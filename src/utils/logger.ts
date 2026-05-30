@@ -1,0 +1,50 @@
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+const LEVELS: Record<LogLevel, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
+
+declare const __DEBUG__: boolean;
+const CURRENT_LEVEL: LogLevel = typeof __DEBUG__ !== 'undefined' && __DEBUG__ ? 'debug' : 'info';
+
+function shouldLog(level: LogLevel): boolean {
+  return LEVELS[level] >= LEVELS[CURRENT_LEVEL];
+}
+
+function formatMessage(level: LogLevel, message: string): string {
+  const timestamp = new Date().toISOString();
+  return `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+}
+
+export const logger = {
+  debug(message: string, ...args: unknown[]): void {
+    if (shouldLog('debug')) {
+      // eslint-disable-next-line no-console
+      console.debug(formatMessage('debug', message), ...args);
+    }
+  },
+
+  info(message: string, ...args: unknown[]): void {
+    if (shouldLog('info')) {
+      // eslint-disable-next-line no-console
+      console.info(formatMessage('info', message), ...args);
+    }
+  },
+
+  warn(message: string, ...args: unknown[]): void {
+    if (shouldLog('warn')) {
+      // eslint-disable-next-line no-console
+      console.warn(formatMessage('warn', message), ...args);
+    }
+  },
+
+  error(message: string, ...args: unknown[]): void {
+    if (shouldLog('error')) {
+      // eslint-disable-next-line no-console
+      console.error(formatMessage('error', message), ...args);
+    }
+  },
+};
