@@ -2,6 +2,9 @@ import { GameScene } from './GameScene';
 import { Graphics, Text, Container, FederatedPointerEvent, BlurFilter } from 'pixi.js';
 import type { GameEngine } from '@/systems/GameEngine';
 import { SceneType } from '@/types';
+import { PlanetSprite } from './PlanetSprite';
+import { PlanetInfoPanel } from './PlanetInfoPanel';
+import type { Planet } from '@/domain/Planet';
 import { logger } from '@/utils/logger';
 
 interface StarLayer {
@@ -118,6 +121,12 @@ export class SpaceFlightScene extends GameScene {
   private readonly SHIP_SIZE = 20;
   private uiContainer: Container | null = null;
 
+  // Planet rendering
+  private planetSprites: PlanetSprite[] = [];
+  private planetInfoPanel: PlanetInfoPanel | null = null;
+  private starCenterX: number = 0;
+  private starCenterY: number = 0;
+
   // Continuous input tracking
   private isPointerDown: boolean = false;
   private boundPointerDown: ((event: FederatedPointerEvent) => void) | null = null;
@@ -136,8 +145,13 @@ export class SpaceFlightScene extends GameScene {
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
 
+    // Calculate star center position (screen center)
+    this.starCenterX = this.renderer.app.screen.width / 2;
+    this.starCenterY = this.renderer.app.screen.height / 2;
+
     this.createStarField();
     this.createNebulae();
+    this.createPlanets();
     this.createShip();
     this.createUI();
 
@@ -174,6 +188,18 @@ export class SpaceFlightScene extends GameScene {
       this.renderer.app.stage.off('pointerup', this.boundPointerUp);
       this.renderer.app.stage.off('pointerupoutside', this.boundPointerUp);
       this.boundPointerUp = null;
+    }
+
+    // Destroy planet sprites
+    for (const sprite of this.planetSprites) {
+      sprite.destroy();
+    }
+    this.planetSprites = [];
+
+    // Destroy planet info panel
+    if (this.planetInfoPanel) {
+      this.planetInfoPanel.destroy();
+      this.planetInfoPanel = null;
     }
 
     this.renderer.clearGameLayer();
@@ -339,14 +365,74 @@ export class SpaceFlightScene extends GameScene {
       logger.info('Back to map clicked');
       await this.returnToStarMap();
     });
-    
+
     // Add hover effect
     backBtn.on('pointerover', () => { backBtn.alpha = 0.7; });
     backBtn.on('pointerout', () => { backBtn.alpha = 1; });
-    
+
     this.uiContainer.addChild(backBtn);
 
     this.renderer.uiLayer.addChild(this.uiContainer);
+  }
+
+  /**
+   * Create planet sprites for the current star system
+   */
+  private createPlanets(): void {
+    if (!this.gameEngine?.player) return;
+
+    // Get current system
+    const currentSystemId = this.gameEngine.player.currentSystemId;
+    const galaxy = this.gameEngine.galaxy;
+    if (!galaxy) return;
+
+    const currentSystem = galaxy.systems.find((s) => s.id === currentSystemId);
+    if (!currentSystem || !currentSystem.planets || currentSystem.planets.length === 0) {
+      logger.debug('No planets in current system');
+      return;
+    }
+
+    // Create sprite for each planet with random initial angle
+    for (const planet of currentSystem.planets) {
+      const initialAngle = Math.random() * Math.PI * 2;
+      const sprite = new PlanetSprite(planet, this.starCenterX, this.starCenterY, initialAngle);
+
+      // Set up click handler
+      sprite.createHitArea(this.onPlanetClick.bind(this));
+
+      // Add to game layer
+      this.renderer.gameLayer.addChild(sprite.container);
+      this.planetSprites.push(sprite);
+    }
+
+    logger.info(`Created ${this.planetSprites.length} planet sprites`);
+  }
+
+  /**
+   * Handle planet click: show info panel and navigate ship to planet
+   */
+  private onPlanetClick(planet: Planet): void {
+    logger.debug(`Planet clicked: ${planet.name}`);
+
+    // Close existing info panel
+    if (this.planetInfoPanel) {
+      this.planetInfoPanel.destroy();
+      this.planetInfoPanel = null;
+    }
+
+    // Create new info panel
+    this.planetInfoPanel = new PlanetInfoPanel(
+      planet,
+      this.renderer.app.screen.width,
+      this.renderer.app.screen.height,
+    );
+    this.renderer.uiLayer.addChild(this.planetInfoPanel.container);
+
+    // Find planet sprite to get screen coordinates
+    const planetSprite = this.planetSprites.find((s) => s.planet.id === planet.id);
+    if (planetSprite && this.shipPhysics) {
+      this.shipPhysics.setTarget(planetSprite.screenX, planetSprite.screenY);
+    }
   }
 
   private onPointerDown(event: FederatedPointerEvent): void {

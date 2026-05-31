@@ -59,7 +59,7 @@ export class TradeSystem {
     const idx = planet.market.availableResources.indexOf(resource);
     const demand = idx >= 0 ? planet.market.demandVector[idx] ?? 1 : 1;
     const supply = idx >= 0 ? Math.max(planet.market.supplyVector[idx] ?? 1, 0.01) : 1;
-    const reputation = player.reputation[planet.market.planet.id] ?? 0;
+    const reputation = player.reputation[planet.market.planet?.id ?? planet.id] ?? 0;
 
     // Gather features for regressor
     const features = [

@@ -42,12 +42,11 @@ describe('TradeSystem', () => {
       'pl1',
       'TestPlanet',
       'INDUSTRIAL' as import('@/types').PlanetType,
-      new Market({} as Planet, ['FUEL' as ResourceType, 'METALS' as ResourceType], [1.0, 1.0], [1.0, 1.0]),
+      150, // orbitalRadius
+      new Market(['FUEL' as ResourceType, 'METALS' as ResourceType], [1.0, 1.0], [1.0, 1.0]),
       [],
       [],
     );
-    // Fix circular reference: market expects planet reference
-    (planet.market as unknown as { planet: Planet }).planet = planet;
     return planet;
   }
 

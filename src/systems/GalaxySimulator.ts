@@ -6,6 +6,7 @@ import type { GalacticEvent } from '@/domain/GalacticEvent';
 import { WarpPath } from '@/domain/WarpPath';
 import { SeededRNG } from '@/utils/seededRNG';
 import { SystemNameGenerator } from '@/utils/systemNameGenerator';
+import { PlanetGenerator } from './PlanetGenerator';
 import { logger } from '@/utils/logger';
 
 export class GalaxySimulator {
@@ -36,12 +37,17 @@ export class GalaxySimulator {
         q: this.rng.nextInt(-50, 50),
         r: this.rng.nextInt(-50, 50),
       };
+
+      // Generate planets for this system
+      const planetGen = new PlanetGenerator(seed, `sys_${i}`);
+      const planets = planetGen.generate(systemNames[i]);
+
       const system = new StarSystem(
         `sys_${i}`,
         systemNames[i],
         coord,
         'YELLOW_DWARF' as import('@/types').StarType,
-        [],
+        planets,
         'INDEPENDENT' as import('@/types/faction').Faction,
         [],
       );

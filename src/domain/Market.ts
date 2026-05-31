@@ -11,10 +11,10 @@ export interface TransactionResult {
 
 export class Market {
   constructor(
-    public readonly planet: Planet,
     public readonly availableResources: ResourceType[],
     public demandVector: number[],
     public supplyVector: number[],
+    public readonly planet?: Planet,
   ) {}
 
   getPrice(resourceType: ResourceType): number {
