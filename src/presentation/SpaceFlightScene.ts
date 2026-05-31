@@ -216,10 +216,13 @@ export class SpaceFlightScene extends GameScene {
     this.boundPointerUp = this.onPointerUp.bind(this);
 
     this.renderer.app.stage.eventMode = 'static';
+    this.renderer.app.stage.hitArea = this.renderer.app.screen; // Ensure stage receives all events
     this.renderer.app.stage.on('pointerdown', this.boundPointerDown);
     this.renderer.app.stage.on('pointermove', this.boundPointerMove);
     this.renderer.app.stage.on('pointerup', this.boundPointerUp);
     this.renderer.app.stage.on('pointerupoutside', this.boundPointerUp);
+
+    logger.info(`Stage hitArea set to: ${this.renderer.app.screen.width}x${this.renderer.app.screen.height}`);
 
     // Add keyboard listener for Quest Journal
     this.boundKeyDown = this.onKeyDown.bind(this);
@@ -766,16 +769,17 @@ export class SpaceFlightScene extends GameScene {
   private onPointerDown(event: FederatedPointerEvent): void {
     if (!this.shipPhysics) return;
 
-    logger.info(`🖱️ POINTER DOWN: button=${event.button}, shift=${event.shiftKey}`);
+    logger.info(`🖱️ POINTER DOWN: button=${event.button}, shift=${event.shiftKey}, global=(${event.global.x.toFixed(0)}, ${event.global.y.toFixed(0)})`);
 
     // Middle mouse button (1), right button (2), or Shift+Left for panning
     const isPanButton = event.button === 1 || event.button === 2 || (event.button === 0 && event.shiftKey);
 
     if (isPanButton) {
+      event.preventDefault(); // Prevent default behavior for pan buttons
       this.isPanning = true;
       this.lastPanX = event.global.x;
       this.lastPanY = event.global.y;
-      logger.info('✅ Pan mode activated');
+      logger.info(`✅ Pan mode activated with button ${event.button}`);
       return;
     }
 
@@ -801,7 +805,7 @@ export class SpaceFlightScene extends GameScene {
       this.lastPanY = event.global.y;
       this.applyCameraTransform();
       if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
-        logger.debug(`Camera pan: (${this.cameraPanX.toFixed(0)}, ${this.cameraPanY.toFixed(0)})`);
+        logger.info(`📍 Camera pan: (${this.cameraPanX.toFixed(0)}, ${this.cameraPanY.toFixed(0)})`);
       }
       return;
     }
@@ -814,6 +818,9 @@ export class SpaceFlightScene extends GameScene {
   }
 
   private onPointerUp(): void {
+    if (this.isPanning) {
+      logger.info('❌ Pan mode deactivated');
+    }
     this.isPointerDown = false;
     this.isPanning = false;
   }
@@ -1038,5 +1045,45 @@ export class SpaceFlightScene extends GameScene {
     if (this.shipPhysics) {
       this.shipPhysics.setTarget(x, y);
     }
+  }
+
+  /** E2E helper: get camera state */
+  e2eGetCameraState(): { zoom: number; panX: number; panY: number } {
+    return {
+      zoom: this.cameraZoom,
+      panX: this.cameraPanX,
+      panY: this.cameraPanY,
+    };
+  }
+
+  /** E2E helper: set camera zoom */
+  e2eSetCameraZoom(zoom: number): void {
+    this.cameraZoom = Math.max(this.MIN_ZOOM, Math.min(this.MAX_ZOOM, zoom));
+    this.applyCameraTransform();
+  }
+
+  /** E2E helper: set camera pan */
+  e2eSetCameraPan(x: number, y: number): void {
+    this.cameraPanX = x;
+    this.cameraPanY = y;
+    this.applyCameraTransform();
+  }
+
+  /** E2E helper: check if minimap exists */
+  e2eHasMinimap(): boolean {
+    return this.systemMiniMap !== null;
+  }
+
+  /** E2E helper: get ship position */
+  e2eGetShipPosition(): { x: number; y: number } {
+    return {
+      x: this.shipPhysics?.shipX ?? 0,
+      y: this.shipPhysics?.shipY ?? 0,
+    };
+  }
+
+  /** E2E helper: check if quest journal is open */
+  e2eIsQuestJournalOpen(): boolean {
+    return this.questJournalUI !== null && this.questJournalUI.container.visible;
   }
 }
