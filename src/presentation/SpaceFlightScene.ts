@@ -10,30 +10,128 @@ interface StarLayer {
   speed: number;
 }
 
+/**
+ * Physics-based movement state machine for ship control
+ * Implements three-phase movement: acceleration → cruise → deceleration
+ */
+class ShipPhysics {
+  public shipX: number;
+  public shipY: number;
+  public shipAngle: number;
+  public currentSpeed: number = 0;
+  public isMoving: boolean = false;
+
+  private targetX: number;
+  private targetY: number;
+  private readonly maxSpeed: number;
+  private readonly acceleration: number = 0.001; // pixels/ms² - speed increase per ms
+  private readonly deceleration: number = 0.0015; // pixels/ms² - speed decrease per ms
+  private readonly rotationSpeed: number; // radians/ms
+  private readonly STOP_THRESHOLD: number = 10; // pixels - distance to consider "arrived"
+
+  constructor(initialX: number, initialY: number, maxSpeed?: number) {
+    this.shipX = initialX;
+    this.shipY = initialY;
+    this.targetX = initialX;
+    this.targetY = initialY;
+    this.shipAngle = 0;
+    this.maxSpeed = maxSpeed ?? 0.3; // pixels/ms - default cruising speed
+    // Calculate rotation speed: 90° (π/2 rad) in 300ms = 5.24 rad/s = 0.00524 rad/ms
+    this.rotationSpeed = (Math.PI / 2) / 300;
+  }
+
+  setTarget(x: number, y: number): void {
+    this.targetX = x;
+    this.targetY = y;
+    this.isMoving = true;
+  }
+
+  getDistanceToTarget(): number {
+    const dx = this.targetX - this.shipX;
+    const dy = this.targetY - this.shipY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  update(deltaTime: number): void {
+    // Cap deltaTime to prevent physics explosion on lag spikes
+    const dt = Math.min(deltaTime, 100);
+
+    const distance = this.getDistanceToTarget();
+
+    // Check if arrived at target
+    if (distance <= this.STOP_THRESHOLD) {
+      this.currentSpeed = 0;
+      this.isMoving = false;
+      // Snap to target if very close
+      if (distance < 2) {
+        this.shipX = this.targetX;
+        this.shipY = this.targetY;
+      }
+      return;
+    }
+
+    // Calculate stopping distance: v² / (2a)
+    const stoppingDistance = (this.currentSpeed * this.currentSpeed) / (2 * this.deceleration);
+
+    // Speed update: accelerate if far from target, decelerate when approaching
+    if (distance > stoppingDistance && this.currentSpeed < this.maxSpeed) {
+      // Acceleration phase
+      this.currentSpeed = Math.min(this.maxSpeed, this.currentSpeed + this.acceleration * dt);
+    } else if (distance <= stoppingDistance && this.currentSpeed > 0) {
+      // Deceleration phase
+      this.currentSpeed = Math.max(0, this.currentSpeed - this.deceleration * dt);
+    }
+    // Else: cruise phase (maintain current speed)
+
+    // Rotation update
+    const dx = this.targetX - this.shipX;
+    const dy = this.targetY - this.shipY;
+    const targetAngle = Math.atan2(dy, dx);
+
+    // Normalize angle difference to [-π, π]
+    let angleDiff = targetAngle - this.shipAngle;
+    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+    // Apply rotation with maximum rotation per frame
+    const maxRotation = this.rotationSpeed * dt;
+    if (Math.abs(angleDiff) <= maxRotation) {
+      this.shipAngle = targetAngle;
+    } else {
+      this.shipAngle += Math.sign(angleDiff) * maxRotation;
+    }
+
+    // Position update
+    const moveDistance = this.currentSpeed * dt;
+    this.shipX += Math.cos(this.shipAngle) * moveDistance;
+    this.shipY += Math.sin(this.shipAngle) * moveDistance;
+  }
+}
+
 export class SpaceFlightScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private shipContainer: Container | null = null;
   private shipGraphics: Graphics | null = null;
   private starLayers: StarLayer[] = [];
   private nebulaeContainer: Container | null = null;
-  private targetX = 0;
-  private targetY = 0;
-  private shipX = 0;
-  private shipY = 0;
-  private shipAngle = 0;
-  private shipVelocity = { x: 0, y: 0 };
-  private isMoving = false;
-  private speed = 0.15;
+  private shipPhysics: ShipPhysics | null = null;
   private readonly SHIP_SIZE = 20;
   private uiContainer: Container | null = null;
-  private boundStageClick: ((event: FederatedPointerEvent) => void) | null = null;
+
+  // Continuous input tracking
+  private isPointerDown: boolean = false;
+  private boundPointerDown: ((event: FederatedPointerEvent) => void) | null = null;
+  private boundPointerMove: ((event: FederatedPointerEvent) => void) | null = null;
+  private boundPointerUp: (() => void) | null = null;
 
   initialize(context?: object): void {
     this.gameEngine = (context as { gameEngine?: GameEngine })?.gameEngine ?? null;
-    this.targetX = this.renderer.app.screen.width / 2;
-    this.targetY = this.renderer.app.screen.height / 2;
-    this.shipX = this.targetX;
-    this.shipY = this.targetY;
+
+    // Initialize ship physics with center position and optional speed from PlayerShip
+    const centerX = this.renderer.app.screen.width / 2;
+    const centerY = this.renderer.app.screen.height / 2;
+    const maxSpeed = this.gameEngine?.player?.ship.speed ?? undefined;
+    this.shipPhysics = new ShipPhysics(centerX, centerY, maxSpeed);
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
@@ -43,10 +141,16 @@ export class SpaceFlightScene extends GameScene {
     this.createShip();
     this.createUI();
 
-    // Enable interactivity on stage for click-to-move
-    this.boundStageClick = this.onStageClick.bind(this);
+    // Enable interactivity on stage for continuous pointer tracking
+    this.boundPointerDown = this.onPointerDown.bind(this);
+    this.boundPointerMove = this.onPointerMove.bind(this);
+    this.boundPointerUp = this.onPointerUp.bind(this);
+
     this.renderer.app.stage.eventMode = 'static';
-    this.renderer.app.stage.on('pointerdown', this.boundStageClick);
+    this.renderer.app.stage.on('pointerdown', this.boundPointerDown);
+    this.renderer.app.stage.on('pointermove', this.boundPointerMove);
+    this.renderer.app.stage.on('pointerup', this.boundPointerUp);
+    this.renderer.app.stage.on('pointerupoutside', this.boundPointerUp);
 
     logger.info('SpaceFlightScene initialized');
   }
@@ -57,10 +161,21 @@ export class SpaceFlightScene extends GameScene {
   }
 
   destroy(): void {
-    if (this.boundStageClick) {
-      this.renderer.app.stage.off('pointerdown', this.boundStageClick);
-      this.boundStageClick = null;
+    // Remove all pointer event listeners
+    if (this.boundPointerDown) {
+      this.renderer.app.stage.off('pointerdown', this.boundPointerDown);
+      this.boundPointerDown = null;
     }
+    if (this.boundPointerMove) {
+      this.renderer.app.stage.off('pointermove', this.boundPointerMove);
+      this.boundPointerMove = null;
+    }
+    if (this.boundPointerUp) {
+      this.renderer.app.stage.off('pointerup', this.boundPointerUp);
+      this.renderer.app.stage.off('pointerupoutside', this.boundPointerUp);
+      this.boundPointerUp = null;
+    }
+
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
     this.starLayers = [];
@@ -68,6 +183,7 @@ export class SpaceFlightScene extends GameScene {
     this.shipGraphics = null;
     this.nebulaeContainer = null;
     this.uiContainer = null;
+    this.shipPhysics = null;
     logger.info('SpaceFlightScene destroyed');
   }
 
@@ -135,6 +251,8 @@ export class SpaceFlightScene extends GameScene {
   }
 
   private createShip(): void {
+    if (!this.shipPhysics) return;
+
     this.shipContainer = new Container();
     this.shipGraphics = new Graphics();
 
@@ -142,15 +260,15 @@ export class SpaceFlightScene extends GameScene {
     this.drawShip();
 
     this.shipContainer.addChild(this.shipGraphics);
-    this.shipContainer.x = this.shipX;
-    this.shipContainer.y = this.shipY;
+    this.shipContainer.x = this.shipPhysics.shipX;
+    this.shipContainer.y = this.shipPhysics.shipY;
     this.shipContainer.pivot.set(0, 0);
 
     this.renderer.gameLayer.addChild(this.shipContainer);
   }
 
   private drawShip(): void {
-    if (!this.shipGraphics) return;
+    if (!this.shipGraphics || !this.shipPhysics) return;
     this.shipGraphics.clear();
 
     const size = this.SHIP_SIZE;
@@ -165,8 +283,8 @@ export class SpaceFlightScene extends GameScene {
       .poly([size * 0.3, 0, -size * 0.2, -size * 0.25, -size * 0.2, size * 0.25])
       .fill({ color: 0x88ccff });
 
-    // Engine glow
-    if (this.isMoving) {
+    // Engine glow (visible when ship is moving)
+    if (this.shipPhysics.isMoving) {
       this.shipGraphics
         .poly([
           -size * 0.5,
@@ -231,64 +349,51 @@ export class SpaceFlightScene extends GameScene {
     this.renderer.uiLayer.addChild(this.uiContainer);
   }
 
-  private onStageClick(event: FederatedPointerEvent): void {
-    this.targetX = event.global.x;
-    this.targetY = event.global.y;
-    this.isMoving = true;
-    logger.debug(`Ship target set to: ${this.targetX}, ${this.targetY}`);
+  private onPointerDown(event: FederatedPointerEvent): void {
+    if (!this.shipPhysics) return;
+    this.isPointerDown = true;
+    this.shipPhysics.setTarget(event.global.x, event.global.y);
+    logger.debug(`Ship target set to: ${event.global.x}, ${event.global.y}`);
+  }
+
+  private onPointerMove(event: FederatedPointerEvent): void {
+    if (!this.isPointerDown || !this.shipPhysics) return;
+    this.shipPhysics.setTarget(event.global.x, event.global.y);
+  }
+
+  private onPointerUp(): void {
+    this.isPointerDown = false;
   }
 
   private updateShip(deltaTime: number): void {
-    if (!this.shipContainer || !this.shipGraphics) return;
+    if (!this.shipContainer || !this.shipGraphics || !this.shipPhysics) return;
 
-    const dx = this.targetX - this.shipX;
-    const dy = this.targetY - this.shipY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    // Update physics
+    this.shipPhysics.update(deltaTime);
 
-    if (distance > 2) {
-      this.isMoving = true;
+    // Read updated values from physics
+    this.shipContainer.x = this.shipPhysics.shipX;
+    this.shipContainer.y = this.shipPhysics.shipY;
+    this.shipContainer.rotation = this.shipPhysics.shipAngle;
 
-      // Calculate target angle
-      const targetAngle = Math.atan2(dy, dx);
-
-      // Smooth rotation (normalize delta for ~60 FPS baseline)
-      let angleDiff = targetAngle - this.shipAngle;
-      while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-      const dtFactor = Math.min(deltaTime / 16.67, 5);
-      this.shipAngle += angleDiff * 0.05 * dtFactor;
-
-      // Move towards target
-      const moveDistance = Math.min(distance, this.speed * deltaTime);
-      this.shipX += Math.cos(this.shipAngle) * moveDistance;
-      this.shipY += Math.sin(this.shipAngle) * moveDistance;
-
-      // Update velocity for star field parallax
-      this.shipVelocity.x = Math.cos(this.shipAngle) * this.speed;
-      this.shipVelocity.y = Math.sin(this.shipAngle) * this.speed;
-    } else {
-      this.isMoving = false;
-      this.shipVelocity.x *= 0.9;
-      this.shipVelocity.y *= 0.9;
-    }
-
-    // Update ship position and rotation
-    this.shipContainer.x = this.shipX;
-    this.shipContainer.y = this.shipY;
-    this.shipContainer.rotation = this.shipAngle;
-
-    // Redraw ship for engine effects
+    // Redraw ship for engine effects (uses isMoving from physics)
     this.drawShip();
   }
 
   private updateStarField(deltaTime: number): void {
+    if (!this.shipPhysics) return;
+
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
+    // Calculate velocity vector from ship's current speed and angle
+    const velocityX = Math.cos(this.shipPhysics.shipAngle) * this.shipPhysics.currentSpeed;
+    const velocityY = Math.sin(this.shipPhysics.shipAngle) * this.shipPhysics.currentSpeed;
+
     for (const layer of this.starLayers) {
       // Move stars opposite to ship movement for parallax effect
-      const offsetX = -this.shipVelocity.x * layer.speed * deltaTime * 10;
-      const offsetY = -this.shipVelocity.y * layer.speed * deltaTime * 10;
+      const offsetX = -velocityX * layer.speed * deltaTime * 10;
+      const offsetY = -velocityY * layer.speed * deltaTime * 10;
 
       layer.container.x += offsetX;
       layer.container.y += offsetY;
@@ -315,8 +420,8 @@ export class SpaceFlightScene extends GameScene {
 
   /** E2E helper: set ship target position */
   e2eSetTarget(x: number, y: number): void {
-    this.targetX = x;
-    this.targetY = y;
-    this.isMoving = true;
+    if (this.shipPhysics) {
+      this.shipPhysics.setTarget(x, y);
+    }
   }
 }
