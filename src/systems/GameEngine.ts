@@ -15,13 +15,14 @@ import { CombatScene } from '@/presentation/CombatScene';
 import { DialogueScene } from '@/presentation/DialogueScene';
 import { InventoryScene } from '@/presentation/InventoryScene';
 import { MainMenuScene } from '@/presentation/MainMenuScene';
+import { RaceSelectionScene } from '@/presentation/RaceSelectionScene';
 import { SpaceFlightScene } from '@/presentation/SpaceFlightScene';
 import { Graphics, Text } from 'pixi.js';
 import { GalaxySimulator } from './GalaxySimulator';
 import { QuestManager } from './QuestManager';
 import { EquipmentSystem } from './EquipmentSystem';
+import { RaceRegistry } from './RaceRegistry';
 import { validatePlayerSettings } from '@/validation/schemas';
-import { Race } from '@/domain/Race';
 import { SkillTree } from '@/domain/SkillTree';
 import { Player } from '@/domain/Player';
 import { PlayerShip } from '@/domain/PlayerShip';
@@ -123,21 +124,16 @@ export class GameEngine {
 
     // Handle new game creation when transitioning to STAR_MAP and no player exists
     if (sceneType === SceneType.STAR_MAP && !this.player) {
-      const humanRace = new Race(
-        'HUMAN' as RaceType,
-        'Human',
-        { piloting: 1 },
-        { id: 'human_trait', description: 'Baseline humanity' },
-        { tone: 'neutral', formality: 0.5, verbosity: 0.5 },
-        { hullHP: 100, shields: 50, energy: 100, speed: 1.0, evasion: 0.8 },
-        { buyMultiplier: 1.0, sellMultiplier: 0.9 },
-      );
+      // Get selected race from context or default to HUMAN
+      const selectedRace = (context as { selectedRace?: RaceType })?.selectedRace ?? RaceType.HUMAN;
+      const race = RaceRegistry.getRace(selectedRace);
+
       const skillTree = new SkillTree([]);
-      
+
       this.player = new Player(
         'player',
         'Captain',
-        humanRace,
+        race,
         0,
         1,
         skillTree,
@@ -148,21 +144,21 @@ export class GameEngine {
         new PlayerShip(
           'Ranger-1',
           'Ranger-1',
-          100,
-          100,
-          50,
-          50,
-          100,
-          100,
-          1.0,
-          0.8,
-          humanRace,
+          race.shipBaseline.hullHP,
+          race.shipBaseline.hullHP,
+          race.shipBaseline.shields,
+          race.shipBaseline.shields,
+          race.shipBaseline.energy,
+          race.shipBaseline.energy,
+          race.shipBaseline.speed,
+          race.shipBaseline.evasion,
+          race,
         ),
         new Inventory(),
         '', // currentSystemId placeholder
       );
-      
-      logger.info('Created new player for game start');
+
+      logger.info(`Created new player with race: ${race.name}`);
     }
 
     // Resolve starting system for new game
@@ -179,6 +175,9 @@ export class GameEngine {
     switch (sceneType) {
       case SceneType.MAIN_MENU:
         this.currentScene = new MainMenuScene(this.renderer);
+        break;
+      case SceneType.RACE_SELECTION:
+        this.currentScene = new RaceSelectionScene(this.renderer);
         break;
       case SceneType.STAR_MAP:
         this.currentScene = new StarMapScene(this.renderer);

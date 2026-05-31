@@ -118,9 +118,11 @@ export class MainMenuScene extends GameScene {
 
   private async handleNewGame(): Promise<void> {
     logger.info('New game selected');
-    // Transition to STAR_MAP with fresh galaxy
+    // Transition to RACE_SELECTION for character creation
     if (this.gameEngine) {
-      await this.gameEngine.transitionTo(SceneType.STAR_MAP);
+      await this.gameEngine.transitionTo(SceneType.RACE_SELECTION, {
+        gameEngine: this.gameEngine,
+      });
     } else {
       logger.error('GameEngine not available!');
     }

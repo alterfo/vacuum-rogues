@@ -81,6 +81,7 @@ export enum EncounterState {
 
 export enum SceneType {
   MAIN_MENU = 'MAIN_MENU',
+  RACE_SELECTION = 'RACE_SELECTION',
   STAR_MAP = 'STAR_MAP',
   COMBAT = 'COMBAT',
   DIALOGUE = 'DIALOGUE',
