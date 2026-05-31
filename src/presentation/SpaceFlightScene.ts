@@ -517,7 +517,7 @@ export class SpaceFlightScene extends GameScene {
 
     // Instructions (non-interactive)
     const instructions = new Text({
-      text: 'Клик на планету - установить курс | Клик в космос - свободный полёт | [J] - Квесты',
+      text: 'Клик на планету - установить курс | Клик в космос - свободный полёт | [J] - Квесты | [I] - Инвентарь',
       style: {
         fontFamily: 'Courier New',
         fontSize: 13,
@@ -786,6 +786,8 @@ export class SpaceFlightScene extends GameScene {
   private onKeyDown(event: KeyboardEvent): void {
     if (event.key === 'j' || event.key === 'J') {
       this.toggleQuestJournal();
+    } else if (event.key === 'i' || event.key === 'I') {
+      this.openInventory();
     }
   }
 
@@ -815,6 +817,18 @@ export class SpaceFlightScene extends GameScene {
         logger.info('Quest journal opened');
       }
     }
+  }
+
+  /**
+   * Open inventory scene
+   */
+  private async openInventory(): Promise<void> {
+    if (!this.gameEngine) return;
+
+    logger.info('Opening inventory');
+    await this.gameEngine.transitionTo('INVENTORY' as any, {
+      gameEngine: this.gameEngine,
+    });
   }
 
   /**
