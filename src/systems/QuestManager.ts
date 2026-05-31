@@ -233,4 +233,29 @@ export class QuestManager {
     const quest = this.activeQuests.get(questId);
     return quest?.isCompleted ?? false;
   }
+
+  /**
+   * Get active quest objective location IDs (for navigation markers)
+   * Returns array of location IDs that need to be visited
+   */
+  getActiveQuestLocations(): string[] {
+    const locations: string[] = [];
+
+    for (const quest of this.activeQuests.values()) {
+      if (quest.isCompleted) continue;
+
+      for (const objective of quest.objectives) {
+        if (objective.completed) continue;
+
+        if (objective.type === 'VISIT_LOCATION' && objective.locationId) {
+          // Skip "any_planet" type objectives
+          if (objective.locationId !== 'any_planet') {
+            locations.push(objective.locationId);
+          }
+        }
+      }
+    }
+
+    return locations;
+  }
 }

@@ -13,10 +13,18 @@ export class QuestJournalUI {
   private readonly panelWidth: number = 600;
   private readonly panelHeight: number = 500;
   private readonly onClose: () => void;
+  private readonly onNavigateToObjective?: (locationId: string) => void;
 
-  constructor(questManager: QuestManager, screenWidth: number, screenHeight: number, onClose: () => void) {
+  constructor(
+    questManager: QuestManager,
+    screenWidth: number,
+    screenHeight: number,
+    onClose: () => void,
+    onNavigateToObjective?: (locationId: string) => void,
+  ) {
     this.questManager = questManager;
     this.onClose = onClose;
+    this.onNavigateToObjective = onNavigateToObjective;
     this.container = new Container();
 
     // Center panel on screen
@@ -172,10 +180,76 @@ export class QuestJournalUI {
       objText.x = 40;
       objText.y = objY;
       card.addChild(objText);
+
+      // Add "Navigate" button for VISIT_LOCATION objectives
+      if (
+        !objective.completed &&
+        objective.type === 'VISIT_LOCATION' &&
+        objective.locationId &&
+        objective.locationId !== 'any_planet' &&
+        this.onNavigateToObjective
+      ) {
+        const navBtn = this.createNavigateButton(objective.locationId);
+        navBtn.x = this.panelWidth - 170;
+        navBtn.y = objY - 2;
+        card.addChild(navBtn);
+      }
+
       objY += 18;
     }
 
     return card;
+  }
+
+  /**
+   * Create "Navigate to objective" button
+   */
+  private createNavigateButton(locationId: string): Container {
+    const btn = new Container();
+
+    const btnBg = new Graphics();
+    btnBg.rect(0, 0, 120, 16);
+    btnBg.fill({ color: 0x444400, alpha: 0.8 });
+    btnBg.stroke({ color: 0xffff00, width: 1 });
+    btn.addChild(btnBg);
+
+    const btnText = new Text({
+      text: '→ Лететь к цели',
+      style: {
+        fontFamily: 'Courier New',
+        fontSize: 10,
+        fill: 0xffff00,
+      },
+    });
+    btnText.x = 5;
+    btnText.y = 2;
+    btn.addChild(btnText);
+
+    btn.eventMode = 'static';
+    btn.cursor = 'pointer';
+
+    btn.on('pointerdown', () => {
+      if (this.onNavigateToObjective) {
+        this.onNavigateToObjective(locationId);
+        this.onClose(); // Close journal after navigation
+      }
+    });
+
+    btn.on('pointerover', () => {
+      btnBg.clear();
+      btnBg.rect(0, 0, 120, 16);
+      btnBg.fill({ color: 0x666600, alpha: 1.0 });
+      btnBg.stroke({ color: 0xffff00, width: 2 });
+    });
+
+    btn.on('pointerout', () => {
+      btnBg.clear();
+      btnBg.rect(0, 0, 120, 16);
+      btnBg.fill({ color: 0x444400, alpha: 0.8 });
+      btnBg.stroke({ color: 0xffff00, width: 1 });
+    });
+
+    return btn;
   }
 
   /**

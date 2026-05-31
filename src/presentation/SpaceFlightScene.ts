@@ -57,6 +57,14 @@ class ShipPhysics {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
+  getTargetX(): number {
+    return this.targetX;
+  }
+
+  getTargetY(): number {
+    return this.targetY;
+  }
+
   update(deltaTime: number): void {
     // Cap deltaTime to prevent physics explosion on lag spikes
     const dt = Math.min(deltaTime, 100);
@@ -145,6 +153,9 @@ export class SpaceFlightScene extends GameScene {
   // Quest Journal UI
   private questJournalUI: QuestJournalUI | null = null;
 
+  // Target indicator
+  private targetIndicator: Graphics | null = null;
+
   // Continuous input tracking
   private isPointerDown: boolean = false;
   private boundPointerDown: ((event: FederatedPointerEvent) => void) | null = null;
@@ -179,6 +190,7 @@ export class SpaceFlightScene extends GameScene {
     this.createOrbits();
     this.createPlanets();
     this.createShip();
+    this.createTargetIndicator();
     this.createUI();
 
     // Enable interactivity on stage for continuous pointer tracking
@@ -203,6 +215,7 @@ export class SpaceFlightScene extends GameScene {
     this.updateStarField(deltaTime);
     this.updateShip(deltaTime);
     this.updatePlanets(deltaTime);
+    this.updateTargetIndicator();
   }
 
   destroy(): void {
@@ -417,6 +430,50 @@ export class SpaceFlightScene extends GameScene {
     this.renderer.gameLayer.addChild(this.shipContainer);
   }
 
+  /**
+   * Create target indicator (crosshair showing where ship is heading)
+   */
+  private createTargetIndicator(): void {
+    this.targetIndicator = new Graphics();
+    this.targetIndicator.visible = false; // Hidden by default
+    this.renderer.gameLayer.addChild(this.targetIndicator);
+  }
+
+  /**
+   * Update target indicator position and visibility
+   */
+  private updateTargetIndicator(): void {
+    if (!this.targetIndicator || !this.shipPhysics) return;
+
+    const distance = this.shipPhysics.getDistanceToTarget();
+
+    // Show indicator only if ship is moving and target is far enough
+    if (this.shipPhysics.isMoving && distance > 20) {
+      this.targetIndicator.visible = true;
+      this.targetIndicator.clear();
+
+      // Draw pulsing crosshair at target position
+      const targetX = this.shipPhysics.getTargetX();
+      const targetY = this.shipPhysics.getTargetY();
+
+      const size = 15;
+      const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7; // Pulsing effect
+
+      // Crosshair lines
+      this.targetIndicator.moveTo(targetX - size, targetY);
+      this.targetIndicator.lineTo(targetX + size, targetY);
+      this.targetIndicator.moveTo(targetX, targetY - size);
+      this.targetIndicator.lineTo(targetX, targetY + size);
+      this.targetIndicator.stroke({ width: 2, color: 0x00ffff, alpha: pulse });
+
+      // Center circle
+      this.targetIndicator.circle(targetX, targetY, 4);
+      this.targetIndicator.stroke({ width: 1, color: 0x00ffff, alpha: pulse * 0.8 });
+    } else {
+      this.targetIndicator.visible = false;
+    }
+  }
+
   private drawShip(): void {
     if (!this.shipGraphics || !this.shipPhysics) return;
     this.shipGraphics.clear();
@@ -545,6 +602,9 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
+    // Get quest objective locations
+    const questLocations = this.gameEngine.questManager.getActiveQuestLocations();
+
     // Create sprite for each planet with random initial angle
     for (const planet of currentSystem.planets) {
       const initialAngle = Math.random() * Math.PI * 2;
@@ -553,12 +613,34 @@ export class SpaceFlightScene extends GameScene {
       // Set up click handler
       sprite.createHitArea(this.onPlanetClick.bind(this));
 
+      // Add quest marker if this planet is a quest objective
+      if (questLocations.includes(planet.id)) {
+        this.addQuestMarker(sprite);
+      }
+
       // Add to game layer
       this.renderer.gameLayer.addChild(sprite.container);
       this.planetSprites.push(sprite);
     }
 
     logger.info(`Created ${this.planetSprites.length} planet sprites`);
+  }
+
+  /**
+   * Add quest marker (pulsing ring) to a planet sprite
+   */
+  private addQuestMarker(sprite: PlanetSprite): void {
+    const marker = new Graphics();
+
+    // Draw pulsing ring around planet
+    const radius = 25; // Slightly larger than planet
+    marker.circle(0, 0, radius);
+    marker.stroke({ width: 3, color: 0xffff00, alpha: 0.8 });
+
+    // Add to planet container so it rotates with planet
+    sprite.container.addChild(marker);
+
+    logger.debug(`Added quest marker to planet ${sprite.planet.name}`);
   }
 
   /**
@@ -573,12 +655,13 @@ export class SpaceFlightScene extends GameScene {
       this.planetInfoPanel = null;
     }
 
-    // Create new info panel with "Talk to Governor" callback
+    // Create new info panel with callbacks
     this.planetInfoPanel = new PlanetInfoPanel(
       planet,
       this.renderer.app.screen.width,
       this.renderer.app.screen.height,
       () => this.onTalkToGovernor(planet),
+      () => this.onWarpToPlanet(planet),
     );
     this.renderer.uiLayer.addChild(this.planetInfoPanel.container);
 
@@ -586,6 +669,32 @@ export class SpaceFlightScene extends GameScene {
     const planetSprite = this.planetSprites.find((s) => s.planet.id === planet.id);
     if (planetSprite && this.shipPhysics) {
       this.shipPhysics.setTarget(planetSprite.screenX, planetSprite.screenY);
+    }
+  }
+
+  /**
+   * Handle "Warp to Planet" button click: instantly teleport ship to planet
+   */
+  private onWarpToPlanet(planet: Planet): void {
+    logger.info(`Mini-warp to ${planet.name}`);
+
+    // Find planet sprite to get coordinates
+    const planetSprite = this.planetSprites.find((s) => s.planet.id === planet.id);
+    if (planetSprite && this.shipPhysics) {
+      // Instantly teleport ship to planet
+      this.shipPhysics.shipX = planetSprite.screenX;
+      this.shipPhysics.shipY = planetSprite.screenY;
+      this.shipPhysics.setTarget(planetSprite.screenX, planetSprite.screenY);
+      this.shipPhysics.currentSpeed = 0;
+      this.shipPhysics.isMoving = false;
+
+      // Update ship container position immediately
+      if (this.shipContainer) {
+        this.shipContainer.x = this.shipPhysics.shipX;
+        this.shipContainer.y = this.shipPhysics.shipY;
+      }
+
+      logger.info(`Warped to ${planet.name} at (${planetSprite.screenX}, ${planetSprite.screenY})`);
     }
   }
 
@@ -725,10 +834,31 @@ export class SpaceFlightScene extends GameScene {
             this.questJournalUI?.destroy();
             this.questJournalUI = null;
           },
+          (locationId: string) => this.navigateToQuestObjective(locationId),
         );
         this.renderer.uiLayer.addChild(this.questJournalUI.container);
         logger.info('Quest journal opened');
       }
+    }
+  }
+
+  /**
+   * Navigate ship to quest objective location (planet)
+   */
+  private navigateToQuestObjective(locationId: string): void {
+    logger.info(`Navigating to quest objective: ${locationId}`);
+
+    // Find planet sprite by locationId
+    const planetSprite = this.planetSprites.find((s) => s.planet.id === locationId);
+    if (planetSprite && this.shipPhysics) {
+      // Set ship target to planet
+      this.shipPhysics.setTarget(planetSprite.screenX, planetSprite.screenY);
+      logger.info(`Set navigation target to planet ${planetSprite.planet.name}`);
+
+      // Show planet info panel
+      this.onPlanetClick(planetSprite.planet);
+    } else {
+      logger.warn(`Could not find planet with ID: ${locationId}`);
     }
   }
 

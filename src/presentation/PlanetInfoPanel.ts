@@ -9,18 +9,21 @@ export class PlanetInfoPanel {
   public readonly container: Container;
   private readonly planet: Planet;
   private readonly panelWidth: number = 220;
-  private readonly panelHeight: number = 180; // Increased to fit button
+  private readonly panelHeight: number = 220; // Increased to fit warp button
   private readonly onTalkToGovernor?: () => void;
+  private readonly onWarpToPlanet?: () => void;
 
   constructor(
     planet: Planet,
     screenWidth: number,
     _screenHeight: number,
     onTalkToGovernor?: () => void,
+    onWarpToPlanet?: () => void,
   ) {
     this.planet = planet;
     this.container = new Container();
     this.onTalkToGovernor = onTalkToGovernor;
+    this.onWarpToPlanet = onWarpToPlanet;
 
     // Position panel at top-right, below any existing UI
     this.container.x = screenWidth - 240;
@@ -144,6 +147,58 @@ export class PlanetInfoPanel {
       });
 
       this.container.addChild(buttonContainer);
+    }
+
+    // Add "Warp to Planet" button if callback provided
+    if (this.onWarpToPlanet) {
+      const warpButtonContainer = new Container();
+      warpButtonContainer.x = 10;
+      warpButtonContainer.y = this.planet.inhabitants.length > 0 ? 170 : 130;
+
+      // Button background
+      const warpBg = new Graphics();
+      warpBg.rect(0, 0, 200, 30);
+      warpBg.fill({ color: 0x444400, alpha: 0.9 });
+      warpBg.stroke({ color: 0xffff00, width: 1 });
+      warpButtonContainer.addChild(warpBg);
+
+      // Button text
+      const warpText = new Text({
+        text: '⚡ Мини-варп к планете',
+        style: {
+          fontFamily: 'Courier New',
+          fontSize: 11,
+          fill: 0xffff00,
+        },
+      });
+      warpText.x = 10;
+      warpText.y = 8;
+      warpButtonContainer.addChild(warpText);
+
+      // Make button interactive
+      warpButtonContainer.eventMode = 'static';
+      warpButtonContainer.cursor = 'pointer';
+      warpButtonContainer.on('pointerdown', () => {
+        if (this.onWarpToPlanet) {
+          this.onWarpToPlanet();
+        }
+      });
+
+      // Hover effects
+      warpButtonContainer.on('pointerover', () => {
+        warpBg.clear();
+        warpBg.rect(0, 0, 200, 30);
+        warpBg.fill({ color: 0x666600, alpha: 0.9 });
+        warpBg.stroke({ color: 0xffff00, width: 2 });
+      });
+      warpButtonContainer.on('pointerout', () => {
+        warpBg.clear();
+        warpBg.rect(0, 0, 200, 30);
+        warpBg.fill({ color: 0x444400, alpha: 0.9 });
+        warpBg.stroke({ color: 0xffff00, width: 1 });
+      });
+
+      this.container.addChild(warpButtonContainer);
     }
   }
 

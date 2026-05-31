@@ -513,9 +513,14 @@ export class StarMapScene extends GameScene {
     this.infoPanel.x = width - 220;
     this.infoPanel.y = 60;
 
+    // Calculate dynamic panel height based on number of planets
+    const basePanelHeight = 180;
+    const planetListHeight = system.planets.length * 18; // 18px per planet
+    const totalPanelHeight = basePanelHeight + planetListHeight;
+
     const bg = new Graphics();
     bg.fill({ color: 0x000000, alpha: 0.8 });
-    bg.rect(0, 0, 200, 180);
+    bg.rect(0, 0, 200, totalPanelHeight);
     bg.stroke({ width: 2, color: 0x00ffff });
     this.infoPanel.addChild(bg);
 
@@ -545,16 +550,48 @@ export class StarMapScene extends GameScene {
     this.infoPanel.addChild(factionText);
 
     const planetsText = new Text({
-      text: `Планет: ${system.planets.length}`,
+      text: `Планеты (${system.planets.length}):`,
       style: {
         fontFamily: 'Courier New',
         fontSize: 11,
         fill: 0xaaaaaa,
+        fontWeight: 'bold',
       },
     });
     planetsText.x = 10;
     planetsText.y = 55;
     this.infoPanel.addChild(planetsText);
+
+    // List of planets with types
+    let planetYOffset = 75;
+    for (const planet of system.planets) {
+      const planetType = this.getPlanetTypeRussian(planet.type);
+      const planetItem = new Text({
+        text: `• ${planet.name}`,
+        style: {
+          fontFamily: 'Courier New',
+          fontSize: 10,
+          fill: 0x88ccff,
+        },
+      });
+      planetItem.x = 15;
+      planetItem.y = planetYOffset;
+      this.infoPanel.addChild(planetItem);
+
+      const typeLabel = new Text({
+        text: planetType,
+        style: {
+          fontFamily: 'Courier New',
+          fontSize: 9,
+          fill: 0x666666,
+        },
+      });
+      typeLabel.x = 25;
+      typeLabel.y = planetYOffset + 11;
+      this.infoPanel.addChild(typeLabel);
+
+      planetYOffset += 18;
+    }
 
     const connectionsText = new Text({
       text: `Пути: ${system.connections.length}`,
@@ -565,8 +602,11 @@ export class StarMapScene extends GameScene {
       },
     });
     connectionsText.x = 10;
-    connectionsText.y = 75;
+    connectionsText.y = planetYOffset + 5;
     this.infoPanel.addChild(connectionsText);
+
+    // Base Y position for interactive elements (after planet list)
+    const interactiveYStart = planetYOffset + 30;
 
     if (system.id === this.playerSystemId) {
       const hereText = new Text({
@@ -579,7 +619,7 @@ export class StarMapScene extends GameScene {
         },
       });
       hereText.x = 10;
-      hereText.y = 95;
+      hereText.y = interactiveYStart;
       this.infoPanel.addChild(hereText);
     }
 
@@ -605,7 +645,7 @@ export class StarMapScene extends GameScene {
         },
       });
       fuelText.x = 10;
-      fuelText.y = 95;
+      fuelText.y = interactiveYStart;
       this.infoPanel.addChild(fuelText);
 
       if (hasEnoughFuel) {
@@ -619,7 +659,7 @@ export class StarMapScene extends GameScene {
           },
         });
         warpBtn.x = 10;
-        warpBtn.y = 120;
+        warpBtn.y = interactiveYStart + 25;
         warpBtn.eventMode = 'static';
         warpBtn.cursor = 'pointer';
         warpBtn.on('pointerdown', () => {
@@ -642,7 +682,7 @@ export class StarMapScene extends GameScene {
           },
         });
         noFuelText.x = 10;
-        noFuelText.y = 120;
+        noFuelText.y = interactiveYStart + 25;
         this.infoPanel.addChild(noFuelText);
       }
     }
@@ -813,5 +853,20 @@ export class StarMapScene extends GameScene {
 
     // Transition to space flight scene
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, { gameEngine: this.gameEngine });
+  }
+
+  /**
+   * Get Russian translation for planet type
+   */
+  private getPlanetTypeRussian(type: string): string {
+    const translations: Record<string, string> = {
+      TERRESTRIAL: 'Земной',
+      GAS_GIANT: 'Газовый гигант',
+      ICE: 'Ледяной',
+      VOLCANIC: 'Вулканический',
+      INDUSTRIAL: 'Промышленный',
+      HABITAT: 'Обитаемый',
+    };
+    return translations[type] ?? type;
   }
 }
