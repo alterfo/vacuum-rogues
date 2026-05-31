@@ -27,6 +27,7 @@ import { SkillTree } from '@/domain/SkillTree';
 import { Player } from '@/domain/Player';
 import { PlayerShip } from '@/domain/PlayerShip';
 import { Inventory } from '@/domain/Inventory';
+import { WeaponModule, ShieldModule, EngineModule } from '@/domain/ShipModule';
 
 export class GameEngine {
   public currentScene: GameScene | null = null;
@@ -129,6 +130,40 @@ export class GameEngine {
       const race = RaceRegistry.getRace(selectedRace);
 
       const skillTree = new SkillTree([]);
+      const inventory = new Inventory();
+
+      // Add starter modules to inventory for testing
+      inventory.addItem(
+        new WeaponModule(
+          'weapon_laser_1',
+          'Лазер МК-1',
+          { type: 'damage', value: 10 },
+          1,
+          15,
+          3,
+          10,
+        ),
+      );
+      inventory.addItem(
+        new ShieldModule(
+          'shield_basic_1',
+          'Базовый щит',
+          { type: 'shield', value: 20 },
+          1,
+          25,
+          5,
+        ),
+      );
+      inventory.addItem(
+        new EngineModule(
+          'engine_fast_1',
+          'Быстрый двигатель',
+          { type: 'speed', value: 0.2 },
+          1,
+          0.3,
+          0.1,
+        ),
+      );
 
       this.player = new Player(
         'player',
@@ -154,7 +189,7 @@ export class GameEngine {
           race.shipBaseline.evasion,
           race,
         ),
-        new Inventory(),
+        inventory,
         '', // currentSystemId placeholder
       );
 
