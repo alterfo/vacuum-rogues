@@ -163,6 +163,17 @@ export class SpaceFlightScene extends GameScene {
   private boundPointerUp: (() => void) | null = null;
   private boundKeyDown: ((event: KeyboardEvent) => void) | null = null;
 
+  // Camera zoom and pan
+  private cameraZoom: number = 1.0;
+  private cameraPanX: number = 0;
+  private cameraPanY: number = 0;
+  private isPanning: boolean = false;
+  private lastPanX: number = 0;
+  private lastPanY: number = 0;
+  private readonly MIN_ZOOM = 0.5;
+  private readonly MAX_ZOOM = 2.0;
+  private boundWheel: ((event: WheelEvent) => void) | null = null;
+
   initialize(context?: object): void {
     this.gameEngine = (context as { gameEngine?: GameEngine })?.gameEngine ?? null;
 
@@ -208,6 +219,10 @@ export class SpaceFlightScene extends GameScene {
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener('keydown', this.boundKeyDown);
 
+    // Add wheel listener for zoom
+    this.boundWheel = this.onWheel.bind(this);
+    this.renderer.app.canvas.addEventListener('wheel', this.boundWheel, { passive: false });
+
     logger.info('SpaceFlightScene initialized');
   }
 
@@ -238,6 +253,12 @@ export class SpaceFlightScene extends GameScene {
     if (this.boundKeyDown) {
       window.removeEventListener('keydown', this.boundKeyDown);
       this.boundKeyDown = null;
+    }
+
+    // Remove wheel listener
+    if (this.boundWheel) {
+      this.renderer.app.canvas.removeEventListener('wheel', this.boundWheel);
+      this.boundWheel = null;
     }
 
     // Destroy planet sprites
@@ -523,12 +544,12 @@ export class SpaceFlightScene extends GameScene {
 
   private createUI(): void {
     this.uiContainer = new Container();
-    // IMPORTANT: Keep eventMode as 'none' to not block clicks on space
-    this.uiContainer.eventMode = 'none';
+    // Container uses default eventMode ('auto') - it won't block clicks since it has no handlers
+    // Child elements with eventMode='static' will receive events
 
     // Instructions (non-interactive)
     const instructions = new Text({
-      text: 'Клик на планету - установить курс | Клик в космос - свободный полёт | [J] - Квесты | [I] - Инвентарь',
+      text: 'Клик на планету - курс | Средняя кнопка - пан | Колесико - зум | [J] - Квесты | [I] - Инвентарь',
       style: {
         fontFamily: 'Courier New',
         fontSize: 13,
@@ -720,18 +741,76 @@ export class SpaceFlightScene extends GameScene {
 
   private onPointerDown(event: FederatedPointerEvent): void {
     if (!this.shipPhysics) return;
-    this.isPointerDown = true;
-    this.shipPhysics.setTarget(event.global.x, event.global.y);
-    logger.debug(`Ship target set to: ${event.global.x}, ${event.global.y}`);
+
+    // Middle mouse button (1) or right mouse button (2) for panning
+    if (event.button === 1 || event.button === 2) {
+      this.isPanning = true;
+      this.lastPanX = event.global.x;
+      this.lastPanY = event.global.y;
+      return;
+    }
+
+    // Left button (0) for ship navigation
+    if (event.button === 0) {
+      this.isPointerDown = true;
+      this.shipPhysics.setTarget(event.global.x, event.global.y);
+      logger.debug(`Ship target set to: ${event.global.x}, ${event.global.y}`);
+    }
   }
 
   private onPointerMove(event: FederatedPointerEvent): void {
-    if (!this.isPointerDown || !this.shipPhysics) return;
-    this.shipPhysics.setTarget(event.global.x, event.global.y);
+    // Handle camera panning
+    if (this.isPanning) {
+      const dx = event.global.x - this.lastPanX;
+      const dy = event.global.y - this.lastPanY;
+      this.cameraPanX += dx;
+      this.cameraPanY += dy;
+      this.lastPanX = event.global.x;
+      this.lastPanY = event.global.y;
+      this.applyCameraTransform();
+      return;
+    }
+
+    // Handle ship target tracking
+    if (this.isPointerDown && this.shipPhysics) {
+      this.shipPhysics.setTarget(event.global.x, event.global.y);
+    }
   }
 
   private onPointerUp(): void {
     this.isPointerDown = false;
+    this.isPanning = false;
+  }
+
+  /**
+   * Handle mouse wheel for zoom
+   */
+  private onWheel(event: WheelEvent): void {
+    event.preventDefault();
+
+    // Calculate zoom delta (negative deltaY = zoom in, positive = zoom out)
+    const zoomDelta = event.deltaY > 0 ? 0.9 : 1.1;
+    const newZoom = this.cameraZoom * zoomDelta;
+
+    // Clamp zoom to min/max bounds
+    this.cameraZoom = Math.max(this.MIN_ZOOM, Math.min(this.MAX_ZOOM, newZoom));
+
+    this.applyCameraTransform();
+    logger.debug(`Camera zoom: ${this.cameraZoom.toFixed(2)}`);
+  }
+
+  /**
+   * Apply camera zoom and pan to game layer
+   */
+  private applyCameraTransform(): void {
+    if (!this.renderer.gameLayer) return;
+
+    // Apply scale
+    this.renderer.gameLayer.scale.set(this.cameraZoom);
+
+    // Apply position offset
+    this.renderer.gameLayer.x = this.cameraPanX;
+    this.renderer.gameLayer.y = this.cameraPanY;
   }
 
   private updateShip(deltaTime: number): void {
