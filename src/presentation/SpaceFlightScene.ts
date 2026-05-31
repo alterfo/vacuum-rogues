@@ -4,6 +4,7 @@ import type { GameEngine } from '@/systems/GameEngine';
 import { SceneType } from '@/types';
 import { PlanetSprite } from './PlanetSprite';
 import { PlanetInfoPanel } from './PlanetInfoPanel';
+import { SystemMiniMap } from './SystemMiniMap';
 import type { Planet } from '@/domain/Planet';
 import { logger } from '@/utils/logger';
 
@@ -126,6 +127,8 @@ export class SpaceFlightScene extends GameScene {
   private planetInfoPanel: PlanetInfoPanel | null = null;
   private starCenterX: number = 0;
   private starCenterY: number = 0;
+  private starGraphics: Graphics | null = null;
+  private systemMiniMap: SystemMiniMap | null = null;
 
   // Continuous input tracking
   private isPointerDown: boolean = false;
@@ -151,6 +154,7 @@ export class SpaceFlightScene extends GameScene {
 
     this.createStarField();
     this.createNebulae();
+    this.createStar();
     this.createPlanets();
     this.createShip();
     this.createUI();
@@ -172,6 +176,7 @@ export class SpaceFlightScene extends GameScene {
   update(deltaTime: number): void {
     this.updateStarField(deltaTime);
     this.updateShip(deltaTime);
+    this.updatePlanets(deltaTime);
   }
 
   destroy(): void {
@@ -202,6 +207,12 @@ export class SpaceFlightScene extends GameScene {
       this.planetInfoPanel = null;
     }
 
+    // Destroy mini-map
+    if (this.systemMiniMap) {
+      this.systemMiniMap.destroy();
+      this.systemMiniMap = null;
+    }
+
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
     this.starLayers = [];
@@ -210,6 +221,7 @@ export class SpaceFlightScene extends GameScene {
     this.nebulaeContainer = null;
     this.uiContainer = null;
     this.shipPhysics = null;
+    this.starGraphics = null;
     logger.info('SpaceFlightScene destroyed');
   }
 
@@ -274,6 +286,45 @@ export class SpaceFlightScene extends GameScene {
     }
 
     this.renderer.gameLayer.addChildAt(this.nebulaeContainer, 0);
+  }
+
+  /**
+   * Create a beautiful star (sun) at the center of the system
+   */
+  private createStar(): void {
+    this.starGraphics = new Graphics();
+
+    // Draw multiple concentric circles for glow effect
+    const glowLayers = [
+      { radius: 60, color: 0xffff00, alpha: 0.1 },
+      { radius: 50, color: 0xffdd00, alpha: 0.15 },
+      { radius: 40, color: 0xffbb00, alpha: 0.2 },
+      { radius: 32, color: 0xff9900, alpha: 0.3 },
+    ];
+
+    for (const layer of glowLayers) {
+      this.starGraphics.circle(this.starCenterX, this.starCenterY, layer.radius);
+      this.starGraphics.fill({ color: layer.color, alpha: layer.alpha });
+    }
+
+    // Draw main star body
+    this.starGraphics.circle(this.starCenterX, this.starCenterY, 28);
+    this.starGraphics.fill({ color: 0xffaa00 });
+
+    // Add bright core
+    this.starGraphics.circle(this.starCenterX, this.starCenterY, 20);
+    this.starGraphics.fill({ color: 0xffffaa });
+
+    // Add white hot center
+    this.starGraphics.circle(this.starCenterX, this.starCenterY, 12);
+    this.starGraphics.fill({ color: 0xffffff, alpha: 0.9 });
+
+    // Add subtle blur for atmospheric glow
+    const blurFilter = new BlurFilter({ strength: 4 });
+    this.starGraphics.filters = [blurFilter];
+
+    // Add star to game layer (above nebulae, below planets)
+    this.renderer.gameLayer.addChild(this.starGraphics);
   }
 
   private createShip(): void {
@@ -373,6 +424,13 @@ export class SpaceFlightScene extends GameScene {
     this.uiContainer.addChild(backBtn);
 
     this.renderer.uiLayer.addChild(this.uiContainer);
+
+    // Create mini-map
+    this.systemMiniMap = new SystemMiniMap(
+      this.renderer.app.screen.width,
+      this.renderer.app.screen.height,
+    );
+    this.renderer.uiLayer.addChild(this.systemMiniMap.container);
   }
 
   /**
@@ -464,6 +522,26 @@ export class SpaceFlightScene extends GameScene {
 
     // Redraw ship for engine effects (uses isMoving from physics)
     this.drawShip();
+  }
+
+  /**
+   * Update planet positions for orbital rotation and mini-map
+   */
+  private updatePlanets(deltaTime: number): void {
+    for (const sprite of this.planetSprites) {
+      sprite.update(deltaTime);
+    }
+
+    // Update mini-map with current positions
+    if (this.systemMiniMap && this.shipPhysics) {
+      this.systemMiniMap.updateWithSprites(
+        this.planetSprites,
+        this.shipPhysics.shipX,
+        this.shipPhysics.shipY,
+        this.starCenterX,
+        this.starCenterY,
+      );
+    }
   }
 
   private updateStarField(deltaTime: number): void {
