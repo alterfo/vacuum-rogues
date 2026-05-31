@@ -16,6 +16,7 @@ export class StarMapScene extends GameScene {
   private playerSystemId: string | null = null;
   private infoPanel: Container | null = null;
   private confirmDialog: Container | null = null;
+  private fixedUIContainer: Container | null = null;
   private gameEngine: GameEngine | null = null;
 
   // Viewport state for zoom/pan
@@ -181,6 +182,7 @@ export class StarMapScene extends GameScene {
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
     this.infoPanel = null;
+    this.fixedUIContainer = null;
     this.gameEngine = null;
   }
 
@@ -194,6 +196,15 @@ export class StarMapScene extends GameScene {
     background.rect(0, 0, width, height);
     this.renderer.gameLayer.addChildAt(background, 0);
 
+    // Clear and recreate fixed UI container
+    if (this.fixedUIContainer) {
+      if (this.fixedUIContainer.parent) {
+        this.renderer.uiLayer.removeChild(this.fixedUIContainer);
+      }
+      this.fixedUIContainer.destroy({ children: true });
+    }
+    this.fixedUIContainer = new Container();
+
     // Fixed UI elements
     const title = new Text({
       text: 'SECTOR MAP',
@@ -206,7 +217,7 @@ export class StarMapScene extends GameScene {
     });
     title.x = 20;
     title.y = 20;
-    this.renderer.uiLayer.addChild(title);
+    this.fixedUIContainer.addChild(title);
 
     // Fuel indicator
     const currentFuel = this.gameEngine?.player?.ship.energy ?? 0;
@@ -224,7 +235,7 @@ export class StarMapScene extends GameScene {
     });
     fuelText.x = 20;
     fuelText.y = 50;
-    this.renderer.uiLayer.addChild(fuelText);
+    this.fixedUIContainer.addChild(fuelText);
 
     const instructions = new Text({
       text: 'Колесо мыши — зум | Перетаскивание — пан | Клик — инфо',
@@ -236,7 +247,9 @@ export class StarMapScene extends GameScene {
     });
     instructions.x = 20;
     instructions.y = height - 30;
-    this.renderer.uiLayer.addChild(instructions);
+    this.fixedUIContainer.addChild(instructions);
+
+    this.renderer.uiLayer.addChild(this.fixedUIContainer);
 
     if (!this.galaxy) {
       logger.warn('No galaxy available for rendering');
