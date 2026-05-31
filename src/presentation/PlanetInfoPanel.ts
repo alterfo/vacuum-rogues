@@ -124,7 +124,8 @@ export class PlanetInfoPanel {
       // Make button interactive
       buttonContainer.eventMode = 'static';
       buttonContainer.cursor = 'pointer';
-      buttonContainer.on('pointerdown', () => {
+      buttonContainer.on('pointerdown', (event) => {
+        event.stopPropagation(); // Prevent stage from also handling this click
         if (this.onTalkToGovernor) {
           this.onTalkToGovernor();
         }

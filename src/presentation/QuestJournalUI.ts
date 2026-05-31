@@ -228,7 +228,8 @@ export class QuestJournalUI {
     btn.eventMode = 'static';
     btn.cursor = 'pointer';
 
-    btn.on('pointerdown', () => {
+    btn.on('pointerdown', (event) => {
+      event.stopPropagation(); // Prevent stage from also handling this click
       if (this.onNavigateToObjective) {
         this.onNavigateToObjective(locationId);
         this.onClose(); // Close journal after navigation
@@ -309,7 +310,8 @@ export class QuestJournalUI {
     closeText.y = 2;
     closeBtn.addChild(closeText);
 
-    closeBtn.on('pointerdown', () => {
+    closeBtn.on('pointerdown', (event) => {
+      event.stopPropagation(); // Prevent stage from also handling this click
       logger.info('Quest journal closed');
       this.onClose();
     });

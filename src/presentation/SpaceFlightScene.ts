@@ -555,7 +555,8 @@ export class SpaceFlightScene extends GameScene {
     questBtn.y = 50;
     questBtn.eventMode = 'static';
     questBtn.cursor = 'pointer';
-    questBtn.on('pointerdown', () => {
+    questBtn.on('pointerdown', (event) => {
+      event.stopPropagation(); // Prevent stage from also handling this click
       logger.info('Quest journal button clicked');
       this.toggleQuestJournal();
     });
@@ -577,7 +578,8 @@ export class SpaceFlightScene extends GameScene {
     backBtn.y = 20;
     backBtn.eventMode = 'static';
     backBtn.cursor = 'pointer';
-    backBtn.on('pointerdown', async () => {
+    backBtn.on('pointerdown', async (event) => {
+      event.stopPropagation(); // Prevent stage from also handling this click
       logger.info('Back to map clicked');
       await this.returnToStarMap();
     });

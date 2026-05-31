@@ -144,7 +144,8 @@ export class PlanetSprite {
     this.graphics.cursor = 'pointer';
 
     // Click handler
-    this.graphics.on('pointerdown', () => {
+    this.graphics.on('pointerdown', (event) => {
+      event.stopPropagation(); // Prevent stage from also handling this click
       if (this.clickCallback) {
         this.clickCallback(this.planet);
       }
