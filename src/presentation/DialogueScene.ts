@@ -1,57 +1,346 @@
 import { GameScene } from './GameScene';
-import { Graphics, Text } from 'pixi.js';
-import type { DialogueSession } from '@/domain/DialogueSession';
+import { Container, Graphics, Text } from 'pixi.js';
+import type { GameEngine } from '@/systems/GameEngine';
+import type { NPC } from '@/domain/NPC';
+import { SceneType } from '@/types';
 import { logger } from '@/utils/logger';
 
-export interface DialogueContext {
-  session: DialogueSession;
+/**
+ * Dialogue node representing a single dialogue exchange
+ */
+export interface DialogueNode {
+  id: string;
+  npcText: string;
+  responses: DialogueResponse[];
+  questOfferId?: string; // ID of quest to offer
 }
 
+/**
+ * Player response option
+ */
+export interface DialogueResponse {
+  text: string;
+  nextNodeId: string | null; // null means end dialogue
+  acceptsQuest?: boolean; // If true, accepts the offered quest
+}
+
+/**
+ * Dialogue tree template
+ */
+export interface DialogueTree {
+  npcId: string;
+  npcName: string;
+  startNodeId: string;
+  nodes: Map<string, DialogueNode>;
+}
+
+/**
+ * Scene for displaying NPC dialogues with template-based conversation trees
+ */
 export class DialogueScene extends GameScene {
-  private session?: DialogueSession;
+  private gameEngine: GameEngine | null = null;
+  private currentNPC: NPC | null = null;
+  private dialogueTree: DialogueTree | null = null;
+  private currentNode: DialogueNode | null = null;
+
+  private dialogueContainer: Container | null = null;
+  private npcPortrait: Graphics | null = null;
+  private npcNameText: Text | null = null;
+  private dialogueText: Text | null = null;
+  private responseButtons: Container[] = [];
 
   initialize(context?: object): void {
-    const ctx = context as DialogueContext | undefined;
-    this.session = ctx?.session;
-    this.renderDialogueUI();
-    logger.info('DialogueScene initialized');
+    const ctx = context as { gameEngine?: GameEngine; npc?: NPC };
+    this.gameEngine = ctx?.gameEngine ?? null;
+    this.currentNPC = ctx?.npc ?? null;
+
+    if (!this.currentNPC) {
+      logger.error('DialogueScene initialized without NPC');
+      return;
+    }
+
+    // Load dialogue tree for this NPC
+    this.dialogueTree = this.loadDialogueTree(this.currentNPC.id);
+    if (!this.dialogueTree) {
+      logger.error(`No dialogue tree found for NPC: ${this.currentNPC.id}`);
+      return;
+    }
+
+    this.renderer.clearGameLayer();
+    this.renderer.clearUILayer();
+
+    this.createDialogueUI();
+    this.displayNode(this.dialogueTree.startNodeId);
+
+    logger.info(`DialogueScene initialized with NPC: ${this.currentNPC.name}`);
   }
 
   update(_deltaTime: number): void {
-    // Dialogue UI animations
+    // No updates needed for static dialogue
   }
 
   destroy(): void {
+    this.responseButtons = [];
+    this.dialogueContainer = null;
+    this.npcPortrait = null;
+    this.npcNameText = null;
+    this.dialogueText = null;
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
+    logger.info('DialogueScene destroyed');
   }
 
-  private renderDialogueUI(): void {
-    this.renderer.clearGameLayer();
+  /**
+   * Load dialogue tree for NPC (hardcoded templates for MVP)
+   */
+  private loadDialogueTree(npcId: string): DialogueTree | null {
+    // Create a simple dialogue tree for governors
+    if (npcId.includes('governor')) {
+      const nodes = new Map<string, DialogueNode>();
 
-    const graphics = new Graphics();
-    const w = this.renderer.app.screen.width;
-    const h = this.renderer.app.screen.height;
+      nodes.set('greeting', {
+        id: 'greeting',
+        npcText: 'Приветствую, рейнджер. Что привело вас в нашу систему?',
+        responses: [
+          { text: 'Нужна ли помощь?', nextNodeId: 'quest_offer' },
+          { text: 'Просто осматриваюсь', nextNodeId: 'casual_chat' },
+          { text: 'Прощайте', nextNodeId: null },
+        ],
+      });
 
-    // Dialogue panel background
-    graphics.fill({ color: 0x001122, alpha: 0.85 });
-    graphics.rect(40, h - 220, w - 80, 180);
-    graphics.fill(0x001122);
-    graphics.stroke({ width: 2, color: 0x00ffff });
+      nodes.set('quest_offer', {
+        id: 'quest_offer',
+        npcText:
+          'Да, у нас проблема. Нам нужна руда для строительства. Не могли бы вы доставить 10 единиц руды на станцию Омега? Мы заплатим 100 кредитов.',
+        responses: [
+          { text: 'Принять квест', nextNodeId: 'quest_accepted', acceptsQuest: true },
+          { text: 'Отказаться', nextNodeId: 'greeting' },
+        ],
+        questOfferId: 'quest_delivery_ore',
+      });
 
-    this.renderer.gameLayer.addChild(graphics);
+      nodes.set('quest_accepted', {
+        id: 'quest_accepted',
+        npcText: 'Отлично! Жду хороших новостей. Удачи, рейнджер!',
+        responses: [{ text: 'До связи', nextNodeId: null }],
+      });
 
-    const npcName = this.session?.npc.name ?? 'Unknown';
-    const title = new Text({
-      text: `DIALOGUE: ${npcName}`,
+      nodes.set('casual_chat', {
+        id: 'casual_chat',
+        npcText: 'Наша система богата ресурсами. Может, захотите здесь остаться?',
+        responses: [
+          { text: 'Расскажите больше', nextNodeId: 'system_info' },
+          { text: 'Пожалуй, нет', nextNodeId: 'greeting' },
+        ],
+      });
+
+      nodes.set('system_info', {
+        id: 'system_info',
+        npcText:
+          'У нас три планеты: промышленная, сельскохозяйственная и торговая. Каждая играет важную роль в экономике.',
+        responses: [{ text: 'Интересно', nextNodeId: 'greeting' }],
+      });
+
+      return {
+        npcId,
+        npcName: 'Губернатор',
+        startNodeId: 'greeting',
+        nodes,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Create dialogue UI container
+   */
+  private createDialogueUI(): void {
+    this.dialogueContainer = new Container();
+
+    const screenWidth = this.renderer.app.screen.width;
+    const screenHeight = this.renderer.app.screen.height;
+
+    // Semi-transparent backdrop
+    const backdrop = new Graphics();
+    backdrop.rect(0, 0, screenWidth, screenHeight);
+    backdrop.fill({ color: 0x000000, alpha: 0.7 });
+    this.dialogueContainer.addChild(backdrop);
+
+    // Main dialogue panel
+    const panelWidth = 700;
+    const panelHeight = 400;
+    const panelX = (screenWidth - panelWidth) / 2;
+    const panelY = (screenHeight - panelHeight) / 2;
+
+    const panel = new Graphics();
+    panel.rect(panelX, panelY, panelWidth, panelHeight);
+    panel.fill({ color: 0x1a1a2e, alpha: 0.95 });
+    panel.stroke({ color: 0x00ffff, width: 2 });
+    this.dialogueContainer.addChild(panel);
+
+    // NPC portrait (simple colored circle for MVP)
+    this.npcPortrait = new Graphics();
+    this.npcPortrait.circle(panelX + 60, panelY + 60, 40);
+    this.npcPortrait.fill({ color: 0x4488cc });
+    this.dialogueContainer.addChild(this.npcPortrait);
+
+    // NPC name
+    this.npcNameText = new Text({
+      text: this.dialogueTree?.npcName ?? 'NPC',
       style: {
         fontFamily: 'Courier New',
-        fontSize: 16,
+        fontSize: 18,
         fill: 0x00ffff,
+        fontWeight: 'bold',
       },
     });
-    title.x = 60;
-    title.y = h - 210;
-    this.renderer.uiLayer.addChild(title);
+    this.npcNameText.x = panelX + 120;
+    this.npcNameText.y = panelY + 30;
+    this.dialogueContainer.addChild(this.npcNameText);
+
+    // Dialogue text area
+    this.dialogueText = new Text({
+      text: '',
+      style: {
+        fontFamily: 'Courier New',
+        fontSize: 14,
+        fill: 0xffffff,
+        wordWrap: true,
+        wordWrapWidth: panelWidth - 40,
+      },
+    });
+    this.dialogueText.x = panelX + 20;
+    this.dialogueText.y = panelY + 100;
+    this.dialogueContainer.addChild(this.dialogueText);
+
+    this.renderer.uiLayer.addChild(this.dialogueContainer);
+  }
+
+  /**
+   * Display a dialogue node with responses
+   */
+  private displayNode(nodeId: string): void {
+    if (!this.dialogueTree) return;
+
+    const node = this.dialogueTree.nodes.get(nodeId);
+    if (!node) {
+      logger.error(`Dialogue node not found: ${nodeId}`);
+      return;
+    }
+
+    this.currentNode = node;
+
+    // Update dialogue text
+    if (this.dialogueText) {
+      this.dialogueText.text = node.npcText;
+    }
+
+    // Clear old response buttons
+    for (const btn of this.responseButtons) {
+      btn.destroy({ children: true });
+    }
+    this.responseButtons = [];
+
+    // Create response buttons
+    const panelX = (this.renderer.app.screen.width - 700) / 2;
+    const panelY = (this.renderer.app.screen.height - 400) / 2;
+    const buttonStartY = panelY + 250;
+
+    for (let i = 0; i < node.responses.length; i++) {
+      const response = node.responses[i];
+      const button = this.createResponseButton(
+        response.text,
+        panelX + 20,
+        buttonStartY + i * 50,
+        () => this.onResponseSelected(response),
+      );
+      this.responseButtons.push(button);
+      this.dialogueContainer?.addChild(button);
+    }
+  }
+
+  /**
+   * Create a clickable response button
+   */
+  private createResponseButton(
+    text: string,
+    x: number,
+    y: number,
+    onClick: () => void,
+  ): Container {
+    const container = new Container();
+    container.x = x;
+    container.y = y;
+
+    const bg = new Graphics();
+    bg.rect(0, 0, 660, 40);
+    bg.fill({ color: 0x16213e, alpha: 0.9 });
+    bg.stroke({ color: 0x00ffff, width: 1 });
+    container.addChild(bg);
+
+    const buttonText = new Text({
+      text,
+      style: {
+        fontFamily: 'Courier New',
+        fontSize: 14,
+        fill: 0xffffff,
+      },
+    });
+    buttonText.x = 10;
+    buttonText.y = 10;
+    container.addChild(buttonText);
+
+    // Make interactive
+    container.eventMode = 'static';
+    container.cursor = 'pointer';
+    container.on('pointerdown', onClick);
+    container.on('pointerover', () => {
+      bg.clear();
+      bg.rect(0, 0, 660, 40);
+      bg.fill({ color: 0x1f4068, alpha: 0.9 });
+      bg.stroke({ color: 0x00ffff, width: 2 });
+    });
+    container.on('pointerout', () => {
+      bg.clear();
+      bg.rect(0, 0, 660, 40);
+      bg.fill({ color: 0x16213e, alpha: 0.9 });
+      bg.stroke({ color: 0x00ffff, width: 1 });
+    });
+
+    return container;
+  }
+
+  /**
+   * Handle response selection
+   */
+  private onResponseSelected(response: DialogueResponse): void {
+    logger.debug(`Response selected: ${response.text}`);
+
+    // Handle quest acceptance
+    if (response.acceptsQuest && this.currentNode?.questOfferId && this.gameEngine) {
+      const questManager = this.gameEngine.questManager;
+      const quest = questManager.acceptQuest(this.currentNode.questOfferId, this.gameEngine.player);
+      if (quest) {
+        logger.info(`Quest accepted: ${quest.title}`);
+      }
+    }
+
+    // Navigate to next node or close dialogue
+    if (response.nextNodeId) {
+      this.displayNode(response.nextNodeId);
+    } else {
+      this.closeDialogue();
+    }
+  }
+
+  /**
+   * Close dialogue and return to previous scene
+   */
+  private async closeDialogue(): Promise<void> {
+    logger.info('Closing dialogue');
+    if (this.gameEngine) {
+      await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, { gameEngine: this.gameEngine });
+    }
   }
 }
