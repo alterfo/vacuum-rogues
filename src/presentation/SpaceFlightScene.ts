@@ -692,6 +692,15 @@ export class SpaceFlightScene extends GameScene {
   private async onTalkToGovernor(planet: Planet): Promise<void> {
     logger.info(`Opening dialogue with governor of ${planet.name}`);
 
+    // Update quest progress for visiting this location
+    if (this.gameEngine?.questManager) {
+      this.gameEngine.questManager.updateQuestProgress({
+        type: 'VISIT_LOCATION',
+        locationId: planet.id,
+      });
+      logger.debug(`Updated quest progress for visiting ${planet.name}`);
+    }
+
     // Get the governor NPC (first inhabitant)
     if (planet.inhabitants.length === 0) {
       logger.warn(`No inhabitants on planet ${planet.name}`);

@@ -22,6 +22,7 @@ export interface DialogueResponse {
   text: string;
   nextNodeId: string | null; // null means end dialogue
   acceptsQuest?: boolean; // If true, accepts the offered quest
+  completesQuest?: string; // If set, completes the quest with this ID
 }
 
 /**
@@ -98,14 +99,32 @@ export class DialogueScene extends GameScene {
     if (npcId.includes('governor')) {
       const nodes = new Map<string, DialogueNode>();
 
+      // Check for completed quests
+      const completedQuests = this.gameEngine?.questManager
+        .getActiveQuests()
+        .filter((q) => q.isCompleted);
+
+      const greetingResponses: DialogueResponse[] = [];
+
+      // Add quest completion option if applicable
+      if (completedQuests && completedQuests.length > 0) {
+        greetingResponses.push({
+          text: `Я выполнил задание: ${completedQuests[0].title}`,
+          nextNodeId: 'quest_complete',
+          completesQuest: completedQuests[0].id,
+        });
+      }
+
+      greetingResponses.push(
+        { text: 'Нужна ли помощь?', nextNodeId: 'quest_offer' },
+        { text: 'Просто осматриваюсь', nextNodeId: 'casual_chat' },
+        { text: 'Прощайте', nextNodeId: null },
+      );
+
       nodes.set('greeting', {
         id: 'greeting',
         npcText: 'Приветствую, рейнджер. Что привело вас в нашу систему?',
-        responses: [
-          { text: 'Нужна ли помощь?', nextNodeId: 'quest_offer' },
-          { text: 'Просто осматриваюсь', nextNodeId: 'casual_chat' },
-          { text: 'Прощайте', nextNodeId: null },
-        ],
+        responses: greetingResponses,
       });
 
       nodes.set('quest_offer', {
@@ -123,6 +142,22 @@ export class DialogueScene extends GameScene {
         id: 'quest_accepted',
         npcText: 'Отлично! Жду хороших новостей. Удачи, рейнджер!',
         responses: [{ text: 'До связи', nextNodeId: null }],
+      });
+
+      // Dynamic quest completion node with rewards
+      let questCompleteText = 'Отличная работа, рейнджер! Вот ваша награда:';
+      if (completedQuests && completedQuests.length > 0) {
+        const reward = completedQuests[0].reward;
+        questCompleteText += `\n\n+ ${reward.credits} кредитов\n+ ${reward.experience} опыта`;
+        if (reward.items.length > 0) {
+          questCompleteText += `\n+ Предметы: ${reward.items.map((i) => i.amount + 'x ' + i.type).join(', ')}`;
+        }
+      }
+
+      nodes.set('quest_complete', {
+        id: 'quest_complete',
+        npcText: questCompleteText,
+        responses: [{ text: 'Спасибо!', nextNodeId: null }],
       });
 
       nodes.set('casual_chat', {
@@ -323,6 +358,15 @@ export class DialogueScene extends GameScene {
       const quest = questManager.acceptQuest(this.currentNode.questOfferId);
       if (quest) {
         logger.info(`Quest accepted: ${quest.title}`);
+      }
+    }
+
+    // Handle quest completion
+    if (response.completesQuest && this.gameEngine?.player) {
+      const questManager = this.gameEngine.questManager;
+      const success = questManager.completeQuest(response.completesQuest, this.gameEngine.player);
+      if (success) {
+        logger.info(`Quest completed: ${response.completesQuest}`);
       }
     }
 
