@@ -9,7 +9,7 @@ export class SystemMiniMap {
   public readonly container: Container;
   private readonly mapWidth: number = 180;
   private readonly mapHeight: number = 180;
-  private readonly mapScale: number = 0.25; // Scale factor for displaying orbits
+  private readonly mapScale: number = 0.05; // Scale factor for displaying orbits (adjusted for 5x orbital radii)
   private readonly graphics: Graphics;
 
   constructor(screenWidth: number, screenHeight: number) {
