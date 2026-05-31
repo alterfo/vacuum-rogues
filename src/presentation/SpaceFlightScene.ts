@@ -74,20 +74,7 @@ class ShipPhysics {
       return;
     }
 
-    // Calculate stopping distance: v² / (2a)
-    const stoppingDistance = (this.currentSpeed * this.currentSpeed) / (2 * this.deceleration);
-
-    // Speed update: accelerate if far from target, decelerate when approaching
-    if (distance > stoppingDistance && this.currentSpeed < this.maxSpeed) {
-      // Acceleration phase
-      this.currentSpeed = Math.min(this.maxSpeed, this.currentSpeed + this.acceleration * dt);
-    } else if (distance <= stoppingDistance && this.currentSpeed > 0) {
-      // Deceleration phase
-      this.currentSpeed = Math.max(0, this.currentSpeed - this.deceleration * dt);
-    }
-    // Else: cruise phase (maintain current speed)
-
-    // Rotation update
+    // Rotation update - calculate angle to target
     const dx = this.targetX - this.shipX;
     const dy = this.targetY - this.shipY;
     const targetAngle = Math.atan2(dy, dx);
@@ -105,8 +92,31 @@ class ShipPhysics {
       this.shipAngle += Math.sign(angleDiff) * maxRotation;
     }
 
-    // Position update
-    const moveDistance = this.currentSpeed * dt;
+    // Calculate alignment factor: how well the ship is pointing at target
+    // 1.0 = perfectly aligned, 0.0 = perpendicular or worse
+    const alignmentFactor = Math.max(0, Math.cos(angleDiff));
+
+    // Only accelerate if ship is reasonably aligned with target (within 60°)
+    const isAligned = Math.abs(angleDiff) < Math.PI / 3;
+
+    // Calculate stopping distance: v² / (2a)
+    const stoppingDistance = (this.currentSpeed * this.currentSpeed) / (2 * this.deceleration);
+
+    // Speed update: accelerate if far from target and aligned, decelerate when approaching
+    if (distance > stoppingDistance && this.currentSpeed < this.maxSpeed && isAligned) {
+      // Acceleration phase - only when pointing at target
+      this.currentSpeed = Math.min(this.maxSpeed, this.currentSpeed + this.acceleration * dt);
+    } else if (distance <= stoppingDistance && this.currentSpeed > 0) {
+      // Deceleration phase
+      this.currentSpeed = Math.max(0, this.currentSpeed - this.deceleration * dt);
+    } else if (!isAligned && this.currentSpeed > this.maxSpeed * 0.3) {
+      // Slow down if not aligned and going too fast
+      this.currentSpeed = Math.max(this.maxSpeed * 0.3, this.currentSpeed - this.deceleration * dt * 0.5);
+    }
+
+    // Position update - apply alignment factor to prevent sideways drift
+    const effectiveSpeed = this.currentSpeed * alignmentFactor;
+    const moveDistance = effectiveSpeed * dt;
     this.shipX += Math.cos(this.shipAngle) * moveDistance;
     this.shipY += Math.sin(this.shipAngle) * moveDistance;
   }
