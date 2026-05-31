@@ -281,12 +281,15 @@ export class SpaceFlightScene extends GameScene {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
-    // Create 3 parallax layers
+    // Create 3 parallax layers with more stars and variety
     const layerConfigs = [
-      { count: 150, speed: 0.02, sizeRange: [0.5, 1.5], alphaRange: [0.3, 0.7] },
-      { count: 80, speed: 0.05, sizeRange: [1, 2.5], alphaRange: [0.5, 0.9] },
-      { count: 30, speed: 0.1, sizeRange: [2, 4], alphaRange: [0.7, 1.0] },
+      { count: 300, speed: 0.02, sizeRange: [0.5, 1.5], alphaRange: [0.3, 0.7] },
+      { count: 150, speed: 0.05, sizeRange: [1, 2.5], alphaRange: [0.5, 0.9] },
+      { count: 50, speed: 0.1, sizeRange: [2, 4], alphaRange: [0.7, 1.0] },
     ];
+
+    // Star colors (white, blue-white, yellow-white)
+    const starColors = [0xffffff, 0xaaccff, 0xffffaa, 0xffdddd];
 
     for (const config of layerConfigs) {
       const container = new Container();
@@ -294,8 +297,8 @@ export class SpaceFlightScene extends GameScene {
 
       for (let i = 0; i < config.count; i++) {
         const star = {
-          x: Math.random() * width,
-          y: Math.random() * height,
+          x: Math.random() * width * 2, // Wider area for wrap-around
+          y: Math.random() * height * 2,
           size: config.sizeRange[0] + Math.random() * (config.sizeRange[1] - config.sizeRange[0]),
           alpha: config.alphaRange[0] + Math.random() * (config.alphaRange[1] - config.alphaRange[0]),
           speed: config.speed,
@@ -303,8 +306,16 @@ export class SpaceFlightScene extends GameScene {
         stars.push(star);
 
         const graphics = new Graphics();
-        graphics.fill({ color: 0xffffff, alpha: star.alpha });
+        const starColor = starColors[Math.floor(Math.random() * starColors.length)];
+        graphics.fill({ color: starColor, alpha: star.alpha });
         graphics.circle(star.x, star.y, star.size);
+
+        // Add subtle glow for larger stars
+        if (star.size > 2) {
+          graphics.fill({ color: starColor, alpha: star.alpha * 0.3 });
+          graphics.circle(star.x, star.y, star.size * 1.5);
+        }
+
         container.addChild(graphics);
       }
 

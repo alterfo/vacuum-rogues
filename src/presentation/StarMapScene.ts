@@ -621,6 +621,28 @@ export class StarMapScene extends GameScene {
       hereText.x = 10;
       hereText.y = interactiveYStart;
       this.infoPanel.addChild(hereText);
+
+      // Add "Enter System" button for current system
+      const enterBtn = new Text({
+        text: '[Войти в систему]',
+        style: {
+          fontFamily: 'Courier New',
+          fontSize: 12,
+          fill: 0x00ffff,
+          fontWeight: 'bold',
+        },
+      });
+      enterBtn.x = 10;
+      enterBtn.y = interactiveYStart + 20;
+      enterBtn.eventMode = 'static';
+      enterBtn.cursor = 'pointer';
+      enterBtn.on('pointerdown', async () => {
+        logger.info('Entering current system');
+        await this.enterCurrentSystem();
+      });
+      enterBtn.on('pointerover', () => { enterBtn.alpha = 0.7; });
+      enterBtn.on('pointerout', () => { enterBtn.alpha = 1.0; });
+      this.infoPanel.addChild(enterBtn);
     }
 
     if (system.id !== this.playerSystemId && this.playerSystemId) {
@@ -823,6 +845,18 @@ export class StarMapScene extends GameScene {
       this.confirmDialog.destroy({ children: true });
       this.confirmDialog = null;
     }
+  }
+
+  private async enterCurrentSystem(): Promise<void> {
+    if (!this.gameEngine?.player) {
+      logger.warn('Cannot enter system: no player or game engine');
+      return;
+    }
+
+    logger.info('Entering current system (no fuel cost)');
+
+    // Simply transition to space flight scene (no fuel cost, no system change)
+    await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, { gameEngine: this.gameEngine });
   }
 
   private async performWarpJump(target: StarSystem, fuelCost: number): Promise<void> {

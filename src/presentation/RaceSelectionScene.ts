@@ -133,6 +133,7 @@ export class RaceSelectionScene extends GameScene {
     });
     raceName.x = 10;
     raceName.y = 10;
+    raceName.eventMode = 'none'; // Don't block clicks
     cardContainer.addChild(raceName);
 
     // Race description
@@ -150,6 +151,7 @@ export class RaceSelectionScene extends GameScene {
     });
     descText.x = 10;
     descText.y = 35;
+    descText.eventMode = 'none'; // Don't block clicks
     cardContainer.addChild(descText);
 
     // Unique mechanic
@@ -165,6 +167,7 @@ export class RaceSelectionScene extends GameScene {
     });
     mechanicText.x = 10;
     mechanicText.y = 90;
+    mechanicText.eventMode = 'none'; // Don't block clicks
     cardContainer.addChild(mechanicText);
 
     // Stats
@@ -180,6 +183,7 @@ export class RaceSelectionScene extends GameScene {
     });
     statsText.x = 10;
     statsText.y = 120;
+    statsText.eventMode = 'none'; // Don't block clicks
     cardContainer.addChild(statsText);
 
     // Click handler

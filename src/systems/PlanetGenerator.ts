@@ -11,7 +11,7 @@ import { logger } from '@/utils/logger';
  */
 export class PlanetGenerator {
   private readonly rng: SeededRNG;
-  private readonly ORBITAL_RADII = [150, 250, 350, 450, 550] as const;
+  private readonly ORBITAL_RADII = [750, 1250, 1750, 2250, 2750] as const; // 5x scale for better navigation
   private readonly PLANET_TYPE_WEIGHTS: Map<PlanetType, number>;
 
   constructor(galaxySeed: string, systemId: string) {
