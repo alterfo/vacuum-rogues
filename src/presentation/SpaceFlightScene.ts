@@ -128,6 +128,7 @@ export class SpaceFlightScene extends GameScene {
   private starCenterX: number = 0;
   private starCenterY: number = 0;
   private starGraphics: Graphics | null = null;
+  private orbitGraphics: Graphics | null = null;
   private systemMiniMap: SystemMiniMap | null = null;
 
   // Continuous input tracking
@@ -139,22 +140,28 @@ export class SpaceFlightScene extends GameScene {
   initialize(context?: object): void {
     this.gameEngine = (context as { gameEngine?: GameEngine })?.gameEngine ?? null;
 
-    // Initialize ship physics with center position and optional speed from PlayerShip
+    // Calculate star center position (screen center)
     const centerX = this.renderer.app.screen.width / 2;
     const centerY = this.renderer.app.screen.height / 2;
+
+    // Initialize ship physics at system entry point (bottom-right edge)
+    // Entry point is beyond the outermost orbit
+    const entryX = centerX + 600; // Right side, beyond furthest orbit (550px)
+    const entryY = centerY + 400; // Below center
     const maxSpeed = this.gameEngine?.player?.ship.speed ?? undefined;
-    this.shipPhysics = new ShipPhysics(centerX, centerY, maxSpeed);
+    this.shipPhysics = new ShipPhysics(entryX, entryY, maxSpeed);
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
 
-    // Calculate star center position (screen center)
-    this.starCenterX = this.renderer.app.screen.width / 2;
-    this.starCenterY = this.renderer.app.screen.height / 2;
+    // Store star center position
+    this.starCenterX = centerX;
+    this.starCenterY = centerY;
 
     this.createStarField();
     this.createNebulae();
     this.createStar();
+    this.createOrbits();
     this.createPlanets();
     this.createShip();
     this.createUI();
@@ -222,6 +229,7 @@ export class SpaceFlightScene extends GameScene {
     this.uiContainer = null;
     this.shipPhysics = null;
     this.starGraphics = null;
+    this.orbitGraphics = null;
     logger.info('SpaceFlightScene destroyed');
   }
 
@@ -327,6 +335,40 @@ export class SpaceFlightScene extends GameScene {
     this.renderer.gameLayer.addChild(this.starGraphics);
   }
 
+  /**
+   * Draw visible orbital paths for planets
+   */
+  private createOrbits(): void {
+    if (!this.gameEngine?.player) return;
+
+    // Get current system
+    const currentSystemId = this.gameEngine.player.currentSystemId;
+    const galaxy = this.gameEngine.galaxy;
+    if (!galaxy) return;
+
+    const currentSystem = galaxy.systems.find((s) => s.id === currentSystemId);
+    if (!currentSystem || !currentSystem.planets || currentSystem.planets.length === 0) {
+      return;
+    }
+
+    this.orbitGraphics = new Graphics();
+
+    // Get unique orbital radii
+    const uniqueRadii = new Set<number>();
+    for (const planet of currentSystem.planets) {
+      uniqueRadii.add(planet.orbitalRadius);
+    }
+
+    // Draw orbit circle for each unique radius
+    for (const radius of uniqueRadii) {
+      this.orbitGraphics.circle(this.starCenterX, this.starCenterY, radius);
+      this.orbitGraphics.stroke({ color: 0x444444, width: 1, alpha: 0.3 });
+    }
+
+    // Add orbits to game layer (above star, below planets)
+    this.renderer.gameLayer.addChild(this.orbitGraphics);
+  }
+
   private createShip(): void {
     if (!this.shipPhysics) return;
 
@@ -386,7 +428,7 @@ export class SpaceFlightScene extends GameScene {
 
     // Instructions
     const instructions = new Text({
-      text: 'Кликните, чтобы переместить корабль',
+      text: 'Кликните на планету или точку в пространстве для перемещения',
       style: {
         fontFamily: 'Courier New',
         fontSize: 14,
