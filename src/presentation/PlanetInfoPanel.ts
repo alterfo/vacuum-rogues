@@ -33,11 +33,12 @@ export class PlanetInfoPanel {
    * Render panel background and planet information
    */
   render(): void {
-    // Background with border
+    // Background with border (blocks clicks to prevent clicking through the panel)
     const background = new Graphics();
     background.rect(0, 0, this.panelWidth, this.panelHeight);
     background.fill({ color: 0x000000, alpha: 0.8 });
     background.stroke({ color: 0x00ffff, width: 2 });
+    background.eventMode = 'static'; // Block clicks through the panel
     this.container.addChild(background);
 
     // Planet name (title)

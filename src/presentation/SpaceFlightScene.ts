@@ -512,9 +512,10 @@ export class SpaceFlightScene extends GameScene {
 
   private createUI(): void {
     this.uiContainer = new Container();
-    this.uiContainer.eventMode = 'static';
+    // IMPORTANT: Keep eventMode as 'none' to not block clicks on space
+    this.uiContainer.eventMode = 'none';
 
-    // Instructions
+    // Instructions (non-interactive)
     const instructions = new Text({
       text: 'Клик на планету - установить курс | Клик в космос - свободный полёт | [J] - Квесты',
       style: {
@@ -526,6 +527,7 @@ export class SpaceFlightScene extends GameScene {
     instructions.alpha = 0.8;
     instructions.x = 20;
     instructions.y = 20;
+    instructions.eventMode = 'none'; // Explicitly set to non-interactive
     this.uiContainer.addChild(instructions);
 
     // Quest Journal button

@@ -14,6 +14,9 @@ export class SystemMiniMap {
 
   constructor(screenWidth: number, screenHeight: number) {
     this.container = new Container();
+    // IMPORTANT: Set to 'none' so mini-map doesn't block clicks on space
+    this.container.eventMode = 'none';
+
     this.graphics = new Graphics();
     this.container.addChild(this.graphics);
 
