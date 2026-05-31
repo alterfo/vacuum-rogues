@@ -1,5 +1,6 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import type { Planet } from '@/domain/Planet';
+import { logger } from '@/utils/logger';
 
 /**
  * Mini-map showing the current star system with planets and ship position
@@ -26,6 +27,8 @@ export class SystemMiniMap {
 
     // Draw background
     this.drawBackground();
+
+    logger.info(`📡 Minimap created at position (${this.container.x}, ${this.container.y})`);
   }
 
   /**
@@ -34,8 +37,8 @@ export class SystemMiniMap {
   private drawBackground(): void {
     const background = new Graphics();
     background.rect(0, 0, this.mapWidth, this.mapHeight);
-    background.fill({ color: 0x000000, alpha: 0.7 });
-    background.stroke({ color: 0x00ffff, width: 2 });
+    background.fill({ color: 0x000000, alpha: 0.85 });
+    background.stroke({ color: 0x00ffff, width: 3 });
 
     // Add title
     const title = new Text({
@@ -119,6 +122,11 @@ export class SystemMiniMap {
     centerY: number,
   ): void {
     this.graphics.clear();
+
+    // Log every 60 frames (approximately once per second at 60fps)
+    if (Math.random() < 0.016) {
+      logger.debug(`📡 Minimap update: ${planetSprites.length} planets, ship at (${shipX.toFixed(0)}, ${shipY.toFixed(0)})`);
+    }
 
     const mapCenterX = this.mapWidth / 2;
     const mapCenterY = this.mapHeight / 2 + 10;

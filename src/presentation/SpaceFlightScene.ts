@@ -174,6 +174,9 @@ export class SpaceFlightScene extends GameScene {
   private readonly MAX_ZOOM = 2.0;
   private boundWheel: ((event: WheelEvent) => void) | null = null;
 
+  // Debug display
+  private cameraDebugText: Text | null = null;
+
   initialize(context?: object): void {
     this.gameEngine = (context as { gameEngine?: GameEngine })?.gameEngine ?? null;
 
@@ -204,6 +207,9 @@ export class SpaceFlightScene extends GameScene {
     this.createTargetIndicator();
     this.createUI();
 
+    // Initialize camera transform (sets initial state)
+    this.applyCameraTransform();
+
     // Enable interactivity on stage for continuous pointer tracking
     this.boundPointerDown = this.onPointerDown.bind(this);
     this.boundPointerMove = this.onPointerMove.bind(this);
@@ -219,14 +225,14 @@ export class SpaceFlightScene extends GameScene {
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener('keydown', this.boundKeyDown);
 
-    // Add wheel listener for zoom
+    // Add wheel listener for zoom (on window to ensure it captures events)
     this.boundWheel = this.onWheel.bind(this);
-    this.renderer.app.canvas.addEventListener('wheel', this.boundWheel, { passive: false });
+    window.addEventListener('wheel', this.boundWheel, { passive: false });
 
     // Prevent context menu on right click (used for panning)
     this.renderer.app.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    logger.info('SpaceFlightScene initialized');
+    logger.info('SpaceFlightScene initialized with camera controls: pan (Shift+click), zoom (wheel)');
   }
 
   update(deltaTime: number): void {
@@ -260,7 +266,7 @@ export class SpaceFlightScene extends GameScene {
 
     // Remove wheel listener
     if (this.boundWheel) {
-      this.renderer.app.canvas.removeEventListener('wheel', this.boundWheel);
+      window.removeEventListener('wheel', this.boundWheel);
       this.boundWheel = null;
     }
 
@@ -295,6 +301,7 @@ export class SpaceFlightScene extends GameScene {
     this.shipGraphics = null;
     this.nebulaeContainer = null;
     this.uiContainer = null;
+    this.cameraDebugText = null;
     this.shipPhysics = null;
     this.starGraphics = null;
     this.orbitGraphics = null;
@@ -565,6 +572,20 @@ export class SpaceFlightScene extends GameScene {
     instructions.eventMode = 'none'; // Explicitly set to non-interactive
     this.uiContainer.addChild(instructions);
 
+    // Camera debug display
+    this.cameraDebugText = new Text({
+      text: 'Камера: Zoom 1.00 | Pan (0, 0)',
+      style: {
+        fontFamily: 'Courier New',
+        fontSize: 12,
+        fill: 0xff00ff,
+      },
+    });
+    this.cameraDebugText.x = this.renderer.app.screen.width - 300;
+    this.cameraDebugText.y = this.renderer.app.screen.height - 30;
+    this.cameraDebugText.eventMode = 'none';
+    this.uiContainer.addChild(this.cameraDebugText);
+
     // Quest Journal button
     const questBtn = new Text({
       text: '[КВЕСТЫ]',
@@ -745,6 +766,8 @@ export class SpaceFlightScene extends GameScene {
   private onPointerDown(event: FederatedPointerEvent): void {
     if (!this.shipPhysics) return;
 
+    logger.info(`🖱️ POINTER DOWN: button=${event.button}, shift=${event.shiftKey}`);
+
     // Middle mouse button (1), right button (2), or Shift+Left for panning
     const isPanButton = event.button === 1 || event.button === 2 || (event.button === 0 && event.shiftKey);
 
@@ -752,7 +775,7 @@ export class SpaceFlightScene extends GameScene {
       this.isPanning = true;
       this.lastPanX = event.global.x;
       this.lastPanY = event.global.y;
-      logger.debug('Pan mode activated');
+      logger.info('✅ Pan mode activated');
       return;
     }
 
@@ -777,6 +800,9 @@ export class SpaceFlightScene extends GameScene {
       this.lastPanX = event.global.x;
       this.lastPanY = event.global.y;
       this.applyCameraTransform();
+      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+        logger.debug(`Camera pan: (${this.cameraPanX.toFixed(0)}, ${this.cameraPanY.toFixed(0)})`);
+      }
       return;
     }
 
@@ -797,16 +823,35 @@ export class SpaceFlightScene extends GameScene {
    */
   private onWheel(event: WheelEvent): void {
     event.preventDefault();
+    logger.info(`🔍 WHEEL EVENT FIRED! deltaY: ${event.deltaY}`);
+
+    const oldZoom = this.cameraZoom;
 
     // Calculate zoom delta (negative deltaY = zoom in, positive = zoom out)
     const zoomDelta = event.deltaY > 0 ? 0.9 : 1.1;
     const newZoom = this.cameraZoom * zoomDelta;
 
     // Clamp zoom to min/max bounds
-    this.cameraZoom = Math.max(this.MIN_ZOOM, Math.min(this.MAX_ZOOM, newZoom));
+    const clampedZoom = Math.max(this.MIN_ZOOM, Math.min(this.MAX_ZOOM, newZoom));
+
+    // Zoom towards screen center to keep it fixed
+    // Formula: adjust pan so that the center point in world space stays at the same screen position
+    const screenCenterX = this.renderer.app.screen.width / 2;
+    const screenCenterY = this.renderer.app.screen.height / 2;
+
+    // World coordinates of the center point before zoom
+    const worldCenterX = (screenCenterX - this.cameraPanX) / this.cameraZoom;
+    const worldCenterY = (screenCenterY - this.cameraPanY) / this.cameraZoom;
+
+    // Update zoom
+    this.cameraZoom = clampedZoom;
+
+    // Adjust pan to keep the world center at the same screen position
+    this.cameraPanX = screenCenterX - worldCenterX * this.cameraZoom;
+    this.cameraPanY = screenCenterY - worldCenterY * this.cameraZoom;
 
     this.applyCameraTransform();
-    logger.debug(`Camera zoom: ${this.cameraZoom.toFixed(2)}`);
+    logger.info(`Camera zoom: ${oldZoom.toFixed(2)} → ${this.cameraZoom.toFixed(2)} (deltaY: ${event.deltaY})`);
   }
 
   /**
@@ -821,6 +866,18 @@ export class SpaceFlightScene extends GameScene {
     // Apply position offset
     this.renderer.gameLayer.x = this.cameraPanX;
     this.renderer.gameLayer.y = this.cameraPanY;
+
+    // Update debug display
+    this.updateCameraDebugDisplay();
+  }
+
+  /**
+   * Update camera debug text display
+   */
+  private updateCameraDebugDisplay(): void {
+    if (this.cameraDebugText) {
+      this.cameraDebugText.text = `Камера: Zoom ${this.cameraZoom.toFixed(2)} | Pan (${this.cameraPanX.toFixed(0)}, ${this.cameraPanY.toFixed(0)})`;
+    }
   }
 
   /**
