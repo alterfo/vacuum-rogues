@@ -516,10 +516,10 @@ export class SpaceFlightScene extends GameScene {
 
     // Instructions
     const instructions = new Text({
-      text: 'Кликните на планету или точку в пространстве для перемещения | [J] - Квесты',
+      text: 'Клик на планету - установить курс | Клик в космос - свободный полёт | [J] - Квесты',
       style: {
         fontFamily: 'Courier New',
-        fontSize: 14,
+        fontSize: 13,
         fill: 0x88ccff,
       },
     });
@@ -655,46 +655,19 @@ export class SpaceFlightScene extends GameScene {
       this.planetInfoPanel = null;
     }
 
-    // Create new info panel with callbacks
+    // Create new info panel
     this.planetInfoPanel = new PlanetInfoPanel(
       planet,
       this.renderer.app.screen.width,
       this.renderer.app.screen.height,
       () => this.onTalkToGovernor(planet),
-      () => this.onWarpToPlanet(planet),
     );
     this.renderer.uiLayer.addChild(this.planetInfoPanel.container);
 
-    // Find planet sprite to get screen coordinates
+    // Find planet sprite to get screen coordinates and set navigation target
     const planetSprite = this.planetSprites.find((s) => s.planet.id === planet.id);
     if (planetSprite && this.shipPhysics) {
       this.shipPhysics.setTarget(planetSprite.screenX, planetSprite.screenY);
-    }
-  }
-
-  /**
-   * Handle "Warp to Planet" button click: instantly teleport ship to planet
-   */
-  private onWarpToPlanet(planet: Planet): void {
-    logger.info(`Mini-warp to ${planet.name}`);
-
-    // Find planet sprite to get coordinates
-    const planetSprite = this.planetSprites.find((s) => s.planet.id === planet.id);
-    if (planetSprite && this.shipPhysics) {
-      // Instantly teleport ship to planet
-      this.shipPhysics.shipX = planetSprite.screenX;
-      this.shipPhysics.shipY = planetSprite.screenY;
-      this.shipPhysics.setTarget(planetSprite.screenX, planetSprite.screenY);
-      this.shipPhysics.currentSpeed = 0;
-      this.shipPhysics.isMoving = false;
-
-      // Update ship container position immediately
-      if (this.shipContainer) {
-        this.shipContainer.x = this.shipPhysics.shipX;
-        this.shipContainer.y = this.shipPhysics.shipY;
-      }
-
-      logger.info(`Warped to ${planet.name} at (${planetSprite.screenX}, ${planetSprite.screenY})`);
     }
   }
 
