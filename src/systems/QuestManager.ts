@@ -1,6 +1,7 @@
 import { Quest } from '@/domain/Quest';
 import type { Player } from '@/domain/Player';
 import type { QuestType, QuestObjective, Reward } from '@/types';
+import { ResourceType } from '@/types';
 import { logger } from '@/utils/logger';
 
 /**
@@ -44,7 +45,7 @@ export class QuestManager {
           description: 'Собрать руду',
           type: 'COLLECT_ITEM',
           targetAmount: 10,
-          itemType: 'METALS',
+          itemType: ResourceType.METALS,
         },
         {
           id: 'obj_deliver_ore',
@@ -97,7 +98,7 @@ export class QuestManager {
   /**
    * Create and accept a new quest from template
    */
-  acceptQuest(templateId: string, player: Player): Quest | null {
+  acceptQuest(templateId: string): Quest | null {
     const template = this.questTemplates.get(templateId);
     if (!template) {
       logger.warn(`Quest template not found: ${templateId}`);
@@ -123,7 +124,7 @@ export class QuestManager {
       template.type,
       objectives,
       template.reward,
-      template.dialogueAnchors.map((a) => a),
+      [], // dialogueAnchors not used in MVP, will be integrated later
     );
 
     this.activeQuests.set(quest.id, quest);

@@ -9,11 +9,18 @@ export class PlanetInfoPanel {
   public readonly container: Container;
   private readonly planet: Planet;
   private readonly panelWidth: number = 220;
-  private readonly panelHeight: number = 140;
+  private readonly panelHeight: number = 180; // Increased to fit button
+  private readonly onTalkToGovernor?: () => void;
 
-  constructor(planet: Planet, screenWidth: number, _screenHeight: number) {
+  constructor(
+    planet: Planet,
+    screenWidth: number,
+    _screenHeight: number,
+    onTalkToGovernor?: () => void,
+  ) {
     this.planet = planet;
     this.container = new Container();
+    this.onTalkToGovernor = onTalkToGovernor;
 
     // Position panel at top-right, below any existing UI
     this.container.x = screenWidth - 240;
@@ -86,6 +93,58 @@ export class PlanetInfoPanel {
     hintText.x = 10;
     hintText.y = 90;
     this.container.addChild(hintText);
+
+    // Add "Talk to Governor" button if planet has inhabitants
+    if (this.planet.inhabitants.length > 0 && this.onTalkToGovernor) {
+      const buttonContainer = new Container();
+      buttonContainer.x = 10;
+      buttonContainer.y = 130;
+
+      // Button background
+      const buttonBg = new Graphics();
+      buttonBg.rect(0, 0, 200, 30);
+      buttonBg.fill({ color: 0x004488, alpha: 0.9 });
+      buttonBg.stroke({ color: 0x00ffff, width: 1 });
+      buttonContainer.addChild(buttonBg);
+
+      // Button text
+      const buttonText = new Text({
+        text: 'Поговорить с губернатором',
+        style: {
+          fontFamily: 'Courier New',
+          fontSize: 11,
+          fill: 0xffffff,
+        },
+      });
+      buttonText.x = 10;
+      buttonText.y = 8;
+      buttonContainer.addChild(buttonText);
+
+      // Make button interactive
+      buttonContainer.eventMode = 'static';
+      buttonContainer.cursor = 'pointer';
+      buttonContainer.on('pointerdown', () => {
+        if (this.onTalkToGovernor) {
+          this.onTalkToGovernor();
+        }
+      });
+
+      // Hover effects
+      buttonContainer.on('pointerover', () => {
+        buttonBg.clear();
+        buttonBg.rect(0, 0, 200, 30);
+        buttonBg.fill({ color: 0x0066aa, alpha: 0.9 });
+        buttonBg.stroke({ color: 0x00ffff, width: 2 });
+      });
+      buttonContainer.on('pointerout', () => {
+        buttonBg.clear();
+        buttonBg.rect(0, 0, 200, 30);
+        buttonBg.fill({ color: 0x004488, alpha: 0.9 });
+        buttonBg.stroke({ color: 0x00ffff, width: 1 });
+      });
+
+      this.container.addChild(buttonContainer);
+    }
   }
 
   /**

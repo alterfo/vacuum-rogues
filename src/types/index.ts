@@ -188,17 +188,21 @@ export interface EmotionVectorData {
 
 export interface Reward {
   readonly credits: number;
-  readonly xp: number;
-  readonly items: unknown[];
-  readonly reputationDelta: number;
+  readonly experience: number; // Changed from xp for consistency
+  readonly items: { type: ResourceType; amount: number }[]; // Changed from unknown[]
+  readonly reputationDelta?: number; // Made optional for simple quests
 }
 
 export interface QuestObjective {
   readonly id: string;
   readonly description: string;
+  readonly type: 'COLLECT_ITEM' | 'VISIT_LOCATION' | 'DEFEAT_ENEMY'; // Added objective type
   readonly targetAmount: number;
   readonly currentAmount: number;
   readonly completed: boolean;
+  readonly itemType?: ResourceType; // For COLLECT_ITEM objectives
+  readonly locationId?: string; // For VISIT_LOCATION objectives
+  readonly enemyType?: EnemyType; // For DEFEAT_ENEMY objectives
 }
 
 export interface DialogueAnchor {

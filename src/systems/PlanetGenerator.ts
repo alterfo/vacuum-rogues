@@ -1,6 +1,7 @@
 import { Planet } from '@/domain/Planet';
 import { Market } from '@/domain/Market';
-import { PlanetType } from '@/types';
+import { NPC } from '@/domain/NPC';
+import { PlanetType, RaceType } from '@/types';
 import { SeededRNG } from '@/utils/seededRNG';
 import { logger } from '@/utils/logger';
 
@@ -44,13 +45,16 @@ export class PlanetGenerator {
       const market = this.createStubMarket();
       const planetId = `planet_${systemName}_${i}`;
 
+      // Generate governor NPC for the planet
+      const governor = this.createGovernorNPC(planetId, planetName);
+
       const planet = new Planet(
         planetId,
         planetName,
         planetType,
         orbitalRadius,
         market,
-        [], // inhabitants (empty for now)
+        [governor], // Add governor to inhabitants
         [], // availableQuests (empty for now)
       );
 
@@ -59,6 +63,46 @@ export class PlanetGenerator {
 
     logger.info(`Generated ${count} planets for system ${systemName}`);
     return planets;
+  }
+
+  /**
+   * Create a governor NPC for a planet
+   * @param planetId Unique identifier for the planet
+   * @param planetName Name of the planet
+   * @returns Governor NPC instance
+   */
+  private createGovernorNPC(planetId: string, planetName: string): NPC {
+    // Randomly select a race for the governor
+    const races: RaceType[] = [
+      RaceType.HUMAN,
+      RaceType.MALAQAR,
+      RaceType.PELENG,
+      RaceType.FAERIAN,
+      RaceType.GAALIAN,
+    ];
+    const governorRace = races[this.rng.nextInt(0, races.length - 1)];
+
+    // Create governor with neutral emotion baseline
+    const governor = new NPC(
+      `governor_${planetId}`,
+      `Губернатор ${planetName}`,
+      governorRace,
+      {
+        traits: ['authoritative', 'diplomatic'],
+        backstory: `Правитель планеты ${planetName}, отвечающий за безопасность и процветание системы.`,
+      },
+      {
+        trust: 5,
+        fear: 0,
+        respect: 5,
+        hostility: 0,
+        curiosity: 3,
+      },
+      [], // Dialogue anchors (empty for MVP, will use DialogueScene templates)
+      0, // No reputation requirement
+    );
+
+    return governor;
   }
 
   /**

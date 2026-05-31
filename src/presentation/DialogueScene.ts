@@ -318,9 +318,9 @@ export class DialogueScene extends GameScene {
     logger.debug(`Response selected: ${response.text}`);
 
     // Handle quest acceptance
-    if (response.acceptsQuest && this.currentNode?.questOfferId && this.gameEngine) {
+    if (response.acceptsQuest && this.currentNode?.questOfferId && this.gameEngine?.player) {
       const questManager = this.gameEngine.questManager;
-      const quest = questManager.acceptQuest(this.currentNode.questOfferId, this.gameEngine.player);
+      const quest = questManager.acceptQuest(this.currentNode.questOfferId);
       if (quest) {
         logger.info(`Quest accepted: ${quest.title}`);
       }

@@ -13,14 +13,18 @@
   - System minimap with real-time updates
   - Ship entry point at system edge
 
-### 🚧 Work in Progress (WIP)
+### ✅ Recently Completed
 - **Story-13**: Template Dialogues and Quest System
   - ✅ QuestManager system created
   - ✅ DialogueScene UI created with dialogue trees
-  - ❌ Type definitions need update in `src/types/index.ts`
-  - ❌ Integration with GameEngine pending
-  - ❌ NPC generation for planets pending
-  - ❌ Quest journal UI pending
+  - ✅ Type definitions updated in `src/types/index.ts`
+  - ✅ Integration with GameEngine completed
+  - ✅ NPC generation for planets (governors with random races)
+  - ✅ Planet interaction with "Talk to Governor" button
+  - ✅ Quest journal UI with keyboard shortcut (J key)
+
+### 🚧 Work in Progress (WIP)
+- None currently
 
 ### 📋 Planned Features
 
@@ -44,9 +48,9 @@
 
 ## 🗺️ Detailed Implementation Plan
 
-### STORY-13: Template Dialogues & Quests (IN PROGRESS)
+### STORY-13: Template Dialogues & Quests (COMPLETED ✅)
 
-#### Status: 40% Complete
+#### Status: 100% Complete
 
 **Completed:**
 - ✅ QuestManager class with quest templates
@@ -54,8 +58,13 @@
 - ✅ Hardcoded dialogue for governors
 - ✅ Quest acceptance/completion logic
 - ✅ UI panels for dialogue display
+- ✅ Type definitions fixed
+- ✅ QuestManager integrated into GameEngine
+- ✅ NPC generation for all planets
+- ✅ Planet interaction with dialogue button
+- ✅ Quest Journal UI with keyboard shortcut
 
-**Remaining Work:**
+**All work items completed!**
 
 ##### 1. Fix Type Definitions (1-2 hours)
 **File:** `src/types/index.ts`
@@ -357,18 +366,18 @@ Track quest progress on:
 3. ✅ Warp to star system
 4. ✅ See planets and sun
 5. ✅ Fly to planet
-6. 🚧 Land and talk to NPC
-7. 🚧 Accept quest
-8. 🚧 Complete quest objectives
+6. ✅ Land and talk to NPC
+7. ✅ Accept quest
+8. 🚧 Complete quest objectives (tracking implemented, needs testing)
 9. 🚧 Return and get reward
 10. ✅ Trade resources
 11. 🚧 Manage inventory
 12. 🚧 Engage in combat
 13. 🚧 Save and load game
 
-**When 13/13 items are ✅, MVP1 is complete!**
+**Progress: 8/13 items complete (62% of MVP1)**
 
 ---
 
 *Last Updated: 2026-05-31*
-*Next Session: Continue Story-13 type fixes and integration*
+*Next Session: Story-14 (Inventory and Ship Modules) or add quest completion flow*

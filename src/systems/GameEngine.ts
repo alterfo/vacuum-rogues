@@ -18,6 +18,7 @@ import { MainMenuScene } from '@/presentation/MainMenuScene';
 import { SpaceFlightScene } from '@/presentation/SpaceFlightScene';
 import { Graphics, Text } from 'pixi.js';
 import { GalaxySimulator } from './GalaxySimulator';
+import { QuestManager } from './QuestManager';
 import { validatePlayerSettings } from '@/validation/schemas';
 import { Race } from '@/domain/Race';
 import { SkillTree } from '@/domain/SkillTree';
@@ -32,6 +33,7 @@ export class GameEngine {
   public readonly saveManager: SaveManager;
   public readonly qualityProfile: AdaptiveQualityProfile;
   public readonly onnxRegistry: ONNXModelRegistry;
+  public readonly questManager: QuestManager;
   public renderer: Renderer | null = null;
 
   private exceptionHandler: GlobalExceptionHandler;
@@ -43,6 +45,7 @@ export class GameEngine {
     this.qualityProfile = new AdaptiveQualityProfile();
     this.onnxRegistry = new ONNXModelRegistry(this.qualityProfile);
     this.saveManager = new SaveManager();
+    this.questManager = new QuestManager();
     this.exceptionHandler = GlobalExceptionHandler.getInstance();
     this.exceptionHandler.onCriticalError = (response) => {
       this.handleCriticalError(response);

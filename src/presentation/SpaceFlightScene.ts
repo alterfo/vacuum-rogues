@@ -5,6 +5,7 @@ import { SceneType } from '@/types';
 import { PlanetSprite } from './PlanetSprite';
 import { PlanetInfoPanel } from './PlanetInfoPanel';
 import { SystemMiniMap } from './SystemMiniMap';
+import { QuestJournalUI } from './QuestJournalUI';
 import type { Planet } from '@/domain/Planet';
 import { logger } from '@/utils/logger';
 
@@ -141,11 +142,15 @@ export class SpaceFlightScene extends GameScene {
   private orbitGraphics: Graphics | null = null;
   private systemMiniMap: SystemMiniMap | null = null;
 
+  // Quest Journal UI
+  private questJournalUI: QuestJournalUI | null = null;
+
   // Continuous input tracking
   private isPointerDown: boolean = false;
   private boundPointerDown: ((event: FederatedPointerEvent) => void) | null = null;
   private boundPointerMove: ((event: FederatedPointerEvent) => void) | null = null;
   private boundPointerUp: (() => void) | null = null;
+  private boundKeyDown: ((event: KeyboardEvent) => void) | null = null;
 
   initialize(context?: object): void {
     this.gameEngine = (context as { gameEngine?: GameEngine })?.gameEngine ?? null;
@@ -187,6 +192,10 @@ export class SpaceFlightScene extends GameScene {
     this.renderer.app.stage.on('pointerup', this.boundPointerUp);
     this.renderer.app.stage.on('pointerupoutside', this.boundPointerUp);
 
+    // Add keyboard listener for Quest Journal
+    this.boundKeyDown = this.onKeyDown.bind(this);
+    window.addEventListener('keydown', this.boundKeyDown);
+
     logger.info('SpaceFlightScene initialized');
   }
 
@@ -212,6 +221,12 @@ export class SpaceFlightScene extends GameScene {
       this.boundPointerUp = null;
     }
 
+    // Remove keyboard listener
+    if (this.boundKeyDown) {
+      window.removeEventListener('keydown', this.boundKeyDown);
+      this.boundKeyDown = null;
+    }
+
     // Destroy planet sprites
     for (const sprite of this.planetSprites) {
       sprite.destroy();
@@ -222,6 +237,12 @@ export class SpaceFlightScene extends GameScene {
     if (this.planetInfoPanel) {
       this.planetInfoPanel.destroy();
       this.planetInfoPanel = null;
+    }
+
+    // Destroy quest journal
+    if (this.questJournalUI) {
+      this.questJournalUI.destroy();
+      this.questJournalUI = null;
     }
 
     // Destroy mini-map
@@ -438,7 +459,7 @@ export class SpaceFlightScene extends GameScene {
 
     // Instructions
     const instructions = new Text({
-      text: 'Кликните на планету или точку в пространстве для перемещения',
+      text: 'Кликните на планету или точку в пространстве для перемещения | [J] - Квесты',
       style: {
         fontFamily: 'Courier New',
         fontSize: 14,
@@ -449,6 +470,28 @@ export class SpaceFlightScene extends GameScene {
     instructions.x = 20;
     instructions.y = 20;
     this.uiContainer.addChild(instructions);
+
+    // Quest Journal button
+    const questBtn = new Text({
+      text: '[КВЕСТЫ]',
+      style: {
+        fontFamily: 'Courier New',
+        fontSize: 14,
+        fill: 0xffaa00,
+        fontWeight: 'bold' as const,
+      },
+    });
+    questBtn.x = 20;
+    questBtn.y = 50;
+    questBtn.eventMode = 'static';
+    questBtn.cursor = 'pointer';
+    questBtn.on('pointerdown', () => {
+      logger.info('Quest journal button clicked');
+      this.toggleQuestJournal();
+    });
+    questBtn.on('pointerover', () => { questBtn.alpha = 0.7; });
+    questBtn.on('pointerout', () => { questBtn.alpha = 1; });
+    this.uiContainer.addChild(questBtn);
 
     // Back button with hit area
     const backBtn = new Text({
@@ -530,11 +573,12 @@ export class SpaceFlightScene extends GameScene {
       this.planetInfoPanel = null;
     }
 
-    // Create new info panel
+    // Create new info panel with "Talk to Governor" callback
     this.planetInfoPanel = new PlanetInfoPanel(
       planet,
       this.renderer.app.screen.width,
       this.renderer.app.screen.height,
+      () => this.onTalkToGovernor(planet),
     );
     this.renderer.uiLayer.addChild(this.planetInfoPanel.container);
 
@@ -542,6 +586,29 @@ export class SpaceFlightScene extends GameScene {
     const planetSprite = this.planetSprites.find((s) => s.planet.id === planet.id);
     if (planetSprite && this.shipPhysics) {
       this.shipPhysics.setTarget(planetSprite.screenX, planetSprite.screenY);
+    }
+  }
+
+  /**
+   * Handle "Talk to Governor" button click: transition to DialogueScene
+   */
+  private async onTalkToGovernor(planet: Planet): Promise<void> {
+    logger.info(`Opening dialogue with governor of ${planet.name}`);
+
+    // Get the governor NPC (first inhabitant)
+    if (planet.inhabitants.length === 0) {
+      logger.warn(`No inhabitants on planet ${planet.name}`);
+      return;
+    }
+
+    const governor = planet.inhabitants[0];
+
+    // Transition to DialogueScene with the governor
+    if (this.gameEngine) {
+      await this.gameEngine.transitionTo(SceneType.DIALOGUE, {
+        gameEngine: this.gameEngine,
+        npc: governor,
+      });
     }
   }
 
@@ -626,6 +693,42 @@ export class SpaceFlightScene extends GameScene {
     logger.info('Returning to star map');
     if (this.gameEngine) {
       await this.gameEngine.transitionTo(SceneType.STAR_MAP);
+    }
+  }
+
+  /**
+   * Handle keyboard input (J key for quest journal)
+   */
+  private onKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'j' || event.key === 'J') {
+      this.toggleQuestJournal();
+    }
+  }
+
+  /**
+   * Toggle quest journal UI
+   */
+  private toggleQuestJournal(): void {
+    if (this.questJournalUI) {
+      // Close journal
+      this.questJournalUI.destroy();
+      this.questJournalUI = null;
+      logger.info('Quest journal closed');
+    } else {
+      // Open journal
+      if (this.gameEngine?.questManager) {
+        this.questJournalUI = new QuestJournalUI(
+          this.gameEngine.questManager,
+          this.renderer.app.screen.width,
+          this.renderer.app.screen.height,
+          () => {
+            this.questJournalUI?.destroy();
+            this.questJournalUI = null;
+          },
+        );
+        this.renderer.uiLayer.addChild(this.questJournalUI.container);
+        logger.info('Quest journal opened');
+      }
     }
   }
 
