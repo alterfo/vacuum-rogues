@@ -3,6 +3,7 @@ import { Graphics, Text, Container, BlurFilter } from 'pixi.js';
 import type { Galaxy } from '@/domain/Galaxy';
 import type { StarSystem } from '@/domain/StarSystem';
 import type { GameEngine } from '@/systems/GameEngine';
+import { SceneType } from '@/types';
 import { logger } from '@/utils/logger';
 
 export interface StarMapContext {
@@ -481,7 +482,7 @@ export class StarMapScene extends GameScene {
         const hasPathToPlayer = system.connections.some((c) => c.toSystemId === this.playerSystemId);
         const isConnected = hasPathFromPlayer || hasPathToPlayer;
         const fuelCost = this.calculateFuelCost(playerSystem, system, isConnected);
-        this.performWarpJump(system, fuelCost);
+        await this.performWarpJump(system, fuelCost);
       }
     }
   }
@@ -784,7 +785,7 @@ export class StarMapScene extends GameScene {
     }
   }
 
-  private performWarpJump(target: StarSystem, fuelCost: number): void {
+  private async performWarpJump(target: StarSystem, fuelCost: number): Promise<void> {
     this.closeConfirmDialog();
 
     if (!this.gameEngine?.player) {
@@ -803,22 +804,14 @@ export class StarMapScene extends GameScene {
     // Reveal destination and its neighbors (AC4)
     this.galaxy?.revealSystemAndNeighbors(target.id);
 
-    // Close info panel and re-render
-    if (this.infoPanel) {
-      if (this.infoPanel.parent) {
-        this.renderer.uiLayer.removeChild(this.infoPanel);
-      }
-      this.infoPanel.destroy(true);
-      this.infoPanel = null;
-    }
-
-    this.renderStarMap();
-
     // Fire-and-forget auto-save
     this.gameEngine.saveGame('auto').catch((e) => {
       logger.error('Auto-save after warp jump failed:', e);
     });
 
-    logger.info(`Warp jump completed to ${target.name}`);
+    logger.info(`Warp jump completed to ${target.name}, transitioning to space flight`);
+
+    // Transition to space flight scene
+    await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, { gameEngine: this.gameEngine });
   }
 }
