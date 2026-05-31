@@ -223,6 +223,9 @@ export class SpaceFlightScene extends GameScene {
     this.boundWheel = this.onWheel.bind(this);
     this.renderer.app.canvas.addEventListener('wheel', this.boundWheel, { passive: false });
 
+    // Prevent context menu on right click (used for panning)
+    this.renderer.app.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
     logger.info('SpaceFlightScene initialized');
   }
 
@@ -549,7 +552,7 @@ export class SpaceFlightScene extends GameScene {
 
     // Instructions (non-interactive)
     const instructions = new Text({
-      text: 'Клик на планету - курс | Средняя кнопка - пан | Колесико - зум | [J] - Квесты | [I] - Инвентарь',
+      text: 'ЛКМ - курс | Shift+ЛКМ/ПКМ - пан | Колесико - зум | [J] - Квесты | [I] - Инвентарь',
       style: {
         fontFamily: 'Courier New',
         fontSize: 13,
@@ -742,19 +745,25 @@ export class SpaceFlightScene extends GameScene {
   private onPointerDown(event: FederatedPointerEvent): void {
     if (!this.shipPhysics) return;
 
-    // Middle mouse button (1) or right mouse button (2) for panning
-    if (event.button === 1 || event.button === 2) {
+    // Middle mouse button (1), right button (2), or Shift+Left for panning
+    const isPanButton = event.button === 1 || event.button === 2 || (event.button === 0 && event.shiftKey);
+
+    if (isPanButton) {
       this.isPanning = true;
       this.lastPanX = event.global.x;
       this.lastPanY = event.global.y;
+      logger.debug('Pan mode activated');
       return;
     }
 
-    // Left button (0) for ship navigation
-    if (event.button === 0) {
+    // Left button (0) for ship navigation (only if not holding Shift)
+    if (event.button === 0 && !event.shiftKey) {
       this.isPointerDown = true;
-      this.shipPhysics.setTarget(event.global.x, event.global.y);
-      logger.debug(`Ship target set to: ${event.global.x}, ${event.global.y}`);
+
+      // Convert screen coordinates to world coordinates
+      const world = this.screenToWorld(event.global.x, event.global.y);
+      this.shipPhysics.setTarget(world.x, world.y);
+      logger.debug(`Ship target set to world: ${world.x.toFixed(1)}, ${world.y.toFixed(1)}`);
     }
   }
 
@@ -771,9 +780,10 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // Handle ship target tracking
+    // Handle ship target tracking (with coordinate transformation)
     if (this.isPointerDown && this.shipPhysics) {
-      this.shipPhysics.setTarget(event.global.x, event.global.y);
+      const world = this.screenToWorld(event.global.x, event.global.y);
+      this.shipPhysics.setTarget(world.x, world.y);
     }
   }
 
@@ -811,6 +821,15 @@ export class SpaceFlightScene extends GameScene {
     // Apply position offset
     this.renderer.gameLayer.x = this.cameraPanX;
     this.renderer.gameLayer.y = this.cameraPanY;
+  }
+
+  /**
+   * Convert screen coordinates to world coordinates (accounting for camera transform)
+   */
+  private screenToWorld(screenX: number, screenY: number): { x: number; y: number } {
+    const worldX = (screenX - this.cameraPanX) / this.cameraZoom;
+    const worldY = (screenY - this.cameraPanY) / this.cameraZoom;
+    return { x: worldX, y: worldY };
   }
 
   private updateShip(deltaTime: number): void {
