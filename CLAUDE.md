@@ -51,6 +51,214 @@ Models load lazily → cached in IndexedDB → inference runs in Web Workers onl
 - **No hardcoded pixel coordinates** for click detection. Use `eventMode = 'static'` + event handlers on interactive objects.
 - Position UI in world/relative coordinates, not screen pixels.
 
+#### PixiJS Event Handling Rules (CRITICAL)
+
+**Rule 1: Never Set `eventMode='none'` on Containers with Interactive Children**
+
+`eventMode='none'` on a Container **blocks ALL events** for children, even if children have `eventMode='static'`.
+
+```typescript
+// ❌ WRONG - breaks all child buttons
+const uiContainer = new Container();
+uiContainer.eventMode = 'none'; // Children won't receive events!
+
+const button = new Text({ text: '[CLICK ME]' });
+button.eventMode = 'static';
+button.on('pointerdown', handleClick); // Never fires!
+uiContainer.addChild(button);
+
+// ✅ CORRECT - use default 'auto' or omit eventMode
+const uiContainer = new Container();
+// eventMode defaults to 'auto' - children can receive events
+
+const button = new Text({ text: '[CLICK ME]' });
+button.eventMode = 'static';
+button.on('pointerdown', handleClick); // Works!
+uiContainer.addChild(button);
+```
+
+**Use `eventMode='none'` ONLY for**:
+- Non-interactive leaf elements (instruction text, labels)
+- Elements that should explicitly ignore all events
+
+**Never use on**:
+- Containers with buttons/interactive children
+- Layouts with nested UI
+
+**Rule 2: Always Use `event.stopPropagation()` in UI Click Handlers**
+
+If UI elements are above layers with global event handlers (stage, gameLayer), prevent event bubbling:
+
+```typescript
+// ❌ WRONG - event bubbles to stage
+button.on('pointerdown', () => {
+  this.openMenu();
+  // Event continues bubbling → stage.on('pointerdown') also fires!
+});
+
+// ✅ CORRECT - stop propagation
+button.on('pointerdown', (event) => {
+  event.stopPropagation(); // CRITICAL!
+  this.openMenu();
+});
+```
+
+**Required for**:
+- All UI buttons over gameLayer/stage with global handlers
+- Planet/entity click handlers
+- Modal dialogs and panels
+- Any interactive element in a layered UI
+
+**Rule 3: Set `eventMode='none'` on Text Elements Over Clickable Areas**
+
+PixiJS Text elements default to `eventMode='auto'`, making them clickable and blocking clicks underneath.
+
+```typescript
+// ❌ PROBLEM - text blocks clicks on card background
+const cardBg = new Graphics();
+cardBg.eventMode = 'static';
+cardBg.on('pointerdown', () => selectCard());
+
+const label = new Text({ text: 'Card Title' });
+// Text blocks clicks - they don't reach cardBg!
+cardContainer.addChild(label);
+
+// ✅ SOLUTION - make text transparent to clicks
+const label = new Text({ text: 'Card Title' });
+label.eventMode = 'none'; // Clicks pass through
+cardContainer.addChild(label);
+```
+
+**Apply to**:
+- All Text elements overlaying clickable Graphics/Sprites
+- Labels on buttons, cards, panels
+- Non-interactive UI text
+
+**Rule 4: Distinguish Mouse Buttons in Event Handlers**
+
+Use `event.button` to handle different mouse buttons separately:
+
+```typescript
+private onPointerDown(event: FederatedPointerEvent): void {
+  // button === 0: left button (primary action)
+  // button === 1: middle button (wheel click)
+  // button === 2: right button (context menu)
+
+  if (event.button === 1 || event.button === 2) {
+    // Camera pan
+    this.isPanning = true;
+    this.lastPanX = event.global.x;
+    this.lastPanY = event.global.y;
+    return;
+  }
+
+  if (event.button === 0) {
+    // Primary action (select, navigate)
+    this.handlePrimaryClick(event);
+  }
+}
+```
+
+**Rule 5: Update Scale-Dependent UI When Changing World Scale**
+
+When changing world coordinates or zoom levels, update ALL dependent UI elements:
+
+**Checklist**:
+- [ ] Update world/game coordinates
+- [ ] Update minimap/radar scale (proportionally)
+- [ ] Update camera zoom bounds (MIN_ZOOM, MAX_ZOOM)
+- [ ] Verify absolute-positioned UI elements
+- [ ] Test edge cases (max zoom, edge of map)
+
+**Example**: Increasing orbital radii 5x (150-550px → 750-2750px)
+```typescript
+// src/systems/PlanetGenerator.ts
+ORBITAL_RADII = [750, 1250, 1750, 2250, 2750]; // 5x scale
+
+// src/presentation/SystemMiniMap.ts
+mapScale = 0.05; // Was 0.25, now divided by 5
+
+// Math: 2750px * 0.05 = 137.5px (fits in 180px minimap) ✓
+```
+
+**Rule 6: Apply Camera Transforms to Single Parent Container**
+
+For zoom/pan, transform one parent container (gameLayer), not individual objects:
+
+```typescript
+// ✅ CORRECT - single transform point
+private applyCameraTransform(): void {
+  this.renderer.gameLayer.scale.set(this.cameraZoom);
+  this.renderer.gameLayer.x = this.cameraPanX;
+  this.renderer.gameLayer.y = this.cameraPanY;
+}
+
+// ❌ WRONG - transforming individual objects
+for (const planet of planets) {
+  planet.sprite.scale.set(this.cameraZoom); // Performance killer!
+  planet.sprite.x += this.cameraPanX;
+}
+```
+
+**Benefits**:
+- Single matrix transform (fast)
+- UI layer unaffected
+- Consistent behavior
+- Easy debugging
+
+**Rule 7: If a Fix Creates New Bugs, Revisit the Root Cause**
+
+**Anti-pattern "Ping-Pong Fix"**:
+```
+Bug A → Fix 1 → Bug B → Fix 2 → Bug C → ...
+```
+
+If your fix breaks adjacent functionality, you're treating **symptoms**, not the **cause**.
+
+**Example from commits**:
+1. UI blocks space clicks → Add `eventMode='none'` to container
+2. Buttons stop working → Add `stopPropagation()` to buttons
+3. Realize: Step 1 was wrong → Remove `eventMode='none'`
+
+**Correct approach**:
+1. **Diagnose**: Why does UI block clicks? (Events bubble to stage)
+2. **Root cause**: Need to stop bubbling, not block events
+3. **Solution**: `stopPropagation()` only (no eventMode change)
+
+**Rule 8: Pass Scene Context Explicitly, Not via Global Flags**
+
+When transitioning scenes with different behaviors, pass context through parameters:
+
+```typescript
+// ❌ WRONG - global flag
+this.isReentryWithoutJump = true;
+await gameEngine.transitionTo(SceneType.SPACE_FLIGHT);
+
+// ✅ CORRECT - explicit state changes + context
+private async enterCurrentSystem(): Promise<void> {
+  // No state change needed - just transition
+  await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
+    gameEngine: this.gameEngine,
+  });
+}
+
+private async performWarpJump(target: StarSystem): Promise<void> {
+  // Modify state BEFORE transition
+  this.player.currentSystemId = target.id;
+  this.player.fuel -= fuelCost;
+
+  await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
+    gameEngine: this.gameEngine,
+  });
+}
+```
+
+**Benefits**:
+- Explicit vs implicit behavior
+- No race conditions
+- Logic visible at call site
+- Easier testing
+
 ### Scene Lifecycle
 - `destroy()` must clean up ALL DisplayObjects, intervals, and null out references. Partial cleanup causes memory leaks.
 - Scenes cannot access IndexedDB or ONNX directly — route through GameEngine → SaveManager / ONNXModelRegistry.
