@@ -1,104 +1,106 @@
 export enum StarType {
-  RED_DWARF = 'RED_DWARF',
-  YELLOW_DWARF = 'YELLOW_DWARF',
-  BLUE_GIANT = 'BLUE_GIANT',
-  WHITE_DWARF = 'WHITE_DWARF',
-  NEUTRON = 'NEUTRON',
-  BLACK_HOLE = 'BLACK_HOLE',
+  RED_DWARF = "RED_DWARF",
+  YELLOW_DWARF = "YELLOW_DWARF",
+  BLUE_GIANT = "BLUE_GIANT",
+  WHITE_DWARF = "WHITE_DWARF",
+  NEUTRON = "NEUTRON",
+  BLACK_HOLE = "BLACK_HOLE",
 }
 
 export enum PlanetType {
-  TERRESTRIAL = 'TERRESTRIAL',
-  GAS_GIANT = 'GAS_GIANT',
-  ICE = 'ICE',
-  VOLCANIC = 'VOLCANIC',
-  INDUSTRIAL = 'INDUSTRIAL',
-  HABITAT = 'HABITAT',
+  TERRESTRIAL = "TERRESTRIAL",
+  GAS_GIANT = "GAS_GIANT",
+  ICE = "ICE",
+  VOLCANIC = "VOLCANIC",
+  INDUSTRIAL = "INDUSTRIAL",
+  HABITAT = "HABITAT",
 }
 
 export enum RaceType {
-  HUMAN = 'HUMAN',
-  MALAQAR = 'MALAQAR',
-  PELENG = 'PELENG',
-  FAERIAN = 'FAERIAN',
-  GAALIAN = 'GAALIAN',
+  HUMAN = "HUMAN",
+  MALAQAR = "MALAQAR",
+  PELENG = "PELENG",
+  FAERIAN = "FAERIAN",
+  GAALIAN = "GAALIAN",
 }
 
 export enum EnemyType {
-  SCOUT = 'SCOUT',
-  FIGHTER = 'FIGHTER',
-  CRUISER = 'CRUISER',
-  DREADNOUGHT = 'DREADNOUGHT',
-  POSSESSED = 'POSSESSED',
+  SCOUT = "SCOUT",
+  FIGHTER = "FIGHTER",
+  CRUISER = "CRUISER",
+  DREADNOUGHT = "DREADNOUGHT",
+  POSSESSED = "POSSESSED",
 }
 
 export enum ModuleCategory {
-  WEAPON = 'WEAPON',
-  SHIELD = 'SHIELD',
-  ENGINE = 'ENGINE',
+  WEAPON = "WEAPON",
+  SHIELD = "SHIELD",
+  ENGINE = "ENGINE",
 }
 
 export enum TileType {
-  EMPTY = 'EMPTY',
-  ASTEROID = 'ASTEROID',
-  DEBRIS = 'DEBRIS',
-  NEBULA = 'NEBULA',
+  EMPTY = "EMPTY",
+  ASTEROID = "ASTEROID",
+  DEBRIS = "DEBRIS",
+  NEBULA = "NEBULA",
 }
 
 export enum QuestType {
-  DELIVERY = 'DELIVERY',
-  BOUNTY = 'BOUNTY',
-  ESCORT = 'ESCORT',
-  DIPLOMACY = 'DIPLOMACY',
-  EXPLORATION = 'EXPLORATION',
+  DELIVERY = "DELIVERY",
+  BOUNTY = "BOUNTY",
+  ESCORT = "ESCORT",
+  DIPLOMACY = "DIPLOMACY",
+  EXPLORATION = "EXPLORATION",
 }
 
 export enum EventType {
-  CHAOS_GATE = 'CHAOS_GATE',
-  INVASION = 'INVASION',
-  TRADER = 'TRADER',
+  CHAOS_GATE = "CHAOS_GATE",
+  INVASION = "INVASION",
+  TRADER = "TRADER",
 }
 
 export enum ResourceType {
-  FUEL = 'FUEL',
-  METALS = 'METALS',
-  CRYSTALS = 'CRYSTALS',
-  ORGANICS = 'ORGANICS',
-  ARTIFACTS = 'ARTIFACTS',
-  WEAPONS = 'WEAPONS',
-  MEDICINE = 'MEDICINE',
-  ELECTRONICS = 'ELECTRONICS',
-  LUXURY = 'LUXURY',
-  DATA_CORES = 'DATA_CORES',
+  FUEL = "FUEL",
+  METALS = "METALS",
+  CRYSTALS = "CRYSTALS",
+  ORGANICS = "ORGANICS",
+  ARTIFACTS = "ARTIFACTS",
+  WEAPONS = "WEAPONS",
+  MEDICINE = "MEDICINE",
+  ELECTRONICS = "ELECTRONICS",
+  LUXURY = "LUXURY",
+  DATA_CORES = "DATA_CORES",
 }
 
 export enum EncounterState {
-  IN_PROGRESS = 'IN_PROGRESS',
-  PLAYER_WON = 'PLAYER_WON',
-  PLAYER_LOST = 'PLAYER_LOST',
-  RETREAT = 'RETREAT',
+  IN_PROGRESS = "IN_PROGRESS",
+  PLAYER_WON = "PLAYER_WON",
+  PLAYER_LOST = "PLAYER_LOST",
+  RETREAT = "RETREAT",
 }
 
 export enum SceneType {
-  MAIN_MENU = 'MAIN_MENU',
-  RACE_SELECTION = 'RACE_SELECTION',
-  STAR_MAP = 'STAR_MAP',
-  COMBAT = 'COMBAT',
-  DIALOGUE = 'DIALOGUE',
-  INVENTORY = 'INVENTORY',
-  SPACE_FLIGHT = 'SPACE_FLIGHT',
+  MAIN_MENU = "MAIN_MENU",
+  RACE_SELECTION = "RACE_SELECTION",
+  STAR_MAP = "STAR_MAP",
+  COMBAT = "COMBAT",
+  DIALOGUE = "DIALOGUE",
+  INVENTORY = "INVENTORY",
+  SPACE_FLIGHT = "SPACE_FLIGHT",
+  PLANET = "PLANET",
+  TRADE = "TRADE",
 }
 
 export enum ProfileLevel {
-  HIGH = 'HIGH',
-  MEDIUM = 'MEDIUM',
-  LOW = 'LOW',
+  HIGH = "HIGH",
+  MEDIUM = "MEDIUM",
+  LOW = "LOW",
 }
 
 export enum ErrorSeverity {
-  INFO = 'INFO',
-  WARNING = 'WARNING',
-  CRITICAL = 'CRITICAL',
+  INFO = "INFO",
+  WARNING = "WARNING",
+  CRITICAL = "CRITICAL",
 }
 
 export interface AxialCoord {
@@ -144,7 +146,7 @@ export interface ModuleEffect {
 }
 
 export interface CombatAction {
-  readonly type: 'MOVE' | 'ATTACK' | 'ABILITY' | 'WAIT';
+  readonly type: "MOVE" | "ATTACK" | "ABILITY" | "WAIT";
   readonly target?: AxialCoord;
   readonly abilityId?: string;
 }
@@ -197,7 +199,7 @@ export interface Reward {
 export interface QuestObjective {
   readonly id: string;
   readonly description: string;
-  readonly type: 'COLLECT_ITEM' | 'VISIT_LOCATION' | 'DEFEAT_ENEMY'; // Added objective type
+  readonly type: "COLLECT_ITEM" | "VISIT_LOCATION" | "DEFEAT_ENEMY"; // Added objective type
   readonly targetAmount: number;
   readonly currentAmount: number;
   readonly completed: boolean;
@@ -251,7 +253,7 @@ export interface TransactionResult {
 }
 
 export interface OvermindAction {
-  readonly type: 'INVADE' | 'FORTIFY' | 'SPAWN_GATE';
+  readonly type: "INVADE" | "FORTIFY" | "SPAWN_GATE";
   readonly targetSystemId: string;
 }
 

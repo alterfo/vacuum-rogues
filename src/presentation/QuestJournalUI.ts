@@ -1,7 +1,7 @@
-import { Container, Graphics, Text } from 'pixi.js';
-import type { QuestManager } from '@/systems/QuestManager';
-import type { Quest } from '@/domain/Quest';
-import { logger } from '@/utils/logger';
+import { Container, Graphics, Text } from "pixi.js";
+import type { IQuestService } from "@/core/ports/IQuestService";
+import type { Quest } from "@/domain/Quest";
+import { logger } from "@/utils/logger";
 
 /**
  * Quest Journal UI - displays active and completed quests with progress
@@ -9,14 +9,14 @@ import { logger } from '@/utils/logger';
  */
 export class QuestJournalUI {
   public readonly container: Container;
-  private readonly questManager: QuestManager;
+  private readonly questManager: IQuestService;
   private readonly panelWidth: number = 600;
   private readonly panelHeight: number = 500;
   private readonly onClose: () => void;
   private readonly onNavigateToObjective?: (locationId: string) => void;
 
   constructor(
-    questManager: QuestManager,
+    questManager: IQuestService,
     screenWidth: number,
     screenHeight: number,
     onClose: () => void,
@@ -42,7 +42,7 @@ export class QuestJournalUI {
     const backdrop = new Graphics();
     backdrop.rect(-1000, -1000, 3000, 3000);
     backdrop.fill({ color: 0x000000, alpha: 0.7 });
-    backdrop.eventMode = 'static'; // Block clicks behind
+    backdrop.eventMode = "static"; // Block clicks behind
     this.container.addChild(backdrop);
 
     // Main panel background
@@ -54,12 +54,12 @@ export class QuestJournalUI {
 
     // Title
     const titleText = new Text({
-      text: 'ЖУРНАЛ КВЕСТОВ',
+      text: "ЖУРНАЛ КВЕСТОВ",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 18,
         fill: 0x00ffff,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     titleText.x = 20;
@@ -85,12 +85,12 @@ export class QuestJournalUI {
     // Empty state if no quests
     if (activeQuests.length === 0 && completedQuestIds.length === 0) {
       const emptyText = new Text({
-        text: 'У вас пока нет квестов.\nПосетите планету и поговорите с губернатором!',
+        text: "У вас пока нет квестов.\nПосетите планету и поговорите с губернатором!",
         style: {
-          fontFamily: 'Courier New',
+          fontFamily: "Courier New",
           fontSize: 14,
           fill: 0xaaaaaa,
-          align: 'center',
+          align: "center",
         },
       });
       emptyText.anchor.set(0.5);
@@ -105,12 +105,12 @@ export class QuestJournalUI {
    */
   private renderActiveQuests(quests: Quest[], startY: number): void {
     const sectionTitle = new Text({
-      text: 'АКТИВНЫЕ КВЕСТЫ',
+      text: "АКТИВНЫЕ КВЕСТЫ",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 14,
         fill: 0xffaa00,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     sectionTitle.x = 20;
@@ -143,10 +143,10 @@ export class QuestJournalUI {
     const titleText = new Text({
       text: quest.title,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 13,
         fill: quest.isCompleted ? 0x00ff00 : 0xffffff,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     titleText.x = 30;
@@ -157,7 +157,7 @@ export class QuestJournalUI {
     const typeText = new Text({
       text: `[${quest.type}]`,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 11,
         fill: 0x888888,
       },
@@ -170,9 +170,9 @@ export class QuestJournalUI {
     let objY = 35;
     for (const objective of quest.objectives) {
       const objText = new Text({
-        text: `${objective.completed ? '✓' : '○'} ${objective.description}: ${objective.currentAmount}/${objective.targetAmount}`,
+        text: `${objective.completed ? "✓" : "○"} ${objective.description}: ${objective.currentAmount}/${objective.targetAmount}`,
         style: {
-          fontFamily: 'Courier New',
+          fontFamily: "Courier New",
           fontSize: 11,
           fill: objective.completed ? 0x00ff00 : 0xaaaaaa,
         },
@@ -184,9 +184,9 @@ export class QuestJournalUI {
       // Add "Navigate" button for VISIT_LOCATION objectives
       if (
         !objective.completed &&
-        objective.type === 'VISIT_LOCATION' &&
+        objective.type === "VISIT_LOCATION" &&
         objective.locationId &&
-        objective.locationId !== 'any_planet' &&
+        objective.locationId !== "any_planet" &&
         this.onNavigateToObjective
       ) {
         const navBtn = this.createNavigateButton(objective.locationId);
@@ -214,9 +214,9 @@ export class QuestJournalUI {
     btn.addChild(btnBg);
 
     const btnText = new Text({
-      text: '→ Лететь к цели',
+      text: "→ Лететь к цели",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 10,
         fill: 0xffff00,
       },
@@ -225,10 +225,10 @@ export class QuestJournalUI {
     btnText.y = 2;
     btn.addChild(btnText);
 
-    btn.eventMode = 'static';
-    btn.cursor = 'pointer';
+    btn.eventMode = "static";
+    btn.cursor = "pointer";
 
-    btn.on('pointerdown', (event) => {
+    btn.on("pointerdown", (event) => {
       event.stopPropagation(); // Prevent stage from also handling this click
       if (this.onNavigateToObjective) {
         this.onNavigateToObjective(locationId);
@@ -236,14 +236,14 @@ export class QuestJournalUI {
       }
     });
 
-    btn.on('pointerover', () => {
+    btn.on("pointerover", () => {
       btnBg.clear();
       btnBg.rect(0, 0, 120, 16);
       btnBg.fill({ color: 0x666600, alpha: 1.0 });
       btnBg.stroke({ color: 0xffff00, width: 2 });
     });
 
-    btn.on('pointerout', () => {
+    btn.on("pointerout", () => {
       btnBg.clear();
       btnBg.rect(0, 0, 120, 16);
       btnBg.fill({ color: 0x444400, alpha: 0.8 });
@@ -256,14 +256,17 @@ export class QuestJournalUI {
   /**
    * Render completed quests section
    */
-  private renderCompletedQuestsSection(questIds: string[], startY: number): void {
+  private renderCompletedQuestsSection(
+    questIds: string[],
+    startY: number,
+  ): void {
     const sectionTitle = new Text({
       text: `ЗАВЕРШЁННЫЕ КВЕСТЫ (${questIds.length})`,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 14,
         fill: 0x00ff00,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     sectionTitle.x = 20;
@@ -272,9 +275,9 @@ export class QuestJournalUI {
 
     // Show count instead of full list to save space
     const completedText = new Text({
-      text: 'Вы завершили несколько квестов!\nПродолжайте исследовать галактику.',
+      text: "Вы завершили несколько квестов!\nПродолжайте исследовать галактику.",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 12,
         fill: 0x888888,
       },
@@ -289,8 +292,8 @@ export class QuestJournalUI {
    */
   private createCloseButton(): Container {
     const closeBtn = new Container();
-    closeBtn.eventMode = 'static';
-    closeBtn.cursor = 'pointer';
+    closeBtn.eventMode = "static";
+    closeBtn.cursor = "pointer";
 
     const closeBg = new Graphics();
     closeBg.rect(0, 0, 20, 20);
@@ -298,31 +301,31 @@ export class QuestJournalUI {
     closeBtn.addChild(closeBg);
 
     const closeText = new Text({
-      text: 'X',
+      text: "X",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 14,
         fill: 0xffffff,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     closeText.x = 5;
     closeText.y = 2;
     closeBtn.addChild(closeText);
 
-    closeBtn.on('pointerdown', (event) => {
+    closeBtn.on("pointerdown", (event) => {
       event.stopPropagation(); // Prevent stage from also handling this click
-      logger.info('Quest journal closed');
+      logger.info("Quest journal closed");
       this.onClose();
     });
 
-    closeBtn.on('pointerover', () => {
+    closeBtn.on("pointerover", () => {
       closeBg.clear();
       closeBg.rect(0, 0, 20, 20);
       closeBg.fill({ color: 0xff4444, alpha: 1.0 });
     });
 
-    closeBtn.on('pointerout', () => {
+    closeBtn.on("pointerout", () => {
       closeBg.clear();
       closeBg.rect(0, 0, 20, 20);
       closeBg.fill({ color: 0xff0000, alpha: 0.8 });
@@ -339,6 +342,6 @@ export class QuestJournalUI {
       this.container.parent.removeChild(this.container);
     }
     this.container.destroy({ children: true });
-    logger.info('QuestJournalUI destroyed');
+    logger.info("QuestJournalUI destroyed");
   }
 }

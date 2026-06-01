@@ -1,7 +1,8 @@
-import type { Galaxy } from './Galaxy';
-import type { Player } from './Player';
-import type { DialogueSession } from './DialogueSession';
-import type { SerializedSave } from '@/types';
+import type { Galaxy } from "./Galaxy";
+import type { Player } from "./Player";
+import type { DialogueSession } from "./DialogueSession";
+import type { SerializedSave } from "@/types";
+import type { SceneType } from "@/types";
 
 export class SaveState {
   constructor(
@@ -10,6 +11,7 @@ export class SaveState {
     public player: Player,
     public persistentDialogs: DialogueSession[],
     public timestamp: number,
+    public currentSceneType?: SceneType,
   ) {}
 
   serialize(): SerializedSave {
@@ -22,6 +24,7 @@ export class SaveState {
         player: this.player,
         persistentDialogs: this.persistentDialogs,
         timestamp: this.timestamp,
+        currentSceneType: this.currentSceneType,
       }),
     };
   }
@@ -35,6 +38,7 @@ export class SaveState {
       parsed.player,
       parsed.persistentDialogs ?? [],
       parsed.timestamp ?? data.timestamp,
+      parsed.currentSceneType,
     );
   }
 }

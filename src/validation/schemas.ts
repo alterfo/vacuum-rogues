@@ -1,6 +1,6 @@
-import { z } from 'zod';
+import { z } from "zod";
 
-import { logger } from '@/utils/logger';
+import { logger } from "@/utils/logger";
 
 export const AxialCoordSchema = z.object({
   q: z.number().int(),
@@ -17,7 +17,7 @@ export const EmotionVectorSchema = z.object({
 
 export const PlayerSettingsSchema = z.object({
   volume: z.number().int().min(0).max(100).default(100),
-  graphicsQuality: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('MEDIUM'),
+  graphicsQuality: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
   keyBindings: z.record(z.string()).optional(),
 });
 
@@ -26,15 +26,17 @@ export type PlayerSettings = z.infer<typeof PlayerSettingsSchema>;
 export function validatePlayerSettings(data: unknown): PlayerSettings {
   const result = PlayerSettingsSchema.safeParse(data);
   if (!result.success) {
-    logger.warn('Invalid player settings, using defaults:', result.error);
+    logger.warn("Invalid player settings, using defaults:", result.error);
     return PlayerSettingsSchema.parse({});
   }
   return result.data;
 }
 
 export const ShipModuleSchema = z.object({
-  id: z.string().uuid(),
-  category: z.enum(['WEAPON', 'SHIELD', 'ENGINE']),
+  // Module ids are stable semantic identifiers (e.g. "weapon_laser_1"), not
+  // UUIDs — requiring .uuid() here rejected every valid save on load.
+  id: z.string().min(1),
+  category: z.enum(["WEAPON", "SHIELD", "ENGINE"]),
   name: z.string(),
   effect: z.object({
     type: z.string(),
@@ -44,7 +46,7 @@ export const ShipModuleSchema = z.object({
 });
 
 export const PlayerShipSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1),
   name: z.string().min(1).max(32),
   hullHP: z.number().int().min(0),
   maxHull: z.number().int().positive(),
@@ -52,15 +54,27 @@ export const PlayerShipSchema = z.object({
   maxShields: z.number().int().positive(),
   energy: z.number().int().min(0),
   maxEnergy: z.number().int().positive(),
-  speed: z.number().int(),
-  evasion: z.number().int(),
-  modules: z.tuple([ShipModuleSchema.nullable(), ShipModuleSchema.nullable(), ShipModuleSchema.nullable()]),
+  speed: z.number(),
+  evasion: z.number(),
+  modules: z.tuple([
+    ShipModuleSchema.nullable(),
+    ShipModuleSchema.nullable(),
+    ShipModuleSchema.nullable(),
+  ]),
 });
 
 export const ResourceStackSchema = z.object({
   type: z.enum([
-    'FUEL', 'METALS', 'CRYSTALS', 'ORGANICS', 'ARTIFACTS',
-    'WEAPONS', 'MEDICINE', 'ELECTRONICS', 'LUXURY', 'DATA_CORES',
+    "FUEL",
+    "METALS",
+    "CRYSTALS",
+    "ORGANICS",
+    "ARTIFACTS",
+    "WEAPONS",
+    "MEDICINE",
+    "ELECTRONICS",
+    "LUXURY",
+    "DATA_CORES",
   ]),
   amount: z.number().int().min(0).max(999_999),
 });
@@ -79,21 +93,37 @@ export const QuestObjectiveSchema = z.object({
   completed: z.boolean(),
 });
 
+export const QuestFailurePenaltySchema = z.object({
+  reputationLoss: z.number().int().min(0),
+  creditsFine: z.number().int().min(0).optional(),
+  jailTime: z.number().int().min(0).optional(),
+  description: z.string(),
+});
+
 export const QuestSchema = z.object({
-  id: z.string().uuid(),
+  // Quest ids are semantic template ids (e.g. "quest_delivery_ore"), not UUIDs.
+  id: z.string().min(1),
   title: z.string(),
-  type: z.enum(['DELIVERY', 'BOUNTY', 'ESCORT', 'DIPLOMACY', 'EXPLORATION']),
+  type: z.enum(["DELIVERY", "BOUNTY", "ESCORT", "DIPLOMACY", "EXPLORATION"]),
   objectives: z.array(QuestObjectiveSchema),
   isCompleted: z.boolean(),
+  isFailed: z.boolean(),
+  planetId: z.string(),
+  issuedDay: z.number().int().min(0),
+  deadline: z.number().int().min(0), // 0 = no deadline
+  failurePenalty: QuestFailurePenaltySchema.nullable(),
 });
 
 export const QuestLogSchema = z.object({
   activeQuests: z.array(QuestSchema),
-  completedQuests: z.array(QuestSchema),
+  // QuestManager tracks completed quests by id only, so persist ids (not full
+  // Quest objects) to match the runtime shape.
+  completedQuests: z.array(z.string()),
 });
 
 export const JournalEntrySchema = z.object({
-  id: z.string().uuid(),
+  // Journal entry ids are stable string ids, not necessarily UUIDs.
+  id: z.string().min(1),
   date: z.number().int(),
   text: z.string(),
 });
@@ -102,11 +132,14 @@ export const JournalSchema = z.object({
   entries: z.array(JournalEntrySchema),
 });
 
-export const ReputationMapSchema = z.record(z.string(), z.number().min(-100).max(100));
+export const ReputationMapSchema = z.record(
+  z.string(),
+  z.number().min(-100).max(100),
+);
 
 export const PlayerSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string().min(1).max(32).regex(/^[A-Za-z0-9 ]+$/),
+  id: z.string().min(1),
+  name: z.string().min(1).max(32),
   experience: z.number().int().min(0),
   level: z.number().int().min(1).max(99),
   credits: z.number().int().min(0),
@@ -115,14 +148,21 @@ export const PlayerSchema = z.object({
   journal: JournalSchema,
   ship: PlayerShipSchema,
   inventory: InventorySchema,
-  currentSystemId: z.string().optional().default(''),
+  currentSystemId: z.string().optional().default(""),
 });
 
 export const StarSystemSchema = z.object({
   id: z.string(),
   name: z.string(),
   coordinates: AxialCoordSchema,
-  starType: z.enum(['RED_DWARF', 'YELLOW_DWARF', 'BLUE_GIANT', 'WHITE_DWARF', 'NEUTRON', 'BLACK_HOLE']),
+  starType: z.enum([
+    "RED_DWARF",
+    "YELLOW_DWARF",
+    "BLUE_GIANT",
+    "WHITE_DWARF",
+    "NEUTRON",
+    "BLACK_HOLE",
+  ]),
   explored: z.boolean(),
   fogOfWar: z.boolean(),
 });
@@ -135,11 +175,13 @@ export const GalaxySchema = z.object({
 
 export const DialogueSessionSchema = z.object({
   id: z.string(),
-  history: z.array(z.object({
-    sender: z.enum(['PLAYER', 'NPC']),
-    text: z.string(),
-    timestamp: z.number().int(),
-  })),
+  history: z.array(
+    z.object({
+      sender: z.enum(["PLAYER", "NPC"]),
+      text: z.string(),
+      timestamp: z.number().int(),
+    }),
+  ),
   currentEmotion: EmotionVectorSchema,
 });
 
@@ -149,9 +191,11 @@ export const SaveStateSchema = z.object({
   galaxy: GalaxySchema,
   player: PlayerSchema,
   persistentDialogs: z.array(DialogueSessionSchema),
+  currentSceneType: z.string().optional(),
 });
 
-export function validateSaveState(data: unknown): z.infer<typeof SaveStateSchema> {
+export function validateSaveState(
+  data: unknown,
+): z.infer<typeof SaveStateSchema> {
   return SaveStateSchema.parse(data);
 }
-

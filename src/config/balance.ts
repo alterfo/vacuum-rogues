@@ -1,0 +1,47 @@
+import { z } from "zod";
+
+/**
+ * Type-safe game balance constants.
+ * Follows SRP: all balance numbers in one place, validated at startup.
+ */
+export const BalanceSchema = z.object({
+  // Economy
+  STARTING_MONEY: z.number().int().min(0).default(1000),
+  MAX_INVENTORY_SLOTS: z.number().int().min(1).default(50),
+
+  // Galaxy
+  DEFAULT_SYSTEM_COUNT: z.number().int().min(1).max(100).default(30),
+  MIN_SYSTEMS: z.number().int().min(1).default(5),
+  MAX_SYSTEMS: z.number().int().min(1).default(100),
+
+  // Travel
+  WARP_FUEL_COST_CONNECTED: z.number().int().min(0).default(5),
+  WARP_FUEL_COST_UNCONNECTED_BASE: z.number().int().min(0).default(10),
+  WARP_FUEL_COST_UNCONNECTED_MULTIPLIER: z.number().min(0).default(2),
+
+  // Combat
+  MAX_EQUIPMENT_SLOTS: z.number().int().min(1).default(3),
+
+  // Save
+  MAX_SAVE_SLOTS: z.number().int().min(1).default(10),
+  AUTO_SAVE_SLOT: z.string().default("auto"),
+  EMERGENCY_SAVE_SLOT: z.string().default("_emergency"),
+
+  // Quality
+  DEFAULT_QUALITY_LEVEL: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
+});
+
+export type BalanceConfig = z.infer<typeof BalanceSchema>;
+
+/**
+ * Runtime-validated balance constants.
+ * Throws if any value violates schema constraints.
+ */
+export const BALANCE: BalanceConfig = BalanceSchema.parse({
+  STARTING_MONEY: 1000,
+  DEFAULT_SYSTEM_COUNT: 30,
+  WARP_FUEL_COST_CONNECTED: 5,
+  WARP_FUEL_COST_UNCONNECTED_BASE: 10,
+  WARP_FUEL_COST_UNCONNECTED_MULTIPLIER: 2,
+  MAX_EQUIPMENT_SLOTS: 3,
+});

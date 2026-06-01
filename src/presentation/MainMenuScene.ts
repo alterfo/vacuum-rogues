@@ -1,8 +1,28 @@
-import { GameScene } from './GameScene';
-import { Graphics, Text, Container } from 'pixi.js';
-import type { GameEngine } from '@/systems/GameEngine';
-import { SceneType } from '@/types';
-import { logger } from '@/utils/logger';
+import { GameScene } from "./GameScene";
+import { Graphics, Text, Container } from "pixi.js";
+import type { GameEngine } from "@/systems/GameEngine";
+import { SceneType } from "@/types";
+import { logger } from "@/utils/logger";
+
+interface StarParticle {
+  x: number;
+  y: number;
+  size: number;
+  speed: number;
+  alpha: number;
+  twinkleSpeed: number;
+  twinkleOffset: number;
+  color: number;
+  layer: number;
+}
+
+interface DemoShip {
+  container: Container;
+  angle: number;
+  speed: number;
+  radius: number;
+  offsetY: number;
+}
 
 export class MainMenuScene extends GameScene {
   private background: Graphics | null = null;
@@ -10,58 +30,203 @@ export class MainMenuScene extends GameScene {
   private title: Text | null = null;
   private gameEngine: GameEngine | null = null;
   private messageTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  private starParticles: StarParticle[] = [];
+  private starGraphics: Graphics | null = null;
+  private demoShips: DemoShip[] = [];
+  private planets: Graphics[] = [];
 
   initialize(context?: object): void {
     // Ensure stage is interactive so pointer events reach children
-    this.renderer.app.stage.eventMode = 'static';
+    this.renderer.app.stage.eventMode = "static";
 
-    this.gameEngine = (context as { gameEngine?: GameEngine })?.gameEngine ?? null;
+    this.gameEngine =
+      (context as { gameEngine?: GameEngine })?.gameEngine ?? null;
     this.renderMainMenu();
-    logger.info('MainMenuScene initialized');
+
+    // Re-render menu when canvas actually gets its size (fixes first-load centering)
+    if (typeof ResizeObserver !== "undefined" && this.renderer.app.canvas) {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.renderMainMenu();
+      });
+      this.resizeObserver.observe(this.renderer.app.canvas);
+    }
+
+    logger.info("MainMenuScene initialized");
   }
 
-  update(_deltaTime: number): void {
-    // Optional: animate background stars
+  update(deltaTime: number): void {
+    const w = this.renderer.app.screen.width;
+    const h = this.renderer.app.screen.height;
+    const time = performance.now();
+
+    // Animate stars with parallax and twinkling
+    if (this.starGraphics) {
+      this.starGraphics.clear();
+      for (const s of this.starParticles) {
+        // Twinkling effect
+        const tw =
+          Math.sin(time * s.twinkleSpeed + s.twinkleOffset) * 0.3 + 0.7;
+        this.starGraphics.fill({ color: s.color, alpha: s.alpha * tw });
+        this.starGraphics.circle(s.x, s.y, s.size);
+
+        // Parallax scrolling (slower for distant stars)
+        s.x += s.speed * s.layer * deltaTime * 0.01;
+        if (s.x > w + 10) {
+          s.x = -10;
+          s.y = Math.random() * h;
+        }
+      }
+    }
+
+    // Animate multiple ships
+    if (w > 0 && h > 0) {
+      for (const ship of this.demoShips) {
+        ship.angle += deltaTime * ship.speed;
+        ship.container.x = w * 0.5 + Math.cos(ship.angle) * w * ship.radius;
+        ship.container.y =
+          h * 0.5 + Math.sin(ship.angle * 0.7) * h * ship.offsetY;
+        ship.container.rotation = ship.angle + Math.PI / 2;
+      }
+    }
   }
 
   destroy(): void {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
     if (this.messageTimeoutId) {
       clearTimeout(this.messageTimeoutId);
       this.messageTimeoutId = null;
+    }
+    this.renderer.clearGameLayer();
+    this.renderer.clearUILayer();
+    this.background = null;
+    this.buttonsContainer = null;
+    this.title = null;
+    this.gameEngine = null;
+    this.starGraphics = null;
+    this.demoShips = [];
+    this.planets = [];
+    this.starParticles = [];
+    logger.info("MainMenuScene destroyed");
+  }
+
+  private renderMainMenu(): void {
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+
+    // Skip render if canvas hasn't received its size yet
+    if (width === 0 || height === 0) {
+      logger.warn("MainMenuScene: canvas size is zero, deferring render");
+      return;
     }
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
 
-    this.background = null;
-    this.buttonsContainer = null;
-    this.title = null;
-    this.gameEngine = null;
-    logger.info('MainMenuScene destroyed');
-  }
-
-  private renderMainMenu(): void {
-    this.renderer.clearGameLayer();
-    this.renderer.clearUILayer();
-
-    const width = this.renderer.app.screen.width;
-    const height = this.renderer.app.screen.height;
-
-    // Draw dark space background
+    // Draw deep space gradient background
     this.background = new Graphics();
-    this.background.fill({ color: 0x000510 });
     this.background.rect(0, 0, width, height);
+    this.background.fill({
+      color: 0x000510,
+      alpha: 1,
+    });
+    // Add subtle gradient effect with overlays
+    const gradientOverlay = new Graphics();
+    gradientOverlay.circle(width * 0.3, height * 0.2, width * 0.4);
+    gradientOverlay.fill({ color: 0x0a0a30, alpha: 0.15 });
+    gradientOverlay.circle(width * 0.7, height * 0.8, width * 0.3);
+    gradientOverlay.fill({ color: 0x1a0520, alpha: 0.1 });
+    this.background.addChild(gradientOverlay);
     this.renderer.gameLayer.addChild(this.background);
+
+    // Add distant planets
+    this.planets = [];
+    const planet1 = new Graphics();
+    planet1.circle(0, 0, 80);
+    planet1.fill({ color: 0x4a3520, alpha: 0.2 });
+    planet1.x = width * 0.15;
+    planet1.y = height * 0.75;
+    this.planets.push(planet1);
+    this.renderer.gameLayer.addChild(planet1);
+
+    const planet2 = new Graphics();
+    planet2.circle(0, 0, 60);
+    planet2.fill({ color: 0x204a45, alpha: 0.15 });
+    planet2.x = width * 0.85;
+    planet2.y = height * 0.3;
+    this.planets.push(planet2);
+    this.renderer.gameLayer.addChild(planet2);
+
+    // Enhanced animated starfield with multiple layers and colors
+    this.starParticles = [];
+    this.starGraphics = new Graphics();
+
+    const starColors = [0xffffff, 0xaaccff, 0xffddaa, 0xffaacc];
+
+    for (let i = 0; i < 300; i++) {
+      const layer = Math.random() < 0.3 ? 1 : Math.random() < 0.6 ? 2 : 3;
+      this.starParticles.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        size: Math.random() * 2.5 + 0.3,
+        speed: Math.random() * 0.015 + 0.003,
+        alpha: (Math.random() * 0.6 + 0.3) / layer,
+        twinkleSpeed: Math.random() * 0.002 + 0.0005,
+        twinkleOffset: Math.random() * Math.PI * 2,
+        color: starColors[Math.floor(Math.random() * starColors.length)],
+        layer,
+      });
+    }
+    this.renderer.gameLayer.addChild(this.starGraphics);
+
+    // Create multiple demo ships with different trajectories
+    this.demoShips = [];
+
+    // Main ship (player-like)
+    const ship1 = this.createShip(16, 0x4488cc, 0x88ccff, 0.6);
+    this.demoShips.push({
+      container: ship1,
+      angle: 0,
+      speed: 0.00005,
+      radius: 0.35,
+      offsetY: 0.25,
+    });
+
+    // Smaller escort ships
+    const ship2 = this.createShip(10, 0x44cc88, 0x88ffcc, 0.4);
+    this.demoShips.push({
+      container: ship2,
+      angle: Math.PI,
+      speed: 0.00007,
+      radius: 0.28,
+      offsetY: 0.18,
+    });
+
+    const ship3 = this.createShip(12, 0xcc8844, 0xffcc88, 0.35);
+    this.demoShips.push({
+      container: ship3,
+      angle: Math.PI * 0.5,
+      speed: 0.00004,
+      radius: 0.32,
+      offsetY: 0.22,
+    });
+
+    for (const ship of this.demoShips) {
+      this.renderer.gameLayer.addChild(ship.container);
+    }
 
     // Title
     this.title = new Text({
-      text: 'КОСМИЧЕСКИЕ РЕЙНДЖЕРЫ\nНЕЙРОСЕТЕВОЕ ВТОРЖЕНИЕ',
+      text: "КОСМИЧЕСКИЕ РЕЙНДЖЕРЫ\nНЕЙРОСЕТЕВОЕ ВТОРЖЕНИЕ",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 32,
         fill: 0x00ffff,
         letterSpacing: 6,
-        align: 'center',
+        align: "center",
         lineHeight: 40,
       },
     });
@@ -76,144 +241,99 @@ export class MainMenuScene extends GameScene {
     this.buttonsContainer.y = height / 2;
 
     // Helper to create clickable text button
-    const createButton = (text: string, y: number, callback: () => void, fontSize = 20, color = 0x00ff00) => {
+    const createButton = (
+      text: string,
+      y: number,
+      callback: () => void,
+      fontSize = 20,
+      color = 0x00ff00,
+    ) => {
       const buttonText = new Text({
         text,
         style: {
-          fontFamily: 'Courier New',
+          fontFamily: "Courier New",
           fontSize,
           fill: color,
-          fontWeight: 'bold' as const,
+          fontWeight: "bold" as const,
         },
       });
       buttonText.anchor.set(0.5, 0.5);
       buttonText.y = y;
-      buttonText.eventMode = 'static';
-      buttonText.cursor = 'pointer';
+      buttonText.eventMode = "static";
+      buttonText.cursor = "pointer";
 
-      buttonText.on('pointerdown', () => {
+      buttonText.on("pointerdown", () => {
         logger.info(`Button clicked: ${text}`);
         callback();
       });
-      buttonText.on('pointerover', () => { buttonText.alpha = 0.7; });
-      buttonText.on('pointerout', () => { buttonText.alpha = 1; });
-      
+      buttonText.on("pointerover", () => {
+        buttonText.alpha = 0.7;
+      });
+      buttonText.on("pointerout", () => {
+        buttonText.alpha = 1;
+      });
+
       return buttonText;
     };
 
-    const newGameBtn = createButton('Новая игра', 0, () => this.handleNewGame());
+    const newGameBtn = createButton("Новая игра", 0, () =>
+      this.handleNewGame(),
+    );
     this.buttonsContainer.addChild(newGameBtn);
 
-    const flightBtn = createButton('Полёт', 40, () => this.handleFlight(), 20, 0x00aaff);
-    this.buttonsContainer.addChild(flightBtn);
-
-    const continueBtn = createButton('Продолжить', 80, () => this.handleContinue(), 20, 0xffaa00);
+    const continueBtn = createButton(
+      "Продолжить",
+      50,
+      () => this.handleContinue(),
+      20,
+      0xffaa00,
+    );
     this.buttonsContainer.addChild(continueBtn);
-
-    const onnxBtn = createButton('ONNX Демо', 130, () => this.handleONNXDemo(), 16, 0xff00ff);
-    this.buttonsContainer.addChild(onnxBtn);
 
     this.renderer.uiLayer.addChild(this.buttonsContainer);
   }
 
   private async handleNewGame(): Promise<void> {
-    logger.info('New game selected');
+    logger.info("New game selected");
     // Transition to RACE_SELECTION for character creation
     if (this.gameEngine) {
       await this.gameEngine.transitionTo(SceneType.RACE_SELECTION, {
         gameEngine: this.gameEngine,
       });
     } else {
-      logger.error('GameEngine not available!');
-    }
-  }
-
-  private async handleFlight(): Promise<void> {
-    logger.info('Flight demo selected');
-    // Transition to SPACE_FLIGHT scene for control demo
-    if (this.gameEngine) {
-      await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT);
-    } else {
-      logger.error('GameEngine not available!');
-    }
-  }
-
-  private async handleONNXDemo(): Promise<void> {
-    logger.info('ONNX Demo selected');
-    if (!this.gameEngine?.onnxRegistry) {
-      logger.error('GameEngine or onnxRegistry not available!');
-      return;
-    }
-
-    const registry = this.gameEngine.onnxRegistry;
-
-    try {
-      this.showMessage('Загрузка ONNX модели...');
-      
-      // Load dialogue model (uses fallback if real model unavailable)
-      await registry.loadModel('t5_dialogue');
-      this.showMessage('Модель загружена!');
-
-      // Run demo inference
-      setTimeout(async () => {
-        try {
-          const { Tensor } = await import('onnxruntime-web');
-          const dummyInput = new Tensor('float32', new Float32Array(100).fill(0), [1, 100]);
-          
-          const startTime = performance.now();
-          await registry.infer('t5_dialogue', dummyInput);
-          const elapsed = performance.now() - startTime;
-          
-          this.showMessage(`Инференс: ${elapsed.toFixed(2)}мс`);
-          logger.info(`ONNX inference demo completed in ${elapsed.toFixed(2)}ms`);
-        } catch (err) {
-          logger.warn('ONNX inference demo failed:', err);
-          this.showMessage('Инференс не доступен (нет модели)');
-        }
-      }, 500);
-    } catch (error) {
-      const err = error as Error;
-      logger.warn('ONNX model load failed (expected in dev):', err);
-      this.showMessage('Модель недоступна (требуется CDN)');
+      logger.error("GameEngine not available!");
     }
   }
 
   private async handleContinue(): Promise<void> {
-    logger.info('Continue selected');
+    logger.info("Continue selected");
     if (!this.gameEngine) {
-      logger.error('GameEngine not available for Continue!');
+      logger.error("GameEngine not available for Continue!");
+      this.showMessage("Ошибка: игровой движок недоступен");
       return;
     }
 
     try {
-      const save = await this.gameEngine.saveManager.read('auto');
-      if (save) {
-        // Restore state and transition to STAR_MAP
-        this.gameEngine.galaxy = save.galaxy;
-        this.gameEngine.player = save.player;
-        await this.gameEngine.transitionTo(SceneType.STAR_MAP);
-      } else {
-        // No save available, show message and stay on menu
-        logger.warn('No save found for continue');
-        this.showMessage('Нет доступных сохранений');
+      const loaded = await this.gameEngine.loadGame("auto");
+      if (!loaded) {
+        logger.warn("No save found for continue");
+        this.showMessage("Нет доступных сохранений");
       }
     } catch (error) {
-      const err = error as Error;
-      logger.error('Failed to load save:', err);
-      if (this.gameEngine) {
-        this.gameEngine.handleError(err);
-      }
+      logger.error("Failed to load save:", error);
+      this.showMessage("Ошибка загрузки. Начните новую игру.");
+      // Don't re-throw - menu should remain functional
     }
   }
 
   private showMessage(message: string): void {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
-    
+
     // Clear previous messages
     if (this.buttonsContainer) {
       for (const child of this.buttonsContainer.children) {
-        if (child instanceof Text && child.text.includes('[')) {
+        if (child instanceof Text && child.text.includes("[")) {
           continue;
         }
       }
@@ -222,14 +342,16 @@ export class MainMenuScene extends GameScene {
     const msgText = new Text({
       text: message,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 16,
         fill: 0xff4444,
       },
     });
     msgText.anchor.set(0.5);
     msgText.x = width / 2;
-    const buttonsY = this.buttonsContainer ? this.buttonsContainer.y : height / 2;
+    const buttonsY = this.buttonsContainer
+      ? this.buttonsContainer.y
+      : height / 2;
     msgText.y = buttonsY + 100;
     this.renderer.uiLayer.addChild(msgText);
 
@@ -241,5 +363,44 @@ export class MainMenuScene extends GameScene {
       msgText.destroy();
       this.messageTimeoutId = null;
     }, 3000);
+  }
+
+  private createShip(
+    size: number,
+    primaryColor: number,
+    accentColor: number,
+    alpha: number,
+  ): Container {
+    const container = new Container();
+    const shipG = new Graphics();
+
+    // Main ship body
+    shipG
+      .poly([
+        size,
+        0,
+        -size * 0.7,
+        -size * 0.6,
+        -size * 0.4,
+        0,
+        -size * 0.7,
+        size * 0.6,
+      ])
+      .fill({ color: primaryColor, alpha });
+
+    // Cockpit/accent
+    shipG
+      .poly([
+        size * 0.3,
+        0,
+        -size * 0.2,
+        -size * 0.25,
+        -size * 0.2,
+        size * 0.25,
+      ])
+      .fill({ color: accentColor, alpha });
+
+    container.addChild(shipG);
+    return container;
   }
 }

@@ -1,67 +1,77 @@
-import { Planet } from '@/domain/Planet';
-import { Market } from '@/domain/Market';
-import { NPC } from '@/domain/NPC';
-import { PlanetType, RaceType } from '@/types';
-import { SeededRNG } from '@/utils/seededRNG';
-import { logger } from '@/utils/logger';
+import { Planet } from "@/domain/Planet";
+import { Market } from "@/domain/Market";
+import { NPC } from "@/domain/NPC";
+import { PlanetType, RaceType } from "@/types";
+import { SeededRNG } from "@/utils/seededRNG";
+import { PlanetNameGenerator } from "@/utils/planetNameGenerator";
+import { logger } from "@/utils/logger";
 
-/**
- * Deterministic planet generation for star systems
- * Uses seeded RNG to ensure same planets for same galaxy seed + system ID
- */
+export interface GenerationProgress {
+  total: number;
+  current: number;
+  status: string;
+}
+
 export class PlanetGenerator {
   private readonly rng: SeededRNG;
-  private readonly ORBITAL_RADII = [750, 1250, 1750, 2250, 2750] as const; // 5x scale for better navigation
-  private readonly PLANET_TYPE_WEIGHTS: Map<PlanetType, number>;
+  private readonly ORBITAL_RADII = [150, 250, 350, 450, 550] as const;
 
   constructor(galaxySeed: string, systemId: string) {
-    // Combine galaxy seed with system ID for deterministic per-system generation
     this.rng = new SeededRNG(galaxySeed + systemId);
-
-    // Define planet type distribution (more terrestrial planets, fewer gas giants)
-    this.PLANET_TYPE_WEIGHTS = new Map([
-      [PlanetType.TERRESTRIAL, 40],
-      [PlanetType.ICE, 25],
-      [PlanetType.VOLCANIC, 15],
-      [PlanetType.GAS_GIANT, 10],
-      [PlanetType.INDUSTRIAL, 7],
-      [PlanetType.HABITAT, 3],
-    ]);
   }
 
-  /**
-   * Generate 1-5 planets for a star system
-   * @param systemName Name of the parent star system (for planet naming)
-   * @returns Array of generated planets
-   */
-  generate(systemName: string): Planet[] {
-    const count = this.rng.nextInt(1, 5);
+  async generate(
+    systemName: string,
+    onProgress?: (p: GenerationProgress) => void,
+  ): Promise<Planet[]> {
+    const count = this.rng.nextInt(2, 5);
+    const names = PlanetNameGenerator.generate(this.rng, count);
     const planets: Planet[] = [];
 
     for (let i = 0; i < count; i++) {
-      const planetType = this.selectPlanetType();
-      const planetName = `${systemName} ${this.toRomanNumeral(i + 1)}`;
+      // Guarantee at least one habitable planet (first planet is always habitable)
+      const planetType =
+        i === 0 ? this.selectHabitablePlanetType() : this.selectPlanetType();
+      const planetName = names[i] ?? `${systemName} ${i + 1}`;
       const orbitalRadius = this.ORBITAL_RADII[i];
       const market = this.createStubMarket();
       const planetId = `planet_${systemName}_${i}`;
+      const isHabitable =
+        planetType === PlanetType.TERRESTRIAL ||
+        planetType === PlanetType.INDUSTRIAL ||
+        planetType === PlanetType.HABITAT;
 
-      // Generate governor NPC for the planet
-      const governor = this.createGovernorNPC(planetId, planetName);
+      const inhabitants = isHabitable
+        ? [this.createGovernorNPC(planetId, planetName)]
+        : [];
 
-      const planet = new Planet(
-        planetId,
-        planetName,
-        planetType,
-        orbitalRadius,
-        market,
-        [governor], // Add governor to inhabitants
-        [], // availableQuests (empty for now)
+      planets.push(
+        new Planet(
+          planetId,
+          planetName,
+          planetType,
+          orbitalRadius,
+          market,
+          inhabitants,
+          [],
+          isHabitable,
+          0,
+        ),
       );
 
-      planets.push(planet);
+      if (onProgress) {
+        onProgress({
+          total: count,
+          current: i + 1,
+          status: `Генерация ${planetName}...`,
+        });
+        await new Promise((r) => setTimeout(r, 30));
+      }
     }
 
-    logger.info(`Generated ${count} planets for system ${systemName}`);
+    logger.info(
+      `Generated ${count} planets for system ${systemName} (${planets.filter((p) => p.isHabitable).length} habitable)`,
+    );
     return planets;
   }
 
@@ -88,7 +98,7 @@ export class PlanetGenerator {
       `Губернатор ${planetName}`,
       governorRace,
       {
-        traits: ['authoritative', 'diplomatic'],
+        traits: ["authoritative", "diplomatic"],
         backstory: `Правитель планеты ${planetName}, отвечающий за безопасность и процветание системы.`,
       },
       {
@@ -105,31 +115,41 @@ export class PlanetGenerator {
     return governor;
   }
 
-  /**
-   * Select planet type using weighted random distribution
-   * @returns Selected PlanetType
-   */
   private selectPlanetType(): PlanetType {
-    // Calculate total weight
-    let totalWeight = 0;
-    for (const weight of this.PLANET_TYPE_WEIGHTS.values()) {
-      totalWeight += weight;
+    const weights: [PlanetType, number][] = [
+      [PlanetType.TERRESTRIAL, 35],
+      [PlanetType.ICE, 20],
+      [PlanetType.VOLCANIC, 15],
+      [PlanetType.GAS_GIANT, 15],
+      [PlanetType.INDUSTRIAL, 10],
+      [PlanetType.HABITAT, 5],
+    ];
+    const total = weights.reduce((s, [, w]) => s + w, 0);
+    let roll = this.rng.nextFloat(0, total);
+    for (const [type, w] of weights) {
+      roll -= w;
+      if (roll <= 0) return type;
     }
-
-    // Generate random value in [0, totalWeight)
-    const randomValue = this.rng.nextFloat(0, totalWeight);
-
-    // Find selected type by accumulating weights
-    let accumulatedWeight = 0;
-    for (const [type, weight] of this.PLANET_TYPE_WEIGHTS.entries()) {
-      accumulatedWeight += weight;
-      if (randomValue < accumulatedWeight) {
-        return type;
-      }
-    }
-
-    // Fallback (should never reach here)
     return PlanetType.TERRESTRIAL;
+  }
+
+  /**
+   * Select only habitable planet types for guaranteed habitable planet
+   * @returns One of TERRESTRIAL, INDUSTRIAL, or HABITAT
+   */
+  private selectHabitablePlanetType(): PlanetType {
+    const weights: [PlanetType, number][] = [
+      [PlanetType.TERRESTRIAL, 70], // 70% chance (most common)
+      [PlanetType.INDUSTRIAL, 20], // 20% chance
+      [PlanetType.HABITAT, 10], // 10% chance (rarest)
+    ];
+    const total = weights.reduce((s, [, w]) => s + w, 0);
+    let roll = this.rng.nextFloat(0, total);
+    for (const [type, w] of weights) {
+      roll -= w;
+      if (roll <= 0) return type;
+    }
+    return PlanetType.TERRESTRIAL; // Fallback
   }
 
   /**
@@ -141,21 +161,5 @@ export class PlanetGenerator {
     // Create empty market - planet reference can be undefined initially
     // Market will be properly initialized in future stories when trade is implemented
     return new Market([], [], []);
-  }
-
-  /**
-   * Convert number to Roman numeral (1-5 only)
-   * @param num Number to convert (1-5)
-   * @returns Roman numeral string
-   */
-  private toRomanNumeral(num: number): string {
-    const romanMap: Record<number, string> = {
-      1: 'I',
-      2: 'II',
-      3: 'III',
-      4: 'IV',
-      5: 'V',
-    };
-    return romanMap[num] ?? 'I';
   }
 }

@@ -1,11 +1,11 @@
-import { Container, Graphics, Text } from 'pixi.js';
-import { GameScene } from './GameScene';
-import type { Renderer } from './Renderer';
-import type { GameEngine } from '@/systems/GameEngine';
-import { RaceRegistry } from '@/systems/RaceRegistry';
-import type { Race } from '@/domain/Race';
-import { RaceType, SceneType } from '@/types';
-import { logger } from '@/utils/logger';
+import { Container, Graphics, Text } from "pixi.js";
+import { GameScene } from "./GameScene";
+import type { Renderer } from "./Renderer";
+import type { GameEngine } from "@/systems/GameEngine";
+import { RaceRegistry } from "@/systems/RaceRegistry";
+import type { Race } from "@/domain/Race";
+import { RaceType, SceneType } from "@/types";
+import { logger } from "@/utils/logger";
 
 /**
  * Race Selection Scene - allows player to choose their race before starting the game
@@ -21,7 +21,7 @@ export class RaceSelectionScene extends GameScene {
 
   initialize(context?: { gameEngine: GameEngine }): void {
     if (!context?.gameEngine) {
-      throw new Error('RaceSelectionScene requires gameEngine in context');
+      throw new Error("RaceSelectionScene requires gameEngine in context");
     }
 
     this.gameEngine = context.gameEngine;
@@ -30,7 +30,7 @@ export class RaceSelectionScene extends GameScene {
 
     this.render();
 
-    logger.info('RaceSelectionScene initialized');
+    logger.info("RaceSelectionScene initialized");
   }
 
   update(_deltaTime: number): void {
@@ -45,7 +45,7 @@ export class RaceSelectionScene extends GameScene {
 
     this.gameEngine = null;
 
-    logger.info('RaceSelectionScene destroyed');
+    logger.info("RaceSelectionScene destroyed");
   }
 
   /**
@@ -65,12 +65,12 @@ export class RaceSelectionScene extends GameScene {
 
     // Title
     const title = new Text({
-      text: 'ВЫБЕРИТЕ РАСУ',
+      text: "ВЫБЕРИТЕ РАСУ",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 28,
         fill: 0x00ffff,
-        fontWeight: 'bold',
+        fontWeight: "bold",
         letterSpacing: 4,
       },
     });
@@ -104,7 +104,13 @@ export class RaceSelectionScene extends GameScene {
   /**
    * Render a single race card
    */
-  private renderRaceCard(race: Race, x: number, y: number, width: number, height: number): void {
+  private renderRaceCard(
+    race: Race,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): void {
     if (!this.mainContainer) return;
 
     const cardContainer = new Container();
@@ -116,24 +122,27 @@ export class RaceSelectionScene extends GameScene {
     const cardBg = new Graphics();
     cardBg.rect(0, 0, width, height);
     cardBg.fill({ color: isSelected ? 0x1a3a4a : 0x0a1a2a, alpha: 0.95 });
-    cardBg.stroke({ color: isSelected ? 0x00ffff : 0x444444, width: isSelected ? 3 : 2 });
-    cardBg.eventMode = 'static';
-    cardBg.cursor = 'pointer';
+    cardBg.stroke({
+      color: isSelected ? 0x00ffff : 0x444444,
+      width: isSelected ? 3 : 2,
+    });
+    cardBg.eventMode = "static";
+    cardBg.cursor = "pointer";
     cardContainer.addChild(cardBg);
 
     // Race name
     const raceName = new Text({
       text: race.name.toUpperCase(),
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 18,
         fill: isSelected ? 0x00ffff : 0xffffff,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     raceName.x = 10;
     raceName.y = 10;
-    raceName.eventMode = 'none'; // Don't block clicks
+    raceName.eventMode = "none"; // Don't block clicks
     cardContainer.addChild(raceName);
 
     // Race description
@@ -141,7 +150,7 @@ export class RaceSelectionScene extends GameScene {
     const descText = new Text({
       text: description,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 11,
         fill: 0xcccccc,
         wordWrap: true,
@@ -151,14 +160,14 @@ export class RaceSelectionScene extends GameScene {
     });
     descText.x = 10;
     descText.y = 35;
-    descText.eventMode = 'none'; // Don't block clicks
+    descText.eventMode = "none"; // Don't block clicks
     cardContainer.addChild(descText);
 
     // Unique mechanic
     const mechanicText = new Text({
       text: `✦ ${race.uniqueMechanic.description}`,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 11,
         fill: 0xffaa00,
         wordWrap: true,
@@ -167,7 +176,7 @@ export class RaceSelectionScene extends GameScene {
     });
     mechanicText.x = 10;
     mechanicText.y = 90;
-    mechanicText.eventMode = 'none'; // Don't block clicks
+    mechanicText.eventMode = "none"; // Don't block clicks
     cardContainer.addChild(mechanicText);
 
     // Stats
@@ -175,7 +184,7 @@ export class RaceSelectionScene extends GameScene {
     const statsText = new Text({
       text: stats,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 10,
         fill: 0xaaaaaa,
         lineHeight: 14,
@@ -183,16 +192,16 @@ export class RaceSelectionScene extends GameScene {
     });
     statsText.x = 10;
     statsText.y = 120;
-    statsText.eventMode = 'none'; // Don't block clicks
+    statsText.eventMode = "none"; // Don't block clicks
     cardContainer.addChild(statsText);
 
     // Click handler
-    cardBg.on('pointerdown', () => {
+    cardBg.on("pointerdown", () => {
       this.selectRace(race.type);
     });
 
     // Hover effect
-    cardBg.on('pointerover', () => {
+    cardBg.on("pointerover", () => {
       if (race.type !== this.selectedRace) {
         cardBg.clear();
         cardBg.rect(0, 0, width, height);
@@ -201,7 +210,7 @@ export class RaceSelectionScene extends GameScene {
       }
     });
 
-    cardBg.on('pointerout', () => {
+    cardBg.on("pointerout", () => {
       if (race.type !== this.selectedRace) {
         cardBg.clear();
         cardBg.rect(0, 0, width, height);
@@ -224,7 +233,7 @@ export class RaceSelectionScene extends GameScene {
     lines.push(`Скорость: ${race.shipBaseline.speed.toFixed(1)}`);
     lines.push(`Уворот: ${race.shipBaseline.evasion.toFixed(1)}`);
 
-    return lines.join('\n');
+    return lines.join("\n");
   }
 
   /**
@@ -260,12 +269,12 @@ export class RaceSelectionScene extends GameScene {
 
     // Button text
     const btnText = new Text({
-      text: 'НАЧАТЬ ИГРУ',
+      text: "НАЧАТЬ ИГРУ",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 20,
         fill: 0xffffff,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     btnText.anchor.set(0.5);
@@ -273,23 +282,33 @@ export class RaceSelectionScene extends GameScene {
     buttonContainer.addChild(btnText);
 
     // Make button interactive
-    buttonContainer.eventMode = 'static';
-    buttonContainer.cursor = 'pointer';
-    buttonContainer.on('pointerdown', () => {
+    buttonContainer.eventMode = "static";
+    buttonContainer.cursor = "pointer";
+    buttonContainer.on("pointerdown", () => {
       this.startGame();
     });
 
     // Hover effects
-    buttonContainer.on('pointerover', () => {
+    buttonContainer.on("pointerover", () => {
       btnBg.clear();
-      btnBg.rect(-buttonWidth / 2, -buttonHeight / 2, buttonWidth, buttonHeight);
+      btnBg.rect(
+        -buttonWidth / 2,
+        -buttonHeight / 2,
+        buttonWidth,
+        buttonHeight,
+      );
       btnBg.fill({ color: 0x0066aa, alpha: 1.0 });
       btnBg.stroke({ color: 0x00ffff, width: 3 });
     });
 
-    buttonContainer.on('pointerout', () => {
+    buttonContainer.on("pointerout", () => {
       btnBg.clear();
-      btnBg.rect(-buttonWidth / 2, -buttonHeight / 2, buttonWidth, buttonHeight);
+      btnBg.rect(
+        -buttonWidth / 2,
+        -buttonHeight / 2,
+        buttonWidth,
+        buttonHeight,
+      );
       btnBg.fill({ color: 0x004488, alpha: 0.9 });
       btnBg.stroke({ color: 0x00ffff, width: 2 });
     });
@@ -306,7 +325,7 @@ export class RaceSelectionScene extends GameScene {
     logger.info(`Starting game with race: ${this.selectedRace}`);
 
     // Pass selected race to GameEngine for player creation
-    await this.gameEngine.transitionTo(SceneType.STAR_MAP, {
+    await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
       selectedRace: this.selectedRace,
     });

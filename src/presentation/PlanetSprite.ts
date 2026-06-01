@@ -1,6 +1,6 @@
-import { Container, Graphics } from 'pixi.js';
-import type { Planet } from '@/domain/Planet';
-import { PlanetType } from '@/types';
+import { Container, Graphics } from "pixi.js";
+import type { Planet } from "@/domain/Planet";
+import { PlanetType } from "@/types";
 
 /**
  * Visual representation of a planet in the SpaceFlightScene
@@ -20,7 +20,12 @@ export class PlanetSprite {
   private isHovered: boolean = false;
   private clickCallback: ((planet: Planet) => void) | null = null;
 
-  constructor(planet: Planet, centerX: number, centerY: number, initialAngle: number) {
+  constructor(
+    planet: Planet,
+    centerX: number,
+    centerY: number,
+    initialAngle: number,
+  ) {
     this.planet = planet;
     this.orbitalRadius = planet.orbitalRadius;
     this.angle = initialAngle;
@@ -50,48 +55,76 @@ export class PlanetSprite {
 
   /**
    * Render planet circle with type-specific color and size
-   * Adds glow effect when hovered and visual variety
+   * Enhanced visibility with strong glow and outline to stand out against starry background
    */
   render(): void {
     this.graphics.clear();
 
     // Determine color and radius based on planet type
-    const { color, radius, hasRings, hasAtmosphere } = this.getPlanetVisuals(this.planet.type);
+    const { color, radius, hasRings, hasAtmosphere } = this.getPlanetVisuals(
+      this.planet.type,
+    );
 
-    // Draw outer glow/atmosphere for some planet types
+    // Draw strong outer glow (multiple layers for depth)
+    this.graphics.circle(0, 0, radius + 16);
+    this.graphics.fill({ color, alpha: 0.08 });
+    this.graphics.circle(0, 0, radius + 12);
+    this.graphics.fill({ color, alpha: 0.12 });
+    this.graphics.circle(0, 0, radius + 8);
+    this.graphics.fill({ color, alpha: 0.18 });
+
+    // Draw atmosphere for some planet types
     if (hasAtmosphere) {
-      this.graphics.circle(0, 0, radius + 4);
-      this.graphics.fill({ color, alpha: 0.15 });
+      this.graphics.circle(0, 0, radius + 5);
+      this.graphics.fill({ color, alpha: 0.25 });
     }
 
-    // Draw hover glow effect
+    // Draw enhanced hover glow effect
     if (this.isHovered) {
+      this.graphics.circle(0, 0, radius + 10);
+      this.graphics.fill({ color: 0xffffff, alpha: 0.3 });
       this.graphics.circle(0, 0, radius + 6);
-      this.graphics.fill({ color: 0xffffff, alpha: 0.25 });
+      this.graphics.fill({ color: 0xffffff, alpha: 0.4 });
     }
 
-    // Draw planet circle with gradient-like effect (multiple circles with decreasing alpha)
+    // Draw bright outline to separate from background
+    this.graphics.circle(0, 0, radius + 2);
+    this.graphics.stroke({
+      color: this.lightenColor(color, 80),
+      width: 2,
+      alpha: 0.6,
+    });
+
+    // Draw planet circle with gradient-like effect
     this.graphics.circle(0, 0, radius);
     this.graphics.fill({ color });
 
-    // Add highlight for 3D effect
-    this.graphics.circle(-radius * 0.25, -radius * 0.25, radius * 0.4);
-    this.graphics.fill({ color: 0xffffff, alpha: 0.2 });
+    // Add strong highlight for 3D effect
+    this.graphics.circle(-radius * 0.25, -radius * 0.25, radius * 0.45);
+    this.graphics.fill({ color: 0xffffff, alpha: 0.35 });
 
-    // Draw rings for gas giants
+    // Add secondary highlight
+    this.graphics.circle(-radius * 0.15, -radius * 0.15, radius * 0.25);
+    this.graphics.fill({ color: 0xffffff, alpha: 0.25 });
+
+    // Draw rings for gas giants (enhanced)
     if (hasRings) {
-      const ringInner = radius + 4;
-      const ringOuter = radius + 10;
+      const ringInner = radius + 6;
+      const ringOuter = radius + 16;
 
       // Draw ring shadow on planet
       this.graphics.ellipse(0, radius * 0.3, radius * 0.9, radius * 0.15);
-      this.graphics.fill({ color: 0x000000, alpha: 0.3 });
+      this.graphics.fill({ color: 0x000000, alpha: 0.4 });
 
-      // Draw rings
-      for (let i = 0; i < 3; i++) {
-        const r = ringInner + (ringOuter - ringInner) * (i / 3);
+      // Draw bright rings with multiple bands
+      for (let i = 0; i < 5; i++) {
+        const r = ringInner + (ringOuter - ringInner) * (i / 5);
         this.graphics.ellipse(0, 0, r, r * 0.2);
-        this.graphics.stroke({ color: this.lightenColor(color, 20), width: 2, alpha: 0.6 - i * 0.15 });
+        this.graphics.stroke({
+          color: this.lightenColor(color, 40 + i * 10),
+          width: 2.5,
+          alpha: 0.7 - i * 0.1,
+        });
       }
     }
   }
@@ -107,19 +140,54 @@ export class PlanetSprite {
   } {
     switch (type) {
       case PlanetType.TERRESTRIAL:
-        return { color: 0x8b7355, radius: 14, hasRings: false, hasAtmosphere: true }; // Brown earth-like
+        return {
+          color: 0x8b7355,
+          radius: 14,
+          hasRings: false,
+          hasAtmosphere: true,
+        }; // Brown earth-like
       case PlanetType.GAS_GIANT:
-        return { color: 0xffa500, radius: 24, hasRings: true, hasAtmosphere: true }; // Orange with rings
+        return {
+          color: 0xffa500,
+          radius: 24,
+          hasRings: true,
+          hasAtmosphere: true,
+        }; // Orange with rings
       case PlanetType.ICE:
-        return { color: 0xadd8e6, radius: 12, hasRings: false, hasAtmosphere: false }; // Light blue
+        return {
+          color: 0xadd8e6,
+          radius: 12,
+          hasRings: false,
+          hasAtmosphere: false,
+        }; // Light blue
       case PlanetType.VOLCANIC:
-        return { color: 0xff4500, radius: 13, hasRings: false, hasAtmosphere: false }; // Red-orange
+        return {
+          color: 0xff4500,
+          radius: 13,
+          hasRings: false,
+          hasAtmosphere: false,
+        }; // Red-orange
       case PlanetType.INDUSTRIAL:
-        return { color: 0x808080, radius: 15, hasRings: false, hasAtmosphere: true }; // Gray with smog
+        return {
+          color: 0x808080,
+          radius: 15,
+          hasRings: false,
+          hasAtmosphere: true,
+        }; // Gray with smog
       case PlanetType.HABITAT:
-        return { color: 0x00aa44, radius: 16, hasRings: false, hasAtmosphere: true }; // Green habitable
+        return {
+          color: 0x00aa44,
+          radius: 16,
+          hasRings: false,
+          hasAtmosphere: true,
+        }; // Green habitable
       default:
-        return { color: 0x8b7355, radius: 14, hasRings: false, hasAtmosphere: true };
+        return {
+          color: 0x8b7355,
+          radius: 14,
+          hasRings: false,
+          hasAtmosphere: true,
+        };
     }
   }
 
@@ -140,11 +208,11 @@ export class PlanetSprite {
   createHitArea(onClickCallback: (planet: Planet) => void): void {
     this.clickCallback = onClickCallback;
 
-    this.graphics.eventMode = 'static';
-    this.graphics.cursor = 'pointer';
+    this.graphics.eventMode = "static";
+    this.graphics.cursor = "pointer";
 
     // Click handler
-    this.graphics.on('pointerdown', (event) => {
+    this.graphics.on("pointerdown", (event) => {
       event.stopPropagation(); // Prevent stage from also handling this click
       if (this.clickCallback) {
         this.clickCallback(this.planet);
@@ -152,11 +220,11 @@ export class PlanetSprite {
     });
 
     // Hover handlers
-    this.graphics.on('pointerover', () => {
+    this.graphics.on("pointerover", () => {
       this.setHoverState(true);
     });
 
-    this.graphics.on('pointerout', () => {
+    this.graphics.on("pointerout", () => {
       this.setHoverState(false);
     });
   }

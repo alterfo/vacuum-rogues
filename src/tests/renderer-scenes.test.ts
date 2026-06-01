@@ -1,17 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { SceneType } from '@/types';
-import { GameEngine } from '@/systems/GameEngine';
-import { Renderer } from '@/presentation/Renderer';
-import { GameScene } from '@/presentation/GameScene';
-import { MainMenuScene } from '@/presentation/MainMenuScene';
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { SceneType } from "@/types";
+import { GameEngine } from "@/systems/GameEngine";
+import { Renderer } from "@/presentation/Renderer";
+import { GameScene } from "@/presentation/GameScene";
+import { MainMenuScene } from "@/presentation/MainMenuScene";
 
 // Mock PixiJS
-vi.mock('pixi.js', () => ({
+vi.mock("pixi.js", () => ({
   Application: vi.fn().mockImplementation(() => ({
     init: vi.fn().mockResolvedValue(undefined),
-    canvas: document.createElement('canvas'),
+    canvas: document.createElement("canvas"),
     renderer: {
-      type: 'webgl',
+      type: "webgl",
       resize: vi.fn(),
     },
     stage: {
@@ -36,8 +36,13 @@ vi.mock('pixi.js', () => ({
     poly: vi.fn().mockReturnThis(),
     moveTo: vi.fn().mockReturnThis(),
     lineTo: vi.fn().mockReturnThis(),
-    eventMode: 'static',
-    cursor: 'pointer',
+    // PixiJS v8 Graphics extends Container, so it supports child management.
+    addChild: vi.fn(),
+    addChildAt: vi.fn(),
+    removeChild: vi.fn(),
+    children: [],
+    eventMode: "static",
+    cursor: "pointer",
     on: vi.fn(),
   })),
   Text: vi.fn().mockImplementation(() => ({
@@ -46,10 +51,10 @@ vi.mock('pixi.js', () => ({
     y: 0,
     width: 100,
     height: 30,
-    text: '',
+    text: "",
     style: {},
-    eventMode: 'none',
-    cursor: 'auto',
+    eventMode: "none",
+    cursor: "auto",
     alpha: 1,
     on: vi.fn(),
     destroy: vi.fn(),
@@ -57,14 +62,14 @@ vi.mock('pixi.js', () => ({
   })),
 }));
 
-describe('Renderer and Scenes', () => {
+describe("Renderer and Scenes", () => {
   let mockContainer: HTMLElement;
 
   beforeEach(() => {
-    mockContainer = document.createElement('div');
-    mockContainer.id = 'game-container';
-    mockContainer.style.width = '800px';
-    mockContainer.style.height = '600px';
+    mockContainer = document.createElement("div");
+    mockContainer.id = "game-container";
+    mockContainer.style.width = "800px";
+    mockContainer.style.height = "600px";
     document.body.appendChild(mockContainer);
   });
 
@@ -73,26 +78,32 @@ describe('Renderer and Scenes', () => {
     vi.clearAllMocks();
   });
 
-  describe('SceneType enum', () => {
-    it('AC4: SceneType enum contains MAIN_MENU', () => {
-      expect(SceneType.MAIN_MENU).toBe('MAIN_MENU');
-      expect(Object.values(SceneType)).toContain('MAIN_MENU');
+  describe("SceneType enum", () => {
+    it("AC4: SceneType enum contains MAIN_MENU", () => {
+      expect(SceneType.MAIN_MENU).toBe("MAIN_MENU");
+      expect(Object.values(SceneType)).toContain("MAIN_MENU");
     });
   });
 
-  describe('GameEngine transitionTo', () => {
+  describe("GameEngine transitionTo", () => {
     it('GameEngine.transitionTo("MAIN_MENU") instantiates MainMenuScene', async () => {
       const engine = new GameEngine();
-      
+
       // Mock renderer initialization
       const mockRenderer = {
         app: {
           screen: { width: 800, height: 600 },
-          renderer: { type: 'webgl', resize: vi.fn() },
+          canvas: document.createElement("canvas"),
+          renderer: { type: "webgl", resize: vi.fn() },
           ticker: { start: vi.fn() },
-          stage: { eventMode: 'auto', addChild: vi.fn() },
+          stage: { eventMode: "auto", addChild: vi.fn() },
         },
-        gameLayer: { addChild: vi.fn(), addChildAt: vi.fn(), children: [], removeChild: vi.fn() },
+        gameLayer: {
+          addChild: vi.fn(),
+          addChildAt: vi.fn(),
+          children: [],
+          removeChild: vi.fn(),
+        },
         uiLayer: { addChild: vi.fn(), children: [], removeChild: vi.fn() },
         stage: { addChild: vi.fn() },
         clearGameLayer: vi.fn(),
@@ -106,15 +117,16 @@ describe('Renderer and Scenes', () => {
       expect(engine.currentScene).toBeInstanceOf(MainMenuScene);
     });
 
-    it('Calling transitionTo() a second time calls destroy() on the previous scene', async () => {
+    it("Calling transitionTo() a second time calls destroy() on the previous scene", async () => {
       const engine = new GameEngine();
-      
+
       const mockRenderer = {
         app: {
           screen: { width: 800, height: 600 },
-          renderer: { type: 'webgl', resize: vi.fn() },
+          canvas: document.createElement("canvas"),
+          renderer: { type: "webgl", resize: vi.fn() },
           ticker: { start: vi.fn() },
-          stage: { eventMode: 'auto', addChild: vi.fn() },
+          stage: { eventMode: "auto", addChild: vi.fn() },
         },
         gameLayer: {
           addChild: vi.fn(),
@@ -152,14 +164,15 @@ describe('Renderer and Scenes', () => {
     });
   });
 
-  describe('MainMenuScene.destroy', () => {
-    it('MainMenuScene.destroy() sets all DisplayObject references to null', async () => {
+  describe("MainMenuScene.destroy", () => {
+    it("MainMenuScene.destroy() sets all DisplayObject references to null", async () => {
       const mockRenderer = {
         app: {
           screen: { width: 800, height: 600 },
-          renderer: { type: 'webgl', resize: vi.fn() },
+          canvas: document.createElement("canvas"),
+          renderer: { type: "webgl", resize: vi.fn() },
           ticker: { start: vi.fn() },
-          stage: { eventMode: 'auto', addChild: vi.fn() },
+          stage: { eventMode: "auto", addChild: vi.fn() },
         },
         gameLayer: {
           addChild: vi.fn(),
@@ -204,18 +217,24 @@ describe('Renderer and Scenes', () => {
     });
   });
 
-  describe('Scene transitions', () => {
-    it('AC2: Transition from MAIN_MENU to STAR_MAP works correctly', async () => {
+  describe("Scene transitions", () => {
+    it("AC2: Transition from MAIN_MENU to STAR_MAP works correctly", async () => {
       const engine = new GameEngine();
 
       const mockRenderer = {
         app: {
           screen: { width: 800, height: 600 },
-          renderer: { type: 'webgl', resize: vi.fn() },
+          canvas: document.createElement("canvas"),
+          renderer: { type: "webgl", resize: vi.fn() },
           ticker: { start: vi.fn() },
-          stage: { eventMode: 'auto', addChild: vi.fn() },
+          stage: { eventMode: "auto", addChild: vi.fn() },
         },
-        gameLayer: { addChild: vi.fn(), addChildAt: vi.fn(), children: [], removeChild: vi.fn() },
+        gameLayer: {
+          addChild: vi.fn(),
+          addChildAt: vi.fn(),
+          children: [],
+          removeChild: vi.fn(),
+        },
         uiLayer: { addChild: vi.fn(), children: [], removeChild: vi.fn() },
         stage: { addChild: vi.fn() },
         clearGameLayer: vi.fn(),
@@ -233,17 +252,23 @@ describe('Renderer and Scenes', () => {
       expect(engine.currentScene).not.toBeInstanceOf(MainMenuScene);
     });
 
-    it('AC3: Transition to COMBAT shows hex grid placeholder', async () => {
+    it("AC3: Transition to COMBAT shows hex grid placeholder", async () => {
       const engine = new GameEngine();
 
       const mockRenderer = {
         app: {
           screen: { width: 800, height: 600 },
-          renderer: { type: 'webgl', resize: vi.fn() },
+          canvas: document.createElement("canvas"),
+          renderer: { type: "webgl", resize: vi.fn() },
           ticker: { start: vi.fn() },
-          stage: { eventMode: 'auto', addChild: vi.fn() },
+          stage: { eventMode: "auto", addChild: vi.fn() },
         },
-        gameLayer: { addChild: vi.fn(), addChildAt: vi.fn(), children: [], removeChild: vi.fn() },
+        gameLayer: {
+          addChild: vi.fn(),
+          addChildAt: vi.fn(),
+          children: [],
+          removeChild: vi.fn(),
+        },
         uiLayer: { addChild: vi.fn(), children: [], removeChild: vi.fn() },
         stage: { addChild: vi.fn() },
         clearGameLayer: vi.fn(),
@@ -253,7 +278,7 @@ describe('Renderer and Scenes', () => {
       engine.renderer = mockRenderer;
 
       await engine.transitionTo(SceneType.COMBAT, { gameEngine: engine });
-      
+
       expect(engine.currentScene).toBeDefined();
       // CombatScene should be instantiated (exact implementation varies)
     });

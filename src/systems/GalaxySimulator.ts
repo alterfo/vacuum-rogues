@@ -1,13 +1,13 @@
-import { StarSystem } from '@/domain/StarSystem';
-import { Galaxy } from '@/domain/Galaxy';
-import type { Player } from '@/domain/Player';
-import { Overmind } from '@/domain/Overmind';
-import type { GalacticEvent } from '@/domain/GalacticEvent';
-import { WarpPath } from '@/domain/WarpPath';
-import { SeededRNG } from '@/utils/seededRNG';
-import { SystemNameGenerator } from '@/utils/systemNameGenerator';
-import { PlanetGenerator } from './PlanetGenerator';
-import { logger } from '@/utils/logger';
+import { StarSystem } from "@/domain/StarSystem";
+import { Galaxy } from "@/domain/Galaxy";
+import type { Player } from "@/domain/Player";
+import { Overmind } from "@/domain/Overmind";
+import type { GalacticEvent } from "@/domain/GalacticEvent";
+import { WarpPath } from "@/domain/WarpPath";
+import { SeededRNG } from "@/utils/seededRNG";
+import { SystemNameGenerator } from "@/utils/systemNameGenerator";
+import { PlanetGenerator } from "./PlanetGenerator";
+import { logger } from "@/utils/logger";
 
 export class GalaxySimulator {
   private _seed: string;
@@ -17,12 +17,12 @@ export class GalaxySimulator {
   private rng: SeededRNG;
 
   constructor() {
-    this._seed = '';
-    this.rng = new SeededRNG('default');
+    this._seed = "";
+    this.rng = new SeededRNG("default");
     this.overmind = new Overmind();
   }
 
-  generateGalaxy(seed: string, systemCount = 10): Galaxy {
+  async generateGalaxy(seed: string, systemCount = 10): Promise<Galaxy> {
     this._seed = seed;
     void this._eventQueue; // referenced for future use
     this.rng = new SeededRNG(seed);
@@ -40,15 +40,15 @@ export class GalaxySimulator {
 
       // Generate planets for this system
       const planetGen = new PlanetGenerator(seed, `sys_${i}`);
-      const planets = planetGen.generate(systemNames[i]);
+      const planets = await planetGen.generate(systemNames[i]);
 
       const system = new StarSystem(
         `sys_${i}`,
         systemNames[i],
         coord,
-        'YELLOW_DWARF' as import('@/types').StarType,
+        "YELLOW_DWARF" as import("@/types").StarType,
         planets,
-        'INDEPENDENT' as import('@/types/faction').Faction,
+        "INDEPENDENT" as import("@/types/faction").Faction,
         [],
       );
       generatedSystems.push(system);
@@ -62,7 +62,7 @@ export class GalaxySimulator {
           system: s,
           dist: Math.sqrt(
             Math.pow(s.coordinates.q - system.coordinates.q, 2) +
-            Math.pow(s.coordinates.r - system.coordinates.r, 2),
+              Math.pow(s.coordinates.r - system.coordinates.r, 2),
           ),
         }))
         .sort((a, b) => a.dist - b.dist);
@@ -70,7 +70,11 @@ export class GalaxySimulator {
       const connections = distances.slice(0, Math.min(3, distances.length));
       for (const conn of connections) {
         system.connections.push(
-          new WarpPath(system.id, conn.system.id, Math.max(1, Math.round(conn.dist / 10))),
+          new WarpPath(
+            system.id,
+            conn.system.id,
+            Math.max(1, Math.round(conn.dist / 10)),
+          ),
         );
       }
     }
@@ -96,7 +100,9 @@ export class GalaxySimulator {
     // Invoke overmind every 7 days
     if (galaxy.gameDays % 7 === 0) {
       const action = this.overmind.makeMove(galaxy);
-      logger.info(`Overmind action: ${action.type} on ${action.targetSystemId}`);
+      logger.info(
+        `Overmind action: ${action.type} on ${action.targetSystemId}`,
+      );
     }
 
     // Process active events
@@ -111,7 +117,7 @@ export class GalaxySimulator {
 
     // Roll for Chaos Gate spawn (5% per ~30 days)
     if (galaxy.gameDays % 30 === 0 && this.rng.next() < 0.05) {
-      logger.info('Chaos Gate spawn triggered');
+      logger.info("Chaos Gate spawn triggered");
     }
 
     // Update market vectors

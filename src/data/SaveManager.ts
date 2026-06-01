@@ -1,12 +1,12 @@
-import type { SaveState } from '@/domain/SaveState';
-import type { SaveSlotInfo } from '@/types';
-import { IndexedDBAdapter } from './IndexedDBAdapter';
-import { SaveStateSerializer } from './SaveStateSerializer';
-import { MigrationPipeline } from './MigrationPipeline';
-import { GameValidationException } from '@/exceptions/GameValidationException';
-import { GameSystemException } from '@/exceptions/GameSystemException';
-import { validateSaveState } from '@/validation/schemas';
-import { logger } from '@/utils/logger';
+import type { SaveState } from "@/domain/SaveState";
+import type { SaveSlotInfo } from "@/types";
+import { IndexedDBAdapter } from "./IndexedDBAdapter";
+import { SaveStateSerializer } from "./SaveStateSerializer";
+import { MigrationPipeline } from "./MigrationPipeline";
+import { GameValidationException } from "@/exceptions/GameValidationException";
+import { GameSystemException } from "@/exceptions/GameSystemException";
+import { validateSaveState } from "@/validation/schemas";
+import { logger } from "@/utils/logger";
 
 const MAX_SLOTS = 10;
 
@@ -21,14 +21,17 @@ export class SaveManager {
   }
 
   async write(slotId: string, state: SaveState): Promise<void> {
-    if (!slotId || typeof slotId !== 'string') {
-      throw new GameValidationException('INVALID_SLOT_ID', 'Save slot ID must be a non-empty string.');
+    if (!slotId || typeof slotId !== "string") {
+      throw new GameValidationException(
+        "INVALID_SLOT_ID",
+        "Save slot ID must be a non-empty string.",
+      );
     }
 
     const slots = await this.listSlots();
     if (slots.length >= MAX_SLOTS && !slots.find((s) => s.slotId === slotId)) {
       throw new GameValidationException(
-        'SAVE_SLOTS_FULL',
+        "SAVE_SLOTS_FULL",
         `Maximum ${MAX_SLOTS} save slots reached. Please overwrite an existing slot.`,
       );
     }
@@ -39,7 +42,7 @@ export class SaveManager {
     const serialized = this.serializer.serialize(state);
 
     try {
-      const store = await this.db.getStore('readwrite');
+      const store = await this.db.getStore("readwrite");
       await new Promise<void>((resolve, reject) => {
         const request = store.put({
           slotId,
@@ -47,28 +50,50 @@ export class SaveManager {
           timestamp: state.timestamp,
           playerLevel: state.player.level,
           location: state.player.ship.name,
+          currentSceneType: state.currentSceneType,
           payload: serialized,
         });
         request.onsuccess = () => resolve();
-        request.onerror = () => reject(new GameSystemException('SAVE_WRITE_FAILED', `Failed to write save to slot ${slotId}.`));
+        request.onerror = () =>
+          reject(
+            new GameSystemException(
+              "SAVE_WRITE_FAILED",
+              `Failed to write save to slot ${slotId}.`,
+            ),
+          );
       });
       logger.info(`Game saved to slot ${slotId}`);
     } catch (e) {
-      throw new GameSystemException('SAVE_WRITE_FAILED', `Failed to write save to slot ${slotId}.`, { cause: e });
+      throw new GameSystemException(
+        "SAVE_WRITE_FAILED",
+        `Failed to write save to slot ${slotId}.`,
+        { cause: e },
+      );
     }
   }
 
   async read(slotId: string): Promise<SaveState | null> {
-    if (!slotId || typeof slotId !== 'string') {
-      throw new GameValidationException('INVALID_SLOT_ID', 'Save slot ID must be a non-empty string.');
+    if (!slotId || typeof slotId !== "string") {
+      throw new GameValidationException(
+        "INVALID_SLOT_ID",
+        "Save slot ID must be a non-empty string.",
+      );
     }
 
     try {
-      const store = await this.db.getStore('readonly');
-      const result = await new Promise<{ payload: string; version: number } | undefined>((resolve, reject) => {
+      const store = await this.db.getStore("readonly");
+      const result = await new Promise<
+        { payload: string; version: number } | undefined
+      >((resolve, reject) => {
         const request = store.get(slotId);
         request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(new GameSystemException('SAVE_READ_FAILED', `Failed to read save from slot ${slotId}.`));
+        request.onerror = () =>
+          reject(
+            new GameSystemException(
+              "SAVE_READ_FAILED",
+              `Failed to read save from slot ${slotId}.`,
+            ),
+          );
       });
 
       if (!result) return null;
@@ -82,10 +107,15 @@ export class SaveManager {
       } catch (error) {
         if (error instanceof Error) {
           // Map ZodError issues to Russian message
-          const issuePath = 'issues' in error ? (error as { issues?: Array<{ path: string[] }> }).issues?.[0]?.path?.join('.') || 'unknown' : 'unknown';
+          const issuePath =
+            "issues" in error
+              ? (
+                  error as { issues?: Array<{ path: string[] }> }
+                ).issues?.[0]?.path?.join(".") || "unknown"
+              : "unknown";
           const mappedMessage = this.mapZodIssueToRussian(error);
           throw new GameValidationException(
-            'SAVE_VALIDATION_FAILED',
+            "SAVE_VALIDATION_FAILED",
             `Сохранение повреждено: ${issuePath} — ${mappedMessage}`,
             { issues: (error as { issues?: unknown }).issues },
           );
@@ -94,7 +124,9 @@ export class SaveManager {
       }
 
       if (parsed.version < this.currentVersion) {
-        logger.info(`Migrating save slot ${slotId} from version ${parsed.version}`);
+        logger.info(
+          `Migrating save slot ${slotId} from version ${parsed.version}`,
+        );
         MigrationPipeline.migrate(parsed);
       }
 
@@ -111,19 +143,20 @@ export class SaveManager {
   private mapZodIssueToRussian(error: Error): string {
     // Map common Zod issues to Russian messages
     const message = error.message;
-    if (message.includes('version')) return 'версия сохранения некорректна';
-    if (message.includes('timestamp')) return 'временная метка некорректна';
-    if (message.includes('galaxy')) return 'данные галактики повреждены';
-    if (message.includes('player')) return 'данные игрока повреждены';
-    if (message.includes('player.ship')) return 'данные корабля повреждены';
-    if (message.includes('player.credits')) return 'количество кредитов некорректно';
-    if (message.includes('hullHP')) return 'здоровье корпуса некорректно';
-    return 'некорректная структура данных';
+    if (message.includes("version")) return "версия сохранения некорректна";
+    if (message.includes("timestamp")) return "временная метка некорректна";
+    if (message.includes("galaxy")) return "данные галактики повреждены";
+    if (message.includes("player")) return "данные игрока повреждены";
+    if (message.includes("player.ship")) return "данные корабля повреждены";
+    if (message.includes("player.credits"))
+      return "количество кредитов некорректно";
+    if (message.includes("hullHP")) return "здоровье корпуса некорректно";
+    return "некорректная структура данных";
   }
 
   async listSlots(): Promise<SaveSlotInfo[]> {
     try {
-      const store = await this.db.getStore('readonly');
+      const store = await this.db.getStore("readonly");
       return new Promise<SaveSlotInfo[]>((resolve, reject) => {
         const request = store.openCursor();
         const slots: SaveSlotInfo[] = [];
@@ -142,21 +175,33 @@ export class SaveManager {
             resolve(slots);
           }
         };
-        request.onerror = () => reject(new GameSystemException('SAVE_LIST_FAILED', 'Failed to list save slots.'));
+        request.onerror = () =>
+          reject(
+            new GameSystemException(
+              "SAVE_LIST_FAILED",
+              "Failed to list save slots.",
+            ),
+          );
       });
     } catch (e) {
-      logger.error('Failed to list save slots:', e);
+      logger.error("Failed to list save slots:", e);
       return [];
     }
   }
 
   async deleteSlot(slotId: string): Promise<void> {
     try {
-      const store = await this.db.getStore('readwrite');
+      const store = await this.db.getStore("readwrite");
       await new Promise<void>((resolve, reject) => {
         const request = store.delete(slotId);
         request.onsuccess = () => resolve();
-        request.onerror = () => reject(new GameSystemException('SAVE_DELETE_FAILED', `Failed to delete save slot ${slotId}.`));
+        request.onerror = () =>
+          reject(
+            new GameSystemException(
+              "SAVE_DELETE_FAILED",
+              `Failed to delete save slot ${slotId}.`,
+            ),
+          );
       });
       logger.info(`Save slot ${slotId} deleted`);
     } catch (e) {

@@ -1,7 +1,7 @@
-import type { PlanetType } from '@/types';
-import type { Market } from './Market';
-import type { NPC } from './NPC';
-import type { Quest } from './Quest';
+import type { PlanetType } from "@/types";
+import type { Market } from "./Market";
+import type { NPC } from "./NPC";
+import type { Quest } from "./Quest";
 
 export class Planet {
   constructor(
@@ -12,5 +12,7 @@ export class Planet {
     public readonly market: Market,
     public readonly inhabitants: NPC[],
     public readonly availableQuests: Quest[],
+    public readonly isHabitable: boolean = true,
+    public drones: number = 0,
   ) {}
 }

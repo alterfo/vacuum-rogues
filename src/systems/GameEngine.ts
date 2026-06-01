@@ -1,57 +1,101 @@
-import type { GameConfig } from '@/types';
-import { SceneType, RaceType } from '@/types';
-import type { Galaxy } from '@/domain/Galaxy';
-import type { GameScene } from '@/presentation/GameScene';
-import { Renderer } from '@/presentation/Renderer';
-import { SaveManager } from '@/data/SaveManager';
-import { ONNXModelRegistry } from '@/ai/ONNXModelRegistry';
-import { AdaptiveQualityProfile } from '@/ai/AdaptiveQualityProfile';
-import { GlobalExceptionHandler } from '@/exceptions/GlobalExceptionHandler';
-import { GameSystemException } from '@/exceptions/GameSystemException';
-import { GameValidationException } from '@/exceptions/GameValidationException';
-import { logger } from '@/utils/logger';
-import { StarMapScene } from '@/presentation/StarMapScene';
-import { CombatScene } from '@/presentation/CombatScene';
-import { DialogueScene } from '@/presentation/DialogueScene';
-import { InventoryScene } from '@/presentation/InventoryScene';
-import { MainMenuScene } from '@/presentation/MainMenuScene';
-import { RaceSelectionScene } from '@/presentation/RaceSelectionScene';
-import { SpaceFlightScene } from '@/presentation/SpaceFlightScene';
-import { Graphics, Text } from 'pixi.js';
-import { GalaxySimulator } from './GalaxySimulator';
-import { QuestManager } from './QuestManager';
-import { EquipmentSystem } from './EquipmentSystem';
-import { RaceRegistry } from './RaceRegistry';
-import { validatePlayerSettings } from '@/validation/schemas';
-import { SkillTree } from '@/domain/SkillTree';
-import { Player } from '@/domain/Player';
-import { PlayerShip } from '@/domain/PlayerShip';
-import { Inventory } from '@/domain/Inventory';
-import { WeaponModule, ShieldModule, EngineModule } from '@/domain/ShipModule';
+import type { GameConfig } from "@/types";
+import { SceneType, RaceType } from "@/types";
+import { Galaxy } from "@/domain/Galaxy";
+import type { GameScene } from "@/presentation/GameScene";
+import { Renderer } from "@/presentation/Renderer";
+import { SaveManager } from "@/data/SaveManager";
+import { ONNXModelRegistry } from "@/ai/ONNXModelRegistry";
+import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
+import { GlobalExceptionHandler } from "@/exceptions/GlobalExceptionHandler";
+import { GameSystemException } from "@/exceptions/GameSystemException";
+import { GameValidationException } from "@/exceptions/GameValidationException";
+import { logger } from "@/utils/logger";
+import { Graphics, Text } from "pixi.js";
+import { validatePlayerSettings } from "@/validation/schemas";
+import { Player } from "@/domain/Player";
+import type { Quest } from "@/domain/Quest";
+import { PlayerShip } from "@/domain/PlayerShip";
+import { Inventory } from "@/domain/Inventory";
+import {
+  ShipModule,
+  WeaponModule,
+  ShieldModule,
+  EngineModule,
+} from "@/domain/ShipModule";
+import type {
+  ISaveService,
+  IGalaxyService,
+  IPlayerService,
+  IOnnxService,
+  IExceptionHandler,
+  IQuestService,
+  IEquipmentService,
+} from "@/core/ports";
+import { GalaxyService, PlayerService, SceneFactory } from "@/core/services";
+import { QuestManagerAdapter, EquipmentSystemAdapter } from "@/core/adapters";
+
+/**
+ * Optional DI dependencies for GameEngine.
+ * When provided, GameEngine uses DI for better testability.
+ * When not provided, GameEngine uses legacy direct instantiation for backward compatibility.
+ */
+export interface GameEngineDIDependencies {
+  saveService: ISaveService;
+  galaxyService: IGalaxyService;
+  playerService: IPlayerService;
+  onnxService: IOnnxService;
+  exceptionHandler: IExceptionHandler;
+  qualityProfile: AdaptiveQualityProfile;
+  questService: IQuestService;
+  equipmentService: IEquipmentService;
+}
 
 export class GameEngine {
   public currentScene: GameScene | null = null;
+  public currentSceneType: SceneType = SceneType.MAIN_MENU;
   public galaxy: Galaxy | null = null;
   public player: Player | null = null;
   public readonly saveManager: SaveManager;
   public readonly qualityProfile: AdaptiveQualityProfile;
   public readonly onnxRegistry: ONNXModelRegistry;
-  public readonly questManager: QuestManager;
-  public readonly equipmentSystem: EquipmentSystem;
+  public readonly questManager: IQuestService;
+  public readonly equipmentSystem: IEquipmentService;
   public renderer: Renderer | null = null;
 
-  private exceptionHandler: GlobalExceptionHandler;
+  private exceptionHandler: IExceptionHandler;
   private animationFrameId = 0;
   private lastTime = 0;
   private modalObjects: (Graphics | Text)[] = [];
+  private readonly galaxyService: IGalaxyService;
+  private readonly playerService: IPlayerService;
+  private readonly sceneFactory: SceneFactory;
 
-  constructor() {
-    this.qualityProfile = new AdaptiveQualityProfile();
-    this.onnxRegistry = new ONNXModelRegistry(this.qualityProfile);
-    this.saveManager = new SaveManager();
-    this.questManager = new QuestManager();
-    this.equipmentSystem = new EquipmentSystem();
-    this.exceptionHandler = GlobalExceptionHandler.getInstance();
+  constructor(diDependencies?: GameEngineDIDependencies) {
+    if (diDependencies) {
+      // DI mode: use injected services
+      this.exceptionHandler = diDependencies.exceptionHandler;
+      this.qualityProfile = diDependencies.qualityProfile;
+      this.onnxRegistry =
+        diDependencies.onnxService as unknown as ONNXModelRegistry;
+      this.saveManager = diDependencies.saveService as SaveManager;
+      this.galaxyService = diDependencies.galaxyService;
+      this.playerService = diDependencies.playerService;
+      this.questManager = diDependencies.questService;
+      this.equipmentSystem = diDependencies.equipmentService;
+    } else {
+      // Legacy mode: direct instantiation (backward compatibility)
+      this.qualityProfile = new AdaptiveQualityProfile();
+      this.onnxRegistry = new ONNXModelRegistry(this.qualityProfile);
+      this.saveManager = new SaveManager();
+      this.galaxyService = new GalaxyService();
+      this.playerService = new PlayerService();
+      this.exceptionHandler = GlobalExceptionHandler.getInstance();
+      this.questManager = new QuestManagerAdapter();
+      this.equipmentSystem = new EquipmentSystemAdapter();
+    }
+
+    this.sceneFactory = new SceneFactory();
+
     this.exceptionHandler.onCriticalError = (response) => {
       this.handleCriticalError(response);
     };
@@ -60,44 +104,62 @@ export class GameEngine {
   async initialize(config: GameConfig): Promise<void> {
     try {
       // Load settings from localStorage and validate
-      const storedSettings = localStorage.getItem('sr_settings');
+      const storedSettings = localStorage.getItem("sr_settings");
       if (storedSettings) {
         try {
           validatePlayerSettings(JSON.parse(storedSettings));
-          logger.info('Loaded and validated settings from localStorage');
+          logger.info("Loaded and validated settings from localStorage");
         } catch (error) {
-          logger.warn('Invalid settings, using defaults:', error);
+          logger.warn("Invalid settings, using defaults:", error);
         }
       }
 
       // Initialize Renderer
-      const container = document.getElementById('game-container');
+      const container = document.getElementById("game-container");
       if (!container) {
-        throw new GameSystemException('NO_CONTAINER', 'Game container not found in DOM.');
+        throw new GameSystemException(
+          "NO_CONTAINER",
+          "Game container not found in DOM.",
+        );
       }
       this.renderer = new Renderer(container);
       await this.renderer.initialize();
 
       // Check for Canvas2D fallback after renderer init
-      const rendererType = (this.renderer.app.renderer as unknown as { type?: string }).type;
-      if (rendererType === 'canvas') {
-        logger.warn('Canvas2D fallback active — WebGL unavailable');
+      const rendererType = (
+        this.renderer.app.renderer as unknown as { type?: string }
+      ).type;
+      if (rendererType === "canvas") {
+        logger.warn("Canvas2D fallback active — WebGL unavailable");
       }
 
       // Benchmark device
       this.qualityProfile.benchmark();
       logger.info(`Quality profile: ${this.qualityProfile.level}`);
 
-      // Initialize SaveManager and offer Continue if valid save exists
+      // Initialize SaveManager and auto-load if valid save exists
       const hasSave = await this.saveManager.hasSave();
       if (hasSave) {
-        logger.info('Existing save detected');
+        logger.info("Existing save detected, attempting auto-load");
+        try {
+          const loaded = await this.loadGame("auto");
+          if (loaded) {
+            // Start game loop after successful load
+            this.lastTime = performance.now();
+            this.gameLoop(this.lastTime);
+            return;
+          }
+        } catch (error) {
+          logger.error("Auto-load failed, falling back to main menu:", error);
+        }
       }
 
       // Generate or load Galaxy
-      const simulator = new GalaxySimulator();
       const seed = config.seed ?? `SR_${Date.now()}`;
-      this.galaxy = simulator.generateGalaxy(seed, config.systemCount ?? 10);
+      this.galaxy = await this.galaxyService.generate(
+        seed,
+        config.systemCount ?? 10,
+      );
       logger.info(`Initializing with seed: ${seed}`);
 
       // Start at MAIN_MENU instead of STAR_MAP
@@ -114,8 +176,15 @@ export class GameEngine {
 
   async transitionTo(sceneType: SceneType, context?: object): Promise<void> {
     if (!this.renderer) {
-      throw new GameSystemException('RENDERER_NOT_READY', 'Renderer not initialized.');
+      throw new GameSystemException(
+        "RENDERER_NOT_READY",
+        "Renderer not initialized.",
+      );
     }
+
+    // Persist current scene type for recovery across reloads
+    this.currentSceneType = sceneType;
+    localStorage.setItem("sr_currentScene", sceneType);
 
     // Tear down current scene
     if (this.currentScene) {
@@ -123,152 +192,274 @@ export class GameEngine {
       this.currentScene = null;
     }
 
-    // Handle new game creation when transitioning to STAR_MAP and no player exists
-    if (sceneType === SceneType.STAR_MAP && !this.player) {
+    // Handle new game creation when transitioning to STAR_MAP or SPACE_FLIGHT and no player exists
+    const isGameStartScene =
+      sceneType === SceneType.STAR_MAP || sceneType === SceneType.SPACE_FLIGHT;
+    if (isGameStartScene && !this.player) {
       // Get selected race from context or default to HUMAN
-      const selectedRace = (context as { selectedRace?: RaceType })?.selectedRace ?? RaceType.HUMAN;
-      const race = RaceRegistry.getRace(selectedRace);
+      const selectedRace =
+        (context as { selectedRace?: RaceType })?.selectedRace ??
+        RaceType.HUMAN;
 
-      const skillTree = new SkillTree([]);
-      const inventory = new Inventory();
+      this.player = this.playerService.createPlayer({
+        raceType: selectedRace,
+        captainName: "Captain",
+        startingMoney: 1000,
+      });
 
       // Add starter modules to inventory for testing
-      inventory.addItem(
+      this.player.inventory.addItem(
         new WeaponModule(
-          'weapon_laser_1',
-          'Лазер МК-1',
-          { type: 'damage', value: 10 },
+          "weapon_laser_1",
+          "Лазер МК-1",
+          { type: "damage", value: 10 },
           1,
           15,
           3,
           10,
         ),
       );
-      inventory.addItem(
+      this.player.inventory.addItem(
         new ShieldModule(
-          'shield_basic_1',
-          'Базовый щит',
-          { type: 'shield', value: 20 },
+          "shield_basic_1",
+          "Базовый щит",
+          { type: "shield", value: 20 },
           1,
           25,
           5,
         ),
       );
-      inventory.addItem(
+      this.player.inventory.addItem(
         new EngineModule(
-          'engine_fast_1',
-          'Быстрый двигатель',
-          { type: 'speed', value: 0.2 },
+          "engine_fast_1",
+          "Быстрый двигатель",
+          { type: "speed", value: 0.2 },
           1,
           0.3,
           0.1,
         ),
       );
 
-      this.player = new Player(
-        'player',
-        'Captain',
-        race,
-        0,
-        1,
-        skillTree,
-        {},
-        { activeQuests: [], completedQuests: [] },
-        { entries: [] },
-        1000,
-        new PlayerShip(
-          'Ranger-1',
-          'Ranger-1',
-          race.shipBaseline.hullHP,
-          race.shipBaseline.hullHP,
-          race.shipBaseline.shields,
-          race.shipBaseline.shields,
-          race.shipBaseline.energy,
-          race.shipBaseline.energy,
-          race.shipBaseline.speed,
-          race.shipBaseline.evasion,
-          race,
-        ),
-        inventory,
-        '', // currentSystemId placeholder
-      );
-
-      logger.info(`Created new player with race: ${race.name}`);
+      logger.info(`Created new player with race: ${this.player.race.name}`);
     }
 
     // Resolve starting system for new game
-    if (sceneType === SceneType.STAR_MAP && this.player && this.galaxy) {
+    if (isGameStartScene && this.player && this.galaxy) {
       if (!this.player.currentSystemId) {
         this.player.currentSystemId = this.galaxy.systems[0].id;
         this.galaxy.systems[0].explored = true;
         this.galaxy.systems[0].fogOfWar = false;
-        logger.info(`New game: starting system set to ${this.player.currentSystemId}`);
+        logger.info(
+          `New game: starting system set to ${this.player.currentSystemId}`,
+        );
       }
     }
 
-    // Instantiate new scene with renderer
-    switch (sceneType) {
-      case SceneType.MAIN_MENU:
-        this.currentScene = new MainMenuScene(this.renderer);
-        break;
-      case SceneType.RACE_SELECTION:
-        this.currentScene = new RaceSelectionScene(this.renderer);
-        break;
-      case SceneType.STAR_MAP:
-        this.currentScene = new StarMapScene(this.renderer);
-        break;
-      case SceneType.COMBAT:
-        this.currentScene = new CombatScene(this.renderer);
-        break;
-      case SceneType.DIALOGUE:
-        this.currentScene = new DialogueScene(this.renderer);
-        break;
-      case SceneType.INVENTORY:
-        this.currentScene = new InventoryScene(this.renderer);
-        break;
-      case SceneType.SPACE_FLIGHT:
-        this.currentScene = new SpaceFlightScene(this.renderer);
-        break;
-      default:
-        throw new GameSystemException('INVALID_SCENE', `Unknown scene type: ${sceneType}`);
+    // Instantiate new scene with renderer via factory (OCP: new scenes added in factory)
+    const newScene = this.sceneFactory.createScene(sceneType, this.renderer);
+    if (!newScene) {
+      throw new GameSystemException(
+        "INVALID_SCENE",
+        `Unknown scene type: ${sceneType}`,
+      );
     }
+    this.currentScene = newScene;
 
-    // Prepare context with galaxy and gameEngine for STAR_MAP if available
+    // Prepare context with galaxy and gameEngine for gameplay scenes
     const finalContext: Record<string, unknown> = { ...(context ?? {}) };
     if (sceneType === SceneType.STAR_MAP) {
       if (this.galaxy) {
         finalContext.galaxy = this.galaxy;
       }
+    }
+    if (
+      sceneType === SceneType.STAR_MAP ||
+      sceneType === SceneType.SPACE_FLIGHT ||
+      sceneType === SceneType.PLANET ||
+      sceneType === SceneType.DIALOGUE ||
+      sceneType === SceneType.INVENTORY ||
+      sceneType === SceneType.COMBAT ||
+      sceneType === SceneType.TRADE
+    ) {
       finalContext.gameEngine = this;
     }
 
     this.currentScene.initialize(finalContext);
     logger.info(`Transitioned to scene: ${sceneType}`);
+
+    // Auto-save on scene transition (only for gameplay scenes with valid state)
+    if (
+      this.galaxy &&
+      this.player &&
+      sceneType !== SceneType.MAIN_MENU &&
+      sceneType !== SceneType.RACE_SELECTION
+    ) {
+      this.saveGame("auto").catch((e) => {
+        logger.error("Auto-save failed:", e);
+      });
+    }
   }
 
-  async saveGame(slotId = 'auto'): Promise<void> {
+  async saveGame(slotId = "auto"): Promise<void> {
     if (!this.galaxy || !this.player) {
-      throw new GameSystemException('SAVE_NO_STATE', 'Cannot save: no active game state.');
+      throw new GameSystemException(
+        "SAVE_NO_STATE",
+        "Cannot save: no active game state.",
+      );
     }
 
-    const { SaveState } = await import('@/domain/SaveState');
+    // Mirror live quest state into the player's questLog so quests (and their
+    // progress/deadlines) survive save/load. QuestManager owns the source of
+    // truth at runtime; player.questLog is only the serialized snapshot.
+    const questLog = this.player.questLog as {
+      activeQuests: unknown[];
+      completedQuests: unknown[];
+    };
+    questLog.activeQuests.length = 0;
+    questLog.activeQuests.push(...this.questManager.getActiveQuests());
+    questLog.completedQuests.length = 0;
+    questLog.completedQuests.push(...this.questManager.getCompletedQuestIds());
+
+    const { SaveState } = await import("@/domain/SaveState");
     const state = new SaveState(
       this.saveManager.currentVersion,
       this.galaxy,
       this.player,
       [], // persistentDialogs would come from DialogueSystem
       Date.now(),
+      this.currentSceneType,
     );
 
     await this.saveManager.write(slotId, state);
   }
 
+  async loadGame(slotId = "auto"): Promise<boolean> {
+    const save = await this.saveManager.read(slotId);
+    if (!save) {
+      return false;
+    }
+
+    // Validate save data integrity
+    if (!save.player || !save.player.id || !save.galaxy) {
+      throw new GameValidationException(
+        "SAVE_VALIDATION_FAILED",
+        "Corrupted save data - missing required fields",
+      );
+    }
+
+    this.galaxy = save.galaxy;
+    this.player = save.player;
+
+    // Saved state is plain JSON: restore class prototypes so domain methods
+    // (galaxy.simulateDay, ship.repair, inventory.addItem) and `instanceof`
+    // module checks work after "Continue". Field data is already correct.
+    this.rehydrateLoadedState();
+
+    // Restore quest state into the live QuestManager (it owns quests at
+    // runtime; the save only carries the serialized questLog).
+    const loadedQuestLog = this.player.questLog as {
+      activeQuests?: Quest[];
+      completedQuests?: string[];
+    };
+    this.questManager.restoreState(
+      loadedQuestLog.activeQuests ?? [],
+      (loadedQuestLog.completedQuests ?? []) as string[],
+    );
+
+    // Ensure player has a valid current system
+    if (!this.player.currentSystemId && this.galaxy.systems[0]) {
+      this.player.currentSystemId = this.galaxy.systems[0].id;
+      logger.info("Set default currentSystemId to first system");
+    }
+
+    // Validate current system exists
+    const currentSystem = this.galaxy.systems.find(
+      (s) => s.id === this.player!.currentSystemId,
+    );
+    if (!currentSystem) {
+      logger.warn("Current system not found, resetting to first system");
+      this.player.currentSystemId = this.galaxy.systems[0].id;
+    }
+
+    // Restore scene type (default to SPACE_FLIGHT for better UX).
+    // Scenes that require transient context (a specific planet, NPC or
+    // encounter) or are overlays cannot be safely re-entered from a save with
+    // only { gameEngine }, so fall back to SPACE_FLIGHT to avoid a blank,
+    // soft-locked screen on "Continue".
+    const contextDependentScenes: SceneType[] = [
+      SceneType.PLANET,
+      SceneType.TRADE,
+      SceneType.DIALOGUE,
+      SceneType.COMBAT,
+      SceneType.INVENTORY,
+    ];
+    const savedScene = save.currentSceneType ?? SceneType.SPACE_FLIGHT;
+    const sceneType = contextDependentScenes.includes(savedScene)
+      ? SceneType.SPACE_FLIGHT
+      : savedScene;
+    await this.transitionTo(sceneType, { gameEngine: this });
+    return true;
+  }
+
+  /**
+   * Restore class prototypes on the just-loaded plain save objects.
+   *
+   * SaveManager persists/returns plain JSON, so loaded entities have the right
+   * field data but none of their domain methods (and modules fail `instanceof`
+   * checks). Re-attaching the prototypes is sufficient because all instance
+   * data is already present; we never reconstruct via constructors, avoiding
+   * positional-argument drift.
+   */
+  private rehydrateLoadedState(): void {
+    if (this.galaxy) {
+      Object.setPrototypeOf(this.galaxy, Galaxy.prototype);
+    }
+
+    if (this.player) {
+      if (this.player.ship) {
+        Object.setPrototypeOf(this.player.ship, PlayerShip.prototype);
+        for (const mod of this.player.ship.modules) {
+          this.rehydrateModule(mod);
+        }
+      }
+      if (this.player.inventory) {
+        Object.setPrototypeOf(this.player.inventory, Inventory.prototype);
+        for (const mod of this.player.inventory.modules) {
+          this.rehydrateModule(mod);
+        }
+      }
+    }
+  }
+
+  /** Re-attach the correct ShipModule subclass prototype based on category. */
+  private rehydrateModule(mod: ShipModule | null): void {
+    if (!mod) return;
+    switch (mod.category) {
+      case "WEAPON":
+        Object.setPrototypeOf(mod, WeaponModule.prototype);
+        break;
+      case "SHIELD":
+        Object.setPrototypeOf(mod, ShieldModule.prototype);
+        break;
+      case "ENGINE":
+        Object.setPrototypeOf(mod, EngineModule.prototype);
+        break;
+      default:
+        Object.setPrototypeOf(mod, ShipModule.prototype);
+    }
+  }
+
   handleError(error: Error): void {
     const response = this.exceptionHandler.handle(error);
-    logger.error(`GameEngine handled error: ${response.code} - ${response.message}`);
+    logger.error(
+      `GameEngine handled error: ${response.code} - ${response.message}`,
+    );
 
     // Handle validation errors from save loading
-    if (error instanceof GameValidationException && error.errorCode === 'SAVE_VALIDATION_FAILED') {
+    if (
+      error instanceof GameValidationException &&
+      error.errorCode === "SAVE_VALIDATION_FAILED"
+    ) {
       // Show modal overlay with "Новая игра" button
       this.showErrorModal(
         `Ошибка сохранения: ${error.errorMessage}. Нажмите "Новая игра" для начала новой игры.`,
@@ -289,14 +480,18 @@ export class GameEngine {
   private handleCriticalError(response: { message: string }): void {
     // Emergency auto-save to _emergency slot
     if (this.galaxy && this.player) {
-      this.saveGame('_emergency').catch((e) => {
-        logger.error('Emergency auto-save failed:', e);
+      this.saveGame("_emergency").catch((e) => {
+        logger.error("Emergency auto-save failed:", e);
       });
     }
     this.showErrorModal(response.message, true);
   }
 
-  private showErrorModal(message: string, _isFatal: boolean, isNewGameButton = false): void {
+  private showErrorModal(
+    message: string,
+    _isFatal: boolean,
+    isNewGameButton = false,
+  ): void {
     if (!this.renderer) return;
 
     // Clear any existing modal
@@ -309,7 +504,7 @@ export class GameEngine {
     const overlay = new Graphics();
     overlay.fill({ color: 0x000000, alpha: 0.85 });
     overlay.rect(0, 0, width, height);
-    overlay.eventMode = 'static';
+    overlay.eventMode = "static";
     this.renderer.uiLayer.addChild(overlay);
     this.modalObjects.push(overlay);
 
@@ -317,10 +512,10 @@ export class GameEngine {
     const msgText = new Text({
       text: message,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 16,
         fill: 0xff4444,
-        align: 'center',
+        align: "center",
         wordWrap: true,
         wordWrapWidth: width * 0.8,
       },
@@ -333,30 +528,34 @@ export class GameEngine {
 
     if (isNewGameButton) {
       const btnText = new Text({
-        text: 'Новая игра',
+        text: "Новая игра",
         style: {
-          fontFamily: 'Courier New',
+          fontFamily: "Courier New",
           fontSize: 20,
           fill: 0x00ff00,
-          fontWeight: 'bold',
+          fontWeight: "bold",
         },
       });
       btnText.anchor.set(0.5);
       btnText.x = width / 2;
       btnText.y = height / 2 + 40;
-      btnText.eventMode = 'static';
-      btnText.cursor = 'pointer';
+      btnText.eventMode = "static";
+      btnText.cursor = "pointer";
 
-      btnText.on('pointerdown', () => {
+      btnText.on("pointerdown", async () => {
         this.clearModal();
-        this.generateDefaultGameState();
-        this.transitionTo(SceneType.STAR_MAP).catch((e) => {
-          logger.error('Transition after modal failed:', e);
+        await this.generateDefaultGameState();
+        await this.transitionTo(SceneType.STAR_MAP).catch((e) => {
+          logger.error("Transition after modal failed:", e);
         });
       });
 
-      btnText.on('pointerover', () => { btnText.alpha = 0.7; });
-      btnText.on('pointerout', () => { btnText.alpha = 1; });
+      btnText.on("pointerover", () => {
+        btnText.alpha = 0.7;
+      });
+      btnText.on("pointerout", () => {
+        btnText.alpha = 1;
+      });
 
       this.renderer.uiLayer.addChild(btnText);
       this.modalObjects.push(btnText);
@@ -374,14 +573,11 @@ export class GameEngine {
     this.modalObjects = [];
   }
 
-  private generateDefaultGameState(): void {
-    // Reset player to trigger new game creation in transitionTo
+  private async generateDefaultGameState(): Promise<void> {
     this.player = null;
-
-    // Generate fresh galaxy
-    const simulator = new GalaxySimulator();
+    this.playerService.deletePlayer();
     const seed = `SR_${Date.now()}`;
-    this.galaxy = simulator.generateGalaxy(seed, 30);
+    this.galaxy = await this.galaxyService.generate(seed, 30);
     logger.info(`Generated default game state with seed: ${seed}`);
   }
 

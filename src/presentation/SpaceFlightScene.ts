@@ -1,13 +1,19 @@
-import { GameScene } from './GameScene';
-import { Graphics, Text, Container, FederatedPointerEvent, BlurFilter } from 'pixi.js';
-import type { GameEngine } from '@/systems/GameEngine';
-import { SceneType } from '@/types';
-import { PlanetSprite } from './PlanetSprite';
-import { PlanetInfoPanel } from './PlanetInfoPanel';
-import { SystemMiniMap } from './SystemMiniMap';
-import { QuestJournalUI } from './QuestJournalUI';
-import type { Planet } from '@/domain/Planet';
-import { logger } from '@/utils/logger';
+import { GameScene } from "./GameScene";
+import {
+  Graphics,
+  Text,
+  Container,
+  FederatedPointerEvent,
+  BlurFilter,
+} from "pixi.js";
+import type { GameEngine } from "@/systems/GameEngine";
+import { SceneType } from "@/types";
+import { PlanetSprite } from "./PlanetSprite";
+import { PlanetInfoPanel } from "./PlanetInfoPanel";
+import { SystemMiniMap } from "./SystemMiniMap";
+import { QuestJournalUI } from "./QuestJournalUI";
+import type { Planet } from "@/domain/Planet";
+import { logger } from "@/utils/logger";
 
 interface StarLayer {
   container: Container;
@@ -40,9 +46,9 @@ class ShipPhysics {
     this.targetX = initialX;
     this.targetY = initialY;
     this.shipAngle = 0;
-    this.maxSpeed = maxSpeed ?? 0.3; // pixels/ms - default cruising speed
+    this.maxSpeed = maxSpeed ?? 0.1; // pixels/ms - slower for turn-based gameplay (was 0.3)
     // Calculate rotation speed: 90° (π/2 rad) in 300ms = 5.24 rad/s = 0.00524 rad/ms
-    this.rotationSpeed = (Math.PI / 2) / 300;
+    this.rotationSpeed = Math.PI / 2 / 300;
   }
 
   setTarget(x: number, y: number): void {
@@ -109,18 +115,32 @@ class ShipPhysics {
     const isAligned = Math.abs(angleDiff) < Math.PI / 3;
 
     // Calculate stopping distance: v² / (2a)
-    const stoppingDistance = (this.currentSpeed * this.currentSpeed) / (2 * this.deceleration);
+    const stoppingDistance =
+      (this.currentSpeed * this.currentSpeed) / (2 * this.deceleration);
 
     // Speed update: accelerate if far from target and aligned, decelerate when approaching
-    if (distance > stoppingDistance && this.currentSpeed < this.maxSpeed && isAligned) {
+    if (
+      distance > stoppingDistance &&
+      this.currentSpeed < this.maxSpeed &&
+      isAligned
+    ) {
       // Acceleration phase - only when pointing at target
-      this.currentSpeed = Math.min(this.maxSpeed, this.currentSpeed + this.acceleration * dt);
+      this.currentSpeed = Math.min(
+        this.maxSpeed,
+        this.currentSpeed + this.acceleration * dt,
+      );
     } else if (distance <= stoppingDistance && this.currentSpeed > 0) {
       // Deceleration phase
-      this.currentSpeed = Math.max(0, this.currentSpeed - this.deceleration * dt);
+      this.currentSpeed = Math.max(
+        0,
+        this.currentSpeed - this.deceleration * dt,
+      );
     } else if (!isAligned && this.currentSpeed > this.maxSpeed * 0.3) {
       // Slow down if not aligned and going too fast
-      this.currentSpeed = Math.max(this.maxSpeed * 0.3, this.currentSpeed - this.deceleration * dt * 0.5);
+      this.currentSpeed = Math.max(
+        this.maxSpeed * 0.3,
+        this.currentSpeed - this.deceleration * dt * 0.5,
+      );
     }
 
     // Position update - apply alignment factor to prevent sideways drift
@@ -135,6 +155,7 @@ export class SpaceFlightScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private shipContainer: Container | null = null;
   private shipGraphics: Graphics | null = null;
+  private backgroundContainer: Container | null = null; // All background elements (blurred)
   private starLayers: StarLayer[] = [];
   private nebulaeContainer: Container | null = null;
   private shipPhysics: ShipPhysics | null = null;
@@ -156,10 +177,21 @@ export class SpaceFlightScene extends GameScene {
   // Target indicator
   private targetIndicator: Graphics | null = null;
 
+  // Time tracking for day counter
+  private distanceTraveled: number = 0;
+  private readonly DISTANCE_PER_DAY: number = 500; // pixels traveled = 1 day
+  private readonly LANDING_RANGE: number = 60; // px: how close the ship must be to a planet to land
+  private dayCounterText: Text | null = null;
+
+  // Two-step movement: plan route, then execute
+  private plannedRoute: { x: number; y: number } | null = null;
+  private routeLineGraphics: Graphics | null = null;
+
   // Continuous input tracking
-  private isPointerDown: boolean = false;
-  private boundPointerDown: ((event: FederatedPointerEvent) => void) | null = null;
-  private boundPointerMove: ((event: FederatedPointerEvent) => void) | null = null;
+  private boundPointerDown: ((event: FederatedPointerEvent) => void) | null =
+    null;
+  private boundPointerMove: ((event: FederatedPointerEvent) => void) | null =
+    null;
   private boundPointerUp: (() => void) | null = null;
   private boundKeyDown: ((event: KeyboardEvent) => void) | null = null;
 
@@ -178,16 +210,35 @@ export class SpaceFlightScene extends GameScene {
   private cameraDebugText: Text | null = null;
 
   initialize(context?: object): void {
-    this.gameEngine = (context as { gameEngine?: GameEngine })?.gameEngine ?? null;
+    const ctx = context as
+      | { gameEngine?: GameEngine; entryVector?: { x: number; y: number } }
+      | undefined;
+    this.gameEngine = ctx?.gameEngine ?? null;
 
-    // Calculate star center position (screen center)
     const centerX = this.renderer.app.screen.width / 2;
     const centerY = this.renderer.app.screen.height / 2;
 
-    // Initialize ship physics at system entry point (bottom-right edge)
-    // Entry point is beyond the outermost orbit
-    const entryX = centerX + 600; // Right side, beyond furthest orbit (550px)
-    const entryY = centerY + 400; // Below center
+    const entryVector = ctx?.entryVector ?? { x: 0, y: 1 };
+    const maxOrbit = 600;
+    const rawEntryX = centerX + entryVector.x * maxOrbit;
+    const rawEntryY = centerY + entryVector.y * maxOrbit;
+
+    // Clamp the entry point into the visible viewport so the player's ship is
+    // always on-screen on system entry. The camera starts at zoom 1 / pan 0 and
+    // does not follow the ship, so a maxOrbit that exceeds the viewport half-
+    // extent (e.g. 600px on a ~717px-tall canvas) would otherwise spawn the
+    // ship below the bottom edge, invisible until the player zooms/pans.
+    const screenW = this.renderer.app.screen.width;
+    const screenH = this.renderer.app.screen.height;
+    const entryMargin = this.SHIP_SIZE * 2;
+    const entryX = Math.max(
+      entryMargin,
+      Math.min(screenW - entryMargin, rawEntryX),
+    );
+    const entryY = Math.max(
+      entryMargin,
+      Math.min(screenH - entryMargin, rawEntryY),
+    );
     const maxSpeed = this.gameEngine?.player?.ship.speed ?? undefined;
     this.shipPhysics = new ShipPhysics(entryX, entryY, maxSpeed);
 
@@ -198,11 +249,16 @@ export class SpaceFlightScene extends GameScene {
     this.starCenterX = centerX;
     this.starCenterY = centerY;
 
+    // Create blurred background container for all distant objects
+    this.backgroundContainer = new Container();
+    this.backgroundContainer.filters = [new BlurFilter({ strength: 1.5 })];
+    this.renderer.gameLayer.addChild(this.backgroundContainer);
+
     this.createStarField();
     this.createNebulae();
     this.createStar();
     this.createOrbits();
-    this.createPlanets();
+    this.createPlanets(); // Planets added to gameLayer directly (not blurred)
     this.createShip();
     this.createTargetIndicator();
     this.createUI();
@@ -215,27 +271,33 @@ export class SpaceFlightScene extends GameScene {
     this.boundPointerMove = this.onPointerMove.bind(this);
     this.boundPointerUp = this.onPointerUp.bind(this);
 
-    this.renderer.app.stage.eventMode = 'static';
+    this.renderer.app.stage.eventMode = "static";
     this.renderer.app.stage.hitArea = this.renderer.app.screen; // Ensure stage receives all events
-    this.renderer.app.stage.on('pointerdown', this.boundPointerDown);
-    this.renderer.app.stage.on('pointermove', this.boundPointerMove);
-    this.renderer.app.stage.on('pointerup', this.boundPointerUp);
-    this.renderer.app.stage.on('pointerupoutside', this.boundPointerUp);
+    this.renderer.app.stage.on("pointerdown", this.boundPointerDown);
+    this.renderer.app.stage.on("pointermove", this.boundPointerMove);
+    this.renderer.app.stage.on("pointerup", this.boundPointerUp);
+    this.renderer.app.stage.on("pointerupoutside", this.boundPointerUp);
 
-    logger.info(`Stage hitArea set to: ${this.renderer.app.screen.width}x${this.renderer.app.screen.height}`);
+    logger.info(
+      `Stage hitArea set to: ${this.renderer.app.screen.width}x${this.renderer.app.screen.height}`,
+    );
 
     // Add keyboard listener for Quest Journal
     this.boundKeyDown = this.onKeyDown.bind(this);
-    window.addEventListener('keydown', this.boundKeyDown);
+    window.addEventListener("keydown", this.boundKeyDown);
 
     // Add wheel listener for zoom (on window to ensure it captures events)
     this.boundWheel = this.onWheel.bind(this);
-    window.addEventListener('wheel', this.boundWheel, { passive: false });
+    window.addEventListener("wheel", this.boundWheel, { passive: false });
 
     // Prevent context menu on right click (used for panning)
-    this.renderer.app.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    this.renderer.app.canvas.addEventListener("contextmenu", (e) =>
+      e.preventDefault(),
+    );
 
-    logger.info('SpaceFlightScene initialized with camera controls: pan (Shift+click), zoom (wheel)');
+    logger.info(
+      "SpaceFlightScene initialized with camera controls: pan (Shift+click), zoom (wheel)",
+    );
   }
 
   update(deltaTime: number): void {
@@ -248,28 +310,28 @@ export class SpaceFlightScene extends GameScene {
   destroy(): void {
     // Remove all pointer event listeners
     if (this.boundPointerDown) {
-      this.renderer.app.stage.off('pointerdown', this.boundPointerDown);
+      this.renderer.app.stage.off("pointerdown", this.boundPointerDown);
       this.boundPointerDown = null;
     }
     if (this.boundPointerMove) {
-      this.renderer.app.stage.off('pointermove', this.boundPointerMove);
+      this.renderer.app.stage.off("pointermove", this.boundPointerMove);
       this.boundPointerMove = null;
     }
     if (this.boundPointerUp) {
-      this.renderer.app.stage.off('pointerup', this.boundPointerUp);
-      this.renderer.app.stage.off('pointerupoutside', this.boundPointerUp);
+      this.renderer.app.stage.off("pointerup", this.boundPointerUp);
+      this.renderer.app.stage.off("pointerupoutside", this.boundPointerUp);
       this.boundPointerUp = null;
     }
 
     // Remove keyboard listener
     if (this.boundKeyDown) {
-      window.removeEventListener('keydown', this.boundKeyDown);
+      window.removeEventListener("keydown", this.boundKeyDown);
       this.boundKeyDown = null;
     }
 
     // Remove wheel listener
     if (this.boundWheel) {
-      window.removeEventListener('wheel', this.boundWheel);
+      window.removeEventListener("wheel", this.boundWheel);
       this.boundWheel = null;
     }
 
@@ -299,90 +361,100 @@ export class SpaceFlightScene extends GameScene {
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
+
+    // Reset the camera transform we applied to gameLayer. clearGameLayer only
+    // removes children, not the scale/offset, so the next scene (PlanetScene,
+    // StarMapScene) would otherwise inherit this scene's zoom/pan and render
+    // scaled and shifted.
+    if (this.renderer.gameLayer) {
+      this.renderer.gameLayer.scale.set(1);
+      this.renderer.gameLayer.x = 0;
+      this.renderer.gameLayer.y = 0;
+    }
+
     this.starLayers = [];
     this.shipContainer = null;
     this.shipGraphics = null;
+    this.backgroundContainer = null;
     this.nebulaeContainer = null;
     this.uiContainer = null;
     this.cameraDebugText = null;
+    this.dayCounterText = null;
     this.shipPhysics = null;
     this.starGraphics = null;
     this.orbitGraphics = null;
-    logger.info('SpaceFlightScene destroyed');
+    this.distanceTraveled = 0;
+    this.clearPlannedRoute(); // Clean up route line
+    logger.info("SpaceFlightScene destroyed");
   }
 
   private createStarField(): void {
+    if (!this.backgroundContainer) return;
+
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
-    // Create 3 parallax layers with more stars and variety
+    // Simple star layers: count, parallax speed, size range, alpha range
     const layerConfigs = [
-      { count: 300, speed: 0.02, sizeRange: [0.5, 1.5], alphaRange: [0.3, 0.7] },
-      { count: 150, speed: 0.05, sizeRange: [1, 2.5], alphaRange: [0.5, 0.9] },
-      { count: 50, speed: 0.1, sizeRange: [2, 4], alphaRange: [0.7, 1.0] },
+      { count: 600, speed: 0.01, size: [0.3, 0.8], alpha: [0.2, 0.4] },
+      { count: 300, speed: 0.03, size: [0.6, 1.2], alpha: [0.3, 0.5] },
+      { count: 100, speed: 0.06, size: [1.0, 2.0], alpha: [0.4, 0.6] },
     ];
 
-    // Star colors (white, blue-white, yellow-white)
-    const starColors = [0xffffff, 0xaaccff, 0xffffaa, 0xffdddd];
+    const starColors = [0xffffff, 0xaaccff, 0xffffcc, 0xffddaa, 0xddaaff];
 
     for (const config of layerConfigs) {
       const container = new Container();
-      const stars: StarLayer['stars'] = [];
+      const stars: StarLayer["stars"] = [];
 
       for (let i = 0; i < config.count; i++) {
-        const star = {
-          x: Math.random() * width * 2, // Wider area for wrap-around
-          y: Math.random() * height * 2,
-          size: config.sizeRange[0] + Math.random() * (config.sizeRange[1] - config.sizeRange[0]),
-          alpha: config.alphaRange[0] + Math.random() * (config.alphaRange[1] - config.alphaRange[0]),
-          speed: config.speed,
-        };
-        stars.push(star);
+        const x = Math.random() * width * 2;
+        const y = Math.random() * height * 2;
+        const size =
+          config.size[0] + Math.random() * (config.size[1] - config.size[0]);
+        const alpha =
+          config.alpha[0] + Math.random() * (config.alpha[1] - config.alpha[0]);
+
+        stars.push({ x, y, size, alpha, speed: config.speed });
 
         const graphics = new Graphics();
-        const starColor = starColors[Math.floor(Math.random() * starColors.length)];
-        graphics.fill({ color: starColor, alpha: star.alpha });
-        graphics.circle(star.x, star.y, star.size);
-
-        // Add subtle glow for larger stars
-        if (star.size > 2) {
-          graphics.fill({ color: starColor, alpha: star.alpha * 0.3 });
-          graphics.circle(star.x, star.y, star.size * 1.5);
-        }
-
+        graphics.fill({
+          color: starColors[Math.floor(Math.random() * starColors.length)],
+          alpha,
+        });
+        graphics.circle(x, y, size);
         container.addChild(graphics);
       }
 
       this.starLayers.push({ container, stars, speed: config.speed });
-      this.renderer.gameLayer.addChild(container);
+      this.backgroundContainer.addChild(container); // Add to blurred background
     }
   }
 
   private createNebulae(): void {
+    if (!this.backgroundContainer) return;
+
     this.nebulaeContainer = new Container();
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
-    // Create 3 nebula clouds
+    // Simple nebula clouds with built-in blur
     const nebulae = [
-      { x: width * 0.2, y: height * 0.3, color: 0x4a0080, radius: 200, alpha: 0.15 },
-      { x: width * 0.7, y: height * 0.6, color: 0x008060, radius: 250, alpha: 0.12 },
-      { x: width * 0.5, y: height * 0.8, color: 0x802000, radius: 180, alpha: 0.1 },
+      { x: width * 0.3, y: height * 0.3, r: 200, color: 0x4a0080, alpha: 0.08 },
+      { x: width * 0.7, y: height * 0.6, r: 250, color: 0x006060, alpha: 0.06 },
+      { x: width * 0.5, y: height * 0.5, r: 300, color: 0x8a60a0, alpha: 0.05 },
     ];
 
-    for (const nebula of nebulae) {
-      const graphics = new Graphics();
-      graphics.fill({ color: nebula.color, alpha: nebula.alpha });
-      graphics.circle(nebula.x, nebula.y, nebula.radius);
-
-      // Add blur effect for soft nebula look
-      const blurFilter = new BlurFilter({ strength: 8 });
-      graphics.filters = [blurFilter];
-
-      this.nebulaeContainer.addChild(graphics);
+    for (const n of nebulae) {
+      const g = new Graphics();
+      g.fill({ color: n.color, alpha: n.alpha });
+      g.circle(n.x, n.y, n.r);
+      g.filters = [new BlurFilter({ strength: 20 })];
+      this.nebulaeContainer.addChild(g);
     }
 
-    this.renderer.gameLayer.addChildAt(this.nebulaeContainer, 0);
+    // Add nebulae at the back of background container
+    this.backgroundContainer.addChildAt(this.nebulaeContainer, 0);
   }
 
   /**
@@ -400,7 +472,11 @@ export class SpaceFlightScene extends GameScene {
     ];
 
     for (const layer of glowLayers) {
-      this.starGraphics.circle(this.starCenterX, this.starCenterY, layer.radius);
+      this.starGraphics.circle(
+        this.starCenterX,
+        this.starCenterY,
+        layer.radius,
+      );
       this.starGraphics.fill({ color: layer.color, alpha: layer.alpha });
     }
 
@@ -436,7 +512,11 @@ export class SpaceFlightScene extends GameScene {
     if (!galaxy) return;
 
     const currentSystem = galaxy.systems.find((s) => s.id === currentSystemId);
-    if (!currentSystem || !currentSystem.planets || currentSystem.planets.length === 0) {
+    if (
+      !currentSystem ||
+      !currentSystem.planets ||
+      currentSystem.planets.length === 0
+    ) {
       return;
     }
 
@@ -513,7 +593,11 @@ export class SpaceFlightScene extends GameScene {
 
       // Center circle
       this.targetIndicator.circle(targetX, targetY, 4);
-      this.targetIndicator.stroke({ width: 1, color: 0x00ffff, alpha: pulse * 0.8 });
+      this.targetIndicator.stroke({
+        width: 1,
+        color: 0x00ffff,
+        alpha: pulse * 0.8,
+      });
     } else {
       this.targetIndicator.visible = false;
     }
@@ -527,12 +611,28 @@ export class SpaceFlightScene extends GameScene {
 
     // Main hull
     this.shipGraphics
-      .poly([size, 0, -size * 0.7, -size * 0.6, -size * 0.4, 0, -size * 0.7, size * 0.6])
+      .poly([
+        size,
+        0,
+        -size * 0.7,
+        -size * 0.6,
+        -size * 0.4,
+        0,
+        -size * 0.7,
+        size * 0.6,
+      ])
       .fill({ color: 0x4488cc });
 
     // Cockpit
     this.shipGraphics
-      .poly([size * 0.3, 0, -size * 0.2, -size * 0.25, -size * 0.2, size * 0.25])
+      .poly([
+        size * 0.3,
+        0,
+        -size * 0.2,
+        -size * 0.25,
+        -size * 0.2,
+        size * 0.25,
+      ])
       .fill({ color: 0x88ccff });
 
     // Engine glow (visible when ship is moving)
@@ -562,9 +662,9 @@ export class SpaceFlightScene extends GameScene {
 
     // Instructions (non-interactive)
     const instructions = new Text({
-      text: 'ЛКМ - курс | Shift+ЛКМ/ПКМ - пан | Колесико - зум | [J] - Квесты | [I] - Инвентарь',
+      text: "ЛКМ - курс | Shift+ЛКМ/ПКМ - пан | Колесико - зум | [J] - Квесты | [I] - Инвентарь",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 13,
         fill: 0x88ccff,
       },
@@ -572,69 +672,86 @@ export class SpaceFlightScene extends GameScene {
     instructions.alpha = 0.8;
     instructions.x = 20;
     instructions.y = 20;
-    instructions.eventMode = 'none'; // Explicitly set to non-interactive
+    instructions.eventMode = "none"; // Explicitly set to non-interactive
     this.uiContainer.addChild(instructions);
 
     // Camera debug display
     this.cameraDebugText = new Text({
-      text: 'Камера: Zoom 1.00 | Pan (0, 0)',
+      text: "Камера: Zoom 1.00 | Pan (0, 0)",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 12,
         fill: 0xff00ff,
       },
     });
     this.cameraDebugText.x = this.renderer.app.screen.width - 300;
     this.cameraDebugText.y = this.renderer.app.screen.height - 30;
-    this.cameraDebugText.eventMode = 'none';
+    this.cameraDebugText.eventMode = "none";
     this.uiContainer.addChild(this.cameraDebugText);
+
+    // Current day display
+    this.dayCounterText = new Text({
+      text: `День: ${this.gameEngine?.galaxy?.gameDays ?? 0}`,
+      style: { fontFamily: "Courier New", fontSize: 14, fill: 0x00ffff },
+    });
+    this.dayCounterText.x = 20;
+    this.dayCounterText.y = 50;
+    this.uiContainer.addChild(this.dayCounterText);
 
     // Quest Journal button
     const questBtn = new Text({
-      text: '[КВЕСТЫ]',
+      text: "[КВЕСТЫ]",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 14,
         fill: 0xffaa00,
-        fontWeight: 'bold' as const,
+        fontWeight: "bold" as const,
       },
     });
     questBtn.x = 20;
-    questBtn.y = 50;
-    questBtn.eventMode = 'static';
-    questBtn.cursor = 'pointer';
-    questBtn.on('pointerdown', (event) => {
+    questBtn.y = 80;
+    questBtn.eventMode = "static";
+    questBtn.cursor = "pointer";
+    questBtn.on("pointerdown", (event) => {
       event.stopPropagation(); // Prevent stage from also handling this click
-      logger.info('Quest journal button clicked');
+      logger.info("Quest journal button clicked");
       this.toggleQuestJournal();
     });
-    questBtn.on('pointerover', () => { questBtn.alpha = 0.7; });
-    questBtn.on('pointerout', () => { questBtn.alpha = 1; });
+    questBtn.on("pointerover", () => {
+      questBtn.alpha = 0.7;
+    });
+    questBtn.on("pointerout", () => {
+      questBtn.alpha = 1;
+    });
     this.uiContainer.addChild(questBtn);
 
-    // Back button with hit area
+    // Star map button
     const backBtn = new Text({
-      text: '[НАЗАД К КАРТЕ]',
+      text: "[МЕЖЗВЕЗДНАЯ КАРТА]",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 14,
         fill: 0xffaa00,
-        fontWeight: 'bold' as const,
+        fontWeight: "bold" as const,
       },
     });
-    backBtn.x = this.renderer.app.screen.width - 180;
+    backBtn.x = this.renderer.app.screen.width - 220;
     backBtn.y = 20;
-    backBtn.eventMode = 'static';
-    backBtn.cursor = 'pointer';
-    backBtn.on('pointerdown', async (event) => {
+    backBtn.eventMode = "static";
+    backBtn.cursor = "pointer";
+    backBtn.on("pointerdown", async (event) => {
       event.stopPropagation(); // Prevent stage from also handling this click
-      logger.info('Back to map clicked');
+      logger.info("Star map button clicked");
       await this.returnToStarMap();
     });
 
     // Add hover effect
-    backBtn.on('pointerover', () => { backBtn.alpha = 0.7; });
-    backBtn.on('pointerout', () => { backBtn.alpha = 1; });
+    backBtn.on("pointerover", () => {
+      backBtn.alpha = 0.7;
+    });
+    backBtn.on("pointerout", () => {
+      backBtn.alpha = 1;
+    });
 
     this.uiContainer.addChild(backBtn);
 
@@ -660,18 +777,28 @@ export class SpaceFlightScene extends GameScene {
     if (!galaxy) return;
 
     const currentSystem = galaxy.systems.find((s) => s.id === currentSystemId);
-    if (!currentSystem || !currentSystem.planets || currentSystem.planets.length === 0) {
-      logger.debug('No planets in current system');
+    if (
+      !currentSystem ||
+      !currentSystem.planets ||
+      currentSystem.planets.length === 0
+    ) {
+      logger.debug("No planets in current system");
       return;
     }
 
     // Get quest objective locations
-    const questLocations = this.gameEngine.questManager.getActiveQuestLocations();
+    const questLocations =
+      this.gameEngine.questManager.getActiveQuestLocations();
 
     // Create sprite for each planet with random initial angle
     for (const planet of currentSystem.planets) {
       const initialAngle = Math.random() * Math.PI * 2;
-      const sprite = new PlanetSprite(planet, this.starCenterX, this.starCenterY, initialAngle);
+      const sprite = new PlanetSprite(
+        planet,
+        this.starCenterX,
+        this.starCenterY,
+        initialAngle,
+      );
 
       // Set up click handler
       sprite.createHitArea(this.onPlanetClick.bind(this));
@@ -707,72 +834,111 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Handle planet click: show info panel and navigate ship to planet
+   * Handle planet click: two-step movement - plan route on first click, execute on second
    */
   private onPlanetClick(planet: Planet): void {
     logger.debug(`Planet clicked: ${planet.name}`);
 
-    // Close existing info panel
+    const planetSprite = this.planetSprites.find(
+      (s) => s.planet.id === planet.id,
+    );
+    if (!planetSprite || !this.shipPhysics) return;
+
+    // Two-step movement logic
+    if (this.plannedRoute) {
+      // Check if clicking on the same planet (within 50px of planned route)
+      const dx = planetSprite.screenX - this.plannedRoute.x;
+      const dy = planetSprite.screenY - this.plannedRoute.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < 50) {
+        // Second click - execute the route
+        this.shipPhysics.setTarget(this.plannedRoute.x, this.plannedRoute.y);
+        logger.info(`▶️ Executing route to planet ${planet.name}`);
+      } else {
+        // Different planet - update planned route
+        this.plannedRoute = {
+          x: planetSprite.screenX,
+          y: planetSprite.screenY,
+        };
+        this.drawRouteLine();
+        logger.info(`🗺️ Route updated to planet ${planet.name}`);
+      }
+    } else {
+      // First click - plan the route
+      this.plannedRoute = { x: planetSprite.screenX, y: planetSprite.screenY };
+      this.drawRouteLine();
+      logger.info(
+        `🗺️ Route planned to planet ${planet.name}. Click again to execute.`,
+      );
+    }
+
+    // Show planet info panel. Landing is only offered once the ship has
+    // actually flown to the planet; otherwise a single click would teleport the
+    // player there (game-days only accrue while the ship is in motion).
     if (this.planetInfoPanel) {
       this.planetInfoPanel.destroy();
       this.planetInfoPanel = null;
     }
 
-    // Create new info panel
+    const distanceX = planetSprite.screenX - this.shipPhysics.shipX;
+    const distanceY = planetSprite.screenY - this.shipPhysics.shipY;
+    const distanceToPlanet = Math.sqrt(
+      distanceX * distanceX + distanceY * distanceY,
+    );
+    const flightDays = Math.max(
+      1,
+      Math.ceil(distanceToPlanet / this.DISTANCE_PER_DAY),
+    );
+    const shipAtPlanet = distanceToPlanet <= this.LANDING_RANGE;
+
     this.planetInfoPanel = new PlanetInfoPanel(
       planet,
       this.renderer.app.screen.width,
       this.renderer.app.screen.height,
-      () => this.onTalkToGovernor(planet),
+      flightDays,
+      shipAtPlanet ? () => this.onLandOnPlanet(planet) : undefined,
     );
     this.renderer.uiLayer.addChild(this.planetInfoPanel.container);
-
-    // Find planet sprite to get screen coordinates and set navigation target
-    const planetSprite = this.planetSprites.find((s) => s.planet.id === planet.id);
-    if (planetSprite && this.shipPhysics) {
-      this.shipPhysics.setTarget(planetSprite.screenX, planetSprite.screenY);
-    }
   }
 
-  /**
-   * Handle "Talk to Governor" button click: transition to DialogueScene
-   */
-  private async onTalkToGovernor(planet: Planet): Promise<void> {
-    logger.info(`Opening dialogue with governor of ${planet.name}`);
-
-    // Update quest progress for visiting this location
-    if (this.gameEngine?.questManager) {
-      this.gameEngine.questManager.updateQuestProgress({
-        type: 'VISIT_LOCATION',
-        locationId: planet.id,
-      });
-      logger.debug(`Updated quest progress for visiting ${planet.name}`);
+  private async onLandOnPlanet(planet: Planet): Promise<void> {
+    // Guard: only allow landing when the ship has actually reached the planet.
+    // Game-days already accrue during the flight (see updateShip), so we do NOT
+    // simulate flightDays here — doing so previously let a single click both
+    // teleport the player and skip days for free.
+    const sprite = this.planetSprites.find((s) => s.planet.id === planet.id);
+    if (sprite && this.shipPhysics) {
+      const dx = sprite.screenX - this.shipPhysics.shipX;
+      const dy = sprite.screenY - this.shipPhysics.shipY;
+      if (Math.sqrt(dx * dx + dy * dy) > this.LANDING_RANGE) {
+        logger.warn("Cannot land: ship has not reached the planet yet");
+        return;
+      }
     }
 
-    // Get the governor NPC (first inhabitant)
-    if (planet.inhabitants.length === 0) {
-      logger.warn(`No inhabitants on planet ${planet.name}`);
-      return;
+    if (this.gameEngine?.player?.ship) {
+      this.gameEngine.player.ship.energy =
+        this.gameEngine.player.ship.maxEnergy;
     }
-
-    const governor = planet.inhabitants[0];
-
-    // Transition to DialogueScene with the governor
-    if (this.gameEngine) {
-      await this.gameEngine.transitionTo(SceneType.DIALOGUE, {
-        gameEngine: this.gameEngine,
-        npc: governor,
-      });
-    }
+    await this.gameEngine?.transitionTo(SceneType.PLANET, {
+      gameEngine: this.gameEngine,
+      planet,
+    });
   }
 
   private onPointerDown(event: FederatedPointerEvent): void {
     if (!this.shipPhysics) return;
 
-    logger.info(`🖱️ POINTER DOWN: button=${event.button}, shift=${event.shiftKey}, global=(${event.global.x.toFixed(0)}, ${event.global.y.toFixed(0)})`);
+    logger.info(
+      `🖱️ POINTER DOWN: button=${event.button}, shift=${event.shiftKey}, global=(${event.global.x.toFixed(0)}, ${event.global.y.toFixed(0)})`,
+    );
 
     // Middle mouse button (1), right button (2), or Shift+Left for panning
-    const isPanButton = event.button === 1 || event.button === 2 || (event.button === 0 && event.shiftKey);
+    const isPanButton =
+      event.button === 1 ||
+      event.button === 2 ||
+      (event.button === 0 && event.shiftKey);
 
     if (isPanButton) {
       event.preventDefault(); // Prevent default behavior for pan buttons
@@ -784,13 +950,41 @@ export class SpaceFlightScene extends GameScene {
     }
 
     // Left button (0) for ship navigation (only if not holding Shift)
+    // Two-step movement: first click plans route, second click executes
     if (event.button === 0 && !event.shiftKey) {
-      this.isPointerDown = true;
-
       // Convert screen coordinates to world coordinates
       const world = this.screenToWorld(event.global.x, event.global.y);
-      this.shipPhysics.setTarget(world.x, world.y);
-      logger.debug(`Ship target set to world: ${world.x.toFixed(1)}, ${world.y.toFixed(1)}`);
+
+      // Check if we already have a planned route
+      if (this.plannedRoute) {
+        // Check if clicking near the same point (within 50px) - execute the route
+        const dx = world.x - this.plannedRoute.x;
+        const dy = world.y - this.plannedRoute.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < 50) {
+          // Execute planned route
+          this.shipPhysics.setTarget(this.plannedRoute.x, this.plannedRoute.y);
+          logger.info(
+            `▶️ Executing planned route to (${this.plannedRoute.x.toFixed(0)}, ${this.plannedRoute.y.toFixed(0)})`,
+          );
+          // Keep the route line visible during movement
+        } else {
+          // Clicked on different location - update planned route
+          this.plannedRoute = { x: world.x, y: world.y };
+          this.drawRouteLine();
+          logger.info(
+            `🗺️ Route updated to (${world.x.toFixed(0)}, ${world.y.toFixed(0)})`,
+          );
+        }
+      } else {
+        // First click - plan the route (don't start moving yet)
+        this.plannedRoute = { x: world.x, y: world.y };
+        this.drawRouteLine();
+        logger.info(
+          `🗺️ Route planned to (${world.x.toFixed(0)}, ${world.y.toFixed(0)}). Click again to execute.`,
+        );
+      }
     }
   }
 
@@ -805,23 +999,21 @@ export class SpaceFlightScene extends GameScene {
       this.lastPanY = event.global.y;
       this.applyCameraTransform();
       if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
-        logger.info(`📍 Camera pan: (${this.cameraPanX.toFixed(0)}, ${this.cameraPanY.toFixed(0)})`);
+        logger.info(
+          `📍 Camera pan: (${this.cameraPanX.toFixed(0)}, ${this.cameraPanY.toFixed(0)})`,
+        );
       }
       return;
     }
 
-    // Handle ship target tracking (with coordinate transformation)
-    if (this.isPointerDown && this.shipPhysics) {
-      const world = this.screenToWorld(event.global.x, event.global.y);
-      this.shipPhysics.setTarget(world.x, world.y);
-    }
+    // No more drag-to-update target in two-step mode
+    // Route is fixed once planned, can only be updated by clicking
   }
 
   private onPointerUp(): void {
     if (this.isPanning) {
-      logger.info('❌ Pan mode deactivated');
+      logger.info("❌ Pan mode deactivated");
     }
-    this.isPointerDown = false;
     this.isPanning = false;
   }
 
@@ -839,7 +1031,10 @@ export class SpaceFlightScene extends GameScene {
     const newZoom = this.cameraZoom * zoomDelta;
 
     // Clamp zoom to min/max bounds
-    const clampedZoom = Math.max(this.MIN_ZOOM, Math.min(this.MAX_ZOOM, newZoom));
+    const clampedZoom = Math.max(
+      this.MIN_ZOOM,
+      Math.min(this.MAX_ZOOM, newZoom),
+    );
 
     // Zoom towards screen center to keep it fixed
     // Formula: adjust pan so that the center point in world space stays at the same screen position
@@ -858,7 +1053,9 @@ export class SpaceFlightScene extends GameScene {
     this.cameraPanY = screenCenterY - worldCenterY * this.cameraZoom;
 
     this.applyCameraTransform();
-    logger.info(`Camera zoom: ${oldZoom.toFixed(2)} → ${this.cameraZoom.toFixed(2)} (deltaY: ${event.deltaY})`);
+    logger.info(
+      `Camera zoom: ${oldZoom.toFixed(2)} → ${this.cameraZoom.toFixed(2)} (deltaY: ${event.deltaY})`,
+    );
   }
 
   /**
@@ -890,7 +1087,10 @@ export class SpaceFlightScene extends GameScene {
   /**
    * Convert screen coordinates to world coordinates (accounting for camera transform)
    */
-  private screenToWorld(screenX: number, screenY: number): { x: number; y: number } {
+  private screenToWorld(
+    screenX: number,
+    screenY: number,
+  ): { x: number; y: number } {
     const worldX = (screenX - this.cameraPanX) / this.cameraZoom;
     const worldY = (screenY - this.cameraPanY) / this.cameraZoom;
     return { x: worldX, y: worldY };
@@ -899,8 +1099,49 @@ export class SpaceFlightScene extends GameScene {
   private updateShip(deltaTime: number): void {
     if (!this.shipContainer || !this.shipGraphics || !this.shipPhysics) return;
 
+    // Track position before update (for distance calculation)
+    const prevX = this.shipPhysics.shipX;
+    const prevY = this.shipPhysics.shipY;
+    const wasMoving = this.shipPhysics.isMoving;
+
     // Update physics
     this.shipPhysics.update(deltaTime);
+
+    // Check if ship just arrived (was moving, now stopped)
+    if (wasMoving && !this.shipPhysics.isMoving) {
+      logger.info("🎯 Ship arrived at destination. Clearing planned route.");
+      this.clearPlannedRoute();
+    }
+
+    // Turn-based time: only advance days when ship is moving
+    if (this.shipPhysics.isMoving && this.shipPhysics.currentSpeed > 0.01) {
+      const dx = this.shipPhysics.shipX - prevX;
+      const dy = this.shipPhysics.shipY - prevY;
+      const distanceMoved = Math.sqrt(dx * dx + dy * dy);
+
+      this.distanceTraveled += distanceMoved;
+
+      // Every DISTANCE_PER_DAY pixels = 1 game day
+      while (this.distanceTraveled >= this.DISTANCE_PER_DAY) {
+        this.distanceTraveled -= this.DISTANCE_PER_DAY;
+        if (this.gameEngine?.galaxy) {
+          this.gameEngine.galaxy.simulateDay();
+          this.updateDayCounter(); // Update UI
+
+          // Check for expired quests after each day
+          if (this.gameEngine.player) {
+            this.gameEngine.questManager.checkExpiredQuests(
+              this.gameEngine.galaxy.gameDays,
+              this.gameEngine.player,
+            );
+          }
+
+          logger.debug(
+            `Day passed during flight. Current day: ${this.gameEngine.galaxy.gameDays}`,
+          );
+        }
+      }
+    }
 
     // Read updated values from physics
     this.shipContainer.x = this.shipPhysics.shipX;
@@ -912,14 +1153,161 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Update planet positions for orbital rotation and mini-map
+   * Update day counter UI text
    */
-  private updatePlanets(deltaTime: number): void {
-    for (const sprite of this.planetSprites) {
-      sprite.update(deltaTime);
+  private updateDayCounter(): void {
+    if (this.dayCounterText && this.gameEngine?.galaxy) {
+      this.dayCounterText.text = `День: ${this.gameEngine.galaxy.gameDays}`;
+    }
+  }
+
+  /**
+   * Draw planned route line from ship to target
+   */
+  private drawRouteLine(): void {
+    if (!this.shipPhysics || !this.plannedRoute) return;
+
+    // Remove old route line
+    if (this.routeLineGraphics) {
+      this.renderer.gameLayer.removeChild(this.routeLineGraphics);
+      this.routeLineGraphics.destroy();
     }
 
-    // Update mini-map with current positions
+    // Create new route line
+    this.routeLineGraphics = new Graphics();
+
+    // Dashed line from ship to target
+    const fromX = this.shipPhysics.shipX;
+    const fromY = this.shipPhysics.shipY;
+    const toX = this.plannedRoute.x;
+    const toY = this.plannedRoute.y;
+
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const dashLength = 20;
+    const gapLength = 10;
+    const totalLength = dashLength + gapLength;
+    const numSegments = Math.floor(distance / totalLength);
+
+    this.routeLineGraphics.moveTo(fromX, fromY);
+
+    for (let i = 0; i < numSegments; i++) {
+      const t1 = (i * totalLength) / distance;
+      const t2 = (i * totalLength + dashLength) / distance;
+
+      const x1 = fromX + dx * t1;
+      const y1 = fromY + dy * t1;
+      const x2 = fromX + dx * t2;
+      const y2 = fromY + dy * t2;
+
+      this.routeLineGraphics.moveTo(x1, y1);
+      this.routeLineGraphics.lineTo(x2, y2);
+    }
+
+    this.routeLineGraphics.stroke({ color: 0x00ffff, width: 2, alpha: 0.6 });
+
+    // Check if route target is near a planet (within 50px radius)
+    const isLandingOnPlanet = this.planetSprites.some((sprite) => {
+      const pdx = sprite.screenX - toX;
+      const pdy = sprite.screenY - toY;
+      const planetDistance = Math.sqrt(pdx * pdx + pdy * pdy);
+      return planetDistance < 50; // Within planet interaction radius
+    });
+
+    // Draw different marker based on whether this is a landing or empty space navigation
+    if (isLandingOnPlanet) {
+      // Landing marker: downward arrow + landing circles
+      this.drawLandingMarker(toX, toY);
+    } else {
+      // Navigation marker: simple pulsing circle
+      this.drawNavigationMarker(toX, toY);
+    }
+
+    this.renderer.gameLayer.addChild(this.routeLineGraphics);
+  }
+
+  /**
+   * Draw landing marker for planetary approach
+   */
+  private drawLandingMarker(x: number, y: number): void {
+    if (!this.routeLineGraphics) return;
+
+    // Outer landing zone circles
+    this.routeLineGraphics.circle(x, y, 25);
+    this.routeLineGraphics.stroke({ color: 0xff9900, width: 3, alpha: 0.8 });
+    this.routeLineGraphics.circle(x, y, 30);
+    this.routeLineGraphics.stroke({ color: 0xff9900, width: 2, alpha: 0.4 });
+
+    // Downward arrow (landing symbol)
+    const arrowSize = 15;
+    const arrowWidth = 8;
+
+    // Arrow shaft
+    this.routeLineGraphics.moveTo(x, y - arrowSize);
+    this.routeLineGraphics.lineTo(x, y + arrowSize * 0.3);
+    this.routeLineGraphics.stroke({ color: 0xff9900, width: 3, alpha: 1.0 });
+
+    // Arrow head (triangle pointing down)
+    this.routeLineGraphics
+      .poly([
+        x,
+        y + arrowSize, // Bottom point
+        x - arrowWidth,
+        y, // Left point
+        x + arrowWidth,
+        y, // Right point
+      ])
+      .fill({ color: 0xff9900, alpha: 1.0 });
+
+    // Small base platform indicator
+    this.routeLineGraphics.moveTo(x - 12, y + arrowSize + 5);
+    this.routeLineGraphics.lineTo(x + 12, y + arrowSize + 5);
+    this.routeLineGraphics.stroke({ color: 0xff9900, width: 2, alpha: 0.7 });
+  }
+
+  /**
+   * Draw navigation marker for empty space movement
+   */
+  private drawNavigationMarker(x: number, y: number): void {
+    if (!this.routeLineGraphics) return;
+
+    // Pulsing circles for generic navigation target
+    this.routeLineGraphics.circle(x, y, 15);
+    this.routeLineGraphics.stroke({ color: 0x00ffff, width: 3, alpha: 0.8 });
+    this.routeLineGraphics.circle(x, y, 20);
+    this.routeLineGraphics.stroke({ color: 0x00ffff, width: 2, alpha: 0.4 });
+  }
+
+  /**
+   * Clear planned route and route line
+   */
+  private clearPlannedRoute(): void {
+    this.plannedRoute = null;
+
+    if (this.routeLineGraphics) {
+      this.renderer.gameLayer.removeChild(this.routeLineGraphics);
+      this.routeLineGraphics.destroy();
+      this.routeLineGraphics = null;
+    }
+  }
+
+  /**
+   * Update planet positions for orbital rotation and mini-map
+   * Turn-based: planets only rotate when ship is moving
+   */
+  private updatePlanets(deltaTime: number): void {
+    // Turn-based gameplay: only update planets when ship is moving
+    const isShipMoving =
+      this.shipPhysics?.isMoving && this.shipPhysics.currentSpeed > 0.01;
+
+    if (isShipMoving) {
+      for (const sprite of this.planetSprites) {
+        sprite.update(deltaTime);
+      }
+    }
+
+    // Always update mini-map (even when paused, for visual feedback)
     if (this.systemMiniMap && this.shipPhysics) {
       this.systemMiniMap.updateWithSprites(
         this.planetSprites,
@@ -938,8 +1326,10 @@ export class SpaceFlightScene extends GameScene {
     const height = this.renderer.app.screen.height;
 
     // Calculate velocity vector from ship's current speed and angle
-    const velocityX = Math.cos(this.shipPhysics.shipAngle) * this.shipPhysics.currentSpeed;
-    const velocityY = Math.sin(this.shipPhysics.shipAngle) * this.shipPhysics.currentSpeed;
+    const velocityX =
+      Math.cos(this.shipPhysics.shipAngle) * this.shipPhysics.currentSpeed;
+    const velocityY =
+      Math.sin(this.shipPhysics.shipAngle) * this.shipPhysics.currentSpeed;
 
     for (const layer of this.starLayers) {
       // Move stars opposite to ship movement for parallax effect
@@ -958,7 +1348,7 @@ export class SpaceFlightScene extends GameScene {
   }
 
   private async returnToStarMap(): Promise<void> {
-    logger.info('Returning to star map');
+    logger.info("Returning to star map");
     if (this.gameEngine) {
       await this.gameEngine.transitionTo(SceneType.STAR_MAP);
     }
@@ -968,9 +1358,9 @@ export class SpaceFlightScene extends GameScene {
    * Handle keyboard input (J key for quest journal)
    */
   private onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'j' || event.key === 'J') {
+    if (event.key === "j" || event.key === "J") {
       this.toggleQuestJournal();
-    } else if (event.key === 'i' || event.key === 'I') {
+    } else if (event.key === "i" || event.key === "I") {
       this.openInventory();
     }
   }
@@ -983,7 +1373,7 @@ export class SpaceFlightScene extends GameScene {
       // Close journal
       this.questJournalUI.destroy();
       this.questJournalUI = null;
-      logger.info('Quest journal closed');
+      logger.info("Quest journal closed");
     } else {
       // Open journal
       if (this.gameEngine?.questManager) {
@@ -998,7 +1388,7 @@ export class SpaceFlightScene extends GameScene {
           (locationId: string) => this.navigateToQuestObjective(locationId),
         );
         this.renderer.uiLayer.addChild(this.questJournalUI.container);
-        logger.info('Quest journal opened');
+        logger.info("Quest journal opened");
       }
     }
   }
@@ -1009,8 +1399,8 @@ export class SpaceFlightScene extends GameScene {
   private async openInventory(): Promise<void> {
     if (!this.gameEngine) return;
 
-    logger.info('Opening inventory');
-    await this.gameEngine.transitionTo('INVENTORY' as any, {
+    logger.info("Opening inventory");
+    await this.gameEngine.transitionTo("INVENTORY" as any, {
       gameEngine: this.gameEngine,
     });
   }
@@ -1022,11 +1412,15 @@ export class SpaceFlightScene extends GameScene {
     logger.info(`Navigating to quest objective: ${locationId}`);
 
     // Find planet sprite by locationId
-    const planetSprite = this.planetSprites.find((s) => s.planet.id === locationId);
+    const planetSprite = this.planetSprites.find(
+      (s) => s.planet.id === locationId,
+    );
     if (planetSprite && this.shipPhysics) {
       // Set ship target to planet
       this.shipPhysics.setTarget(planetSprite.screenX, planetSprite.screenY);
-      logger.info(`Set navigation target to planet ${planetSprite.planet.name}`);
+      logger.info(
+        `Set navigation target to planet ${planetSprite.planet.name}`,
+      );
 
       // Show planet info panel
       this.onPlanetClick(planetSprite.planet);
@@ -1084,6 +1478,8 @@ export class SpaceFlightScene extends GameScene {
 
   /** E2E helper: check if quest journal is open */
   e2eIsQuestJournalOpen(): boolean {
-    return this.questJournalUI !== null && this.questJournalUI.container.visible;
+    return (
+      this.questJournalUI !== null && this.questJournalUI.container.visible
+    );
   }
 }

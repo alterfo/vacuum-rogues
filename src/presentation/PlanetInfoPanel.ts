@@ -1,179 +1,127 @@
-import { Container, Graphics, Text } from 'pixi.js';
-import type { Planet } from '@/domain/Planet';
+import { Container, Graphics, Text } from "pixi.js";
+import type { Planet } from "@/domain/Planet";
 
-/**
- * Info panel displaying planet details when clicked
- * Positioned in top-right corner below map title
- */
 export class PlanetInfoPanel {
   public readonly container: Container;
+  public readonly flightDays: number;
   private readonly planet: Planet;
-  private readonly panelWidth: number = 220;
-  private readonly panelHeight: number = 180; // Standard height
-  private readonly onTalkToGovernor?: () => void;
+  private readonly onLand?: () => void;
 
   constructor(
     planet: Planet,
     screenWidth: number,
     _screenHeight: number,
-    onTalkToGovernor?: () => void,
+    flightDays: number,
+    onLand?: () => void,
   ) {
     this.planet = planet;
+    this.flightDays = flightDays;
+    this.onLand = onLand;
     this.container = new Container();
-    this.onTalkToGovernor = onTalkToGovernor;
-
-    // Position panel at top-right, below any existing UI
     this.container.x = screenWidth - 240;
     this.container.y = 80;
-
     this.render();
   }
 
-  /**
-   * Render panel background and planet information
-   */
   render(): void {
-    // Background with border (blocks clicks to prevent clicking through the panel)
-    const background = new Graphics();
-    background.rect(0, 0, this.panelWidth, this.panelHeight);
-    background.fill({ color: 0x000000, alpha: 0.8 });
-    background.stroke({ color: 0x00ffff, width: 2 });
-    background.eventMode = 'static'; // Block clicks through the panel
-    this.container.addChild(background);
+    const bg = new Graphics();
+    bg.rect(0, 0, 220, 200);
+    bg.fill({ color: 0x000000, alpha: 0.8 });
+    bg.stroke({ color: 0x00ffff, width: 2 });
+    bg.eventMode = "static";
+    this.container.addChild(bg);
 
-    // Planet name (title)
-    const titleText = new Text({
+    const title = new Text({
       text: this.planet.name,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 14,
         fill: 0x00ffff,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
-    titleText.x = 10;
-    titleText.y = 10;
-    this.container.addChild(titleText);
+    title.x = 10;
+    title.y = 10;
+    this.container.addChild(title);
 
-    // Planet type
-    const typeText = new Text({
-      text: `Тип: ${this.getPlanetTypeRussian(this.planet.type)}`,
-      style: {
-        fontFamily: 'Courier New',
-        fontSize: 11,
-        fill: 0xaaaaaa,
-      },
+    const type = new Text({
+      text: `Тип: ${this.getType(this.planet.type)}`,
+      style: { fontFamily: "Courier New", fontSize: 11, fill: 0xaaaaaa },
     });
-    typeText.x = 10;
-    typeText.y = 40;
-    this.container.addChild(typeText);
+    type.x = 10;
+    type.y = 35;
+    this.container.addChild(type);
 
-    // Orbital radius
-    const orbitText = new Text({
-      text: `Орбита: ${this.planet.orbitalRadius}px`,
-      style: {
-        fontFamily: 'Courier New',
-        fontSize: 11,
-        fill: 0xaaaaaa,
-      },
+    const habitability = new Text({
+      text: this.planet.isHabitable
+        ? `Раса: ${this.planet.inhabitants[0]?.race ?? "Неизвестно"}`
+        : `Дроны: ${this.planet.drones}`,
+      style: { fontFamily: "Courier New", fontSize: 11, fill: 0x88ccff },
     });
-    orbitText.x = 10;
-    orbitText.y = 60;
-    this.container.addChild(orbitText);
+    habitability.x = 10;
+    habitability.y = 55;
+    this.container.addChild(habitability);
 
-    // Hint text
-    const hintText = new Text({
-      text: 'Корабль направляется\nк планете',
-      style: {
-        fontFamily: 'Courier New',
-        fontSize: 10,
-        fill: 0x88ccff,
-        align: 'left',
-      },
+    const flight = new Text({
+      text: `Перелёт: ${this.flightDays} дн.`,
+      style: { fontFamily: "Courier New", fontSize: 11, fill: 0xffaa00 },
     });
-    hintText.x = 10;
-    hintText.y = 90;
-    this.container.addChild(hintText);
+    flight.x = 10;
+    flight.y = 80;
+    this.container.addChild(flight);
 
-    // Add "Talk to Governor" button if planet has inhabitants
-    if (this.planet.inhabitants.length > 0 && this.onTalkToGovernor) {
-      const buttonContainer = new Container();
-      buttonContainer.x = 10;
-      buttonContainer.y = 130;
-
-      // Button background
-      const buttonBg = new Graphics();
-      buttonBg.rect(0, 0, 200, 30);
-      buttonBg.fill({ color: 0x004488, alpha: 0.9 });
-      buttonBg.stroke({ color: 0x00ffff, width: 1 });
-      buttonContainer.addChild(buttonBg);
-
-      // Button text
-      const buttonText = new Text({
-        text: 'Поговорить с губернатором',
+    if (this.onLand) {
+      const land = new Text({
+        text: "[Приземлиться]",
         style: {
-          fontFamily: 'Courier New',
-          fontSize: 11,
-          fill: 0xffffff,
+          fontFamily: "Courier New",
+          fontSize: 12,
+          fill: 0x00ff00,
+          fontWeight: "bold",
         },
       });
-      buttonText.x = 10;
-      buttonText.y = 8;
-      buttonContainer.addChild(buttonText);
-
-      // Make button interactive
-      buttonContainer.eventMode = 'static';
-      buttonContainer.cursor = 'pointer';
-      buttonContainer.on('pointerdown', (event) => {
-        event.stopPropagation(); // Prevent stage from also handling this click
-        if (this.onTalkToGovernor) {
-          this.onTalkToGovernor();
-        }
+      land.x = 10;
+      land.y = 110;
+      land.eventMode = "static";
+      land.cursor = "pointer";
+      land.on("pointerdown", (e) => {
+        e.stopPropagation();
+        this.onLand?.();
       });
-
-      // Hover effects
-      buttonContainer.on('pointerover', () => {
-        buttonBg.clear();
-        buttonBg.rect(0, 0, 200, 30);
-        buttonBg.fill({ color: 0x0066aa, alpha: 0.9 });
-        buttonBg.stroke({ color: 0x00ffff, width: 2 });
+      land.on("pointerover", () => {
+        land.alpha = 0.7;
       });
-      buttonContainer.on('pointerout', () => {
-        buttonBg.clear();
-        buttonBg.rect(0, 0, 200, 30);
-        buttonBg.fill({ color: 0x004488, alpha: 0.9 });
-        buttonBg.stroke({ color: 0x00ffff, width: 1 });
+      land.on("pointerout", () => {
+        land.alpha = 1;
       });
-
-      this.container.addChild(buttonContainer);
+      this.container.addChild(land);
+    } else {
+      const hint = new Text({
+        text: "Подлетите ближе,\nчтобы приземлиться",
+        style: { fontFamily: "Courier New", fontSize: 10, fill: 0x888888 },
+      });
+      hint.x = 10;
+      hint.y = 110;
+      hint.eventMode = "none";
+      this.container.addChild(hint);
     }
   }
 
-  /**
-   * Get Russian translation for planet type
-   */
-  private getPlanetTypeRussian(type: string): string {
-    const translations: Record<string, string> = {
-      TERRESTRIAL: 'Земной',
-      GAS_GIANT: 'Газовый гигант',
-      ICE: 'Ледяной',
-      VOLCANIC: 'Вулканический',
-      INDUSTRIAL: 'Промышленный',
-      HABITAT: 'Обитаемый',
+  private getType(type: string): string {
+    const t: Record<string, string> = {
+      TERRESTRIAL: "Земной",
+      GAS_GIANT: "Газовый гигант",
+      ICE: "Ледяной",
+      VOLCANIC: "Вулканический",
+      INDUSTRIAL: "Промышленный",
+      HABITAT: "Обитаемый",
     };
-    return translations[type] ?? type;
+    return t[type] ?? type;
   }
 
-  /**
-   * Clean up resources
-   */
   destroy(): void {
-    // Remove from parent if attached
-    if (this.container.parent) {
+    if (this.container.parent)
       this.container.parent.removeChild(this.container);
-    }
-
-    // Destroy all children and container
     this.container.destroy({ children: true });
   }
 }

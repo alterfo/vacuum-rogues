@@ -1,6 +1,6 @@
-import { Container, Graphics, Text } from 'pixi.js';
-import type { Planet } from '@/domain/Planet';
-import { logger } from '@/utils/logger';
+import { Container, Graphics, Text } from "pixi.js";
+import type { Planet } from "@/domain/Planet";
+import { logger } from "@/utils/logger";
 
 /**
  * Mini-map showing the current star system with planets and ship position
@@ -10,13 +10,16 @@ export class SystemMiniMap {
   public readonly container: Container;
   private readonly mapWidth: number = 180;
   private readonly mapHeight: number = 180;
-  private readonly mapScale: number = 0.05; // Scale factor for displaying orbits (adjusted for 5x orbital radii)
+  // Orbits are drawn from the minimap centre (90px), so the largest world
+  // orbit (~550px, see PlanetGenerator.ORBITAL_RADII) must map to <=~85px:
+  // 550 * 0.15 = 82.5px, leaving a small margin inside the 180px box.
+  private readonly mapScale: number = 0.15;
   private readonly graphics: Graphics;
 
   constructor(screenWidth: number, screenHeight: number) {
     this.container = new Container();
     // IMPORTANT: Set to 'none' so mini-map doesn't block clicks on space
-    this.container.eventMode = 'none';
+    this.container.eventMode = "none";
 
     this.graphics = new Graphics();
     this.container.addChild(this.graphics);
@@ -28,7 +31,9 @@ export class SystemMiniMap {
     // Draw background
     this.drawBackground();
 
-    logger.info(`📡 Minimap created at position (${this.container.x}, ${this.container.y})`);
+    logger.info(
+      `📡 Minimap created at position (${this.container.x}, ${this.container.y})`,
+    );
   }
 
   /**
@@ -42,12 +47,12 @@ export class SystemMiniMap {
 
     // Add title
     const title = new Text({
-      text: 'СИСТЕМА',
+      text: "СИСТЕМА",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 10,
         fill: 0x00ffff,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     title.x = 5;
@@ -65,7 +70,13 @@ export class SystemMiniMap {
    * @param centerX Star center X position
    * @param centerY Star center Y position
    */
-  update(planets: Planet[], shipX: number, shipY: number, centerX: number, centerY: number): void {
+  update(
+    planets: Planet[],
+    shipX: number,
+    shipY: number,
+    centerX: number,
+    centerY: number,
+  ): void {
     this.graphics.clear();
 
     const mapCenterX = this.mapWidth / 2;
@@ -125,7 +136,9 @@ export class SystemMiniMap {
 
     // Log every 60 frames (approximately once per second at 60fps)
     if (Math.random() < 0.016) {
-      logger.debug(`📡 Minimap update: ${planetSprites.length} planets, ship at (${shipX.toFixed(0)}, ${shipY.toFixed(0)})`);
+      logger.debug(
+        `📡 Minimap update: ${planetSprites.length} planets, ship at (${shipX.toFixed(0)}, ${shipY.toFixed(0)})`,
+      );
     }
 
     const mapCenterX = this.mapWidth / 2;
@@ -189,17 +202,17 @@ export class SystemMiniMap {
    */
   private getPlanetColor(type: string): number {
     switch (type) {
-      case 'TERRESTRIAL':
+      case "TERRESTRIAL":
         return 0x8b7355;
-      case 'GAS_GIANT':
+      case "GAS_GIANT":
         return 0xffa500;
-      case 'ICE':
+      case "ICE":
         return 0xadd8e6;
-      case 'VOLCANIC':
+      case "VOLCANIC":
         return 0xff4500;
-      case 'INDUSTRIAL':
+      case "INDUSTRIAL":
         return 0x808080;
-      case 'HABITAT':
+      case "HABITAT":
         return 0x00aa44;
       default:
         return 0x8b7355;

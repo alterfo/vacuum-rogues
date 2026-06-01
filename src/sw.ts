@@ -47,11 +47,16 @@ sw.addEventListener('message', (event) => {
   }
 });
 
-// Fetch: cache-first for assets, stale-while-revalidate for models, offline fallback
+// Fetch: stale-while-revalidate for HTML/JS/CSS, cache-first for immutable assets, offline fallback
 sw.addEventListener('fetch', (event) => {
   const e = event as FetchEvent;
   const request = e.request;
   const url = new URL(request.url);
+
+  // Skip non-GET requests
+  if (request.method !== 'GET') {
+    return;
+  }
 
   // Stale-while-revalidate for ONNX and WASM files
   if (url.pathname.endsWith('.onnx') || url.pathname.endsWith('.wasm')) {
@@ -83,29 +88,74 @@ sw.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for static assets with offline fallback
+  // For HTML navigation requests: network-first to always get latest app shell
+  if (request.mode === 'navigate' || url.pathname.endsWith('.html')) {
+    e.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => {
+          // Offline: fallback to cache
+          return caches.match(request).then((cached) => {
+            if (cached) return cached;
+            return caches.match('/offline-fallback.html').then((fallback) => {
+              return fallback || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+            });
+          });
+        }),
+    );
+    return;
+  }
+
+  // For JS/CSS: stale-while-revalidate (fast load + background update)
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
+    e.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(request);
+
+        const networkPromise = fetch(request).then((response) => {
+          if (response.ok) {
+            cache.put(request, response.clone());
+          }
+          return response;
+        }).catch(() => {
+          // Network failed
+          if (cached) return cached;
+          return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+        });
+
+        if (cached) {
+          // Return cached immediately, update in background
+          networkPromise.catch(() => {});
+          return cached;
+        }
+
+        // Nothing cached, wait for network
+        return networkPromise;
+      }),
+    );
+    return;
+  }
+
+  // Cache-first for all other static assets (images, fonts, etc.)
   e.respondWith(
     caches.match(request).then((cached) => {
       if (cached) {
         return cached;
       }
       
-      // Not in cache, try to fetch
       return fetch(request).then((response) => {
-        // Cache successful responses for future
-        if (response.status === 200 && request.method === 'GET') {
+        if (response.status === 200) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         }
         return response;
       }).catch(() => {
-        // Offline and not cached - serve offline fallback for HTML requests
-        if (request.mode === 'navigate') {
-          return caches.match('/offline-fallback.html').then((fallback) => {
-            return fallback || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
-          });
-        }
-        // For other requests, return a network error
         return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
       });
     }),
