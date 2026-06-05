@@ -81,6 +81,13 @@ export class PlanetScene extends GameScene {
     planetGfx.fill({ color: this.planet.isHabitable ? 0x22aa44 : 0x888888 });
     this.renderer.gameLayer.addChild(planetGfx);
 
+    // Proportional layout so the screen doesn't look cramped at 768px height.
+    const nameY = h * 0.38;
+    const infoY = h * 0.46;
+    const statY = h * 0.535;
+    const btnStartY = h * 0.58;
+    const btnStep = Math.max(34, h * 0.048);
+
     const title = new Text({
       text: this.planet.name,
       style: {
@@ -93,38 +100,25 @@ export class PlanetScene extends GameScene {
     });
     title.anchor.set(0.5);
     title.x = w / 2;
-    title.y = h / 3 + 100;
+    title.y = nameY;
+    title.eventMode = "none";
     ui.addChild(title);
 
-    const sub = new Text({
-      text: `${this.getType(this.planet.type)} • ${this.planet.isHabitable ? "Обитаемая" : "Необитаемая"}`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0xaaaaaa,
-        align: "center",
-      },
-    });
-    sub.anchor.set(0.5);
-    sub.x = w / 2;
-    sub.y = h / 3 + 140;
-    ui.addChild(sub);
+    // Planet info panel (US-060): faction, econ type, reputation, market goods.
+    this.addInfoPanel(ui, w, infoY);
 
-    // Hangar stat bar above the button list.
+    // Hangar stat bar: hull / fuel / credits in one compact line.
     if (this.gameEngine?.player) {
       const ship = this.gameEngine.player.ship;
       const hullPct = Math.round((ship.hullHP / ship.maxHull) * 100);
       const fuelPct = Math.round(
         (ship.energy / Math.max(1, ship.maxEnergy)) * 100,
       );
-      const hullBar =
-        "█".repeat(Math.round(hullPct / 10)) +
-        "░".repeat(10 - Math.round(hullPct / 10));
-      const fuelBar =
-        "█".repeat(Math.round(fuelPct / 10)) +
-        "░".repeat(10 - Math.round(fuelPct / 10));
+      const bars = (pct: number): string =>
+        "█".repeat(Math.round(pct / 10)) +
+        "░".repeat(10 - Math.round(pct / 10));
       const statLine = new Text({
-        text: `Корпус: ${hullBar} ${hullPct}%   Топливо: ${fuelBar} ${fuelPct}%   ${this.gameEngine.player.credits.toLocaleString("ru")} ₡`,
+        text: `Корпус: ${bars(hullPct)} ${hullPct}%   Топливо: ${bars(fuelPct)} ${fuelPct}%   ${this.gameEngine.player.credits.toLocaleString("ru")} ₡`,
         style: {
           fontFamily: "Courier New",
           fontSize: 13,
@@ -134,7 +128,7 @@ export class PlanetScene extends GameScene {
       });
       statLine.anchor.set(0.5);
       statLine.x = w / 2;
-      statLine.y = h / 2 + 10;
+      statLine.y = statY;
       statLine.eventMode = "none";
       ui.addChild(statLine);
     }
@@ -162,7 +156,7 @@ export class PlanetScene extends GameScene {
     ];
 
     const visible = visiblePlanetServices(this.planet.isHabitable, buttons);
-    let y = h / 2 + 40;
+    let y = btnStartY;
     for (const b of visible) {
       const t = new Text({
         text: `[ ${b.label} ]`,
@@ -186,10 +180,157 @@ export class PlanetScene extends GameScene {
         t.alpha = 1;
       });
       ui.addChild(t);
-      y += 45;
+      y += btnStep;
     }
 
     this.renderer.uiLayer.addChild(ui);
+  }
+
+  /**
+   * Planet information card (US-060): faction, economic type, player reputation
+   * with the controlling faction, and a short market goods summary.
+   */
+  private addInfoPanel(ui: Container, w: number, topY: number): void {
+    if (!this.planet || !this.gameEngine) return;
+
+    const system = this.gameEngine.galaxy?.systems.find((s) =>
+      s.planets.some((p) => p.id === this.planet!.id),
+    );
+
+    const FACTION_RU: Record<string, string> = {
+      OUTLANDERS: "Окраинники",
+      BASTIONS: "Бастион",
+      SYNDICATE: "Синдикат",
+      PARADOXES: "Парадокс",
+      PROGRESSORS: "Прогрессоры",
+      INDEPENDENT: "Независимая",
+      OVERMIND: "Сверхразум",
+    };
+
+    const FACTION_COLOR: Record<string, number> = {
+      OUTLANDERS: 0xff6600,
+      BASTIONS: 0xcc2222,
+      SYNDICATE: 0x22cc22,
+      PARADOXES: 0xaa22cc,
+      PROGRESSORS: 0x2266ff,
+      INDEPENDENT: 0x999999,
+      OVERMIND: 0xff22cc,
+    };
+
+    const RESOURCE_RU: Record<string, string> = {
+      FUEL: "Топливо",
+      METALS: "Металлы",
+      CRYSTALS: "Кристаллы",
+      ORGANICS: "Органика",
+      ARTIFACTS: "Артефакты",
+      WEAPONS: "Оружие",
+      MEDICINE: "Медикаменты",
+      ELECTRONICS: "Электроника",
+      LUXURY: "Роскошь",
+      DATA_CORES: "Ядра данных",
+    };
+
+    const faction = system?.ownerFaction ?? "INDEPENDENT";
+    const factionName = FACTION_RU[faction] ?? faction;
+    const factionColor = FACTION_COLOR[faction] ?? 0x999999;
+
+    const rep = this.gameEngine.player?.reputation[faction] ?? 0;
+    const repLabel =
+      rep >= 50
+        ? "Союзник"
+        : rep >= 20
+          ? "Дружелюбный"
+          : rep >= -20
+            ? "Нейтральный"
+            : rep >= -50
+              ? "Враждебный"
+              : "Война";
+    const repColor =
+      rep >= 50
+        ? 0x00ff88
+        : rep >= 20
+          ? 0x88ff88
+          : rep >= -20
+            ? 0xaaaaaa
+            : rep >= -50
+              ? 0xff8888
+              : 0xff2222;
+
+    const goods = this.planet.market.availableResources
+      .slice(0, 4)
+      .map((r) => RESOURCE_RU[r as string] ?? String(r))
+      .join(", ");
+
+    // Line 1: type • faction (coloured)
+    const typeText = new Text({
+      text: `${this.getType(this.planet.type)} • `,
+      style: { fontFamily: "Courier New", fontSize: 13, fill: 0x889aaa },
+    });
+    typeText.eventMode = "none";
+    typeText.anchor.set(0.5, 0);
+    typeText.x = w / 2 - 40;
+    typeText.y = topY;
+    ui.addChild(typeText);
+
+    const factionText = new Text({
+      text: factionName,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 13,
+        fill: factionColor,
+        fontWeight: "bold",
+      },
+    });
+    factionText.eventMode = "none";
+    factionText.anchor.set(0, 0);
+    factionText.x = w / 2 - 40 + typeText.width;
+    factionText.y = topY;
+    ui.addChild(factionText);
+
+    // Line 2: reputation status
+    const repLine = new Text({
+      text: `Отношение: `,
+      style: { fontFamily: "Courier New", fontSize: 13, fill: 0x889aaa },
+    });
+    repLine.eventMode = "none";
+    repLine.anchor.set(0.5, 0);
+    repLine.x = w / 2 - 30;
+    repLine.y = topY + 20;
+    ui.addChild(repLine);
+
+    const repText = new Text({
+      text: `${repLabel} (${rep >= 0 ? "+" : ""}${rep})`,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 13,
+        fill: repColor,
+        fontWeight: "bold",
+      },
+    });
+    repText.eventMode = "none";
+    repText.anchor.set(0, 0);
+    repText.x = w / 2 - 30 + repLine.width;
+    repText.y = topY + 20;
+    ui.addChild(repText);
+
+    // Line 3: market goods (or inhabitation status)
+    const goodsLine = this.planet.isHabitable
+      ? `Рынок: ${goods || "нет данных"}`
+      : `Дроны: ${this.planet.drones}  •  Необитаемая`;
+    const goodsText = new Text({
+      text: goodsLine,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 12,
+        fill: 0x6688aa,
+        align: "center",
+      },
+    });
+    goodsText.eventMode = "none";
+    goodsText.anchor.set(0.5, 0);
+    goodsText.x = w / 2;
+    goodsText.y = topY + 40;
+    ui.addChild(goodsText);
   }
 
   private async openGovernor(): Promise<void> {
