@@ -95,6 +95,7 @@ export enum SceneType {
   PLANET = "PLANET",
   TRADE = "TRADE",
   EQUIPMENT_SHOP = "EQUIPMENT_SHOP",
+  INFO_CENTER = "INFO_CENTER",
 }
 
 export enum ProfileLevel {

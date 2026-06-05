@@ -141,6 +141,11 @@ export class PlanetScene extends GameScene {
       },
       { label: "Задания", color: 0xffee66, action: () => this.openJobBoard() },
       {
+        label: "Инфоцентр",
+        color: 0x66bbff,
+        action: () => this.openInfoCenter(),
+      },
+      {
         label: "Магазин снаряжения",
         color: 0x44ddff,
         action: () => this.openEquipmentShop(),
@@ -411,6 +416,14 @@ export class PlanetScene extends GameScene {
       `Корпус восстановлен (+${missing}) за ${cost} кр.`,
       0x00ff88,
     );
+  }
+
+  private async openInfoCenter(): Promise<void> {
+    if (!this.gameEngine || !this.planet) return;
+    await this.gameEngine.transitionTo(SceneType.INFO_CENTER, {
+      gameEngine: this.gameEngine,
+      planet: this.planet,
+    });
   }
 
   private async openEquipmentShop(): Promise<void> {
