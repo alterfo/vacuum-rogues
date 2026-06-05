@@ -3,22 +3,92 @@ import {
   Graphics,
   Text,
   Container,
+  Sprite,
+  TilingSprite,
   FederatedPointerEvent,
   BlurFilter,
 } from "pixi.js";
+import { buildSphereMesh, type SphereMesh } from "./sphereMesh";
 import type { GameEngine } from "@/systems/GameEngine";
-import { SceneType } from "@/types";
+import { SceneType, StarType, NpcState, NpcRole } from "@/types";
+import { pickVariant, tex } from "./textures";
+import { installGameCursors, setCanvasCursor } from "./cursor";
 import { PlanetSprite } from "./PlanetSprite";
 import { PlanetInfoPanel } from "./PlanetInfoPanel";
 import { SystemMiniMap } from "./SystemMiniMap";
 import { QuestJournalUI } from "./QuestJournalUI";
+import { NpcShipSprite } from "./NpcShipSprite";
+import type { SystemBounds } from "./NpcShipSprite";
+import { NpcContactPanel } from "./NpcContactPanel";
 import type { Planet } from "@/domain/Planet";
+import type { NpcShip } from "@/domain/NpcShip";
+import { npcsPresentInSystem } from "@/systems/npc/NpcSimulator";
 import { logger } from "@/utils/logger";
+import { formatGameDate } from "@/utils/gameCalendar";
+import { SeededRNG } from "@/utils/seededRNG";
+import {
+  dayTickMarks,
+  avoidStarPath,
+  hashToAngle,
+} from "@/utils/flightGeometry";
+
+interface NebulaLayer {
+  container: Container;
+  driftX: number;
+  driftY: number;
+  pulseAmp: number;
+  pulseSpeed: number;
+  phase: number;
+  baseAlpha: number;
+}
+
+interface TwinkleStar {
+  graphics: Graphics;
+  baseAlpha: number;
+  phase: number;
+  speed: number;
+}
+
+interface WarpArrivalEffect {
+  container: Container;
+  rings: Graphics[];
+  flash: Graphics;
+  glow: Graphics;
+  elapsed: number;
+  duration: number;
+}
 
 interface StarLayer {
   container: Container;
   stars: { x: number; y: number; size: number; alpha: number; speed: number }[];
   speed: number;
+}
+
+interface DustMote {
+  graphics: Graphics;
+  x: number;
+  y: number;
+  depth: number; // 0..1 — nearer motes streak faster (parallax)
+}
+
+interface AsteroidMote {
+  graphics: Graphics;
+  x: number;
+  y: number;
+  vx: number; // px/ms screen drift
+  vy: number;
+  spin: number; // rad/ms
+  comet: boolean; // draw a bright tail
+}
+
+interface SwarmLayer {
+  container: Container;
+  driftX: number;
+  driftY: number;
+  pulseSpeed: number;
+  pulseAmp: number;
+  phase: number;
+  baseAlpha: number;
 }
 
 /**
@@ -34,11 +104,23 @@ class ShipPhysics {
 
   private targetX: number;
   private targetY: number;
+  // Remaining waypoints of a curved path (e.g. around the star). The ship flows
+  // through them without stopping — the next waypoint is taken before arrival so
+  // speed is never zeroed mid-route (US-070: smooth motion around the sun).
+  private path: { x: number; y: number }[] = [];
   private readonly maxSpeed: number;
-  private readonly acceleration: number = 0.001; // pixels/ms² - speed increase per ms
-  private readonly deceleration: number = 0.0015; // pixels/ms² - speed decrease per ms
+  // Gentle accel/decel for a physical feel. Deceleration is tuned so the ship
+  // eases to a stop over roughly DISTANCE_PER_DAY (≈500px) at cruise — i.e. the
+  // final leg of a route is slowed to take about a day, even when it's short
+  // (US-070: tie movement to physics + "last mile takes a day"). Only the final
+  // leg decelerates; intermediate waypoints are switched at speed.
+  private readonly acceleration: number = 0.0009; // pixels/ms²
+  private readonly deceleration: number = 0.00025; // pixels/ms²
   private readonly rotationSpeed: number; // radians/ms
-  private readonly STOP_THRESHOLD: number = 10; // pixels - distance to consider "arrived"
+  private readonly STOP_THRESHOLD: number = 8; // pixels - distance to consider "arrived"
+  // Switch to the next queued waypoint once this close, so the ship rounds the
+  // corner at speed instead of decelerating to a stop at each one.
+  private readonly WAYPOINT_SWITCH: number = 48; // pixels
 
   constructor(initialX: number, initialY: number, maxSpeed?: number) {
     this.shipX = initialX;
@@ -52,9 +134,45 @@ class ShipPhysics {
   }
 
   setTarget(x: number, y: number): void {
+    this.path = [];
     this.targetX = x;
     this.targetY = y;
     this.isMoving = true;
+  }
+
+  /**
+   * Fly through an ordered list of waypoints (the last one is the destination).
+   * Intermediate waypoints are switched before arrival (see WAYPOINT_SWITCH) so
+   * the ship keeps its speed around curves; only the final point decelerates.
+   */
+  setPath(points: { x: number; y: number }[]): void {
+    if (points.length === 0) return;
+    this.path = points.slice(1);
+    const first = points[0];
+    this.targetX = first.x;
+    this.targetY = first.y;
+    this.isMoving = true;
+  }
+
+  /**
+   * Instantly place the ship at (x,y) and park it there. Unlike setting shipX/Y
+   * directly, this also resets the target so update() — which always eases
+   * toward the target when it is far — doesn't immediately fly the ship back to
+   * its old position. Used for take-off/respawn relocation.
+   */
+  teleport(x: number, y: number): void {
+    this.path = [];
+    this.shipX = x;
+    this.shipY = y;
+    this.targetX = x;
+    this.targetY = y;
+    this.currentSpeed = 0;
+    this.isMoving = false;
+  }
+
+  /** Waypoints still queued ahead of the current target. */
+  hasPath(): boolean {
+    return this.path.length > 0;
   }
 
   getDistanceToTarget(): number {
@@ -71,11 +189,28 @@ class ShipPhysics {
     return this.targetY;
   }
 
+  /** Current speed as a fraction [0..1] of max speed (for camera lead, FX). */
+  getSpeedFraction(): number {
+    return this.maxSpeed > 0 ? this.currentSpeed / this.maxSpeed : 0;
+  }
+
   update(deltaTime: number): void {
     // Cap deltaTime to prevent physics explosion on lag spikes
     const dt = Math.min(deltaTime, 100);
 
-    const distance = this.getDistanceToTarget();
+    let distance = this.getDistanceToTarget();
+
+    // Flow through queued waypoints: switch to the next one before reaching the
+    // current target so the ship keeps its speed around the curve (no stop/start
+    // stutter at each star-avoidance point). The final waypoint is handled by the
+    // normal arrival/deceleration logic below.
+    while (this.path.length > 0 && distance <= this.WAYPOINT_SWITCH) {
+      const next = this.path.shift();
+      if (!next) break;
+      this.targetX = next.x;
+      this.targetY = next.y;
+      distance = this.getDistanceToTarget();
+    }
 
     // Check if arrived at target
     if (distance <= this.STOP_THRESHOLD) {
@@ -114,26 +249,26 @@ class ShipPhysics {
     // Only accelerate if ship is reasonably aligned with target (within 60°)
     const isAligned = Math.abs(angleDiff) < Math.PI / 3;
 
-    // Calculate stopping distance: v² / (2a)
+    // Only the final leg (no more queued waypoints) decelerates to a stop;
+    // intermediate waypoints are flown through at speed (smooth route — they are
+    // switched at WAYPOINT_SWITCH above). This eases the "last mile" over ≈a day.
+    const finalLeg = this.path.length === 0;
     const stoppingDistance =
       (this.currentSpeed * this.currentSpeed) / (2 * this.deceleration);
 
-    // Speed update: accelerate if far from target and aligned, decelerate when approaching
-    if (
-      distance > stoppingDistance &&
-      this.currentSpeed < this.maxSpeed &&
-      isAligned
-    ) {
-      // Acceleration phase - only when pointing at target
-      this.currentSpeed = Math.min(
-        this.maxSpeed,
-        this.currentSpeed + this.acceleration * dt,
-      );
-    } else if (distance <= stoppingDistance && this.currentSpeed > 0) {
-      // Deceleration phase
+    // Speed update: accelerate while far / on intermediate legs; decelerate only
+    // when approaching the final destination.
+    if (finalLeg && distance <= stoppingDistance && this.currentSpeed > 0) {
+      // Deceleration phase (final approach) — eases over the last ~day's distance.
       this.currentSpeed = Math.max(
         0,
         this.currentSpeed - this.deceleration * dt,
+      );
+    } else if (this.currentSpeed < this.maxSpeed && isAligned) {
+      // Acceleration / cruise phase — only when pointing at target.
+      this.currentSpeed = Math.min(
+        this.maxSpeed,
+        this.currentSpeed + this.acceleration * dt,
       );
     } else if (!isAligned && this.currentSpeed > this.maxSpeed * 0.3) {
       // Slow down if not aligned and going too fast
@@ -155,9 +290,31 @@ export class SpaceFlightScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private shipContainer: Container | null = null;
   private shipGraphics: Graphics | null = null;
-  private backgroundContainer: Container | null = null; // All background elements (blurred)
+  // Player-ship art (if available); falls back to the procedural triangle.
+  private shipSprite: Sprite | null = null;
+  // Heading 0 points +X (east); the ship art faces "up" (nose at the top of the
+  // image), so the sprite is pre-rotated +90° (clockwise) to align art-forward
+  // with the heading.
+  private readonly SHIP_SPRITE_ROTATION = Math.PI / 2;
+  private backgroundContainer: Container | null = null; // Nebula clouds (world-space, blurred)
+  // Screen-fixed deep-space backdrop (crisp far stars + twinkle), sits behind
+  // the world so panning never reveals an edge. Added to renderer.stage.
+  private skyContainer: Container | null = null;
   private starLayers: StarLayer[] = [];
   private nebulaeContainer: Container | null = null;
+  private nebulaLayers: NebulaLayer[] = []; // Animated nebula clouds
+  private twinkleStars: TwinkleStar[] = []; // Bright "hero" stars that pulse
+  private twinkleContainer: Container | null = null; // parallaxed with the near layer
+  private swarmLayers: SwarmLayer[] = []; // Glowing swarms drifting in the nebula
+  // Foreground dust motes (screen-fixed) that streak past with ship velocity —
+  // the main sense-of-speed cue. Added to uiLayer (above world, below HUD).
+  private dustContainer: Container | null = null;
+  private dustMotes: DustMote[] = [];
+  // Occasional foreground asteroids/comets drifting across the view (US-070 #1).
+  private asteroidContainer: Container | null = null;
+  private asteroids: AsteroidMote[] = [];
+  private warpEffect: WarpArrivalEffect | null = null; // Warp-exit flash/rings
+  private bgElapsed = 0; // Animation clock for background (ms)
   private shipPhysics: ShipPhysics | null = null;
   private readonly SHIP_SIZE = 20;
   private uiContainer: Container | null = null;
@@ -168,24 +325,100 @@ export class SpaceFlightScene extends GameScene {
   private starCenterX: number = 0;
   private starCenterY: number = 0;
   private starGraphics: Graphics | null = null;
+  private starSurface: Container | null = null; // rotating star surface
+  // Equirect sun map scrolled under a circular mask for real axial rotation
+  // (US-070 #4), plus a pulsing flare overlay for occasional "всполохи".
+  private starTiling: TilingSprite | null = null;
+  private starFlare: Graphics | null = null;
+  // Preferred sun rendering: an equirect map on a hemisphere mesh (see
+  // sphereMesh.ts) so it really turns rather than scrolling flat.
+  private sunSphere: SphereMesh | null = null;
+  private readonly STAR_RADIUS = 170; // big, foreground sun (crisp)
+  // Routes bow around the star outside its visible corona (which reaches
+  // ~STAR_RADIUS*2 = 340px), so the path clearly clears the sun rather than
+  // grazing its glow.
+  private readonly STAR_AVOID_RADIUS = 390;
   private orbitGraphics: Graphics | null = null;
   private systemMiniMap: SystemMiniMap | null = null;
+
+  // NPC ships present in the player's system (Feature 8, slice 2)
+  private npcSprites: NpcShipSprite[] = [];
+  private npcContactPanel: NpcContactPanel | null = null;
+  private contactNpcId: string | null = null;
+  // When set, the ship auto-follows this NPC (used by "Атаковать"): on each
+  // arrival it re-routes to the target's current position (auto-follow).
+  private followNpcId: string | null = null;
+  // Transient on-screen feedback (toast), and its auto-clear timer.
+  private toast: Text | null = null;
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
+  // Latches the low-hull auto-stop so the warning fires once per descent below
+  // the threshold, not every frame.
+  private lowHullStopped = false;
+
+  // Turn control (Play/Pause). The turn "runs" (ship flies, NPCs/planets move,
+  // combat resolves) while isTurnRunning; Pause ends it at the next day segment.
+  private isTurnRunning = false;
+  private pauseRequested = false;
+  private playPauseButton: Text | null = null;
+  // Auto-attack combat tuning.
+  private readonly WEAPON_RANGE = 240; // px the ship must close to before firing
+  private readonly PLAYER_DPS = 26; // player hull damage per second
+  private readonly NPC_DPS_SCALE = 0.6; // scales NpcShip.damage into per-second
+  private readonly NPC_LOOT = 200; // credits gained for a kill
+  private combatToastAt = 0; // throttles the combat HP toast
+  // System geometry (EPIC-004 grand scale): NPCs wander in [inner, outer];
+  // hyperjumps occur only on the boundary edge (рубеж гиперпрыжка). Matches
+  // PlanetGenerator.ORBITAL_RADII (600..2500); keep in sync (CLAUDE.md Rule 5).
+  private readonly SYSTEM_INNER_RADIUS = 600;
+  private readonly SYSTEM_OUTER_RADIUS = 2500;
+  private readonly SYSTEM_BOUNDARY_RADIUS = 2800;
+  // Ship scanner radius (world px) — drawn as the green "radar" ring on the
+  // minimap, centred on the ship like the original game.
+  private readonly SCANNER_RANGE = 1200;
 
   // Quest Journal UI
   private questJournalUI: QuestJournalUI | null = null;
 
   // Target indicator
   private targetIndicator: Graphics | null = null;
+  private combatFxGraphics: Graphics | null = null;
 
   // Time tracking for day counter
+  // Timestamp (performance.now) when the scene finished initializing. A click
+  // that lands within a short window of entering the scene is the residual
+  // pointer event from the previous scene's button (e.g. the race-selection
+  // confirm), not a deliberate navigation click — it is ignored (US-070 #1).
+  private sceneReadyAt = 0;
+  private readonly INPUT_GRACE_MS = 350;
+
   private distanceTraveled: number = 0;
   private readonly DISTANCE_PER_DAY: number = 500; // pixels traveled = 1 day
+  // Course-less "wait" turn (US-070 #5): fractional day accrued while the ship
+  // holds position, and how long one waited day takes in real time.
+  private waitDayAccum: number = 0;
+  private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070)
   private readonly LANDING_RANGE: number = 60; // px: how close the ship must be to a planet to land
   private dayCounterText: Text | null = null;
 
   // Two-step movement: plan route, then execute
   private plannedRoute: { x: number; y: number } | null = null;
+  // If the active route targets a planet, its id — the ship auto-lands on arrival.
+  private routeTargetPlanetId: string | null = null;
+  // Full curved path (around the star) kept for drawing the route line; the
+  // ship flows through it via ShipPhysics.setPath (no scene-side waypoint queue).
+  private routePath: { x: number; y: number }[] = [];
   private routeLineGraphics: Graphics | null = null;
+
+  // Pending hyperjump (US-023): set when the player chose a warp target on the
+  // star map. The ship auto-routes to the system edge in `exitVector` direction
+  // and the jump fires only on reaching the boundary (see performWarp).
+  private pendingWarp: {
+    targetSystemId: string;
+    fuelCost: number;
+    exitVector: { x: number; y: number };
+  } | null = null;
+  // Guards against firing the jump more than once mid-transition.
+  private warpInProgress = false;
 
   // Continuous input tracking
   private boundPointerDown: ((event: FederatedPointerEvent) => void) | null =
@@ -199,72 +432,180 @@ export class SpaceFlightScene extends GameScene {
   private cameraZoom: number = 1.0;
   private cameraPanX: number = 0;
   private cameraPanY: number = 0;
+  // Camera "look-ahead": while moving, the focus point leads the ship along its
+  // heading so the player sees what's coming. Smoothed for a calm feel.
+  private camLeadX: number = 0;
+  private camLeadY: number = 0;
   private isPanning: boolean = false;
   private lastPanX: number = 0;
   private lastPanY: number = 0;
-  private readonly MIN_ZOOM = 0.5;
+  // Lower min zoom so the player can pull back to survey the now much larger
+  // system (grand scale, EPIC-004).
+  private readonly MIN_ZOOM = 0.25;
   private readonly MAX_ZOOM = 2.0;
   private boundWheel: ((event: WheelEvent) => void) | null = null;
+  // Suppresses Chrome's middle-button "auto-scroll" (which otherwise fires
+  // wheel/scroll events and zooms the camera while the player pans). See bug:
+  // panning with the wheel button also zoomed the view.
+  private boundCanvasMouseDown: ((event: MouseEvent) => void) | null = null;
+  // Reposition the screen-edge-anchored HUD when the window/canvas resizes,
+  // otherwise the minimap and star-map button drift off-screen (bug: canvas
+  // exceeded the window, right/bottom UI hidden).
+  private boundResize: (() => void) | null = null;
+  private backButton: Text | null = null;
 
   // Debug display
   private cameraDebugText: Text | null = null;
 
   initialize(context?: object): void {
     const ctx = context as
-      | { gameEngine?: GameEngine; entryVector?: { x: number; y: number } }
+      | {
+          gameEngine?: GameEngine;
+          entryVector?: { x: number; y: number };
+          pendingWarp?: {
+            targetSystemId: string;
+            fuelCost: number;
+            exitVector: { x: number; y: number };
+          };
+          warpArrival?: boolean;
+          // Set when arriving from a planet take-off: the ship spawns next to
+          // that planet instead of at the system edge (see below).
+          fromPlanetId?: string;
+        }
       | undefined;
     this.gameEngine = ctx?.gameEngine ?? null;
+    this.pendingWarp = ctx?.pendingWarp ?? null;
 
     const centerX = this.renderer.app.screen.width / 2;
     const centerY = this.renderer.app.screen.height / 2;
 
+    // Ship enters at the system boundary (рубеж гиперпрыжка) from the warp
+    // direction. No viewport clamp: the camera follows the ship (centerCamera-
+    // OnShip), so it is always on-screen even though the system is larger than
+    // the viewport.
+    // For a pending hyperjump (US-023) the ship instead spawns near the system
+    // centre so the player sees it traverse out to the edge before jumping.
+    // For a pending hyperjump the ship starts from where it actually was in the
+    // system when the player opened the star map (US-070 #1). If that position
+    // isn't known (e.g. jumped straight from a fresh load), fall back to the
+    // inner side opposite the exit direction — still clear of the star, never on
+    // top of the sun. A normal (non-warp) entry comes in from the system edge.
+    const lastPos = this.gameEngine?.lastFlightShipPos ?? null;
+    if (this.gameEngine) this.gameEngine.lastFlightShipPos = null; // consume
     const entryVector = ctx?.entryVector ?? { x: 0, y: 1 };
-    const maxOrbit = 600;
-    const rawEntryX = centerX + entryVector.x * maxOrbit;
-    const rawEntryY = centerY + entryVector.y * maxOrbit;
-
-    // Clamp the entry point into the visible viewport so the player's ship is
-    // always on-screen on system entry. The camera starts at zoom 1 / pan 0 and
-    // does not follow the ship, so a maxOrbit that exceeds the viewport half-
-    // extent (e.g. 600px on a ~717px-tall canvas) would otherwise spawn the
-    // ship below the bottom edge, invisible until the player zooms/pans.
-    const screenW = this.renderer.app.screen.width;
-    const screenH = this.renderer.app.screen.height;
-    const entryMargin = this.SHIP_SIZE * 2;
-    const entryX = Math.max(
-      entryMargin,
-      Math.min(screenW - entryMargin, rawEntryX),
-    );
-    const entryY = Math.max(
-      entryMargin,
-      Math.min(screenH - entryMargin, rawEntryY),
-    );
-    const maxSpeed = this.gameEngine?.player?.ship.speed ?? undefined;
-    this.shipPhysics = new ShipPhysics(entryX, entryY, maxSpeed);
+    const entryX = this.pendingWarp
+      ? (lastPos?.x ??
+        centerX - this.pendingWarp.exitVector.x * this.SYSTEM_INNER_RADIUS)
+      : centerX + entryVector.x * this.SYSTEM_BOUNDARY_RADIUS;
+    const entryY = this.pendingWarp
+      ? (lastPos?.y ??
+        centerY - this.pendingWarp.exitVector.y * this.SYSTEM_INNER_RADIUS)
+      : centerY + entryVector.y * this.SYSTEM_BOUNDARY_RADIUS;
+    // Cruise so one day's distance (DISTANCE_PER_DAY) is covered in ~1 real
+    // second — "день = секунда" (US-070). A faster ship stat shortens it slightly.
+    const speedStat = this.gameEngine?.player?.ship.speed ?? 1;
+    const cruise =
+      (this.DISTANCE_PER_DAY / 1000) * Math.min(1.4, Math.max(0.8, speedStat));
+    this.shipPhysics = new ShipPhysics(entryX, entryY, cruise);
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
+
+    // Explicit z-ordering so interactive ships always sit (and hit-test) above
+    // the large planet discs and the star — planets render big, and without this
+    // a planet's interactive disc could swallow clicks meant for an NPC drifting
+    // over it (US-070 #6). zIndex tiers: background 0, star/planets default,
+    // NPCs Z_NPC, player ship Z_SHIP, decorative FX in between.
+    this.renderer.gameLayer.sortableChildren = true;
 
     // Store star center position
     this.starCenterX = centerX;
     this.starCenterY = centerY;
 
-    // Create blurred background container for all distant objects
+    // Screen-fixed deep-space backdrop (crisp far stars + twinkle), behind the
+    // whole world so panning/zooming never exposes a hard background edge.
+    this.skyContainer = new Container();
+    this.skyContainer.eventMode = "none";
+    this.renderer.stage.addChildAt(this.skyContainer, 0);
+
+    // World-space nebula clouds (blurred internally). Stars are deliberately NOT
+    // in here — they stay crisp for a deep-field look (per art direction).
     this.backgroundContainer = new Container();
-    this.backgroundContainer.filters = [new BlurFilter({ strength: 1.5 })];
     this.renderer.gameLayer.addChild(this.backgroundContainer);
 
-    this.createStarField();
-    this.createNebulae();
+    this.createNebulae(); // World-space clouds + glowing swarms
+    this.createStarField(); // Crisp far stars (screen-fixed)
+    this.createTwinkleStars(); // Bright pulsing hero stars (screen-fixed)
     this.createStar();
     this.createOrbits();
+    this.createSystemBoundary(); // Edge where hyperjumps happen
     this.createPlanets(); // Planets added to gameLayer directly (not blurred)
+    this.createNpcShips(); // NPC ships present in this system (Feature 8)
     this.createShip();
     this.createTargetIndicator();
+    this.createDust(); // Foreground streaking motes (screen-fixed, above world)
+    this.createAsteroids(); // Occasional foreground asteroids/comets (US-070 #1)
+    this.createVignette(); // Screen-fixed edge darkening (added before HUD)
     this.createUI();
 
-    // Initialize camera transform (sets initial state)
-    this.applyCameraTransform();
+    // Took off from a planet → spawn right next to it (just outside its orbit),
+    // not at the system edge. Planets are placed at a random orbital angle each
+    // time the scene loads, so we resolve the position after createPlanets().
+    if (ctx?.fromPlanetId && this.shipPhysics) {
+      const sprite = this.planetSprites.find(
+        (s) => s.planet.id === ctx.fromPlanetId,
+      );
+      if (sprite) {
+        const dx = sprite.screenX - this.starCenterX;
+        const dy = sprite.screenY - this.starCenterY;
+        const len = Math.hypot(dx, dy) || 1;
+        const spawnX = sprite.screenX + (dx / len) * 80; // 80px further out
+        const spawnY = sprite.screenY + (dy / len) * 80;
+        // teleport() also resets the physics target, so the ship parks here
+        // instead of flying back toward its initial (edge) spawn point.
+        this.shipPhysics.teleport(spawnX, spawnY);
+        if (this.shipContainer) {
+          this.shipContainer.x = spawnX;
+          this.shipContainer.y = spawnY;
+        }
+      }
+    }
+
+    // Center the camera on the ship at spawn (system is larger than the
+    // viewport; the camera follows the ship — see updateCamera).
+    this.centerCameraOnShip();
+
+    // Pending hyperjump: auto-route the ship to the system edge in the warp
+    // direction. The jump fires when it reaches the boundary (see updateShip →
+    // performWarp). Days advance during this flight like any other movement.
+    if (this.pendingWarp) {
+      const { exitVector } = this.pendingWarp;
+      const edgeX = centerX + exitVector.x * this.SYSTEM_BOUNDARY_RADIUS;
+      const edgeY = centerY + exitVector.y * this.SYSTEM_BOUNDARY_RADIUS;
+      // Pre-plan the route to the jump point, but DO NOT start moving — the
+      // player must press "Ход" (Play) to begin the flight to the edge
+      // (US-070 #11). The route preview (bowing around the star) is drawn so the
+      // course is visible immediately.
+      this.routePath = this.computeAvoidancePath(
+        this.shipPhysics.shipX,
+        this.shipPhysics.shipY,
+        edgeX,
+        edgeY,
+      );
+      this.plannedRoute = { x: edgeX, y: edgeY };
+      this.drawRouteLine();
+      logger.info(
+        `Pending warp: course to system edge plotted (${edgeX.toFixed(0)}, ${edgeY.toFixed(0)}) — press Ход to depart`,
+      );
+    }
+
+    // Just dropped out of hyperspace → play the warp-exit flourish at the ship.
+    if (ctx?.warpArrival && !this.pendingWarp) {
+      this.playWarpArrivalEffect(
+        this.shipPhysics.shipX,
+        this.shipPhysics.shipY,
+      );
+    }
 
     // Enable interactivity on stage for continuous pointer tracking
     this.boundPointerDown = this.onPointerDown.bind(this);
@@ -290,10 +631,31 @@ export class SpaceFlightScene extends GameScene {
     this.boundWheel = this.onWheel.bind(this);
     window.addEventListener("wheel", this.boundWheel, { passive: false });
 
+    // Reposition edge-anchored HUD on window resize (PixiJS auto-resizes the
+    // canvas via resizeTo, but UI placed at screen.width/height does not move).
+    this.boundResize = this.handleResize.bind(this);
+    window.addEventListener("resize", this.boundResize);
+
     // Prevent context menu on right click (used for panning)
     this.renderer.app.canvas.addEventListener("contextmenu", (e) =>
       e.preventDefault(),
     );
+
+    // Suppress middle-button auto-scroll so panning with the wheel button does
+    // not also zoom the camera.
+    this.boundCanvasMouseDown = (e: MouseEvent) => {
+      if (e.button === 1) e.preventDefault();
+    };
+    this.renderer.app.canvas.addEventListener(
+      "mousedown",
+      this.boundCanvasMouseDown,
+    );
+
+    // Context-sensitive game cursors (US-070 #5): default in space, reticle over
+    // hostiles, landing marker over planets.
+    installGameCursors(this.renderer.app);
+
+    this.sceneReadyAt = performance.now();
 
     logger.info(
       "SpaceFlightScene initialized with camera controls: pan (Shift+click), zoom (wheel)",
@@ -301,10 +663,22 @@ export class SpaceFlightScene extends GameScene {
   }
 
   update(deltaTime: number): void {
+    this.bgElapsed += deltaTime;
     this.updateStarField(deltaTime);
+    this.updateDust(deltaTime);
+    this.updateAsteroids(deltaTime);
+    this.updateStar(deltaTime);
+    this.updateNebulae();
+    this.updateSwarms();
+    this.updateTwinkleStars();
+    this.updateWarpEffect(deltaTime);
     this.updateShip(deltaTime);
+    this.updateCombat(deltaTime);
+    this.updateCamera();
+    this.updateNpcShips(deltaTime);
     this.updatePlanets(deltaTime);
     this.updateTargetIndicator();
+    this.updatePlayPauseButton();
   }
 
   destroy(): void {
@@ -335,6 +709,25 @@ export class SpaceFlightScene extends GameScene {
       this.boundWheel = null;
     }
 
+    // Remove the middle-button auto-scroll suppressor.
+    if (this.boundCanvasMouseDown) {
+      this.renderer.app.canvas.removeEventListener(
+        "mousedown",
+        this.boundCanvasMouseDown,
+      );
+      this.boundCanvasMouseDown = null;
+    }
+
+    // Remove the resize listener.
+    if (this.boundResize) {
+      window.removeEventListener("resize", this.boundResize);
+      this.boundResize = null;
+    }
+    this.backButton = null;
+    this.playPauseButton = null;
+    this.isTurnRunning = false;
+    this.pauseRequested = false;
+
     // Destroy planet sprites
     for (const sprite of this.planetSprites) {
       sprite.destroy();
@@ -345,6 +738,24 @@ export class SpaceFlightScene extends GameScene {
     if (this.planetInfoPanel) {
       this.planetInfoPanel.destroy();
       this.planetInfoPanel = null;
+    }
+
+    // Destroy NPC ship sprites and contact panel
+    for (const sprite of this.npcSprites) {
+      sprite.destroy();
+    }
+    this.npcSprites = [];
+    this.closeNpcContactPanel();
+    this.followNpcId = null;
+
+    // Clear any transient toast + its timer.
+    if (this.toastTimer) {
+      clearTimeout(this.toastTimer);
+      this.toastTimer = null;
+    }
+    if (this.toast) {
+      this.toast.destroy();
+      this.toast = null;
     }
 
     // Destroy quest journal
@@ -372,36 +783,87 @@ export class SpaceFlightScene extends GameScene {
       this.renderer.gameLayer.y = 0;
     }
 
+    // The screen-fixed sky lives on renderer.stage, which clearGameLayer/
+    // clearUILayer do NOT touch — remove and destroy it explicitly.
+    if (this.skyContainer) {
+      this.renderer.stage.removeChild(this.skyContainer);
+      this.skyContainer.destroy({ children: true });
+      this.skyContainer = null;
+    }
+
     this.starLayers = [];
+    this.nebulaLayers = [];
+    this.twinkleStars = [];
+    this.twinkleContainer = null;
+    this.swarmLayers = [];
+    this.dustMotes = [];
+    this.asteroids = [];
+    // Layers are torn down by clearGameLayer/clearUILayer on the next scene
+    // init; just drop our references (consistent with uiContainer handling).
+    this.warpEffect = null;
+    this.bgElapsed = 0;
     this.shipContainer = null;
     this.shipGraphics = null;
+    this.shipSprite = null;
     this.backgroundContainer = null;
+    this.dustContainer = null;
+    this.asteroidContainer = null;
     this.nebulaeContainer = null;
     this.uiContainer = null;
     this.cameraDebugText = null;
     this.dayCounterText = null;
     this.shipPhysics = null;
     this.starGraphics = null;
+    this.starSurface = null;
+    this.starTiling = null;
+    this.starFlare = null;
+    this.sunSphere = null;
     this.orbitGraphics = null;
+    this.targetIndicator = null;
+    this.combatFxGraphics = null;
     this.distanceTraveled = 0;
     this.clearPlannedRoute(); // Clean up route line
     logger.info("SpaceFlightScene destroyed");
   }
 
+  /**
+   * A BlurFilter with generous padding. PixiJS renders a filter into a texture
+   * sized to the object's bounds + padding; if the padding is too small the
+   * blur is clipped at the texture edge and shows as a hard rectangular band —
+   * especially once the gameLayer is scaled by the camera zoom. Padding ~2×
+   * the blur strength keeps the falloff inside the texture so no edge appears.
+   */
+  private paddedBlur(strength: number): BlurFilter {
+    const f = new BlurFilter({ strength });
+    // The Gaussian kernel reaches ~3σ; pad well beyond that (and beyond the
+    // worst-case camera zoom) so the blur's falloff always stays inside the
+    // filter texture. Too-tight padding shows as moving rectangular bands once
+    // the gameLayer is scaled or the filtered object rotates (US-070 streaks).
+    f.padding = Math.ceil(strength * 3 + 24);
+    // Pin the filter resolution to 1 so the intermediate texture doesn't balloon
+    // with camera zoom / device pixel ratio and get clamped to the max texture
+    // size — that clamp is what produced the hard bands across the canvas.
+    f.resolution = 1;
+    return f;
+  }
+
   private createStarField(): void {
-    if (!this.backgroundContainer) return;
+    if (!this.skyContainer) return;
 
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
-    // Simple star layers: count, parallax speed, size range, alpha range
+    // Depth layers: far/dim/slow → near/bright/fast (parallax). Denser and
+    // brighter than before for a "deep field" look like the reference shot.
     const layerConfigs = [
-      { count: 600, speed: 0.01, size: [0.3, 0.8], alpha: [0.2, 0.4] },
-      { count: 300, speed: 0.03, size: [0.6, 1.2], alpha: [0.3, 0.5] },
-      { count: 100, speed: 0.06, size: [1.0, 2.0], alpha: [0.4, 0.6] },
+      { count: 1500, speed: 0.008, size: [0.4, 1.1], alpha: [0.4, 0.7] },
+      { count: 750, speed: 0.025, size: [0.8, 1.7], alpha: [0.6, 0.9] },
+      { count: 280, speed: 0.055, size: [1.3, 2.6], alpha: [0.75, 1.0] },
     ];
 
-    const starColors = [0xffffff, 0xaaccff, 0xffffcc, 0xffddaa, 0xddaaff];
+    const starColors = [
+      0xffffff, 0xcfe0ff, 0xfff4d6, 0xffe2b0, 0xe6d0ff, 0xd6fff0,
+    ];
 
     for (const config of layerConfigs) {
       const container = new Container();
@@ -418,86 +880,744 @@ export class SpaceFlightScene extends GameScene {
         stars.push({ x, y, size, alpha, speed: config.speed });
 
         const graphics = new Graphics();
+        graphics.circle(x, y, size);
         graphics.fill({
           color: starColors[Math.floor(Math.random() * starColors.length)],
           alpha,
         });
-        graphics.circle(x, y, size);
         container.addChild(graphics);
       }
 
       this.starLayers.push({ container, stars, speed: config.speed });
-      this.backgroundContainer.addChild(container); // Add to blurred background
+      this.skyContainer.addChild(container); // Crisp, screen-fixed backdrop
     }
   }
 
+  /**
+   * A handful of bright "hero" stars with a 4-point glint that gently pulse
+   * (twinkle). Only these few are animated per-frame, so it stays cheap.
+   */
+  private createTwinkleStars(): void {
+    if (!this.skyContainer) return;
+
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+    const container = new Container();
+    const colors = [0xffffff, 0xfff0c0, 0xc0e0ff, 0xffd0f0];
+    const count = 32;
+
+    for (let i = 0; i < count; i++) {
+      const x = Math.random() * width * 2 - width * 0.5;
+      const y = Math.random() * height * 2 - height * 0.5;
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      const r = 1.4 + Math.random() * 1.8;
+      const baseAlpha = 0.6 + Math.random() * 0.4;
+
+      const g = new Graphics();
+      // soft halo
+      g.circle(0, 0, r * 4).fill({ color, alpha: 0.12 });
+      g.circle(0, 0, r * 2).fill({ color, alpha: 0.25 });
+      // 4-point glint
+      const len = r * 6;
+      g.moveTo(-len, 0).lineTo(len, 0).moveTo(0, -len).lineTo(0, len);
+      g.stroke({ width: 0.8, color, alpha: 0.5 });
+      // bright core
+      g.circle(0, 0, r).fill({ color, alpha: 1 });
+      g.x = x;
+      g.y = y;
+      g.alpha = baseAlpha;
+      container.addChild(g);
+
+      this.twinkleStars.push({
+        graphics: g,
+        baseAlpha,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.0012 + Math.random() * 0.0022,
+      });
+    }
+
+    this.skyContainer.addChild(container);
+    this.twinkleContainer = container;
+  }
+
+  /** Blend a hex colour toward white by `amount` [0..1]. */
+  private lightenColor(color: number, amount: number): number {
+    const r = (color >> 16) & 0xff;
+    const g = (color >> 8) & 0xff;
+    const b = color & 0xff;
+    const lr = Math.round(r + (255 - r) * amount);
+    const lg = Math.round(g + (255 - g) * amount);
+    const lb = Math.round(b + (255 - b) * amount);
+    return (lr << 16) | (lg << 8) | lb;
+  }
+
+  /**
+   * Big, organic, multi-tone nebula clouds spread across the whole system.
+   * Each cloud is built from many overlapping soft blobs baked into a single
+   * blurred Graphics (drawn once), then only its transform/alpha is animated —
+   * slow drift + gentle "breathing" pulse — so it's cheap but feels alive.
+   * The palette and layout are seeded from the system id, so every system has a
+   * distinct but stable look.
+   */
   private createNebulae(): void {
     if (!this.backgroundContainer) return;
 
     this.nebulaeContainer = new Container();
+
+    const systemId = this.gameEngine?.player?.currentSystemId ?? "default";
+    const rng = new SeededRNG(`nebula_${systemId}`);
+
+    // Cohesive palettes (R,G,B hex). First mirrors the reference (olive/gold/
+    // green); the rest give variety across systems.
+    const palettes = [
+      [0x9a8a2a, 0x76902e, 0xb3a142, 0x4f6a30, 0xc8b24a], // yellow-green (ref)
+      [0x2f4f96, 0x3a6aa0, 0x24507a, 0x6a3a96, 0x4060b0], // blue-violet
+      [0x96402a, 0xa85f2a, 0x6a2a3a, 0xb87840, 0x803050], // amber-rust
+      [0x2a6a6a, 0x36897a, 0x205a5a, 0x40916e, 0x2e7d8a], // teal-emerald
+      [0xb83a22, 0xd06a2a, 0x8a2a2a, 0xe08a3a, 0x6a2030], // fiery red-orange (ref)
+    ];
+    const palIdx = rng.nextInt(0, palettes.length - 1);
+    const palette = palettes[palIdx];
+
+    // Generated hero nebula backdrop (if art exists), tinted to match the chosen
+    // procedural palette and sitting behind the animated clouds for depth.
+    const palNames = ["green", "blue", "red", "teal", "red"];
+    const backdrop =
+      pickVariant("nebula", `${palNames[palIdx]}_mid`, systemId) ??
+      pickVariant("nebula", `${palNames[palIdx]}_near`, systemId);
+    if (backdrop) {
+      const bg = new Sprite(backdrop);
+      bg.anchor.set(0.5);
+      bg.x = this.starCenterX;
+      bg.y = this.starCenterY;
+      // Larger than the camera-pan clamp (cameraBoundRadius) so its rectangular
+      // edge can never be panned into view.
+      const size = this.SYSTEM_BOUNDARY_RADIUS * 2.8;
+      bg.width = size;
+      bg.height = size;
+      bg.alpha = 0.4;
+      bg.eventMode = "none";
+      // Soft blur so the backdrop reads as distant gas, not a sharp photo.
+      bg.filters = [this.paddedBlur(4)];
+      this.nebulaeContainer.addChild(bg); // first child → behind the clouds
+    }
+
+    // Spread clouds across the whole (larger-than-screen) system.
+    const span = this.SYSTEM_BOUNDARY_RADIUS * 2.4;
+    const cloudCount = rng.nextInt(5, 7);
+
+    for (let c = 0; c < cloudCount; c++) {
+      const cloud = new Container();
+      cloud.x = this.starCenterX + rng.nextFloat(-span / 2, span / 2);
+      cloud.y = this.starCenterY + rng.nextFloat(-span / 2, span / 2);
+
+      const color = palette[rng.nextInt(0, palette.length - 1)];
+      const baseAlpha = rng.nextFloat(0.07, 0.16);
+      const cloudR = rng.nextFloat(550, 1150);
+      const squash = rng.nextFloat(0.45, 0.95); // wispy, non-circular shape
+      const rot = rng.next() * Math.PI;
+      const blobs = rng.nextInt(24, 36);
+
+      const g = new Graphics();
+      for (let b = 0; b < blobs; b++) {
+        const ang = rng.next() * Math.PI * 2;
+        // denser toward the core (square pushes samples inward)
+        const dist = rng.next() * rng.next() * cloudR;
+        let bx = Math.cos(ang) * dist;
+        let by = Math.sin(ang) * dist * squash;
+        // rotate the squashed cloud for variety
+        const rx = bx * Math.cos(rot) - by * Math.sin(rot);
+        const ry = bx * Math.sin(rot) + by * Math.cos(rot);
+        bx = rx;
+        by = ry;
+        const r = rng.nextFloat(140, 340) * (1 - (dist / cloudR) * 0.5);
+        const a = baseAlpha * rng.nextFloat(0.35, 1.0);
+        g.circle(bx, by, r).fill({ color, alpha: a });
+      }
+      g.filters = [this.paddedBlur(16)];
+      g.blendMode = "screen"; // glow additively over the dark sky (US-070 #1)
+      cloud.addChild(g);
+
+      // Glowing "ember" cores near the heart of the cloud — a brighter, warmer
+      // tint that gives the painterly, lit-from-within look of the reference.
+      const emberTint = this.lightenColor(color, 0.55);
+      const emberG = new Graphics();
+      const emberCount = rng.nextInt(2, 4);
+      for (let e = 0; e < emberCount; e++) {
+        const ex = rng.nextFloat(-cloudR * 0.25, cloudR * 0.25);
+        const ey = rng.nextFloat(-cloudR * 0.25, cloudR * 0.25) * squash;
+        emberG.circle(ex, ey, rng.nextFloat(40, 120));
+        emberG.fill({ color: emberTint, alpha: rng.nextFloat(0.1, 0.22) });
+      }
+      emberG.filters = [this.paddedBlur(14)];
+      emberG.blendMode = "add"; // bright lit-from-within cores
+      cloud.addChild(emberG);
+      this.nebulaeContainer.addChild(cloud);
+
+      this.nebulaLayers.push({
+        container: cloud,
+        driftX: rng.nextFloat(-0.004, 0.004),
+        driftY: rng.nextFloat(-0.004, 0.004),
+        pulseAmp: rng.nextFloat(0.1, 0.22),
+        pulseSpeed: rng.nextFloat(0.0003, 0.0009),
+        phase: rng.next() * Math.PI * 2,
+        baseAlpha: 1,
+      });
+    }
+
+    // Glowing swarms of motes drifting near the cloud cores (the green/amber
+    // "fireflies" of the reference shot). Seeded from the same rng so they sit
+    // with the clouds.
+    this.createSwarms(rng, palette);
+
+    this.backgroundContainer.addChild(this.nebulaeContainer);
+  }
+
+  /**
+   * A few drifting swarms of tiny glowing motes — the luminous "fireflies" that
+   * cluster inside the nebula in the reference shot. Each swarm is a baked
+   * Graphics of soft dots (cheap), animated only by a slow drift + breathing
+   * pulse on its container.
+   */
+  private createSwarms(rng: SeededRNG, palette: number[]): void {
+    if (!this.nebulaeContainer) return;
+
+    const span = this.SYSTEM_BOUNDARY_RADIUS * 1.6;
+    const swarmCount = rng.nextInt(4, 7);
+
+    for (let s = 0; s < swarmCount; s++) {
+      const container = new Container();
+      container.x = this.starCenterX + rng.nextFloat(-span / 2, span / 2);
+      container.y = this.starCenterY + rng.nextFloat(-span / 2, span / 2);
+
+      // Brighten a palette colour toward white for a "glowing" mote.
+      const tint = this.lightenColor(
+        palette[rng.nextInt(0, palette.length - 1)],
+        0.6,
+      );
+      const spread = rng.nextFloat(120, 260);
+      const motes = rng.nextInt(36, 64);
+
+      const g = new Graphics();
+      for (let m = 0; m < motes; m++) {
+        const ang = rng.next() * Math.PI * 2;
+        const dist = rng.next() * rng.next() * spread; // denser toward centre
+        const mx = Math.cos(ang) * dist;
+        const my = Math.sin(ang) * dist;
+        const r = rng.nextFloat(1.2, 3.2);
+        // soft halo + bright core
+        g.circle(mx, my, r * 2.4).fill({ color: tint, alpha: 0.12 });
+        g.circle(mx, my, r).fill({ color: tint, alpha: 0.9 });
+      }
+      g.filters = [this.paddedBlur(1.5)];
+      container.addChild(g);
+      this.nebulaeContainer.addChild(container);
+
+      this.swarmLayers.push({
+        container,
+        driftX: rng.nextFloat(-0.006, 0.006),
+        driftY: rng.nextFloat(-0.006, 0.006),
+        pulseSpeed: rng.nextFloat(0.0008, 0.0018),
+        pulseAmp: rng.nextFloat(0.15, 0.3),
+        phase: rng.next() * Math.PI * 2,
+        baseAlpha: rng.nextFloat(0.5, 0.8),
+      });
+    }
+  }
+
+  /** Slow drift + breathing pulse so the glowing swarms shimmer. */
+  private updateSwarms(): void {
+    for (const s of this.swarmLayers) {
+      s.container.x += s.driftX;
+      s.container.y += s.driftY;
+      const pulse =
+        1 + Math.sin(this.bgElapsed * s.pulseSpeed + s.phase) * s.pulseAmp;
+      s.container.alpha = Math.max(0, Math.min(1, s.baseAlpha * pulse));
+    }
+  }
+
+  /**
+   * Foreground dust motes (screen-fixed) that streak past with the ship's
+   * velocity — the primary sense-of-speed cue, like flying through fine debris.
+   * Added to the UI layer (above the world, below the HUD) so they always fill
+   * the screen and never expose a world edge.
+   */
+  private createDust(): void {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
-    // Simple nebula clouds with built-in blur
-    const nebulae = [
-      { x: width * 0.3, y: height * 0.3, r: 200, color: 0x4a0080, alpha: 0.08 },
-      { x: width * 0.7, y: height * 0.6, r: 250, color: 0x006060, alpha: 0.06 },
-      { x: width * 0.5, y: height * 0.5, r: 300, color: 0x8a60a0, alpha: 0.05 },
-    ];
+    this.dustContainer = new Container();
+    this.dustContainer.eventMode = "none";
 
-    for (const n of nebulae) {
+    const count = 190;
+    for (let i = 0; i < count; i++) {
       const g = new Graphics();
-      g.fill({ color: n.color, alpha: n.alpha });
-      g.circle(n.x, n.y, n.r);
-      g.filters = [new BlurFilter({ strength: 20 })];
-      this.nebulaeContainer.addChild(g);
+      const x = Math.random() * width;
+      const y = Math.random() * height;
+      g.x = x;
+      g.y = y;
+      g.eventMode = "none";
+      this.dustContainer.addChild(g);
+      this.dustMotes.push({
+        graphics: g,
+        x,
+        y,
+        depth: 0.3 + Math.random() * 0.7,
+      });
     }
 
-    // Add nebulae at the back of background container
-    this.backgroundContainer.addChildAt(this.nebulaeContainer, 0);
+    // First child of the UI layer → above the world, below HUD/minimap.
+    this.renderer.uiLayer.addChildAt(this.dustContainer, 0);
+  }
+
+  /**
+   * Move dust motes opposite the ship's velocity (parallax by depth), wrapping
+   * around the screen. Fast motion stretches each mote into a short streak.
+   */
+  private updateDust(deltaTime: number): void {
+    if (!this.shipPhysics || this.dustMotes.length === 0) return;
+
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+
+    const velX =
+      Math.cos(this.shipPhysics.shipAngle) * this.shipPhysics.currentSpeed;
+    const velY =
+      Math.sin(this.shipPhysics.shipAngle) * this.shipPhysics.currentSpeed;
+
+    for (const mote of this.dustMotes) {
+      const vx = -velX * mote.depth * deltaTime * 1.8;
+      const vy = -velY * mote.depth * deltaTime * 1.8;
+      mote.x += vx;
+      mote.y += vy;
+
+      // Wrap around the screen edges so the field is seamless.
+      if (mote.x < 0) mote.x += width;
+      else if (mote.x > width) mote.x -= width;
+      if (mote.y < 0) mote.y += height;
+      else if (mote.y > height) mote.y -= height;
+
+      mote.graphics.x = mote.x;
+      mote.graphics.y = mote.y;
+
+      const speed = Math.hypot(vx, vy);
+      const g = mote.graphics;
+      g.clear();
+      // Only render motion streaks (the sense-of-speed cue). At rest nothing is
+      // drawn — static foreground dots read as dirt on the screen, which the
+      // player would want to wipe off (US-070 #1: no stars in the foreground).
+      if (speed > 2.5) {
+        const alpha = Math.min(0.6, (speed - 2.5) * 0.12) * (0.4 + mote.depth);
+        const len = Math.min(34, speed * 2.8);
+        const nx = vx / speed;
+        const ny = vy / speed;
+        g.moveTo(0, 0)
+          .lineTo(-nx * len, -ny * len)
+          .stroke({ color: 0xbfd8ff, width: mote.depth * 1.4, alpha });
+      }
+    }
+  }
+
+  /**
+   * Spawn a few asteroids/comets that drift through the system (US-070 #1).
+   * They live in **world space** (the star's frame) so they pan and zoom with the
+   * world rather than sliding across the screen as the ship moves — they belong
+   * to the system, not the camera. A high zIndex keeps them reading in front of
+   * the ship/planets ("foreground" flybys). The field stays sparse: each one
+   * respawns at the system edge once it drifts past it.
+   */
+  private createAsteroids(): void {
+    this.asteroidContainer = new Container();
+    this.asteroidContainer.eventMode = "none";
+    this.asteroidContainer.zIndex = 120; // in front of ship (110) / planets
+    const count = 5;
+    for (let i = 0; i < count; i++) {
+      const g = new Graphics();
+      g.eventMode = "none";
+      this.asteroidContainer.addChild(g);
+      const a: AsteroidMote = {
+        graphics: g,
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        spin: 0,
+        comet: Math.random() < 0.25,
+      };
+      this.drawAsteroid(a);
+      this.respawnAsteroid(a, true);
+      this.asteroids.push(a);
+    }
+    // World-space (moves with the system), above the ship/planets.
+    this.renderer.gameLayer.addChild(this.asteroidContainer);
+  }
+
+  /** Draw an irregular grey rock (with a faint comet tail when applicable). */
+  private drawAsteroid(a: AsteroidMote): void {
+    const g = a.graphics;
+    g.clear();
+    // World-space sizes (comparable to the ship/small bodies, since they share
+    // the world scale now rather than being screen-sized).
+    const r = a.comet ? 7 : 9 + Math.random() * 14;
+    if (a.comet) {
+      // Tail along local -x (the graphic is rotated to face its velocity, so the
+      // tail trails behind), then a bright icy head + soft glow.
+      g.poly([-r * 9, 0, 0, -r * 0.8, 0, r * 0.8]).fill({
+        color: 0x88bbff,
+        alpha: 0.16,
+      });
+      g.circle(0, 0, r * 2.2).fill({ color: 0x88bbff, alpha: 0.2 });
+      g.circle(0, 0, r).fill({ color: 0xcfe6ff, alpha: 0.95 });
+    } else {
+      const pts: number[] = [];
+      const sides = 7;
+      for (let i = 0; i < sides; i++) {
+        const ang = (i / sides) * Math.PI * 2;
+        const rr = r * (0.7 + Math.random() * 0.5);
+        pts.push(Math.cos(ang) * rr, Math.sin(ang) * rr);
+      }
+      g.poly(pts).fill({ color: 0x6b6256, alpha: 0.85 });
+      g.poly(pts).stroke({ width: 1, color: 0x2a251f, alpha: 0.6 });
+      // a couple of craters
+      g.circle(-r * 0.2, -r * 0.1, r * 0.22).fill({
+        color: 0x4a443b,
+        alpha: 0.7,
+      });
+      g.circle(r * 0.25, r * 0.2, r * 0.16).fill({
+        color: 0x4a443b,
+        alpha: 0.6,
+      });
+    }
+  }
+
+  /** Radius of the asteroid field around the star (world units). */
+  private asteroidFieldRadius(): number {
+    return this.SYSTEM_BOUNDARY_RADIUS * 1.1;
+  }
+
+  /**
+   * Place an asteroid in world space: it enters at the system edge and drifts
+   * across toward the far side (passing near the star). `initial` instead
+   * scatters it somewhere inside the field so the first batch isn't all bunched
+   * at the rim.
+   */
+  private respawnAsteroid(a: AsteroidMote, initial = false): void {
+    const cx = this.starCenterX;
+    const cy = this.starCenterY;
+    const R = this.asteroidFieldRadius();
+    const speed = 0.012 + Math.random() * 0.03; // slow, world px/ms
+
+    // Enter on a point of the bounding circle, head roughly across to the far
+    // side (with some spread) so it traverses the system.
+    const entryAng = Math.random() * Math.PI * 2;
+    a.x = cx + Math.cos(entryAng) * R;
+    a.y = cy + Math.sin(entryAng) * R;
+    const aimAng = entryAng + Math.PI + (Math.random() - 0.5) * 1.1;
+    a.vx = Math.cos(aimAng) * speed;
+    a.vy = Math.sin(aimAng) * speed;
+    a.spin = (Math.random() - 0.5) * 0.0008;
+
+    if (initial) {
+      // Scatter inside the disc (uniform by area) for a sparse starting field.
+      const rr = Math.sqrt(Math.random()) * R;
+      const ang2 = Math.random() * Math.PI * 2;
+      a.x = cx + Math.cos(ang2) * rr;
+      a.y = cy + Math.sin(ang2) * rr;
+    }
+    a.graphics.x = a.x;
+    a.graphics.y = a.y;
+  }
+
+  /** Drift + spin the asteroids in world space, respawning past the field edge. */
+  private updateAsteroids(deltaTime: number): void {
+    if (this.asteroids.length === 0) return;
+    const cx = this.starCenterX;
+    const cy = this.starCenterY;
+    const limit = this.asteroidFieldRadius() * 1.15;
+    const limitSq = limit * limit;
+    for (const a of this.asteroids) {
+      a.x += a.vx * deltaTime;
+      a.y += a.vy * deltaTime;
+      a.graphics.x = a.x;
+      a.graphics.y = a.y;
+      // Comets face their velocity (tail trails behind); asteroids tumble.
+      if (a.comet) {
+        a.graphics.rotation = Math.atan2(a.vy, a.vx);
+      } else {
+        a.graphics.rotation += a.spin * deltaTime;
+      }
+      const dx = a.x - cx;
+      const dy = a.y - cy;
+      if (dx * dx + dy * dy > limitSq) {
+        this.drawAsteroid(a);
+        this.respawnAsteroid(a);
+      }
+    }
+  }
+
+  /**
+   * Screen-fixed vignette that darkens the edges so the action reads in the
+   * centre. Built as a heavily blurred thick border (no gradient API needed).
+   */
+  private createVignette(): void {
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+
+    // Stacked edge strokes fading inward — a vignette without a BlurFilter (a
+    // blurred full-screen rect showed up as bands across the whole canvas).
+    const v = new Graphics();
+    const bands = 16;
+    for (let i = 0; i < bands; i++) {
+      const inset = i * 16;
+      const alpha = 0.06 * (1 - i / bands);
+      v.rect(inset, inset, width - 2 * inset, height - 2 * inset);
+      v.stroke({ width: 32, color: 0x000000, alpha });
+    }
+    v.eventMode = "none"; // never intercept clicks
+    // Added before the HUD so it sits underneath it (above the world). Torn
+    // down by clearUILayer on the next scene init.
+    this.renderer.uiLayer.addChild(v);
+  }
+
+  /**
+   * Warp-exit flourish (US-043): a bright flash, expanding shock rings and a
+   * lingering glow at the point where the ship drops out of hyperspace.
+   */
+  private playWarpArrivalEffect(x: number, y: number): void {
+    const container = new Container();
+    container.x = x;
+    container.y = y;
+
+    const color = 0x9fe8ff;
+
+    const glow = new Graphics();
+    glow.circle(0, 0, 90).fill({ color, alpha: 0.0 });
+    glow.filters = [this.paddedBlur(24)];
+    container.addChild(glow);
+
+    const flash = new Graphics();
+    flash.circle(0, 0, 60).fill({ color: 0xffffff, alpha: 1 });
+    flash.filters = [this.paddedBlur(12)];
+    container.addChild(flash);
+
+    const rings: Graphics[] = [];
+    for (let i = 0; i < 3; i++) {
+      const ring = new Graphics();
+      ring.circle(0, 0, 20).stroke({ width: 4, color, alpha: 0.9 });
+      container.addChild(ring);
+      rings.push(ring);
+    }
+
+    this.renderer.gameLayer.addChild(container);
+    this.warpEffect = {
+      container,
+      rings,
+      flash,
+      glow,
+      elapsed: 0,
+      duration: 1100,
+    };
   }
 
   /**
    * Create a beautiful star (sun) at the center of the system
    */
   private createStar(): void {
+    const R = this.STAR_RADIUS;
+    const rng = new SeededRNG(
+      `star_${this.gameEngine?.player?.currentSystemId ?? "x"}`,
+    );
+
+    // --- Corona: large soft glow built from many concentric rings (a faked
+    // radial gradient), NOT a BlurFilter — a blurred corona showed up as a
+    // rectangular band near the star once the gameLayer was zoomed (US-070 #10).
     this.starGraphics = new Graphics();
+    this.starGraphics.eventMode = "none"; // decorative — never intercept clicks
+    const rings = 26;
+    for (let i = rings; i >= 1; i--) {
+      const t = i / rings; // 1 = outermost
+      const r = R * (1.0 + t * 1.15); // R .. ~R*2.15
+      // Outer = deep orange, inner = warm yellow; alpha rises toward the centre.
+      const color = this.lightenColor(0xff5500, (1 - t) * 0.55);
+      const alpha = 0.03 + (1 - t) * (1 - t) * 0.28;
+      this.starGraphics
+        .circle(this.starCenterX, this.starCenterY, r)
+        .fill({ color, alpha });
+    }
+    this.renderer.gameLayer.addChild(this.starGraphics);
 
-    // Draw multiple concentric circles for glow effect
-    const glowLayers = [
-      { radius: 60, color: 0xffff00, alpha: 0.1 },
-      { radius: 50, color: 0xffdd00, alpha: 0.15 },
-      { radius: 40, color: 0xffbb00, alpha: 0.2 },
-      { radius: 32, color: 0xff9900, alpha: 0.3 },
-    ];
+    // --- Rotating surface: generated star art if available, else procedural ---
+    const surface = new Container();
+    surface.eventMode = "none"; // decorative — never intercept clicks
+    surface.x = this.starCenterX;
+    surface.y = this.starCenterY;
 
-    for (const layer of glowLayers) {
-      this.starGraphics.circle(
-        this.starCenterX,
-        this.starCenterY,
-        layer.radius,
-      );
-      this.starGraphics.fill({ color: layer.color, alpha: layer.alpha });
+    // Preferred: equirectangular fire map projected onto a hemisphere so the
+    // surface really turns (US-070 #4), tinted per star type. Falls back to a
+    // flat scrolling disc if the mesh can't be built.
+    const sunMap = tex("star_maps/sun_01") ?? this.pickStarTexture();
+    if (sunMap) {
+      const W = R * 2;
+      const tint = this.starTint();
+      this.sunSphere = buildSphereMesh(sunMap, R, tint);
+      const mesh = this.sunSphere?.mesh ?? null;
+
+      // Hot core glow so the centre reads as brighter. No limb ring — the dark
+      // rim around the disc looked like a drawn border, so it was removed.
+      const shade = new Graphics();
+      shade.eventMode = "none";
+      shade.circle(0, 0, R * 0.34).fill({ color: 0xfff2c0, alpha: 0.28 });
+
+      // Pulsing flare overlay (rare "всполохи").
+      const flare = new Graphics();
+      flare.eventMode = "none";
+      this.starFlare = flare;
+      const flareMask = new Graphics()
+        .circle(0, 0, R)
+        .fill({ color: 0xffffff });
+      flare.mask = flareMask;
+
+      if (mesh) {
+        surface.addChild(mesh, shade, flareMask, flare);
+      } else {
+        // Fallback: flat scrolling disc under a circular mask.
+        const maskC = new Graphics().circle(0, 0, R).fill({ color: 0xffffff });
+        const tiling = new TilingSprite({
+          texture: sunMap,
+          width: W,
+          height: W,
+        });
+        tiling.x = -R;
+        tiling.y = -R;
+        const scale = sunMap.height > 0 ? W / sunMap.height : 1;
+        tiling.tileScale.set(scale, scale);
+        tiling.tint = tint;
+        tiling.mask = maskC;
+        this.starTiling = tiling;
+        surface.addChild(maskC, tiling, shade, flareMask, flare);
+      }
+
+      this.starSurface = surface;
+      this.renderer.gameLayer.addChild(surface);
+      return;
     }
 
-    // Draw main star body
-    this.starGraphics.circle(this.starCenterX, this.starCenterY, 28);
-    this.starGraphics.fill({ color: 0xffaa00 });
+    const disc = new Graphics();
+    // base disc, brighter toward the centre
+    disc.circle(0, 0, R).fill({ color: 0xff8800 });
+    disc.circle(0, 0, R * 0.82).fill({ color: 0xffab1f });
+    disc.circle(0, 0, R * 0.55).fill({ color: 0xffd24a });
+    // turbulent surface patches (darker spots + bright flares)
+    const spots = rng.nextInt(22, 30);
+    for (let i = 0; i < spots; i++) {
+      const ang = rng.next() * Math.PI * 2;
+      const dist = rng.next() * R * 0.95;
+      const px = Math.cos(ang) * dist;
+      const py = Math.sin(ang) * dist;
+      const pr = rng.nextFloat(R * 0.08, R * 0.26);
+      const dark = rng.next() < 0.5;
+      disc.circle(px, py, pr).fill({
+        color: dark ? 0xc23a12 : 0xfff0a0,
+        alpha: rng.nextFloat(0.25, 0.6),
+      });
+    }
+    // bright hot core
+    disc.circle(0, 0, R * 0.32).fill({ color: 0xfff6cc, alpha: 0.85 });
+    disc.filters = [this.paddedBlur(2)]; // crisp, slight softening
 
-    // Add bright core
-    this.starGraphics.circle(this.starCenterX, this.starCenterY, 20);
-    this.starGraphics.fill({ color: 0xffffaa });
+    // Clip mottling to the disc so nothing spills past the rim.
+    const mask = new Graphics();
+    mask.circle(0, 0, R).fill({ color: 0xffffff });
+    surface.addChild(mask);
+    disc.mask = mask;
+    surface.addChild(disc);
 
-    // Add white hot center
-    this.starGraphics.circle(this.starCenterX, this.starCenterY, 12);
-    this.starGraphics.fill({ color: 0xffffff, alpha: 0.9 });
+    this.starSurface = surface;
+    this.renderer.gameLayer.addChild(surface);
+  }
 
-    // Add subtle blur for atmospheric glow
-    const blurFilter = new BlurFilter({ strength: 4 });
-    this.starGraphics.filters = [blurFilter];
+  /**
+   * Generated star art for the current system's star type (deterministic per
+   * system), or undefined to fall back to the procedural sun.
+   */
+  private pickStarTexture(): import("pixi.js").Texture | undefined {
+    const systemId = this.gameEngine?.player?.currentSystemId;
+    if (!systemId) return undefined;
+    const system = this.gameEngine?.galaxy?.systems.find(
+      (s) => s.id === systemId,
+    );
+    if (!system) return undefined;
+    const prefix: Partial<Record<StarType, string>> = {
+      [StarType.RED_DWARF]: "red_dwarf",
+      [StarType.YELLOW_DWARF]: "yellow",
+      [StarType.BLUE_GIANT]: "blue_giant",
+      [StarType.WHITE_DWARF]: "white_dwarf",
+      [StarType.NEUTRON]: "neutron",
+    };
+    const p = prefix[system.starType];
+    return p ? pickVariant("stars", p, systemId) : undefined;
+  }
 
-    // Add star to game layer (above nebulae, below planets)
-    this.renderer.gameLayer.addChild(this.starGraphics);
+  /** Tint for the equirect sun map, by the current system's star type. */
+  private starTint(): number {
+    const systemId = this.gameEngine?.player?.currentSystemId;
+    const system = this.gameEngine?.galaxy?.systems.find(
+      (s) => s.id === systemId,
+    );
+    switch (system?.starType) {
+      case StarType.RED_DWARF:
+        return 0xff7a4d; // deep red-orange
+      case StarType.BLUE_GIANT:
+        return 0x8fb8ff; // blue-white
+      case StarType.WHITE_DWARF:
+        return 0xfff2e6; // near white
+      case StarType.NEUTRON:
+        return 0xcfe0ff; // cold brilliant
+      default:
+        return 0xffd9a0; // warm yellow sun
+    }
+  }
+
+  /**
+   * Animate the sun: scroll the equirect map for axial rotation and pulse a few
+   * solar flares near the rim (rare "всполохи"). Falls back to rotating the
+   * procedural surface container when no map is loaded.
+   */
+  private updateStar(deltaTime: number): void {
+    if (this.sunSphere) {
+      // Roll the surface — the hemisphere mesh gives real spherical foreshortening.
+      this.sunSphere.advance(0.00012 * deltaTime);
+    } else if (this.starTiling) {
+      // Fallback: scroll the map horizontally.
+      this.starTiling.tilePosition.x -= 0.012 * deltaTime;
+    } else if (this.starSurface) {
+      this.starSurface.rotation += 0.00004 * deltaTime;
+    }
+
+    if (this.starFlare) {
+      const R = this.STAR_RADIUS;
+      const g = this.starFlare;
+      g.clear();
+      const t = this.bgElapsed;
+      // A few flares with offset phases; each swells and fades, so most of the
+      // time only one or two are visible — occasional bright eruptions.
+      const flares = 5;
+      for (let i = 0; i < flares; i++) {
+        const phase = (t / 2600 + i / flares) % 1;
+        const pulse = Math.max(0, Math.sin(phase * Math.PI)); // 0→1→0
+        if (pulse < 0.04) continue;
+        const ang = (i / flares) * Math.PI * 2 + t * 0.00002 * (i + 1);
+        const rr = R * (0.86 + 0.1 * pulse);
+        const fx = Math.cos(ang) * rr;
+        const fy = Math.sin(ang) * rr;
+        const fr = R * (0.12 + 0.18 * pulse);
+        g.circle(fx, fy, fr).fill({ color: 0xffd070, alpha: 0.35 * pulse });
+        g.circle(fx, fy, fr * 0.5).fill({
+          color: 0xfff6d0,
+          alpha: 0.5 * pulse,
+        });
+      }
+    }
   }
 
   /**
@@ -521,6 +1641,7 @@ export class SpaceFlightScene extends GameScene {
     }
 
     this.orbitGraphics = new Graphics();
+    this.orbitGraphics.eventMode = "none"; // decorative — never intercept clicks
 
     // Get unique orbital radii
     const uniqueRadii = new Set<number>();
@@ -543,11 +1664,27 @@ export class SpaceFlightScene extends GameScene {
 
     this.shipContainer = new Container();
     this.shipGraphics = new Graphics();
+    this.shipContainer.addChild(this.shipGraphics);
 
-    // Draw ship body (triangle shape)
+    // Prefer ship art (ranger hull) when available; the procedural triangle is
+    // the fallback (drawShip skips the hull when a sprite is present).
+    const shipTex = pickVariant("ships", "ranger", "player_ship");
+    if (shipTex) {
+      const sp = new Sprite(shipTex);
+      sp.anchor.set(0.5);
+      const size = this.SHIP_SIZE * 2.6;
+      sp.width = size;
+      sp.height = size;
+      sp.rotation = this.SHIP_SPRITE_ROTATION;
+      sp.eventMode = "none";
+      this.shipSprite = sp;
+      this.shipContainer.addChild(sp);
+    }
+
+    // Draw ship body (procedural triangle; no-op hull when a sprite is used)
     this.drawShip();
 
-    this.shipContainer.addChild(this.shipGraphics);
+    this.shipContainer.zIndex = 110; // player ship above NPCs and planets
     this.shipContainer.x = this.shipPhysics.shipX;
     this.shipContainer.y = this.shipPhysics.shipY;
     this.shipContainer.pivot.set(0, 0);
@@ -560,8 +1697,15 @@ export class SpaceFlightScene extends GameScene {
    */
   private createTargetIndicator(): void {
     this.targetIndicator = new Graphics();
+    this.targetIndicator.eventMode = "none"; // decorative — never intercept clicks
     this.targetIndicator.visible = false; // Hidden by default
     this.renderer.gameLayer.addChild(this.targetIndicator);
+
+    // Weapon-fire FX, drawn each frame while the ship is firing on a target so
+    // combat is visible (US-070 ongoing: attack felt instant with no feedback).
+    this.combatFxGraphics = new Graphics();
+    this.combatFxGraphics.eventMode = "none";
+    this.renderer.gameLayer.addChild(this.combatFxGraphics);
   }
 
   /**
@@ -606,6 +1750,10 @@ export class SpaceFlightScene extends GameScene {
   private drawShip(): void {
     if (!this.shipGraphics || !this.shipPhysics) return;
     this.shipGraphics.clear();
+
+    // When ship art is present, the sprite is the hull — skip the procedural
+    // triangle (it would draw on top of the sprite).
+    if (this.shipSprite) return;
 
     const size = this.SHIP_SIZE;
 
@@ -689,9 +1837,9 @@ export class SpaceFlightScene extends GameScene {
     this.cameraDebugText.eventMode = "none";
     this.uiContainer.addChild(this.cameraDebugText);
 
-    // Current day display
+    // Current date display
     this.dayCounterText = new Text({
-      text: `День: ${this.gameEngine?.galaxy?.gameDays ?? 0}`,
+      text: formatGameDate(this.gameEngine?.galaxy?.gameDays ?? 0),
       style: { fontFamily: "Courier New", fontSize: 14, fill: 0x00ffff },
     });
     this.dayCounterText.x = 20;
@@ -754,13 +1902,48 @@ export class SpaceFlightScene extends GameScene {
     });
 
     this.uiContainer.addChild(backBtn);
+    this.backButton = backBtn;
+
+    // Play / Pause turn control (bottom-centre). Play runs the planned turn;
+    // while moving it becomes Pause, which ends the turn at the next day segment.
+    const playBtn = new Text({
+      text: "▶ ХОД",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 18,
+        fill: 0x00ff88,
+        fontWeight: "bold" as const,
+        stroke: { color: 0x000000, width: 4 },
+      },
+    });
+    playBtn.anchor.set(0.5);
+    playBtn.x = this.renderer.app.screen.width / 2;
+    playBtn.y = this.renderer.app.screen.height - 40;
+    playBtn.eventMode = "static";
+    playBtn.cursor = "pointer";
+    playBtn.on("pointerdown", (event) => {
+      event.stopPropagation();
+      this.onPlayPause();
+    });
+    playBtn.on("pointerover", () => {
+      playBtn.alpha = 0.7;
+    });
+    playBtn.on("pointerout", () => {
+      playBtn.alpha = 1;
+    });
+    this.uiContainer.addChild(playBtn);
+    this.playPauseButton = playBtn;
 
     this.renderer.uiLayer.addChild(this.uiContainer);
 
-    // Create mini-map
+    // Create mini-map. Dragging on it pans the main view (it no longer falls
+    // through as a navigation click).
     this.systemMiniMap = new SystemMiniMap(
       this.renderer.app.screen.width,
       this.renderer.app.screen.height,
+    );
+    this.systemMiniMap.setPanHandler((worldX, worldY) =>
+      this.focusCameraOnWorld(worldX, worldY),
     );
     this.renderer.uiLayer.addChild(this.systemMiniMap.container);
   }
@@ -790,14 +1973,20 @@ export class SpaceFlightScene extends GameScene {
     const questLocations =
       this.gameEngine.questManager.getActiveQuestLocations();
 
-    // Create sprite for each planet with random initial angle
+    // Orbital position is a deterministic function of the (persisted) game-day
+    // count, so planets sit where they should every time the scene loads — no
+    // more random teleport-around-the-sun after landing (US-070 #9). The base
+    // angle is derived from the planet id so each planet starts at a stable,
+    // distinct point on its orbit.
+    const gameDays = this.gameEngine.galaxy?.gameDays ?? 0;
     for (const planet of currentSystem.planets) {
-      const initialAngle = Math.random() * Math.PI * 2;
+      const baseAngle = hashToAngle(planet.id);
       const sprite = new PlanetSprite(
         planet,
         this.starCenterX,
         this.starCenterY,
-        initialAngle,
+        baseAngle,
+        gameDays,
       );
 
       // Set up click handler
@@ -844,6 +2033,10 @@ export class SpaceFlightScene extends GameScene {
     );
     if (!planetSprite || !this.shipPhysics) return;
 
+    // This route targets a planet → the ship will auto-land on arrival.
+    this.routeTargetPlanetId = planet.id;
+    this.followNpcId = null; // picking a planet cancels auto-follow
+
     // Two-step movement logic
     if (this.plannedRoute) {
       // Check if clicking on the same planet (within 50px of planned route)
@@ -852,22 +2045,17 @@ export class SpaceFlightScene extends GameScene {
       const distance = Math.sqrt(dx * dx + dy * dy);
 
       if (distance < 50) {
-        // Second click - execute the route
-        this.shipPhysics.setTarget(this.plannedRoute.x, this.plannedRoute.y);
+        // Second click - execute the route (curving around the star if needed)
+        this.executeRouteTo(this.plannedRoute.x, this.plannedRoute.y);
         logger.info(`▶️ Executing route to planet ${planet.name}`);
       } else {
-        // Different planet - update planned route
-        this.plannedRoute = {
-          x: planetSprite.screenX,
-          y: planetSprite.screenY,
-        };
-        this.drawRouteLine();
+        // Different planet - update planned route (preview bows around the star)
+        this.planRouteTo(planetSprite.screenX, planetSprite.screenY);
         logger.info(`🗺️ Route updated to planet ${planet.name}`);
       }
     } else {
-      // First click - plan the route
-      this.plannedRoute = { x: planetSprite.screenX, y: planetSprite.screenY };
-      this.drawRouteLine();
+      // First click - plan the route (preview bows around the star)
+      this.planRouteTo(planetSprite.screenX, planetSprite.screenY);
       logger.info(
         `🗺️ Route planned to planet ${planet.name}. Click again to execute.`,
       );
@@ -890,7 +2078,8 @@ export class SpaceFlightScene extends GameScene {
       1,
       Math.ceil(distanceToPlanet / this.DISTANCE_PER_DAY),
     );
-    const shipAtPlanet = distanceToPlanet <= this.LANDING_RANGE;
+    const shipAtPlanet =
+      distanceToPlanet <= this.landingThreshold(planetSprite);
 
     this.planetInfoPanel = new PlanetInfoPanel(
       planet,
@@ -902,6 +2091,16 @@ export class SpaceFlightScene extends GameScene {
     this.renderer.uiLayer.addChild(this.planetInfoPanel.container);
   }
 
+  /**
+   * Distance (px) from the ship to a planet's centre at which landing is
+   * allowed. Planets render large (US-070 #3), so this is the surface radius
+   * plus a fixed approach margin — otherwise the ship would have to fly to the
+   * planet's centre, deep inside the disc, before it could land.
+   */
+  private landingThreshold(sprite: PlanetSprite): number {
+    return sprite.displayRadius + this.LANDING_RANGE;
+  }
+
   private async onLandOnPlanet(planet: Planet): Promise<void> {
     // Guard: only allow landing when the ship has actually reached the planet.
     // Game-days already accrue during the flight (see updateShip), so we do NOT
@@ -911,7 +2110,7 @@ export class SpaceFlightScene extends GameScene {
     if (sprite && this.shipPhysics) {
       const dx = sprite.screenX - this.shipPhysics.shipX;
       const dy = sprite.screenY - this.shipPhysics.shipY;
-      if (Math.sqrt(dx * dx + dy * dy) > this.LANDING_RANGE) {
+      if (Math.sqrt(dx * dx + dy * dy) > this.landingThreshold(sprite)) {
         logger.warn("Cannot land: ship has not reached the planet yet");
         return;
       }
@@ -934,17 +2133,48 @@ export class SpaceFlightScene extends GameScene {
       `🖱️ POINTER DOWN: button=${event.button}, shift=${event.shiftKey}, global=(${event.global.x.toFixed(0)}, ${event.global.y.toFixed(0)})`,
     );
 
-    // Middle mouse button (1), right button (2), or Shift+Left for panning
+    // Right button (2) or Shift+Left for panning. The wheel (middle) button no
+    // longer pans — it caused the auto-scroll/zoom conflict and the right button
+    // is enough (per request).
     const isPanButton =
-      event.button === 1 ||
-      event.button === 2 ||
-      (event.button === 0 && event.shiftKey);
+      event.button === 2 || (event.button === 0 && event.shiftKey);
+
+    // Swallow the residual click carried over from the previous scene's button
+    // (US-070 #1: after confirming race selection, the same click was building a
+    // route here). Panning is unaffected so the player can still look around.
+    if (
+      !isPanButton &&
+      performance.now() - this.sceneReadyAt < this.INPUT_GRACE_MS
+    ) {
+      logger.info(
+        "Ignoring carried-over click during scene-entry grace window",
+      );
+      return;
+    }
+
+    // Modal panels (NPC contact, quest journal) are dismissed by clicking
+    // outside them. Their own children call stopPropagation(), so any click that
+    // reaches the stage while one is open is necessarily *outside* it — swallow
+    // it (close the panel, do NOT plan a route behind the modal). See bug: route
+    // was being built to the point hidden behind the dialog.
+    if (!isPanButton && this.isBlockingModalOpen()) {
+      this.closeBlockingModals();
+      return;
+    }
+
+    // While a hyperjump is committed the ship is auto-flying to the system edge;
+    // ignore navigation clicks so it can't be diverted (camera pan still works).
+    if (this.pendingWarp && !isPanButton) {
+      logger.info("Navigation locked: warping to system edge");
+      return;
+    }
 
     if (isPanButton) {
       event.preventDefault(); // Prevent default behavior for pan buttons
       this.isPanning = true;
       this.lastPanX = event.global.x;
       this.lastPanY = event.global.y;
+      setCanvasCursor(this.renderer.app, "grab"); // pan cursor (US-070 #5)
       logger.info(`✅ Pan mode activated with button ${event.button}`);
       return;
     }
@@ -963,24 +2193,26 @@ export class SpaceFlightScene extends GameScene {
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance < 50) {
-          // Execute planned route
-          this.shipPhysics.setTarget(this.plannedRoute.x, this.plannedRoute.y);
+          // Execute planned route (curving around the star if needed)
+          this.executeRouteTo(this.plannedRoute.x, this.plannedRoute.y);
           logger.info(
             `▶️ Executing planned route to (${this.plannedRoute.x.toFixed(0)}, ${this.plannedRoute.y.toFixed(0)})`,
           );
           // Keep the route line visible during movement
         } else {
-          // Clicked on different location - update planned route
-          this.plannedRoute = { x: world.x, y: world.y };
-          this.drawRouteLine();
+          // Clicked on different location - update planned route (empty space)
+          this.routeTargetPlanetId = null; // navigating to open space, not a planet
+          this.followNpcId = null; // manual nav cancels auto-follow
+          this.planRouteTo(world.x, world.y); // preview bows around the star
           logger.info(
             `🗺️ Route updated to (${world.x.toFixed(0)}, ${world.y.toFixed(0)})`,
           );
         }
       } else {
         // First click - plan the route (don't start moving yet)
-        this.plannedRoute = { x: world.x, y: world.y };
-        this.drawRouteLine();
+        this.routeTargetPlanetId = null; // navigating to open space, not a planet
+        this.followNpcId = null; // manual nav cancels auto-follow
+        this.planRouteTo(world.x, world.y); // preview bows around the star
         logger.info(
           `🗺️ Route planned to (${world.x.toFixed(0)}, ${world.y.toFixed(0)}). Click again to execute.`,
         );
@@ -1013,6 +2245,7 @@ export class SpaceFlightScene extends GameScene {
   private onPointerUp(): void {
     if (this.isPanning) {
       logger.info("❌ Pan mode deactivated");
+      setCanvasCursor(this.renderer.app, "default"); // release pan cursor
     }
     this.isPanning = false;
   }
@@ -1022,6 +2255,12 @@ export class SpaceFlightScene extends GameScene {
    */
   private onWheel(event: WheelEvent): void {
     event.preventDefault();
+
+    // Do not zoom while a pan drag is in progress. Middle-button "auto-scroll"
+    // (and trackpad momentum) can emit wheel events during a pan; suppressing
+    // them here keeps panning from also zooming (bug: pan + unwanted zoom).
+    if (this.isPanning) return;
+
     logger.info(`🔍 WHEEL EVENT FIRED! deltaY: ${event.deltaY}`);
 
     const oldZoom = this.cameraZoom;
@@ -1036,21 +2275,23 @@ export class SpaceFlightScene extends GameScene {
       Math.min(this.MAX_ZOOM, newZoom),
     );
 
-    // Zoom towards screen center to keep it fixed
-    // Formula: adjust pan so that the center point in world space stays at the same screen position
-    const screenCenterX = this.renderer.app.screen.width / 2;
-    const screenCenterY = this.renderer.app.screen.height / 2;
+    // Zoom towards the mouse cursor so the world point under the pointer stays
+    // fixed (US-070 #4). The wheel listener is on `window`, so the event carries
+    // viewport coordinates — convert them to canvas-local screen coordinates.
+    const rect = this.renderer.app.canvas.getBoundingClientRect();
+    const anchorX = event.clientX - rect.left;
+    const anchorY = event.clientY - rect.top;
 
-    // World coordinates of the center point before zoom
-    const worldCenterX = (screenCenterX - this.cameraPanX) / this.cameraZoom;
-    const worldCenterY = (screenCenterY - this.cameraPanY) / this.cameraZoom;
+    // World coordinates of the anchor point before zoom
+    const worldAnchorX = (anchorX - this.cameraPanX) / this.cameraZoom;
+    const worldAnchorY = (anchorY - this.cameraPanY) / this.cameraZoom;
 
     // Update zoom
     this.cameraZoom = clampedZoom;
 
-    // Adjust pan to keep the world center at the same screen position
-    this.cameraPanX = screenCenterX - worldCenterX * this.cameraZoom;
-    this.cameraPanY = screenCenterY - worldCenterY * this.cameraZoom;
+    // Adjust pan to keep the anchor point under the cursor at the same position
+    this.cameraPanX = anchorX - worldAnchorX * this.cameraZoom;
+    this.cameraPanY = anchorY - worldAnchorY * this.cameraZoom;
 
     this.applyCameraTransform();
     logger.info(
@@ -1061,8 +2302,125 @@ export class SpaceFlightScene extends GameScene {
   /**
    * Apply camera zoom and pan to game layer
    */
+  /**
+   * Camera-follow: while the ship is flying, keep it centred (the system is
+   * larger than the viewport). When the ship is stopped, the camera is left
+   * alone so the player can freely pan/zoom to look around (consistent with the
+   * turn-based pause, and preserves manual pan behaviour).
+   */
+  private updateCamera(): void {
+    if (!this.shipPhysics) return;
+    const moving =
+      this.shipPhysics.isMoving && this.shipPhysics.currentSpeed > 0.01;
+    const hasLead =
+      Math.abs(this.camLeadX) > 0.5 || Math.abs(this.camLeadY) > 0.5;
+    // Follow with smoothed look-ahead while moving; once stopped, let the
+    // residual lead ease to zero and then STOP touching the camera — so the
+    // player can freely pan to examine the map without it snapping back to the
+    // ship (US-070: don't yank the view to the ship between turns).
+    if (moving || hasLead) this.focusCameraWithLead();
+  }
+
+  /**
+   * Pan the camera so a point *ahead* of the ship (along its heading, scaled by
+   * speed) sits at screen centre — the ship rides toward the back of the view
+   * and the player can see what's coming. The lead is smoothed each frame.
+   */
+  private focusCameraWithLead(): void {
+    if (!this.shipPhysics) return;
+    const cx = this.renderer.app.screen.width / 2;
+    const cy = this.renderer.app.screen.height / 2;
+
+    // Desired lead (world units) in the heading direction, up to ~34% of a
+    // half-screen ahead at full speed. Zero when stopped → ship recenters.
+    const maxLeadWorld = (cx * 0.34) / this.cameraZoom;
+    const f = Math.min(1, this.shipPhysics.getSpeedFraction() * 1.4);
+    const desired = maxLeadWorld * f;
+    const desiredX = Math.cos(this.shipPhysics.shipAngle) * desired;
+    const desiredY = Math.sin(this.shipPhysics.shipAngle) * desired;
+
+    // Smooth toward the desired lead (and toward 0 when slowing/stopped).
+    this.camLeadX += (desiredX - this.camLeadX) * 0.06;
+    this.camLeadY += (desiredY - this.camLeadY) * 0.06;
+
+    const focusX = this.shipPhysics.shipX + this.camLeadX;
+    const focusY = this.shipPhysics.shipY + this.camLeadY;
+    // Ease the camera toward the target pan instead of snapping the ship to dead
+    // centre every frame — a gentle follow so the view glides rather than jerks
+    // when the ship turns or changes speed (US-070: camera not so abrupt).
+    const targetPanX = cx - focusX * this.cameraZoom;
+    const targetPanY = cy - focusY * this.cameraZoom;
+    const FOLLOW = 0.08; // lower = smoother / more lag
+    this.cameraPanX += (targetPanX - this.cameraPanX) * FOLLOW;
+    this.cameraPanY += (targetPanY - this.cameraPanY) * FOLLOW;
+    this.applyCameraTransform();
+  }
+
+  /**
+   * Re-anchor the screen-edge HUD after the window/canvas resizes. PixiJS keeps
+   * the canvas sized to the container (resizeTo), but elements positioned at
+   * screen.width/height were placed once at init and otherwise drift off-screen.
+   */
+  private handleResize(): void {
+    // Force the renderer to match the container *now* so app.screen is current.
+    // PixiJS's own resizeTo listener may run after ours; without this, growing
+    // the window back left the HUD anchored to the old (smaller) size.
+    this.renderer.resize();
+    const w = this.renderer.app.screen.width;
+    const h = this.renderer.app.screen.height;
+
+    if (this.backButton) {
+      this.backButton.x = w - 220;
+      this.backButton.y = 20;
+    }
+    if (this.cameraDebugText) {
+      this.cameraDebugText.x = w - 300;
+      this.cameraDebugText.y = h - 30;
+    }
+    if (this.toast) {
+      this.toast.x = w / 2;
+    }
+    if (this.playPauseButton) {
+      this.playPauseButton.x = w / 2;
+      this.playPauseButton.y = h - 40;
+    }
+    this.systemMiniMap?.reposition(w, h);
+
+    // Keep the ship framed after the viewport changed.
+    if (this.shipPhysics) this.centerCameraOnShip();
+  }
+
+  /**
+   * Centre the main view on a world point — used by the radar drag-to-pan. The
+   * residual camera lead is cleared so the view doesn't snap back while idle.
+   */
+  private focusCameraOnWorld(worldX: number, worldY: number): void {
+    const cx = this.renderer.app.screen.width / 2;
+    const cy = this.renderer.app.screen.height / 2;
+    this.camLeadX = 0;
+    this.camLeadY = 0;
+    this.cameraPanX = cx - worldX * this.cameraZoom;
+    this.cameraPanY = cy - worldY * this.cameraZoom;
+    this.applyCameraTransform();
+  }
+
+  /** Snap the camera so the ship sits exactly at screen centre (spawn). */
+  private centerCameraOnShip(): void {
+    if (!this.shipPhysics) return;
+    const cx = this.renderer.app.screen.width / 2;
+    const cy = this.renderer.app.screen.height / 2;
+    this.camLeadX = 0;
+    this.camLeadY = 0;
+    this.cameraPanX = cx - this.shipPhysics.shipX * this.cameraZoom;
+    this.cameraPanY = cy - this.shipPhysics.shipY * this.cameraZoom;
+    this.applyCameraTransform();
+  }
+
   private applyCameraTransform(): void {
     if (!this.renderer.gameLayer) return;
+
+    // Keep the view inside the background coverage so its edge is never shown.
+    this.clampCameraPan();
 
     // Apply scale
     this.renderer.gameLayer.scale.set(this.cameraZoom);
@@ -1073,6 +2431,41 @@ export class SpaceFlightScene extends GameScene {
 
     // Update debug display
     this.updateCameraDebugDisplay();
+  }
+
+  /**
+   * Clamp the camera pan so the visible viewport never extends past the
+   * background coverage (the nebula backdrop), i.e. the picture's edge can't be
+   * panned into view. When the viewport is larger than the bound (fully zoomed
+   * out) the system is simply centred on that axis.
+   */
+  private clampCameraPan(): void {
+    const z = this.cameraZoom;
+    // Slightly smaller than the backdrop half-size (BOUNDARY * 2.8 / 2 = 1.4)
+    // so a margin of gas always remains beyond the edge of the screen.
+    const half = this.SYSTEM_BOUNDARY_RADIUS * 1.25;
+    const sw = this.renderer.app.screen.width;
+    const sh = this.renderer.app.screen.height;
+
+    // Viewport world edges: left = -panX/z, right = (sw - panX)/z. Require the
+    // edges to stay within [center ± half].
+    const minX = this.starCenterX - half;
+    const maxX = this.starCenterX + half;
+    const panXMax = -minX * z;
+    const panXMin = sw - maxX * z;
+    this.cameraPanX =
+      panXMin > panXMax
+        ? (panXMin + panXMax) / 2
+        : Math.max(panXMin, Math.min(panXMax, this.cameraPanX));
+
+    const minY = this.starCenterY - half;
+    const maxY = this.starCenterY + half;
+    const panYMax = -minY * z;
+    const panYMin = sh - maxY * z;
+    this.cameraPanY =
+      panYMin > panYMax
+        ? (panYMin + panYMax) / 2
+        : Math.max(panYMin, Math.min(panYMax, this.cameraPanY));
   }
 
   /**
@@ -1107,10 +2500,94 @@ export class SpaceFlightScene extends GameScene {
     // Update physics
     this.shipPhysics.update(deltaTime);
 
-    // Check if ship just arrived (was moving, now stopped)
+    // Proactive landing: planets render large (US-070 #3), so land as soon as
+    // the ship touches the planet's surface margin instead of flying all the way
+    // to its centre (which sits deep inside the disc).
+    if (this.routeTargetPlanetId && this.shipPhysics.isMoving) {
+      const sprite = this.planetSprites.find(
+        (s) => s.planet.id === this.routeTargetPlanetId,
+      );
+      if (sprite) {
+        const d = Math.hypot(
+          sprite.screenX - this.shipPhysics.shipX,
+          sprite.screenY - this.shipPhysics.shipY,
+        );
+        if (d <= this.landingThreshold(sprite)) {
+          const planet = sprite.planet;
+          this.clearPlannedRoute();
+          void this.onLandOnPlanet(planet);
+          return;
+        }
+      }
+    }
+
+    // Check if ship just arrived (was moving, now stopped). Physics flows through
+    // the curved path itself, so reaching a stop here means the final waypoint.
     if (wasMoving && !this.shipPhysics.isMoving) {
-      logger.info("🎯 Ship arrived at destination. Clearing planned route.");
+      logger.info("🎯 Ship arrived at destination.");
+
+      // Reached the system edge with a pending hyperjump → execute the warp.
+      if (this.pendingWarp && !this.warpInProgress) {
+        this.clearPlannedRoute();
+        void this.performWarp();
+        return;
+      }
+
+      // Auto-follow an attacked NPC is owned by updateCombat (chase → hold →
+      // fire). On arrival here we simply keep the turn running and let combat
+      // decide whether to re-route or open fire.
+      if (this.followNpcId) return;
+
+      // If the route targeted a planet, land on arrival (the player set the
+      // planet as the destination, so landing is the expected outcome).
+      if (this.routeTargetPlanetId) {
+        const sprite = this.planetSprites.find(
+          (s) => s.planet.id === this.routeTargetPlanetId,
+        );
+        if (sprite) {
+          const dist = Math.hypot(
+            sprite.screenX - this.shipPhysics.shipX,
+            sprite.screenY - this.shipPhysics.shipY,
+          );
+          if (dist <= this.landingThreshold(sprite)) {
+            const planet = sprite.planet;
+            this.clearPlannedRoute();
+            void this.onLandOnPlanet(planet);
+            return;
+          }
+          // The planet drifted along its orbit while we flew — keep chasing its
+          // current position (still avoiding the star) so we arrive and land.
+          this.executeRouteTo(sprite.screenX, sprite.screenY);
+          return;
+        }
+      }
+
+      // Arrived at an open-space destination with nothing else to do → the turn
+      // ends (Play/Pause model).
       this.clearPlannedRoute();
+      this.isTurnRunning = false;
+    }
+
+    // Safety auto-stop: if the hull drops below 30% mid-flight, halt the engines
+    // so the player can divert to the nearest planet and repair before pressing
+    // on. Latched so the warning fires once per descent below the threshold.
+    const ship = this.gameEngine?.player?.ship;
+    if (ship && ship.maxHull > 0) {
+      const hullFraction = ship.hullHP / ship.maxHull;
+      if (hullFraction < 0.3) {
+        if (this.shipPhysics.isMoving && !this.lowHullStopped) {
+          this.lowHullStopped = true;
+          this.followNpcId = null;
+          this.clearPlannedRoute();
+          this.endTurn(); // stop the ship and end the turn
+          this.showMessage(
+            "⚠ Корпус < 30% — двигатели остановлены. Найдите планету для ремонта.",
+            0xff5555,
+          );
+        }
+      } else {
+        this.lowHullStopped = false;
+      }
     }
 
     // Turn-based time: only advance days when ship is moving
@@ -1125,8 +2602,9 @@ export class SpaceFlightScene extends GameScene {
       while (this.distanceTraveled >= this.DISTANCE_PER_DAY) {
         this.distanceTraveled -= this.DISTANCE_PER_DAY;
         if (this.gameEngine?.galaxy) {
-          this.gameEngine.galaxy.simulateDay();
+          this.gameEngine.advanceGalaxyDay();
           this.updateDayCounter(); // Update UI
+          this.refreshNpcShips(); // NPCs may have arrived/departed this day
 
           // Check for expired quests after each day
           if (this.gameEngine.player) {
@@ -1140,6 +2618,14 @@ export class SpaceFlightScene extends GameScene {
             `Day passed during flight. Current day: ${this.gameEngine.galaxy.gameDays}`,
           );
         }
+
+        // Pause requested → end the turn at this day boundary (the ship stops at
+        // the end of the day segment, per the Play/Pause spec).
+        if (this.pauseRequested) {
+          this.endTurn();
+          this.showMessage("⏸ Ход завершён", 0xffcc00);
+          break;
+        }
       }
     }
 
@@ -1150,6 +2636,98 @@ export class SpaceFlightScene extends GameScene {
 
     // Redraw ship for engine effects (uses isMoving from physics)
     this.drawShip();
+
+    // "Wait" turn (US-070 #5): the player may run a turn with no course — the
+    // ship holds position while the living galaxy (NPCs) and the calendar keep
+    // advancing, until Pause. Advance game days on a timer while idle so time
+    // genuinely passes; combat hold-station and pending warps are handled
+    // elsewhere and excluded here.
+    if (
+      this.isTurnRunning &&
+      !this.shipPhysics.isMoving &&
+      !this.followNpcId &&
+      !this.pendingWarp
+    ) {
+      this.advanceWaitTime(deltaTime);
+    }
+  }
+
+  /**
+   * Advance the calendar while the ship waits in place (a course-less turn). A
+   * fractional day accumulates smoothly (so planets keep drifting); whole days
+   * are committed to the galaxy as they tick over, and a requested Pause ends the
+   * turn at the next day boundary — mirroring the in-flight day model.
+   */
+  private advanceWaitTime(deltaTime: number): void {
+    this.waitDayAccum += deltaTime / this.MS_PER_WAIT_DAY;
+    while (this.waitDayAccum >= 1) {
+      this.waitDayAccum -= 1;
+      if (this.gameEngine?.galaxy) {
+        this.gameEngine.advanceGalaxyDay();
+        this.updateDayCounter();
+        this.refreshNpcShips();
+        if (this.gameEngine.player) {
+          this.gameEngine.questManager.checkExpiredQuests(
+            this.gameEngine.galaxy.gameDays,
+            this.gameEngine.player,
+          );
+        }
+      }
+      if (this.pauseRequested) {
+        this.endTurn();
+        this.showMessage("⏸ Ход завершён", 0xffcc00);
+        return;
+      }
+    }
+  }
+
+  /**
+   * Execute the committed hyperjump once the ship has reached the system edge
+   * (US-023). Deducts fuel, moves the player to the target system, reveals it
+   * and its neighbours, auto-saves, then transitions to the new system with the
+   * ship entering from the origin side (entry = -exit).
+   */
+  private async performWarp(): Promise<void> {
+    if (
+      !this.pendingWarp ||
+      this.warpInProgress ||
+      !this.gameEngine?.player ||
+      !this.gameEngine.galaxy
+    ) {
+      return;
+    }
+    this.warpInProgress = true;
+
+    const { targetSystemId, fuelCost, exitVector } = this.pendingWarp;
+    this.pendingWarp = null; // consume so the jump can't re-fire
+
+    const target = this.gameEngine.galaxy.systems.find(
+      (s) => s.id === targetSystemId,
+    );
+    if (!target) {
+      logger.error(`Warp target system not found: ${targetSystemId}`);
+      this.warpInProgress = false;
+      return;
+    }
+
+    this.gameEngine.player.ship.energy -= fuelCost;
+    this.gameEngine.player.currentSystemId = targetSystemId;
+    this.gameEngine.galaxy.revealSystemAndNeighbors(targetSystemId);
+    logger.info(
+      `Hyperjump to ${target.name} complete. Fuel left: ${this.gameEngine.player.ship.energy}`,
+    );
+
+    this.gameEngine.saveGame("auto").catch((e) => {
+      logger.error("Auto-save after hyperjump failed:", e);
+    });
+
+    // Appear on the side of the new system that faces the origin.
+    const entryVector = { x: -exitVector.x, y: -exitVector.y };
+    await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
+      gameEngine: this.gameEngine,
+      entryVector,
+      warpArrival: true,
+    });
   }
 
   /**
@@ -1157,7 +2735,9 @@ export class SpaceFlightScene extends GameScene {
    */
   private updateDayCounter(): void {
     if (this.dayCounterText && this.gameEngine?.galaxy) {
-      this.dayCounterText.text = `День: ${this.gameEngine.galaxy.gameDays}`;
+      this.dayCounterText.text = formatGameDate(
+        this.gameEngine.galaxy.gameDays,
+      );
     }
   }
 
@@ -1173,39 +2753,55 @@ export class SpaceFlightScene extends GameScene {
       this.routeLineGraphics.destroy();
     }
 
-    // Create new route line
+    // Create new route line. Non-interactive so its dashes/markers can never
+    // sit over a ship and swallow its click (US-070 #7).
     this.routeLineGraphics = new Graphics();
+    this.routeLineGraphics.eventMode = "none";
 
-    // Dashed line from ship to target
-    const fromX = this.shipPhysics.shipX;
-    const fromY = this.shipPhysics.shipY;
+    // Polyline ship → (curved waypoints) → destination. When the path is a
+    // straight clear shot, routePath is just the destination.
+    const path =
+      this.routePath.length > 0 ? this.routePath : [this.plannedRoute];
+    const points = [
+      { x: this.shipPhysics.shipX, y: this.shipPhysics.shipY },
+      ...path,
+    ];
     const toX = this.plannedRoute.x;
     const toY = this.plannedRoute.y;
 
-    const dx = toX - fromX;
-    const dy = toY - fromY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
     const dashLength = 20;
     const gapLength = 10;
     const totalLength = dashLength + gapLength;
-    const numSegments = Math.floor(distance / totalLength);
 
-    this.routeLineGraphics.moveTo(fromX, fromY);
-
-    for (let i = 0; i < numSegments; i++) {
-      const t1 = (i * totalLength) / distance;
-      const t2 = (i * totalLength + dashLength) / distance;
-
-      const x1 = fromX + dx * t1;
-      const y1 = fromY + dy * t1;
-      const x2 = fromX + dx * t2;
-      const y2 = fromY + dy * t2;
-
-      this.routeLineGraphics.moveTo(x1, y1);
-      this.routeLineGraphics.lineTo(x2, y2);
+    // Dash along each segment of the polyline.
+    for (let s = 0; s < points.length - 1; s++) {
+      const ax = points[s].x;
+      const ay = points[s].y;
+      const bx = points[s + 1].x;
+      const by = points[s + 1].y;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const distance = Math.hypot(dx, dy);
+      const numSegments = Math.floor(distance / totalLength);
+      for (let i = 0; i < numSegments; i++) {
+        const t1 = (i * totalLength) / distance;
+        const t2 = (i * totalLength + dashLength) / distance;
+        this.routeLineGraphics.moveTo(ax + dx * t1, ay + dy * t1);
+        this.routeLineGraphics.lineTo(ax + dx * t2, ay + dy * t2);
+      }
     }
 
     this.routeLineGraphics.stroke({ color: 0x00ffff, width: 2, alpha: 0.6 });
+
+    // Per-day tick marks along the route: a short perpendicular dash every
+    // DISTANCE_PER_DAY pixels, so the player can read how many days the trip
+    // takes (like the day "divisions" in the original game). See dayTickMarks.
+    const tickLen = 6;
+    for (const t of dayTickMarks(points, this.DISTANCE_PER_DAY)) {
+      this.routeLineGraphics.moveTo(t.x - t.px * tickLen, t.y - t.py * tickLen);
+      this.routeLineGraphics.lineTo(t.x + t.px * tickLen, t.y + t.py * tickLen);
+    }
+    this.routeLineGraphics.stroke({ color: 0xffee66, width: 2, alpha: 0.9 });
 
     // Check if route target is near a planet (within 50px radius)
     const isLandingOnPlanet = this.planetSprites.some((sprite) => {
@@ -1233,15 +2829,16 @@ export class SpaceFlightScene extends GameScene {
   private drawLandingMarker(x: number, y: number): void {
     if (!this.routeLineGraphics) return;
 
-    // Outer landing zone circles
-    this.routeLineGraphics.circle(x, y, 25);
-    this.routeLineGraphics.stroke({ color: 0xff9900, width: 3, alpha: 0.8 });
-    this.routeLineGraphics.circle(x, y, 30);
-    this.routeLineGraphics.stroke({ color: 0xff9900, width: 2, alpha: 0.4 });
+    // Outer landing zone circles (kept compact so the marker doesn't swamp the
+    // planet it points at).
+    this.routeLineGraphics.circle(x, y, 12);
+    this.routeLineGraphics.stroke({ color: 0xff9900, width: 2, alpha: 0.8 });
+    this.routeLineGraphics.circle(x, y, 16);
+    this.routeLineGraphics.stroke({ color: 0xff9900, width: 1.5, alpha: 0.4 });
 
     // Downward arrow (landing symbol)
-    const arrowSize = 15;
-    const arrowWidth = 8;
+    const arrowSize = 8;
+    const arrowWidth = 5;
 
     // Arrow shaft
     this.routeLineGraphics.moveTo(x, y - arrowSize);
@@ -1261,9 +2858,9 @@ export class SpaceFlightScene extends GameScene {
       .fill({ color: 0xff9900, alpha: 1.0 });
 
     // Small base platform indicator
-    this.routeLineGraphics.moveTo(x - 12, y + arrowSize + 5);
-    this.routeLineGraphics.lineTo(x + 12, y + arrowSize + 5);
-    this.routeLineGraphics.stroke({ color: 0xff9900, width: 2, alpha: 0.7 });
+    this.routeLineGraphics.moveTo(x - 8, y + arrowSize + 4);
+    this.routeLineGraphics.lineTo(x + 8, y + arrowSize + 4);
+    this.routeLineGraphics.stroke({ color: 0xff9900, width: 1.5, alpha: 0.7 });
   }
 
   /**
@@ -1272,18 +2869,78 @@ export class SpaceFlightScene extends GameScene {
   private drawNavigationMarker(x: number, y: number): void {
     if (!this.routeLineGraphics) return;
 
-    // Pulsing circles for generic navigation target
-    this.routeLineGraphics.circle(x, y, 15);
-    this.routeLineGraphics.stroke({ color: 0x00ffff, width: 3, alpha: 0.8 });
-    this.routeLineGraphics.circle(x, y, 20);
-    this.routeLineGraphics.stroke({ color: 0x00ffff, width: 2, alpha: 0.4 });
+    // Pulsing circles for generic navigation target (compact)
+    this.routeLineGraphics.circle(x, y, 8);
+    this.routeLineGraphics.stroke({ color: 0x00ffff, width: 2, alpha: 0.8 });
+    this.routeLineGraphics.circle(x, y, 11);
+    this.routeLineGraphics.stroke({ color: 0x00ffff, width: 1.5, alpha: 0.4 });
   }
 
   /**
    * Clear planned route and route line
    */
+  /**
+   * Build a path from (fx,fy) to (tx,ty) that bows around the star instead of
+   * flying through it. Returns just [{to}] when the straight segment is clear,
+   * otherwise an arc of waypoints around the star plus the destination.
+   */
+  private computeAvoidancePath(
+    fx: number,
+    fy: number,
+    tx: number,
+    ty: number,
+  ): { x: number; y: number }[] {
+    return avoidStarPath(
+      fx,
+      fy,
+      tx,
+      ty,
+      this.starCenterX,
+      this.starCenterY,
+      this.STAR_AVOID_RADIUS,
+    );
+  }
+
+  /**
+   * Set the planned-route point and draw its preview, bowing the preview around
+   * the star so the dashed line never appears to cut through the sun before the
+   * player commits (US-070 #6: the route was drawn straight through the star on
+   * the first click, only curving once executed).
+   */
+  private planRouteTo(x: number, y: number): void {
+    if (!this.shipPhysics) return;
+    this.plannedRoute = { x, y };
+    this.routePath = this.computeAvoidancePath(
+      this.shipPhysics.shipX,
+      this.shipPhysics.shipY,
+      x,
+      y,
+    );
+    this.drawRouteLine();
+  }
+
+  /** Start flying to (x,y) along a star-avoiding path of waypoints. */
+  private executeRouteTo(x: number, y: number): void {
+    if (!this.shipPhysics) return;
+    this.routePath = this.computeAvoidancePath(
+      this.shipPhysics.shipX,
+      this.shipPhysics.shipY,
+      x,
+      y,
+    );
+    // Hand the whole curved path to physics; it flows through the waypoints
+    // without stopping (smooth motion around the star — US-070 #5).
+    this.shipPhysics.setPath(this.routePath);
+    this.plannedRoute = { x, y };
+    this.isTurnRunning = true; // executing a route runs the turn (Play)
+    this.drawRouteLine();
+  }
+
   private clearPlannedRoute(): void {
     this.plannedRoute = null;
+    this.routeTargetPlanetId = null;
+    this.followNpcId = null;
+    this.routePath = [];
 
     if (this.routeLineGraphics) {
       this.renderer.gameLayer.removeChild(this.routeLineGraphics);
@@ -1297,11 +2954,21 @@ export class SpaceFlightScene extends GameScene {
    * Turn-based: planets only rotate when ship is moving
    */
   private updatePlanets(deltaTime: number): void {
-    // Turn-based gameplay: only update planets when ship is moving
-    const isShipMoving =
-      this.shipPhysics?.isMoving && this.shipPhysics.currentSpeed > 0.01;
+    // Orbital position tracks elapsed game days (whole days advance as the ship
+    // flies; the in-flight fraction makes the motion smooth). Because position
+    // is a pure function of game time, planets only advance by the days actually
+    // spent away — no full orbit during a brief landing (US-070 #9).
+    const gameDays = this.gameEngine?.galaxy?.gameDays ?? 0;
+    const fractionalDay = this.distanceTraveled / this.DISTANCE_PER_DAY;
+    // While waiting in place, waitDayAccum carries the smooth sub-day progress so
+    // planets keep drifting (US-070 #5).
+    const currentDays = gameDays + fractionalDay + this.waitDayAccum;
+    for (const sprite of this.planetSprites) {
+      sprite.setOrbitForDay(currentDays);
+    }
 
-    if (isShipMoving) {
+    // Cosmetic axial spin / moons only advance while the turn is running.
+    if (this.isTurnRunning) {
       for (const sprite of this.planetSprites) {
         sprite.update(deltaTime);
       }
@@ -1309,47 +2976,671 @@ export class SpaceFlightScene extends GameScene {
 
     // Always update mini-map (even when paused, for visual feedback)
     if (this.systemMiniMap && this.shipPhysics) {
+      const npcDots = this.npcSprites.map((s) => ({
+        x: s.x,
+        y: s.y,
+        color: s.mapColor,
+      }));
+      // Show the route on the radar: the planned destination (set on planning
+      // or while travelling), else the live target while the ship is moving.
+      const route =
+        this.plannedRoute ??
+        (this.shipPhysics.isMoving
+          ? {
+              x: this.shipPhysics.getTargetX(),
+              y: this.shipPhysics.getTargetY(),
+            }
+          : null);
+      // Current camera view in world coords → radar viewport rectangle.
+      const z = this.cameraZoom;
+      const viewport = {
+        minX: (0 - this.cameraPanX) / z,
+        minY: (0 - this.cameraPanY) / z,
+        maxX: (this.renderer.app.screen.width - this.cameraPanX) / z,
+        maxY: (this.renderer.app.screen.height - this.cameraPanY) / z,
+      };
       this.systemMiniMap.updateWithSprites(
         this.planetSprites,
         this.shipPhysics.shipX,
         this.shipPhysics.shipY,
         this.starCenterX,
         this.starCenterY,
+        npcDots,
+        route,
+        this.SYSTEM_BOUNDARY_RADIUS,
+        viewport,
+        this.SCANNER_RANGE,
       );
     }
   }
 
-  private updateStarField(deltaTime: number): void {
-    if (!this.shipPhysics) return;
+  /**
+   * Draw the system boundary — the edge where ships hyperjump in and out.
+   * Faint dashed-looking ring; non-interactive so it never blocks clicks.
+   */
+  private createSystemBoundary(): void {
+    const ring = new Graphics();
+    ring.circle(
+      this.starCenterX,
+      this.starCenterY,
+      this.SYSTEM_BOUNDARY_RADIUS,
+    );
+    ring.stroke({ width: 2, color: 0x2266aa, alpha: 0.35 });
+    ring.eventMode = "none";
+    // Cleaned up with the rest of the game layer in destroy(); no field needed.
+    this.renderer.gameLayer.addChild(ring);
+  }
+
+  /**
+   * Create NPC ship sprites for every NPC currently present in this system.
+   */
+  private createNpcShips(): void {
+    const galaxy = this.gameEngine?.galaxy;
+    const systemId = this.gameEngine?.player?.currentSystemId;
+    if (!galaxy || !systemId) return;
+
+    // NPCs already in the system when we enter are distributed inside it (they
+    // didn't just arrive), so they spawn at interior positions.
+    for (const npc of npcsPresentInSystem(galaxy, systemId)) {
+      this.addNpcSprite(npc, false);
+    }
+    logger.info(`Created ${this.npcSprites.length} NPC sprites`);
+  }
+
+  /** Geometry NPC ships move within (band + boundary edge). */
+  private npcBounds(): SystemBounds {
+    return {
+      cx: this.starCenterX,
+      cy: this.starCenterY,
+      rInner: this.SYSTEM_INNER_RADIUS,
+      rOuter: this.SYSTEM_OUTER_RADIUS,
+      boundary: this.SYSTEM_BOUNDARY_RADIUS,
+    };
+  }
+
+  /**
+   * Spawn a single NPC sprite. When `entry` is true the ship just hyperjumped
+   * in, so it appears on the system boundary and flies inward; otherwise it is
+   * placed at a random interior position.
+   */
+  private addNpcSprite(npc: NpcShip, entry: boolean): void {
+    const bounds = this.npcBounds();
+    const angle = Math.random() * Math.PI * 2;
+    const radius = entry
+      ? bounds.boundary
+      : bounds.rInner + Math.random() * (bounds.rOuter - bounds.rInner);
+    const sprite = new NpcShipSprite(
+      npc,
+      bounds.cx + Math.cos(angle) * radius,
+      bounds.cy + Math.sin(angle) * radius,
+      bounds,
+    );
+    sprite.setClickHandler((n) => this.onNpcClick(n));
+    sprite.container.zIndex = 100; // above planet discs so clicks reach the ship
+    // Non-pirates "visit" a planet: anchor them to loiter near one (deterministic
+    // by id) so traders/rangers/patrols cluster at planets instead of aimlessly
+    // crossing the system. Pirates keep roaming the whole band.
+    if (npc.role !== NpcRole.PIRATE && this.planetSprites.length > 0) {
+      const idx = this.hashId(npc.id) % this.planetSprites.length;
+      const p = this.planetSprites[idx];
+      sprite.setAnchor(p.screenX, p.screenY);
+    }
+    this.renderer.gameLayer.addChild(sprite.container);
+    this.npcSprites.push(sprite);
+  }
+
+  /**
+   * Sync NPC sprites with the simulation after a day passes (Scenario 8.5):
+   * ships that left the system fly out to the boundary and hyperjump; newly
+   * arrived ships appear on the boundary and fly in. No mid-system pop-in/out.
+   */
+  private refreshNpcShips(): void {
+    const galaxy = this.gameEngine?.galaxy;
+    const systemId = this.gameEngine?.player?.currentSystemId;
+    if (!galaxy || !systemId) return;
+
+    const present = npcsPresentInSystem(galaxy, systemId);
+    const presentIds = new Set(present.map((n) => n.id));
+
+    // NPCs no longer present begin flying out toward the boundary (removed once
+    // they reach it, in updateNpcShips).
+    for (const sprite of this.npcSprites) {
+      if (!presentIds.has(sprite.npc.id)) sprite.beginDeparture();
+    }
+
+    // Newly arrived NPCs enter from the boundary.
+    const existing = new Set(this.npcSprites.map((s) => s.npc.id));
+    for (const npc of present) {
+      if (!existing.has(npc.id)) this.addNpcSprite(npc, true);
+    }
+
+    // Close the contact panel if its NPC has left the system.
+    if (this.contactNpcId && !presentIds.has(this.contactNpcId)) {
+      this.closeNpcContactPanel();
+    }
+  }
+
+  /** Advance NPC movement only while the world is running (turn-based). */
+  private updateNpcShips(deltaTime: number): void {
+    // The world runs while the turn is running (flying, or holding station in
+    // combat) — not only while the ship is physically moving.
+    if (!this.isTurnRunning) return;
+
+    for (let i = this.npcSprites.length - 1; i >= 0; i--) {
+      const sprite = this.npcSprites[i];
+      sprite.update(deltaTime);
+      if (sprite.isGone()) {
+        sprite.destroy();
+        this.npcSprites.splice(i, 1);
+      }
+    }
+  }
+
+  /** Small deterministic hash of a string id (FNV-1a) for stable assignment. */
+  private hashId(s: string): number {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  /** Open the contact panel for a clicked NPC ship. */
+  private onNpcClick(npc: NpcShip): void {
+    this.closeNpcContactPanel();
+    this.contactNpcId = npc.id;
+    // Hailing/trading and the detailed readout are offered within radar/scanner
+    // range; beyond it the panel only offers "Приблизиться" to close the gap
+    // (US-070 #3). The gate is the scanner range, not the (much shorter) firing
+    // range — you can talk and trade well before you are in weapons reach.
+    const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
+    const inRange =
+      !!sprite &&
+      !!this.shipPhysics &&
+      Math.hypot(
+        sprite.x - this.shipPhysics.shipX,
+        sprite.y - this.shipPhysics.shipY,
+      ) <= this.SCANNER_RANGE;
+    this.npcContactPanel = new NpcContactPanel(
+      npc,
+      this.renderer.app.screen.width,
+      this.renderer.app.screen.height,
+      {
+        onHail: () => this.onHailNpc(npc),
+        onTrade: () => this.onTradeNpc(npc),
+        onAttack: () => this.onAttackNpc(npc),
+        onApproach: () => this.onApproachNpc(npc),
+        onClose: () => this.closeNpcContactPanel(),
+      },
+      inRange,
+    );
+    this.renderer.uiLayer.addChild(this.npcContactPanel.container);
+  }
+
+  /**
+   * "Приблизиться": plot a course to the target's current position and fly there
+   * so the ship closes to firing range, without opening fire (US-070 #2). The
+   * player can then re-open the panel to hail/trade or attack.
+   */
+  private onApproachNpc(npc: NpcShip): void {
+    const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
+    this.closeNpcContactPanel();
+    if (!sprite || !this.shipPhysics) return;
+    this.followNpcId = null; // approach only — not an attack
+    this.routeTargetPlanetId = null;
+    this.executeRouteTo(sprite.x, sprite.y);
+    this.showMessage(`Сближение: ${npc.name}`, 0x88ccff);
+  }
+
+  /** "Связаться": show a short greeting from the NPC. */
+  private onHailNpc(npc: NpcShip): void {
+    const lines = [
+      "Приветствую, рейнджер. Чистого космоса.",
+      "Не мешай — у меня груз по расписанию.",
+      "Держись подальше, если не ищешь неприятностей.",
+      "Слыхал о возмущениях у рубежа? Будь начеку.",
+    ];
+    const line = lines[Math.floor(Math.random() * lines.length)];
+    this.showMessage(`${npc.name}: «${line}»`, 0x88ccff);
+  }
+
+  /** "Торговать": trade-with-ships is not implemented yet — be honest. */
+  private onTradeNpc(npc: NpcShip): void {
+    this.showMessage(
+      `Торговля с ${npc.name} пока недоступна в полёте.`,
+      0xffaa00,
+    );
+  }
+
+  /**
+   * "Атаковать": close the panel and set the ship to auto-follow (intercept)
+   * the target, routing toward it (curving around the star if needed). Weapons
+   * fire / tactical combat is a later slice — for now the ship closes in.
+   */
+  private onAttackNpc(npc: NpcShip): void {
+    const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
+    this.closeNpcContactPanel();
+    if (!sprite || !this.shipPhysics) return;
+    this.followNpcId = npc.id;
+    this.routeTargetPlanetId = null;
+    this.executeRouteTo(sprite.x, sprite.y);
+    this.showMessage(`Перехват: ${npc.name}`, 0xff5555);
+  }
+
+  /**
+   * Play/Pause turn control. When paused: Play executes the planned route (the
+   * turn starts running). While running: Pause ends the turn at the next day
+   * segment (or immediately if the ship is holding station in combat).
+   */
+  private onPlayPause(): void {
+    if (this.isTurnRunning) {
+      // Pause: stop at the end of the current day segment while flying; if the
+      // ship is holding station (e.g. firing on a target) end the turn now.
+      if (this.shipPhysics?.isMoving) {
+        this.pauseRequested = true;
+        this.showMessage("⏸ Пауза в конце отрезка дня", 0xffcc00);
+      } else {
+        this.endTurn();
+      }
+      return;
+    }
+    // Play: run the planned route (or close on an attack target). With no course
+    // at all, run a "wait" turn — the ship holds position while the world keeps
+    // moving and the calendar advances, until Pause (US-070 #5).
+    if (this.plannedRoute) {
+      this.executeRouteTo(this.plannedRoute.x, this.plannedRoute.y);
+    } else if (this.followNpcId) {
+      const sprite = this.npcSprites.find((s) => s.npc.id === this.followNpcId);
+      if (sprite) this.executeRouteTo(sprite.x, sprite.y);
+    } else {
+      this.waitDayAccum = 0;
+      this.isTurnRunning = true; // course-less wait: time passes, ship stays put
+      this.showMessage("⏳ Ожидание… (мир движется)", 0x88ccff);
+    }
+  }
+
+  /** End the running turn: stop the ship and freeze the world (pause). */
+  private endTurn(): void {
+    this.isTurnRunning = false;
+    this.pauseRequested = false;
+    this.waitDayAccum = 0;
+    if (this.shipPhysics) {
+      this.shipPhysics.setTarget(
+        this.shipPhysics.shipX,
+        this.shipPhysics.shipY,
+      );
+      this.shipPhysics.isMoving = false;
+      this.shipPhysics.currentSpeed = 0;
+    }
+  }
+
+  /** Refresh the Play/Pause button label/colour to match the turn state. */
+  private updatePlayPauseButton(): void {
+    if (!this.playPauseButton) return;
+    if (this.isTurnRunning) {
+      this.playPauseButton.text = this.pauseRequested ? "⏸ …" : "⏸ ПАУЗА";
+      this.playPauseButton.style.fill = 0xffcc00;
+    } else {
+      // ХОД is always available — with a course it flies it, without one it runs
+      // a wait turn (US-070 #5), so the button is always shown active.
+      this.playPauseButton.text = "▶ ХОД";
+      this.playPauseButton.style.fill = 0x00ff88;
+    }
+  }
+
+  /**
+   * Auto-attack: while a follow target is set and the turn is running, close to
+   * weapon range, then hold station and exchange fire until the target is
+   * destroyed, the player drops below 30% hull, or the target is lost.
+   */
+  private updateCombat(deltaTime: number): void {
+    // Clear last frame's weapon FX; it is redrawn below only while firing.
+    this.combatFxGraphics?.clear();
+    if (!this.isTurnRunning || !this.followNpcId || !this.shipPhysics) return;
+    const ship = this.gameEngine?.player?.ship;
+    if (!ship) return;
+
+    const sprite = this.npcSprites.find((s) => s.npc.id === this.followNpcId);
+    if (!sprite) {
+      this.showMessage("Цель потеряна", 0xffaa00);
+      this.followNpcId = null;
+      return;
+    }
+    const npc = sprite.npc;
+    const dist = Math.hypot(
+      sprite.x - this.shipPhysics.shipX,
+      sprite.y - this.shipPhysics.shipY,
+    );
+
+    // Out of range → keep chasing (auto-follow).
+    if (dist > this.WEAPON_RANGE) {
+      if (!this.shipPhysics.isMoving) this.executeRouteTo(sprite.x, sprite.y);
+      return;
+    }
+
+    // In range → hold station and fire.
+    if (this.shipPhysics.isMoving) {
+      this.shipPhysics.setTarget(
+        this.shipPhysics.shipX,
+        this.shipPhysics.shipY,
+      );
+      this.shipPhysics.isMoving = false;
+      this.shipPhysics.currentSpeed = 0;
+    }
+
+    const dt = deltaTime / 1000;
+    this.applyDamage(npc, this.PLAYER_DPS * dt);
+    this.applyDamage(ship, npc.damage * this.NPC_DPS_SCALE * dt);
+
+    // Visible exchange of fire: a pulsing beam from the ship to the target plus
+    // an impact flash, so the player can see combat resolving in real time.
+    this.drawCombatBeam(sprite.x, sprite.y);
+
+    // Throttled combat readout.
+    const now = this.bgElapsed;
+    if (now - this.combatToastAt > 500) {
+      this.combatToastAt = now;
+      const tHP = Math.max(0, Math.round(npc.hullHP));
+      const pHP = Math.max(0, Math.round(ship.hullHP));
+      this.showMessage(`Бой: ${npc.name} ${tHP}HP · вы ${pHP}HP`, 0xff7755);
+    }
+
+    if (npc.hullHP <= 0) {
+      this.destroyTarget(sprite);
+      return;
+    }
+    if (ship.maxHull > 0 && ship.hullHP / ship.maxHull < 0.3) {
+      // Break off: hull critical. Disengage and end the turn so the player can
+      // limp to a planet and repair (the ship is already holding station).
+      this.followNpcId = null;
+      this.endTurn();
+      this.showMessage(
+        "⚠ Корпус < 30% — выхожу из боя. Нужен ремонт на планете.",
+        0xff5555,
+      );
+    }
+  }
+
+  /** Draw a pulsing weapon beam from the ship to (tx,ty) plus an impact flash. */
+  private drawCombatBeam(tx: number, ty: number): void {
+    if (!this.combatFxGraphics || !this.shipPhysics) return;
+    const g = this.combatFxGraphics;
+    const sx = this.shipPhysics.shipX;
+    const sy = this.shipPhysics.shipY;
+
+    const dx = tx - sx;
+    const dy = ty - sy;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+    // Perpendicular, for muzzle/impact spread.
+    const px = -uy;
+    const py = ux;
+
+    const t = this.bgElapsed;
+    // Rapid flicker so it reads as repeated bolts rather than a static line.
+    const pulse = 0.45 + 0.55 * Math.abs(Math.sin(t / 45));
+
+    // Outer glow + bright core (two passes) for a hot energy-beam look.
+    g.moveTo(sx, sy).lineTo(tx, ty);
+    g.stroke({ width: 7, color: 0xff2244, alpha: 0.18 * pulse });
+    g.moveTo(sx, sy).lineTo(tx, ty);
+    g.stroke({ width: 3, color: 0xff5566, alpha: 0.6 * pulse });
+    g.moveTo(sx, sy).lineTo(tx, ty);
+    g.stroke({ width: 1.2, color: 0xffe0a0, alpha: 0.9 * pulse });
+
+    // Travelling bolts: bright packets sliding from the ship to the target so the
+    // beam reads as a stream of fire rather than a static line.
+    const bolts = 3;
+    for (let i = 0; i < bolts; i++) {
+      const phase = (t / 220 + i / bolts) % 1;
+      const bx = sx + ux * len * phase;
+      const by = sy + uy * len * phase;
+      const fade = Math.sin(phase * Math.PI); // dim at both ends
+      g.circle(bx, by, 3.2).fill({ color: 0xfff0c0, alpha: 0.85 * fade });
+      g.circle(bx, by, 6).fill({ color: 0xff6644, alpha: 0.3 * fade });
+    }
+
+    // Muzzle flash at the ship nose.
+    const mx = sx + ux * 14;
+    const my = sy + uy * 14;
+    const mflash = 0.6 + 0.4 * Math.abs(Math.sin(t / 30));
+    g.circle(mx, my, 5 * mflash).fill({ color: 0xffdd88, alpha: 0.7 * mflash });
+
+    // Impact: expanding shock ring + a few sparks fanning off the hull.
+    const ring = (t / 90) % 1;
+    g.circle(tx, ty, 4 + ring * 16).stroke({
+      width: 2,
+      color: 0xffcc55,
+      alpha: 0.5 * (1 - ring),
+    });
+    g.circle(tx, ty, 5 + 3 * pulse).fill({
+      color: 0xffe27a,
+      alpha: 0.6 * pulse,
+    });
+    const sparks = 4;
+    for (let i = 0; i < sparks; i++) {
+      const sp = (t / 120 + i / sparks) % 1;
+      const spread = (i - (sparks - 1) / 2) * 0.5;
+      // back-scatter along the beam, fanned by the perpendicular
+      const ex = tx - ux * sp * 14 + px * spread * sp * 18;
+      const ey = ty - uy * sp * 14 + py * spread * sp * 18;
+      g.circle(ex, ey, 1.8 * (1 - sp)).fill({
+        color: 0xffaa55,
+        alpha: 0.7 * (1 - sp),
+      });
+    }
+  }
+
+  /** Subtract damage from a combatant: shields absorb first, then hull. */
+  private applyDamage(
+    target: { shields: number; hullHP: number },
+    amount: number,
+  ): void {
+    if (target.shields > 0) {
+      const absorbed = Math.min(target.shields, amount);
+      target.shields -= absorbed;
+      amount -= absorbed;
+    }
+    if (amount > 0) target.hullHP = Math.max(0, target.hullHP - amount);
+  }
+
+  /** Destroy a defeated NPC: remove it, award loot, end the engagement. */
+  private destroyTarget(sprite: NpcShipSprite): void {
+    const npc = sprite.npc;
+    npc.hullHP = 0;
+    npc.state = NpcState.DEAD;
+    const galaxy = this.gameEngine?.galaxy;
+    if (galaxy) {
+      const gi = galaxy.npcShips.findIndex((n) => n.id === npc.id);
+      if (gi >= 0) galaxy.npcShips.splice(gi, 1);
+    }
+    const idx = this.npcSprites.indexOf(sprite);
+    if (idx >= 0) this.npcSprites.splice(idx, 1);
+    sprite.destroy();
+
+    if (this.gameEngine?.player)
+      this.gameEngine.player.credits += this.NPC_LOOT;
+    this.showMessage(`Уничтожен: ${npc.name} (+${this.NPC_LOOT} кр)`, 0x00ff88);
+    this.followNpcId = null;
+    this.endTurn();
+  }
+
+  /** True while a panel that should swallow outside-clicks is open. */
+  private isBlockingModalOpen(): boolean {
+    return this.npcContactPanel !== null || this.questJournalUI !== null;
+  }
+
+  /** Close any open blocking modal (NPC contact / quest journal). */
+  private closeBlockingModals(): void {
+    this.closeNpcContactPanel();
+    const journal = this.questJournalUI;
+    this.questJournalUI = null;
+    if (journal) queueMicrotask(() => journal.destroy());
+  }
+
+  private closeNpcContactPanel(): void {
+    const panel = this.npcContactPanel;
+    this.npcContactPanel = null;
+    this.contactNpcId = null;
+    // Defer the actual teardown out of the current pointer-event dispatch.
+    // Destroying the display object that PixiJS's event boundary is mid-dispatch
+    // on corrupts hit-testing and leaves other sprites unclickable (bug: after
+    // contacting/attacking one NPC, other ships stopped responding to clicks).
+    if (panel) queueMicrotask(() => panel.destroy());
+  }
+
+  /**
+   * Transient on-screen feedback near the top-centre of the view (button
+   * actions, warnings). Replaces any current toast.
+   */
+  private showMessage(text: string, color = 0x00ffff): void {
+    if (this.toast) {
+      this.toast.destroy();
+      this.toast = null;
+    }
+    if (this.toastTimer) {
+      clearTimeout(this.toastTimer);
+      this.toastTimer = null;
+    }
+    const t = new Text({
+      text,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 15,
+        fill: color,
+        fontWeight: "bold",
+        align: "center",
+        stroke: { color: 0x000000, width: 4 },
+      },
+    });
+    t.anchor.set(0.5, 0);
+    t.x = this.renderer.app.screen.width / 2;
+    t.y = 90;
+    t.eventMode = "none";
+    this.toast = t;
+    this.renderer.uiLayer.addChild(t);
+    this.toastTimer = setTimeout(() => {
+      if (this.toast) {
+        this.toast.destroy();
+        this.toast = null;
+      }
+      this.toastTimer = null;
+    }, 3200);
+  }
+
+  /** Slow drift + gentle "breathing" pulse so the nebulae feel alive. */
+  private updateNebulae(): void {
+    // Shared slow diagonal drift of the whole nebula field (US-070 #1): on top
+    // of each cloud's own gentle wander, the layer crawls down-right so the sky
+    // feels alive rather than static.
+    const DRIFT_X = 0.018;
+    const DRIFT_Y = 0.011;
+    for (const n of this.nebulaLayers) {
+      n.container.x += n.driftX + DRIFT_X;
+      n.container.y += n.driftY + DRIFT_Y;
+      const pulse =
+        1 + Math.sin(this.bgElapsed * n.pulseSpeed + n.phase) * n.pulseAmp;
+      n.container.alpha = Math.max(0, Math.min(1, n.baseAlpha * pulse));
+      // very subtle scale breathing
+      const s =
+        1 + Math.sin(this.bgElapsed * n.pulseSpeed * 0.7 + n.phase) * 0.03;
+      n.container.scale.set(s);
+    }
+  }
+
+  /** Twinkle the few bright hero stars by oscillating their alpha. */
+  private updateTwinkleStars(): void {
+    for (const s of this.twinkleStars) {
+      const t = 0.55 + 0.45 * Math.sin(this.bgElapsed * s.speed + s.phase);
+      s.graphics.alpha = s.baseAlpha * t;
+    }
+  }
+
+  /** Animate the warp-exit flash + expanding rings, then clean up. */
+  private updateWarpEffect(deltaTime: number): void {
+    const fx = this.warpEffect;
+    if (!fx) return;
+
+    fx.elapsed += deltaTime;
+    const t = Math.min(1, fx.elapsed / fx.duration);
+
+    // Flash: bright then fades fast.
+    fx.flash.alpha = Math.max(0, 1 - t * 2.2);
+    fx.flash.scale.set(1 + t * 0.6);
+
+    // Glow: swells in, fades out over the full duration.
+    fx.glow.alpha = Math.sin(t * Math.PI) * 0.6;
+    fx.glow.scale.set(0.6 + t * 1.4);
+
+    // Rings: staggered expansion outward, thinning as they grow.
+    fx.rings.forEach((ring, i) => {
+      const rt = Math.max(0, Math.min(1, t * 1.3 - i * 0.18));
+      ring.scale.set(0.2 + rt * 8);
+      ring.alpha = Math.max(0, 1 - rt) * 0.9;
+    });
+
+    if (t >= 1) {
+      this.renderer.gameLayer.removeChild(fx.container);
+      fx.container.destroy({ children: true });
+      this.warpEffect = null;
+    }
+  }
+
+  private updateStarField(_deltaTime: number): void {
+    if (!this.skyContainer) return;
 
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
-    // Calculate velocity vector from ship's current speed and angle
-    const velocityX =
-      Math.cos(this.shipPhysics.shipAngle) * this.shipPhysics.currentSpeed;
-    const velocityY =
-      Math.sin(this.shipPhysics.shipAngle) * this.shipPhysics.currentSpeed;
-
+    // Parallax the screen-fixed starfield against the *camera* (pan + zoom), not
+    // just ship velocity. Previously the stars were anchored to the screen and
+    // only drifted with speed, so panning/zooming left them sitting still —
+    // "dust stuck on the glass". Now each depth layer shifts opposite the camera
+    // pan (scaled by the layer's depth), and seamlessly tiles via wrapping.
+    const PARALLAX = 6; // overall pan strength (gentler so stars don't lurch)
     for (const layer of this.starLayers) {
-      // Move stars opposite to ship movement for parallax effect
-      const offsetX = -velocityX * layer.speed * deltaTime * 10;
-      const offsetY = -velocityY * layer.speed * deltaTime * 10;
-
-      layer.container.x += offsetX;
-      layer.container.y += offsetY;
-
-      // Wrap around
-      if (layer.container.x < -width) layer.container.x += width;
-      if (layer.container.x > width) layer.container.x -= width;
-      if (layer.container.y < -height) layer.container.y += height;
-      if (layer.container.y > height) layer.container.y -= height;
+      const sx = this.cameraPanX * layer.speed * PARALLAX;
+      const sy = this.cameraPanY * layer.speed * PARALLAX;
+      // Normalise into [-width, 0] / [-height, 0] so the doubled-size field
+      // always covers the screen with no gap.
+      layer.container.x = (((sx % width) + width) % width) - width;
+      layer.container.y = (((sy % height) + height) % height) - height;
     }
+
+    // Parallax the bright "hero" twinkle stars with the near layer so they don't
+    // sit still while the rest of the field moves. They are not tiled, so a
+    // small fractional shift (no wrap) is enough to keep them feeling attached.
+    if (this.twinkleContainer) {
+      this.twinkleContainer.x = this.cameraPanX * 0.06;
+      this.twinkleContainer.y = this.cameraPanY * 0.06;
+    }
+
+    // Couple the whole star backdrop to the camera zoom (damped) so stars scale
+    // *with* the world (sun, nebula) instead of staying a fixed screen size —
+    // otherwise their apparent depth inverts on zoom (far stars seemed to sit in
+    // front of the nebula, near stars closer than the sun). Clamped to ≥1 so the
+    // 2×-sized field can't shrink and reveal a gap. Scaled about screen centre.
+    const cx = width / 2;
+    const cy = height / 2;
+    const skyScale = Math.max(1, 1 + (this.cameraZoom - 1) * 0.35);
+    this.skyContainer.pivot.set(cx, cy);
+    this.skyContainer.position.set(cx, cy);
+    this.skyContainer.scale.set(skyScale);
   }
 
   private async returnToStarMap(): Promise<void> {
     logger.info("Returning to star map");
     if (this.gameEngine) {
+      // Remember where the ship is so a hyperjump can start from here rather
+      // than teleporting the ship next to the sun (US-070 #1).
+      if (this.shipPhysics) {
+        this.gameEngine.lastFlightShipPos = {
+          x: this.shipPhysics.shipX,
+          y: this.shipPhysics.shipY,
+        };
+      }
       await this.gameEngine.transitionTo(SceneType.STAR_MAP);
     }
   }

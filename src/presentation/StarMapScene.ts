@@ -1020,6 +1020,12 @@ export class StarMapScene extends GameScene {
     });
   }
 
+  /**
+   * Initiate a hyperjump (US-023). The jump does NOT happen instantly here:
+   * fuel and system change are deferred. We return to the *current* system in
+   * flight with a `pendingWarp` context; the ship flies to the system edge and
+   * the jump fires there (see SpaceFlightScene.performWarp).
+   */
   private async performWarpJump(
     target: StarSystem,
     fuelCost: number,
@@ -1031,33 +1037,29 @@ export class StarMapScene extends GameScene {
       return;
     }
 
+    // Fuel is checked here too (call sites usually gate on it) — never commit a
+    // jump the player can't afford.
+    if (this.gameEngine.player.ship.energy < fuelCost) {
+      this.showMessage("Недостаточно топлива");
+      return;
+    }
+
     const fromSystem = this.galaxy?.systems.find(
       (s) => s.id === this.playerSystemId,
     );
     const dx = target.coordinates.q - (fromSystem?.coordinates.q ?? 0);
     const dy = target.coordinates.r - (fromSystem?.coordinates.r ?? 0);
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    const entryVector = { x: dx / dist, y: dy / dist };
+    const exitVector = { x: dx / dist, y: dy / dist };
 
-    this.gameEngine.player.ship.energy -= fuelCost;
-    logger.info(
-      `Fuel consumed: ${fuelCost}, remaining: ${this.gameEngine.player.ship.energy}`,
-    );
-
-    this.playerSystemId = target.id;
     this.selectedSystemId = null;
-    this.gameEngine.player.currentSystemId = target.id;
 
-    this.galaxy?.revealSystemAndNeighbors(target.id);
-
-    this.gameEngine.saveGame("auto").catch((e) => {
-      logger.error("Auto-save after warp jump failed:", e);
-    });
-
-    logger.info(`Warp jump completed to ${target.name}`);
+    logger.info(
+      `Warp initiated to ${target.name}; ship will jump from the system edge`,
+    );
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
-      entryVector,
+      pendingWarp: { targetSystemId: target.id, fuelCost, exitVector },
     });
   }
 

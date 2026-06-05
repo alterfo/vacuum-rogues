@@ -4,10 +4,32 @@ import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
 import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
+import { JobBoardPanel } from "./JobBoardPanel";
+import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 
 interface PlanetContext {
   gameEngine?: GameEngine;
   planet?: Planet;
+}
+
+/** A planet-surface action button (governor, garage, market, …, take-off). */
+export interface PlanetServiceButton {
+  label: string;
+  color: number;
+  action: () => void;
+}
+
+/**
+ * Which station services are offered on a planet. Uninhabited worlds have no
+ * station services — only "Взлёт" (take-off); once drones exist, also "leave a
+ * drone". Inhabited worlds show the full set (US-070 #12).
+ */
+export function visiblePlanetServices<T extends { label: string }>(
+  isHabitable: boolean,
+  buttons: T[],
+): T[] {
+  if (isHabitable) return buttons;
+  return buttons.filter((b) => b.label === "Взлёт");
 }
 
 export class PlanetScene extends GameScene {
@@ -15,6 +37,7 @@ export class PlanetScene extends GameScene {
   private planet: Planet | null = null;
   private uiContainer: Container | null = null;
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
+  private jobBoardPanel: JobBoardPanel | null = null;
 
   initialize(context?: object): void {
     const ctx = context as PlanetContext | undefined;
@@ -33,6 +56,7 @@ export class PlanetScene extends GameScene {
       clearTimeout(this.toastTimeout);
       this.toastTimeout = null;
     }
+    this.closeJobBoard();
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
     this.uiContainer = null;
@@ -92,6 +116,7 @@ export class PlanetScene extends GameScene {
         color: 0x00ff00,
         action: () => this.openGovernor(),
       },
+      { label: "Задания", color: 0xffee66, action: () => this.openJobBoard() },
       { label: "Гараж", color: 0x00aaff, action: () => this.openGarage() },
       { label: "Маркет", color: 0xffaa00, action: () => this.openMarket() },
       {
@@ -102,9 +127,7 @@ export class PlanetScene extends GameScene {
       { label: "Взлёт", color: 0xff4444, action: () => this.takeOff() },
     ];
 
-    const visible = this.planet.isHabitable
-      ? buttons
-      : buttons.filter((b) => b.label !== "Губернатор");
+    const visible = visiblePlanetServices(this.planet.isHabitable, buttons);
     let y = h / 2 + 40;
     for (const b of visible) {
       const t = new Text({
@@ -136,14 +159,55 @@ export class PlanetScene extends GameScene {
   }
 
   private async openGovernor(): Promise<void> {
-    if (!this.planet?.inhabitants[0] || !this.gameEngine) return;
+    if (!this.planet || !this.gameEngine) return;
+    // Procedurally-generated planets carry no stored inhabitants, so synthesize
+    // a governor NPC on the fly. The id must contain "governor" for the dialogue
+    // tree lookup in DialogueScene to match (bug US-070 #10: the interface never
+    // opened because inhabitants[0] was always undefined).
+    const governor = this.planet.inhabitants[0] ?? {
+      id: `governor_${this.planet.id}`,
+      name: `Губернатор ${this.planet.name}`,
+    };
     await this.gameEngine.transitionTo(SceneType.DIALOGUE, {
       gameEngine: this.gameEngine,
-      npc: this.planet.inhabitants[0],
+      npc: governor,
       // Return to this planet (not space) when the conversation ends.
       returnScene: SceneType.PLANET,
       returnPlanet: this.planet,
     });
+  }
+
+  /** Open the planet job board (EPIC-008): the quests this planet offers now. */
+  private openJobBoard(): void {
+    if (!this.gameEngine || !this.planet) return;
+    this.closeJobBoard();
+    const quests = this.gameEngine.getQuestBoard(this.planet.id);
+    const { width, height } = this.renderer.app.screen;
+    this.jobBoardPanel = new JobBoardPanel(quests, width, height, {
+      onAccept: (q) => this.acceptJob(q),
+      onClose: () => this.closeJobBoard(),
+    });
+    this.renderer.uiLayer.addChild(this.jobBoardPanel.container);
+  }
+
+  private acceptJob(q: GeneratedQuest): void {
+    if (!this.gameEngine || !this.planet) return;
+    const accepted = this.gameEngine.acceptBoardQuest(q, this.planet.id);
+    if (accepted) {
+      this.showMessage(`Задание принято: ${q.template.title}`, 0x00ff88);
+      this.openJobBoard(); // refresh — the accepted quest drops off the board
+    } else {
+      this.showMessage("Не удалось принять задание", 0xffaa00);
+    }
+  }
+
+  private closeJobBoard(): void {
+    const panel = this.jobBoardPanel;
+    this.jobBoardPanel = null;
+    if (panel) {
+      this.renderer?.uiLayer?.removeChild(panel.container);
+      panel.destroy();
+    }
   }
 
   private openGarage(): void {
@@ -192,6 +256,8 @@ export class PlanetScene extends GameScene {
     if (!this.gameEngine) return;
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
+      // Spawn the ship next to this planet, not at the distant system edge.
+      fromPlanetId: this.planet?.id,
     });
   }
 

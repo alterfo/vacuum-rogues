@@ -1,6 +1,8 @@
 import { Container, Graphics, Text } from "pixi.js";
+import type { FederatedPointerEvent } from "pixi.js";
 import type { Planet } from "@/domain/Planet";
 import { logger } from "@/utils/logger";
+import { radarToWorld } from "@/utils/flightGeometry";
 
 /**
  * Mini-map showing the current star system with planets and ship position
@@ -10,42 +12,135 @@ export class SystemMiniMap {
   public readonly container: Container;
   private readonly mapWidth: number = 180;
   private readonly mapHeight: number = 180;
-  // Orbits are drawn from the minimap centre (90px), so the largest world
-  // orbit (~550px, see PlanetGenerator.ORBITAL_RADII) must map to <=~85px:
-  // 550 * 0.15 = 82.5px, leaving a small margin inside the 180px box.
-  private readonly mapScale: number = 0.15;
+  // Orbits are drawn from the minimap centre (90px), so the system boundary
+  // (~2800px, see SpaceFlightScene.SYSTEM_BOUNDARY_RADIUS) must map to <=~85px:
+  // 2800 * 0.03 = 84px, leaving a small margin inside the 180px box.
+  // Keep in sync with the grand-scale orbits (CLAUDE.md Rule 5).
+  private readonly mapScale: number = 0.03;
   private readonly graphics: Graphics;
+
+  // Last star-centre passed to updateWithSprites, used to convert a click on the
+  // radar back into a world coordinate for drag-to-pan.
+  private lastCenterX = 0;
+  private lastCenterY = 0;
+  // Called while the player drags on the radar, with the world point under the
+  // cursor — the scene re-centres the main view there.
+  private onPan: ((worldX: number, worldY: number) => void) | null = null;
+  private dragging = false;
 
   constructor(screenWidth: number, screenHeight: number) {
     this.container = new Container();
-    // IMPORTANT: Set to 'none' so mini-map doesn't block clicks on space
-    this.container.eventMode = "none";
+    // The radar captures pointer events itself (drag-to-pan); it must NOT let
+    // clicks fall through to the stage (which would plan a route behind it).
+    this.container.eventMode = "static";
+
+    // Layer order (bottom → top):
+    //   1. backing panel (dark fill)
+    //   2. dynamic graphics (orbits/planets/ship), clipped to the box
+    //   3. frame + title (always on top, never clipped)
+    this.drawBackground();
 
     this.graphics = new Graphics();
     this.container.addChild(this.graphics);
 
+    // Clip everything we draw (orbits, scanner ring, viewport) to the map box so
+    // nothing spills out past the frame when the ship is near the system edge.
+    const clip = new Graphics();
+    clip.rect(0, 0, this.mapWidth, this.mapHeight);
+    clip.fill({ color: 0xffffff });
+    this.container.addChild(clip);
+    this.graphics.mask = clip;
+
+    this.drawFrame();
+
+    this.setupDragToPan();
+
     // Position mini-map at bottom-right corner
     this.container.x = screenWidth - this.mapWidth - 20;
     this.container.y = screenHeight - this.mapHeight - 20;
-
-    // Draw background
-    this.drawBackground();
 
     logger.info(
       `📡 Minimap created at position (${this.container.x}, ${this.container.y})`,
     );
   }
 
+  /** Register the callback invoked while the player drags across the radar. */
+  setPanHandler(handler: (worldX: number, worldY: number) => void): void {
+    this.onPan = handler;
+  }
+
+  /** Re-anchor the radar to the bottom-right corner after a window resize. */
+  reposition(screenWidth: number, screenHeight: number): void {
+    this.container.x = screenWidth - this.mapWidth - 20;
+    this.container.y = screenHeight - this.mapHeight - 20;
+  }
+
   /**
-   * Draw semi-transparent background for mini-map
+   * Make the radar draggable: press-and-drag over the map moves the main view
+   * to the corresponding world position (does not plan a route). A transparent
+   * hit rectangle on top captures the pointer.
+   */
+  private setupDragToPan(): void {
+    const hit = new Graphics();
+    hit.rect(0, 0, this.mapWidth, this.mapHeight);
+    hit.fill({ color: 0xffffff, alpha: 0.001 }); // invisible but hit-testable
+    hit.eventMode = "static";
+    hit.cursor = "grab";
+
+    const toWorld = (e: FederatedPointerEvent) => {
+      const local = e.getLocalPosition(this.container);
+      return radarToWorld(
+        local.x,
+        local.y,
+        this.mapWidth,
+        this.mapHeight,
+        this.mapScale,
+        this.lastCenterX,
+        this.lastCenterY,
+      );
+    };
+
+    hit.on("pointerdown", (e: FederatedPointerEvent) => {
+      e.stopPropagation();
+      this.dragging = true;
+      hit.cursor = "grabbing";
+      const { x, y } = toWorld(e);
+      this.onPan?.(x, y);
+    });
+    hit.on("globalpointermove", (e: FederatedPointerEvent) => {
+      if (!this.dragging) return;
+      e.stopPropagation();
+      const { x, y } = toWorld(e);
+      this.onPan?.(x, y);
+    });
+    const end = () => {
+      this.dragging = false;
+      hit.cursor = "grab";
+    };
+    hit.on("pointerup", end);
+    hit.on("pointerupoutside", end);
+
+    this.container.addChild(hit);
+  }
+
+  /**
+   * Draw the dark backing panel (sits behind the dynamic radar content).
    */
   private drawBackground(): void {
     const background = new Graphics();
     background.rect(0, 0, this.mapWidth, this.mapHeight);
     background.fill({ color: 0x000000, alpha: 0.85 });
-    background.stroke({ color: 0x00ffff, width: 3 });
+    this.container.addChild(background);
+  }
 
-    // Add title
+  /**
+   * Draw the frame + title on top of everything (never clipped).
+   */
+  private drawFrame(): void {
+    const frame = new Graphics();
+    frame.rect(0, 0, this.mapWidth, this.mapHeight);
+    frame.stroke({ color: 0x00ffff, width: 3 });
+
     const title = new Text({
       text: "СИСТЕМА",
       style: {
@@ -57,9 +152,9 @@ export class SystemMiniMap {
     });
     title.x = 5;
     title.y = 5;
-    background.addChild(title);
+    frame.addChild(title);
 
-    this.container.addChild(background);
+    this.container.addChild(frame);
   }
 
   /**
@@ -131,7 +226,19 @@ export class SystemMiniMap {
     shipY: number,
     centerX: number,
     centerY: number,
+    npcDots: { x: number; y: number; color: number }[] = [],
+    route: { x: number; y: number } | null = null,
+    boundaryRadius: number | null = null,
+    viewport: {
+      minX: number;
+      minY: number;
+      maxX: number;
+      maxY: number;
+    } | null = null,
+    scannerRange: number | null = null,
   ): void {
+    this.lastCenterX = centerX;
+    this.lastCenterY = centerY;
     this.graphics.clear();
 
     // Log every 60 frames (approximately once per second at 60fps)
@@ -143,6 +250,15 @@ export class SystemMiniMap {
 
     const mapCenterX = this.mapWidth / 2;
     const mapCenterY = this.mapHeight / 2 + 10;
+
+    // System boundary (hyperjump rim) — a faint ring around the star, drawn so
+    // the player can see how far out the system edge is. The bright green
+    // "radar" ring is the ship's scanner range (drawn near the ship below).
+    if (boundaryRadius) {
+      const br = boundaryRadius * this.mapScale;
+      this.graphics.circle(mapCenterX, mapCenterY, br);
+      this.graphics.stroke({ color: 0x224a6a, width: 1, alpha: 0.6 });
+    }
 
     // Draw sun at center
     this.graphics.circle(mapCenterX, mapCenterY, 5);
@@ -175,11 +291,63 @@ export class SystemMiniMap {
       this.graphics.fill({ color });
     }
 
-    // Draw ship position
-    const shipRelativeX = (shipX - centerX) * this.mapScale;
-    const shipRelativeY = (shipY - centerY) * this.mapScale;
-    const shipMapX = mapCenterX + shipRelativeX;
-    const shipMapY = mapCenterY + shipRelativeY;
+    // Draw NPC ships as faction-coloured dots
+    for (const dot of npcDots) {
+      const nx = mapCenterX + (dot.x - centerX) * this.mapScale;
+      const ny = mapCenterY + (dot.y - centerY) * this.mapScale;
+      this.graphics.circle(nx, ny, 2);
+      this.graphics.fill({ color: dot.color });
+    }
+
+    const shipMapX = mapCenterX + (shipX - centerX) * this.mapScale;
+    const shipMapY = mapCenterY + (shipY - centerY) * this.mapScale;
+
+    // Scanner range — the bright green ring centred on the ship, like the
+    // original Space Rangers radar. The viewport rectangle sits inside it.
+    if (scannerRange) {
+      const sr = scannerRange * this.mapScale;
+      this.graphics.circle(shipMapX, shipMapY, sr);
+      this.graphics.fill({ color: 0x0a3a1a, alpha: 0.22 });
+      this.graphics.circle(shipMapX, shipMapY, sr);
+      this.graphics.stroke({ color: 0x33ff66, width: 1.5, alpha: 0.9 });
+    }
+
+    // Draw planned route as a colour-graded dotted line (green near the ship →
+    // orange near the destination), matching the in-world route indicator.
+    if (route) {
+      const tx = mapCenterX + (route.x - centerX) * this.mapScale;
+      const ty = mapCenterY + (route.y - centerY) * this.mapScale;
+      const dx = tx - shipMapX;
+      const dy = ty - shipMapY;
+      const len = Math.hypot(dx, dy);
+      const dots = Math.max(1, Math.floor(len / 4));
+      for (let i = 1; i <= dots; i++) {
+        const t = i / dots;
+        const r = Math.round(0x33 + (0xff - 0x33) * t);
+        const g = Math.round(0xff + (0x99 - 0xff) * t);
+        const b = Math.round(0x66 + (0x33 - 0x66) * t);
+        this.graphics.circle(shipMapX + dx * t, shipMapY + dy * t, 1);
+        this.graphics.fill({ color: (r << 16) | (g << 8) | b, alpha: 0.9 });
+      }
+      // destination marker
+      this.graphics.circle(tx, ty, 2.4);
+      this.graphics.stroke({ color: 0xff9933, width: 1 });
+    }
+
+    // Current camera view as a white rectangle (radar viewport), like the
+    // original. Clamped to the map box so it stays readable when zoomed out.
+    if (viewport) {
+      const vx1 = mapCenterX + (viewport.minX - centerX) * this.mapScale;
+      const vy1 = mapCenterY + (viewport.minY - centerY) * this.mapScale;
+      const vx2 = mapCenterX + (viewport.maxX - centerX) * this.mapScale;
+      const vy2 = mapCenterY + (viewport.maxY - centerY) * this.mapScale;
+      const cx1 = Math.max(2, Math.min(this.mapWidth - 2, vx1));
+      const cy1 = Math.max(14, Math.min(this.mapHeight - 2, vy1));
+      const cx2 = Math.max(2, Math.min(this.mapWidth - 2, vx2));
+      const cy2 = Math.max(14, Math.min(this.mapHeight - 2, vy2));
+      this.graphics.rect(cx1, cy1, cx2 - cx1, cy2 - cy1);
+      this.graphics.stroke({ color: 0xffffff, width: 1, alpha: 0.85 });
+    }
 
     // Draw ship as triangle
     this.graphics.poly([

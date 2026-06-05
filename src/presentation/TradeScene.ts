@@ -127,16 +127,19 @@ export class TradeScene extends GameScene {
     this.addText("В трюме", panelX + 430, top, 12, 0x888888);
 
     const player = this.gameEngine.player;
-    const sellMult = player.race.tradeModifiers.sellMultiplier ?? 1.0;
 
     let y = top + 28;
     for (const resource of Object.values(ResourceType)) {
-      const buyPrice = this.tradeSystem.getMarketPrice(
+      const buyPrice = this.tradeSystem.getBuyPrice(
         this.planet,
         resource,
         player,
       );
-      const sellPrice = Math.round(buyPrice * sellMult);
+      const sellPrice = this.tradeSystem.getSellPrice(
+        this.planet,
+        resource,
+        player,
+      );
       const owned =
         player.inventory.resources.find((r) => r.type === resource)?.amount ??
         0;

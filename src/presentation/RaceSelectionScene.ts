@@ -1,19 +1,25 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics, Text, Sprite } from "pixi.js";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
-import { RaceRegistry } from "@/systems/RaceRegistry";
-import type { Race } from "@/domain/Race";
-import { RaceType, SceneType } from "@/types";
+import { FactionType, SceneType } from "@/types";
 import { logger } from "@/utils/logger";
+import { pickVariant } from "./textures";
+import {
+  FACTION_TITLES,
+  FACTION_DESCRIPTIONS,
+  FACTION_COLORS,
+  FACTION_STATS,
+  FACTION_BONUSES,
+} from "@/config/factionConfig";
 
 /**
- * Race Selection Scene - allows player to choose their race before starting the game
+ * Faction Selection Scene - allows player to choose their faction before starting the game
  */
 export class RaceSelectionScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private mainContainer: Container | null = null;
-  private selectedRace: RaceType = RaceType.HUMAN;
+  private selectedFaction: FactionType = FactionType.OUTLANDERS;
 
   constructor(renderer: Renderer) {
     super(renderer);
@@ -49,7 +55,7 @@ export class RaceSelectionScene extends GameScene {
   }
 
   /**
-   * Render the race selection UI
+   * Render the faction selection UI
    */
   private render(): void {
     if (!this.mainContainer) return;
@@ -65,7 +71,7 @@ export class RaceSelectionScene extends GameScene {
 
     // Title
     const title = new Text({
-      text: "ВЫБЕРИТЕ РАСУ",
+      text: "ВЫБЕРИТЕ ФРАКЦИЮ",
       style: {
         fontFamily: "Courier New",
         fontSize: 28,
@@ -79,22 +85,22 @@ export class RaceSelectionScene extends GameScene {
     title.y = 60;
     this.mainContainer.addChild(title);
 
-    // Render race cards in a grid
-    const races = RaceRegistry.getAllRaces();
-    const cardWidth = 280;
-    const cardHeight = 200;
+    // Render faction cards in a grid
+    const factions = Object.values(FactionType);
+    const cardWidth = 300;
+    const cardHeight = 230;
     const gap = 20;
     const startX = (screenWidth - (cardWidth * 3 + gap * 2)) / 2;
     const startY = 130;
 
-    for (let i = 0; i < races.length; i++) {
-      const race = races[i];
+    for (let i = 0; i < factions.length; i++) {
+      const faction = factions[i];
       const row = Math.floor(i / 3);
       const col = i % 3;
       const x = startX + col * (cardWidth + gap);
       const y = startY + row * (cardHeight + gap);
 
-      this.renderRaceCard(race, x, y, cardWidth, cardHeight);
+      this.renderFactionCard(faction, x, y, cardWidth, cardHeight);
     }
 
     // Start button
@@ -102,10 +108,10 @@ export class RaceSelectionScene extends GameScene {
   }
 
   /**
-   * Render a single race card
+   * Render a single faction card
    */
-  private renderRaceCard(
-    race: Race,
+  private renderFactionCard(
+    faction: FactionType,
     x: number,
     y: number,
     width: number,
@@ -118,35 +124,53 @@ export class RaceSelectionScene extends GameScene {
     cardContainer.y = y;
 
     // Card background
-    const isSelected = race.type === this.selectedRace;
+    const isSelected = faction === this.selectedFaction;
     const cardBg = new Graphics();
     cardBg.rect(0, 0, width, height);
     cardBg.fill({ color: isSelected ? 0x1a3a4a : 0x0a1a2a, alpha: 0.95 });
     cardBg.stroke({
-      color: isSelected ? 0x00ffff : 0x444444,
+      color: isSelected ? FACTION_COLORS[faction] : 0x444444,
       width: isSelected ? 3 : 2,
     });
     cardBg.eventMode = "static";
     cardBg.cursor = "pointer";
     cardContainer.addChild(cardBg);
 
-    // Race name
-    const raceName = new Text({
-      text: race.name.toUpperCase(),
+    // Faction portrait (left column). Clicks pass through to the card below.
+    const portraitW = 104;
+    const portraitX = 8;
+    const portraitY = 34;
+    const portraitH = height - portraitY - 8;
+    this.renderPortrait(
+      cardContainer,
+      faction,
+      portraitX,
+      portraitY,
+      portraitW,
+      portraitH,
+    );
+
+    // Text column sits to the right of the portrait.
+    const textX = portraitX + portraitW + 10;
+    const textW = width - textX - 10;
+
+    // Faction name
+    const factionName = new Text({
+      text: FACTION_TITLES[faction],
       style: {
         fontFamily: "Courier New",
-        fontSize: 18,
-        fill: isSelected ? 0x00ffff : 0xffffff,
+        fontSize: 16,
+        fill: isSelected ? FACTION_COLORS[faction] : 0xffffff,
         fontWeight: "bold",
       },
     });
-    raceName.x = 10;
-    raceName.y = 10;
-    raceName.eventMode = "none"; // Don't block clicks
-    cardContainer.addChild(raceName);
+    factionName.x = 10;
+    factionName.y = 10;
+    factionName.eventMode = "none";
+    cardContainer.addChild(factionName);
 
-    // Race description
-    const description = RaceRegistry.getRaceDescription(race.type);
+    // Faction description
+    const description = FACTION_DESCRIPTIONS[faction];
     const descText = new Text({
       text: description,
       style: {
@@ -154,33 +178,33 @@ export class RaceSelectionScene extends GameScene {
         fontSize: 11,
         fill: 0xcccccc,
         wordWrap: true,
-        wordWrapWidth: width - 20,
+        wordWrapWidth: textW,
         lineHeight: 14,
       },
     });
-    descText.x = 10;
-    descText.y = 35;
-    descText.eventMode = "none"; // Don't block clicks
+    descText.x = textX;
+    descText.y = 34;
+    descText.eventMode = "none";
     cardContainer.addChild(descText);
 
-    // Unique mechanic
-    const mechanicText = new Text({
-      text: `✦ ${race.uniqueMechanic.description}`,
+    // Unique bonus
+    const bonusText = new Text({
+      text: FACTION_BONUSES[faction],
       style: {
         fontFamily: "Courier New",
         fontSize: 11,
         fill: 0xffaa00,
         wordWrap: true,
-        wordWrapWidth: width - 20,
+        wordWrapWidth: textW,
       },
     });
-    mechanicText.x = 10;
-    mechanicText.y = 90;
-    mechanicText.eventMode = "none"; // Don't block clicks
-    cardContainer.addChild(mechanicText);
+    bonusText.x = textX;
+    bonusText.y = 120;
+    bonusText.eventMode = "none";
+    cardContainer.addChild(bonusText);
 
     // Stats
-    const stats = this.getRaceStatsText(race);
+    const stats = this.getFactionStatsText(faction);
     const statsText = new Text({
       text: stats,
       style: {
@@ -190,28 +214,28 @@ export class RaceSelectionScene extends GameScene {
         lineHeight: 14,
       },
     });
-    statsText.x = 10;
-    statsText.y = 120;
-    statsText.eventMode = "none"; // Don't block clicks
+    statsText.x = textX;
+    statsText.y = 168;
+    statsText.eventMode = "none";
     cardContainer.addChild(statsText);
 
     // Click handler
     cardBg.on("pointerdown", () => {
-      this.selectRace(race.type);
+      this.selectFaction(faction);
     });
 
     // Hover effect
     cardBg.on("pointerover", () => {
-      if (race.type !== this.selectedRace) {
+      if (faction !== this.selectedFaction) {
         cardBg.clear();
         cardBg.rect(0, 0, width, height);
         cardBg.fill({ color: 0x152535, alpha: 0.98 });
-        cardBg.stroke({ color: 0x00aaaa, width: 2 });
+        cardBg.stroke({ color: FACTION_COLORS[faction], width: 2 });
       }
     });
 
     cardBg.on("pointerout", () => {
-      if (race.type !== this.selectedRace) {
+      if (faction !== this.selectedFaction) {
         cardBg.clear();
         cardBg.rect(0, 0, width, height);
         cardBg.fill({ color: 0x0a1a2a, alpha: 0.95 });
@@ -223,25 +247,77 @@ export class RaceSelectionScene extends GameScene {
   }
 
   /**
-   * Get formatted stats text for race
+   * Render the faction's character portrait into a framed box on the card.
+   * Cover-fits the art (top-anchored so the face shows) and crops to the box
+   * with a mask. Falls back to a tinted silhouette plate when art is missing
+   * (e.g. in unit tests where textures aren't preloaded).
    */
-  private getRaceStatsText(race: Race): string {
-    const lines = [];
+  private renderPortrait(
+    container: Container,
+    faction: FactionType,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ): void {
+    const color = FACTION_COLORS[faction];
 
-    lines.push(`Корпус: ${race.shipBaseline.hullHP}`);
-    lines.push(`Щиты: ${race.shipBaseline.shields}`);
-    lines.push(`Скорость: ${race.shipBaseline.speed.toFixed(1)}`);
-    lines.push(`Уворот: ${race.shipBaseline.evasion.toFixed(1)}`);
+    // Backing plate (also shows through if the art has transparency).
+    const plate = new Graphics();
+    plate.rect(x, y, w, h);
+    plate.fill({ color: 0x05111c });
+    plate.eventMode = "none";
+    container.addChild(plate);
 
+    const texture = pickVariant("portraits", faction.toLowerCase(), faction);
+    if (texture) {
+      const sprite = new Sprite(texture);
+      // Cover-fit: fill the box, anchored to the top so the head/face stays in
+      // view while the lower body is cropped off the bottom.
+      const scale = Math.max(w / texture.width, h / texture.height);
+      sprite.scale.set(scale);
+      sprite.anchor.set(0.5, 0);
+      sprite.x = x + w / 2;
+      sprite.y = y;
+      sprite.eventMode = "none";
+
+      const mask = new Graphics();
+      mask.rect(x, y, w, h);
+      mask.fill({ color: 0xffffff });
+      mask.eventMode = "none";
+      sprite.mask = mask;
+      container.addChild(mask);
+      container.addChild(sprite);
+    }
+
+    // Frame around the portrait.
+    const frame = new Graphics();
+    frame.rect(x, y, w, h);
+    frame.stroke({ color, width: 1, alpha: 0.8 });
+    frame.eventMode = "none";
+    container.addChild(frame);
+  }
+
+  /**
+   * Get formatted stats text for faction
+   */
+  private getFactionStatsText(faction: FactionType): string {
+    const stats = FACTION_STATS[faction];
+    const lines = [
+      `Корпус: ${stats.hull}`,
+      `Щиты: ${stats.shields}`,
+      `Скорость: ${stats.speed.toFixed(1)}`,
+      `Уворот: ${stats.evasion.toFixed(1)}`,
+    ];
     return lines.join("\n");
   }
 
   /**
-   * Select a race
+   * Select a faction
    */
-  private selectRace(raceType: RaceType): void {
-    this.selectedRace = raceType;
-    logger.info(`Selected race: ${raceType}`);
+  private selectFaction(factionType: FactionType): void {
+    this.selectedFaction = factionType;
+    logger.info(`Selected faction: ${factionType}`);
 
     // Re-render to update selection
     this.refresh();
@@ -317,17 +393,17 @@ export class RaceSelectionScene extends GameScene {
   }
 
   /**
-   * Start the game with selected race
+   * Start the game with selected faction
    */
   private async startGame(): Promise<void> {
     if (!this.gameEngine) return;
 
-    logger.info(`Starting game with race: ${this.selectedRace}`);
+    logger.info(`Starting game with faction: ${this.selectedFaction}`);
 
-    // Pass selected race to GameEngine for player creation
+    // Pass selected faction to GameEngine for player creation
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
-      selectedRace: this.selectedRace,
+      selectedFaction: this.selectedFaction,
     });
   }
 

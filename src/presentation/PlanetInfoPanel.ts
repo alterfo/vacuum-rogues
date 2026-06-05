@@ -54,7 +54,7 @@ export class PlanetInfoPanel {
 
     const habitability = new Text({
       text: this.planet.isHabitable
-        ? `Раса: ${this.planet.inhabitants[0]?.race ?? "Неизвестно"}`
+        ? `Фракция: Окраинники`
         : `Дроны: ${this.planet.drones}`,
       style: { fontFamily: "Courier New", fontSize: 11, fill: 0x88ccff },
     });

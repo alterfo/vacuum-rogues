@@ -220,7 +220,7 @@ export class MainMenuScene extends GameScene {
 
     // Title
     this.title = new Text({
-      text: "КОСМИЧЕСКИЕ РЕЙНДЖЕРЫ\nНЕЙРОСЕТЕВОЕ ВТОРЖЕНИЕ",
+      text: "GALACTIC HORIZON\nНЕЙРОСЕТЕВОЕ ВТОРЖЕНИЕ",
       style: {
         fontFamily: "Courier New",
         fontSize: 32,
