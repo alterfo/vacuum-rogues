@@ -891,42 +891,57 @@ export class SpaceFlightScene extends GameScene {
     // spread: field half-extent in screen-widths/heights; near layer uses more
     // so its larger pan shifts never expose an edge.
     const layerConfigs = [
+      // Deepest layer: ultra-dense carpet of faint micro-stars (the "infinity" cue).
+      // Very low alpha individually — they stack into a dense milky band rather than
+      // isolated dots. No zoom-depth: they sit at infinite distance.
       {
-        count: 1400,
-        depth: 0.04,
+        count: 3400,
+        depth: 0.02,
         zoomDepth: 0.0,
-        size: [0.4, 1.0],
-        alpha: [0.35, 0.6],
+        size: [0.18, 0.55],
+        alpha: [0.1, 0.42],
         spread: 1.0,
       },
+      // Mid layer: slightly larger, begin to show color, visible individually.
       {
-        count: 700,
-        depth: 0.1,
-        zoomDepth: 0.04,
-        size: [0.8, 1.6],
-        alpha: [0.55, 0.82],
-        spread: 1.2,
+        count: 1200,
+        depth: 0.08,
+        zoomDepth: 0.03,
+        size: [0.42, 1.15],
+        alpha: [0.28, 0.72],
+        spread: 1.3,
       },
+      // Near layer: foreground stars — clearly distinct, colorful, parallax-obvious.
       {
-        count: 260,
-        depth: 0.22,
-        zoomDepth: 0.1,
-        size: [1.3, 2.5],
-        alpha: [0.7, 1.0],
-        spread: 1.5,
+        count: 480,
+        depth: 0.2,
+        zoomDepth: 0.09,
+        size: [0.75, 2.3],
+        alpha: [0.48, 1.0],
+        spread: 1.6,
       },
     ];
 
-    const starColors = [
-      0xffffff, 0xcfe0ff, 0xfff4d6, 0xffe2b0, 0xe6d0ff, 0xd6fff0,
-    ];
+    // Weighted color pool: 60% blue-white (hot stellar cores), 15% pure white,
+    // 8% cool blue, 8% warm yellow-white, 5% nebula-lit pink, 4% warm orange.
+    // This matches photographic star fields where cool/hot stars dominate and
+    // a few warm/pink ones signal nebula illumination.
+    const starColorPool: number[] = [];
+    const pushColors = (c: number, w: number) => {
+      for (let i = 0; i < w; i++) starColorPool.push(c);
+    };
+    pushColors(0xe8f2ff, 35); // blue-white (dominant)
+    pushColors(0xffffff, 20); // pure white
+    pushColors(0xccddff, 12); // cool blue
+    pushColors(0xfff5e0, 12); // warm yellow-white
+    pushColors(0xffd0d0, 10); // nebula-lit pink
+    pushColors(0xffc090, 7); // warm orange
+    pushColors(0xddccff, 4); // faint violet
 
     for (const config of layerConfigs) {
       const container = new Container();
 
       for (let i = 0; i < config.count; i++) {
-        // Centred field; spread multiplier ensures parallax shifts never expose
-        // an edge (near layer uses 1.5× so its larger shifts stay in-bounds).
         const fw = width * config.spread;
         const fh = height * config.spread;
         const x = (Math.random() * 2 - 1) * fw;
@@ -939,7 +954,8 @@ export class SpaceFlightScene extends GameScene {
         const graphics = new Graphics();
         graphics.circle(x, y, size);
         graphics.fill({
-          color: starColors[Math.floor(Math.random() * starColors.length)],
+          color:
+            starColorPool[Math.floor(Math.random() * starColorPool.length)],
           alpha,
         });
         container.addChild(graphics);
@@ -966,24 +982,41 @@ export class SpaceFlightScene extends GameScene {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
     const container = new Container();
-    const colors = [0xffffff, 0xfff0c0, 0xc0e0ff, 0xffd0f0];
-    const count = 32;
+    // Mix of colors: most blue-white (hot giants), some warm, some pink (nebula-lit).
+    const twinkleColors = [
+      { c: 0xffffff, w: 8 }, // pure white
+      { c: 0xe0eeff, w: 12 }, // blue-white (most common)
+      { c: 0xfff5cc, w: 6 }, // warm yellow
+      { c: 0xffcccc, w: 5 }, // nebula pink
+      { c: 0xffddaa, w: 4 }, // warm orange
+      { c: 0xccddff, w: 5 }, // cool blue
+    ];
+    const twinklePool: number[] = [];
+    for (const { c, w } of twinkleColors) {
+      for (let k = 0; k < w; k++) twinklePool.push(c);
+    }
+
+    const count = 60;
 
     for (let i = 0; i < count; i++) {
-      const x = Math.random() * width * 2 - width * 0.5;
-      const y = Math.random() * height * 2 - height * 0.5;
-      const color = colors[Math.floor(Math.random() * colors.length)];
-      const r = 1.4 + Math.random() * 1.8;
-      const baseAlpha = 0.6 + Math.random() * 0.4;
+      const x = Math.random() * width * 2.2 - width * 0.6;
+      const y = Math.random() * height * 2.2 - height * 0.6;
+      const color = twinklePool[Math.floor(Math.random() * twinklePool.length)];
+      // vary size: most small, a few large "hero" stars
+      const r =
+        Math.random() < 0.15
+          ? 2.2 + Math.random() * 1.4 // bright hero star
+          : 1.1 + Math.random() * 1.4; // normal bright star
+      const baseAlpha = 0.55 + Math.random() * 0.45;
 
       const g = new Graphics();
-      // soft halo
-      g.circle(0, 0, r * 4).fill({ color, alpha: 0.12 });
-      g.circle(0, 0, r * 2).fill({ color, alpha: 0.25 });
-      // 4-point glint
-      const len = r * 6;
+      // outer soft diffraction halo
+      g.circle(0, 0, r * 5).fill({ color, alpha: 0.06 });
+      g.circle(0, 0, r * 2.8).fill({ color, alpha: 0.18 });
+      // 4-point diffraction spike
+      const len = r * (r > 2 ? 9 : 6);
       g.moveTo(-len, 0).lineTo(len, 0).moveTo(0, -len).lineTo(0, len);
-      g.stroke({ width: 0.8, color, alpha: 0.5 });
+      g.stroke({ width: r > 2 ? 1.0 : 0.7, color, alpha: 0.45 });
       // bright core
       g.circle(0, 0, r).fill({ color, alpha: 1 });
       g.x = x;
@@ -995,7 +1028,7 @@ export class SpaceFlightScene extends GameScene {
         graphics: g,
         baseAlpha,
         phase: Math.random() * Math.PI * 2,
-        speed: 0.0012 + Math.random() * 0.0022,
+        speed: 0.0008 + Math.random() * 0.0018,
       });
     }
 
@@ -1030,21 +1063,29 @@ export class SpaceFlightScene extends GameScene {
     const systemId = this.gameEngine?.player?.currentSystemId ?? "default";
     const rng = new SeededRNG(`nebula_${systemId}`);
 
-    // Cohesive palettes (R,G,B hex). First mirrors the reference (olive/gold/
-    // green); the rest give variety across systems.
+    // Photorealistic nebula palettes — saturated, high-contrast, black-space friendly.
+    // Each array is [dark-outer, mid-body, inner-hot, core-bright, accent].
+    // "screen" blend on dark background: final = src + dst - src*dst ≈ src (adds light).
+    // Darker outer values ensure space stays BLACK between clouds; bright inner
+    // values give the luminous core seen in the Space Rangers reference.
     const palettes = [
-      [0x9a8a2a, 0x76902e, 0xb3a142, 0x4f6a30, 0xc8b24a], // yellow-green (ref)
-      [0x2f4f96, 0x3a6aa0, 0x24507a, 0x6a3a96, 0x4060b0], // blue-violet
-      [0x96402a, 0xa85f2a, 0x6a2a3a, 0xb87840, 0x803050], // amber-rust
-      [0x2a6a6a, 0x36897a, 0x205a5a, 0x40916e, 0x2e7d8a], // teal-emerald
-      [0xb83a22, 0xd06a2a, 0x8a2a2a, 0xe08a3a, 0x6a2030], // fiery red-orange (ref)
+      // Warm red-orange (Space Rangers reference: emission nebula)
+      [0x6e0a00, 0xcc2000, 0xff4400, 0xff8800, 0xffbb22],
+      // Deep blue-violet (reflection/supernova remnant)
+      [0x05082a, 0x0d1a88, 0x2244cc, 0x4466ff, 0x88aaff],
+      // Crimson-magenta (planetary nebula)
+      [0x380012, 0x880030, 0xdd1060, 0xff44aa, 0xffaadd],
+      // Amber-gold (young star cluster)
+      [0x2a1000, 0x993300, 0xff6600, 0xffaa00, 0xffee44],
+      // Purple-indigo (Orion/pillar style)
+      [0x180040, 0x440088, 0x8800cc, 0xaa44ff, 0xddaaff],
     ];
     const palIdx = rng.nextInt(0, palettes.length - 1);
     const palette = palettes[palIdx];
 
     // Generated hero nebula backdrop (if art exists), tinted to match the chosen
     // procedural palette and sitting behind the animated clouds for depth.
-    const palNames = ["green", "blue", "red", "teal", "red"];
+    const palNames = ["red", "blue", "red", "red", "blue"];
     const backdrop =
       pickVariant("nebula", `${palNames[palIdx]}_mid`, systemId) ??
       pickVariant("nebula", `${palNames[palIdx]}_near`, systemId);
@@ -1076,48 +1117,93 @@ export class SpaceFlightScene extends GameScene {
       cloud.x = this.starCenterX + rng.nextFloat(-span / 2, span / 2);
       cloud.y = this.starCenterY + rng.nextFloat(-span / 2, span / 2);
 
-      const color = palette[rng.nextInt(0, palette.length - 1)];
-      const baseAlpha = rng.nextFloat(0.07, 0.16);
-      const cloudR = rng.nextFloat(550, 1150);
-      const squash = rng.nextFloat(0.45, 0.95); // wispy, non-circular shape
-      const rot = rng.next() * Math.PI;
-      const blobs = rng.nextInt(24, 36);
+      // Each cloud has 3 concentric zones:
+      //   outer haze → body (dominant color) → bright hot core
+      // This mirrors the radial gradient of real emission nebulae.
+      const outerColor = palette[0];
+      const bodyColor = palette[rng.nextInt(1, 2)];
+      const innerColor = palette[3];
+      const coreColor = palette[4];
 
-      const g = new Graphics();
-      for (let b = 0; b < blobs; b++) {
+      const cloudR = rng.nextFloat(600, 1200);
+      const squash = rng.nextFloat(0.4, 0.9);
+      const rot = rng.next() * Math.PI;
+
+      // OUTER HAZE — large, very low alpha, dark palette color
+      const outerG = new Graphics();
+      for (let b = 0; b < 30; b++) {
         const ang = rng.next() * Math.PI * 2;
-        // denser toward the core (square pushes samples inward)
-        const dist = rng.next() * rng.next() * cloudR;
+        const dist = rng.next() * cloudR; // uniform — fills whole area
         let bx = Math.cos(ang) * dist;
         let by = Math.sin(ang) * dist * squash;
-        // rotate the squashed cloud for variety
         const rx = bx * Math.cos(rot) - by * Math.sin(rot);
         const ry = bx * Math.sin(rot) + by * Math.cos(rot);
         bx = rx;
         by = ry;
-        const r = rng.nextFloat(140, 340) * (1 - (dist / cloudR) * 0.5);
-        const a = baseAlpha * rng.nextFloat(0.35, 1.0);
-        g.circle(bx, by, r).fill({ color, alpha: a });
+        const r = rng.nextFloat(180, 420) * (1 - (dist / cloudR) * 0.3);
+        outerG
+          .circle(bx, by, r)
+          .fill({ color: outerColor, alpha: rng.nextFloat(0.03, 0.07) });
       }
-      // No BlurFilter (US-070 stripes): the cloud is a stack of many soft, low-
-      // alpha circles over the dark sky with a "screen" blend, so it already
-      // reads as soft gas — and an unfiltered graphic can't band under zoom.
-      g.blendMode = "screen";
-      cloud.addChild(g);
+      outerG.blendMode = "screen";
+      cloud.addChild(outerG);
 
-      // Glowing "ember" cores near the heart of the cloud — a brighter, warmer
-      // tint that gives the painterly, lit-from-within look of the reference.
-      const emberTint = this.lightenColor(color, 0.55);
-      const emberG = new Graphics();
-      const emberCount = rng.nextInt(2, 4);
-      for (let e = 0; e < emberCount; e++) {
-        const ex = rng.nextFloat(-cloudR * 0.25, cloudR * 0.25);
-        const ey = rng.nextFloat(-cloudR * 0.25, cloudR * 0.25) * squash;
-        emberG.circle(ex, ey, rng.nextFloat(40, 120));
-        emberG.fill({ color: emberTint, alpha: rng.nextFloat(0.1, 0.22) });
+      // BODY — denser toward centre, medium alpha, vivid color
+      const bodyG = new Graphics();
+      for (let b = 0; b < 38; b++) {
+        const ang = rng.next() * Math.PI * 2;
+        const dist = rng.next() * rng.next() * cloudR * 0.85; // denser toward core
+        let bx = Math.cos(ang) * dist;
+        let by = Math.sin(ang) * dist * squash;
+        const rx = bx * Math.cos(rot) - by * Math.sin(rot);
+        const ry = bx * Math.sin(rot) + by * Math.cos(rot);
+        bx = rx;
+        by = ry;
+        const r = rng.nextFloat(120, 300) * (1 - (dist / cloudR) * 0.55);
+        bodyG
+          .circle(bx, by, r)
+          .fill({ color: bodyColor, alpha: rng.nextFloat(0.05, 0.14) });
       }
-      emberG.blendMode = "add"; // bright lit-from-within cores (no blur — US-070)
-      cloud.addChild(emberG);
+      bodyG.blendMode = "screen";
+      cloud.addChild(bodyG);
+
+      // HOT INNER ZONE — concentrated around the core, brighter
+      const innerG = new Graphics();
+      for (let b = 0; b < 20; b++) {
+        const ang = rng.next() * Math.PI * 2;
+        const dist = rng.next() * rng.next() * cloudR * 0.45;
+        let bx = Math.cos(ang) * dist;
+        let by = Math.sin(ang) * dist * squash;
+        const rx = bx * Math.cos(rot) - by * Math.sin(rot);
+        const ry = bx * Math.sin(rot) + by * Math.cos(rot);
+        bx = rx;
+        by = ry;
+        const r = rng.nextFloat(60, 180);
+        innerG
+          .circle(bx, by, r)
+          .fill({ color: innerColor, alpha: rng.nextFloat(0.08, 0.2) });
+      }
+      innerG.blendMode = "screen";
+      cloud.addChild(innerG);
+
+      // LUMINOUS CORE — small, very bright, "add" blend → blown-out glow
+      const coreG = new Graphics();
+      const coreCount = rng.nextInt(2, 4);
+      for (let e = 0; e < coreCount; e++) {
+        const ex = rng.nextFloat(-cloudR * 0.18, cloudR * 0.18);
+        const ey = rng.nextFloat(-cloudR * 0.18, cloudR * 0.18) * squash;
+        const cr = rng.nextFloat(50, 130);
+        // outer soft glow
+        coreG
+          .circle(ex, ey, cr * 2.5)
+          .fill({ color: coreColor, alpha: rng.nextFloat(0.06, 0.14) });
+        // bright core
+        coreG
+          .circle(ex, ey, cr)
+          .fill({ color: coreColor, alpha: rng.nextFloat(0.2, 0.42) });
+      }
+      coreG.blendMode = "add";
+      cloud.addChild(coreG);
       this.nebulaeContainer.addChild(cloud);
 
       this.nebulaLayers.push({
@@ -1161,32 +1247,35 @@ export class SpaceFlightScene extends GameScene {
         palette[rng.nextInt(0, palette.length - 1)],
         0.6,
       );
-      const spread = rng.nextFloat(120, 260);
-      const motes = rng.nextInt(36, 64);
+      // Small, tight cluster of luminous motes — like the reference's green
+      // "fireflies". Key: small spread + no blur filter + low baseAlpha so they
+      // don't coalesce into the cartoon glowing balls that plagued the old version.
+      const spread = rng.nextFloat(50, 110);
+      const motes = rng.nextInt(22, 44);
 
       const g = new Graphics();
       for (let m = 0; m < motes; m++) {
         const ang = rng.next() * Math.PI * 2;
-        const dist = rng.next() * rng.next() * spread; // denser toward centre
+        const dist = rng.next() * rng.next() * spread;
         const mx = Math.cos(ang) * dist;
         const my = Math.sin(ang) * dist;
-        const r = rng.nextFloat(1.2, 3.2);
-        // soft halo + bright core
-        g.circle(mx, my, r * 2.4).fill({ color: tint, alpha: 0.12 });
-        g.circle(mx, my, r).fill({ color: tint, alpha: 0.9 });
+        const r = rng.nextFloat(0.6, 1.8);
+        // minimal halo (r×1.6), bright-but-small core
+        g.circle(mx, my, r * 1.6).fill({ color: tint, alpha: 0.08 });
+        g.circle(mx, my, r).fill({ color: tint, alpha: 0.7 });
       }
-      g.filters = [this.paddedBlur(1.5)];
+      // No blur filter — blur was the root cause of cartoon blobs (US-070)
       container.addChild(g);
       this.nebulaeContainer.addChild(container);
 
       this.swarmLayers.push({
         container,
-        driftX: rng.nextFloat(-0.006, 0.006),
-        driftY: rng.nextFloat(-0.006, 0.006),
-        pulseSpeed: rng.nextFloat(0.0008, 0.0018),
-        pulseAmp: rng.nextFloat(0.15, 0.3),
+        driftX: rng.nextFloat(-0.005, 0.005),
+        driftY: rng.nextFloat(-0.005, 0.005),
+        pulseSpeed: rng.nextFloat(0.0006, 0.0014),
+        pulseAmp: rng.nextFloat(0.12, 0.22),
         phase: rng.next() * Math.PI * 2,
-        baseAlpha: rng.nextFloat(0.5, 0.8),
+        baseAlpha: rng.nextFloat(0.22, 0.45), // much subtler than before
       });
     }
   }
