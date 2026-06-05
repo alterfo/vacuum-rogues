@@ -81,9 +81,13 @@ export class NpcShipSprite {
   private readonly speed = 0.2;
   private departing = false;
   private gone = false;
-  // When set, the ship loiters near this point (a planet it's "visiting").
+  // When set, the ship orbits this point (a planet it's "visiting").
   private anchorX: number | null = null;
   private anchorY: number | null = null;
+  private orbitAngle = 0;
+  private orbitRadius = 70;
+  private orbitDir = 1; // +1 / -1
+  private readonly orbitSpeed = 0.0006; // rad/ms (~10s per lap)
   private clickCallback: ((npc: NpcShip) => void) | null = null;
 
   constructor(npc: NpcShip, x: number, y: number, bounds: SystemBounds) {
@@ -161,6 +165,27 @@ export class NpcShipSprite {
   update(deltaTime: number): void {
     if (this.gone) return;
 
+    // Visiting a planet: smoothly orbit it (eases onto the ring, then circles).
+    // This reads as a deliberate "calling at the planet" rather than the chaotic
+    // random hops it did before (US-070: NPCs need a clear purpose).
+    if (!this.departing && this.anchorX !== null && this.anchorY !== null) {
+      this.orbitAngle += this.orbitDir * this.orbitSpeed * deltaTime;
+      const tx = this.anchorX + Math.cos(this.orbitAngle) * this.orbitRadius;
+      const ty = this.anchorY + Math.sin(this.orbitAngle) * this.orbitRadius;
+      const ox = tx - this.x;
+      const oy = ty - this.y;
+      const od = Math.hypot(ox, oy);
+      const step = Math.min(od, this.speed * deltaTime);
+      if (od > 0.001) {
+        this.x += (ox / od) * step;
+        this.y += (oy / od) * step;
+        this.container.rotation = Math.atan2(oy, ox); // face direction of travel
+      }
+      this.container.x = this.x;
+      this.container.y = this.y;
+      return;
+    }
+
     const dx = this.targetX - this.x;
     const dy = this.targetY - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -201,11 +226,15 @@ export class NpcShipSprite {
     this.targetY = this.bounds.cy + Math.sin(angle) * radius;
   }
 
-  /** Loiter near a fixed point (a planet) instead of wandering the whole band. */
+  /** Orbit a fixed point (a planet) instead of wandering the whole band. */
   setAnchor(x: number, y: number): void {
     this.anchorX = x;
     this.anchorY = y;
-    this.pickNewTarget();
+    this.orbitRadius = 50 + Math.random() * 45;
+    this.orbitDir = Math.random() < 0.5 ? 1 : -1;
+    // Start the orbit angle at the ship's current bearing from the planet so it
+    // eases on without a jump.
+    this.orbitAngle = Math.atan2(this.y - y, this.x - x);
   }
 
   private render(): void {

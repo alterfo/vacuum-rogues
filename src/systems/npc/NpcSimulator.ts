@@ -16,10 +16,10 @@ const PIRATE_DAMAGE_FRACTION = 0.5;
 const VICTIM_RETALIATION_FRACTION = 0.3;
 /** Credits a pirate loots when it destroys a victim. */
 const PIRATE_LOOT = 200;
-/** Per-day chance a ship that has arrived somewhere decides to move on (~4-5 day
- *  dwell): long enough to linger and visit, short enough that ships keep
- *  circulating and don't pile up in one system. */
-const DEPART_CHANCE = 0.22;
+/** Per-day chance a ship that has arrived somewhere decides to move on (~6-7 day
+ *  dwell): long enough to actually orbit/visit a planet and read as purposeful,
+ *  short enough that ships keep circulating and don't pile up in one system. */
+const DEPART_CHANCE = 0.15;
 
 const FACTIONS: FactionType[] = [
   FactionType.OUTLANDERS,

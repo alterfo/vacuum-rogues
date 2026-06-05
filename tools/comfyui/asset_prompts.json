@@ -46,17 +46,19 @@
     "planet_maps": {
       "size": [1024, 512],
       "variants": 3,
-      "template": "Seamless horizontally tileable equirectangular surface map of a planet, flat 2:1 cylindrical map projection filling the whole frame edge to edge, {type}, even flat ambient lighting, no shadows, highly detailed planetary terrain texture, top-down orthographic map",
-      "negative": "sphere, globe, planet ball, circle, round, horizon, curvature, outer space, stars, black background, vignette, directional shading, terminator, 3d render, lens, bottom cut off",
+      "steps": 42,
+      "cfg": 6.5,
+      "template": "Seamless full-frame flat texture, a wide 2:1 rectangular surface swatch that completely fills the frame edge to edge with NO central object and no border, {type}, evenly and uniformly lit, flat lighting, no shadows, no curvature, ultra-detailed surface material, sharp focus",
+      "negative": "globe, sphere, orb, ball, circle, round, disc, ring, concentric circles, eye, iris, planet object, planet in space, vignette, dark corners, radial, road map, street map, atlas, compass, charts, text, labels, grid, frame, border, margins, letterbox, black background, stars, outer space, horizon, 3d render of a sphere",
       "name_order": ["type"],
       "axes": {
         "type": {
-          "terrestrial": "blue oceans, green and brown continents, scattered white clouds",
-          "gas": "horizontal banded gas-giant cloud bands, orange and cream stripes, one swirling storm oval",
-          "ice": "white and pale-cyan cracked ice fields and frost",
-          "volcanic": "black basalt crust veined with glowing orange lava rivers",
-          "industrial": "grey metallic plated surface with sprawling glowing city lights",
-          "habitat": "lush green terraced farmland with rivers and lakes"
+          "terrestrial": "blue ocean water with green and brown landmasses and scattered thin white clouds, seen from directly overhead, satellite imagery of terrain",
+          "gas": "swirling horizontal cloud bands in orange, cream and amber with turbulent storm eddies, gas-giant atmosphere seen from directly overhead",
+          "ice": "cracked white and pale-cyan ice sheets with frost, fractures and ridges, frozen polar terrain seen from directly overhead",
+          "volcanic": "black basalt rock veined with glowing orange and yellow lava rivers and cracks, volcanic terrain seen from directly overhead",
+          "industrial": "dense grey metal plating with sprawling glowing yellow city lights, planet-wide megacity seen from directly overhead at night",
+          "habitat": "lush green terraced farmland with winding rivers, lakes and fields, seen from directly overhead"
         }
       }
     },

@@ -12,6 +12,27 @@ async function registerServiceWorker(): Promise<void> {
   // serves stale code, so source edits silently don't take effect until the
   // cache is manually cleared. Only register for production builds.
   if (import.meta.env.DEV) {
+    // A SW left over from a previous production/preview build can keep serving
+    // stale modules even though we no longer register one in dev — which makes
+    // source fixes silently "not work". Actively tear down any existing SW and
+    // its caches on dev boot so what you see is always the current code.
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        if (regs.length > 0) {
+          await Promise.all(regs.map((r) => r.unregister()));
+          logger.warn(
+            `Unregistered ${regs.length} stale Service Worker(s) in dev — reload once to drop the old cache.`,
+          );
+        }
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch (error) {
+      logger.warn('Dev Service Worker cleanup failed:', error);
+    }
     logger.info('Service Worker disabled in dev (avoids caching stale modules)');
     return;
   }

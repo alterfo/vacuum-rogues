@@ -175,16 +175,9 @@ export class PlanetSprite {
     const shade = new Container();
     shade.eventMode = "none";
     const sh = new Graphics();
-    sh.circle(-radius * 0.45, 0, radius).fill({ color: 0x000008, alpha: 0.55 }); // night side
-    sh.circle(-radius * 0.15, 0, radius).fill({ color: 0x000008, alpha: 0.18 }); // terminator
-    sh.circle(radius * 0.4, -radius * 0.35, radius * 0.42).fill({
-      color: 0xffffff,
-      alpha: 0.22,
-    }); // specular
-    sh.circle(radius * 0.8, 0, radius * 0.3).fill({
-      color: 0xffffff,
-      alpha: 0.13,
-    }); // rim light
+    sh.circle(-radius * 0.45, 0, radius).fill({ color: 0x000008, alpha: 0.5 }); // night side
+    sh.circle(-radius * 0.15, 0, radius).fill({ color: 0x000008, alpha: 0.16 }); // terminator
+    // No white specular/rim "glints" — they read as weird blobs (US-070).
     shade.addChild(sh);
     shade.mask = maskB;
     this.shadeContainer = shade;
@@ -201,34 +194,20 @@ export class PlanetSprite {
     const W = radius * 2;
     const rng = new SeededRNG(`surf_${this.planet.id}`);
 
-    // Star-facing lighting: night side + terminator + specular + rim light.
-    const maskB = new Graphics().circle(0, 0, radius).fill({ color: 0xffffff });
-    const shade = new Container();
-    shade.eventMode = "none";
-    const sh = new Graphics();
-    sh.circle(-radius * 0.45, 0, radius).fill({ color: 0x000008, alpha: 0.55 });
-    sh.circle(-radius * 0.15, 0, radius).fill({ color: 0x000008, alpha: 0.18 });
-    sh.circle(radius * 0.4, -radius * 0.35, radius * 0.42).fill({
-      color: 0xffffff,
-      alpha: 0.2,
-    });
-    sh.circle(radius * 0.8, 0, radius * 0.3).fill({
-      color: 0xffffff,
-      alpha: 0.12,
-    });
-    shade.addChild(sh);
-    shade.mask = maskB;
-    this.shadeContainer = shade;
+    // No fake lighting overlay: the specular/rim "glints" and the directional
+    // terminator read as weird blobs on the disc. Depth comes from the convex
+    // sphere mesh (foreshortening) and the parallax background instead.
+    this.shadeContainer = null;
 
-    // Preferred: a real rotating sphere mesh (convex foreshortening) under the
-    // lighting layer — same technique as the sun (US-070: planets convex too).
+    // Preferred: a real rotating sphere mesh (convex foreshortening) — same
+    // technique as the sun (US-070: planets convex too).
     const sphere = buildSphereMesh(mapTex, radius);
     if (sphere) {
       this.sphere = sphere;
       // longitude fraction per ms (slow); randomized direction.
       this.axialSpeed =
         (0.00006 + rng.next() * 0.00006) * (rng.next() < 0.5 ? 1 : -1);
-      this.container.addChild(sphere.mesh, maskB, shade);
+      this.container.addChild(sphere.mesh);
       return;
     }
 
@@ -244,7 +223,7 @@ export class PlanetSprite {
     this.tiling = tiling;
     this.axialSpeed =
       (0.012 + rng.next() * 0.012) * (rng.next() < 0.5 ? 1 : -1);
-    this.container.addChild(maskC, tiling, maskB, shade);
+    this.container.addChild(maskC, tiling);
   }
 
   /** Darken a hex color by an absolute per-channel amount. */

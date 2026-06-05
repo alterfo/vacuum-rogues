@@ -60,8 +60,10 @@ interface WarpArrivalEffect {
 
 interface StarLayer {
   container: Container;
-  stars: { x: number; y: number; size: number; alpha: number; speed: number }[];
-  speed: number;
+  // Parallax depth: on-screen pan shift = cameraPan * depth (smaller = farther
+  // and slower). zoomDepth: how much the layer scales with camera zoom.
+  depth: number;
+  zoomDepth: number;
 }
 
 interface DustMote {
@@ -300,6 +302,9 @@ export class SpaceFlightScene extends GameScene {
   // Screen-fixed deep-space backdrop (crisp far stars + twinkle), sits behind
   // the world so panning never reveals an edge. Added to renderer.stage.
   private skyContainer: Container | null = null;
+  // Nebula art sprite in screen-space (skyContainer child). Screen-space means
+  // it's always viewport-sized, never shows its edge even at max zoom-out.
+  private nebulaBackdropSprite: Sprite | null = null;
   private starLayers: StarLayer[] = [];
   private nebulaeContainer: Container | null = null;
   private nebulaLayers: NebulaLayer[] = []; // Animated nebula clouds
@@ -327,9 +332,8 @@ export class SpaceFlightScene extends GameScene {
   private starGraphics: Graphics | null = null;
   private starSurface: Container | null = null; // rotating star surface
   // Equirect sun map scrolled under a circular mask for real axial rotation
-  // (US-070 #4), plus a pulsing flare overlay for occasional "всполохи".
+  // (US-070 #4) when the sphere mesh is unavailable.
   private starTiling: TilingSprite | null = null;
-  private starFlare: Graphics | null = null;
   // Preferred sun rendering: an equirect map on a hemisphere mesh (see
   // sphereMesh.ts) so it really turns rather than scrolling flat.
   private sunSphere: SphereMesh | null = null;
@@ -795,6 +799,7 @@ export class SpaceFlightScene extends GameScene {
     this.nebulaLayers = [];
     this.twinkleStars = [];
     this.twinkleContainer = null;
+    this.nebulaBackdropSprite = null;
     this.swarmLayers = [];
     this.dustMotes = [];
     this.asteroids = [];
@@ -816,7 +821,6 @@ export class SpaceFlightScene extends GameScene {
     this.starGraphics = null;
     this.starSurface = null;
     this.starTiling = null;
-    this.starFlare = null;
     this.sunSphere = null;
     this.orbitGraphics = null;
     this.targetIndicator = null;
@@ -853,12 +857,46 @@ export class SpaceFlightScene extends GameScene {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
-    // Depth layers: far/dim/slow → near/bright/fast (parallax). Denser and
-    // brighter than before for a "deep field" look like the reference shot.
+    // Depth layers, deepest → nearest. `depth` = on-screen pan parallax rate
+    // (far moves least → reads as distant); `zoomDepth` = how much it scales with
+    // zoom. Stars are laid out in a large field CENTRED on the origin and the
+    // whole layer is translated by cameraPan*depth — no per-pan reshuffling/
+    // wrapping, so stars don't pop/change as you pan (US-070 parallax fix).
+    const cx = width / 2;
+    const cy = height / 2;
+    // Depth hierarchy (pan parallax rate × cameraPan = on-screen shift per px).
+    // Far layer barely moves (deep-background cue); near layer clearly trails
+    // behind as you pan (close-foreground cue). The 5.5× ratio between layers
+    // makes the depth effect read clearly without stars "flying" off screen.
+    // zoomDepth: subtle size change on zoom-in/out — near-layer stars feel
+    // like local dust/debris; far-layer stars are unaffected by zoom (infinity).
+    // spread: field half-extent in screen-widths/heights; near layer uses more
+    // so its larger pan shifts never expose an edge.
     const layerConfigs = [
-      { count: 1500, speed: 0.008, size: [0.4, 1.1], alpha: [0.4, 0.7] },
-      { count: 750, speed: 0.025, size: [0.8, 1.7], alpha: [0.6, 0.9] },
-      { count: 280, speed: 0.055, size: [1.3, 2.6], alpha: [0.75, 1.0] },
+      {
+        count: 1400,
+        depth: 0.04,
+        zoomDepth: 0.0,
+        size: [0.4, 1.0],
+        alpha: [0.35, 0.6],
+        spread: 1.0,
+      },
+      {
+        count: 700,
+        depth: 0.1,
+        zoomDepth: 0.04,
+        size: [0.8, 1.6],
+        alpha: [0.55, 0.82],
+        spread: 1.2,
+      },
+      {
+        count: 260,
+        depth: 0.22,
+        zoomDepth: 0.1,
+        size: [1.3, 2.5],
+        alpha: [0.7, 1.0],
+        spread: 1.5,
+      },
     ];
 
     const starColors = [
@@ -867,17 +905,18 @@ export class SpaceFlightScene extends GameScene {
 
     for (const config of layerConfigs) {
       const container = new Container();
-      const stars: StarLayer["stars"] = [];
 
       for (let i = 0; i < config.count; i++) {
-        const x = Math.random() * width * 2;
-        const y = Math.random() * height * 2;
+        // Centred field; spread multiplier ensures parallax shifts never expose
+        // an edge (near layer uses 1.5× so its larger shifts stay in-bounds).
+        const fw = width * config.spread;
+        const fh = height * config.spread;
+        const x = (Math.random() * 2 - 1) * fw;
+        const y = (Math.random() * 2 - 1) * fh;
         const size =
           config.size[0] + Math.random() * (config.size[1] - config.size[0]);
         const alpha =
           config.alpha[0] + Math.random() * (config.alpha[1] - config.alpha[0]);
-
-        stars.push({ x, y, size, alpha, speed: config.speed });
 
         const graphics = new Graphics();
         graphics.circle(x, y, size);
@@ -888,7 +927,13 @@ export class SpaceFlightScene extends GameScene {
         container.addChild(graphics);
       }
 
-      this.starLayers.push({ container, stars, speed: config.speed });
+      container.x = cx; // field centre starts at screen centre
+      container.y = cy;
+      this.starLayers.push({
+        container,
+        depth: config.depth,
+        zoomDepth: config.zoomDepth,
+      });
       this.skyContainer.addChild(container); // Crisp, screen-fixed backdrop
     }
   }
@@ -985,21 +1030,23 @@ export class SpaceFlightScene extends GameScene {
     const backdrop =
       pickVariant("nebula", `${palNames[palIdx]}_mid`, systemId) ??
       pickVariant("nebula", `${palNames[palIdx]}_near`, systemId);
-    if (backdrop) {
+    if (backdrop && this.skyContainer) {
       const bg = new Sprite(backdrop);
       bg.anchor.set(0.5);
-      bg.x = this.starCenterX;
-      bg.y = this.starCenterY;
-      // Larger than the camera-pan clamp (cameraBoundRadius) so its rectangular
-      // edge can never be panned into view.
-      const size = this.SYSTEM_BOUNDARY_RADIUS * 2.8;
+      // Screen-space: centred on viewport, never scales with zoom → edge never
+      // visible at any zoom level. 2.4× max(W,H) gives ample parallax margin.
+      const sw = this.renderer.app.screen.width;
+      const sh = this.renderer.app.screen.height;
+      bg.x = sw / 2;
+      bg.y = sh / 2;
+      const size = Math.max(sw, sh) * 2.4;
       bg.width = size;
       bg.height = size;
-      bg.alpha = 0.4;
+      bg.alpha = 0.38;
       bg.eventMode = "none";
-      // Soft blur so the backdrop reads as distant gas, not a sharp photo.
-      bg.filters = [this.paddedBlur(4)];
-      this.nebulaeContainer.addChild(bg); // first child → behind the clouds
+      this.nebulaBackdropSprite = bg;
+      // addChildAt(0) → behind all star layers that createStarField() appends.
+      this.skyContainer.addChildAt(bg, 0);
     }
 
     // Spread clouds across the whole (larger-than-screen) system.
@@ -1034,8 +1081,10 @@ export class SpaceFlightScene extends GameScene {
         const a = baseAlpha * rng.nextFloat(0.35, 1.0);
         g.circle(bx, by, r).fill({ color, alpha: a });
       }
-      g.filters = [this.paddedBlur(16)];
-      g.blendMode = "screen"; // glow additively over the dark sky (US-070 #1)
+      // No BlurFilter (US-070 stripes): the cloud is a stack of many soft, low-
+      // alpha circles over the dark sky with a "screen" blend, so it already
+      // reads as soft gas — and an unfiltered graphic can't band under zoom.
+      g.blendMode = "screen";
       cloud.addChild(g);
 
       // Glowing "ember" cores near the heart of the cloud — a brighter, warmer
@@ -1049,8 +1098,7 @@ export class SpaceFlightScene extends GameScene {
         emberG.circle(ex, ey, rng.nextFloat(40, 120));
         emberG.fill({ color: emberTint, alpha: rng.nextFloat(0.1, 0.22) });
       }
-      emberG.filters = [this.paddedBlur(14)];
-      emberG.blendMode = "add"; // bright lit-from-within cores
+      emberG.blendMode = "add"; // bright lit-from-within cores (no blur — US-070)
       cloud.addChild(emberG);
       this.nebulaeContainer.addChild(cloud);
 
@@ -1462,23 +1510,11 @@ export class SpaceFlightScene extends GameScene {
       this.sunSphere = buildSphereMesh(sunMap, R, tint);
       const mesh = this.sunSphere?.mesh ?? null;
 
-      // Hot core glow so the centre reads as brighter. No limb ring — the dark
-      // rim around the disc looked like a drawn border, so it was removed.
-      const shade = new Graphics();
-      shade.eventMode = "none";
-      shade.circle(0, 0, R * 0.34).fill({ color: 0xfff2c0, alpha: 0.28 });
-
-      // Pulsing flare overlay (rare "всполохи").
-      const flare = new Graphics();
-      flare.eventMode = "none";
-      this.starFlare = flare;
-      const flareMask = new Graphics()
-        .circle(0, 0, R)
-        .fill({ color: 0xffffff });
-      flare.mask = flareMask;
-
+      // No overlays on the sun: the hot-core fill and pulsing flares read as a
+      // weird bright blob over the surface, so they were removed — the rotating
+      // fire texture + corona (starGraphics) carry the look on their own.
       if (mesh) {
-        surface.addChild(mesh, shade, flareMask, flare);
+        surface.addChild(mesh);
       } else {
         // Fallback: flat scrolling disc under a circular mask.
         const maskC = new Graphics().circle(0, 0, R).fill({ color: 0xffffff });
@@ -1494,7 +1530,7 @@ export class SpaceFlightScene extends GameScene {
         tiling.tint = tint;
         tiling.mask = maskC;
         this.starTiling = tiling;
-        surface.addChild(maskC, tiling, shade, flareMask, flare);
+        surface.addChild(maskC, tiling);
       }
 
       this.starSurface = surface;
@@ -1579,9 +1615,8 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Animate the sun: scroll the equirect map for axial rotation and pulse a few
-   * solar flares near the rim (rare "всполохи"). Falls back to rotating the
-   * procedural surface container when no map is loaded.
+   * Animate the sun: roll the surface for axial rotation. Falls back to the
+   * scrolling disc / procedural container when no mesh/map is available.
    */
   private updateStar(deltaTime: number): void {
     if (this.sunSphere) {
@@ -1592,31 +1627,6 @@ export class SpaceFlightScene extends GameScene {
       this.starTiling.tilePosition.x -= 0.012 * deltaTime;
     } else if (this.starSurface) {
       this.starSurface.rotation += 0.00004 * deltaTime;
-    }
-
-    if (this.starFlare) {
-      const R = this.STAR_RADIUS;
-      const g = this.starFlare;
-      g.clear();
-      const t = this.bgElapsed;
-      // A few flares with offset phases; each swells and fades, so most of the
-      // time only one or two are visible — occasional bright eruptions.
-      const flares = 5;
-      for (let i = 0; i < flares; i++) {
-        const phase = (t / 2600 + i / flares) % 1;
-        const pulse = Math.max(0, Math.sin(phase * Math.PI)); // 0→1→0
-        if (pulse < 0.04) continue;
-        const ang = (i / flares) * Math.PI * 2 + t * 0.00002 * (i + 1);
-        const rr = R * (0.86 + 0.1 * pulse);
-        const fx = Math.cos(ang) * rr;
-        const fy = Math.sin(ang) * rr;
-        const fr = R * (0.12 + 0.18 * pulse);
-        g.circle(fx, fy, fr).fill({ color: 0xffd070, alpha: 0.35 * pulse });
-        g.circle(fx, fy, fr * 0.5).fill({
-          color: 0xfff6d0,
-          alpha: 0.5 * pulse,
-        });
-      }
     }
   }
 
@@ -3532,11 +3542,22 @@ export class SpaceFlightScene extends GameScene {
 
   /** Slow drift + gentle "breathing" pulse so the nebulae feel alive. */
   private updateNebulae(): void {
-    // Shared slow diagonal drift of the whole nebula field (US-070 #1): on top
-    // of each cloud's own gentle wander, the layer crawls down-right so the sky
-    // feels alive rather than static.
-    const DRIFT_X = 0.018;
-    const DRIFT_Y = 0.011;
+    // Nebula parallax: the nebula lives in the world (gameLayer), but a distant
+    // gas backdrop should move SLOWER than the planets/ship as the camera pans —
+    // not 1:1. Counter-translate the whole nebula container so its net on-screen
+    // pan rate is NEB_DEPTH (≈35% of the world). This puts it on its own depth
+    // layer: behind the world, in front of (faster than) the far stars.
+    const NEB_DEPTH = 0.35;
+    if (this.backgroundContainer) {
+      const z = this.cameraZoom || 1;
+      this.backgroundContainer.x = (-this.cameraPanX * (1 - NEB_DEPTH)) / z;
+      this.backgroundContainer.y = (-this.cameraPanY * (1 - NEB_DEPTH)) / z;
+    }
+
+    // A very slow shared diagonal drift on top of each cloud's own wander, so the
+    // sky feels alive without the nebula visibly sliding.
+    const DRIFT_X = 0.006;
+    const DRIFT_Y = 0.004;
     for (const n of this.nebulaLayers) {
       n.container.x += n.driftX + DRIFT_X;
       n.container.y += n.driftY + DRIFT_Y;
@@ -3591,43 +3612,33 @@ export class SpaceFlightScene extends GameScene {
   private updateStarField(_deltaTime: number): void {
     if (!this.skyContainer) return;
 
-    const width = this.renderer.app.screen.width;
-    const height = this.renderer.app.screen.height;
+    const cx = this.renderer.app.screen.width / 2;
+    const cy = this.renderer.app.screen.height / 2;
 
-    // Parallax the screen-fixed starfield against the *camera* (pan + zoom), not
-    // just ship velocity. Previously the stars were anchored to the screen and
-    // only drifted with speed, so panning/zooming left them sitting still —
-    // "dust stuck on the glass". Now each depth layer shifts opposite the camera
-    // pan (scaled by the layer's depth), and seamlessly tiles via wrapping.
-    const PARALLAX = 6; // overall pan strength (gentler so stars don't lurch)
+    // Nebula art backdrop drifts almost imperceptibly (0.01) — it reads as an
+    // infinite-distance cosmic cloud that barely reacts to local camera motion.
+    if (this.nebulaBackdropSprite) {
+      this.nebulaBackdropSprite.x = cx + this.cameraPanX * 0.01;
+      this.nebulaBackdropSprite.y = cy + this.cameraPanY * 0.01;
+    }
+
+    // Each depth layer is a centred field translated by cameraPan*depth. Stars
+    // also scale slightly with zoom (except the deepest layer — it's at infinity
+    // and never scales). No Math.max clamp: stars can shrink at zoom-out, giving
+    // the correct depth cue that distant stars look smaller when you step back.
     for (const layer of this.starLayers) {
-      const sx = this.cameraPanX * layer.speed * PARALLAX;
-      const sy = this.cameraPanY * layer.speed * PARALLAX;
-      // Normalise into [-width, 0] / [-height, 0] so the doubled-size field
-      // always covers the screen with no gap.
-      layer.container.x = (((sx % width) + width) % width) - width;
-      layer.container.y = (((sy % height) + height) % height) - height;
+      const s = Math.max(0.4, 1 + (this.cameraZoom - 1) * layer.zoomDepth);
+      layer.container.scale.set(s);
+      layer.container.x = cx + this.cameraPanX * layer.depth;
+      layer.container.y = cy + this.cameraPanY * layer.depth;
     }
 
-    // Parallax the bright "hero" twinkle stars with the near layer so they don't
-    // sit still while the rest of the field moves. They are not tiled, so a
-    // small fractional shift (no wrap) is enough to keep them feeling attached.
+    // Twinkle stars ride with the near layer (same parallax rate = 0.22) so they
+    // feel anchored to nearby space rather than the infinite background.
     if (this.twinkleContainer) {
-      this.twinkleContainer.x = this.cameraPanX * 0.06;
-      this.twinkleContainer.y = this.cameraPanY * 0.06;
+      this.twinkleContainer.x = this.cameraPanX * 0.22;
+      this.twinkleContainer.y = this.cameraPanY * 0.22;
     }
-
-    // Couple the whole star backdrop to the camera zoom (damped) so stars scale
-    // *with* the world (sun, nebula) instead of staying a fixed screen size —
-    // otherwise their apparent depth inverts on zoom (far stars seemed to sit in
-    // front of the nebula, near stars closer than the sun). Clamped to ≥1 so the
-    // 2×-sized field can't shrink and reveal a gap. Scaled about screen centre.
-    const cx = width / 2;
-    const cy = height / 2;
-    const skyScale = Math.max(1, 1 + (this.cameraZoom - 1) * 0.35);
-    this.skyContainer.pivot.set(cx, cy);
-    this.skyContainer.position.set(cx, cy);
-    this.skyContainer.scale.set(skyScale);
   }
 
   private async returnToStarMap(): Promise<void> {
