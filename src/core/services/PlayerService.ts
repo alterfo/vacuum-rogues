@@ -6,7 +6,7 @@ import { Player } from "@/domain/Player";
 import { PlayerShip } from "@/domain/PlayerShip";
 import { Inventory } from "@/domain/Inventory";
 import { SkillTree } from "@/domain/SkillTree";
-import { RaceRegistry } from "@/systems/RaceRegistry";
+import { FactionRegistry } from "@/systems/FactionRegistry";
 import { logger } from "@/utils/logger";
 
 /**
@@ -18,14 +18,25 @@ export class PlayerService implements IPlayerService {
   private player: Player | null = null;
 
   createPlayer(settings: PlayerSettings): Player {
-    const race = RaceRegistry.getRace(settings.raceType);
+    const factionBonus = FactionRegistry.getBonus(settings.factionType);
     const skillTree = new SkillTree([]);
     const inventory = new Inventory();
+
+    // Base stats modified by faction bonus
+    const baseHull = 100;
+    const baseShields = 50;
+    const baseEnergy = 100;
+    const baseSpeed = 1.0;
+    const baseEvasion = 0.8;
+
+    const hullBonus = factionBonus.shipBonus.armor ?? 1.0;
+    const shieldBonus = factionBonus.shipBonus.shield ?? 1.0;
+    const speedBonus = factionBonus.shipBonus.speed ?? 1.0;
 
     this.player = new Player(
       "player",
       settings.captainName ?? "Captain",
-      race,
+      settings.factionType,
       0,
       1,
       skillTree,
@@ -36,22 +47,22 @@ export class PlayerService implements IPlayerService {
       new PlayerShip(
         "Ranger-1",
         "Ranger-1",
-        race.shipBaseline.hullHP,
-        race.shipBaseline.hullHP,
-        race.shipBaseline.shields,
-        race.shipBaseline.shields,
-        race.shipBaseline.energy,
-        race.shipBaseline.energy,
-        race.shipBaseline.speed,
-        race.shipBaseline.evasion,
-        race,
+        Math.round(baseHull * hullBonus),
+        Math.round(baseHull * hullBonus),
+        Math.round(baseShields * shieldBonus),
+        Math.round(baseShields * shieldBonus),
+        baseEnergy,
+        baseEnergy,
+        baseSpeed * speedBonus,
+        baseEvasion,
+        settings.factionType,
       ),
       inventory,
       "",
     );
 
     logger.info(
-      `PlayerService: created player "${this.player.name}" with race ${race.name}`,
+      `PlayerService: created player "${this.player.name}" with faction ${settings.factionType}`,
     );
     return this.player;
   }

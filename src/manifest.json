@@ -1,6 +1,6 @@
 {
-  "name": "Космические рейнджеры: Нейросетевое вторжение",
-  "short_name": "Нейросетевое вторжение",
+  "name": "Galactic Horizon: Нейросетевое вторжение",
+  "short_name": "Galactic Horizon",
   "description": "Браузерная космическая RPG/стратегия с ONNX нейросетями",
   "start_url": "/",
   "display": "standalone",

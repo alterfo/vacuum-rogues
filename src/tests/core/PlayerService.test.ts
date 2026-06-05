@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { PlayerService } from "@/core/services/PlayerService";
-import { RaceType } from "@/types";
+import { FactionType } from "@/types";
 
 describe("PlayerService", () => {
   let service: PlayerService;
@@ -10,29 +10,31 @@ describe("PlayerService", () => {
   });
 
   it("should create a player with default values", () => {
-    const player = service.createPlayer({ raceType: RaceType.HUMAN });
+    const player = service.createPlayer({
+      factionType: FactionType.OUTLANDERS,
+    });
 
     expect(player).toBeDefined();
     expect(player.name).toBe("Captain");
     expect(player.credits).toBe(1000);
-    expect(player.race.type).toBe(RaceType.HUMAN);
+    expect(player.faction).toBe(FactionType.OUTLANDERS);
     expect(player.currentSystemId).toBe("");
   });
 
   it("should create a player with custom settings", () => {
     const player = service.createPlayer({
-      raceType: RaceType.MALAQAR,
+      factionType: FactionType.BASTIONS,
       captainName: "Korg",
       startingMoney: 5000,
     });
 
     expect(player.name).toBe("Korg");
     expect(player.credits).toBe(5000);
-    expect(player.race.type).toBe(RaceType.MALAQAR);
+    expect(player.faction).toBe(FactionType.BASTIONS);
   });
 
   it("should return created player via getPlayer", () => {
-    const player = service.createPlayer({ raceType: RaceType.PELENG });
+    const player = service.createPlayer({ factionType: FactionType.SYNDICATE });
     expect(service.getPlayer()).toBe(player);
   });
 
@@ -41,7 +43,9 @@ describe("PlayerService", () => {
   });
 
   it("should update player", () => {
-    const player = service.createPlayer({ raceType: RaceType.HUMAN });
+    const player = service.createPlayer({
+      factionType: FactionType.OUTLANDERS,
+    });
     player.credits = 9999;
     service.updatePlayer(player);
 
@@ -49,7 +53,7 @@ describe("PlayerService", () => {
   });
 
   it("should delete player", () => {
-    service.createPlayer({ raceType: RaceType.HUMAN });
+    service.createPlayer({ factionType: FactionType.OUTLANDERS });
     service.deletePlayer();
 
     expect(service.getPlayer()).toBeNull();

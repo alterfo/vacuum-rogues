@@ -1,13 +1,19 @@
-import type { RaceType, NPCCharacter, EmotionVectorData, DialogueAnchor } from '@/types';
+/**
+ * Minimal NPC interface for dialogue system compatibility.
+ * Full NPC domain was removed during Galactic Horizon rebrand.
+ * This stub allows dialogue-related files to compile.
+ */
+import { FactionType } from "@/types";
 
-export class NPC {
-  constructor(
-    public readonly id: string,
-    public readonly name: string,
-    public readonly race: RaceType,
-    public readonly character: NPCCharacter,
-    public readonly emotionBaseline: EmotionVectorData,
-    public readonly anchors: DialogueAnchor[],
-    public readonly requiredReputation: number,
-  ) {}
+export interface NPC {
+  readonly id: string;
+  readonly name: string;
+  readonly race?: FactionType;
+  readonly emotionBaseline?: {
+    trust: number;
+    fear: number;
+    respect: number;
+    hostility: number;
+    curiosity: number;
+  };
 }

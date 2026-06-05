@@ -1,0 +1,35 @@
+{
+  "_comment": "API-format ComfyUI workflow (the graph generate_assets.py builds per asset). POST to /prompt as {\"prompt\": <this>}. Replace ckpt_name with an installed checkpoint. filename_prefix '<category>/<name>' makes outputs mirror docs/design/ASSET_PIPELINE.md.",
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 12345, "steps": 30, "cfg": 6.5,
+      "sampler_name": "dpmpp_2m", "scheduler": "karras", "denoise": 1.0,
+      "model": ["4", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0]
+    }
+  },
+  "4": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": { "ckpt_name": "PUT_YOUR_CHECKPOINT.safetensors" }
+  },
+  "5": {
+    "class_type": "EmptyLatentImage",
+    "inputs": { "width": 1024, "height": 1024, "batch_size": 1 }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "clip": ["4", 1], "text": "Alien planet sphere, top-down game sprite, white and pale-cyan frozen world with cracked ice and frost, soft global illumination, subtle atmospheric rim light, centered, isolated on plain solid black background, painterly sci-fi, high detail, no stars" }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "clip": ["4", 1], "text": "text, words, watermark, ui, frame, border, people, blurry, low quality, jpeg artifacts, deformed" }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": { "samples": ["3", 0], "vae": ["4", 2] }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": { "filename_prefix": "planets/ice_01", "images": ["8", 0] }
+  }
+}

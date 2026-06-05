@@ -37,3 +37,7 @@ coverage/
 *.temp
 .tmp
 .temp
+
+# Copyrighted reference material (original game manual) — design inspiration
+# only, must never be committed or shipped.
+reference_help/

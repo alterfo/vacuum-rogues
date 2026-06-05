@@ -7,6 +7,7 @@ import { WarpPath } from "@/domain/WarpPath";
 import { SeededRNG } from "@/utils/seededRNG";
 import { SystemNameGenerator } from "@/utils/systemNameGenerator";
 import { PlanetGenerator } from "./PlanetGenerator";
+import { NpcSimulator } from "./npc/NpcSimulator";
 import { logger } from "@/utils/logger";
 
 export class GalaxySimulator {
@@ -15,6 +16,7 @@ export class GalaxySimulator {
   private overmind: Overmind;
   private _eventQueue: GalacticEvent[] = [];
   private rng: SeededRNG;
+  private readonly npcSimulator = new NpcSimulator();
 
   constructor() {
     this._seed = "";
@@ -88,7 +90,11 @@ export class GalaxySimulator {
       this.systems,
       this.overmind,
       [],
+      [],
     );
+
+    // Populate the galaxy with autonomous NPC ships (Feature 8).
+    this.npcSimulator.spawnInitial(galaxy, this.rng);
 
     logger.info(`Galaxy generated with ${systemCount} systems`);
     return galaxy;

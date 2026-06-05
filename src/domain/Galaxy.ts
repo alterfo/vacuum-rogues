@@ -1,8 +1,9 @@
-import type { StarSystem } from './StarSystem';
-import type { Overmind } from './Overmind';
-import type { GalacticEvent } from './GalacticEvent';
-import { GameSystemException } from '@/exceptions/GameSystemException';
-import { logger } from '@/utils/logger';
+import type { StarSystem } from "./StarSystem";
+import type { Overmind } from "./Overmind";
+import type { GalacticEvent } from "./GalacticEvent";
+import type { NpcShip } from "./NpcShip";
+import { GameSystemException } from "@/exceptions/GameSystemException";
+import { logger } from "@/utils/logger";
 
 export class Galaxy {
   gameDays = 0;
@@ -12,11 +13,16 @@ export class Galaxy {
     public readonly systems: StarSystem[],
     public readonly overmind: Overmind,
     public readonly activeEvents: GalacticEvent[],
+    /** Autonomous NPC ships living across the galaxy (Feature 8). */
+    public readonly npcShips: NpcShip[] = [],
   ) {}
 
   static generate(_seed: string): Galaxy {
     // Placeholder: actual generation in GalaxySimulator
-    throw new GameSystemException('GALAXY_GENERATE_DEPRECATED', 'Use GalaxySimulator.generateGalaxy instead');
+    throw new GameSystemException(
+      "GALAXY_GENERATE_DEPRECATED",
+      "Use GalaxySimulator.generateGalaxy instead",
+    );
   }
 
   simulateDay(): void {
@@ -45,6 +51,8 @@ export class Galaxy {
       }
     }
 
-    logger.info(`Revealed system: ${system.name} and ${revealedCount} neighbors`);
+    logger.info(
+      `Revealed system: ${system.name} and ${revealedCount} neighbors`,
+    );
   }
 }

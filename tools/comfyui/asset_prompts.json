@@ -1,0 +1,146 @@
+{
+  "_comment": "Bullet-proof prompts + per-category flags for Galactic Horizon. alpha=true -> background removed (transparent PNG) via a cutout node; tileable=true -> seamless circular tiling. Names/folders per docs/design/ASSET_PIPELINE.md, no proprietary names.",
+  "negative_common": "text, words, letters, caption, watermark, signature, logo, blurry, out of focus, low quality, jpeg artifacts, deformed, duplicate, extra objects, frame, border",
+  "defaults": { "steps": 30, "cfg": 6.0, "sampler": "dpmpp_2m", "scheduler": "karras", "upscale_model": "4x-UltraSharp.pth" },
+  "categories": {
+    "nebula": {
+      "size": [1024, 1024],
+      "tileable": true,
+      "upscale": true,
+      "template": "Seamless tileable deep-space nebula texture, abstract diffuse glowing gas clouds filling the entire frame edge to edge, evenly distributed with no central object and no focal point, scattered ember cores, fine star dust, {palette} palette, {layer}, dark near-black space, flat even lighting, digital matte painting texture",
+      "negative": "black hole, accretion disk, central object, focal point, vortex, swirl center, symmetrical composition, planet, sun, star with rays, spaceship, character, vignette, horizon, ground",
+      "name_order": ["palette", "layer"],
+      "axes": {
+        "palette": {
+          "red": "fiery red-orange and gold",
+          "blue": "deep blue and cyan",
+          "green": "olive-green and amber",
+          "teal": "teal and emerald"
+        },
+        "layer": {
+          "far": "very faint subtle low-contrast haze, mostly empty dark space",
+          "mid": "moderate evenly spread clouds",
+          "near": "denser bright wispy clouds"
+        }
+      }
+    },
+    "planets": {
+      "size": [1024, 1024],
+      "variants": 6,
+      "alpha": true,
+      "circle": true,
+      "template": "A single complete planet rendered as a perfect circle, the entire globe centered and fully surrounded by empty space with nothing around it and nothing below it, {type}, soft directional sunlight from one side, plain flat uniform neutral grey background, studio product shot of a planet globe, sharp focus, highly detailed",
+      "negative": "clouds outside the planet, mist, fog, haze, waves, ocean below, platform, pedestal, base, stand, ground, surface below the planet, foreground, two planets, multiple planets, second planet, moon, spaceship, partial planet, cropped sphere, bottom cut off",
+      "name_order": ["type"],
+      "axes": {
+        "type": {
+          "terrestrial": "blue oceans, white swirling clouds, green and brown continents",
+          "gas": "banded gas giant with a great swirling storm spot, orange and cream bands",
+          "ice": "white and pale-cyan frozen world with cracked ice and frost",
+          "volcanic": "black basalt surface with glowing orange lava rivers and fissures",
+          "industrial": "grey metallic surface, sprawling city lights glowing on the night side",
+          "habitat": "ringed orbital habitat megastructure, metallic, lit windows"
+        }
+      }
+    },
+    "planet_maps": {
+      "size": [1024, 512],
+      "variants": 3,
+      "template": "Seamless horizontally tileable equirectangular surface map of a planet, flat 2:1 cylindrical map projection filling the whole frame edge to edge, {type}, even flat ambient lighting, no shadows, highly detailed planetary terrain texture, top-down orthographic map",
+      "negative": "sphere, globe, planet ball, circle, round, horizon, curvature, outer space, stars, black background, vignette, directional shading, terminator, 3d render, lens, bottom cut off",
+      "name_order": ["type"],
+      "axes": {
+        "type": {
+          "terrestrial": "blue oceans, green and brown continents, scattered white clouds",
+          "gas": "horizontal banded gas-giant cloud bands, orange and cream stripes, one swirling storm oval",
+          "ice": "white and pale-cyan cracked ice fields and frost",
+          "volcanic": "black basalt crust veined with glowing orange lava rivers",
+          "industrial": "grey metallic plated surface with sprawling glowing city lights",
+          "habitat": "lush green terraced farmland with rivers and lakes"
+        }
+      }
+    },
+    "stars": {
+      "size": [1024, 1024],
+      "variants": 6,
+      "alpha": true,
+      "template": "{type}, glowing stellar sphere with corona and solar flares, intense additive light, centered, solid black background, highly detailed",
+      "negative": "planet, spaceship, text, lens flare streaks across the frame",
+      "name_order": ["type"],
+      "axes": {
+        "type": {
+          "yellow": "yellow main-sequence star, warm golden turbulent plasma surface",
+          "red_dwarf": "small dim deep-red dwarf star, muted glow",
+          "blue_giant": "huge brilliant blue-white giant star, fierce radiance",
+          "neutron": "tiny intensely bright white neutron star with sharp polar beams",
+          "white_dwarf": "small hot white dwarf star, pale blue-white glow"
+        }
+      }
+    },
+    "ships": {
+      "size": [1024, 1024],
+      "variants": 10,
+      "alpha": true,
+      "template": "A sci-fi starship spacecraft seen from directly above, orthographic top-down view, flat, the ship pointing straight up with its nose/bow at the top edge of the image and its engine thrusters at the bottom, vertical symmetry, {role}, glowing engine thrusters at the rear (bottom), clean readable silhouette, centered, full ship visible, plain flat neutral grey background, concept art, sharp focus",
+      "negative": "legs, animal, creature, robot dog, mecha, walker, person, side view, perspective view, nose pointing sideways, nose pointing down, horizontal ship, tilted, diagonal, ground, sky, planet, scenery, cropped, multiple ships",
+      "name_order": ["role"],
+      "axes": {
+        "role": {
+          "ranger": "small agile ranger vessel, metallic blue hull with cyan glow",
+          "trader": "bulky merchant freighter with cargo pods, worn metal",
+          "pirate": "asymmetric raider with spikes and dark red plating, menacing",
+          "patrol": "sleek military patrol craft, cyan accents, clean lines"
+        }
+      }
+    },
+    "icons": {
+      "size": [768, 768],
+      "alpha": true,
+      "template": "A single sci-fi ship module: {module}, centered, the whole object fully visible, glossy 3d render, soft studio light, plain flat neutral grey background, game inventory icon, consistent lighting angle",
+      "negative": "multiple objects, scene, background scenery, text, hands, person, cropped",
+      "name_order": ["module"],
+      "axes": {
+        "module": {
+          "engine": "a starship ion engine thruster",
+          "fuel_tank": "a cylindrical starship fuel tank",
+          "radar": "a radar dish sensor array",
+          "shield": "a glowing defense field shield generator",
+          "laser": "a mounted energy laser cannon",
+          "repair_droid": "a small repair maintenance droid"
+        }
+      }
+    },
+    "ui": {
+      "size": [1024, 1024],
+      "alpha": true,
+      "template": "A sci-fi game UI element, {name}, glowing cyan-blue holographic bezel, brushed metal edges, rounded corners, semi-transparent dark glass, on a solid black background, clean, symmetrical",
+      "negative": "text, letters, words, clutter, character",
+      "name_order": ["name"],
+      "axes": {
+        "name": {
+          "panel": "a rectangular info panel frame",
+          "radar_bezel": "a circular radar minimap bezel ring",
+          "bottom_bar": "a wide horizontal command bar with button slots",
+          "tooltip": "a small rounded tooltip card frame"
+        }
+      }
+    },
+    "portraits": {
+      "size": [832, 1216],
+      "variants": 3,
+      "alpha": true,
+      "template": "Portrait bust of an alien humanoid, sci-fi, {faction}, head and shoulders, centered, plain flat neutral grey background, soft cinematic light, original character, painterly, sharp focus, distinct non-human features",
+      "negative": "full body, multiple characters, text, busy background, scenery, helmet covering face",
+      "name_order": ["faction"],
+      "axes": {
+        "faction": {
+          "outlanders": "rugged frontier colonist, weathered orange-tan skin, practical gear",
+          "bastions": "stern militaristic warrior, heavy red armor, scarred",
+          "syndicate": "sly smuggler, sleek green-tinted features, dark hood",
+          "paradoxes": "enigmatic violet-skinned being, glowing eyes, strange ornaments",
+          "progressors": "refined blue-skinned scientist, sleek cyan tech attire"
+        }
+      }
+    }
+  }
+}

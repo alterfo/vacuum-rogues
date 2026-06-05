@@ -1,6 +1,6 @@
-import type { Race } from './Race';
-import type { ShipModule } from './ShipModule';
-import { GameBusinessException } from '@/exceptions/GameBusinessException';
+import type { FactionType } from "@/types";
+import type { ShipModule } from "./ShipModule";
+import { GameBusinessException } from "@/exceptions/GameBusinessException";
 
 export class PlayerShip {
   modules: [ShipModule | null, ShipModule | null, ShipModule | null] = [
@@ -20,13 +20,13 @@ export class PlayerShip {
     public maxEnergy: number,
     public speed: number,
     public evasion: number,
-    public readonly raceBaseline: Race,
+    public readonly factionBaseline: FactionType,
   ) {}
 
   equipModule(slot: number, module: ShipModule): void {
     if (slot < 0 || slot > 2) {
       throw new GameBusinessException(
-        'INVALID_MODULE_SLOT',
+        "INVALID_MODULE_SLOT",
         `Module slot ${slot} is invalid. Valid slots: 0-2.`,
         { slot, moduleId: module.id },
       );
@@ -37,7 +37,7 @@ export class PlayerShip {
   unequipModule(slot: number): ShipModule | null {
     if (slot < 0 || slot > 2) {
       throw new GameBusinessException(
-        'INVALID_MODULE_SLOT',
+        "INVALID_MODULE_SLOT",
         `Module slot ${slot} is invalid. Valid slots: 0-2.`,
         { slot },
       );

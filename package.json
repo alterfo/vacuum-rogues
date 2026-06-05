@@ -1,7 +1,8 @@
 {
-  "name": "space-rangers-neural-onslaught",
+  "name": "galactic-horizon-neural-onslaught",
   "version": "0.1.0",
   "type": "module",
+  "description": "Browser-based open-world space RPG/strategy with local ONNX models for dialogue and tactical AI.",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

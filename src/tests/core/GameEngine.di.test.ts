@@ -142,7 +142,7 @@ describe("GameEngine with DI", () => {
     const engine = new GameEngine(diDeps);
 
     const player = playerService.createPlayer({
-      raceType: "HUMAN" as import("@/types").RaceType,
+      factionType: "OUTLANDERS" as import("@/types").FactionType,
     });
     engine.player = player;
 

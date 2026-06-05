@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GameEngine, GameEngineDIDependencies } from "@/systems/GameEngine";
-import { SceneType, RaceType } from "@/types";
+import { SceneType, FactionType } from "@/types";
 import {
   MockSaveService,
   MockGalaxyService,
@@ -37,6 +37,7 @@ vi.mock("pixi.js", () => ({
     fill: vi.fn().mockReturnThis(),
     rect: vi.fn().mockReturnThis(),
     circle: vi.fn().mockReturnThis(),
+    ellipse: vi.fn().mockReturnThis(),
     stroke: vi.fn().mockReturnThis(),
     poly: vi.fn().mockReturnThis(),
     moveTo: vi.fn().mockReturnThis(),
@@ -112,11 +113,12 @@ describe("GameEngine persist location (US-021)", () => {
       },
       uiLayer: {
         addChild: vi.fn(),
+        addChildAt: vi.fn(),
         children: [],
         removeChild: vi.fn(),
         clear: vi.fn(),
       },
-      stage: { addChild: vi.fn() },
+      stage: { addChild: vi.fn(), addChildAt: vi.fn(), removeChild: vi.fn() },
       clearGameLayer: vi.fn(),
       clearUILayer: vi.fn(),
     } as unknown as import("@/presentation/Renderer").Renderer;
@@ -154,7 +156,7 @@ describe("GameEngine persist location (US-021)", () => {
     it("should save currentSceneType in SaveState", async () => {
       engine.galaxy = await diDeps.galaxyService.generate("test", 5);
       engine.player = diDeps.playerService.createPlayer({
-        raceType: RaceType.HUMAN,
+        factionType: FactionType.OUTLANDERS,
       });
       engine.currentSceneType = SceneType.SPACE_FLIGHT;
 
@@ -168,7 +170,7 @@ describe("GameEngine persist location (US-021)", () => {
     it("should include currentSceneType when saving from StarMap", async () => {
       engine.galaxy = await diDeps.galaxyService.generate("test", 5);
       engine.player = diDeps.playerService.createPlayer({
-        raceType: RaceType.HUMAN,
+        factionType: FactionType.OUTLANDERS,
       });
       engine.currentSceneType = SceneType.STAR_MAP;
 
@@ -183,7 +185,7 @@ describe("GameEngine persist location (US-021)", () => {
     it("should restore scene type from SaveState (SPACE_FLIGHT)", async () => {
       engine.galaxy = await diDeps.galaxyService.generate("test", 5);
       engine.player = diDeps.playerService.createPlayer({
-        raceType: RaceType.HUMAN,
+        factionType: FactionType.OUTLANDERS,
       });
 
       const save = new SaveState(
@@ -210,7 +212,7 @@ describe("GameEngine persist location (US-021)", () => {
     it("should restore scene type from SaveState (STAR_MAP)", async () => {
       engine.galaxy = await diDeps.galaxyService.generate("test", 5);
       engine.player = diDeps.playerService.createPlayer({
-        raceType: RaceType.HUMAN,
+        factionType: FactionType.OUTLANDERS,
       });
 
       const save = new SaveState(
@@ -237,7 +239,7 @@ describe("GameEngine persist location (US-021)", () => {
     it("should fallback to SPACE_FLIGHT when currentSceneType is missing in save", async () => {
       engine.galaxy = await diDeps.galaxyService.generate("test", 5);
       engine.player = diDeps.playerService.createPlayer({
-        raceType: RaceType.HUMAN,
+        factionType: FactionType.OUTLANDERS,
       });
 
       const save = new SaveState(

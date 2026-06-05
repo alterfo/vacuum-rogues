@@ -1,16 +1,23 @@
-import type { DialogueOption, NPCResponse, EmotionVectorData } from '@/types';
-import type { Player } from '@/domain/Player';
-import type { NPC } from '@/domain/NPC';
-import { DialogueSession } from '@/domain/DialogueSession';
-import { EmotionVector } from '@/domain/EmotionVector';
-import { AdaptiveQualityProfile } from '@/ai/AdaptiveQualityProfile';
-import { ONNXModelRegistry } from '@/ai/ONNXModelRegistry';
-import { logger } from '@/utils/logger';
-import { GameValidationException } from '@/exceptions/GameValidationException';
+import type { DialogueOption, NPCResponse, EmotionVectorData } from "@/types";
+import type { Player } from "@/domain/Player";
+import type { NPC } from "@/domain/NPC";
+import { DialogueSession } from "@/domain/DialogueSession";
+import { EmotionVector } from "@/domain/EmotionVector";
+import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
+import { ONNXModelRegistry } from "@/ai/ONNXModelRegistry";
+import { logger } from "@/utils/logger";
+import { GameValidationException } from "@/exceptions/GameValidationException";
 
 export interface DialogueAnchorRegistry {
-  getOpeningAnchor(npc: NPC, reputation: number, questState: unknown): DialogueAnchorNode | null;
-  getNextAnchors(currentNodeId: string, emotion: EmotionVectorData): DialogueAnchorNode[];
+  getOpeningAnchor(
+    npc: NPC,
+    reputation: number,
+    questState: unknown,
+  ): DialogueAnchorNode | null;
+  getNextAnchors(
+    currentNodeId: string,
+    emotion: EmotionVectorData,
+  ): DialogueAnchorNode[];
 }
 
 export interface DialogueAnchorNode {
@@ -32,9 +39,12 @@ export class T5DialogueAdapter {
 export class GRUEmotionAdapter {
   constructor(_registry: ONNXModelRegistry) {}
 
-  async infer(_context: unknown, _history: unknown[]): Promise<EmotionVectorData> {
+  async infer(
+    _context: unknown,
+    _history: unknown[],
+  ): Promise<EmotionVectorData> {
     // Placeholder: actual GRU inference
-    logger.debug('GRU infer called');
+    logger.debug("GRU infer called");
     return new EmotionVector({
       trust: 10,
       fear: -5,
@@ -67,7 +77,12 @@ export class DialogueSystem {
   startDialogue(player: Player, npc: NPC): DialogueSession {
     const sessionId = `dlg_${npc.id}_${Date.now()}`;
     const baseline = new EmotionVector(npc.emotionBaseline);
-    const session = new DialogueSession(sessionId, npc, player, baseline.toData());
+    const session = new DialogueSession(
+      sessionId,
+      npc,
+      player,
+      baseline.toData(),
+    );
 
     // Load historical messages if previous session exists
     const previous = this.sessionHistory.get(npc.id);
@@ -88,17 +103,25 @@ export class DialogueSystem {
     return session;
   }
 
-  async submitPlayerChoice(sessionId: string, choice: DialogueOption): Promise<NPCResponse> {
+  async submitPlayerChoice(
+    sessionId: string,
+    choice: DialogueOption,
+  ): Promise<NPCResponse> {
     const session = this.sessionHistory.get(sessionId);
     if (!session) {
-      throw new GameValidationException('DIALOGUE_SESSION_NOT_FOUND', `Dialogue session ${sessionId} not found.`);
+      throw new GameValidationException(
+        "DIALOGUE_SESSION_NOT_FOUND",
+        `Dialogue session ${sessionId} not found.`,
+      );
     }
 
     session.sendPlayerMessage(choice.text);
 
     // Update emotion via GRU if profile allows
     let emotionData = session.currentEmotion;
-    if (this.qualityProfile.level !== ('LOW' as import('@/types').ProfileLevel)) {
+    if (
+      this.qualityProfile.level !== ("LOW" as import("@/types").ProfileLevel)
+    ) {
       try {
         emotionData = await this.gruAdapter.infer(
           { npc: session.npc, choice },
@@ -106,7 +129,7 @@ export class DialogueSystem {
         );
         session.currentEmotion = emotionData;
       } catch (e) {
-        logger.warn('GRU emotion inference failed, using current emotion:', e);
+        logger.warn("GRU emotion inference failed, using current emotion:", e);
       }
     }
 
@@ -114,36 +137,51 @@ export class DialogueSystem {
     let confidence = 1.0;
 
     // Try T5 generation if High profile and model loaded
-    if (this.qualityProfile.level === ('HIGH' as import('@/types').ProfileLevel)) {
+    if (
+      this.qualityProfile.level === ("HIGH" as import("@/types").ProfileLevel)
+    ) {
       try {
         const prompt = this.buildPrompt(session, choice);
         const timeoutPromise = new Promise<string>((_, reject) =>
-          setTimeout(() => reject(new Error('T5 timeout')), 3000),
+          setTimeout(() => reject(new Error("T5 timeout")), 3000),
         );
-        responseText = await Promise.race([this.t5Adapter.generateResponse(prompt), timeoutPromise]);
+        responseText = await Promise.race([
+          this.t5Adapter.generateResponse(prompt),
+          timeoutPromise,
+        ]);
         confidence = 0.85;
       } catch (e) {
-        logger.warn('T5 generation failed or timed out, falling back to anchors:', e);
+        logger.warn(
+          "T5 generation failed or timed out, falling back to anchors:",
+          e,
+        );
         confidence = 0.0;
-        responseText = '';
+        responseText = "";
       }
     } else {
       confidence = 0.0;
-      responseText = '';
+      responseText = "";
     }
 
     // Fallback to anchors if needed
     if (!responseText || confidence < 0.7) {
-      const anchors = this.anchorRegistry.getNextAnchors(choice.id, emotionData);
+      const anchors = this.anchorRegistry.getNextAnchors(
+        choice.id,
+        emotionData,
+      );
       if (anchors.length > 0) {
         responseText = anchors[0].template;
       } else {
-        responseText = '...';
+        responseText = "...";
       }
     }
 
     // Apply reputation delta
-    const reputationDelta = choice.tags.includes('friendly') ? 5 : choice.tags.includes('hostile') ? -5 : 0;
+    const reputationDelta = choice.tags.includes("friendly")
+      ? 5
+      : choice.tags.includes("hostile")
+        ? -5
+        : 0;
     if (session.player.reputation[session.npc.id] !== undefined) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (session.player.reputation as any)[session.npc.id] += reputationDelta;
@@ -154,7 +192,10 @@ export class DialogueSystem {
 
     // Clamp reputation
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (session.player.reputation as any)[session.npc.id] = Math.max(-100, Math.min(100, (session.player.reputation as any)[session.npc.id]));
+    (session.player.reputation as any)[session.npc.id] = Math.max(
+      -100,
+      Math.min(100, (session.player.reputation as any)[session.npc.id]),
+    );
 
     session.addNPCResponse(responseText);
 
@@ -172,7 +213,10 @@ export class DialogueSystem {
   }
 
   getFallbackOptions(session: DialogueSession): DialogueOption[] {
-    const anchors = this.anchorRegistry.getNextAnchors('current', session.currentEmotion);
+    const anchors = this.anchorRegistry.getNextAnchors(
+      "current",
+      session.currentEmotion,
+    );
     const options: DialogueOption[] = [];
     for (const anchor of anchors) {
       options.push(...anchor.options);
@@ -180,7 +224,10 @@ export class DialogueSystem {
     return options.slice(0, 4);
   }
 
-  private buildPrompt(session: DialogueSession, choice: DialogueOption): string {
-    return `Race: ${session.npc.race}, Tone: friendly, Context: ${choice.text}`;
+  private buildPrompt(
+    session: DialogueSession,
+    choice: DialogueOption,
+  ): string {
+    return `Faction: ${session.npc.race ?? "Unknown"}, Tone: friendly, Context: ${choice.text}`;
   }
 }

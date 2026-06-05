@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { RaceSelectionScene } from "@/presentation/RaceSelectionScene";
-import { SceneType, RaceType } from "@/types";
+import { SceneType, FactionType } from "@/types";
 
 vi.mock("pixi.js", () => ({
   Container: vi.fn().mockImplementation(() => ({
@@ -45,7 +45,7 @@ describe("RaceSelectionScene (US-021)", () => {
     clearUILayer: vi.fn(),
   } as unknown as import("@/presentation/Renderer").Renderer;
 
-  it("should transition to SPACE_FLIGHT on startGame with selected race", async () => {
+  it("should transition to SPACE_FLIGHT on startGame with selected faction", async () => {
     const scene = new RaceSelectionScene(mockRenderer);
     const mockEngine = {
       transitionTo: vi.fn().mockResolvedValue(undefined),
@@ -53,8 +53,8 @@ describe("RaceSelectionScene (US-021)", () => {
 
     scene.initialize({ gameEngine: mockEngine });
 
-    // Select a race and start game
-    (scene as any).selectedRace = RaceType.PELENG;
+    // Select a faction and start game
+    (scene as any).selectedFaction = FactionType.SYNDICATE;
     await (scene as any).startGame();
 
     expect(mockEngine.transitionTo).toHaveBeenCalledTimes(1);
@@ -62,12 +62,12 @@ describe("RaceSelectionScene (US-021)", () => {
       SceneType.SPACE_FLIGHT,
       expect.objectContaining({
         gameEngine: mockEngine,
-        selectedRace: RaceType.PELENG,
+        selectedFaction: FactionType.SYNDICATE,
       }),
     );
   });
 
-  it("should default to HUMAN race if not explicitly changed", async () => {
+  it("should default to OUTLANDERS faction if not explicitly changed", async () => {
     const scene = new RaceSelectionScene(mockRenderer);
     const mockEngine = {
       transitionTo: vi.fn().mockResolvedValue(undefined),
@@ -75,13 +75,13 @@ describe("RaceSelectionScene (US-021)", () => {
 
     scene.initialize({ gameEngine: mockEngine });
 
-    // startGame without changing selection defaults to HUMAN
+    // startGame without changing selection defaults to OUTLANDERS
     await (scene as any).startGame();
 
     expect(mockEngine.transitionTo).toHaveBeenCalledWith(
       SceneType.SPACE_FLIGHT,
       expect.objectContaining({
-        selectedRace: RaceType.HUMAN,
+        selectedFaction: FactionType.OUTLANDERS,
       }),
     );
   });
