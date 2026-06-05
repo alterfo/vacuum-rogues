@@ -1,6 +1,12 @@
-import type { ResourceType, TransactionResult } from "@/types";
+import type {
+  ResourceType,
+  TransactionResult,
+  EconomyType,
+  PoliticalSystem,
+} from "@/types";
 import type { Planet } from "@/domain/Planet";
 import type { Player } from "@/domain/Player";
+import { economyBaseline } from "@/domain/Market";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
 import { logger } from "@/utils/logger";
 
@@ -97,6 +103,20 @@ export class TradeSystem {
     let finalPrice =
       basePrice * (1 + modifier) * this.planetPriceFactor(planet.id, resource);
 
+    // Economy type: static multiplier based on system economy (e.g. AGRICULTURAL
+    // makes food cheap, tech expensive). Falls back to MIXED (1.0×) if unset.
+    const econMult = economyBaseline(
+      planet.market.economyType ?? ("MIXED" as EconomyType),
+      resource,
+    );
+    finalPrice *= econMult;
+
+    // Daily drift: dynamic multiplier accumulated by Market.advanceMarketDay().
+    const driftIdx = planet.market.availableResources.indexOf(resource);
+    if (driftIdx >= 0) {
+      finalPrice *= planet.market.priceMultipliers[driftIdx] ?? 1.0;
+    }
+
     // Hard guardrails: [base × 0.3, base × 3.0]
     finalPrice = Math.max(
       basePrice * 0.3,
@@ -152,6 +172,26 @@ export class TradeSystem {
         return { buyMultiplier: 0.9, sellMultiplier: 1.1 };
       default:
         return { buyMultiplier: 1.0, sellMultiplier: 1.0 };
+    }
+  }
+
+  /**
+   * Returns true when `good` is legal under the given political system.
+   * ANARCHY / DEMOCRACY / MONARCHY: all goods legal.
+   * DICTATORSHIP: bans ORGANICS (alcohol) and LUXURY (narcotics).
+   * REPUBLIC: bans WEAPONS.
+   */
+  isLegal(good: ResourceType, politicalSystem: PoliticalSystem): boolean {
+    switch (politicalSystem) {
+      case "DICTATORSHIP" as PoliticalSystem:
+        return (
+          good !== ("ORGANICS" as ResourceType) &&
+          good !== ("LUXURY" as ResourceType)
+        );
+      case "REPUBLIC" as PoliticalSystem:
+        return good !== ("WEAPONS" as ResourceType);
+      default:
+        return true;
     }
   }
 

@@ -1,4 +1,9 @@
-import type { AxialCoord, StarType } from "@/types";
+import type {
+  AxialCoord,
+  StarType,
+  EconomyType,
+  PoliticalSystem,
+} from "@/types";
 import { Faction } from "@/types/faction";
 import type { Planet } from "./Planet";
 import type { WarpPath } from "./WarpPath";
@@ -17,6 +22,8 @@ export class StarSystem {
     public readonly ownerFaction: Faction,
     public readonly connections: WarpPath[],
     public readonly stations: Station[] = [],
+    public readonly economyType: EconomyType = "MIXED" as EconomyType,
+    public readonly politicalSystem: PoliticalSystem = "REPUBLIC" as PoliticalSystem,
   ) {}
 
   enter(_player: unknown): void {

@@ -228,7 +228,7 @@ describe("MigrationPipeline v1 -> v2", () => {
 
     MigrationPipeline.migrate(state);
 
-    expect(state.version).toBe(2);
+    expect(state.version).toBe(MigrationPipeline.CURRENT_VERSION);
     expect(
       Array.isArray(
         (state.galaxy as unknown as { npcShips: unknown[] }).npcShips,

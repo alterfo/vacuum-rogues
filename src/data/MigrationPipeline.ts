@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 2;
+  static readonly CURRENT_VERSION = 3;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -40,6 +40,19 @@ export class MigrationPipeline {
       const galaxy = state.galaxy as unknown as { npcShips?: unknown[] };
       if (galaxy && !Array.isArray(galaxy.npcShips)) {
         galaxy.npcShips = [];
+      }
+    },
+    // 2 -> 3: economy type and political system (Task 1). Old saves don't have
+    // these fields; default to MIXED/REPUBLIC so every system is functional.
+    2: (state: SaveState) => {
+      const galaxy = state.galaxy as unknown as {
+        systems?: Array<{ economyType?: string; politicalSystem?: string }>;
+      };
+      if (galaxy && Array.isArray(galaxy.systems)) {
+        for (const sys of galaxy.systems) {
+          if (!sys.economyType) sys.economyType = "MIXED";
+          if (!sys.politicalSystem) sys.politicalSystem = "REPUBLIC";
+        }
       }
     },
   };

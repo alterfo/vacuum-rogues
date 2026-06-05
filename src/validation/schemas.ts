@@ -172,6 +172,10 @@ export const StarSystemSchema = z.object({
   ]),
   explored: z.boolean(),
   fogOfWar: z.boolean(),
+  economyType: z.enum(["AGRICULTURAL", "INDUSTRIAL", "MIXED"]).default("MIXED"),
+  politicalSystem: z
+    .enum(["ANARCHY", "DICTATORSHIP", "MONARCHY", "REPUBLIC", "DEMOCRACY"])
+    .default("REPUBLIC"),
 });
 
 export const NpcGoalSchema = z.object({

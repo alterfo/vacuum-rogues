@@ -166,6 +166,20 @@ export interface NpcShipInit {
   reputation: number;
 }
 
+export enum EconomyType {
+  AGRICULTURAL = "AGRICULTURAL",
+  INDUSTRIAL = "INDUSTRIAL",
+  MIXED = "MIXED",
+}
+
+export enum PoliticalSystem {
+  ANARCHY = "ANARCHY",
+  DICTATORSHIP = "DICTATORSHIP",
+  MONARCHY = "MONARCHY",
+  REPUBLIC = "REPUBLIC",
+  DEMOCRACY = "DEMOCRACY",
+}
+
 export enum ErrorSeverity {
   INFO = "INFO",
   WARNING = "WARNING",

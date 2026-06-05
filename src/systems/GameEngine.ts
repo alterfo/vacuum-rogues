@@ -332,6 +332,16 @@ export class GameEngine {
     this.galaxy.simulateDay();
     const rng = new SeededRNG(`${this.galaxy.id}_day_${this.galaxy.gameDays}`);
     this.npcSimulator.tick(this.galaxy, rng, this.player?.currentSystemId);
+
+    // Advance market drift on every planet (Task 1: daily supply/demand drift).
+    for (const system of this.galaxy.systems) {
+      for (const planet of system.planets) {
+        if (typeof planet.market.advanceMarketDay === "function") {
+          planet.market.advanceMarketDay(() => rng.next());
+        }
+      }
+    }
+
     this.infoRegistryCache = null; // world advanced → registry is stale
   }
 

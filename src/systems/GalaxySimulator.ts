@@ -10,7 +10,7 @@ import { SystemNameGenerator } from "@/utils/systemNameGenerator";
 import { PlanetGenerator } from "./PlanetGenerator";
 import { NpcSimulator } from "./npc/NpcSimulator";
 import { logger } from "@/utils/logger";
-import { StationType } from "@/types";
+import { StationType, EconomyType, PoliticalSystem } from "@/types";
 import type { Faction } from "@/types/faction";
 
 export class GalaxySimulator {
@@ -43,9 +43,32 @@ export class GalaxySimulator {
         r: this.rng.nextInt(-50, 50),
       };
 
+      // Deterministically assign economy type and political system from seed
+      const economyTypes = [
+        EconomyType.AGRICULTURAL,
+        EconomyType.INDUSTRIAL,
+        EconomyType.MIXED,
+      ];
+      const politicalSystems = [
+        PoliticalSystem.ANARCHY,
+        PoliticalSystem.DICTATORSHIP,
+        PoliticalSystem.MONARCHY,
+        PoliticalSystem.REPUBLIC,
+        PoliticalSystem.DEMOCRACY,
+      ];
+      const economyType =
+        economyTypes[this.rng.nextInt(0, economyTypes.length - 1)];
+      const politicalSystem =
+        politicalSystems[this.rng.nextInt(0, politicalSystems.length - 1)];
+
       // Generate planets for this system
       const planetGen = new PlanetGenerator(seed, `sys_${i}`);
       const planets = await planetGen.generate(systemNames[i]);
+
+      // Propagate economy type to each planet's market
+      for (const planet of planets) {
+        planet.market.economyType = economyType;
+      }
 
       // Generate 1 station per system (type depends on index/seed)
       const faction = "INDEPENDENT" as Faction;
@@ -65,6 +88,8 @@ export class GalaxySimulator {
         faction,
         [],
         stations,
+        economyType,
+        politicalSystem,
       );
       generatedSystems.push(system);
     }
