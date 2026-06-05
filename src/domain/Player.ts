@@ -19,4 +19,23 @@ export class Player {
     public readonly inventory: Inventory,
     public currentSystemId: string = "",
   ) {}
+
+  /** Returns reputation score with a faction (0 if never interacted). */
+  getReputation(factionId: string): number {
+    return this.reputation[factionId] ?? 0;
+  }
+
+  /** Returns true when the player is hostile to a faction (score < -30). */
+  isHostileTo(factionId: string): boolean {
+    return this.getReputation(factionId) < -30;
+  }
+
+  /** Adjusts reputation with a faction by delta, clamped to [-100, 100]. */
+  adjustReputation(factionId: string, delta: number): void {
+    const current = this.getReputation(factionId);
+    (this.reputation as Record<string, number>)[factionId] = Math.max(
+      -100,
+      Math.min(100, current + delta),
+    );
+  }
 }

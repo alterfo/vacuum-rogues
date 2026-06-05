@@ -32,17 +32,22 @@ export function visiblePlanetServices<T extends { label: string }>(
   return buttons.filter((b) => b.label === "Взлёт");
 }
 
+const BRIBE_COST = 500;
+
 export class PlanetScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private planet: Planet | null = null;
   private uiContainer: Container | null = null;
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
   private jobBoardPanel: JobBoardPanel | null = null;
+  /** Bribe paid this landing — gates are lifted for the duration of the visit. */
+  private bribed = false;
 
   initialize(context?: object): void {
     const ctx = context as PlanetContext | undefined;
     this.gameEngine = ctx?.gameEngine ?? null;
     this.planet = ctx?.planet ?? null;
+    this.bribed = false;
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
     this.createUI();
@@ -160,32 +165,78 @@ export class PlanetScene extends GameScene {
       { label: "Взлёт", color: 0xff4444, action: () => this.takeOff() },
     ];
 
+    // Reputation gate: hostile faction blocks all services except take-off.
+    const system = this.gameEngine?.galaxy?.systems.find((s) =>
+      s.planets.some((p) => p.id === this.planet!.id),
+    );
+    const planetFaction = system?.ownerFaction ?? "INDEPENDENT";
+    const player = this.gameEngine?.player;
+    const isHostile =
+      !this.bribed && (player?.isHostileTo(planetFaction) ?? false);
+
     const visible = visiblePlanetServices(this.planet.isHabitable, buttons);
     let y = btnStartY;
     for (const b of visible) {
+      const blocked = isHostile && b.label !== "Взлёт";
       const t = new Text({
         text: `[ ${b.label} ]`,
         style: {
           fontFamily: "Courier New",
           fontSize: 18,
-          fill: b.color,
+          fill: blocked ? 0x445566 : b.color,
           fontWeight: "bold",
         },
       });
       t.anchor.set(0.5);
       t.x = w / 2;
       t.y = y;
-      t.eventMode = "static";
-      t.cursor = "pointer";
-      t.on("pointerdown", b.action);
-      t.on("pointerover", () => {
-        t.alpha = 0.7;
-      });
-      t.on("pointerout", () => {
-        t.alpha = 1;
-      });
+      if (blocked) {
+        t.eventMode = "none";
+      } else {
+        t.eventMode = "static";
+        t.cursor = "pointer";
+        t.on("pointerdown", (e) => {
+          e.stopPropagation();
+          b.action();
+        });
+        t.on("pointerover", () => {
+          t.alpha = 0.7;
+        });
+        t.on("pointerout", () => {
+          t.alpha = 1;
+        });
+      }
       ui.addChild(t);
       y += btnStep;
+    }
+
+    // Show bribe button when hostile to the controlling faction.
+    if (isHostile && this.planet.isHabitable) {
+      const brLabel = new Text({
+        text: `[ Дать взятку (${BRIBE_COST} ₡) ]`,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 16,
+          fill: 0xffaa44,
+          fontWeight: "bold",
+        },
+      });
+      brLabel.anchor.set(0.5);
+      brLabel.x = w / 2;
+      brLabel.y = y;
+      brLabel.eventMode = "static";
+      brLabel.cursor = "pointer";
+      brLabel.on("pointerdown", (e) => {
+        e.stopPropagation();
+        this.payBribe(planetFaction);
+      });
+      brLabel.on("pointerover", () => {
+        brLabel.alpha = 0.7;
+      });
+      brLabel.on("pointerout", () => {
+        brLabel.alpha = 1;
+      });
+      ui.addChild(brLabel);
     }
 
     this.renderer.uiLayer.addChild(ui);
@@ -336,6 +387,27 @@ export class PlanetScene extends GameScene {
     goodsText.x = w / 2;
     goodsText.y = topY + 40;
     ui.addChild(goodsText);
+  }
+
+  private payBribe(faction: string): void {
+    const player = this.gameEngine?.player;
+    if (!player) return;
+    if (player.credits < BRIBE_COST) {
+      this.showMessage(
+        `Нужно ${BRIBE_COST} ₡ — недостаточно средств`,
+        0xff5544,
+      );
+      return;
+    }
+    player.credits -= BRIBE_COST;
+    this.bribed = true;
+    logger.info(
+      `PlanetScene: bribed customs at ${this.planet?.name} (faction ${faction})`,
+    );
+    this.renderer.clearGameLayer();
+    this.renderer.clearUILayer();
+    this.createUI();
+    this.showMessage("Взятка принята. Добро пожаловать.", 0xffaa44);
   }
 
   private async openGovernor(): Promise<void> {

@@ -77,16 +77,16 @@ NPC trade activity and base consumption. Economy type comes from StarSystem doma
 Services become unavailable when player reputation with the planet's faction is below a threshold.
 Add a bribe option that costs credits and temporarily restores access for one landing.
 
-- [ ] Add `getReputation(factionId): number` helper to `Player` (wraps `player.reputation` map).
+- [x] Add `getReputation(factionId): number` helper to `Player` (wraps `player.reputation` map).
   Thresholds: < -30 → hostile (no shop/trade/info); -30..0 → neutral (all services); > 0 → ally
   (discount). Implement in `src/domain/Player.ts`.
-- [ ] In `src/presentation/PlanetScene.ts`, check reputation on render: disable (gray + tooltip
+- [x] In `src/presentation/PlanetScene.ts`, check reputation on render: disable (gray + tooltip
   "Враждебное отношение") the shop/trade/info buttons when hostile. Show "Дать взятку (500 ₡)"
   button when hostile. Bribe: `player.credits -= 500`, temp flag `bribed = true` on PlanetScene
   instance, re-render buttons active.
-- [ ] Same reputation check in `src/presentation/StationScene.ts` for station services.
-- [ ] Faction for a planet comes from `planet.factionId` (already exists on Planet domain).
-- [ ] Unit test: `getReputation` returns correct value; bribe decrements credits.
+- [x] Same reputation check in `src/presentation/StationScene.ts` for station services.
+- [x] Faction for a planet comes from `planet.factionId` (already exists on Planet domain).
+- [x] Unit test: `getReputation` returns correct value; bribe decrements credits.
 
 ### Task 3: Smuggling — illegal goods and customs risk
 

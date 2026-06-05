@@ -34,8 +34,15 @@ const TYPE_COLOR: Record<StationType, number> = {
 
 /** Services available per station type. */
 const TYPE_SERVICES: Record<StationType, string[]> = {
-  [StationType.TRADE_POST]: ["shop", "infoCenter", "repair", "refuel", "leave"],
-  [StationType.REPAIR_DOCK]: ["repair", "refuel", "leave"],
+  [StationType.TRADE_POST]: [
+    "shop",
+    "hangar",
+    "infoCenter",
+    "repair",
+    "refuel",
+    "leave",
+  ],
+  [StationType.REPAIR_DOCK]: ["hangar", "repair", "refuel", "leave"],
   [StationType.MILITARY_BASE]: [
     "quests",
     "infoCenter",
@@ -79,7 +86,9 @@ const KIND_COLOR: Record<GearKind, number> = {
 
 // ── Scene ────────────────────────────────────────────────────────────────────
 
-type View = "main" | "shop";
+type View = "main" | "shop" | "hangar";
+
+const STATION_BRIBE_COST = 500;
 
 export class StationScene extends GameScene {
   private gameEngine: GameEngine | null = null;
@@ -93,6 +102,8 @@ export class StationScene extends GameScene {
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private toast: Text | null = null;
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** Bribe paid this docking — gates are lifted for the duration of the visit. */
+  private bribed = false;
 
   constructor(renderer: Renderer) {
     super(renderer);
@@ -104,6 +115,7 @@ export class StationScene extends GameScene {
     const ctx = context as StationContext | undefined;
     this.gameEngine = ctx?.gameEngine ?? null;
     this.station = ctx?.station ?? null;
+    this.bribed = false;
 
     this.mainContainer = new Container();
     this.renderer.uiLayer.addChild(this.mainContainer);
@@ -173,6 +185,8 @@ export class StationScene extends GameScene {
 
     if (this.view === "shop") {
       this.renderShop();
+    } else if (this.view === "hangar") {
+      this.renderHangar();
     } else {
       this.renderMain();
     }
@@ -239,6 +253,12 @@ export class StationScene extends GameScene {
     // Stats row: hull / fuel / credits
     this.renderStatsRow(PX, PY + 82, PW);
 
+    // Reputation gate: hostile faction blocks all services except undocking.
+    const stationFaction = String(this.station?.faction ?? "INDEPENDENT");
+    const player = this.gameEngine?.player;
+    const isHostile =
+      !this.bribed && (player?.isHostileTo(stationFaction) ?? false);
+
     // Service buttons
     const services = this.station ? TYPE_SERVICES[this.station.type] : [];
     const BTN_W = PW - 80;
@@ -248,27 +268,60 @@ export class StationScene extends GameScene {
 
     for (const svc of services) {
       const { label, color: btnColor } = this.serviceButton(svc);
+      const blocked = isHostile && svc !== "leave";
       const btn = new Text({
         text: `[ ${label} ]`,
-        style: { fontSize: 15, fill: btnColor, fontFamily: "monospace" },
+        style: {
+          fontSize: 15,
+          fill: blocked ? 0x445566 : btnColor,
+          fontFamily: "monospace",
+        },
       });
       btn.anchor.set(0.5, 0.5);
       btn.x = btnX + BTN_W / 2;
       btn.y = btnY + BTN_H / 2;
-      btn.eventMode = "static";
-      btn.cursor = "pointer";
-      btn.on("pointerdown", (e) => {
-        e.stopPropagation();
-        void this.executeService(svc);
-      });
-      btn.on("pointerover", () => {
-        btn.alpha = 0.7;
-      });
-      btn.on("pointerout", () => {
-        btn.alpha = 1;
-      });
+      if (blocked) {
+        btn.eventMode = "none";
+      } else {
+        btn.eventMode = "static";
+        btn.cursor = "pointer";
+        btn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          void this.executeService(svc);
+        });
+        btn.on("pointerover", () => {
+          btn.alpha = 0.7;
+        });
+        btn.on("pointerout", () => {
+          btn.alpha = 1;
+        });
+      }
       this.mainContainer!.addChild(btn);
       btnY += BTN_H + 4;
+    }
+
+    // Bribe button when hostile to the station's faction.
+    if (isHostile) {
+      const brBtn = new Text({
+        text: `[ Дать взятку (${STATION_BRIBE_COST} ₡) ]`,
+        style: { fontSize: 14, fill: 0xffaa44, fontFamily: "monospace" },
+      });
+      brBtn.anchor.set(0.5, 0.5);
+      brBtn.x = btnX + BTN_W / 2;
+      brBtn.y = btnY + BTN_H / 2;
+      brBtn.eventMode = "static";
+      brBtn.cursor = "pointer";
+      brBtn.on("pointerdown", (e) => {
+        e.stopPropagation();
+        this.payStationBribe(stationFaction);
+      });
+      brBtn.on("pointerover", () => {
+        brBtn.alpha = 0.7;
+      });
+      brBtn.on("pointerout", () => {
+        brBtn.alpha = 1;
+      });
+      this.mainContainer!.addChild(brBtn);
     }
 
     // Toast slot (re-attached on render)
@@ -331,6 +384,8 @@ export class StationScene extends GameScene {
       }
       case "shop":
         return { label: "Магазин снаряжения", color: 0x44ddff };
+      case "hangar":
+        return { label: "Ангар / Оснастка", color: 0x88ddaa };
       case "infoCenter":
         return { label: "Инфоцентр", color: 0x66bbff };
       case "quests":
@@ -354,9 +409,17 @@ export class StationScene extends GameScene {
         this.view = "shop";
         this.render();
         break;
+      case "hangar":
+        this.view = "hangar";
+        this.render();
+        break;
       case "infoCenter":
-        // Info center needs a planet context; show inline message for now
-        this.showToast("Инфоцентр недоступен без планетарной базы", 0xff8844);
+        if (this.gameEngine && this.station) {
+          await this.gameEngine.transitionTo(SceneType.INFO_CENTER, {
+            gameEngine: this.gameEngine,
+            station: this.station,
+          });
+        }
         break;
       case "quests":
         this.showToast("Задания выдаются только на военных базах", 0xffcc44);
@@ -407,6 +470,25 @@ export class StationScene extends GameScene {
     ship.energy = ship.maxEnergy;
     this.showToast(`Топливо пополнено за ${cost} ₡`, 0x44aaff);
     this.render();
+  }
+
+  private payStationBribe(faction: string): void {
+    const player = this.gameEngine?.player;
+    if (!player) return;
+    if (player.credits < STATION_BRIBE_COST) {
+      this.showToast(
+        `Нужно ${STATION_BRIBE_COST} ₡ — недостаточно средств`,
+        0xff5544,
+      );
+      return;
+    }
+    player.credits -= STATION_BRIBE_COST;
+    this.bribed = true;
+    logger.info(
+      `StationScene: bribed staff at ${this.station?.name} (faction ${faction})`,
+    );
+    this.render();
+    this.showToast("Взятка принята. Добро пожаловать.", 0xffaa44);
   }
 
   private async undock(): Promise<void> {
@@ -628,6 +710,182 @@ export class StationScene extends GameScene {
     this.mainContainer!.addChild(toast);
   }
 
+  private renderHangar(): void {
+    const sw = this.renderer.app.screen.width;
+    const sh = this.renderer.app.screen.height;
+    const player = this.gameEngine?.player;
+    if (!player) return;
+
+    const PW = Math.min(540, sw - 80);
+    const PH = Math.min(560, sh - 80);
+    const PX = (sw - PW) / 2;
+    const PY = (sh - PH) / 2;
+
+    const bg = new Graphics();
+    bg.rect(0, 0, sw, sh).fill({ color: 0x000000, alpha: 0.88 });
+    bg.eventMode = "static";
+    this.mainContainer!.addChild(bg);
+
+    const panel = new Graphics();
+    panel.rect(PX, PY, PW, PH).fill({ color: 0x0a1420, alpha: 1 });
+    panel.rect(PX, PY, PW, PH).stroke({ color: 0x223344, width: 1 });
+    panel.eventMode = "none";
+    this.mainContainer!.addChild(panel);
+
+    const title = new Text({
+      text: "АНГАР — ОСНАСТКА КОРАБЛЯ",
+      style: { fontSize: 14, fill: 0x88ddaa, fontFamily: "monospace" },
+    });
+    title.x = PX + 20;
+    title.y = PY + 16;
+    title.eventMode = "none";
+    this.mainContainer!.addChild(title);
+
+    // Slots section
+    const slotsLabel = new Text({
+      text: "Установленные модули:",
+      style: { fontSize: 12, fill: 0x6688aa, fontFamily: "monospace" },
+    });
+    slotsLabel.x = PX + 20;
+    slotsLabel.y = PY + 48;
+    slotsLabel.eventMode = "none";
+    this.mainContainer!.addChild(slotsLabel);
+
+    const ship = player.ship;
+    for (let i = 0; i < 3; i++) {
+      const mod = ship.modules[i];
+      const slotY = PY + 70 + i * 44;
+
+      const slotBg = new Graphics();
+      slotBg
+        .rect(PX + 20, slotY, PW - 40, 36)
+        .fill({ color: mod ? 0x0d2030 : 0x081018, alpha: 1 });
+      slotBg
+        .rect(PX + 20, slotY, PW - 40, 36)
+        .stroke({ color: mod ? 0x336655 : 0x1a2a3a, width: 1 });
+      slotBg.eventMode = "none";
+      this.mainContainer!.addChild(slotBg);
+
+      const slotText = new Text({
+        text: mod
+          ? `[Слот ${i + 1}]  ${mod.name}  (ур. ${mod.level})`
+          : `[Слот ${i + 1}]  — пусто —`,
+        style: {
+          fontSize: 12,
+          fill: mod ? 0x88ddaa : 0x445566,
+          fontFamily: "monospace",
+        },
+      });
+      slotText.x = PX + 30;
+      slotText.y = slotY + 10;
+      slotText.eventMode = "none";
+      this.mainContainer!.addChild(slotText);
+
+      if (mod) {
+        const unBtn = new Text({
+          text: "[снять]",
+          style: { fontSize: 11, fill: 0xff8844, fontFamily: "monospace" },
+        });
+        unBtn.anchor.set(1, 0.5);
+        unBtn.x = PX + PW - 26;
+        unBtn.y = slotY + 18;
+        unBtn.eventMode = "static";
+        unBtn.cursor = "pointer";
+        unBtn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          const removed = ship.unequipModule(i);
+          if (removed) player.inventory.modules.push(removed);
+          this.render();
+        });
+        this.mainContainer!.addChild(unBtn);
+      }
+    }
+
+    // Inventory section
+    const invLabel = new Text({
+      text: "Инвентарь:",
+      style: { fontSize: 12, fill: 0x6688aa, fontFamily: "monospace" },
+    });
+    invLabel.x = PX + 20;
+    invLabel.y = PY + 216;
+    invLabel.eventMode = "none";
+    this.mainContainer!.addChild(invLabel);
+
+    const invMods = player.inventory.modules;
+    if (invMods.length === 0) {
+      const empty = new Text({
+        text: "Нет модулей в инвентаре",
+        style: { fontSize: 12, fill: 0x334455, fontFamily: "monospace" },
+      });
+      empty.x = PX + 20;
+      empty.y = PY + 238;
+      empty.eventMode = "none";
+      this.mainContainer!.addChild(empty);
+    } else {
+      invMods.forEach((mod, idx) => {
+        const iy = PY + 238 + idx * 44;
+        if (iy + 40 > PY + PH - 60) return; // clip to panel
+
+        const invBg = new Graphics();
+        invBg
+          .rect(PX + 20, iy, PW - 40, 36)
+          .fill({ color: 0x0d1a28, alpha: 1 });
+        invBg
+          .rect(PX + 20, iy, PW - 40, 36)
+          .stroke({ color: 0x223344, width: 1 });
+        invBg.eventMode = "none";
+        this.mainContainer!.addChild(invBg);
+
+        const invText = new Text({
+          text: `${mod.name}  (ур. ${mod.level})`,
+          style: { fontSize: 12, fill: 0xaaccee, fontFamily: "monospace" },
+        });
+        invText.x = PX + 30;
+        invText.y = iy + 10;
+        invText.eventMode = "none";
+        this.mainContainer!.addChild(invText);
+
+        // Equip buttons per slot
+        const freeSlots = [0, 1, 2].filter((s) => ship.modules[s] === null);
+        if (freeSlots.length > 0) {
+          const eqBtn = new Text({
+            text: `[надеть → слот ${freeSlots[0] + 1}]`,
+            style: { fontSize: 11, fill: 0x44ddaa, fontFamily: "monospace" },
+          });
+          eqBtn.anchor.set(1, 0.5);
+          eqBtn.x = PX + PW - 26;
+          eqBtn.y = iy + 18;
+          eqBtn.eventMode = "static";
+          eqBtn.cursor = "pointer";
+          eqBtn.on("pointerdown", (e) => {
+            e.stopPropagation();
+            ship.equipModule(freeSlots[0], mod);
+            player.inventory.modules.splice(idx, 1);
+            this.render();
+          });
+          this.mainContainer!.addChild(eqBtn);
+        }
+      });
+    }
+
+    // Back button
+    const backBtn = new Text({
+      text: "[ ← Назад ]",
+      style: { fontSize: 14, fill: 0x6688aa, fontFamily: "monospace" },
+    });
+    backBtn.anchor.set(0.5, 1);
+    backBtn.x = PX + PW / 2;
+    backBtn.y = PY + PH - 16;
+    backBtn.eventMode = "static";
+    backBtn.cursor = "pointer";
+    backBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      this.view = "main";
+      this.render();
+    });
+    this.mainContainer!.addChild(backBtn);
+  }
+
   private showToast(msg: string, color: number): void {
     if (this.toastTimeout) clearTimeout(this.toastTimeout);
     if (this.toast) {
@@ -644,7 +902,7 @@ export class StationScene extends GameScene {
 
   private onKeyDown(e: KeyboardEvent): void {
     if (e.key === "Escape") {
-      if (this.view === "shop") {
+      if (this.view === "shop" || this.view === "hangar") {
         this.view = "main";
         this.render();
       } else {
