@@ -4,11 +4,14 @@ import type { Player } from "@/domain/Player";
 import { Overmind } from "@/domain/Overmind";
 import type { GalacticEvent } from "@/domain/GalacticEvent";
 import { WarpPath } from "@/domain/WarpPath";
+import { Station } from "@/domain/Station";
 import { SeededRNG } from "@/utils/seededRNG";
 import { SystemNameGenerator } from "@/utils/systemNameGenerator";
 import { PlanetGenerator } from "./PlanetGenerator";
 import { NpcSimulator } from "./npc/NpcSimulator";
 import { logger } from "@/utils/logger";
+import { StationType } from "@/types";
+import type { Faction } from "@/types/faction";
 
 export class GalaxySimulator {
   private _seed: string;
@@ -44,14 +47,24 @@ export class GalaxySimulator {
       const planetGen = new PlanetGenerator(seed, `sys_${i}`);
       const planets = await planetGen.generate(systemNames[i]);
 
+      // Generate 1 station per system (type depends on index/seed)
+      const faction = "INDEPENDENT" as Faction;
+      const stations = generateStations(
+        `sys_${i}`,
+        systemNames[i],
+        faction,
+        this.rng,
+      );
+
       const system = new StarSystem(
         `sys_${i}`,
         systemNames[i],
         coord,
         "YELLOW_DWARF" as import("@/types").StarType,
         planets,
-        "INDEPENDENT" as import("@/types/faction").Faction,
+        faction,
         [],
+        stations,
       );
       generatedSystems.push(system);
     }
@@ -148,4 +161,50 @@ export class GalaxySimulator {
       return false;
     });
   }
+}
+
+// ── Station generation helpers ──────────────────────────────────────────────
+
+const STATION_TYPES = [
+  StationType.TRADE_POST,
+  StationType.REPAIR_DOCK,
+  StationType.MILITARY_BASE,
+  StationType.RESEARCH_LAB,
+];
+
+const STATION_NAME: Record<StationType, (sys: string) => string> = {
+  [StationType.TRADE_POST]: (s) => `Торговый пост «${s}»`,
+  [StationType.REPAIR_DOCK]: (s) => `Верфь «${s}»`,
+  [StationType.MILITARY_BASE]: (s) => `База «${s}»`,
+  [StationType.RESEARCH_LAB]: (s) => `Лаборатория «${s}»`,
+};
+
+function generateStations(
+  systemId: string,
+  systemName: string,
+  faction: Faction,
+  rng: SeededRNG,
+): Station[] {
+  // Each system gets exactly 1 station. Type is pseudo-random but reproducible.
+  const typeIdx = rng.nextInt(0, STATION_TYPES.length - 1);
+  const type = STATION_TYPES[typeIdx];
+  const name = STATION_NAME[type](systemName);
+
+  // Place station between the innermost and outermost planet orbits.
+  // PlanetGenerator uses ORBITAL_RADII ≈ [600..2500]; we split that range.
+  const orbitRadius = 900 + rng.nextInt(0, 800); // 900–1700 px
+  // Use a seeded angle unique to this system to spread stations around the star.
+  const hash = [...systemId].reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const orbitAngle = ((hash * 137.508) % 360) * (Math.PI / 180);
+
+  return [
+    new Station(
+      `${systemId}_station_0`,
+      name,
+      type,
+      faction,
+      orbitRadius,
+      orbitAngle,
+    ),
+  ];
 }

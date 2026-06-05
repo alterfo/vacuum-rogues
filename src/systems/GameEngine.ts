@@ -299,7 +299,8 @@ export class GameEngine {
       sceneType === SceneType.COMBAT ||
       sceneType === SceneType.TRADE ||
       sceneType === SceneType.EQUIPMENT_SHOP ||
-      sceneType === SceneType.INFO_CENTER
+      sceneType === SceneType.INFO_CENTER ||
+      sceneType === SceneType.STATION
     ) {
       finalContext.gameEngine = this;
     }

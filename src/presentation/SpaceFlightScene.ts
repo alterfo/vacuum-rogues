@@ -21,6 +21,7 @@ import { NpcShipSprite } from "./NpcShipSprite";
 import type { SystemBounds } from "./NpcShipSprite";
 import { NpcContactPanel } from "./NpcContactPanel";
 import type { Planet } from "@/domain/Planet";
+import type { Station } from "@/domain/Station";
 import type { NpcShip } from "@/domain/NpcShip";
 import { npcsPresentInSystem } from "@/systems/npc/NpcSimulator";
 import { logger } from "@/utils/logger";
@@ -327,6 +328,14 @@ export class SpaceFlightScene extends GameScene {
   // Planet rendering
   private planetSprites: PlanetSprite[] = [];
   private planetInfoPanel: PlanetInfoPanel | null = null;
+  // Station rendering
+  private stationMarkers: {
+    station: Station;
+    container: Container;
+    x: number;
+    y: number;
+  }[] = [];
+  private routeTargetStationId: string | null = null;
   private starCenterX: number = 0;
   private starCenterY: number = 0;
   private starGraphics: Graphics | null = null;
@@ -544,6 +553,7 @@ export class SpaceFlightScene extends GameScene {
     this.createOrbits();
     this.createSystemBoundary(); // Edge where hyperjumps happen
     this.createPlanets(); // Planets added to gameLayer directly (not blurred)
+    this.createStations(); // Space stations in this system (US-066)
     this.createNpcShips(); // NPC ships present in this system (Feature 8)
     this.createShip();
     this.createTargetIndicator();
@@ -737,6 +747,14 @@ export class SpaceFlightScene extends GameScene {
       sprite.destroy();
     }
     this.planetSprites = [];
+
+    // Destroy station markers
+    for (const m of this.stationMarkers) {
+      this.renderer.gameLayer.removeChild(m.container);
+      m.container.destroy({ children: true });
+    }
+    this.stationMarkers = [];
+    this.routeTargetStationId = null;
 
     // Destroy planet info panel
     if (this.planetInfoPanel) {
@@ -2032,6 +2050,117 @@ export class SpaceFlightScene extends GameScene {
     logger.debug(`Added quest marker to planet ${sprite.planet.name}`);
   }
 
+  // ── Station rendering (US-066) ──────────────────────────────────────────────
+
+  private createStations(): void {
+    const currentSystemId = this.gameEngine?.player?.currentSystemId;
+    const galaxy = this.gameEngine?.galaxy;
+    if (!currentSystemId || !galaxy) return;
+
+    const currentSystem = galaxy.systems.find((s) => s.id === currentSystemId);
+    if (!currentSystem || !currentSystem.stations.length) return;
+
+    for (const station of currentSystem.stations) {
+      const wx =
+        this.starCenterX + Math.cos(station.orbitAngle) * station.orbitRadius;
+      const wy =
+        this.starCenterY + Math.sin(station.orbitAngle) * station.orbitRadius;
+
+      const ctn = new Container();
+      ctn.x = wx;
+      ctn.y = wy;
+      ctn.zIndex = 90;
+
+      // Diamond shape coloured by station type
+      const stationColor = this.stationColor(
+        station.type as import("@/types").StationType,
+      );
+      const g = new Graphics();
+      g.poly([0, -14, 10, 0, 0, 14, -10, 0]);
+      g.fill({ color: stationColor, alpha: 0.85 });
+      g.stroke({ color: 0xffffff, width: 1, alpha: 0.4 });
+      g.eventMode = "none";
+      ctn.addChild(g);
+
+      // Small label
+      const label = new Text({
+        text: station.name.slice(0, 22),
+        style: { fontSize: 10, fill: stationColor, fontFamily: "monospace" },
+      });
+      label.anchor.set(0.5, 0);
+      label.y = 18;
+      label.eventMode = "none";
+      ctn.addChild(label);
+
+      // Hit area for clicking
+      const hit = new Graphics();
+      hit.circle(0, 0, 20);
+      hit.fill({ color: 0xffffff, alpha: 0.001 });
+      hit.eventMode = "static";
+      hit.cursor = "pointer";
+      hit.on("pointerdown", (e) => {
+        e.stopPropagation();
+        this.onStationClick(station);
+      });
+      ctn.addChild(hit);
+
+      this.renderer.gameLayer.addChild(ctn);
+      this.stationMarkers.push({ station, container: ctn, x: wx, y: wy });
+    }
+
+    logger.info(`Created ${this.stationMarkers.length} station markers`);
+  }
+
+  private stationColor(type: import("@/types").StationType): number {
+    switch (type) {
+      case "TRADE_POST":
+        return 0xffcc44;
+      case "REPAIR_DOCK":
+        return 0x44aaff;
+      case "MILITARY_BASE":
+        return 0xff5544;
+      case "RESEARCH_LAB":
+        return 0xcc88ff;
+      default:
+        return 0xaaaaaa;
+    }
+  }
+
+  private onStationClick(station: Station): void {
+    logger.debug(`Station clicked: ${station.name}`);
+    if (!this.shipPhysics) return;
+
+    const marker = this.stationMarkers.find((m) => m.station.id === station.id);
+    if (!marker) return;
+
+    this.routeTargetStationId = station.id;
+    this.routeTargetPlanetId = null;
+    this.followNpcId = null;
+
+    if (this.plannedRoute) {
+      const dx = marker.x - this.plannedRoute.x;
+      const dy = marker.y - this.plannedRoute.y;
+      if (Math.sqrt(dx * dx + dy * dy) < 50) {
+        this.executeRouteTo(marker.x, marker.y);
+        return;
+      }
+    }
+    this.planRouteTo(marker.x, marker.y);
+  }
+
+  private readonly DOCKING_RANGE = 55;
+
+  private async onDockAtStation(station: Station): Promise<void> {
+    if (!this.gameEngine) return;
+    logger.info(`Docking at station: ${station.name}`);
+    this.clearPlannedRoute();
+    this.routeTargetStationId = null;
+    await this.gameEngine.transitionTo(SceneType.STATION, {
+      gameEngine: this.gameEngine,
+      station,
+    });
+  }
+
   /**
    * Handle planet click: two-step movement - plan route on first click, execute on second
    */
@@ -2212,6 +2341,7 @@ export class SpaceFlightScene extends GameScene {
         } else {
           // Clicked on different location - update planned route (empty space)
           this.routeTargetPlanetId = null; // navigating to open space, not a planet
+          this.routeTargetStationId = null;
           this.followNpcId = null; // manual nav cancels auto-follow
           this.planRouteTo(world.x, world.y); // preview bows around the star
           logger.info(
@@ -2221,6 +2351,7 @@ export class SpaceFlightScene extends GameScene {
       } else {
         // First click - plan the route (don't start moving yet)
         this.routeTargetPlanetId = null; // navigating to open space, not a planet
+        this.routeTargetStationId = null;
         this.followNpcId = null; // manual nav cancels auto-follow
         this.planRouteTo(world.x, world.y); // preview bows around the star
         logger.info(
@@ -2509,6 +2640,23 @@ export class SpaceFlightScene extends GameScene {
 
     // Update physics
     this.shipPhysics.update(deltaTime);
+
+    // Proactive docking: station is a small marker, dock when within DOCKING_RANGE.
+    if (this.routeTargetStationId && this.shipPhysics.isMoving) {
+      const marker = this.stationMarkers.find(
+        (m) => m.station.id === this.routeTargetStationId,
+      );
+      if (marker) {
+        const d = Math.hypot(
+          marker.x - this.shipPhysics.shipX,
+          marker.y - this.shipPhysics.shipY,
+        );
+        if (d <= this.DOCKING_RANGE) {
+          void this.onDockAtStation(marker.station);
+          return;
+        }
+      }
+    }
 
     // Proactive landing: planets render large (US-070 #3), so land as soon as
     // the ship touches the planet's surface margin instead of flying all the way
@@ -2949,6 +3097,7 @@ export class SpaceFlightScene extends GameScene {
   private clearPlannedRoute(): void {
     this.plannedRoute = null;
     this.routeTargetPlanetId = null;
+    this.routeTargetStationId = null;
     this.followNpcId = null;
     this.routePath = [];
 

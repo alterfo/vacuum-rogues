@@ -96,6 +96,14 @@ export enum SceneType {
   TRADE = "TRADE",
   EQUIPMENT_SHOP = "EQUIPMENT_SHOP",
   INFO_CENTER = "INFO_CENTER",
+  STATION = "STATION",
+}
+
+export enum StationType {
+  TRADE_POST = "TRADE_POST",
+  REPAIR_DOCK = "REPAIR_DOCK",
+  MILITARY_BASE = "MILITARY_BASE",
+  RESEARCH_LAB = "RESEARCH_LAB",
 }
 
 export enum ProfileLevel {

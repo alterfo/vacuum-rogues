@@ -1,7 +1,8 @@
-import type { AxialCoord, StarType } from '@/types';
-import { Faction } from '@/types/faction';
-import type { Planet } from './Planet';
-import type { WarpPath } from './WarpPath';
+import type { AxialCoord, StarType } from "@/types";
+import { Faction } from "@/types/faction";
+import type { Planet } from "./Planet";
+import type { WarpPath } from "./WarpPath";
+import type { Station } from "./Station";
 
 export class StarSystem {
   explored = false;
@@ -15,6 +16,7 @@ export class StarSystem {
     public readonly planets: Planet[],
     public readonly ownerFaction: Faction,
     public readonly connections: WarpPath[],
+    public readonly stations: Station[] = [],
   ) {}
 
   enter(_player: unknown): void {
