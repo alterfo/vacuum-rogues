@@ -21,6 +21,18 @@ export class QuestManagerAdapter implements IQuestService {
     return this.delegate.acceptQuest(templateId, planetId, currentDay);
   }
 
+  acceptQuestFromTemplate(
+    template: QuestTemplate,
+    planetId?: string,
+    currentDay?: number,
+  ): Quest | null {
+    return this.delegate.acceptQuestFromTemplate(
+      template,
+      planetId,
+      currentDay,
+    );
+  }
+
   updateQuestProgress(event: QuestProgressEvent): void {
     this.delegate.updateQuestProgress(event);
   }

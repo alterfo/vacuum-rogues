@@ -1,3 +1,5 @@
+import { Faction } from "./faction";
+
 export enum StarType {
   RED_DWARF = "RED_DWARF",
   YELLOW_DWARF = "YELLOW_DWARF",
@@ -16,12 +18,12 @@ export enum PlanetType {
   HABITAT = "HABITAT",
 }
 
-export enum RaceType {
-  HUMAN = "HUMAN",
-  MALAQAR = "MALAQAR",
-  PELENG = "PELENG",
-  FAERIAN = "FAERIAN",
-  GAALIAN = "GAALIAN",
+export enum FactionType {
+  OUTLANDERS = "OUTLANDERS",
+  BASTIONS = "BASTIONS",
+  SYNDICATE = "SYNDICATE",
+  PARADOXES = "PARADOXES",
+  PROGRESSORS = "PROGRESSORS",
 }
 
 export enum EnemyType {
@@ -51,6 +53,9 @@ export enum QuestType {
   ESCORT = "ESCORT",
   DIPLOMACY = "DIPLOMACY",
   EXPLORATION = "EXPLORATION",
+  // Branching text-adventure novella (EPIC-005), issued ~1 in 5 by the quest
+  // generator (EPIC-008) as the special "cherry on top".
+  TEXT_ADVENTURE = "TEXT_ADVENTURE",
 }
 
 export enum EventType {
@@ -95,6 +100,60 @@ export enum ProfileLevel {
   HIGH = "HIGH",
   MEDIUM = "MEDIUM",
   LOW = "LOW",
+}
+
+// --- Living Galaxy: autonomous NPC ships (Feature 8) ---
+
+export enum NpcRole {
+  RANGER = "RANGER",
+  TRADER = "TRADER",
+  PIRATE = "PIRATE",
+  PATROL = "PATROL",
+}
+
+export enum NpcState {
+  IDLE = "IDLE",
+  TRAVELING = "TRAVELING",
+  TRADING = "TRADING",
+  QUESTING = "QUESTING",
+  PATROLLING = "PATROLLING",
+  FIGHTING = "FIGHTING",
+  DEAD = "DEAD",
+}
+
+export enum NpcGoalKind {
+  TRAVEL = "TRAVEL",
+  TRADE = "TRADE",
+  QUEST = "QUEST",
+  PATROL = "PATROL",
+  HUNT = "HUNT",
+}
+
+export interface NpcGoal {
+  readonly kind: NpcGoalKind;
+  readonly targetSystemId?: string;
+  readonly questId?: string;
+}
+
+/** Plain initialization data for an NpcShip (also its serialized shape). */
+export interface NpcShipInit {
+  id: string;
+  name: string;
+  race: FactionType;
+  faction: Faction;
+  role: NpcRole;
+  hullHP: number;
+  maxHull: number;
+  shields: number;
+  speed: number;
+  damage: number;
+  currentSystemId: string;
+  state: NpcState;
+  goal: NpcGoal | null;
+  destinationSystemId: string | null;
+  daysToArrival: number;
+  credits: number;
+  reputation: number;
 }
 
 export enum ErrorSeverity {

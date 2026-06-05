@@ -40,6 +40,15 @@ export interface IQuestService {
     planetId?: string,
     currentDay?: number,
   ): Quest | null;
+  /**
+   * Accept a quest from an externally-built template (e.g. the quest generator's
+   * job board, EPIC-008). The template is registered, then accepted.
+   */
+  acceptQuestFromTemplate(
+    template: QuestTemplate,
+    planetId?: string,
+    currentDay?: number,
+  ): Quest | null;
   updateQuestProgress(event: QuestProgressEvent): void;
   completeQuest(questId: string, player: Player): boolean;
   getActiveQuests(): Quest[];

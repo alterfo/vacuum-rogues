@@ -22,6 +22,12 @@ export class MockQuestService implements IQuestService {
     return null;
   }
 
+  acceptQuestFromTemplate(template: QuestTemplate): Quest | null {
+    this.acceptCallCount++;
+    this.lastTemplateId = template.id;
+    return null;
+  }
+
   updateQuestProgress(event: QuestProgressEvent): void {
     this.progressEvents.push(event);
   }

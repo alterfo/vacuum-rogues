@@ -1,12 +1,12 @@
 import type { Player } from "@/domain/Player";
-import type { RaceType } from "@/types";
+import type { FactionType } from "@/types";
 
 /**
- * Settings required to create a new player.
+ * Service responsible for Player lifecycle
  */
 export interface PlayerSettings {
   captainName?: string;
-  raceType: RaceType;
+  factionType: FactionType;
   startingMoney?: number;
 }
 

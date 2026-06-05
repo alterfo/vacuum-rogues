@@ -404,6 +404,20 @@ export class QuestManager {
   }
 
   /**
+   * Accept a quest from an externally-built template — e.g. one produced by the
+   * {@link QuestGenerator} job board (EPIC-008). The template is registered so
+   * {@link getQuestTemplate} keeps working, then accepted like any other.
+   */
+  acceptQuestFromTemplate(
+    template: QuestTemplate,
+    planetId: string = "unknown",
+    currentDay: number = 0,
+  ): Quest | null {
+    this.questTemplates.set(template.id, template);
+    return this.acceptQuest(template.id, planetId, currentDay);
+  }
+
+  /**
    * Update quest progress based on player action
    */
   updateQuestProgress(event: {

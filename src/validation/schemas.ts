@@ -104,7 +104,14 @@ export const QuestSchema = z.object({
   // Quest ids are semantic template ids (e.g. "quest_delivery_ore"), not UUIDs.
   id: z.string().min(1),
   title: z.string(),
-  type: z.enum(["DELIVERY", "BOUNTY", "ESCORT", "DIPLOMACY", "EXPLORATION"]),
+  type: z.enum([
+    "DELIVERY",
+    "BOUNTY",
+    "ESCORT",
+    "DIPLOMACY",
+    "EXPLORATION",
+    "TEXT_ADVENTURE",
+  ]),
   objectives: z.array(QuestObjectiveSchema),
   isCompleted: z.boolean(),
   isFailed: z.boolean(),
@@ -167,10 +174,59 @@ export const StarSystemSchema = z.object({
   fogOfWar: z.boolean(),
 });
 
+export const NpcGoalSchema = z.object({
+  kind: z.enum(["TRAVEL", "TRADE", "QUEST", "PATROL", "HUNT"]),
+  targetSystemId: z.string().optional(),
+  questId: z.string().optional(),
+});
+
+export const NpcShipSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  race: z.enum([
+    "OUTLANDERS",
+    "BASTIONS",
+    "SYNDICATE",
+    "PARADOXES",
+    "PROGRESSORS",
+  ]),
+  faction: z.enum([
+    "OUTLANDERS",
+    "BASTIONS",
+    "SYNDICATE",
+    "PARADOXES",
+    "PROGRESSORS",
+    "INDEPENDENT",
+    "OVERMIND",
+  ]),
+  role: z.enum(["RANGER", "TRADER", "PIRATE", "PATROL"]),
+  hullHP: z.number(),
+  maxHull: z.number(),
+  shields: z.number(),
+  speed: z.number(),
+  damage: z.number(),
+  currentSystemId: z.string(),
+  state: z.enum([
+    "IDLE",
+    "TRAVELING",
+    "TRADING",
+    "QUESTING",
+    "PATROLLING",
+    "FIGHTING",
+    "DEAD",
+  ]),
+  goal: NpcGoalSchema.nullable(),
+  destinationSystemId: z.string().nullable(),
+  daysToArrival: z.number(),
+  credits: z.number(),
+  reputation: z.number(),
+});
+
 export const GalaxySchema = z.object({
   id: z.string(),
   gameDays: z.number().int().min(0),
   systems: z.array(StarSystemSchema).min(1).max(100),
+  npcShips: z.array(NpcShipSchema).default([]),
 });
 
 export const DialogueSessionSchema = z.object({

@@ -1,8 +1,9 @@
 import type { GameConfig } from "@/types";
-import { SceneType, RaceType } from "@/types";
+import { SceneType, FactionType } from "@/types";
 import { Galaxy } from "@/domain/Galaxy";
 import type { GameScene } from "@/presentation/GameScene";
 import { Renderer } from "@/presentation/Renderer";
+import { preloadTextures } from "@/presentation/textures";
 import { SaveManager } from "@/data/SaveManager";
 import { ONNXModelRegistry } from "@/ai/ONNXModelRegistry";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
@@ -13,7 +14,15 @@ import { logger } from "@/utils/logger";
 import { Graphics, Text } from "pixi.js";
 import { validatePlayerSettings } from "@/validation/schemas";
 import { Player } from "@/domain/Player";
+import { NpcSimulator } from "@/systems/npc/NpcSimulator";
+import { SeededRNG } from "@/utils/seededRNG";
 import type { Quest } from "@/domain/Quest";
+import {
+  generateQuestBoard,
+  type GeneratedQuest,
+} from "@/systems/quests/QuestGenerator";
+import { buildRegistry } from "@/systems/info/InfoService";
+import type { GalacticRegistry } from "@/systems/info/GalacticRegistry";
 import { PlayerShip } from "@/domain/PlayerShip";
 import { Inventory } from "@/domain/Inventory";
 import {
@@ -55,6 +64,10 @@ export class GameEngine {
   public currentSceneType: SceneType = SceneType.MAIN_MENU;
   public galaxy: Galaxy | null = null;
   public player: Player | null = null;
+  // Transient: the ship's world position in the system when the player last left
+  // flight for the star map, so a hyperjump can start from where the ship was
+  // (not teleport it next to the sun). Cleared once consumed.
+  public lastFlightShipPos: { x: number; y: number } | null = null;
   public readonly saveManager: SaveManager;
   public readonly qualityProfile: AdaptiveQualityProfile;
   public readonly onnxRegistry: ONNXModelRegistry;
@@ -69,6 +82,7 @@ export class GameEngine {
   private readonly galaxyService: IGalaxyService;
   private readonly playerService: IPlayerService;
   private readonly sceneFactory: SceneFactory;
+  private readonly npcSimulator = new NpcSimulator();
 
   constructor(diDependencies?: GameEngineDIDependencies) {
     if (diDependencies) {
@@ -124,6 +138,10 @@ export class GameEngine {
       }
       this.renderer = new Renderer(container);
       await this.renderer.initialize();
+
+      // Load generated art into the texture cache before any scene builds, so
+      // sprites resolve immediately (missing art simply falls back to Graphics).
+      await preloadTextures();
 
       // Check for Canvas2D fallback after renderer init
       const rendererType = (
@@ -196,13 +214,13 @@ export class GameEngine {
     const isGameStartScene =
       sceneType === SceneType.STAR_MAP || sceneType === SceneType.SPACE_FLIGHT;
     if (isGameStartScene && !this.player) {
-      // Get selected race from context or default to HUMAN
-      const selectedRace =
-        (context as { selectedRace?: RaceType })?.selectedRace ??
-        RaceType.HUMAN;
+      // Get selected faction from context or default to OUTLANDERS
+      const selectedFaction =
+        (context as { selectedFaction?: FactionType })?.selectedFaction ??
+        FactionType.OUTLANDERS;
 
       this.player = this.playerService.createPlayer({
-        raceType: selectedRace,
+        factionType: selectedFaction,
         captainName: "Captain",
         startingMoney: 1000,
       });
@@ -240,7 +258,7 @@ export class GameEngine {
         ),
       );
 
-      logger.info(`Created new player with race: ${this.player.race.name}`);
+      logger.info(`Created new player with faction: ${this.player.faction}`);
     }
 
     // Resolve starting system for new game
@@ -298,6 +316,71 @@ export class GameEngine {
         logger.error("Auto-save failed:", e);
       });
     }
+  }
+
+  /**
+   * Advance the galaxy by one game day: increment the day counter and tick the
+   * living-galaxy NPC simulation. The per-day RNG is derived from the galaxy id
+   * and day so simulation stays deterministic and survives save/load (no RNG
+   * state to persist). Call this instead of `galaxy.simulateDay()` directly.
+   */
+  advanceGalaxyDay(): void {
+    if (!this.galaxy) return;
+    this.galaxy.simulateDay();
+    const rng = new SeededRNG(`${this.galaxy.id}_day_${this.galaxy.gameDays}`);
+    this.npcSimulator.tick(this.galaxy, rng, this.player?.currentSystemId);
+    this.infoRegistryCache = null; // world advanced → registry is stale
+  }
+
+  // Lazily-built galactic info registry, cached per game day (EPIC-009).
+  private infoRegistryCache: { day: number; reg: GalacticRegistry } | null =
+    null;
+
+  /**
+   * The galactic information registry for the current day (EPIC-009): ship
+   * locations, market goods and per-planet gear shops, queryable by parameter
+   * and jump distance. Rebuilt when the day changes. Null until a galaxy exists.
+   */
+  getInfoRegistry(): GalacticRegistry | null {
+    if (!this.galaxy) return null;
+    const day = this.galaxy.gameDays;
+    if (this.infoRegistryCache?.day === day) return this.infoRegistryCache.reg;
+    const reg = buildRegistry(this.galaxy, this.galaxy.id, day);
+    this.infoRegistryCache = { day, reg };
+    return reg;
+  }
+
+  /**
+   * The quest board a planet currently offers (EPIC-008): deterministic from the
+   * galaxy seed + planet + day-bucket, with quests the player has already taken
+   * or completed filtered out.
+   */
+  getQuestBoard(planetId: string): GeneratedQuest[] {
+    if (!this.galaxy || !this.player) return [];
+    const board = generateQuestBoard({
+      systems: this.galaxy.systems,
+      originSystemId: this.player.currentSystemId,
+      planetId,
+      day: this.galaxy.gameDays,
+      seed: this.galaxy.id,
+    });
+    const taken = new Set<string>([
+      ...this.questManager.getActiveQuests().map((q) => q.id),
+      ...this.questManager.getCompletedQuestIds(),
+    ]);
+    return board.filter((q) => !taken.has(q.template.id));
+  }
+
+  /**
+   * Accept a generated board quest (EPIC-008): registers and activates it via the
+   * quest service, tagged with the issuing planet and current day for deadlines.
+   */
+  acceptBoardQuest(quest: GeneratedQuest, planetId: string): Quest | null {
+    return this.questManager.acceptQuestFromTemplate(
+      quest.template,
+      planetId,
+      this.galaxy?.gameDays ?? 0,
+    );
   }
 
   async saveGame(slotId = "auto"): Promise<void> {
