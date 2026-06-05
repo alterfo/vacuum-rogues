@@ -297,7 +297,8 @@ export class GameEngine {
       sceneType === SceneType.DIALOGUE ||
       sceneType === SceneType.INVENTORY ||
       sceneType === SceneType.COMBAT ||
-      sceneType === SceneType.TRADE
+      sceneType === SceneType.TRADE ||
+      sceneType === SceneType.EQUIPMENT_SHOP
     ) {
       finalContext.gameEngine = this;
     }

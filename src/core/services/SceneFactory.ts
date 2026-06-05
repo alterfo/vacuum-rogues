@@ -11,6 +11,7 @@ import { InventoryScene } from "@/presentation/InventoryScene";
 import { SpaceFlightScene } from "@/presentation/SpaceFlightScene";
 import { PlanetScene } from "@/presentation/PlanetScene";
 import { TradeScene } from "@/presentation/TradeScene";
+import { EquipmentShopScene } from "@/presentation/EquipmentShopScene";
 
 /**
  * Factory for creating scene instances.
@@ -38,6 +39,8 @@ export class SceneFactory implements ISceneFactory {
         return new PlanetScene(renderer);
       case SceneType.TRADE:
         return new TradeScene(renderer);
+      case SceneType.EQUIPMENT_SHOP:
+        return new EquipmentShopScene(renderer);
       default:
         return null;
     }

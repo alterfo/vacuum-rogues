@@ -110,6 +110,35 @@ export class PlanetScene extends GameScene {
     sub.y = h / 3 + 140;
     ui.addChild(sub);
 
+    // Hangar stat bar above the button list.
+    if (this.gameEngine?.player) {
+      const ship = this.gameEngine.player.ship;
+      const hullPct = Math.round((ship.hullHP / ship.maxHull) * 100);
+      const fuelPct = Math.round(
+        (ship.energy / Math.max(1, ship.maxEnergy)) * 100,
+      );
+      const hullBar =
+        "█".repeat(Math.round(hullPct / 10)) +
+        "░".repeat(10 - Math.round(hullPct / 10));
+      const fuelBar =
+        "█".repeat(Math.round(fuelPct / 10)) +
+        "░".repeat(10 - Math.round(fuelPct / 10));
+      const statLine = new Text({
+        text: `Корпус: ${hullBar} ${hullPct}%   Топливо: ${fuelBar} ${fuelPct}%   ${this.gameEngine.player.credits.toLocaleString("ru")} ₡`,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 13,
+          fill: 0x88aacc,
+          align: "center",
+        },
+      });
+      statLine.anchor.set(0.5);
+      statLine.x = w / 2;
+      statLine.y = h / 2 + 10;
+      statLine.eventMode = "none";
+      ui.addChild(statLine);
+    }
+
     const buttons: { label: string; color: number; action: () => void }[] = [
       {
         label: "Губернатор",
@@ -117,6 +146,11 @@ export class PlanetScene extends GameScene {
         action: () => this.openGovernor(),
       },
       { label: "Задания", color: 0xffee66, action: () => this.openJobBoard() },
+      {
+        label: "Магазин снаряжения",
+        color: 0x44ddff,
+        action: () => this.openEquipmentShop(),
+      },
       { label: "Гараж", color: 0x00aaff, action: () => this.openGarage() },
       { label: "Маркет", color: 0xffaa00, action: () => this.openMarket() },
       {
@@ -236,6 +270,14 @@ export class PlanetScene extends GameScene {
       `Корпус восстановлен (+${missing}) за ${cost} кр.`,
       0x00ff88,
     );
+  }
+
+  private async openEquipmentShop(): Promise<void> {
+    if (!this.gameEngine || !this.planet) return;
+    await this.gameEngine.transitionTo(SceneType.EQUIPMENT_SHOP, {
+      gameEngine: this.gameEngine,
+      planet: this.planet,
+    });
   }
 
   private async openMarket(): Promise<void> {
