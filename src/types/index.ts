@@ -1,4 +1,5 @@
 import { Faction } from "./faction";
+import type { Quest } from "@/domain/Quest";
 
 export enum StarType {
   RED_DWARF = "RED_DWARF",
@@ -437,8 +438,8 @@ export interface ReputationMap {
 }
 
 export interface QuestLog {
-  readonly activeQuests: unknown[];
-  readonly completedQuests: unknown[];
+  readonly activeQuests: Quest[];
+  readonly completedQuests: string[];
 }
 
 export interface Journal {

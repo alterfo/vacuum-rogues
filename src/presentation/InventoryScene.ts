@@ -1,10 +1,11 @@
-import { Container, Graphics, Text } from 'pixi.js';
-import { GameScene } from './GameScene';
-import type { Renderer } from './Renderer';
-import type { GameEngine } from '@/systems/GameEngine';
-import type { ShipModule } from '@/domain/ShipModule';
-import { WeaponModule, ShieldModule, EngineModule } from '@/domain/ShipModule';
-import { logger } from '@/utils/logger';
+import { Container, Graphics, Text } from "pixi.js";
+import { GameScene } from "./GameScene";
+import type { Renderer } from "./Renderer";
+import type { GameEngine } from "@/systems/GameEngine";
+import type { ShipModule } from "@/domain/ShipModule";
+import { WeaponModule, ShieldModule, EngineModule } from "@/domain/ShipModule";
+import { logger } from "@/utils/logger";
+import { SceneType } from "@/types";
 
 /**
  * Inventory Scene - displays ship equipment slots, inventory modules, and resources
@@ -24,7 +25,7 @@ export class InventoryScene extends GameScene {
 
   initialize(context?: { gameEngine: GameEngine }): void {
     if (!context?.gameEngine) {
-      throw new Error('InventoryScene requires gameEngine in context');
+      throw new Error("InventoryScene requires gameEngine in context");
     }
 
     this.gameEngine = context.gameEngine;
@@ -35,9 +36,9 @@ export class InventoryScene extends GameScene {
 
     // Add keyboard listener for closing inventory
     this.boundKeyDown = this.onKeyDown.bind(this);
-    window.addEventListener('keydown', this.boundKeyDown);
+    window.addEventListener("keydown", this.boundKeyDown);
 
-    logger.info('InventoryScene initialized');
+    logger.info("InventoryScene initialized");
   }
 
   update(_deltaTime: number): void {
@@ -47,7 +48,7 @@ export class InventoryScene extends GameScene {
   destroy(): void {
     // Remove keyboard listener
     if (this.boundKeyDown) {
-      window.removeEventListener('keydown', this.boundKeyDown);
+      window.removeEventListener("keydown", this.boundKeyDown);
       this.boundKeyDown = null;
     }
 
@@ -61,7 +62,7 @@ export class InventoryScene extends GameScene {
     this.selectedModule = null;
     this.selectedSlot = null;
 
-    logger.info('InventoryScene destroyed');
+    logger.info("InventoryScene destroyed");
   }
 
   /**
@@ -77,7 +78,7 @@ export class InventoryScene extends GameScene {
     const backdrop = new Graphics();
     backdrop.rect(0, 0, screenWidth, screenHeight);
     backdrop.fill({ color: 0x000000, alpha: 0.8 });
-    backdrop.eventMode = 'static'; // Block clicks behind
+    backdrop.eventMode = "static"; // Block clicks behind
     this.mainContainer.addChild(backdrop);
 
     // Main panel
@@ -94,12 +95,12 @@ export class InventoryScene extends GameScene {
 
     // Title
     const title = new Text({
-      text: 'ИНВЕНТАРЬ И ОБОРУДОВАНИЕ',
+      text: "ИНВЕНТАРЬ И ОБОРУДОВАНИЕ",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 20,
         fill: 0x00ffff,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     title.x = panelX + 20;
@@ -126,17 +127,18 @@ export class InventoryScene extends GameScene {
    * Render ship statistics
    */
   private renderShipStats(x: number, y: number): void {
-    if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player) return;
+    if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player)
+      return;
 
     const ship = this.gameEngine.player.ship;
 
     const statsTitle = new Text({
-      text: 'КОРАБЛЬ',
+      text: "КОРАБЛЬ",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 16,
         fill: 0xffaa00,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     statsTitle.x = x;
@@ -158,7 +160,7 @@ export class InventoryScene extends GameScene {
       const statText = new Text({
         text: stat,
         style: {
-          fontFamily: 'Courier New',
+          fontFamily: "Courier New",
           fontSize: 12,
           fill: 0xaaaaaa,
         },
@@ -174,15 +176,16 @@ export class InventoryScene extends GameScene {
    * Render equipment slots (3 slots for modules)
    */
   private renderEquipmentSlots(x: number, y: number): void {
-    if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player) return;
+    if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player)
+      return;
 
     const slotsTitle = new Text({
-      text: 'УСТАНОВЛЕННЫЕ МОДУЛИ',
+      text: "УСТАНОВЛЕННЫЕ МОДУЛИ",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 16,
         fill: 0xffaa00,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     slotsTitle.x = x;
@@ -202,7 +205,12 @@ export class InventoryScene extends GameScene {
   /**
    * Render a single equipment slot card
    */
-  private renderSlotCard(x: number, y: number, slot: number, module: ShipModule | null): void {
+  private renderSlotCard(
+    x: number,
+    y: number,
+    slot: number,
+    module: ShipModule | null,
+  ): void {
     if (!this.mainContainer || !this.gameEngine) return;
 
     const slotContainer = new Container();
@@ -213,17 +221,20 @@ export class InventoryScene extends GameScene {
     const slotBg = new Graphics();
     slotBg.rect(0, 0, 220, 110);
     slotBg.fill({ color: module ? 0x16213e : 0x0a0a0a, alpha: 0.9 });
-    slotBg.stroke({ color: this.selectedSlot === slot ? 0x00ffff : 0x444444, width: 2 });
+    slotBg.stroke({
+      color: this.selectedSlot === slot ? 0x00ffff : 0x444444,
+      width: 2,
+    });
     slotContainer.addChild(slotBg);
 
     // Slot label
     const slotLabel = new Text({
       text: `СЛОТ ${slot + 1}`,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 11,
         fill: 0x888888,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     slotLabel.x = 5;
@@ -235,10 +246,10 @@ export class InventoryScene extends GameScene {
       const moduleName = new Text({
         text: module.name,
         style: {
-          fontFamily: 'Courier New',
+          fontFamily: "Courier New",
           fontSize: 12,
           fill: 0xffffff,
-          fontWeight: 'bold',
+          fontWeight: "bold",
         },
       });
       moduleName.x = 10;
@@ -250,7 +261,7 @@ export class InventoryScene extends GameScene {
       const statsText = new Text({
         text: stats,
         style: {
-          fontFamily: 'Courier New',
+          fontFamily: "Courier New",
           fontSize: 10,
           fill: 0xaaaaaa,
         },
@@ -260,17 +271,17 @@ export class InventoryScene extends GameScene {
       slotContainer.addChild(statsText);
 
       // Unequip button
-      const unequipBtn = this.createButton('Снять', 130, 75, 80, 25);
-      unequipBtn.on('pointerdown', () => {
+      const unequipBtn = this.createButton("Снять", 130, 75, 80, 25);
+      unequipBtn.on("pointerdown", () => {
         this.unequipModule(slot);
       });
       slotContainer.addChild(unequipBtn);
     } else {
       // Empty slot message
       const emptyText = new Text({
-        text: 'Пусто',
+        text: "Пусто",
         style: {
-          fontFamily: 'Courier New',
+          fontFamily: "Courier New",
           fontSize: 12,
           fill: 0x555555,
         },
@@ -281,8 +292,8 @@ export class InventoryScene extends GameScene {
 
       // Equip button (only if module selected)
       if (this.selectedModule) {
-        const equipBtn = this.createButton('Установить', 110, 75, 100, 25);
-        equipBtn.on('pointerdown', () => {
+        const equipBtn = this.createButton("Установить", 110, 75, 100, 25);
+        equipBtn.on("pointerdown", () => {
           this.equipModuleToSlot(slot);
         });
         slotContainer.addChild(equipBtn);
@@ -296,15 +307,16 @@ export class InventoryScene extends GameScene {
    * Render inventory modules list
    */
   private renderInventoryModules(x: number, y: number): void {
-    if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player) return;
+    if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player)
+      return;
 
     const inventoryTitle = new Text({
-      text: 'МОДУЛИ В ИНВЕНТАРЕ',
+      text: "МОДУЛИ В ИНВЕНТАРЕ",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 16,
         fill: 0xffaa00,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     inventoryTitle.x = x;
@@ -315,9 +327,9 @@ export class InventoryScene extends GameScene {
 
     if (modules.length === 0) {
       const emptyText = new Text({
-        text: 'Инвентарь пуст',
+        text: "Инвентарь пуст",
         style: {
-          fontFamily: 'Courier New',
+          fontFamily: "Courier New",
           fontSize: 12,
           fill: 0x666666,
         },
@@ -356,18 +368,18 @@ export class InventoryScene extends GameScene {
       color: this.selectedModule?.id === module.id ? 0x00ffff : 0x555555,
       width: this.selectedModule?.id === module.id ? 2 : 1,
     });
-    moduleBg.eventMode = 'static';
-    moduleBg.cursor = 'pointer';
+    moduleBg.eventMode = "static";
+    moduleBg.cursor = "pointer";
     moduleContainer.addChild(moduleBg);
 
     // Module name
     const moduleName = new Text({
       text: module.name,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 12,
         fill: 0xffffff,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     moduleName.x = 10;
@@ -378,7 +390,7 @@ export class InventoryScene extends GameScene {
     const categoryText = new Text({
       text: `[${this.getCategoryRussian(module.category)}]`,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 10,
         fill: 0x888888,
       },
@@ -392,7 +404,7 @@ export class InventoryScene extends GameScene {
     const statsText = new Text({
       text: stats,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 10,
         fill: 0xaaaaaa,
       },
@@ -402,7 +414,7 @@ export class InventoryScene extends GameScene {
     moduleContainer.addChild(statsText);
 
     // Click to select
-    moduleBg.on('pointerdown', () => {
+    moduleBg.on("pointerdown", () => {
       this.selectModule(module);
     });
 
@@ -413,15 +425,16 @@ export class InventoryScene extends GameScene {
    * Render resources display
    */
   private renderResources(x: number, y: number): void {
-    if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player) return;
+    if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player)
+      return;
 
     const resourcesTitle = new Text({
-      text: 'РЕСУРСЫ',
+      text: "РЕСУРСЫ",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 14,
         fill: 0xffaa00,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     resourcesTitle.x = x;
@@ -434,13 +447,13 @@ export class InventoryScene extends GameScene {
     let resourceText = `Кредиты: ${credits}`;
     if (resources.length > 0) {
       resourceText +=
-        '  |  ' + resources.map((r) => `${r.type}: ${r.amount}`).join('  |  ');
+        "  |  " + resources.map((r) => `${r.type}: ${r.amount}`).join("  |  ");
     }
 
     const resText = new Text({
       text: resourceText,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 11,
         fill: 0xaaaaaa,
       },
@@ -466,7 +479,8 @@ export class InventoryScene extends GameScene {
    * Equip selected module to a slot
    */
   private equipModuleToSlot(slot: number): void {
-    if (!this.gameEngine || !this.gameEngine.player || !this.selectedModule) return;
+    if (!this.gameEngine || !this.gameEngine.player || !this.selectedModule)
+      return;
 
     try {
       this.gameEngine.equipmentSystem.equipModule(
@@ -477,7 +491,7 @@ export class InventoryScene extends GameScene {
       this.selectedModule = null; // Clear selection
       this.refresh();
     } catch (error) {
-      logger.error('Failed to equip module:', error);
+      logger.error("Failed to equip module:", error);
     }
   }
 
@@ -488,10 +502,13 @@ export class InventoryScene extends GameScene {
     if (!this.gameEngine || !this.gameEngine.player) return;
 
     try {
-      this.gameEngine.equipmentSystem.unequipModule(this.gameEngine.player, slot);
+      this.gameEngine.equipmentSystem.unequipModule(
+        this.gameEngine.player,
+        slot,
+      );
       this.refresh();
     } catch (error) {
-      logger.error('Failed to unequip module:', error);
+      logger.error("Failed to unequip module:", error);
     }
   }
 
@@ -516,8 +533,8 @@ export class InventoryScene extends GameScene {
     const closeBtn = new Container();
     closeBtn.x = x;
     closeBtn.y = y;
-    closeBtn.eventMode = 'static';
-    closeBtn.cursor = 'pointer';
+    closeBtn.eventMode = "static";
+    closeBtn.cursor = "pointer";
 
     const closeBg = new Graphics();
     closeBg.rect(0, 0, 25, 25);
@@ -525,29 +542,29 @@ export class InventoryScene extends GameScene {
     closeBtn.addChild(closeBg);
 
     const closeText = new Text({
-      text: 'X',
+      text: "X",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 16,
         fill: 0xffffff,
-        fontWeight: 'bold',
+        fontWeight: "bold",
       },
     });
     closeText.x = 7;
     closeText.y = 2;
     closeBtn.addChild(closeText);
 
-    closeBtn.on('pointerdown', () => {
+    closeBtn.on("pointerdown", () => {
       this.closeInventory();
     });
 
-    closeBtn.on('pointerover', () => {
+    closeBtn.on("pointerover", () => {
       closeBg.clear();
       closeBg.rect(0, 0, 25, 25);
       closeBg.fill({ color: 0xff4444, alpha: 1.0 });
     });
 
-    closeBtn.on('pointerout', () => {
+    closeBtn.on("pointerout", () => {
       closeBg.clear();
       closeBg.rect(0, 0, 25, 25);
       closeBg.fill({ color: 0xff0000, alpha: 0.8 });
@@ -559,12 +576,18 @@ export class InventoryScene extends GameScene {
   /**
    * Create a generic button
    */
-  private createButton(text: string, x: number, y: number, width: number, height: number): Container {
+  private createButton(
+    text: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): Container {
     const btn = new Container();
     btn.x = x;
     btn.y = y;
-    btn.eventMode = 'static';
-    btn.cursor = 'pointer';
+    btn.eventMode = "static";
+    btn.cursor = "pointer";
 
     const btnBg = new Graphics();
     btnBg.rect(0, 0, width, height);
@@ -575,7 +598,7 @@ export class InventoryScene extends GameScene {
     const btnText = new Text({
       text: text,
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 11,
         fill: 0xffffff,
       },
@@ -585,14 +608,14 @@ export class InventoryScene extends GameScene {
     btn.addChild(btnText);
 
     // Hover effects
-    btn.on('pointerover', () => {
+    btn.on("pointerover", () => {
       btnBg.clear();
       btnBg.rect(0, 0, width, height);
       btnBg.fill({ color: 0x0066aa, alpha: 1.0 });
       btnBg.stroke({ color: 0x00ffff, width: 2 });
     });
 
-    btn.on('pointerout', () => {
+    btn.on("pointerout", () => {
       btnBg.clear();
       btnBg.rect(0, 0, width, height);
       btnBg.fill({ color: 0x004488, alpha: 0.9 });
@@ -613,7 +636,7 @@ export class InventoryScene extends GameScene {
     } else if (module instanceof EngineModule) {
       return `Скорость: +${module.speedBoost} | Уворот: +${module.evasionBoost}`;
     }
-    return 'Неизвестный модуль';
+    return "Неизвестный модуль";
   }
 
   /**
@@ -621,9 +644,9 @@ export class InventoryScene extends GameScene {
    */
   private getCategoryRussian(category: string): string {
     const translations: Record<string, string> = {
-      WEAPON: 'Оружие',
-      SHIELD: 'Щит',
-      ENGINE: 'Двигатель',
+      WEAPON: "Оружие",
+      SHIELD: "Щит",
+      ENGINE: "Двигатель",
     };
     return translations[category] ?? category;
   }
@@ -634,17 +657,17 @@ export class InventoryScene extends GameScene {
   private async closeInventory(): Promise<void> {
     if (!this.gameEngine) return;
 
-    logger.info('Closing inventory');
+    logger.info("Closing inventory");
     // Return to previous scene (stored in GameEngine)
     // For now, default to SPACE_FLIGHT
-    await this.gameEngine.transitionTo('SPACE_FLIGHT' as any);
+    await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT);
   }
 
   /**
    * Handle keyboard input
    */
   private onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'i' || event.key === 'I' || event.key === 'Escape') {
+    if (event.key === "i" || event.key === "I" || event.key === "Escape") {
       this.closeInventory();
     }
   }

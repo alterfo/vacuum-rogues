@@ -182,20 +182,7 @@ export class DialogueSystem {
       : choice.tags.includes("hostile")
         ? -5
         : 0;
-    if (session.player.reputation[session.npc.id] !== undefined) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (session.player.reputation as any)[session.npc.id] += reputationDelta;
-    } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (session.player.reputation as any)[session.npc.id] = reputationDelta;
-    }
-
-    // Clamp reputation
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (session.player.reputation as any)[session.npc.id] = Math.max(
-      -100,
-      Math.min(100, (session.player.reputation as any)[session.npc.id]),
-    );
+    session.player.adjustReputation(session.npc.id, reputationDelta);
 
     session.addNPCResponse(responseText);
 

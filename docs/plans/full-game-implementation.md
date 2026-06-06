@@ -578,18 +578,18 @@ complete, and combat + reward.
 Extract `ShipPhysics` to its own file and move combat-resolution logic to `FlightCombatResolver`.
 Wire `Player.adjustReputation()` to replace all `as any` reputation casts.
 
-- [ ] Move `ShipPhysics` inner class from `SpaceFlightScene` to
+- [x] Move `ShipPhysics` inner class from `SpaceFlightScene` to
   `src/systems/ShipPhysics.ts`. Update `SpaceFlightScene` to import it. Verify all 160 tests
   still pass (ShipPhysics is now testable in isolation — add 5 unit tests for physics state machine).
-- [ ] Create `src/systems/FlightCombatResolver.ts` extracting the auto-attack logic from
+- [x] Create `src/systems/FlightCombatResolver.ts` extracting the auto-attack logic from
   `SpaceFlightScene.updateCombat()` (~80 lines). `SpaceFlightScene` delegates to it.
-- [ ] Add `Player.adjustReputation(factionId: string, delta: number): void` in
+- [x] Add `Player.adjustReputation(factionId: string, delta: number): void` in
   `src/domain/Player.ts`. Replace all `as any` casts in `DialogueSystem.ts` with calls to
   `player.adjustReputation()`.
-- [ ] Fix `QuestLog`: change `activeQuests: unknown[]` and `completedQuests: unknown[]` to
+- [x] Fix `QuestLog`: change `activeQuests: unknown[]` and `completedQuests: unknown[]` to
   `Quest[]` and `string[]` in `src/types/index.ts`. Fix the cast in `GameEngine.saveGame()`.
-- [ ] Fix `InventoryScene.ts` `'SPACE_FLIGHT' as any` → `SceneType.SPACE_FLIGHT`.
-- [ ] Guard stub AI adapters with `if (!__DEBUG__) logger.warn(...)` in PPOAdapter, VAEAdapter,
+- [x] Fix `InventoryScene.ts` `'SPACE_FLIGHT' as any` → `SceneType.SPACE_FLIGHT`.
+- [x] Guard stub AI adapters with `if (!__DEBUG__) logger.warn(...)` in PPOAdapter, VAEAdapter,
   GRUAdapter, T5DialogueAdapter.
 
 ### Task 29: Star map fog of war and faction home systems

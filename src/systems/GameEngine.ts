@@ -542,8 +542,8 @@ export class GameEngine {
     // progress/deadlines) survive save/load. QuestManager owns the source of
     // truth at runtime; player.questLog is only the serialized snapshot.
     const questLog = this.player.questLog as {
-      activeQuests: unknown[];
-      completedQuests: unknown[];
+      activeQuests: Quest[];
+      completedQuests: string[];
     };
     questLog.activeQuests.length = 0;
     questLog.activeQuests.push(...this.questManager.getActiveQuests());
