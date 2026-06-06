@@ -83,8 +83,8 @@ Build a working e2e screenshot test suite that captures all major game scenes, f
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] Run full test suite: `npm test -- --run`
-- [ ] Run e2e suite: `npm run test:e2e -- --run`
-- [ ] Run linter: `npm run lint`
-- [ ] Verify `e2e/screenshots/` contains PNG files for each major scene
-- [ ] Verify `docs/ux-review.md` exists with prioritized findings
+- [x] Run full test suite: `npm test -- --run`
+- [x] Run e2e suite: `npm run test:e2e -- --run`
+- [x] Run linter: `npm run lint`
+- [x] Verify `e2e/screenshots/` contains PNG files for each major scene
+- [x] Verify `docs/ux-review.md` exists with prioritized findings
