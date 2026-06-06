@@ -1230,6 +1230,10 @@ export class InfoCenterScene extends GameScene {
         gameEngine: this.gameEngine,
         planet: this.planet,
       });
+    } else {
+      await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
+        gameEngine: this.gameEngine,
+      });
     }
   }
 }

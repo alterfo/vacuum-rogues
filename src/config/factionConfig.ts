@@ -57,3 +57,11 @@ export const FACTION_BONUSES: Record<FactionType, string> = {
   [FactionType.PARADOXES]: "✦ Непредсказуемость: случайные бонусы в бою",
   [FactionType.PROGRESSORS]: "✦ Технологии: +15% эффективность оборудования",
 };
+
+export const FACTION_LABEL: Record<FactionType, string> = {
+  [FactionType.OUTLANDERS]: "Окраинники",
+  [FactionType.BASTIONS]: "Бастионы",
+  [FactionType.SYNDICATE]: "Синдикат",
+  [FactionType.PARADOXES]: "Парадоксы",
+  [FactionType.PROGRESSORS]: "Прогрессоры",
+};

@@ -36,6 +36,7 @@ export class MainMenuScene extends GameScene {
   private starGraphics: Graphics | null = null;
   private demoShips: DemoShip[] = [];
   private planets: Graphics[] = [];
+  private saveAvailable = false;
 
   initialize(context?: object): void {
     // Ensure stage is interactive so pointer events reach children
@@ -44,6 +45,7 @@ export class MainMenuScene extends GameScene {
     this.gameEngine =
       (context as { gameEngine?: GameEngine })?.gameEngine ?? null;
     this.renderMainMenu();
+    void this.checkSaveAvailability();
 
     // Re-render menu when canvas actually gets its size (fixes first-load centering)
     if (typeof ResizeObserver !== "undefined" && this.renderer.app.canvas) {
@@ -89,6 +91,15 @@ export class MainMenuScene extends GameScene {
           h * 0.5 + Math.sin(ship.angle * 0.7) * h * ship.offsetY;
         ship.container.rotation = ship.angle + Math.PI / 2;
       }
+    }
+  }
+
+  private async checkSaveAvailability(): Promise<void> {
+    if (!this.gameEngine?.saveManager) return;
+    const hasSave = await this.gameEngine.saveManager.hasSave();
+    if (hasSave !== this.saveAvailable) {
+      this.saveAvailable = hasSave;
+      this.renderMainMenu();
     }
   }
 
@@ -289,8 +300,12 @@ export class MainMenuScene extends GameScene {
       50,
       () => this.handleContinue(),
       20,
-      0xffaa00,
+      this.saveAvailable ? 0xffaa00 : 0x556677,
     );
+    if (!this.saveAvailable) {
+      continueBtn.eventMode = "none";
+      continueBtn.alpha = 0.5;
+    }
     this.buttonsContainer.addChild(continueBtn);
 
     this.renderer.uiLayer.addChild(this.buttonsContainer);
@@ -363,7 +378,7 @@ export class MainMenuScene extends GameScene {
     this.renderer.uiLayer.addChild(msgText);
     this.currentMsgText = msgText;
 
-    // Remove after 3 seconds
+    // Remove after 5 seconds
     this.messageTimeoutId = setTimeout(() => {
       if (msgText.parent) {
         this.renderer.uiLayer.removeChild(msgText);
@@ -371,7 +386,7 @@ export class MainMenuScene extends GameScene {
       msgText.destroy();
       this.messageTimeoutId = null;
       this.currentMsgText = null;
-    }, 3000);
+    }, 5000);
   }
 
   private createShip(

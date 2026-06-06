@@ -1,11 +1,14 @@
 import { Container, Graphics, Text } from "pixi.js";
 import type { Planet } from "@/domain/Planet";
+import { FactionType } from "@/types";
+import { FACTION_LABEL } from "@/config/factionConfig";
 
 export class PlanetInfoPanel {
   public readonly container: Container;
   public readonly flightDays: number;
   private readonly planet: Planet;
   private readonly onLand?: () => void;
+  private readonly ownerFaction?: string;
 
   constructor(
     planet: Planet,
@@ -13,10 +16,12 @@ export class PlanetInfoPanel {
     _screenHeight: number,
     flightDays: number,
     onLand?: () => void,
+    ownerFaction?: string,
   ) {
     this.planet = planet;
     this.flightDays = flightDays;
     this.onLand = onLand;
+    this.ownerFaction = ownerFaction;
     this.container = new Container();
     this.container.x = screenWidth - 240;
     this.container.y = 80;
@@ -52,9 +57,13 @@ export class PlanetInfoPanel {
     type.y = 35;
     this.container.addChild(type);
 
+    const factionName =
+      this.ownerFaction !== undefined
+        ? (FACTION_LABEL[this.ownerFaction as FactionType] ?? this.ownerFaction)
+        : "Окраинники";
     const habitability = new Text({
       text: this.planet.isHabitable
-        ? `Фракция: Окраинники`
+        ? `Фракция: ${factionName}`
         : `Дроны: ${this.planet.drones}`,
       style: { fontFamily: "Courier New", fontSize: 11, fill: 0x88ccff },
     });

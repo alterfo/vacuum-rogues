@@ -224,6 +224,38 @@ export class StationScene extends GameScene {
     bg.eventMode = "static";
     this.mainContainer!.addChild(bg);
 
+    if (!this.station) {
+      const errMsg = new Text({
+        text: "Ошибка: станция недоступна",
+        style: { fontSize: 18, fill: 0xff4444, fontFamily: "monospace" },
+      });
+      errMsg.anchor.set(0.5, 0.5);
+      errMsg.x = sw / 2;
+      errMsg.y = sh / 2 - 30;
+      errMsg.eventMode = "none";
+      this.mainContainer!.addChild(errMsg);
+
+      const backBtn = new Text({
+        text: "[ Назад ]",
+        style: { fontSize: 16, fill: 0x88ccff, fontFamily: "monospace" },
+      });
+      backBtn.anchor.set(0.5, 0.5);
+      backBtn.x = sw / 2;
+      backBtn.y = sh / 2 + 20;
+      backBtn.eventMode = "static";
+      backBtn.cursor = "pointer";
+      backBtn.on("pointerdown", (e) => {
+        e.stopPropagation();
+        if (this.gameEngine) {
+          void this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
+            gameEngine: this.gameEngine,
+          });
+        }
+      });
+      this.mainContainer!.addChild(backBtn);
+      return;
+    }
+
     // Panel
     const PW = Math.min(600, sw - 40);
     const PH = Math.min(560, sh - 60);
@@ -1213,8 +1245,10 @@ export class StationScene extends GameScene {
           }
           this.mainContainer!.addChild(mmBtn);
         } else {
+          const mmEntry = MICRO_MODULES.find((m) => m.id === mod.micromoduleId);
+          const mmLabel = mmEntry?.name ?? mod.micromoduleId ?? "?";
           const mmTag = new Text({
-            text: `[мм: ${mod.micromoduleId}]`,
+            text: `[мм: ${mmLabel}]`,
             style: { fontSize: 10, fill: 0xffcc44, fontFamily: "monospace" },
           });
           mmTag.anchor.set(1, 0.5);

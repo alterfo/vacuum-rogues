@@ -270,7 +270,36 @@ export class StarMapScene extends GameScene {
     });
     instructions.x = 20;
     instructions.y = height - 30;
+    instructions.eventMode = "none";
     this.fixedUIContainer.addChild(instructions);
+
+    const backBtn = new Text({
+      text: "[ Назад ]",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 14,
+        fill: 0x88ccff,
+      },
+    });
+    backBtn.x = width - 120;
+    backBtn.y = 20;
+    backBtn.eventMode = "static";
+    backBtn.cursor = "pointer";
+    backBtn.on("pointerdown", (event) => {
+      event.stopPropagation();
+      if (this.gameEngine) {
+        void this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
+          gameEngine: this.gameEngine,
+        });
+      }
+    });
+    backBtn.on("pointerover", () => {
+      backBtn.alpha = 0.7;
+    });
+    backBtn.on("pointerout", () => {
+      backBtn.alpha = 1;
+    });
+    this.fixedUIContainer.addChild(backBtn);
 
     this.renderer.uiLayer.addChild(this.fixedUIContainer);
 

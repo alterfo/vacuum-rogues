@@ -69,11 +69,24 @@ export class DialogueScene extends GameScene {
       return;
     }
 
-    // Load dialogue tree for this NPC
+    // Load dialogue tree for this NPC; fall back to a minimal 1-node tree
     this.dialogueTree = this.loadDialogueTree(this.currentNPC.id);
     if (!this.dialogueTree) {
-      logger.error(`No dialogue tree found for NPC: ${this.currentNPC.id}`);
-      return;
+      logger.warn(
+        `No dialogue tree for NPC: ${this.currentNPC.id} — showing fallback`,
+      );
+      const fallbackNodes = new Map<string, DialogueNode>();
+      fallbackNodes.set("fallback", {
+        id: "fallback",
+        npcText: "Нет слов для разговора.",
+        responses: [{ text: "Завершить", nextNodeId: null }],
+      });
+      this.dialogueTree = {
+        npcId: this.currentNPC.id,
+        npcName: this.currentNPC.name,
+        startNodeId: "fallback",
+        nodes: fallbackNodes,
+      };
     }
 
     this.renderer.clearGameLayer();

@@ -20,6 +20,7 @@ export class RaceSelectionScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private mainContainer: Container | null = null;
   private selectedFaction: FactionType = FactionType.OUTLANDERS;
+  private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
@@ -36,6 +37,11 @@ export class RaceSelectionScene extends GameScene {
 
     this.render();
 
+    this.boundKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") void this.goBack();
+    };
+    window.addEventListener("keydown", this.boundKeyDown);
+
     logger.info("RaceSelectionScene initialized");
   }
 
@@ -44,6 +50,10 @@ export class RaceSelectionScene extends GameScene {
   }
 
   destroy(): void {
+    if (this.boundKeyDown) {
+      window.removeEventListener("keydown", this.boundKeyDown);
+      this.boundKeyDown = null;
+    }
     if (this.mainContainer) {
       this.mainContainer.destroy({ children: true });
       this.mainContainer = null;
@@ -52,6 +62,13 @@ export class RaceSelectionScene extends GameScene {
     this.gameEngine = null;
 
     logger.info("RaceSelectionScene destroyed");
+  }
+
+  private async goBack(): Promise<void> {
+    if (!this.gameEngine) return;
+    await this.gameEngine.transitionTo(SceneType.MAIN_MENU, {
+      gameEngine: this.gameEngine,
+    });
   }
 
   /**
@@ -102,6 +119,31 @@ export class RaceSelectionScene extends GameScene {
 
       this.renderFactionCard(faction, x, y, cardWidth, cardHeight);
     }
+
+    // Back button (top-left)
+    const backBtn = new Text({
+      text: "[ Назад ]",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 16,
+        fill: 0x88ccff,
+      },
+    });
+    backBtn.x = 20;
+    backBtn.y = 20;
+    backBtn.eventMode = "static";
+    backBtn.cursor = "pointer";
+    backBtn.on("pointerdown", (event) => {
+      event.stopPropagation();
+      void this.goBack();
+    });
+    backBtn.on("pointerover", () => {
+      backBtn.alpha = 0.7;
+    });
+    backBtn.on("pointerout", () => {
+      backBtn.alpha = 1;
+    });
+    this.mainContainer.addChild(backBtn);
 
     // Start button
     this.renderStartButton(screenWidth / 2, screenHeight - 80);

@@ -2343,12 +2343,17 @@ export class SpaceFlightScene extends GameScene {
     const shipAtPlanet =
       distanceToPlanet <= this.landingThreshold(planetSprite);
 
+    const currentSystemId = this.gameEngine?.player?.currentSystemId;
+    const currentSystem = this.gameEngine?.galaxy?.systems.find(
+      (s) => s.id === currentSystemId,
+    );
     this.planetInfoPanel = new PlanetInfoPanel(
       planet,
       this.renderer.app.screen.width,
       this.renderer.app.screen.height,
       flightDays,
       shipAtPlanet ? () => this.onLandOnPlanet(planet) : undefined,
+      currentSystem?.ownerFaction,
     );
     this.renderer.uiLayer.addChild(this.planetInfoPanel.container);
   }

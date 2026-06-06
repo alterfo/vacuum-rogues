@@ -306,17 +306,17 @@ Scenario: Планеты различимы
 - Modify: `src/presentation/PlanetInfoPanel.ts`
 - Modify: `src/systems/GameEngine.ts`
 
-- [ ] **RaceSelectionScene**: add "[ Назад ]" button + Esc handler → `transitionTo(MAIN_MENU)`
-- [ ] **StarMapScene**: add "[ Назад ]" button in `fixedUIContainer` → `transitionTo(SPACE_FLIGHT)`
-- [ ] **DialogueScene**: add fallback for null dialogue tree — show 1-node "Нет слов для разговора." with "Завершить" button
-- [ ] **InfoCenterScene.goBack()**: add fallback `transitionTo(SPACE_FLIGHT)` when both `station` and `planet` are null
-- [ ] **MainMenuScene**: check save existence on init → dim/disable "Продолжить" when no save; fix `showMessage()` to remove previous message before adding new; add 5s auto-remove timer
-- [ ] **StationScene.renderMain()**: add null-context guard — if `this.station` is null, show error + "[ Назад ]" button → `transitionTo(SPACE_FLIGHT)`
-- [ ] **GameEngine**: add `StationScene` to `contextDependentScenes` so "Continue" never navigates there without context
-- [ ] **StationScene**: look up micromodule name from `MICRO_MODULES` catalogue before rendering; show human-readable name not raw ID
-- [ ] **PlanetInfoPanel**: look up actual `planet.factionId` from its `StarSystem`; map to Russian name via `FACTION_LABEL` constant
-- [ ] Add `FACTION_LABEL: Record<FactionType, string>` constant (reuse or create in `src/config/balance.ts` or `src/types/`)
-- [ ] Run `npm test -- --run` + `npm run lint` — no regressions
+- [x] **RaceSelectionScene**: add "[ Назад ]" button + Esc handler → `transitionTo(MAIN_MENU)`
+- [x] **StarMapScene**: add "[ Назад ]" button in `fixedUIContainer` → `transitionTo(SPACE_FLIGHT)`
+- [x] **DialogueScene**: add fallback for null dialogue tree — show 1-node "Нет слов для разговора." with "Завершить" button
+- [x] **InfoCenterScene.goBack()**: add fallback `transitionTo(SPACE_FLIGHT)` when both `station` and `planet` are null
+- [x] **MainMenuScene**: check save existence on init → dim/disable "Продолжить" when no save; fix `showMessage()` to remove previous message before adding new; add 5s auto-remove timer
+- [x] **StationScene.renderMain()**: add null-context guard — if `this.station` is null, show error + "[ Назад ]" button → `transitionTo(SPACE_FLIGHT)`
+- [x] **GameEngine**: add `StationScene` to `contextDependentScenes` so "Continue" never navigates there without context
+- [x] **StationScene**: look up micromodule name from `MICRO_MODULES` catalogue before rendering; show human-readable name not raw ID
+- [x] **PlanetInfoPanel**: look up actual `planet.factionId` from its `StarSystem`; map to Russian name via `FACTION_LABEL` constant
+- [x] Add `FACTION_LABEL: Record<FactionType, string>` constant (reuse or create in `src/config/balance.ts` or `src/types/`)
+- [x] Run `npm test -- --run` + `npm run lint` — no regressions
 
 ### Task 3: UX Critical — Star map zoom-to-fit on open (US-077)
 
