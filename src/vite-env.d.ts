@@ -6,3 +6,7 @@ declare module '*?worker?url' {
   export default content;
 }
 
+// Vite define() replacements
+declare const __DEBUG__: boolean;
+declare const __BUILD_VERSION__: string;
+

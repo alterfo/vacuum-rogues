@@ -42,6 +42,7 @@ import type {
   IEquipmentService,
 } from "@/core/ports";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
+import { NpcShip } from "@/domain/NpcShip";
 import { GalaxyService, PlayerService, SceneFactory } from "@/core/services";
 import { QuestManagerAdapter, EquipmentSystemAdapter } from "@/core/adapters";
 import { TextQuestRuntime } from "@/systems/quests/TextQuestRuntime";
@@ -585,6 +586,16 @@ export class GameEngine {
     // module checks work after "Continue". Field data is already correct.
     this.rehydrateLoadedState();
 
+    // Loadout is not persisted in SaveState — initialize a default starter
+    // loadout so gear-derived stats (speed, shields, droid repair) work
+    // immediately after "Continue".
+    if (!this.playerLoadout) {
+      const loadout = new ShipLoadout("hull_corvette");
+      loadout.install("eq_engine_i");
+      loadout.install("eq_tank");
+      this.playerLoadout = loadout;
+    }
+
     // Restore quest state into the live QuestManager (it owns quests at
     // runtime; the save only carries the serialized questLog).
     const loadedQuestLog = this.player.questLog as {
@@ -622,6 +633,10 @@ export class GameEngine {
       SceneType.DIALOGUE,
       SceneType.COMBAT,
       SceneType.INVENTORY,
+      SceneType.STATION,
+      SceneType.EQUIPMENT_SHOP,
+      SceneType.GOVERNMENT,
+      SceneType.TEXT_QUEST,
     ];
     const savedScene = save.currentSceneType ?? SceneType.SPACE_FLIGHT;
     const sceneType = contextDependentScenes.includes(savedScene)
@@ -643,6 +658,9 @@ export class GameEngine {
   private rehydrateLoadedState(): void {
     if (this.galaxy) {
       Object.setPrototypeOf(this.galaxy, Galaxy.prototype);
+      for (const npc of this.galaxy.npcShips ?? []) {
+        Object.setPrototypeOf(npc, NpcShip.prototype);
+      }
     }
 
     if (this.player) {

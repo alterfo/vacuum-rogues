@@ -98,22 +98,22 @@ export class CombatSystem {
     if (ability === WeaponAbility.BURST) {
       const targets = this.getBurstTargets(primaryTarget);
       for (const t of targets) {
-        const dmg = this.applyDamageToEnemy(t, baseDamage, false);
+        const dmg = this.applyDamageToEnemy(t, baseDamage);
         totalDamage += dmg;
       }
       extraMsg = ` (Шквал: ${targets.length} целей)`;
     } else if (ability === WeaponAbility.EMP) {
-      const dmg = this.applyDamageToEnemy(primaryTarget, baseDamage, false);
+      const dmg = this.applyDamageToEnemy(primaryTarget, baseDamage);
       totalDamage = dmg;
       primaryTarget.shieldDisabledTurns = 2;
       extraMsg = " (ЭМИ: щит отключён на 2 хода)";
     } else if (ability === WeaponAbility.HOMING) {
       // Homing bypasses adjacency requirement — always hits
-      const dmg = this.applyDamageToEnemy(primaryTarget, baseDamage, false);
+      const dmg = this.applyDamageToEnemy(primaryTarget, baseDamage);
       totalDamage = dmg;
       extraMsg = " (Самонаведение)";
     } else {
-      const dmg = this.applyDamageToEnemy(primaryTarget, baseDamage, false);
+      const dmg = this.applyDamageToEnemy(primaryTarget, baseDamage);
       totalDamage = dmg;
     }
 
@@ -133,9 +133,8 @@ export class CombatSystem {
   applyDamageToEnemy(
     enemy: import("@/domain/EnemyShip").EnemyShip,
     rawDamage: number,
-    isEnemyAttack: boolean,
   ): number {
-    const shieldActive = enemy.shieldDisabledTurns <= 0 && !isEnemyAttack;
+    const shieldActive = enemy.shieldDisabledTurns <= 0;
     if (enemy.shields > 0 && shieldActive) {
       const absorbed = Math.min(enemy.shields, rawDamage);
       enemy.shields -= absorbed;

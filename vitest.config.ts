@@ -22,6 +22,10 @@ export default defineConfig({
       },
     },
   },
+  define: {
+    __DEBUG__: JSON.stringify(true),
+    __BUILD_VERSION__: JSON.stringify('test'),
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

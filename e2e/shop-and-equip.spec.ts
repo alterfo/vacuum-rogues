@@ -106,11 +106,11 @@ test.describe('Shop and Equip flow', () => {
     const removed = await page.evaluate(() => {
       const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       const loadout = engine.playerLoadout as unknown as {
-        uninstall: (gearId: string) => void;
+        remove: (gearId: string) => boolean;
         derivedStats: () => { speed: number; canTakeOff: boolean };
       } | null;
       if (!loadout) return false;
-      loadout.uninstall('eq_engine_i');
+      loadout.remove('eq_engine_i');
       return true;
     });
     expect(removed).toBe(true);

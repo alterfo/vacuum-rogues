@@ -20,6 +20,7 @@ class MockBufferSource {
 }
 
 class MockAudioContext {
+  static lastInstance: MockAudioContext | null = null;
   state = "running";
   currentTime = 0;
   createGain = vi.fn(() => new MockGainNode());
@@ -28,6 +29,9 @@ class MockAudioContext {
   resume = vi.fn(async () => {});
   close = vi.fn(async () => {});
   destination = {};
+  constructor() {
+    MockAudioContext.lastInstance = this;
+  }
 }
 
 // Stub global AudioContext
@@ -89,24 +93,20 @@ describe("AudioManager", () => {
 
   it("setMusicVolume clamps to 0..1", () => {
     mgr.setMusicVolume(2.5);
-    // No error thrown; internal state clamped
+    expect(mgr.getMusicVolume()).toBe(1);
     mgr.setMusicVolume(-1);
-    // No error thrown
-    expect(true).toBe(true);
+    expect(mgr.getMusicVolume()).toBe(0);
   });
 
   it("stopTrack clears the current track key so the same track can replay", async () => {
     await mgr.playTrack("planet_hub");
+    const ctxInstance = MockAudioContext.lastInstance!;
+    ctxInstance.createBufferSource.mockClear();
     mgr.stopTrack();
-    // After stop, currentTrackKey is null. Playing the same key again should
-    // create a new buffer source (not early-return). The ctx.createBufferSource
-    // mock call count should increase.
-    const ctx = new (globalThis.AudioContext as unknown as {
-      new (): MockAudioContext;
-    })();
-    // Just verify no throw and the call proceeds
-    await expect(mgr.playTrack("planet_hub")).resolves.toBeUndefined();
-    void ctx; // suppress unused warning
+    // After stopTrack, the key is cleared — playing the same track again
+    // must call createBufferSource (not early-return due to same-key guard).
+    await mgr.playTrack("planet_hub");
+    expect(ctxInstance.createBufferSource).toHaveBeenCalled();
   });
 
   it("gracefully handles missing audio files (fetch returns 404)", async () => {
@@ -119,10 +119,9 @@ describe("AudioManager", () => {
   });
 
   it("destroy closes the AudioContext", async () => {
-    // Trigger context creation
     await mgr.playTrack("explore_calm");
+    const ctxInstance = MockAudioContext.lastInstance!;
     mgr.destroy();
-    // No assertions needed — just verify no throw
-    expect(true).toBe(true);
+    expect(ctxInstance.close).toHaveBeenCalled();
   });
 });

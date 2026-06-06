@@ -121,7 +121,7 @@ describe("CombatSystem — EMP ability (Task 10)", () => {
 
     enemy.shieldDisabledTurns = 1;
     const hpBefore = enemy.hullHP;
-    system.applyDamageToEnemy(enemy, 20, false);
+    system.applyDamageToEnemy(enemy, 20);
 
     // Shield is disabled so hull should take full damage
     expect(enemy.hullHP).toBe(hpBefore - 20);
@@ -135,7 +135,7 @@ describe("CombatSystem — EMP ability (Task 10)", () => {
 
     const hpBefore = enemy.hullHP;
     const shieldsBefore = enemy.shields;
-    system.applyDamageToEnemy(enemy, 20, false);
+    system.applyDamageToEnemy(enemy, 20);
 
     // Shield should absorb some/all damage
     expect(enemy.shields).toBeLessThan(shieldsBefore);

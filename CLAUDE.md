@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Space Rangers: Neural Onslaught** — browser-based space RPG/strategy game with local ONNX models for dialogue generation and tactical AI. Built with TypeScript, PixiJS 8, and onnxruntime-web.
+**Galactic Horizon: Neural Onslaught** — browser-based space RPG/strategy game with local ONNX models for dialogue generation and tactical AI. Built with TypeScript, PixiJS 8, and onnxruntime-web.
 
 ## Build & Development Commands
 
@@ -172,7 +172,7 @@ When changing world coordinates or zoom levels, update ALL dependent UI elements
 
 **Example**: Increasing orbital radii 5x (150-550px → 750-2750px)
 ```typescript
-// src/systems/PlanetGenerator.ts
+// src/config/balance.ts  ← geometry constants live here (SYSTEM_GEOMETRY.orbitRadii)
 ORBITAL_RADII = [750, 1250, 1750, 2250, 2750]; // 5x scale
 
 // src/presentation/SystemMiniMap.ts
@@ -282,8 +282,9 @@ private async performWarpJump(target: StarSystem): Promise<void> {
 ### New Scene
 1. Create class extending `GameScene` in `src/presentation/`
 2. Add `SceneType.MY_SCENE` to `src/types/index.ts`
-3. Register in `GameEngine.transitionTo()` switch-case
-4. Add Page Object in `e2e/page-objects/` for E2E tests
+3. Add a `case SceneType.MY_SCENE:` to `src/core/services/SceneFactory.ts`
+4. If the scene requires transient context (planet, NPC, station), add it to `contextDependentScenes` in `GameEngine.loadGame()` so "Continue" falls back to SPACE_FLIGHT instead of a blank screen
+5. Add Page Object in `e2e/page-objects/` for E2E tests
 
 ### New ONNX Model
 1. Add config to `src/ai/ModelManifest.ts`
@@ -305,4 +306,4 @@ private async performWarpJump(target: StarSystem): Promise<void> {
 
 ## Project Status
 
-Currently in Phase 0 (Proof of Concept) — ONNX integration, basic flight scene, CI/CD pipeline. Many mechanics have stub implementations.
+Phase 1 (MVP in progress) — core gameplay loops implemented: economy, equipment/hull system, NPC living galaxy, quest generator, text quests, government dialogue, station services, info center, combat AI, fog-of-war star map, audio. See `docs/plans/full-game-implementation.md` for remaining tasks.

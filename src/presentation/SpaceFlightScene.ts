@@ -1958,19 +1958,21 @@ export class SpaceFlightScene extends GameScene {
     instructions.eventMode = "none"; // Explicitly set to non-interactive
     this.uiContainer.addChild(instructions);
 
-    // Camera debug display
-    this.cameraDebugText = new Text({
-      text: "Камера: Zoom 1.00 | Pan (0, 0)",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 12,
-        fill: 0xff00ff,
-      },
-    });
-    this.cameraDebugText.x = this.renderer.app.screen.width - 300;
-    this.cameraDebugText.y = this.renderer.app.screen.height - 30;
-    this.cameraDebugText.eventMode = "none";
-    this.uiContainer.addChild(this.cameraDebugText);
+    // Camera debug display (development only)
+    if (__DEBUG__) {
+      this.cameraDebugText = new Text({
+        text: "Камера: Zoom 1.00 | Pan (0, 0)",
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 12,
+          fill: 0xff00ff,
+        },
+      });
+      this.cameraDebugText.x = this.renderer.app.screen.width - 300;
+      this.cameraDebugText.y = this.renderer.app.screen.height - 30;
+      this.cameraDebugText.eventMode = "none";
+      this.uiContainer.addChild(this.cameraDebugText);
+    }
 
     // Current date display
     this.dayCounterText = new Text({
@@ -2875,14 +2877,6 @@ export class SpaceFlightScene extends GameScene {
           this.updateDayCounter(); // Update UI
           this.refreshNpcShips(); // NPCs may have arrived/departed this day
 
-          // Check for expired quests after each day
-          if (this.gameEngine.player) {
-            this.gameEngine.questManager.checkExpiredQuests(
-              this.gameEngine.galaxy.gameDays,
-              this.gameEngine.player,
-            );
-          }
-
           logger.debug(
             `Day passed during flight. Current day: ${this.gameEngine.galaxy.gameDays}`,
           );
@@ -2935,12 +2929,6 @@ export class SpaceFlightScene extends GameScene {
         this.gameEngine.advanceGalaxyDay();
         this.updateDayCounter();
         this.refreshNpcShips();
-        if (this.gameEngine.player) {
-          this.gameEngine.questManager.checkExpiredQuests(
-            this.gameEngine.galaxy.gameDays,
-            this.gameEngine.player,
-          );
-        }
       }
       if (this.pauseRequested) {
         this.endTurn();
@@ -2980,7 +2968,10 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    this.gameEngine.player.ship.energy -= fuelCost;
+    this.gameEngine.player.ship.energy = Math.max(
+      0,
+      this.gameEngine.player.ship.energy - fuelCost,
+    );
     this.gameEngine.player.currentSystemId = targetSystemId;
     this.gameEngine.galaxy.revealSystemAndNeighbors(targetSystemId);
     logger.info(

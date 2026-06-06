@@ -153,6 +153,10 @@ export class AudioManager {
     if (muted) this.stopTrack();
   }
 
+  getMusicVolume(): number {
+    return this.musicVolume;
+  }
+
   setMusicVolume(volume: number): void {
     this.musicVolume = Math.max(0, Math.min(1, volume));
     if (this.currentGain && this.ctx) {
