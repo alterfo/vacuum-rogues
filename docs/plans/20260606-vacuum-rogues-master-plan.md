@@ -468,15 +468,15 @@ Scenario: Планеты различимы
 - Modify: `src/systems/GameEngine.ts`
 - Modify: `src/presentation/PlanetScene.ts`
 
-- [ ] **US-082**: quantity controls [-] [qty] [+] in TradeScene; qty capped at min(stock, hold, affordable)
-- [ ] **US-082**: sell button disabled when player owns 0 units
-- [ ] **US-082**: trade toast auto-removes after 3 seconds
-- [ ] **US-074**: `QuestDirector.tick(day)` — check deadlines, emit `'quest-expired'`
-- [ ] **US-074**: PlanetScene quest board button → list active quests with countdown
-- [ ] **US-074**: On landing at target planet → auto-check `quest.targetId === planet.id` → `completeQuest()`
-- [ ] **US-074**: `GameEngine.checkWinCondition()` — rank VETERAN + reputation ≥ 3 factions > 50 → `transitionTo(WIN_SCREEN)`
-- [ ] WIN_SCREEN scene: final stats + "В главное меню" button
-- [ ] Run `npm test -- --run` + `npm run lint` — no regressions
+- [x] **US-082**: quantity controls [-] [qty] [+] in TradeScene; qty capped at min(stock, hold, affordable)
+- [x] **US-082**: sell button disabled when player owns 0 units
+- [x] **US-082**: trade toast auto-removes after 3 seconds
+- [x] **US-074**: `QuestDirector.tick(day)` — check deadlines, emit `'quest-expired'`
+- [x] **US-074**: PlanetScene quest board button → list active quests with countdown
+- [x] **US-074**: On landing at target planet → auto-check `quest.targetId === planet.id` → `completeQuest()`
+- [x] **US-074**: `GameEngine.checkWinCondition()` — rank VETERAN + reputation ≥ 3 factions > 50 → `transitionTo(WIN_SCREEN)`
+- [x] WIN_SCREEN scene: final stats + "В главное меню" button
+- [x] Run `npm test -- --run` + `npm run lint` — no regressions
 
 ### Task 13: Sprint 5 — UX polish (tooltips, mini-log, escape, UI sounds)
 

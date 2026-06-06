@@ -691,9 +691,11 @@ export class PlanetScene extends GameScene {
     this.closeJobBoard();
     const quests = this.gameEngine.getQuestBoard(this.planet.id);
     const { width, height } = this.renderer.app.screen;
-    const activeCount = this.gameEngine.questManager.getActiveQuests().length;
+    const activeQuests = this.gameEngine.questManager.getActiveQuests();
+    const activeCount = activeQuests.length;
+    const currentDay = this.gameEngine.galaxy?.gameDays ?? 0;
     const acceptedIds = new Set<string>([
-      ...this.gameEngine.questManager.getActiveQuests().map((q) => q.id),
+      ...activeQuests.map((q) => q.id),
       ...this.gameEngine.questManager.getCompletedQuestIds(),
     ]);
     this.jobBoardPanel = new JobBoardPanel(
@@ -706,6 +708,8 @@ export class PlanetScene extends GameScene {
       },
       activeCount,
       acceptedIds,
+      activeQuests,
+      currentDay,
     );
     this.renderer.uiLayer.addChild(this.jobBoardPanel.container);
   }

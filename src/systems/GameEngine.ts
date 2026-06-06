@@ -98,6 +98,7 @@ export class GameEngine {
   private modalObjects: (Graphics | Text)[] = [];
   private loadingOverlayObjects: (Graphics | Text)[] = [];
   private _gameOverShown = false;
+  private _winScreenShown = false;
   private readonly galaxyService: IGalaxyService;
   private readonly playerService: IPlayerService;
   private readonly sceneFactory: SceneFactory;
@@ -445,6 +446,35 @@ export class GameEngine {
 
     // Check for expired quests and apply failure penalties.
     this.checkExpiredQuests();
+
+    // Win condition: rank >= VETERAN (2) + 3+ factions with rep > 50.
+    if (this.checkWinCondition() && !this._winScreenShown) {
+      this._winScreenShown = true;
+      this.transitionTo(SceneType.WIN_SCREEN, { gameEngine: this }).catch((e) =>
+        logger.error("Win screen transition failed:", e),
+      );
+    }
+  }
+
+  /**
+   * Returns true when the player meets the win condition:
+   * rank >= 2 ("Ветеран") AND reputation > 50 with at least 3 factions.
+   */
+  checkWinCondition(): boolean {
+    if (!this.player) return false;
+    const VETERAN_RANK = 2;
+    if ((this.player.rank ?? 0) < VETERAN_RANK) return false;
+    const factions = [
+      "BASTIONS",
+      "SYNDICATE",
+      "OUTLANDERS",
+      "PROGRESSORS",
+      "PARADOXES",
+    ];
+    const allied = factions.filter(
+      (f) => (this.player!.reputation[f] ?? 0) > 50,
+    );
+    return allied.length >= 3;
   }
 
   /**
@@ -648,6 +678,7 @@ export class GameEngine {
       SceneType.EQUIPMENT_SHOP,
       SceneType.GOVERNMENT,
       SceneType.TEXT_QUEST,
+      SceneType.WIN_SCREEN,
     ];
     const savedScene = save.currentSceneType ?? SceneType.SPACE_FLIGHT;
     const sceneType = contextDependentScenes.includes(savedScene)
@@ -982,6 +1013,7 @@ export class GameEngine {
     this.player = null;
     this.playerLoadout = null;
     this._gameOverShown = false;
+    this._winScreenShown = false;
     this.playerService.deletePlayer();
     const seed = `SR_${Date.now()}`;
     this.galaxy = await this.galaxyService.generate(seed, 30);

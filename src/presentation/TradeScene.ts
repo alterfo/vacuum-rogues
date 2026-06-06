@@ -23,6 +23,9 @@ export class TradeScene extends GameScene {
   private readonly tradeSystem = new TradeSystem();
   private mainContainer: Container | null = null;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
+  /** Per-resource quantity selector state (persists across refresh). */
+  private readonly tradeQty = new Map<ResourceType, number>();
+  private toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
   private static readonly RESOURCE_NAMES: Record<string, string> = {
     FUEL: "Топливо",
@@ -63,6 +66,10 @@ export class TradeScene extends GameScene {
       window.removeEventListener("keydown", this.boundKeyDown);
       this.boundKeyDown = null;
     }
+    if (this.toastTimeout) {
+      clearTimeout(this.toastTimeout);
+      this.toastTimeout = null;
+    }
     if (this.mainContainer) {
       this.mainContainer.destroy({ children: true });
       this.mainContainer = null;
@@ -88,10 +95,10 @@ export class TradeScene extends GameScene {
     const backdrop = new Graphics();
     backdrop.rect(0, 0, screenW, screenH);
     backdrop.fill({ color: 0x000000, alpha: 0.85 });
-    backdrop.eventMode = "static"; // block clicks behind the panel
+    backdrop.eventMode = "static";
     this.mainContainer.addChild(backdrop);
 
-    const panelW = 760;
+    const panelW = 800;
     const panelH = 600;
     const panelX = (screenW - panelW) / 2;
     const panelY = (screenH - panelH) / 2;
@@ -122,11 +129,18 @@ export class TradeScene extends GameScene {
     // Column headers
     const top = panelY + 55;
     this.addText("Ресурс", panelX + 20, top, 12, 0x888888);
-    this.addText("Покупка", panelX + 230, top, 12, 0x888888);
-    this.addText("Продажа", panelX + 330, top, 12, 0x888888);
-    this.addText("В трюме", panelX + 430, top, 12, 0x888888);
+    this.addText("Покупка", panelX + 195, top, 12, 0x888888);
+    this.addText("Продажа", panelX + 280, top, 12, 0x888888);
+    this.addText("В трюме", panelX + 365, top, 12, 0x888888);
+    this.addText("Кол-во", panelX + 445, top, 12, 0x888888);
 
     const player = this.gameEngine.player;
+    const totalCargo = player.inventory.resources.reduce(
+      (sum, r) => sum + r.amount,
+      0,
+    );
+    const cargoCapacity = player.ship.cargoCapacity;
+    const freeHold = Math.max(0, cargoCapacity - totalCargo);
 
     let y = top + 28;
     for (const resource of Object.values(ResourceType)) {
@@ -144,6 +158,24 @@ export class TradeScene extends GameScene {
         player.inventory.resources.find((r) => r.type === resource)?.amount ??
         0;
 
+      // Qty caps
+      const maxBuyQty = Math.max(
+        1,
+        Math.min(
+          buyPrice > 0 ? Math.floor(player.credits / buyPrice) : 99,
+          freeHold,
+        ),
+      );
+      const maxSellQty = Math.max(1, owned);
+      const qty = Math.max(
+        1,
+        Math.min(
+          this.tradeQty.get(resource) ?? 1,
+          Math.max(maxBuyQty, maxSellQty),
+        ),
+      );
+      this.tradeQty.set(resource, qty);
+
       this.addText(
         TradeScene.RESOURCE_NAMES[resource] ?? resource,
         panelX + 20,
@@ -151,21 +183,25 @@ export class TradeScene extends GameScene {
         13,
         0xffffff,
       );
-      this.addText(`${buyPrice}`, panelX + 230, y, 13, 0xffcc66);
-      this.addText(`${sellPrice}`, panelX + 330, y, 13, 0x66ccff);
+      this.addText(`${buyPrice}`, panelX + 195, y, 13, 0xffcc66);
+      this.addText(`${sellPrice}`, panelX + 280, y, 13, 0x66ccff);
       this.addText(
         `${owned}`,
-        panelX + 430,
+        panelX + 365,
         y,
         13,
         owned > 0 ? 0x00ff88 : 0x666666,
       );
 
+      // Quantity selector: [-] qty [+]
+      this.addQtySelector(resource, qty, panelX + 440, y - 2);
+
+      // Buy button
       const buyBtn = this.createButton(
         "Купить",
-        panelX + 510,
+        panelX + 545,
         y - 4,
-        90,
+        80,
         24,
         0x004488,
       );
@@ -173,21 +209,29 @@ export class TradeScene extends GameScene {
         e.stopPropagation();
         this.trade(resource, true);
       });
-      this.mainContainer.addChild(buyBtn);
+      this.mainContainer!.addChild(buyBtn);
 
+      // Sell button — disabled when owned === 0
+      const canSell = owned > 0;
       const sellBtn = this.createButton(
         "Продать",
-        panelX + 615,
+        panelX + 635,
         y - 4,
-        90,
+        80,
         24,
-        0x884400,
+        canSell ? 0x884400 : 0x222222,
       );
-      sellBtn.on("pointerdown", (e) => {
-        e.stopPropagation();
-        this.trade(resource, false);
-      });
-      this.mainContainer.addChild(sellBtn);
+      if (canSell) {
+        sellBtn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          this.trade(resource, false);
+        });
+        sellBtn.cursor = "pointer";
+      } else {
+        sellBtn.cursor = "default";
+        sellBtn.eventMode = "none";
+      }
+      this.mainContainer!.addChild(sellBtn);
 
       y += 44;
     }
@@ -208,7 +252,7 @@ export class TradeScene extends GameScene {
     this.mainContainer.addChild(closeBtn);
 
     this.addText(
-      "1 единица за нажатие • [Esc] — выход",
+      "[Esc] — выход",
       panelX + 20,
       panelY + panelH - 38,
       11,
@@ -216,22 +260,102 @@ export class TradeScene extends GameScene {
     );
   }
 
+  private addQtySelector(
+    resource: ResourceType,
+    qty: number,
+    x: number,
+    y: number,
+  ): void {
+    if (!this.mainContainer) return;
+
+    const btnW = 22;
+    const btnH = 22;
+
+    // [-] button
+    const minusBtn = new Container();
+    minusBtn.x = x;
+    minusBtn.y = y;
+    minusBtn.eventMode = "static";
+    minusBtn.cursor = "pointer";
+    const minusBg = new Graphics();
+    minusBg.rect(0, 0, btnW, btnH);
+    minusBg.fill({ color: 0x332200, alpha: 0.9 });
+    minusBg.stroke({ color: 0x996600, width: 1 });
+    minusBtn.addChild(minusBg);
+    const minusLbl = new Text({
+      text: "−",
+      style: { fontFamily: "Courier New", fontSize: 14, fill: 0xffcc44 },
+    });
+    minusLbl.anchor.set(0.5);
+    minusLbl.x = btnW / 2;
+    minusLbl.y = btnH / 2;
+    minusLbl.eventMode = "none";
+    minusBtn.addChild(minusLbl);
+    minusBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      const cur = this.tradeQty.get(resource) ?? 1;
+      this.tradeQty.set(resource, Math.max(1, cur - 1));
+      this.refresh();
+    });
+    this.mainContainer.addChild(minusBtn);
+
+    // qty label
+    const qtyLbl = new Text({
+      text: String(qty),
+      style: { fontFamily: "Courier New", fontSize: 13, fill: 0xffffff },
+    });
+    qtyLbl.anchor.set(0.5, 0);
+    qtyLbl.x = x + btnW + 18;
+    qtyLbl.y = y + 2;
+    qtyLbl.eventMode = "none";
+    this.mainContainer.addChild(qtyLbl);
+
+    // [+] button
+    const plusBtn = new Container();
+    plusBtn.x = x + btnW + 36;
+    plusBtn.y = y;
+    plusBtn.eventMode = "static";
+    plusBtn.cursor = "pointer";
+    const plusBg = new Graphics();
+    plusBg.rect(0, 0, btnW, btnH);
+    plusBg.fill({ color: 0x002233, alpha: 0.9 });
+    plusBg.stroke({ color: 0x006699, width: 1 });
+    plusBtn.addChild(plusBg);
+    const plusLbl = new Text({
+      text: "+",
+      style: { fontFamily: "Courier New", fontSize: 14, fill: 0x44ccff },
+    });
+    plusLbl.anchor.set(0.5);
+    plusLbl.x = btnW / 2;
+    plusLbl.y = btnH / 2;
+    plusLbl.eventMode = "none";
+    plusBtn.addChild(plusLbl);
+    plusBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      const cur = this.tradeQty.get(resource) ?? 1;
+      this.tradeQty.set(resource, cur + 1);
+      this.refresh();
+    });
+    this.mainContainer.addChild(plusBtn);
+  }
+
   private trade(resource: ResourceType, isBuy: boolean): void {
     if (!this.gameEngine || !this.gameEngine.player || !this.planet) return;
+    const qty = this.tradeQty.get(resource) ?? 1;
     let toast: { message: string; color: number };
     try {
       const result = this.tradeSystem.executeTrade(
         this.gameEngine.player,
         this.planet,
         resource,
-        1,
+        qty,
         isBuy,
       );
       const name = TradeScene.RESOURCE_NAMES[resource] ?? resource;
       if (result.success) {
         const verb = isBuy ? "Куплено" : "Продано";
         toast = {
-          message: `${verb}: ${name} за ${result.finalPrice} кр.`,
+          message: `${verb}: ${qty}×${name} за ${result.finalPrice} кр.`,
           color: 0x00ff88,
         };
         this.gameEngine?.audio.playSfx("buy").catch(() => {});
@@ -268,6 +392,10 @@ export class TradeScene extends GameScene {
   }
 
   private refresh(): void {
+    if (this.toastTimeout) {
+      clearTimeout(this.toastTimeout);
+      this.toastTimeout = null;
+    }
     if (!this.mainContainer) return;
     this.mainContainer.destroy({ children: true });
     this.mainContainer = new Container();
@@ -292,7 +420,10 @@ export class TradeScene extends GameScene {
     toast.y = 30;
     toast.eventMode = "none";
     this.mainContainer.addChild(toast);
-    // Toast persists until the next refresh, which rebuilds the container.
+    this.toastTimeout = setTimeout(() => {
+      this.toastTimeout = null;
+      if (!toast.destroyed) toast.destroy();
+    }, 3000);
   }
 
   private markContrabandIfIllegal(resource: ResourceType): void {

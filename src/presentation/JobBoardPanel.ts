@@ -1,5 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
+import type { Quest } from "@/domain/Quest";
 import { QuestType } from "@/types";
 
 export interface JobBoardCallbacks {
@@ -54,14 +55,32 @@ export class JobBoardPanel {
     activeQuestCount = 0,
     /** IDs of quests already accepted (so their Принять button is grayed). */
     acceptedQuestIds: ReadonlySet<string> = new Set(),
+    /** Active quests to display with countdown (US-074). */
+    activeQuests: Quest[] = [],
+    /** Current game day (for countdown calculation). */
+    currentDay = 0,
   ) {
     this.callbacks = callbacks;
     this.container = new Container();
-    const rows = Math.max(quests.length, 1);
-    const h = JobBoardPanel.HEAD + rows * JobBoardPanel.ROW_H + 16;
+    const availableRows = Math.max(quests.length, 1);
+    const activeRows = activeQuests.length;
+    const activeSection =
+      activeRows > 0 ? activeRows * JobBoardPanel.ROW_H + 36 : 0;
+    const h =
+      JobBoardPanel.HEAD +
+      activeSection +
+      availableRows * JobBoardPanel.ROW_H +
+      16;
     this.container.x = Math.round((screenWidth - JobBoardPanel.W) / 2);
-    this.container.y = Math.round((screenHeight - h) / 2);
-    this.render(quests, h, activeQuestCount, acceptedQuestIds);
+    this.container.y = Math.round(Math.max(8, (screenHeight - h) / 2));
+    this.render(
+      quests,
+      h,
+      activeQuestCount,
+      acceptedQuestIds,
+      activeQuests,
+      currentDay,
+    );
   }
 
   private render(
@@ -69,6 +88,8 @@ export class JobBoardPanel {
     h: number,
     activeQuestCount: number,
     acceptedQuestIds: ReadonlySet<string>,
+    activeQuests: Quest[],
+    currentDay: number,
   ): void {
     const W = JobBoardPanel.W;
     const bg = new Graphics();
@@ -91,24 +112,92 @@ export class JobBoardPanel {
       );
     }
 
+    let y = JobBoardPanel.HEAD;
+
+    // Active quests section with countdown
+    if (activeQuests.length > 0) {
+      this.label("АКТИВНЫЕ ЗАДАНИЯ", 16, y + 6, 13, 0xffcc44, true);
+      y += 26;
+      for (const q of activeQuests) {
+        this.addActiveRow(q, y, W, currentDay);
+        y += JobBoardPanel.ROW_H;
+      }
+      // Divider
+      const divider = new Graphics();
+      divider.rect(10, y + 2, W - 20, 1).fill({ color: 0x334466, alpha: 0.9 });
+      this.container.addChild(divider);
+      this.label("ДОСТУПНЫЕ ЗАДАНИЯ", 16, y + 8, 13, 0x88ccff, true);
+      y += 24;
+    }
+
     if (quests.length === 0) {
-      this.label(
-        "Свободных заданий нет.",
-        16,
-        JobBoardPanel.HEAD + 8,
-        14,
-        0xffaa00,
-      );
+      this.label("Свободных заданий нет.", 16, y + 8, 14, 0xffaa00);
       return;
     }
 
-    let y = JobBoardPanel.HEAD;
     for (const q of quests) {
       const alreadyTaken = acceptedQuestIds.has(q.template.id);
       const canAccept = !atLimit && !alreadyTaken;
       this.addRow(q, y, W, canAccept, alreadyTaken);
       y += JobBoardPanel.ROW_H;
     }
+  }
+
+  private addActiveRow(
+    q: Quest,
+    y: number,
+    W: number,
+    currentDay: number,
+  ): void {
+    const rowH = JobBoardPanel.ROW_H - 6;
+    const color = TYPE_COLOR[q.type as QuestType] ?? 0xffffff;
+    const typeLabel = TYPE_LABEL[q.type as QuestType] ?? String(q.type);
+
+    const row = new Graphics();
+    row.roundRect(10, y, W - 20, rowH, 5).fill({ color: 0x1a2a12, alpha: 0.9 });
+    row.stroke({ color, width: 1, alpha: 0.5 });
+    row.eventMode = "static";
+    this.container.addChild(row);
+
+    this.label(typeLabel, 20, y + 6, 11, color);
+
+    const title = q.title.length > 28 ? q.title.slice(0, 27) + "…" : q.title;
+    this.label(title, 20, y + 22, 12, 0xdddddd, true);
+
+    // Countdown
+    let countdownText: string;
+    let countdownColor: number;
+    if (q.deadline === 0) {
+      countdownText = "Без срока";
+      countdownColor = 0x888888;
+    } else {
+      const remaining = q.getRemainingDays(currentDay);
+      if (remaining === 0) {
+        countdownText = "ПРОСРОЧЕНО";
+        countdownColor = 0xff2222;
+      } else if (remaining <= 2) {
+        countdownText = `⏱ ${remaining}д`;
+        countdownColor = 0xff8844;
+      } else {
+        countdownText = `⏱ ${remaining}д`;
+        countdownColor = 0xffcc44;
+      }
+    }
+
+    const cd = new Text({
+      text: countdownText,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 11,
+        fill: countdownColor,
+        fontWeight: "bold",
+      },
+    });
+    cd.eventMode = "none";
+    cd.anchor.set(1, 0);
+    cd.x = W - 16;
+    cd.y = y + 14;
+    this.container.addChild(cd);
   }
 
   private addRow(
