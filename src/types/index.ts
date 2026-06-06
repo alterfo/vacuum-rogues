@@ -195,13 +195,19 @@ export interface NpcShipInit {
 
 /** A simulation event emitted by the living-galaxy and collected in newsFeed. */
 export interface NewsEvent {
-  type: "NPC_QUEST_COMPLETE" | "PIRATE_ATTACK";
+  type:
+    | "NPC_QUEST_COMPLETE"
+    | "PIRATE_ATTACK"
+    | "MARKET_SHIFT"
+    | "OVERMIND_EXPANSION";
   /** Ranger NPC that completed a quest (NPC_QUEST_COMPLETE only). */
   npcId?: string;
   /** System where the event occurred. */
   systemId: string;
   /** Galaxy day the event was emitted. */
   day: number;
+  /** Human-readable description shown in the news feed. */
+  description: string;
 }
 
 export enum EconomyType {

@@ -7,7 +7,7 @@ import { GameSystemException } from "@/exceptions/GameSystemException";
 import { logger } from "@/utils/logger";
 
 /** Maximum number of news events retained in the feed. */
-const NEWS_FEED_MAX = 50;
+const NEWS_FEED_MAX = 100;
 
 export class Galaxy {
   gameDays = 0;

@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 10;
+  static readonly CURRENT_VERSION = 11;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -141,6 +141,22 @@ export class MigrationPipeline {
             if (q.chainId === undefined) q.chainId = null;
             if (q.chainPart === undefined) q.chainPart = -1;
           }
+        }
+      }
+    },
+    // 10 -> 11: News feed bookmarks (Task 20). Add newsBookmarks to player;
+    // backfill description on legacy news events that lack it.
+    10: (state: SaveState) => {
+      const player = state.player as unknown as { newsBookmarks?: number[] };
+      if (player && !Array.isArray(player.newsBookmarks)) {
+        player.newsBookmarks = [];
+      }
+      const galaxy = state.galaxy as unknown as {
+        newsFeed?: Array<{ description?: string }>;
+      };
+      if (galaxy && Array.isArray(galaxy.newsFeed)) {
+        for (const event of galaxy.newsFeed) {
+          if (!event.description) event.description = "";
         }
       }
     },

@@ -207,6 +207,7 @@ export const PlayerSchema = z.object({
   contrabandGoods: z.array(z.string()).default([]),
   completedQuestChains: z.array(z.string()).default([]),
   activeTextQuestState: TextQuestStateSchema.nullable().default(null),
+  newsBookmarks: z.array(z.number().int().min(0)).default([]),
 });
 
 export const StarSystemSchema = z.object({
@@ -284,10 +285,16 @@ export const NpcShipSchema = z.object({
 });
 
 export const NewsEventSchema = z.object({
-  type: z.enum(["NPC_QUEST_COMPLETE", "PIRATE_ATTACK"]),
+  type: z.enum([
+    "NPC_QUEST_COMPLETE",
+    "PIRATE_ATTACK",
+    "MARKET_SHIFT",
+    "OVERMIND_EXPANSION",
+  ]),
   npcId: z.string().optional(),
   systemId: z.string(),
   day: z.number().int().min(0),
+  description: z.string().default(""),
 });
 
 export const GalaxySchema = z.object({

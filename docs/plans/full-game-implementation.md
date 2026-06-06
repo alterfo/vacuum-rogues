@@ -430,18 +430,18 @@ government.
 The info center's news tab aggregates events from the simulation (NPC actions, market shifts,
 OVERMIND expansion) and presents them with timestamps and a bookmark toggle.
 
-- [ ] Define `NewsEvent { type, day, systemId?, npcId?, description: string }` in types.
+- [x] Define `NewsEvent { type, day, systemId?, npcId?, description: string }` in types.
   `GalacticRegistry.newsFeed: NewsEvent[]` (already added in Task 13 — extend with all event types
   from OVERMIND, market, NPC quests, pirate attacks).
-- [ ] In `GameEngine.advanceGalaxyDay()`, after each day tick: collect events from NpcSimulator,
+- [x] In `GameEngine.advanceGalaxyDay()`, after each day tick: collect events from NpcSimulator,
   market drift, and OVERMIND (Task 26). Append to `registry.newsFeed` (keep last 100). Persist
   in save (add to schemas).
-- [ ] `InfoCenterScene` news tab: vertical scrollable list of news items. Each item: day badge,
+- [x] `InfoCenterScene` news tab: vertical scrollable list of news items. Each item: day badge,
   type icon, description text, ★ bookmark toggle. Bookmarks stored in `player.newsBookmarks:
   number[]` (news event day + type hash). Persist in schemas.
-- [ ] Faction and reputation gate: if player reputation with the station/planet faction < -30 →
+- [x] Faction and reputation gate: if player reputation with the station/planet faction < -30 →
   show "Инфоцентр недоступен" and block access (already done for StationScene — extend to all).
-- [ ] Unit tests: news events appended correctly; bookmark toggle persists.
+- [x] Unit tests: news events appended correctly; bookmark toggle persists.
 
 ### Task 21: Info center tabs — object search and gear search
 

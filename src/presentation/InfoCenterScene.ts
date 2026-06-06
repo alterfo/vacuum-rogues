@@ -6,6 +6,7 @@ import type { Planet } from "@/domain/Planet";
 import type { Station } from "@/domain/Station";
 import type { StarSystem } from "@/domain/StarSystem";
 import { SceneType, ResourceType, NpcRole } from "@/types";
+import type { NewsEvent } from "@/types";
 import { GearKind } from "@/systems/equipment/GearCatalog";
 
 interface InfoContext {
@@ -41,12 +42,36 @@ const GEAR_KIND_COLOR: Record<GearKind, number> = {
   [GearKind.EQUIPMENT]: 0x88ffcc,
 };
 
+const NEWS_TYPE_LABEL: Record<NewsEvent["type"], string> = {
+  NPC_QUEST_COMPLETE: "[РЕЙНДЖЕР]",
+  PIRATE_ATTACK: "[АТАКА]",
+  MARKET_SHIFT: "[РЫНОК]",
+  OVERMIND_EXPANSION: "[УГРОЗА]",
+};
+
+const NEWS_TYPE_COLOR: Record<NewsEvent["type"], number> = {
+  NPC_QUEST_COMPLETE: 0x88ddaa,
+  PIRATE_ATTACK: 0xff5544,
+  MARKET_SHIFT: 0xaabb88,
+  OVERMIND_EXPANSION: 0xff3388,
+};
+
 // ── News generation ─────────────────────────────────────────────────────────
 
 interface NewsItem {
   day: number;
   text: string;
   color: number;
+  bookmarkKey: number;
+}
+
+/** Stable bookmark key from day + text content. */
+function newsKey(day: number, text: string): number {
+  let h = (day * 100003) >>> 0;
+  for (let i = 0; i < Math.min(text.length, 24); i++) {
+    h = (h * 31 + text.charCodeAt(i)) >>> 0;
+  }
+  return h % 2_000_000_000;
 }
 
 function buildNews(gameEngine: GameEngine): NewsItem[] {
@@ -63,6 +88,21 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
 
   const items: NewsItem[] = [];
 
+  // Real simulation events from galaxy.newsFeed (newest first, capped at 20 items).
+  const feedEvents = [...galaxy.newsFeed].reverse().slice(0, 20);
+  for (const event of feedEvents) {
+    const sysName = systemMap.get(event.systemId)?.name ?? event.systemId;
+    const label = NEWS_TYPE_LABEL[event.type] ?? "[СОБЫТИЕ]";
+    const color = NEWS_TYPE_COLOR[event.type] ?? 0x888888;
+    const desc = event.description || `${label} в системе ${sysName}`;
+    items.push({
+      day: event.day,
+      text: desc,
+      color,
+      bookmarkKey: newsKey(event.day, desc),
+    });
+  }
+
   if (registry) {
     // Pirate sightings within 3 jumps
     const pirates = registry.findShips({
@@ -73,10 +113,12 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
     for (const p of pirates.slice(0, 4)) {
       const sysName = systemMap.get(p.systemId)?.name ?? p.systemId;
       const dist = p.jumps === 0 ? "текущая система" : `${p.jumps} пр.`;
+      const text = `[ТРЕВОГА] Пираты в системе "${sysName}" (${dist})`;
       items.push({
         day,
-        text: `[ТРЕВОГА] Пираты в системе "${sysName}" (${dist})`,
+        text,
         color: 0xff5544,
+        bookmarkKey: newsKey(day, text),
       });
     }
 
@@ -98,10 +140,12 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
       if (!hit) continue;
       const sysName = systemMap.get(hit.systemId)?.name ?? hit.systemId;
       const dist = hit.jumps === 0 ? "здесь" : `${hit.jumps} пр.`;
+      const text = `[РЫНОК] ${RESOURCE_RU[res]}: лучшая цена "${sysName}" — ${hit.price} ₡ (${dist})`;
       items.push({
         day: day - Math.floor(Math.random() * 3),
-        text: `[РЫНОК] ${RESOURCE_RU[res]}: лучшая цена "${sysName}" — ${hit.price} ₡ (${dist})`,
+        text,
         color: 0x88ddaa,
+        bookmarkKey: newsKey(day, text),
       });
     }
 
@@ -114,10 +158,12 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
     if (traders.length > 0) {
       const sysName =
         systemMap.get(traders[0].systemId)?.name ?? traders[0].systemId;
+      const text = `[ТРАФИК] Торговцы активны в системе "${sysName}"`;
       items.push({
         day,
-        text: `[ТРАФИК] Торговцы активны в системе "${sysName}"`,
+        text,
         color: 0xaaaaff,
+        bookmarkKey: newsKey(day, text),
       });
     }
 
@@ -130,10 +176,12 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
     if (patrols.length > 0) {
       const sysName =
         systemMap.get(patrols[0].systemId)?.name ?? patrols[0].systemId;
+      const text = `[ПАТРУЛЬ] Флот охраны обнаружен в системе "${sysName}"`;
       items.push({
         day,
-        text: `[ПАТРУЛЬ] Флот охраны обнаружен в системе "${sysName}"`,
+        text,
         color: 0x88bbff,
+        bookmarkKey: newsKey(day, text),
       });
     }
   }
@@ -148,8 +196,14 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
     [day - 6, "Парадоксы зафиксированы вблизи запретной зоны R-17"],
     [day - 7, "Рейнджеры сообщают об аномальной активности в туманности"],
   ];
-  for (const [d, text] of lore) {
-    items.push({ day: d, text: `[НОВОСТИ] ${text}`, color: 0x666677 });
+  for (const [d, loreText] of lore) {
+    const text = `[НОВОСТИ] ${loreText}`;
+    items.push({
+      day: d,
+      text,
+      color: 0x666677,
+      bookmarkKey: newsKey(d, text),
+    });
   }
 
   items.sort((a, b) => b.day - a.day);
@@ -170,6 +224,7 @@ export class InfoCenterScene extends GameScene {
   private station: Station | null = null;
 
   private mainContainer: Container | null = null;
+  private blocked = false;
 
   // tab state
   private activeTab: Tab = "news";
@@ -195,8 +250,28 @@ export class InfoCenterScene extends GameScene {
     this.gameEngine = ctx?.gameEngine ?? null;
     this.planet = ctx?.planet ?? null;
     this.station = ctx?.station ?? null;
+    this.blocked = false;
 
-    if (this.gameEngine) {
+    // Reputation gate: hostile faction blocks info center access.
+    const player = this.gameEngine?.player;
+    const galaxy = this.gameEngine?.galaxy;
+    if (player && galaxy) {
+      const system = this.station
+        ? null
+        : galaxy.systems.find((s) =>
+            s.planets.some((p) => p.id === this.planet?.id),
+          );
+      const faction = String(
+        this.station?.faction ??
+          (system as { ownerFaction?: string } | undefined)?.ownerFaction ??
+          "INDEPENDENT",
+      );
+      if (player.isHostileTo(faction)) {
+        this.blocked = true;
+      }
+    }
+
+    if (!this.blocked && this.gameEngine) {
       this.newsItems = buildNews(this.gameEngine);
     }
 
@@ -204,7 +279,7 @@ export class InfoCenterScene extends GameScene {
     this.renderer.uiLayer.addChild(this.mainContainer);
 
     this.render();
-    this.runSearch();
+    if (!this.blocked) this.runSearch();
 
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.boundKeyDown);
@@ -232,6 +307,11 @@ export class InfoCenterScene extends GameScene {
   private render(): void {
     if (!this.mainContainer) return;
     this.mainContainer.removeChildren();
+
+    if (this.blocked) {
+      this.renderBlocked();
+      return;
+    }
 
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;
@@ -359,12 +439,54 @@ export class InfoCenterScene extends GameScene {
     this.mainContainer.addChild(back);
   }
 
+  private renderBlocked(): void {
+    const sw = this.renderer.app.screen.width;
+    const sh = this.renderer.app.screen.height;
+
+    const bg = new Graphics();
+    bg.rect(0, 0, sw, sh);
+    bg.fill({ color: 0x000000, alpha: 0.85 });
+    bg.eventMode = "static";
+    this.mainContainer!.addChild(bg);
+
+    const msg = new Text({
+      text: "Инфоцентр недоступен\n\n(Враждебное отношение)",
+      style: {
+        fontSize: 20,
+        fill: 0x884444,
+        fontFamily: "monospace",
+        align: "center",
+      },
+    });
+    msg.anchor.set(0.5, 0.5);
+    msg.x = sw / 2;
+    msg.y = sh / 2 - 20;
+    msg.eventMode = "none";
+    this.mainContainer!.addChild(msg);
+
+    const back = new Text({
+      text: "[ Закрыть  Esc ]",
+      style: { fontSize: 14, fill: 0x88ccff, fontFamily: "monospace" },
+    });
+    back.anchor.set(0.5, 1);
+    back.x = sw / 2;
+    back.y = sh / 2 + 60;
+    back.eventMode = "static";
+    back.cursor = "pointer";
+    back.on("pointerdown", (e) => {
+      e.stopPropagation();
+      void this.goBack();
+    });
+    this.mainContainer!.addChild(back);
+  }
+
   // ── news tab ───────────────────────────────────────────────────────────────
 
   private renderNews(container: Container, pw: number, ph: number): void {
     const ROW_H = 38;
     const VISIBLE = Math.floor(ph / ROW_H);
     const PAD = 16;
+    const STAR_W = 28;
 
     const clampedScroll = Math.max(
       0,
@@ -383,6 +505,8 @@ export class InfoCenterScene extends GameScene {
     mask.fill({ color: 0xffffff });
     container.addChild(mask);
     container.mask = mask;
+
+    const bookmarks = this.gameEngine?.player?.newsBookmarks ?? [];
 
     for (const [i, item] of visible.entries()) {
       const y = i * ROW_H;
@@ -410,13 +534,33 @@ export class InfoCenterScene extends GameScene {
           fill: item.color,
           fontFamily: "monospace",
           wordWrap: true,
-          wordWrapWidth: pw - PAD * 2 - 50,
+          wordWrapWidth: pw - PAD * 2 - 50 - STAR_W,
         },
       });
       news.x = PAD + 46;
       news.y = y + ROW_H / 2 - 7;
       news.eventMode = "none";
       container.addChild(news);
+
+      // Bookmark toggle (★)
+      const isBookmarked = bookmarks.includes(item.bookmarkKey);
+      const star = new Text({
+        text: isBookmarked ? "★" : "☆",
+        style: {
+          fontSize: 16,
+          fill: isBookmarked ? 0xffdd44 : 0x334455,
+          fontFamily: "monospace",
+        },
+      });
+      star.x = pw - PAD - STAR_W + 4;
+      star.y = y + ROW_H / 2 - 9;
+      star.eventMode = "static";
+      star.cursor = "pointer";
+      star.on("pointerdown", (e) => {
+        e.stopPropagation();
+        this.toggleBookmark(item.bookmarkKey);
+      });
+      container.addChild(star);
     }
 
     // Scroll hint
@@ -431,6 +575,18 @@ export class InfoCenterScene extends GameScene {
       hint.eventMode = "none";
       container.addChild(hint);
     }
+  }
+
+  private toggleBookmark(key: number): void {
+    const player = this.gameEngine?.player;
+    if (!player) return;
+    const idx = player.newsBookmarks.indexOf(key);
+    if (idx >= 0) {
+      player.newsBookmarks.splice(idx, 1);
+    } else {
+      player.newsBookmarks.push(key);
+    }
+    this.render();
   }
 
   // ── search tab ─────────────────────────────────────────────────────────────

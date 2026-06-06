@@ -16,6 +16,8 @@ export class Player {
   completedQuestChains: string[] = [];
   /** Saved runtime state for the currently active text quest (null when no text quest active). */
   activeTextQuestState: TextQuestState | null = null;
+  /** Hashed keys of bookmarked news events (day * 1000 + type-index). */
+  newsBookmarks: number[] = [];
 
   constructor(
     public readonly id: string,

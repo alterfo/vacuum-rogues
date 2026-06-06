@@ -364,11 +364,20 @@ export class GameEngine {
     }
 
     // Advance market drift on every planet (Task 1: daily supply/demand drift).
+    // Emit a MARKET_SHIFT news event for notable price swings (~10% chance/day per system).
     for (const system of this.galaxy.systems) {
       for (const planet of system.planets) {
         if (typeof planet.market.advanceMarketDay === "function") {
           planet.market.advanceMarketDay(() => rng.next());
         }
+      }
+      if (rng.next() < 0.1 && system.planets.length > 0) {
+        this.galaxy.addNewsEvent({
+          type: "MARKET_SHIFT",
+          systemId: system.id,
+          day: this.galaxy.gameDays,
+          description: `Рыночные цены изменились в системе ${system.name}`,
+        });
       }
     }
 

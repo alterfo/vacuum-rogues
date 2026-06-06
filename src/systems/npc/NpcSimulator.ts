@@ -319,6 +319,7 @@ export class NpcSimulator {
               npcId: npc.id,
               systemId: npc.currentSystemId,
               day: galaxy.gameDays,
+              description: `Рейнджер ${npc.name} выполнил задание в системе ${npc.currentSystemId}`,
             });
             npc.activeQuestTarget = null;
             logger.info(
@@ -410,7 +411,12 @@ export class NpcSimulator {
         if (alive.length === 0) continue;
         const target = alive[rng.nextInt(0, alive.length - 1)];
         target.cargo = [];
-        events.push({ type: "PIRATE_ATTACK", systemId, day: galaxy.gameDays });
+        events.push({
+          type: "PIRATE_ATTACK",
+          systemId,
+          day: galaxy.gameDays,
+          description: `Пираты атаковали торговца в системе ${systemId}`,
+        });
         logger.info(
           `NPC pirate ${pirate.name} raided ${target.name}'s cargo in ${systemId}`,
         );
