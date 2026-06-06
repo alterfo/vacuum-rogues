@@ -14,7 +14,7 @@
  */
 import type { StarSystem } from "@/domain/StarSystem";
 import type { NpcShip } from "@/domain/NpcShip";
-import type { ResourceType, NpcRole } from "@/types";
+import type { ResourceType, NpcRole, NewsEvent } from "@/types";
 import type { Faction } from "@/types/faction";
 import { jumpDistances } from "@/systems/galaxy/jumpDistance";
 import {
@@ -106,14 +106,18 @@ export class GalacticRegistry {
   private readonly listings: MarketListing[] = [];
   /** Gear for sale across the galaxy (from the shop generator). */
   private readonly gearListings: GearListing[];
+  /** Living-galaxy simulation events (news feed), newest last. */
+  readonly newsFeed: NewsEvent[];
 
   constructor(
     systems: StarSystem[],
     ships: NpcShip[],
     gearListings: GearListing[] = [],
+    newsFeed: NewsEvent[] = [],
   ) {
     this.systems = systems;
     this.gearListings = gearListings;
+    this.newsFeed = newsFeed;
     this.indexShips(ships);
     this.indexMarkets();
   }

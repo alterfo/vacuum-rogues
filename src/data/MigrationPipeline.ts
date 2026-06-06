@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 6;
+  static readonly CURRENT_VERSION = 7;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -78,6 +78,26 @@ export class MigrationPipeline {
       )?.inventory;
       if (inventory && !Array.isArray(inventory.micromodules)) {
         inventory.micromodules = [];
+      }
+    },
+    // 6 -> 7: NPC questing and news feed (Task 13). Old saves lack activeQuestTarget
+    // on NPC ships and the galaxy newsFeed array.
+    6: (state: SaveState) => {
+      const galaxy = state.galaxy as unknown as {
+        npcShips?: Array<{ activeQuestTarget?: unknown }>;
+        newsFeed?: unknown[];
+      };
+      if (galaxy) {
+        if (!Array.isArray(galaxy.newsFeed)) {
+          galaxy.newsFeed = [];
+        }
+        if (Array.isArray(galaxy.npcShips)) {
+          for (const npc of galaxy.npcShips) {
+            if (npc.activeQuestTarget === undefined) {
+              npc.activeQuestTarget = null;
+            }
+          }
+        }
       }
     },
   };

@@ -18,6 +18,7 @@ import {
   ResourceType,
   PlanetType,
 } from "@/types";
+import type { NewsEvent } from "@/types";
 import { Faction } from "@/types/faction";
 import type { SaveState } from "@/domain/SaveState";
 
@@ -394,5 +395,208 @@ describe("MigrationPipeline v1 -> v2", () => {
         (state.galaxy as unknown as { npcShips: unknown[] }).npcShips,
       ),
     ).toBe(true);
+  });
+});
+
+describe("NPC off-screen questing (Task 13)", () => {
+  function makeGalaxy2(): Galaxy {
+    const sysA = new StarSystem(
+      "sys_q_a",
+      "QAlpha",
+      { q: 0, r: 0 },
+      StarType.YELLOW_DWARF,
+      [],
+      Faction.INDEPENDENT,
+      [],
+    );
+    const sysB = new StarSystem(
+      "sys_q_b",
+      "QBeta",
+      { q: 5, r: 0 },
+      StarType.YELLOW_DWARF,
+      [],
+      Faction.INDEPENDENT,
+      [],
+    );
+    sysA.connections.push(new WarpPath("sys_q_a", "sys_q_b", 1));
+    sysB.connections.push(new WarpPath("sys_q_b", "sys_q_a", 1));
+    return new Galaxy("galaxy_quest", [sysA, sysB], new Overmind(), [], []);
+  }
+
+  it("ranger quest completion emits NPC_QUEST_COMPLETE news event", () => {
+    const galaxy = makeGalaxy2();
+    const ranger = new NpcShip({
+      id: "ranger1",
+      name: "Ranger",
+      race: FactionType.OUTLANDERS,
+      faction: Faction.INDEPENDENT,
+      role: NpcRole.RANGER,
+      hullHP: 120,
+      maxHull: 120,
+      shields: 60,
+      speed: 0.1,
+      damage: 25,
+      currentSystemId: "sys_q_a",
+      state: NpcState.TRAVELING,
+      goal: { kind: NpcGoalKind.QUEST, targetSystemId: "sys_q_b" },
+      destinationSystemId: "sys_q_b",
+      daysToArrival: 1,
+      credits: 200,
+      reputation: 0,
+      activeQuestTarget: "sys_q_b",
+    });
+    galaxy.npcShips.push(ranger);
+
+    const sim = new NpcSimulator();
+    const events = sim.tick(galaxy, new SeededRNG("quest_test"));
+
+    expect(ranger.currentSystemId).toBe("sys_q_b");
+    const questEvent = events.find((e) => e.type === "NPC_QUEST_COMPLETE");
+    expect(questEvent).toBeDefined();
+    expect(questEvent!.npcId).toBe("ranger1");
+    expect(questEvent!.systemId).toBe("sys_q_b");
+    expect(ranger.reputation).toBe(10);
+    expect(ranger.activeQuestTarget).toBeNull();
+  });
+
+  it("pirate cargo raid clears trader cargo and emits PIRATE_ATTACK event", () => {
+    // 1 system, target NPC count = round(1 * 4) = 4. Populate exactly 4 NPCs
+    // so pruneAndReplenish never spawns additional traders that could confuse
+    // which trader's cargo was cleared.
+    const galaxy = new Galaxy(
+      "g_raid",
+      [
+        new StarSystem(
+          "sys_raid",
+          "Raid",
+          { q: 0, r: 0 },
+          StarType.YELLOW_DWARF,
+          [],
+          Faction.INDEPENDENT,
+          [],
+        ),
+      ],
+      new Overmind(),
+      [],
+      [],
+    );
+
+    const trader = new NpcShip({
+      id: "trader_raid",
+      name: "Trader",
+      race: FactionType.OUTLANDERS,
+      faction: Faction.INDEPENDENT,
+      role: NpcRole.TRADER,
+      hullHP: 100,
+      maxHull: 100,
+      shields: 30,
+      speed: 0.08,
+      damage: 10,
+      currentSystemId: "sys_raid",
+      state: NpcState.PATROLLING,
+      goal: null,
+      destinationSystemId: null,
+      daysToArrival: 0,
+      credits: 200,
+      reputation: 0,
+      cargo: [{ goodId: ResourceType.METALS, qty: 10 }],
+    });
+    const pirate = new NpcShip({
+      id: "pirate_raid",
+      name: "Pirate",
+      race: FactionType.OUTLANDERS,
+      faction: Faction.INDEPENDENT,
+      role: NpcRole.PIRATE,
+      hullHP: 110,
+      maxHull: 110,
+      shields: 40,
+      speed: 0.12,
+      damage: 30,
+      currentSystemId: "sys_raid",
+      state: NpcState.PATROLLING,
+      goal: null,
+      destinationSystemId: null,
+      daysToArrival: 0,
+      credits: 100,
+      reputation: 0,
+    });
+    // Two extra rangers to reach the target count (4) so pruneAndReplenish
+    // never spawns extra traders that would confuse the cargo check.
+    const pad1 = new NpcShip({
+      id: "pad1",
+      name: "Pad1",
+      race: FactionType.OUTLANDERS,
+      faction: Faction.INDEPENDENT,
+      role: NpcRole.RANGER,
+      hullHP: 100,
+      maxHull: 100,
+      shields: 50,
+      speed: 0.1,
+      damage: 20,
+      currentSystemId: "sys_raid",
+      state: NpcState.PATROLLING,
+      goal: null,
+      destinationSystemId: null,
+      daysToArrival: 0,
+      credits: 0,
+      reputation: 0,
+    });
+    const pad2 = new NpcShip({
+      id: "pad2",
+      name: "Pad2",
+      race: FactionType.OUTLANDERS,
+      faction: Faction.INDEPENDENT,
+      role: NpcRole.RANGER,
+      hullHP: 100,
+      maxHull: 100,
+      shields: 50,
+      speed: 0.1,
+      damage: 20,
+      currentSystemId: "sys_raid",
+      state: NpcState.PATROLLING,
+      goal: null,
+      destinationSystemId: null,
+      daysToArrival: 0,
+      credits: 0,
+      reputation: 0,
+    });
+    galaxy.npcShips.push(trader, pirate, pad1, pad2);
+
+    // Run many ticks until the specific trader's cargo is cleared by a raid.
+    const sim = new NpcSimulator();
+    let raidEvents: NewsEvent[] = [];
+    for (let i = 0; i < 200 && trader.cargo.length > 0; i++) {
+      const evts = sim.tick(galaxy, new SeededRNG(`raid_${i}`), "elsewhere");
+      const hits = evts.filter((e) => e.type === "PIRATE_ATTACK");
+      if (hits.length > 0) raidEvents = hits;
+    }
+
+    expect(raidEvents.length).toBeGreaterThan(0);
+    expect(raidEvents[0].systemId).toBe("sys_raid");
+    expect(trader.cargo).toHaveLength(0);
+  });
+
+  it("migration 6→7 adds newsFeed and activeQuestTarget to old saves", () => {
+    const state = {
+      version: 6,
+      galaxy: {
+        id: "g",
+        gameDays: 0,
+        systems: [],
+        npcShips: [{ id: "n1", role: "RANGER" }],
+      },
+      player: {},
+      persistentDialogs: [],
+      timestamp: 0,
+    } as unknown as SaveState;
+
+    MigrationPipeline.migrate(state);
+
+    const galaxy = state.galaxy as unknown as {
+      newsFeed: unknown[];
+      npcShips: Array<{ activeQuestTarget: unknown }>;
+    };
+    expect(Array.isArray(galaxy.newsFeed)).toBe(true);
+    expect(galaxy.npcShips[0].activeQuestTarget).toBeNull();
   });
 });

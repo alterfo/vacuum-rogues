@@ -2,11 +2,17 @@ import type { StarSystem } from "./StarSystem";
 import type { Overmind } from "./Overmind";
 import type { GalacticEvent } from "./GalacticEvent";
 import type { NpcShip } from "./NpcShip";
+import type { NewsEvent } from "@/types";
 import { GameSystemException } from "@/exceptions/GameSystemException";
 import { logger } from "@/utils/logger";
 
+/** Maximum number of news events retained in the feed. */
+const NEWS_FEED_MAX = 50;
+
 export class Galaxy {
   gameDays = 0;
+  /** Living-galaxy simulation events, newest last (capped at NEWS_FEED_MAX). */
+  newsFeed: NewsEvent[] = [];
 
   constructor(
     public readonly id: string,
@@ -16,6 +22,14 @@ export class Galaxy {
     /** Autonomous NPC ships living across the galaxy (Feature 8). */
     public readonly npcShips: NpcShip[] = [],
   ) {}
+
+  /** Append a news event, trimming the feed to NEWS_FEED_MAX. */
+  addNewsEvent(event: NewsEvent): void {
+    this.newsFeed.push(event);
+    if (this.newsFeed.length > NEWS_FEED_MAX) {
+      this.newsFeed.splice(0, this.newsFeed.length - NEWS_FEED_MAX);
+    }
+  }
 
   static generate(_seed: string): Galaxy {
     // Placeholder: actual generation in GalaxySimulator

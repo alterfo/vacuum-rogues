@@ -54,6 +54,7 @@ function galaxy() {
       sys("B", ["A"], Faction.BASTIONS, [{ id: "B1" }]),
     ],
     npcShips: [ship("t1", "B")],
+    newsFeed: [],
   };
 }
 

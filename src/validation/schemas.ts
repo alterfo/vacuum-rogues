@@ -250,6 +250,14 @@ export const NpcShipSchema = z.object({
   cargo: z
     .array(z.object({ goodId: z.string(), qty: z.number().int().min(0) }))
     .default([]),
+  activeQuestTarget: z.string().nullable().default(null),
+});
+
+export const NewsEventSchema = z.object({
+  type: z.enum(["NPC_QUEST_COMPLETE", "PIRATE_ATTACK"]),
+  npcId: z.string().optional(),
+  systemId: z.string(),
+  day: z.number().int().min(0),
 });
 
 export const GalaxySchema = z.object({
@@ -257,6 +265,7 @@ export const GalaxySchema = z.object({
   gameDays: z.number().int().min(0),
   systems: z.array(StarSystemSchema).min(1).max(100),
   npcShips: z.array(NpcShipSchema).default([]),
+  newsFeed: z.array(NewsEventSchema).default([]),
 });
 
 export const DialogueSessionSchema = z.object({

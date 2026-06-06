@@ -343,7 +343,14 @@ export class GameEngine {
     if (!this.galaxy) return;
     this.galaxy.simulateDay();
     const rng = new SeededRNG(`${this.galaxy.id}_day_${this.galaxy.gameDays}`);
-    this.npcSimulator.tick(this.galaxy, rng, this.player?.currentSystemId);
+    const npcEvents = this.npcSimulator.tick(
+      this.galaxy,
+      rng,
+      this.player?.currentSystemId,
+    );
+    for (const event of npcEvents) {
+      this.galaxy.addNewsEvent(event);
+    }
 
     // Advance market drift on every planet (Task 1: daily supply/demand drift).
     for (const system of this.galaxy.systems) {

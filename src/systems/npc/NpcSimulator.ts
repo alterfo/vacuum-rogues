@@ -9,6 +9,7 @@ import {
   FactionType,
   ResourceType,
 } from "@/types";
+import type { NewsEvent } from "@/types";
 import type { NpcBrain } from "./NpcBrain";
 import { RuleBasedNpcBrain } from "./NpcBrain";
 import { logger } from "@/utils/logger";
@@ -40,6 +41,12 @@ const TRADEABLE_GOODS: ResourceType[] = [
  *  dwell): long enough to actually orbit/visit a planet and read as purposeful,
  *  short enough that ships keep circulating and don't pile up in one system. */
 const DEPART_CHANCE = 0.15;
+
+/** Per-day chance a ranger NPC accepts a random delivery quest to another system. */
+const RANGER_QUEST_CHANCE = 0.1;
+
+/** Per-day chance a pirate NPC raids a trader's cargo in the same off-screen system. */
+const PIRATE_CARGO_RAID_CHANCE = 0.05;
 
 const FACTIONS: FactionType[] = [
   FactionType.OUTLANDERS,
@@ -285,8 +292,11 @@ export class NpcSimulator {
   /**
    * Advance one game day for every NPC: progress travel, arrive at
    * destinations, and pick fresh goals for idle/arrived ships.
+   * Returns news events generated during this tick.
    */
-  tick(galaxy: Galaxy, rng: SeededRNG, playerSystemId?: string): void {
+  tick(galaxy: Galaxy, rng: SeededRNG, playerSystemId?: string): NewsEvent[] {
+    const events: NewsEvent[] = [];
+
     for (const npc of galaxy.npcShips) {
       if (npc.state === NpcState.DEAD) continue;
 
@@ -297,8 +307,39 @@ export class NpcSimulator {
           if (npc.role === NpcRole.TRADER) {
             this.simulateTraderTrade(npc, galaxy, rng);
           }
+          // Ranger arriving at quest target → quest complete
+          if (
+            npc.role === NpcRole.RANGER &&
+            npc.activeQuestTarget !== null &&
+            npc.currentSystemId === npc.activeQuestTarget
+          ) {
+            npc.reputation += 10;
+            events.push({
+              type: "NPC_QUEST_COMPLETE",
+              npcId: npc.id,
+              systemId: npc.currentSystemId,
+              day: galaxy.gameDays,
+            });
+            npc.activeQuestTarget = null;
+            logger.info(
+              `NPC ranger ${npc.name} completed quest in ${npc.currentSystemId}`,
+            );
+          }
         }
         continue;
+      }
+
+      // Ranger without an active quest: 10% chance to accept one.
+      if (
+        npc.role === NpcRole.RANGER &&
+        npc.activeQuestTarget === null &&
+        rng.next() < RANGER_QUEST_CHANCE
+      ) {
+        const target = this.pickQuestTarget(npc.currentSystemId, galaxy, rng);
+        if (target) {
+          npc.activeQuestTarget = target;
+          logger.info(`NPC ranger ${npc.name} accepted quest → ${target}`);
+        }
       }
 
       // Present in a system. A purposeless (IDLE) ship looks for somewhere to go
@@ -312,7 +353,70 @@ export class NpcSimulator {
 
     // Resolve abstract off-screen fights, then keep the population topped up.
     this.resolveOffscreenCombat(galaxy, rng, playerSystemId);
+    const raidEvents = this.resolveOffscreenPirateRaids(
+      galaxy,
+      rng,
+      playerSystemId,
+    );
+    for (const e of raidEvents) events.push(e);
     this.pruneAndReplenish(galaxy, rng);
+
+    return events;
+  }
+
+  /** Pick a random system other than the NPC's current one as a quest destination. */
+  private pickQuestTarget(
+    currentSystemId: string,
+    galaxy: Galaxy,
+    rng: SeededRNG,
+  ): string | null {
+    const candidates = galaxy.systems
+      .map((s) => s.id)
+      .filter((id) => id !== currentSystemId);
+    if (candidates.length === 0) return null;
+    return candidates[rng.nextInt(0, candidates.length - 1)];
+  }
+
+  /**
+   * Simulate pirate cargo raids in off-screen systems: each pirate has a 5%
+   * daily chance to raid a co-located trader, clearing its cargo.
+   */
+  private resolveOffscreenPirateRaids(
+    galaxy: Galaxy,
+    rng: SeededRNG,
+    playerSystemId?: string,
+  ): NewsEvent[] {
+    const events: NewsEvent[] = [];
+    const bySystem = new Map<string, NpcShip[]>();
+    for (const npc of galaxy.npcShips) {
+      if (npc.state === NpcState.DEAD || npc.state === NpcState.TRAVELING)
+        continue;
+      if (npc.currentSystemId === playerSystemId) continue;
+      const list = bySystem.get(npc.currentSystemId) ?? [];
+      list.push(npc);
+      bySystem.set(npc.currentSystemId, list);
+    }
+
+    for (const [systemId, ships] of bySystem) {
+      const pirates = ships.filter((s) => s.role === NpcRole.PIRATE);
+      const traders = ships.filter(
+        (s) => s.role === NpcRole.TRADER && s.cargo.length > 0,
+      );
+      if (pirates.length === 0 || traders.length === 0) continue;
+
+      for (const pirate of pirates) {
+        if (rng.next() >= PIRATE_CARGO_RAID_CHANCE) continue;
+        const alive = traders.filter((t) => t.state !== NpcState.DEAD);
+        if (alive.length === 0) continue;
+        const target = alive[rng.nextInt(0, alive.length - 1)];
+        target.cargo = [];
+        events.push({ type: "PIRATE_ATTACK", systemId, day: galaxy.gameDays });
+        logger.info(
+          `NPC pirate ${pirate.name} raided ${target.name}'s cargo in ${systemId}`,
+        );
+      }
+    }
+    return events;
   }
 
   /**

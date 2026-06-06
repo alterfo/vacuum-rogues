@@ -284,16 +284,16 @@ emergent price differences the player can exploit.
 Ranger NPCs take quests from planets and complete them over time, earning reputation. Completed
 NPC quests produce news events (visible in info center).
 
-- [ ] In `NpcSimulator.advanceDay()`: each ranger NPC has a 10% daily chance to "accept" a
+- [x] In `NpcSimulator.advanceDay()`: each ranger NPC has a 10% daily chance to "accept" a
   random delivery quest from their current system (target = a random other system). Add
   `activeQuestTarget: string | null` to `NpcShip`. When ranger arrives at target system →
   quest complete: ranger reputation with issuing faction +10, emit a news event
   `{ type: 'NPC_QUEST_COMPLETE', npcId, systemId, day }`.
-- [ ] Collect news events in `GalacticRegistry.newsFeed: NewsEvent[]` (append, keep last 50).
+- [x] Collect news events in `GalacticRegistry.newsFeed: NewsEvent[]` (append, keep last 50).
   `advanceGalaxyDay()` in `GameEngine` publishes events after NpcSimulator tick.
-- [ ] Pirates: 5% daily chance to attack a trader NPC in the same system. If attacked, trader
+- [x] Pirates: 5% daily chance to attack a trader NPC in the same system. If attacked, trader
   loses cargo (clear cargo array); emit `{ type: 'PIRATE_ATTACK', systemId, day }` news event.
-- [ ] Unit tests: ranger quest completion emits news event; pirate attack clears trader cargo.
+- [x] Unit tests: ranger quest completion emits news event; pirate attack clears trader cargo.
 
 ---
 

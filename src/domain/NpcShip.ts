@@ -5,6 +5,7 @@ import type {
   NpcGoal,
   NpcShipInit,
 } from "@/types";
+
 import type { Faction } from "@/types/faction";
 
 /**
@@ -35,6 +36,8 @@ export class NpcShip {
   loadoutSummary: string[];
   /** Goods a trader NPC carries between systems; influences market prices on arrival. */
   cargo: { goodId: string; qty: number }[];
+  /** System ID this ranger NPC is traveling toward to complete an off-screen quest. */
+  activeQuestTarget: string | null;
 
   constructor(init: NpcShipInit) {
     this.id = init.id;
@@ -57,5 +60,6 @@ export class NpcShip {
     this.shieldPower = init.shieldPower ?? 0;
     this.loadoutSummary = init.loadoutSummary ?? [];
     this.cargo = init.cargo ?? [];
+    this.activeQuestTarget = init.activeQuestTarget ?? null;
   }
 }

@@ -188,6 +188,19 @@ export interface NpcShipInit {
   loadoutSummary?: string[];
   /** Goods a trader NPC is currently carrying between systems. */
   cargo?: { goodId: string; qty: number }[];
+  /** System ID this ranger NPC is currently traveling toward to complete a quest. */
+  activeQuestTarget?: string | null;
+}
+
+/** A simulation event emitted by the living-galaxy and collected in newsFeed. */
+export interface NewsEvent {
+  type: "NPC_QUEST_COMPLETE" | "PIRATE_ATTACK";
+  /** Ranger NPC that completed a quest (NPC_QUEST_COMPLETE only). */
+  npcId?: string;
+  /** System where the event occurred. */
+  systemId: string;
+  /** Galaxy day the event was emitted. */
+  day: number;
 }
 
 export enum EconomyType {

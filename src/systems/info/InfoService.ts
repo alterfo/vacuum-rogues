@@ -10,6 +10,7 @@
  */
 import type { StarSystem } from "@/domain/StarSystem";
 import type { NpcShip } from "@/domain/NpcShip";
+import type { NewsEvent } from "@/types";
 import { Faction } from "@/types/faction";
 import { GalacticRegistry } from "@/systems/info/GalacticRegistry";
 import { generateGalaxyGear } from "@/systems/equipment/ShopGenerator";
@@ -18,6 +19,7 @@ import { generateGalaxyGear } from "@/systems/equipment/ShopGenerator";
 export interface GalaxyView {
   readonly systems: StarSystem[];
   readonly npcShips: NpcShip[];
+  readonly newsFeed: NewsEvent[];
 }
 
 /**
@@ -62,5 +64,10 @@ export function buildRegistry(
     }
   }
   const gear = generateGalaxyGear(planets, seed, day);
-  return new GalacticRegistry(galaxy.systems, galaxy.npcShips, gear);
+  return new GalacticRegistry(
+    galaxy.systems,
+    galaxy.npcShips,
+    gear,
+    galaxy.newsFeed,
+  );
 }
