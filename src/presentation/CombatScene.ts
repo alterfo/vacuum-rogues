@@ -498,4 +498,42 @@ export class CombatScene extends GameScene {
     overlay.addChild(bg, border, msgText, rewardDisplay, continueBtn);
     this.renderer.uiLayer.addChild(overlay);
   }
+
+  // ── E2E test helpers (accessible at runtime, typed for page.evaluate) ────
+
+  /** Returns the current encounter state for E2E assertions. */
+  e2eGetEncounterState(): {
+    enemyHp: number;
+    playerHp: number;
+    state: string;
+    enemyCount: number;
+  } | null {
+    const enc = this._encounter;
+    if (!enc) return null;
+    const enemy = enc.enemies[0];
+    const playerShip = enc.playerShip;
+    return {
+      enemyHp: enemy?.hullHP ?? 0,
+      playerHp: (playerShip as unknown as { hullHP?: number })?.hullHP ?? 0,
+      state: enc.state,
+      enemyCount: enc.enemies.length,
+    };
+  }
+
+  /** Reduce the first enemy to 1 HP so the next attack guarantees a kill. */
+  e2eWeakenEnemy(): void {
+    const enc = this._encounter;
+    if (!enc || enc.enemies.length === 0) return;
+    enc.enemies[0].hullHP = 1;
+  }
+
+  /** Trigger a player attack turn (async, resolves after AI counter-turn). */
+  async e2eAttack(): Promise<void> {
+    return this.onPlayerAttack();
+  }
+
+  /** Returns true when the outcome panel (victory/defeat) has been shown. */
+  e2eIsOutcomeShown(): boolean {
+    return this._outcomeShown;
+  }
 }

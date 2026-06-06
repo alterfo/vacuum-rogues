@@ -562,15 +562,15 @@ Track-to-state mapping from `docs/design/AUDIO_TRACKLIST.md`.
 Playwright E2E tests for the three critical player loops: shopping + equipping, quest accept +
 complete, and combat + reward.
 
-- [ ] E2E: `e2e/shop-and-equip.spec.ts` — Start game → fly to planet → open equipment shop →
+- [x] E2E: `e2e/shop-and-equip.spec.ts` — Start game → fly to planet → open equipment shop →
   buy an item → open hangar → equip item → verify stat bar shows updated speed.
   Use `window.__gameEngine` to drive transitions; assert via DOM or `__gameEngine` state.
-- [ ] E2E: `e2e/quest-accept-complete.spec.ts` — Start game → accept a DELIVERY quest from job
+- [x] E2E: `e2e/quest-accept-complete.spec.ts` — Start game → accept a DELIVERY quest from job
   board → fly to target system (jump) → land on target planet → quest auto-completes →
   credits increased by reward amount.
-- [ ] E2E: `e2e/combat-flow.spec.ts` — Start game → find NPC → attack → combat scene opens →
+- [x] E2E: `e2e/combat-flow.spec.ts` — Start game → find NPC → attack → combat scene opens →
   AI takes a turn → player attacks → enemy destroyed → victory panel shown → credits awarded.
-- [ ] All E2E tests must use `waitForFunction` / `waitForSelector`, no `waitForTimeout`.
+- [x] All E2E tests must use `waitForFunction` / `waitForSelector`, no `waitForTimeout`.
   No `canvas.click({ position })` — use `page.evaluate(() => window.__gameEngine...)`.
 
 ### Task 28: Split SpaceFlightScene and fix God-class violations
