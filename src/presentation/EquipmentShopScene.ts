@@ -11,8 +11,11 @@ import {
   type HullSpec,
 } from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
-import { ShipModule } from "@/domain/ShipModule";
-import type { ModuleCategory } from "@/types";
+import {
+  gearToModule,
+  KIND_LABEL,
+  KIND_COLOR,
+} from "@/systems/equipment/GearBridge";
 import { logger } from "@/utils/logger";
 
 interface ShopContext {
@@ -32,34 +35,6 @@ function techLevelForPlanet(type: PlanetType): number {
     default:
       return 2;
   }
-}
-
-/** Map GearKind to the Russian label shown in the kind-badge column. */
-const KIND_LABEL: Record<GearKind, string> = {
-  [GearKind.HULL]: "Корпус",
-  [GearKind.WEAPON]: "Оружие",
-  [GearKind.EQUIPMENT]: "Снаряжение",
-};
-
-const KIND_COLOR: Record<GearKind, number> = {
-  [GearKind.HULL]: 0x88ccff,
-  [GearKind.WEAPON]: 0xff8888,
-  [GearKind.EQUIPMENT]: 0x88ffcc,
-};
-
-/**
- * Bridge a Gear catalog item to the legacy ShipModule stored in inventory.
- * The full equip-to-slot system (ShipLoadout integration) comes in a later
- * slice; for now buying just puts an item in the player's module inventory.
- */
-function gearToModule(gear: Gear): ShipModule {
-  return new ShipModule(
-    gear.id,
-    gear.kind as unknown as ModuleCategory,
-    gear.name,
-    { type: gear.kind.toLowerCase(), value: gear.techLevel * 10 },
-    gear.techLevel,
-  );
 }
 
 /** Build a one-line stat summary for a gear item (shown on hover / detail). */

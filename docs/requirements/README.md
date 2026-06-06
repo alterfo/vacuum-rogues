@@ -29,15 +29,15 @@ docs/requirements/
 
 | ID | Название | Канон (§) | Статус |
 |----|----------|-----------|--------|
-| [EPIC-001](epics/EPIC-001-trading.md) | Торговая система | §4 | In Progress |
-| [EPIC-002](epics/EPIC-002-combat.md) | Боевая система | §7 | Planned |
-| [EPIC-003](epics/EPIC-003-living-galaxy.md) | Живая галактика (NPC-корабли) | §6 | In Progress |
-| [EPIC-004](epics/EPIC-004-grand-system-radar-background.md) | Масштаб системы, радар, фон | §3 | In Progress |
-| [EPIC-005](epics/EPIC-005-text-quests-onnx.md) | Текст-квесты на диалоговом ONNX | §8, §10 | Planned |
-| [EPIC-006](epics/EPIC-006-planet-station-services.md) | Услуги планет и станций (хаб) | §11.1–11.6 | Planned |
-| [EPIC-007](epics/EPIC-007-ship-fitting-equipment.md) | Снаряжение корабля (корпус/модули/оружие) | §11.3 | Planned |
-| [EPIC-008](epics/EPIC-008-quest-generation-and-missions.md) | Quest generation & galaxy-spanning missions | §8, §11.1 | Planned |
-| [EPIC-009](epics/EPIC-009-information-system.md) | Information system (registry + search) | §11.5, §11.3 | Planned |
+| [EPIC-001](epics/EPIC-001-trading.md) | Торговая система | §4 | Done |
+| [EPIC-002](epics/EPIC-002-combat.md) | Боевая система | §7 | Done |
+| [EPIC-003](epics/EPIC-003-living-galaxy.md) | Живая галактика (NPC-корабли) | §6 | Done |
+| [EPIC-004](epics/EPIC-004-grand-system-radar-background.md) | Масштаб системы, радар, фон | §3 | Done |
+| [EPIC-005](epics/EPIC-005-text-quests-onnx.md) | Текст-квесты на диалоговом ONNX | §8, §10 | Done |
+| [EPIC-006](epics/EPIC-006-planet-station-services.md) | Услуги планет и станций (хаб) | §11.1–11.6 | Done |
+| [EPIC-007](epics/EPIC-007-ship-fitting-equipment.md) | Снаряжение корабля (корпус/модули/оружие) | §11.3 | Done |
+| [EPIC-008](epics/EPIC-008-quest-generation-and-missions.md) | Quest generation & galaxy-spanning missions | §8, §11.1 | Done |
+| [EPIC-009](epics/EPIC-009-information-system.md) | Information system (registry + search) | §11.5, §11.3 | Done |
 
 ## Статусы
 

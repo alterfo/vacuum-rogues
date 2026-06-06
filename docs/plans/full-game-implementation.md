@@ -615,28 +615,28 @@ with faction colors and generate faction-specific quests from day 1.
 Move `InferenceSession.create()` into the worker thread. System geometry constants go into
 `src/config/balance.ts`. Deduplicate `gearToModule` / `KIND_LABEL` into `GearBridge.ts`.
 
-- [ ] Create `src/config/balance.ts` with `SYSTEM_GEOMETRY = { innerRadius: 600,
+- [x] Create `src/config/balance.ts` with `SYSTEM_GEOMETRY = { innerRadius: 600,
   outerRadius: 2500, boundaryRadius: 2800, starAvoidRadius: 390, orbitRadii: [...] }` and
   `GAME_BALANCE = { pixelsPerDay: 500, npcSpeed: 0.2, weaponRange: 450, ... }`. Replace all
   hardcoded values in `SpaceFlightScene`, `PlanetGenerator`, `NpcShipSprite`.
-- [ ] Create `src/systems/equipment/GearBridge.ts`: export `gearToModule(gear): ShipModule`
+- [x] Create `src/systems/equipment/GearBridge.ts`: export `gearToModule(gear): ShipModule`
   and `KIND_LABEL`, `KIND_COLOR` maps. Remove duplicate copies from `EquipmentShopScene` and
   `StationScene`, replace with imports from GearBridge.
-- [ ] Move `InferenceSession.create()` inside the ONNX worker: instead of loading the session in
+- [x] Move `InferenceSession.create()` inside the ONNX worker: instead of loading the session in
   `ONNXModelRegistry.loadModel()` on main thread, send the model buffer to the worker via
   `postMessage` with `Transferable`. Worker creates the session and holds it in its own scope.
   Main thread only sends infer requests.
-- [ ] Verify `npm run build` produces no TypeScript errors and bundle size < 3MB initial
+- [x] Verify `npm run build` produces no TypeScript errors and bundle size < 3MB initial
   (ONNX runtime is loaded lazily). Run `npx tsc --noEmit` + full test suite.
-- [ ] Update `MEMORY.md` / project docs: mark all epics as Done in `docs/requirements/README.md`.
+- [x] Update `MEMORY.md` / project docs: mark all epics as Done in `docs/requirements/README.md`.
 
 ---
 
 ## Success Criteria
 
-- [ ] `npx tsc --noEmit` — 0 errors
-- [ ] `npm test -- --run` — all tests pass (160+ at plan start, target 220+ at completion)
-- [ ] `npm run build` — clean production build
+- [x] `npx tsc --noEmit` — 0 errors
+- [x] `npm test -- --run` — all tests pass (160+ at plan start, target 220+ at completion)
+- [x] `npm run build` — clean production build
 - [ ] Player loop works end-to-end: start → trade → buy equipment → accept quest → fly to system
-  → complete quest → upgrade ship → fight NPC → text quest → win condition
-- [ ] All 9 epics marked Done in `docs/requirements/README.md`
+  → complete quest → upgrade ship → fight NPC → text quest → win condition (manual verification)
+- [x] All 9 epics marked Done in `docs/requirements/README.md`

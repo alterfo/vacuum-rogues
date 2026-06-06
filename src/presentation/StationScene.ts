@@ -5,14 +5,14 @@ import type { GameEngine } from "@/systems/GameEngine";
 import type { Station } from "@/domain/Station";
 import { SceneType, StationType, type MicroModule } from "@/types";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
-import {
-  GearKind,
-  type Gear,
-  MICRO_MODULES,
-} from "@/systems/equipment/GearCatalog";
+import { MICRO_MODULES } from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
+import {
+  gearToModule,
+  KIND_LABEL,
+  KIND_COLOR,
+} from "@/systems/equipment/GearBridge";
 import { ShipModule } from "@/domain/ShipModule";
-import type { ModuleCategory } from "@/types";
 import { logger } from "@/utils/logger";
 import { RANK_THRESHOLDS, RANK_LABELS } from "@/config/balance";
 
@@ -74,30 +74,6 @@ const REPAIR_DISCOUNT: Record<StationType, number> = {
   [StationType.MILITARY_BASE]: 0.8,
   [StationType.RESEARCH_LAB]: 1.1,
   [StationType.CRAFT_CENTER]: 1.0,
-};
-
-// ── Gear bridging (same as EquipmentShopScene) ───────────────────────────────
-
-function gearToModule(gear: Gear): ShipModule {
-  return new ShipModule(
-    gear.id,
-    gear.kind as unknown as ModuleCategory,
-    gear.name,
-    { type: gear.kind.toLowerCase(), value: gear.techLevel * 10 },
-    gear.techLevel,
-  );
-}
-
-const KIND_LABEL: Record<GearKind, string> = {
-  [GearKind.HULL]: "Корпус",
-  [GearKind.WEAPON]: "Оружие",
-  [GearKind.EQUIPMENT]: "Снаряжение",
-};
-
-const KIND_COLOR: Record<GearKind, number> = {
-  [GearKind.HULL]: 0x88ccff,
-  [GearKind.WEAPON]: 0xff8888,
-  [GearKind.EQUIPMENT]: 0x88ffcc,
 };
 
 // ── Scene ────────────────────────────────────────────────────────────────────

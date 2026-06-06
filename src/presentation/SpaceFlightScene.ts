@@ -39,6 +39,7 @@ import {
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
+import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
 
 interface NebulaLayer {
   container: Container;
@@ -165,11 +166,8 @@ export class SpaceFlightScene extends GameScene {
   // Preferred sun rendering: an equirect map on a hemisphere mesh (see
   // sphereMesh.ts) so it really turns rather than scrolling flat.
   private sunSphere: SphereMesh | null = null;
-  private readonly STAR_RADIUS = 170; // big, foreground sun (crisp)
-  // Routes bow around the star outside its visible corona (which reaches
-  // ~STAR_RADIUS*2 = 340px), so the path clearly clears the sun rather than
-  // grazing its glow.
-  private readonly STAR_AVOID_RADIUS = 390;
+  private readonly STAR_RADIUS = GAME_BALANCE.starRadius;
+  private readonly STAR_AVOID_RADIUS = SYSTEM_GEOMETRY.starAvoidRadius;
   private orbitGraphics: Graphics | null = null;
   private systemMiniMap: SystemMiniMap | null = null;
 
@@ -195,16 +193,11 @@ export class SpaceFlightScene extends GameScene {
   private isTurnRunning = false;
   private pauseRequested = false;
   private playPauseButton: Text | null = null;
-  private readonly WEAPON_RANGE = 240; // px the ship must close to for CombatScene
-  // System geometry (EPIC-004 grand scale): NPCs wander in [inner, outer];
-  // hyperjumps occur only on the boundary edge (рубеж гиперпрыжка). Matches
-  // PlanetGenerator.ORBITAL_RADII (600..2500); keep in sync (CLAUDE.md Rule 5).
-  private readonly SYSTEM_INNER_RADIUS = 600;
-  private readonly SYSTEM_OUTER_RADIUS = 2500;
-  private readonly SYSTEM_BOUNDARY_RADIUS = 2800;
-  // Ship scanner radius (world px) — drawn as the green "radar" ring on the
-  // minimap, centred on the ship like the original game.
-  private readonly SCANNER_RANGE = 1200;
+  private readonly WEAPON_RANGE = GAME_BALANCE.weaponRange;
+  private readonly SYSTEM_INNER_RADIUS = SYSTEM_GEOMETRY.innerRadius;
+  private readonly SYSTEM_OUTER_RADIUS = SYSTEM_GEOMETRY.outerRadius;
+  private readonly SYSTEM_BOUNDARY_RADIUS = SYSTEM_GEOMETRY.boundaryRadius;
+  private readonly SCANNER_RANGE = GAME_BALANCE.scannerRange;
 
   // Quest Journal UI
   private questJournalUI: QuestJournalUI | null = null;
@@ -221,7 +214,7 @@ export class SpaceFlightScene extends GameScene {
   private readonly INPUT_GRACE_MS = 350;
 
   private distanceTraveled: number = 0;
-  private readonly DISTANCE_PER_DAY: number = 500; // pixels traveled = 1 day
+  private readonly DISTANCE_PER_DAY: number = GAME_BALANCE.pixelsPerDay;
   // Course-less "wait" turn (US-070 #5): fractional day accrued while the ship
   // holds position, and how long one waited day takes in real time.
   private waitDayAccum: number = 0;

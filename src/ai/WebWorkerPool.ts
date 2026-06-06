@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';
+import { logger } from "@/utils/logger";
 
 interface WorkerTask {
   readonly id: string;
@@ -28,7 +28,7 @@ export class WebWorkerPool {
 
   private addWorker(index: number): void {
     try {
-      const worker = new Worker(this.workerScript, { type: 'module' });
+      const worker = new Worker(this.workerScript, { type: "module" });
       worker.onmessage = (event) => this.handleMessage(index, event);
       worker.onerror = (error) => this.handleError(index, error);
       this.workers[index] = worker;
@@ -67,6 +67,35 @@ export class WebWorkerPool {
     const task = this.queue.shift()!;
     this.activeTasks.set(workerIndex, task);
     this.workers[workerIndex].postMessage({ id: task.id, data: task.data });
+  }
+
+  /**
+   * Broadcast a model buffer to every worker so each one can create its own
+   * InferenceSession. Uses structured clone (not transfer) so the buffer
+   * remains usable on the main thread after the call.
+   */
+  loadModel(modelId: string, buffer: ArrayBuffer): Promise<void[]> {
+    const tasks = this.workers.map(
+      (worker) =>
+        new Promise<void>((resolve, reject) => {
+          const taskId = `load_${modelId}_${++this.taskIdCounter}`;
+          const onMessage = (event: MessageEvent) => {
+            if (event.data.id !== taskId) return;
+            worker.removeEventListener("message", onMessage);
+            if (event.data.error) {
+              reject(new Error(event.data.error));
+            } else {
+              resolve();
+            }
+          };
+          worker.addEventListener("message", onMessage);
+          worker.postMessage({
+            id: taskId,
+            data: { modelId, modelBuffer: buffer },
+          });
+        }),
+    );
+    return Promise.all(tasks);
   }
 
   execute(data: unknown): Promise<unknown> {

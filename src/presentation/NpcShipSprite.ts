@@ -3,6 +3,7 @@ import type { NpcShip } from "@/domain/NpcShip";
 import { NpcRole } from "@/types";
 import { Faction } from "@/types/faction";
 import { pickVariant } from "./textures";
+import { GAME_BALANCE } from "@/config/balance";
 
 /** Maps an NPC role to its ship-art asset prefix (src/assets/ships/<prefix>). */
 const ROLE_SHIP_PREFIX: Record<NpcRole, string> = {
@@ -75,10 +76,7 @@ export class NpcShipSprite {
   // only the faction halo + intent dot are drawn (US-070 #8).
   private shipSprite: Sprite | null = null;
   private readonly bounds: SystemBounds;
-  // px per ms drift speed: a calm cruise (~40% of the player's) so traffic reads
-  // clearly without buzzing around like flies. (Was 0.05 — far too slow — then
-  // briefly 0.5, which looked frantic when loitering near a planet.)
-  private readonly speed = 0.2;
+  private readonly speed = GAME_BALANCE.npcSpeed;
   private departing = false;
   private gone = false;
   // When set, the ship orbits this point (a planet it's "visiting").

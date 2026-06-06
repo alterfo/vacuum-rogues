@@ -71,3 +71,36 @@ export const RANK_DISCOUNT_THRESHOLD = 5;
 
 /** Price multiplier for high-rank players (15% off). */
 export const RANK_DISCOUNT_FACTOR = 0.85;
+
+/**
+ * System geometry constants. All measurements in world pixels.
+ * Keep in sync with PlanetGenerator.ORBITAL_RADII (CLAUDE.md Rule 5).
+ */
+export const SYSTEM_GEOMETRY = {
+  /** Innermost NPC wander radius; also innermost planet orbit. */
+  innerRadius: 600,
+  /** Outermost NPC wander radius; also outermost planet orbit. */
+  outerRadius: 2500,
+  /** System boundary (рубеж гиперпрыжка): ships enter/leave here. */
+  boundaryRadius: 2800,
+  /** Minimum approach distance to the star corona for route planning. */
+  starAvoidRadius: 390,
+  /** Planet orbital radii for up to 5 planets. */
+  orbitRadii: [600, 1050, 1500, 1950, 2500] as const,
+} as const;
+
+/**
+ * Gameplay balance constants used across scene and system layers.
+ */
+export const GAME_BALANCE = {
+  /** World pixels a ship must travel for 1 in-game day to elapse. */
+  pixelsPerDay: 500,
+  /** NPC drift speed in px/ms. */
+  npcSpeed: 0.2,
+  /** Weapon engagement range in world px. */
+  weaponRange: 240,
+  /** Scanner (radar) range in world px. */
+  scannerRange: 1200,
+  /** Star sprite radius (visual, not physics). */
+  starRadius: 170,
+} as const;

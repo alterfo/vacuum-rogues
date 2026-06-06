@@ -4,6 +4,7 @@ import { PlanetType } from "@/types";
 import { SeededRNG } from "@/utils/seededRNG";
 import { PlanetNameGenerator } from "@/utils/planetNameGenerator";
 import { logger } from "@/utils/logger";
+import { SYSTEM_GEOMETRY } from "@/config/balance";
 
 export interface GenerationProgress {
   total: number;
@@ -13,7 +14,7 @@ export interface GenerationProgress {
 
 export class PlanetGenerator {
   private readonly rng: SeededRNG;
-  private readonly ORBITAL_RADII = [600, 1050, 1500, 1950, 2500] as const;
+  private readonly ORBITAL_RADII = SYSTEM_GEOMETRY.orbitRadii;
 
   constructor(galaxySeed: string, systemId: string) {
     this.rng = new SeededRNG(galaxySeed + systemId);

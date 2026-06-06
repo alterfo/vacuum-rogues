@@ -1,4 +1,4 @@
-import { InferenceSession, Tensor } from "onnxruntime-web";
+import { Tensor } from "onnxruntime-web";
 import type { ModelConfig, CacheInfo } from "@/types";
 import { ONNXModel } from "./ONNXModel";
 import { WebWorkerPool } from "./WebWorkerPool";
@@ -80,28 +80,22 @@ export class ONNXModelRegistry {
           fetchError,
         );
         // For POC, create a mock session without requiring actual model file
-        const mockSession = await SimpleONNXModel.createMockSession();
-        const model = new ONNXModel(
-          modelId,
-          modelConfig.version,
-          mockSession as unknown as InferenceSession,
-        );
+        await SimpleONNXModel.createMockSession();
+        const model = new ONNXModel(modelId, modelConfig.version, null);
         this.models.set(modelId, model);
         logger.info(`Mock session created for ${modelId} (POC mode)`);
         return model;
       }
     }
 
-    // Create inference session with real model buffer
-    const session = await InferenceSession.create(buffer, {
-      executionProviders: ["wasm"],
-      graphOptimizationLevel: "all",
-    });
-
-    const model = new ONNXModel(modelId, modelConfig.version, session);
-    this.models.set(modelId, model);
+    // Send buffer to all workers so each creates its own InferenceSession.
+    // InferenceSession.create() is intentionally NOT called on the main thread.
+    await this.workerPool.loadModel(modelId, buffer);
     this.modelBuffers.set(modelId, buffer);
-    logger.info(`Model ${modelId} loaded successfully.`);
+
+    const model = new ONNXModel(modelId, modelConfig.version, null);
+    this.models.set(modelId, model);
+    logger.info(`Model ${modelId} loaded in workers.`);
     return model;
   }
 
