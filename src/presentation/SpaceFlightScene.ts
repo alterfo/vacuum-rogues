@@ -2456,7 +2456,7 @@ export class SpaceFlightScene extends GameScene {
   private onPointerDown(event: FederatedPointerEvent): void {
     if (!this.shipPhysics) return;
 
-    logger.info(
+    logger.debug(
       `🖱️ POINTER DOWN: button=${event.button}, shift=${event.shiftKey}, global=(${event.global.x.toFixed(0)}, ${event.global.y.toFixed(0)})`,
     );
 
@@ -2592,7 +2592,7 @@ export class SpaceFlightScene extends GameScene {
     // them here keeps panning from also zooming (bug: pan + unwanted zoom).
     if (this.panZoom.isPanning) return;
 
-    logger.info(`🔍 WHEEL EVENT FIRED! deltaY: ${event.deltaY}`);
+    logger.debug(`🔍 WHEEL EVENT FIRED! deltaY: ${event.deltaY}`);
 
     const oldZoom = this.cameraZoom;
 

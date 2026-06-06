@@ -179,6 +179,9 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
             ),
           ),
         );
+        // Increment so subsequent isChain rolls fall through to the else branch
+        // (routine quest) instead of adding a duplicate finale.
+        chainPartsOnBoard++;
       } else if (!completedQuestChains.includes(chainId)) {
         out.push(
           applyPrefix(

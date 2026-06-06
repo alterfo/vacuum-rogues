@@ -220,6 +220,29 @@ export const PlayerSchema = z.object({
   visitedSystems: z.array(z.string()).default([]),
 });
 
+export const StationSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  type: z.enum([
+    "TRADE_POST",
+    "REPAIR_DOCK",
+    "MILITARY_BASE",
+    "RESEARCH_LAB",
+    "CRAFT_CENTER",
+  ]),
+  faction: z.enum([
+    "OUTLANDERS",
+    "BASTIONS",
+    "SYNDICATE",
+    "PARADOXES",
+    "PROGRESSORS",
+    "INDEPENDENT",
+    "OVERMIND",
+  ]),
+  orbitRadius: z.number(),
+  orbitAngle: z.number(),
+});
+
 export const StarSystemSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -252,6 +275,7 @@ export const StarSystemSchema = z.object({
     ])
     .nullable()
     .default(null),
+  stations: z.array(StationSchema).default([]),
 });
 
 export const NpcGoalSchema = z.object({
