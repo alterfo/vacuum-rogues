@@ -16,12 +16,14 @@ npm run preview      # Preview production build locally
 npm run lint         # ESLint check on src/**/*.ts
 npm test             # Run Vitest unit tests (watch mode)
 npm test -- --run    # Run unit tests once (CI mode)
-npm run test:e2e     # Run Playwright E2E tests (starts dev server automatically)
+npm run test:e2e     # Run Playwright E2E tests (starts dev server on port 5175 automatically)
 npm run test:e2e:headed  # E2E with visible browser
 npm run test:e2e:debug   # E2E in debug mode
 ```
 
 **Run single test file:** `npm test -- --run src/tests/pathfinding.test.ts`
+
+**E2E note:** E2E tests start their own dev server on port 5175 (`playwright.config.ts`). Do not rely on a running `npm run dev` instance for E2E.
 
 ## Architecture
 
@@ -30,10 +32,10 @@ npm run test:e2e:debug   # E2E in debug mode
 | Layer | Directory | Responsibility |
 |-------|-----------|----------------|
 | Presentation | `src/presentation/` | PixiJS scenes, sprites, rendering, player input |
-| Systems | `src/systems/` | GameEngine, combat, trade, dialogue, galaxy generation |
+| Systems | `src/systems/` | GameEngine, AudioManager, trade, dialogue, galaxy generation; sub-modules: `equipment/`, `npc/`, `quests/`, `info/`, `combat/`, `galaxy/` |
 | Domain | `src/domain/` | Pure entities (Player, Galaxy, StarSystem) — no PixiJS/ONNX/DOM deps |
 | AI/Infrastructure | `src/ai/`, `src/data/` | ONNX inference, Web Workers, IndexedDB, save management |
-| Types/Config | `src/types/`, `src/config/` | Shared types, enums, balance constants |
+| Types/Config | `src/types/`, `src/config/` | Shared types, enums, balance constants; `FactionType` replaces old `RaceType` |
 
 ### Key Entry Points
 
@@ -283,8 +285,18 @@ private async performWarpJump(target: StarSystem): Promise<void> {
 1. Create class extending `GameScene` in `src/presentation/`
 2. Add `SceneType.MY_SCENE` to `src/types/index.ts`
 3. Add a `case SceneType.MY_SCENE:` to `src/core/services/SceneFactory.ts`
-4. If the scene requires transient context (planet, NPC, station), add it to `contextDependentScenes` in `GameEngine.loadGame()` so "Continue" falls back to SPACE_FLIGHT instead of a blank screen
+4. If the scene requires transient context (planet, NPC, station), add it to `contextDependentScenes` in `GameEngine.loadGame()` so "Continue" falls back to SPACE_FLIGHT instead of a blank screen (currently: `PLANET`, `TRADE`, `DIALOGUE`, `COMBAT`, `INVENTORY`, `STATION`, `EQUIPMENT_SHOP`, `GOVERNMENT`, `TEXT_QUEST`, `WIN_SCREEN`)
 5. Add Page Object in `e2e/page-objects/` for E2E tests
+
+### New Audio Track or SFX
+- Music files: `public/audio/mus_<key>.ogg` — add a `TrackKey` entry in `src/systems/AudioManager.ts`
+- SFX files: `public/audio/sfx_<key>.ogg` — add a `SfxKey` entry in `src/systems/AudioManager.ts`
+- Play from any scene via `this.gameEngine.audio.playTrack(key)` / `this.gameEngine.audio.playSfx(key)`
+
+### New Art Asset
+- Drop the file into `src/assets/<category>/` (e.g. `src/assets/planets/`). The Vite glob manifest (`src/assets/manifest.ts`) picks it up automatically — no code change needed.
+- Naming convention: `<type>_<NN>` (e.g. `habitat_07.png`).
+- Access via `texture(key)` / `texUrl(key)` from `src/presentation/textures.ts`.
 
 ### New ONNX Model
 1. Add config to `src/ai/ModelManifest.ts`
@@ -304,6 +316,55 @@ private async performWarpJump(target: StarSystem): Promise<void> {
 - Target: ES2022, module: ESNext
 - `__DEBUG__` global available (true in development)
 
+## Plan Format (Ralphex)
+
+All implementation plans in `docs/plans/` **must** use ralphex-compatible format — the plan runner rejects files that deviate.
+
+**Required top-level structure (in order):**
+
+```markdown
+---
+# Plan Title
+
+## Overview
+One-paragraph summary.
+
+## Context
+Key files, related US/EPICs, current state.
+
+## Development Approach
+TDD order, ordering constraints, applicable rules.
+
+## Implementation Steps
+
+### Task 1: Short Title
+**Files:**
+- Modify: path/to/file.ts
+- Create: path/to/new.ts
+
+- [ ] acceptance criterion or implementation step
+- [ ] acceptance criterion or implementation step
+
+### Task 2: Short Title
+...
+```
+
+**Validation rules (enforced by ralphex):**
+
+| Rule | Detail |
+|------|--------|
+| File starts with `---` | YAML front-matter separator — line 1 |
+| `## Overview` present | Required section |
+| `## Context` present | Required section |
+| `## Development Approach` present | Required section |
+| `## Implementation Steps` present | Required section |
+| Tasks use `### Task N:` | Colon required; ralphex matches this exact pattern |
+| Each task has `- [ ]` checkboxes | At least one per task — tracked as progress |
+| `**Files:**` block per task | Recommended for traceability; not validated |
+
+Do **not** use `## 1.` / `## 0.` section numbering — ralphex ignores those.  
+Use `### Iteration N:` only for time-boxed sprint iterations, not regular tasks.
+
 ## Project Status
 
-Phase 1 (MVP in progress) — core gameplay loops implemented: economy, equipment/hull system, NPC living galaxy, quest generator, text quests, government dialogue, station services, info center, combat AI, fog-of-war star map, audio. See `docs/plans/completed/full-game-implementation.md` for remaining tasks.
+Phase 2 (Вакуумные Пройдохи) — core gameplay loops implemented: economy, equipment/hull system, NPC living galaxy, quest generator, text quests, government dialogue, station services, info center, combat AI, fog-of-war star map, audio. Active plan: `docs/plans/20260606-vacuum-rogues-master-plan.md`.

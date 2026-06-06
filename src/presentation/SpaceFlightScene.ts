@@ -2714,6 +2714,13 @@ export class SpaceFlightScene extends GameScene {
     }
     this.systemMiniMap?.reposition(w, h);
 
+    if (this.miniLogContainer) {
+      this.miniLogContainer.y = h - 105;
+    }
+    if (this.dayCounterText) {
+      this.dayCounterText.y = 50;
+    }
+
     // Keep the ship framed after the viewport changed.
     if (this.shipPhysics) this.centerCameraOnShip();
   }
@@ -3790,15 +3797,22 @@ export class SpaceFlightScene extends GameScene {
 
   /** True while a panel that should swallow outside-clicks is open. */
   private isBlockingModalOpen(): boolean {
-    return this.npcContactPanel !== null || this.questJournalUI !== null;
+    return (
+      this.npcContactPanel !== null ||
+      this.questJournalUI !== null ||
+      this.planetInfoPanel !== null
+    );
   }
 
-  /** Close any open blocking modal (NPC contact / quest journal). */
+  /** Close any open blocking modal (NPC contact / quest journal / planet panel). */
   private closeBlockingModals(): void {
     this.closeNpcContactPanel();
     const journal = this.questJournalUI;
     this.questJournalUI = null;
     if (journal) queueMicrotask(() => journal.destroy());
+    const info = this.planetInfoPanel;
+    this.planetInfoPanel = null;
+    if (info) queueMicrotask(() => info.destroy());
   }
 
   private closeNpcContactPanel(): void {

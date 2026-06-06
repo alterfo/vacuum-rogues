@@ -1,6 +1,8 @@
 ---
 # Master Plan: Vacuum Rogues — Phase 2
 
+**Status: Completed — 2026-06-06**
+
 ## Overview
 
 Phase 2 of the game after rebranding to «Вакуумные Пройдохи». Covers five sprints:

@@ -36,7 +36,7 @@ export class QuestManager {
   private activeQuests: Map<string, Quest> = new Map();
   private completedQuests: Set<string> = new Set();
   private questTemplates: Map<string, QuestTemplate> = new Map();
-  /** In-memory tracking of completed chain parts; not persisted (lost on reload). */
+  /** In-memory tracking of completed chain parts; persisted in player.questLog on save/load. */
   private completedChainParts: Map<string, Set<number>> = new Map();
 
   constructor() {

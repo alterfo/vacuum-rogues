@@ -71,6 +71,14 @@ export class StarMapPage extends GamePageBase {
   }
 
   /**
+   * Click on star map canvas at relative position (0–1 fractions).
+   * @deprecated TECH DEBT: use clickOnSystem(systemId) instead.
+   */
+  async clickOnSystemPercent(xPercent: number, yPercent: number) {
+    await this.clickCanvasPercent(xPercent, yPercent);
+  }
+
+  /**
    * Navigate between systems via warp jump
    */
   async warpToSystem(systemId: string) {

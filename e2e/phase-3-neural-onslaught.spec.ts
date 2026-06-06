@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { MainMenuPage } from '../page-objects/main-menu.page';
-import { StarMapPage } from '../page-objects/star-map.page';
-import { CombatPage } from '../page-objects/combat.page';
-import { checkIndexedDB, expectNoJavaScriptErrors } from '../fixtures/game-fixtures';
+import { MainMenuPage } from './page-objects/main-menu.page';
+import { StarMapPage } from './page-objects/star-map.page';
+import { CombatPage } from './page-objects/combat.page';
+import { checkIndexedDB, expectNoJavaScriptErrors } from './fixtures/game-fixtures';
 
 /**
  * Phase 3: Neural Onslaught (Alpha Release)
@@ -322,13 +322,13 @@ test.describe('Phase 3: Save System (Alpha)', () => {
 
     // Create saves in different slots
     const save1 = await checkIndexedDB(page);
-    expect(save1.exists || true).toBeTruthy();
+    expect(save1.exists).toBeTruthy();
 
     await page.reload();
     await page.waitForSelector('canvas', { timeout: 10000 });
 
     const save2 = await checkIndexedDB(page);
-    expect(save2.exists || true).toBeTruthy();
+    expect(save2.exists).toBeTruthy();
   });
 
   test('TC-P3-S002: Emergency save is created on error', async ({ page }) => {
@@ -337,6 +337,6 @@ test.describe('Phase 3: Save System (Alpha)', () => {
 
     // Game should create emergency save
     const dbStatus = await checkIndexedDB(page);
-    expect(dbStatus.exists || true).toBeTruthy();
+    expect(dbStatus.exists).toBeTruthy();
   });
 });

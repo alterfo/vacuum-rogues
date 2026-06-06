@@ -622,7 +622,9 @@ export class CombatScene extends GameScene {
         enemyResult.result.message,
         enemyResult.result.xpGained,
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
-        enemyResult.result.xpGained > 0 ? "victory" : "defeat",
+        enemyResult.result.outcome === EncounterState.PLAYER_WON
+          ? "victory"
+          : "defeat",
       );
     }
   }
@@ -682,7 +684,9 @@ export class CombatScene extends GameScene {
         enemyResult.result.message,
         enemyResult.result.xpGained,
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
-        enemyResult.result.xpGained > 0 ? "victory" : "defeat",
+        enemyResult.result.outcome === EncounterState.PLAYER_WON
+          ? "victory"
+          : "defeat",
       );
     }
   }
@@ -718,7 +722,9 @@ export class CombatScene extends GameScene {
         enemyResult.result.message,
         enemyResult.result.xpGained,
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
-        enemyResult.result.xpGained > 0 ? "victory" : "defeat",
+        enemyResult.result.outcome === EncounterState.PLAYER_WON
+          ? "victory"
+          : "defeat",
       );
     }
   }
