@@ -515,6 +515,9 @@ export class SpaceFlightScene extends GameScene {
     // Auto-complete EXPLORATION quests whose target is the current system.
     this.completeExplorationQuestsBySystemEntry();
 
+    // Auto-complete DEFENSE quests targeting this system (OVERMIND liberations).
+    this.completeDefenseQuestsBySystemEntry();
+
     // Update lastVisitedDay for data-fog tracking (Task 21).
     if (this.gameEngine?.galaxy && this.gameEngine.player) {
       const _galaxy = this.gameEngine.galaxy;
@@ -522,6 +525,23 @@ export class SpaceFlightScene extends GameScene {
         (s) => s.id === this.gameEngine!.player!.currentSystemId,
       );
       if (_sys) _sys.lastVisitedDay = _galaxy.gameDays;
+    }
+
+    // OVERMIND core system: show the final encounter prompt (only on fresh entry,
+    // not when returning from an already-completed combat).
+    if (
+      this.gameEngine?.galaxy &&
+      this.gameEngine.player &&
+      !ctx?.combatResult
+    ) {
+      const coreId = this.gameEngine.galaxy.overmindCoreSystemId;
+      if (
+        coreId &&
+        this.gameEngine.player.currentSystemId === coreId &&
+        this.gameEngine.galaxy.isOvermindSystem(coreId)
+      ) {
+        this.showOvermindCorePrompt();
+      }
     }
 
     const centerX = this.renderer.app.screen.width / 2;
@@ -4075,6 +4095,139 @@ export class SpaceFlightScene extends GameScene {
         );
       }
     }
+  }
+
+  /** Auto-complete DEFENSE quests targeting the current system and liberate the adjacent OVERMIND system. */
+  private completeDefenseQuestsBySystemEntry(): void {
+    if (!this.gameEngine?.player || !this.gameEngine.galaxy) return;
+    const player = this.gameEngine.player;
+    const galaxy = this.gameEngine.galaxy;
+    const questManager = this.gameEngine.questManager;
+    const currentSystemId = player.currentSystemId;
+
+    for (const quest of questManager.getActiveQuests()) {
+      if (quest.type !== QuestType.DEFENSE) continue;
+      if (quest.isCompleted || quest.isFailed) continue;
+      if (quest.targetSystemId !== currentSystemId) continue;
+      const completed = questManager.forceCompleteQuest(quest.id, player);
+      if (completed) {
+        // Remove the OVERMIND system stored in targetObjectId (the one being pushed back).
+        if (quest.targetObjectId) {
+          galaxy.removeOvermindSystem(quest.targetObjectId);
+          logger.info(
+            `DEFENSE quest completed: ${quest.title}, liberated OVERMIND system ${quest.targetObjectId}`,
+          );
+        }
+      }
+    }
+  }
+
+  /** Show a prompt when entering the OVERMIND core system so the player can fight the final encounter. */
+  private showOvermindCorePrompt(): void {
+    if (!this.gameEngine) return;
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+
+    const overlay = new Container();
+    const bg = new Graphics();
+    bg.fill({ color: 0x000000, alpha: 0.85 });
+    bg.roundRect(width / 2 - 240, height / 2 - 110, 480, 220, 6);
+    bg.fill();
+
+    const border = new Graphics();
+    border.stroke({ width: 2, color: 0xff2200 });
+    border.roundRect(width / 2 - 240, height / 2 - 110, 480, 220, 6);
+    border.stroke();
+
+    const title = new Text({
+      text: "ЯДРО OVERMIND",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 20,
+        fill: 0xff2200,
+        fontWeight: "bold",
+      },
+    });
+    title.anchor.set(0.5);
+    title.x = width / 2;
+    title.y = height / 2 - 80;
+    title.eventMode = "none";
+
+    const desc = new Text({
+      text: "Вы вошли в систему ядра OVERMIND.\nУничтожьте его, чтобы спасти галактику.",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 14,
+        fill: 0xcccccc,
+        align: "center",
+      },
+    });
+    desc.anchor.set(0.5);
+    desc.x = width / 2;
+    desc.y = height / 2 - 30;
+    desc.eventMode = "none";
+
+    const attackBtn = new Container();
+    const attackBg = new Graphics();
+    attackBg.fill({ color: 0x330000 });
+    attackBg.stroke({ width: 1, color: 0xff2200 });
+    attackBg.roundRect(0, 0, 180, 36, 4);
+    attackBg.fill();
+    attackBg.stroke();
+    const attackLabel = new Text({
+      text: "[ Атаковать ядро ]",
+      style: { fontFamily: "Courier New", fontSize: 14, fill: 0xff4444 },
+    });
+    attackLabel.x = 8;
+    attackLabel.y = 9;
+    attackLabel.eventMode = "none";
+    attackBtn.addChild(attackBg, attackLabel);
+    attackBtn.x = width / 2 - 200;
+    attackBtn.y = height / 2 + 40;
+    attackBtn.eventMode = "static";
+    attackBtn.cursor = "pointer";
+    attackBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      overlay.destroy();
+      void this.gameEngine!.transitionTo(SceneType.COMBAT, {
+        gameEngine: this.gameEngine!,
+        isOvermindCore: true,
+        npcEnemy: {
+          id: "overmind_core",
+          hullHP: 300,
+          shields: 150,
+          damage: 45,
+          techLevel: 7,
+        },
+      });
+    });
+
+    const retreatBtn = new Container();
+    const retreatBg = new Graphics();
+    retreatBg.fill({ color: 0x0d1b2a });
+    retreatBg.stroke({ width: 1, color: 0x4488ff });
+    retreatBg.roundRect(0, 0, 180, 36, 4);
+    retreatBg.fill();
+    retreatBg.stroke();
+    const retreatLabel = new Text({
+      text: "[ Отступить ]",
+      style: { fontFamily: "Courier New", fontSize: 14, fill: 0x4488ff },
+    });
+    retreatLabel.x = 8;
+    retreatLabel.y = 9;
+    retreatLabel.eventMode = "none";
+    retreatBtn.addChild(retreatBg, retreatLabel);
+    retreatBtn.x = width / 2 + 20;
+    retreatBtn.y = height / 2 + 40;
+    retreatBtn.eventMode = "static";
+    retreatBtn.cursor = "pointer";
+    retreatBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      overlay.destroy();
+    });
+
+    overlay.addChild(bg, border, title, desc, attackBtn, retreatBtn);
+    this.renderer.uiLayer.addChild(overlay);
   }
 
   /**

@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 13;
+  static readonly CURRENT_VERSION = 14;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -158,6 +158,26 @@ export class MigrationPipeline {
       if (player) {
         if (player.killPoints === undefined) player.killPoints = 0;
         if (player.rank === undefined) player.rank = 0;
+      }
+    },
+    // 13 -> 14: OVERMIND threat arc (Task 23). Old saves lack overmindSystems and
+    // overmindCoreSystemId on galaxy; default to empty set, core = last system by ID.
+    13: (state: SaveState) => {
+      const galaxy = state.galaxy as unknown as {
+        systems?: Array<{ id: string }>;
+        overmindSystems?: string[];
+        overmindCoreSystemId?: string;
+      };
+      if (galaxy) {
+        if (!Array.isArray(galaxy.overmindSystems)) {
+          galaxy.overmindSystems = [];
+        }
+        if (!galaxy.overmindCoreSystemId) {
+          const lastSystem = Array.isArray(galaxy.systems)
+            ? [...galaxy.systems].sort((a, b) => a.id.localeCompare(b.id)).pop()
+            : null;
+          galaxy.overmindCoreSystemId = lastSystem?.id ?? "";
+        }
       }
     },
     // 10 -> 11: News feed bookmarks (Task 20). Add newsBookmarks to player;

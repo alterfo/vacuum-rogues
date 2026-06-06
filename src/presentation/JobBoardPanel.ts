@@ -14,6 +14,7 @@ const TYPE_LABEL: Record<QuestType, string> = {
   [QuestType.DIPLOMACY]: "Дипломатия",
   [QuestType.EXPLORATION]: "Разведка",
   [QuestType.TEXT_ADVENTURE]: "✦ История",
+  [QuestType.DEFENSE]: "⚔ Оборона",
 };
 
 const TYPE_COLOR: Record<QuestType, number> = {
@@ -23,6 +24,7 @@ const TYPE_COLOR: Record<QuestType, number> = {
   [QuestType.DIPLOMACY]: 0xffcc66,
   [QuestType.EXPLORATION]: 0x66ddff,
   [QuestType.TEXT_ADVENTURE]: 0xff99ff,
+  [QuestType.DEFENSE]: 0xff4422,
 };
 
 /** Maximum number of quests a player can hold simultaneously. */

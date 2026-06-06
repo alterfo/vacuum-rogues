@@ -131,6 +131,7 @@ export const QuestSchema = z.object({
     "DIPLOMACY",
     "EXPLORATION",
     "TEXT_ADVENTURE",
+    "DEFENSE",
   ]),
   objectives: z.array(QuestObjectiveSchema),
   isCompleted: z.boolean(),
@@ -307,6 +308,8 @@ export const GalaxySchema = z.object({
   npcShips: z.array(NpcShipSchema).default([]),
   newsFeed: z.array(NewsEventSchema).default([]),
   questBoards: z.record(z.number().int().min(0)).default({}),
+  overmindSystems: z.array(z.string()).default([]),
+  overmindCoreSystemId: z.string().default(""),
 });
 
 export const DialogueSessionSchema = z.object({

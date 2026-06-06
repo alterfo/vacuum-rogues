@@ -65,6 +65,8 @@ export enum QuestType {
   // Branching text-adventure novella (EPIC-005), issued ~1 in 5 by the quest
   // generator (EPIC-008) as the special "cherry on top".
   TEXT_ADVENTURE = "TEXT_ADVENTURE",
+  // Anti-OVERMIND defense mission: fly to the target system to push OVERMIND back.
+  DEFENSE = "DEFENSE",
 }
 
 export enum EventType {

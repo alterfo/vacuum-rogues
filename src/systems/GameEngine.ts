@@ -392,6 +392,34 @@ export class GameEngine {
       }
     }
 
+    // OVERMIND expansion: every 5 days, take an adjacent non-player system.
+    if (
+      this.galaxy.gameDays % 5 === 0 &&
+      this.galaxy.overmindSystems.length > 0
+    ) {
+      const playerSystemId = this.player?.currentSystemId ?? "";
+      const candidates = this.galaxy.getOvermindAdjacentSystems(playerSystemId);
+      if (candidates.length > 0) {
+        const target = candidates[rng.nextInt(0, candidates.length - 1)];
+        this.galaxy.addOvermindSystem(target.id);
+        this.galaxy.addNewsEvent({
+          type: "OVERMIND_EXPANSION",
+          systemId: target.id,
+          day: this.galaxy.gameDays,
+          description: `OVERMIND захватил систему ${target.name}`,
+        });
+        logger.info(`OVERMIND expanded to: ${target.name} (${target.id})`);
+      }
+    }
+
+    // Loss condition: OVERMIND controls >50% of systems.
+    if (this.galaxy.isOvermindMajority()) {
+      logger.warn(
+        "OVERMIND controls majority of galaxy — triggering game over",
+      );
+      this.showGameOutcomeScreen(false);
+    }
+
     this.infoRegistryCache = null; // world advanced → registry is stale
 
     // Check for expired quests and apply failure penalties.
@@ -439,6 +467,11 @@ export class GameEngine {
     const faction: string =
       (originSystem as { ownerFaction?: string })?.ownerFaction ??
       "INDEPENDENT";
+    // Determine OVERMIND-adjacent systems for injecting DEFENSE quests.
+    const overmindAdjacent = this.galaxy
+      .getOvermindAdjacentSystems(this.player.currentSystemId)
+      .map((s) => s.id);
+
     const board = generateQuestBoard({
       systems: this.galaxy.systems,
       originSystemId: this.player.currentSystemId,
@@ -446,6 +479,8 @@ export class GameEngine {
       day: this.galaxy.gameDays,
       seed: this.galaxy.id,
       completedQuestChains: this.player.completedQuestChains,
+      overmindSystems: this.galaxy.overmindSystems,
+      overmindAdjacentSystems: overmindAdjacent,
     });
     // Record when this board was last fetched for persistence tracking.
     this.galaxy.questBoards[planetId] = this.galaxy.gameDays;
@@ -625,6 +660,98 @@ export class GameEngine {
       default:
         Object.setPrototypeOf(mod, ShipModule.prototype);
     }
+  }
+
+  /**
+   * Show a full-screen win or loss overlay with a "Начать заново" button.
+   * Called when the player destroys the OVERMIND core (win) or OVERMIND
+   * captures more than half the galaxy (loss).
+   */
+  showGameOutcomeScreen(win: boolean): void {
+    if (!this.renderer) return;
+    this.clearModal();
+
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+
+    const overlay = new Graphics();
+    overlay.fill({ color: 0x000000, alpha: 0.9 });
+    overlay.rect(0, 0, width, height);
+    overlay.eventMode = "static";
+    this.renderer.uiLayer.addChild(overlay);
+    this.modalObjects.push(overlay);
+
+    const titleColor = win ? 0xffdd44 : 0xff4444;
+    const titleStr = win ? "ПОБЕДА!" : "КОНЕЦ ИГРЫ";
+
+    const titleText = new Text({
+      text: titleStr,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 36,
+        fill: titleColor,
+        fontWeight: "bold",
+      },
+    });
+    titleText.anchor.set(0.5);
+    titleText.x = width / 2;
+    titleText.y = height / 2 - 80;
+    titleText.eventMode = "none";
+    this.renderer.uiLayer.addChild(titleText);
+    this.modalObjects.push(titleText);
+
+    const msg = win
+      ? "Ядро OVERMIND уничтожено.\nГалактика спасена!"
+      : "Галактика пала.\nOVERMIND установил контроль над большинством систем.";
+
+    const msgText = new Text({
+      text: msg,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 18,
+        fill: 0xcccccc,
+        align: "center",
+        wordWrap: true,
+        wordWrapWidth: width * 0.65,
+      },
+    });
+    msgText.anchor.set(0.5);
+    msgText.x = width / 2;
+    msgText.y = height / 2;
+    msgText.eventMode = "none";
+    this.renderer.uiLayer.addChild(msgText);
+    this.modalObjects.push(msgText);
+
+    const btnText = new Text({
+      text: "Начать заново",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 22,
+        fill: 0x00ff88,
+        fontWeight: "bold",
+      },
+    });
+    btnText.anchor.set(0.5);
+    btnText.x = width / 2;
+    btnText.y = height / 2 + 90;
+    btnText.eventMode = "static";
+    btnText.cursor = "pointer";
+    btnText.on("pointerdown", () => {
+      this.clearModal();
+      this.generateDefaultGameState()
+        .then(() =>
+          this.transitionTo(SceneType.MAIN_MENU, { gameEngine: this }),
+        )
+        .catch((e) => logger.error("Transition after game outcome failed:", e));
+    });
+    btnText.on("pointerover", () => {
+      btnText.alpha = 0.7;
+    });
+    btnText.on("pointerout", () => {
+      btnText.alpha = 1;
+    });
+    this.renderer.uiLayer.addChild(btnText);
+    this.modalObjects.push(btnText);
   }
 
   handleError(error: Error): void {

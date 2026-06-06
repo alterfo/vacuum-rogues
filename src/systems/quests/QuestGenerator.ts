@@ -57,6 +57,10 @@ export interface BoardOptions {
   readonly chainRatio?: number;
   /** Chain IDs already fully completed by the player; those chains show a finale quest instead. */
   readonly completedQuestChains?: readonly string[];
+  /** OVERMIND-controlled system IDs; used to build DEFENSE quest targets. */
+  readonly overmindSystems?: readonly string[];
+  /** System IDs adjacent to OVERMIND-controlled systems (non-OVERMIND). Triggers 1 DEFENSE quest when non-empty. */
+  readonly overmindAdjacentSystems?: readonly string[];
 }
 
 /** The routine (non-text) quest types, in pick order. */
@@ -85,6 +89,8 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     eliteRatio = QUEST_ELITE_RATIO,
     chainRatio = QUEST_CHAIN_RATIO,
     completedQuestChains = [],
+    overmindSystems = [],
+    overmindAdjacentSystems = [],
   } = opts;
 
   const bucket = Math.floor(day / Math.max(1, refreshEveryDays));
@@ -178,6 +184,63 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
       ),
     );
   }
+  // Inject 1 DEFENSE quest when OVERMIND has adjacent systems the player can contest.
+  if (overmindAdjacentSystems.length > 0) {
+    const defRng = new SeededRNG(`${boardSeed}|defense`);
+    const targetAdjacentId =
+      overmindAdjacentSystems[
+        defRng.nextInt(0, overmindAdjacentSystems.length - 1)
+      ];
+    // The OVERMIND system adjacent to the target (to be removed on completion).
+    // Find the first OVERMIND system that is connected to the target.
+    const targetSys = systems.find((s) => s.id === targetAdjacentId) ?? null;
+    const adjacentOvermindId =
+      targetSys?.connections
+        .map((c) => c.toSystemId)
+        .find((id) => overmindSystems.includes(id)) ?? null;
+
+    if (targetSys) {
+      const jumps =
+        jumpDistances(systems, originSystemId).get(targetAdjacentId) ?? 1;
+      const { credits, experience, deadline } = economics(
+        QuestType.DEFENSE,
+        jumps,
+        defRng,
+      );
+      const defId = `${slotId(planetId, Math.floor(day / Math.max(1, refreshEveryDays)), out.length)}_defense`;
+      out.push({
+        template: {
+          id: defId,
+          title: `Оборона: ${targetSys.name} (${jumps} прыж.)`,
+          description: `OVERMIND угрожает системе ${targetSys.name}. Прилетите туда, чтобы остановить экспансию.`,
+          type: QuestType.DEFENSE,
+          objectives: [
+            {
+              id: `${defId}_arrive`,
+              description: `Прибыть в систему ${targetSys.name}`,
+              type: "VISIT_LOCATION",
+              targetAmount: 1,
+              locationId: targetSys.id,
+            },
+          ],
+          reward: { credits, experience, items: [] },
+          dialogueAnchors: [],
+          deadline,
+          failurePenalty: {
+            reputationLoss: 15,
+            description: "OVERMIND захватил систему — сопротивление сломлено.",
+          },
+          targetSystemId: targetAdjacentId,
+          targetObjectId: adjacentOvermindId,
+          minReputation: 0,
+        },
+        targetSystemId: targetAdjacentId,
+        targetPlanetId: pickTargetPlanet(targetSys),
+        jumps,
+      });
+    }
+  }
+
   return out;
 }
 
@@ -209,6 +272,7 @@ function economics(
     [QuestType.EXPLORATION]: 1.1,
     [QuestType.BOUNTY]: 1.6,
     [QuestType.TEXT_ADVENTURE]: 1.4,
+    [QuestType.DEFENSE]: 1.8,
   };
   const m = risk[type] ?? 1;
   const base = 120;

@@ -19,6 +19,8 @@ export interface CombatContext {
     damage: number;
     techLevel: number;
   };
+  /** True when this is the OVERMIND core encounter (win condition). */
+  isOvermindCore?: boolean;
 }
 
 export class CombatScene extends GameScene {
@@ -29,6 +31,7 @@ export class CombatScene extends GameScene {
   private _weaponPanelContainer: Container | null = null;
   private _outcomeShown = false;
   private _npcId: string | null = null;
+  private _isOvermindCore = false;
 
   initialize(context?: object): void {
     const ctx = context as CombatContext | undefined;
@@ -36,6 +39,7 @@ export class CombatScene extends GameScene {
     this._encounter = ctx?.encounter;
     this._outcomeShown = false;
     this._npcId = ctx?.npcEnemy?.id ?? null;
+    this._isOvermindCore = ctx?.isOvermindCore ?? false;
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
@@ -472,6 +476,11 @@ export class CombatScene extends GameScene {
     continueBtn.on("pointerdown", (e) => {
       e.stopPropagation();
       if (this._gameEngine) {
+        // OVERMIND core destroyed → trigger game win screen.
+        if (this._isOvermindCore && combatResult === "victory") {
+          this._gameEngine.showGameOutcomeScreen(true);
+          return;
+        }
         void this._gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
           gameEngine: this._gameEngine,
           combatResult: combatResult === "victory" ? "victory" : "retreat",

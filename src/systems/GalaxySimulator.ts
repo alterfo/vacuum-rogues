@@ -123,12 +123,28 @@ export class GalaxySimulator {
     this.overmind = new Overmind();
     this._eventQueue = [];
 
+    // Assign OVERMIND starting systems: the 2 most distant from the galactic
+    // centre (highest q²+r² magnitude). The most distant becomes the core.
+    const sortedByDistance = [...generatedSystems].sort((a, b) => {
+      const da = a.coordinates.q ** 2 + a.coordinates.r ** 2;
+      const db = b.coordinates.q ** 2 + b.coordinates.r ** 2;
+      return db - da; // descending — most isolated first
+    });
+    const overmindStart: string[] = [];
+    if (sortedByDistance.length >= 1)
+      overmindStart.push(sortedByDistance[0].id);
+    if (sortedByDistance.length >= 2)
+      overmindStart.push(sortedByDistance[1].id);
+    const overmindCoreId = sortedByDistance[0]?.id ?? "";
+
     const galaxy = new Galaxy(
       `galaxy_${this._seed}`,
       this.systems,
       this.overmind,
       [],
       [],
+      overmindStart,
+      overmindCoreId,
     );
 
     // Populate the galaxy with autonomous NPC ships (Feature 8).

@@ -490,20 +490,20 @@ OVERMIND (ancient threat) controls some systems and expands daily. If it takes >
 game loss. Player can take anti-OVERMIND quests to push it back. Destroying the OVERMIND core
 system → win.
 
-- [ ] Add `overmindSystems: Set<string>` and `overmindCoreSystemId: string` to `Galaxy`. On
+- [x] Add `overmindSystems: Set<string>` and `overmindCoreSystemId: string` to `Galaxy`. On
   galaxy generation, assign 2 starting OVERMIND systems (from isolated edge systems). Update
   schemas + migration (default empty set; core = last system by ID).
-- [ ] OVERMIND expansion in `GalaxySimulator.advanceDay()`: every 5 days, OVERMIND takes an
+- [x] OVERMIND expansion in `GalaxySimulator.advanceDay()`: every 5 days, OVERMIND takes an
   adjacent non-player system (BFS neighbor of any OVERMIND system). Emit news event "OVERMIND
   захватил систему [name]".
-- [ ] Win condition: when player jumps into `overmindCoreSystemId` and wins a combat encounter
+- [x] Win condition: when player jumps into `overmindCoreSystemId` and wins a combat encounter
   (`CombatSystem` returns victory with a special "CORE_DESTROYED" flag), game win screen shows.
-- [ ] Loss condition: checked each day advance — if `overmindSystems.size > galaxy.systems.length
+- [x] Loss condition: checked each day advance — if `overmindSystems.size > galaxy.systems.length
   / 2` → game over screen ("Галактика пала").
-- [ ] Anti-OVERMIND quests: `QuestGenerator` adds 1 DEFENSE quest type (requires player to fly
+- [x] Anti-OVERMIND quests: `QuestGenerator` adds 1 DEFENSE quest type (requires player to fly
   to an OVERMIND-adjacent system; on arrival, OVERMIND loses that system).
-- [ ] Win/loss screens: simple PixiJS overlay with outcome text and "Начать заново" button.
-- [ ] Unit tests: OVERMIND expansion increments; loss condition triggers at >50%; defense quest
+- [x] Win/loss screens: simple PixiJS overlay with outcome text and "Начать заново" button.
+- [x] Unit tests: OVERMIND expansion increments; loss condition triggers at >50%; defense quest
   removes system from OVERMIND set.
 
 ### Task 24: Global events system
