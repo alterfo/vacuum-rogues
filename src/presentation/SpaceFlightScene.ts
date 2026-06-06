@@ -274,6 +274,7 @@ export class SpaceFlightScene extends GameScene {
   // otherwise the minimap and star-map button drift off-screen (bug: canvas
   // exceeded the window, right/bottom UI hidden).
   private boundResize: (() => void) | null = null;
+  private boundContextMenu: ((e: Event) => void) | null = null;
   private backButton: Text | null = null;
 
   // Debug display
@@ -513,8 +514,10 @@ export class SpaceFlightScene extends GameScene {
     window.addEventListener("resize", this.boundResize);
 
     // Prevent context menu on right click (used for panning)
-    this.renderer.app.canvas.addEventListener("contextmenu", (e) =>
-      e.preventDefault(),
+    this.boundContextMenu = (e: Event) => e.preventDefault();
+    this.renderer.app.canvas.addEventListener(
+      "contextmenu",
+      this.boundContextMenu,
     );
 
     // Suppress middle-button auto-scroll so panning with the wheel button does
@@ -583,6 +586,15 @@ export class SpaceFlightScene extends GameScene {
     if (this.boundWheel) {
       window.removeEventListener("wheel", this.boundWheel);
       this.boundWheel = null;
+    }
+
+    // Remove the contextmenu suppressor.
+    if (this.boundContextMenu) {
+      this.renderer.app.canvas.removeEventListener(
+        "contextmenu",
+        this.boundContextMenu,
+      );
+      this.boundContextMenu = null;
     }
 
     // Remove the middle-button auto-scroll suppressor.
@@ -4146,5 +4158,13 @@ export class SpaceFlightScene extends GameScene {
     return (
       this.questJournalUI !== null && this.questJournalUI.container.visible
     );
+  }
+
+  /** E2E helper: return current system planets for test assertions */
+  e2eGetPlanets(): { id: string; name: string }[] {
+    return this.planetSprites.map((ps) => ({
+      id: ps.planet.id,
+      name: ps.planet.name,
+    }));
   }
 }

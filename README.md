@@ -108,15 +108,14 @@ galactic-horizon/
 ### Документация для разработчиков
 
 - **[Developer Guide](docs/DEVELOPER_GUIDE.md)** — архитектура, жизненный цикл сцены
-- **[Coding Rules](docs/CODING_RULES.md)** — архитектурные ограничения, best practices
-- **[AI Prompt Guide](docs/AI_PROMPT_GUIDE.md)** — шаблоны промптов для AI-ассистентов
+- **[CLAUDE.md](CLAUDE.md)** — архитектурные ограничения, best practices, coding rules
 - **[SOURCE-OF-TRUTH](docs/requirements/reference/SOURCE-OF-TRUTH.md)** — канон дизайна
 
 ### Добавление новой сцены
 
 1. Создать класс, наследующий `GameScene`
 2. Реализовать методы `initialize()`, `update()`, `destroy()`
-3. Зарегистрировать в `GameEngine.transitionTo()`
+3. Добавить `case` в `src/core/services/SceneFactory.ts`
 4. Добавить `SceneType` в `src/types/index.ts`
 
 ### Интеграция ONNX-модели

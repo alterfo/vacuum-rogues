@@ -306,4 +306,4 @@ private async performWarpJump(target: StarSystem): Promise<void> {
 
 ## Project Status
 
-Phase 1 (MVP in progress) — core gameplay loops implemented: economy, equipment/hull system, NPC living galaxy, quest generator, text quests, government dialogue, station services, info center, combat AI, fog-of-war star map, audio. See `docs/plans/full-game-implementation.md` for remaining tasks.
+Phase 1 (MVP in progress) — core gameplay loops implemented: economy, equipment/hull system, NPC living galaxy, quest generator, text quests, government dialogue, station services, info center, combat AI, fog-of-war star map, audio. See `docs/plans/completed/full-game-implementation.md` for remaining tasks.

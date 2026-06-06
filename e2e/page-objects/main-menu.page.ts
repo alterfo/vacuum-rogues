@@ -106,7 +106,10 @@ export class MainMenuPage extends GamePageBase {
       }
     });
 
-    await this.page.waitForTimeout(3000);
+    await this.page.waitForFunction(() => {
+      const w = window as unknown as Record<string, unknown>;
+      return w.__gameEngine != null;
+    }, { timeout: 10000 });
 
     const workerErrors = errors.filter(
       (e) =>

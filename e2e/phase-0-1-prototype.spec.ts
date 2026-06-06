@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
-import { MainMenuPage } from '../page-objects/main-menu.page';
-import { StarMapPage } from '../page-objects/star-map.page';
-import { SpaceFlightPage } from '../page-objects/space-flight.page';
+import { MainMenuPage } from './page-objects/main-menu.page';
+import { StarMapPage } from './page-objects/star-map.page';
+import { SpaceFlightPage } from './page-objects/space-flight.page';
 import {
   checkIndexedDB,
   saveGameToIndexedDB,
   loadGameFromIndexedDB,
   expectNoJavaScriptErrors,
-} from '../fixtures/game-fixtures';
+} from './fixtures/game-fixtures';
 
 /**
  * Phase 0 - Technical Prototype (Proof of Concept)
@@ -163,7 +163,12 @@ test.describe('Phase 1: Combat System (MVP1)', () => {
     await starMap.navigateFromMainMenu();
     await starMap.triggerRandomEncounter();
 
-    await page.waitForTimeout(2000);
+    await page.waitForFunction(() => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: { constructor: { name: string } } | null;
+      };
+      return engine?.currentScene?.constructor.name === 'CombatScene';
+    }, { timeout: 10000 });
 
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
@@ -175,25 +180,28 @@ test.describe('Phase 1: Combat System (MVP1)', () => {
     await starMap.navigateFromMainMenu();
     await starMap.triggerRandomEncounter();
 
-    await page.waitForTimeout(2000);
+    await page.waitForFunction(() => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: { constructor: { name: string } } | null;
+      };
+      return engine?.currentScene?.constructor.name === 'CombatScene';
+    }, { timeout: 10000 });
+
+    await page.evaluate(() => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eWeakenEnemy?: () => void } | null;
+      };
+      engine?.currentScene?.e2eWeakenEnemy?.();
+    });
+
+    await page.evaluate(async () => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eAttack?: () => Promise<void> } | null;
+      };
+      await engine?.currentScene?.e2eAttack?.();
+    });
 
     const canvas = page.locator('canvas');
-    const box = await canvas.boundingBox();
-
-    if (box) {
-      // Click on enemy
-      await canvas.click({
-        position: { x: box.width * 0.6, y: box.height * 0.4 },
-      });
-      await page.waitForTimeout(500);
-
-      // Execute attack
-      await canvas.click({
-        position: { x: box.width * 0.8, y: box.height * 0.8 },
-      });
-    }
-
-    await page.waitForTimeout(1000);
     await expect(canvas).toBeVisible();
   });
 });
@@ -269,8 +277,6 @@ test.describe('Phase 0: Space Flight Demo', () => {
   test('TC-P0-F001: Navigate to space flight scene', async ({ page }) => {
     await mainMenu.expectMainMenuVisible();
     await mainMenu.clickFlight();
-    await page.waitForTimeout(500);
-    
     await spaceFlight.expectSpaceFlightVisible();
   });
 
@@ -289,8 +295,6 @@ test.describe('Phase 0: Space Flight Demo', () => {
     await spaceFlight.expectSpaceFlightVisible();
     
     await spaceFlight.clickBackToMap();
-    await page.waitForTimeout(500);
-    
     // Should be back at main menu or star map
     await mainMenu.expectMainMenuVisible();
   });
@@ -302,8 +306,6 @@ test.describe('Phase 0: Space Flight Demo', () => {
     if (box) {
       // Click to move ship
       await spaceFlight.clickToMoveShip(box.width / 2 + 100, box.height / 2);
-      await page.waitForTimeout(300);
-      
       // Scene should still be active
       await spaceFlight.expectSpaceFlightVisible();
     }

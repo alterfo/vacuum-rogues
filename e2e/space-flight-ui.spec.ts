@@ -18,7 +18,7 @@ test.describe('Space Flight UI - Camera Controls', () => {
     await page.goto('/');
     await mainMenuPage.waitForMainMenu();
     await mainMenuPage.startNewGame();
-    await mainMenuPage.selectRace('human');
+    await mainMenuPage.selectRace('OUTLANDERS');
     await mainMenuPage.clickStartGame();
     // Wait for game to initialize and enter space flight
     await spaceFlightPage.waitForSpaceFlight();
@@ -152,7 +152,7 @@ test.describe('Space Flight UI - Minimap', () => {
     await page.goto('/');
     await mainMenuPage.waitForMainMenu();
     await mainMenuPage.startNewGame();
-    await mainMenuPage.selectRace('human');
+    await mainMenuPage.selectRace('OUTLANDERS');
     await mainMenuPage.clickStartGame();
     await spaceFlightPage.waitForSpaceFlight();
   });
@@ -209,7 +209,7 @@ test.describe('Space Flight UI - Ship Navigation', () => {
     await page.goto('/');
     await mainMenuPage.waitForMainMenu();
     await mainMenuPage.startNewGame();
-    await mainMenuPage.selectRace('human');
+    await mainMenuPage.selectRace('OUTLANDERS');
     await mainMenuPage.clickStartGame();
     await spaceFlightPage.waitForSpaceFlight();
   });
@@ -303,7 +303,7 @@ test.describe('Space Flight UI - UI Elements', () => {
     await page.goto('/');
     await mainMenuPage.waitForMainMenu();
     await mainMenuPage.startNewGame();
-    await mainMenuPage.selectRace('human');
+    await mainMenuPage.selectRace('OUTLANDERS');
     await mainMenuPage.clickStartGame();
     await spaceFlightPage.waitForSpaceFlight();
   });
@@ -398,7 +398,7 @@ test.describe('Space Flight UI - Combined Scenarios', () => {
     await page.goto('/');
     await mainMenuPage.waitForMainMenu();
     await mainMenuPage.startNewGame();
-    await mainMenuPage.selectRace('human');
+    await mainMenuPage.selectRace('OUTLANDERS');
     await mainMenuPage.clickStartGame();
     await spaceFlightPage.waitForSpaceFlight();
   });
