@@ -25,6 +25,11 @@ export class Galaxy {
   overmindSystems: string[] = [];
   /** The core OVERMIND system; destroying it triggers the win condition. */
   overmindCoreSystemId: string = "";
+  /**
+   * Active TradeBoom events: maps systemId → day on which the boom expires.
+   * While active, market prices in that system are reduced by 15%.
+   */
+  activeTradeBoomSystems: Record<string, number> = {};
 
   constructor(
     public readonly id: string,
@@ -85,6 +90,46 @@ export class Galaxy {
       }
     }
     return result;
+  }
+
+  /** Apply a TradeBoom to a system (prices drop 15% for durationDays). */
+  applyTradeBoom(systemId: string, durationDays: number): void {
+    const expiresDay = this.gameDays + durationDays;
+    this.activeTradeBoomSystems[systemId] = expiresDay;
+    const system = this.systems.find((s) => s.id === systemId);
+    if (!system) return;
+    for (const planet of system.planets) {
+      if (!planet.market) continue;
+      for (let i = 0; i < planet.market.priceMultipliers.length; i++) {
+        planet.market.priceMultipliers[i] = Math.max(
+          0.4,
+          (planet.market.priceMultipliers[i] ?? 1) * 0.85,
+        );
+      }
+    }
+  }
+
+  /** Expire TradeBoom effects whose endDay has passed, restoring prices. */
+  expireGlobalEvents(): void {
+    for (const [systemId, expiresDay] of Object.entries(
+      this.activeTradeBoomSystems,
+    )) {
+      if (this.gameDays >= expiresDay) {
+        const system = this.systems.find((s) => s.id === systemId);
+        if (system) {
+          for (const planet of system.planets) {
+            if (!planet.market) continue;
+            for (let i = 0; i < planet.market.priceMultipliers.length; i++) {
+              planet.market.priceMultipliers[i] = Math.min(
+                2.5,
+                (planet.market.priceMultipliers[i] ?? 1) / 0.85,
+              );
+            }
+          }
+        }
+        delete this.activeTradeBoomSystems[systemId];
+      }
+    }
   }
 
   /** Append a news event, trimming the feed to NEWS_FEED_MAX. */

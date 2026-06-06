@@ -294,6 +294,10 @@ export const NewsEventSchema = z.object({
     "PIRATE_ATTACK",
     "MARKET_SHIFT",
     "OVERMIND_EXPANSION",
+    "PIRATE_SURGE",
+    "TRADE_BOOM",
+    "PLAGUE",
+    "DISCOVERY",
   ]),
   npcId: z.string().optional(),
   systemId: z.string(),
@@ -310,6 +314,7 @@ export const GalaxySchema = z.object({
   questBoards: z.record(z.number().int().min(0)).default({}),
   overmindSystems: z.array(z.string()).default([]),
   overmindCoreSystemId: z.string().default(""),
+  activeTradeBoomSystems: z.record(z.number().int().min(0)).default({}),
 });
 
 export const DialogueSessionSchema = z.object({

@@ -10,8 +10,23 @@ import { SystemNameGenerator } from "@/utils/systemNameGenerator";
 import { PlanetGenerator } from "./PlanetGenerator";
 import { NpcSimulator } from "./npc/NpcSimulator";
 import { logger } from "@/utils/logger";
-import { StationType, EconomyType, PoliticalSystem } from "@/types";
+import {
+  StationType,
+  EconomyType,
+  PoliticalSystem,
+  GalaxyEventType,
+} from "@/types";
+import type { GalaxyGlobalEvent, NewsEvent } from "@/types";
 import type { Faction } from "@/types/faction";
+
+/**
+ * Per-day probability of a global galaxy event firing (~1 event per 10 days on
+ * average, which falls comfortably within the stated 7–15 day range).
+ */
+const GLOBAL_EVENT_CHANCE = 0.1;
+
+/** Duration of a TradeBoom effect in days. */
+const TRADE_BOOM_DURATION = 10;
 
 export class GalaxySimulator {
   private _seed: string;
@@ -188,6 +203,163 @@ export class GalaxySimulator {
           planet.market.demandVector[i] += this.rng.nextFloat(-0.1, 0.1);
           planet.market.supplyVector[i] += this.rng.nextFloat(-0.1, 0.1);
         }
+      }
+    }
+  }
+
+  /**
+   * Roll and apply random galaxy-wide events every ~10 days (seeded per day so
+   * events are deterministic for a given galaxy + day combination).
+   * Returns news events describing what happened.
+   */
+  tickGlobalEvents(galaxy: Galaxy, rng: SeededRNG): NewsEvent[] {
+    const events: NewsEvent[] = [];
+
+    // Expire any TradeBoom whose duration has elapsed.
+    galaxy.expireGlobalEvents();
+
+    if (rng.next() >= GLOBAL_EVENT_CHANCE) return events;
+
+    // Pick a target system at random (exclude systems with no planets).
+    const candidates = galaxy.systems.filter((s) => s.planets.length > 0);
+    if (candidates.length === 0) return events;
+    const target = candidates[rng.nextInt(0, candidates.length - 1)];
+
+    const severity = rng.nextInt(1, 3) as 1 | 2 | 3;
+    const eventTypes: GalaxyEventType[] = [
+      GalaxyEventType.PIRATE_SURGE,
+      GalaxyEventType.TRADE_BOOM,
+      GalaxyEventType.PLAGUE,
+      GalaxyEventType.DISCOVERY,
+    ];
+    const eventType = eventTypes[rng.nextInt(0, eventTypes.length - 1)];
+
+    const globalEvent: GalaxyGlobalEvent = {
+      type: eventType,
+      systemId: target.id,
+      severity,
+      day: galaxy.gameDays,
+    };
+
+    const newsEvent = this.applyGlobalEvent(globalEvent, galaxy, rng);
+    events.push(newsEvent);
+    return events;
+  }
+
+  /**
+   * Apply a global event's effect and return the corresponding news event.
+   */
+  private applyGlobalEvent(
+    event: GalaxyGlobalEvent,
+    galaxy: Galaxy,
+    rng: SeededRNG,
+  ): NewsEvent {
+    const system = galaxy.systems.find((s) => s.id === event.systemId);
+
+    switch (event.type) {
+      case GalaxyEventType.PIRATE_SURGE: {
+        // Spawn +3 pirate NPCs in target system; prices rise +20%.
+        const pirateCount = 3 * event.severity;
+        for (let i = 0; i < pirateCount; i++) {
+          const id = `npc_surge_${event.systemId}_${event.day}_${i}`;
+          galaxy.npcShips.push(
+            this.npcSimulator.spawnPirateInSystem(
+              galaxy,
+              rng,
+              id,
+              event.systemId,
+            ),
+          );
+        }
+        if (system) {
+          for (const planet of system.planets) {
+            if (!planet.market) continue;
+            for (let i = 0; i < planet.market.priceMultipliers.length; i++) {
+              planet.market.priceMultipliers[i] = Math.min(
+                2.5,
+                (planet.market.priceMultipliers[i] ?? 1) * 1.2,
+              );
+            }
+          }
+        }
+        logger.info(
+          `PIRATE_SURGE in ${system?.name ?? event.systemId} (severity ${event.severity}): +${pirateCount} pirates, prices +20%`,
+        );
+        return {
+          type: "PIRATE_SURGE",
+          systemId: event.systemId,
+          day: event.day,
+          description: `Пиратский рейд! Флот пиратов атакует систему ${system?.name ?? event.systemId}. Цены на товары резко выросли.`,
+        };
+      }
+
+      case GalaxyEventType.TRADE_BOOM: {
+        // All prices in target system drop -15% for 10 days.
+        galaxy.applyTradeBoom(event.systemId, TRADE_BOOM_DURATION);
+        logger.info(
+          `TRADE_BOOM in ${system?.name ?? event.systemId}: prices -15% for ${TRADE_BOOM_DURATION} days`,
+        );
+        return {
+          type: "TRADE_BOOM",
+          systemId: event.systemId,
+          day: event.day,
+          description: `Торговый бум в системе ${system?.name ?? event.systemId}! Цены снижены на 15% в течение ${TRADE_BOOM_DURATION} дней.`,
+        };
+      }
+
+      case GalaxyEventType.PLAGUE: {
+        // Target planet population -= 30%.
+        if (system) {
+          const habitable = system.planets.filter((p) => p.isHabitable);
+          const planet =
+            habitable[rng.nextInt(0, Math.max(0, habitable.length - 1))];
+          if (planet) {
+            const loss = Math.round(planet.population * 0.3);
+            planet.population = Math.max(0, planet.population - loss);
+            logger.info(
+              `PLAGUE on ${planet.name}: population -30% (now ${planet.population})`,
+            );
+          }
+        }
+        return {
+          type: "PLAGUE",
+          systemId: event.systemId,
+          day: event.day,
+          description: `Эпидемия в системе ${system?.name ?? event.systemId}! Население резко сократилось. Спрос на медикаменты вырос.`,
+        };
+      }
+
+      case GalaxyEventType.DISCOVERY: {
+        // Reveal a previously foggy system adjacent to the target.
+        const foggyNeighbors = galaxy.systems.filter((s) => {
+          if (!s.fogOfWar) return false;
+          return (
+            system?.connections.some((c) => c.toSystemId === s.id) ?? false
+          );
+        });
+        let discovered = "неизвестная система";
+        if (foggyNeighbors.length > 0) {
+          const found =
+            foggyNeighbors[rng.nextInt(0, foggyNeighbors.length - 1)];
+          found.fogOfWar = false;
+          found.explored = true;
+          discovered = found.name;
+          logger.info(
+            `DISCOVERY: revealed ${found.name} (adjacent to ${system?.name})`,
+          );
+        }
+        const findTypes = [
+          "заброшенный корабль",
+          "залежи минералов",
+          "древние руины",
+        ];
+        const findType = findTypes[rng.nextInt(0, findTypes.length - 1)];
+        return {
+          type: "DISCOVERY",
+          systemId: event.systemId,
+          day: event.day,
+          description: `Открытие! Вблизи системы ${system?.name ?? event.systemId} обнаружен ${findType}. Система ${discovered} нанесена на карту.`,
+        };
       }
     }
   }

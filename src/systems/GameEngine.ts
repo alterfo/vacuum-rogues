@@ -15,6 +15,7 @@ import { Graphics, Text } from "pixi.js";
 import { validatePlayerSettings } from "@/validation/schemas";
 import { Player } from "@/domain/Player";
 import { NpcSimulator } from "@/systems/npc/NpcSimulator";
+import { GalaxySimulator } from "@/systems/GalaxySimulator";
 import { SeededRNG } from "@/utils/seededRNG";
 import type { Quest } from "@/domain/Quest";
 import {
@@ -95,6 +96,7 @@ export class GameEngine {
   private readonly playerService: IPlayerService;
   private readonly sceneFactory: SceneFactory;
   private readonly npcSimulator = new NpcSimulator();
+  private readonly galaxySimulator = new GalaxySimulator();
 
   constructor(diDependencies?: GameEngineDIDependencies) {
     if (diDependencies) {
@@ -360,6 +362,15 @@ export class GameEngine {
       this.player?.currentSystemId,
     );
     for (const event of npcEvents) {
+      this.galaxy.addNewsEvent(event);
+    }
+
+    // Global galaxy events: PIRATE_SURGE, TRADE_BOOM, PLAGUE, DISCOVERY (Task 24).
+    const globalEvents = this.galaxySimulator.tickGlobalEvents(
+      this.galaxy,
+      rng,
+    );
+    for (const event of globalEvents) {
       this.galaxy.addNewsEvent(event);
     }
 

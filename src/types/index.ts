@@ -75,6 +75,20 @@ export enum EventType {
   TRADER = "TRADER",
 }
 
+export enum GalaxyEventType {
+  PIRATE_SURGE = "PIRATE_SURGE",
+  TRADE_BOOM = "TRADE_BOOM",
+  PLAGUE = "PLAGUE",
+  DISCOVERY = "DISCOVERY",
+}
+
+export interface GalaxyGlobalEvent {
+  type: GalaxyEventType;
+  systemId: string;
+  severity: 1 | 2 | 3;
+  day: number;
+}
+
 export enum ResourceType {
   FUEL = "FUEL",
   METALS = "METALS",
@@ -201,7 +215,11 @@ export interface NewsEvent {
     | "NPC_QUEST_COMPLETE"
     | "PIRATE_ATTACK"
     | "MARKET_SHIFT"
-    | "OVERMIND_EXPANSION";
+    | "OVERMIND_EXPANSION"
+    | "PIRATE_SURGE"
+    | "TRADE_BOOM"
+    | "PLAGUE"
+    | "DISCOVERY";
   /** Ranger NPC that completed a quest (NPC_QUEST_COMPLETE only). */
   npcId?: string;
   /** System where the event occurred. */

@@ -39,6 +39,8 @@ export class PlanetGenerator {
         planetType === PlanetType.INDUSTRIAL ||
         planetType === PlanetType.HABITAT;
 
+      const population = isHabitable ? this.rng.nextInt(500_000, 5_000_000) : 0;
+
       planets.push(
         new Planet(
           planetId,
@@ -50,6 +52,7 @@ export class PlanetGenerator {
           [],
           isHabitable,
           0,
+          population,
         ),
       );
 

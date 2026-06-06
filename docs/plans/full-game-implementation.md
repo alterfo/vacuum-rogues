@@ -511,16 +511,16 @@ system → win.
 Random galaxy events (pirate surge, trade boom, plague, discovery) fire every 7–15 days,
 affecting markets, NPC spawns, and reputation. Published to news feed.
 
-- [ ] Define `GalaxyEvent` type: `{ type: PirateSurge|TradeBoom|Plague|Discovery, systemId,
+- [x] Define `GalaxyEvent` type: `{ type: PirateSurge|TradeBoom|Plague|Discovery, systemId,
   severity: 1|2|3, day }`. In `GalaxySimulator`, roll a random event every 7–15 days (seeded
   from `galaxy.seed + gameDays`).
-- [ ] Effects by type:
+- [x] Effects by type:
   - PirateSurge: spawn +3 pirate NPCs in target system; prices rise +20% in that system.
   - TradeBoom: all prices in target system drop -15% for 10 days.
   - Plague: target planet `population -= 30%` (affects quest board and market capacity).
   - Discovery: reveal a previously foggy system; news item says what was found (derelict/mineral).
-- [ ] Events appended to `registry.newsFeed` with descriptive text.
-- [ ] Unit tests: each event type applies correct effect; events are seeded (deterministic).
+- [x] Events appended to `registry.newsFeed` with descriptive text.
+- [x] Unit tests: each event type applies correct effect; events are seeded (deterministic).
 
 ---
 

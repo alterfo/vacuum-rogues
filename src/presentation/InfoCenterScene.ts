@@ -33,6 +33,10 @@ const NEWS_TYPE_LABEL: Record<NewsEvent["type"], string> = {
   PIRATE_ATTACK: "[АТАКА]",
   MARKET_SHIFT: "[РЫНОК]",
   OVERMIND_EXPANSION: "[УГРОЗА]",
+  PIRATE_SURGE: "[ПИРАТЫ]",
+  TRADE_BOOM: "[ТОРГОВЛЯ]",
+  PLAGUE: "[ЭПИДЕМИЯ]",
+  DISCOVERY: "[ОТКРЫТИЕ]",
 };
 
 const NEWS_TYPE_COLOR: Record<NewsEvent["type"], number> = {
@@ -40,6 +44,10 @@ const NEWS_TYPE_COLOR: Record<NewsEvent["type"], number> = {
   PIRATE_ATTACK: 0xff5544,
   MARKET_SHIFT: 0xaabb88,
   OVERMIND_EXPANSION: 0xff3388,
+  PIRATE_SURGE: 0xff7700,
+  TRADE_BOOM: 0x44cc88,
+  PLAGUE: 0xcc44aa,
+  DISCOVERY: 0x44aaff,
 };
 
 const GEAR_SORT_LABELS: Record<string, string> = {

@@ -170,6 +170,42 @@ export class NpcSimulator {
     return galaxy.npcShips;
   }
 
+  /**
+   * Spawn a pirate NPC directly in the specified system and return it.
+   * Used by GalaxySimulator for PIRATE_SURGE events.
+   */
+  spawnPirateInSystem(
+    _galaxy: Galaxy,
+    rng: SeededRNG,
+    id: string,
+    systemId: string,
+  ): NpcShip {
+    const stats = ROLE_STATS[NpcRole.PIRATE];
+    const faction = FactionType.OUTLANDERS;
+    return new NpcShip({
+      id,
+      name: `${ROLE_NAME[NpcRole.PIRATE]} ${FACTION_NAME[faction]} ${id}`,
+      race: faction,
+      faction: faction as unknown as import("@/types/faction").Faction,
+      role: NpcRole.PIRATE,
+      hullHP: stats.hull,
+      maxHull: stats.hull,
+      shields: stats.shields,
+      speed: stats.speed,
+      damage: stats.damage,
+      currentSystemId: systemId,
+      state: NpcState.IDLE,
+      goal: null,
+      destinationSystemId: null,
+      daysToArrival: 0,
+      credits: rng.nextInt(50, 300),
+      reputation: 0,
+      shieldPower: stats.shieldPower,
+      loadoutSummary: ROLE_LOADOUT[NpcRole.PIRATE],
+      cargo: [],
+    });
+  }
+
   /** Create one NPC with the given id at a random system. */
   private spawnOne(galaxy: Galaxy, rng: SeededRNG, id: string): void {
     const system = galaxy.systems[rng.nextInt(0, galaxy.systems.length - 1)];
