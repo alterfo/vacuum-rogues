@@ -2,7 +2,13 @@ import type { Galaxy } from "@/domain/Galaxy";
 import type { StarSystem } from "@/domain/StarSystem";
 import type { SeededRNG } from "@/utils/seededRNG";
 import { NpcShip } from "@/domain/NpcShip";
-import { NpcRole, NpcState, NpcGoalKind, FactionType } from "@/types";
+import {
+  NpcRole,
+  NpcState,
+  NpcGoalKind,
+  FactionType,
+  ResourceType,
+} from "@/types";
 import type { NpcBrain } from "./NpcBrain";
 import { RuleBasedNpcBrain } from "./NpcBrain";
 import { logger } from "@/utils/logger";
@@ -16,6 +22,20 @@ const PIRATE_DAMAGE_FRACTION = 0.5;
 const VICTIM_RETALIATION_FRACTION = 0.3;
 /** Credits a pirate loots when it destroys a victim. */
 const PIRATE_LOOT = 200;
+/** How much one unit of NPC cargo shifts a market's supply vector on trade. */
+const NPC_TRADE_SUPPLY_IMPACT = 0.02;
+
+/** Goods a trader NPC can carry (fuel excluded — consumed for travel). */
+const TRADEABLE_GOODS: ResourceType[] = [
+  ResourceType.METALS,
+  ResourceType.CRYSTALS,
+  ResourceType.ORGANICS,
+  ResourceType.MEDICINE,
+  ResourceType.ELECTRONICS,
+  ResourceType.LUXURY,
+  ResourceType.DATA_CORES,
+];
+
 /** Per-day chance a ship that has arrived somewhere decides to move on (~6-7 day
  *  dwell): long enough to actually orbit/visit a planet and read as purposeful,
  *  short enough that ships keep circulating and don't pile up in one system. */
@@ -174,8 +194,92 @@ export class NpcSimulator {
         reputation: 0,
         shieldPower: stats.shieldPower,
         loadoutSummary: ROLE_LOADOUT[role],
+        cargo: role === NpcRole.TRADER ? this.pickTraderCargo(system, rng) : [],
       }),
     );
+  }
+
+  /**
+   * Pick a random cargo load (1–3 goods, 5–20 units each) for a trader NPC.
+   * Prefers the cheapest goods available in the system's markets; falls back to
+   * the global tradeable goods list when the system has no planets with markets.
+   */
+  private pickTraderCargo(
+    system: StarSystem,
+    rng: SeededRNG,
+  ): { goodId: string; qty: number }[] {
+    let candidateGoods: string[] = TRADEABLE_GOODS as string[];
+
+    const planet = system.planets.find(
+      (p) => p.market && p.market.availableResources.length > 0,
+    );
+    if (planet) {
+      const priced = planet.market.availableResources
+        .map((r) => ({ r: r as string, price: planet.market.getPrice(r) }))
+        .sort((a, b) => a.price - b.price);
+      candidateGoods = priced.map((p) => p.r);
+    }
+
+    const count = rng.nextInt(1, Math.min(3, candidateGoods.length));
+    const result: { goodId: string; qty: number }[] = [];
+    const used = new Set<string>();
+    let attempts = 0;
+    while (result.length < count && attempts < candidateGoods.length * 3) {
+      const idx = rng.nextInt(0, candidateGoods.length - 1);
+      attempts++;
+      if (!used.has(candidateGoods[idx])) {
+        used.add(candidateGoods[idx]);
+        result.push({ goodId: candidateGoods[idx], qty: rng.nextInt(5, 20) });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Simulate a trader NPC selling its cargo at the destination and buying new
+   * goods. Selling increases market supply (lowers prices); buying decreases it.
+   */
+  private simulateTraderTrade(
+    npc: NpcShip,
+    galaxy: Galaxy,
+    rng: SeededRNG,
+  ): void {
+    const system = galaxy.systems.find((s) => s.id === npc.currentSystemId);
+    if (!system) return;
+
+    const planet = system.planets.find(
+      (p) => p.market && p.market.availableResources.length > 0,
+    );
+    if (!planet) return;
+
+    const market = planet.market;
+
+    // Sell existing cargo (increase supply → lower prices)
+    for (const item of npc.cargo) {
+      const idx = market.availableResources.indexOf(
+        item.goodId as ResourceType,
+      );
+      if (idx >= 0) {
+        market.supplyVector[idx] = Math.min(
+          5.0,
+          (market.supplyVector[idx] ?? 1) + item.qty * NPC_TRADE_SUPPLY_IMPACT,
+        );
+      }
+    }
+
+    // Buy new cargo at this destination (decrease supply → higher prices)
+    npc.cargo = this.pickTraderCargo(system, rng);
+    for (const item of npc.cargo) {
+      const idx = market.availableResources.indexOf(
+        item.goodId as ResourceType,
+      );
+      if (idx >= 0) {
+        market.supplyVector[idx] = Math.max(
+          0.1,
+          (market.supplyVector[idx] ?? 1) - item.qty * NPC_TRADE_SUPPLY_IMPACT,
+        );
+      }
+    }
   }
 
   /**
@@ -188,7 +292,12 @@ export class NpcSimulator {
 
       if (npc.state === NpcState.TRAVELING) {
         npc.daysToArrival -= 1;
-        if (npc.daysToArrival <= 0) this.arrive(npc);
+        if (npc.daysToArrival <= 0) {
+          this.arrive(npc);
+          if (npc.role === NpcRole.TRADER) {
+            this.simulateTraderTrade(npc, galaxy, rng);
+          }
+        }
         continue;
       }
 

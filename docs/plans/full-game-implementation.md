@@ -269,15 +269,15 @@ enemy. Post-combat: if player wins, NPC is removed from the system; if player re
 Trader NPCs carry cargo between systems and affect market prices when they land. This creates
 emergent price differences the player can exploit.
 
-- [ ] Add `cargo: { goodId: string; qty: number }[]` to `NpcShip` domain. Persist in schemas.
+- [x] Add `cargo: { goodId: string; qty: number }[]` to `NpcShip` domain. Persist in schemas.
   On spawn, `NpcSimulator` gives traders a random cargo load (1–3 goods, 5–20 units each) from
   the system's cheapest goods.
-- [ ] In `NpcSimulator.advanceDay()`: when a trader NPC "arrives" at a planet (changes system),
+- [x] In `NpcSimulator.advanceDay()`: when a trader NPC "arrives" at a planet (changes system),
   simulate a trade: sell cargo at destination (increment that planet's market supply by qty,
   lowering price), buy new cargo at destination (decrement supply). Update `Market` state.
-- [ ] `NpcShip.cargo` is visible via scan (Task 8): when scanner > shield, show cargo manifest
+- [x] `NpcShip.cargo` is visible via scan (Task 8): when scanner > shield, show cargo manifest
   in the scan result panel.
-- [ ] Unit tests: trader cargo updates market supply; prices decrease after trade.
+- [x] Unit tests: trader cargo updates market supply; prices decrease after trade.
 
 ### Task 13: NPC off-screen questing and reputation
 

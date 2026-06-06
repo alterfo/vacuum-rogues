@@ -1,13 +1,23 @@
 import { describe, it, expect } from "vitest";
 import { Galaxy } from "@/domain/Galaxy";
 import { StarSystem } from "@/domain/StarSystem";
+import { Planet } from "@/domain/Planet";
+import { Market } from "@/domain/Market";
 import { WarpPath } from "@/domain/WarpPath";
 import { Overmind } from "@/domain/Overmind";
 import { NpcSimulator, npcsPresentInSystem } from "@/systems/npc/NpcSimulator";
 import { NpcShip } from "@/domain/NpcShip";
 import { MigrationPipeline } from "@/data/MigrationPipeline";
 import { SeededRNG } from "@/utils/seededRNG";
-import { StarType, NpcState, NpcRole, FactionType } from "@/types";
+import {
+  StarType,
+  NpcState,
+  NpcRole,
+  NpcGoalKind,
+  FactionType,
+  ResourceType,
+  PlanetType,
+} from "@/types";
 import { Faction } from "@/types/faction";
 import type { SaveState } from "@/domain/SaveState";
 
@@ -213,6 +223,156 @@ describe("NpcSimulator", () => {
       // round(1 system * 4) = 4 ships maintained despite losses
       expect(galaxy.npcShips.length).toBe(4);
     });
+  });
+});
+
+describe("NPC trader cargo", () => {
+  function makeMarket(resources: ResourceType[], supply?: number[]): Market {
+    return new Market(
+      resources,
+      resources.map(() => 1.0),
+      supply ?? resources.map(() => 1.0),
+    );
+  }
+
+  function makeSystemWithMarket(id: string, supply?: number[]): StarSystem {
+    const market = makeMarket(
+      [ResourceType.METALS, ResourceType.CRYSTALS, ResourceType.ORGANICS],
+      supply,
+    );
+    const planet = new Planet(
+      `planet_${id}`,
+      `Planet ${id}`,
+      PlanetType.TERRESTRIAL,
+      800,
+      market,
+      [],
+      [],
+    );
+    return new StarSystem(
+      id,
+      id.toUpperCase(),
+      { q: 0, r: 0 },
+      StarType.YELLOW_DWARF,
+      [planet],
+      Faction.INDEPENDENT,
+      [],
+    );
+  }
+
+  it("trader NPCs are spawned with cargo", () => {
+    // Use 10 systems (40 NPCs) to make it near-certain at least one trader spawns.
+    const systems = Array.from({ length: 10 }, (_, i) =>
+      makeSystemWithMarket(`sys_t${i}`),
+    );
+    const galaxy = new Galaxy("g", systems, new Overmind(), [], []);
+    new NpcSimulator().spawnInitial(galaxy, new SeededRNG("cargo_seed"));
+
+    const traders = galaxy.npcShips.filter((n) => n.role === NpcRole.TRADER);
+    expect(traders.length).toBeGreaterThan(0);
+    for (const trader of traders) {
+      expect(trader.cargo).toBeDefined();
+      expect(trader.cargo.length).toBeGreaterThan(0);
+      for (const item of trader.cargo) {
+        expect(item.qty).toBeGreaterThanOrEqual(5);
+        expect(item.qty).toBeLessThanOrEqual(20);
+        expect(item.goodId.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("non-trader NPCs spawn with empty cargo", () => {
+    const sys = makeSystemWithMarket("sys_nt");
+    const galaxy = new Galaxy("g", [sys], new Overmind(), [], []);
+    new NpcSimulator().spawnInitial(galaxy, new SeededRNG("no_cargo"));
+
+    const nonTraders = galaxy.npcShips.filter((n) => n.role !== NpcRole.TRADER);
+    for (const npc of nonTraders) {
+      expect(npc.cargo).toHaveLength(0);
+    }
+  });
+
+  it("trader cargo increases supply of sold goods after arrival", () => {
+    // sysB has CRYSTALS at high supply (price ≈ 20) and METALS at normal supply
+    // (price ≈ 100). When the trader sells METALS and then buys goods, it will
+    // prefer cheap CRYSTALS — leaving METALS supply higher than the initial value.
+    const sysA = makeSystemWithMarket("sys_a2");
+    const sysB = makeSystemWithMarket("sys_b2", [1.0, 5.0, 5.0]);
+    sysA.connections.push(new WarpPath("sys_a2", "sys_b2", 2));
+    sysB.connections.push(new WarpPath("sys_b2", "sys_a2", 2));
+    const galaxy = new Galaxy("g2", [sysA, sysB], new Overmind(), [], []);
+
+    const market = sysB.planets[0].market;
+    const metalsIdx = market.availableResources.indexOf(ResourceType.METALS);
+    const initialMetalsSupply = market.supplyVector[metalsIdx]; // 1.0
+
+    // Large qty (50) so sell adds 1.0 to supply; even if buyer buys the same
+    // good at max qty (20), net METALS supply is 2.0 - 0.4 = 1.6 > 1.0 initial.
+    const trader = new NpcShip({
+      id: "trader1",
+      name: "Trader",
+      race: FactionType.OUTLANDERS,
+      faction: Faction.INDEPENDENT,
+      role: NpcRole.TRADER,
+      hullHP: 100,
+      maxHull: 100,
+      shields: 30,
+      speed: 0.08,
+      damage: 10,
+      currentSystemId: "sys_a2",
+      state: NpcState.TRAVELING,
+      goal: { kind: NpcGoalKind.TRADE, targetSystemId: "sys_b2" },
+      destinationSystemId: "sys_b2",
+      daysToArrival: 1,
+      credits: 500,
+      reputation: 0,
+      cargo: [{ goodId: ResourceType.METALS, qty: 50 }],
+    });
+    galaxy.npcShips.push(trader);
+
+    new NpcSimulator().tick(galaxy, new SeededRNG("trade_tick"));
+
+    // Sell adds 50*0.02=1.0; worst-case buy-back of 20 units removes only 0.4.
+    expect(market.supplyVector[metalsIdx]).toBeGreaterThan(initialMetalsSupply);
+  });
+
+  it("price decreases when supply increases after NPC sells cargo", () => {
+    // Market with CRYSTALS at high supply so buyer prefers CRYSTALS.
+    const sys = makeSystemWithMarket("sys_price", [1.0, 5.0, 5.0]);
+    const galaxy = new Galaxy("g3", [sys], new Overmind(), [], []);
+
+    const market = sys.planets[0].market;
+    const metalsIdx = market.availableResources.indexOf(ResourceType.METALS);
+    const priceBefore = market.getPrice(ResourceType.METALS);
+
+    // Large qty so sell effect (qty*0.02=1.0) dominates any buy-back.
+    const trader = new NpcShip({
+      id: "t2",
+      name: "Trader2",
+      race: FactionType.OUTLANDERS,
+      faction: Faction.INDEPENDENT,
+      role: NpcRole.TRADER,
+      hullHP: 100,
+      maxHull: 100,
+      shields: 30,
+      speed: 0.08,
+      damage: 10,
+      currentSystemId: "sys_price",
+      state: NpcState.TRAVELING,
+      goal: { kind: NpcGoalKind.TRADE, targetSystemId: "sys_price" },
+      destinationSystemId: "sys_price",
+      daysToArrival: 1,
+      credits: 500,
+      reputation: 0,
+      cargo: [{ goodId: ResourceType.METALS, qty: 50 }],
+    });
+    galaxy.npcShips.push(trader);
+
+    new NpcSimulator().tick(galaxy, new SeededRNG("price_check"));
+
+    const priceAfter = market.getPrice(ResourceType.METALS);
+    expect(market.supplyVector[metalsIdx]).toBeGreaterThan(1.0);
+    expect(priceAfter).toBeLessThan(priceBefore);
   });
 });
 

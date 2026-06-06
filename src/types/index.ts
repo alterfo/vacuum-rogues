@@ -186,6 +186,8 @@ export interface NpcShipInit {
   shieldPower?: number;
   /** Names of equipment items visible when scanned (3 items at NPC tech level). */
   loadoutSummary?: string[];
+  /** Goods a trader NPC is currently carrying between systems. */
+  cargo?: { goodId: string; qty: number }[];
 }
 
 export enum EconomyType {

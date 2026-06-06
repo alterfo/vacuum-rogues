@@ -260,6 +260,12 @@ export class NpcContactPanel {
         ? npc.loadoutSummary.join(", ")
         : "Данные недоступны";
       resultText = `Снаряжение:\n${items}`;
+      if (npc.cargo && npc.cargo.length > 0) {
+        const cargoText = npc.cargo
+          .map((c) => `${c.goodId} ×${c.qty}`)
+          .join(", ");
+        resultText += `\nГруз: ${cargoText}`;
+      }
     } else {
       resultText = "Цель защищена полем —\nсканирование невозможно";
     }

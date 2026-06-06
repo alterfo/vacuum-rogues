@@ -33,6 +33,8 @@ export class NpcShip {
   reputation: number;
   shieldPower: number;
   loadoutSummary: string[];
+  /** Goods a trader NPC carries between systems; influences market prices on arrival. */
+  cargo: { goodId: string; qty: number }[];
 
   constructor(init: NpcShipInit) {
     this.id = init.id;
@@ -54,5 +56,6 @@ export class NpcShip {
     this.reputation = init.reputation;
     this.shieldPower = init.shieldPower ?? 0;
     this.loadoutSummary = init.loadoutSummary ?? [];
+    this.cargo = init.cargo ?? [];
   }
 }
