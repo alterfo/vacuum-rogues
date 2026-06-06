@@ -112,17 +112,17 @@ Add a GovernmentScene accessible from the planet hub (replaces the stub Governor
 Shows faction info, player reputation, and dialogue lines based on reputation tier.
 Offers reputation-gated quests (hooks into the job board from Task 16).
 
-- [ ] Create `src/presentation/GovernmentScene.ts` extending GameScene. Context: `{ gameEngine,
+- [x] Create `src/presentation/GovernmentScene.ts` extending GameScene. Context: `{ gameEngine,
   planet }`. Shows: planet name, faction name/colour, political system, economy type, population
   (formatted), player reputation (number + label "Враг/Нейтрал/Союзник").
-- [ ] 3–5 dialogue lines from the governor, determined by reputation tier (hostile/neutral/ally).
+- [x] 3–5 dialogue lines from the governor, determined by reputation tier (hostile/neutral/ally).
   Lines are template strings in a config map (no ONNX yet — that's Task 21).
-- [ ] "Задания" button → transition to PlanetScene job board (or inline a 3-quest mini-board —
+- [x] "Задания" button → transition to PlanetScene job board (or inline a 3-quest mini-board —
   see Task 16 for full board). For now, show "Заданий нет" if job board is not yet wired.
-- [ ] "Назад" → returns to PlanetScene.
-- [ ] Add `SceneType.GOVERNMENT` to `src/types/index.ts`; register in `GameEngine.transitionTo()`;
+- [x] "Назад" → returns to PlanetScene.
+- [x] Add `SceneType.GOVERNMENT` to `src/types/index.ts`; register in `GameEngine.transitionTo()`;
   wire `Governor` button in `PlanetScene` to transition to GovernmentScene.
-- [ ] Unit test: GovernmentScene initializes with planet context; dialogue lines match tier.
+- [x] Unit test: GovernmentScene initializes with planet context; dialogue lines match tier.
 
 ---
 

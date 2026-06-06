@@ -97,6 +97,7 @@ export enum SceneType {
   EQUIPMENT_SHOP = "EQUIPMENT_SHOP",
   INFO_CENTER = "INFO_CENTER",
   STATION = "STATION",
+  GOVERNMENT = "GOVERNMENT",
 }
 
 export enum StationType {

@@ -631,20 +631,9 @@ export class PlanetScene extends GameScene {
 
   private async openGovernor(): Promise<void> {
     if (!this.planet || !this.gameEngine) return;
-    // Procedurally-generated planets carry no stored inhabitants, so synthesize
-    // a governor NPC on the fly. The id must contain "governor" for the dialogue
-    // tree lookup in DialogueScene to match (bug US-070 #10: the interface never
-    // opened because inhabitants[0] was always undefined).
-    const governor = this.planet.inhabitants[0] ?? {
-      id: `governor_${this.planet.id}`,
-      name: `Губернатор ${this.planet.name}`,
-    };
-    await this.gameEngine.transitionTo(SceneType.DIALOGUE, {
+    await this.gameEngine.transitionTo(SceneType.GOVERNMENT, {
       gameEngine: this.gameEngine,
-      npc: governor,
-      // Return to this planet (not space) when the conversation ends.
-      returnScene: SceneType.PLANET,
-      returnPlanet: this.planet,
+      planet: this.planet,
     });
   }
 
