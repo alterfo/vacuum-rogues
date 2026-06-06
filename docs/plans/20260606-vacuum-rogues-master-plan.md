@@ -406,18 +406,18 @@ Scenario: Планеты различимы
 - Create: `src/tests/combat.test.ts`
 - Create: `src/tests/tradeSystem.test.ts`
 
-- [ ] Написать `combat.test.ts`:
+- [x] Написать `combat.test.ts`:
   - shield damage: урон сначала в щит, остаток в корпус
   - hull damage at 0 shield: весь урон идёт в корпус
   - auto-break at ≤ 30% HP: бой завершается, событие `'combat-retreat'`
   - loot drop: при hp=0 противника → `player.cargo` получает loot
-- [ ] Написать `tradeSystem.test.ts`:
+- [x] Написать `tradeSystem.test.ts`:
   - buy/sell spread: `sellPrice < buyPrice` для каждого товара
   - contraband penalty: `reputationDelta < 0` при продаже контрабанды без лицензии
   - supply/demand shift: после 10 покупок `buyPrice` растёт
-- [ ] Запустить `npm test -- --run src/tests/combat.test.ts` — зелёные
-- [ ] Запустить `npm test -- --run src/tests/tradeSystem.test.ts` — зелёные
-- [ ] Запустить `npm test -- --run` + `npm run lint` — без регрессий
+- [x] Запустить `npm test -- --run src/tests/combat.test.ts` — зелёные
+- [x] Запустить `npm test -- --run src/tests/tradeSystem.test.ts` — зелёные
+- [x] Запустить `npm test -- --run` + `npm run lint` — без регрессий
 
 ### Task 10: E2E smoke tests refactor (5 сценариев)
 

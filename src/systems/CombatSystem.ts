@@ -473,6 +473,16 @@ export class CombatSystem {
   }
 
   /**
+   * Returns true when the player ship HP has dropped to ≤ 30% of max hull.
+   * The CombatScene checks this each round and emits 'combat-retreat' when true.
+   */
+  isAutoRetreatTriggered(): boolean {
+    if (!this.encounter) return false;
+    const { hullHP, maxHull } = this.encounter.playerShip;
+    return hullHP > 0 && hullHP <= maxHull * 0.3;
+  }
+
+  /**
    * Calculate victory rewards: credits and kill points based on enemy tech
    * levels, plus a 30% equipment drop chance per enemy.
    */
