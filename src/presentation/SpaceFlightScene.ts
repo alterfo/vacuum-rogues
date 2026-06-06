@@ -10,7 +10,7 @@ import {
 } from "pixi.js";
 import { buildSphereMesh, type SphereMesh } from "./sphereMesh";
 import type { GameEngine } from "@/systems/GameEngine";
-import { SceneType, StarType, NpcState, NpcRole } from "@/types";
+import { SceneType, StarType, NpcRole } from "@/types";
 import { pickVariant, tex } from "./textures";
 import { installGameCursors, setCanvasCursor } from "./cursor";
 import { PlanetSprite } from "./PlanetSprite";
@@ -23,7 +23,11 @@ import { NpcContactPanel } from "./NpcContactPanel";
 import type { Planet } from "@/domain/Planet";
 import type { Station } from "@/domain/Station";
 import type { NpcShip } from "@/domain/NpcShip";
-import { npcsPresentInSystem } from "@/systems/npc/NpcSimulator";
+import {
+  npcsPresentInSystem,
+  NpcSimulator,
+  npcRoleTechLevel,
+} from "@/systems/npc/NpcSimulator";
 import { logger } from "@/utils/logger";
 import { formatGameDate } from "@/utils/gameCalendar";
 import { SeededRNG } from "@/utils/seededRNG";
@@ -367,6 +371,9 @@ export class SpaceFlightScene extends GameScene {
   // When set, the ship auto-follows this NPC (used by "Атаковать"): on each
   // arrival it re-routes to the target's current position (auto-follow).
   private followNpcId: string | null = null;
+  // Guard: prevents multiple simultaneous CombatScene transition requests.
+  private _combatTransitionPending = false;
+  private readonly _npcSimulator = new NpcSimulator();
   // Transient on-screen feedback (toast), and its auto-clear timer.
   private toast: Text | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -379,12 +386,7 @@ export class SpaceFlightScene extends GameScene {
   private isTurnRunning = false;
   private pauseRequested = false;
   private playPauseButton: Text | null = null;
-  // Auto-attack combat tuning.
-  private readonly WEAPON_RANGE = 240; // px the ship must close to before firing
-  private readonly PLAYER_DPS = 26; // player hull damage per second
-  private readonly NPC_DPS_SCALE = 0.6; // scales NpcShip.damage into per-second
-  private readonly NPC_LOOT = 200; // credits gained for a kill
-  private combatToastAt = 0; // throttles the combat HP toast
+  private readonly WEAPON_RANGE = 240; // px the ship must close to for CombatScene
   // System geometry (EPIC-004 grand scale): NPCs wander in [inner, outer];
   // hyperjumps occur only on the boundary edge (рубеж гиперпрыжка). Matches
   // PlanetGenerator.ORBITAL_RADII (600..2500); keep in sync (CLAUDE.md Rule 5).
@@ -400,7 +402,6 @@ export class SpaceFlightScene extends GameScene {
 
   // Target indicator
   private targetIndicator: Graphics | null = null;
-  private combatFxGraphics: Graphics | null = null;
 
   // Time tracking for day counter
   // Timestamp (performance.now) when the scene finished initializing. A click
@@ -490,10 +491,24 @@ export class SpaceFlightScene extends GameScene {
           // Set when arriving from a planet take-off: the ship spawns next to
           // that planet instead of at the system edge (see below).
           fromPlanetId?: string;
+          // Set when returning from CombatScene (Task 11).
+          combatResult?: "victory" | "retreat";
+          npcId?: string;
         }
       | undefined;
     this.gameEngine = ctx?.gameEngine ?? null;
     this.pendingWarp = ctx?.pendingWarp ?? null;
+    this._combatTransitionPending = false;
+
+    // If returning victorious from CombatScene, remove the defeated NPC from
+    // the galaxy domain before createNpcShips() builds the sprite list.
+    if (
+      ctx?.combatResult === "victory" &&
+      ctx.npcId &&
+      this.gameEngine?.galaxy
+    ) {
+      this._npcSimulator.removeNpc(this.gameEngine.galaxy, ctx.npcId);
+    }
 
     const centerX = this.renderer.app.screen.width / 2;
     const centerY = this.renderer.app.screen.height / 2;
@@ -750,6 +765,7 @@ export class SpaceFlightScene extends GameScene {
     this.playPauseButton = null;
     this.isTurnRunning = false;
     this.pauseRequested = false;
+    this._combatTransitionPending = false;
 
     // Destroy planet sprites
     for (const sprite of this.planetSprites) {
@@ -851,7 +867,6 @@ export class SpaceFlightScene extends GameScene {
     this.sunSphere = null;
     this.orbitGraphics = null;
     this.targetIndicator = null;
-    this.combatFxGraphics = null;
     this.distanceTraveled = 0;
     this.clearPlannedRoute(); // Clean up route line
     logger.info("SpaceFlightScene destroyed");
@@ -1988,12 +2003,6 @@ export class SpaceFlightScene extends GameScene {
     this.targetIndicator.eventMode = "none"; // decorative — never intercept clicks
     this.targetIndicator.visible = false; // Hidden by default
     this.renderer.gameLayer.addChild(this.targetIndicator);
-
-    // Weapon-fire FX, drawn each frame while the ship is firing on a target so
-    // combat is visible (US-070 ongoing: attack felt instant with no feedback).
-    this.combatFxGraphics = new Graphics();
-    this.combatFxGraphics.eventMode = "none";
-    this.renderer.gameLayer.addChild(this.combatFxGraphics);
   }
 
   /**
@@ -3660,18 +3669,49 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * "Атаковать": close the panel and set the ship to auto-follow (intercept)
-   * the target, routing toward it (curving around the star if needed). Weapons
-   * fire / tactical combat is a later slice — for now the ship closes in.
+   * "Атаковать": if already within weapon range, transition immediately to
+   * turn-based CombatScene. Otherwise, close the panel and set the ship to
+   * auto-follow (intercept) the target — updateCombat() will trigger the
+   * CombatScene transition once in range.
    */
   private onAttackNpc(npc: NpcShip): void {
     const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
     this.closeNpcContactPanel();
     if (!sprite || !this.shipPhysics) return;
+
+    const dist = Math.hypot(
+      sprite.x - this.shipPhysics.shipX,
+      sprite.y - this.shipPhysics.shipY,
+    );
+
+    if (dist <= this.WEAPON_RANGE) {
+      this.launchCombatWithNpc(npc);
+      return;
+    }
+
+    // Not yet in range — auto-follow to close the gap.
     this.followNpcId = npc.id;
     this.routeTargetPlanetId = null;
     this.executeRouteTo(sprite.x, sprite.y);
     this.showMessage(`Перехват: ${npc.name}`, 0xff5555);
+  }
+
+  /** Transition to the turn-based CombatScene for a specific NPC. */
+  private launchCombatWithNpc(npc: NpcShip): void {
+    if (!this.gameEngine || this._combatTransitionPending) return;
+    this._combatTransitionPending = true;
+    this.followNpcId = null;
+    this.endTurn();
+    void this.gameEngine.transitionTo(SceneType.COMBAT, {
+      gameEngine: this.gameEngine,
+      npcEnemy: {
+        id: npc.id,
+        hullHP: npc.hullHP,
+        shields: npc.shields,
+        damage: npc.damage,
+        techLevel: npcRoleTechLevel(npc.role),
+      },
+    });
   }
 
   /**
@@ -3740,9 +3780,7 @@ export class SpaceFlightScene extends GameScene {
    * weapon range, then hold station and exchange fire until the target is
    * destroyed, the player drops below 30% hull, or the target is lost.
    */
-  private updateCombat(deltaTime: number): void {
-    // Clear last frame's weapon FX; it is redrawn below only while firing.
-    this.combatFxGraphics?.clear();
+  private updateCombat(_deltaTime: number): void {
     if (!this.isTurnRunning || !this.followNpcId || !this.shipPhysics) return;
     const ship = this.gameEngine?.player?.ship;
     if (!ship) return;
@@ -3765,7 +3803,7 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // In range → hold station and fire.
+    // In range → stop and launch turn-based tactical combat.
     if (this.shipPhysics.isMoving) {
       this.shipPhysics.setTarget(
         this.shipPhysics.shipX,
@@ -3774,143 +3812,7 @@ export class SpaceFlightScene extends GameScene {
       this.shipPhysics.isMoving = false;
       this.shipPhysics.currentSpeed = 0;
     }
-
-    const dt = deltaTime / 1000;
-    this.applyDamage(npc, this.PLAYER_DPS * dt);
-    this.applyDamage(ship, npc.damage * this.NPC_DPS_SCALE * dt);
-
-    // Visible exchange of fire: a pulsing beam from the ship to the target plus
-    // an impact flash, so the player can see combat resolving in real time.
-    this.drawCombatBeam(sprite.x, sprite.y);
-
-    // Throttled combat readout.
-    const now = this.bgElapsed;
-    if (now - this.combatToastAt > 500) {
-      this.combatToastAt = now;
-      const tHP = Math.max(0, Math.round(npc.hullHP));
-      const pHP = Math.max(0, Math.round(ship.hullHP));
-      this.showMessage(`Бой: ${npc.name} ${tHP}HP · вы ${pHP}HP`, 0xff7755);
-    }
-
-    if (npc.hullHP <= 0) {
-      this.destroyTarget(sprite);
-      return;
-    }
-    if (ship.maxHull > 0 && ship.hullHP / ship.maxHull < 0.3) {
-      // Break off: hull critical. Disengage and end the turn so the player can
-      // limp to a planet and repair (the ship is already holding station).
-      this.followNpcId = null;
-      this.endTurn();
-      this.showMessage(
-        "⚠ Корпус < 30% — выхожу из боя. Нужен ремонт на планете.",
-        0xff5555,
-      );
-    }
-  }
-
-  /** Draw a pulsing weapon beam from the ship to (tx,ty) plus an impact flash. */
-  private drawCombatBeam(tx: number, ty: number): void {
-    if (!this.combatFxGraphics || !this.shipPhysics) return;
-    const g = this.combatFxGraphics;
-    const sx = this.shipPhysics.shipX;
-    const sy = this.shipPhysics.shipY;
-
-    const dx = tx - sx;
-    const dy = ty - sy;
-    const len = Math.hypot(dx, dy) || 1;
-    const ux = dx / len;
-    const uy = dy / len;
-    // Perpendicular, for muzzle/impact spread.
-    const px = -uy;
-    const py = ux;
-
-    const t = this.bgElapsed;
-    // Rapid flicker so it reads as repeated bolts rather than a static line.
-    const pulse = 0.45 + 0.55 * Math.abs(Math.sin(t / 45));
-
-    // Outer glow + bright core (two passes) for a hot energy-beam look.
-    g.moveTo(sx, sy).lineTo(tx, ty);
-    g.stroke({ width: 7, color: 0xff2244, alpha: 0.18 * pulse });
-    g.moveTo(sx, sy).lineTo(tx, ty);
-    g.stroke({ width: 3, color: 0xff5566, alpha: 0.6 * pulse });
-    g.moveTo(sx, sy).lineTo(tx, ty);
-    g.stroke({ width: 1.2, color: 0xffe0a0, alpha: 0.9 * pulse });
-
-    // Travelling bolts: bright packets sliding from the ship to the target so the
-    // beam reads as a stream of fire rather than a static line.
-    const bolts = 3;
-    for (let i = 0; i < bolts; i++) {
-      const phase = (t / 220 + i / bolts) % 1;
-      const bx = sx + ux * len * phase;
-      const by = sy + uy * len * phase;
-      const fade = Math.sin(phase * Math.PI); // dim at both ends
-      g.circle(bx, by, 3.2).fill({ color: 0xfff0c0, alpha: 0.85 * fade });
-      g.circle(bx, by, 6).fill({ color: 0xff6644, alpha: 0.3 * fade });
-    }
-
-    // Muzzle flash at the ship nose.
-    const mx = sx + ux * 14;
-    const my = sy + uy * 14;
-    const mflash = 0.6 + 0.4 * Math.abs(Math.sin(t / 30));
-    g.circle(mx, my, 5 * mflash).fill({ color: 0xffdd88, alpha: 0.7 * mflash });
-
-    // Impact: expanding shock ring + a few sparks fanning off the hull.
-    const ring = (t / 90) % 1;
-    g.circle(tx, ty, 4 + ring * 16).stroke({
-      width: 2,
-      color: 0xffcc55,
-      alpha: 0.5 * (1 - ring),
-    });
-    g.circle(tx, ty, 5 + 3 * pulse).fill({
-      color: 0xffe27a,
-      alpha: 0.6 * pulse,
-    });
-    const sparks = 4;
-    for (let i = 0; i < sparks; i++) {
-      const sp = (t / 120 + i / sparks) % 1;
-      const spread = (i - (sparks - 1) / 2) * 0.5;
-      // back-scatter along the beam, fanned by the perpendicular
-      const ex = tx - ux * sp * 14 + px * spread * sp * 18;
-      const ey = ty - uy * sp * 14 + py * spread * sp * 18;
-      g.circle(ex, ey, 1.8 * (1 - sp)).fill({
-        color: 0xffaa55,
-        alpha: 0.7 * (1 - sp),
-      });
-    }
-  }
-
-  /** Subtract damage from a combatant: shields absorb first, then hull. */
-  private applyDamage(
-    target: { shields: number; hullHP: number },
-    amount: number,
-  ): void {
-    if (target.shields > 0) {
-      const absorbed = Math.min(target.shields, amount);
-      target.shields -= absorbed;
-      amount -= absorbed;
-    }
-    if (amount > 0) target.hullHP = Math.max(0, target.hullHP - amount);
-  }
-
-  /** Destroy a defeated NPC: remove it, award loot, end the engagement. */
-  private destroyTarget(sprite: NpcShipSprite): void {
-    const npc = sprite.npc;
-    npc.hullHP = 0;
-    npc.state = NpcState.DEAD;
-    const galaxy = this.gameEngine?.galaxy;
-    if (galaxy) {
-      const gi = galaxy.npcShips.findIndex((n) => n.id === npc.id);
-      if (gi >= 0) galaxy.npcShips.splice(gi, 1);
-    }
-    const idx = this.npcSprites.indexOf(sprite);
-    if (idx >= 0) this.npcSprites.splice(idx, 1);
-    sprite.destroy();
-
-    if (this.gameEngine?.player)
-      this.gameEngine.player.credits += this.NPC_LOOT;
-    this.showMessage(`Уничтожен: ${npc.name} (+${this.NPC_LOOT} кр)`, 0x00ff88);
-    this.followNpcId = null;
-    this.endTurn();
+    this.launchCombatWithNpc(npc);
   }
 
   /** True while a panel that should swallow outside-clicks is open. */

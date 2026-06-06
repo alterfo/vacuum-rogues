@@ -28,12 +28,14 @@ export class CombatScene extends GameScene {
   private _uiContainer: Container | null = null;
   private _weaponPanelContainer: Container | null = null;
   private _outcomeShown = false;
+  private _npcId: string | null = null;
 
   initialize(context?: object): void {
     const ctx = context as CombatContext | undefined;
     this._gameEngine = ctx?.gameEngine;
     this._encounter = ctx?.encounter;
     this._outcomeShown = false;
+    this._npcId = ctx?.npcEnemy?.id ?? null;
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
@@ -296,10 +298,12 @@ export class CombatScene extends GameScene {
     this.renderWeaponPanel();
 
     if (result.loot !== undefined || result.xpGained !== undefined) {
+      // Player action ended combat — player killed the last enemy
       this.showOutcomePanel(
         result.message,
         result.xpGained ?? 0,
         (result.loot as import("@/domain/ShipModule").ShipModule[]) ?? [],
+        "victory",
       );
       return;
     }
@@ -315,6 +319,7 @@ export class CombatScene extends GameScene {
         enemyResult.result.message,
         enemyResult.result.xpGained,
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
+        enemyResult.result.xpGained > 0 ? "victory" : "defeat",
       );
     }
   }
@@ -326,11 +331,12 @@ export class CombatScene extends GameScene {
     const result = system.processPlayerAction({ type: "ATTACK" });
     this.renderWeaponPanel();
     if (result.loot !== undefined || result.xpGained !== undefined) {
-      // Combat ended on player action
+      // Player action ended combat — player killed the last enemy
       this.showOutcomePanel(
         result.message,
         result.xpGained ?? 0,
         (result.loot as import("@/domain/ShipModule").ShipModule[]) ?? [],
+        "victory",
       );
       return;
     }
@@ -347,6 +353,7 @@ export class CombatScene extends GameScene {
         enemyResult.result.message,
         enemyResult.result.xpGained,
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
+        enemyResult.result.xpGained > 0 ? "victory" : "defeat",
       );
     }
   }
@@ -369,6 +376,7 @@ export class CombatScene extends GameScene {
         enemyResult.result.message,
         enemyResult.result.xpGained,
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
+        enemyResult.result.xpGained > 0 ? "victory" : "defeat",
       );
     }
   }
@@ -380,7 +388,7 @@ export class CombatScene extends GameScene {
     if (system.encounter) {
       system.encounter.state = EncounterState.RETREAT;
     }
-    this.showOutcomePanel("Отступление — корабль цел.", 0, []);
+    this.showOutcomePanel("Отступление — корабль цел.", 0, [], "retreat");
   }
 
   private applyRewardsToPlayer(
@@ -399,6 +407,7 @@ export class CombatScene extends GameScene {
     message: string,
     credits: number,
     loot: import("@/domain/ShipModule").ShipModule[],
+    combatResult: "victory" | "defeat" | "retreat" = "defeat",
   ): void {
     if (this._outcomeShown) return;
     this._outcomeShown = true;
@@ -408,6 +417,7 @@ export class CombatScene extends GameScene {
       this._uiContainer.visible = false;
     }
 
+    const isVictory = combatResult === "victory";
     const overlay = new Container();
     const bg = new Graphics();
     bg.fill({ color: 0x000000, alpha: 0.85 });
@@ -415,7 +425,7 @@ export class CombatScene extends GameScene {
     bg.fill();
 
     const border = new Graphics();
-    border.stroke({ width: 2, color: credits > 0 ? 0x44ff88 : 0xff4444 });
+    border.stroke({ width: 2, color: isVictory ? 0x44ff88 : 0xff4444 });
     border.rect(60, 140, 500, 220);
     border.stroke();
 
@@ -424,7 +434,7 @@ export class CombatScene extends GameScene {
       style: {
         fontFamily: "Courier New",
         fontSize: 18,
-        fill: credits > 0 ? 0x44ff88 : 0xff4444,
+        fill: isVictory ? 0x44ff88 : 0xff4444,
       },
     });
     msgText.x = 80;
@@ -449,6 +459,8 @@ export class CombatScene extends GameScene {
       if (this._gameEngine) {
         void this._gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
           gameEngine: this._gameEngine,
+          combatResult: combatResult === "victory" ? "victory" : "retreat",
+          npcId: this._npcId ?? undefined,
         });
       }
     });

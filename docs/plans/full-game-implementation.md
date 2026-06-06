@@ -248,17 +248,17 @@ Add 3 weapon classes (energy/kinetic/missile) with special abilities: EMP (disab
 "Атаковать" on an NPC ship from the contact panel transitions to CombatScene with that NPC as the
 enemy. Post-combat: if player wins, NPC is removed from the system; if player retreats, NPC stays.
 
-- [ ] In `SpaceFlightScene.onNpcClick()` / `NpcContactPanel`, when "Атаковать" is pressed and
+- [x] In `SpaceFlightScene.onNpcClick()` / `NpcContactPanel`, when "Атаковать" is pressed and
   the player is within weapon range (`< WEAPON_RANGE`), stop the auto-follow and transition to
   `SceneType.COMBAT` with context `{ gameEngine, npcShip }` instead of the current in-flight
   auto-attack.
-- [ ] In `CombatScene.initialize()`, if context contains `npcShip`, build a `TacticalEncounter`
+- [x] In `CombatScene.initialize()`, if context contains `npcShip`, build a `TacticalEncounter`
   enemy from the NPC's tech level and faction (using `loadoutSummary` for weapon/shield stats).
-- [ ] Post-combat callback: `CombatScene` calls `gameEngine.transitionTo(SceneType.SPACE_FLIGHT)`
+- [x] Post-combat callback: `CombatScene` calls `gameEngine.transitionTo(SceneType.SPACE_FLIGHT)`
   with `{ combatResult: 'victory' | 'retreat', npcId }`. In `SpaceFlightScene.initialize()`,
   if `combatResult === 'victory'`, remove the NpcShipSprite with that `npcId` and call
   `npcSimulator.removeNpc(npcId)` to clean up the domain.
-- [ ] Unit test: combat context built from NpcShip; victory removes NPC from domain.
+- [x] Unit test: combat context built from NpcShip; victory removes NPC from domain.
 
 ---
 

@@ -101,6 +101,20 @@ const ROLE_LOADOUT: Record<NpcRole, string[]> = {
 };
 
 /**
+ * Map NpcRole to a tech level (1–3) used for CombatScene enemy initialization.
+ * Determines weapon/shield strength of the spawned enemy.
+ */
+export function npcRoleTechLevel(role: NpcRole): number {
+  const map: Record<NpcRole, number> = {
+    [NpcRole.PATROL]: 3,
+    [NpcRole.RANGER]: 2,
+    [NpcRole.PIRATE]: 2,
+    [NpcRole.TRADER]: 1,
+  };
+  return map[role] ?? 1;
+}
+
+/**
  * Advances the autonomous life of NPC ships across the galaxy: spawning them at
  * generation time and, each game day, moving them between systems toward their
  * goals. Off-screen combat, trading and quest resolution arrive in later slices
@@ -252,6 +266,15 @@ export class NpcSimulator {
         }
       }
     }
+  }
+
+  /**
+   * Remove a specific NPC from the galaxy (e.g. destroyed by the player in
+   * a CombatScene encounter). No-op if the id is not found.
+   */
+  removeNpc(galaxy: Galaxy, npcId: string): void {
+    const idx = galaxy.npcShips.findIndex((n) => n.id === npcId);
+    if (idx >= 0) galaxy.npcShips.splice(idx, 1);
   }
 
   /** Remove destroyed NPCs and respawn up to the target population. */
