@@ -1,35 +1,105 @@
-import { GameScene } from './GameScene';
-import { Graphics, Text } from 'pixi.js';
-import type { TacticalEncounter } from '@/domain/TacticalEncounter';
-import { logger } from '@/utils/logger';
+import { GameScene } from "./GameScene";
+import { Container, Graphics, Text } from "pixi.js";
+import type { TacticalEncounter } from "@/domain/TacticalEncounter";
+import type { GameEngine } from "@/systems/GameEngine";
+import { CombatSystem } from "@/systems/CombatSystem";
+import { EnemyShip } from "@/domain/EnemyShip";
+import { EncounterState, SceneType } from "@/types";
+import type { EnemyType, AIProfile } from "@/types";
+import { logger } from "@/utils/logger";
 
 export interface CombatContext {
-  encounter: TacticalEncounter;
+  encounter?: TacticalEncounter;
+  gameEngine?: GameEngine;
+  /** Optional NPC-sourced enemy for Task 11 */
+  npcEnemy?: {
+    id: string;
+    hullHP: number;
+    shields: number;
+    damage: number;
+    techLevel: number;
+  };
 }
 
 export class CombatScene extends GameScene {
   private _encounter?: TacticalEncounter;
+  private _gameEngine?: GameEngine;
+  private _system: CombatSystem | null = null;
+  private _uiContainer: Container | null = null;
+  private _outcomeShown = false;
 
   initialize(context?: object): void {
     const ctx = context as CombatContext | undefined;
+    this._gameEngine = ctx?.gameEngine;
     this._encounter = ctx?.encounter;
-    void this._encounter;
+    this._outcomeShown = false;
+
+    this.renderer.clearGameLayer();
+    this.renderer.clearUILayer();
+
+    // Build a default encounter if one wasn't provided but we have a game engine + player
+    if (!this._encounter && this._gameEngine?.player) {
+      const player = this._gameEngine.player;
+      const system = new CombatSystem(this._gameEngine.qualityProfile);
+
+      let enemy: EnemyShip;
+      if (ctx?.npcEnemy) {
+        const npc = ctx.npcEnemy;
+        enemy = new EnemyShip(
+          npc.id,
+          "FIGHTER" as EnemyType,
+          npc.hullHP,
+          npc.shields,
+          0.1,
+          npc.damage,
+          false,
+          [],
+          {} as AIProfile,
+          npc.techLevel,
+        );
+      } else {
+        enemy = new EnemyShip(
+          `enemy_${Date.now()}`,
+          "FIGHTER" as EnemyType,
+          60,
+          20,
+          0.1,
+          15,
+          false,
+          [],
+          {} as AIProfile,
+          2,
+        );
+      }
+
+      this._encounter = system.startCombat(player.ship, [enemy], {
+        obstacles: [],
+        cover: [],
+        nebulae: [],
+      });
+      this._system = system;
+    }
+
     this.renderCombatGrid();
-    logger.info('CombatScene initialized');
+    this.renderActionButtons();
+    logger.info("CombatScene initialized");
   }
 
   update(_deltaTime: number): void {
-    // Combat animations
+    // Combat is turn-based; no continuous updates needed
   }
 
   destroy(): void {
+    this._uiContainer = null;
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
   }
 
-  private renderCombatGrid(): void {
-    this.renderer.clearGameLayer();
+  private getSystem(): CombatSystem | null {
+    return this._system;
+  }
 
+  private renderCombatGrid(): void {
     const graphics = new Graphics();
     const hexSize = 24;
     const offsetX = 100;
@@ -46,7 +116,10 @@ export class CombatScene extends GameScene {
         const points: number[] = [];
         for (let i = 0; i < 6; i++) {
           const angle = (Math.PI / 3) * i;
-          points.push(x + hexSize * Math.cos(angle), y + hexSize * Math.sin(angle));
+          points.push(
+            x + hexSize * Math.cos(angle),
+            y + hexSize * Math.sin(angle),
+          );
         }
         graphics.poly(points);
         graphics.fill(0x0a1525);
@@ -57,9 +130,9 @@ export class CombatScene extends GameScene {
     this.renderer.gameLayer.addChild(graphics);
 
     const title = new Text({
-      text: 'TACTICAL COMBAT',
+      text: "TACTICAL COMBAT",
       style: {
-        fontFamily: 'Courier New',
+        fontFamily: "Courier New",
         fontSize: 20,
         fill: 0xff4444,
         letterSpacing: 3,
@@ -67,6 +140,201 @@ export class CombatScene extends GameScene {
     });
     title.x = 20;
     title.y = 20;
+    title.eventMode = "none";
     this.renderer.uiLayer.addChild(title);
+  }
+
+  private renderActionButtons(): void {
+    if (!this._system) return;
+
+    const uiContainer = new Container();
+    this._uiContainer = uiContainer;
+
+    const btnY = 430;
+
+    const attackBtn = this.makeButton("[ Атаковать ]", 0xff4444, 50, btnY);
+    attackBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      void this.onPlayerAttack();
+    });
+
+    const waitBtn = this.makeButton("[ Ждать ]", 0x888888, 230, btnY);
+    waitBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      void this.onPlayerWait();
+    });
+
+    const retreatBtn = this.makeButton("[ Отступить ]", 0x4488ff, 370, btnY);
+    retreatBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      void this.onPlayerRetreat();
+    });
+
+    uiContainer.addChild(attackBtn, waitBtn, retreatBtn);
+    this.renderer.uiLayer.addChild(uiContainer);
+  }
+
+  private makeButton(
+    label: string,
+    color: number,
+    x: number,
+    y: number,
+  ): Container {
+    const btn = new Container();
+    const bg = new Graphics();
+    bg.fill({ color: 0x0d1b2a });
+    bg.stroke({ width: 1, color });
+    bg.roundRect(0, 0, 160, 36, 4);
+    bg.fill();
+    bg.stroke();
+
+    const text = new Text({
+      text: label,
+      style: { fontFamily: "Courier New", fontSize: 14, fill: color },
+    });
+    text.x = 8;
+    text.y = 8;
+    text.eventMode = "none";
+
+    btn.addChild(bg, text);
+    btn.x = x;
+    btn.y = y;
+    btn.eventMode = "static";
+    btn.cursor = "pointer";
+    return btn;
+  }
+
+  private async onPlayerAttack(): Promise<void> {
+    const system = this.getSystem();
+    if (!system || this._outcomeShown) return;
+
+    const result = system.processPlayerAction({ type: "ATTACK" });
+    if (result.loot !== undefined || result.xpGained !== undefined) {
+      // Combat ended on player action
+      this.showOutcomePanel(
+        result.message,
+        result.xpGained ?? 0,
+        (result.loot as import("@/domain/ShipModule").ShipModule[]) ?? [],
+      );
+      return;
+    }
+
+    // Run enemy turns
+    const enemyResult = await system.executeEnemyTurns();
+    if (enemyResult.result) {
+      this.applyRewardsToPlayer(
+        enemyResult.result.xpGained,
+        enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
+      );
+      this.showOutcomePanel(
+        enemyResult.result.message,
+        enemyResult.result.xpGained,
+        enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
+      );
+    }
+  }
+
+  private async onPlayerWait(): Promise<void> {
+    const system = this.getSystem();
+    if (!system || this._outcomeShown) return;
+
+    system.processPlayerAction({ type: "WAIT" });
+
+    const enemyResult = await system.executeEnemyTurns();
+    if (enemyResult.result) {
+      this.applyRewardsToPlayer(
+        enemyResult.result.xpGained,
+        enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
+      );
+      this.showOutcomePanel(
+        enemyResult.result.message,
+        enemyResult.result.xpGained,
+        enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
+      );
+    }
+  }
+
+  private async onPlayerRetreat(): Promise<void> {
+    const system = this.getSystem();
+    if (!system || this._outcomeShown) return;
+
+    if (system.encounter) {
+      system.encounter.state = EncounterState.RETREAT;
+    }
+    this.showOutcomePanel("Отступление — корабль цел.", 0, []);
+  }
+
+  private applyRewardsToPlayer(
+    credits: number,
+    loot: import("@/domain/ShipModule").ShipModule[],
+  ): void {
+    const player = this._gameEngine?.player;
+    if (!player) return;
+    if (credits > 0) player.credits += credits;
+    for (const item of loot) {
+      player.inventory.addItem(item);
+    }
+  }
+
+  private showOutcomePanel(
+    message: string,
+    credits: number,
+    loot: import("@/domain/ShipModule").ShipModule[],
+  ): void {
+    if (this._outcomeShown) return;
+    this._outcomeShown = true;
+
+    // Hide action buttons
+    if (this._uiContainer) {
+      this._uiContainer.visible = false;
+    }
+
+    const overlay = new Container();
+    const bg = new Graphics();
+    bg.fill({ color: 0x000000, alpha: 0.85 });
+    bg.rect(60, 140, 500, 220);
+    bg.fill();
+
+    const border = new Graphics();
+    border.stroke({ width: 2, color: credits > 0 ? 0x44ff88 : 0xff4444 });
+    border.rect(60, 140, 500, 220);
+    border.stroke();
+
+    const msgText = new Text({
+      text: message,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 18,
+        fill: credits > 0 ? 0x44ff88 : 0xff4444,
+      },
+    });
+    msgText.x = 80;
+    msgText.y = 165;
+    msgText.eventMode = "none";
+
+    let rewardText = "";
+    if (credits > 0) rewardText += `Кредиты: +${credits} ₡\n`;
+    for (const item of loot) rewardText += `Найдено: ${item.name}\n`;
+
+    const rewardDisplay = new Text({
+      text: rewardText,
+      style: { fontFamily: "Courier New", fontSize: 14, fill: 0xcccccc },
+    });
+    rewardDisplay.x = 80;
+    rewardDisplay.y = 205;
+    rewardDisplay.eventMode = "none";
+
+    const continueBtn = this.makeButton("[ Продолжить ]", 0xffffff, 230, 315);
+    continueBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      if (this._gameEngine) {
+        void this._gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
+          gameEngine: this._gameEngine,
+        });
+      }
+    });
+
+    overlay.addChild(bg, border, msgText, rewardDisplay, continueBtn);
+    this.renderer.uiLayer.addChild(overlay);
   }
 }

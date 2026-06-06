@@ -214,18 +214,18 @@ button in NpcContactPanel reveals the target's equipment if scanner > shield.
 Replace the CombatScene AI stub with a working rule-based state machine: attack nearest enemy,
 retreat when HP low, use weapons on cooldown, claim reward on victory.
 
-- [ ] Implement `CombatAI` class in `src/systems/CombatSystem.ts` (or new
+- [x] Implement `CombatAI` class in `src/systems/CombatSystem.ts` (or new
   `src/systems/combat/CombatAI.ts`). State machine: IDLE → ATTACK (move toward player, fire
   when in range) → RETREAT (move away from player when HP < 30%). Uses `TacticalEncounter`
   hexgrid for pathfinding (BFS to approach/flee).
-- [ ] Wire into `CombatSystem.executeTurn()`: after player action, iterate all enemy ships and
+- [x] Wire into `CombatSystem.executeTurn()`: after player action, iterate all enemy ships and
   call `CombatAI.decide(enemy, board)` to get their actions (move + attack or retreat).
-- [ ] Victory condition: all enemies HP ≤ 0 → `CombatSystem.resolveVictory()` — awards credits
+- [x] Victory condition: all enemies HP ≤ 0 → `CombatSystem.resolveVictory()` — awards credits
   (sum of enemy base value) + random equipment drop (30% chance per enemy, tier = enemy tech
   level). Credits added to `player.credits`; equipment to `player.inventory.modules`.
-- [ ] Defeat condition: player HP ≤ 0 → retreat (HP set to 1) or save-restore. Show outcome
+- [x] Defeat condition: player HP ≤ 0 → retreat (HP set to 1) or save-restore. Show outcome
   panel with "Победа! +N ₡ + [Предмет]" or "Поражение — корабль поврежден".
-- [ ] Unit tests: AI moves toward player; retreats at low HP; victory rewards computed correctly.
+- [x] Unit tests: AI moves toward player; retreats at low HP; victory rewards computed correctly.
 
 ### Task 10: Weapon types and special abilities
 
