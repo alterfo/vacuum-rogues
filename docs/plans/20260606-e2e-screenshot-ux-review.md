@@ -76,10 +76,10 @@ Build a working e2e screenshot test suite that captures all major game scenes, f
 **Files:**
 - Create: `docs/ux-review.md`
 
-- [ ] Spawn `ux-reviewer` agent with all scene source files (`src/presentation/*.ts`) plus captured screenshots from `e2e/screenshots/`
-- [ ] Agent produces `docs/ux-review.md` covering: navigation flow, button/label consistency, feedback (loading states, errors, empty states), accessibility (contrast, text sizing), scene transition clarity
-- [ ] Section "Prioritized Work Plan" in `docs/ux-review.md` lists UX issues by severity (Critical / High / Low) with proposed fixes and estimated effort
-- [ ] Verify `docs/ux-review.md` exists and has content
+- [x] Spawn `ux-reviewer` agent with all scene source files (`src/presentation/*.ts`) plus captured screenshots from `e2e/screenshots/`
+- [x] Agent produces `docs/ux-review.md` covering: navigation flow, button/label consistency, feedback (loading states, errors, empty states), accessibility (contrast, text sizing), scene transition clarity
+- [x] Section "Prioritized Work Plan" in `docs/ux-review.md` lists UX issues by severity (Critical / High / Low) with proposed fixes and estimated effort
+- [x] Verify `docs/ux-review.md` exists and has content
 
 ### Task 6: Verify acceptance criteria
 
