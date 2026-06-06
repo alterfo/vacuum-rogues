@@ -116,10 +116,10 @@ export class SpaceFlightScene extends GameScene {
   private shipGraphics: Graphics | null = null;
   // Player-ship art (if available); falls back to the procedural triangle.
   private shipSprite: Sprite | null = null;
-  // Heading 0 points +X (east); the ship art faces "up" (nose at the top of the
-  // image), so the sprite is pre-rotated +90° (clockwise) to align art-forward
-  // with the heading.
-  private readonly SHIP_SPRITE_ROTATION = Math.PI / 2;
+  // Heading 0 points +X (east); the ship art faces "down" (nose at the bottom of
+  // the image), so the sprite is pre-rotated -90° (counter-clockwise) to align
+  // art-forward with the heading. Verified live in US-070 Round 4.
+  private readonly SHIP_SPRITE_ROTATION = -Math.PI / 2;
   private backgroundContainer: Container | null = null; // Nebula clouds (world-space, blurred)
   // Screen-fixed deep-space backdrop (crisp far stars + twinkle), sits behind
   // the world so panning never reveals an edge. Added to renderer.stage.
@@ -179,6 +179,7 @@ export class SpaceFlightScene extends GameScene {
   // When set, the ship auto-follows this NPC (used by "Атаковать"): on each
   // arrival it re-routes to the target's current position (auto-follow).
   private followNpcId: string | null = null;
+  private overmindOverlay: Container | null = null;
   // Guard: prevents multiple simultaneous CombatScene transition requests.
   private _combatTransitionPending = false;
   private readonly _npcSimulator = new NpcSimulator();
@@ -694,6 +695,11 @@ export class SpaceFlightScene extends GameScene {
     if (this.questJournalUI) {
       this.questJournalUI.destroy();
       this.questJournalUI = null;
+    }
+
+    if (this.overmindOverlay) {
+      this.overmindOverlay.destroy({ children: true });
+      this.overmindOverlay = null;
     }
 
     // Destroy mini-map
@@ -3800,7 +3806,8 @@ export class SpaceFlightScene extends GameScene {
     return (
       this.npcContactPanel !== null ||
       this.questJournalUI !== null ||
-      this.planetInfoPanel !== null
+      this.planetInfoPanel !== null ||
+      this.overmindOverlay !== null
     );
   }
 
@@ -4160,15 +4167,17 @@ export class SpaceFlightScene extends GameScene {
     const height = this.renderer.app.screen.height;
 
     const overlay = new Container();
+    this.overmindOverlay = overlay;
     const bg = new Graphics();
-    bg.fill({ color: 0x000000, alpha: 0.85 });
-    bg.roundRect(width / 2 - 240, height / 2 - 110, 480, 220, 6);
-    bg.fill();
+    bg.roundRect(width / 2 - 240, height / 2 - 110, 480, 220, 6).fill({
+      color: 0x000000,
+      alpha: 0.85,
+    });
 
     const border = new Graphics();
-    border.stroke({ width: 2, color: 0xff2200 });
-    border.roundRect(width / 2 - 240, height / 2 - 110, 480, 220, 6);
-    border.stroke();
+    border
+      .roundRect(width / 2 - 240, height / 2 - 110, 480, 220, 6)
+      .stroke({ width: 2, color: 0xff2200 });
 
     const title = new Text({
       text: "ЯДРО OVERMIND",
@@ -4200,11 +4209,10 @@ export class SpaceFlightScene extends GameScene {
 
     const attackBtn = new Container();
     const attackBg = new Graphics();
-    attackBg.fill({ color: 0x330000 });
-    attackBg.stroke({ width: 1, color: 0xff2200 });
-    attackBg.roundRect(0, 0, 180, 36, 4);
-    attackBg.fill();
-    attackBg.stroke();
+    attackBg
+      .roundRect(0, 0, 180, 36, 4)
+      .fill({ color: 0x330000 })
+      .stroke({ width: 1, color: 0xff2200 });
     const attackLabel = new Text({
       text: "[ Атаковать ядро ]",
       style: { fontFamily: "Courier New", fontSize: 14, fill: 0xff4444 },
@@ -4219,6 +4227,7 @@ export class SpaceFlightScene extends GameScene {
     attackBtn.cursor = "pointer";
     attackBtn.on("pointerdown", (e) => {
       e.stopPropagation();
+      this.overmindOverlay = null;
       overlay.destroy();
       void this.gameEngine!.transitionTo(SceneType.COMBAT, {
         gameEngine: this.gameEngine!,
@@ -4235,11 +4244,10 @@ export class SpaceFlightScene extends GameScene {
 
     const retreatBtn = new Container();
     const retreatBg = new Graphics();
-    retreatBg.fill({ color: 0x0d1b2a });
-    retreatBg.stroke({ width: 1, color: 0x4488ff });
-    retreatBg.roundRect(0, 0, 180, 36, 4);
-    retreatBg.fill();
-    retreatBg.stroke();
+    retreatBg
+      .roundRect(0, 0, 180, 36, 4)
+      .fill({ color: 0x0d1b2a })
+      .stroke({ width: 1, color: 0x4488ff });
     const retreatLabel = new Text({
       text: "[ Отступить ]",
       style: { fontFamily: "Courier New", fontSize: 14, fill: 0x4488ff },
@@ -4254,6 +4262,7 @@ export class SpaceFlightScene extends GameScene {
     retreatBtn.cursor = "pointer";
     retreatBtn.on("pointerdown", (e) => {
       e.stopPropagation();
+      this.overmindOverlay = null;
       overlay.destroy();
     });
 
