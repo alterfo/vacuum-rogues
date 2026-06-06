@@ -408,6 +408,23 @@ export class RaceSelectionScene extends GameScene {
   }
 
   /**
+   * E2E hook: select a faction by name string.
+   * Accepts a FactionType value (case-insensitive); defaults to OUTLANDERS.
+   */
+  e2eSelectFaction(faction: string): void {
+    const upper = faction.toUpperCase() as FactionType;
+    const valid = (Object.values(FactionType) as string[]).includes(upper);
+    this.selectFaction(valid ? upper : FactionType.OUTLANDERS);
+  }
+
+  /**
+   * E2E hook: trigger the "НАЧАТЬ ИГРУ" button programmatically.
+   */
+  e2eConfirmSelection(): void {
+    void this.startGame();
+  }
+
+  /**
    * Refresh the UI
    */
   private refresh(): void {

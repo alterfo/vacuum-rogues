@@ -131,6 +131,75 @@ export class MainMenuPage extends GamePageBase {
   }
 
   /**
+   * Wait until MainMenuScene is the active scene.
+   */
+  async waitForMainMenu() {
+    await this.page.waitForFunction(
+      () => {
+        const engine = (window as unknown as Record<string, unknown>)
+          .__gameEngine as {
+          currentScene: { constructor: { name: string } } | null;
+        };
+        return engine?.currentScene?.constructor.name === 'MainMenuScene';
+      },
+      { timeout: 10000 },
+    );
+  }
+
+  /**
+   * Transition to RaceSelectionScene (new game flow).
+   */
+  async startNewGame() {
+    await this.page.evaluate(async () => {
+      const engine = (window as unknown as Record<string, unknown>)
+        .__gameEngine as {
+        transitionTo: (scene: string, context?: object) => Promise<void>;
+      };
+      await engine.transitionTo('RACE_SELECTION', { gameEngine: engine });
+    });
+    await this.page.waitForFunction(
+      () => {
+        const engine = (window as unknown as Record<string, unknown>)
+          .__gameEngine as {
+          currentScene: { constructor: { name: string } } | null;
+        };
+        return engine?.currentScene?.constructor.name === 'RaceSelectionScene';
+      },
+      { timeout: 10000 },
+    );
+  }
+
+  /**
+   * Select a faction by name (case-insensitive, e.g. 'human' maps to OUTLANDERS).
+   * Calls e2eSelectFaction on RaceSelectionScene.
+   */
+  async selectRace(faction: string) {
+    await this.page.evaluate((f) => {
+      const engine = (window as unknown as Record<string, unknown>)
+        .__gameEngine as {
+        currentScene: { e2eSelectFaction?: (faction: string) => void } | null;
+      };
+      engine?.currentScene?.e2eSelectFaction?.(f);
+    }, faction);
+  }
+
+  /**
+   * Confirm race selection and start the game.
+   * Calls e2eConfirmSelection on RaceSelectionScene.
+   */
+  async clickStartGame() {
+    await this.page.evaluate(async () => {
+      const engine = (window as unknown as Record<string, unknown>)
+        .__gameEngine as {
+        currentScene: {
+          e2eConfirmSelection?: () => void | Promise<void>;
+        } | null;
+      };
+      await engine?.currentScene?.e2eConfirmSelection?.();
+    });
+  }
+
+  /**
    * Click "ONNX Демо" button
    * Triggers ONNX demo via the engine's current scene.
    */
