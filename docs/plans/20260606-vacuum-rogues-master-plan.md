@@ -379,11 +379,11 @@ Scenario: Планеты различимы
 **Files:**
 - Modify: `src/presentation/SpaceFlightScene.ts`
 
-- [ ] В обработчике `wheel`: вычислить мировую точку под курсором до zoom и после
-- [ ] Скорректировать `cameraPanX/cameraPanY` так чтобы мировая точка осталась под курсором
-- [ ] Формула: `panX = cursorX - (cursorX - panX) * (newZoom / oldZoom)`; аналогично для Y
-- [ ] Проверить граничные случаи: `MIN_ZOOM`, `MAX_ZOOM`
-- [ ] Запустить `npm test -- --run` + `npm run lint` — без регрессий
+- [x] В обработчике `wheel`: вычислить мировую точку под курсором до zoom и после
+- [x] Скорректировать `cameraPanX/cameraPanY` так чтобы мировая точка осталась под курсором
+- [x] Формула: `panX = cursorX - (cursorX - panX) * (newZoom / oldZoom)`; аналогично для Y
+- [x] Проверить граничные случаи: `MIN_ZOOM`, `MAX_ZOOM`
+- [x] Запустить `npm test -- --run` + `npm run lint` — без регрессий
 
 ### Task 8: US-073 — Луны за планетой (z-depth)
 
