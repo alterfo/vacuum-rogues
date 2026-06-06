@@ -44,6 +44,10 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { GalaxyService, PlayerService, SceneFactory } from "@/core/services";
 import { QuestManagerAdapter, EquipmentSystemAdapter } from "@/core/adapters";
 import { TextQuestRuntime } from "@/systems/quests/TextQuestRuntime";
+import {
+  OnnxQuestNarrator,
+  type QuestNarrator,
+} from "@/ai/adapters/QuestNarrator";
 
 /**
  * Optional DI dependencies for GameEngine.
@@ -80,6 +84,8 @@ export class GameEngine {
   public playerLoadout: ShipLoadout | null = null;
   /** Runtime engine for the active text quest (one at a time). */
   public readonly textQuestRuntime = new TextQuestRuntime();
+  /** Narrator for text quest node descriptions (ONNX with template fallback). */
+  public readonly questNarrator: QuestNarrator;
 
   private exceptionHandler: IExceptionHandler;
   private animationFrameId = 0;
@@ -115,6 +121,7 @@ export class GameEngine {
     }
 
     this.sceneFactory = new SceneFactory();
+    this.questNarrator = new OnnxQuestNarrator(this.onnxRegistry);
 
     this.exceptionHandler.onCriticalError = (response) => {
       this.handleCriticalError(response);

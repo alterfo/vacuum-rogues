@@ -388,16 +388,16 @@ traverses the graph, checks conditions (credits/reputation/inventory), applies o
 and `TemplateQuestNarrator` (fallback with parameterized sentences). The scene (Task 19) calls
 the narrator interface, never caring which is active.
 
-- [ ] Define `QuestNarrator` interface in `src/ai/adapters/QuestNarrator.ts`:
+- [x] Define `QuestNarrator` interface in `src/ai/adapters/QuestNarrator.ts`:
   `{ narrate(nodeTextKey: string, context: NarratorContext): Promise<string> }`.
   `NarratorContext` = `{ role: string, tone: string, systemName: string, daysSinceStart: number }`.
-- [ ] Implement `TemplateQuestNarrator`: maps `nodeTextKey` to parameterized template strings
+- [x] Implement `TemplateQuestNarrator`: maps `nodeTextKey` to parameterized template strings
   (one paragraph each), substituting context variables. No ONNX, always synchronous-ish.
-- [ ] Implement `OnnxQuestNarrator`: build a prompt from `nodeTextKey + context`, call
+- [x] Implement `OnnxQuestNarrator`: build a prompt from `nodeTextKey + context`, call
   `ONNXModelRegistry.infer('dialogue', prompt)` in the worker. If model not loaded or inference
   times out, fall back to `TemplateQuestNarrator`. Wrap `InferenceException` gracefully.
-- [ ] Register narrator in `GameEngine`: use `OnnxQuestNarrator` with auto-fallback.
-- [ ] Unit tests: `TemplateQuestNarrator` returns non-empty string for all sample quest node keys;
+- [x] Register narrator in `GameEngine`: use `OnnxQuestNarrator` with auto-fallback.
+- [x] Unit tests: `TemplateQuestNarrator` returns non-empty string for all sample quest node keys;
   fallback activates when ONNX is mocked to reject.
 
 ### Task 19: Text quest scene UI and outcome application
