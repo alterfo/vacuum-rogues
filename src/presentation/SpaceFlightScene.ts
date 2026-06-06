@@ -191,6 +191,16 @@ export class SpaceFlightScene extends GameScene {
   // Lerp-return animation: true while the camera is smoothly returning to ship.
   private cameraReturning = false;
 
+  // Tooltip (B1): delayed hover tooltip for planets and NPC ships.
+  private tooltipText: Text | null = null;
+  private tooltipTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Mini-log (B5): last 5 game events in the bottom-left corner.
+  private miniLogContainer: Container | null = null;
+  private miniLogEntries: Array<{ textObj: Text; elapsed: number }> = [];
+  private readonly MINI_LOG_DURATION = 5000;
+  private readonly MINI_LOG_FADE_MS = 1000;
+
   // Turn control (Play/Pause). The turn "runs" (ship flies, NPCs/planets move,
   // combat resolves) while isTurnRunning; Pause ends it at the next day segment.
   private isTurnRunning = false;
@@ -566,6 +576,7 @@ export class SpaceFlightScene extends GameScene {
     this.updatePlanets(deltaTime);
     this.updateTargetIndicator();
     this.updatePlayPauseButton();
+    this.updateMiniLog(deltaTime);
   }
 
   destroy(): void {
@@ -670,6 +681,14 @@ export class SpaceFlightScene extends GameScene {
       this.toast.destroy();
       this.toast = null;
     }
+
+    // Clear tooltip.
+    this.hideTooltip();
+
+    // Clear mini-log.
+    for (const e of this.miniLogEntries) e.textObj.destroy();
+    this.miniLogEntries = [];
+    this.miniLogContainer = null;
 
     // Destroy quest journal
     if (this.questJournalUI) {
@@ -2026,11 +2045,13 @@ export class SpaceFlightScene extends GameScene {
     questBtn.eventMode = "static";
     questBtn.cursor = "pointer";
     questBtn.on("pointerdown", (event) => {
-      event.stopPropagation(); // Prevent stage from also handling this click
+      event.stopPropagation();
+      this.gameEngine?.audio?.playUiClick();
       logger.info("Quest journal button clicked");
       this.toggleQuestJournal();
     });
     questBtn.on("pointerover", () => {
+      this.gameEngine?.audio?.playUiHover();
       questBtn.alpha = 0.7;
     });
     questBtn.on("pointerout", () => {
@@ -2053,13 +2074,14 @@ export class SpaceFlightScene extends GameScene {
     backBtn.eventMode = "static";
     backBtn.cursor = "pointer";
     backBtn.on("pointerdown", async (event) => {
-      event.stopPropagation(); // Prevent stage from also handling this click
+      event.stopPropagation();
+      this.gameEngine?.audio?.playUiClick();
       logger.info("Star map button clicked");
       await this.returnToStarMap();
     });
 
-    // Add hover effect
     backBtn.on("pointerover", () => {
+      this.gameEngine?.audio?.playUiHover();
       backBtn.alpha = 0.7;
     });
     backBtn.on("pointerout", () => {
@@ -2088,9 +2110,11 @@ export class SpaceFlightScene extends GameScene {
     playBtn.cursor = "pointer";
     playBtn.on("pointerdown", (event) => {
       event.stopPropagation();
+      this.gameEngine?.audio?.playUiClick();
       this.onPlayPause();
     });
     playBtn.on("pointerover", () => {
+      this.gameEngine?.audio?.playUiHover();
       playBtn.alpha = 0.7;
     });
     playBtn.on("pointerout", () => {
@@ -2100,6 +2124,13 @@ export class SpaceFlightScene extends GameScene {
     this.playPauseButton = playBtn;
 
     this.renderer.uiLayer.addChild(this.uiContainer);
+
+    // Mini-log (B5): bottom-left panel showing the last 5 game events.
+    this.miniLogContainer = new Container();
+    this.miniLogContainer.eventMode = "none";
+    this.miniLogContainer.x = 20;
+    this.miniLogContainer.y = this.renderer.app.screen.height - 105;
+    this.renderer.uiLayer.addChild(this.miniLogContainer);
 
     // Create mini-map. Dragging on it pans the main view (it no longer falls
     // through as a navigation click).
@@ -2157,6 +2188,12 @@ export class SpaceFlightScene extends GameScene {
 
       // Set up click handler
       sprite.createHitArea(this.onPlanetClick.bind(this));
+
+      // Tooltip on hover (B1).
+      sprite.setTooltipHandlers(
+        (p, sx, sy) => this.showTooltip(p.name, sx, sy),
+        () => this.hideTooltip(),
+      );
 
       // Add quest marker if this planet is a quest objective
       if (questLocations.includes(planet.id)) {
@@ -3415,6 +3452,10 @@ export class SpaceFlightScene extends GameScene {
       bounds,
     );
     sprite.setClickHandler((n) => this.onNpcClick(n));
+    sprite.setHoverHandler(
+      (n, sx, sy) => this.showTooltip(`${n.name} [${n.role}]`, sx, sy),
+      () => this.hideTooltip(),
+    );
     sprite.container.zIndex = 100; // above planet discs so clicks reach the ship
     // Non-pirates "visit" a planet: anchor them to loiter near one (deterministic
     // by id) so traders/rangers/patrols cluster at planets instead of aimlessly
@@ -3776,6 +3817,8 @@ export class SpaceFlightScene extends GameScene {
    * actions, warnings). Replaces any current toast.
    */
   private showMessage(text: string, color = 0x00ffff): void {
+    this.addMiniLogEntry(text);
+    this.gameEngine?.audio?.playToast();
     if (this.toast) {
       this.toast.destroy();
       this.toast = null;
@@ -3808,6 +3851,86 @@ export class SpaceFlightScene extends GameScene {
       }
       this.toastTimer = null;
     }, 3200);
+  }
+
+  /** Show a delayed hover tooltip near the cursor (B1). 300 ms delay before it appears. */
+  private showTooltip(text: string, screenX: number, screenY: number): void {
+    this.hideTooltip();
+    this.tooltipTimer = setTimeout(() => {
+      this.tooltipTimer = null;
+      const t = new Text({
+        text,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 13,
+          fill: 0xffffff,
+          stroke: { color: 0x000000, width: 3 },
+        },
+      });
+      t.eventMode = "none";
+      t.x = Math.min(
+        screenX + 16,
+        this.renderer.app.screen.width - t.width - 8,
+      );
+      t.y = screenY - 24;
+      this.tooltipText = t;
+      this.renderer.uiLayer.addChild(t);
+    }, 300);
+  }
+
+  /** Cancel any pending tooltip and destroy the visible one. */
+  private hideTooltip(): void {
+    if (this.tooltipTimer !== null) {
+      clearTimeout(this.tooltipTimer);
+      this.tooltipTimer = null;
+    }
+    if (this.tooltipText) {
+      this.tooltipText.destroy();
+      this.tooltipText = null;
+    }
+  }
+
+  /** Push a line to the mini-log (B5); keeps only the last 5 entries. */
+  private addMiniLogEntry(text: string): void {
+    if (!this.miniLogContainer) return;
+    const lineH = 18;
+    // Remove oldest if full.
+    if (this.miniLogEntries.length >= 5) {
+      const oldest = this.miniLogEntries.shift()!;
+      oldest.textObj.destroy();
+      for (const e of this.miniLogEntries) e.textObj.y -= lineH;
+    }
+    const textObj = new Text({
+      text: `> ${text}`,
+      style: { fontFamily: "Courier New", fontSize: 11, fill: 0x88ccff },
+    });
+    textObj.eventMode = "none";
+    textObj.y = this.miniLogEntries.length * lineH;
+    this.miniLogContainer.addChild(textObj);
+    this.miniLogEntries.push({ textObj, elapsed: 0 });
+  }
+
+  /** Advance mini-log timers; fade out and remove expired entries each frame. */
+  private updateMiniLog(deltaTime: number): void {
+    const lineH = 18;
+    for (const entry of this.miniLogEntries) {
+      entry.elapsed += deltaTime;
+      const fadeStart = this.MINI_LOG_DURATION - this.MINI_LOG_FADE_MS;
+      if (entry.elapsed >= fadeStart) {
+        const t =
+          (entry.elapsed - fadeStart) / (this.MINI_LOG_DURATION - fadeStart);
+        entry.textObj.alpha = Math.max(0, 1 - t);
+      }
+    }
+    // Remove expired entries (oldest first).
+    while (
+      this.miniLogEntries.length > 0 &&
+      this.miniLogEntries[0].elapsed >= this.MINI_LOG_DURATION
+    ) {
+      const removed = this.miniLogEntries.shift()!;
+      removed.textObj.destroy();
+      for (const e of this.miniLogEntries) e.textObj.y -= lineH;
+    }
   }
 
   /** Slow drift + gentle "breathing" pulse so the nebulae feel alive. */
@@ -3925,6 +4048,22 @@ export class SpaceFlightScene extends GameScene {
    * Handle keyboard input (J key for quest journal)
    */
   private onKeyDown(event: KeyboardEvent): void {
+    if (event.key === "Escape") {
+      // B4: first Escape closes the top-most panel, second cancels route.
+      if (this.npcContactPanel) {
+        this.closeNpcContactPanel();
+      } else if (this.questJournalUI) {
+        this.questJournalUI.destroy();
+        this.questJournalUI = null;
+      } else if (this.planetInfoPanel) {
+        this.planetInfoPanel.destroy();
+        this.planetInfoPanel = null;
+      } else if (this.plannedRoute) {
+        this.clearPlannedRoute();
+        this.showMessage("Маршрут отменён", 0xffaa00);
+      }
+      return;
+    }
     if (event.key === "j" || event.key === "J") {
       this.toggleQuestJournal();
     } else if (event.key === "i" || event.key === "I") {

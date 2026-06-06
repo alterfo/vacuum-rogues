@@ -1,5 +1,5 @@
 import { Container, Graphics, Sprite, TilingSprite } from "pixi.js";
-import type { Texture } from "pixi.js";
+import type { FederatedPointerEvent, Texture } from "pixi.js";
 import type { Planet } from "@/domain/Planet";
 import { PlanetType } from "@/types";
 import { SeededRNG } from "@/utils/seededRNG";
@@ -447,6 +447,17 @@ export class PlanetSprite {
     this.graphics.on("pointerout", () => {
       this.setHoverState(false);
     });
+  }
+
+  /** Wire additional hover callbacks (for tooltip system in SpaceFlightScene). */
+  setTooltipHandlers(
+    onOver: (planet: Planet, screenX: number, screenY: number) => void,
+    onOut: () => void,
+  ): void {
+    this.graphics.on("pointerover", (e: FederatedPointerEvent) =>
+      onOver(this.planet, e.global.x, e.global.y),
+    );
+    this.graphics.on("pointerout", onOut);
   }
 
   /**

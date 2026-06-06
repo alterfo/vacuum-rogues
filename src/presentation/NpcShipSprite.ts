@@ -1,4 +1,5 @@
 import { Container, Graphics, Sprite, Circle } from "pixi.js";
+import type { FederatedPointerEvent } from "pixi.js";
 import type { NpcShip } from "@/domain/NpcShip";
 import { NpcRole } from "@/types";
 import { Faction } from "@/types/faction";
@@ -120,6 +121,17 @@ export class NpcShipSprite {
 
     this.render();
     this.pickNewTarget();
+  }
+
+  /** Wire hover callbacks for the tooltip system (must be called after setClickHandler). */
+  setHoverHandler(
+    onOver: (npc: NpcShip, screenX: number, screenY: number) => void,
+    onOut: () => void,
+  ): void {
+    this.container.on("pointerover", (e: FederatedPointerEvent) =>
+      onOver(this.npc, e.global.x, e.global.y),
+    );
+    this.container.on("pointerout", onOut);
   }
 
   /** Wire a click handler; stops propagation so the stage doesn't also fire. */

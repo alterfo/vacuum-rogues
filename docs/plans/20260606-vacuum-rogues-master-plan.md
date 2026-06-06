@@ -486,11 +486,11 @@ Scenario: Планеты различимы
 - Modify: `src/presentation/SpaceFlightScene.ts`
 - Modify: `src/systems/AudioManager.ts`
 
-- [ ] **Tooltip (B1)**: on hover over planet/ship/equipment — `Text` 300ms delay, `eventMode='none'`, auto-remove on pointerout
-- [ ] **Escape (B4)**: in `SpaceFlightScene` — first closes top open panel, then cancels route
-- [ ] **Mini-log (B5)**: last 5 events in bottom-left corner; `Text`, `eventMode='none'`; fade-out after 5s
-- [ ] **UI sounds**: `AudioManager.playUiClick()`, `playUiHover()`, `playToast()` wired to respective events
-- [ ] Run `npm test -- --run` + `npm run lint` — no regressions
+- [x] **Tooltip (B1)**: on hover over planet/ship/equipment — `Text` 300ms delay, `eventMode='none'`, auto-remove on pointerout
+- [x] **Escape (B4)**: in `SpaceFlightScene` — first closes top open panel, then cancels route
+- [x] **Mini-log (B5)**: last 5 events in bottom-left corner; `Text`, `eventMode='none'`; fade-out after 5s
+- [x] **UI sounds**: `AudioManager.playUiClick()`, `playUiHover()`, `playToast()` wired to respective events
+- [x] Run `npm test -- --run` + `npm run lint` — no regressions
 
 ### Task 14: Sprint 5 — Obfuscation + domain lock
 

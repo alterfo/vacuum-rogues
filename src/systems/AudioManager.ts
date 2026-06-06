@@ -19,7 +19,15 @@ export type TrackKey =
   | "news_alert";
 
 /** One-shot SFX keys (mapped to public/audio/sfx_<key>.ogg). */
-export type SfxKey = "warp" | "buy" | "hit" | "land" | "reward";
+export type SfxKey =
+  | "warp"
+  | "buy"
+  | "hit"
+  | "land"
+  | "reward"
+  | "ui_click"
+  | "ui_hover"
+  | "toast";
 
 const FADE_DURATION_MS = 1000;
 
@@ -169,6 +177,18 @@ export class AudioManager {
 
   setSfxVolume(volume: number): void {
     this.sfxVolume = Math.max(0, Math.min(1, volume));
+  }
+
+  playUiClick(): void {
+    this.playSfx("ui_click").catch(() => {});
+  }
+
+  playUiHover(): void {
+    this.playSfx("ui_hover").catch(() => {});
+  }
+
+  playToast(): void {
+    this.playSfx("toast").catch(() => {});
   }
 
   destroy(): void {
