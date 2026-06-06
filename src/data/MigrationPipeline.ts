@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 14;
+  static readonly CURRENT_VERSION = 15;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -178,6 +178,41 @@ export class MigrationPipeline {
             : null;
           galaxy.overmindCoreSystemId = lastSystem?.id ?? "";
         }
+      }
+    },
+    // 14 -> 15: Comprehensive gap-fill for fields that were added in Tasks
+    // 8/12/17/24 but never got their own migration steps. Old saves upgraded
+    // through v14 may still be missing these — this step ensures they are
+    // present so runtime code never sees undefined for expected fields.
+    14: (state: SaveState) => {
+      // Task 24: activeTradeBoomSystems on galaxy
+      const galaxy = state.galaxy as unknown as {
+        activeTradeBoomSystems?: Record<string, number>;
+        npcShips?: Array<{
+          cargo?: unknown[];
+          loadoutSummary?: unknown[];
+          shieldPower?: number;
+        }>;
+      };
+      if (galaxy) {
+        if (!galaxy.activeTradeBoomSystems) {
+          galaxy.activeTradeBoomSystems = {};
+        }
+        // Tasks 8/12: cargo, loadoutSummary, shieldPower on NPC ships
+        if (Array.isArray(galaxy.npcShips)) {
+          for (const npc of galaxy.npcShips) {
+            if (!Array.isArray(npc.cargo)) npc.cargo = [];
+            if (!Array.isArray(npc.loadoutSummary)) npc.loadoutSummary = [];
+            if (npc.shieldPower === undefined) npc.shieldPower = 0;
+          }
+        }
+      }
+      // Task 17: activeTextQuestState on player
+      const player = state.player as unknown as {
+        activeTextQuestState?: unknown;
+      };
+      if (player && player.activeTextQuestState === undefined) {
+        player.activeTextQuestState = null;
       }
     },
     // 10 -> 11: News feed bookmarks (Task 20). Add newsBookmarks to player;

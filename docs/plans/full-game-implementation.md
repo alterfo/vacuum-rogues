@@ -531,15 +531,15 @@ affecting markets, NPC spawns, and reputation. Published to news feed.
 Ensure all new domain fields from Tasks 1–24 have Zod schemas and migration steps. Old saves
 load cleanly with sensible defaults.
 
-- [ ] Audit `src/validation/schemas.ts`: verify every field added in Tasks 1–24 has a
+- [x] Audit `src/validation/schemas.ts`: verify every field added in Tasks 1–24 has a
   corresponding Zod schema with a `.default()` or `.optional()` so old saves don't fail.
-- [ ] `src/data/MigrationPipeline.ts`: add migration version bump (one per major field group
+- [x] `src/data/MigrationPipeline.ts`: add migration version bump (one per major field group
   from this plan). Each migration step is a pure function that adds missing fields with defaults.
   Test that a save from "version 0" (pre-plan) loads and runs without errors.
-- [ ] `GameEngine.rehydrateLoadedState()`: verify all new domain class instances are properly
+- [x] `GameEngine.rehydrateLoadedState()`: verify all new domain class instances are properly
   reconstructed (not plain objects). Add `PlayerShip`, `ShipLoadout`, `TextQuestState` to the
   class-restoration switch.
-- [ ] Unit tests: migration from version 0 → current produces a valid, fully typed save object.
+- [x] Unit tests: migration from version 0 → current produces a valid, fully typed save object.
 
 ### Task 26: Audio integration
 

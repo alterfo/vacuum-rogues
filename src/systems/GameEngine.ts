@@ -640,6 +640,7 @@ export class GameEngine {
     }
 
     if (this.player) {
+      Object.setPrototypeOf(this.player, Player.prototype);
       if (this.player.ship) {
         Object.setPrototypeOf(this.player.ship, PlayerShip.prototype);
         for (const mod of this.player.ship.modules) {
