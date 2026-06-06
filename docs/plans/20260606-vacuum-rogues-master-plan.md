@@ -429,16 +429,16 @@ Scenario: Планеты различимы
 - Create: `e2e/smoke/05-npc-contact.spec.ts`
 - Create: `e2e/fixtures/mockHeavySystems.ts`
 
-- [ ] Создать `e2e/fixtures/mockHeavySystems.ts` с `window.__mockONNX`, `window.__skipAudio`, `window.__fastAnimations`
-- [ ] `01-new-game.spec.ts`: launch → main menu (`waitForFunction`) → `startNewGame()` → await SpaceFlightScene
-- [ ] `02-planet-trade.spec.ts`: `e2eLandOnPlanet()` → buy fuel → `player.credits` decreased
-- [ ] `03-star-map.spec.ts`: `transitionTo('STAR_MAP')` → `e2eSelectSystem(1)` → zoom-to-fit visible
-- [ ] `04-flight.spec.ts`: `e2eSetRoute({x, y})` → `waitForFunction` while ship moves
-- [ ] `05-npc-contact.spec.ts`: `e2eSpawnNpc()` → `waitForFunction` no console errors
-- [ ] No `waitForTimeout`, no `canvas.click({position})` in any test
-- [ ] `screenshot: 'only-on-failure'` in `playwright.config.ts`
-- [ ] Run `npm run test:e2e -- --run smoke/` — all 5 pass
-- [ ] Run `npm run lint` — no errors
+- [x] Создать `e2e/fixtures/mockHeavySystems.ts` с `window.__mockONNX`, `window.__skipAudio`, `window.__fastAnimations`
+- [x] `01-new-game.spec.ts`: launch → main menu (`waitForFunction`) → `startNewGame()` → await SpaceFlightScene
+- [x] `02-planet-trade.spec.ts`: `e2eLandOnPlanet()` → buy fuel → `player.credits` decreased
+- [x] `03-star-map.spec.ts`: `transitionTo('STAR_MAP')` → `e2eSelectSystem(1)` → zoom-to-fit visible
+- [x] `04-flight.spec.ts`: `e2eSetRoute({x, y})` → `waitForFunction` while ship moves
+- [x] `05-npc-contact.spec.ts`: `e2eSpawnNpc()` → `waitForFunction` no console errors
+- [x] No `waitForTimeout`, no `canvas.click({position})` in any test
+- [x] `screenshot: 'only-on-failure'` in `playwright.config.ts`
+- [x] Run `npm run test:e2e -- --run smoke/` — all 5 pass
+- [x] Run `npm run lint` — no errors
 
 ### Task 11: Sprint 3 — CombatScene rendering + logic (US-080 + EPIC-002)
 

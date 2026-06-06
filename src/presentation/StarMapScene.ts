@@ -1216,4 +1216,25 @@ export class StarMapScene extends GameScene {
     };
     return translations[type] ?? type;
   }
+
+  /** E2E helper: select system by index in galaxy.systems array */
+  e2eSelectSystem(index: number): void {
+    const system = this.galaxy?.systems[index];
+    if (system) {
+      this.handleSystemClick(system);
+    }
+  }
+
+  /** E2E helper: return current viewport state */
+  e2eGetViewport(): {
+    zoomLevel: number;
+    viewportX: number;
+    viewportY: number;
+  } {
+    return {
+      zoomLevel: this.zoomLevel,
+      viewportX: this.viewportX,
+      viewportY: this.viewportY,
+    };
+  }
 }

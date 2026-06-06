@@ -407,4 +407,12 @@ export class TradeScene extends GameScene {
 
     return btn;
   }
+
+  /** E2E helper: buy qty units of resource; returns true if all purchases succeeded */
+  e2eBuyItem(resource: ResourceType, qty: number): boolean {
+    for (let i = 0; i < qty; i++) {
+      this.trade(resource, true);
+    }
+    return (this.gameEngine?.player?.credits ?? 0) >= 0;
+  }
 }

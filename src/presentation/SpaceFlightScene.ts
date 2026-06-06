@@ -4232,4 +4232,19 @@ export class SpaceFlightScene extends GameScene {
       name: ps.planet.name,
     }));
   }
+
+  /** E2E helper: transition directly to PLANET scene bypassing distance check */
+  async e2eLandOnPlanet(): Promise<void> {
+    const planet = this.planetSprites[0]?.planet;
+    if (!planet || !this.gameEngine) return;
+    await this.gameEngine.transitionTo(SceneType.PLANET, {
+      gameEngine: this.gameEngine,
+      planet,
+    });
+  }
+
+  /** E2E helper: count of NPC ship sprites currently in the scene */
+  e2eGetNpcCount(): number {
+    return this.npcSprites.length;
+  }
 }
