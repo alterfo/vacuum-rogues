@@ -31,6 +31,7 @@ import {
 import { logger } from "@/utils/logger";
 import { formatGameDate } from "@/utils/gameCalendar";
 import { SeededRNG } from "@/utils/seededRNG";
+import { SAMPLE_TEXT_QUESTS } from "@/domain/TextQuest";
 import {
   dayTickMarks,
   avoidStarPath,
@@ -3652,8 +3653,28 @@ export class SpaceFlightScene extends GameScene {
     this.showMessage(`Сближение: ${npc.name}`, 0x88ccff);
   }
 
-  /** "Связаться": show a short greeting from the NPC. */
+  /** "Связаться": if player has an active TEXT_ADVENTURE quest, launch it; otherwise show greeting. */
   private onHailNpc(npc: NpcShip): void {
+    this.closeNpcContactPanel();
+
+    const activeQuests = this.gameEngine?.questManager.getActiveQuests() ?? [];
+    const textAdventureQuest = activeQuests.find(
+      (q) => q.type === QuestType.TEXT_ADVENTURE,
+    );
+
+    if (textAdventureQuest && this.gameEngine) {
+      const domainQuest = SAMPLE_TEXT_QUESTS[0];
+      if (domainQuest) {
+        void this.gameEngine.transitionTo(SceneType.TEXT_QUEST, {
+          gameEngine: this.gameEngine,
+          quest: domainQuest,
+          returnScene: SceneType.SPACE_FLIGHT,
+          returnContext: { gameEngine: this.gameEngine },
+        });
+        return;
+      }
+    }
+
     const lines = [
       "Приветствую, рейнджер. Чистого космоса.",
       "Не мешай — у меня груз по расписанию.",

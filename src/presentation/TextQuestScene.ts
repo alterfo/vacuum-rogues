@@ -1,0 +1,570 @@
+import { Container, Graphics, Text } from "pixi.js";
+import { GameScene } from "./GameScene";
+import type { Renderer } from "./Renderer";
+import type { GameEngine } from "@/systems/GameEngine";
+import type { TextQuest, QuestNode, QuestChoice, QuestOutcome } from "@/types";
+import { SceneType } from "@/types";
+import { TextQuestRuntime } from "@/systems/quests/TextQuestRuntime";
+import type { NarratorContext } from "@/ai/adapters/QuestNarrator";
+import { GameBusinessException } from "@/exceptions/GameBusinessException";
+import { logger } from "@/utils/logger";
+
+export interface TextQuestContext {
+  gameEngine?: GameEngine;
+  quest?: TextQuest;
+  returnScene?: SceneType;
+  returnContext?: object;
+}
+
+export class TextQuestScene extends GameScene {
+  private gameEngine: GameEngine | null = null;
+  private quest: TextQuest | null = null;
+  private returnScene: SceneType = SceneType.PLANET;
+  private returnContext: object = {};
+
+  private runtime: TextQuestRuntime = new TextQuestRuntime();
+  private currentNode: QuestNode | null = null;
+
+  private uiContainer: Container | null = null;
+  private narrationText: Text | null = null;
+  private choiceContainer: Container | null = null;
+
+  constructor(renderer: Renderer) {
+    super(renderer);
+  }
+
+  initialize(context?: object): void {
+    const ctx = context as TextQuestContext | undefined;
+    this.gameEngine = ctx?.gameEngine ?? null;
+    this.quest = ctx?.quest ?? null;
+    this.returnScene = ctx?.returnScene ?? SceneType.PLANET;
+    this.returnContext = ctx?.returnContext ?? {};
+
+    this.renderer.clearGameLayer();
+    this.renderer.clearUILayer();
+
+    if (!this.quest) {
+      logger.warn("TextQuestScene: no quest in context — returning");
+      this.doReturn();
+      return;
+    }
+
+    const player = this.gameEngine?.player;
+    if (!player) {
+      logger.warn("TextQuestScene: no player — returning");
+      this.doReturn();
+      return;
+    }
+
+    this.runtime = this.gameEngine?.textQuestRuntime ?? new TextQuestRuntime();
+
+    try {
+      this.currentNode = this.runtime.start(this.quest, player);
+    } catch (e) {
+      logger.error("TextQuestScene: failed to start quest", e);
+      this.doReturn();
+      return;
+    }
+
+    this.buildLayout();
+    this.loadNodeText(this.currentNode);
+    logger.info(`TextQuestScene: started quest "${this.quest.title}"`);
+  }
+
+  update(_dt: number): void {}
+
+  destroy(): void {
+    this.renderer.clearGameLayer();
+    this.renderer.clearUILayer();
+    this.uiContainer = null;
+    this.narrationText = null;
+    this.choiceContainer = null;
+    this.gameEngine = null;
+    this.quest = null;
+    this.currentNode = null;
+  }
+
+  // ── Layout ──────────────────────────────────────────────────────────────────
+
+  private buildLayout(): void {
+    const w = this.renderer.app.screen.width;
+    const h = this.renderer.app.screen.height;
+
+    const bg = new Graphics();
+    bg.rect(0, 0, w, h);
+    bg.fill({ color: 0x020510, alpha: 0.97 });
+    this.renderer.gameLayer.addChild(bg);
+
+    const ui = new Container();
+    this.uiContainer = ui;
+    this.renderer.uiLayer.addChild(ui);
+
+    // Title
+    const title = new Text({
+      text: this.quest?.title ?? "",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 20,
+        fill: 0xff99ff,
+        fontWeight: "bold",
+      },
+    });
+    title.anchor.set(0.5, 0);
+    title.x = w / 2;
+    title.y = 16;
+    title.eventMode = "none";
+    ui.addChild(title);
+
+    // Separator
+    const sep = new Graphics();
+    sep.rect(w * 0.05, 48, w * 0.9, 1);
+    sep.fill({ color: 0xff99ff, alpha: 0.3 });
+    ui.addChild(sep);
+
+    // Narration area (top 60%)
+    const narAreaH = Math.floor(h * 0.52);
+    const narAreaBg = new Graphics();
+    narAreaBg.rect(w * 0.05, 56, w * 0.9, narAreaH);
+    narAreaBg.fill({ color: 0x05101c, alpha: 0.85 });
+    narAreaBg.stroke({ color: 0xff99ff, width: 1, alpha: 0.2 });
+    ui.addChild(narAreaBg);
+
+    const narText = new Text({
+      text: "...",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 14,
+        fill: 0xddeeff,
+        wordWrap: true,
+        wordWrapWidth: w * 0.9 - 32,
+        lineHeight: 22,
+      },
+    });
+    narText.x = w * 0.05 + 16;
+    narText.y = 72;
+    narText.eventMode = "none";
+    this.narrationText = narText;
+    ui.addChild(narText);
+
+    // Choice container (bottom 40%)
+    const choiceArea = new Container();
+    choiceArea.y = Math.floor(h * 0.62);
+    this.choiceContainer = choiceArea;
+    ui.addChild(choiceArea);
+
+    // Exit button
+    const exitY = h - 36;
+    this.addExitButton(ui, w / 2, exitY);
+  }
+
+  private addExitButton(parent: Container, cx: number, cy: number): void {
+    const t = new Text({
+      text: "[ Выйти ]",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 15,
+        fill: 0x666666,
+        fontWeight: "bold",
+      },
+    });
+    t.anchor.set(0.5);
+    t.x = cx;
+    t.y = cy;
+    t.eventMode = "static";
+    t.cursor = "pointer";
+    t.on("pointerdown", (e) => {
+      e.stopPropagation();
+      this.doReturn();
+    });
+    t.on("pointerover", () => {
+      t.alpha = 0.6;
+    });
+    t.on("pointerout", () => {
+      t.alpha = 1;
+    });
+    parent.addChild(t);
+  }
+
+  // ── Narration loading ───────────────────────────────────────────────────────
+
+  private loadNodeText(node: QuestNode): void {
+    if (!this.narrationText) return;
+    this.narrationText.text = "...";
+
+    const ctx: NarratorContext = {
+      role: this.getPlayerRole(),
+      tone: "серьёзный",
+      systemName: this.getCurrentSystemName(),
+      daysSinceStart: this.gameEngine?.galaxy?.gameDays ?? 0,
+    };
+
+    const narrator = this.gameEngine?.questNarrator;
+    if (narrator) {
+      narrator
+        .narrate(node.textKey, ctx)
+        .then((text) => {
+          if (this.narrationText && !this.narrationText.destroyed) {
+            this.narrationText.text = text;
+          }
+          this.renderChoices(node);
+        })
+        .catch((err) => {
+          logger.warn("TextQuestScene: narrator failed", err);
+          if (this.narrationText && !this.narrationText.destroyed) {
+            this.narrationText.text = node.textKey.replace(/[._]/g, " ");
+          }
+          this.renderChoices(node);
+        });
+    } else {
+      this.narrationText.text = node.textKey.replace(/[._]/g, " ");
+      this.renderChoices(node);
+    }
+  }
+
+  // ── Choice rendering ────────────────────────────────────────────────────────
+
+  private renderChoices(node: QuestNode): void {
+    if (!this.choiceContainer) return;
+    // Clear old choices
+    while (this.choiceContainer.children.length > 0) {
+      const child = this.choiceContainer.children[0];
+      this.choiceContainer.removeChild(child);
+      child.destroy({ children: true });
+    }
+
+    const w = this.renderer.app.screen.width;
+    const player = this.gameEngine?.player;
+    const btnW = w * 0.8;
+    const btnH = 40;
+    const gap = 10;
+    let yOff = 0;
+
+    for (let i = 0; i < node.choices.length; i++) {
+      const choice = node.choices[i];
+      const condFail = this.getConditionFailReason(choice, player);
+      const disabled = condFail !== null;
+
+      this.addChoiceButton(
+        this.choiceContainer,
+        choice.label,
+        condFail,
+        (w - btnW) / 2,
+        yOff,
+        btnW,
+        btnH,
+        disabled,
+        () => this.onChoiceClick(node.id, i, node.choices),
+      );
+      yOff += btnH + gap;
+    }
+  }
+
+  private addChoiceButton(
+    parent: Container,
+    label: string,
+    tooltip: string | null,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    disabled: boolean,
+    onClick: () => void,
+  ): void {
+    const btn = new Container();
+    btn.x = x;
+    btn.y = y;
+
+    const bg = new Graphics();
+    bg.rect(0, 0, w, h);
+    if (disabled) {
+      bg.fill({ color: 0x111122, alpha: 0.7 });
+      bg.stroke({ color: 0x334455, width: 1 });
+    } else {
+      bg.fill({ color: 0x0a1a2e, alpha: 0.9 });
+      bg.stroke({ color: 0xff99ff, width: 1 });
+    }
+    btn.addChild(bg);
+
+    const lbl = new Text({
+      text: disabled ? `${label}  ` : label,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 13,
+        fill: disabled ? 0x445566 : 0xeeeeff,
+        wordWrap: true,
+        wordWrapWidth: w - 24,
+      },
+    });
+    lbl.x = 12;
+    lbl.y = (h - lbl.height) / 2;
+    lbl.eventMode = "none";
+    btn.addChild(lbl);
+
+    if (disabled && tooltip) {
+      const hint = new Text({
+        text: `↳ ${tooltip}`,
+        style: { fontFamily: "Courier New", fontSize: 11, fill: 0xff6644 },
+      });
+      hint.x = 12;
+      hint.y = h - 16;
+      hint.eventMode = "none";
+      btn.addChild(hint);
+    }
+
+    if (!disabled) {
+      btn.eventMode = "static";
+      btn.cursor = "pointer";
+      btn.on("pointerdown", (e) => {
+        e.stopPropagation();
+        onClick();
+      });
+      btn.on("pointerover", () => {
+        bg.clear();
+        bg.rect(0, 0, w, h);
+        bg.fill({ color: 0x1a2a44, alpha: 1 });
+        bg.stroke({ color: 0xff99ff, width: 1 });
+      });
+      btn.on("pointerout", () => {
+        bg.clear();
+        bg.rect(0, 0, w, h);
+        bg.fill({ color: 0x0a1a2e, alpha: 0.9 });
+        bg.stroke({ color: 0xff99ff, width: 1 });
+      });
+    }
+
+    parent.addChild(btn);
+  }
+
+  // ── Choice handling ─────────────────────────────────────────────────────────
+
+  private onChoiceClick(
+    nodeId: string,
+    choiceIdx: number,
+    choices: readonly QuestChoice[],
+  ): void {
+    const player = this.gameEngine?.player;
+    if (!player || !this.quest) return;
+
+    let nextNode: QuestNode | null;
+    try {
+      nextNode = this.runtime.choose(nodeId, choiceIdx, player);
+    } catch (e) {
+      if (e instanceof GameBusinessException) {
+        this.showToast(e.message, 0xff6644);
+      }
+      return;
+    }
+
+    const choice = choices[choiceIdx];
+
+    if (nextNode === null) {
+      // Terminal node — apply outcome and show result
+      const outcome = choice.outcome;
+      if (outcome) {
+        this.runtime.applyOutcome(outcome, player);
+        this.showResultPanel(outcome);
+      } else {
+        this.doReturn();
+      }
+      return;
+    }
+
+    // Non-terminal: load next node
+    this.currentNode = nextNode;
+    this.loadNodeText(nextNode);
+  }
+
+  // ── Result panel ────────────────────────────────────────────────────────────
+
+  private showResultPanel(outcome: QuestOutcome): void {
+    if (!this.uiContainer) return;
+    const w = this.renderer.app.screen.width;
+    const h = this.renderer.app.screen.height;
+
+    // Dim overlay
+    const overlay = new Container();
+    const dimBg = new Graphics();
+    dimBg.rect(0, 0, w, h);
+    dimBg.fill({ color: 0x000000, alpha: 0.75 });
+    dimBg.eventMode = "static";
+    dimBg.on("pointerdown", (e) => e.stopPropagation());
+    overlay.addChild(dimBg);
+
+    // Result box
+    const boxW = 420;
+    const boxH = 220;
+    const boxX = (w - boxW) / 2;
+    const boxY = (h - boxH) / 2;
+    const box = new Graphics();
+    box.rect(boxX, boxY, boxW, boxH);
+    box.fill({ color: 0x05101c, alpha: 0.98 });
+    box.stroke({ color: 0xff99ff, width: 2 });
+    overlay.addChild(box);
+
+    const header = new Text({
+      text: "✦ КВЕСТ ЗАВЕРШЁН",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 18,
+        fill: 0xff99ff,
+        fontWeight: "bold",
+      },
+    });
+    header.anchor.set(0.5, 0);
+    header.x = w / 2;
+    header.y = boxY + 16;
+    header.eventMode = "none";
+    overlay.addChild(header);
+
+    const lines: string[] = [];
+    if (outcome.creditsDelta > 0) lines.push(`+${outcome.creditsDelta} ₡`);
+    if (outcome.creditsDelta < 0) lines.push(`${outcome.creditsDelta} ₡`);
+    if (outcome.reputationDelta !== 0 && outcome.factionId) {
+      const sign = outcome.reputationDelta > 0 ? "+" : "";
+      lines.push(
+        `${sign}${outcome.reputationDelta} репутация (${outcome.factionId})`,
+      );
+    }
+    if (outcome.itemGained)
+      lines.push(`Получен предмет: ${outcome.itemGained}`);
+    if (outcome.journalEntry) lines.push(`Журнал: ${outcome.journalEntry}`);
+
+    let lineY = boxY + 52;
+    for (const line of lines) {
+      const lt = new Text({
+        text: line,
+        style: { fontFamily: "Courier New", fontSize: 13, fill: 0xccddee },
+      });
+      lt.anchor.set(0.5, 0);
+      lt.x = w / 2;
+      lt.y = lineY;
+      lt.eventMode = "none";
+      overlay.addChild(lt);
+      lineY += 22;
+    }
+
+    // Continue button
+    const continueBtnY = boxY + boxH - 46;
+    const contBtnW = 260;
+    const contBtn = new Container();
+    contBtn.x = (w - contBtnW) / 2;
+    contBtn.y = continueBtnY;
+    contBtn.eventMode = "static";
+    contBtn.cursor = "pointer";
+
+    const contBg = new Graphics();
+    contBg.rect(0, 0, contBtnW, 34);
+    contBg.fill({ color: 0x1a0a2e, alpha: 0.9 });
+    contBg.stroke({ color: 0xff99ff, width: 1 });
+    contBtn.addChild(contBg);
+
+    const contLbl = new Text({
+      text: "[ Продолжить ]",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 15,
+        fill: 0xff99ff,
+        fontWeight: "bold",
+      },
+    });
+    contLbl.anchor.set(0.5);
+    contLbl.x = contBtnW / 2;
+    contLbl.y = 17;
+    contLbl.eventMode = "none";
+    contBtn.addChild(contLbl);
+
+    contBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      if (!overlay.destroyed) overlay.destroy({ children: true });
+      this.doReturn();
+    });
+
+    overlay.addChild(contBtn);
+    this.uiContainer.addChild(overlay);
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+
+  private getConditionFailReason(
+    choice: QuestChoice,
+    player:
+      | {
+          credits: number;
+          getReputation: (id: string) => number;
+          inventory: { resources: { type: string; amount: number }[] };
+        }
+      | null
+      | undefined,
+  ): string | null {
+    if (!player) return null;
+    for (const cond of choice.conditions) {
+      if (cond.type === "credits" && cond.comparison === ">=") {
+        if (player.credits < cond.value) {
+          return `Нужно ${cond.value} ₡`;
+        }
+      } else if (cond.type === "reputation" && cond.comparison === ">=") {
+        if ((player.getReputation(cond.factionId ?? "") ?? 0) < cond.value) {
+          return `Нужна репутация ${cond.value}`;
+        }
+      } else if (cond.type === "item") {
+        const stack = player.inventory.resources.find(
+          (r) => r.type === (cond.itemId as string),
+        );
+        const qty = stack?.amount ?? 0;
+        if (cond.comparison === ">=" && qty < cond.value) {
+          return `Нужен предмет: ${cond.itemId}`;
+        }
+      }
+    }
+    return null;
+  }
+
+  private getPlayerRole(): string {
+    const faction = this.gameEngine?.player?.faction;
+    return faction ? String(faction) : "пилот";
+  }
+
+  private getCurrentSystemName(): string {
+    const sysId = this.gameEngine?.player?.currentSystemId;
+    if (!sysId || !this.gameEngine?.galaxy) return "неизвестная система";
+    return (
+      this.gameEngine.galaxy.systems.find((s) => s.id === sysId)?.name ??
+      "неизвестная система"
+    );
+  }
+
+  private showToast(text: string, color: number): void {
+    if (!this.uiContainer) return;
+    const w = this.renderer.app.screen.width;
+    const toast = new Text({
+      text,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 13,
+        fill: color,
+        fontWeight: "bold",
+        align: "center",
+      },
+    });
+    toast.anchor.set(0.5);
+    toast.x = w / 2;
+    toast.y = this.renderer.app.screen.height - 60;
+    toast.eventMode = "none";
+    this.uiContainer.addChild(toast);
+    setTimeout(() => {
+      if (!toast.destroyed) toast.destroy();
+    }, 2500);
+  }
+
+  private doReturn(): void {
+    if (!this.gameEngine) return;
+    this.gameEngine
+      .transitionTo(this.returnScene, {
+        gameEngine: this.gameEngine,
+        ...this.returnContext,
+      })
+      .catch((e) =>
+        logger.error("TextQuestScene: return transition failed", e),
+      );
+  }
+}

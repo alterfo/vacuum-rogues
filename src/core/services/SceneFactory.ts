@@ -15,6 +15,7 @@ import { EquipmentShopScene } from "@/presentation/EquipmentShopScene";
 import { InfoCenterScene } from "@/presentation/InfoCenterScene";
 import { StationScene } from "@/presentation/StationScene";
 import { GovernmentScene } from "@/presentation/GovernmentScene";
+import { TextQuestScene } from "@/presentation/TextQuestScene";
 
 /**
  * Factory for creating scene instances.
@@ -50,6 +51,8 @@ export class SceneFactory implements ISceneFactory {
         return new StationScene(renderer);
       case SceneType.GOVERNMENT:
         return new GovernmentScene(renderer);
+      case SceneType.TEXT_QUEST:
+        return new TextQuestScene(renderer);
       default:
         return null;
     }

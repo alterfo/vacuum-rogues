@@ -406,20 +406,20 @@ the narrator interface, never caring which is active.
 changes credits/reputation/inventory and writes a journal entry. Triggers from NPC contact and
 government.
 
-- [ ] Create `src/presentation/TextQuestScene.ts` extending GameScene. Context:
+- [x] Create `src/presentation/TextQuestScene.ts` extending GameScene. Context:
   `{ gameEngine, quest: TextQuest, returnScene: SceneType, returnContext }`.
   Layout: full-screen dark panel, scrollable narration text area (top 60%), choice buttons
   (bottom 40%). "Отмена/Выйти" exits without completing, returns to returnScene.
-- [ ] On initialize: start TextQuestRuntime, call narrator.narrate(firstNode.textKey, ctx), show
+- [x] On initialize: start TextQuestRuntime, call narrator.narrate(firstNode.textKey, ctx), show
   text. Choice buttons: show choice.label; gray + tooltip if condition fails (show reason).
-- [ ] On choice click: TextQuestRuntime.choose() → if next node → narrate + update buttons;
+- [x] On choice click: TextQuestRuntime.choose() → if next node → narrate + update buttons;
   if terminal node (no choices) → apply outcome, show result panel "Квест завершён: +N ₡ /
   −N репутации / Получен [предмет]", add journal entry, transition back.
-- [ ] Wire triggers:
+- [x] Wire triggers:
   - NpcContactPanel: "Связаться" with ranger NPC that has an active quest → if player has
     TEXT_ADVENTURE quest targeting this NPC → transition to TextQuestScene.
   - GovernmentScene "Задания": if board contains a TEXT_ADVENTURE quest → transition.
-- [ ] Unit tests: scene transitions through a 3-node quest path; outcome applied to player state.
+- [x] Unit tests: scene transitions through a 3-node quest path; outcome applied to player state.
 
 ---
 

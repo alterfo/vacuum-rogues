@@ -4,8 +4,9 @@ import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
 import type { StarSystem } from "@/domain/StarSystem";
-import { SceneType } from "@/types";
+import { SceneType, QuestType } from "@/types";
 import { logger } from "@/utils/logger";
+import { getTextQuestById, SAMPLE_TEXT_QUESTS } from "@/domain/TextQuest";
 
 interface GovernmentContext {
   gameEngine?: GameEngine;
@@ -311,7 +312,43 @@ export class GovernmentScene extends GameScene {
   }
 
   private openQuests(): void {
-    // Job board is wired from PlanetScene — show stub until Task 16
+    if (!this.gameEngine || !this.planet) {
+      this.showToast("Заданий нет", 0xffaa44);
+      return;
+    }
+
+    // Check if the quest board has any TEXT_ADVENTURE quests to launch
+    const board = this.gameEngine.getQuestBoard(this.planet.id);
+    const textQuest = board.find(
+      (q) => q.template.type === QuestType.TEXT_ADVENTURE,
+    );
+
+    if (textQuest) {
+      // Pick the sample quest that matches the board entry's id prefix, or fall back
+      const questId = textQuest.template.id;
+      const domainQuest = getTextQuestById(questId) ?? SAMPLE_TEXT_QUESTS[0];
+
+      if (!domainQuest) {
+        this.showToast("Заданий нет", 0xffaa44);
+        return;
+      }
+
+      this.gameEngine
+        .transitionTo(SceneType.TEXT_QUEST, {
+          gameEngine: this.gameEngine,
+          quest: domainQuest,
+          returnScene: SceneType.GOVERNMENT,
+          returnContext: {
+            gameEngine: this.gameEngine,
+            planet: this.planet,
+          },
+        })
+        .catch((e) =>
+          logger.error("GovernmentScene: text quest transition failed", e),
+        );
+      return;
+    }
+
     this.showToast("Заданий нет", 0xffaa44);
   }
 
