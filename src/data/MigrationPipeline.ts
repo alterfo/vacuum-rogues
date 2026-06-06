@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 11;
+  static readonly CURRENT_VERSION = 12;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -143,6 +143,11 @@ export class MigrationPipeline {
           }
         }
       }
+    },
+    // 11 -> 12: Data fog (Task 21). lastVisitedDay on StarSystem is optional;
+    // undefined means "never visited" which is the correct default for old saves.
+    11: (_state: SaveState) => {
+      // No migration needed — field is optional with no required default value.
     },
     // 10 -> 11: News feed bookmarks (Task 20). Add newsBookmarks to player;
     // backfill description on legacy news events that lack it.

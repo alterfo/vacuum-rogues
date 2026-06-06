@@ -515,6 +515,15 @@ export class SpaceFlightScene extends GameScene {
     // Auto-complete EXPLORATION quests whose target is the current system.
     this.completeExplorationQuestsBySystemEntry();
 
+    // Update lastVisitedDay for data-fog tracking (Task 21).
+    if (this.gameEngine?.galaxy && this.gameEngine.player) {
+      const _galaxy = this.gameEngine.galaxy;
+      const _sys = _galaxy.systems.find(
+        (s) => s.id === this.gameEngine!.player!.currentSystemId,
+      );
+      if (_sys) _sys.lastVisitedDay = _galaxy.gameDays;
+    }
+
     const centerX = this.renderer.app.screen.width / 2;
     const centerY = this.renderer.app.screen.height / 2;
 

@@ -12,6 +12,7 @@ import type { Station } from "./Station";
 export class StarSystem {
   explored = false;
   fogOfWar = true;
+  lastVisitedDay?: number = undefined;
 
   constructor(
     public readonly id: string,

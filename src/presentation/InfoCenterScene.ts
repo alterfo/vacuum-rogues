@@ -5,8 +5,13 @@ import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
 import type { Station } from "@/domain/Station";
 import type { StarSystem } from "@/domain/StarSystem";
-import { SceneType, ResourceType, NpcRole } from "@/types";
+import { SceneType, NpcRole, ResourceType } from "@/types";
 import type { NewsEvent } from "@/types";
+import type {
+  GearHit,
+  PlanetHit,
+  ShipLocation,
+} from "@/systems/info/GalacticRegistry";
 import { GearKind } from "@/systems/equipment/GearCatalog";
 
 interface InfoContext {
@@ -17,29 +22,10 @@ interface InfoContext {
 
 // ── Localisation ────────────────────────────────────────────────────────────
 
-const RESOURCE_RU: Record<ResourceType, string> = {
-  [ResourceType.FUEL]: "Топливо",
-  [ResourceType.METALS]: "Металлы",
-  [ResourceType.CRYSTALS]: "Кристаллы",
-  [ResourceType.ORGANICS]: "Органика",
-  [ResourceType.ARTIFACTS]: "Артефакты",
-  [ResourceType.WEAPONS]: "Оружие (груз)",
-  [ResourceType.MEDICINE]: "Медикаменты",
-  [ResourceType.ELECTRONICS]: "Электроника",
-  [ResourceType.LUXURY]: "Роскошь",
-  [ResourceType.DATA_CORES]: "Ядра данных",
-};
-
 const GEAR_KIND_RU: Record<GearKind, string> = {
   [GearKind.HULL]: "Корпус",
   [GearKind.WEAPON]: "Оружие",
   [GearKind.EQUIPMENT]: "Снаряжение",
-};
-
-const GEAR_KIND_COLOR: Record<GearKind, number> = {
-  [GearKind.HULL]: 0x88ccff,
-  [GearKind.WEAPON]: 0xff8888,
-  [GearKind.EQUIPMENT]: 0x88ffcc,
 };
 
 const NEWS_TYPE_LABEL: Record<NewsEvent["type"], string> = {
@@ -56,6 +42,12 @@ const NEWS_TYPE_COLOR: Record<NewsEvent["type"], number> = {
   OVERMIND_EXPANSION: 0xff3388,
 };
 
+const GEAR_SORT_LABELS: Record<string, string> = {
+  price: "Цена",
+  tech: "Уровень",
+  distance: "Расстояние",
+};
+
 // ── News generation ─────────────────────────────────────────────────────────
 
 interface NewsItem {
@@ -65,7 +57,6 @@ interface NewsItem {
   bookmarkKey: number;
 }
 
-/** Stable bookmark key from day + text content. */
 function newsKey(day: number, text: string): number {
   let h = (day * 100003) >>> 0;
   for (let i = 0; i < Math.min(text.length, 24); i++) {
@@ -88,7 +79,6 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
 
   const items: NewsItem[] = [];
 
-  // Real simulation events from galaxy.newsFeed (newest first, capped at 20 items).
   const feedEvents = [...galaxy.newsFeed].reverse().slice(0, 20);
   for (const event of feedEvents) {
     const sysName = systemMap.get(event.systemId)?.name ?? event.systemId;
@@ -104,7 +94,6 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
   }
 
   if (registry) {
-    // Pirate sightings within 3 jumps
     const pirates = registry.findShips({
       originSystemId: originId,
       role: NpcRole.PIRATE,
@@ -122,7 +111,6 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
       });
     }
 
-    // Cheapest commodity deals in the galaxy
     const hotResources: ResourceType[] = [
       ResourceType.FUEL,
       ResourceType.METALS,
@@ -130,6 +118,18 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
       ResourceType.ELECTRONICS,
       ResourceType.CRYSTALS,
     ];
+    const RESOURCE_RU: Record<ResourceType, string> = {
+      [ResourceType.FUEL]: "Топливо",
+      [ResourceType.METALS]: "Металлы",
+      [ResourceType.CRYSTALS]: "Кристаллы",
+      [ResourceType.ORGANICS]: "Органика",
+      [ResourceType.ARTIFACTS]: "Артефакты",
+      [ResourceType.WEAPONS]: "Оружие (груз)",
+      [ResourceType.MEDICINE]: "Медикаменты",
+      [ResourceType.ELECTRONICS]: "Электроника",
+      [ResourceType.LUXURY]: "Роскошь",
+      [ResourceType.DATA_CORES]: "Ядра данных",
+    };
     for (const res of hotResources) {
       const hit = registry.findResource({
         resource: res,
@@ -149,7 +149,6 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
       });
     }
 
-    // Trader activity
     const traders = registry.findShips({
       originSystemId: originId,
       role: NpcRole.TRADER,
@@ -167,7 +166,6 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
       });
     }
 
-    // Patrol activity
     const patrols = registry.findShips({
       originSystemId: originId,
       role: NpcRole.PATROL,
@@ -186,7 +184,6 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
     }
   }
 
-  // Static lore filler so the feed is never empty
   const lore: [number, string][] = [
     [day - 1, "Совет Независимых обсуждает нейтральный договор с Бастионом"],
     [day - 2, "Прогрессоры объявили о новой серии кораблей класса «Омега»"],
@@ -210,13 +207,31 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
   return items;
 }
 
+// ── Data-fog helper ──────────────────────────────────────────────────────────
+
+function isStaleSystem(
+  systemId: string,
+  systemMap: Map<string, StarSystem>,
+  currentDay: number,
+): boolean {
+  const sys = systemMap.get(systemId);
+  if (!sys) return true;
+  if (sys.lastVisitedDay === undefined) return true;
+  return currentDay - sys.lastVisitedDay > 30;
+}
+
 // ── Scene ───────────────────────────────────────────────────────────────────
 
-const ALL_RESOURCES = Object.values(ResourceType);
-const ALL_GEAR_KINDS = Object.values(GearKind);
+type Tab = "news" | "objects" | "gear";
+type GearSortOption = "price" | "tech" | "distance";
 
-type Tab = "news" | "search";
-type SearchCategory = "resource" | "gear";
+const ALL_GEAR_KINDS = Object.values(GearKind);
+const GEAR_SORT_OPTIONS: GearSortOption[] = ["price", "tech", "distance"];
+const GEAR_MAX_PRICE_OPTIONS = [0, 1000, 5000, 10000, 50000];
+
+type ObjectResult =
+  | { kind: "ship"; loc: ShipLocation & { jumps: number }; stale: boolean }
+  | { kind: "planet"; hit: PlanetHit; stale: boolean };
 
 export class InfoCenterScene extends GameScene {
   private gameEngine: GameEngine | null = null;
@@ -231,11 +246,18 @@ export class InfoCenterScene extends GameScene {
   private newsItems: NewsItem[] = [];
   private newsScroll = 0;
 
-  // search state
-  private searchCategory: SearchCategory = "resource";
-  private selectedResource: ResourceType = ResourceType.FUEL;
-  private selectedGearKind: GearKind = GearKind.HULL;
-  private searchResults: string[] = [];
+  // objects tab state
+  private objectsQuery = "";
+  private objectsResults: ObjectResult[] = [];
+  private objectsInputFocused = false;
+
+  // gear tab state
+  private gearKind: GearKind = GearKind.HULL;
+  private gearMinTech = 1;
+  private gearMaxTech = 6;
+  private gearMaxPriceIdx = 0; // index into GEAR_MAX_PRICE_OPTIONS
+  private gearSort: GearSortOption = "price";
+  private gearResults: GearHit[] = [];
 
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
 
@@ -252,7 +274,6 @@ export class InfoCenterScene extends GameScene {
     this.station = ctx?.station ?? null;
     this.blocked = false;
 
-    // Reputation gate: hostile faction blocks info center access.
     const player = this.gameEngine?.player;
     const galaxy = this.gameEngine?.galaxy;
     if (player && galaxy) {
@@ -279,7 +300,6 @@ export class InfoCenterScene extends GameScene {
     this.renderer.uiLayer.addChild(this.mainContainer);
 
     this.render();
-    if (!this.blocked) this.runSearch();
 
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.boundKeyDown);
@@ -316,14 +336,12 @@ export class InfoCenterScene extends GameScene {
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;
 
-    // Backdrop
     const bg = new Graphics();
     bg.rect(0, 0, sw, sh);
     bg.fill({ color: 0x000000, alpha: 0.9 });
     bg.eventMode = "static";
     this.mainContainer.addChild(bg);
 
-    // Panel
     const PW = Math.min(860, sw - 40);
     const PH = sh - 60;
     const PX = (sw - PW) / 2;
@@ -335,7 +353,6 @@ export class InfoCenterScene extends GameScene {
     panel.stroke({ color: 0x334455, width: 1 });
     this.mainContainer.addChild(panel);
 
-    // Title
     const title = new Text({
       text: "[ ИНФОЦЕНТР ]",
       style: { fontSize: 22, fill: 0x88ccff, fontFamily: "monospace" },
@@ -346,7 +363,6 @@ export class InfoCenterScene extends GameScene {
     title.eventMode = "none";
     this.mainContainer.addChild(title);
 
-    // Day counter
     const day = this.gameEngine?.galaxy?.gameDays ?? 0;
     const dayText = new Text({
       text: `День ${day}`,
@@ -358,13 +374,14 @@ export class InfoCenterScene extends GameScene {
     dayText.eventMode = "none";
     this.mainContainer.addChild(dayText);
 
-    // Tabs
+    // 3-tab switcher
     const TAB_Y = PY + 50;
     const tabDefs: { id: Tab; label: string }[] = [
       { id: "news", label: "НОВОСТИ" },
-      { id: "search", label: "ПОИСК" },
+      { id: "objects", label: "ОБЪЕКТЫ" },
+      { id: "gear", label: "СНАРЯЖЕНИЕ" },
     ];
-    const TAB_W = 130;
+    const TAB_W = 120;
     const TAB_H = 30;
     const tabsStartX = PX + 16;
 
@@ -381,15 +398,15 @@ export class InfoCenterScene extends GameScene {
       tabBg.on("pointerdown", (e) => {
         e.stopPropagation();
         this.activeTab = tab.id;
+        this.objectsInputFocused = tab.id === "objects";
         this.render();
-        if (tab.id === "search") this.runSearch();
       });
       this.mainContainer.addChild(tabBg);
 
       const tabLabel = new Text({
         text: tab.label,
         style: {
-          fontSize: 13,
+          fontSize: 12,
           fill: isActive ? 0x88ccff : 0x556677,
           fontFamily: "monospace",
         },
@@ -401,7 +418,6 @@ export class InfoCenterScene extends GameScene {
       this.mainContainer.addChild(tabLabel);
     }
 
-    // Content area
     const CONTENT_Y = TAB_Y + TAB_H + 6;
     const CONTENT_H = PH - (CONTENT_Y - PY) - 44;
 
@@ -412,11 +428,12 @@ export class InfoCenterScene extends GameScene {
 
     if (this.activeTab === "news") {
       this.renderNews(content, PW, CONTENT_H);
+    } else if (this.activeTab === "objects") {
+      this.renderObjects(content, PW, CONTENT_H);
     } else {
-      this.renderSearch(content, PW, CONTENT_H);
+      this.renderGear(content, PW, CONTENT_H);
     }
 
-    // Back button
     const back = new Text({
       text: "[ Закрыть  Esc ]",
       style: { fontSize: 14, fill: 0x88ccff, fontFamily: "monospace" },
@@ -499,7 +516,6 @@ export class InfoCenterScene extends GameScene {
       clampedScroll + VISIBLE,
     );
 
-    // Clip mask
     const mask = new Graphics();
     mask.rect(PAD, 0, pw - PAD * 2, ph);
     mask.fill({ color: 0xffffff });
@@ -516,7 +532,6 @@ export class InfoCenterScene extends GameScene {
       rowBg.fill({ color: i % 2 === 0 ? 0x0d1220 : 0x0a0e18 });
       container.addChild(rowBg);
 
-      // Day badge
       const dayBadge = new Text({
         text: `Д${item.day}`,
         style: { fontSize: 11, fill: 0x445566, fontFamily: "monospace" },
@@ -526,7 +541,6 @@ export class InfoCenterScene extends GameScene {
       dayBadge.eventMode = "none";
       container.addChild(dayBadge);
 
-      // News text
       const news = new Text({
         text: item.text,
         style: {
@@ -542,7 +556,6 @@ export class InfoCenterScene extends GameScene {
       news.eventMode = "none";
       container.addChild(news);
 
-      // Bookmark toggle (★)
       const isBookmarked = bookmarks.includes(item.bookmarkKey);
       const star = new Text({
         text: isBookmarked ? "★" : "☆",
@@ -563,7 +576,6 @@ export class InfoCenterScene extends GameScene {
       container.addChild(star);
     }
 
-    // Scroll hint
     if (this.newsItems.length > VISIBLE) {
       const hint = new Text({
         text: `↑↓  ${clampedScroll + 1}–${Math.min(clampedScroll + VISIBLE, this.newsItems.length)} / ${this.newsItems.length}`,
@@ -589,195 +601,572 @@ export class InfoCenterScene extends GameScene {
     this.render();
   }
 
-  // ── search tab ─────────────────────────────────────────────────────────────
+  // ── objects tab ────────────────────────────────────────────────────────────
 
-  private renderSearch(container: Container, pw: number, _ph: number): void {
+  private renderObjects(container: Container, pw: number, ph: number): void {
     const PAD = 16;
-    const CAT_W = 180;
-    const ITEM_H = 32;
 
-    // Category toggle
-    const catDefs: { id: SearchCategory; label: string }[] = [
-      { id: "resource", label: "Ресурсы" },
-      { id: "gear", label: "Снаряжение" },
-    ];
-    for (const [i, cat] of catDefs.entries()) {
-      const isActive = this.searchCategory === cat.id;
-      const cx = PAD + i * 96;
+    // Text input box
+    const inputBg = new Graphics();
+    inputBg.rect(PAD, 4, pw - PAD * 2 - 110, 30);
+    inputBg.fill({ color: 0x0d1522 });
+    inputBg.stroke({
+      color: this.objectsInputFocused ? 0x88ccff : 0x334455,
+      width: 1,
+    });
+    inputBg.eventMode = "static";
+    inputBg.cursor = "text";
+    inputBg.on("pointerdown", (e) => {
+      e.stopPropagation();
+      this.objectsInputFocused = true;
+      this.render();
+    });
+    container.addChild(inputBg);
 
-      const bg = new Graphics();
-      bg.roundRect(cx, 0, 88, 26, 4);
-      bg.fill({ color: isActive ? 0x1a2a3a : 0x0d0d1a });
-      bg.stroke({ color: isActive ? 0x88ccff : 0x334455, width: 1 });
-      bg.eventMode = "static";
-      bg.cursor = "pointer";
-      bg.on("pointerdown", (e) => {
-        e.stopPropagation();
-        this.searchCategory = cat.id;
-        this.runSearch();
-        this.render();
+    const queryText =
+      this.objectsQuery.length > 0
+        ? this.objectsQuery
+        : "Введите имя NPC или планеты...";
+    const inputLabel = new Text({
+      text: queryText,
+      style: {
+        fontSize: 13,
+        fill: this.objectsQuery.length > 0 ? 0xeeddaa : 0x445566,
+        fontFamily: "monospace",
+      },
+    });
+    inputLabel.x = PAD + 6;
+    inputLabel.y = 11;
+    inputLabel.eventMode = "none";
+    container.addChild(inputLabel);
+
+    // cursor blink indicator
+    if (this.objectsInputFocused) {
+      const cursor = new Text({
+        text: "|",
+        style: { fontSize: 13, fill: 0x88ccff, fontFamily: "monospace" },
       });
-      container.addChild(bg);
-
-      const label = new Text({
-        text: cat.label,
-        style: {
-          fontSize: 12,
-          fill: isActive ? 0x88ccff : 0x556677,
-          fontFamily: "monospace",
-        },
-      });
-      label.anchor.set(0.5, 0.5);
-      label.x = cx + 44;
-      label.y = 13;
-      label.eventMode = "none";
-      container.addChild(label);
+      cursor.x = PAD + 8 + inputLabel.width;
+      cursor.y = 11;
+      cursor.eventMode = "none";
+      container.addChild(cursor);
     }
 
-    const LIST_Y = 36;
+    // Search button
+    const btnX = pw - PAD - 100;
+    const searchBtn = new Graphics();
+    searchBtn.rect(btnX, 4, 94, 30);
+    searchBtn.fill({ color: 0x112233 });
+    searchBtn.stroke({ color: 0x88ccff, width: 1 });
+    searchBtn.eventMode = "static";
+    searchBtn.cursor = "pointer";
+    searchBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      this.runObjectsSearch();
+      this.render();
+    });
+    container.addChild(searchBtn);
 
-    // Left: selectable items
-    const items =
-      this.searchCategory === "resource"
-        ? ALL_RESOURCES.map((r) => ({ id: r, label: RESOURCE_RU[r] }))
-        : ALL_GEAR_KINDS.map((k) => ({ id: k, label: GEAR_KIND_RU[k] }));
-
-    for (const [i, item] of items.entries()) {
-      const y = LIST_Y + i * ITEM_H;
-      const isSelected =
-        this.searchCategory === "resource"
-          ? item.id === this.selectedResource
-          : item.id === this.selectedGearKind;
-
-      const bg = new Graphics();
-      bg.rect(PAD, y, CAT_W, ITEM_H - 2);
-      bg.fill({ color: isSelected ? 0x152535 : 0x0d1220 });
-      bg.stroke({ color: isSelected ? 0x88ccff : 0x223344, width: 1 });
-      bg.eventMode = "static";
-      bg.cursor = "pointer";
-      bg.on("pointerdown", (e) => {
-        e.stopPropagation();
-        if (this.searchCategory === "resource") {
-          this.selectedResource = item.id as ResourceType;
-        } else {
-          this.selectedGearKind = item.id as GearKind;
-        }
-        this.runSearch();
-        this.render();
-      });
-      container.addChild(bg);
-
-      const label = new Text({
-        text: item.label,
-        style: {
-          fontSize: 12,
-          fill: isSelected ? 0xeeddaa : 0x889aaa,
-          fontFamily: "monospace",
-        },
-      });
-      label.x = PAD + 8;
-      label.y = y + ITEM_H / 2 - 7;
-      label.eventMode = "none";
-      container.addChild(label);
-    }
-
-    // Right: results
-    const RX = PAD + CAT_W + 16;
-    const RW = pw - RX - PAD;
-
-    const resultsTitle = new Text({
-      text:
-        this.searchCategory === "resource"
-          ? `Где купить: ${RESOURCE_RU[this.selectedResource]}`
-          : `Где найти: ${GEAR_KIND_RU[this.selectedGearKind]}`,
+    const searchBtnLabel = new Text({
+      text: "[ Найти ]",
       style: { fontSize: 13, fill: 0x88ccff, fontFamily: "monospace" },
     });
-    resultsTitle.x = RX;
-    resultsTitle.y = LIST_Y;
-    resultsTitle.eventMode = "none";
-    container.addChild(resultsTitle);
+    searchBtnLabel.anchor.set(0.5, 0.5);
+    searchBtnLabel.x = btnX + 47;
+    searchBtnLabel.y = 19;
+    searchBtnLabel.eventMode = "none";
+    container.addChild(searchBtnLabel);
 
-    if (this.searchResults.length === 0) {
+    // Results
+    const LIST_Y = 44;
+    const ROW_H = 34;
+    const VISIBLE = Math.floor((ph - LIST_Y) / ROW_H);
+
+    if (this.objectsResults.length === 0) {
       const empty = new Text({
-        text: "Нет данных в этом секторе",
+        text:
+          this.objectsQuery.length === 0
+            ? "Введите запрос и нажмите Найти или Enter"
+            : "Ничего не найдено",
         style: { fontSize: 13, fill: 0x445566, fontFamily: "monospace" },
       });
-      empty.x = RX;
-      empty.y = LIST_Y + 30;
+      empty.x = PAD;
+      empty.y = LIST_Y + 10;
       empty.eventMode = "none";
       container.addChild(empty);
-    } else {
-      for (const [i, line] of this.searchResults.entries()) {
-        const y = LIST_Y + 28 + i * 26;
+      return;
+    }
 
-        const rowBg = new Graphics();
-        rowBg.rect(RX - 4, y - 2, RW, 24);
-        rowBg.fill({ color: i % 2 === 0 ? 0x0d1220 : 0x0a0e18 });
-        container.addChild(rowBg);
+    const galaxy = this.gameEngine?.galaxy;
+    const systemMap = new Map<string, StarSystem>(
+      galaxy?.systems.map((s) => [s.id, s]) ?? [],
+    );
+    const currentDay = galaxy?.gameDays ?? 0;
 
-        const resultText = new Text({
-          text: line,
-          style: { fontSize: 12, fill: 0xaabbcc, fontFamily: "monospace" },
-        });
-        resultText.x = RX;
-        resultText.y = y;
-        resultText.eventMode = "none";
-        container.addChild(resultText);
-      }
+    for (const [i, result] of this.objectsResults.slice(0, VISIBLE).entries()) {
+      const y = LIST_Y + i * ROW_H;
+
+      const rowBg = new Graphics();
+      rowBg.rect(PAD, y + 1, pw - PAD * 2, ROW_H - 2);
+      rowBg.fill({ color: i % 2 === 0 ? 0x0d1220 : 0x0a0e18 });
+      container.addChild(rowBg);
+
+      const stale =
+        result.kind === "ship"
+          ? isStaleSystem(result.loc.systemId, systemMap, currentDay)
+          : isStaleSystem(result.hit.systemId, systemMap, currentDay);
+
+      const name =
+        result.kind === "ship" ? result.loc.name : result.hit.planetName;
+      const sysName =
+        result.kind === "ship"
+          ? (systemMap.get(result.loc.systemId)?.name ?? result.loc.systemId)
+          : result.hit.systemName;
+      const jumps =
+        result.kind === "ship" ? result.loc.jumps : result.hit.jumps;
+      const typeLabel = result.kind === "ship" ? "[NPC]" : "[ПЛН]";
+      const systemId =
+        result.kind === "ship" ? result.loc.systemId : result.hit.systemId;
+
+      const distStr = jumps === 0 ? "здесь" : `${jumps} пр.`;
+      const staleStr = stale ? " (уст.)" : "";
+      const lineText = `${typeLabel} ${name.padEnd(16)} ${sysName}${staleStr} — ${distStr}`;
+
+      const lineLabel = new Text({
+        text: lineText,
+        style: {
+          fontSize: 12,
+          fill: stale ? 0x556677 : 0xaabbcc,
+          fontFamily: "monospace",
+        },
+      });
+      lineLabel.x = PAD + 4;
+      lineLabel.y = y + ROW_H / 2 - 8;
+      lineLabel.eventMode = "none";
+      container.addChild(lineLabel);
+
+      // "→ карта" button
+      const mapBtnX = pw - PAD - 76;
+      const mapBtn = new Graphics();
+      mapBtn.rect(mapBtnX, y + 4, 70, ROW_H - 8);
+      mapBtn.fill({ color: 0x0d1a22 });
+      mapBtn.stroke({ color: 0x334466, width: 1 });
+      mapBtn.eventMode = "static";
+      mapBtn.cursor = "pointer";
+      mapBtn.on("pointerdown", (e) => {
+        e.stopPropagation();
+        void this.openStarMapForSystem(systemId);
+      });
+      container.addChild(mapBtn);
+
+      const mapBtnLabel = new Text({
+        text: "→ карта",
+        style: { fontSize: 11, fill: 0x6699bb, fontFamily: "monospace" },
+      });
+      mapBtnLabel.anchor.set(0.5, 0.5);
+      mapBtnLabel.x = mapBtnX + 35;
+      mapBtnLabel.y = y + ROW_H / 2;
+      mapBtnLabel.eventMode = "none";
+      container.addChild(mapBtnLabel);
+    }
+
+    if (this.objectsResults.length > VISIBLE) {
+      const hint = new Text({
+        text: `показаны первые ${VISIBLE} из ${this.objectsResults.length}`,
+        style: { fontSize: 11, fill: 0x334455, fontFamily: "monospace" },
+      });
+      hint.anchor.set(1, 1);
+      hint.x = pw - PAD;
+      hint.y = ph - 2;
+      hint.eventMode = "none";
+      container.addChild(hint);
     }
   }
 
-  // ── search logic ───────────────────────────────────────────────────────────
+  private runObjectsSearch(): void {
+    this.objectsResults = [];
+    const registry = this.gameEngine?.getInfoRegistry();
+    const galaxy = this.gameEngine?.galaxy;
+    if (!registry || !galaxy || this.objectsQuery.trim().length === 0) return;
 
-  private runSearch(): void {
-    this.searchResults = [];
+    const originId =
+      this.gameEngine?.player?.currentSystemId ?? galaxy.systems[0]?.id ?? "";
+    const systemMap = new Map<string, StarSystem>(
+      galaxy.systems.map((s) => [s.id, s]),
+    );
+    const currentDay = galaxy.gameDays;
+
+    const ships = registry.findShips({
+      originSystemId: originId,
+      name: this.objectsQuery.trim(),
+    });
+    for (const loc of ships.slice(0, 10)) {
+      const stale = isStaleSystem(loc.systemId, systemMap, currentDay);
+      this.objectsResults.push({ kind: "ship", loc, stale });
+    }
+
+    const planets = registry.findPlanet({
+      name: this.objectsQuery.trim(),
+      originSystemId: originId,
+    });
+    for (const hit of planets.slice(0, 10)) {
+      const stale = isStaleSystem(hit.systemId, systemMap, currentDay);
+      this.objectsResults.push({ kind: "planet", hit, stale });
+    }
+
+    this.objectsResults.sort((a, b) => {
+      const ja = a.kind === "ship" ? a.loc.jumps : a.hit.jumps;
+      const jb = b.kind === "ship" ? b.loc.jumps : b.hit.jumps;
+      return ja - jb;
+    });
+  }
+
+  // ── gear tab ───────────────────────────────────────────────────────────────
+
+  private renderGear(container: Container, pw: number, ph: number): void {
+    const PAD = 16;
+    const CTRL_H = 28;
+    const CTRL_Y = 4;
+    const GAP = 8;
+
+    let cx = PAD;
+
+    // Kind selector
+    const kindLabel = new Text({
+      text: "Вид:",
+      style: { fontSize: 12, fill: 0x88aacc, fontFamily: "monospace" },
+    });
+    kindLabel.x = cx;
+    kindLabel.y = CTRL_Y + 7;
+    kindLabel.eventMode = "none";
+    container.addChild(kindLabel);
+    cx += 36;
+
+    const kindBg = new Graphics();
+    kindBg.rect(cx, CTRL_Y, 96, CTRL_H);
+    kindBg.fill({ color: 0x0d1522 });
+    kindBg.stroke({ color: 0x88ccff, width: 1 });
+    kindBg.eventMode = "static";
+    kindBg.cursor = "pointer";
+    kindBg.on("pointerdown", (e) => {
+      e.stopPropagation();
+      const idx = ALL_GEAR_KINDS.indexOf(this.gearKind);
+      this.gearKind = ALL_GEAR_KINDS[(idx + 1) % ALL_GEAR_KINDS.length];
+      this.render();
+    });
+    container.addChild(kindBg);
+
+    const kindVal = new Text({
+      text: GEAR_KIND_RU[this.gearKind],
+      style: { fontSize: 12, fill: 0xeeddaa, fontFamily: "monospace" },
+    });
+    kindVal.anchor.set(0.5, 0.5);
+    kindVal.x = cx + 48;
+    kindVal.y = CTRL_Y + CTRL_H / 2;
+    kindVal.eventMode = "none";
+    container.addChild(kindVal);
+    cx += 96 + GAP;
+
+    // Tech level range
+    const techLabel = new Text({
+      text: "Т.ур:",
+      style: { fontSize: 12, fill: 0x88aacc, fontFamily: "monospace" },
+    });
+    techLabel.x = cx;
+    techLabel.y = CTRL_Y + 7;
+    techLabel.eventMode = "none";
+    container.addChild(techLabel);
+    cx += 38;
+
+    // Tech min
+    const techMinBg = new Graphics();
+    techMinBg.rect(cx, CTRL_Y, 34, CTRL_H);
+    techMinBg.fill({ color: 0x0d1522 });
+    techMinBg.stroke({ color: 0x556677, width: 1 });
+    techMinBg.eventMode = "static";
+    techMinBg.cursor = "pointer";
+    techMinBg.on("pointerdown", (e) => {
+      e.stopPropagation();
+      this.gearMinTech = (this.gearMinTech % 6) + 1;
+      if (this.gearMinTech > this.gearMaxTech)
+        this.gearMaxTech = this.gearMinTech;
+      this.render();
+    });
+    container.addChild(techMinBg);
+
+    const techMinVal = new Text({
+      text: String(this.gearMinTech),
+      style: { fontSize: 12, fill: 0xaabbcc, fontFamily: "monospace" },
+    });
+    techMinVal.anchor.set(0.5, 0.5);
+    techMinVal.x = cx + 17;
+    techMinVal.y = CTRL_Y + CTRL_H / 2;
+    techMinVal.eventMode = "none";
+    container.addChild(techMinVal);
+    cx += 34;
+
+    const techSep = new Text({
+      text: "–",
+      style: { fontSize: 12, fill: 0x556677, fontFamily: "monospace" },
+    });
+    techSep.x = cx + 2;
+    techSep.y = CTRL_Y + 7;
+    techSep.eventMode = "none";
+    container.addChild(techSep);
+    cx += 14;
+
+    // Tech max
+    const techMaxBg = new Graphics();
+    techMaxBg.rect(cx, CTRL_Y, 34, CTRL_H);
+    techMaxBg.fill({ color: 0x0d1522 });
+    techMaxBg.stroke({ color: 0x556677, width: 1 });
+    techMaxBg.eventMode = "static";
+    techMaxBg.cursor = "pointer";
+    techMaxBg.on("pointerdown", (e) => {
+      e.stopPropagation();
+      this.gearMaxTech = (this.gearMaxTech % 6) + 1;
+      if (this.gearMaxTech < this.gearMinTech)
+        this.gearMinTech = this.gearMaxTech;
+      this.render();
+    });
+    container.addChild(techMaxBg);
+
+    const techMaxVal = new Text({
+      text: String(this.gearMaxTech),
+      style: { fontSize: 12, fill: 0xaabbcc, fontFamily: "monospace" },
+    });
+    techMaxVal.anchor.set(0.5, 0.5);
+    techMaxVal.x = cx + 17;
+    techMaxVal.y = CTRL_Y + CTRL_H / 2;
+    techMaxVal.eventMode = "none";
+    container.addChild(techMaxVal);
+    cx += 34 + GAP;
+
+    // Max price
+    const priceLabel = new Text({
+      text: "Цена≤:",
+      style: { fontSize: 12, fill: 0x88aacc, fontFamily: "monospace" },
+    });
+    priceLabel.x = cx;
+    priceLabel.y = CTRL_Y + 7;
+    priceLabel.eventMode = "none";
+    container.addChild(priceLabel);
+    cx += 52;
+
+    const maxPrice = GEAR_MAX_PRICE_OPTIONS[this.gearMaxPriceIdx];
+    const priceBg = new Graphics();
+    priceBg.rect(cx, CTRL_Y, 72, CTRL_H);
+    priceBg.fill({ color: 0x0d1522 });
+    priceBg.stroke({ color: 0x556677, width: 1 });
+    priceBg.eventMode = "static";
+    priceBg.cursor = "pointer";
+    priceBg.on("pointerdown", (e) => {
+      e.stopPropagation();
+      this.gearMaxPriceIdx =
+        (this.gearMaxPriceIdx + 1) % GEAR_MAX_PRICE_OPTIONS.length;
+      this.render();
+    });
+    container.addChild(priceBg);
+
+    const priceVal = new Text({
+      text: maxPrice === 0 ? "любая" : `${maxPrice}₡`,
+      style: { fontSize: 11, fill: 0xaabbcc, fontFamily: "monospace" },
+    });
+    priceVal.anchor.set(0.5, 0.5);
+    priceVal.x = cx + 36;
+    priceVal.y = CTRL_Y + CTRL_H / 2;
+    priceVal.eventMode = "none";
+    container.addChild(priceVal);
+    cx += 72 + GAP;
+
+    // Sort
+    const sortLabel = new Text({
+      text: "Сорт:",
+      style: { fontSize: 12, fill: 0x88aacc, fontFamily: "monospace" },
+    });
+    sortLabel.x = cx;
+    sortLabel.y = CTRL_Y + 7;
+    sortLabel.eventMode = "none";
+    container.addChild(sortLabel);
+    cx += 44;
+
+    const sortBg = new Graphics();
+    sortBg.rect(cx, CTRL_Y, 84, CTRL_H);
+    sortBg.fill({ color: 0x0d1522 });
+    sortBg.stroke({ color: 0x556677, width: 1 });
+    sortBg.eventMode = "static";
+    sortBg.cursor = "pointer";
+    sortBg.on("pointerdown", (e) => {
+      e.stopPropagation();
+      const idx = GEAR_SORT_OPTIONS.indexOf(this.gearSort);
+      this.gearSort = GEAR_SORT_OPTIONS[(idx + 1) % GEAR_SORT_OPTIONS.length];
+      this.render();
+    });
+    container.addChild(sortBg);
+
+    const sortVal = new Text({
+      text: GEAR_SORT_LABELS[this.gearSort],
+      style: { fontSize: 12, fill: 0xaabbcc, fontFamily: "monospace" },
+    });
+    sortVal.anchor.set(0.5, 0.5);
+    sortVal.x = cx + 42;
+    sortVal.y = CTRL_Y + CTRL_H / 2;
+    sortVal.eventMode = "none";
+    container.addChild(sortVal);
+    cx += 84 + GAP;
+
+    // Find button
+    const findBtnX = pw - PAD - 80;
+    const findBtn = new Graphics();
+    findBtn.rect(findBtnX, CTRL_Y, 74, CTRL_H);
+    findBtn.fill({ color: 0x112233 });
+    findBtn.stroke({ color: 0x88ccff, width: 1 });
+    findBtn.eventMode = "static";
+    findBtn.cursor = "pointer";
+    findBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      this.runGearSearch();
+      this.render();
+    });
+    container.addChild(findBtn);
+
+    const findBtnLabel = new Text({
+      text: "[ Найти ]",
+      style: { fontSize: 12, fill: 0x88ccff, fontFamily: "monospace" },
+    });
+    findBtnLabel.anchor.set(0.5, 0.5);
+    findBtnLabel.x = findBtnX + 37;
+    findBtnLabel.y = CTRL_Y + CTRL_H / 2;
+    findBtnLabel.eventMode = "none";
+    container.addChild(findBtnLabel);
+
+    // Results
+    const LIST_Y = CTRL_Y + CTRL_H + 8;
+    const ROW_H = 30;
+    const VISIBLE = Math.floor((ph - LIST_Y) / ROW_H);
+
+    if (this.gearResults.length === 0) {
+      const empty = new Text({
+        text: "Нажмите Найти для поиска снаряжения",
+        style: { fontSize: 13, fill: 0x445566, fontFamily: "monospace" },
+      });
+      empty.x = PAD;
+      empty.y = LIST_Y + 10;
+      empty.eventMode = "none";
+      container.addChild(empty);
+      return;
+    }
+
+    const galaxy = this.gameEngine?.galaxy;
+    const systemMap = new Map<string, StarSystem>(
+      galaxy?.systems.map((s) => [s.id, s]) ?? [],
+    );
+    const currentDay = galaxy?.gameDays ?? 0;
+
+    for (const [i, hit] of this.gearResults.slice(0, VISIBLE).entries()) {
+      const y = LIST_Y + i * ROW_H;
+      const stale = isStaleSystem(hit.systemId, systemMap, currentDay);
+
+      const rowBg = new Graphics();
+      rowBg.rect(PAD, y + 1, pw - PAD * 2, ROW_H - 2);
+      rowBg.fill({ color: i % 2 === 0 ? 0x0d1220 : 0x0a0e18 });
+      container.addChild(rowBg);
+
+      const sysName = systemMap.get(hit.systemId)?.name ?? hit.systemId;
+      const distStr = hit.jumps === 0 ? "здесь" : `${hit.jumps} пр.`;
+      const staleStr = stale ? " (уст.)" : "";
+      const gearName = hit.gear.name.slice(0, 20).padEnd(20);
+      const lineText = `T${hit.gear.techLevel} ${gearName} ${sysName}${staleStr} — ${hit.price}₡  ${distStr}`;
+
+      const lineLabel = new Text({
+        text: lineText,
+        style: {
+          fontSize: 11,
+          fill: stale ? 0x556677 : 0xaabbcc,
+          fontFamily: "monospace",
+        },
+      });
+      lineLabel.x = PAD + 4;
+      lineLabel.y = y + ROW_H / 2 - 7;
+      lineLabel.eventMode = "none";
+      container.addChild(lineLabel);
+
+      // "→ карта" button
+      const mapBtnX = pw - PAD - 70;
+      const mapBtn = new Graphics();
+      mapBtn.rect(mapBtnX, y + 3, 64, ROW_H - 6);
+      mapBtn.fill({ color: 0x0d1a22 });
+      mapBtn.stroke({ color: 0x334466, width: 1 });
+      mapBtn.eventMode = "static";
+      mapBtn.cursor = "pointer";
+      mapBtn.on("pointerdown", (e) => {
+        e.stopPropagation();
+        void this.openStarMapForSystem(hit.systemId);
+      });
+      container.addChild(mapBtn);
+
+      const mapBtnLabel = new Text({
+        text: "→ карта",
+        style: { fontSize: 10, fill: 0x6699bb, fontFamily: "monospace" },
+      });
+      mapBtnLabel.anchor.set(0.5, 0.5);
+      mapBtnLabel.x = mapBtnX + 32;
+      mapBtnLabel.y = y + ROW_H / 2;
+      mapBtnLabel.eventMode = "none";
+      container.addChild(mapBtnLabel);
+    }
+
+    if (this.gearResults.length > VISIBLE) {
+      const hint = new Text({
+        text: `показаны первые ${VISIBLE} из ${this.gearResults.length}`,
+        style: { fontSize: 11, fill: 0x334455, fontFamily: "monospace" },
+      });
+      hint.anchor.set(1, 1);
+      hint.x = pw - PAD;
+      hint.y = ph - 2;
+      hint.eventMode = "none";
+      container.addChild(hint);
+    }
+  }
+
+  private runGearSearch(): void {
+    this.gearResults = [];
     const registry = this.gameEngine?.getInfoRegistry();
     const galaxy = this.gameEngine?.galaxy;
     if (!registry || !galaxy) return;
 
-    const systemMap = new Map<string, StarSystem>(
-      galaxy.systems.map((s) => [s.id, s]),
-    );
     const originId =
       this.gameEngine?.player?.currentSystemId ?? galaxy.systems[0]?.id ?? "";
+    const maxPrice = GEAR_MAX_PRICE_OPTIONS[this.gearMaxPriceIdx];
 
-    if (this.searchCategory === "resource") {
-      const hits = registry.findResource({
-        resource: this.selectedResource,
-        originSystemId: originId,
-        sort: "price",
-        limit: 8,
-      });
-      for (const h of hits) {
-        const sysName = systemMap.get(h.systemId)?.name ?? h.systemId;
-        const dist = h.jumps === 0 ? "здесь" : `${h.jumps} пр.`;
-        this.searchResults.push(
-          `${dist.padEnd(7)} ${sysName.padEnd(16)} — ${h.price} ₡`,
-        );
-      }
-    } else {
-      // Gear search: find the best tech-level gear of this kind across galaxy
-      const hits = registry.findGear({
-        originSystemId: originId,
-        kind: this.selectedGearKind,
-        sort:
-          this.selectedGearKind === GearKind.WEAPON
-            ? "damage"
-            : this.selectedGearKind === GearKind.HULL
-              ? "hp"
-              : "price",
-        limit: 8,
-      });
-      for (const h of hits) {
-        const sysName = systemMap.get(h.systemId)?.name ?? h.systemId;
-        const dist = h.jumps === 0 ? "здесь" : `${h.jumps} пр.`;
-        const kindColor = GEAR_KIND_COLOR[h.gear.kind];
-        void kindColor; // used for future badge; text-only for now
-        this.searchResults.push(
-          `${dist.padEnd(7)} ${sysName.padEnd(14)} T${h.gear.techLevel} ${h.gear.name.slice(0, 18).padEnd(18)} ${h.price} ₡`,
-        );
-      }
-    }
+    const sortMap: Record<
+      GearSortOption,
+      "price" | "jumps" | "damage" | "hp" | "tech"
+    > = {
+      price: "price",
+      distance: "jumps",
+      tech: "tech",
+    };
+
+    this.gearResults = registry.findGear({
+      originSystemId: originId,
+      kind: this.gearKind,
+      minTech: this.gearMinTech,
+      maxTech: this.gearMaxTech,
+      maxPrice: maxPrice > 0 ? maxPrice : undefined,
+      sort: sortMap[this.gearSort],
+      limit: 20,
+    });
+  }
+
+  // ── navigation ──────────────────────────────────────────────────────────────
+
+  private async openStarMapForSystem(systemId: string): Promise<void> {
+    if (!this.gameEngine) return;
+    await this.gameEngine.transitionTo(SceneType.STAR_MAP, {
+      gameEngine: this.gameEngine,
+      pendingSelectedSystemId: systemId,
+    });
   }
 
   // ── input ──────────────────────────────────────────────────────────────────
@@ -790,6 +1179,23 @@ export class InfoCenterScene extends GameScene {
     if (this.activeTab === "news") {
       if (e.key === "ArrowUp") this.scrollNews(-1);
       if (e.key === "ArrowDown") this.scrollNews(1);
+      return;
+    }
+    if (this.activeTab === "objects" && this.objectsInputFocused) {
+      if (e.key === "Enter") {
+        this.runObjectsSearch();
+        this.render();
+        return;
+      }
+      if (e.key === "Backspace") {
+        this.objectsQuery = this.objectsQuery.slice(0, -1);
+        this.render();
+        return;
+      }
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+        this.objectsQuery += e.key;
+        this.render();
+      }
     }
   }
 

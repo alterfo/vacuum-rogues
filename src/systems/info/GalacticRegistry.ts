@@ -63,6 +63,24 @@ export interface ShipQuery {
   readonly role?: NpcRole;
   readonly faction?: Faction;
   readonly maxJumps?: number;
+  /** Case-insensitive substring filter on ship name. */
+  readonly name?: string;
+}
+
+/** A planet location result for the "Объекты" info-center tab. */
+export interface PlanetHit {
+  readonly systemId: string;
+  readonly planetId: string;
+  readonly planetName: string;
+  readonly systemName: string;
+  readonly jumps: number;
+}
+
+export interface PlanetQuery {
+  /** Case-insensitive substring to match against planet names. */
+  readonly name: string;
+  readonly originSystemId: string;
+  readonly maxJumps?: number;
 }
 
 /** A piece of gear for sale somewhere (US-092, gear half). */
@@ -94,7 +112,7 @@ export interface GearQuery {
   // Weapon criteria
   readonly minDamage?: number;
   readonly minRange?: number;
-  readonly sort?: "price" | "jumps" | "damage" | "hp";
+  readonly sort?: "price" | "jumps" | "damage" | "hp" | "tech";
   readonly limit?: number;
 }
 
@@ -169,20 +187,50 @@ export class GalacticRegistry {
     return this.shipsBySystem.get(systemId) ?? [];
   }
 
-  /** Ships matching role/faction, within an optional jump radius, nearest first. */
+  /** Ships matching role/faction/name, within an optional jump radius, nearest first. */
   findShips(query: ShipQuery): (ShipLocation & { jumps: number })[] {
     const dist = jumpDistances(this.systems, query.originSystemId);
+    const nameLower = query.name?.toLowerCase();
     const out: (ShipLocation & { jumps: number })[] = [];
     for (const loc of this.shipById.values()) {
       if (query.role !== undefined && loc.role !== query.role) continue;
       if (query.faction !== undefined && loc.faction !== query.faction)
         continue;
+      if (nameLower && !loc.name.toLowerCase().includes(nameLower)) continue;
       const jumps = dist.get(loc.systemId);
       if (jumps === undefined) continue; // unreachable from origin
       if (query.maxJumps !== undefined && jumps > query.maxJumps) continue;
       out.push({ ...loc, jumps });
     }
     out.sort((a, b) => a.jumps - b.jumps || a.id.localeCompare(b.id));
+    return out;
+  }
+
+  /** Find planets by (partial, case-insensitive) name match, nearest first. */
+  findPlanet(query: PlanetQuery): PlanetHit[] {
+    const dist = jumpDistances(this.systems, query.originSystemId);
+    const nameLower = query.name.toLowerCase();
+    const out: PlanetHit[] = [];
+    for (const sys of this.systems) {
+      const jumps = dist.get(sys.id);
+      if (jumps === undefined) continue;
+      if (query.maxJumps !== undefined && jumps > query.maxJumps) continue;
+      for (const planet of sys.planets) {
+        const pName =
+          (planet as unknown as { name?: string }).name ?? planet.id;
+        if (!pName.toLowerCase().includes(nameLower)) continue;
+        out.push({
+          systemId: sys.id,
+          planetId: planet.id,
+          planetName: pName,
+          systemName: sys.name,
+          jumps,
+        });
+      }
+    }
+    out.sort(
+      (a, b) => a.jumps - b.jumps || a.planetName.localeCompare(b.planetName),
+    );
     return out;
   }
 
@@ -299,6 +347,8 @@ function sortGear(hits: GearHit[], sort: NonNullable<GearQuery["sort"]>): void {
         return dmg(b) - dmg(a) || a.price - b.price;
       case "hp":
         return hp(b) - hp(a) || a.price - b.price;
+      case "tech":
+        return b.gear.techLevel - a.gear.techLevel || a.price - b.price;
       case "price":
       default:
         return a.price - b.price || a.jumps - b.jumps;

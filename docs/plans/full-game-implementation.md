@@ -449,19 +449,19 @@ Add two more tabs to InfoCenterScene: "Поиск объектов" (NPC locatio
 "Снаряжение" (gear parameter search with jump distance). Data fog: distant/unvisited systems
 show stale data.
 
-- [ ] Refactor `InfoCenterScene` to have 3 tabs: "Новости" / "Объекты" / "Снаряжение".
+- [x] Refactor `InfoCenterScene` to have 3 tabs: "Новости" / "Объекты" / "Снаряжение".
   Tab switcher: 3 text buttons at top, highlighted active tab. Each tab renders its content area.
-- [ ] "Объекты" tab: text input "Поиск NPC / планеты". On submit: call
+- [x] "Объекты" tab: text input "Поиск NPC / планеты". On submit: call
   `GalacticRegistry.findShip(name)` and `findPlanet(name)` → show name, current system, distance
   in jumps (use `galaxy.jumpDistance(player.currentSystemId, targetSystemId)`). "Проложить
   маршрут" button sets the star map warp target.
-- [ ] "Снаряжение" tab: dropdowns for `kind` (hull/weapon/equipment), tech level range min/max,
+- [x] "Снаряжение" tab: dropdowns for `kind` (hull/weapon/equipment), tech level range min/max,
   max price, sort by (price/tech/distance). "Найти" → calls `GalacticRegistry.findGear(query)` →
   list results: item name, system, planet, price, jumps. Tap result → show system on star map.
-- [ ] Data fog: if `galaxy.systems[id].lastVisitedDay` is undefined (never visited) or >30 days
+- [x] Data fog: if `galaxy.systems[id].lastVisitedDay` is undefined (never visited) or >30 days
   ago, mark results from that system with "(устаревшие данные)". Track `lastVisitedDay` in
   StarSystem (add to schemas); update in `SpaceFlightScene.initialize()`.
-- [ ] Unit tests: search returns sorted results; unvisited systems flagged; visited systems updated.
+- [x] Unit tests: search returns sorted results; unvisited systems flagged; visited systems updated.
 
 ---
 

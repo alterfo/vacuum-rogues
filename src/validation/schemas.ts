@@ -228,6 +228,7 @@ export const StarSystemSchema = z.object({
   politicalSystem: z
     .enum(["ANARCHY", "DICTATORSHIP", "MONARCHY", "REPUBLIC", "DEMOCRACY"])
     .default("REPUBLIC"),
+  lastVisitedDay: z.number().int().optional(),
 });
 
 export const NpcGoalSchema = z.object({

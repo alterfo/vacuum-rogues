@@ -9,6 +9,8 @@ import { logger } from "@/utils/logger";
 export interface StarMapContext {
   galaxy?: Galaxy;
   gameEngine?: GameEngine;
+  /** Pre-select and highlight this system when the map opens (info-center routing). */
+  pendingSelectedSystemId?: string;
 }
 
 export class StarMapScene extends GameScene {
@@ -61,6 +63,11 @@ export class StarMapScene extends GameScene {
       this.galaxy.revealSystemAndNeighbors(this.playerSystemId);
     }
 
+    // Pre-select system if routed here from the info center.
+    if (ctx?.pendingSelectedSystemId) {
+      this.selectedSystemId = ctx.pendingSelectedSystemId;
+    }
+
     // Clear layers first, then render
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
@@ -70,6 +77,14 @@ export class StarMapScene extends GameScene {
 
     // Render the star map
     this.renderStarMap();
+
+    // If a system was pre-selected, show its info panel.
+    if (this.selectedSystemId && this.galaxy) {
+      const preSelected = this.galaxy.systems.find(
+        (s) => s.id === this.selectedSystemId,
+      );
+      if (preSelected) this.showSystemInfo(preSelected);
+    }
 
     logger.info("StarMapScene initialized");
   }
