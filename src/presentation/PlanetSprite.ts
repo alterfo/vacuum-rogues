@@ -3,6 +3,7 @@ import type { Texture } from "pixi.js";
 import type { Planet } from "@/domain/Planet";
 import { PlanetType } from "@/types";
 import { SeededRNG } from "@/utils/seededRNG";
+import { getMoonLayer } from "@/utils/moonZOrder";
 import { pickVariant } from "./textures";
 import { buildSphereMesh, type SphereMesh } from "./sphereMesh";
 
@@ -22,6 +23,7 @@ interface Moon {
   speed: number; // radians per ms
   angle: number;
   squash: number; // vertical squash for a tilted orbit look
+  wasBehind: boolean; // tracks current layer to avoid re-parenting every tick
 }
 
 /**
@@ -47,7 +49,8 @@ export class PlanetSprite {
   private isHovered: boolean = false;
   private clickCallback: ((planet: Planet) => void) | null = null;
   private readonly moons: Moon[] = [];
-  private readonly moonContainer: Container = new Container();
+  private readonly backMoonsContainer: Container = new Container();
+  private readonly frontMoonsContainer: Container = new Container();
   // Rotating 3D sphere: surface scrolls under a circular mask; shading is
   // oriented so the lit side faces the star, giving a volumetric look.
   private surfaceStrip: Graphics | null = null;
@@ -90,6 +93,9 @@ export class PlanetSprite {
     // Create PixiJS objects
     this.container = new Container();
     this.graphics = new Graphics();
+    // backMoonsContainer must be the first child so moons in the far half of the
+    // orbit render behind the planet body and sphere overlay.
+    this.container.addChild(this.backMoonsContainer);
     this.container.addChild(this.graphics);
 
     // Position container at calculated screen coordinates
@@ -99,7 +105,7 @@ export class PlanetSprite {
     // Initial render
     this.render();
     this.buildSphere();
-    this.createMoons();
+    this.createMoons(); // adds frontMoonsContainer as the last child
   }
 
   /**
@@ -239,7 +245,8 @@ export class PlanetSprite {
     const { radius } = this.getPlanetVisuals(this.planet.type);
     const rng = new SeededRNG(`moon_${this.planet.id}`);
     const count = rng.nextInt(0, 2);
-    this.container.addChild(this.moonContainer); // moons orbit in front (transit)
+    // frontMoonsContainer is the last child — moons in the near half render over the planet.
+    this.container.addChild(this.frontMoonsContainer);
     for (let i = 0; i < count; i++) {
       const g = new Graphics();
       const size = rng.nextFloat(1.8, 3.4);
@@ -248,13 +255,20 @@ export class PlanetSprite {
         color: 0xffffff,
         alpha: 0.4,
       });
-      this.moonContainer.addChild(g);
+      const angle = rng.next() * Math.PI * 2;
+      const isBehind = getMoonLayer(angle) === "back";
+      if (isBehind) {
+        this.backMoonsContainer.addChild(g);
+      } else {
+        this.frontMoonsContainer.addChild(g);
+      }
       this.moons.push({
         graphics: g,
         orbit: radius + rng.nextFloat(10, 22) + i * 6,
         speed: rng.nextFloat(0.0006, 0.0014) * (rng.next() < 0.5 ? 1 : -1),
-        angle: rng.next() * Math.PI * 2,
+        angle,
         squash: rng.nextFloat(0.4, 0.8),
+        wasBehind: isBehind,
       });
     }
   }
@@ -495,11 +509,22 @@ export class PlanetSprite {
     // Orient the shading so the lit hemisphere faces the star (system centre).
     this.orientShading();
 
-    // Orbit the moons around the planet (tilted, so some pass in front/behind).
+    // Orbit the moons; re-parent between back/front layers only when the moon
+    // crosses the horizontal axis (wasBehind flag prevents re-parenting every tick).
     for (const m of this.moons) {
       m.angle += m.speed * deltaTime;
       m.graphics.x = Math.cos(m.angle) * m.orbit;
       m.graphics.y = Math.sin(m.angle) * m.orbit * m.squash;
+
+      const isBehind = getMoonLayer(m.angle) === "back";
+      if (isBehind !== m.wasBehind) {
+        m.wasBehind = isBehind;
+        if (isBehind) {
+          this.backMoonsContainer.addChild(m.graphics);
+        } else {
+          this.frontMoonsContainer.addChild(m.graphics);
+        }
+      }
     }
   }
 

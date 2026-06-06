@@ -391,14 +391,14 @@ Scenario: Планеты различимы
 - Modify: `src/presentation/PlanetSprite.ts`
 - Create: `src/tests/moonZOrder.test.ts`
 
-- [ ] Написать тест `moonZOrder.test.ts`: угол 0–π → луна за планетой; угол π–2π → луна перед планетой
-- [ ] В `PlanetSprite.update()`: при каждом тике для каждой луны проверять `moonAngle % (2*PI)`
+- [x] Написать тест `moonZOrder.test.ts`: угол 0–π → луна за планетой; угол π–2π → луна перед планетой
+- [x] В `PlanetSprite.update()`: при каждом тике для каждой луны проверять `moonAngle % (2*PI)`
   - `angle < Math.PI` → `backMoonsLayer.addChild(moonSprite)` (под планетой)
   - `angle >= Math.PI` → `frontMoonsLayer.addChild(moonSprite)` (над планетой)
-- [ ] Альтернатива: два слоя в `gameLayer` — `backMoonsLayer` (indx < planets) / `frontMoonsLayer` (indx > planets)
-- [ ] Избегать `addChildAt` каждый тик если угол не пересёк ось (flag `wasBehind`)
-- [ ] Запустить `npm test -- --run src/tests/moonZOrder.test.ts` — тесты зелёные
-- [ ] Запустить `npm test -- --run` + `npm run lint` — без регрессий
+- [x] Альтернатива: два слоя в `gameLayer` — `backMoonsLayer` (indx < planets) / `frontMoonsLayer` (indx > planets)
+- [x] Избегать `addChildAt` каждый тик если угол не пересёк ось (flag `wasBehind`)
+- [x] Запустить `npm test -- --run src/tests/moonZOrder.test.ts` — тесты зелёные
+- [x] Запустить `npm test -- --run` + `npm run lint` — без регрессий
 
 ### Task 9: Новые unit-тесты (combat, tradeSystem)
 
