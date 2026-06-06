@@ -730,6 +730,11 @@ export class PlanetScene extends GameScene {
 
   private async takeOff(): Promise<void> {
     if (!this.gameEngine) return;
+    const loadoutStats = this.gameEngine.playerLoadout?.derivedStats();
+    if (loadoutStats && !loadoutStats.canTakeOff) {
+      this.showMessage("Нет двигателя — взлёт невозможен", 0xff4444);
+      return;
+    }
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
       // Spawn the ship next to this planet, not at the distant system edge.

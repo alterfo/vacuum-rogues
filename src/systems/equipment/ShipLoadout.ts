@@ -163,7 +163,8 @@ export class ShipLoadout {
     const maxHull = Math.round(hull.hp * this.mult(this.hullMicromoduleId));
     let weaponDamage = 0;
     let weaponCount = 0;
-    let enginePotency = 0;
+    // Best engine speed in px/ms: 0.05 + techLevel × 0.03
+    let bestEngineSpeed = 0;
     let radarRange = 0;
     let scannerStrength = 0;
     let shields = 0;
@@ -181,27 +182,39 @@ export class ShipLoadout {
         weaponCount++;
       } else if (g.kind === GearKind.EQUIPMENT) {
         const e = g as EquipmentSpec;
-        const p = e.potency * m;
         switch (e.equipmentClass) {
-          case EquipmentClass.ENGINE:
-            enginePotency = Math.max(enginePotency, p);
+          case EquipmentClass.ENGINE: {
+            // Higher tech level wins; micromodule scales the derived speed
+            const spd = (0.05 + e.techLevel * 0.03) * m;
+            if (spd > bestEngineSpeed) bestEngineSpeed = spd;
             hasEngine = true;
             break;
+          }
           case EquipmentClass.FUEL_TANK:
-            fuelCapacity += p;
+            // 50-unit base reserve + tank potency; micromodule scales the whole tank
+            fuelCapacity += Math.round((50 + e.potency) * m);
             hasFuel = true;
             break;
           case EquipmentClass.RADAR:
-            radarRange = Math.max(radarRange, p);
+            // 600 base + tech × 200 px; micromodule scales the computed range
+            radarRange = Math.max(
+              radarRange,
+              Math.round((600 + e.techLevel * 200) * m),
+            );
             break;
           case EquipmentClass.SCANNER:
-            scannerStrength = Math.max(scannerStrength, p);
+            scannerStrength = Math.max(
+              scannerStrength,
+              Math.round(e.potency * m),
+            );
             break;
           case EquipmentClass.SHIELD:
-            shields += p;
+            // tech × 30 HP per shield module; micromodule scales it
+            shields += Math.round(e.techLevel * 30 * m);
             break;
           case EquipmentClass.REPAIR_DROID:
-            repairRate = Math.max(repairRate, p);
+            // 1 + tech × 0.5 HP/day; take the best droid if multiple installed
+            repairRate = Math.max(repairRate, (1 + e.techLevel * 0.5) * m);
             break;
           case EquipmentClass.GRAPPLE:
             break;
@@ -217,12 +230,13 @@ export class ShipLoadout {
       slotsUsed: this.slotted.length,
       weaponDamage: Math.round(weaponDamage),
       weaponCount,
-      speed: hasEngine ? Number(enginePotency.toFixed(2)) : 0,
-      radarRange: Math.round(radarRange),
-      scannerStrength: Math.round(scannerStrength),
-      shields: Math.round(shields),
+      // Speed is in px/ms; 0 when no engine installed → cannot move or take off
+      speed: hasEngine ? Number(bestEngineSpeed.toFixed(3)) : 0,
+      radarRange,
+      scannerStrength,
+      shields,
       repairRate: Number(repairRate.toFixed(2)),
-      fuelCapacity: Math.round(fuelCapacity),
+      fuelCapacity,
       // Canon §11.4: cannot take off without an engine and a fuel tank.
       canTakeOff: hasEngine && hasFuel,
     };

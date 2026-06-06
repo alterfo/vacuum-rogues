@@ -153,19 +153,19 @@ inventory).
 change ship stats used by game systems. ShipPhysics reads speed from derived stats. Broken/missing
 engine blocks takeoff.
 
-- [ ] Implement `ShipLoadout.derive(modules)` fully:
+- [x] Implement `ShipLoadout.derive(modules)` fully:
   - Engine module → `maxSpeed` (0.05 base + tech × 0.03 px/ms).
   - Fuel tank → `maxFuel` (50 base + capacity × 20 units).
   - Radar → `radarRange` (600 base + tech × 200 px).
   - Droid → `repairRate` (1 + tier × 0.5 HP/day in flight).
   - Shield generator → `shieldHp` (0 base + tech × 30).
-- [ ] `ShipPhysics` (in `SpaceFlightScene`) reads `ship.loadout.derived.maxSpeed` instead of
+- [x] `ShipPhysics` (in `SpaceFlightScene`) reads `ship.loadout.derived.maxSpeed` instead of
   hardcoded `0.1`. If engine slot is empty → `maxSpeed = 0`.
-- [ ] In `PlanetScene` / `StationScene` takeoff handler: if `ship.loadout.derived.maxSpeed === 0`
+- [x] In `PlanetScene` / `StationScene` takeoff handler: if `ship.loadout.derived.maxSpeed === 0`
   → show toast "Нет двигателя — взлёт невозможен" and block transition.
-- [ ] Droid repair: in `GameEngine.advanceGalaxyDay()`, if droid installed and hull < maxHp,
+- [x] Droid repair: in `GameEngine.advanceGalaxyDay()`, if droid installed and hull < maxHp,
   `ship.hull += repairRate` (capped at maxHp).
-- [ ] Unit tests: derive() returns correct stats for each module type; takeoff blocked without engine.
+- [x] Unit tests: derive() returns correct stats for each module type; takeoff blocked without engine.
 
 ### Task 7: Micromodules — crafting station and UI
 

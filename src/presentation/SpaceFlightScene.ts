@@ -78,10 +78,16 @@ interface AsteroidMote {
   graphics: Graphics;
   x: number;
   y: number;
-  vx: number; // px/ms screen drift
+  vx: number; // px/ms (asteroids only)
   vy: number;
-  spin: number; // rad/ms
-  comet: boolean; // draw a bright tail
+  spin: number; // rad/ms (asteroids only)
+  comet: boolean;
+  // Orbital parameters — comets only
+  orbitA: number; // semi-major axis (world px)
+  orbitB: number; // semi-minor axis (world px)
+  orbitAngle: number; // current angle (rad)
+  orbitSpeed: number; // rad/ms, sign = direction
+  orbitTilt: number; // orbit plane rotation in world xy (rad)
 }
 
 interface SwarmLayer {
@@ -338,8 +344,8 @@ export class SpaceFlightScene extends GameScene {
   private routeTargetStationId: string | null = null;
   private starCenterX: number = 0;
   private starCenterY: number = 0;
-  private starGraphics: Graphics | null = null;
   private starSurface: Container | null = null; // rotating star surface
+  private starHaloContainer: Container | null = null; // blurred glow behind star
   // Equirect sun map scrolled under a circular mask for real axial rotation
   // (US-070 #4) when the sphere mesh is unavailable.
   private starTiling: TilingSprite | null = null;
@@ -514,12 +520,16 @@ export class SpaceFlightScene extends GameScene {
       ? (lastPos?.y ??
         centerY - this.pendingWarp.exitVector.y * this.SYSTEM_INNER_RADIUS)
       : centerY + entryVector.y * this.SYSTEM_BOUNDARY_RADIUS;
-    // Cruise so one day's distance (DISTANCE_PER_DAY) is covered in ~1 real
-    // second — "день = секунда" (US-070). A faster ship stat shortens it slightly.
-    const speedStat = this.gameEngine?.player?.ship.speed ?? 1;
-    const cruise =
-      (this.DISTANCE_PER_DAY / 1000) * Math.min(1.4, Math.max(0.8, speedStat));
-    this.shipPhysics = new ShipPhysics(entryX, entryY, cruise);
+    // Cruise speed: derived from installed engine module (px/ms).
+    // Loadout speed is already in px/ms from ShipLoadout.derivedStats().
+    // Fall back to DISTANCE_PER_DAY / 1000 (legacy ship.speed multiplier) when
+    // no GearCatalog loadout is set, so old saves/tests keep working.
+    const loadoutStats = this.gameEngine?.playerLoadout?.derivedStats();
+    const cruise = loadoutStats
+      ? loadoutStats.speed
+      : (this.DISTANCE_PER_DAY / 1000) *
+        Math.min(1.4, Math.max(0.8, this.gameEngine?.player?.ship.speed ?? 1));
+    this.shipPhysics = new ShipPhysics(entryX, entryY, cruise || 0.1);
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
@@ -541,12 +551,11 @@ export class SpaceFlightScene extends GameScene {
     this.skyContainer.eventMode = "none";
     this.renderer.stage.addChildAt(this.skyContainer, 0);
 
-    // World-space nebula clouds (blurred internally). Stars are deliberately NOT
-    // in here — they stay crisp for a deep-field look (per art direction).
+    // Reserved world-space container (currently empty; nebulae moved to skyContainer).
     this.backgroundContainer = new Container();
     this.renderer.gameLayer.addChild(this.backgroundContainer);
 
-    this.createNebulae(); // World-space clouds + glowing swarms
+    this.createNebulae(); // Screen-space nebula clouds (skyContainer) + swarms
     this.createStarField(); // Crisp far stars (screen-fixed)
     this.createTwinkleStars(); // Bright pulsing hero stars (screen-fixed)
     this.createStar();
@@ -836,8 +845,8 @@ export class SpaceFlightScene extends GameScene {
     this.cameraDebugText = null;
     this.dayCounterText = null;
     this.shipPhysics = null;
-    this.starGraphics = null;
     this.starSurface = null;
+    this.starHaloContainer = null;
     this.starTiling = null;
     this.sunSphere = null;
     this.orbitGraphics = null;
@@ -911,15 +920,7 @@ export class SpaceFlightScene extends GameScene {
         alpha: [0.28, 0.72],
         spread: 1.3,
       },
-      // Near layer: foreground stars — clearly distinct, colorful, parallax-obvious.
-      {
-        count: 480,
-        depth: 0.2,
-        zoomDepth: 0.09,
-        size: [0.75, 2.3],
-        alpha: [0.48, 1.0],
-        spread: 1.6,
-      },
+      // No near/foreground star layer — foreground is dust streaks only (per art direction).
     ];
 
     // Weighted color pool: 60% blue-white (hot stellar cores), 15% pure white,
@@ -1056,46 +1057,36 @@ export class SpaceFlightScene extends GameScene {
    * distinct but stable look.
    */
   private createNebulae(): void {
-    if (!this.backgroundContainer) return;
+    if (!this.skyContainer) return;
 
     this.nebulaeContainer = new Container();
+    this.nebulaeContainer.eventMode = "none";
 
     const systemId = this.gameEngine?.player?.currentSystemId ?? "default";
     const rng = new SeededRNG(`nebula_${systemId}`);
 
-    // Photorealistic nebula palettes — saturated, high-contrast, black-space friendly.
-    // Each array is [dark-outer, mid-body, inner-hot, core-bright, accent].
-    // "screen" blend on dark background: final = src + dst - src*dst ≈ src (adds light).
-    // Darker outer values ensure space stays BLACK between clouds; bright inner
-    // values give the luminous core seen in the Space Rangers reference.
+    const sw = this.renderer.app.screen.width;
+    const sh = this.renderer.app.screen.height;
+
+    // Photorealistic nebula palettes — [dark-outer, mid-body, inner-hot, core-bright, accent].
     const palettes = [
-      // Warm red-orange (Space Rangers reference: emission nebula)
-      [0x6e0a00, 0xcc2000, 0xff4400, 0xff8800, 0xffbb22],
-      // Deep blue-violet (reflection/supernova remnant)
-      [0x05082a, 0x0d1a88, 0x2244cc, 0x4466ff, 0x88aaff],
-      // Crimson-magenta (planetary nebula)
-      [0x380012, 0x880030, 0xdd1060, 0xff44aa, 0xffaadd],
-      // Amber-gold (young star cluster)
-      [0x2a1000, 0x993300, 0xff6600, 0xffaa00, 0xffee44],
-      // Purple-indigo (Orion/pillar style)
-      [0x180040, 0x440088, 0x8800cc, 0xaa44ff, 0xddaaff],
+      [0x6e0a00, 0xcc2000, 0xff4400, 0xff8800, 0xffbb22], // warm red-orange
+      [0x05082a, 0x0d1a88, 0x2244cc, 0x4466ff, 0x88aaff], // deep blue-violet
+      [0x380012, 0x880030, 0xdd1060, 0xff44aa, 0xffaadd], // crimson-magenta
+      [0x2a1000, 0x993300, 0xff6600, 0xffaa00, 0xffee44], // amber-gold
+      [0x180040, 0x440088, 0x8800cc, 0xaa44ff, 0xddaaff], // purple-indigo
     ];
     const palIdx = rng.nextInt(0, palettes.length - 1);
     const palette = palettes[palIdx];
 
-    // Generated hero nebula backdrop (if art exists), tinted to match the chosen
-    // procedural palette and sitting behind the animated clouds for depth.
+    // Backdrop art sprite (if present) — behind everything in skyContainer.
     const palNames = ["red", "blue", "red", "red", "blue"];
     const backdrop =
       pickVariant("nebula", `${palNames[palIdx]}_mid`, systemId) ??
       pickVariant("nebula", `${palNames[palIdx]}_near`, systemId);
-    if (backdrop && this.skyContainer) {
+    if (backdrop) {
       const bg = new Sprite(backdrop);
       bg.anchor.set(0.5);
-      // Screen-space: centred on viewport, never scales with zoom → edge never
-      // visible at any zoom level. 2.4× max(W,H) gives ample parallax margin.
-      const sw = this.renderer.app.screen.width;
-      const sh = this.renderer.app.screen.height;
       bg.x = sw / 2;
       bg.y = sh / 2;
       const size = Math.max(sw, sh) * 2.4;
@@ -1104,125 +1095,124 @@ export class SpaceFlightScene extends GameScene {
       bg.alpha = 0.38;
       bg.eventMode = "none";
       this.nebulaBackdropSprite = bg;
-      // addChildAt(0) → behind all star layers that createStarField() appends.
       this.skyContainer.addChildAt(bg, 0);
     }
 
-    // Spread clouds across the whole (larger-than-screen) system.
-    const span = this.SYSTEM_BOUNDARY_RADIUS * 2.4;
-    const cloudCount = rng.nextInt(5, 7);
+    // Clouds are in screen-space (skyContainer), centred on (0,0) relative to
+    // nebulaeContainer. nebulaeContainer is placed at screen-centre and translated
+    // by cameraPan × NEBULA_DEPTH for gentle parallax — same model as star layers.
+    // Each cloud gets a BlurFilter to dissolve hard circle edges into smooth gradients.
+    const cloudCount = rng.nextInt(4, 6);
 
     for (let c = 0; c < cloudCount; c++) {
       const cloud = new Container();
-      cloud.x = this.starCenterX + rng.nextFloat(-span / 2, span / 2);
-      cloud.y = this.starCenterY + rng.nextFloat(-span / 2, span / 2);
+      // Symmetric spread so clouds fill and slightly overflow the viewport.
+      cloud.x = rng.nextFloat(-sw * 0.7, sw * 0.7);
+      cloud.y = rng.nextFloat(-sh * 0.7, sh * 0.7);
 
-      // Each cloud has 3 concentric zones:
-      //   outer haze → body (dominant color) → bright hot core
-      // This mirrors the radial gradient of real emission nebulae.
       const outerColor = palette[0];
       const bodyColor = palette[rng.nextInt(1, 2)];
       const innerColor = palette[3];
       const coreColor = palette[4];
 
-      const cloudR = rng.nextFloat(600, 1200);
-      const squash = rng.nextFloat(0.4, 0.9);
+      // cloudR in screen pixels (was world-px, caused scaling artifacts on zoom).
+      const cloudR = rng.nextFloat(200, 450);
+      const squash = rng.nextFloat(0.45, 0.92);
       const rot = rng.next() * Math.PI;
 
-      // OUTER HAZE — large, very low alpha, dark palette color
+      // OUTER HAZE — fills the whole cloud area, very soft
       const outerG = new Graphics();
-      for (let b = 0; b < 30; b++) {
+      for (let b = 0; b < 24; b++) {
         const ang = rng.next() * Math.PI * 2;
-        const dist = rng.next() * cloudR; // uniform — fills whole area
+        const dist = rng.next() * cloudR;
         let bx = Math.cos(ang) * dist;
         let by = Math.sin(ang) * dist * squash;
         const rx = bx * Math.cos(rot) - by * Math.sin(rot);
         const ry = bx * Math.sin(rot) + by * Math.cos(rot);
         bx = rx;
         by = ry;
-        const r = rng.nextFloat(180, 420) * (1 - (dist / cloudR) * 0.3);
+        const r = rng.nextFloat(55, 140) * (1 - (dist / cloudR) * 0.3);
         outerG
           .circle(bx, by, r)
-          .fill({ color: outerColor, alpha: rng.nextFloat(0.03, 0.07) });
+          .fill({ color: outerColor, alpha: rng.nextFloat(0.05, 0.12) });
       }
-      outerG.blendMode = "screen";
       cloud.addChild(outerG);
 
-      // BODY — denser toward centre, medium alpha, vivid color
+      // BODY — denser toward centre
       const bodyG = new Graphics();
-      for (let b = 0; b < 38; b++) {
+      for (let b = 0; b < 32; b++) {
         const ang = rng.next() * Math.PI * 2;
-        const dist = rng.next() * rng.next() * cloudR * 0.85; // denser toward core
+        const dist = rng.next() * rng.next() * cloudR * 0.85;
         let bx = Math.cos(ang) * dist;
         let by = Math.sin(ang) * dist * squash;
         const rx = bx * Math.cos(rot) - by * Math.sin(rot);
         const ry = bx * Math.sin(rot) + by * Math.cos(rot);
         bx = rx;
         by = ry;
-        const r = rng.nextFloat(120, 300) * (1 - (dist / cloudR) * 0.55);
+        const r = rng.nextFloat(35, 100) * (1 - (dist / cloudR) * 0.55);
         bodyG
           .circle(bx, by, r)
-          .fill({ color: bodyColor, alpha: rng.nextFloat(0.05, 0.14) });
+          .fill({ color: bodyColor, alpha: rng.nextFloat(0.08, 0.2) });
       }
-      bodyG.blendMode = "screen";
       cloud.addChild(bodyG);
 
-      // HOT INNER ZONE — concentrated around the core, brighter
+      // HOT INNER — tight bright zone
       const innerG = new Graphics();
-      for (let b = 0; b < 20; b++) {
+      for (let b = 0; b < 16; b++) {
         const ang = rng.next() * Math.PI * 2;
-        const dist = rng.next() * rng.next() * cloudR * 0.45;
+        const dist = rng.next() * rng.next() * cloudR * 0.42;
         let bx = Math.cos(ang) * dist;
         let by = Math.sin(ang) * dist * squash;
         const rx = bx * Math.cos(rot) - by * Math.sin(rot);
         const ry = bx * Math.sin(rot) + by * Math.cos(rot);
         bx = rx;
         by = ry;
-        const r = rng.nextFloat(60, 180);
+        const r = rng.nextFloat(18, 55);
         innerG
           .circle(bx, by, r)
-          .fill({ color: innerColor, alpha: rng.nextFloat(0.08, 0.2) });
+          .fill({ color: innerColor, alpha: rng.nextFloat(0.12, 0.28) });
       }
-      innerG.blendMode = "screen";
       cloud.addChild(innerG);
 
-      // LUMINOUS CORE — small, very bright, "add" blend → blown-out glow
+      // LUMINOUS CORE — tiny bright hot-spots
       const coreG = new Graphics();
-      const coreCount = rng.nextInt(2, 4);
+      const coreCount = rng.nextInt(1, 3);
       for (let e = 0; e < coreCount; e++) {
-        const ex = rng.nextFloat(-cloudR * 0.18, cloudR * 0.18);
-        const ey = rng.nextFloat(-cloudR * 0.18, cloudR * 0.18) * squash;
-        const cr = rng.nextFloat(50, 130);
-        // outer soft glow
+        const ex = rng.nextFloat(-cloudR * 0.15, cloudR * 0.15);
+        const ey = rng.nextFloat(-cloudR * 0.15, cloudR * 0.15) * squash;
+        const cr = rng.nextFloat(10, 28);
         coreG
-          .circle(ex, ey, cr * 2.5)
-          .fill({ color: coreColor, alpha: rng.nextFloat(0.06, 0.14) });
-        // bright core
+          .circle(ex, ey, cr * 2.2)
+          .fill({ color: coreColor, alpha: rng.nextFloat(0.08, 0.16) });
         coreG
           .circle(ex, ey, cr)
-          .fill({ color: coreColor, alpha: rng.nextFloat(0.2, 0.42) });
+          .fill({ color: coreColor, alpha: rng.nextFloat(0.22, 0.42) });
       }
-      coreG.blendMode = "add";
       cloud.addChild(coreG);
-      this.nebulaeContainer.addChild(cloud);
 
+      // Container-level screen blend + GPU blur converts sharp circle edges into
+      // volumetric gradients. Applied to whole container = single GPU pass per cloud.
+      cloud.blendMode = "screen";
+      cloud.filters = [new BlurFilter({ strength: 72, quality: 3 })];
+      cloud.eventMode = "none";
+
+      this.nebulaeContainer.addChild(cloud);
       this.nebulaLayers.push({
         container: cloud,
         driftX: rng.nextFloat(-0.004, 0.004),
         driftY: rng.nextFloat(-0.004, 0.004),
-        pulseAmp: rng.nextFloat(0.1, 0.22),
+        pulseAmp: rng.nextFloat(0.08, 0.18),
         pulseSpeed: rng.nextFloat(0.0003, 0.0009),
         phase: rng.next() * Math.PI * 2,
         baseAlpha: 1,
       });
     }
 
-    // Glowing swarms of motes drifting near the cloud cores (the green/amber
-    // "fireflies" of the reference shot). Seeded from the same rng so they sit
-    // with the clouds.
     this.createSwarms(rng, palette);
+    this.createNebulaPillars(rng, sw, sh);
 
-    this.backgroundContainer.addChild(this.nebulaeContainer);
+    // Add behind star layers: backdrop(0) → nebulae(1) → stars(2+).
+    this.skyContainer.addChild(this.nebulaeContainer);
   }
 
   /**
@@ -1234,13 +1224,15 @@ export class SpaceFlightScene extends GameScene {
   private createSwarms(rng: SeededRNG, palette: number[]): void {
     if (!this.nebulaeContainer) return;
 
-    const span = this.SYSTEM_BOUNDARY_RADIUS * 1.6;
-    const swarmCount = rng.nextInt(4, 7);
+    const sw = this.renderer.app.screen.width;
+    const sh = this.renderer.app.screen.height;
+    const swarmCount = rng.nextInt(3, 6);
 
     for (let s = 0; s < swarmCount; s++) {
       const container = new Container();
-      container.x = this.starCenterX + rng.nextFloat(-span / 2, span / 2);
-      container.y = this.starCenterY + rng.nextFloat(-span / 2, span / 2);
+      // Screen-space positions relative to nebulaeContainer origin (screen centre).
+      container.x = rng.nextFloat(-sw * 0.55, sw * 0.55);
+      container.y = rng.nextFloat(-sh * 0.55, sh * 0.55);
 
       // Brighten a palette colour toward white for a "glowing" mote.
       const tint = this.lightenColor(
@@ -1277,6 +1269,48 @@ export class SpaceFlightScene extends GameScene {
         phase: rng.next() * Math.PI * 2,
         baseAlpha: rng.nextFloat(0.22, 0.45), // much subtler than before
       });
+    }
+  }
+
+  /**
+   * Dark dust-lane pillars composited over the nebula clouds with multiply blend.
+   * The reference (SR2) shows dark gas columns visible against the lit nebula —
+   * elongated, slightly rotated, softly blurred so they read as absorption zones
+   * rather than painted stripes.
+   */
+  private createNebulaPillars(rng: SeededRNG, sw: number, sh: number): void {
+    if (!this.nebulaeContainer) return;
+
+    const pillarCount = rng.nextInt(3, 5);
+    for (let p = 0; p < pillarCount; p++) {
+      const g = new Graphics();
+
+      // Position near the core of the nebula, offset slightly.
+      const cx = rng.nextFloat(-sw * 0.35, sw * 0.35);
+      const cy = rng.nextFloat(-sh * 0.35, sh * 0.35);
+
+      // Each pillar is 3–5 overlapping dark ellipses at a common angle to form
+      // a column. Random tilt makes them organic rather than axis-aligned.
+      const tilt = rng.nextFloat(-Math.PI * 0.45, Math.PI * 0.45);
+      const segments = rng.nextInt(3, 5);
+      for (let s = 0; s < segments; s++) {
+        const along = rng.nextFloat(-80, 80); // offset along the pillar axis
+        const perp = rng.nextFloat(-18, 18); // slight wobble perpendicular
+        const ex = cx + Math.cos(tilt) * along - Math.sin(tilt) * perp;
+        const ey = cy + Math.sin(tilt) * along + Math.cos(tilt) * perp;
+        const w = rng.nextFloat(22, 48);
+        const h = rng.nextFloat(65, 150);
+        g.ellipse(ex, ey, w, h);
+        g.fill({ color: 0x000000, alpha: rng.nextFloat(0.55, 0.82) });
+      }
+
+      const pillarC = new Container();
+      pillarC.addChild(g);
+      pillarC.rotation = tilt;
+      pillarC.blendMode = "multiply";
+      pillarC.filters = [new BlurFilter({ strength: 28, quality: 2 })];
+      pillarC.eventMode = "none";
+      this.nebulaeContainer.addChild(pillarC);
     }
   }
 
@@ -1385,7 +1419,7 @@ export class SpaceFlightScene extends GameScene {
     this.asteroidContainer = new Container();
     this.asteroidContainer.eventMode = "none";
     this.asteroidContainer.zIndex = 120; // in front of ship (110) / planets
-    const count = 5;
+    const count = 8;
     for (let i = 0; i < count; i++) {
       const g = new Graphics();
       g.eventMode = "none";
@@ -1397,7 +1431,12 @@ export class SpaceFlightScene extends GameScene {
         vx: 0,
         vy: 0,
         spin: 0,
-        comet: Math.random() < 0.25,
+        comet: false,
+        orbitA: 0,
+        orbitB: 0,
+        orbitAngle: 0,
+        orbitSpeed: 0,
+        orbitTilt: 0,
       };
       this.drawAsteroid(a);
       this.respawnAsteroid(a, true);
@@ -1407,22 +1446,70 @@ export class SpaceFlightScene extends GameScene {
     this.renderer.gameLayer.addChild(this.asteroidContainer);
   }
 
-  /** Draw an irregular grey rock (with a faint comet tail when applicable). */
+  /** Draw an irregular grey rock (or a comet with solar-wind tail). */
   private drawAsteroid(a: AsteroidMote): void {
     const g = a.graphics;
     g.clear();
-    // World-space sizes (comparable to the ship/small bodies, since they share
-    // the world scale now rather than being screen-sized).
-    const r = a.comet ? 7 : 9 + Math.random() * 14;
+    const r = a.comet ? 13 + Math.random() * 5 : 9 + Math.random() * 14;
     if (a.comet) {
-      // Tail along local -x (the graphic is rotated to face its velocity, so the
-      // tail trails behind), then a bright icy head + soft glow.
-      g.poly([-r * 9, 0, 0, -r * 0.8, 0, r * 0.8]).fill({
-        color: 0x88bbff,
-        alpha: 0.16,
-      });
-      g.circle(0, 0, r * 2.2).fill({ color: 0x88bbff, alpha: 0.2 });
-      g.circle(0, 0, r).fill({ color: 0xcfe6ff, alpha: 0.95 });
+      // Tail in local +x direction; rotation is updated each frame so +x always
+      // points anti-sunward (solar wind blows tail away from the star).
+      // Photorealistic look: many overlapping narrow wedges at slightly different
+      // angles accumulate into a smooth volumetric gradient — no solid triangles.
+
+      // DUST TAIL — 10 wedge layers fanning across ±14° total spread
+      const dustColor = 0xd0e0ff;
+      for (let i = 0; i < 10; i++) {
+        const ang = (i / 9 - 0.5) * 0.24; // ±0.12 rad ≈ ±7°
+        const len = r * (28 - i * 0.6);
+        const hw = r * (2.6 - i * 0.08); // half-width at origin
+        g.poly([Math.cos(ang) * len, Math.sin(ang) * len, 0, -hw, 0, hw]).fill({
+          color: dustColor,
+          alpha: 0.028,
+        });
+      }
+      // Brighter inner spine — tight wedges
+      for (let i = 0; i < 6; i++) {
+        const ang = (i / 5 - 0.5) * 0.07;
+        const len = r * 18;
+        const hw = r * 0.8;
+        g.poly([Math.cos(ang) * len, Math.sin(ang) * len, 0, -hw, 0, hw]).fill({
+          color: 0xe8f0ff,
+          alpha: 0.045,
+        });
+      }
+      // ION TAIL — straight, narrow, blue-white
+      g.poly([
+        r * 38,
+        r * 0.18,
+        r * 38,
+        -r * 0.18,
+        0,
+        -r * 0.3,
+        0,
+        r * 0.3,
+      ]).fill({ color: 0x7aacff, alpha: 0.13 });
+      g.poly([
+        r * 30,
+        r * 0.11,
+        r * 30,
+        -r * 0.11,
+        0,
+        -r * 0.18,
+        0,
+        r * 0.18,
+      ]).fill({ color: 0x99c2ff, alpha: 0.2 });
+
+      // COMA — stacked diffuse halos around the nucleus
+      g.circle(0, 0, r * 5.0).fill({ color: 0x80a8d0, alpha: 0.03 });
+      g.circle(0, 0, r * 3.2).fill({ color: 0xa0c0e0, alpha: 0.06 });
+      g.circle(0, 0, r * 2.0).fill({ color: 0xc0d8f0, alpha: 0.1 });
+      g.circle(0, 0, r * 1.2).fill({ color: 0xd8eaff, alpha: 0.18 });
+
+      // NUCLEUS — icy, compact, with a hot interior point
+      g.circle(0, 0, r * 0.9).fill({ color: 0xcce4ff, alpha: 0.92 });
+      g.circle(0, 0, r * 0.45).fill({ color: 0xeef6ff, alpha: 0.96 });
+      g.circle(0, 0, r * 0.15).fill({ color: 0xffffff, alpha: 1.0 });
     } else {
       const pts: number[] = [];
       const sides = 7;
@@ -1460,24 +1547,41 @@ export class SpaceFlightScene extends GameScene {
     const cx = this.starCenterX;
     const cy = this.starCenterY;
     const R = this.asteroidFieldRadius();
-    const speed = 0.012 + Math.random() * 0.03; // slow, world px/ms
 
-    // Enter on a point of the bounding circle, head roughly across to the far
-    // side (with some spread) so it traverses the system.
-    const entryAng = Math.random() * Math.PI * 2;
-    a.x = cx + Math.cos(entryAng) * R;
-    a.y = cy + Math.sin(entryAng) * R;
-    const aimAng = entryAng + Math.PI + (Math.random() - 0.5) * 1.1;
-    a.vx = Math.cos(aimAng) * speed;
-    a.vy = Math.sin(aimAng) * speed;
-    a.spin = (Math.random() - 0.5) * 0.0008;
-
-    if (initial) {
-      // Scatter inside the disc (uniform by area) for a sparse starting field.
-      const rr = Math.sqrt(Math.random()) * R;
-      const ang2 = Math.random() * Math.PI * 2;
-      a.x = cx + Math.cos(ang2) * rr;
-      a.y = cy + Math.sin(ang2) * rr;
+    if (a.comet) {
+      // Elliptical orbit around the star. Highly eccentric like real comets.
+      a.orbitA = R * (0.38 + Math.random() * 0.5); // 38–88% of boundary
+      a.orbitB = a.orbitA * (0.2 + Math.random() * 0.45); // b/a = 0.20–0.65
+      a.orbitAngle = Math.random() * Math.PI * 2;
+      a.orbitSpeed =
+        (0.00004 + Math.random() * 0.00008) * (Math.random() < 0.5 ? 1 : -1);
+      a.orbitTilt = Math.random() * Math.PI * 2;
+      // Set initial world position from orbital parameters
+      const cos = Math.cos(a.orbitAngle);
+      const sin = Math.sin(a.orbitAngle);
+      a.x =
+        cx +
+        a.orbitA * cos * Math.cos(a.orbitTilt) -
+        a.orbitB * sin * Math.sin(a.orbitTilt);
+      a.y =
+        cy +
+        a.orbitA * cos * Math.sin(a.orbitTilt) +
+        a.orbitB * sin * Math.cos(a.orbitTilt);
+    } else {
+      const speed = 0.012 + Math.random() * 0.03;
+      const entryAng = Math.random() * Math.PI * 2;
+      a.x = cx + Math.cos(entryAng) * R;
+      a.y = cy + Math.sin(entryAng) * R;
+      const aimAng = entryAng + Math.PI + (Math.random() - 0.5) * 1.1;
+      a.vx = Math.cos(aimAng) * speed;
+      a.vy = Math.sin(aimAng) * speed;
+      a.spin = (Math.random() - 0.5) * 0.0008;
+      if (initial) {
+        const rr = Math.sqrt(Math.random()) * R;
+        const ang2 = Math.random() * Math.PI * 2;
+        a.x = cx + Math.cos(ang2) * rr;
+        a.y = cy + Math.sin(ang2) * rr;
+      }
     }
     a.graphics.x = a.x;
     a.graphics.y = a.y;
@@ -1491,21 +1595,48 @@ export class SpaceFlightScene extends GameScene {
     const limit = this.asteroidFieldRadius() * 1.15;
     const limitSq = limit * limit;
     for (const a of this.asteroids) {
-      a.x += a.vx * deltaTime;
-      a.y += a.vy * deltaTime;
-      a.graphics.x = a.x;
-      a.graphics.y = a.y;
-      // Comets face their velocity (tail trails behind); asteroids tumble.
       if (a.comet) {
-        a.graphics.rotation = Math.atan2(a.vy, a.vx);
+        // Advance orbital angle (Kepler-lite: uniform angular speed)
+        a.orbitAngle += a.orbitSpeed * deltaTime;
+        const cos = Math.cos(a.orbitAngle);
+        const sin = Math.sin(a.orbitAngle);
+        a.x =
+          cx +
+          a.orbitA * cos * Math.cos(a.orbitTilt) -
+          a.orbitB * sin * Math.sin(a.orbitTilt);
+        a.y =
+          cy +
+          a.orbitA * cos * Math.sin(a.orbitTilt) +
+          a.orbitB * sin * Math.cos(a.orbitTilt);
+        a.graphics.x = a.x;
+        a.graphics.y = a.y;
+        // Tail points away from the star (solar wind). local +x → anti-sunward.
+        const sunDx = a.x - cx;
+        const sunDy = a.y - cy;
+        a.graphics.rotation = Math.atan2(sunDy, sunDx);
+        // Tail visible only in the inner system (orbit 2-3 zone ≈ 1050–1950 px).
+        // Fade in from 2200 px, fully visible inside 1500 px.
+        const dist = Math.hypot(sunDx, sunDy);
+        const FULL = 1500;
+        const FADE = 2200;
+        a.graphics.alpha =
+          dist <= FULL
+            ? 1
+            : dist >= FADE
+              ? 0
+              : 1 - (dist - FULL) / (FADE - FULL);
       } else {
+        a.x += a.vx * deltaTime;
+        a.y += a.vy * deltaTime;
+        a.graphics.x = a.x;
+        a.graphics.y = a.y;
         a.graphics.rotation += a.spin * deltaTime;
-      }
-      const dx = a.x - cx;
-      const dy = a.y - cy;
-      if (dx * dx + dy * dy > limitSq) {
-        this.drawAsteroid(a);
-        this.respawnAsteroid(a);
+        const dx = a.x - cx;
+        const dy = a.y - cy;
+        if (dx * dx + dy * dy > limitSq) {
+          this.drawAsteroid(a);
+          this.respawnAsteroid(a);
+        }
       }
     }
   }
@@ -1583,23 +1714,10 @@ export class SpaceFlightScene extends GameScene {
       `star_${this.gameEngine?.player?.currentSystemId ?? "x"}`,
     );
 
-    // --- Corona: large soft glow built from many concentric rings (a faked
-    // radial gradient), NOT a BlurFilter — a blurred corona showed up as a
-    // rectangular band near the star once the gameLayer was zoomed (US-070 #10).
-    this.starGraphics = new Graphics();
-    this.starGraphics.eventMode = "none"; // decorative — never intercept clicks
-    const rings = 26;
-    for (let i = rings; i >= 1; i--) {
-      const t = i / rings; // 1 = outermost
-      const r = R * (1.0 + t * 1.15); // R .. ~R*2.15
-      // Outer = deep orange, inner = warm yellow; alpha rises toward the centre.
-      const color = this.lightenColor(0xff5500, (1 - t) * 0.55);
-      const alpha = 0.03 + (1 - t) * (1 - t) * 0.28;
-      this.starGraphics
-        .circle(this.starCenterX, this.starCenterY, r)
-        .fill({ color, alpha });
-    }
-    this.renderer.gameLayer.addChild(this.starGraphics);
+    // Volumetric glow halo — a blurred container in screen blend, placed behind
+    // the surface so the star appears to radiate warm light into the void.
+    this.starHaloContainer = this.buildStarHalo(R);
+    this.renderer.gameLayer.addChild(this.starHaloContainer);
 
     // --- Rotating surface: generated star art if available, else procedural ---
     const surface = new Container();
@@ -1619,7 +1737,7 @@ export class SpaceFlightScene extends GameScene {
 
       // No overlays on the sun: the hot-core fill and pulsing flares read as a
       // weird bright blob over the surface, so they were removed — the rotating
-      // fire texture + corona (starGraphics) carry the look on their own.
+      // fire texture carries the look on its own.
       if (mesh) {
         surface.addChild(mesh);
       } else {
@@ -1719,6 +1837,59 @@ export class SpaceFlightScene extends GameScene {
       default:
         return 0xffd9a0; // warm yellow sun
     }
+  }
+
+  /**
+   * Diffuse volumetric glow behind the star. Uses BlurFilter on a container so
+   * the falloff is smooth without concentric rings. Screen blend integrates
+   * naturally with the dark space background.
+   */
+  private buildStarHalo(R: number): Container {
+    const halo = new Container();
+    halo.eventMode = "none";
+    halo.x = this.starCenterX;
+    halo.y = this.starCenterY;
+
+    const systemId = this.gameEngine?.player?.currentSystemId;
+    const system = this.gameEngine?.galaxy?.systems.find(
+      (s) => s.id === systemId,
+    );
+
+    // Inner and outer halo colours keyed to star type.
+    let innerC = 0xffeebb;
+    let outerC = 0xff8800;
+    switch (system?.starType) {
+      case StarType.RED_DWARF:
+        innerC = 0xff9966;
+        outerC = 0xcc2200;
+        break;
+      case StarType.BLUE_GIANT:
+        innerC = 0xddeeff;
+        outerC = 0x4488ff;
+        break;
+      case StarType.WHITE_DWARF:
+        innerC = 0xffffff;
+        outerC = 0xaaccff;
+        break;
+      case StarType.NEUTRON:
+        innerC = 0xeeffff;
+        outerC = 0x6699ff;
+        break;
+    }
+
+    const g = new Graphics();
+    // Concentric fills, outermost first — BlurFilter smears them into a
+    // smooth gradient so no individual ring is visible.
+    g.circle(0, 0, R * 5.5).fill({ color: outerC, alpha: 0.03 });
+    g.circle(0, 0, R * 4.0).fill({ color: outerC, alpha: 0.05 });
+    g.circle(0, 0, R * 2.8).fill({ color: outerC, alpha: 0.09 });
+    g.circle(0, 0, R * 1.9).fill({ color: innerC, alpha: 0.14 });
+    g.circle(0, 0, R * 1.35).fill({ color: innerC, alpha: 0.22 });
+    halo.addChild(g);
+
+    halo.blendMode = "screen";
+    halo.filters = [this.paddedBlur(110)];
+    return halo;
   }
 
   /**
@@ -2114,7 +2285,9 @@ export class SpaceFlightScene extends GameScene {
         this.addQuestMarker(sprite);
       }
 
-      // Add to game layer
+      // zIndex 50 so ships behind the disc (zIndex 40) are occluded and ships
+      // in front (zIndex 100) render on top — see updateNpcDepth().
+      sprite.container.zIndex = 50;
       this.renderer.gameLayer.addChild(sprite.container);
       this.planetSprites.push(sprite);
     }
@@ -2390,10 +2563,10 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // While a hyperjump is committed the ship is auto-flying to the system edge;
-    // ignore navigation clicks so it can't be diverted (camera pan still works).
-    if (this.pendingWarp && !isPanButton) {
-      logger.info("Navigation locked: warping to system edge");
+    // While the ship is already en route to the warp edge, lock navigation.
+    // If the ship is still stopped (route shown but Play not pressed), allow replanning.
+    if (this.pendingWarp && !isPanButton && this.shipPhysics?.isMoving) {
+      logger.info("Navigation locked: en route to warp edge");
       return;
     }
 
@@ -2429,20 +2602,22 @@ export class SpaceFlightScene extends GameScene {
           // Keep the route line visible during movement
         } else {
           // Clicked on different location - update planned route (empty space)
-          this.routeTargetPlanetId = null; // navigating to open space, not a planet
+          this.routeTargetPlanetId = null;
           this.routeTargetStationId = null;
-          this.followNpcId = null; // manual nav cancels auto-follow
-          this.planRouteTo(world.x, world.y); // preview bows around the star
+          this.followNpcId = null;
+          this.pendingWarp = null; // cancel warp if user picks a different destination
+          this.planRouteTo(world.x, world.y);
           logger.info(
             `🗺️ Route updated to (${world.x.toFixed(0)}, ${world.y.toFixed(0)})`,
           );
         }
       } else {
         // First click - plan the route (don't start moving yet)
-        this.routeTargetPlanetId = null; // navigating to open space, not a planet
+        this.routeTargetPlanetId = null;
         this.routeTargetStationId = null;
-        this.followNpcId = null; // manual nav cancels auto-follow
-        this.planRouteTo(world.x, world.y); // preview bows around the star
+        this.followNpcId = null;
+        this.pendingWarp = null; // cancel warp if user picks a new destination
+        this.planRouteTo(world.x, world.y);
         logger.info(
           `🗺️ Route planned to (${world.x.toFixed(0)}, ${world.y.toFixed(0)}). Click again to execute.`,
         );
@@ -2649,17 +2824,17 @@ export class SpaceFlightScene extends GameScene {
   private applyCameraTransform(): void {
     if (!this.renderer.gameLayer) return;
 
-    // Keep the view inside the background coverage so its edge is never shown.
     this.clampCameraPan();
 
-    // Apply scale
     this.renderer.gameLayer.scale.set(this.cameraZoom);
-
-    // Apply position offset
     this.renderer.gameLayer.x = this.cameraPanX;
     this.renderer.gameLayer.y = this.cameraPanY;
 
-    // Update debug display
+    // Keep NPC hit areas a fixed screen size regardless of zoom level.
+    for (const s of this.npcSprites) {
+      s.updateHitArea(this.cameraZoom);
+    }
+
     this.updateCameraDebugDisplay();
   }
 
@@ -3380,8 +3555,28 @@ export class SpaceFlightScene extends GameScene {
       if (sprite.isGone()) {
         sprite.destroy();
         this.npcSprites.splice(i, 1);
+      } else {
+        this.updateNpcDepth(sprite);
       }
     }
+  }
+
+  /**
+   * Set NPC zIndex so the ship is occluded by planet discs it passes behind.
+   * Planet discs sit at zIndex 50; ships at 40 render under them, ships at 100
+   * render above. We switch to 40 whenever the ship's world position is within
+   * the disc radius of any planet.
+   */
+  private updateNpcDepth(sprite: NpcShipSprite): void {
+    for (const planet of this.planetSprites) {
+      const dx = sprite.x - planet.screenX;
+      const dy = sprite.y - planet.screenY;
+      if (dx * dx + dy * dy < planet.displayRadius * planet.displayRadius) {
+        sprite.container.zIndex = 40;
+        return;
+      }
+    }
+    sprite.container.zIndex = 100;
   }
 
   /** Small deterministic hash of a string id (FNV-1a) for stable assignment. */
@@ -3780,20 +3975,17 @@ export class SpaceFlightScene extends GameScene {
 
   /** Slow drift + gentle "breathing" pulse so the nebulae feel alive. */
   private updateNebulae(): void {
-    // Nebula parallax: the nebula lives in the world (gameLayer), but a distant
-    // gas backdrop should move SLOWER than the planets/ship as the camera pans —
-    // not 1:1. Counter-translate the whole nebula container so its net on-screen
-    // pan rate is NEB_DEPTH (≈35% of the world). This puts it on its own depth
-    // layer: behind the world, in front of (faster than) the far stars.
-    const NEB_DEPTH = 0.35;
-    if (this.backgroundContainer) {
-      const z = this.cameraZoom || 1;
-      this.backgroundContainer.x = (-this.cameraPanX * (1 - NEB_DEPTH)) / z;
-      this.backgroundContainer.y = (-this.cameraPanY * (1 - NEB_DEPTH)) / z;
+    // Nebulae live in skyContainer (screen-space) — they don't scale with gameLayer
+    // zoom, so depth remains consistent at any zoom level. Gentle parallax
+    // (NEBULA_DEPTH ≈ 0.04) is midway between far stars (0.02) and mid stars (0.08).
+    const NEBULA_DEPTH = 0.04;
+    if (this.nebulaeContainer) {
+      const cx = this.renderer.app.screen.width / 2;
+      const cy = this.renderer.app.screen.height / 2;
+      this.nebulaeContainer.x = cx + this.cameraPanX * NEBULA_DEPTH;
+      this.nebulaeContainer.y = cy + this.cameraPanY * NEBULA_DEPTH;
     }
 
-    // A very slow shared diagonal drift on top of each cloud's own wander, so the
-    // sky feels alive without the nebula visibly sliding.
     const DRIFT_X = 0.006;
     const DRIFT_Y = 0.004;
     for (const n of this.nebulaLayers) {
@@ -3802,7 +3994,6 @@ export class SpaceFlightScene extends GameScene {
       const pulse =
         1 + Math.sin(this.bgElapsed * n.pulseSpeed + n.phase) * n.pulseAmp;
       n.container.alpha = Math.max(0, Math.min(1, n.baseAlpha * pulse));
-      // very subtle scale breathing
       const s =
         1 + Math.sin(this.bgElapsed * n.pulseSpeed * 0.7 + n.phase) * 0.03;
       n.container.scale.set(s);
@@ -3871,11 +4062,10 @@ export class SpaceFlightScene extends GameScene {
       layer.container.y = cy + this.cameraPanY * layer.depth;
     }
 
-    // Twinkle stars ride with the near layer (same parallax rate = 0.22) so they
-    // feel anchored to nearby space rather than the infinite background.
+    // Twinkle stars ride with the mid layer — bright distant stars, not foreground.
     if (this.twinkleContainer) {
-      this.twinkleContainer.x = this.cameraPanX * 0.22;
-      this.twinkleContainer.y = this.cameraPanY * 0.22;
+      this.twinkleContainer.x = cx + this.cameraPanX * 0.08;
+      this.twinkleContainer.y = cy + this.cameraPanY * 0.08;
     }
   }
 

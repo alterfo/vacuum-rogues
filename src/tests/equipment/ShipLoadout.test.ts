@@ -46,10 +46,14 @@ describe("ShipLoadout — fitting (US-073)", () => {
     expect(s.cargo).toBe(35);
     expect(s.weaponCount).toBe(2);
     expect(s.weaponDamage).toBe(56); // 30 + 26
-    expect(s.speed).toBeCloseTo(1.4);
+    // eq_engine_iii: tech 5 → 0.05 + 5*0.03 = 0.20 px/ms
+    expect(s.speed).toBeCloseTo(0.2);
+    // eq_radar: tech 4 → 600 + 4*200 = 1400 px
     expect(s.radarRange).toBe(1400);
-    expect(s.shields).toBe(80);
-    expect(s.fuelCapacity).toBe(40);
+    // eq_shield: tech 6 → 6*30 = 180 HP
+    expect(s.shields).toBe(180);
+    // eq_tank: 50 base + 40 potency = 90 units
+    expect(s.fuelCapacity).toBe(90);
     expect(s.canTakeOff).toBe(true); // engine + fuel
   });
 
@@ -66,13 +70,13 @@ describe("ShipLoadout — fitting (US-073)", () => {
 
   it("uses the strongest engine and sums fuel tanks", () => {
     const lo = new ShipLoadout("hull_bastion"); // 9 slots
-    lo.install("eq_engine_i"); // 0.9
-    lo.install("eq_engine_iii"); // 1.4 → should win
-    lo.install("eq_tank"); // 40
-    lo.install("eq_tank"); // +40 → 80
+    lo.install("eq_engine_i"); // tech 2 → 0.05 + 0.06 = 0.11 px/ms
+    lo.install("eq_engine_iii"); // tech 5 → 0.05 + 0.15 = 0.20 px/ms → wins
+    lo.install("eq_tank"); // 50 + 40 = 90
+    lo.install("eq_tank"); // +90 → 180
     const s = lo.derivedStats();
-    expect(s.speed).toBeCloseTo(1.4);
-    expect(s.fuelCapacity).toBe(80);
+    expect(s.speed).toBeCloseTo(0.2);
+    expect(s.fuelCapacity).toBe(180);
   });
 });
 

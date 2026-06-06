@@ -493,6 +493,11 @@ export class StationScene extends GameScene {
 
   private async undock(): Promise<void> {
     if (!this.gameEngine) return;
+    const loadoutStats = this.gameEngine.playerLoadout?.derivedStats();
+    if (loadoutStats && !loadoutStats.canTakeOff) {
+      this.showToast("Нет двигателя — отстыковка невозможна", 0xff4444);
+      return;
+    }
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
     });

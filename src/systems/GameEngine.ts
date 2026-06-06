@@ -40,6 +40,7 @@ import type {
   IQuestService,
   IEquipmentService,
 } from "@/core/ports";
+import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { GalaxyService, PlayerService, SceneFactory } from "@/core/services";
 import { QuestManagerAdapter, EquipmentSystemAdapter } from "@/core/adapters";
 
@@ -74,6 +75,8 @@ export class GameEngine {
   public readonly questManager: IQuestService;
   public readonly equipmentSystem: IEquipmentService;
   public renderer: Renderer | null = null;
+  /** GearCatalog-based loadout driving derived ship stats (speed, shields, etc.). */
+  public playerLoadout: ShipLoadout | null = null;
 
   private exceptionHandler: IExceptionHandler;
   private animationFrameId = 0;
@@ -259,6 +262,14 @@ export class GameEngine {
       );
 
       logger.info(`Created new player with faction: ${this.player.faction}`);
+
+      // Initialize GearCatalog loadout: starter corvette with engine + fuel tank
+      if (!this.playerLoadout) {
+        const loadout = new ShipLoadout("hull_corvette");
+        loadout.install("eq_engine_i");
+        loadout.install("eq_tank");
+        this.playerLoadout = loadout;
+      }
     }
 
     // Resolve starting system for new game
@@ -339,6 +350,17 @@ export class GameEngine {
       for (const planet of system.planets) {
         if (typeof planet.market.advanceMarketDay === "function") {
           planet.market.advanceMarketDay(() => rng.next());
+        }
+      }
+    }
+
+    // Droid repair: if player has a droid installed, heal hull by repairRate HP/day
+    if (this.player && this.playerLoadout) {
+      const stats = this.playerLoadout.derivedStats();
+      if (stats.repairRate > 0) {
+        const ship = this.player.ship;
+        if (ship.hullHP < ship.maxHull) {
+          ship.hullHP = Math.min(ship.maxHull, ship.hullHP + stats.repairRate);
         }
       }
     }
