@@ -39,6 +39,7 @@ import {
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
+import { PanZoomController } from "@/systems/PanZoomController";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
 
 interface NebulaLayer {
@@ -248,6 +249,7 @@ export class SpaceFlightScene extends GameScene {
   private boundPointerMove: ((event: FederatedPointerEvent) => void) | null =
     null;
   private boundPointerUp: (() => void) | null = null;
+  private boundPointerLeave: (() => void) | null = null;
   private boundKeyDown: ((event: KeyboardEvent) => void) | null = null;
 
   // Camera zoom and pan
@@ -258,9 +260,7 @@ export class SpaceFlightScene extends GameScene {
   // heading so the player sees what's coming. Smoothed for a calm feel.
   private camLeadX: number = 0;
   private camLeadY: number = 0;
-  private isPanning: boolean = false;
-  private lastPanX: number = 0;
-  private lastPanY: number = 0;
+  private readonly panZoom = new PanZoomController();
   // Lower min zoom so the player can pull back to survey the now much larger
   // system (grand scale, EPIC-004).
   private readonly MIN_ZOOM = 0.25;
@@ -488,6 +488,7 @@ export class SpaceFlightScene extends GameScene {
     this.boundPointerDown = this.onPointerDown.bind(this);
     this.boundPointerMove = this.onPointerMove.bind(this);
     this.boundPointerUp = this.onPointerUp.bind(this);
+    this.boundPointerLeave = () => this.panZoom.reset();
 
     this.renderer.app.stage.eventMode = "static";
     this.renderer.app.stage.hitArea = this.renderer.app.screen; // Ensure stage receives all events
@@ -495,6 +496,10 @@ export class SpaceFlightScene extends GameScene {
     this.renderer.app.stage.on("pointermove", this.boundPointerMove);
     this.renderer.app.stage.on("pointerup", this.boundPointerUp);
     this.renderer.app.stage.on("pointerupoutside", this.boundPointerUp);
+    this.renderer.app.canvas.addEventListener(
+      "pointerleave",
+      this.boundPointerLeave,
+    );
 
     logger.info(
       `Stage hitArea set to: ${this.renderer.app.screen.width}x${this.renderer.app.screen.height}`,
@@ -574,6 +579,13 @@ export class SpaceFlightScene extends GameScene {
       this.renderer.app.stage.off("pointerup", this.boundPointerUp);
       this.renderer.app.stage.off("pointerupoutside", this.boundPointerUp);
       this.boundPointerUp = null;
+    }
+    if (this.boundPointerLeave) {
+      this.renderer.app.canvas.removeEventListener(
+        "pointerleave",
+        this.boundPointerLeave,
+      );
+      this.boundPointerLeave = null;
     }
 
     // Remove keyboard listener
@@ -2438,9 +2450,7 @@ export class SpaceFlightScene extends GameScene {
 
     if (isPanButton) {
       event.preventDefault(); // Prevent default behavior for pan buttons
-      this.isPanning = true;
-      this.lastPanX = event.global.x;
-      this.lastPanY = event.global.y;
+      this.panZoom.startPan(event.global.x, event.global.y);
       setCanvasCursor(this.renderer.app, "grab"); // pan cursor (US-070 #5)
       logger.info(`✅ Pan mode activated with button ${event.button}`);
       return;
@@ -2449,6 +2459,10 @@ export class SpaceFlightScene extends GameScene {
     // Left button (0) for ship navigation (only if not holding Shift)
     // Two-step movement: first click plans route, second click executes
     if (event.button === 0 && !event.shiftKey) {
+      // Begin tracking drag distance so a drag gesture won't be mistaken for a
+      // navigation click (cleared in onPointerUp via panZoom.reset).
+      this.panZoom.startDragTracking(event.global.x, event.global.y);
+
       // Convert screen coordinates to world coordinates
       const world = this.screenToWorld(event.global.x, event.global.y);
 
@@ -2492,33 +2506,31 @@ export class SpaceFlightScene extends GameScene {
   }
 
   private onPointerMove(event: FederatedPointerEvent): void {
-    // Handle camera panning
-    if (this.isPanning) {
-      const dx = event.global.x - this.lastPanX;
-      const dy = event.global.y - this.lastPanY;
-      this.cameraPanX += dx;
-      this.cameraPanY += dy;
-      this.lastPanX = event.global.x;
-      this.lastPanY = event.global.y;
+    const panDelta = this.panZoom.onMove(event.global.x, event.global.y);
+    if (panDelta) {
+      this.cameraPanX += panDelta.dx;
+      this.cameraPanY += panDelta.dy;
       this.applyCameraTransform();
-      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+      if (Math.abs(panDelta.dx) > 1 || Math.abs(panDelta.dy) > 1) {
         logger.info(
           `📍 Camera pan: (${this.cameraPanX.toFixed(0)}, ${this.cameraPanY.toFixed(0)})`,
         );
       }
-      return;
     }
-
-    // No more drag-to-update target in two-step mode
-    // Route is fixed once planned, can only be updated by clicking
   }
 
   private onPointerUp(): void {
-    if (this.isPanning) {
+    if (this.panZoom.isPanning) {
       logger.info("❌ Pan mode deactivated");
       setCanvasCursor(this.renderer.app, "default"); // release pan cursor
     }
-    this.isPanning = false;
+    // If the LMB was dragged further than the threshold, cancel any route that
+    // was planned in onPointerDown — the gesture was a drag, not a click.
+    if (this.panZoom.shouldSwallowClick()) {
+      this.clearPlannedRoute();
+      logger.info("🖱️ LMB drag exceeded threshold — route planning swallowed");
+    }
+    this.panZoom.reset();
   }
 
   /**
@@ -2530,7 +2542,7 @@ export class SpaceFlightScene extends GameScene {
     // Do not zoom while a pan drag is in progress. Middle-button "auto-scroll"
     // (and trackpad momentum) can emit wheel events during a pan; suppressing
     // them here keeps panning from also zooming (bug: pan + unwanted zoom).
-    if (this.isPanning) return;
+    if (this.panZoom.isPanning) return;
 
     logger.info(`🔍 WHEEL EVENT FIRED! deltaY: ${event.deltaY}`);
 

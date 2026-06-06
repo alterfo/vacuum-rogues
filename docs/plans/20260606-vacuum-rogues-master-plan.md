@@ -351,12 +351,12 @@ Scenario: Планеты различимы
 - Modify: `src/presentation/SpaceFlightScene.ts`
 - Create: `src/tests/panZoom.test.ts`
 
-- [ ] Написать тест `panZoom.test.ts`: pan во время `isTurnRunning=true` — маршрут не ставится; drag > DRAG_THRESHOLD → swallow click
-- [ ] В `SpaceFlightScene.onPointerDown`: если `event.button === 2` (ПКМ) — всегда запускать pan, независимо от `isTurnRunning`
-- [ ] В `SpaceFlightScene.onPointerUp`: если `dragDistance > DRAG_THRESHOLD` — не вызывать `setRoute()`
-- [ ] Убедиться что `isPanning=false` сбрасывается при `pointerup` и `pointerleave`
-- [ ] Запустить `npm test -- --run src/tests/panZoom.test.ts` — тесты зелёные
-- [ ] Запустить `npm test -- --run` + `npm run lint` — без регрессий
+- [x] Написать тест `panZoom.test.ts`: pan во время `isTurnRunning=true` — маршрут не ставится; drag > DRAG_THRESHOLD → swallow click
+- [x] В `SpaceFlightScene.onPointerDown`: если `event.button === 2` (ПКМ) — всегда запускать pan, независимо от `isTurnRunning`
+- [x] В `SpaceFlightScene.onPointerUp`: если `dragDistance > DRAG_THRESHOLD` — не вызывать `setRoute()`
+- [x] Убедиться что `isPanning=false` сбрасывается при `pointerup` и `pointerleave`
+- [x] Запустить `npm test -- --run src/tests/panZoom.test.ts` — тесты зелёные
+- [x] Запустить `npm test -- --run` + `npm run lint` — без регрессий
 
 ### Task 6: US-072 — Кнопка «вернуть камеру» на миникарте
 
