@@ -8,7 +8,12 @@
  * and stat recomputation come later in EPIC-007; this is the searchable
  * "what exists" catalog that the shop generator and info center (EPIC-009) use.
  */
-import { HullClass, ModuleCategory, type MicroModule } from "@/types";
+import {
+  HullClass,
+  ModuleCategory,
+  WeaponAbility,
+  type MicroModule,
+} from "@/types";
 
 export enum GearKind {
   HULL = "HULL",
@@ -57,6 +62,8 @@ export interface WeaponSpec extends GearBase {
   readonly weaponClass: WeaponClass;
   readonly damage: number; // per shot / per second
   readonly range: number; // px reach in flight combat
+  readonly ability: WeaponAbility;
+  readonly cooldownTurns: number; // turns before weapon can fire again
 }
 
 export interface EquipmentSpec extends GearBase {
@@ -165,10 +172,12 @@ const WEAPONS: WeaponSpec[] = [
     weaponClass: WeaponClass.ENERGY,
     damage: 14,
     range: 240,
+    ability: WeaponAbility.NONE,
+    cooldownTurns: 1,
   },
   {
     id: "wpn_beam",
-    name: "Лучевой эмиттер",
+    name: "Лучевой эмиттер (ЭМИ)",
     kind: GearKind.WEAPON,
     techLevel: 5,
     size: 4,
@@ -176,6 +185,8 @@ const WEAPONS: WeaponSpec[] = [
     weaponClass: WeaponClass.ENERGY,
     damage: 30,
     range: 300,
+    ability: WeaponAbility.EMP,
+    cooldownTurns: 3,
   },
   {
     id: "wpn_railgun",
@@ -187,10 +198,12 @@ const WEAPONS: WeaponSpec[] = [
     weaponClass: WeaponClass.FRAGMENT,
     damage: 26,
     range: 360,
+    ability: WeaponAbility.NONE,
+    cooldownTurns: 1,
   },
   {
     id: "wpn_scatter",
-    name: "Картечница",
+    name: "Картечница (Шквал)",
     kind: GearKind.WEAPON,
     techLevel: 3,
     size: 4,
@@ -198,10 +211,12 @@ const WEAPONS: WeaponSpec[] = [
     weaponClass: WeaponClass.FRAGMENT,
     damage: 22,
     range: 180,
+    ability: WeaponAbility.BURST,
+    cooldownTurns: 2,
   },
   {
     id: "wpn_torpedo",
-    name: "Торпедный модуль",
+    name: "Самонаводящаяся торпеда",
     kind: GearKind.WEAPON,
     techLevel: 6,
     size: 6,
@@ -209,6 +224,21 @@ const WEAPONS: WeaponSpec[] = [
     weaponClass: WeaponClass.MISSILE,
     damage: 55,
     range: 420,
+    ability: WeaponAbility.HOMING,
+    cooldownTurns: 3,
+  },
+  {
+    id: "wpn_rocket",
+    name: "Ракетный блок",
+    kind: GearKind.WEAPON,
+    techLevel: 3,
+    size: 4,
+    basePrice: 5500,
+    weaponClass: WeaponClass.MISSILE,
+    damage: 35,
+    range: 320,
+    ability: WeaponAbility.NONE,
+    cooldownTurns: 2,
   },
 ];
 

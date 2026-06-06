@@ -93,6 +93,13 @@ export enum EncounterState {
   RETREAT = "RETREAT",
 }
 
+export enum WeaponAbility {
+  NONE = "NONE",
+  EMP = "EMP",
+  HOMING = "HOMING",
+  BURST = "BURST",
+}
+
 export enum SceneType {
   MAIN_MENU = "MAIN_MENU",
   RACE_SELECTION = "RACE_SELECTION",
@@ -309,6 +316,7 @@ export interface CombatAction {
   readonly type: "MOVE" | "ATTACK" | "ABILITY" | "WAIT";
   readonly target?: AxialCoord;
   readonly abilityId?: string;
+  readonly weaponId?: string;
 }
 
 export interface CombatResult {

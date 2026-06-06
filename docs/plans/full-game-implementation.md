@@ -232,16 +232,16 @@ retreat when HP low, use weapons on cooldown, claim reward on victory.
 Add 3 weapon classes (energy/kinetic/missile) with special abilities: EMP (disables shields for
 2 turns), homing (auto-targets closest hex), burst (3-hex AoE). Add cooldown tracking in combat.
 
-- [ ] Add `WeaponAbility` enum: `NONE | EMP | HOMING | BURST`. Add `ability: WeaponAbility` and
+- [x] Add `WeaponAbility` enum: `NONE | EMP | HOMING | BURST`. Add `ability: WeaponAbility` and
   `cooldown: number` to `WeaponSpec` in `GearCatalog`. Define 6 weapon variants (2 per type).
-- [ ] In `CombatScene`, render weapon panel with cooldown indicators (gray overlay + countdown
+- [x] In `CombatScene`, render weapon panel with cooldown indicators (gray overlay + countdown
   number). Disable weapon button when `cooldown > 0`.
-- [ ] Implement abilities in `CombatSystem.resolveAttack()`:
+- [x] Implement abilities in `CombatSystem.resolveAttack()`:
   - EMP: sets target.shieldDisabledTurns = 2; shield does not absorb damage while active.
   - HOMING: if player fires homing weapon, AI cannot dodge (hits regardless of hex adjacency).
   - BURST: damages all ships in 1-hex radius of target.
-- [ ] Cooldown: after firing, weapon cooldown = weapon.cooldownTurns. Decremented each turn.
-- [ ] Unit tests: EMP disables shield; burst hits adjacent; cooldown decrements per turn.
+- [x] Cooldown: after firing, weapon cooldown = weapon.cooldownTurns. Decremented each turn.
+- [x] Unit tests: EMP disables shield; burst hits adjacent; cooldown decrements per turn.
 
 ### Task 11: Warp-to-combat bridge (EPIC-003 US-036)
 

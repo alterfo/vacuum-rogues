@@ -26,6 +26,7 @@ export class CombatScene extends GameScene {
   private _gameEngine?: GameEngine;
   private _system: CombatSystem | null = null;
   private _uiContainer: Container | null = null;
+  private _weaponPanelContainer: Container | null = null;
   private _outcomeShown = false;
 
   initialize(context?: object): void {
@@ -82,6 +83,7 @@ export class CombatScene extends GameScene {
 
     this.renderCombatGrid();
     this.renderActionButtons();
+    this.renderWeaponPanel();
     logger.info("CombatScene initialized");
   }
 
@@ -91,6 +93,7 @@ export class CombatScene extends GameScene {
 
   destroy(): void {
     this._uiContainer = null;
+    this._weaponPanelContainer = null;
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
   }
@@ -204,11 +207,124 @@ export class CombatScene extends GameScene {
     return btn;
   }
 
+  private renderWeaponPanel(): void {
+    if (this._weaponPanelContainer) {
+      this.renderer.uiLayer.removeChild(this._weaponPanelContainer);
+      this._weaponPanelContainer = null;
+    }
+
+    const system = this.getSystem();
+    const player = this._gameEngine?.player;
+    if (!system || !player) return;
+
+    const weaponModules = (
+      player.ship.modules as (import("@/domain/ShipModule").ShipModule | null)[]
+    ).filter((m) => m !== null && m.category === "WEAPON");
+    if (weaponModules.length === 0) return;
+
+    const container = new Container();
+    this._weaponPanelContainer = container;
+
+    const label = new Text({
+      text: "ВООРУЖЕНИЕ:",
+      style: { fontFamily: "Courier New", fontSize: 11, fill: 0x888888 },
+    });
+    label.x = 50;
+    label.y = 368;
+    label.eventMode = "none";
+    container.addChild(label);
+
+    let btnX = 50;
+    for (const mod of weaponModules) {
+      if (!mod) continue;
+      const cooldown = system.getWeaponCooldown(mod.id);
+      const onCd = cooldown > 0;
+      const btn = this.makeWeaponButton(mod.name, cooldown, onCd, btnX, 385);
+      if (!onCd) {
+        const weaponId = mod.id;
+        btn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          void this.onPlayerAttackWithWeapon(weaponId);
+        });
+      }
+      container.addChild(btn);
+      btnX += 175;
+    }
+
+    this.renderer.uiLayer.addChild(container);
+  }
+
+  private makeWeaponButton(
+    name: string,
+    cooldown: number,
+    disabled: boolean,
+    x: number,
+    y: number,
+  ): Container {
+    const btn = new Container();
+    const color = disabled ? 0x444444 : 0xffaa00;
+    const bg = new Graphics();
+    bg.fill({ color: 0x0d1b2a });
+    bg.stroke({ width: 1, color });
+    bg.roundRect(0, 0, 165, 36, 4);
+    bg.fill();
+    bg.stroke();
+
+    const shortName = name.length > 18 ? name.slice(0, 16) + "…" : name;
+    const cdSuffix = disabled ? ` [${cooldown}]` : "";
+    const label = new Text({
+      text: shortName + cdSuffix,
+      style: { fontFamily: "Courier New", fontSize: 11, fill: color },
+    });
+    label.x = 6;
+    label.y = 10;
+    label.eventMode = "none";
+
+    btn.addChild(bg, label);
+    btn.x = x;
+    btn.y = y;
+    btn.eventMode = disabled ? "none" : "static";
+    if (!disabled) btn.cursor = "pointer";
+    return btn;
+  }
+
+  private async onPlayerAttackWithWeapon(weaponId: string): Promise<void> {
+    const system = this.getSystem();
+    if (!system || this._outcomeShown) return;
+
+    const result = system.processPlayerAction({ type: "ATTACK", weaponId });
+    this.renderWeaponPanel();
+
+    if (result.loot !== undefined || result.xpGained !== undefined) {
+      this.showOutcomePanel(
+        result.message,
+        result.xpGained ?? 0,
+        (result.loot as import("@/domain/ShipModule").ShipModule[]) ?? [],
+      );
+      return;
+    }
+
+    const enemyResult = await system.executeEnemyTurns();
+    this.renderWeaponPanel();
+    if (enemyResult.result) {
+      this.applyRewardsToPlayer(
+        enemyResult.result.xpGained,
+        enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
+      );
+      this.showOutcomePanel(
+        enemyResult.result.message,
+        enemyResult.result.xpGained,
+        enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
+      );
+    }
+  }
+
   private async onPlayerAttack(): Promise<void> {
     const system = this.getSystem();
     if (!system || this._outcomeShown) return;
 
     const result = system.processPlayerAction({ type: "ATTACK" });
+    this.renderWeaponPanel();
     if (result.loot !== undefined || result.xpGained !== undefined) {
       // Combat ended on player action
       this.showOutcomePanel(
@@ -221,6 +337,7 @@ export class CombatScene extends GameScene {
 
     // Run enemy turns
     const enemyResult = await system.executeEnemyTurns();
+    this.renderWeaponPanel();
     if (enemyResult.result) {
       this.applyRewardsToPlayer(
         enemyResult.result.xpGained,
@@ -239,8 +356,10 @@ export class CombatScene extends GameScene {
     if (!system || this._outcomeShown) return;
 
     system.processPlayerAction({ type: "WAIT" });
+    this.renderWeaponPanel();
 
     const enemyResult = await system.executeEnemyTurns();
+    this.renderWeaponPanel();
     if (enemyResult.result) {
       this.applyRewardsToPlayer(
         enemyResult.result.xpGained,

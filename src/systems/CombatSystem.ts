@@ -4,7 +4,7 @@ import type {
   EncounterResult,
   TerrainConfig,
 } from "@/types";
-import { EncounterState } from "@/types";
+import { EncounterState, WeaponAbility } from "@/types";
 import type { PlayerShip } from "@/domain/PlayerShip";
 import type { EnemyShip } from "@/domain/EnemyShip";
 import type { TacticalEncounter } from "@/domain/TacticalEncounter";
@@ -16,9 +16,13 @@ import { GameBusinessException } from "@/exceptions/GameBusinessException";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 import { logger } from "@/utils/logger";
 import { CombatAI } from "@/systems/combat/CombatAI";
-import { GEAR_CATALOG, GearKind } from "@/systems/equipment/GearCatalog";
+import {
+  GEAR_CATALOG,
+  GearKind,
+  type WeaponSpec,
+} from "@/systems/equipment/GearCatalog";
 import { ShipModule as ShipModuleClass } from "@/domain/ShipModule";
-import type { ModuleCategory } from "@/types";
+import type { ModuleCategory, AxialCoord } from "@/types";
 
 export interface CombatRewardResult {
   creditsGained: number;
@@ -29,10 +33,148 @@ export class CombatSystem {
   public encounter: TacticalEncounter | null = null;
   public grid: HexGrid;
   private combatAI: CombatAI;
+  /** Weapon cooldown tracking: weaponGearId → turns remaining. */
+  private playerWeaponCooldowns = new Map<string, number>();
 
   constructor(_qualityProfile: AdaptiveQualityProfile) {
     this.grid = new HexGrid(9, 9);
     this.combatAI = new CombatAI();
+  }
+
+  /** Returns remaining cooldown turns for the given weapon gear id. */
+  getWeaponCooldown(weaponId: string): number {
+    return this.playerWeaponCooldowns.get(weaponId) ?? 0;
+  }
+
+  /** Returns true when the weapon is on cooldown and cannot fire. */
+  isWeaponOnCooldown(weaponId: string): boolean {
+    return (this.playerWeaponCooldowns.get(weaponId) ?? 0) > 0;
+  }
+
+  /** Decrement all player weapon cooldowns by 1. Call once per player turn start. */
+  decrementPlayerCooldowns(): void {
+    for (const [id, turns] of this.playerWeaponCooldowns) {
+      if (turns > 0) this.playerWeaponCooldowns.set(id, turns - 1);
+    }
+  }
+
+  /** Also decrement EMP disabled-turn counters on all enemies. */
+  private tickEnemyStatusEffects(): void {
+    if (!this.encounter) return;
+    for (const enemy of this.encounter.enemies) {
+      if (enemy.shieldDisabledTurns > 0) enemy.shieldDisabledTurns--;
+    }
+  }
+
+  /**
+   * Resolve a player attack with optional weapon selection and ability effects.
+   * Returns damage dealt and any status message.
+   */
+  resolvePlayerAttack(weaponId?: string): { damage: number; message: string } {
+    if (!this.encounter) return { damage: 0, message: "" };
+
+    const weaponSpec = weaponId
+      ? (GEAR_CATALOG.find(
+          (g) => g.id === weaponId && g.kind === GearKind.WEAPON,
+        ) as WeaponSpec | undefined)
+      : undefined;
+
+    if (weaponSpec && this.isWeaponOnCooldown(weaponId!)) {
+      return { damage: 0, message: "Оружие перезаряжается." };
+    }
+
+    const baseDamage = weaponSpec
+      ? weaponSpec.damage
+      : Math.floor(Math.random() * 20) + 5;
+
+    const ability = weaponSpec?.ability ?? WeaponAbility.NONE;
+    const primaryTarget = this.encounter.enemies.find((e) => e.hullHP > 0);
+    if (!primaryTarget) return { damage: 0, message: "" };
+
+    let totalDamage = 0;
+    let extraMsg = "";
+
+    if (ability === WeaponAbility.BURST) {
+      const targets = this.getBurstTargets(primaryTarget);
+      for (const t of targets) {
+        const dmg = this.applyDamageToEnemy(t, baseDamage, false);
+        totalDamage += dmg;
+      }
+      extraMsg = ` (Шквал: ${targets.length} целей)`;
+    } else if (ability === WeaponAbility.EMP) {
+      const dmg = this.applyDamageToEnemy(primaryTarget, baseDamage, false);
+      totalDamage = dmg;
+      primaryTarget.shieldDisabledTurns = 2;
+      extraMsg = " (ЭМИ: щит отключён на 2 хода)";
+    } else if (ability === WeaponAbility.HOMING) {
+      // Homing bypasses adjacency requirement — always hits
+      const dmg = this.applyDamageToEnemy(primaryTarget, baseDamage, false);
+      totalDamage = dmg;
+      extraMsg = " (Самонаведение)";
+    } else {
+      const dmg = this.applyDamageToEnemy(primaryTarget, baseDamage, false);
+      totalDamage = dmg;
+    }
+
+    if (weaponSpec) {
+      this.playerWeaponCooldowns.set(weaponId!, weaponSpec.cooldownTurns);
+    }
+
+    logger.debug(
+      `Player attack with ${weaponSpec?.name ?? "default"}: ${totalDamage} dmg${extraMsg}`,
+    );
+    return { damage: totalDamage, message: extraMsg };
+  }
+
+  /**
+   * Apply damage to an enemy, respecting shield absorption and EMP state.
+   */
+  applyDamageToEnemy(
+    enemy: import("@/domain/EnemyShip").EnemyShip,
+    rawDamage: number,
+    isEnemyAttack: boolean,
+  ): number {
+    const shieldActive = enemy.shieldDisabledTurns <= 0 && !isEnemyAttack;
+    if (enemy.shields > 0 && shieldActive) {
+      const absorbed = Math.min(enemy.shields, rawDamage);
+      enemy.shields -= absorbed;
+      enemy.hullHP -= rawDamage - absorbed;
+    } else {
+      enemy.hullHP -= rawDamage;
+    }
+    return rawDamage;
+  }
+
+  /**
+   * Get all enemies in 1-hex radius of the primary target (including the target itself).
+   */
+  private getBurstTargets(
+    primaryTarget: import("@/domain/EnemyShip").EnemyShip,
+  ): import("@/domain/EnemyShip").EnemyShip[] {
+    if (!this.encounter) return [primaryTarget];
+
+    const targetCoord = this.findOccupantCoord(primaryTarget);
+    if (!targetCoord) return [primaryTarget];
+
+    const targets: import("@/domain/EnemyShip").EnemyShip[] = [primaryTarget];
+    for (const neighbor of this.grid.getNeighbors(targetCoord)) {
+      if (neighbor.occupant && neighbor.occupant !== primaryTarget) {
+        const adjacent = this.encounter.enemies.find(
+          (e) => e === neighbor.occupant && e.hullHP > 0,
+        );
+        if (adjacent) targets.push(adjacent);
+      }
+    }
+    return targets;
+  }
+
+  private findOccupantCoord(entity: unknown): AxialCoord | null {
+    for (let r = 0; r < this.grid.height; r++) {
+      for (let q = 0; q < this.grid.width; q++) {
+        if (this.grid.tiles[r][q].occupant === entity) return { q, r };
+      }
+    }
+    return null;
   }
 
   startCombat(
@@ -126,18 +268,8 @@ export class CombatSystem {
     let damageDealt = 0;
 
     if (action.type === "ATTACK") {
-      const rawDamage = Math.floor(Math.random() * 20) + 5;
-      const target = this.encounter.enemies.find((e) => e.hullHP > 0);
-      if (target) {
-        if (target.shields > 0) {
-          const absorbed = Math.min(target.shields, rawDamage);
-          target.shields -= absorbed;
-          target.hullHP -= rawDamage - absorbed;
-        } else {
-          target.hullHP -= rawDamage;
-        }
-        damageDealt = rawDamage;
-      }
+      const attackResult = this.resolvePlayerAttack(action.weaponId);
+      damageDealt = attackResult.damage;
     }
 
     this.encounter.processTurn(currentEntity, action);
@@ -178,6 +310,10 @@ export class CombatSystem {
     }
 
     let damageTaken = 0;
+
+    // Decrement cooldowns and EMP timers at start of enemy phase
+    this.decrementPlayerCooldowns();
+    this.tickEnemyStatusEffects();
 
     // Process all enemy turns until it's the player's turn again
     while (
