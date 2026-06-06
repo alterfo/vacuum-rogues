@@ -13,6 +13,14 @@ export class Galaxy {
   gameDays = 0;
   /** Living-galaxy simulation events, newest last (capped at NEWS_FEED_MAX). */
   newsFeed: NewsEvent[] = [];
+  /**
+   * Quest board cache: maps planetId → game day when the board was last
+   * refreshed. Persisted with the save so cross-session consistency is
+   * preserved. The board content itself is regenerated deterministically from
+   * (galaxy.id + planetId + day-bucket), so only the refresh timestamp is
+   * stored here.
+   */
+  questBoards: Record<string, number> = {};
 
   constructor(
     public readonly id: string,

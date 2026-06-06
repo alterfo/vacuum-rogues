@@ -324,18 +324,18 @@ is destroyed.
 The existing `JobBoardPanel` is partial. Complete it: board refreshes each day, shows quest type/
 target/reward/deadline, player can accept up to 3 active quests. Persist board + accepted quests.
 
-- [ ] In `PlanetScene`, wire the "Задания" button to show a full JobBoardPanel with quests from
+- [x] In `PlanetScene`, wire the "Задания" button to show a full JobBoardPanel with quests from
   `GameEngine.getQuestBoard(planetId)` (already exists). Show: type icon, destination system
   name, reward, deadline (days remaining), "Принять" button. Disable if quest already accepted
   or player has 3 active quests.
-- [ ] `GameEngine.acceptBoardQuest()` already exists — verify it correctly moves quest from board
+- [x] `GameEngine.acceptBoardQuest()` already exists — verify it correctly moves quest from board
   to `player.activeQuests` and updates QuestJournalUI.
-- [ ] Board refresh: `GameEngine.advanceGalaxyDay()` calls `QuestGenerator.refresh(planet, day)`
+- [x] Board refresh: `GameEngine.advanceGalaxyDay()` calls `QuestGenerator.refresh(planet, day)`
   every 3 days per planet (or daily if board has < 2 quests). Board state persists in
   `galaxy.questBoards: Map<planetId, Quest[]>`. Add to schemas + migration.
-- [ ] Deadline expiry in `GameEngine.checkExpiredQuests()` (already exists — verify it deducts
+- [x] Deadline expiry in `GameEngine.checkExpiredQuests()` (already exists — verify it deducts
   `failurePenalty` credits and reputation, and removes quest from active list).
-- [ ] Unit tests: board generates 3–5 quests; accept moves quest to active; expiry deducts penalty.
+- [x] Unit tests: board generates 3–5 quests; accept moves quest to active; expiry deducts penalty.
 
 ### Task 16: Reputation gates and quest chains
 

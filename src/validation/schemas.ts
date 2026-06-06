@@ -268,6 +268,7 @@ export const GalaxySchema = z.object({
   systems: z.array(StarSystemSchema).min(1).max(100),
   npcShips: z.array(NpcShipSchema).default([]),
   newsFeed: z.array(NewsEventSchema).default([]),
+  questBoards: z.record(z.number().int().min(0)).default({}),
 });
 
 export const DialogueSessionSchema = z.object({

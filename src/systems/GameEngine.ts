@@ -373,6 +373,19 @@ export class GameEngine {
     }
 
     this.infoRegistryCache = null; // world advanced → registry is stale
+
+    // Check for expired quests and apply failure penalties.
+    this.checkExpiredQuests();
+  }
+
+  /**
+   * Check all active quests against the current game day. Expired quests are
+   * failed and their penalty (credits fine + reputation loss) applied to the
+   * player. Delegates to QuestManager which owns the failure logic.
+   */
+  checkExpiredQuests(): void {
+    if (!this.player || !this.galaxy) return;
+    this.questManager.checkExpiredQuests(this.galaxy.gameDays, this.player);
   }
 
   // Lazily-built galactic info registry, cached per game day (EPIC-009).
@@ -407,6 +420,8 @@ export class GameEngine {
       day: this.galaxy.gameDays,
       seed: this.galaxy.id,
     });
+    // Record when this board was last fetched for persistence tracking.
+    this.galaxy.questBoards[planetId] = this.galaxy.gameDays;
     const taken = new Set<string>([
       ...this.questManager.getActiveQuests().map((q) => q.id),
       ...this.questManager.getCompletedQuestIds(),

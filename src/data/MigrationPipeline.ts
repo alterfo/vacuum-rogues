@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 8;
+  static readonly CURRENT_VERSION = 9;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -113,6 +113,14 @@ export class MigrationPipeline {
           if (q.targetSystemId === undefined) q.targetSystemId = null;
           if (q.targetObjectId === undefined) q.targetObjectId = null;
         }
+      }
+    },
+    // 8 -> 9: Quest board persistence (Task 15). Old saves lack questBoards on
+    // galaxy; initialize to empty record so board tracking starts fresh.
+    8: (state: SaveState) => {
+      const galaxy = state.galaxy as unknown as { questBoards?: unknown };
+      if (galaxy && !galaxy.questBoards) {
+        galaxy.questBoards = {};
       }
     },
   };

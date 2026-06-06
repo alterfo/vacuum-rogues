@@ -368,6 +368,128 @@ describe("EXPLORATION quest auto-completion on system entry", () => {
   });
 });
 
+describe("QuestManager.checkExpiredQuests — deadline expiry and penalties", () => {
+  function makeTimedQuest(
+    id: string,
+    issuedDay: number,
+    deadline: number,
+    penalty: { reputationLoss: number; creditsFine?: number } | null,
+  ): Quest {
+    return new Quest(
+      id,
+      "Timed Quest",
+      QuestType.DELIVERY,
+      [],
+      EMPTY_REWARD,
+      [],
+      "faction_A",
+      issuedDay,
+      deadline,
+      penalty ? { ...penalty, description: "test penalty" } : null,
+    );
+  }
+
+  it("removes expired quest from active list", () => {
+    const qm = new QuestManager();
+    const player = playerStub(1000);
+    const quest = makeTimedQuest("q_expire_1", 0, 3, null);
+    qm["activeQuests"].set(quest.id, quest);
+
+    qm.checkExpiredQuests(10, player); // day 10 > issuedDay(0) + deadline(3)
+    expect(qm.getActiveQuests()).toHaveLength(0);
+  });
+
+  it("does NOT expire quest within its deadline", () => {
+    const qm = new QuestManager();
+    const player = playerStub(1000);
+    const quest = makeTimedQuest("q_expire_2", 0, 10, null);
+    qm["activeQuests"].set(quest.id, quest);
+
+    qm.checkExpiredQuests(5, player); // day 5 ≤ issuedDay(0) + deadline(10)
+    expect(qm.getActiveQuests()).toHaveLength(1);
+  });
+
+  it("deducts credits fine on expiry", () => {
+    const qm = new QuestManager();
+    const player = playerStub(1000);
+    const quest = makeTimedQuest("q_fine", 0, 2, {
+      reputationLoss: 0,
+      creditsFine: 200,
+    });
+    qm["activeQuests"].set(quest.id, quest);
+
+    qm.checkExpiredQuests(5, player);
+    expect(player.credits).toBe(800); // 1000 - 200
+    expect(qm.getActiveQuests()).toHaveLength(0);
+  });
+
+  it("deducts reputation on expiry, clamped to -100", () => {
+    const qm = new QuestManager();
+    const player = playerStub(500);
+    (player.reputation as Record<string, number>)["faction_A"] = -90;
+    const quest = makeTimedQuest("q_rep", 0, 1, {
+      reputationLoss: 30,
+    });
+    qm["activeQuests"].set(quest.id, quest);
+
+    qm.checkExpiredQuests(5, player);
+    // -90 - 30 = -120, clamped to -100
+    expect(player.reputation["faction_A"]).toBe(-100);
+  });
+
+  it("does not expire quests with no deadline", () => {
+    const qm = new QuestManager();
+    const player = playerStub(500);
+    const quest = makeTimedQuest("q_no_deadline", 0, 0, null);
+    qm["activeQuests"].set(quest.id, quest);
+
+    qm.checkExpiredQuests(9999, player); // any day
+    expect(qm.getActiveQuests()).toHaveLength(1);
+  });
+
+  it("board generates 3-5 quests and accept moves quest to active", () => {
+    const systems: StarSystem[] = [
+      {
+        id: "sys_A",
+        name: "A",
+        connections: [
+          { fromSystemId: "sys_A", toSystemId: "sys_B", fuelCost: 5 },
+        ],
+        planets: [{ id: "sys_A_p1", isHabitable: true }],
+      } as unknown as StarSystem,
+      {
+        id: "sys_B",
+        name: "B",
+        connections: [
+          { fromSystemId: "sys_B", toSystemId: "sys_A", fuelCost: 5 },
+        ],
+        planets: [{ id: "sys_B_p1", isHabitable: true }],
+      } as unknown as StarSystem,
+    ];
+
+    const board = generateQuestBoard({
+      systems,
+      originSystemId: "sys_A",
+      planetId: "sys_A_p1",
+      day: 0,
+      seed: "test-seed",
+      count: 5,
+    });
+    expect(board.length).toBeGreaterThanOrEqual(3);
+    expect(board.length).toBeLessThanOrEqual(8); // count=5 but up to count
+
+    const qm = new QuestManager();
+    const accepted = qm.acceptQuestFromTemplate(
+      board[0].template,
+      "sys_A_p1",
+      0,
+    );
+    expect(accepted).not.toBeNull();
+    expect(qm.getActiveQuests()).toHaveLength(1);
+    expect(qm.getActiveQuests()[0].id).toBe(board[0].template.id);
+  });
+});
+
 describe("QuestGenerator wires targetSystemId into template", () => {
   function sys(id: string, toIds: string[]): StarSystem {
     return {

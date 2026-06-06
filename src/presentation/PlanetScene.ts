@@ -689,10 +689,22 @@ export class PlanetScene extends GameScene {
     this.closeJobBoard();
     const quests = this.gameEngine.getQuestBoard(this.planet.id);
     const { width, height } = this.renderer.app.screen;
-    this.jobBoardPanel = new JobBoardPanel(quests, width, height, {
-      onAccept: (q) => this.acceptJob(q),
-      onClose: () => this.closeJobBoard(),
-    });
+    const activeCount = this.gameEngine.questManager.getActiveQuests().length;
+    const acceptedIds = new Set<string>([
+      ...this.gameEngine.questManager.getActiveQuests().map((q) => q.id),
+      ...this.gameEngine.questManager.getCompletedQuestIds(),
+    ]);
+    this.jobBoardPanel = new JobBoardPanel(
+      quests,
+      width,
+      height,
+      {
+        onAccept: (q) => this.acceptJob(q),
+        onClose: () => this.closeJobBoard(),
+      },
+      activeCount,
+      acceptedIds,
+    );
     this.renderer.uiLayer.addChild(this.jobBoardPanel.container);
   }
 
