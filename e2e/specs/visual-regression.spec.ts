@@ -87,4 +87,59 @@ test.describe('Visual Regression Tests', () => {
     );
     await page.screenshot({ path: `${SCREENSHOT_DIR}/inventory.png` });
   });
+
+  test('combat scene renders correctly', async ({ page }) => {
+    await page.goto('/');
+    const mainMenu = new MainMenuPage(page);
+    await mainMenu.waitForMainMenu();
+    await mainMenu.startNewGame();
+    await mainMenu.selectRace('OUTLANDERS');
+    await mainMenu.clickStartGame();
+    const spaceFlight = new SpaceFlightPage(page);
+    await spaceFlight.waitForSpaceFlight();
+    await page.evaluate(async () => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        transitionTo: (scene: string) => Promise<void>;
+      };
+      await engine.transitionTo('COMBAT');
+    });
+    await page.waitForFunction(
+      () => {
+        const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+          currentScene: { constructor: { name: string } } | null;
+        };
+        return engine?.currentScene?.constructor.name === 'CombatScene';
+      },
+      { timeout: 10000 },
+    );
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/combat.png` });
+  });
+
+  test('station scene renders correctly', async ({ page }) => {
+    await page.goto('/');
+    const mainMenu = new MainMenuPage(page);
+    await mainMenu.waitForMainMenu();
+    await mainMenu.startNewGame();
+    await mainMenu.selectRace('OUTLANDERS');
+    await mainMenu.clickStartGame();
+    const spaceFlight = new SpaceFlightPage(page);
+    await spaceFlight.waitForSpaceFlight();
+    await page.evaluate(async () => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        transitionTo: (scene: string) => Promise<void>;
+      };
+      // No station context — renders fallback/empty state as a known baseline
+      await engine.transitionTo('STATION');
+    });
+    await page.waitForFunction(
+      () => {
+        const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+          currentScene: { constructor: { name: string } } | null;
+        };
+        return engine?.currentScene?.constructor.name === 'StationScene';
+      },
+      { timeout: 10000 },
+    );
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/station.png` });
+  });
 });

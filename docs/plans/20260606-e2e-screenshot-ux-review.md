@@ -66,10 +66,10 @@ Build a working e2e screenshot test suite that captures all major game scenes, f
 **Files:**
 - Modify: `e2e/specs/visual-regression.spec.ts`
 
-- [ ] Add a `Combat scene renders correctly` test: navigate via `engine.transitionTo('COMBAT')`, wait for `CombatScene`, `page.screenshot({ path: 'e2e/screenshots/combat.png' })`
-- [ ] Add a `Station scene renders correctly` test: navigate via `engine.transitionTo('STATION', { ... })` with minimal valid context; if context guard throws, capture the fallback/error state as a known baseline
-- [ ] Run full visual regression suite — all tests pass, `e2e/screenshots/` contains 7+ PNG files
-- [ ] Run `npm run lint` — no errors
+- [x] Add a `Combat scene renders correctly` test: navigate via `engine.transitionTo('COMBAT')`, wait for `CombatScene`, `page.screenshot({ path: 'e2e/screenshots/combat.png' })`
+- [x] Add a `Station scene renders correctly` test: navigate via `engine.transitionTo('STATION', { ... })` with minimal valid context; if context guard throws, capture the fallback/error state as a known baseline
+- [x] Run full visual regression suite — all tests pass, `e2e/screenshots/` contains 7+ PNG files
+- [x] Run `npm run lint` — no errors
 
 ### Task 5: UX review → docs/ux-review.md
 
