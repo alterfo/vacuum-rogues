@@ -1194,6 +1194,8 @@ export class StarMapScene extends GameScene {
     logger.info(
       `Warp initiated to ${target.name}; ship will jump from the system edge`,
     );
+    this.gameEngine.showLoadingOverlay("Прыжок...");
+    // Overlay is destroyed with the scene when transitionTo calls scene.destroy()
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
       pendingWarp: { targetSystemId: target.id, fuelCost, exitVector },

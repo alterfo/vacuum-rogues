@@ -331,16 +331,32 @@ export class MainMenuScene extends GameScene {
       return;
     }
 
+    if (this.buttonsContainer) {
+      this.buttonsContainer.eventMode = "none";
+      this.buttonsContainer.alpha = 0.5;
+    }
+    this.gameEngine.showLoadingOverlay("Загрузка...");
+
     try {
       const loaded = await this.gameEngine.loadGame("auto");
       if (!loaded) {
         logger.warn("No save found for continue");
+        this.gameEngine?.hideLoadingOverlay();
+        if (this.buttonsContainer) {
+          this.buttonsContainer.eventMode = "auto";
+          this.buttonsContainer.alpha = 1;
+        }
         this.showMessage("Нет доступных сохранений");
       }
+      // On success: transitionTo was called inside loadGame → scene destroyed with overlay
     } catch (error) {
       logger.error("Failed to load save:", error);
+      this.gameEngine?.hideLoadingOverlay();
+      if (this.buttonsContainer) {
+        this.buttonsContainer.eventMode = "auto";
+        this.buttonsContainer.alpha = 1;
+      }
       this.showMessage("Ошибка загрузки. Начните новую игру.");
-      // Don't re-throw - menu should remain functional
     }
   }
 

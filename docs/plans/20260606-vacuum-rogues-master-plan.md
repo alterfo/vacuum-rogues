@@ -340,10 +340,10 @@ Scenario: Планеты различимы
 - Modify: `src/presentation/MainMenuScene.ts`
 - Modify: `src/presentation/StarMapScene.ts`
 
-- [ ] Add `GameEngine.showLoadingOverlay(label: string)` / `hideLoadingOverlay()`: full-screen semi-transparent black + centred label Text (18px, cyan) on a top `uiLayer`
-- [ ] `MainMenuScene.handleContinue()`: disable buttons → show overlay → `await loadGame()` → hide overlay
-- [ ] `StarMapScene.performWarpJump()`: disable warp button → show overlay → `await transitionTo()` → (overlay destroyed with scene)
-- [ ] Run `npm test -- --run` + `npm run lint` — no regressions
+- [x] Add `GameEngine.showLoadingOverlay(label: string)` / `hideLoadingOverlay()`: full-screen semi-transparent black + centred label Text (18px, cyan) on a top `uiLayer`
+- [x] `MainMenuScene.handleContinue()`: disable buttons → show overlay → `await loadGame()` → hide overlay
+- [x] `StarMapScene.performWarpJump()`: disable warp button → show overlay → `await transitionTo()` → (overlay destroyed with scene)
+- [x] Run `npm test -- --run` + `npm run lint` — no regressions
 
 ### Task 5: US-071 — Свободное панорамирование во время хода
 

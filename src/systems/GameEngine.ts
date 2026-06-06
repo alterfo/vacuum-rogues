@@ -96,6 +96,7 @@ export class GameEngine {
   private animationFrameId = 0;
   private lastTime = 0;
   private modalObjects: (Graphics | Text)[] = [];
+  private loadingOverlayObjects: (Graphics | Text)[] = [];
   private _gameOverShown = false;
   private readonly galaxyService: IGalaxyService;
   private readonly playerService: IPlayerService;
@@ -935,6 +936,46 @@ export class GameEngine {
       obj.destroy();
     }
     this.modalObjects = [];
+  }
+
+  showLoadingOverlay(label: string): void {
+    if (!this.renderer) return;
+    this.hideLoadingOverlay();
+
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+
+    const overlay = new Graphics();
+    overlay.fill({ color: 0x000000, alpha: 0.75 });
+    overlay.rect(0, 0, width, height);
+    overlay.eventMode = "static";
+    this.renderer.uiLayer.addChild(overlay);
+    this.loadingOverlayObjects.push(overlay);
+
+    const labelText = new Text({
+      text: label,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 18,
+        fill: 0x00ffff,
+      },
+    });
+    labelText.anchor.set(0.5);
+    labelText.x = width / 2;
+    labelText.y = height / 2;
+    labelText.eventMode = "none";
+    this.renderer.uiLayer.addChild(labelText);
+    this.loadingOverlayObjects.push(labelText);
+  }
+
+  hideLoadingOverlay(): void {
+    for (const obj of this.loadingOverlayObjects) {
+      if (obj.parent) {
+        obj.parent.removeChild(obj);
+      }
+      obj.destroy();
+    }
+    this.loadingOverlayObjects = [];
   }
 
   private async generateDefaultGameState(): Promise<void> {
