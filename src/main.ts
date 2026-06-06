@@ -54,7 +54,7 @@ async function registerServiceWorker(): Promise<void> {
               logger.info('Доступно обновление. Перезагрузите страницу для применения.');
               // Show non-blocking notification to user
               if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification('Galactic Horizon', {
+                new Notification('Вакуумные Пройдохи', {
                   body: 'Доступно обновление. Перезагрузите страницу для применения.',
                 });
               }
@@ -108,7 +108,7 @@ async function main(): Promise<void> {
       systemCount: 30,
       overmindSpeed: 1.0,
     });
-    logger.info('Galactic Horizon: Neural Onslaught initialized');
+    logger.info('Вакуумные Пройдохи initialized');
 
     // Expose engine to window for E2E testing (dev/test mode only)
     if (typeof __DEBUG__ !== 'undefined' && __DEBUG__) {

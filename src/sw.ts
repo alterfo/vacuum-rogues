@@ -2,8 +2,8 @@
 
 // eslint-disable-next-line no-restricted-globals
 const BUILD_VERSION = (globalThis as unknown as { __BUILD_VERSION__?: string }).__BUILD_VERSION__ ?? 'dev';
-const CACHE_NAME = `space-rangers-v${BUILD_VERSION}`;
-const MODEL_CACHE_NAME = `space-rangers-models-v${BUILD_VERSION}`;
+const CACHE_NAME = `vacuum-rogues-v${BUILD_VERSION}`;
+const MODEL_CACHE_NAME = `vacuum-rogues-models-v${BUILD_VERSION}`;
 
 const CORE_ASSETS = [
   '/',

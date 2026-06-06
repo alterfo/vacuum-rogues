@@ -92,6 +92,10 @@ export const SYSTEM_GEOMETRY = {
 /**
  * Gameplay balance constants used across scene and system layers.
  */
+export const GameConfig = {
+  GAME_TITLE: "ВАКУУМНЫЕ ПРОЙДОХИ",
+} as const;
+
 export const GAME_BALANCE = {
   /** World pixels a ship must travel for 1 in-game day to elapse. */
   pixelsPerDay: 500,

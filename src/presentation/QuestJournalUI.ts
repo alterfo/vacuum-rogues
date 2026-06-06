@@ -2,6 +2,7 @@ import { Container, Graphics, Text } from "pixi.js";
 import type { IQuestService } from "@/core/ports/IQuestService";
 import type { Quest } from "@/domain/Quest";
 import { logger } from "@/utils/logger";
+import { TYPE_LABEL } from "@/presentation/JobBoardPanel";
 
 /**
  * Quest Journal UI - displays active and completed quests with progress
@@ -155,7 +156,7 @@ export class QuestJournalUI {
 
     // Quest type
     const typeText = new Text({
-      text: `[${quest.type}]`,
+      text: `[${TYPE_LABEL[quest.type] ?? quest.type}]`,
       style: {
         fontFamily: "Courier New",
         fontSize: 11,

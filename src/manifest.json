@@ -1,6 +1,6 @@
 {
-  "name": "Galactic Horizon: Нейросетевое вторжение",
-  "short_name": "Galactic Horizon",
+  "name": "Вакуумные Пройдохи",
+  "short_name": "Вакуумные Пройдохи",
   "description": "Браузерная космическая RPG/стратегия с ONNX нейросетями",
   "start_url": "/",
   "display": "standalone",

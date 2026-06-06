@@ -139,7 +139,7 @@ export class CombatScene extends GameScene {
     this.renderer.gameLayer.addChild(graphics);
 
     const title = new Text({
-      text: "TACTICAL COMBAT",
+      text: "ТАКТИЧЕСКИЙ БОЙ",
       style: {
         fontFamily: "Courier New",
         fontSize: 20,

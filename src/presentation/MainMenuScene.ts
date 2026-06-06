@@ -223,7 +223,7 @@ export class MainMenuScene extends GameScene {
 
     // Title
     this.title = new Text({
-      text: "GALACTIC HORIZON\nНЕЙРОСЕТЕВОЕ ВТОРЖЕНИЕ",
+      text: "ВАКУУМНЫЕ ПРОЙДОХИ",
       style: {
         fontFamily: "Courier New",
         fontSize: 32,

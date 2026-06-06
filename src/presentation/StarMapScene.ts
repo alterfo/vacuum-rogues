@@ -229,7 +229,7 @@ export class StarMapScene extends GameScene {
 
     // Fixed UI elements
     const title = new Text({
-      text: "SECTOR MAP",
+      text: "КАРТА ГАЛАКТИКИ",
       style: {
         fontFamily: "Courier New",
         fontSize: 24,

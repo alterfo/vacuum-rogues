@@ -7,7 +7,7 @@ export interface JobBoardCallbacks {
   onClose: () => void;
 }
 
-const TYPE_LABEL: Record<QuestType, string> = {
+export const TYPE_LABEL: Record<QuestType, string> = {
   [QuestType.DELIVERY]: "Доставка",
   [QuestType.BOUNTY]: "Охота",
   [QuestType.ESCORT]: "Эскорт",
