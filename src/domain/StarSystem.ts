@@ -13,6 +13,10 @@ export class StarSystem {
   explored = false;
   fogOfWar = true;
   lastVisitedDay?: number = undefined;
+  /** True when this system is the home system of one of the 5 major factions. */
+  isFactionHome: boolean = false;
+  /** Faction that considers this their home system (null for regular systems). */
+  homeFactionId: Faction | null = null;
 
   constructor(
     public readonly id: string,

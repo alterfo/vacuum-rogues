@@ -326,13 +326,16 @@ export class SpaceFlightScene extends GameScene {
     // Auto-complete DEFENSE quests targeting this system (OVERMIND liberations).
     this.completeDefenseQuestsBySystemEntry();
 
-    // Update lastVisitedDay for data-fog tracking (Task 21).
+    // Update lastVisitedDay for data-fog tracking (Task 21) and mark system visited (Task 29).
     if (this.gameEngine?.galaxy && this.gameEngine.player) {
       const _galaxy = this.gameEngine.galaxy;
       const _sys = _galaxy.systems.find(
         (s) => s.id === this.gameEngine!.player!.currentSystemId,
       );
       if (_sys) _sys.lastVisitedDay = _galaxy.gameDays;
+      this.gameEngine.player.markVisited(
+        this.gameEngine.player.currentSystemId,
+      );
     }
 
     // OVERMIND core system: show the final encounter prompt (only on fresh entry,

@@ -166,6 +166,21 @@ export class NpcSimulator {
       this.spawnOne(galaxy, rng, `npc_${i}`);
     }
 
+    // Faction home systems get double NPC density to feel more alive.
+    const homeSystems = galaxy.systems.filter((s) => s.isFactionHome);
+    let homeIdx = 0;
+    for (const homeSystem of homeSystems) {
+      for (let j = 0; j < NPCS_PER_SYSTEM; j++) {
+        this.spawnOneInSystem(
+          galaxy,
+          rng,
+          `npc_home_${homeIdx}_${j}`,
+          homeSystem.id,
+        );
+        homeIdx++;
+      }
+    }
+
     logger.info(`Spawned ${galaxy.npcShips.length} NPC ships`);
     return galaxy.npcShips;
   }
@@ -216,6 +231,47 @@ export class NpcSimulator {
         : FACTIONS[rng.nextInt(0, FACTIONS.length - 1)];
     const stats = ROLE_STATS[role];
 
+    galaxy.npcShips.push(
+      new NpcShip({
+        id,
+        name: `${ROLE_NAME[role]} ${FACTION_NAME[faction]} ${id}`,
+        race: faction,
+        faction: faction as unknown as import("@/types/faction").Faction,
+        role,
+        hullHP: stats.hull,
+        maxHull: stats.hull,
+        shields: stats.shields,
+        speed: stats.speed,
+        damage: stats.damage,
+        currentSystemId: system.id,
+        state: NpcState.IDLE,
+        goal: null,
+        destinationSystemId: null,
+        daysToArrival: 0,
+        credits: rng.nextInt(100, 1000),
+        reputation: 0,
+        shieldPower: stats.shieldPower,
+        loadoutSummary: ROLE_LOADOUT[role],
+        cargo: role === NpcRole.TRADER ? this.pickTraderCargo(system, rng) : [],
+      }),
+    );
+  }
+
+  /** Spawn one NPC in a specific system (used for home-system density boost). */
+  private spawnOneInSystem(
+    galaxy: Galaxy,
+    rng: SeededRNG,
+    id: string,
+    systemId: string,
+  ): void {
+    const system = galaxy.systems.find((s) => s.id === systemId);
+    if (!system) return;
+    const role = ROLES[rng.nextInt(0, ROLES.length - 1)];
+    const faction =
+      role === NpcRole.PIRATE
+        ? FactionType.OUTLANDERS
+        : FACTIONS[rng.nextInt(0, FACTIONS.length - 1)];
+    const stats = ROLE_STATS[role];
     galaxy.npcShips.push(
       new NpcShip({
         id,

@@ -211,6 +211,7 @@ export const PlayerSchema = z.object({
   newsBookmarks: z.array(z.number().int().min(0)).default([]),
   killPoints: z.number().int().min(0).default(0),
   rank: z.number().int().min(0).max(7).default(0),
+  visitedSystems: z.array(z.string()).default([]),
 });
 
 export const StarSystemSchema = z.object({
@@ -232,6 +233,19 @@ export const StarSystemSchema = z.object({
     .enum(["ANARCHY", "DICTATORSHIP", "MONARCHY", "REPUBLIC", "DEMOCRACY"])
     .default("REPUBLIC"),
   lastVisitedDay: z.number().int().optional(),
+  isFactionHome: z.boolean().default(false),
+  homeFactionId: z
+    .enum([
+      "OUTLANDERS",
+      "BASTIONS",
+      "SYNDICATE",
+      "PARADOXES",
+      "PROGRESSORS",
+      "INDEPENDENT",
+      "OVERMIND",
+    ])
+    .nullable()
+    .default(null),
 });
 
 export const NpcGoalSchema = z.object({

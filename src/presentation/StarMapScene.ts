@@ -400,6 +400,12 @@ export class StarMapScene extends GameScene {
       return dx * dx + dy * dy < cr * cr;
     };
 
+    // Determine visited systems and OVERMIND systems for rendering decisions.
+    const visitedSystems = new Set(
+      this.gameEngine?.player?.visitedSystems ?? [],
+    );
+    const overmindSystems = new Set(this.galaxy.overmindSystems ?? []);
+
     // Draw only explored systems
     let systemsDrawn = 0;
     const labelBounds: { x: number; y: number; w: number; h: number }[] = [];
@@ -419,15 +425,31 @@ export class StarMapScene extends GameScene {
       const x = system.coordinates.q * scale;
       const y = system.coordinates.r * scale;
 
-      let color = 0x00ffff;
-      let radius = 4;
+      const isPlayer = system.id === this.playerSystemId;
+      const isSelected = system.id === this.selectedSystemId;
+      const isOvermind = overmindSystems.has(system.id);
+      const isVisited = visitedSystems.has(system.id) || isPlayer;
 
-      if (system.id === this.playerSystemId) {
+      let color: number;
+      let radius: number;
+
+      if (isPlayer) {
         color = 0x00ff00;
         radius = 7;
-      } else if (system.id === this.selectedSystemId) {
+      } else if (isOvermind) {
+        // OVERMIND systems: red, regardless of visited status.
+        color = isSelected ? 0xff8800 : 0xff2222;
+        radius = isSelected ? 5 : 4;
+      } else if (isSelected) {
         color = 0xffff00;
         radius = 5;
+      } else if (!isVisited) {
+        // Explored but not personally visited: dim gray "?" node.
+        color = 0x445566;
+        radius = 3;
+      } else {
+        color = 0x00ffff;
+        radius = 4;
       }
 
       // Draw system circle
@@ -466,6 +488,23 @@ export class StarMapScene extends GameScene {
       });
 
       this.mapContainer.addChild(hitArea);
+
+      // Unvisited systems: show "?" instead of system name.
+      if (!isVisited && !isPlayer && !isOvermind) {
+        const qLabel = new Text({
+          text: "?",
+          style: {
+            fontFamily: "Courier New",
+            fontSize: 10,
+            fill: 0x445566,
+          },
+        });
+        qLabel.x = x + 6;
+        qLabel.y = y - 6;
+        qLabel.eventMode = "none";
+        this.mapContainer.addChild(qLabel);
+        continue;
+      }
 
       // Smart label placement: try right, left, above, below
       const labelW = system.name.length * 6;
@@ -530,12 +569,18 @@ export class StarMapScene extends GameScene {
       if (bestPos) {
         labelBounds.push({ x: bestPos.x, y: bestPos.y, w: labelW, h: labelH });
 
+        const labelFill = isOvermind
+          ? 0xff6666
+          : system.id === this.playerSystemId
+            ? 0x00ff00
+            : 0x88ccff;
+
         const label = new Text({
           text: system.name,
           style: {
             fontFamily: "Courier New",
             fontSize: 10,
-            fill: system.id === this.playerSystemId ? 0x00ff00 : 0x88ccff,
+            fill: labelFill,
           },
         });
         label.x = bestPos.x;

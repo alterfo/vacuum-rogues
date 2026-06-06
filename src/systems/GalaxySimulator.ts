@@ -14,6 +14,7 @@ import {
   StationType,
   EconomyType,
   PoliticalSystem,
+  FactionType,
   GalaxyEventType,
 } from "@/types";
 import type { GalaxyGlobalEvent, NewsEvent } from "@/types";
@@ -151,6 +152,11 @@ export class GalaxySimulator {
     if (sortedByDistance.length >= 2)
       overmindStart.push(sortedByDistance[1].id);
     const overmindCoreId = sortedByDistance[0]?.id ?? "";
+
+    // Assign one home system per faction from the non-OVERMIND systems.
+    // Spread them across the galaxy by sorting remaining systems by spatial
+    // quadrant and picking the most central one per quadrant.
+    assignFactionHomeSystems(generatedSystems, overmindStart, this.rng);
 
     const galaxy = new Galaxy(
       `galaxy_${this._seed}`,
@@ -373,6 +379,94 @@ export class GalaxySimulator {
       // Check if within 2 jumps of explored system
       return false;
     });
+  }
+}
+
+// ── Faction home system assignment ─────────────────────────────────────────
+
+/** Economy type each faction's home system receives. */
+const FACTION_HOME_ECONOMY: Record<string, EconomyType> = {
+  [FactionType.PROGRESSORS]: EconomyType.INDUSTRIAL,
+  [FactionType.OUTLANDERS]: EconomyType.AGRICULTURAL,
+  [FactionType.SYNDICATE]: EconomyType.MIXED,
+  [FactionType.BASTIONS]: EconomyType.MIXED,
+  [FactionType.PARADOXES]: EconomyType.MIXED,
+};
+
+const HOME_FACTIONS = [
+  FactionType.OUTLANDERS,
+  FactionType.BASTIONS,
+  FactionType.SYNDICATE,
+  FactionType.PARADOXES,
+  FactionType.PROGRESSORS,
+];
+
+/**
+ * Pick one home system per faction from the candidate pool (excludes OVERMIND
+ * systems). Each faction gets the system furthest from all already-chosen homes,
+ * ensuring they are spread across the galaxy.
+ */
+function assignFactionHomeSystems(
+  systems: StarSystem[],
+  overmindSystemIds: string[],
+  rng: SeededRNG,
+): void {
+  const overmindSet = new Set(overmindSystemIds);
+  const candidates = systems.filter((s) => !overmindSet.has(s.id));
+  if (candidates.length < HOME_FACTIONS.length) return;
+
+  const chosen: StarSystem[] = [];
+
+  for (const faction of HOME_FACTIONS) {
+    let best: StarSystem | null = null;
+    let bestScore = -Infinity;
+
+    for (const sys of candidates) {
+      // Skip already-assigned home systems
+      if (sys.isFactionHome) continue;
+
+      // Score = minimum distance to any already-chosen home (spread them out).
+      // If no homes chosen yet, use distance from origin (prefer non-central).
+      let score: number;
+      if (chosen.length === 0) {
+        score =
+          sys.coordinates.q * sys.coordinates.q +
+          sys.coordinates.r * sys.coordinates.r;
+      } else {
+        score = Math.min(
+          ...chosen.map((c) => {
+            const dq = sys.coordinates.q - c.coordinates.q;
+            const dr = sys.coordinates.r - c.coordinates.r;
+            return dq * dq + dr * dr;
+          }),
+        );
+      }
+      // Add a small random jitter (seeded) so ties break deterministically.
+      score += rng.nextFloat(0, 0.01);
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = sys;
+      }
+    }
+
+    if (!best) continue;
+    best.isFactionHome = true;
+    best.homeFactionId =
+      faction as unknown as import("@/types/faction").Faction;
+
+    // Override economy type to match faction identity.
+    const econOverride = FACTION_HOME_ECONOMY[faction];
+    if (econOverride) {
+      // StarSystem.economyType is readonly; cast needed for assignment.
+      (best as unknown as { economyType: EconomyType }).economyType =
+        econOverride;
+      // Propagate to each planet's market.
+      for (const planet of best.planets) {
+        planet.market.economyType = econOverride;
+      }
+    }
+    chosen.push(best);
   }
 }
 

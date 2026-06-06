@@ -597,17 +597,17 @@ Wire `Player.adjustReputation()` to replace all `as any` reputation casts.
 Unvisited star systems appear as question marks on the star map. Faction home systems are marked
 with faction colors and generate faction-specific quests from day 1.
 
-- [ ] Add `visitedSystems: Set<string>` to `Player` domain. Update schemas. Update
+- [x] Add `visitedSystems: Set<string>` to `Player` domain. Update schemas. Update
   `SpaceFlightScene.initialize()` to add `player.currentSystemId` to `visitedSystems`.
-- [ ] In `StarMapScene`, render unvisited systems as dim "?" nodes (no name, gray dot). Visited
+- [x] In `StarMapScene`, render unvisited systems as dim "?" nodes (no name, gray dot). Visited
   systems render normally. OVERMIND systems (Task 23) render in red regardless of visited status.
-- [ ] Galaxy generation: assign one home system per faction (5 factions → 5 home systems,
+- [x] Galaxy generation: assign one home system per faction (5 factions → 5 home systems,
   chosen from non-adjacent starting systems). Home systems have `isFactionHome: boolean` and
   `homeFaction: Faction` on `StarSystem`. Update schemas.
-- [ ] Home systems: economy type matches faction (Progressors → INDUSTRIAL; Outlanders →
+- [x] Home systems: economy type matches faction (Progressors → INDUSTRIAL; Outlanders →
   AGRICULTURAL; Syndicate → MIXED). Start with higher NPC density (×2 spawn count).
   `QuestGenerator` for home systems emits faction-themed quest names.
-- [ ] Unit tests: visitedSystems updated on arrival; home systems assigned deterministically per
+- [x] Unit tests: visitedSystems updated on arrival; home systems assigned deterministically per
   faction; fog-of-war rendering logic (unvisited → no name exposed).
 
 ### Task 30: Performance, production build, and ONNX worker isolation

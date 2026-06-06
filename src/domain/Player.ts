@@ -22,6 +22,8 @@ export class Player {
   killPoints: number = 0;
   /** Current rank index (0–7). Promoted at military bases when killPoints threshold is met. */
   rank: number = 0;
+  /** IDs of star systems the player has physically flown into. */
+  visitedSystems: string[] = [];
 
   constructor(
     public readonly id: string,
@@ -47,6 +49,18 @@ export class Player {
   /** Returns true when the player is hostile to a faction (score < -30). */
   isHostileTo(factionId: string): boolean {
     return this.getReputation(factionId) < -30;
+  }
+
+  /** Returns true if the player has ever entered the given system. */
+  hasVisited(systemId: string): boolean {
+    return this.visitedSystems.includes(systemId);
+  }
+
+  /** Mark a system as visited (idempotent). */
+  markVisited(systemId: string): void {
+    if (!this.visitedSystems.includes(systemId)) {
+      this.visitedSystems.push(systemId);
+    }
   }
 
   /** Adjusts reputation with a faction by delta, clamped to [-100, 100]. */

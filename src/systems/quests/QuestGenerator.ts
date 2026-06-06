@@ -61,6 +61,11 @@ export interface BoardOptions {
   readonly overmindSystems?: readonly string[];
   /** System IDs adjacent to OVERMIND-controlled systems (non-OVERMIND). Triggers 1 DEFENSE quest when non-empty. */
   readonly overmindAdjacentSystems?: readonly string[];
+  /**
+   * When set, the planet is on a faction home system. Quest titles will include
+   * a faction-specific prefix to give them a distinctive flavour.
+   */
+  readonly homeFactionId?: string | null;
 }
 
 /** The routine (non-text) quest types, in pick order. */
@@ -76,6 +81,15 @@ const ROUTINE_TYPES: QuestType[] = [
  * Generate the job board for a planet. Deterministic in
  * `(seed, planetId, day-bucket)`: identical inputs yield identical boards.
  */
+/** Faction-themed quest title prefix for home system boards. */
+const FACTION_HOME_PREFIX: Record<string, string> = {
+  OUTLANDERS: "[ОКРАИНА]",
+  BASTIONS: "[БАСТИОН]",
+  SYNDICATE: "[СИНДИКАТ]",
+  PARADOXES: "[ПАРАДОКС]",
+  PROGRESSORS: "[ПРОГРЕССОРЫ]",
+};
+
 export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
   const {
     systems,
@@ -91,7 +105,12 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     completedQuestChains = [],
     overmindSystems = [],
     overmindAdjacentSystems = [],
+    homeFactionId = null,
   } = opts;
+
+  const factionPrefix = homeFactionId
+    ? (FACTION_HOME_PREFIX[homeFactionId] ?? null)
+    : null;
 
   const bucket = Math.floor(day / Math.max(1, refreshEveryDays));
   const boardSeed = `${seed}|board|${planetId}|${bucket}`;
@@ -109,6 +128,18 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
   // Track how many chain parts have been added to this board.
   let chainPartsOnBoard = 0;
 
+  /** Apply faction home prefix to a quest's title when the board is a home system board. */
+  const applyPrefix = (quest: GeneratedQuest): GeneratedQuest => {
+    if (!factionPrefix) return quest;
+    return {
+      ...quest,
+      template: {
+        ...quest.template,
+        title: `${factionPrefix} ${quest.template.title}`,
+      },
+    };
+  };
+
   const out: GeneratedQuest[] = [];
   for (let i = 0; i < count; i++) {
     const rng = new SeededRNG(`${boardSeed}|${i}`);
@@ -116,9 +147,11 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
 
     if (isText || reachable.length === 0) {
       out.push(
-        isText
-          ? buildTextQuest(rng, planetId, bucket, i, day, origin)
-          : buildLocalDelivery(rng, planetId, bucket, i, day, origin),
+        applyPrefix(
+          isText
+            ? buildTextQuest(rng, planetId, bucket, i, day, origin)
+            : buildLocalDelivery(rng, planetId, bucket, i, day, origin),
+        ),
       );
       continue;
     }
@@ -133,37 +166,52 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
       if (completedQuestChains.includes(chainId) && chainPartsOnBoard === 0) {
         // Chain is complete: show the finale quest once per board.
         out.push(
-          buildFinaleQuest(
-            rng,
-            chainId,
-            target,
-            jumps,
-            planetId,
-            bucket,
-            i,
-            day,
+          applyPrefix(
+            buildFinaleQuest(
+              rng,
+              chainId,
+              target,
+              jumps,
+              planetId,
+              bucket,
+              i,
+              day,
+            ),
           ),
         );
       } else if (!completedQuestChains.includes(chainId)) {
         out.push(
-          buildChainQuest(
-            rng,
-            type,
-            target,
-            jumps,
-            planetId,
-            bucket,
-            i,
-            day,
-            chainId,
-            chainPartsOnBoard,
+          applyPrefix(
+            buildChainQuest(
+              rng,
+              type,
+              target,
+              jumps,
+              planetId,
+              bucket,
+              i,
+              day,
+              chainId,
+              chainPartsOnBoard,
+            ),
           ),
         );
         chainPartsOnBoard++;
       } else {
         // Chain finale already on board: emit normal quest instead.
         out.push(
-          buildRoutineQuest(rng, type, target, jumps, planetId, bucket, i, day),
+          applyPrefix(
+            buildRoutineQuest(
+              rng,
+              type,
+              target,
+              jumps,
+              planetId,
+              bucket,
+              i,
+              day,
+            ),
+          ),
         );
       }
       continue;
@@ -171,16 +219,18 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
 
     const isElite = rng.next() < eliteRatio;
     out.push(
-      buildRoutineQuest(
-        rng,
-        type,
-        target,
-        jumps,
-        planetId,
-        bucket,
-        i,
-        day,
-        isElite,
+      applyPrefix(
+        buildRoutineQuest(
+          rng,
+          type,
+          target,
+          jumps,
+          planetId,
+          bucket,
+          i,
+          day,
+          isElite,
+        ),
       ),
     );
   }

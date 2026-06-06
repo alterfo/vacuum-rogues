@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 15;
+  static readonly CURRENT_VERSION = 17;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -213,6 +213,28 @@ export class MigrationPipeline {
       };
       if (player && player.activeTextQuestState === undefined) {
         player.activeTextQuestState = null;
+      }
+    },
+    // 15 -> 16: Visited systems (Task 29). Add visitedSystems to player;
+    // old saves start with an empty list (player must re-visit to populate).
+    15: (state: SaveState) => {
+      const player = state.player as unknown as { visitedSystems?: string[] };
+      if (player && !Array.isArray(player.visitedSystems)) {
+        player.visitedSystems = [];
+      }
+    },
+    // 16 -> 17: Faction home systems (Task 29). Add isFactionHome and
+    // homeFactionId to each StarSystem; defaults to false/null for old saves
+    // (the generator assigns them for new galaxies).
+    16: (state: SaveState) => {
+      const galaxy = state.galaxy as unknown as {
+        systems?: Array<{ isFactionHome?: boolean; homeFactionId?: unknown }>;
+      };
+      if (galaxy && Array.isArray(galaxy.systems)) {
+        for (const sys of galaxy.systems) {
+          if (sys.isFactionHome === undefined) sys.isFactionHome = false;
+          if (sys.homeFactionId === undefined) sys.homeFactionId = null;
+        }
       }
     },
     // 10 -> 11: News feed bookmarks (Task 20). Add newsBookmarks to player;
