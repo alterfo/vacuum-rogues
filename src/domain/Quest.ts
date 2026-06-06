@@ -27,6 +27,10 @@ export class Quest {
     public readonly issuedDay: number, // Game day when quest was issued
     public readonly deadline: number, // Days from issuedDay to complete (0 = no deadline)
     public readonly failurePenalty: QuestFailurePenalty | null = null, // Penalty if quest fails or expires
+    /** Star system the quest objective is located in (null for local quests). */
+    public readonly targetSystemId: string | null = null,
+    /** Specific NpcShip id targeted by BOUNTY quests (null if not assigned). */
+    public readonly targetObjectId: string | null = null,
   ) {}
 
   updateProgress(event: { objectiveId: string; amount: number }): void {

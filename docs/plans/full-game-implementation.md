@@ -305,18 +305,18 @@ Quests from the job board must lead the player to OTHER systems. Implement the o
 loop: delivery quests close when cargo arrives at target; bounty quests close when the target NPC
 is destroyed.
 
-- [ ] Add `targetSystemId: string | null` and `targetObjectId: string | null` to `Quest` domain
+- [x] Add `targetSystemId: string | null` and `targetObjectId: string | null` to `Quest` domain
   (already has objective). Update schemas + migration (default null). Update `QuestGenerator` to
   set targetSystemId from the existing BFS galaxy-reach logic (it generates this but doesn't save
   it to the Quest — wire it up).
-- [ ] DELIVERY quests: when player lands on a planet in `targetSystemId` carrying the quest cargo
+- [x] DELIVERY quests: when player lands on a planet in `targetSystemId` carrying the quest cargo
   good in inventory → auto-complete the quest from `PlanetScene.initialize()`. Reward: credits +
   reputation. Remove the cargo good from inventory.
-- [ ] BOUNTY quests: `targetObjectId` is an NpcShip id. When that NpcShip is destroyed
+- [x] BOUNTY quests: `targetObjectId` is an NpcShip id. When that NpcShip is destroyed
   (Task 11 victory callback), check active bounty quests targeting that id → auto-complete.
-- [ ] EXPLORATION quests: `targetSystemId` is any system. Quest completes when player jumps
+- [x] EXPLORATION quests: `targetSystemId` is any system. Quest completes when player jumps
   into that system (check in `SpaceFlightScene.initialize()`).
-- [ ] Unit tests: delivery closes on correct planet; bounty closes on NPC death; exploration
+- [x] Unit tests: delivery closes on correct planet; bounty closes on NPC death; exploration
   closes on system entry.
 
 ### Task 15: Job board completion and quest persistence

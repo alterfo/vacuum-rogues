@@ -10,7 +10,7 @@ import {
 } from "pixi.js";
 import { buildSphereMesh, type SphereMesh } from "./sphereMesh";
 import type { GameEngine } from "@/systems/GameEngine";
-import { SceneType, StarType, NpcRole } from "@/types";
+import { SceneType, StarType, NpcRole, QuestType } from "@/types";
 import { pickVariant, tex } from "./textures";
 import { installGameCursors, setCanvasCursor } from "./cursor";
 import { PlanetSprite } from "./PlanetSprite";
@@ -508,7 +508,11 @@ export class SpaceFlightScene extends GameScene {
       this.gameEngine?.galaxy
     ) {
       this._npcSimulator.removeNpc(this.gameEngine.galaxy, ctx.npcId);
+      this.completeBountyQuestsByNpcKill(ctx.npcId);
     }
+
+    // Auto-complete EXPLORATION quests whose target is the current system.
+    this.completeExplorationQuestsBySystemEntry();
 
     const centerX = this.renderer.app.screen.width / 2;
     const centerY = this.renderer.app.screen.height / 2;
@@ -3997,6 +4001,49 @@ export class SpaceFlightScene extends GameScene {
       this.toggleQuestJournal();
     } else if (event.key === "i" || event.key === "I") {
       this.openInventory();
+    }
+  }
+
+  /** Auto-complete BOUNTY quests targeting the defeated NpcShip. */
+  private completeBountyQuestsByNpcKill(npcId: string): void {
+    if (!this.gameEngine?.player) return;
+    const player = this.gameEngine.player;
+    const questManager = this.gameEngine.questManager;
+    const currentSystemId = player.currentSystemId;
+
+    for (const quest of questManager.getActiveQuests()) {
+      if (quest.type !== QuestType.BOUNTY) continue;
+      if (quest.isCompleted || quest.isFailed) continue;
+      const matchesNpc = quest.targetObjectId === npcId;
+      const matchesSystem =
+        !quest.targetObjectId && quest.targetSystemId === currentSystemId;
+      if (!matchesNpc && !matchesSystem) continue;
+      const completed = questManager.forceCompleteQuest(quest.id, player);
+      if (completed) {
+        logger.info(
+          `BOUNTY quest auto-completed: ${quest.title} (npcId=${npcId})`,
+        );
+      }
+    }
+  }
+
+  /** Auto-complete EXPLORATION quests whose target is the current system. */
+  private completeExplorationQuestsBySystemEntry(): void {
+    if (!this.gameEngine?.player) return;
+    const player = this.gameEngine.player;
+    const questManager = this.gameEngine.questManager;
+    const currentSystemId = player.currentSystemId;
+
+    for (const quest of questManager.getActiveQuests()) {
+      if (quest.type !== QuestType.EXPLORATION) continue;
+      if (quest.isCompleted || quest.isFailed) continue;
+      if (quest.targetSystemId !== currentSystemId) continue;
+      const completed = questManager.forceCompleteQuest(quest.id, player);
+      if (completed) {
+        logger.info(
+          `EXPLORATION quest auto-completed on system entry: ${quest.title}`,
+        );
+      }
     }
   }
 

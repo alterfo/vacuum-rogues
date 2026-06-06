@@ -7,6 +7,7 @@ import { logger } from "@/utils/logger";
 import { JobBoardPanel } from "./JobBoardPanel";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import { TradeSystem } from "@/systems/TradeSystem";
+import { QuestType } from "@/types";
 import type { ResourceType } from "@/types";
 
 interface PlanetContext {
@@ -68,9 +69,54 @@ export class PlanetScene extends GameScene {
     this.createUI();
     logger.info(`PlanetScene: ${this.planet?.name}`);
     this.checkCustoms();
+    this.checkDeliveryQuestCompletion();
   }
 
   update(_deltaTime: number): void {}
+
+  /**
+   * Auto-complete DELIVERY quests whose targetSystemId matches the current
+   * system. Checks that the player carries the required cargo, removes it from
+   * inventory, then force-completes the quest and shows a success toast.
+   */
+  private checkDeliveryQuestCompletion(): void {
+    if (!this.gameEngine?.player || !this.planet) return;
+    const currentSystemId = this.gameEngine.player.currentSystemId;
+    const player = this.gameEngine.player;
+    const questManager = this.gameEngine.questManager;
+
+    for (const quest of questManager.getActiveQuests()) {
+      if (quest.type !== QuestType.DELIVERY) continue;
+      if (quest.isCompleted || quest.isFailed) continue;
+      if (quest.targetSystemId !== currentSystemId) continue;
+
+      // Find the COLLECT_ITEM objective to know what cargo is expected
+      const collectObj = quest.objectives.find(
+        (o) => o.type === "COLLECT_ITEM" && !o.completed,
+      );
+      if (collectObj && collectObj.itemType) {
+        const stack = player.inventory.resources.find(
+          (r) => r.type === collectObj.itemType,
+        );
+        if (!stack || stack.amount < collectObj.targetAmount) continue;
+        stack.amount -= collectObj.targetAmount;
+        player.contrabandGoods = player.contrabandGoods.filter(
+          (g) => g !== (collectObj.itemType as string),
+        );
+      }
+
+      const completed = questManager.forceCompleteQuest(quest.id, player);
+      if (completed) {
+        logger.info(
+          `DELIVERY quest auto-completed on landing: ${quest.title} (reward: ${quest.reward?.credits ?? 0} cr)`,
+        );
+        this.showMessage(
+          `Задание выполнено: ${quest.title} +${quest.reward?.credits ?? 0} ₡`,
+          0x00ff88,
+        );
+      }
+    }
+  }
 
   /**
    * Customs check on landing: if any inventory goods are illegal at this planet,

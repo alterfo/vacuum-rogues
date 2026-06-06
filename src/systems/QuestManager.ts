@@ -17,6 +17,8 @@ export interface QuestTemplate {
   dialogueAnchors: { nodeId: string; text: string }[];
   deadline: number; // Days to complete (0 = no deadline)
   failurePenalty: QuestFailurePenalty | null; // Penalty on failure/expiration
+  targetSystemId?: string | null;
+  targetObjectId?: string | null;
 }
 
 /**
@@ -393,6 +395,8 @@ export class QuestManager {
       currentDay,
       template.deadline,
       template.failurePenalty,
+      template.targetSystemId ?? null,
+      template.targetObjectId ?? null,
     );
 
     this.activeQuests.set(quest.id, quest);
@@ -642,6 +646,28 @@ export class QuestManager {
         `Player sentenced to ${penalty.jailTime} days in jail (not implemented in MVP)`,
       );
     }
+  }
+
+  /**
+   * Force-complete a quest regardless of objective progress. Marks all
+   * objectives done, then grants the reward. Used for auto-completion
+   * triggers: DELIVERY on planet landing, EXPLORATION on system entry,
+   * BOUNTY on NPC kill.
+   */
+  forceCompleteQuest(questId: string, player: Player): boolean {
+    const quest = this.activeQuests.get(questId);
+    if (!quest || quest.isFailed) return false;
+    if (!quest.isCompleted) {
+      for (const obj of quest.objectives) {
+        if (!obj.completed) {
+          quest.updateProgress({
+            objectiveId: obj.id,
+            amount: obj.targetAmount - obj.currentAmount,
+          });
+        }
+      }
+    }
+    return this.completeQuest(questId, player);
   }
 
   /**

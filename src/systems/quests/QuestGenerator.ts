@@ -293,6 +293,8 @@ function buildRoutineQuest(
       dialogueAnchors: [],
       deadline,
       failurePenalty,
+      targetSystemId: target.id,
+      targetObjectId: null,
     },
     targetSystemId: target.id,
     targetPlanetId,

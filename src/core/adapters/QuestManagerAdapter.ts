@@ -72,4 +72,8 @@ export class QuestManagerAdapter implements IQuestService {
   restoreState(activeQuests: Quest[], completedQuestIds: string[]): void {
     this.delegate.restoreState(activeQuests, completedQuestIds);
   }
+
+  forceCompleteQuest(questId: string, player: Player): boolean {
+    return this.delegate.forceCompleteQuest(questId, player);
+  }
 }

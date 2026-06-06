@@ -18,6 +18,8 @@ export interface QuestTemplate {
   }[];
   readonly deadline: number; // Days to complete (0 = no deadline)
   readonly failurePenalty: QuestFailurePenalty | null; // Penalty on failure/expiration
+  readonly targetSystemId?: string | null;
+  readonly targetObjectId?: string | null;
 }
 
 /**
@@ -60,4 +62,9 @@ export interface IQuestService {
   getUrgentQuests(currentDay: number): Quest[];
   /** Restore quest state from a loaded save (active quests + completed ids). */
   restoreState(activeQuests: Quest[], completedQuestIds: string[]): void;
+  /**
+   * Force-complete a quest regardless of objective state and grant reward.
+   * Used by auto-completion triggers (planet landing, system entry, NPC kill).
+   */
+  forceCompleteQuest(questId: string, player: Player): boolean;
 }

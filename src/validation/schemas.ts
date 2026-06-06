@@ -139,6 +139,8 @@ export const QuestSchema = z.object({
   issuedDay: z.number().int().min(0),
   deadline: z.number().int().min(0), // 0 = no deadline
   failurePenalty: QuestFailurePenaltySchema.nullable(),
+  targetSystemId: z.string().nullable().default(null),
+  targetObjectId: z.string().nullable().default(null),
 });
 
 export const QuestLogSchema = z.object({

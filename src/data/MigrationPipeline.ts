@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 7;
+  static readonly CURRENT_VERSION = 8;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -97,6 +97,21 @@ export class MigrationPipeline {
               npc.activeQuestTarget = null;
             }
           }
+        }
+      }
+    },
+    // 7 -> 8: Galaxy-spanning quest objectives (Task 14). Old saves lack
+    // targetSystemId and targetObjectId on persisted active quests.
+    7: (state: SaveState) => {
+      const quests = (
+        state.player as unknown as {
+          questLog?: { activeQuests?: Array<Record<string, unknown>> };
+        }
+      )?.questLog?.activeQuests;
+      if (Array.isArray(quests)) {
+        for (const q of quests) {
+          if (q.targetSystemId === undefined) q.targetSystemId = null;
+          if (q.targetObjectId === undefined) q.targetObjectId = null;
         }
       }
     },

@@ -68,4 +68,8 @@ export class MockQuestService implements IQuestService {
     this.activeQuests = activeQuests;
     this.completedQuestIds = completedQuestIds;
   }
+
+  forceCompleteQuest(_questId: string, _player: Player): boolean {
+    return false;
+  }
 }
