@@ -499,12 +499,12 @@ Scenario: Планеты различимы
 - Modify: `package.json`
 - Modify: `src/config/balance.ts`
 
-- [ ] Add `rollup-plugin-obfuscator` to devDependencies
-- [ ] Configure in `vite.config.ts` for `mode === 'production'` only: `compact, controlFlowFlattening, stringArray, stringArrayEncoding: ['base64'], identifierNamesGenerator: 'hexadecimal', selfDefending: true`
-- [ ] `sourcemap: false` in production Vite config
-- [ ] Domain lock: `GameConfig.ALLOWED_ORIGINS = ['vacuum-rogues.com', 'localhost']`; check `location.origin` on start
-- [ ] Run `npm run build` (production) — success, no source maps
-- [ ] Run `npm test -- --run` + `npm run lint` — no regressions
+- [x] Add `rollup-plugin-obfuscator` to devDependencies
+- [x] Configure in `vite.config.ts` for `mode === 'production'` only: `compact, controlFlowFlattening, stringArray, stringArrayEncoding: ['base64'], identifierNamesGenerator: 'hexadecimal', selfDefending: true`
+- [x] `sourcemap: false` in production Vite config
+- [x] Domain lock: `GameConfig.ALLOWED_ORIGINS = ['vacuum-rogues.com', 'localhost']`; check `location.origin` on start
+- [x] Run `npm run build` (production) — success, no source maps
+- [x] Run `npm test -- --run` + `npm run lint` — no regressions
 
 ### Task 15: Verify acceptance criteria
 

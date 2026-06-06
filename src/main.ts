@@ -4,6 +4,7 @@ import { SaveManagerAdapter, ONNXAdapter, ExceptionHandlerAdapter, QuestManagerA
 import { GalaxyService, PlayerService } from './core/services';
 import { AdaptiveQualityProfile } from './ai/AdaptiveQualityProfile';
 import { logger } from './utils/logger';
+import { GameConfig } from './config/balance';
 
 declare const __DEBUG__: boolean;
 
@@ -82,7 +83,19 @@ function initializeDIContainer(qualityProfile: AdaptiveQualityProfile): DIContai
   return container;
 }
 
+function checkDomainLock(): void {
+  if (import.meta.env.DEV) return;
+  const host = location.hostname;
+  const allowed = GameConfig.ALLOWED_ORIGINS.some((origin) => host === origin || host.endsWith(`.${origin}`));
+  if (!allowed) {
+    document.body.innerHTML = `<div style="color:#f00;font-size:2rem;text-align:center;margin-top:20vh">Запуск на данном домене запрещён.</div>`;
+    throw new Error(`Domain lock: "${host}" not in ALLOWED_ORIGINS`);
+  }
+}
+
 async function main(): Promise<void> {
+  checkDomainLock();
+
   history.pushState(null, '', location.href);
   window.addEventListener('popstate', () => history.pushState(null, '', location.href));
 
