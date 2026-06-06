@@ -16,6 +16,7 @@ import type { QuestTemplate } from "@/systems/QuestManager";
 import { QuestType, ResourceType, EnemyType } from "@/types";
 import { SeededRNG } from "@/utils/seededRNG";
 import { jumpDistances } from "@/systems/galaxy/jumpDistance";
+import { ELITE_QUEST_MIN_RANK } from "@/config/balance";
 
 /** Share of issued quests that are branching text-quests (the "cherry"). */
 export const QUEST_TEXT_RATIO = 0.2;
@@ -355,7 +356,7 @@ function buildRoutineQuest(
     }
   }
 
-  // Elite quests: ×2 reward, minReputation=50, title prefix.
+  // Elite quests: ×2 reward, minReputation=50, minRank=3, title prefix.
   const finalReward = isElite
     ? {
         ...reward,
@@ -365,6 +366,7 @@ function buildRoutineQuest(
     : reward;
   const finalTitle = isElite ? `[ЭЛИТА] ${title}` : title;
   const minReputation = isElite ? 50 : 0;
+  const minRank = isElite ? ELITE_QUEST_MIN_RANK : 0;
 
   return {
     template: {
@@ -380,6 +382,7 @@ function buildRoutineQuest(
       targetSystemId: target.id,
       targetObjectId: null,
       minReputation,
+      minRank,
     },
     targetSystemId: target.id,
     targetPlanetId,

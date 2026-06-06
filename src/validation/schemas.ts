@@ -208,6 +208,8 @@ export const PlayerSchema = z.object({
   completedQuestChains: z.array(z.string()).default([]),
   activeTextQuestState: TextQuestStateSchema.nullable().default(null),
   newsBookmarks: z.array(z.number().int().min(0)).default([]),
+  killPoints: z.number().int().min(0).default(0),
+  rank: z.number().int().min(0).max(7).default(0),
 });
 
 export const StarSystemSchema = z.object({

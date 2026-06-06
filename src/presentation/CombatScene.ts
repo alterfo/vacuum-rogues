@@ -299,6 +299,11 @@ export class CombatScene extends GameScene {
 
     if (result.loot !== undefined || result.xpGained !== undefined) {
       // Player action ended combat — player killed the last enemy
+      this.applyRewardsToPlayer(
+        result.xpGained ?? 0,
+        (result.loot as import("@/domain/ShipModule").ShipModule[]) ?? [],
+        result.killPointsGained ?? 0,
+      );
       this.showOutcomePanel(
         result.message,
         result.xpGained ?? 0,
@@ -314,6 +319,7 @@ export class CombatScene extends GameScene {
       this.applyRewardsToPlayer(
         enemyResult.result.xpGained,
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
+        enemyResult.result.killPointsGained,
       );
       this.showOutcomePanel(
         enemyResult.result.message,
@@ -332,6 +338,11 @@ export class CombatScene extends GameScene {
     this.renderWeaponPanel();
     if (result.loot !== undefined || result.xpGained !== undefined) {
       // Player action ended combat — player killed the last enemy
+      this.applyRewardsToPlayer(
+        result.xpGained ?? 0,
+        (result.loot as import("@/domain/ShipModule").ShipModule[]) ?? [],
+        result.killPointsGained ?? 0,
+      );
       this.showOutcomePanel(
         result.message,
         result.xpGained ?? 0,
@@ -348,6 +359,7 @@ export class CombatScene extends GameScene {
       this.applyRewardsToPlayer(
         enemyResult.result.xpGained,
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
+        enemyResult.result.killPointsGained,
       );
       this.showOutcomePanel(
         enemyResult.result.message,
@@ -371,6 +383,7 @@ export class CombatScene extends GameScene {
       this.applyRewardsToPlayer(
         enemyResult.result.xpGained,
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
+        enemyResult.result.killPointsGained,
       );
       this.showOutcomePanel(
         enemyResult.result.message,
@@ -394,10 +407,12 @@ export class CombatScene extends GameScene {
   private applyRewardsToPlayer(
     credits: number,
     loot: import("@/domain/ShipModule").ShipModule[],
+    killPoints: number = 0,
   ): void {
     const player = this._gameEngine?.player;
     if (!player) return;
     if (credits > 0) player.credits += credits;
+    if (killPoints > 0) player.killPoints += killPoints;
     for (const item of loot) {
       player.inventory.addItem(item);
     }

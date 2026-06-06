@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 12;
+  static readonly CURRENT_VERSION = 13;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -148,6 +148,17 @@ export class MigrationPipeline {
     // undefined means "never visited" which is the correct default for old saves.
     11: (_state: SaveState) => {
       // No migration needed — field is optional with no required default value.
+    },
+    // 12 -> 13: Rank system (Task 22). Old saves lack killPoints and rank on player.
+    12: (state: SaveState) => {
+      const player = state.player as unknown as {
+        killPoints?: number;
+        rank?: number;
+      };
+      if (player) {
+        if (player.killPoints === undefined) player.killPoints = 0;
+        if (player.rank === undefined) player.rank = 0;
+      }
     },
     // 10 -> 11: News feed bookmarks (Task 20). Add newsBookmarks to player;
     // backfill description on legacy news events that lack it.

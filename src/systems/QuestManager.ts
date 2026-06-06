@@ -21,6 +21,8 @@ export interface QuestTemplate {
   targetObjectId?: string | null;
   /** Minimum faction reputation required to see this quest (0 = no restriction). */
   minReputation?: number;
+  /** Minimum player rank required to see this quest (0 = no restriction). */
+  minRank?: number;
   /** Chain identifier shared by 3 sequential chain-quest parts (null = standalone). */
   chainId?: string | null;
   /** Position in the chain: 0/1/2 for parts, 3 for finale, -1 = not a chain quest. */

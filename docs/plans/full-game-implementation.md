@@ -472,17 +472,17 @@ show stale data.
 Kill points accumulate from combat victories. Military base stations let players cash in points
 for a rank promotion. Higher ranks unlock elite quests and faction discounts.
 
-- [ ] Add `killPoints: number` and `rank: number` (0–7) to `Player` domain. Update schemas.
+- [x] Add `killPoints: number` and `rank: number` (0–7) to `Player` domain. Update schemas.
   Each enemy ship destroyed in combat: `player.killPoints += enemyTechLevel × 10`.
-- [ ] `RANK_THRESHOLDS = [0, 100, 250, 500, 1000, 2000, 4000, 8000]` in balance config. Rank
+- [x] `RANK_THRESHOLDS = [0, 100, 250, 500, 1000, 2000, 4000, 8000]` in balance config. Rank
   label names (our own, non-canon): Новобранец / Пилот / Ветеран / Аса / Мастер / Командор /
   Адмирал / Легенда.
-- [ ] Add `StationType.MILITARY_BASE` (already exists). In `StationScene` for military bases,
+- [x] Add `StationType.MILITARY_BASE` (already exists). In `StationScene` for military bases,
   show "Получить звание" button: if `player.killPoints >= RANK_THRESHOLDS[player.rank + 1]` →
   promote: `player.rank++`, `player.killPoints = 0`, show congratulation panel.
-- [ ] `QuestGenerator`: elite quests (`minReputation = 50`) also require `minRank = 3` (Аса).
+- [x] `QuestGenerator`: elite quests (`minReputation = 50`) also require `minRank = 3` (Аса).
   Government faction discount at rank ≥ 5: prices ×0.85.
-- [ ] Unit tests: kill points accumulate; promotion at threshold; elite quest gated by rank.
+- [x] Unit tests: kill points accumulate; promotion at threshold; elite quest gated by rank.
 
 ### Task 23: OVERMIND threat arc and win/loss conditions
 

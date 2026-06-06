@@ -346,6 +346,7 @@ export interface CombatResult {
   readonly damageDealt?: number;
   readonly damageTaken?: number;
   readonly xpGained?: number;
+  readonly killPointsGained?: number;
   readonly loot?: unknown[];
   readonly message: string;
 }
@@ -353,6 +354,7 @@ export interface CombatResult {
 export interface EncounterResult {
   readonly outcome: EncounterState;
   readonly xpGained: number;
+  readonly killPointsGained: number;
   readonly loot: unknown[];
   readonly message: string;
 }

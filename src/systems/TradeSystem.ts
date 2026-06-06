@@ -9,6 +9,10 @@ import type { Player } from "@/domain/Player";
 import { economyBaseline } from "@/domain/Market";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
 import { logger } from "@/utils/logger";
+import {
+  RANK_DISCOUNT_THRESHOLD,
+  RANK_DISCOUNT_FACTOR,
+} from "@/config/balance";
 
 export interface PriceRegressorAdapter {
   predictModifier(features: number[]): number;
@@ -115,6 +119,11 @@ export class TradeSystem {
     const driftIdx = planet.market.availableResources.indexOf(resource);
     if (driftIdx >= 0) {
       finalPrice *= planet.market.priceMultipliers[driftIdx] ?? 1.0;
+    }
+
+    // High-rank discount: rank ≥ RANK_DISCOUNT_THRESHOLD → 15% off.
+    if ((player.rank ?? 0) >= RANK_DISCOUNT_THRESHOLD) {
+      finalPrice *= RANK_DISCOUNT_FACTOR;
     }
 
     // Hard guardrails: [base × 0.3, base × 3.0]

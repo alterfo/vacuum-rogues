@@ -18,6 +18,10 @@ export class Player {
   activeTextQuestState: TextQuestState | null = null;
   /** Hashed keys of bookmarked news events (day * 1000 + type-index). */
   newsBookmarks: number[] = [];
+  /** Cumulative combat kill points; reset to 0 on each rank promotion. */
+  killPoints: number = 0;
+  /** Current rank index (0–7). Promoted at military bases when killPoints threshold is met. */
+  rank: number = 0;
 
   constructor(
     public readonly id: string,

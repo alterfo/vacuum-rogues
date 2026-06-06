@@ -14,6 +14,7 @@ import type { GearListing } from "@/systems/info/GalacticRegistry";
 import { ShipModule } from "@/domain/ShipModule";
 import type { ModuleCategory } from "@/types";
 import { logger } from "@/utils/logger";
+import { RANK_THRESHOLDS, RANK_LABELS } from "@/config/balance";
 
 interface StationContext {
   gameEngine?: GameEngine;
@@ -51,6 +52,7 @@ const TYPE_SERVICES: Record<StationType, string[]> = {
   [StationType.REPAIR_DOCK]: ["hangar", "repair", "refuel", "leave"],
   [StationType.MILITARY_BASE]: [
     "quests",
+    "rankPromotion",
     "infoCenter",
     "repair",
     "refuel",
@@ -433,6 +435,15 @@ export class StationScene extends GameScene {
         return { label: "Инфоцентр", color: 0x66bbff };
       case "quests":
         return { label: "Задания", color: 0xffee66 };
+      case "rankPromotion": {
+        const player = this.gameEngine?.player;
+        const rank = player?.rank ?? 0;
+        const rankLabel = RANK_LABELS[rank] ?? "Легенда";
+        return {
+          label: `Звание: ${rankLabel} (${player?.killPoints ?? 0} очков)`,
+          color: 0xff9944,
+        };
+      }
       case "micromodules":
         return { label: "Микромодули", color: 0xffaa22 };
       case "leave":
@@ -468,6 +479,9 @@ export class StationScene extends GameScene {
         break;
       case "quests":
         this.showToast("Задания выдаются только на военных базах", 0xffcc44);
+        break;
+      case "rankPromotion":
+        this.doRankPromotion();
         break;
       case "micromodules":
         this.view = "micromodules";
@@ -519,6 +533,37 @@ export class StationScene extends GameScene {
     ship.energy = ship.maxEnergy;
     this.showToast(`Топливо пополнено за ${cost} ₡`, 0x44aaff);
     this.render();
+  }
+
+  private doRankPromotion(): void {
+    const player = this.gameEngine?.player;
+    if (!player) return;
+
+    const currentRank = player.rank ?? 0;
+
+    if (currentRank >= RANK_THRESHOLDS.length - 1) {
+      this.showToast("Вы достигли максимального звания!", 0xffcc44);
+      return;
+    }
+
+    const required = RANK_THRESHOLDS[currentRank + 1];
+    if ((player.killPoints ?? 0) < required) {
+      const needed = required - (player.killPoints ?? 0);
+      this.showToast(
+        `Нужно ещё ${needed} очков боёвки для повышения`,
+        0x885522,
+      );
+      return;
+    }
+
+    player.rank = currentRank + 1;
+    player.killPoints = 0;
+    const newLabel = RANK_LABELS[player.rank] ?? "Легенда";
+    logger.info(
+      `Player promoted to rank ${player.rank} (${newLabel}) at station ${this.station?.name}`,
+    );
+    this.render();
+    this.showToast(`Звание повышено: ${newLabel}! Поздравляем!`, 0xffaa44);
   }
 
   private payStationBribe(faction: string): void {

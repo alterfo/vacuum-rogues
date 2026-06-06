@@ -459,6 +459,9 @@ export class GameEngine {
       const minRep = q.template.minReputation ?? 0;
       if (minRep > 0 && this.player!.getReputation(faction) < minRep)
         return false;
+      // Filter elite quests the player doesn't have sufficient rank for.
+      const minRank = q.template.minRank ?? 0;
+      if (minRank > 0 && (this.player!.rank ?? 0) < minRank) return false;
       return true;
     });
   }

@@ -45,3 +45,29 @@ export const BALANCE: BalanceConfig = BalanceSchema.parse({
   WARP_FUEL_COST_UNCONNECTED_MULTIPLIER: 2,
   MAX_EQUIPMENT_SLOTS: 3,
 });
+
+/** Kill-point thresholds for ranks 0–7. */
+export const RANK_THRESHOLDS = [
+  0, 100, 250, 500, 1000, 2000, 4000, 8000,
+] as const;
+
+/** Display names for each rank tier. */
+export const RANK_LABELS = [
+  "Новобранец",
+  "Пилот",
+  "Ветеран",
+  "Ас",
+  "Мастер",
+  "Командор",
+  "Адмирал",
+  "Легенда",
+] as const;
+
+/** Minimum rank required to see elite quests (minRank = 3 → Ас). */
+export const ELITE_QUEST_MIN_RANK = 3;
+
+/** Player rank at which the government faction discount applies. */
+export const RANK_DISCOUNT_THRESHOLD = 5;
+
+/** Price multiplier for high-rank players (15% off). */
+export const RANK_DISCOUNT_FACTOR = 0.85;

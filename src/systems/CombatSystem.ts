@@ -26,6 +26,7 @@ import type { ModuleCategory, AxialCoord } from "@/types";
 
 export interface CombatRewardResult {
   creditsGained: number;
+  killPointsGained: number;
   loot: ShipModule[];
 }
 
@@ -439,6 +440,7 @@ export class CombatSystem {
       return {
         outcome: EncounterState.PLAYER_LOST,
         xpGained: 0,
+        killPointsGained: 0,
         loot: [],
         message: "Поражение — корабль поврежден.",
       };
@@ -451,6 +453,7 @@ export class CombatSystem {
       return {
         outcome: EncounterState.PLAYER_WON,
         xpGained: rewards.creditsGained,
+        killPointsGained: rewards.killPointsGained,
         loot: rewards.loot,
         message: `Победа! +${rewards.creditsGained} ₡${rewards.loot.length > 0 ? ` + ${rewards.loot[0].name}` : ""}`,
       };
@@ -459,21 +462,24 @@ export class CombatSystem {
     return {
       outcome: EncounterState.IN_PROGRESS,
       xpGained: 0,
+      killPointsGained: 0,
       loot: [],
       message: "Combat continues...",
     };
   }
 
   /**
-   * Calculate victory rewards: credits based on enemy tech levels,
-   * plus a 30% equipment drop chance per enemy.
+   * Calculate victory rewards: credits and kill points based on enemy tech
+   * levels, plus a 30% equipment drop chance per enemy.
    */
   resolveVictory(enemies: EnemyShip[]): CombatRewardResult {
     let creditsGained = 0;
+    let killPointsGained = 0;
     const loot: ShipModule[] = [];
 
     for (const enemy of enemies) {
       creditsGained += enemy.techLevel * 50;
+      killPointsGained += enemy.techLevel * 10;
 
       if (Math.random() < 0.3) {
         const drop = this.rollLootDrop(enemy.techLevel);
@@ -481,7 +487,7 @@ export class CombatSystem {
       }
     }
 
-    return { creditsGained, loot };
+    return { creditsGained, killPointsGained, loot };
   }
 
   private rollLootDrop(techLevel: number): ShipModule | null {
