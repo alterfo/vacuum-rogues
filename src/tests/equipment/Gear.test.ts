@@ -7,6 +7,7 @@ import {
   type HullSpec,
   type WeaponSpec,
 } from "@/systems/equipment/GearCatalog";
+import { HullClass } from "@/types";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
 
 describe("GearCatalog", () => {
@@ -23,11 +24,14 @@ describe("GearCatalog", () => {
       id: "x",
       name: "x",
       kind: GearKind.HULL,
+      hullClass: HullClass.CORVETTE,
       techLevel: 3,
       size: 6,
       basePrice: 1000,
       hp: 100,
       slots: 4,
+      weaponSlots: 2,
+      equipmentSlots: 2,
       cargo: 10,
     };
     const higherTech = gearMarketPrice({ ...base, techLevel: 6 });

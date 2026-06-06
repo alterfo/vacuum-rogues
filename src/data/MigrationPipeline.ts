@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 4;
+  static readonly CURRENT_VERSION = 5;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -60,6 +60,15 @@ export class MigrationPipeline {
       const player = state.player as unknown as { contrabandGoods?: string[] };
       if (player && !Array.isArray(player.contrabandGoods)) {
         player.contrabandGoods = [];
+      }
+    },
+    // 4 -> 5: hull classes (Task 5). Old saves lack hullClass on player.ship.
+    4: (state: SaveState) => {
+      const ship = (
+        state.player as unknown as { ship?: { hullClass?: string } }
+      )?.ship;
+      if (ship && !ship.hullClass) {
+        ship.hullClass = "CORVETTE";
       }
     },
   };

@@ -187,6 +187,68 @@ export enum ErrorSeverity {
   CRITICAL = "CRITICAL",
 }
 
+export enum HullClass {
+  LIGHT_FIGHTER = "LIGHT_FIGHTER",
+  CORVETTE = "CORVETTE",
+  FRIGATE = "FRIGATE",
+  DESTROYER = "DESTROYER",
+  TRANSPORT = "TRANSPORT",
+  HEAVY_FREIGHTER = "HEAVY_FREIGHTER",
+}
+
+export interface HullClassSpec {
+  readonly maxHp: number;
+  readonly weaponSlots: number;
+  readonly equipmentSlots: number;
+  readonly cargoCapacity: number;
+  readonly techLevel: number;
+}
+
+export const HULL_CLASS_SPECS: Record<HullClass, HullClassSpec> = {
+  [HullClass.LIGHT_FIGHTER]: {
+    maxHp: 90,
+    weaponSlots: 2,
+    equipmentSlots: 2,
+    cargoCapacity: 20,
+    techLevel: 2,
+  },
+  [HullClass.CORVETTE]: {
+    maxHp: 140,
+    weaponSlots: 2,
+    equipmentSlots: 3,
+    cargoCapacity: 30,
+    techLevel: 3,
+  },
+  [HullClass.TRANSPORT]: {
+    maxHp: 120,
+    weaponSlots: 1,
+    equipmentSlots: 4,
+    cargoCapacity: 45,
+    techLevel: 3,
+  },
+  [HullClass.FRIGATE]: {
+    maxHp: 220,
+    weaponSlots: 3,
+    equipmentSlots: 4,
+    cargoCapacity: 35,
+    techLevel: 5,
+  },
+  [HullClass.HEAVY_FREIGHTER]: {
+    maxHp: 180,
+    weaponSlots: 2,
+    equipmentSlots: 4,
+    cargoCapacity: 120,
+    techLevel: 4,
+  },
+  [HullClass.DESTROYER]: {
+    maxHp: 360,
+    weaponSlots: 4,
+    equipmentSlots: 5,
+    cargoCapacity: 50,
+    techLevel: 7,
+  },
+};
+
 export interface AxialCoord {
   readonly q: number;
   readonly r: number;

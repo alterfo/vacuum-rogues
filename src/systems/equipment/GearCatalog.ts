@@ -8,6 +8,7 @@
  * and stat recomputation come later in EPIC-007; this is the searchable
  * "what exists" catalog that the shop generator and info center (EPIC-009) use.
  */
+import { HullClass } from "@/types";
 
 export enum GearKind {
   HULL = "HULL",
@@ -43,8 +44,11 @@ interface GearBase {
 
 export interface HullSpec extends GearBase {
   readonly kind: GearKind.HULL;
+  readonly hullClass: HullClass;
   readonly hp: number; // hull points (= capacity in canon)
-  readonly slots: number; // equipment slots
+  readonly slots: number; // total slots (weaponSlots + equipmentSlots)
+  readonly weaponSlots: number;
+  readonly equipmentSlots: number;
   readonly cargo: number; // hold capacity
 }
 
@@ -68,55 +72,84 @@ const HULLS: HullSpec[] = [
     id: "hull_scout",
     name: "Каркас «Разведчик»",
     kind: GearKind.HULL,
+    hullClass: HullClass.LIGHT_FIGHTER,
     techLevel: 2,
     size: 8,
     basePrice: 4000,
     hp: 90,
     slots: 4,
+    weaponSlots: 2,
+    equipmentSlots: 2,
     cargo: 20,
+  },
+  {
+    id: "hull_corvette",
+    name: "Каркас «Корвет»",
+    kind: GearKind.HULL,
+    hullClass: HullClass.CORVETTE,
+    techLevel: 3,
+    size: 10,
+    basePrice: 9500,
+    hp: 140,
+    slots: 5,
+    weaponSlots: 2,
+    equipmentSlots: 3,
+    cargo: 30,
   },
   {
     id: "hull_courier",
     name: "Каркас «Курьер»",
     kind: GearKind.HULL,
+    hullClass: HullClass.TRANSPORT,
     techLevel: 3,
     size: 10,
     basePrice: 7000,
     hp: 120,
     slots: 5,
+    weaponSlots: 1,
+    equipmentSlots: 4,
     cargo: 45,
   },
   {
     id: "hull_warden",
     name: "Каркас «Страж»",
     kind: GearKind.HULL,
+    hullClass: HullClass.FRIGATE,
     techLevel: 5,
     size: 12,
     basePrice: 16000,
     hp: 220,
     slots: 7,
+    weaponSlots: 3,
+    equipmentSlots: 4,
     cargo: 35,
   },
   {
     id: "hull_freighter",
     name: "Каркас «Грузовоз»",
     kind: GearKind.HULL,
+    hullClass: HullClass.HEAVY_FREIGHTER,
     techLevel: 4,
     size: 16,
     basePrice: 14000,
     hp: 180,
     slots: 6,
+    weaponSlots: 2,
+    equipmentSlots: 4,
     cargo: 120,
   },
   {
     id: "hull_bastion",
     name: "Каркас «Бастион»",
     kind: GearKind.HULL,
+    hullClass: HullClass.DESTROYER,
     techLevel: 7,
     size: 14,
     basePrice: 38000,
     hp: 360,
     slots: 9,
+    weaponSlots: 4,
+    equipmentSlots: 5,
     cargo: 50,
   },
 ];

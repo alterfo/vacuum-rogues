@@ -56,6 +56,16 @@ export const PlayerShipSchema = z.object({
   maxEnergy: z.number().int().positive(),
   speed: z.number(),
   evasion: z.number(),
+  hullClass: z
+    .enum([
+      "LIGHT_FIGHTER",
+      "CORVETTE",
+      "FRIGATE",
+      "DESTROYER",
+      "TRANSPORT",
+      "HEAVY_FREIGHTER",
+    ])
+    .default("CORVETTE"),
   modules: z.tuple([
     ShipModuleSchema.nullable(),
     ShipModuleSchema.nullable(),

@@ -3,9 +3,13 @@ import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
-import { SceneType, PlanetType } from "@/types";
+import { SceneType, PlanetType, HULL_CLASS_SPECS } from "@/types";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
-import { GearKind, type Gear } from "@/systems/equipment/GearCatalog";
+import {
+  GearKind,
+  type Gear,
+  type HullSpec,
+} from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import { ShipModule } from "@/domain/ShipModule";
 import type { ModuleCategory } from "@/types";
@@ -15,6 +19,8 @@ interface ShopContext {
   gameEngine?: GameEngine;
   planet?: Planet;
 }
+
+type ShopTab = "gear" | "hull";
 
 /** Derive tech level from planet type (higher-tech worlds carry rarer gear). */
 function techLevelForPlanet(type: PlanetType): number {
@@ -80,8 +86,9 @@ export class EquipmentShopScene extends GameScene {
   private creditsText: Text | null = null;
   private listings: GearListing[] = [];
   private scrollOffset = 0;
+  private activeTab: ShopTab = "gear";
   private readonly ROW_H = 52;
-  private readonly VISIBLE_ROWS = 9;
+  private readonly VISIBLE_ROWS = 8;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(renderer: Renderer) {
@@ -197,27 +204,34 @@ export class EquipmentShopScene extends GameScene {
     this.creditsText.y = PY + 14;
     this.mainContainer.addChild(this.creditsText);
 
-    // Column headers
-    this.renderColumnHeaders(PX, PY + 44, PW);
+    // Tab switcher
+    this.renderTabs(PX, PY + 44, PW);
 
-    // Scrollable item list
-    const listMask = new Graphics();
-    listMask.rect(PX, PY + 64, PW, this.VISIBLE_ROWS * this.ROW_H);
-    listMask.fill({ color: 0xffffff });
-    this.mainContainer.addChild(listMask);
+    if (this.activeTab === "gear") {
+      // Column headers
+      this.renderColumnHeaders(PX, PY + 76, PW);
 
-    this.listContainer = new Container();
-    this.listContainer.mask = listMask;
-    this.mainContainer.addChild(this.listContainer);
+      // Scrollable item list
+      const listMask = new Graphics();
+      listMask.rect(PX, PY + 96, PW, this.VISIBLE_ROWS * this.ROW_H);
+      listMask.fill({ color: 0xffffff });
+      this.mainContainer.addChild(listMask);
 
-    this.renderRows(PX, PY + 64, PW);
+      this.listContainer = new Container();
+      this.listContainer.mask = listMask;
+      this.mainContainer.addChild(this.listContainer);
 
-    // Scroll buttons
-    this.addScrollButtons(
-      PX + PW - 28,
-      PY + 64,
-      this.VISIBLE_ROWS * this.ROW_H,
-    );
+      this.renderRows(PX, PY + 96, PW);
+
+      // Scroll buttons
+      this.addScrollButtons(
+        PX + PW - 28,
+        PY + 96,
+        this.VISIBLE_ROWS * this.ROW_H,
+      );
+    } else {
+      this.renderHullPanel(PX, PY + 76, PW, PH - 76 - 44);
+    }
 
     // Back button
     const back = new Text({
@@ -250,6 +264,217 @@ export class EquipmentShopScene extends GameScene {
     backdrop.on("wheel", (e) => {
       this.scroll(e.deltaY > 0 ? 1 : -1);
     });
+  }
+
+  private renderTabs(x: number, y: number, w: number): void {
+    const tabs: { label: string; tab: ShopTab }[] = [
+      { label: "[ СНАРЯЖЕНИЕ ]", tab: "gear" },
+      { label: "[ КОРПУС ]", tab: "hull" },
+    ];
+    let tabX = x + 14;
+    for (const { label, tab } of tabs) {
+      const isActive = this.activeTab === tab;
+      const tabBtn = new Text({
+        text: label,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 13,
+          fill: isActive ? 0x00ccff : 0x446688,
+          fontWeight: isActive ? "bold" : "normal",
+        },
+      });
+      tabBtn.eventMode = "none";
+      tabBtn.x = tabX;
+      tabBtn.y = y + 6;
+      this.mainContainer!.addChild(tabBtn);
+
+      if (!isActive) {
+        tabBtn.eventMode = "static";
+        tabBtn.cursor = "pointer";
+        tabBtn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          this.activeTab = tab;
+          this.scrollOffset = 0;
+          this.rebuild();
+        });
+        tabBtn.on("pointerover", () => {
+          tabBtn.alpha = 0.7;
+        });
+        tabBtn.on("pointerout", () => {
+          tabBtn.alpha = 1;
+        });
+      }
+
+      tabX += tabBtn.width + 20;
+    }
+
+    const divider = new Graphics();
+    divider.rect(x, y + 28, w, 1);
+    divider.fill({ color: 0x1a3050 });
+    this.mainContainer!.addChild(divider);
+  }
+
+  private renderHullPanel(x: number, y: number, w: number, _h: number): void {
+    if (!this.mainContainer) return;
+    const player = this.gameEngine?.player;
+    const hullListings = this.listings.filter(
+      (l) => l.gear.kind === GearKind.HULL,
+    );
+
+    const currentClass = player?.ship.hullClass ?? "CORVETTE";
+    const infoText = new Text({
+      text: `Текущий корпус: ${currentClass}  HP: ${player?.ship.maxHull ?? "—"}  Трюм: ${player?.ship.cargoCapacity ?? "—"}`,
+      style: { fontFamily: "Courier New", fontSize: 12, fill: 0x8899aa },
+    });
+    infoText.eventMode = "none";
+    infoText.x = x + 14;
+    infoText.y = y + 8;
+    this.mainContainer.addChild(infoText);
+
+    if (hullListings.length === 0) {
+      const noHulls = new Text({
+        text: "Корпуса не доступны в этом магазине",
+        style: { fontFamily: "Courier New", fontSize: 13, fill: 0x446688 },
+      });
+      noHulls.eventMode = "none";
+      noHulls.x = x + 14;
+      noHulls.y = y + 40;
+      this.mainContainer.addChild(noHulls);
+      return;
+    }
+
+    const ROW = 70;
+    for (let i = 0; i < hullListings.length; i++) {
+      const listing = hullListings[i];
+      const hull = listing.gear as HullSpec;
+      const rowY = y + 34 + i * ROW;
+      const playerCredits = player?.credits ?? 0;
+      const canAfford = playerCredits >= listing.price;
+      const isCurrent = player?.ship.hullClass === hull.hullClass;
+
+      const rowBg = new Graphics();
+      rowBg.rect(x + 4, rowY, w - 36, ROW - 4);
+      rowBg.fill({
+        color: isCurrent ? 0x0a1f30 : i % 2 === 0 ? 0x060e18 : 0x050b14,
+      });
+      if (isCurrent) rowBg.stroke({ width: 1, color: 0x1a4060 });
+      this.mainContainer.addChild(rowBg);
+
+      const nameText = new Text({
+        text: hull.name,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 13,
+          fill: isCurrent ? 0x44aaff : canAfford ? 0xddeeff : 0x667788,
+          fontWeight: "bold",
+        },
+      });
+      nameText.eventMode = "none";
+      nameText.x = x + 14;
+      nameText.y = rowY + 6;
+      this.mainContainer.addChild(nameText);
+
+      const specText = new Text({
+        text: `HP: ${hull.hp}  Оружие: ${hull.weaponSlots}  Снаряж: ${hull.equipmentSlots}  Трюм: ${hull.cargo}  T${hull.techLevel}`,
+        style: { fontFamily: "Courier New", fontSize: 11, fill: 0x445566 },
+      });
+      specText.eventMode = "none";
+      specText.x = x + 14;
+      specText.y = rowY + 26;
+      this.mainContainer.addChild(specText);
+
+      const priceText = new Text({
+        text: `${listing.price.toLocaleString("ru")}₡`,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 12,
+          fill: canAfford ? 0xffee55 : 0x556655,
+        },
+      });
+      priceText.eventMode = "none";
+      priceText.x = x + w * 0.7;
+      priceText.y = rowY + 16;
+      this.mainContainer.addChild(priceText);
+
+      if (isCurrent) {
+        const currentBadge = new Text({
+          text: "Установлен",
+          style: { fontFamily: "Courier New", fontSize: 12, fill: 0x44aaff },
+        });
+        currentBadge.eventMode = "none";
+        currentBadge.x = x + w * 0.85;
+        currentBadge.y = rowY + 16;
+        this.mainContainer.addChild(currentBadge);
+      } else {
+        const btnLabel = canAfford ? "[Установить]" : "Мало₡";
+        const buyBtn = new Text({
+          text: btnLabel,
+          style: {
+            fontFamily: "Courier New",
+            fontSize: 12,
+            fill: canAfford ? 0x00ff88 : 0x445544,
+            fontWeight: "bold",
+          },
+        });
+        buyBtn.x = x + w * 0.85;
+        buyBtn.y = rowY + 16;
+
+        if (canAfford) {
+          buyBtn.eventMode = "static";
+          buyBtn.cursor = "pointer";
+          buyBtn.on("pointerdown", (e) => {
+            e.stopPropagation();
+            this.buyHull(listing, hull);
+          });
+          buyBtn.on("pointerover", () => {
+            buyBtn.alpha = 0.7;
+          });
+          buyBtn.on("pointerout", () => {
+            buyBtn.alpha = 1;
+          });
+        } else {
+          buyBtn.eventMode = "none";
+        }
+        this.mainContainer.addChild(buyBtn);
+      }
+    }
+  }
+
+  private buyHull(listing: GearListing, hull: HullSpec): void {
+    const player = this.gameEngine?.player;
+    if (!player) return;
+    if (player.credits < listing.price) return;
+
+    // Move all installed modules to inventory
+    for (const mod of player.ship.modules) {
+      if (mod !== null) {
+        player.inventory.addItem(mod);
+      }
+    }
+    player.ship.modules = [null, null, null];
+
+    // Deduct credits and update hull class
+    player.credits -= listing.price;
+    player.ship.hullClass = hull.hullClass;
+    const spec = HULL_CLASS_SPECS[hull.hullClass];
+    player.ship.maxHull = spec.maxHp;
+    player.ship.hullHP = Math.min(player.ship.hullHP, spec.maxHp);
+
+    logger.info(
+      `Installed hull ${hull.name} (${hull.hullClass}) for ${listing.price} credits. Modules moved to inventory.`,
+    );
+
+    this.rebuild();
+  }
+
+  private rebuild(): void {
+    if (!this.mainContainer) return;
+    this.mainContainer.destroy({ children: true });
+    this.mainContainer = new Container();
+    this.renderer.uiLayer.addChild(this.mainContainer);
+    this.listContainer = null;
+    this.creditsText = null;
+    this.render();
   }
 
   private renderColumnHeaders(x: number, y: number, w: number): void {
@@ -446,7 +671,7 @@ export class EquipmentShopScene extends GameScene {
     const PH = Math.min(580, sh - 40);
     const PX = (sw - PW) / 2;
     const PY = (sh - PH) / 2;
-    this.renderRows(PX, PY + 64, PW);
+    this.renderRows(PX, PY + 96, PW);
   }
 
   private buyItem(listing: GearListing): void {
@@ -469,7 +694,7 @@ export class EquipmentShopScene extends GameScene {
     const sh = this.renderer.app.screen.height;
     const PW = Math.min(820, sw - 40);
     const PY = (sh - Math.min(580, sh - 40)) / 2;
-    this.renderRows((sw - PW) / 2, PY + 64, PW);
+    this.renderRows((sw - PW) / 2, PY + 96, PW);
   }
 
   private onKeyDown(e: KeyboardEvent): void {

@@ -1,4 +1,4 @@
-import type { FactionType } from "@/types";
+import { type FactionType, HullClass, HULL_CLASS_SPECS } from "@/types";
 import type { ShipModule } from "./ShipModule";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
 
@@ -21,7 +21,20 @@ export class PlayerShip {
     public speed: number,
     public evasion: number,
     public readonly factionBaseline: FactionType,
+    public hullClass: HullClass = HullClass.CORVETTE,
   ) {}
+
+  get weaponSlots(): number {
+    return HULL_CLASS_SPECS[this.hullClass].weaponSlots;
+  }
+
+  get equipmentSlots(): number {
+    return HULL_CLASS_SPECS[this.hullClass].equipmentSlots;
+  }
+
+  get cargoCapacity(): number {
+    return HULL_CLASS_SPECS[this.hullClass].cargoCapacity;
+  }
 
   equipModule(slot: number, module: ShipModule): void {
     if (slot < 0 || slot > 2) {

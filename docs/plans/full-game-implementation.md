@@ -135,17 +135,17 @@ each with distinct HP, weapon slots, equipment slots, and cargo capacity. Player
 at the equipment shop; this replaces their current hull and resets all module slots (modules go to
 inventory).
 
-- [ ] Add `HullClass` enum and `HullSpec` (already partial in GearCatalog) with fields:
+- [x] Add `HullClass` enum and `HullSpec` (already partial in GearCatalog) with fields:
   `hullClass, maxHp, weaponSlots, equipmentSlots, cargoCapacity, techLevel`. Define 6 classes in
   `src/systems/equipment/GearCatalog.ts`.
-- [ ] Add `hullClass: HullClass` to `PlayerShip` domain. `PlayerShip` derives `maxHp`,
+- [x] Add `hullClass: HullClass` to `PlayerShip` domain. `PlayerShip` derives `maxHp`,
   `weaponSlots`, `equipmentSlots`, `cargoCapacity` from `hullClass` (not hardcoded). Update
   `PlayerShip` constructor + accessors. Update `src/validation/schemas.ts`; migration defaults
   old saves to `HullClass.CORVETTE`.
-- [ ] "Купить корпус" section in `src/presentation/EquipmentShopScene.ts`: list available hulls
+- [x] "Купить корпус" section in `src/presentation/EquipmentShopScene.ts`: list available hulls
   (filtered by planet tech level); buy = deduct credits, move all current modules to
   `player.inventory.modules`, set new `playerShip.hullClass`.
-- [ ] Unit tests: hull slot counts match spec; buying hull moves modules to inventory.
+- [x] Unit tests: hull slot counts match spec; buying hull moves modules to inventory.
 
 ### Task 6: Equipment effects → real ship stats
 
