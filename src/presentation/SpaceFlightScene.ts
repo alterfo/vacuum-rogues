@@ -188,6 +188,8 @@ export class SpaceFlightScene extends GameScene {
   // Latches the low-hull auto-stop so the warning fires once per descent below
   // the threshold, not every frame.
   private lowHullStopped = false;
+  // Lerp-return animation: true while the camera is smoothly returning to ship.
+  private cameraReturning = false;
 
   // Turn control (Play/Pause). The turn "runs" (ship flies, NPCs/planets move,
   // combat resolves) while isTurnRunning; Pause ends it at the next day segment.
@@ -558,6 +560,7 @@ export class SpaceFlightScene extends GameScene {
     this.updateWarpEffect(deltaTime);
     this.updateShip(deltaTime);
     this.updateCombat(deltaTime);
+    this.updateCameraReturn();
     this.updateCamera();
     this.updateNpcShips(deltaTime);
     this.updatePlanets(deltaTime);
@@ -628,6 +631,7 @@ export class SpaceFlightScene extends GameScene {
     this.isTurnRunning = false;
     this.pauseRequested = false;
     this._combatTransitionPending = false;
+    this.cameraReturning = false;
 
     // Destroy planet sprites
     for (const sprite of this.planetSprites) {
@@ -2106,6 +2110,7 @@ export class SpaceFlightScene extends GameScene {
     this.systemMiniMap.setPanHandler((worldX, worldY) =>
       this.focusCameraOnWorld(worldX, worldY),
     );
+    this.systemMiniMap.setReturnCameraHandler(() => this.startCameraReturn());
     this.renderer.uiLayer.addChild(this.systemMiniMap.container);
   }
 
@@ -2601,7 +2606,10 @@ export class SpaceFlightScene extends GameScene {
     // residual lead ease to zero and then STOP touching the camera — so the
     // player can freely pan to examine the map without it snapping back to the
     // ship (US-070: don't yank the view to the ship between turns).
-    if (moving || hasLead) this.focusCameraWithLead();
+    if (moving || hasLead) {
+      this.cameraReturning = false; // ship motion follow takes over
+      this.focusCameraWithLead();
+    }
   }
 
   /**
@@ -2694,9 +2702,42 @@ export class SpaceFlightScene extends GameScene {
     const cy = this.renderer.app.screen.height / 2;
     this.camLeadX = 0;
     this.camLeadY = 0;
+    this.cameraReturning = false;
     this.cameraPanX = cx - this.shipPhysics.shipX * this.cameraZoom;
     this.cameraPanY = cy - this.shipPhysics.shipY * this.cameraZoom;
     this.applyCameraTransform();
+  }
+
+  /** Activate the lerp-return animation toward the ship (⊙ button handler). */
+  private startCameraReturn(): void {
+    this.camLeadX = 0;
+    this.camLeadY = 0;
+    this.cameraReturning = true;
+  }
+
+  /**
+   * Each frame: lerp the camera toward the ship's centred position.
+   * Clears `cameraReturning` once the ship is within 1 px of the target.
+   */
+  private updateCameraReturn(): void {
+    if (!this.cameraReturning || !this.shipPhysics) return;
+    const cx = this.renderer.app.screen.width / 2;
+    const cy = this.renderer.app.screen.height / 2;
+    const targetPanX = cx - this.shipPhysics.shipX * this.cameraZoom;
+    const targetPanY = cy - this.shipPhysics.shipY * this.cameraZoom;
+    const LERP = 0.12;
+    this.cameraPanX += (targetPanX - this.cameraPanX) * LERP;
+    this.cameraPanY += (targetPanY - this.cameraPanY) * LERP;
+    this.applyCameraTransform();
+    if (
+      Math.abs(this.cameraPanX - targetPanX) < 1 &&
+      Math.abs(this.cameraPanY - targetPanY) < 1
+    ) {
+      this.cameraPanX = targetPanX;
+      this.cameraPanY = targetPanY;
+      this.cameraReturning = false;
+      this.applyCameraTransform();
+    }
   }
 
   private applyCameraTransform(): void {
@@ -3301,6 +3342,13 @@ export class SpaceFlightScene extends GameScene {
         this.SYSTEM_BOUNDARY_RADIUS,
         viewport,
         this.SCANNER_RANGE,
+      );
+      this.systemMiniMap.updateCenterButton(
+        this.cameraPanX,
+        this.cameraPanY,
+        this.shipPhysics.shipX,
+        this.shipPhysics.shipY,
+        this.cameraZoom,
       );
     }
   }

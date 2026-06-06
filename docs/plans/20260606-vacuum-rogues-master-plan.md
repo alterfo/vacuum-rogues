@@ -365,14 +365,14 @@ Scenario: Планеты различимы
 - Modify: `src/presentation/SpaceFlightScene.ts`
 - Create: `src/tests/cameraReturn.test.ts`
 
-- [ ] Написать тест `cameraReturn.test.ts`: при `cameraPanX/Y ≠ shipX/Y` кнопка видима; `centerOnPlayer()` устанавливает правильные координаты
-- [ ] В `SystemMiniMap.ts` добавить кнопку «⊙» (`Graphics`, 28×28 px) в правый нижний угол вне области карты
-- [ ] Кнопка эмитирует событие `'center-on-player'` через `EventEmitter`
-- [ ] `Text` кнопки — `eventMode='none'`; кнопка `Graphics` — `eventMode='static'` + `stopPropagation()`
-- [ ] В `SpaceFlightScene.ts` подписаться на `'center-on-player'` → запустить lerp-анимацию к позиции корабля
-- [ ] Кнопка скрыта (`visible=false`) когда корабль уже в центре экрана (threshold 10 px)
-- [ ] Запустить `npm test -- --run src/tests/cameraReturn.test.ts` — тесты зелёные
-- [ ] Запустить `npm test -- --run` + `npm run lint` — без регрессий
+- [x] Написать тест `cameraReturn.test.ts`: при `cameraPanX/Y ≠ shipX/Y` кнопка видима; `centerOnPlayer()` устанавливает правильные координаты
+- [x] В `SystemMiniMap.ts` добавить кнопку «⊙» (`Graphics`, 28×28 px) в правый нижний угол вне области карты
+- [x] Кнопка эмитирует событие `'center-on-player'` через callback (`setReturnCameraHandler`)
+- [x] `Text` кнопки — `eventMode='none'`; кнопка `Graphics` — `eventMode='static'` + `stopPropagation()`
+- [x] В `SpaceFlightScene.ts` подписаться на `'center-on-player'` → запустить lerp-анимацию к позиции корабля
+- [x] Кнопка скрыта (`visible=false`) когда корабль уже в центре экрана (threshold 10 px)
+- [x] Запустить `npm test -- --run src/tests/cameraReturn.test.ts` — тесты зелёные
+- [x] Запустить `npm test -- --run` + `npm run lint` — без регрессий
 
 ### Task 7: Zoom-to-cursor (A5)
 
