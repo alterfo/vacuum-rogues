@@ -31,6 +31,8 @@ export class NpcShip {
   daysToArrival: number;
   credits: number;
   reputation: number;
+  shieldPower: number;
+  loadoutSummary: string[];
 
   constructor(init: NpcShipInit) {
     this.id = init.id;
@@ -50,5 +52,7 @@ export class NpcShip {
     this.daysToArrival = init.daysToArrival;
     this.credits = init.credits;
     this.reputation = init.reputation;
+    this.shieldPower = init.shieldPower ?? 0;
+    this.loadoutSummary = init.loadoutSummary ?? [];
   }
 }

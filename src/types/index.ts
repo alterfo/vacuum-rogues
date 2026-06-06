@@ -175,6 +175,10 @@ export interface NpcShipInit {
   daysToArrival: number;
   credits: number;
   reputation: number;
+  /** Shield tech level — compared against player scanPower for scan check. */
+  shieldPower?: number;
+  /** Names of equipment items visible when scanned (3 items at NPC tech level). */
+  loadoutSummary?: string[];
 }
 
 export enum EconomyType {

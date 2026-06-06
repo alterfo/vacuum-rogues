@@ -245,6 +245,8 @@ export const NpcShipSchema = z.object({
   daysToArrival: z.number(),
   credits: z.number(),
   reputation: z.number(),
+  shieldPower: z.number().default(0),
+  loadoutSummary: z.array(z.string()).default([]),
 });
 
 export const GalaxySchema = z.object({

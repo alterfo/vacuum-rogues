@@ -63,7 +63,11 @@ export interface DerivedStats {
   readonly speed: number; // 0 with no engine → cannot move
   readonly radarRange: number;
   readonly scannerStrength: number;
+  /** Tech level of the best installed scanner — used for NPC scan check. */
+  readonly scanPower: number;
   readonly shields: number;
+  /** Tech level of the best installed shield generator — used for NPC scan check. */
+  readonly shieldPower: number;
   readonly repairRate: number;
   readonly fuelCapacity: number;
   readonly canTakeOff: boolean;
@@ -167,7 +171,9 @@ export class ShipLoadout {
     let bestEngineSpeed = 0;
     let radarRange = 0;
     let scannerStrength = 0;
+    let scanPower = 0;
     let shields = 0;
+    let shieldPower = 0;
     let repairRate = 0;
     let fuelCapacity = 0;
     let hasEngine = false;
@@ -207,10 +213,12 @@ export class ShipLoadout {
               scannerStrength,
               Math.round(e.potency * m),
             );
+            scanPower = Math.max(scanPower, e.techLevel);
             break;
           case EquipmentClass.SHIELD:
             // tech × 30 HP per shield module; micromodule scales it
             shields += Math.round(e.techLevel * 30 * m);
+            shieldPower = Math.max(shieldPower, e.techLevel);
             break;
           case EquipmentClass.REPAIR_DROID:
             // 1 + tech × 0.5 HP/day; take the best droid if multiple installed
@@ -234,7 +242,9 @@ export class ShipLoadout {
       speed: hasEngine ? Number(bestEngineSpeed.toFixed(3)) : 0,
       radarRange,
       scannerStrength,
+      scanPower,
       shields,
+      shieldPower,
       repairRate: Number(repairRate.toFixed(2)),
       fuelCapacity,
       // Canon §11.4: cannot take off without an engine and a fuel tank.

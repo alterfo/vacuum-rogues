@@ -3605,6 +3605,8 @@ export class SpaceFlightScene extends GameScene {
         sprite.x - this.shipPhysics.shipX,
         sprite.y - this.shipPhysics.shipY,
       ) <= this.SCANNER_RANGE;
+    const scanPower =
+      this.gameEngine?.playerLoadout?.derivedStats().scanPower ?? 0;
     this.npcContactPanel = new NpcContactPanel(
       npc,
       this.renderer.app.screen.width,
@@ -3617,6 +3619,7 @@ export class SpaceFlightScene extends GameScene {
         onClose: () => this.closeNpcContactPanel(),
       },
       inRange,
+      scanPower,
     );
     this.renderer.uiLayer.addChild(this.npcContactPanel.container);
   }

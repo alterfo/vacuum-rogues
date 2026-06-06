@@ -54,12 +54,50 @@ const ROLE_NAME: Record<NpcRole, string> = {
 /** Base combat stats per role. */
 const ROLE_STATS: Record<
   NpcRole,
-  { hull: number; shields: number; speed: number; damage: number }
+  {
+    hull: number;
+    shields: number;
+    speed: number;
+    damage: number;
+    shieldPower: number;
+  }
 > = {
-  [NpcRole.RANGER]: { hull: 120, shields: 60, speed: 0.1, damage: 25 },
-  [NpcRole.TRADER]: { hull: 100, shields: 30, speed: 0.08, damage: 10 },
-  [NpcRole.PIRATE]: { hull: 110, shields: 40, speed: 0.12, damage: 30 },
-  [NpcRole.PATROL]: { hull: 140, shields: 70, speed: 0.1, damage: 28 },
+  [NpcRole.RANGER]: {
+    hull: 120,
+    shields: 60,
+    speed: 0.1,
+    damage: 25,
+    shieldPower: 3,
+  },
+  [NpcRole.TRADER]: {
+    hull: 100,
+    shields: 30,
+    speed: 0.08,
+    damage: 10,
+    shieldPower: 1,
+  },
+  [NpcRole.PIRATE]: {
+    hull: 110,
+    shields: 40,
+    speed: 0.12,
+    damage: 30,
+    shieldPower: 2,
+  },
+  [NpcRole.PATROL]: {
+    hull: 140,
+    shields: 70,
+    speed: 0.1,
+    damage: 28,
+    shieldPower: 4,
+  },
+};
+
+/** Representative equipment loadout names for each role (shown via scan). */
+const ROLE_LOADOUT: Record<NpcRole, string[]> = {
+  [NpcRole.RANGER]: ["Двигатель ур.3", "Генератор поля", "Сканер целей"],
+  [NpcRole.TRADER]: ["Двигатель ур.1", "Топливный бак", "Ремонтный дроид"],
+  [NpcRole.PIRATE]: ["Двигатель ур.2", "Импульсная пушка", "Радар"],
+  [NpcRole.PATROL]: ["Двигатель ур.3", "Генератор поля", "Балистическая пушка"],
 };
 
 /**
@@ -120,6 +158,8 @@ export class NpcSimulator {
         daysToArrival: 0,
         credits: rng.nextInt(100, 1000),
         reputation: 0,
+        shieldPower: stats.shieldPower,
+        loadoutSummary: ROLE_LOADOUT[role],
       }),
     );
   }

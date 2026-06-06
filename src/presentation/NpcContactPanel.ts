@@ -44,12 +44,13 @@ export class NpcContactPanel {
   private readonly callbacks: NpcContactCallbacks;
 
   private static readonly W = 240;
-  // Taller when in radar range: the detailed scan readout adds rows before the
-  // action buttons (US-070 #3).
-  private static readonly H_IN_RANGE = 296;
+  // Taller when in radar range: scan button + possible result area (Task 8).
+  private static readonly H_IN_RANGE = 350;
   private static readonly H_OUT = 230;
 
   private readonly inRange: boolean;
+  private readonly playerScanPower: number;
+  private scanResultLabel: Text | null = null;
 
   constructor(
     npc: NpcShip,
@@ -57,9 +58,11 @@ export class NpcContactPanel {
     _screenHeight: number,
     callbacks: NpcContactCallbacks,
     inRange = true,
+    playerScanPower = 0,
   ) {
     this.callbacks = callbacks;
     this.inRange = inRange;
+    this.playerScanPower = playerScanPower;
     this.container = new Container();
     this.container.x = screenWidth - NpcContactPanel.W - 20;
     this.container.y = 80;
@@ -124,6 +127,7 @@ export class NpcContactPanel {
       this.addButton("Связаться", 12, 162, 0x004488, this.callbacks.onHail);
       this.addButton("Торговать", 12, 192, 0x885500, this.callbacks.onTrade);
       this.addButton("Атаковать", 12, 222, 0x880000, this.callbacks.onAttack);
+      this.addButton("Сканировать", 12, 252, 0x005544, () => this.onScan(npc));
     } else {
       // Beyond radar range (US-070 #3): no hail/trade — the ship can only close
       // the distance to firing range, after which the panel offers them. Attack
@@ -240,6 +244,41 @@ export class NpcContactPanel {
 
     this.container.addChild(btn);
     this.container.addChild(t);
+  }
+
+  /** Handle the "Сканировать" button: compare scan power vs NPC shield power. */
+  private onScan(npc: NpcShip): void {
+    if (this.scanResultLabel) {
+      this.container.removeChild(this.scanResultLabel);
+      this.scanResultLabel.destroy();
+      this.scanResultLabel = null;
+    }
+
+    let resultText: string;
+    if (this.playerScanPower > npc.shieldPower) {
+      const items = npc.loadoutSummary.length
+        ? npc.loadoutSummary.join(", ")
+        : "Данные недоступны";
+      resultText = `Снаряжение:\n${items}`;
+    } else {
+      resultText = "Цель защищена полем —\nсканирование невозможно";
+    }
+
+    const label = new Text({
+      text: resultText,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 11,
+        fill: this.playerScanPower > npc.shieldPower ? 0x88ffcc : 0xff8844,
+        wordWrap: true,
+        wordWrapWidth: NpcContactPanel.W - 24,
+      },
+    });
+    label.x = 12;
+    label.y = 284;
+    label.eventMode = "none";
+    this.scanResultLabel = label;
+    this.container.addChild(label);
   }
 
   destroy(): void {

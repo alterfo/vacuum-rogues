@@ -193,17 +193,17 @@ of a specific module; once applied, it cannot be removed. Wire the UI in the han
 Scanner power vs shield generator power determines visibility of NPC loadout. "Сканировать"
 button in NpcContactPanel reveals the target's equipment if scanner > shield.
 
-- [ ] Add `scanPower: number` and `shieldPower: number` to `ShipLoadout.derived()`. Derive from
+- [x] Add `scanPower: number` and `shieldPower: number` to `ShipLoadout.derived()`. Derive from
   radar module (scan) and shield generator (shield), using tech level as power.
-- [ ] `NpcShip` domain: add `loadoutSummary: string[]` (list of equipment names); generated in
+- [x] `NpcShip` domain: add `loadoutSummary: string[]` (list of equipment names); generated in
   `NpcSimulator` when spawning (3 random equipment items at NPC tech level).
-- [ ] In `NpcContactPanel`: add "Сканировать" button. On click: if
+- [x] In `NpcContactPanel`: add "Сканировать" button. On click: if
   `player.ship.loadout.derived.scanPower > npc.shieldPower` → show panel with NPC loadout items.
   Else → "Цель защищена полем — сканирование невозможно".
-- [ ] CombatScene: shield HP from `shieldHp` derived stat absorbs incoming damage before hull.
+- [x] CombatScene: shield HP from `shieldHp` derived stat absorbs incoming damage before hull.
   If no shield → direct hull damage. When `shieldHp` depleted mid-combat, it resets to 0 (no
   regen in combat without shield module).
-- [ ] Unit tests: scan succeeds when scanner > shield; shield absorbs damage before hull.
+- [x] Unit tests: scan succeeds when scanner > shield; shield absorbs damage before hull.
 
 ---
 
