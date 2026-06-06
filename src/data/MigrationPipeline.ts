@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 3;
+  static readonly CURRENT_VERSION = 4;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -53,6 +53,13 @@ export class MigrationPipeline {
           if (!sys.economyType) sys.economyType = "MIXED";
           if (!sys.politicalSystem) sys.politicalSystem = "REPUBLIC";
         }
+      }
+    },
+    // 3 -> 4: smuggling (Task 3). Old saves lack contrabandGoods on player.
+    3: (state: SaveState) => {
+      const player = state.player as unknown as { contrabandGoods?: string[] };
+      if (player && !Array.isArray(player.contrabandGoods)) {
+        player.contrabandGoods = [];
       }
     },
   };

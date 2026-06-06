@@ -93,18 +93,18 @@ Add a bribe option that costs credits and temporarily restores access for one la
 When the player lands on a planet with illegal goods in their inventory, there is a random customs
 check. Penalty: fine + reputation loss. Player can choose to try to bribe customs.
 
-- [ ] Add `isContraband: boolean` property to TradeGood based on legality at destination.
+- [x] Add `isContraband: boolean` property to TradeGood based on legality at destination.
   When player buys a good that is illegal at the planet, mark it in inventory: add
   `legal: boolean` to inventory slot metadata (or a `contrabandGoods: Set<string>` on Player).
   Simplest: add `contrabandGoods: string[]` (good IDs) to `Player` domain, persist in schemas.
-- [ ] On planet landing (`PlanetScene.initialize()`): if player has any goods illegal at this
+- [x] On planet landing (`PlanetScene.initialize()`): if player has any goods illegal at this
   planet, roll a customs check (30% chance). If triggered, show a modal:
   "Таможенный досмотр. Обнаружен нелегальный груз. Штраф: X ₡ / Дать взятку (Y ₡) / Выбросить груз".
   Penalty = good value × 1.5 credits + reputation -20. Bribe = penalty × 0.6, no rep loss.
   Dump: goods removed, no penalty.
-- [ ] Implement customs modal in `PlanetScene` using existing modal pattern (Container with
+- [x] Implement customs modal in `PlanetScene` using existing modal pattern (Container with
   stopPropagation, ✕ close, buttons).
-- [ ] Unit test: contraband detection; penalty calculation.
+- [x] Unit test: contraband detection; penalty calculation.
 
 ### Task 4: Government dialogue scene
 

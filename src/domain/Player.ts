@@ -4,6 +4,9 @@ import type { SkillTree } from "./SkillTree";
 import type { Inventory } from "./Inventory";
 
 export class Player {
+  /** Resource type IDs (ResourceType strings) bought at a planet where the good was illegal. */
+  contrabandGoods: string[] = [];
+
   constructor(
     public readonly id: string,
     public name: string,

@@ -195,6 +195,11 @@ export class TradeSystem {
     }
   }
 
+  /** Base price for a resource (used for penalty/fine calculations). */
+  getBasePrice(resource: ResourceType): number {
+    return this.basePrices.get(resource) ?? 100;
+  }
+
   /** Deterministic per-planet/per-resource price multiplier in [0.7, 1.3). */
   private planetPriceFactor(planetId: string, resource: ResourceType): number {
     const s = `${planetId}:${resource}`;

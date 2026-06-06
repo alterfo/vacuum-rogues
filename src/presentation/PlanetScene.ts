@@ -6,6 +6,8 @@ import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
 import { JobBoardPanel } from "./JobBoardPanel";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
+import { TradeSystem } from "@/systems/TradeSystem";
+import type { ResourceType } from "@/types";
 
 interface PlanetContext {
   gameEngine?: GameEngine;
@@ -34,6 +36,19 @@ export function visiblePlanetServices<T extends { label: string }>(
 
 const BRIBE_COST = 500;
 
+const RESOURCE_RU: Record<string, string> = {
+  FUEL: "Топливо",
+  METALS: "Металлы",
+  CRYSTALS: "Кристаллы",
+  ORGANICS: "Органика",
+  ARTIFACTS: "Артефакты",
+  WEAPONS: "Оружие",
+  MEDICINE: "Медикаменты",
+  ELECTRONICS: "Электроника",
+  LUXURY: "Роскошь",
+  DATA_CORES: "Ядра данных",
+};
+
 export class PlanetScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private planet: Planet | null = null;
@@ -52,9 +67,226 @@ export class PlanetScene extends GameScene {
     this.renderer.clearUILayer();
     this.createUI();
     logger.info(`PlanetScene: ${this.planet?.name}`);
+    this.checkCustoms();
   }
 
   update(_deltaTime: number): void {}
+
+  /**
+   * Customs check on landing: if any inventory goods are illegal at this planet,
+   * roll a 30% chance of triggering an inspection. If triggered, show the modal.
+   */
+  private checkCustoms(): void {
+    if (!this.gameEngine?.player || !this.planet?.isHabitable) return;
+    const system = this.gameEngine.galaxy?.systems.find((s) =>
+      s.planets.some((p) => p.id === this.planet!.id),
+    );
+    if (!system) return;
+
+    const tradeSystem = new TradeSystem();
+    const player = this.gameEngine.player;
+    const illegalGoods = player.inventory.resources.filter(
+      (r) =>
+        r.amount > 0 && !tradeSystem.isLegal(r.type, system.politicalSystem),
+    );
+
+    if (illegalGoods.length === 0) return;
+
+    // 30% chance of customs inspection
+    if (Math.random() >= 0.3) return;
+
+    const penalty = illegalGoods.reduce((sum, r) => {
+      return (
+        sum + Math.round(tradeSystem.getBasePrice(r.type) * r.amount * 1.5)
+      );
+    }, 0);
+
+    const goodNames = illegalGoods
+      .map((r) => `${RESOURCE_RU[r.type as string] ?? r.type} (${r.amount})`)
+      .join(", ");
+
+    this.showCustomsModal(
+      illegalGoods,
+      goodNames,
+      penalty,
+      system.ownerFaction,
+    );
+  }
+
+  private showCustomsModal(
+    illegalGoods: { type: ResourceType; amount: number }[],
+    goodNames: string,
+    penalty: number,
+    faction: string,
+  ): void {
+    const w = this.renderer.app.screen.width;
+    const h = this.renderer.app.screen.height;
+    const modal = new Container();
+
+    // Backdrop — blocks all underlying interaction
+    const backdrop = new Graphics();
+    backdrop.rect(0, 0, w, h);
+    backdrop.fill({ color: 0x000000, alpha: 0.75 });
+    backdrop.eventMode = "static";
+    backdrop.on("pointerdown", (e) => e.stopPropagation());
+    modal.addChild(backdrop);
+
+    // Modal box
+    const boxW = 460;
+    const boxH = 280;
+    const boxX = (w - boxW) / 2;
+    const boxY = (h - boxH) / 2;
+    const box = new Graphics();
+    box.rect(boxX, boxY, boxW, boxH);
+    box.fill({ color: 0x0d0d1a, alpha: 0.98 });
+    box.stroke({ color: 0xff4444, width: 2 });
+    modal.addChild(box);
+
+    const addLabel = (
+      text: string,
+      x: number,
+      y: number,
+      size: number,
+      color: number,
+      bold = false,
+    ): void => {
+      const t = new Text({
+        text,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: size,
+          fill: color,
+          fontWeight: bold ? "bold" : "normal",
+          align: "center",
+          wordWrap: true,
+          wordWrapWidth: boxW - 40,
+        },
+      });
+      t.anchor.set(0.5, 0);
+      t.x = x;
+      t.y = y;
+      t.eventMode = "none";
+      modal.addChild(t);
+    };
+
+    addLabel("⚠ ТАМОЖЕННЫЙ ДОСМОТР", w / 2, boxY + 18, 16, 0xff4444, true);
+    addLabel(`Нелегальный груз: ${goodNames}`, w / 2, boxY + 50, 12, 0xffaa66);
+
+    const bribeCost = Math.round(penalty * 0.6);
+
+    const makeBtn = (
+      label: string,
+      yOffset: number,
+      color: number,
+      onClick: () => void,
+    ): void => {
+      const btnW = 380;
+      const btn = new Container();
+      btn.x = (w - btnW) / 2;
+      btn.y = boxY + yOffset;
+      btn.eventMode = "static";
+      btn.cursor = "pointer";
+
+      const bg = new Graphics();
+      bg.rect(0, 0, btnW, 34);
+      bg.fill({ color, alpha: 0.85 });
+      bg.stroke({ color: 0x888888, width: 1 });
+      btn.addChild(bg);
+
+      const lbl = new Text({
+        text: label,
+        style: { fontFamily: "Courier New", fontSize: 13, fill: 0xffffff },
+      });
+      lbl.anchor.set(0.5);
+      lbl.x = btnW / 2;
+      lbl.y = 17;
+      lbl.eventMode = "none";
+      btn.addChild(lbl);
+
+      btn.on("pointerdown", (e) => {
+        e.stopPropagation();
+        onClick();
+      });
+      btn.on("pointerover", () => {
+        bg.clear();
+        bg.rect(0, 0, btnW, 34);
+        bg.fill({ color, alpha: 1.0 });
+        bg.stroke({ color: 0xffffff, width: 1 });
+      });
+      btn.on("pointerout", () => {
+        bg.clear();
+        bg.rect(0, 0, btnW, 34);
+        bg.fill({ color, alpha: 0.85 });
+        bg.stroke({ color: 0x888888, width: 1 });
+      });
+      modal.addChild(btn);
+    };
+
+    const player = this.gameEngine!.player!;
+
+    makeBtn(
+      `Заплатить штраф (${penalty} ₡) — репутация -20`,
+      110,
+      0x660000,
+      () => {
+        if (player.credits < penalty) {
+          player.credits = 0;
+        } else {
+          player.credits -= penalty;
+        }
+        player.adjustReputation(faction, -20);
+        logger.info(
+          `Customs fine paid: ${penalty} cr, rep -20 with ${faction}`,
+        );
+        modal.destroy({ children: true });
+        this.showMessage(
+          `Штраф уплачен: −${penalty} ₡, репутация −20`,
+          0xff8844,
+        );
+      },
+    );
+
+    makeBtn(
+      `Дать взятку (${bribeCost} ₡) — без потери репутации`,
+      155,
+      0x664400,
+      () => {
+        if (player.credits < bribeCost) {
+          player.credits = 0;
+        } else {
+          player.credits -= bribeCost;
+        }
+        logger.info(`Customs bribed: ${bribeCost} cr`);
+        modal.destroy({ children: true });
+        this.showMessage(`Взятка уплачена: −${bribeCost} ₡`, 0xffaa44);
+      },
+    );
+
+    makeBtn("Выбросить груз — без штрафа", 200, 0x004400, () => {
+      for (const good of illegalGoods) {
+        const stack = player.inventory.resources.find(
+          (r) => r.type === good.type,
+        );
+        if (stack) stack.amount = 0;
+        player.contrabandGoods = player.contrabandGoods.filter(
+          (g) => g !== (good.type as string),
+        );
+      }
+      logger.info("Contraband dumped to avoid customs");
+      modal.destroy({ children: true });
+      this.showMessage("Нелегальный груз выброшен", 0x66ff66);
+    });
+
+    addLabel(
+      `Штраф: ${penalty} ₡  •  Взятка: ${bribeCost} ₡`,
+      w / 2,
+      boxY + 248,
+      11,
+      0x666666,
+    );
+
+    this.renderer.uiLayer.addChild(modal);
+  }
 
   destroy(): void {
     if (this.toastTimeout) {
@@ -271,19 +503,6 @@ export class PlanetScene extends GameScene {
       PROGRESSORS: 0x2266ff,
       INDEPENDENT: 0x999999,
       OVERMIND: 0xff22cc,
-    };
-
-    const RESOURCE_RU: Record<string, string> = {
-      FUEL: "Топливо",
-      METALS: "Металлы",
-      CRYSTALS: "Кристаллы",
-      ORGANICS: "Органика",
-      ARTIFACTS: "Артефакты",
-      WEAPONS: "Оружие",
-      MEDICINE: "Медикаменты",
-      ELECTRONICS: "Электроника",
-      LUXURY: "Роскошь",
-      DATA_CORES: "Ядра данных",
     };
 
     const faction = system?.ownerFaction ?? "INDEPENDENT";

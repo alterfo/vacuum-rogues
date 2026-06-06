@@ -234,6 +234,11 @@ export class TradeScene extends GameScene {
           message: `${verb}: ${name} за ${result.finalPrice} кр.`,
           color: 0x00ff88,
         };
+        if (isBuy) {
+          this.markContrabandIfIllegal(resource);
+        } else {
+          this.unmarkContrabandIfSold(resource);
+        }
       } else {
         toast = {
           message: this.localizeMessage(result.message),
@@ -287,6 +292,34 @@ export class TradeScene extends GameScene {
     toast.eventMode = "none";
     this.mainContainer.addChild(toast);
     // Toast persists until the next refresh, which rebuilds the container.
+  }
+
+  private markContrabandIfIllegal(resource: ResourceType): void {
+    if (!this.gameEngine?.player || !this.planet) return;
+    const system = this.gameEngine.galaxy?.systems.find((s) =>
+      s.planets.some((p) => p.id === this.planet!.id),
+    );
+    if (!system) return;
+    const illegal = !this.tradeSystem.isLegal(resource, system.politicalSystem);
+    if (illegal) {
+      const player = this.gameEngine.player;
+      if (!player.contrabandGoods.includes(resource as string)) {
+        player.contrabandGoods.push(resource as string);
+      }
+    }
+  }
+
+  private unmarkContrabandIfSold(resource: ResourceType): void {
+    if (!this.gameEngine?.player) return;
+    const stack = this.gameEngine.player.inventory.resources.find(
+      (r) => r.type === resource,
+    );
+    if (!stack || stack.amount === 0) {
+      const player = this.gameEngine.player;
+      player.contrabandGoods = player.contrabandGoods.filter(
+        (g) => g !== (resource as string),
+      );
+    }
   }
 
   private async close(): Promise<void> {

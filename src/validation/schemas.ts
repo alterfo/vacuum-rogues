@@ -156,6 +156,7 @@ export const PlayerSchema = z.object({
   ship: PlayerShipSchema,
   inventory: InventorySchema,
   currentSystemId: z.string().optional().default(""),
+  contrabandGoods: z.array(z.string()).default([]),
 });
 
 export const StarSystemSchema = z.object({
