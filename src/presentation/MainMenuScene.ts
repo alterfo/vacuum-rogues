@@ -30,6 +30,7 @@ export class MainMenuScene extends GameScene {
   private title: Text | null = null;
   private gameEngine: GameEngine | null = null;
   private messageTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private currentMsgText: Text | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private starParticles: StarParticle[] = [];
   private starGraphics: Graphics | null = null;
@@ -100,6 +101,7 @@ export class MainMenuScene extends GameScene {
       clearTimeout(this.messageTimeoutId);
       this.messageTimeoutId = null;
     }
+    this.currentMsgText = null;
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
     this.background = null;
@@ -133,14 +135,15 @@ export class MainMenuScene extends GameScene {
       color: 0x000510,
       alpha: 1,
     });
+    this.renderer.gameLayer.addChild(this.background);
+
     // Add subtle gradient effect with overlays
     const gradientOverlay = new Graphics();
     gradientOverlay.circle(width * 0.3, height * 0.2, width * 0.4);
     gradientOverlay.fill({ color: 0x0a0a30, alpha: 0.15 });
     gradientOverlay.circle(width * 0.7, height * 0.8, width * 0.3);
     gradientOverlay.fill({ color: 0x1a0520, alpha: 0.1 });
-    this.background.addChild(gradientOverlay);
-    this.renderer.gameLayer.addChild(this.background);
+    this.renderer.gameLayer.addChild(gradientOverlay);
 
     // Add distant planets
     this.planets = [];
@@ -330,13 +333,17 @@ export class MainMenuScene extends GameScene {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
-    // Clear previous messages
-    if (this.buttonsContainer) {
-      for (const child of this.buttonsContainer.children) {
-        if (child instanceof Text && child.text.includes("[")) {
-          continue;
-        }
+    // Clear previous message
+    if (this.messageTimeoutId) {
+      clearTimeout(this.messageTimeoutId);
+      this.messageTimeoutId = null;
+    }
+    if (this.currentMsgText) {
+      if (this.currentMsgText.parent) {
+        this.renderer.uiLayer.removeChild(this.currentMsgText);
       }
+      this.currentMsgText.destroy();
+      this.currentMsgText = null;
     }
 
     const msgText = new Text({
@@ -354,6 +361,7 @@ export class MainMenuScene extends GameScene {
       : height / 2;
     msgText.y = buttonsY + 100;
     this.renderer.uiLayer.addChild(msgText);
+    this.currentMsgText = msgText;
 
     // Remove after 3 seconds
     this.messageTimeoutId = setTimeout(() => {
@@ -362,6 +370,7 @@ export class MainMenuScene extends GameScene {
       }
       msgText.destroy();
       this.messageTimeoutId = null;
+      this.currentMsgText = null;
     }, 3000);
   }
 

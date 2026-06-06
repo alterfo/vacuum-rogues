@@ -60,6 +60,7 @@ export class WebWorkerPool {
     }
     logger.error(`Worker ${workerIndex} error:`, error);
     this.addWorker(workerIndex);
+    this.processQueue(workerIndex);
   }
 
   private processQueue(workerIndex: number): void {

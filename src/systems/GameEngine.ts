@@ -96,6 +96,7 @@ export class GameEngine {
   private animationFrameId = 0;
   private lastTime = 0;
   private modalObjects: (Graphics | Text)[] = [];
+  private _gameOverShown = false;
   private readonly galaxyService: IGalaxyService;
   private readonly playerService: IPlayerService;
   private readonly sceneFactory: SceneFactory;
@@ -431,10 +432,11 @@ export class GameEngine {
     }
 
     // Loss condition: OVERMIND controls >50% of systems.
-    if (this.galaxy.isOvermindMajority()) {
+    if (this.galaxy.isOvermindMajority() && !this._gameOverShown) {
       logger.warn(
         "OVERMIND controls majority of galaxy — triggering game over",
       );
+      this._gameOverShown = true;
       this.showGameOutcomeScreen(false);
     }
 
@@ -673,6 +675,10 @@ export class GameEngine {
 
     if (this.player) {
       Object.setPrototypeOf(this.player, Player.prototype);
+      // Fields added after initial release may be absent in older saves.
+      if (!Array.isArray(this.player.visitedSystems)) {
+        this.player.visitedSystems = [];
+      }
       if (this.player.ship) {
         Object.setPrototypeOf(this.player.ship, PlayerShip.prototype);
         for (const mod of this.player.ship.modules) {
@@ -683,6 +689,15 @@ export class GameEngine {
         Object.setPrototypeOf(this.player.inventory, Inventory.prototype);
         for (const mod of this.player.inventory.modules) {
           this.rehydrateModule(mod);
+        }
+      }
+    }
+
+    // Ensure stations array exists on each StarSystem (added in Task 26).
+    if (this.galaxy) {
+      for (const system of this.galaxy.systems) {
+        if (!Array.isArray((system as { stations?: unknown }).stations)) {
+          (system as { stations: unknown[] }).stations = [];
         }
       }
     }
@@ -925,6 +940,7 @@ export class GameEngine {
   private async generateDefaultGameState(): Promise<void> {
     this.player = null;
     this.playerLoadout = null;
+    this._gameOverShown = false;
     this.playerService.deletePlayer();
     const seed = `SR_${Date.now()}`;
     this.galaxy = await this.galaxyService.generate(seed, 30);
