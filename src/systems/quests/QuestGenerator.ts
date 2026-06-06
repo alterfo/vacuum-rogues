@@ -20,6 +20,12 @@ import { jumpDistances } from "@/systems/galaxy/jumpDistance";
 /** Share of issued quests that are branching text-quests (the "cherry"). */
 export const QUEST_TEXT_RATIO = 0.2;
 
+/** Share of routine quests that are "elite" (require minReputation=50, ×2 reward). */
+export const QUEST_ELITE_RATIO = 0.2;
+
+/** Share of routine quests that belong to a quest chain (3 parts + finale). */
+export const QUEST_CHAIN_RATIO = 0.15;
+
 /** How many days a single board stays fixed before it refreshes. */
 export const BOARD_REFRESH_DAYS = 5;
 
@@ -44,6 +50,12 @@ export interface BoardOptions {
   readonly count?: number; // default 5
   readonly refreshEveryDays?: number; // default BOARD_REFRESH_DAYS
   readonly textRatio?: number; // default QUEST_TEXT_RATIO
+  /** Fraction of routine quests marked elite (minReputation=50, ×2 reward). Default QUEST_ELITE_RATIO. */
+  readonly eliteRatio?: number;
+  /** Fraction of routine quests that are part of a quest chain. Default QUEST_CHAIN_RATIO. */
+  readonly chainRatio?: number;
+  /** Chain IDs already fully completed by the player; those chains show a finale quest instead. */
+  readonly completedQuestChains?: readonly string[];
 }
 
 /** The routine (non-text) quest types, in pick order. */
@@ -69,6 +81,9 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     count = 5,
     refreshEveryDays = BOARD_REFRESH_DAYS,
     textRatio = QUEST_TEXT_RATIO,
+    eliteRatio = QUEST_ELITE_RATIO,
+    chainRatio = QUEST_CHAIN_RATIO,
+    completedQuestChains = [],
   } = opts;
 
   const bucket = Math.floor(day / Math.max(1, refreshEveryDays));
@@ -82,14 +97,17 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     .sort((a, b) => a.id.localeCompare(b.id)); // stable order for determinism
   const origin = systems.find((s) => s.id === originSystemId) ?? null;
 
+  // Chain ID is deterministic per planet+bucket so the same chain appears on refresh.
+  const chainId = `chain-${planetId}-${bucket}`;
+  // Track how many chain parts have been added to this board.
+  let chainPartsOnBoard = 0;
+
   const out: GeneratedQuest[] = [];
   for (let i = 0; i < count; i++) {
     const rng = new SeededRNG(`${boardSeed}|${i}`);
     const isText = rng.next() < textRatio;
 
     if (isText || reachable.length === 0) {
-      // Text-quests are read on the spot; with no reachable system, routine
-      // quests fall back to local too.
       out.push(
         isText
           ? buildTextQuest(rng, planetId, bucket, i, day, origin)
@@ -101,8 +119,62 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     const type = ROUTINE_TYPES[rng.nextInt(0, ROUTINE_TYPES.length - 1)];
     const target = reachable[rng.nextInt(0, reachable.length - 1)];
     const jumps = jumpDist.get(target.id) ?? 1;
+
+    // Determine quest tier: chain → elite → normal
+    const isChain = rng.next() < chainRatio && chainPartsOnBoard < 3;
+    if (isChain) {
+      if (completedQuestChains.includes(chainId) && chainPartsOnBoard === 0) {
+        // Chain is complete: show the finale quest once per board.
+        out.push(
+          buildFinaleQuest(
+            rng,
+            chainId,
+            target,
+            jumps,
+            planetId,
+            bucket,
+            i,
+            day,
+          ),
+        );
+      } else if (!completedQuestChains.includes(chainId)) {
+        out.push(
+          buildChainQuest(
+            rng,
+            type,
+            target,
+            jumps,
+            planetId,
+            bucket,
+            i,
+            day,
+            chainId,
+            chainPartsOnBoard,
+          ),
+        );
+        chainPartsOnBoard++;
+      } else {
+        // Chain finale already on board: emit normal quest instead.
+        out.push(
+          buildRoutineQuest(rng, type, target, jumps, planetId, bucket, i, day),
+        );
+      }
+      continue;
+    }
+
+    const isElite = rng.next() < eliteRatio;
     out.push(
-      buildRoutineQuest(rng, type, target, jumps, planetId, bucket, i, day),
+      buildRoutineQuest(
+        rng,
+        type,
+        target,
+        jumps,
+        planetId,
+        bucket,
+        i,
+        day,
+        isElite,
+      ),
     );
   }
   return out;
@@ -183,6 +255,7 @@ function buildRoutineQuest(
   bucket: number,
   i: number,
   _day: number,
+  isElite = false,
 ): GeneratedQuest {
   const id = slotId(planetId, bucket, i);
   const targetPlanetId = pickTargetPlanet(target);
@@ -282,19 +355,156 @@ function buildRoutineQuest(
     }
   }
 
+  // Elite quests: ×2 reward, minReputation=50, title prefix.
+  const finalReward = isElite
+    ? {
+        ...reward,
+        credits: reward.credits * 2,
+        experience: reward.experience * 2,
+      }
+    : reward;
+  const finalTitle = isElite ? `[ЭЛИТА] ${title}` : title;
+  const minReputation = isElite ? 50 : 0;
+
   return {
     template: {
       id,
-      title,
+      title: finalTitle,
       description,
       type,
       objectives,
+      reward: finalReward,
+      dialogueAnchors: [],
+      deadline,
+      failurePenalty,
+      targetSystemId: target.id,
+      targetObjectId: null,
+      minReputation,
+    },
+    targetSystemId: target.id,
+    targetPlanetId,
+    jumps,
+  };
+}
+
+/** A chain quest (one part of a 3-part chain + finale). */
+function buildChainQuest(
+  rng: SeededRNG,
+  type: QuestType,
+  target: StarSystem,
+  jumps: number,
+  planetId: string,
+  bucket: number,
+  i: number,
+  _day: number,
+  chainId: string,
+  chainPart: number,
+): GeneratedQuest {
+  const id = `${slotId(planetId, bucket, i)}_chain${chainPart}`;
+  const targetPlanetId = pickTargetPlanet(target);
+  const where = `${target.name} (${jumps} прыж.)`;
+  const { credits, experience, deadline } = economics(type, jumps, rng);
+  const reward = {
+    credits,
+    experience,
+    items: [] as { type: ResourceType; amount: number }[],
+  };
+  const failurePenalty = penaltyFor(type, credits);
+  const cargo = pickCargo(rng);
+  const partLabel = `Часть ${chainPart + 1}/3`;
+  return {
+    template: {
+      id,
+      title: `[ЦЕПОЧКА ${partLabel}] Цепь курьеров: ${where}`,
+      description: `${partLabel}: перевезите груз (${cargo.label}) в систему ${target.name}. Выполните все 3 части для крупного вознаграждения.`,
+      type: QuestType.DELIVERY,
+      objectives: [
+        {
+          id: `${id}_collect`,
+          description: `Загрузить ${cargo.label}`,
+          type: "COLLECT_ITEM",
+          targetAmount: rng.nextInt(5, 12),
+          itemType: cargo.resource,
+        },
+        {
+          id: `${id}_deliver`,
+          description: `Доставить в ${target.name}`,
+          type: "VISIT_LOCATION",
+          targetAmount: 1,
+          locationId: targetPlanetId ?? target.id,
+        },
+      ],
       reward,
       dialogueAnchors: [],
       deadline,
       failurePenalty,
       targetSystemId: target.id,
       targetObjectId: null,
+      minReputation: 0,
+      chainId,
+      chainPart,
+    },
+    targetSystemId: target.id,
+    targetPlanetId,
+    jumps,
+  };
+}
+
+/** The chain finale quest, appearing after all 3 parts are done. */
+function buildFinaleQuest(
+  rng: SeededRNG,
+  chainId: string,
+  target: StarSystem,
+  jumps: number,
+  planetId: string,
+  bucket: number,
+  i: number,
+  _day: number,
+): GeneratedQuest {
+  const id = `${slotId(planetId, bucket, i)}_finale`;
+  const targetPlanetId = pickTargetPlanet(target);
+  const where = `${target.name} (${jumps} прыж.)`;
+  const { credits, experience, deadline } = economics(
+    QuestType.DELIVERY,
+    jumps,
+    rng,
+  );
+  const cargo = pickCargo(rng);
+  return {
+    template: {
+      id,
+      title: `[ФИНАЛ] Завершение цепочки: ${where}`,
+      description: `Последняя миссия цепочки! Доставьте особый груз (${cargo.label}) в систему ${target.name}. Награда утроена.`,
+      type: QuestType.DELIVERY,
+      objectives: [
+        {
+          id: `${id}_collect`,
+          description: `Загрузить ${cargo.label}`,
+          type: "COLLECT_ITEM",
+          targetAmount: rng.nextInt(10, 20),
+          itemType: cargo.resource,
+        },
+        {
+          id: `${id}_deliver`,
+          description: `Доставить в ${target.name}`,
+          type: "VISIT_LOCATION",
+          targetAmount: 1,
+          locationId: targetPlanetId ?? target.id,
+        },
+      ],
+      reward: {
+        credits: credits * 3,
+        experience: experience * 3,
+        items: [],
+      },
+      dialogueAnchors: [],
+      deadline,
+      failurePenalty: penaltyFor(QuestType.DELIVERY, credits * 3),
+      targetSystemId: target.id,
+      targetObjectId: null,
+      minReputation: 0,
+      chainId,
+      chainPart: 3, // 3 = finale
     },
     targetSystemId: target.id,
     targetPlanetId,

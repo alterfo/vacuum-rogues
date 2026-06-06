@@ -343,18 +343,18 @@ High-value quests (elite government contracts, rescue missions) only appear when
 with the issuing faction is above a threshold. Completing a chain of 3 related quests unlocks a
 harder one with a bigger reward.
 
-- [ ] Add `minReputation: number` and `chainId: string | null` to `Quest` domain. In
+- [x] Add `minReputation: number` and `chainId: string | null` to `Quest` domain. In
   `QuestGenerator`, generate "elite" quest tier (20% of board) with `minReputation = 50` and
   double the reward. In `GameEngine.getQuestBoard()`, filter out quests where
   `player.getReputation(faction) < quest.minReputation`.
-- [ ] Quest chains: `QuestGenerator` can emit 3 sequential quests sharing a `chainId`
+- [x] Quest chains: `QuestGenerator` can emit 3 sequential quests sharing a `chainId`
   (e.g., `courier-chain-{systemId}-{seed}`). When all 3 are complete, unlock a 4th
   "chain finale" quest with ×3 reward. Track completed chain quests in
   `player.completedQuestChains: string[]` (add to schemas).
-- [ ] Text-quest ratio: `QuestGenerator` emits `QuestType.TEXT_ADVENTURE` at ~20% of board
+- [x] Text-quest ratio: `QuestGenerator` emits `QuestType.TEXT_ADVENTURE` at ~20% of board
   (controlled by `QUEST_TEXT_RATIO = 0.2` constant). For now, accepting a TEXT_ADVENTURE quest
   shows a "Текст-квест (скоро)" toast — the scene will be wired in Task 21.
-- [ ] Unit tests: elite quest filtered by reputation; chain completes when all 3 done; ratio
+- [x] Unit tests: elite quest filtered by reputation; chain completes when all 3 done; ratio
   emits correct TEXT_ADVENTURE proportion.
 
 ---

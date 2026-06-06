@@ -413,12 +413,19 @@ export class GameEngine {
    */
   getQuestBoard(planetId: string): GeneratedQuest[] {
     if (!this.galaxy || !this.player) return [];
+    const originSystem = this.galaxy.systems.find(
+      (s) => s.id === this.player!.currentSystemId,
+    );
+    const faction: string =
+      (originSystem as { ownerFaction?: string })?.ownerFaction ??
+      "INDEPENDENT";
     const board = generateQuestBoard({
       systems: this.galaxy.systems,
       originSystemId: this.player.currentSystemId,
       planetId,
       day: this.galaxy.gameDays,
       seed: this.galaxy.id,
+      completedQuestChains: this.player.completedQuestChains,
     });
     // Record when this board was last fetched for persistence tracking.
     this.galaxy.questBoards[planetId] = this.galaxy.gameDays;
@@ -426,7 +433,14 @@ export class GameEngine {
       ...this.questManager.getActiveQuests().map((q) => q.id),
       ...this.questManager.getCompletedQuestIds(),
     ]);
-    return board.filter((q) => !taken.has(q.template.id));
+    return board.filter((q) => {
+      if (taken.has(q.template.id)) return false;
+      // Filter elite quests the player doesn't have enough reputation for.
+      const minRep = q.template.minReputation ?? 0;
+      if (minRep > 0 && this.player!.getReputation(faction) < minRep)
+        return false;
+      return true;
+    });
   }
 
   /**

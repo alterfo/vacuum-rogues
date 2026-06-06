@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 9;
+  static readonly CURRENT_VERSION = 10;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -121,6 +121,27 @@ export class MigrationPipeline {
       const galaxy = state.galaxy as unknown as { questBoards?: unknown };
       if (galaxy && !galaxy.questBoards) {
         galaxy.questBoards = {};
+      }
+    },
+    // 9 -> 10: Reputation gates and quest chains (Task 16). Old saves lack
+    // minReputation/chainId/chainPart on quests and completedQuestChains on player.
+    9: (state: SaveState) => {
+      const player = state.player as unknown as {
+        completedQuestChains?: string[];
+        questLog?: { activeQuests?: Array<Record<string, unknown>> };
+      };
+      if (player) {
+        if (!Array.isArray(player.completedQuestChains)) {
+          player.completedQuestChains = [];
+        }
+        const quests = player.questLog?.activeQuests;
+        if (Array.isArray(quests)) {
+          for (const q of quests) {
+            if (q.minReputation === undefined) q.minReputation = 0;
+            if (q.chainId === undefined) q.chainId = null;
+            if (q.chainPart === undefined) q.chainPart = -1;
+          }
+        }
       }
     },
   };

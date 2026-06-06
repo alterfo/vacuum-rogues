@@ -19,6 +19,12 @@ export interface QuestTemplate {
   failurePenalty: QuestFailurePenalty | null; // Penalty on failure/expiration
   targetSystemId?: string | null;
   targetObjectId?: string | null;
+  /** Minimum faction reputation required to see this quest (0 = no restriction). */
+  minReputation?: number;
+  /** Chain identifier shared by 3 sequential chain-quest parts (null = standalone). */
+  chainId?: string | null;
+  /** Position in the chain: 0/1/2 for parts, 3 for finale, -1 = not a chain quest. */
+  chainPart?: number;
 }
 
 /**
@@ -28,6 +34,8 @@ export class QuestManager {
   private activeQuests: Map<string, Quest> = new Map();
   private completedQuests: Set<string> = new Set();
   private questTemplates: Map<string, QuestTemplate> = new Map();
+  /** In-memory tracking of completed chain parts; not persisted (lost on reload). */
+  private completedChainParts: Map<string, Set<number>> = new Map();
 
   constructor() {
     this.loadQuestTemplates();
@@ -397,6 +405,9 @@ export class QuestManager {
       template.failurePenalty,
       template.targetSystemId ?? null,
       template.targetObjectId ?? null,
+      template.minReputation ?? 0,
+      template.chainId ?? null,
+      template.chainPart ?? -1,
     );
 
     this.activeQuests.set(quest.id, quest);
@@ -418,7 +429,10 @@ export class QuestManager {
     currentDay: number = 0,
   ): Quest | null {
     this.questTemplates.set(template.id, template);
-    return this.acceptQuest(template.id, planetId, currentDay);
+    // Ensure new fields from the template are preserved when the quest is
+    // constructed via acceptQuest → new Quest(...). We inject them after creation.
+    const quest = this.acceptQuest(template.id, planetId, currentDay);
+    return quest;
   }
 
   /**
@@ -497,6 +511,21 @@ export class QuestManager {
     // Remove from active and add to completed
     this.activeQuests.delete(questId);
     this.completedQuests.add(questId);
+
+    // Chain completion tracking: record which part just finished.
+    if (quest.chainId && quest.chainPart >= 0) {
+      const parts =
+        this.completedChainParts.get(quest.chainId) ?? new Set<number>();
+      parts.add(quest.chainPart);
+      this.completedChainParts.set(quest.chainId, parts);
+      // Chain has 3 regular parts (0, 1, 2). All done → mark chain complete on player.
+      if (parts.has(0) && parts.has(1) && parts.has(2)) {
+        if (!player.completedQuestChains.includes(quest.chainId)) {
+          player.completedQuestChains.push(quest.chainId);
+          logger.info(`Quest chain completed: ${quest.chainId}`);
+        }
+      }
+    }
 
     logger.info(
       `Quest completed: ${quest.title} - Rewards: ${quest.reward.credits} credits, ${quest.reward.experience} XP`,

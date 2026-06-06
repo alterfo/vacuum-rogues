@@ -141,6 +141,9 @@ export const QuestSchema = z.object({
   failurePenalty: QuestFailurePenaltySchema.nullable(),
   targetSystemId: z.string().nullable().default(null),
   targetObjectId: z.string().nullable().default(null),
+  minReputation: z.number().int().min(0).default(0),
+  chainId: z.string().nullable().default(null),
+  chainPart: z.number().int().default(-1),
 });
 
 export const QuestLogSchema = z.object({
@@ -179,6 +182,7 @@ export const PlayerSchema = z.object({
   inventory: InventorySchema,
   currentSystemId: z.string().optional().default(""),
   contrabandGoods: z.array(z.string()).default([]),
+  completedQuestChains: z.array(z.string()).default([]),
 });
 
 export const StarSystemSchema = z.object({

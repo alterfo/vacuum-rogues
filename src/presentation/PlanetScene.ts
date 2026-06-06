@@ -712,7 +712,11 @@ export class PlanetScene extends GameScene {
     if (!this.gameEngine || !this.planet) return;
     const accepted = this.gameEngine.acceptBoardQuest(q, this.planet.id);
     if (accepted) {
-      this.showMessage(`Задание принято: ${q.template.title}`, 0x00ff88);
+      if (q.template.type === QuestType.TEXT_ADVENTURE) {
+        this.showMessage("Текст-квест (скоро)", 0xffaa44);
+      } else {
+        this.showMessage(`Задание принято: ${q.template.title}`, 0x00ff88);
+      }
       this.openJobBoard(); // refresh — the accepted quest drops off the board
     } else {
       this.showMessage("Не удалось принять задание", 0xffaa00);

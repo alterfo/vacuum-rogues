@@ -6,6 +6,8 @@ import type { Inventory } from "./Inventory";
 export class Player {
   /** Resource type IDs (ResourceType strings) bought at a planet where the good was illegal. */
   contrabandGoods: string[] = [];
+  /** chainId strings for chains where all 3 parts have been completed. */
+  completedQuestChains: string[] = [];
 
   constructor(
     public readonly id: string,

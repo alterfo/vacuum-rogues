@@ -31,6 +31,12 @@ export class Quest {
     public readonly targetSystemId: string | null = null,
     /** Specific NpcShip id targeted by BOUNTY quests (null if not assigned). */
     public readonly targetObjectId: string | null = null,
+    /** Minimum faction reputation required to see/accept this quest (0 = no restriction). */
+    public readonly minReputation: number = 0,
+    /** Chain identifier shared by the 3 sequential quests in a chain (null = standalone). */
+    public readonly chainId: string | null = null,
+    /** Position in the chain: 0/1/2 for parts, 3 for finale, -1 = not a chain quest. */
+    public readonly chainPart: number = -1,
   ) {}
 
   updateProgress(event: { objectiveId: string; amount: number }): void {
