@@ -53,13 +53,13 @@ Build a working e2e screenshot test suite that captures all major game scenes, f
 **Files:**
 - Modify: `e2e/specs/visual-regression.spec.ts`
 
-- [ ] Fix import: `'../page-objects/MainMenuPage'` → `'../page-objects/main-menu.page'`
-- [ ] Replace all `page.waitForTimeout()` calls with `page.waitForFunction()` or `waitForSpaceFlight()` etc.
-- [ ] Replace `page.locator('text=ЧЕЛОВЕК').click()` and all coord clicks with semantic calls through page objects and `engine.transitionTo`
-- [ ] Add `page.screenshot({ path: 'e2e/screenshots/main-menu.png' })` after each scene loads — directory `e2e/screenshots/` (create it)
-- [ ] Cover 5 scenes in serial mode: MainMenu, RaceSelection, StarMap, SpaceFlight, Inventory (use `engine.transitionTo('INVENTORY')`)
-- [ ] Remove broken `UI Component Regression` group that uses `canvas.click({ position })` — replace with semantic planet-panel opener via `engine.currentScene.e2eGetPlanets?.()`
-- [ ] Run `npm run test:e2e -- --run specs/visual-regression.spec.ts` — must pass before Task 4
+- [x] Fix import: `'../page-objects/MainMenuPage'` → `'../page-objects/main-menu.page'`
+- [x] Replace all `page.waitForTimeout()` calls with `page.waitForFunction()` or `waitForSpaceFlight()` etc.
+- [x] Replace `page.locator('text=ЧЕЛОВЕК').click()` and all coord clicks with semantic calls through page objects and `engine.transitionTo`
+- [x] Add `page.screenshot({ path: 'e2e/screenshots/main-menu.png' })` after each scene loads — directory `e2e/screenshots/` (create it)
+- [x] Cover 5 scenes in serial mode: MainMenu, RaceSelection, StarMap, SpaceFlight, Inventory (use `engine.transitionTo('INVENTORY')`)
+- [x] Remove broken `UI Component Regression` group that uses `canvas.click({ position })` — replace with semantic planet-panel opener via `engine.currentScene.e2eGetPlanets?.()`
+- [x] Run `npm run test:e2e -- --run specs/visual-regression.spec.ts` — must pass before Task 4
 
 ### Task 4: Add screenshot tests for Combat and Dialogue scenes
 
