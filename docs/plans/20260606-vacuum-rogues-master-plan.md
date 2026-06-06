@@ -448,16 +448,16 @@ Scenario: Планеты различимы
 - Modify: `src/systems/CombatSystem.ts`
 - Modify: `src/presentation/CombatScene.ts`
 
-- [ ] Render player ship token and enemy token(s) on the hex grid at start positions
-- [ ] HP bars visible for both sides; colour: green > 60%, yellow 30-60%, red < 30%
-- [ ] Scrollable combat log text area (last 5 events)
-- [ ] Shield hit → blue flash; hull hit → red flash
-- [ ] Auto-attack loop: each round attacker and defender exchange shots
-- [ ] Loot on enemy death → `player.cargo`, toast "Трофеи получены"
-- [ ] Reputation: `player.adjustReputation(enemy.factionId, KILL_REP_DELTA)`
-- [ ] Auto-retreat trigger: `player.hull.hp ≤ maxHp * 0.3` → `emit('combat-retreat')`
-- [ ] Action buttons positioned relative to `app.screen.height / app.screen.width` (not hardcoded px)
-- [ ] Run `npm test -- --run` + `npm run lint` — no regressions
+- [x] Render player ship token and enemy token(s) on the hex grid at start positions
+- [x] HP bars visible for both sides; colour: green > 60%, yellow 30-60%, red < 30%
+- [x] Scrollable combat log text area (last 5 events)
+- [x] Shield hit → blue flash; hull hit → red flash
+- [x] Auto-attack loop: each round attacker and defender exchange shots
+- [x] Loot on enemy death → `player.cargo`, toast "Трофеи получены"
+- [x] Reputation: `player.adjustReputation(enemy.factionId, KILL_REP_DELTA)`
+- [x] Auto-retreat trigger: `player.hull.hp ≤ maxHp * 0.3` → `emit('combat-retreat')`
+- [x] Action buttons positioned relative to `app.screen.height / app.screen.width` (not hardcoded px)
+- [x] Run `npm test -- --run` + `npm run lint` — no regressions
 
 ### Task 12: Sprint 4 — Trade quantity selector (US-082) + Quest director (US-074)
 

@@ -3637,6 +3637,7 @@ export class SpaceFlightScene extends GameScene {
         shields: npc.shields,
         damage: npc.damage,
         techLevel: npcRoleTechLevel(npc.role),
+        factionId: npc.race,
       },
     });
   }
