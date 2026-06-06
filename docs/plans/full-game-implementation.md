@@ -546,16 +546,16 @@ load cleanly with sensible defaults.
 AudioManager plays background music tracks by game state and SFX for key actions.
 Track-to-state mapping from `docs/design/AUDIO_TRACKLIST.md`.
 
-- [ ] Implement `src/systems/AudioManager.ts`: wraps Web Audio API. Methods: `playTrack(key)`,
+- [x] Implement `src/systems/AudioManager.ts`: wraps Web Audio API. Methods: `playTrack(key)`,
   `stopTrack()`, `playSfx(key)`. Tracks loaded from `public/audio/mus_<key>.ogg` (Vite serves
   from public). SFX from `public/audio/sfx_<key>.ogg`. Fade in/out over 1s for track transitions.
-- [ ] State → track key mapping from AUDIO_TRACKLIST.md. Wire transitions:
+- [x] State → track key mapping from AUDIO_TRACKLIST.md. Wire transitions:
   - StarMapScene → `mus_starmap`; SpaceFlightScene → `mus_flight`; CombatScene → `mus_combat`;
   - PlanetScene → `mus_planet`; TextQuestScene → `mus_quest`.
-- [ ] SFX: warp jump → `sfx_warp`; purchase → `sfx_buy`; combat hit → `sfx_hit`;
+- [x] SFX: warp jump → `sfx_warp`; purchase → `sfx_buy`; combat hit → `sfx_hit`;
   landing → `sfx_land`; quest complete → `sfx_reward`. Play from the corresponding scene event.
-- [ ] AudioManager registered in `GameEngine`; scenes call `gameEngine.audio.playTrack(...)`.
-- [ ] Guard: if no audio file found, log a warn and continue silently (assets are optional).
+- [x] AudioManager registered in `GameEngine`; scenes call `gameEngine.audio.playTrack(...)`.
+- [x] Guard: if no audio file found, log a warn and continue silently (assets are optional).
 
 ### Task 27: E2E test coverage for key flows
 

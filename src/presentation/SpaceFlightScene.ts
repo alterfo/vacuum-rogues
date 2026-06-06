@@ -3162,6 +3162,7 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
     this.warpInProgress = true;
+    this.gameEngine.audio.playSfx("warp").catch(() => {});
 
     const { targetSystemId, fuelCost, exitVector } = this.pendingWarp;
     this.pendingWarp = null; // consume so the jump can't re-fire

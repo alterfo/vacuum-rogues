@@ -49,6 +49,7 @@ import {
   OnnxQuestNarrator,
   type QuestNarrator,
 } from "@/ai/adapters/QuestNarrator";
+import { AudioManager } from "@/systems/AudioManager";
 
 /**
  * Optional DI dependencies for GameEngine.
@@ -87,6 +88,8 @@ export class GameEngine {
   public readonly textQuestRuntime = new TextQuestRuntime();
   /** Narrator for text quest node descriptions (ONNX with template fallback). */
   public readonly questNarrator: QuestNarrator;
+  /** Audio subsystem: background music + SFX. */
+  public readonly audio = new AudioManager();
 
   private exceptionHandler: IExceptionHandler;
   private animationFrameId = 0;
@@ -332,6 +335,9 @@ export class GameEngine {
 
     this.currentScene.initialize(finalContext);
     logger.info(`Transitioned to scene: ${sceneType}`);
+
+    // Play background music track matching the new scene.
+    this.playSceneTrack(sceneType);
 
     // Auto-save on scene transition (only for gameplay scenes with valid state)
     if (
@@ -912,10 +918,51 @@ export class GameEngine {
     this.animationFrameId = requestAnimationFrame(this.gameLoop);
   };
 
+  /** Map a scene type to the appropriate background music track and start it. */
+  private playSceneTrack(sceneType: SceneType): void {
+    switch (sceneType) {
+      case SceneType.MAIN_MENU:
+      case SceneType.RACE_SELECTION:
+        this.audio.playTrack("menu_main").catch(() => {});
+        break;
+      case SceneType.STAR_MAP:
+        this.audio.playTrack("explore_calm").catch(() => {});
+        break;
+      case SceneType.SPACE_FLIGHT:
+        this.audio.playTrack("explore_calm").catch(() => {});
+        break;
+      case SceneType.COMBAT:
+        this.audio.playTrack("combat").catch(() => {});
+        break;
+      case SceneType.PLANET:
+        this.audio.playTrack("planet_hub").catch(() => {});
+        break;
+      case SceneType.TRADE:
+        this.audio.playTrack("market").catch(() => {});
+        break;
+      case SceneType.EQUIPMENT_SHOP:
+      case SceneType.STATION:
+        this.audio.playTrack("equipment_shop").catch(() => {});
+        break;
+      case SceneType.GOVERNMENT:
+        this.audio.playTrack("governor_dialogue").catch(() => {});
+        break;
+      case SceneType.TEXT_QUEST:
+        this.audio.playTrack("text_quest").catch(() => {});
+        break;
+      case SceneType.INFO_CENTER:
+        this.audio.playTrack("explore_calm").catch(() => {});
+        break;
+      default:
+        break;
+    }
+  }
+
   stop(): void {
     cancelAnimationFrame(this.animationFrameId);
     this.currentScene?.destroy();
     this.renderer?.destroy();
+    this.audio.destroy();
     this.onnxRegistry.cleanup();
   }
 }

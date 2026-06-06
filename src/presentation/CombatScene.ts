@@ -338,6 +338,7 @@ export class CombatScene extends GameScene {
     const system = this.getSystem();
     if (!system || this._outcomeShown) return;
 
+    this._gameEngine?.audio.playSfx("hit").catch(() => {});
     const result = system.processPlayerAction({ type: "ATTACK" });
     this.renderWeaponPanel();
     if (result.loot !== undefined || result.xpGained !== undefined) {
@@ -430,6 +431,11 @@ export class CombatScene extends GameScene {
   ): void {
     if (this._outcomeShown) return;
     this._outcomeShown = true;
+
+    // Play outcome SFX
+    if (combatResult === "victory") {
+      this._gameEngine?.audio.playSfx("reward").catch(() => {});
+    }
 
     // Hide action buttons
     if (this._uiContainer) {

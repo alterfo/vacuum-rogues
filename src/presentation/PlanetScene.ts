@@ -68,6 +68,7 @@ export class PlanetScene extends GameScene {
     this.renderer.clearUILayer();
     this.createUI();
     logger.info(`PlanetScene: ${this.planet?.name}`);
+    this.gameEngine?.audio.playSfx("land").catch(() => {});
     this.checkCustoms();
     this.checkDeliveryQuestCompletion();
   }
@@ -110,6 +111,7 @@ export class PlanetScene extends GameScene {
         logger.info(
           `DELIVERY quest auto-completed on landing: ${quest.title} (reward: ${quest.reward?.credits ?? 0} cr)`,
         );
+        this.gameEngine?.audio.playSfx("reward").catch(() => {});
         this.showMessage(
           `Задание выполнено: ${quest.title} +${quest.reward?.credits ?? 0} ₡`,
           0x00ff88,

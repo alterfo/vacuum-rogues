@@ -681,6 +681,7 @@ export class EquipmentShopScene extends GameScene {
 
     player.credits -= listing.price;
     player.inventory.addItem(gearToModule(listing.gear));
+    this.gameEngine?.audio.playSfx("buy").catch(() => {});
 
     logger.info(
       `Bought ${listing.gear.name} for ${listing.price} credits (balance: ${player.credits})`,

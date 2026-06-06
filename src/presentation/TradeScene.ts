@@ -234,6 +234,7 @@ export class TradeScene extends GameScene {
           message: `${verb}: ${name} за ${result.finalPrice} кр.`,
           color: 0x00ff88,
         };
+        this.gameEngine?.audio.playSfx("buy").catch(() => {});
         if (isBuy) {
           this.markContrabandIfIllegal(resource);
         } else {
