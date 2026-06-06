@@ -1,6 +1,6 @@
-import type { ResourceType } from '@/types';
-import type { ShipModule } from './ShipModule';
-import { GameBusinessException } from '@/exceptions/GameBusinessException';
+import type { ResourceType, MicroModule } from "@/types";
+import type { ShipModule } from "./ShipModule";
+import { GameBusinessException } from "@/exceptions/GameBusinessException";
 
 export interface ResourceStack {
   readonly type: ResourceType;
@@ -14,11 +14,12 @@ export interface CosmeticItem {
 
 export class Inventory {
   modules: ShipModule[] = [];
+  micromodules: MicroModule[] = [];
   resources: ResourceStack[] = [];
   cosmetics: CosmeticItem[] = [];
 
   addItem(item: ShipModule | CosmeticItem): void {
-    if ('category' in item) {
+    if ("category" in item) {
       this.modules.push(item);
     } else {
       this.cosmetics.push(item);
@@ -37,7 +38,7 @@ export class Inventory {
       return;
     }
     throw new GameBusinessException(
-      'ITEM_NOT_FOUND',
+      "ITEM_NOT_FOUND",
       `Item ${itemId} not found in inventory.`,
       { itemId },
     );
@@ -53,8 +54,8 @@ export class Inventory {
   consumeResources(cost: ResourceStack[]): void {
     if (!this.hasResources(cost)) {
       throw new GameBusinessException(
-        'INSUFFICIENT_RESOURCES',
-        'Not enough resources for this operation.',
+        "INSUFFICIENT_RESOURCES",
+        "Not enough resources for this operation.",
         { cost },
       );
     }

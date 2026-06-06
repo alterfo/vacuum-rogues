@@ -127,17 +127,24 @@ export class NpcShipSprite {
   /** Wire a click handler; stops propagation so the stage doesn't also fire. */
   setClickHandler(cb: (npc: NpcShip) => void): void {
     this.clickCallback = cb;
-    // Make the whole container a generous circular hit target (not just the small
-    // halo graphic) so every ship stays reliably clickable, even when zoomed out
-    // or overlapping a planet (US-070: "not all ships are clickable").
     this.container.eventMode = "static";
-    this.container.hitArea = new Circle(0, 0, 26);
+    this.container.hitArea = new Circle(0, 0, 40);
     this.container.cursor =
       this.npc.role === NpcRole.PIRATE ? "target" : "pointer";
     this.container.on("pointerdown", (event) => {
       event.stopPropagation();
       this.clickCallback?.(this.npc);
     });
+  }
+
+  /**
+   * Scale the hit circle inversely with camera zoom so the clickable area stays
+   * ~40 screen-px regardless of how far the player has zoomed out.
+   */
+  updateHitArea(cameraZoom: number): void {
+    if (this.container.eventMode === "none") return; // departing — skip
+    const worldR = Math.max(28, 40 / cameraZoom);
+    this.container.hitArea = new Circle(0, 0, worldR);
   }
 
   /**

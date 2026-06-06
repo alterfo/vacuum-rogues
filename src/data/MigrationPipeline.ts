@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 5;
+  static readonly CURRENT_VERSION = 6;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -69,6 +69,15 @@ export class MigrationPipeline {
       )?.ship;
       if (ship && !ship.hullClass) {
         ship.hullClass = "CORVETTE";
+      }
+    },
+    // 5 -> 6: micromodule inventory (Task 7). Old saves lack micromodules in player inventory.
+    5: (state: SaveState) => {
+      const inventory = (
+        state.player as unknown as { inventory?: { micromodules?: unknown[] } }
+      )?.inventory;
+      if (inventory && !Array.isArray(inventory.micromodules)) {
+        inventory.micromodules = [];
       }
     },
   };

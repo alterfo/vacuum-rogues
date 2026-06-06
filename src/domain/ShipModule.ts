@@ -1,6 +1,9 @@
-import type { ModuleCategory, ModuleEffect } from '@/types';
+import type { ModuleCategory, ModuleEffect } from "@/types";
 
 export class ShipModule {
+  /** Id of an applied MicroModule; undefined means no micromodule attached yet. */
+  micromoduleId?: string;
+
   constructor(
     public readonly id: string,
     public readonly category: ModuleCategory,
@@ -20,7 +23,7 @@ export class WeaponModule extends ShipModule {
     public readonly range: number,
     public readonly energyCost: number,
   ) {
-    super(id, 'WEAPON' as ModuleCategory, name, effect, level);
+    super(id, "WEAPON" as ModuleCategory, name, effect, level);
   }
 }
 
@@ -33,7 +36,7 @@ export class ShieldModule extends ShipModule {
     public readonly shieldBoost: number,
     public readonly rechargeRate: number,
   ) {
-    super(id, 'SHIELD' as ModuleCategory, name, effect, level);
+    super(id, "SHIELD" as ModuleCategory, name, effect, level);
   }
 }
 
@@ -46,6 +49,6 @@ export class EngineModule extends ShipModule {
     public readonly speedBoost: number,
     public readonly evasionBoost: number,
   ) {
-    super(id, 'ENGINE' as ModuleCategory, name, effect, level);
+    super(id, "ENGINE" as ModuleCategory, name, effect, level);
   }
 }

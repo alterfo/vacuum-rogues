@@ -195,6 +195,7 @@ const STATION_TYPES = [
   StationType.REPAIR_DOCK,
   StationType.MILITARY_BASE,
   StationType.RESEARCH_LAB,
+  StationType.CRAFT_CENTER,
 ];
 
 const STATION_NAME: Record<StationType, (sys: string) => string> = {
@@ -202,6 +203,7 @@ const STATION_NAME: Record<StationType, (sys: string) => string> = {
   [StationType.REPAIR_DOCK]: (s) => `Верфь «${s}»`,
   [StationType.MILITARY_BASE]: (s) => `База «${s}»`,
   [StationType.RESEARCH_LAB]: (s) => `Лаборатория «${s}»`,
+  [StationType.CRAFT_CENTER]: (s) => `Центр крафта «${s}»`,
 };
 
 function generateStations(

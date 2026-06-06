@@ -3,6 +3,7 @@ import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
+import type { Station } from "@/domain/Station";
 import type { StarSystem } from "@/domain/StarSystem";
 import { SceneType, ResourceType, NpcRole } from "@/types";
 import { GearKind } from "@/systems/equipment/GearCatalog";
@@ -10,6 +11,7 @@ import { GearKind } from "@/systems/equipment/GearCatalog";
 interface InfoContext {
   gameEngine?: GameEngine;
   planet?: Planet;
+  station?: Station;
 }
 
 // ── Localisation ────────────────────────────────────────────────────────────
@@ -165,6 +167,7 @@ type SearchCategory = "resource" | "gear";
 export class InfoCenterScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private planet: Planet | null = null;
+  private station: Station | null = null;
 
   private mainContainer: Container | null = null;
 
@@ -191,6 +194,7 @@ export class InfoCenterScene extends GameScene {
     const ctx = context as InfoContext | undefined;
     this.gameEngine = ctx?.gameEngine ?? null;
     this.planet = ctx?.planet ?? null;
+    this.station = ctx?.station ?? null;
 
     if (this.gameEngine) {
       this.newsItems = buildNews(this.gameEngine);
@@ -220,6 +224,7 @@ export class InfoCenterScene extends GameScene {
     }
     this.gameEngine = null;
     this.planet = null;
+    this.station = null;
   }
 
   // ── rendering ──────────────────────────────────────────────────────────────
@@ -644,10 +649,17 @@ export class InfoCenterScene extends GameScene {
   }
 
   private async goBack(): Promise<void> {
-    if (!this.gameEngine || !this.planet) return;
-    await this.gameEngine.transitionTo(SceneType.PLANET, {
-      gameEngine: this.gameEngine,
-      planet: this.planet,
-    });
+    if (!this.gameEngine) return;
+    if (this.station) {
+      await this.gameEngine.transitionTo(SceneType.STATION, {
+        gameEngine: this.gameEngine,
+        station: this.station,
+      });
+    } else if (this.planet) {
+      await this.gameEngine.transitionTo(SceneType.PLANET, {
+        gameEngine: this.gameEngine,
+        planet: this.planet,
+      });
+    }
   }
 }

@@ -32,17 +32,26 @@ export function validatePlayerSettings(data: unknown): PlayerSettings {
   return result.data;
 }
 
+export const MicroModuleSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  targetCategory: z.enum(["WEAPON", "SHIELD", "ENGINE", "EQUIPMENT"]),
+  bonusType: z.string(),
+  bonusTier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+});
+
 export const ShipModuleSchema = z.object({
   // Module ids are stable semantic identifiers (e.g. "weapon_laser_1"), not
   // UUIDs — requiring .uuid() here rejected every valid save on load.
   id: z.string().min(1),
-  category: z.enum(["WEAPON", "SHIELD", "ENGINE"]),
+  category: z.enum(["WEAPON", "SHIELD", "ENGINE", "EQUIPMENT"]),
   name: z.string(),
   effect: z.object({
     type: z.string(),
     value: z.number(),
   }),
   level: z.number().int().min(1),
+  micromoduleId: z.string().optional(),
 });
 
 export const PlayerShipSchema = z.object({
@@ -91,6 +100,7 @@ export const ResourceStackSchema = z.object({
 
 export const InventorySchema = z.object({
   modules: z.array(ShipModuleSchema),
+  micromodules: z.array(MicroModuleSchema).default([]),
   resources: z.array(ResourceStackSchema),
   cosmetics: z.array(z.object({ id: z.string(), name: z.string() })),
 });

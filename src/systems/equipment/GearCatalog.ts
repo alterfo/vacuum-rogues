@@ -8,7 +8,7 @@
  * and stat recomputation come later in EPIC-007; this is the searchable
  * "what exists" catalog that the shop generator and info center (EPIC-009) use.
  */
-import { HullClass } from "@/types";
+import { HullClass, ModuleCategory, type MicroModule } from "@/types";
 
 export enum GearKind {
   HULL = "HULL",
@@ -291,6 +291,102 @@ export const GEAR_CATALOG: readonly Gear[] = [
   ...WEAPONS,
   ...EQUIPMENT,
 ];
+
+/** 12 micromodule definitions: 4 categories × 3 tiers. Sold at CRAFT_CENTER stations. */
+export const MICRO_MODULES: readonly MicroModule[] = [
+  // ENGINE — boosts derived speed
+  {
+    id: "mm_eng_1",
+    name: "Форсаж ур.1",
+    targetCategory: ModuleCategory.ENGINE,
+    bonusType: "speed",
+    bonusTier: 1,
+  },
+  {
+    id: "mm_eng_2",
+    name: "Форсаж ур.2",
+    targetCategory: ModuleCategory.ENGINE,
+    bonusType: "speed",
+    bonusTier: 2,
+  },
+  {
+    id: "mm_eng_3",
+    name: "Форсаж ур.3",
+    targetCategory: ModuleCategory.ENGINE,
+    bonusType: "speed",
+    bonusTier: 3,
+  },
+  // WEAPON — boosts weapon damage
+  {
+    id: "mm_wpn_1",
+    name: "Усилитель урона ур.1",
+    targetCategory: ModuleCategory.WEAPON,
+    bonusType: "damage",
+    bonusTier: 1,
+  },
+  {
+    id: "mm_wpn_2",
+    name: "Усилитель урона ур.2",
+    targetCategory: ModuleCategory.WEAPON,
+    bonusType: "damage",
+    bonusTier: 2,
+  },
+  {
+    id: "mm_wpn_3",
+    name: "Усилитель урона ур.3",
+    targetCategory: ModuleCategory.WEAPON,
+    bonusType: "damage",
+    bonusTier: 3,
+  },
+  // SHIELD — boosts shield HP
+  {
+    id: "mm_shld_1",
+    name: "Усиление щита ур.1",
+    targetCategory: ModuleCategory.SHIELD,
+    bonusType: "shieldHp",
+    bonusTier: 1,
+  },
+  {
+    id: "mm_shld_2",
+    name: "Усиление щита ур.2",
+    targetCategory: ModuleCategory.SHIELD,
+    bonusType: "shieldHp",
+    bonusTier: 2,
+  },
+  {
+    id: "mm_shld_3",
+    name: "Усиление щита ур.3",
+    targetCategory: ModuleCategory.SHIELD,
+    bonusType: "shieldHp",
+    bonusTier: 3,
+  },
+  // EQUIPMENT — boosts generic equipment potency (radar, droid, etc.)
+  {
+    id: "mm_eq_1",
+    name: "Оптимизатор ур.1",
+    targetCategory: ModuleCategory.EQUIPMENT,
+    bonusType: "potency",
+    bonusTier: 1,
+  },
+  {
+    id: "mm_eq_2",
+    name: "Оптимизатор ур.2",
+    targetCategory: ModuleCategory.EQUIPMENT,
+    bonusType: "potency",
+    bonusTier: 2,
+  },
+  {
+    id: "mm_eq_3",
+    name: "Оптимизатор ур.3",
+    targetCategory: ModuleCategory.EQUIPMENT,
+    bonusType: "potency",
+    bonusTier: 3,
+  },
+];
+
+export function microModuleById(id: string): MicroModule | undefined {
+  return MICRO_MODULES.find((m) => m.id === id);
+}
 
 /** Lookup by id. */
 export function gearById(id: string): Gear | undefined {

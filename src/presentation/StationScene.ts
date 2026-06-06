@@ -3,9 +3,13 @@ import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Station } from "@/domain/Station";
-import { SceneType, StationType } from "@/types";
+import { SceneType, StationType, type MicroModule } from "@/types";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
-import { GearKind, type Gear } from "@/systems/equipment/GearCatalog";
+import {
+  GearKind,
+  type Gear,
+  MICRO_MODULES,
+} from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import { ShipModule } from "@/domain/ShipModule";
 import type { ModuleCategory } from "@/types";
@@ -23,6 +27,7 @@ const TYPE_LABEL: Record<StationType, string> = {
   [StationType.REPAIR_DOCK]: "Ремонтный узел",
   [StationType.MILITARY_BASE]: "Военная база",
   [StationType.RESEARCH_LAB]: "Исследовательская лаборатория",
+  [StationType.CRAFT_CENTER]: "Центр крафта",
 };
 
 const TYPE_COLOR: Record<StationType, number> = {
@@ -30,6 +35,7 @@ const TYPE_COLOR: Record<StationType, number> = {
   [StationType.REPAIR_DOCK]: 0x44aaff,
   [StationType.MILITARY_BASE]: 0xff5544,
   [StationType.RESEARCH_LAB]: 0xcc88ff,
+  [StationType.CRAFT_CENTER]: 0xffaa22,
 };
 
 /** Services available per station type. */
@@ -51,6 +57,13 @@ const TYPE_SERVICES: Record<StationType, string[]> = {
     "leave",
   ],
   [StationType.RESEARCH_LAB]: ["shop", "infoCenter", "refuel", "leave"],
+  [StationType.CRAFT_CENTER]: [
+    "micromodules",
+    "hangar",
+    "repair",
+    "refuel",
+    "leave",
+  ],
 };
 
 const REPAIR_DISCOUNT: Record<StationType, number> = {
@@ -58,6 +71,7 @@ const REPAIR_DISCOUNT: Record<StationType, number> = {
   [StationType.REPAIR_DOCK]: 0.6, // 40 % cheaper
   [StationType.MILITARY_BASE]: 0.8,
   [StationType.RESEARCH_LAB]: 1.1,
+  [StationType.CRAFT_CENTER]: 1.0,
 };
 
 // ── Gear bridging (same as EquipmentShopScene) ───────────────────────────────
@@ -86,7 +100,13 @@ const KIND_COLOR: Record<GearKind, number> = {
 
 // ── Scene ────────────────────────────────────────────────────────────────────
 
-type View = "main" | "shop" | "hangar";
+type View = "main" | "shop" | "hangar" | "micromodules" | "micromodule_apply";
+
+/** Index of the hangar slot being micro-modded (for sub-panel). */
+interface MicromoduleApplyTarget {
+  slotIndex: number;
+  module: ShipModule;
+}
 
 const STATION_BRIBE_COST = 500;
 
@@ -96,6 +116,8 @@ export class StationScene extends GameScene {
   private mainContainer: Container | null = null;
   private view: View = "main";
   private shopListings: GearListing[] = [];
+  private micromoduleListings: MicroModule[] = [];
+  private micromoduleApplyTarget: MicromoduleApplyTarget | null = null;
   private shopScroll = 0;
   private readonly ROW_H = 50;
   private readonly VISIBLE_ROWS = 9;
@@ -123,6 +145,9 @@ export class StationScene extends GameScene {
     if (this.station && this.hasService("shop")) {
       this.buildShopInventory();
     }
+    if (this.station?.type === StationType.CRAFT_CENTER) {
+      this.buildMicromoduleListings();
+    }
 
     this.render();
 
@@ -148,6 +173,7 @@ export class StationScene extends GameScene {
     this.toast = null;
     this.gameEngine = null;
     this.station = null;
+    this.micromoduleApplyTarget = null;
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────
@@ -155,6 +181,19 @@ export class StationScene extends GameScene {
   private hasService(service: string): boolean {
     if (!this.station) return false;
     return TYPE_SERVICES[this.station.type].includes(service);
+  }
+
+  private buildMicromoduleListings(): void {
+    // Craft centers sell a deterministic subset based on station id seed
+    const seed = this.station?.id.charCodeAt(0) ?? 0;
+    // Offer all 12 micromodules (full catalog at craft centers)
+    this.micromoduleListings = [...MICRO_MODULES];
+    // Shuffle deterministically so different stations have different order
+    this.micromoduleListings.sort(
+      (a, b) =>
+        a.id.charCodeAt(seed % a.id.length) -
+        b.id.charCodeAt(seed % b.id.length),
+    );
   }
 
   private buildShopInventory(): void {
@@ -187,6 +226,10 @@ export class StationScene extends GameScene {
       this.renderShop();
     } else if (this.view === "hangar") {
       this.renderHangar();
+    } else if (this.view === "micromodules") {
+      this.renderMicromoduleShop();
+    } else if (this.view === "micromodule_apply") {
+      this.renderMicromoduleApplyPanel();
     } else {
       this.renderMain();
     }
@@ -390,6 +433,8 @@ export class StationScene extends GameScene {
         return { label: "Инфоцентр", color: 0x66bbff };
       case "quests":
         return { label: "Задания", color: 0xffee66 };
+      case "micromodules":
+        return { label: "Микромодули", color: 0xffaa22 };
       case "leave":
         return { label: "Отстыковаться  Esc", color: 0xff6655 };
       default:
@@ -423,6 +468,10 @@ export class StationScene extends GameScene {
         break;
       case "quests":
         this.showToast("Задания выдаются только на военных базах", 0xffcc44);
+        break;
+      case "micromodules":
+        this.view = "micromodules";
+        this.render();
         break;
       case "leave":
         await this.undock();
@@ -699,6 +748,309 @@ export class StationScene extends GameScene {
     this.render();
   }
 
+  // ── micromodule shop sub-view ──────────────────────────────────────────────
+
+  private renderMicromoduleShop(): void {
+    const sw = this.renderer.app.screen.width;
+    const sh = this.renderer.app.screen.height;
+    const player = this.gameEngine?.player;
+
+    const bg = new Graphics();
+    bg.rect(0, 0, sw, sh).fill({ color: 0x000000, alpha: 0.9 });
+    bg.eventMode = "static";
+    this.mainContainer!.addChild(bg);
+
+    const PW = Math.min(620, sw - 40);
+    const PH = Math.min(560, sh - 60);
+    const PX = (sw - PW) / 2;
+    const PY = (sh - PH) / 2;
+
+    const panel = new Graphics();
+    panel.rect(PX, PY, PW, PH).fill({ color: 0x0a1018, alpha: 1 });
+    panel.rect(PX, PY, PW, PH).stroke({ color: 0x443322, width: 1 });
+    this.mainContainer!.addChild(panel);
+
+    const title = new Text({
+      text: "[ МИКРОМОДУЛИ ]",
+      style: { fontSize: 17, fill: 0xffaa22, fontFamily: "monospace" },
+    });
+    title.anchor.set(0.5, 0);
+    title.x = PX + PW / 2;
+    title.y = PY + 12;
+    title.eventMode = "none";
+    this.mainContainer!.addChild(title);
+
+    const playerCredits = player?.credits ?? 0;
+    const credText = new Text({
+      text: `${playerCredits.toLocaleString("ru")} ₡`,
+      style: { fontSize: 13, fill: 0xffcc44, fontFamily: "monospace" },
+    });
+    credText.anchor.set(1, 0);
+    credText.x = PX + PW - 14;
+    credText.y = PY + 14;
+    credText.eventMode = "none";
+    this.mainContainer!.addChild(credText);
+
+    const ROW = 46;
+    let rowY = PY + 50;
+    const TIER_BONUS = ["", "+20%", "+12%", "+6%"] as const;
+    const TIER_PRICE = [0, 3200, 1800, 800] as const;
+
+    for (const mm of this.micromoduleListings) {
+      if (rowY + ROW > PY + PH - 50) break;
+
+      const price = TIER_PRICE[mm.bonusTier];
+      const canAfford = playerCredits >= price;
+      const alreadyOwned = (player?.inventory.micromodules ?? []).some(
+        (m) => m.id === mm.id,
+      );
+
+      const rowBg = new Graphics();
+      rowBg
+        .rect(PX + 14, rowY + 2, PW - 28, ROW - 4)
+        .fill({ color: 0x0d1820, alpha: 1 });
+      this.mainContainer!.addChild(rowBg);
+
+      const tierColor =
+        mm.bonusTier === 1
+          ? 0xffcc44
+          : mm.bonusTier === 2
+            ? 0x88ccff
+            : 0x888888;
+      const tierBadge = new Text({
+        text: `Ур.${mm.bonusTier}  ${TIER_BONUS[mm.bonusTier]}`,
+        style: { fontSize: 11, fill: tierColor, fontFamily: "monospace" },
+      });
+      tierBadge.x = PX + 20;
+      tierBadge.y = rowY + 6;
+      tierBadge.eventMode = "none";
+      this.mainContainer!.addChild(tierBadge);
+
+      const nameText = new Text({
+        text: mm.name,
+        style: { fontSize: 13, fill: 0xddeeff, fontFamily: "monospace" },
+      });
+      nameText.x = PX + 20;
+      nameText.y = rowY + 24;
+      nameText.eventMode = "none";
+      this.mainContainer!.addChild(nameText);
+
+      const catText = new Text({
+        text: mm.targetCategory,
+        style: { fontSize: 11, fill: 0x557788, fontFamily: "monospace" },
+      });
+      catText.x = PX + 180;
+      catText.y = rowY + 24;
+      catText.eventMode = "none";
+      this.mainContainer!.addChild(catText);
+
+      const priceText = new Text({
+        text: `${price} ₡`,
+        style: {
+          fontSize: 13,
+          fill: canAfford ? 0xffcc44 : 0x664433,
+          fontFamily: "monospace",
+        },
+      });
+      priceText.anchor.set(1, 0.5);
+      priceText.x = PX + PW - 110;
+      priceText.y = rowY + ROW / 2;
+      priceText.eventMode = "none";
+      this.mainContainer!.addChild(priceText);
+
+      const buyLabel = alreadyOwned ? "Есть" : canAfford ? "[Купить]" : "Мало₡";
+      const buyColor = alreadyOwned
+        ? 0x448844
+        : canAfford
+          ? 0x44ff88
+          : 0x554433;
+      const buyBtn = new Text({
+        text: buyLabel,
+        style: { fontSize: 13, fill: buyColor, fontFamily: "monospace" },
+      });
+      buyBtn.anchor.set(1, 0.5);
+      buyBtn.x = PX + PW - 14;
+      buyBtn.y = rowY + ROW / 2;
+      if (!alreadyOwned && canAfford && player) {
+        buyBtn.eventMode = "static";
+        buyBtn.cursor = "pointer";
+        buyBtn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          player.credits -= price;
+          player.inventory.micromodules.push(mm);
+          this.showToast(`Куплено: ${mm.name}`, 0x44ff88);
+          this.render();
+        });
+        buyBtn.on("pointerover", () => {
+          buyBtn.alpha = 0.7;
+        });
+        buyBtn.on("pointerout", () => {
+          buyBtn.alpha = 1;
+        });
+      } else {
+        buyBtn.eventMode = "none";
+      }
+      this.mainContainer!.addChild(buyBtn);
+
+      rowY += ROW;
+    }
+
+    const back = new Text({
+      text: "[ ← Назад ]",
+      style: { fontSize: 14, fill: 0x88ccff, fontFamily: "monospace" },
+    });
+    back.anchor.set(0.5, 1);
+    back.x = PX + PW / 2;
+    back.y = PY + PH - 10;
+    back.eventMode = "static";
+    back.cursor = "pointer";
+    back.on("pointerdown", (e) => {
+      e.stopPropagation();
+      this.view = "main";
+      this.render();
+    });
+    back.on("pointerover", () => {
+      back.alpha = 0.7;
+    });
+    back.on("pointerout", () => {
+      back.alpha = 1;
+    });
+    this.mainContainer!.addChild(back);
+  }
+
+  private renderMicromoduleApplyPanel(): void {
+    const sw = this.renderer.app.screen.width;
+    const sh = this.renderer.app.screen.height;
+    const player = this.gameEngine?.player;
+    const target = this.micromoduleApplyTarget;
+    if (!player || !target) {
+      this.view = "hangar";
+      this.render();
+      return;
+    }
+
+    const bg = new Graphics();
+    bg.rect(0, 0, sw, sh).fill({ color: 0x000000, alpha: 0.9 });
+    bg.eventMode = "static";
+    this.mainContainer!.addChild(bg);
+
+    const PW = Math.min(520, sw - 60);
+    const PH = Math.min(480, sh - 80);
+    const PX = (sw - PW) / 2;
+    const PY = (sh - PH) / 2;
+
+    const panel = new Graphics();
+    panel.rect(PX, PY, PW, PH).fill({ color: 0x0a1018, alpha: 1 });
+    panel.rect(PX, PY, PW, PH).stroke({ color: 0x443322, width: 1 });
+    this.mainContainer!.addChild(panel);
+
+    const title = new Text({
+      text: `Выбор микромодуля для: ${target.module.name}`,
+      style: { fontSize: 13, fill: 0xffaa22, fontFamily: "monospace" },
+    });
+    title.x = PX + 14;
+    title.y = PY + 12;
+    title.eventMode = "none";
+    this.mainContainer!.addChild(title);
+
+    // Micromodules in inventory matching the module's category
+    const matching = player.inventory.micromodules.filter(
+      (mm) => mm.targetCategory === target.module.category,
+    );
+
+    if (matching.length === 0) {
+      const none = new Text({
+        text: "Нет подходящих микромодулей в инвентаре",
+        style: { fontSize: 12, fill: 0x445566, fontFamily: "monospace" },
+      });
+      none.x = PX + 20;
+      none.y = PY + 60;
+      none.eventMode = "none";
+      this.mainContainer!.addChild(none);
+    } else {
+      const TIER_BONUS = ["", "+20%", "+12%", "+6%"] as const;
+      let rowY = PY + 52;
+      const ROW = 48;
+      for (const mm of matching) {
+        if (rowY + ROW > PY + PH - 50) break;
+
+        const rowBg = new Graphics();
+        rowBg.rect(PX + 14, rowY, PW - 28, ROW - 4).fill({ color: 0x0d1820 });
+        this.mainContainer!.addChild(rowBg);
+
+        const tierColor =
+          mm.bonusTier === 1
+            ? 0xffcc44
+            : mm.bonusTier === 2
+              ? 0x88ccff
+              : 0x888888;
+        const info = new Text({
+          text: `${mm.name}  (${TIER_BONUS[mm.bonusTier]} ${mm.bonusType})`,
+          style: { fontSize: 12, fill: tierColor, fontFamily: "monospace" },
+        });
+        info.x = PX + 20;
+        info.y = rowY + 14;
+        info.eventMode = "none";
+        this.mainContainer!.addChild(info);
+
+        const applyBtn = new Text({
+          text: "[Применить]",
+          style: { fontSize: 12, fill: 0x44ff88, fontFamily: "monospace" },
+        });
+        applyBtn.anchor.set(1, 0.5);
+        applyBtn.x = PX + PW - 14;
+        applyBtn.y = rowY + ROW / 2 - 2;
+        applyBtn.eventMode = "static";
+        applyBtn.cursor = "pointer";
+        applyBtn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          target.module.micromoduleId = mm.id;
+          const idx = player.inventory.micromodules.indexOf(mm);
+          if (idx >= 0) player.inventory.micromodules.splice(idx, 1);
+          logger.info(
+            `Applied micromodule ${mm.id} to module ${target.module.id}`,
+          );
+          this.micromoduleApplyTarget = null;
+          this.view = "hangar";
+          this.showToast(`Применён: ${mm.name}`, 0x44ff88);
+          this.render();
+        });
+        applyBtn.on("pointerover", () => {
+          applyBtn.alpha = 0.7;
+        });
+        applyBtn.on("pointerout", () => {
+          applyBtn.alpha = 1;
+        });
+        this.mainContainer!.addChild(applyBtn);
+
+        rowY += ROW;
+      }
+    }
+
+    const back = new Text({
+      text: "[ ← Назад ]",
+      style: { fontSize: 14, fill: 0x88ccff, fontFamily: "monospace" },
+    });
+    back.anchor.set(0.5, 1);
+    back.x = PX + PW / 2;
+    back.y = PY + PH - 10;
+    back.eventMode = "static";
+    back.cursor = "pointer";
+    back.on("pointerdown", (e) => {
+      e.stopPropagation();
+      this.micromoduleApplyTarget = null;
+      this.view = "hangar";
+      this.render();
+    });
+    back.on("pointerover", () => {
+      back.alpha = 0.7;
+    });
+    back.on("pointerout", () => {
+      back.alpha = 1;
+    });
+    this.mainContainer!.addChild(back);
+  }
+
   // ── toast ─────────────────────────────────────────────────────────────────
 
   private addToastSlot(px: number, py: number, pw: number, ph: number): void {
@@ -803,6 +1155,53 @@ export class StationScene extends GameScene {
           this.render();
         });
         this.mainContainer!.addChild(unBtn);
+
+        // Micromodule button: show if no micromodule applied yet
+        if (!mod.micromoduleId) {
+          const hasMatchingMm = player.inventory.micromodules.some(
+            (mm) => mm.targetCategory === mod.category,
+          );
+          const mmBtn = new Text({
+            text: "[+ микромодуль]",
+            style: {
+              fontSize: 10,
+              fill: hasMatchingMm ? 0xffaa22 : 0x445566,
+              fontFamily: "monospace",
+            },
+          });
+          mmBtn.anchor.set(1, 0.5);
+          mmBtn.x = PX + PW - 26;
+          mmBtn.y = slotY + 30;
+          if (hasMatchingMm) {
+            mmBtn.eventMode = "static";
+            mmBtn.cursor = "pointer";
+            mmBtn.on("pointerdown", (e) => {
+              e.stopPropagation();
+              this.micromoduleApplyTarget = { slotIndex: i, module: mod };
+              this.view = "micromodule_apply";
+              this.render();
+            });
+            mmBtn.on("pointerover", () => {
+              mmBtn.alpha = 0.7;
+            });
+            mmBtn.on("pointerout", () => {
+              mmBtn.alpha = 1;
+            });
+          } else {
+            mmBtn.eventMode = "none";
+          }
+          this.mainContainer!.addChild(mmBtn);
+        } else {
+          const mmTag = new Text({
+            text: `[мм: ${mod.micromoduleId}]`,
+            style: { fontSize: 10, fill: 0xffcc44, fontFamily: "monospace" },
+          });
+          mmTag.anchor.set(1, 0.5);
+          mmTag.x = PX + PW - 26;
+          mmTag.y = slotY + 30;
+          mmTag.eventMode = "none";
+          this.mainContainer!.addChild(mmTag);
+        }
       }
     }
 
@@ -907,7 +1306,15 @@ export class StationScene extends GameScene {
 
   private onKeyDown(e: KeyboardEvent): void {
     if (e.key === "Escape") {
-      if (this.view === "shop" || this.view === "hangar") {
+      if (this.view === "micromodule_apply") {
+        this.micromoduleApplyTarget = null;
+        this.view = "hangar";
+        this.render();
+      } else if (
+        this.view === "shop" ||
+        this.view === "hangar" ||
+        this.view === "micromodules"
+      ) {
         this.view = "main";
         this.render();
       } else {

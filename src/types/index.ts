@@ -38,6 +38,15 @@ export enum ModuleCategory {
   WEAPON = "WEAPON",
   SHIELD = "SHIELD",
   ENGINE = "ENGINE",
+  EQUIPMENT = "EQUIPMENT",
+}
+
+export interface MicroModule {
+  readonly id: string;
+  readonly name: string;
+  readonly targetCategory: ModuleCategory;
+  readonly bonusType: string;
+  readonly bonusTier: 1 | 2 | 3;
 }
 
 export enum TileType {
@@ -105,6 +114,7 @@ export enum StationType {
   REPAIR_DOCK = "REPAIR_DOCK",
   MILITARY_BASE = "MILITARY_BASE",
   RESEARCH_LAB = "RESEARCH_LAB",
+  CRAFT_CENTER = "CRAFT_CENTER",
 }
 
 export enum ProfileLevel {
