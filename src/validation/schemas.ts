@@ -169,6 +169,29 @@ export const ReputationMapSchema = z.record(
   z.number().min(-100).max(100),
 );
 
+export const QuestConditionSchema = z.object({
+  type: z.enum(["credits", "reputation", "item"]),
+  comparison: z.enum([">=", "<=", "==", ">"]),
+  value: z.number(),
+  factionId: z.string().optional(),
+  itemId: z.string().optional(),
+});
+
+const QuestOutcomeSchema = z.object({
+  creditsDelta: z.number(),
+  reputationDelta: z.number(),
+  factionId: z.string().optional(),
+  itemGained: z.string().optional(),
+  itemLost: z.string().optional(),
+  journalEntry: z.string(),
+});
+
+export const TextQuestStateSchema = z.object({
+  questId: z.string(),
+  currentNodeId: z.string(),
+  pendingOutcomes: z.array(QuestOutcomeSchema).default([]),
+});
+
 export const PlayerSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(32),
@@ -183,6 +206,7 @@ export const PlayerSchema = z.object({
   currentSystemId: z.string().optional().default(""),
   contrabandGoods: z.array(z.string()).default([]),
   completedQuestChains: z.array(z.string()).default([]),
+  activeTextQuestState: TextQuestStateSchema.nullable().default(null),
 });
 
 export const StarSystemSchema = z.object({

@@ -43,6 +43,7 @@ import type {
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { GalaxyService, PlayerService, SceneFactory } from "@/core/services";
 import { QuestManagerAdapter, EquipmentSystemAdapter } from "@/core/adapters";
+import { TextQuestRuntime } from "@/systems/quests/TextQuestRuntime";
 
 /**
  * Optional DI dependencies for GameEngine.
@@ -77,6 +78,8 @@ export class GameEngine {
   public renderer: Renderer | null = null;
   /** GearCatalog-based loadout driving derived ship stats (speed, shields, etc.). */
   public playerLoadout: ShipLoadout | null = null;
+  /** Runtime engine for the active text quest (one at a time). */
+  public readonly textQuestRuntime = new TextQuestRuntime();
 
   private exceptionHandler: IExceptionHandler;
   private animationFrameId = 0;
@@ -312,7 +315,8 @@ export class GameEngine {
       sceneType === SceneType.EQUIPMENT_SHOP ||
       sceneType === SceneType.INFO_CENTER ||
       sceneType === SceneType.STATION ||
-      sceneType === SceneType.GOVERNMENT
+      sceneType === SceneType.GOVERNMENT ||
+      sceneType === SceneType.TEXT_QUEST
     ) {
       finalContext.gameEngine = this;
     }

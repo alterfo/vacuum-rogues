@@ -114,6 +114,7 @@ export enum SceneType {
   INFO_CENTER = "INFO_CENTER",
   STATION = "STATION",
   GOVERNMENT = "GOVERNMENT",
+  TEXT_QUEST = "TEXT_QUEST",
 }
 
 export enum StationType {
@@ -494,4 +495,59 @@ export interface AIProfile {
   readonly aggressiveness: number;
   readonly caution: number;
   readonly targetPriority: string[];
+}
+
+// --- Text Quest Graph (EPIC-005) ---
+
+export interface QuestCondition {
+  readonly type: "credits" | "reputation" | "item";
+  /** The comparison operator applied to player's value vs. this value. */
+  readonly comparison: ">=" | "<=" | "==" | ">";
+  readonly value: number;
+  /** For reputation checks: which faction id to look up. */
+  readonly factionId?: string;
+  /** For item checks: which resource type (ResourceType string) must be in inventory. */
+  readonly itemId?: string;
+}
+
+export interface QuestOutcome {
+  readonly creditsDelta: number;
+  readonly reputationDelta: number;
+  /** Faction that receives the reputation delta (required when reputationDelta ≠ 0). */
+  readonly factionId?: string;
+  /** ResourceType string added to player inventory (quantity = 1). */
+  readonly itemGained?: string;
+  /** ResourceType string removed from player inventory (quantity = 1). */
+  readonly itemLost?: string;
+  /** Short text appended to the player journal when this outcome fires. */
+  readonly journalEntry: string;
+}
+
+export interface QuestChoice {
+  readonly label: string;
+  readonly conditions: QuestCondition[];
+  readonly nextNodeId: string | null;
+  readonly outcome: QuestOutcome | null;
+}
+
+export interface QuestNode {
+  readonly id: string;
+  /** Lookup key for narration text (used by QuestNarrator / TemplateQuestNarrator). */
+  readonly textKey: string;
+  readonly choices: QuestChoice[];
+}
+
+export interface TextQuest {
+  readonly id: string;
+  readonly title: string;
+  readonly nodes: QuestNode[];
+  readonly startNodeId: string;
+}
+
+/** Saved runtime state of an in-progress text quest. */
+export interface TextQuestState {
+  readonly questId: string;
+  readonly currentNodeId: string;
+  /** Outcomes accumulated so far (applied only on quest completion). */
+  readonly pendingOutcomes: QuestOutcome[];
 }

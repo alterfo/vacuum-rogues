@@ -366,21 +366,21 @@ harder one with a bigger reward.
 The text-quest graph is pure data: nodes, choices, conditions, outcomes. The runtime engine
 traverses the graph, checks conditions (credits/reputation/inventory), applies outcomes.
 
-- [ ] Define types in `src/types/index.ts`:
+- [x] Define types in `src/types/index.ts`:
   `QuestNode { id, textKey, choices: QuestChoice[] }`
   `QuestChoice { label, conditions: QuestCondition[], nextNodeId, outcome: QuestOutcome | null }`
   `QuestCondition { type: 'credits'|'reputation'|'item', comparison, value }`
   `QuestOutcome { creditsDelta, reputationDelta, factionId?, itemGained?, itemLost?, journalEntry }`
-- [ ] Create `src/domain/TextQuest.ts`: immutable quest graph. Create 2 sample quests:
+- [x] Create `src/domain/TextQuest.ts`: immutable quest graph. Create 2 sample quests:
   - Logical: "Тайный груз" (3-node, 2 fail branches, logical puzzle about codes).
   - Atmospheric: "Дрейфующий корабль" (4-node, branching moral choice).
-- [ ] Create `src/systems/quests/TextQuestRuntime.ts`: `start(quest, player)` → returns first
+- [x] Create `src/systems/quests/TextQuestRuntime.ts`: `start(quest, player)` → returns first
   node; `choose(nodeId, choiceIdx, player)` → checks conditions → returns next node or throws
   `GameBusinessException` if condition fails; `applyOutcome(outcome, player)` → mutates player
   state.
-- [ ] Add `TextQuestRuntime` to `GameEngine`; add `activeTextQuestState: TextQuestState | null`
+- [x] Add `TextQuestRuntime` to `GameEngine`; add `activeTextQuestState: TextQuestState | null`
   to Player domain (current node id + seed + accumulated outcomes). Update schemas.
-- [ ] Unit tests: all paths through both sample quests; condition checks; outcome application.
+- [x] Unit tests: all paths through both sample quests; condition checks; outcome application.
 
 ### Task 18: ONNX narrator with template fallback
 

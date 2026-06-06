@@ -1,4 +1,10 @@
-import type { ReputationMap, QuestLog, Journal, FactionType } from "@/types";
+import type {
+  ReputationMap,
+  QuestLog,
+  Journal,
+  FactionType,
+  TextQuestState,
+} from "@/types";
 import type { PlayerShip } from "./PlayerShip";
 import type { SkillTree } from "./SkillTree";
 import type { Inventory } from "./Inventory";
@@ -8,6 +14,8 @@ export class Player {
   contrabandGoods: string[] = [];
   /** chainId strings for chains where all 3 parts have been completed. */
   completedQuestChains: string[] = [];
+  /** Saved runtime state for the currently active text quest (null when no text quest active). */
+  activeTextQuestState: TextQuestState | null = null;
 
   constructor(
     public readonly id: string,
