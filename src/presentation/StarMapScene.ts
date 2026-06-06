@@ -22,6 +22,8 @@ export class StarMapScene extends GameScene {
   private fixedUIContainer: Container | null = null;
   private gameEngine: GameEngine | null = null;
 
+  private readonly MAP_SCALE = 4;
+
   // Viewport state for zoom/pan
   private viewportX = 0;
   private viewportY = 0;
@@ -68,6 +70,9 @@ export class StarMapScene extends GameScene {
       this.selectedSystemId = ctx.pendingSelectedSystemId;
     }
 
+    // Set initial viewport so all explored systems are visible (US-077)
+    this.initializeViewport();
+
     // Clear layers first, then render
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
@@ -87,6 +92,49 @@ export class StarMapScene extends GameScene {
     }
 
     logger.info("StarMapScene initialized");
+  }
+
+  private initializeViewport(): void {
+    if (!this.galaxy) return;
+    const exploredSystems = this.galaxy.systems.filter((s) => s.explored);
+    if (exploredSystems.length === 0) return;
+
+    let minQ = Infinity,
+      maxQ = -Infinity,
+      minR = Infinity,
+      maxR = -Infinity;
+    for (const sys of exploredSystems) {
+      minQ = Math.min(minQ, sys.coordinates.q);
+      maxQ = Math.max(maxQ, sys.coordinates.q);
+      minR = Math.min(minR, sys.coordinates.r);
+      maxR = Math.max(maxR, sys.coordinates.r);
+    }
+
+    const mapW = (maxQ - minQ) * this.MAP_SCALE;
+    const mapH = (maxR - minR) * this.MAP_SCALE;
+    const screenW = this.renderer.app.screen.width;
+    const screenH = this.renderer.app.screen.height;
+
+    if (mapW < 1 && mapH < 1) {
+      this.zoomLevel = 2;
+    } else {
+      const zoomW = mapW > 0 ? (screenW * 0.7) / mapW : Infinity;
+      const zoomH = mapH > 0 ? (screenH * 0.7) / mapH : Infinity;
+      this.zoomLevel = Math.max(0.5, Math.min(4, Math.min(zoomW, zoomH)));
+    }
+
+    const playerSystem = this.galaxy.systems.find(
+      (s) => s.id === this.playerSystemId,
+    );
+    const centerQ = playerSystem
+      ? playerSystem.coordinates.q
+      : (minQ + maxQ) / 2;
+    const centerR = playerSystem
+      ? playerSystem.coordinates.r
+      : (minR + maxR) / 2;
+
+    this.viewportX = -centerQ * this.MAP_SCALE * this.zoomLevel;
+    this.viewportY = -centerR * this.MAP_SCALE * this.zoomLevel;
   }
 
   private setupViewportControls(): void {
@@ -158,7 +206,7 @@ export class StarMapScene extends GameScene {
   private handleWheel(e: WheelEvent): void {
     e.preventDefault();
     const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
-    this.zoomLevel = Math.max(0.5, Math.min(3, this.zoomLevel * zoomDelta));
+    this.zoomLevel = Math.max(0.5, Math.min(4, this.zoomLevel * zoomDelta));
     this.updateMapTransform();
   }
 
@@ -320,7 +368,7 @@ export class StarMapScene extends GameScene {
 
     const graphics = new Graphics();
     graphics.eventMode = "none";
-    const scale = 4;
+    const scale = this.MAP_SCALE;
 
     // Draw warp lanes (only between explored systems)
     for (const system of this.galaxy.systems) {

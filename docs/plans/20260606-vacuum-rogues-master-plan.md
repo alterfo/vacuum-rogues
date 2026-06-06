@@ -325,11 +325,11 @@ Scenario: Планеты различимы
 **Files:**
 - Modify: `src/presentation/StarMapScene.ts`
 
-- [ ] In `initialize()`: compute bounding box of all `player.visitedSystemIds` map coordinates
-- [ ] Set `zoomLevel` and `viewportX/Y` so all explored systems occupy ~70% of canvas width
-- [ ] Clamp: minimum `zoomLevel = 0.5`, maximum `zoomLevel = 4`
-- [ ] Player's current system should be near-centred in the initial view
-- [ ] Run `npm test -- --run` + `npm run lint` — no regressions
+- [x] In `initialize()`: compute bounding box of all `player.visitedSystemIds` map coordinates
+- [x] Set `zoomLevel` and `viewportX/Y` so all explored systems occupy ~70% of canvas width
+- [x] Clamp: minimum `zoomLevel = 0.5`, maximum `zoomLevel = 4`
+- [x] Player's current system should be near-centred in the initial view
+- [x] Run `npm test -- --run` + `npm run lint` — no regressions
 
 ### Task 4: UX High — Loading state during async transitions (US-076)
 
