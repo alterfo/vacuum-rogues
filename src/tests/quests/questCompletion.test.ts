@@ -8,6 +8,7 @@ import type { StarSystem } from "@/domain/StarSystem";
 import { generateQuestBoard } from "@/systems/quests/QuestGenerator";
 
 function playerStub(credits = 0): Player {
+  const reputation: Record<string, number> = {};
   return {
     credits,
     experience: 0,
@@ -18,7 +19,14 @@ function playerStub(credits = 0): Player {
       micromodules: [],
       cosmetics: [],
     },
-    reputation: {},
+    reputation,
+    getReputation: (id: string) => reputation[id] ?? 0,
+    adjustReputation: (id: string, delta: number) => {
+      reputation[id] = Math.max(
+        -100,
+        Math.min(100, (reputation[id] ?? 0) + delta),
+      );
+    },
   } as unknown as Player;
 }
 

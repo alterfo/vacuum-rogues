@@ -524,10 +524,14 @@ export class GameEngine {
    * quest service, tagged with the issuing planet and current day for deadlines.
    */
   acceptBoardQuest(quest: GeneratedQuest, planetId: string): Quest | null {
+    const factionId =
+      this.galaxy?.systems.find((s) => s.planets.some((p) => p.id === planetId))
+        ?.ownerFaction ?? "";
     return this.questManager.acceptQuestFromTemplate(
       quest.template,
       planetId,
       this.galaxy?.gameDays ?? 0,
+      String(factionId),
     );
   }
 
@@ -545,11 +549,13 @@ export class GameEngine {
     const questLog = this.player.questLog as {
       activeQuests: Quest[];
       completedQuests: string[];
+      completedChainParts: Record<string, number[]>;
     };
     questLog.activeQuests.length = 0;
     questLog.activeQuests.push(...this.questManager.getActiveQuests());
     questLog.completedQuests.length = 0;
     questLog.completedQuests.push(...this.questManager.getCompletedQuestIds());
+    questLog.completedChainParts = this.questManager.getCompletedChainParts();
 
     const { SaveState } = await import("@/domain/SaveState");
     const state = new SaveState(
@@ -601,10 +607,12 @@ export class GameEngine {
     const loadedQuestLog = this.player.questLog as {
       activeQuests?: Quest[];
       completedQuests?: string[];
+      completedChainParts?: Record<string, number[]>;
     };
     this.questManager.restoreState(
       loadedQuestLog.activeQuests ?? [],
       (loadedQuestLog.completedQuests ?? []) as string[],
+      loadedQuestLog.completedChainParts ?? {},
     );
 
     // Ensure player has a valid current system
@@ -916,6 +924,7 @@ export class GameEngine {
 
   private async generateDefaultGameState(): Promise<void> {
     this.player = null;
+    this.playerLoadout = null;
     this.playerService.deletePlayer();
     const seed = `SR_${Date.now()}`;
     this.galaxy = await this.galaxyService.generate(seed, 30);

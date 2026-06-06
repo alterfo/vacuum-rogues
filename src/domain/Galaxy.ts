@@ -95,6 +95,11 @@ export class Galaxy {
   /** Apply a TradeBoom to a system (prices drop 15% for durationDays). */
   applyTradeBoom(systemId: string, durationDays: number): void {
     const expiresDay = this.gameDays + durationDays;
+    if (this.activeTradeBoomSystems[systemId]) {
+      // Already active: extend expiry without re-applying the multiplier.
+      this.activeTradeBoomSystems[systemId] = expiresDay;
+      return;
+    }
     this.activeTradeBoomSystems[systemId] = expiresDay;
     const system = this.systems.find((s) => s.id === systemId);
     if (!system) return;

@@ -41,6 +41,7 @@ export interface IQuestService {
     templateId: string,
     planetId?: string,
     currentDay?: number,
+    factionId?: string,
   ): Quest | null;
   /**
    * Accept a quest from an externally-built template (e.g. the quest generator's
@@ -50,6 +51,7 @@ export interface IQuestService {
     template: QuestTemplate,
     planetId?: string,
     currentDay?: number,
+    factionId?: string,
   ): Quest | null;
   updateQuestProgress(event: QuestProgressEvent): void;
   completeQuest(questId: string, player: Player): boolean;
@@ -60,8 +62,14 @@ export interface IQuestService {
   getActiveQuestLocations(): string[];
   checkExpiredQuests(currentDay: number, player: Player): void;
   getUrgentQuests(currentDay: number): Quest[];
-  /** Restore quest state from a loaded save (active quests + completed ids). */
-  restoreState(activeQuests: Quest[], completedQuestIds: string[]): void;
+  /** Restore quest state from a loaded save (active quests + completed ids + chain parts). */
+  restoreState(
+    activeQuests: Quest[],
+    completedQuestIds: string[],
+    completedChainParts?: Record<string, number[]>,
+  ): void;
+  /** Serialize completedChainParts for persistence. */
+  getCompletedChainParts(): Record<string, number[]>;
   /**
    * Force-complete a quest regardless of objective state and grant reward.
    * Used by auto-completion triggers (planet landing, system entry, NPC kill).

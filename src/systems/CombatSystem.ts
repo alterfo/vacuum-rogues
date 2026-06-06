@@ -103,7 +103,8 @@ export class CombatSystem {
       }
       extraMsg = ` (Шквал: ${targets.length} целей)`;
     } else if (ability === WeaponAbility.EMP) {
-      const dmg = this.applyDamageToEnemy(primaryTarget, baseDamage);
+      // EMP pulses bypass shields and hit the hull directly, then disable the shield.
+      const dmg = this.applyDamageToEnemy(primaryTarget, baseDamage, true);
       totalDamage = dmg;
       primaryTarget.shieldDisabledTurns = 2;
       extraMsg = " (ЭМИ: щит отключён на 2 хода)";
@@ -129,20 +130,24 @@ export class CombatSystem {
 
   /**
    * Apply damage to an enemy, respecting shield absorption and EMP state.
+   * Pass bypassShields=true for EMP hits that penetrate to the hull directly.
    */
   applyDamageToEnemy(
     enemy: import("@/domain/EnemyShip").EnemyShip,
     rawDamage: number,
+    bypassShields = false,
   ): number {
     const shieldActive = enemy.shieldDisabledTurns <= 0;
-    if (enemy.shields > 0 && shieldActive) {
+    if (!bypassShields && enemy.shields > 0 && shieldActive) {
       const absorbed = Math.min(enemy.shields, rawDamage);
       enemy.shields -= absorbed;
-      enemy.hullHP -= rawDamage - absorbed;
+      const hullDamage = rawDamage - absorbed;
+      enemy.hullHP -= hullDamage;
+      return hullDamage;
     } else {
       enemy.hullHP -= rawDamage;
+      return rawDamage;
     }
-    return rawDamage;
   }
 
   /**

@@ -17,19 +17,27 @@ export class QuestManagerAdapter implements IQuestService {
     templateId: string,
     planetId?: string,
     currentDay?: number,
+    factionId?: string,
   ): Quest | null {
-    return this.delegate.acceptQuest(templateId, planetId, currentDay);
+    return this.delegate.acceptQuest(
+      templateId,
+      planetId,
+      currentDay,
+      factionId,
+    );
   }
 
   acceptQuestFromTemplate(
     template: QuestTemplate,
     planetId?: string,
     currentDay?: number,
+    factionId?: string,
   ): Quest | null {
     return this.delegate.acceptQuestFromTemplate(
       template,
       planetId,
       currentDay,
+      factionId,
     );
   }
 
@@ -69,11 +77,23 @@ export class QuestManagerAdapter implements IQuestService {
     return this.delegate.getUrgentQuests(currentDay);
   }
 
-  restoreState(activeQuests: Quest[], completedQuestIds: string[]): void {
-    this.delegate.restoreState(activeQuests, completedQuestIds);
+  restoreState(
+    activeQuests: Quest[],
+    completedQuestIds: string[],
+    completedChainParts?: Record<string, number[]>,
+  ): void {
+    this.delegate.restoreState(
+      activeQuests,
+      completedQuestIds,
+      completedChainParts,
+    );
   }
 
   forceCompleteQuest(questId: string, player: Player): boolean {
     return this.delegate.forceCompleteQuest(questId, player);
+  }
+
+  getCompletedChainParts(): Record<string, number[]> {
+    return this.delegate.getCompletedChainParts();
   }
 }

@@ -369,11 +369,13 @@ export class QuestManager {
    * @param templateId Quest template ID
    * @param planetId Planet where quest is issued (for reputation tracking)
    * @param currentDay Current game day (for deadline tracking)
+   * @param factionId Faction that controls the issuing planet (for faction reputation penalty on failure)
    */
   acceptQuest(
     templateId: string,
     planetId: string = "unknown",
     currentDay: number = 0,
+    factionId: string = "",
   ): Quest | null {
     const template = this.questTemplates.get(templateId);
     if (!template) {
@@ -410,6 +412,7 @@ export class QuestManager {
       template.minReputation ?? 0,
       template.chainId ?? null,
       template.chainPart ?? -1,
+      factionId,
     );
 
     this.activeQuests.set(quest.id, quest);
@@ -429,11 +432,17 @@ export class QuestManager {
     template: QuestTemplate,
     planetId: string = "unknown",
     currentDay: number = 0,
+    factionId: string = "",
   ): Quest | null {
     this.questTemplates.set(template.id, template);
     // Ensure new fields from the template are preserved when the quest is
     // constructed via acceptQuest → new Quest(...). We inject them after creation.
-    const quest = this.acceptQuest(template.id, planetId, currentDay);
+    const quest = this.acceptQuest(
+      template.id,
+      planetId,
+      currentDay,
+      factionId,
+    );
     return quest;
   }
 
@@ -555,13 +564,30 @@ export class QuestManager {
    * JSON, so re-attach the Quest prototype to restore its methods
    * (isExpired, updateProgress, ...).
    */
-  restoreState(activeQuests: Quest[], completedQuestIds: string[]): void {
+  restoreState(
+    activeQuests: Quest[],
+    completedQuestIds: string[],
+    completedChainParts: Record<string, number[]> = {},
+  ): void {
     this.activeQuests.clear();
     for (const quest of activeQuests) {
       Object.setPrototypeOf(quest, Quest.prototype);
       this.activeQuests.set(quest.id, quest);
     }
     this.completedQuests = new Set(completedQuestIds);
+    this.completedChainParts.clear();
+    for (const [chainId, parts] of Object.entries(completedChainParts)) {
+      this.completedChainParts.set(chainId, new Set(parts));
+    }
+  }
+
+  /** Serialize completedChainParts for persistence. */
+  getCompletedChainParts(): Record<string, number[]> {
+    const out: Record<string, number[]> = {};
+    for (const [chainId, parts] of this.completedChainParts) {
+      out[chainId] = Array.from(parts).sort((a, b) => a - b);
+    }
+    return out;
   }
 
   /**
@@ -653,13 +679,14 @@ export class QuestManager {
 
     const penalty = quest.failurePenalty;
 
-    // Apply reputation loss
+    // Apply reputation loss — key by factionId so the penalty is visible on the
+    // quest board (which filters by faction rep). Fall back to planetId for
+    // older saves and test stubs that don't set factionId.
     if (penalty.reputationLoss > 0) {
-      const currentRep = player.reputation[quest.planetId] ?? 0;
-      (player.reputation as { [key: string]: number })[quest.planetId] =
-        Math.max(-100, currentRep - penalty.reputationLoss);
+      const repKey = quest.factionId || quest.planetId;
+      player.adjustReputation(repKey, -penalty.reputationLoss);
       logger.info(
-        `Reputation loss: -${penalty.reputationLoss} on planet ${quest.planetId} (now ${player.reputation[quest.planetId]})`,
+        `Reputation loss: -${penalty.reputationLoss} on ${repKey} (now ${player.getReputation(repKey)})`,
       );
     }
 

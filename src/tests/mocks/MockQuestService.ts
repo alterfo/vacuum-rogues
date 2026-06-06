@@ -64,12 +64,20 @@ export class MockQuestService implements IQuestService {
     return [];
   }
 
-  restoreState(activeQuests: Quest[], completedQuestIds: string[]): void {
+  restoreState(
+    activeQuests: Quest[],
+    completedQuestIds: string[],
+    _completedChainParts?: Record<string, number[]>,
+  ): void {
     this.activeQuests = activeQuests;
     this.completedQuestIds = completedQuestIds;
   }
 
   forceCompleteQuest(_questId: string, _player: Player): boolean {
     return false;
+  }
+
+  getCompletedChainParts(): Record<string, number[]> {
+    return {};
   }
 }

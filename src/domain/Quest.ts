@@ -37,6 +37,8 @@ export class Quest {
     public readonly chainId: string | null = null,
     /** Position in the chain: 0/1/2 for parts, 3 for finale, -1 = not a chain quest. */
     public readonly chainPart: number = -1,
+    /** Faction that issued this quest — used for reputation penalty on failure. Empty = fall back to planetId key. */
+    public readonly factionId: string = "",
   ) {}
 
   updateProgress(event: { objectiveId: string; amount: number }): void {

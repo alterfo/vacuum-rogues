@@ -145,6 +145,7 @@ export const QuestSchema = z.object({
   minReputation: z.number().int().min(0).default(0),
   chainId: z.string().nullable().default(null),
   chainPart: z.number().int().default(-1),
+  factionId: z.string().default(""),
 });
 
 export const QuestLogSchema = z.object({
@@ -152,6 +153,11 @@ export const QuestLogSchema = z.object({
   // QuestManager tracks completed quests by id only, so persist ids (not full
   // Quest objects) to match the runtime shape.
   completedQuests: z.array(z.string()),
+  // completedChainParts: chainId → sorted list of completed part indices (0/1/2).
+  // Persisted so cross-session chain completion works correctly.
+  completedChainParts: z
+    .record(z.string(), z.array(z.number().int()))
+    .default({}),
 });
 
 export const JournalEntrySchema = z.object({
