@@ -254,6 +254,13 @@ export class NpcShipSprite {
     this.orbitAngle = Math.atan2(this.y - y, this.x - x);
   }
 
+  /** Update only the orbit center each frame as the planet moves. Does not
+   *  reset orbit radius or direction. */
+  updateAnchorPosition(x: number, y: number): void {
+    this.anchorX = x;
+    this.anchorY = y;
+  }
+
   private render(): void {
     const hull = FACTION_COLORS[this.npc.faction] ?? 0x999999;
     const intent = INTENT_COLORS[this.npc.role] ?? 0xffffff;

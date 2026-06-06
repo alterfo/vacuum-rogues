@@ -577,6 +577,16 @@ export class NpcSimulator {
         }
       }
     }
+
+    // Reset surviving combatants to PATROLLING so they don't appear as
+    // perpetually FIGHTING in the contact panel. Use PATROLLING (not IDLE) so
+    // the 15% per-day departure chance is preserved rather than triggering an
+    // immediate departure.
+    for (const npc of galaxy.npcShips) {
+      if (npc.state === NpcState.FIGHTING) {
+        npc.state = NpcState.PATROLLING;
+      }
+    }
   }
 
   /**

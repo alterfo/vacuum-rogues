@@ -174,6 +174,9 @@ export class SpaceFlightScene extends GameScene {
 
   // NPC ships present in the player's system (Feature 8, slice 2)
   private npcSprites: NpcShipSprite[] = [];
+  // Maps each non-pirate NPC sprite to the planet sprite it orbits so the
+  // anchor can be refreshed each frame as planets drift along their orbits.
+  private npcAnchorPlanet = new Map<NpcShipSprite, PlanetSprite>();
   private npcContactPanel: NpcContactPanel | null = null;
   private contactNpcId: string | null = null;
   // When set, the ship auto-follows this NPC (used by "Атаковать"): on each
@@ -670,6 +673,7 @@ export class SpaceFlightScene extends GameScene {
       sprite.destroy();
     }
     this.npcSprites = [];
+    this.npcAnchorPlanet.clear();
     this.closeNpcContactPanel();
     this.followNpcId = null;
 
@@ -3477,6 +3481,7 @@ export class SpaceFlightScene extends GameScene {
       const idx = this.hashId(npc.id) % this.planetSprites.length;
       const p = this.planetSprites[idx];
       sprite.setAnchor(p.screenX, p.screenY);
+      this.npcAnchorPlanet.set(sprite, p);
     }
     this.renderer.gameLayer.addChild(sprite.container);
     this.npcSprites.push(sprite);
@@ -3521,8 +3526,14 @@ export class SpaceFlightScene extends GameScene {
 
     for (let i = this.npcSprites.length - 1; i >= 0; i--) {
       const sprite = this.npcSprites[i];
+      // Keep the orbit center aligned with the planet's current orbital position.
+      const anchorPlanet = this.npcAnchorPlanet.get(sprite);
+      if (anchorPlanet) {
+        sprite.updateAnchorPosition(anchorPlanet.screenX, anchorPlanet.screenY);
+      }
       sprite.update(deltaTime);
       if (sprite.isGone()) {
+        this.npcAnchorPlanet.delete(sprite);
         sprite.destroy();
         this.npcSprites.splice(i, 1);
       } else {
