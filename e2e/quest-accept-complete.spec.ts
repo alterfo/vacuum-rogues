@@ -26,6 +26,7 @@ type QuestTemplate = {
 };
 
 type GeneratedQuest = {
+  id: string;
   template: QuestTemplate;
   targetSystemId: string;
 };
@@ -56,7 +57,7 @@ type GameEngine = {
   };
   galaxy: { systems: GalaxySystem[] } | null;
   currentSceneType: string;
-  transitionTo: (scene: string) => Promise<void>;
+  transitionTo: (scene: string, ctx?: unknown) => Promise<void>;
   getQuestBoard: (planetId: string) => GeneratedQuest[];
   acceptBoardQuest: (quest: GeneratedQuest, planetId: string) => Quest | null;
   questManager: {
@@ -70,10 +71,6 @@ declare global {
   }
 }
 
-function getEngine(win: Window): GameEngine {
-  return (win as unknown as { __gameEngine: GameEngine }).__gameEngine;
-}
-
 test.describe('Quest accept and complete flow', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -82,11 +79,13 @@ test.describe('Quest accept and complete flow', () => {
       { timeout: 15000 },
     );
     await page.evaluate(async () => {
-      const engine = getEngine(window);
+      const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       await engine.transitionTo('SPACE_FLIGHT');
     });
     await page.waitForFunction(
-      () => getEngine(window).currentSceneType === 'SPACE_FLIGHT',
+      () =>
+        (window as unknown as { __gameEngine: GameEngine }).__gameEngine
+          .currentSceneType === 'SPACE_FLIGHT',
       { timeout: 8000 },
     );
   });
@@ -94,7 +93,7 @@ test.describe('Quest accept and complete flow', () => {
   test('EXPLORATION quest completes when player enters target system', async ({ page }) => {
     // Find a planet in the starting system to get the quest board
     const setupResult = await page.evaluate(() => {
-      const engine = getEngine(window);
+      const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       const galaxy = engine.galaxy;
       if (!galaxy || !engine.player) return null;
 
@@ -121,7 +120,7 @@ test.describe('Quest accept and complete flow', () => {
 
     // Accept the quest
     const acceptResult = await page.evaluate((sr) => {
-      const engine = getEngine(window);
+      const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       const accepted = engine.acceptBoardQuest(sr.quest, sr.planetId);
       return {
         accepted: !!accepted,
@@ -135,36 +134,44 @@ test.describe('Quest accept and complete flow', () => {
 
     // Confirm quest appears in active quests
     const activeCount = await page.evaluate(() => {
-      return getEngine(window).questManager.getActiveQuests().length;
+      return (window as unknown as { __gameEngine: GameEngine }).__gameEngine
+        .questManager.getActiveQuests().length;
     });
     expect(activeCount).toBeGreaterThan(0);
 
-    const creditsBefore = await page.evaluate(() => getEngine(window).player.credits);
+    const creditsBefore = await page.evaluate(() => {
+      return (window as unknown as { __gameEngine: GameEngine }).__gameEngine.player.credits;
+    });
 
     // Teleport player to target system (warp jump)
     await page.evaluate((targetSystemId) => {
-      getEngine(window).player.currentSystemId = targetSystemId;
+      (window as unknown as { __gameEngine: GameEngine }).__gameEngine
+        .player.currentSystemId = targetSystemId;
     }, acceptResult.targetSystemId);
 
     // Transitioning to SPACE_FLIGHT triggers completeExplorationQuestsBySystemEntry()
     await page.evaluate(async () => {
-      const engine = getEngine(window);
+      const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       await engine.transitionTo('SPACE_FLIGHT');
     });
     await page.waitForFunction(
-      () => getEngine(window).currentSceneType === 'SPACE_FLIGHT',
+      () =>
+        (window as unknown as { __gameEngine: GameEngine }).__gameEngine
+          .currentSceneType === 'SPACE_FLIGHT',
       { timeout: 8000 },
     );
 
     // Verify credits increased by the quest reward
-    const creditsAfter = await page.evaluate(() => getEngine(window).player.credits);
+    const creditsAfter = await page.evaluate(() => {
+      return (window as unknown as { __gameEngine: GameEngine }).__gameEngine.player.credits;
+    });
     expect(creditsAfter).toBeGreaterThanOrEqual(creditsBefore + acceptResult.reward);
   });
 
   test('DELIVERY quest completes when player lands on target planet with cargo', async ({ page }) => {
     // Find a DELIVERY quest on the board
     const setupResult = await page.evaluate(() => {
-      const engine = getEngine(window);
+      const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       const galaxy = engine.galaxy;
       if (!galaxy || !engine.player) return null;
 
@@ -188,7 +195,7 @@ test.describe('Quest accept and complete flow', () => {
 
     // Accept delivery quest
     const acceptResult = await page.evaluate((sr) => {
-      const engine = getEngine(window);
+      const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       const accepted = engine.acceptBoardQuest(sr.quest, sr.planetId);
       if (!accepted) return null;
 
@@ -210,30 +217,27 @@ test.describe('Quest accept and complete flow', () => {
       return;
     }
 
-    // Load the required cargo into inventory
+    // Load the required cargo into inventory via the addResource API
     if (acceptResult.cargoType) {
       await page.evaluate((info) => {
-        const engine = getEngine(window);
-        const resources = engine.player.inventory.resources;
-        const existing = resources.find((r) => r.type === info.cargoType);
-        if (existing) {
-          existing.amount += info.cargoAmount;
-        } else {
-          resources.push({ type: info.cargoType, amount: info.cargoAmount });
-        }
+        const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
+        engine.player.inventory.addResource(info.cargoType!, info.cargoAmount);
       }, { cargoType: acceptResult.cargoType, cargoAmount: acceptResult.cargoAmount });
     }
 
-    const creditsBefore = await page.evaluate(() => getEngine(window).player.credits);
+    const creditsBefore = await page.evaluate(() => {
+      return (window as unknown as { __gameEngine: GameEngine }).__gameEngine.player.credits;
+    });
 
     // Travel to target system
     await page.evaluate((targetSystemId) => {
-      getEngine(window).player.currentSystemId = targetSystemId;
+      (window as unknown as { __gameEngine: GameEngine }).__gameEngine
+        .player.currentSystemId = targetSystemId;
     }, acceptResult.targetSystemId);
 
     // Land on target planet (PlanetScene.initialize triggers checkDeliveryQuestCompletion)
     const targetPlanetId = await page.evaluate((targetSystemId) => {
-      const engine = getEngine(window);
+      const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       const galaxy = engine.galaxy;
       const sys = galaxy?.systems.find((s) => s.id === targetSystemId);
       return sys?.planets?.[0]?.id ?? null;
@@ -245,7 +249,7 @@ test.describe('Quest accept and complete flow', () => {
     }
 
     await page.evaluate(async (planetId) => {
-      const engine = getEngine(window);
+      const engine = (window as unknown as { __gameEngine: GameEngine }).__gameEngine;
       await engine.transitionTo('PLANET', {
         gameEngine: engine,
         planet: (engine.galaxy?.systems
@@ -255,12 +259,16 @@ test.describe('Quest accept and complete flow', () => {
     }, targetPlanetId);
 
     await page.waitForFunction(
-      () => getEngine(window).currentSceneType === 'PLANET',
+      () =>
+        (window as unknown as { __gameEngine: GameEngine }).__gameEngine
+          .currentSceneType === 'PLANET',
       { timeout: 8000 },
     );
 
     // Verify credits increased
-    const creditsAfter = await page.evaluate(() => getEngine(window).player.credits);
+    const creditsAfter = await page.evaluate(() => {
+      return (window as unknown as { __gameEngine: GameEngine }).__gameEngine.player.credits;
+    });
     expect(creditsAfter).toBeGreaterThanOrEqual(creditsBefore + acceptResult.reward);
   });
 });

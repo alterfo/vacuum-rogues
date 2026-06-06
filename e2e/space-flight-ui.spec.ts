@@ -118,8 +118,8 @@ test.describe('Space Flight UI - Camera Controls', () => {
     // Ship position should not have changed significantly in world coordinates
     const zoomedShip = await spaceFlightPage.getShipPosition();
 
-    expect(zoomedShip.x).toBeCloseTo(initialShip.x, 50);
-    expect(zoomedShip.y).toBeCloseTo(initialShip.y, 50);
+    expect(Math.abs(zoomedShip.x - initialShip.x)).toBeLessThan(50);
+    expect(Math.abs(zoomedShip.y - initialShip.y)).toBeLessThan(50);
   });
 
   test('should update camera debug display when zooming', async ({ page }) => {

@@ -26,7 +26,7 @@ test.describe('Phase 0: Technical Prototype', () => {
   }) => {
     await mainMenu.expectGameTitleVisible();
     await mainMenu.expectMainMenuVisible();
-    await expect(page).toHaveTitle(/Space Rangers|Космические рейнджеры/);
+    await expect(page).toHaveTitle(/Galactic Horizon|Neural Onslaught/);
   });
 
   test('TC-P0-002: Web Workers should load without MIME type errors', async ({
@@ -65,7 +65,7 @@ test.describe('Phase 0: Technical Prototype', () => {
   }) => {
     const dbStatus = await checkIndexedDB(page);
     // DB should be accessible (may or may not have saves yet)
-    expect(dbStatus.exists || true).toBeTruthy();
+    expect(dbStatus.exists).toBeDefined();
   });
 });
 
@@ -221,7 +221,7 @@ test.describe('Phase 1: Save/Load System (MVP1)', () => {
 
     // Check IndexedDB for save
     const dbStatus = await checkIndexedDB(page);
-    expect(dbStatus.exists || true).toBeTruthy();
+    expect(dbStatus.exists).toBeDefined();
   });
 
   test('TC-P1-S002: Game state persists after page reload', async ({

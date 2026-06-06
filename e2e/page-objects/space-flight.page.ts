@@ -64,6 +64,13 @@ export class SpaceFlightPage extends GamePageBase {
   }
 
   /**
+   * Trigger ship movement via semantic engine call (no canvas pixel coords)
+   */
+  async clickToMoveShip(x: number, y: number) {
+    await this.setShipTarget(x, y);
+  }
+
+  /**
    * Click back to star map button
    */
   async clickBackToMap() {
