@@ -11,6 +11,7 @@ import {
 import { buildSphereMesh, type SphereMesh } from "./sphereMesh";
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType, StarType, NpcRole, QuestType } from "@/types";
+import { Faction } from "@/types/faction";
 import { pickVariant, tex } from "./textures";
 import { installGameCursors, setCanvasCursor } from "./cursor";
 import { PlanetSprite } from "./PlanetSprite";
@@ -42,6 +43,33 @@ import { ShipPhysics } from "@/systems/ShipPhysics";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { PanZoomController } from "@/systems/PanZoomController";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
+
+/** Display names for factions shown in planet tooltips. */
+const FACTION_DISPLAY_NAME: Record<Faction, string> = {
+  [Faction.OUTLANDERS]: "Аутсайдеры",
+  [Faction.BASTIONS]: "Бастионы",
+  [Faction.SYNDICATE]: "Синдикат",
+  [Faction.PARADOXES]: "Парадоксы",
+  [Faction.PROGRESSORS]: "Прогрессоры",
+  [Faction.INDEPENDENT]: "Независимые",
+  [Faction.OVERMIND]: "Овермайнд",
+};
+
+function reputationLabel(rep: number): string {
+  if (rep >= 50) return "Союзник";
+  if (rep >= 20) return "Дружественный";
+  if (rep >= -20) return "Нейтральный";
+  if (rep >= -50) return "Недовольный";
+  return "Враждебный";
+}
+
+function reputationColor(rep: number): number {
+  if (rep >= 50) return 0x44dd44;
+  if (rep >= 20) return 0x88dd88;
+  if (rep >= -20) return 0xcccccc;
+  if (rep >= -50) return 0xddaa44;
+  return 0xff4444;
+}
 
 interface NebulaLayer {
   container: Container;
@@ -199,8 +227,9 @@ export class SpaceFlightScene extends GameScene {
   // Lerp-return animation: true while the camera is smoothly returning to ship.
   private cameraReturning = false;
 
-  // Tooltip (B1): delayed hover tooltip for planets and NPC ships.
+  // Tooltip (B1): hover tooltip for planets (immediate) and NPC ships (300ms delay).
   private tooltipText: Text | null = null;
+  private tooltipContainer: Container | null = null;
   private tooltipTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Mini-log (B5): last 5 game events in the bottom-left corner.
@@ -2238,9 +2267,10 @@ export class SpaceFlightScene extends GameScene {
       // Set up click handler
       sprite.createHitArea(this.onPlanetClick.bind(this));
 
-      // Tooltip on hover (B1).
+      // Tooltip on hover (B1) — immediate rich tooltip for planets.
+      const systemFaction = currentSystem.ownerFaction;
       sprite.setTooltipHandlers(
-        (p, sx, sy) => this.showTooltip(p.name, sx, sy),
+        (p, sx, sy) => this.showPlanetTooltip(p, systemFaction, sx, sy),
         () => this.hideTooltip(),
       );
 
@@ -3993,6 +4023,89 @@ export class SpaceFlightScene extends GameScene {
     }, 300);
   }
 
+  /** Show an immediate rich planet tooltip (name, habitability, faction, capture). */
+  private showPlanetTooltip(
+    planet: Planet,
+    systemFaction: Faction,
+    screenX: number,
+    screenY: number,
+  ): void {
+    this.hideTooltip();
+
+    const lines: Array<{ text: string; color: number }> = [];
+
+    // Line 1: planet name
+    lines.push({ text: planet.name, color: 0xffffff });
+
+    // Line 2: habitability
+    if (planet.isHabitable) {
+      lines.push({ text: "Обитаема", color: 0x44dd44 });
+    } else {
+      lines.push({ text: "Необитаема", color: 0x888888 });
+    }
+
+    // Line 3: faction + player reputation
+    const factionLabel = FACTION_DISPLAY_NAME[systemFaction] ?? systemFaction;
+    const rep = this.gameEngine?.player?.getReputation(systemFaction) ?? 0;
+    const repLabel = reputationLabel(rep);
+    const repColor = reputationColor(rep);
+    lines.push({ text: `${factionLabel} · ${repLabel}`, color: repColor });
+
+    // Line 4: capture warning
+    if (planet.capturedBy !== null && planet.capturedBy !== undefined) {
+      const captorName =
+        FACTION_DISPLAY_NAME[planet.capturedBy as unknown as Faction] ??
+        planet.capturedBy;
+      lines.push({ text: `⚠ Захвачена: ${captorName}`, color: 0xff4444 });
+    }
+
+    // Build container
+    const padding = 8;
+    const lineHeight = 18;
+    const fontSize = 13;
+
+    const container = new Container();
+    container.eventMode = "none";
+
+    const textNodes: Text[] = lines.map((line, i) => {
+      const t = new Text({
+        text: line.text,
+        style: {
+          fontFamily: "Courier New",
+          fontSize,
+          fill: line.color,
+        },
+      });
+      t.eventMode = "none";
+      t.x = padding;
+      t.y = padding + i * lineHeight;
+      return t;
+    });
+
+    // Measure content area after creating texts
+    const maxWidth = Math.max(...textNodes.map((t) => t.width));
+    const totalHeight = padding * 2 + lines.length * lineHeight;
+
+    const bg = new Graphics();
+    bg.roundRect(0, 0, maxWidth + padding * 2, totalHeight, 4);
+    bg.fill({ color: 0x000000, alpha: 0.75 });
+    bg.eventMode = "none";
+
+    container.addChild(bg);
+    for (const t of textNodes) container.addChild(t);
+
+    const screenW = this.renderer.app.screen.width;
+    const screenH = this.renderer.app.screen.height;
+    container.x = Math.min(screenX + 16, screenW - maxWidth - padding * 2 - 8);
+    container.y = Math.max(
+      8,
+      Math.min(screenY - totalHeight / 2, screenH - totalHeight - 8),
+    );
+
+    this.tooltipContainer = container;
+    this.renderer.uiLayer.addChild(container);
+  }
+
   /** Cancel any pending tooltip and destroy the visible one. */
   private hideTooltip(): void {
     if (this.tooltipTimer !== null) {
@@ -4002,6 +4115,10 @@ export class SpaceFlightScene extends GameScene {
     if (this.tooltipText) {
       this.tooltipText.destroy();
       this.tooltipText = null;
+    }
+    if (this.tooltipContainer) {
+      this.tooltipContainer.destroy({ children: true });
+      this.tooltipContainer = null;
     }
   }
 

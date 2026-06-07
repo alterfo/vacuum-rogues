@@ -1,4 +1,4 @@
-import type { PlanetType } from "@/types";
+import type { FactionType, PlanetType } from "@/types";
 import type { Market } from "./Market";
 import type { NPC } from "./NPC";
 import type { Quest } from "./Quest";
@@ -16,5 +16,7 @@ export class Planet {
     public drones: number = 0,
     /** Population count; affected by Plague events and market capacity. */
     public population: number = 0,
+    /** Faction that has captured this planet (null = not captured). */
+    public capturedBy: FactionType | null = null,
   ) {}
 }
