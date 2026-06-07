@@ -36,6 +36,7 @@ import {
   dayTickMarks,
   avoidStarPath,
   hashToAngle,
+  planetApproachPoint,
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
@@ -2352,36 +2353,43 @@ export class SpaceFlightScene extends GameScene {
    * Handle planet click: two-step movement - plan route on first click, execute on second
    */
   private onPlanetClick(planet: Planet): void {
-    logger.debug(`Planet clicked: ${planet.name}`);
+    logger.debug(
+      `Planet clicked: ${planet.name}, plannedRoute=${JSON.stringify(this.plannedRoute)}, routeTargetPlanetId=${this.routeTargetPlanetId}`,
+    );
 
     const planetSprite = this.planetSprites.find(
       (s) => s.planet.id === planet.id,
     );
     if (!planetSprite || !this.shipPhysics) return;
 
-    // This route targets a planet → the ship will auto-land on arrival.
-    this.routeTargetPlanetId = planet.id;
     this.followNpcId = null; // picking a planet cancels auto-follow
 
-    // Two-step movement logic
-    if (this.plannedRoute) {
-      // Check if clicking on the same planet (within 50px of planned route)
-      const dx = planetSprite.screenX - this.plannedRoute.x;
-      const dy = planetSprite.screenY - this.plannedRoute.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+    // Compute approach point at planet edge (ship-facing side) so the route
+    // preview stops at the disc surface rather than cutting through to the centre.
+    const approachPt = planetApproachPoint(
+      this.shipPhysics.shipX,
+      this.shipPhysics.shipY,
+      planetSprite.screenX,
+      planetSprite.screenY,
+      planetSprite.displayRadius,
+      GAME_BALANCE.landingApproachOffset,
+    );
+    logger.debug(
+      `Planet ${planet.name}: approach pt (${approachPt.x.toFixed(0)}, ${approachPt.y.toFixed(0)})`,
+    );
 
-      if (distance < 50) {
-        // Second click - execute the route (curving around the star if needed)
-        this.executeRouteTo(this.plannedRoute.x, this.plannedRoute.y);
-        logger.info(`▶️ Executing route to planet ${planet.name}`);
-      } else {
-        // Different planet - update planned route (preview bows around the star)
-        this.planRouteTo(planetSprite.screenX, planetSprite.screenY);
-        logger.info(`🗺️ Route updated to planet ${planet.name}`);
-      }
+    // Detect second click via planet ID (stable even as the planet orbits),
+    // not position proximity (which broke when the planet moved between clicks).
+    const isSamePlanet = this.routeTargetPlanetId === planet.id;
+    this.routeTargetPlanetId = planet.id;
+
+    if (this.plannedRoute && isSamePlanet) {
+      // Second click on same planet - execute the route
+      this.executeRouteTo(approachPt.x, approachPt.y);
+      logger.info(`▶️ Executing route to planet ${planet.name}`);
     } else {
-      // First click - plan the route (preview bows around the star)
-      this.planRouteTo(planetSprite.screenX, planetSprite.screenY);
+      // First click or different planet - plan the route preview
+      this.planRouteTo(approachPt.x, approachPt.y);
       logger.info(
         `🗺️ Route planned to planet ${planet.name}. Click again to execute.`,
       );

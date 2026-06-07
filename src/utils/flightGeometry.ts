@@ -116,6 +116,35 @@ export function avoidStarPath(
 }
 
 /**
+ * Compute the approach waypoint for a planet: a point on the ship-facing edge
+ * of the planet disc, offset outward by `offset` px.  Routing to this point
+ * instead of the planet centre prevents the preview line from cutting through
+ * the disc, while the auto-land trigger (which fires when the ship is within
+ * `LANDING_RANGE` of the surface) ensures the ship still lands on arrival.
+ */
+export function planetApproachPoint(
+  shipX: number,
+  shipY: number,
+  planetX: number,
+  planetY: number,
+  planetRadius: number,
+  offset: number,
+): Point {
+  const dx = planetX - shipX;
+  const dy = planetY - shipY;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 1e-6) {
+    return { x: planetX + planetRadius + offset, y: planetY };
+  }
+  const nx = dx / dist;
+  const ny = dy / dist;
+  return {
+    x: planetX - nx * (planetRadius + offset),
+    y: planetY - ny * (planetRadius + offset),
+  };
+}
+
+/**
  * Convert a point in the minimap's local coordinates (px within the radar box)
  * back to a world coordinate, so a drag on the radar can re-centre the main
  * view there (US-070 #2). `titleOffset` accounts for the radar's title bar.

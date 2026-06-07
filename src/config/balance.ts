@@ -108,4 +108,9 @@ export const GAME_BALANCE = {
   scannerRange: 1200,
   /** Star sprite radius (visual, not physics). */
   starRadius: 170,
+  /** Gap (px) from planet surface to route endpoint — route preview stops at
+   *  the edge rather than cutting through the disc. Auto-landing triggers
+   *  earlier (LANDING_RANGE = 60 px), so the ship always lands before the
+   *  approach waypoint is reached. */
+  landingApproachOffset: 80,
 } as const;
