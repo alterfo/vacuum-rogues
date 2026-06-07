@@ -5,6 +5,7 @@ import type { StarSystem } from "@/domain/StarSystem";
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
+import { getSystemVisibility } from "@/utils/starMapUtils";
 
 export interface StarMapContext {
   galaxy?: Galaxy;
@@ -478,9 +479,7 @@ export class StarMapScene extends GameScene {
     };
 
     // Determine visited systems and OVERMIND systems for rendering decisions.
-    const visitedSystems = new Set(
-      this.gameEngine?.player?.visitedSystems ?? [],
-    );
+    const visitedSystemIds = this.gameEngine?.player?.visitedSystems ?? [];
     const overmindSystems = new Set(this.galaxy.overmindSystems ?? []);
 
     // Draw only explored systems
@@ -505,7 +504,10 @@ export class StarMapScene extends GameScene {
       const isPlayer = system.id === this.playerSystemId;
       const isSelected = system.id === this.selectedSystemId;
       const isOvermind = overmindSystems.has(system.id);
-      const isVisited = visitedSystems.has(system.id) || isPlayer;
+      const visibility = isPlayer
+        ? "visited"
+        : getSystemVisibility(system.id, visitedSystemIds, this.galaxy.systems);
+      const isVisited = visibility === "visited";
 
       let color: number;
       let radius: number;
@@ -520,10 +522,14 @@ export class StarMapScene extends GameScene {
       } else if (isSelected) {
         color = 0xffff00;
         radius = 5;
-      } else if (!isVisited) {
-        // Explored but not personally visited: dim gray "?" node.
-        color = 0x445566;
+      } else if (visibility === "neighbor") {
+        // Neighbor system: known but not personally visited — dim dot.
+        color = 0x334455;
         radius = 3;
+      } else if (!isVisited) {
+        // Fully unknown system (should be rare — unexplored): very dim.
+        color = 0x223344;
+        radius = 2;
       } else {
         color = 0x00ffff;
         radius = 4;
@@ -566,14 +572,14 @@ export class StarMapScene extends GameScene {
 
       this.mapContainer.addChild(hitArea);
 
-      // Unvisited systems: show "?" instead of system name.
-      if (!isVisited && !isPlayer && !isOvermind) {
+      // Completely unknown systems: show "?" with no label.
+      if (visibility === "unknown" && !isPlayer && !isOvermind) {
         const qLabel = new Text({
           text: "?",
           style: {
             fontFamily: "Courier New",
             fontSize: 10,
-            fill: 0x445566,
+            fill: 0x223344,
           },
         });
         qLabel.x = x + 6;
@@ -650,7 +656,9 @@ export class StarMapScene extends GameScene {
           ? 0xff6666
           : system.id === this.playerSystemId
             ? 0x00ff00
-            : 0x88ccff;
+            : visibility === "neighbor"
+              ? 0x445566
+              : 0x88ccff;
 
         const label = new Text({
           text: system.name,
