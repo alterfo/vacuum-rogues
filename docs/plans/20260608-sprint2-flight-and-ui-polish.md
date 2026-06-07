@@ -87,12 +87,12 @@
 - Modify: `src/presentation/SpaceFlightScene.ts`
 - Modify: `src/config/balance.ts`
 
-- [ ] В `avoidStarPath()`: после генерации дуговых waypoints применить Catmull-Rom сглаживание — для каждого участка вычислять контрольные точки и возвращать плотную выборку (~4 точки между каждой парой) вместо сырого полигона
-- [ ] Добавить в `balance.ts`: `STAR_TOUCH_DAMAGE = 5` (урон корпусу при касании солнца)
-- [ ] В `SpaceFlightScene.updateMovement()`: каждый тик проверять `distance(ship, starCenter) < STAR_RADIUS`; если да — `player.hull.hp -= STAR_TOUCH_DAMAGE * dt/1000`; показать toast «☀ Корпус горит!» (один раз пока касается, не спам)
-- [ ] Написать тест `avoidStarSmooth.test.ts`: соседние waypoints в выходе `avoidStarPath` не имеют резких углов (угол между сегментами < 30°)
-- [ ] `npm test -- --run src/tests/avoidStarSmooth.test.ts` — зелёный
-- [ ] `npm test -- --run` + `npm run lint` — без регрессий
+- [x] В `avoidStarPath()`: после генерации дуговых waypoints применить Catmull-Rom сглаживание — для каждого участка вычислять контрольные точки и возвращать плотную выборку (~4 точки между каждой парой) вместо сырого полигона
+- [x] Добавить в `balance.ts`: `STAR_TOUCH_DAMAGE = 5` (урон корпусу при касании солнца)
+- [x] В `SpaceFlightScene.updateMovement()`: каждый тик проверять `distance(ship, starCenter) < STAR_RADIUS`; если да — `player.hull.hp -= STAR_TOUCH_DAMAGE * dt/1000`; показать toast «☀ Корпус горит!» (один раз пока касается, не спам)
+- [x] Написать тест `avoidStarSmooth.test.ts`: соседние waypoints в выходе `avoidStarPath` не имеют резких углов (угол между сегментами < 30°)
+- [x] `npm test -- --run src/tests/avoidStarSmooth.test.ts` — зелёный
+- [x] `npm test -- --run` + `npm run lint` — без регрессий
 
 ### Task 5: Тултип планеты — полная информация сразу
 

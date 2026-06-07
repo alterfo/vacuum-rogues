@@ -117,4 +117,6 @@ export const GAME_BALANCE = {
   gameSpeedDefault: 1.0,
   /** Selectable time-scale steps cycled by the speed button in the HUD. */
   gameSpeedMultipliers: [1.0, 2.0, 4.0] as const,
+  /** Hull damage per second when the ship is inside the star radius. */
+  starTouchDamage: 5,
 } as const;

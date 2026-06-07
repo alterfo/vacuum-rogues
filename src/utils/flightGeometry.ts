@@ -70,10 +70,52 @@ export function hashToAngle(s: string): number {
 }
 
 /**
+ * Catmull-Rom spline through `pts` with `samplesPerSegment` interpolated points
+ * per segment. Ghost points at both ends ensure the curve passes through the
+ * first and last control points.
+ */
+export function catmullRomSpline(
+  pts: Point[],
+  samplesPerSegment: number,
+): Point[] {
+  if (pts.length < 2) return [...pts];
+  const cp: Point[] = [pts[0], ...pts, pts[pts.length - 1]];
+  const result: Point[] = [];
+  for (let i = 1; i < cp.length - 2; i++) {
+    const p0 = cp[i - 1];
+    const p1 = cp[i];
+    const p2 = cp[i + 1];
+    const p3 = cp[i + 2];
+    for (let s = 0; s < samplesPerSegment; s++) {
+      const t = s / samplesPerSegment;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      result.push({
+        x:
+          0.5 *
+          (2 * p1.x +
+            (-p0.x + p2.x) * t +
+            (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
+            (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+        y:
+          0.5 *
+          (2 * p1.y +
+            (-p0.y + p2.y) * t +
+            (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+            (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
+      });
+    }
+  }
+  result.push(pts[pts.length - 1]);
+  return result;
+}
+
+/**
  * A path from (fx,fy) to (tx,ty) that bows around a star at (sx,sy) of radius R
  * instead of cutting through it. Returns just `[{to}]` when the straight segment
- * already clears the star, otherwise an arc of waypoints around it plus the
- * destination (US-070 #6). Pure — used for both the route preview and execution.
+ * already clears the star, otherwise a Catmull-Rom smoothed arc of waypoints
+ * around it plus the destination (US-070 #6). Pure — used for both the route
+ * preview and execution.
  */
 export function avoidStarPath(
   fx: number,
@@ -94,25 +136,25 @@ export function avoidStarPath(
   const cyp = fy + dy * t;
   if (Math.hypot(sx - cxp, sy - cyp) >= R) return [{ x: tx, y: ty }];
 
-  // Bow around: arc waypoints at radius R between the from/to angles.
+  // Generate sparse arc control points, then smooth with Catmull-Rom so the
+  // rendered path has no visible angular chords even at large star-avoid radii.
   const a0 = Math.atan2(fy - sy, fx - sx);
   const a1 = Math.atan2(ty - sy, tx - sx);
   let d = a1 - a0;
   while (d > Math.PI) d -= 2 * Math.PI;
   while (d < -Math.PI) d += 2 * Math.PI;
   if (Math.abs(d) < 1e-3) d = Math.PI; // near-opposite: go around one side
-  // Densely sample the arc so the polyline reads as a smooth bow around the star
-  // rather than a few angular chords (US-070 #6). Scale the sample count with the
-  // arc's angular span so short bows aren't over-tessellated.
-  const steps = Math.max(8, Math.round((Math.abs(d) / Math.PI) * 24));
+  // Sparse control points for Catmull-Rom: 4–8 points per semicircle.
+  const steps = Math.max(4, Math.round((Math.abs(d) / Math.PI) * 8));
   const arcR = R * 1.08;
-  const pts: Point[] = [];
+  const control: Point[] = [];
   for (let i = 1; i < steps; i++) {
     const a = a0 + d * (i / steps);
-    pts.push({ x: sx + Math.cos(a) * arcR, y: sy + Math.sin(a) * arcR });
+    control.push({ x: sx + Math.cos(a) * arcR, y: sy + Math.sin(a) * arcR });
   }
-  pts.push({ x: tx, y: ty });
-  return pts;
+  control.push({ x: tx, y: ty });
+  // Smooth the sparse arc polygon into a curve (~4 interpolated points per gap).
+  return catmullRomSpline(control, 4);
 }
 
 /**

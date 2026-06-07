@@ -193,6 +193,9 @@ export class SpaceFlightScene extends GameScene {
   // Latches the low-hull auto-stop so the warning fires once per descent below
   // the threshold, not every frame.
   private lowHullStopped = false;
+  // Latches the star-touch toast so the "Корпус горит!" warning fires once
+  // while the ship is inside the star radius, not every frame.
+  private starTouchActive = false;
   // Lerp-return animation: true while the camera is smoothly returning to ship.
   private cameraReturning = false;
 
@@ -3009,6 +3012,29 @@ export class SpaceFlightScene extends GameScene {
       // ends (Play/Pause model).
       this.clearPlannedRoute();
       this.isTurnRunning = false;
+    }
+
+    // Star-touch damage: while the ship is inside the star visual radius, apply
+    // hull burn at STAR_TOUCH_DAMAGE hp/s. Toast fires once per contact episode.
+    const distToStar = Math.hypot(
+      this.shipPhysics.shipX - this.starCenterX,
+      this.shipPhysics.shipY - this.starCenterY,
+    );
+    const touchingStar = distToStar < this.STAR_RADIUS;
+    if (touchingStar) {
+      const burnShip = this.gameEngine?.player?.ship;
+      if (burnShip) {
+        burnShip.hullHP = Math.max(
+          0,
+          burnShip.hullHP - GAME_BALANCE.starTouchDamage * (deltaTime / 1000),
+        );
+      }
+      if (!this.starTouchActive) {
+        this.starTouchActive = true;
+        this.showMessage("☀ Корпус горит!", 0xff8800);
+      }
+    } else {
+      this.starTouchActive = false;
     }
 
     // Safety auto-stop: if the hull drops below 30% mid-flight, halt the engines
