@@ -240,6 +240,10 @@ export class SpaceFlightScene extends GameScene {
   private readonly LANDING_RANGE: number = 60; // px: how close the ship must be to a planet to land
   private dayCounterText: Text | null = null;
 
+  // Speed control HUD button (cycles 1×/2×/4×)
+  private speedButton: Text | null = null;
+  private speedIndex: number = 0; // index into GAME_BALANCE.gameSpeedMultipliers
+
   // Two-step movement: plan route, then execute
   private plannedRoute: { x: number; y: number } | null = null;
   // If the active route targets a planet, its id — the ship auto-lands on arrival.
@@ -644,6 +648,8 @@ export class SpaceFlightScene extends GameScene {
     }
     this.backButton = null;
     this.playPauseButton = null;
+    this.speedButton = null;
+    this.speedIndex = 0;
     this.isTurnRunning = false;
     this.pauseRequested = false;
     this._combatTransitionPending = false;
@@ -2154,6 +2160,35 @@ export class SpaceFlightScene extends GameScene {
     );
     this.systemMiniMap.setReturnCameraHandler(() => this.startCameraReturn());
     this.renderer.uiLayer.addChild(this.systemMiniMap.container);
+
+    // Speed button: cycles 1×/2×/4× — placed above the minimap (bottom-right).
+    const speedBtn = new Text({
+      text: "1×",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 16,
+        fill: 0x00ffcc,
+        fontWeight: "bold" as const,
+        stroke: { color: 0x000000, width: 3 },
+      },
+    });
+    speedBtn.anchor.set(1, 1);
+    speedBtn.x = this.renderer.app.screen.width - 20;
+    speedBtn.y = this.renderer.app.screen.height - 220;
+    speedBtn.eventMode = "static";
+    speedBtn.cursor = "pointer";
+    speedBtn.on("pointerdown", (event) => {
+      event.stopPropagation();
+      this.cycleGameSpeed();
+    });
+    speedBtn.on("pointerover", () => {
+      speedBtn.alpha = 0.7;
+    });
+    speedBtn.on("pointerout", () => {
+      speedBtn.alpha = 1;
+    });
+    this.renderer.uiLayer.addChild(speedBtn);
+    this.speedButton = speedBtn;
   }
 
   /**
@@ -2731,6 +2766,11 @@ export class SpaceFlightScene extends GameScene {
       this.playPauseButton.y = h - 40;
     }
     this.systemMiniMap?.reposition(w, h);
+
+    if (this.speedButton) {
+      this.speedButton.x = w - 20;
+      this.speedButton.y = h - 220;
+    }
 
     if (this.miniLogContainer) {
       this.miniLogContainer.y = h - 105;
@@ -3720,6 +3760,15 @@ export class SpaceFlightScene extends GameScene {
    * turn starts running). While running: Pause ends the turn at the next day
    * segment (or immediately if the ship is holding station in combat).
    */
+  /** Cycle game speed through 1×/2×/4× and update physics + button label. */
+  private cycleGameSpeed(): void {
+    const steps = GAME_BALANCE.gameSpeedMultipliers;
+    this.speedIndex = (this.speedIndex + 1) % steps.length;
+    const scale = steps[this.speedIndex];
+    if (this.shipPhysics) this.shipPhysics.setTimeScale(scale);
+    if (this.speedButton) this.speedButton.text = `${scale}×`;
+  }
+
   private onPlayPause(): void {
     if (this.isTurnRunning) {
       // Pause: stop at the end of the current day segment while flying; if the

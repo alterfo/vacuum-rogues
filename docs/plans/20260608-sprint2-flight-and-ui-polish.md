@@ -72,13 +72,13 @@
 - Modify: `src/systems/ShipPhysics.ts`
 - Modify: `src/presentation/SpaceFlightScene.ts`
 
-- [ ] Добавить в `balance.ts`: `GAME_SPEED_DEFAULT = 1.0` и `GAME_SPEED_MULTIPLIERS = [0.5, 1.0, 2.0, 4.0]`
-- [ ] В `ShipPhysics` добавить поле `timeScale: number = 1.0` и метод `setTimeScale(v: number)`; умножать `dt` на `timeScale` внутри `update(dt)` — это ускоряет анимацию движения, не влияя на `pixelsPerDay`
-- [ ] В `SpaceFlightScene` добавить кнопку скорости «1×» в правый нижний угол HUD (рядом с минимапой); клик циклически переключает `[1×, 2×, 4×]`; кнопка обновляет `shipPhysics.setTimeScale()` и свою метку
-- [ ] `eventMode='static'` + `stopPropagation()` на кнопке; `Text` метки — `eventMode='none'`
-- [ ] Написать тест `timeScale.test.ts`: `ShipPhysics.update(dt)` с `timeScale=2` перемещает корабль вдвое быстрее при том же `dt`
-- [ ] `npm test -- --run src/tests/timeScale.test.ts` — зелёный
-- [ ] `npm test -- --run` + `npm run lint` — без регрессий
+- [x] Добавить в `balance.ts`: `GAME_SPEED_DEFAULT = 1.0` и `GAME_SPEED_MULTIPLIERS = [0.5, 1.0, 2.0, 4.0]`
+- [x] В `ShipPhysics` добавить поле `timeScale: number = 1.0` и метод `setTimeScale(v: number)`; умножать `dt` на `timeScale` внутри `update(dt)` — это ускоряет анимацию движения, не влияя на `pixelsPerDay`
+- [x] В `SpaceFlightScene` добавить кнопку скорости «1×» в правый нижний угол HUD (рядом с минимапой); клик циклически переключает `[1×, 2×, 4×]`; кнопка обновляет `shipPhysics.setTimeScale()` и свою метку
+- [x] `eventMode='static'` + `stopPropagation()` на кнопке; `Text` метки — `eventMode='none'`
+- [x] Написать тест `timeScale.test.ts`: `ShipPhysics.update(dt)` с `timeScale=2` перемещает корабль вдвое быстрее при том же `dt`
+- [x] `npm test -- --run src/tests/timeScale.test.ts` — зелёный
+- [x] `npm test -- --run` + `npm run lint` — без регрессий
 
 ### Task 4: Облёт солнца — плавная кривая + урон при касании
 

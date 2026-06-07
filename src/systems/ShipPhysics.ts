@@ -9,6 +9,7 @@ export class ShipPhysics {
   public shipAngle: number;
   public currentSpeed: number = 0;
   public isMoving: boolean = false;
+  public timeScale: number = 1.0;
 
   private targetX: number;
   private targetY: number;
@@ -78,6 +79,11 @@ export class ShipPhysics {
     this.isMoving = false;
   }
 
+  /** Set the animation time-scale (1.0 = normal, 2.0 = double speed, etc.). */
+  setTimeScale(v: number): void {
+    this.timeScale = Math.max(0.1, v);
+  }
+
   /** Waypoints still queued ahead of the current target. */
   hasPath(): boolean {
     return this.path.length > 0;
@@ -103,8 +109,9 @@ export class ShipPhysics {
   }
 
   update(deltaTime: number): void {
-    // Cap deltaTime to prevent physics explosion on lag spikes
-    const dt = Math.min(deltaTime, 100);
+    // Cap deltaTime to prevent physics explosion on lag spikes, then apply
+    // timeScale so the HUD speed button accelerates visual movement.
+    const dt = Math.min(deltaTime, 100) * this.timeScale;
 
     let distance = this.getDistanceToTarget();
 

@@ -113,4 +113,8 @@ export const GAME_BALANCE = {
    *  earlier (LANDING_RANGE = 60 px), so the ship always lands before the
    *  approach waypoint is reached. */
   landingApproachOffset: 80,
+  /** Default time-scale multiplier for ship physics (1.0 = real-time). */
+  gameSpeedDefault: 1.0,
+  /** Selectable time-scale steps cycled by the speed button in the HUD. */
+  gameSpeedMultipliers: [1.0, 2.0, 4.0] as const,
 } as const;
