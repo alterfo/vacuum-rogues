@@ -11,8 +11,16 @@ import type {
   GearHit,
   PlanetHit,
   ShipLocation,
+  EquipmentFacet,
 } from "@/systems/info/GalacticRegistry";
-import { GearKind } from "@/systems/equipment/GearCatalog";
+import {
+  GearKind,
+  EquipmentClass,
+  gearById,
+  type EquipmentSpec,
+  type Gear,
+} from "@/systems/equipment/GearCatalog";
+import { logger } from "@/utils/logger";
 
 interface InfoContext {
   gameEngine?: GameEngine;
@@ -21,12 +29,6 @@ interface InfoContext {
 }
 
 // ── Localisation ────────────────────────────────────────────────────────────
-
-const GEAR_KIND_RU: Record<GearKind, string> = {
-  [GearKind.HULL]: "Корпус",
-  [GearKind.WEAPON]: "Оружие",
-  [GearKind.EQUIPMENT]: "Снаряжение",
-};
 
 const NEWS_TYPE_LABEL: Record<NewsEvent["type"], string> = {
   NPC_QUEST_COMPLETE: "[РЕЙНДЖЕР]",
@@ -228,14 +230,39 @@ function isStaleSystem(
   return currentDay - sys.lastVisitedDay > 30;
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function facetToGearKind(facet: EquipmentFacet): GearKind {
+  if (facet === "hull") return GearKind.HULL;
+  if (facet === "weapon") return GearKind.WEAPON;
+  return GearKind.EQUIPMENT;
+}
+
 // ── Scene ───────────────────────────────────────────────────────────────────
 
 type Tab = "news" | "objects" | "gear";
 type GearSortOption = "price" | "tech" | "distance";
 
-const ALL_GEAR_KINDS = Object.values(GearKind);
 const GEAR_SORT_OPTIONS: GearSortOption[] = ["price", "tech", "distance"];
 const GEAR_MAX_PRICE_OPTIONS = [0, 1000, 5000, 10000, 50000];
+
+const EQUIPMENT_FACETS: EquipmentFacet[] = [
+  "engine",
+  "hull",
+  "weapon",
+  "scanner",
+  "shield",
+  "other",
+];
+
+const FACET_LABELS: Record<EquipmentFacet, string> = {
+  engine: "Двигатель",
+  hull: "Корпус",
+  weapon: "Оружие",
+  scanner: "Сканер",
+  shield: "Щит",
+  other: "Прочее",
+};
 
 type ObjectResult =
   | { kind: "ship"; loc: ShipLocation & { jumps: number }; stale: boolean }
@@ -261,6 +288,7 @@ export class InfoCenterScene extends GameScene {
 
   // gear tab state
   private gearKind: GearKind = GearKind.HULL;
+  private gearFacet: EquipmentFacet = "engine";
   private gearMinTech = 1;
   private gearMaxTech = 6;
   private gearMaxPriceIdx = 0; // index into GEAR_MAX_PRICE_OPTIONS
@@ -381,6 +409,17 @@ export class InfoCenterScene extends GameScene {
     dayText.y = PY + 16;
     dayText.eventMode = "none";
     this.mainContainer.addChild(dayText);
+
+    const credits = this.gameEngine?.player?.credits ?? 0;
+    const creditsText = new Text({
+      text: `Кредиты: ${credits.toLocaleString()} ₢`,
+      style: { fontSize: 13, fill: 0x88ddaa, fontFamily: "monospace" },
+    });
+    creditsText.anchor.set(0, 0);
+    creditsText.x = PX + 14;
+    creditsText.y = PY + 16;
+    creditsText.eventMode = "none";
+    this.mainContainer.addChild(creditsText);
 
     // 3-tab switcher
     const TAB_Y = PY + 50;
@@ -795,6 +834,9 @@ export class InfoCenterScene extends GameScene {
     this.objectsResults = [];
     const registry = this.gameEngine?.getInfoRegistry();
     const galaxy = this.gameEngine?.galaxy;
+    logger.debug(
+      `[InfoCenter] runObjectsSearch: query="${this.objectsQuery.trim()}" registry=${!!registry} galaxy=${!!galaxy}`,
+    );
     if (!registry || !galaxy || this.objectsQuery.trim().length === 0) return;
 
     const originId =
@@ -834,46 +876,82 @@ export class InfoCenterScene extends GameScene {
   private renderGear(container: Container, pw: number, ph: number): void {
     const PAD = 16;
     const CTRL_H = 28;
-    const CTRL_Y = 4;
-    const GAP = 8;
+    const GAP = 6;
 
+    // Faceted pill buttons row (top)
+    const PILL_Y = 4;
+    const PILL_H = 26;
+    const pillWidths = EQUIPMENT_FACETS.map(
+      (f) => FACET_LABELS[f].length * 8 + 16,
+    );
+    let px = PAD;
+    for (const [i, facet] of EQUIPMENT_FACETS.entries()) {
+      const pw2 = pillWidths[i];
+      const isActive = this.gearFacet === facet;
+      const pill = new Graphics();
+      pill.rect(px, PILL_Y, pw2, PILL_H);
+      pill.fill({ color: isActive ? 0x1a3a5a : 0x0d0d1a });
+      pill.stroke({ color: isActive ? 0x88ccff : 0x334455, width: 1 });
+      pill.eventMode = "static";
+      pill.cursor = "pointer";
+      pill.on("pointerdown", (e) => {
+        e.stopPropagation();
+        this.gearFacet = facet;
+        this.gearKind = facetToGearKind(facet);
+        this.render();
+      });
+      container.addChild(pill);
+      const pillLabel = new Text({
+        text: FACET_LABELS[facet],
+        style: {
+          fontSize: 11,
+          fill: isActive ? 0x88ccff : 0x556677,
+          fontFamily: "monospace",
+        },
+      });
+      pillLabel.anchor.set(0.5, 0.5);
+      pillLabel.x = px + pw2 / 2;
+      pillLabel.y = PILL_Y + PILL_H / 2;
+      pillLabel.eventMode = "none";
+      container.addChild(pillLabel);
+      px += pw2 + GAP;
+    }
+
+    // Currently equipped item of the same facet type
+    const equippedItem = this.getEquippedItemForFacet(this.gearFacet);
+    let equippedRowH = 0;
+    if (equippedItem) {
+      equippedRowH = 32;
+      const EQUIPPED_Y = PILL_Y + PILL_H + 6;
+      const equippedBg = new Graphics();
+      equippedBg.rect(PAD, EQUIPPED_Y, pw - PAD * 2, equippedRowH - 2);
+      equippedBg.fill({ color: 0x0d1f0d });
+      equippedBg.stroke({ color: 0x336633, width: 1 });
+      equippedBg.eventMode = "none";
+      container.addChild(equippedBg);
+
+      const equippedHdr = new Text({
+        text: "Установлено сейчас:",
+        style: { fontSize: 10, fill: 0x55aa55, fontFamily: "monospace" },
+      });
+      equippedHdr.x = PAD + 6;
+      equippedHdr.y = EQUIPPED_Y + 4;
+      equippedHdr.eventMode = "none";
+      container.addChild(equippedHdr);
+
+      const equippedName = new Text({
+        text: `T${equippedItem.techLevel}  ${equippedItem.name}`,
+        style: { fontSize: 11, fill: 0x88dd88, fontFamily: "monospace" },
+      });
+      equippedName.x = PAD + 6;
+      equippedName.y = EQUIPPED_Y + 16;
+      equippedName.eventMode = "none";
+      container.addChild(equippedName);
+    }
+
+    // Second controls row: tech level, max price, sort, find
+    const CTRL_Y = PILL_Y + PILL_H + equippedRowH + 8;
     let cx = PAD;
-
-    // Kind selector
-    const kindLabel = new Text({
-      text: "Вид:",
-      style: { fontSize: 12, fill: 0x88aacc, fontFamily: "monospace" },
-    });
-    kindLabel.x = cx;
-    kindLabel.y = CTRL_Y + 7;
-    kindLabel.eventMode = "none";
-    container.addChild(kindLabel);
-    cx += 36;
-
-    const kindBg = new Graphics();
-    kindBg.rect(cx, CTRL_Y, 96, CTRL_H);
-    kindBg.fill({ color: 0x0d1522 });
-    kindBg.stroke({ color: 0x88ccff, width: 1 });
-    kindBg.eventMode = "static";
-    kindBg.cursor = "pointer";
-    kindBg.on("pointerdown", (e) => {
-      e.stopPropagation();
-      const idx = ALL_GEAR_KINDS.indexOf(this.gearKind);
-      this.gearKind = ALL_GEAR_KINDS[(idx + 1) % ALL_GEAR_KINDS.length];
-      this.render();
-    });
-    container.addChild(kindBg);
-
-    const kindVal = new Text({
-      text: GEAR_KIND_RU[this.gearKind],
-      style: { fontSize: 12, fill: 0xeeddaa, fontFamily: "monospace" },
-    });
-    kindVal.anchor.set(0.5, 0.5);
-    kindVal.x = cx + 48;
-    kindVal.y = CTRL_Y + CTRL_H / 2;
-    kindVal.eventMode = "none";
-    container.addChild(kindVal);
-    cx += 96 + GAP;
 
     // Tech level range
     const techLabel = new Text({
@@ -1165,6 +1243,34 @@ export class InfoCenterScene extends GameScene {
       sort: sortMap[this.gearSort],
       limit: 20,
     });
+  }
+
+  private getEquippedItemForFacet(facet: EquipmentFacet): Gear | null {
+    const loadout = this.gameEngine?.playerLoadout;
+    if (!loadout) return null;
+    if (facet === "hull") return loadout.hull;
+    for (const id of loadout.installedGearIds()) {
+      const g = gearById(id);
+      if (!g) continue;
+      if (facet === "weapon" && g.kind === GearKind.WEAPON) return g;
+      if (g.kind === GearKind.EQUIPMENT) {
+        const eq = g as EquipmentSpec;
+        if (facet === "engine" && eq.equipmentClass === EquipmentClass.ENGINE)
+          return g;
+        if (facet === "scanner" && eq.equipmentClass === EquipmentClass.SCANNER)
+          return g;
+        if (facet === "shield" && eq.equipmentClass === EquipmentClass.SHIELD)
+          return g;
+        if (
+          facet === "other" &&
+          eq.equipmentClass !== EquipmentClass.ENGINE &&
+          eq.equipmentClass !== EquipmentClass.SCANNER &&
+          eq.equipmentClass !== EquipmentClass.SHIELD
+        )
+          return g;
+      }
+    }
+    return null;
   }
 
   // ── navigation ──────────────────────────────────────────────────────────────

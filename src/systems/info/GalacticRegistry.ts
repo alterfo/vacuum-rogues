@@ -19,9 +19,11 @@ import type { Faction } from "@/types/faction";
 import { jumpDistances } from "@/systems/galaxy/jumpDistance";
 import {
   GearKind,
+  EquipmentClass,
   type Gear,
   type HullSpec,
   type WeaponSpec,
+  type EquipmentSpec,
 } from "@/systems/equipment/GearCatalog";
 
 /** Where a ship is right now (US-091). */
@@ -114,6 +116,34 @@ export interface GearQuery {
   readonly minRange?: number;
   readonly sort?: "price" | "jumps" | "damage" | "hp" | "tech";
   readonly limit?: number;
+}
+
+/** Faceted equipment filter type for the InfoCenter gear tab. */
+export type EquipmentFacet =
+  | "engine"
+  | "hull"
+  | "weapon"
+  | "scanner"
+  | "shield"
+  | "other";
+
+/** Equipment search hit with resolved planet/system names. */
+export interface EquipmentHit {
+  readonly gear: Gear;
+  readonly planet: string;
+  readonly system: string;
+  readonly price: number;
+  readonly jumps: number;
+  readonly systemId: string;
+  readonly planetId: string;
+}
+
+export interface EquipmentQuery {
+  readonly originSystemId: string;
+  readonly type?: EquipmentFacet;
+  readonly name?: string;
+  readonly maxPrice?: number;
+  readonly maxJumps?: number;
 }
 
 export class GalacticRegistry {
@@ -299,6 +329,55 @@ export class GalacticRegistry {
     return this.findGear(query)[0] ?? null;
   }
 
+  // --- Faceted equipment search (US-093, InfoCenter tab) --------------------
+
+  /**
+   * Equipment search by human-friendly facet type with resolved planet/system
+   * names. Used by the InfoCenter gear tab faceted filter.
+   */
+  findEquipment(query: EquipmentQuery): EquipmentHit[] {
+    const dist = jumpDistances(this.systems, query.originSystemId);
+    const systemMap = new Map<string, StarSystem>(
+      this.systems.map((s) => [s.id, s]),
+    );
+    const hits: EquipmentHit[] = [];
+    for (const l of this.gearListings) {
+      if (!matchesFacet(l.gear, query.type)) continue;
+      if (query.maxPrice !== undefined && l.price > query.maxPrice) continue;
+      if (
+        query.name !== undefined &&
+        query.name.length > 0 &&
+        !l.gear.name.toLowerCase().includes(query.name.toLowerCase())
+      )
+        continue;
+      const jumps = dist.get(l.systemId);
+      if (jumps === undefined) continue;
+      if (query.maxJumps !== undefined && jumps > query.maxJumps) continue;
+      const sys = systemMap.get(l.systemId);
+      const systemName = sys?.name ?? l.systemId;
+      let planetName = l.planetId;
+      if (sys) {
+        for (const p of sys.planets) {
+          if (p.id === l.planetId) {
+            planetName = (p as unknown as { name?: string }).name ?? p.id;
+            break;
+          }
+        }
+      }
+      hits.push({
+        gear: l.gear,
+        planet: planetName,
+        system: systemName,
+        price: l.price,
+        jumps,
+        systemId: l.systemId,
+        planetId: l.planetId,
+      });
+    }
+    hits.sort((a, b) => a.price - b.price || a.jumps - b.jumps);
+    return hits;
+  }
+
   /** Total market listings indexed (diagnostics/tests). */
   get listingCount(): number {
     return this.listings.length;
@@ -307,6 +386,40 @@ export class GalacticRegistry {
   /** Total gear listings indexed (diagnostics/tests). */
   get gearListingCount(): number {
     return this.gearListings.length;
+  }
+}
+
+function matchesFacet(g: Gear, facet: EquipmentFacet | undefined): boolean {
+  if (facet === undefined) return true;
+  switch (facet) {
+    case "hull":
+      return g.kind === GearKind.HULL;
+    case "weapon":
+      return g.kind === GearKind.WEAPON;
+    case "engine":
+      return (
+        g.kind === GearKind.EQUIPMENT &&
+        (g as EquipmentSpec).equipmentClass === EquipmentClass.ENGINE
+      );
+    case "scanner":
+      return (
+        g.kind === GearKind.EQUIPMENT &&
+        (g as EquipmentSpec).equipmentClass === EquipmentClass.SCANNER
+      );
+    case "shield":
+      return (
+        g.kind === GearKind.EQUIPMENT &&
+        (g as EquipmentSpec).equipmentClass === EquipmentClass.SHIELD
+      );
+    case "other":
+      return (
+        g.kind === GearKind.EQUIPMENT &&
+        (g as EquipmentSpec).equipmentClass !== EquipmentClass.ENGINE &&
+        (g as EquipmentSpec).equipmentClass !== EquipmentClass.SCANNER &&
+        (g as EquipmentSpec).equipmentClass !== EquipmentClass.SHIELD
+      );
+    default:
+      return true;
   }
 }
 
