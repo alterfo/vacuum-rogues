@@ -58,6 +58,12 @@ export class QuestVM {
   }
 
   private checkCriticalThresholds(): void {
+    // Terminal locations must not be interrupted by critical thresholds
+    const current = this.script.locations.find(
+      (l) => l.id === this.currentLocationId,
+    );
+    if (current?.isSuccess || current?.isFailure) return;
+
     for (const param of this.script.params) {
       if (!param.critTarget) continue;
       const value = this.params.get(param.id) ?? 0;
