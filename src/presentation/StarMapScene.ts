@@ -582,7 +582,7 @@ export class StarMapScene extends GameScene {
           style: {
             fontFamily: "Courier New",
             fontSize: 10,
-            fill: 0x223344,
+            fill: 0x556677,
           },
         });
         qLabel.x = x + 6;

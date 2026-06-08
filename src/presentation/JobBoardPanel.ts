@@ -170,7 +170,7 @@ export class JobBoardPanel {
     let countdownColor: number;
     if (q.deadline === 0) {
       countdownText = "Без срока";
-      countdownColor = 0x888888;
+      countdownColor = 0xaaaaaa;
     } else {
       const remaining = q.getRemainingDays(currentDay);
       if (remaining === 0) {

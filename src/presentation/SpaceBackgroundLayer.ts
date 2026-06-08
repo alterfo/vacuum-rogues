@@ -254,7 +254,7 @@ export class SpaceBackgroundLayer {
       if (s.x < -25) s.x += w + 50;
       else if (s.x > w + 25) s.x -= w + 50;
       if (s.y < -25) s.y += h + 50;
-      else if (s.y > h + 50) s.y -= h + 50;
+      else if (s.y > h + 25) s.y -= h + 50;
       s.g.x = s.x;
       s.g.y = s.y;
     }

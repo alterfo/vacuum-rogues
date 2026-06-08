@@ -93,7 +93,7 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
   for (const event of feedEvents) {
     const sysName = systemMap.get(event.systemId)?.name ?? event.systemId;
     const label = NEWS_TYPE_LABEL[event.type] ?? "[СОБЫТИЕ]";
-    const color = NEWS_TYPE_COLOR[event.type] ?? 0x888888;
+    const color = NEWS_TYPE_COLOR[event.type] ?? 0xaaaaaa;
     const desc = event.description || `${label} в системе ${sysName}`;
     items.push({
       day: event.day,

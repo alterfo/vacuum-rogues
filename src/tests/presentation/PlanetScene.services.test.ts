@@ -12,7 +12,7 @@ import { visiblePlanetServices } from "@/presentation/PlanetScene";
 
 const ALL = [
   { label: "Губернатор" },
-  { label: "Гараж" },
+  { label: "Верфь" },
   { label: "Маркет" },
   { label: "Исследования" },
   { label: "Взлёт" },

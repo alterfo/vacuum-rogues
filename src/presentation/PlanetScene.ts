@@ -407,7 +407,7 @@ export class PlanetScene extends GameScene {
     // Panoramic background: full-screen equirectangular texture (cover scale)
     const prefix = PLANET_TEXTURE_PREFIX[this.planet.type] ?? "terrestrial";
     const panTex = panoramaTex(`${prefix}_01`);
-    if (panTex && panTex.width > 1) {
+    if (panTex && panTex.width > 1 && panTex.height > 0) {
       const panorama = new Sprite(panTex);
       panorama.eventMode = "none";
       // Cover scale: fill width first, then height if needed
