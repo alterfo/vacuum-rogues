@@ -119,4 +119,6 @@ export const GAME_BALANCE = {
   gameSpeedMultipliers: [1.0, 2.0, 4.0] as const,
   /** Hull damage per second when the ship is inside the star radius. */
   starTouchDamage: 5,
+  /** Fraction of base price deviation that marks a deal (20% = buy/sell 20% off/above average). */
+  tradeDealThreshold: 0.2,
 } as const;

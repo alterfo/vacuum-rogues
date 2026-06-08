@@ -151,14 +151,14 @@
 - Modify: `src/presentation/TradeScene.ts`
 - Modify: `src/config/balance.ts`
 
-- [ ] Добавить в `balance.ts`: `TRADE_DEAL_THRESHOLD = 0.20` (20% отклонение от средней цены — «выгодно»)
-- [ ] В `TradeScene` рядом с кнопкой [+] добавить кнопку «Макс»: устанавливает `tradeQty` = `min(stock, freeHold, affordable)` для покупки или `min(playerOwns, sellLimit)` для продажи
-- [ ] Вычислять `averageGalaxyPrice` для каждого товара из `GalacticRegistry` (или из `balance.ts` базовых цен)
-- [ ] Если `buyPrice < averagePrice * (1 - TRADE_DEAL_THRESHOLD)` — на кнопке «Купить» показывать маленькую иконку «★» (зелёная `Text`, `fontSize=10`, `eventMode='none'`) поверх кнопки в правом верхнем углу
-- [ ] Если `sellPrice > averagePrice * (1 + TRADE_DEAL_THRESHOLD)` — аналогичная иконка на «Продать» (золотая «★»)
-- [ ] Написать тест `tradeMaxBtn.test.ts`: кнопка «Макс» устанавливает корректное максимальное количество с учётом трюма и кредитов
-- [ ] `npm test -- --run src/tests/tradeMaxBtn.test.ts` — зелёный
-- [ ] `npm test -- --run` + `npm run lint` — без регрессий
+- [x] Добавить в `balance.ts`: `TRADE_DEAL_THRESHOLD = 0.20` (20% отклонение от средней цены — «выгодно»)
+- [x] В `TradeScene` рядом с кнопкой [+] добавить кнопку «Макс»: устанавливает `tradeQty` = `min(stock, freeHold, affordable)` для покупки или `min(playerOwns, sellLimit)` для продажи
+- [x] Вычислять `averageGalaxyPrice` для каждого товара из `GalacticRegistry` (или из `balance.ts` базовых цен)
+- [x] Если `buyPrice < averagePrice * (1 - TRADE_DEAL_THRESHOLD)` — на кнопке «Купить» показывать маленькую иконку «★» (зелёная `Text`, `fontSize=10`, `eventMode='none'`) поверх кнопки в правом верхнем углу
+- [x] Если `sellPrice > averagePrice * (1 + TRADE_DEAL_THRESHOLD)` — аналогичная иконка на «Продать» (золотая «★»)
+- [x] Написать тест `tradeMaxBtn.test.ts`: кнопка «Макс» устанавливает корректное максимальное количество с учётом трюма и кредитов
+- [x] `npm test -- --run src/tests/tradeMaxBtn.test.ts` — зелёный
+- [x] `npm test -- --run` + `npm run lint` — без регрессий
 
 ### Task 9: Планетный экран — визуальный рефакторинг
 

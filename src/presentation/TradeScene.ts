@@ -6,6 +6,7 @@ import type { Planet } from "@/domain/Planet";
 import { SceneType, ResourceType } from "@/types";
 import { TradeSystem } from "@/systems/TradeSystem";
 import { logger } from "@/utils/logger";
+import { GAME_BALANCE } from "@/config/balance";
 
 interface TradeContext {
   gameEngine?: GameEngine;
@@ -193,13 +194,20 @@ export class TradeScene extends GameScene {
         owned > 0 ? 0x00ff88 : 0x666666,
       );
 
-      // Quantity selector: [-] qty [+]
-      this.addQtySelector(resource, qty, panelX + 440, y - 2);
+      // Quantity selector: [-] qty [+] [Макс]
+      const maxQty = Math.max(maxBuyQty, maxSellQty);
+      this.addQtySelector(resource, qty, maxQty, panelX + 440, y - 2);
+
+      // Deal indicators: compare current price against base (galaxy average)
+      const basePrice = this.tradeSystem.getBasePrice(resource);
+      const threshold = GAME_BALANCE.tradeDealThreshold;
+      const isBuyDeal = buyPrice < basePrice * (1 - threshold);
+      const isSellDeal = sellPrice > basePrice * (1 + threshold);
 
       // Buy button
       const buyBtn = this.createButton(
         "Купить",
-        panelX + 545,
+        panelX + 558,
         y - 4,
         80,
         24,
@@ -209,13 +217,23 @@ export class TradeScene extends GameScene {
         e.stopPropagation();
         this.trade(resource, true);
       });
+      if (isBuyDeal) {
+        const star = new Text({
+          text: "★",
+          style: { fontFamily: "Courier New", fontSize: 10, fill: 0x00ff44 },
+        });
+        star.x = 72;
+        star.y = 1;
+        star.eventMode = "none";
+        buyBtn.addChild(star);
+      }
       this.mainContainer!.addChild(buyBtn);
 
       // Sell button — disabled when owned === 0
       const canSell = owned > 0;
       const sellBtn = this.createButton(
         "Продать",
-        panelX + 635,
+        panelX + 648,
         y - 4,
         80,
         24,
@@ -227,6 +245,16 @@ export class TradeScene extends GameScene {
           this.trade(resource, false);
         });
         sellBtn.cursor = "pointer";
+        if (isSellDeal) {
+          const star = new Text({
+            text: "★",
+            style: { fontFamily: "Courier New", fontSize: 10, fill: 0xffcc00 },
+          });
+          star.x = 72;
+          star.y = 1;
+          star.eventMode = "none";
+          sellBtn.addChild(star);
+        }
       } else {
         sellBtn.cursor = "default";
         sellBtn.eventMode = "none";
@@ -263,6 +291,7 @@ export class TradeScene extends GameScene {
   private addQtySelector(
     resource: ResourceType,
     qty: number,
+    maxQty: number,
     x: number,
     y: number,
   ): void {
@@ -337,6 +366,45 @@ export class TradeScene extends GameScene {
       this.refresh();
     });
     this.mainContainer.addChild(plusBtn);
+
+    // [Макс] button — sets qty to maximum affordable/holdable amount
+    const maxBtn = new Container();
+    maxBtn.x = x + btnW + 36 + btnW + 4;
+    maxBtn.y = y;
+    maxBtn.eventMode = "static";
+    maxBtn.cursor = "pointer";
+    const maxBg = new Graphics();
+    maxBg.rect(0, 0, 28, btnH);
+    maxBg.fill({ color: 0x1a1a44, alpha: 0.9 });
+    maxBg.stroke({ color: 0x4444aa, width: 1 });
+    maxBtn.addChild(maxBg);
+    const maxLbl = new Text({
+      text: "М",
+      style: { fontFamily: "Courier New", fontSize: 12, fill: 0x8888ff },
+    });
+    maxLbl.anchor.set(0.5);
+    maxLbl.x = 14;
+    maxLbl.y = btnH / 2;
+    maxLbl.eventMode = "none";
+    maxBtn.addChild(maxLbl);
+    maxBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      this.tradeQty.set(resource, maxQty);
+      this.refresh();
+    });
+    maxBtn.on("pointerover", () => {
+      maxBg.clear();
+      maxBg.rect(0, 0, 28, btnH);
+      maxBg.fill({ color: 0x2a2a66, alpha: 1.0 });
+      maxBg.stroke({ color: 0x6666cc, width: 1 });
+    });
+    maxBtn.on("pointerout", () => {
+      maxBg.clear();
+      maxBg.rect(0, 0, 28, btnH);
+      maxBg.fill({ color: 0x1a1a44, alpha: 0.9 });
+      maxBg.stroke({ color: 0x4444aa, width: 1 });
+    });
+    this.mainContainer.addChild(maxBtn);
   }
 
   private trade(resource: ResourceType, isBuy: boolean): void {
