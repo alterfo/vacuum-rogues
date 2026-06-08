@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { QuestVM } from "@/systems/quests/QuestVM";
 import { customsScript } from "@/systems/quests/scripts/customs";
+import { gravitySlalomScript } from "@/systems/quests/scripts/gravity-slalom";
 
 // Advance through all autoExecute transitions until a manual decision or finished state
 function advanceAuto(vm: QuestVM): void {
@@ -194,5 +195,165 @@ describe("Customs quest", () => {
     expect(text).toContain("6");
     expect(text).toContain("1234");
     expect(text).toContain("75");
+  });
+});
+
+describe("Gravity Slalom quest", () => {
+  it("starts at cell_a1 with 100 fuel", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    expect(vm.currentLocation().id).toBe("cell_a1");
+    expect(vm.getParam("fuel")).toBe(100);
+  });
+
+  it("window params are 0 or 1 for any seed", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const vm = new QuestVM(gravitySlalomScript, seed);
+      for (let i = 1; i <= 4; i++) {
+        const w = vm.getParam(`window_${i}`);
+        expect(w).toBeGreaterThanOrEqual(0);
+        expect(w).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it("direct move a1→a2 costs 26 fuel", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.execute("a1_to_a2");
+    expect(vm.getParam("fuel")).toBe(74);
+    expect(vm.currentLocation().id).toBe("cell_a2");
+  });
+
+  it("four consecutive direct moves exhaust fuel and trigger failure", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    // Path: a1→a2→a3→b3→c3 (4×26=104 total, last move pushes fuel negative)
+    vm.execute("a1_to_a2"); // 74
+    vm.execute("a2_to_a3"); // 48
+    vm.execute("a3_to_b3"); // 22
+    vm.execute("b3_to_c3"); // 22-26=-4 → critMin:1 fires
+    expect(vm.isFinished()).toBe(true);
+    expect(vm.isSuccess()).toBe(false);
+    expect(vm.currentLocation().id).toBe("quest_failure_fuel");
+  });
+
+  it("open gravity window (window_1=1) allows free move a1→b2", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.setParam("window_1", 1);
+    vm.execute("a1_grav1_open");
+    expect(vm.getParam("fuel")).toBe(100);
+    expect(vm.currentLocation().id).toBe("cell_b2");
+  });
+
+  it("closed gravity window (window_1=0) costs 40 fuel for a1→b2", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.setParam("window_1", 0);
+    vm.execute("a1_grav1_closed");
+    expect(vm.getParam("fuel")).toBe(60);
+    expect(vm.currentLocation().id).toBe("cell_b2");
+  });
+
+  it("double gravity a1→b2→c3 succeeds with both windows open (100 fuel remaining)", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.setParam("window_1", 1);
+    vm.setParam("window_4", 1);
+    vm.execute("a1_grav1_open");
+    expect(vm.currentLocation().id).toBe("cell_b2");
+    vm.execute("b2_grav4_open");
+    // arrives at cell_c3, autoExecute fires
+    const avail = vm.availableTransitions();
+    expect(avail[0].autoExecute).toBe(true);
+    vm.execute(avail[0].id);
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("fuel")).toBe(100);
+  });
+
+  it("double gravity a1→b2→c3 still succeeds with both windows closed (20 fuel remaining)", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.setParam("window_1", 0);
+    vm.setParam("window_4", 0);
+    vm.execute("a1_grav1_closed"); // 100-40=60
+    vm.execute("b2_grav4_closed"); // 60-40=20
+    const avail = vm.availableTransitions();
+    vm.execute(avail[0].id);
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("fuel")).toBe(20);
+  });
+
+  it("path via closed gravity (a2→b3) + direct to c3 fails with insufficient fuel reserve", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.setParam("window_2", 0);
+    vm.execute("a1_to_a2"); // 100-26=74
+    vm.execute("a2_grav2_closed"); // 74-40=34
+    vm.execute("b3_to_c3"); // 34-26=8 → at c3, fuel=8 < 10
+    const avail = vm.availableTransitions();
+    vm.execute(avail[0].id); // c3_success not available (8<10), so c3_failure_reserve fires
+    expect(vm.isFinished()).toBe(true);
+    expect(vm.isSuccess()).toBe(false);
+    expect(vm.currentLocation().id).toBe("quest_failure_fuel_reserve");
+  });
+
+  it("path via open gravity (a2→b3) + direct to c3 succeeds with 48 fuel", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.setParam("window_2", 1);
+    vm.execute("a1_to_a2"); // 100-26=74
+    vm.execute("a2_grav2_open"); // 74-0=74 (free)
+    vm.execute("b3_to_c3"); // 74-26=48 → at c3
+    const avail = vm.availableTransitions();
+    vm.execute(avail[0].id);
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("fuel")).toBe(48);
+  });
+
+  it("path via b1→c2 open gravity + c2→c3 direct succeeds with 48 fuel", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.setParam("window_3", 1);
+    vm.execute("a1_to_b1"); // 74
+    vm.execute("b1_grav3_open"); // 74 (free)
+    vm.execute("c2_to_c3"); // 74-26=48
+    const avail = vm.availableTransitions();
+    vm.execute(avail[0].id);
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("fuel")).toBe(48);
+  });
+
+  it("all routes correctly calculate fuel - mixed path a1→b1→c1→c2→c3 (4 direct) fails", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.execute("a1_to_b1"); // 74
+    vm.execute("b1_to_c1"); // 48
+    vm.execute("c1_to_c2"); // 22
+    vm.execute("c2_to_c3"); // 22-26=-4 → critMin fires
+    expect(vm.isFinished()).toBe(true);
+    expect(vm.isSuccess()).toBe(false);
+    expect(vm.currentLocation().id).toBe("quest_failure_fuel");
+  });
+
+  it("quest results are deterministic for the same seed", () => {
+    const vm1 = new QuestVM(gravitySlalomScript, 42);
+    const vm2 = new QuestVM(gravitySlalomScript, 42);
+    // Same window values → same path strategy
+    expect(vm1.getParam("window_1")).toBe(vm2.getParam("window_1"));
+    expect(vm1.getParam("window_4")).toBe(vm2.getParam("window_4"));
+    // Execute same moves on both
+    vm1.execute("a1_to_a2");
+    vm2.execute("a1_to_a2");
+    expect(vm1.getParam("fuel")).toBe(vm2.getParam("fuel"));
+    expect(vm1.currentLocation().id).toBe(vm2.currentLocation().id);
+  });
+
+  it("different seeds produce different window configurations", () => {
+    const configs = new Set<string>();
+    for (let seed = 0; seed < 50; seed++) {
+      const vm = new QuestVM(gravitySlalomScript, seed);
+      const key = `${vm.getParam("window_1")}${vm.getParam("window_2")}${vm.getParam("window_3")}${vm.getParam("window_4")}`;
+      configs.add(key);
+    }
+    // Should see at least 4 distinct configurations across 50 seeds
+    expect(configs.size).toBeGreaterThanOrEqual(4);
+  });
+
+  it("text interpolation shows fuel value in location text", () => {
+    const vm = new QuestVM(gravitySlalomScript, 1);
+    vm.execute("a1_to_a2"); // fuel = 74
+    const text = vm.interpolate(vm.currentLocation().text);
+    expect(text).toContain("74");
   });
 });
