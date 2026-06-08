@@ -18,6 +18,7 @@ export interface TextQuestContext {
   seed?: number | string;
   returnScene?: SceneType;
   returnContext?: object;
+  questId?: string;
 }
 
 export class TextQuestScene extends GameScene {
@@ -37,6 +38,7 @@ export class TextQuestScene extends GameScene {
   private vm: QuestVM | null = null;
   private vmSeed: number | string = 0;
   private questScript: QuestScript | null = null;
+  private questId: string | null = null;
   private vmNarrationText: Text | null = null;
   private vmChoiceContainer: Container | null = null;
   private vmParamPanel: Container | null = null;
@@ -54,6 +56,7 @@ export class TextQuestScene extends GameScene {
     this.quest = ctx?.quest ?? null;
     this.questScript = ctx?.questScript ?? null;
     this.vmSeed = ctx?.seed ?? Date.now();
+    this.questId = ctx?.questId ?? null;
     this.returnScene = ctx?.returnScene ?? SceneType.PLANET;
     this.returnContext = ctx?.returnContext ?? {};
 
@@ -127,6 +130,7 @@ export class TextQuestScene extends GameScene {
     this.vmParamPanel = null;
     this.gameEngine = null;
     this.quest = null;
+    this.questId = null;
     this.currentNode = null;
   }
 
@@ -437,6 +441,12 @@ export class TextQuestScene extends GameScene {
   private handleVmFinished(): void {
     if (!this.vm) return;
     if (this.vm.isSuccess()) {
+      if (this.questId && this.gameEngine?.player) {
+        this.gameEngine.questManager.completeQuest(
+          this.questId,
+          this.gameEngine.player,
+        );
+      }
       this.showToast("Квест выполнен!", 0x44ff88);
       this.successTimer = setTimeout(() => {
         this.successTimer = null;

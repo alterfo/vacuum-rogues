@@ -354,12 +354,19 @@ export class GovernmentScene extends GameScene {
     if (q.template.type === QuestType.TEXT_ADVENTURE) {
       // scriptId is stored in targetObjectId; fall back to template id for legacy entries
       const scriptId = q.template.targetObjectId ?? q.template.id;
+      const accepted = this.gameEngine.acceptBoardQuest(q, this.planet.id);
       this.closeJobBoard();
       this.gameEngine
-        .startTextQuest(scriptId, undefined, SceneType.GOVERNMENT, {
-          gameEngine: this.gameEngine,
-          planet: this.planet,
-        })
+        .startTextQuest(
+          scriptId,
+          undefined,
+          SceneType.GOVERNMENT,
+          {
+            gameEngine: this.gameEngine,
+            planet: this.planet,
+          },
+          accepted?.id,
+        )
         .catch((e) =>
           logger.error("GovernmentScene: text quest transition failed", e),
         );

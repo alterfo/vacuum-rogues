@@ -206,8 +206,20 @@ export class GalaxySimulator {
       for (const planet of system.planets) {
         // Slight random drift in supply/demand
         for (let i = 0; i < planet.market.demandVector.length; i++) {
-          planet.market.demandVector[i] += this.rng.nextFloat(-0.1, 0.1);
-          planet.market.supplyVector[i] += this.rng.nextFloat(-0.1, 0.1);
+          planet.market.demandVector[i] = Math.max(
+            0.1,
+            Math.min(
+              5.0,
+              planet.market.demandVector[i] + this.rng.nextFloat(-0.1, 0.1),
+            ),
+          );
+          planet.market.supplyVector[i] = Math.max(
+            0.1,
+            Math.min(
+              5.0,
+              planet.market.supplyVector[i] + this.rng.nextFloat(-0.1, 0.1),
+            ),
+          );
         }
       }
     }
@@ -365,6 +377,17 @@ export class GalaxySimulator {
           systemId: event.systemId,
           day: event.day,
           description: `Открытие! Вблизи системы ${system?.name ?? event.systemId} обнаружен ${findType}. Система ${discovered} нанесена на карту.`,
+        };
+      }
+
+      default: {
+        const unknownType = (event as GalaxyGlobalEvent).type;
+        logger.warn(`GalaxySimulator: unknown event type "${unknownType}"`);
+        return {
+          type: "MARKET_SHIFT" as NewsEvent["type"],
+          systemId: event.systemId,
+          day: event.day,
+          description: `Неизвестное событие в системе ${system?.name ?? event.systemId}.`,
         };
       }
     }

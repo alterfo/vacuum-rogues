@@ -32,7 +32,6 @@ import {
 import { logger } from "@/utils/logger";
 import { formatGameDate } from "@/utils/gameCalendar";
 import { SeededRNG } from "@/utils/seededRNG";
-import { SAMPLE_TEXT_QUESTS } from "@/domain/TextQuest";
 import {
   dayTickMarks,
   avoidStarPath,
@@ -3865,16 +3864,16 @@ export class SpaceFlightScene extends GameScene {
     );
 
     if (textAdventureQuest && this.gameEngine) {
-      const domainQuest = SAMPLE_TEXT_QUESTS[0];
-      if (domainQuest) {
-        void this.gameEngine.transitionTo(SceneType.TEXT_QUEST, {
-          gameEngine: this.gameEngine,
-          quest: domainQuest,
-          returnScene: SceneType.SPACE_FLIGHT,
-          returnContext: { gameEngine: this.gameEngine },
-        });
-        return;
-      }
+      const scriptId =
+        textAdventureQuest.targetObjectId ?? textAdventureQuest.id;
+      void this.gameEngine.startTextQuest(
+        scriptId,
+        undefined,
+        SceneType.SPACE_FLIGHT,
+        { gameEngine: this.gameEngine },
+        textAdventureQuest.id,
+      );
+      return;
     }
 
     const lines = [

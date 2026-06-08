@@ -142,10 +142,10 @@ export class QuestVM {
   }
 
   private applyOp(current: number, op: string, n: number): number {
-    if ((op === "/" || op === "*") && n === 0) {
+    if (op === "/" && n === 0) {
       throw new GameSystemException(
         "QUEST_VM_DIVIDE_BY_ZERO",
-        `QuestVM: division/multiplication by zero in effect`,
+        `QuestVM: division by zero in effect`,
       );
     }
     switch (op) {

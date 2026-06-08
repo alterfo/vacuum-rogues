@@ -581,6 +581,7 @@ export class GameEngine {
     seed?: number,
     returnScene: SceneType = SceneType.PLANET,
     returnContext: object = {},
+    questId?: string,
   ): Promise<void> {
     const script = getQuestScript(scriptId);
     if (!script) {
@@ -594,6 +595,7 @@ export class GameEngine {
       seed: seed ?? Date.now(),
       returnScene,
       returnContext,
+      questId,
     });
   }
 
@@ -995,10 +997,16 @@ export class GameEngine {
 
       btnText.on("pointerdown", async () => {
         this.clearModal();
-        await this.generateDefaultGameState();
-        await this.transitionTo(SceneType.STAR_MAP).catch((e) => {
-          logger.error("Transition after modal failed:", e);
-        });
+        try {
+          await this.generateDefaultGameState();
+          await this.transitionTo(SceneType.STAR_MAP);
+        } catch (e) {
+          logger.error("New game from modal failed:", e);
+          this.showErrorModal(
+            "Не удалось начать новую игру. Обновите страницу.",
+            false,
+          );
+        }
       });
 
       btnText.on("pointerover", () => {
