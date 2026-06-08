@@ -201,6 +201,7 @@ describe("TRADE_BOOM effect", () => {
 describe("PLAGUE effect", () => {
   it("reduces target planet population by 30%", () => {
     const sim = new GalaxySimulator();
+    let plagueFound = false;
     for (let day = 0; day < 500; day++) {
       const g = makeGalaxy(1);
       g.gameDays = day;
@@ -208,20 +209,23 @@ describe("PLAGUE effect", () => {
       const events = sim.tickGlobalEvents(g, rng);
       const plague = events.find((e) => e.type === "PLAGUE");
       if (plague) {
+        plagueFound = true;
         // Population should have decreased
         const planet = g.systems[0].planets[0];
         // Original population was 2_000_000; after plague it should be 1_400_000
         expect(planet.population).toBeLessThan(2_000_000);
         expect(planet.population).toBeGreaterThanOrEqual(0);
-        return;
+        break;
       }
     }
+    expect(plagueFound).toBe(true);
   });
 });
 
 describe("DISCOVERY effect", () => {
   it("reveals a foggy adjacent system", () => {
     const sim = new GalaxySimulator();
+    let discoveryFound = false;
     for (let day = 0; day < 500; day++) {
       const g = makeGalaxy(3);
       // Set fog on systems 1 and 2
@@ -232,10 +236,12 @@ describe("DISCOVERY effect", () => {
       const events = sim.tickGlobalEvents(g, rng);
       const disc = events.find((e) => e.type === "DISCOVERY");
       if (disc) {
+        discoveryFound = true;
         expect(disc.description.length).toBeGreaterThan(0);
-        return;
+        break;
       }
     }
+    expect(discoveryFound).toBe(true);
   });
 });
 

@@ -367,4 +367,4 @@ Use `### Iteration N:` only for time-boxed sprint iterations, not regular tasks.
 
 ## Project Status
 
-Phase 2 (Вакуумные Пройдохи) — core gameplay loops implemented: economy, equipment/hull system, NPC living galaxy, quest generator, text quests, government dialogue, station services, info center, combat AI, fog-of-war star map, audio. Active plan: `docs/plans/20260606-vacuum-rogues-master-plan.md`.
+Phase 2 (Вакуумные Пройдохи) — core gameplay loops implemented: economy, equipment/hull system, NPC living galaxy, quest generator, text quests, government dialogue, station services, info center, combat AI, fog-of-war star map, audio. Active plan: `docs/plans/20260608-sprint2-flight-and-ui-polish.md` (Sprint 2 flight/UI polish — all tasks complete, pending archive).

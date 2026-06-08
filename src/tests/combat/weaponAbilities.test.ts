@@ -162,10 +162,10 @@ describe("CombatSystem — BURST ability (Task 10)", () => {
     // Place enemy2 adjacent to enemy1 (enemy1 at q=7,r=2; enemy2 at q=7,r=3)
     const tile1 = system.grid.getTile({ q: 7, r: 2 });
     const tile2 = system.grid.getTile({ q: 7, r: 3 });
-    if (tile1 && tile2) {
-      tile1.occupant = enemy1;
-      tile2.occupant = enemy2;
-    }
+    expect(tile1).not.toBeNull();
+    expect(tile2).not.toBeNull();
+    tile1!.occupant = enemy1;
+    tile2!.occupant = enemy2;
 
     const burstWeapon = (GEAR_CATALOG as WeaponSpec[]).find(
       (g) => g.kind === GearKind.WEAPON && g.ability === WeaponAbility.BURST,
