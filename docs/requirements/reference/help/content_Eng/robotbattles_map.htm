@@ -1,0 +1,1363 @@
+<html><head>
+<script language="Javascript"><!--
+if (self.name=="menu") {location.href="menu.htm"; parent.cont.location="robotbattles_map.htm"}
+//--></script>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+<link rel="stylesheet" type="text/css" href="styles.css">
+<SCRIPT language="Javascript"> 
+<!-- 
+if (document.images) 
+{  
+img1on = new Image ;img1off = new Image; 
+img2on = new Image ;img2off = new Image; 
+ 
+img1on.src = "img/back1.gif";img1off.src = "img/back.gif";
+img2on.src = "img/forward1.gif";img2off.src = "img/forward.gif";
+} 
+function img_act(imgName) { 
+if (document.images) 
+{ imgOn = eval (imgName + "on.src"); 
+document [imgName].src = imgOn; } } 
+function img_inact(imgName) { 
+if (document.images) 
+{ imgOff = eval(imgName + "off.src"); 
+document [imgName].src = imgOff; } } 
+//--> 
+</SCRIPT>
+<SCRIPT language="Javascript"> 
+<!-- 
+isDOM=document.getElementById //DOM1 browser (MSIE 5+, Netscape 6, Opera 5+)
+isMSIE=document.all && document.all.item //Microsoft Internet Explorer 4+
+isNetscape4=document.layers //Netscape 4.*
+isOpera=window.opera //Opera
+isOpera5=isOpera && isDOM //Opera 5+
+isMSIE5=isDOM && isMSIE && !isOpera //MSIE 5+
+isMozilla=isNetscape6=isDOM && !isMSIE && !isOpera
+
+var obj;
+
+function getLayer(layerName, parentLayerName){
+  if(isDOM){ return document.getElementById(layerName); }
+  if(isMSIE){ return document.all[layerName]; }
+  if(isNetscape4){ return eval('document.layers[layerName]'); }
+  return false;
+}
+
+function ts(e,what){
+  mousex = e.clientX;
+  mousey = e.clientY;
+  pagexoff = 0;
+  pageyoff = 0;
+  if(isMSIE5){
+    pagexoff = document.body.scrollLeft;
+    pageyoff = document.body.scrollTop;
+  }
+  else{
+    pagexoff = window.pageXOffset;
+     pageyoff = window.pageYOffset;
+  }
+  if(getLayer(what)){
+    if(isNetscape4)
+      obj = getLayer(what);
+    else
+      obj = getLayer(what).style;
+ 	
+  	if(obj){
+	    leftoff = mousex-pagexoff;
+    	obj.left = (mousex+pagexoff);
+  
+	    topoff = mousey-pageyoff;
+    	if(isOpera && topoff <= 30)
+    	  obj.top = mousey + 20;
+	    else 
+		if( mousey <= 30) 
+	        obj.top = (mousey+pageyoff) + 20;
+		else 
+	      if (isOpera) 
+    	    obj.top = mousey + 20;
+	    else
+    	  obj.top = (mousey+pageyoff) + 20;
+   		
+		
+	    if(isNetscape4)
+    	  obj.visibility = 'show';
+	    else
+    	  obj.visibility = 'visible';
+	  }
+   }
+  return true;
+}
+
+function tc(){
+  if(obj){
+    if(isNetscape4)
+      obj.visibility = 'hide';
+    else
+      obj.visibility='hidden';
+  }
+  return true
+}
+
+function p(x, y, z) {
+	for (a = 0; a < arguments.length; a++) {
+		arguments[a] = arguments[a].split('');
+		arguments[a] = arguments[a].reverse();
+		arguments[a] = arguments[a].join('');
+	}
+	document.location.href = "mailto:" + x + "@" + y + "." + z;
+}
+function p_u(x, y, z) {
+	c = arguments;
+	for (b = 0; b < c.length; b++) {
+        if (b == 3) continue;
+		c[b] = c[b].split(',');
+		c[b] = c[b].reverse();
+		for (a = 0; a < c[b].length; a++)
+			c[b][a] = String.fromCharCode(c[b][a] - 10);
+		c[b] = c[b].join('');
+	}
+	document.location.href = "mailto:" + c[0] + "@" + c[1] + "." + c[2] + "?subject=" + c[3] + "";
+	
+}
+
+var win = null;
+function nwin(mypage,myname,w,h,scroll){LeftPosition = (screen.width) ? (screen.width-w)/2 : 0;TopPosition = (screen.height) ? (screen.height-h)/2 : 0;settings = 'height='+h+',width='+w+',top='+TopPosition+',left='+LeftPosition+',scrollbars='+scroll+',resizable'
+win = window.open(mypage,myname,settings)
+}
+//--> 
+</SCRIPT>
+<style type=text/css><!--
+
+.tip {
+PADDING-RIGHT:0px; 
+PADDING-LEFT:0px; 
+Z-INDEX:999;  
+VISIBILITY:hidden; 
+PADDING-BOTTOM:0px;  
+PADDING-TOP 0px; 
+POSITION:absolute; 
+LEFT:0px;
+TOP:0px; 
+background-color:#000000; 
+}
+
+.add,
+.ori {	color: #A5F9FF; }
+
+.hd {	color:#00CCFF;	}
+
+//--></style>
+</head>
+
+<body onselectstart="document.selection.empty()" oncontextmenu="return false" bgcolor="#000000" leftmargin="0" topmargin="0" rightmargin="0" bottommargin="0" marginwidth="0" marginheight="0">
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="15"> </td>
+<td class="topnav"> 
+<div align="left"><a href="robotbattles.htm" onClick=parent.delay() hidefocus="true">Planetary battles</a> &gt; Maps of planetary battles</div>
+</td>
+<td class="topnav" width="20">&nbsp;</td>
+<td class="topnav" width="79" valign="top"><a href="robotbattles_buildings.htm" onMouseOver="img_act('img1')" onMouseOut="img_inact('img1')" onClick=parent.delay() hidefocus="true"><img src="img/back.gif" width="79" height="20" name="img1" border="0" alt="Back"></a></td>
+<td class="topnav" width="79" valign="top"><img src="img/forward2.gif" width="79" height="20" name="img2" alt="Forward" border="0"></td>
+<td class="topnav" width="25">&nbsp;</td>
+</tr>
+</table>
+
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td width="5%" valign="top"><img src="img/spacer.gif" width="25" height="1"></td><br>
+
+<td><span class="title2">Maps of planetary battles</span><br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr><td><img src="img/spacer.gif" width="1" height="9"></td></tr></table>
+<br>
+
+In total there are 74 maps of planetary battles in Space Rangers HD: A War Apart. <br>
+
+You can receive the majority of battles at once after the liberation of a system.<br>
+<br>
+<br>
+<img src="img/sage.gif" width="32" height="28" class="float">If you've either failed to win a planetary battle, or wish to fight the one you liked once again, or the authorities didn't offer it to you during the game, you can start it at any time beyond the game process. Press <b>R</b> key in the main menu or a special button located at the bottom of the window to launch a list of all the planetary battles. Having chosen the battle (here below you will find a list of all battle names), you trigger it. After the battle, you will return to the main menu.
+<br><br>
+<br>
+Here is a list of all maps for planetary battles with descriptions:<br><br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr><td>
+• <a href=#ahrok hidefocus="true"><span class="ori">Agro-Intestinal Refinery</span></a><br>
+• <a href=#bigcrater hidefocus="true"><span class="add">Antenna</span></a><br>
+• <a href='#All_Kagul' hidefocus="true"><span class="hd">Al-Kagul</span></a><br>
+• <a href='#armagedd' hidefocus="true"><span class="hd">Armageddong 
+</span></a><br>
+• <a href=#atoll hidefocus="true"><span class="add">Atoll</span></a><br>
+• <a href='#Bunker' hidefocus="true"><span class="hd">Bunker</span></a><br>
+• <a href=#virus hidefocus="true"><span class="add">Virus</span></a><br>
+• <a href='#Burn' hidefocus="true"><span class="hd">Combustion</span></a><br>
+• <a href=#gaal hidefocus="true"><span class="ori">Gaalian Quadrant</span></a><br>
+• <a href=#deep hidefocus="true"><span class="add">Depth</span></a><br>
+• <a href='#Gorod113' hidefocus="true"><span class="hd">City-113</span></a><br>
+• <a href=#canyon hidefocus="true"><span class="ori">Grand Canyon</span></a><br>
+• <a href=#rift hidefocus="true"><span class="add">Border</span></a><br>
+• <a href='#Grubaxar' hidefocus="true"><span class="hd">Grubaxar</span></a><br>
+• <a href=#paw hidefocus="true"><span class="add">Snoutius Degradius</span></a><br>
+• <a href=#disodan hidefocus="true"><span class="ori">Desert Disodane</span></a><br>
+• <a href=#ironisland hidefocus="true"><span class="add">Iron Island</span></a><br>
+• <a href=#zhuki hidefocus="true"><span class="ori">Bugs</span></a><br>
+• <a href=#starcraft hidefocus="true"><span class="add">Starship</span></a><br>
+• <a href=#zeki hidefocus="true"><span class="ori">Icecutting Inmates</span></a><br>
+• <a href='#Zenit' hidefocus="true"><span class="hd">Zenith</span></a><br>
+• <a href='#Inmemoria' hidefocus="true"><span class="hd">In Memoriam</span></a><br>
+• <a href='#X-Ray' hidefocus="true"><span class="hd">X-Ray</span></a><br>
+</td><td>
+• <a href=#isla_majolina hidefocus="true"><span class="add">Isla-Mayolina</span></a><br>
+• <a href=#krater hidefocus="true"><span class="add">Crater</span></a><br>
+• <a href='#Krizisniy_Centr' hidefocus="true"><span class="hd">Crisis Center</span></a><br>
+• <a href='#Crio' hidefocus="true"><span class="hd">Cryo</span></a><br>
+• <a href='#RedAlert' hidefocus="true"><span class="hd">Red Alert</span></a><br>
+• <a href=#timelab hidefocus="true"><span class="ori">Time Laboratory</span></a><br>
+• <a href=#malocosoft hidefocus="true"><span class="add">Maloqsoft</span></a><br>
+• <a href=#malok hidefocus="true"><span class="ori">Maloq Movie</span></a><br>
+• <a href=#bur hidefocus="true"><span class="add">Megadrill</span></a><br>
+• <a href=#merzlota hidefocus="true"><span class="ori">Permafrost</span></a><br>
+• <a href=#module hidefocus="true"><span class="add">Module</span></a><br>
+• <a href='#SeaBattle' hidefocus="true"><span class="hd">Battleship</span></a><br>
+• <a href=#trash hidefocus="true"><span class="add">Trash</span></a><br>
+• <a href='#Osada' hidefocus="true"><span class="hd">Siege</span></a><br>
+• <a href=#alenkiy hidefocus="true"><span class="ori">Scarlet Island</span></a><br>
+• <a href=#saintvalentine hidefocus="true"><span class="add">St. Valentine's Island</span></a><br>
+• <a href='#Crossfire' hidefocus="true"><span class="hd">Crossfire</span></a><br>
+• <a href='#Piramida' hidefocus="true"><span class="hd">Pyramid</span></a><br>
+• <a href=#pyramids hidefocus="true"><span class="add">Pyramids</span></a><br>
+• <a href='#Plan' hidefocus="true"><span class="hd">Plan</span></a><br>
+• <a href=#maunaroa hidefocus="true"><span class="add">Mauna Roa Beaches</span></a><br>
+• <a href=#weather hidefocus="true"><span class="ori">Weather Station</span></a><br>
+• <a href=#pomoyka hidefocus="true"><span class="add">Dump</span></a><br>
+</td><td>
+• <a href=#boarding hidefocus="true"><span class="add">Landing</span></a><br>
+• <a href='#Proval' hidefocus="true"><span class="hd">Escallop</span></a><br>
+• <a href=#rahobam hidefocus="true"><span class="ori">Ragobam Bloodbath</span></a><br>
+• <a href=#reactor hidefocus="true"><span class="add">Reactor</span></a><br>
+• <a href=#biohazzard hidefocus="true"><span class="add">Reality Show</span></a><br>
+• <a href=#islands hidefocus="true"><span class="add">Lyakusha's Residence</span></a><br>
+• <a href=#metall hidefocus="true"><span class="add">Mines</span></a><br>
+• <a href='#Ryan' hidefocus="true"><span class="hd">Private Ryan</span></a><br>
+• <a href='#Sphere' hidefocus="true"><span class="hd">Sphere</span></a><br>
+• <a href=#warm hidefocus="true"><span class="ori">Heating Plant</span></a><br>
+• <a href=#terron hidefocus="true"><span class="ori">Terron</span></a> - final<br>
+• <a href=#isle_down hidefocus="true"><span class="add">Sinking Island</span></a><br>
+• <a href='#FuelForLife' hidefocus="true"><span class="hd">Fuel for Life</span></a><br>
+• <a href=#trident hidefocus="true"><span class="add">Trident</span></a><br>
+• <a href=#trilaran hidefocus="true"><span class="ori">Trilaran</span></a><br>
+• <a href='#Logic' hidefocus="true"><span class="hd">Triple Blow</span></a><br>
+• <a href=#training hidefocus="true"><span class="ori">Tutorial</span></a> - training<br>
+• <a href=#foncers hidefocus="true"><span class="ori">Phoncers</span></a><br>
+• <a href=#hawaii hidefocus="true"><span class="ori">Jawaiian Islands</span></a><br>
+• <a href=#coldsyntez hidefocus="true"><span class="add">Cold Fusion</span></a><br>
+• <a href=#ecventor hidefocus="true"><span class="add">Equantor</span></a><br>
+• <a href='#Core' hidefocus="true"><span class="hd">Core</span></a><br>
+</td></tr></table>
+<br>
+<span class="beige">Note</span>. <span class="hd">The bright</font> color indicates the new maps developed especially for for Space Rangers HD: A War Apart.<br>
+
+<br><br>
+
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><a name="ahrok"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr>
+</table>
+<br>
+
+
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> 
+<br>
+<td class="justify" valign="top"><img src="minimaps/01_ahrok.jpg" border="0" height="137" width="139" class="float"><span class="title1">Agro-Intestinal Refinery</span><br>
+<br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+We urgently need the help of an experienced strategist, ranger! <br> Our planet has become an object of interest for the dominators due to its enormous mineral resources. Several months ago each robot type managed to land a self-extracting base here.
+<br> As is, we need the help of an experienced ranger -- someone to utilize the resources at hand so as to recapture from the enemy or destroy our main agro-intestinal refinery. Being a trader yourself, we trust you understand how important this is to us? If you accept the mission, we will give you detailed instructions. And we'll surely make it worth your while. Even if you fail the mission, we promise not to execute!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="All_Kagul">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/All_Kagul.jpg" border="0" height="137" width="137" class="float" />
+				<span class="title1">Al-Kagul</span><br><br>
+				<small>Difficulty:</small> <span class="beige">above medium</span><br><br>
+				Salaam, ranger! We need you. No, no, you are not wanted by the authorities here, nor do we wish to throw you in jail or collect an unpaid debt from you. We are in need of your strategic potential. Yes, you guessed right -- dominators have descended upon our planet and began terrorizing the Al-Kagul Island. Have you heard of it? No big deal, it's perfectly all right for an alien. This is the blessed patch of land where the wisest dervishes and mullahs spend their time getting to know themselves and God through their hermitage, prayers and labor. Now, speaking of labor. Since the only two crops growing on the island are date trees and grapes, the hermits make their living exporting their homemade wine. The local community has become so efficient producing that good beverage that cheers that revenues from the sale thereof now make for a substantial part of our planet's gross domestic product. But everything went down the drain when the island was attacked and captured by all three dominator types at the same time. Most of the community managed to take cover in the cellars, and official mourning is now being observed over those who didn't. While fighting each other, the machines have transformed the once bountiful oasis beyond recognition. They completely rebuilt the port and destroyed most of the vines and some of the date groves during battle. I am not going to bother telling you about the damage to the state treasury or the dangers befalling thousands of noble hermits. Instead, I am going to offer you something that is sure going to compel you to take part in the operation -- money. A lot of money.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="bigcrater">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/27_bigcrater.jpg" border="0" height="137" width="137" class="float" />
+				<span class="title1">Antenna</span><br><br>
+				<small>Difficulty:</small> <span class="beige">high</span><br><br>
+				Ranger, we need you to spearhead the liberation of the Grand Crater island. Besides its unique shape, resembling a parabolic dish, the island is particularly rich in chrysolithe deposits. We suspect that the terronoids aim to use the chrysolithe as foundation for a massive hyperspace radar. And you can bet that this communication facility will be used against the Coalition. Your mission is to recapture the bases and factories, and sweep the area clear of enemies. The operation might be further complicated by the fact that two detachments of hostile robots have been spotted moving toward the island.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="armagedd">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/armagedd.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Armageddong 
+</span><br><br>
+				<small>Difficulty:</small> <span class="beige">under medium</span><br><br>
+				Ranger, please use whatever analytic abilities you may have to properly understand the mission. Following a number of unsuccessful attempts to occupy our system, blazeroids decided to use a weapon capable of destroying life on one of the planets in its entirety for hope that this would demoralize our armed forces. They assembled an outsized Gnuuk gravitational engine on the Oort-Yantalaki planetoid MK-10046 and gave it a powerful impetus directed against the vector of its movement. As a result, the planetoid became unstable and shifted to a hyperbolic trajectory projected to traverse the orbit of our planet in a point where it would be captured by its gravitational field with a probability of 87.329%, thus resulting in a likely collision. When the two bodies collide, the planetoid will explode, with the shock wave and thermal effects destroying 99.957% of the population of planet <Planet>. Naturally, such an outcome is absolutely unacceptable. We are considering a number of options to prevent this crisis, of which one would involve taking over the island on the planetoid where the Gnuuk engine has been set up. Basically, that's what we need you for since we do not have any strategists on staff on this planet, and it would take an expert sent by the Galactic Council over a month to get here. What do you say, Ranger <Player>? How about you prove you are a truly intelligent person who can think straight?
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="atoll"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/36_atoll.jpg" border="0" height="134" width="137" class="float"><span class="title1">Atoll</span><br><br>
+<small>Difficulty:</small> <span class="beige">low</span><br>
+<br>
+We've... We've got a suitable mission for you, he-he! And it happens to be in the largest cultural center of our planet, so count your lucky stars!<br>
+Does the name Black Bill Atoll mean anything to you? It's clear now that you have absolutely no knowledge of interplanetary tourism! It is a giant museum island, featuring some of the Galaxy's most spectacular creatures whose very appearance rocks your imagination! At least that was the case before dominators landed on the island and took it over! I fear they've already exterminated the most valuable specimens... You're the only one who can stop them from turning our tourist paradise into a barren, radioactive wasteland...
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Bunker">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Bunker.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Bunker</span><br><br>
+				<small>Difficulty:</small> <span class="beige">high</span><br><br>
+				Ah, <Player>, you couldn't have come at a better moment! Our Underground Mole operation is in its final stage and we need a strategic command expert. That would be you. Oh, yes, you are not yet privy to this secret information. Back during the Klissan War, human scientists went about developing a neutron weapon that could strike at crystalline klissan organisms. One of their research centers was located deep inside a bunker on our planet. Unfortunately, it was captured by the enemy at the most inopportune moment. Among other things, they managed to locate the bunker and used a neutrino impulse to detonate a prototype neutron bomb that had been assembled on the upper floors of the structure. With all hands lost, the reactor destroyed, and the station completely out of commission, everyone put the facility out of their minds for a long time. Until today, that is.<br />
+				Dominators of two types simultaneously descended upon our planet and quickly proceeded to burrow tunnels to the ancient bunker. It is most likely that the machines have been attracted by the strange signals emitted from the deep. The bigger danger, however, is that they may find surviving neutron weapon designs they have not been aware of before. I hope you understand what that would mean for all the organic races of the Coalition. However, not everything is doom and gloom. Using an old ventilation shaft, we managed to deploy substantial forces inside the bunker and even built well-fortified bases there. By the time the blazeroids finished digging their tunnel and the kelleroids built their teleport, our forces were well in position to repel them. By the way, the bunker appeared to be full of robots with green markings that came from nowhere and made quite a nuisance of themselves for a while. What is especially remarkable is that as we examined some of the captured robots, it turned out they were not terronoids at all. For lack of anything better, we called that new series beta-terron. We have also discovered how these beta-terronoids came to be, but this is the kind of information we will be able to share with you only on site. Now let's get down to business. Heavy fighting exhausted both us and the beta-terronoids, and that was when blazeroids and kelleroids descended in force. Long story short, we need your help.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="virus"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/50_virus.jpg" border="0" height="136" width="137" class="float"><span class="title1">Virus</span><br><br>
+<small>Difficulty:</small> <span class="beige">high</span><br>
+<br>
+We have a very important mission for you! You may have heard of the recent epidemic of arboreous flu that cost thousands of humans their lives. The interplanetary Yellow Cross took it upon themselves to develop a vaccine, and we offered one of our uninhabited islands as a site for the laboratory so that the experimental virus strains would remain safely confined.<br>
+Unfortunately, ranger, we were unable to maintain sufficient secrecy. Dominators learned about the project and landed on the island. Blazeroid earth moving equipment is already on the way to our laboratories. We suggest you take command of the combat robots purchased specifically for this mission and stop the dominators. The fate of humanity is at stake since the epidemic will wreak unimaginable havoc if the vaccine is not developed. And if the dominators succeed in laying their hands on a mutant virus that could affect other races... Long story short, you are our only hope.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr><td><a name="gaal"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Burn">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Burn.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Combustion</span><br><br>
+				<small>Difficulty:</small> <span class="beige">medium</span><br><br>
+				Well, we do have a mission for you, but let me be brutally honest here: it isn't a walk in the park. However, you being a famous warrior and all that, we are sure you'd fit the bill nicely. You see, there is this huge volcanic sea on our planet, courtesy of seismic activities, which is also a bottomless source of valuable ores and rare earths. Basically, our planet's entire economy revolves around this huge pot of lava. We have hired the Galaxy's greatest minds to develop a high-tech automated mining complex for us that would be capable of operating under extremely high temperatures. Well, in hell, basically.<br />
+				And now imagine -- the dominators decided they wanted this complex for themselves! At first we paid little attention to their landing party believing they would not be able to survive in these extreme temperatures. Later on, when we discovered the machines were equipped with special heat-proof armor, it was too late, and the facility was lost. It would be totally insane to send infantry or plasma tanks there, so the only option we have left is to hire a brave ranger such as yourself who would agree to control experimental heat-resistant robots.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr><br>
+<td class="justify" valign="top"><img src="minimaps/03_gaal.jpg" border="0" height="137" width="144" class="float"><span class="title1">Gaalian Quadrant</span><br><br>
+<small>Difficulty:</small> <span class="beige">under medium</span><br>
+<br>
+We have a mission for you, <Player>! Ever heard of something called the &laquogaalian quadrants&raquo? No? They are traditional proving grounds, used by gaals to conduct large-scale simulations of real combat conditions. <br>
+The purpose of the dominators' last landing on our planet was apparently to undermine our military power by eliminating our combat proving ground. Of course, the very notion of "military power" is a slippery one, as for the past centuries we've dedicated ourselves solely to contemplation and enlightenment. The quadrant in question has long been redesigned to cultivate green twigs, and we are not presently capable of repelling the invaders. <br>
+There are virtually no brave youths among our people; your species, however, is renowned for producing many fine warriors. If you are one such warrior, <Player>, perhaps you might be interested in assuming temporary military command over the gaal armed forces on planet <Planet>? Truly, this is a rare opportunity for members of other races. <br>
+With your consent, our chopper will deliver you on location without delay; there you will receive all the instructions.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="deep"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/41_deep.jpg" border="0" height="160" width="137" class="float"><span class="title1">Depth</span><br><br>
+<small>Difficulty:</small> <span class="beige">high</span><br>
+<br>
+Yes, ranger, your help would be very much appreciated. We have recently received an alarming report from one of our bottom research submarines that detected dominators in sector 209B, at the depth of 4 miles. The ship has never been heard of again or responded to our communications. We checked our secret archives and found out that it was in that very sector that an experimental underwater microscopic herring farm was mothballed eons ago. It must have been taken over by the dominators.<br>
+Those bastards have now laid their filthy manipulators on our experimental precision underwater equipment. Do you even realize what the dominators could use that farm equipment for if you don't stop them? If you take this mission, we will give you a few combat robots and help you access the station. If you manage to liberate the station, you will definitely get a reward.
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Gorod113">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Gorod113.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">City-113</span><br><br>
+				<small>Difficulty:</small> <span class="beige">medium</span><br><br>
+				You want a job, ranger? Do you know how to keep your mouth shut? All right, then take a listen. 313 years ago to a day, a new type of a neutron weapon was tested on our planet that affected not only organic matter but klissan as well. The launch was to take place at the secret Station 82 pad, the target being an immobilized klissan egemon loitering high up in the atmosphere. However, 13 seconds into the flight the guidance system shorted, and the missile with a neutron warhead went out of control. As luck would have it, the missile fell on the very secret research station, City-113, where it had been developed. After the incident, all contact was lost with the base, and when we sent a rescue mission over to look for survivors their whirlybird disappeared without a trace while on approach. It was later discovered that some bespectacled eager beaver had managed to register an electromagnetic spike caused by the whirlybird's exploding generator. Naturally, the little prick spilled the beans to the press right away. Unsurprisingly, the island was immediately flooded by reporters believing City-113 to be a new Bermuda Triangle.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr><td><a name="canyon"><img src="img/spacer.gif" width="1" height="9"></a></td></tr></table><br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr><br>
+<td class="justify" valign="top"><img src="minimaps/04_canyon.jpg" border="0" height="151" width="137" class="float"><span class="title1">Grand Canyon</span><br><br>
+<small>Difficulty:</small> <span class="beige">above medium</span><br>
+<br>
+Would you like to take part in clearing out the Grand Canyon? It is an artificial island -- the dream of a loony millionaire, made real in the middle of an ocean. Ah, seems you've got a good nose for money, don't you? Don't look so surprised, we have devices that register greed.
+<br>
+Getting back to the matter at hand: after our system was liberated, we swiftly dealt with all the dominators on the planet and considered the matter closed. And then it turned out that this crazy millionaire had kept two samples for himself -- a blazeroid and a kelleroid. Evidently, he and his buddies thought to make a fortune on them. To this end, he built an entire base for the robots: a place to move about, engage in combat, etc.
+<br>
+We could go on with this fascinating story, but first we would like to secure your agreement, for if you aren't willing to help us, we will need to turn to another ranger. Well, what say you? Speak quickly! Will you save the Grand Canyon and fight the dominators on land? Or do you only fight them in space, aboard unbreakable cruisers?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="rift"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/31_rift.jpg" border="0" height="137" width="137" class="float"><span class="title1">Border</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+If you've ever been to our planet before, surely you've heard of the Meridian Border, yes? No?? How strange... All right, I'll give you a brief background info. A thousand years ago a symbolic boundary was set on one of the islands in the ocean, splitting our planet into western and eastern hemispheres. All the geography maps produced since have been created with prime meridian tracing this line with utter precision, making it one of our planet's essential symbols!<br>
+But recently the island containing the meridian boundary was captured by the dominators. They razed the local tourist town to the ground. We were lucky that this isn't tourist season -- the island was closed to visitors, so there weren't any casualties... Of course, that doesn't mean we should sit idly by and watch the dominators destroy the Meridian Border with their stations! The planet's geographical society has allocated a sizable donation to whoever can thwart the dominators' plans! And you have all the chances of earning it if you accept this mission.
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Grubaxar">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Grubaxar.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Grubaxar</span><br><br>
+				<small>Difficulty:</small> <span class="beige">above medium</span><br><br>
+				I don't know about any coffee, but we do have a mission for you. And not just a mission -- a Mission with a capital M! In case you don't know, even before becoming a spacefaring race, we maloqs had fought plenty of wars with the aliens -- ancient gaals, karaps, etc. Some of our prisoners of war held on different planets managed to free themselves and even kick our enemies out of there since we procreate so much faster than all those alien sissies and fight so much better. This is exactly how our planet happened to come under maloq rule. We still have on display General Grubaxar's camp that he had set up near a karap pyramid that he would later blow to pieces with their very own guns. Oh, those were the days... Later on, we did restore the pyramid too, by the way, albeit without all those karap knickknacks. Still, you wouldn't be able to tell the difference just by looking at it. So, what was I talking about?<br />
+				Oh yes, the dominators! You see, they decided to capture that legendary battlefield. And not that we'd mind them fighting each other a little, but they went about messing up Grubaxar's camp, and that's totally unacceptable. It is our national relic, for crying out loud! Long story short, ranger, if you are not a complete coward you simply have to help us liberate the camp, along with the entire historical complex while you are at it.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="paw"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/26_paw.jpg" border="0" height="140" width="137"  class="float"><span class="title1">Snoutius Degradius</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+We have a highly complicated but appropriately lucrative mission for you, ranger!<br>
+Do you remember biology classes? Does the name "snoutius degradius" ring a bell? It is an incredibly rare species of giant reptiles whose skeletal remains develop deposits of the mineral niobium. And if you didn't know, niobium is the foundation upon which superconducting alloys are made. Ours happens to be the only planet that still contains live specimen of the giant degradius -- a fact that has catapulted our share on the galactic niobium market to nearly 28%!<br>
+Alas, all good things come to an end. The dominators have begun expressing strong interest in our source of niobium. Having landed in a natural reserve, they butchered every single specimen of degradius in sight! They are now processing the poor creatures' remains, extracting niobium from their bones. You must put an end to this travesty! Exterminate every last one of the dominators and hand over the animal remains to our geneticists -- perhaps they will be able to clone them.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr><td><a name="disodan"><img src="img/spacer.gif" width="1" height="9"></a></td></tr></table><br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr><br>
+<td class="justify" valign="top"><img src="minimaps/05_disodan.jpg" border="0" height="142" width="137"  class="float"><span class="title1">Desert Disodane</span><br><br>
+<small>Difficulty:</small> <span class="beige">low</span><br>
+<br>
+Ranger, we need your help.<br>
+After our system was liberated from the dominators, on some planets these death machines continue to multiply. The Galactic Council has promised to send in troops only in three months, but we cannot afford to wait that long, not with our people living in constant danger. <br>
+We know that fighting dominators on planets isn't part of ranger responsibilities; nevertheless, we must ask you to help us liquidate these robots. The cleansing operation is top-secret in order to prevent widespread panic on planet, so we can fill you in on the details only after you accept this mission.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="ironisland"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/29_ironisland.jpg" border="0" height="137" width="137"  class="float"><span class="title1">Iron Island</span><br><br>
+<small>Difficulty:</small> <span class="beige">low</span><br>
+<br>
+This should be a straightforward operation to capture a metal processing plant. Squads of blazeroids and kelleroids have secured a foothold inside it. The plant is stationed in the middle of the Placid Ocean, which creates a hazard for passenger vessels with routes in the immediate vicinity. We trust it won't be too difficult to lead a landing party of robots to victory and liberate the island?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr><td><a name="zhuki"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr><br>
+<td class="justify" valign="top"><img src="minimaps/06_zhuki.jpg" border="0" height="137" width="132" class="float"><span class="title1">Bugs</span><br><br>
+<small>Difficulty:</small> <span class="beige">under medium</span><br>
+<br>
+Yes, we have a mission especially for you. We cannot entrust a matter of such importance to anyone else, for it concerns planet, our home.
+<br>
+Many years ago, before even the first faeyan colonists got here, this planet was inhabited by huge bugs. Yes, yes, these arthropods were sometimes the size of a small town! Unfortunately, we did not have a chance to study this curious phenomenon in detail, since the bugs died out aeons before we settled the planet. Anyway, it's not the bugs that are important here, but the dominators that started studying them. The robots grew intrigued by the the extinct creatures' size and dropped a landing party onto our planet several months ago.
+<br>
+You are to stop their scientific efforts at any cost. You will receive detailed instructions once on location, and let me assure you that the fee will exceed any expectations you may have!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="starcraft"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/38_starcraft.jpg" border="0" height="140" width="137"   class="float"><span class="title1">Starship</span><br><br>
+<small>Difficulty:</small> <span class="beige">low</span><br>
+<br>
+Hmmmm.... I was asked to contact you specifically. Let's say you were recommended by someone as an experienced combat pilot. This is a fairly dangerous matter, and somewhat unusual too, but I am sure you'll be interested enough to at least hear me out.<br>
+A certain fairly eccentric gaal billionaire who is the biggest supporter of scientific research on our planet occasionally offers to fund certain... umm... let's call them brave and unusual experiments that seek to find perfection in a number of areas. This time around he is launching a certain... umm... project that has been popularly dubbed "Intuition and Improvisation vs Logic and Mathematics."<br>
+It's all very simple: here's you, and here are a few dominator clans. The participants of this so-called project find themselves together on an island. The outcome of your fight with the dominators will determine what is stronger: free will or mechanistic logic. The winner will get a substantial cash prize. Still, I fail to understand what use dominators may have for galactic credits. So, are you in?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr><td><a name="zeki"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/07_zeki.jpg" border="0" height="153" width="137" class="float"><span class="title1">Icecutting Inmates</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+Would you like some ice cubes, ranger? No? Too bad... Some smart ass -- some general's son, no doubt! -- has decided that our planet is an ideal place to mine ice. Now we're up to our ears in it... Many a maloq has already perished in the cold mines. We feel that it tempers the spirit and improves the nation's immune system. <br>
+But there was an unpleasant incident recently. Dominators have suddenly appeared in an open penitentiary camp -- a place you can't easily escape, obviously. As you would expect, the icecutters tried fighting them off with their bare hands. There were plenty veterans among them, but what's a pickaxe against a machine... You get the idea. They were brave, but they all died just the same... Argh... On your feet! Glory to the fallen heroes!
+<br>And now, let's get to it. Some of the inmates -- I mean workers -- escaped and hid in the barracks. They must be rescued before they freeze to death. Time is ticking -- there ain't no time to chillax! So, will you take on this rescue operation? Besides, some exposure to -40 temperature will be good for your pirate organism.
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Zenit">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Zenit.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Zenith</span><br><br>
+				<small>Difficulty:</small> <span class="beige">high</span><br><br>
+				Well, ranger, we happen to have a job for you. It involves commanding robots under extreme conditions. Oh! I see your eyes lighting up already!<br />
+				As you may know, our planet rotates around itself at the same speed as around its star. Since our orbital eccentricity is slightly above zero, one half of the planet is incessantly baked by the never-setting sun while the other is always dark and frozen solid. Naturally, all of our cities are located in the twilight zone that offers moderate temperatures. However, in the daylight area where the sun incinerates everyone stupid enough to wander into the desert, there is a small autonomous mining operation producing and enriching uranium. Anyhow, after yet another dominator attack on our system we discovered a kelleroid expedition in the daylight zone that was closely "scrutinizing" our high-tech production rigs. I don't think I need to explain what may happen if dominators lay their hands on a supply of enriched uranium. Oh, all right, let me spell it out: they will blow our entire planet to smithereens with their damn nukes! Unless, of course, you can stop them. Think about all those untold millions of relatively innocent civilians and cute babies that will perish if you, ranger, refuse to help us. No? Hitting no nerves? Then think about the big fat zeros we will add to your bank account.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Inmemoria">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Inmemoria.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">In Memoriam</span><br><br>
+				<small>Difficulty:</small> <span class="beige">under medium</span><br><br>
+				Ranger, we need your help!<br />
+				We have this island on our planet with a unique monument harking back to some ancient events that no one even remembers anymore. However, the great granite slabs with names on them had survived through the times and still guard some kind of a secret that we have not been able to learn yet. The only thing that we do know is that there are some mysterious caves under the monument, and that every once in a while it sends strange signals into space that no one can decipher. Archaeologists of all races keep asking me for permission to do a complete study and dig the place up, but I cannot be responsible for anything that may result in this great monument's destruction since every year it attracts hundreds of thousands of tourists and pilgrims. To be sure, some folks at the SNK transplanetary corporation know something about the memorial, but they are never going to tell, may they be damned along with their corporate ethics!<br />
+				Anyhow everything would have been hunky-dory had it not been for dominators that descended upon that blessed island a few days ago. Apparently, they were lured in by those mysterious signals. What's really exasperating is that they could destroy the great monument without ever asking me -- and that pisses me off! We must kick them off the island ASAP before they mess the monument beyond any recognition. I do not want to go down in history as the ruler on whose watch the great monument was destroyed, so I am prepared to pay you <Money> cr if your mission is successful.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="X-Ray">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/X-Ray.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">X-Ray</span><br><br>
+				<small>Difficulty:</small> <span class="beige">medium</span><br><br>
+				What mission? Don't you see I am having a panic attack? Aaaah! We are all gonna die! All right, all right: breathe in, breathe out... No, we are doomed! Aaaah! One second, hello! Yeah, there is this one guy.<br />
+				We are all gonna die!
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="isla_majolina"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/34_isla_majolina.jpg" border="0" height="143" width="137" class="float"><span class="title1">Isla-Mayolina</span><br><br>
+<small>Difficulty:</small> <span class="beige">low</span><br>
+<br>
+Well, ranger, it just so happens we're in need of a seasoned strategist, and I do hope you fit the bill.<br>
+Your mission will be to retake the Isla-Mayolina Island back from the dominators. Perhaps you've heard something about this barren and utterly useless piece of rock? If you have, congratulations -- you've fallen for our misinformation campaign. The fact is that we've been deliberately trying to keep this place out of the public eye, going as far as staging phony shows and anti-promotional events. The truth is that the island is used a testing ground for our latest top-secret technology -- unmanned stealth aircraft. Unfortunately for us, the dominators don't seem to care much for our evening news programs. Knowing not the uselessness of the island, they up and captured it for themselves. <br>
+So, are you willing to help us drive the dominators from the island and return this utterly worthless piece of work to the authorities of planet <Planet>? Naturally, your service will be subject to renumeration, specifically 1,000,000 cr! An unbelievable sum, is it not?
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="RedAlert">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/RedAlert.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Red Alert</span><br><br>
+				<small>Difficulty:</small> <span class="beige">high</span><br><br>
+				Oh, yes, we have a mission for you, and a fairly difficult one too. One of our planet's moons has vast oceans of molten heavy hydrocarbons that are being mined by the human company Snell. However, not too long ago one of their most profitable rigs was attacked by dominators who started rearranging it for their own needs that we suspect include building a storm troop of combat robots. Naturally, we could just bomb the facility built by the machines right out of the heavy bitumen it is floating on, but Snell's lawyers have already warned us they will have the shirts off our backs if we do. Thus, our only option is to send over a ranger -- and that would be you -- to command combat robots. I hope you are good at strategy. Are you?
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="krater"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/46_krater.jpg" border="0" height="152" width="137" class="float"><span class="title1">Crater</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+Let me give you a brief rundown of the situation. Some time ago a germanium-rich meteorite fell on our planet. This mineral is badly needed by our semiconductor industry, but it is even more valuable for dominators. They have already taken over most of the island.<br>
+If you agree to take on these dominators and rid our planet of the entire lot we will provide you with a first rate production facility to build combat robots. Naturally, we will also pay you an attractive compensation for your efforts.!
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Krizisniy_Centr">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Krizisniy_Centr.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Crisis Center</span><br><br>
+				<small>Difficulty:</small> <span class="beige">under medium</span><br><br>
+				You know, ranger, these days many governments make advance preparations for fending off dominator invasions. Thus, gaals and feyans develop planetary shields, maloqs build underground shelters for their entire populations, and pelengs have arrangements in place for urgent evacuation of the government and the state treasury. As for us, we have developed an automatic crisis center that will wage asymmetric warfare once our planet is taken over by dominators, so as to speed up its future liberation. But by a stroke of bad luck dominators landed right on the secret island where the crisis center is located. And believe it or not, they are none the wiser to what powerful weapon they now have in their possession. As it happens, they have been attracted by a titanium deposit. Moreover, the kelleroids that took over the air defense center have already shot down half a dozen other rangers we sent on rescue missions, so we cannot guarantee your personal safety. So, are you going to take it or should we keep looking for someone who has more guts?
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Crio">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Crio.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Cryo</span><br><br>
+				<small>Difficulty:</small> <span class="beige">under medium</span><br><br>
+				Yes, ranger, this is a job for you: we have problems with dominators, and what serious problems they are! These buggers landed on a tropical island and set up some sort of a production facility there that most likely involves cryogenic technology. The results were just horrible! Because of the rapid changes in local climate, the island began generating tropical hurricanes like there was no tomorrow. Coastal cities incurred serious damage and suffered great casualties. Ships continue to sink on the high seas regularly. Still, there is not much we can do since any strike from the orbit will cause the power plant located on the island to explode, which would in turn generate a giant tsunami and do even more harm to our cities.<br />
+				You are our only hope, my dear ranger. Naturally, we'll be sure to pay you.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="timelab"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/09_timelab.jpg" border="0" height="123" width="137" class="float"><span class="title1">Time Laboratory</span><br><br>
+<small>Difficulty:</small> <span class="beige">high</span><br>
+<br>
+We have a top secret mission for you. I assume you know that our planet has just recently been liberated from the dominators. But only a few people know about the Time Laboratory. During their occupation of our system, the dominators were very much interested in it, so much so that it became a point of contention. In fact, even after being driven out of the system, they continue to remain there. The situation is fraught with all manner of disastrous consequences. What happens if the dominators go to the past and change it? The mere thought of it is truly terrifying!
+<br>Therefore, this mission will require an experienced strategist. Are you ready to turn back time, retaking control over the lab's surface and underground communication devices?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="malocosoft"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/47_malocosoft.jpg" border="0" height="136" width="137"  class="float"><span class="title1">Maloqsoft</span><br><br>
+<small>Difficulty:</small> <span class="beige">high</span><br>
+<br>
+Do you even know how difficult it is to maintain a combat-ready army? No, you don't. We maloqs build special training grounds for this so that our soldiers could learn to kill practicing on robot mock-ups, gain combat experience and vent their range.<br>
+So, what was I talking about? Oh, yes! Not so long ago, Maloqsoft Corporation gave us a gift -- brand new training grounds. They have also gotten a good deal on dominator mock-ups from the pelengs and set up an effective lighting scheme for key areas using fixtures deployed in space. The place will be a boon for our valiant soldiers -- brave but not very experienced yet. Keeping in mind Maloqsoft's great reputation, we decided to let you test our new grounds first so as not to put the lives... I mean, combat experience of our soldiers at risk. Make up your mind, ranger! We will even pay you for that.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="malok"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/10_malok.jpg" border="0" height="162" width="137" class="float"><span class="title1">Maloq Movie</span><br><br>
+<small>Difficulty:</small> <span class="beige">high</span><br>
+<br>
+The valorous Maloq Army wants YOU!
+<br>What do you say, how is that for a slogan? I'm trying to write copy for a stereo trailer.
+<br>What for? Well, you see, our youth doesn't seem to want to serve in the army... But even the elite Red Army needs steady reinforcements. It's getting so bad they've started taking recruits with rosy and even pink mugs, instead of exclusively blood-red as stipulated by the Charter. If this keeps up, before long the Red Army will turn into an elite Rainbow Division. These damned kids have read too many adventure novels! Everybody wants to be a free ranger, but who's going to serve, I ask you? Division General Getraeus himself?
+<br>In an effort to boost patriotism among the youth, the brass has decided to shoot a promotional stereo trailer. We even got a cool script. Here, listen:
+<br>A ranger ship crashes on a dominator-controlled planet, right into a heated battle, where the valorous Maloq Army is giving the dominator forces a real drubbing, despite being greatly outnumbered. "Stop, where are you going?!" the ranger yells to the maloq troops fleeing in terror... I mean, regrouping! "Running to hide!"... Err, I mean... "We're falling back to lay an ambush!" the division commander fires back, and the next moment his head gets split open with a blaster. Blood is gushing, birds are singing, the grass is green and shiny... In a word -- beautiful! And then the ranger grabs hold of the banner, gives the troops a good kick in the ass... I mean, delivers a glorious and inspiring speech... and the galvanized maloq forces rip the dominators to shreds!
+<br>Then the ranger wipes the blood off his face and proudly proclaims: "I want to serve in the Maloq Army!" Cut scene. Say, do you want to play the part of the ranger, <Player>? The pay is pretty good. Everything is pretty much ready: a dominator party was delivered to the resort island where the filming will take place, and an elite storm squad is prepared to play the role of the maloq troops. Well, what do you say?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="bur"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/44_bur.jpg" border="0" height="136" width="137" class="float"><span class="title1">Megadrill</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+Uh-huh, we've got us this little problem, and I think you could help us out. Our shipbuilding plants have recently completed a new great feat of maloq engineering -- a megadrill. It's this giant rig for deep drilling. But before they could even assemble the rig on site, kelleroids shot down the escorts, took over the tugboat and towed the rig to an island they've captured. Faeyan experts have determined that the dominators are looking for some deep me-ta-pho-ric in-tru-sion po-ly-plast... damn, what a tongue twister! In a nutshell, these bores are boring their holes with our very own bore.<br>
+We can't get to them by air since their air defenses are excellent. We will send you over aboard a submarine. It will also deliver a mobile production facility to the rig along with some robots. You will be in charge of it all. What are you waiting for? Get on with it. Oh, I forgot. We will pay you a nice chunk of cash if you deliver.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="merzlota"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/11_merzlota.jpg" border="0" height="275" width="137" class="float"><span class="title1">Permafrost</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+We have a mission for you that is if you're prepared to brave the permafrost of our planet a while longer.
+<br>Our scientists have recently discovered that blazeroid dominators are manufacturing their intellectual matrices in negative temperatures. This is why the robots tend to establish their manufacturing facilities on remote planets, where they engineer AI modules.
+<br>Our planet happens to offer ideal conditions for a production base, and blazeroids couldn't let the opportunity pass. To our shame, our planetary security systems missed their intrustion. However, we've managed to discover the dominators' landing point fairly quickly, and they have yet to secure a foothold on their island.
+<br>Furthermore, our saboteurs have captured one of the bases at the edge of the island. Alas, that is the only resource we can offer. Our planet is too insignificant to station regular forces, especially when they're needed elsewhere.
+<br>Finally, a small request: when you're killing robots, try to keep their frames intact as much as possible. Our planet is too poor in minerals to waste such ample amounts of top grade metal. You are a valiant warrior; no doubt, you realize how badly the Interstellar Coalition needs new battle cruisers.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="module"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/33_module.jpg" border="0" height="137" width="137" class="float"><span class="title1">Module</span><br><br>
+<small>Difficulty:</small> <span class="beige">high</span><br>
+<br>
+After the Coalition forces drove the dominators from our system, we spotted a disguised enemy transport vessel and shot it down. It crashed on one of the islands in the ocean and by some miracle didn't explode or even catch fire; it stands to reason that the cargo is was carrying is still intact.<br>
+We suspect that this cargo is some kind of matter distorter. Not only did the device survive, but it appears to be in perfect working condition, judging by the slew of earthquakes that keep rocking the area within a 1,000 km radius of the crash site.<br>
+Our technicians should be able to switch off the device, but a dominator force has already landed on the island and is attempting to recover the lost cargo. Your job is to clear the area of dominators, allowing our scientists to first deactivate the module and then to study its mechanisms.
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="SeaBattle">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/SeaBattle.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Battleship</span><br><br>
+				<small>Difficulty:</small> <span class="beige">above medium</span><br><br>
+				Mission, ranger? How are your sea legs? You see, we have a mission for a strategist capable of performing in confined spaces.<br />
+				Our navy met a serious opponent: a sunk battleship restored by blazeroids came out of nowhere and easily destroyed two squadrons we have sent to intercept it. Then its boarding party captured our aircraft carrier, the Aurora. Still, before going down, our cruiser Storm managed to fire a cryogun salvo at the battleship and put its engines out of commission. We have put together a few hundreds of combat robots and landing craft for a boarding operation to get the Aurora back and liquidate the blazeroid threat. At the moment, we are looking for a suitable strategist.<br />
+				If you agree -- and I am sure you will -- we will bring you aboard the U-2 submarine via teleporter, so that you could safely command the operation.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="trash"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/49_trash.jpg" border="0" height="131" width="137" class="float"><span class="title1">Trash</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+How about some coffee, ranger?<br>
+No? All right then, it's not like we drink much of that sludge ourselves. You see, we have a serious problem with potable water, or rather a lack thereof. Many years ago, our planet was very rich in mineral resources, but we wasted them all gratuitously and now have nothing left. Our scientists came up with a fairly attractive program for recycling and reusing trash. Sounds incredible, doesn't it? Nevertheless, we did manage to build recycling facilities in the Trash Valley -- our planet's largest dump -- and the results are quite promising.<br>
+Unfortunately, our plants and the treasure trove of recycled resources concentrated at one location caught the attention of dominators. A huge army of battered blazeroids, terronoids and kelleroids descended upon the valley. They captured our plants, reequipped them and now use them to repair themselves. They scrapped all scrubbers and other environment protection systems. It took these dominators a few short weeks to push our planet to the brink of a true environmental disaster. Our water is all poisoned, the ozone layer is getting thinner by the minute, and entire species of animals become extinct!<br>
+We beg you to help us get rid of the dominators. What's at stake here is the health... heck, the very existence of our entire planet! We will assist you in any way we can and pay you handsomely for your troubles!
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Osada">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Osada.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Siege</span><br><br>
+				<small>Difficulty:</small> <span class="beige">above medium</span><br><br>
+				Ranger, have you ever heard of the roleplaying society? They are very interesting humans and gaals with keen imaginations and deep pockets. Some thirty years ago, one of those groups put together enough money to reenact a certain battle between imaginary peoples in an imaginary world. The script was written by some ancient human professor. I must admit that that creation of theirs became one of our planet's wonders and gave rise to a decent tourist business in between the reenacted battles. But as you may have already guessed all of it went down the drain when dominators descended upon us.<br />
+				Naturally, the Galactic Endorist-Ardist Society demands that we take decisive action. At the same time, they insist that we preserve the fortresses built on the battlefield, for which reason our only reliable option here would be using modular robots. I was informed by the authorities that you are fully licensed to operate those. And believe me, you will need every ounce of your skills here since many a ranger has already singed his wings trying to crack this mission. Yes, our enemies are that strong.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr><td><a name="alenkiy"><img src="img/spacer.gif" width="1" height="9"></a></td></tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><br>
+<td class="justify" valign="top"><img src="minimaps/12_alenkiy.jpg" border="0" height="162" width="137" class="float"><span class="title1">Scarlet Island</span><br><br>
+<small>Difficulty:</small> <span class="beige">low</span><br>
+<br>
+Yes, we have a mission for you! Do you like nature? Trees, flowers, animals? If so, then you will surely be interested in this task.
+<br>
+A thousand years ago our planet was pure as a virgin spring. But as civilization grew and grew, we lost sight of our roots. Skyscrapers, factories and dump sites infested the planet. We didn't realize what we were doing to the planet's ecosystem, not until we were left with nothing...
+<br>
+Once we finally came to grips with this terrible fact, we proceeded to study the entire surface of our planet. Our search unearthed a tiny island, formed by a volcanic eruption many centuries ago and virtually untouched by civilization. Our scientists were delighted, for no alien flora and fauna could ever replace our own. According to our data, there is a small population of turtles on the island and some hundred species of plants, including the very last red flower, the name of which has been long forgotten. This island has become a symbol for us -- a symbol that was modestly dubbed &laquoScarlet&raquo.
+<br>
+Now, I won't presume that you care about our flora and the dominators that threaten it. If that is the case, just say so. You are not a pirate, after all, but a true ranger, yes? Are you prepared to fight the dominators and save the nature of planet <Planet>?! If the answer is yes, we will deliver you straight onto the battlefield and give you all the necessary information about this noble mission.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="saintvalentine"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/35_saintvalentine.jpg" border="0" height="154" width="137" class="float"><span class="title1">St. Valentine's Island</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+I have an offer for you that's rather personal in nature. But I'll make it worth your while if you help me -- this I promise you. You see, I've been dating my girlfriend for quite a long time now. I love her and I've finally decided to propose, and I'm certain that she'll say yes. And why wouldn't she? Do you know a girl who would refuse a 50 carat black diamond ring and her own personal island?!<br>
+My analytical adviser devised a grand and super-romantic plan: I hand my beloved the ring when we're on the orbit, aboard my luxurious space yacht, then point to the heart-shaped island in the window and say: "My darling. There is my heart, and now it belongs to you!"<br>
+Very romantic, isn't it? It took me three hours to memorize the line! Or rather practicing it in front of a mirror. But alas... Turns out the island I'd bought has a dominator base on the surface, which I suppose explains the 30% discount! Quite a present it would make, eh? <Player>, if you help cleanse my heart... meaning this island of the dominators, you will be generously rewarded!
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Crossfire">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Crossfire.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Crossfire</span><br><br>
+				<small>Difficulty:</small> <span class="beige">above medium</span><br><br>
+				How do you feel about the gaming industry, my good chap? You see, Clapon Co., a veteran of human gaming business, has come to our planet with a presentation of their new scripted shooter, Quarter-Life: Episode 451. As part of the celebration, they are organizing a tournament at a special range that will replicate one of the levels of their online game -- crossfire -- using modular robots for "players." But there's a wee bit of a problem: we couldn't find any qualified operators for this equipment. We did manage to connect two of the warring parties to captured dominator modules, but one role still remains up for grabs.<br />
+				Yes, you guessed correctly: we suggest that you take on this role. And don't you worry, you will be pleasantly surprised by the prize money.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Piramida">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Piramida.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Pyramid</span><br><br>
+				<small>Difficulty:</small> <span class="beige">high</span><br><br>
+				Oh, Ranger! Your timing couldn't be better -- dominators have taken over the dig site and are now threatening to destroy the pyramid. Wait, haven't you heard? That was a discovery of the century! Doctor Indy Jokes, a famous archaeologist, found and dug up the first ever operational karap pyramid. Don't tell me you never heard of the karaps! To make it real simple for a person of your erudition, the karaps were a very advanced ancient race that disappeared without a trace some three and a half thousand years ago leaving behind multiple high-technology artifacts all over the galaxy. There are reasons to believe that they disappeared after a war with ancient gaals, but the gaals themselves flat our refuse to share such "shameful episodes of our history" with the rest of us. Until recently, studying the karap civilization was all the more difficult since they left no writings and stored all information on digital media that are notorious for their poor durability. But then an expedition led by Doctor Jokes found an entire operational pyramid, intact with all its archives. Unfortunately, they have also unearthed a secret underground dominator base and had to retreat under cover of a rearguard action. The worst of it was that blazeroids whose base was destroyed during the dig set up camp on top of the pyramid and began transforming it to their own liking. I hope you understand that we cannot use orbital guns or nuclear weapons since the Galactic Council has already designated the pyramid a monument of universal importance, and we will face huge sanctions if it is lost. Fortunately, we had a mobile, self-unpacking base available that we managed to drop from the air in the vicinity of the dig site. Now all we need to do is find a strategist. Your file says that you have been trained for exactly this kind of missions, so, as the saying goes, more power to you.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="pyramids"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/30_pyramids.jpg" border="0" height="137" width="137" class="float"><span class="title1">Pyramids</span><br><br>
+<small>Difficulty:</small> <span class="beige">low</span><br>
+<small>Duration:</small> <span class="beige">short</span><br>
+<small>Name in the list of maps:</small> <span class="beige">Pyramids.cmap</span><br>
+<br>
+According to your dossier, ranger, you are a seasoned commander of ground robot forces. As such, we've decided to entrust you with the honorable mission of liberating Pyramid Island -- a truly unique site serving as evidence of an ancient civilization on planet <Planet>. We know next to nothing about this culture, for they've disappeared from here long before we settled these fertile lands. That is what makes the recovery of the island so critical for our scientists. Without it, they will not be able to study the remains of this extinct nation.
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Plan">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Plan.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Plan</span><br><br>
+				<small>Difficulty:</small> <span class="beige">above medium</span><br><br>
+				Say, have you ever heard the name of Olmian Cellanori? No? How about Dazykagz Sisha? Oh, now I see your eyes lighting up! And by the way, why do they shine in such a suspicious manner? Oh, anyway. You are probably aware that Dazykagz heads a large peleng drug cartel, the Sleazy Hands, and Olmian is a famous computer programmer, inventor and hacker wanted in 10 different systems. By the way, it was Cellanori who in the year 3299 found a way to manufacture and reprogram modular dominator robots that now make up the backbone of our land forces. Now he has begun using these robots against us. But let's get back to the business at hand. Our planet's western oceanic hemisphere has seen a recent rise of electromagnetic activity, which is very suspicious considering the area is not populated. Besides, the gaals began complaining about our planet allegedly exporting drugs. All of this called for a serious investigation that discovered an island plantation of opium poppies -- a source of elite natural drugs. Subsequent observations confirmed that it was a partnership venture by Sisha and Cellanori who also built a low-orbit flier port and a refining lab at the plantation. The island is protected by solid air defenses and a troop of reprogrammed dominator robots. The SWAT teams we have sent were easily repelled by kelleroids, so that Cellanori did not even have to tap the terronoids he used to harvest the crops. We were about to send the SQUAT special forces in, but here comes you -- an experienced strategist. Everyone knows that the best way to fight modular robots is with modular robots of your own. We are ready to offer you a standard freelance strategist contract and pay you handsomely. Say yes. 
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="maunaroa"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/48_maunaroa.jpg" border="0" height="138" width="137" class="float"><span class="title1">Mauna Roa Beaches</span><br><br>
+<small>Difficulty:</small> <span class="beige">high</span><br>
+<br>
+Ranger, if you ever heard of Mauna Roa, you must know that it is the most luxurious and expensive resort in the entire Galaxy, and only the rich and the famous can afford to vacation there. It's a huge mountain in the middle of the ocean where you can ski from the top straight to the beach at the foot. <br>
+And of course it is quite a cash cow, or rather it used to be before dominators descended upon it and all the tourists had to be evacuated. Whatever it is the machines want with it, the invasion has caused us a great financial loss. <Player>, we need you to realize the depth of our suffering here. We ask you to help us free the island, and naturally, we are going to make it worth your while.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="weather"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/14_weather.jpg" border="0" height="147" width="137" class="float"><span class="title1">Weather Station</span><br><br>
+<small>Difficulty:</small> <span class="beige">high</span><br>
+<br>
+Aaachoo! Did you say something, ranger? If this is about coffee, I have bad news for you: all hot and alcoholic drinks -- achoooo! -- are deemed an important strategic resource here after the dominators pulled off a diversion on this planet just before it was liberated, cough-cough!
+<br>Wait, do you not know what's happening here? Then let me explain, cough-cough. But first, please turn up that heater... The dominators are still in control of our weather control station, which we have purchased from the fae for a hefty sum of money.
+<br>Running all the equipment chaotically like total idiots, they've managed to make the weather not only erratic, but simply deadly. Heavy snow in the midst of summer, devastating typhoons springing out of nowhere -- it's like we're in a disaster movie! We were hoping you could lead a rescue... a... a... aaachoooo!!! Pardon while I wipe that... operation? We must take back the weather station.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="pomoyka"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/39_pomoyka.jpg" border="0" height="140" width="137" class="float"><span class="title1">Dump</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+Do you have a radiation protection suit, ranger? If not, I suggest you get one. As you have probably guessed by now, we propose that you travel to a fairly inhospitable place. Some time ago, our air defenses shot down a transport that happened to be teeming with dominators.<br>
+The ship crash landed in an island dump where they bring nuclear waste from all over the planet for disposal. It would be stupid to hope that radiation would damage dominator chips and systems, especially if one considers where they come from. On the other hand, we cannot ignore any dominators roaming our planet, so we suggest you go to that island and destroy the surviving dominators, turning them into piles of radioactive debris!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="boarding"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/28_boarding.jpg" border="0" height="125" width="137" class="float"><span class="title1">Landing</span><br><br>
+<small>Difficulty:</small> <span class="beige">high</span><br>
+<br>
+How do you feel about walks on the beach, ranger? Fresh salty breeze, water splashing your face, the smoking remains of enemy ships and the floating bodies being devoured by sharks... Oh, apologies, I got carried away.<br>
+This morning we picked up a signal from a floating research and development center, located aboard the ship Endoria's Pride. The ship was attacked by dominator vessels, likely intrigued by the complex's powerful manufacturing bases and research labs.<br>
+If you head over to Endoria's Pride and help us defend the ship against the dominator offensive, you will earn a sizable reward if the operation proves successful.
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Proval">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Proval.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Escallop</span><br><br>
+				<small>Difficulty:</small> <span class="beige">high</span><br><br>
+				Hello, ranger. It's quite handy that you dropped in. At the moment, not only the Escallop National Park alone is threatened to be destroyed, but also the rich cities on the Louter Banks, of which this particular island is one. You've never heard of the Escallop, is that what you are saying? OK, since you are not local, let me explain. This is about the only untouched stretch of wilderness on planet <Planet> most of which has by now been densely developed. It has been spared development not only because it is protected by the government but also in view of its powerful seismic activity. Almost every year the island is rattled by powerful quakes, and massive eruptions happen a few times a century. Dominators must have been unaware of that, or they wouldn't have built their base in such a dangerous place. Were it any other location, we wouldn't hesitate to bombard it from the orbit. However, in this case Greenpeace would have the shirt off our backs for destroying the Escallop, and, second, the island is surrounded with a powerful barrier shield that could protect it from such a bombardment and interfere with our scanners. Whatever bits of information we do have indicate that the dominators are preparing a seaborne assault and are almost ready to sail. It will take us a while to put together naval assets sufficient for an intercept, so in order to buy time we need an experienced strategist such as yourself. A heavy combat flier carrier is already standing by.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="rahobam"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/17_rahobam.jpg" border="0" height="150" width="137" class="float"><span class="title1">Ragobam Bloodbath</span><br><br>
+<small>Difficulty:</small> <span class="beige">under medium</span><br>
+<br>
+We have a mission for someone who isn't afraid to get their hands dirty. A true master of their trade, a real pirate! By the way, I hope you harbor no perversions or unnatural inclinations for ragobam bullfrogs? Good, then listen carefully!
+It is known that ragobam bullfrogs are a valuable source of the most delectable pleasure for a myriad clients. These wonderful creatures secrete a toxic substance that may induce intoxication, slight nausea and various psychosomatic effects, in addition to relaxation of cerebral lobes. Moreover, select gifted males may even even evoke visions of the future... They are an excellent commodity, popular even among feyans. Excuse me for getting carried away; you see, these bullfrogs are my second biggest weakness. What is the biggest, you ask? That's privy only to my personal psychotherapist. <br>
+So anyway, we had this brilliant idea (we are a brilliant people, after all) to increase the population of gifted males! We imported dominators to our least profitable bullfrog farms, built up infrastructure and set up a base! You are given a huge resource and a whole lot of nuclear warheads to secure victory. And should the battle turn bloody, you will be rewarded in a way you've never even dreamed of. So, do we have a deal?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="reactor"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/42_reactor.jpg" border="0" height="212" width="137" class="float"><span class="title1">Reactor</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+Just curious, have you ever been to any "hot" spots? Like, say, a nuclear waste dump or a reactor core? If you haven't, may I recommend visiting -- that's a thrill of your life! Come to think of it, it is such a pity they now consider nuclear power plants obsolete. Whatever their benefits, new, safe orbital power plants don't even have a fraction of the old romantic appeal...<br>
+But let's get to the point. We have an inactive reactor on one of the islands that was mothballed hundreds of years ago. The background radiation level there is quite safe. Dominators would be your much bigger worry. They have recently landed on that island, dismantled the outer protective walls and seem to be trying to restart the reactor. At the same time, they are making some very suspicious modifications and improvements. Our analysts believe that the dominators have found a way to increase the reactor yield substantially.<br>
+You must stop them, since apparently they are not going to use the reactor to supply heat and power to our cities. Once they have a high-yield working plant at their disposal, they may want to supply us with so much heat and power that half the cities on this planet will simply cease to exist!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="biohazzard"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/43_biohazzard.jpg" border="0" height="136" width="137" class="float"><span class="title1">Reality Show</span><br><br>
+<small>Difficulty:</small> <span class="beige">high</span><br>
+<br>
+Oh, what a character! Turn sideways. Now, a frontal shot. Here, take this number. Say something menacing. Your wallet or your life, maybe? You can always tell one of your own humanoids. You fit the bill perfectly -- what we need for this shoot is an absolute wacko who wouldn't give a hoot about the lives of others.<br>
+Our chemical and biological weapons plant is teetering on the brink of bankruptcy. They decided to use the last of their cash to fund a reality show, The Island of Death, that is shaping up to become a real blockbuster. The script is a work of genius: a few participants are sent to an island where they use giant combat robots to fight for survival. The last man standing will receive a substantial cash prize and the title of the Conqueror of Death. Make up your mind. Here's you chance to prove you are the best of the best!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="islands"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/25_islands.jpg" border="0" height="150" width="137" class="float"><span class="title1">Lyakusha's Residence</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+You should -- nay, you must! -- head to the Makhara-Tuta atoll at once! The atoll belongs to our Supreme Lyakusha, who loves to feed the sharks captive malo... I mean, captive macaques. Yes, of course I meant macaques! <br>
+But as ill luck would happen, as soon as our supreme leader arrived on his island with a fresh batch of captive ma... I mean, to engage in his favorite pastime, the island was overrun by dominators. Thankfully, our wise and handsome Lyakusha has managed to hole up in a bunker, which the dominators have already discovered and are trying to infiltrate as we speak!<br>
+We implore you to terminate the dominators and rescue our Supreme Lyakusha! He will make it worth your while and then some!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="metall"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/51_metall.jpg" border="0" height="137" width="137" class="float"><span class="title1">Mines</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+You are exactly the kind of specialist we need. You are not a pirate or some kind of merchant; you are a true warrior, so you can understand the gravity of the problem we face.<br>
+So here goes. Our planet is home to the largest armor alloy manufacturer in the sector that caters to the needs of the defense industry. Our alloys are used to build the best battle ships in the galaxy. However, when the planet was liberated we realized it to our horror that our main production facility had been captured by dominators. It appears they could also use the best armor in the galaxy. Do you understand what would happen if our army loses access to these alloys? It would be a disaster! Deploy to the coastal shelf immediately -- that's where the plant is located -- and stop these dang tin cans!
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Ryan">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Ryan.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Private Ryan</span><br><br>
+				<small>Difficulty:</small> <span class="beige">above medium</span><br><br>
+				You know, ranger, not too long ago dominators tried to take over our system. Or maybe you don't know -- you rangers often stay out there in space for months, away from all the news. One way or another, we had blazeroids landing on our planet, with everything you would expect such a thing to entail: evacuations, Coalition storm troops arriving, the state of emergency being declared and panic breaking out. Still, even under such hectic circumstances the customs did a great job and figured out that there was a tiny discrepancy between those coming back and those that left or got killed in action. Namely, a certain John Anson Ryan was missing -- a native of Orlenon, a private in the plasma tanks and veteran of the first battle of Gralgar. You may not think it important, but there is nothing unimportant in security, so our security services took a look.<br />
+				And they found him. Boy, did they really! Our private Ryan turned out to be no Ryan at all. Not a native of Orlenon, and not even human, but rather a terminator -- a blazeroid saboteur! While we were getting life back to normal and restoring order after the dominator attack, that bugger bought tons of different stuff on the black market and used it to assemble some primitive engineering bots and ore miners. In turn, those assembled more advanced specimen that then went to build an entire army of modular robots -- heavy assault droids, yes -- and a fairly large fleet to boot. All it took was a month and a half! Luckily, in order to keep his extracurricular activities quiet, "Ryan" built his army away from civilization, on an uninhabited island. And now this entire armada is heading towards our capital's metropolitan area, and the only thing in between them and us... well, there was this navy of ours and the air force, but the dominators did away with those even though it cost them dearly. Now the only defense our capital's harbor has is a well fortified island smack in the middle of the estuary. Our regular combat robot operator has been badly wounded and is now in intensive care. You are our last hope. Well, you and the ground forces that will fight the enemy on the beaches if it comes to that. Think long and hard -- we are talking about the lives of our soldiers here.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Sphere">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Sphere.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Sphere</span><br><br>
+				<small>Difficulty:</small> <span class="beige">above medium</span><br><br>
+				Not too long ago, our planet barely escaped being hit by a very strange meteorite. Yes, barely, since it stopped dead in its tracks a few yards above the ground and antigravitated like there was no tomorrow. Moreover, this object that ignorant media scribblers have already dubbed a Sphere generates gigawatts of direct current and shoots lightnings all around, all the while maintaining the temperature of its surface constant at the water boiling point at local pressure. Many scientists would like to know what that wonder Sphere is and where it gets those vast quantities of energy necessary for antigravitation and other mayhem. I'll tell you more, the fae have already offered us an exorbitant amount for the exclusive right to conduct a study of this phenomenon.<br />
+				But as you may have already guessed, the biggest problem was caused by dominators. Kelleroids picked up on this anomaly almost immediately and landed an assault troop, which in turn drew the attention of the other two series. Our special forces managed to handle the blazeroids all by themselves, but from this point on modular robots will be required, which you, if your file is accurate, are quite good with.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="warm"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/19_warm.jpg" border="0" height="116" width="137" class="float"><span class="title1">Heating Plant</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+How is your frost resistance? If all is well, then perhaps you can help us.
+<br>Some time ago we detected blazeroid and kelleroid landing parties on our planet's north pole. Given the extremely harsh conditions in the area, we weren't particularly alarmed by this news -- even machines cannot function well in such temperatures... Or so we thought, seeing as recently two fully functional bases were discovered in the area. Evidently, somehow the dominators managed to adapt.
+<br>We will provide you with experimental equipment, designed specifically for use in operations in subzero temperatures. Unfortunately, we never got the chance to test these new technologies, but our engineers swear that everything will work like clockwork in the far north... Let's just hope their idea of 'clock' is waterproof...
+<br>So, what is your decision, ranger?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="terron"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/20_terron.jpg" border="0" height="137" width="137" class="float"><span class="title1">Terron</span><br><br>
+<small>Difficulty:</small> <span class="beige">low</span><br>
+<br>
+<span class="beige">Note</span>. The map is final. After its completion Terron will be eliminated, the terronoids won't multiply any longer.<br><br>
+Two detachments of robots under our control are located in the vicinity of the Terron central processor, but the center is well protected from outside assault. The robots' combat protocol will not be able to overcome the enemy's superior numbers. You, Ranger <Player>, must take command over the robots into your own hands. The operation's probability of success equals 50%.<br>
+Using your main strike force, clear a path to the central processor. Locate the squad of robots armed with nuclear charges and activate them as close to the central processor as you can. This will initiate the irreversible process of disintegration of the entire planet.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="isle_down"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/40_isle_down.jpg" border="0" height="141" width="137"  class="float"><span class="title1">Sinking Island</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+When was the last time you went to a museum, ranger? I mean the museum of combat robots.<br>
+Not that you could call it a museum, of course. It's more like a giant cemetery. After the dominator rebellion, the Coalition's five races signed a treaty calling for decommission and destruction of all intelligent combat robots. The Arruga Island is now home to the most dangerous and destructive of them that were supposed to be sunk with the island itself. But just when our tectonic engineers began submerging the island a bunch of dominators showed up. It looks like they decided to lay their manipulators on our most dangerous robots, and we simply cannot afford to let this happen. We need your help.<br>
+If you can stop the dominators, we will not have to hit the island from the orbit, and our planet's environment will be saved.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="trident"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="FuelForLife">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/FuelForLife.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Fuel for Life</span><br><br>
+				<small>Difficulty:</small> <span class="beige">medium</span><br><br>
+				A secret mission, you say? Well, it's hardly a secret anymore, but it sure is important. Oh, yes, it's not like you are following our news... We have us an emergency here. During a recent dominator attack, a small ship of theirs descended upon our planet and headed towards a fortified sea rig, apparently spoiling for a good fight. It's not like you could expect any different from a blazeroid. Were it a regular oil rig, we would have simply had the fleet blow it up, but this one here mines for a very rare mineral, neoninastin -- a powerful energy source, high-temperature superconductor and, most importantly, a valuable flora neonization catalyst. I hope you remember, ranger, that feyans cannot digest food from other planets that has not been neonized. I am sure you'll be interested to know that feyans pay millions of credits for a kilo of purified blue neoninastin gel. So it should go without saying now that we are not just going to simply give up on that money. We are going to fight and get the platform back, whatever the cost -- economically feasible cost, that is. We were about to send our special forces there, but then you descended upon us -- a godsent, seeing that you are a ranger licensed to operate combat robots. To be sure, robots cause a lot of damage on site, but you should see those maloq louts our soldier boys have recruited. You can trust them to burn the place to the ground, destroy everything and eat the debris, so if you agree to take on the task of clearing the platform we will be sure to pay you nicely for your troubles.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/37_trident.jpg" border="0" height="141" width="137" class="float"><span class="title1">Trident</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+Ranger, you are quite the experienced commander. How would you like to serve the cause of science in exchange for money?<br>
+Perhaps you've heard about an ancient interplanetary civilization whose remains have been found on dozens of planets? Most often these were constructions of pyramids. Case in point, a whole complex of excellently preserved pyramids has been discovered on the unpopulated hemisphere of our planet. But what's really interesting is the fact that the island had become visible only recently. Until then, it somehow eluded all our detectors. Our theory is that an ancient cloaking device had finally malfunctioned...<br>
+Sadly, upon deploying an expedition to the pyramids, we discovered a detachment of kelleroids on the island! They were digging shafts into the island depths; according to our data, that is where the pyramids connect via a network of tunnels and corridors. Fortunately, the expedition was carrying enough tech and weapons to capture one of the dominator bases up in the mountains. And that's where we stand now -- in dire need of a professional dominator fighter. Help us liberate the island from those grabby manipulators. The pyramids must be handed over to our scientists for study!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="trilaran"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/21_trilaran.jpg" border="0" height="136" width="137"  class="float"><span class="title1">Trilaran</span><br><br>
+<small>Difficulty:</small> <span class="beige">above medium</span><br>
+<br>
+We believe that you will be able to help us correct the error made by the advocates of the revolutionary pseudo-intellect theory. This sorry bunch of dilettantes with the gall to call themselves "scientists" has begun a dangerous experiment on one of our industrial islands named Trilaran.
+<br>Not surprisingly, the experiment quickly got out of hand, as the advocates of the traditional evolutionary theory predicted all along. The experimental dominator models annihilated the Control and Surveillance sectors and are now wreaking havoc on the island unchecked. Thankfully, the would-be researchers failed to establish production of terronoids, and barely managed to activate their base.
+<br>We suggest that you make use of this base and its resources to destroy the sorry consequences of this experiment, and cleanse the island of Trilaran from the dominators. Obviously, we are not asking you to do this for free...
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Logic">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Logic.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Triple Blow</span><br><br>
+				<small>Difficulty:</small> <span class="beige">under medium</span><br><br>
+				Even after our planet was liberated, a fraction of the dominator land force refused to put down their arms, and at the moment hostilities are still ongoing in many areas between what's left of them and KVSMK assault troops. Still, certain areas with no strategic importance have been abandoned, and as it happens one of them is home to the Bove Brotherhood shrine and the underground Scorpion Temple where Prophet Caain blessed his followers before the victorious war with the union of infidels that would not bow to the power of the Unguided Killerator. Today, this patch of sacred land that in the course of a long was has become an island, is being held by dominators. Unfortunately, KVSMK generals wouldn't even let us have a mobile base, but if you feel you could defeat a superior force of machines we would give you a brigade of assault troops to command. Naturally, you should also consider the potential reward that on top of the undying respect from all the Brothers would also include a substantial amount of money.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="training"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/22_training.jpg" border="0" height="207" width="137"  class="float"><span class="title1">Tutorial</span><br><br>
+<small>Difficulty:</small> <span class="beige">low</span><br>
+<br>
+And now it's time to practice. You have a whole lot of battle ahead of you, but before you can take on serious missions you must first learn the basics of robot war tactics. <br>
+The first thing you need to learn that the best way to fight machines is with other machines. Our job in this equation is simple: controlling them. We will now give you a robot production facility. These machines are strong, but utterly without intellect. Our engineers have developed three basic programs for them: attack, capture and defend. Putting the robot into one of these three modes nets you an autonomous unit! <br>
+Of course, you don't actually have to use them. If you are a good strategist, you will be able to command your robots personally. Your objective is to force your way through the obstacles, destroy the enemy combat models and raze their base to the ground. We wish you luck. Remember that you're not actually in any danger. It's just training, ranger, so be brave!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="foncers"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/23_foncers.jpg" border="0" height="126" width="137"  class="float"><span class="title1">Phoncers</span><br><br>
+<small>Difficulty:</small> <span class="beige">under medium</span><br>
+<br>
+Oh, yes! Your timing couldn't be better -- the tournament is set to begin in two weeks! All the tickets were sold months in advance, and if the tournament falls through there will be a huge scandal...
+<br>Oh, you don't know... You see, ours is the host planet for the annual ultraspeed phoncer racing tournament. Unfortunately, ours is also the planet picked by the dominators as a target for sabotage! They captured a ship in the orbit that was transporting phoncers for the tournament, and used them as disguise to sneak through customs. Having infiltrated the island where the tournament is held, the dominators seized control and even built a few bases. And they did it right on the phoncer speedway -- the Galaxy's one and only!
+<br>There's not enough time for us to build a new track before the tournament starts. That means you are our only hope, <Player>. If you purge the island of the dominator presence, we will have time enough to restore the damaged tracks and ensure the tournament takes place. If only you knew the magnitude and volume of bets placed, or the distinguished guests the tournament draws, you'd be ready to take on the dominators with your bare hands!
+<br>So, can you help us?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="hawaii"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/24_hawaii.jpg" border="0" height="136" width="137"  class="float"><span class="title1">Jawaiian Islands</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+We have a little mission for you. We're sure you've heard about our famous Jawaiian resorts? They are a chain of out-of-this-world-beautiful sandy islands. However, the islands were recently quarantined, and now all the tourists are sent to vacation at the famous  Bloston Paradise orbital entertainment complex.
+<br>Naturally, the government ends up footing the bill, seeing as the tourism business is not the least bit profitable. And all because of the dominators! Some time ago those damned tin cans managed to secure a base in the Jawaiian Triangle and started up production of their own kind. Their attack claimed so many tourist lives that three of our insurance companies went bankrupt paying out premiums.
+<br>Now, I know that you're probably here for rest and not another fight, but put yourself in our shoes... Surely it won't trouble you much to organize resistance and drive the dominators out of our corner of paradise? For our part, we will provide you with everything you may need. If you agree to take over the planetary battle and win, our travel agencies will always be glad to treat you as an honorary guest!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="coldsyntez"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/45_coldsyntez.jpg" border="0" height="132" width="137" class="float"><span class="title1">Cold Fusion</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+Wait, I need to change the battery here. You see, our planet has virtually no sources of energy of its own; we use imported batteries.<br>
+But it's going to change now. Our great scientists sto... I mean developed a revolutionary technology for supercooled thermonuclear fusion and just finished building our first reactor. But they hardly had time enough to figure out how it all worked before kelleroids descended upon the island. They may have been drawn in by the energetic emissions from the power source. Just imagine, they started the reactor and are now stealing our energy. What has the world come down too -- dominators stealing from pelengs! We are not going to put up with this!<br>
+If you agree to destroy these dominators, we will take you to a luxurious resort island and make first rate production facilities available to you. Say yes, we are even going to pay you for it!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="ecventor"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/32_ecventor.jpg" border="0" height="130" width="137"  class="float"><span class="title1">Equantor</span><br><br>
+<small>Difficulty:</small> <span class="beige">medium</span><br>
+<br>
+Ranger, recently we have come upon a drifting kelleroid Equantor way out in far space. It has sustained significant damage and could easily be destroyed, but that's not what we want. Rather, we want to take advantage of this golden opportunity to capture and study it thoroughly. Our plan is to furtively deploy a squad of reprogrammed robots and have them make the capture. We already have a key for the gate.
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Core">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Core.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Core</span><br><br>
+				<small>Difficulty:</small> <span class="beige">low</span><br><br>
+				It's good that you asked. There is this one mission, a very important mission as a matter of fact.<br />
+				You should know that we only use environmentally sound geothermal energy to generate electricity that, among other things, powers the lights and computer screens in this office. Overall, it is about the only energy source on our planet. It is all very simple and easy to use since our planet has a very hot core. The only reason we have not yet all cooked on the surface is that the planet is far enough from the sun to compensate for the extra heat emanated by the core.<br />
+				All our power plants are located deep underground, which makes perfect sense since the deeper it is, the hotter the magma. Additionally, these plants also produce all kinds of souvenirs and tchotchkes. For example, the shape of this black molten rock somewhat resembles a swarokok ready to leap. See that vicious scowl? And these are the tiny paws. You still don't see it? Come on, ranger, use your imagination. But anyway, we digress.<br />
+				One of these plants has been taken over by dominators even though we have no idea how they could possibly get there. These iron buggers wasted almost the entire operating crew and then went about their usual dominator business that mostly involves fighting each other. Seriously, like they couldn't find some other place for it! Because of them, the plant's machinery continues to operate with no supervision, which is very dangerous. A small overload here, a short there -- and the entire planet goes kaboom! We may be sitting in our comfortable armchairs now, but in fact we are sitting on a ticking bomb. Be seated, <Player>, be seated. That was a figure of speech. Don't worry, the seat is not going to explode under you.<br />
+				Ranger, I would like you to take on the important mission of destroying the dominators that have taken over the station. We know that all of you rangers undergo special training, so it looks like of all of us here you are the most qualified person for the job. If you manage to pull it off, you will have the gratitude of our entire population, and I will personally pay you <Money> cr. Provided the planet stays in one piece, that is.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr></table>
+<br>
+<br>
+<img src="img/sage.gif" width="32" height="28" class="float">
+Don't use one and the same method on all the maps. Take into account the circumstances, which build on the entire map, and not only next to your area or your troops. For example, it is useful to take your time and watch the fighting between two of your enemies, waiting till they make each other weak and then backstab them both. Keep a constant watch on the resource accumulation, since their abundance is the chief factor of the victory. The capture of the enemy's resource plants reduces the amount of robots produced. Actively use the terrain relief for your manuevering. Build the robots with the similar movement speed, so they could reach the target simultaneously opening the fire at the same time. It will bring your the concentration of forces and the advantage on the direction of your strike. A part of robots in your group should be repairable - it drastically increases the life of your forces and saves your resources. Use the manual robot control, for example head for the advancing enemy. At the distance of the artillery blow start moving back and deliver a strike. It allows to significantly weaken the enemy's offensive. Don't forget to summon reinforcements from time to time. Set up the defense of your plants and your base, taking into account the location of turrets and the terrain relief.
+<br>
+<br>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td> <br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<div align="left"><br>
+<br>
+</div>
+</td>
+</tr>
+</table>
+</body></html>

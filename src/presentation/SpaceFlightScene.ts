@@ -5,6 +5,7 @@ import {
   Container,
   Sprite,
   TilingSprite,
+  Texture,
   FederatedPointerEvent,
   BlurFilter,
 } from "pixi.js";
@@ -13,7 +14,7 @@ import { buildSphereMesh, type SphereMesh } from "./sphereMesh";
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType, StarType, NpcRole, QuestType } from "@/types";
 import { Faction } from "@/types/faction";
-import { pickVariant, tex } from "./textures";
+import { pickVariant } from "./textures";
 import { installGameCursors, setCanvasCursor } from "./cursor";
 import { PlanetSprite } from "./PlanetSprite";
 import { PlanetInfoPanel } from "./PlanetInfoPanel";
@@ -1728,19 +1729,15 @@ export class SpaceFlightScene extends GameScene {
     surface.x = this.starCenterX;
     surface.y = this.starCenterY;
 
-    // Preferred: equirectangular fire map projected onto a hemisphere so the
-    // surface really turns (US-070 #4), tinted per star type. Falls back to a
-    // flat scrolling disc if the mesh can't be built.
-    const sunMap = tex("star_maps/sun_01") ?? this.pickStarTexture();
+    // Preferred: equirectangular star map projected onto a hemisphere so the
+    // surface really turns, tinted per star type.
+    const sunMap = this.pickStarTexture();
     if (sunMap) {
       const W = R * 2;
       const tint = this.starTint();
       this.sunSphere = buildSphereMesh(sunMap, R, tint);
       const mesh = this.sunSphere?.mesh ?? null;
 
-      // No overlays on the sun: the hot-core fill and pulsing flares read as a
-      // weird bright blob over the surface, so they were removed — the rotating
-      // fire texture carries the look on its own.
       if (mesh) {
         surface.addChild(mesh);
       } else {
@@ -1760,6 +1757,12 @@ export class SpaceFlightScene extends GameScene {
         this.starTiling = tiling;
         surface.addChild(maskC, tiling);
       }
+
+      // Radial limb-fade mask: opaque at center, fades to transparent at edge
+      // so the star boundary blends into the halo rather than hard-clipping.
+      const limbMask = this.buildStarLimbMask(R);
+      surface.addChild(limbMask);
+      surface.mask = limbMask;
 
       this.starSurface = surface;
       this.renderer.gameLayer.addChild(surface);
@@ -1819,7 +1822,36 @@ export class SpaceFlightScene extends GameScene {
       [StarType.NEUTRON]: "neutron",
     };
     const p = prefix[system.starType];
-    return p ? pickVariant("stars", p, systemId) : undefined;
+    // Prefer equirectangular star_maps (for sphere mesh), fall back to sprites
+    return p
+      ? (pickVariant("star_maps", p, systemId) ??
+          pickVariant("stars", p, systemId))
+      : undefined;
+  }
+
+  /**
+   * Build a Canvas-based radial gradient texture used as an alpha mask over
+   * the star surface so the limb fades to transparent instead of hard-clipping.
+   * The gradient is opaque from center to 78% radius, then fades to zero at 100%.
+   */
+  private buildStarLimbMask(R: number): Sprite {
+    const size = Math.ceil(R * 2 + 4);
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+    const cx = size / 2;
+    const grad = ctx.createRadialGradient(cx, cx, 0, cx, cx, R);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(0.78, "rgba(255,255,255,1)");
+    grad.addColorStop(1.0, "rgba(255,255,255,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    const maskTex = Texture.from(canvas);
+    const sprite = new Sprite(maskTex);
+    sprite.anchor.set(0.5);
+    sprite.eventMode = "none";
+    return sprite;
   }
 
   /** Tint for the equirect sun map, by the current system's star type. */

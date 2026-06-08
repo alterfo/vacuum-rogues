@@ -1,0 +1,1361 @@
+<html><head>
+<script language="Javascript"><!--
+if (self.name=="menu") {location.href="menu.htm"; parent.cont.location="robotbattles_map.htm"}
+//--></script>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+<link rel="stylesheet" type="text/css" href="styles.css">
+<SCRIPT language="Javascript"> 
+<!-- 
+if (document.images) 
+{  
+img1on = new Image ;img1off = new Image; 
+img2on = new Image ;img2off = new Image; 
+ 
+img1on.src = "img/back1.gif";img1off.src = "img/back.gif";
+img2on.src = "img/forward1.gif";img2off.src = "img/forward.gif";
+} 
+function img_act(imgName) { 
+if (document.images) 
+{ imgOn = eval (imgName + "on.src"); 
+document [imgName].src = imgOn; } } 
+function img_inact(imgName) { 
+if (document.images) 
+{ imgOff = eval(imgName + "off.src"); 
+document [imgName].src = imgOff; } } 
+//--> 
+</SCRIPT>
+<SCRIPT language="Javascript"> 
+<!-- 
+isDOM=document.getElementById //DOM1 browser (MSIE 5+, Netscape 6, Opera 5+)
+isMSIE=document.all && document.all.item //Microsoft Internet Explorer 4+
+isNetscape4=document.layers //Netscape 4.*
+isOpera=window.opera //Opera
+isOpera5=isOpera && isDOM //Opera 5+
+isMSIE5=isDOM && isMSIE && !isOpera //MSIE 5+
+isMozilla=isNetscape6=isDOM && !isMSIE && !isOpera
+
+var obj;
+
+function getLayer(layerName, parentLayerName){
+  if(isDOM){ return document.getElementById(layerName); }
+  if(isMSIE){ return document.all[layerName]; }
+  if(isNetscape4){ return eval('document.layers[layerName]'); }
+  return false;
+}
+
+function ts(e,what){
+  mousex = e.clientX;
+  mousey = e.clientY;
+  pagexoff = 0;
+  pageyoff = 0;
+  if(isMSIE5){
+    pagexoff = document.body.scrollLeft;
+    pageyoff = document.body.scrollTop;
+  }
+  else{
+    pagexoff = window.pageXOffset;
+     pageyoff = window.pageYOffset;
+  }
+  if(getLayer(what)){
+    if(isNetscape4)
+      obj = getLayer(what);
+    else
+      obj = getLayer(what).style;
+ 	
+  	if(obj){
+	    leftoff = mousex-pagexoff;
+    	obj.left = (mousex+pagexoff);
+  
+	    topoff = mousey-pageyoff;
+    	if(isOpera && topoff <= 30)
+    	  obj.top = mousey + 20;
+	    else 
+		if( mousey <= 30) 
+	        obj.top = (mousey+pageyoff) + 20;
+		else 
+	      if (isOpera) 
+    	    obj.top = mousey + 20;
+	    else
+    	  obj.top = (mousey+pageyoff) + 20;
+   		
+		
+	    if(isNetscape4)
+    	  obj.visibility = 'show';
+	    else
+    	  obj.visibility = 'visible';
+	  }
+   }
+  return true;
+}
+
+function tc(){
+  if(obj){
+    if(isNetscape4)
+      obj.visibility = 'hide';
+    else
+      obj.visibility='hidden';
+  }
+  return true
+}
+
+function p(x, y, z) {
+	for (a = 0; a < arguments.length; a++) {
+		arguments[a] = arguments[a].split('');
+		arguments[a] = arguments[a].reverse();
+		arguments[a] = arguments[a].join('');
+	}
+	document.location.href = "mailto:" + x + "@" + y + "." + z;
+}
+function p_u(x, y, z) {
+	c = arguments;
+	for (b = 0; b < c.length; b++) {
+        if (b == 3) continue;
+		c[b] = c[b].split(',');
+		c[b] = c[b].reverse();
+		for (a = 0; a < c[b].length; a++)
+			c[b][a] = String.fromCharCode(c[b][a] - 10);
+		c[b] = c[b].join('');
+	}
+	document.location.href = "mailto:" + c[0] + "@" + c[1] + "." + c[2] + "?subject=" + c[3] + "";
+	
+}
+
+var win = null;
+function nwin(mypage,myname,w,h,scroll){LeftPosition = (screen.width) ? (screen.width-w)/2 : 0;TopPosition = (screen.height) ? (screen.height-h)/2 : 0;settings = 'height='+h+',width='+w+',top='+TopPosition+',left='+LeftPosition+',scrollbars='+scroll+',resizable'
+win = window.open(mypage,myname,settings)
+}
+//--> 
+</SCRIPT>
+<style type=text/css><!--
+
+.tip {
+PADDING-RIGHT:0px; 
+PADDING-LEFT:0px; 
+Z-INDEX:999;  
+VISIBILITY:hidden; 
+PADDING-BOTTOM:0px;  
+PADDING-TOP 0px; 
+POSITION:absolute; 
+LEFT:0px;
+TOP:0px; 
+background-color:#000000; 
+}
+
+.add,
+.ori {	color: #A5F9FF; }
+
+.hd {	color:#00CCFF;	}
+
+//--></style>
+</head>
+
+<body onselectstart="document.selection.empty()" oncontextmenu="return false" bgcolor="#000000" leftmargin="0" topmargin="0" rightmargin="0" bottommargin="0" marginwidth="0" marginheight="0">
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="15"> </td>
+<td class="topnav"> 
+<div align="left"><a href="robotbattles.htm" onClick=parent.delay() hidefocus="true">Планетарные бои</a> &gt; Карты планетарных боёв</div>
+</td>
+<td class="topnav" width="20">&nbsp;</td>
+<td class="topnav" width="79" valign="top"><a href="robotbattles_buildings.htm" onMouseOver="img_act('img1')" onMouseOut="img_inact('img1')" onClick=parent.delay() hidefocus="true"><img src="img/back.gif" width="79" height="20" name="img1" border="0" alt="Назад"></a></td>
+<td class="topnav" width="79" valign="top"><img src="img/forward2.gif" width="79" height="20" name="img2" alt="Вперед" border="0"></td>
+<td class="topnav" width="25">&nbsp;</td>
+</tr>
+</table>
+
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td width="5%" valign="top"><img src="img/spacer.gif" width="25" height="1"></td><br>
+
+<td><span class="title2">Карты планетарных боёв</span><br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr><td><img src="img/spacer.gif" width="1" height="9"></td></tr></table>
+<br>
+
+Всего в игре "Космические рейнджеры HD: Революция" доступны для прохождения 74 карт планетарных боёв. <br>
+
+Большое количество заданий на прохождения планетарных боёв можно получить сразу после освобождения системы.<br>
+<br>
+<br>
+<img src="img/sage.gif" width="32" height="28" class="float">Если вы не смогли пройти  планетарный бой, вновь хотите пройти понравившийся, или его вам не предложили в здании правительства, во время игры, то его можно пройти в любое время вне игрового процесса. В главном меню нажатием клавиши <b>R</b> или специальной кнопкой, расположенной внизу, запускается окно со списком всех планетарных боев. Выбрав планетарный бой (прим. название планетарных боев в списке можно увидеть на этой странице), вы запускаете его и проходите. По окончании планетарного боя, вы вернетесь в главное меню.
+<br><br>
+<br>
+Краткое описание всех карт планетарных боёв:<br><br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr><td>
+• <a href=#ahrok hidefocus="true"><span class="ori">Агрокишечный комплекс</span></a><br>
+• <a href=#bigcrater hidefocus="true"><span class="add">Антенна</span></a><br>
+• <a href='#All_Kagul' hidefocus="true"><span class="hd">Аль-Кагул</span></a><br>
+• <a href='#armagedd' hidefocus="true"><span class="hd">Армагеддец</span></a><br>
+• <a href=#atoll hidefocus="true"><span class="add">Атолл</span></a><br>
+• <a href='#Bunker' hidefocus="true"><span class="hd">Бункер</span></a><br>
+• <a href=#virus hidefocus="true"><span class="add">Вирус</span></a><br>
+• <a href='#Burn' hidefocus="true"><span class="hd">Возгорание</span></a><br>
+• <a href=#gaal hidefocus="true"><span class="ori">Гаальский квадрант</span></a><br>
+• <a href=#deep hidefocus="true"><span class="add">Глубина</span></a><br>
+• <a href='#Gorod113' hidefocus="true"><span class="hd">Город-113</span></a><br>
+• <a href=#canyon hidefocus="true"><span class="ori">Гранд-каньон</span></a><br>
+• <a href=#rift hidefocus="true"><span class="add">Граница</span></a><br>
+• <a href='#Grubaxar' hidefocus="true"><span class="hd">Грубахар</span></a><br>
+• <a href=#paw hidefocus="true"><span class="add">Деградонты</span></a><br>
+• <a href=#disodan hidefocus="true"><span class="ori">Дизодан в пустыне</span></a><br>
+• <a href=#ironisland hidefocus="true"><span class="add">Железный остров</span></a><br>
+• <a href=#zhuki hidefocus="true"><span class="ori">Жуки</span></a><br>
+• <a href=#starcraft hidefocus="true"><span class="add">Звездолёт</span></a><br>
+• <a href=#zeki hidefocus="true"><span class="ori">Зеки-ледорубы</span></a><br>
+• <a href='#Zenit' hidefocus="true"><span class="hd">Зенит</span></a><br>
+• <a href='#Inmemoria' hidefocus="true"><span class="hd">In memoria</span></a><br>
+• <a href='#X-Ray' hidefocus="true"><span class="hd">X-Ray</span></a><br>
+</td><td>
+• <a href=#isla_majolina hidefocus="true"><span class="add">Исла-Майолина</span></a><br>
+• <a href=#krater hidefocus="true"><span class="add">Кратер</span></a><br>
+• <a href='#Krizisniy_Centr' hidefocus="true"><span class="hd">Кризисный центр</span></a><br>
+• <a href='#Crio' hidefocus="true"><span class="hd">Крио</span></a><br>
+• <a href='#RedAlert' hidefocus="true"><span class="hd">Красная тревога</span></a><br>
+• <a href=#timelab hidefocus="true"><span class="ori">Лаборатория времени</span></a><br>
+• <a href=#malocosoft hidefocus="true"><span class="add">Малокософт</span></a><br>
+• <a href=#malok hidefocus="true"><span class="ori">Малокское кино</span></a><br>
+• <a href=#bur hidefocus="true"><span class="add">Мега-бур</span></a><br>
+• <a href=#merzlota hidefocus="true"><span class="ori">Мерзлота</span></a><br>
+• <a href=#module hidefocus="true"><span class="add">Модуль</span></a><br>
+• <a href='#SeaBattle' hidefocus="true"><span class="hd">Морской бой</span></a><br>
+• <a href=#trash hidefocus="true"><span class="add">Мусор</span></a><br>
+• <a href='#Osada' hidefocus="true"><span class="hd">Осада</span></a><br>
+• <a href=#alenkiy hidefocus="true"><span class="ori">Остров Аленький</span></a><br>
+• <a href=#saintvalentine hidefocus="true"><span class="add">Остров Святого Валентина</span></a><br>
+• <a href='#Crossfire' hidefocus="true"><span class="hd">Перекрестный огонь</span></a><br>
+• <a href='#Piramida' hidefocus="true"><span class="hd">Пирамида</span></a><br>
+• <a href=#pyramids hidefocus="true"><span class="add">Пирамиды</span></a><br>
+• <a href='#Plan' hidefocus="true"><span class="hd">План</span></a><br>
+• <a href=#maunaroa hidefocus="true"><span class="add">Пляжи Мауна-Роа</span></a><br>
+• <a href=#weather hidefocus="true"><span class="ori">Погодная станция</span></a><br>
+• <a href=#pomoyka hidefocus="true"><span class="add">Помойка</span></a><br>
+</td><td>
+• <a href=#boarding hidefocus="true"><span class="add">Посадка</span></a><br>
+• <a href='#Proval' hidefocus="true"><span class="hd">Провалъ</span></a><br>
+• <a href=#rahobam hidefocus="true"><span class="ori">Рагобамская резня</span></a><br>
+• <a href=#reactor hidefocus="true"><span class="add">Реактор</span></a><br>
+• <a href=#biohazzard hidefocus="true"><span class="add">Реалити-шоу</span></a><br>
+• <a href=#islands hidefocus="true"><span class="add">Резиденция Верховного Лякуши</span></a><br>
+• <a href=#metall hidefocus="true"><span class="add">Рудники</span></a><br>
+• <a href='#Ryan' hidefocus="true"><span class="hd">Рядовой Райан</span></a><br>
+• <a href='#Sphere' hidefocus="true"><span class="hd">Сфера</span></a><br>
+• <a href=#warm hidefocus="true"><span class="ori">Тепловая установка</span></a><br>
+• <a href=#terron hidefocus="true"><span class="ori">Террон</span></a> - финальная<br>
+• <a href=#isle_down hidefocus="true"><span class="add">Тонущий остров</span></a><br>
+• <a href='#FuelForLife' hidefocus="true"><span class="hd">Топливо для жизни</span></a><br>
+• <a href=#trident hidefocus="true"><span class="add">Трезубец</span></a><br>
+• <a href=#trilaran hidefocus="true"><span class="ori">Триларан</span></a><br>
+• <a href='#Logic' hidefocus="true"><span class="hd">Тройной удар</span></a><br>
+• <a href=#training hidefocus="true"><span class="ori">Учебная</span></a> - тренировочная<br>
+• <a href=#foncers hidefocus="true"><span class="ori">Фонсеры</span></a><br>
+• <a href=#hawaii hidefocus="true"><span class="ori">Хавайские острова</span></a><br>
+• <a href=#coldsyntez hidefocus="true"><span class="add">Холодный синтез</span></a><br>
+• <a href=#ecventor hidefocus="true"><span class="add">Эквентор</span></a><br>
+• <a href='#Core' hidefocus="true"><span class="hd">Ядро</span></a><br>
+</td></tr></table>
+<br>
+<span class="beige">Примечание</span>. <span class="hd">Ярким</font> цветом выделены новые карты, разработанные специально для издания "Космические рейнджеры 2 HD: Революция".<br>
+
+<br><br>
+<!-- описание карт -->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><a name="ahrok"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr>
+</table>
+<br>
+
+
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> 
+<br>
+<td class="justify" valign="top"><img src="minimaps/01_ahrok.jpg" border="0" height="137" width="139" class="float"><span class="title1">Агрокишечный комплекс</span><br>
+<br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Срочно нужна помощь опытного стратега, рейнджер! <br> Из-за массовых скоплений полезных ископаемых наша планета представляет для доминаторов особый интерес. Несколько месяцев назад каждая серия роботов сумела отправить к нам самораспаковывающуюся базу.<br>В процессе военных конфликтов на планете, блазероиды и терроноиды вытеснили келлероидов с основных позиций. Улучив момент, мы отправили отряд захвата, элитных бойцов малокской гвардии. Состоялось грандиозное сражение, мы здорово надрали задницу противнику. И если бы не большие потери наших войск, мы могли бы позволить себе довести операцию до конца.
+<br> Сейчас нам требуется помощь рейнджера, который с имеющимися ресурсами сможет отбить у врага или уничтожить наш ведущий агрокишечный перерабатывающий комплекс. Вы ведь как истинный торгаш понимаете, насколько нам это важно? Если возьметесь за дело, получите более подробные инструкции. А уж мы в долгу не останемся. Даже если провалите миссию, мы вас не будем расстреливать!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="All_Kagul">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/All_Kagul.jpg" border="0" height="137" width="137" class="float" />
+				<span class="title1">Аль-Кагул</span><br><br>
+				<small>Сложность:</small> <span class="beige">выше средней</span><br><br>
+				Салам, рейнджер. Вы нам нужны. Нет, вас здесь не разыскивают, не желают посадить или снять денег по непогашенным кредитам. Нам ценен ваш стратегический потенциал. Да, вы правильно догадались - доминаторы высадились на нашей планете и начали терроризировать остров Аль-Кагул. Вы не слышали о нем? Впрочем, для вас, как для чужеземца, это вполне нормально. На этом благословенном клочке суши проводят дни и ночи мудрейшие дервиши и муллы, познавая себя и Бога в отшельничестве, молитвах и труде. Собственно, о труде. В связи с тем, что на пустынном острове произрастают лишь финиковые пальмы, да виноград, отшельники зарабатывают себе на жизнь тем, что отправляют своё домашнее вино на экспорт. Местная община столь хорошо наладила производство веселящего напитка, что его доход с его продажи стал занимать существенное положение в экономике планеты. Но все рухнуло, когда остров захватили доминаторы - нас атаковали сразу все три серии. Большая часть общины успела укрыться в погребах, а в честь остальных объявлен государственный траур. Машины, воюя между собой, полностью преобразили благодатный оазис, перестроили порт погрузки и уничтожили в боях почти все виноградники и часть финиковых рощ. Я не буду рассказывать вам об угрозе государственной казне и об угрозе жизням тысяч благородных отшельников, и предложу вам лишь то, что точно склонит чашу весов в сторону вашего участия в операции - а именно деньги. В большом количестве.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="bigcrater">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/27_bigcrater.jpg" border="0" height="137" width="137" class="float" />
+				<span class="title1">Антенна</span><br><br>
+				<small>Сложность:</small> <span class="beige">высокая</span><br><br>
+				Да, рейнджер, нам нужно, чтобы вы возглавили освобождение острова Большой Кратер. Этот уникальный остров помимо своей формы, напоминающей тарелку параболической антенны, обладает повышенным содержанием металло-кризолита. Есть подозрение, что терроноиды создали на его основе огромный гиперпространственный радар, кризолит великолепно для этого подходит! Использоваться это средство связи будет явно с враждебными намерениями. Поэтому вам предстоит отбить базы и заводы, и окончательно зачистить территорию. Но операция осложняется тем, что к острову движутся еще две группы враждебных роботов.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="armagedd">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/armagedd.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Армагеддец</span><br><br>
+				<small>Сложность:</small> <span class="beige">ниже средней</span><br><br>
+				Рейнджер , мобилизуйте максимум аналитических способностей, чтобы воспринять суть задания. После нескольких неудачных попыток захватить нашу систему блазероиды решили использовать оружие, способное уничтожить жизнь на одной из планет и деморализовать тем самым вооруженные силы. Они собрали на планетоиде "МК - 10046" класса Оорта - Янталаки сверхмощный гравитационный двигатель Гнуука, и придали ему мощный импульс, направленный против вектора его движения. В результате этого планетоид потерял стабильность, и вышел на гиперболическую траекторию, пересекающую орбиту нашей планеты в точке, где вероятность его захвата гравитационным полем и столкновения составляет 87,329%. При столкновении планетоид будет разрушен, а взрывная волна и термические эффекты от взрыва уничтожат 99,957% населения планеты. Естественно, такой исход нас абсолютно не устраивает. У нас есть несколько планов преодоления кризиса, один из которых заключается в зачистке одного из островов на планетоиде, где размещен двигатель Гнуука. Собственно, для этого вы нам и нужны, так как штатных стратегов на нашей планете нет, а специалист от галактического совета будет добираться более месяца. Слово за вами, рейнджер. Докажите, что являетесь действительно разумным и трезвомыслящим индивидуумом.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="atoll"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/36_atoll.jpg" border="0" height="134" width="137" class="float"><span class="title1">Атолл</span><br><br>
+<small>Сложность:</small> <span class="beige">низкая</span><br>
+<br>
+Есть... Есть для вас подходящая работенка, хе-хе! Причем в крупнейшем туристическом центре нашей планеты, так что вам просто невероятно повезло!<br>
+Атолл Черный Билль - вам о чем-нибудь говорит это название? Похоже, вы совершенно не интересуетесь инопланетным туризмом! Огромный остров-музей, в котором собраны самые невероятные создания, один только вид которых поражает воображение! По крайней мере, так было, пока на остров не высадились доминаторы! Наверняка они уже уничтожили самые ценные экземпляры. И только в ваших силах помешать им окончательно превратить наш туристический рай в голую радиоактивную пустыню.
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Bunker">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Bunker.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Бункер</span><br><br>
+				<small>Сложность:</small> <span class="beige">высокая</span><br><br>
+				А, рейнджер, вы как раз кстати! Операция "Крот в подземелье" перешла к финальной стадии, и нам срочно нужен специалист по стратегическому командованию, то есть вы. Ах, да, вы ведь не в курсе, ведь информация секретна... Еще во время клисанской войны человеческие ученые занимались созданием нейтронного оружия, способного поражать кристаллические организмы клисан. Один из центров этих исследований находился в глубоком бункере на нашей планете, но, как назло, ее очень не вовремя захватили враги. Они, между прочим, даже сумели отыскать бункер, и нейтринным импульсом подорвали находившийся на верхних этажах прототип нейтронной бомбы. После гибели всего персонала и разрушения ядерного реактора, повлекшего полное крушение станции, о ней надолго забыли. До этого дня.<br />
+				Доминаторы сразу двух серий высадились на поверхности нашей планеты и начали спешно рыть тоннели в древний бункер. Вероятнее всего, машин привлекли странные сигналы, поступающие из недр, но главная опасность состоит в том, что они могут найти уцелевшие образцы нейтронного оружия, доселе неизвестного доминаторам, а чем все это грозит органическим расам Коалиции, вы, я надеюсь, понимаете. Впрочем, не все так плохо - воспользовавшись старой системой вентиляции, нам удалось перебросить в бункер немалые силы, и даже построить хорошо укрепленные базы так, что к тому времени, как блазероиды дорыли свой тоннель, а келлероиды достроили телепорт, наши силы уже были способны дать им отпор. К слову, в этом бункере неизвестно как появились роботы с зеленой маркировкой, и до поры до времени сильно нам досаждали. Весьма интересно, что роботы эти отнюдь не терроноиды, что было подтверждено при исследовании захваченных образцов. Ради удобства мы назвали эту новую серию "бета-террон". Мы узнали и причину появления бета-терроноидов, но эту информацию мы сможем вам передать только на месте боевых действий. Теперь к делу. После тяжелых боев с бета-терроноидами и мы, и они существенно выдохлись, и тут как назло вторжение блазероидов и келлероидов... Короче говоря, нам нужна ваша помощь.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="virus"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/50_virus.jpg" border="0" height="136" width="137" class="float"><span class="title1">Вирус</span><br><br>
+<small>Сложность:</small> <span class="beige">высокая</span><br>
+<br>
+Для вас есть миссия огромной важности, рейнджер! Возможно, вы слышали о недавней эпидемии вируса древесного гриппа, унесшего жизни многих тысяч людей? Разработку вакцины принял на себя межпланетный Желтый Крест, и мы предложили лабораторию по добыче вакцины решили разместить на нашей планете, под одним из пустынных островов, чтобы экспериментальные штаммы не вырвались на свободу.<br>
+Увы, рейнджер, нам не удалось обеспечить достаточную секретность проекта, о нем стало известно доминаторам, и они высадились на остров! Землеройные машины блазероидов уже движутся к лабораториям. Мы предлагаем вам взять на себя командование специально приобретенными для этой миссии боевыми роботами и остановить доминаторов. На кону судьба всего человечества, ведь без вакцины последствия эпидемии будут ужасающими! А если доминаторам удастся получить вирус-мутант, поражающий другие расы, то... В общем, на вас вся надежда!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr><td><a name="gaal"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Burn">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Burn.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Возгорание</span><br><br>
+				<small>Сложность:</small> <span class="beige">средняя</span><br><br>
+				Есть у нас для вас заданьице, прямо скажем - не из легких. Но вам, как прославленному воину, оно придётся впору, мы уверены. Видите ли, на нашей планете есть гигантское вулканическое море - результат деятельности активных недр, и бездонный источник ценных руд и редких минералов. Собственно, почти вся экономика нашей планеты построена вокруг этого гигантского лавового котла. Величайшие умы галактики разработали по нашему заказу сверхсовременный автоматический горнодобывающий комплекс, способный работать в условиях адских температур.<br />
+				И вы только представьте - доминаторы решили захватить комплекс! Сначала мы не обратили внимание на их десант, решив, что им не справится с экстремальными температурами, но когда выяснилось, что машины использовали специальную жароустойчивую броню, было уже поздно - комплекс был потерян. Оправлять туда пехоту или плазмотанки - безумие, так что единственное что нам осталось - нанять бравого рейнджера вроде вас, для управления экспериментальными огнеупорными роботами.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr><br>
+<td class="justify" valign="top"><img src="minimaps/03_gaal.jpg" border="0" height="137" width="144" class="float"><span class="title1">Гаальский квадрант</span><br><br>
+<small>Сложность:</small> <span class="beige">ниже средней</span><br>
+<br>
+У нас есть для вас подходящее задание. Вы слышали что-нибудь о &laquoгаальских квадрантах&raquo? Нет? Это такие испытательные полигоны, на которых гаальцы издревле проводят широкомасштабные учения, в условиях, приближенных к боевым. <br>
+Цель последней высадки доминаторов на нашу планету, очевидно, заключалась в подрыве нашей военной мощи путем уничтожения боевого полигона. Впрочем, о какой мощи можно говорить, когда мы уже немало веков предаемся лишь рассуждению и созерцанию? Данный квадрант давно служит полем для выращивания зеленых твыгов, а мы сами пока не способны дать отпор завоевателям. <br>
+Среди нашей расы практически не осталось смелых юношей, а вот среди вашей немало достойных воинов. Если вы, рейнджер, из таких, то, возможно, вас заинтересует возможность стать на время гаальским командиром вооруженных сил планеты? Редкая возможность для представителя иных рас. <br>
+Если решитесь, наш вертолет немедленно доставит вас на место, где вы получите все необходимые инструкции.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="deep"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/41_deep.jpg" border="0" height="160" width="137" class="float"><span class="title1">Глубина</span><br><br>
+<small>Сложность:</small> <span class="beige">высокая</span><br>
+<br>
+Да, рейнджер, ваша помощь будет как нельзя кстати! Недавно мы получили тревожный сигнал с одной из наших научно-исследовательских придонных субмарин - в секторе 209Б на глубине 9 километров были замечены доминаторы! Больше с судна не поступало вестей и на запросы они не отвечали. Мы подняли секретные архивы - именно в этом секторе когда-то была законсервирована экспериментальная подводная база, занимавшаяся выведением микроскопической сельди, а теперь наверняка она захвачена доминаторами!<br>
+Сверхточное глубоководное экспериментальное оборудование попало в манипуляторы этих тварей! Представляете, для чего доминаторы могут использовать техническое оснащение станции, если вы не остановите их? Если вы возьметесь за дело, мы дадим вам несколько боевых роботов и поможем вам проникнуть на станцию. За освобождение станции вы непременно получите награду!
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Gorod113">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Gorod113.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Город-113</span><br><br>
+				<small>Сложность:</small> <span class="beige">средняя</span><br><br>
+				Рейнджер , мобилизуйте максимум аналитических способностей, чтобы воспринять суть задания. После нескольких неудачных попыток захватить нашу систему блазероиды решили использовать оружие, способное уничтожить жизнь на одной из планет и деморализовать тем самым вооруженные силы. Они собрали на планетоиде "МК - 10046" класса Оорта - Янталаки сверхмощный гравитационный двигатель Гнуука, и придали ему мощный импульс, направленный против вектора его движения. В результате этого планетоид потерял стабильность, и вышел на гиперболическую траекторию, пересекающую орбиту нашей планеты в точке, где вероятность его захвата гравитационным полем и столкновения составляет 87,329%. При столкновении планетоид будет разрушен, а взрывная волна и термические эффекты от взрыва уничтожат 99,957% населения планеты. Естественно, такой исход нас абсолютно не устраивает. У нас есть несколько планов преодоления кризиса, один из которых заключается в зачистке одного из островов на планетоиде, где размещен двигатель Гнуука. Собственно, для этого вы нам и нужны, так как штатных стратегов на нашей планете нет, а специалист от галактического совета будет добираться более месяца. Слово за вами, рейнджер. Докажите, что являетесь действительно разумным и трезвомыслящим индивидуумом.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr><td><a name="canyon"><img src="img/spacer.gif" width="1" height="9"></a></td></tr></table><br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr><br>
+<td class="justify" valign="top"><img src="minimaps/04_canyon.jpg" border="0" height="151" width="137" class="float"><span class="title1">Гранд-каньон</span><br><br>
+<small>Сложность:</small> <span class="beige">выше средней</span><br>
+<br>
+Не хотите принять участие в очистке Гранд-каньона? Это такой искусственно выращенный остров, мечта, воплощенная посреди океана одним помешанным миллионером. Видим, что запах денег действует на вас заразительно. Да-да, у нас есть приборы, фиксирующие жадность.
+<br>
+Так вот, после того как наша система была освобождена, мы быстро разобрались со всеми доминаторами на планете и уже думали, что все хорошо, как вдруг оказалось, что этот ненормальный миллионер оставил у себя два экземпляра роботов, причем один из них был блазероид, другой келлероид. Миллионер с друзьями решил сделать на них кучу денег. Для этого он построил роботам целую базу, по его задумке они должны были там ездить и сражаться друг с другом.
+<br>
+Мы могли бы и далее развлекать вас рассказами, но вначале хотелось бы получить ваше согласие. Потому как если вы не согласны нам помочь, нам нужно обратиться к другому рейнджеру. Итак, быстро отвечайте! Вы готовы спасти Гранд-каньон, сразиться с доминаторами на земле? Или вам космос подавай с крутыми крейсерами?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="rift"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/31_rift.jpg" border="0" height="137" width="137" class="float"><span class="title1">Граница</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Если вы когда-нибудь бывали на нашей планете, то вы наверняка слыхали о "Меридианной границе", не так ли? Нет? Гм... странно. Ну хорошо, расскажу вкратце - тысячу лет назад на одном из островов океана была установлена символическая граница, которая делит нашу планету на западное и восточное полушарие. И все географические карты создаются с нулевым меридианом, в точности проходящим по этой границе, так что это один из важнейших символов планеты!<br>
+И вот недавно остров, где находится меридианная граница, был захвачен доминаторами. Туристический городок, находящийся на острове, был уничтожен. Хорошо хоть, что сейчас не сезон, и остров был закрыт для посетителей, так что никто не пострадал... Разумеется, мы не можем сложа руки наблюдать, как доминаторы разрушают Границу своими добывающими станциями! Географическое общество планеты выделило солидное вознаграждение тому, кто остановит доминаторов! И у вас есть все шансы его получить, если вы возьметесь за это дело.
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Grubaxar">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Grubaxar.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Грубахар</span><br><br>
+				<small>Сложность:</small> <span class="beige">выше средней</span><br><br>
+				Не знаю, как насчет кофейку, но задание у нас имеется. Да не просто задание – всем заданиям задание! Еще до выхода в космос, если вы не в курсе, малоки успели навоеваться с иноплянетниками – и с древнегаальцами, и с карапами, а иные из военнопленных умудрялись сбежать на вражеских планетах, и даже вытеснить оттуда противников – мы ведь размножаемся быстрее этих инопланетных хлюпиков, да и сражаемся в разы лучше! Да, именно так на нашей планете утвердилась власть малоков. У нас до сих пор хранится боевой лагерь генерала Грубахара, который он разбил возле пирамиды карапов, перед тем, как разнести ее украденными у них же орудиями. Да, славные были времена... Кстати, пирамиду мы тоже отстроили, ну, без всей это карапской машинерии, но с виду – не отличишь. Так вот, о чем это я?<br />
+				Ах да, доминаторы! Они, видите ли, решили захватить легендарное поле битвы. И ладно бы, повоевали немного там между собой, так начали переделывать лагерь Грубахара, а мы этого допустить не можем! Это ж национальная, эта, святыня! Короче, рейнджер, если ты не последний трус, то обязан помочь нам в освобождении лагеря, а до кучи и всего исторического комплекса.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="paw"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/26_paw.jpg" border="0" height="140" width="137"  class="float"><span class="title1">Деградонты</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Есть для вас очень сложное, и пропорционально высоко оплачиваемое задание, Рейнджер!<br>
+Вспомните-ка школьные уроки по биологии. Название "свинорылый деградонт" вам говорит о чем-нибудь? Редчайший вид гигантских рептилий, в скелете которых со временем откладывается минерал ниобий, на базе которого создаются сверхпроводниковые сплавы. Наша планета - единственная, на которой еще оставались живыми гигантские деградонты, благодаря которым мы экспортируем почти 28% всего ниобия в Галактике!<br>
+Увы. Похоже, доминаторы тоже заинтересовались нашим источником ниобия. Они высадились в заповеднике и перебили всех до единого деградонтов! И теперь они перерабатывают останки несчастных животных, выделяя из них ниобий. Вы должны положить этому конец - нужно истребить доминаторов всех до одного, а останки животных передать нашим генетикам, возможно, им удастся клонировать деградонтов.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr><td><a name="disodan"><img src="img/spacer.gif" width="1" height="9"></a></td></tr></table><br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr><br>
+<td class="justify" valign="top"><img src="minimaps/05_disodan.jpg" border="0" height="142" width="137"  class="float"><span class="title1">Дизодан в пустыне</span><br><br>
+<small>Сложность:</small> <span class="beige">низкая</span><br>
+<br>
+Рейнджер, нужна ваша помощь.<br>
+После освобождения нашей системы от доминаторов, на некоторых планетах эти машины убийства продолжают множиться. Галактический совет обещает прислать войска для зачистки только через три месяца, а мы не можем ждать все это время. Ведь наши жители находятся в зоне постоянной угрозы. <br>
+Мы знаем, что в обязанности рейнджеров не входит уничтожение доминаторов в условиях притяжения планет, но все-таки мы обращаемся к вам с просьбой о помощи в ликвидации роботов. Операция по их уничтожению абсолютно секретна в целях нераспространения панических настроений на планете, поэтому подробности узнаете, когда возьметесь за это дело.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="ironisland"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/29_ironisland.jpg" border="0" height="137" width="137"  class="float"><span class="title1">Железный остров</span><br><br>
+<small>Сложность:</small> <span class="beige">низкая</span><br>
+<br>
+Да, рейнджер, это довольно простая операция по захвату металлоперерабатывающего комплекса. Блазероиды и келлероиды закрепились на нем посреди Бесшумного океана нашей планеты, и создают угрозу безопасности пассажирских судов, маршруты которых проходят в непосредственной близости. Надеемся, вам не составит большого труда 
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr><td><a name="zhuki"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr><br>
+<td class="justify" valign="top"><img src="minimaps/06_zhuki.jpg" border="0" height="137" width="132" class="float"><span class="title1">Жуки</span><br><br>
+<small>Сложность:</small> <span class="beige">ниже средней</span><br>
+<br>
+Да, рейнджер, у нас есть специально для вас задание. Мы не можем доверить столь ответственное дело никому другому, кроме вас, ведь оно касается нашего дома - нашей планеты.
+<br>
+Много лет назад, еще до колонизации этой планеты фэянами, на ней обитали огромные жуки. Да, эти членистоногие создания порой были размером с небольшой город! К сожалению, мы не смогли в полной мере изучить этот любопытный феномен, так как жуки вымерли задолго до освоения нами планеты. Но, собственно, дело не в жуках, а в доминаторах, которые стали их исследовать. Они явно заинтересовались их огромными размерами и высадили несколько месяцев назад десант на нашу планету.
+<br>
+Вам предлагается прервать их научную деятельность любыми средствами. Все инструкции вы получите на месте, и смею вас заверить, награда превзойдет все ваши ожидания!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="starcraft"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/38_starcraft.jpg" border="0" height="140" width="137"   class="float"><span class="title1">Звездолёт</span><br><br>
+<small>Сложность:</small> <span class="beige">низкая</span><br>
+<br>
+Гм. Меня попросили обратиться именно к вам. Так сказать, порекомендовали определенные лица, как опытного боевого пилота. Дело довольно опасное и несколько необычное, но, уверен, вам будет интересно меня хотя бы выслушать.<br>
+Один довольно эксцентричный миллиардер-гаалец, главный меценат всех научно-технических разработок на нашей планете, порой вызывается финансировать довольно... гм... смелые и необычные эксперименты, проводимые им в поисках совершенства в той или иной области. Вот и на этот раз - он запускает один... гм... проект, который молва уже окрестила "Интуиция и импровизация против логики и математики".<br>
+Все очень просто - есть вы, и есть несколько кланов доминаторов. Участники этого, так сказать, проекта оказываются вместе на одном острове. В итоге вашего с доминаторами противостояния и выяснится, что сильнее - свободная воля или машинная логика. Победителю достанется солидный денежный приз. Правда, я не понимаю, зачем галактические кредиты доминаторам. Вы согласны?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr><td><a name="zeki"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/07_zeki.jpg" border="0" height="153" width="137" class="float"><span class="title1">Зеки-ледорубы</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Хотите немного колотого льда, рейнджер? Нет? Жаль... Какой-то умник, наверно генеральский сынок, решил, что наша планета идеально подходит для добычи этого самого льда, так что сами понимаете - у нас его завались. Да, уже не мало малоков положили свои жизни в холодных рудниках. Считается, что это закаляет волю и усиливает иммунитет нации. <br>
+Тут неприятный инцидент произошел. На зоне, точнее, в открытом исправительном лагере, откуда нельзя бежать, т.к. просто некуда, внезапно появились доминаторы. Ледорубы, среди которых было немало опытных ветеранов, хотели расправиться с ними голыми руками. Но куда им с киркой против машин? Сами понимаете. Полегли все смельчаки... Арх, встать! Слава павшим героям!
+<br>Ладно, перейдем к делу. Часть зеков, т.е. я хотел сказать, рабочих, укрылась в казарме. Их надо освободить, а то ведь замерзнут заживо. Понимаю, это вам не мороженое жрать, в общем, дело срочное. Беретесь руководить спасательной операцией, освободить их из невольного заточения? Заодно и проветритесь на 40 градусном морозце, это ведь очень полезно для вашего пиратского организма.
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Zenit">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Zenit.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Зенит</span><br><br>
+				<small>Сложность:</small> <span class="beige">высокая</span><br><br>
+				Ну что ж, рейнджер, работенка для вас как раз есть. Это связано с командованием роботами в экстремальных условиях. О! Я вижу, как уже загорелись ваши глаза!<br />
+				Как вам наверно известно, наша планета обращается вокруг оси с той же скоростью, что и вокруг звезды, и учитывая малый наклон оси к эклиптике, на половине планеты постоянно пылающий, жаркий день, а на другой - страшная морозная ночь. Естественно, все города на планете находятся в зоне сумерек, где достаточно приемлемая температура. Однако в зоне зенита, где светило круглый год испепеляет всех, кому хватило дури туда залететь, налажено небольшое автономное производство, а именно - добыча и обогащение урана. Но вот, после очередной атаки доминаторов на нашу систему, мы обнаружили в зенитной зоне экспедицию келлероидов, которые "изучали" наши высокотехнологичные производственные платформы. Думаю, вам не надо говорить, что доминаторы могут сделать, если получат доступ к запасам обогащенного урана, но я все же скажу: они к чертям разнесут нашу планету ядерными бомбами! Если, конечно, вы им не помешаете. Подумайте о миллионах относительно невинных мирных жителей, о милых детишках, которые погибнут, если вы, рейнджер, не согласитесь нам помочь! Не проняло? Тогда подумайте о приличной сумме, которую мы начислим на ваш счет!
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Inmemoria">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Inmemoria.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">In memoria</span><br><br>
+				<small>Сложность:</small> <span class="beige">ниже средней</span><br><br>
+				Рейнджер, срочно нужна ваша помощь!<br />
+				На нашей планете есть небольшой остров, на котором расположен уникальный мемориал, посвященный древним событиям, о которых никто уже и не помнит. Однако гранитные плиты с высеченными на них именами стоят по сей день, и хранят какую-то великую тайну, которую мы не можем разгадать. Единственное, что мы знаем - это то, что под памятником расположены загадочные подземные пустоты, а еще временами он передает в космос таинственные сигналы, которые никто не может расшифровать. Археологи всех рас просили у меня разрешения провести полномасштабные исследования, включающие в себя раскопки, но я не могу взять на себя ответственность и разрушить это великое творение, ведь оно каждый год собирает сотни тысяч туристов и паломников. Что-то об этом мемориале наверняка  знают сотрудники межпланетной корпорации "СНК", но они никогда в жизни не расколются, краб бы их побрал вместе с их корпоративным этикетом!<br />
+				В общем, все было бы хорошо, рейнджер, но на днях на этот самый остров приземлились доминаторы. Вероятно, их привлекли те самые таинственные сигналы. Хуже всего то, что они могут уничтожить это великое сооружение, вовсе не спрашивая моего разрешения, и меня это бесит! Нужно немедленно выкурить их с острова, пока памятнику не нанесен непоправимый ущерб! Я не хочу запомниться в книгах по истории, как "правитель, при котором был разрушен мемориал", поэтому готов хорошо заплатить вам в случае успеха.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="X-Ray">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/X-Ray.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">X-Ray</span><br><br>
+				<small>Сложность:</small> <span class="beige">средняя</span><br><br>
+				Какое еще задание, вы что не видите, я паникую! А-ааа! Мы все умрем! Так, вдох, выдох, вдох, выдох…  Нет, мы обречены! А-ааа! Секундочку, алло, да, есть тут один Рейнджер, вам оказана высокая честь спасти столицу нашей планеты от ядерной угрозы. Что значит, «сколько?», честь у вас уже не в чести… Как-то несолидно получилось… Короче: есть остров, есть доминаторы, есть ядерная ракета класса «Апокалипсис», есть пусковая платформа. Через несколько часов они запустят ракету в нашу милую столицу, а мощности там хватит, чтобы весь город запустить на орбиту. Времени, в обрез, плацдарма на острове нет, предыдущий рейнджер проворонил базу, а часики-то тикают. Не буду тянуть – вот на столе лежит контракт, хотите - берите, не хотите - перелетайте в другой космопорт, а я побежал забирать семью в бункер.<br />
+				Мы все умрем!..
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="isla_majolina"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/34_isla_majolina.jpg" border="0" height="143" width="137" class="float"><span class="title1">Исла-Майолина</span><br><br>
+<small>Сложность:</small> <span class="beige">низкая</span><br>
+<br>
+Ну что ж, рейнджер рейнджер, нам как раз нужен опытный стратег, и надеюсь, вы нам подойдете.<br>
+Перед вами стоит задача отбить у доминаторов остров Исла-Майолина. Возможно, вы слышали об этом безжизненном и абсолютно бесполезном куске камня? Так вот, все это - дезинформация. Мы специально стараемся не привлекать внимание общественности к этому месту, и даже устраиваем специальные шоу и антирекламные акции. Дело в том, что именно там находится испытательный полигон нашей последней секретной разработки - беспилотного самолета-невидимки. Увы, похоже, что доминаторы не смотрят вечерних новостей и не знают, какой же это абсолютно бесполезный остров, поэтому и захватили его. <br>
+Ну так как - вы согласны помочь нам вышвырнуть доминаторов с острова и вернуть этот абсолютно бесполезный кусок камня правительству планеты? Разумеется, эта услуга не останется безнаказанной, и вы получите целый 1.000.000 cr! Невероятная сумма, правда?
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="RedAlert">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/RedAlert.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Красная тревога</span><br><br>
+				<small>Сложность:</small> <span class="beige">высокая</span><br><br>
+				Да-да, задание у нас имеется, причем непростое - на одной из лун нашей планеты есть обширные океаны расплавленных тяжелых углеводородов, активно разрабатываемые человеческой нефтяной компанией "Ракушка", но недавно на одну из самых результативных черпальных платформ напали доминаторы, и начали переделывать ее под свои нужды, которые, как мы подозреваем, включают создание десанта боевых роботов. Конечно, можно было бы разбомбить созданный машинами комплекс, но адвокаты "Ракушки" уже намекнули, что обдерут нас до последней нитки в таком случае. Остается только один вариант - послать туда рейнджера, то бишь вас, для командования роботами. Надеюсь, вы хорошо управляетесь со стратегическим управлением?
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="krater"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/46_krater.jpg" border="0" height="152" width="137" class="float"><span class="title1">Кратер</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Вкратце обрисую нашу ситуацию... Недавно на нашу планету упал метеорит с крайне высоким содержанием германия. Этот минерал очень нужен нашей микропроцессорной промышленности, и еще более нужен доминаторам - они захватили уже почти весь остров!<br>
+Мы обеспечим вам первоклассную производственную базу для создания боевых роботов и, конечно же, солидное денежное вознаграждение, если вы возьмете на себя уничтожение доминаторов и избавите нашу планету от их присутствия!
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Krizisniy_Centr">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Krizisniy_Centr.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Кризисный центр</span><br><br>
+				<small>Сложность:</small> <span class="beige">ниже средней</span><br><br>
+				Знаете, рейнджер, в наше время многие правительства заранее готовятся к доминаторским  вторжениям. Так, гаальцы с фэянами разрабатывают планетарные щиты, малоки создают подземные убежища, в которых можно разместить все население, пеленги разработали системы срочной эвакуации правительства и государственной казны. А вот мы разработали автоматический кризисный центр, который будет вести подрывную деятельность после захвата нашей планеты доминаторами, что облегчит освобождение. Но вот незадача - по иронии судьбы доминаторы высадились как раз на тайном острове кризисного центра. Представьте только - они даже не подозревают, какое оружие у них в руках - их приманили месторождения титана. Мало того - келлероиды, захватившие центр ПВО, сбили полдюжины предыдущих рейнджеров, которых мы послали для спасательной операции, так что за вашу безопасность мы не ручаемся. Ну что, согласны, или нам поискать кого-то посмелее?
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Crio">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Crio.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Крио</span><br><br>
+				<small>Сложность:</small> <span class="beige">ниже средней</span><br><br>
+				Да-да, задание как раз по вашей части, рейнджер: у нас проблемы с доминаторами, причем самые что ни на есть серьезные - эти твари высадились на острове в тропическом поясе, и запустили там какое - то производство, явно базирующееся на криогенных технологиях. Последствия были самыми ужасающими. Из-за резкой смены локального климата остров начал производить тропические ураганы как горячие пирожки. Прибережные города понесли серьезные разрушения, а следовательно - и жертвы, в море тонут суда, а мы ничего не можем поделать - орбитальная бомбардировка приведет к взрыву электростанции на острове, что в свою очередь вызовет исполинское цунами на наши города.<br />
+				Единственная надежда на вас, дорогой рейнджер. Оплату, естественно, гарантируем.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="timelab"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/09_timelab.jpg" border="0" height="123" width="137" class="float"><span class="title1">Лаборатория времени</span><br><br>
+<small>Сложность:</small> <span class="beige">высокая</span><br>
+<br>
+У нас есть для вас секретное задание. Вы, конечно, знаете, что наша планета была недавно освобождена от доминаторов. Но вот чего не знает никто, так это про лабораторию &laquoВремени&raquo. Доминаторы даже во время оккупации системы живо ею интересовались, враждовали между собой из-за нее. И после освобождения продолжают там оставаться. Это все грозит настоящим катаклизмом. Что будет, если доминаторы проникнут в прошлое и изменят его? Это просто страшно представить!
+<br>Так что у нас есть задание для опытного стратега. Вы готовы повернуть время вспять, вернув под контроль все подземные и наземные коммуникации лаборатории?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="malocosoft"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/47_malocosoft.jpg" border="0" height="136" width="137"  class="float"><span class="title1">Малокософт</span><br><br>
+<small>Сложность:</small> <span class="beige">высокая</span><br>
+<br>
+Знаете ли, как трудно поддерживать армию в боеспособном состоянии? Не знаете. Вот у нас, малоков, для этого дела строятся специальные полигоны, где солдаты учатся убивать тренировочные макеты роботов, зарабатывая боевой опыт и давая выход своей ярости.<br>
+Так, о чем это я? Ах да. Компания Малокософт недавно подарила нам новенький полигон, также она закупила у пеленгов по льготной цене тренировочные макеты доминаторов, и устроила эффектную подсветку ключевых точек полигона из космоса, для лучшего ориентирования наших бравых, но еще не очень опытных солдат. Помня славную репутацию всех продуктов Малокософта, мы решили предоставить вам первым протестировать полигон, чтобы не рисковать жизнью... то есть, э-э, боевым опытом наших солдат. Решайтесь, рейнджер, мы вам еще и деньжат подкинем за это дельце.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="malok"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/10_malok.jpg" border="0" height="162" width="137" class="float"><span class="title1">Малокское кино</span><br><br>
+<small>Сложность:</small> <span class="beige">высокая</span><br>
+<br>
+А ты записался в ряды доблестной Малокской Армии?!.
+<br>Ну как, правда звучит, а, рейнджер? Это я готовлю речь для рекламного... как его... во - ролика!
+<br>Тут ведь какое дело... Ну не хочет молодежь служить в рядах Малокской Армии. Даже элитная Красная Армия нуждается в пополнении. Дошло до того, что они принимают бойцов с пунцовыми и даже розовыми мордами, а не только с кроваво-красными, как полагается по Уставу... Эдак скоро вместо Красной Армии у нас будет элитный Серо-Буро-Малиновый дивизион. Все хотят романтики, бегут в вольные рейнджеры - ну а служить кто будет? Кто, я спрашиваю - лично генерал-дивизион Гатрыхин?
+<br>Для развития патриотизма среди молодежи, наше командование приняло решение снять агитационный стереоролик. У нас даже сценарий есть классный. Вот, слушай:
+<br>На захваченной доминаторами планете терпит крушение корабль рейнджера. И плюхается он аккурат в самую гущу боя, где доблестная Малокская Армия наносит сокрушительное поражение превосходящим силам противника. &laquoСтойте, куда вы?!&raquo - орет рейнджер убегающим в панике... то есть передислоцирующимся малокским силам. &laquoПрятаться&raquo... то есть это... &laquoЗалечь в засаду&raquo, - отвечает командир дивизии, и тут ему башку нахрен сносит. Кровищи куча, птички поют, травка зеленеет - красота кругом, короче. Ну тут рейнджер хватает знамя, пинками заставляет... то есть воодушевляет речью бойцов, и рассвирепевшие малоки рвут доминаторов в клочья голыми руками.
+<br>А потом рейнджер размазывает кровянку по своей морде, и гордо так говорит: &laquoЯ хочу служить в Малокской Армии!&raquo Занавес. Хотите роль этого рейнджера? Гонорар солидный. Для съемок все готово - уже даже доминаторов подвезли на курортный остров, где будут вестись съемки, элитный штурмовой отряд готов сыграть роль малокских бойцов. Ну так как?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="bur"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/44_bur.jpg" border="0" height="136" width="137" class="float"><span class="title1">Мега-бур</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Ага, у нас тут проблемка одна появилась, и я думаю, вы можете помочь нам ее решить. Недавно наши судоверфи произвели на свет вершину малокской инженерной мысли - мега-бур. Это такая гигантская башня для бурения на больших глубинах. Вот только ее даже смонтировать на месте не успели - келлероиды расстреляли корабли сопровождения, захватили буксир, и оттащили платформу к захваченному ими острову. Фэянские специалисты уже выяснили, что доминаторы ищут какую-то глубокую ме-та-мор-фи-чес-кую ин-тру-зию по-ли-плас... черт, язык сломаешь. В общем, они совсем обурели, и бурят нашим буром...<br>
+По воздуху подобраться к ним не удалось - ПВО доминаторов работает отменно, поэтому мы отправим вас на подводной лодке. Она также доставит на платформу мобильную производственную базу и отряд роботов, а вы возьмете на себя командование. Чего стоите? Выполняйте... А, да, забыл сказать, вам за это дельце мы выплатим кругленькую сумму.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="merzlota"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/11_merzlota.jpg" border="0" height="275" width="137" class="float"><span class="title1">Мерзлота</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Есть задание для вас, рейнджер, если вы готовы провести некоторое время на нашей планете, в условиях вечной мерзлоты.
+<br>Недавно ученые подтвердили одну из догадок - доминаторы серии Блазер изготавливают свои интеллектуальные матрицы при воздействии отрицательных температур. Именно поэтому роботы базируют свои производственные комплексы  на отдаленных от звезд планетах и там создают блоки искусственного разума.
+<br>Наша планета является идеальным местом для их производства, чем блазероиды и воспользовались. Каюсь, наши системы планетарной безопасности прозевали вторжение, однако мы смогли обнаружить место высадки доминаторов достаточно оперативно, и они не успели основательно закрепиться на своем острове.
+<br>Нашим диверсантам удалось захватить одну из баз на окраине острова. К сожалению, это все, что мы можем вам предложить. Наша планета слишком незначительна, чтобы держать на ней регулярные вооруженные силы, когда они требуются в других местах.
+<br>И маленькая просьба - когда будете уничтожать роботов, постарайтесь сохранить их корпуса неповрежденными - наша планета слишком бедна минералами, чтобы разбрасываться таким количеством замечательного металла. Вы ведь доблестный воин, и должны прекрасно понимать, как сильно Межзвездная Коалиция нуждается в новых боевых крейсерах.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="module"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/33_module.jpg" border="0" height="137" width="137" class="float"><span class="title1">Модуль</span><br><br>
+<small>Сложность:</small> <span class="beige">высокая</span><br>
+<br>
+Когда войска Коалиции выбили доминаторов из нашей системы, мы засекли замаскировавшийся транспорт врага и сбили его. Он упал на один из островов в океане, и каким-то чудом не взорвался, есть все основания полагать, что груз на его борту цел.<br>
+Мы полагаем, что этот груз - что-то вроде искажателя материи. Прибор не только уцелел, но и исправно функционирует: в радиусе 1000 км от места падения происходят землетрясения, и они усиливаются.<br>
+Наши техники наверняка смогли бы отключить прибор, однако доминаторы уже высадились на остров и пытаются вернуть утерянный груз. Вам необходимо очистить сектор от доминаторов, чтобы наши ученые смогли приступить к деактивации модуля и изучению его устройства.
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="SeaBattle">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/SeaBattle.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Морской бой</span><br><br>
+				<small>Сложность:</small> <span class="beige">выше средней</span><br><br>
+				Задание, рейнджер? А на морскую болезнь не жалуетесь? Видите ли, у нас как раз есть задание для стратега, умеющего управляться в тесных пространствах.<br />
+				Нашим военно-морским силам пришлось столкнуться с серьезным противником - затонувший броненосец, реставрированный блазероидами, возник буквально ниоткуда, и с легкостью уничтожил две эскадры боевых кораблей, которые мы послали ему наперерез, а авианосец "Аврора" - взяли на абордаж. Но, тем не менее, крейсер "Шторм", перед тем как пойти ко дну, успел-таки выстрелить по броненосцу криопушкой, и вывести из строя его двигатели. Мы собрали несколько сотен боевых роботов и десантные корабли, для абордажной операции по освобождении "Авроры" и ликвидации угрозы блазероидов, и сейчас как раз ищем подходящего стратега.<br />
+				Если вы согласитесь, а я уверен, что это будет так, мы доставим вас через телепортатор на борт подлодки "У-2", где вы в безопасности сможете командовать боевыми действиями.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="trash"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/49_trash.jpg" border="0" height="131" width="137" class="float"><span class="title1">Мусор</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Ну так как, рейнджер, не хотите ли кофейку?<br>
+Нет? Ну и ладно, сами не хотим такой гадости: видите ли, у нас серьезные проблемы с питьевой водой, то есть, с ее отсутствием. Много лет назад наша планета была чрезвычайно богата полезными ископаемыми, но увы - мы относились к ресурсам излишне расточительно и вскоре остались без оных. Наши ученые предложили весьма любопытную программу - вторичную переработку и использование мусора! Просто невероятно звучит, правда? Тем не менее, нам удалось построить заводы вторичной переработки в долине Треш, самой грандиозной свалке нашей планеты, и даже получить весьма оптимистичные результаты.<br>
+Увы - наши заводы и такое обилие ресурсов, собранных в одном месте, привлекли внимание доминаторов. Огромная армия потрепанных в боях блазероидов, терроноидов и келлероидов высадилась в долине. Они захватили наши заводы, переоборудовали их и используют для саморемонта. Они избавились от всех очистных и контролирующих уровень загрязнения элементов! За каких-то пару недель доминаторы устроили самую настоящую экологическую катастрофу на нашей планете - вода отравлена, озоновый слой вокруг планеты тает, а животные вымирают целыми видами!<br>
+Умоляем - помогите нам избавиться от доминаторов! На кону стоит здоровье... даже жизнь целой планеты! Мы окажем вам любую помощь и выплатим за работу отличные деньги!
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Osada">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Osada.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Осада</span><br><br>
+				<small>Сложность:</small> <span class="beige">выше средней</span><br><br>
+				Рейнджер, случалось ли вам слышать об обществе ролевиков? Исключительно занятные люди и гаальцы, обремененные излишней фантазией и денежными средствами. Одна из этих групп лет этак тридцать назад насобирала денег для реконструкции некоей битвы, между вымышленными народами в вымышленном мире, авторства какого - то древнечеловеческого профессора. Должен признаться, то, что они создали, стало одним из чудес нашей планеты, и в перерывах между их "баталиями" приносило неплохие деньги в качестве туристического маршрута, но, как вы уже, наверное, догадались, все испортил десант доминаторов.<br />
+				Галактическое общество Ардистов-Эндористов, конечно же требует от нашей планеты активных действий, но при этом настаивает на сохранении крепостей, воздвигнутых на поле боя, так что единственный верный ход с нашей стороны - это использование модульных роботов, на управление которыми, у вас, как мне сообщили компетентные органы, имеется квалификация. И уж поверьте, она вам пригодится - на этом задании прогорел уже не один рейнджер - до того сильны и крепки наши враги.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr><td><a name="alenkiy"><img src="img/spacer.gif" width="1" height="9"></a></td></tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr><br>
+<td class="justify" valign="top"><img src="minimaps/12_alenkiy.jpg" border="0" height="162" width="137" class="float"><span class="title1">Остров Аленький</span><br><br>
+<small>Сложность:</small> <span class="beige">низкая</span><br>
+<br>
+Да, у нас есть для вас задание, рейнджер! Вы любите природу? Деревья, цветы и животных? Если да, то вас однозначно заинтересует наше задание.
+<br>
+Более тысячи лет назад наша планета была девственно чистым миром. Но цивилизация росла и росла, мы потеряли свои корни. Небоскребы, заводы и свалки с отходами обволокли всю планету. Мы не понимали, что делаем со своей природой, пока у нас не осталось ровным счетом ничего...
+<br>
+Впрочем, осознав этот страшный факт, мы изучили всю поверхность нашей планеты и обнаружили маленький, нетронутый цивилизацией островок, образовавшийся после извержения вулкана много столетий назад. Наши ученые были в восторге, так как никакие чужеземные животные и растительность не могут заменить нам собственных. По нашим данным, на острове обитает небольшая популяция черепах, а также имеется почти сто видов растительности, включая последний красный цветок, названия которого никто уже точно не знает. Этот остров стал для нас символом и получил скромное название &laquoАленький&raquo.
+<br>
+Впрочем, возможно, вас не интересует наш флора и угрожающие ей доминаторы. Не медлите, скажите сразу. Вы ведь не пират, настоящий рейнджер?! Вы согласны сразиться с доминаторами за природу нашей планеты?! В этом случае мы доставим вас на место сражения и снабдим полной информацией об этой благородной миссии.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="saintvalentine"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/35_saintvalentine.jpg" border="0" height="154" width="137" class="float"><span class="title1">Остров Святого Валентина</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+У меня есть для вас просьба скажем так... несколько личного характера. Но я обещаю - если вы поможете, то уж я в долгу не останусь. Дело в том, что у меня есть любимая девушка, с которой мы уже давно встречаемся. И наконец-то я решил сделать ей предложение - и я уверен, что она согласится. Еще бы! Кольцо из черного алмаза в 50 каратов и собственный остров в подарок!<br>
+Мой советник-аналитик разработал шикарнейший и весьма романтичный план: я вручаю любимой это кольцо, когда мы с ней находимся на орбите, на борту моей роскошной космической яхты, а потом я указываю в иллюминатор на остров в форме сердца и говорю: "Любимая. Ты видишь мое сердце, и теперь оно принадлежит тебе!"<br>
+Не правда ли, очень романтично? Я этот текст три часа заучивал! В смысле, тренировался произносить. Но увы... На купленном мной острове, как оказалось, основали свою базу доминаторы - то-то он мне обошелся с 30% скидкой! Хорош будет подарочек, нечего сказать. рейнджер, если вы очистите мое сердце... то есть этот остров от доминаторов, то получите щедрое вознаграждение!
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Crossfire">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Crossfire.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Перекрестный огонь</span><br><br>
+				<small>Сложность:</small> <span class="beige">выше средней</span><br><br>
+				А как вы относитесь к игровой индустрии, уважаемый? Видите ли, ветеран человеческого игрового бизнеса, компания "Клапан", проводит на нашей планете презентацию своего нового сюжетного шутера "Четвертьраспад: эпизод 451", и в рамках празднований устроила турнир на специальном полигоне, воссоздающем один из игровых уровней для сетевой игры: "перекрестный огонь", а в качестве "игроков" использовала модульных роботов. Но вот незадача: специалистов, готовых управлять этой техникой, у нас как назло не нашлось - благо две воюющие стороны удалось подключить к трофейным доминаторским модулям, но одна из сторон все еще остается "бесхозной".<br />
+				Да, вы правильно догадались - возглавить эту воюющую сторону мы предлагаем вам. И уж поверьте, призовой фонд вас приятно удивит.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Piramida">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Piramida.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Пирамида</span><br><br>
+				<small>Сложность:</small> <span class="beige">высокая</span><br><br>
+				А, рейнджер, вы как раз вовремя - доминаторы захватили место раскопок и грозятся уничтожить пирамиду... Стоп, вы что, не знаете? Это ведь открытие века! Доктор Индий Джокс - известный археолог - раскопал-таки первую действующую пирамиду Карапской цивилизации. Вы что, и о карапах не слышали? Если сделать скидку на ваше образование, то можно сказать, что это древняя высокоразвитая раса, бесследно исчезнувшая три с половиной тысячи лет назад, оставив после себя многочисленные высокотехнологичные руины по всей галактике. Есть некоторые основания полагать, что причиной их исчезновения была война с древними гаальцами, но сами гаальцы отказываются делиться, как они говорят, "постыдными страницами нашей истории". До последнего времени изучение карапов было осложнено тем, что они не оставили письменных свидетельств, а информацию хранили на цифровых накопителях, которые, как известно, недолговечны, но вот экспедиция Джокса отрыла целую и нетронутую действующую пирамиду с неповрежденными архивами. К сожалению, они отрыли также тайную подземную базу доминаторов и вынуждены были с боями отступать. Страшнее всего оказалось то, что блазероиды, чья база была разрушена раскопками, обосновались на пирамиде и принялись перестраивать ее на свой лад. Вы сами понимаете, что использовать орбитальные пушки или ядерную бомбардировку мы не можем - галактический совет уже объявил  пирамиду памятником мирового масштаба, и ее потеря грозит нам чудовищными санкциями. К счастью, у нас оказалась мобильная самораспаковывающаяся база, которую мы смогли десантировать в район раскопок, и осталось только найти стратега. У вас в досье написано, что вы подготовлены к выполнению подобных заданий так, что, как говорится, флаг вам в руки.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="pyramids"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/30_pyramids.jpg" border="0" height="137" width="137" class="float"><span class="title1">Пирамиды</span><br><br>
+<small>Сложность:</small> <span class="beige">низкая</span><br>
+<small>Длительность:</small> <span class="beige">малая</span><br>
+<small>Название в списке карт:</small> <span class="beige">Pyramids.cmap</span><br>
+<br>
+Согласно вашему досье, рейнджер, вы уже не новичок в управлении наземными роботами. И мы решили возложить на вас почетную миссию освобождения Острова Пирамид - свидетельства существования древней цивилизации на планете. Мы почти ничего не знаем об этой культуре, ведь они исчезли задолго до нашего заселения этих благодатных земель. И поэтому нашим ученым особенно важно вернуть остров для дальнейшего изучения следов ушедшего народа.
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Plan">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Plan.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">План</span><br><br>
+				<small>Сложность:</small> <span class="beige">выше средней</span><br><br>
+				Скажите, рейнджер, доводилось ли вам слышать имя Олмиан Селланори? Нет? А Дазыкагз Сиша? О, я вижу, как загорелись ваши глазки... Кстати, почему они у вас так странно блестят? Ну да ладно, вы наверняка знаете, что Дазыкагз - лидер крупного пеленгского наркосиндиката "Скользкие руки", а вот Олмиан - известный программист, изобретатель и хакер, разыскиваемый в 10-ти системах. Кстати, именно Селланори в 3299-м году открыл способ производства и перепрограммирования модульных роботов доминаторов - основу наших сухопутных войск, а теперь начал использовать этих роботов против нас... Но вернемся к делу. На западном океаническом полушарии нашей планеты в последнее время повысилась электромагнитная активность, что очень странно ввиду незаселенности этих территорий. К тому же гаальцы начали жаловаться, что наша планета экспортирует наркотики. Все это требовало серьезного расследования, которое и обнаружило остров с плантацией опиумных саговников - источников элитных натуральных наркотиков. В результате наблюдений удалось узнать, что этот бизнес - дело рук Сиши и Селаннори, которые оборудовали плантацию портом низкоорбитальных флаеров, порталом, заводом по очистке и рафинированию наркотиков, а также надежной охраной в виде системы ПВО и перепрограммированных роботов доминаторов. Посланные  отряды спецназа С.В.А.Т. были легко отбиты силами келлероидов так, что Селланори даже не пришлось отвлекать терроноидов от уборки урожая. Мы уж было хотели  послать спецотряд С.В.А.Х.А., но тут явились вы - опытный стратег, а, как известно, лучшее оружие против модульных роботов - другие модульные роботы. Мы готовы предоставить вам стандартный контракт внештатного стратега и щедрое вознаграждение, соглашайтесь. 
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="maunaroa"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/48_maunaroa.jpg" border="0" height="138" width="137" class="float"><span class="title1">Пляжи Мауна-Роа</span><br><br>
+<small>Сложность:</small> <span class="beige">высокая</span><br>
+<br>
+Рейнджер, если вы слышали о знаменитых курортах на острове Мауна-Роа, то знаете, что это самый дорогой и самый роскошный курорт во всей галактике, и лишь самые богатые люди могут позволить себе здесь отдыхать. Огромная гора посреди океана, на вершине которой катаются на лыжах, а у подножия нежатся на пляжах. <br>
+И, конечно же, такой курорт приносит уйму денег, точнее приносил: недавно на острове Мауна-Роа высадились доминаторы, и всех отдыхающих пришлось эвакуировать. Что машинам там нужно - неизвестно, но мы терпим от их вторжения страшные убытки. Вы, рейнджер, должны понять всю глубину нашей проблемы, мы просим вас помочь нам в очищении острова - конечно же, за солидную плату.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="weather"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/14_weather.jpg" border="0" height="147" width="137" class="float"><span class="title1">Погодная станция</span><br><br>
+<small>Сложность:</small> <span class="beige">высокая</span><br>
+<br>
+А-апчхи!!! Вы что-то сказали, рейнджер? Если вы насчет кофе, то могу вас огорчить - все горячие и горячительные напитки... а-апчхи!.. у нас являются важным стратегическим ресурсом, после того как доминаторы устроили непосредственно перед освобождением планеты диверсию, кха-кха-а-кха!
+<br>Как - разве вы не в курсе, чхи, что у нас творится? Сейчас, кхе-кхе, поясню. Включите, пожалуйста, обогреватель посильнее... Доминаторы до сих пор держат под своим контролем нашу, купленную у фэян за огромные деньги, станцию управления погодой.
+<br>Запустив все оборудование в идиотском хаотичном режиме, они добились того, что погода стала не просто переменчива, а опасна. Снег идет посреди лета, внезапно зарождаются страшные тайфуны, просто ужас какой-то. Вы согласитесь возглавить спасательную а... а... а-а-апчхи!!! Извините, я сейчас вытру... операцию? Надо вернуть станцию погоды назад.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="pomoyka"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/39_pomoyka.jpg" border="0" height="140" width="137" class="float"><span class="title1">Помойка</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+У вас есть антирадиационный костюм, рейнджер? Если нет, то рекомендую им обзавестись. Как, возможно, вы уже поняли, мы предлагаем вам отправиться в одно довольно неуютное место. Недавно наши ПВО сбили подозрительный транспортный корабль, который, как оказалось, был битком набит доминаторами!<br>
+Сбитый корабль упал на остров-свалку, где перерабатываются ядерные отходы со всей планеты. Было бы глупо полагать, что радиация приведет микропроцессорные системы доминаторов в негодность, особенно с учетом их происхождения. И проигнорировать их присутствие на нашей планете мы не можем, так что мы предлагаем вам отправиться на остров и уничтожить остатки выживших доминаторов, превратив их в часть радиоактивного мусора!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="boarding"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/28_boarding.jpg" border="0" height="125" width="137" class="float"><span class="title1">Посадка</span><br><br>
+<small>Сложность:</small> <span class="beige">высокая</span><br>
+<br>
+Как вы относитесь к морским прогулкам, рейнджер? Соленый ветер, брызги в лицо, дымящиеся останки вражеского корабля и пожираемые акулами тела... Гм, простите, увлекся.<br>
+Утром к нам поступил сигнал с плавучего научно-производственного центра, расположенного на борту судна "Гордость Эндории". Корабль атаковали суда доминаторов, вероятно заинтересовавшихся мощнейшими производственными базами и исследовательскими лабораториями комплекса.<br>
+Если вы прямо сейчас отправитесь на борт "Гордости Эндории", и поможете нам защитить атакуемое доминаторами судно, то в случае успеха вас ждет солидное вознаграждение.
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Proval">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Proval.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Провалъ</span><br><br>
+				<small>Сложность:</small> <span class="beige">высокая</span><br><br>
+				Здравствуйте, рейнджер. Вы очень кстати, ведь под угрозой разрушения находится не только национальный заповедник "Провалъ", но и богатые города на берегах Акухской банки, в которой расположен этот остров... Говорите, вы не слышали, о "Провале"? Ну что ж, поскольку вы не местный, объясню вам, что это чуть ли не единственный нетронутый уголок природы на сплошь застроенной планете. Нетронут он не столько потому, что защищен государством, но и в связи с бурной геологией. Почти каждый год этот остров сотрясают мощные подземные толчки, а несколько раз в столетие там случаются мощные извержения. Доминаторы, видимо, этого не знали, иначе не построили бы свою базу на столь шаткой почве. Если бы дело касалось какого-то другого места, мы бы без колебаний воспользовались орбитальной бомбардировкой. Но, во-первых, Гринпис по миру нас пустит, если мы разрушим "Провалъ", а во-вторых, остров окружен мощным барьерным щитом, способным защитить его от бомбардировок, да и мешающим сканированию. Те крохи информации, которые мы получили, дают нам основание полагать, что доминаторы готовят морской десант и уже почти готовы к отплытию. Сбор флота для перехвата займет некоторое время и для того, чтобы затянуть отплытие, нам нужен опытный стратег в вашем лице. Тяжелый боевой флаер-носитель уже готов к вылету.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="rahobam"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/17_rahobam.jpg" border="0" height="150" width="137" class="float"><span class="title1">Рагобаская резня</span><br><br>
+<small>Сложность:</small> <span class="beige">ниже средней</span><br>
+<br>
+Есть у нас одно задание, для тех, кто не боится трудностей. Для настоящих мастеров своего дела, истинных пиратов! Кстати, у вас случайно нет противоестественных наклонностей и иных слабостей к рагобамским жабам? Тогда слушайте внимательно!
+Как известно, рагобамские жабы являются ценными поставщиками изумительнейших наслаждений для многих клиентов. Выделяемые ими токсичные экскременты могут вызвать зуд, легкую рвоту и различные психосоматические эффекты, а также расслабление мозговых долей. Надо сказать, что самые юркие самцы способны даже вызвать у вас видения будущего... Это прекрасный товар, который у нас берут даже фэяне. Впрочем, я отвлекся, простите, ведь жабы моя вторая слабость, а о первой знает лишь мой личный психотерапевт. <br>
+Итак, нам пришла гениальная мысль, так свойственная для нашего народа, об увеличении числа юрких самцов! На самые нерентабельные плантации мы завезли доминаторов, построили им инфраструктуру и установили свою базу! Вам дается огромный ресурс для победы и много ядерных боеголовок. Если бой будет кровавым, вы получите награду, о которой даже не можете мечтать. Беретесь?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="reactor"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/42_reactor.jpg" border="0" height="212" width="137" class="float"><span class="title1">Реактор</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Мне вот интересно - приходилось вам уже бывать в "жарких" точках? Вот, например, на свалке ядерных отходов или в самом сердце реактора? Если нет, то настоятельно рекомендую - ощущения просто незабываемые! Даже жаль, что атомные электростанции уже давно считаются устаревшими. Что ни говори, а новые безопасные орбитальные энергостанции не несут в себе и сотой доли той романтики...<br>
+Но перейдем к делу. На одном из островов у нас находится бездействующий реактор, законсервированный сотни лет назад. Уровень фона вполне безопасен для здоровья - куда больше неприятностей вам могут причинить доминаторы. Они недавно высадились на остров, сняли защитные кожухи с законсервированной станции и, судя по всему, пытаются снова запустить реактор. При этом они вносят в его конструкцию подозрительные изменения и усовершенствования. Наши аналитики полагают, что доминаторв нашли какой-то способ значительно увеличить мощность реактора.<br>
+Вы должны остановить их, ведь наверняка действующий реактор доминаторам понадобился не для того чтобы снабжать наши города теплом и светом! В их распоряжении может оказаться рабочая станция огромной мощности, и они смогут дать нам столько света и тепла, что половина городов будет стерта с лица планеты!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="biohazzard"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/43_biohazzard.jpg" border="0" height="136" width="137" class="float"><span class="title1">Реалити-шоу</span><br><br>
+<small>Сложность:</small> <span class="beige">высокая</span><br>
+<br>
+Ах, какой типаж! А ну-ка, повернитесь в профиль, теперь в фас, вот, возьмите табличку с номером... Скажите что-нибудь устрашающее... Кошелек или жизнь? Сразу видно - свой гуманоид! И вы нам как раз подходите - нам для съемок нужен совершенно безбашенный тип, ни во что не ставящий жизни других.<br>
+Наш завод по производству боевых ядов и биологического оружия находится на грани банкротства. На остатки средств они решили профинансировать съемки реалити-шоу "Остров смерти", прибыли обещают быть просто сумасшедшими! Сценарий прост и гениален: несколько участников засылают на остров, где они с помощью гигантских боевых роботов ведут борьбу за выживание. Выживший получает солидный гонорар и титул "Победителя Смерти". Решайтесь, это ваш шанс доказать, что вы лучший из лучших!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="islands"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/25_islands.jpg" border="0" height="150" width="137" class="float"><span class="title1">Резиденция Верховного Лякуши</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Рейнджер! Срочно, нет - немедленно отправляйтесь на атолл Махара-Тута! Этот атолл принадлежит нашему Верховному Лякуше, большому любителю кормления акул пленными мало... макаками, ну конешшшно же макаками... <br>
+И надо же было такому случиться - стоило только Верховному отправиться на свой остров со свежей партией пленных ма... как, чтобы предаться любимому развлечению, как остров был захвачен доминаторами. К счастью, нашей надежде, нашему мудрейшему и красивейшему лякуше удалось укрыться в бункере, но доминаторы уже обнаружили его и пытаются проникнуть во внутрь.<br>
+Умоляю! Уничтожьте доминаторов и спасите нашего Верховного Лякушу, и уж поверьте - он не останется в долгу!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="metall"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/51_metall.jpg" border="0" height="137" width="137" class="float"><span class="title1">Рудники</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Именно такой специалист как вы, рейнджер, как раз нам и нужен. Вы ведь не какой-нибудь пират или торгаш, а самый что ни на есть воин, а значит, поймете всю глубину проблемы.<br>
+Так вот, на нашей планете находится крупнейший в секторе комплекс по производству бронесплавов высшего качества для нужд военной промышленности. Из наших сплавов производятся лучшие боевые корабли галактики! Но после освобождения планеты мы с ужасом обнаружили, что наш главный производственный комплекс захвачен доминаторами. Похоже, им тоже нужна лучшая броня в Галактике! Вы понимаете, что будет, если наша армия останется без этих сплавов? Это же просто катастрофа! Немедленно отправляйтесь на шельф, где расположился комплекс, и остановите этих железяк!
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Ryan">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Ryan.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Рядовой Райан</span><br><br>
+				<small>Сложность:</small> <span class="beige">выше средней</span><br><br>
+				Вы знаете, рейнджер, что не так давно нашу систему пытались захватить доминаторы. Ну а может не знаете - вы, рейнджеры, бывало, месяцами пропадаете в космосе, вдали от новостей. Так или иначе, на нашей планете была  совершена высадка блазероидов со всеми вытекающими: эвакуация, десант коалиционных военных, чрезвычайное положение и дикая паника вокруг. Впрочем, таможня даже в таких условиях сработала на "отлично", и вычислила, что между списками прибывших и списками отбывших (плюс павших в бою) есть небольшая разница - отсутствует некто Джон Энсон Райан, уроженец Орленона, рядовой плазмотанковых войск, и участник первой битвы в Гралгаре. Вам это может показаться мелочью, но в деле безопасности мелочей не бывает, и спецслужбы начали поиск.<br />
+				И нашли. Ох, как нашли... Наш рядовой Райан оказался отнюдь не уроженцем Орленона, и даже не человеком, а роботом - терминатором, диверсантом блазероидов. Пока мы налаживали жизнь и устанавливали порядок после доминаторского десанта, эта тварь закупила на черном рынке много разнообразных ресурсов и с их помощью собрала примитивных инженерных ботов и рудодобытчиков, инженерные боты собрали более продвинутые образцы, а те в свою очередь построили целую армию модульных роботов, тяжелых штурмовых дроидов, да еще и неслабый флот в придачу. И все это всего за каких-то полтора месяца! Хорошо хоть, что "Райан", не иначе в целях конспирации, создал свою армию вдали от цивилизации на необитаемом острове. Теперь эта армада движется к столичному мегалополису, и на ее пути... ну, в общем, на ее пути еще стоял наш морской флот и авиация, но доминаторы, хоть и с потерями, их одолели, и теперь единственная преграда, защищающая столичную бухту, являет собой хорошо укрепленный остров, посреди пролива в эту самую бухту. Наш штатный специалист по управлению боевыми роботами сейчас лежит в реанимации с тяжелым ранением, так что вся надежда либо на вас, либо на наши сухопутные войска, которые будут встречать армаду уже на берегу бухты. Подумайте хорошенько - ведь на кону жизни наших солдат.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Sphere">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Sphere.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Сфера</span><br><br>
+				<small>Сложность:</small> <span class="beige">выше средней</span><br><br>
+				Недавно на нашу планету почти упал весьма странный метеорит... Да-да, именно "почти упал" - он остановился в нескольких метрах от поверхности и завис в состоянии антигравитации. Более того, этот объект, который журналюги уже окрестили "Сферой", вырабатывает гигаватты постоянного тока, которым без устали лупит во все стороны в виде молний, и держит стабильную температуру своей поверхности на уровне кипения воды при местном давлении. Многие ученые хотели бы знать, что же за чудо являет собой эта самая "Сфера", а также, откуда она берет огромное количество энергии на антигравитацию и прочие беспорядки. Я вам даже скажу, фэяне предлагали нам просто астрономические суммы за эксклюзивные права исследования.<br />
+				Проблема, как вы, уже, наверное, догадались, в доминаторах – аномалия почти мгновенно привлекла внимание десанта келлероидов, а он, в свою очередь, чуть позднее привлек внимание прочих серий. С блазероидами, правда, справились наши спецвойска, но дальше определенно нужны модульные роботы, а вы, судя по досье, весьма неплохо умеете ими управлять.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="warm"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/19_warm.jpg" border="0" height="116" width="137" class="float"><span class="title1">Тепловая установка</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Как у вас с морозоустойчивостью, рейнджер? Если все нормально, то вы можете нам помочь.
+<br>Некоторое время назад мы засекли высадку десанта блазероидов и келлероидов на северном полюсе нашей планеты. Условия там просто ужасные, и мы не придали особого значения этому происшествию - даже машинам не по силам нормально функционировать при таких температурах... Однако совсем недавно в том районе были обнаружены действующие базы противника - каким-то образом доминаторы смогли приспособиться к условиям холода.
+<br>В ваше распоряжение будет предоставлено экспериментальное оборудование, созданное специально для эксплуатации при низких температурах. К сожалению, у нас не было достаточно времени, чтобы испытать новые технологии, но специалисты уверяют, что в условиях крайнего севера все будет работать как часы... Надеюсь, что они имели в виду не водяные...
+<br>Что вы решили, рейнджер?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="terron"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/20_terron.jpg" border="0" height="137" width="137" class="float"><span class="title1">Террон</span><br><br>
+<small>Сложность:</small> <span class="beige">низкая</span><br>
+<br>
+<span class="beige">Примечание</span>. Карта является финальной. После прохождения босс Террон уничтожен, доминаторы серии Террон не размножаются.<br><br>
+Два отряда подконтрольных нам роботов находятся вблизи от центрального процессора Террона, но центр хорошо защищен от вторжения извне. Боевая программа роботов не справится с превосходящими силами противника. Вам, рейнджер, необходимо взять управление отрядами под личный контроль. Вероятность успешного исхода операции 50%.<br>
+Используя основную ударную силу, освободите путь к центральному процессору группе роботов с ядерными зарядами и активируйте их в непосредственной близи от центрального процессора. Это приведет к началу необратимой реакции распада всей планеты.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="isle_down"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/40_isle_down.jpg" border="0" height="141" width="137"  class="float"><span class="title1">Тонущий остров</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Как давно вы были в музее, рейнджер? А в музее боевой робототехники?<br>
+Правда, вряд ли это можно назвать музеем, скорее это гигантское кладбище... После восстания доминаторов представители пяти рас Коалиции подписали договор о списании и уничтожении всей интеллектуальной боевой робототехники. На острове Арруга собраны самые опасные и разрушительные экземпляры, которые было решено затопить вместе с островом. Вот только когда наши инженеры-тектоники начали опускать остров, появились доминаторы! Похоже, они решили заполучить в свои манипуляторы самые смертоносные экземпляры - допустить этого мы не можем, и нам требуется ваша помощь.<br>
+Если вам удастся остановить доминаторов, то нам не придется наносить по острову удар с орбиты, и экология нашей планеты будет сохранена.
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="trident"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="FuelForLife">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/FuelForLife.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Топливо для жизни</span><br><br>
+				<small>Сложность:</small> <span class="beige">средняя</span><br><br>
+				Секретное задание, говорите? Секретное, это уж вряд ли, но что важное, это да... Ах, да, вы ведь наши новости не смотрите. У нас тут ЧП - во время недавнего вторжения доминаторов к нам на планету залетел их небольшой корабль, и направился к укрепленной добывающей платформе посреди моря, видимо, рассчитывая найти там хорошую драчку - чего же еще ждать от блазероидов. Обычную платформу со, скажем, нефтью, мы бы просто обстреляли с флота, но с этой добывается крайне редкий минерал неодостанит - мощный энергоноситель, высокотемпературный сверхпроводник, и, что самое главное, ценный катализатор при неонизации флоры. Вы ведь не забыли, рейнджер, что фэяне могут усваивать инопланетную пищу только после ее неонизации? Так вот, за кило синего геля, который представляет собой очищенный неодостанит, фэяне отваливают миллионы кредитов. Нужно ли говорить, что просто так отказываться от этих денег мы ни за что не будем, и собираемся отбить платформу любой экономически обоснованной ценой? Вообще-то мы собирались отправить туда спецназ, но тут как подарок с небес являетесь вы - рейнджер с дипломом на право управления боевыми роботами. Конечно, роботы причиняют полю боя немалые повреждения, но вы еще тех малокских мордоворотов, которых набрали наши солдафоны не видели - эти там все выжгут дотла, развалят по камушкам и съедят, так что, если вы согласны взяться за контракт по очищению платформы, можете рассчитывать на щедрое вознаграждение.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/37_trident.jpg" border="0" height="141" width="137" class="float"><span class="title1">Трезубец</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Рейнджер, вы уже опытный полководец. Не хотите ли посодействовать науке за деньги?<br>
+Возможно, вы слышали о древней межпланетной цивилизации, следы пребывания которой найдены на десятках планет? Обычно это сооружения в виде пирамид. На необжитой стороне нашей планеты мы обнаружили остров, где находится целый комплекс отлично сохранившихся пирамид. Что самое интересное, остров стал виден лишь недавно, раньше его никто не замечал. Наверное, древнее маскировочное оборудование по какой-то причине вышло из строя...<br>
+Увы, выслав экспедицию к пирамидам, мы обнаружили келлероидов, орудующих на острове! Они прорывали шахты вглубь острова, где, по нашим данным, пирамиды соединяются целой сетью туннелей и коридоров. К счастью, экспедиция была хорошо оснащена технически, в том числе и в плане вооружения - им удалось отбить одну из доминаторских баз в горах. Но дальше дело не пошло - похоже, нам требуется помощь профессионального борца с доминаторами. Помогите нам освободить остров от их загребущих манипуляторов. Пирамиды должны быть изучены нашими учеными!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="trilaran"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/21_trilaran.jpg" border="0" height="136" width="137"  class="float"><span class="title1">Триларан</span><br><br>
+<small>Сложность:</small> <span class="beige">выше средней</span><br>
+<br>
+Мы полагаем, что именно вы способны помочь нам исправить ошибку, допущенную сторонниками революционной теории псевдоинтеллекта. Эта клика самозванцев, имеющая наглость именовать себя &laquoучеными&raquo, затеяла опасный эксперимент на одном из наших промышленных островов - Триларане.
+<br>Разумеется, как и предупреждали сторонники общепринятой традиционной теории эволюции, эксперимент вышел из-под контроля. Подопытные экземпляры доминаторов уничтожили секцию Контроля и Наблюдения, и теперь бесчинствуют на острове, оставаясь совершенно безнаказанными. Еще хорошо, что эти горе-исследователи не смогли наладить производство роботов-терронов, и едва-едва успели активировать свою базу.
+<br>Мы предлагаем вам воспользоваться этой базой и ее ресурсами для того, чтобы уничтожить печальные последствия эксперимента, очистить остров Триларан от доминаторов. Разумеется, вам будет заплачено за беспокойство...
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Logic">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Logic.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Тройной удар</span><br><br>
+				<small>Сложность:</small> <span class="beige">ниже средней</span><br><br>
+				После освобождения нашей планеты от доминаторов, часть наземных сил машин не прекратила сопротивление, и сейчас многие регионы раздираемы войной между их остатками и десантными войсками КВСМК. Однако неважные с военной точки зрения объекты были брошены на произвол судьбы, и среди них оказалась святыня братства Бов, подземный Храм Скорпиона, в котором пророк Кээйн вдохновил своих последователей перед победоносной войной с нечестивым союзом неверующих в силу Неуправляемого Убиватора. Но сегодня этот клочок суши, в процессе тяжелой священной войны превратившийся в остров, захвачен доминаторами. Увы, генералы КВСМК отказываются выдать нам даже мобильную базу, но если вы чувствуете в себе достаточно сил, чтобы повергнуть превосходящие войска машин, мы готовы отдать под ваше командование десантный отряд. И, конечно же, не стоит забывать о вознаграждении, в которое, помимо безгранично уважения всех Братьев входит и изрядная сумма в твердой валюте.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="training"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/22_training.jpg" border="0" height="207" width="137"  class="float"><span class="title1">Учебная</span><br><br>
+<small>Сложность:</small> <span class="beige">низкая</span><br>
+<br>
+Пришло время потренироваться. Впереди вас ждет много сражений, и прежде чем приступить к серьезным заданиям, вам надо освоить тактику боя против роботов. <br>
+Прежде всего, вам надо уяснить, что с машинами должны драться машины, и наша тактика заключается в том, чтобы ими управлять. Сейчас мы дадим вам завод по производству роботов. Роботы сильные, но без интеллекта. Хотя надо признать, что наши специалисты сумели разработать для них 3 базовых программы: атакующую, захватывающую и защитную. Переключая робота в один из этих режимов, вы получаете самостоятельную единицу! <br>
+Впрочем, никто ваc не обязывает их использовать. Если вы хороший стратег, то сможете лично отдавать приказы роботам. Итак, ваша задача состоит в том, чтобы пройти полосу препятствий: уничтожить боевые макеты противника и разрушить его базу. Желаем вам удачи. Помните, что враг вам не угрожает. Поэтому не робейте, это всего лишь тренировка, рейнджер!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="foncers"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/23_foncers.jpg" border="0" height="126" width="137"  class="float"><span class="title1">Фонсеры</span><br><br>
+<small>Сложность:</small> <span class="beige">ниже средней</span><br>
+<br>
+ О да! Вы как нельзя кстати, ведь чемпионат должен начаться уже через две недели! Все билеты давно проданы, и если чемпионат не состоится, разразится грандиозный скандал...
+<br>Ах да, вы ведь не в курсе. Дело в том, что именно на нашей планете проводится ежегодный чемпионат по гонкам на сверхскоростных фонсерах. И надо же, именно нашу планету доминаторы выбрали для диверсии! Они захватили на орбите корабль, который транспортировал фонсеры для участия в чемпионате, и под видом этих скоростных машин им удалось пройти досмотр. Доставленные на остров, на котором проводится чемпионат, доминаторы захватили его и даже отстроили свои базы. Прямо на скоростной трассе для фонсеров, единственной и уникальной в Галактике!
+<br>Мы уже не успеваем создать новую трассу до начала чемпионата - единственная надежда на вас, рейнджер. Если вы очистите остров от роботов, мы успеем восстановить поврежденные треки, и чемпионат не будет сорван. Знали бы вы, какие делают ставки на фаворитов, и какие именитые гости посещают эти состязания, вы были бы готовы разорвать доминаторов голыми руками!
+<br>Ну так как - вы согласны?
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="hawaii"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/24_hawaii.jpg" border="0" height="136" width="137"  class="float"><span class="title1">Хавайские острова</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Есть у нас одно заданьице. Разумеется, вы слышали о наших знаменитых Хавайских курортах? Это целая цепь прекрасных песчаных островов. Так вот, недавно их объявили карантинной зоной, и всех туристов отправляют отдыхать на знаменитый орбитальный развлекательный комплекс &laquoБлостонский Рай&raquo.
+<br>Разумеется, все издержки покрываются из правительственного бюджета, туристический бизнес несет нам одни убытки. А все это из-за доминаторов! Некоторое время назад эти проклятые железяки умудрились построить базу на Хавайском Треугольнике и наладили там производство себе подобных. Во время захвата погибло столько туристов, что три наши страховые компании разорились на выплатах компенсаций.
+<br>Понимаю, вы наверняка прибыли сюда отдыхать, а не воевать, но войдите в наше положение... Ведь наверняка вам не составит труда организовать сопротивление и выбить доминаторов из нашего райского уголка? Мы предоставим вам все необходимое для этого. Если вы согласитесь взять в свои руки руководство планетарным сражением и победите, наши туристические агентства всегда будут рады встретить вас как почетного гостя!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="coldsyntez"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/45_coldsyntez.jpg" border="0" height="132" width="137" class="float"><span class="title1">Холодный синтез</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Подождите, я сейчас, только поменяю аккумулятор. Видите ли, на нашей планете практически нет источников энергии, мы пользуемся импортными аккумуляторами.<br>
+Но теперь все должно измениться наши гениальные ученые укра... то есть, разработали революционную технологию сверххолодного ядерного синтеза, и уже даже построили первый реактор. Увы, они даже не успели понять, как что работает, когда на остров высадились келлероиды, вероятно привлеченные излучением источника энергии. Вы только предс-ставьте, они запустили реактор, и воруют нашу энергию. К чему катится мир доминаторы обворовывают пеленгов... Мы не потерпим такого безобразия!<br>
+Если вы согласитесь уничтожить доминаторов, мы доставим вас на роскошный курортный остров, где проводится эксперимент, и предоставим первоклассную производственную базу в ваше распоряжение. Решайтесь, мы вам и деньжат подкинем!
+</td></tr></tbody></table><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><a name="ecventor"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr></table><br><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr> <br>
+<td class="justify" valign="top"><img src="minimaps/32_ecventor.jpg" border="0" height="130" width="137"  class="float"><span class="title1">Эквентор</span><br><br>
+<small>Сложность:</small> <span class="beige">средняя</span><br>
+<br>
+Рейнджер, в дальнем космосе мы обнаружили дрейфующий келлероидный Эквентор, получивший значительные повреждения, однако мы хотели бы не уничтожить его, что не представляет сейчас труда, а захватить и изучить поподробнее, не часто выпадает такая возможность. Наш план - скрытно забросить туда перепрограммированных роботов и, управляя ими, совершить захват. Ключ к шлюзу мы уже подобрали.
+</td></tr></tbody></table><br>
+<!-- //-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+	<tr>
+		<td>
+			<a name="Core">
+				<img src="img/spacer.gif" width="1" height="9" />
+			</a>
+		</td>
+	</tr>
+</table>
+<br>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tbody>
+		<tr>
+			<td class="justify" valign="top">
+				<img src="minimaps/hd/Core.jpg" border="0" height="137" width="137"  class="float" />
+				<span class="title1">Ядро</span><br><br>
+				<small>Сложность:</small> <span class="beige">низкая</span><br><br>
+				Хорошо, что вы спросили. Есть одна миссия, очень важная миссия.<br />
+				Да будет вам известно, что мы используем экологически чистую геотермальную энергию для выработки электричества, которое в частности заставляет работать лампы и компьютерные панели в этом кабинете, а в целом является единственным источником добычи энергетических ресурсов на нашей планете. Это весьма просто и удобно, поскольку у нашей планеты очень горячее раскаленное ядро. Мы тут на поверхности еще не изжарились лишь по той причине, что удаленность от солнца сполна компенсирует излучаемый ядром жар.<br />
+				Все наши станции по выработке электричества находятся глубоко под землей и это вполне логично, ведь чем ближе к ядру, тем больше вокруг раскаленной магмы. Помимо энергии на этих станциях еще делают всякие сувениры и безделушки. Вот, например этот оплавленный черный камень по своей форме похож на приготовившегося к прыжку сварокока. Видите, как он злобно щерится. А вот это маленькие лапки. Ничего похожего? Ну же, включите воображение, рейнджер. Впрочем, что-то мы отвлеклись.<br />
+				Неизвестно как, но на одну из подземных станций проникли доминаторы. Эти железные пакостники перебили почти весь персонал и теперь занимаются там своими обычными доминаторскими делами, а если точнее, сражаются друг с другом. Как будто не могли другого места найти, честное слово. Из-за них все оборудование станции осталось работать без присмотра, а это очень опасно. Небольшая перегрузка или замыкание - и вся планета разлетится на миллионы мелких обломков. Мы сейчас с вами сидим на мягких креслах, но на самом деле под нами бомба замедленного действия. Что это вы вскочили? Я образно выражаюсь, кресло не взорвется, не волнуйтесь.<br />
+				На вас, рейнджер, я хочу возложить ответственную миссию по изничтожению доминаторов на станции. Нам известно, что все рейнджеры проходят специальную подготовку, так что вы наиболее квалифицированы для этой работы из нас всех. В случае если вы справитесь - все население планеты будет вам благодарно, а лично от меня вы получите. Разумеется, если планета при этом не разлетится на части.
+			</td>
+		</tr>
+	</tbody>
+</table><br>
+<!-- //-->
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr></table>
+<br>
+<br>
+<img src="img/sage.gif" width="32" height="28" class="float">
+Не действуйте  по одной и той же схеме на всех картах. Учитывайте обстановку, которая складывается на всей карте, а не только вблизи вашей территории или войск. Например, часто полезно не спешить ввязываться в драку между двумя вашими врагами, а подождать, пока они ослабят друг друга и затем ударить им в спину. Постоянно следите за накоплением ресурсов, так как их обилие является решающим фактором победы. Захват ресурсных заводов врагов уменьшает количество производимых ими роботов. Активно используйте рельеф местности для маневров на карте. Стройте роботов с одинаковой скоростью передвижения, чтобы они одновременно выходили к цели и вместе открывали огонь - это обеспечивает концентрацию и превосходство ваших сил на направлении удара. Часть роботов в вашей группе должна иметь способность ремонта - это резко повышает живучесть ваших сил и экономит ресурсы. Используйте ручное управление роботом, например, выдвигайтесь в сторону движение наступающего врага. Находясь на расстоянии удара орудий, делаете отступление назад с нанесением урона противнику. Это позволяет значительно ослабить наступление. Не забывайте, по мере необходимости, вызывать подкрепление. Устраивайте оборону своих заводов и базы, учитывая расположение турелей и рельефа местности.
+<br>
+<br>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td> <br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<div align="left"><br>
+<br>
+</div>
+</td>
+</tr>
+</table>
+</body></html>

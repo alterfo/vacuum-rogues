@@ -16,14 +16,20 @@ import { logger } from "@/utils/logger";
 const cache: Record<string, Texture> = {};
 let loadPromise: Promise<void> | null = null;
 
+/** Categories excluded from eager preload — loaded on demand instead. */
+const LAZY_PREFIXES = ["panoramas/", "planet_maps/", "star_maps/"];
+
 /**
- * Load every manifest asset into the texture cache. Idempotent: repeated calls
+ * Load every manifest asset into the texture cache, skipping large lazy
+ * categories (panoramas, planet_maps, star_maps). Idempotent: repeated calls
  * return the same promise. Failures are logged but never reject (missing art
  * must not break boot).
  */
 export function preloadTextures(): Promise<void> {
   if (loadPromise) return loadPromise;
-  const entries = Object.entries(manifest);
+  const entries = Object.entries(manifest).filter(
+    ([key]) => !LAZY_PREFIXES.some((p) => key.startsWith(p)),
+  );
   loadPromise = Promise.all(
     entries.map(async ([key, url]) => {
       try {
@@ -38,6 +44,25 @@ export function preloadTextures(): Promise<void> {
     );
   });
   return loadPromise;
+}
+
+/**
+ * Lazily load a single texture by manifest key. Returns cached Texture if
+ * already loaded. Safe to call multiple times — deduplicates via cache.
+ */
+export async function loadTextureAsync(
+  key: string,
+): Promise<Texture | undefined> {
+  if (cache[key]) return cache[key];
+  const url = manifest[key];
+  if (!url) return undefined;
+  try {
+    cache[key] = await Assets.load(url);
+    return cache[key];
+  } catch (e) {
+    logger.warn(`lazy texture load failed: ${key}`, e);
+    return undefined;
+  }
 }
 
 /** Resolve a loaded texture by its exact manifest key, or undefined. */
@@ -63,7 +88,8 @@ export function panoramaUrl(key: string): string | undefined {
 
 /**
  * Resolve a loaded panorama Texture for the given key. Returns undefined
- * when the asset is absent or not yet loaded.
+ * when the asset is absent or not yet loaded. Use {@link loadTextureAsync}
+ * with key `panoramas/<key>` to load on demand before calling this.
  */
 export function panoramaTex(key: string): Texture | undefined {
   return cache[`panoramas/${key}`];

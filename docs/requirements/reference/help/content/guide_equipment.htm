@@ -1,0 +1,669 @@
+<html><head>
+<script language="Javascript"><!--
+if (self.name=="menu") {location.href="menu.htm"; parent.cont.location="guide_equipment.htm"}
+//--></script>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+<link rel="stylesheet" type="text/css" href="styles.css">
+<SCRIPT language="Javascript"> 
+<!-- 
+if (document.images) 
+{  
+img1on = new Image ;img1off = new Image; 
+img2on = new Image ;img2off = new Image; 
+ 
+img1on.src = "img/back1.gif";img1off.src = "img/back.gif";
+img2on.src = "img/forward1.gif";img2off.src = "img/forward.gif";
+} 
+function img_act(imgName) { 
+if (document.images) 
+{ imgOn = eval (imgName + "on.src"); 
+document [imgName].src = imgOn; } } 
+function img_inact(imgName) { 
+if (document.images) 
+{ imgOff = eval(imgName + "off.src"); 
+document [imgName].src = imgOff; } } 
+//--> 
+</SCRIPT>
+<style type=text/css><!--
+
+table.paramplain td, table.paramplain th { padding:1px 15px }
+table.paramplain th { color:#666666; }
+
+table.paramplain col.param { color:#800 }
+table.paramplain col.level { font-size:80%; color:#606060; text-align:center; }
+
+table.main { margin-bottom:3em; }
+ul.main { list-style-type:none; margin-left:4em }
+table.main ul.main { margin-left:1em }
+ul.main li { background:url(img/answer.gif) no-repeat 0px 2px; padding-left:24px; height:20px }
+
+
+table.param {
+	font-family:ms sans serif,sans-serif;
+	font-size:80%;
+}
+table.param span.level,
+table.param span.name,
+table.param span.params,
+table.param span.param { display:block }
+table.param span.params span.param { display:inline }
+
+table.param td.t1 { padding-left:20px; padding-right:60px }
+table.param td.t2 { padding-left:20px; }
+
+table.param span.level { font-size:80%; color:#CC9999; text-align:center }
+table.param 
+table.param span.params,
+table.param span.param { text-align:center }
+span.params span.param { margin:0px 2px }
+span.params { color:#808080 }
+span.param,
+span.power,
+span.range { color:#FF3333 }
+table.param span.power { margin-right:5px }
+table.param span.range { margin-left:5px }
+
+p.param { margin-left:4em }
+
+
+h2 { margin-top:3em; margin-left:0px; }
+h2 { font-size:100%; margin-top:1.5em; text-decoration : none; color: #A5F9FF; font-weight: bold; }
+h2 img { vertical-align:middle; margin-right:10px; }
+
+.name { color:#8FBC8F; font-weight:normal; text-align:left; margin-top:3px; margin-bottom:10px }
+.param { color:#FF0000; text-align:center; }
+.level { color:#CC9999; }
+.light { color:#FFD700 }
+
+//--></style>
+</head>
+
+<body onselectstart="document.selection.empty()" oncontextmenu="return false" bgcolor="#000000" leftmargin="0" topmargin="0" rightmargin="0" bottommargin="0" marginwidth="0" marginheight="0">
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="15"> </td>
+<td class="topnav"> 
+<div align="left"><a href="guide.htm" onClick=parent.delay() hidefocus="true">Справочник</a> &gt; 
+Стандартное оборудование</div>
+</td>
+<td class="topnav" width="20">&nbsp;</td>
+<td class="topnav" width="79" valign="top"><a href="guide_ranks_pirate.htm" onMouseOver="img_act('img1')" onMouseOut="img_inact('img1')" onClick=parent.delay() hidefocus="true"><img src="img/back.gif" width="79" height="20" name="img1" border="0" alt="Назад"></a></td>
+<td class="topnav" width="79" valign="top"><a href="guide_artefacts.htm" onMouseOver="img_act('img2')" onMouseOut="img_inact('img2')" onClick=parent.delay() hidefocus="true"><img src="img/forward.gif" width="79" height="20" name="img2" alt="Вперед" border="0"></a></td>
+<td class="topnav" width="25">&nbsp;</td>
+</tr>
+</table>
+<br>
+<br>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td><span class="title2">Стандартное оборудование</span><br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><img src="img/spacer.gif" width="1" height="9"></td></tr></table>
+<br>
+К стандартным видам оборудования относятся двигатель, топливные баки, радар, сканер, 
+дроид, захват, генератор защитного поля. Все это можно купить в любом <a href="manual_planet_equipmentshop.htm" onClick=parent.delay() hidefocus="true">магазине 
+оборудования</a> и установить на свой корабль. Кроме того, в магазине можно приобрести 
+корпус корабля, который фактически представляет собой контейнер, внутри которого 
+и размещается прочее оборудование. <br>
+<br>
+Каждый вид оборудования имеет следующие характеристики: тип, размер, раса-изготовитель 
+и стоимость. Чем более <a href="guide_races.htm" onClick=parent.delay() hidefocus="true">развитая раса</a> изготовила 
+ту или иную вещь, тем дороже она стоит и тем дольше будет служить, не требуя ремонта. 
+<br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><a name="hull"><img src="img/spacer.gif" width="1" height="9"></a></td>
+</tr>
+</table>
+<div align="left"><br>
+<img src="img/hull.jpg" width="145" height="164" class="float"><span class="title1">Корпус</span><br>
+<br>
+Корпус представляет собой собственно корабль рейнджера. Важными характеристиками 
+корпуса является его объем и количество слотов под оборудование. Из-за различий в объеме и количествах открытых и закрытых слотов корпусы подразделяются на <a href="guide_hull.htm" onClick=parent.delay() hidefocus="true">серии</a>.<br>
+<br>
+Численно жизнестойкость корабля (Hit Points) равна его объему. Если корпус поврежден, 
+то он может быть починен роботом-дроидом во время полета или в ангаре на любой 
+космической станции. </div>
+</td>
+</tr></table>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td> 
+<div align="left"><br>
+Типы корпус: <br>
+<table class="paramplain">
+<tr><td><span class=name>1. Гравикорный</span></td></tr>
+<tr><td><span class=name>2. Мезоструктурный</span></td></tr>
+<tr><td><span class=name>3. Рогостовый</span></td></tr>
+<tr><td><span class=name>4. Бромированный</span></td></tr>
+<tr><td><span class=name>5. Хробайтовый</span></td></tr>
+<tr><td><span class=name>6. Полиморфный</span></td></tr>
+<tr><td><span class=name>7. Нанохитиновый</span></td></tr>
+<tr><td><span class=name>8. Биослотовый</span></td></tr>
+</table>
+
+<br>
+Размер корпуса и количество активных слотов зависит от типа корабля. Например, 
+у военного судна больше слотов под оружие, чем у торгового судна, зато у последнего 
+гораздо более вместительный трюм. <br>
+<br><br><span class="beige">Примечание</span>. 
+От типа корпуса зависит, сколько единиц повреждения от каждого полученного
+выстрела будет нейтрализовано его броней. Но сначала полученный урон
+ослабляется защитным полем, при наличии генератора защитного поля.<br><br>
+
+
+<small><span class="beige">Количество повреждений вычисляется по формуле:</span> <br>
+<font color="#999999"><b>Повреждения = сила полученного выстрела * (100% - мощность защитного поля) - броня корпуса</b></font><br>
+</small>
+</td>
+</tr>
+</table><br><br><br>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td> 
+<div align="left"> При покупке корпуса обращайте внимание на всплывающую подсказку. 
+Там отображены характеристики корпуса. Схематичное изображение корпуса в левой 
+части всплывающего окна полностью повторяет количество слотов и наличие форсажа 
+в окне "Корабль"(S). <br>
+</div>
+</td>
+</tr>
+</table>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td> 
+<div align="center"><br>
+Примеры различных вариантов оснащения корпусов:<br>
+<br>
+</div>
+<table width="100%" border="0" cellspacing="7" cellpadding="0">
+<tr> 
+<td> 
+<div align="center"><img src="img/hullscheme1.jpg" width="74" height="82"></div>
+</td>
+<td> 
+<div align="center"><img src="img/hullscheme2.jpg" width="74" height="82"></div>
+</td>
+<td> 
+<div align="center"><img src="img/hullscheme3.jpg" width="74" height="82"></div>
+</td>
+</tr>
+<tr> 
+<td valign="top"> 
+<div align="center"><small><b class="beige">Транспортное судно</b> <br>
+У этого корпуса всего два отсека под оружие, т.к. транспортным кораблям оружие 
+нужно лишь для того, чтоб суметь отбиться от пиратов. Отсутствие многих слотов 
+компенсирует большая грузоподъемность.</small></div>
+</td>
+<td valign="top"> 
+<div align="center"><small><b class="beige">Военный корабль</b> <br>
+У этого корабля активны пять из пяти возможных слотов под оружие. Это очень мощный 
+корабль в бою. Отсутствует возможность установить захват, военным он ни к чему.</small></div>
+</td>
+<td valign="top"> 
+<div align="center"><small><b class="beige">Пиратский корабль</b> <br>
+Данный корпус содержит три активных слота под оружие, наличие форсажа, а так же 
+два слота для нестандартного оборудования.</small></div>
+</td>
+</tr>
+</table>
+<br>
+Корпусы разделяются на серии. Каждая серия - это измененный стандартный вид корпуса 
+в зависимости от качества и дороговизны серии: добавляются или убираются слоты, 
+увеличивается или уменьшается размер. Таким образом, вариантов наличия слотов 
+у разных корпусов в игре очень большое количество.<br>
+<br>
+<span class="beige">Примечание</span>. В отличие от других видов оборудования 
+игрок не может продать существующий корпус, а может только купить новый. Корпус 
+из магазина будет доставлен на склад, где можно самостоятельно произвести замену.<br>
+</td>
+</tr>
+</table>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td> <br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<div align="left"><br>
+ <span class="title1">Двигатель</span><br>
+<br>
+Двигатель служит для перемещения в обычном пространстве и для совершения <a href="manual_space_jump.htm" onClick=parent.delay() hidefocus="true">гиперпрыжков</a>. 
+Потребление топлива в обычном пространстве ничтожно мало. Потребление топлива 
+в гиперпрыжке составляет 1 единицу топлива на парсек. Тип и мощность двигателя 
+влияют на развиваемую скорость / дальность гиперпрыжка. <br>
+<br>
+Типы двигателей: <br>
+
+
+<table class=param>
+<tr>
+<td class=p1><img src=equipment/engine1.gif></td>
+<td class=t1><span class=name>1. Нырковый</span></td>
+<td class=p2><img src=equipment/engine5.gif></td>
+<td class=t2><span class=name>5. Сплэшевый</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/engine2.gif></td>
+<td class=t1><span class=name>2. Сингулярный</span></td>
+<td class=p2><img src=equipment/engine6.gif></td>
+<td class=t2><span class=name>6. Гравитонный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/engine3.gif></td>
+<td class=t1><span class=name>3. Жабродюзный</span></td>
+<td class=p2><img src=equipment/engine7.gif></td>
+<td class=t2><span class=name>7. Стансерный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/engine4.gif></td>
+<td class=t1><span class=name>4. Потоковый</span></td>
+<td class=p2><img src=equipment/engine8.gif></td>
+<td class=t2><span class=name>8. Темпоральный</span></td>
+</tr>
+</table>
+
+<p>Минимальный размер: <span class="vol">20</span></p>
+
+<br>
+Если двигатель сломан, то скорость корабля становится ничтожно малой. В этом случае 
+следует дотянуть до ближайшей планеты и сделать ремонт. <br>
+<br>
+<small><span class="beige">Для тех, кто хочет разобраться в механике игры и вычислить 
+реальную скорость корабля:</span> <br>
+<font color="#999999">Базовая скорость двигателя не является его реальной скоростью, 
+она зависит от нагруженности корабля, исходя из следующей формулы:<br>
+<b>Скорость в % от номинала = 122,333 - 0,045 * Вес</b><br>
+Примечание: если вес корабля больше 2000, то коэффициент всегда равен 33%.<br>
+<br>
+Графическое отображение формулы:<br>
+<br>
+<img src="img/speed.gif" width="512" height="168"> <br>
+Примеры: <br>
+1) У нас есть корабль весом 380 единиц и двигатель с максимальной скоростью 400 
+единиц - это значит, что он будет летать с максимальной скоростью 400. <br>
+2) У нас корабль весом в 1000 единиц и двигатель с максимальной скоростью 800, 
+исходя из формулы, его скорость будет 77% от номинала и получается, что реальная 
+скорость равна 800*0.77=616 единиц. <br>
+<br>
+Еще одним фактором снижения скорости является перегрев двигателя во время боя. 
+Из-за попаданий и частых маневров, он может снизить скорость до двух раз.</font><br>
+</small>
+</div>
+</td>
+</tr>
+</table>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td> <br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<div align="left"><br>
+<br>
+<span class="title1">Топливный бак</span> <br>
+<br>
+Для чего служит топливный бак, ясно из названия. Чем больше топлива содержится 
+в баке, тем более дальний гиперпрыжок может совершить корабль без дозаправки. 
+Если топливо закончилось, то корабль может перемещаться лишь в пределах текущей 
+звездной системы. Количество топлива в баках зависит от их объема и типа. <br>
+<br>
+Типы топливных баков: <br><br>
+
+<table class=param>
+<tr>
+<td class=p1><img src=equipment/fueltank1.gif></td>
+<td class=t1><span class=name>1. Гипержидкостный</span></td>
+<td class=p2><img src=equipment/fueltank5.gif></td>
+<td class=t2><span class=name>5. Позиционный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/fueltank2.gif></td>
+<td class=t1><span class=name>2. Конденсатный</span></td>
+<td class=p2><img src=equipment/fueltank6.gif></td>
+<td class=t2><span class=name>6. Эндокластерный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/fueltank3.gif></td>
+<td class=t1><span class=name>3. Редукционный</span></td>
+<td class=p2><img src=equipment/fueltank7.gif></td>
+<td class=t2><span class=name>7. Гироскопический</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/fueltank4.gif></td>
+<td class=t1><span class=name>4. Протопузырчатый</span></td>
+<td class=p2><img src=equipment/fueltank8.gif></td>
+<td class=t2><span class=name>8. Текриновый</span></td>
+</tr>
+</table>
+
+<p>Минимальный размер: <span class=vol>20</span></p>
+
+<small><span class="beige">Итоговая вместимость бака вычисляется по формуле:</span> <br>
+<font color="#999999"><b>Итоговая вместимость = размер / 2 + базовая вместимость</b></p>
+<p>Пять десятых округляются в меньшую сторону.<br>
+Пример 1. Редукционный бак размером 45 вмещает: 45 / 2 + 20 = 42 ед.<br>
+Пример 2. Текриновый бак размером 21 вмещает: 21 / 2 + 45.5 = 56 ед.</p>
+Тип - базовая вместимость<br><br>
+Гипержидкостный - 10<br>
+Конденсатный - 15.5<br>
+Редукционный - 20<br>
+Протопузырчатый - 25.5<br>
+Позиционный - 30<br>
+Эндокластерный - 35.5<br>
+Гироскопический - 40<br>
+Текриновый - 45.5<br>
+</font>
+</small>
+<br>
+<span class="beige">Примечание</span>. Если топливный бак поврежден, то он начинает протекать, хотя и функционирует.<br>
+</div>
+</td>
+</tr>
+</table>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td> <br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<div align="left"><br>
+ <span class="title1">Радар</span> 
+<br>
+<br>
+Радар позволяет видеть в космосе различные объекты (планеты, станции, корабли) 
+и определять их важнейшие характеристики - размер, скорость, наименование и т.д. 
+Информация, получаемая с радара, отображается на <a href="manual_space_radar.htm" onClick=parent.delay() hidefocus="true">панели 
+радара</a>. Радиус действия радара зависит от его типа. <br>
+<br>
+Типы радаров: <br>
+
+<table class=param>
+<tr>
+<td class=p1><img src=equipment/radar1.gif></td>
+<td class=t1><span class=name>1. Волновой</span></td>
+<td class=p2><img src=equipment/radar5.gif></td>
+<td class=t2><span class=name>5. Катаурный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/radar2.gif></td>
+<td class=t1><span class=name>2. Субтрансферный</span></td>
+<td class=p2><img src=equipment/radar6.gif></td>
+<td class=t2><span class=name>6. Нейропоточный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/radar3.gif></td>
+<td class=t1><span class=name>3. Октонный</span></td>
+<td class=p2><img src=equipment/radar7.gif></td>
+<td class=t2><span class=name>7. Этановый</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/radar4.gif></td>
+<td class=t1><span class=name>4. Пучковый</span></td>
+<td class=p2><img src=equipment/radar8.gif></td>
+<td class=t2><span class=name>8. Нуль-контактный</span></td>
+</tr>
+</table>
+
+<p>Минимальный размер: <span class=vol>15</span></p>
+
+<br>
+Если радар не установлен или сломан, то навигация существенно затрудняется. Кроме 
+того, становятся невозможными <a href="manual_space_talk.htm" onClick=parent.delay() hidefocus="true">переговоры</a> с 
+другими кораблями, а также их <a href="manual_space_scan.htm" onClick=parent.delay() hidefocus="true">сканирование</a>.<br>
+</div>
+</td>
+</tr>
+</table>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td> <br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<div align="left"><br>
+ <span class="title1">Сканер 
+</span> <br>
+<br>
+Сканер дает возможность <a href="manual_space_scan.htm" onClick=parent.delay() hidefocus="true">исследовать начинку</a> 
+другого корабля, то есть увидеть оборудование и вооружение, установленное внутри 
+него. Данная информация очень полезна в бою, потому как вы точно будете представлять 
+силу противника. Сканирование возможно, если мощность сканера позволяет преодолеть 
+защитное поле сканируемого корабля. Мощность сканера зависит от его типа. <br>
+<br>
+Типы сканеров: <br>
+
+<table class=param>
+<tr>
+<td class=p1><img src=equipment/scaner1.gif></td>
+<td class=t1><span class=name>1. Трассионный</span></td>
+<td class=p2><img src=equipment/scaner5.gif></td>
+<td class=t2><span class=name>5. Коллоидный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/scaner2.gif></td>
+<td class=t1><span class=name>2. Вортексный</span></td>
+<td class=p2><img src=equipment/scaner6.gif></td>
+<td class=t2><span class=name>6. Текторный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/scaner3.gif></td>
+<td class=t1><span class=name>3. Нейрощупный</span></td>
+<td class=p2><img src=equipment/scaner7.gif></td>
+<td class=t2><span class=name>7. Деатомарный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/scaner4.gif></td>
+<td class=t1><span class=name>4. Молекулярный</span></td>
+<td class=p2><img src=equipment/scaner8.gif></td>
+<td class=t2><span class=name>8. Кванторный</span></td>
+</tr>
+</table>
+
+<p>Минимальный размер: <span class=vol>15</span></p>
+
+
+<br>
+Сканер функционирует только в зоне действия радара. Если радар не установлен или 
+сломан, то сканер не действует.  Сканирование кораблей доминаторов невозможно.<br>
+</div>
+</td>
+</tr>
+</table>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td> <br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<div align="left"><br>
+ <span class="title1">Дроид 
+</span> <br>
+<br>
+Ремонтный дроид служит для восстановления поврежденной в бою обшивки корабля и 
+может работать прямо во время полета. За один день работы дроид может восстановить 
+N единиц корпуса корабля - в зависимости от типа. <br>
+<br>
+Типы дроидов: <br>
+
+
+<table class=param>
+<tr>
+<td class=p1><img src=equipment/droid1.gif></td>
+<td class=t1><span class=name>1. Биотический</span></td>
+<td class=p2><img src=equipment/droid5.gif></td>
+<td class=t2><span class=name>5. Болидный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/droid2.gif></td>
+<td class=t1><span class=name>2. Суспензорный</span></td>
+<td class=p2><img src=equipment/droid6.gif></td>
+<td class=t2><span class=name>6. Тензорный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/droid3.gif></td>
+<td class=t1><span class=name>3. Трекинговый</span></td>
+<td class=p2><img src=equipment/droid7.gif></td>
+<td class=t2><span class=name>7. Штифтовый</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/droid4.gif></td>
+<td class=t1><span class=name>4. Стволовой</span></td>
+<td class=p2><img src=equipment/droid8.gif></td>
+<td class=t2><span class=name>8. Дуплексный</span></td>
+</tr>
+</table>
+
+<p>Минимальный размер: <span class=vol>20</span></p>
+</div>
+</td>
+</tr>
+</table>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td> <br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<div align="left"><br>
+ <span class="title1">Захват 
+</span> <br>
+<br>
+Захват служит для <a href="manual_space_takecargo.htm" onClick=parent.delay() hidefocus="true">подъема предметов</a> на 
+борт корабля. Предметы могут появляться в космосе, как естественным путем, так 
+и в результате боевых действий участников игры. При уничтожении корабля часть 
+его груза или оборудования может остаться невредимой и разлететься в космосе. 
+Грузоподъемность захвата и его радиус действия зависят от типа захвата. <br>
+<br>
+Типы захватов: <br>
+
+<table class=param>
+<tr>
+<td class=p1><img src=equipment/cargohook1.gif></td>
+<td class=t1><span class=name>1. Активаторный</span></td>
+<td class=p2><img src=equipment/cargohook5.gif></td>
+<td class=t2><span class=name>5. Пьезотронный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/cargohook2.gif></td>
+<td class=t1><span class=name>2. Телекинетический</span></td>
+<td class=p2><img src=equipment/cargohook6.gif></td>
+<td class=t2><span class=name>6. Эриметроидный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/cargohook3.gif></td>
+<td class=t1><span class=name>3. Плазмонитевый</span></td>
+<td class=p2><img src=equipment/cargohook7.gif></td>
+<td class=t2><span class=name>7. Оптоволновой</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/cargohook4.gif></td>
+<td class=t1><span class=name>4. Эктогенный</span></td>
+<td class=p2><img src=equipment/cargohook8.gif></td>
+<td class=t2><span class=name>8. Микротональный</span></td>
+</tr>
+</table>
+
+<p>Минимальный размер: <span class=vol>20</span></p>
+</div>
+</td>
+</tr>
+</table>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td> <br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<div align="left"><br>
+ <span class="title1">Генератор 
+защитного поля <br>
+</span> <br>
+Генератор создает вокруг корабля защитное поле, которое ослабляет наносимые противником 
+повреждения на определенный процент, в зависимости от мощности генератора. Кроме 
+того, если мощность защитного поля больше мощности сканера другого корабля, то 
+ваш корабль будет защищен от нежелательного <a href="manual_space_scan.htm" onClick=parent.delay() hidefocus="true">сканирования</a>. 
+Мощность защитного поля зависит от типа генератора. <br>
+<br>
+Типы генераторов защитных полей: <br>
+
+<table class=param>
+<tr>
+<td class=p1><img src=equipment/shield1.gif></td>
+<td class=t1><span class=name>1. Коротковолновый</span></td>
+<td class=p2><img src=equipment/shield5.gif></td>
+<td class=t2><span class=name>5. Полигональный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/shield2.gif></td>
+<td class=t1><span class=name>2. Поляризующий</span></td>
+<td class=p2><img src=equipment/shield6.gif></td>
+<td class=t2><span class=name>6. Зональный</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/shield3.gif></td>
+<td class=t1><span class=name>3. Мезонный</span></td>
+<td class=p2><img src=equipment/shield7.gif></td>
+<td class=t2><span class=name>7. Микроуровневый</span></td>
+</tr>
+<tr>
+<td class=p1><img src=equipment/shield4.gif></td>
+<td class=t1><span class=name>4. Сетчатый</span></td>
+<td class=p2><img src=equipment/shield8.gif></td>
+<td class=t2><span class=name>8. Ультраплазменный</span></td>
+</tr>
+</table>
+
+<p>Минимальный размер: <span class=vol>20</span></p>
+</div>
+</td>
+</tr>
+</table>
+<br><br><br>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="5%" valign="top"><img src="img/spacer.gif" width="25" height="1"></td>
+<td> <br>
+<table width="100%" border="0" cellspacing="0">
+<tr> 
+<td><img src="img/sage.gif" width="32" height="28" class="float">Доминаторское оборудование может иметь размер меньше минимального.</td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<br>
+</td>
+</tr>
+</table>
+</body></html>

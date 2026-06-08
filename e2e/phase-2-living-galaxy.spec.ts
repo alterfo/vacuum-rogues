@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { MainMenuPage } from '../page-objects/main-menu.page';
-import { StarMapPage } from '../page-objects/star-map.page';
-import { CombatPage } from '../page-objects/combat.page';
-import { InventoryPage } from '../page-objects/inventory.page';
-import { TradePage } from '../page-objects/trade.page';
+import { MainMenuPage } from './page-objects/main-menu.page';
+import { StarMapPage } from './page-objects/star-map.page';
+import { CombatPage } from './page-objects/combat.page';
+import { InventoryPage } from './page-objects/inventory.page';
+import { TradePage } from './page-objects/trade.page';
 
 /**
  * Phase 2: Living Galaxy (MVP2)

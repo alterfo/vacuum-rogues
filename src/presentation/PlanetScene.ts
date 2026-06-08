@@ -9,7 +9,7 @@ import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import { TradeSystem } from "@/systems/TradeSystem";
 import { QuestType } from "@/types";
 import type { ResourceType } from "@/types";
-import { pickVariant, panoramaTex } from "./textures";
+import { pickVariant, panoramaTex, loadTextureAsync } from "./textures";
 import { scaledFont } from "@/utils/fontScale";
 import { UiButton, type ButtonAccent } from "./ui/UiButton";
 
@@ -68,14 +68,27 @@ const FACTION_COLOR: Record<string, number> = {
   OVERMIND: 0xff22cc,
 };
 
-const PLANET_TEXTURE_PREFIX: Record<string, string> = {
-  TERRESTRIAL: "terrestrial",
-  GAS_GIANT: "gas",
-  ICE: "ice",
-  VOLCANIC: "volcanic",
-  INDUSTRIAL: "industrial",
-  HABITAT: "habitat",
+const FACTION_PANORAMA: Record<string, string> = {
+  OUTLANDERS: "outlanders_city",
+  BASTIONS: "bastions_city",
+  SYNDICATE: "syndicate_city",
+  PARADOXES: "paradoxes_city",
+  PROGRESSORS: "progressors_city",
+  INDEPENDENT: "wilderness_jungle",
+  OVERMIND: "wilderness_tundra",
 };
+
+function planetTexturePrefix(type: string): string {
+  const map: Record<string, string> = {
+    TERRESTRIAL: "terrestrial",
+    GAS_GIANT: "gas",
+    ICE: "ice",
+    VOLCANIC: "volcanic",
+    INDUSTRIAL: "industrial",
+    HABITAT: "habitat",
+  };
+  return map[type] ?? "terrestrial";
+}
 
 const PLANET_FALLBACK_COLORS: Record<string, number[]> = {
   TERRESTRIAL: [0x0a2c4c, 0x1a5c8c, 0x2a7c44, 0x3a9c55, 0x1e6e4a],
@@ -115,11 +128,32 @@ export class PlanetScene extends GameScene {
     this.bribed = false;
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
+
+    // Resolve faction for panorama key (same logic as createUI)
+    const initSystem = this.gameEngine?.galaxy?.systems.find((s) =>
+      s.planets.some((p) => p.id === this.planet?.id),
+    );
+    const initFaction = initSystem?.ownerFaction ?? "INDEPENDENT";
+    const panoramaKey = `panoramas/${FACTION_PANORAMA[initFaction] ?? "wilderness_jungle"}`;
+
+    // Show scene immediately with dark fallback, then swap in panorama when loaded.
     this.createUI();
     logger.info(`PlanetScene: ${this.planet?.name}`);
     this.gameEngine?.audio.playSfx("land").catch(() => {});
     this.checkDeliveryQuestCompletion();
     this.checkCustoms();
+
+    if (!panoramaTex(FACTION_PANORAMA[initFaction] ?? "wilderness_jungle")) {
+      loadTextureAsync(panoramaKey)
+        .then((tex) => {
+          if (tex && this.planet) {
+            this.renderer.clearGameLayer();
+            this.renderer.clearUILayer();
+            this.createUI();
+          }
+        })
+        .catch(() => {});
+    }
   }
 
   update(_deltaTime: number): void {}
@@ -426,9 +460,17 @@ export class PlanetScene extends GameScene {
     const w = this.renderer.app.screen.width;
     const h = this.renderer.app.screen.height;
 
-    // Panoramic background: full-screen equirectangular texture (cover scale)
-    const prefix = PLANET_TEXTURE_PREFIX[this.planet.type] ?? "terrestrial";
-    const panTex = panoramaTex(`${prefix}_01`);
+    // Resolve faction data needed by panorama + multiple UI elements
+    const system = this.gameEngine?.galaxy?.systems.find((s) =>
+      s.planets.some((p) => p.id === this.planet!.id),
+    );
+    const faction = system?.ownerFaction ?? "INDEPENDENT";
+    const factionName = FACTION_RU[faction] ?? faction;
+    const factionColor = FACTION_COLOR[faction] ?? 0x999999;
+
+    // Panoramic background: faction-specific wide panorama, lazy-loaded
+    const panoramaKey = FACTION_PANORAMA[faction] ?? "wilderness_jungle";
+    const panTex = panoramaTex(panoramaKey);
     if (panTex && panTex.width > 1 && panTex.height > 0) {
       const panorama = new Sprite(panTex);
       panorama.eventMode = "none";
@@ -457,14 +499,6 @@ export class PlanetScene extends GameScene {
     overlay.eventMode = "none";
     this.renderer.gameLayer.addChild(overlay);
 
-    // Resolve faction data needed by multiple elements
-    const system = this.gameEngine?.galaxy?.systems.find((s) =>
-      s.planets.some((p) => p.id === this.planet!.id),
-    );
-    const faction = system?.ownerFaction ?? "INDEPENDENT";
-    const factionName = FACTION_RU[faction] ?? faction;
-    const factionColor = FACTION_COLOR[faction] ?? 0x999999;
-
     const planetCX = w / 2;
     const planetCY = Math.min(h * 0.22, PLANET_VISUAL_RADIUS + 10);
 
@@ -484,6 +518,7 @@ export class PlanetScene extends GameScene {
     }
 
     // Planet body: use texture variant or procedural gradient fallback
+    const prefix = planetTexturePrefix(this.planet.type);
     const planetTex = pickVariant("planets", prefix, this.planet.id);
     if (planetTex) {
       const sprite = new Sprite(planetTex);

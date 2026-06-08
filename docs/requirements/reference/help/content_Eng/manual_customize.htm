@@ -1,0 +1,170 @@
+<html><head>
+<script language="Javascript"><!--
+if (self.name=="menu") {location.href="menu.htm"; parent.cont.location="manual_customize.htm"}
+//--></script>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+<link rel="stylesheet" type="text/css" href="styles.css">
+<SCRIPT language="Javascript"> 
+<!-- 
+if (document.images) 
+{  
+img1on = new Image ;img1off = new Image; 
+img2on = new Image ;img2off = new Image; 
+ 
+img1on.src = "img/back1.gif";img1off.src = "img/back.gif";
+img2on.src = "img/forward1.gif";img2off.src = "img/forward.gif";
+} 
+function img_act(imgName) { 
+if (document.images) 
+{ imgOn = eval (imgName + "on.src"); 
+document [imgName].src = imgOn; } } 
+function img_inact(imgName) { 
+if (document.images) 
+{ imgOff = eval(imgName + "off.src"); 
+document [imgName].src = imgOff; } } 
+//--> 
+</SCRIPT>
+</head>
+
+<body onselectstart="document.selection.empty()" oncontextmenu="return false" bgcolor="#000000" leftmargin="0" topmargin="0" rightmargin="0" bottommargin="0" marginwidth="0" marginheight="0">
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="15"> </td>
+<td class="topnav"> 
+<div align="left"><a href="manual.htm" onClick=parent.delay() hidefocus="true">Ranger manual</a> &gt; <a href="manual_mainmenu.htm" onClick=parent.delay() hidefocus="true">Main menu screen</a> &gt; <a href="manual_mainmenu_newgame.htm" onClick=parent.delay() hidefocus="true"> New game
+</a> &gt; Advanced adjustment.
+</div>
+</td>
+<td class="topnav" width="20">&nbsp;</td>
+<td class="topnav" width="79" valign="top"><a href="manual_mainmenu_newgame.htm" onMouseOver="img_act('img1')" onMouseOut="img_inact('img1')" onClick=parent.delay() hidefocus="true"><img src="img/back.gif" width="79" height="20" name="img1" border="0" alt="Назад"></a></td>
+<td class="topnav" width="79" valign="top"><a href="manual_mainmenu_load.htm" onMouseOver="img_act('img2')" onMouseOut="img_inact('img2')" onClick=parent.delay() hidefocus="true"><img src="img/forward.gif" width="79" height="20" name="img2" alt="Вперед" border="0"></a></td>
+<td class="topnav" width="25">&nbsp;</td>
+</tr>
+</table>
+<br>
+<br>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td><span class="title2">Advanced adjustment</span><br><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><img src="img/spacer.gif" width="1" height="9"></td></tr></table><br>
+If you check the "advanced adjustment" option during new game creation, after pressing the “Next” button the advanced adjustment mode will be activated.
+ <br>
+<br>
+</td>
+</tr></table>
+<div align="center"><img src="img/customize_butt.jpg" width="590" height="150"></div>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td> 
+<p><br>
+You should notice, that activation of this mode leads to marking the save file with special flag, which makes impossible to accept such game record to the record table.
+ <br>
+
+
+<div align="center"><img src="img/custom_question.jpg" width="396" height="260"></div><br>
+If this is a no problem for you, hit the “Next” button and agree with the popup warning. After this, warning windows will close and the “Next” button moves you to advanced adjustment screen.
+<br>
+</p>
+
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<p> 
+After pressing the “Next” button, the window appears:
+
+<br>
+<div align="center"><img src="img/customize_window.jpg" width="679" height="498"></div>
+<br>
+
+
+There are several blocks of settings to adjust:
+<br><br>
+<b class="title1">Balance</b> <br><br>
+• <b>Dominator equipment  </b>- adjusts level of Dominators ship equipment. 
+<br><br>
+• <b> Dominator aggression  </b>- adjusts intensity of steel machines attacks and its rate.<br><br>
+• <b> Dominator reproduction speed  </b>- adjusts speed of building new Dominator ships.<br><br>
+• <b> Pirate aggression  </b>- adjusts intensity of pirate attacks and its rate.<br><br>
+• <b> Coalition level of activity  </b>- general parameter, adjusting rate of military operations..<br> The larger value means more activity for Coalition trying to free the star systems. Does not affect to ships amount and their equipment. 
+<br><br>
+• <b> Bonus to starting technologies  </b>- sets the level, which will be a starting point to a technology in a game Universe.  The maximum value means access to best equipment right away.
+<br><br>
+• <b> Number of extra rangers  </b>- on average, maximum number of rangers in game is equivalent  to amount of Coalition controlled systems, about one ranger for a system. This parameter gives you the power to increase the number of rangers.<br><br>
+• <b> Pirates, civilian and combat ships appear: With some starting experience / Without starting experience  </b>- sets, will the new-born ships have experience points. If the second option is selected, their skills won’t be evolved, otherwise the AI pilot can distribute experience and adjust their skills at own will.<br><br>
+• <b> Large-size hulls available to Coalition and pirate ships: From the start / As technologies develop  </b>- sets, how fast AI pilots starts to use heavy, armored but low-speed cruisers: from the beginning of the game, or later.<br><br>
+• <b> equipment, developed by other series, ank-and-file dominators: Available / Not available </b>- differentiates development of the Dominators-only weapons to its series. If “Not available” option selected, the Torpedo Tube will be only available to Blazer series, IMHO-900 to terron series, and Vertix to keller series.<br><br>
+• <b> Computer-controlled ships fire missiles and torpedoes: medium distance / From maximum distance /b>- - sets how far the AI pilot should be from its target to use missile-type weapons. 
+<br><br><br>
+<b class="title1">Galaxy
+</b> <br><br>
+• <b>Number of asteroids  </b>- amount of asteroids in space, 100%  - normal value.
+<br><br>
+• <b>Damage from stars  </b>- damage taken from the heat emitted by close star.
+.<br>  <br>
+• <b>Relative concentration of agrarian planets in the Galaxy  </b>- correlation between agrarian planets and planets with different economics type. Maximum value is 10, but crucial point is the ratio between all three economic types parameters. For example, if this setting sets to 10, and other two to 0, all planets in the Galaxy will be agrarian.<br><br>
+• <b>Location of the player's starting system: In a far corner / In the center  </b>- sets the position of the sector, where player will start. If the first option is selected, the sector will be placed at the outskirts of the Galaxy, and player’s home planet will be in on one of the capital systems. Otherwise, the player will start at random sector closest to the map center. 
+
+<br>  <br>
+• <b>• Relative concentration of industrial planets in the Galaxy </b>- - correlation between industrial planets and planets with different economics type. 
+	<br>  <br><br>
+
+<b class="title1">Misc
+</b> <br><br>
+• <b>Results of random events: Changes when loading a saved game / Does not change when loading a saved game </b>- turns off and on the possibility to change random generation value by loading a saved game.<br><br>
+• <b>Construction of stations: Close to center / In a random spot in the system </b>- sets the coordinates of space stations in the system..<br> <br>
+• <b> Far from the player's station: Skip fire / Fight normally  </b>- - if the first option is selected, stations will attack hostiles only one time of third. This will gave AI ships an advantage in attacks without player. Otherwise, station defense style won’t be changing as compared to seen by player himself.
+<br> <br>
+• <b>Space stations can receive new equipment: Only with the player's help / From own store </b>- by default (the first option), stations starting equipment will be used at it during the whole lifecycle of the base, and only the player can change, repair or upgrade it. The second option gives  stations the ability to refresh its equipment, using their own store. However, if player will do it by himself, while this option is active, the station will stop to use its store in future. 
+
+
+<br>  <br>
+• <b>Old unique hulls (Boline, Assassin, Rock): Exist in the game / Absent from the game 
+ </b>- three super-ships (Boline, Assassin, Rock), included in the game in “Reboot” addon are disabled by default in SR HD due to balance reasons, but you can return them, by setting this parameter.<br> <br>
+• <b>Amount of acrynic goods in store  </b>- sets the percentage of acrynic equipment at stations store. If the maximum value is set, stores will have only unique acrynic equip. <br> <br>
+• <b>Amount of nodes dropped by dominators </b>- sets the percentage of nodes, dropped by hitting dominators. 100% is a base value.
+ <br><br>
+• <b>Drop rate: Limited by tech level / Unlimited  </b>- ffects the loot, dropped by the dominators.<br> <br>
+• <b>Maximum cost of dropped items  </b>- affects the cost of loot, left after ship destruction. <br>  <br>
+• <b>Quality of equipment dropped by enemies in black holes </b>- affects the level of equipment, dropped after defeating all enemies in black hole.<br> <br>
+• <b>Enemy endurance in black holes  </b>- affects the black hole ship’s hull strength.<br> <br>
+• <b>Enemy damage in black holes  </b>- affects the black hole ship’s firepower.<br> <br>
+• <b>Enemies in black holes: Acting together / Feuding  </b>- if the second option is selected, enemies in black holes fights “deathmatch” mode, attacking each other and player. The first option is default, the only enemy for AI is the player.<br> <br>
+• <b>Amount of objects in the system after which the pilots begin to shoot them down  </b>- after reaching the selected amount of objects in the system, AI pilots starts to shoot it, however, goods will be left untouched, if the amount is lower than the selected threshold.<br> <br>
+• <b>Battles with hyper-pirates when traveling between systems: OFF / ON </b>- turns  on or off hyperspace travels between the systems like in original Space Rangers (with hyper-clots).<br> <br>
+• <b>Sale of nodes on pirate bases: ON / OFF </b>-  - if sets to “ON”, pirates will be glad to sell you some false nodes (for a credits, of course), which can be used like a genuine one.<br><br>
+• <b>Computer players<br>receive equipment: Through own channels / Buy in stores -  </b>- technical progress is always a challenge, so ship`s equipment becoming out of date, while the world growths. AI pilots needs to change it, so they can compete the player as before. For this need, they can use their own channels, which, basically, has more advanced equipment, than a store. If the second option is selected, computer pilots will be equate to the player, and will use only store items, devastating the store. So the player should be on the look-out, and don’t miss a good gun!    
+<br><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.<br>gif" height="9">
+<tr> 
+<td><img src="img/spacer.<br>gif" width="1" height="9"></td>
+</tr>
+</table><br>
+<b class="title1">Reset all</b> </b>-  is not a settings block, but a button, resetting all parameters to their default values.<br> 
+<br><br>
+
+<br><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table><br>
+After completing the adjustment, you should press the “Next” button in a right-bottom corner of the screen, and then world generation will begin.<br><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table><br>
+<br><img src="img/sage.gif" width="32" height="28" class="float">  You should also notice, that all settings are saved to a text file, so there is no need to remember it or adjust manually every time you starts a new game.
+
+
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table><br>
+<br>
+<br></body></html>

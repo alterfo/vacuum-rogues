@@ -1,194 +1,248 @@
-# Источник истины: дизайн-документ проекта
+# Source of Truth: Game Design Document
 
-> **Это канонический документ.** Все требования (эпики, user stories) и игровые
-> механики проекта выводятся отсюда. Если требование или код противоречат этому
-> описанию — прав этот документ, а требование/код считаются дефектом.
+> **This is the canonical document.** All requirements (epics, user stories) and game mechanics derive from here. If any requirement or code conflicts with this description — this document wins.
+>
+> **Copyright note.** Mechanics and structure are inspired by the original Space Rangers series, but all faction names, rank names, hull series names, and station type names are original. Original IP names are NOT used in any game asset or code.
 
-## 1. Жанр и суть
+---
 
-Космическая RPG/стратегия с открытым миром. Игрок — свободный капитан,
-перемещается по галактике: торгует, берёт квесты, исследует, сражается,
-прокачивает корабль. Глобальная цель — противостояние угрозе галактического
-масштаба.
+## §1 Genre and Core
 
-## 2. Устройство галактики
+A space RPG/strategy with an open world. The player is a free captain who moves across the galaxy: trading, taking quests, exploring, fighting, upgrading their ship. The global objective is to resist a galactic-scale threat — the **OVERMIND**.
 
-- Галактика поделена на **секторы**, в секторах — **звёздные системы**.
-- Карта галактики **генерируется при старте новой игры** (частично случайно,
-  частично по правилам) — детерминированно от seed.
-- Между системами — **гиперпрыжки** (быстрые переходы; с расходом топлива и времени).
-- Система = **звезда в центре + планеты на орбитах** (обитаемые и необитаемые).
+---
 
-## 3. Полёт в звёздной системе
+## §2 Galaxy Structure
 
-- **Вид сверху (top-down), 2D.**
-- **Пошаговый режим по игровым дням**: один ход ≈ один игровой день. Игрок
-  отдаёт приказы (курс, цель оружия), завершает ход, действие проигрывается.
-  мир статичен при планировании, дни/движение идут во время полёта.
-- Система **крупнее экрана**; целиком обозревается на **миникарте-радаре**.
-- В системе одновременно находятся **другие корабли** (см. §6), отображаемые
-  цветными маркерами по принадлежности.
-- По краю системы — **рубеж**, с которого совершается гиперпрыжок.
+- The galaxy is divided into **sectors**; each sector contains **star systems**.
+- The galaxy map is **generated at new game start** (partially random, partially rule-based) — deterministic from seed.
+- Between systems: **hyperjumps** (fast transitions; cost fuel and game days).
+- A system = **a star at the centre + planets in orbit** (habitable and uninhabitable).
 
-## 4. Экономика и торговля
+---
 
-- Единая валюта — **галактический кредит**.
-- На планетах/станциях: торговля товарами и трофеями, покупка оборудования,
-  получение заданий, новости, ремонт.
-- Цены зависят от **спроса/предложения** и **репутации с фракцией**; есть
-  легальные и нелегальные товары (контрабанда → штрафы/репутация).
+## §3 In-System Flight
 
-## 5. Фракции
+- **Top-down view (2D).**
+- **Turn-based by game days**: one turn ≈ one game day. The player issues orders (heading, weapon target), ends turn, action plays out. World is static while planning; days and movement happen during flight.
+- The system is **larger than the screen**; the full system is visible on the **minimap radar**.
+- Other ships are present simultaneously (see §6), shown as coloured markers by faction affiliation.
+- At the edge of the system — **the jump boundary**, from which a hyperjump is performed.
 
-| Фракция | Характер | Бонусы |
-|---------|----------|--------|
-| **Окраинники** (Outlanders) | Колонисты, торговцы | Торговля, ремонт, надёжность |
-| **Бастионы** (Bastions) | Воинственные | Урон, броня, военные технологии |
-| **Синдикат** (Syndicate) | Контрабандисты | Скрытность, скорость, чёрный рынок |
-| **Парадоксы** (Paradoxes) | Загадочные | Уникальные модули, непредсказуемость |
-| **Прогрессоры** (Progressors) | Исследователи | Технологии, дроны, наука |
+---
 
-- Плюс **независимые/пираты** (INDEPENDENT) и **угроза** (OVERMIND — древняя цивилизация).
-- **Репутация** с каждой фракцией влияет на отношение, цены и доступ к услугам.
+## §4 Economy and Trade
 
-## 6. Живая вселенная (ключевой принцип)
+- Single currency — **galactic credit**.
+- On planets/stations: trade in goods and trophies, purchase equipment, accept quests, news, repair.
+- Prices depend on **supply/demand** and **reputation with the faction**; there are legal and illegal goods (contraband → fines/reputation penalty).
 
-Мир живёт **независимо от игрока**:
+---
 
-- **NPC-капитаны** летают между системами, берут и выполняют квесты, торгуют,
-  прокачиваются, сражаются.
-- **Пираты** грабят торговые суда; **патрули** их преследуют.
-- **Торговцы** возят товары между системами, влияя на рынки.
-- Происходят **глобальные события**: захваты систем, перевороты, вторжения.
-- Игрок — лишь один из множества акторов, а не центр мира.
+## §5 Factions
 
-→ В нашем проекте это **EPIC-003 «Живая галактика»** (Feature 8).
+> Ordered by technology level (lowest → highest). English IDs are used in code.
 
-## 7. Корабль, оборудование, бой
+| Tech | Code | Russian Name | Character | Gameplay Bonuses |
+|------|------|-------------|-----------|-----------------|
+| Low | `BASTIONS` | **Бастионы** | Militarists; cult of strength; large, powerful | High damage, heavy armour, military tech |
+| Low-Med | `SYNDICATE` | **Синдикат** | Pirates, smugglers, spies; cunning and quick | Stealth, speed, black market access |
+| Medium | `OUTLANDERS` | **Окраинники** | Colonists, traders, diplomats; versatile | Trade bonuses, repair, reliability |
+| High | `PROGRESSORS` | **Прогрессоры** | Researchers, innovators, intellectuals; physically frail | Advanced tech, drones, science modules |
+| Maximum | `PARADOXES` | **Парадоксы** | Enigmatic; highest tech; unpredictable | Unique modules unavailable elsewhere |
 
-- **Корпус** определяет число слотов оборудования и прочность; **трюм** — грузо-
-  вместимость.
-- **Оборудование** имеет уровни качества и производителей (по фракциям).
-- **Ремонт** корпуса и дозаправка — на планетах/станциях.
-- **Космический бой** между кораблями в системе.
-- **Планетарные бои** — отдельный режим (низкий приоритет).
+- Plus **independent/pirates** (`INDEPENDENT`) and **the threat** (`OVERMIND` — ancient civilisation, final antagonist).
+- **Reputation** with each faction affects attitude, prices, and access to services.
 
-## 8. Квесты и репутация
+---
 
-- Квесты выдаются **правительствами планет и другими структурами**.
-- Типы: доставка, охота за головами, эскорт, дипломатия, исследование.
-- Выполнение → награда (кредиты/предметы) и изменение **репутации**.
-- У квестов бывают **сроки** (дедлайны по игровым дням).
-- **Текстовые квесты** — фирменная черта оригинала: квест-новелла с ветвлением,
-  где игрок читает ситуацию и выбирает действия, исход зависит от выбора (и
-  навыков/ресурсов). У нас это направление усиливается **локальной диалоговой
-  ONNX-моделью** (см. EPIC-005): ситуации и реплики генерируются, а не только
-  выбираются из фикс-вариантов. Это ключевой дифференциатор проекта.
+## §6 Living Universe (key principle)
 
-## 9. Соответствие проекту (карта компонентов)
+The world lives **independently of the player**:
 
-| Механика | Где у нас |
-|----------|-----------|
-| Галактика, системы, гиперпрыжки | `Galaxy`, `StarSystem`, `WarpPath`, `StarMapScene` |
-| Полёт в системе (top-down, дни) | `SpaceFlightScene`, `Galaxy.gameDays` |
-| Миникарта-радар | `SystemMiniMap` → EPIC-004 |
-| Крупный масштаб системы | `PlanetGenerator.ORBITAL_RADII` → EPIC-004 |
-| Торговля/рынок | `TradeSystem`, `Market`, `TradeScene` (EPIC-001) |
-| Бой | `CombatSystem`, `TacticalEncounter`, `CombatScene` (EPIC-002) |
-| Фракции/репутация | `FactionRegistry`, `Faction`, `Player.reputation` |
-| Живая вселенная (NPC) | `NpcShip`, `NpcSimulator`, `NpcBrain` → EPIC-003 |
-| Квесты | `QuestManager`, `Quest` |
-| Диалоги/NPC на планетах | `DialogueSystem`, `NPC`, `DialogueScene` |
+- **NPC captains** fly between systems, take and complete quests, trade, level up, fight.
+- **Pirates** raid trading ships; **patrols** chase them.
+- **Traders** carry goods between systems, affecting markets.
+- **Global events** happen: system conquests, coups, invasions.
+- The player is just one of many actors, not the centre of the world.
 
-## 10. Технические особенности
+→ In our project this is **EPIC-003 "Living Galaxy"**.
 
-- **Платформа**: браузер, PixiJS 8, локальные ONNX-модели для диалогов/AI.
-- **Гиперпрыжки**: не мгновенные — стоят топлива и времени.
-- **Пошаговость**: мир паузится во время планирования; дни идут во время полёта.
-- **Планетарные бои**: низкий приоритет / отложены.
-- **OVERMIND** — древняя угроза (финальный босс).
+---
 
-## 11. Дайджест механик планет, кораблей и станций
+## §7 Ship, Equipment, Combat
 
-> Сведено из руководства оригинала **в наших словах**, без проприетарных имён
-> (расы → наши фракции, «доминаторы» → OVERMIND, конкретные имена корпусов/
-> модулей/оружия/рангов **не переносятся** — придумываем свои). Источник лежит
-> локально вне репозитория (`reference_help/`, в `.gitignore`).
+- The **hull** determines the number of equipment slots and structural HP; the **cargo hold** — capacity.
+- **Equipment** has quality levels and manufacturers (by faction). Higher-tech faction = more expensive but more durable.
+- **Repair** of the hull and refuelling — at planets/stations.
+- **Space combat** between ships in-system.
+- **Planetary battles** — separate mode (low priority, deferred).
 
-### 11.1 Экран планеты (хаб услуг)
-- После посадки — вид планеты + инфо-панель: раса/фракция-владелец, политсистема,
-  эконом-тип, население, **отношение к игроку**.
-- **Население** влияет на ассортимент товаров и оборудования.
-- **Эконом-тип** задаёт уровни цен: аграрная (дёшево еда/медикаменты/алкоголь),
-  индустриальная (дёшево техника/предметы роскоши), смешанная (средние).
-- **Политсистема** (анархия/диктатура/монархия/республика/демократия) задаёт
-  **легальность** части товаров (контрабанда: наркотики/алкоголь и т.п.).
-- **Отношение/репутация** гейтит услуги: при плохом — нельзя торговать/покупать/
-  входить в инфоцентр; спец-квесты правительства — только при хорошем; есть
-  взятка чиновнику; за враждебность — «тюрьма» (штраф/потеря времени).
-- Кнопки хаба: торговый центр, магазин оборудования, ангар, инфоцентр,
-  правительство (диалог), взлёт.
+### 7.1 Hull Series (8 tiers, our names)
 
-### 11.2 Торговый центр
-- ~8 групп товаров (еда, медикаменты, оборудование, роскошь, минералы, алкоголь,
-  оружие, контрабанда). Покупка/продажа; подсказки выгодности (👍/👎).
-- Ограничения: не купить дороже денег и больше свободного объёма трюма.
-- Цена продажи на той же планете всегда ниже покупки (см. [US-006]); прибыль —
-  от перевозки между планетами с разными ценами.
+| Tier | Our Name | Type Bias | Slots | HP |
+|------|----------|-----------|-------|-----|
+| T1 | Lightweight | Scout | 2–3 | Low |
+| T2 | Standard | All-rounder | 3–4 | Medium |
+| T3 | Reinforced | Fighter | 4–5 | Medium-High |
+| T4 | Heavy | Transport / Cruiser | 4–6 | High |
+| T5 | Advanced | All-rounder | 5–6 | High |
+| T6 | Elite | Combat | 6–7 | Very High |
+| T7 | Prototype | Any | 6–8 | Very High |
+| T8 | Legendary | Any | 7–9 | Maximum |
 
-### 11.3 Магазин оборудования и снаряжение корабля
-- Продаются **стандартное оборудование** и **оружие**. Ассортимент зависит от
-  фракции и её тех-уровня; цена — от параметров, **размера** и **качества**
-  (меньше + качественнее = дороже).
-- **Тех-уровни** оборудования: 8 ступеней (наши обозначения, напр. T1–T8).
-- **Корпус = корабль**: вместимость (= очки прочности) + число слотов
-  (открытые/закрытые); деление на **серии корпусов** (~8). Тип корабля (боевой/
-  торговый/…) задаёт число оружейных/прочих слотов.
-- Стандартное оборудование: двигатель, топливные баки, радар, сканер, дроид
-  (чинит корпус в полёте), грейфер/захват (берёт груз), генератор защитного поля.
-- **Микромодули**: 3 уровня силы (ур.1 — макс. бонус); модифицируют параметры
-  предмета; **один на предмет, снять нельзя**; часть несовместима с фракциями;
-  источники: станции-крафта, исследование планет, награды квестов, трофеи.
-- **Оружие**: типы с принципом действия (энергия/осколки/ракеты), уроном и
-  дальностью; часть лучше для тактического боя в космосе, часть — для аркадного.
+Hull HP = hull volume (size units). Damage formula: `dmg = shot_power × (1 - shield%) - armour_bonus`.
 
-### 11.4 Ангар (ремонт/заправка/взлёт)
-- Робот-ассистент показывает статус ключевых компонентов (корпус/двигатель/баки):
-  «Тест системы: … Корабль к взлёту готов».
-- Действия: ремонт корпуса (если повреждён), заправка (если бак не полон), взлёт.
-- **Нельзя взлететь без двигателя и топливных баков.** Можно осмотреть нутро
-  чужих кораблей.
+### 7.2 Standard Equipment Slots
 
-### 11.5 Инфоцентр
-- Лента новостей галактики (падения цен, освобождение систем от OVERMIND,
-  где появились пираты/торговцы, события). Можно «закладывать» новость.
-- Поиск местоположения любого значимого объекта (корабль/планета/станция/
-  оборудование в магазине).
+| Slot | Code | Key Parameter |
+|------|------|---------------|
+| Engine | `ENGINE` | Speed, maneuverability |
+| Fuel tank | `FUEL_TANK` | Capacity, jump range |
+| Radar | `RADAR` | Detection radius |
+| Scanner | `SCANNER` | Enemy equipment reveal depth |
+| Repair droid | `REPAIR_DROID` | In-flight HP/day |
+| Cargo hook/grabber | `GRABBER` | Debris/cargo pickup |
+| Shield generator | `SHIELD_GEN` | Shield HP |
+| Weapon | `WEAPON` | Damage, range, type |
 
-### 11.6 Космические станции
-- В отличие от планет — **фиксированы в точке** (могут отстреливаться/улетать при
-  атаке). Услуги как на планете (торговля/магазин/инфоцентр), но у каждого типа —
-  свои особенности. ~6 типов (наши названия): крафт-центр (микромодули),
-  научная база (исследования/разовый апгрейд оборудования), военная база (ранги),
-  пиратская, медицинская, деловой центр.
+### 7.3 Weapons
 
-### 11.7 Взаимодействие с NPC в космосе
-- **Разговор**: торговцы рассказывают откуда/куда летят и уровень цен; пираты/
-  рейнджеры — советы/угрозы по отношению. Можно: торговать, запугать (отнять
-  деньги/груз), заключить союз, **нанять рейнджера в напарники** и отдавать приказы.
-- **Сканирование**: сканер против защитного поля цели → видно установленное
-  оборудование/оружие (важно перед боем); зависит от радара/дальности.
+| Type | Code | Principle | Advantage |
+|------|------|-----------|-----------|
+| Energy | `ENERGY` | Beam/laser | Accurate, instant |
+| Kinetic | `KINETIC` | Shells/projectiles | Good vs armour |
+| Missile | `MISSILE` | Homing | Long range |
 
-### 11.8 Ранги и прогресс
-- Уничтожение кораблей даёт очки; набор → новый ранг на военной базе; после
-  получения счёт обнуляется. Лестница рангов (наши названия) до «адмирала».
+### 7.4 Micromodules
 
-### 11.9 Текст-квесты (см. EPIC-005)
-- «Живая книга» с ветвлением; две категории: логические (задача/головоломка) и
-  атмосферные (вжиться в жизнь планеты). У нас — поверх ONNX-нарратора.
+- 3 power levels: `MM1` (strongest bonus per slot), `MM2`, `MM3`.
+- Modifies one parameter of one item; **cannot be removed after installation**.
+- Sources: craft stations, planet exploration rewards, quest rewards, combat trophies.
+- Some micromodules are faction-locked.
 
-## Источники
+---
 
-> Дата фиксации: 2026-01-XX. Раздел 11 сведён из локального руководства оригинала
-> (`reference_help/`, вне репо) — механики/идеи в наших словах, имена не переносятся.
-> При расширении требований дополняйте этот раздел.
+## §8 Quests and Reputation
+
+- Quests are issued by **planet governments and other entities**.
+- Types: delivery (`DELIVERY`), bounty (`BOUNTY`), escort (`ESCORT`), diplomacy (`DIPLOMACY`), exploration (`EXPLORATION`).
+- Completion → reward (credits/items) and **reputation change**.
+- Quests have **deadlines** (in game days).
+- **Text quests** — a signature feature: quest-novel with branching choices; outcome depends on choice (and stats/resources). Enhanced by a **local ONNX dialogue model** (EPIC-005): situations and lines are generated, not just selected from fixed variants. This is the project's key differentiator.
+
+---
+
+## §9 Component Map
+
+| Mechanic | Where in our code |
+|----------|------------------|
+| Galaxy, systems, hyperjumps | `Galaxy`, `StarSystem`, `WarpPath`, `StarMapScene` |
+| In-system flight (top-down, turns) | `SpaceFlightScene`, `Galaxy.gameDays` |
+| Minimap radar | `SystemMiniMap` (EPIC-004) |
+| Large system scale | `PlanetGenerator.ORBITAL_RADII` (EPIC-004) |
+| Trade / market | `TradeSystem`, `Market`, `TradeScene` (EPIC-001) |
+| Combat | `CombatSystem`, `TacticalEncounter`, `CombatScene` (EPIC-002) |
+| Factions / reputation | `FactionRegistry`, `Faction`, `Player.reputation` |
+| Living universe (NPC) | `NpcShip`, `NpcSimulator`, `NpcBrain` (EPIC-003) |
+| Quests | `QuestManager`, `Quest`, `QuestDirector` |
+| Dialogues / NPC on planets | `DialogueSystem`, `NPC`, `DialogueScene` |
+| Text quests (ONNX) | `TextQuestEngine`, `ONNXModelRegistry` (EPIC-005) |
+| Game title / branding | `GameConfig.GAME_TITLE` = "Вакуумные Пройдохи" |
+
+---
+
+## §10 Technical Specifics
+
+- **Platform**: browser, PixiJS 8, local ONNX models for dialogue/AI.
+- **Hyperjumps**: not instant — cost fuel and time.
+- **Turn-based**: world pauses while planning; days run during flight.
+- **Planetary battles**: low priority / deferred.
+- **OVERMIND** — ancient threat (final boss).
+- **Save system**: IndexedDB, Zod validation, migration pipeline.
+
+---
+
+## §11 Planet Hub: Service Digest
+
+> Derived from the reference manual in our own words. No proprietary names transferred.
+
+### 11.1 Planet Screen (service hub)
+
+- After landing: planet view + info panel: faction-owner, political system, economy type, population, **player attitude**.
+- **Population** influences goods and equipment range.
+- **Economy type** sets price tiers: agrarian (cheap food/medicine/alcohol), industrial (cheap tech/luxury), mixed (average).
+- **Political system** (anarchy/dictatorship/monarchy/republic/democracy) sets **legality** of some goods (contraband: drugs/alcohol/etc.).
+- **Attitude/reputation** gates services: poor attitude → no trading/buying/infocenter access; government special quests → only with good reputation.
+- Hub buttons: Trade Centre, Equipment Shop, Hangar, Info Centre, Government (dialogue), Take Off.
+
+### 11.2 Trade Centre
+
+- ~8 commodity groups (food, medicine, equipment, luxury, minerals, alcohol, weapons, contraband). Buy/sell; value indicators (↑/↓).
+- Constraints: cannot buy more than available credits or free hold capacity.
+- Sell price on the same planet always lower than buy price (see US-006); profit comes from inter-system transport.
+
+### 11.3 Equipment Shop and Ship Fitting
+
+- Standard equipment and weapons for sale. Range depends on faction and tech level; price depends on parameters, **size**, and **quality** (smaller + higher quality = more expensive).
+- **Hull = ship**: capacity (= HP) + number of slots (open/closed). Hull **series** (~8 tiers, T1–T8).
+- Ship type (combat/trade/…) defines the number of weapon and other slots.
+- Micromodules: see §7.4.
+
+### 11.4 Hangar (repair / refuel / launch)
+
+- Robot assistant shows status of key components (hull/engine/tanks): "System check: … Ship ready for launch."
+- Actions: repair hull (if damaged), refuel (if tank not full), launch.
+- **Cannot launch without engine and fuel tanks.**
+
+### 11.5 Info Centre
+
+- Galaxy news feed (price drops, system liberations from OVERMIND, pirate/trader appearances, events). Can bookmark a news item.
+- Search for any significant object's location (ship/planet/station/equipment in shop).
+
+### 11.6 Space Stations
+
+Unlike planets, stations are **fixed in space** (can fire at attackers or flee). Same services as planets but each type has its speciality.
+
+| Our Name | Code | Key Specialty |
+|----------|------|---------------|
+| Craft Centre | `CRAFT_STATION` | Micromodule fabrication, node collection, ranger classification |
+| Research Base | `RESEARCH_BASE` | OVERMIND research, probe manufacture, one-time equipment upgrade |
+| Military Base | `MILITARY_BASE` | Ranks / rank rewards, best weapon sales, combat briefings |
+| Pirate Base | `PIRATE_BASE` | All goods incl. contraband; used equipment; identity change |
+| Medical Station | `MEDICAL_STATION` | Illness diagnosis/treatment, temporary bio stimulants |
+| Trade Hub | `TRADE_HUB` | Credits, investments, insurance, trade optimisation research |
+
+### 11.7 NPC Interaction in Space
+
+- **Conversation**: traders report origin/destination and price levels; pirates/rangers — advice/threats by attitude. Options: trade, intimidate (take money/cargo), form alliance, **hire a ranger as companion**.
+- **Scanning**: scanner vs target's shield → reveals installed equipment/weapons (important pre-combat); depends on radar range.
+
+### 11.8 Ranks and Progression
+
+Ship kills award combat points; reaching a threshold → new rank at a Military Base; score resets after promotion. Rank ladder (our names, low → high):
+
+| Rank | Code | Points to Reach |
+|------|------|----------------|
+| Rookie | `RANK_ROOKIE` | Start |
+| Cadet | `RANK_CADET` | +100 |
+| Pilot | `RANK_PILOT` | +250 |
+| Captain | `RANK_CAPTAIN` | +450 |
+| Fighter | `RANK_FIGHTER` | +750 |
+| Ace | `RANK_ACE` | +1000 |
+| Commander | `RANK_COMMANDER` | +1500 |
+| Admiral | `RANK_ADMIRAL` | +2000 |
+
+Kill point awards (reference-calibrated, our values):
+- Small fast ship: 1 pt · Medium warship: 12 pt · Heavy cruiser: 24–48 pt
+- Liberate system from OVERMIND: +30 pt · Pirate: +10 pt
+
+### 11.9 Text Quests (see EPIC-005)
+
+"Living book" with branching choices; two categories: logical (puzzle/task) and atmospheric (immersive vignette). Enhanced by ONNX narrator: situations and NPC lines are generated, not just selected from fixed variants.
+
+---
+
+## §12 Sources
+
+> Mechanics and ideas in our own words; no proprietary names from the original game are used in any code, asset, or player-facing text. The reference manual is stored locally outside the repo (`reference/help/`, in `.gitignore`).

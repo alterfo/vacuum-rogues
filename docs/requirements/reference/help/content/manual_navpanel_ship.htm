@@ -1,0 +1,250 @@
+<html><head>
+<script language="Javascript"><!--
+if (self.name=="menu") {location.href="menu.htm"; parent.cont.location="manual_navpanel_ship.htm"}
+//--></script>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+<link rel="stylesheet" type="text/css" href="styles.css">
+<SCRIPT language="Javascript"> 
+<!-- 
+if (document.images) 
+{  
+img1on = new Image ;img1off = new Image; 
+img2on = new Image ;img2off = new Image; 
+ 
+img1on.src = "img/back1.gif";img1off.src = "img/back.gif";
+img2on.src = "img/forward1.gif";img2off.src = "img/forward.gif";
+} 
+function img_act(imgName) { 
+if (document.images) 
+{ imgOn = eval (imgName + "on.src"); 
+document [imgName].src = imgOn; } } 
+function img_inact(imgName) { 
+if (document.images) 
+{ imgOff = eval(imgName + "off.src"); 
+document [imgName].src = imgOff; } } 
+//--> 
+</SCRIPT>
+</head>
+
+<body onselectstart="document.selection.empty()" oncontextmenu="return false" bgcolor="#000000" leftmargin="0" topmargin="0" rightmargin="0" bottommargin="0" marginwidth="0" marginheight="0">
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="15"> </td>
+<td class="topnav"> 
+<div align="left"><a href="manual.htm" onClick=parent.delay() hidefocus="true">Руководство рейнджера</a> &gt; <a href="manual_navpanel.htm" onClick=parent.delay() hidefocus="true">Панель 
+навигации </a> &gt; Корабль (S)</div>
+</td>
+<td class="topnav" width="20">&nbsp;</td>
+<td class="topnav" width="79" valign="top"><a href="manual_navpanel_endofturn.htm" onMouseOver="img_act('img1')" onMouseOut="img_inact('img1')" onClick=parent.delay() hidefocus="true"><img src="img/back.gif" width="79" height="20" name="img1" border="0" alt="Назад"></a></td>
+<td class="topnav" width="79" valign="top"><a href="manual_navpanel_camouflage.htm" onMouseOver="img_act('img2')" onMouseOut="img_inact('img2')" onClick=parent.delay() hidefocus="true"><img src="img/forward.gif" width="79" height="20" name="img2" alt="Вперед" border="0"></a></td>
+<td class="topnav" width="25">&nbsp;</td>
+</tr>
+</table>
+<br>
+<br>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td><span class="title2">Корабль (S)</span><br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9"><tr>
+<td><img src="img/spacer.gif" width="1" height="9"></td></tr></table><br>
+В этом окне вы видите себя и свой корабль. Вверху указаны основные характеристики 
+корабля: защита, количество свободного места, масса и скорость. В центре окна 
+показаны корпус корабля, а также <a href="guide_equipment.htm" onClick=parent.delay() hidefocus="true">оборудование</a> 
+и <a href="guide_weapon.htm" onClick=parent.delay() hidefocus="true">вооружение</a>, установленные в специальные слоты. 
+Внизу можно видеть предметы, лежащие в трюме. В правой части окна показаны имя 
+пилота, его портрет, характер, летное звание, награды и развитые <a href="#skills" hidefocus="true">навыков</a>.<br>
+</td>
+</tr></table>
+<br>
+<div align="center"><img src="img/ship.jpg" width="640" height="618"><br>
+<br>
+</div>
+
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="30" valign="top"><img src="img/spacer.gif" width="30" height="1"></td>
+<td> 
+<img src="img/sage.gif" width="32" height="28" class="float">В окне корабля нажатие <b>Ctrl</b> + цифра <b>1</b>, <b>2</b> или <b>3</b> запоминает конфигурацию оборудования, нажатие цифры, с которой нажималась клавиша <b>Ctrl</b>, восстанавливает комплектацию. Или сохранение и восстановление комплектации осуществляется кнопками расположенными в верхней части корабля. Удобство использования очевидно. Например, одна конфигурация для того чтобы вести боевые действия, вторая для полетов, третья для гиперпрыжков.<br>
+<span class="beige">Внимание!</span> Все оборудование, которое используется при смене конфигурации, должно находиться в трюме. Также на складе оставленное оборудование использованное в создании конфигурации, но корабль игрока должен находиться на планете или базе, где находится этот склад. Иначе находящееся на складе оборудование не установиться.
+<br><br>
+Предметы можно перекладывать из слотов в трюм и обратно (<strong>Alt+правый клик</strong>). Для удобного просмотра содержимого трюма его можно "развернуть" соответствующей кнопкой, расположенной в правом нижнем углу.
+<br><br>При клике <strong>правой кнопкой мыши</strong> по какой-либо единице оборудования (например, радару) - она будет автоматически установлена в подходящий слот корпуса, при условии, что он существует и не занят.<br>
+<div align="center"><img src="img/ship_hold.jpg" width="640" height="597"><br>
+</div>
+Предметы в трюме можно сортировать по типу, весу и цене. Достаточно нажать соответствующую кнопку.<br><br><br>
+Находясь на планете, предметы можно продавать, выбрасывать, чинить или класть на склад.<br>
+<span class="beige">Примечание</span>. В корпусах могут быть активными 
+не все слоты. Это зависит от <a href="guide_hull.htm" onClick=parent.delay() hidefocus="true">серии корабля</a>. В центре закрытого слота можно различить 
+надпись n/a. С помощью некоторых видов <a href="guide_artefacts.htm" onClick=parent.delay() hidefocus="true">нестандартного 
+оборудования</a> (артефактов), <a href="guide_micromodules.htm" onClick=parent.delay() hidefocus="true">микромодулей</a> можно увеличить количество активных слотов.<br><br>
+
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<span class="beige"><br>
+Внимание!</span> Для того чтобы оборудование работало, оно должно быть установлено 
+в соответствующий слот. Двигатель должен быть установлен в слот двигателя, сканер 
+- в слот сканера, а осколочное орудие - в оружейный слот. Оборудование или вооружение, 
+лежащее в трюме, не функционирует!<br>
+<br>
+<span class="title1">Чтобы установить предмет из трюма в слот:</span> <br>
+1. Возьмите этот предмет, щелкнув по нему мышкой. Курсор мыши примет вид руки, 
+держащей выбранный предмет, а слоты, в которые можно установить этот предмет, 
+будут подсвечены. <br>
+2. Щелкните по тому подсвеченному слоту, который вам нужен.<br>
+<br>
+Кстати, есть и другой, более быстрый способ - можно кликнуть <strong>правой кнопкой мыши</strong> по нужному предмету, и если в корпусе есть подходящий слот, и он свободен, то выбранная единица оборудования автоматически будет установлена!<br><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<a name="rep"></a><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td> <img src="img/servicecenter.jpg" width="123" height="300" class="float"><br>
+На планетах и станциях рядом с окном корабля вы увидите окно &quot;Сервисного 
+центра&quot;.<br>
+<br><span class="title1">
+Чтобы продать или починить предмет:</span> <br>
+1. Находясь на планете, щелкните мышкой по этому предмету, чтобы взять его. Курсор 
+мыши примет вид руки, держащей выбранный предмет, и в левой части экрана, в окне 
+"Сервисный центр" откроются люки "Продажа" и "Починка", а для топливного бака 
+- еще и "Заправка".<br>
+2. Положить предмет в соответствующий люк. <br>
+<br>
+<span class="beige">Примечание</span>. Если предмет цел (не требует починки), 
+то люк "Починка" не будет открываться. <br>
+<br>
+<span class="title1">Чтобы зарядить ракетное оружие:</span> <br>
+1. Щелчком мыши возьмите ракетное оружие, которое собираетесь зарядить. Курсор 
+мыши примет вид руки, держащей выбранное оружие, и в левой части экрана, в окне 
+"Сервисный центр" откроется люк "Зарядка".<br>
+2. Положить оружие в люк.
+<br>
+<span class="beige">Совет</span>. Быстрая зарядка всех ракетных орудий осуществляется нажатием соответствующих клавиш: всё оружие в слотах - клавиша <b>U</b>, всё оружие в трюме - клавиша <b>Y</b>.<br>
+<span class="beige">Примечание</span>. Окно частичной <i>заправки/зарядки</i> появляется при удержании клавиши <b>CTRL</b>. <br>
+<br>
+<span class="title1">Чтобы положить предмет на склад:</span> <br>
+1. Щелчком мыши возьмите предмет, который собираетесь оставить на складе. Курсор 
+мыши примет вид руки, держащей выбранный предмет.<br>
+2. Перетащите его в раздвигающуюся нижнюю часть окошка "Сервисный центр". <br>
+3. Кликните по свободному слоту. 
+</td>
+</tr>
+</table>
+<br><br>
+<img src="img/sage.gif" width="32" height="28" class="float">
+Быстрое перемещение предмета из трюма на склад: щелчок правый кнопкой мыши на предмете в трюме с зажатой клавишей <b>Shift</b>.<br>
+Быстрое перемещение предмета из склада в трюм: щелчок правый кнопкой мыши на предмете на складе с зажатой клавишей <b>Shift</b>.<br>
+Быстрое перемещение всех предметов из трюма на склад: нажатие клавиш <b>Ctrl</b> + <b>I</b>.<br>
+Быстрое перемещение всех предметов из склада в трюм: нажатие клавиш <b>Ctrl</b> + <b>O</b>.<br>
+
+
+
+<br><br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<br>
+<span class="title1">Чтобы выбросить предмет:</span> <br>
+1. Возьмите этот предмет щелчком мышки по нему. Курсор мыши примет вид руки, держащей 
+выбранный предмет.<br>
+2. Перетащите его в раздвижной слот "Выбросить". <br>
+3. Кликните по слоту с открытыми створками, чтобы избавиться от предмета. <br>
+<br>
+<span class="beige">Примечание</span>. Имейте в виду, что если вы выбросите двигатель 
+или бак, то корабль не сможет летать. А выбросив захват, нельзя будет поднять 
+на борт ни одного предмета.<br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<img src="img/activpanel.jpg" width="160" height="171" class="float"><br>
+<br>
+Некоторое нестандартное оборудование можно активировать в специальном слоте активации. 
+Этот слот появится слева от основного окна корабля, когда вы возьмете в руку предмет 
+с такими возможностями. </td>
+</tr>
+</table>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<br>
+При наведении курсора на тот или иной элемент появляется всплывающее окошко с 
+кратким описанием этого элемента. Например, можно просмотреть характеристики любого 
+оборудования или предмета у вас на борту. Или узнать, сколько необходимо заработать 
+очков для получения очередного летного звания или навыка. <br>
+<br>
+<span class="title1">Чтобы узнать, сколько очков вам остается до очередного летного 
+звания:</span> <br>
+Подведите курсор к эмблеме летного звания в правой части экрана. <br>
+<span class="beige">Примечание</span>. Новое звание не будет присвоено вам автоматически, 
+для его получения вам необходимо посетить военную базу. <br>
+<br>
+<span class="title1">Чтобы узнать, сколько нужно опыта для улучшения конкретного 
+навыка:</span> <br>
+Подведите курсор к иконке соответствующего навыка в правой части экрана. <br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<a name="skills"><br>
+<span class="title2">Описание навыков пилотов:</span></a><br>
+<br>
+<span class="title1"><img src="img/skill1.jpg" width="29" height="29"> Точность</span><br>
+Навык точности, развитый у пилота до 100%, позволяет наносить противнику максимально 
+возможный урон. Например, если в характеристиках орудия сказано, что оно наносит 
+24-36 повреждений, то при 100% навыке будет наноситься 36 единиц повреждений.<br>
+<br>
+<span class="title1"><img src="img/skill2.jpg" width="29" height="29"> Маневренность</span><br>
+Пилот со 100% маневренностью получает в бою минимальные повреждения. Если маневренность 
+и точность сторон совпадают, то наносится случайное повреждение в диапазоне силы 
+действия оружия. <small>(Подробнее о том, как вычисляются повреждения, в зависимости 
+от навыков &quot;Маневренность&quot; и &quot;Точность&quot;, смотрите в разделе 
+&quot;<a href="manual_space_weaponshot.htm#detail" hidefocus="true">Стрельба из орудий</a>&quot;.</small>) 
+<br>
+<br>
+<span class="title1"><img src="img/skill3.jpg" width="29" height="29"> Знание 
+техники</span><br>
+Знание техники, развитое у пилота до максимума, снижает скорость износа оборудования и дает возможность контролировать до 7 исследовательских <a href="manual_exploration.htm#satellite" hidefocus="true">зондов</a>.<br>
+<br>
+<span class="title1"><img src="img/skill4.jpg" width="29" height="29"> Торговля</span><br>
+Навык торговли, развитый у пилота до максимума, позволяет продавать оборудование почти по его фактической стоимости.<br>
+<br>
+<span class="title1"><img src="img/skill5.jpg" width="29" height="29"> Обаяние</span><br>
+Обаяние пилота, развитое до максимума, смягчает негативную реакцию окружающих 
+на ваши поступки в 2 раза. И в 2 раза усиливает положительную реакцию. Кроме того, 
+благодаря развитому обаянию увеличивается и сумма вознаграждений за выполненные 
+задания. <br>
+<br>
+<span class="title1"><img src="img/skill6.jpg" width="29" height="29"> Лидерство</span><br>
+Лидерство, развитое до максимума, позволяет иметь в своем подчинении до 5 других 
+рейнджеров. При определенном уровне пиратского рейтинга, позволяет иметь в своем подчинении до 5 пиратов. Однако при проведении переговоров по найму надо учитывать, что вышестоящий по званию рейнджер или пират не станет подчиняться нижестоящему.<br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+<br>
+<br>
+</body></html>

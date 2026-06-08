@@ -1,0 +1,367 @@
+<html><head>
+<script language="Javascript"><!--
+if (self.name=="menu") {location.href="menu.htm"; parent.cont.location="robotbattles_equipment.htm"}
+//--></script>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+<link rel="stylesheet" type="text/css" href="styles.css">
+<SCRIPT language="Javascript"> 
+<!-- 
+if (document.images) 
+{  
+img1on = new Image ;img1off = new Image; 
+img2on = new Image ;img2off = new Image; 
+ 
+img1on.src = "img/back1.gif";img1off.src = "img/back.gif";
+img2on.src = "img/forward1.gif";img2off.src = "img/forward.gif";
+} 
+function img_act(imgName) { 
+if (document.images) 
+{ imgOn = eval (imgName + "on.src"); 
+document [imgName].src = imgOn; } } 
+function img_inact(imgName) { 
+if (document.images) 
+{ imgOff = eval(imgName + "off.src"); 
+document [imgName].src = imgOff; } } 
+//--> 
+</SCRIPT>
+</head>
+
+<body onselectstart="document.selection.empty()" oncontextmenu="return false" bgcolor="#000000" leftmargin="0" topmargin="0" rightmargin="0" bottommargin="0" marginwidth="0" marginheight="0">
+
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td width="15">
+</td> 
+<td class="topnav">
+<div align="left"><a href="robotbattles.htm" onClick=parent.delay() hidefocus="true">Планетарные 
+бои</a> &gt; Оборудование</div>
+</td>
+<td class="topnav" width="20">&nbsp;</td>
+<td class="topnav" width="79" valign="top"><a href="robotbattles_strategy.htm" onMouseOver="img_act('img1')" onMouseOut="img_inact('img1')" onClick=parent.delay() hidefocus="true"><img src="img/back.gif" width="79" height="20" name="img1" border="0" alt="Назад"></a></td>
+<td class="topnav" width="79" valign="top"><a href="robotbattles_buildings.htm" onMouseOver="img_act('img2')" onMouseOut="img_inact('img2')" onClick=parent.delay() hidefocus="true"><img src="img/forward.gif" width="79" height="20" name="img2" alt="Вперед" border="0"></a></td>
+<td class="topnav" width="25">&nbsp;</td>
+</tr>
+</table>
+<br><br>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td width="40" valign="top"><img src="img/spacer.gif" width="40" height="1"></td>
+<td><span class="title2">Оборудование</span><br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<br>
+Роботы состоят из нескольких частей: <a href="#hull" hidefocus="true">корпуса</a>, <a href="#ch" hidefocus="true">шасси</a>, 
+<a href="#w" hidefocus="true">оружия</a> и <a href="#mod" hidefocus="true">модуля</a>. Корпус и шасси - обязательные 
+части, которые присутствуют в любом роботе, а оружие и модули можно добавлять 
+по желанию. <br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<span class="title1"><a name="hull"></a></span><br>
+<span class="title1">Корпуса</span> <br>
+<small>Количество активных слотов под оружие зависит от корпуса.</small><br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td width="140" valign="top"><img src="img/robots/hull1.jpg" width="119" height="85"></td>
+<td> <b>Моностек</b> <br>
+Один слот под основной тип оружия.<br>
+Броня: Легкая.</td>
+</tr></table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/hull2.jpg" width="108" height="88"></td>
+<td> <b>Бирекс</b> <br>
+Один слот под основной тип оружия и один под дополнительный тип оружия. <br>
+Броня: Легкая. </td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/hull3.jpg" width="104" height="121"></td>
+<td> <b>Диплоид</b> <br>
+Два слота под основной тип оружия. <br>
+Броня: Средняя. </td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/hull4.jpg" width="107" height="90"></td>
+<td> <b>Парагон</b> <br>
+Два слота под основной тип оружия и один под дополнительный тип оружия. <br>
+Броня: Средняя. </td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/hull5.jpg" width="93" height="124"></td>
+<td> <b>Трайдент</b> <br>
+Три слота под основной тип оружия. <br>
+Броня: Тяжелая. </td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/hull6.jpg" width="119" height="108"></td>
+<td> <b>Фулстек</b> <br>
+Все возможные типы оружия. <br>
+Броня: Тяжелая. </td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<a name="ch"></a><br>
+<span class="title1">Шасси</span> <br>
+<small>На скоростные характеристики робота влияют шасси.</small><br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/ch1.jpg" width="103" height="114"></td>
+<td> <b>Пневматика</b> <br>
+Шагающий механизм пневматического принципа действия, с виду напоминает ноги гуманоида. 
+Проходит по любой поверхности, кроме глубоководных мест. <br>
+</td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/ch2.jpg" width="137" height="109"></td>
+<td> <b>Колеса</b> <br>
+Бронированные колеса. Представляет собой три пары широких колес с глубоким протектором. 
+Проходят по любой поверхности, кроме глубоководных мест. <br>
+</td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/ch3.jpg" width="134" height="108"></td>
+<td> <b>Траки</b> <br>
+Самый медленный вид шасси с гусеничным принципом действия. Оснащается дополнительной 
+ультратитановой броней. <br>
+</td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/ch4.jpg" width="120" height="106"></td>
+<td> <b>Экроплан</b> <br>
+Сочетают в себе максимальную проходимость и хорошую скорость. Использует принцип 
+нагнетания воздуха под корпус – «воздушной подушки». <br>
+</td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/ch5.jpg" width="82" height="112"></td>
+<td> <b>Антигравы</b> <br>
+В области антигравитации доминаторы добились больших успехов. Изобретенный ими 
+вид шасси дает роботу максимально возможную скорость и проходимость. </td>
+</tr>
+</table>
+<br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<a name="mod"></a><br>
+<span class="title1">Модули</span> <br>
+<small>Дополнительные возможности реализуются в роботе с помощью модулей.</small><br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top">
+<div align="center"><img src="img/robots/mod1.jpg" width="68" height="54"></div>
+</td>
+<td> <b>Блокиратор</b> <br>
+Используя гранулярный принцип диффузии металлов, покрывает поверхность корпуса 
+дополнительным слоем брони, увеличивая его прочность на 30 единиц.<br>
+</td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top">
+<div align="center"><img src="img/robots/mod2.jpg" width="62" height="64"></div>
+</td>
+<td> <b>Динамо</b> <br>
+По сути - является гиниромасленным насосом. Прокачивает масло по всем узлам машины, 
+смазывая их и значительно увеличивая отвод тепла, что уменьшает перегрев оружия 
+на 20%, увеличивает его скорострельность на 20% и скорость шасси на 20%. <br>
+</td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top">
+<div align="center"><img src="img/robots/mod3.jpg" width="52" height="66"></div>
+</td>
+<td> <b>Локатор</b> <br>
+Усиливает локационные возможности робота и снижает помехи. Увеличивает дальность 
+стрельбы на 20% и радиус действия радара - на 50%. <br>
+</td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top">
+<div align="center"><img src="img/robots/mod4.jpg" width="75" height="62"></div>
+</td>
+<td> <b>Фаервол</b> <br>
+Излучает направленные помехи и тем самым сбивает электронные блоки наведения на 
+цель - уменьшает количество попаданий на 50%. Блокирует действия разрядника, повреждение 
+от оружия &quot;Ликвидатор&quot; на 30% меньше. <br>
+</td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<a name="w"></a><br>
+<span class="title1">Оружие</span> <br>
+<br>
+В планетарных битвах существует два типа орудий: <br>
+1. Восемь видов <span class="beige">основных орудий</span> - те, что устанавливаются 
+в передние пазы для орудий. <br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/w1.jpg" width="106" height="66"></td>
+<td> <b>Пулемет</b> <br>
+Скорострельное оружие. Стреляет 20-ти миллиметровыми снарядами. Значительная часть 
+современной брони достаточно эффективна против этого оружия. </td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/w2.jpg" width="131" height="74"></td>
+<td> <b>Пушка</b><br>
+Оружие средней мощности. Производит выстрелы снарядами с плазменными боеголовками. 
+При попадании в цель плазменный заряд прожигает броню. </td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/w3.jpg" width="101" height="83"></td>
+<td> <b>Ракетница</b> <br>
+Удачное сочетание цены и качества. Долго перезаряжается, но пробивает любые виды 
+брони. Представляет серьезную угрозу при совмещении нескольких ракетниц в одной 
+боевой единице. </td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/w4.jpg" width="107" height="80"></td>
+<td> <b>Огнемет</b> <br>
+Термическое оружие - выбрасывает мощную струю пламени. Очень малый радиус действия, 
+но воспламененная цель будет гореть длительное время, пока не выгорит горючая 
+жидкость. </td>
+</tr>
+</table>
+<br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/w5.jpg" width="104" height="62"></td>
+<td> <b>Лазер</b> <br>
+Поражает цель мощным тепловым лучом, прожигая и даже расплавляя броню. Сильно 
+нагревается во время стрельбы и долго остывает. </td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/w6.jpg" width="104" height="82"></td>
+<td> <b>Плазмоган</b> <br>
+Стреляет сгустками плазмы с высокой скоростью. За счет внешнего образования плазмы 
+очень незначительно нагревается. Дальность стрельбы оптимальная. </td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/w7.jpg" width="106" height="80"></td>
+<td> <b>Разрядник</b> <br>
+Генерирует направленный электромагнитный импульс, подавляя управляющие сигналы 
+движущей системы. Позволяет полностью обездвижить противника. </td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/w8.jpg" width="123" height="102"></td>
+<td> <b>Ремонтник</b> <br>
+Скорее, не орудие, а ремонтное оборудование. Это устройство выброса наноботов, 
+восстанавливающих поврежденные части роботов. Обычно интегрируется на роботе без 
+других видов оружия. </td>
+</tr>
+</table>
+<br>
+2. Два вида <span class="beige">дополнительных орудий</span> - те, что устанавливаются 
+в заплечный отсек для орудий. <br>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/w9.jpg" width="83" height="93"></td>
+<td> <b>Миномет</b> <br>
+Мощное оружие. Длительная перезарядка, но при точном попадании наносит большие 
+повреждения. </td>
+</tr>
+</table>
+<br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="140" valign="top"><img src="img/robots/w0.jpg" width="92" height="94"></td>
+<td> <b>Атомная бомба</b> <br>
+Мощное средство уничтожения - уничтожает и носителя, и все, что находится вокруг 
+него. Используется быстроходными роботами-камикадзе или в крайних случаях. </td>
+</tr>
+</table>
+<br>
+</td>
+</tr></table>
+<div align="center"> </div>
+<table width="95%" border="0" cellspacing="0" cellpadding="0">
+<tr> 
+<td width="5%" valign="top"><img src="img/spacer.gif" width="25" height="1"></td>
+<td> <br>
+<table width="100%" border="0" cellspacing="0" cellpadding="0" background="img/dot.gif" height="9">
+<tr> 
+<td><img src="img/spacer.gif" width="1" height="9"></td>
+</tr>
+</table>
+<br>
+</td>
+</tr>
+</table>
+</body></html>

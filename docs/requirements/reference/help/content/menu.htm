@@ -1,0 +1,148 @@
+<HTML><HEAD>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+<style type="text/css">
+<!--
+a:link { color: #E1E1E1; text-decoration: none }
+a:visited { color: #E1E1E1; text-decoration: none }
+a:hover { color: #C9FF73; text-decoration: none }
+.toc { z-index: 1; visibility: hidden; position: absolute; }
+.TOCITEM { font-size: 11px; z-index: 1; cursor: hand; color: #818181; font-family: Verdana, Geneva, Arial, Helvetica, sans-serif; }
+
+body  {
+scrollbar-face-color:#000000;
+scrollbar-arrow-color:#1A889D;
+scrollbar-track-color:#000000;
+scrollbar-shadow-color:#1A889D;
+scrollbar-highlight-color:#1A889D;
+scrollbar-3dlight-color:#000000;
+scrollbar-darkshadow-Color:#000000;
+}
+-->
+</style>
+<SCRIPT language=JavaScript src="js/menu.js"></SCRIPT>
+<SCRIPT language=JavaScript>
+var t	= [
+	new Array(0," "),
+	new Array(1,"<font color='#FFBC3D'><b>Начало</b></font>","beginning.htm"),
+	new Array(2,"Вступление","beginning_introduction.htm"),
+	new Array(2,"Особенности и новшества КР2","beginning_features.htm"),
+	new Array(2,"Новшества аддона Перезагрузка","addon_features.htm"),
+	new Array(2,"Новшества  КР HD: Революция","hd_features.htm"),
+	new Array(2,"Системные требования","beginning_requirements.htm"),
+	new Array(2,"Перечень горячих клавиш","beginning_hotkeys.htm"),
+	new Array(3,"Главное меню","beginning_hotkey_main.htm"),
+	new Array(3,"Системное меню","beginning_hotkey_system.htm"),
+	new Array(3,"Космос","beginning_hotkey_space.htm"),
+	new Array(3,"Планета, Космические станции","beginning_hotkey_planet.htm"),
+	new Array(3,"Незаселённая планета","beginning_hotkey_unplanet.htm"),
+	new Array(3,"Гиперпространство","beginning_hotkey_hyperspace.htm"),
+	new Array(3,"Планетарные бои","beginning_hotkey_planetbattles.htm"),
+	new Array(2,"Установка и запуск игры","beginning_startgame.htm"),
+	new Array(1,"<font color='FFBC3D'><b>Руководство рейнджера</b></font>","manual.htm"),/* РУКОВОДСТВО РЕЙНДЖЕРА */
+	new Array(2,"Экран главного меню","manual_mainmenu.htm"),
+	new Array(3,"Новая игра","manual_mainmenu_newgame.htm"),
+	new Array(4,"Тонкая настройка","manual_customize.htm"),
+	new Array(3,"Загрузить игру","manual_mainmenu_load.htm"),
+	new Array(3,"Рекорды","manual_mainmenu_records.htm"),
+	new Array(3,"Настройки","manual_mainmenu_preferences.htm"),
+	new Array(2,"Панель навигации","manual_navpanel.htm"),
+	new Array(3,"Системное меню (Esc)","manual_navpanel_sysmenu.htm"),
+	new Array(3,"Конец хода (Space)","manual_navpanel_endofturn.htm"),
+	new Array(3,"Корабль (S)","manual_navpanel_ship.htm"),
+	new Array(4,"Камуфляж (K)","manual_navpanel_camouflage.htm"),
+	new Array(3,"Рейтинг рейнджеров (R)","manual_navpanel_rating.htm"),
+	new Array(3,"Галактическая карта (M)","manual_navpanel_map.htm"),
+	new Array(3,"Бортовой журнал (F1)","manual_navpanel_journal.htm"),
+	new Array(2,"Экран планеты","manual_planet.htm"),
+	new Array(3,"Здание правительства (G)","manual_planet_gov.htm"),
+	new Array(3,"Магазин оборудования (E)","manual_planet_equipmentshop.htm"),
+	new Array(3,"Торговый центр (T)","manual_planet_tradecenter.htm"),
+	new Array(3,"Информационный центр (I)","manual_planet_infocenter.htm"),
+	new Array(3,"Ангар (H)","manual_planet_hangar.htm"),
+	new Array(2,"Экран космоса","manual_space.htm"),
+	new Array(3,"Радар","manual_space_radar.htm"),
+	new Array(3,"Сканирование (I)","manual_space_scan.htm"),
+	new Array(3,"Разговор (T)","manual_space_talk.htm"),
+	new Array(3,"Полет","manual_space_fly.htm"),
+	new Array(3,"Посадка","manual_space_landing.htm"),
+	new Array(3,"Преследование","manual_space_follow.htm"),
+	new Array(3,"Прыжок к звезде","manual_space_jump.htm"),
+	new Array(3,"Подъем предмета","manual_space_takecargo.htm"),
+	new Array(3,"Оружейная панель (W)","manual_space_weaponpanel.htm"),
+	new Array(3,"Стрельба из орудий","manual_space_weaponshot.htm"),
+	new Array(2,"Экран истории полетов","manual_history.htm"),
+	new Array(2,"Экран аркадной битвы","manual_arcadebattle.htm"),
+	new Array(2,"Экран квеста","manual_quest.htm"),
+	new Array(2,"Экран исследования планет","manual_exploration.htm"),
+	new Array(1,"<font color='FFBC3D'><b>Справочник</b></font>","guide.htm"),/* СПРАВОЧНИК */
+	new Array(2,"Космические объекты","guide_spaceobjects.htm"),
+	new Array(2,"Космические станции","guide_spacestations.htm"),
+	new Array(3,"Антидоминаторские программы","guide_spacestations_soft.htm"),
+	new Array(3,"Болезни и стимуляторы","guide_spacestations_disease&drugs.htm"),
+	new Array(2,"Корабли","guide_ships.htm"),
+	new Array(2,"Расы","guide_races.htm"),
+	new Array(2,"Звания во флоте Коалиции","guide_ranks.htm"),
+	new Array(2,"Звания в пиратской среде","guide_ranks_pirate.htm"),
+	new Array(2,"Стандартное оборудование","guide_equipment.htm"),
+	new Array(2,"Нестандартное оборудование","guide_artefacts.htm"),
+	new Array(2,"Уникальное оборудование","guide_aqryn.htm"),
+	new Array(2,"Секретное оборудование","guide_secret.htm"),
+	new Array(2,"Виды оружия","guide_weapon.htm"),
+ 	new Array(3,"Модификации вооружения","guide_weapon_mods.htm"),
+	new Array(2,"Серии корпусов","guide_hull.htm"),
+	new Array(2,"Микромодули","guide_micromodules.htm"),
+	new Array(2,"Планетарные квесты","guide_quests.htm"),
+	new Array(2,"Медали","guide_medals.htm"),
+	new Array(2,"Стартовые условия","startcond/index.htm"),
+	new Array(3,"Малок — Воин","startcond/m-v.htm"),
+	new Array(3,"Малок — Наемник","startcond/m-n.htm"),
+	new Array(3,"Малок — Торговец","startcond/m-t.htm"),
+	new Array(3,"Малок — Корсар","startcond/m-k.htm"),
+	new Array(3,"Малок — Пират","startcond/m-p.htm"),
+	new Array(3,"Пеленг — Воин","startcond/p-v.htm"),
+	new Array(3,"Пеленг — Наемник","startcond/p-n.htm"),
+	new Array(3,"Пеленг — Торговец","startcond/p-t.htm"),
+	new Array(3,"Пеленг — Корсар","startcond/p-k.htm"),
+	new Array(3,"Пеленг — Пират","startcond/p-p.htm"),
+	new Array(3,"Человек — Воин","startcond/h-v.htm"),
+	new Array(3,"Человек — Наемник","startcond/h-n.htm"),
+	new Array(3,"Человек — Торговец","startcond/h-t.htm"),
+	new Array(3,"Человек — Корсар","startcond/h-k.htm"),
+	new Array(3,"Человек — Пират","startcond/h-p.htm"),
+	new Array(3,"Фэянин — Воин","startcond/f-v.htm"),
+	new Array(3,"Фэянин — Наемник","startcond/f-n.htm"),
+	new Array(3,"Фэянин — Торговец","startcond/f-t.htm"),
+	new Array(3,"Фэянин — Корсар","startcond/f-k.htm"),
+	new Array(3,"Фэянин — Пират","startcond/f-p.htm"),
+	new Array(3,"Гаалец — Воин","startcond/g-v.htm"),
+	new Array(3,"Гаалец — Наемник","startcond/g-n.htm"),
+	new Array(3,"Гаалец — Торговец","startcond/g-t.htm"),
+	new Array(3,"Гаалец — Корсар","startcond/g-k.htm"),
+	new Array(3,"Гаалец — Пират","startcond/g-p.htm"),
+	new Array(1,"<font color='FFBC3D'><b>Планетарные бои</b></font>","robotbattles.htm"),
+	new Array(2,"Основной экран","robotbattles_main.htm"),
+	new Array(2,"Конструктор роботов","robotbattles_constructor.htm"),
+	new Array(2,"Постройка турелей","robotbattles_turrets.htm"),
+	new Array(2,"Ручной режим управления","robotbattles_manual.htm"),
+	new Array(2,"Стратегический режим управления","robotbattles_strategy.htm"),
+	new Array(2,"Оборудование","robotbattles_equipment.htm"),
+	new Array(2,"Здания","robotbattles_buildings.htm"),
+	new Array(2,"Карты","robotbattles_map.htm")
+];
+var T = new toc(5,-23, t,'cont',-1);
+T.build();
+onload = init;
+function init(){
+	T.activate();
+	parent.MainMenu=T;
+	T.DABSelectByUrl(parent.cont.location.toString());
+}
+</SCRIPT>
+</HEAD>
+<BODY bgColor="#000000" leftMargin=0 topMargin=0 marginwidth="0" marginheight="0" onselectstart="document.selection.empty()" oncontextmenu="return false">
+<SCRIPT language=JavaScript>
+document.write(T.div);
+document.write(T.scripts);
+</SCRIPT>
+</BODY></HTML>
+

@@ -7,20 +7,22 @@
       "size": [1024, 1024],
       "tileable": true,
       "upscale": true,
-      "template": "Seamless tileable deep-space nebula texture, abstract diffuse glowing gas clouds filling the entire frame edge to edge, evenly distributed with no central object and no focal point, scattered ember cores, fine star dust, {palette} palette, {layer}, dark near-black space, flat even lighting, digital matte painting texture",
-      "negative": "black hole, accretion disk, central object, focal point, vortex, swirl center, symmetrical composition, planet, sun, star with rays, spaceship, character, vignette, horizon, ground",
+      "steps": 40,
+      "cfg": 7.0,
+      "template": "Hubble Space Telescope photograph, NASA astrophotography, real deep space nebula, {palette} narrow-band false color composite, hydrogen-alpha emission, ionized gas clouds, cosmic dust pillars, fine pinpoint stars scattered throughout, {layer}, photorealistic scientific photograph, no focal point, no central object, diffuse and spread across entire frame, ultra-detailed, 8k",
+      "negative": "painting, illustration, artwork, digital art, drawing, anime, cartoon, render, 3d, cgi, painterly, stylized, planet sphere, sun, black hole, spacecraft, person, character, horizon, ground, central bright object, vortex spiral, symmetrical, frame border, vignette, oversaturated",
       "name_order": ["palette", "layer"],
       "axes": {
         "palette": {
-          "red": "fiery red-orange and gold",
-          "blue": "deep blue and cyan",
-          "green": "olive-green and amber",
-          "teal": "teal and emerald"
+          "red": "deep crimson and amber, hydrogen-alpha red emission, warm gold dust lanes",
+          "blue": "deep blue and cyan, oxygen-III OIII emission, cold blue ionized plasma",
+          "green": "teal-green and gold, sulfur-II emission mixed with oxygen, bioluminescent-like glow",
+          "teal": "teal and emerald, cool blue-green emission nebula, dark molecular cloud contrast"
         },
         "layer": {
-          "far": "very faint subtle low-contrast haze, mostly empty dark space",
-          "mid": "moderate evenly spread clouds",
-          "near": "denser bright wispy clouds"
+          "far": "extremely faint barely visible transparent wispy haze, very low opacity gas, mostly black empty space with subtle ghost clouds, dim",
+          "mid": "moderate diffuse gas clouds spread evenly across frame, mid-density pillars and filaments, no dominant center",
+          "near": "dense bright glowing gas clouds with sharp detail, vivid color, thick nebular pillars and wisps"
         }
       }
     },
@@ -59,6 +61,24 @@
           "volcanic": "black basalt rock veined with glowing orange and yellow lava rivers and cracks, volcanic terrain seen from directly overhead",
           "industrial": "dense grey metal plating with sprawling glowing yellow city lights, planet-wide megacity seen from directly overhead at night",
           "habitat": "lush green terraced farmland with winding rivers, lakes and fields, seen from directly overhead"
+        }
+      }
+    },
+    "star_maps": {
+      "size": [1024, 512],
+      "variants": 6,
+      "steps": 42,
+      "cfg": 7.5,
+      "template": "Seamless equirectangular surface texture of {type}, ultra close-up macro photograph of stellar plasma, solar granulation cells, boiling convective plasma, solar prominences arching out, coronal loops, plasma jets erupting from surface, photorealistic NASA solar telescope imagery, extreme detail, flat even lighting, fills entire 2:1 rectangular frame edge to edge with no border",
+      "negative": "planet, space background, stars in background, black background, sphere shape, globe, circle, disc, dark background, vignette, planet silhouette, text, watermark, grid, frame, border, margins",
+      "name_order": ["type"],
+      "axes": {
+        "type": {
+          "yellow": "a yellow G-type main sequence star, golden-orange plasma granulation, bright photosphere, warm sunspot regions",
+          "red_dwarf": "an M-type red dwarf star, deep crimson plasma, dim cool photosphere, prominent magnetic field arcs",
+          "blue_giant": "an O-type blue supergiant star, intense white-blue plasma, extreme UV radiation glow, fierce energy",
+          "neutron": "a highly magnetized neutron star, hot plasma jets, extreme X-ray surface emission, glowing magnetic poles",
+          "white_dwarf": "a hot white dwarf stellar remnant, pale blue-white dense plasma surface, subtle convection cells"
         }
       }
     },
@@ -124,6 +144,27 @@
           "radar_bezel": "a circular radar minimap bezel ring",
           "bottom_bar": "a wide horizontal command bar with button slots",
           "tooltip": "a small rounded tooltip card frame"
+        }
+      }
+    },
+    "panoramas": {
+      "size": [2048, 512],
+      "upscale": true,
+      "steps": 40,
+      "cfg": 7.0,
+      "template": "Ultra-wide cinematic panorama, standing on an alien planet surface looking at the horizon, {scene}, photorealistic, sci-fi, dramatic sky, sense of vast scale, sharp foreground detail fading to distant horizon, no people, no UI, no text, 8k, hyperdetailed",
+      "negative": "top-down, aerial view, map, satellite, overhead, portrait, person, character, watermark, text, frame, border, fisheye, vignette, blurry, low quality",
+      "name_order": ["scene"],
+      "axes": {
+        "scene": {
+          "outlanders_city": "frontier colony settlement, dust plains, low buildings with glowing signs, twin moons rising on the horizon, warm orange sky at dusk",
+          "bastions_city": "militaristic fortress city, massive stone walls and gun towers, red stormy sky, volcanic mountains in the distance, searchlights sweeping",
+          "syndicate_city": "neon-lit underground megacity carved into a canyon, acid-yellow smog sky, dense holographic advertisements, gritty industrial aesthetic",
+          "progressors_city": "gleaming futuristic research campus, bioluminescent jungle surrounding pristine white towers, two suns in the sky, serene and advanced",
+          "paradoxes_city": "alien crystalline city, impossible non-Euclidean architecture, iridescent purple and gold, reality-bending sky, floating geometric structures",
+          "wilderness_jungle": "lush alien jungle, enormous bioluminescent plants, glowing spores drifting, dense canopy with light rays piercing through, exotic fauna silhouettes",
+          "wilderness_tundra": "frozen arctic tundra, cracked ice plains stretching to the horizon, aurora borealis in the sky, blizzard on the horizon, desolate and beautiful",
+          "wilderness_desert": "vast alien desert, towering red rock formations, three moons in the day sky, dust storm on the horizon, ancient ruins half-buried in sand"
         }
       }
     },

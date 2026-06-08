@@ -1,0 +1,82 @@
+body  {
+font-family: Verdana, Arial, Helvetica, sans-serif;
+font-size: 12px;
+color : #F1F1F1;
+margin: 0px;
+background-color: #000000;
+
+scrollbar-face-color:#000000;
+scrollbar-arrow-color:#1A889D;
+scrollbar-track-color:#000000;
+scrollbar-shadow-color:#1A889D;
+scrollbar-highlight-color:#1A889D;
+scrollbar-3dlight-color:#000000;
+scrollbar-darkshadow-Color:#000000;
+}
+
+table, td {
+font-family: Verdana, Arial, Helvetica, sans-serif;
+text-decoration: none;
+font-size: 12px;
+color : #D4D4D4;
+text-align: justify}
+
+.toptable {
+background-position: top center;
+background-repeat: repeat-y}
+
+A:link  {
+color : #38C9FF; text-decoration: underline; }
+
+A:visited  {
+color : #38C9FF; text-decoration: underline; }
+
+A:hover  {
+color : #C9FF73; text-decoration: underline; }
+
+.date {  
+font-size : 11px; 
+color: #C9FF73; font-weight: bold}
+
+.copyrights {  
+font-size : 11px; 
+text-decoration : none; color: #80909A}
+.copyrights  A  {color: #80909A; text-decoration: none}
+.copyrights  A:Visited {color: #80909A; text-decoration: none}
+.copyrights  A:Hover {color: #F26522; text-decoration: none}
+
+.topnav {  
+font-size : 10px; 
+text-decoration : none; color: #136C87}
+.topnav  A  {color: #136C87; text-decoration: none}
+.topnav  A:Visited {color: #136C87; text-decoration: none}
+.topnav  A:Hover {color: #00FFFF; text-decoration: none}
+
+.exit {  
+font-size : 10px; 
+text-decoration : none; color: #000000; font-weight: bold}
+.exit  A  {color: #000000; text-decoration: none}
+.exit  A:Visited {color: #000000; text-decoration: none}
+.exit  A:Hover {color: #00FFFF; text-decoration: none}
+
+.title1 {  
+text-decoration : none; color: #A5F9FF; font-weight: bold}
+
+.title2 {  
+text-decoration : none; color: #FFBC3D; font-weight: bold}
+
+.beige {
+color: #FFF5B0}
+
+.center {
+background-position: center}
+
+.float {  
+float: left; margin-right: 20px; margin-bottom: 10px}
+
+
+.param { color:#FF0000; text-align:center; }
+.level { color:#CC9999; }
+.light { color:#FFD700; }
+.battime { color:#9999CC; }
+.vol { color:#DAA520; }
