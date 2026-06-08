@@ -69,17 +69,17 @@
 **Files:**
 - Modify: `src/presentation/TextQuestScene.ts`
 
-- [ ] Подключить `QuestVM` к `TextQuestScene`: принимает `QuestScript` через `context`
-- [ ] Layout (без Canvas-координат): верхняя 60% — панель описания (`Text`, wordWrap,
+- [x] Подключить `QuestVM` к `TextQuestScene`: принимает `QuestScript` через `context`
+- [x] Layout (без Canvas-координат): верхняя 60% — панель описания (`Text`, wordWrap,
   fontSize из `fontScale`, белый текст, scrollable если не влезает); нижняя 40% —
   кнопки переходов (до 6 штук, `UiButton` из Sprint 3 Task 6)
-- [ ] Правая панель (180px): список `showInUI` параметров с именем и значением;
+- [x] Правая панель (180px): список `showInUI` параметров с именем и значением;
   числовые — с прогресс-баром если `min/max` заданы
-- [ ] При `autoExecute=true` переход выполняется автоматически через 800ms с анимацией «...»
-- [ ] На `isSuccess` → toast «Квест выполнен!» + `transitionTo(PLANET)` через 2 сек
-- [ ] На `isFailure` → toast «Провал.» + кнопка «Попробовать снова» (re-init VM с тем же seed)
-- [ ] Escape закрывает квест (возврат к планете без результата)
-- [ ] `npm test -- --run` + `npm run lint` — без регрессий
+- [x] При `autoExecute=true` переход выполняется автоматически через 800ms с анимацией «...»
+- [x] На `isSuccess` → toast «Квест выполнен!» + `transitionTo(PLANET)` через 2 сек
+- [x] На `isFailure` → toast «Провал.» + кнопка «Попробовать снова» (re-init VM с тем же seed)
+- [x] Escape закрывает квест (возврат к планете без результата)
+- [x] `npm test -- --run` + `npm run lint` — без регрессий
 
 ### Task 3: Квест «Таможня» (логика + ресурсы)
 

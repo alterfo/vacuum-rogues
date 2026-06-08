@@ -3,8 +3,10 @@ import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { TextQuest, QuestNode, QuestChoice, QuestOutcome } from "@/types";
+import type { QuestScript } from "@/systems/quests/QuestScript";
 import { SceneType } from "@/types";
 import { TextQuestRuntime } from "@/systems/quests/TextQuestRuntime";
+import { QuestVM } from "@/systems/quests/QuestVM";
 import type { NarratorContext } from "@/ai/adapters/QuestNarrator";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
 import { logger } from "@/utils/logger";
@@ -12,6 +14,8 @@ import { logger } from "@/utils/logger";
 export interface TextQuestContext {
   gameEngine?: GameEngine;
   quest?: TextQuest;
+  questScript?: QuestScript;
+  seed?: number | string;
   returnScene?: SceneType;
   returnContext?: object;
 }
@@ -29,6 +33,16 @@ export class TextQuestScene extends GameScene {
   private narrationText: Text | null = null;
   private choiceContainer: Container | null = null;
 
+  // QuestVM path
+  private vm: QuestVM | null = null;
+  private vmSeed: number | string = 0;
+  private questScript: QuestScript | null = null;
+  private vmNarrationText: Text | null = null;
+  private vmChoiceContainer: Container | null = null;
+  private vmParamPanel: Container | null = null;
+  private autoExecuteTimer: ReturnType<typeof setTimeout> | null = null;
+  private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
+
   constructor(renderer: Renderer) {
     super(renderer);
   }
@@ -37,11 +51,25 @@ export class TextQuestScene extends GameScene {
     const ctx = context as TextQuestContext | undefined;
     this.gameEngine = ctx?.gameEngine ?? null;
     this.quest = ctx?.quest ?? null;
+    this.questScript = ctx?.questScript ?? null;
+    this.vmSeed = ctx?.seed ?? Date.now();
     this.returnScene = ctx?.returnScene ?? SceneType.PLANET;
     this.returnContext = ctx?.returnContext ?? {};
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
+
+    if (this.questScript) {
+      this.vm = new QuestVM(this.questScript, this.vmSeed);
+      this.boundKeyDown = this.onVmKeyDown.bind(this);
+      window.addEventListener("keydown", this.boundKeyDown);
+      this.buildVmLayout();
+      this.renderVmLocation();
+      logger.info(
+        `TextQuestScene: started VM quest "${this.questScript.title}"`,
+      );
+      return;
+    }
 
     if (!this.quest) {
       logger.warn("TextQuestScene: no quest in context — returning");
@@ -74,14 +102,373 @@ export class TextQuestScene extends GameScene {
   update(_dt: number): void {}
 
   destroy(): void {
+    if (this.boundKeyDown) {
+      window.removeEventListener("keydown", this.boundKeyDown);
+      this.boundKeyDown = null;
+    }
+    if (this.autoExecuteTimer !== null) {
+      clearTimeout(this.autoExecuteTimer);
+      this.autoExecuteTimer = null;
+    }
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
     this.uiContainer = null;
     this.narrationText = null;
     this.choiceContainer = null;
+    this.vm = null;
+    this.questScript = null;
+    this.vmNarrationText = null;
+    this.vmChoiceContainer = null;
+    this.vmParamPanel = null;
     this.gameEngine = null;
     this.quest = null;
     this.currentNode = null;
+  }
+
+  // ── QuestVM Layout & Rendering ───────────────────────────────────────────────
+
+  private buildVmLayout(): void {
+    const w = this.renderer.app.screen.width;
+    const h = this.renderer.app.screen.height;
+    const RIGHT_W = 192;
+    const CONTENT_W = w - RIGHT_W - 8;
+
+    const bg = new Graphics();
+    bg.rect(0, 0, w, h);
+    bg.fill({ color: 0x020510, alpha: 0.97 });
+    this.renderer.gameLayer.addChild(bg);
+
+    const ui = new Container();
+    this.uiContainer = ui;
+    this.renderer.uiLayer.addChild(ui);
+
+    // Title
+    const title = new Text({
+      text: this.questScript?.title ?? "",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 18,
+        fill: 0xff99ff,
+        fontWeight: "bold",
+      },
+    });
+    title.anchor.set(0, 0);
+    title.x = 16;
+    title.y = 12;
+    title.eventMode = "none";
+    ui.addChild(title);
+
+    const sep = new Graphics();
+    sep.rect(8, 40, CONTENT_W - 8, 1);
+    sep.fill({ color: 0xff99ff, alpha: 0.3 });
+    ui.addChild(sep);
+
+    // Description panel (top 60% of content area, below title)
+    const contentTop = 48;
+    const contentH = h - contentTop - 8;
+    const descH = Math.floor(contentH * 0.58);
+
+    const descBg = new Graphics();
+    descBg.rect(8, contentTop, CONTENT_W - 16, descH);
+    descBg.fill({ color: 0x05101c, alpha: 0.85 });
+    descBg.stroke({ color: 0xff99ff, width: 1, alpha: 0.2 });
+    ui.addChild(descBg);
+
+    const narText = new Text({
+      text: "...",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 14,
+        fill: 0xddeeff,
+        wordWrap: true,
+        wordWrapWidth: CONTENT_W - 48,
+        lineHeight: 22,
+      },
+    });
+    narText.x = 24;
+    narText.y = contentTop + 12;
+    narText.eventMode = "none";
+    this.vmNarrationText = narText;
+    ui.addChild(narText);
+
+    // Button area (bottom 40%)
+    const btnAreaY = contentTop + descH + 8;
+    const choiceArea = new Container();
+    choiceArea.x = 8;
+    choiceArea.y = btnAreaY;
+    this.vmChoiceContainer = choiceArea;
+    ui.addChild(choiceArea);
+
+    // Right panel — parameters
+    const paramBg = new Graphics();
+    paramBg.rect(w - RIGHT_W, 0, RIGHT_W, h);
+    paramBg.fill({ color: 0x040c18, alpha: 0.92 });
+    paramBg.stroke({ color: 0x334466, width: 1 });
+    ui.addChild(paramBg);
+
+    const paramTitle = new Text({
+      text: "ПАРАМЕТРЫ",
+      style: { fontFamily: "Courier New", fontSize: 11, fill: 0x6688aa },
+    });
+    paramTitle.x = w - RIGHT_W + 8;
+    paramTitle.y = 10;
+    paramTitle.eventMode = "none";
+    ui.addChild(paramTitle);
+
+    const paramPanel = new Container();
+    paramPanel.x = w - RIGHT_W + 8;
+    paramPanel.y = 30;
+    this.vmParamPanel = paramPanel;
+    ui.addChild(paramPanel);
+
+    this.refreshVmParamPanel();
+  }
+
+  private refreshVmParamPanel(): void {
+    if (!this.vmParamPanel || !this.vm || !this.questScript) return;
+    while (this.vmParamPanel.children.length > 0) {
+      const c = this.vmParamPanel.children[0];
+      this.vmParamPanel.removeChild(c);
+      c.destroy({ children: true });
+    }
+
+    const RIGHT_W = 192;
+    const panelW = RIGHT_W - 16;
+    let yOff = 0;
+
+    for (const param of this.questScript.params) {
+      if (!param.showInUI) continue;
+      const value = this.vm.getParam(param.id);
+
+      const nameT = new Text({
+        text: param.name,
+        style: { fontFamily: "Courier New", fontSize: 11, fill: 0x99bbcc },
+      });
+      nameT.x = 0;
+      nameT.y = yOff;
+      nameT.eventMode = "none";
+      this.vmParamPanel.addChild(nameT);
+      yOff += 16;
+
+      const valT = new Text({
+        text: String(value),
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 13,
+          fill: 0xeeeeff,
+          fontWeight: "bold",
+        },
+      });
+      valT.x = 0;
+      valT.y = yOff;
+      valT.eventMode = "none";
+      this.vmParamPanel.addChild(valT);
+      yOff += 18;
+
+      // Progress bar if min/max range is meaningful
+      if (param.max > param.min) {
+        const barW = panelW - 4;
+        const barBg = new Graphics();
+        barBg.rect(0, yOff, barW, 6);
+        barBg.fill({ color: 0x112233 });
+        this.vmParamPanel.addChild(barBg);
+
+        const ratio = Math.max(
+          0,
+          Math.min(1, (value - param.min) / (param.max - param.min)),
+        );
+        if (ratio > 0) {
+          const barFill = new Graphics();
+          barFill.rect(0, yOff, Math.floor(barW * ratio), 6);
+          barFill.fill({ color: 0x44aaff });
+          this.vmParamPanel.addChild(barFill);
+        }
+        yOff += 12;
+      }
+
+      yOff += 6;
+    }
+  }
+
+  private renderVmLocation(): void {
+    if (!this.vm || !this.vmNarrationText || !this.vmChoiceContainer) return;
+
+    const loc = this.vm.currentLocation();
+    this.vmNarrationText.text = this.vm.interpolate(loc.text);
+    this.refreshVmParamPanel();
+
+    // Clear old buttons
+    while (this.vmChoiceContainer.children.length > 0) {
+      const c = this.vmChoiceContainer.children[0];
+      this.vmChoiceContainer.removeChild(c);
+      c.destroy({ children: true });
+    }
+
+    if (this.vm.isFinished()) {
+      this.handleVmFinished();
+      return;
+    }
+
+    const transitions = this.vm.availableTransitions();
+    const w = this.renderer.app.screen.width;
+    const RIGHT_W = 192;
+    const CONTENT_W = w - RIGHT_W - 8;
+    const btnW = CONTENT_W - 32;
+    const btnH = 36;
+    const gap = 8;
+
+    // Auto-execute: single auto transition
+    const autoT = transitions.find((t) => t.autoExecute);
+    if (autoT && transitions.length === 1) {
+      const ellipsis = new Text({
+        text: "...",
+        style: { fontFamily: "Courier New", fontSize: 16, fill: 0x6688aa },
+      });
+      ellipsis.x = 8;
+      ellipsis.y = 8;
+      ellipsis.eventMode = "none";
+      this.vmChoiceContainer.addChild(ellipsis);
+
+      this.autoExecuteTimer = setTimeout(() => {
+        this.autoExecuteTimer = null;
+        if (this.vm) {
+          try {
+            this.vm.execute(autoT.id);
+          } catch (e) {
+            logger.warn("TextQuestScene VM: auto-execute failed", e);
+          }
+          this.renderVmLocation();
+        }
+      }, 800);
+      return;
+    }
+
+    const limit = Math.min(transitions.length, 6);
+    for (let i = 0; i < limit; i++) {
+      const t = transitions[i];
+      this.addVmTransitionButton(
+        this.vmChoiceContainer,
+        t.label,
+        8,
+        i * (btnH + gap),
+        btnW,
+        btnH,
+        () => this.executeVmTransition(t.id),
+      );
+    }
+  }
+
+  private addVmTransitionButton(
+    parent: Container,
+    label: string,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    onClick: () => void,
+  ): void {
+    const btn = new Container();
+    btn.x = x;
+    btn.y = y;
+
+    const bg = new Graphics();
+    bg.rect(0, 0, w, h);
+    bg.fill({ color: 0x0a1a2e, alpha: 0.9 });
+    bg.stroke({ color: 0xff99ff, width: 1 });
+    btn.addChild(bg);
+
+    const lbl = new Text({
+      text: label,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 13,
+        fill: 0xeeeeff,
+        wordWrap: true,
+        wordWrapWidth: w - 24,
+      },
+    });
+    lbl.x = 12;
+    lbl.y = (h - lbl.height) / 2;
+    lbl.eventMode = "none";
+    btn.addChild(lbl);
+
+    btn.eventMode = "static";
+    btn.cursor = "pointer";
+    btn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      onClick();
+    });
+    btn.on("pointerover", () => {
+      bg.clear();
+      bg.rect(0, 0, w, h);
+      bg.fill({ color: 0x1a2a44, alpha: 1 });
+      bg.stroke({ color: 0xff99ff, width: 1 });
+    });
+    btn.on("pointerout", () => {
+      bg.clear();
+      bg.rect(0, 0, w, h);
+      bg.fill({ color: 0x0a1a2e, alpha: 0.9 });
+      bg.stroke({ color: 0xff99ff, width: 1 });
+    });
+
+    parent.addChild(btn);
+  }
+
+  private executeVmTransition(transitionId: string): void {
+    if (!this.vm) return;
+    if (this.autoExecuteTimer !== null) {
+      clearTimeout(this.autoExecuteTimer);
+      this.autoExecuteTimer = null;
+    }
+    try {
+      this.vm.execute(transitionId);
+    } catch (e) {
+      logger.warn("TextQuestScene VM: transition failed", e);
+      return;
+    }
+    this.renderVmLocation();
+  }
+
+  private handleVmFinished(): void {
+    if (!this.vm) return;
+    if (this.vm.isSuccess()) {
+      this.showToast("Квест выполнен!", 0x44ff88);
+      setTimeout(() => {
+        this.doReturn();
+      }, 2000);
+    } else {
+      this.showToast("Провал.", 0xff6644);
+      this.showVmRetryButton();
+    }
+  }
+
+  private showVmRetryButton(): void {
+    if (!this.vmChoiceContainer) return;
+    const w = this.renderer.app.screen.width;
+    const RIGHT_W = 192;
+    const CONTENT_W = w - RIGHT_W - 8;
+    const btnW = CONTENT_W - 32;
+
+    this.addVmTransitionButton(
+      this.vmChoiceContainer,
+      "Попробовать снова",
+      8,
+      0,
+      btnW,
+      36,
+      () => {
+        if (this.questScript) {
+          this.vm = new QuestVM(this.questScript, this.vmSeed);
+          this.renderVmLocation();
+        }
+      },
+    );
+  }
+
+  private onVmKeyDown(event: KeyboardEvent): void {
+    if (event.key === "Escape") {
+      this.doReturn();
+    }
   }
 
   // ── Layout ──────────────────────────────────────────────────────────────────
