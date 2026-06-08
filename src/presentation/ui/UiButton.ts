@@ -1,4 +1,5 @@
 import { Container, Graphics, Text, type FederatedPointerEvent } from "pixi.js";
+import { scaledFont } from "@/utils/fontScale";
 
 export type ButtonAccent = "primary" | "danger" | "success" | "neutral";
 
@@ -51,7 +52,7 @@ export class UiButton {
       text: icon,
       style: {
         fontFamily: "Courier New, monospace",
-        fontSize: 16,
+        fontSize: scaledFont(16),
         fill: this._accent,
       },
     });
@@ -62,7 +63,7 @@ export class UiButton {
       text: label,
       style: {
         fontFamily: "Courier New",
-        fontSize: 14,
+        fontSize: scaledFont(14),
         fill: this._accent,
         fontWeight: "bold",
       },
@@ -174,6 +175,8 @@ export class UiButton {
     this.bg
       .roundRect(0, 0, this.btnW, this.btnH, 4)
       .stroke({ color: c, width: 2 });
+    this.strip.clear();
+    this.strip.rect(0, 4, 4, this.btnH - 8).fill({ color: c, alpha: 0.9 });
   }
 
   private _drawActive(): void {
@@ -185,5 +188,7 @@ export class UiButton {
     this.bg
       .roundRect(0, 0, this.btnW, this.btnH, 4)
       .stroke({ color: c, width: 2 });
+    this.strip.clear();
+    this.strip.rect(0, 4, 4, this.btnH - 8).fill({ color: c, alpha: 0.9 });
   }
 }

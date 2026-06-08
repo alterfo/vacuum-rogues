@@ -45,6 +45,7 @@ import { PanZoomController } from "@/systems/PanZoomController";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
 import {
   currentFontSizeKey,
+  scaledFont,
   setFontScale,
   type FontSizeKey,
 } from "@/utils/fontScale";
@@ -725,6 +726,8 @@ export class SpaceFlightScene extends GameScene {
     this.isTurnRunning = false;
     this.pauseRequested = false;
     this.turnHintShown = false;
+    this.lowHullStopped = false;
+    this.starTouchActive = false;
     this._combatTransitionPending = false;
     this.cameraReturning = false;
 
@@ -2206,7 +2209,7 @@ export class SpaceFlightScene extends GameScene {
       text: "ЛКМ - курс | Shift+ЛКМ/ПКМ - пан | Колесико - зум | [J] - Квесты | [I] - Инвентарь",
       style: {
         fontFamily: "Courier New",
-        fontSize: 13,
+        fontSize: scaledFont(13),
         fill: 0x88ccff,
       },
     });
@@ -2222,7 +2225,7 @@ export class SpaceFlightScene extends GameScene {
         text: "Камера: Zoom 1.00 | Pan (0, 0)",
         style: {
           fontFamily: "Courier New",
-          fontSize: 12,
+          fontSize: scaledFont(12),
           fill: 0xff00ff,
         },
       });
@@ -2235,7 +2238,11 @@ export class SpaceFlightScene extends GameScene {
     // Current date display
     this.dayCounterText = new Text({
       text: formatGameDate(this.gameEngine?.galaxy?.gameDays ?? 0),
-      style: { fontFamily: "Courier New", fontSize: 14, fill: 0x00ffff },
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(14),
+        fill: 0x00ffff,
+      },
     });
     this.dayCounterText.x = 20;
     this.dayCounterText.y = 50;
@@ -2246,7 +2253,7 @@ export class SpaceFlightScene extends GameScene {
       text: "[КВЕСТЫ]",
       style: {
         fontFamily: "Courier New",
-        fontSize: 14,
+        fontSize: scaledFont(14),
         fill: 0xffaa00,
         fontWeight: "bold" as const,
       },
@@ -2275,7 +2282,7 @@ export class SpaceFlightScene extends GameScene {
       text: "[МЕЖЗВЕЗДНАЯ КАРТА]",
       style: {
         fontFamily: "Courier New",
-        fontSize: 14,
+        fontSize: scaledFont(14),
         fill: 0xffaa00,
         fontWeight: "bold" as const,
       },
@@ -2413,7 +2420,7 @@ export class SpaceFlightScene extends GameScene {
     const active = currentFontSizeKey();
     const sizes: FontSizeKey[] = ["S", "M", "L"];
     const labels = ["A", "A", "A"];
-    const btnFontSizes = [14, 18, 22];
+    const btnFontSizes = [scaledFont(14), scaledFont(18), scaledFont(22)];
 
     sizes.forEach((key, i) => {
       const isActive = key === active;
@@ -2596,7 +2603,11 @@ export class SpaceFlightScene extends GameScene {
       // Small label
       const label = new Text({
         text: station.name.slice(0, 22),
-        style: { fontSize: 10, fill: stationColor, fontFamily: "monospace" },
+        style: {
+          fontSize: scaledFont(10),
+          fill: stationColor,
+          fontFamily: "monospace",
+        },
       });
       label.anchor.set(0.5, 0);
       label.y = 18;
@@ -4277,7 +4288,7 @@ export class SpaceFlightScene extends GameScene {
       text,
       style: {
         fontFamily: "Courier New",
-        fontSize: 15,
+        fontSize: scaledFont(15),
         fill: color,
         fontWeight: "bold",
         align: "center",
@@ -4308,7 +4319,7 @@ export class SpaceFlightScene extends GameScene {
         text,
         style: {
           fontFamily: "Courier New",
-          fontSize: 13,
+          fontSize: scaledFont(13),
           fill: 0xffffff,
           stroke: { color: 0x000000, width: 3 },
         },
@@ -4438,7 +4449,11 @@ export class SpaceFlightScene extends GameScene {
     }
     const textObj = new Text({
       text: `> ${text}`,
-      style: { fontFamily: "Courier New", fontSize: 11, fill: 0x88ccff },
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(11),
+        fill: 0x88ccff,
+      },
     });
     textObj.eventMode = "none";
     textObj.y = this.miniLogEntries.length * lineH;
@@ -4698,7 +4713,7 @@ export class SpaceFlightScene extends GameScene {
       text: "ЯДРО OVERMIND",
       style: {
         fontFamily: "Courier New",
-        fontSize: 20,
+        fontSize: scaledFont(20),
         fill: 0xff2200,
         fontWeight: "bold",
       },
@@ -4712,7 +4727,7 @@ export class SpaceFlightScene extends GameScene {
       text: "Вы вошли в систему ядра OVERMIND.\nУничтожьте его, чтобы спасти галактику.",
       style: {
         fontFamily: "Courier New",
-        fontSize: 14,
+        fontSize: scaledFont(14),
         fill: 0xcccccc,
         align: "center",
       },
@@ -4730,7 +4745,11 @@ export class SpaceFlightScene extends GameScene {
       .stroke({ width: 1, color: 0xff2200 });
     const attackLabel = new Text({
       text: "[ Атаковать ядро ]",
-      style: { fontFamily: "Courier New", fontSize: 14, fill: 0xff4444 },
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(14),
+        fill: 0xff4444,
+      },
     });
     attackLabel.x = 8;
     attackLabel.y = 9;
@@ -4765,7 +4784,11 @@ export class SpaceFlightScene extends GameScene {
       .stroke({ width: 1, color: 0x4488ff });
     const retreatLabel = new Text({
       text: "[ Отступить ]",
-      style: { fontFamily: "Courier New", fontSize: 14, fill: 0x4488ff },
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(14),
+        fill: 0x4488ff,
+      },
     });
     retreatLabel.x = 8;
     retreatLabel.y = 9;

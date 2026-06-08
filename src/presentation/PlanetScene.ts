@@ -10,6 +10,7 @@ import { TradeSystem } from "@/systems/TradeSystem";
 import { QuestType } from "@/types";
 import type { ResourceType } from "@/types";
 import { pickVariant, panoramaTex } from "./textures";
+import { scaledFont } from "@/utils/fontScale";
 import { UiButton, type ButtonAccent } from "./ui/UiButton";
 
 interface PlanetContext {
@@ -265,8 +266,21 @@ export class PlanetScene extends GameScene {
       modal.addChild(t);
     };
 
-    addLabel("⚠ ТАМОЖЕННЫЙ ДОСМОТР", w / 2, boxY + 18, 16, 0xff4444, true);
-    addLabel(`Нелегальный груз: ${goodNames}`, w / 2, boxY + 50, 12, 0xffaa66);
+    addLabel(
+      "⚠ ТАМОЖЕННЫЙ ДОСМОТР",
+      w / 2,
+      boxY + 18,
+      scaledFont(16),
+      0xff4444,
+      true,
+    );
+    addLabel(
+      `Нелегальный груз: ${goodNames}`,
+      w / 2,
+      boxY + 50,
+      scaledFont(12),
+      0xffaa66,
+    );
 
     const bribeCost = Math.round(penalty * 0.6);
 
@@ -291,7 +305,11 @@ export class PlanetScene extends GameScene {
 
       const lbl = new Text({
         text: label,
-        style: { fontFamily: "Courier New", fontSize: 13, fill: 0xffffff },
+        style: {
+          fontFamily: "Courier New",
+          fontSize: scaledFont(13),
+          fill: 0xffffff,
+        },
       });
       lbl.anchor.set(0.5);
       lbl.x = btnW / 2;
@@ -377,7 +395,7 @@ export class PlanetScene extends GameScene {
       `Штраф: ${penalty} ₡  •  Взятка: ${bribeCost} ₡`,
       w / 2,
       boxY + 248,
-      11,
+      scaledFont(11),
       0x666666,
     );
 
@@ -502,7 +520,7 @@ export class PlanetScene extends GameScene {
       text: factionName,
       style: {
         fontFamily: "Courier New",
-        fontSize: 13,
+        fontSize: scaledFont(13),
         fill: 0xffffff,
         fontWeight: "bold",
       },
@@ -539,7 +557,7 @@ export class PlanetScene extends GameScene {
         text: `⚠ ЗАХВАЧЕНА: ${captureName}`,
         style: {
           fontFamily: "Courier New",
-          fontSize: 12,
+          fontSize: scaledFont(12),
           fill: 0xffffff,
           fontWeight: "bold",
         },
@@ -556,7 +574,7 @@ export class PlanetScene extends GameScene {
         text: `${this.gameEngine.player.credits.toLocaleString("ru")} ₡`,
         style: {
           fontFamily: "Courier New",
-          fontSize: 14,
+          fontSize: scaledFont(14),
           fill: 0xffdd44,
           fontWeight: "bold",
         },
@@ -579,7 +597,7 @@ export class PlanetScene extends GameScene {
       text: this.planet.name,
       style: {
         fontFamily: "Courier New",
-        fontSize: 28,
+        fontSize: scaledFont(28),
         fill: 0x00ffff,
         fontWeight: "bold",
         align: "center",
@@ -608,7 +626,7 @@ export class PlanetScene extends GameScene {
         text: `Корпус: ${bars(hullPct)} ${hullPct}%   Топливо: ${bars(fuelPct)} ${fuelPct}%`,
         style: {
           fontFamily: "Courier New",
-          fontSize: 13,
+          fontSize: scaledFont(13),
           fill: 0x88aacc,
           align: "center",
         },
@@ -696,8 +714,8 @@ export class PlanetScene extends GameScene {
           text: `${b.icon} ${b.label}`,
           style: {
             fontFamily: "Courier New",
-            fontSize: 13,
-            fill: 0x445566,
+            fontSize: scaledFont(13),
+            fill: 0x8899aa,
             fontWeight: "bold",
           },
         });
@@ -795,7 +813,11 @@ export class PlanetScene extends GameScene {
     // Line 1: type • faction (coloured)
     const typeText = new Text({
       text: `${this.getType(this.planet.type)} • `,
-      style: { fontFamily: "Courier New", fontSize: 13, fill: 0x889aaa },
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(13),
+        fill: 0x889aaa,
+      },
     });
     typeText.eventMode = "none";
     typeText.anchor.set(0.5, 0);
@@ -807,7 +829,7 @@ export class PlanetScene extends GameScene {
       text: factionName,
       style: {
         fontFamily: "Courier New",
-        fontSize: 13,
+        fontSize: scaledFont(13),
         fill: factionColor,
         fontWeight: "bold",
       },
@@ -821,7 +843,11 @@ export class PlanetScene extends GameScene {
     // Line 2: reputation status
     const repLine = new Text({
       text: `Отношение: `,
-      style: { fontFamily: "Courier New", fontSize: 13, fill: 0x889aaa },
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(13),
+        fill: 0x889aaa,
+      },
     });
     repLine.eventMode = "none";
     repLine.anchor.set(0.5, 0);
@@ -833,7 +859,7 @@ export class PlanetScene extends GameScene {
       text: `${repLabel} (${rep >= 0 ? "+" : ""}${rep})`,
       style: {
         fontFamily: "Courier New",
-        fontSize: 13,
+        fontSize: scaledFont(13),
         fill: repColor,
         fontWeight: "bold",
       },
@@ -852,7 +878,7 @@ export class PlanetScene extends GameScene {
       text: goodsLine,
       style: {
         fontFamily: "Courier New",
-        fontSize: 12,
+        fontSize: scaledFont(12),
         fill: 0x6688aa,
         align: "center",
       },
@@ -1038,7 +1064,7 @@ export class PlanetScene extends GameScene {
       text,
       style: {
         fontFamily: "Courier New",
-        fontSize: 16,
+        fontSize: scaledFont(16),
         fill: color,
         fontWeight: "bold",
         align: "center",
