@@ -849,7 +849,7 @@ export class GameEngine {
     this.modalObjects.push(titleText);
 
     const msg = win
-      ? "Ядро OVERMIND уничтожено.\nГалактика спасена!"
+      ? "Ветеран-Дипломат.\nГалактика под вашей защитой!"
       : "Галактика пала.\nOVERMIND установил контроль над большинством систем.";
 
     const msgText = new Text({

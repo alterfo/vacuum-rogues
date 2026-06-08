@@ -76,6 +76,7 @@ export class NpcContactPanel {
     bg.fill({ color: 0x000000, alpha: 0.85 });
     bg.stroke({ color: 0x00ffff, width: 2 });
     bg.eventMode = "static";
+    bg.on("pointerdown", (e) => e.stopPropagation());
     this.container.addChild(bg);
 
     // Truncate long names so they never run under the corner ✕.
