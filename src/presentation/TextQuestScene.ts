@@ -566,7 +566,7 @@ export class TextQuestScene extends GameScene {
       style: {
         fontFamily: "Courier New",
         fontSize: 15,
-        fill: 0x666666,
+        fill: 0xaaaaaa,
         fontWeight: "bold",
       },
     });

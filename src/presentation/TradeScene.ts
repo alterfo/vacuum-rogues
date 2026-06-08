@@ -129,11 +129,11 @@ export class TradeScene extends GameScene {
 
     // Column headers
     const top = panelY + 55;
-    this.addText("Ресурс", panelX + 20, top, 12, 0x888888);
-    this.addText("Покупка", panelX + 195, top, 12, 0x888888);
-    this.addText("Продажа", panelX + 280, top, 12, 0x888888);
-    this.addText("В трюме", panelX + 365, top, 12, 0x888888);
-    this.addText("Кол-во", panelX + 445, top, 12, 0x888888);
+    this.addText("Ресурс", panelX + 20, top, 12, 0xaaaaaa);
+    this.addText("Покупка", panelX + 195, top, 12, 0xaaaaaa);
+    this.addText("Продажа", panelX + 280, top, 12, 0xaaaaaa);
+    this.addText("В трюме", panelX + 365, top, 12, 0xaaaaaa);
+    this.addText("Кол-во", panelX + 445, top, 12, 0xaaaaaa);
 
     const player = this.gameEngine.player;
     const totalCargo = player.inventory.resources.reduce(
@@ -191,7 +191,7 @@ export class TradeScene extends GameScene {
         panelX + 365,
         y,
         13,
-        owned > 0 ? 0x00ff88 : 0x666666,
+        owned > 0 ? 0x00ff88 : 0xaaaaaa,
       );
 
       // Quantity selector: [-] qty [+] [Макс]

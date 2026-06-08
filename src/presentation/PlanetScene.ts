@@ -400,7 +400,7 @@ export class PlanetScene extends GameScene {
       w / 2,
       boxY + 248,
       scaledFont(11),
-      0x666666,
+      0xaaaaaa,
     );
 
     this.renderer.uiLayer.addChild(modal);
