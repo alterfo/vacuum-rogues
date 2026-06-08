@@ -17,6 +17,7 @@ import { QuestType, ResourceType, EnemyType } from "@/types";
 import { SeededRNG } from "@/utils/seededRNG";
 import { jumpDistances } from "@/systems/galaxy/jumpDistance";
 import { ELITE_QUEST_MIN_RANK } from "@/config/balance";
+import { ALL_QUEST_SCRIPTS } from "@/systems/quests/TextQuestRegistry";
 
 /** Share of issued quests that are branching text-quests (the "cherry"). */
 export const QUEST_TEXT_RATIO = 0.2;
@@ -670,7 +671,7 @@ function buildLocalDelivery(
   };
 }
 
-/** A branching text-quest stub (its graph/scene come from EPIC-005). */
+/** A branching text-quest stub backed by a real QuestScript. */
 function buildTextQuest(
   rng: SeededRNG,
   planetId: string,
@@ -681,23 +682,21 @@ function buildTextQuest(
 ): GeneratedQuest {
   const id = slotId(planetId, bucket, i);
   const { credits, experience } = economics(QuestType.TEXT_ADVENTURE, 0, rng);
-  const hooks = [
-    "Странный сигнал с дрейфующего корабля",
-    "Таможенник просит об услуге",
-    "Спор колонистов, который нужно рассудить",
-    "Подозрительное предложение в баре",
-  ];
-  const hook = hooks[rng.nextInt(0, hooks.length - 1)];
+
+  // Pick a script deterministically for this board slot.
+  const script =
+    ALL_QUEST_SCRIPTS[rng.nextInt(0, ALL_QUEST_SCRIPTS.length - 1)];
+
   return {
     template: {
       id,
-      title: `История: ${hook}`,
-      description: `${hook}. Ветвящийся текст-квест — исход зависит от ваших решений.`,
+      title: `Особое задание: ${script.title}`,
+      description: `Уникальное задание «${script.title}». Исход зависит от ваших решений.`,
       type: QuestType.TEXT_ADVENTURE,
       objectives: [
         {
           id: `${id}_resolve`,
-          description: "Разрешить ситуацию",
+          description: "Завершить задание",
           type: "VISIT_LOCATION",
           targetAmount: 1,
           locationId: planetId,
@@ -707,6 +706,7 @@ function buildTextQuest(
       dialogueAnchors: [],
       deadline: 0,
       failurePenalty: null,
+      targetObjectId: script.id,
     },
     targetSystemId: origin?.id ?? planetId,
     targetPlanetId: planetId,

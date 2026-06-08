@@ -6,7 +6,6 @@ import type { Planet } from "@/domain/Planet";
 import type { StarSystem } from "@/domain/StarSystem";
 import { SceneType, QuestType } from "@/types";
 import { logger } from "@/utils/logger";
-import { getTextQuestById, SAMPLE_TEXT_QUESTS } from "@/domain/TextQuest";
 import { JobBoardPanel } from "./JobBoardPanel";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 
@@ -353,22 +352,13 @@ export class GovernmentScene extends GameScene {
     if (!this.gameEngine || !this.planet) return;
 
     if (q.template.type === QuestType.TEXT_ADVENTURE) {
-      const questId = q.template.id;
-      const domainQuest = getTextQuestById(questId) ?? SAMPLE_TEXT_QUESTS[0];
-      if (!domainQuest) {
-        this.showToast("Текст-квест недоступен", 0xffaa44);
-        return;
-      }
+      // scriptId is stored in targetObjectId; fall back to template id for legacy entries
+      const scriptId = q.template.targetObjectId ?? q.template.id;
       this.closeJobBoard();
       this.gameEngine
-        .transitionTo(SceneType.TEXT_QUEST, {
+        .startTextQuest(scriptId, undefined, SceneType.GOVERNMENT, {
           gameEngine: this.gameEngine,
-          quest: domainQuest,
-          returnScene: SceneType.GOVERNMENT,
-          returnContext: {
-            gameEngine: this.gameEngine,
-            planet: this.planet,
-          },
+          planet: this.planet,
         })
         .catch((e) =>
           logger.error("GovernmentScene: text quest transition failed", e),

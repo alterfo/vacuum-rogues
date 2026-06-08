@@ -50,6 +50,8 @@ import {
   OnnxQuestNarrator,
   type QuestNarrator,
 } from "@/ai/adapters/QuestNarrator";
+import { getQuestScript } from "@/systems/quests/TextQuestRegistry";
+import type { QuestScript } from "@/systems/quests/QuestScript";
 import { AudioManager } from "@/systems/AudioManager";
 
 /**
@@ -566,6 +568,58 @@ export class GameEngine {
       this.galaxy?.gameDays ?? 0,
       String(factionId),
     );
+  }
+
+  /**
+   * Start a scripted text quest (EPIC-005 / Task 9).
+   * Looks up the QuestScript by ID, injects an ONNX narration intro into the
+   * first location (template fallback when ONNX is unavailable), then transitions
+   * to TextQuestScene with the prepared script in context.
+   */
+  async startTextQuest(
+    scriptId: string,
+    seed?: number,
+    returnScene: SceneType = SceneType.PLANET,
+    returnContext: object = {},
+  ): Promise<void> {
+    const script = getQuestScript(scriptId);
+    if (!script) {
+      logger.warn(`startTextQuest: unknown script id "${scriptId}"`);
+      return;
+    }
+    const scriptWithIntro = await this.injectQuestNarration(script);
+    await this.transitionTo(SceneType.TEXT_QUEST, {
+      gameEngine: this,
+      questScript: scriptWithIntro,
+      seed: seed ?? Date.now(),
+      returnScene,
+      returnContext,
+    });
+  }
+
+  /** Prepend a narration sentence from questNarrator to the start location text. */
+  private async injectQuestNarration(
+    script: QuestScript,
+  ): Promise<QuestScript> {
+    try {
+      const system = this.galaxy?.systems.find(
+        (s) => s.id === this.player?.currentSystemId,
+      );
+      const planetName = system?.planets[0]?.name ?? system?.name ?? "станция";
+      const intro = await this.questNarrator.narrateQuestIntro(
+        script,
+        planetName,
+      );
+      if (!intro) return script;
+      const locations = script.locations.map((loc) =>
+        loc.id === script.startLocation
+          ? { ...loc, text: `${intro}\n\n${loc.text}` }
+          : loc,
+      );
+      return { ...script, locations };
+    } catch {
+      return script;
+    }
   }
 
   async saveGame(slotId = "auto"): Promise<void> {

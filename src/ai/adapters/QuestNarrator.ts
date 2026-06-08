@@ -1,6 +1,7 @@
 import type { ONNXModelRegistry } from "@/ai/ONNXModelRegistry";
 import { Tensor } from "onnxruntime-web";
 import { logger } from "@/utils/logger";
+import type { QuestScript } from "@/systems/quests/QuestScript";
 
 export interface NarratorContext {
   role: string;
@@ -11,6 +12,8 @@ export interface NarratorContext {
 
 export interface QuestNarrator {
   narrate(nodeTextKey: string, context: NarratorContext): Promise<string>;
+  /** Generate a 1-2 sentence flavour intro for a quest, shown before the first location. */
+  narrateQuestIntro(script: QuestScript, planetName: string): Promise<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,6 +76,21 @@ const FALLBACK_TEMPLATE = (key: string, ctx: NarratorContext): string =>
 // TemplateQuestNarrator — pure synchronous template substitution, no ONNX
 // ---------------------------------------------------------------------------
 
+const QUEST_INTRO_TEMPLATES: Record<string, (planet: string) => string> = {
+  customs: (p) =>
+    `Орбитальная станция ${p}. Таможенный пост третьего уровня — скучная работа до тех пор, пока не объявился первый подозрительный корабль.`,
+  "gravity-slalom": (p) =>
+    `Учёный с базы ${p} машет вам рукой прямо у шлюза: зонд нужно доставить сейчас, пока гравитационные окна не закрылись.`,
+  investigation: (p) =>
+    `На складе ${p} нашли тело. Патруль уже оцепил периметр, но найти виновного — дело вашего ума, не их.`,
+  "cargo-sort": (p) =>
+    `Диспетчер ${p} смотрит на вас с надеждой: пять транспортов на подходе, три дока свободны — и никто не знает, кого куда ставить.`,
+  reactor: (p) =>
+    `Аварийный сигнал с корабля близ ${p}. Реактор нестабилен. У вас сто двадцать секунд.`,
+  auction: (p) =>
+    `Аукцион космического лома на станции ${p}. Восемь лотов, несколько жадных покупателей и ваш ограниченный бюджет.`,
+};
+
 export class TemplateQuestNarrator implements QuestNarrator {
   async narrate(
     nodeTextKey: string,
@@ -80,6 +98,16 @@ export class TemplateQuestNarrator implements QuestNarrator {
   ): Promise<string> {
     const fn = TEMPLATES[nodeTextKey];
     return fn ? fn(context) : FALLBACK_TEMPLATE(nodeTextKey, context);
+  }
+
+  async narrateQuestIntro(
+    script: QuestScript,
+    planetName: string,
+  ): Promise<string> {
+    const fn = QUEST_INTRO_TEMPLATES[script.id];
+    return fn
+      ? fn(planetName)
+      : `${planetName}. Вам предстоит: «${script.title}».`;
   }
 }
 
@@ -135,5 +163,32 @@ export class OnnxQuestNarrator implements QuestNarrator {
       );
     }
     return this.fallback.narrate(nodeTextKey, context);
+  }
+
+  async narrateQuestIntro(
+    script: QuestScript,
+    planetName: string,
+  ): Promise<string> {
+    try {
+      await this.registry.loadModel(DIALOGUE_MODEL_ID);
+      const prompt = `intro:${script.id} planet:${planetName} title:${script.title}`;
+      const codes = new Float32Array(prompt.length);
+      for (let i = 0; i < prompt.length; i++) {
+        codes[i] = prompt.charCodeAt(i) / 127;
+      }
+      const inputTensor = new Tensor("float32", codes, [1, prompt.length]);
+      const outputTensor = await this.registry.infer(
+        DIALOGUE_MODEL_ID,
+        inputTensor,
+      );
+      const text = tensorToText(outputTensor);
+      if (text.length > 20) return text;
+    } catch (err) {
+      logger.warn(
+        "OnnxQuestNarrator: intro inference failed, using fallback",
+        err,
+      );
+    }
+    return this.fallback.narrateQuestIntro(script, planetName);
   }
 }
