@@ -1,5 +1,5 @@
 import { GameScene } from "./GameScene";
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics, Sprite, Text } from "pixi.js";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
 import { SceneType } from "@/types";
@@ -9,6 +9,7 @@ import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import { TradeSystem } from "@/systems/TradeSystem";
 import { QuestType } from "@/types";
 import type { ResourceType } from "@/types";
+import { pickVariant } from "./textures";
 
 interface PlanetContext {
   gameEngine?: GameEngine;
@@ -36,6 +37,45 @@ export function visiblePlanetServices<T extends { label: string }>(
 }
 
 const BRIBE_COST = 500;
+const PLANET_VISUAL_RADIUS = 180;
+
+const FACTION_RU: Record<string, string> = {
+  OUTLANDERS: "Окраинники",
+  BASTIONS: "Бастион",
+  SYNDICATE: "Синдикат",
+  PARADOXES: "Парадокс",
+  PROGRESSORS: "Прогрессоры",
+  INDEPENDENT: "Независимая",
+  OVERMIND: "Сверхразум",
+};
+
+const FACTION_COLOR: Record<string, number> = {
+  OUTLANDERS: 0xff6600,
+  BASTIONS: 0xcc2222,
+  SYNDICATE: 0x22cc22,
+  PARADOXES: 0xaa22cc,
+  PROGRESSORS: 0x2266ff,
+  INDEPENDENT: 0x999999,
+  OVERMIND: 0xff22cc,
+};
+
+const PLANET_TEXTURE_PREFIX: Record<string, string> = {
+  TERRESTRIAL: "terrestrial",
+  GAS_GIANT: "gas",
+  ICE: "ice",
+  VOLCANIC: "volcanic",
+  INDUSTRIAL: "industrial",
+  HABITAT: "habitat",
+};
+
+const PLANET_FALLBACK_COLORS: Record<string, number[]> = {
+  TERRESTRIAL: [0x0a2c4c, 0x1a5c8c, 0x2a7c44, 0x3a9c55, 0x1e6e4a],
+  GAS_GIANT: [0x5c2a00, 0x8c5a1a, 0xaa7733, 0xcc9944, 0xaa7733],
+  ICE: [0x6699cc, 0xaaccff, 0xccddff, 0xeeeeff, 0xccddff],
+  VOLCANIC: [0x400800, 0x8c1a00, 0xcc3300, 0xff5500, 0xcc3300],
+  INDUSTRIAL: [0x223344, 0x334455, 0x445566, 0x556677, 0x445566],
+  HABITAT: [0x11883a, 0x22aa44, 0x33bb55, 0x44cc66, 0x33bb55],
+};
 
 const RESOURCE_RU: Record<string, string> = {
   FUEL: "Топливо",
@@ -361,17 +401,146 @@ export class PlanetScene extends GameScene {
     bg.fill({ color: 0x000510, alpha: 0.95 });
     this.renderer.gameLayer.addChild(bg);
 
-    const planetGfx = new Graphics();
-    planetGfx.circle(w / 2, h / 3, 60);
-    planetGfx.fill({ color: this.planet.isHabitable ? 0x22aa44 : 0x888888 });
-    this.renderer.gameLayer.addChild(planetGfx);
+    // Resolve faction data needed by multiple elements
+    const system = this.gameEngine?.galaxy?.systems.find((s) =>
+      s.planets.some((p) => p.id === this.planet!.id),
+    );
+    const faction = system?.ownerFaction ?? "INDEPENDENT";
+    const factionName = FACTION_RU[faction] ?? faction;
+    const factionColor = FACTION_COLOR[faction] ?? 0x999999;
 
-    // Proportional layout so the screen doesn't look cramped at 768px height.
-    const nameY = h * 0.38;
-    const infoY = h * 0.46;
-    const statY = h * 0.535;
-    const btnStartY = h * 0.58;
-    const btnStep = Math.max(34, h * 0.048);
+    const planetCX = w / 2;
+    const planetCY = Math.min(h * 0.22, PLANET_VISUAL_RADIUS + 10);
+
+    // Atmospheric glow: concentric semi-transparent rings
+    const glowAlphas = [0.15, 0.08, 0.03];
+    const glowRings = [
+      PLANET_VISUAL_RADIUS + 22,
+      PLANET_VISUAL_RADIUS + 40,
+      PLANET_VISUAL_RADIUS + 60,
+    ];
+    for (let i = 0; i < glowRings.length; i++) {
+      const glow = new Graphics();
+      glow.circle(planetCX, planetCY, glowRings[i]);
+      glow.fill({ color: factionColor, alpha: glowAlphas[i] });
+      glow.eventMode = "none";
+      this.renderer.gameLayer.addChild(glow);
+    }
+
+    // Planet body: use texture variant or procedural gradient fallback
+    const prefix = PLANET_TEXTURE_PREFIX[this.planet.type] ?? "terrestrial";
+    const planetTex = pickVariant("planets", prefix, this.planet.id);
+    if (planetTex) {
+      const sprite = new Sprite(planetTex);
+      sprite.anchor.set(0.5);
+      sprite.x = planetCX;
+      sprite.y = planetCY;
+      sprite.width = PLANET_VISUAL_RADIUS * 2;
+      sprite.height = PLANET_VISUAL_RADIUS * 2;
+      sprite.eventMode = "none";
+      this.renderer.gameLayer.addChild(sprite);
+    } else {
+      const fallbackColors = PLANET_FALLBACK_COLORS[this.planet.type] ?? [
+        0x555566, 0x666677,
+      ];
+      const steps = fallbackColors.length;
+      const gfx = new Graphics();
+      for (let i = steps - 1; i >= 0; i--) {
+        const r = PLANET_VISUAL_RADIUS * ((i + 1) / steps);
+        gfx.circle(planetCX, planetCY, r);
+        gfx.fill({ color: fallbackColors[i] });
+      }
+      gfx.eventMode = "none";
+      this.renderer.gameLayer.addChild(gfx);
+    }
+
+    // Faction banner: top-left strip with faction name
+    const bannerX = 16;
+    const bannerY = 16;
+    const bannerW = 230;
+    const bannerH = 28;
+    const factionBg = new Graphics();
+    factionBg.rect(bannerX, bannerY, bannerW, bannerH);
+    factionBg.fill({ color: factionColor, alpha: 0.85 });
+    factionBg.eventMode = "none";
+    ui.addChild(factionBg);
+
+    const factionLabel = new Text({
+      text: factionName,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 13,
+        fill: 0xffffff,
+        fontWeight: "bold",
+      },
+    });
+    factionLabel.x = bannerX + 8;
+    factionLabel.y = bannerY + 7;
+    factionLabel.eventMode = "none";
+    ui.addChild(factionLabel);
+
+    // Reputation indicator dots (5 dots, filled left-to-right by rep level)
+    const rep = this.gameEngine?.player?.reputation[faction] ?? 0;
+    const repLevel =
+      rep >= 50 ? 4 : rep >= 20 ? 3 : rep >= -20 ? 2 : rep >= -50 ? 1 : 0;
+    const dotColors = [0xff2222, 0xff8888, 0xaaaaaa, 0x88ff88, 0x00ff88];
+    for (let i = 0; i < 5; i++) {
+      const dot = new Graphics();
+      dot.circle(bannerX + 10 + i * 16, bannerY + bannerH + 8, 5);
+      dot.fill({ color: i <= repLevel ? dotColors[i] : 0x333344 });
+      dot.eventMode = "none";
+      ui.addChild(dot);
+    }
+
+    // Capture warning banner
+    if (this.planet.capturedBy) {
+      const captureName =
+        FACTION_RU[this.planet.capturedBy] ?? this.planet.capturedBy;
+      const captureBg = new Graphics();
+      captureBg.rect(bannerX, bannerY + bannerH + 22, bannerW + 40, 24);
+      captureBg.fill({ color: 0xff0000, alpha: 0.85 });
+      captureBg.eventMode = "none";
+      ui.addChild(captureBg);
+
+      const captureLabel = new Text({
+        text: `⚠ ЗАХВАЧЕНА: ${captureName}`,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 12,
+          fill: 0xffffff,
+          fontWeight: "bold",
+        },
+      });
+      captureLabel.x = bannerX + 6;
+      captureLabel.y = bannerY + bannerH + 27;
+      captureLabel.eventMode = "none";
+      ui.addChild(captureLabel);
+    }
+
+    // Credits HUD: top-right
+    if (this.gameEngine?.player) {
+      const creditsHud = new Text({
+        text: `${this.gameEngine.player.credits.toLocaleString("ru")} ₡`,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 14,
+          fill: 0xffdd44,
+          fontWeight: "bold",
+        },
+      });
+      creditsHud.anchor.set(1, 0);
+      creditsHud.x = w - 16;
+      creditsHud.y = 16;
+      creditsHud.eventMode = "none";
+      ui.addChild(creditsHud);
+    }
+
+    // Layout calculations: flow below the planet
+    const nameY = planetCY + PLANET_VISUAL_RADIUS + 18;
+    const infoY = nameY + 34;
+    const statY = infoY + 66;
+    const btnStartY = statY + 38;
+    const btnStep = Math.max(30, (h - btnStartY - 24) / 8);
 
     const title = new Text({
       text: this.planet.name,
@@ -392,7 +561,7 @@ export class PlanetScene extends GameScene {
     // Planet info panel (US-060): faction, econ type, reputation, market goods.
     this.addInfoPanel(ui, w, infoY);
 
-    // Hangar stat bar: hull / fuel / credits in one compact line.
+    // Hangar stat bar: hull / fuel in compact line (credits shown in top-right HUD).
     if (this.gameEngine?.player) {
       const ship = this.gameEngine.player.ship;
       const hullPct = Math.round((ship.hullHP / ship.maxHull) * 100);
@@ -403,7 +572,7 @@ export class PlanetScene extends GameScene {
         "█".repeat(Math.round(pct / 10)) +
         "░".repeat(10 - Math.round(pct / 10));
       const statLine = new Text({
-        text: `Корпус: ${bars(hullPct)} ${hullPct}%   Топливо: ${bars(fuelPct)} ${fuelPct}%   ${this.gameEngine.player.credits.toLocaleString("ru")} ₡`,
+        text: `Корпус: ${bars(hullPct)} ${hullPct}%   Топливо: ${bars(fuelPct)} ${fuelPct}%`,
         style: {
           fontFamily: "Courier New",
           fontSize: 13,
@@ -446,77 +615,85 @@ export class PlanetScene extends GameScene {
     ];
 
     // Reputation gate: hostile faction blocks all services except take-off.
-    const system = this.gameEngine?.galaxy?.systems.find((s) =>
-      s.planets.some((p) => p.id === this.planet!.id),
-    );
-    const planetFaction = system?.ownerFaction ?? "INDEPENDENT";
     const player = this.gameEngine?.player;
-    const isHostile =
-      !this.bribed && (player?.isHostileTo(planetFaction) ?? false);
+    const isHostile = !this.bribed && (player?.isHostileTo(faction) ?? false);
 
-    const visible = visiblePlanetServices(this.planet.isHabitable, buttons);
-    let y = btnStartY;
-    for (const b of visible) {
-      const blocked = isHostile && b.label !== "Взлёт";
-      const t = new Text({
-        text: `[ ${b.label} ]`,
+    const btnW = 280;
+    const btnH = 28;
+
+    const makeServiceBtn = (
+      b: { label: string; color: number; action: () => void },
+      yPos: number,
+      blocked: boolean,
+    ): void => {
+      const btn = new Container();
+      btn.x = w / 2 - btnW / 2;
+      btn.y = yPos;
+
+      const bg = new Graphics();
+      bg.roundRect(0, 0, btnW, btnH, 4);
+      bg.fill({ color: blocked ? 0x1a1a2e : 0x0a1428, alpha: 0.9 });
+      bg.stroke({ color: blocked ? 0x334455 : b.color, width: 1 });
+      btn.addChild(bg);
+
+      const lbl = new Text({
+        text: b.label,
         style: {
           fontFamily: "Courier New",
-          fontSize: 18,
+          fontSize: 13,
           fill: blocked ? 0x445566 : b.color,
           fontWeight: "bold",
         },
       });
-      t.anchor.set(0.5);
-      t.x = w / 2;
-      t.y = y;
+      lbl.anchor.set(0.5);
+      lbl.x = btnW / 2;
+      lbl.y = btnH / 2;
+      lbl.eventMode = "none";
+      btn.addChild(lbl);
+
       if (blocked) {
-        t.eventMode = "none";
+        btn.eventMode = "none";
       } else {
-        t.eventMode = "static";
-        t.cursor = "pointer";
-        t.on("pointerdown", (e) => {
+        btn.eventMode = "static";
+        btn.cursor = "pointer";
+        btn.on("pointerdown", (e) => {
           e.stopPropagation();
           b.action();
         });
-        t.on("pointerover", () => {
-          t.alpha = 0.7;
+        btn.on("pointerover", () => {
+          bg.clear();
+          bg.roundRect(0, 0, btnW, btnH, 4);
+          bg.fill({ color: b.color, alpha: 0.22 });
+          bg.stroke({ color: b.color, width: 2 });
         });
-        t.on("pointerout", () => {
-          t.alpha = 1;
+        btn.on("pointerout", () => {
+          bg.clear();
+          bg.roundRect(0, 0, btnW, btnH, 4);
+          bg.fill({ color: 0x0a1428, alpha: 0.9 });
+          bg.stroke({ color: b.color, width: 1 });
         });
       }
-      ui.addChild(t);
+      ui.addChild(btn);
+    };
+
+    const visible = visiblePlanetServices(this.planet.isHabitable, buttons);
+    let y = btnStartY;
+    for (const b of visible) {
+      makeServiceBtn(b, y, isHostile && b.label !== "Взлёт");
       y += btnStep;
     }
 
     // Show bribe button when hostile to the controlling faction.
     if (isHostile && this.planet.isHabitable) {
-      const brLabel = new Text({
-        text: `[ Дать взятку (${BRIBE_COST} ₡) ]`,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 16,
-          fill: 0xffaa44,
-          fontWeight: "bold",
+      makeServiceBtn(
+        {
+          label: `Дать взятку (${BRIBE_COST} ₡)`,
+          color: 0xffaa44,
+          action: () => this.payBribe(faction),
         },
-      });
-      brLabel.anchor.set(0.5);
-      brLabel.x = w / 2;
-      brLabel.y = y;
-      brLabel.eventMode = "static";
-      brLabel.cursor = "pointer";
-      brLabel.on("pointerdown", (e) => {
-        e.stopPropagation();
-        this.payBribe(planetFaction);
-      });
-      brLabel.on("pointerover", () => {
-        brLabel.alpha = 0.7;
-      });
-      brLabel.on("pointerout", () => {
-        brLabel.alpha = 1;
-      });
-      ui.addChild(brLabel);
+        y,
+        false,
+      );
     }
 
     this.renderer.uiLayer.addChild(ui);
@@ -532,26 +709,6 @@ export class PlanetScene extends GameScene {
     const system = this.gameEngine.galaxy?.systems.find((s) =>
       s.planets.some((p) => p.id === this.planet!.id),
     );
-
-    const FACTION_RU: Record<string, string> = {
-      OUTLANDERS: "Окраинники",
-      BASTIONS: "Бастион",
-      SYNDICATE: "Синдикат",
-      PARADOXES: "Парадокс",
-      PROGRESSORS: "Прогрессоры",
-      INDEPENDENT: "Независимая",
-      OVERMIND: "Сверхразум",
-    };
-
-    const FACTION_COLOR: Record<string, number> = {
-      OUTLANDERS: 0xff6600,
-      BASTIONS: 0xcc2222,
-      SYNDICATE: 0x22cc22,
-      PARADOXES: 0xaa22cc,
-      PROGRESSORS: 0x2266ff,
-      INDEPENDENT: 0x999999,
-      OVERMIND: 0xff22cc,
-    };
 
     const faction = system?.ownerFaction ?? "INDEPENDENT";
     const factionName = FACTION_RU[faction] ?? faction;
