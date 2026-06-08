@@ -317,7 +317,7 @@ export class StarMapScene extends GameScene {
       style: {
         fontFamily: "Courier New",
         fontSize: 11,
-        fill: 0x888888,
+        fill: 0xaaaaaa,
       },
     });
     instructions.x = 20;
@@ -660,7 +660,7 @@ export class StarMapScene extends GameScene {
           : system.id === this.playerSystemId
             ? 0x00ff00
             : visibility === "neighbor"
-              ? 0x445566
+              ? 0x88aacc
               : 0x88ccff;
 
         const label = new Text({
@@ -854,7 +854,7 @@ export class StarMapScene extends GameScene {
         style: {
           fontFamily: "Courier New",
           fontSize: 9,
-          fill: 0x666666,
+          fill: 0x889999,
         },
       });
       typeLabel.x = 25;

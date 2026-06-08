@@ -72,6 +72,20 @@ export const RANK_DISCOUNT_THRESHOLD = 5;
 /** Price multiplier for high-rank players (15% off). */
 export const RANK_DISCOUNT_FACTOR = 0.85;
 
+/** Base font sizes in px. Multiply by `currentFontScale()` from fontScale.ts for final size. */
+export const BASE_FONT_SIZES = {
+  /** Small labels, badges, mini-log */
+  label: 11,
+  /** Body text: descriptions, item names, dialogue */
+  body: 13,
+  /** Tooltip text */
+  tooltip: 12,
+  /** HUD buttons (play/pause, speed) */
+  hud: 16,
+  /** Section titles and headings */
+  title: 18,
+} as const;
+
 /**
  * System geometry constants. All measurements in world pixels.
  * Keep in sync with PlanetGenerator.ORBITAL_RADII (CLAUDE.md Rule 5).

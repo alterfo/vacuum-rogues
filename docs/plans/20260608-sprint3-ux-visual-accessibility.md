@@ -80,12 +80,12 @@
 - Modify: `src/presentation/SpaceFlightScene.ts` (Settings UI)
 - Create: `src/utils/fontScale.ts`
 
-- [ ] Создать `src/utils/fontScale.ts`: `FONT_SIZES = { S: 0.85, M: 1.0, L: 1.25 }` и `currentFontScale()` / `setFontScale(size: 'S'|'M'|'L')` — читает/пишет `localStorage.getItem('fontScale')`
-- [ ] В `balance.ts` добавить `BASE_FONT_SIZES` — базовые размеры в px для каждого типа текста (UI label, body, title, tooltip). Все `fontSize` в компонентах умножать на `currentFontScale()`
-- [ ] Кнопка шестерёнки «⚙» в HUD `SpaceFlightScene` (левый нижний угол) открывает мини-панель настроек: кнопки `[A]` `[A]` `[A]` (S/M/L) с рамкой у активного; изменение сразу перестраивает HUD через `handleResize()`
-- [ ] Правило контраста — **запретить серый текст на чёрном**: аудит всех `style.fill = 0x888888` / `0x666666` / `0x445566` на тёмных фонах → заменить на минимум `0xaaaaaa` (или белый `0xffffff`); тёмный фон panels поднять до `0x111122` min
-- [ ] Конкретные места замены: `InfoCenterScene` dim results, `JobBoardPanel` description text, `StarMapScene` neighbour system labels (сейчас `0x445566` → `0x88aacc`), `SpaceFlightScene` mini-log
-- [ ] `npm test -- --run` + `npm run lint` — без регрессий
+- [x] Создать `src/utils/fontScale.ts`: `FONT_SIZES = { S: 0.85, M: 1.0, L: 1.25 }` и `currentFontScale()` / `setFontScale(size: 'S'|'M'|'L')` — читает/пишет `localStorage.getItem('fontScale')`
+- [x] В `balance.ts` добавить `BASE_FONT_SIZES` — базовые размеры в px для каждого типа текста (UI label, body, title, tooltip). Все `fontSize` в компонентах умножать на `currentFontScale()`
+- [x] Кнопка шестерёнки «⚙» в HUD `SpaceFlightScene` (левый нижний угол) открывает мини-панель настроек: кнопки `[A]` `[A]` `[A]` (S/M/L) с рамкой у активного; изменение сразу перестраивает HUD через `handleResize()`
+- [x] Правило контраста — **запретить серый текст на чёрном**: аудит всех `style.fill = 0x888888` / `0x666666` / `0x445566` на тёмных фонах → заменить на минимум `0xaaaaaa` (или белый `0xffffff`); тёмный фон panels поднять до `0x111122` min
+- [x] Конкретные места замены: `InfoCenterScene` dim results, `JobBoardPanel` description text, `StarMapScene` neighbour system labels (сейчас `0x445566` → `0x88aacc`), `SpaceFlightScene` mini-log
+- [x] `npm test -- --run` + `npm run lint` — без регрессий
 
 ### Task 5: Эквиректангулярный фон планетарного экрана
 

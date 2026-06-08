@@ -42,6 +42,11 @@ import { ShipPhysics } from "@/systems/ShipPhysics";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { PanZoomController } from "@/systems/PanZoomController";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
+import {
+  currentFontSizeKey,
+  setFontScale,
+  type FontSizeKey,
+} from "@/utils/fontScale";
 import { SpaceBackgroundLayer } from "./SpaceBackgroundLayer";
 
 /** Display names for factions shown in planet tooltips. */
@@ -289,6 +294,10 @@ export class SpaceFlightScene extends GameScene {
   // Speed control HUD button (cycles 1×/2×/4×)
   private speedButton: Text | null = null;
   private speedIndex: number = 0; // index into GAME_BALANCE.gameSpeedMultipliers
+
+  // Font-size settings: gear button + toggled panel (bottom-left HUD)
+  private gearButton: Text | null = null;
+  private settingsPanel: Container | null = null;
 
   // Two-step movement: plan route, then execute
   private plannedRoute: { x: number; y: number } | null = null;
@@ -707,6 +716,11 @@ export class SpaceFlightScene extends GameScene {
     this.playPauseButton = null;
     this.speedButton = null;
     this.speedIndex = 0;
+    this.gearButton = null;
+    if (this.settingsPanel) {
+      this.settingsPanel.destroy({ children: true });
+      this.settingsPanel = null;
+    }
     this.isTurnRunning = false;
     this.pauseRequested = false;
     this.turnHintShown = false;
@@ -2368,6 +2382,124 @@ export class SpaceFlightScene extends GameScene {
     });
     this.renderer.uiLayer.addChild(speedBtn);
     this.speedButton = speedBtn;
+
+    // Gear button (⚙) — bottom-left, above mini-log — opens font-size panel.
+    const gearBtn = new Text({
+      text: "⚙",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 16,
+        fill: 0x88aacc,
+        stroke: { color: 0x000000, width: 3 },
+      },
+    });
+    gearBtn.anchor.set(0, 1);
+    gearBtn.x = 20;
+    gearBtn.y = this.renderer.app.screen.height - 130;
+    gearBtn.eventMode = "static";
+    gearBtn.cursor = "pointer";
+    gearBtn.on("pointerdown", (event) => {
+      event.stopPropagation();
+      this.toggleSettingsPanel();
+    });
+    gearBtn.on("pointerover", () => {
+      gearBtn.alpha = 0.7;
+    });
+    gearBtn.on("pointerout", () => {
+      gearBtn.alpha = 1;
+    });
+    this.renderer.uiLayer.addChild(gearBtn);
+    this.gearButton = gearBtn;
+  }
+
+  /** Toggle the font-size mini-panel (S / M / L). */
+  private toggleSettingsPanel(): void {
+    if (this.settingsPanel) {
+      this.settingsPanel.destroy({ children: true });
+      this.settingsPanel = null;
+      return;
+    }
+    if (!this.gearButton) return;
+    const panel = new Container();
+    const panelW = 120;
+    const panelH = 44;
+    const panelX = this.gearButton.x;
+    const panelY = this.gearButton.y - panelH - 4;
+
+    const bg = new Graphics();
+    bg.roundRect(0, 0, panelW, panelH, 4).fill({
+      color: 0x0a1520,
+      alpha: 0.92,
+    });
+    bg.roundRect(0, 0, panelW, panelH, 4).stroke({ color: 0x334455, width: 1 });
+    panel.addChild(bg);
+
+    const active = currentFontSizeKey();
+    const sizes: FontSizeKey[] = ["S", "M", "L"];
+    const labels = ["A", "A", "A"];
+    const btnFontSizes = [14, 18, 22];
+
+    sizes.forEach((key, i) => {
+      const isActive = key === active;
+      const btnX = 8 + i * 36;
+      const btnY = 6;
+      const btnW = 30;
+      const btnH = 32;
+
+      const btnBg = new Graphics();
+      btnBg.roundRect(btnX, btnY, btnW, btnH, 3).fill({
+        color: isActive ? 0x1a3048 : 0x0e1e2c,
+        alpha: 1,
+      });
+      if (isActive) {
+        btnBg.roundRect(btnX, btnY, btnW, btnH, 3).stroke({
+          color: 0x00ccff,
+          width: 1,
+        });
+      }
+      btnBg.eventMode = "none";
+      panel.addChild(btnBg);
+
+      const lbl = new Text({
+        text: labels[i],
+        style: {
+          fontFamily: "Courier New",
+          fontSize: btnFontSizes[i],
+          fill: isActive ? 0x00ccff : 0x88aacc,
+        },
+      });
+      lbl.anchor.set(0.5);
+      lbl.x = btnX + btnW / 2;
+      lbl.y = btnY + btnH / 2;
+      lbl.eventMode = "none";
+      panel.addChild(lbl);
+
+      const hit = new Graphics();
+      hit
+        .roundRect(btnX, btnY, btnW, btnH, 3)
+        .fill({ color: 0xffffff, alpha: 0.001 });
+      hit.eventMode = "static";
+      hit.cursor = "pointer";
+      hit.on("pointerdown", (event) => {
+        event.stopPropagation();
+        setFontScale(key);
+        if (this.settingsPanel) {
+          this.settingsPanel.destroy({ children: true });
+          this.settingsPanel = null;
+        }
+        if (this.gameEngine) {
+          void this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
+            gameEngine: this.gameEngine,
+          });
+        }
+      });
+      panel.addChild(hit);
+    });
+
+    panel.x = panelX;
+    panel.y = panelY;
+    this.renderer.uiLayer.addChild(panel);
+    this.settingsPanel = panel;
   }
 
   /**
@@ -2962,6 +3094,13 @@ export class SpaceFlightScene extends GameScene {
     if (this.speedButton) {
       this.speedButton.x = w - 20;
       this.speedButton.y = h - 220;
+    }
+
+    if (this.gearButton) {
+      this.gearButton.y = h - 130;
+    }
+    if (this.settingsPanel) {
+      this.settingsPanel.y = h - 130 - 48;
     }
 
     if (this.miniLogContainer) {
@@ -4226,7 +4365,7 @@ export class SpaceFlightScene extends GameScene {
     if (planet.isHabitable) {
       lines.push({ text: "Обитаема", color: 0x44dd44 });
     } else {
-      lines.push({ text: "Необитаема", color: 0x888888 });
+      lines.push({ text: "Необитаема", color: 0xaaaaaa });
     }
 
     // Line 3: faction + player reputation (use actual controller if planet is captured)

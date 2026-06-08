@@ -581,7 +581,7 @@ export class InfoCenterScene extends GameScene {
 
       const dayBadge = new Text({
         text: `Д${item.day}`,
-        style: { fontSize: 11, fill: 0x445566, fontFamily: "monospace" },
+        style: { fontSize: 11, fill: 0x88aacc, fontFamily: "monospace" },
       });
       dayBadge.x = PAD + 6;
       dayBadge.y = y + ROW_H / 2 - 7;
@@ -678,7 +678,7 @@ export class InfoCenterScene extends GameScene {
       text: queryText,
       style: {
         fontSize: 13,
-        fill: this.objectsQuery.length > 0 ? 0xeeddaa : 0x445566,
+        fill: this.objectsQuery.length > 0 ? 0xeeddaa : 0x88aacc,
         fontFamily: "monospace",
       },
     });
@@ -735,7 +735,7 @@ export class InfoCenterScene extends GameScene {
           this.objectsQuery.length === 0
             ? "Введите запрос и нажмите Найти или Enter"
             : "Ничего не найдено",
-        style: { fontSize: 13, fill: 0x445566, fontFamily: "monospace" },
+        style: { fontSize: 13, fill: 0x88aacc, fontFamily: "monospace" },
       });
       empty.x = PAD;
       empty.y = LIST_Y + 10;
@@ -1134,7 +1134,7 @@ export class InfoCenterScene extends GameScene {
     if (this.gearResults.length === 0) {
       const empty = new Text({
         text: "Нажмите Найти для поиска снаряжения",
-        style: { fontSize: 13, fill: 0x445566, fontFamily: "monospace" },
+        style: { fontSize: 13, fill: 0x88aacc, fontFamily: "monospace" },
       });
       empty.x = PAD;
       empty.y = LIST_Y + 10;
