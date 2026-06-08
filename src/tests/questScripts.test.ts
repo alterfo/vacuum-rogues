@@ -3,6 +3,7 @@ import { QuestVM } from "@/systems/quests/QuestVM";
 import { customsScript } from "@/systems/quests/scripts/customs";
 import { gravitySlalomScript } from "@/systems/quests/scripts/gravity-slalom";
 import { investigationScript } from "@/systems/quests/scripts/investigation";
+import { cargoSortScript } from "@/systems/quests/scripts/cargo-sort";
 
 // Advance through all autoExecute transitions until a manual decision or finished state
 function advanceAuto(vm: QuestVM): void {
@@ -614,5 +615,241 @@ describe("Investigation quest", () => {
     solveInvestigation(vm2);
     expect(vm1.isSuccess()).toBe(vm2.isSuccess());
     expect(vm1.getParam("murderer")).toBe(vm2.getParam("murderer"));
+  });
+});
+
+// Greedy dock assignment: always pick the dock with the lowest current load
+function assignGreedy(vm: QuestVM): number {
+  const d1 = vm.getParam("dock1_load");
+  const d2 = vm.getParam("dock2_load");
+  const d3 = vm.getParam("dock3_load");
+  if (d1 <= d2 && d1 <= d3) return 1;
+  if (d2 <= d1 && d2 <= d3) return 2;
+  return 3;
+}
+
+// Advance through init_breakdown (autoExecute) and any subsequent auto steps
+function advanceAutoCS(vm: QuestVM): void {
+  const MAX = 30;
+  let steps = 0;
+  while (!vm.isFinished() && steps < MAX) {
+    steps++;
+    const avail = vm.availableTransitions();
+    if (avail.length === 0 || !avail[0].autoExecute) break;
+    vm.execute(avail[0].id);
+  }
+}
+
+// Full greedy playthrough: init → assign all 5 transports → final verdict
+function runGreedyCargoSort(vm: QuestVM): void {
+  advanceAutoCS(vm); // init_breakdown → dispatch_hub
+  const ships = ["A", "B", "C", "D", "E"];
+  for (const ship of ships) {
+    expect(vm.currentLocation().id).toBe("dispatch_hub");
+    const dock = assignGreedy(vm);
+    vm.execute(`go_select_${ship}`);
+    vm.execute(`assign_${ship}_dock${dock}`);
+    advanceAutoCS(vm); // assign_to_dockN → check_progress → dispatch_hub (or final checks)
+  }
+  // After the 5th assignment, advanceAutoCS continues through dock checks → final_verdict → result
+}
+
+describe("Cargo Sort quest", () => {
+  it("starts at init_breakdown and arrives at dispatch_hub after auto-init", () => {
+    const vm = new QuestVM(cargoSortScript, 1);
+    expect(vm.currentLocation().id).toBe("init_breakdown");
+    advanceAutoCS(vm);
+    expect(vm.currentLocation().id).toBe("dispatch_hub");
+  });
+
+  it("transport times are in range 1-4 before breakdown (raw init)", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const vm = new QuestVM(cargoSortScript, seed);
+      // Before init_breakdown fires, times are raw random(1,4)
+      for (const ship of ["A", "B", "C", "D", "E"]) {
+        const t = vm.getParam(`time_${ship}`);
+        expect(t).toBeGreaterThanOrEqual(1);
+        expect(t).toBeLessThanOrEqual(4);
+      }
+    }
+  });
+
+  it("one transport gets +2 hours after breakdown init", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const vm = new QuestVM(cargoSortScript, seed);
+      const before = ["A", "B", "C", "D", "E"].map((s) =>
+        vm.getParam(`time_${s}`),
+      );
+      advanceAutoCS(vm); // fires init_breakdown
+      const after = ["A", "B", "C", "D", "E"].map((s) =>
+        vm.getParam(`time_${s}`),
+      );
+      const incremented = after.filter((v, i) => v === before[i] + 2).length;
+      const unchanged = after.filter((v, i) => v === before[i]).length;
+      expect(incremented).toBe(1);
+      expect(unchanged).toBe(4);
+    }
+  });
+
+  it("break_ship determines which transport gets +2 hours", () => {
+    const vm = new QuestVM(cargoSortScript, 1);
+    const breakShip = vm.getParam("break_ship");
+    const ships = ["A", "B", "C", "D", "E"];
+    const timeBefore = vm.getParam(`time_${ships[breakShip]}`);
+    advanceAutoCS(vm);
+    expect(vm.getParam(`time_${ships[breakShip]}`)).toBe(timeBefore + 2);
+  });
+
+  it("all 5 transports can be assigned and assigned_count reaches 5", () => {
+    const vm = new QuestVM(cargoSortScript, 1);
+    advanceAutoCS(vm);
+    const ships = ["A", "B", "C", "D", "E"];
+    for (let i = 0; i < ships.length; i++) {
+      vm.execute(`go_select_${ships[i]}`);
+      vm.execute(`assign_${ships[i]}_dock1`);
+      advanceAutoCS(vm);
+      if (i < 4) {
+        expect(vm.currentLocation().id).toBe("dispatch_hub");
+        expect(vm.getParam("assigned_count")).toBe(i + 1);
+      }
+    }
+    // After 5th assignment, quest finishes (all in dock1 → overload)
+    expect(vm.isFinished()).toBe(true);
+  });
+
+  it("assigning to dock1 increases dock1_load by transport time", () => {
+    const vm = new QuestVM(cargoSortScript, 1);
+    advanceAutoCS(vm);
+    const timeA = vm.getParam("time_A");
+    vm.execute("go_select_A");
+    vm.execute("assign_A_dock1");
+    advanceAutoCS(vm);
+    expect(vm.getParam("dock1_load")).toBe(timeA);
+    expect(vm.getParam("assigned_A")).toBe(1);
+  });
+
+  it("assigning to dock2 increases dock2_load by transport time", () => {
+    const vm = new QuestVM(cargoSortScript, 1);
+    advanceAutoCS(vm);
+    const timeB = vm.getParam("time_B");
+    vm.execute("go_select_B");
+    vm.execute("assign_B_dock2");
+    advanceAutoCS(vm);
+    expect(vm.getParam("dock2_load")).toBe(timeB);
+    expect(vm.getParam("dock1_load")).toBe(0);
+  });
+
+  it("assigned transport no longer appears in dispatch_hub transitions", () => {
+    const vm = new QuestVM(cargoSortScript, 1);
+    advanceAutoCS(vm);
+    vm.execute("go_select_C");
+    vm.execute("assign_C_dock3");
+    advanceAutoCS(vm);
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).not.toContain("go_select_C");
+    expect(ids).toContain("go_select_A");
+    expect(ids).toContain("go_select_B");
+    expect(ids).toContain("go_select_D");
+    expect(ids).toContain("go_select_E");
+  });
+
+  it("back transition returns to dispatch_hub without assigning", () => {
+    const vm = new QuestVM(cargoSortScript, 1);
+    advanceAutoCS(vm);
+    vm.execute("go_select_A");
+    vm.execute("back_from_A");
+    expect(vm.currentLocation().id).toBe("dispatch_hub");
+    expect(vm.getParam("assigned_A")).toBe(0);
+    expect(vm.getParam("assigned_count")).toBe(0);
+  });
+
+  it("dock overloaded (>12h) increments overtime", () => {
+    const vm = new QuestVM(cargoSortScript, 1);
+    advanceAutoCS(vm);
+    // Force all 5 to dock1 — guaranteed overload since 5 × min(2h with breakdown) = 10-22h
+    vm.setParam("time_A", 4);
+    vm.setParam("time_B", 4);
+    vm.setParam("time_C", 4);
+    vm.setParam("time_D", 4);
+    vm.setParam("time_E", 4);
+    const ships = ["A", "B", "C", "D", "E"];
+    for (const ship of ships) {
+      vm.execute(`go_select_${ship}`);
+      vm.execute(`assign_${ship}_dock1`);
+      advanceAutoCS(vm);
+    }
+    // dock1_load = 20 > 12 → overtime = 1; dock2 = 0, dock3 = 0
+    expect(vm.getParam("overtime")).toBe(1);
+    expect(vm.isFinished()).toBe(true);
+    expect(vm.isSuccess()).toBe(false);
+    expect(vm.currentLocation().id).toBe("quest_failure_overtime");
+  });
+
+  it("no dock overloaded → overtime == 0 → quest success", () => {
+    const vm = new QuestVM(cargoSortScript, 1);
+    advanceAutoCS(vm);
+    // Set controlled times: 4,4,4 → dock1; 3,3 → dock2; none → dock3
+    vm.setParam("time_A", 4);
+    vm.setParam("time_B", 4);
+    vm.setParam("time_C", 4);
+    vm.setParam("time_D", 3);
+    vm.setParam("time_E", 3);
+    // Assign A+D to dock1 (7h), B+E to dock2 (7h), C to dock3 (4h) — all under 12
+    vm.execute("go_select_A");
+    vm.execute("assign_A_dock1");
+    advanceAutoCS(vm);
+    vm.execute("go_select_D");
+    vm.execute("assign_D_dock1");
+    advanceAutoCS(vm);
+    vm.execute("go_select_B");
+    vm.execute("assign_B_dock2");
+    advanceAutoCS(vm);
+    vm.execute("go_select_E");
+    vm.execute("assign_E_dock2");
+    advanceAutoCS(vm);
+    vm.execute("go_select_C");
+    vm.execute("assign_C_dock3");
+    advanceAutoCS(vm);
+    expect(vm.getParam("overtime")).toBe(0);
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.currentLocation().id).toBe("quest_success");
+  });
+
+  it("greedy strategy achieves overtime == 0 for seed 1 (optimal distribution)", () => {
+    const vm = new QuestVM(cargoSortScript, 1);
+    runGreedyCargoSort(vm);
+    expect(vm.isFinished()).toBe(true);
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("overtime")).toBe(0);
+  });
+
+  it("greedy strategy achieves overtime < 4 for any seed 0-29", () => {
+    for (let seed = 0; seed < 30; seed++) {
+      const vm = new QuestVM(cargoSortScript, seed);
+      runGreedyCargoSort(vm);
+      expect(vm.getParam("overtime")).toBeLessThan(4);
+    }
+  });
+
+  it("quest result is deterministic for the same seed", () => {
+    const vm1 = new QuestVM(cargoSortScript, 42);
+    const vm2 = new QuestVM(cargoSortScript, 42);
+    runGreedyCargoSort(vm1);
+    runGreedyCargoSort(vm2);
+    expect(vm1.isSuccess()).toBe(vm2.isSuccess());
+    expect(vm1.getParam("dock1_load")).toBe(vm2.getParam("dock1_load"));
+    expect(vm1.getParam("overtime")).toBe(vm2.getParam("overtime"));
+  });
+
+  it("text interpolation shows dock loads in location text", () => {
+    const vm = new QuestVM(cargoSortScript, 1);
+    advanceAutoCS(vm);
+    vm.setParam("dock1_load", 5);
+    vm.setParam("dock2_load", 3);
+    vm.setParam("dock3_load", 7);
+    const text = vm.interpolate(vm.currentLocation().text);
+    expect(text).toContain("5");
+    expect(text).toContain("3");
+    expect(text).toContain("7");
   });
 });
