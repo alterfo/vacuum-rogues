@@ -42,6 +42,7 @@ import { ShipPhysics } from "@/systems/ShipPhysics";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { PanZoomController } from "@/systems/PanZoomController";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
+import { SpaceBackgroundLayer } from "./SpaceBackgroundLayer";
 
 /** Display names for factions shown in planet tooltips. */
 const FACTION_DISPLAY_NAME: Record<Faction, string> = {
@@ -168,6 +169,7 @@ export class SpaceFlightScene extends GameScene {
   // Occasional foreground asteroids/comets drifting across the view (US-070 #1).
   private asteroidContainer: Container | null = null;
   private asteroids: AsteroidMote[] = [];
+  private spaceBackgroundLayer: SpaceBackgroundLayer | null = null;
   private warpEffect: WarpArrivalEffect | null = null; // Warp-exit flash/rings
   private bgElapsed = 0; // Animation clock for background (ms)
   private shipPhysics: ShipPhysics | null = null;
@@ -470,6 +472,16 @@ export class SpaceFlightScene extends GameScene {
     this.skyContainer.eventMode = "none";
     this.renderer.stage.addChildAt(this.skyContainer, 0);
 
+    // Mid-ground parallax layer (screen-fixed, between sky and game world).
+    // Inserted at index 1 so it sits above the deep-space skybox but below gameLayer.
+    this.spaceBackgroundLayer = new SpaceBackgroundLayer(
+      this.renderer.stage,
+      1,
+      this.renderer.app.screen.width,
+      this.renderer.app.screen.height,
+      this.gameEngine?.player?.currentSystemId ?? "default",
+    );
+
     // Reserved world-space container (currently empty; nebulae moved to skyContainer).
     this.backgroundContainer = new Container();
     this.renderer.gameLayer.addChild(this.backgroundContainer);
@@ -613,6 +625,7 @@ export class SpaceFlightScene extends GameScene {
 
   update(deltaTime: number): void {
     this.bgElapsed += deltaTime;
+    this.spaceBackgroundLayer?.update(deltaTime);
     this.updateStarField(deltaTime);
     this.updateDust(deltaTime);
     this.updateAsteroids(deltaTime);
@@ -783,6 +796,11 @@ export class SpaceFlightScene extends GameScene {
       this.renderer.stage.removeChild(this.skyContainer);
       this.skyContainer.destroy({ children: true });
       this.skyContainer = null;
+    }
+
+    if (this.spaceBackgroundLayer) {
+      this.spaceBackgroundLayer.destroy();
+      this.spaceBackgroundLayer = null;
     }
 
     this.starLayers = [];
