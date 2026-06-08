@@ -84,24 +84,24 @@
 **Files:**
 - Create: `e2e/playtest-02-text-quests.spec.ts`
 
-- [ ] Тест `should start and complete reactor quest`:
+- [x] Тест `should start and complete reactor quest`:
   - Новая игра → посадка на планету
   - `engine.startTextQuest('reactor', 42)` → `waitForScene('TextQuestScene')`
   - Проверить что в DOM/canvas есть параметр `time_left` (через `engine.currentScene.vm.getParam('time_left')`)
   - Сделать 5 переходов через `engine.currentScene.executeTransition('rod_a_up')`
   - Проверить что `time_left` уменьшилось
   - `errorCollector.assertNoErrors()`
-- [ ] Тест `should handle quest failure gracefully`:
+- [x] Тест `should handle quest failure gracefully`:
   - Запустить квест reactor с seed где начальные стержни далеко от цели
   - Нажимать произвольные переходы пока `time_left <= 0`
   - Проверить что показан экран провала (не crash)
   - Проверить `waitForScene('PlanetScene')` после нажатия «Попробовать снова» → «Выход»
-- [ ] Тест `should complete customs quest optimally`:
+- [x] Тест `should complete customs quest optimally`:
   - seed=1 (конкретный seed); запустить квест, пройти все 20 раундов
   - сканировать корабли с `suspicion >= 7` → skip остальных
   - проверить `quest.isSuccess === true`
-- [ ] `npm run test:e2e -- --run e2e/playtest-02-text-quests.spec.ts`
-- [ ] `npm run lint` — без ошибок
+- [x] `npm run test:e2e -- --run e2e/playtest-02-text-quests.spec.ts`
+- [x] `npm run lint` — без ошибок
 
 ### Task 4: Dead-end проверка всех сцен
 
