@@ -12,6 +12,11 @@ export class PanZoomController {
   private _dragStartX = 0;
   private _dragStartY = 0;
   private _dragDistance = 0;
+  // True only when startDragTracking was called for the current pointer gesture.
+  // Prevents shouldSwallowClick() from firing when pointerdown was intercepted by
+  // a child (planet/NPC) and the stage handler never ran — stale _dragStartX/Y
+  // would otherwise produce a large _dragDistance and clear the freshly-set route.
+  private _dragTrackingActive = false;
 
   get isPanning(): boolean {
     return this._isPanning;
@@ -36,6 +41,7 @@ export class PanZoomController {
     this._dragStartX = x;
     this._dragStartY = y;
     this._dragDistance = 0;
+    this._dragTrackingActive = true;
   }
 
   /**
@@ -62,6 +68,7 @@ export class PanZoomController {
   reset(): void {
     this._isPanning = false;
     this._dragDistance = 0;
+    this._dragTrackingActive = false;
   }
 
   /**
@@ -70,6 +77,6 @@ export class PanZoomController {
    * release should NOT trigger route planning.
    */
   shouldSwallowClick(): boolean {
-    return this._dragDistance > DRAG_THRESHOLD;
+    return this._dragTrackingActive && this._dragDistance > DRAG_THRESHOLD;
   }
 }
