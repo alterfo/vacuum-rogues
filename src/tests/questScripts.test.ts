@@ -4,6 +4,7 @@ import { customsScript } from "@/systems/quests/scripts/customs";
 import { gravitySlalomScript } from "@/systems/quests/scripts/gravity-slalom";
 import { investigationScript } from "@/systems/quests/scripts/investigation";
 import { cargoSortScript } from "@/systems/quests/scripts/cargo-sort";
+import { reactorScript } from "@/systems/quests/scripts/reactor";
 
 // Advance through all autoExecute transitions until a manual decision or finished state
 function advanceAuto(vm: QuestVM): void {
@@ -851,5 +852,211 @@ describe("Cargo Sort quest", () => {
     expect(text).toContain("5");
     expect(text).toContain("3");
     expect(text).toContain("7");
+  });
+});
+
+// Advance through all autoExecute transitions (init + check chain) until reactor_control or finished
+function advanceAutoReactor(vm: QuestVM): void {
+  const MAX = 20;
+  let steps = 0;
+  while (!vm.isFinished() && steps < MAX) {
+    steps++;
+    const avail = vm.availableTransitions();
+    if (avail.length === 0 || !avail[0].autoExecute) break;
+    vm.execute(avail[0].id);
+  }
+}
+
+// Greedy solver: move each rod one step toward its target (A=3 B=4 C=4 D=2).
+// After each manual move, advance through the autoExecute check chain.
+function solveReactor(vm: QuestVM): void {
+  const MAX_STEPS = 30;
+  let steps = 0;
+  advanceAutoReactor(vm); // consume init + initial check chain
+  while (!vm.isFinished() && steps < MAX_STEPS) {
+    steps++;
+    if (vm.currentLocation().id !== "reactor_control") {
+      advanceAutoReactor(vm);
+      continue;
+    }
+    const a = vm.getParam("rod_a");
+    const b = vm.getParam("rod_b");
+    const c = vm.getParam("rod_c");
+    const d = vm.getParam("rod_d");
+    if (a !== 3) {
+      vm.execute(a < 3 ? "a_up" : "a_down");
+    } else if (b !== 4) {
+      vm.execute(b < 4 ? "b_up" : "b_down");
+    } else if (c !== 4) {
+      vm.execute(c < 4 ? "c_up" : "c_down");
+    } else if (d !== 2) {
+      vm.execute(d < 2 ? "d_up" : "d_down");
+    } else {
+      break; // already at solution (shouldn't happen after init check, but guard)
+    }
+    advanceAutoReactor(vm); // process check chain after each move
+  }
+}
+
+describe("Reactor quest", () => {
+  it("starts with time_left=120 and all rods in range 0-5", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    expect(vm.getParam("time_left")).toBe(120);
+    for (const rod of ["rod_a", "rod_b", "rod_c", "rod_d"]) {
+      const v = vm.getParam(rod);
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(5);
+    }
+  });
+
+  it("after init advances to reactor_control (when not already solved)", () => {
+    // Use seed that gives a non-solution start (overwhelmingly likely)
+    const vm = new QuestVM(reactorScript, 7);
+    advanceAutoReactor(vm);
+    // Either at reactor_control (unsolved) or at stable (lucky solution start)
+    expect(["reactor_control", "stable"]).toContain(vm.currentLocation().id);
+  });
+
+  it("a_up increments rod_a by 1 and costs 5 seconds", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    advanceAutoReactor(vm);
+    vm.setParam("rod_a", 1);
+    vm.execute("a_up");
+    advanceAutoReactor(vm);
+    expect(vm.getParam("rod_a")).toBe(2);
+    expect(vm.getParam("time_left")).toBe(115);
+  });
+
+  it("a_down decrements rod_a by 1 and costs 5 seconds", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    advanceAutoReactor(vm);
+    vm.setParam("rod_a", 4);
+    vm.execute("a_down");
+    advanceAutoReactor(vm);
+    expect(vm.getParam("rod_a")).toBe(3);
+    expect(vm.getParam("time_left")).toBe(115);
+  });
+
+  it("a_up not available when rod_a=5", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    advanceAutoReactor(vm);
+    vm.setParam("rod_a", 5);
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).not.toContain("a_up");
+    expect(ids).toContain("a_down");
+  });
+
+  it("a_down not available when rod_a=0", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    advanceAutoReactor(vm);
+    vm.setParam("rod_a", 0);
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).not.toContain("a_down");
+    expect(ids).toContain("a_up");
+  });
+
+  it("time_left reaching 0 triggers reactor_explosion", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    advanceAutoReactor(vm);
+    vm.setParam("time_left", 5);
+    vm.setParam("rod_a", 1); // ensure not at solution
+    vm.execute("a_up");
+    // time_left = 0 → critMin:1 → reactor_explosion
+    expect(vm.isFinished()).toBe(true);
+    expect(vm.isSuccess()).toBe(false);
+    expect(vm.currentLocation().id).toBe("reactor_explosion");
+  });
+
+  it("setting all rods to solution (A=3 B=4 C=4 D=2) leads to stable", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    advanceAutoReactor(vm);
+    vm.setParam("rod_a", 3);
+    vm.setParam("rod_b", 4);
+    vm.setParam("rod_c", 4);
+    vm.setParam("rod_d", 2);
+    // Trigger check by making any valid move then undoing it, or by directly verifying
+    // Simulate adjusting d_up then d_down to trigger the check chain at solution
+    vm.setParam("rod_d", 1); // temporarily break solution
+    vm.execute("d_up"); // d_d = 2 again, time -= 5; goes to check_stable
+    advanceAutoReactor(vm); // check chain → stable
+    expect(vm.isFinished()).toBe(true);
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.currentLocation().id).toBe("stable");
+  });
+
+  it("wrong rod values return to reactor_control after check", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    advanceAutoReactor(vm);
+    vm.setParam("rod_a", 1); // not 3
+    vm.setParam("rod_b", 4);
+    vm.setParam("rod_c", 4);
+    vm.setParam("rod_d", 2);
+    vm.execute("a_up"); // rod_a=2, still not 3 → check_stable → check_a_fail → reactor_control
+    advanceAutoReactor(vm);
+    expect(vm.currentLocation().id).toBe("reactor_control");
+    expect(vm.isFinished()).toBe(false);
+  });
+
+  it("greedy solver finds solution within time budget for seed 1", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    solveReactor(vm);
+    expect(vm.isFinished()).toBe(true);
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("time_left")).toBeGreaterThan(0);
+  });
+
+  it("greedy solver solves quest for any seed 0-19", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const vm = new QuestVM(reactorScript, seed);
+      solveReactor(vm);
+      // Quest is solvable within the 24-move time budget (max Manhattan distance ≤ 14)
+      expect(vm.isSuccess()).toBe(true);
+      expect(vm.getParam("time_left")).toBeGreaterThan(0);
+    }
+  });
+
+  it("quest result is deterministic for the same seed", () => {
+    const vm1 = new QuestVM(reactorScript, 42);
+    const vm2 = new QuestVM(reactorScript, 42);
+    solveReactor(vm1);
+    solveReactor(vm2);
+    expect(vm1.isSuccess()).toBe(vm2.isSuccess());
+    expect(vm1.getParam("time_left")).toBe(vm2.getParam("time_left"));
+    expect(vm1.getParam("rod_a")).toBe(vm2.getParam("rod_a"));
+  });
+
+  it("different seeds produce different initial rod configurations", () => {
+    const configs = new Set<string>();
+    for (let seed = 0; seed < 50; seed++) {
+      const vm = new QuestVM(reactorScript, seed);
+      const key = `${vm.getParam("rod_a")}${vm.getParam("rod_b")}${vm.getParam("rod_c")}${vm.getParam("rod_d")}`;
+      configs.add(key);
+    }
+    expect(configs.size).toBeGreaterThanOrEqual(10);
+  });
+
+  it("text interpolation shows rod values and time in location text", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    advanceAutoReactor(vm);
+    vm.setParam("rod_a", 2);
+    vm.setParam("rod_b", 3);
+    vm.setParam("rod_c", 1);
+    vm.setParam("rod_d", 5);
+    vm.setParam("time_left", 85);
+    const text = vm.interpolate(vm.currentLocation().text);
+    expect(text).toContain("2");
+    expect(text).toContain("3");
+    expect(text).toContain("85");
+  });
+
+  it("explosion text interpolates final rod values", () => {
+    const vm = new QuestVM(reactorScript, 1);
+    advanceAutoReactor(vm);
+    vm.setParam("rod_a", 1);
+    vm.setParam("time_left", 5);
+    vm.execute("a_up"); // time_left → 0 → reactor_explosion
+    const text = vm.interpolate(vm.currentLocation().text);
+    expect(vm.currentLocation().id).toBe("reactor_explosion");
+    expect(text).toContain("2"); // rod_a was 1, now 2 after a_up
   });
 });
