@@ -3183,7 +3183,10 @@ export class SpaceFlightScene extends GameScene {
       if (burnShip) {
         burnShip.hullHP = Math.max(
           0,
-          burnShip.hullHP - GAME_BALANCE.starTouchDamage * (deltaTime / 1000),
+          burnShip.hullHP -
+            GAME_BALANCE.starTouchDamage *
+              (deltaTime / 1000) *
+              (this.shipPhysics?.timeScale ?? 1),
         );
       }
       if (!this.starTouchActive) {
@@ -3586,8 +3589,9 @@ export class SpaceFlightScene extends GameScene {
 
     // Cosmetic axial spin / moons only advance while the turn is running.
     if (this.isTurnRunning) {
+      const scaledDt = deltaTime * (this.shipPhysics?.timeScale ?? 1);
       for (const sprite of this.planetSprites) {
-        sprite.update(deltaTime);
+        sprite.update(scaledDt);
       }
     }
 
@@ -3762,7 +3766,7 @@ export class SpaceFlightScene extends GameScene {
       if (anchorPlanet) {
         sprite.updateAnchorPosition(anchorPlanet.screenX, anchorPlanet.screenY);
       }
-      sprite.update(deltaTime);
+      sprite.update(deltaTime * (this.shipPhysics?.timeScale ?? 1));
       if (sprite.isGone()) {
         this.npcAnchorPlanet.delete(sprite);
         sprite.destroy();
@@ -4171,9 +4175,12 @@ export class SpaceFlightScene extends GameScene {
       lines.push({ text: "Необитаема", color: 0x888888 });
     }
 
-    // Line 3: faction + player reputation
-    const factionLabel = FACTION_DISPLAY_NAME[systemFaction] ?? systemFaction;
-    const rep = this.gameEngine?.player?.getReputation(systemFaction) ?? 0;
+    // Line 3: faction + player reputation (use actual controller if planet is captured)
+    const controllingFaction =
+      (planet.capturedBy as Faction | null | undefined) ?? systemFaction;
+    const factionLabel =
+      FACTION_DISPLAY_NAME[controllingFaction] ?? controllingFaction;
+    const rep = this.gameEngine?.player?.getReputation(controllingFaction) ?? 0;
     const repLabel = reputationLabel(rep);
     const repColor = reputationColor(rep);
     lines.push({ text: `${factionLabel} · ${repLabel}`, color: repColor });

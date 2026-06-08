@@ -98,6 +98,7 @@ export class GovernmentScene extends GameScene {
   private planet: Planet | null = null;
   private uiContainer: Container | null = null;
   private jobBoardPanel: JobBoardPanel | null = null;
+  private toastTimers: ReturnType<typeof setTimeout>[] = [];
 
   constructor(renderer: Renderer) {
     super(renderer);
@@ -117,6 +118,8 @@ export class GovernmentScene extends GameScene {
 
   destroy(): void {
     this.closeJobBoard();
+    for (const t of this.toastTimers) clearTimeout(t);
+    this.toastTimers = [];
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
     this.uiContainer = null;
@@ -420,9 +423,11 @@ export class GovernmentScene extends GameScene {
     toast.eventMode = "none";
     this.uiContainer?.addChild(toast);
 
-    setTimeout(() => {
+    const handle = setTimeout(() => {
       if (!toast.destroyed) toast.destroy();
+      this.toastTimers = this.toastTimers.filter((t) => t !== handle);
     }, 2500);
+    this.toastTimers.push(handle);
   }
 
   private findSystem(): StarSystem | undefined {

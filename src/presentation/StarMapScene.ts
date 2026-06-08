@@ -40,6 +40,7 @@ export class StarMapScene extends GameScene {
   private boundMouseDown: ((e: MouseEvent) => void) | null = null;
   private boundMouseMove: ((e: MouseEvent) => void) | null = null;
   private boundMouseUp: ((e: MouseEvent) => void) | null = null;
+  private messageTimers: ReturnType<typeof setTimeout>[] = [];
 
   initialize(context?: object): void {
     // Ensure PixiJS events are active (previous scene may have disabled them)
@@ -226,6 +227,8 @@ export class StarMapScene extends GameScene {
 
   destroy(): void {
     this.closeConfirmDialog();
+    for (const t of this.messageTimers) clearTimeout(t);
+    this.messageTimers = [];
     const canvas = this.renderer.app.canvas;
     // Remove DOM event listeners
     if (this.boundHandleWheel) {
@@ -757,10 +760,14 @@ export class StarMapScene extends GameScene {
     msg.x = this.renderer.app.screen.width / 2;
     msg.y = this.renderer.app.screen.height / 2 + 120;
     this.renderer.uiLayer.addChild(msg);
-    setTimeout(() => {
-      this.renderer.uiLayer.removeChild(msg);
-      msg.destroy();
+    const handle = setTimeout(() => {
+      if (!msg.destroyed) {
+        this.renderer.uiLayer.removeChild(msg);
+        msg.destroy();
+      }
+      this.messageTimers = this.messageTimers.filter((t) => t !== handle);
     }, 2000);
+    this.messageTimers.push(handle);
   }
 
   private showSystemInfo(system: StarSystem): void {
@@ -906,7 +913,8 @@ export class StarMapScene extends GameScene {
       enterBtn.y = interactiveYStart + 20;
       enterBtn.eventMode = "static";
       enterBtn.cursor = "pointer";
-      enterBtn.on("pointerdown", async () => {
+      enterBtn.on("pointerdown", async (event) => {
+        event.stopPropagation();
         logger.info("Entering current system");
         await this.enterCurrentSystem();
       });
@@ -923,8 +931,9 @@ export class StarMapScene extends GameScene {
       const playerSystem = this.galaxy?.systems.find(
         (s) => s.id === this.playerSystemId,
       );
+      if (!playerSystem) return;
       // Check bidirectional: player→target OR target→player
-      const hasPathFromPlayer = playerSystem?.connections.some(
+      const hasPathFromPlayer = playerSystem.connections.some(
         (c) => c.toSystemId === system.id,
       );
       const hasPathToPlayer = system.connections.some(
@@ -934,7 +943,7 @@ export class StarMapScene extends GameScene {
 
       // Calculate distance and fuel cost
       const fuelCost = this.calculateFuelCost(
-        playerSystem!,
+        playerSystem,
         system,
         isConnected,
       );

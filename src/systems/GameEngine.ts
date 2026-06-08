@@ -679,6 +679,7 @@ export class GameEngine {
       SceneType.GOVERNMENT,
       SceneType.TEXT_QUEST,
       SceneType.WIN_SCREEN,
+      SceneType.INFO_CENTER,
     ];
     const savedScene = save.currentSceneType ?? SceneType.SPACE_FLIGHT;
     const sceneType = contextDependentScenes.includes(savedScene)

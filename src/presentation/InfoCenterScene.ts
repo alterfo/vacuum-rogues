@@ -152,7 +152,7 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
       const dist = hit.jumps === 0 ? "здесь" : `${hit.jumps} пр.`;
       const text = `[РЫНОК] ${RESOURCE_RU[res]}: лучшая цена "${sysName}" — ${hit.price} ₡ (${dist})`;
       items.push({
-        day: day - Math.floor(Math.random() * 3),
+        day: day - (hit.systemId.charCodeAt(0) % 3),
         text,
         color: 0x88ddaa,
         bookmarkKey: newsKey(day, text),
