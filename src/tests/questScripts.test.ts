@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { QuestVM } from "@/systems/quests/QuestVM";
 import { customsScript } from "@/systems/quests/scripts/customs";
 import { gravitySlalomScript } from "@/systems/quests/scripts/gravity-slalom";
+import { investigationScript } from "@/systems/quests/scripts/investigation";
 
 // Advance through all autoExecute transitions until a manual decision or finished state
 function advanceAuto(vm: QuestVM): void {
@@ -355,5 +356,263 @@ describe("Gravity Slalom quest", () => {
     vm.execute("a1_to_a2"); // fuel = 74
     const text = vm.interpolate(vm.currentLocation().text);
     expect(text).toContain("74");
+  });
+});
+
+// Helper: advance all auto-execute transitions until a manual choice or finished
+function advanceAutoInvestigation(vm: QuestVM): void {
+  const MAX = 20;
+  let steps = 0;
+  while (!vm.isFinished() && steps < MAX) {
+    steps++;
+    const avail = vm.availableTransitions();
+    if (avail.length === 0 || !avail[0].autoExecute) break;
+    vm.execute(avail[0].id);
+  }
+}
+
+// Helper: do a full correct playthrough (interview all 4, examine 5 clues, accuse correctly)
+function solveInvestigation(vm: QuestVM): void {
+  // Interview all 4 suspects
+  const interviewBtns = [
+    "go_interview_mechanic",
+    "go_interview_pilot",
+    "go_interview_trader2",
+    "go_interview_guard",
+  ];
+  const doneBtns = [
+    "done_mechanic",
+    "done_pilot",
+    "done_trader2",
+    "done_guard",
+  ];
+  for (let i = 0; i < 4; i++) {
+    vm.execute(interviewBtns[i]);
+    vm.execute(doneBtns[i]);
+  }
+
+  // Examine the first 5 clues
+  const clueIds = [
+    "examine_clue_0",
+    "examine_clue_1",
+    "examine_clue_2",
+    "examine_clue_3",
+    "examine_clue_4",
+  ];
+  const backIds = [
+    "back_from_e0",
+    "back_from_e1",
+    "back_from_e2",
+    "back_from_e3",
+    "back_from_e4",
+  ];
+  for (let i = 0; i < 5; i++) {
+    vm.execute(clueIds[i]);
+    vm.execute(backIds[i]);
+  }
+
+  // Navigate through accusation gate
+  vm.execute("go_accuse");
+  advanceAutoInvestigation(vm); // gate_interviews_pass → accuse_gate_clues
+  advanceAutoInvestigation(vm); // gate_clues_pass → accuse
+
+  // Accuse the correct suspect
+  const murderer = vm.getParam("murderer");
+  const accuseBtns = [
+    "accuse_mechanic",
+    "accuse_pilot",
+    "accuse_trader2",
+    "accuse_guard",
+  ];
+  vm.execute(accuseBtns[murderer]);
+  advanceAutoInvestigation(vm); // check_N_correct → quest_success
+}
+
+describe("Investigation quest", () => {
+  it("starts at warehouse with 0 interviews and 0 clues", () => {
+    const vm = new QuestVM(investigationScript, 1);
+    expect(vm.currentLocation().id).toBe("warehouse");
+    expect(vm.getParam("interviews_done")).toBe(0);
+    expect(vm.getParam("clues_examined")).toBe(0);
+    expect(vm.getParam("rating")).toBe(500);
+  });
+
+  it("murderer is 0-3 for any seed", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const vm = new QuestVM(investigationScript, seed);
+      const m = vm.getParam("murderer");
+      expect(m).toBeGreaterThanOrEqual(0);
+      expect(m).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("murderer varies across seeds", () => {
+    const values = new Set<number>();
+    for (let seed = 0; seed < 50; seed++) {
+      values.add(new QuestVM(investigationScript, seed).getParam("murderer"));
+    }
+    expect(values.size).toBe(4);
+  });
+
+  it("interviewing a suspect increments interviews_done", () => {
+    const vm = new QuestVM(investigationScript, 1);
+    vm.execute("go_interview_mechanic");
+    vm.execute("done_mechanic");
+    expect(vm.getParam("interviewed_0")).toBe(1);
+    expect(vm.getParam("interviews_done")).toBe(1);
+    expect(vm.currentLocation().id).toBe("warehouse");
+  });
+
+  it("interview button hidden after suspect is interviewed", () => {
+    const vm = new QuestVM(investigationScript, 1);
+    vm.execute("go_interview_mechanic");
+    vm.execute("done_mechanic");
+    const transitions = vm.availableTransitions().map((t) => t.id);
+    expect(transitions).not.toContain("go_interview_mechanic");
+  });
+
+  it("examining a clue increments clues_examined", () => {
+    const vm = new QuestVM(investigationScript, 1);
+    vm.execute("examine_clue_0");
+    vm.execute("back_from_e0");
+    expect(vm.getParam("examined_0")).toBe(1);
+    expect(vm.getParam("clues_examined")).toBe(1);
+  });
+
+  it("clue button hidden after it is examined", () => {
+    const vm = new QuestVM(investigationScript, 1);
+    vm.execute("examine_clue_0");
+    vm.execute("back_from_e0");
+    const transitions = vm.availableTransitions().map((t) => t.id);
+    expect(transitions).not.toContain("examine_clue_0");
+  });
+
+  it("accusation gate blocks when interviews_done < 4", () => {
+    const vm = new QuestVM(investigationScript, 1);
+    vm.execute("go_accuse");
+    advanceAutoInvestigation(vm); // gate → not_ready_interviews
+    expect(vm.currentLocation().id).toBe("not_ready_interviews");
+  });
+
+  it("accusation gate blocks when clues_examined < 5 even with all interviews done", () => {
+    const vm = new QuestVM(investigationScript, 1);
+    vm.setParam("interviews_done", 4);
+    vm.setParam("interviewed_0", 1);
+    vm.setParam("interviewed_1", 1);
+    vm.setParam("interviewed_2", 1);
+    vm.setParam("interviewed_3", 1);
+    // examine only 4 clues
+    for (let i = 0; i < 4; i++) {
+      vm.execute(`examine_clue_${i}`);
+      vm.execute(`back_from_e${i}`);
+    }
+    vm.execute("go_accuse");
+    advanceAutoInvestigation(vm); // gate_interviews_pass → accuse_gate_clues
+    advanceAutoInvestigation(vm); // gate_clues_fail → not_ready_clues
+    expect(vm.currentLocation().id).toBe("not_ready_clues");
+  });
+
+  it("not_ready feedback locations return to warehouse", () => {
+    const vm = new QuestVM(investigationScript, 1);
+    vm.execute("go_accuse");
+    advanceAutoInvestigation(vm);
+    expect(vm.currentLocation().id).toBe("not_ready_interviews");
+    vm.execute("back_from_gate_interviews");
+    expect(vm.currentLocation().id).toBe("warehouse");
+  });
+
+  it("correct accusation wins the quest", () => {
+    for (let seed = 0; seed < 4; seed++) {
+      const vm = new QuestVM(investigationScript, seed);
+      solveInvestigation(vm);
+      expect(vm.isFinished()).toBe(true);
+      expect(vm.isSuccess()).toBe(true);
+      expect(vm.currentLocation().id).toBe("quest_success");
+    }
+  });
+
+  it("quest is solvable for any seed", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const vm = new QuestVM(investigationScript, seed);
+      solveInvestigation(vm);
+      expect(vm.isSuccess()).toBe(true);
+    }
+  });
+
+  it("wrong accusation costs 200 rating and returns to accuse screen", () => {
+    const vm = new QuestVM(investigationScript, 1);
+    vm.setParam("interviews_done", 4);
+    vm.setParam("clues_examined", 5);
+    // Force murderer to 0 (mechanic), then accuse pilot (wrong)
+    vm.setParam("murderer", 0);
+    vm.execute("go_accuse");
+    advanceAutoInvestigation(vm);
+    advanceAutoInvestigation(vm);
+    expect(vm.currentLocation().id).toBe("accuse");
+    vm.execute("accuse_pilot"); // wrong
+    advanceAutoInvestigation(vm); // pilot_wrong → wrong_accusation
+    expect(vm.currentLocation().id).toBe("wrong_accusation");
+    vm.execute("retry_accusation"); // rating -= 200
+    expect(vm.getParam("rating")).toBe(300);
+    expect(vm.currentLocation().id).toBe("accuse");
+  });
+
+  it("three wrong accusations cause rating failure", () => {
+    const vm = new QuestVM(investigationScript, 1);
+    vm.setParam("interviews_done", 4);
+    vm.setParam("clues_examined", 5);
+    vm.setParam("murderer", 0); // mechanic is guilty
+    vm.execute("go_accuse");
+    advanceAutoInvestigation(vm);
+    advanceAutoInvestigation(vm);
+    // Wrong 1: accuse pilot (500 → 300)
+    vm.execute("accuse_pilot");
+    advanceAutoInvestigation(vm);
+    vm.execute("retry_accusation");
+    expect(vm.getParam("rating")).toBe(300);
+    // Wrong 2: accuse trader2 (300 → 100)
+    vm.execute("accuse_trader2");
+    advanceAutoInvestigation(vm);
+    vm.execute("retry_accusation");
+    expect(vm.getParam("rating")).toBe(100);
+    // Wrong 3: accuse guard (100 → -100 → critMin fires)
+    vm.execute("accuse_guard");
+    advanceAutoInvestigation(vm);
+    vm.execute("retry_accusation"); // rating = -100, critMin triggers failure
+    expect(vm.isFinished()).toBe(true);
+    expect(vm.isSuccess()).toBe(false);
+    expect(vm.currentLocation().id).toBe("quest_failure_rating");
+  });
+
+  it("text interpolation shows investigation stats", () => {
+    const vm = new QuestVM(investigationScript, 1);
+    vm.setParam("interviews_done", 2);
+    vm.setParam("clues_examined", 3);
+    vm.setParam("rating", 500);
+    const text = vm.interpolate(vm.currentLocation().text);
+    expect(text).toContain("2");
+    expect(text).toContain("3");
+    expect(text).toContain("500");
+  });
+
+  it("planted clue texts contain ПРОТИВОРЕЧИЕ marker", () => {
+    const vm = new QuestVM(investigationScript, 1);
+    vm.execute("examine_clue_5");
+    expect(vm.currentLocation().text).toContain("ПРОТИВОРЕЧИЕ");
+    vm.execute("back_from_e5");
+    vm.execute("examine_clue_6");
+    expect(vm.currentLocation().text).toContain("ПРОТИВОРЕЧИЕ");
+    vm.execute("back_from_e6");
+    vm.execute("examine_clue_7");
+    expect(vm.currentLocation().text).toContain("ПРОТИВОРЕЧИЕ");
+  });
+
+  it("quest result is deterministic for the same seed", () => {
+    const vm1 = new QuestVM(investigationScript, 42);
+    const vm2 = new QuestVM(investigationScript, 42);
+    solveInvestigation(vm1);
+    solveInvestigation(vm2);
+    expect(vm1.isSuccess()).toBe(vm2.isSuccess());
+    expect(vm1.getParam("murderer")).toBe(vm2.getParam("murderer"));
   });
 });
