@@ -50,11 +50,11 @@
 **Files:**
 - Modify: `src/presentation/SpaceFlightScene.ts`
 
-- [ ] В `onPointerDown` (глобальный обработчик stage): если `isTurnRunning === true` — полностью игнорировать клик (не строить маршрут, не открывать панели планет/NPC); показать мигающую подсказку «⏸ Поставь на паузу чтобы выбрать маршрут» один раз при первом попытке кликнуть во время хода
-- [ ] `onPlanetClick` и `onNpcClick` — добавить ранний `return` если `isTurnRunning`
-- [ ] Курсор во время хода: `app.canvas.style.cursor = 'default'` (не pointer при наведении на планеты); во время паузы — восстановить pointer
-- [ ] Тест `routeOnlyInPause.test.ts`: при `isTurnRunning=true` клик на планету не изменяет `plannedRoute`
-- [ ] `npm test -- --run` + `npm run lint` — без регрессий
+- [x] В `onPointerDown` (глобальный обработчик stage): если `isTurnRunning === true` — полностью игнорировать клик (не строить маршрут, не открывать панели планет/NPC); показать мигающую подсказку «⏸ Поставь на паузу чтобы выбрать маршрут» один раз при первом попытке кликнуть во время хода
+- [x] `onPlanetClick` и `onNpcClick` — добавить ранний `return` если `isTurnRunning`
+- [x] Курсор во время хода: `app.canvas.style.cursor = 'default'` (не pointer при наведении на планеты); во время паузы — восстановить pointer
+- [x] Тест `routeOnlyInPause.test.ts`: при `isTurnRunning=true` клик на планету не изменяет `plannedRoute`
+- [x] `npm test -- --run` + `npm run lint` — без регрессий
 
 ### Task 3: Живой фон полёта — астероиды, кометы, фоновые корабли
 

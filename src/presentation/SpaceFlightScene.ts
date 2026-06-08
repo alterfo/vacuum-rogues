@@ -252,6 +252,8 @@ export class SpaceFlightScene extends GameScene {
   // combat resolves) while isTurnRunning; Pause ends it at the next day segment.
   private isTurnRunning = false;
   private pauseRequested = false;
+  // Latch: show "pause first" hint only once per turn to avoid message spam.
+  private turnHintShown = false;
   private playPauseButton: Text | null = null;
   private readonly WEAPON_RANGE = GAME_BALANCE.weaponRange;
   private readonly SYSTEM_INNER_RADIUS = SYSTEM_GEOMETRY.innerRadius;
@@ -694,6 +696,7 @@ export class SpaceFlightScene extends GameScene {
     this.speedIndex = 0;
     this.isTurnRunning = false;
     this.pauseRequested = false;
+    this.turnHintShown = false;
     this._combatTransitionPending = false;
     this.cameraReturning = false;
 
@@ -2547,6 +2550,8 @@ export class SpaceFlightScene extends GameScene {
    * Handle planet click: two-step movement - plan route on first click, execute on second
    */
   private onPlanetClick(planet: Planet): void {
+    if (this.isTurnRunning) return;
+
     logger.debug(
       `Planet clicked: ${planet.name}, plannedRoute=${JSON.stringify(this.plannedRoute)}, routeTargetPlanetId=${this.routeTargetPlanetId}`,
     );
@@ -2692,6 +2697,16 @@ export class SpaceFlightScene extends GameScene {
     // was being built to the point hidden behind the dialog.
     if (!isPanButton && this.isBlockingModalOpen()) {
       this.closeBlockingModals();
+      return;
+    }
+
+    // While a turn is running, block route building and panel interactions.
+    // Panning is always allowed so the player can still survey the map.
+    if (this.isTurnRunning && !isPanButton) {
+      if (!this.turnHintShown) {
+        this.turnHintShown = true;
+        this.showMessage("⏸ Поставь на паузу чтобы выбрать маршрут", 0xffcc00);
+      }
       return;
     }
 
@@ -3551,6 +3566,7 @@ export class SpaceFlightScene extends GameScene {
     this.shipPhysics.setPath(this.routePath);
     this.plannedRoute = { x, y };
     this.isTurnRunning = true; // executing a route runs the turn (Play)
+    this.updateInteractiveCursors(true);
     this.drawRouteLine();
   }
 
@@ -3806,6 +3822,8 @@ export class SpaceFlightScene extends GameScene {
 
   /** Open the contact panel for a clicked NPC ship. */
   private onNpcClick(npc: NpcShip): void {
+    if (this.isTurnRunning) return;
+
     this.closeNpcContactPanel();
     this.contactNpcId = npc.id;
     // Hailing/trading and the detailed readout are offered within radar/scanner
@@ -3978,6 +3996,7 @@ export class SpaceFlightScene extends GameScene {
     } else {
       this.waitDayAccum = 0;
       this.isTurnRunning = true; // course-less wait: time passes, ship stays put
+      this.updateInteractiveCursors(true);
       this.showMessage("⏳ Ожидание… (мир движется)", 0x88ccff);
     }
   }
@@ -3987,6 +4006,8 @@ export class SpaceFlightScene extends GameScene {
     this.isTurnRunning = false;
     this.pauseRequested = false;
     this.waitDayAccum = 0;
+    this.turnHintShown = false;
+    this.updateInteractiveCursors(false);
     if (this.shipPhysics) {
       this.shipPhysics.setTarget(
         this.shipPhysics.shipX,
@@ -3994,6 +4015,22 @@ export class SpaceFlightScene extends GameScene {
       );
       this.shipPhysics.isMoving = false;
       this.shipPhysics.currentSpeed = 0;
+    }
+  }
+
+  /** Switch planet and NPC cursors so hovering shows intent only when not mid-turn. */
+  private updateInteractiveCursors(turnRunning: boolean): void {
+    const planetCursor = turnRunning ? "default" : "pointer";
+    for (const sprite of this.planetSprites) {
+      sprite.graphics.cursor = planetCursor;
+    }
+    for (const sprite of this.npcSprites) {
+      const npcCursor = turnRunning
+        ? "default"
+        : sprite.npc.role === NpcRole.PIRATE
+          ? "target"
+          : "pointer";
+      sprite.container.cursor = npcCursor;
     }
   }
 
