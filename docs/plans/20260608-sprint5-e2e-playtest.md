@@ -63,7 +63,7 @@
 **Files:**
 - Create: `e2e/playtest-01-full-loop.spec.ts`
 
-- [ ] Тест `should complete full game loop: flight → land → trade → takeoff`:
+- [x] Тест `should complete full game loop: flight → land → trade → takeoff`:
   - Запустить новую игру, дождаться `SpaceFlightScene`
   - Запустить ход (`playTurn()`), дождаться паузы
   - Выбрать маршрут к планете (`engine.currentScene.onPlanetClick(planets[0])`)
@@ -73,11 +73,11 @@
   - Проверить `getCredits() < credits` (деньги списаны)
   - Взлететь, дождаться `SpaceFlightScene`
   - `errorCollector.assertNoErrors()`
-- [ ] Тест `should not lose credits on cancel trade`:
+- [x] Тест `should not lose credits on cancel trade`:
   - Зайти на планету, открыть рынок, НЕ покупать, взлететь
   - Проверить `credits === initialCredits`
-- [ ] `npm run test:e2e -- --run e2e/playtest-01-full-loop.spec.ts`
-- [ ] `npm run lint` — без ошибок
+- [x] `npm run test:e2e -- --run e2e/playtest-01-full-loop.spec.ts`
+- [x] `npm run lint` — без ошибок
 
 ### Task 3: Full-loop playtest — текстовые квесты
 
