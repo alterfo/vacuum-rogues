@@ -108,13 +108,13 @@
 - Modify: `src/presentation/PlanetScene.ts`
 - Modify: `src/presentation/SpaceFlightScene.ts` (HUD кнопки)
 
-- [ ] Создать `UiButton` класс (`Container`): `Graphics` фон с rounded rect + левая цветная полоска (accent color по типу кнопки) + иконка (Unicode символ, 18px) + текст (14px); hover → lighten fill + cursor pointer; active → darken; `eventMode='static'`, `stopPropagation()` внутри
-- [ ] Типы акцента: `primary` (cyan `0x00ffee`), `danger` (red `0xff4444`), `success` (green `0x44ff88`), `neutral` (gray `0x667788`)
-- [ ] В `PlanetScene`: заменить текстовые кнопки сервисов на `UiButton` с иконками:
+- [x] Создать `UiButton` класс (`Container`): `Graphics` фон с rounded rect + левая цветная полоска (accent color по типу кнопки) + иконка (Unicode символ, 18px) + текст (14px); hover → lighten fill + cursor pointer; active → darken; `eventMode='static'`, `stopPropagation()` внутри
+- [x] Типы акцента: `primary` (cyan `0x00ffee`), `danger` (red `0xff4444`), `success` (green `0x44ff88`), `neutral` (gray `0x667788`)
+- [x] В `PlanetScene`: заменить текстовые кнопки сервисов на `UiButton` с иконками:
   - `⚙ Верфь`, `📦 Рынок`, `📋 Губернатор`, `🚀 Взлёт`, `🔍 Инфоцентр`, `⚔ Снаряжение`
-- [ ] HUD `SpaceFlightScene`: кнопки «▶ ХОД» / «⏸ ПАУЗА», «1×/2×/4×», «⚙», «⊙» — перевести на `UiButton` с акцентом
-- [ ] `UiButton` экспортирует `setLabel(text)` для обновления без пересоздания (используется кнопкой скорости и play/pause)
-- [ ] `npm test -- --run` + `npm run lint` — без регрессий
+- [x] HUD `SpaceFlightScene`: кнопки «▶ ХОД» / «⏸ ПАУЗА», «1×/2×/4×», «⚙», «⊙» — перевести на `UiButton` с акцентом
+- [x] `UiButton` экспортирует `setLabel(text)` для обновления без пересоздания (используется кнопкой скорости и play/pause)
+- [x] `npm test -- --run` + `npm run lint` — без регрессий
 
 ### Task 7: Верификация всех acceptance criteria
 

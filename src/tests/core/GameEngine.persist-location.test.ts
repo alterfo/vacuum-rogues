@@ -36,6 +36,7 @@ vi.mock("pixi.js", () => ({
   Graphics: vi.fn().mockImplementation(() => ({
     fill: vi.fn().mockReturnThis(),
     rect: vi.fn().mockReturnThis(),
+    roundRect: vi.fn().mockReturnThis(),
     circle: vi.fn().mockReturnThis(),
     ellipse: vi.fn().mockReturnThis(),
     stroke: vi.fn().mockReturnThis(),

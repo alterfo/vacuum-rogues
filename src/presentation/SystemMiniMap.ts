@@ -4,6 +4,7 @@ import type { Planet } from "@/domain/Planet";
 import { logger } from "@/utils/logger";
 import { radarToWorld } from "@/utils/flightGeometry";
 import { isCameraOnPlayer } from "@/utils/cameraCenter";
+import { UiButton } from "./ui/UiButton";
 
 /**
  * Mini-map showing the current star system with planets and ship position
@@ -29,7 +30,7 @@ export class SystemMiniMap {
   private onPan: ((worldX: number, worldY: number) => void) | null = null;
   private dragging = false;
   // ⊙ camera-return button (outside the map area, top-right corner)
-  private centerButton: Graphics | null = null;
+  private centerButton: UiButton | null = null;
   private onReturnCamera: (() => void) | null = null;
   // Screen dimensions kept for visibility calculation
   private screenW = 0;
@@ -124,40 +125,23 @@ export class SystemMiniMap {
     const BH = 28;
     const PAD = 4;
 
-    const btn = new Graphics();
-    btn.rect(0, 0, BW, BH);
-    btn.fill({ color: 0x003333, alpha: 0.85 });
-    btn.rect(0, 0, BW, BH);
-    btn.stroke({ color: 0x00ffcc, width: 1.5 });
-    btn.eventMode = "static";
-    btn.cursor = "pointer";
+    const btn = new UiButton(
+      "⊙",
+      "",
+      "neutral",
+      (e: FederatedPointerEvent) => {
+        e.stopPropagation();
+        this.onReturnCamera?.();
+      },
+      BW,
+      BH,
+    );
     // Place above the top-right corner of the map, outside the 180×180 area
     btn.x = this.mapWidth - BW;
     btn.y = -(BH + PAD);
     btn.visible = false; // hidden until camera is panned away from ship
 
-    const label = new Text({
-      text: "⊙",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: 0x00ffcc,
-        fontWeight: "bold",
-      },
-    });
-    label.anchor.set(0.5);
-    label.x = BW / 2;
-    label.y = BH / 2;
-    label.eventMode = "none"; // text must not absorb clicks
-
-    btn.addChild(label);
-
-    btn.on("pointerdown", (e: FederatedPointerEvent) => {
-      e.stopPropagation();
-      this.onReturnCamera?.();
-    });
-
-    this.container.addChild(btn);
+    this.container.addChild(btn.container);
     this.centerButton = btn;
   }
 

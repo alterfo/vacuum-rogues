@@ -10,6 +10,7 @@ import { TradeSystem } from "@/systems/TradeSystem";
 import { QuestType } from "@/types";
 import type { ResourceType } from "@/types";
 import { pickVariant, panoramaTex } from "./textures";
+import { UiButton, type ButtonAccent } from "./ui/UiButton";
 
 interface PlanetContext {
   gameEngine?: GameEngine;
@@ -20,6 +21,13 @@ interface PlanetContext {
 export interface PlanetServiceButton {
   label: string;
   color: number;
+  action: () => void;
+}
+
+interface ServiceButtonDef {
+  icon: string;
+  label: string;
+  accent: ButtonAccent | number;
   action: () => void;
 }
 
@@ -612,31 +620,55 @@ export class PlanetScene extends GameScene {
       ui.addChild(statLine);
     }
 
-    const buttons: { label: string; color: number; action: () => void }[] = [
+    const buttons: ServiceButtonDef[] = [
       {
+        icon: "📋",
         label: "Губернатор",
-        color: 0x00ff00,
+        accent: "success",
         action: () => this.openGovernor(),
       },
-      { label: "Задания", color: 0xffee66, action: () => this.openJobBoard() },
       {
+        icon: "≡",
+        label: "Задания",
+        accent: "primary",
+        action: () => this.openJobBoard(),
+      },
+      {
+        icon: "🔍",
         label: "Инфоцентр",
-        color: 0x66bbff,
+        accent: "primary",
         action: () => this.openInfoCenter(),
       },
       {
-        label: "Магазин снаряжения",
-        color: 0x44ddff,
+        icon: "⚔",
+        label: "Снаряжение",
+        accent: "primary",
         action: () => this.openEquipmentShop(),
       },
-      { label: "Гараж", color: 0x00aaff, action: () => this.openGarage() },
-      { label: "Маркет", color: 0xffaa00, action: () => this.openMarket() },
       {
+        icon: "⚙",
+        label: "Верфь",
+        accent: "primary",
+        action: () => this.openGarage(),
+      },
+      {
+        icon: "📦",
+        label: "Маркет",
+        accent: "neutral",
+        action: () => this.openMarket(),
+      },
+      {
+        icon: "✦",
         label: "Исследования",
-        color: 0xff00ff,
+        accent: "neutral",
         action: () => this.openResearch(),
       },
-      { label: "Взлёт", color: 0xff4444, action: () => this.takeOff() },
+      {
+        icon: "🚀",
+        label: "Взлёт",
+        accent: "danger",
+        action: () => this.takeOff(),
+      },
     ];
 
     // Reputation gate: hostile faction blocks all services except take-off.
@@ -644,61 +676,54 @@ export class PlanetScene extends GameScene {
     const isHostile = !this.bribed && (player?.isHostileTo(faction) ?? false);
 
     const btnW = 280;
-    const btnH = 28;
+    const btnH = 32;
 
     const makeServiceBtn = (
-      b: { label: string; color: number; action: () => void },
+      b: ServiceButtonDef,
       yPos: number,
       blocked: boolean,
     ): void => {
-      const btn = new Container();
-      btn.x = w / 2 - btnW / 2;
-      btn.y = yPos;
-
-      const bg = new Graphics();
-      bg.roundRect(0, 0, btnW, btnH, 4);
-      bg.fill({ color: blocked ? 0x1a1a2e : 0x0a1428, alpha: 0.9 });
-      bg.stroke({ color: blocked ? 0x334455 : b.color, width: 1 });
-      btn.addChild(bg);
-
-      const lbl = new Text({
-        text: b.label,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 13,
-          fill: blocked ? 0x445566 : b.color,
-          fontWeight: "bold",
-        },
-      });
-      lbl.anchor.set(0.5);
-      lbl.x = btnW / 2;
-      lbl.y = btnH / 2;
-      lbl.eventMode = "none";
-      btn.addChild(lbl);
-
       if (blocked) {
+        const btn = new Container();
+        btn.x = w / 2 - btnW / 2;
+        btn.y = yPos;
+        const bg = new Graphics();
+        bg.roundRect(0, 0, btnW, btnH, 4).fill({ color: 0x1a1a2e, alpha: 0.9 });
+        bg.roundRect(0, 0, btnW, btnH, 4).stroke({ color: 0x334455, width: 1 });
+        bg.eventMode = "none";
+        btn.addChild(bg);
+        const lbl = new Text({
+          text: `${b.icon} ${b.label}`,
+          style: {
+            fontFamily: "Courier New",
+            fontSize: 13,
+            fill: 0x445566,
+            fontWeight: "bold",
+          },
+        });
+        lbl.anchor.set(0.5);
+        lbl.x = btnW / 2;
+        lbl.y = btnH / 2;
+        lbl.eventMode = "none";
+        btn.addChild(lbl);
         btn.eventMode = "none";
-      } else {
-        btn.eventMode = "static";
-        btn.cursor = "pointer";
-        btn.on("pointerdown", (e) => {
+        ui.addChild(btn);
+        return;
+      }
+      const btn = new UiButton(
+        b.icon,
+        b.label,
+        b.accent,
+        (e) => {
           e.stopPropagation();
           b.action();
-        });
-        btn.on("pointerover", () => {
-          bg.clear();
-          bg.roundRect(0, 0, btnW, btnH, 4);
-          bg.fill({ color: b.color, alpha: 0.22 });
-          bg.stroke({ color: b.color, width: 2 });
-        });
-        btn.on("pointerout", () => {
-          bg.clear();
-          bg.roundRect(0, 0, btnW, btnH, 4);
-          bg.fill({ color: 0x0a1428, alpha: 0.9 });
-          bg.stroke({ color: b.color, width: 1 });
-        });
-      }
-      ui.addChild(btn);
+        },
+        btnW,
+        btnH,
+      );
+      btn.x = w / 2 - btnW / 2;
+      btn.y = yPos;
+      ui.addChild(btn.container);
     };
 
     const visible = visiblePlanetServices(this.planet.isHabitable, buttons);
@@ -712,8 +737,9 @@ export class PlanetScene extends GameScene {
     if (isHostile && this.planet.isHabitable) {
       makeServiceBtn(
         {
-          label: `Дать взятку (${BRIBE_COST} ₡)`,
-          color: 0xffaa44,
+          icon: "💰",
+          label: `Взятка (${BRIBE_COST} ₡)`,
+          accent: 0xffaa44,
           action: () => this.payBribe(faction),
         },
         y,

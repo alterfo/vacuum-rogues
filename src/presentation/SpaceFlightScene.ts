@@ -8,6 +8,7 @@ import {
   FederatedPointerEvent,
   BlurFilter,
 } from "pixi.js";
+import { UiButton } from "./ui/UiButton";
 import { buildSphereMesh, type SphereMesh } from "./sphereMesh";
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType, StarType, NpcRole, QuestType } from "@/types";
@@ -261,7 +262,7 @@ export class SpaceFlightScene extends GameScene {
   private pauseRequested = false;
   // Latch: show "pause first" hint only once per turn to avoid message spam.
   private turnHintShown = false;
-  private playPauseButton: Text | null = null;
+  private playPauseButton: UiButton | null = null;
   private readonly WEAPON_RANGE = GAME_BALANCE.weaponRange;
   private readonly SYSTEM_INNER_RADIUS = SYSTEM_GEOMETRY.innerRadius;
   private readonly SYSTEM_OUTER_RADIUS = SYSTEM_GEOMETRY.outerRadius;
@@ -292,11 +293,11 @@ export class SpaceFlightScene extends GameScene {
   private dayCounterText: Text | null = null;
 
   // Speed control HUD button (cycles 1×/2×/4×)
-  private speedButton: Text | null = null;
+  private speedButton: UiButton | null = null;
   private speedIndex: number = 0; // index into GAME_BALANCE.gameSpeedMultipliers
 
   // Font-size settings: gear button + toggled panel (bottom-left HUD)
-  private gearButton: Text | null = null;
+  private gearButton: UiButton | null = null;
   private settingsPanel: Container | null = null;
 
   // Two-step movement: plan route, then execute
@@ -2303,34 +2304,26 @@ export class SpaceFlightScene extends GameScene {
 
     // Play / Pause turn control (bottom-centre). Play runs the planned turn;
     // while moving it becomes Pause, which ends the turn at the next day segment.
-    const playBtn = new Text({
-      text: "▶ ХОД",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 18,
-        fill: 0x00ff88,
-        fontWeight: "bold" as const,
-        stroke: { color: 0x000000, width: 4 },
+    const PLAY_BTN_W = 140;
+    const PLAY_BTN_H = 36;
+    const playBtn = new UiButton(
+      "",
+      "▶ ХОД",
+      "success",
+      (event) => {
+        event.stopPropagation();
+        this.gameEngine?.audio?.playUiClick();
+        this.onPlayPause();
       },
-    });
-    playBtn.anchor.set(0.5);
-    playBtn.x = this.renderer.app.screen.width / 2;
-    playBtn.y = this.renderer.app.screen.height - 40;
-    playBtn.eventMode = "static";
-    playBtn.cursor = "pointer";
-    playBtn.on("pointerdown", (event) => {
-      event.stopPropagation();
-      this.gameEngine?.audio?.playUiClick();
-      this.onPlayPause();
-    });
+      PLAY_BTN_W,
+      PLAY_BTN_H,
+    );
+    playBtn.x = this.renderer.app.screen.width / 2 - PLAY_BTN_W / 2;
+    playBtn.y = this.renderer.app.screen.height - PLAY_BTN_H - 18;
     playBtn.on("pointerover", () => {
       this.gameEngine?.audio?.playUiHover();
-      playBtn.alpha = 0.7;
     });
-    playBtn.on("pointerout", () => {
-      playBtn.alpha = 1;
-    });
-    this.uiContainer.addChild(playBtn);
+    this.uiContainer.addChild(playBtn.container);
     this.playPauseButton = playBtn;
 
     this.renderer.uiLayer.addChild(this.uiContainer);
@@ -2355,60 +2348,41 @@ export class SpaceFlightScene extends GameScene {
     this.renderer.uiLayer.addChild(this.systemMiniMap.container);
 
     // Speed button: cycles 1×/2×/4× — placed above the minimap (bottom-right).
-    const speedBtn = new Text({
-      text: "1×",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: 0x00ffcc,
-        fontWeight: "bold" as const,
-        stroke: { color: 0x000000, width: 3 },
+    const SPEED_BTN_W = 52;
+    const SPEED_BTN_H = 28;
+    const speedBtn = new UiButton(
+      "",
+      "1×",
+      "neutral",
+      (event) => {
+        event.stopPropagation();
+        this.cycleGameSpeed();
       },
-    });
-    speedBtn.anchor.set(1, 1);
-    speedBtn.x = this.renderer.app.screen.width - 20;
-    speedBtn.y = this.renderer.app.screen.height - 220;
-    speedBtn.eventMode = "static";
-    speedBtn.cursor = "pointer";
-    speedBtn.on("pointerdown", (event) => {
-      event.stopPropagation();
-      this.cycleGameSpeed();
-    });
-    speedBtn.on("pointerover", () => {
-      speedBtn.alpha = 0.7;
-    });
-    speedBtn.on("pointerout", () => {
-      speedBtn.alpha = 1;
-    });
-    this.renderer.uiLayer.addChild(speedBtn);
+      SPEED_BTN_W,
+      SPEED_BTN_H,
+    );
+    speedBtn.x = this.renderer.app.screen.width - 20 - SPEED_BTN_W;
+    speedBtn.y = this.renderer.app.screen.height - 220 - SPEED_BTN_H;
+    this.renderer.uiLayer.addChild(speedBtn.container);
     this.speedButton = speedBtn;
 
     // Gear button (⚙) — bottom-left, above mini-log — opens font-size panel.
-    const gearBtn = new Text({
-      text: "⚙",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: 0x88aacc,
-        stroke: { color: 0x000000, width: 3 },
+    const GEAR_BTN_W = 36;
+    const GEAR_BTN_H = 32;
+    const gearBtn = new UiButton(
+      "⚙",
+      "",
+      "neutral",
+      (event) => {
+        event.stopPropagation();
+        this.toggleSettingsPanel();
       },
-    });
-    gearBtn.anchor.set(0, 1);
+      GEAR_BTN_W,
+      GEAR_BTN_H,
+    );
     gearBtn.x = 20;
-    gearBtn.y = this.renderer.app.screen.height - 130;
-    gearBtn.eventMode = "static";
-    gearBtn.cursor = "pointer";
-    gearBtn.on("pointerdown", (event) => {
-      event.stopPropagation();
-      this.toggleSettingsPanel();
-    });
-    gearBtn.on("pointerover", () => {
-      gearBtn.alpha = 0.7;
-    });
-    gearBtn.on("pointerout", () => {
-      gearBtn.alpha = 1;
-    });
-    this.renderer.uiLayer.addChild(gearBtn);
+    gearBtn.y = this.renderer.app.screen.height - 130 - GEAR_BTN_H;
+    this.renderer.uiLayer.addChild(gearBtn.container);
     this.gearButton = gearBtn;
   }
 
@@ -3086,21 +3060,21 @@ export class SpaceFlightScene extends GameScene {
       this.toast.x = w / 2;
     }
     if (this.playPauseButton) {
-      this.playPauseButton.x = w / 2;
-      this.playPauseButton.y = h - 40;
+      this.playPauseButton.x = w / 2 - 70;
+      this.playPauseButton.y = h - 54;
     }
     this.systemMiniMap?.reposition(w, h);
 
     if (this.speedButton) {
-      this.speedButton.x = w - 20;
-      this.speedButton.y = h - 220;
+      this.speedButton.x = w - 20 - 52;
+      this.speedButton.y = h - 248;
     }
 
     if (this.gearButton) {
-      this.gearButton.y = h - 130;
+      this.gearButton.y = h - 162;
     }
-    if (this.settingsPanel) {
-      this.settingsPanel.y = h - 130 - 48;
+    if (this.settingsPanel && this.gearButton) {
+      this.settingsPanel.y = this.gearButton.y - 48;
     }
 
     if (this.miniLogContainer) {
@@ -4127,7 +4101,7 @@ export class SpaceFlightScene extends GameScene {
     this.speedIndex = (this.speedIndex + 1) % steps.length;
     const scale = steps[this.speedIndex];
     if (this.shipPhysics) this.shipPhysics.setTimeScale(scale);
-    if (this.speedButton) this.speedButton.text = `${scale}×`;
+    if (this.speedButton) this.speedButton.setLabel(`${scale}×`);
   }
 
   private onPlayPause(): void {
@@ -4195,13 +4169,13 @@ export class SpaceFlightScene extends GameScene {
   private updatePlayPauseButton(): void {
     if (!this.playPauseButton) return;
     if (this.isTurnRunning) {
-      this.playPauseButton.text = this.pauseRequested ? "⏸ …" : "⏸ ПАУЗА";
-      this.playPauseButton.style.fill = 0xffcc00;
+      this.playPauseButton.setLabel(this.pauseRequested ? "⏸ …" : "⏸ ПАУЗА");
+      this.playPauseButton.setAccentColor(0xffcc00);
     } else {
       // ХОД is always available — with a course it flies it, without one it runs
       // a wait turn (US-070 #5), so the button is always shown active.
-      this.playPauseButton.text = "▶ ХОД";
-      this.playPauseButton.style.fill = 0x00ff88;
+      this.playPauseButton.setLabel("▶ ХОД");
+      this.playPauseButton.setAccentColor(0x00ff88);
     }
   }
 
