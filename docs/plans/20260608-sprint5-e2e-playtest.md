@@ -193,13 +193,13 @@
 **Files:**
 - None
 
-- [ ] `npm test -- --run` — все unit-тесты зелёные
-- [ ] `npm run test:e2e -- --run smoke/` — 5 smoke-тестов проходят
-- [ ] `npm run test:e2e -- --run playtest-01` — full-loop проходит
-- [ ] `npm run test:e2e -- --run monkey-01` — monkey SpaceFlight проходит
-- [ ] `npm run test:e2e:regression` — < 60 сек, всё зелёное
-- [ ] `npm run lint` — 0 ошибок
-- [ ] `npm run build` — нет TypeScript ошибок
+- [x] `npm test -- --run` — все unit-тесты зелёные
+- [x] `npm run test:e2e -- --run smoke/` — 5 smoke-тестов проходят
+- [x] `npm run test:e2e -- --run playtest-01` — full-loop проходит
+- [x] `npm run test:e2e -- --run monkey-01` — monkey SpaceFlight проходит
+- [x] `npm run test:e2e:regression` — < 60 сек, всё зелёное
+- [x] `npm run lint` — 0 ошибок
+- [x] `npm run build` — нет TypeScript ошибок
 
 ## Technical Details
 
