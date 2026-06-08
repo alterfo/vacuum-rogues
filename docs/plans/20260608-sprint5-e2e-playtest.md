@@ -108,20 +108,20 @@
 **Files:**
 - Create: `e2e/playtest-03-no-dead-ends.spec.ts`
 
-- [ ] Тест `every scene has a way back`:
+- [x] Тест `every scene has a way back`:
   - Для каждой сцены из списка `[StarMap, Planet, Trade, Dialogue, Inventory, Station, InfoCenter, Government, TextQuest, WinScreen]`:
     - Перейти в сцену через `engine.transitionTo(SceneType.X, ctx)`
     - Нажать Escape или найти кнопку «Назад»/«Взлёт»
     - Проверить что сцена сменилась (не осталась та же)
-- [ ] Тест `main menu continue without save shows disabled button`:
+- [x] Тест `main menu continue without save shows disabled button`:
   - Очистить localStorage, открыть MainMenu
   - Проверить `engine.currentScene.continueBtn.alpha < 1` (задимлена)
-- [ ] Тест `info center search returns results`:
+- [x] Тест `info center search returns results`:
   - `engine.transitionTo('INFO_CENTER', ctx)`
   - `engine.currentScene.runGearSearch({ facet: 'engine' })`
   - Проверить `engine.currentScene.gearResults.length > 0`
-- [ ] `npm run test:e2e -- --run e2e/playtest-03-no-dead-ends.spec.ts`
-- [ ] `npm run lint` — без ошибок
+- [x] `npm run test:e2e -- --run e2e/playtest-03-no-dead-ends.spec.ts`
+- [x] `npm run lint` — без ошибок
 
 ### Task 5: Monkey testing — SpaceFlightScene
 
