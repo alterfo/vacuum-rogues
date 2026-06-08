@@ -128,24 +128,24 @@
 **Files:**
 - Create: `e2e/monkey-01-space-flight.spec.ts`
 
-- [ ] Тест `monkey: 200 random inputs in SpaceFlightScene do not crash`:
+- [x] Тест `monkey: 200 random inputs in SpaceFlightScene do not crash`:
   - Новая игра → `waitForScene('SpaceFlightScene')`
   - `monkey.run(200, { delayMs: 30 })`
   - После: `waitForFunction(() => !!engine.currentScene)` — сцена жива
   - `errorCollector.assertNoErrors()`
   - Проверить `engine.isRunning === true`
-- [ ] Тест `monkey: clicks during turn execution are ignored (no route set)`:
+- [x] Тест `monkey: clicks during turn execution are ignored (no route set)`:
   - Запустить ход
   - `monkey.run(50, { delayMs: 20, types: ['leftClick'] })` пока `isTurnRunning`
   - После паузы: проверить `engine.currentScene.plannedRoute === null` — клики не сломали маршрут
-- [ ] Тест `monkey: rapid scroll does not break zoom bounds`:
+- [x] Тест `monkey: rapid scroll does not break zoom bounds`:
   - `monkey.run(100, { delayMs: 10, types: ['scroll'] })`
   - Проверить `cameraZoom >= MIN_ZOOM && cameraZoom <= MAX_ZOOM`
-- [ ] Тест `monkey: right-click panning does not accumulate NaN`:
+- [x] Тест `monkey: right-click panning does not accumulate NaN`:
   - `monkey.run(100, { delayMs: 20, types: ['rightClick'] })`
   - Проверить `!isNaN(cameraPanX) && !isNaN(cameraPanY)`
-- [ ] `npm run test:e2e -- --run e2e/monkey-01-space-flight.spec.ts`
-- [ ] `npm run lint` — без ошибок
+- [x] `npm run test:e2e -- --run e2e/monkey-01-space-flight.spec.ts`
+- [x] `npm run lint` — без ошибок
 
 ### Task 6: Monkey testing — планетарные и квестовые сцены
 

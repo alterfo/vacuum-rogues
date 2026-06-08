@@ -73,8 +73,8 @@ export class MonkeyTester {
     await this.page.mouse.up({ button: 'right' });
   }
 
-  async randomScroll(delta?: number): Promise<void> {
-    const b = await this.getCanvasBounds();
+  async randomScroll(delta?: number, bounds?: MonkeyBounds): Promise<void> {
+    const b = bounds ?? (await this.getCanvasBounds());
     const x = b.x + this.nextFloat() * b.w;
     const y = b.y + this.nextFloat() * b.h;
     const deltaY = delta ?? (this.nextFloat() * 600 - 300);
@@ -104,19 +104,22 @@ export class MonkeyTester {
     const errors: string[] = [];
     let actions = 0;
 
+    // Cache bounds once to avoid per-action async locator lookups
+    const cachedBounds = bounds ?? (await this.getCanvasBounds());
+
     for (let i = 0; i < n; i++) {
       const action = this.pickAction(types);
       try {
-        if (action === 'leftClick') await this.randomClick(bounds);
-        else if (action === 'rightClick') await this.randomRightClick(bounds);
-        else if (action === 'scroll') await this.randomScroll();
+        if (action === 'leftClick') await this.randomClick(cachedBounds);
+        else if (action === 'rightClick') await this.randomRightClick(cachedBounds);
+        else if (action === 'scroll') await this.randomScroll(undefined, cachedBounds);
         else await this.randomKey();
         actions++;
       } catch (err) {
         errors.push(String(err));
       }
       if (delayMs > 0) {
-        await this.page.waitForTimeout(delayMs);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
 
