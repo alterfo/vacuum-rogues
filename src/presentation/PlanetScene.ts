@@ -118,8 +118,8 @@ export class PlanetScene extends GameScene {
     this.createUI();
     logger.info(`PlanetScene: ${this.planet?.name}`);
     this.gameEngine?.audio.playSfx("land").catch(() => {});
-    this.checkCustoms();
     this.checkDeliveryQuestCompletion();
+    this.checkCustoms();
   }
 
   update(_deltaTime: number): void {}
@@ -144,19 +144,23 @@ export class PlanetScene extends GameScene {
       const collectObj = quest.objectives.find(
         (o) => o.type === "COLLECT_ITEM" && !o.completed,
       );
+      let stackToDeduct: { type: string; amount: number } | undefined;
       if (collectObj && collectObj.itemType) {
         const stack = player.inventory.resources.find(
           (r) => r.type === collectObj.itemType,
         );
         if (!stack || stack.amount < collectObj.targetAmount) continue;
-        stack.amount -= collectObj.targetAmount;
-        player.contrabandGoods = player.contrabandGoods.filter(
-          (g) => g !== (collectObj.itemType as string),
-        );
+        stackToDeduct = stack as { type: string; amount: number };
       }
 
       const completed = questManager.forceCompleteQuest(quest.id, player);
       if (completed) {
+        if (stackToDeduct && collectObj && collectObj.itemType) {
+          stackToDeduct.amount -= collectObj.targetAmount;
+          player.contrabandGoods = player.contrabandGoods.filter(
+            (g) => g !== (collectObj.itemType as string),
+          );
+        }
         logger.info(
           `DELIVERY quest auto-completed on landing: ${quest.title} (reward: ${quest.reward?.credits ?? 0} cr)`,
         );

@@ -402,7 +402,7 @@ export class InfoCenterScene extends GameScene {
     const day = this.gameEngine?.galaxy?.gameDays ?? 0;
     const dayText = new Text({
       text: `День ${day}`,
-      style: { fontSize: 13, fill: 0x556677, fontFamily: "monospace" },
+      style: { fontSize: 13, fill: 0x88aacc, fontFamily: "monospace" },
     });
     dayText.anchor.set(1, 0);
     dayText.x = PX + PW - 14;
@@ -454,7 +454,7 @@ export class InfoCenterScene extends GameScene {
         text: tab.label,
         style: {
           fontSize: 12,
-          fill: isActive ? 0x88ccff : 0x556677,
+          fill: isActive ? 0x88ccff : 0x7799bb,
           fontFamily: "monospace",
         },
       });
@@ -783,7 +783,7 @@ export class InfoCenterScene extends GameScene {
         text: lineText,
         style: {
           fontSize: 12,
-          fill: stale ? 0x556677 : 0xaabbcc,
+          fill: stale ? 0x7799aa : 0xaabbcc,
           fontFamily: "monospace",
         },
       });
@@ -905,7 +905,7 @@ export class InfoCenterScene extends GameScene {
         text: FACET_LABELS[facet],
         style: {
           fontSize: 11,
-          fill: isActive ? 0x88ccff : 0x556677,
+          fill: isActive ? 0x88ccff : 0x7799bb,
           fontFamily: "monospace",
         },
       });
@@ -993,7 +993,7 @@ export class InfoCenterScene extends GameScene {
 
     const techSep = new Text({
       text: "–",
-      style: { fontSize: 12, fill: 0x556677, fontFamily: "monospace" },
+      style: { fontSize: 12, fill: 0x88aacc, fontFamily: "monospace" },
     });
     techSep.x = cx + 2;
     techSep.y = CTRL_Y + 7;
@@ -1168,7 +1168,7 @@ export class InfoCenterScene extends GameScene {
         text: lineText,
         style: {
           fontSize: 11,
-          fill: stale ? 0x556677 : 0xaabbcc,
+          fill: stale ? 0x7799aa : 0xaabbcc,
           fontFamily: "monospace",
         },
       });
