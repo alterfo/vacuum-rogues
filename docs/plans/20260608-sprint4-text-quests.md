@@ -213,16 +213,16 @@ A=3, B=4, C=4, D=2 (проверяемо). Каждое нажатие «под�
 - Modify: `src/systems/quests/QuestGenerator.ts`
 - Modify: `src/ai/FallbackEngine.ts`
 
-- [ ] В `GameEngine` добавить `startTextQuest(scriptId: string, seed?: number)`:
+- [x] В `GameEngine` добавить `startTextQuest(scriptId: string, seed?: number)`:
   загружает скрипт, создаёт `QuestVM`, переходит в `TextQuestScene` с VM в context
-- [ ] В `QuestGenerator` добавить маппинг квестов к планетам: каждая планета имеет
+- [x] В `QuestGenerator` добавить маппинг квестов к планетам: каждая планета имеет
   `availableQuestIds[]` из 1–2 скриптов (детерминировано по `planet.id % scripts.length`)
-- [ ] `GovernmentScene`: кнопка «Задания» → `JobBoardPanel` → строки квестов из двух источников:
+- [x] `GovernmentScene`: кнопка «Задания» → `JobBoardPanel` → строки квестов из двух источников:
   `deliveryQuests` (процедурные) + `textQuests` (скриптовые, с тегом «Особое задание»)
-- [ ] ONNX нарратив: перед стартом text quest — `ONNXModelRegistry.infer('narration', {questTitle, planetName})`
+- [x] ONNX нарратив: перед стартом text quest — `ONNXModelRegistry.infer('narration', {questTitle, planetName})`
   → вставить 1–2 предложения флейвора в первую локацию квеста; fallback —
   `FallbackEngine.narrateQuestIntro(script)` (детерминированные шаблоны)
-- [ ] `npm test -- --run` + `npm run lint` — без регрессий
+- [x] `npm test -- --run` + `npm run lint` — без регрессий
 
 ### Task 10: Верификация всех квестов
 
