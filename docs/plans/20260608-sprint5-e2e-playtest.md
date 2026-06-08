@@ -177,16 +177,16 @@
 - Modify: `playwright.config.ts`
 - Create: `e2e/playtest-regression.spec.ts`
 
-- [ ] Создать `e2e/playtest-regression.spec.ts` — единый быстрый (< 60 сек) набор:
+- [x] Создать `e2e/playtest-regression.spec.ts` — единый быстрый (< 60 сек) набор:
   - smoke: новая игра запускается
   - smoke: маршрут к планете строится и НЕ исчезает (regression Task 1 Sprint 3)
   - smoke: квест `reactor` стартует без ошибок
   - monkey: 50 кликов в SpaceFlightScene без crash
-- [ ] В `playwright.config.ts` добавить project `regression` с `testMatch: '**/playtest-regression.spec.ts'`
-- [ ] Добавить `npm run test:e2e:regression` в `package.json` scripts:
+- [x] В `playwright.config.ts` добавить project `regression` с `testMatch: '**/playtest-regression.spec.ts'`
+- [x] Добавить `npm run test:e2e:regression` в `package.json` scripts:
   `playwright test --project=regression`
-- [ ] `npm run test:e2e:regression` — проходит < 60 сек
-- [ ] `npm run lint` — без ошибок
+- [x] `npm run test:e2e:regression` — проходит < 60 сек
+- [x] `npm run lint` — без ошибок
 
 ### Task 8: Верификация
 

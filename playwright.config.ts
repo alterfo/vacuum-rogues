@@ -29,6 +29,16 @@ export default defineConfig({
         },
       },
     },
+    {
+      name: 'regression',
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          args: ['--no-proxy-server'],
+        },
+      },
+      testMatch: '**/playtest-regression.spec.ts',
+    },
     // {
     //   name: 'firefox',
     //   use: { ...devices['Desktop Firefox'] },
