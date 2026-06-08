@@ -78,8 +78,7 @@ test.describe('Monkey 02: Planet and quest scene resilience', () => {
     expect(sceneName).not.toBeNull();
     expect(['PlanetScene', 'SpaceFlightScene']).toContain(sceneName);
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 
   test('monkey: rapid transitions in TextQuestScene are safe', async ({ page }) => {
@@ -140,8 +139,7 @@ test.describe('Monkey 02: Planet and quest scene resilience', () => {
     // Quest must have reached a terminal state (not stuck)
     expect(questFinished).toBe(true);
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 
   test('monkey: trade scene button mashing does not corrupt player state', async ({ page }) => {
@@ -189,7 +187,6 @@ test.describe('Monkey 02: Planet and quest scene resilience', () => {
     // Credits must not exceed initial (no duplication bug)
     expect(credits).toBeLessThanOrEqual(initialCredits);
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 });

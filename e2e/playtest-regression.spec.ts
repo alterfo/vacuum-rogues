@@ -91,8 +91,7 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
 
     expect(routeStillSet).toBe(true);
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 
   test('smoke: reactor quest starts without errors', async ({ page }) => {
@@ -120,8 +119,7 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     });
     expect(sceneName).toBe('TextQuestScene');
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 
   test('monkey: 50 random inputs in SpaceFlightScene do not crash', async ({ page }) => {
@@ -145,7 +143,6 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     });
     expect(sceneName).not.toBeNull();
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 });

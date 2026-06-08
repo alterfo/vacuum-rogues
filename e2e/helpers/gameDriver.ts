@@ -5,10 +5,8 @@ type EngineHandle = {
   currentSceneType: string;
   player: {
     credits: number;
-    hull: { hp: number; cargoCapacity: number };
-    cargo: { totalWeight: number };
+    ship: { hullHP: number; cargoCapacity: number };
   } | null;
-  isRunning?: boolean;
   transitionTo: (scene: string, ctx?: object) => Promise<void>;
   acceptBoardQuest: (questId: string) => unknown;
   startTextQuest: (scriptId: string, seed?: number) => Promise<void>;
@@ -46,9 +44,8 @@ export class GameDriver {
       const p = engine.player;
       return {
         credits: p.credits,
-        hp: p.hull?.hp ?? 0,
-        cargoCapacity: p.hull?.cargoCapacity ?? 0,
-        cargoWeight: p.cargo?.totalWeight ?? 0,
+        hp: p.ship?.hullHP ?? 0,
+        cargoCapacity: p.ship?.cargoCapacity ?? 0,
       };
     });
   }
@@ -63,7 +60,7 @@ export class GameDriver {
   async getHP(): Promise<number> {
     return this.page.evaluate(() => {
       const engine = (window as unknown as Record<string, EngineHandle>).__gameEngine;
-      return engine?.player?.hull?.hp ?? 0;
+      return engine?.player?.ship?.hullHP ?? 0;
     });
   }
 
@@ -71,15 +68,8 @@ export class GameDriver {
     return this.page.evaluate(() => {
       const engine = (window as unknown as Record<string, EngineHandle>).__gameEngine;
       if (!engine?.currentScene) return false;
-      const hp = engine.player?.hull?.hp ?? 0;
+      const hp = engine.player?.ship?.hullHP ?? 0;
       return hp > 0;
-    });
-  }
-
-  async isRunning(): Promise<boolean> {
-    return this.page.evaluate(() => {
-      const engine = (window as unknown as Record<string, EngineHandle>).__gameEngine;
-      return engine?.isRunning ?? false;
     });
   }
 
@@ -119,16 +109,15 @@ export class GameDriver {
     );
   }
 
-  async landOnPlanet(index = 0): Promise<void> {
-    await this.page.evaluate((idx) => {
+  async landOnPlanet(): Promise<void> {
+    await this.page.evaluate(async () => {
       const engine = (window as unknown as Record<string, EngineHandle>).__gameEngine;
       const scene = engine?.currentScene as
-        | { e2eLandOnPlanet?: (i: number) => void; onPlanetClick?: (planet: unknown) => void }
+        | { e2eLandOnPlanet?: () => Promise<void> }
         | null;
-      if (scene?.e2eLandOnPlanet) {
-        scene.e2eLandOnPlanet(idx);
-      }
-    }, index);
+      await scene?.e2eLandOnPlanet?.();
+    });
+    await this.waitForScene('PlanetScene', 15_000);
   }
 
   async takeOff(): Promise<void> {

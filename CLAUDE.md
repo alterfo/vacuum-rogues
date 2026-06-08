@@ -16,9 +16,10 @@ npm run preview      # Preview production build locally
 npm run lint         # ESLint check on src/**/*.ts
 npm test             # Run Vitest unit tests (watch mode)
 npm test -- --run    # Run unit tests once (CI mode)
-npm run test:e2e     # Run Playwright E2E tests (starts dev server on port 5175 automatically)
-npm run test:e2e:headed  # E2E with visible browser
-npm run test:e2e:debug   # E2E in debug mode
+npm run test:e2e            # Run Playwright E2E tests (starts dev server on port 5175 automatically)
+npm run test:e2e:headed     # E2E with visible browser
+npm run test:e2e:debug      # E2E in debug mode
+npm run test:e2e:regression # Run regression playtest suite only (fast gate, < 60 s, for CI)
 ```
 
 **Run single test file:** `npm test -- --run src/tests/pathfinding.test.ts`
@@ -278,6 +279,10 @@ private async performWarpJump(target: StarSystem): Promise<void> {
 - **No `canvas.click({ position: {x, y} })`** — use `page.evaluate(() => window.__gameEngine.currentScene.handler())` or accessibility attributes.
 - No `waitForTimeout()` — use explicit waits (`waitForFunction`, `waitForSelector`).
 - In dev/test mode, `window.__gameEngine` is exposed for test access.
+- Reusable helpers in `e2e/helpers/`: `GameDriver` (typed `__gameEngine` wrapper), `ErrorCollector` (JS error listener — always call `assertAndDetach()` at test end), `MonkeyTester` (seeded random input generator).
+- Shared fixtures in `e2e/fixtures/mockHeavySystems.ts` — call `applyMockHeavySystems(page)` before `page.goto()` to stub ONNX, audio, and animations in every E2E test.
+- The `regression` Playwright project (`npm run test:e2e:regression`) targets only `playtest-regression.spec.ts` — a fast gate for CI on every PR.
+- Scenes may expose `e2e*` methods (e.g. `e2eSelectFaction`, `e2eLandOnPlanet`) to allow test drivers to bypass UI interactions. Guard with `if (__DEBUG__)` to strip from production builds.
 
 ## Adding New Features
 

@@ -75,8 +75,7 @@ test.describe('Playtest 01: Full game loop', () => {
     });
     await waitForScene(page, 'SpaceFlightScene', 15_000);
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 
   test('should not lose credits on cancel trade', async ({ page }) => {
@@ -129,7 +128,6 @@ test.describe('Playtest 01: Full game loop', () => {
     const finalCredits = await driver.getCredits();
     expect(finalCredits).toBe(initialCredits);
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 });

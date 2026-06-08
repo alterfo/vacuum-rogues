@@ -11,38 +11,6 @@ type EngineHandle = {
   saveManager: { hasSave: () => Promise<boolean>; clearSave?: () => Promise<void> };
 };
 
-/** Transition to a scene and verify we can navigate away from it */
-async function checkSceneHasWayBack(
-  page: Parameters<Parameters<ReturnType<typeof test.describe>['beforeEach']>[0]>[0],
-  sceneType: string,
-  ctx: Record<string, unknown>,
-  expectedReturnSceneNot: string,
-  goBackFn: () => Promise<void>,
-): Promise<void> {
-  const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
-  await engine.transitionTo(sceneType, { gameEngine: engine, ...ctx });
-  void engine; // used above
-  await page.waitForFunction(
-    (s) => {
-      const eng = (window as Record<string, unknown>).__gameEngine as EngineHandle;
-      return eng?.currentScene?.constructor.name === s;
-    },
-    expectedReturnSceneNot === '' ? sceneType : expectedReturnSceneNot,
-    { timeout: 10_000 }
-  );
-  await goBackFn();
-  // Verify scene changed
-  await page.waitForFunction(
-    (s) => {
-      const eng = (window as Record<string, unknown>).__gameEngine as EngineHandle;
-      return eng?.currentScene?.constructor.name !== s;
-    },
-    expectedReturnSceneNot,
-    { timeout: 10_000 }
-  );
-}
-
-void checkSceneHasWayBack; // suppress unused-variable warning (used pattern below)
 
 test.describe('Playtest 03: No dead-ends', () => {
   test.setTimeout(120_000);
@@ -270,8 +238,7 @@ test.describe('Playtest 03: No dead-ends', () => {
     });
     await waitForSceneChange('WinScene');
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 
   test('main menu continue without save shows disabled button', async ({ page }) => {
@@ -323,8 +290,7 @@ test.describe('Playtest 03: No dead-ends', () => {
 
     expect(continueBtnAlpha).toBeLessThan(1);
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 
   test('info center search returns results', async ({ page }) => {
@@ -338,57 +304,56 @@ test.describe('Playtest 03: No dead-ends', () => {
       };
     });
 
-    if (planetId) {
-      await page.evaluate(
-        async ({ pid }) => {
-          const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
-          const planet = engine.galaxy?.systems
-            .flatMap((s) => s.planets)
-            .find((p) => (p as { id?: string })?.id === pid);
-          if (planet) {
-            await engine.transitionTo('INFO_CENTER', { gameEngine: engine, planet });
-          }
-        },
-        { pid: planetId }
-      );
-      await waitForScene(page, 'InfoCenterScene', 10_000);
+    expect(planetId, 'galaxy must have at least one planet').toBeTruthy();
 
-      // Run gear search via private method access
-      await page.evaluate(() => {
+    await page.evaluate(
+      async ({ pid }) => {
+        const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+        const planet = engine.galaxy?.systems
+          .flatMap((s) => s.planets)
+          .find((p) => (p as { id?: string })?.id === pid);
+        if (planet) {
+          await engine.transitionTo('INFO_CENTER', { gameEngine: engine, planet });
+        }
+      },
+      { pid: planetId }
+    );
+    await waitForScene(page, 'InfoCenterScene', 10_000);
+
+    // Run gear search via private method access
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine?.currentScene;
+      if (typeof scene?.['runGearSearch'] === 'function') {
+        (scene['runGearSearch'] as () => void)();
+      }
+    });
+
+    // Wait a tick for synchronous results
+    await page.waitForFunction(
+      () => {
         const engine = (window as Record<string, unknown>).__gameEngine as {
           currentScene: Record<string, unknown> | null;
         };
         const scene = engine?.currentScene;
-        if (typeof scene?.['runGearSearch'] === 'function') {
-          (scene['runGearSearch'] as () => void)();
-        }
-      });
+        const results = scene?.['gearResults'] as unknown[] | undefined;
+        return Array.isArray(results) && results.length > 0;
+      },
+      { timeout: 5_000 }
+    );
 
-      // Wait a tick for synchronous results
-      await page.waitForFunction(
-        () => {
-          const engine = (window as Record<string, unknown>).__gameEngine as {
-            currentScene: Record<string, unknown> | null;
-          };
-          const scene = engine?.currentScene;
-          const results = scene?.['gearResults'] as unknown[] | undefined;
-          return Array.isArray(results) && results.length > 0;
-        },
-        { timeout: 5_000 }
-      );
+    const resultCount = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const results = engine?.currentScene?.['gearResults'] as unknown[] | undefined;
+      return results?.length ?? 0;
+    });
 
-      const resultCount = await page.evaluate(() => {
-        const engine = (window as Record<string, unknown>).__gameEngine as {
-          currentScene: Record<string, unknown> | null;
-        };
-        const results = engine?.currentScene?.['gearResults'] as unknown[] | undefined;
-        return results?.length ?? 0;
-      });
+    expect(resultCount).toBeGreaterThan(0);
 
-      expect(resultCount).toBeGreaterThan(0);
-    }
-
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 });

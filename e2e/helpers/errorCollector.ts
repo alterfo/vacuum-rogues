@@ -43,6 +43,14 @@ export class ErrorCollector {
     expect(relevant, `Unexpected JS errors:\n${relevant.join('\n')}`).toHaveLength(0);
   }
 
+  assertAndDetach(excludePatterns: string[] = []): void {
+    try {
+      this.assertNoErrors(excludePatterns);
+    } finally {
+      this.detach();
+    }
+  }
+
   detach(): void {
     this.page.off('console', this.consoleListener);
     this.page.off('pageerror', this.pageErrorListener);

@@ -56,8 +56,7 @@ test.describe('Monkey 01: SpaceFlightScene resilience', () => {
     });
     expect(sceneName).not.toBeNull();
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 
   test('monkey: clicks during turn execution are ignored (no route set)', async ({ page }) => {
@@ -97,8 +96,7 @@ test.describe('Monkey 01: SpaceFlightScene resilience', () => {
     });
     expect(routeOk).toBe(true);
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 
   test('monkey: rapid scroll does not break zoom bounds', async ({ page }) => {
@@ -117,8 +115,7 @@ test.describe('Monkey 01: SpaceFlightScene resilience', () => {
     });
     expect(zoomInBounds).toBe(true);
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 
   test('monkey: right-click panning does not accumulate NaN', async ({ page }) => {
@@ -138,7 +135,6 @@ test.describe('Monkey 01: SpaceFlightScene resilience', () => {
     });
     expect(panOk).toBe(true);
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 });

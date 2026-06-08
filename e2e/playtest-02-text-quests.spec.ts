@@ -137,8 +137,7 @@ test.describe('Playtest 02: Text quests', () => {
     // 5 moves × 5 seconds each = time_left 120 − 25 = 95
     expect(finalTimeLeft).toBe(95);
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 
   test('should handle reactor quest failure gracefully', async ({ page }) => {
@@ -204,8 +203,7 @@ test.describe('Playtest 02: Text quests', () => {
     await page.keyboard.press('Escape');
     await waitForScene(page, 'PlanetScene', 10_000);
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 
   test('should complete customs quest optimally with seed=1', async ({ page }) => {
@@ -280,7 +278,6 @@ test.describe('Playtest 02: Text quests', () => {
 
     expect(succeeded).toBe(true);
 
-    errorCollector.assertNoErrors();
-    errorCollector.detach();
+    errorCollector.assertAndDetach();
   });
 });
