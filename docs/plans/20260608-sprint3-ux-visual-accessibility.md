@@ -94,12 +94,12 @@
 - Modify: `src/presentation/textures.ts`
 - Modify: `src/assets/manifest.ts`
 
-- [ ] В `src/assets/manifest.ts` зарегистрировать glob `src/assets/panoramas/*.{jpg,png}` — файлы `bastions_01.jpg`, `outlanders_01.jpg`, `progressors_01.jpg`, `wilderness_01.jpg`, `pirate_01.jpg` (пока заглушки 1×1 px, позже ComfyUI)
-- [ ] В `textures.ts` добавить `panoramaUrl(key: string)` — возвращает URL из manifest или fallback gradient
-- [ ] В `PlanetScene.createUI()`: первым добавить в `uiContainer` полноэкранный `Sprite` из `panoramaUrl(planet.type + '_01')`, масштаб `cover` (заполнить весь экран сохраняя aspect ratio через `sprite.width/height`); если текстура не загружена — оставить градиентный фон
-- [ ] Поверх панорамы — полупрозрачный `Graphics` overlay `0x000011` alpha=0.55 чтобы интерфейс читался на любой картинке
-- [ ] Создать 5 заглушек (1×1 px PNG) в `src/assets/panoramas/` чтобы manifest работал сразу
-- [ ] `npm test -- --run` + `npm run lint` — без регрессий
+- [x] В `src/assets/manifest.ts` зарегистрировать glob `src/assets/panoramas/*.{jpg,png}` — файлы `bastions_01.jpg`, `outlanders_01.jpg`, `progressors_01.jpg`, `wilderness_01.jpg`, `pirate_01.jpg` (пока заглушки 1×1 px, позже ComfyUI)
+- [x] В `textures.ts` добавить `panoramaUrl(key: string)` — возвращает URL из manifest или fallback gradient
+- [x] В `PlanetScene.createUI()`: первым добавить в `uiContainer` полноэкранный `Sprite` из `panoramaUrl(planet.type + '_01')`, масштаб `cover` (заполнить весь экран сохраняя aspect ratio через `sprite.width/height`); если текстура не загружена — оставить градиентный фон
+- [x] Поверх панорамы — полупрозрачный `Graphics` overlay `0x000011` alpha=0.55 чтобы интерфейс читался на любой картинке
+- [x] Создать 5 заглушек (1×1 px PNG) в `src/assets/panoramas/` чтобы manifest работал сразу
+- [x] `npm test -- --run` + `npm run lint` — без регрессий
 
 ### Task 6: Визуальный язык UI — кнопки с характером
 

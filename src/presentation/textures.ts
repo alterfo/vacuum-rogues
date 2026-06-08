@@ -51,6 +51,24 @@ export function texUrl(key: string): string | undefined {
   return manifest[key];
 }
 
+/**
+ * Resolve a panorama asset URL for the given key (without the `panoramas/`
+ * prefix), e.g. `panoramaUrl("terrestrial_01")` → hashed URL.
+ * Returns undefined if the panorama is not in the manifest (art not yet
+ * generated). Callers should fall back to a procedural background.
+ */
+export function panoramaUrl(key: string): string | undefined {
+  return manifest[`panoramas/${key}`];
+}
+
+/**
+ * Resolve a loaded panorama Texture for the given key. Returns undefined
+ * when the asset is absent or not yet loaded.
+ */
+export function panoramaTex(key: string): Texture | undefined {
+  return cache[`panoramas/${key}`];
+}
+
 /** Tiny deterministic string hash (FNV-1a) for stable variant selection. */
 function hash(s: string): number {
   let h = 0x811c9dc5;

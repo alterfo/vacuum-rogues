@@ -9,7 +9,7 @@ import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import { TradeSystem } from "@/systems/TradeSystem";
 import { QuestType } from "@/types";
 import type { ResourceType } from "@/types";
-import { pickVariant } from "./textures";
+import { pickVariant, panoramaTex } from "./textures";
 
 interface PlanetContext {
   gameEngine?: GameEngine;
@@ -396,10 +396,36 @@ export class PlanetScene extends GameScene {
     const w = this.renderer.app.screen.width;
     const h = this.renderer.app.screen.height;
 
-    const bg = new Graphics();
-    bg.rect(0, 0, w, h);
-    bg.fill({ color: 0x000510, alpha: 0.95 });
-    this.renderer.gameLayer.addChild(bg);
+    // Panoramic background: full-screen equirectangular texture (cover scale)
+    const prefix = PLANET_TEXTURE_PREFIX[this.planet.type] ?? "terrestrial";
+    const panTex = panoramaTex(`${prefix}_01`);
+    if (panTex && panTex.width > 1) {
+      const panorama = new Sprite(panTex);
+      panorama.eventMode = "none";
+      // Cover scale: fill width first, then height if needed
+      panorama.width = w;
+      panorama.height = panorama.width / (panTex.width / panTex.height);
+      if (panorama.height < h) {
+        panorama.height = h;
+        panorama.width = panorama.height * (panTex.width / panTex.height);
+      }
+      panorama.x = (w - panorama.width) / 2;
+      panorama.y = (h - panorama.height) / 2;
+      this.renderer.gameLayer.addChild(panorama);
+    } else {
+      const bg = new Graphics();
+      bg.rect(0, 0, w, h);
+      bg.fill({ color: 0x000510 });
+      bg.eventMode = "none";
+      this.renderer.gameLayer.addChild(bg);
+    }
+
+    // Dark overlay so UI is readable over any background image
+    const overlay = new Graphics();
+    overlay.rect(0, 0, w, h);
+    overlay.fill({ color: 0x000011, alpha: 0.55 });
+    overlay.eventMode = "none";
+    this.renderer.gameLayer.addChild(overlay);
 
     // Resolve faction data needed by multiple elements
     const system = this.gameEngine?.galaxy?.systems.find((s) =>
@@ -428,7 +454,6 @@ export class PlanetScene extends GameScene {
     }
 
     // Planet body: use texture variant or procedural gradient fallback
-    const prefix = PLANET_TEXTURE_PREFIX[this.planet.type] ?? "terrestrial";
     const planetTex = pickVariant("planets", prefix, this.planet.id);
     if (planetTex) {
       const sprite = new Sprite(planetTex);
