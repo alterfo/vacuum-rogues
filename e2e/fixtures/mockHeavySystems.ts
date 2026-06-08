@@ -24,7 +24,7 @@ export async function waitForEngine(page: Page, timeout = 15000): Promise<void> 
     () => {
       const w = window as Record<string, unknown>;
       const engine = w.__gameEngine as { player: unknown } | undefined;
-      return engine != null;
+      return engine != null && engine.player != null;
     },
     { timeout },
   );

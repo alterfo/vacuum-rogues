@@ -4948,4 +4948,8 @@ export class SpaceFlightScene extends GameScene {
   e2eGetNpcCount(): number {
     return this.npcSprites.length;
   }
+
+  e2ePlayPause(): void {
+    this.onPlayPause();
+  }
 }

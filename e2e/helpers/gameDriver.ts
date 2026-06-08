@@ -93,9 +93,9 @@ export class GameDriver {
     await this.page.evaluate(() => {
       const engine = (window as unknown as Record<string, EngineHandle>).__gameEngine;
       const scene = engine?.currentScene as
-        | { handlePlayPause?: () => void }
+        | { e2ePlayPause?: () => void }
         | null;
-      scene?.handlePlayPause?.();
+      scene?.e2ePlayPause?.();
     });
     await this.page.waitForFunction(
       () => {
@@ -126,7 +126,11 @@ export class GameDriver {
       const scene = engine?.currentScene as
         | { handleTakeOff?: () => void; e2eTakeOff?: () => void }
         | null;
-      scene?.e2eTakeOff?.() ?? scene?.handleTakeOff?.();
+      if (scene?.e2eTakeOff) {
+        scene.e2eTakeOff();
+      } else {
+        scene?.handleTakeOff?.();
+      }
     });
     await this.waitForScene('SpaceFlightScene', 15_000);
   }

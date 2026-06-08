@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { applyMockHeavySystems } from './fixtures/mockHeavySystems';
 
 /**
  * E2E: Shop and equip flow
@@ -32,6 +33,7 @@ declare global {
 
 test.describe('Shop and Equip flow', () => {
   test.beforeEach(async ({ page }) => {
+    await applyMockHeavySystems(page);
     await page.goto('/');
     await page.waitForFunction(
       () => !!(window as unknown as { __gameEngine?: unknown }).__gameEngine,

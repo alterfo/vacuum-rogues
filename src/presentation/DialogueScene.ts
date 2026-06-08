@@ -423,6 +423,10 @@ export class DialogueScene extends GameScene {
   /**
    * Close dialogue and return to previous scene
    */
+  async goBack(): Promise<void> {
+    await this.closeDialogue();
+  }
+
   private async closeDialogue(): Promise<void> {
     logger.info("Closing dialogue");
     if (!this.gameEngine) return;

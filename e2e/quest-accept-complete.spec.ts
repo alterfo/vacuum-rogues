@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { applyMockHeavySystems } from './fixtures/mockHeavySystems';
 
 /**
  * E2E: Quest accept and complete flow
@@ -73,6 +74,7 @@ declare global {
 
 test.describe('Quest accept and complete flow', () => {
   test.beforeEach(async ({ page }) => {
+    await applyMockHeavySystems(page);
     await page.goto('/');
     await page.waitForFunction(
       () => !!(window as unknown as { __gameEngine?: unknown }).__gameEngine,

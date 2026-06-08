@@ -97,7 +97,7 @@ test.describe('Playtest 03: No dead-ends', () => {
     await waitForScene(page, 'SpaceFlightScene', 10_000);
 
     // ── PlanetScene ──
-    const { planetId } = await getCtx();
+    const { planetId, stationId } = await getCtx();
     if (planetId) {
       await page.evaluate(
         async ({ pid }) => {
@@ -182,6 +182,33 @@ test.describe('Playtest 03: No dead-ends', () => {
       await callGoBack();
       await waitForSceneChange('GovernmentScene');
     }
+
+    // ── StationScene ──
+    if (stationId) {
+      await page.evaluate(
+        async ({ sid }) => {
+          const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+          const station = engine.galaxy?.systems
+            .flatMap((s) => s.stations)
+            .find((st) => (st as { id?: string })?.id === sid);
+          if (station) {
+            await engine.transitionTo('STATION', { gameEngine: engine, station });
+          }
+        },
+        { sid: stationId }
+      );
+      await waitForScene(page, 'StationScene', 10_000);
+      await callGoBack();
+      await waitForSceneChange('StationScene');
+    }
+
+    // ── DialogueScene ──
+    await goTo('SPACE_FLIGHT');
+    await waitForScene(page, 'SpaceFlightScene', 10_000);
+    await goTo('DIALOGUE');
+    await waitForScene(page, 'DialogueScene', 10_000);
+    await callGoBack();
+    await waitForSceneChange('DialogueScene');
 
     // ── EquipmentShopScene ──
     if (planetId) {

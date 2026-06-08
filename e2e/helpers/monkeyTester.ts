@@ -67,10 +67,13 @@ export class MonkeyTester {
     const y = b.y + this.nextFloat() * b.h;
     await this.page.mouse.move(x, y);
     await this.page.mouse.down({ button: 'right' });
-    const dx = (this.nextFloat() - 0.5) * 100;
-    const dy = (this.nextFloat() - 0.5) * 100;
-    await this.page.mouse.move(x + dx, y + dy);
-    await this.page.mouse.up({ button: 'right' });
+    try {
+      const dx = (this.nextFloat() - 0.5) * 100;
+      const dy = (this.nextFloat() - 0.5) * 100;
+      await this.page.mouse.move(x + dx, y + dy);
+    } finally {
+      await this.page.mouse.up({ button: 'right' });
+    }
   }
 
   async randomScroll(delta?: number, bounds?: MonkeyBounds): Promise<void> {

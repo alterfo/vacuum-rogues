@@ -593,6 +593,10 @@ export class StationScene extends GameScene {
     this.showToast("Взятка принята. Добро пожаловать.", 0xffaa44);
   }
 
+  async goBack(): Promise<void> {
+    await this.undock();
+  }
+
   private async undock(): Promise<void> {
     if (!this.gameEngine) return;
     const loadoutStats = this.gameEngine.playerLoadout?.derivedStats();
