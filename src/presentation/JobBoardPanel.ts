@@ -42,8 +42,9 @@ export class JobBoardPanel {
   public readonly container: Container;
   private readonly callbacks: JobBoardCallbacks;
 
-  private static readonly W = 480;
+  private static readonly W = 520;
   private static readonly ROW_H = 60;
+  private static readonly ROW_H_OFFER = 92;
   private static readonly HEAD = 48;
 
   constructor(
@@ -69,7 +70,7 @@ export class JobBoardPanel {
     const h =
       JobBoardPanel.HEAD +
       activeSection +
-      availableRows * JobBoardPanel.ROW_H +
+      availableRows * JobBoardPanel.ROW_H_OFFER +
       16;
     this.container.x = Math.round((screenWidth - JobBoardPanel.W) / 2);
     this.container.y = Math.round(Math.max(8, (screenHeight - h) / 2));
@@ -139,7 +140,7 @@ export class JobBoardPanel {
       const alreadyTaken = acceptedQuestIds.has(q.template.id);
       const canAccept = !atLimit && !alreadyTaken;
       this.addRow(q, y, W, canAccept, alreadyTaken);
-      y += JobBoardPanel.ROW_H;
+      y += JobBoardPanel.ROW_H_OFFER;
     }
   }
 
@@ -207,7 +208,7 @@ export class JobBoardPanel {
     canAccept: boolean,
     alreadyTaken: boolean,
   ): void {
-    const rowH = JobBoardPanel.ROW_H - 6;
+    const rowH = JobBoardPanel.ROW_H_OFFER - 6;
     const t = q.template;
     const color = TYPE_COLOR[t.type] ?? 0xffffff;
 
@@ -222,8 +223,26 @@ export class JobBoardPanel {
     this.label(tag, 20, y + 6, 11, color);
 
     // Title (truncated)
-    const title = t.title.length > 32 ? t.title.slice(0, 31) + "…" : t.title;
-    this.label(title, 20, y + 22, 12, 0xffffff, true);
+    const title = t.title.length > 36 ? t.title.slice(0, 35) + "…" : t.title;
+    this.label(title, 20, y + 20, 12, 0xffffff, true);
+
+    // Description (2-3 lines, grey, small)
+    if (t.description) {
+      const descText = new Text({
+        text: t.description,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 10,
+          fill: 0x889aaa,
+          wordWrap: true,
+          wordWrapWidth: W - 120,
+        },
+      });
+      descText.eventMode = "none";
+      descText.x = 20;
+      descText.y = y + 36;
+      this.container.addChild(descText);
+    }
 
     // Reward / deadline / jumps on the right side of info area
     const deadlineDays = t.deadline > 0 ? `  ⏱ ${t.deadline}д` : "";
@@ -236,7 +255,7 @@ export class JobBoardPanel {
     m.eventMode = "none";
     m.anchor.set(1, 0);
     m.x = W - 90;
-    m.y = y + 22;
+    m.y = y + 20;
     this.container.addChild(m);
 
     // "Принять" button on the right

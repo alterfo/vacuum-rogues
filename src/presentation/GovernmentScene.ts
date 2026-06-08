@@ -7,6 +7,8 @@ import type { StarSystem } from "@/domain/StarSystem";
 import { SceneType, QuestType } from "@/types";
 import { logger } from "@/utils/logger";
 import { getTextQuestById, SAMPLE_TEXT_QUESTS } from "@/domain/TextQuest";
+import { JobBoardPanel } from "./JobBoardPanel";
+import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 
 interface GovernmentContext {
   gameEngine?: GameEngine;
@@ -95,6 +97,7 @@ export class GovernmentScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private planet: Planet | null = null;
   private uiContainer: Container | null = null;
+  private jobBoardPanel: JobBoardPanel | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
@@ -113,6 +116,7 @@ export class GovernmentScene extends GameScene {
   update(_dt: number): void {}
 
   destroy(): void {
+    this.closeJobBoard();
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
     this.uiContainer = null;
@@ -264,9 +268,9 @@ export class GovernmentScene extends GameScene {
 
     y += panelH + 24;
 
-    // Quests button
-    this.addButton(ui, "[ Задания ]", w / 2, y, 0xffee66, () =>
-      this.openQuests(),
+    // Job board button
+    this.addButton(ui, "[ Доска заданий ]", w / 2, y, 0xffee66, () =>
+      this.openJobBoard(),
     );
     y += 44;
 
@@ -311,28 +315,48 @@ export class GovernmentScene extends GameScene {
     parent.addChild(t);
   }
 
-  private openQuests(): void {
+  private openJobBoard(): void {
     if (!this.gameEngine || !this.planet) {
       this.showToast("Заданий нет", 0xffaa44);
       return;
     }
-
-    // Check if the quest board has any TEXT_ADVENTURE quests to launch
-    const board = this.gameEngine.getQuestBoard(this.planet.id);
-    const textQuest = board.find(
-      (q) => q.template.type === QuestType.TEXT_ADVENTURE,
+    this.closeJobBoard();
+    const quests = this.gameEngine.getQuestBoard(this.planet.id);
+    const { width, height } = this.renderer.app.screen;
+    const activeQuests = this.gameEngine.questManager.getActiveQuests();
+    const activeCount = activeQuests.length;
+    const currentDay = this.gameEngine.galaxy?.gameDays ?? 0;
+    const acceptedIds = new Set<string>([
+      ...activeQuests.map((q) => q.id),
+      ...this.gameEngine.questManager.getCompletedQuestIds(),
+    ]);
+    this.jobBoardPanel = new JobBoardPanel(
+      quests,
+      width,
+      height,
+      {
+        onAccept: (q) => this.acceptJob(q),
+        onClose: () => this.closeJobBoard(),
+      },
+      activeCount,
+      acceptedIds,
+      activeQuests,
+      currentDay,
     );
+    this.renderer.uiLayer.addChild(this.jobBoardPanel.container);
+  }
 
-    if (textQuest) {
-      // Pick the sample quest that matches the board entry's id prefix, or fall back
-      const questId = textQuest.template.id;
+  private acceptJob(q: GeneratedQuest): void {
+    if (!this.gameEngine || !this.planet) return;
+
+    if (q.template.type === QuestType.TEXT_ADVENTURE) {
+      const questId = q.template.id;
       const domainQuest = getTextQuestById(questId) ?? SAMPLE_TEXT_QUESTS[0];
-
       if (!domainQuest) {
-        this.showToast("Заданий нет", 0xffaa44);
+        this.showToast("Текст-квест недоступен", 0xffaa44);
         return;
       }
-
+      this.closeJobBoard();
       this.gameEngine
         .transitionTo(SceneType.TEXT_QUEST, {
           gameEngine: this.gameEngine,
@@ -349,7 +373,22 @@ export class GovernmentScene extends GameScene {
       return;
     }
 
-    this.showToast("Заданий нет", 0xffaa44);
+    const accepted = this.gameEngine.acceptBoardQuest(q, this.planet.id);
+    if (accepted) {
+      this.showToast(`Задание принято: ${q.template.title}`, 0x00ff88);
+      this.openJobBoard(); // refresh board
+    } else {
+      this.showToast("Не удалось принять задание", 0xffaa00);
+    }
+  }
+
+  private closeJobBoard(): void {
+    const panel = this.jobBoardPanel;
+    this.jobBoardPanel = null;
+    if (panel) {
+      this.renderer?.uiLayer?.removeChild(panel.container);
+      panel.destroy();
+    }
   }
 
   private async goBack(): Promise<void> {

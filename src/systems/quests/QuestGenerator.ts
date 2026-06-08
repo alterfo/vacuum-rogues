@@ -395,7 +395,7 @@ function buildRoutineQuest(
       const cargo = pickCargo(rng);
       const qty = rng.nextInt(5, 15);
       title = `Доставка: ${where}`;
-      description = `Отвезите груз (${cargo.label}) в систему ${target.name}.`;
+      description = pickDeliveryDesc(rng, cargo.label, target.name, credits);
       objectives = [
         {
           id: `${id}_collect`,
@@ -416,7 +416,7 @@ function buildRoutineQuest(
     }
     case QuestType.BOUNTY: {
       title = `Охота: ${where}`;
-      description = `Перехватите и уничтожьте цель в системе ${target.name}.`;
+      description = pickBountyDesc(rng, target.name, credits);
       objectives = [
         {
           id: `${id}_kill`,
@@ -430,7 +430,7 @@ function buildRoutineQuest(
     }
     case QuestType.ESCORT: {
       title = `Эскорт: ${where}`;
-      description = `Сопроводите конвой до системы ${target.name}.`;
+      description = pickEscortDesc(rng, target.name, credits);
       objectives = [
         {
           id: `${id}_escort`,
@@ -444,7 +444,7 @@ function buildRoutineQuest(
     }
     case QuestType.DIPLOMACY: {
       title = `Дипломатия: ${where}`;
-      description = `Доставьте предложение фракции в систему ${target.name}.`;
+      description = pickDiplomacyDesc(rng, target.name, credits);
       objectives = [
         {
           id: `${id}_envoy`,
@@ -459,7 +459,7 @@ function buildRoutineQuest(
     case QuestType.EXPLORATION:
     default: {
       title = `Разведка: ${where}`;
-      description = `Достигните и просканируйте систему ${target.name}.`;
+      description = pickExplorationDesc(rng, target.name, credits);
       objectives = [
         {
           id: `${id}_scan`,
@@ -728,4 +728,78 @@ function pickCargo(rng: SeededRNG): { label: string; resource: ResourceType } {
 function bountyEnemy(rng: SeededRNG): EnemyType {
   const pool = [EnemyType.SCOUT, EnemyType.FIGHTER, EnemyType.CRUISER];
   return pool[rng.nextInt(0, pool.length - 1)];
+}
+
+function pickDeliveryDesc(
+  rng: SeededRNG,
+  cargoLabel: string,
+  targetName: string,
+  reward: number,
+): string {
+  const templates = [
+    `Контейнер с «${cargoLabel}» (не спрашивай) нужно доставить на ${targetName}. Владелец клянётся, что ничего не пищит. Оплата: ${reward} ₢.`,
+    `Срочная поставка ${cargoLabel} в систему ${targetName} — там ждут уже третий день. Клиент нервничает, курьеры разбегаются. Может, ты справишься? Вознаграждение: ${reward} ₢.`,
+    `${targetName} остро нуждается в ${cargoLabel}. Местные говорят «срочно», но это у них вечно. Губернатор готов заплатить ${reward} ₢ за своевременную доставку.`,
+    `Доставь ${cargoLabel} в ${targetName} — без вопросов, без лишнего шума. Упаковка нестандартная, но таможня уже предупреждена. ${reward} ₢ по прибытии.`,
+  ];
+  return templates[rng.nextInt(0, templates.length - 1)];
+}
+
+function pickBountyDesc(
+  rng: SeededRNG,
+  targetName: string,
+  reward: number,
+): string {
+  const gangs = [
+    "«Зубные Феи»",
+    "«Ржавые Кулаки»",
+    "«Корсары Туманности»",
+    "«Весёлые Вдовы»",
+  ];
+  const gang = gangs[rng.nextInt(0, gangs.length - 1)];
+  const templates = [
+    `Пиратская шайка ${gang} обнаглела и обложила данью торговцев в районе ${targetName}. Губернатор просит навести порядок. Вознаграждение щедрое — чтобы перебить страх. Итого: ${reward} ₢.`,
+    `Цель находится в системе ${targetName}. Предупреждаем: стреляет первым, переговоров не ведёт. Зато мёртвой стоит ${reward} ₢ — живой не нужна никому.`,
+    `Группа ${gang} атаковала конвой близ ${targetName}. Пострадавшие требуют справедливости. Администрация требует результата. Ты требуешь ${reward} ₢ — кажется, все довольны.`,
+  ];
+  return templates[rng.nextInt(0, templates.length - 1)];
+}
+
+function pickEscortDesc(
+  rng: SeededRNG,
+  targetName: string,
+  reward: number,
+): string {
+  const templates = [
+    `Торговый конвой идёт в ${targetName}, но маршрут небезопасный. Охрана сбежала ещё вчера. Тебе предлагают ${reward} ₢ и искреннюю благодарность — последнее бесплатно.`,
+    `Дипломатическая делегация направляется в ${targetName} и очень боится. Требуется сопровождение. Стрелять первым нельзя, но отвечать — обязательно. Оплата: ${reward} ₢.`,
+    `Груз и пассажиры следуют в ${targetName}. Клиент нанял тебя, потому что предыдущий эскорт «не смог». Подробности он старается не уточнять. ${reward} ₢ при доставке.`,
+  ];
+  return templates[rng.nextInt(0, templates.length - 1)];
+}
+
+function pickDiplomacyDesc(
+  rng: SeededRNG,
+  targetName: string,
+  reward: number,
+): string {
+  const templates = [
+    `Фракционные переговоры зашли в тупик. Нужен нейтральный курьер, чтобы доставить предложение в ${targetName} — лично, в руки. Бюрократы боятся перехвата. Ты получишь ${reward} ₢ за дискретность.`,
+    `В ${targetName} ждут ответа на торговое предложение. Ответ — конверт. Конверт — у тебя. Не вскрывать, не читать, не нюхать. ${reward} ₢ по прибытии.`,
+    `Дипломатический кризис между ${targetName} и здешней администрацией разгорается. Твоя задача — привезти мирный документ раньше, чем кто-то успеет выстрелить. ${reward} ₢ за мир.`,
+  ];
+  return templates[rng.nextInt(0, templates.length - 1)];
+}
+
+function pickExplorationDesc(
+  rng: SeededRNG,
+  targetName: string,
+  reward: number,
+): string {
+  const templates = [
+    `Система ${targetName} числится в картах, но последние данные оттуда — трёхлетней давности. Учёные хотят свежий скан. Риски минимальные, оплата — ${reward} ₢. Говорят, там красиво.`,
+    `Аномалия зафиксирована в районе ${targetName}. Нужен разведчик, который слетает и вернётся живым. Предыдущих двух мы не упоминаем. Вознаграждение: ${reward} ₢.`,
+    `${targetName} не отвечает на стандартные сигналы. Скорее всего, сбой ретранслятора. Скорее всего. Слетай, проверь, привези данные. ${reward} ₢ — и никаких лишних вопросов.`,
+  ];
+  return templates[rng.nextInt(0, templates.length - 1)];
 }

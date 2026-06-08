@@ -144,4 +144,32 @@ describe("QuestGenerator", () => {
       expect(q.template.deadline).toEqual(0);
     }
   });
+
+  it("all generated quests have a non-empty description", () => {
+    const board = generateQuestBoard(baseOpts({ count: 40, textRatio: 0 }));
+    for (const q of board) {
+      expect(q.template.description).toBeTruthy();
+      expect(q.template.description.length).toBeGreaterThan(10);
+    }
+  });
+
+  it("delivery descriptions mention target system name and reward", () => {
+    const board = generateQuestBoard(
+      baseOpts({ count: 40, textRatio: 0, eliteRatio: 0, chainRatio: 0 }),
+    );
+    const deliveries = board.filter(
+      (q) => q.template.type === QuestType.DELIVERY,
+    );
+    expect(deliveries.length).toBeGreaterThan(0);
+    for (const q of deliveries) {
+      expect(q.template.description).toContain(
+        q.targetSystemId === "B"
+          ? "Бета"
+          : q.targetSystemId === "C"
+            ? "Гамма"
+            : "Дельта",
+      );
+      expect(q.template.description).toMatch(/\d+ ₢/);
+    }
+  });
 });
