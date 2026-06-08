@@ -2395,6 +2395,8 @@ export class SpaceFlightScene extends GameScene {
     }
     if (!this.gearButton) return;
     const panel = new Container();
+    panel.eventMode = "static";
+    panel.on("pointerdown", (e) => e.stopPropagation());
     const panelW = 120;
     const panelH = 44;
     const panelX = this.gearButton.x;
@@ -3323,7 +3325,7 @@ export class SpaceFlightScene extends GameScene {
       this.shipPhysics.shipY - this.starCenterY,
     );
     const touchingStar = distToStar < this.STAR_RADIUS;
-    if (touchingStar) {
+    if (touchingStar && this.isTurnRunning) {
       const burnShip = this.gameEngine?.player?.ship;
       if (burnShip) {
         burnShip.hullHP = Math.max(
@@ -3338,7 +3340,7 @@ export class SpaceFlightScene extends GameScene {
         this.starTouchActive = true;
         this.showMessage("☀ Корпус горит!", 0xff8800);
       }
-    } else {
+    } else if (!touchingStar) {
       this.starTouchActive = false;
     }
 
@@ -4229,7 +4231,8 @@ export class SpaceFlightScene extends GameScene {
       this.npcContactPanel !== null ||
       this.questJournalUI !== null ||
       this.planetInfoPanel !== null ||
-      this.overmindOverlay !== null
+      this.overmindOverlay !== null ||
+      this.settingsPanel !== null
     );
   }
 
