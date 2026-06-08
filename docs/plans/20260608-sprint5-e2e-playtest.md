@@ -152,24 +152,24 @@
 **Files:**
 - Create: `e2e/monkey-02-planet-and-quests.spec.ts`
 
-- [ ] Тест `monkey: 100 random clicks on PlanetScene do not crash`:
+- [x] Тест `monkey: 100 random clicks on PlanetScene do not crash`:
   - Посадить на планету
   - `monkey.run(100, { delayMs: 40 })`
   - Проверить что сцена — Planet или SpaceFlight (взлетели от случайного клика — ок)
   - `errorCollector.assertNoErrors()`
-- [ ] Тест `monkey: rapid transitions in TextQuestScene are safe`:
+- [x] Тест `monkey: rapid transitions in TextQuestScene are safe`:
   - Запустить квест `reactor` seed=99
   - В цикле 30 раз: выбрать случайный доступный переход из `vm.availableTransitions()`
     и выполнить его через `engine.currentScene.executeTransition(id)`
   - Проверить что квест завершился (success/failure) а не завис
   - `errorCollector.assertNoErrors()`
-- [ ] Тест `monkey: trade scene quantity buttons mashing`:
+- [x] Тест `monkey: trade scene quantity buttons mashing`:
   - Открыть рынок
   - `monkey.run(80, { delayMs: 20, types: ['leftClick'], bounds: tradeAreaBounds })`
   - Проверить `player.credits >= 0` (не ушли в минус)
   - Проверить `player.cargo.totalWeight <= player.hull.cargoCapacity`
-- [ ] `npm run test:e2e -- --run e2e/monkey-02-planet-and-quests.spec.ts`
-- [ ] `npm run lint` — без ошибок
+- [x] `npm run test:e2e -- --run e2e/monkey-02-planet-and-quests.spec.ts`
+- [x] `npm run lint` — без ошибок
 
 ### Task 7: Регрессионный playtest — запускать в CI
 
