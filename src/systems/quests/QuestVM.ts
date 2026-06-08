@@ -1,4 +1,5 @@
 import { SeededRNG } from "@/utils/seededRNG";
+import { GameSystemException } from "@/exceptions/GameSystemException";
 import type {
   QuestScript,
   QuestLocation,
@@ -116,21 +117,7 @@ export class QuestVM {
     if (compound) {
       const [, name, op, val] = compound;
       const current = this.params.get(name) ?? 0;
-      const n = Number(val);
-      switch (op) {
-        case "+":
-          this.params.set(name, current + n);
-          break;
-        case "-":
-          this.params.set(name, current - n);
-          break;
-        case "*":
-          this.params.set(name, current * n);
-          break;
-        case "/":
-          this.params.set(name, Math.floor(current / n));
-          break;
-      }
+      this.params.set(name, this.applyOp(current, op, Number(val)));
       return;
     }
 
@@ -147,25 +134,32 @@ export class QuestVM {
     if (exprAssign) {
       const [, target, srcName, op, val] = exprAssign;
       const src = this.params.get(srcName) ?? 0;
-      const n = Number(val);
-      switch (op) {
-        case "+":
-          this.params.set(target, src + n);
-          break;
-        case "-":
-          this.params.set(target, src - n);
-          break;
-        case "*":
-          this.params.set(target, src * n);
-          break;
-        case "/":
-          this.params.set(target, Math.floor(src / n));
-          break;
-      }
+      this.params.set(target, this.applyOp(src, op, Number(val)));
       return;
     }
 
     throw new Error(`Bad effect: ${expr}`);
+  }
+
+  private applyOp(current: number, op: string, n: number): number {
+    if ((op === "/" || op === "*") && n === 0) {
+      throw new GameSystemException(
+        "QUEST_VM_DIVIDE_BY_ZERO",
+        `QuestVM: division/multiplication by zero in effect`,
+      );
+    }
+    switch (op) {
+      case "+":
+        return current + n;
+      case "-":
+        return current - n;
+      case "*":
+        return current * n;
+      case "/":
+        return Math.floor(current / n);
+      default:
+        return current;
+    }
   }
 
   interpolate(text: string): string {

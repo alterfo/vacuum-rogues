@@ -285,7 +285,7 @@ private async performWarpJump(target: StarSystem): Promise<void> {
 1. Create class extending `GameScene` in `src/presentation/`
 2. Add `SceneType.MY_SCENE` to `src/types/index.ts`
 3. Add a `case SceneType.MY_SCENE:` to `src/core/services/SceneFactory.ts`
-4. If the scene requires transient context (planet, NPC, station), add it to `contextDependentScenes` in `GameEngine.loadGame()` so "Continue" falls back to SPACE_FLIGHT instead of a blank screen (currently: `PLANET`, `TRADE`, `DIALOGUE`, `COMBAT`, `INVENTORY`, `STATION`, `EQUIPMENT_SHOP`, `GOVERNMENT`, `TEXT_QUEST`, `WIN_SCREEN`)
+4. If the scene requires transient context (planet, NPC, station), add it to `contextDependentScenes` in `GameEngine.loadGame()` so "Continue" falls back to SPACE_FLIGHT instead of a blank screen (currently: `PLANET`, `TRADE`, `DIALOGUE`, `COMBAT`, `INVENTORY`, `STATION`, `EQUIPMENT_SHOP`, `GOVERNMENT`, `TEXT_QUEST`, `WIN_SCREEN`, `INFO_CENTER`)
 5. Add Page Object in `e2e/page-objects/` for E2E tests
 
 ### New Audio Track or SFX
@@ -367,4 +367,4 @@ Use `### Iteration N:` only for time-boxed sprint iterations, not regular tasks.
 
 ## Project Status
 
-Phase 2 (Вакуумные Пройдохи) — core gameplay loops implemented: economy, equipment/hull system, NPC living galaxy, quest generator, text quests, government dialogue, station services, info center, combat AI, fog-of-war star map, audio. Active plan: `docs/plans/20260608-sprint2-flight-and-ui-polish.md` (Sprint 2 flight/UI polish — all tasks complete, pending archive).
+Phase 2 (Вакуумные Пройдохи) — core gameplay loops implemented: economy, equipment/hull system, NPC living galaxy, quest generator, text quests (QuestVM + 6 scripts), government dialogue, station services, info center, combat AI, fog-of-war star map, audio. Active plan: `docs/plans/20260608-sprint4-text-quests.md` (Sprint 4 text quest engine — all 10 tasks complete).

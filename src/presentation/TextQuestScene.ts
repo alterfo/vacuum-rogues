@@ -41,6 +41,7 @@ export class TextQuestScene extends GameScene {
   private vmChoiceContainer: Container | null = null;
   private vmParamPanel: Container | null = null;
   private autoExecuteTimer: ReturnType<typeof setTimeout> | null = null;
+  private successTimer: ReturnType<typeof setTimeout> | null = null;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(renderer: Renderer) {
@@ -109,6 +110,10 @@ export class TextQuestScene extends GameScene {
     if (this.autoExecuteTimer !== null) {
       clearTimeout(this.autoExecuteTimer);
       this.autoExecuteTimer = null;
+    }
+    if (this.successTimer !== null) {
+      clearTimeout(this.successTimer);
+      this.successTimer = null;
     }
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
@@ -317,9 +322,9 @@ export class TextQuestScene extends GameScene {
     const btnH = 36;
     const gap = 8;
 
-    // Auto-execute: single auto transition
+    // Auto-execute: all available transitions are auto (routing/branching nodes)
     const autoT = transitions.find((t) => t.autoExecute);
-    if (autoT && transitions.length === 1) {
+    if (autoT && transitions.every((t) => t.autoExecute)) {
       const ellipsis = new Text({
         text: "...",
         style: { fontFamily: "Courier New", fontSize: 16, fill: 0x6688aa },
@@ -433,7 +438,8 @@ export class TextQuestScene extends GameScene {
     if (!this.vm) return;
     if (this.vm.isSuccess()) {
       this.showToast("Квест выполнен!", 0x44ff88);
-      setTimeout(() => {
+      this.successTimer = setTimeout(() => {
+        this.successTimer = null;
         this.doReturn();
       }, 2000);
     } else {
@@ -717,6 +723,8 @@ export class TextQuestScene extends GameScene {
         bg.fill({ color: 0x0a1a2e, alpha: 0.9 });
         bg.stroke({ color: 0xff99ff, width: 1 });
       });
+    } else {
+      btn.eventMode = "none";
     }
 
     parent.addChild(btn);
