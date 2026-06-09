@@ -200,7 +200,10 @@ describe("hudCursors: HUD buttons keep their pointer cursor across turns", () =>
       npc: { role: NpcRole.TRADER },
       restoreInteractivity: () => {},
     };
-    playBtnContainer = { cursor: "pointer" };
+    // Sentinel value that nothing in updateInteractiveCursors should ever
+    // write: if the HUD button were swept into the planet/NPC cursor loop, this
+    // would flip to "default"/"pointer" and the assertions below would bite.
+    playBtnContainer = { cursor: "__sentinel__" };
 
     s.planetSprites = [planet];
     s.npcSprites = [pirate, trader];
@@ -223,8 +226,8 @@ describe("hudCursors: HUD buttons keep their pointer cursor across turns", () =>
     expect(pirate.container.cursor).toBe("default");
     expect(trader.container.cursor).toBe("default");
 
-    // ...but the HUD play button keeps its pointer cursor.
-    expect(playBtnContainer.cursor).toBe("pointer");
+    // ...but the HUD play button is never written to (cursor untouched).
+    expect(playBtnContainer.cursor).toBe("__sentinel__");
   });
 
   it("restores intent cursors when the turn ends (pirate=target, trader=pointer)", () => {
@@ -234,6 +237,7 @@ describe("hudCursors: HUD buttons keep their pointer cursor across turns", () =>
     expect(planet.graphics.cursor).toBe("pointer");
     expect(pirate.container.cursor).toBe("target");
     expect(trader.container.cursor).toBe("pointer");
-    expect(playBtnContainer.cursor).toBe("pointer");
+    // HUD button still never touched across the full turn-start/turn-end cycle.
+    expect(playBtnContainer.cursor).toBe("__sentinel__");
   });
 });

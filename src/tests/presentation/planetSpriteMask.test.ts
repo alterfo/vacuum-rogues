@@ -69,14 +69,20 @@ describe("PlanetSprite circular masking", () => {
   });
 
   it("masks every planet type's body to a circle", () => {
+    let totalMasked = 0;
     for (const type of Object.values(PlanetType)) {
       const sprite = new PlanetSprite(makePlanet(type), 0, 0, 0);
+      sprite.render(); // masks are only assigned during render()
       const masked = collectMaskedObjects(sprite.container);
+      totalMasked += masked.length;
       for (const obj of masked) {
         const mask = obj.mask as unknown as PixiContainer;
         expect(obj.children).toContain(mask);
       }
       sprite.destroy();
     }
+    // Without render() the loop above asserted nothing (no masks existed). At
+    // least one planet type must produce a masked body for this test to bite.
+    expect(totalMasked).toBeGreaterThan(0);
   });
 });

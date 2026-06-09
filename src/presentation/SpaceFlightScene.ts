@@ -135,6 +135,15 @@ interface SwarmLayer {
   rotSpeed: number;
 }
 
+/** Minimal structural view of a display object for recursive filter disposal. */
+interface FilterableNode {
+  filters?:
+    | ReadonlyArray<{ destroy?: () => void }>
+    | { destroy?: () => void }
+    | null;
+  children?: ReadonlyArray<unknown>;
+}
+
 export class SpaceFlightScene extends GameScene {
   private readonly combatResolver = new FlightCombatResolver();
   private gameEngine: GameEngine | null = null;
@@ -826,6 +835,11 @@ export class SpaceFlightScene extends GameScene {
       this.systemMiniMap = null;
     }
 
+    // Release GPU filter textures before the layer is cleared — clearGameLayer
+    // destroys the display objects but not their BlurFilters (star halo, ship
+    // glow, procedural sun disc), which would otherwise leak each teardown.
+    if (this.renderer.gameLayer)
+      this.disposeFiltersDeep(this.renderer.gameLayer);
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
 
@@ -843,6 +857,9 @@ export class SpaceFlightScene extends GameScene {
     // clearUILayer do NOT touch — remove and destroy it explicitly.
     if (this.skyContainer) {
       this.renderer.stage.removeChild(this.skyContainer);
+      // Dispose the nebula-cloud, pillar and swarm-mote BlurFilters before the
+      // subtree is destroyed — destroy({children}) leaves their GPU textures.
+      this.disposeFiltersDeep(this.skyContainer);
       this.skyContainer.destroy({ children: true });
       this.skyContainer = null;
     }
@@ -906,6 +923,23 @@ export class SpaceFlightScene extends GameScene {
     // size — that clamp is what produced the hard bands across the canvas.
     f.resolution = 1;
     return f;
+  }
+
+  /**
+   * Recursively destroy every filter attached to a display-object subtree.
+   * PixiJS v8 `Container.destroy({children})` / `clearGameLayer()` removes the
+   * display objects but does NOT dispose their `filters` — each BlurFilter holds
+   * a GPU render texture that leaks on every scene teardown otherwise (the swarm
+   * motes, ship glow, star halo, nebula clouds and pillars all carry one). Call
+   * this before tearing a layer down so the textures are released.
+   */
+  private disposeFiltersDeep(obj: FilterableNode): void {
+    const fs = obj.filters;
+    const arr = Array.isArray(fs) ? fs : fs ? [fs] : [];
+    for (const f of arr) f.destroy?.();
+    for (const child of obj.children ?? []) {
+      this.disposeFiltersDeep(child as FilterableNode);
+    }
   }
 
   private createStarField(): void {
@@ -3246,6 +3280,10 @@ export class SpaceFlightScene extends GameScene {
       );
       if (marker) {
         this.spawnShipBeside(marker.x, marker.y, 20);
+        // Consume any pending landing too, so a later free-flight re-entry isn't
+        // snapped back to a stale planet (docstring: landedPlanetId is one-shot).
+        if (this.gameEngine?.player)
+          this.gameEngine.player.landedPlanetId = null;
         return;
       }
     }
