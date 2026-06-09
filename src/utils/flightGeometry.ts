@@ -171,6 +171,200 @@ export function avoidStarPath(
 }
 
 /**
+ * A smooth arc from (fx,fy) to (tx,ty) that bows out perpendicular to the chord
+ * by `bowFrac` of the chord length (signed: positive bows to the left of the
+ * travel direction, negative to the right). Returns the forward waypoint list
+ * (the start point is dropped — callers prepend the ship's live position when
+ * drawing). Used for landing-insertion and take-off arcs so flight reads as
+ * curved manoeuvring rather than dead-straight beelines (Task 5).
+ */
+export function bowedPath(
+  fx: number,
+  fy: number,
+  tx: number,
+  ty: number,
+  bowFrac: number,
+  samplesPerSegment = 8,
+): Point[] {
+  const dx = tx - fx;
+  const dy = ty - fy;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6 || bowFrac === 0) return [{ x: tx, y: ty }];
+  const px = -dy / len; // left-perpendicular unit
+  const py = dx / len;
+  const bow = bowFrac * len;
+  const control: Point[] = [
+    { x: fx, y: fy },
+    { x: (fx + tx) / 2 + px * bow, y: (fy + ty) / 2 + py * bow },
+    { x: tx, y: ty },
+  ];
+  return catmullRomSpline(control, samplesPerSegment).slice(1);
+}
+
+/**
+ * Curved "spiral-in" approach to a planet: a bowed arc from the ship to the
+ * orbit-edge approach point, sweeping wide of the disc then curving in to the
+ * edge instead of driving straight at the centre (Task 5). The bow is biased
+ * away from the planet centre so it reads as an orbital insertion.
+ */
+export function spiralApproachPath(
+  shipX: number,
+  shipY: number,
+  planetX: number,
+  planetY: number,
+  planetRadius: number,
+  approachOffset: number,
+  bowFrac = 0.18,
+): Point[] {
+  const ap = planetApproachPoint(
+    shipX,
+    shipY,
+    planetX,
+    planetY,
+    planetRadius,
+    approachOffset,
+  );
+  const mx = (shipX + ap.x) / 2;
+  const my = (shipY + ap.y) / 2;
+  const dx = ap.x - shipX;
+  const dy = ap.y - shipY;
+  const len = Math.hypot(dx, dy) || 1;
+  const px = -dy / len;
+  const py = dx / len;
+  // Bow away from the planet centre (sweep wide, then curve in to the edge).
+  const dot = px * (planetX - mx) + py * (planetY - my);
+  const sign = dot > 0 ? -1 : 1;
+  return bowedPath(shipX, shipY, ap.x, ap.y, sign * bowFrac);
+}
+
+/**
+ * Short outward arc a ship flies when lifting off a planet, before autopilot
+ * engages (Task 5). `(outX,outY)` is the outward unit direction (planet facing
+ * away from the star); the ship rises from the planet edge and curves out to a
+ * point `outDist` beyond it. Includes the lift-off start point so the cosmetic
+ * animator can drive the whole polyline.
+ */
+export function takeoffArcPath(
+  planetX: number,
+  planetY: number,
+  outX: number,
+  outY: number,
+  planetRadius: number,
+  outDist: number,
+  bowFrac = 0.4,
+  samplesPerSegment = 10,
+): Point[] {
+  const start = {
+    x: planetX + outX * planetRadius,
+    y: planetY + outY * planetRadius,
+  };
+  const end = {
+    x: planetX + outX * (planetRadius + outDist),
+    y: planetY + outY * (planetRadius + outDist),
+  };
+  const curve = bowedPath(
+    start.x,
+    start.y,
+    end.x,
+    end.y,
+    bowFrac,
+    samplesPerSegment,
+  );
+  return [start, ...curve];
+}
+
+/** A position + heading sampled at an arc-length along a polyline. */
+export interface PathSample {
+  x: number;
+  y: number;
+  /** Heading (radians) of the segment the sample falls on. */
+  heading: number;
+  /** True once `dist` reaches/exceeds the polyline's total length. */
+  done: boolean;
+}
+
+/**
+ * Sample the point `dist` pixels along a polyline, with the heading of the
+ * segment it falls on. Used to drive the cosmetic take-off animation at a
+ * constant speed without involving the day-counting flight physics (Task 5).
+ */
+export function pointAlongPath(points: Point[], dist: number): PathSample {
+  if (points.length === 0) return { x: 0, y: 0, heading: 0, done: true };
+  if (points.length === 1) {
+    return { x: points[0].x, y: points[0].y, heading: 0, done: true };
+  }
+  if (dist <= 0) {
+    const h = Math.atan2(points[1].y - points[0].y, points[1].x - points[0].x);
+    return { x: points[0].x, y: points[0].y, heading: h, done: false };
+  }
+  let acc = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const seg = Math.hypot(b.x - a.x, b.y - a.y);
+    if (seg === 0) continue;
+    const heading = Math.atan2(b.y - a.y, b.x - a.x);
+    if (dist <= acc + seg) {
+      const t = (dist - acc) / seg;
+      return {
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t,
+        heading,
+        done: false,
+      };
+    }
+    acc += seg;
+  }
+  const last = points[points.length - 1];
+  const prev = points[points.length - 2];
+  return {
+    x: last.x,
+    y: last.y,
+    heading: Math.atan2(last.y - prev.y, last.x - prev.x),
+    done: true,
+  };
+}
+
+/**
+ * Predicted intercept point for a shooter at (sx,sy) moving at `shooterSpeed`
+ * (px/ms) chasing a target at (tx,ty) with velocity (tvx,tvy). Solves the
+ * quadratic lead so the pursuer heads where the target *will* be — re-solved
+ * each leg, this makes the chase curve to lead a crossing target rather than
+ * always pointing at its current position (Task 5). Falls back to the target's
+ * current position when there is no positive-time solution.
+ */
+export function leadInterceptPoint(
+  sx: number,
+  sy: number,
+  shooterSpeed: number,
+  tx: number,
+  ty: number,
+  tvx: number,
+  tvy: number,
+): Point {
+  const rx = tx - sx;
+  const ry = ty - sy;
+  const a = tvx * tvx + tvy * tvy - shooterSpeed * shooterSpeed;
+  const b = 2 * (rx * tvx + ry * tvy);
+  const c = rx * rx + ry * ry;
+  let t = -1;
+  if (Math.abs(a) < 1e-9) {
+    if (Math.abs(b) > 1e-9) t = -c / b;
+  } else {
+    const disc = b * b - 4 * a * c;
+    if (disc >= 0) {
+      const sq = Math.sqrt(disc);
+      const roots = [(-b - sq) / (2 * a), (-b + sq) / (2 * a)]
+        .filter((v) => v > 1e-6)
+        .sort((p, q) => p - q);
+      if (roots.length) t = roots[0];
+    }
+  }
+  if (t <= 0 || !Number.isFinite(t)) return { x: tx, y: ty };
+  return { x: tx + tvx * t, y: ty + tvy * t };
+}
+
+/**
  * Compute the approach waypoint for a planet: a point on the ship-facing edge
  * of the planet disc, offset outward by `offset` px.  Routing to this point
  * instead of the planet centre prevents the preview line from cutting through

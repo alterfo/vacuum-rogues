@@ -108,6 +108,11 @@ export class ShipPhysics {
     return this.maxSpeed > 0 ? this.currentSpeed / this.maxSpeed : 0;
   }
 
+  /** Max cruise speed (px/ms) — used to solve intercept lead against a target. */
+  getMaxSpeed(): number {
+    return this.maxSpeed;
+  }
+
   update(deltaTime: number): void {
     // Cap deltaTime to prevent physics explosion on lag spikes, then apply
     // timeScale so the HUD speed button accelerates visual movement.

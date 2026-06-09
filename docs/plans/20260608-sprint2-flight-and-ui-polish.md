@@ -76,11 +76,11 @@ Related: US-070, US-071, US-072, US-074, US-075
 **Files:**
 - Modify: `src/presentation/SpaceFlightScene.ts`
 
-- [ ] Route line should show arc/curve when path bends around sun (use PixiJS bezier or multi-segment polyline matching computed waypoints)
-- [ ] During landing approach (entering planet orbit), animate ship on a curved spiral-in path instead of a straight line to the planet center
-- [ ] During take-off, animate ship on a short outward arc before engaging autopilot
-- [ ] When approaching NPC ship (intercept), path curves to lead the target rather than heading directly at its current position
-- [ ] Run `npm test -- --run` — must pass
+- [x] Route line should show arc/curve when path bends around sun (use PixiJS bezier or multi-segment polyline matching computed waypoints) — `drawRouteLine` already dashes along the curved `routePath` (Catmull-Rom arc from `avoidStarPath`); added a route-arc test asserting the rendered polyline is multi-segment, clears the exclusion radius, and bows well off the straight chord
+- [x] During landing approach (entering planet orbit), animate ship on a curved spiral-in path instead of a straight line to the planet center — new `spiralApproachPath` curves the approach to the orbit-edge point; `computeFlightPath` uses it for planet destinations when the shot is otherwise straight (when it already bends around the star it is curved enough); wired into `onPlanetClick` plan + execute
+- [x] During take-off, animate ship on a short outward arc before engaging autopilot — new `takeoffArcPath` + cosmetic `updateTakeoff` walk: on re-entry from a planet (`fromPlanetId`) the ship lifts off the disc edge and arcs out ~90px; physics stays parked at the arc end so no game-days burn; a fresh course (`executeRouteTo`) cancels it
+- [x] When approaching NPC ship (intercept), path curves to lead the target rather than heading directly at its current position — new `leadInterceptPoint` (quadratic lead solve) + `npcLeadPoint`; both the initial intercept (`onAttackNpc`) and each chase leg (`updateCombat`) re-aim at the predicted lead, so the pursuit curves to lead a crossing target
+- [x] Run `npm test -- --run` — must pass (735 tests pass)
 
 ### Task 6: Planet scene visual polish
 **Files:**

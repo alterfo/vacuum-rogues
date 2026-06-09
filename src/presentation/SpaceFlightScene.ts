@@ -40,6 +40,10 @@ import {
   avoidStarPath,
   hashToAngle,
   planetApproachPoint,
+  spiralApproachPath,
+  takeoffArcPath,
+  pointAlongPath,
+  leadInterceptPoint,
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
@@ -295,6 +299,14 @@ export class SpaceFlightScene extends GameScene {
   private routePath: { x: number; y: number }[] = [];
   private routeLineGraphics: Graphics | null = null;
 
+  // Cosmetic take-off arc (Task 5): when the ship lifts off a planet it flies a
+  // short outward curve before autopilot engages. Driven by a fixed-speed walk
+  // along this polyline; the flight physics stays parked at the end point so no
+  // game-days are burned and the day/landing logic in updateShip is bypassed.
+  private takeoffArc: { x: number; y: number }[] | null = null;
+  private takeoffArcDist = 0;
+  private static readonly TAKEOFF_ARC_SPEED = 0.5; // px/ms
+
   // Pending hyperjump (US-023): set when the player chose a warp target on the
   // star map. The ship auto-routes to the system edge in `exitVector` direction
   // and the jump fires only on reaching the boundary (see performWarp).
@@ -509,14 +521,29 @@ export class SpaceFlightScene extends GameScene {
         const dx = sprite.screenX - this.starCenterX;
         const dy = sprite.screenY - this.starCenterY;
         const len = Math.hypot(dx, dy) || 1;
-        const spawnX = sprite.screenX + (dx / len) * 80; // 80px further out
-        const spawnY = sprite.screenY + (dy / len) * 80;
-        // teleport() also resets the physics target, so the ship parks here
-        // instead of flying back toward its initial (edge) spawn point.
-        this.shipPhysics.teleport(spawnX, spawnY);
+        const outX = dx / len;
+        const outY = dy / len;
+        // Take-off flourish (Task 5): fly a short outward arc from the planet
+        // edge to a point ~90px beyond it, then hand off to autopilot. Physics
+        // is parked at the arc's END so the manoeuvre is purely cosmetic (no
+        // game-days burned) — updateShip defers to updateTakeoff while it plays.
+        const arc = takeoffArcPath(
+          sprite.screenX,
+          sprite.screenY,
+          outX,
+          outY,
+          sprite.displayRadius,
+          90,
+        );
+        const end = arc[arc.length - 1];
+        // teleport() also resets the physics target, so the ship parks at the
+        // arc's end instead of flying back toward its initial (edge) spawn.
+        this.shipPhysics.teleport(end.x, end.y);
+        this.takeoffArc = arc;
+        this.takeoffArcDist = 0;
         if (this.shipContainer) {
-          this.shipContainer.x = spawnX;
-          this.shipContainer.y = spawnY;
+          this.shipContainer.x = arc[0].x;
+          this.shipContainer.y = arc[0].y;
         }
       }
     }
@@ -2736,13 +2763,20 @@ export class SpaceFlightScene extends GameScene {
     const isSamePlanet = this.routeTargetPlanetId === planet.id;
     this.routeTargetPlanetId = planet.id;
 
+    // Curve the approach into a spiral-in around the planet's orbit edge (Task 5).
+    const landing = {
+      planetX: planetSprite.screenX,
+      planetY: planetSprite.screenY,
+      planetRadius: planetSprite.displayRadius,
+    };
+
     if (this.plannedRoute && isSamePlanet) {
       // Second click on same planet - execute the route
-      this.executeRouteTo(approachPt.x, approachPt.y);
+      this.executeRouteTo(approachPt.x, approachPt.y, landing);
       logger.info(`▶️ Executing route to planet ${planet.name}`);
     } else {
       // First click or different planet - plan the route preview
-      this.planRouteTo(approachPt.x, approachPt.y);
+      this.planRouteTo(approachPt.x, approachPt.y, landing);
       logger.info(
         `🗺️ Route planned to planet ${planet.name}. Click again to execute.`,
       );
@@ -3250,8 +3284,50 @@ export class SpaceFlightScene extends GameScene {
     return { x: worldX, y: worldY };
   }
 
+  /**
+   * Advance the cosmetic take-off arc (Task 5): walk the ship container along
+   * the outward curve at a constant speed, facing the direction of travel. The
+   * flight physics is already parked at the arc's end point, so when the walk
+   * completes the ship simply stays there and normal autopilot resumes.
+   */
+  private updateTakeoff(deltaTime: number): void {
+    if (!this.takeoffArc || !this.shipContainer || !this.shipPhysics) return;
+    this.takeoffArcDist +=
+      SpaceFlightScene.TAKEOFF_ARC_SPEED * Math.min(deltaTime, 100);
+    const sample = pointAlongPath(this.takeoffArc, this.takeoffArcDist);
+    this.shipContainer.x = sample.x;
+    this.shipContainer.y = sample.y;
+    this.shipContainer.rotation = sample.heading;
+    this.shipPhysics.shipAngle = sample.heading; // keep physics heading in sync
+    if (sample.done) {
+      this.finishTakeoff();
+    }
+  }
+
+  /** End the take-off arc: snap to the parked end point and clear the arc. */
+  private finishTakeoff(): void {
+    if (!this.takeoffArc) return;
+    const end = this.takeoffArc[this.takeoffArc.length - 1];
+    this.takeoffArc = null;
+    this.takeoffArcDist = 0;
+    if (this.shipPhysics) {
+      this.shipPhysics.teleport(end.x, end.y);
+      if (this.shipContainer) {
+        this.shipContainer.x = end.x;
+        this.shipContainer.y = end.y;
+      }
+    }
+  }
+
   private updateShip(deltaTime: number): void {
     if (!this.shipContainer || !this.shipGraphics || !this.shipPhysics) return;
+
+    // Take-off arc in progress (Task 5): drive the cosmetic outward curve and
+    // skip the day-counting flight physics until it finishes.
+    if (this.takeoffArc) {
+      this.updateTakeoff(deltaTime);
+      return;
+    }
 
     // Track position before update (for distance calculation)
     const prevX = this.shipPhysics.shipX;
@@ -3701,32 +3777,61 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
+   * Build the flight path from the ship to (tx,ty): the star-avoidance arc, but
+   * when the shot is otherwise straight and the destination is a planet, a
+   * curved spiral-in approach so the ship sweeps into the orbit edge rather than
+   * beelining at the disc (Task 5). When the path already bows around the star
+   * it is curved enough and left as-is.
+   */
+  private computeFlightPath(
+    tx: number,
+    ty: number,
+    landing?: { planetX: number; planetY: number; planetRadius: number },
+  ): { x: number; y: number }[] {
+    if (!this.shipPhysics) return [{ x: tx, y: ty }];
+    const fx = this.shipPhysics.shipX;
+    const fy = this.shipPhysics.shipY;
+    const path = this.computeAvoidancePath(fx, fy, tx, ty);
+    if (landing && path.length <= 1) {
+      return spiralApproachPath(
+        fx,
+        fy,
+        landing.planetX,
+        landing.planetY,
+        landing.planetRadius,
+        GAME_BALANCE.landingApproachOffset,
+      );
+    }
+    return path;
+  }
+
+  /**
    * Set the planned-route point and draw its preview, bowing the preview around
    * the star so the dashed line never appears to cut through the sun before the
    * player commits (US-070 #6: the route was drawn straight through the star on
-   * the first click, only curving once executed).
+   * the first click, only curving once executed). A planet destination previews
+   * the curved spiral-in approach (Task 5).
    */
-  private planRouteTo(x: number, y: number): void {
+  private planRouteTo(
+    x: number,
+    y: number,
+    landing?: { planetX: number; planetY: number; planetRadius: number },
+  ): void {
     if (!this.shipPhysics) return;
     this.plannedRoute = { x, y };
-    this.routePath = this.computeAvoidancePath(
-      this.shipPhysics.shipX,
-      this.shipPhysics.shipY,
-      x,
-      y,
-    );
+    this.routePath = this.computeFlightPath(x, y, landing);
     this.drawRouteLine();
   }
 
-  /** Start flying to (x,y) along a star-avoiding path of waypoints. */
-  private executeRouteTo(x: number, y: number): void {
+  /** Start flying to (x,y) along a star-avoiding (and, for planets, spiral) path. */
+  private executeRouteTo(
+    x: number,
+    y: number,
+    landing?: { planetX: number; planetY: number; planetRadius: number },
+  ): void {
     if (!this.shipPhysics) return;
-    this.routePath = this.computeAvoidancePath(
-      this.shipPhysics.shipX,
-      this.shipPhysics.shipY,
-      x,
-      y,
-    );
+    this.finishTakeoff(); // a fresh course cancels any in-progress take-off arc
+    this.routePath = this.computeFlightPath(x, y, landing);
     // Hand the whole curved path to physics; it flows through the waypoints
     // without stopping (smooth motion around the star — US-070 #5).
     this.shipPhysics.setPath(this.routePath);
@@ -4099,11 +4204,36 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // Not yet in range — auto-follow to close the gap.
+    // Not yet in range — auto-follow to close the gap, aiming at a lead point
+    // so the intercept curves to where the target is heading (Task 5).
     this.followNpcId = npc.id;
     this.routeTargetPlanetId = null;
-    this.executeRouteTo(sprite.x, sprite.y);
+    const lead = this.npcLeadPoint(sprite);
+    this.executeRouteTo(lead.x, lead.y);
     this.showMessage(`Перехват: ${npc.name}`, 0xff5555);
+  }
+
+  /**
+   * Predicted intercept point for chasing an NPC: leads the target along its
+   * current heading so the pursuit curves toward where it will be rather than
+   * pointing at its present position (Task 5). NPC velocity is derived from its
+   * sprite heading (the hull faces its direction of travel) and the shared NPC
+   * cruise speed. Falls back to the NPC's current position when no lead solves.
+   */
+  private npcLeadPoint(sprite: NpcShipSprite): { x: number; y: number } {
+    if (!this.shipPhysics) return { x: sprite.x, y: sprite.y };
+    const heading = sprite.container.rotation;
+    const vx = Math.cos(heading) * GAME_BALANCE.npcSpeed;
+    const vy = Math.sin(heading) * GAME_BALANCE.npcSpeed;
+    return leadInterceptPoint(
+      this.shipPhysics.shipX,
+      this.shipPhysics.shipY,
+      this.shipPhysics.getMaxSpeed(),
+      sprite.x,
+      sprite.y,
+      vx,
+      vy,
+    );
   }
 
   /** Transition to the turn-based CombatScene for a specific NPC. */
@@ -4241,8 +4371,17 @@ export class SpaceFlightScene extends GameScene {
         this.followNpcId = null;
         return;
       case "chase":
-        if (!this.shipPhysics.isMoving)
-          this.executeRouteTo(decision.targetX, decision.targetY);
+        if (!this.shipPhysics.isMoving) {
+          // Re-aim at a fresh lead point each leg so the chase curves to lead a
+          // crossing target rather than always heading at its old position.
+          const chased = this.npcSprites.find(
+            (s) => s.npc.id === this.followNpcId,
+          );
+          const lead = chased
+            ? this.npcLeadPoint(chased)
+            : { x: decision.targetX, y: decision.targetY };
+          this.executeRouteTo(lead.x, lead.y);
+        }
         return;
       case "launch":
         if (this.shipPhysics.isMoving) {
