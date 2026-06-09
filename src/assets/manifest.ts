@@ -10,8 +10,12 @@
  * Naming convention (see docs/design/ASSET_PIPELINE.md + ART_PROMPTS.md):
  *   nebula/<palette>_<layer>      palette: red|blue|green|teal · layer: far|mid|near
  *   planets/<type>_<NN>           pre-lit cut-out disc (static)
- *   planet_maps/<type>_<NN>       equirectangular surface map (rotates in-engine)
+ *   planet_maps/<type>_<NN>       equirectangular surface map (rotates in-engine);
+ *                                 _04+ = Solar System Scope CC BY 4.0, _01–_03 = AI
+ *   star_maps/<startype>_<NN>     equirectangular star-surface map (rotates in-engine)
  *   stars/<startype>_<NN>         red_dwarf|yellow|blue_giant|neutron|white_dwarf
+ *   panoramas/<faction>_city ·    360° landing backdrops (faction city + wilderness
+ *   panoramas/wilderness_<biome>  biome: desert|jungle|tundra) — lazy-loaded
  *   ships/<role>_<NN>             ranger|trader|pirate|patrol
  *   ui/<name> · icons/<module>
  *
