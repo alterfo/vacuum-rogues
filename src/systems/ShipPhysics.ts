@@ -79,6 +79,19 @@ export class ShipPhysics {
     this.isMoving = false;
   }
 
+  /**
+   * Halt the ship in place immediately: clear any queued waypoints, park the
+   * target at the current position (so update() won't ease it back toward an
+   * old target), and zero out speed. Used to abort a route mid-flight (Pause).
+   */
+  stop(): void {
+    this.path = [];
+    this.targetX = this.shipX;
+    this.targetY = this.shipY;
+    this.currentSpeed = 0;
+    this.isMoving = false;
+  }
+
   /** Set the animation time-scale (1.0 = normal, 2.0 = double speed, etc.). */
   setTimeScale(v: number): void {
     this.timeScale = Math.max(0.1, v);

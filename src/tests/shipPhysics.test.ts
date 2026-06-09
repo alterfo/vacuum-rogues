@@ -83,6 +83,28 @@ describe("ShipPhysics", () => {
     expect(p.shipX).toBeCloseTo(100, 0);
   });
 
+  it("stop() halts the ship in place and clears the path mid-flight", () => {
+    const p = new ShipPhysics(0, 0, 0.5);
+    p.setPath([
+      { x: 500, y: 0 },
+      { x: 1000, y: 0 },
+    ]);
+    p.update(100); // start moving
+    expect(p.isMoving).toBe(true);
+    const x = p.shipX;
+    const y = p.shipY;
+    p.stop();
+    expect(p.isMoving).toBe(false);
+    expect(p.currentSpeed).toBe(0);
+    expect(p.hasPath()).toBe(false);
+    // Position is unchanged and a further update does not fly back to the target.
+    expect(p.shipX).toBe(x);
+    expect(p.shipY).toBe(y);
+    p.update(100);
+    expect(p.isMoving).toBe(false);
+    expect(p.shipX).toBe(x);
+  });
+
   it("update() clamps deltaTime at 100ms — lag spike behaves like 100ms frame", () => {
     const p1 = new ShipPhysics(0, 0, 0.5);
     const p2 = new ShipPhysics(0, 0, 0.5);

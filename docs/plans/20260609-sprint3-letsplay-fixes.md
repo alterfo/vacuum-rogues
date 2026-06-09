@@ -54,11 +54,11 @@ Root cause: In PixiJS 8, a Graphics mask must be part of the display object tree
 
 Root cause: `onPlayPause()` (line 4375) sets `pauseRequested = true` when the ship is moving, meaning pause only activates at the END of the current movement segment. Player can't stop an unwanted route mid-flight.
 
-- [ ] In `onPlayPause()` (line ~4375), when `this.isTurnRunning && this.shipPhysics?.isMoving`: instead of just setting `pauseRequested = true`, immediately call `this.shipPhysics.stop()` then `this.endTurn()`. Remove the `pauseRequested` flag entirely if no other caller uses it.
-- [ ] Verify the Ход button's container has `eventMode = "static"` and is **above** any fullscreen transparent overlay that might intercept clicks. Check the z-order: uiLayer must be on top of gameLayer; the button's `stopPropagation()` must be present in UiButton.
-- [ ] Ensure `updateInteractiveCursors()` (line ~4417) does NOT set `cursor = "default"` on the Ход/Pause button — only planet and NPC cursors should change during turns.
-- [ ] Write unit test: mock `shipPhysics.stop` and `endTurn`, call `onPlayPause()` while `isTurnRunning=true` and `shipPhysics.isMoving=true`, assert `stop()` and `endTurn()` were both called.
-- [ ] `npm run lint && npm test -- --run` — must pass.
+- [x] In `onPlayPause()` (line ~4375), when `this.isTurnRunning && this.shipPhysics?.isMoving`: instead of just setting `pauseRequested = true`, immediately call `this.shipPhysics.stop()` then `this.endTurn()`. Remove the `pauseRequested` flag entirely if no other caller uses it. (Added `ShipPhysics.stop()` that clears the path, parks the target at the current pos, and zeroes speed. `onPlayPause` now calls `stop()` + `endTurn()` for ANY running turn — flying, holding station, or waiting. Removed the `pauseRequested` field and its deferred day-boundary checks in the flight loop and `advanceWaitTime`.)
+- [x] Verify the Ход button's container has `eventMode = "static"` and is **above** any fullscreen transparent overlay that might intercept clicks. Check the z-order: uiLayer must be on top of gameLayer; the button's `stopPropagation()` must be present in UiButton. (Confirmed: `UiButton` sets `container.eventMode = "static"` and calls `event.stopPropagation()` in its pointerdown handler; the play button is added to `uiContainer` → `uiLayer`, above `gameLayer`. The onClick wrapper also calls `stopPropagation()`.)
+- [x] Ensure `updateInteractiveCursors()` (line ~4417) does NOT set `cursor = "default"` on the Ход/Pause button — only planet and NPC cursors should change during turns. (Confirmed: the function only iterates `planetSprites` and `npcSprites`; it never touches `playPauseButton`.)
+- [x] Write unit test: mock `shipPhysics.stop` and `endTurn`, call `onPlayPause()` while `isTurnRunning=true` and `shipPhysics.isMoving=true`, assert `stop()` and `endTurn()` were both called. (`src/tests/playPauseImmediate.test.ts` — 3 cases: flying, holding station, and paused-no-op. Also added a `stop()` test to `shipPhysics.test.ts`.)
+- [x] `npm run lint && npm test -- --run` — must pass. (0 lint errors; 809 unit tests pass.)
 
 ### Task 3: Pointer cursor on all interactive elements
 

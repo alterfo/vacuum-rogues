@@ -249,9 +249,8 @@ export class SpaceFlightScene extends GameScene {
   private readonly MINI_LOG_FADE_MS = 1000;
 
   // Turn control (Play/Pause). The turn "runs" (ship flies, NPCs/planets move,
-  // combat resolves) while isTurnRunning; Pause ends it at the next day segment.
+  // combat resolves) while isTurnRunning; Pause stops the ship and ends it now.
   private isTurnRunning = false;
-  private pauseRequested = false;
   // Latch: show "pause first" hint only once per turn to avoid message spam.
   private turnHintShown = false;
   private playPauseButton: UiButton | null = null;
@@ -736,7 +735,6 @@ export class SpaceFlightScene extends GameScene {
       this.settingsPanel = null;
     }
     this.isTurnRunning = false;
-    this.pauseRequested = false;
     this.turnHintShown = false;
     this.lowHullStopped = false;
     this.starTouchActive = false;
@@ -3593,14 +3591,6 @@ export class SpaceFlightScene extends GameScene {
             `Day passed during flight. Current day: ${this.gameEngine.galaxy.gameDays}`,
           );
         }
-
-        // Pause requested → end the turn at this day boundary (the ship stops at
-        // the end of the day segment, per the Play/Pause spec).
-        if (this.pauseRequested) {
-          this.endTurn();
-          this.showMessage("⏸ Ход завершён", 0xffcc00);
-          break;
-        }
       }
     }
 
@@ -3630,8 +3620,8 @@ export class SpaceFlightScene extends GameScene {
   /**
    * Advance the calendar while the ship waits in place (a course-less turn). A
    * fractional day accumulates smoothly (so planets keep drifting); whole days
-   * are committed to the galaxy as they tick over, and a requested Pause ends the
-   * turn at the next day boundary — mirroring the in-flight day model.
+   * are committed to the galaxy as they tick over. Pause stops the wait turn
+   * immediately via onPlayPause(), so there is no day-boundary deferral here.
    */
   private advanceWaitTime(deltaTime: number): void {
     const scaledDt = deltaTime * (this.shipPhysics?.timeScale ?? 1);
@@ -3642,11 +3632,6 @@ export class SpaceFlightScene extends GameScene {
         this.gameEngine.advanceGalaxyDay();
         this.updateDayCounter();
         this.refreshNpcShips();
-      }
-      if (this.pauseRequested) {
-        this.endTurn();
-        this.showMessage("⏸ Ход завершён", 0xffcc00);
-        return;
       }
     }
   }
@@ -4370,14 +4355,11 @@ export class SpaceFlightScene extends GameScene {
 
   private onPlayPause(): void {
     if (this.isTurnRunning) {
-      // Pause: stop at the end of the current day segment while flying; if the
-      // ship is holding station (e.g. firing on a target) end the turn now.
-      if (this.shipPhysics?.isMoving) {
-        this.pauseRequested = true;
-        this.showMessage("⏸ Пауза в конце отрезка дня", 0xffcc00);
-      } else {
-        this.endTurn();
-      }
+      // Pause: stop the ship immediately and end the turn so the player can
+      // abort an unwanted route mid-flight — no longer deferred to the next day
+      // segment. Works the same whether flying, holding station, or waiting.
+      this.shipPhysics?.stop();
+      this.endTurn();
       return;
     }
     // Play: run the planned route (or close on an attack target). With no course
@@ -4399,7 +4381,6 @@ export class SpaceFlightScene extends GameScene {
   /** End the running turn: stop the ship and freeze the world (pause). */
   private endTurn(): void {
     this.isTurnRunning = false;
-    this.pauseRequested = false;
     this.waitDayAccum = 0;
     this.distanceTraveled = 0;
     this.turnHintShown = false;
@@ -4434,7 +4415,7 @@ export class SpaceFlightScene extends GameScene {
   private updatePlayPauseButton(): void {
     if (!this.playPauseButton) return;
     if (this.isTurnRunning) {
-      this.playPauseButton.setLabel(this.pauseRequested ? "⏸ …" : "⏸ ПАУЗА");
+      this.playPauseButton.setLabel("⏸ ПАУЗА");
       this.playPauseButton.setAccentColor(0xffcc00);
     } else {
       // ХОД is always available — with a course it flies it, without one it runs
