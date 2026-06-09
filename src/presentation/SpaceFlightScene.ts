@@ -1741,9 +1741,9 @@ export class SpaceFlightScene extends GameScene {
     // --- Rotating surface: generated star art if available, else procedural ---
     // Preferred: equirectangular star map projected onto a hemisphere so the
     // surface really turns, tinted per star type. The equirect star_maps are a
-    // lazy category (not preloaded), so on the first visit pickStarTexture falls
-    // back to a stars/ sprite (or, failing that, the procedural sun below); a
-    // background load then upgrades to the equirect map when it arrives.
+    // lazy category (not preloaded), so on the first visit pickStarTexture
+    // returns undefined and the procedural sun below renders; a background load
+    // then upgrades to the equirect map when it arrives.
     const sunMap = this.pickStarTexture();
     if (sunMap) {
       this.mountStarMapSurface(R, sunMap);
@@ -1856,9 +1856,23 @@ export class SpaceFlightScene extends GameScene {
       if (!mapTex || this.sceneDestroyed) return;
       // Player may have warped to another system while the map was loading.
       if (this.gameEngine?.player?.currentSystemId !== sp.systemId) return;
-      // Tear down the previous (stars/ sprite or procedural) surface first.
+      // Tear down the previous (procedural) surface first.
       if (this.starSurface) {
         this.renderer.gameLayer.removeChild(this.starSurface);
+        // Container.destroy({children}) does NOT dispose child filters in
+        // PixiJS v8, so the procedural sun's BlurFilter would leak on upgrade.
+        for (const child of this.starSurface.children) {
+          const fs = (
+            child as {
+              filters?:
+                | { destroy?: () => void }[]
+                | { destroy?: () => void }
+                | null;
+            }
+          ).filters;
+          const arr = Array.isArray(fs) ? fs : fs ? [fs] : [];
+          for (const f of arr) f.destroy?.();
+        }
         this.starSurface.destroy({ children: true });
         this.starSurface = null;
       }
