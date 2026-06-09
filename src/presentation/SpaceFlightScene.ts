@@ -55,6 +55,7 @@ import {
 import { SpaceBackgroundLayer } from "./SpaceBackgroundLayer";
 import { StarRenderer } from "./flight/StarRenderer";
 import { AsteroidBelt } from "./flight/AsteroidBelt";
+import { OrbitRenderer } from "./flight/OrbitRenderer";
 
 interface WarpArrivalEffect {
   container: Container;
@@ -121,7 +122,9 @@ export class SpaceFlightScene extends GameScene {
   // star geometry the scene reads for collision/orbit/route math — extracted from
   // this scene as a FlightModule. Exposes centerX/centerY/radius/avoidRadius.
   private starRenderer!: StarRenderer;
-  private orbitGraphics: Graphics | null = null;
+  // Draws the static orbit circles and the system-boundary ring — extracted from
+  // this scene as a FlightModule. Owns its own display objects on the game layer.
+  private orbitRenderer!: OrbitRenderer;
   private systemMiniMap: SystemMiniMap | null = null;
 
   // NPC ships present in the player's system (Feature 8, slice 2)
@@ -393,8 +396,8 @@ export class SpaceFlightScene extends GameScene {
 
     // Star module: owns the sun (glow, rotating surface) and the star geometry
     // (centre/radius/avoid-radius) the rest of the scene reads. Constructed here
-    // so createOrbits/createPlanets/route planning can read its centre below; its
-    // display objects are built when initialize() runs (just after the bg layer).
+    // so createPlanets/route planning can read its centre below; its display
+    // objects are built when initialize() runs (just after the bg layer).
     this.starRenderer = new StarRenderer(
       this.renderer,
       this.gameEngine,
@@ -406,6 +409,15 @@ export class SpaceFlightScene extends GameScene {
     this.asteroidBelt = new AsteroidBelt(
       this.renderer,
       this.renderer.gameLayer,
+    );
+
+    // Orbit module: static orbit circles + system-boundary ring. Owns its own
+    // display objects on the game layer; nothing animates per frame.
+    this.orbitRenderer = new OrbitRenderer(
+      this.renderer,
+      this.renderer.gameLayer,
+      this.gameEngine?.galaxy ?? null,
+      this.gameEngine?.player?.currentSystemId ?? "default",
     );
 
     // Screen-fixed deep-space backdrop (crisp far stars + twinkle), behind the
@@ -438,8 +450,7 @@ export class SpaceFlightScene extends GameScene {
     this.background.initialize();
 
     this.starRenderer.initialize();
-    this.createOrbits();
-    this.createSystemBoundary(); // Edge where hyperjumps happen
+    this.orbitRenderer.initialize(); // Orbit circles + boundary (hyperjump edge)
     this.createPlanets(); // Planets added to gameLayer directly (not blurred)
     this.createStations(); // Space stations in this system (US-066)
     this.createNpcShips(); // NPC ships present in this system (Feature 8)
@@ -754,6 +765,8 @@ export class SpaceFlightScene extends GameScene {
     this.starRenderer?.destroy();
     // Tear down the asteroid field (removes + destroys its container).
     this.asteroidBelt?.destroy();
+    // Tear down the orbit circles + boundary ring (removes + destroys them).
+    this.orbitRenderer?.destroy();
 
     // Release GPU filter textures before the layer is cleared — clearGameLayer
     // destroys the display objects but not their BlurFilters (ship glow, etc.),
@@ -801,7 +814,6 @@ export class SpaceFlightScene extends GameScene {
     this.cameraDebugText = null;
     this.dayCounterText = null;
     this.shipPhysics = null;
-    this.orbitGraphics = null;
     this.targetIndicator = null;
     this.distanceTraveled = 0;
     this.clearPlannedRoute(); // Clean up route line
@@ -884,49 +896,6 @@ export class SpaceFlightScene extends GameScene {
       elapsed: 0,
       duration: 1100,
     };
-  }
-
-  /**
-   * Draw visible orbital paths for planets
-   */
-  private createOrbits(): void {
-    if (!this.gameEngine?.player) return;
-
-    // Get current system
-    const currentSystemId = this.gameEngine.player.currentSystemId;
-    const galaxy = this.gameEngine.galaxy;
-    if (!galaxy) return;
-
-    const currentSystem = galaxy.systems.find((s) => s.id === currentSystemId);
-    if (
-      !currentSystem ||
-      !currentSystem.planets ||
-      currentSystem.planets.length === 0
-    ) {
-      return;
-    }
-
-    this.orbitGraphics = new Graphics();
-    this.orbitGraphics.eventMode = "none"; // decorative — never intercept clicks
-
-    // Get unique orbital radii
-    const uniqueRadii = new Set<number>();
-    for (const planet of currentSystem.planets) {
-      uniqueRadii.add(planet.orbitalRadius);
-    }
-
-    // Draw orbit circle for each unique radius
-    for (const radius of uniqueRadii) {
-      this.orbitGraphics.circle(
-        this.starRenderer.centerX,
-        this.starRenderer.centerY,
-        radius,
-      );
-      this.orbitGraphics.stroke({ color: 0x444444, width: 1, alpha: 0.3 });
-    }
-
-    // Add orbits to game layer (above star, below planets)
-    this.renderer.gameLayer.addChild(this.orbitGraphics);
   }
 
   private createShip(): void {
@@ -2822,23 +2791,6 @@ export class SpaceFlightScene extends GameScene {
         this.cameraZoom,
       );
     }
-  }
-
-  /**
-   * Draw the system boundary — the edge where ships hyperjump in and out.
-   * Faint dashed-looking ring; non-interactive so it never blocks clicks.
-   */
-  private createSystemBoundary(): void {
-    const ring = new Graphics();
-    ring.circle(
-      this.starRenderer.centerX,
-      this.starRenderer.centerY,
-      this.SYSTEM_BOUNDARY_RADIUS,
-    );
-    ring.stroke({ width: 2, color: 0x2266aa, alpha: 0.35 });
-    ring.eventMode = "none";
-    // Cleaned up with the rest of the game layer in destroy(); no field needed.
-    this.renderer.gameLayer.addChild(ring);
   }
 
   /**

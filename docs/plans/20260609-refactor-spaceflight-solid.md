@@ -126,12 +126,13 @@ The existing `SpaceBackgroundLayer` handles distant parallax. Extend it to absor
 - Create: `src/presentation/flight/OrbitRenderer.ts`
 - Modify: `src/presentation/SpaceFlightScene.ts`
 
-- [ ] Create `OrbitRenderer` implementing `FlightModule`. Constructor: `(renderer: Renderer, gameLayer: Container, galaxy: Galaxy, currentSystemId: string)`
-- [ ] Move fields: `orbitGraphics`
-- [ ] Move methods: `createOrbits()`, `createSystemBoundary()`
-- [ ] `initialize()` calls both; `update()` is a no-op (orbits are static); `destroy()` removes graphics
-- [ ] In SpaceFlightScene: replace references
-- [ ] `npm run lint && npm test -- --run` — must pass.
+- [x] Create `OrbitRenderer` implementing `FlightModule`. Constructor: `(renderer: Renderer, gameLayer: Container, galaxy: Galaxy | null, currentSystemId: string)` — `renderer` supplies `app.screen` for the star centre (identical to StarRenderer's/AsteroidBelt's, so no coupling to the star module); `galaxy` is nullable so the scene can pass `gameEngine?.galaxy ?? null`.
+- [x] Move fields: `orbitGraphics` → folded into a single owned `container` that holds both the orbit-graphics and the boundary ring (matches AsteroidBelt's container pattern, so `destroy()` tears down one node and works against the partial PixiJS mock whose `Graphics` has no `destroy()`).
+- [x] Move methods verbatim: `createOrbits()`, `createSystemBoundary()` — `createSystemBoundary()` now reads `SYSTEM_GEOMETRY.boundaryRadius` directly (instead of the scene's `SYSTEM_BOUNDARY_RADIUS`), and both add their graphics to the module's `container` instead of the game layer.
+- [x] `initialize()` builds the container, calls both create methods, mounts the container (above star, below planets); `update()` is a no-op (orbits/boundary are static); `destroy()` removes + destroys the container.
+- [x] In SpaceFlightScene: construct `orbitRenderer` alongside `asteroidBelt`; replace `this.createOrbits()`/`this.createSystemBoundary()` with `this.orbitRenderer.initialize()`; added `this.orbitRenderer.destroy()` to `destroy()` and removed the old `this.orbitGraphics = null` line and the `orbitGraphics` field.
+- [x] Write unit test (`src/tests/presentation/orbitRenderer.test.ts`): construct OrbitRenderer; `initialize()` mounts one container holding orbit-graphics + boundary; no-planet system draws only the boundary; null galaxy draws only the boundary; `update()` is a no-op and `destroy()` leaks no children.
+- [x] `npm run lint && npm test -- --run` — must pass. (tsc --noEmit clean; lint: 0 errors; tests: 855 passed; OrbitRenderer 128 lines, SpaceFlightScene 3947 → 3897.)
 
 ### Task 6: Extract RouteRenderer — route line, landing/nav markers
 
