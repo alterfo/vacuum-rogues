@@ -2468,6 +2468,10 @@ export class SpaceFlightScene extends GameScene {
     playBtn.on("pointerover", () => {
       this.gameEngine?.audio?.playUiHover();
     });
+    // Pin the pointer cursor explicitly so scene-level cursor updates
+    // (updateInteractiveCursors) can never reset the Ход button to "default"
+    // — it only ever touches planet/NPC sprites, but this is belt-and-suspenders.
+    playBtn.container.cursor = "pointer";
     this.uiContainer.addChild(playBtn.container);
     this.playPauseButton = playBtn;
 

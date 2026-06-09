@@ -66,11 +66,11 @@ Root cause: `onPlayPause()` (line 4375) sets `pauseRequested = true` when the sh
 - Modify: `src/presentation/SpaceFlightScene.ts`
 - Modify: `src/presentation/ui/UiButton.ts` (verify)
 
-- [ ] In `updateInteractiveCursors()` (line ~4417), confirm the function only touches planet sprites and NPC ships — not the HUD buttons (Ход, back, quest). If HUD buttons are being reset to `"default"`, stop touching them.
-- [ ] On the stage-level pointerover/pointerout handler (if any): do not override cursor when the pointer is over a Container with `cursor` already set. PixiJS should propagate the innermost `cursor` automatically — check if the global stage `cursor` property is overriding children.
-- [ ] Add `cursor = "pointer"` explicitly in `createHUD()` for the Ход button container after it is created, so it cannot be overridden by scene-level cursor updates.
-- [ ] Verify `NpcShipSprite.setClickHandler()` (line 140): `cursor = "pointer"` (or `"target"`) is already set — confirm it's not cleared by `updateInteractiveCursors()` when `isTurnRunning = false`.
-- [ ] `npm run lint && npm test -- --run` — must pass.
+- [x] In `updateInteractiveCursors()` (line ~4399), confirm the function only touches planet sprites and NPC ships — not the HUD buttons (Ход, back, quest). If HUD buttons are being reset to `"default"`, stop touching them. (Confirmed: the function iterates only `planetSprites` and `npcSprites`; it never references `playPauseButton`, `backButton`, or the quest text button.)
+- [x] On the stage-level pointerover/pointerout handler (if any): do not override cursor when the pointer is over a Container with `cursor` already set. PixiJS should propagate the innermost `cursor` automatically — check if the global stage `cursor` property is overriding children. (Confirmed: the only stage handler is `onPointerMove`, which handles panning only; cursor is never written on the stage. PixiJS resolves the hovered display object's `cursor` via `events.cursorStyles` set in `installGameCursors`. The only direct canvas-cursor writes are `setCanvasCursor("grab"/"default")` during pan, which release back to default — no children overridden.)
+- [x] Add `cursor = "pointer"` explicitly in `createHUD()` for the Ход button container after it is created, so it cannot be overridden by scene-level cursor updates. (`playBtn.container.cursor = "pointer"` set right after the button is built — belt-and-suspenders over the UiButton constructor's own `container.cursor = "pointer"`.)
+- [x] Verify `NpcShipSprite.setClickHandler()` (line 140): `cursor = "pointer"` (or `"target"`) is already set — confirm it's not cleared by `updateInteractiveCursors()` when `isTurnRunning = false`. (Confirmed: `setClickHandler` sets `"target"` for pirates and `"pointer"` otherwise; `updateInteractiveCursors(false)` re-applies the same mapping, so the intent cursor is restored, not cleared.)
+- [x] `npm run lint && npm test -- --run` — must pass. (0 lint errors; 811 unit tests pass, incl. new `src/tests/hudCursors.test.ts`.)
 
 ### Task 4: Replace solar corona and flares with quality glow
 
