@@ -113,9 +113,9 @@ export function catmullRomSpline(
 /**
  * A path from (fx,fy) to (tx,ty) that bows around a star at (sx,sy) of radius R
  * instead of cutting through it. Returns just `[{to}]` when the straight segment
- * already clears the star, otherwise a Catmull-Rom smoothed arc of waypoints
- * around it plus the destination (US-070 #6). Pure — used for both the route
- * preview and execution.
+ * already clears the star, otherwise a smooth tangent-arc-tangent bypass of
+ * waypoints around it plus the destination (US-070 #6). Pure — used for both the
+ * route preview and execution.
  */
 export function avoidStarPath(
   fx: number,
@@ -136,53 +136,86 @@ export function avoidStarPath(
   const cyp = fy + dy * t;
   if (Math.hypot(sx - cxp, sy - cyp) >= R) return [{ x: tx, y: ty }];
 
-  // Generate sparse arc control points, then smooth with Catmull-Rom so the
-  // rendered path has no visible angular chords even at large star-avoid radii.
-  const a0 = Math.atan2(fy - sy, fx - sx);
-  const a1 = Math.atan2(ty - sy, tx - sx);
-  let d = a1 - a0;
-  while (d > Math.PI) d -= 2 * Math.PI;
-  while (d < -Math.PI) d += 2 * Math.PI;
-  if (Math.abs(d) < 1e-3) d = Math.PI; // near-opposite: go around one side
-  // Dense control points for Catmull-Rom: 10–14 points per semicircle. More
-  // control points → shorter chords before interpolation → smaller residual
-  // kinks (Sprint 3 Task 8).
-  const steps = Math.max(10, Math.round((Math.abs(d) / Math.PI) * 14));
-  // Wide clearance (1.15R) so the arc bows clear of the star's outer glow.
+  // Wide clearance (1.15R) so the arc and its tangent approaches bow clear of
+  // the star's outer glow.
   const arcR = R * 1.15;
+  const thetaA = Math.atan2(fy - sy, fx - sx);
+  const thetaB = Math.atan2(ty - sy, tx - sx);
+  const dA = Math.hypot(fx - sx, fy - sy);
+  const dB = Math.hypot(tx - sx, ty - sy);
+
+  // Detour side: sweep the short way from A's bearing toward B's bearing (the
+  // historical behaviour). A real clip implies A and B sit on roughly opposite
+  // sides of the star, so this is well-defined; guard the degenerate case.
+  let around = thetaB - thetaA;
+  while (around > Math.PI) around -= 2 * Math.PI;
+  while (around < -Math.PI) around += 2 * Math.PI;
+  if (Math.abs(around) < 1e-3) around = Math.PI; // near-coincident bearings
+  const sigma = around >= 0 ? 1 : -1;
+
+  // Tangent-line construction (Sprint 3 Task 8). The bypass ENTERS and LEAVES
+  // the avoidance ring along lines that are tangent to it, so there is no sharp
+  // circumferential→radial corner — the root cause of the old kinks, where a
+  // uniform Catmull-Rom through a far destination control point folded back on
+  // itself. `beta` is the tangent half-angle from each endpoint; an endpoint
+  // inside the ring falls back to a radial entry (beta = 0).
+  const betaA = dA > arcR ? Math.acos(arcR / dA) : 0;
+  const betaB = dB > arcR ? Math.acos(arcR / dB) : 0;
+  const phi1 = thetaA + sigma * betaA; // entry tangent bearing on the ring
+  const phi2 = thetaB - sigma * betaB; // exit tangent bearing on the ring
+
+  // Sweep from phi1 to phi2 in the detour direction (a tangent-arc-tangent wrap
+  // is the minor arc, ≤ π).
+  let sweep = phi2 - phi1;
+  while (sweep > Math.PI) sweep -= 2 * Math.PI;
+  while (sweep < -Math.PI) sweep += 2 * Math.PI;
+  if (sigma > 0 && sweep < 0) sweep += 2 * Math.PI;
+  if (sigma < 0 && sweep > 0) sweep -= 2 * Math.PI;
+
+  // Dense, EVENLY spaced control points on the ring from the entry tangent point
+  // through to the exit tangent point (~14 per semicircle). Equal spacing means
+  // uniform Catmull-Rom cannot overshoot — there is no spacing disparity and no
+  // corner for it to ring around.
+  const steps = Math.max(10, Math.round((Math.abs(sweep) / Math.PI) * 14));
   const control: Point[] = [];
-  for (let i = 1; i < steps; i++) {
-    const a = a0 + d * (i / steps);
+  for (let i = 0; i <= steps; i++) {
+    const a = phi1 + sweep * (i / steps);
     control.push({ x: sx + Math.cos(a) * arcR, y: sy + Math.sin(a) * arcR });
   }
-  control.push({ x: tx, y: ty });
-  // Smooth the dense arc polygon into a curve (8 interpolated points per gap).
   const smoothed = catmullRomSpline(control, 8);
-  // Final Laplacian smoothing pass: replace each interior vertex with the
-  // average of its two neighbours. A single iteration erases residual kinks
-  // (e.g. at the arc → destination junction) without materially changing the
-  // arc's shape. Computed from a pre-pass snapshot so the smoothing is a true
-  // single iteration, not a one-sided sweep. Start/end are left untouched (the
-  // last point is the true destination).
-  const pre = smoothed.map((p) => ({ x: p.x, y: p.y }));
-  for (let i = 1; i < smoothed.length - 1; i++) {
-    smoothed[i] = {
-      x: (pre[i - 1].x + pre[i + 1].x) / 2,
-      y: (pre[i - 1].y + pre[i + 1].y) / 2,
-    };
-  }
-  // The Catmull-Rom curve (and the Laplacian pass, which pulls vertices toward
-  // the chord) can bow inward between the arc and a far destination, dipping
-  // inside the exclusion circle. Push any such sample radially back out to the
-  // circle edge — run AFTER smoothing so the clearance invariant always holds.
-  // The final point is the true destination — leave it intact (Task 3).
-  for (let i = 0; i < smoothed.length - 1; i++) {
-    const ox = smoothed[i].x - sx;
-    const oy = smoothed[i].y - sy;
-    const dist = Math.hypot(ox, oy);
-    if (dist > 1e-6 && dist < R) {
-      smoothed[i] = { x: sx + (ox / dist) * R, y: sy + (oy / dist) * R };
+  // The far destination is deliberately NOT a spline control point: appending it
+  // as a straight tangent segment keeps the exit-tangent junction smooth and
+  // avoids the overshoot a distant control point would induce.
+  smoothed.push({ x: tx, y: ty });
+
+  // Numerical safety net: should any interior sample dip below the hard radius R
+  // (only reachable via the rare in-ring beta=0 fallback), rebuild that
+  // contiguous run as a monotonic boundary arc — clearance holds without the
+  // fold a naive radial push-out would create. The final point is the true
+  // destination — leave it intact.
+  const inside = (p: Point) => Math.hypot(p.x - sx, p.y - sy) < R;
+  let i = 0;
+  while (i < smoothed.length - 1) {
+    if (!inside(smoothed[i])) {
+      i++;
+      continue;
     }
+    let j = i;
+    while (j < smoothed.length - 1 && inside(smoothed[j])) j++;
+    const aPrev =
+      i > 0
+        ? Math.atan2(smoothed[i - 1].y - sy, smoothed[i - 1].x - sx)
+        : Math.atan2(smoothed[i].y - sy, smoothed[i].x - sx);
+    const aNext = Math.atan2(smoothed[j].y - sy, smoothed[j].x - sx);
+    let span = aNext - aPrev;
+    while (span > Math.PI) span -= 2 * Math.PI;
+    while (span < -Math.PI) span += 2 * Math.PI;
+    const runLen = j - i;
+    for (let k = 0; k < runLen; k++) {
+      const a = aPrev + (span * (k + 1)) / (runLen + 1);
+      smoothed[i + k] = { x: sx + Math.cos(a) * R, y: sy + Math.sin(a) * R };
+    }
+    i = j;
   }
   return smoothed;
 }

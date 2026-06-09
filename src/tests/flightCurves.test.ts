@@ -208,4 +208,37 @@ describe("avoidStarPath smoothness (Task 8: no visible kinks)", () => {
     expect(path.length).toBeGreaterThanOrEqual(20);
     expect(minTurnAngleDeg(path)).toBeGreaterThanOrEqual(160);
   });
+
+  // Property test: the old uniform-Catmull-Rom-through-a-far-destination design
+  // produced sharp cusps on ~16% of random routes (the radial clamp folded the
+  // path back on itself). The tangent-arc-tangent construction must stay smooth
+  // AND keep clearance across the whole space of realistic routes — endpoints
+  // well outside the star's avoidance ring, as planets/edges always are.
+  it("never kinks below 160° (and never clips the star) over random routes", () => {
+    let seed = 0x9e3779b1;
+    const rnd = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 0xffffffff;
+    };
+    for (let k = 0; k < 5000; k++) {
+      const sx = (rnd() - 0.5) * 1000;
+      const sy = (rnd() - 0.5) * 1000;
+      const R = 150 + rnd() * 350;
+      // Endpoints sampled on a ring beyond the glow radius (1.15R), like real
+      // ship/planet/edge positions which never sit inside the avoidance ring.
+      const place = () => {
+        const ang = rnd() * Math.PI * 2;
+        const dist = R * 1.15 + 100 + rnd() * 3000;
+        return { x: sx + Math.cos(ang) * dist, y: sy + Math.sin(ang) * dist };
+      };
+      const a = place();
+      const b = place();
+      const path = avoidStarPath(a.x, a.y, b.x, b.y, sx, sy, R);
+      if (path.length < 3) continue; // straight shot — no arc to check
+      expect(minTurnAngleDeg(path)).toBeGreaterThanOrEqual(160);
+      for (const p of path.slice(0, -1)) {
+        expect(Math.hypot(p.x - sx, p.y - sy)).toBeGreaterThanOrEqual(R - 1e-6);
+      }
+    }
+  });
 });
