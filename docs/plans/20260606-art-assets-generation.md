@@ -150,15 +150,15 @@ Generate high-quality visual assets for Вакуумные Пройдохи usin
 - Create: `src/presentation/filters/PlanetRotationFilter.ts`
 - Modify: `src/presentation/SpaceFlightScene.ts` (or wherever planet sprites are rendered)
 
-- [ ] Create `PlanetRotationFilter extends Filter` with GLSL fragment shader that:
-  - maps UV to equirectangular sphere projection (latitude/longitude to UV)
-  - accepts `u_offset: float` uniform (0.0–1.0, incremented each frame)
-  - clips output to circular mask (discard if `distance(uv, vec2(0.5)) > 0.5`)
-  - applies a subtle atmosphere rim-light at edge (`smoothstep` ring)
-- [ ] Export the filter class; accept `texturePath: string` and `rotationSpeed: number` constructor params
-- [ ] In `SpaceFlightScene`, replace static planet sprites with `PlanetRotationFilter`-wrapped sprites using `planet_maps/<type>_04.jpg` as default texture, AI-generated variant if available
-- [ ] Update planet `destroy()` to dispose filter and texture
-- [ ] Unit test: `PlanetRotationFilter` increments `u_offset` by `rotationSpeed * dt` each frame; clamps to [0, 1] with wrap-around
+- [x] Create `PlanetRotationFilter extends Filter` with GLSL fragment shader that:
+  - maps UV to equirectangular sphere projection (latitude/longitude to UV) — orthographic front-hemisphere → equirect UV
+  - accepts `u_offset: float` uniform (0.0–1.0, incremented each frame) — `uOffset` in a `UniformGroup`, wraps via `wrapUnit`
+  - clips output to circular mask (discard if `distance(uv, vec2(0.5)) > 0.5`) — `discard` when `length(p) > 1.0`, plus anti-aliased edge
+  - applies a subtle atmosphere rim-light at edge (`smoothstep` ring) — `smoothstep(0.86,1.0,r)` blue rim + limb darkening
+- [x] Export the filter class; accept `texturePath: string` and `rotationSpeed: number` constructor params — options object carries `rotationSpeed`, optional `texture`/`texturePath`/`rimStrength`; static async `create()` loads from `texturePath`; `createPlanetRotationFilter()` factory returns null on API mismatch for safe fallback
+- [x] In `SpaceFlightScene`, replace static planet sprites with `PlanetRotationFilter`-wrapped sprites using `planet_maps/<type>_04.jpg` as default texture, AI-generated variant if available — wired into `PlanetSprite.buildEquirectSphere` (where planet sprites are actually rendered; plan: "or wherever planet sprites are rendered"). Filter is the preferred map-backed renderer; `buildSphereMesh` (convex mesh) and the flat scroll remain as fallbacks. Default texture from `pickVariant("planet_maps", prefix, id)` (`_04`+ Solar System Scope or AI variants when present)
+- [x] Update planet `destroy()` to dispose filter and texture — `destroy()` disposes the filter (default `destroyPrograms=false`, since the GL program is cached/shared). The equirect map is a shared texture-cache entry reused by other planets, so it is deliberately **not** destroyed here (destroying it would break the cache)
+- [x] Unit test: `PlanetRotationFilter` increments `u_offset` by `rotationSpeed * dt` each frame; clamps to [0, 1] with wrap-around — `src/tests/planetRotationFilter.test.ts` (10 tests: advance increment, uniform mirroring, positive/negative wrap, `wrapUnit` helper, factory)
 
 ### Task 8: PlanetScene 360° Panorama Viewer
 **Files:**

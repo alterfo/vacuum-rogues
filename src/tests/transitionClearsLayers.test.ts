@@ -5,6 +5,9 @@ import type { Renderer } from "@/presentation/Renderer";
 import { GameScene } from "@/presentation/GameScene";
 
 vi.mock("pixi.js", () => ({
+  // PlanetRotationFilter (via PlanetSprite → SpaceFlightScene) extends Filter at
+  // module load, so the partial mock must expose a constructable Filter.
+  Filter: class {},
   Application: vi.fn().mockImplementation(() => ({
     init: vi.fn().mockResolvedValue(undefined),
     canvas: document.createElement("canvas"),

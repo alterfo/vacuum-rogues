@@ -1,0 +1,211 @@
+/**
+ * Planet sphere-rotation filter (ART Task 7 / US-075).
+ *
+ * A GLSL {@link Filter} that paints a rotating planet from an equirectangular
+ * surface map. The fragment shader maps each disc pixel through the orthographic
+ * projection of a sphere's front hemisphere back to equirectangular UV, samples
+ * the supplied surface map, clips to a circular mask, applies limb darkening for
+ * volume and a subtle atmosphere rim-light at the edge. Axial rotation is the
+ * `uOffset` longitude uniform, advanced each frame by {@link advance}.
+ *
+ * Applied to a flat square Sprite sized to the planet's diameter; the filter
+ * samples the *original* map texture (`uMapTexture`) directly rather than the
+ * re-rendered sprite, so the projection is independent of filter padding.
+ *
+ * Pure-presentation helper. Construction is guarded by
+ * {@link createPlanetRotationFilter} so callers can fall back to a textured
+ * sphere mesh on any PixiJS API mismatch (e.g. a WebGPU-only renderer, since we
+ * only ship a WebGL program).
+ */
+import { Filter, GlProgram, Texture, UniformGroup } from "pixi.js";
+
+// Standard PixiJS v8 filter vertex shader (matches the built-in default): maps
+// the filter quad and emits vTextureCoord in [0,1] over the sprite's bounds.
+const VERTEX = `in vec2 aPosition;
+out vec2 vTextureCoord;
+
+uniform vec4 uInputSize;
+uniform vec4 uOutputFrame;
+uniform vec4 uOutputTexture;
+
+vec4 filterVertexPosition( void )
+{
+    vec2 position = aPosition * uOutputFrame.zw + uOutputFrame.xy;
+    position.x = position.x * (2.0 / uOutputTexture.x) - 1.0;
+    position.y = position.y * (2.0*uOutputTexture.z / uOutputTexture.y) - uOutputTexture.z;
+    return vec4(position, 0.0, 1.0);
+}
+
+vec2 filterTextureCoord( void )
+{
+    return aPosition * (uOutputFrame.zw * uInputSize.zw);
+}
+
+void main(void)
+{
+    gl_Position = filterVertexPosition();
+    vTextureCoord = filterTextureCoord();
+}
+`;
+
+const FRAGMENT = `in vec2 vTextureCoord;
+out vec4 finalColor;
+
+uniform sampler2D uTexture;     // filter input (unused — kept for the binding)
+uniform sampler2D uMapTexture;  // equirectangular surface map
+
+uniform float uOffset;  // longitude scroll, [0,1)
+uniform float uRim;     // atmosphere rim-light strength
+
+const float PI = 3.14159265359;
+
+void main(void)
+{
+    // Disc-local coords: vTextureCoord is [0,1] over the square sprite (padding 0).
+    vec2 p = (vTextureCoord - 0.5) * 2.0;     // [-1, 1]
+    float r = length(p);
+    if (r > 1.0) {
+        discard;                              // outside the planet disc
+    }
+
+    // Orthographic projection of a sphere's front hemisphere -> equirect UV.
+    float lat = asin(clamp(p.y, -1.0, 1.0));
+    float cosLat = max(cos(lat), 1e-3);
+    float lon = asin(clamp(p.x / cosLat, -1.0, 1.0));
+
+    // Front hemisphere (+/-90 deg longitude) spans half the 360 deg map width;
+    // uOffset slides that window to spin the planet on its axis.
+    float u = fract(lon / (2.0 * PI) + uOffset);
+    float v = clamp(lat / PI + 0.5, 0.0, 1.0);
+
+    vec4 surf = texture(uMapTexture, vec2(u, v));
+
+    // Limb darkening toward the edge gives the disc volume.
+    float shade = mix(1.0, 0.55, smoothstep(0.55, 1.0, r));
+    vec3 color = surf.rgb * shade;
+
+    // Subtle blue atmosphere rim-light at the limb.
+    float rim = smoothstep(0.86, 1.0, r) * uRim;
+    color += vec3(0.40, 0.58, 1.0) * rim;
+
+    // Anti-aliased circular edge (premultiplied output).
+    float edge = 1.0 - smoothstep(0.985, 1.0, r);
+    finalColor = vec4(color * edge, edge);
+}
+`;
+
+export interface PlanetRotationFilterOptions {
+  /** Equirectangular surface map, preferred (already loaded). */
+  texture?: Texture;
+  /** Manifest URL/path to load lazily via {@link PlanetRotationFilter.create}. */
+  texturePath?: string;
+  /** Longitude fraction advanced per millisecond; wraps at 1.0. May be negative. */
+  rotationSpeed: number;
+  /** Atmosphere rim-light intensity (0 disables). Default 0.35. */
+  rimStrength?: number;
+}
+
+/** Wrap a value into the unit interval [0, 1) (handles negatives). */
+export function wrapUnit(value: number): number {
+  const w = value % 1;
+  return w < 0 ? w + 1 : w;
+}
+
+export class PlanetRotationFilter extends Filter {
+  /** Longitude fraction advanced per millisecond (wraps at 1.0). */
+  public readonly rotationSpeed: number;
+  /** Manifest path the map was loaded from, if any (diagnostics only). */
+  public readonly texturePath: string | undefined;
+  private readonly planetUniforms: UniformGroup;
+  private _offset = 0;
+
+  constructor(options: PlanetRotationFilterOptions) {
+    const texture = options.texture ?? Texture.EMPTY;
+    const source = texture.source;
+    const planetUniforms = new UniformGroup({
+      uOffset: { value: 0, type: "f32" },
+      uRim: { value: options.rimStrength ?? 0.35, type: "f32" },
+    });
+    const glProgram = GlProgram.from({
+      vertex: VERTEX,
+      fragment: FRAGMENT,
+      name: "planet-rotation-filter",
+    });
+    super({
+      glProgram,
+      resources: {
+        planetUniforms,
+        uMapTexture: source,
+        uMapSampler: source.style,
+      },
+    });
+    // No padding: vTextureCoord then maps [0,1] exactly over the sprite square.
+    this.padding = 0;
+    this.planetUniforms = planetUniforms;
+    this.rotationSpeed = options.rotationSpeed;
+    this.texturePath = options.texturePath;
+
+    // Repeat wrap so the longitude seam scrolls seamlessly (best-effort).
+    try {
+      const style = source.style as {
+        addressMode?: string;
+        update?: () => void;
+      };
+      style.addressMode = "repeat";
+      style.update?.();
+    } catch {
+      /* wrap mode is best-effort */
+    }
+  }
+
+  /** Current longitude offset, in [0, 1). */
+  get offset(): number {
+    return this._offset;
+  }
+
+  /**
+   * Advance the axial rotation by `deltaMs` milliseconds: increments the
+   * `uOffset` longitude uniform by `rotationSpeed * deltaMs`, wrapping into
+   * [0, 1).
+   */
+  advance(deltaMs: number): void {
+    this._offset = wrapUnit(this._offset + this.rotationSpeed * deltaMs);
+    this.planetUniforms.uniforms.uOffset = this._offset;
+  }
+
+  /**
+   * Construct asynchronously from a `texturePath`, loading the map first. Falls
+   * back to a path-less filter (Texture.EMPTY) if the load fails.
+   */
+  static async create(
+    options: PlanetRotationFilterOptions,
+  ): Promise<PlanetRotationFilter> {
+    if (!options.texture && options.texturePath) {
+      try {
+        const { Assets } = await import("pixi.js");
+        const texture = await Assets.load(options.texturePath);
+        return new PlanetRotationFilter({ ...options, texture });
+      } catch {
+        /* fall through to path-less construction */
+      }
+    }
+    return new PlanetRotationFilter(options);
+  }
+}
+
+/**
+ * Build a {@link PlanetRotationFilter} for a loaded equirectangular map, or
+ * return null on any PixiJS API mismatch so the caller can fall back to a
+ * textured sphere mesh / flat scroll.
+ */
+export function createPlanetRotationFilter(
+  texture: Texture,
+  rotationSpeed: number,
+  rimStrength?: number,
+): PlanetRotationFilter | null {
+  try {
+    return new PlanetRotationFilter({ texture, rotationSpeed, rimStrength });
+  } catch {
+    return null;
+  }
+}

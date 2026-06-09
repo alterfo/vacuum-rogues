@@ -6,6 +6,10 @@ import { SeededRNG } from "@/utils/seededRNG";
 import { getMoonLayer } from "@/utils/moonZOrder";
 import { pickVariant } from "./textures";
 import { buildSphereMesh, type SphereMesh } from "./sphereMesh";
+import {
+  createPlanetRotationFilter,
+  type PlanetRotationFilter,
+} from "./filters/PlanetRotationFilter";
 
 /** Maps a planet type to its art-asset name prefix (src/assets/planets/<prefix>_NN). */
 const PLANET_TEXTURE_PREFIX: Record<PlanetType, string> = {
@@ -63,6 +67,9 @@ export class PlanetSprite {
   private tiling: TilingSprite | null = null;
   // Preferred map-backed rendering: a rotating sphere mesh (convex), like the sun.
   private sphere: SphereMesh | null = null;
+  // Preferred-most map-backed rendering: a GLSL sphere-rotation filter on a flat
+  // sprite (equirect→sphere projection, circular clip and rim-light in-shader).
+  private rotationFilter: PlanetRotationFilter | null = null;
 
   constructor(
     planet: Planet,
@@ -202,10 +209,29 @@ export class PlanetSprite {
 
     // No fake lighting overlay: the specular/rim "glints" and the directional
     // terminator read as weird blobs on the disc. Depth comes from the convex
-    // sphere mesh (foreshortening) and the parallax background instead.
+    // sphere mesh / filter (foreshortening) and the parallax background instead.
     this.shadeContainer = null;
 
-    // Preferred: a real rotating sphere mesh (convex foreshortening) — same
+    // Preferred: a GLSL sphere-rotation filter on a flat sprite. The shader does
+    // the equirect→sphere projection, circular clip and atmosphere rim-light, and
+    // spins on its axis via the uOffset uniform (ART Task 7 / US-075).
+    // longitude fraction per ms (slow); randomized direction.
+    const filterSpeed =
+      (0.00006 + rng.next() * 0.00006) * (rng.next() < 0.5 ? 1 : -1);
+    const filter = createPlanetRotationFilter(mapTex, filterSpeed);
+    if (filter) {
+      const sprite = new Sprite(mapTex);
+      sprite.anchor.set(0.5);
+      sprite.width = radius * 2;
+      sprite.height = radius * 2;
+      sprite.eventMode = "none"; // clicks fall through to the hit-area graphics
+      sprite.filters = [filter];
+      this.rotationFilter = filter;
+      this.container.addChild(sprite);
+      return;
+    }
+
+    // Fallback: a real rotating sphere mesh (convex foreshortening) — same
     // technique as the sun (US-070: planets convex too).
     const sphere = buildSphereMesh(mapTex, radius);
     if (sphere) {
@@ -506,9 +532,11 @@ export class PlanetSprite {
     // via setOrbitForDay(). This method only animates the cosmetic axial spin,
     // shading and moons (wall-clock time is fine for those).
 
-    // Axial rotation: roll the sphere mesh (preferred), else scroll the equirect
-    // tiling / procedural strip.
-    if (this.sphere) {
+    // Axial rotation: advance the GLSL filter (preferred), else roll the sphere
+    // mesh, else scroll the equirect tiling / procedural strip.
+    if (this.rotationFilter) {
+      this.rotationFilter.advance(deltaTime);
+    } else if (this.sphere) {
       this.sphere.advance(this.axialSpeed * deltaTime);
     } else if (this.tiling) {
       this.tiling.tilePosition.x -= this.axialSpeed * deltaTime;
@@ -546,7 +574,15 @@ export class PlanetSprite {
     // Remove all event listeners
     this.graphics.removeAllListeners();
 
-    // Destroy graphics and container
+    // Dispose the rotation filter (its GL program is shared/cached, so pass the
+    // default destroyPrograms=false; the map texture is a shared cache entry and
+    // must NOT be destroyed here — other planets reuse it).
+    if (this.rotationFilter) {
+      this.rotationFilter.destroy();
+      this.rotationFilter = null;
+    }
+
+    // Destroy graphics and container (children incl. the filtered sprite).
     this.graphics.destroy();
     this.container.destroy({ children: true });
 
