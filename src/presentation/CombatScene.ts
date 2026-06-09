@@ -578,10 +578,8 @@ export class CombatScene extends GameScene {
     this.updateHpBars();
 
     if (this._encounter?.enemies[0]) {
-      this.flashToken(
-        this._enemyTokens.get(this._encounter.enemies[0].id) ?? new Graphics(),
-        false,
-      );
+      const enemyToken0 = this._enemyTokens.get(this._encounter.enemies[0].id);
+      if (enemyToken0) this.flashToken(enemyToken0, false);
     }
 
     if (result.outcome !== undefined) {
@@ -640,10 +638,8 @@ export class CombatScene extends GameScene {
     this.updateHpBars();
 
     if (this._encounter?.enemies[0]) {
-      this.flashToken(
-        this._enemyTokens.get(this._encounter.enemies[0].id) ?? new Graphics(),
-        false,
-      );
+      const enemyToken1 = this._enemyTokens.get(this._encounter.enemies[0].id);
+      if (enemyToken1) this.flashToken(enemyToken1, false);
     }
 
     if (result.outcome !== undefined) {
