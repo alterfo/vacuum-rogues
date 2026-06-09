@@ -97,3 +97,92 @@ non-human features (skin tone, eyes), shoulders-up, soft cinematic light,
 - Планеты/звёзды/корабли: подменить Graphics-рисовку на `Sprite` из текстур.
 - UI-рамки: 9-slice (`NineSliceSprite` в PixiJS 8).
 - Ассеты класть в `src/assets/` (или `public/`), грузить лениво.
+
+---
+
+## LoRA Pipelines
+
+Production assets are generated on the ComfyUI host (`oleg@192.168.88.193`, port
+8188, RTX 4090) using three purpose-built LoRAs. The sections below give the
+exact trigger words, prompts, and sampler notes each workflow JSON in
+`tools/comfyui/` consumes. The user drives the ComfyUI UI; this file is the
+single source of truth for the prompts.
+
+| ID | Base model | Trigger | Weight | Aspect | Use |
+|----|-----------|---------|--------|--------|-----|
+| Space Image ZIT (`civitai#2334878`) | ZImageTurbo | `Sp11` | ≤ 0.9 | 1:1 (1024²) | Nebula parallax tiles |
+| Flux Equirectangular 360° (`civitai#735980`, ver `823024`) | Flux.1 D | `equirectangular 360 degree panorama` | 0.5–1.5 | 2:1 | Planet/star surface maps, interior panoramas |
+| 360 Diffusion for SD1.5 (`civitai#26815`) | SD 1.5 | `qxj` | 0.8–1.0 | 1:2 / 2:1 | SD1.5 fallback for interiors |
+
+**Sampler notes:**
+- **ZImageTurbo** is a turbo (distilled) model — use low steps (`steps=20`) and
+  low CFG (`cfg=4.0`), sampler `dpmpp_2m`, scheduler `karras`. Higher steps wash
+  out the LoRA structure.
+- **Flux.1 D** uses split loaders (`UNETLoader` + dual `CLIPLoader` for T5 and
+  CLIP-L + `VAELoader`), guidance `2.5–3.0`, `steps=30–40`. No classic CFG.
+- **SD1.5 360°** is the no-Flux fallback: render at 1:2 (e.g. 768×384) and
+  upscale via img2img (`denoise=0.35`) to reach the target resolution.
+
+### Nebula (Space ZIT LoRA)
+
+Tileable square tiles, `1024×1024`, trigger `Sp11`. Generate three parallax
+layers (far/mid/near) per palette by adjusting LoRA weight: far `0.6` (faint),
+mid `0.8` (visible gas lanes), near `0.9` (bright highlights). Output naming:
+`<layer>_<palette>.png` (e.g. `far_red.png`).
+
+**Positive prompts (per palette):**
+- **Red:** `Sp11, Hubble space nebula, deep crimson red haze with bright hot star cores, wispy ionised gas tendrils, volumetric glow, black void background, tileable seamless`
+- **Teal:** `Sp11, Hubble space nebula, cyan-teal emission nebula, oxygen-III glow, dark dust lanes, tileable seamless`
+- **Violet:** `Sp11, Hubble space nebula, deep violet purple gas cloud, star-forming pillars, dark molecular cloud, tileable seamless`
+- **Amber:** `Sp11, Hubble space nebula, warm golden amber hydrogen-alpha nebula, bright stellar nursery, tileable seamless`
+
+**Negative (all palettes):** `planets, ships, text, watermark, blurry, low quality, lens flare`
+
+### Planet Surface Maps (Flux 360° LoRA)
+
+Equirectangular maps, aspect `2:1` (2048×1024), trigger prefix
+`equirectangular 360 degree panorama`. Aim for ≥ 2 variants per type. Output
+naming: `<type>_0N.jpg` (e.g. `bastions_01.jpg`). The rotation shader
+(`PlanetRotationFilter`) consumes these as sphere textures.
+
+**Positive prompts (prefix `equirectangular 360 degree panorama, ` + type):**
+- **Bastions:** rocky fortress world, scarred red plains, industrial scars, stormy atmosphere
+- **Syndicate:** polluted smog world, acid-yellow sky, dense urban sprawl from orbit
+- **Outlanders:** temperate colony world, blue ocean patches, patchwork agriculture
+- **Progressors:** lush garden world, bioluminescent canopy, research domes visible
+- **Paradoxes:** alien crystalline world, impossible geometries, iridescent surface
+- **Volcanic:** magma seas, black obsidian plains, lava rivers
+- **Ice:** cracked white ice sheets, subsurface ocean hints, blizzard bands
+- **Gas:** banded gas giant, Great Storm eye, swirling ammonia clouds
+
+**Negative (all types):** `text, watermark, UI, cartography lines, latitude longitude grid, people`
+
+### Star Surface Maps (Flux 360° LoRA)
+
+Same Flux 360° pipeline as planet maps; aspect `2:1`. Output naming:
+`<type>_0N.jpg` in `src/assets/star_maps/`.
+
+**Positive prompts (prefix `equirectangular 360 degree panorama, ` + type):**
+- **Yellow:** solar granulation, prominences, sunspot groups
+- **Blue:** superheated blue-white star, X-ray glow corona, extreme UV radiation
+- **Red:** red dwarf, cool surface convection cells, dim orange glow
+- **Neutron:** pulsar jet beams, magnetosphere, faint blue polar glow
+
+**Negative (all types):** `text, watermark, UI, cartography lines, latitude longitude grid, people`
+
+### Planet Interior Panoramas (Flux 360° or SD1.5 360°)
+
+High-res equirectangular panoramas for planetary landing scenes (`PlanetScene`
+→ `PanoramaViewer`). Flux preferred at `4096×2048`; SD1.5 360° fallback uses
+`qxj` trigger at 768×384, then iterative img2img upscale (`denoise=0.35`) to
+1536×768. Output naming: `<faction>_<biome>.jpg` (e.g. `bastions_city.jpg`).
+
+**Positive prompts (prefix `equirectangular 360 degree panorama, interior view, `):**
+- **Bastions city:** feudal fortress city, brutalist stone towers, warships in sky
+- **Syndicate city:** neon-lit port district, fog, holographic signs
+- **Outlanders city:** mid-tech colony town, market square, farmland horizon
+- **Progressors city:** gleaming research campus, drone corridors, glass domes
+- **Paradoxes site:** impossible crystal architecture, floating islands, alien sky
+- **Wilderness:** alien jungle/tundra/desert (per climate)
+
+**Negative (all):** `fisheye, text, watermark, latitude lines, grid, people, faces`

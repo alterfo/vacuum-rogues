@@ -41,14 +41,14 @@ Generate high-quality visual assets for Вакуумные Пройдохи usin
 **Files:**
 - Modify: `docs/design/ART_PROMPTS.md`
 
-- [ ] Add `## LoRA Pipelines` section documenting all three LoRAs (base model, trigger, weight range, aspect, sampler notes)
-- [ ] Add `### Nebula (Space ZIT LoRA)` with per-palette positive prompts:
+- [x] Add `## LoRA Pipelines` section documenting all three LoRAs (base model, trigger, weight range, aspect, sampler notes)
+- [x] Add `### Nebula (Space ZIT LoRA)` with per-palette positive prompts:
   - Red:    `Sp11, Hubble space nebula, deep crimson red haze with bright hot star cores, wispy ionised gas tendrils, volumetric glow, black void background, tileable seamless`
   - Teal:   `Sp11, Hubble space nebula, cyan-teal emission nebula, oxygen-III glow, dark dust lanes, tileable seamless`
   - Violet: `Sp11, Hubble space nebula, deep violet purple gas cloud, star-forming pillars, dark molecular cloud, tileable seamless`
   - Amber:  `Sp11, Hubble space nebula, warm golden amber hydrogen-alpha nebula, bright stellar nursery, tileable seamless`
   - Negative (all): `planets, ships, text, watermark, blurry, low quality, lens flare`
-- [ ] Add `### Planet Surface Maps (Flux 360° LoRA)` with per-type prompts (aspect 2:1, trigger `equirectangular 360 degree panorama`):
+- [x] Add `### Planet Surface Maps (Flux 360° LoRA)` with per-type prompts (aspect 2:1, trigger `equirectangular 360 degree panorama`):
   - Bastions:   rocky fortress world, scarred red plains, industrial scars, stormy atmosphere
   - Syndicate:  polluted smog world, acid-yellow sky, dense urban sprawl from orbit
   - Outlanders: temperate colony world, blue ocean patches, patchwork agriculture
@@ -58,12 +58,12 @@ Generate high-quality visual assets for Вакуумные Пройдохи usin
   - Ice:        cracked white ice sheets, subsurface ocean hints, blizzard bands
   - Gas:        banded gas giant, Great Storm eye, swirling ammonia clouds
   - Negative (all): `text, watermark, UI, cartography lines, latitude longitude grid, people`
-- [ ] Add `### Star Surface Maps (Flux 360° LoRA)` with per-type prompts:
+- [x] Add `### Star Surface Maps (Flux 360° LoRA)` with per-type prompts:
   - Yellow:  solar granulation, prominences, sunspot groups
   - Blue:    superheated blue-white star, X-ray glow corona, extreme UV radiation
   - Red:     red dwarf, cool surface convection cells, dim orange glow
   - Neutron: pulsar jet beams, magnetosphere, faint blue polar glow
-- [ ] Add `### Planet Interior Panoramas (Flux 360° or SD1.5 360°)`:
+- [x] Add `### Planet Interior Panoramas (Flux 360° or SD1.5 360°)`:
   - Bastions city:   feudal fortress city, brutalist stone towers, warships in sky
   - Syndicate city:  neon-lit port district, fog, holographic signs
   - Outlanders city: mid-tech colony town, market square, farmland horizon
