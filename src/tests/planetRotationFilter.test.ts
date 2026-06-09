@@ -13,9 +13,12 @@ describe("wrapUnit", () => {
   });
 
   it("wraps values >= 1 back into [0,1)", () => {
-    expect(wrapUnit(1)).toBeCloseTo(0);
+    // Exactly 1.0 must land on 0, never on a value still >= 1 (seam invariant).
+    expect(wrapUnit(1)).toBe(0);
     expect(wrapUnit(1.2)).toBeCloseTo(0.2);
     expect(wrapUnit(3.75)).toBeCloseTo(0.75);
+    expect(wrapUnit(1)).toBeLessThan(1);
+    expect(wrapUnit(3.75)).toBeLessThan(1);
   });
 
   it("wraps negative values into [0,1)", () => {

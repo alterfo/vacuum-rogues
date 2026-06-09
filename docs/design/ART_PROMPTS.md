@@ -128,13 +128,16 @@ single source of truth for the prompts.
 Tileable square tiles, `1024×1024`, trigger `Sp11`. Generate three parallax
 layers (far/mid/near) per palette by adjusting LoRA weight: far `0.6` (faint),
 mid `0.8` (visible gas lanes), near `0.9` (bright highlights). Output naming:
-`<layer>_<palette>.png` (e.g. `far_red.png`).
+`<palette>_<layer>.png` (e.g. `red_far.png`) — palette first, matching
+`src/assets/manifest.ts`, `docs/design/ASSET_PIPELINE.md`, and the
+`pickVariant("nebula", "<palette>_<layer>", …)` consumer in `SpaceFlightScene`.
+The shipped palette set is **red / blue / green / teal**.
 
 **Positive prompts (per palette):**
 - **Red:** `Sp11, Hubble space nebula, deep crimson red haze with bright hot star cores, wispy ionised gas tendrils, volumetric glow, black void background, tileable seamless`
+- **Blue:** `Sp11, Hubble space nebula, cool blue reflection nebula, scattered starlight, faint dust lanes, black void background, tileable seamless`
+- **Green:** `Sp11, Hubble space nebula, green oxygen-III emission nebula, ionised gas filaments, dark molecular cloud, tileable seamless`
 - **Teal:** `Sp11, Hubble space nebula, cyan-teal emission nebula, oxygen-III glow, dark dust lanes, tileable seamless`
-- **Violet:** `Sp11, Hubble space nebula, deep violet purple gas cloud, star-forming pillars, dark molecular cloud, tileable seamless`
-- **Amber:** `Sp11, Hubble space nebula, warm golden amber hydrogen-alpha nebula, bright stellar nursery, tileable seamless`
 
 **Negative (all palettes):** `planets, ships, text, watermark, blurry, low quality, lens flare`
 
@@ -160,7 +163,9 @@ naming: `<type>_0N.jpg` (e.g. `bastions_01.jpg`). The rotation shader
 ### Star Surface Maps (Flux 360° LoRA)
 
 Same Flux 360° pipeline as planet maps; aspect `2:1`. Output naming:
-`<type>_0N.jpg` in `src/assets/star_maps/`.
+`<type>_0N.<ext>` in `src/assets/star_maps/` (shipped set is PNG; the manifest
+glob is extension-agnostic). Shipped star types: `yellow`, `blue_giant`,
+`red_dwarf`, `white_dwarf`, `neutron`.
 
 **Positive prompts (prefix `equirectangular 360 degree panorama, ` + type):**
 - **Yellow:** solar granulation, prominences, sunspot groups
@@ -175,7 +180,8 @@ Same Flux 360° pipeline as planet maps; aspect `2:1`. Output naming:
 High-res equirectangular panoramas for planetary landing scenes (`PlanetScene`
 → `PanoramaViewer`). Flux preferred at `4096×2048`; SD1.5 360° fallback uses
 `qxj` trigger at 768×384, then iterative img2img upscale (`denoise=0.35`) to
-1536×768. Output naming: `<faction>_<biome>.jpg` (e.g. `bastions_city.jpg`).
+1536×768. Output naming: `<faction>_<biome>.<ext>` (e.g. `bastions_city.png`;
+shipped set is PNG, the manifest glob is extension-agnostic).
 
 **Positive prompts (prefix `equirectangular 360 degree panorama, interior view, `):**
 - **Bastions city:** feudal fortress city, brutalist stone towers, warships in sky

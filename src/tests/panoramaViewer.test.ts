@@ -19,9 +19,12 @@ describe("wrapPan", () => {
   });
 
   it("wraps values >= 1 back into [0,1)", () => {
-    expect(wrapPan(1)).toBeCloseTo(0);
+    // Exactly 1.0 must land on 0, never on a value still >= 1 (seam invariant).
+    expect(wrapPan(1)).toBe(0);
     expect(wrapPan(1.2)).toBeCloseTo(0.2);
     expect(wrapPan(2.75)).toBeCloseTo(0.75);
+    expect(wrapPan(1)).toBeLessThan(1);
+    expect(wrapPan(2.75)).toBeLessThan(1);
   });
 
   it("wraps negative values into [0,1)", () => {
@@ -44,7 +47,7 @@ describe("PanoramaViewer", () => {
   it("panning past 1.0 wraps back toward 0.0", () => {
     const v = new PanoramaViewer(opts);
     v.setPanX(1.0);
-    expect(v.panX).toBeCloseTo(0);
+    expect(v.panX).toBe(0);
     v.setPanX(1.2);
     expect(v.panX).toBeCloseTo(0.2);
     expect(v.panX).toBeGreaterThanOrEqual(0);
@@ -93,6 +96,19 @@ describe("PanoramaViewer", () => {
     const v = new PanoramaViewer(opts);
     v.destroy();
     expect(() => v.destroy()).not.toThrow();
+  });
+
+  it("disposes the sprite/filter even when the container was destroyed externally", () => {
+    const v = new PanoramaViewer(opts);
+    // Simulate Renderer.clearGameLayer(): destroy the container with the default
+    // children:false, which orphans (but does NOT destroy) the sprite + filter.
+    v.container.destroy();
+    expect(v.container.destroyed).toBe(true);
+    // destroy() must still tear down the sprite/filter rather than skipping them
+    // because the container is already gone (otherwise they leak per landing).
+    expect(() => v.destroy()).not.toThrow();
+    const sprite = (v as unknown as { sprite: { destroyed: boolean } }).sprite;
+    expect(sprite.destroyed).toBe(true);
   });
 });
 

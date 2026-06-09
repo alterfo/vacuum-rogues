@@ -134,6 +134,7 @@ export class PanoramaViewer {
   public readonly panoramaUrl: string | undefined;
 
   private readonly sprite: Sprite;
+  private readonly filter: Filter;
   private readonly uniforms: UniformGroup;
   private readonly fovX: number;
   private _panX = 0;
@@ -181,6 +182,7 @@ export class PanoramaViewer {
     });
     // No padding: vTextureCoord then maps [0,1] exactly over the sprite quad.
     filter.padding = 0;
+    this.filter = filter;
 
     // Repeat wrap so the longitude seam scrolls seamlessly (best-effort).
     try {
@@ -267,8 +269,17 @@ export class PanoramaViewer {
     this.sprite.off("pointerup", this.onUp);
     this.sprite.off("pointerupoutside", this.onUp);
     this.dragging = false;
-    // The panorama is a shared texture-cache entry reused across landings, so it
-    // is deliberately not destroyed here; only our display objects + filter are.
+    // Dispose our GL filter explicitly: neither Sprite.destroy nor
+    // Container.destroy disposes filters, and clearGameLayer may already have
+    // destroyed our container (children:false) leaving the sprite + filter
+    // orphaned — so relying on container.destroy({children:true}) alone leaks
+    // them. The GL program is shared/cached (default destroyPrograms=false) and
+    // the panorama is a shared texture-cache entry reused across landings, so
+    // neither the program nor the texture is destroyed here.
+    this.filter.destroy();
+    if (!this.sprite.destroyed) {
+      this.sprite.destroy({ texture: false });
+    }
     if (!this.container.destroyed) {
       this.container.destroy({ children: true });
     }
