@@ -1,0 +1,82 @@
+{
+  "_comment": "ComfyUI Workflow B — Planet & Star surface maps via the Flux Equirectangular 360 LoRA (Flux.1-dev base, trigger 'equirectangular 360 degree panorama'). API-format graph: POST to /prompt as {\"prompt\": <this>}. Flux needs SPLIT loaders (UNETLoader + DualCLIPLoader + VAELoader), NOT CheckpointLoaderSimple. Replace [TYPE_PROMPT] / [TYPE] / [NN] before queueing — see docs/design/ART_PROMPTS.md '### Planet Surface Maps (Flux 360 LoRA)' and '### Star Surface Maps'. Adjust unet/clip/vae/lora filenames to whatever is installed on the host.",
+  "_generation_notes": {
+    "lora": "flux_equirectangular_360.safetensors (civitai#735980, ver 823024), trigger 'equirectangular 360 degree panorama', weight 0.5-1.5 (default 0.85)",
+    "base_model": "Flux.1-dev — split loaders: UNETLoader (node 4), DualCLIPLoader T5+CLIP-L (node 11), VAELoader Flux ae (node 12). No CFG in the classic sense; distilled guidance set via FluxGuidance (node 13).",
+    "latent_note": "Node 5 is EmptySD3LatentImage — Flux uses 16-channel latents, so the plan's 'EmptyLatentImage' must be the SD3 variant or sampling errors on a channel mismatch. Size 2048x1024 = 2:1 equirectangular.",
+    "sampler": "KSampler (node 3): steps=30, cfg=2.5, euler/simple. FluxGuidance guidance=2.5 (node 13) drives the distilled guidance; cfg=2.5 lets the negative prompt (node 7) take effect. Drop cfg to 1.0 to ignore the negative and run ~2x faster.",
+    "positive_prompt": "Set node 6 text to 'equirectangular 360 degree panorama, [TYPE_PROMPT]' from ART_PROMPTS.md. Negative (node 7) is fixed for all types.",
+    "filename_prefix": "Set node 9 to 'planet_maps/[TYPE]_[NN]' for planets (e.g. 'planet_maps/bastions_01') or 'star_maps/[TYPE]_[NN]' for stars (e.g. 'star_maps/yellow_01').",
+    "output_size": "2048x1024 — export as JPEG ~90% quality, naming '<type>_0N.jpg'",
+    "planet_types": ["bastions", "syndicate", "outlanders", "progressors", "paradoxes", "volcanic", "ice", "gas"],
+    "star_types": ["yellow", "blue", "red", "neutron"],
+    "variants_target": "aim for >= 2 variants per planet type (16 planet images) + 1 per star type (4 star images); change node 3 'seed' for each variant",
+    "naming_convention": "<type>_0N.jpg — AI-generated variants use _01/_02/_03; Solar System Scope CC BY 4.0 originals keep _04+ (see planet_maps/CREDITS.md)"
+  },
+  "_sd15_fallback": {
+    "_comment": "No-Flux fallback for hosts without Flux.1-dev. Start from workflow_api.json (CheckpointLoaderSimple + KSampler), insert a LoraLoader (node 10 pattern from workflow_zit_nebula.json) and render small, then centre-crop to 2:1.",
+    "checkpoint": "any SD 1.5 base (e.g. realisticVision / dreamshaper)",
+    "lora_name": "360_diffusion_sd15.safetensors (civitai#26815)",
+    "trigger": "qxj",
+    "lora_strength": "0.8-1.0",
+    "positive_prompt": "qxj, equirectangular panorama, [TYPE_PROMPT]",
+    "aspect": "render 1:1 (768x768) or 1:2 (512x1024), then centre-crop / pad to 2:1 (2048x1024)",
+    "ksampler": "steps=28, cfg=7.0, sampler dpmpp_2m, scheduler karras (classic SD1.5 settings)"
+  },
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 12345, "steps": 30, "cfg": 2.5,
+      "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0,
+      "model": ["10", 0], "positive": ["13", 0], "negative": ["7", 0], "latent_image": ["5", 0]
+    }
+  },
+  "4": {
+    "class_type": "UNETLoader",
+    "inputs": { "unet_name": "flux1-dev.safetensors", "weight_dtype": "default" }
+  },
+  "5": {
+    "class_type": "EmptySD3LatentImage",
+    "inputs": { "width": 2048, "height": 1024, "batch_size": 1 }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "clip": ["10", 1], "text": "equirectangular 360 degree panorama, [TYPE_PROMPT]" }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "clip": ["10", 1], "text": "fisheye, text, watermark, latitude lines, grid, people, faces" }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": { "samples": ["3", 0], "vae": ["12", 0] }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": { "filename_prefix": "planet_maps/[TYPE]_[NN]", "images": ["8", 0] }
+  },
+  "10": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": ["4", 0], "clip": ["11", 0],
+      "lora_name": "flux_equirectangular_360.safetensors",
+      "strength_model": 0.85, "strength_clip": 0.85
+    }
+  },
+  "11": {
+    "class_type": "DualCLIPLoader",
+    "inputs": {
+      "clip_name1": "t5xxl_fp16.safetensors",
+      "clip_name2": "clip_l.safetensors",
+      "type": "flux"
+    }
+  },
+  "12": {
+    "class_type": "VAELoader",
+    "inputs": { "vae_name": "ae.safetensors" }
+  },
+  "13": {
+    "class_type": "FluxGuidance",
+    "inputs": { "conditioning": ["6", 0], "guidance": 2.5 }
+  }
+}

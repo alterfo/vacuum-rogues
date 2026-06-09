@@ -98,15 +98,15 @@ Generate high-quality visual assets for Вакуумные Пройдохи usin
 **Files:**
 - Create: `tools/comfyui/workflow_flux_360_planets.json`
 
-- [ ] Use `UNETLoader` for Flux.1-dev UNET + dual `CLIPLoader` (T5 + CLIP-L) + `VAELoader` (Flux VAE) — Flux requires split loaders, not `CheckpointLoaderSimple`
-- [ ] Insert `LoraLoader` after UNET: `lora_name="flux_equirectangular_360.safetensors"`, `strength_model=0.85`
-- [ ] Set `EmptyLatentImage`: `width=2048, height=1024` (2:1 equirectangular)
-- [ ] Set `BasicGuider` (Flux) or `KSampler`: `cfg/guidance=2.5, steps=30`
-- [ ] Positive text: `equirectangular 360 degree panorama, [TYPE_PROMPT]` — user substitutes from ART_PROMPTS.md
-- [ ] Negative text: `fisheye, text, watermark, latitude lines, grid, people, faces`
-- [ ] `SaveImage.filename_prefix`: `"planet_maps/[TYPE]_[NN]"` (e.g. `planet_maps/bastions_01`)
-- [ ] Add `_generation_notes`: list 8 planet types + 4 star types; aim ≥ 2 variants per type; naming convention `<type>_0N.jpg`
-- [ ] Include a commented SD1.5 fallback variant section for users who don't have Flux: use `workflow_api.json` base + `lora_name="360_diffusion_sd15.safetensors"`, trigger `qxj`, aspect 1:1 or 1:2, then centre-crop
+- [x] Use `UNETLoader` for Flux.1-dev UNET + dual `CLIPLoader` (T5 + CLIP-L) + `VAELoader` (Flux VAE) — Flux requires split loaders, not `CheckpointLoaderSimple`
+- [x] Insert `LoraLoader` after UNET: `lora_name="flux_equirectangular_360.safetensors"`, `strength_model=0.85`
+- [x] Set `EmptyLatentImage`: `width=2048, height=1024` (2:1 equirectangular) — used `EmptySD3LatentImage` (Flux needs 16-channel latents; noted in `_generation_notes`)
+- [x] Set `BasicGuider` (Flux) or `KSampler`: `cfg/guidance=2.5, steps=30` — `FluxGuidance` guidance=2.5 + `KSampler` cfg=2.5/steps=30
+- [x] Positive text: `equirectangular 360 degree panorama, [TYPE_PROMPT]` — user substitutes from ART_PROMPTS.md
+- [x] Negative text: `fisheye, text, watermark, latitude lines, grid, people, faces`
+- [x] `SaveImage.filename_prefix`: `"planet_maps/[TYPE]_[NN]"` (e.g. `planet_maps/bastions_01`)
+- [x] Add `_generation_notes`: list 8 planet types + 4 star types; aim ≥ 2 variants per type; naming convention `<type>_0N.jpg`
+- [x] Include a commented SD1.5 fallback variant section for users who don't have Flux: use `workflow_api.json` base + `lora_name="360_diffusion_sd15.safetensors"`, trigger `qxj`, aspect 1:1 or 1:2, then centre-crop
 
 ### Task 4: ComfyUI Workflow C — Planet Interior Panoramas (Flux 360° LoRA)
 **Files:**
