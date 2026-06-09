@@ -18,6 +18,7 @@ import type { ResourceType } from "@/types";
 import { pickVariant, panoramaTex, loadTextureAsync } from "./textures";
 import { scaledFont } from "@/utils/fontScale";
 import { UiButton, type ButtonAccent } from "./ui/UiButton";
+import { PanoramaViewer, createPanoramaViewer } from "./PanoramaViewer";
 
 interface PlanetContext {
   gameEngine?: GameEngine;
@@ -138,6 +139,14 @@ const FACTION_PANORAMA: Record<string, string> = {
   OVERMIND: "wilderness_tundra",
 };
 
+/** Ultimate panorama fallback (Task 8) when a faction's art is unavailable. */
+const PANORAMA_FALLBACK = "outlanders_city";
+
+/** Resolve the panorama asset key for a faction, defaulting to the fallback. */
+function panoramaKeyForFaction(faction: string): string {
+  return FACTION_PANORAMA[faction] ?? PANORAMA_FALLBACK;
+}
+
 function planetTexturePrefix(type: string): string {
   const map: Record<string, string> = {
     TERRESTRIAL: "terrestrial",
@@ -181,6 +190,10 @@ export class PlanetScene extends GameScene {
   /** Bribe paid this landing — gates are lifted for the duration of the visit. */
   private bribed = false;
 
+  // Task 8 — projected 360° panorama viewer (primary). The Task 6 flat-sprite
+  // fields below are the fallback path when the viewer can't be constructed.
+  private panoramaViewer: PanoramaViewer | null = null;
+
   // Task 6 — panorama drag-to-look + rotating planet orb
   private panoramaSprite: Sprite | null = null;
   private panoramaWidth = 0;
@@ -206,7 +219,8 @@ export class PlanetScene extends GameScene {
       s.planets.some((p) => p.id === this.planet?.id),
     );
     const initFaction = initSystem?.ownerFaction ?? "INDEPENDENT";
-    const panoramaKey = `panoramas/${FACTION_PANORAMA[initFaction] ?? "wilderness_jungle"}`;
+    const initKey = panoramaKeyForFaction(initFaction);
+    const panoramaKey = `panoramas/${initKey}`;
 
     // Show scene immediately with dark fallback, then swap in panorama when loaded.
     this.createUI();
@@ -229,16 +243,25 @@ export class PlanetScene extends GameScene {
     stage.on("pointerup", this.boundPanoramaUp);
     stage.on("pointerupoutside", this.boundPanoramaUp);
 
-    if (!panoramaTex(FACTION_PANORAMA[initFaction] ?? "wilderness_jungle")) {
+    if (!panoramaTex(initKey)) {
+      // Task 8: lazy-load the faction panorama behind the US-076 loading overlay,
+      // falling back to outlanders_city if the faction's art is unavailable.
+      this.gameEngine?.showLoadingOverlay("Посадка…");
       loadTextureAsync(panoramaKey)
+        .then(
+          (tex) => tex ?? loadTextureAsync(`panoramas/${PANORAMA_FALLBACK}`),
+        )
         .then((tex) => {
+          this.gameEngine?.hideLoadingOverlay();
           if (tex && this.planet) {
             this.renderer.clearGameLayer();
             this.renderer.clearUILayer();
             this.createUI();
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          this.gameEngine?.hideLoadingOverlay();
+        });
     }
   }
 
@@ -602,6 +625,10 @@ export class PlanetScene extends GameScene {
     }
     this.boundPanoramaMove = null;
     this.boundPanoramaUp = null;
+    if (this.panoramaViewer) {
+      this.panoramaViewer.destroy();
+      this.panoramaViewer = null;
+    }
     this.panoramaSprite = null;
     this.planetOrbSprite = null;
     this.isPanningPanorama = false;
@@ -615,6 +642,13 @@ export class PlanetScene extends GameScene {
 
   private createUI(): void {
     if (!this.planet) return;
+    // createUI is re-invoked on bribe / lazy panorama load; clearGameLayer has
+    // already removed the old viewer's container, so detach its handlers and
+    // null the ref before building a fresh one (Task 8).
+    if (this.panoramaViewer) {
+      this.panoramaViewer.destroy();
+      this.panoramaViewer = null;
+    }
     const ui = new Container();
     this.uiContainer = ui;
     const w = this.renderer.app.screen.width;
@@ -629,13 +663,31 @@ export class PlanetScene extends GameScene {
     const factionColor = FACTION_COLOR[faction] ?? 0x999999;
 
     // Panoramic background: faction-specific wide panorama, lazy-loaded.
-    // Fill the full screen height and let the width overflow so the player can
-    // drag horizontally to "look around" (Task 6).
-    const panoramaKey = FACTION_PANORAMA[faction] ?? "wilderness_jungle";
-    const panTex = panoramaTex(panoramaKey);
-    if (panTex && panTex.width > 1 && panTex.height > 0) {
+    const panoramaKey = panoramaKeyForFaction(faction);
+    const panTex = panoramaTex(panoramaKey) ?? panoramaTex(PANORAMA_FALLBACK);
+    const hasPanorama = !!panTex && panTex.width > 1 && panTex.height > 0;
+
+    // Task 8 (primary): project the equirectangular panorama into a rectilinear
+    // ground-level view with seamless 360° drag-to-look.
+    const viewer = hasPanorama
+      ? createPanoramaViewer({
+          texture: panTex,
+          panoramaUrl: panoramaKey,
+          width: w,
+          height: h,
+        })
+      : null;
+
+    if (viewer) {
+      this.panoramaViewer = viewer;
+      this.panoramaSprite = null;
+      this.renderer.gameLayer.addChild(viewer.container);
+    } else if (hasPanorama) {
+      // Task 6 fallback: flat panorama sprite with drag + parallax, used only
+      // when the projected viewer can't be constructed (e.g. WebGPU renderer).
+      this.panoramaViewer = null;
       const panorama = new Sprite(panTex);
-      const aspect = panTex.width / panTex.height;
+      const aspect = panTex!.width / panTex!.height;
       panorama.height = h;
       panorama.width = h * aspect;
       if (panorama.width < w) {
@@ -659,6 +711,7 @@ export class PlanetScene extends GameScene {
       this.renderer.gameLayer.addChild(panorama);
     } else {
       // No panorama art: procedural sky gradient tinted toward the faction colour.
+      this.panoramaViewer = null;
       this.panoramaSprite = null;
       const bands = skyGradientColors(factionColor, 10);
       const bandH = h / bands.length;

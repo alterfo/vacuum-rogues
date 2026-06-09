@@ -165,15 +165,15 @@ Generate high-quality visual assets for Вакуумные Пройдохи usin
 - Create: `src/presentation/PanoramaViewer.ts`
 - Modify: `src/presentation/PlanetScene.ts`
 
-- [ ] Create `PanoramaViewer` PixiJS component that:
-  - accepts a `panoramaUrl: string`
-  - renders a wide-FoV slice of the equirectangular image as background (a horizontal band centred on y=50%)
-  - responds to pointer/touch drag to pan horizontally (update `u_pan_x` uniform, wrap at ±1.0)
-  - displays a subtle vignette overlay
-- [ ] GLSL approach: equirectangular → rectilinear projection for the visible FoV slice (avoid sphere distortion for ground-level view)
-- [ ] Wire into `PlanetScene.initialize()`: load panorama from `src/assets/panoramas/<faction>_city.jpg` (fallback to `src/assets/panoramas/outlanders_city.jpg`)
-- [ ] Panorama texture is loaded lazily via `Assets.load()` with a loading spinner (reuse existing loading overlay from US-076)
-- [ ] Unit test: `PanoramaViewer` renders without errors when panorama URL resolves; panning past 1.0 wraps to 0.0
+- [x] Create `PanoramaViewer` PixiJS component that:
+  - accepts a `panoramaUrl: string` — options carry `panoramaUrl` and/or a preloaded `texture`; static async `create()` loads the URL via `Assets.load`
+  - renders a wide-FoV slice of the equirectangular image as background (a horizontal band centred on y=50%) — full-screen sprite carries the panorama; the filter projects the horizon-centred FoV band
+  - responds to pointer/touch drag to pan horizontally (update `u_pan_x` uniform, wrap at ±1.0) — `uPanX` in a `UniformGroup`; self-contained drag via `pointerdown`+`globalpointermove`; `wrapPan` wraps into [0,1)
+  - displays a subtle vignette overlay — composited in-shader (`uVignette`) as edge darkening
+- [x] GLSL approach: equirectangular → rectilinear projection for the visible FoV slice (avoid sphere distortion for ground-level view) — gnomonic view ray (`uFovX`/`uAspect`) yawed by `uPanX`, then ray→equirect UV; straight features stay straight
+- [x] Wire into `PlanetScene.initialize()`: load panorama from `src/assets/panoramas/<faction>_city.jpg` (fallback to `src/assets/panoramas/outlanders_city.jpg`) — `panoramaKeyForFaction()` resolves the faction key (assets are PNG, not JPG; the manifest is auto-discovering), `PANORAMA_FALLBACK="outlanders_city"`; the Task 6 flat-sprite path remains as a graceful fallback when the projected viewer can't be constructed
+- [x] Panorama texture is loaded lazily via `Assets.load()` with a loading spinner (reuse existing loading overlay from US-076) — `loadTextureAsync` (→ `Assets.load`) behind `gameEngine.showLoadingOverlay("Посадка…")`/`hideLoadingOverlay()`, with `outlanders_city` load fallback
+- [x] Unit test: `PanoramaViewer` renders without errors when panorama URL resolves; panning past 1.0 wraps to 0.0 — `src/tests/panoramaViewer.test.ts` (11 tests: construction, setPanX/panBy wrap-around, negative wrap, uniform mirroring, resize aspect, idempotent destroy, `wrapPan`, factory)
 
 ### Task 9: Asset Manifest Update and Integration Verification
 **Files:**
