@@ -112,6 +112,8 @@ export class AudioManager {
       this.currentTrackKey = prevKey;
       return;
     }
+    // If a newer playTrack call superseded this one while we were awaiting, abort.
+    if (this.currentTrackKey !== key) return;
 
     // Fade out current track
     this.fadeOutCurrent(ctx);

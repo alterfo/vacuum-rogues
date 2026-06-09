@@ -3287,7 +3287,9 @@ export class SpaceFlightScene extends GameScene {
   private updateTakeoff(deltaTime: number): void {
     if (!this.takeoffArc || !this.shipContainer || !this.shipPhysics) return;
     this.takeoffArcDist +=
-      SpaceFlightScene.TAKEOFF_ARC_SPEED * Math.min(deltaTime, 100);
+      SpaceFlightScene.TAKEOFF_ARC_SPEED *
+      Math.min(deltaTime, 100) *
+      (this.shipPhysics?.timeScale ?? 1);
     const sample = pointAlongPath(this.takeoffArc, this.takeoffArcDist);
     this.shipContainer.x = sample.x;
     this.shipContainer.y = sample.y;
@@ -3530,7 +3532,8 @@ export class SpaceFlightScene extends GameScene {
    * turn at the next day boundary — mirroring the in-flight day model.
    */
   private advanceWaitTime(deltaTime: number): void {
-    this.waitDayAccum += deltaTime / this.MS_PER_WAIT_DAY;
+    const scaledDt = deltaTime * (this.shipPhysics?.timeScale ?? 1);
+    this.waitDayAccum += scaledDt / this.MS_PER_WAIT_DAY;
     while (this.waitDayAccum >= 1) {
       this.waitDayAccum -= 1;
       if (this.gameEngine?.galaxy) {
@@ -4296,6 +4299,7 @@ export class SpaceFlightScene extends GameScene {
     this.isTurnRunning = false;
     this.pauseRequested = false;
     this.waitDayAccum = 0;
+    this.distanceTraveled = 0;
     this.turnHintShown = false;
     this.updateInteractiveCursors(false);
     if (this.shipPhysics) {
