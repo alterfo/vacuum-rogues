@@ -125,13 +125,13 @@ Generate high-quality visual assets for Вакуумные Пройдохи usin
 - Populate: `src/assets/nebula/mid_red.png`, `mid_teal.png`, `mid_violet.png`, `mid_amber.png`
 - Populate: `src/assets/nebula/near_red.png`, `near_teal.png`, `near_violet.png`, `near_amber.png`
 
-- [ ] Load `workflow_zit_nebula.json` into ComfyUI at `oleg@192.168.88.193:8188`
-- [ ] Run 12 generations (3 layers × 4 palettes); adjust per-layer density:
+- [x] Load `workflow_zit_nebula.json` into ComfyUI at `oleg@192.168.88.193:8188` (manual — user ran on ComfyUI host)
+- [x] Run 12 generations (3 layers × 4 palettes); adjust per-layer density: (manual — user ran on ComfyUI host)
   - far:  low density, faint glow — LoRA weight 0.6
   - mid:  medium structure, visible gas lanes — LoRA weight 0.8
   - near: high density, bright highlights — LoRA weight 0.9
-- [ ] Export as PNG 1024×1024; place in `src/assets/nebula/` using `<layer>_<palette>.png` naming
-- [ ] Delete old 12 files (previously unnamed/inconsistent) and update `src/assets/manifest.ts` nebula entries
+- [x] Export as PNG 1024×1024; place in `src/assets/nebula/` — done. Adopted naming is `<palette>_<layer>.png` (e.g. `red_far.png`), per `docs/design/ASSET_PIPELINE.md` and the manifest docstring, not the `<layer>_<palette>` draft order. Palette set finalised as red/blue/green/teal (replacing the draft red/teal/violet/amber)
+- [x] Delete old 12 files (previously unnamed/inconsistent) and update `src/assets/manifest.ts` nebula entries — old files replaced; the 12 correctly-named PNGs are committed. `manifest.ts` is auto-discovering (`import.meta.glob`), so it picks up the files with no edit; `npm run build` bundles them cleanly
 
 ### Task 6: (Manual) Generate Planet/Star Maps and Interior Panoramas
 **Files:**
