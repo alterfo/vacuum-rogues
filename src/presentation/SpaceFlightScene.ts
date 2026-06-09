@@ -43,7 +43,13 @@ import {
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { PanZoomController } from "@/systems/PanZoomController";
-import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
+import {
+  SYSTEM_GEOMETRY,
+  GAME_BALANCE,
+  SUN_EXCLUSION_RADIUS,
+  SUN_CONTACT_HULL_DAMAGE,
+  SUN_CONTACT_DAMAGE_INTERVAL_MS,
+} from "@/config/balance";
 import {
   currentFontSizeKey,
   scaledFont,
@@ -206,7 +212,7 @@ export class SpaceFlightScene extends GameScene {
   // sphereMesh.ts) so it really turns rather than scrolling flat.
   private sunSphere: SphereMesh | null = null;
   private readonly STAR_RADIUS = GAME_BALANCE.starRadius;
-  private readonly STAR_AVOID_RADIUS = SYSTEM_GEOMETRY.starAvoidRadius;
+  private readonly STAR_AVOID_RADIUS = SUN_EXCLUSION_RADIUS;
   // Animated solar prominences (the container is owned by gameLayer)
   private starProminenceData: {
     gfx: Graphics;
@@ -244,6 +250,10 @@ export class SpaceFlightScene extends GameScene {
   // Latches the star-touch toast so the "Корпус горит!" warning fires once
   // while the ship is inside the star radius, not every frame.
   private starTouchActive = false;
+  // Accumulates game-time (ms) spent inside the star radius. Hull damage is
+  // applied in discrete SUN_CONTACT_HULL_DAMAGE chunks once this crosses
+  // SUN_CONTACT_DAMAGE_INTERVAL_MS, so the hull never drains frame-by-frame.
+  private sunContactDamageTimer = 0;
   // Lerp-return animation: true while the camera is smoothly returning to ship.
   private cameraReturning = false;
 
@@ -729,6 +739,7 @@ export class SpaceFlightScene extends GameScene {
     this.turnHintShown = false;
     this.lowHullStopped = false;
     this.starTouchActive = false;
+    this.sunContactDamageTimer = 0;
     this._combatTransitionPending = false;
     this.cameraReturning = false;
 
@@ -3361,23 +3372,27 @@ export class SpaceFlightScene extends GameScene {
       this.isTurnRunning = false;
     }
 
-    // Star-touch damage: while the ship is inside the star visual radius, apply
-    // hull burn at STAR_TOUCH_DAMAGE hp/s. Toast fires once per contact episode.
+    // Star-touch damage: while the ship is inside the star visual radius, burn
+    // the hull in discrete SUN_CONTACT_HULL_DAMAGE chunks, rate-limited to once
+    // per SUN_CONTACT_DAMAGE_INTERVAL_MS of game time so a graze does not drain
+    // the hull frame-by-frame. Toast fires once per contact episode.
     const distToStar = Math.hypot(
       this.shipPhysics.shipX - this.starCenterX,
       this.shipPhysics.shipY - this.starCenterY,
     );
     const touchingStar = distToStar < this.STAR_RADIUS;
     if (touchingStar && this.isTurnRunning) {
+      this.sunContactDamageTimer +=
+        deltaTime * (this.shipPhysics?.timeScale ?? 1);
       const burnShip = this.gameEngine?.player?.ship;
-      if (burnShip) {
-        burnShip.hullHP = Math.max(
-          0,
-          burnShip.hullHP -
-            GAME_BALANCE.starTouchDamage *
-              (deltaTime / 1000) *
-              (this.shipPhysics?.timeScale ?? 1),
-        );
+      while (this.sunContactDamageTimer >= SUN_CONTACT_DAMAGE_INTERVAL_MS) {
+        this.sunContactDamageTimer -= SUN_CONTACT_DAMAGE_INTERVAL_MS;
+        if (burnShip) {
+          burnShip.hullHP = Math.max(
+            0,
+            burnShip.hullHP - SUN_CONTACT_HULL_DAMAGE,
+          );
+        }
       }
       if (!this.starTouchActive) {
         this.starTouchActive = true;
@@ -3385,6 +3400,7 @@ export class SpaceFlightScene extends GameScene {
       }
     } else if (!touchingStar) {
       this.starTouchActive = false;
+      this.sunContactDamageTimer = 0;
     }
 
     // Safety auto-stop: if the hull drops below 30% mid-flight, halt the engines

@@ -131,8 +131,29 @@ export const GAME_BALANCE = {
   gameSpeedDefault: 1.0,
   /** Selectable time-scale steps cycled by the speed button in the HUD. */
   gameSpeedMultipliers: [1.0, 2.0, 4.0] as const,
-  /** Hull damage per second when the ship is inside the star radius. */
-  starTouchDamage: 5,
   /** Fraction of base price deviation that marks a deal (20% = buy/sell 20% off/above average). */
   tradeDealThreshold: 0.2,
 } as const;
+
+/**
+ * Sun-avoidance tuning (Sprint 2, Task 3).
+ *
+ * `SUN_EXCLUSION_RADIUS` is the route-planning clearance: when a straight path
+ * would pass within this distance of the star centre, the route bows around it
+ * in a smooth arc tangent to this circle (see `avoidStarPath`). It is an alias
+ * of `SYSTEM_GEOMETRY.starAvoidRadius` so the avoidance radius has a single
+ * source of truth.
+ */
+export const SUN_EXCLUSION_RADIUS = SYSTEM_GEOMETRY.starAvoidRadius;
+
+/**
+ * Hull HP lost per contact tick while the ship sits inside the star's visual
+ * radius (`GAME_BALANCE.starRadius`). Applied at most once per
+ * `SUN_CONTACT_DAMAGE_INTERVAL_MS` of game time so soft-steering nudges or a
+ * brief graze cost a predictable amount instead of draining the hull every
+ * frame.
+ */
+export const SUN_CONTACT_HULL_DAMAGE = 5;
+
+/** Minimum interval (game-time ms) between sun-contact hull-damage ticks. */
+export const SUN_CONTACT_DAMAGE_INTERVAL_MS = 500;

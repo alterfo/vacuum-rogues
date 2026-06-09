@@ -154,7 +154,20 @@ export function avoidStarPath(
   }
   control.push({ x: tx, y: ty });
   // Smooth the sparse arc polygon into a curve (~4 interpolated points per gap).
-  return catmullRomSpline(control, 4);
+  const smoothed = catmullRomSpline(control, 4);
+  // The Catmull-Rom curve can bow inward between the arc and a far destination,
+  // dipping inside the exclusion circle. Push any such sample radially back out
+  // to the circle edge so the flown/preview path never enters the exclusion
+  // radius (Task 3). The final point is the true destination — leave it intact.
+  for (let i = 0; i < smoothed.length - 1; i++) {
+    const ox = smoothed[i].x - sx;
+    const oy = smoothed[i].y - sy;
+    const dist = Math.hypot(ox, oy);
+    if (dist > 1e-6 && dist < R) {
+      smoothed[i] = { x: sx + (ox / dist) * R, y: sy + (oy / dist) * R };
+    }
+  }
+  return smoothed;
 }
 
 /**

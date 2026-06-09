@@ -54,12 +54,12 @@ Related: US-070, US-071, US-072, US-074, US-075
 - Modify: `src/presentation/SpaceFlightScene.ts`
 - Modify: `src/config/balance.ts`
 
-- [ ] Replace hard-blockade sun avoidance with soft steering: when pathfinding through or near sun, bend the route in an arc around the exclusion radius (add intermediate waypoint tangent to sun circle)
-- [ ] Add `SUN_EXCLUSION_RADIUS` and `SUN_CONTACT_HULL_DAMAGE` constants to `balance.ts` (e.g. 120px exclusion, 5 hull damage on contact)
-- [ ] Each movement tick: if ship center is within sun radius, apply `SUN_CONTACT_HULL_DAMAGE` to player hull (rate-limited to once per 500ms to avoid rapid drain)
-- [ ] Route preview line must visually arc around sun (not cut through it)
-- [ ] Write test: `pathfindAroundSun()` produces waypoints that never enter exclusion radius
-- [ ] Run `npm test -- --run` — must pass
+- [x] Replace hard-blockade sun avoidance with soft steering: when pathfinding through or near sun, bend the route in an arc around the exclusion radius (`avoidStarPath` builds a Catmull-Rom arc tangent to the sun circle; waypoints now radially clamped so they never dip inside `SUN_EXCLUSION_RADIUS`)
+- [x] Add `SUN_EXCLUSION_RADIUS` and `SUN_CONTACT_HULL_DAMAGE` constants to `balance.ts` (exclusion aliases `SYSTEM_GEOMETRY.starAvoidRadius` = 390px to keep one source of truth at the game's 5x scale; 5 hull damage per contact tick, plus `SUN_CONTACT_DAMAGE_INTERVAL_MS` = 500)
+- [x] Each movement tick: if ship center is within sun radius, apply `SUN_CONTACT_HULL_DAMAGE` to player hull (discrete accumulator applies one chunk per `SUN_CONTACT_DAMAGE_INTERVAL_MS` of game time — no frame-by-frame drain)
+- [x] Route preview line must visually arc around sun (not cut through it) — `drawRouteLine` renders `routePath`, the same clamped avoidance arc
+- [x] Write test: `pathfindAroundSun()` produces waypoints that never enter exclusion radius (`src/tests/sunAvoidance.test.ts` covers `avoidStarPath` clearance + rate-limited burn)
+- [x] Run `npm test -- --run` — must pass (720 tests pass)
 
 ### Task 4: Planet hover tooltip — immediate name, habitability, faction, owner
 **Files:**
