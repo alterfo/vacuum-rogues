@@ -1095,23 +1095,39 @@ export class SpaceFlightScene extends GameScene {
     const palIdx = rng.nextInt(0, palettes.length - 1);
     const palette = palettes[palIdx];
 
-    // Backdrop art sprite (if present) — behind everything in skyContainer.
+    // Backdrop art sprite — lazily loaded so large nebula PNGs don't block boot.
     const palNames = ["red", "blue", "red", "red", "blue"];
-    const backdrop =
-      pickVariant("nebula", `${palNames[palIdx]}_mid`, systemId) ??
-      pickVariant("nebula", `${palNames[palIdx]}_near`, systemId);
-    if (backdrop) {
-      const bg = new Sprite(backdrop);
-      bg.anchor.set(0.5);
-      bg.x = sw / 2;
-      bg.y = sh / 2;
-      const size = Math.max(sw, sh) * 2.4;
-      bg.width = size;
-      bg.height = size;
-      bg.alpha = 0.38;
-      bg.eventMode = "none";
-      this.nebulaBackdropSprite = bg;
-      this.skyContainer.addChildAt(bg, 0);
+    const palName = palNames[palIdx];
+    const backdropKey =
+      pickVariantKey("nebula", `${palName}_mid`, systemId) ??
+      pickVariantKey("nebula", `${palName}_near`, systemId);
+    if (backdropKey) {
+      // Show immediately from cache if already loaded (e.g. revisiting system),
+      // otherwise load async and splice into skyContainer once ready.
+      const mountBackdrop = (tex: import("pixi.js").Texture): void => {
+        if (!this.skyContainer) return;
+        const bg = new Sprite(tex);
+        bg.anchor.set(0.5);
+        bg.x = sw / 2;
+        bg.y = sh / 2;
+        const size = Math.max(sw, sh) * 2.4;
+        bg.width = size;
+        bg.height = size;
+        bg.alpha = 0.38;
+        bg.eventMode = "none";
+        this.nebulaBackdropSprite = bg;
+        this.skyContainer.addChildAt(bg, 0);
+      };
+      const cached =
+        pickVariant("nebula", `${palName}_mid`, systemId) ??
+        pickVariant("nebula", `${palName}_near`, systemId);
+      if (cached) {
+        mountBackdrop(cached);
+      } else {
+        void loadTextureAsync(backdropKey).then((tex) => {
+          if (tex && !this.sceneDestroyed) mountBackdrop(tex);
+        });
+      }
     }
 
     // Clouds are in screen-space (skyContainer), centred on (0,0) relative to

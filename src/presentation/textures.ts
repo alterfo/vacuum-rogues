@@ -17,11 +17,17 @@ const cache: Record<string, Texture> = {};
 let loadPromise: Promise<void> | null = null;
 
 /** Categories excluded from eager preload — loaded on demand instead. */
-const LAZY_PREFIXES = ["panoramas/", "planet_maps/", "star_maps/", "stars/"];
+const LAZY_PREFIXES = [
+  "panoramas/",
+  "planet_maps/",
+  "star_maps/",
+  "stars/",
+  "nebula/",
+];
 
 /**
  * Load every manifest asset into the texture cache, skipping large lazy
- * categories (panoramas, planet_maps, star_maps, stars). Idempotent: repeated calls
+ * categories (panoramas, planet_maps, star_maps, stars, nebula). Idempotent: repeated calls
  * return the same promise. Failures are logged but never reject (missing art
  * must not break boot).
  */
