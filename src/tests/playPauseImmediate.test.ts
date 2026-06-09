@@ -216,7 +216,8 @@ describe("playPauseImmediate: Pause stops the ship immediately mid-turn", () => 
     endTurn = vi.fn();
     s.shipPhysics = { isMoving: true, stop };
     s.endTurn = endTurn;
-    s.showMessage = vi.fn();
+    // The toast lives on the HUD module now (onPlayPause's wait branch calls it).
+    s.hud = { showMessage: vi.fn() };
     s.updateInteractiveCursors = vi.fn();
     s.executeRouteTo = vi.fn();
     // NPC auto-follow state is owned by the NPC module now.

@@ -1,23 +1,16 @@
 import { GameScene } from "./GameScene";
 import {
   Graphics,
-  Text,
   Container,
   FederatedPointerEvent,
   BlurFilter,
 } from "pixi.js";
-import { UiButton } from "./ui/UiButton";
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType, QuestType } from "@/types";
-import { Faction } from "@/types/faction";
-import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
 import { installGameCursors, setCanvasCursor } from "./cursor";
-import { SystemMiniMap } from "./SystemMiniMap";
-import { QuestJournalUI } from "./QuestJournalUI";
 import type { Planet } from "@/domain/Planet";
 import type { Station } from "@/domain/Station";
 import { logger } from "@/utils/logger";
-import { formatGameDate } from "@/utils/gameCalendar";
 import {
   avoidStarPath,
   spiralApproachPath,
@@ -27,12 +20,6 @@ import { ShipPhysics } from "@/systems/ShipPhysics";
 import { engineSpeedBonus } from "@/systems/EquipmentSystem";
 import { PanZoomController } from "@/systems/PanZoomController";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
-import {
-  currentFontSizeKey,
-  scaledFont,
-  setFontScale,
-  type FontSizeKey,
-} from "@/utils/fontScale";
 import { SpaceBackgroundLayer } from "./SpaceBackgroundLayer";
 import { StarRenderer } from "./flight/StarRenderer";
 import { AsteroidBelt } from "./flight/AsteroidBelt";
@@ -41,6 +28,7 @@ import { RouteRenderer } from "./flight/RouteRenderer";
 import { PlayerShipRenderer } from "./flight/PlayerShipRenderer";
 import { NpcShipManager } from "./flight/NpcShipManager";
 import { PlanetManager } from "./flight/PlanetManager";
+import { FlightHud } from "./flight/FlightHud";
 
 interface WarpArrivalEffect {
   container: Container;
@@ -79,7 +67,11 @@ export class SpaceFlightScene extends GameScene {
   private warpEffect: WarpArrivalEffect | null = null; // Warp-exit flash/rings
   private bgElapsed = 0; // Animation clock for background (ms)
   private shipPhysics: ShipPhysics | null = null;
-  private uiContainer: Container | null = null;
+  // In-flight HUD: turn/speed/settings buttons, day counter, mini-map, mini-log,
+  // toasts and tooltips. Extracted from this scene as a FlightModule; button
+  // presses fan back through callbacks wired in initialize(). The scene drives
+  // the mini-map refresh via `hud.miniMap` (it reads route + camera state).
+  private hud!: FlightHud;
 
   // Owns all planet sprites, station markers, the planet info panel and the
   // route-target state — extracted from this scene as a FlightModule. The scene
@@ -93,45 +85,26 @@ export class SpaceFlightScene extends GameScene {
   // Draws the static orbit circles and the system-boundary ring — extracted from
   // this scene as a FlightModule. Owns its own display objects on the game layer.
   private orbitRenderer!: OrbitRenderer;
-  private systemMiniMap: SystemMiniMap | null = null;
 
   // Living-galaxy NPC ships present in the player's system (Feature 8) — sprite
   // lifecycle, contact panel, auto-follow combat loop and the OVERMIND-core
   // prompt are owned by this module. The scene reads/clears its `followNpcId`
   // during the flight/turn loop and drives its combat tick + refresh.
   private npcManager!: NpcShipManager;
-  // Transient on-screen feedback (toast), and its auto-clear timer.
-  private toast: Text | null = null;
-  private toastTimer: ReturnType<typeof setTimeout> | null = null;
   // Latches the low-hull auto-stop so the warning fires once per descent below
   // the threshold, not every frame.
   private lowHullStopped = false;
   // Lerp-return animation: true while the camera is smoothly returning to ship.
   private cameraReturning = false;
 
-  // Tooltip (B1): hover tooltip for planets (immediate) and NPC ships (300ms delay).
-  private tooltipText: Text | null = null;
-  private tooltipContainer: Container | null = null;
-  private tooltipTimer: ReturnType<typeof setTimeout> | null = null;
-
-  // Mini-log (B5): last 5 game events in the bottom-left corner.
-  private miniLogContainer: Container | null = null;
-  private miniLogEntries: Array<{ textObj: Text; elapsed: number }> = [];
-  private readonly MINI_LOG_DURATION = 5000;
-  private readonly MINI_LOG_FADE_MS = 1000;
-
   // Turn control (Play/Pause). The turn "runs" (ship flies, NPCs/planets move,
   // combat resolves) while isTurnRunning; Pause stops the ship and ends it now.
   private isTurnRunning = false;
   // Latch: show "pause first" hint only once per turn to avoid message spam.
   private turnHintShown = false;
-  private playPauseButton: UiButton | null = null;
   private readonly SYSTEM_INNER_RADIUS = SYSTEM_GEOMETRY.innerRadius;
   private readonly SYSTEM_BOUNDARY_RADIUS = SYSTEM_GEOMETRY.boundaryRadius;
   private readonly SCANNER_RANGE = GAME_BALANCE.scannerRange;
-
-  // Quest Journal UI
-  private questJournalUI: QuestJournalUI | null = null;
 
   // Time tracking for day counter
   // Timestamp (performance.now) when the scene finished initializing. A click
@@ -147,15 +120,6 @@ export class SpaceFlightScene extends GameScene {
   // holds position, and how long one waited day takes in real time.
   private waitDayAccum: number = 0;
   private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070)
-  private dayCounterText: Text | null = null;
-
-  // Speed control HUD button (cycles 1×/2×/4×)
-  private speedButton: UiButton | null = null;
-  private speedIndex: number = 0; // index into GAME_BALANCE.gameSpeedMultipliers
-
-  // Font-size settings: gear button + toggled panel (bottom-left HUD)
-  private gearButton: UiButton | null = null;
-  private settingsPanel: Container | null = null;
 
   // Two-step movement: plan route, then execute
   private plannedRoute: { x: number; y: number } | null = null;
@@ -209,10 +173,6 @@ export class SpaceFlightScene extends GameScene {
   // exceeded the window, right/bottom UI hidden).
   private boundResize: (() => void) | null = null;
   private boundContextMenu: ((e: Event) => void) | null = null;
-  private backButton: Text | null = null;
-
-  // Debug display
-  private cameraDebugText: Text | null = null;
 
   initialize(context?: object): void {
     const ctx = context as
@@ -239,6 +199,23 @@ export class SpaceFlightScene extends GameScene {
     this.gameEngine = ctx?.gameEngine ?? null;
     this.pendingWarp = ctx?.pendingWarp ?? null;
 
+    // HUD module: turn/speed/settings buttons, day counter, mini-map, mini-log,
+    // toasts and tooltips. Constructed first so the NPC/planet modules' deps
+    // (toast + tooltip) and the overmind branch can reach it; its display objects
+    // are built later via initialize() (after the UI layer is cleared). Button
+    // presses fan back through the callbacks wired just below.
+    this.hud = new FlightHud(
+      this.renderer,
+      this.gameEngine,
+      this.renderer.uiLayer,
+    );
+    this.hud.onPlayPause = () => this.onPlayPause();
+    this.hud.onSpeedCycle = (scale) => this.shipPhysics?.setTimeScale(scale);
+    this.hud.onStarMap = () => void this.returnToStarMap();
+    this.hud.onQuestNavigate = (id) => this.navigateToQuestObjective(id);
+    this.hud.onMiniMapPan = (x, y) => this.focusCameraOnWorld(x, y);
+    this.hud.onMiniMapReturn = () => this.startCameraReturn();
+
     // NPC module: owns the living-galaxy ships, their contact panel, the
     // auto-follow combat loop and the OVERMIND-core prompt. Constructed first so
     // the victory-removeNpc and overmind-prompt branches below can use it; its
@@ -259,9 +236,9 @@ export class SpaceFlightScene extends GameScene {
           y: this.starRenderer.centerY,
         }),
         isTurnRunning: () => this.isTurnRunning,
-        showMessage: (text, color) => this.showMessage(text, color),
-        showTooltip: (text, sx, sy) => this.showTooltip(text, sx, sy),
-        hideTooltip: () => this.hideTooltip(),
+        showMessage: (text, color) => this.hud.showMessage(text, color),
+        showTooltip: (text, sx, sy) => this.hud.showTooltip(text, sx, sy),
+        hideTooltip: () => this.hud.hideTooltip(),
         executeRouteTo: (x, y) => this.executeRouteTo(x, y),
         clearRouteTarget: () => {
           this.planetManager.routeTargetPlanetId = null;
@@ -423,8 +400,8 @@ export class SpaceFlightScene extends GameScene {
           return gameDays + fractionalDay + this.waitDayAccum;
         },
         showPlanetTooltip: (planet, faction, sx, sy) =>
-          this.showPlanetTooltip(planet, faction, sx, sy),
-        hideTooltip: () => this.hideTooltip(),
+          this.hud.showPlanetTooltip(planet, faction, sx, sy),
+        hideTooltip: () => this.hud.hideTooltip(),
         clearFollow: () => {
           if (this.npcManager) this.npcManager.followNpcId = null;
         },
@@ -481,7 +458,7 @@ export class SpaceFlightScene extends GameScene {
     this.npcManager.initialize(); // NPC ships present in this system (Feature 8)
     this.playerShip.initialize(); // Ship hull/sprite, glow, heading crosshair
     this.asteroidBelt.initialize(); // Foreground asteroids/comets (US-070 #1)
-    this.createUI();
+    this.hud.initialize(); // Turn/speed buttons, day counter, mini-map, mini-log
 
     // Took off from a planet → spawn right next to it (just outside its orbit),
     // not at the system edge. Planets are placed at a random orbital angle each
@@ -639,8 +616,10 @@ export class SpaceFlightScene extends GameScene {
     this.npcManager.update(deltaTime, this.bgElapsed);
     this.planetManager.update(deltaTime, this.bgElapsed);
     this.updateSystemMiniMap();
-    this.updatePlayPauseButton();
-    this.updateMiniLog(deltaTime);
+    // Push the turn state so the HUD shows the right Play/Pause label, then let
+    // it refresh its per-frame read-outs (button, day counter, mini-log fade).
+    this.hud.setTurnRunning(this.isTurnRunning);
+    this.hud.update(deltaTime, this.bgElapsed);
   }
 
   destroy(): void {
@@ -701,15 +680,6 @@ export class SpaceFlightScene extends GameScene {
       window.removeEventListener("resize", this.boundResize);
       this.boundResize = null;
     }
-    this.backButton = null;
-    this.playPauseButton = null;
-    this.speedButton = null;
-    this.speedIndex = 0;
-    this.gearButton = null;
-    if (this.settingsPanel) {
-      this.settingsPanel.destroy({ children: true });
-      this.settingsPanel = null;
-    }
     this.isTurnRunning = false;
     this.turnHintShown = false;
     this.lowHullStopped = false;
@@ -717,41 +687,15 @@ export class SpaceFlightScene extends GameScene {
     this.warpInProgress = false;
     this.waitDayAccum = 0;
 
+    // Tear down the HUD (buttons, mini-map, mini-log, toast/tooltip + their
+    // timers) before clearUILayer destroys the UI layer underneath it.
+    this.hud?.destroy();
+
     // Tear down planet sprites, station markers and the planet info panel.
     this.planetManager?.destroy();
 
     // Tear down NPC ship sprites, contact panel and the OVERMIND-core overlay.
     this.npcManager?.destroy();
-
-    // Clear any transient toast + its timer.
-    if (this.toastTimer) {
-      clearTimeout(this.toastTimer);
-      this.toastTimer = null;
-    }
-    if (this.toast) {
-      this.toast.destroy();
-      this.toast = null;
-    }
-
-    // Clear tooltip.
-    this.hideTooltip();
-
-    // Clear mini-log.
-    for (const e of this.miniLogEntries) e.textObj.destroy();
-    this.miniLogEntries = [];
-    this.miniLogContainer = null;
-
-    // Destroy quest journal
-    if (this.questJournalUI) {
-      this.questJournalUI.destroy();
-      this.questJournalUI = null;
-    }
-
-    // Destroy mini-map
-    if (this.systemMiniMap) {
-      this.systemMiniMap.destroy();
-      this.systemMiniMap = null;
-    }
 
     // Tear down the star module (disposes its halo/sun filters and removes its
     // display objects from the game layer) before the layer-wide cleanup below.
@@ -800,12 +744,9 @@ export class SpaceFlightScene extends GameScene {
     }
 
     // Layers are torn down by clearGameLayer/clearUILayer on the next scene
-    // init; just drop our references (consistent with uiContainer handling).
+    // init; just drop our references (the HUD dropped its own above).
     this.warpEffect = null;
     this.bgElapsed = 0;
-    this.uiContainer = null;
-    this.cameraDebugText = null;
-    this.dayCounterText = null;
     this.shipPhysics = null;
     this.distanceTraveled = 0;
     this.clearPlannedRoute(); // Clean up route line
@@ -888,296 +829,6 @@ export class SpaceFlightScene extends GameScene {
       elapsed: 0,
       duration: 1100,
     };
-  }
-
-  private createUI(): void {
-    this.uiContainer = new Container();
-    // Container uses default eventMode ('auto') - it won't block clicks since it has no handlers
-    // Child elements with eventMode='static' will receive events
-
-    // Instructions (non-interactive)
-    const instructions = new Text({
-      text: "ЛКМ - курс | Shift+ЛКМ/ПКМ - пан | Колесико - зум | [J] - Квесты | [I] - Инвентарь",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(13),
-        fill: 0x88ccff,
-      },
-    });
-    instructions.alpha = 0.8;
-    instructions.x = 20;
-    instructions.y = 20;
-    instructions.eventMode = "none"; // Explicitly set to non-interactive
-    this.uiContainer.addChild(instructions);
-
-    // Camera debug display (development only)
-    if (__DEBUG__) {
-      this.cameraDebugText = new Text({
-        text: "Камера: Zoom 1.00 | Pan (0, 0)",
-        style: {
-          fontFamily: "Courier New",
-          fontSize: scaledFont(12),
-          fill: 0xff00ff,
-        },
-      });
-      this.cameraDebugText.x = this.renderer.app.screen.width - 300;
-      this.cameraDebugText.y = this.renderer.app.screen.height - 30;
-      this.cameraDebugText.eventMode = "none";
-      this.uiContainer.addChild(this.cameraDebugText);
-    }
-
-    // Current date display
-    this.dayCounterText = new Text({
-      text: formatGameDate(this.gameEngine?.galaxy?.gameDays ?? 0),
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(14),
-        fill: 0x00ffff,
-      },
-    });
-    this.dayCounterText.x = 20;
-    this.dayCounterText.y = 50;
-    this.uiContainer.addChild(this.dayCounterText);
-
-    // Quest Journal button
-    const questBtn = new Text({
-      text: "[КВЕСТЫ]",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(14),
-        fill: 0xffaa00,
-        fontWeight: "bold" as const,
-      },
-    });
-    questBtn.x = 20;
-    questBtn.y = 80;
-    questBtn.eventMode = "static";
-    questBtn.cursor = "pointer";
-    questBtn.on("pointerdown", (event) => {
-      event.stopPropagation();
-      this.gameEngine?.audio?.playUiClick();
-      logger.info("Quest journal button clicked");
-      this.toggleQuestJournal();
-    });
-    questBtn.on("pointerover", () => {
-      this.gameEngine?.audio?.playUiHover();
-      questBtn.alpha = 0.7;
-    });
-    questBtn.on("pointerout", () => {
-      questBtn.alpha = 1;
-    });
-    this.uiContainer.addChild(questBtn);
-
-    // Star map button
-    const backBtn = new Text({
-      text: "[МЕЖЗВЕЗДНАЯ КАРТА]",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(14),
-        fill: 0xffaa00,
-        fontWeight: "bold" as const,
-      },
-    });
-    backBtn.x = this.renderer.app.screen.width - 220;
-    backBtn.y = 20;
-    backBtn.eventMode = "static";
-    backBtn.cursor = "pointer";
-    backBtn.on("pointerdown", async (event) => {
-      event.stopPropagation();
-      this.gameEngine?.audio?.playUiClick();
-      logger.info("Star map button clicked");
-      await this.returnToStarMap();
-    });
-
-    backBtn.on("pointerover", () => {
-      this.gameEngine?.audio?.playUiHover();
-      backBtn.alpha = 0.7;
-    });
-    backBtn.on("pointerout", () => {
-      backBtn.alpha = 1;
-    });
-
-    this.uiContainer.addChild(backBtn);
-    this.backButton = backBtn;
-
-    // Play / Pause turn control (bottom-centre). Play runs the planned turn;
-    // while moving it becomes Pause, which ends the turn at the next day segment.
-    const PLAY_BTN_W = 140;
-    const PLAY_BTN_H = 36;
-    const playBtn = new UiButton(
-      "",
-      "▶ ХОД",
-      "success",
-      (event) => {
-        event.stopPropagation();
-        this.gameEngine?.audio?.playUiClick();
-        this.onPlayPause();
-      },
-      PLAY_BTN_W,
-      PLAY_BTN_H,
-    );
-    playBtn.x = this.renderer.app.screen.width / 2 - PLAY_BTN_W / 2;
-    playBtn.y = this.renderer.app.screen.height - PLAY_BTN_H - 18;
-    playBtn.on("pointerover", () => {
-      this.gameEngine?.audio?.playUiHover();
-    });
-    // Pin the pointer cursor explicitly so scene-level cursor updates
-    // (updateInteractiveCursors) can never reset the Ход button to "default"
-    // — it only ever touches planet/NPC sprites, but this is belt-and-suspenders.
-    playBtn.container.cursor = "pointer";
-    this.uiContainer.addChild(playBtn.container);
-    this.playPauseButton = playBtn;
-
-    this.renderer.uiLayer.addChild(this.uiContainer);
-
-    // Mini-log (B5): bottom-left panel showing the last 5 game events.
-    this.miniLogContainer = new Container();
-    this.miniLogContainer.eventMode = "none";
-    this.miniLogContainer.x = 20;
-    this.miniLogContainer.y = this.renderer.app.screen.height - 105;
-    this.renderer.uiLayer.addChild(this.miniLogContainer);
-
-    // Create mini-map. Dragging on it pans the main view (it no longer falls
-    // through as a navigation click).
-    this.systemMiniMap = new SystemMiniMap(
-      this.renderer.app.screen.width,
-      this.renderer.app.screen.height,
-    );
-    this.systemMiniMap.setPanHandler((worldX, worldY) =>
-      this.focusCameraOnWorld(worldX, worldY),
-    );
-    this.systemMiniMap.setReturnCameraHandler(() => this.startCameraReturn());
-    this.renderer.uiLayer.addChild(this.systemMiniMap.container);
-
-    // Speed button: cycles 1×/2×/4× — placed above the minimap (bottom-right).
-    const SPEED_BTN_W = 52;
-    const SPEED_BTN_H = 28;
-    const speedBtn = new UiButton(
-      "",
-      "1×",
-      "neutral",
-      (event) => {
-        event.stopPropagation();
-        this.cycleGameSpeed();
-      },
-      SPEED_BTN_W,
-      SPEED_BTN_H,
-    );
-    speedBtn.x = this.renderer.app.screen.width - 20 - SPEED_BTN_W;
-    speedBtn.y = this.renderer.app.screen.height - 220 - SPEED_BTN_H;
-    this.renderer.uiLayer.addChild(speedBtn.container);
-    this.speedButton = speedBtn;
-
-    // Gear button (⚙) — bottom-left, above mini-log — opens font-size panel.
-    const GEAR_BTN_W = 36;
-    const GEAR_BTN_H = 32;
-    const gearBtn = new UiButton(
-      "⚙",
-      "",
-      "neutral",
-      (event) => {
-        event.stopPropagation();
-        this.toggleSettingsPanel();
-      },
-      GEAR_BTN_W,
-      GEAR_BTN_H,
-    );
-    gearBtn.x = 20;
-    gearBtn.y = this.renderer.app.screen.height - 130 - GEAR_BTN_H;
-    this.renderer.uiLayer.addChild(gearBtn.container);
-    this.gearButton = gearBtn;
-  }
-
-  /** Toggle the font-size mini-panel (S / M / L). */
-  private toggleSettingsPanel(): void {
-    if (this.settingsPanel) {
-      this.settingsPanel.destroy({ children: true });
-      this.settingsPanel = null;
-      return;
-    }
-    if (!this.gearButton) return;
-    const panel = new Container();
-    panel.eventMode = "static";
-    panel.on("pointerdown", (e) => e.stopPropagation());
-    const panelW = 120;
-    const panelH = 44;
-    const panelX = this.gearButton.x;
-    const panelY = this.gearButton.y - panelH - 4;
-
-    const bg = new Graphics();
-    bg.roundRect(0, 0, panelW, panelH, 4).fill({
-      color: 0x0a1520,
-      alpha: 0.92,
-    });
-    bg.roundRect(0, 0, panelW, panelH, 4).stroke({ color: 0x334455, width: 1 });
-    panel.addChild(bg);
-
-    const active = currentFontSizeKey();
-    const sizes: FontSizeKey[] = ["S", "M", "L"];
-    const labels = ["A", "A", "A"];
-    const btnFontSizes = [scaledFont(14), scaledFont(18), scaledFont(22)];
-
-    sizes.forEach((key, i) => {
-      const isActive = key === active;
-      const btnX = 8 + i * 36;
-      const btnY = 6;
-      const btnW = 30;
-      const btnH = 32;
-
-      const btnBg = new Graphics();
-      btnBg.roundRect(btnX, btnY, btnW, btnH, 3).fill({
-        color: isActive ? 0x1a3048 : 0x0e1e2c,
-        alpha: 1,
-      });
-      if (isActive) {
-        btnBg.roundRect(btnX, btnY, btnW, btnH, 3).stroke({
-          color: 0x00ccff,
-          width: 1,
-        });
-      }
-      btnBg.eventMode = "none";
-      panel.addChild(btnBg);
-
-      const lbl = new Text({
-        text: labels[i],
-        style: {
-          fontFamily: "Courier New",
-          fontSize: btnFontSizes[i],
-          fill: isActive ? 0x00ccff : 0x88aacc,
-        },
-      });
-      lbl.anchor.set(0.5);
-      lbl.x = btnX + btnW / 2;
-      lbl.y = btnY + btnH / 2;
-      lbl.eventMode = "none";
-      panel.addChild(lbl);
-
-      const hit = new Graphics();
-      hit
-        .roundRect(btnX, btnY, btnW, btnH, 3)
-        .fill({ color: 0xffffff, alpha: 0.001 });
-      hit.eventMode = "static";
-      hit.cursor = "pointer";
-      hit.on("pointerdown", (event) => {
-        event.stopPropagation();
-        setFontScale(key);
-        if (this.settingsPanel) {
-          this.settingsPanel.destroy({ children: true });
-          this.settingsPanel = null;
-        }
-        if (this.gameEngine) {
-          void this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
-            gameEngine: this.gameEngine,
-          });
-        }
-      });
-      panel.addChild(hit);
-    });
-
-    panel.x = panelX;
-    panel.y = panelY;
-    this.renderer.uiLayer.addChild(panel);
-    this.settingsPanel = panel;
   }
 
   private readonly DOCKING_RANGE = 55;
@@ -1332,7 +983,10 @@ export class SpaceFlightScene extends GameScene {
     if (this.isTurnRunning && !isPanButton) {
       if (!this.turnHintShown) {
         this.turnHintShown = true;
-        this.showMessage("⏸ Поставь на паузу чтобы выбрать маршрут", 0xffcc00);
+        this.hud.showMessage(
+          "⏸ Поставь на паузу чтобы выбрать маршрут",
+          0xffcc00,
+        );
       }
       return;
     }
@@ -1551,41 +1205,8 @@ export class SpaceFlightScene extends GameScene {
     const w = this.renderer.app.screen.width;
     const h = this.renderer.app.screen.height;
 
-    if (this.backButton) {
-      this.backButton.x = w - 220;
-      this.backButton.y = 20;
-    }
-    if (this.cameraDebugText) {
-      this.cameraDebugText.x = w - 300;
-      this.cameraDebugText.y = h - 30;
-    }
-    if (this.toast) {
-      this.toast.x = w / 2;
-    }
-    if (this.playPauseButton) {
-      this.playPauseButton.x = w / 2 - 70;
-      this.playPauseButton.y = h - 54;
-    }
-    this.systemMiniMap?.reposition(w, h);
-
-    if (this.speedButton) {
-      this.speedButton.x = w - 20 - 52;
-      this.speedButton.y = h - 248;
-    }
-
-    if (this.gearButton) {
-      this.gearButton.y = h - 162;
-    }
-    if (this.settingsPanel && this.gearButton) {
-      this.settingsPanel.y = this.gearButton.y - 48;
-    }
-
-    if (this.miniLogContainer) {
-      this.miniLogContainer.y = h - 105;
-    }
-    if (this.dayCounterText) {
-      this.dayCounterText.y = 50;
-    }
+    // Re-anchor all screen-edge HUD elements (buttons, mini-map, mini-log, …).
+    this.hud.reposition(w, h);
 
     // Keep the ship framed after the viewport changed.
     if (this.shipPhysics) this.centerCameraOnShip();
@@ -1729,7 +1350,7 @@ export class SpaceFlightScene extends GameScene {
     // Keep NPC hit areas a fixed screen size regardless of zoom level.
     this.npcManager?.updateHitAreas(this.cameraZoom);
 
-    this.updateCameraDebugDisplay();
+    this.hud.setCameraDebug(this.cameraZoom, this.cameraPanX, this.cameraPanY);
   }
 
   /**
@@ -1765,15 +1386,6 @@ export class SpaceFlightScene extends GameScene {
       panYMin > panYMax
         ? (panYMin + panYMax) / 2
         : Math.max(panYMin, Math.min(panYMax, this.cameraPanY));
-  }
-
-  /**
-   * Update camera debug text display
-   */
-  private updateCameraDebugDisplay(): void {
-    if (this.cameraDebugText) {
-      this.cameraDebugText.text = `Камера: Zoom ${this.cameraZoom.toFixed(2)} | Pan (${this.cameraPanX.toFixed(0)}, ${this.cameraPanY.toFixed(0)})`;
-    }
   }
 
   /**
@@ -1903,7 +1515,7 @@ export class SpaceFlightScene extends GameScene {
       this.shipPhysics?.timeScale ?? 1,
     );
     if (startedBurning) {
-      this.showMessage("☀ Корпус горит!", 0xff8800);
+      this.hud.showMessage("☀ Корпус горит!", 0xff8800);
     }
 
     // Safety auto-stop: if the hull drops below 30% mid-flight, halt the engines
@@ -1918,7 +1530,7 @@ export class SpaceFlightScene extends GameScene {
           this.npcManager.followNpcId = null;
           this.clearPlannedRoute();
           this.endTurn(); // stop the ship and end the turn
-          this.showMessage(
+          this.hud.showMessage(
             "⚠ Корпус < 30% — двигатели остановлены. Найдите планету для ремонта.",
             0xff5555,
           );
@@ -1941,7 +1553,7 @@ export class SpaceFlightScene extends GameScene {
         this.distanceTraveled -= this.DISTANCE_PER_DAY;
         if (this.gameEngine?.galaxy) {
           this.gameEngine.advanceGalaxyDay();
-          this.updateDayCounter(); // Update UI
+          // The HUD day counter refreshes from gameEngine each frame (hud.update).
           this.npcManager.refresh(); // NPCs may have arrived/departed this day
 
           logger.debug(
@@ -1983,7 +1595,6 @@ export class SpaceFlightScene extends GameScene {
       this.waitDayAccum -= 1;
       if (this.gameEngine?.galaxy) {
         this.gameEngine.advanceGalaxyDay();
-        this.updateDayCounter();
         this.npcManager.refresh();
       }
     }
@@ -2040,17 +1651,6 @@ export class SpaceFlightScene extends GameScene {
       entryVector,
       warpArrival: true,
     });
-  }
-
-  /**
-   * Update day counter UI text
-   */
-  private updateDayCounter(): void {
-    if (this.dayCounterText && this.gameEngine?.galaxy) {
-      this.dayCounterText.text = formatGameDate(
-        this.gameEngine.galaxy.gameDays,
-      );
-    }
   }
 
   /**
@@ -2198,8 +1798,11 @@ export class SpaceFlightScene extends GameScene {
    * PlanetManager.update(); this only reads its sprites for the radar.
    */
   private updateSystemMiniMap(): void {
-    // Always update mini-map (even when paused, for visual feedback)
-    if (this.systemMiniMap && this.shipPhysics) {
+    // Always update mini-map (even when paused, for visual feedback). The radar
+    // object lives in the HUD; the per-frame refresh stays here (it reads route +
+    // camera + world state owned by the scene).
+    const miniMap = this.hud.miniMap;
+    if (miniMap && this.shipPhysics) {
       const npcDots = this.npcManager.getNpcDots();
       // Show the route on the radar: the planned destination (set on planning
       // or while travelling), else the live target while the ship is moving.
@@ -2219,7 +1822,7 @@ export class SpaceFlightScene extends GameScene {
         maxX: (this.renderer.app.screen.width - this.cameraPanX) / z,
         maxY: (this.renderer.app.screen.height - this.cameraPanY) / z,
       };
-      this.systemMiniMap.updateWithSprites(
+      miniMap.updateWithSprites(
         this.planetManager.planetSprites,
         this.shipPhysics.shipX,
         this.shipPhysics.shipY,
@@ -2231,7 +1834,7 @@ export class SpaceFlightScene extends GameScene {
         viewport,
         this.SCANNER_RANGE,
       );
-      this.systemMiniMap.updateCenterButton(
+      miniMap.updateCenterButton(
         this.cameraPanX,
         this.cameraPanY,
         this.shipPhysics.shipX,
@@ -2246,15 +1849,6 @@ export class SpaceFlightScene extends GameScene {
    * turn starts running). While running: Pause ends the turn at the next day
    * segment (or immediately if the ship is holding station in combat).
    */
-  /** Cycle game speed through 1×/2×/4× and update physics + button label. */
-  private cycleGameSpeed(): void {
-    const steps = GAME_BALANCE.gameSpeedMultipliers;
-    this.speedIndex = (this.speedIndex + 1) % steps.length;
-    const scale = steps[this.speedIndex];
-    if (this.shipPhysics) this.shipPhysics.setTimeScale(scale);
-    if (this.speedButton) this.speedButton.setLabel(`${scale}×`);
-  }
-
   private onPlayPause(): void {
     if (this.isTurnRunning) {
       // Pause: stop the ship immediately and end the turn so the player can
@@ -2276,7 +1870,7 @@ export class SpaceFlightScene extends GameScene {
       this.waitDayAccum = 0;
       this.isTurnRunning = true; // course-less wait: time passes, ship stays put
       this.updateInteractiveCursors(true);
-      this.showMessage("⏳ Ожидание… (мир движется)", 0x88ccff);
+      this.hud.showMessage("⏳ Ожидание… (мир движется)", 0x88ccff);
     }
   }
 
@@ -2307,233 +1901,21 @@ export class SpaceFlightScene extends GameScene {
     this.npcManager?.setCursors(turnRunning);
   }
 
-  /** Refresh the Play/Pause button label/colour to match the turn state. */
-  private updatePlayPauseButton(): void {
-    if (!this.playPauseButton) return;
-    if (this.isTurnRunning) {
-      this.playPauseButton.setLabel("⏸ ПАУЗА");
-      this.playPauseButton.setAccentColor(0xffcc00);
-    } else {
-      // ХОД is always available — with a course it flies it, without one it runs
-      // a wait turn (US-070 #5), so the button is always shown active.
-      this.playPauseButton.setLabel("▶ ХОД");
-      this.playPauseButton.setAccentColor(0x00ff88);
-    }
-  }
-
   /** True while a panel that should swallow outside-clicks is open. */
   private isBlockingModalOpen(): boolean {
     return (
       this.npcManager.hasOpenModal() ||
-      this.questJournalUI !== null ||
+      this.hud.isQuestJournalOpen() ||
       this.planetManager.hasInfoPanel ||
-      this.settingsPanel !== null
+      this.hud.isSettingsPanelOpen()
     );
   }
 
   /** Close any open blocking modal (NPC contact / quest journal / planet panel). */
   private closeBlockingModals(): void {
     this.npcManager.closeModals();
-    const journal = this.questJournalUI;
-    this.questJournalUI = null;
-    if (journal) queueMicrotask(() => journal.destroy());
+    this.hud.closeModals(); // quest journal + settings panel (deferred destroy)
     this.planetManager.closeInfoPanel();
-    if (this.settingsPanel) {
-      const sp = this.settingsPanel;
-      this.settingsPanel = null;
-      queueMicrotask(() => sp.destroy({ children: true }));
-    }
-  }
-
-  /**
-   * Transient on-screen feedback near the top-centre of the view (button
-   * actions, warnings). Replaces any current toast.
-   */
-  private showMessage(text: string, color = 0x00ffff): void {
-    this.addMiniLogEntry(text);
-    this.gameEngine?.audio?.playToast();
-    if (this.toast) {
-      this.toast.destroy();
-      this.toast = null;
-    }
-    if (this.toastTimer) {
-      clearTimeout(this.toastTimer);
-      this.toastTimer = null;
-    }
-    const t = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(15),
-        fill: color,
-        fontWeight: "bold",
-        align: "center",
-        stroke: { color: 0x000000, width: 4 },
-      },
-    });
-    t.anchor.set(0.5, 0);
-    t.x = this.renderer.app.screen.width / 2;
-    t.y = 90;
-    t.eventMode = "none";
-    this.toast = t;
-    this.renderer.uiLayer.addChild(t);
-    this.toastTimer = setTimeout(() => {
-      if (this.toast) {
-        this.toast.destroy();
-        this.toast = null;
-      }
-      this.toastTimer = null;
-    }, 3200);
-  }
-
-  /** Show a delayed hover tooltip near the cursor (B1). 300 ms delay before it appears. */
-  private showTooltip(text: string, screenX: number, screenY: number): void {
-    this.hideTooltip();
-    this.tooltipTimer = setTimeout(() => {
-      this.tooltipTimer = null;
-      const t = new Text({
-        text,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: scaledFont(13),
-          fill: 0xffffff,
-          stroke: { color: 0x000000, width: 3 },
-        },
-      });
-      t.eventMode = "none";
-      t.x = Math.min(
-        screenX + 16,
-        this.renderer.app.screen.width - t.width - 8,
-      );
-      t.y = screenY - 24;
-      this.tooltipText = t;
-      this.renderer.uiLayer.addChild(t);
-    }, 300);
-  }
-
-  /** Show an immediate rich planet tooltip (name, habitability, faction, capture). */
-  private showPlanetTooltip(
-    planet: Planet,
-    systemFaction: Faction,
-    screenX: number,
-    screenY: number,
-  ): void {
-    this.hideTooltip();
-
-    const lines = buildPlanetTooltipLines(
-      planet,
-      systemFaction,
-      (faction) => this.gameEngine?.player?.getReputation(faction) ?? 0,
-    );
-
-    // Build container
-    const padding = 8;
-    const lineHeight = 18;
-    const fontSize = 13;
-
-    const container = new Container();
-    container.eventMode = "none";
-
-    const textNodes: Text[] = lines.map((line, i) => {
-      const t = new Text({
-        text: line.text,
-        style: {
-          fontFamily: "Courier New",
-          fontSize,
-          fill: line.color,
-        },
-      });
-      t.eventMode = "none";
-      t.x = padding;
-      t.y = padding + i * lineHeight;
-      return t;
-    });
-
-    // Measure content area after creating texts
-    const maxWidth = Math.max(...textNodes.map((t) => t.width));
-    const totalHeight = padding * 2 + lines.length * lineHeight;
-
-    const bg = new Graphics();
-    bg.roundRect(0, 0, maxWidth + padding * 2, totalHeight, 4);
-    bg.fill({ color: 0x000000, alpha: 0.75 });
-    bg.eventMode = "none";
-
-    container.addChild(bg);
-    for (const t of textNodes) container.addChild(t);
-
-    const screenW = this.renderer.app.screen.width;
-    const screenH = this.renderer.app.screen.height;
-    container.x = Math.min(screenX + 16, screenW - maxWidth - padding * 2 - 8);
-    container.y = Math.max(
-      8,
-      Math.min(screenY - totalHeight / 2, screenH - totalHeight - 8),
-    );
-
-    this.tooltipContainer = container;
-    this.renderer.uiLayer.addChild(container);
-  }
-
-  /** Cancel any pending tooltip and destroy the visible one. */
-  private hideTooltip(): void {
-    if (this.tooltipTimer !== null) {
-      clearTimeout(this.tooltipTimer);
-      this.tooltipTimer = null;
-    }
-    if (this.tooltipText) {
-      this.tooltipText.destroy();
-      this.tooltipText = null;
-    }
-    if (this.tooltipContainer) {
-      this.tooltipContainer.destroy({ children: true });
-      this.tooltipContainer = null;
-    }
-  }
-
-  /** Push a line to the mini-log (B5); keeps only the last 5 entries. */
-  private addMiniLogEntry(text: string): void {
-    if (!this.miniLogContainer) return;
-    const lineH = 18;
-    // Remove oldest if full.
-    if (this.miniLogEntries.length >= 5) {
-      const oldest = this.miniLogEntries.shift()!;
-      oldest.textObj.destroy();
-      for (const e of this.miniLogEntries) e.textObj.y -= lineH;
-    }
-    const textObj = new Text({
-      text: `> ${text}`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(11),
-        fill: 0x88ccff,
-      },
-    });
-    textObj.eventMode = "none";
-    textObj.y = this.miniLogEntries.length * lineH;
-    this.miniLogContainer.addChild(textObj);
-    this.miniLogEntries.push({ textObj, elapsed: 0 });
-  }
-
-  /** Advance mini-log timers; fade out and remove expired entries each frame. */
-  private updateMiniLog(deltaTime: number): void {
-    const lineH = 18;
-    for (const entry of this.miniLogEntries) {
-      entry.elapsed += deltaTime;
-      const fadeStart = this.MINI_LOG_DURATION - this.MINI_LOG_FADE_MS;
-      if (entry.elapsed >= fadeStart) {
-        const t =
-          (entry.elapsed - fadeStart) / (this.MINI_LOG_DURATION - fadeStart);
-        entry.textObj.alpha = Math.max(0, 1 - t);
-      }
-    }
-    // Remove expired entries (oldest first).
-    while (
-      this.miniLogEntries.length > 0 &&
-      this.miniLogEntries[0].elapsed >= this.MINI_LOG_DURATION
-    ) {
-      const removed = this.miniLogEntries.shift()!;
-      removed.textObj.destroy();
-      for (const e of this.miniLogEntries) e.textObj.y -= lineH;
-    }
   }
 
   /** Animate the warp-exit flash + expanding rings, then clean up. */
@@ -2589,19 +1971,18 @@ export class SpaceFlightScene extends GameScene {
       // B4: first Escape closes the top-most panel, second cancels route.
       if (this.npcManager.isContactPanelOpen) {
         this.npcManager.closeContactPanel();
-      } else if (this.questJournalUI) {
-        this.questJournalUI.destroy();
-        this.questJournalUI = null;
+      } else if (this.hud.isQuestJournalOpen()) {
+        this.hud.closeQuestJournal();
       } else if (this.planetManager.hasInfoPanel) {
         this.planetManager.closeInfoPanel();
       } else if (this.plannedRoute) {
         this.clearPlannedRoute();
-        this.showMessage("Маршрут отменён", 0xffaa00);
+        this.hud.showMessage("Маршрут отменён", 0xffaa00);
       }
       return;
     }
     if (event.key === "j" || event.key === "J") {
-      this.toggleQuestJournal();
+      this.hud.toggleQuestJournal();
     } else if (event.key === "i" || event.key === "I") {
       this.openInventory();
     }
@@ -2671,34 +2052,6 @@ export class SpaceFlightScene extends GameScene {
             `DEFENSE quest completed: ${quest.title}, liberated OVERMIND system ${quest.targetObjectId}`,
           );
         }
-      }
-    }
-  }
-
-  /**
-   * Toggle quest journal UI
-   */
-  private toggleQuestJournal(): void {
-    if (this.questJournalUI) {
-      // Close journal
-      this.questJournalUI.destroy();
-      this.questJournalUI = null;
-      logger.info("Quest journal closed");
-    } else {
-      // Open journal
-      if (this.gameEngine?.questManager) {
-        this.questJournalUI = new QuestJournalUI(
-          this.gameEngine.questManager,
-          this.renderer.app.screen.width,
-          this.renderer.app.screen.height,
-          () => {
-            this.questJournalUI?.destroy();
-            this.questJournalUI = null;
-          },
-          (locationId: string) => this.navigateToQuestObjective(locationId),
-        );
-        this.renderer.uiLayer.addChild(this.questJournalUI.container);
-        logger.info("Quest journal opened");
       }
     }
   }
@@ -2781,7 +2134,7 @@ export class SpaceFlightScene extends GameScene {
   /** E2E helper: check if minimap exists */
   e2eHasMinimap(): boolean {
     if (!__DEBUG__) return false;
-    return this.systemMiniMap !== null;
+    return this.hud.miniMap !== null;
   }
 
   /** E2E helper: get ship position */
@@ -2796,9 +2149,7 @@ export class SpaceFlightScene extends GameScene {
   /** E2E helper: check if quest journal is open */
   e2eIsQuestJournalOpen(): boolean {
     if (!__DEBUG__) return false;
-    return (
-      this.questJournalUI !== null && this.questJournalUI.container.visible
-    );
+    return this.hud.isQuestJournalVisible();
   }
 
   /** E2E helper: return current system planets for test assertions */
