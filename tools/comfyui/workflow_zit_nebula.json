@@ -8,15 +8,15 @@
       "mid": "medium structure, visible gas lanes — strength 0.8",
       "near": "high density, bright highlights — strength 0.9"
     },
-    "palettes": ["red", "teal", "violet", "amber"],
+    "palettes": ["red", "blue", "green", "teal"],
     "positive_prompt": "Set node 6 text to 'Sp11, [PALETTE_PROMPT]' from ART_PROMPTS.md. Negative (node 7) is fixed for all palettes.",
-    "filename_prefix": "Set node 9 to 'nebula/[LAYER]_[PALETTE]' (e.g. 'nebula/far_red').",
+    "filename_prefix": "Set node 9 to 'nebula/[PALETTE]_[LAYER]' (palette first, e.g. 'nebula/red_far') — matches src/assets/manifest.ts and the pickVariant('nebula', '<palette>_<layer>') consumer.",
     "output_size": "1024x1024 PNG (tileable square)",
     "expected_output_count": 12,
     "expected_outputs": [
-      "nebula/far_red", "nebula/far_teal", "nebula/far_violet", "nebula/far_amber",
-      "nebula/mid_red", "nebula/mid_teal", "nebula/mid_violet", "nebula/mid_amber",
-      "nebula/near_red", "nebula/near_teal", "nebula/near_violet", "nebula/near_amber"
+      "nebula/red_far", "nebula/blue_far", "nebula/green_far", "nebula/teal_far",
+      "nebula/red_mid", "nebula/blue_mid", "nebula/green_mid", "nebula/teal_mid",
+      "nebula/red_near", "nebula/blue_near", "nebula/green_near", "nebula/teal_near"
     ]
   },
   "3": {
@@ -49,7 +49,7 @@
   },
   "9": {
     "class_type": "SaveImage",
-    "inputs": { "filename_prefix": "nebula/[LAYER]_[PALETTE]", "images": ["8", 0] }
+    "inputs": { "filename_prefix": "nebula/[PALETTE]_[LAYER]", "images": ["8", 0] }
   },
   "10": {
     "class_type": "LoraLoader",
