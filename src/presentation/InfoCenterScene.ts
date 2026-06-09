@@ -8,16 +8,18 @@ import type { StarSystem } from "@/domain/StarSystem";
 import { SceneType, NpcRole, ResourceType } from "@/types";
 import type { NewsEvent } from "@/types";
 import type {
-  GearHit,
   PlanetHit,
   ShipLocation,
   EquipmentFacet,
+  EquipmentHit,
 } from "@/systems/info/GalacticRegistry";
 import {
   GearKind,
   EquipmentClass,
   gearById,
   type EquipmentSpec,
+  type HullSpec,
+  type WeaponSpec,
   type Gear,
 } from "@/systems/equipment/GearCatalog";
 import { logger } from "@/utils/logger";
@@ -57,6 +59,19 @@ const GEAR_SORT_LABELS: Record<string, string> = {
   tech: "Уровень",
   distance: "Расстояние",
 };
+
+function gearStatLine(g: Gear): string {
+  if (g.kind === GearKind.HULL) {
+    const h = g as HullSpec;
+    return `ПП:${h.hp} трюм:${h.cargo} слоты:${h.slots}`;
+  }
+  if (g.kind === GearKind.WEAPON) {
+    const w = g as WeaponSpec;
+    return `урон:${w.damage} дальн:${w.range}`;
+  }
+  const eq = g as EquipmentSpec;
+  return `потенц:${eq.potency}`;
+}
 
 // ── News generation ─────────────────────────────────────────────────────────
 
@@ -150,7 +165,27 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
       if (!hit) continue;
       const sysName = systemMap.get(hit.systemId)?.name ?? hit.systemId;
       const dist = hit.jumps === 0 ? "здесь" : `${hit.jumps} пр.`;
-      const text = `[РЫНОК] ${RESOURCE_RU[res]}: лучшая цена "${sysName}" — ${hit.price} ₡ (${dist})`;
+
+      // Price delta vs current system
+      let deltaStr = "";
+      if (hit.jumps > 0) {
+        const localHit = registry.findResource({
+          resource: res,
+          originSystemId: originId,
+          maxJumps: 0,
+          sort: "price",
+          limit: 1,
+        })[0];
+        if (localHit && localHit.price > 0) {
+          const pct = Math.round(
+            ((hit.price - localHit.price) / localHit.price) * 100,
+          );
+          if (pct < 0) deltaStr = ` ▼${Math.abs(pct)}% vs здесь`;
+          else if (pct > 0) deltaStr = ` ▲${pct}% vs здесь`;
+        }
+      }
+
+      const text = `[РЫНОК] ${RESOURCE_RU[res]}: лучшая цена "${sysName}" — ${hit.price} ₡${deltaStr} (${dist})`;
       items.push({
         day: day - (hit.systemId.charCodeAt(0) % 3),
         text,
@@ -230,14 +265,6 @@ function isStaleSystem(
   return currentDay - sys.lastVisitedDay > 30;
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function facetToGearKind(facet: EquipmentFacet): GearKind {
-  if (facet === "hull") return GearKind.HULL;
-  if (facet === "weapon") return GearKind.WEAPON;
-  return GearKind.EQUIPMENT;
-}
-
 // ── Scene ───────────────────────────────────────────────────────────────────
 
 type Tab = "news" | "objects" | "gear";
@@ -287,13 +314,12 @@ export class InfoCenterScene extends GameScene {
   private objectsInputFocused = false;
 
   // gear tab state
-  private gearKind: GearKind = GearKind.HULL;
   private gearFacet: EquipmentFacet = "engine";
   private gearMinTech = 1;
   private gearMaxTech = 6;
   private gearMaxPriceIdx = 0; // index into GEAR_MAX_PRICE_OPTIONS
   private gearSort: GearSortOption = "price";
-  private gearResults: GearHit[] = [];
+  private gearResults: EquipmentHit[] = [];
 
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
 
@@ -897,7 +923,6 @@ export class InfoCenterScene extends GameScene {
       pill.on("pointerdown", (e) => {
         e.stopPropagation();
         this.gearFacet = facet;
-        this.gearKind = facetToGearKind(facet);
         this.render();
       });
       container.addChild(pill);
@@ -917,11 +942,11 @@ export class InfoCenterScene extends GameScene {
       px += pw2 + GAP;
     }
 
-    // Currently equipped item of the same facet type
+    // Currently equipped item of the same facet type (comparison bar)
     const equippedItem = this.getEquippedItemForFacet(this.gearFacet);
     let equippedRowH = 0;
     if (equippedItem) {
-      equippedRowH = 32;
+      equippedRowH = 44;
       const EQUIPPED_Y = PILL_Y + PILL_H + 6;
       const equippedBg = new Graphics();
       equippedBg.rect(PAD, EQUIPPED_Y, pw - PAD * 2, equippedRowH - 2);
@@ -931,7 +956,7 @@ export class InfoCenterScene extends GameScene {
       container.addChild(equippedBg);
 
       const equippedHdr = new Text({
-        text: "Установлено сейчас:",
+        text: "▶ Установлено:",
         style: { fontSize: 10, fill: 0x55aa55, fontFamily: "monospace" },
       });
       equippedHdr.x = PAD + 6;
@@ -947,6 +972,15 @@ export class InfoCenterScene extends GameScene {
       equippedName.y = EQUIPPED_Y + 16;
       equippedName.eventMode = "none";
       container.addChild(equippedName);
+
+      const equippedStats = new Text({
+        text: gearStatLine(equippedItem),
+        style: { fontSize: 10, fill: 0x66bb66, fontFamily: "monospace" },
+      });
+      equippedStats.x = PAD + 220;
+      equippedStats.y = EQUIPPED_Y + 16;
+      equippedStats.eventMode = "none";
+      container.addChild(equippedStats);
     }
 
     // Second controls row: tech level, max price, sort, find
@@ -1128,7 +1162,7 @@ export class InfoCenterScene extends GameScene {
 
     // Results
     const LIST_Y = CTRL_Y + CTRL_H + 8;
-    const ROW_H = 30;
+    const ROW_H = 38;
     const VISIBLE = Math.floor((ph - LIST_Y) / ROW_H);
 
     if (this.gearResults.length === 0) {
@@ -1158,11 +1192,11 @@ export class InfoCenterScene extends GameScene {
       rowBg.fill({ color: i % 2 === 0 ? 0x0d1220 : 0x0a0e18 });
       container.addChild(rowBg);
 
-      const sysName = systemMap.get(hit.systemId)?.name ?? hit.systemId;
       const distStr = hit.jumps === 0 ? "здесь" : `${hit.jumps} пр.`;
       const staleStr = stale ? " (уст.)" : "";
-      const gearName = hit.gear.name.slice(0, 20).padEnd(20);
-      const lineText = `T${hit.gear.techLevel} ${gearName} ${sysName}${staleStr} — ${hit.price}₡  ${distStr}`;
+      const gearName = hit.gear.name.slice(0, 18).padEnd(18);
+      const planetSys = `${hit.planet} / ${hit.system}`.slice(0, 22).padEnd(22);
+      const lineText = `T${hit.gear.techLevel} ${gearName} ${planetSys}${staleStr} — ${hit.price}₡  ${distStr}`;
 
       const lineLabel = new Text({
         text: lineText,
@@ -1173,9 +1207,18 @@ export class InfoCenterScene extends GameScene {
         },
       });
       lineLabel.x = PAD + 4;
-      lineLabel.y = y + ROW_H / 2 - 7;
+      lineLabel.y = y + 5;
       lineLabel.eventMode = "none";
       container.addChild(lineLabel);
+
+      const statsLabel = new Text({
+        text: gearStatLine(hit.gear),
+        style: { fontSize: 10, fill: 0x557799, fontFamily: "monospace" },
+      });
+      statsLabel.x = PAD + 4;
+      statsLabel.y = y + 20;
+      statsLabel.eventMode = "none";
+      container.addChild(statsLabel);
 
       // "→ карта" button
       const mapBtnX = pw - PAD - 70;
@@ -1225,24 +1268,30 @@ export class InfoCenterScene extends GameScene {
       this.gameEngine?.player?.currentSystemId ?? galaxy.systems[0]?.id ?? "";
     const maxPrice = GEAR_MAX_PRICE_OPTIONS[this.gearMaxPriceIdx];
 
-    const sortMap: Record<
-      GearSortOption,
-      "price" | "jumps" | "damage" | "hp" | "tech"
-    > = {
-      price: "price",
-      distance: "jumps",
-      tech: "tech",
-    };
-
-    this.gearResults = registry.findGear({
+    let hits = registry.findEquipment({
       originSystemId: originId,
-      kind: this.gearKind,
-      minTech: this.gearMinTech,
-      maxTech: this.gearMaxTech,
+      type: this.gearFacet,
       maxPrice: maxPrice > 0 ? maxPrice : undefined,
-      sort: sortMap[this.gearSort],
-      limit: 20,
     });
+
+    // Apply tech level filter
+    hits = hits.filter(
+      (h) =>
+        h.gear.techLevel >= this.gearMinTech &&
+        h.gear.techLevel <= this.gearMaxTech,
+    );
+
+    // Sort
+    if (this.gearSort === "tech") {
+      hits.sort(
+        (a, b) => b.gear.techLevel - a.gear.techLevel || a.price - b.price,
+      );
+    } else if (this.gearSort === "distance") {
+      hits.sort((a, b) => a.jumps - b.jumps || a.price - b.price);
+    }
+    // default "price" sort is already applied by findEquipment
+
+    this.gearResults = hits.slice(0, 20);
   }
 
   private getEquippedItemForFacet(facet: EquipmentFacet): Gear | null {

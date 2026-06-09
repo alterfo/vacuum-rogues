@@ -112,14 +112,14 @@ Related: US-070, US-071, US-072, US-074, US-075
 **Files:**
 - Modify: `src/presentation/InfoCenterScene.ts`
 
-- [ ] Fix search: goods/equipment search must return results (debug why nothing is found — likely missing index or wrong field name)
-- [ ] Equipment results: show planet name + system name next to each listing, not just station ID
-- [ ] Player money: show player credits balance prominently in top bar of info center (same pattern as trade scene)
-- [ ] Equipment faceted filter: add filter chips for equipment type (engine, shield, radar, laser, hull, fuel tank); clicking a chip narrows results; chips are toggle-able, multi-select
-- [ ] Equipment comparison: when viewing equipment search results, show current installed equipment of same type in a "vs" sidebar panel (slot type, key stats side-by-side)
-- [ ] Goods search: show price delta vs player's current system price (▲ / ▼ %)
-- [ ] Write tests: search returns results for known item type; facet filter reduces result set; comparison panel shows correct slot type
-- [ ] Run `npm test -- --run` — must pass
+- [x] Fix search: goods/equipment search must return results (debug why nothing is found — likely missing index or wrong field name)
+- [x] Equipment results: show planet name + system name next to each listing, not just station ID
+- [x] Player money: show player credits balance prominently in top bar of info center (same pattern as trade scene)
+- [x] Equipment faceted filter: add filter chips for equipment type (engine, shield, radar, laser, hull, fuel tank); clicking a chip narrows results; chips are toggle-able, multi-select
+- [x] Equipment comparison: when viewing equipment search results, show current installed equipment of same type in a "vs" sidebar panel (slot type, key stats side-by-side)
+- [x] Goods search: show price delta vs player's current system price (▲ / ▼ %)
+- [x] Write tests: search returns results for known item type; facet filter reduces result set; comparison panel shows correct slot type
+- [x] Run `npm test -- --run` — must pass (752 tests pass)
 
 ### Task 9: Trade market — max cargo button + price highlight icons
 **Files:**
