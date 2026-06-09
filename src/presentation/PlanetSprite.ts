@@ -191,6 +191,11 @@ export class PlanetSprite {
       }
     }
     surface.addChild(strip);
+    // PixiJS 8 only clips with a mask that lives in the scene graph. Parent the
+    // mask under the object it masks (rather than as a loose sibling) so the
+    // surface is clipped to a circle instead of rendering as its rectangular
+    // bounds (Sprint 3: planets were showing up as rectangles).
+    surface.addChild(maskA);
     surface.mask = maskA;
     this.surfaceStrip = strip;
     this.surfaceWidth = W;
@@ -207,10 +212,11 @@ export class PlanetSprite {
     sh.circle(-radius * 0.15, 0, radius).fill({ color: 0x000008, alpha: 0.16 }); // terminator
     // No white specular/rim "glints" — they read as weird blobs (US-070).
     shade.addChild(sh);
+    shade.addChild(maskB); // mask must live in the scene graph (see maskA above)
     shade.mask = maskB;
     this.shadeContainer = shade;
 
-    this.bodyContainer.addChild(maskA, surface, maskB, shade);
+    this.bodyContainer.addChild(surface, shade);
   }
 
   /**
@@ -283,19 +289,25 @@ export class PlanetSprite {
       return;
     }
 
-    // Fallback: flat scrolling disc under a circular mask.
-    const maskC = new Graphics().circle(0, 0, radius).fill({ color: 0xffffff });
+    // Fallback: flat scrolling disc under a circular mask. The mask is parented
+    // under the tiling sprite so it lives in the scene graph (PixiJS 8 requires
+    // this to clip). The sprite is offset by (-radius, -radius), so the mask's
+    // circle is centred at the tiling-local planet centre (radius, radius).
+    const maskC = new Graphics()
+      .circle(radius, radius, radius)
+      .fill({ color: 0xffffff });
     const tiling = new TilingSprite({ texture: mapTex, width: W, height: W });
     tiling.x = -radius;
     tiling.y = -radius;
     const scale = W / mapTex.height;
     tiling.tileScale.set(scale, scale);
     tiling.eventMode = "none";
+    tiling.addChild(maskC);
     tiling.mask = maskC;
     this.tiling = tiling;
     this.axialSpeed =
       (0.012 + rng.next() * 0.012) * (rng.next() < 0.5 ? 1 : -1);
-    this.bodyContainer.addChild(maskC, tiling);
+    this.bodyContainer.addChild(tiling);
   }
 
   /** Darken a hex color by an absolute per-channel amount. */
