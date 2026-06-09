@@ -218,6 +218,7 @@ export const PlayerSchema = z.object({
   killPoints: z.number().int().min(0).default(0),
   rank: z.number().int().min(0).max(7).default(0),
   visitedSystems: z.array(z.string()).default([]),
+  landedPlanetId: z.string().nullable().default(null),
   faction: z
     .enum(["OUTLANDERS", "BASTIONS", "SYNDICATE", "PARADOXES", "PROGRESSORS"])
     .default("OUTLANDERS"),

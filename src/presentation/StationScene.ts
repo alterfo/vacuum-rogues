@@ -249,6 +249,7 @@ export class StationScene extends GameScene {
         if (this.gameEngine) {
           void this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
             gameEngine: this.gameEngine,
+            fromStationId: this.station?.id,
           });
         }
       });
@@ -606,6 +607,8 @@ export class StationScene extends GameScene {
     }
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
+      // Spawn beside the station we just left, not at the distant edge (Task 9).
+      fromStationId: this.station?.id,
     });
   }
 

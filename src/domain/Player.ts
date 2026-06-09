@@ -24,6 +24,12 @@ export class Player {
   rank: number = 0;
   /** IDs of star systems the player has physically flown into. */
   visitedSystems: string[] = [];
+  /**
+   * ID of the planet the player is currently landed on (null when free-flying).
+   * Set on landing, cleared on take-off. Lets a re-entry to SPACE_FLIGHT spawn
+   * the ship next to that planet instead of at the distant system edge.
+   */
+  landedPlanetId: string | null = null;
 
   constructor(
     public readonly id: string,

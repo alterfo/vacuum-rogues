@@ -348,6 +348,15 @@ export class GameEngine {
       finalContext.gameEngine = this;
     }
 
+    // Track the planet the player is parked at so a later re-entry to
+    // SPACE_FLIGHT spawns the ship next to it instead of at the system edge.
+    // Set on landing (PLANET); SpaceFlightScene consumes & clears it on take-off.
+    if (this.player && sceneType === SceneType.PLANET) {
+      const landedPlanet = (context as { planet?: { id?: string } } | undefined)
+        ?.planet;
+      if (landedPlanet?.id) this.player.landedPlanetId = landedPlanet.id;
+    }
+
     this.currentScene.initialize(finalContext);
     logger.info(`Transitioned to scene: ${sceneType}`);
 

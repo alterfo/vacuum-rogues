@@ -368,6 +368,9 @@ export class SpaceFlightScene extends GameScene {
           // Set when arriving from a planet take-off: the ship spawns next to
           // that planet instead of at the system edge (see below).
           fromPlanetId?: string;
+          // Set when undocking from a space station: the ship spawns next to
+          // that station instead of being flung to the system edge (Task 9).
+          fromStationId?: string;
           // Set when returning from CombatScene (Task 11).
           combatResult?: "victory" | "retreat";
           npcId?: string;
@@ -541,6 +544,13 @@ export class SpaceFlightScene extends GameScene {
           this.shipContainer.y = arc[0].y;
         }
       }
+      // Took off → no longer parked at the planet, so a later combat-return or
+      // context-less re-entry keeps its own spawn instead of snapping back here.
+      if (this.gameEngine?.player) this.gameEngine.player.landedPlanetId = null;
+    } else {
+      // Not a planet take-off: spawn beside the station we undocked from, or
+      // (failing that) beside the last planet we landed on (Task 9).
+      this.applyReentrySpawn(ctx?.fromStationId);
     }
 
     // Center the camera on the ship at spawn (system is larger than the
@@ -3211,6 +3221,66 @@ export class SpaceFlightScene extends GameScene {
     this.cameraPanX = cx - this.shipPhysics.shipX * this.cameraZoom;
     this.cameraPanY = cy - this.shipPhysics.shipY * this.cameraZoom;
     this.applyCameraTransform();
+  }
+
+  /**
+   * Position the ship after a non-take-off entry to SPACE_FLIGHT (Task 9).
+   * Priority: the station we just undocked from (`fromStationId`), else the last
+   * planet we landed on (`player.landedPlanetId`, consumed once). If neither is
+   * known the ship keeps its default edge spawn.
+   */
+  private applyReentrySpawn(fromStationId?: string): void {
+    if (!this.shipPhysics) return;
+
+    if (fromStationId) {
+      const marker = this.stationMarkers.find(
+        (m) => m.station.id === fromStationId,
+      );
+      if (marker) {
+        this.spawnShipBeside(marker.x, marker.y, 20);
+        return;
+      }
+    }
+
+    const player = this.gameEngine?.player;
+    const landedId = player?.landedPlanetId;
+    if (landedId) {
+      const sprite = this.planetSprites.find((s) => s.planet.id === landedId);
+      if (sprite) {
+        this.spawnShipBeside(
+          sprite.screenX,
+          sprite.screenY,
+          sprite.displayRadius,
+        );
+      }
+      // Consume so a later free-flight entry doesn't keep snapping the ship back.
+      if (player) player.landedPlanetId = null;
+    }
+  }
+
+  /**
+   * Park the ship just outside a body (planet/station) instead of at the system
+   * edge — used when re-entering SPACE_FLIGHT after docking/landing (Task 9).
+   * Places it `bodyRadius + margin` px out along the radial from the star, so it
+   * sits clear of the body's disc and never on top of the star.
+   */
+  private spawnShipBeside(
+    bodyX: number,
+    bodyY: number,
+    bodyRadius: number,
+    margin = 40,
+  ): void {
+    if (!this.shipPhysics) return;
+    const dx = bodyX - this.starCenterX;
+    const dy = bodyY - this.starCenterY;
+    const len = Math.hypot(dx, dy) || 1;
+    const spawnX = bodyX + (dx / len) * (bodyRadius + margin);
+    const spawnY = bodyY + (dy / len) * (bodyRadius + margin);
+    this.shipPhysics.teleport(spawnX, spawnY);
+    if (this.shipContainer) {
+      this.shipContainer.x = spawnX;
+      this.shipContainer.y = spawnY;
+    }
   }
 
   /** Activate the lerp-return animation toward the ship (⊙ button handler). */
