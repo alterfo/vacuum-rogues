@@ -112,13 +112,13 @@ The existing `SpaceBackgroundLayer` handles distant parallax. Extend it to absor
 - Create: `src/presentation/flight/AsteroidBelt.ts`
 - Modify: `src/presentation/SpaceFlightScene.ts`
 
-- [ ] Create `AsteroidBelt` implementing `FlightModule`. Constructor: `(renderer: Renderer, gameLayer: Container)`
-- [ ] Move `AsteroidMote` interface, `asteroidContainer`, `asteroids` fields
-- [ ] Move methods verbatim: `createAsteroids()`, `drawAsteroid()`, `updateAsteroids()`
-- [ ] `initialize()` calls `createAsteroids()`; `update(dt, bgElapsed)` calls `updateAsteroids(dt)`; `destroy()` clears container
-- [ ] In SpaceFlightScene: replace all references with `this.asteroidBelt.*`
-- [ ] Write unit test: construct AsteroidBelt; call `initialize()`; assert `asteroidBelt` has > 0 asteroids after init.
-- [ ] `npm run lint && npm test -- --run` — must pass.
+- [x] Create `AsteroidBelt` implementing `FlightModule`. Constructor: `(renderer: Renderer, gameLayer: Container)` — `renderer` supplies `app.screen` for the field centre (the star centre, identical to StarRenderer's), `gameLayer` mounts the container. No coupling to StarRenderer.
+- [x] Move `AsteroidMote` interface, `asteroidContainer`, `asteroids` fields (plus the `asteroidFieldRadius()`/`respawnAsteroid()` helpers the methods depend on; `asteroidFieldRadius()` now reads `SYSTEM_GEOMETRY.boundaryRadius` directly instead of the scene's `SYSTEM_BOUNDARY_RADIUS`).
+- [x] Move methods verbatim: `createAsteroids()`, `drawAsteroid()`, `updateAsteroids()`
+- [x] `initialize()` calls `createAsteroids()`; `update(dt, bgElapsed)` calls `updateAsteroids(dt)`; `destroy()` removes + destroys the container and clears the field. Exposed `count` getter for tests.
+- [x] In SpaceFlightScene: construct `asteroidBelt` alongside `starRenderer`; replace `this.createAsteroids()`/`this.updateAsteroids()` with `this.asteroidBelt.initialize()`/`.update()`; added `this.asteroidBelt.destroy()` to `destroy()` and removed the old `asteroids`/`asteroidContainer` cleanup lines.
+- [x] Write unit test (`src/tests/presentation/asteroidBelt.test.ts`): construct AsteroidBelt; `initialize()`; assert `count > 0` and one child mounted on the game layer; `update()` + `destroy()` leak no children.
+- [x] `npm run lint && npm test -- --run` — must pass. (tsc --noEmit clean; lint: 0 errors; tests: 851 passed.)
 
 ### Task 5: Extract OrbitRenderer — orbit circles, system boundary
 
