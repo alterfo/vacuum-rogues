@@ -32,7 +32,6 @@ import {
 import { logger } from "@/utils/logger";
 import { formatGameDate } from "@/utils/gameCalendar";
 import {
-  dayTickMarks,
   avoidStarPath,
   hashToAngle,
   planetApproachPoint,
@@ -56,6 +55,7 @@ import { SpaceBackgroundLayer } from "./SpaceBackgroundLayer";
 import { StarRenderer } from "./flight/StarRenderer";
 import { AsteroidBelt } from "./flight/AsteroidBelt";
 import { OrbitRenderer } from "./flight/OrbitRenderer";
+import { RouteRenderer } from "./flight/RouteRenderer";
 
 interface WarpArrivalEffect {
   container: Container;
@@ -211,7 +211,9 @@ export class SpaceFlightScene extends GameScene {
   // Full curved path (around the star) kept for drawing the route line; the
   // ship flows through it via ShipPhysics.setPath (no scene-side waypoint queue).
   private routePath: { x: number; y: number }[] = [];
-  private routeLineGraphics: Graphics | null = null;
+  // Draws the planned-course overlay (dashed line, day ticks, end marker) —
+  // extracted to a renderer that owns the Graphics; route planning stays here.
+  private routeRenderer!: RouteRenderer;
 
   // Cosmetic take-off arc (Task 5): when the ship lifts off a planet it flies a
   // short outward curve before autopilot engages. Driven by a fixed-speed walk
@@ -419,6 +421,11 @@ export class SpaceFlightScene extends GameScene {
       this.gameEngine?.galaxy ?? null,
       this.gameEngine?.player?.currentSystemId ?? "default",
     );
+
+    // Route module: draws the planned-course overlay (dashed line, day ticks,
+    // landing/navigation marker) onto the game layer. Stateless wrt game logic —
+    // the scene hands it the finished polyline + marker decision.
+    this.routeRenderer = new RouteRenderer(this.renderer.gameLayer);
 
     // Screen-fixed deep-space backdrop (crisp far stars + twinkle), behind the
     // whole world so panning/zooming never exposes a hard background edge.
@@ -767,6 +774,7 @@ export class SpaceFlightScene extends GameScene {
     this.asteroidBelt?.destroy();
     // Tear down the orbit circles + boundary ring (removes + destroys them).
     this.orbitRenderer?.destroy();
+    // The planned-course overlay is torn down by clearPlannedRoute() below.
 
     // Release GPU filter textures before the layer is cleared — clearGameLayer
     // destroys the display objects but not their BlurFilters (ship glow, etc.),
@@ -2482,21 +2490,13 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Draw planned route line from ship to target
+   * Plan the planned-course overlay and hand it to {@link RouteRenderer} to draw.
+   * Route planning (the ship→waypoints→destination polyline and the
+   * landing-vs-navigation decision) is the scene's job — it owns the route data
+   * and the planet sprites; the renderer just draws what it's told.
    */
   private drawRouteLine(): void {
     if (!this.shipPhysics || !this.plannedRoute) return;
-
-    // Remove old route line
-    if (this.routeLineGraphics) {
-      this.renderer.gameLayer.removeChild(this.routeLineGraphics);
-      this.routeLineGraphics.destroy();
-    }
-
-    // Create new route line. Non-interactive so its dashes/markers can never
-    // sit over a ship and swallow its click (US-070 #7).
-    this.routeLineGraphics = new Graphics();
-    this.routeLineGraphics.eventMode = "none";
 
     // Polyline ship → (curved waypoints) → destination. When the path is a
     // straight clear shot, routePath is just the destination.
@@ -2509,39 +2509,7 @@ export class SpaceFlightScene extends GameScene {
     const toX = this.plannedRoute.x;
     const toY = this.plannedRoute.y;
 
-    const dashLength = 20;
-    const gapLength = 10;
-    const totalLength = dashLength + gapLength;
-
-    // Dash along each segment of the polyline.
-    for (let s = 0; s < points.length - 1; s++) {
-      const ax = points[s].x;
-      const ay = points[s].y;
-      const bx = points[s + 1].x;
-      const by = points[s + 1].y;
-      const dx = bx - ax;
-      const dy = by - ay;
-      const distance = Math.hypot(dx, dy);
-      const numSegments = Math.floor(distance / totalLength);
-      for (let i = 0; i < numSegments; i++) {
-        const t1 = (i * totalLength) / distance;
-        const t2 = (i * totalLength + dashLength) / distance;
-        this.routeLineGraphics.moveTo(ax + dx * t1, ay + dy * t1);
-        this.routeLineGraphics.lineTo(ax + dx * t2, ay + dy * t2);
-      }
-    }
-
-    this.routeLineGraphics.stroke({ color: 0x00ffff, width: 2, alpha: 0.6 });
-
-    // Per-day tick marks along the route: a short perpendicular dash every
-    // DISTANCE_PER_DAY pixels, so the player can read how many days the trip
-    // takes (like the day "divisions" in the original game). See dayTickMarks.
-    const tickLen = 6;
-    for (const t of dayTickMarks(points, this.DISTANCE_PER_DAY)) {
-      this.routeLineGraphics.moveTo(t.x - t.px * tickLen, t.y - t.py * tickLen);
-      this.routeLineGraphics.lineTo(t.x + t.px * tickLen, t.y + t.py * tickLen);
-    }
-    this.routeLineGraphics.stroke({ color: 0xffee66, width: 2, alpha: 0.9 });
+    this.routeRenderer.drawRoute(points, this.DISTANCE_PER_DAY);
 
     // Check if route target is near a planet (within 50px radius)
     const isLandingOnPlanet = this.planetSprites.some((sprite) => {
@@ -2553,67 +2521,10 @@ export class SpaceFlightScene extends GameScene {
 
     // Draw different marker based on whether this is a landing or empty space navigation
     if (isLandingOnPlanet) {
-      // Landing marker: downward arrow + landing circles
-      this.drawLandingMarker(toX, toY);
+      this.routeRenderer.drawLandingMarker(toX, toY);
     } else {
-      // Navigation marker: simple pulsing circle
-      this.drawNavigationMarker(toX, toY);
+      this.routeRenderer.drawNavigationMarker(toX, toY);
     }
-
-    this.renderer.gameLayer.addChild(this.routeLineGraphics);
-  }
-
-  /**
-   * Draw landing marker for planetary approach
-   */
-  private drawLandingMarker(x: number, y: number): void {
-    if (!this.routeLineGraphics) return;
-
-    // Outer landing zone circles (kept compact so the marker doesn't swamp the
-    // planet it points at).
-    this.routeLineGraphics.circle(x, y, 12);
-    this.routeLineGraphics.stroke({ color: 0xff9900, width: 2, alpha: 0.8 });
-    this.routeLineGraphics.circle(x, y, 16);
-    this.routeLineGraphics.stroke({ color: 0xff9900, width: 1.5, alpha: 0.4 });
-
-    // Downward arrow (landing symbol)
-    const arrowSize = 8;
-    const arrowWidth = 5;
-
-    // Arrow shaft
-    this.routeLineGraphics.moveTo(x, y - arrowSize);
-    this.routeLineGraphics.lineTo(x, y + arrowSize * 0.3);
-    this.routeLineGraphics.stroke({ color: 0xff9900, width: 3, alpha: 1.0 });
-
-    // Arrow head (triangle pointing down)
-    this.routeLineGraphics
-      .poly([
-        x,
-        y + arrowSize, // Bottom point
-        x - arrowWidth,
-        y, // Left point
-        x + arrowWidth,
-        y, // Right point
-      ])
-      .fill({ color: 0xff9900, alpha: 1.0 });
-
-    // Small base platform indicator
-    this.routeLineGraphics.moveTo(x - 8, y + arrowSize + 4);
-    this.routeLineGraphics.lineTo(x + 8, y + arrowSize + 4);
-    this.routeLineGraphics.stroke({ color: 0xff9900, width: 1.5, alpha: 0.7 });
-  }
-
-  /**
-   * Draw navigation marker for empty space movement
-   */
-  private drawNavigationMarker(x: number, y: number): void {
-    if (!this.routeLineGraphics) return;
-
-    // Pulsing circles for generic navigation target (compact)
-    this.routeLineGraphics.circle(x, y, 8);
-    this.routeLineGraphics.stroke({ color: 0x00ffff, width: 2, alpha: 0.8 });
-    this.routeLineGraphics.circle(x, y, 11);
-    this.routeLineGraphics.stroke({ color: 0x00ffff, width: 1.5, alpha: 0.4 });
   }
 
   /**
@@ -2713,11 +2624,9 @@ export class SpaceFlightScene extends GameScene {
     this.followNpcId = null;
     this.routePath = [];
 
-    if (this.routeLineGraphics) {
-      this.renderer.gameLayer.removeChild(this.routeLineGraphics);
-      this.routeLineGraphics.destroy();
-      this.routeLineGraphics = null;
-    }
+    // ?.: clearPlannedRoute runs from destroy(), which may fire before the
+    // scene finished initializing (and constructing the route renderer).
+    this.routeRenderer?.clearRoute();
   }
 
   /**

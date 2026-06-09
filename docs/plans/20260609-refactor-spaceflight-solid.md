@@ -142,17 +142,17 @@ The existing `SpaceBackgroundLayer` handles distant parallax. Extend it to absor
 
 RouteRenderer is stateless with respect to game logic — it only draws what it's given. Information Expert: route data stays in SpaceFlightScene (it owns route planning logic), RouteRenderer only renders it.
 
-- [ ] Create `RouteRenderer`. Constructor: `(gameLayer: Container)`
-- [ ] Move `routeLineGraphics` field
-- [ ] Move methods: `drawRouteLine()`, `drawLandingMarker()`, `drawNavigationMarker()`
-- [ ] Change signatures to accept data as parameters (no reading SpaceFlightScene state directly):
-  - `drawRoute(path: {x:number, y:number}[], targetX: number, targetY: number): void`
+- [x] Create `RouteRenderer`. Constructor: `(gameLayer: Container)`. Intentionally NOT a `FlightModule` — the overlay is redrawn on demand when the route changes, so there is no per-frame `update()`; it just draws and clears.
+- [x] Move `routeLineGraphics` field (private; exposed via a `get graphics()` getter for tests).
+- [x] Move methods: `drawRouteLine()` (split — the renderer keeps the line+ticks draw as `drawRoute()`; the orchestration stays in the scene), `drawLandingMarker()`, `drawNavigationMarker()`, plus the `dayTickMarks` import they depend on.
+- [x] Change signatures to accept data as parameters (no reading SpaceFlightScene state directly):
+  - `drawRoute(path: {x:number, y:number}[], distancePerDay: number): void` — `path` is the finished ship→waypoints→destination polyline (built by the scene); `distancePerDay` replaces the planned `targetX/targetY` (the end marker is drawn separately by the scene's landing-vs-nav decision, so the renderer never needs the target coords, and `distancePerDay` is what the tick-mark spacing actually needs — passed as a param since the constructor is `(gameLayer)`).
   - `drawLandingMarker(x: number, y: number): void`
   - `drawNavigationMarker(x: number, y: number): void`
   - `clearRoute(): void`
-- [ ] Update SpaceFlightScene callers to pass route state explicitly
-- [ ] Write unit test: `drawRoute()` with 3 points — assert `routeLineGraphics` is non-null and added to container.
-- [ ] `npm run lint && npm test -- --run` — must pass.
+- [x] Update SpaceFlightScene callers to pass route state explicitly: `drawRouteLine()` now builds the polyline + landing-vs-nav decision (Information Expert — it owns route data + planet sprites) and delegates drawing to `this.routeRenderer`; `clearPlannedRoute()` clears scene state then calls `this.routeRenderer?.clearRoute()` (?.: runs from `destroy()`, which may fire before init). Removed the `routeLineGraphics` field and the `dayTickMarks` import from the scene.
+- [x] Write unit test (`src/tests/presentation/routeRenderer.test.ts`): `drawRoute()` with 3 points — assert the overlay is non-null, a `Graphics`, added to the container, and non-interactive; redraw replaces+disposes the old overlay; markers append to the existing overlay (no-op before one exists); `clearRoute()` disposes and leaks no children.
+- [x] `npm run lint && npm test -- --run` — must pass. (tsc --noEmit clean; lint: 0 errors; tests: 859 passed; RouteRenderer 158 lines, SpaceFlightScene 3897 → 3806.)
 
 ### Task 7: Extract PlayerShipRenderer — ship sprite, drawing, target indicator, takeoff arc
 
