@@ -70,10 +70,10 @@ export interface FlightModule {
 **Files:**
 - Create: `src/presentation/flight/FlightModule.ts`
 
-- [ ] Create `src/presentation/flight/` directory
-- [ ] Write `FlightModule` interface as shown in Technical Details — `initialize()`, `update(dt, bgElapsed)`, `destroy()`
-- [ ] Export it; no logic, just the contract
-- [ ] `npm run lint && npm test -- --run` — must pass (no changes to existing code yet)
+- [x] Create `src/presentation/flight/` directory
+- [x] Write `FlightModule` interface as shown in Technical Details — `initialize()`, `update(dt, bgElapsed)`, `destroy()`
+- [x] Export it; no logic, just the contract
+- [x] `npm run lint && npm test -- --run` — must pass (no changes to existing code yet)
 
 ### Task 2: Extract BackgroundLayer — nebulae, swarms, dust, twinkle stars, star field
 
