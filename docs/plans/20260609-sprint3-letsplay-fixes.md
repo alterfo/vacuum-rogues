@@ -131,12 +131,12 @@ Current issue: some particles appear as grey rectangles. This is likely the aste
 
 Current `avoidStarPath()` (line 120) generates 4–8 sparse control points on the arc then Catmull-Rom smooths them. Screenshot shows kinks — meaning either too few control points or the Catmull-Rom tension is wrong.
 
-- [ ] In `avoidStarPath()` (line ~149), increase the arc radius clearance from `R * 1.08` to `R * 1.15` — gives a more visually natural wide arc around the star's glow.
-- [ ] Increase base control point count from the current `4–8` range to `10–14` (per semicircle). More control points → smoother chord segments before spline interpolation.
-- [ ] Increase Catmull-Rom interpolation subdivisions from 4 to 8 per gap (line ~157). This directly reduces kink size between control points.
-- [ ] After the radius-clamp pass (line ~162), add one final smoothing pass: for every intermediate point (not start/end), nudge it to the average of its two neighbors — a single iteration of Laplacian smoothing that eliminates residual kinks without changing the overall arc shape.
-- [ ] Write/update unit test in `src/tests/flightCurves.test.ts`: assert `avoidStarPath()` output has ≥ 20 points and no two consecutive points form an angle < 160° (i.e., no kinks > 20°).
-- [ ] `npm run lint && npm test -- --run` — must pass.
+- [x] In `avoidStarPath()` (line ~149), increase the arc radius clearance from `R * 1.08` to `R * 1.15` — gives a more visually natural wide arc around the star's glow. (`arcR = R * 1.15`.)
+- [x] Increase base control point count from the current `4–8` range to `10–14` (per semicircle). More control points → smoother chord segments before spline interpolation. (`steps = Math.max(10, Math.round((|d| / π) * 14))` — 10 min, 14 for a full semicircle.)
+- [x] Increase Catmull-Rom interpolation subdivisions from 4 to 8 per gap (line ~157). This directly reduces kink size between control points. (`catmullRomSpline(control, 8)`.)
+- [x] After the radius-clamp pass (line ~162), add one final smoothing pass: for every intermediate point (not start/end), nudge it to the average of its two neighbors — a single iteration of Laplacian smoothing that eliminates residual kinks without changing the overall arc shape. (Added a true single-iteration Laplacian pass from a pre-pass snapshot. Reordered so the smoothing runs BEFORE the radial clamp — Laplacian averaging pulls vertices toward the chord/inward, so clamping last guarantees the `≥ R` clearance invariant `sunAvoidance.test.ts` enforces, instead of the smoothing re-violating it.)
+- [x] Write/update unit test in `src/tests/flightCurves.test.ts`: assert `avoidStarPath()` output has ≥ 20 points and no two consecutive points form an angle < 160° (i.e., no kinks > 20°). (Added `avoidStarPath smoothness` describe with a `minTurnAngleDeg` helper: 3 cases — straight-through bypass ≥20 pts & ≥160°, 1.15R apex clearance, and an off-axis quarter-turn bypass.)
+- [x] `npm run lint && npm test -- --run` — must pass. (0 lint errors; 829 unit tests pass, incl. 3 new.)
 
 ### Task 9: Fix undocking from shipyard — player spawns at edge of system
 

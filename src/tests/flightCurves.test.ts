@@ -165,3 +165,47 @@ describe("route line arc (Task 5: route bends visibly around the sun)", () => {
     ).toBeGreaterThan(50);
   });
 });
+
+/** Smallest interior angle (degrees) at any vertex of a polyline. */
+function minTurnAngleDeg(points: Point[]): number {
+  let min = 180;
+  for (let i = 1; i < points.length - 1; i++) {
+    const ax = points[i - 1].x - points[i].x;
+    const ay = points[i - 1].y - points[i].y;
+    const bx = points[i + 1].x - points[i].x;
+    const by = points[i + 1].y - points[i].y;
+    const la = Math.hypot(ax, ay);
+    const lb = Math.hypot(bx, by);
+    if (la < 1e-9 || lb < 1e-9) continue; // skip coincident points
+    let cos = (ax * bx + ay * by) / (la * lb);
+    cos = Math.max(-1, Math.min(1, cos));
+    const deg = (Math.acos(cos) * 180) / Math.PI;
+    if (deg < min) min = deg;
+  }
+  return min;
+}
+
+describe("avoidStarPath smoothness (Task 8: no visible kinks)", () => {
+  it("produces a dense polyline with no kinks sharper than 20°", () => {
+    const path = avoidStarPath(-500, 0, 500, 0, 0, 0, 300);
+    // Dense sampling: 10–14 control points × 8 subdivisions per gap.
+    expect(path.length).toBeGreaterThanOrEqual(20);
+    // No two consecutive segments turn more than 20° (interior angle ≥ 160°).
+    expect(minTurnAngleDeg(path)).toBeGreaterThanOrEqual(160);
+  });
+
+  it("clears the wider 1.15R glow radius at the arc apex", () => {
+    const path = avoidStarPath(-500, 0, 500, 0, 0, 0, 300);
+    const apexR = Math.max(
+      ...path.slice(0, -1).map((p) => Math.hypot(p.x, p.y)),
+    );
+    // The arc bows out to ~1.15R clearance (was 1.08R before Task 8).
+    expect(apexR).toBeGreaterThan(300 * 1.1);
+  });
+
+  it("stays kink-free for an off-axis (quarter-turn) bypass", () => {
+    const path = avoidStarPath(-400, -50, 50, 400, 0, 0, 250);
+    expect(path.length).toBeGreaterThanOrEqual(20);
+    expect(minTurnAngleDeg(path)).toBeGreaterThanOrEqual(160);
+  });
+});

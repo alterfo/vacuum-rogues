@@ -144,21 +144,38 @@ export function avoidStarPath(
   while (d > Math.PI) d -= 2 * Math.PI;
   while (d < -Math.PI) d += 2 * Math.PI;
   if (Math.abs(d) < 1e-3) d = Math.PI; // near-opposite: go around one side
-  // Sparse control points for Catmull-Rom: 4–8 points per semicircle.
-  const steps = Math.max(4, Math.round((Math.abs(d) / Math.PI) * 8));
-  const arcR = R * 1.08;
+  // Dense control points for Catmull-Rom: 10–14 points per semicircle. More
+  // control points → shorter chords before interpolation → smaller residual
+  // kinks (Sprint 3 Task 8).
+  const steps = Math.max(10, Math.round((Math.abs(d) / Math.PI) * 14));
+  // Wide clearance (1.15R) so the arc bows clear of the star's outer glow.
+  const arcR = R * 1.15;
   const control: Point[] = [];
   for (let i = 1; i < steps; i++) {
     const a = a0 + d * (i / steps);
     control.push({ x: sx + Math.cos(a) * arcR, y: sy + Math.sin(a) * arcR });
   }
   control.push({ x: tx, y: ty });
-  // Smooth the sparse arc polygon into a curve (~4 interpolated points per gap).
-  const smoothed = catmullRomSpline(control, 4);
-  // The Catmull-Rom curve can bow inward between the arc and a far destination,
-  // dipping inside the exclusion circle. Push any such sample radially back out
-  // to the circle edge so the flown/preview path never enters the exclusion
-  // radius (Task 3). The final point is the true destination — leave it intact.
+  // Smooth the dense arc polygon into a curve (8 interpolated points per gap).
+  const smoothed = catmullRomSpline(control, 8);
+  // Final Laplacian smoothing pass: replace each interior vertex with the
+  // average of its two neighbours. A single iteration erases residual kinks
+  // (e.g. at the arc → destination junction) without materially changing the
+  // arc's shape. Computed from a pre-pass snapshot so the smoothing is a true
+  // single iteration, not a one-sided sweep. Start/end are left untouched (the
+  // last point is the true destination).
+  const pre = smoothed.map((p) => ({ x: p.x, y: p.y }));
+  for (let i = 1; i < smoothed.length - 1; i++) {
+    smoothed[i] = {
+      x: (pre[i - 1].x + pre[i + 1].x) / 2,
+      y: (pre[i - 1].y + pre[i + 1].y) / 2,
+    };
+  }
+  // The Catmull-Rom curve (and the Laplacian pass, which pulls vertices toward
+  // the chord) can bow inward between the arc and a far destination, dipping
+  // inside the exclusion circle. Push any such sample radially back out to the
+  // circle edge — run AFTER smoothing so the clearance invariant always holds.
+  // The final point is the true destination — leave it intact (Task 3).
   for (let i = 0; i < smoothed.length - 1; i++) {
     const ox = smoothed[i].x - sx;
     const oy = smoothed[i].y - sy;
