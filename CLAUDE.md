@@ -48,6 +48,21 @@ npm run test:e2e:regression # Run regression playtest suite only (fast gate, < 6
 
 Models load lazily → cached in IndexedDB → inference runs in Web Workers only. Never call `ort.InferenceSession.run()` on main thread — use `ONNXModelRegistry.infer()`.
 
+### Texture Loading
+
+`src/presentation/textures.ts` — `LAZY_PREFIXES` excludes heavy categories from eager boot preload. Current lazy categories: `panoramas/`, `planet_maps/`, `star_maps/`, `stars/`, `nebula/`.
+
+**Pattern for lazy categories** (must NOT use synchronous `pickVariant`):
+```typescript
+const key = pickVariantKey("nebula", prefix, seed);
+if (key) {
+  const cached = tex(key);
+  if (cached) mount(cached);
+  else void loadTextureAsync(key).then((t) => { if (t && !this.sceneDestroyed) mount(t); });
+}
+```
+Any new art category with >10 MB total must be added to `LAZY_PREFIXES`.
+
 ## Critical Coding Rules
 
 ### Input Handling (PixiJS)
@@ -162,7 +177,22 @@ private onPointerDown(event: FederatedPointerEvent): void {
 }
 ```
 
-**Rule 5: Update Scale-Dependent UI When Changing World Scale**
+**Rule 5 (PixiJS 8): Graphics Mask Must Be addChild()'d to the Masked Object**
+
+In PixiJS 8, a `Graphics` used as `.mask` **must** be in the scene graph as a child of the masked object. Without `addChild()`, the mask is silently ignored and the object renders with its full bounding box (rectangles instead of circles).
+
+```typescript
+// ❌ WRONG — mask ignored, planets render as rectangles
+surface.mask = maskGraphics;
+
+// ✅ CORRECT — addChild BEFORE assigning mask
+surface.addChild(maskGraphics);
+surface.mask = maskGraphics;
+```
+
+This applies to ALL masked containers: planet surface, atmosphere shade, tiling sprite.
+
+**Rule 6: Update Scale-Dependent UI When Changing World Scale**
 
 When changing world coordinates or zoom levels, update ALL dependent UI elements:
 
@@ -184,7 +214,7 @@ mapScale = 0.05; // Was 0.25, now divided by 5
 // Math: 2750px * 0.05 = 137.5px (fits in 180px minimap) ✓
 ```
 
-**Rule 6: Apply Camera Transforms to Single Parent Container**
+**Rule 7: Apply Camera Transforms to Single Parent Container**
 
 For zoom/pan, transform one parent container (gameLayer), not individual objects:
 
@@ -209,7 +239,7 @@ for (const planet of planets) {
 - Consistent behavior
 - Easy debugging
 
-**Rule 7: If a Fix Creates New Bugs, Revisit the Root Cause**
+**Rule 8: If a Fix Creates New Bugs, Revisit the Root Cause**
 
 **Anti-pattern "Ping-Pong Fix"**:
 ```
@@ -228,7 +258,7 @@ If your fix breaks adjacent functionality, you're treating **symptoms**, not the
 2. **Root cause**: Need to stop bubbling, not block events
 3. **Solution**: `stopPropagation()` only (no eventMode change)
 
-**Rule 8: Pass Scene Context Explicitly, Not via Global Flags**
+**Rule 9: Pass Scene Context Explicitly, Not via Global Flags**
 
 When transitioning scenes with different behaviors, pass context through parameters:
 
@@ -372,4 +402,12 @@ Use `### Iteration N:` only for time-boxed sprint iterations, not regular tasks.
 
 ## Project Status
 
-Phase 2 (Вакуумные Пройдохи) — core gameplay loops implemented: economy, equipment/hull system, NPC living galaxy, quest generator, text quests (QuestVM + 6 scripts), government dialogue, station services, info center, combat AI, fog-of-war star map, audio. Sprint 2 (`feat/flight-sweep-and-systems`) added: physics-based flight (`ShipPhysics`, `PanZoomController`), sun avoidance arc, curved landing/takeoff, SpaceBackgroundLayer, panorama parallax, `UiButton` component, `AudioManager`, `FlightCombatResolver`, game calendar (`gameCalendar.ts`), and font-scale accessibility setting. All sprint plans through `20260609-planet-parallax-and-click-audit` are complete (see `docs/plans/completed/`). No active plan — ready for next sprint.
+Phase 2 (Вакуумные Пройдохи) — core gameplay loops: economy, equipment/hull, NPC living galaxy, quest generator, text quests (QuestVM + 6 scripts), government dialogue, station services, info center, combat AI, fog-of-war star map, audio.
+
+**Completed plans** (see `docs/plans/completed/`): Sprint 1 (rename, pan, minimap), Sprint 2 (ShipPhysics, PanZoomController, sun arc, AudioManager, FlightCombatResolver, UiButton, panorama parallax, SpaceBackgroundLayer), art-assets (ComfyUI workflows, PlanetRotationFilter, PanoramaViewer), planet-parallax-and-click-audit (central layer clear in transitionTo(), teardown audit).
+
+**Active plan**: `docs/plans/20260609-sprint3-letsplay-fixes.md` — 12 letsplay bug fixes (planet masking ✓, pause, cursor, solar glow, ship outline, NPC clickability, particles, arc smoothness, undocking spawn, engine speed, frost-line placement, verify).
+
+**Queued plan** (after sprint3 completes): `docs/plans/20260609-refactor-spaceflight-solid.md` — SOLID/GRASP decomposition of SpaceFlightScene (5200 lines → ~600 line coordinator + 9 modules in `src/presentation/flight/`). Do NOT launch while sprint3 ralphex is running — both edit SpaceFlightScene.ts.
+
+**Known unresolved bug**: `DialogueSystem` session key mismatch — sessions stored under `dlg_<npcId>_<timestamp>` but history-restore lookup uses `npc.id`; keys never match, session map grows unbounded (memory leak).

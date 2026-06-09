@@ -135,6 +135,10 @@ export class SpaceFlightScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private shipContainer: Container | null = null;
   private shipGraphics: Graphics | null = null;
+  // Soft volumetric glow blob behind the ship — gives 3D presence against the
+  // dark backdrop. Created once and blurred; not redrawn per frame so the filter
+  // texture stays stable.
+  private shipGlow: Graphics | null = null;
   // Player-ship art (if available); falls back to the procedural triangle.
   private shipSprite: Sprite | null = null;
   // Heading 0 points +X (east); the ship art faces "down" (nose at the bottom of
@@ -840,6 +844,7 @@ export class SpaceFlightScene extends GameScene {
     this.bgElapsed = 0;
     this.shipContainer = null;
     this.shipGraphics = null;
+    this.shipGlow = null;
     this.shipSprite = null;
     this.dustContainer = null;
     this.asteroidContainer = null;
@@ -2093,6 +2098,16 @@ export class SpaceFlightScene extends GameScene {
     if (!this.shipPhysics) return;
 
     this.shipContainer = new Container();
+
+    // Volumetric glow blob drawn FIRST so it sits behind the hull/sprite. A soft
+    // blue halo reads as depth and keeps the ship visible against dark space.
+    // Whether the active hull is the sprite or the procedural triangle, this glow
+    // is the "behind the ship" depth cue — for the sprite case it stands in for
+    // an outline filter (no @pixi/filter-outline dependency in this project).
+    this.shipGlow = new Graphics();
+    this.shipGlow.eventMode = "none";
+    this.shipContainer.addChild(this.shipGlow);
+
     this.shipGraphics = new Graphics();
     this.shipContainer.addChild(this.shipGraphics);
 
@@ -2110,6 +2125,15 @@ export class SpaceFlightScene extends GameScene {
       this.shipSprite = sp;
       this.shipContainer.addChild(sp);
     }
+
+    // Size the glow to the active hull representation, then blur it. The sprite
+    // is ~2.6× larger than the procedural triangle, so its glow is wider to peek
+    // out past the artwork edges.
+    const glowRadius = this.shipSprite ? this.SHIP_SIZE * 1.6 : 18;
+    this.shipGlow
+      .circle(0, 0, glowRadius)
+      .fill({ color: 0x2244aa, alpha: 0.35 });
+    this.shipGlow.filters = [this.paddedBlur(8)];
 
     // Draw ship body (procedural triangle; no-op hull when a sprite is used)
     this.drawShip();
@@ -2181,19 +2205,22 @@ export class SpaceFlightScene extends GameScene {
 
     const size = this.SHIP_SIZE;
 
-    // Main hull
+    // Main hull — drawn as a fill, then re-stroked with a crisp cyan rim so the
+    // silhouette reads clearly against dark space.
+    const hull = [
+      size,
+      0,
+      -size * 0.7,
+      -size * 0.6,
+      -size * 0.4,
+      0,
+      -size * 0.7,
+      size * 0.6,
+    ];
+    this.shipGraphics.poly(hull).fill({ color: 0x4488cc });
     this.shipGraphics
-      .poly([
-        size,
-        0,
-        -size * 0.7,
-        -size * 0.6,
-        -size * 0.4,
-        0,
-        -size * 0.7,
-        size * 0.6,
-      ])
-      .fill({ color: 0x4488cc });
+      .poly(hull)
+      .stroke({ color: 0x44ccff, alpha: 0.9, width: 1.5 });
 
     // Cockpit
     this.shipGraphics
@@ -2207,19 +2234,24 @@ export class SpaceFlightScene extends GameScene {
       ])
       .fill({ color: 0x88ccff });
 
-    // Engine glow (visible when ship is moving)
+    // Engine glow (visible when ship is moving). bgElapsed is in ms, so /80 gives
+    // a ~0.5 s pulse; the alpha now swings 0.10–1.0 (amplitude 0.45) for a strong
+    // engine flicker, and the flame reaches further (0.7× vs 0.5×).
     if (this.shipPhysics.isMoving) {
+      const enginePulse = 0.5 + 0.5 * Math.sin(this.bgElapsed / 80);
       this.shipGraphics
         .poly([
           -size * 0.5,
-          -size * 0.3,
-          -size * 0.5 -
-            size * 0.5 * (0.5 + 0.5 * Math.sin(this.bgElapsed / 80)),
+          -size * 0.4,
+          -size * 0.5 - size * 0.7 * enginePulse,
           0,
           -size * 0.5,
-          size * 0.3,
+          size * 0.4,
         ])
-        .fill({ color: 0x00ffff, alpha: 0.6 });
+        .fill({
+          color: 0x00ffff,
+          alpha: 0.55 + 0.45 * Math.sin(this.bgElapsed / 80),
+        });
     }
 
     // Engine lights

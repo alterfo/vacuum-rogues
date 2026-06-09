@@ -94,11 +94,11 @@ Current state: `createStarProminences()` (line 2041) draws 3 corona rings + 4–
 
 Ship is too flat/invisible. Need a rim highlight to give it 3D presence.
 
-- [ ] In `drawShip()` (line ~2285), after drawing the hull polygon, add a matching hull outline stroke: `this.shipGraphics.poly(hullPoints).stroke({color: 0x44ccff, alpha: 0.9, width: 1.5})`. This gives a crisp cyan edge.
-- [ ] Add a soft glow blob BEHIND the ship (drawn first, before hull): a blurred `Graphics.circle(0, 0, 18)` filled `0x2244aa` alpha 0.35, with `BlurFilter(8)` applied. This creates volumetric depth.
-- [ ] For the sprite-based ship (line ~2212, when `shipTex` is found): add `OutlineFilter` from `@pixi/filter-outline` if available, OR draw the same glow circle behind the sprite container. Check if `@pixi/filter-outline` is in package.json; if not, use the manual glow Graphics.
-- [ ] Engine glow (line ~2322): increase pulse amplitude — `alpha: 0.55 + 0.45 * Math.sin(bgElapsed * 3)` instead of current value, and increase the glow radius slightly.
-- [ ] `npm run lint && npm test -- --run` — must pass.
+- [x] In `drawShip()` (line ~2285), after drawing the hull polygon, add a matching hull outline stroke: `this.shipGraphics.poly(hullPoints).stroke({color: 0x44ccff, alpha: 0.9, width: 1.5})`. This gives a crisp cyan edge. (Hull points hoisted into a `hull` const, filled `0x4488cc` then re-stroked `0x44ccff` alpha 0.9 width 1.5.)
+- [x] Add a soft glow blob BEHIND the ship (drawn first, before hull): a blurred `Graphics.circle(0, 0, 18)` filled `0x2244aa` alpha 0.35, with `BlurFilter(8)` applied. This creates volumetric depth. (New `shipGlow` Graphics added to `shipContainer` first — before `shipGraphics`/sprite — drawn once with a filled circle, `paddedBlur(8)` so the falloff never shows a rectangular band under camera zoom. Nulled in `destroy()`.)
+- [x] For the sprite-based ship (line ~2212, when `shipTex` is found): add `OutlineFilter` from `@pixi/filter-outline` if available, OR draw the same glow circle behind the sprite container. Check if `@pixi/filter-outline` is in package.json; if not, use the manual glow Graphics. (`@pixi/filter-outline` is NOT a dependency → used the manual glow path. The same `shipGlow` sits behind the sprite; its radius widens to `SHIP_SIZE * 1.6` for the sprite — which is ~2.6× larger — so the halo peeks out past the artwork edges; the procedural triangle keeps radius 18.)
+- [x] Engine glow (line ~2322): increase pulse amplitude — `alpha: 0.55 + 0.45 * Math.sin(bgElapsed * 3)` instead of current value, and increase the glow radius slightly. (Engine flame alpha now swings 0.10–1.0 (`0.55 + 0.45 * sin`), flame reaches `0.7×` size (was 0.5×) and its base widened to `±size*0.4` (was ±0.3). `bgElapsed` is in ms so the `/80` time-base is kept — `* 3` would flicker every ~2 ms; `/80` gives a ~0.5 s pulse.)
+- [x] `npm run lint && npm test -- --run` — must pass. (0 lint errors; 819 unit tests pass, incl. 4 new in `src/tests/presentation/shipGlow.test.ts`.)
 
 ### Task 6: Fix NPC ship clickability
 
