@@ -140,7 +140,10 @@ export interface EquipmentHit {
 
 export interface EquipmentQuery {
   readonly originSystemId: string;
+  /** Single-facet filter (legacy). Ignored when `types` is provided. */
   readonly type?: EquipmentFacet;
+  /** Multi-facet filter — item matches if it matches any entry. Empty array = no filter (all types). */
+  readonly types?: EquipmentFacet[];
   readonly name?: string;
   readonly maxPrice?: number;
   readonly maxJumps?: number;
@@ -342,7 +345,13 @@ export class GalacticRegistry {
     );
     const hits: EquipmentHit[] = [];
     for (const l of this.gearListings) {
-      if (!matchesFacet(l.gear, query.type)) continue;
+      if (
+        !matchesFacet(
+          l.gear,
+          query.types ?? (query.type !== undefined ? [query.type] : undefined),
+        )
+      )
+        continue;
       if (query.maxPrice !== undefined && l.price > query.maxPrice) continue;
       if (
         query.name !== undefined &&
@@ -389,8 +398,12 @@ export class GalacticRegistry {
   }
 }
 
-function matchesFacet(g: Gear, facet: EquipmentFacet | undefined): boolean {
-  if (facet === undefined) return true;
+function matchesFacet(g: Gear, facets: EquipmentFacet[] | undefined): boolean {
+  if (facets === undefined || facets.length === 0) return true;
+  return facets.some((facet) => matchesSingleFacet(g, facet));
+}
+
+function matchesSingleFacet(g: Gear, facet: EquipmentFacet): boolean {
   switch (facet) {
     case "hull":
       return g.kind === GearKind.HULL;

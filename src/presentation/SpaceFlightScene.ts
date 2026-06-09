@@ -4411,6 +4411,16 @@ export class SpaceFlightScene extends GameScene {
     const info = this.planetInfoPanel;
     this.planetInfoPanel = null;
     if (info) queueMicrotask(() => info.destroy());
+    if (this.overmindOverlay) {
+      const ov = this.overmindOverlay;
+      this.overmindOverlay = null;
+      queueMicrotask(() => ov.destroy({ children: true }));
+    }
+    if (this.settingsPanel) {
+      const sp = this.settingsPanel;
+      this.settingsPanel = null;
+      queueMicrotask(() => sp.destroy({ children: true }));
+    }
   }
 
   private closeNpcContactPanel(): void {
@@ -4990,10 +5000,10 @@ export class SpaceFlightScene extends GameScene {
       (s) => s.planet.id === locationId,
     );
     if (planetSprite && this.shipPhysics) {
-      // Set ship target to planet
-      this.shipPhysics.setTarget(planetSprite.screenX, planetSprite.screenY);
+      // Plan a star-avoiding route to the planet (same path as a manual click).
+      this.planRouteTo(planetSprite.screenX, planetSprite.screenY);
       logger.info(
-        `Set navigation target to planet ${planetSprite.planet.name}`,
+        `Planned navigation route to planet ${planetSprite.planet.name}`,
       );
 
       // Show planet info panel

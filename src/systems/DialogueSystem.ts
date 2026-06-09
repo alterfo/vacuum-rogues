@@ -98,7 +98,9 @@ export class DialogueSystem {
       session.addNPCResponse(anchor.template);
     }
 
+    // Index by both session ID (for submitPlayerChoice) and npc.id (for history recall).
     this.sessionHistory.set(sessionId, session);
+    this.sessionHistory.set(npc.id, session);
     logger.info(`Dialogue started with NPC ${npc.name}`);
     return session;
   }

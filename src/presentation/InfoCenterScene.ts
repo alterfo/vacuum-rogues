@@ -313,8 +313,8 @@ export class InfoCenterScene extends GameScene {
   private objectsResults: ObjectResult[] = [];
   private objectsInputFocused = false;
 
-  // gear tab state
-  private gearFacet: EquipmentFacet = "engine";
+  // gear tab state — multi-select; empty set = all types shown
+  private gearFacets = new Set<EquipmentFacet>(["engine" as EquipmentFacet]);
   private gearMinTech = 1;
   private gearMaxTech = 6;
   private gearMaxPriceIdx = 0; // index into GEAR_MAX_PRICE_OPTIONS
@@ -913,7 +913,7 @@ export class InfoCenterScene extends GameScene {
     let px = PAD;
     for (const [i, facet] of EQUIPMENT_FACETS.entries()) {
       const pw2 = pillWidths[i];
-      const isActive = this.gearFacet === facet;
+      const isActive = this.gearFacets.has(facet);
       const pill = new Graphics();
       pill.rect(px, PILL_Y, pw2, PILL_H);
       pill.fill({ color: isActive ? 0x1a3a5a : 0x0d0d1a });
@@ -922,7 +922,11 @@ export class InfoCenterScene extends GameScene {
       pill.cursor = "pointer";
       pill.on("pointerdown", (e) => {
         e.stopPropagation();
-        this.gearFacet = facet;
+        if (this.gearFacets.has(facet)) {
+          this.gearFacets.delete(facet);
+        } else {
+          this.gearFacets.add(facet);
+        }
         this.render();
       });
       container.addChild(pill);
@@ -942,8 +946,14 @@ export class InfoCenterScene extends GameScene {
       px += pw2 + GAP;
     }
 
-    // Currently equipped item of the same facet type (comparison bar)
-    const equippedItem = this.getEquippedItemForFacet(this.gearFacet);
+    // Show comparison bar only when exactly one facet is selected.
+    const singleFacet =
+      this.gearFacets.size === 1
+        ? (this.gearFacets.values().next().value as EquipmentFacet)
+        : null;
+    const equippedItem = singleFacet
+      ? this.getEquippedItemForFacet(singleFacet)
+      : null;
     let equippedRowH = 0;
     if (equippedItem) {
       equippedRowH = 44;
@@ -1270,7 +1280,7 @@ export class InfoCenterScene extends GameScene {
 
     let hits = registry.findEquipment({
       originSystemId: originId,
-      type: this.gearFacet,
+      types: this.gearFacets.size > 0 ? [...this.gearFacets] : undefined,
       maxPrice: maxPrice > 0 ? maxPrice : undefined,
     });
 
