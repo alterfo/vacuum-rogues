@@ -3,7 +3,6 @@ import {
   Graphics,
   Text,
   Container,
-  Sprite,
   FederatedPointerEvent,
   BlurFilter,
 } from "pixi.js";
@@ -12,7 +11,6 @@ import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType, NpcRole, QuestType } from "@/types";
 import { Faction } from "@/types/faction";
 import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
-import { pickVariant } from "./textures";
 import { installGameCursors, setCanvasCursor } from "./cursor";
 import { PlanetSprite } from "./PlanetSprite";
 import { PlanetInfoPanel } from "./PlanetInfoPanel";
@@ -37,7 +35,6 @@ import {
   planetApproachPoint,
   spiralApproachPath,
   takeoffArcPath,
-  pointAlongPath,
   leadInterceptPoint,
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
@@ -56,6 +53,7 @@ import { StarRenderer } from "./flight/StarRenderer";
 import { AsteroidBelt } from "./flight/AsteroidBelt";
 import { OrbitRenderer } from "./flight/OrbitRenderer";
 import { RouteRenderer } from "./flight/RouteRenderer";
+import { PlayerShipRenderer } from "./flight/PlayerShipRenderer";
 
 interface WarpArrivalEffect {
   container: Container;
@@ -78,18 +76,9 @@ interface FilterableNode {
 export class SpaceFlightScene extends GameScene {
   private readonly combatResolver = new FlightCombatResolver();
   private gameEngine: GameEngine | null = null;
-  private shipContainer: Container | null = null;
-  private shipGraphics: Graphics | null = null;
-  // Soft volumetric glow blob behind the ship — gives 3D presence against the
-  // dark backdrop. Created once and blurred; not redrawn per frame so the filter
-  // texture stays stable.
-  private shipGlow: Graphics | null = null;
-  // Player-ship art (if available); falls back to the procedural triangle.
-  private shipSprite: Sprite | null = null;
-  // Heading 0 points +X (east); the ship art faces "down" (nose at the bottom of
-  // the image), so the sprite is pre-rotated -90° (counter-clockwise) to align
-  // art-forward with the heading. Verified live in US-070 Round 4.
-  private readonly SHIP_SPRITE_ROTATION = -Math.PI / 2;
+  // Renders the player ship (hull/sprite, glow, heading crosshair, take-off arc)
+  // and owns its display objects — extracted from this scene as a FlightModule.
+  private playerShip!: PlayerShipRenderer;
   // Screen-fixed deep-space backdrop (crisp far stars + twinkle), sits behind
   // the world so panning never reveals an edge. Added to renderer.stage. The
   // scene owns this container's lifecycle; SpaceBackgroundLayer populates it
@@ -104,7 +93,6 @@ export class SpaceFlightScene extends GameScene {
   private warpEffect: WarpArrivalEffect | null = null; // Warp-exit flash/rings
   private bgElapsed = 0; // Animation clock for background (ms)
   private shipPhysics: ShipPhysics | null = null;
-  private readonly SHIP_SIZE = 20;
   private uiContainer: Container | null = null;
 
   // Planet rendering
@@ -176,9 +164,6 @@ export class SpaceFlightScene extends GameScene {
   // Quest Journal UI
   private questJournalUI: QuestJournalUI | null = null;
 
-  // Target indicator
-  private targetIndicator: Graphics | null = null;
-
   // Time tracking for day counter
   // Timestamp (performance.now) when the scene finished initializing. A click
   // that lands within a short window of entering the scene is the residual
@@ -214,14 +199,6 @@ export class SpaceFlightScene extends GameScene {
   // Draws the planned-course overlay (dashed line, day ticks, end marker) —
   // extracted to a renderer that owns the Graphics; route planning stays here.
   private routeRenderer!: RouteRenderer;
-
-  // Cosmetic take-off arc (Task 5): when the ship lifts off a planet it flies a
-  // short outward curve before autopilot engages. Driven by a fixed-speed walk
-  // along this polyline; the flight physics stays parked at the end point so no
-  // game-days are burned and the day/landing logic in updateShip is bypassed.
-  private takeoffArc: { x: number; y: number }[] | null = null;
-  private takeoffArcDist = 0;
-  private static readonly TAKEOFF_ARC_SPEED = 0.5; // px/ms
 
   // Pending hyperjump (US-023): set when the player chose a warp target on the
   // star map. The ship auto-routes to the system edge in `exitVector` direction
@@ -427,6 +404,15 @@ export class SpaceFlightScene extends GameScene {
     // the scene hands it the finished polyline + marker decision.
     this.routeRenderer = new RouteRenderer(this.renderer.gameLayer);
 
+    // Player-ship module: owns the ship hull/sprite, glow, heading crosshair and
+    // the cosmetic take-off arc. Reads the authoritative position from the
+    // ShipPhysics created above; the scene keeps the flight/turn logic.
+    this.playerShip = new PlayerShipRenderer(
+      this.renderer,
+      this.renderer.gameLayer,
+      this.shipPhysics,
+    );
+
     // Screen-fixed deep-space backdrop (crisp far stars + twinkle), behind the
     // whole world so panning/zooming never exposes a hard background edge.
     this.skyContainer = new Container();
@@ -461,8 +447,7 @@ export class SpaceFlightScene extends GameScene {
     this.createPlanets(); // Planets added to gameLayer directly (not blurred)
     this.createStations(); // Space stations in this system (US-066)
     this.createNpcShips(); // NPC ships present in this system (Feature 8)
-    this.createShip();
-    this.createTargetIndicator();
+    this.playerShip.initialize(); // Ship hull/sprite, glow, heading crosshair
     this.asteroidBelt.initialize(); // Foreground asteroids/comets (US-070 #1)
     this.createUI();
 
@@ -495,12 +480,9 @@ export class SpaceFlightScene extends GameScene {
         // teleport() also resets the physics target, so the ship parks at the
         // arc's end instead of flying back toward its initial (edge) spawn.
         this.shipPhysics.teleport(end.x, end.y);
-        this.takeoffArc = arc;
-        this.takeoffArcDist = 0;
-        if (this.shipContainer) {
-          this.shipContainer.x = arc[0].x;
-          this.shipContainer.y = arc[0].y;
-        }
+        // Hand the cosmetic arc to the ship renderer; it walks the container
+        // along it each frame (updateShip defers while the arc is active).
+        this.playerShip.startTakeoffArc(arc);
       }
       // Took off → no longer parked at the planet, so a later combat-return or
       // context-less re-entry keeps its own spawn instead of snapping back here.
@@ -616,12 +598,14 @@ export class SpaceFlightScene extends GameScene {
     this.starRenderer.update(deltaTime, this.bgElapsed);
     this.updateWarpEffect(deltaTime);
     this.updateShip(deltaTime);
+    // Sync the ship sprite to the post-physics position (or walk the take-off
+    // arc), redraw engine effects, and refresh the heading crosshair.
+    this.playerShip.update(deltaTime, this.bgElapsed);
     this.updateCombat(deltaTime);
     this.updateCameraReturn();
     this.updateCamera();
     this.updateNpcShips(deltaTime);
     this.updatePlanets(deltaTime);
-    this.updateTargetIndicator();
     this.updatePlayPauseButton();
     this.updateMiniLog(deltaTime);
   }
@@ -700,8 +684,6 @@ export class SpaceFlightScene extends GameScene {
     this.cameraReturning = false;
     this.warpInProgress = false;
     this.waitDayAccum = 0;
-    this.takeoffArc = null;
-    this.takeoffArcDist = 0;
 
     // Destroy planet sprites
     for (const sprite of this.planetSprites) {
@@ -774,6 +756,9 @@ export class SpaceFlightScene extends GameScene {
     this.asteroidBelt?.destroy();
     // Tear down the orbit circles + boundary ring (removes + destroys them).
     this.orbitRenderer?.destroy();
+    // Tear down the ship renderer (disposes its glow filter, removes the ship
+    // container + heading crosshair from the game layer).
+    this.playerShip?.destroy();
     // The planned-course overlay is torn down by clearPlannedRoute() below.
 
     // Release GPU filter textures before the layer is cleared — clearGameLayer
@@ -814,15 +799,10 @@ export class SpaceFlightScene extends GameScene {
     // init; just drop our references (consistent with uiContainer handling).
     this.warpEffect = null;
     this.bgElapsed = 0;
-    this.shipContainer = null;
-    this.shipGraphics = null;
-    this.shipGlow = null;
-    this.shipSprite = null;
     this.uiContainer = null;
     this.cameraDebugText = null;
     this.dayCounterText = null;
     this.shipPhysics = null;
-    this.targetIndicator = null;
     this.distanceTraveled = 0;
     this.clearPlannedRoute(); // Clean up route line
     logger.info("SpaceFlightScene destroyed");
@@ -904,172 +884,6 @@ export class SpaceFlightScene extends GameScene {
       elapsed: 0,
       duration: 1100,
     };
-  }
-
-  private createShip(): void {
-    if (!this.shipPhysics) return;
-
-    this.shipContainer = new Container();
-
-    // Volumetric glow blob drawn FIRST so it sits behind the hull/sprite. A soft
-    // blue halo reads as depth and keeps the ship visible against dark space.
-    // Whether the active hull is the sprite or the procedural triangle, this glow
-    // is the "behind the ship" depth cue — for the sprite case it stands in for
-    // an outline filter (no @pixi/filter-outline dependency in this project).
-    this.shipGlow = new Graphics();
-    this.shipGlow.eventMode = "none";
-    this.shipContainer.addChild(this.shipGlow);
-
-    this.shipGraphics = new Graphics();
-    this.shipContainer.addChild(this.shipGraphics);
-
-    // Prefer ship art (ranger hull) when available; the procedural triangle is
-    // the fallback (drawShip skips the hull when a sprite is present).
-    const shipTex = pickVariant("ships", "ranger", "player_ship");
-    if (shipTex) {
-      const sp = new Sprite(shipTex);
-      sp.anchor.set(0.5);
-      const size = this.SHIP_SIZE * 2.6;
-      sp.width = size;
-      sp.height = size;
-      sp.rotation = this.SHIP_SPRITE_ROTATION;
-      sp.eventMode = "none";
-      this.shipSprite = sp;
-      this.shipContainer.addChild(sp);
-    }
-
-    // Size the glow to the active hull representation, then blur it. The sprite
-    // is ~2.6× larger than the procedural triangle, so its glow is wider to peek
-    // out past the artwork edges.
-    const glowRadius = this.shipSprite ? this.SHIP_SIZE * 1.6 : 18;
-    this.shipGlow
-      .circle(0, 0, glowRadius)
-      .fill({ color: 0x2244aa, alpha: 0.35 });
-    this.shipGlow.filters = [this.paddedBlur(8)];
-
-    // Draw ship body (procedural triangle; no-op hull when a sprite is used)
-    this.drawShip();
-
-    this.shipContainer.zIndex = 110; // player ship above NPCs and planets
-    this.shipContainer.x = this.shipPhysics.shipX;
-    this.shipContainer.y = this.shipPhysics.shipY;
-    this.shipContainer.pivot.set(0, 0);
-
-    this.renderer.gameLayer.addChild(this.shipContainer);
-  }
-
-  /**
-   * Create target indicator (crosshair showing where ship is heading)
-   */
-  private createTargetIndicator(): void {
-    this.targetIndicator = new Graphics();
-    this.targetIndicator.eventMode = "none"; // decorative — never intercept clicks
-    this.targetIndicator.visible = false; // Hidden by default
-    this.renderer.gameLayer.addChild(this.targetIndicator);
-  }
-
-  /**
-   * Update target indicator position and visibility
-   */
-  private updateTargetIndicator(): void {
-    if (!this.targetIndicator || !this.shipPhysics) return;
-
-    const distance = this.shipPhysics.getDistanceToTarget();
-
-    // Show indicator only if ship is moving and target is far enough
-    if (this.shipPhysics.isMoving && distance > 20) {
-      this.targetIndicator.visible = true;
-      this.targetIndicator.clear();
-
-      // Draw pulsing crosshair at target position
-      const targetX = this.shipPhysics.getTargetX();
-      const targetY = this.shipPhysics.getTargetY();
-
-      const size = 15;
-      const pulse = Math.sin(this.bgElapsed / 200) * 0.3 + 0.7; // Pulsing effect
-
-      // Crosshair lines
-      this.targetIndicator.moveTo(targetX - size, targetY);
-      this.targetIndicator.lineTo(targetX + size, targetY);
-      this.targetIndicator.moveTo(targetX, targetY - size);
-      this.targetIndicator.lineTo(targetX, targetY + size);
-      this.targetIndicator.stroke({ width: 2, color: 0x00ffff, alpha: pulse });
-
-      // Center circle
-      this.targetIndicator.circle(targetX, targetY, 4);
-      this.targetIndicator.stroke({
-        width: 1,
-        color: 0x00ffff,
-        alpha: pulse * 0.8,
-      });
-    } else {
-      this.targetIndicator.visible = false;
-    }
-  }
-
-  private drawShip(): void {
-    if (!this.shipGraphics || !this.shipPhysics) return;
-    this.shipGraphics.clear();
-
-    // When ship art is present, the sprite is the hull — skip the procedural
-    // triangle (it would draw on top of the sprite).
-    if (this.shipSprite) return;
-
-    const size = this.SHIP_SIZE;
-
-    // Main hull — drawn as a fill, then re-stroked with a crisp cyan rim so the
-    // silhouette reads clearly against dark space.
-    const hull = [
-      size,
-      0,
-      -size * 0.7,
-      -size * 0.6,
-      -size * 0.4,
-      0,
-      -size * 0.7,
-      size * 0.6,
-    ];
-    this.shipGraphics.poly(hull).fill({ color: 0x4488cc });
-    this.shipGraphics
-      .poly(hull)
-      .stroke({ color: 0x44ccff, alpha: 0.9, width: 1.5 });
-
-    // Cockpit
-    this.shipGraphics
-      .poly([
-        size * 0.3,
-        0,
-        -size * 0.2,
-        -size * 0.25,
-        -size * 0.2,
-        size * 0.25,
-      ])
-      .fill({ color: 0x88ccff });
-
-    // Engine glow (visible when ship is moving). bgElapsed is in ms, so /80 gives
-    // a ~0.5 s pulse; the alpha now swings 0.10–1.0 (amplitude 0.45) for a strong
-    // engine flicker, and the flame reaches further (0.7× vs 0.5×).
-    if (this.shipPhysics.isMoving) {
-      const enginePulse = 0.5 + 0.5 * Math.sin(this.bgElapsed / 80);
-      this.shipGraphics
-        .poly([
-          -size * 0.5,
-          -size * 0.4,
-          -size * 0.5 - size * 0.7 * enginePulse,
-          0,
-          -size * 0.5,
-          size * 0.4,
-        ])
-        .fill({
-          color: 0x00ffff,
-          alpha: 0.55 + 0.45 * Math.sin(this.bgElapsed / 80),
-        });
-    }
-
-    // Engine lights
-    this.shipGraphics.fill({ color: 0x00ffff, alpha: 0.8 });
-    this.shipGraphics.circle(-size * 0.5, -size * 0.3, 2);
-    this.shipGraphics.circle(-size * 0.5, size * 0.3, 2);
   }
 
   private createUI(): void {
@@ -2072,9 +1886,10 @@ export class SpaceFlightScene extends GameScene {
     const spawnX = bodyX + (dx / len) * (bodyRadius + margin);
     const spawnY = bodyY + (dy / len) * (bodyRadius + margin);
     this.shipPhysics.teleport(spawnX, spawnY);
-    if (this.shipContainer) {
-      this.shipContainer.x = spawnX;
-      this.shipContainer.y = spawnY;
+    const shipC = this.playerShip?.container;
+    if (shipC) {
+      shipC.x = spawnX;
+      shipC.y = spawnY;
     }
   }
 
@@ -2183,50 +1998,13 @@ export class SpaceFlightScene extends GameScene {
     return { x: worldX, y: worldY };
   }
 
-  /**
-   * Advance the cosmetic take-off arc (Task 5): walk the ship container along
-   * the outward curve at a constant speed, facing the direction of travel. The
-   * flight physics is already parked at the arc's end point, so when the walk
-   * completes the ship simply stays there and normal autopilot resumes.
-   */
-  private updateTakeoff(deltaTime: number): void {
-    if (!this.takeoffArc || !this.shipContainer || !this.shipPhysics) return;
-    this.takeoffArcDist +=
-      SpaceFlightScene.TAKEOFF_ARC_SPEED *
-      Math.min(deltaTime, 100) *
-      (this.shipPhysics?.timeScale ?? 1);
-    const sample = pointAlongPath(this.takeoffArc, this.takeoffArcDist);
-    this.shipContainer.x = sample.x;
-    this.shipContainer.y = sample.y;
-    this.shipContainer.rotation = sample.heading;
-    this.shipPhysics.shipAngle = sample.heading; // keep physics heading in sync
-    if (sample.done) {
-      this.finishTakeoff();
-    }
-  }
-
-  /** End the take-off arc: snap to the parked end point and clear the arc. */
-  private finishTakeoff(): void {
-    if (!this.takeoffArc) return;
-    const end = this.takeoffArc[this.takeoffArc.length - 1];
-    this.takeoffArc = null;
-    this.takeoffArcDist = 0;
-    if (this.shipPhysics) {
-      this.shipPhysics.teleport(end.x, end.y);
-      if (this.shipContainer) {
-        this.shipContainer.x = end.x;
-        this.shipContainer.y = end.y;
-      }
-    }
-  }
-
   private updateShip(deltaTime: number): void {
-    if (!this.shipContainer || !this.shipGraphics || !this.shipPhysics) return;
+    if (!this.shipPhysics) return;
 
-    // Take-off arc in progress (Task 5): drive the cosmetic outward curve and
-    // skip the day-counting flight physics until it finishes.
-    if (this.takeoffArc) {
-      this.updateTakeoff(deltaTime);
+    // Take-off arc in progress (Task 5): the ship renderer walks the cosmetic
+    // outward curve (see PlayerShipRenderer.update) — skip the day-counting
+    // flight physics until it finishes.
+    if (this.playerShip.isArcActive()) {
       return;
     }
 
@@ -2383,13 +2161,9 @@ export class SpaceFlightScene extends GameScene {
       }
     }
 
-    // Read updated values from physics
-    this.shipContainer.x = this.shipPhysics.shipX;
-    this.shipContainer.y = this.shipPhysics.shipY;
-    this.shipContainer.rotation = this.shipPhysics.shipAngle;
-
-    // Redraw ship for engine effects (uses isMoving from physics)
-    this.drawShip();
+    // The ship container is synced to the physics position and redrawn for
+    // engine effects by PlayerShipRenderer.update(), called right after this in
+    // the scene's update loop.
 
     // "Wait" turn (US-070 #5): the player may run a turn with no course — the
     // ship holds position while the living galaxy (NPCs) and the calendar keep
@@ -2606,7 +2380,7 @@ export class SpaceFlightScene extends GameScene {
     landing?: { planetX: number; planetY: number; planetRadius: number },
   ): void {
     if (!this.shipPhysics) return;
-    this.finishTakeoff(); // a fresh course cancels any in-progress take-off arc
+    this.playerShip.finishTakeoff(); // a fresh course cancels any in-progress take-off arc
     this.routePath = this.computeFlightPath(x, y, landing);
     // Hand the whole curved path to physics; it flows through the waypoints
     // without stopping (smooth motion around the star — US-070 #5).

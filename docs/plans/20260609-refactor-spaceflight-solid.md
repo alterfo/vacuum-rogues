@@ -160,14 +160,14 @@ RouteRenderer is stateless with respect to game logic — it only draws what it'
 - Create: `src/presentation/flight/PlayerShipRenderer.ts`
 - Modify: `src/presentation/SpaceFlightScene.ts`
 
-- [ ] Create `PlayerShipRenderer` implementing `FlightModule`. Constructor: `(renderer: Renderer, gameLayer: Container, shipPhysics: ShipPhysics)`
-- [ ] Move fields: `shipContainer`, `shipGraphics`, `shipSprite`, `SHIP_SIZE`, `SHIP_SPRITE_ROTATION`, `takeoffArc`, `takeoffArcDist`, `targetIndicator`
-- [ ] Move methods: `createShip()`, `drawShip()`, `createTargetIndicator()`, `updateTargetIndicator()`, `updateTakeoff()`
-- [ ] Expose as public: `container` (so SpaceFlightScene can read ship world position), `isArcActive(): boolean`
-- [ ] `update(dt, bgElapsed)` calls `drawShip()`, `updateTargetIndicator()`, `updateTakeoff(dt)`
-- [ ] In SpaceFlightScene: `this.playerShip.initialize()` / `this.playerShip.update(dt, bgElapsed)`; read `this.playerShip.container.x/y` for physics
-- [ ] Write unit test: construct PlayerShipRenderer; `initialize()`; assert `container.children.length > 0`
-- [ ] `npm run lint && npm test -- --run` — must pass.
+- [x] Create `PlayerShipRenderer` implementing `FlightModule`. Constructor: `(renderer, gameLayer, shipPhysics)` — `renderer` is accepted for API parity but unused (the module mounts on the injected `gameLayer` and reads world position from `shipPhysics`; no `app.screen` needed, unlike StarRenderer/AsteroidBelt), so it's the `_renderer` param.
+- [x] Move fields: `shipContainer`, `shipGraphics`, `shipSprite`, `SHIP_SIZE`, `SHIP_SPRITE_ROTATION`, `takeoffArc`, `takeoffArcDist`, `targetIndicator` — plus `shipGlow` (the volumetric depth blob, part of the same ship visual) and `TAKEOFF_ARC_SPEED`. Added a local `paddedBlur()` copy (the scene keeps its own) and a `bgElapsed` field pushed in via `update()` for the engine-flame/crosshair pulses.
+- [x] Move methods: `createShip()`, `drawShip()`, `createTargetIndicator()`, `updateTargetIndicator()`, `updateTakeoff()` — plus `finishTakeoff()` (the arc's snap-to-end, now public so the scene can cancel an in-progress arc when a fresh course is set).
+- [x] Expose as public: `container` (nullable getter — the scene reads ship world position via it in `spawnShipBeside`/re-entry spawn), `isArcActive(): boolean`, plus `startTakeoffArc(arc)` (the scene builds the polyline + parks physics; the module walks it) and the public `finishTakeoff()`.
+- [x] `update(dt, bgElapsed)` walks the take-off arc when active (else syncs the container to physics), then `drawShip()` + `updateTargetIndicator()`. The scene's `updateShip()` keeps the flight/turn logic and early-returns while `isArcActive()` (physics stays parked); the container-sync + `drawShip` that used to live at the end of `updateShip` now happen in `playerShip.update()`, called right after `updateShip` in the scene loop (the standalone `updateTargetIndicator()` call was removed).
+- [x] In SpaceFlightScene: `this.playerShip.initialize()` / `this.playerShip.update(dt, bgElapsed)`; read `this.playerShip.container` for physics-side spawn placement; `this.playerShip.destroy()` in `destroy()`. Removed the moved ship fields/methods and the now-unused imports (`Sprite`, `pickVariant`, `pointAlongPath`).
+- [x] Write unit test (`src/tests/presentation/playerShipRenderer.test.ts`): `initialize()` mounts the ship container (children > 0) + crosshair on the game layer and parks at the physics spawn; `update()` syncs to the physics position; the take-off arc walks then parks at its end; `finishTakeoff()` cancels in-progress (no-op otherwise); `update()` + `destroy()` leak no children. Also retargeted `shipGlow.test.ts` to the extracted class.
+- [x] `npm run lint && npm test -- --run` — must pass. (tsc --noEmit clean; lint: 0 errors; tests: 864 passed; PlayerShipRenderer 378 lines, SpaceFlightScene 3806 → 3580.)
 
 ### Task 8: Extract NpcShipManager — NPC ship creation, updates, interactions
 

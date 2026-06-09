@@ -2,15 +2,18 @@
  * Sprint 3 Task 5: add a ship outline + volumetric glow so the player ship has
  * 3D presence and stays visible against dark space.
  *
- * After createShip() the scene must own a `shipGlow` Graphics that is blurred
- * (one filter) and drawn behind the hull. drawShip() must re-stroke the hull
- * polygon so the silhouette has a crisp cyan rim. This guards against a
+ * After initialize() the PlayerShipRenderer must own a `shipGlow` Graphics that
+ * is blurred (one filter) and drawn behind the hull. drawShip() must re-stroke
+ * the hull polygon so the silhouette has a crisp cyan rim. This guards against a
  * regression that drops the outline or the volumetric glow.
+ *
+ * Retargeted to PlayerShipRenderer after the SOLID refactor (Task 7) extracted
+ * the ship rendering out of SpaceFlightScene.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mirror the pixi.js + presentation mocks from starHalo.test.ts so the
-// SpaceFlightScene can be constructed in jsdom without a real renderer.
+// Mock pixi.js so the renderer can be exercised in jsdom without a real GPU
+// context; the Graphics mock records circle/fill/stroke/poly calls for assertion.
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
     addChild: vi.fn(),
@@ -31,6 +34,8 @@ vi.mock("pixi.js", () => {
     filters: [],
     hitArea: null,
     mask: null,
+    parent: null,
+    destroyed: false,
     on: vi.fn(),
     off: vi.fn(),
     destroy: vi.fn(),
@@ -51,14 +56,6 @@ vi.mock("pixi.js", () => {
       closePath: vi.fn().mockReturnThis(),
       clear: vi.fn().mockReturnThis(),
     })),
-    Text: vi.fn().mockImplementation(() => ({
-      ...makeContainer(),
-      anchor: { set: vi.fn() },
-      text: "",
-      style: { fill: 0, fontFamily: "", fontSize: 12 },
-      width: 100,
-      height: 20,
-    })),
     Sprite: vi.fn().mockImplementation(() => ({
       ...makeContainer(),
       anchor: { set: vi.fn() },
@@ -67,36 +64,14 @@ vi.mock("pixi.js", () => {
       tint: 0xffffff,
       texture: {},
     })),
-    TilingSprite: vi.fn().mockImplementation(() => ({
-      ...makeContainer(),
-      tileScale: { set: vi.fn() },
-      tilePosition: { x: 0, y: 0 },
-      tint: 0xffffff,
-    })),
-    Texture: { from: vi.fn().mockReturnValue({}) },
     BlurFilter: vi.fn().mockImplementation(() => ({
       strength: 0,
       padding: 0,
       resolution: 1,
-    })),
-    Circle: vi.fn().mockImplementation((x: number, y: number, r: number) => ({
-      x,
-      y,
-      radius: r,
+      destroy: vi.fn(),
     })),
   };
 });
-
-vi.mock("@/presentation/sphereMesh", () => ({
-  buildSphereMesh: vi.fn().mockReturnValue(null),
-}));
-
-vi.mock("@/presentation/PlanetSprite", () => ({ PlanetSprite: vi.fn() }));
-vi.mock("@/presentation/PlanetInfoPanel", () => ({ PlanetInfoPanel: vi.fn() }));
-vi.mock("@/presentation/SystemMiniMap", () => ({ SystemMiniMap: vi.fn() }));
-vi.mock("@/presentation/QuestJournalUI", () => ({ QuestJournalUI: vi.fn() }));
-vi.mock("@/presentation/NpcShipSprite", () => ({ NpcShipSprite: vi.fn() }));
-vi.mock("@/presentation/NpcContactPanel", () => ({ NpcContactPanel: vi.fn() }));
 
 vi.mock("@/presentation/textures", () => ({
   pickVariant: vi.fn().mockReturnValue(null),
@@ -105,52 +80,9 @@ vi.mock("@/presentation/textures", () => ({
   tex: vi.fn().mockReturnValue(null),
 }));
 
-vi.mock("@/presentation/cursor", () => ({
-  installGameCursors: vi.fn(),
-  setCanvasCursor: vi.fn(),
-}));
-
-import { SpaceFlightScene } from "@/presentation/SpaceFlightScene";
+import { PlayerShipRenderer } from "@/presentation/flight/PlayerShipRenderer";
 import type { Renderer } from "@/presentation/Renderer";
-
-function makeMockRenderer(): Renderer {
-  const makeLayer = () => ({
-    addChild: vi.fn(),
-    addChildAt: vi.fn(),
-    removeChild: vi.fn(),
-    children: [],
-    eventMode: "auto",
-    sortableChildren: false,
-    scale: { set: vi.fn() },
-    x: 0,
-    y: 0,
-  });
-  return {
-    app: {
-      screen: { width: 800, height: 600 },
-      canvas: Object.assign(document.createElement("canvas"), {
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        getBoundingClientRect: vi
-          .fn()
-          .mockReturnValue({ left: 0, top: 0, width: 800, height: 600 }),
-        style: {},
-      }),
-      stage: {
-        eventMode: "static",
-        hitArea: null,
-        addChild: vi.fn(),
-        on: vi.fn(),
-        off: vi.fn(),
-      },
-    },
-    gameLayer: makeLayer(),
-    uiLayer: makeLayer(),
-    stage: { addChild: vi.fn(), addChildAt: vi.fn() },
-    clearGameLayer: vi.fn(),
-    clearUILayer: vi.fn(),
-  } as unknown as Renderer;
-}
+import type { ShipPhysics } from "@/systems/ShipPhysics";
 
 type GraphicsMock = {
   circle: ReturnType<typeof vi.fn>;
@@ -160,16 +92,35 @@ type GraphicsMock = {
   filters: unknown[];
 };
 
+function makeShipPhysics(): ShipPhysics {
+  return {
+    shipX: 0,
+    shipY: 0,
+    shipAngle: 0,
+    isMoving: false,
+    timeScale: 1,
+    getDistanceToTarget: () => 0,
+    getTargetX: () => 0,
+    getTargetY: () => 0,
+    teleport: vi.fn(),
+  } as unknown as ShipPhysics;
+}
+
 describe("shipGlow: outline + volumetric glow give the ship 3D presence", () => {
-  let scene: SpaceFlightScene;
+  let ship: PlayerShipRenderer;
+  let physics: ShipPhysics;
   let s: Record<string, unknown>;
 
   beforeEach(() => {
-    scene = new SpaceFlightScene(makeMockRenderer());
-    s = scene as unknown as Record<string, unknown>;
-    // createShip returns early without ship physics; supply a minimal stub.
-    s.shipPhysics = { shipX: 0, shipY: 0, isMoving: false };
-    (scene as unknown as { createShip(): void }).createShip();
+    const gameLayer = { addChild: vi.fn(), removeChild: vi.fn() };
+    const renderer = {
+      app: { screen: { width: 800, height: 600 } },
+      gameLayer,
+    } as unknown as Renderer;
+    physics = makeShipPhysics();
+    ship = new PlayerShipRenderer(renderer, gameLayer as never, physics);
+    s = ship as unknown as Record<string, unknown>;
+    ship.initialize();
   });
 
   it("creates a blurred glow blob behind the ship", () => {
@@ -196,13 +147,13 @@ describe("shipGlow: outline + volumetric glow give the ship 3D presence", () => 
     const g = s.shipGraphics as GraphicsMock;
     const polyAtRest = g.poly.mock.calls.length;
     // While moving, drawShip adds the engine-glow polygon → more poly calls.
-    (s.shipPhysics as { isMoving: boolean }).isMoving = true;
-    (scene as unknown as { drawShip(): void }).drawShip();
+    physics.isMoving = true;
+    (ship as unknown as { drawShip(): void }).drawShip();
     expect(g.poly.mock.calls.length).toBeGreaterThan(polyAtRest);
   });
 
   it("nulls the glow reference on destroy", () => {
-    (scene as unknown as { destroy(): void }).destroy();
+    ship.destroy();
     expect(s.shipGlow).toBeNull();
   });
 });
