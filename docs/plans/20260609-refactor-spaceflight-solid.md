@@ -83,13 +83,13 @@ export interface FlightModule {
 
 The existing `SpaceBackgroundLayer` handles distant parallax. Extend it to absorb the nebula/swarm/dust/twinkle/vignette systems that currently live in SpaceFlightScene.
 
-- [ ] Move these fields from SpaceFlightScene into SpaceBackgroundLayer: `nebulaBackdropSprite`, `nebulaeContainer`, `nebulaLayers`, `twinkleStars`, `twinkleContainer`, `swarmLayers`, `dustContainer`, `dustMotes`, `pillarContainer` (if present), `vignette` container
-- [ ] Move these methods verbatim: `createNebulae()`, `createSwarms()`, `createNebulaPillars()`, `createDust()`, `createVignette()`, `createTwinkleStars()`, `updateSwarms()`, `updateDust()`, `updateNebulae()`, `updateTwinkleStars()`, `updateStarField()`
-- [ ] SpaceBackgroundLayer constructor takes `(renderer: Renderer, skyContainer: Container)`. Methods that previously accessed `this.renderer.app.screen` now use the injected renderer.
-- [ ] Implement `FlightModule` on SpaceBackgroundLayer: `initialize()` calls create* in order, `update(dt, bgElapsed)` calls all update*, `destroy()` clears all containers.
-- [ ] In SpaceFlightScene: replace `this.spaceBackgroundLayer = new SpaceBackgroundLayer(...)` with the updated call; delegate all background create/update calls to `this.background.initialize()` / `this.background.update(dt, bgElapsed)`.
-- [ ] Write unit test: construct SpaceBackgroundLayer with mock renderer; call `initialize()`; assert `twinkleStars.length > 0` and `swarmLayers.length > 0`.
-- [ ] `npm run lint && npm test -- --run` — must pass.
+- [x] Move these fields from SpaceFlightScene into SpaceBackgroundLayer: `nebulaBackdropSprite`, `nebulaeContainer`, `nebulaLayers`, `twinkleStars`, `twinkleContainer`, `swarmLayers`, `dustContainer`, `dustMotes`, `pillarContainer` (if present), `vignette` container (also moved `starLayers` + `createStarField`, since `updateStarField` parallaxes them — per the Context overview table)
+- [x] Move these methods verbatim: `createNebulae()`, `createSwarms()`, `createNebulaPillars()`, `createDust()`, `createVignette()`, `createTwinkleStars()`, `updateSwarms()`, `updateDust()`, `updateNebulae()`, `updateTwinkleStars()`, `updateStarField()` (plus `createStarField()` and the private `lightenColor()` helper they depend on; added a local `paddedBlur()` copy since the scene still needs its own)
+- [x] SpaceBackgroundLayer constructor takes `(renderer: Renderer, skyContainer: Container, systemId, getCamera, getShipVelocity)`. Methods that previously accessed `this.renderer.app.screen` now use the injected renderer; parallax reads live camera state and ship velocity via the injected accessors (the FlightModule `update(dt, bgElapsed)` signature can't carry camera/velocity, so they are injected — matches the plan's "PanZoomController reference passed to modules that need it" guidance).
+- [x] Implement `FlightModule` on SpaceBackgroundLayer: `initialize()` calls create* in order (sky → dust/vignette → mid-ground), `update(dt, bgElapsed)` calls all update*, `destroy()` clears all containers (mid-ground destroyed directly; dust/vignette detached for clearUILayer to destroy).
+- [x] In SpaceFlightScene: replace `this.spaceBackgroundLayer = new SpaceBackgroundLayer(...)` with the updated call (field renamed `background`); delegate all background create/update calls to `this.background.initialize()` / `this.background.update(dt, bgElapsed)`.
+- [x] Write unit test: construct SpaceBackgroundLayer with mock renderer; call `initialize()`; assert `twinkleStars.length > 0` and `swarmLayers.length > 0` (`src/tests/presentation/spaceBackgroundLayer.test.ts`; also updated `swarmGlow.test.ts` to target the extracted class).
+- [x] `npm run lint && npm test -- --run` — must pass. (lint: 0 errors; tests: 845 passed; tsc --noEmit clean)
 
 ### Task 3: Extract StarRenderer — sun sphere, halo, prominences, surface rotation
 

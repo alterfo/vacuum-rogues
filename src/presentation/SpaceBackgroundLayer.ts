@@ -1,5 +1,9 @@
-import { Container, Graphics } from "pixi.js";
+import { Container, Graphics, Sprite, BlurFilter } from "pixi.js";
+import type { Texture } from "pixi.js";
+import type { Renderer } from "./Renderer";
 import { SeededRNG } from "@/utils/seededRNG";
+import type { FlightModule } from "./flight/FlightModule";
+import { pickVariant, pickVariantKey, loadTextureAsync } from "./textures";
 
 interface DriftAsteroid {
   g: Graphics;
@@ -36,65 +40,907 @@ interface DustParticle {
   depth: number;
 }
 
+interface NebulaLayer {
+  container: Container;
+  driftX: number;
+  driftY: number;
+  pulseAmp: number;
+  pulseSpeed: number;
+  phase: number;
+  baseAlpha: number;
+}
+
+interface TwinkleStar {
+  graphics: Graphics;
+  baseAlpha: number;
+  phase: number;
+  speed: number;
+}
+
+interface StarLayer {
+  container: Container;
+  // Parallax depth: on-screen pan shift = cameraPan * depth (smaller = farther
+  // and slower). zoomDepth: how much the layer scales with camera zoom.
+  depth: number;
+  zoomDepth: number;
+}
+
+interface DustMote {
+  graphics: Graphics;
+  x: number;
+  y: number;
+  depth: number; // 0..1 — nearer motes streak faster (parallax)
+}
+
+interface SwarmLayer {
+  container: Container;
+  driftX: number;
+  driftY: number;
+  pulseSpeed: number;
+  pulseAmp: number;
+  phase: number;
+  baseAlpha: number;
+  // Slow organic spin (rad/frame) applied to the whole cluster so the swarm
+  // feels alive rather than a static dot field. Tiny (±0.0002) → barely
+  // perceptible per frame, like the existing per-frame drift.
+  rotSpeed: number;
+}
+
+/** Camera state the parallax systems read each frame. */
+export interface BackgroundCamera {
+  panX: number;
+  panY: number;
+  zoom: number;
+}
+
+/** Ship velocity (heading + speed) the foreground dust streaks read. */
+export interface BackgroundShipVelocity {
+  angle: number;
+  speed: number;
+}
+
 /**
- * Screen-fixed parallax background layer sitting between the deep-space skybox
- * and the game world. Provides slow-drifting asteroids, occasional comet
- * streaks, background silhouette ships, and parallax dust motes.
- * Does NOT receive camera transforms — objects wrap at screen edges.
+ * Owns the entire flight background: the screen-fixed deep-space backdrop
+ * (nebula clouds, star fields, glowing swarms, twinkle hero stars), the
+ * mid-ground parallax layer (slow-drifting asteroids, comet streaks, silhouette
+ * ships, parallax dust motes), the foreground speed-streak dust, and the edge
+ * vignette.
+ *
+ * Sky elements live inside the injected `skyContainer` (a screen-space layer the
+ * scene owns and tears down); the mid-ground sits just above it; dust + vignette
+ * go on the renderer's UI layer. The layer never receives a camera transform —
+ * its elements are individually parallaxed each frame from the injected camera
+ * state, so panning/zooming never exposes a hard background edge.
  */
-export class SpaceBackgroundLayer {
-  private readonly container: Container;
-  private readonly width: number;
-  private readonly height: number;
+export class SpaceBackgroundLayer implements FlightModule {
+  private readonly renderer: Renderer;
+  private readonly skyContainer: Container;
+  private readonly systemId: string;
+  private readonly getCamera: () => BackgroundCamera;
+  private readonly getShipVelocity: () => BackgroundShipVelocity | null;
+  private destroyed = false;
+
+  // Mid-ground parallax container (sits above the sky, below the game world).
+  private readonly midground = new Container();
 
   private readonly driftAsteroids: DriftAsteroid[] = [];
   private readonly activeComets: CometStreak[] = [];
   private cometTimer = 0;
-  private cometNextSpawn: number;
+  private cometNextSpawn = 0;
   private readonly bgShips: BgShip[] = [];
   private readonly dustParticles: DustParticle[] = [];
 
   // "Toward camera" asteroid: periodically scales 0.3→1.5 and fades out
-  private readonly camAstG: Graphics;
+  private camAstG: Graphics | null = null;
   private camAstX = 0;
   private camAstY = 0;
   private camAstIdle = true;
-  private camAstTimer: number;
+  private camAstTimer = 0;
   private camAstElapsed = 0;
   private camAstDuration = 5000;
 
+  // Screen-fixed deep-space backdrop systems (children of skyContainer).
+  private nebulaBackdropSprite: Sprite | null = null;
+  private readonly starLayers: StarLayer[] = [];
+  private nebulaeContainer: Container | null = null;
+  private readonly nebulaLayers: NebulaLayer[] = []; // Animated nebula clouds
+  private readonly twinkleStars: TwinkleStar[] = []; // Bright "hero" stars that pulse
+  private twinkleContainer: Container | null = null; // parallaxed with the near layer
+  private readonly swarmLayers: SwarmLayer[] = []; // Glowing swarms in the nebula
+
+  // Foreground dust motes + vignette (on the UI layer).
+  private dustContainer: Container | null = null;
+  private readonly dustMotes: DustMote[] = [];
+  private vignette: Graphics | null = null;
+
   constructor(
-    parentContainer: Container,
-    insertIndex: number,
-    width: number,
-    height: number,
+    renderer: Renderer,
+    skyContainer: Container,
     systemId: string,
+    getCamera: () => BackgroundCamera,
+    getShipVelocity: () => BackgroundShipVelocity | null,
   ) {
-    this.width = width;
-    this.height = height;
+    this.renderer = renderer;
+    this.skyContainer = skyContainer;
+    this.systemId = systemId;
+    this.getCamera = getCamera;
+    this.getShipVelocity = getShipVelocity;
+  }
 
-    this.container = new Container();
-    this.container.eventMode = "none";
-    parentContainer.addChildAt(this.container, insertIndex);
+  private get width(): number {
+    return this.renderer.app.screen.width;
+  }
 
-    const rng = new SeededRNG(`bgLayer_${systemId}`);
+  private get height(): number {
+    return this.renderer.app.screen.height;
+  }
+
+  // ---------------------------------------------------------------------------
+  // FlightModule lifecycle
+  // ---------------------------------------------------------------------------
+
+  initialize(): void {
+    // Sky systems first (children of skyContainer): backdrop → nebulae → stars.
+    this.createNebulae(); // Screen-space nebula clouds (skyContainer) + swarms
+    this.createStarField(); // Crisp far stars (screen-fixed)
+    this.createTwinkleStars(); // Bright pulsing hero stars (screen-fixed)
+    // Foreground dust streaks + edge vignette (UI layer).
+    this.createDust();
+    this.createVignette();
+    // Mid-ground parallax layer (between the sky and the game world).
+    this.initMidground();
+  }
+
+  update(_dt: number, bgElapsed: number): void {
+    // Mid-ground parallax.
+    this.updateDriftAsteroids(_dt);
+    this.updateBgShips(_dt);
+    this.updateDustParticles(_dt);
+    this.updateComets(_dt);
+    this.updateCamAsteroid(_dt);
+    // Screen-fixed sky parallax + animation.
+    this.updateStarField();
+    this.updateDust(_dt);
+    this.updateNebulae(bgElapsed);
+    this.updateSwarms(bgElapsed);
+    this.updateTwinkleStars(bgElapsed);
+  }
+
+  destroy(): void {
+    this.destroyed = true;
+
+    // Destroy any live comet graphics not yet removed.
+    for (const c of this.activeComets) {
+      c.g.destroy();
+    }
+    // Mid-ground container lives on renderer.stage — remove and destroy it.
+    if (this.midground.parent) {
+      this.midground.parent.removeChild(this.midground);
+    }
+    if (!this.midground.destroyed) {
+      this.midground.destroy({ children: true });
+    }
+
+    // Dust + vignette live on the UI layer, which the host scene tears down via
+    // renderer.clearUILayer() (it removes AND destroys every UI-layer child).
+    // Just detach them here so the module is also safe standalone; never destroy
+    // them directly (clearUILayer owns that, and avoids a double-free).
+    if (this.dustContainer?.parent) {
+      this.dustContainer.parent.removeChild(this.dustContainer);
+    }
+    if (this.vignette?.parent) {
+      this.vignette.parent.removeChild(this.vignette);
+    }
+
+    // The nebula/star/twinkle display objects live inside skyContainer, which the
+    // scene owns and destroys (after disposing their BlurFilters) — just drop our
+    // references here.
+    this.nebulaBackdropSprite = null;
+    this.nebulaeContainer = null;
+    this.twinkleContainer = null;
+    this.dustContainer = null;
+    this.vignette = null;
+    this.camAstG = null;
+    this.starLayers.length = 0;
+    this.nebulaLayers.length = 0;
+    this.twinkleStars.length = 0;
+    this.swarmLayers.length = 0;
+    this.dustMotes.length = 0;
+    this.driftAsteroids.length = 0;
+    this.activeComets.length = 0;
+    this.bgShips.length = 0;
+    this.dustParticles.length = 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Shared filter helper (a local copy of SpaceFlightScene.paddedBlur)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * A BlurFilter with generous padding so the falloff stays inside the filter
+   * texture (too-tight padding shows as a hard rectangular band once the layer
+   * is scaled). Resolution pinned to 1 so the texture doesn't balloon with zoom.
+   */
+  private paddedBlur(strength: number): BlurFilter {
+    const f = new BlurFilter({ strength });
+    f.padding = Math.ceil(strength * 3 + 24);
+    f.resolution = 1;
+    return f;
+  }
+
+  /** Blend a hex colour toward white by `amount` [0..1]. */
+  private lightenColor(color: number, amount: number): number {
+    const r = (color >> 16) & 0xff;
+    const g = (color >> 8) & 0xff;
+    const b = color & 0xff;
+    const lr = Math.round(r + (255 - r) * amount);
+    const lg = Math.round(g + (255 - g) * amount);
+    const lb = Math.round(b + (255 - b) * amount);
+    return (lr << 16) | (lg << 8) | lb;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Screen-fixed star field
+  // ---------------------------------------------------------------------------
+
+  private createStarField(): void {
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+
+    // Depth layers, deepest → nearest. `depth` = on-screen pan parallax rate
+    // (far moves least → reads as distant); `zoomDepth` = how much it scales with
+    // zoom. Stars are laid out in a large field CENTRED on the origin and the
+    // whole layer is translated by cameraPan*depth — no per-pan reshuffling/
+    // wrapping, so stars don't pop/change as you pan (US-070 parallax fix).
+    const cx = width / 2;
+    const cy = height / 2;
+    // Depth hierarchy (pan parallax rate × cameraPan = on-screen shift per px).
+    // Far layer barely moves (deep-background cue); near layer clearly trails
+    // behind as you pan (close-foreground cue). The 5.5× ratio between layers
+    // makes the depth effect read clearly without stars "flying" off screen.
+    // zoomDepth: subtle size change on zoom-in/out — near-layer stars feel
+    // like local dust/debris; far-layer stars are unaffected by zoom (infinity).
+    // spread: field half-extent in screen-widths/heights; near layer uses more
+    // so its larger pan shifts never expose an edge.
+    const layerConfigs = [
+      // Deepest layer: ultra-dense carpet of faint micro-stars (the "infinity" cue).
+      // Very low alpha individually — they stack into a dense milky band rather than
+      // isolated dots. No zoom-depth: they sit at infinite distance.
+      {
+        count: 3400,
+        depth: 0.02,
+        zoomDepth: 0.0,
+        size: [0.18, 0.55],
+        alpha: [0.1, 0.42],
+        spread: 1.0,
+      },
+      // Mid layer: slightly larger, begin to show color, visible individually.
+      {
+        count: 1200,
+        depth: 0.08,
+        zoomDepth: 0.03,
+        size: [0.42, 1.15],
+        alpha: [0.28, 0.72],
+        spread: 1.3,
+      },
+      // No near/foreground star layer — foreground is dust streaks only (per art direction).
+    ];
+
+    // Weighted color pool: 60% blue-white (hot stellar cores), 15% pure white,
+    // 8% cool blue, 8% warm yellow-white, 5% nebula-lit pink, 4% warm orange.
+    // This matches photographic star fields where cool/hot stars dominate and
+    // a few warm/pink ones signal nebula illumination.
+    const starColorPool: number[] = [];
+    const pushColors = (c: number, w: number) => {
+      for (let i = 0; i < w; i++) starColorPool.push(c);
+    };
+    pushColors(0xe8f2ff, 35); // blue-white (dominant)
+    pushColors(0xffffff, 20); // pure white
+    pushColors(0xccddff, 12); // cool blue
+    pushColors(0xfff5e0, 12); // warm yellow-white
+    pushColors(0xffd0d0, 10); // nebula-lit pink
+    pushColors(0xffc090, 7); // warm orange
+    pushColors(0xddccff, 4); // faint violet
+
+    for (const config of layerConfigs) {
+      const container = new Container();
+
+      for (let i = 0; i < config.count; i++) {
+        const fw = width * config.spread;
+        const fh = height * config.spread;
+        const x = (Math.random() * 2 - 1) * fw;
+        const y = (Math.random() * 2 - 1) * fh;
+        const size =
+          config.size[0] + Math.random() * (config.size[1] - config.size[0]);
+        const alpha =
+          config.alpha[0] + Math.random() * (config.alpha[1] - config.alpha[0]);
+
+        const graphics = new Graphics();
+        graphics.circle(x, y, size);
+        graphics.fill({
+          color:
+            starColorPool[Math.floor(Math.random() * starColorPool.length)],
+          alpha,
+        });
+        container.addChild(graphics);
+      }
+
+      container.x = cx; // field centre starts at screen centre
+      container.y = cy;
+      this.starLayers.push({
+        container,
+        depth: config.depth,
+        zoomDepth: config.zoomDepth,
+      });
+      this.skyContainer.addChild(container); // Crisp, screen-fixed backdrop
+    }
+  }
+
+  /**
+   * A handful of bright "hero" stars with a 4-point glint that gently pulse
+   * (twinkle). Only these few are animated per-frame, so it stays cheap.
+   */
+  private createTwinkleStars(): void {
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+    const container = new Container();
+    // Mix of colors: most blue-white (hot giants), some warm, some pink (nebula-lit).
+    const twinkleColors = [
+      { c: 0xffffff, w: 8 }, // pure white
+      { c: 0xe0eeff, w: 12 }, // blue-white (most common)
+      { c: 0xfff5cc, w: 6 }, // warm yellow
+      { c: 0xffcccc, w: 5 }, // nebula pink
+      { c: 0xffddaa, w: 4 }, // warm orange
+      { c: 0xccddff, w: 5 }, // cool blue
+    ];
+    const twinklePool: number[] = [];
+    for (const { c, w } of twinkleColors) {
+      for (let k = 0; k < w; k++) twinklePool.push(c);
+    }
+
+    const count = 60;
+
+    for (let i = 0; i < count; i++) {
+      const x = Math.random() * width * 2.2 - width * 0.6;
+      const y = Math.random() * height * 2.2 - height * 0.6;
+      const color = twinklePool[Math.floor(Math.random() * twinklePool.length)];
+      // vary size: most small, a few large "hero" stars
+      const r =
+        Math.random() < 0.15
+          ? 2.2 + Math.random() * 1.4 // bright hero star
+          : 1.1 + Math.random() * 1.4; // normal bright star
+      const baseAlpha = 0.55 + Math.random() * 0.45;
+
+      const g = new Graphics();
+      // outer soft diffraction halo
+      g.circle(0, 0, r * 5).fill({ color, alpha: 0.06 });
+      g.circle(0, 0, r * 2.8).fill({ color, alpha: 0.18 });
+      // 4-point diffraction spike
+      const len = r * (r > 2 ? 9 : 6);
+      g.moveTo(-len, 0).lineTo(len, 0).moveTo(0, -len).lineTo(0, len);
+      g.stroke({ width: r > 2 ? 1.0 : 0.7, color, alpha: 0.45 });
+      // bright core
+      g.circle(0, 0, r).fill({ color, alpha: 1 });
+      g.x = x;
+      g.y = y;
+      g.alpha = baseAlpha;
+      container.addChild(g);
+
+      this.twinkleStars.push({
+        graphics: g,
+        baseAlpha,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.0008 + Math.random() * 0.0018,
+      });
+    }
+
+    this.skyContainer.addChild(container);
+    this.twinkleContainer = container;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Nebulae, swarms, dust-lane pillars
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Big, organic, multi-tone nebula clouds spread across the whole system.
+   * Each cloud is built from many overlapping soft blobs baked into a single
+   * blurred Graphics (drawn once), then only its transform/alpha is animated —
+   * slow drift + gentle "breathing" pulse — so it's cheap but feels alive.
+   * The palette and layout are seeded from the system id, so every system has a
+   * distinct but stable look.
+   */
+  private createNebulae(): void {
+    this.nebulaeContainer = new Container();
+    this.nebulaeContainer.eventMode = "none";
+
+    const systemId = this.systemId;
+    const rng = new SeededRNG(`nebula_${systemId}`);
+
+    const sw = this.renderer.app.screen.width;
+    const sh = this.renderer.app.screen.height;
+
+    // Photorealistic nebula palettes — [dark-outer, mid-body, inner-hot, core-bright, accent].
+    const palettes = [
+      [0x6e0a00, 0xcc2000, 0xff4400, 0xff8800, 0xffbb22], // warm red-orange
+      [0x05082a, 0x0d1a88, 0x2244cc, 0x4466ff, 0x88aaff], // deep blue-violet
+      [0x380012, 0x880030, 0xdd1060, 0xff44aa, 0xffaadd], // crimson-magenta
+      [0x2a1000, 0x993300, 0xff6600, 0xffaa00, 0xffee44], // amber-gold
+      [0x180040, 0x440088, 0x8800cc, 0xaa44ff, 0xddaaff], // purple-indigo
+    ];
+    const palIdx = rng.nextInt(0, palettes.length - 1);
+    const palette = palettes[palIdx];
+
+    // Backdrop art sprite — lazily loaded so large nebula PNGs don't block boot.
+    const palNames = ["red", "blue", "red", "red", "blue"];
+    const palName = palNames[palIdx];
+    const backdropKey =
+      pickVariantKey("nebula", `${palName}_mid`, systemId) ??
+      pickVariantKey("nebula", `${palName}_near`, systemId);
+    if (backdropKey) {
+      // Show immediately from cache if already loaded (e.g. revisiting system),
+      // otherwise load async and splice into skyContainer once ready.
+      const mountBackdrop = (tex: Texture): void => {
+        if (this.destroyed) return;
+        const bg = new Sprite(tex);
+        bg.anchor.set(0.5);
+        bg.x = sw / 2;
+        bg.y = sh / 2;
+        const size = Math.max(sw, sh) * 2.4;
+        bg.width = size;
+        bg.height = size;
+        bg.alpha = 0.38;
+        bg.eventMode = "none";
+        this.nebulaBackdropSprite = bg;
+        this.skyContainer.addChildAt(bg, 0);
+      };
+      const cached =
+        pickVariant("nebula", `${palName}_mid`, systemId) ??
+        pickVariant("nebula", `${palName}_near`, systemId);
+      if (cached) {
+        mountBackdrop(cached);
+      } else {
+        void loadTextureAsync(backdropKey).then((tex) => {
+          if (tex && !this.destroyed) mountBackdrop(tex);
+        });
+      }
+    }
+
+    // Clouds are in screen-space (skyContainer), centred on (0,0) relative to
+    // nebulaeContainer. nebulaeContainer is placed at screen-centre and translated
+    // by cameraPan × NEBULA_DEPTH for gentle parallax — same model as star layers.
+    // Each cloud gets a BlurFilter to dissolve hard circle edges into smooth gradients.
+    const cloudCount = rng.nextInt(4, 6);
+
+    for (let c = 0; c < cloudCount; c++) {
+      const cloud = new Container();
+      // Symmetric spread so clouds fill and slightly overflow the viewport.
+      cloud.x = rng.nextFloat(-sw * 0.7, sw * 0.7);
+      cloud.y = rng.nextFloat(-sh * 0.7, sh * 0.7);
+
+      const outerColor = palette[0];
+      const bodyColor = palette[rng.nextInt(1, 2)];
+      const innerColor = palette[3];
+      const coreColor = palette[4];
+
+      // cloudR in screen pixels (was world-px, caused scaling artifacts on zoom).
+      const cloudR = rng.nextFloat(200, 450);
+      const squash = rng.nextFloat(0.45, 0.92);
+      const rot = rng.next() * Math.PI;
+
+      // OUTER HAZE — fills the whole cloud area, very soft
+      const outerG = new Graphics();
+      for (let b = 0; b < 24; b++) {
+        const ang = rng.next() * Math.PI * 2;
+        const dist = rng.next() * cloudR;
+        let bx = Math.cos(ang) * dist;
+        let by = Math.sin(ang) * dist * squash;
+        const rx = bx * Math.cos(rot) - by * Math.sin(rot);
+        const ry = bx * Math.sin(rot) + by * Math.cos(rot);
+        bx = rx;
+        by = ry;
+        const r = rng.nextFloat(55, 140) * (1 - (dist / cloudR) * 0.3);
+        outerG
+          .circle(bx, by, r)
+          .fill({ color: outerColor, alpha: rng.nextFloat(0.05, 0.12) });
+      }
+      cloud.addChild(outerG);
+
+      // BODY — denser toward centre
+      const bodyG = new Graphics();
+      for (let b = 0; b < 32; b++) {
+        const ang = rng.next() * Math.PI * 2;
+        const dist = rng.next() * rng.next() * cloudR * 0.85;
+        let bx = Math.cos(ang) * dist;
+        let by = Math.sin(ang) * dist * squash;
+        const rx = bx * Math.cos(rot) - by * Math.sin(rot);
+        const ry = bx * Math.sin(rot) + by * Math.cos(rot);
+        bx = rx;
+        by = ry;
+        const r = rng.nextFloat(35, 100) * (1 - (dist / cloudR) * 0.55);
+        bodyG
+          .circle(bx, by, r)
+          .fill({ color: bodyColor, alpha: rng.nextFloat(0.08, 0.2) });
+      }
+      cloud.addChild(bodyG);
+
+      // HOT INNER — tight bright zone
+      const innerG = new Graphics();
+      for (let b = 0; b < 16; b++) {
+        const ang = rng.next() * Math.PI * 2;
+        const dist = rng.next() * rng.next() * cloudR * 0.42;
+        let bx = Math.cos(ang) * dist;
+        let by = Math.sin(ang) * dist * squash;
+        const rx = bx * Math.cos(rot) - by * Math.sin(rot);
+        const ry = bx * Math.sin(rot) + by * Math.cos(rot);
+        bx = rx;
+        by = ry;
+        const r = rng.nextFloat(18, 55);
+        innerG
+          .circle(bx, by, r)
+          .fill({ color: innerColor, alpha: rng.nextFloat(0.12, 0.28) });
+      }
+      cloud.addChild(innerG);
+
+      // LUMINOUS CORE — tiny bright hot-spots
+      const coreG = new Graphics();
+      const coreCount = rng.nextInt(1, 3);
+      for (let e = 0; e < coreCount; e++) {
+        const ex = rng.nextFloat(-cloudR * 0.15, cloudR * 0.15);
+        const ey = rng.nextFloat(-cloudR * 0.15, cloudR * 0.15) * squash;
+        const cr = rng.nextFloat(10, 28);
+        coreG
+          .circle(ex, ey, cr * 2.2)
+          .fill({ color: coreColor, alpha: rng.nextFloat(0.08, 0.16) });
+        coreG
+          .circle(ex, ey, cr)
+          .fill({ color: coreColor, alpha: rng.nextFloat(0.22, 0.42) });
+      }
+      cloud.addChild(coreG);
+
+      // Container-level screen blend + GPU blur converts sharp circle edges into
+      // volumetric gradients. Applied to whole container = single GPU pass per cloud.
+      cloud.blendMode = "screen";
+      cloud.filters = [new BlurFilter({ strength: 72, quality: 3 })];
+      cloud.eventMode = "none";
+
+      this.nebulaeContainer.addChild(cloud);
+      this.nebulaLayers.push({
+        container: cloud,
+        driftX: rng.nextFloat(-0.004, 0.004),
+        driftY: rng.nextFloat(-0.004, 0.004),
+        pulseAmp: rng.nextFloat(0.08, 0.18),
+        pulseSpeed: rng.nextFloat(0.0003, 0.0009),
+        phase: rng.next() * Math.PI * 2,
+        baseAlpha: 1,
+      });
+    }
+
+    this.createSwarms(rng, palette);
+    this.createNebulaPillars(rng, sw, sh);
+
+    // Add behind star layers: backdrop(0) → nebulae(1) → stars(2+).
+    this.skyContainer.addChild(this.nebulaeContainer);
+  }
+
+  /**
+   * A few drifting swarms of tiny glowing motes — the luminous "fireflies" that
+   * cluster inside the nebula in the reference shot. Each swarm is a baked
+   * Graphics of soft dots (cheap), animated only by a slow drift + breathing
+   * pulse on its container.
+   */
+  private createSwarms(rng: SeededRNG, palette: number[]): void {
+    if (!this.nebulaeContainer) return;
+
+    const sw = this.renderer.app.screen.width;
+    const sh = this.renderer.app.screen.height;
+    const swarmCount = rng.nextInt(3, 6);
+
+    for (let s = 0; s < swarmCount; s++) {
+      const container = new Container();
+      // Screen-space positions relative to nebulaeContainer origin (screen centre).
+      container.x = rng.nextFloat(-sw * 0.55, sw * 0.55);
+      container.y = rng.nextFloat(-sh * 0.55, sh * 0.55);
+
+      // Brighten a palette colour toward white for a "glowing" mote.
+      const tint = this.lightenColor(
+        palette[rng.nextInt(0, palette.length - 1)],
+        0.6,
+      );
+      // Small, tight cluster of luminous motes — like the reference's green
+      // "fireflies". Key: small spread + low baseAlpha so they don't coalesce
+      // into the cartoon glowing balls that plagued the old version.
+      const spread = rng.nextFloat(50, 110);
+      const motes = rng.nextInt(22, 44);
+
+      const g = new Graphics();
+      for (let m = 0; m < motes; m++) {
+        const ang = rng.next() * Math.PI * 2;
+        const dist = rng.next() * rng.next() * spread;
+        const mx = Math.cos(ang) * dist;
+        const my = Math.sin(ang) * dist;
+        const r = rng.nextFloat(0.6, 1.8);
+        // minimal halo (r×1.6), bright-but-small core
+        g.circle(mx, my, r * 1.6).fill({ color: tint, alpha: 0.08 });
+        g.circle(mx, my, r).fill({ color: tint, alpha: 0.7 });
+      }
+      // A subtle per-mote-Graphics blur (strength 2) softens each tiny circle
+      // into a natural glow. Strength stays low — the old cartoon blobs came
+      // from a HIGH-strength container blur (US-070); a weak blur on the mote
+      // Graphics itself reads as light orbs, not blobs. paddedBlur keeps the
+      // falloff inside the filter texture so no rectangular band appears.
+      g.filters = [this.paddedBlur(2)];
+      container.addChild(g);
+      this.nebulaeContainer.addChild(container);
+
+      this.swarmLayers.push({
+        container,
+        driftX: rng.nextFloat(-0.005, 0.005),
+        driftY: rng.nextFloat(-0.005, 0.005),
+        pulseSpeed: rng.nextFloat(0.0006, 0.0014),
+        pulseAmp: rng.nextFloat(0.12, 0.22),
+        phase: rng.next() * Math.PI * 2,
+        baseAlpha: rng.nextFloat(0.22, 0.45), // much subtler than before
+        rotSpeed: rng.nextFloat(-0.0002, 0.0002), // slow organic spin (rad/frame)
+      });
+    }
+  }
+
+  /**
+   * Dark dust-lane pillars composited over the nebula clouds with multiply blend.
+   * The reference (SR2) shows dark gas columns visible against the lit nebula —
+   * elongated, slightly rotated, softly blurred so they read as absorption zones
+   * rather than painted stripes.
+   */
+  private createNebulaPillars(rng: SeededRNG, sw: number, sh: number): void {
+    if (!this.nebulaeContainer) return;
+
+    const pillarCount = rng.nextInt(3, 5);
+    for (let p = 0; p < pillarCount; p++) {
+      const g = new Graphics();
+
+      // Position near the core of the nebula, offset slightly.
+      const cx = rng.nextFloat(-sw * 0.35, sw * 0.35);
+      const cy = rng.nextFloat(-sh * 0.35, sh * 0.35);
+
+      // Each pillar is 3–5 overlapping dark ellipses at a common angle to form
+      // a column. Random tilt makes them organic rather than axis-aligned.
+      const tilt = rng.nextFloat(-Math.PI * 0.45, Math.PI * 0.45);
+      const segments = rng.nextInt(3, 5);
+      for (let s = 0; s < segments; s++) {
+        const along = rng.nextFloat(-80, 80); // offset along the pillar axis
+        const perp = rng.nextFloat(-18, 18); // slight wobble perpendicular
+        const ex = cx + Math.cos(tilt) * along - Math.sin(tilt) * perp;
+        const ey = cy + Math.sin(tilt) * along + Math.cos(tilt) * perp;
+        const w = rng.nextFloat(22, 48);
+        const h = rng.nextFloat(65, 150);
+        g.ellipse(ex, ey, w, h);
+        g.fill({ color: 0x000000, alpha: rng.nextFloat(0.55, 0.82) });
+      }
+
+      const pillarC = new Container();
+      pillarC.addChild(g);
+      pillarC.rotation = tilt;
+      pillarC.blendMode = "multiply";
+      pillarC.filters = [new BlurFilter({ strength: 28, quality: 2 })];
+      pillarC.eventMode = "none";
+      this.nebulaeContainer.addChild(pillarC);
+    }
+  }
+
+  /** Slow drift + spin + breathing pulse so the glowing swarms shimmer. */
+  private updateSwarms(bgElapsed: number): void {
+    for (const s of this.swarmLayers) {
+      s.container.x += s.driftX;
+      s.container.y += s.driftY;
+      // Per-frame spin (same convention as driftX/driftY above — applied once
+      // per frame, not scaled by dt) so the cluster slowly turns and feels alive.
+      s.container.rotation += s.rotSpeed;
+      const pulse =
+        1 + Math.sin(bgElapsed * s.pulseSpeed + s.phase) * s.pulseAmp;
+      s.container.alpha = Math.max(0, Math.min(1, s.baseAlpha * pulse));
+    }
+  }
+
+  /** Slow drift + gentle "breathing" pulse so the nebulae feel alive. */
+  private updateNebulae(bgElapsed: number): void {
+    // Nebulae live in skyContainer (screen-space) — they don't scale with gameLayer
+    // zoom, so depth remains consistent at any zoom level. Gentle parallax
+    // (NEBULA_DEPTH ≈ 0.04) is midway between far stars (0.02) and mid stars (0.08).
+    const NEBULA_DEPTH = 0.04;
+    if (this.nebulaeContainer) {
+      const cam = this.getCamera();
+      const cx = this.renderer.app.screen.width / 2;
+      const cy = this.renderer.app.screen.height / 2;
+      this.nebulaeContainer.x = cx + cam.panX * NEBULA_DEPTH;
+      this.nebulaeContainer.y = cy + cam.panY * NEBULA_DEPTH;
+    }
+
+    const DRIFT_X = 0.006;
+    const DRIFT_Y = 0.004;
+    for (const n of this.nebulaLayers) {
+      n.container.x += n.driftX + DRIFT_X;
+      n.container.y += n.driftY + DRIFT_Y;
+      const pulse =
+        1 + Math.sin(bgElapsed * n.pulseSpeed + n.phase) * n.pulseAmp;
+      n.container.alpha = Math.max(0, Math.min(1, n.baseAlpha * pulse));
+      const s = 1 + Math.sin(bgElapsed * n.pulseSpeed * 0.7 + n.phase) * 0.03;
+      n.container.scale.set(s);
+    }
+  }
+
+  /** Twinkle the few bright hero stars by oscillating their alpha. */
+  private updateTwinkleStars(bgElapsed: number): void {
+    for (const s of this.twinkleStars) {
+      const t = 0.55 + 0.45 * Math.sin(bgElapsed * s.speed + s.phase);
+      s.graphics.alpha = s.baseAlpha * t;
+    }
+  }
+
+  private updateStarField(): void {
+    const cam = this.getCamera();
+    const cx = this.renderer.app.screen.width / 2;
+    const cy = this.renderer.app.screen.height / 2;
+
+    // Nebula art backdrop drifts almost imperceptibly (0.01) — it reads as an
+    // infinite-distance cosmic cloud that barely reacts to local camera motion.
+    if (this.nebulaBackdropSprite) {
+      this.nebulaBackdropSprite.x = cx + cam.panX * 0.01;
+      this.nebulaBackdropSprite.y = cy + cam.panY * 0.01;
+    }
+
+    // Each depth layer is a centred field translated by cameraPan*depth. Stars
+    // also scale slightly with zoom (except the deepest layer — it's at infinity
+    // and never scales). No Math.max clamp: stars can shrink at zoom-out, giving
+    // the correct depth cue that distant stars look smaller when you step back.
+    for (const layer of this.starLayers) {
+      const s = Math.max(0.4, 1 + (cam.zoom - 1) * layer.zoomDepth);
+      layer.container.scale.set(s);
+      layer.container.x = cx + cam.panX * layer.depth;
+      layer.container.y = cy + cam.panY * layer.depth;
+    }
+
+    // Twinkle stars ride with the mid layer — bright distant stars, not foreground.
+    if (this.twinkleContainer) {
+      this.twinkleContainer.x = cx + cam.panX * 0.08;
+      this.twinkleContainer.y = cy + cam.panY * 0.08;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Foreground dust streaks + vignette (UI layer)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Foreground dust motes (screen-fixed) that streak past with the ship's
+   * velocity — the primary sense-of-speed cue, like flying through fine debris.
+   * Added to the UI layer (above the world, below the HUD) so they always fill
+   * the screen and never expose a world edge.
+   */
+  private createDust(): void {
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+
+    this.dustContainer = new Container();
+    this.dustContainer.eventMode = "none";
+
+    const count = 190;
+    for (let i = 0; i < count; i++) {
+      const g = new Graphics();
+      const x = Math.random() * width;
+      const y = Math.random() * height;
+      g.x = x;
+      g.y = y;
+      g.eventMode = "none";
+      this.dustContainer.addChild(g);
+      this.dustMotes.push({
+        graphics: g,
+        x,
+        y,
+        depth: 0.3 + Math.random() * 0.7,
+      });
+    }
+
+    // First child of the UI layer → above the world, below HUD/minimap.
+    this.renderer.uiLayer.addChildAt(this.dustContainer, 0);
+  }
+
+  /**
+   * Move dust motes opposite the ship's velocity (parallax by depth), wrapping
+   * around the screen. Fast motion stretches each mote into a short streak.
+   */
+  private updateDust(deltaTime: number): void {
+    const vel = this.getShipVelocity();
+    if (!vel || this.dustMotes.length === 0) return;
+
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+
+    const velX = Math.cos(vel.angle) * vel.speed;
+    const velY = Math.sin(vel.angle) * vel.speed;
+
+    for (const mote of this.dustMotes) {
+      const vx = -velX * mote.depth * deltaTime * 1.8;
+      const vy = -velY * mote.depth * deltaTime * 1.8;
+      mote.x += vx;
+      mote.y += vy;
+
+      // Wrap around the screen edges so the field is seamless.
+      if (mote.x < 0) mote.x += width;
+      else if (mote.x > width) mote.x -= width;
+      if (mote.y < 0) mote.y += height;
+      else if (mote.y > height) mote.y -= height;
+
+      mote.graphics.x = mote.x;
+      mote.graphics.y = mote.y;
+
+      const speed = Math.hypot(vx, vy);
+      const g = mote.graphics;
+      g.clear();
+      // Only render motion streaks (the sense-of-speed cue). At rest nothing is
+      // drawn — static foreground dots read as dirt on the screen, which the
+      // player would want to wipe off (US-070 #1: no stars in the foreground).
+      if (speed > 2.5) {
+        const alpha = Math.min(0.6, (speed - 2.5) * 0.12) * (0.4 + mote.depth);
+        const len = Math.min(34, speed * 2.8);
+        const nx = vx / speed;
+        const ny = vy / speed;
+        g.moveTo(0, 0)
+          .lineTo(-nx * len, -ny * len)
+          .stroke({ color: 0xbfd8ff, width: mote.depth * 1.4, alpha });
+      }
+    }
+  }
+
+  /**
+   * Screen-fixed vignette that darkens the edges so the action reads in the
+   * centre. Built as stacked edge strokes fading inward (no BlurFilter — a
+   * blurred full-screen rect showed up as bands across the whole canvas).
+   */
+  private createVignette(): void {
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+
+    const v = new Graphics();
+    const bands = 16;
+    for (let i = 0; i < bands; i++) {
+      const inset = i * 16;
+      const alpha = 0.06 * (1 - i / bands);
+      v.rect(inset, inset, width - 2 * inset, height - 2 * inset);
+      v.stroke({ width: 32, color: 0x000000, alpha });
+    }
+    v.eventMode = "none"; // never intercept clicks
+    // Added before the HUD so it sits underneath it (above the world). Torn
+    // down by clearUILayer on the next scene init.
+    this.vignette = v;
+    this.renderer.uiLayer.addChild(v);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mid-ground parallax (drift asteroids, comets, silhouette ships, dust motes)
+  // ---------------------------------------------------------------------------
+
+  private initMidground(): void {
+    this.midground.eventMode = "none";
+    // Sit just above the screen-fixed sky but below the game world. The scene
+    // inserts skyContainer at stage index 0 immediately before building this
+    // module, so index 1 places the mid-ground between the sky and gameLayer.
+    this.renderer.stage.addChildAt(this.midground, 1);
+
+    const rng = new SeededRNG(`bgLayer_${this.systemId}`);
 
     this.createDriftAsteroids(rng);
     this.createBgShips(rng);
     this.createDustParticles(rng);
 
-    // Camera asteroid placeholder — positioned and activated on first trigger
+    // Camera asteroid placeholder — positioned and activated on first trigger.
     this.camAstG = this.buildCamAsteroid();
     this.camAstG.alpha = 0;
-    this.container.addChild(this.camAstG);
+    this.midground.addChild(this.camAstG);
     this.camAstTimer = rng.nextFloat(60000, 90000);
 
     this.cometNextSpawn = rng.nextFloat(15000, 40000);
   }
-
-  // ---------------------------------------------------------------------------
-  // Construction helpers
-  // ---------------------------------------------------------------------------
 
   private createDriftAsteroids(rng: SeededRNG): void {
     const count = rng.nextInt(8, 12);
@@ -116,7 +962,7 @@ export class SpaceBackgroundLayer {
       g.y = a.y;
       g.rotation = a.rot;
       this.driftAsteroids.push(a);
-      this.container.addChild(g);
+      this.midground.addChild(g);
     }
   }
 
@@ -150,7 +996,7 @@ export class SpaceBackgroundLayer {
       g.x = s.x;
       g.y = s.y;
       this.bgShips.push(s);
-      this.container.addChild(g);
+      this.midground.addChild(g);
     }
   }
 
@@ -196,7 +1042,7 @@ export class SpaceBackgroundLayer {
       g.x = p.x;
       g.y = p.y;
       this.dustParticles.push(p);
-      this.container.addChild(g);
+      this.midground.addChild(g);
     }
   }
 
@@ -216,18 +1062,6 @@ export class SpaceBackgroundLayer {
     g.circle(-6, -4, 4).fill({ color: 0x3e3830, alpha: 0.55 });
     g.circle(5, 6, 3).fill({ color: 0x3e3830, alpha: 0.5 });
     return g;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Update
-  // ---------------------------------------------------------------------------
-
-  update(dt: number): void {
-    this.updateDriftAsteroids(dt);
-    this.updateBgShips(dt);
-    this.updateDustParticles(dt);
-    this.updateComets(dt);
-    this.updateCamAsteroid(dt);
   }
 
   private updateDriftAsteroids(dt: number): void {
@@ -301,7 +1135,7 @@ export class SpaceBackgroundLayer {
         c.y < -200 ||
         c.y > h + 200
       ) {
-        this.container.removeChild(c.g);
+        this.midground.removeChild(c.g);
         c.g.destroy();
         this.activeComets.splice(i, 1);
       }
@@ -372,11 +1206,12 @@ export class SpaceBackgroundLayer {
     g.x = sx;
     g.y = sy;
     g.alpha = 0;
-    this.container.addChild(g);
+    this.midground.addChild(g);
     this.activeComets.push({ g, x: sx, y: sy, vx, vy, life: maxLife, maxLife });
   }
 
   private updateCamAsteroid(dt: number): void {
+    if (!this.camAstG) return;
     if (this.camAstIdle) {
       this.camAstTimer -= dt;
       if (this.camAstTimer <= 0) {
@@ -403,18 +1238,5 @@ export class SpaceBackgroundLayer {
         this.camAstTimer = 60000 + Math.random() * 30000;
       }
     }
-  }
-
-  // ---------------------------------------------------------------------------
-
-  destroy(): void {
-    // Destroy any live comet graphics not yet removed
-    for (const c of this.activeComets) {
-      c.g.destroy();
-    }
-    if (this.container.parent) {
-      this.container.parent.removeChild(this.container);
-    }
-    this.container.destroy({ children: true });
   }
 }

@@ -108,7 +108,7 @@ vi.mock("@/presentation/cursor", () => ({
   setCanvasCursor: vi.fn(),
 }));
 
-import { SpaceFlightScene } from "@/presentation/SpaceFlightScene";
+import { SpaceBackgroundLayer } from "@/presentation/SpaceBackgroundLayer";
 import type { Renderer } from "@/presentation/Renderer";
 import { SeededRNG } from "@/utils/seededRNG";
 
@@ -162,12 +162,23 @@ type SwarmLayer = {
 };
 
 describe("swarmGlow: glowing, slowly-spinning cosmic swarms", () => {
-  let scene: SpaceFlightScene;
+  let background: SpaceBackgroundLayer;
   let s: Record<string, unknown>;
 
   beforeEach(() => {
-    scene = new SpaceFlightScene(makeMockRenderer());
-    s = scene as unknown as Record<string, unknown>;
+    const renderer = makeMockRenderer();
+    background = new SpaceBackgroundLayer(
+      renderer,
+      // skyContainer mock — createSwarms only touches nebulaeContainer below.
+      {
+        addChild: vi.fn(),
+        children: [],
+      } as unknown as import("pixi.js").Container,
+      "swarm-test",
+      () => ({ panX: 0, panY: 0, zoom: 1 }),
+      () => null,
+    );
+    s = background as unknown as Record<string, unknown>;
     // createSwarms early-returns without a nebulae container; supply a mock that
     // records the swarm containers added to it.
     s.nebulaeContainer = {
@@ -177,7 +188,7 @@ describe("swarmGlow: glowing, slowly-spinning cosmic swarms", () => {
     const rng = new SeededRNG("swarm-test");
     const palette = [0x3366ff, 0x66ccff, 0xffffff];
     (
-      scene as unknown as {
+      background as unknown as {
         createSwarms(rng: SeededRNG, palette: number[]): void;
       }
     ).createSwarms(rng, palette);
@@ -213,7 +224,9 @@ describe("swarmGlow: glowing, slowly-spinning cosmic swarms", () => {
   it("rotates each swarm container by its rotSpeed on update", () => {
     const layers = s.swarmLayers as SwarmLayer[];
     const before = layers.map((l) => l.container.rotation);
-    (scene as unknown as { updateSwarms(): void }).updateSwarms();
+    (
+      background as unknown as { updateSwarms(bgElapsed: number): void }
+    ).updateSwarms(0);
     layers.forEach((layer, i) => {
       expect(layer.container.rotation).toBeCloseTo(
         before[i] + layer.rotSpeed,
