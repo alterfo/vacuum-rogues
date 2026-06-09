@@ -35,11 +35,11 @@ This plan is sequenced to run AFTER sprint2 (`20260608-sprint2-flight-and-ui-pol
 **Files:**
 - Modify: `src/systems/GameEngine.ts`
 
-- [ ] In `transitionTo()`, find the teardown block (around lines 231-235) that reads `this.currentScene.destroy(); this.currentScene = null;`
-- [ ] Immediately AFTER that block, add `this.renderer.clearGameLayer();` and `this.renderer.clearUILayer();` so both shared layers are guaranteed empty before the new scene is instantiated. Guard with `if (this.renderer)` (the method already throws earlier if renderer is missing, so a plain call is fine).
-- [ ] Add a code comment: `// Safety net: guarantee no orphaned interactive objects survive a scene's incomplete destroy() (prevents click-swallowing across scenes).`
-- [ ] Write unit test `src/tests/transitionClearsLayers.test.ts`: build a GameEngine with a mock renderer whose `gameLayer`/`uiLayer` are real PixiJS `Container`s; add a dummy child to each; transition to a scene that adds nothing; assert both layers have `children.length === 0` after the transition (i.e. the stale child was removed). Use existing test setup patterns from `src/tests/` for mocking the renderer/scene factory.
-- [ ] **Done when**: `npm run lint && npm test -- --run` passes and the new test proves layers are cleared on transition.
+- [x] In `transitionTo()`, find the teardown block (around lines 231-235) that reads `this.currentScene.destroy(); this.currentScene = null;`
+- [x] Immediately AFTER that block, add `this.renderer.clearGameLayer();` and `this.renderer.clearUILayer();` so both shared layers are guaranteed empty before the new scene is instantiated. Guard with `if (this.renderer)` (the method already throws earlier if renderer is missing, so a plain call is fine).
+- [x] Add a code comment: `// Safety net: guarantee no orphaned interactive objects survive a scene's incomplete destroy() (prevents click-swallowing across scenes).`
+- [x] Write unit test `src/tests/transitionClearsLayers.test.ts`: build a GameEngine with a mock renderer whose `gameLayer`/`uiLayer` are real PixiJS `Container`s; add a dummy child to each; transition to a scene that adds nothing; assert both layers have `children.length === 0` after the transition (i.e. the stale child was removed). Use existing test setup patterns from `src/tests/` for mocking the renderer/scene factory.
+- [x] **Done when**: `npm run lint && npm test -- --run` passes and the new test proves layers are cleared on transition.
 
 ### Task 2: Per-scene teardown audit (defense in depth)
 

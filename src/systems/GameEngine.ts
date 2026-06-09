@@ -234,6 +234,10 @@ export class GameEngine {
       this.currentScene = null;
     }
 
+    // Safety net: guarantee no orphaned interactive objects survive a scene's incomplete destroy() (prevents click-swallowing across scenes).
+    this.renderer.clearGameLayer();
+    this.renderer.clearUILayer();
+
     // Handle new game creation when transitioning to STAR_MAP or SPACE_FLIGHT and no player exists
     const isGameStartScene =
       sceneType === SceneType.STAR_MAP || sceneType === SceneType.SPACE_FLIGHT;
