@@ -125,12 +125,12 @@ Related: US-070, US-071, US-072, US-074, US-075
 **Files:**
 - Modify: `src/presentation/TradeScene.ts`
 
-- [ ] Add "Макс" button next to quantity input for each commodity row — clicking it sets quantity to the maximum the player can afford AND fit in cargo hold (min of: credits/price, free hold space)
-- [ ] Highlight commodities with exceptionally good buy price (< 70% of galactic average) with a small green ▼ icon overlaid on the "Купить" button
-- [ ] Highlight commodities with exceptionally good sell price (> 130% of galactic average) with a small gold ▲ icon overlaid on "Продать"
-- [ ] Price average baseline: use `GalaxySimulator` commodity price data or a simple hardcoded baseline from `balance.ts`
-- [ ] Write test: `computeMaxBuyQty(price, credits, freeHold)` returns correct value for edge cases (0 credits, 0 hold, exact fit)
-- [ ] Run `npm test -- --run` — must pass
+- [x] Add "Макс" button next to quantity input for each commodity row — clicking it sets quantity to the maximum the player can afford AND fit in cargo hold (min of: credits/price, free hold space)
+- [x] Highlight commodities with exceptionally good buy price (< 70% of galactic average) with a small green ▼ icon overlaid on the "Купить" button
+- [x] Highlight commodities with exceptionally good sell price (> 130% of galactic average) with a small gold ▲ icon overlaid on "Продать"
+- [x] Price average baseline: use `GalaxySimulator` commodity price data or a simple hardcoded baseline from `balance.ts`
+- [x] Write test: `computeMaxBuyQty(price, credits, freeHold)` returns correct value for edge cases (0 credits, 0 hold, exact fit)
+- [x] Run `npm test -- --run` — must pass (752 tests pass)
 
 ### Task 10: Verify all acceptance criteria
 **Files:**

@@ -218,14 +218,14 @@ export class TradeScene extends GameScene {
         this.trade(resource, true);
       });
       if (isBuyDeal) {
-        const star = new Text({
-          text: "★",
+        const arrow = new Text({
+          text: "▼",
           style: { fontFamily: "Courier New", fontSize: 10, fill: 0x00ff44 },
         });
-        star.x = 72;
-        star.y = 1;
-        star.eventMode = "none";
-        buyBtn.addChild(star);
+        arrow.x = 70;
+        arrow.y = 1;
+        arrow.eventMode = "none";
+        buyBtn.addChild(arrow);
       }
       this.mainContainer!.addChild(buyBtn);
 
@@ -246,14 +246,14 @@ export class TradeScene extends GameScene {
         });
         sellBtn.cursor = "pointer";
         if (isSellDeal) {
-          const star = new Text({
-            text: "★",
+          const arrow = new Text({
+            text: "▲",
             style: { fontFamily: "Courier New", fontSize: 10, fill: 0xffcc00 },
           });
-          star.x = 72;
-          star.y = 1;
-          star.eventMode = "none";
-          sellBtn.addChild(star);
+          arrow.x = 70;
+          arrow.y = 1;
+          arrow.eventMode = "none";
+          sellBtn.addChild(arrow);
         }
       } else {
         sellBtn.cursor = "default";
