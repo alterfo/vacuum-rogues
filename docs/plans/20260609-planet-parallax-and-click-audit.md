@@ -81,10 +81,10 @@ This plan is sequenced to run AFTER sprint2 (`20260608-sprint2-flight-and-ui-pol
 **Files:**
 - Read only.
 
-- [ ] `npm test -- --run` — all unit tests pass.
-- [ ] `npm run test:e2e:regression` — passes.
-- [ ] `npm run lint` — 0 errors.
-- [ ] Confirm Task 1's central clear is present in `transitionTo` and Task 2's `clearUILayer` calls are present in the three scenes.
+- [x] `npm test -- --run` — all unit tests pass.
+- [x] `npm run test:e2e:regression` — passes.
+- [x] `npm run lint` — 0 errors.
+- [x] Confirm Task 1's central clear is present in `transitionTo` and Task 2's `clearUILayer` calls are present in the three scenes.
 
 ## Technical Details
 
