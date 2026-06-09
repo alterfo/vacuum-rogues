@@ -139,11 +139,11 @@ Generate high-quality visual assets for Вакуумные Пройдохи usin
 - Populate: `src/assets/star_maps/<type>_0N.jpg`
 - Populate: `src/assets/panoramas/<faction>_<biome>.jpg`
 
-- [ ] Run `workflow_flux_360_planets.json` for 8 planet types (2 variants each = 16 images) + 4 star types (1 each = 4 images)
-- [ ] Export as JPEG 2048×1024 (90% quality); keep existing Solar System Scope maps as fallbacks (`_04`, `_05`, `_06` suffix)
-- [ ] Run `workflow_flux_360_interior.json` for 5 faction cities + 3 wilderness = 8 panoramas
-- [ ] Export as JPEG 4096×2048 (85% quality); place in `src/assets/panoramas/`
-- [ ] Verify no Solar System Scope originals are accidentally overwritten (they carry CC BY 4.0 attribution in `CREDITS.md`)
+- [x] Run `workflow_flux_360_planets.json` (manual — user ran on ComfyUI host). Star maps generated and committed: `yellow`, `blue_giant`, `red_dwarf`, `white_dwarf`, `neutron` (5 types, multiple variants each). Faction-themed planet **surface** maps deferred — the Solar System Scope equirectangular set (`gas/ice/volcanic/terrestrial/habitat/industrial` `_04`–`_08`) remains the surface-map source consumed by the Task 7 rotation shader (default `<type>_04.jpg`)
+- [x] Export quality (manual). Star maps exported as PNG (user export choice, not JPEG); existing Solar System Scope maps preserved as fallbacks (`_04`, `_05`, `_06` suffix present and untouched)
+- [x] Run `workflow_flux_360_interior.json` (manual — user ran on ComfyUI host): 5 faction cities (`bastions_city`, `syndicate_city`, `outlanders_city`, `progressors_city`, `paradoxes_city`) + 3 wilderness (`wilderness_desert`, `wilderness_jungle`, `wilderness_tundra`) = 8 panoramas
+- [x] Panoramas placed in `src/assets/panoramas/` (manual). Exported as high-res PNG (~24 MB each) rather than JPEG (user export choice)
+- [x] Verified (Claude): no Solar System Scope originals overwritten — `terrestrial_04`, `habitat_04`, `gas_04`/`gas_05`, `ice_04`/`ice_05`, `volcanic_04`/`volcanic_05`, `industrial_04` all present at original mtime; `planet_maps/CREDITS.md` CC BY 4.0 attribution intact
 
 ### Task 7: PixiJS Planet Sphere-Rotation Filter
 **Files:**
