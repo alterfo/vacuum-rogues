@@ -158,6 +158,17 @@ export class NpcShipSprite {
   }
 
   /**
+   * Re-enable click/hover interactivity unless the ship is leaving the system.
+   * Called when a turn ends so any ship that lost its hit-area mid-turn becomes
+   * clickable again (Task 6: NPC ships must stay clickable between turns).
+   * Departing/gone ships stay non-interactive — they are about to hyperjump out.
+   */
+  restoreInteractivity(): void {
+    if (this.departing || this.gone) return;
+    this.container.eventMode = "static";
+  }
+
+  /**
    * Begin leaving the system: head straight out to the boundary, where the ship
    * will hyperjump (be removed). Used when the simulation moves this NPC to a
    * different system.

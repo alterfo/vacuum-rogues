@@ -106,11 +106,11 @@ Ship is too flat/invisible. Need a rim highlight to give it 3D presence.
 - Modify: `src/presentation/SpaceFlightScene.ts`
 - Modify: `src/presentation/NpcShipSprite.ts`
 
-- [ ] Find all places where `NpcShipSprite` containers have their `eventMode` changed during a turn (search for `eventMode` writes on npcShip containers in SpaceFlightScene). If any code sets `eventMode = "none"` on ships during the turn for reasons other than departure, change it to keep `"static"`.
-- [ ] In `NpcShipSprite.setClickHandler()` (line ~140): verify `hitArea = new Circle(0, 0, 40)` is set. Confirm `updateHitArea()` is called when camera zoom changes so the hit circle stays ~40 screen-px regardless of zoom level.
-- [ ] In `updateInteractiveCursors()`: when `isTurnRunning = false`, re-apply `eventMode = "static"` on ALL NPC ships that are not departing (not just their cursor). This ensures any ship that lost interactivity during the turn is restored.
-- [ ] Write unit test: construct a mock NpcShipSprite; call `setClickHandler()`; assert `container.eventMode === "static"` and `container.hitArea` is a Circle instance.
-- [ ] `npm run lint && npm test -- --run` — must pass.
+- [x] Find all places where `NpcShipSprite` containers have their `eventMode` changed during a turn (search for `eventMode` writes on npcShip containers in SpaceFlightScene). If any code sets `eventMode = "none"` on ships during the turn for reasons other than departure, change it to keep `"static"`. (Audited: the only `eventMode = "none"` write on an NPC container is in `NpcShipSprite.beginDeparture()` — the legitimate hyperjump-out case. `setClickHandler()` sets `"static"`. No turn-time code clobbers ship interactivity, so nothing to change.)
+- [x] In `NpcShipSprite.setClickHandler()` (line ~140): verify `hitArea = new Circle(0, 0, 40)` is set. Confirm `updateHitArea()` is called when camera zoom changes so the hit circle stays ~40 screen-px regardless of zoom level. (Confirmed: `setClickHandler` sets `hitArea = new Circle(0, 0, 40)` and `eventMode = "static"`; `applyCameraTransform()` (line ~3245) calls `s.updateHitArea(this.cameraZoom)` for every NPC on each zoom/pan, keeping the hit circle ~40 screen-px — `worldR = max(28, 40 / zoom)`.)
+- [x] In `updateInteractiveCursors()`: when `isTurnRunning = false`, re-apply `eventMode = "static"` on ALL NPC ships that are not departing (not just their cursor). This ensures any ship that lost interactivity during the turn is restored. (Added `NpcShipSprite.restoreInteractivity()` — sets `eventMode = "static"` unless `departing`/`gone`. `updateInteractiveCursors(false)` now calls it for every NPC, so any ship that lost its hit-area mid-turn becomes clickable again.)
+- [x] Write unit test: construct a mock NpcShipSprite; call `setClickHandler()`; assert `container.eventMode === "static"` and `container.hitArea` is a Circle instance. (`src/tests/presentation/npcShipClickable.test.ts` — 3 cases: setClickHandler → static + Circle hit-area; restoreInteractivity revives a non-departing ship; departing ship stays `"none"`.)
+- [x] `npm run lint && npm test -- --run` — must pass. (0 lint errors; 822 unit tests pass, incl. 3 new. Updated the `hudCursors.test.ts` NPC stubs with a `restoreInteractivity` no-op.)
 
 ### Task 7: Replace rectangular swarm/asteroid particles with glowing cosmic swarms
 

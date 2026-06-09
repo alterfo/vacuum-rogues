@@ -176,8 +176,13 @@ describe("hudCursors: HUD buttons keep their pointer cursor across turns", () =>
   let scene: SpaceFlightScene;
   let s: Record<string, unknown>;
   let planet: { graphics: CursorHost };
-  let pirate: { container: CursorHost; npc: { role: NpcRole } };
-  let trader: { container: CursorHost; npc: { role: NpcRole } };
+  type NpcStub = {
+    container: CursorHost;
+    npc: { role: NpcRole };
+    restoreInteractivity: () => void;
+  };
+  let pirate: NpcStub;
+  let trader: NpcStub;
   let playBtnContainer: CursorHost;
 
   beforeEach(() => {
@@ -185,10 +190,15 @@ describe("hudCursors: HUD buttons keep their pointer cursor across turns", () =>
     s = scene as unknown as Record<string, unknown>;
 
     planet = { graphics: { cursor: "pointer" } };
-    pirate = { container: { cursor: "target" }, npc: { role: NpcRole.PIRATE } };
+    pirate = {
+      container: { cursor: "target" },
+      npc: { role: NpcRole.PIRATE },
+      restoreInteractivity: () => {},
+    };
     trader = {
       container: { cursor: "pointer" },
       npc: { role: NpcRole.TRADER },
+      restoreInteractivity: () => {},
     };
     playBtnContainer = { cursor: "pointer" };
 

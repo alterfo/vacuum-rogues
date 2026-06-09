@@ -4335,6 +4335,10 @@ export class SpaceFlightScene extends GameScene {
           ? "target"
           : "pointer";
       sprite.container.cursor = npcCursor;
+      // When the turn ends, restore click/hover interactivity on every ship that
+      // isn't leaving the system — a ship that lost its hit-area mid-turn becomes
+      // clickable again (Task 6).
+      if (!turnRunning) sprite.restoreInteractivity();
     }
   }
 
