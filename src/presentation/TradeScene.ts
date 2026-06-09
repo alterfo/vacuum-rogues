@@ -76,6 +76,7 @@ export class TradeScene extends GameScene {
       this.mainContainer = null;
     }
     this.renderer.clearGameLayer();
+    this.renderer.clearUILayer();
     this.gameEngine = null;
     this.planet = null;
     logger.info("TradeScene destroyed");

@@ -46,10 +46,10 @@ This plan is sequenced to run AFTER sprint2 (`20260608-sprint2-flight-and-ui-pol
 **Files:**
 - Modify: `src/presentation/TradeScene.ts`, `src/presentation/EquipmentShopScene.ts`, `src/presentation/WinScene.ts`
 
-- [ ] In each of the three scenes' `destroy()`, the cleanup is currently `mainContainer.destroy({children:true})` + `clearGameLayer()` but never `clearUILayer()`. Since `mainContainer` is added to `uiLayer`, add an explicit `this.renderer.clearUILayer();` call in each `destroy()` so UI is fully cleared even if a transient overlay was added outside `mainContainer`. (After Task 1 this is redundant but documents the contract and protects against direct `transitionTo` callers in tests.)
-- [ ] Verify each scene's transient overlays are torn down: in `PlanetScene` confirm `closeJobBoard()` (already called in `destroy()` line 448) removes `jobBoardPanel.container` from `uiLayer`; confirm any toast timeout is cleared.
-- [ ] Do NOT change the scenes that already clear both layers or that use a single verified `mainContainer` — leave InfoCenterScene/StationScene/InventoryScene/RaceSelectionScene as-is.
-- [ ] **Done when**: `grep -L clearUILayer` over TradeScene/EquipmentShopScene/WinScene returns nothing (all three now reference it), and `npm run lint && npm test -- --run` passes.
+- [x] In each of the three scenes' `destroy()`, the cleanup is currently `mainContainer.destroy({children:true})` + `clearGameLayer()` but never `clearUILayer()`. Since `mainContainer` is added to `uiLayer`, add an explicit `this.renderer.clearUILayer();` call in each `destroy()` so UI is fully cleared even if a transient overlay was added outside `mainContainer`. (After Task 1 this is redundant but documents the contract and protects against direct `transitionTo` callers in tests.)
+- [x] Verify each scene's transient overlays are torn down: in `PlanetScene` confirm `closeJobBoard()` (already called in `destroy()` line 448) removes `jobBoardPanel.container` from `uiLayer`; confirm any toast timeout is cleared.
+- [x] Do NOT change the scenes that already clear both layers or that use a single verified `mainContainer` — leave InfoCenterScene/StationScene/InventoryScene/RaceSelectionScene as-is.
+- [x] **Done when**: `grep -L clearUILayer` over TradeScene/EquipmentShopScene/WinScene returns nothing (all three now reference it), and `npm run lint && npm test -- --run` passes.
 
 ### Task 3: PlanetScene panorama parallax (reconcile with sprint2 drag-pan)
 

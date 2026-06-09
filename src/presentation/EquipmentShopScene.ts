@@ -101,6 +101,7 @@ export class EquipmentShopScene extends GameScene {
       this.mainContainer = null;
     }
     this.renderer.clearGameLayer();
+    this.renderer.clearUILayer();
     this.listContainer = null;
     this.creditsText = null;
     this.gameEngine = null;

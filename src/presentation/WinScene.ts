@@ -36,6 +36,7 @@ export class WinScene extends GameScene {
       this.container = null;
     }
     this.renderer.clearGameLayer();
+    this.renderer.clearUILayer();
     this.gameEngine = null;
   }
 
