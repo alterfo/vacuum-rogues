@@ -165,15 +165,20 @@ describe("Task 9: re-entry spawn beside station / landed planet", () => {
     s.starRenderer = { centerX: STAR.x, centerY: STAR.y };
     s.shipPhysics = new ShipPhysics(EDGE.x, EDGE.y, 0.1);
     s.shipContainer = { x: 0, y: 0 };
-    s.planetSprites = [
-      {
-        planet: { id: "planet-1" },
-        screenX: 700,
-        screenY: 300,
-        displayRadius: 80,
-      },
-    ];
-    s.stationMarkers = [{ station: { id: "station-1" }, x: 250, y: 520 }];
+    // Planet sprites + station markers now live on the PlanetManager module; the
+    // spawn helpers read them through it. Stub it directly (these tests bypass
+    // initialize(), so the real manager is never constructed).
+    s.planetManager = {
+      planetSprites: [
+        {
+          planet: { id: "planet-1" },
+          screenX: 700,
+          screenY: 300,
+          displayRadius: 80,
+        },
+      ],
+      stationMarkers: [{ station: { id: "station-1" }, x: 250, y: 520 }],
+    };
   });
 
   it("spawnShipBeside parks the ship just outside the body, along the star radial", () => {

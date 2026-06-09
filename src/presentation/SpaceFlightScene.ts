@@ -12,8 +12,6 @@ import { SceneType, QuestType } from "@/types";
 import { Faction } from "@/types/faction";
 import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
 import { installGameCursors, setCanvasCursor } from "./cursor";
-import { PlanetSprite } from "./PlanetSprite";
-import { PlanetInfoPanel } from "./PlanetInfoPanel";
 import { SystemMiniMap } from "./SystemMiniMap";
 import { QuestJournalUI } from "./QuestJournalUI";
 import type { Planet } from "@/domain/Planet";
@@ -22,8 +20,6 @@ import { logger } from "@/utils/logger";
 import { formatGameDate } from "@/utils/gameCalendar";
 import {
   avoidStarPath,
-  hashToAngle,
-  planetApproachPoint,
   spiralApproachPath,
   takeoffArcPath,
 } from "@/utils/flightGeometry";
@@ -44,6 +40,7 @@ import { OrbitRenderer } from "./flight/OrbitRenderer";
 import { RouteRenderer } from "./flight/RouteRenderer";
 import { PlayerShipRenderer } from "./flight/PlayerShipRenderer";
 import { NpcShipManager } from "./flight/NpcShipManager";
+import { PlanetManager } from "./flight/PlanetManager";
 
 interface WarpArrivalEffect {
   container: Container;
@@ -84,17 +81,11 @@ export class SpaceFlightScene extends GameScene {
   private shipPhysics: ShipPhysics | null = null;
   private uiContainer: Container | null = null;
 
-  // Planet rendering
-  private planetSprites: PlanetSprite[] = [];
-  private planetInfoPanel: PlanetInfoPanel | null = null;
-  // Station rendering
-  private stationMarkers: {
-    station: Station;
-    container: Container;
-    x: number;
-    y: number;
-  }[] = [];
-  private routeTargetStationId: string | null = null;
+  // Owns all planet sprites, station markers, the planet info panel and the
+  // route-target state — extracted from this scene as a FlightModule. The scene
+  // reads its planetSprites/stationMarkers/routeTarget* fields for route
+  // planning, landing/docking and re-entry spawn; route logic stays here.
+  private planetManager!: PlanetManager;
   // Renders the central sun (glow halo, rotating surface, limb fade) and owns the
   // star geometry the scene reads for collision/orbit/route math — extracted from
   // this scene as a FlightModule. Exposes centerX/centerY/radius/avoidRadius.
@@ -156,7 +147,6 @@ export class SpaceFlightScene extends GameScene {
   // holds position, and how long one waited day takes in real time.
   private waitDayAccum: number = 0;
   private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070)
-  private readonly LANDING_RANGE: number = 60; // px: how close the ship must be to a planet to land
   private dayCounterText: Text | null = null;
 
   // Speed control HUD button (cycles 1×/2×/4×)
@@ -169,8 +159,6 @@ export class SpaceFlightScene extends GameScene {
 
   // Two-step movement: plan route, then execute
   private plannedRoute: { x: number; y: number } | null = null;
-  // If the active route targets a planet, its id — the ship auto-lands on arrival.
-  private routeTargetPlanetId: string | null = null;
   // Full curved path (around the star) kept for drawing the route line; the
   // ship flows through it via ShipPhysics.setPath (no scene-side waypoint queue).
   private routePath: { x: number; y: number }[] = [];
@@ -265,7 +253,7 @@ export class SpaceFlightScene extends GameScene {
       this.renderer.uiLayer,
       {
         getShipPhysics: () => this.shipPhysics,
-        getPlanetSprites: () => this.planetSprites,
+        getPlanetSprites: () => this.planetManager.planetSprites,
         getStarCenter: () => ({
           x: this.starRenderer.centerX,
           y: this.starRenderer.centerY,
@@ -276,7 +264,7 @@ export class SpaceFlightScene extends GameScene {
         hideTooltip: () => this.hideTooltip(),
         executeRouteTo: (x, y) => this.executeRouteTo(x, y),
         clearRouteTarget: () => {
-          this.routeTargetPlanetId = null;
+          this.planetManager.routeTargetPlanetId = null;
         },
         endTurn: () => this.endTurn(),
       },
@@ -412,6 +400,43 @@ export class SpaceFlightScene extends GameScene {
     // the scene hands it the finished polyline + marker decision.
     this.routeRenderer = new RouteRenderer(this.renderer.gameLayer);
 
+    // Planet module: owns planet sprites, station markers, the info panel and the
+    // route-target state. Its accessors read live scene state (ship physics, star
+    // centre, the orbital-day clock, turn state) and the HUD (tooltip); clicking a
+    // body delegates the route/landing/docking back to the scene via callbacks, so
+    // route data stays here (Information Expert). Built later via initialize().
+    this.planetManager = new PlanetManager(
+      this.renderer,
+      this.gameEngine,
+      this.renderer.gameLayer,
+      this.renderer.uiLayer,
+      {
+        getShipPhysics: () => this.shipPhysics,
+        getStarCenter: () => ({
+          x: this.starRenderer.centerX,
+          y: this.starRenderer.centerY,
+        }),
+        isTurnRunning: () => this.isTurnRunning,
+        getOrbitalDay: () => {
+          const gameDays = this.gameEngine?.galaxy?.gameDays ?? 0;
+          const fractionalDay = this.distanceTraveled / this.DISTANCE_PER_DAY;
+          return gameDays + fractionalDay + this.waitDayAccum;
+        },
+        showPlanetTooltip: (planet, faction, sx, sy) =>
+          this.showPlanetTooltip(planet, faction, sx, sy),
+        hideTooltip: () => this.hideTooltip(),
+        clearFollow: () => {
+          if (this.npcManager) this.npcManager.followNpcId = null;
+        },
+      },
+    );
+    this.planetManager.onPlanetRouteRequested = (planetId, x, y) =>
+      this.handlePlanetRouteRequested(planetId, x, y);
+    this.planetManager.onPlanetLanding = (planetId) =>
+      this.handlePlanetLanding(planetId);
+    this.planetManager.onStationDock = (stationId) =>
+      this.handleStationDock(stationId);
+
     // Player-ship module: owns the ship hull/sprite, glow, heading crosshair and
     // the cosmetic take-off arc. Reads the authoritative position from the
     // ShipPhysics created above; the scene keeps the flight/turn logic.
@@ -452,8 +477,7 @@ export class SpaceFlightScene extends GameScene {
 
     this.starRenderer.initialize();
     this.orbitRenderer.initialize(); // Orbit circles + boundary (hyperjump edge)
-    this.createPlanets(); // Planets added to gameLayer directly (not blurred)
-    this.createStations(); // Space stations in this system (US-066)
+    this.planetManager.initialize(); // Planets + station markers (US-066)
     this.npcManager.initialize(); // NPC ships present in this system (Feature 8)
     this.playerShip.initialize(); // Ship hull/sprite, glow, heading crosshair
     this.asteroidBelt.initialize(); // Foreground asteroids/comets (US-070 #1)
@@ -463,7 +487,7 @@ export class SpaceFlightScene extends GameScene {
     // not at the system edge. Planets are placed at a random orbital angle each
     // time the scene loads, so we resolve the position after createPlanets().
     if (ctx?.fromPlanetId && this.shipPhysics) {
-      const sprite = this.planetSprites.find(
+      const sprite = this.planetManager.planetSprites.find(
         (s) => s.planet.id === ctx.fromPlanetId,
       );
       if (sprite) {
@@ -613,7 +637,8 @@ export class SpaceFlightScene extends GameScene {
     this.updateCameraReturn();
     this.updateCamera();
     this.npcManager.update(deltaTime, this.bgElapsed);
-    this.updatePlanets(deltaTime);
+    this.planetManager.update(deltaTime, this.bgElapsed);
+    this.updateSystemMiniMap();
     this.updatePlayPauseButton();
     this.updateMiniLog(deltaTime);
   }
@@ -692,25 +717,8 @@ export class SpaceFlightScene extends GameScene {
     this.warpInProgress = false;
     this.waitDayAccum = 0;
 
-    // Destroy planet sprites
-    for (const sprite of this.planetSprites) {
-      sprite.destroy();
-    }
-    this.planetSprites = [];
-
-    // Destroy station markers
-    for (const m of this.stationMarkers) {
-      this.renderer.gameLayer.removeChild(m.container);
-      m.container.destroy({ children: true });
-    }
-    this.stationMarkers = [];
-    this.routeTargetStationId = null;
-
-    // Destroy planet info panel
-    if (this.planetInfoPanel) {
-      this.planetInfoPanel.destroy();
-      this.planetInfoPanel = null;
-    }
+    // Tear down planet sprites, station markers and the planet info panel.
+    this.planetManager?.destroy();
 
     // Tear down NPC ship sprites, contact panel and the OVERMIND-core overlay.
     this.npcManager?.destroy();
@@ -1172,181 +1180,75 @@ export class SpaceFlightScene extends GameScene {
     this.settingsPanel = panel;
   }
 
-  /**
-   * Create planet sprites for the current star system
-   */
-  private createPlanets(): void {
-    if (!this.gameEngine?.player) return;
+  private readonly DOCKING_RANGE = 55;
 
-    // Get current system
-    const currentSystemId = this.gameEngine.player.currentSystemId;
-    const galaxy = this.gameEngine.galaxy;
-    if (!galaxy) return;
-
-    const currentSystem = galaxy.systems.find((s) => s.id === currentSystemId);
-    if (
-      !currentSystem ||
-      !currentSystem.planets ||
-      currentSystem.planets.length === 0
-    ) {
-      logger.debug("No planets in current system");
-      return;
-    }
-
-    // Get quest objective locations
-    const questLocations =
-      this.gameEngine.questManager.getActiveQuestLocations();
-
-    // Orbital position is a deterministic function of the (persisted) game-day
-    // count, so planets sit where they should every time the scene loads — no
-    // more random teleport-around-the-sun after landing (US-070 #9). The base
-    // angle is derived from the planet id so each planet starts at a stable,
-    // distinct point on its orbit.
-    const gameDays = this.gameEngine.galaxy?.gameDays ?? 0;
-    for (const planet of currentSystem.planets) {
-      const baseAngle = hashToAngle(planet.id);
-      const sprite = new PlanetSprite(
-        planet,
-        this.starRenderer.centerX,
-        this.starRenderer.centerY,
-        baseAngle,
-        gameDays,
-      );
-
-      // Set up click handler
-      sprite.createHitArea(this.onPlanetClick.bind(this));
-
-      // Tooltip on hover (B1) — immediate rich tooltip for planets.
-      const systemFaction = currentSystem.ownerFaction;
-      sprite.setTooltipHandlers(
-        (p, sx, sy) => this.showPlanetTooltip(p, systemFaction, sx, sy),
-        () => this.hideTooltip(),
-      );
-
-      // Add quest marker if this planet is a quest objective
-      if (questLocations.includes(planet.id)) {
-        this.addQuestMarker(sprite);
-      }
-
-      // zIndex 50 so ships behind the disc (zIndex 40) are occluded and ships
-      // in front (zIndex 100) render on top — see updateNpcDepth().
-      sprite.container.zIndex = 50;
-      this.renderer.gameLayer.addChild(sprite.container);
-      this.planetSprites.push(sprite);
-    }
-
-    logger.info(`Created ${this.planetSprites.length} planet sprites`);
+  private async onDockAtStation(station: Station): Promise<void> {
+    if (!this.gameEngine) return;
+    logger.info(`Docking at station: ${station.name}`);
+    this.clearPlannedRoute();
+    this.planetManager.routeTargetStationId = null;
+    await this.gameEngine.transitionTo(SceneType.STATION, {
+      gameEngine: this.gameEngine,
+      station,
+    });
   }
 
   /**
-   * Add quest marker (pulsing ring) to a planet sprite
+   * Plan or execute a route to a clicked planet (delegated by PlanetManager).
+   * Two-step movement: first click plans the preview, a second click on the same
+   * planet executes it. Route planning + targets are the scene's concern
+   * (Information Expert); the manager owns the body sprites + info panel.
    */
-  private addQuestMarker(sprite: PlanetSprite): void {
-    const marker = new Graphics();
+  private handlePlanetRouteRequested(
+    planetId: string,
+    x: number,
+    y: number,
+  ): void {
+    const sprite = this.planetManager.planetSprites.find(
+      (s) => s.planet.id === planetId,
+    );
+    if (!sprite) return;
 
-    // Draw pulsing ring around planet
-    const radius = 25; // Slightly larger than planet
-    marker.circle(0, 0, radius);
-    marker.stroke({ width: 3, color: 0xffff00, alpha: 0.8 });
+    // Curve the approach into a spiral-in around the planet's orbit edge (Task 5).
+    const landing = {
+      planetX: sprite.screenX,
+      planetY: sprite.screenY,
+      planetRadius: sprite.displayRadius,
+    };
 
-    // Add to planet container so it rotates with planet
-    sprite.container.addChild(marker);
+    // Detect second click via planet ID (stable even as the planet orbits),
+    // not position proximity (which broke when the planet moved between clicks).
+    const isSamePlanet = this.planetManager.routeTargetPlanetId === planetId;
+    this.planetManager.routeTargetPlanetId = planetId;
 
-    logger.debug(`Added quest marker to planet ${sprite.planet.name}`);
-  }
-
-  // ── Station rendering (US-066) ──────────────────────────────────────────────
-
-  private createStations(): void {
-    const currentSystemId = this.gameEngine?.player?.currentSystemId;
-    const galaxy = this.gameEngine?.galaxy;
-    if (!currentSystemId || !galaxy) return;
-
-    const currentSystem = galaxy.systems.find((s) => s.id === currentSystemId);
-    if (!currentSystem || !currentSystem.stations.length) return;
-
-    for (const station of currentSystem.stations) {
-      const wx =
-        this.starRenderer.centerX +
-        Math.cos(station.orbitAngle) * station.orbitRadius;
-      const wy =
-        this.starRenderer.centerY +
-        Math.sin(station.orbitAngle) * station.orbitRadius;
-
-      const ctn = new Container();
-      ctn.x = wx;
-      ctn.y = wy;
-      ctn.zIndex = 90;
-
-      // Diamond shape coloured by station type
-      const stationColor = this.stationColor(
-        station.type as import("@/types").StationType,
+    if (this.plannedRoute && isSamePlanet) {
+      this.executeRouteTo(x, y, landing);
+      logger.info(`▶️ Executing route to planet ${sprite.planet.name}`);
+    } else {
+      this.planRouteTo(x, y, landing);
+      logger.info(
+        `🗺️ Route planned to planet ${sprite.planet.name}. Click again to execute.`,
       );
-      const g = new Graphics();
-      g.poly([0, -14, 10, 0, 0, 14, -10, 0]);
-      g.fill({ color: stationColor, alpha: 0.85 });
-      g.stroke({ color: 0xffffff, width: 1, alpha: 0.4 });
-      g.eventMode = "none";
-      ctn.addChild(g);
-
-      // Small label
-      const label = new Text({
-        text: station.name.slice(0, 22),
-        style: {
-          fontSize: scaledFont(10),
-          fill: stationColor,
-          fontFamily: "monospace",
-        },
-      });
-      label.anchor.set(0.5, 0);
-      label.y = 18;
-      label.eventMode = "none";
-      ctn.addChild(label);
-
-      // Hit area for clicking
-      const hit = new Graphics();
-      hit.circle(0, 0, 20);
-      hit.fill({ color: 0xffffff, alpha: 0.001 });
-      hit.eventMode = "static";
-      hit.cursor = "pointer";
-      hit.on("pointerdown", (e) => {
-        e.stopPropagation();
-        this.onStationClick(station);
-      });
-      ctn.addChild(hit);
-
-      this.renderer.gameLayer.addChild(ctn);
-      this.stationMarkers.push({ station, container: ctn, x: wx, y: wy });
-    }
-
-    logger.info(`Created ${this.stationMarkers.length} station markers`);
-  }
-
-  private stationColor(type: import("@/types").StationType): number {
-    switch (type) {
-      case "TRADE_POST":
-        return 0xffcc44;
-      case "REPAIR_DOCK":
-        return 0x44aaff;
-      case "MILITARY_BASE":
-        return 0xff5544;
-      case "RESEARCH_LAB":
-        return 0xcc88ff;
-      default:
-        return 0xaaaaaa;
     }
   }
 
-  private onStationClick(station: Station): void {
-    logger.debug(`Station clicked: ${station.name}`);
-    if (!this.shipPhysics) return;
+  /** Land on a planet (delegated by PlanetManager's info-panel land button). */
+  private handlePlanetLanding(planetId: string): void {
+    const sprite = this.planetManager.planetSprites.find(
+      (s) => s.planet.id === planetId,
+    );
+    if (sprite) void this.onLandOnPlanet(sprite.planet);
+  }
 
-    const marker = this.stationMarkers.find((m) => m.station.id === station.id);
-    if (!marker) return;
-
-    this.routeTargetStationId = station.id;
-    this.routeTargetPlanetId = null;
-    this.npcManager.followNpcId = null;
+  /**
+   * Plan or execute a route to a clicked station (delegated by PlanetManager).
+   * The actual docking is proactive — see updateShip when within DOCKING_RANGE.
+   */
+  private handleStationDock(stationId: string): void {
+    const marker = this.planetManager.stationMarkers.find(
+      (m) => m.station.id === stationId,
+    );
+    if (!marker || !this.shipPhysics) return;
 
     if (this.plannedRoute) {
       const dx = marker.x - this.plannedRoute.x;
@@ -1359,129 +1261,21 @@ export class SpaceFlightScene extends GameScene {
     this.planRouteTo(marker.x, marker.y);
   }
 
-  private readonly DOCKING_RANGE = 55;
-
-  private async onDockAtStation(station: Station): Promise<void> {
-    if (!this.gameEngine) return;
-    logger.info(`Docking at station: ${station.name}`);
-    this.clearPlannedRoute();
-    this.routeTargetStationId = null;
-    await this.gameEngine.transitionTo(SceneType.STATION, {
-      gameEngine: this.gameEngine,
-      station,
-    });
-  }
-
-  /**
-   * Handle planet click: two-step movement - plan route on first click, execute on second
-   */
-  private onPlanetClick(planet: Planet): void {
-    if (this.isTurnRunning) return;
-
-    logger.debug(
-      `Planet clicked: ${planet.name}, plannedRoute=${JSON.stringify(this.plannedRoute)}, routeTargetPlanetId=${this.routeTargetPlanetId}`,
-    );
-
-    const planetSprite = this.planetSprites.find(
-      (s) => s.planet.id === planet.id,
-    );
-    if (!planetSprite || !this.shipPhysics) return;
-
-    this.npcManager.followNpcId = null; // picking a planet cancels auto-follow
-
-    // Compute approach point at planet edge (ship-facing side) so the route
-    // preview stops at the disc surface rather than cutting through to the centre.
-    const approachPt = planetApproachPoint(
-      this.shipPhysics.shipX,
-      this.shipPhysics.shipY,
-      planetSprite.screenX,
-      planetSprite.screenY,
-      planetSprite.displayRadius,
-      GAME_BALANCE.landingApproachOffset,
-    );
-    logger.debug(
-      `Planet ${planet.name}: approach pt (${approachPt.x.toFixed(0)}, ${approachPt.y.toFixed(0)})`,
-    );
-
-    // Detect second click via planet ID (stable even as the planet orbits),
-    // not position proximity (which broke when the planet moved between clicks).
-    const isSamePlanet = this.routeTargetPlanetId === planet.id;
-    this.routeTargetPlanetId = planet.id;
-
-    // Curve the approach into a spiral-in around the planet's orbit edge (Task 5).
-    const landing = {
-      planetX: planetSprite.screenX,
-      planetY: planetSprite.screenY,
-      planetRadius: planetSprite.displayRadius,
-    };
-
-    if (this.plannedRoute && isSamePlanet) {
-      // Second click on same planet - execute the route
-      this.executeRouteTo(approachPt.x, approachPt.y, landing);
-      logger.info(`▶️ Executing route to planet ${planet.name}`);
-    } else {
-      // First click or different planet - plan the route preview
-      this.planRouteTo(approachPt.x, approachPt.y, landing);
-      logger.info(
-        `🗺️ Route planned to planet ${planet.name}. Click again to execute.`,
-      );
-    }
-
-    // Show planet info panel. Landing is only offered once the ship has
-    // actually flown to the planet; otherwise a single click would teleport the
-    // player there (game-days only accrue while the ship is in motion).
-    if (this.planetInfoPanel) {
-      this.planetInfoPanel.destroy();
-      this.planetInfoPanel = null;
-    }
-
-    const distanceX = planetSprite.screenX - this.shipPhysics.shipX;
-    const distanceY = planetSprite.screenY - this.shipPhysics.shipY;
-    const distanceToPlanet = Math.sqrt(
-      distanceX * distanceX + distanceY * distanceY,
-    );
-    const flightDays = Math.max(
-      1,
-      Math.ceil(distanceToPlanet / this.DISTANCE_PER_DAY),
-    );
-    const shipAtPlanet =
-      distanceToPlanet <= this.landingThreshold(planetSprite);
-
-    const currentSystemId = this.gameEngine?.player?.currentSystemId;
-    const currentSystem = this.gameEngine?.galaxy?.systems.find(
-      (s) => s.id === currentSystemId,
-    );
-    this.planetInfoPanel = new PlanetInfoPanel(
-      planet,
-      this.renderer.app.screen.width,
-      this.renderer.app.screen.height,
-      flightDays,
-      shipAtPlanet ? () => this.onLandOnPlanet(planet) : undefined,
-      currentSystem?.ownerFaction,
-    );
-    this.renderer.uiLayer.addChild(this.planetInfoPanel.container);
-  }
-
-  /**
-   * Distance (px) from the ship to a planet's centre at which landing is
-   * allowed. Planets render large (US-070 #3), so this is the surface radius
-   * plus a fixed approach margin — otherwise the ship would have to fly to the
-   * planet's centre, deep inside the disc, before it could land.
-   */
-  private landingThreshold(sprite: PlanetSprite): number {
-    return sprite.displayRadius + this.LANDING_RANGE;
-  }
-
   private async onLandOnPlanet(planet: Planet): Promise<void> {
     // Guard: only allow landing when the ship has actually reached the planet.
     // Game-days already accrue during the flight (see updateShip), so we do NOT
     // simulate flightDays here — doing so previously let a single click both
     // teleport the player and skip days for free.
-    const sprite = this.planetSprites.find((s) => s.planet.id === planet.id);
+    const sprite = this.planetManager.planetSprites.find(
+      (s) => s.planet.id === planet.id,
+    );
     if (sprite && this.shipPhysics) {
       const dx = sprite.screenX - this.shipPhysics.shipX;
       const dy = sprite.screenY - this.shipPhysics.shipY;
-      if (Math.sqrt(dx * dx + dy * dy) > this.landingThreshold(sprite)) {
+      if (
+        Math.sqrt(dx * dx + dy * dy) >
+        this.planetManager.landingThreshold(sprite)
+      ) {
         logger.warn("Cannot land: ship has not reached the planet yet");
         return;
       }
@@ -1584,8 +1378,8 @@ export class SpaceFlightScene extends GameScene {
           // Keep the route line visible during movement
         } else {
           // Clicked on different location - update planned route (empty space)
-          this.routeTargetPlanetId = null;
-          this.routeTargetStationId = null;
+          this.planetManager.routeTargetPlanetId = null;
+          this.planetManager.routeTargetStationId = null;
           this.npcManager.followNpcId = null;
           this.pendingWarp = null; // cancel warp if user picks a different destination
           this.planRouteTo(world.x, world.y);
@@ -1595,8 +1389,8 @@ export class SpaceFlightScene extends GameScene {
         }
       } else {
         // First click - plan the route (don't start moving yet)
-        this.routeTargetPlanetId = null;
-        this.routeTargetStationId = null;
+        this.planetManager.routeTargetPlanetId = null;
+        this.planetManager.routeTargetStationId = null;
         this.npcManager.followNpcId = null;
         this.pendingWarp = null; // cancel warp if user picks a new destination
         this.planRouteTo(world.x, world.y);
@@ -1834,7 +1628,7 @@ export class SpaceFlightScene extends GameScene {
     if (!this.shipPhysics) return;
 
     if (fromStationId) {
-      const marker = this.stationMarkers.find(
+      const marker = this.planetManager.stationMarkers.find(
         (m) => m.station.id === fromStationId,
       );
       if (marker) {
@@ -1850,7 +1644,9 @@ export class SpaceFlightScene extends GameScene {
     const player = this.gameEngine?.player;
     const landedId = player?.landedPlanetId;
     if (landedId) {
-      const sprite = this.planetSprites.find((s) => s.planet.id === landedId);
+      const sprite = this.planetManager.planetSprites.find(
+        (s) => s.planet.id === landedId,
+      );
       if (sprite) {
         this.spawnShipBeside(
           sprite.screenX,
@@ -2011,9 +1807,9 @@ export class SpaceFlightScene extends GameScene {
     this.shipPhysics.update(deltaTime);
 
     // Proactive docking: station is a small marker, dock when within DOCKING_RANGE.
-    if (this.routeTargetStationId && this.shipPhysics.isMoving) {
-      const marker = this.stationMarkers.find(
-        (m) => m.station.id === this.routeTargetStationId,
+    if (this.planetManager.routeTargetStationId && this.shipPhysics.isMoving) {
+      const marker = this.planetManager.stationMarkers.find(
+        (m) => m.station.id === this.planetManager.routeTargetStationId,
       );
       if (marker) {
         const d = Math.hypot(
@@ -2030,16 +1826,16 @@ export class SpaceFlightScene extends GameScene {
     // Proactive landing: planets render large (US-070 #3), so land as soon as
     // the ship touches the planet's surface margin instead of flying all the way
     // to its centre (which sits deep inside the disc).
-    if (this.routeTargetPlanetId && this.shipPhysics.isMoving) {
-      const sprite = this.planetSprites.find(
-        (s) => s.planet.id === this.routeTargetPlanetId,
+    if (this.planetManager.routeTargetPlanetId && this.shipPhysics.isMoving) {
+      const sprite = this.planetManager.planetSprites.find(
+        (s) => s.planet.id === this.planetManager.routeTargetPlanetId,
       );
       if (sprite) {
         const d = Math.hypot(
           sprite.screenX - this.shipPhysics.shipX,
           sprite.screenY - this.shipPhysics.shipY,
         );
-        if (d <= this.landingThreshold(sprite)) {
+        if (d <= this.planetManager.landingThreshold(sprite)) {
           const planet = sprite.planet;
           this.clearPlannedRoute();
           void this.onLandOnPlanet(planet);
@@ -2067,16 +1863,16 @@ export class SpaceFlightScene extends GameScene {
 
       // If the route targeted a planet, land on arrival (the player set the
       // planet as the destination, so landing is the expected outcome).
-      if (this.routeTargetPlanetId) {
-        const sprite = this.planetSprites.find(
-          (s) => s.planet.id === this.routeTargetPlanetId,
+      if (this.planetManager.routeTargetPlanetId) {
+        const sprite = this.planetManager.planetSprites.find(
+          (s) => s.planet.id === this.planetManager.routeTargetPlanetId,
         );
         if (sprite) {
           const dist = Math.hypot(
             sprite.screenX - this.shipPhysics.shipX,
             sprite.screenY - this.shipPhysics.shipY,
           );
-          if (dist <= this.landingThreshold(sprite)) {
+          if (dist <= this.planetManager.landingThreshold(sprite)) {
             const planet = sprite.planet;
             this.clearPlannedRoute();
             void this.onLandOnPlanet(planet);
@@ -2279,13 +2075,8 @@ export class SpaceFlightScene extends GameScene {
 
     this.routeRenderer.drawRoute(points, this.DISTANCE_PER_DAY);
 
-    // Check if route target is near a planet (within 50px radius)
-    const isLandingOnPlanet = this.planetSprites.some((sprite) => {
-      const pdx = sprite.screenX - toX;
-      const pdy = sprite.screenY - toY;
-      const planetDistance = Math.sqrt(pdx * pdx + pdy * pdy);
-      return planetDistance < 50; // Within planet interaction radius
-    });
+    // Check if route target is near a planet (within its interaction radius)
+    const isLandingOnPlanet = this.planetManager.getPlanetAt(toX, toY) !== null;
 
     // Draw different marker based on whether this is a landing or empty space navigation
     if (isLandingOnPlanet) {
@@ -2387,10 +2178,12 @@ export class SpaceFlightScene extends GameScene {
 
   private clearPlannedRoute(): void {
     this.plannedRoute = null;
-    this.routeTargetPlanetId = null;
-    this.routeTargetStationId = null;
     // Guard: clearPlannedRoute runs from destroy(), which may fire before the
-    // scene finished initializing (and constructing the NPC module).
+    // scene finished initializing (and constructing the planet/NPC modules).
+    if (this.planetManager) {
+      this.planetManager.routeTargetPlanetId = null;
+      this.planetManager.routeTargetStationId = null;
+    }
     if (this.npcManager) this.npcManager.followNpcId = null;
     this.routePath = [];
 
@@ -2400,31 +2193,11 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Update planet positions for orbital rotation and mini-map
-   * Turn-based: planets only rotate when ship is moving
+   * Refresh the system mini-map each frame (planet positions, ship, NPC dots,
+   * route + camera viewport). Planet orbital motion itself is owned by
+   * PlanetManager.update(); this only reads its sprites for the radar.
    */
-  private updatePlanets(deltaTime: number): void {
-    // Orbital position tracks elapsed game days (whole days advance as the ship
-    // flies; the in-flight fraction makes the motion smooth). Because position
-    // is a pure function of game time, planets only advance by the days actually
-    // spent away — no full orbit during a brief landing (US-070 #9).
-    const gameDays = this.gameEngine?.galaxy?.gameDays ?? 0;
-    const fractionalDay = this.distanceTraveled / this.DISTANCE_PER_DAY;
-    // While waiting in place, waitDayAccum carries the smooth sub-day progress so
-    // planets keep drifting (US-070 #5).
-    const currentDays = gameDays + fractionalDay + this.waitDayAccum;
-    for (const sprite of this.planetSprites) {
-      sprite.setOrbitForDay(currentDays);
-    }
-
-    // Cosmetic axial spin / moons only advance while the turn is running.
-    if (this.isTurnRunning) {
-      const scaledDt = deltaTime * (this.shipPhysics?.timeScale ?? 1);
-      for (const sprite of this.planetSprites) {
-        sprite.update(scaledDt);
-      }
-    }
-
+  private updateSystemMiniMap(): void {
     // Always update mini-map (even when paused, for visual feedback)
     if (this.systemMiniMap && this.shipPhysics) {
       const npcDots = this.npcManager.getNpcDots();
@@ -2447,7 +2220,7 @@ export class SpaceFlightScene extends GameScene {
         maxY: (this.renderer.app.screen.height - this.cameraPanY) / z,
       };
       this.systemMiniMap.updateWithSprites(
-        this.planetSprites,
+        this.planetManager.planetSprites,
         this.shipPhysics.shipX,
         this.shipPhysics.shipY,
         this.starRenderer.centerX,
@@ -2527,7 +2300,7 @@ export class SpaceFlightScene extends GameScene {
   /** Switch planet and NPC cursors so hovering shows intent only when not mid-turn. */
   private updateInteractiveCursors(turnRunning: boolean): void {
     const planetCursor = turnRunning ? "default" : "pointer";
-    for (const sprite of this.planetSprites) {
+    for (const sprite of this.planetManager.planetSprites) {
       sprite.graphics.cursor = planetCursor;
     }
     // NPC cursors + interactivity restore are owned by the NPC module.
@@ -2553,7 +2326,7 @@ export class SpaceFlightScene extends GameScene {
     return (
       this.npcManager.hasOpenModal() ||
       this.questJournalUI !== null ||
-      this.planetInfoPanel !== null ||
+      this.planetManager.hasInfoPanel ||
       this.settingsPanel !== null
     );
   }
@@ -2564,9 +2337,7 @@ export class SpaceFlightScene extends GameScene {
     const journal = this.questJournalUI;
     this.questJournalUI = null;
     if (journal) queueMicrotask(() => journal.destroy());
-    const info = this.planetInfoPanel;
-    this.planetInfoPanel = null;
-    if (info) queueMicrotask(() => info.destroy());
+    this.planetManager.closeInfoPanel();
     if (this.settingsPanel) {
       const sp = this.settingsPanel;
       this.settingsPanel = null;
@@ -2821,9 +2592,8 @@ export class SpaceFlightScene extends GameScene {
       } else if (this.questJournalUI) {
         this.questJournalUI.destroy();
         this.questJournalUI = null;
-      } else if (this.planetInfoPanel) {
-        this.planetInfoPanel.destroy();
-        this.planetInfoPanel = null;
+      } else if (this.planetManager.hasInfoPanel) {
+        this.planetManager.closeInfoPanel();
       } else if (this.plannedRoute) {
         this.clearPlannedRoute();
         this.showMessage("Маршрут отменён", 0xffaa00);
@@ -2952,7 +2722,7 @@ export class SpaceFlightScene extends GameScene {
     logger.info(`Navigating to quest objective: ${locationId}`);
 
     // Find planet sprite by locationId
-    const planetSprite = this.planetSprites.find(
+    const planetSprite = this.planetManager.planetSprites.find(
       (s) => s.planet.id === locationId,
     );
     if (planetSprite && this.shipPhysics) {
@@ -2963,7 +2733,7 @@ export class SpaceFlightScene extends GameScene {
       );
 
       // Show planet info panel
-      this.onPlanetClick(planetSprite.planet);
+      this.planetManager.handlePlanetClick(planetSprite.planet);
     } else {
       logger.warn(`Could not find planet with ID: ${locationId}`);
     }
@@ -3034,7 +2804,7 @@ export class SpaceFlightScene extends GameScene {
   /** E2E helper: return current system planets for test assertions */
   e2eGetPlanets(): { id: string; name: string }[] {
     if (!__DEBUG__) return [];
-    return this.planetSprites.map((ps) => ({
+    return this.planetManager.planetSprites.map((ps) => ({
       id: ps.planet.id,
       name: ps.planet.name,
     }));
@@ -3043,7 +2813,7 @@ export class SpaceFlightScene extends GameScene {
   /** E2E helper: transition directly to PLANET scene bypassing distance check */
   async e2eLandOnPlanet(): Promise<void> {
     if (!__DEBUG__) return;
-    const planet = this.planetSprites[0]?.planet;
+    const planet = this.planetManager.planetSprites[0]?.planet;
     if (!planet || !this.gameEngine) return;
     await this.gameEngine.transitionTo(SceneType.PLANET, {
       gameEngine: this.gameEngine,

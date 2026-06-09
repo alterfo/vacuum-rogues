@@ -2,10 +2,10 @@
  * Verifies that route building and NPC/planet panel interactions are blocked
  * while a turn is running (isTurnRunning=true).
  *
- * Task 2 guard logic: onPlanetClick and onNpcClick return early when
- * isTurnRunning=true so plannedRoute is never changed mid-turn.
+ * Task 2 guard logic: PlanetManager.handlePlanetClick and NpcShipManager.onNpcClick
+ * return early when isTurnRunning=true so plannedRoute is never changed mid-turn.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 // Mock pixi.js and all presentation helpers that import it.
 vi.mock("pixi.js", () => {
@@ -154,13 +154,18 @@ vi.mock("@/presentation/cursor", () => ({
   setCanvasCursor: vi.fn(),
 }));
 
-import { SpaceFlightScene } from "@/presentation/SpaceFlightScene";
 import {
   NpcShipManager,
   type NpcShipManagerDeps,
 } from "@/presentation/flight/NpcShipManager";
+import {
+  PlanetManager,
+  type PlanetManagerDeps,
+} from "@/presentation/flight/PlanetManager";
 import type { Renderer } from "@/presentation/Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
+import type { ShipPhysics } from "@/systems/ShipPhysics";
+import type { PlanetSprite } from "@/presentation/PlanetSprite";
 import type { Planet } from "@/domain/Planet";
 
 function makeMockRenderer(): Renderer {
@@ -218,70 +223,66 @@ function makeMockPlanet(id = "planet-1"): Planet {
 }
 
 describe("routeOnlyInPause: route blocked while turn is running", () => {
-  let scene: SpaceFlightScene;
-  let s: Record<string, unknown>;
-
-  beforeEach(() => {
+  // Planet click handling moved to PlanetManager. handlePlanetClick requests a
+  // route (delegated to the scene via onPlanetRouteRequested) only when paused.
+  function makePlanetManager(
+    turnRunning: boolean,
+    onRoute?: (id: string, x: number, y: number) => void,
+  ): PlanetManager {
     const renderer = makeMockRenderer();
-    scene = new SpaceFlightScene(renderer);
-    s = scene as unknown as Record<string, unknown>;
-
-    // Inject minimal private state so onPlanetClick can be called safely.
-    s.isTurnRunning = false;
-    s.plannedRoute = null;
-    s.routeTargetPlanetId = null;
-    s.shipPhysics = {
-      shipX: 100,
-      shipY: 100,
-      isMoving: false,
+    const deps: PlanetManagerDeps = {
+      getShipPhysics: () =>
+        ({ shipX: 100, shipY: 100 }) as unknown as ShipPhysics,
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => turnRunning,
+      getOrbitalDay: () => 0,
+      showPlanetTooltip: () => {},
+      hideTooltip: () => {},
+      clearFollow: () => {},
     };
-    s.planetSprites = [];
-    // NPC auto-follow state is owned by the NPC module now (onPlanetClick clears
-    // it). A bare stub is enough for the planet-click tests below.
-    s.npcManager = { followNpcId: null };
-    s.planetInfoPanel = null;
-    s.gameEngine = { galaxy: { systems: [] }, player: null };
-    // Stub planRouteTo so it doesn't blow up without a full scene.
-    s.planRouteTo = vi.fn();
-    s.executeRouteTo = vi.fn();
-    s.showMessage = vi.fn();
-    s.turnHintShown = false;
-  });
+    const gameEngine = {
+      galaxy: { systems: [] },
+      player: null,
+    } as unknown as GameEngine;
+    const mgr = new PlanetManager(
+      renderer,
+      gameEngine,
+      renderer.gameLayer,
+      renderer.uiLayer,
+      deps,
+    );
+    if (onRoute) mgr.onPlanetRouteRequested = onRoute;
+    return mgr;
+  }
 
-  it("onPlanetClick sets routeTargetPlanetId when paused", () => {
-    s.isTurnRunning = false;
+  it("handlePlanetClick requests a route when paused", () => {
+    let routedId: string | null = null;
+    const mgr = makePlanetManager(false, (id) => {
+      routedId = id;
+    });
     const planet = makeMockPlanet("p1");
+    mgr.planetSprites = [
+      { planet, screenX: 400, screenY: 300, displayRadius: 60 },
+    ] as unknown as PlanetSprite[];
 
-    // Inject a matching sprite so onPlanetClick can find it.
-    s.planetSprites = [
-      {
-        planet,
-        screenX: 400,
-        screenY: 300,
-        displayRadius: 60,
-        graphics: { cursor: "pointer" },
-        destroy: vi.fn(),
-      },
-    ];
+    mgr.handlePlanetClick(planet);
 
-    (scene as unknown as { onPlanetClick(p: Planet): void }).onPlanetClick(
-      planet,
-    );
-
-    expect(s.routeTargetPlanetId).toBe("p1");
+    expect(routedId).toBe("p1");
   });
 
-  it("onPlanetClick does NOT change routeTargetPlanetId when turn is running", () => {
-    s.isTurnRunning = true;
-    s.routeTargetPlanetId = null;
+  it("handlePlanetClick does NOT request a route when the turn is running", () => {
+    let routed = false;
+    const mgr = makePlanetManager(true, () => {
+      routed = true;
+    });
     const planet = makeMockPlanet("p2");
+    mgr.planetSprites = [
+      { planet, screenX: 400, screenY: 300, displayRadius: 60 },
+    ] as unknown as PlanetSprite[];
 
-    (scene as unknown as { onPlanetClick(p: Planet): void }).onPlanetClick(
-      planet,
-    );
+    mgr.handlePlanetClick(planet);
 
-    expect(s.routeTargetPlanetId).toBeNull();
-    expect(s.planRouteTo).not.toHaveBeenCalled();
+    expect(routed).toBe(false);
   });
 
   // NPC click handling moved to NpcShipManager. The turn-running guard and the

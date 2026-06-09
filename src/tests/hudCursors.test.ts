@@ -234,7 +234,9 @@ describe("hudCursors: HUD buttons keep their pointer cursor across turns", () =>
     );
     (mgr as unknown as { npcSprites: unknown[] }).npcSprites = [pirate, trader];
 
-    s.planetSprites = [planet];
+    // Planet sprites now live on the PlanetManager module; updateInteractiveCursors
+    // reads them from it. A bare stub holding the planet is enough here.
+    s.planetManager = { planetSprites: [planet] };
     s.npcManager = mgr;
     s.playPauseButton = { container: playBtnContainer };
   });
