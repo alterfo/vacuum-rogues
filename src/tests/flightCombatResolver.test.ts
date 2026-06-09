@@ -82,4 +82,29 @@ describe("FlightCombatResolver", () => {
       expect(result.npc).toBe(sprite.npc);
     }
   });
+
+  it("returns launch when target is exactly at weapon range boundary", () => {
+    const physics = makeShipPhysics(0, 0);
+    const sprite = makeNpcSprite("npc-1", 240, 0); // dist === weaponRange
+    const result = resolver.decide({
+      isTurnRunning: true,
+      followNpcId: "npc-1",
+      shipPhysics: physics,
+      npcSprites: [sprite],
+      weaponRange: 240,
+    });
+    expect(result.action).toBe("launch");
+  });
+
+  it("returns chase when target is one pixel beyond weapon range", () => {
+    const physics = makeShipPhysics(0, 0);
+    const result = resolver.decide({
+      isTurnRunning: true,
+      followNpcId: "npc-1",
+      shipPhysics: physics,
+      npcSprites: [makeNpcSprite("npc-1", 241, 0)],
+      weaponRange: 240,
+    });
+    expect(result.action).toBe("chase");
+  });
 });

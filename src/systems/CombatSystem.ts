@@ -288,6 +288,7 @@ export class CombatSystem {
         xpGained: result.xpGained,
         loot: result.loot as ShipModule[],
         message: result.message,
+        outcome: result.outcome,
       };
     }
 
@@ -359,10 +360,11 @@ export class CombatSystem {
           const absorbed = Math.min(player.shields, rawDamage);
           player.shields -= absorbed;
           player.hullHP -= rawDamage - absorbed;
+          damageTaken += rawDamage - absorbed;
         } else {
           player.hullHP -= rawDamage;
+          damageTaken += rawDamage;
         }
-        damageTaken += rawDamage;
       } else if (action.type === "MOVE" && action.target) {
         // Apply grid movement
         this.applyGridMove(enemy, action.target);
@@ -528,11 +530,11 @@ export class CombatSystem {
     if (!targetTile || targetTile.occupant) return;
 
     // Clear the enemy from its current tile
-    for (let r = 0; r < this.grid.height; r++) {
+    outer: for (let r = 0; r < this.grid.height; r++) {
       for (let q = 0; q < this.grid.width; q++) {
         if (this.grid.tiles[r][q].occupant === enemy) {
           this.grid.tiles[r][q].occupant = null;
-          break;
+          break outer;
         }
       }
     }

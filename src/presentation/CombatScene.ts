@@ -584,7 +584,7 @@ export class CombatScene extends GameScene {
       );
     }
 
-    if (result.loot !== undefined || result.xpGained !== undefined) {
+    if (result.outcome !== undefined) {
       this.applyRewardsToPlayer(
         result.xpGained ?? 0,
         (result.loot as import("@/domain/ShipModule").ShipModule[]) ?? [],
@@ -594,7 +594,7 @@ export class CombatScene extends GameScene {
         result.message,
         result.xpGained ?? 0,
         (result.loot as import("@/domain/ShipModule").ShipModule[]) ?? [],
-        "victory",
+        result.outcome === EncounterState.PLAYER_WON ? "victory" : "defeat",
       );
       return;
     }
@@ -646,7 +646,7 @@ export class CombatScene extends GameScene {
       );
     }
 
-    if (result.loot !== undefined || result.xpGained !== undefined) {
+    if (result.outcome !== undefined) {
       this.applyRewardsToPlayer(
         result.xpGained ?? 0,
         (result.loot as import("@/domain/ShipModule").ShipModule[]) ?? [],
@@ -656,7 +656,7 @@ export class CombatScene extends GameScene {
         result.message,
         result.xpGained ?? 0,
         (result.loot as import("@/domain/ShipModule").ShipModule[]) ?? [],
-        "victory",
+        result.outcome === EncounterState.PLAYER_WON ? "victory" : "defeat",
       );
       return;
     }

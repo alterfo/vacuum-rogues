@@ -371,6 +371,7 @@ export interface CombatResult {
   readonly killPointsGained?: number;
   readonly loot?: unknown[];
   readonly message: string;
+  readonly outcome?: EncounterState;
 }
 
 export interface EncounterResult {

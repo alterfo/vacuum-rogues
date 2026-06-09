@@ -50,4 +50,47 @@ describe("ShipPhysics", () => {
     expect(p.getSpeedFraction()).toBeGreaterThan(0.5);
     expect(p.getSpeedFraction()).toBeLessThanOrEqual(1.0);
   });
+
+  it("setPath([]) with empty array does nothing", () => {
+    const p = new ShipPhysics(100, 200, 0.1);
+    p.setPath([]);
+    expect(p.isMoving).toBe(false);
+    expect(p.shipX).toBe(100);
+    expect(p.shipY).toBe(200);
+  });
+
+  it("setPath with multiple waypoints starts moving and hasPath is true", () => {
+    const p = new ShipPhysics(0, 0, 0.5);
+    p.setPath([
+      { x: 100, y: 0 },
+      { x: 200, y: 0 },
+      { x: 300, y: 0 },
+    ]);
+    expect(p.isMoving).toBe(true);
+    expect(p.hasPath()).toBe(true);
+  });
+
+  it("setPath: ship travels through waypoints and arrives at final destination", () => {
+    const p = new ShipPhysics(0, 0, 1.0);
+    p.setPath([
+      { x: 50, y: 0 },
+      { x: 100, y: 0 },
+    ]);
+    // Run until arrival
+    for (let i = 0; i < 500; i++) p.update(100);
+    expect(p.isMoving).toBe(false);
+    expect(p.hasPath()).toBe(false);
+    expect(p.shipX).toBeCloseTo(100, 0);
+  });
+
+  it("update() clamps deltaTime at 100ms — lag spike behaves like 100ms frame", () => {
+    const p1 = new ShipPhysics(0, 0, 0.5);
+    const p2 = new ShipPhysics(0, 0, 0.5);
+    p1.setTarget(5000, 0);
+    p2.setTarget(5000, 0);
+    p1.update(100);
+    p2.update(1000); // should be clamped to 100
+    expect(p1.shipX).toBeCloseTo(p2.shipX, 5);
+    expect(p1.currentSpeed).toBeCloseTo(p2.currentSpeed, 5);
+  });
 });

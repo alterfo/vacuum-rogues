@@ -141,7 +141,6 @@ export class SpaceFlightScene extends GameScene {
   // the image), so the sprite is pre-rotated -90° (counter-clockwise) to align
   // art-forward with the heading. Verified live in US-070 Round 4.
   private readonly SHIP_SPRITE_ROTATION = -Math.PI / 2;
-  private backgroundContainer: Container | null = null; // Nebula clouds (world-space, blurred)
   // Screen-fixed deep-space backdrop (crisp far stars + twinkle), sits behind
   // the world so panning never reveals an edge. Added to renderer.stage.
   private skyContainer: Container | null = null;
@@ -489,10 +488,6 @@ export class SpaceFlightScene extends GameScene {
       this.renderer.app.screen.height,
       this.gameEngine?.player?.currentSystemId ?? "default",
     );
-
-    // Reserved world-space container (currently empty; nebulae moved to skyContainer).
-    this.backgroundContainer = new Container();
-    this.renderer.gameLayer.addChild(this.backgroundContainer);
 
     this.createNebulae(); // Screen-space nebula clouds (skyContainer) + swarms
     this.createStarField(); // Crisp far stars (screen-fixed)
@@ -849,7 +844,6 @@ export class SpaceFlightScene extends GameScene {
     this.shipContainer = null;
     this.shipGraphics = null;
     this.shipSprite = null;
-    this.backgroundContainer = null;
     this.dustContainer = null;
     this.asteroidContainer = null;
     this.nebulaeContainer = null;
@@ -4980,7 +4974,7 @@ export class SpaceFlightScene extends GameScene {
     if (!this.gameEngine) return;
 
     logger.info("Opening inventory");
-    await this.gameEngine.transitionTo("INVENTORY" as any, {
+    await this.gameEngine.transitionTo(SceneType.INVENTORY, {
       gameEngine: this.gameEngine,
     });
   }

@@ -471,13 +471,7 @@ export class GameEngine {
     if (!this.player) return false;
     const VETERAN_RANK = 2;
     if ((this.player.rank ?? 0) < VETERAN_RANK) return false;
-    const factions = [
-      "BASTIONS",
-      "SYNDICATE",
-      "OUTLANDERS",
-      "PROGRESSORS",
-      "PARADOXES",
-    ];
+    const factions = Object.values(FactionType);
     const allied = factions.filter(
       (f) => (this.player!.reputation[f] ?? 0) > 50,
     );

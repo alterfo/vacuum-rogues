@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { QuestVM } from "@/systems/quests/QuestVM";
+import { GameSystemException } from "@/exceptions/GameSystemException";
 import type { QuestScript } from "@/systems/quests/QuestScript";
 
 const basicScript: QuestScript = {
@@ -247,5 +248,33 @@ describe("QuestVM", () => {
     vm1.applyEffect("hp = random(1,100)");
     vm2.applyEffect("hp = random(1,100)");
     expect(vm1.getParam("hp")).toBe(vm2.getParam("hp"));
+  });
+
+  it("execute() throws when transition is not available due to unmet condition", () => {
+    const vm = new QuestVM(basicScript, 42);
+    vm.setParam("money", 100); // below 200, so "buy" is unavailable
+    expect(() => vm.execute("buy")).toThrow("Transition not available: buy");
+  });
+
+  it("execute() throws when transition id does not exist", () => {
+    const vm = new QuestVM(basicScript, 42);
+    expect(() => vm.execute("nonexistent")).toThrow(
+      "Transition not available: nonexistent",
+    );
+  });
+
+  it("evaluate() throws on malformed expression", () => {
+    const vm = new QuestVM(basicScript, 42);
+    expect(() => vm.evaluate("money is 500")).toThrow("Bad condition:");
+  });
+
+  it("applyEffect() throws GameSystemException on divide-by-zero", () => {
+    const vm = new QuestVM(basicScript, 42);
+    expect(() => vm.applyEffect("money /= 0")).toThrow(GameSystemException);
+  });
+
+  it("applyEffect() throws on malformed expression", () => {
+    const vm = new QuestVM(basicScript, 42);
+    expect(() => vm.applyEffect("money is 5")).toThrow("Bad effect:");
   });
 });
