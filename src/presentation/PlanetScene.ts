@@ -1,5 +1,11 @@
 import { GameScene } from "./GameScene";
-import { Container, Graphics, Sprite, Text } from "pixi.js";
+import {
+  Container,
+  Graphics,
+  Sprite,
+  Text,
+  type FederatedPointerEvent,
+} from "pixi.js";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
 import { SceneType } from "@/types";
@@ -45,8 +51,46 @@ export function visiblePlanetServices<T extends { label: string }>(
   return buttons.filter((b) => b.label === "Взлёт");
 }
 
+/**
+ * Clamp the panorama's horizontal offset so its edges never reveal empty space
+ * (Task 6). When the panorama is wider than the screen, x is constrained to
+ * `[screenWidth - panoramaWidth, 0]`; when it is narrower (or equal) it is
+ * centred and cannot be dragged.
+ */
+export function clampPanoramaX(
+  x: number,
+  panoramaWidth: number,
+  screenWidth: number,
+): number {
+  if (panoramaWidth <= screenWidth) return (screenWidth - panoramaWidth) / 2;
+  const min = screenWidth - panoramaWidth; // negative — right edge of pan range
+  return Math.max(min, Math.min(0, x));
+}
+
+/**
+ * Build a top→bottom procedural sky gradient (Task 6 fallback when no panorama
+ * art exists). Returns `steps` band colours: the top band is near-black space,
+ * lower bands blend up to ~45% toward the controlling faction's colour so the
+ * sky reads as that faction's world instead of flat black.
+ */
+export function skyGradientColors(baseColor: number, steps: number): number[] {
+  const br = (baseColor >> 16) & 0xff;
+  const bg = (baseColor >> 8) & 0xff;
+  const bb = baseColor & 0xff;
+  const out: number[] = [];
+  for (let i = 0; i < steps; i++) {
+    const t = steps <= 1 ? 1 : i / (steps - 1); // 0 at top → 1 at bottom
+    const mix = t * 0.45;
+    const r = Math.round(0x02 + (br - 0x02) * mix);
+    const g = Math.round(0x03 + (bg - 0x03) * mix);
+    const b = Math.round(0x0a + (bb - 0x0a) * mix);
+    out.push((r << 16) | (g << 8) | b);
+  }
+  return out;
+}
+
 const BRIBE_COST = 500;
-const PLANET_VISUAL_RADIUS = 180;
+const PLANET_VISUAL_RADIUS = 196;
 
 const FACTION_RU: Record<string, string> = {
   OUTLANDERS: "Окраинники",
@@ -121,6 +165,15 @@ export class PlanetScene extends GameScene {
   /** Bribe paid this landing — gates are lifted for the duration of the visit. */
   private bribed = false;
 
+  // Task 6 — panorama drag-to-look + rotating planet orb
+  private panoramaSprite: Sprite | null = null;
+  private panoramaWidth = 0;
+  private isPanningPanorama = false;
+  private lastPanoramaPointerX = 0;
+  private planetOrbSprite: Sprite | null = null;
+  private boundPanoramaMove: ((e: FederatedPointerEvent) => void) | null = null;
+  private boundPanoramaUp: (() => void) | null = null;
+
   initialize(context?: object): void {
     const ctx = context as PlanetContext | undefined;
     this.gameEngine = ctx?.gameEngine ?? null;
@@ -143,6 +196,20 @@ export class PlanetScene extends GameScene {
     this.checkDeliveryQuestCompletion();
     this.checkCustoms();
 
+    // Panorama drag-to-look (Task 6): the wide background pans horizontally as
+    // the player drags. Move/up are tracked on the stage so a drag started over
+    // the background keeps tracking even if the pointer leaves the sprite.
+    this.boundPanoramaMove = (e) => this.onPanoramaMove(e);
+    this.boundPanoramaUp = () => {
+      this.isPanningPanorama = false;
+    };
+    const stage = this.renderer.app.stage;
+    stage.eventMode = "static";
+    stage.hitArea = this.renderer.app.screen;
+    stage.on("pointermove", this.boundPanoramaMove);
+    stage.on("pointerup", this.boundPanoramaUp);
+    stage.on("pointerupoutside", this.boundPanoramaUp);
+
     if (!panoramaTex(FACTION_PANORAMA[initFaction] ?? "wilderness_jungle")) {
       loadTextureAsync(panoramaKey)
         .then((tex) => {
@@ -156,7 +223,32 @@ export class PlanetScene extends GameScene {
     }
   }
 
-  update(_deltaTime: number): void {}
+  update(deltaTime: number): void {
+    // Subtle planet-orb rotation (Task 6). deltaTime is in ms; ~0.04 rad/s gives
+    // a slow, barely-perceptible spin (full turn ≈ 160 s).
+    if (this.planetOrbSprite && !this.planetOrbSprite.destroyed) {
+      this.planetOrbSprite.rotation += deltaTime * 0.00004;
+    }
+  }
+
+  /** Drag-to-look: pan the panorama horizontally, clamped to its edges. */
+  private onPanoramaMove(e: FederatedPointerEvent): void {
+    if (
+      !this.isPanningPanorama ||
+      !this.panoramaSprite ||
+      this.panoramaSprite.destroyed
+    ) {
+      return;
+    }
+    const w = this.renderer.app.screen.width;
+    const dx = e.global.x - this.lastPanoramaPointerX;
+    this.lastPanoramaPointerX = e.global.x;
+    this.panoramaSprite.x = clampPanoramaX(
+      this.panoramaSprite.x + dx,
+      this.panoramaWidth,
+      w,
+    );
+  }
 
   /**
    * Auto-complete DELIVERY quests whose targetSystemId matches the current
@@ -445,6 +537,22 @@ export class PlanetScene extends GameScene {
       clearTimeout(this.toastTimeout);
       this.toastTimeout = null;
     }
+    // Detach panorama drag handlers (Task 6).
+    const stage = this.renderer?.app?.stage;
+    if (stage) {
+      if (this.boundPanoramaMove) {
+        stage.off("pointermove", this.boundPanoramaMove);
+      }
+      if (this.boundPanoramaUp) {
+        stage.off("pointerup", this.boundPanoramaUp);
+        stage.off("pointerupoutside", this.boundPanoramaUp);
+      }
+    }
+    this.boundPanoramaMove = null;
+    this.boundPanoramaUp = null;
+    this.panoramaSprite = null;
+    this.planetOrbSprite = null;
+    this.isPanningPanorama = false;
     this.closeJobBoard();
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
@@ -468,26 +576,43 @@ export class PlanetScene extends GameScene {
     const factionName = FACTION_RU[faction] ?? faction;
     const factionColor = FACTION_COLOR[faction] ?? 0x999999;
 
-    // Panoramic background: faction-specific wide panorama, lazy-loaded
+    // Panoramic background: faction-specific wide panorama, lazy-loaded.
+    // Fill the full screen height and let the width overflow so the player can
+    // drag horizontally to "look around" (Task 6).
     const panoramaKey = FACTION_PANORAMA[faction] ?? "wilderness_jungle";
     const panTex = panoramaTex(panoramaKey);
     if (panTex && panTex.width > 1 && panTex.height > 0) {
       const panorama = new Sprite(panTex);
-      panorama.eventMode = "none";
-      // Cover scale: fill width first, then height if needed
-      panorama.width = w;
-      panorama.height = panorama.width / (panTex.width / panTex.height);
-      if (panorama.height < h) {
-        panorama.height = h;
-        panorama.width = panorama.height * (panTex.width / panTex.height);
+      const aspect = panTex.width / panTex.height;
+      panorama.height = h;
+      panorama.width = h * aspect;
+      if (panorama.width < w) {
+        // Narrower than the screen — fall back to width-fill (no pan room).
+        panorama.width = w;
+        panorama.height = w / aspect;
       }
-      panorama.x = (w - panorama.width) / 2;
       panorama.y = (h - panorama.height) / 2;
+      panorama.x = clampPanoramaX((w - panorama.width) / 2, panorama.width, w);
+      // Draggable: start a pan on press; stage move/up (initialize) do the rest.
+      panorama.eventMode = "static";
+      panorama.cursor = "grab";
+      panorama.on("pointerdown", (e: FederatedPointerEvent) => {
+        this.isPanningPanorama = true;
+        this.lastPanoramaPointerX = e.global.x;
+      });
+      this.panoramaSprite = panorama;
+      this.panoramaWidth = panorama.width;
       this.renderer.gameLayer.addChild(panorama);
     } else {
+      // No panorama art: procedural sky gradient tinted toward the faction colour.
+      this.panoramaSprite = null;
+      const bands = skyGradientColors(factionColor, 10);
+      const bandH = h / bands.length;
       const bg = new Graphics();
-      bg.rect(0, 0, w, h);
-      bg.fill({ color: 0x000510 });
+      for (let i = 0; i < bands.length; i++) {
+        bg.rect(0, i * bandH, w, bandH + 1);
+        bg.fill({ color: bands[i] });
+      }
       bg.eventMode = "none";
       this.renderer.gameLayer.addChild(bg);
     }
@@ -500,7 +625,7 @@ export class PlanetScene extends GameScene {
     this.renderer.gameLayer.addChild(overlay);
 
     const planetCX = w / 2;
-    const planetCY = Math.min(h * 0.22, PLANET_VISUAL_RADIUS + 10);
+    const planetCY = Math.min(h * 0.2, PLANET_VISUAL_RADIUS + 10);
 
     // Atmospheric glow: concentric semi-transparent rings
     const glowAlphas = [0.15, 0.08, 0.03];
@@ -528,8 +653,10 @@ export class PlanetScene extends GameScene {
       sprite.width = PLANET_VISUAL_RADIUS * 2;
       sprite.height = PLANET_VISUAL_RADIUS * 2;
       sprite.eventMode = "none";
+      this.planetOrbSprite = sprite;
       this.renderer.gameLayer.addChild(sprite);
     } else {
+      this.planetOrbSprite = null;
       const fallbackColors = PLANET_FALLBACK_COLORS[this.planet.type] ?? [
         0x555566, 0x666677,
       ];
@@ -626,18 +753,20 @@ export class PlanetScene extends GameScene {
     }
 
     // Layout calculations: flow below the planet
-    const nameY = planetCY + PLANET_VISUAL_RADIUS + 18;
-    const infoY = nameY + 34;
-    const statY = infoY + 66;
-    const btnStartY = statY + 38;
+    const nameY = planetCY + PLANET_VISUAL_RADIUS + 16;
+    const subtitleY = nameY + 24;
+    const infoY = nameY + 46;
+    const statY = infoY + 64;
+    const btnStartY = statY + 36;
     const btnStep = Math.max(30, (h - btnStartY - 24) / 8);
 
+    // Planet name header: larger font in the controlling faction's colour.
     const title = new Text({
       text: this.planet.name,
       style: {
         fontFamily: "Courier New",
-        fontSize: scaledFont(28),
-        fill: 0x00ffff,
+        fontSize: scaledFont(30),
+        fill: factionColor,
         fontWeight: "bold",
         align: "center",
       },
@@ -647,6 +776,24 @@ export class PlanetScene extends GameScene {
     title.y = nameY;
     title.eventMode = "none";
     ui.addChild(title);
+
+    // Subtitle: planet type and habitability status.
+    const subtitle = new Text({
+      text: `${this.getType(this.planet.type)} • ${
+        this.planet.isHabitable ? "Обитаемая" : "Необитаемая"
+      }`,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(13),
+        fill: 0x99bbcc,
+        align: "center",
+      },
+    });
+    subtitle.anchor.set(0.5);
+    subtitle.x = w / 2;
+    subtitle.y = subtitleY;
+    subtitle.eventMode = "none";
+    ui.addChild(subtitle);
 
     // Planet info panel (US-060): faction, econ type, reputation, market goods.
     this.addInfoPanel(ui, w, infoY);

@@ -86,14 +86,14 @@ Related: US-070, US-071, US-072, US-074, US-075
 **Files:**
 - Modify: `src/presentation/PlanetScene.ts`
 
-- [ ] Panorama background: implement horizontal pan with mouse drag (mouseX delta → sprite.x offset clamped to panorama width − screen width), so the user can "look around" as described
-- [ ] Ensure panorama fills full screen height, overflows horizontally; clamp pan so edges are never visible (panorama is 4096px wide, screen ~1280px → 2816px of pan range)
-- [ ] Planet sphere (top-left decorative orb): increase size, add subtle rotation animation using `PlanetRotationFilter` if available, else simple UV scroll
-- [ ] Service buttons: use consistent `UiButton` component with proper spacing; show faction banner color as accent on header
-- [ ] Planet name header: larger font, faction color, with subtitle showing planet type and habitability
-- [ ] Fallback when no panorama asset exists: gradient sky matching faction color palette instead of flat black
-- [ ] Write test: `visiblePlanetServices` correctly hides services for uninhabited planet (existing test — verify still passes)
-- [ ] Run `npm test -- --run` — must pass
+- [x] Panorama background: implement horizontal pan with mouse drag (mouseX delta → sprite.x offset clamped to panorama width − screen width), so the user can "look around" as described — `pointerdown` on the panorama sprite starts a drag; stage `pointermove`/`pointerup` track it; `onPanoramaMove` applies the delta through `clampPanoramaX`
+- [x] Ensure panorama fills full screen height, overflows horizontally; clamp pan so edges are never visible (panorama is 4096px wide, screen ~1280px → 2816px of pan range) — panorama now scaled to `height = screenH` (width overflows by aspect); `clampPanoramaX` constrains x to `[screenW - panoramaW, 0]` and centres non-pannable (narrower) panoramas
+- [x] Planet sphere (top-left decorative orb): increase size, add subtle rotation animation using `PlanetRotationFilter` if available, else simple UV scroll — no rotation filter exists in the codebase; `PLANET_VISUAL_RADIUS` bumped 180→196 and `update()` applies a very slow `planetOrbSprite.rotation` spin (~0.04 rad/s, full turn ≈ 160 s)
+- [x] Service buttons: use consistent `UiButton` component with proper spacing; show faction banner color as accent on header — service buttons already render via `UiButton`; the planet name header now uses the controlling faction's colour as its accent
+- [x] Planet name header: larger font, faction color, with subtitle showing planet type and habitability — title font 28→30 in faction colour, with a new subtitle line ("<type> • Обитаемая/Необитаемая")
+- [x] Fallback when no panorama asset exists: gradient sky matching faction color palette instead of flat black — `skyGradientColors(factionColor, 10)` draws a top→bottom gradient (space-black → 45% toward faction hue) replacing the flat `0x000510` fill
+- [x] Write test: `visiblePlanetServices` correctly hides services for uninhabited planet (existing test — verify still passes) — existing `PlanetScene.services.test.ts` still passes; new `planetSceneUtils.test.ts` also re-covers it plus `clampPanoramaX`/`skyGradientColors`
+- [x] Run `npm test -- --run` — must pass (743 tests pass)
 
 ### Task 7: Job board — richer quest text + governor dialogue entry
 **Files:**

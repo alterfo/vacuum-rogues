@@ -1,119 +1,123 @@
 ---
-# Planet Parallax + UI Click Audit
+# Planet Parallax + UI Click Fix
 
 ## Overview
 
-Two focused fixes for PlanetScene: (1) subtle mouse-driven parallax on the panorama background so it feels alive when the cursor moves, and (2) a systematic audit of every scene's eventMode/stopPropagation setup to eliminate the intermittent click-swallowing bug reported across PlanetScene service buttons and SpaceFlightScene HUD.
+Two user-reported regressions: (1) the planet panorama background is static — it should drift slightly when the mouse moves (subtle parallax); (2) UI clicks break chaotically across scenes — "many buttons just stop working" with no reproducible trigger.
+
+Root cause of the click bug (found during code review): `GameEngine.transitionTo()` tears down a scene by calling only `currentScene.destroy()` and relies on each scene to fully clean the shared `gameLayer`/`uiLayer`. The teardown contract is inconsistent across scenes (some call `clearGameLayer()`+`clearUILayer()`, some destroy a single `mainContainer`, some do only one). Any incomplete `destroy()` leaves interactive PixiJS objects from the previous scene attached on top of the next scene, silently swallowing clicks. The fix is a central, idempotent layer-clear in `transitionTo` as a safety net, plus a per-scene teardown audit.
+
+This plan is sequenced to run AFTER sprint2 (`20260608-sprint2-flight-and-ui-polish.md`) finishes. Sprint2 Task 6 adds drag-pan to the same panorama sprite; Task 3 here reconciles parallax with whatever sprint2 produced (do not duplicate the pointermove wiring).
 
 ## Context
 
-- **Files involved**: `src/presentation/PlanetScene.ts`, `src/presentation/SpaceFlightScene.ts`, `src/presentation/ui/UiButton.ts`, `src/presentation/TradeScene.ts`, `src/presentation/StationScene.ts`, `src/presentation/JobBoardPanel.ts`, `src/presentation/InventoryScene.ts`
-- **Panorama sprite**: `PlanetScene.ts:475` — sprite created with `eventMode="none"`, no mouse-move handler, centered at `(w - panorama.width) / 2`
-- **Reported bug**: Clicks fail chaotically in PlanetScene (service buttons), SpaceFlightScene (HUD, planets), and elsewhere — no reproducible trigger
-- **Known patterns** (CLAUDE.md): `eventMode='none'` on parent containers blocks children; Text defaults to `eventMode='auto'` and blocks clicks beneath; `stopPropagation()` required on all interactive elements above global stage handlers
-- **Related plan**: `20260608-sprint2-flight-and-ui-polish.md` Task 6 (panorama pan) overlaps slightly — this plan implements mouse-parallax, the other plan implements drag-pan; they are compatible
+- `src/systems/GameEngine.ts` — `transitionTo()` at line 219; scene teardown at lines 231-235 (`this.currentScene.destroy()`), no central layer clear.
+- `src/presentation/Renderer.ts` — `clearGameLayer()` (line 47) and `clearUILayer()` (line 55) each remove + `destroy()` every child. Only `gameLayer` and `uiLayer` are added to the stage (lines 36-37); no content is meant to persist across scenes, so clearing both on every transition is safe.
+- `src/presentation/PlanetScene.ts` — panorama sprite created in `createUI()` (~line 472-486), added to `gameLayer`, `eventMode="none"`. After sprint2 Task 6 it will be stored as a class field with drag-pan handlers.
+- Per-scene teardown audit baseline (run `grep -c clearGameLayer` / `clearUILayer` per file):
+  - Clean both layers: PlanetScene, StarMapScene, CombatScene, DialogueScene, GovernmentScene, MainMenuScene, TextQuestScene.
+  - Use single `mainContainer.destroy({children:true})` (verified correct, refresh paths destroy-before-recreate): InfoCenterScene, StationScene, InventoryScene, RaceSelectionScene.
+  - Mixed/partial — call `clearGameLayer()` AND `mainContainer.destroy()` but never `clearUILayer()`: TradeScene, EquipmentShopScene, WinScene.
+- Scenes also add transient overlays OUTSIDE `mainContainer` directly to `uiLayer` — these are the highest leak risk: `PlanetScene.jobBoardPanel` (line 987), toasts, governor dialogue panel.
 
 ## Development Approach
 
-- **Testing approach**: Regular (code first, then unit tests + E2E smoke)
-- Complete each task fully before moving to the next
-- Changes are surgical — touch only the minimum needed; no refactors or new abstractions
-- Run `npm run lint && npm test -- --run` after each task
-- E2E regression suite (`npm run test:e2e:regression`) must pass before final task
+- **Testing approach**: Regular (code first, then unit tests + E2E smoke).
+- Tasks are independent; do them in order. Complete and verify each before the next.
+- Each task lists an exact "Done when" gate. Run `npm run lint && npm test -- --run` after every task; it MUST pass before moving on.
+- Changes are surgical — no refactors, no new abstractions, touch only the lines named.
+- Run `npm run test:e2e:regression` before the final verify task.
 
 ## Implementation Steps
 
-### Task 1: Mouse-parallax on PlanetScene panorama
+### Task 1: Central layer-clear safety net in transitionTo
+
+**Files:**
+- Modify: `src/systems/GameEngine.ts`
+
+- [ ] In `transitionTo()`, find the teardown block (around lines 231-235) that reads `this.currentScene.destroy(); this.currentScene = null;`
+- [ ] Immediately AFTER that block, add `this.renderer.clearGameLayer();` and `this.renderer.clearUILayer();` so both shared layers are guaranteed empty before the new scene is instantiated. Guard with `if (this.renderer)` (the method already throws earlier if renderer is missing, so a plain call is fine).
+- [ ] Add a code comment: `// Safety net: guarantee no orphaned interactive objects survive a scene's incomplete destroy() (prevents click-swallowing across scenes).`
+- [ ] Write unit test `src/tests/transitionClearsLayers.test.ts`: build a GameEngine with a mock renderer whose `gameLayer`/`uiLayer` are real PixiJS `Container`s; add a dummy child to each; transition to a scene that adds nothing; assert both layers have `children.length === 0` after the transition (i.e. the stale child was removed). Use existing test setup patterns from `src/tests/` for mocking the renderer/scene factory.
+- [ ] **Done when**: `npm run lint && npm test -- --run` passes and the new test proves layers are cleared on transition.
+
+### Task 2: Per-scene teardown audit (defense in depth)
+
+**Files:**
+- Modify: `src/presentation/TradeScene.ts`, `src/presentation/EquipmentShopScene.ts`, `src/presentation/WinScene.ts`
+
+- [ ] In each of the three scenes' `destroy()`, the cleanup is currently `mainContainer.destroy({children:true})` + `clearGameLayer()` but never `clearUILayer()`. Since `mainContainer` is added to `uiLayer`, add an explicit `this.renderer.clearUILayer();` call in each `destroy()` so UI is fully cleared even if a transient overlay was added outside `mainContainer`. (After Task 1 this is redundant but documents the contract and protects against direct `transitionTo` callers in tests.)
+- [ ] Verify each scene's transient overlays are torn down: in `PlanetScene` confirm `closeJobBoard()` (already called in `destroy()` line 448) removes `jobBoardPanel.container` from `uiLayer`; confirm any toast timeout is cleared.
+- [ ] Do NOT change the scenes that already clear both layers or that use a single verified `mainContainer` — leave InfoCenterScene/StationScene/InventoryScene/RaceSelectionScene as-is.
+- [ ] **Done when**: `grep -L clearUILayer` over TradeScene/EquipmentShopScene/WinScene returns nothing (all three now reference it), and `npm run lint && npm test -- --run` passes.
+
+### Task 3: PlanetScene panorama parallax (reconcile with sprint2 drag-pan)
 
 **Files:**
 - Modify: `src/presentation/PlanetScene.ts`
 
-- [ ] Store `panoramaBg` as a class field (currently a local `const panorama`) so `update()` can access it
-- [ ] Store `panoramaBaseX` (the initial centered X) and `panoramaMaxOffset` (e.g. `30`) as class fields
-- [ ] In `initialize()`, register a `pointermove` listener on `this.renderer.app.stage` that records `this._mouseX` (global X, 0–screenWidth)
-- [ ] In `update(dt)`, compute target offset: `(mouseX / screenW - 0.5) * 2 * maxOffset` (maps center→0, edges→±maxOffset), then lerp `panorama.x` toward `panoramaBaseX + offset` with factor `0.05 * dt * 60` for smooth inertia
-- [ ] In `destroy()`, remove the pointermove listener to avoid memory leak
-- [ ] Write unit test in `src/tests/planetScene.parallax.test.ts`: mock stage, simulate pointermove events, assert panorama.x converges toward expected offset after several update ticks
-- [ ] Run `npm run lint && npm test -- --run` — must pass
+- [ ] First READ the current panorama setup in `createUI()` and `initialize()`. Sprint2 Task 6 likely already: (a) stores the panorama as a class field, (b) records `lastPanX`, (c) registers a `stage.on("pointermove", ...)` drag handler. Reuse those fields — do NOT add a second pointermove listener.
+- [ ] Add subtle parallax on mouse move (no button held), on top of any drag-pan: store `panoramaBaseX` (the centered X computed at setup) and a constant `PANORAMA_PARALLAX_MAX = 30` (px). In the existing pointermove handler, when NOT dragging, compute `norm = (event.global.x / screenWidth) * 2 - 1` (range -1..1) and set a target `panoramaBaseX + norm * PANORAMA_PARALLAX_MAX`.
+- [ ] Apply the target with easing in `update(dt)` so motion is smooth, not jumpy: `panorama.x += (targetX - panorama.x) * Math.min(1, 0.08 * dt * 60)`. Store `targetX` as a class field updated by the move handler. If sprint2 already drives `panorama.x` via drag, only apply parallax easing when the drag flag is false.
+- [ ] Clamp the final `panorama.x` so blank edges never show: never let it exceed the existing drag clamp bounds `[-(panorama.width - screenWidth), 0]`.
+- [ ] Ensure the pointermove listener is removed in `destroy()` (sprint2 should already do this via `clearGameLayer`/stage `off`; if a stage listener was added, confirm a matching `stage.off("pointermove", ...)` exists).
+- [ ] Write unit test `src/tests/planetParallax.test.ts` for a pure helper `computeParallaxTargetX(mouseX, screenWidth, baseX, maxOffset)`: assert center → `baseX`, left edge (mouseX=0) → `baseX - maxOffset`, right edge (mouseX=screenWidth) → `baseX + maxOffset`. Extract this helper as an exported pure function so it is testable without PixiJS.
+- [ ] **Done when**: `npm run lint && npm test -- --run` passes; helper test green.
 
-### Task 2: Audit PlanetScene event handling
-
-**Files:**
-- Modify: `src/presentation/PlanetScene.ts`
-
-- [ ] List all Graphics/Containers/Sprites added to `uiLayer` or `gameLayer` that have `eventMode` unset (defaults to `'auto'`) — fix any that are non-interactive to `'none'`
-- [ ] Verify every interactive element (buttons, backdrop, customs modal) calls `event.stopPropagation()` on `pointerdown`
-- [ ] Check `destroy()`: confirm every `pointerdown`/`pointermove`/`pointerup` listener registered on `stage` or `app` is removed
-- [ ] Check z-order: confirm no invisible full-screen Graphics/Container sits above service buttons without `eventMode='none'`
-- [ ] Fix any violations found in the checklist above
-- [ ] Write/update unit test asserting that `PlanetScene.destroy()` removes all stage-level listeners (spy on `stage.off`)
-- [ ] Run `npm run lint && npm test -- --run` — must pass
-
-### Task 3: Audit SpaceFlightScene event handling
+### Task 4: E2E smoke — clicks survive transitions + parallax moves
 
 **Files:**
-- Modify: `src/presentation/SpaceFlightScene.ts`
+- Create: `e2e/planet-parallax-click.spec.ts`
+- Page object: reuse/extend existing objects in `e2e/page-objects/`
 
-- [ ] Audit all containers/graphics added during `initialize()` that don't explicitly set `eventMode` — fix non-interactive ones to `'none'`
-- [ ] Check HUD button creation (back button, quest button, ~line 2295/2324): confirm `stopPropagation()` present
-- [ ] Check modal panel backdrops (~line 2437): confirm `eventMode='static'` + `stopPropagation()` on the backdrop
-- [ ] Check that planet sprites and orbit rings explicitly have `eventMode='none'` or `'static'` (not defaulting to `'auto'`)
-- [ ] Verify `destroy()` cleans up all stage-level listeners registered in this scene
-- [ ] Fix any violations found
-- [ ] Run `npm run lint && npm test -- --run` — must pass
+- [ ] Use `applyMockHeavySystems(page)` before `page.goto()` (per CLAUDE.md E2E fixtures) and attach an `ErrorCollector`; call `assertAndDetach()` at test end.
+- [ ] Test A (click regression): drive scene transitions via `window.__gameEngine` — go SPACE_FLIGHT → PLANET → TRADE → back → PLANET, then invoke a PlanetScene service handler via `page.evaluate` (use an existing `e2e*` method or the scene's public handler) and assert it succeeds (scene type changes or modal opens) with no JS error. This proves clicks are not swallowed by leftover objects.
+- [ ] Test B (parallax): on PlanetScene, read `panorama.x` baseline via `page.evaluate`, call `page.mouse.move()` to the left edge, advance a few frames (`waitForFunction` on the x value changing), assert `panorama.x` decreased from baseline.
+- [ ] Test C (post-modal clicks): open the job board panel, close it, then invoke a service handler again — assert it still fires (regression guard for overlay leak).
+- [ ] **Done when**: `npm run test:e2e:regression` passes and the new spec passes (`npm run test:e2e -- planet-parallax-click`).
 
-### Task 4: Audit remaining scenes (TradeScene, StationScene, JobBoardPanel)
-
-**Files:**
-- Modify: `src/presentation/TradeScene.ts`, `src/presentation/StationScene.ts`, `src/presentation/JobBoardPanel.ts`
-
-- [ ] In TradeScene: confirm all buy/sell/qty controls call `stopPropagation()`; confirm backdrop `eventMode='static'`
-- [ ] In StationScene: audit for any containers without explicit `eventMode` that could intercept clicks
-- [ ] In JobBoardPanel: confirm quest-row clicks and accept-button clicks call `stopPropagation()`; confirm no stale listeners after panel hide/show cycles
-- [ ] Fix any violations found
-- [ ] Run `npm run lint && npm test -- --run` — must pass
-
-### Task 5: E2E smoke — verify clicks and parallax
+### Task 5: Verify acceptance criteria
 
 **Files:**
-- Modify or create: `e2e/planet-parallax-click.spec.ts`
+- Read only.
 
-- [ ] Add E2E test: navigate to PlanetScene, simulate `pointermove` via `page.mouse.move()`, assert `window.__gameEngine.currentScene.panoramaBg.x` shifts from baseline
-- [ ] Add E2E test: click each service button (at least 3) via `page.evaluate(() => scene.e2eClickServiceButton(index))` — assert scene transitions or modal opens without error
-- [ ] Add E2E test: open and close a modal in PlanetScene, then click a service button again — assert click still registers (regression for post-modal click loss)
-- [ ] Run `npm run test:e2e:regression` — must pass
-- [ ] Run `npm run lint` — must pass
-
-### Task 6: Verify acceptance criteria
-
-- [ ] Panorama parallax visible in-browser: mouse at left edge → bg shifts left ~30px; center → no shift; right → shifts right ~30px
-- [ ] Service buttons in PlanetScene always clickable after multiple scene transitions
-- [ ] HUD buttons in SpaceFlightScene always clickable after entering from planet
-- [ ] `npm test -- --run` passes (all unit tests green)
-- [ ] `npm run test:e2e:regression` passes
-- [ ] `npm run lint` passes with 0 errors
+- [ ] `npm test -- --run` — all unit tests pass.
+- [ ] `npm run test:e2e:regression` — passes.
+- [ ] `npm run lint` — 0 errors.
+- [ ] Confirm Task 1's central clear is present in `transitionTo` and Task 2's `clearUILayer` calls are present in the three scenes.
 
 ## Technical Details
 
-**Parallax formula** (in `update`):
+**Central layer clear (Task 1)** — in `GameEngine.transitionTo`, right after the existing destroy block:
 ```typescript
-const norm = (this._mouseX / screenW) * 2 - 1; // -1 … +1
-const targetX = this.panoramaBaseX + norm * this.panoramaMaxOffset;
-this.panoramaBg.x += (targetX - this.panoramaBg.x) * 0.05 * dt * 60;
+if (this.currentScene) {
+  this.currentScene.destroy();
+  this.currentScene = null;
+}
+// Safety net: guarantee no orphaned interactive objects survive a scene's
+// incomplete destroy() (prevents click-swallowing across scenes).
+this.renderer.clearGameLayer();
+this.renderer.clearUILayer();
 ```
-Clamp panorama.x so it never reveals blank space: `panoramaBaseX ± panoramaMaxOffset` must stay inside `[0 - (panorama.width - screenW), 0]`.
+Safe because no content is meant to persist across scenes in these layers — every scene rebuilds its display tree in `initialize()`. The call is idempotent with each scene's own cleanup.
 
-**Audit checklist per scene** (quick grep pattern):
-```bash
-grep -n "eventMode" src/presentation/PlanetScene.ts | grep -v "'none'"
+**Parallax helper (Task 3)** — pure, exported, unit-tested:
+```typescript
+export function computeParallaxTargetX(
+  mouseX: number, screenWidth: number, baseX: number, maxOffset: number,
+): number {
+  const norm = (mouseX / screenWidth) * 2 - 1; // -1 (left) .. +1 (right)
+  return baseX + norm * maxOffset;
+}
 ```
-Any hit that isn't on a deliberately interactive element is a candidate for `'none'`.
 
 ## Post-Completion
 
 **Manual verification:**
-- Play through: land on planet → use each service → return to flight → re-land — confirm no click regression
-- Move mouse slowly across PlanetScene — parallax should feel subtle and smooth, not jumpy
-- Open/close several modals in sequence — buttons must remain responsive throughout
+- Land on a planet; move the mouse slowly left/right — the panorama drifts subtly (~30px each way), smoothly, never showing blank edges.
+- Cycle scenes repeatedly (flight → planet → trade → equipment → info center → back). Every button must remain clickable after every transition.
+- Open and close the job board / governor dialogue several times; service buttons must keep responding.
 
-*Note: ralphex automatically moves completed plans to `docs/plans/completed/`*
+**Separate code-review findings (NOT in this plan — track elsewhere):**
+- `DialogueSystem.startDialogue` stores sessions under `dlg_<npcId>_<timestamp>` but the history-restore lookup uses `npc.id`; keys never match, so history is never restored and `sessionHistory` grows unbounded (memory leak). Fix: key the map by `npc.id`, or store both and prune.
+- Duplicate stub classes: `T5DialogueAdapter`/`GRUEmotionAdapter` exist in both `src/ai/adapters/` and inline in `src/systems/DialogueSystem.ts`. Consolidate to one source.

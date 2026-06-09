@@ -1,0 +1,72 @@
+import { describe, it, expect, vi } from "vitest";
+
+// PlanetScene imports pixi.js at module load; mock it so the pure helpers can be
+// imported without a real renderer.
+vi.mock("pixi.js", () => ({
+  Container: vi.fn(),
+  Graphics: vi.fn(),
+  Text: vi.fn(),
+  Sprite: vi.fn(),
+}));
+
+import {
+  clampPanoramaX,
+  skyGradientColors,
+  visiblePlanetServices,
+} from "@/presentation/PlanetScene";
+
+describe("clampPanoramaX (Task 6 panorama pan)", () => {
+  it("centres a panorama narrower than the screen and ignores drag", () => {
+    expect(clampPanoramaX(0, 800, 1000)).toBe(100);
+    expect(clampPanoramaX(-500, 800, 1000)).toBe(100);
+    expect(clampPanoramaX(999, 800, 1000)).toBe(100);
+  });
+
+  it("clamps a wide panorama to [screenWidth - panoramaWidth, 0]", () => {
+    // 4096px panorama on a 1280px screen → 2816px of pan range.
+    expect(clampPanoramaX(0, 4096, 1280)).toBe(0); // left edge
+    expect(clampPanoramaX(100, 4096, 1280)).toBe(0); // cannot pan past 0
+    expect(clampPanoramaX(-5000, 4096, 1280)).toBe(1280 - 4096); // right edge
+    expect(clampPanoramaX(-1000, 4096, 1280)).toBe(-1000); // mid-range passes
+  });
+
+  it("treats an exactly screen-wide panorama as non-pannable", () => {
+    expect(clampPanoramaX(-50, 1280, 1280)).toBe(0);
+  });
+});
+
+describe("skyGradientColors (Task 6 fallback sky)", () => {
+  it("returns exactly the requested number of bands", () => {
+    expect(skyGradientColors(0x2266ff, 8)).toHaveLength(8);
+    expect(skyGradientColors(0xff6600, 10)).toHaveLength(10);
+  });
+
+  it("starts near space-black and tints toward the faction colour at the bottom", () => {
+    const bands = skyGradientColors(0x2266ff, 10);
+    expect(bands[0]).toBeLessThan(0x0a0a20); // top band ≈ dark space
+    expect(bands[bands.length - 1]).toBeGreaterThan(bands[0]); // bottom brighter
+  });
+
+  it("handles a single-step request without dividing by zero", () => {
+    expect(skyGradientColors(0xff0000, 1)).toHaveLength(1);
+  });
+});
+
+describe("visiblePlanetServices (regression — must still pass)", () => {
+  const ALL = [
+    { label: "Губернатор" },
+    { label: "Верфь" },
+    { label: "Маркет" },
+    { label: "Взлёт" },
+  ];
+
+  it("shows the full set on inhabited worlds", () => {
+    expect(visiblePlanetServices(true, ALL)).toEqual(ALL);
+  });
+
+  it("shows only take-off on uninhabited worlds", () => {
+    expect(visiblePlanetServices(false, ALL).map((b) => b.label)).toEqual([
+      "Взлёт",
+    ]);
+  });
+});
