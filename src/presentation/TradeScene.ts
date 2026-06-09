@@ -162,7 +162,7 @@ export class TradeScene extends GameScene {
 
       // Qty caps
       const maxBuyQty = Math.max(
-        1,
+        0,
         Math.min(
           buyPrice > 0 ? Math.floor(player.credits / buyPrice) : 99,
           freeHold,
@@ -205,19 +205,22 @@ export class TradeScene extends GameScene {
       const isBuyDeal = buyPrice < basePrice * (1 - threshold);
       const isSellDeal = sellPrice > basePrice * (1 + threshold);
 
-      // Buy button
+      // Buy button — disabled when cargo is full
+      const canBuy = maxBuyQty > 0;
       const buyBtn = this.createButton(
         "Купить",
         panelX + 558,
         y - 4,
         80,
         24,
-        0x004488,
+        canBuy ? 0x004488 : 0x222222,
       );
-      buyBtn.on("pointerdown", (e) => {
-        e.stopPropagation();
-        this.trade(resource, true);
-      });
+      if (canBuy) {
+        buyBtn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          this.trade(resource, true);
+        });
+      }
       if (isBuyDeal) {
         const arrow = new Text({
           text: "▼",

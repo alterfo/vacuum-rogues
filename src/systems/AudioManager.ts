@@ -167,6 +167,10 @@ export class AudioManager {
     source.loop = false;
     source.connect(gainNode);
     source.start();
+    source.onended = () => {
+      source.disconnect();
+      gainNode.disconnect();
+    };
   }
 
   setMuted(muted: boolean): void {

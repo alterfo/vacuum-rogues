@@ -251,6 +251,19 @@ export class TradeSystem {
         };
       }
 
+      const totalCargo = player.inventory.resources.reduce(
+        (sum, r) => sum + r.amount,
+        0,
+      );
+      if (totalCargo + amount > player.ship.cargoCapacity) {
+        return {
+          success: false,
+          finalPrice: totalPrice,
+          remainingBalance: player.credits,
+          message: "Not enough cargo space.",
+        };
+      }
+
       player.credits -= totalPrice;
       const stack = player.inventory.resources.find((r) => r.type === resource);
       if (stack) {

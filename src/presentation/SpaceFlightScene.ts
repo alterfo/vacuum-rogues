@@ -738,6 +738,10 @@ export class SpaceFlightScene extends GameScene {
     this.sunContactDamageTimer = 0;
     this._combatTransitionPending = false;
     this.cameraReturning = false;
+    this.warpInProgress = false;
+    this.waitDayAccum = 0;
+    this.takeoffArc = null;
+    this.takeoffArcDist = 0;
 
     // Destroy planet sprites
     for (const sprite of this.planetSprites) {
@@ -2160,7 +2164,7 @@ export class SpaceFlightScene extends GameScene {
       const targetY = this.shipPhysics.getTargetY();
 
       const size = 15;
-      const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7; // Pulsing effect
+      const pulse = Math.sin(this.bgElapsed / 200) * 0.3 + 0.7; // Pulsing effect
 
       // Crosshair lines
       this.targetIndicator.moveTo(targetX - size, targetY);
@@ -2223,7 +2227,8 @@ export class SpaceFlightScene extends GameScene {
         .poly([
           -size * 0.5,
           -size * 0.3,
-          -size * 0.5 - size * 0.5 * Math.random(),
+          -size * 0.5 -
+            size * 0.5 * (0.5 + 0.5 * Math.sin(this.bgElapsed / 80)),
           0,
           -size * 0.5,
           size * 0.3,
