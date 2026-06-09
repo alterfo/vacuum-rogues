@@ -112,12 +112,12 @@ Generate high-quality visual assets for Вакуумные Пройдохи usin
 **Files:**
 - Create: `tools/comfyui/workflow_flux_360_interior.json`
 
-- [ ] Clone `workflow_flux_360_planets.json`; change image size to `width=4096, height=2048` for high-res panoramas
-- [ ] Adjust KSampler/BasicGuider: `steps=40, guidance=3.0` (more detail needed for interior scenes)
-- [ ] Positive prefix: `equirectangular 360 degree panorama, interior view, [FACTION_SCENE_PROMPT]`
-- [ ] `SaveImage.filename_prefix`: `"panoramas/[FACTION]_[CLIMATE]"` (e.g. `panoramas/bastions_city`)
-- [ ] Add `_generation_notes`: 5 faction cities + 3 wilderness biomes (jungle/tundra/desert) = 8 panoramas minimum
-- [ ] SD1.5 alt-workflow note: use `qxj` trigger, 768×384, iterative img2img upscale 2× with `denoise=0.35` to reach 1536×768
+- [x] Clone `workflow_flux_360_planets.json`; change image size to `width=4096, height=2048` for high-res panoramas
+- [x] Adjust KSampler/BasicGuider: `steps=40, guidance=3.0` (more detail needed for interior scenes)
+- [x] Positive prefix: `equirectangular 360 degree panorama, interior view, [FACTION_SCENE_PROMPT]`
+- [x] `SaveImage.filename_prefix`: `"panoramas/[FACTION]_[CLIMATE]"` (e.g. `panoramas/bastions_city`)
+- [x] Add `_generation_notes`: 5 faction cities + 3 wilderness biomes (jungle/tundra/desert) = 8 panoramas minimum
+- [x] SD1.5 alt-workflow note: use `qxj` trigger, 768×384, iterative img2img upscale 2× with `denoise=0.35` to reach 1536×768
 
 ### Task 5: (Manual) Generate Nebula Assets on ComfyUI Host
 **Files:**

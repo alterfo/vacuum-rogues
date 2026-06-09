@@ -1,0 +1,82 @@
+{
+  "_comment": "ComfyUI Workflow C — Planet INTERIOR panoramas via the Flux Equirectangular 360 LoRA (Flux.1-dev base, trigger 'equirectangular 360 degree panorama'). Cloned from workflow_flux_360_planets.json; differs by hi-res 4096x2048 output, steps=40 and FluxGuidance=3.0 for richer interior detail, an 'interior view' positive prefix, and a 'panoramas/' save prefix. API-format graph: POST to /prompt as {\"prompt\": <this>}. Flux needs SPLIT loaders (UNETLoader + DualCLIPLoader + VAELoader), NOT CheckpointLoaderSimple. Replace [FACTION_SCENE_PROMPT] / [FACTION] / [CLIMATE] before queueing — see docs/design/ART_PROMPTS.md '### Planet Interior Panoramas (Flux 360 or SD1.5 360)'. Adjust unet/clip/vae/lora filenames to whatever is installed on the host.",
+  "_generation_notes": {
+    "lora": "flux_equirectangular_360.safetensors (civitai#735980, ver 823024), trigger 'equirectangular 360 degree panorama', weight 0.5-1.5 (default 0.85)",
+    "base_model": "Flux.1-dev — split loaders: UNETLoader (node 4), DualCLIPLoader T5+CLIP-L (node 11), VAELoader Flux ae (node 12). Distilled guidance set via FluxGuidance (node 13).",
+    "latent_note": "Node 5 is EmptySD3LatentImage — Flux uses 16-channel latents, so 'EmptyLatentImage' must be the SD3 variant or sampling errors on a channel mismatch. Size 4096x2048 = 2:1 equirectangular at panorama resolution. WARNING: 4096x2048 Flux sampling is VRAM-heavy on a 24GB RTX 4090; if OOM, render 2048x1024 then upscale 2x with an UltimateSDUpscale / model-upscale pass.",
+    "sampler": "KSampler (node 3): steps=40, cfg=2.5, euler/simple — more steps than the planet workflow (30) for interior detail. FluxGuidance guidance=3.0 (node 13) — higher than the planet workflow (2.5) to push scene structure. Drop cfg to 1.0 to ignore the negative and run ~2x faster.",
+    "positive_prompt": "Set node 6 text to 'equirectangular 360 degree panorama, interior view, [FACTION_SCENE_PROMPT]' from ART_PROMPTS.md '### Planet Interior Panoramas'. Negative (node 7) is fixed for all scenes.",
+    "filename_prefix": "Set node 9 to 'panoramas/[FACTION]_[CLIMATE]' (e.g. 'panoramas/bastions_city', 'panoramas/wilderness_jungle').",
+    "output_size": "4096x2048 — export as JPEG ~85% quality, naming '<faction>_<biome>.jpg'",
+    "faction_cities": ["bastions_city", "syndicate_city", "outlanders_city", "progressors_city", "paradoxes_site"],
+    "wilderness_biomes": ["wilderness_jungle", "wilderness_tundra", "wilderness_desert"],
+    "variants_target": "5 faction cities + 3 wilderness biomes = 8 panoramas minimum; change node 3 'seed' for additional variants",
+    "naming_convention": "<faction>_<biome>.jpg — consumed by PlanetScene -> PanoramaViewer; fallback is outlanders_city.jpg"
+  },
+  "_sd15_fallback": {
+    "_comment": "No-Flux fallback for hosts without Flux.1-dev. Start from workflow_api.json (CheckpointLoaderSimple + KSampler), insert a LoraLoader (node 10 pattern from workflow_zit_nebula.json). Render small then iterative img2img upscale to reach the target panorama size.",
+    "checkpoint": "any SD 1.5 base (e.g. realisticVision / dreamshaper)",
+    "lora_name": "360_diffusion_sd15.safetensors (civitai#26815)",
+    "trigger": "qxj",
+    "lora_strength": "0.8-1.0",
+    "positive_prompt": "qxj, equirectangular panorama, interior view, [FACTION_SCENE_PROMPT]",
+    "aspect": "render 768x384 (2:1), then iterative img2img upscale 2x with denoise=0.35 to reach 1536x768",
+    "ksampler": "first pass steps=28, cfg=7.0, sampler dpmpp_2m, scheduler karras; upscale pass denoise=0.35"
+  },
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 12345, "steps": 40, "cfg": 2.5,
+      "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0,
+      "model": ["10", 0], "positive": ["13", 0], "negative": ["7", 0], "latent_image": ["5", 0]
+    }
+  },
+  "4": {
+    "class_type": "UNETLoader",
+    "inputs": { "unet_name": "flux1-dev.safetensors", "weight_dtype": "default" }
+  },
+  "5": {
+    "class_type": "EmptySD3LatentImage",
+    "inputs": { "width": 4096, "height": 2048, "batch_size": 1 }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "clip": ["10", 1], "text": "equirectangular 360 degree panorama, interior view, [FACTION_SCENE_PROMPT]" }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "clip": ["10", 1], "text": "fisheye, text, watermark, latitude lines, grid, people, faces" }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": { "samples": ["3", 0], "vae": ["12", 0] }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": { "filename_prefix": "panoramas/[FACTION]_[CLIMATE]", "images": ["8", 0] }
+  },
+  "10": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": ["4", 0], "clip": ["11", 0],
+      "lora_name": "flux_equirectangular_360.safetensors",
+      "strength_model": 0.85, "strength_clip": 0.85
+    }
+  },
+  "11": {
+    "class_type": "DualCLIPLoader",
+    "inputs": {
+      "clip_name1": "t5xxl_fp16.safetensors",
+      "clip_name2": "clip_l.safetensors",
+      "type": "flux"
+    }
+  },
+  "12": {
+    "class_type": "VAELoader",
+    "inputs": { "vae_name": "ae.safetensors" }
+  },
+  "13": {
+    "class_type": "FluxGuidance",
+    "inputs": { "conditioning": ["6", 0], "guidance": 3.0 }
+  }
+}
