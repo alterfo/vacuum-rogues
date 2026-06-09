@@ -15,7 +15,7 @@ import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType, StarType, NpcRole, QuestType } from "@/types";
 import { Faction } from "@/types/faction";
 import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
-import { pickVariant } from "./textures";
+import { pickVariant, pickVariantKey, loadTextureAsync } from "./textures";
 import { installGameCursors, setCanvasCursor } from "./cursor";
 import { PlanetSprite } from "./PlanetSprite";
 import { PlanetInfoPanel } from "./PlanetInfoPanel";
@@ -188,6 +188,9 @@ export class SpaceFlightScene extends GameScene {
   // Preferred sun rendering: an equirect map on a hemisphere mesh (see
   // sphereMesh.ts) so it really turns rather than scrolling flat.
   private sunSphere: SphereMesh | null = null;
+  // Set in destroy() so an in-flight lazy star-map load (createStar) cannot touch
+  // a torn-down scene. A fresh instance is created per transition (SceneFactory).
+  private sceneDestroyed = false;
   private readonly STAR_RADIUS = GAME_BALANCE.starRadius;
   private readonly STAR_AVOID_RADIUS = SUN_EXCLUSION_RADIUS;
   // Animated solar prominences (the container is owned by gameLayer)
@@ -664,6 +667,8 @@ export class SpaceFlightScene extends GameScene {
   }
 
   destroy(): void {
+    this.sceneDestroyed = true;
+
     // Remove all pointer event listeners
     if (this.boundPointerDown) {
       this.renderer.app.stage.off("pointerdown", this.boundPointerDown);
@@ -1734,50 +1739,22 @@ export class SpaceFlightScene extends GameScene {
     this.createStarProminences(R, rng);
 
     // --- Rotating surface: generated star art if available, else procedural ---
+    // Preferred: equirectangular star map projected onto a hemisphere so the
+    // surface really turns, tinted per star type. The equirect star_maps are a
+    // lazy category (not preloaded), so on the first visit pickStarTexture falls
+    // back to a stars/ sprite (or, failing that, the procedural sun below); a
+    // background load then upgrades to the equirect map when it arrives.
+    const sunMap = this.pickStarTexture();
+    if (sunMap) {
+      this.mountStarMapSurface(R, sunMap);
+      this.scheduleStarMapUpgrade(R);
+      return;
+    }
+
     const surface = new Container();
     surface.eventMode = "none"; // decorative — never intercept clicks
     surface.x = this.starCenterX;
     surface.y = this.starCenterY;
-
-    // Preferred: equirectangular star map projected onto a hemisphere so the
-    // surface really turns, tinted per star type.
-    const sunMap = this.pickStarTexture();
-    if (sunMap) {
-      const W = R * 2;
-      const tint = this.starTint();
-      this.sunSphere = buildSphereMesh(sunMap, R, tint);
-      const mesh = this.sunSphere?.mesh ?? null;
-
-      if (mesh) {
-        surface.addChild(mesh);
-      } else {
-        // Fallback: flat scrolling disc under a circular mask.
-        const maskC = new Graphics().circle(0, 0, R).fill({ color: 0xffffff });
-        const tiling = new TilingSprite({
-          texture: sunMap,
-          width: W,
-          height: W,
-        });
-        tiling.x = -R;
-        tiling.y = -R;
-        const scale = sunMap.height > 0 ? W / sunMap.height : 1;
-        tiling.tileScale.set(scale, scale);
-        tiling.tint = tint;
-        tiling.mask = maskC;
-        this.starTiling = tiling;
-        surface.addChild(maskC, tiling);
-      }
-
-      // Radial limb-fade mask: opaque at center, fades to transparent at edge
-      // so the star boundary blends into the halo rather than hard-clipping.
-      const limbMask = this.buildStarLimbMask(R);
-      surface.addChild(limbMask);
-      surface.mask = limbMask;
-
-      this.starSurface = surface;
-      this.renderer.gameLayer.addChild(surface);
-      return;
-    }
 
     const disc = new Graphics();
     // base disc, brighter toward the centre
@@ -1811,6 +1788,107 @@ export class SpaceFlightScene extends GameScene {
 
     this.starSurface = surface;
     this.renderer.gameLayer.addChild(surface);
+
+    // Procedural sun for now; upgrade to the equirect star map once it loads.
+    this.scheduleStarMapUpgrade(R);
+  }
+
+  /**
+   * Build the rotating star surface from an equirectangular map (sphere mesh, or
+   * a flat scrolling-disc fallback), add the limb-fade mask, and mount it on the
+   * game layer. Sets {@link sunSphere}/{@link starTiling}/{@link starSurface}.
+   */
+  private mountStarMapSurface(
+    R: number,
+    sunMap: import("pixi.js").Texture,
+  ): void {
+    const surface = new Container();
+    surface.eventMode = "none"; // decorative — never intercept clicks
+    surface.x = this.starCenterX;
+    surface.y = this.starCenterY;
+
+    const W = R * 2;
+    const tint = this.starTint();
+    this.sunSphere = buildSphereMesh(sunMap, R, tint);
+    const mesh = this.sunSphere?.mesh ?? null;
+
+    if (mesh) {
+      surface.addChild(mesh);
+    } else {
+      // Fallback: flat scrolling disc under a circular mask.
+      const maskC = new Graphics().circle(0, 0, R).fill({ color: 0xffffff });
+      const tiling = new TilingSprite({ texture: sunMap, width: W, height: W });
+      tiling.x = -R;
+      tiling.y = -R;
+      const scale = sunMap.height > 0 ? W / sunMap.height : 1;
+      tiling.tileScale.set(scale, scale);
+      tiling.tint = tint;
+      tiling.mask = maskC;
+      this.starTiling = tiling;
+      surface.addChild(maskC, tiling);
+    }
+
+    // Radial limb-fade mask: opaque at center, fades to transparent at edge
+    // so the star boundary blends into the halo rather than hard-clipping.
+    const limbMask = this.buildStarLimbMask(R);
+    surface.addChild(limbMask);
+    surface.mask = limbMask;
+
+    this.starSurface = surface;
+    this.renderer.gameLayer.addChild(surface);
+  }
+
+  /**
+   * If the current star's equirect map is not cached yet, lazily load it and
+   * swap the rotating surface over to it once it arrives. No-op when the map is
+   * already in use (re-entry) or absent from the manifest. Guarded against a
+   * torn-down scene and against the player having warped away mid-load.
+   */
+  private scheduleStarMapUpgrade(R: number): void {
+    const sp = this.starMapPrefix();
+    if (!sp) return;
+    // Already rendering the equirect map (it is cached and preferred) → nothing
+    // to upgrade.
+    if (pickVariant("star_maps", sp.prefix, sp.systemId)) return;
+    const key = pickVariantKey("star_maps", sp.prefix, sp.systemId);
+    if (!key) return;
+    void loadTextureAsync(key).then((mapTex) => {
+      if (!mapTex || this.sceneDestroyed) return;
+      // Player may have warped to another system while the map was loading.
+      if (this.gameEngine?.player?.currentSystemId !== sp.systemId) return;
+      // Tear down the previous (stars/ sprite or procedural) surface first.
+      if (this.starSurface) {
+        this.renderer.gameLayer.removeChild(this.starSurface);
+        this.starSurface.destroy({ children: true });
+        this.starSurface = null;
+      }
+      this.sunSphere = null;
+      this.starTiling = null;
+      this.mountStarMapSurface(R, mapTex);
+    });
+  }
+
+  /**
+   * Resolve the equirect star-map prefix (e.g. `yellow`, `blue_giant`) for the
+   * current system's star type, or undefined when unknown. Shared by
+   * {@link pickStarTexture} and {@link scheduleStarMapUpgrade}.
+   */
+  private starMapPrefix(): { systemId: string; prefix: string } | undefined {
+    const systemId = this.gameEngine?.player?.currentSystemId;
+    if (!systemId) return undefined;
+    const system = this.gameEngine?.galaxy?.systems.find(
+      (s) => s.id === systemId,
+    );
+    if (!system) return undefined;
+    const prefixes: Partial<Record<StarType, string>> = {
+      [StarType.RED_DWARF]: "red_dwarf",
+      [StarType.YELLOW_DWARF]: "yellow",
+      [StarType.BLUE_GIANT]: "blue_giant",
+      [StarType.WHITE_DWARF]: "white_dwarf",
+      [StarType.NEUTRON]: "neutron",
+    };
+    const prefix = prefixes[system.starType];
+    return prefix ? { systemId, prefix } : undefined;
   }
 
   /**
@@ -1818,25 +1896,13 @@ export class SpaceFlightScene extends GameScene {
    * system), or undefined to fall back to the procedural sun.
    */
   private pickStarTexture(): import("pixi.js").Texture | undefined {
-    const systemId = this.gameEngine?.player?.currentSystemId;
-    if (!systemId) return undefined;
-    const system = this.gameEngine?.galaxy?.systems.find(
-      (s) => s.id === systemId,
+    const sp = this.starMapPrefix();
+    if (!sp) return undefined;
+    // Prefer equirectangular star_maps (for sphere mesh), fall back to sprites.
+    return (
+      pickVariant("star_maps", sp.prefix, sp.systemId) ??
+      pickVariant("stars", sp.prefix, sp.systemId)
     );
-    if (!system) return undefined;
-    const prefix: Partial<Record<StarType, string>> = {
-      [StarType.RED_DWARF]: "red_dwarf",
-      [StarType.YELLOW_DWARF]: "yellow",
-      [StarType.BLUE_GIANT]: "blue_giant",
-      [StarType.WHITE_DWARF]: "white_dwarf",
-      [StarType.NEUTRON]: "neutron",
-    };
-    const p = prefix[system.starType];
-    // Prefer equirectangular star_maps (for sphere mesh), fall back to sprites
-    return p
-      ? (pickVariant("star_maps", p, systemId) ??
-          pickVariant("stars", p, systemId))
-      : undefined;
   }
 
   /**

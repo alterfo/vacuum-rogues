@@ -4,7 +4,7 @@ import type { Planet } from "@/domain/Planet";
 import { PlanetType } from "@/types";
 import { SeededRNG } from "@/utils/seededRNG";
 import { getMoonLayer } from "@/utils/moonZOrder";
-import { pickVariant } from "./textures";
+import { pickVariant, pickVariantKey, loadTextureAsync } from "./textures";
 import { buildSphereMesh, type SphereMesh } from "./sphereMesh";
 import {
   createPlanetRotationFilter,
@@ -55,6 +55,12 @@ export class PlanetSprite {
   private readonly moons: Moon[] = [];
   private readonly backMoonsContainer: Container = new Container();
   private readonly frontMoonsContainer: Container = new Container();
+  // Holds the planet body (disc art / rotating sphere). Sits between the back and
+  // front moon containers so a deferred equirect upgrade (see buildSphere) keeps
+  // the correct z-order without re-parenting moons.
+  private readonly bodyContainer: Container = new Container();
+  // Guards the async equirect-map upgrade against a sprite torn down mid-load.
+  private destroyed = false;
   // Rotating 3D sphere: surface scrolls under a circular mask; shading is
   // oriented so the lit side faces the star, giving a volumetric look.
   private surfaceStrip: Graphics | null = null;
@@ -104,6 +110,9 @@ export class PlanetSprite {
     // orbit render behind the planet body and sphere overlay.
     this.container.addChild(this.backMoonsContainer);
     this.container.addChild(this.graphics);
+    // Planet body lives here, above the base graphics but below the front moons
+    // (createMoons adds frontMoonsContainer last).
+    this.container.addChild(this.bodyContainer);
 
     // Position container at calculated screen coordinates
     this.container.x = this.screenX;
@@ -134,6 +143,12 @@ export class PlanetSprite {
       return;
     }
 
+    // The equirect map is in a lazy-loaded category (planet_maps) that is not
+    // preloaded, so on the first visit to a system it is not cached yet. Kick off
+    // a background load and upgrade the body to the rotating sphere when it
+    // arrives; until then fall through to the static disc / procedural body.
+    if (prefix) this.scheduleEquirectUpgrade(prefix, radius);
+
     // 2) Pre-shaded cut-out disc art: reads as 3D from its baked lighting, but
     // does not rotate. Picked deterministically for stable, varied looks.
     const discTex = prefix
@@ -145,7 +160,7 @@ export class PlanetSprite {
       sprite.width = radius * 2;
       sprite.height = radius * 2;
       sprite.eventMode = "none"; // clicks fall through to the hit-area graphics
-      this.container.addChild(sprite);
+      this.bodyContainer.addChild(sprite);
       return;
     }
 
@@ -195,7 +210,32 @@ export class PlanetSprite {
     shade.mask = maskB;
     this.shadeContainer = shade;
 
-    this.container.addChild(maskA, surface, maskB, shade);
+    this.bodyContainer.addChild(maskA, surface, maskB, shade);
+  }
+
+  /**
+   * Lazily load the planet's equirectangular surface map (a lazy-loaded category
+   * not covered by the eager preload) and, once it arrives, replace the static
+   * fallback body with the rotating sphere. Fire-and-forget; guarded against a
+   * sprite torn down mid-load and against a body that has already been upgraded.
+   */
+  private scheduleEquirectUpgrade(prefix: string, radius: number): void {
+    const key = pickVariantKey("planet_maps", prefix, this.planet.id);
+    if (!key) return;
+    void loadTextureAsync(key).then((mapTex) => {
+      if (!mapTex || this.destroyed) return;
+      // Another path already produced a rotating body — leave it alone.
+      if (this.rotationFilter || this.sphere || this.tiling) return;
+      // Drop the static fallback body and rebuild as a rotating sphere. Destroy
+      // children too (procedural strip/shade graphics) but not textures — the
+      // disc art is a shared cache entry reused by other planets.
+      for (const child of this.bodyContainer.removeChildren()) {
+        child.destroy({ children: true });
+      }
+      this.surfaceStrip = null;
+      this.shadeContainer = null;
+      this.buildEquirectSphere(mapTex, radius);
+    });
   }
 
   /**
@@ -227,7 +267,7 @@ export class PlanetSprite {
       sprite.eventMode = "none"; // clicks fall through to the hit-area graphics
       sprite.filters = [filter];
       this.rotationFilter = filter;
-      this.container.addChild(sprite);
+      this.bodyContainer.addChild(sprite);
       return;
     }
 
@@ -239,7 +279,7 @@ export class PlanetSprite {
       // longitude fraction per ms (slow); randomized direction.
       this.axialSpeed =
         (0.00006 + rng.next() * 0.00006) * (rng.next() < 0.5 ? 1 : -1);
-      this.container.addChild(sphere.mesh);
+      this.bodyContainer.addChild(sphere.mesh);
       return;
     }
 
@@ -255,7 +295,7 @@ export class PlanetSprite {
     this.tiling = tiling;
     this.axialSpeed =
       (0.012 + rng.next() * 0.012) * (rng.next() < 0.5 ? 1 : -1);
-    this.container.addChild(maskC, tiling);
+    this.bodyContainer.addChild(maskC, tiling);
   }
 
   /** Darken a hex color by an absolute per-channel amount. */
@@ -571,6 +611,9 @@ export class PlanetSprite {
    * Clean up resources
    */
   destroy(): void {
+    // Stop any in-flight equirect-map upgrade from touching torn-down objects.
+    this.destroyed = true;
+
     // Remove all event listeners
     this.graphics.removeAllListeners();
 

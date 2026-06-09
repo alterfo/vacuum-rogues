@@ -127,3 +127,23 @@ export function pickVariant(
   if (keys.length === 0) return undefined;
   return cache[keys[hash(seed) % keys.length]];
 }
+
+/**
+ * Deterministically pick a manifest KEY for a category/prefix, whether or not it
+ * is loaded yet. Mirrors {@link pickVariant}'s selection but does not require the
+ * texture to be cached — use with {@link loadTextureAsync} to lazily warm a
+ * large/lazy category (e.g. `planet_maps`, `star_maps`) and then upgrade the
+ * render once it arrives. Returns undefined when no manifest entry matches.
+ */
+export function pickVariantKey(
+  category: string,
+  prefix: string,
+  seed: string,
+): string | undefined {
+  const wanted = `${category}/${prefix}`;
+  const keys = allTextures(category)
+    .filter((k) => k === wanted || k.startsWith(`${wanted}_`))
+    .sort();
+  if (keys.length === 0) return undefined;
+  return keys[hash(seed) % keys.length];
+}
