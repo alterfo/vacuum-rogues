@@ -109,8 +109,9 @@ vi.mock("@/presentation/cursor", () => ({
   setCanvasCursor: vi.fn(),
 }));
 
-import { SpaceFlightScene } from "@/presentation/SpaceFlightScene";
+import { StarRenderer } from "@/presentation/flight/StarRenderer";
 import type { Renderer } from "@/presentation/Renderer";
+import type { GameEngine } from "@/systems/GameEngine";
 
 function makeMockRenderer(): Renderer {
   const makeLayer = () => ({
@@ -152,14 +153,18 @@ function makeMockRenderer(): Renderer {
 }
 
 describe("starHalo: quality glow replaces corona + prominences", () => {
-  let scene: SpaceFlightScene;
+  let star: StarRenderer;
   let s: Record<string, unknown>;
 
   beforeEach(() => {
-    scene = new SpaceFlightScene(makeMockRenderer());
-    s = scene as unknown as Record<string, unknown>;
-    // Run the star setup (procedural path: no gameEngine / star texture).
-    (scene as unknown as { createStar(): void }).createStar();
+    const renderer = makeMockRenderer();
+    const gameEngine: GameEngine | null = null;
+    // Star rendering now lives in the StarRenderer FlightModule (extracted from
+    // SpaceFlightScene). Run the star setup (procedural path: no gameEngine /
+    // star texture).
+    star = new StarRenderer(renderer, gameEngine, renderer.gameLayer);
+    s = star as unknown as Record<string, unknown>;
+    star.initialize();
   });
 
   it("creates a halo container after star setup", () => {
@@ -182,9 +187,9 @@ describe("starHalo: quality glow replaces corona + prominences", () => {
     expect(halo.filters.length).toBe(1);
   });
 
-  it("updateStar runs without prominence animation and advances elapsed time", () => {
+  it("update advances elapsed time without prominence animation", () => {
     s.starElapsed = 0;
-    (scene as unknown as { updateStar(dt: number): void }).updateStar(16);
+    star.update(16, 0);
     expect(s.starElapsed).toBe(16);
   });
 });

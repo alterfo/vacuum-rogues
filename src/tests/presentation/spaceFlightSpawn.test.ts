@@ -160,8 +160,9 @@ describe("Task 9: re-entry spawn beside station / landed planet", () => {
   beforeEach(() => {
     scene = new SpaceFlightScene(makeMockRenderer());
     s = scene as unknown as Record<string, unknown>;
-    s.starCenterX = STAR.x;
-    s.starCenterY = STAR.y;
+    // Star geometry now lives on the StarRenderer module; the spawn helpers read
+    // its centre. Stub it directly since these tests bypass initialize().
+    s.starRenderer = { centerX: STAR.x, centerY: STAR.y };
     s.shipPhysics = new ShipPhysics(EDGE.x, EDGE.y, 0.1);
     s.shipContainer = { x: 0, y: 0 };
     s.planetSprites = [

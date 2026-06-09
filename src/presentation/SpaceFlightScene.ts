@@ -4,18 +4,15 @@ import {
   Text,
   Container,
   Sprite,
-  TilingSprite,
-  Texture,
   FederatedPointerEvent,
   BlurFilter,
 } from "pixi.js";
 import { UiButton } from "./ui/UiButton";
-import { buildSphereMesh, type SphereMesh } from "./sphereMesh";
 import type { GameEngine } from "@/systems/GameEngine";
-import { SceneType, StarType, NpcRole, QuestType } from "@/types";
+import { SceneType, NpcRole, QuestType } from "@/types";
 import { Faction } from "@/types/faction";
 import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
-import { pickVariant, pickVariantKey, loadTextureAsync } from "./textures";
+import { pickVariant } from "./textures";
 import { installGameCursors, setCanvasCursor } from "./cursor";
 import { PlanetSprite } from "./PlanetSprite";
 import { PlanetInfoPanel } from "./PlanetInfoPanel";
@@ -34,7 +31,6 @@ import {
 } from "@/systems/npc/NpcSimulator";
 import { logger } from "@/utils/logger";
 import { formatGameDate } from "@/utils/gameCalendar";
-import { SeededRNG } from "@/utils/seededRNG";
 import {
   dayTickMarks,
   avoidStarPath,
@@ -49,13 +45,7 @@ import { ShipPhysics } from "@/systems/ShipPhysics";
 import { engineSpeedBonus } from "@/systems/EquipmentSystem";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { PanZoomController } from "@/systems/PanZoomController";
-import {
-  SYSTEM_GEOMETRY,
-  GAME_BALANCE,
-  SUN_EXCLUSION_RADIUS,
-  SUN_CONTACT_HULL_DAMAGE,
-  SUN_CONTACT_DAMAGE_INTERVAL_MS,
-} from "@/config/balance";
+import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
 import {
   currentFontSizeKey,
   scaledFont,
@@ -63,6 +53,7 @@ import {
   type FontSizeKey,
 } from "@/utils/fontScale";
 import { SpaceBackgroundLayer } from "./SpaceBackgroundLayer";
+import { StarRenderer } from "./flight/StarRenderer";
 
 interface WarpArrivalEffect {
   container: Container;
@@ -141,22 +132,10 @@ export class SpaceFlightScene extends GameScene {
     y: number;
   }[] = [];
   private routeTargetStationId: string | null = null;
-  private starCenterX: number = 0;
-  private starCenterY: number = 0;
-  private starSurface: Container | null = null; // rotating star surface
-  private starHaloContainer: Container | null = null; // blurred glow behind star
-  // Equirect sun map scrolled under a circular mask for real axial rotation
-  // (US-070 #4) when the sphere mesh is unavailable.
-  private starTiling: TilingSprite | null = null;
-  // Preferred sun rendering: an equirect map on a hemisphere mesh (see
-  // sphereMesh.ts) so it really turns rather than scrolling flat.
-  private sunSphere: SphereMesh | null = null;
-  // Set in destroy() so an in-flight lazy star-map load (createStar) cannot touch
-  // a torn-down scene. A fresh instance is created per transition (SceneFactory).
-  private sceneDestroyed = false;
-  private readonly STAR_RADIUS = GAME_BALANCE.starRadius;
-  private readonly STAR_AVOID_RADIUS = SUN_EXCLUSION_RADIUS;
-  private starElapsed: number = 0;
+  // Renders the central sun (glow halo, rotating surface, limb fade) and owns the
+  // star geometry the scene reads for collision/orbit/route math — extracted from
+  // this scene as a FlightModule. Exposes centerX/centerY/radius/avoidRadius.
+  private starRenderer!: StarRenderer;
   private orbitGraphics: Graphics | null = null;
   private systemMiniMap: SystemMiniMap | null = null;
 
@@ -180,13 +159,6 @@ export class SpaceFlightScene extends GameScene {
   // Latches the low-hull auto-stop so the warning fires once per descent below
   // the threshold, not every frame.
   private lowHullStopped = false;
-  // Latches the star-touch toast so the "Корпус горит!" warning fires once
-  // while the ship is inside the star radius, not every frame.
-  private starTouchActive = false;
-  // Accumulates game-time (ms) spent inside the star radius. Hull damage is
-  // applied in discrete SUN_CONTACT_HULL_DAMAGE chunks once this crosses
-  // SUN_CONTACT_DAMAGE_INTERVAL_MS, so the hull never drains frame-by-frame.
-  private sunContactDamageTimer = 0;
   // Lerp-return animation: true while the camera is smoothly returning to ship.
   private cameraReturning = false;
 
@@ -434,9 +406,15 @@ export class SpaceFlightScene extends GameScene {
     // NPCs Z_NPC, player ship Z_SHIP, decorative FX in between.
     this.renderer.gameLayer.sortableChildren = true;
 
-    // Store star center position
-    this.starCenterX = centerX;
-    this.starCenterY = centerY;
+    // Star module: owns the sun (glow, rotating surface) and the star geometry
+    // (centre/radius/avoid-radius) the rest of the scene reads. Constructed here
+    // so createOrbits/createPlanets/route planning can read its centre below; its
+    // display objects are built when initialize() runs (just after the bg layer).
+    this.starRenderer = new StarRenderer(
+      this.renderer,
+      this.gameEngine,
+      this.renderer.gameLayer,
+    );
 
     // Screen-fixed deep-space backdrop (crisp far stars + twinkle), behind the
     // whole world so panning/zooming never exposes a hard background edge.
@@ -467,7 +445,7 @@ export class SpaceFlightScene extends GameScene {
     );
     this.background.initialize();
 
-    this.createStar();
+    this.starRenderer.initialize();
     this.createOrbits();
     this.createSystemBoundary(); // Edge where hyperjumps happen
     this.createPlanets(); // Planets added to gameLayer directly (not blurred)
@@ -486,8 +464,8 @@ export class SpaceFlightScene extends GameScene {
         (s) => s.planet.id === ctx.fromPlanetId,
       );
       if (sprite) {
-        const dx = sprite.screenX - this.starCenterX;
-        const dy = sprite.screenY - this.starCenterY;
+        const dx = sprite.screenX - this.starRenderer.centerX;
+        const dy = sprite.screenY - this.starRenderer.centerY;
         const len = Math.hypot(dx, dy) || 1;
         const outX = dx / len;
         const outY = dy / len;
@@ -625,7 +603,7 @@ export class SpaceFlightScene extends GameScene {
     this.bgElapsed += deltaTime;
     this.background?.update(deltaTime, this.bgElapsed);
     this.updateAsteroids(deltaTime);
-    this.updateStar(deltaTime);
+    this.starRenderer.update(deltaTime, this.bgElapsed);
     this.updateWarpEffect(deltaTime);
     this.updateShip(deltaTime);
     this.updateCombat(deltaTime);
@@ -639,8 +617,6 @@ export class SpaceFlightScene extends GameScene {
   }
 
   destroy(): void {
-    this.sceneDestroyed = true;
-
     // Remove all pointer event listeners
     if (this.boundPointerDown) {
       this.renderer.app.stage.off("pointerdown", this.boundPointerDown);
@@ -710,8 +686,6 @@ export class SpaceFlightScene extends GameScene {
     this.isTurnRunning = false;
     this.turnHintShown = false;
     this.lowHullStopped = false;
-    this.starTouchActive = false;
-    this.sunContactDamageTimer = 0;
     this._combatTransitionPending = false;
     this.cameraReturning = false;
     this.warpInProgress = false;
@@ -783,9 +757,13 @@ export class SpaceFlightScene extends GameScene {
       this.systemMiniMap = null;
     }
 
+    // Tear down the star module (disposes its halo/sun filters and removes its
+    // display objects from the game layer) before the layer-wide cleanup below.
+    this.starRenderer?.destroy();
+
     // Release GPU filter textures before the layer is cleared — clearGameLayer
-    // destroys the display objects but not their BlurFilters (star halo, ship
-    // glow, procedural sun disc), which would otherwise leak each teardown.
+    // destroys the display objects but not their BlurFilters (ship glow, etc.),
+    // which would otherwise leak each teardown.
     if (this.renderer.gameLayer)
       this.disposeFiltersDeep(this.renderer.gameLayer);
     this.renderer.clearGameLayer();
@@ -831,11 +809,6 @@ export class SpaceFlightScene extends GameScene {
     this.cameraDebugText = null;
     this.dayCounterText = null;
     this.shipPhysics = null;
-    this.starSurface = null;
-    this.starHaloContainer = null;
-    this.starTiling = null;
-    this.sunSphere = null;
-    this.starElapsed = 0;
     this.orbitGraphics = null;
     this.targetIndicator = null;
     this.distanceTraveled = 0;
@@ -1018,8 +991,8 @@ export class SpaceFlightScene extends GameScene {
    * at the rim.
    */
   private respawnAsteroid(a: AsteroidMote, initial = false): void {
-    const cx = this.starCenterX;
-    const cy = this.starCenterY;
+    const cx = this.starRenderer.centerX;
+    const cy = this.starRenderer.centerY;
     const R = this.asteroidFieldRadius();
 
     if (a.comet) {
@@ -1064,8 +1037,8 @@ export class SpaceFlightScene extends GameScene {
   /** Drift + spin the asteroids in world space, respawning past the field edge. */
   private updateAsteroids(deltaTime: number): void {
     if (this.asteroids.length === 0) return;
-    const cx = this.starCenterX;
-    const cy = this.starCenterY;
+    const cx = this.starRenderer.centerX;
+    const cy = this.starRenderer.centerY;
     const limit = this.asteroidFieldRadius() * 1.15;
     const limitSq = limit * limit;
     for (const a of this.asteroids) {
@@ -1156,332 +1129,6 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Create a beautiful star (sun) at the center of the system
-   */
-  private createStar(): void {
-    const R = this.STAR_RADIUS;
-    const rng = new SeededRNG(
-      `star_${this.gameEngine?.player?.currentSystemId ?? "x"}`,
-    );
-
-    // Volumetric glow halo — a blurred container in screen blend, placed behind
-    // the surface so the star appears to radiate warm light into the void.
-    this.starHaloContainer = this.buildStarHalo(R);
-    this.renderer.gameLayer.addChild(this.starHaloContainer);
-
-    // --- Rotating surface: generated star art if available, else procedural ---
-    // Preferred: equirectangular star map projected onto a hemisphere so the
-    // surface really turns, tinted per star type. The equirect star_maps are a
-    // lazy category (not preloaded), so on the first visit pickStarTexture
-    // returns undefined and the procedural sun below renders; a background load
-    // then upgrades to the equirect map when it arrives.
-    const sunMap = this.pickStarTexture();
-    if (sunMap) {
-      this.mountStarMapSurface(R, sunMap);
-      this.scheduleStarMapUpgrade(R);
-      return;
-    }
-
-    const surface = new Container();
-    surface.eventMode = "none"; // decorative — never intercept clicks
-    surface.x = this.starCenterX;
-    surface.y = this.starCenterY;
-
-    const disc = new Graphics();
-    // base disc, brighter toward the centre
-    disc.circle(0, 0, R).fill({ color: 0xff8800 });
-    disc.circle(0, 0, R * 0.82).fill({ color: 0xffab1f });
-    disc.circle(0, 0, R * 0.55).fill({ color: 0xffd24a });
-    // turbulent surface patches (darker spots + bright flares)
-    const spots = rng.nextInt(22, 30);
-    for (let i = 0; i < spots; i++) {
-      const ang = rng.next() * Math.PI * 2;
-      const dist = rng.next() * R * 0.95;
-      const px = Math.cos(ang) * dist;
-      const py = Math.sin(ang) * dist;
-      const pr = rng.nextFloat(R * 0.08, R * 0.26);
-      const dark = rng.next() < 0.5;
-      disc.circle(px, py, pr).fill({
-        color: dark ? 0xc23a12 : 0xfff0a0,
-        alpha: rng.nextFloat(0.25, 0.6),
-      });
-    }
-    // bright hot core
-    disc.circle(0, 0, R * 0.32).fill({ color: 0xfff6cc, alpha: 0.85 });
-    disc.filters = [this.paddedBlur(2)]; // crisp, slight softening
-
-    // Clip mottling to the disc so nothing spills past the rim.
-    const mask = new Graphics();
-    mask.circle(0, 0, R).fill({ color: 0xffffff });
-    surface.addChild(mask);
-    disc.mask = mask;
-    surface.addChild(disc);
-
-    this.starSurface = surface;
-    this.renderer.gameLayer.addChild(surface);
-
-    // Procedural sun for now; upgrade to the equirect star map once it loads.
-    this.scheduleStarMapUpgrade(R);
-  }
-
-  /**
-   * Build the rotating star surface from an equirectangular map (sphere mesh, or
-   * a flat scrolling-disc fallback), add the limb-fade mask, and mount it on the
-   * game layer. Sets {@link sunSphere}/{@link starTiling}/{@link starSurface}.
-   */
-  private mountStarMapSurface(
-    R: number,
-    sunMap: import("pixi.js").Texture,
-  ): void {
-    const surface = new Container();
-    surface.eventMode = "none"; // decorative — never intercept clicks
-    surface.x = this.starCenterX;
-    surface.y = this.starCenterY;
-
-    const W = R * 2;
-    const tint = this.starTint();
-    this.sunSphere = buildSphereMesh(sunMap, R, tint);
-    const mesh = this.sunSphere?.mesh ?? null;
-
-    if (mesh) {
-      surface.addChild(mesh);
-    } else {
-      // Fallback: flat scrolling disc under a circular mask.
-      const maskC = new Graphics().circle(0, 0, R).fill({ color: 0xffffff });
-      const tiling = new TilingSprite({ texture: sunMap, width: W, height: W });
-      tiling.x = -R;
-      tiling.y = -R;
-      const scale = sunMap.height > 0 ? W / sunMap.height : 1;
-      tiling.tileScale.set(scale, scale);
-      tiling.tint = tint;
-      tiling.mask = maskC;
-      this.starTiling = tiling;
-      surface.addChild(maskC, tiling);
-    }
-
-    // Radial limb-fade mask: opaque at center, fades to transparent at edge
-    // so the star boundary blends into the halo rather than hard-clipping.
-    const limbMask = this.buildStarLimbMask(R);
-    surface.addChild(limbMask);
-    surface.mask = limbMask;
-
-    this.starSurface = surface;
-    this.renderer.gameLayer.addChild(surface);
-  }
-
-  /**
-   * If the current star's equirect map is not cached yet, lazily load it and
-   * swap the rotating surface over to it once it arrives. No-op when the map is
-   * already in use (re-entry) or absent from the manifest. Guarded against a
-   * torn-down scene and against the player having warped away mid-load.
-   */
-  private scheduleStarMapUpgrade(R: number): void {
-    const sp = this.starMapPrefix();
-    if (!sp) return;
-    // Already rendering the equirect map (it is cached and preferred) → nothing
-    // to upgrade.
-    if (pickVariant("star_maps", sp.prefix, sp.systemId)) return;
-    const key = pickVariantKey("star_maps", sp.prefix, sp.systemId);
-    if (!key) return;
-    void loadTextureAsync(key).then((mapTex) => {
-      if (!mapTex || this.sceneDestroyed) return;
-      // Player may have warped to another system while the map was loading.
-      if (this.gameEngine?.player?.currentSystemId !== sp.systemId) return;
-      // Tear down the previous (procedural) surface first.
-      if (this.starSurface) {
-        this.renderer.gameLayer.removeChild(this.starSurface);
-        // Container.destroy({children}) does NOT dispose child filters in
-        // PixiJS v8, so the procedural sun's BlurFilter would leak on upgrade.
-        for (const child of this.starSurface.children) {
-          const fs = (
-            child as {
-              filters?:
-                | { destroy?: () => void }[]
-                | { destroy?: () => void }
-                | null;
-            }
-          ).filters;
-          const arr = Array.isArray(fs) ? fs : fs ? [fs] : [];
-          for (const f of arr) f.destroy?.();
-        }
-        this.starSurface.destroy({ children: true });
-        this.starSurface = null;
-      }
-      this.sunSphere = null;
-      this.starTiling = null;
-      this.mountStarMapSurface(R, mapTex);
-    });
-  }
-
-  /**
-   * Resolve the equirect star-map prefix (e.g. `yellow`, `blue_giant`) for the
-   * current system's star type, or undefined when unknown. Shared by
-   * {@link pickStarTexture} and {@link scheduleStarMapUpgrade}.
-   */
-  private starMapPrefix(): { systemId: string; prefix: string } | undefined {
-    const systemId = this.gameEngine?.player?.currentSystemId;
-    if (!systemId) return undefined;
-    const system = this.gameEngine?.galaxy?.systems.find(
-      (s) => s.id === systemId,
-    );
-    if (!system) return undefined;
-    const prefixes: Partial<Record<StarType, string>> = {
-      [StarType.RED_DWARF]: "red_dwarf",
-      [StarType.YELLOW_DWARF]: "yellow",
-      [StarType.BLUE_GIANT]: "blue_giant",
-      [StarType.WHITE_DWARF]: "white_dwarf",
-      [StarType.NEUTRON]: "neutron",
-    };
-    const prefix = prefixes[system.starType];
-    return prefix ? { systemId, prefix } : undefined;
-  }
-
-  /**
-   * Generated star art for the current system's star type (deterministic per
-   * system), or undefined to fall back to the procedural sun.
-   */
-  private pickStarTexture(): import("pixi.js").Texture | undefined {
-    const sp = this.starMapPrefix();
-    if (!sp) return undefined;
-    // Only equirectangular `star_maps` are valid here: `mountStarMapSurface`
-    // UV-wraps the texture onto a hemisphere, so a round `stars/` sprite would
-    // be badly distorted. When no star_map is cached yet (first visit, lazy
-    // category) we deliberately return undefined so the procedural sun renders;
-    // `scheduleStarMapUpgrade` then swaps in the equirect map once it loads.
-    return pickVariant("star_maps", sp.prefix, sp.systemId);
-  }
-
-  /**
-   * Build a Canvas-based radial gradient texture used as an alpha mask over
-   * the star surface so the limb fades to transparent instead of hard-clipping.
-   * The gradient is opaque from center to 78% radius, then fades to zero at 100%.
-   */
-  private buildStarLimbMask(R: number): Sprite {
-    const size = Math.ceil(R * 2 + 4);
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d")!;
-    const cx = size / 2;
-    const grad = ctx.createRadialGradient(cx, cx, 0, cx, cx, R);
-    grad.addColorStop(0, "rgba(255,255,255,1)");
-    grad.addColorStop(0.78, "rgba(255,255,255,1)");
-    grad.addColorStop(1.0, "rgba(255,255,255,0)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, size, size);
-    const maskTex = Texture.from(canvas);
-    const sprite = new Sprite(maskTex);
-    sprite.anchor.set(0.5);
-    sprite.eventMode = "none";
-    return sprite;
-  }
-
-  /** Tint for the equirect sun map, by the current system's star type. */
-  private starTint(): number {
-    const systemId = this.gameEngine?.player?.currentSystemId;
-    const system = this.gameEngine?.galaxy?.systems.find(
-      (s) => s.id === systemId,
-    );
-    switch (system?.starType) {
-      case StarType.RED_DWARF:
-        return 0xff7a4d; // deep red-orange
-      case StarType.BLUE_GIANT:
-        return 0x8fb8ff; // blue-white
-      case StarType.WHITE_DWARF:
-        return 0xfff2e6; // near white
-      case StarType.NEUTRON:
-        return 0xcfe0ff; // cold brilliant
-      default:
-        return 0xffd9a0; // warm yellow sun
-    }
-  }
-
-  /**
-   * Diffuse volumetric glow behind the star. A 3-layer radial glow stack
-   * (4.5R / 2.5R / 1.5R, increasing alpha inward) under a single BlurFilter in
-   * screen blend smears into a smooth, ring-free gradient. A thin bright limb
-   * ring at 1.0R gives the star a defined edge without a harsh clip. Replaces
-   * the old concentric-corona + bezier-prominence decoration.
-   */
-  private buildStarHalo(R: number): Container {
-    const halo = new Container();
-    halo.eventMode = "none";
-    halo.x = this.starCenterX;
-    halo.y = this.starCenterY;
-
-    const systemId = this.gameEngine?.player?.currentSystemId;
-    const system = this.gameEngine?.galaxy?.systems.find(
-      (s) => s.id === systemId,
-    );
-
-    // A single warm glow colour for all layers, keyed to star type. Warm
-    // yellow/white for sun-likes; cooler tints for exotic stars.
-    let glowC = 0xffcc55;
-    switch (system?.starType) {
-      case StarType.RED_DWARF:
-        glowC = 0xff7733;
-        break;
-      case StarType.BLUE_GIANT:
-        glowC = 0x88bbff;
-        break;
-      case StarType.WHITE_DWARF:
-        glowC = 0xffffff;
-        break;
-      case StarType.NEUTRON:
-        glowC = 0xcfe0ff;
-        break;
-    }
-
-    // 3-layer radial glow: faint wide outer, brighter mid, bright inner. The
-    // BlurFilter dissolves the three discs into one continuous falloff.
-    const g = new Graphics();
-    (
-      [
-        [4.5, 0.08],
-        [2.5, 0.18],
-        [1.5, 0.3],
-      ] as const
-    ).forEach(([scale, alpha]) => {
-      g.circle(0, 0, R * scale).fill({ color: glowC, alpha });
-    });
-    halo.addChild(g);
-
-    halo.blendMode = "screen";
-    // paddedBlur(80) rather than a raw BlurFilter(80): the padding keeps the
-    // falloff inside the filter texture so it never shows as a rectangular band
-    // once the gameLayer is scaled by the camera zoom.
-    halo.filters = [this.paddedBlur(80)];
-
-    // Thin bright limb ring at exactly the star radius — a crisp edge without a
-    // hard clip. Drawn unblurred (added after the filter is set so it stays
-    // sharp on its own layer? no — it shares the halo blur, which is fine: a
-    // 2px stroke at 1.0R reads as a soft rim under screen blend).
-    const limb = new Graphics();
-    limb.circle(0, 0, R).stroke({ color: 0xffffff, alpha: 0.6, width: 2 });
-    halo.addChild(limb);
-
-    return halo;
-  }
-
-  /**
-   * Animate the sun: roll the surface for axial rotation. Falls back to the
-   * scrolling disc / procedural container when no mesh/map is available.
-   */
-  private updateStar(deltaTime: number): void {
-    this.starElapsed += deltaTime;
-
-    if (this.sunSphere) {
-      // Roll the surface — the hemisphere mesh gives real spherical foreshortening.
-      this.sunSphere.advance(0.00012 * deltaTime);
-    } else if (this.starTiling) {
-      // Fallback: scroll the map horizontally.
-      this.starTiling.tilePosition.x -= 0.012 * deltaTime;
-    } else if (this.starSurface) {
-      this.starSurface.rotation += 0.00004 * deltaTime;
-    }
-  }
-
-  /**
    * Draw visible orbital paths for planets
    */
   private createOrbits(): void {
@@ -1512,7 +1159,11 @@ export class SpaceFlightScene extends GameScene {
 
     // Draw orbit circle for each unique radius
     for (const radius of uniqueRadii) {
-      this.orbitGraphics.circle(this.starCenterX, this.starCenterY, radius);
+      this.orbitGraphics.circle(
+        this.starRenderer.centerX,
+        this.starRenderer.centerY,
+        radius,
+      );
       this.orbitGraphics.stroke({ color: 0x444444, width: 1, alpha: 0.3 });
     }
 
@@ -2011,8 +1662,8 @@ export class SpaceFlightScene extends GameScene {
       const baseAngle = hashToAngle(planet.id);
       const sprite = new PlanetSprite(
         planet,
-        this.starCenterX,
-        this.starCenterY,
+        this.starRenderer.centerX,
+        this.starRenderer.centerY,
         baseAngle,
         gameDays,
       );
@@ -2071,9 +1722,11 @@ export class SpaceFlightScene extends GameScene {
 
     for (const station of currentSystem.stations) {
       const wx =
-        this.starCenterX + Math.cos(station.orbitAngle) * station.orbitRadius;
+        this.starRenderer.centerX +
+        Math.cos(station.orbitAngle) * station.orbitRadius;
       const wy =
-        this.starCenterY + Math.sin(station.orbitAngle) * station.orbitRadius;
+        this.starRenderer.centerY +
+        Math.sin(station.orbitAngle) * station.orbitRadius;
 
       const ctn = new Container();
       ctn.x = wx;
@@ -2678,8 +2331,8 @@ export class SpaceFlightScene extends GameScene {
     margin = 40,
   ): void {
     if (!this.shipPhysics) return;
-    const dx = bodyX - this.starCenterX;
-    const dy = bodyY - this.starCenterY;
+    const dx = bodyX - this.starRenderer.centerX;
+    const dy = bodyY - this.starRenderer.centerY;
     const len = Math.hypot(dx, dy) || 1;
     const spawnX = bodyX + (dx / len) * (bodyRadius + margin);
     const spawnY = bodyY + (dy / len) * (bodyRadius + margin);
@@ -2755,8 +2408,8 @@ export class SpaceFlightScene extends GameScene {
 
     // Viewport world edges: left = -panX/z, right = (sw - panX)/z. Require the
     // edges to stay within [center ± half].
-    const minX = this.starCenterX - half;
-    const maxX = this.starCenterX + half;
+    const minX = this.starRenderer.centerX - half;
+    const maxX = this.starRenderer.centerX + half;
     const panXMax = -minX * z;
     const panXMin = sw - maxX * z;
     this.cameraPanX =
@@ -2764,8 +2417,8 @@ export class SpaceFlightScene extends GameScene {
         ? (panXMin + panXMax) / 2
         : Math.max(panXMin, Math.min(panXMax, this.cameraPanX));
 
-    const minY = this.starCenterY - half;
-    const maxY = this.starCenterY + half;
+    const minY = this.starRenderer.centerY - half;
+    const maxY = this.starRenderer.centerY + half;
     const panYMax = -minY * z;
     const panYMin = sh - maxY * z;
     this.cameraPanY =
@@ -2935,35 +2588,19 @@ export class SpaceFlightScene extends GameScene {
       this.isTurnRunning = false;
     }
 
-    // Star-touch damage: while the ship is inside the star visual radius, burn
-    // the hull in discrete SUN_CONTACT_HULL_DAMAGE chunks, rate-limited to once
-    // per SUN_CONTACT_DAMAGE_INTERVAL_MS of game time so a graze does not drain
-    // the hull frame-by-frame. Toast fires once per contact episode.
-    const distToStar = Math.hypot(
-      this.shipPhysics.shipX - this.starCenterX,
-      this.shipPhysics.shipY - this.starCenterY,
+    // Star-touch damage: while the ship is inside the star visual radius the
+    // StarRenderer burns the hull in discrete chunks (rate-limited so a graze
+    // does not drain it frame-by-frame). It returns true on the frame a fresh
+    // contact episode begins, so the toast fires once per episode.
+    const startedBurning = this.starRenderer.updateSunContactDamage(
+      deltaTime,
+      this.shipPhysics.shipX,
+      this.shipPhysics.shipY,
+      this.isTurnRunning,
+      this.shipPhysics?.timeScale ?? 1,
     );
-    const touchingStar = distToStar < this.STAR_RADIUS;
-    if (touchingStar && this.isTurnRunning) {
-      this.sunContactDamageTimer +=
-        deltaTime * (this.shipPhysics?.timeScale ?? 1);
-      const burnShip = this.gameEngine?.player?.ship;
-      while (this.sunContactDamageTimer >= SUN_CONTACT_DAMAGE_INTERVAL_MS) {
-        this.sunContactDamageTimer -= SUN_CONTACT_DAMAGE_INTERVAL_MS;
-        if (burnShip) {
-          burnShip.hullHP = Math.max(
-            0,
-            burnShip.hullHP - SUN_CONTACT_HULL_DAMAGE,
-          );
-        }
-      }
-      if (!this.starTouchActive) {
-        this.starTouchActive = true;
-        this.showMessage("☀ Корпус горит!", 0xff8800);
-      }
-    } else if (!touchingStar) {
-      this.starTouchActive = false;
-      this.sunContactDamageTimer = 0;
+    if (startedBurning) {
+      this.showMessage("☀ Корпус горит!", 0xff8800);
     }
 
     // Safety auto-stop: if the hull drops below 30% mid-flight, halt the engines
@@ -3271,9 +2908,9 @@ export class SpaceFlightScene extends GameScene {
       fy,
       tx,
       ty,
-      this.starCenterX,
-      this.starCenterY,
-      this.STAR_AVOID_RADIUS,
+      this.starRenderer.centerX,
+      this.starRenderer.centerY,
+      this.starRenderer.avoidRadius,
     );
   }
 
@@ -3411,8 +3048,8 @@ export class SpaceFlightScene extends GameScene {
         this.planetSprites,
         this.shipPhysics.shipX,
         this.shipPhysics.shipY,
-        this.starCenterX,
-        this.starCenterY,
+        this.starRenderer.centerX,
+        this.starRenderer.centerY,
         npcDots,
         route,
         this.SYSTEM_BOUNDARY_RADIUS,
@@ -3436,8 +3073,8 @@ export class SpaceFlightScene extends GameScene {
   private createSystemBoundary(): void {
     const ring = new Graphics();
     ring.circle(
-      this.starCenterX,
-      this.starCenterY,
+      this.starRenderer.centerX,
+      this.starRenderer.centerY,
       this.SYSTEM_BOUNDARY_RADIUS,
     );
     ring.stroke({ width: 2, color: 0x2266aa, alpha: 0.35 });
@@ -3465,8 +3102,8 @@ export class SpaceFlightScene extends GameScene {
   /** Geometry NPC ships move within (band + boundary edge). */
   private npcBounds(): SystemBounds {
     return {
-      cx: this.starCenterX,
-      cy: this.starCenterY,
+      cx: this.starRenderer.centerX,
+      cy: this.starRenderer.centerY,
       rInner: this.SYSTEM_INNER_RADIUS,
       rOuter: this.SYSTEM_OUTER_RADIUS,
       boundary: this.SYSTEM_BOUNDARY_RADIUS,

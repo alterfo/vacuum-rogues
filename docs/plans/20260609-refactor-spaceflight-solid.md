@@ -97,14 +97,14 @@ The existing `SpaceBackgroundLayer` handles distant parallax. Extend it to absor
 - Create: `src/presentation/flight/StarRenderer.ts`
 - Modify: `src/presentation/SpaceFlightScene.ts`
 
-- [ ] Create `StarRenderer` implementing `FlightModule`. Constructor: `(renderer: Renderer, gameEngine: GameEngine, gameLayer: Container)`
-- [ ] Move fields: `starCenterX`, `starCenterY`, `starTiling`, `sunSphere`, `starHaloContainer`, `starSurface`, `starProminenceData`, `starElapsed`, `STAR_RADIUS`, `STAR_AVOID_RADIUS`, `starTouchActive`, `sunContactDamageTimer`
-- [ ] Move methods verbatim: `createStar()`, `buildStarLimbMask()`, `buildStarHalo()`, `createStarProminences()`, `drawProminence()`, `updateStar()`, `scheduleStarMapUpgrade()` (if present), `mountStarMapSurface()`, `starMapPrefix()`
-- [ ] Expose as public readonly: `centerX`, `centerY`, `radius` — SpaceFlightScene reads these for collision and avoidance path calculation.
-- [ ] Expose `updateSunContactDamage(dt, playerX, playerY)` — called by SpaceFlightScene's ship update loop to apply hull damage.
-- [ ] In SpaceFlightScene: replace all `this.createStar()` / `this.updateStar()` with `this.starRenderer.initialize()` / `this.starRenderer.update(dt, bgElapsed)`.
-- [ ] Write unit test: construct StarRenderer with mock renderer; call `initialize()`; assert `starRenderer.centerX` is a number and `starRenderer.radius > 0`.
-- [ ] `npm run lint && npm test -- --run` — must pass.
+- [x] Create `StarRenderer` implementing `FlightModule`. Constructor: `(renderer: Renderer, gameEngine: GameEngine | null, gameLayer: Container)` (renderer used only for `app.screen` → centre; the injected `gameLayer` owns the display objects, so no `renderer` field is kept).
+- [x] Move fields: `starCenterX`/`starCenterY` (→ public readonly `centerX`/`centerY`, computed from the screen centre in the constructor), `starTiling`, `sunSphere`, `starHaloContainer`, `starSurface`, `starElapsed`, `STAR_RADIUS` (→ public readonly `radius`), `STAR_AVOID_RADIUS` (→ public readonly `avoidRadius`), `starTouchActive`, `sunContactDamageTimer`. (`starProminenceData` no longer exists — the corona/prominence decoration was already replaced by the halo limb-ring, see the buildStarHalo doc comment.)
+- [x] Move methods verbatim: `createStar()`, `buildStarLimbMask()`, `buildStarHalo()`, `updateStar()`, `scheduleStarMapUpgrade()`, `mountStarMapSurface()`, `starMapPrefix()` — plus the helpers they depend on: `pickStarTexture()`, `starTint()`, and a local `paddedBlur()` copy (the scene keeps its own). (`createStarProminences()`/`drawProminence()` no longer exist — removed with the corona.)
+- [x] Expose as public readonly: `centerX`, `centerY`, `radius`, `avoidRadius` — SpaceFlightScene reads these for collision, orbit/planet/station layout, camera bounds, and star-avoidance path calculation (all `this.starCenterX/Y`, `this.STAR_RADIUS`, `this.STAR_AVOID_RADIUS` references rewired).
+- [x] Expose `updateSunContactDamage(dt, playerX, playerY, turnRunning, timeScale): boolean` — called by SpaceFlightScene's ship update loop; burns the hull in discrete chunks and returns `true` on the frame a fresh contact episode starts so the scene fires its "Корпус горит!" toast (keeps the HUD dependency in the scene).
+- [x] In SpaceFlightScene: replace `this.createStar()` / `this.updateStar()` with `this.starRenderer.initialize()` / `this.starRenderer.update(dt, bgElapsed)`; construct `starRenderer` before `createOrbits/createPlanets` so they can read its centre; call `this.starRenderer.destroy()` in `destroy()` (removes + disposes its own gameLayer objects). Removed now-unused imports (`TilingSprite`, `Texture`, `buildSphereMesh`/`SphereMesh`, `StarType`, `SeededRNG`, `pickVariantKey`/`loadTextureAsync`, `SUN_*` constants) and the dead `sceneDestroyed` field.
+- [x] Write unit test (`src/tests/presentation/starRenderer.test.ts`): construct StarRenderer with mock renderer; assert `centerX`/`centerY`/`radius`/`avoidRadius`; `initialize()` mounts the sun into the game layer; `update()` + `destroy()` leak no children; `updateSunContactDamage()` burns only inside the radius and latches the toast. Also retargeted `starHalo.test.ts` to the extracted class and updated `spaceFlightSpawn.test.ts` to stub `starRenderer.centerX/Y`.
+- [x] `npm run lint && npm test -- --run` — must pass. (tsc --noEmit clean; lint: 0 errors; tests: 849 passed; StarRenderer 510 lines, SpaceFlightScene 4550 → 4181.)
 
 ### Task 4: Extract AsteroidBelt — asteroid creation, animation, drawing
 
