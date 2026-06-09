@@ -2,6 +2,11 @@ import { describe, it, expect } from "vitest";
 import { Planet } from "@/domain/Planet";
 import { PlanetType, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
+import {
+  buildPlanetTooltipLines,
+  FACTION_COLOR,
+  FACTION_DISPLAY_NAME,
+} from "@/utils/planetTooltip";
 
 // Minimal Market stub so Planet can be constructed without real infrastructure.
 const stubMarket = {
@@ -32,132 +37,137 @@ function makePlanet(
   );
 }
 
-/** Simulate the tooltip data logic extracted from showPlanetTooltip. */
-function buildTooltipLines(
-  planet: Planet,
-  systemFaction: Faction,
-  playerRep: number,
-): Array<{ text: string; color: number }> {
-  const FACTION_DISPLAY_NAME: Record<Faction, string> = {
-    [Faction.OUTLANDERS]: "Аутсайдеры",
-    [Faction.BASTIONS]: "Бастионы",
-    [Faction.SYNDICATE]: "Синдикат",
-    [Faction.PARADOXES]: "Парадоксы",
-    [Faction.PROGRESSORS]: "Прогрессоры",
-    [Faction.INDEPENDENT]: "Независимые",
-    [Faction.OVERMIND]: "Овермайнд",
-  };
+/** Constant-reputation lookup helper for tests. */
+const repAlways = (rep: number) => () => rep;
 
-  function repLabel(rep: number): string {
-    if (rep >= 50) return "Союзник";
-    if (rep >= 20) return "Дружественный";
-    if (rep >= -20) return "Нейтральный";
-    if (rep >= -50) return "Недовольный";
-    return "Враждебный";
-  }
-
-  function repColor(rep: number): number {
-    if (rep >= 50) return 0x44dd44;
-    if (rep >= 20) return 0x88dd88;
-    if (rep >= -20) return 0xcccccc;
-    if (rep >= -50) return 0xddaa44;
-    return 0xff4444;
-  }
-
-  const lines: Array<{ text: string; color: number }> = [];
-
-  lines.push({ text: planet.name, color: 0xffffff });
-
-  if (planet.isHabitable) {
-    lines.push({ text: "Обитаема", color: 0x44dd44 });
-  } else {
-    lines.push({ text: "Необитаема", color: 0x888888 });
-  }
-
-  const factionLabel = FACTION_DISPLAY_NAME[systemFaction] ?? systemFaction;
-  const repLbl = repLabel(playerRep);
-  const repCol = repColor(playerRep);
-  lines.push({ text: `${factionLabel} · ${repLbl}`, color: repCol });
-
-  if (planet.capturedBy !== null && planet.capturedBy !== undefined) {
-    const captorName =
-      FACTION_DISPLAY_NAME[planet.capturedBy as unknown as Faction] ??
-      planet.capturedBy;
-    lines.push({ text: `⚠ Захвачена: ${captorName}`, color: 0xff4444 });
-  }
-
-  return lines;
-}
-
-describe("planet tooltip data", () => {
-  it("includes planet name as first line", () => {
+describe("buildPlanetTooltipLines", () => {
+  it("includes planet name as first line (white)", () => {
     const planet = makePlanet({ name: "Альфа" });
-    const lines = buildTooltipLines(planet, Faction.OUTLANDERS, 0);
+    const lines = buildPlanetTooltipLines(
+      planet,
+      Faction.OUTLANDERS,
+      repAlways(0),
+    );
     expect(lines[0].text).toBe("Альфа");
     expect(lines[0].color).toBe(0xffffff);
   });
 
   it("shows habitable status for habitable planet (green)", () => {
     const planet = makePlanet({ isHabitable: true });
-    const lines = buildTooltipLines(planet, Faction.BASTIONS, 0);
+    const lines = buildPlanetTooltipLines(
+      planet,
+      Faction.BASTIONS,
+      repAlways(0),
+    );
     expect(lines[1].text).toBe("Обитаема");
     expect(lines[1].color).toBe(0x44dd44);
   });
 
-  it("shows uninhabitable status for uninhabitable planet (gray)", () => {
+  it("shows uninhabitable status for uninhabitable planet (grey)", () => {
     const planet = makePlanet({ isHabitable: false });
-    const lines = buildTooltipLines(planet, Faction.BASTIONS, 0);
+    const lines = buildPlanetTooltipLines(
+      planet,
+      Faction.BASTIONS,
+      repAlways(0),
+    );
     expect(lines[1].text).toBe("Необитаема");
-    expect(lines[1].color).toBe(0x888888);
+    expect(lines[1].color).toBe(0xaaaaaa);
   });
 
-  it("includes faction name and reputation label on third line", () => {
+  it("renders the controlling faction name in its faction colour", () => {
     const planet = makePlanet();
-    const lines = buildTooltipLines(planet, Faction.SYNDICATE, 10);
-    expect(lines[2].text).toContain("Синдикат");
-    expect(lines[2].text).toContain("Нейтральный");
+    const lines = buildPlanetTooltipLines(
+      planet,
+      Faction.SYNDICATE,
+      repAlways(10),
+    );
+    expect(lines[2].text).toBe(FACTION_DISPLAY_NAME[Faction.SYNDICATE]);
+    expect(lines[2].color).toBe(FACTION_COLOR[Faction.SYNDICATE]);
   });
 
-  it("uses ally reputation label when rep >= 50", () => {
+  it("renders the player relation on its own line (neutral)", () => {
     const planet = makePlanet();
-    const lines = buildTooltipLines(planet, Faction.PROGRESSORS, 75);
-    expect(lines[2].text).toContain("Союзник");
-    expect(lines[2].color).toBe(0x44dd44);
+    const lines = buildPlanetTooltipLines(
+      planet,
+      Faction.SYNDICATE,
+      repAlways(10),
+    );
+    expect(lines[3].text).toBe("Нейтральный");
+    expect(lines[3].color).toBe(0xcccccc);
   });
 
-  it("uses hostile reputation label when rep < -50", () => {
+  it("uses ally relation when rep >= 50 (green)", () => {
     const planet = makePlanet();
-    const lines = buildTooltipLines(planet, Faction.PARADOXES, -80);
-    expect(lines[2].text).toContain("Враждебный");
-    expect(lines[2].color).toBe(0xff4444);
+    const lines = buildPlanetTooltipLines(
+      planet,
+      Faction.PROGRESSORS,
+      repAlways(75),
+    );
+    expect(lines[3].text).toBe("Союзник");
+    expect(lines[3].color).toBe(0x44dd44);
   });
 
-  it("does not include capture warning for uncaptured planet", () => {
+  it("uses hostile relation when rep < -50 (red)", () => {
+    const planet = makePlanet();
+    const lines = buildPlanetTooltipLines(
+      planet,
+      Faction.PARADOXES,
+      repAlways(-80),
+    );
+    expect(lines[3].text).toBe("Враждебный");
+    expect(lines[3].color).toBe(0xff4444);
+  });
+
+  it("has no capture warning for an uncaptured planet (4 lines)", () => {
     const planet = makePlanet({ capturedBy: null });
-    const lines = buildTooltipLines(planet, Faction.OUTLANDERS, 0);
-    expect(lines).toHaveLength(3);
+    const lines = buildPlanetTooltipLines(
+      planet,
+      Faction.OUTLANDERS,
+      repAlways(0),
+    );
+    expect(lines).toHaveLength(4);
     expect(lines.some((l) => l.text.includes("Захвачена"))).toBe(false);
   });
 
-  it("includes capture warning for a captured planet", () => {
-    const planet = makePlanet({ capturedBy: FactionType.OUTLANDERS });
-    const lines = buildTooltipLines(planet, Faction.BASTIONS, 0);
-    expect(lines).toHaveLength(4);
-    const captureLine = lines[3];
-    expect(captureLine.text).toContain("⚠ Захвачена:");
+  it("flags an OVERMIND-captured planet in red with a warning (5 lines)", () => {
+    const planet = makePlanet({
+      capturedBy: Faction.OVERMIND as unknown as FactionType,
+    });
+    const lines = buildPlanetTooltipLines(
+      planet,
+      Faction.BASTIONS,
+      repAlways(-40),
+    );
+    expect(lines).toHaveLength(5);
+    const captureLine = lines[4];
+    expect(captureLine.text).toContain("⚠ Захвачена");
+    expect(captureLine.text).toContain(FACTION_DISPLAY_NAME[Faction.OVERMIND]);
     expect(captureLine.color).toBe(0xff4444);
   });
 
-  it("capturedBy field defaults to null on Planet construction", () => {
-    const planet = new Planet(
-      "p2",
-      "Бета",
-      PlanetType.ICE,
-      600,
-      stubMarket,
-      [],
-      [],
+  it("uses the captor (not the system) for the faction name when captured", () => {
+    const planet = makePlanet({
+      capturedBy: Faction.OVERMIND as unknown as FactionType,
+    });
+    const lines = buildPlanetTooltipLines(
+      planet,
+      Faction.BASTIONS,
+      repAlways(0),
     );
-    expect(planet.capturedBy).toBeNull();
+    expect(lines[2].text).toBe(FACTION_DISPLAY_NAME[Faction.OVERMIND]);
+    expect(lines[2].color).toBe(FACTION_COLOR[Faction.OVERMIND]);
+  });
+
+  it("reputation is looked up against the controlling faction", () => {
+    const planet = makePlanet({
+      capturedBy: Faction.OVERMIND as unknown as FactionType,
+    });
+    const seen: Faction[] = [];
+    buildPlanetTooltipLines(planet, Faction.BASTIONS, (f) => {
+      seen.push(f);
+      return 0;
+    });
+    expect(seen).toContain(Faction.OVERMIND);
+    expect(seen).not.toContain(Faction.BASTIONS);
   });
 });

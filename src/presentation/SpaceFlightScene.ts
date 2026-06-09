@@ -14,6 +14,7 @@ import { buildSphereMesh, type SphereMesh } from "./sphereMesh";
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType, StarType, NpcRole, QuestType } from "@/types";
 import { Faction } from "@/types/faction";
+import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
 import { pickVariant } from "./textures";
 import { installGameCursors, setCanvasCursor } from "./cursor";
 import { PlanetSprite } from "./PlanetSprite";
@@ -57,33 +58,6 @@ import {
   type FontSizeKey,
 } from "@/utils/fontScale";
 import { SpaceBackgroundLayer } from "./SpaceBackgroundLayer";
-
-/** Display names for factions shown in planet tooltips. */
-const FACTION_DISPLAY_NAME: Record<Faction, string> = {
-  [Faction.OUTLANDERS]: "Аутсайдеры",
-  [Faction.BASTIONS]: "Бастионы",
-  [Faction.SYNDICATE]: "Синдикат",
-  [Faction.PARADOXES]: "Парадоксы",
-  [Faction.PROGRESSORS]: "Прогрессоры",
-  [Faction.INDEPENDENT]: "Независимые",
-  [Faction.OVERMIND]: "Овермайнд",
-};
-
-function reputationLabel(rep: number): string {
-  if (rep >= 50) return "Союзник";
-  if (rep >= 20) return "Дружественный";
-  if (rep >= -20) return "Нейтральный";
-  if (rep >= -50) return "Недовольный";
-  return "Враждебный";
-}
-
-function reputationColor(rep: number): number {
-  if (rep >= 50) return 0x44dd44;
-  if (rep >= 20) return 0x88dd88;
-  if (rep >= -20) return 0xcccccc;
-  if (rep >= -50) return 0xddaa44;
-  return 0xff4444;
-}
 
 interface NebulaLayer {
   container: Container;
@@ -4392,35 +4366,11 @@ export class SpaceFlightScene extends GameScene {
   ): void {
     this.hideTooltip();
 
-    const lines: Array<{ text: string; color: number }> = [];
-
-    // Line 1: planet name
-    lines.push({ text: planet.name, color: 0xffffff });
-
-    // Line 2: habitability
-    if (planet.isHabitable) {
-      lines.push({ text: "Обитаема", color: 0x44dd44 });
-    } else {
-      lines.push({ text: "Необитаема", color: 0xaaaaaa });
-    }
-
-    // Line 3: faction + player reputation (use actual controller if planet is captured)
-    const controllingFaction =
-      (planet.capturedBy as Faction | null | undefined) ?? systemFaction;
-    const factionLabel =
-      FACTION_DISPLAY_NAME[controllingFaction] ?? controllingFaction;
-    const rep = this.gameEngine?.player?.getReputation(controllingFaction) ?? 0;
-    const repLabel = reputationLabel(rep);
-    const repColor = reputationColor(rep);
-    lines.push({ text: `${factionLabel} · ${repLabel}`, color: repColor });
-
-    // Line 4: capture warning
-    if (planet.capturedBy !== null && planet.capturedBy !== undefined) {
-      const captorName =
-        FACTION_DISPLAY_NAME[planet.capturedBy as unknown as Faction] ??
-        planet.capturedBy;
-      lines.push({ text: `⚠ Захвачена: ${captorName}`, color: 0xff4444 });
-    }
+    const lines = buildPlanetTooltipLines(
+      planet,
+      systemFaction,
+      (faction) => this.gameEngine?.player?.getReputation(faction) ?? 0,
+    );
 
     // Build container
     const padding = 8;

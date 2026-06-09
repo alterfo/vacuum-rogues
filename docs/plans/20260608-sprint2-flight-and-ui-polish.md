@@ -65,12 +65,12 @@ Related: US-070, US-071, US-072, US-074, US-075
 **Files:**
 - Modify: `src/presentation/SpaceFlightScene.ts`
 
-- [ ] Show tooltip on `pointerover` (not just on click): display planet name, habitability status ("Обитаемая" / "Необитаемая"), faction name in faction color, and relation to player (ally/neutral/hostile)
-- [ ] If planet `ownerFaction === "PIRATES"` or `ownerFaction === "OVERMIND"`, show that explicitly ("Захвачена Пиратами" / "Захвачена Овермайндом") in red
-- [ ] Tooltip must appear within 50ms of hover (no delay), hide on `pointerout`
-- [ ] Tooltip must not block clicks underneath (use `eventMode = 'none'` on tooltip text elements, `stopPropagation` not needed as it's a static overlay)
-- [ ] Add E2E/unit test: hover over planet → tooltip text contains planet name
-- [ ] Run `npm test -- --run` — must pass
+- [x] Show tooltip on `pointerover` (not just on click): display planet name, habitability status ("Обитаемая" / "Необитаемая"), faction name in faction color, and relation to player (ally/neutral/hostile) — `buildPlanetTooltipLines` now emits the controlling faction name in its faction colour on its own line, with the player relation on the next line in reputation colour
+- [x] If planet `ownerFaction === "PIRATES"` or `ownerFaction === "OVERMIND"`, show that explicitly ("Захвачена Пиратами" / "Захвачена Овермайндом") in red — codebase has no PIRATES faction; OVERMIND (and any captor) gets a red "⚠ Захвачена: <captor>" warning line
+- [x] Tooltip must appear within 50ms of hover (no delay), hide on `pointerout` — `showPlanetTooltip` renders synchronously on `pointerover` (no setTimeout), `hideTooltip` on `pointerout`
+- [x] Tooltip must not block clicks underneath (use `eventMode = 'none'` on tooltip text elements, `stopPropagation` not needed as it's a static overlay) — container, bg, and all text nodes set `eventMode = 'none'`
+- [x] Add E2E/unit test: hover over planet → tooltip text contains planet name — `src/tests/planetTooltip.test.ts` now exercises the real `buildPlanetTooltipLines` helper (name, habitability, faction colour, relation, capture warning); 11 cases
+- [x] Run `npm test -- --run` — must pass (722 tests pass)
 
 ### Task 5: Star map — non-straight routes and route not strictly linear
 **Files:**
