@@ -182,9 +182,9 @@ Real solar systems follow the frost line: hot/rocky planets close to the star, g
 
 ### Task 12: Verify acceptance criteria
 
-- [ ] `npm test -- --run` — all tests pass
-- [ ] `npm run lint` — 0 errors
-- [ ] `npm run test:e2e:regression` — passes
+- [x] `npm test -- --run` — all tests pass (86 files, 841 tests pass)
+- [x] `npm run lint` — 0 errors (0 errors, 32 pre-existing warnings)
+- [x] `npm run test:e2e:regression` — passes (4/4 regression tests green; note: the local env's `http_proxy`/`https_proxy` point at Privoxy and intercept localhost — run with the proxy unset / `NO_PROXY=localhost,127.0.0.1` so Playwright's webServer readiness check can reach the Vite dev server)
 
 ## Technical Details
 
