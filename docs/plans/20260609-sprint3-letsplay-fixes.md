@@ -169,16 +169,16 @@ Current `avoidStarPath()` (line 120) generates 4–8 sparse control points on th
 
 Real solar systems follow the frost line: hot/rocky planets close to the star, gas giants and ice worlds far out. Currently a player can see an ice planet orbiting at the same radius as a volcanic world.
 
-- [ ] Find planet type assignment in the galaxy/system generator. Search for `PlanetType`, `ice`, `volcanic`, `gas`, `habitat`, `terrestrial` assignment logic.
-- [ ] Define orbital zones by radius relative to `SYSTEM_GEOMETRY.orbitRadii` (5 orbits at ~750–2750px). Map each zone to allowed types:
-  - Orbit 0 (closest, ~750px): `volcanic`, `barren` only
-  - Orbit 1 (~1250px): `volcanic`, `barren`, `terrestrial`
-  - Orbit 2 (~1750px): `terrestrial`, `habitat`, `barren`
-  - Orbit 3 (~2250px): `habitat`, `terrestrial`, `gas`
-  - Orbit 4 (outer, ~2750px): `gas`, `ice` only
-- [ ] Replace the current random planet type selection with a zone-constrained selection that picks only from the allowed set for each orbit index.
-- [ ] Write unit test `src/tests/galaxy/planetZones.test.ts`: generate 50 random systems; for each planet, assert its type is in the allowed set for its orbit index.
-- [ ] `npm run lint && npm test -- --run` — must pass.
+- [x] Find planet type assignment in the galaxy/system generator. Search for `PlanetType`, `ice`, `volcanic`, `gas`, `habitat`, `terrestrial` assignment logic. (Found in `src/systems/PlanetGenerator.ts` — `selectPlanetType()`/`selectHabitablePlanetType()` did pure weighted random with no regard to orbit. Weights lived in the generator, not balance.ts, so the zone data stays there too.)
+- [x] Define orbital zones by radius relative to `SYSTEM_GEOMETRY.orbitRadii` (5 orbits at ~600–2500px). Map each zone to allowed types: (Added an exported `ORBIT_ZONES: PlanetType[][]` keyed by orbit index. The enum has no `BARREN` member, so `INDUSTRIAL` — mining/factory worlds — stands in for the harsh rocky inner bodies.)
+  - Orbit 0 (closest): `VOLCANIC`, `INDUSTRIAL`
+  - Orbit 1: `VOLCANIC`, `INDUSTRIAL`, `TERRESTRIAL`
+  - Orbit 2: `TERRESTRIAL`, `HABITAT`, `INDUSTRIAL`
+  - Orbit 3: `HABITAT`, `TERRESTRIAL`, `GAS_GIANT`
+  - Orbit 4 (outer): `GAS_GIANT`, `ICE`
+- [x] Replace the current random planet type selection with a zone-constrained selection that picks only from the allowed set for each orbit index. (New `selectForZone(orbitIndex, habitableOnly)` + `weightedPick()` draw only from the orbit's zone. The goldilocks orbit `min(count-1, 2)` is forced to a habitable type so every system keeps a guaranteed landing spot.)
+- [x] Write unit test `src/tests/galaxy/planetZones.test.ts`: generate 50 random systems; for each planet, assert its type is in the allowed set for its orbit index. (3 cases: 50 systems all zone-valid; frost-line edges — orbit 0 never gas/ice, orbit 4 only gas/ice; and a guaranteed-habitable assertion over 50 systems.)
+- [x] `npm run lint && npm test -- --run` — must pass. (0 lint errors; 841 unit tests pass, incl. 3 new.)
 
 ### Task 12: Verify acceptance criteria
 
