@@ -1,8 +1,25 @@
-import type { Player } from '@/domain/Player';
-import type { ShipModule } from '@/domain/ShipModule';
-import { WeaponModule, ShieldModule, EngineModule } from '@/domain/ShipModule';
-import { GameBusinessException } from '@/exceptions/GameBusinessException';
-import { logger } from '@/utils/logger';
+import type { Player } from "@/domain/Player";
+import type { ShipModule } from "@/domain/ShipModule";
+import { WeaponModule, ShieldModule, EngineModule } from "@/domain/ShipModule";
+import { GameBusinessException } from "@/exceptions/GameBusinessException";
+import { logger } from "@/utils/logger";
+
+/**
+ * Total fractional speed bonus from every installed EngineModule (its
+ * `speedBoost` / `{ type: "speed", value }` stat). A ship fitted with a single
+ * `value: 0.2` fast engine returns 0.2, so cruise speed should scale ×1.2.
+ *
+ * Pure and dependency-free so {@link ShipPhysics}' cruise-speed derivation in
+ * the flight scene can read the equipped engine without pulling in the whole
+ * EquipmentSystem (Task 10: fast engine had no effect on movement).
+ */
+export function engineSpeedBonus(ship: {
+  modules: readonly (ShipModule | null)[];
+}): number {
+  return ship.modules
+    .filter((m): m is EngineModule => m instanceof EngineModule)
+    .reduce((sum, m) => sum + m.speedBoost, 0);
+}
 
 /**
  * Equipment System - manages ship module installation, removal, and stat updates
@@ -18,7 +35,7 @@ export class EquipmentSystem {
     // Validate slot number
     if (slot < 0 || slot > 2) {
       throw new GameBusinessException(
-        'INVALID_SLOT',
+        "INVALID_SLOT",
         `Invalid equipment slot: ${slot}. Valid slots are 0-2.`,
         { slot },
       );
@@ -28,7 +45,7 @@ export class EquipmentSystem {
     const module = player.inventory.modules.find((m) => m.id === moduleId);
     if (!module) {
       throw new GameBusinessException(
-        'MODULE_NOT_FOUND',
+        "MODULE_NOT_FOUND",
         `Module ${moduleId} not found in inventory.`,
         { moduleId },
       );
@@ -62,7 +79,7 @@ export class EquipmentSystem {
     // Validate slot
     if (slot < 0 || slot > 2) {
       throw new GameBusinessException(
-        'INVALID_SLOT',
+        "INVALID_SLOT",
         `Invalid equipment slot: ${slot}. Valid slots are 0-2.`,
         { slot },
       );
@@ -72,7 +89,7 @@ export class EquipmentSystem {
     const module = player.ship.modules[slot];
     if (!module) {
       throw new GameBusinessException(
-        'EMPTY_SLOT',
+        "EMPTY_SLOT",
         `Slot ${slot} is already empty.`,
         { slot },
       );
@@ -96,11 +113,18 @@ export class EquipmentSystem {
   private applyModuleBonuses(ship: any, module: ShipModule): void {
     if (module instanceof WeaponModule) {
       // Weapon modules don't directly modify ship stats (used in combat)
-      logger.debug(`Weapon module ${module.name} equipped: +${module.damage} damage`);
+      logger.debug(
+        `Weapon module ${module.name} equipped: +${module.damage} damage`,
+      );
     } else if (module instanceof ShieldModule) {
       ship.maxShields += module.shieldBoost;
-      ship.shields = Math.min(ship.shields + module.shieldBoost, ship.maxShields);
-      logger.debug(`Shield module ${module.name} equipped: +${module.shieldBoost} shields`);
+      ship.shields = Math.min(
+        ship.shields + module.shieldBoost,
+        ship.maxShields,
+      );
+      logger.debug(
+        `Shield module ${module.name} equipped: +${module.shieldBoost} shields`,
+      );
     } else if (module instanceof EngineModule) {
       ship.speed += module.speedBoost;
       ship.evasion += module.evasionBoost;
@@ -119,7 +143,9 @@ export class EquipmentSystem {
     } else if (module instanceof ShieldModule) {
       ship.maxShields -= module.shieldBoost;
       ship.shields = Math.min(ship.shields, ship.maxShields);
-      logger.debug(`Shield module ${module.name} removed: -${module.shieldBoost} shields`);
+      logger.debug(
+        `Shield module ${module.name} removed: -${module.shieldBoost} shields`,
+      );
     } else if (module instanceof EngineModule) {
       ship.speed -= module.speedBoost;
       ship.evasion -= module.evasionBoost;

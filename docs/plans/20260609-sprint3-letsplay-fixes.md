@@ -155,11 +155,11 @@ Current `avoidStarPath()` (line 120) generates 4–8 sparse control points on th
 - Modify: `src/systems/ShipPhysics.ts`
 - Modify: `src/systems/EquipmentSystem.ts` or `src/presentation/SpaceFlightScene.ts`
 
-- [ ] Find where `ShipPhysics.maxSpeed` (or equivalent) is set. Search for `maxSpeed`, `shipSpeed`, `BASE_SHIP_SPEED` in ShipPhysics.ts and balance.ts.
-- [ ] Find where equipped engine module stats are applied to the ship. Search for `EngineModule`, `speed` stat type, `playerLoadout.getEquipped`. If the engine's `{ type: "speed", value: 0.2 }` stat is never read by ShipPhysics, wire it in: `maxSpeed = BASE_SPEED * (1 + engineSpeedBonus)`.
-- [ ] The `EngineModule` with `value: 0.2` at `GameEngine.ts:~279` has stat type `"speed"` — confirm `ShipPhysics` reads this stat from the loadout. If `ShipPhysics` takes a flat `speed` constant, change it to accept `baseSpeed` and multiply by `(1 + sum of engine speed bonuses)`.
-- [ ] Write unit test: create a `ShipPhysics` with a `0.2` speed bonus engine module; assert `maxSpeed > BASE_SPEED`.
-- [ ] `npm run lint && npm test -- --run` — must pass.
+- [x] Find where `ShipPhysics.maxSpeed` (or equivalent) is set. Search for `maxSpeed`, `shipSpeed`, `BASE_SHIP_SPEED` in ShipPhysics.ts and balance.ts. (Found: `ShipPhysics`'s `maxSpeed` is the constructor's 3rd arg, supplied as the `cruise` value at `SpaceFlightScene.ts:~463`. There is no `BASE_SHIP_SPEED` in balance.ts — the cruise base comes from `playerLoadout.derivedStats().speed` (px/ms).)
+- [x] Find where equipped engine module stats are applied to the ship. Search for `EngineModule`, `speed` stat type, `playerLoadout.getEquipped`. If the engine's `{ type: "speed", value: 0.2 }` stat is never read by ShipPhysics, wire it in: `maxSpeed = BASE_SPEED * (1 + engineSpeedBonus)`. (Root cause: `EquipmentSystem.applyModuleBonuses` folds `EngineModule.speedBoost` into `ship.speed`, but the cruise computation used ONLY `loadoutStats.speed` whenever a GearCatalog loadout existed — so the fast engine's `ship.speed` boost was silently dropped on every new game. Added a pure `engineSpeedBonus(ship)` export in `EquipmentSystem.ts` and scaled the loadout base: `cruise = loadoutStats.speed * (1 + engineBonus)`.)
+- [x] The `EngineModule` with `value: 0.2` at `GameEngine.ts:~279` has stat type `"speed"` — confirm `ShipPhysics` reads this stat from the loadout. If `ShipPhysics` takes a flat `speed` constant, change it to accept `baseSpeed` and multiply by `(1 + sum of engine speed bonuses)`. (Kept `ShipPhysics` pure — it still takes a flat `maxSpeed`. The `(1 + bonus)` scaling is applied at the call site in `SpaceFlightScene.initialize()`. The legacy fallback path already encodes the engine via `ship.speed`, so the bonus is applied to the loadout base only — never double-counted.)
+- [x] Write unit test: create a `ShipPhysics` with a `0.2` speed bonus engine module; assert `maxSpeed > BASE_SPEED`. (`src/tests/engineSpeed.test.ts` — 5 cases: `engineSpeedBonus` is 0 with no engine, reads 0.2 from a fast engine, sums across multiple engines, ignores non-engine slots; and a 0.2-bonus engine yields a `ShipPhysics.getMaxSpeed()` greater than the unboosted base (0.12 > 0.1).)
+- [x] `npm run lint && npm test -- --run` — must pass. (0 lint errors; 838 unit tests pass, incl. 5 new.)
 
 ### Task 11: Logical planet placement by orbital distance
 

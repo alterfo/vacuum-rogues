@@ -46,6 +46,7 @@ import {
   leadInterceptPoint,
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
+import { engineSpeedBonus } from "@/systems/EquipmentSystem";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { PanZoomController } from "@/systems/PanZoomController";
 import {
@@ -455,11 +456,18 @@ export class SpaceFlightScene extends GameScene {
     // Loadout speed is already in px/ms from ShipLoadout.derivedStats().
     // Fall back to DISTANCE_PER_DAY / 1000 (legacy ship.speed multiplier) when
     // no GearCatalog loadout is set, so old saves/tests keep working.
+    // An equipped EngineModule's "speed" stat (e.g. the fast engine's value:0.2)
+    // scales the GearCatalog base so a faster engine is actually faster (Task 10).
+    // The fallback path already folds the engine into ship.speed via
+    // EquipmentSystem.applyModuleBonuses, so the bonus is only re-applied to the
+    // loadout-derived base — never double-counted.
     const loadoutStats = this.gameEngine?.playerLoadout?.derivedStats();
+    const ship = this.gameEngine?.player?.ship;
+    const engineBonus = ship ? engineSpeedBonus(ship) : 0;
     const cruise = loadoutStats
-      ? loadoutStats.speed
+      ? loadoutStats.speed * (1 + engineBonus)
       : (this.DISTANCE_PER_DAY / 1000) *
-        Math.min(1.4, Math.max(0.8, this.gameEngine?.player?.ship.speed ?? 1));
+        Math.min(1.4, Math.max(0.8, ship?.speed ?? 1));
     this.shipPhysics = new ShipPhysics(entryX, entryY, cruise || 0.1);
 
     this.renderer.clearGameLayer();
