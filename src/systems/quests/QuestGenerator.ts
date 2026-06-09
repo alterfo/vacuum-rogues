@@ -40,6 +40,10 @@ export interface GeneratedQuest {
   readonly targetPlanetId: string | null;
   /** Hyperjumps from the issuing system to the target (0 = local). */
   readonly jumps: number;
+  /** In-character name of whoever posted the job (e.g. "Маклай"). */
+  readonly issuerName: string;
+  /** Title that fits the job (e.g. "Губернатор", "Снабженец", "Шериф"). */
+  readonly issuerTitle: string;
 }
 
 export interface BoardOptions {
@@ -90,6 +94,65 @@ const FACTION_HOME_PREFIX: Record<string, string> = {
   PARADOXES: "[ПАРАДОКС]",
   PROGRESSORS: "[ПРОГРЕССОРЫ]",
 };
+
+/** First-name pool for quest issuers (deterministic per quest slot). */
+const ISSUER_NAMES = [
+  "Маклай",
+  "Зорба",
+  "Хендрикс",
+  "Валенса",
+  "Тао",
+  "Брунн",
+  "Сольвейг",
+  "Кадар",
+  "Орлофф",
+  "Мерсье",
+  "Янг",
+  "Дусет",
+  "Ферран",
+  "Гримо",
+  "Лазар",
+  "Окич",
+];
+
+/** Per-type title pool, so the issuer's rank fits the job they post. */
+const ISSUER_TITLES: Partial<Record<QuestType, string[]>> = {
+  [QuestType.DELIVERY]: ["Снабженец", "Торговец", "Завхоз"],
+  [QuestType.BOUNTY]: ["Шериф", "Командор", "Маршал"],
+  [QuestType.ESCORT]: ["Караванщик", "Капитан конвоя", "Старшина"],
+  [QuestType.DIPLOMACY]: ["Посол", "Советник", "Атташе"],
+  [QuestType.EXPLORATION]: ["Профессор", "Картограф", "Координатор"],
+  [QuestType.DEFENSE]: ["Командующий", "Адмирал"],
+  [QuestType.TEXT_ADVENTURE]: ["Незнакомец", "Информатор"],
+};
+
+/**
+ * Pick a deterministic in-character issuer (name + fitting title) for a quest.
+ * Consumes two RNG draws; call it at a stable point in each builder so the
+ * board stays reproducible.
+ */
+function pickIssuer(
+  rng: SeededRNG,
+  type: QuestType,
+): { name: string; title: string } {
+  const name = ISSUER_NAMES[rng.nextInt(0, ISSUER_NAMES.length - 1)];
+  const titles = ISSUER_TITLES[type] ?? ["Губернатор"];
+  const title = titles[rng.nextInt(0, titles.length - 1)];
+  return { name, title };
+}
+
+/**
+ * Frame a generated quest as a first-person dialogue line from its issuer, so
+ * the governor screen can "offer" the job in character (Task 7). Falls back to
+ * a plain "Губернатор" speaker when no issuer metadata is present.
+ */
+export function governorOfferLine(quest: GeneratedQuest): string {
+  const speaker =
+    quest.issuerName && quest.issuerTitle
+      ? `${quest.issuerTitle} ${quest.issuerName}`
+      : "Губернатор";
+  return `${speaker}: «${quest.template.description}»`;
+}
 
 export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
   const {
@@ -261,12 +324,13 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
         jumps,
         defRng,
       );
+      const defIssuer = pickIssuer(defRng, QuestType.DEFENSE);
       const defId = `${slotId(planetId, Math.floor(day / Math.max(1, refreshEveryDays)), out.length)}_defense`;
       out.push({
         template: {
           id: defId,
           title: `Оборона: ${targetSys.name} (${jumps} прыж.)`,
-          description: `OVERMIND угрожает системе ${targetSys.name}. Прилетите туда, чтобы остановить экспансию.`,
+          description: `${defIssuer.title} ${defIssuer.name} бьёт тревогу: OVERMIND угрожает системе ${targetSys.name}. Прилетите туда лично и остановите экспансию, пока ещё есть что оборонять.`,
           type: QuestType.DEFENSE,
           objectives: [
             {
@@ -291,6 +355,8 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
         targetSystemId: targetAdjacentId,
         targetPlanetId: pickTargetPlanet(targetSys),
         jumps,
+        issuerName: defIssuer.name,
+        issuerTitle: defIssuer.title,
       });
     }
   }
@@ -380,6 +446,7 @@ function buildRoutineQuest(
   const targetPlanetId = pickTargetPlanet(target);
   const where = `${target.name} (${jumps} прыж.)`;
   const { credits, experience, deadline } = economics(type, jumps, rng);
+  const issuer = pickIssuer(rng, type);
   const reward = {
     credits,
     experience,
@@ -396,7 +463,13 @@ function buildRoutineQuest(
       const cargo = pickCargo(rng);
       const qty = rng.nextInt(5, 15);
       title = `Доставка: ${where}`;
-      description = pickDeliveryDesc(rng, cargo.label, target.name, credits);
+      description = pickDeliveryDesc(
+        rng,
+        issuer.name,
+        cargo.label,
+        target.name,
+        credits,
+      );
       objectives = [
         {
           id: `${id}_collect`,
@@ -417,7 +490,7 @@ function buildRoutineQuest(
     }
     case QuestType.BOUNTY: {
       title = `Охота: ${where}`;
-      description = pickBountyDesc(rng, target.name, credits);
+      description = pickBountyDesc(rng, issuer.name, target.name, credits);
       objectives = [
         {
           id: `${id}_kill`,
@@ -431,7 +504,7 @@ function buildRoutineQuest(
     }
     case QuestType.ESCORT: {
       title = `Эскорт: ${where}`;
-      description = pickEscortDesc(rng, target.name, credits);
+      description = pickEscortDesc(rng, issuer.name, target.name, credits);
       objectives = [
         {
           id: `${id}_escort`,
@@ -445,7 +518,7 @@ function buildRoutineQuest(
     }
     case QuestType.DIPLOMACY: {
       title = `Дипломатия: ${where}`;
-      description = pickDiplomacyDesc(rng, target.name, credits);
+      description = pickDiplomacyDesc(rng, issuer.name, target.name, credits);
       objectives = [
         {
           id: `${id}_envoy`,
@@ -460,7 +533,7 @@ function buildRoutineQuest(
     case QuestType.EXPLORATION:
     default: {
       title = `Разведка: ${where}`;
-      description = pickExplorationDesc(rng, target.name, credits);
+      description = pickExplorationDesc(rng, issuer.name, target.name, credits);
       objectives = [
         {
           id: `${id}_scan`,
@@ -505,6 +578,8 @@ function buildRoutineQuest(
     targetSystemId: target.id,
     targetPlanetId,
     jumps,
+    issuerName: issuer.name,
+    issuerTitle: issuer.title,
   };
 }
 
@@ -525,6 +600,7 @@ function buildChainQuest(
   const targetPlanetId = pickTargetPlanet(target);
   const where = `${target.name} (${jumps} прыж.)`;
   const { credits, experience, deadline } = economics(type, jumps, rng);
+  const issuer = pickIssuer(rng, QuestType.DELIVERY);
   const reward = {
     credits,
     experience,
@@ -537,7 +613,7 @@ function buildChainQuest(
     template: {
       id,
       title: `[ЦЕПОЧКА ${partLabel}] Цепь курьеров: ${where}`,
-      description: `${partLabel}: перевезите груз (${cargo.label}) в систему ${target.name}. Выполните все 3 части для крупного вознаграждения.`,
+      description: `${partLabel}. ${issuer.title} ${issuer.name} ведёт большое дело по частям: перевезите груз (${cargo.label}) в систему ${target.name}. Выполните все 3 части — и за финал заплатят по-крупному.`,
       type: QuestType.DELIVERY,
       objectives: [
         {
@@ -568,6 +644,8 @@ function buildChainQuest(
     targetSystemId: target.id,
     targetPlanetId,
     jumps,
+    issuerName: issuer.name,
+    issuerTitle: issuer.title,
   };
 }
 
@@ -590,12 +668,13 @@ function buildFinaleQuest(
     jumps,
     rng,
   );
+  const issuer = pickIssuer(rng, QuestType.DELIVERY);
   const cargo = pickCargo(rng);
   return {
     template: {
       id,
       title: `[ФИНАЛ] Завершение цепочки: ${where}`,
-      description: `Последняя миссия цепочки! Доставьте особый груз (${cargo.label}) в систему ${target.name}. Награда утроена.`,
+      description: `Последняя миссия цепочки! ${issuer.title} ${issuer.name} лично проследит за грузом: доставьте особый контейнер (${cargo.label}) в систему ${target.name}. Награда утроена — заслужили.`,
       type: QuestType.DELIVERY,
       objectives: [
         {
@@ -630,6 +709,8 @@ function buildFinaleQuest(
     targetSystemId: target.id,
     targetPlanetId,
     jumps,
+    issuerName: issuer.name,
+    issuerTitle: issuer.title,
   };
 }
 
@@ -643,13 +724,14 @@ function buildLocalDelivery(
   origin: StarSystem | null,
 ): GeneratedQuest {
   const id = slotId(planetId, bucket, i);
+  const issuer = pickIssuer(rng, QuestType.DELIVERY);
   const cargo = pickCargo(rng);
   const targetPlanetId = pickTargetPlanet(origin);
   return {
     template: {
       id,
       title: "Местный подряд",
-      description: `Местная доставка (${cargo.label}) в пределах системы.`,
+      description: `${issuer.title} ${issuer.name} подкинул местный подряд: развезти «${cargo.label}» по орбитальным складам, не покидая систему. Платят немного, зато спокойно и без прыжков.`,
       type: QuestType.DELIVERY,
       objectives: [
         {
@@ -668,6 +750,8 @@ function buildLocalDelivery(
     targetSystemId: origin?.id ?? planetId,
     targetPlanetId,
     jumps: 0,
+    issuerName: issuer.name,
+    issuerTitle: issuer.title,
   };
 }
 
@@ -682,6 +766,7 @@ function buildTextQuest(
 ): GeneratedQuest {
   const id = slotId(planetId, bucket, i);
   const { credits, experience } = economics(QuestType.TEXT_ADVENTURE, 0, rng);
+  const issuer = pickIssuer(rng, QuestType.TEXT_ADVENTURE);
 
   // Pick a script deterministically for this board slot.
   const script =
@@ -691,7 +776,7 @@ function buildTextQuest(
     template: {
       id,
       title: `Особое задание: ${script.title}`,
-      description: `Уникальное задание «${script.title}». Исход зависит от ваших решений.`,
+      description: `${issuer.title} ${issuer.name} вполголоса предлагает уникальное дело «${script.title}». Исход целиком зависит от ваших решений — гарантий никаких.`,
       type: QuestType.TEXT_ADVENTURE,
       objectives: [
         {
@@ -711,6 +796,8 @@ function buildTextQuest(
     targetSystemId: origin?.id ?? planetId,
     targetPlanetId: planetId,
     jumps: 0,
+    issuerName: issuer.name,
+    issuerTitle: issuer.title,
   };
 }
 
@@ -732,21 +819,24 @@ function bountyEnemy(rng: SeededRNG): EnemyType {
 
 function pickDeliveryDesc(
   rng: SeededRNG,
+  issuer: string,
   cargoLabel: string,
   targetName: string,
   reward: number,
 ): string {
   const templates = [
-    `Контейнер с «${cargoLabel}» (не спрашивай) нужно доставить на ${targetName}. Владелец клянётся, что ничего не пищит. Оплата: ${reward} ₢.`,
-    `Срочная поставка ${cargoLabel} в систему ${targetName} — там ждут уже третий день. Клиент нервничает, курьеры разбегаются. Может, ты справишься? Вознаграждение: ${reward} ₢.`,
-    `${targetName} остро нуждается в ${cargoLabel}. Местные говорят «срочно», но это у них вечно. Губернатор готов заплатить ${reward} ₢ за своевременную доставку.`,
-    `Доставь ${cargoLabel} в ${targetName} — без вопросов, без лишнего шума. Упаковка нестандартная, но таможня уже предупреждена. ${reward} ₢ по прибытии.`,
+    `${issuer} грузит контейнер с «${cargoLabel}» (не спрашивай, что внутри) и просит доставить на ${targetName}. Клянётся, что ничего не пищит. Оплата: ${reward} ₢.`,
+    `Срочная поставка ${cargoLabel} в систему ${targetName} — там ждут уже третий день. ${issuer} нервничает, прежние курьеры разбежались. Может, ты справишься? Вознаграждение: ${reward} ₢.`,
+    `${targetName} остро нуждается в ${cargoLabel}. «Срочно!» — твердит ${issuer}, но у них тут вечно срочно. Готовы заплатить ${reward} ₢ за своевременную доставку.`,
+    `${issuer} просит без лишнего шума: доставь ${cargoLabel} в ${targetName}. Упаковка нестандартная, но таможня уже предупреждена. ${reward} ₢ по прибытии.`,
+    `${issuer} божится, что груз «${cargoLabel}» абсолютно легален и безопасен. Именно поэтому за рейс до ${targetName} платят целых ${reward} ₢. Совпадение? Решать тебе.`,
   ];
   return templates[rng.nextInt(0, templates.length - 1)];
 }
 
 function pickBountyDesc(
   rng: SeededRNG,
+  issuer: string,
   targetName: string,
   reward: number,
 ): string {
@@ -755,51 +845,63 @@ function pickBountyDesc(
     "«Ржавые Кулаки»",
     "«Корсары Туманности»",
     "«Весёлые Вдовы»",
+    "«Сборщики Долгов»",
   ];
   const gang = gangs[rng.nextInt(0, gangs.length - 1)];
   const templates = [
-    `Пиратская шайка ${gang} обнаглела и обложила данью торговцев в районе ${targetName}. Губернатор просит навести порядок. Вознаграждение щедрое — чтобы перебить страх. Итого: ${reward} ₢.`,
-    `Цель находится в системе ${targetName}. Предупреждаем: стреляет первым, переговоров не ведёт. Зато мёртвой стоит ${reward} ₢ — живой не нужна никому.`,
-    `Группа ${gang} атаковала конвой близ ${targetName}. Пострадавшие требуют справедливости. Администрация требует результата. Ты требуешь ${reward} ₢ — кажется, все довольны.`,
+    `Шайка ${gang} обнаглела и обложила данью торговцев у ${targetName}. ${issuer} просит навести порядок. Награда щедрая — чтобы перебить страх: ${reward} ₢.`,
+    `Цель прячется в системе ${targetName}. ${issuer} предупреждает: стреляет первой, переговоров не ведёт. Зато мёртвой стоит ${reward} ₢ — живой не нужна никому.`,
+    `${gang} атаковали конвой близ ${targetName}. Пострадавшие требуют справедливости, ${issuer} требует результата, а ты потребуешь ${reward} ₢. Кажется, все довольны.`,
+    `${issuer} давно мечтает, чтобы ${gang} перестали существовать где-то у ${targetName}. Бюджет на мечту: ${reward} ₢. Вопросов о методах не будет.`,
+    `Розыск: один очень нехороший тип засел в ${targetName}. ${issuer} клянётся, что он того заслужил. ${reward} ₢, и можешь не уточнять подробности.`,
   ];
   return templates[rng.nextInt(0, templates.length - 1)];
 }
 
 function pickEscortDesc(
   rng: SeededRNG,
+  issuer: string,
   targetName: string,
   reward: number,
 ): string {
   const templates = [
-    `Торговый конвой идёт в ${targetName}, но маршрут небезопасный. Охрана сбежала ещё вчера. Тебе предлагают ${reward} ₢ и искреннюю благодарность — последнее бесплатно.`,
-    `Дипломатическая делегация направляется в ${targetName} и очень боится. Требуется сопровождение. Стрелять первым нельзя, но отвечать — обязательно. Оплата: ${reward} ₢.`,
-    `Груз и пассажиры следуют в ${targetName}. Клиент нанял тебя, потому что предыдущий эскорт «не смог». Подробности он старается не уточнять. ${reward} ₢ при доставке.`,
+    `Торговый конвой идёт в ${targetName}, но маршрут небезопасен. Охрана ${issuer}а сбежала ещё вчера. Тебе предлагают ${reward} ₢ и искреннюю благодарность — последнее бесплатно.`,
+    `${issuer} сопровождает делегацию в ${targetName} и очень боится. Стрелять первым нельзя, но отвечать — обязательно. Оплата: ${reward} ₢.`,
+    `Груз и пассажиры ${issuer}а следуют в ${targetName}. Предыдущий эскорт «не смог», подробности тебе знать не положено. ${reward} ₢ при доставке.`,
+    `${issuer} нанимает прикрытие до ${targetName}: караван жирный, пираты голодные, математика очевидная. За нервы и топливо — ${reward} ₢.`,
+    `«Просто доведи нас до ${targetName} живыми», — просит ${issuer}. Звучит просто. Платят ${reward} ₢ — значит, не очень.`,
   ];
   return templates[rng.nextInt(0, templates.length - 1)];
 }
 
 function pickDiplomacyDesc(
   rng: SeededRNG,
+  issuer: string,
   targetName: string,
   reward: number,
 ): string {
   const templates = [
-    `Фракционные переговоры зашли в тупик. Нужен нейтральный курьер, чтобы доставить предложение в ${targetName} — лично, в руки. Бюрократы боятся перехвата. Ты получишь ${reward} ₢ за дискретность.`,
-    `В ${targetName} ждут ответа на торговое предложение. Ответ — конверт. Конверт — у тебя. Не вскрывать, не читать, не нюхать. ${reward} ₢ по прибытии.`,
-    `Дипломатический кризис между ${targetName} и здешней администрацией разгорается. Твоя задача — привезти мирный документ раньше, чем кто-то успеет выстрелить. ${reward} ₢ за мир.`,
+    `Переговоры зашли в тупик. ${issuer} ищет нейтрального курьера, чтобы доставить предложение в ${targetName} лично в руки. Бюрократы боятся перехвата. ${reward} ₢ за дискретность.`,
+    `В ${targetName} ждут ответа на торговое предложение. Ответ — конверт, конверт — у ${issuer}а, скоро будет у тебя. Не вскрывать, не читать, не нюхать. ${reward} ₢ по прибытии.`,
+    `Дипломатический кризис между ${targetName} и здешней администрацией разгорается. ${issuer} умоляет привезти мирный документ раньше, чем кто-то выстрелит. ${reward} ₢ за мир.`,
+    `${issuer} клянётся, что это «просто формальность»: подпись, печать, рукопожатие в ${targetName}. Формальности за ${reward} ₢ обычно не такие уж формальные.`,
+    `Тонкая миссия: ${issuer} просит передать слово чести в ${targetName}, не уронив ни слова и ни честь. ${reward} ₢ — и ни одной лишней реплики.`,
   ];
   return templates[rng.nextInt(0, templates.length - 1)];
 }
 
 function pickExplorationDesc(
   rng: SeededRNG,
+  issuer: string,
   targetName: string,
   reward: number,
 ): string {
   const templates = [
-    `Система ${targetName} числится в картах, но последние данные оттуда — трёхлетней давности. Учёные хотят свежий скан. Риски минимальные, оплата — ${reward} ₢. Говорят, там красиво.`,
-    `Аномалия зафиксирована в районе ${targetName}. Нужен разведчик, который слетает и вернётся живым. Предыдущих двух мы не упоминаем. Вознаграждение: ${reward} ₢.`,
-    `${targetName} не отвечает на стандартные сигналы. Скорее всего, сбой ретранслятора. Скорее всего. Слетай, проверь, привези данные. ${reward} ₢ — и никаких лишних вопросов.`,
+    `Система ${targetName} есть в картах, но свежих данных оттуда нет уже три года. ${issuer} хочет новый скан. Риски минимальные, оплата — ${reward} ₢. Говорят, там красиво.`,
+    `Аномалия зафиксирована близ ${targetName}. ${issuer} ищет разведчика, который слетает и вернётся живым. Про предыдущих двух мы не вспоминаем. Вознаграждение: ${reward} ₢.`,
+    `${targetName} не отвечает на стандартные сигналы. ${issuer} уверен, что это сбой ретранслятора. Почти уверен. Слетай, проверь, привези данные. ${reward} ₢ без лишних вопросов.`,
+    `${issuer} ставит на то, что в ${targetName} есть нечто, чего нет в каталогах. Сыграет ставка — ${reward} ₢ твои, а слава его. Честный делёж по галактическим меркам.`,
+    `Скучный заказ от ${issuer}а: облететь ${targetName}, всё измерить, ничего не трогать. За скуку и аккуратность — ${reward} ₢. Постарайся вернуть зонд целым.`,
   ];
   return templates[rng.nextInt(0, templates.length - 1)];
 }

@@ -101,12 +101,12 @@ Related: US-070, US-071, US-072, US-074, US-075
 - Modify: `src/presentation/JobBoardPanel.ts`
 - Modify: `src/presentation/PlanetScene.ts`
 
-- [ ] `QuestGenerator`: enrich quest `description` field with humorous, story-rich text — add 5+ description templates per quest type (DELIVERY, PATROL, BOUNTY, ESCORT) with variable substitution (sender name, goods, reason, reward framing); match the terse-but-funny tone of original Space Rangers
-- [ ] `QuestGenerator`: add `issuerName` and `issuerTitle` fields to generated quest (e.g. "Губернатор Маклай", "Торговец Зорба"); used in panel header
-- [ ] `JobBoardPanel`: show issuer name/title in panel header when available; show full description text (scrollable if needed)
-- [ ] `PlanetScene`: add "Губернатор" button (if planet is habitable) that opens a governor dialogue panel listing available quests — same underlying quests as job board but framed as NPC dialogue lines (governor "offers" the mission in first person)
-- [ ] Write test: every quest type produces a non-empty description with at least 50 characters
-- [ ] Run `npm test -- --run` — must pass
+- [x] `QuestGenerator`: enrich quest `description` field with humorous, story-rich text — add 5+ description templates per quest type (DELIVERY, PATROL, BOUNTY, ESCORT) with variable substitution (sender name, goods, reason, reward framing); match the terse-but-funny tone of original Space Rangers — each `pick*Desc` (DELIVERY/BOUNTY/ESCORT/DIPLOMACY/EXPLORATION) now has 5 templates weaving in the issuer name, goods, target, and reward framing
+- [x] `QuestGenerator`: add `issuerName` and `issuerTitle` fields to generated quest (e.g. "Губернатор Маклай", "Торговец Зорба"); used in panel header — added to `GeneratedQuest`; `pickIssuer(rng, type)` draws a name from a pool plus a type-fitting title (Снабженец/Шериф/Караванщик/Посол/Картограф/Командующий/Незнакомец); threaded through every builder incl. DEFENSE
+- [x] `JobBoardPanel`: show issuer name/title in panel header when available; show full description text (scrollable if needed) — each offer row now shows a "— <title> <name>" issuer line; full description rendered with word-wrap (row height bumped 92→110 to fit)
+- [x] `PlanetScene`: add "Губернатор" button (if planet is habitable) that opens a governor dialogue panel listing available quests — same underlying quests as job board but framed as NPC dialogue lines (governor "offers" the mission in first person) — the habitable-only "Губернатор" button already opens `GovernmentScene`; added a "Губернатор предлагает:" section there listing up to 3 board quests as first-person `governorOfferLine` dialogue, each with an inline "[ Взять ]" accept button
+- [x] Write test: every quest type produces a non-empty description with at least 50 characters — `QuestGenerator.test.ts` now asserts ≥50 chars for all 7 types (DELIVERY/BOUNTY/ESCORT/DIPLOMACY/EXPLORATION/TEXT_ADVENTURE/DEFENSE) plus issuer-field presence and `governorOfferLine` framing
+- [x] Run `npm test -- --run` — must pass (746 tests pass)
 
 ### Task 8: Info center fixes — search, money display, equipment facets, comparison
 **Files:**

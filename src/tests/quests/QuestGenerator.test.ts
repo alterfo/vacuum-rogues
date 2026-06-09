@@ -3,8 +3,10 @@ import type { StarSystem } from "@/domain/StarSystem";
 import { QuestType } from "@/types";
 import {
   generateQuestBoard,
+  governorOfferLine,
   QUEST_TEXT_RATIO,
   type BoardOptions,
+  type GeneratedQuest,
 } from "@/systems/quests/QuestGenerator";
 
 /**
@@ -151,6 +153,87 @@ describe("QuestGenerator", () => {
       expect(q.template.description).toBeTruthy();
       expect(q.template.description.length).toBeGreaterThan(10);
     }
+  });
+
+  it("every quest type produces a description of at least 50 characters", () => {
+    const byType = new Map<QuestType, string[]>();
+    const record = (board: GeneratedQuest[]): void => {
+      for (const q of board) {
+        const arr = byType.get(q.template.type) ?? [];
+        arr.push(q.template.description);
+        byType.set(q.template.type, arr);
+      }
+    };
+
+    // Routine types (DELIVERY/BOUNTY/ESCORT/DIPLOMACY/EXPLORATION) over many slots.
+    record(
+      generateQuestBoard(
+        baseOpts({ count: 200, textRatio: 0, eliteRatio: 0, chainRatio: 0 }),
+      ),
+    );
+    // Text adventures.
+    record(generateQuestBoard(baseOpts({ count: 10, textRatio: 1 })));
+    // Local delivery (isolated origin → jumps=0 fallback).
+    record(
+      generateQuestBoard(
+        baseOpts({ systems: [sys("A", "Альфа", [])], count: 5 }),
+      ),
+    );
+    // DEFENSE quest (OVERMIND adjacent to a contestable system).
+    const omGalaxy = [
+      sys("A", "Альфа", ["B"]),
+      sys("B", "Бета", ["A", "O"]),
+      sys("O", "Овермайнд", ["B"]),
+    ];
+    record(
+      generateQuestBoard(
+        baseOpts({
+          systems: omGalaxy,
+          overmindSystems: ["O"],
+          overmindAdjacentSystems: ["B"],
+          count: 5,
+        }),
+      ),
+    );
+
+    const wantTypes = [
+      QuestType.DELIVERY,
+      QuestType.BOUNTY,
+      QuestType.ESCORT,
+      QuestType.DIPLOMACY,
+      QuestType.EXPLORATION,
+      QuestType.TEXT_ADVENTURE,
+      QuestType.DEFENSE,
+    ];
+    for (const t of wantTypes) {
+      const descs = byType.get(t) ?? [];
+      expect(descs.length, `expected at least one ${t} quest`).toBeGreaterThan(
+        0,
+      );
+      for (const d of descs) {
+        expect(
+          d.length,
+          `${t} description too short: "${d}"`,
+        ).toBeGreaterThanOrEqual(50);
+      }
+    }
+  });
+
+  it("every quest carries an issuer name and a fitting title", () => {
+    const board = generateQuestBoard(baseOpts({ count: 40, textRatio: 0 }));
+    for (const q of board) {
+      expect(q.issuerName).toBeTruthy();
+      expect(q.issuerTitle).toBeTruthy();
+    }
+  });
+
+  it("governorOfferLine frames the quest as a first-person dialogue offer", () => {
+    const board = generateQuestBoard(baseOpts({ count: 10, textRatio: 0 }));
+    const q = board[0];
+    const line = governorOfferLine(q);
+    expect(line).toContain(q.issuerName);
+    expect(line).toContain(q.issuerTitle);
+    expect(line).toContain(q.template.description);
   });
 
   it("delivery descriptions mention target system name and reward", () => {

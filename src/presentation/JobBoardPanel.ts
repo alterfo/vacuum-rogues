@@ -44,7 +44,7 @@ export class JobBoardPanel {
 
   private static readonly W = 520;
   private static readonly ROW_H = 60;
-  private static readonly ROW_H_OFFER = 92;
+  private static readonly ROW_H_OFFER = 110;
   private static readonly HEAD = 48;
 
   constructor(
@@ -226,7 +226,15 @@ export class JobBoardPanel {
     const title = t.title.length > 36 ? t.title.slice(0, 35) + "…" : t.title;
     this.label(title, 20, y + 20, 12, 0xffffff, true);
 
-    // Description (2-3 lines, grey, small)
+    // Issuer line: who posted the job (e.g. "— Снабженец Маклай").
+    if (q.issuerName) {
+      const issuer = q.issuerTitle
+        ? `— ${q.issuerTitle} ${q.issuerName}`
+        : `— ${q.issuerName}`;
+      this.label(issuer, 20, y + 36, 10, 0x77aacc);
+    }
+
+    // Description (full text, grey, small, wrapped)
     if (t.description) {
       const descText = new Text({
         text: t.description,
@@ -240,7 +248,7 @@ export class JobBoardPanel {
       });
       descText.eventMode = "none";
       descText.x = 20;
-      descText.y = y + 36;
+      descText.y = y + (q.issuerName ? 50 : 36);
       this.container.addChild(descText);
     }
 

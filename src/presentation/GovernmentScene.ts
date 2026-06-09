@@ -7,7 +7,10 @@ import type { StarSystem } from "@/domain/StarSystem";
 import { SceneType, QuestType } from "@/types";
 import { logger } from "@/utils/logger";
 import { JobBoardPanel } from "./JobBoardPanel";
-import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
+import {
+  governorOfferLine,
+  type GeneratedQuest,
+} from "@/systems/quests/QuestGenerator";
 
 interface GovernmentContext {
   gameEngine?: GameEngine;
@@ -270,6 +273,10 @@ export class GovernmentScene extends GameScene {
 
     y += panelH + 24;
 
+    // Governor's first-person quest offers (Task 7): the same quests the board
+    // lists, but framed as in-character dialogue with an inline accept button.
+    y = this.addGovernorOffers(ui, w, y, factionColor);
+
     // Job board button
     this.addButton(ui, "[ Доска заданий ]", w / 2, y, 0xffee66, () =>
       this.openJobBoard(),
@@ -280,6 +287,64 @@ export class GovernmentScene extends GameScene {
     this.addButton(ui, "[ Назад ]", w / 2, y, 0x888888, () => this.goBack());
 
     this.renderer.uiLayer.addChild(ui);
+  }
+
+  /**
+   * Render up to 3 of the planet's available quests as first-person governor
+   * dialogue offers (Task 7), each with an inline "Взять" button. The full board
+   * remains reachable via the "Доска заданий" button below. Returns the next y.
+   */
+  private addGovernorOffers(
+    ui: Container,
+    w: number,
+    topY: number,
+    factionColor: number,
+  ): number {
+    if (!this.gameEngine || !this.planet) return topY;
+    const quests = this.gameEngine.getQuestBoard(this.planet.id).slice(0, 3);
+    if (quests.length === 0) return topY;
+
+    let y = topY;
+    const header = new Text({
+      text: "Губернатор предлагает:",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 13,
+        fill: factionColor,
+        fontWeight: "bold",
+      },
+    });
+    header.eventMode = "none";
+    header.x = w * 0.15;
+    header.y = y;
+    ui.addChild(header);
+    y += 24;
+
+    for (const q of quests) {
+      const line = governorOfferLine(q);
+      const truncated = line.length > 64 ? line.slice(0, 63) + "…»" : line;
+      const offer = new Text({
+        text: `» ${truncated}`,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 12,
+          fill: 0xddeeff,
+          wordWrap: true,
+          wordWrapWidth: w * 0.5,
+        },
+      });
+      offer.eventMode = "none";
+      offer.x = w * 0.15 + 6;
+      offer.y = y;
+      ui.addChild(offer);
+
+      // Inline accept button on the right of the offer line.
+      this.addButton(ui, "[ Взять ]", w * 0.82, y + 8, 0x00ff88, () =>
+        this.acceptJob(q),
+      );
+      y += 32;
+    }
+    return y + 8;
   }
 
   private addButton(
