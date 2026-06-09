@@ -1898,11 +1898,12 @@ export class SpaceFlightScene extends GameScene {
   private pickStarTexture(): import("pixi.js").Texture | undefined {
     const sp = this.starMapPrefix();
     if (!sp) return undefined;
-    // Prefer equirectangular star_maps (for sphere mesh), fall back to sprites.
-    return (
-      pickVariant("star_maps", sp.prefix, sp.systemId) ??
-      pickVariant("stars", sp.prefix, sp.systemId)
-    );
+    // Only equirectangular `star_maps` are valid here: `mountStarMapSurface`
+    // UV-wraps the texture onto a hemisphere, so a round `stars/` sprite would
+    // be badly distorted. When no star_map is cached yet (first visit, lazy
+    // category) we deliberately return undefined so the procedural sun renders;
+    // `scheduleStarMapUpgrade` then swaps in the equirect map once it loads.
+    return pickVariant("star_maps", sp.prefix, sp.systemId);
   }
 
   /**
