@@ -75,8 +75,8 @@ Generate high-quality visual assets for Вакуумные Пройдохи usin
 **Files:**
 - Create: `tools/comfyui/workflow_zit_nebula.json`
 
-- [ ] Fork `workflow_api.json`; change `CheckpointLoaderSimple.ckpt_name` to `"ZImageTurbo.safetensors"`
-- [ ] Insert `LoraLoader` node between checkpoint and KSampler:
+- [x] Fork `workflow_api.json`; change `CheckpointLoaderSimple.ckpt_name` to `"ZImageTurbo.safetensors"`
+- [x] Insert `LoraLoader` node between checkpoint and KSampler:
   ```json
   "10": {
     "class_type": "LoraLoader",
@@ -87,12 +87,12 @@ Generate high-quality visual assets for Вакуумные Пройдохи usin
     }
   }
   ```
-- [ ] Wire `["10", 0]` → `KSampler.model`, `["10", 1]` → both `CLIPTextEncode.clip`
-- [ ] Set `EmptyLatentImage`: `width=1024, height=1024` (tileable square)
-- [ ] Set KSampler: `steps=20, cfg=4.0, sampler_name="dpmpp_2m", scheduler="karras"` (ZImageTurbo needs lower steps)
-- [ ] Set positive text to `Sp11, [PALETTE_PROMPT]` (user substitutes palette from ART_PROMPTS.md)
-- [ ] Set `SaveImage.filename_prefix` to `"nebula/[LAYER]_[PALETTE]"` (e.g. `nebula/far_red`)
-- [ ] Add a `_generation_notes` comment block listing: layers (far/mid/near), palettes (red/teal/violet/amber), expected output count: 12 images
+- [x] Wire `["10", 0]` → `KSampler.model`, `["10", 1]` → both `CLIPTextEncode.clip`
+- [x] Set `EmptyLatentImage`: `width=1024, height=1024` (tileable square)
+- [x] Set KSampler: `steps=20, cfg=4.0, sampler_name="dpmpp_2m", scheduler="karras"` (ZImageTurbo needs lower steps)
+- [x] Set positive text to `Sp11, [PALETTE_PROMPT]` (user substitutes palette from ART_PROMPTS.md)
+- [x] Set `SaveImage.filename_prefix` to `"nebula/[LAYER]_[PALETTE]"` (e.g. `nebula/far_red`)
+- [x] Add a `_generation_notes` comment block listing: layers (far/mid/near), palettes (red/teal/violet/amber), expected output count: 12 images
 
 ### Task 3: ComfyUI Workflow B — Planet & Star Surface Maps (Flux 360° LoRA)
 **Files:**

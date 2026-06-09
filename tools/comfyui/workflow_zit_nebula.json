@@ -1,0 +1,62 @@
+{
+  "_comment": "ComfyUI Workflow A — Nebula parallax tiles via the Space Image ZIT LoRA (ZImageTurbo base, trigger 'Sp11'). API-format graph: POST to /prompt as {\"prompt\": <this>}. Forked from workflow_api.json; adds a LoraLoader (node 10) between the checkpoint and the sampler. Replace [PALETTE_PROMPT] / [LAYER] / [PALETTE] before queueing — see docs/design/ART_PROMPTS.md '### Nebula (Space ZIT LoRA)'.",
+  "_generation_notes": {
+    "lora": "space_image_zit.safetensors (civitai#2334878), trigger 'Sp11', weight <= 0.9",
+    "base_model": "ZImageTurbo.safetensors (turbo -> low steps, low cfg)",
+    "layers": {
+      "far": "low density, faint glow — set LoraLoader strength_model/strength_clip to 0.6",
+      "mid": "medium structure, visible gas lanes — strength 0.8",
+      "near": "high density, bright highlights — strength 0.9"
+    },
+    "palettes": ["red", "teal", "violet", "amber"],
+    "positive_prompt": "Set node 6 text to 'Sp11, [PALETTE_PROMPT]' from ART_PROMPTS.md. Negative (node 7) is fixed for all palettes.",
+    "filename_prefix": "Set node 9 to 'nebula/[LAYER]_[PALETTE]' (e.g. 'nebula/far_red').",
+    "output_size": "1024x1024 PNG (tileable square)",
+    "expected_output_count": 12,
+    "expected_outputs": [
+      "nebula/far_red", "nebula/far_teal", "nebula/far_violet", "nebula/far_amber",
+      "nebula/mid_red", "nebula/mid_teal", "nebula/mid_violet", "nebula/mid_amber",
+      "nebula/near_red", "nebula/near_teal", "nebula/near_violet", "nebula/near_amber"
+    ]
+  },
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 12345, "steps": 20, "cfg": 4.0,
+      "sampler_name": "dpmpp_2m", "scheduler": "karras", "denoise": 1.0,
+      "model": ["10", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0]
+    }
+  },
+  "4": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": { "ckpt_name": "ZImageTurbo.safetensors" }
+  },
+  "5": {
+    "class_type": "EmptyLatentImage",
+    "inputs": { "width": 1024, "height": 1024, "batch_size": 1 }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "clip": ["10", 1], "text": "Sp11, [PALETTE_PROMPT]" }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "clip": ["10", 1], "text": "planets, ships, text, watermark, blurry, low quality, lens flare" }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": { "samples": ["3", 0], "vae": ["4", 2] }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": { "filename_prefix": "nebula/[LAYER]_[PALETTE]", "images": ["8", 0] }
+  },
+  "10": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": ["4", 0], "clip": ["4", 1],
+      "lora_name": "space_image_zit.safetensors",
+      "strength_model": 0.85, "strength_clip": 0.85
+    }
+  }
+}
