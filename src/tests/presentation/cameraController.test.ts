@@ -17,7 +17,10 @@ function makeShip(over: Partial<ShipPhysics> = {}): ShipPhysics {
   } as unknown as ShipPhysics;
 }
 
-function makeHarness(ship: ShipPhysics | null = makeShip()): {
+function makeHarness(
+  ship: ShipPhysics | null = makeShip(),
+  boundaryRadius = 10000,
+): {
   camera: CameraController;
   gameLayer: Container;
   shipRef: { current: ShipPhysics | null };
@@ -32,12 +35,13 @@ function makeHarness(ship: ShipPhysics | null = makeShip()): {
   } as unknown as Renderer;
 
   const shipRef = { current: ship };
-  // Star at screen centre; a generous boundary so the pan-clamp doesn't
-  // interfere with the small pans these tests apply.
+  // Star at screen centre; default to a generous boundary so the pan-clamp does
+  // not interfere with the small pans most tests apply. Pass a small boundary to
+  // exercise clampPan itself.
   const camera = new CameraController(renderer, {
     getShipPhysics: () => shipRef.current,
     getStarCenter: () => ({ x: 400, y: 300 }),
-    boundaryRadius: 10000,
+    boundaryRadius,
   });
   return { camera, gameLayer, shipRef };
 }
@@ -119,5 +123,25 @@ describe("CameraController (extracted from SpaceFlightScene)", () => {
     const { camera, shipRef } = makeHarness(null);
     shipRef.current = null;
     expect(() => camera.update()).not.toThrow();
+  });
+
+  it("clampPan stops the pan at the backdrop edge when zoomed in", () => {
+    // boundaryRadius 400 → half = 500. At zoom 1, star at (400,300), screen
+    // 800×600: panX clamps to [-100, 100], panY to [-200, 200].
+    const { camera } = makeHarness(makeShip(), 400);
+    camera.setPan(9999, -9999);
+    expect(camera.panX).toBe(100);
+    expect(camera.panY).toBe(-200);
+  });
+
+  it("clampPan centres the system on each axis when zoomed out past the bound", () => {
+    // boundaryRadius 400 → half = 500. At zoom 0.25 the viewport is wider than
+    // the bound, so panXMin > panXMax and the axis is centred regardless of the
+    // requested pan: X → (575+25)/2 = 300, Y → (400+50)/2 = 225.
+    const { camera } = makeHarness(makeShip(), 400);
+    camera.setZoom(0.25);
+    camera.setPan(9999, -9999);
+    expect(camera.panX).toBe(300);
+    expect(camera.panY).toBe(225);
   });
 });

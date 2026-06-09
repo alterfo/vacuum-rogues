@@ -129,6 +129,10 @@ export class PlanetInfoPanel {
   }
 
   destroy(): void {
+    // Idempotent: closed via a deferred microtask (see PlanetManager.
+    // closeInfoPanel) that may run after the scene's clearUILayer() already
+    // destroyed this container — destroying it twice throws.
+    if (this.container.destroyed) return;
     if (this.container.parent)
       this.container.parent.removeChild(this.container);
     this.container.destroy({ children: true });

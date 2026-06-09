@@ -339,6 +339,10 @@ export class QuestJournalUI {
    * Clean up resources
    */
   destroy(): void {
+    // Idempotent: the journal is closed via a deferred microtask (see
+    // FlightHud.closeModals) which may run after the scene's clearUILayer() has
+    // already destroyed this container — destroying it twice throws.
+    if (this.container.destroyed) return;
     if (this.container.parent) {
       this.container.parent.removeChild(this.container);
     }

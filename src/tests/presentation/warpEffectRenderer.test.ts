@@ -1,6 +1,28 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { Container } from "pixi.js";
 import { WarpEffectRenderer } from "@/presentation/flight/WarpEffectRenderer";
+
+/**
+ * Spy on (and neutralise) `destroy` for every filter attached to the effect
+ * container's children. `Container.destroy({children})` does not release filter
+ * GPU textures, so the renderer must dispose them itself — these spies verify it
+ * does, guarding against the leak regression.
+ */
+function spyOnEffectFilters(container: Container): unknown[] {
+  const spies: unknown[] = [];
+  for (const child of container.children) {
+    const fs = (child as unknown as { filters?: unknown }).filters;
+    const arr = Array.isArray(fs) ? fs : fs ? [fs] : [];
+    for (const filter of arr) {
+      spies.push(
+        vi
+          .spyOn(filter as { destroy: () => void }, "destroy")
+          .mockImplementation(() => {}),
+      );
+    }
+  }
+  return spies;
+}
 
 describe("WarpEffectRenderer (extracted from SpaceFlightScene)", () => {
   it("mounts a single transient effect container on play()", () => {
@@ -48,5 +70,30 @@ describe("WarpEffectRenderer (extracted from SpaceFlightScene)", () => {
     fx.destroy();
     expect(fx.isActive).toBe(false);
     expect(gameLayer.children.length).toBe(0);
+  });
+
+  it("disposes its flash/glow BlurFilters when the animation completes (no GPU leak)", () => {
+    const gameLayer = new Container();
+    const fx = new WarpEffectRenderer(gameLayer);
+    fx.play(0, 0);
+
+    const spies = spyOnEffectFilters(gameLayer.children[0] as Container);
+    expect(spies.length).toBeGreaterThan(0); // glow + flash each carry a BlurFilter
+
+    fx.update(1200); // past the 1100ms duration → completes
+    expect(fx.isActive).toBe(false);
+    for (const s of spies) expect(s).toHaveBeenCalled();
+  });
+
+  it("disposes its flash/glow BlurFilters on destroy() (no GPU leak)", () => {
+    const gameLayer = new Container();
+    const fx = new WarpEffectRenderer(gameLayer);
+    fx.play(0, 0);
+
+    const spies = spyOnEffectFilters(gameLayer.children[0] as Container);
+    expect(spies.length).toBeGreaterThan(0);
+
+    fx.destroy();
+    for (const s of spies) expect(s).toHaveBeenCalled();
   });
 });

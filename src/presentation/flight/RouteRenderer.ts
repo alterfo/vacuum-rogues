@@ -151,7 +151,9 @@ export class RouteRenderer {
   clearRoute(): void {
     if (this.routeLineGraphics) {
       this.gameLayer.removeChild(this.routeLineGraphics);
-      this.routeLineGraphics.destroy();
+      // Guard: during scene teardown clearGameLayer() destroys this Graphics
+      // before clearPlannedRoute() reaches here — destroying it twice throws.
+      if (!this.routeLineGraphics.destroyed) this.routeLineGraphics.destroy();
       this.routeLineGraphics = null;
     }
   }

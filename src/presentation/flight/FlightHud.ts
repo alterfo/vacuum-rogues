@@ -276,7 +276,11 @@ export class FlightHud implements FlightModule {
     if (this.settingsPanel) {
       const sp = this.settingsPanel;
       this.settingsPanel = null;
-      queueMicrotask(() => sp.destroy({ children: true }));
+      // Guard: a scene transition may run clearUILayer() (which destroys this
+      // panel) before the microtask fires — destroying it twice throws.
+      queueMicrotask(() => {
+        if (!sp.destroyed) sp.destroy({ children: true });
+      });
     }
   }
 

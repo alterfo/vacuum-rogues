@@ -3,6 +3,10 @@ import { Container } from "pixi.js";
 import { StarRenderer } from "@/presentation/flight/StarRenderer";
 import type { Renderer } from "@/presentation/Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
+import {
+  SUN_CONTACT_HULL_DAMAGE,
+  SUN_CONTACT_DAMAGE_INTERVAL_MS,
+} from "@/config/balance";
 
 /**
  * Build a minimal Renderer stand-in backed by a real PixiJS Container. The star
@@ -10,7 +14,7 @@ import type { GameEngine } from "@/systems/GameEngine";
  * to the injected game layer, so a real Container exercises the actual
  * scene-graph wiring without a WebGL context.
  */
-function makeHarness(): {
+function makeHarness(gameEngine: GameEngine | null = null): {
   star: StarRenderer;
   gameLayer: Container;
 } {
@@ -25,12 +29,21 @@ function makeHarness(): {
     gameLayer,
   } as unknown as Renderer;
 
-  // No player/galaxy → starMapPrefix() returns undefined, so the procedural sun
-  // path runs (no lazy star-map texture, no canvas/sphere-mesh dependency).
-  const gameEngine: GameEngine | null = null;
-
+  // Default: no player/galaxy → starMapPrefix() returns undefined, so the
+  // procedural sun path runs (no lazy star-map texture, no canvas/sphere-mesh
+  // dependency). Pass a stub gameEngine to exercise sun-contact hull burning.
   const star = new StarRenderer(renderer, gameEngine, gameLayer);
   return { star, gameLayer };
+}
+
+/** A gameEngine stub exposing only the ship whose hull the sun burns. */
+function makeBurnEngine(hullHP: number): {
+  engine: GameEngine;
+  ship: { hullHP: number };
+} {
+  const ship = { hullHP };
+  const engine = { player: { ship } } as unknown as GameEngine;
+  return { engine, ship };
 }
 
 describe("StarRenderer (extracted FlightModule)", () => {
@@ -68,7 +81,7 @@ describe("StarRenderer (extracted FlightModule)", () => {
     expect(gameLayer.children.length).toBe(0);
   });
 
-  it("burns the hull only while the ship is inside the star radius", () => {
+  it("latches the burning toast: fires once entering the star, not every frame", () => {
     const { star } = makeHarness();
     star.initialize();
 
@@ -103,5 +116,59 @@ describe("StarRenderer (extracted FlightModule)", () => {
     expect(stillInside).toBe(false);
 
     star.destroy();
+  });
+
+  it("burns the hull in discrete chunks per damage interval while inside the star", () => {
+    const { engine, ship } = makeBurnEngine(100);
+    const { star } = makeHarness(engine);
+
+    // One full interval of game time inside the radius → exactly one chunk.
+    star.updateSunContactDamage(
+      SUN_CONTACT_DAMAGE_INTERVAL_MS,
+      star.centerX,
+      star.centerY,
+      true,
+      1,
+    );
+    expect(ship.hullHP).toBe(100 - SUN_CONTACT_HULL_DAMAGE);
+
+    // timeScale multiplies the accrued game-time: two intervals' worth in one
+    // call → two chunks burned.
+    star.updateSunContactDamage(
+      SUN_CONTACT_DAMAGE_INTERVAL_MS,
+      star.centerX,
+      star.centerY,
+      true,
+      2,
+    );
+    expect(ship.hullHP).toBe(100 - SUN_CONTACT_HULL_DAMAGE * 3);
+  });
+
+  it("does not burn the hull while the turn is paused", () => {
+    const { engine, ship } = makeBurnEngine(100);
+    const { star } = makeHarness(engine);
+
+    star.updateSunContactDamage(
+      SUN_CONTACT_DAMAGE_INTERVAL_MS * 4,
+      star.centerX,
+      star.centerY,
+      false, // turn not running
+      1,
+    );
+    expect(ship.hullHP).toBe(100);
+  });
+
+  it("does not burn the hull while outside the star radius", () => {
+    const { engine, ship } = makeBurnEngine(100);
+    const { star } = makeHarness(engine);
+
+    star.updateSunContactDamage(
+      SUN_CONTACT_DAMAGE_INTERVAL_MS * 4,
+      star.centerX + star.radius + 50,
+      star.centerY,
+      true,
+      1,
+    );
+    expect(ship.hullHP).toBe(100);
   });
 });

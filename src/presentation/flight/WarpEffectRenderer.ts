@@ -72,6 +72,22 @@ export class WarpEffectRenderer {
     };
   }
 
+  /**
+   * Dispose the effect's flash/glow BlurFilters. `Container.destroy({children})`
+   * removes the display objects but does NOT release filter GPU textures, so the
+   * BlurFilters must be disposed explicitly or they leak — once per warp arrival
+   * (the {@link update} completion path) and on scene teardown ({@link destroy},
+   * which removes the container before the scene's layer-wide filter sweep can
+   * reach it).
+   */
+  private disposeEffectFilters(fx: WarpArrivalEffect): void {
+    for (const node of [fx.flash, fx.glow]) {
+      const fs = node.filters;
+      const arr = Array.isArray(fs) ? fs : fs ? [fs] : [];
+      for (const f of arr) f.destroy?.();
+    }
+  }
+
   /** Animate the warp-exit flash + expanding rings, then clean up. */
   update(deltaTime: number): void {
     const fx = this.warpEffect;
@@ -96,6 +112,7 @@ export class WarpEffectRenderer {
     });
 
     if (t >= 1) {
+      this.disposeEffectFilters(fx);
       this.gameLayer.removeChild(fx.container);
       fx.container.destroy({ children: true });
       this.warpEffect = null;
@@ -111,6 +128,7 @@ export class WarpEffectRenderer {
   destroy(): void {
     const fx = this.warpEffect;
     if (fx) {
+      this.disposeEffectFilters(fx);
       this.gameLayer.removeChild(fx.container);
       fx.container.destroy({ children: true });
       this.warpEffect = null;
