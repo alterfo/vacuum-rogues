@@ -128,6 +128,10 @@ interface SwarmLayer {
   pulseAmp: number;
   phase: number;
   baseAlpha: number;
+  // Slow organic spin (rad/frame) applied to the whole cluster so the swarm
+  // feels alive rather than a static dot field. Tiny (±0.0002) → barely
+  // perceptible per frame, like the existing per-frame drift.
+  rotSpeed: number;
 }
 
 export class SpaceFlightScene extends GameScene {
@@ -1264,8 +1268,8 @@ export class SpaceFlightScene extends GameScene {
         0.6,
       );
       // Small, tight cluster of luminous motes — like the reference's green
-      // "fireflies". Key: small spread + no blur filter + low baseAlpha so they
-      // don't coalesce into the cartoon glowing balls that plagued the old version.
+      // "fireflies". Key: small spread + low baseAlpha so they don't coalesce
+      // into the cartoon glowing balls that plagued the old version.
       const spread = rng.nextFloat(50, 110);
       const motes = rng.nextInt(22, 44);
 
@@ -1280,7 +1284,12 @@ export class SpaceFlightScene extends GameScene {
         g.circle(mx, my, r * 1.6).fill({ color: tint, alpha: 0.08 });
         g.circle(mx, my, r).fill({ color: tint, alpha: 0.7 });
       }
-      // No blur filter — blur was the root cause of cartoon blobs (US-070)
+      // A subtle per-mote-Graphics blur (strength 2) softens each tiny circle
+      // into a natural glow. Strength stays low — the old cartoon blobs came
+      // from a HIGH-strength container blur (US-070); a weak blur on the mote
+      // Graphics itself reads as light orbs, not blobs. paddedBlur keeps the
+      // falloff inside the filter texture so no rectangular band appears.
+      g.filters = [this.paddedBlur(2)];
       container.addChild(g);
       this.nebulaeContainer.addChild(container);
 
@@ -1292,6 +1301,7 @@ export class SpaceFlightScene extends GameScene {
         pulseAmp: rng.nextFloat(0.12, 0.22),
         phase: rng.next() * Math.PI * 2,
         baseAlpha: rng.nextFloat(0.22, 0.45), // much subtler than before
+        rotSpeed: rng.nextFloat(-0.0002, 0.0002), // slow organic spin (rad/frame)
       });
     }
   }
@@ -1338,11 +1348,14 @@ export class SpaceFlightScene extends GameScene {
     }
   }
 
-  /** Slow drift + breathing pulse so the glowing swarms shimmer. */
+  /** Slow drift + spin + breathing pulse so the glowing swarms shimmer. */
   private updateSwarms(): void {
     for (const s of this.swarmLayers) {
       s.container.x += s.driftX;
       s.container.y += s.driftY;
+      // Per-frame spin (same convention as driftX/driftY above — applied once
+      // per frame, not scaled by dt) so the cluster slowly turns and feels alive.
+      s.container.rotation += s.rotSpeed;
       const pulse =
         1 + Math.sin(this.bgElapsed * s.pulseSpeed + s.phase) * s.pulseAmp;
       s.container.alpha = Math.max(0, Math.min(1, s.baseAlpha * pulse));
