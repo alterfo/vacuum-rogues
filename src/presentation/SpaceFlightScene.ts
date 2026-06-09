@@ -5015,11 +5015,13 @@ export class SpaceFlightScene extends GameScene {
 
   /** E2E helper: click back to star map */
   async e2eClickBackToMap(): Promise<void> {
+    if (!__DEBUG__) return;
     await this.returnToStarMap();
   }
 
   /** E2E helper: set ship target position */
   e2eSetTarget(x: number, y: number): void {
+    if (!__DEBUG__) return;
     if (this.shipPhysics) {
       this.shipPhysics.setTarget(x, y);
     }
@@ -5027,6 +5029,7 @@ export class SpaceFlightScene extends GameScene {
 
   /** E2E helper: get camera state */
   e2eGetCameraState(): { zoom: number; panX: number; panY: number } {
+    if (!__DEBUG__) return { zoom: 1, panX: 0, panY: 0 };
     return {
       zoom: this.cameraZoom,
       panX: this.cameraPanX,
@@ -5036,12 +5039,14 @@ export class SpaceFlightScene extends GameScene {
 
   /** E2E helper: set camera zoom */
   e2eSetCameraZoom(zoom: number): void {
+    if (!__DEBUG__) return;
     this.cameraZoom = Math.max(this.MIN_ZOOM, Math.min(this.MAX_ZOOM, zoom));
     this.applyCameraTransform();
   }
 
   /** E2E helper: set camera pan */
   e2eSetCameraPan(x: number, y: number): void {
+    if (!__DEBUG__) return;
     this.cameraPanX = x;
     this.cameraPanY = y;
     this.applyCameraTransform();
@@ -5049,11 +5054,13 @@ export class SpaceFlightScene extends GameScene {
 
   /** E2E helper: check if minimap exists */
   e2eHasMinimap(): boolean {
+    if (!__DEBUG__) return false;
     return this.systemMiniMap !== null;
   }
 
   /** E2E helper: get ship position */
   e2eGetShipPosition(): { x: number; y: number } {
+    if (!__DEBUG__) return { x: 0, y: 0 };
     return {
       x: this.shipPhysics?.shipX ?? 0,
       y: this.shipPhysics?.shipY ?? 0,
@@ -5062,6 +5069,7 @@ export class SpaceFlightScene extends GameScene {
 
   /** E2E helper: check if quest journal is open */
   e2eIsQuestJournalOpen(): boolean {
+    if (!__DEBUG__) return false;
     return (
       this.questJournalUI !== null && this.questJournalUI.container.visible
     );
@@ -5069,6 +5077,7 @@ export class SpaceFlightScene extends GameScene {
 
   /** E2E helper: return current system planets for test assertions */
   e2eGetPlanets(): { id: string; name: string }[] {
+    if (!__DEBUG__) return [];
     return this.planetSprites.map((ps) => ({
       id: ps.planet.id,
       name: ps.planet.name,
@@ -5077,6 +5086,7 @@ export class SpaceFlightScene extends GameScene {
 
   /** E2E helper: transition directly to PLANET scene bypassing distance check */
   async e2eLandOnPlanet(): Promise<void> {
+    if (!__DEBUG__) return;
     const planet = this.planetSprites[0]?.planet;
     if (!planet || !this.gameEngine) return;
     await this.gameEngine.transitionTo(SceneType.PLANET, {
@@ -5087,10 +5097,12 @@ export class SpaceFlightScene extends GameScene {
 
   /** E2E helper: count of NPC ship sprites currently in the scene */
   e2eGetNpcCount(): number {
+    if (!__DEBUG__) return 0;
     return this.npcSprites.length;
   }
 
   e2ePlayPause(): void {
+    if (!__DEBUG__) return;
     this.onPlayPause();
   }
 }

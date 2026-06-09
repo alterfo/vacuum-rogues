@@ -520,10 +520,13 @@ export class PlanetScene extends GameScene {
       0x660000,
       () => {
         if (player.credits < penalty) {
-          player.credits = 0;
-        } else {
-          player.credits -= penalty;
+          this.showMessage(
+            `Недостаточно кредитов (нужно ${penalty} ₡)`,
+            0xff5544,
+          );
+          return;
         }
+        player.credits -= penalty;
         player.adjustReputation(faction, -20);
         logger.info(
           `Customs fine paid: ${penalty} cr, rep -20 with ${faction}`,
@@ -542,10 +545,13 @@ export class PlanetScene extends GameScene {
       0x664400,
       () => {
         if (player.credits < bribeCost) {
-          player.credits = 0;
-        } else {
-          player.credits -= bribeCost;
+          this.showMessage(
+            `Недостаточно кредитов (нужно ${bribeCost} ₡)`,
+            0xff5544,
+          );
+          return;
         }
+        player.credits -= bribeCost;
         logger.info(`Customs bribed: ${bribeCost} cr`);
         modal.destroy({ children: true });
         this.showMessage(`Взятка уплачена: −${bribeCost} ₡`, 0xffaa44);

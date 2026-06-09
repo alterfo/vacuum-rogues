@@ -91,8 +91,16 @@ export class AudioManager {
   async playTrack(key: TrackKey): Promise<void> {
     if (this.currentTrackKey === key) return;
 
+    // Guard early to prevent concurrent calls from both passing the check above
+    // before either finishes loading (race condition on rapid scene transitions).
+    const prevKey = this.currentTrackKey;
+    this.currentTrackKey = key;
+
     const ctx = this.getContext();
-    if (!ctx || this.muted) return;
+    if (!ctx || this.muted) {
+      this.currentTrackKey = prevKey;
+      return;
+    }
 
     // Resume suspended context (browsers block autoplay until user gesture)
     if (ctx.state === "suspended") {
@@ -100,7 +108,10 @@ export class AudioManager {
     }
 
     const buffer = await this.loadBuffer(this.resolveUrl("mus", key));
-    if (!buffer) return;
+    if (!buffer) {
+      this.currentTrackKey = prevKey;
+      return;
+    }
 
     // Fade out current track
     this.fadeOutCurrent(ctx);
@@ -195,6 +206,7 @@ export class AudioManager {
     this.fadeOutCurrent(this.ctx);
     this.ctx?.close().catch(() => {});
     this.ctx = null;
+    this.currentTrackKey = null;
     this.cache.clear();
   }
 
