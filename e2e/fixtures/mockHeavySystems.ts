@@ -18,14 +18,14 @@ export async function applyMockHeavySystems(page: Page): Promise<void> {
   });
 }
 
-/** Wait until window.__gameEngine is available and player exists */
+/** Wait until window.__gameEngine is available (player may still be null at main menu) */
 export async function waitForEngine(page: Page, timeout = 15000): Promise<void> {
   await page.waitForFunction(
     () => {
       const w = window as Record<string, unknown>;
-      const engine = w.__gameEngine as { player: unknown } | undefined;
-      return engine != null && engine.player != null;
+      return w.__gameEngine != null;
     },
+    undefined,
     { timeout },
   );
 }

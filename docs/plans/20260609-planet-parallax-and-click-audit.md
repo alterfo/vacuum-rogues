@@ -70,11 +70,11 @@ This plan is sequenced to run AFTER sprint2 (`20260608-sprint2-flight-and-ui-pol
 - Create: `e2e/planet-parallax-click.spec.ts`
 - Page object: reuse/extend existing objects in `e2e/page-objects/`
 
-- [ ] Use `applyMockHeavySystems(page)` before `page.goto()` (per CLAUDE.md E2E fixtures) and attach an `ErrorCollector`; call `assertAndDetach()` at test end.
-- [ ] Test A (click regression): drive scene transitions via `window.__gameEngine` — go SPACE_FLIGHT → PLANET → TRADE → back → PLANET, then invoke a PlanetScene service handler via `page.evaluate` (use an existing `e2e*` method or the scene's public handler) and assert it succeeds (scene type changes or modal opens) with no JS error. This proves clicks are not swallowed by leftover objects.
-- [ ] Test B (parallax): on PlanetScene, read `panorama.x` baseline via `page.evaluate`, call `page.mouse.move()` to the left edge, advance a few frames (`waitForFunction` on the x value changing), assert `panorama.x` decreased from baseline.
-- [ ] Test C (post-modal clicks): open the job board panel, close it, then invoke a service handler again — assert it still fires (regression guard for overlay leak).
-- [ ] **Done when**: `npm run test:e2e:regression` passes and the new spec passes (`npm run test:e2e -- planet-parallax-click`).
+- [x] Use `applyMockHeavySystems(page)` before `page.goto()` (per CLAUDE.md E2E fixtures) and attach an `ErrorCollector`; call `assertAndDetach()` at test end.
+- [x] Test A (click regression): drive scene transitions via `window.__gameEngine` — go SPACE_FLIGHT → PLANET → TRADE → back → PLANET, then invoke a PlanetScene service handler via `page.evaluate` (use an existing `e2e*` method or the scene's public handler) and assert it succeeds (scene type changes or modal opens) with no JS error. This proves clicks are not swallowed by leftover objects.
+- [x] Test B (parallax): on PlanetScene, read `panorama.x` baseline via `page.evaluate`, call `page.mouse.move()` to the left edge, advance a few frames (`waitForFunction` on the x value changing), assert `panorama.x` decreased from baseline.
+- [x] Test C (post-modal clicks): open the job board panel, close it, then invoke a service handler again — assert it still fires (regression guard for overlay leak).
+- [x] **Done when**: `npm run test:e2e:regression` passes and the new spec passes (`npm run test:e2e -- planet-parallax-click`).
 
 ### Task 5: Verify acceptance criteria
 
