@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { getSystemVisibility } from "@/utils/starMapUtils";
+import { Player } from "@/domain/Player";
+import type { FactionType } from "@/types";
+import type { SkillTree } from "@/domain/SkillTree";
+import type { PlayerShip } from "@/domain/PlayerShip";
+import type { Inventory } from "@/domain/Inventory";
 
 const makeSystems = (
   edges: [string, string][],
@@ -63,5 +68,76 @@ describe("getSystemVisibility", () => {
 
   it("returns visited when system is in visitedSystemIds even if connections exist", () => {
     expect(getSystemVisibility("C", ["A", "B", "C"], systems)).toBe("visited");
+  });
+});
+
+// ── Fresh player (new-game start) ────────────────────────────────────────────
+// Regression guard for the fog-of-war bug where a brand-new game showed "?" for
+// every system because the starting system was never added to visitedSystems.
+
+function makeFreshPlayer(startSystemId: string): Player {
+  return new Player(
+    "p1",
+    "Test",
+    "OUTLANDERS" as FactionType,
+    0,
+    1,
+    {} as SkillTree,
+    {},
+    { activeQuests: [], completedQuests: [] },
+    { entries: [] },
+    1000,
+    {} as PlayerShip,
+    {
+      modules: [],
+      micromodules: [],
+      resources: [],
+      cosmetics: [],
+    } as unknown as Inventory,
+    startSystemId,
+  );
+}
+
+describe("getSystemVisibility — fresh player at new-game start", () => {
+  // Galaxy: A <-> B <-> C   D <-> E (separate cluster)
+  const systems = makeSystems([
+    ["A", "B"],
+    ["B", "A"],
+    ["B", "C"],
+    ["C", "B"],
+    ["D", "E"],
+    ["E", "D"],
+  ]);
+
+  it("marks the starting system visited so it is never fogged", () => {
+    const player = makeFreshPlayer("A");
+    // Mirrors GameEngine new-game init: starting system marked before any scene.
+    player.markVisited(player.currentSystemId);
+
+    expect(player.visitedSystems).toEqual(["A"]);
+    expect(getSystemVisibility("A", player.visitedSystems, systems)).toBe(
+      "visited",
+    );
+  });
+
+  it("shows systems connected to the start as neighbor (dim dots, not '?')", () => {
+    const player = makeFreshPlayer("A");
+    player.markVisited(player.currentSystemId);
+
+    expect(getSystemVisibility("B", player.visitedSystems, systems)).toBe(
+      "neighbor",
+    );
+  });
+
+  it("keeps disconnected systems unknown for a fresh player", () => {
+    const player = makeFreshPlayer("A");
+    player.markVisited(player.currentSystemId);
+
+    expect(getSystemVisibility("C", player.visitedSystems, systems)).toBe(
+      "unknown",
+    );
+    expect(getSystemVisibility("D", player.visitedSystems, systems)).toBe(
+      "unknown",
+    );
   });
 });

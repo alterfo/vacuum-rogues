@@ -303,6 +303,11 @@ export class GameEngine {
           `New game: starting system set to ${this.player.currentSystemId}`,
         );
       }
+      // Mark the starting system visited before any scene (the star map
+      // included) opens. Otherwise getSystemVisibility() treats every system —
+      // including the one the player is sitting in — as "unknown" and the star
+      // map renders "?" everywhere.
+      this.player.markVisited(this.player.currentSystemId);
     }
 
     // Instantiate new scene with renderer via factory (OCP: new scenes added in factory)
@@ -717,6 +722,16 @@ export class GameEngine {
     if (!currentSystem) {
       logger.warn("Current system not found, resetting to first system");
       this.player.currentSystemId = this.galaxy.systems[0].id;
+    }
+
+    // Migration guard: older saves predate visitedSystems tracking, leaving the
+    // array empty so the star map would be fully fogged on "Continue". Seed it
+    // with at least the current system.
+    if (
+      this.player.visitedSystems.length === 0 &&
+      this.player.currentSystemId
+    ) {
+      this.player.markVisited(this.player.currentSystemId);
     }
 
     // Restore scene type (default to SPACE_FLIGHT for better UX).
