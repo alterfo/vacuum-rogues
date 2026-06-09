@@ -93,11 +93,8 @@ test.describe('Planet parallax and click regression', () => {
       return panorama?.x ?? null;
     });
 
-    // Only run parallax check if panorama exists
-    if (baselineX === null) {
-      errorCollector.detach();
-      return;
-    }
+    // Panorama must be loaded — fail explicitly instead of silently skipping
+    expect(baselineX, 'panorama sprite must exist on PlanetScene for parallax test').not.toBeNull();
 
     const bounds = await page.evaluate(() => {
       const canvas = document.querySelector('canvas');
@@ -176,8 +173,9 @@ test.describe('Planet parallax and click regression', () => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
       const scene = engine.currentScene as Record<string, unknown> | null;
       if (!scene) return false;
+      if (typeof scene['openGarage'] !== 'function') return false;
       try {
-        (scene['openGarage'] as (() => void) | undefined)?.();
+        (scene['openGarage'] as () => void)();
         return true;
       } catch {
         return false;
