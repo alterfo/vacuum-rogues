@@ -52,9 +52,9 @@ test.describe('Planet parallax and click regression', () => {
     // Go to TRADE scene from PlanetScene (PLANET → TRADE)
     await page.evaluate(async () => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
-      const scene = engine.currentScene as { openMarket?: () => void } | null;
+      const scene = engine.currentScene as { openMarket?: () => Promise<void> } | null;
       // openMarket is private, access via bracket notation
-      (scene as Record<string, unknown>)['openMarket']?.();
+      await (scene as Record<string, unknown>)['openMarket']?.();
     });
     await waitForScene(page, 'TradeScene', 15_000);
 

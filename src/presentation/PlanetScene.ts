@@ -255,7 +255,7 @@ export class PlanetScene extends GameScene {
       this.panoramaSprite &&
       !this.panoramaSprite.destroyed
     ) {
-      const factor = Math.min(1, 0.08 * deltaTime * 0.06);
+      const factor = Math.min(1, 0.0048 * deltaTime);
       const w = this.renderer.app.screen.width;
       const next =
         this.panoramaSprite.x +
