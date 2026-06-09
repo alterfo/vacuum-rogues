@@ -43,11 +43,11 @@ Related: US-070, US-071, US-072, US-074, US-075
 **Files:**
 - Modify: `src/presentation/SpaceFlightScene.ts`
 
-- [ ] Trace route-click handler: find where route is built and why it clears immediately on first click (likely a double-event: pointerdown + pointerup both fire and the second cancels the first)
-- [ ] Fix event handling: build route on `pointerup` (or check `hasDragged` flag before clearing), ensure single click commits route
-- [ ] Fix endpoint position: route destination should be at planet orbit radius, not at planet center (so the path ends just before the planet disc)
-- [ ] Write unit/integration test verifying route survives a single click (mock event sequence)
-- [ ] Run `npm test -- --run` — must pass
+- [x] Trace route-click handler: find where route is built and why it clears immediately on first click (likely a double-event: pointerdown + pointerup both fire and the second cancels the first)
+- [x] Fix event handling: build route on `pointerup` (or check `hasDragged` flag before clearing), ensure single click commits route
+- [x] Fix endpoint position: route destination should be at planet orbit radius, not at planet center (so the path ends just before the planet disc)
+- [x] Write unit/integration test verifying route survives a single click (mock event sequence)
+- [x] Run `npm test -- --run` — must pass
 
 ### Task 3: Sun orbit — smooth avoidance + hull damage on contact
 **Files:**
