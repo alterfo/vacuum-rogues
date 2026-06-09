@@ -51,6 +51,22 @@ export function visiblePlanetServices<T extends { label: string }>(
   return buttons.filter((b) => b.label === "Взлёт");
 }
 
+const PANORAMA_PARALLAX_MAX = 30;
+
+/**
+ * Pure helper for parallax offset: maps mouse X to a target panorama X.
+ * norm = -1 at left edge, +1 at right edge; result = baseX ± maxOffset.
+ */
+export function computeParallaxTargetX(
+  mouseX: number,
+  screenWidth: number,
+  baseX: number,
+  maxOffset: number,
+): number {
+  const norm = (mouseX / screenWidth) * 2 - 1;
+  return baseX + norm * maxOffset;
+}
+
 /**
  * Clamp the panorama's horizontal offset so its edges never reveal empty space
  * (Task 6). When the panorama is wider than the screen, x is constrained to
@@ -173,6 +189,9 @@ export class PlanetScene extends GameScene {
   private planetOrbSprite: Sprite | null = null;
   private boundPanoramaMove: ((e: FederatedPointerEvent) => void) | null = null;
   private boundPanoramaUp: (() => void) | null = null;
+  // Parallax: base X set at sprite creation; targetX tracks smooth destination.
+  private panoramaBaseX = 0;
+  private panoramaTargetX = 0;
 
   initialize(context?: object): void {
     const ctx = context as PlanetContext | undefined;
@@ -229,25 +248,52 @@ export class PlanetScene extends GameScene {
     if (this.planetOrbSprite && !this.planetOrbSprite.destroyed) {
       this.planetOrbSprite.rotation += deltaTime * 0.00004;
     }
+
+    // Parallax easing: smooth the panorama toward the mouse-driven target.
+    if (
+      !this.isPanningPanorama &&
+      this.panoramaSprite &&
+      !this.panoramaSprite.destroyed
+    ) {
+      const factor = Math.min(1, 0.08 * deltaTime * 0.06);
+      const w = this.renderer.app.screen.width;
+      const next =
+        this.panoramaSprite.x +
+        (this.panoramaTargetX - this.panoramaSprite.x) * factor;
+      this.panoramaSprite.x = clampPanoramaX(next, this.panoramaWidth, w);
+    }
   }
 
   /** Drag-to-look: pan the panorama horizontally, clamped to its edges. */
   private onPanoramaMove(e: FederatedPointerEvent): void {
-    if (
-      !this.isPanningPanorama ||
-      !this.panoramaSprite ||
-      this.panoramaSprite.destroyed
-    ) {
-      return;
-    }
+    if (!this.panoramaSprite || this.panoramaSprite.destroyed) return;
     const w = this.renderer.app.screen.width;
-    const dx = e.global.x - this.lastPanoramaPointerX;
-    this.lastPanoramaPointerX = e.global.x;
-    this.panoramaSprite.x = clampPanoramaX(
-      this.panoramaSprite.x + dx,
-      this.panoramaWidth,
-      w,
-    );
+
+    if (this.isPanningPanorama) {
+      const dx = e.global.x - this.lastPanoramaPointerX;
+      this.lastPanoramaPointerX = e.global.x;
+      const newX = clampPanoramaX(
+        this.panoramaSprite.x + dx,
+        this.panoramaWidth,
+        w,
+      );
+      this.panoramaSprite.x = newX;
+      // Keep base and target in sync during drag so parallax resumes cleanly.
+      this.panoramaBaseX = newX;
+      this.panoramaTargetX = newX;
+    } else {
+      // Subtle parallax: drift panorama toward mouse position (no button held).
+      this.panoramaTargetX = clampPanoramaX(
+        computeParallaxTargetX(
+          e.global.x,
+          w,
+          this.panoramaBaseX,
+          PANORAMA_PARALLAX_MAX,
+        ),
+        this.panoramaWidth,
+        w,
+      );
+    }
   }
 
   /**
@@ -602,6 +648,8 @@ export class PlanetScene extends GameScene {
       });
       this.panoramaSprite = panorama;
       this.panoramaWidth = panorama.width;
+      this.panoramaBaseX = panorama.x;
+      this.panoramaTargetX = panorama.x;
       this.renderer.gameLayer.addChild(panorama);
     } else {
       // No panorama art: procedural sky gradient tinted toward the faction colour.

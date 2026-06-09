@@ -56,13 +56,13 @@ This plan is sequenced to run AFTER sprint2 (`20260608-sprint2-flight-and-ui-pol
 **Files:**
 - Modify: `src/presentation/PlanetScene.ts`
 
-- [ ] First READ the current panorama setup in `createUI()` and `initialize()`. Sprint2 Task 6 likely already: (a) stores the panorama as a class field, (b) records `lastPanX`, (c) registers a `stage.on("pointermove", ...)` drag handler. Reuse those fields — do NOT add a second pointermove listener.
-- [ ] Add subtle parallax on mouse move (no button held), on top of any drag-pan: store `panoramaBaseX` (the centered X computed at setup) and a constant `PANORAMA_PARALLAX_MAX = 30` (px). In the existing pointermove handler, when NOT dragging, compute `norm = (event.global.x / screenWidth) * 2 - 1` (range -1..1) and set a target `panoramaBaseX + norm * PANORAMA_PARALLAX_MAX`.
-- [ ] Apply the target with easing in `update(dt)` so motion is smooth, not jumpy: `panorama.x += (targetX - panorama.x) * Math.min(1, 0.08 * dt * 60)`. Store `targetX` as a class field updated by the move handler. If sprint2 already drives `panorama.x` via drag, only apply parallax easing when the drag flag is false.
-- [ ] Clamp the final `panorama.x` so blank edges never show: never let it exceed the existing drag clamp bounds `[-(panorama.width - screenWidth), 0]`.
-- [ ] Ensure the pointermove listener is removed in `destroy()` (sprint2 should already do this via `clearGameLayer`/stage `off`; if a stage listener was added, confirm a matching `stage.off("pointermove", ...)` exists).
-- [ ] Write unit test `src/tests/planetParallax.test.ts` for a pure helper `computeParallaxTargetX(mouseX, screenWidth, baseX, maxOffset)`: assert center → `baseX`, left edge (mouseX=0) → `baseX - maxOffset`, right edge (mouseX=screenWidth) → `baseX + maxOffset`. Extract this helper as an exported pure function so it is testable without PixiJS.
-- [ ] **Done when**: `npm run lint && npm test -- --run` passes; helper test green.
+- [x] First READ the current panorama setup in `createUI()` and `initialize()`. Sprint2 Task 6 likely already: (a) stores the panorama as a class field, (b) records `lastPanX`, (c) registers a `stage.on("pointermove", ...)` drag handler. Reuse those fields — do NOT add a second pointermove listener.
+- [x] Add subtle parallax on mouse move (no button held), on top of any drag-pan: store `panoramaBaseX` (the centered X computed at setup) and a constant `PANORAMA_PARALLAX_MAX = 30` (px). In the existing pointermove handler, when NOT dragging, compute `norm = (event.global.x / screenWidth) * 2 - 1` (range -1..1) and set a target `panoramaBaseX + norm * PANORAMA_PARALLAX_MAX`.
+- [x] Apply the target with easing in `update(dt)` so motion is smooth, not jumpy: `panorama.x += (targetX - panorama.x) * Math.min(1, 0.08 * dt * 60)`. Store `targetX` as a class field updated by the move handler. If sprint2 already drives `panorama.x` via drag, only apply parallax easing when the drag flag is false.
+- [x] Clamp the final `panorama.x` so blank edges never show: never let it exceed the existing drag clamp bounds `[-(panorama.width - screenWidth), 0]`.
+- [x] Ensure the pointermove listener is removed in `destroy()` (sprint2 should already do this via `clearGameLayer`/stage `off`; if a stage listener was added, confirm a matching `stage.off("pointermove", ...)` exists).
+- [x] Write unit test `src/tests/planetParallax.test.ts` for a pure helper `computeParallaxTargetX(mouseX, screenWidth, baseX, maxOffset)`: assert center → `baseX`, left edge (mouseX=0) → `baseX - maxOffset`, right edge (mouseX=screenWidth) → `baseX + maxOffset`. Extract this helper as an exported pure function so it is testable without PixiJS.
+- [x] **Done when**: `npm run lint && npm test -- --run` passes; helper test green.
 
 ### Task 4: E2E smoke — clicks survive transitions + parallax moves
 
