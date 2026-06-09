@@ -1,12 +1,7 @@
 import { GameScene } from "./GameScene";
-import {
-  Graphics,
-  Container,
-  FederatedPointerEvent,
-  BlurFilter,
-} from "pixi.js";
+import { Container, FederatedPointerEvent } from "pixi.js";
 import type { GameEngine } from "@/systems/GameEngine";
-import { SceneType, QuestType } from "@/types";
+import { SceneType } from "@/types";
 import { installGameCursors, setCanvasCursor } from "./cursor";
 import type { Planet } from "@/domain/Planet";
 import type { Station } from "@/domain/Station";
@@ -29,15 +24,9 @@ import { PlayerShipRenderer } from "./flight/PlayerShipRenderer";
 import { NpcShipManager } from "./flight/NpcShipManager";
 import { PlanetManager } from "./flight/PlanetManager";
 import { FlightHud } from "./flight/FlightHud";
-
-interface WarpArrivalEffect {
-  container: Container;
-  rings: Graphics[];
-  flash: Graphics;
-  glow: Graphics;
-  elapsed: number;
-  duration: number;
-}
+import { CameraController } from "./flight/CameraController";
+import { WarpEffectRenderer } from "./flight/WarpEffectRenderer";
+import { QuestCompletion } from "./flight/QuestCompletion";
 
 /** Minimal structural view of a display object for recursive filter disposal. */
 interface FilterableNode {
@@ -64,7 +53,10 @@ export class SpaceFlightScene extends GameScene {
   // Owns the deep-space backdrop, mid-ground parallax, foreground dust streaks
   // and edge vignette (extracted from this scene — FlightModule).
   private background: SpaceBackgroundLayer | null = null;
-  private warpEffect: WarpArrivalEffect | null = null; // Warp-exit flash/rings
+  // Warp-exit flourish (flash/rings/glow) — owns its transient effect container.
+  private warpFx!: WarpEffectRenderer;
+  // Auto-completes exploration/defense/bounty quests triggered by flight events.
+  private questCompletion!: QuestCompletion;
   private bgElapsed = 0; // Animation clock for background (ms)
   private shipPhysics: ShipPhysics | null = null;
   // In-flight HUD: turn/speed/settings buttons, day counter, mini-map, mini-log,
@@ -94,8 +86,6 @@ export class SpaceFlightScene extends GameScene {
   // Latches the low-hull auto-stop so the warning fires once per descent below
   // the threshold, not every frame.
   private lowHullStopped = false;
-  // Lerp-return animation: true while the camera is smoothly returning to ship.
-  private cameraReturning = false;
 
   // Turn control (Play/Pause). The turn "runs" (ship flies, NPCs/planets move,
   // combat resolves) while isTurnRunning; Pause stops the ship and ends it now.
@@ -150,19 +140,12 @@ export class SpaceFlightScene extends GameScene {
   private boundPointerLeave: (() => void) | null = null;
   private boundKeyDown: ((event: KeyboardEvent) => void) | null = null;
 
-  // Camera zoom and pan
-  private cameraZoom: number = 1.0;
-  private cameraPanX: number = 0;
-  private cameraPanY: number = 0;
-  // Camera "look-ahead": while moving, the focus point leads the ship along its
-  // heading so the player sees what's coming. Smoothed for a calm feel.
-  private camLeadX: number = 0;
-  private camLeadY: number = 0;
+  // World camera: zoom, pan, smoothed follow/look-ahead, edge clamp and
+  // screen↔world conversion — extracted from this scene as its own controller.
+  // Pan/zoom *gestures* are still recognised here (input) via PanZoomController
+  // and forwarded to the camera as deltas / wheel events.
+  private camera!: CameraController;
   private readonly panZoom = new PanZoomController();
-  // Lower min zoom so the player can pull back to survey the now much larger
-  // system (grand scale, EPIC-004).
-  private readonly MIN_ZOOM = 0.25;
-  private readonly MAX_ZOOM = 2.0;
   private boundWheel: ((event: WheelEvent) => void) | null = null;
   // Suppresses Chrome's middle-button "auto-scroll" (which otherwise fires
   // wheel/scroll events and zooms the camera while the player pans). See bug:
@@ -198,6 +181,8 @@ export class SpaceFlightScene extends GameScene {
       | undefined;
     this.gameEngine = ctx?.gameEngine ?? null;
     this.pendingWarp = ctx?.pendingWarp ?? null;
+    // Quest auto-completion driven by flight events (system entry / NPC kill).
+    this.questCompletion = new QuestCompletion(this.gameEngine);
 
     // HUD module: turn/speed/settings buttons, day counter, mini-map, mini-log,
     // toasts and tooltips. Constructed first so the NPC/planet modules' deps
@@ -213,8 +198,8 @@ export class SpaceFlightScene extends GameScene {
     this.hud.onSpeedCycle = (scale) => this.shipPhysics?.setTimeScale(scale);
     this.hud.onStarMap = () => void this.returnToStarMap();
     this.hud.onQuestNavigate = (id) => this.navigateToQuestObjective(id);
-    this.hud.onMiniMapPan = (x, y) => this.focusCameraOnWorld(x, y);
-    this.hud.onMiniMapReturn = () => this.startCameraReturn();
+    this.hud.onMiniMapPan = (x, y) => this.camera.focusOnWorld(x, y);
+    this.hud.onMiniMapReturn = () => this.camera.startReturn();
 
     // NPC module: owns the living-galaxy ships, their contact panel, the
     // auto-follow combat loop and the OVERMIND-core prompt. Constructed first so
@@ -255,14 +240,14 @@ export class SpaceFlightScene extends GameScene {
       this.gameEngine?.galaxy
     ) {
       this.npcManager.removeDefeatedNpc(this.gameEngine.galaxy, ctx.npcId);
-      this.completeBountyQuestsByNpcKill(ctx.npcId);
+      this.questCompletion.bountyByNpcKill(ctx.npcId);
     }
 
     // Auto-complete EXPLORATION quests whose target is the current system.
-    this.completeExplorationQuestsBySystemEntry();
+    this.questCompletion.explorationBySystemEntry();
 
     // Auto-complete DEFENSE quests targeting this system (OVERMIND liberations).
-    this.completeDefenseQuestsBySystemEntry();
+    this.questCompletion.defenseBySystemEntry();
 
     // Update lastVisitedDay for data-fog tracking (Task 21) and mark system visited (Task 29).
     if (this.gameEngine?.galaxy && this.gameEngine.player) {
@@ -423,6 +408,30 @@ export class SpaceFlightScene extends GameScene {
       this.shipPhysics,
     );
 
+    // World camera: owns zoom/pan/follow/clamp. Reads live ship physics + star
+    // centre via accessors; fans each new transform out to the NPC hit-area
+    // rescale and the HUD debug read-out (the camera stays unaware of both).
+    this.camera = new CameraController(this.renderer, {
+      getShipPhysics: () => this.shipPhysics,
+      getStarCenter: () => ({
+        x: this.starRenderer.centerX,
+        y: this.starRenderer.centerY,
+      }),
+      boundaryRadius: this.SYSTEM_BOUNDARY_RADIUS,
+    });
+    this.camera.onTransform = (zoom) => {
+      // Keep NPC hit areas a fixed screen size regardless of zoom level.
+      this.npcManager?.updateHitAreas(zoom);
+      this.hud?.setCameraDebug(
+        this.camera.zoom,
+        this.camera.panX,
+        this.camera.panY,
+      );
+    };
+
+    // Warp-exit flourish (flash/rings) shown when dropping out of hyperspace.
+    this.warpFx = new WarpEffectRenderer(this.renderer.gameLayer);
+
     // Screen-fixed deep-space backdrop (crisp far stars + twinkle), behind the
     // whole world so panning/zooming never exposes a hard background edge.
     this.skyContainer = new Container();
@@ -438,9 +447,9 @@ export class SpaceFlightScene extends GameScene {
       this.skyContainer,
       this.gameEngine?.player?.currentSystemId ?? "default",
       () => ({
-        panX: this.cameraPanX,
-        panY: this.cameraPanY,
-        zoom: this.cameraZoom,
+        panX: this.camera.panX,
+        panY: this.camera.panY,
+        zoom: this.camera.zoom,
       }),
       () =>
         this.shipPhysics
@@ -503,8 +512,8 @@ export class SpaceFlightScene extends GameScene {
     }
 
     // Center the camera on the ship at spawn (system is larger than the
-    // viewport; the camera follows the ship — see updateCamera).
-    this.centerCameraOnShip();
+    // viewport; the camera follows the ship — see CameraController.update).
+    this.camera.centerOnShip();
 
     // Pending hyperjump: auto-route the ship to the system edge in the warp
     // direction. The jump fires when it reaches the boundary (see updateShip →
@@ -524,7 +533,7 @@ export class SpaceFlightScene extends GameScene {
         edgeY,
       );
       this.plannedRoute = { x: edgeX, y: edgeY };
-      this.drawRouteLine();
+      this.plotRoute();
       logger.info(
         `Pending warp: course to system edge plotted (${edgeX.toFixed(0)}, ${edgeY.toFixed(0)}) — press Ход to depart`,
       );
@@ -532,10 +541,7 @@ export class SpaceFlightScene extends GameScene {
 
     // Just dropped out of hyperspace → play the warp-exit flourish at the ship.
     if (ctx?.warpArrival && !this.pendingWarp) {
-      this.playWarpArrivalEffect(
-        this.shipPhysics.shipX,
-        this.shipPhysics.shipY,
-      );
+      this.warpFx.play(this.shipPhysics.shipX, this.shipPhysics.shipY);
     }
 
     // Enable interactivity on stage for continuous pointer tracking
@@ -605,14 +611,13 @@ export class SpaceFlightScene extends GameScene {
     this.background?.update(deltaTime, this.bgElapsed);
     this.asteroidBelt.update(deltaTime, this.bgElapsed);
     this.starRenderer.update(deltaTime, this.bgElapsed);
-    this.updateWarpEffect(deltaTime);
+    this.warpFx.update(deltaTime);
     this.updateShip(deltaTime);
     // Sync the ship sprite to the post-physics position (or walk the take-off
     // arc), redraw engine effects, and refresh the heading crosshair.
     this.playerShip.update(deltaTime, this.bgElapsed);
     this.npcManager.updateCombat(deltaTime);
-    this.updateCameraReturn();
-    this.updateCamera();
+    this.camera.update();
     this.npcManager.update(deltaTime, this.bgElapsed);
     this.planetManager.update(deltaTime, this.bgElapsed);
     this.updateSystemMiniMap();
@@ -683,9 +688,11 @@ export class SpaceFlightScene extends GameScene {
     this.isTurnRunning = false;
     this.turnHintShown = false;
     this.lowHullStopped = false;
-    this.cameraReturning = false;
     this.warpInProgress = false;
     this.waitDayAccum = 0;
+
+    // Tear down the warp-exit flourish if one is mid-animation.
+    this.warpFx?.destroy();
 
     // Tear down the HUD (buttons, mini-map, mini-log, toast/tooltip + their
     // timers) before clearUILayer destroys the UI layer underneath it.
@@ -745,33 +752,11 @@ export class SpaceFlightScene extends GameScene {
 
     // Layers are torn down by clearGameLayer/clearUILayer on the next scene
     // init; just drop our references (the HUD dropped its own above).
-    this.warpEffect = null;
     this.bgElapsed = 0;
     this.shipPhysics = null;
     this.distanceTraveled = 0;
     this.clearPlannedRoute(); // Clean up route line
     logger.info("SpaceFlightScene destroyed");
-  }
-
-  /**
-   * A BlurFilter with generous padding. PixiJS renders a filter into a texture
-   * sized to the object's bounds + padding; if the padding is too small the
-   * blur is clipped at the texture edge and shows as a hard rectangular band —
-   * especially once the gameLayer is scaled by the camera zoom. Padding ~2×
-   * the blur strength keeps the falloff inside the texture so no edge appears.
-   */
-  private paddedBlur(strength: number): BlurFilter {
-    const f = new BlurFilter({ strength });
-    // The Gaussian kernel reaches ~3σ; pad well beyond that (and beyond the
-    // worst-case camera zoom) so the blur's falloff always stays inside the
-    // filter texture. Too-tight padding shows as moving rectangular bands once
-    // the gameLayer is scaled or the filtered object rotates (US-070 streaks).
-    f.padding = Math.ceil(strength * 3 + 24);
-    // Pin the filter resolution to 1 so the intermediate texture doesn't balloon
-    // with camera zoom / device pixel ratio and get clamped to the max texture
-    // size — that clamp is what produced the hard bands across the canvas.
-    f.resolution = 1;
-    return f;
   }
 
   /**
@@ -789,46 +774,6 @@ export class SpaceFlightScene extends GameScene {
     for (const child of obj.children ?? []) {
       this.disposeFiltersDeep(child as FilterableNode);
     }
-  }
-
-  /**
-   * Warp-exit flourish (US-043): a bright flash, expanding shock rings and a
-   * lingering glow at the point where the ship drops out of hyperspace.
-   */
-  private playWarpArrivalEffect(x: number, y: number): void {
-    const container = new Container();
-    container.x = x;
-    container.y = y;
-
-    const color = 0x9fe8ff;
-
-    const glow = new Graphics();
-    glow.circle(0, 0, 90).fill({ color, alpha: 0.0 });
-    glow.filters = [this.paddedBlur(24)];
-    container.addChild(glow);
-
-    const flash = new Graphics();
-    flash.circle(0, 0, 60).fill({ color: 0xffffff, alpha: 1 });
-    flash.filters = [this.paddedBlur(12)];
-    container.addChild(flash);
-
-    const rings: Graphics[] = [];
-    for (let i = 0; i < 3; i++) {
-      const ring = new Graphics();
-      ring.circle(0, 0, 20).stroke({ width: 4, color, alpha: 0.9 });
-      container.addChild(ring);
-      rings.push(ring);
-    }
-
-    this.renderer.gameLayer.addChild(container);
-    this.warpEffect = {
-      container,
-      rings,
-      flash,
-      glow,
-      elapsed: 0,
-      duration: 1100,
-    };
   }
 
   private readonly DOCKING_RANGE = 55;
@@ -1014,7 +959,7 @@ export class SpaceFlightScene extends GameScene {
       this.panZoom.startDragTracking(event.global.x, event.global.y);
 
       // Convert screen coordinates to world coordinates
-      const world = this.screenToWorld(event.global.x, event.global.y);
+      const world = this.camera.screenToWorld(event.global.x, event.global.y);
 
       // Check if we already have a planned route
       if (this.plannedRoute) {
@@ -1057,16 +1002,7 @@ export class SpaceFlightScene extends GameScene {
 
   private onPointerMove(event: FederatedPointerEvent): void {
     const panDelta = this.panZoom.onMove(event.global.x, event.global.y);
-    if (panDelta) {
-      this.cameraPanX += panDelta.dx;
-      this.cameraPanY += panDelta.dy;
-      this.applyCameraTransform();
-      if (Math.abs(panDelta.dx) > 1 || Math.abs(panDelta.dy) > 1) {
-        logger.info(
-          `📍 Camera pan: (${this.cameraPanX.toFixed(0)}, ${this.cameraPanY.toFixed(0)})`,
-        );
-      }
-    }
+    if (panDelta) this.camera.pan(panDelta.dx, panDelta.dy);
   }
 
   private onPointerUp(): void {
@@ -1084,7 +1020,9 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Handle mouse wheel for zoom
+   * Handle mouse wheel for zoom (toward the cursor). The anchor math lives in
+   * {@link CameraController.zoomAtClient}; the scene only guards against zooming
+   * mid-pan and forwards the event.
    */
   private onWheel(event: WheelEvent): void {
     event.preventDefault();
@@ -1094,102 +1032,7 @@ export class SpaceFlightScene extends GameScene {
     // them here keeps panning from also zooming (bug: pan + unwanted zoom).
     if (this.panZoom.isPanning) return;
 
-    logger.debug(`🔍 WHEEL EVENT FIRED! deltaY: ${event.deltaY}`);
-
-    const oldZoom = this.cameraZoom;
-
-    // Calculate zoom delta (negative deltaY = zoom in, positive = zoom out)
-    const zoomDelta = event.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = this.cameraZoom * zoomDelta;
-
-    // Clamp zoom to min/max bounds
-    const clampedZoom = Math.max(
-      this.MIN_ZOOM,
-      Math.min(this.MAX_ZOOM, newZoom),
-    );
-
-    // Zoom towards the mouse cursor so the world point under the pointer stays
-    // fixed (US-070 #4). The wheel listener is on `window`, so the event carries
-    // viewport coordinates — convert them to canvas-local screen coordinates.
-    const rect = this.renderer.app.canvas.getBoundingClientRect();
-    const anchorX = event.clientX - rect.left;
-    const anchorY = event.clientY - rect.top;
-
-    // World coordinates of the anchor point before zoom
-    const worldAnchorX = (anchorX - this.cameraPanX) / this.cameraZoom;
-    const worldAnchorY = (anchorY - this.cameraPanY) / this.cameraZoom;
-
-    // Update zoom
-    this.cameraZoom = clampedZoom;
-
-    // Adjust pan to keep the anchor point under the cursor at the same position
-    this.cameraPanX = anchorX - worldAnchorX * this.cameraZoom;
-    this.cameraPanY = anchorY - worldAnchorY * this.cameraZoom;
-
-    this.applyCameraTransform();
-    logger.info(
-      `Camera zoom: ${oldZoom.toFixed(2)} → ${this.cameraZoom.toFixed(2)} (deltaY: ${event.deltaY})`,
-    );
-  }
-
-  /**
-   * Apply camera zoom and pan to game layer
-   */
-  /**
-   * Camera-follow: while the ship is flying, keep it centred (the system is
-   * larger than the viewport). When the ship is stopped, the camera is left
-   * alone so the player can freely pan/zoom to look around (consistent with the
-   * turn-based pause, and preserves manual pan behaviour).
-   */
-  private updateCamera(): void {
-    if (!this.shipPhysics) return;
-    const moving =
-      this.shipPhysics.isMoving && this.shipPhysics.currentSpeed > 0.01;
-    const hasLead =
-      Math.abs(this.camLeadX) > 0.5 || Math.abs(this.camLeadY) > 0.5;
-    // Follow with smoothed look-ahead while moving; once stopped, let the
-    // residual lead ease to zero and then STOP touching the camera — so the
-    // player can freely pan to examine the map without it snapping back to the
-    // ship (US-070: don't yank the view to the ship between turns).
-    if (moving || hasLead) {
-      this.cameraReturning = false; // ship motion follow takes over
-      this.focusCameraWithLead();
-    }
-  }
-
-  /**
-   * Pan the camera so a point *ahead* of the ship (along its heading, scaled by
-   * speed) sits at screen centre — the ship rides toward the back of the view
-   * and the player can see what's coming. The lead is smoothed each frame.
-   */
-  private focusCameraWithLead(): void {
-    if (!this.shipPhysics) return;
-    const cx = this.renderer.app.screen.width / 2;
-    const cy = this.renderer.app.screen.height / 2;
-
-    // Desired lead (world units) in the heading direction, up to ~34% of a
-    // half-screen ahead at full speed. Zero when stopped → ship recenters.
-    const maxLeadWorld = (cx * 0.34) / this.cameraZoom;
-    const f = Math.min(1, this.shipPhysics.getSpeedFraction() * 1.4);
-    const desired = maxLeadWorld * f;
-    const desiredX = Math.cos(this.shipPhysics.shipAngle) * desired;
-    const desiredY = Math.sin(this.shipPhysics.shipAngle) * desired;
-
-    // Smooth toward the desired lead (and toward 0 when slowing/stopped).
-    this.camLeadX += (desiredX - this.camLeadX) * 0.06;
-    this.camLeadY += (desiredY - this.camLeadY) * 0.06;
-
-    const focusX = this.shipPhysics.shipX + this.camLeadX;
-    const focusY = this.shipPhysics.shipY + this.camLeadY;
-    // Ease the camera toward the target pan instead of snapping the ship to dead
-    // centre every frame — a gentle follow so the view glides rather than jerks
-    // when the ship turns or changes speed (US-070: camera not so abrupt).
-    const targetPanX = cx - focusX * this.cameraZoom;
-    const targetPanY = cy - focusY * this.cameraZoom;
-    const FOLLOW = 0.08; // lower = smoother / more lag
-    this.cameraPanX += (targetPanX - this.cameraPanX) * FOLLOW;
-    this.cameraPanY += (targetPanY - this.cameraPanY) * FOLLOW;
-    this.applyCameraTransform();
+    this.camera.zoomAtClient(event.deltaY, event.clientX, event.clientY);
   }
 
   /**
@@ -1209,34 +1052,7 @@ export class SpaceFlightScene extends GameScene {
     this.hud.reposition(w, h);
 
     // Keep the ship framed after the viewport changed.
-    if (this.shipPhysics) this.centerCameraOnShip();
-  }
-
-  /**
-   * Centre the main view on a world point — used by the radar drag-to-pan. The
-   * residual camera lead is cleared so the view doesn't snap back while idle.
-   */
-  private focusCameraOnWorld(worldX: number, worldY: number): void {
-    const cx = this.renderer.app.screen.width / 2;
-    const cy = this.renderer.app.screen.height / 2;
-    this.camLeadX = 0;
-    this.camLeadY = 0;
-    this.cameraPanX = cx - worldX * this.cameraZoom;
-    this.cameraPanY = cy - worldY * this.cameraZoom;
-    this.applyCameraTransform();
-  }
-
-  /** Snap the camera so the ship sits exactly at screen centre (spawn). */
-  private centerCameraOnShip(): void {
-    if (!this.shipPhysics) return;
-    const cx = this.renderer.app.screen.width / 2;
-    const cy = this.renderer.app.screen.height / 2;
-    this.camLeadX = 0;
-    this.camLeadY = 0;
-    this.cameraReturning = false;
-    this.cameraPanX = cx - this.shipPhysics.shipX * this.cameraZoom;
-    this.cameraPanY = cy - this.shipPhysics.shipY * this.cameraZoom;
-    this.applyCameraTransform();
+    if (this.shipPhysics) this.camera.centerOnShip();
   }
 
   /**
@@ -1304,100 +1120,6 @@ export class SpaceFlightScene extends GameScene {
       shipC.x = spawnX;
       shipC.y = spawnY;
     }
-  }
-
-  /** Activate the lerp-return animation toward the ship (⊙ button handler). */
-  private startCameraReturn(): void {
-    this.camLeadX = 0;
-    this.camLeadY = 0;
-    this.cameraReturning = true;
-  }
-
-  /**
-   * Each frame: lerp the camera toward the ship's centred position.
-   * Clears `cameraReturning` once the ship is within 1 px of the target.
-   */
-  private updateCameraReturn(): void {
-    if (!this.cameraReturning || !this.shipPhysics) return;
-    const cx = this.renderer.app.screen.width / 2;
-    const cy = this.renderer.app.screen.height / 2;
-    const targetPanX = cx - this.shipPhysics.shipX * this.cameraZoom;
-    const targetPanY = cy - this.shipPhysics.shipY * this.cameraZoom;
-    const LERP = 0.12;
-    this.cameraPanX += (targetPanX - this.cameraPanX) * LERP;
-    this.cameraPanY += (targetPanY - this.cameraPanY) * LERP;
-    this.applyCameraTransform();
-    if (
-      Math.abs(this.cameraPanX - targetPanX) < 1 &&
-      Math.abs(this.cameraPanY - targetPanY) < 1
-    ) {
-      this.cameraPanX = targetPanX;
-      this.cameraPanY = targetPanY;
-      this.cameraReturning = false;
-      this.applyCameraTransform();
-    }
-  }
-
-  private applyCameraTransform(): void {
-    if (!this.renderer.gameLayer) return;
-
-    this.clampCameraPan();
-
-    this.renderer.gameLayer.scale.set(this.cameraZoom);
-    this.renderer.gameLayer.x = this.cameraPanX;
-    this.renderer.gameLayer.y = this.cameraPanY;
-
-    // Keep NPC hit areas a fixed screen size regardless of zoom level.
-    this.npcManager?.updateHitAreas(this.cameraZoom);
-
-    this.hud.setCameraDebug(this.cameraZoom, this.cameraPanX, this.cameraPanY);
-  }
-
-  /**
-   * Clamp the camera pan so the visible viewport never extends past the
-   * background coverage (the nebula backdrop), i.e. the picture's edge can't be
-   * panned into view. When the viewport is larger than the bound (fully zoomed
-   * out) the system is simply centred on that axis.
-   */
-  private clampCameraPan(): void {
-    const z = this.cameraZoom;
-    // Slightly smaller than the backdrop half-size (BOUNDARY * 2.8 / 2 = 1.4)
-    // so a margin of gas always remains beyond the edge of the screen.
-    const half = this.SYSTEM_BOUNDARY_RADIUS * 1.25;
-    const sw = this.renderer.app.screen.width;
-    const sh = this.renderer.app.screen.height;
-
-    // Viewport world edges: left = -panX/z, right = (sw - panX)/z. Require the
-    // edges to stay within [center ± half].
-    const minX = this.starRenderer.centerX - half;
-    const maxX = this.starRenderer.centerX + half;
-    const panXMax = -minX * z;
-    const panXMin = sw - maxX * z;
-    this.cameraPanX =
-      panXMin > panXMax
-        ? (panXMin + panXMax) / 2
-        : Math.max(panXMin, Math.min(panXMax, this.cameraPanX));
-
-    const minY = this.starRenderer.centerY - half;
-    const maxY = this.starRenderer.centerY + half;
-    const panYMax = -minY * z;
-    const panYMin = sh - maxY * z;
-    this.cameraPanY =
-      panYMin > panYMax
-        ? (panYMin + panYMax) / 2
-        : Math.max(panYMin, Math.min(panYMax, this.cameraPanY));
-  }
-
-  /**
-   * Convert screen coordinates to world coordinates (accounting for camera transform)
-   */
-  private screenToWorld(
-    screenX: number,
-    screenY: number,
-  ): { x: number; y: number } {
-    const worldX = (screenX - this.cameraPanX) / this.cameraZoom;
-    const worldY = (screenY - this.cameraPanY) / this.cameraZoom;
-    return { x: worldX, y: worldY };
   }
 
   private updateShip(deltaTime: number): void {
@@ -1654,12 +1376,13 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Plan the planned-course overlay and hand it to {@link RouteRenderer} to draw.
+   * Plot the planned-course overlay and hand it to {@link RouteRenderer} to draw.
    * Route planning (the ship→waypoints→destination polyline and the
    * landing-vs-navigation decision) is the scene's job — it owns the route data
-   * and the planet sprites; the renderer just draws what it's told.
+   * and the planet sprites; the renderer just draws what it's told. (Named
+   * `plotRoute`, not `draw*`: the actual drawing is delegated to the renderer.)
    */
-  private drawRouteLine(): void {
+  private plotRoute(): void {
     if (!this.shipPhysics || !this.plannedRoute) return;
 
     // Polyline ship → (curved waypoints) → destination. When the path is a
@@ -1755,7 +1478,7 @@ export class SpaceFlightScene extends GameScene {
     if (!this.shipPhysics) return;
     this.plannedRoute = { x, y };
     this.routePath = this.computeFlightPath(x, y, landing);
-    this.drawRouteLine();
+    this.plotRoute();
   }
 
   /** Start flying to (x,y) along a star-avoiding (and, for planets, spiral) path. */
@@ -1773,7 +1496,7 @@ export class SpaceFlightScene extends GameScene {
     this.plannedRoute = { x, y };
     this.isTurnRunning = true; // executing a route runs the turn (Play)
     this.updateInteractiveCursors(true);
-    this.drawRouteLine();
+    this.plotRoute();
   }
 
   private clearPlannedRoute(): void {
@@ -1815,13 +1538,7 @@ export class SpaceFlightScene extends GameScene {
             }
           : null);
       // Current camera view in world coords → radar viewport rectangle.
-      const z = this.cameraZoom;
-      const viewport = {
-        minX: (0 - this.cameraPanX) / z,
-        minY: (0 - this.cameraPanY) / z,
-        maxX: (this.renderer.app.screen.width - this.cameraPanX) / z,
-        maxY: (this.renderer.app.screen.height - this.cameraPanY) / z,
-      };
+      const viewport = this.camera.worldViewport();
       miniMap.updateWithSprites(
         this.planetManager.planetSprites,
         this.shipPhysics.shipX,
@@ -1835,11 +1552,11 @@ export class SpaceFlightScene extends GameScene {
         this.SCANNER_RANGE,
       );
       miniMap.updateCenterButton(
-        this.cameraPanX,
-        this.cameraPanY,
+        this.camera.panX,
+        this.camera.panY,
         this.shipPhysics.shipX,
         this.shipPhysics.shipY,
-        this.cameraZoom,
+        this.camera.zoom,
       );
     }
   }
@@ -1918,36 +1635,6 @@ export class SpaceFlightScene extends GameScene {
     this.planetManager.closeInfoPanel();
   }
 
-  /** Animate the warp-exit flash + expanding rings, then clean up. */
-  private updateWarpEffect(deltaTime: number): void {
-    const fx = this.warpEffect;
-    if (!fx) return;
-
-    fx.elapsed += deltaTime;
-    const t = Math.min(1, fx.elapsed / fx.duration);
-
-    // Flash: bright then fades fast.
-    fx.flash.alpha = Math.max(0, 1 - t * 2.2);
-    fx.flash.scale.set(1 + t * 0.6);
-
-    // Glow: swells in, fades out over the full duration.
-    fx.glow.alpha = Math.sin(t * Math.PI) * 0.6;
-    fx.glow.scale.set(0.6 + t * 1.4);
-
-    // Rings: staggered expansion outward, thinning as they grow.
-    fx.rings.forEach((ring, i) => {
-      const rt = Math.max(0, Math.min(1, t * 1.3 - i * 0.18));
-      ring.scale.set(0.2 + rt * 8);
-      ring.alpha = Math.max(0, 1 - rt) * 0.9;
-    });
-
-    if (t >= 1) {
-      this.renderer.gameLayer.removeChild(fx.container);
-      fx.container.destroy({ children: true });
-      this.warpEffect = null;
-    }
-  }
-
   private async returnToStarMap(): Promise<void> {
     logger.info("Returning to star map");
     if (this.gameEngine) {
@@ -1985,74 +1672,6 @@ export class SpaceFlightScene extends GameScene {
       this.hud.toggleQuestJournal();
     } else if (event.key === "i" || event.key === "I") {
       this.openInventory();
-    }
-  }
-
-  /** Auto-complete BOUNTY quests targeting the defeated NpcShip. */
-  private completeBountyQuestsByNpcKill(npcId: string): void {
-    if (!this.gameEngine?.player) return;
-    const player = this.gameEngine.player;
-    const questManager = this.gameEngine.questManager;
-    const currentSystemId = player.currentSystemId;
-
-    for (const quest of questManager.getActiveQuests()) {
-      if (quest.type !== QuestType.BOUNTY) continue;
-      if (quest.isCompleted || quest.isFailed) continue;
-      const matchesNpc = quest.targetObjectId === npcId;
-      const matchesSystem =
-        !quest.targetObjectId && quest.targetSystemId === currentSystemId;
-      if (!matchesNpc && !matchesSystem) continue;
-      const completed = questManager.forceCompleteQuest(quest.id, player);
-      if (completed) {
-        logger.info(
-          `BOUNTY quest auto-completed: ${quest.title} (npcId=${npcId})`,
-        );
-      }
-    }
-  }
-
-  /** Auto-complete EXPLORATION quests whose target is the current system. */
-  private completeExplorationQuestsBySystemEntry(): void {
-    if (!this.gameEngine?.player) return;
-    const player = this.gameEngine.player;
-    const questManager = this.gameEngine.questManager;
-    const currentSystemId = player.currentSystemId;
-
-    for (const quest of questManager.getActiveQuests()) {
-      if (quest.type !== QuestType.EXPLORATION) continue;
-      if (quest.isCompleted || quest.isFailed) continue;
-      if (quest.targetSystemId !== currentSystemId) continue;
-      const completed = questManager.forceCompleteQuest(quest.id, player);
-      if (completed) {
-        logger.info(
-          `EXPLORATION quest auto-completed on system entry: ${quest.title}`,
-        );
-      }
-    }
-  }
-
-  /** Auto-complete DEFENSE quests targeting the current system and liberate the adjacent OVERMIND system. */
-  private completeDefenseQuestsBySystemEntry(): void {
-    if (!this.gameEngine?.player || !this.gameEngine.galaxy) return;
-    const player = this.gameEngine.player;
-    const galaxy = this.gameEngine.galaxy;
-    const questManager = this.gameEngine.questManager;
-    const currentSystemId = player.currentSystemId;
-
-    for (const quest of questManager.getActiveQuests()) {
-      if (quest.type !== QuestType.DEFENSE) continue;
-      if (quest.isCompleted || quest.isFailed) continue;
-      if (quest.targetSystemId !== currentSystemId) continue;
-      const completed = questManager.forceCompleteQuest(quest.id, player);
-      if (completed) {
-        // Remove the OVERMIND system stored in targetObjectId (the one being pushed back).
-        if (quest.targetObjectId) {
-          galaxy.removeOvermindSystem(quest.targetObjectId);
-          logger.info(
-            `DEFENSE quest completed: ${quest.title}, liberated OVERMIND system ${quest.targetObjectId}`,
-          );
-        }
-      }
     }
   }
 
@@ -2110,25 +1729,22 @@ export class SpaceFlightScene extends GameScene {
   e2eGetCameraState(): { zoom: number; panX: number; panY: number } {
     if (!__DEBUG__) return { zoom: 1, panX: 0, panY: 0 };
     return {
-      zoom: this.cameraZoom,
-      panX: this.cameraPanX,
-      panY: this.cameraPanY,
+      zoom: this.camera.zoom,
+      panX: this.camera.panX,
+      panY: this.camera.panY,
     };
   }
 
   /** E2E helper: set camera zoom */
   e2eSetCameraZoom(zoom: number): void {
     if (!__DEBUG__) return;
-    this.cameraZoom = Math.max(this.MIN_ZOOM, Math.min(this.MAX_ZOOM, zoom));
-    this.applyCameraTransform();
+    this.camera.setZoom(zoom);
   }
 
   /** E2E helper: set camera pan */
   e2eSetCameraPan(x: number, y: number): void {
     if (!__DEBUG__) return;
-    this.cameraPanX = x;
-    this.cameraPanY = y;
-    this.applyCameraTransform();
+    this.camera.setPan(x, y);
   }
 
   /** E2E helper: check if minimap exists */
