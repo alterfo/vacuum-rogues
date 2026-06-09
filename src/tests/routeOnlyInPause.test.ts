@@ -155,7 +155,12 @@ vi.mock("@/presentation/cursor", () => ({
 }));
 
 import { SpaceFlightScene } from "@/presentation/SpaceFlightScene";
+import {
+  NpcShipManager,
+  type NpcShipManagerDeps,
+} from "@/presentation/flight/NpcShipManager";
 import type { Renderer } from "@/presentation/Renderer";
+import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
 
 function makeMockRenderer(): Renderer {
@@ -231,7 +236,9 @@ describe("routeOnlyInPause: route blocked while turn is running", () => {
       isMoving: false,
     };
     s.planetSprites = [];
-    s.followNpcId = null;
+    // NPC auto-follow state is owned by the NPC module now (onPlanetClick clears
+    // it). A bare stub is enough for the planet-click tests below.
+    s.npcManager = { followNpcId: null };
     s.planetInfoPanel = null;
     s.gameEngine = { galaxy: { systems: [] }, player: null };
     // Stub planRouteTo so it doesn't blow up without a full scene.
@@ -277,46 +284,56 @@ describe("routeOnlyInPause: route blocked while turn is running", () => {
     expect(s.planRouteTo).not.toHaveBeenCalled();
   });
 
-  it("onNpcClick is blocked when turn is running", () => {
-    s.isTurnRunning = true;
-    s.contactNpcId = null;
-    const npc = { id: "npc-1", role: "TRADER", name: "NPC" };
-    s.npcSprites = [];
-    s.npcContactPanel = null;
-
-    // closeNpcContactPanel must exist to avoid errors when turn is NOT running.
-    s.closeNpcContactPanel = vi.fn();
-
-    (scene as unknown as { onNpcClick(n: unknown): void }).onNpcClick(npc);
-
-    // contactNpcId should not be set because onNpcClick returns early.
-    expect(s.contactNpcId).toBeNull();
-    expect(s.closeNpcContactPanel).not.toHaveBeenCalled();
-  });
-
-  it("onNpcClick proceeds normally when turn is paused", () => {
-    s.isTurnRunning = false;
-    s.contactNpcId = null;
-    const npc = { id: "npc-2", role: "TRADER", name: "NPC" };
-    s.npcSprites = [];
-    s.npcContactPanel = null;
-    s.closeNpcContactPanel = vi.fn();
-    // Stub NpcContactPanel creation.
-    (s as unknown as { npcContactPanel: unknown }).npcContactPanel = null;
-    s.gameEngine = {
+  // NPC click handling moved to NpcShipManager. The turn-running guard and the
+  // contact-panel open path are exercised directly against the module.
+  function makeNpcManager(turnRunning: boolean): NpcShipManager {
+    const renderer = makeMockRenderer();
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => null,
+      getPlanetSprites: () => [],
+      getStarCenter: () => ({ x: 0, y: 0 }),
+      isTurnRunning: () => turnRunning,
+      showMessage: () => {},
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: () => {},
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+    };
+    const gameEngine = {
       playerLoadout: {
         derivedStats: vi.fn().mockReturnValue({ scanPower: 0 }),
       },
       player: { shipX: 0, shipY: 0 },
-    };
-    // Provide a minimal uiLayer stub on the renderer.
-    (
-      scene as unknown as { renderer: { uiLayer: { addChild: unknown } } }
-    ).renderer.uiLayer.addChild = vi.fn();
+    } as unknown as GameEngine;
+    return new NpcShipManager(
+      renderer,
+      gameEngine,
+      renderer.gameLayer,
+      renderer.uiLayer,
+      deps,
+    );
+  }
 
-    (scene as unknown as { onNpcClick(n: unknown): void }).onNpcClick(npc);
+  it("onNpcClick is blocked when turn is running", () => {
+    const mgr = makeNpcManager(true);
+    const npc = { id: "npc-1", role: "TRADER", name: "NPC" };
 
-    expect(s.closeNpcContactPanel).toHaveBeenCalled();
-    expect(s.contactNpcId).toBe("npc-2");
+    (mgr as unknown as { onNpcClick(n: unknown): void }).onNpcClick(npc);
+
+    // Early-return mid-turn: no contact panel opens.
+    expect(mgr.isContactPanelOpen).toBe(false);
+  });
+
+  it("onNpcClick proceeds normally when turn is paused", () => {
+    const mgr = makeNpcManager(false);
+    const npc = { id: "npc-2", role: "TRADER", name: "NPC" };
+
+    (mgr as unknown as { onNpcClick(n: unknown): void }).onNpcClick(npc);
+
+    expect(mgr.isContactPanelOpen).toBe(true);
+    expect(
+      (mgr as unknown as { contactNpcId: string | null }).contactNpcId,
+    ).toBe("npc-2");
   });
 });

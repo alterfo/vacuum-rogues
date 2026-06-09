@@ -7,6 +7,10 @@
  * clickable-looking even while a turn is running.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  NpcShipManager,
+  type NpcShipManagerDeps,
+} from "@/presentation/flight/NpcShipManager";
 
 // Mirror the pixi.js + presentation mocks from playPauseImmediate.test.ts so the
 // SpaceFlightScene can be constructed in jsdom without a real renderer.
@@ -186,7 +190,8 @@ describe("hudCursors: HUD buttons keep their pointer cursor across turns", () =>
   let playBtnContainer: CursorHost;
 
   beforeEach(() => {
-    scene = new SpaceFlightScene(makeMockRenderer());
+    const renderer = makeMockRenderer();
+    scene = new SpaceFlightScene(renderer);
     s = scene as unknown as Record<string, unknown>;
 
     planet = { graphics: { cursor: "pointer" } };
@@ -205,8 +210,32 @@ describe("hudCursors: HUD buttons keep their pointer cursor across turns", () =>
     // would flip to "default"/"pointer" and the assertions below would bite.
     playBtnContainer = { cursor: "__sentinel__" };
 
+    // NPC cursors are owned by the NPC module now — inject a real manager
+    // holding the pirate/trader stubs so updateInteractiveCursors() delegates to
+    // its setCursors() exactly as it does in the live scene.
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => null,
+      getPlanetSprites: () => [],
+      getStarCenter: () => ({ x: 0, y: 0 }),
+      isTurnRunning: () => false,
+      showMessage: () => {},
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: () => {},
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+    };
+    const mgr = new NpcShipManager(
+      renderer,
+      null,
+      renderer.gameLayer,
+      renderer.uiLayer,
+      deps,
+    );
+    (mgr as unknown as { npcSprites: unknown[] }).npcSprites = [pirate, trader];
+
     s.planetSprites = [planet];
-    s.npcSprites = [pirate, trader];
+    s.npcManager = mgr;
     s.playPauseButton = { container: playBtnContainer };
   });
 

@@ -8,7 +8,7 @@ import {
 } from "pixi.js";
 import { UiButton } from "./ui/UiButton";
 import type { GameEngine } from "@/systems/GameEngine";
-import { SceneType, NpcRole, QuestType } from "@/types";
+import { SceneType, QuestType } from "@/types";
 import { Faction } from "@/types/faction";
 import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
 import { installGameCursors, setCanvasCursor } from "./cursor";
@@ -16,17 +16,8 @@ import { PlanetSprite } from "./PlanetSprite";
 import { PlanetInfoPanel } from "./PlanetInfoPanel";
 import { SystemMiniMap } from "./SystemMiniMap";
 import { QuestJournalUI } from "./QuestJournalUI";
-import { NpcShipSprite } from "./NpcShipSprite";
-import type { SystemBounds } from "./NpcShipSprite";
-import { NpcContactPanel } from "./NpcContactPanel";
 import type { Planet } from "@/domain/Planet";
 import type { Station } from "@/domain/Station";
-import type { NpcShip } from "@/domain/NpcShip";
-import {
-  npcsPresentInSystem,
-  NpcSimulator,
-  npcRoleTechLevel,
-} from "@/systems/npc/NpcSimulator";
 import { logger } from "@/utils/logger";
 import { formatGameDate } from "@/utils/gameCalendar";
 import {
@@ -35,11 +26,9 @@ import {
   planetApproachPoint,
   spiralApproachPath,
   takeoffArcPath,
-  leadInterceptPoint,
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import { engineSpeedBonus } from "@/systems/EquipmentSystem";
-import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { PanZoomController } from "@/systems/PanZoomController";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
 import {
@@ -54,6 +43,7 @@ import { AsteroidBelt } from "./flight/AsteroidBelt";
 import { OrbitRenderer } from "./flight/OrbitRenderer";
 import { RouteRenderer } from "./flight/RouteRenderer";
 import { PlayerShipRenderer } from "./flight/PlayerShipRenderer";
+import { NpcShipManager } from "./flight/NpcShipManager";
 
 interface WarpArrivalEffect {
   container: Container;
@@ -74,7 +64,6 @@ interface FilterableNode {
 }
 
 export class SpaceFlightScene extends GameScene {
-  private readonly combatResolver = new FlightCombatResolver();
   private gameEngine: GameEngine | null = null;
   // Renders the player ship (hull/sprite, glow, heading crosshair, take-off arc)
   // and owns its display objects — extracted from this scene as a FlightModule.
@@ -115,20 +104,11 @@ export class SpaceFlightScene extends GameScene {
   private orbitRenderer!: OrbitRenderer;
   private systemMiniMap: SystemMiniMap | null = null;
 
-  // NPC ships present in the player's system (Feature 8, slice 2)
-  private npcSprites: NpcShipSprite[] = [];
-  // Maps each non-pirate NPC sprite to the planet sprite it orbits so the
-  // anchor can be refreshed each frame as planets drift along their orbits.
-  private npcAnchorPlanet = new Map<NpcShipSprite, PlanetSprite>();
-  private npcContactPanel: NpcContactPanel | null = null;
-  private contactNpcId: string | null = null;
-  // When set, the ship auto-follows this NPC (used by "Атаковать"): on each
-  // arrival it re-routes to the target's current position (auto-follow).
-  private followNpcId: string | null = null;
-  private overmindOverlay: Container | null = null;
-  // Guard: prevents multiple simultaneous CombatScene transition requests.
-  private _combatTransitionPending = false;
-  private readonly _npcSimulator = new NpcSimulator();
+  // Living-galaxy NPC ships present in the player's system (Feature 8) — sprite
+  // lifecycle, contact panel, auto-follow combat loop and the OVERMIND-core
+  // prompt are owned by this module. The scene reads/clears its `followNpcId`
+  // during the flight/turn loop and drives its combat tick + refresh.
+  private npcManager!: NpcShipManager;
   // Transient on-screen feedback (toast), and its auto-clear timer.
   private toast: Text | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -155,9 +135,7 @@ export class SpaceFlightScene extends GameScene {
   // Latch: show "pause first" hint only once per turn to avoid message spam.
   private turnHintShown = false;
   private playPauseButton: UiButton | null = null;
-  private readonly WEAPON_RANGE = GAME_BALANCE.weaponRange;
   private readonly SYSTEM_INNER_RADIUS = SYSTEM_GEOMETRY.innerRadius;
-  private readonly SYSTEM_OUTER_RADIUS = SYSTEM_GEOMETRY.outerRadius;
   private readonly SYSTEM_BOUNDARY_RADIUS = SYSTEM_GEOMETRY.boundaryRadius;
   private readonly SCANNER_RANGE = GAME_BALANCE.scannerRange;
 
@@ -272,16 +250,46 @@ export class SpaceFlightScene extends GameScene {
       | undefined;
     this.gameEngine = ctx?.gameEngine ?? null;
     this.pendingWarp = ctx?.pendingWarp ?? null;
-    this._combatTransitionPending = false;
+
+    // NPC module: owns the living-galaxy ships, their contact panel, the
+    // auto-follow combat loop and the OVERMIND-core prompt. Constructed first so
+    // the victory-removeNpc and overmind-prompt branches below can use it; its
+    // sprites are built later via initialize() (after the layers are cleared).
+    // Its accessors read live scene state (ship physics, planet sprites, star
+    // centre, turn state) and the HUD (toast/tooltip), so it never couples to
+    // this scene class directly.
+    this.npcManager = new NpcShipManager(
+      this.renderer,
+      this.gameEngine,
+      this.renderer.gameLayer,
+      this.renderer.uiLayer,
+      {
+        getShipPhysics: () => this.shipPhysics,
+        getPlanetSprites: () => this.planetSprites,
+        getStarCenter: () => ({
+          x: this.starRenderer.centerX,
+          y: this.starRenderer.centerY,
+        }),
+        isTurnRunning: () => this.isTurnRunning,
+        showMessage: (text, color) => this.showMessage(text, color),
+        showTooltip: (text, sx, sy) => this.showTooltip(text, sx, sy),
+        hideTooltip: () => this.hideTooltip(),
+        executeRouteTo: (x, y) => this.executeRouteTo(x, y),
+        clearRouteTarget: () => {
+          this.routeTargetPlanetId = null;
+        },
+        endTurn: () => this.endTurn(),
+      },
+    );
 
     // If returning victorious from CombatScene, remove the defeated NPC from
-    // the galaxy domain before createNpcShips() builds the sprite list.
+    // the galaxy domain before the NPC module builds the sprite list.
     if (
       ctx?.combatResult === "victory" &&
       ctx.npcId &&
       this.gameEngine?.galaxy
     ) {
-      this._npcSimulator.removeNpc(this.gameEngine.galaxy, ctx.npcId);
+      this.npcManager.removeDefeatedNpc(this.gameEngine.galaxy, ctx.npcId);
       this.completeBountyQuestsByNpcKill(ctx.npcId);
     }
 
@@ -316,7 +324,7 @@ export class SpaceFlightScene extends GameScene {
         this.gameEngine.player.currentSystemId === coreId &&
         this.gameEngine.galaxy.isOvermindSystem(coreId)
       ) {
-        this.showOvermindCorePrompt();
+        this.npcManager.showOvermindCorePrompt();
       }
     }
 
@@ -446,7 +454,7 @@ export class SpaceFlightScene extends GameScene {
     this.orbitRenderer.initialize(); // Orbit circles + boundary (hyperjump edge)
     this.createPlanets(); // Planets added to gameLayer directly (not blurred)
     this.createStations(); // Space stations in this system (US-066)
-    this.createNpcShips(); // NPC ships present in this system (Feature 8)
+    this.npcManager.initialize(); // NPC ships present in this system (Feature 8)
     this.playerShip.initialize(); // Ship hull/sprite, glow, heading crosshair
     this.asteroidBelt.initialize(); // Foreground asteroids/comets (US-070 #1)
     this.createUI();
@@ -601,10 +609,10 @@ export class SpaceFlightScene extends GameScene {
     // Sync the ship sprite to the post-physics position (or walk the take-off
     // arc), redraw engine effects, and refresh the heading crosshair.
     this.playerShip.update(deltaTime, this.bgElapsed);
-    this.updateCombat(deltaTime);
+    this.npcManager.updateCombat(deltaTime);
     this.updateCameraReturn();
     this.updateCamera();
-    this.updateNpcShips(deltaTime);
+    this.npcManager.update(deltaTime, this.bgElapsed);
     this.updatePlanets(deltaTime);
     this.updatePlayPauseButton();
     this.updateMiniLog(deltaTime);
@@ -680,7 +688,6 @@ export class SpaceFlightScene extends GameScene {
     this.isTurnRunning = false;
     this.turnHintShown = false;
     this.lowHullStopped = false;
-    this._combatTransitionPending = false;
     this.cameraReturning = false;
     this.warpInProgress = false;
     this.waitDayAccum = 0;
@@ -705,14 +712,8 @@ export class SpaceFlightScene extends GameScene {
       this.planetInfoPanel = null;
     }
 
-    // Destroy NPC ship sprites and contact panel
-    for (const sprite of this.npcSprites) {
-      sprite.destroy();
-    }
-    this.npcSprites = [];
-    this.npcAnchorPlanet.clear();
-    this.closeNpcContactPanel();
-    this.followNpcId = null;
+    // Tear down NPC ship sprites, contact panel and the OVERMIND-core overlay.
+    this.npcManager?.destroy();
 
     // Clear any transient toast + its timer.
     if (this.toastTimer) {
@@ -736,11 +737,6 @@ export class SpaceFlightScene extends GameScene {
     if (this.questJournalUI) {
       this.questJournalUI.destroy();
       this.questJournalUI = null;
-    }
-
-    if (this.overmindOverlay) {
-      this.overmindOverlay.destroy({ children: true });
-      this.overmindOverlay = null;
     }
 
     // Destroy mini-map
@@ -1350,7 +1346,7 @@ export class SpaceFlightScene extends GameScene {
 
     this.routeTargetStationId = station.id;
     this.routeTargetPlanetId = null;
-    this.followNpcId = null;
+    this.npcManager.followNpcId = null;
 
     if (this.plannedRoute) {
       const dx = marker.x - this.plannedRoute.x;
@@ -1391,7 +1387,7 @@ export class SpaceFlightScene extends GameScene {
     );
     if (!planetSprite || !this.shipPhysics) return;
 
-    this.followNpcId = null; // picking a planet cancels auto-follow
+    this.npcManager.followNpcId = null; // picking a planet cancels auto-follow
 
     // Compute approach point at planet edge (ship-facing side) so the route
     // preview stops at the disc surface rather than cutting through to the centre.
@@ -1590,7 +1586,7 @@ export class SpaceFlightScene extends GameScene {
           // Clicked on different location - update planned route (empty space)
           this.routeTargetPlanetId = null;
           this.routeTargetStationId = null;
-          this.followNpcId = null;
+          this.npcManager.followNpcId = null;
           this.pendingWarp = null; // cancel warp if user picks a different destination
           this.planRouteTo(world.x, world.y);
           logger.info(
@@ -1601,7 +1597,7 @@ export class SpaceFlightScene extends GameScene {
         // First click - plan the route (don't start moving yet)
         this.routeTargetPlanetId = null;
         this.routeTargetStationId = null;
-        this.followNpcId = null;
+        this.npcManager.followNpcId = null;
         this.pendingWarp = null; // cancel warp if user picks a new destination
         this.planRouteTo(world.x, world.y);
         logger.info(
@@ -1935,9 +1931,7 @@ export class SpaceFlightScene extends GameScene {
     this.renderer.gameLayer.y = this.cameraPanY;
 
     // Keep NPC hit areas a fixed screen size regardless of zoom level.
-    for (const s of this.npcSprites) {
-      s.updateHitArea(this.cameraZoom);
-    }
+    this.npcManager?.updateHitAreas(this.cameraZoom);
 
     this.updateCameraDebugDisplay();
   }
@@ -2069,7 +2063,7 @@ export class SpaceFlightScene extends GameScene {
       // Auto-follow an attacked NPC is owned by updateCombat (chase → hold →
       // fire). On arrival here we simply keep the turn running and let combat
       // decide whether to re-route or open fire.
-      if (this.followNpcId) return;
+      if (this.npcManager.followNpcId) return;
 
       // If the route targeted a planet, land on arrival (the player set the
       // planet as the destination, so landing is the expected outcome).
@@ -2125,7 +2119,7 @@ export class SpaceFlightScene extends GameScene {
       if (hullFraction < 0.3) {
         if (this.shipPhysics.isMoving && !this.lowHullStopped) {
           this.lowHullStopped = true;
-          this.followNpcId = null;
+          this.npcManager.followNpcId = null;
           this.clearPlannedRoute();
           this.endTurn(); // stop the ship and end the turn
           this.showMessage(
@@ -2152,7 +2146,7 @@ export class SpaceFlightScene extends GameScene {
         if (this.gameEngine?.galaxy) {
           this.gameEngine.advanceGalaxyDay();
           this.updateDayCounter(); // Update UI
-          this.refreshNpcShips(); // NPCs may have arrived/departed this day
+          this.npcManager.refresh(); // NPCs may have arrived/departed this day
 
           logger.debug(
             `Day passed during flight. Current day: ${this.gameEngine.galaxy.gameDays}`,
@@ -2173,7 +2167,7 @@ export class SpaceFlightScene extends GameScene {
     if (
       this.isTurnRunning &&
       !this.shipPhysics.isMoving &&
-      !this.followNpcId &&
+      !this.npcManager.followNpcId &&
       !this.pendingWarp
     ) {
       this.advanceWaitTime(deltaTime);
@@ -2194,7 +2188,7 @@ export class SpaceFlightScene extends GameScene {
       if (this.gameEngine?.galaxy) {
         this.gameEngine.advanceGalaxyDay();
         this.updateDayCounter();
-        this.refreshNpcShips();
+        this.npcManager.refresh();
       }
     }
   }
@@ -2395,7 +2389,9 @@ export class SpaceFlightScene extends GameScene {
     this.plannedRoute = null;
     this.routeTargetPlanetId = null;
     this.routeTargetStationId = null;
-    this.followNpcId = null;
+    // Guard: clearPlannedRoute runs from destroy(), which may fire before the
+    // scene finished initializing (and constructing the NPC module).
+    if (this.npcManager) this.npcManager.followNpcId = null;
     this.routePath = [];
 
     // ?.: clearPlannedRoute runs from destroy(), which may fire before the
@@ -2431,11 +2427,7 @@ export class SpaceFlightScene extends GameScene {
 
     // Always update mini-map (even when paused, for visual feedback)
     if (this.systemMiniMap && this.shipPhysics) {
-      const npcDots = this.npcSprites.map((s) => ({
-        x: s.x,
-        y: s.y,
-        color: s.mapColor,
-      }));
+      const npcDots = this.npcManager.getNpcDots();
       // Show the route on the radar: the planned destination (set on planning
       // or while travelling), else the live target while the ship is moving.
       const route =
@@ -2477,316 +2469,6 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Create NPC ship sprites for every NPC currently present in this system.
-   */
-  private createNpcShips(): void {
-    const galaxy = this.gameEngine?.galaxy;
-    const systemId = this.gameEngine?.player?.currentSystemId;
-    if (!galaxy || !systemId) return;
-
-    // NPCs already in the system when we enter are distributed inside it (they
-    // didn't just arrive), so they spawn at interior positions.
-    for (const npc of npcsPresentInSystem(galaxy, systemId)) {
-      this.addNpcSprite(npc, false);
-    }
-    logger.info(`Created ${this.npcSprites.length} NPC sprites`);
-  }
-
-  /** Geometry NPC ships move within (band + boundary edge). */
-  private npcBounds(): SystemBounds {
-    return {
-      cx: this.starRenderer.centerX,
-      cy: this.starRenderer.centerY,
-      rInner: this.SYSTEM_INNER_RADIUS,
-      rOuter: this.SYSTEM_OUTER_RADIUS,
-      boundary: this.SYSTEM_BOUNDARY_RADIUS,
-    };
-  }
-
-  /**
-   * Spawn a single NPC sprite. When `entry` is true the ship just hyperjumped
-   * in, so it appears on the system boundary and flies inward; otherwise it is
-   * placed at a random interior position.
-   */
-  private addNpcSprite(npc: NpcShip, entry: boolean): void {
-    const bounds = this.npcBounds();
-    const angle = Math.random() * Math.PI * 2;
-    const radius = entry
-      ? bounds.boundary
-      : bounds.rInner + Math.random() * (bounds.rOuter - bounds.rInner);
-    const sprite = new NpcShipSprite(
-      npc,
-      bounds.cx + Math.cos(angle) * radius,
-      bounds.cy + Math.sin(angle) * radius,
-      bounds,
-    );
-    sprite.setClickHandler((n) => this.onNpcClick(n));
-    sprite.setHoverHandler(
-      (n, sx, sy) => this.showTooltip(`${n.name} [${n.role}]`, sx, sy),
-      () => this.hideTooltip(),
-    );
-    sprite.container.zIndex = 100; // above planet discs so clicks reach the ship
-    // Non-pirates "visit" a planet: anchor them to loiter near one (deterministic
-    // by id) so traders/rangers/patrols cluster at planets instead of aimlessly
-    // crossing the system. Pirates keep roaming the whole band.
-    if (npc.role !== NpcRole.PIRATE && this.planetSprites.length > 0) {
-      const idx = this.hashId(npc.id) % this.planetSprites.length;
-      const p = this.planetSprites[idx];
-      sprite.setAnchor(p.screenX, p.screenY);
-      this.npcAnchorPlanet.set(sprite, p);
-    }
-    this.renderer.gameLayer.addChild(sprite.container);
-    this.npcSprites.push(sprite);
-  }
-
-  /**
-   * Sync NPC sprites with the simulation after a day passes (Scenario 8.5):
-   * ships that left the system fly out to the boundary and hyperjump; newly
-   * arrived ships appear on the boundary and fly in. No mid-system pop-in/out.
-   */
-  private refreshNpcShips(): void {
-    const galaxy = this.gameEngine?.galaxy;
-    const systemId = this.gameEngine?.player?.currentSystemId;
-    if (!galaxy || !systemId) return;
-
-    const present = npcsPresentInSystem(galaxy, systemId);
-    const presentIds = new Set(present.map((n) => n.id));
-
-    // NPCs no longer present begin flying out toward the boundary (removed once
-    // they reach it, in updateNpcShips).
-    for (const sprite of this.npcSprites) {
-      if (!presentIds.has(sprite.npc.id)) sprite.beginDeparture();
-    }
-
-    // Newly arrived NPCs enter from the boundary.
-    const existing = new Set(this.npcSprites.map((s) => s.npc.id));
-    for (const npc of present) {
-      if (!existing.has(npc.id)) this.addNpcSprite(npc, true);
-    }
-
-    // Close the contact panel if its NPC has left the system.
-    if (this.contactNpcId && !presentIds.has(this.contactNpcId)) {
-      this.closeNpcContactPanel();
-    }
-  }
-
-  /** Advance NPC movement only while the world is running (turn-based). */
-  private updateNpcShips(deltaTime: number): void {
-    // The world runs while the turn is running (flying, or holding station in
-    // combat) — not only while the ship is physically moving.
-    if (!this.isTurnRunning) return;
-
-    for (let i = this.npcSprites.length - 1; i >= 0; i--) {
-      const sprite = this.npcSprites[i];
-      // Keep the orbit center aligned with the planet's current orbital position.
-      const anchorPlanet = this.npcAnchorPlanet.get(sprite);
-      if (anchorPlanet) {
-        sprite.updateAnchorPosition(anchorPlanet.screenX, anchorPlanet.screenY);
-      }
-      sprite.update(deltaTime * (this.shipPhysics?.timeScale ?? 1));
-      if (sprite.isGone()) {
-        this.npcAnchorPlanet.delete(sprite);
-        sprite.destroy();
-        this.npcSprites.splice(i, 1);
-      } else {
-        this.updateNpcDepth(sprite);
-      }
-    }
-  }
-
-  /**
-   * Set NPC zIndex so the ship is occluded by planet discs it passes behind.
-   * Planet discs sit at zIndex 50; ships at 40 render under them, ships at 100
-   * render above. We switch to 40 whenever the ship's world position is within
-   * the disc radius of any planet.
-   */
-  private updateNpcDepth(sprite: NpcShipSprite): void {
-    for (const planet of this.planetSprites) {
-      const dx = sprite.x - planet.screenX;
-      const dy = sprite.y - planet.screenY;
-      if (dx * dx + dy * dy < planet.displayRadius * planet.displayRadius) {
-        sprite.container.zIndex = 40;
-        return;
-      }
-    }
-    sprite.container.zIndex = 100;
-  }
-
-  /** Small deterministic hash of a string id (FNV-1a) for stable assignment. */
-  private hashId(s: string): number {
-    let h = 2166136261;
-    for (let i = 0; i < s.length; i++) {
-      h ^= s.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
-  }
-
-  /** Open the contact panel for a clicked NPC ship. */
-  private onNpcClick(npc: NpcShip): void {
-    if (this.isTurnRunning) return;
-
-    this.closeNpcContactPanel();
-    this.contactNpcId = npc.id;
-    // Hailing/trading and the detailed readout are offered within radar/scanner
-    // range; beyond it the panel only offers "Приблизиться" to close the gap
-    // (US-070 #3). The gate is the scanner range, not the (much shorter) firing
-    // range — you can talk and trade well before you are in weapons reach.
-    const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
-    const inRange =
-      !!sprite &&
-      !!this.shipPhysics &&
-      Math.hypot(
-        sprite.x - this.shipPhysics.shipX,
-        sprite.y - this.shipPhysics.shipY,
-      ) <= this.SCANNER_RANGE;
-    const scanPower =
-      this.gameEngine?.playerLoadout?.derivedStats().scanPower ?? 0;
-    this.npcContactPanel = new NpcContactPanel(
-      npc,
-      this.renderer.app.screen.width,
-      this.renderer.app.screen.height,
-      {
-        onHail: () => this.onHailNpc(npc),
-        onTrade: () => this.onTradeNpc(npc),
-        onAttack: () => this.onAttackNpc(npc),
-        onApproach: () => this.onApproachNpc(npc),
-        onClose: () => this.closeNpcContactPanel(),
-      },
-      inRange,
-      scanPower,
-    );
-    this.renderer.uiLayer.addChild(this.npcContactPanel.container);
-  }
-
-  /**
-   * "Приблизиться": plot a course to the target's current position and fly there
-   * so the ship closes to firing range, without opening fire (US-070 #2). The
-   * player can then re-open the panel to hail/trade or attack.
-   */
-  private onApproachNpc(npc: NpcShip): void {
-    const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
-    this.closeNpcContactPanel();
-    if (!sprite || !this.shipPhysics) return;
-    this.followNpcId = null; // approach only — not an attack
-    this.routeTargetPlanetId = null;
-    this.executeRouteTo(sprite.x, sprite.y);
-    this.showMessage(`Сближение: ${npc.name}`, 0x88ccff);
-  }
-
-  /** "Связаться": if player has an active TEXT_ADVENTURE quest, launch it; otherwise show greeting. */
-  private onHailNpc(npc: NpcShip): void {
-    this.closeNpcContactPanel();
-
-    const activeQuests = this.gameEngine?.questManager.getActiveQuests() ?? [];
-    const textAdventureQuest = activeQuests.find(
-      (q) => q.type === QuestType.TEXT_ADVENTURE,
-    );
-
-    if (textAdventureQuest && this.gameEngine) {
-      const scriptId =
-        textAdventureQuest.targetObjectId ?? textAdventureQuest.id;
-      void this.gameEngine.startTextQuest(
-        scriptId,
-        undefined,
-        SceneType.SPACE_FLIGHT,
-        { gameEngine: this.gameEngine },
-        textAdventureQuest.id,
-      );
-      return;
-    }
-
-    const lines = [
-      "Приветствую, рейнджер. Чистого космоса.",
-      "Не мешай — у меня груз по расписанию.",
-      "Держись подальше, если не ищешь неприятностей.",
-      "Слыхал о возмущениях у рубежа? Будь начеку.",
-    ];
-    const line = lines[Math.floor(Math.random() * lines.length)];
-    this.showMessage(`${npc.name}: «${line}»`, 0x88ccff);
-  }
-
-  /** "Торговать": trade-with-ships is not implemented yet — be honest. */
-  private onTradeNpc(npc: NpcShip): void {
-    this.showMessage(
-      `Торговля с ${npc.name} пока недоступна в полёте.`,
-      0xffaa00,
-    );
-  }
-
-  /**
-   * "Атаковать": if already within weapon range, transition immediately to
-   * turn-based CombatScene. Otherwise, close the panel and set the ship to
-   * auto-follow (intercept) the target — updateCombat() will trigger the
-   * CombatScene transition once in range.
-   */
-  private onAttackNpc(npc: NpcShip): void {
-    const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
-    this.closeNpcContactPanel();
-    if (!sprite || !this.shipPhysics) return;
-
-    const dist = Math.hypot(
-      sprite.x - this.shipPhysics.shipX,
-      sprite.y - this.shipPhysics.shipY,
-    );
-
-    if (dist <= this.WEAPON_RANGE) {
-      this.launchCombatWithNpc(npc);
-      return;
-    }
-
-    // Not yet in range — auto-follow to close the gap, aiming at a lead point
-    // so the intercept curves to where the target is heading (Task 5).
-    this.followNpcId = npc.id;
-    this.routeTargetPlanetId = null;
-    const lead = this.npcLeadPoint(sprite);
-    this.executeRouteTo(lead.x, lead.y);
-    this.showMessage(`Перехват: ${npc.name}`, 0xff5555);
-  }
-
-  /**
-   * Predicted intercept point for chasing an NPC: leads the target along its
-   * current heading so the pursuit curves toward where it will be rather than
-   * pointing at its present position (Task 5). NPC velocity is derived from its
-   * sprite heading (the hull faces its direction of travel) and the shared NPC
-   * cruise speed. Falls back to the NPC's current position when no lead solves.
-   */
-  private npcLeadPoint(sprite: NpcShipSprite): { x: number; y: number } {
-    if (!this.shipPhysics) return { x: sprite.x, y: sprite.y };
-    const heading = sprite.container.rotation;
-    const vx = Math.cos(heading) * GAME_BALANCE.npcSpeed;
-    const vy = Math.sin(heading) * GAME_BALANCE.npcSpeed;
-    return leadInterceptPoint(
-      this.shipPhysics.shipX,
-      this.shipPhysics.shipY,
-      this.shipPhysics.getMaxSpeed(),
-      sprite.x,
-      sprite.y,
-      vx,
-      vy,
-    );
-  }
-
-  /** Transition to the turn-based CombatScene for a specific NPC. */
-  private launchCombatWithNpc(npc: NpcShip): void {
-    if (!this.gameEngine || this._combatTransitionPending) return;
-    this._combatTransitionPending = true;
-    this.followNpcId = null;
-    this.endTurn();
-    void this.gameEngine.transitionTo(SceneType.COMBAT, {
-      gameEngine: this.gameEngine,
-      npcEnemy: {
-        id: npc.id,
-        hullHP: npc.hullHP,
-        shields: npc.shields,
-        damage: npc.damage,
-        techLevel: npcRoleTechLevel(npc.role),
-        factionId: npc.race,
-      },
-    });
-  }
-
-  /**
    * Play/Pause turn control. When paused: Play executes the planned route (the
    * turn starts running). While running: Pause ends the turn at the next day
    * segment (or immediately if the ship is holding station in combat).
@@ -2814,9 +2496,9 @@ export class SpaceFlightScene extends GameScene {
     // moving and the calendar advances, until Pause (US-070 #5).
     if (this.plannedRoute) {
       this.executeRouteTo(this.plannedRoute.x, this.plannedRoute.y);
-    } else if (this.followNpcId) {
-      const sprite = this.npcSprites.find((s) => s.npc.id === this.followNpcId);
-      if (sprite) this.executeRouteTo(sprite.x, sprite.y);
+    } else if (this.npcManager.followNpcId) {
+      const target = this.npcManager.getFollowTarget();
+      if (target) this.executeRouteTo(target.x, target.y);
     } else {
       this.waitDayAccum = 0;
       this.isTurnRunning = true; // course-less wait: time passes, ship stays put
@@ -2848,18 +2530,8 @@ export class SpaceFlightScene extends GameScene {
     for (const sprite of this.planetSprites) {
       sprite.graphics.cursor = planetCursor;
     }
-    for (const sprite of this.npcSprites) {
-      const npcCursor = turnRunning
-        ? "default"
-        : sprite.npc.role === NpcRole.PIRATE
-          ? "target"
-          : "pointer";
-      sprite.container.cursor = npcCursor;
-      // When the turn ends, restore click/hover interactivity on every ship that
-      // isn't leaving the system — a ship that lost its hit-area mid-turn becomes
-      // clickable again (Task 6).
-      if (!turnRunning) sprite.restoreInteractivity();
-    }
+    // NPC cursors + interactivity restore are owned by the NPC module.
+    this.npcManager?.setCursors(turnRunning);
   }
 
   /** Refresh the Play/Pause button label/colour to match the turn state. */
@@ -2876,100 +2548,30 @@ export class SpaceFlightScene extends GameScene {
     }
   }
 
-  /**
-   * Auto-attack: while a follow target is set and the turn is running, close to
-   * weapon range, then hold station and exchange fire until the target is
-   * destroyed, the player drops below 30% hull, or the target is lost.
-   * Decision logic delegated to FlightCombatResolver for testability.
-   */
-  private updateCombat(_deltaTime: number): void {
-    if (!this.shipPhysics) return;
-    const ship = this.gameEngine?.player?.ship;
-    if (!ship) return;
-
-    const decision = this.combatResolver.decide({
-      isTurnRunning: this.isTurnRunning,
-      followNpcId: this.followNpcId,
-      shipPhysics: this.shipPhysics,
-      npcSprites: this.npcSprites,
-      weaponRange: this.WEAPON_RANGE,
-    });
-
-    switch (decision.action) {
-      case "idle":
-        return;
-      case "lost":
-        this.showMessage("Цель потеряна", 0xffaa00);
-        this.followNpcId = null;
-        return;
-      case "chase":
-        if (!this.shipPhysics.isMoving) {
-          // Re-aim at a fresh lead point each leg so the chase curves to lead a
-          // crossing target rather than always heading at its old position.
-          const chased = this.npcSprites.find(
-            (s) => s.npc.id === this.followNpcId,
-          );
-          const lead = chased
-            ? this.npcLeadPoint(chased)
-            : { x: decision.targetX, y: decision.targetY };
-          this.executeRouteTo(lead.x, lead.y);
-        }
-        return;
-      case "launch":
-        if (this.shipPhysics.isMoving) {
-          this.shipPhysics.setTarget(
-            this.shipPhysics.shipX,
-            this.shipPhysics.shipY,
-          );
-          this.shipPhysics.isMoving = false;
-          this.shipPhysics.currentSpeed = 0;
-        }
-        this.launchCombatWithNpc(decision.npc);
-        return;
-    }
-  }
-
   /** True while a panel that should swallow outside-clicks is open. */
   private isBlockingModalOpen(): boolean {
     return (
-      this.npcContactPanel !== null ||
+      this.npcManager.hasOpenModal() ||
       this.questJournalUI !== null ||
       this.planetInfoPanel !== null ||
-      this.overmindOverlay !== null ||
       this.settingsPanel !== null
     );
   }
 
   /** Close any open blocking modal (NPC contact / quest journal / planet panel). */
   private closeBlockingModals(): void {
-    this.closeNpcContactPanel();
+    this.npcManager.closeModals();
     const journal = this.questJournalUI;
     this.questJournalUI = null;
     if (journal) queueMicrotask(() => journal.destroy());
     const info = this.planetInfoPanel;
     this.planetInfoPanel = null;
     if (info) queueMicrotask(() => info.destroy());
-    if (this.overmindOverlay) {
-      const ov = this.overmindOverlay;
-      this.overmindOverlay = null;
-      queueMicrotask(() => ov.destroy({ children: true }));
-    }
     if (this.settingsPanel) {
       const sp = this.settingsPanel;
       this.settingsPanel = null;
       queueMicrotask(() => sp.destroy({ children: true }));
     }
-  }
-
-  private closeNpcContactPanel(): void {
-    const panel = this.npcContactPanel;
-    this.npcContactPanel = null;
-    this.contactNpcId = null;
-    // Defer the actual teardown out of the current pointer-event dispatch.
-    // Destroying the display object that PixiJS's event boundary is mid-dispatch
-    // on corrupts hit-testing and leaves other sprites unclickable (bug: after
-    // contacting/attacking one NPC, other ships stopped responding to clicks).
-    if (panel) queueMicrotask(() => panel.destroy());
   }
 
   /**
@@ -3214,8 +2816,8 @@ export class SpaceFlightScene extends GameScene {
   private onKeyDown(event: KeyboardEvent): void {
     if (event.key === "Escape") {
       // B4: first Escape closes the top-most panel, second cancels route.
-      if (this.npcContactPanel) {
-        this.closeNpcContactPanel();
+      if (this.npcManager.isContactPanelOpen) {
+        this.npcManager.closeContactPanel();
       } else if (this.questJournalUI) {
         this.questJournalUI.destroy();
         this.questJournalUI = null;
@@ -3301,124 +2903,6 @@ export class SpaceFlightScene extends GameScene {
         }
       }
     }
-  }
-
-  /** Show a prompt when entering the OVERMIND core system so the player can fight the final encounter. */
-  private showOvermindCorePrompt(): void {
-    if (!this.gameEngine) return;
-    const width = this.renderer.app.screen.width;
-    const height = this.renderer.app.screen.height;
-
-    const overlay = new Container();
-    this.overmindOverlay = overlay;
-    const bg = new Graphics();
-    bg.roundRect(width / 2 - 240, height / 2 - 110, 480, 220, 6).fill({
-      color: 0x000000,
-      alpha: 0.85,
-    });
-
-    const border = new Graphics();
-    border
-      .roundRect(width / 2 - 240, height / 2 - 110, 480, 220, 6)
-      .stroke({ width: 2, color: 0xff2200 });
-
-    const title = new Text({
-      text: "ЯДРО OVERMIND",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(20),
-        fill: 0xff2200,
-        fontWeight: "bold",
-      },
-    });
-    title.anchor.set(0.5);
-    title.x = width / 2;
-    title.y = height / 2 - 80;
-    title.eventMode = "none";
-
-    const desc = new Text({
-      text: "Вы вошли в систему ядра OVERMIND.\nУничтожьте его, чтобы спасти галактику.",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(14),
-        fill: 0xcccccc,
-        align: "center",
-      },
-    });
-    desc.anchor.set(0.5);
-    desc.x = width / 2;
-    desc.y = height / 2 - 30;
-    desc.eventMode = "none";
-
-    const attackBtn = new Container();
-    const attackBg = new Graphics();
-    attackBg
-      .roundRect(0, 0, 180, 36, 4)
-      .fill({ color: 0x330000 })
-      .stroke({ width: 1, color: 0xff2200 });
-    const attackLabel = new Text({
-      text: "[ Атаковать ядро ]",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(14),
-        fill: 0xff4444,
-      },
-    });
-    attackLabel.x = 8;
-    attackLabel.y = 9;
-    attackLabel.eventMode = "none";
-    attackBtn.addChild(attackBg, attackLabel);
-    attackBtn.x = width / 2 - 200;
-    attackBtn.y = height / 2 + 40;
-    attackBtn.eventMode = "static";
-    attackBtn.cursor = "pointer";
-    attackBtn.on("pointerdown", (e) => {
-      e.stopPropagation();
-      this.overmindOverlay = null;
-      overlay.destroy();
-      void this.gameEngine!.transitionTo(SceneType.COMBAT, {
-        gameEngine: this.gameEngine!,
-        isOvermindCore: true,
-        npcEnemy: {
-          id: "overmind_core",
-          hullHP: 300,
-          shields: 150,
-          damage: 45,
-          techLevel: 7,
-        },
-      });
-    });
-
-    const retreatBtn = new Container();
-    const retreatBg = new Graphics();
-    retreatBg
-      .roundRect(0, 0, 180, 36, 4)
-      .fill({ color: 0x0d1b2a })
-      .stroke({ width: 1, color: 0x4488ff });
-    const retreatLabel = new Text({
-      text: "[ Отступить ]",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(14),
-        fill: 0x4488ff,
-      },
-    });
-    retreatLabel.x = 8;
-    retreatLabel.y = 9;
-    retreatLabel.eventMode = "none";
-    retreatBtn.addChild(retreatBg, retreatLabel);
-    retreatBtn.x = width / 2 + 20;
-    retreatBtn.y = height / 2 + 40;
-    retreatBtn.eventMode = "static";
-    retreatBtn.cursor = "pointer";
-    retreatBtn.on("pointerdown", (e) => {
-      e.stopPropagation();
-      this.overmindOverlay = null;
-      overlay.destroy();
-    });
-
-    overlay.addChild(bg, border, title, desc, attackBtn, retreatBtn);
-    this.renderer.uiLayer.addChild(overlay);
   }
 
   /**
@@ -3570,7 +3054,7 @@ export class SpaceFlightScene extends GameScene {
   /** E2E helper: count of NPC ship sprites currently in the scene */
   e2eGetNpcCount(): number {
     if (!__DEBUG__) return 0;
-    return this.npcSprites.length;
+    return this.npcManager.npcCount;
   }
 
   e2ePlayPause(): void {

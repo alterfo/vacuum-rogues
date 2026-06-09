@@ -219,6 +219,8 @@ describe("playPauseImmediate: Pause stops the ship immediately mid-turn", () => 
     s.showMessage = vi.fn();
     s.updateInteractiveCursors = vi.fn();
     s.executeRouteTo = vi.fn();
+    // NPC auto-follow state is owned by the NPC module now.
+    s.npcManager = { followNpcId: null, getFollowTarget: () => null };
   });
 
   function onPlayPause(): void {
@@ -248,8 +250,6 @@ describe("playPauseImmediate: Pause stops the ship immediately mid-turn", () => 
   it("does not stop or end the turn when paused (starts a wait turn instead)", () => {
     s.isTurnRunning = false;
     s.plannedRoute = null;
-    s.followNpcId = null;
-    s.npcSprites = [];
 
     onPlayPause();
 
