@@ -79,13 +79,13 @@ Root cause: `onPlayPause()` (line 4375) sets `pauseRequested = true` when the sh
 
 Current state: `createStarProminences()` (line 2041) draws 3 corona rings + 4–6 triangular bezier spikes that look cheap. The halo (line 1989) already applies blur correctly but is buried under the ugly rings.
 
-- [ ] Remove the call to `createStarProminences()` from wherever it is called in `initialize()` / star setup. Remove the `updateProminences()` call from `update()`. Remove the `this.prominences` field and `drawProminence()` method entirely.
-- [ ] In `buildStarHalo()` (line ~1989), replace the 5 concentric circles with a 3-layer radial glow stack. Layer sizes relative to star radius R: outer `4.5R` (very faint, alpha 0.08), mid `2.5R` (alpha 0.18), inner `1.5R` (alpha 0.30). Apply a single `BlurFilter(80)` with `blendMode = "screen"`. Use warm star color (yellow/white) for all layers.
-- [ ] Add a thin bright limb ring at exactly `1.0R` using `Graphics.circle(0,0,R).stroke({color: 0xffffff, alpha:0.6, width:2})` to give the sun a defined edge without a harsh clip.
-- [ ] Remove the 3 corona ring Graphics inside `createStarProminences()` — they are now replaced by the halo layers above.
-- [ ] Preserve the `buildStarLimbMask()` and rotating surface — only the corona decoration changes.
-- [ ] Write unit test: after star setup, assert `this.prominences` is empty (or undefined), and `this.starHalo` exists.
-- [ ] `npm run lint && npm test -- --run` — must pass.
+- [x] Remove the call to `createStarProminences()` from wherever it is called in `initialize()` / star setup. Remove the `updateProminences()` call from `update()`. Remove the `this.prominences` field and `drawProminence()` method entirely. (Removed the `createStarProminences(R, rng)` call in `createStar`, the prominence-animation loop in `updateStar`, the `starProminenceData` field + its `destroy()` reset, and both `createStarProminences()` and `drawProminence()` methods.)
+- [x] In `buildStarHalo()` (line ~1989), replace the 5 concentric circles with a 3-layer radial glow stack. Layer sizes relative to star radius R: outer `4.5R` (very faint, alpha 0.08), mid `2.5R` (alpha 0.18), inner `1.5R` (alpha 0.30). Apply a single `BlurFilter(80)` with `blendMode = "screen"`. Use warm star color (yellow/white) for all layers. (3 layers at 4.5R/2.5R/1.5R, alpha 0.08/0.18/0.30, single warm `glowC` per star type, `blendMode = "screen"`, `paddedBlur(80)` — strength 80 with padding so the falloff never shows a rectangular band at camera zoom, the codebase's BlurFilter wrapper.)
+- [x] Add a thin bright limb ring at exactly `1.0R` using `Graphics.circle(0,0,R).stroke({color: 0xffffff, alpha:0.6, width:2})` to give the sun a defined edge without a harsh clip. (Added as a separate `limb` Graphics child of the halo.)
+- [x] Remove the 3 corona ring Graphics inside `createStarProminences()` — they are now replaced by the halo layers above. (Whole method removed.)
+- [x] Preserve the `buildStarLimbMask()` and rotating surface — only the corona decoration changes. (Both untouched; `updateStar` still rolls the sphere/tiling/procedural surface.)
+- [x] Write unit test: after star setup, assert `this.prominences` is empty (or undefined), and `this.starHalo` exists. (`src/tests/presentation/starHalo.test.ts` — asserts `starHaloContainer` exists, `starProminenceData` is undefined, halo is screen-blend with one filter, and `updateStar` advances without prominence animation.)
+- [x] `npm run lint && npm test -- --run` — must pass. (0 lint errors; 815 unit tests pass, incl. 4 new.)
 
 ### Task 5: Add ship outline and volumetric glow
 

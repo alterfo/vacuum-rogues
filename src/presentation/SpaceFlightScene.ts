@@ -193,16 +193,6 @@ export class SpaceFlightScene extends GameScene {
   private sceneDestroyed = false;
   private readonly STAR_RADIUS = GAME_BALANCE.starRadius;
   private readonly STAR_AVOID_RADIUS = SUN_EXCLUSION_RADIUS;
-  // Animated solar prominences (the container is owned by gameLayer)
-  private starProminenceData: {
-    gfx: Graphics;
-    baseAngle: number;
-    length: number;
-    width: number;
-    color: number;
-    phase: number;
-    period: number;
-  }[] = [];
   private starElapsed: number = 0;
   private orbitGraphics: Graphics | null = null;
   private systemMiniMap: SystemMiniMap | null = null;
@@ -862,7 +852,6 @@ export class SpaceFlightScene extends GameScene {
     this.starHaloContainer = null;
     this.starTiling = null;
     this.sunSphere = null;
-    this.starProminenceData = [];
     this.starElapsed = 0;
     this.orbitGraphics = null;
     this.targetIndicator = null;
@@ -1749,9 +1738,6 @@ export class SpaceFlightScene extends GameScene {
     this.starHaloContainer = this.buildStarHalo(R);
     this.renderer.gameLayer.addChild(this.starHaloContainer);
 
-    // Outer corona rings + animated prominences (added behind the surface)
-    this.createStarProminences(R, rng);
-
     // --- Rotating surface: generated star art if available, else procedural ---
     // Preferred: equirectangular star map projected onto a hemisphere so the
     // surface really turns, tinted per star type. The equirect star_maps are a
@@ -1980,9 +1966,11 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Diffuse volumetric glow behind the star. Uses BlurFilter on a container so
-   * the falloff is smooth without concentric rings. Screen blend integrates
-   * naturally with the dark space background.
+   * Diffuse volumetric glow behind the star. A 3-layer radial glow stack
+   * (4.5R / 2.5R / 1.5R, increasing alpha inward) under a single BlurFilter in
+   * screen blend smears into a smooth, ring-free gradient. A thin bright limb
+   * ring at 1.0R gives the star a defined edge without a harsh clip. Replaces
+   * the old concentric-corona + bezier-prominence decoration.
    */
   private buildStarHalo(R: number): Container {
     const halo = new Container();
@@ -1995,158 +1983,61 @@ export class SpaceFlightScene extends GameScene {
       (s) => s.id === systemId,
     );
 
-    // Inner and outer halo colours keyed to star type.
-    let innerC = 0xffeebb;
-    let outerC = 0xff8800;
+    // A single warm glow colour for all layers, keyed to star type. Warm
+    // yellow/white for sun-likes; cooler tints for exotic stars.
+    let glowC = 0xffcc55;
     switch (system?.starType) {
       case StarType.RED_DWARF:
-        innerC = 0xff9966;
-        outerC = 0xcc2200;
+        glowC = 0xff7733;
         break;
       case StarType.BLUE_GIANT:
-        innerC = 0xddeeff;
-        outerC = 0x4488ff;
+        glowC = 0x88bbff;
         break;
       case StarType.WHITE_DWARF:
-        innerC = 0xffffff;
-        outerC = 0xaaccff;
+        glowC = 0xffffff;
         break;
       case StarType.NEUTRON:
-        innerC = 0xeeffff;
-        outerC = 0x6699ff;
+        glowC = 0xcfe0ff;
         break;
     }
 
+    // 3-layer radial glow: faint wide outer, brighter mid, bright inner. The
+    // BlurFilter dissolves the three discs into one continuous falloff.
     const g = new Graphics();
-    // Concentric fills, outermost first — BlurFilter smears them into a
-    // smooth gradient so no individual ring is visible.
-    g.circle(0, 0, R * 5.5).fill({ color: outerC, alpha: 0.03 });
-    g.circle(0, 0, R * 4.0).fill({ color: outerC, alpha: 0.05 });
-    g.circle(0, 0, R * 2.8).fill({ color: outerC, alpha: 0.09 });
-    g.circle(0, 0, R * 1.9).fill({ color: innerC, alpha: 0.14 });
-    g.circle(0, 0, R * 1.35).fill({ color: innerC, alpha: 0.22 });
+    (
+      [
+        [4.5, 0.08],
+        [2.5, 0.18],
+        [1.5, 0.3],
+      ] as const
+    ).forEach(([scale, alpha]) => {
+      g.circle(0, 0, R * scale).fill({ color: glowC, alpha });
+    });
     halo.addChild(g);
 
     halo.blendMode = "screen";
-    halo.filters = [this.paddedBlur(110)];
+    // paddedBlur(80) rather than a raw BlurFilter(80): the padding keeps the
+    // falloff inside the filter texture so it never shows as a rectangular band
+    // once the gameLayer is scaled by the camera zoom.
+    halo.filters = [this.paddedBlur(80)];
+
+    // Thin bright limb ring at exactly the star radius — a crisp edge without a
+    // hard clip. Drawn unblurred (added after the filter is set so it stays
+    // sharp on its own layer? no — it shares the halo blur, which is fine: a
+    // 2px stroke at 1.0R reads as a soft rim under screen blend).
+    const limb = new Graphics();
+    limb.circle(0, 0, R).stroke({ color: 0xffffff, alpha: 0.6, width: 2 });
+    halo.addChild(limb);
+
     return halo;
-  }
-
-  /**
-   * Build animated solar prominences (bezier spikes) + static corona rings
-   * behind the star surface. No BlurFilter — all concentric fills.
-   */
-  private createStarProminences(R: number, rng: SeededRNG): void {
-    const container = new Container();
-    container.eventMode = "none";
-    container.x = this.starCenterX;
-    container.y = this.starCenterY;
-
-    // Three concentric corona rings without blur
-    const corona = new Graphics();
-    corona.circle(0, 0, R * 2.6).fill({ color: 0xffcc44, alpha: 0.03 });
-    corona.circle(0, 0, R * 2.0).fill({ color: 0xffaa22, alpha: 0.08 });
-    corona.circle(0, 0, R * 1.55).fill({ color: 0xff8800, alpha: 0.15 });
-    container.addChild(corona);
-
-    // 4-6 procedural prominences as bezier triangles
-    const count = rng.nextInt(4, 6);
-    const baseColor = this.starTint();
-    this.starProminenceData = [];
-    for (let i = 0; i < count; i++) {
-      const angle = rng.next() * Math.PI * 2;
-      const len = rng.nextFloat(R * 0.5, R * 1.1);
-      const w = rng.nextFloat(R * 0.12, R * 0.22);
-      const phase = rng.next() * Math.PI * 2;
-      const period = rng.nextFloat(3000, 7000);
-      const gfx = new Graphics();
-      gfx.eventMode = "none";
-      container.addChild(gfx);
-      this.starProminenceData.push({
-        gfx,
-        baseAngle: angle,
-        length: len,
-        width: w,
-        color: baseColor,
-        phase,
-        period,
-      });
-    }
-
-    this.renderer.gameLayer.addChild(container);
-  }
-
-  /** Redraw a single prominence as a bezier spike pointing outward from the star. */
-  private drawProminence(
-    gfx: Graphics,
-    R: number,
-    angle: number,
-    len: number,
-    width: number,
-    color: number,
-    scaleY: number,
-  ): void {
-    gfx.clear();
-    const effectiveLen = len * scaleY;
-    if (effectiveLen <= 0) return;
-
-    // Rotate so spike points along +Y, then apply angle rotation via gfx.rotation.
-    // Base: two points on star rim ±(width/2) perpendicular to the spike direction.
-    // Tip: on the star rim + effectiveLen outward.
-    // Control points for bezier: 1/3 and 2/3 along, pulled inward by width/3.
-    const halfW = width / 2;
-    const tipX = 0;
-    const tipY = -(R + effectiveLen);
-    const baseLeft: [number, number] = [-halfW, -R];
-    const baseRight: [number, number] = [halfW, -R];
-
-    gfx.moveTo(baseLeft[0], baseLeft[1]);
-    // Left edge curves to tip
-    gfx.bezierCurveTo(
-      -halfW * 0.3,
-      -(R + effectiveLen * 0.35),
-      tipX - halfW * 0.1,
-      tipY + effectiveLen * 0.3,
-      tipX,
-      tipY,
-    );
-    // Right edge curves back
-    gfx.bezierCurveTo(
-      tipX + halfW * 0.1,
-      tipY + effectiveLen * 0.3,
-      halfW * 0.3,
-      -(R + effectiveLen * 0.35),
-      baseRight[0],
-      baseRight[1],
-    );
-    gfx.closePath();
-    gfx.fill({ color, alpha: 0.55 - 0.15 * scaleY });
-
-    gfx.rotation = angle + Math.PI / 2;
   }
 
   /**
    * Animate the sun: roll the surface for axial rotation. Falls back to the
    * scrolling disc / procedural container when no mesh/map is available.
-   * Also updates animated prominences.
    */
   private updateStar(deltaTime: number): void {
     this.starElapsed += deltaTime;
-    // Animate prominences
-    const R = this.STAR_RADIUS;
-    for (const p of this.starProminenceData) {
-      const t = this.starElapsed / p.period;
-      const scaleY = 0.55 + 0.45 * Math.sin(Math.PI * 2 * t + p.phase);
-      this.drawProminence(
-        p.gfx,
-        R,
-        p.baseAngle,
-        p.length,
-        p.width,
-        p.color,
-        scaleY,
-      );
-    }
 
     if (this.sunSphere) {
       // Roll the surface — the hemisphere mesh gives real spherical foreshortening.
