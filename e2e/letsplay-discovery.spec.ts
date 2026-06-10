@@ -193,6 +193,35 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-06-ship');
     });
 
+    // ── 06b Free route across the sun (playtest 2 ③: bypass arc + dashes) ──
+    await step('06b-sun-route', async () => {
+      const info = await page.evaluate(() => {
+        const scene = getEngine().currentScene as Record<string, unknown>;
+        const star = scene['starRenderer'] as { centerX: number; centerY: number };
+        const sp = scene['shipPhysics'] as { shipX: number; shipY: number };
+        // Target diametrically opposite the ship across the star — the straight
+        // shot pierces the sun, so the planner must produce the bypass arc.
+        const dx = star.centerX - sp.shipX;
+        const dy = star.centerY - sp.shipY;
+        const d = Math.hypot(dx, dy) || 1;
+        const tx = star.centerX + (dx / d) * Math.max(900, d);
+        const ty = star.centerY + (dy / d) * Math.max(900, d);
+        (scene['planRouteTo'] as (x: number, y: number) => void).call(scene, tx, ty);
+        const path = scene['routePath'] as { x: number; y: number }[];
+        let minR = Infinity;
+        for (const p of path) {
+          minR = Math.min(minR, Math.hypot(p.x - star.centerX, p.y - star.centerY));
+        }
+        return { points: path.length, minR: Math.round(minR), span: d * 2 };
+      });
+      // Frame the bypass arc (radius ≈ 1.15 × exclusion ring around the star)
+      // rather than the whole ship→target span — the arc is the evidence.
+      const fit = Math.max(0.55, 720 / (info.span * 1.3));
+      await focus(diag.star.x, diag.star.y, fit);
+      await shot(page, 'lp-06b-sun-route');
+      return `bypass points=${info.points} minR=${info.minR}px`;
+    });
+
     // ── 07 Route to a planet ──
     await step('07-route', async () => {
       await page.evaluate(() => {

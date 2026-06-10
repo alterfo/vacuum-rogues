@@ -1,5 +1,5 @@
 import { Container, Graphics } from "pixi.js";
-import { dayTickMarks } from "@/utils/flightGeometry";
+import { dashedPolyline, dayTickMarks } from "@/utils/flightGeometry";
 
 /**
  * Draws the planned-course overlay: the dashed cyan line from the ship through
@@ -57,23 +57,15 @@ export class RouteRenderer {
 
     const dashLength = 20;
     const gapLength = 10;
-    const totalLength = dashLength + gapLength;
 
-    // Dash along each segment of the polyline.
-    for (let s = 0; s < points.length - 1; s++) {
-      const ax = points[s].x;
-      const ay = points[s].y;
-      const bx = points[s + 1].x;
-      const by = points[s + 1].y;
-      const dx = bx - ax;
-      const dy = by - ay;
-      const distance = Math.hypot(dx, dy);
-      const numSegments = Math.floor(distance / totalLength);
-      for (let i = 0; i < numSegments; i++) {
-        const t1 = (i * totalLength) / distance;
-        const t2 = (i * totalLength + dashLength) / distance;
-        this.routeLineGraphics.moveTo(ax + dx * t1, ay + dy * t1);
-        this.routeLineGraphics.lineTo(ax + dx * t2, ay + dy * t2);
+    // Dash the polyline as ONE continuous walk — the pattern phase carries
+    // across vertices, so the dense sun-bypass spline (segments shorter than
+    // the dash period) is dashed seamlessly instead of disappearing
+    // (playtest 2 ③: the route line stopped and resumed around the arc).
+    for (const dash of dashedPolyline(points, dashLength, gapLength)) {
+      this.routeLineGraphics.moveTo(dash[0].x, dash[0].y);
+      for (let i = 1; i < dash.length; i++) {
+        this.routeLineGraphics.lineTo(dash[i].x, dash[i].y);
       }
     }
 

@@ -111,21 +111,93 @@ export function catmullRomSpline(
 }
 
 /**
+ * Project (x,y) radially out to at least `minR` from (cx,cy). Points already
+ * outside are returned unchanged; a point exactly on the center is pushed out
+ * along +x (deterministic). Used to clamp navigation targets outside the sun's
+ * exclusion ring — a click ON the star must not become a destination inside it
+ * (playtest 2 ③: the ship flew into the sun).
+ */
+export function clampOutsideRadius(
+  x: number,
+  y: number,
+  cx: number,
+  cy: number,
+  minR: number,
+): Point {
+  const dx = x - cx;
+  const dy = y - cy;
+  const dist = Math.hypot(dx, dy);
+  if (dist >= minR) return { x, y };
+  if (dist < 1e-9) return { x: cx + minR, y: cy };
+  const k = minR / dist;
+  return { x: cx + dx * k, y: cy + dy * k };
+}
+
+/**
+ * Dash a polyline into stroke runs of `dashLength` separated by `gapLength`,
+ * with the pattern phase carried ACROSS vertices — a dash that reaches a corner
+ * bends around it instead of restarting. Each returned run is the point list of
+ * one dash (≥ 2 points). Replaces per-segment dashing, which drew ZERO dashes
+ * on segments shorter than the dash period — the sun-bypass spline's ~10px
+ * segments left the whole arc invisible (playtest 2 ③: broken dashes).
+ */
+export function dashedPolyline(
+  points: Point[],
+  dashLength: number,
+  gapLength: number,
+): Point[][] {
+  const dashes: Point[][] = [];
+  if (points.length < 2 || dashLength <= 0 || gapLength < 0) return dashes;
+  const period = dashLength + gapLength;
+  let phase = 0; // arc-length position within the dash+gap cycle [0, period)
+  let run: Point[] | null = null; // dash being built (null while in a gap)
+  for (let s = 0; s < points.length - 1; s++) {
+    const a = points[s];
+    const b = points[s + 1];
+    const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+    if (segLen === 0) continue;
+    const ux = (b.x - a.x) / segLen;
+    const uy = (b.y - a.y) / segLen;
+    let pos = 0;
+    while (pos < segLen - 1e-9) {
+      const inDash = phase < dashLength;
+      const phaseEnd = inDash ? dashLength : period;
+      const step = Math.min(segLen - pos, phaseEnd - phase);
+      if (inDash) {
+        if (!run) run = [{ x: a.x + ux * pos, y: a.y + uy * pos }];
+        run.push({ x: a.x + ux * (pos + step), y: a.y + uy * (pos + step) });
+      } else if (run) {
+        dashes.push(run);
+        run = null;
+      }
+      pos += step;
+      phase += step;
+      if (phase >= period - 1e-9) phase = 0;
+    }
+  }
+  if (run) dashes.push(run);
+  return dashes;
+}
+
+/**
  * A path from (fx,fy) to (tx,ty) that bows around a star at (sx,sy) of radius R
  * instead of cutting through it. Returns just `[{to}]` when the straight segment
  * already clears the star, otherwise a smooth tangent-arc-tangent bypass of
- * waypoints around it plus the destination (US-070 #6). Pure — used for both the
- * route preview and execution.
+ * waypoints around it plus the destination (US-070 #6). A destination inside
+ * the exclusion ring is clamped to the ring edge first — no route may end
+ * inside the star (playtest 2 ③: a click on the sun flew the ship into it).
+ * Pure — used for both the route preview and execution.
  */
 export function avoidStarPath(
   fx: number,
   fy: number,
-  tx: number,
-  ty: number,
+  toX: number,
+  toY: number,
   sx: number,
   sy: number,
   R: number,
 ): Point[] {
+  const { x: tx, y: ty } = clampOutsideRadius(toX, toY, sx, sy, R);
   const dx = tx - fx;
   const dy = ty - fy;
   const len2 = dx * dx + dy * dy || 1;

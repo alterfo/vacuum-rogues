@@ -45,11 +45,11 @@ verification pass over PlanetScene. Every bug: red test → fix → screenshot.
 - Modify: `src/presentation/flight/RouteRenderer.ts`
 - Modify: `src/tests/` (route tests — extend `routePlanet.test.ts` or add `routeSunClearance.test.ts`)
 
-- [ ] Write RED unit test: for ANY route whose straight segment passes within the sun clearance radius (planet-routes AND free click-to-point routes), every produced path point keeps ≥ clearance distance from the star center. Property-test over seeded random start/end pairs (mirror the sprint3 adversarial-arc test). Confirm current code fails for the free-flight case
-- [ ] Fix: apply the same sun-bypass waypoint generation to free click-to-point routes (single route-building entry point — no duplicated bypass logic)
-- [ ] Write RED test for dash continuity: RouteRenderer output for a bypass route has no gap longer than N dash periods between consecutive segments (the user saw the route disappear and resume). Diagnose whether gaps come from the renderer (per-segment dash phase reset) or from missing waypoints; fix accordingly
-- [ ] Re-run letsplay spec; inspect a sun-bypass route screenshot (extend the spec with a route that crosses the sun if needed) — continuous dashes, clear arc around the sun
-- [ ] Run lint + unit + regression — green
+- [x] Write RED unit test (`routeSunClearance.test.ts`): every produced path point — final point INCLUDED — keeps ≥ clearance from the star center, property-tested over 5000 seeded start/end pairs with destinations sampled ANYWHERE (incl. inside the ring). NOTE: diagnosis revised the plan's hypothesis — free-flight clicks already went through `avoidStarPath`; the hole was IN-RING DESTINATIONS: a click on/behind the sun became a path endpoint inside the star (the sprint3 property test sampled endpoints only outside the ring and excluded the final point). Proven RED: path ended 0px from the star center
+- [x] Fix: `clampOutsideRadius()` in flightGeometry; `avoidStarPath` clamps an in-ring destination to the ring edge (single route-building entry point — every caller covered: clicks, combat chase, planet drift chase); the scene click handler also clamps the click so plannedRoute, marker, and the 50px second-click-execute check agree on the reachable point
+- [x] Write RED test for dash continuity (`routeRendererDashes.test.ts`, real Pixi Graphics instruction introspection): diagnosis — the RENDERER dashed each segment independently with `floor(segLen/period)` dashes, so the bypass spline's ~10px segments drew ZERO dashes (whole arc invisible; 546px gap proven RED — worse than a phase reset). Fix: `dashedPolyline()` walks the whole polyline with the dash phase carried across vertices; RouteRenderer draws its runs
+- [x] Re-run letsplay spec with new `06b-sun-route` step (`lp-06b-sun-route.png`): bypass 82 points, min distance 448 world px = 1.15R; pixel-verified on the PNG — closest route pixel 245.7px from the sun on screen (predicted 246.4px, sun disc 93.5px), max angular dash gap along the arc = one 10px gap period (continuous dashes)
+- [x] Run lint + unit + regression — green (0 lint errors, 1007 unit tests, 11/11 regression E2E in 54.5s)
 
 ### Task 3: Minimap must not cover the camera hint text
 **Files:**
@@ -87,7 +87,7 @@ verification pass over PlanetScene. Every bug: red test → fix → screenshot.
 - [ ] `npm run lint` — 0 errors
 - [ ] `npm test -- --run` — all unit tests pass
 - [ ] `NO_PROXY=localhost,127.0.0.1 npm run test:e2e:regression` — green, < 60 s
-- [ ] `NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=letsplay` — 21/21 steps, 0 JS errors
+- [ ] `NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=letsplay` — 22/22 steps (06b-sun-route added in Task 2), 0 JS errors
 - [ ] Inspect regenerated screenshots: sun-route arc continuous, minimap/hint separated, ship glow clean
 - [ ] Append a "Playtest 2" status table to `docs/playtests/20260610-letsplay-discovery.md` mapping each finding ①–⑥ to its verifying test/screenshot
 

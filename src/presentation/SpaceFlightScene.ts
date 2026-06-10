@@ -8,6 +8,7 @@ import type { Station } from "@/domain/Station";
 import { logger } from "@/utils/logger";
 import {
   avoidStarPath,
+  clampOutsideRadius,
   spiralApproachPath,
   takeoffArcPath,
 } from "@/utils/flightGeometry";
@@ -969,8 +970,12 @@ export class SpaceFlightScene extends GameScene {
       // navigation click (cleared in onPointerUp via panZoom.reset).
       this.panZoom.startDragTracking(event.global.x, event.global.y);
 
-      // Convert screen coordinates to world coordinates
-      const world = this.camera.screenToWorld(event.global.x, event.global.y);
+      // Convert the click to world coords, clamped outside the sun's exclusion
+      // ring: a click on/behind the sun can't be a destination, and clamping
+      // keeps route, marker and second-click-execute consistent (playtest 2 ③).
+      const pt = this.camera.screenToWorld(event.global.x, event.global.y);
+      const { centerX: sx, centerY: sy, avoidRadius } = this.starRenderer;
+      const world = clampOutsideRadius(pt.x, pt.y, sx, sy, avoidRadius);
 
       // Check if we already have a planned route
       if (this.plannedRoute) {
