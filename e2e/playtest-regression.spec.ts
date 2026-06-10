@@ -919,6 +919,28 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
       return { x: phys.shipX, y: phys.shipY };
     });
 
+    // Set game speed to x4 via the REAL speed button first: the font re-init must
+    // preserve BOTH ship position AND the chosen speed (plan Task 2 acceptance).
+    const speedBtn = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+      const c = (hud?.['speedButton'] as {
+        container?: { getGlobalPosition: () => { x: number; y: number }; width: number; height: number };
+      })?.container;
+      if (!c) return null;
+      const p = c.getGlobalPosition();
+      return { x: p.x + c.width / 2, y: p.y + c.height / 2 };
+    });
+    expect(speedBtn).not.toBeNull();
+    await page.mouse.click(speedBtn!.x, speedBtn!.y); // 1× → 2×
+    await page.mouse.click(speedBtn!.x, speedBtn!.y); // 2× → 4×
+    await page.waitForFunction(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        gameSpeedMultiplier?: number;
+      };
+      return engine.gameSpeedMultiplier === 4;
+    }, undefined, { timeout: 3_000 });
+
     // Open the font panel via the REAL gear button.
     const gear = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
@@ -952,14 +974,19 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     await waitForScene(page, 'SpaceFlightScene', 20_000);
 
     const after = await page.evaluate(() => {
-      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle & {
+        gameSpeedMultiplier?: number;
+      };
       const phys = (engine.currentScene as Record<string, unknown>)?.['shipPhysics'] as {
         shipX: number;
         shipY: number;
+        timeScale: number;
       } | null;
       return {
         x: phys?.shipX ?? null,
         y: phys?.shipY ?? null,
+        timeScale: phys?.timeScale ?? null,
+        gameSpeedMultiplier: engine.gameSpeedMultiplier,
         fontScale: localStorage.getItem('fontScale'),
       };
     });
@@ -968,6 +995,9 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     expect(after.fontScale).toBe('S');
     expect(after.x).not.toBeNull();
     expect(Math.hypot((after.x as number) - parked.x, (after.y as number) - parked.y)).toBeLessThan(5);
+    // ...and the chosen game speed survived the font-change re-init (Task 2 acceptance).
+    expect(after.gameSpeedMultiplier).toBe(4);
+    expect(after.timeScale).toBe(4);
 
     errorCollector.assertAndDetach();
   });

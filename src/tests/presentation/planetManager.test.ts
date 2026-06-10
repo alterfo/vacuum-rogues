@@ -186,3 +186,75 @@ describe("PlanetManager", () => {
     expect(empty.manager.planetSprites.length).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Playtest4 C: planetLeadPoint leads a pursuit course ahead of an orbiting
+// planet. This is the only non-trivial new math on the planet side — the
+// px/game-day → px/ms unit conversion feeding the intercept solver. A wrong
+// conversion (dropped/inverted scale) would aim wildly off with no other test
+// catching it (only the orbital-velocity primitive is pinned elsewhere).
+// ---------------------------------------------------------------------------
+describe("PlanetManager.planetLeadPoint (playtest4 C lead)", () => {
+  function makeLeadManager(
+    getShipPhysics: PlanetManagerDeps["getShipPhysics"],
+  ): PlanetManager {
+    const renderer = makeMockRenderer();
+    const gameEngine = {
+      player: { currentSystemId: "sys_a" },
+      galaxy: {
+        gameDays: 0,
+        systems: [{ id: "sys_a", planets: [], stations: [] }],
+      },
+      questManager: { getActiveQuestLocations: () => [] },
+    } as unknown as GameEngine;
+    const deps: PlanetManagerDeps = {
+      getShipPhysics,
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => false,
+      getOrbitalDay: () => 0,
+      showPlanetTooltip: () => {},
+      hideTooltip: () => {},
+      clearFollow: () => {},
+    };
+    return new PlanetManager(
+      renderer,
+      gameEngine,
+      renderer.gameLayer,
+      renderer.uiLayer,
+      deps,
+    );
+  }
+
+  // A planet drifting +y; a sprite stub exposing only what planetLeadPoint reads.
+  const makeDriftingSprite = (vyPerDay: number) =>
+    ({
+      screenX: 500,
+      screenY: 0,
+      orbitalVelocityPerDay: () => ({ vx: 0, vy: vyPerDay }),
+    }) as unknown as import("@/presentation/PlanetSprite").PlanetSprite;
+
+  it("aims AHEAD of the planet along its orbital drift (not at its current centre)", () => {
+    // Ship at origin, faster than the (converted) planet drift → an intercept
+    // solves. Planet at (500,0) moving +y at 100 px/game-day.
+    const manager = makeLeadManager(
+      () =>
+        ({
+          shipX: 0,
+          shipY: 0,
+          getMaxSpeed: () => 0.5,
+        }) as unknown as ShipPhysics,
+    );
+    const lead = manager.planetLeadPoint(makeDriftingSprite(100));
+
+    // Pure +y drift → x is unchanged, y leads ahead of the current centre (0).
+    // A no-lead implementation would return (500,0); lead.y>0 distinguishes it.
+    expect(lead.x).toBeCloseTo(500, 3);
+    expect(lead.y).toBeGreaterThan(0);
+  });
+
+  it("falls back to the planet's current centre when no ship physics is available", () => {
+    const manager = makeLeadManager(() => null);
+    const lead = manager.planetLeadPoint(makeDriftingSprite(100));
+    expect(lead).toEqual({ x: 500, y: 0 });
+  });
+});
