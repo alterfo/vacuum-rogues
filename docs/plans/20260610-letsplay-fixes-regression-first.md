@@ -116,12 +116,12 @@ which all previous "masking fixes" (TilingSprite fallback) missed.
 ### Task 8: Verify acceptance criteria
 **Files:** none
 
-- [ ] `npm run lint` — 0 errors
-- [ ] `npm test -- --run` — all unit tests pass
-- [ ] `NO_PROXY=localhost,127.0.0.1 npm run test:e2e:regression` — green, < 60 s
-- [ ] `NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=chromium` — all 21 steps ok, 0 JS errors
-- [ ] Inspect ALL regenerated `lp-*.png`: planets circular (F1), background readable (F2), ship visible (F3), sun clean (F4), combat centred (F5), inventory canonical (F6)
-- [ ] Update `docs/playtests/20260610-letsplay-discovery.md` — mark each finding fixed with the verifying screenshot name
+- [x] `npm run lint` — 0 errors (32 pre-existing warnings only)
+- [x] `npm test -- --run` — all unit tests pass (967/967, 105 files)
+- [x] `NO_PROXY=localhost,127.0.0.1 npm run test:e2e:regression` — green, < 60 s (9/9 in 36 s)
+- [x] `NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=chromium` — all 21 steps ok, 0 JS errors
+- [x] Inspect ALL regenerated `lp-*.png`: planets circular (F1: lp-04-planet-0..3 all circular with textures), background readable (F2: lp-03/lp-07 dimmed nebula), ship visible (F3: lp-06 ship centred with glow), sun clean (F4: lp-05 no band), combat centred (F5: lp-20 centred grid, ship sprites), inventory canonical (F6: lp-19 GearCatalog gear + derived stats)
+- [x] Update `docs/playtests/20260610-letsplay-discovery.md` — mark each finding fixed with the verifying screenshot name (status table added at top of Findings)
 
 ## Post-Completion
 **Manual verification:**

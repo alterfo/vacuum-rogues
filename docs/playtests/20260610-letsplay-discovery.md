@@ -7,6 +7,25 @@ running the spec with `NO_PROXY=localhost,127.0.0.1`).
 
 ## Findings
 
+**Status (2026-06-10): all six findings FIXED** via plan
+`docs/plans/20260610-letsplay-fixes-regression-first.md` (regression-first:
+red test → fix → screenshot verification). Verifying screenshots regenerated
+2026-06-10 by re-running the spec — 21/21 steps ok, 0 JS errors:
+
+| Finding | Fix | Verified by |
+|---------|-----|-------------|
+| F1 rectangles | PlanetRotationFilter disc coords from `vPos` varying, not raw `vTextureCoord` | `lp-04-planet-0..3` — all four planets circular with real textures |
+| F2 background | `BACKGROUND_DIM` (0.45) overlay in SpaceBackgroundLayer | `lp-03-flight-initial`, `lp-07-route` — game layer readable |
+| F3 ship invisible | CameraController pan clamp covers full system boundary | `lp-06-ship` — ship centred, outline + engine glow visible |
+| F4 sun band | sphereMesh mirror-repeat U / clamp V; seam-row star maps removed; tiling fallback mask wrapped | `lp-05-sun` — clean disc, no band |
+| F5 combat layout | hex grid centred from screen size; units = faction-tinted ship sprites | `lp-20-combat` — centred grid, cyan ranger vs red pirate |
+| F6 dual equipment | InventoryScene shows canonical GearCatalog loadout; legacy modules hidden | `lp-19-inventory` — same gear the shop sells + derived stats |
+
+(F7, DialogueSystem session-map growth, was fixed in the same plan — unit
+regression in `src/tests/dialogueSystem.test.ts`.)
+
+Original findings below, kept for the record.
+
 ### CRITICAL
 
 **F1. Planets render as rectangles in SpaceFlightScene — GLSL filter path (NOT the TilingSprite path).**
