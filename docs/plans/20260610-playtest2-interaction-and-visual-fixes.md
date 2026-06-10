@@ -66,11 +66,11 @@ verification pass over PlanetScene. Every bug: red test → fix → screenshot.
 - Modify: `src/presentation/flight/PlayerShipRenderer.ts`
 - Modify: `src/tests/flight/` (matching renderer test)
 
-- [ ] Capture the current glow close-up via the letsplay/exploration spec (baseline "before")
-- [ ] Rework the glow: tight radial falloff hugging the hull silhouette (small radius, 2–3 layered circles with decreasing alpha or a small blur), no flat rectangular/oval smear; engine glow stays at the nozzle only; respect BlurFilter disposal rule if filters are used
-- [ ] Unit test: glow objects mounted/destroyed cleanly (`gameLayer.children.length === 0` after destroy; filters disposed)
-- [ ] Re-run letsplay spec; inspect `lp-06-ship.png` — glow reads as a subtle halo, not a smear; compare against the "before" capture
-- [ ] Run lint + unit + regression — green
+- [x] Capture the current glow close-up via the letsplay/exploration spec (baseline "before") — cropped+2× the centre of the pre-fix `lp-06-ship.png`: a large diffuse blue disc clearly wider than the hull (single circle r=SHIP_SIZE·1.6 blown out by a strength-8 blur = the "flat smear")
+- [x] Rework the glow: tight radial falloff hugging the hull silhouette — `PlayerShipRenderer.drawShipGlow()` draws THREE concentric circles (r = outerR, 0.7·outerR, 0.42·outerR) with decreasing alpha (0.10 → 0.17 → 0.24 toward the centre) and a GENTLE blur (strength 3, was 8); outerR = SHIP_SIZE·1.4 (sprite) / SHIP_SIZE·0.95 (procedural triangle) so the halo peeks just past the hull edge instead of ballooning. Engine glow already lives at the nozzle only (procedural-flame poly in `drawShip`, unchanged). BlurFilter still disposed in `destroy()` via `disposeFiltersDeep`
+- [x] Unit test (`src/tests/flight/playerShipRenderer.test.ts`, real Pixi Graphics instruction introspection): glow is a child at z-index 0 with ≥3 filled circles whose alpha decreases outward and outer radius ≤ SHIP_SIZE·1.05 (RED on the old single-circle smear); one blur filter attached; `filter.destroy()` called and `gameLayer.children.length === 0` after `destroy()`
+- [x] Re-run letsplay spec; inspect `lp-06-ship.png` — glow now reads as a subtle halo tight to the hull (the large diffuse disc is gone), depth cue preserved; verified on the regenerated PNG vs the "before" crop. (Full run timed out at a LATER scene step at the 240 s harness limit — JS_ERRORS [], unrelated to the glow; the 06-ship screenshot regenerated before the timeout. Task 6 covers the 22/22-step pass.)
+- [x] Run lint + unit + regression — green (0 lint errors, 1016 unit tests, 11/11 regression E2E in 1.4 min)
 
 ### Task 5: PlanetScene real-pointer verification (post-UiButton fix)
 **Files:**

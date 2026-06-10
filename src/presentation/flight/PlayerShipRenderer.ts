@@ -199,14 +199,14 @@ export class PlayerShipRenderer implements FlightModule {
       this.shipContainer.addChild(sp);
     }
 
-    // Size the glow to the active hull representation, then blur it. The sprite
-    // is ~2.6× larger than the procedural triangle, so its glow is wider to peek
-    // out past the artwork edges.
-    const glowRadius = this.shipSprite ? this.SHIP_SIZE * 1.6 : 18;
-    this.shipGlow
-      .circle(0, 0, glowRadius)
-      .fill({ color: 0x2244aa, alpha: 0.35 });
-    this.shipGlow.filters = [this.paddedBlur(8)];
+    // Tight radial halo that hugs the hull silhouette (playtest 2 ⑤ — the old
+    // single big circle + strong blur read as a flat oversized smear). Three
+    // concentric circles with decreasing alpha give a smooth radial falloff that
+    // fades just past the hull edge; a GENTLE blur softens the bands into a
+    // continuous gradient without ballooning the halo the way strength-8 did.
+    // The outer radius peeks just past the active hull representation — the
+    // sprite (~2.6× the procedural triangle) gets a slightly wider halo.
+    this.drawShipGlow();
 
     // Draw ship body (procedural triangle; no-op hull when a sprite is used)
     this.drawShip();
@@ -217,6 +217,32 @@ export class PlayerShipRenderer implements FlightModule {
     this.shipContainer.pivot.set(0, 0);
 
     this.gameLayer.addChild(this.shipContainer);
+  }
+
+  /**
+   * Draw the soft depth halo behind the ship: a tight radial falloff made of
+   * three concentric circles with decreasing alpha (brightest at the centre,
+   * fading at the rim) plus a gentle blur. Sized to hug the hull silhouette and
+   * peek just past its edge — never a flat oversized smear (playtest 2 ⑤).
+   * Drawn once (not per frame) so the blur filter texture stays stable.
+   */
+  private drawShipGlow(): void {
+    if (!this.shipGlow) return;
+    this.shipGlow.clear();
+    // Outer radius hugs the hull: the sprite art is ~2.6× the procedural
+    // triangle, so it gets a slightly wider halo to peek past the artwork edge.
+    const outerR = this.shipSprite
+      ? this.SHIP_SIZE * 1.4
+      : this.SHIP_SIZE * 0.95;
+    const layers: { r: number; alpha: number }[] = [
+      { r: outerR, alpha: 0.1 },
+      { r: outerR * 0.7, alpha: 0.17 },
+      { r: outerR * 0.42, alpha: 0.24 },
+    ];
+    for (const { r, alpha } of layers) {
+      this.shipGlow.circle(0, 0, r).fill({ color: 0x3a6fd0, alpha });
+    }
+    this.shipGlow.filters = [this.paddedBlur(3)];
   }
 
   /**
