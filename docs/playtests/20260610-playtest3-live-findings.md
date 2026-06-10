@@ -96,3 +96,20 @@ These are NOT in the active playtest2 plan (Tasks 4–6: glow, planet click
 verification, final gates). Compile a "playtest3" regression-first plan and run
 it AFTER playtest2 finishes — same files (SpaceFlightScene, ShipPhysics,
 PlanetScene), so no concurrent ralphex.
+
+## Playtest 3 — fixed (2026-06-10)
+
+All six findings closed via `docs/plans/20260610-playtest3-live-fixes.md`
+(regression-first; every visual/interaction fix gated on a letsplay screenshot
+or real-pointer check, not just green unit tests). Final acceptance run: lint
+0 errors, 1028 unit tests pass, 15 regression e2e pass (< 60 s), letsplay all
+21 steps ok with 0 JS errors.
+
+| Finding | Status | Fix summary | Verifying test / screenshot |
+|---------|--------|-------------|-----------------------------|
+| F1 — Pause finishes the current day | ✅ Fixed | Deferred-pause latch (`pauseAtDayBoundary`): Pause lets the in-progress day complete, then `endTurn()`; low-HP emergency hard-stop + combat auto-follow abort preserved | `src/tests/pauseFinishesDay.test.ts`; regression "Pause mid-flight finishes the current day"; `lp-09-paused.png` (ship still travelling its dashed route) |
+| F2 — Strange route curve | ✅ Fixed | `arcR = R * 1.01` (was `R * 1.15`): sun bypass rides just outside the exclusion ring instead of 15% past it; no boundary straight→wide-bow snap; clearance guarantee intact | `src/tests/flightCurves.test.ts`; `lp-06b-sun-route.png` (clean arc hugging ring), `lp-07-route.png` (near-straight planet approach) |
+| F3 — Game speed resets x4 → x1 | ✅ Fixed | Persist multiplier on scene-surviving `GameEngine.gameSpeedMultiplier`; `FlightHud.restoreGameSpeed` re-seeds index/label + `ShipPhysics.timeScale` on every re-init | `src/tests/presentation/flightHud.test.ts`; regression "game speed survives a SPACE_FLIGHT re-init (x4 stays x4)" |
+| F4 — Re-entry to system edge after equipment shop | ✅ Fixed (already present) | `PlanetScene.takeOff()` always passes `fromPlanetId` (predates this build); E2E confirms parks within `displayRadius + 220px` of the planet | `src/tests/presentation/planetSceneTakeOff.test.ts`; regression "take-off after the equipment shop parks beside the planet" |
+| F5 — Planet backdrop fish-eyes like a lens | ✅ Fixed | Flat-sprite light parallax (`panoramaSprite` + `clampPanoramaX`) made primary; `PanoramaViewer` projection deleted | `src/tests/presentation/planetSceneBackdrop.test.ts`; `lp-10-planet-scene.png` (flat horizon, upright structures, undistorted edges) |
+| F6 — Quest-window clicks build a route | ✅ Fixed | Backdrop is a single full-screen catch-all that `stopPropagation()`s; all non-button content is `eventMode="none"`; OVERMIND overlay panel given the same guard | `src/tests/presentation/questJournalUI.test.ts`; regression "clicking inside the open quest journal keeps it open and builds no route" |

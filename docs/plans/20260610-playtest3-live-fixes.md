@@ -101,12 +101,12 @@ check as a hard acceptance gate before commit** — not just green unit tests.
 ### Task 7: Verify acceptance criteria
 **Files:** none
 
-- [ ] `npm run lint` — 0 errors
-- [ ] `npm test -- --run` — all unit tests pass
-- [ ] `NO_PROXY=localhost,127.0.0.1 npm run test:e2e:regression` — green, < 60 s
-- [ ] `NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=letsplay` — all steps ok, 0 JS errors
-- [ ] Inspect regenerated screenshots for F2 (route), F5 (planet backdrop); confirm F1/F3/F4/F6 via their tests
-- [ ] Append a "Playtest 3 — fixed" status table to `docs/playtests/20260610-playtest3-live-findings.md` mapping each finding to its verifying test/screenshot
+- [x] `npm run lint` — 0 errors (32 warnings, all pre-existing `no-explicit-any` in tests)
+- [x] `npm test -- --run` — all unit tests pass (1028 tests, 114 files)
+- [x] `NO_PROXY=localhost,127.0.0.1 npm run test:e2e:regression` — green (15 passed, ~1.2 m incl. server start)
+- [x] `NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=letsplay` — all 21 steps ok, `JS_ERRORS []`
+- [x] Inspected regenerated screenshots: F2 `lp-06b-sun-route.png` (clean arc hugging the sun ring) + `lp-07-route.png` (near-straight planet approach); F5 `lp-10-planet-scene.png` (flat horizon, upright structures, undistorted edges). F1/F3/F4/F6 confirmed via their regression + unit tests (all green)
+- [x] Appended the "Playtest 3 — fixed" status table to `docs/playtests/20260610-playtest3-live-findings.md` mapping each finding (F1–F6) to its verifying test/screenshot
 
 ## Post-Completion
 **Manual verification:**
