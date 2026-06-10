@@ -70,13 +70,18 @@ export function buildSphereMesh(
       }
     }
 
-    // Wrap horizontally so the longitude offset scrolls past the seam seamlessly.
+    // Mirror-wrap horizontally so the longitude offset scrolls past the seam
+    // without a hard discontinuity even when the map's left/right edges don't
+    // tile (F4: plain "repeat" showed the mismatched edges as a seam meridian
+    // sweeping the rotating sun). Clamp vertically so the pole rows never
+    // blend with the opposite edge of the texture.
     try {
       const style = mapTex.source?.style as
-        | { addressMode?: string }
+        | { addressModeU?: string; addressModeV?: string }
         | undefined;
       if (style) {
-        style.addressMode = "repeat";
+        style.addressModeU = "mirror-repeat";
+        style.addressModeV = "clamp-to-edge";
         (mapTex.source.style as { update?: () => void }).update?.();
       }
     } catch {
@@ -91,12 +96,16 @@ export function buildSphereMesh(
     mesh.tint = tint;
     mesh.eventMode = "none";
 
+    // Longitude wraps with period 2, not 1: mirror-repeat addressing repeats
+    // the texture every TWO widths (image + its mirror), so wrapping at 1
+    // would snap the mirrored half back to the original mid-cycle — a visible
+    // pop. With period 2 the u offset is continuous across the whole cycle.
     let lon = 0;
     return {
       mesh,
       advance(lonDelta: number): void {
-        lon = (lon + lonDelta) % 1;
-        if (lon < 0) lon += 1;
+        lon = (lon + lonDelta) % 2;
+        if (lon < 0) lon += 2;
         for (let i = 0; i < baseU.length; i++) uvs[i * 2] = baseU[i] + lon;
         uvBuffer.update();
       },

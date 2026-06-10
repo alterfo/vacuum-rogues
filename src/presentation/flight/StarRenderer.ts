@@ -11,6 +11,7 @@ import type { GameEngine } from "@/systems/GameEngine";
 import { StarType } from "@/types";
 import { SeededRNG } from "@/utils/seededRNG";
 import { buildSphereMesh, type SphereMesh } from "../sphereMesh";
+import { buildTilingDisc } from "../PlanetSprite";
 import { pickVariant, pickVariantKey, loadTextureAsync } from "../textures";
 import {
   GAME_BALANCE,
@@ -271,7 +272,6 @@ export class StarRenderer implements FlightModule {
     surface.x = this.centerX;
     surface.y = this.centerY;
 
-    const W = R * 2;
     const tint = this.starTint();
     this.sunSphere = buildSphereMesh(sunMap, R, tint);
     const mesh = this.sunSphere?.mesh ?? null;
@@ -279,17 +279,14 @@ export class StarRenderer implements FlightModule {
     if (mesh) {
       surface.addChild(mesh);
     } else {
-      // Fallback: flat scrolling disc under a circular mask.
-      const maskC = new Graphics().circle(0, 0, R).fill({ color: 0xffffff });
-      const tiling = new TilingSprite({ texture: sunMap, width: W, height: W });
-      tiling.x = -R;
-      tiling.y = -R;
-      const scale = sunMap.height > 0 ? W / sunMap.height : 1;
-      tiling.tileScale.set(scale, scale);
-      tiling.tint = tint;
-      tiling.mask = maskC;
-      this.starTiling = tiling;
-      surface.addChild(maskC, tiling);
+      // Fallback: flat scrolling disc under a circular mask. A TilingSprite's
+      // renderer drops a mask assigned to it (the "rectangles" bug class), so
+      // reuse the planet's buildTilingDisc wrapper: the mask lives on a plain
+      // wrapper Container, never on the TilingSprite itself.
+      const disc = buildTilingDisc(sunMap, R);
+      disc.tiling.tint = tint;
+      this.starTiling = disc.tiling;
+      surface.addChild(disc.surface);
     }
 
     // Radial limb-fade mask: opaque at center, fades to transparent at edge

@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { Container } from "pixi.js";
+import { describe, it, expect, vi } from "vitest";
+import { Container, Sprite, Texture, type TilingSprite } from "pixi.js";
 import { StarRenderer } from "@/presentation/flight/StarRenderer";
 import type { Renderer } from "@/presentation/Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -7,6 +7,12 @@ import {
   SUN_CONTACT_HULL_DAMAGE,
   SUN_CONTACT_DAMAGE_INTERVAL_MS,
 } from "@/config/balance";
+
+// Force the equirect star-map path onto the TilingSprite fallback: the sphere
+// mesh is "unavailable", exactly as in a browser where Mesh construction fails.
+// The procedural-sun tests below never call buildSphereMesh, so they are
+// unaffected by the mock.
+vi.mock("@/presentation/sphereMesh", () => ({ buildSphereMesh: () => null }));
 
 /**
  * Build a minimal Renderer stand-in backed by a real PixiJS Container. The star
@@ -156,6 +162,42 @@ describe("StarRenderer (extracted FlightModule)", () => {
       1,
     );
     expect(ship.hullHP).toBe(100);
+  });
+
+  it("masks the tiling-fallback disc via a plain wrapper Container, never the TilingSprite (F4)", () => {
+    // Same bug class as the "planets render as rectangles" regression: a
+    // TilingSprite's specialised renderer drops a mask assigned to it, so the
+    // sun disc renders as its full rectangle. The circular mask must live on a
+    // plain wrapper Container instead (see PlanetSprite.buildTilingDisc).
+    const { star } = makeHarness();
+
+    // jsdom has no 2D canvas: stub the limb-fade mask builder (Canvas radial
+    // gradient) with an empty sprite — the assertions target the tiling wrapper.
+    (
+      star as unknown as { buildStarLimbMask: (R: number) => Sprite }
+    ).buildStarLimbMask = () => new Sprite();
+
+    (
+      star as unknown as {
+        mountStarMapSurface: (R: number, tex: Texture) => void;
+      }
+    ).mountStarMapSurface(star.radius, Texture.WHITE);
+
+    const tiling = (star as unknown as { starTiling: TilingSprite | null })
+      .starTiling;
+    expect(tiling).not.toBeNull();
+
+    // The mask must NOT be on the TilingSprite itself…
+    expect(tiling!.mask ?? null).toBeNull();
+
+    // …but on its plain wrapper Container, parented under that same wrapper.
+    const wrapper = tiling!.parent as Container;
+    const mask = wrapper.mask as unknown as Container;
+    expect(mask).toBeTruthy();
+    expect(wrapper.children).toContain(mask);
+    expect(tiling!.children).not.toContain(mask);
+
+    star.destroy();
   });
 
   it("does not burn the hull while outside the star radius", () => {

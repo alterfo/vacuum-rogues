@@ -84,11 +84,11 @@ which all previous "masking fixes" (TilingSprite fallback) missed.
 - Modify: `src/presentation/flight/StarRenderer.ts`
 - Modify: `src/tests/flight/starRenderer.test.ts` (or matching test file)
 
-- [ ] Reproduce: extend the letsplay/exploration spec to capture a tight sun close-up; identify the horizontal band's source (sphere-mesh v-mapping seam vs texture content vs limb mask arc) by toggling layers via `page.evaluate`
-- [ ] Fix the identified source (likely v-coordinate wrap/clamp on the sphere mesh or the equirect texture seam row)
-- [ ] Unify the tiling fallback with the planet fix: replace direct `tiling.mask = maskC` in `mountStarMapSurface` with the `buildTilingDisc`-style wrapper (mask on a plain wrapper Container) — same bug class as Task 2 of the e2e-visual plan; add unit test asserting the mask parent is the wrapper, not the TilingSprite
-- [ ] Re-run letsplay spec; inspect `lp-05-sun.png` — no band artifact
-- [ ] Run lint + unit suite + regression gate — all green
+- [x] Reproduce: extend the letsplay/exploration spec to capture a tight sun close-up; identify the horizontal band's source (sphere-mesh v-mapping seam vs texture content vs limb mask arc) by toggling layers via `page.evaluate` (new `e2e/sun-band-exploration.spec.ts`: band survives halo-off and limb-mask-off → source is the sphere-mesh surface: baked horizontal collage-seam rows in some star_maps + hard u-wrap seam meridian from `repeat` addressing)
+- [x] Fix the identified source (likely v-coordinate wrap/clamp on the sphere mesh or the equirect texture seam row) (sphereMesh: `mirror-repeat` U so non-tiling edges never show a hard seam, `clamp-to-edge` V against pole bleed, longitude wrap period 2 to match the mirror period; removed the three star maps with baked collage seam rows: yellow_01, yellow_04, neutron_01)
+- [x] Unify the tiling fallback with the planet fix: replace direct `tiling.mask = maskC` in `mountStarMapSurface` with the `buildTilingDisc`-style wrapper (mask on a plain wrapper Container) — same bug class as Task 2 of the e2e-visual plan; add unit test asserting the mask parent is the wrapper, not the TilingSprite
+- [x] Re-run letsplay spec; inspect `lp-05-sun.png` — no band artifact
+- [x] Run lint + unit suite + regression gate — all green (0 lint errors, 958 unit tests, gate 9/9 in 41 s)
 
 ### Task 6: F6 — Hide the inert legacy equipment system from the player
 **Files:**
