@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { applyMockHeavySystems, waitForEngine, waitForScene } from './fixtures/mockHeavySystems';
 import { MonkeyTester } from './helpers/monkeyTester';
 import { ErrorCollector } from './helpers/errorCollector';
+import { SpaceFlightPage } from './page-objects/space-flight.page';
 
 type EngineHandle = {
   currentScene: Record<string, unknown> | null;
@@ -98,6 +99,122 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     });
 
     expect(routeStillSet).toBe(true);
+
+    errorCollector.assertAndDetach();
+  });
+
+  // ---------------------------------------------------------------------------
+  // SpaceFlightScene smoke tests (Task 5 of 20260609-e2e-visual-spaceflightscene).
+  // Fast, platform-independent regression guards for the visual/behavioural fixes
+  // verified in Tasks 2–4. They drive the scene through the __DEBUG__-guarded
+  // e2e* hooks (SpaceFlightPage) — never pixel clicks (CLAUDE.md E2E rules) — and
+  // deliberately avoid pixel-screenshot baselines so the CI gate stays OS-agnostic.
+  // ---------------------------------------------------------------------------
+
+  test('smoke: planets render circular, not rectangular (masking regression Task 2)', async ({ page }) => {
+    await setupNewGame(page);
+    const sf = new SpaceFlightPage(page);
+
+    // Let lazy planet surface maps load so any TilingSprite-disc fallback bodies
+    // are built before we introspect their masks.
+    await sf.settle(30);
+
+    // Only the TilingSprite fallback path can ever regress to a rectangle — the
+    // GLSL rotation filter and the sphere-mesh paths clip in-shader / by
+    // geometry. e2eMaskInfo() returns the mask state for planets on that path and
+    // null for the others. For every planet that DID take the tiling path, the
+    // circular mask must be a child of the wrapper Container (PixiJS 8 scene-graph
+    // rule) and centred on the planet origin — exactly the invariant whose
+    // violation rendered planets as bottom-clipped rectangles (Task 2).
+    const maskInfos = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const pm = engine.currentScene?.['planetManager'] as
+        | {
+            planetSprites: Array<{
+              e2eMaskInfo?: () => {
+                maskIsChild: boolean;
+                maskBounds: { x: number; y: number; width: number; height: number };
+              } | null;
+            }>;
+          }
+        | undefined;
+      return (pm?.planetSprites ?? []).map((s) => s.e2eMaskInfo?.() ?? null);
+    });
+
+    for (const info of maskInfos) {
+      if (!info) continue; // shader / sphere-mesh path — circular by construction.
+      expect(info.maskIsChild).toBe(true);
+      // Centred circle: bounds are a square whose centre sits on the origin.
+      const cx = info.maskBounds.x + info.maskBounds.width / 2;
+      const cy = info.maskBounds.y + info.maskBounds.height / 2;
+      expect(Math.abs(cx)).toBeLessThan(1);
+      expect(Math.abs(cy)).toBeLessThan(1);
+      expect(Math.abs(info.maskBounds.width - info.maskBounds.height)).toBeLessThan(1);
+    }
+  });
+
+  test('smoke: Ход stops the ship immediately when mid-flight (Sprint 3 regression)', async ({ page }) => {
+    await setupNewGame(page);
+    const sf = new SpaceFlightPage(page);
+
+    // Plan a route so the turn has somewhere to fly.
+    await sf.clickPlanet(0);
+    expect(await sf.hasPlannedRoute()).toBe(true);
+
+    // Ход → execute the route (setPath flips isMoving=true synchronously).
+    await sf.startTurn();
+    expect((await sf.getSceneState()).isFlying).toBe(true);
+
+    // Ход again → immediate stop, no longer deferred to the next day segment.
+    await sf.pressPause();
+    expect((await sf.getSceneState()).isFlying).toBe(false);
+  });
+
+  test('smoke: NPC ships stay clickable after the first turn (Sprint 3 Task 6 regression)', async ({ page }) => {
+    await setupNewGame(page);
+    const sf = new SpaceFlightPage(page);
+
+    expect((await sf.getSceneState()).npcsCount).toBeGreaterThan(0);
+
+    // Run a course-less wait turn, then end it.
+    await sf.startTurn();
+    await sf.settle();
+    await sf.pressPause();
+    await sf.settle();
+
+    // Interactivity is restored when the turn ends...
+    expect(await sf.isNpcClickable(0)).toBe(true);
+    // ...and a click opens the contact panel (the handler still fires).
+    await sf.clickNpc(0);
+    expect(await sf.isContactPanelOpen()).toBe(true);
+  });
+
+  test('smoke: no JS errors during a 3-turn play session', async ({ page }) => {
+    await setupNewGame(page);
+    const sf = new SpaceFlightPage(page);
+    const errorCollector = new ErrorCollector(page);
+
+    const planetsCount = (await sf.getSceneState()).planetsCount;
+    expect(planetsCount).toBeGreaterThan(0);
+
+    for (let turn = 0; turn < 3; turn++) {
+      // Plan a route to a planet, fly part of the way, then stop — each cycle
+      // exercises route planning, flight physics, NPC updates and turn teardown.
+      await sf.clickPlanet(turn % planetsCount);
+      await sf.startTurn();
+      await sf.settle(8);
+      await sf.pressPause();
+      await sf.settle(2);
+    }
+
+    // Scene survived the session and is still SpaceFlightScene.
+    const sceneName = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      return engine?.currentScene?.constructor?.name ?? null;
+    });
+    expect(sceneName).toBe('SpaceFlightScene');
 
     errorCollector.assertAndDetach();
   });

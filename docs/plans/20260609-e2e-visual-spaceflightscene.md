@@ -96,11 +96,11 @@ Interactive browser session to visually verify SpaceFlightScene after sprint3 + 
 **Files:**
 - Modify: `e2e/playtest-regression.spec.ts`
 
-- [ ] Add smoke test: planets are circular — verify via `e2eClickPlanet(0)` + screenshot comparison
-- [ ] Add smoke test: Ход button stops ship immediately when mid-flight
-- [ ] Add smoke test: NPC ships clickable after first turn
-- [ ] Add smoke test: no JS errors thrown during 3-turn play session (ErrorCollector)
-- [ ] Verify `npm run test:e2e:regression` completes in < 60s
+- [x] Add smoke test: planets are circular — verified via per-planet `e2eMaskInfo()` introspection (mask is a centred circular child of the wrapper) instead of a pixel screenshot, because (a) the ship spawns at the system edge so planets aren't framed in the default view, and (b) a darwin-only screenshot baseline in the CI regression gate would break on Linux. Mask introspection is platform-independent and targets the exact TilingSprite invariant whose violation rendered planets as rectangles (Task 2)
+- [x] Add smoke test: Ход button stops ship immediately when mid-flight — plan route, `startTurn()` → `isFlying===true`, `pressPause()` → `isFlying===false`
+- [x] Add smoke test: NPC ships clickable after first turn — course-less wait turn, then `isNpcClickable(0)` and `clickNpc(0)` opens the contact panel
+- [x] Add smoke test: no JS errors thrown during 3-turn play session (ErrorCollector) — 3 route-fly-stop cycles, scene still `SpaceFlightScene`, `assertAndDetach()` clean
+- [x] Verify `npm run test:e2e:regression` completes in < 60s — 8 tests passed in 35.6 s (the 4 new ones are tests 3–6)
 
 ### Task 6: GRASP compliance review of flight/ modules
 **Files:**
