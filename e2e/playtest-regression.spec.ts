@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { PNG } from 'pngjs';
 import { applyMockHeavySystems, waitForEngine, waitForScene } from './fixtures/mockHeavySystems';
 import { MonkeyTester } from './helpers/monkeyTester';
 import { ErrorCollector } from './helpers/errorCollector';
@@ -174,6 +175,121 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
       expect(Math.abs(cy)).toBeLessThan(1);
       expect(Math.abs(info.maskBounds.width - info.maskBounds.height)).toBeLessThan(1);
     }
+  });
+
+  test('smoke: GLSL-filter planets clip to a circle — bbox corner is pure background (F1)', async ({ page }) => {
+    // Letsplay finding F1 (docs/playtests/20260610-letsplay-discovery.md): in the
+    // real game planets render as RECTANGLES through the GLSL PlanetRotationFilter
+    // path — the path WebGL actually takes (the previously-fixed TilingSprite mask
+    // was only the fallback). Root cause: the fragment shader derived disc-local
+    // coords from vTextureCoord assuming it spans [0,1] over the sprite, but the
+    // PixiJS v8 filter input texture is power-of-two POOLED, so vTextureCoord only
+    // reaches k = frame/pooled < 1 → the in-shader circular clip is mis-scaled and
+    // surface texture leaks into the sprite's bounding-box corners.
+    //
+    // jsdom cannot execute shaders, so this is a pixel-level browser assertion:
+    // isolate one filter-path planet, centre the camera on it, screenshot the
+    // bottom-right corner of its bounding box (a region fully OUTSIDE the
+    // inscribed circle) and require it to be near-black background.
+    await setupNewGame(page);
+    const sf = new SpaceFlightPage(page);
+
+    // The GLSL filter mounts only after the lazy planet_maps texture loads.
+    await page.waitForFunction(
+      () => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+        };
+        const pm = engine.currentScene?.['planetManager'] as
+          | { planetSprites: Array<Record<string, unknown>> }
+          | undefined;
+        return (pm?.planetSprites ?? []).some((s) => s['rotationFilter'] != null);
+      },
+      { timeout: 20_000 },
+    );
+
+    // Isolate the planet's filtered body (hide glow rings, moons, orbit lines,
+    // NPCs, star, other planets) and centre the camera on it at MAX_ZOOM, so the
+    // corner pixels can only come from the shader under test or the background.
+    const region = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene as {
+        e2eSetCameraZoom?: (z: number) => void;
+        e2eSetCameraPan?: (x: number, y: number) => void;
+        e2eGetCameraState?: () => { zoom: number; panX: number; panY: number };
+      } & Record<string, unknown>;
+      const pm = scene['planetManager'] as {
+        planetSprites: Array<{
+          container: {
+            visible: boolean;
+            parent: { children: Array<{ visible: boolean }> };
+            children: Array<{ visible: boolean }>;
+          };
+          screenX: number;
+          screenY: number;
+          displayRadius: number;
+        } & Record<string, unknown>>;
+      };
+      const target = pm.planetSprites.find((s) => s['rotationFilter'] != null);
+      if (!target) return null;
+
+      for (const child of target.container.parent.children) child.visible = false;
+      target.container.visible = true;
+      const body = target['bodyContainer'];
+      for (const child of target.container.children) {
+        child.visible = (child as unknown) === body;
+      }
+
+      const zoom = 2; // CameraController.MAX_ZOOM
+      scene.e2eSetCameraZoom?.(zoom);
+      scene.e2eSetCameraPan?.(
+        window.innerWidth / 2 - target.screenX * zoom,
+        window.innerHeight / 2 - target.screenY * zoom,
+      );
+      // Read back the EFFECTIVE camera (pan is clamped) and derive the planet's
+      // on-screen centre and radius from it.
+      const cam = scene.e2eGetCameraState?.() ?? { zoom, panX: 0, panY: 0 };
+      return {
+        cx: cam.panX + target.screenX * cam.zoom,
+        cy: cam.panY + target.screenY * cam.zoom,
+        R: target.displayRadius * cam.zoom,
+      };
+    });
+    expect(region).not.toBeNull();
+    const { cx, cy, R } = region!;
+
+    await sf.freezeWorld();
+
+    // Corner clip: the square [0.75R, 0.99R]² (relative to the planet centre)
+    // sits inside the sprite's bounding box but fully outside the inscribed
+    // circle (closest point is at distance 0.75·√2 ≈ 1.06R from the centre).
+    const canvasBox = await page.locator('canvas').boundingBox();
+    expect(canvasBox).not.toBeNull();
+    const side = R * 0.24;
+    const shot = await page.screenshot({
+      clip: {
+        x: canvasBox!.x + cx + R * 0.75,
+        y: canvasBox!.y + cy + R * 0.75,
+        width: side,
+        height: side,
+      },
+    });
+
+    const png = PNG.sync.read(shot);
+    const total = png.width * png.height;
+    let dark = 0;
+    for (let i = 0; i < total; i++) {
+      const r = png.data[i * 4];
+      const g = png.data[i * 4 + 1];
+      const b = png.data[i * 4 + 2];
+      // Near-black = renderer clear color 0x000510 plus headroom for AA/dither.
+      if (r <= 32 && g <= 32 && b <= 32) dark++;
+    }
+    // ≥95% background: with the bug the mis-scaled disc floods the corner with
+    // bright surface-texture pixels and this drops to ~0%.
+    expect(dark / total).toBeGreaterThanOrEqual(0.95);
   });
 
   test('smoke: Ход stops the ship immediately when mid-flight (Sprint 3 regression)', async ({ page }) => {

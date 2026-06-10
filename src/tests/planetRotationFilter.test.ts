@@ -79,6 +79,38 @@ describe("PlanetRotationFilter", () => {
     });
     expect(f).toBeInstanceOf(PlanetRotationFilter);
   });
+
+  // ---------------------------------------------------------------------------
+  // Source-level shader guards (letsplay F1: planets rendered as rectangles).
+  // jsdom cannot execute GLSL, so these document and pin the invariant the
+  // pixel-level browser test (playtest-regression.spec.ts, "GLSL-filter planets
+  // clip to a circle") actually verifies: disc-local coords MUST come from the
+  // aPosition-based varying, never from vTextureCoord. PixiJS v8 filter input
+  // textures are power-of-two pooled, so vTextureCoord spans only
+  // [0, frame/pooled] (k < 1) and a disc derived from it is mis-scaled.
+  // ---------------------------------------------------------------------------
+  describe("disc-coordinate invariant (F1: rectangles regression)", () => {
+    const filter = () => new PlanetRotationFilter({ rotationSpeed: 0.001 });
+
+    it("vertex shader emits the aPosition-based vPos varying", () => {
+      const vertex = filter().glProgram.vertex;
+      expect(vertex).toMatch(/out\s+vec2\s+vPos\s*;/);
+      expect(vertex).toMatch(/vPos\s*=\s*aPosition\s*;/);
+    });
+
+    it("fragment shader derives disc coords from vPos, not vTextureCoord", () => {
+      const fragment = filter().glProgram.fragment;
+      expect(fragment).toMatch(/in\s+vec2\s+vPos\s*;/);
+      // Disc-local coords come from the position varying...
+      expect(fragment).toMatch(/\(\s*vPos\s*-\s*0\.5\s*\)\s*\*\s*2\.0/);
+      // ...and never from the pool-scaled texture coordinate.
+      expect(fragment).not.toMatch(/vTextureCoord\s*-\s*0\.5/);
+    });
+
+    it("does not clip the filter frame to the viewport (vPos must span the full sprite)", () => {
+      expect(filter().clipToViewport).toBe(false);
+    });
+  });
 });
 
 describe("createPlanetRotationFilter", () => {

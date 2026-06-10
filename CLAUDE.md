@@ -306,6 +306,15 @@ private async performWarpJump(target: StarSystem): Promise<void> {
 - Throw only `GameBusinessException`, `GameSystemException`, `GameValidationException`, or `InferenceException` (from `src/exceptions/`).
 - Use `src/utils/logger.ts` instead of `console.log`.
 
+### Bug Fixing Process (regression-first)
+Every bug found in playtests or reported by the user follows this order — no exceptions:
+1. **Reproduce as a red test first** — write a failing regression test (unit test, or E2E in `playtest-regression.spec.ts` for visual/interaction bugs) that captures the bug.
+2. **Fix until the test goes green.** Do not claim a fix without the test.
+3. **Visually verify** UI/rendering fixes via screenshot (exploration spec or snapshot baseline) — green text-level tests are NOT sufficient evidence for visual bugs (planet masking was "fixed" three times with green tests).
+4. If the fix breaks an adjacent test, that's a root-cause signal — re-diagnose instead of patching the other test (Rule 8, Ping-Pong Fix).
+
+**Why:** this codebase's history shows fixes landing ~10% of the time when done blind. The red-test-first loop converts "fixed one, broke another" from a user-discovered regression into a CI failure.
+
 ### E2E Testing (Playwright)
 - Tests live in `e2e/`, Page Objects in `e2e/page-objects/`.
 - **No `canvas.click({ position: {x, y} })`** — use `page.evaluate(() => window.__gameEngine.currentScene.handler())` or accessibility attributes.

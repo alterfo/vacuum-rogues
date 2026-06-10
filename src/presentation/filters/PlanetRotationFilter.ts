@@ -19,10 +19,16 @@
  */
 import { Filter, GlProgram, Texture, UniformGroup } from "pixi.js";
 
-// Standard PixiJS v8 filter vertex shader (matches the built-in default): maps
-// the filter quad and emits vTextureCoord in [0,1] over the sprite's bounds.
+// Standard PixiJS v8 filter vertex shader (matches the built-in default) plus a
+// `vPos` varying: aPosition spans [0,1] over the filter quad (= the sprite's
+// bounds, padding 0 + clipToViewport false), which is what the fragment stage
+// needs for disc-local coords. vTextureCoord CANNOT be used for that: the filter
+// input texture is pooled (power-of-two), so vTextureCoord only reaches
+// frame/pooled-size `k < 1` and a disc derived from it is mis-scaled — planets
+// rendered as corner-flooded rectangles (letsplay F1).
 const VERTEX = `in vec2 aPosition;
 out vec2 vTextureCoord;
+out vec2 vPos;
 
 uniform vec4 uInputSize;
 uniform vec4 uOutputFrame;
@@ -45,10 +51,12 @@ void main(void)
 {
     gl_Position = filterVertexPosition();
     vTextureCoord = filterTextureCoord();
+    vPos = aPosition;
 }
 `;
 
 const FRAGMENT = `in vec2 vTextureCoord;
+in vec2 vPos;
 out vec4 finalColor;
 
 uniform sampler2D uTexture;     // filter input (unused — kept for the binding)
@@ -61,8 +69,11 @@ const float PI = 3.14159265359;
 
 void main(void)
 {
-    // Disc-local coords: vTextureCoord is [0,1] over the square sprite (padding 0).
-    vec2 p = (vTextureCoord - 0.5) * 2.0;     // [-1, 1]
+    // Disc-local coords from vPos: aPosition is [0,1] over the square sprite
+    // (padding 0, clipToViewport off). NOT vTextureCoord — the pooled input
+    // texture makes its range frame-dependent (k < 1), which mis-scales the
+    // disc clip, limb darkening and rim-light (letsplay F1: rectangles).
+    vec2 p = (vPos - 0.5) * 2.0;              // [-1, 1]
     float r = length(p);
     if (r > 1.0) {
         discard;                              // outside the planet disc
@@ -138,8 +149,12 @@ export class PlanetRotationFilter extends Filter {
         uMapTexture: source,
         uMapSampler: source.style,
       },
+      // Never clip the filter frame to the viewport: vPos must span [0,1] over
+      // the FULL sprite square even when the planet is partially offscreen,
+      // otherwise the disc projection would distort at the screen edges.
+      clipToViewport: false,
     });
-    // No padding: vTextureCoord then maps [0,1] exactly over the sprite square.
+    // No padding: aPosition (vPos) then maps [0,1] exactly over the sprite square.
     this.padding = 0;
     this.planetUniforms = planetUniforms;
     this.rotationSpeed = options.rotationSpeed;
