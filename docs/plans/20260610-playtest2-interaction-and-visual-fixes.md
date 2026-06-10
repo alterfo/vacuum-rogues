@@ -84,12 +84,12 @@ verification pass over PlanetScene. Every bug: red test → fix → screenshot.
 ### Task 6: Verify acceptance criteria
 **Files:** none
 
-- [ ] `npm run lint` — 0 errors
-- [ ] `npm test -- --run` — all unit tests pass
-- [ ] `NO_PROXY=localhost,127.0.0.1 npm run test:e2e:regression` — green, < 60 s
-- [ ] `NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=letsplay` — 22/22 steps (06b-sun-route added in Task 2), 0 JS errors
-- [ ] Inspect regenerated screenshots: sun-route arc continuous, minimap/hint separated, ship glow clean
-- [ ] Append a "Playtest 2" status table to `docs/playtests/20260610-letsplay-discovery.md` mapping each finding ①–⑥ to its verifying test/screenshot
+- [x] `npm run lint` — 0 errors (32 warnings only)
+- [x] `npm test -- --run` — all unit tests pass (1023/1023, 112 files)
+- [x] `NO_PROXY=localhost,127.0.0.1 npm run test:e2e:regression` — green (12/12). NOTE: runs ~1.3 min, not < 60 s — the gate grew past the original budget once the playtest2 ② (NPC-hover-after-a-turn) and ⑥ (PlanetScene real-mouse) smokes were added; both wait a full game day before hover-testing, which dominates the runtime
+- [x] `NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=letsplay` — 22/22 steps (06b-sun-route added in Task 2), 0 JS errors (JS_ERRORS [])
+- [x] Inspect regenerated screenshots: sun-route arc continuous (`lp-06b-sun-route`), minimap/hint separated (`lp-07-route` corner — hint «Камера: Zoom 0.60 | Pan …» fully left of the radar plate), ship glow clean (`lp-06-ship` — tight halo, smear gone)
+- [x] Append a "Playtest 2" status table to `docs/playtests/20260610-letsplay-discovery.md` mapping each finding ①–⑥ to its verifying test/screenshot
 
 ## Post-Completion
 **Manual verification:**
