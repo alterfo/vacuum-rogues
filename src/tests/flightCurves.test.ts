@@ -4,7 +4,6 @@ import {
   spiralApproachPath,
   takeoffArcPath,
   pointAlongPath,
-  leadInterceptPoint,
   avoidStarPath,
   type Point,
 } from "@/utils/flightGeometry";
@@ -120,32 +119,6 @@ describe("pointAlongPath (Task 5: take-off animation sampling)", () => {
     expect(s.x).toBeCloseTo(10);
     expect(s.y).toBeCloseTo(10);
     expect(s.done).toBe(true);
-  });
-});
-
-describe("leadInterceptPoint (Task 5: curved intercept lead)", () => {
-  it("leads a crossing target so the pursuer aims ahead of it", () => {
-    // Shooter at origin (speed 1); target 10px right, drifting +y at 0.5.
-    const lead = leadInterceptPoint(0, 0, 1, 10, 0, 0, 0.5);
-    // Lead is ahead of the target along its velocity (+y).
-    expect(lead.y).toBeGreaterThan(0);
-    // Time to fly to the lead matches the time for the target to reach it.
-    const flightTime = Math.hypot(lead.x, lead.y) / 1;
-    const targetTime = (lead.y - 0) / 0.5;
-    expect(flightTime).toBeCloseTo(targetTime, 3);
-  });
-
-  it("returns the target's position for a stationary target", () => {
-    const lead = leadInterceptPoint(0, 0, 1, 25, -7, 0, 0);
-    expect(lead.x).toBeCloseTo(25);
-    expect(lead.y).toBeCloseTo(-7);
-  });
-
-  it("falls back to the target when no positive-time intercept exists", () => {
-    // Target flees directly away faster than the pursuer can close.
-    const lead = leadInterceptPoint(0, 0, 1, 10, 0, 2, 0);
-    expect(lead.x).toBeCloseTo(10);
-    expect(lead.y).toBeCloseTo(0);
   });
 });
 

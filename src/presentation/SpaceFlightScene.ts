@@ -61,9 +61,9 @@ export class SpaceFlightScene extends GameScene {
   private bgElapsed = 0; // Animation clock for background (ms)
   private shipPhysics: ShipPhysics | null = null;
   // In-flight HUD: turn/speed/settings buttons, day counter, mini-map, mini-log,
-  // toasts and tooltips. Extracted from this scene as a FlightModule; button
-  // presses fan back through callbacks wired in initialize(). The scene drives
-  // the mini-map refresh via `hud.miniMap` (it reads route + camera state).
+  // toasts and tooltips (a FlightModule); button presses fan back through
+  // callbacks wired in initialize(). The scene drives the mini-map refresh via
+  // `hud.miniMap` (it reads route + camera state).
   private hud!: FlightHud;
 
   // Owns all planet sprites, station markers, the planet info panel and the
@@ -79,10 +79,9 @@ export class SpaceFlightScene extends GameScene {
   // this scene as a FlightModule. Owns its own display objects on the game layer.
   private orbitRenderer!: OrbitRenderer;
 
-  // Living-galaxy NPC ships present in the player's system (Feature 8) — sprite
-  // lifecycle, contact panel, auto-follow combat loop and the OVERMIND-core
-  // prompt are owned by this module. The scene reads/clears its `followNpcId`
-  // during the flight/turn loop and drives its combat tick + refresh.
+  // Living-galaxy NPC ships present in the player's system (Feature 8): sprite
+  // lifecycle, contact panel, auto-follow combat loop and OVERMIND-core prompt.
+  // The scene reads/clears `followNpcId` and drives its combat tick + refresh.
   private npcManager!: NpcShipManager;
   // Latches the low-hull auto-stop so the warning fires once per descent below
   // the threshold, not every frame.
@@ -101,7 +100,6 @@ export class SpaceFlightScene extends GameScene {
   private readonly SYSTEM_BOUNDARY_RADIUS = SYSTEM_GEOMETRY.boundaryRadius;
   private readonly SCANNER_RANGE = GAME_BALANCE.scannerRange;
 
-  // Time tracking for day counter
   // Timestamp (performance.now) when the scene finished initializing. A click
   // that lands within a short window of entering the scene is the residual
   // pointer event from the previous scene's button (e.g. the race-selection
@@ -121,8 +119,8 @@ export class SpaceFlightScene extends GameScene {
   // Full curved path (around the star) kept for drawing the route line; the
   // ship flows through it via ShipPhysics.setPath (no scene-side waypoint queue).
   private routePath: { x: number; y: number }[] = [];
-  // Draws the planned-course overlay (dashed line, day ticks, end marker) —
-  // extracted to a renderer that owns the Graphics; route planning stays here.
+  // Draws the planned-course overlay (dashed line + end marker); route planning
+  // stays here. The renderer owns the Graphics.
   private routeRenderer!: RouteRenderer;
 
   // Pending hyperjump (US-023): set when the player chose a warp target on the
@@ -146,15 +144,13 @@ export class SpaceFlightScene extends GameScene {
   private boundKeyDown: ((event: KeyboardEvent) => void) | null = null;
 
   // World camera: zoom, pan, smoothed follow/look-ahead, edge clamp and
-  // screen↔world conversion — extracted from this scene as its own controller.
-  // Pan/zoom *gestures* are still recognised here (input) via PanZoomController
-  // and forwarded to the camera as deltas / wheel events.
+  // screen↔world conversion (its own controller). Pan/zoom *gestures* are still
+  // recognised here via PanZoomController and forwarded as deltas / wheel events.
   private camera!: CameraController;
   private readonly panZoom = new PanZoomController();
   private boundWheel: ((event: WheelEvent) => void) | null = null;
   // Suppresses Chrome's middle-button "auto-scroll" (which otherwise fires
-  // wheel/scroll events and zooms the camera while the player pans). See bug:
-  // panning with the wheel button also zoomed the view.
+  // wheel/scroll events and zooms the camera while the player pans).
   private boundCanvasMouseDown: ((event: MouseEvent) => void) | null = null;
   // Reposition the screen-edge-anchored HUD when the window/canvas resizes,
   // otherwise the minimap and star-map button drift off-screen (bug: canvas
@@ -1235,9 +1231,10 @@ export class SpaceFlightScene extends GameScene {
             void this.onLandOnPlanet(planet);
             return;
           }
-          // The planet drifted along its orbit while we flew — keep chasing its
-          // current position (still avoiding the star) so we arrive and land.
-          this.executeRouteTo(sprite.screenX, sprite.screenY);
+          // Planet keeps drifting along its orbit while we fly — chase a lead
+          // point ahead of it so we converge, not trail it (playtest4 C).
+          const lead = this.planetManager.planetLeadPoint(sprite);
+          this.executeRouteTo(lead.x, lead.y);
           return;
         }
       }

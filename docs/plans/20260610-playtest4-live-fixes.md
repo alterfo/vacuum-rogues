@@ -54,12 +54,12 @@ green unit tests.
 - Create: `src/utils/intercept.ts`; Create: `src/tests/intercept.test.ts`
 - Modify: `src/presentation/SpaceFlightScene.ts` (and NpcShipManager/PlanetManager accessors if velocity is needed)
 
-- [ ] Write the RED test for the intercept helper: given shooter pos + max speed and a target pos + velocity, return the predicted intercept point; for a moving target it must lead ahead of the current position; degenerate/no-solution falls back to the current target pos. Confirm it FAILS (no helper yet)
-- [ ] Implement `solveInterceptPoint(...)` (time-to-intercept quadratic) in `src/utils/intercept.ts`
-- [ ] Wire it into the approach/attack course: when plotting a course to a moving NPC or an orbiting planet (and in the attack-follow chase), aim at the predicted point using the target's current velocity (NPC drift vector; planet orbital tangent). Keep the sun-clearance bypass on the resulting course
-- [ ] Write a scene/unit test that a course to a moving NPC targets ahead of its current position
-- [ ] Re-run letsplay; confirm a course to a moving target aims ahead, not behind
-- [ ] Run lint + unit + regression — green
+- [x] Write the RED test for the intercept helper: given shooter pos + max speed and a target pos + velocity, return the predicted intercept point; for a moving target it must lead ahead of the current position; degenerate/no-solution falls back to the current target pos. Confirm it FAILS (no helper yet) — `src/tests/intercept.test.ts` added; RED on missing `@/utils/intercept` import
+- [x] Implement `solveInterceptPoint(...)` (time-to-intercept quadratic) in `src/utils/intercept.ts` — canonical solver; the old `flightGeometry.leadInterceptPoint` was removed and its callers (NpcShipManager) + the `flightCurves.test` lead cases migrated to it (single source of truth, no dup)
+- [x] Wire it into the approach/attack course: when plotting a course to a moving NPC or an orbiting planet (and in the attack-follow chase), aim at the predicted point using the target's current velocity (NPC drift vector; planet orbital tangent). Keep the sun-clearance bypass on the resulting course — NPC "Приблизиться" now leads (`onApproachNpc` → `npcLeadPoint`); orbiting-planet drift re-chase leads (`PlanetManager.planetLeadPoint` + `PlanetSprite.orbitalVelocityPerDay`, px/day→px/ms via cruise speed); attack-follow chase already led. `executeRouteTo` still bows the result around the star
+- [x] Write a scene/unit test that a course to a moving NPC targets ahead of its current position — `npcShipManager.test.ts` drives `updateCombat` chase and asserts the captured `executeRouteTo` point leads ahead of the NPC's heading; `planetSpriteVelocity.test.ts` pins the planet orbital tangent
+- [x] Re-run letsplay; confirm a course to a moving target aims ahead, not behind — letsplay project green (21/21 steps, 0 JS errors); lead DIRECTION proven by the unit tests (visual aim-ahead is human-inspected)
+- [x] Run lint + unit + regression — green (0 lint errors, 1038 unit, 16 regression, tsc clean)
 
 ### Task 4: Verify acceptance criteria
 **Files:** none

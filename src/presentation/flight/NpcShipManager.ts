@@ -14,7 +14,7 @@ import {
   npcRoleTechLevel,
 } from "@/systems/npc/NpcSimulator";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
-import { leadInterceptPoint } from "@/utils/flightGeometry";
+import { solveInterceptPoint } from "@/utils/intercept";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
 import { SceneType, NpcRole, QuestType } from "@/types";
 import { scaledFont } from "@/utils/fontScale";
@@ -429,9 +429,10 @@ export class NpcShipManager implements FlightModule {
   }
 
   /**
-   * "Приблизиться": plot a course to the target's current position and fly there
-   * so the ship closes to firing range, without opening fire (US-070 #2). The
-   * player can then re-open the panel to hail/trade or attack.
+   * "Приблизиться": plot a course that LEADS the moving target so the ship
+   * closes to firing range aiming where it will be, not where it is, without
+   * opening fire (US-070 #2; lead added playtest4 C). The player can then
+   * re-open the panel to hail/trade or attack.
    */
   private onApproachNpc(npc: NpcShip): void {
     const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
@@ -439,7 +440,8 @@ export class NpcShipManager implements FlightModule {
     if (!sprite || !this.deps.getShipPhysics()) return;
     this.followNpcId = null; // approach only — not an attack
     this.deps.clearRouteTarget();
-    this.deps.executeRouteTo(sprite.x, sprite.y);
+    const lead = this.npcLeadPoint(sprite);
+    this.deps.executeRouteTo(lead.x, lead.y);
     this.deps.showMessage(`Сближение: ${npc.name}`, 0x88ccff);
   }
 
@@ -524,7 +526,7 @@ export class NpcShipManager implements FlightModule {
     const heading = sprite.container.rotation;
     const vx = Math.cos(heading) * GAME_BALANCE.npcSpeed;
     const vy = Math.sin(heading) * GAME_BALANCE.npcSpeed;
-    return leadInterceptPoint(
+    return solveInterceptPoint(
       physics.shipX,
       physics.shipY,
       physics.getMaxSpeed(),

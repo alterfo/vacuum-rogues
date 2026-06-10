@@ -7,6 +7,7 @@ import {
 import type { Renderer } from "@/presentation/Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Galaxy } from "@/domain/Galaxy";
+import { ShipPhysics } from "@/systems/ShipPhysics";
 import { NpcShip } from "@/domain/NpcShip";
 import { NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
@@ -181,6 +182,74 @@ describe("NpcShipManager (extracted FlightModule)", () => {
     // initialize() with no present NPCs leaves the manager empty.
     manager.initialize();
     expect(manager.npcCount).toBe(0);
+    manager.destroy();
+  });
+
+  it("a chase course leads ahead of a moving NPC's current position (playtest4 C)", () => {
+    // Ship at origin closing faster (0.3) than the NPC drifts (npcSpeed 0.2),
+    // NPC far to the right (> weapon range) heading straight +y. The chase must
+    // aim AHEAD of the NPC along its heading, not at its current position.
+    const physics = new ShipPhysics(0, 0, 0.3);
+    const routeCalls: Array<{ x: number; y: number }> = [];
+
+    const stage = new Container();
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+    const renderer = {
+      app: { screen: { width: 800, height: 600 } },
+      stage,
+      uiLayer,
+      gameLayer,
+    } as unknown as Renderer;
+    const galaxy = { npcShips: [makeNpc("npc_chase", NpcRole.PIRATE)] };
+    const gameEngine = {
+      galaxy,
+      player: { currentSystemId: "sys_a", ship: { maxHull: 100, hullHP: 100 } },
+    } as unknown as GameEngine;
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => physics,
+      getPlanetSprites: () => [],
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => true,
+      showMessage: () => {},
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: (x, y) => routeCalls.push({ x, y }),
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+    };
+
+    const manager = new NpcShipManager(
+      renderer,
+      gameEngine,
+      gameLayer,
+      uiLayer,
+      deps,
+    );
+    manager.initialize();
+
+    const sprite = (
+      manager as unknown as {
+        npcSprites: Array<{
+          x: number;
+          y: number;
+          container: { rotation: number };
+        }>;
+      }
+    ).npcSprites[0];
+    sprite.x = 500;
+    sprite.y = 0;
+    sprite.container.rotation = Math.PI / 2; // heading +y (drifting downward)
+
+    manager.followNpcId = "npc_chase";
+    manager.updateCombat(1 / 60);
+
+    expect(routeCalls.length).toBe(1);
+    const lead = routeCalls[0];
+    // Lead is ahead of the NPC along its heading (+y), not at its current y=0.
+    expect(lead.y).toBeGreaterThan(sprite.y);
+    expect(lead.x).toBeCloseTo(sprite.x, 5);
+
     manager.destroy();
   });
 });

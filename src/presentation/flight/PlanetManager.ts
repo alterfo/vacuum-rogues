@@ -8,6 +8,7 @@ import type { Faction } from "@/types/faction";
 import { PlanetSprite } from "../PlanetSprite";
 import { PlanetInfoPanel } from "../PlanetInfoPanel";
 import { hashToAngle, planetApproachPoint } from "@/utils/flightGeometry";
+import { solveInterceptPoint } from "@/utils/intercept";
 import { GAME_BALANCE } from "@/config/balance";
 import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
@@ -186,6 +187,32 @@ export class PlanetManager implements FlightModule {
         const dy = s.screenY - y;
         return Math.sqrt(dx * dx + dy * dy) < 50;
       }) ?? null
+    );
+  }
+
+  /**
+   * Lead point for pursuing an orbiting planet: solve the intercept against the
+   * planet's orbital-tangent velocity so a chase aims where the planet WILL be,
+   * not where it is now (playtest4 C). The planet's velocity is geometry the
+   * sprite owns (px/game-day); we convert it to px/ms to match the ship's cruise
+   * speed — 1 game-day of cruise covers `pixelsPerDay` px at `getMaxSpeed()`
+   * px/ms, so px/ms = (px/day) · maxSpeed / pixelsPerDay. Falls back to the
+   * planet's current centre when no intercept solves (handled by the solver).
+   */
+  planetLeadPoint(sprite: PlanetSprite): { x: number; y: number } {
+    const physics = this.deps.getShipPhysics();
+    if (!physics) return { x: sprite.screenX, y: sprite.screenY };
+    const maxSpeed = physics.getMaxSpeed();
+    const { vx, vy } = sprite.orbitalVelocityPerDay(); // px / game-day
+    const scale = maxSpeed / GAME_BALANCE.pixelsPerDay; // px/day → px/ms
+    return solveInterceptPoint(
+      physics.shipX,
+      physics.shipY,
+      maxSpeed,
+      sprite.screenX,
+      sprite.screenY,
+      vx * scale,
+      vy * scale,
     );
   }
 

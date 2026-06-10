@@ -620,6 +620,20 @@ export class PlanetSprite {
     return this.getPlanetVisuals(this.planet.type).radius;
   }
 
+  /**
+   * Orbital (tangential) velocity at the planet's CURRENT position, in world px
+   * per game-day. Direction is perpendicular to the radius (the orbit tangent),
+   * magnitude `orbitalRadius * radPerDay`. Used to lead a pursuit course so the
+   * ship aims where the planet will drift, not where it is now (playtest4 C).
+   */
+  orbitalVelocityPerDay(): { vx: number; vy: number } {
+    const speed = this.orbitalRadius * this.radPerDay;
+    return {
+      vx: -Math.sin(this.angle) * speed,
+      vy: Math.cos(this.angle) * speed,
+    };
+  }
+
   /** Orient the day/night shading so the lit hemisphere faces the star. */
   private orientShading(): void {
     if (this.shadeContainer) {
