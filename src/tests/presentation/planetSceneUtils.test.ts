@@ -11,6 +11,7 @@ vi.mock("pixi.js", () => ({
 
 import {
   clampPanoramaX,
+  computePlanetMenuLayout,
   skyGradientColors,
   visiblePlanetServices,
 } from "@/presentation/PlanetScene";
@@ -49,6 +50,44 @@ describe("skyGradientColors (Task 6 fallback sky)", () => {
 
   it("handles a single-step request without dividing by zero", () => {
     expect(skyGradientColors(0xff0000, 1)).toHaveLength(1);
+  });
+});
+
+describe("computePlanetMenuLayout (playtest2 ⑥ — menu must fit on-screen)", () => {
+  // statY at 1280×720 with the default planet/info/stat block ≈ 466 (see
+  // createUI). The eighth button «Взлёт» used to overflow below y=720.
+  const CONTENT_BOTTOM = 466;
+
+  const cases: Array<{ h: number; count: number }> = [
+    { h: 720, count: 8 }, // inhabited world, full service menu (the ⑥ case)
+    { h: 720, count: 9 }, // + bribe button when hostile
+    { h: 768, count: 8 },
+    { h: 1080, count: 8 },
+    { h: 1080, count: 9 },
+    { h: 900, count: 1 }, // uninhabited world: only «Взлёт»
+  ];
+
+  for (const { h, count } of cases) {
+    it(`fits ${count} buttons at ${h}px without overflow or overlap`, () => {
+      const { btnStartY, btnStep, btnH } = computePlanetMenuLayout(
+        h,
+        CONTENT_BOTTOM,
+        count,
+      );
+      // The last button's bottom edge must stay on-screen.
+      const lastBottom = btnStartY + (count - 1) * btnStep + btnH;
+      expect(lastBottom).toBeLessThanOrEqual(h);
+      // Consecutive buttons must not overlap (overlap steals clicks).
+      expect(btnH).toBeLessThanOrEqual(btnStep);
+      // Buttons stay legible.
+      expect(btnH).toBeGreaterThanOrEqual(20);
+    });
+  }
+
+  it("does not balloon buttons on very tall screens", () => {
+    const { btnStep, btnH } = computePlanetMenuLayout(2000, CONTENT_BOTTOM, 8);
+    expect(btnStep).toBeLessThanOrEqual(38);
+    expect(btnH).toBeLessThanOrEqual(32);
   });
 });
 

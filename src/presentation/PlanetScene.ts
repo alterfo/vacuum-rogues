@@ -139,6 +139,31 @@ const FACTION_PANORAMA: Record<string, string> = {
   OVERMIND: "wilderness_tundra",
 };
 
+/**
+ * Vertical layout for the planet service-menu button stack. Regression (playtest2
+ * ⑥, real-pointer verification): at 1280×720 the eighth button «Взлёт» overflowed
+ * below the viewport, so the critical take-off action was only half-clickable.
+ * Distribute `count` buttons across the space between the content above
+ * (`contentBottomY`) and a bottom margin so the LAST button's bottom edge always
+ * stays on-screen, and consecutive buttons never overlap (overlap steals clicks).
+ */
+export function computePlanetMenuLayout(
+  screenH: number,
+  contentBottomY: number,
+  count: number,
+): { btnStartY: number; btnStep: number; btnH: number } {
+  const bottomMargin = 16;
+  const btnStartY = contentBottomY + 36;
+  const avail = Math.max(0, screenH - bottomMargin - btnStartY);
+  // Cap the step so buttons aren't enormous on tall screens; shrink to fit on
+  // short ones.
+  const btnStep = count > 0 ? Math.min(38, avail / count) : 32;
+  // Button height sits a hair under the step so consecutive buttons never
+  // overlap; floor 20 keeps the label legible on very short screens.
+  const btnH = Math.max(20, Math.min(Math.floor(btnStep) - 2, 32));
+  return { btnStartY, btnStep, btnH };
+}
+
 /** Ultimate panorama fallback (Task 8) when a faction's art is unavailable. */
 const PANORAMA_FALLBACK = "outlanders_city";
 
@@ -864,8 +889,6 @@ export class PlanetScene extends GameScene {
     const subtitleY = nameY + 24;
     const infoY = nameY + 46;
     const statY = infoY + 64;
-    const btnStartY = statY + 36;
-    const btnStep = Math.max(30, (h - btnStartY - 24) / 8);
 
     // Planet name header: larger font in the controlling faction's colour.
     const title = new Text({
@@ -986,8 +1009,16 @@ export class PlanetScene extends GameScene {
     const player = this.gameEngine?.player;
     const isHostile = !this.bribed && (player?.isHostileTo(faction) ?? false);
 
+    // Which buttons are shown drives the adaptive vertical layout: the stack
+    // (plus the optional bribe button) must fit on-screen at every resolution.
+    const visible = visiblePlanetServices(this.planet.isHabitable, buttons);
+    const showBribe = isHostile && this.planet.isHabitable;
+    const { btnStartY, btnStep, btnH } = computePlanetMenuLayout(
+      h,
+      statY,
+      visible.length + (showBribe ? 1 : 0),
+    );
     const btnW = 280;
-    const btnH = 32;
 
     const makeServiceBtn = (
       b: ServiceButtonDef,
@@ -1037,7 +1068,6 @@ export class PlanetScene extends GameScene {
       ui.addChild(btn.container);
     };
 
-    const visible = visiblePlanetServices(this.planet.isHabitable, buttons);
     let y = btnStartY;
     for (const b of visible) {
       makeServiceBtn(b, y, isHostile && b.label !== "Взлёт");
@@ -1045,7 +1075,7 @@ export class PlanetScene extends GameScene {
     }
 
     // Show bribe button when hostile to the controlling faction.
-    if (isHostile && this.planet.isHabitable) {
+    if (showBribe) {
       makeServiceBtn(
         {
           icon: "💰",

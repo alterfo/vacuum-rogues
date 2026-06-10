@@ -480,6 +480,148 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('smoke: PlanetScene menu buttons respond to REAL mouse hover + click (playtest2 ⑥)', async ({ page }) => {
+    // Finding ⑥: on a planet the background panned with the grab cursor
+    // everywhere and no menu button was clickable. Root cause was the global
+    // UiButton hit-geometry regression (every planet-menu button is a UiButton,
+    // PlanetScene.makeServiceBtn). e2e* seams bypass PixiJS hit-testing, so only
+    // a REAL mousemove/click — coordinates from scene introspection, never
+    // hardcoded — proves the menu is alive again post-fix.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Warm up the event boundary (rootTarget is set on the first mapped event).
+    await page.mouse.move(5, 5);
+
+    // Land on a HABITABLE planet so the full service menu — incl. «Маркет» — is
+    // shown (uninhabited worlds only offer «Взлёт»).
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        galaxy: {
+          systems: Array<{ id: string; planets: Array<{ id: string; isHabitable: boolean }> }>;
+        } | null;
+        player: { currentSystemId: string } | null;
+        transitionTo: (scene: string, ctx?: object) => Promise<void>;
+      };
+      const systems = engine.galaxy?.systems ?? [];
+      const here = systems.find((s) => s.id === engine.player?.currentSystemId);
+      const planet =
+        here?.planets.find((p) => p.isHabitable) ??
+        systems.flatMap((s) => s.planets).find((p) => p.isHabitable);
+      if (!planet) return;
+      await engine.transitionTo('PLANET', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'PlanetScene', 15_000);
+
+    // The lazy faction-panorama load shows a loading overlay and can rebuild the
+    // menu once. Wait until the overlay is gone AND the (final) service buttons
+    // exist before reading any on-screen coordinates.
+    await page.waitForFunction(
+      () => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+          loadingOverlayObjects?: unknown[];
+        };
+        if ((engine.loadingOverlayObjects?.length ?? 0) > 0) return false;
+        const ui = engine.currentScene?.['uiContainer'] as
+          | { children: Array<{ eventMode: string; cursor: string }> }
+          | undefined;
+        return (
+          ui?.children.some((c) => c.eventMode === 'static' && c.cursor === 'pointer') ?? false
+        );
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
+
+    // Read each service button's on-screen centre + label from scene
+    // introspection (the UiButton containers are the static/pointer children of
+    // the scene's uiContainer; the label is their longest Text child).
+    const buttons = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const ui = engine.currentScene?.['uiContainer'] as
+        | {
+            children: Array<{
+              eventMode: string;
+              cursor: string;
+              width: number;
+              height: number;
+              getGlobalPosition: () => { x: number; y: number };
+              children: Array<{ text?: string }>;
+            }>;
+          }
+        | undefined;
+      if (!ui) return [];
+      return ui.children
+        .filter((c) => c.eventMode === 'static' && c.cursor === 'pointer')
+        .map((c) => {
+          const p = c.getGlobalPosition();
+          const label = c.children
+            .map((ch) => ch.text ?? '')
+            .reduce((a, b) => (b.length > a.length ? b : a), '');
+          return { label, x: p.x + c.width / 2, y: p.y + c.height / 2 };
+        });
+    });
+    expect(buttons.length).toBeGreaterThan(0);
+
+    // Every service button must report the landing/pointer cursor on REAL hover
+    // — never the grab/move pan cursor that covered the whole screen in ⑥.
+    for (const b of buttons) {
+      await page.mouse.move(b.x, b.y, { steps: 3 });
+      await expect
+        .poll(
+          () => page.evaluate(() => document.querySelector('canvas')?.style.cursor ?? ''),
+          { timeout: 3_000 },
+        )
+        .toMatch(/cursor_landing|pointer/);
+      const cursor = await page.evaluate(
+        () => document.querySelector('canvas')?.style.cursor ?? '',
+      );
+      expect(cursor).not.toMatch(/grab|grabbing|move/);
+    }
+
+    // Real click on «Маркет» → TradeScene opens.
+    const market = buttons.find((b) => b.label.includes('Маркет'));
+    expect(market).toBeDefined();
+    await page.mouse.click(market!.x, market!.y);
+    await waitForScene(page, 'TradeScene', 10_000);
+
+    // Real click on the close button «Покинуть маркет» → back to PlanetScene.
+    const close = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const main = engine.currentScene?.['mainContainer'] as
+        | {
+            children: Array<{
+              eventMode: string;
+              cursor: string;
+              width: number;
+              height: number;
+              getGlobalPosition: () => { x: number; y: number };
+              children: Array<{ text?: string }>;
+            }>;
+          }
+        | undefined;
+      const btn = main?.children.find(
+        (c) =>
+          c.eventMode === 'static' &&
+          c.cursor === 'pointer' &&
+          c.children.some((ch) => (ch.text ?? '').includes('Покинуть')),
+      );
+      if (!btn) return null;
+      const p = btn.getGlobalPosition();
+      return { x: p.x + btn.width / 2, y: p.y + btn.height / 2 };
+    });
+    expect(close).not.toBeNull();
+    await page.mouse.click(close!.x, close!.y);
+    await waitForScene(page, 'PlanetScene', 10_000);
+
+    errorCollector.assertAndDetach();
+  });
+
   test('smoke: reactor quest starts without errors', async ({ page }) => {
     await setupNewGame(page);
     const errorCollector = new ErrorCollector(page);

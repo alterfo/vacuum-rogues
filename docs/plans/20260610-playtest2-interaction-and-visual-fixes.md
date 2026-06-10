@@ -77,9 +77,9 @@ verification pass over PlanetScene. Every bug: red test → fix → screenshot.
 - Modify: `e2e/playtest-regression.spec.ts` (or planet smoke spec)
 - Modify: `src/presentation/PlanetScene.ts` (only if diagnosis finds residual blockers)
 
-- [ ] Write E2E smoke: land on a planet, `page.mouse.move()` over each menu button (coordinates from introspection) → cursor becomes pointer (not "move"/"grab"); `page.mouse.click()` the Trade button → TradeScene opens. Should pass already thanks to the UiButton hitArea fix — if it fails, diagnose with `rootBoundary.hitTest()` and fix the blocker (e.g. panorama mesh z-order)
-- [ ] Verify the back/Esc path works with a real click too (return to PlanetScene)
-- [ ] Run lint + unit + regression — green (< 60 s gate)
+- [x] Write E2E smoke (`playtest-regression.spec.ts` — "PlanetScene menu buttons … playtest2 ⑥"): land on a HABITABLE planet (so «Маркет» shows), read each service button's on-screen centre + label from scene introspection (the static/pointer children of `uiContainer`), `page.mouse.move()` over each → assert canvas cursor matches `/cursor_landing|pointer/` and NOT `/grab|grabbing|move/`; `page.mouse.click()` «Маркет» → TradeScene opens. The UiButton hitArea fix made the buttons hittable, but a `rootBoundary.hitTest()` probe revealed a REAL blocker: at 1280×720 the eighth button «Взлёт» overflowed below the viewport (center y=728.5 > 720) so its hover read the default cursor — the critical take-off action was half-clickable
+- [x] Fix the blocker: extracted a pure `computePlanetMenuLayout(screenH, contentBottomY, count)` that distributes the button stack (incl. the optional bribe button) across the available height so the LAST button's bottom edge always stays on-screen and buttons never overlap — replaces the old `Math.max(30, (h-…)/8)` step that ignored button height and the bribe row. Unit-tested in `planetSceneUtils.test.ts` (fit + no-overlap for 720/768/1080px × 8/9 buttons, no ballooning on tall screens). Verify the back path works with a real click too: real-click «Покинуть маркет» → back to PlanetScene
+- [x] Run lint + unit + regression — green (0 lint errors, 1023 unit tests, 12/12 regression E2E in 1.3 min)
 
 ### Task 6: Verify acceptance criteria
 **Files:** none
