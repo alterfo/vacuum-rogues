@@ -56,10 +56,10 @@ verification pass over PlanetScene. Every bug: red test → fix → screenshot.
 - Modify: `src/presentation/flight/FlightHud.ts`
 - Modify: `src/tests/presentation/flightHud.test.ts`
 
-- [ ] Write RED unit test: bounding boxes of `cameraDebugText` and the `SystemMiniMap` container do not intersect for representative screen sizes (1280×720, 1920×1080, narrow 1024×768)
-- [ ] Fix: derive the hint-text position from the minimap's actual bounds (place it above/left of the minimap), not from independent absolute offsets
-- [ ] Re-run letsplay spec; inspect the bottom-right corner in `lp-03`/`lp-07` — text fully readable beside/above the minimap
-- [ ] Run lint + unit + regression — green
+- [x] Write RED unit test: bounding boxes of `cameraDebugText` and the `SystemMiniMap` container do not intersect for representative screen sizes (1280×720, 1920×1080, narrow 1024×768) — 6 tests (build-time + reposition per size) in `flightHud.test.ts`; SystemMiniMap un-mocked so the REAL radar geometry is measured; Text mock got Courier metrics (0.6 em advance) + anchor-aware boxes; proven RED (all 6 failed pre-fix, worst-case wide pan read-out)
+- [x] Fix: derive the hint-text position from the minimap's actual bounds (place it above/left of the minimap), not from independent absolute offsets — `positionCameraDebugText()`: text anchored (1,0) so it grows leftward, right edge pinned to `systemMiniMap.container.x - 12`; called after radar creation in `createUI` and after `systemMiniMap.reposition()` in `reposition()`
+- [x] Re-run letsplay spec; inspect the bottom-right corner in `lp-03`/`lp-07` — text fully readable beside/above the minimap — verified on cropped 620×240 corner of both PNGs: hint sits fully left of the radar plate with a clean gap (22/22 steps, 0 JS errors)
+- [x] Run lint + unit + regression — green (0 lint errors, 1013 unit tests, 11/11 regression E2E in 45.4 s)
 
 ### Task 4: Player-ship glow polish
 **Files:**

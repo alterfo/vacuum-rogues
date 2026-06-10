@@ -195,15 +195,26 @@ export class FlightHud implements FlightModule {
     }
   }
 
+  /**
+   * Place the camera read-out beside the radar: its right edge hugs the
+   * minimap's left edge (playtest2 finding ④ — independent absolute offsets
+   * let the radar cover the text). Requires anchor (1, 0) on the text.
+   */
+  private positionCameraDebugText(
+    screenWidth: number,
+    screenHeight: number,
+  ): void {
+    if (!this.cameraDebugText) return;
+    const mapLeft = this.systemMiniMap?.container.x ?? screenWidth - 220;
+    this.cameraDebugText.x = mapLeft - 12;
+    this.cameraDebugText.y = screenHeight - 30;
+  }
+
   /** Re-anchor the screen-edge HUD after the window/canvas resizes. */
   reposition(w: number, h: number): void {
     if (this.backButton) {
       this.backButton.x = w - 220;
       this.backButton.y = 20;
-    }
-    if (this.cameraDebugText) {
-      this.cameraDebugText.x = w - 300;
-      this.cameraDebugText.y = h - 30;
     }
     if (this.toast) {
       this.toast.x = w / 2;
@@ -213,6 +224,8 @@ export class FlightHud implements FlightModule {
       this.playPauseButton.y = h - 54;
     }
     this.systemMiniMap?.reposition(w, h);
+    // After the radar settles, re-derive the camera hint from its bounds.
+    this.positionCameraDebugText(w, h);
 
     if (this.speedButton) {
       this.speedButton.x = w - 20 - 52;
@@ -308,7 +321,9 @@ export class FlightHud implements FlightModule {
     instructions.eventMode = "none"; // Explicitly set to non-interactive
     this.uiContainer.addChild(instructions);
 
-    // Camera debug display (development only)
+    // Camera debug display (development only). Right-edge anchored: the text
+    // grows leftward as pan values widen, so it can never extend under the
+    // minimap. Positioned from the minimap's bounds once the radar exists.
     if (__DEBUG__) {
       this.cameraDebugText = new Text({
         text: "Камера: Zoom 1.00 | Pan (0, 0)",
@@ -318,8 +333,7 @@ export class FlightHud implements FlightModule {
           fill: 0xff00ff,
         },
       });
-      this.cameraDebugText.x = this.renderer.app.screen.width - 300;
-      this.cameraDebugText.y = this.renderer.app.screen.height - 30;
+      this.cameraDebugText.anchor.set(1, 0);
       this.cameraDebugText.eventMode = "none";
       this.uiContainer.addChild(this.cameraDebugText);
     }
@@ -446,6 +460,10 @@ export class FlightHud implements FlightModule {
     );
     this.systemMiniMap.setReturnCameraHandler(() => this.onMiniMapReturn?.());
     this.uiLayer.addChild(this.systemMiniMap.container);
+    this.positionCameraDebugText(
+      this.renderer.app.screen.width,
+      this.renderer.app.screen.height,
+    );
 
     // Speed button: cycles 1×/2×/4× — placed above the minimap (bottom-right).
     const SPEED_BTN_W = 52;
