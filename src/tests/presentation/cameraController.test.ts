@@ -125,23 +125,24 @@ describe("CameraController (extracted from SpaceFlightScene)", () => {
     expect(() => camera.update()).not.toThrow();
   });
 
-  it("clampPan stops the pan at the backdrop edge when zoomed in", () => {
-    // boundaryRadius 400 → half = 500. At zoom 1, star at (400,300), screen
-    // 800×600: panX clamps to [-100, 100], panY to [-200, 200].
+  it("clampPan keeps the focus point inside [star ± boundaryRadius]", () => {
+    // F3 semantics: the world point at screen centre is clamped to the
+    // ship-reachable square. boundaryRadius 400, star (400,300), screen
+    // 800×600, zoom 1: focus x ∈ [0, 800] → panX = sw/2 - focusX·z ∈ [-400, 400];
+    // focus y ∈ [-100, 700] → panY = sh/2 - focusY·z ∈ [-400, 400].
     const { camera } = makeHarness(makeShip(), 400);
     camera.setPan(9999, -9999);
-    expect(camera.panX).toBe(100);
-    expect(camera.panY).toBe(-200);
+    expect(camera.panX).toBe(400);
+    expect(camera.panY).toBe(-400);
   });
 
-  it("clampPan centres the system on each axis when zoomed out past the bound", () => {
-    // boundaryRadius 400 → half = 500. At zoom 0.25 the viewport is wider than
-    // the bound, so panXMin > panXMax and the axis is centred regardless of the
-    // requested pan: X → (575+25)/2 = 300, Y → (400+50)/2 = 225.
+  it("clampPan still bounds the focus point when zoomed out", () => {
+    // Same focus bounds at zoom 0.25: focus x ∈ [0, 800] → panX ∈ [200, 400];
+    // focus y ∈ [-100, 700] → panY ∈ [125, 325].
     const { camera } = makeHarness(makeShip(), 400);
     camera.setZoom(0.25);
     camera.setPan(9999, -9999);
-    expect(camera.panX).toBe(300);
-    expect(camera.panY).toBe(225);
+    expect(camera.panX).toBe(400);
+    expect(camera.panY).toBe(125);
   });
 });

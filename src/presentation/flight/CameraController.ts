@@ -279,38 +279,28 @@ export class CameraController {
   }
 
   /**
-   * Clamp the camera pan so the visible viewport never extends past the
-   * background coverage (the nebula backdrop), i.e. the picture's edge can't be
-   * panned into view. When the viewport is larger than the bound (fully zoomed
-   * out) the system is simply centred on that axis.
+   * Clamp the camera FOCUS POINT (the world coordinate at screen centre) to
+   * the ship-reachable square [star ± boundaryRadius], so any spawn/flight
+   * position — including the system-edge hyperjump spawn — can be centred at
+   * every zoom level and screen size (F3, letsplay 2026-06-10). The sky
+   * backdrop is screen-fixed (skyContainer, not the panned gameLayer), so
+   * panning can never expose a backdrop edge; the clamp only stops the view
+   * from wandering into empty void far beyond the system boundary.
    */
   private clampPan(): void {
     const z = this.cameraZoom;
     const center = this.deps.getStarCenter();
-    // Slightly smaller than the backdrop half-size (BOUNDARY * 2.8 / 2 = 1.4)
-    // so a margin of gas always remains beyond the edge of the screen.
-    const half = this.deps.boundaryRadius * 1.25;
+    const half = this.deps.boundaryRadius;
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;
 
-    // Viewport world edges: left = -panX/z, right = (sw - panX)/z. Require the
-    // edges to stay within [center ± half].
-    const minX = center.x - half;
-    const maxX = center.x + half;
-    const panXMax = -minX * z;
-    const panXMin = sw - maxX * z;
-    this.cameraPanX =
-      panXMin > panXMax
-        ? (panXMin + panXMax) / 2
-        : Math.max(panXMin, Math.min(panXMax, this.cameraPanX));
+    // Focus point: worldX = (sw/2 - panX) / z. Require it within [center ± half].
+    const panXMax = sw / 2 - (center.x - half) * z;
+    const panXMin = sw / 2 - (center.x + half) * z;
+    this.cameraPanX = Math.max(panXMin, Math.min(panXMax, this.cameraPanX));
 
-    const minY = center.y - half;
-    const maxY = center.y + half;
-    const panYMax = -minY * z;
-    const panYMin = sh - maxY * z;
-    this.cameraPanY =
-      panYMin > panYMax
-        ? (panYMin + panYMax) / 2
-        : Math.max(panYMin, Math.min(panYMax, this.cameraPanY));
+    const panYMax = sh / 2 - (center.y - half) * z;
+    const panYMin = sh / 2 - (center.y + half) * z;
+    this.cameraPanY = Math.max(panYMin, Math.min(panYMax, this.cameraPanY));
   }
 }

@@ -62,11 +62,11 @@ which all previous "masking fixes" (TilingSprite fallback) missed.
 - Modify: `src/presentation/flight/PlayerShipRenderer.ts` (only if glow/outline proves broken)
 - Modify: `src/tests/flight/` (matching module tests)
 
-- [ ] Write RED unit test: camera pan clamp must allow centring the ship spawn position (system edge, world y ≈ 3100+) at zoom 3.5 — assert clamped pan equals requested pan for that target
-- [ ] Fix the pan-clamp bounds in CameraController so the full ship-reachable area (system boundary radius from `SYSTEM_GEOMETRY`) is focusable
-- [ ] Re-run letsplay spec; inspect `lp-06-ship.png` — ship sprite, outline and engine glow must be visible and centred
-- [ ] If the ship is still hard to read at default zoom in `lp-03`: add a subtle marker (pulsing ring or brightened outline) in PlayerShipRenderer, gated by zoom level, with a unit test
-- [ ] Run lint + unit suite + regression gate — all green
+- [x] Write RED unit test: camera pan clamp must allow centring the ship spawn position (system edge, world y ≈ 3100+) at zoom 3.5 — assert clamped pan equals requested pan for that target
+- [x] Fix the pan-clamp bounds in CameraController so the full ship-reachable area (system boundary radius from `SYSTEM_GEOMETRY`) is focusable
+- [x] Re-run letsplay spec; inspect `lp-06-ship.png` — ship sprite, outline and engine glow must be visible and centred
+- [x] If the ship is still hard to read at default zoom in `lp-03`: add a subtle marker (pulsing ring or brightened outline) in PlayerShipRenderer, gated by zoom level, with a unit test (not needed — ship clearly readable at default zoom in lp-03 after F2 dim + clamp fix; marker skipped)
+- [x] Run lint + unit suite + regression gate — all green
 
 ### Task 4: F7 — DialogueSystem residual session-map growth
 **Files:**
