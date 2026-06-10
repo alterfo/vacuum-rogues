@@ -224,3 +224,47 @@ describe("Task 9: re-entry spawn beside station / landed planet", () => {
     expect(phys.shipY).toBeCloseTo(EDGE.y, 5);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Playtest4 finding A: a font-size change re-inits SPACE_FLIGHT to re-apply the
+// scale; that re-init must NOT edge-spawn the ship via applyReentrySpawn (no
+// marker). The scene passes preserveShipPos through the context, and the entry
+// spawn honors it with precedence over the take-off/re-entry paths.
+// ---------------------------------------------------------------------------
+describe("Playtest4 A: font-scale re-init preserves ship position", () => {
+  let scene: SpaceFlightScene;
+  let s: Record<string, unknown>;
+
+  beforeEach(() => {
+    scene = new SpaceFlightScene(makeMockRenderer());
+    s = scene as unknown as Record<string, unknown>;
+    s.starRenderer = { centerX: STAR.x, centerY: STAR.y };
+    // Park the ship in the middle of the system, far from the edge.
+    s.shipPhysics = new ShipPhysics(900, 410, 0.1);
+    s.planetManager = { planetSprites: [], stationMarkers: [] };
+  });
+
+  it("applyEntrySpawn teleports to preserveShipPos, never to the edge", () => {
+    const keep = { x: 900, y: 410 };
+    (
+      scene as unknown as { applyEntrySpawn(ctx?: object): void }
+    ).applyEntrySpawn({ preserveShipPos: keep });
+    const phys = s.shipPhysics as ShipPhysics;
+    expect(phys.shipX).toBeCloseTo(keep.x, 5);
+    expect(phys.shipY).toBeCloseTo(keep.y, 5);
+    expect(dist(phys.shipX, phys.shipY, EDGE.x, EDGE.y)).toBeGreaterThan(200);
+  });
+
+  it("onFontScaleChanged re-inits SPACE_FLIGHT with the current ship pos preserved", () => {
+    const transitionTo = vi.fn();
+    s.gameEngine = { transitionTo };
+    (scene as unknown as { onFontScaleChanged(): void }).onFontScaleChanged();
+    expect(transitionTo).toHaveBeenCalledTimes(1);
+    const [, ctx] = transitionTo.mock.calls[0] as [
+      unknown,
+      { preserveShipPos?: { x: number; y: number } },
+    ];
+    expect(ctx.preserveShipPos?.x).toBeCloseTo(900, 5);
+    expect(ctx.preserveShipPos?.y).toBeCloseTo(410, 5);
+  });
+});

@@ -889,6 +889,89 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('smoke: changing the font size keeps the ship in place (playtest4 A)', async ({ page }) => {
+    // A: the ⚙ font-size buttons re-init SPACE_FLIGHT to re-apply the scale, but
+    // used to pass no context so applyReentrySpawn flung the ship to the system
+    // edge. The HUD now fans the change out (onFontScaleChange) and the scene
+    // re-inits with preserveShipPos. Park the ship at a known interior point, then
+    // click the REAL gear + "S" buttons (coords from scene introspection — the
+    // e2e* seams would bypass the UiButton hit geometry) and assert it stays put.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Warm up the event boundary (rootTarget is set on the first mapped event).
+    await page.mouse.move(5, 5);
+
+    // Park the ship at a clearly-interior point (star centre + offset), well away
+    // from the boundary edge an errant re-spawn would snap it to.
+    const parked = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const scene = engine.currentScene as Record<string, unknown>;
+      const star = scene['starRenderer'] as { centerX: number; centerY: number };
+      const phys = scene['shipPhysics'] as {
+        teleport: (x: number, y: number) => void;
+        shipX: number;
+        shipY: number;
+      };
+      const x = star.centerX + 140;
+      const y = star.centerY + 110;
+      phys.teleport(x, y);
+      return { x: phys.shipX, y: phys.shipY };
+    });
+
+    // Open the font panel via the REAL gear button.
+    const gear = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+      const c = (hud?.['gearButton'] as {
+        container?: { getGlobalPosition: () => { x: number; y: number }; width: number; height: number };
+      })?.container;
+      if (!c) return null;
+      const p = c.getGlobalPosition();
+      return { x: p.x + c.width / 2, y: p.y + c.height / 2 };
+    });
+    expect(gear).not.toBeNull();
+    await page.mouse.click(gear!.x, gear!.y);
+
+    // The "S" font button is the first hit-rect in the now-open panel (local
+    // origin 8,6 + 30×32 → centre ≈ 23,22 from the panel's global position).
+    const sBtn = await page.waitForFunction(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+      const panel = hud?.['settingsPanel'] as {
+        getGlobalPosition: () => { x: number; y: number };
+      } | null;
+      if (!panel) return null;
+      const p = panel.getGlobalPosition();
+      return { x: p.x + 23, y: p.y + 22 };
+    }, undefined, { timeout: 3_000 });
+    const s = (await sBtn.jsonValue()) as { x: number; y: number };
+    await page.mouse.click(s.x, s.y);
+
+    // The font change forces a faithful re-init; wait for the fresh scene.
+    await waitForScene(page, 'SpaceFlightScene', 20_000);
+
+    const after = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const phys = (engine.currentScene as Record<string, unknown>)?.['shipPhysics'] as {
+        shipX: number;
+        shipY: number;
+      } | null;
+      return {
+        x: phys?.shipX ?? null,
+        y: phys?.shipY ?? null,
+        fontScale: localStorage.getItem('fontScale'),
+      };
+    });
+
+    // Font scale was applied, and the ship is exactly where it was — NOT edge-spawned.
+    expect(after.fontScale).toBe('S');
+    expect(after.x).not.toBeNull();
+    expect(Math.hypot((after.x as number) - parked.x, (after.y as number) - parked.y)).toBeLessThan(5);
+
+    errorCollector.assertAndDetach();
+  });
+
   test('monkey: 50 random inputs in SpaceFlightScene do not crash', async ({ page }) => {
     await setupNewGame(page);
     const errorCollector = new ErrorCollector(page);

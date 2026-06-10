@@ -2,7 +2,6 @@ import { Container, Graphics, Text } from "pixi.js";
 import { UiButton } from "../ui/UiButton";
 import type { Renderer } from "../Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
-import { SceneType } from "@/types";
 import type { Planet } from "@/domain/Planet";
 import type { Faction } from "@/types/faction";
 import { SystemMiniMap } from "../SystemMiniMap";
@@ -104,6 +103,12 @@ export class FlightHud implements FlightModule {
   onMiniMapPan: ((worldX: number, worldY: number) => void) | null = null;
   /** Radar centre button: smoothly return the camera to the ship. */
   onMiniMapReturn: (() => void) | null = null;
+  /**
+   * Font size (S/M/L) was changed in the ⚙ panel. The scene re-inits SPACE_FLIGHT
+   * to re-apply the scale while preserving the ship position — the HUD must NOT
+   * transition the scene itself (playtest4 A, DIP).
+   */
+  onFontScaleChange: (() => void) | null = null;
 
   constructor(
     renderer: Renderer,
@@ -585,11 +590,10 @@ export class FlightHud implements FlightModule {
           this.settingsPanel.destroy({ children: true });
           this.settingsPanel = null;
         }
-        if (this.gameEngine) {
-          void this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
-            gameEngine: this.gameEngine,
-          });
-        }
+        // Fan the change out to the scene, which re-inits SPACE_FLIGHT to
+        // re-apply the font scale while preserving the ship position. The HUD
+        // never transitions the scene itself (playtest4 A, DIP).
+        this.onFontScaleChange?.();
       });
       panel.addChild(hit);
     });

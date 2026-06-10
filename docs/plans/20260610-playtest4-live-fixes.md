@@ -43,11 +43,11 @@ green unit tests.
 - Modify: `src/presentation/flight/FlightHud.ts`, `src/presentation/SpaceFlightScene.ts`
 - Modify: `src/tests/` (FlightHud + scene re-init tests)
 
-- [ ] Write the RED test: with the ship parked away from the system edge, trigger a font-scale change; assert the ship's world position is unchanged after the re-init (not edge-spawned) and the game-speed multiplier is preserved. Confirm it FAILS
-- [ ] Add `onFontScaleChange: (() => void) | null` to FlightHud; the font button calls `setFontScale(key)` + closes the panel + fires the callback (no direct `transitionTo` in the HUD)
-- [ ] Scene wires it (`SpaceFlightScene.ts:~202`): capture `shipPhysics.shipX/shipY` and `transitionTo(SPACE_FLIGHT, { gameEngine, preserveShipPos: { x, y } })`. Add `preserveShipPos?: { x: number; y: number }` to the scene context type; `initialize()` honors it (teleport there, takes precedence over `applyReentrySpawn`) and re-applies the persisted game speed
-- [ ] Re-run letsplay/real check: change font mid-system → ship stays put, HUD font scales
-- [ ] Run lint + unit + regression — green
+- [x] Write the RED test: with the ship parked away from the system edge, trigger a font-scale change; assert the ship's world position is unchanged after the re-init (not edge-spawned) and the game-speed multiplier is preserved. Confirm it FAILS — FlightHud + scene RED tests added (`flightHud.test.ts`, `spaceFlightSpawn.test.ts`), confirmed failing on old code
+- [x] Add `onFontScaleChange: (() => void) | null` to FlightHud; the font button calls `setFontScale(key)` + closes the panel + fires the callback (no direct `transitionTo` in the HUD) — dropped the now-unused `SceneType` import
+- [x] Scene wires it (`SpaceFlightScene.ts:~202`): capture `shipPhysics.shipX/shipY` and `transitionTo(SPACE_FLIGHT, { gameEngine, preserveShipPos: { x, y } })`. Add `preserveShipPos?: { x: number; y: number }` to the scene context type; `initialize()` honors it (teleport there, takes precedence over `applyReentrySpawn`) and re-applies the persisted game speed — spawn precedence extracted to `applyEntrySpawn(ctx)` (preserve → take-off → re-entry); game speed already re-applied by `FlightHud.restoreGameSpeed()`. Trimmed redundant `initialize()` comments to stay under the < 1900-line guard
+- [x] Re-run letsplay/real check: change font mid-system → ship stays put, HUD font scales — added a REAL-mouse regression test (gear → "S" coords from `getGlobalPosition()`); ship stays at the parked interior point, `fontScale` → S
+- [x] Run lint + unit + regression — green (1032 unit, 16 regression, 0 lint errors)
 
 ### Task 3: C — Approach/attack course leads a moving target
 **Files:**

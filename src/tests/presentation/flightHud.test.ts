@@ -110,7 +110,7 @@ vi.mock("@/presentation/QuestJournalUI", () => ({
   })),
 }));
 
-import { Text } from "pixi.js";
+import { Graphics, Text } from "pixi.js";
 import { FlightHud } from "@/presentation/flight/FlightHud";
 import { UiButton } from "@/presentation/ui/UiButton";
 import type { Renderer } from "@/presentation/Renderer";
@@ -320,6 +320,68 @@ describe("FlightHud game-speed persistence (playtest3 F3)", () => {
     };
     expect(speed.setLabel).toHaveBeenCalledWith("1×");
     expect(engine.gameSpeedMultiplier).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Playtest4 finding A: changing the font size (S/M/L in the ⚙ panel) re-inited
+// SPACE_FLIGHT *from the HUD* with no context, which edge-spawned the ship. The
+// HUD must no longer transition the scene itself — it just persists the size,
+// closes the panel and fans the change out via onFontScaleChange (DIP); the
+// scene owns the re-init (preserving the ship position).
+// ---------------------------------------------------------------------------
+
+/** Collect the font-button pointerdown handlers created while the panel is open. */
+function fontButtonHandlers(): Array<
+  (e: { stopPropagation: () => void }) => void
+> {
+  return vi
+    .mocked(Graphics)
+    .mock.results.map((r) => r.value as { on?: ReturnType<typeof vi.fn> })
+    .flatMap((g) =>
+      (g.on?.mock.calls ?? [])
+        .filter((c: unknown[]) => c[0] === "pointerdown")
+        .map(
+          (c: unknown[]) =>
+            c[1] as (e: { stopPropagation: () => void }) => void,
+        ),
+    );
+}
+
+describe("FlightHud font-scale button (playtest4 A)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it("persists the size + fires onFontScaleChange, never transitioning the scene itself", () => {
+    const m = makeMockRenderer();
+    const engine = makeGameEngine();
+    const transitionTo = vi.fn();
+    (engine as unknown as { transitionTo: typeof transitionTo }).transitionTo =
+      transitionTo;
+    const hud = new FlightHud(m.renderer, engine, m.renderer.uiLayer);
+    const onFontScaleChange = vi.fn();
+    hud.onFontScaleChange = onFontScaleChange;
+    hud.initialize();
+
+    // Drop the Graphics created during initialize() (incl. the real minimap's)
+    // so fontButtonHandlers() only sees the font panel's hit graphics.
+    vi.mocked(Graphics).mockClear();
+
+    // Open the font-size mini-panel and click the first ("S") font button.
+    (hud as unknown as { toggleSettingsPanel(): void }).toggleSettingsPanel();
+    expect(hud.isSettingsPanelOpen()).toBe(true);
+    const handlers = fontButtonHandlers();
+    expect(handlers.length).toBeGreaterThan(0);
+    handlers[0]({ stopPropagation: vi.fn() });
+
+    // Size is persisted, the panel closes, the change fans out via the callback,
+    // and the HUD does NOT reach for transitionTo itself.
+    expect(localStorage.getItem("fontScale")).toBe("S");
+    expect(hud.isSettingsPanelOpen()).toBe(false);
+    expect(onFontScaleChange).toHaveBeenCalledTimes(1);
+    expect(transitionTo).not.toHaveBeenCalled();
   });
 });
 
