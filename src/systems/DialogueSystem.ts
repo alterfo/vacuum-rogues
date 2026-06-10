@@ -84,10 +84,12 @@ export class DialogueSystem {
       baseline.toData(),
     );
 
-    // Load historical messages if previous session exists
+    // Load historical messages if previous session exists, then drop the
+    // stale session's timestamped key so the map stays bounded per NPC.
     const previous = this.sessionHistory.get(npc.id);
     if (previous) {
       session.history.push(...previous.history);
+      this.sessionHistory.delete(previous.id);
     }
 
     // Select opening anchor

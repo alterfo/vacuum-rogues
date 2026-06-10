@@ -429,4 +429,4 @@ Phase 2 (Вакуумные Пройдохи) — core gameplay loops: economy, 
 
 **Re-entry spawn convention (Sprint 3, Task 9)**: when transitioning back to `SPACE_FLIGHT` from a docked scene, pass `fromStationId`/`fromPlanetId` in the context so `applyReentrySpawn()` parks the ship beside the marker instead of at the system edge. `Player.landedPlanetId` (set in `GameEngine.transitionTo` on landing, consumed/cleared on take-off) is the fallback for context-less re-entry — see Rule 9.
 
-**Known unresolved bug**: `DialogueSystem` session key mismatch — sessions stored under `dlg_<npcId>_<timestamp>` but history-restore lookup uses `npc.id`; keys never match, session map grows unbounded (memory leak).
+**Resolved (was "Known unresolved bug")**: `DialogueSystem` session handling — history-restore was fixed earlier by also indexing each session under `npc.id`; the residual unbounded growth (one orphaned `dlg_<npcId>_<timestamp>` entry per `startDialogue` call) is fixed too: `startDialogue` deletes the previous session's timestamped key when re-indexing the NPC, so the map holds ≤ 2 entries per NPC (regression test: `src/tests/dialogueSystem.test.ts`).

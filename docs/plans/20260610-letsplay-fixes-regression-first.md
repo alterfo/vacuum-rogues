@@ -73,11 +73,11 @@ which all previous "masking fixes" (TilingSprite fallback) missed.
 - Modify: `src/systems/DialogueSystem.ts`
 - Modify: `src/tests/` (DialogueSystem test file)
 
-- [ ] Write RED unit test: call `startDialogue(player, npc)` 10× for the same NPC — `sessionHistory` size must stay bounded (≤ 2 entries per NPC), history still restored across sessions. Confirm it FAILS (currently grows by ~1 per call via timestamped keys)
-- [ ] Fix: on `startDialogue`, delete the previous session's timestamped key (`previous.id`) when re-indexing the NPC, so each NPC holds at most one live session + one npc.id alias
-- [ ] Verify history-restore still works (existing behaviour: previous messages copied into the new session)
-- [ ] Update CLAUDE.md "Known unresolved bug" note — describe the remaining state accurately (history-restore fixed earlier; growth fixed now)
-- [ ] Run lint + unit suite — all green
+- [x] Write RED unit test: call `startDialogue(player, npc)` 10× for the same NPC — `sessionHistory` size must stay bounded (≤ 2 entries per NPC), history still restored across sessions. Confirm it FAILS (currently grows by ~1 per call via timestamped keys) (confirmed RED: map size 11 after 10 calls)
+- [x] Fix: on `startDialogue`, delete the previous session's timestamped key (`previous.id`) when re-indexing the NPC, so each NPC holds at most one live session + one npc.id alias
+- [x] Verify history-restore still works (existing behaviour: previous messages copied into the new session)
+- [x] Update CLAUDE.md "Known unresolved bug" note — describe the remaining state accurately (history-restore fixed earlier; growth fixed now)
+- [x] Run lint + unit suite — all green (0 lint errors, 954 unit tests pass)
 
 ### Task 5: F4 — Sun seam band + StarRenderer latent TilingSprite mask
 **Files:**
