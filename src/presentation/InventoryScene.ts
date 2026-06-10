@@ -2,20 +2,23 @@ import { Container, Graphics, Text } from "pixi.js";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
-import type { ShipModule } from "@/domain/ShipModule";
-import { WeaponModule, ShieldModule, EngineModule } from "@/domain/ShipModule";
+import { gearById, type Gear } from "@/systems/equipment/GearCatalog";
+import { KIND_LABEL } from "@/systems/equipment/GearBridge";
 import { logger } from "@/utils/logger";
 import { SceneType } from "@/types";
 
 /**
- * Inventory Scene - displays ship equipment slots, inventory modules, and resources
- * Accessible via "I" key from SpaceFlightScene or StarMapScene
+ * Inventory Scene — read-only view of the ship: canonical GearCatalog loadout
+ * (hull + installed gear + derived stats) and resources/credits.
+ *
+ * The legacy `ship.modules` / `inventory.modules` system is inert (F6,
+ * letsplay 2026-06-10) and deliberately NOT rendered here — gear is bought and
+ * installed via the EquipmentShopScene, which drives `gameEngine.playerLoadout`.
+ * Accessible via "I" key from SpaceFlightScene or StarMapScene.
  */
 export class InventoryScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private mainContainer: Container | null = null;
-  private selectedModule: ShipModule | null = null;
-  private selectedSlot: number | null = null;
 
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
 
@@ -59,8 +62,6 @@ export class InventoryScene extends GameScene {
     }
 
     this.gameEngine = null;
-    this.selectedModule = null;
-    this.selectedSlot = null;
 
     logger.info("InventoryScene destroyed");
   }
@@ -113,24 +114,24 @@ export class InventoryScene extends GameScene {
     // Ship stats panel (left side)
     this.renderShipStats(panelX + 20, panelY + 60);
 
-    // Equipment slots (center-left)
-    this.renderEquipmentSlots(panelX + 250, panelY + 60);
-
-    // Inventory modules (right side)
-    this.renderInventoryModules(panelX + 500, panelY + 60);
+    // Installed gear from the canonical loadout (right side)
+    this.renderLoadoutGear(panelX + 330, panelY + 60);
 
     // Resources display (bottom)
     this.renderResources(panelX + 20, panelY + panelHeight - 100);
   }
 
   /**
-   * Render ship statistics
+   * Render ship statistics. Hull capacity, shields, speed and slot usage come
+   * from the canonical loadout's derived stats when a loadout exists; live
+   * values (current HP, energy, evasion) come from the ship state.
    */
   private renderShipStats(x: number, y: number): void {
     if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player)
       return;
 
     const ship = this.gameEngine.player.ship;
+    const stats = this.gameEngine.playerLoadout?.derivedStats() ?? null;
 
     const statsTitle = new Text({
       text: "КОРАБЛЬ",
@@ -145,20 +146,26 @@ export class InventoryScene extends GameScene {
     statsTitle.y = y;
     this.mainContainer.addChild(statsTitle);
 
-    const stats = [
+    const lines = [
       `Название: ${ship.name}`,
       ``,
-      `Корпус: ${ship.hullHP}/${ship.maxHull}`,
-      `Щиты: ${ship.shields}/${ship.maxShields}`,
+      `Корпус: ${ship.hullHP}/${stats ? stats.maxHull : ship.maxHull}`,
+      `Щиты: ${stats ? stats.shields : ship.shields}`,
       `Энергия: ${ship.energy}/${ship.maxEnergy}`,
-      `Скорость: ${ship.speed}`,
+      `Скорость: ${stats ? stats.speed : ship.speed}`,
       `Уворот: ${ship.evasion}`,
     ];
+    if (stats) {
+      lines.push(
+        `Слоты: ${stats.slotsUsed}/${stats.slotsTotal}`,
+        `Трюм: ${stats.cargo}`,
+      );
+    }
 
     let yOffset = y + 30;
-    for (const stat of stats) {
+    for (const line of lines) {
       const statText = new Text({
-        text: stat,
+        text: line,
         style: {
           fontFamily: "Courier New",
           fontSize: 12,
@@ -173,14 +180,14 @@ export class InventoryScene extends GameScene {
   }
 
   /**
-   * Render equipment slots (3 slots for modules)
+   * Render the hull and installed gear from the canonical GearCatalog loadout
+   * (read-only — gear is managed in the equipment shop).
    */
-  private renderEquipmentSlots(x: number, y: number): void {
-    if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player)
-      return;
+  private renderLoadoutGear(x: number, y: number): void {
+    if (!this.gameEngine || !this.mainContainer) return;
 
-    const slotsTitle = new Text({
-      text: "УСТАНОВЛЕННЫЕ МОДУЛИ",
+    const sectionTitle = new Text({
+      text: "УСТАНОВЛЕННОЕ ОБОРУДОВАНИЕ",
       style: {
         fontFamily: "Courier New",
         fontSize: 16,
@@ -188,146 +195,14 @@ export class InventoryScene extends GameScene {
         fontWeight: "bold",
       },
     });
-    slotsTitle.x = x;
-    slotsTitle.y = y;
-    this.mainContainer.addChild(slotsTitle);
+    sectionTitle.x = x;
+    sectionTitle.y = y;
+    this.mainContainer.addChild(sectionTitle);
 
-    const ship = this.gameEngine.player.ship;
-    let yOffset = y + 35;
-
-    for (let slot = 0; slot < 3; slot++) {
-      const module = ship.modules[slot];
-      this.renderSlotCard(x, yOffset, slot, module);
-      yOffset += 130;
-    }
-  }
-
-  /**
-   * Render a single equipment slot card
-   */
-  private renderSlotCard(
-    x: number,
-    y: number,
-    slot: number,
-    module: ShipModule | null,
-  ): void {
-    if (!this.mainContainer || !this.gameEngine) return;
-
-    const slotContainer = new Container();
-    slotContainer.x = x;
-    slotContainer.y = y;
-
-    // Slot background
-    const slotBg = new Graphics();
-    slotBg.rect(0, 0, 220, 110);
-    slotBg.fill({ color: module ? 0x16213e : 0x0a0a0a, alpha: 0.9 });
-    slotBg.stroke({
-      color: this.selectedSlot === slot ? 0x00ffff : 0x444444,
-      width: 2,
-    });
-    slotContainer.addChild(slotBg);
-
-    // Slot label
-    const slotLabel = new Text({
-      text: `СЛОТ ${slot + 1}`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: 0x888888,
-        fontWeight: "bold",
-      },
-    });
-    slotLabel.x = 5;
-    slotLabel.y = 5;
-    slotContainer.addChild(slotLabel);
-
-    if (module) {
-      // Module name
-      const moduleName = new Text({
-        text: module.name,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 12,
-          fill: 0xffffff,
-          fontWeight: "bold",
-        },
-      });
-      moduleName.x = 10;
-      moduleName.y = 25;
-      slotContainer.addChild(moduleName);
-
-      // Module stats
-      const stats = this.getModuleStatsText(module);
-      const statsText = new Text({
-        text: stats,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 10,
-          fill: 0xaaaaaa,
-        },
-      });
-      statsText.x = 10;
-      statsText.y = 45;
-      slotContainer.addChild(statsText);
-
-      // Unequip button
-      const unequipBtn = this.createButton("Снять", 130, 75, 80, 25);
-      unequipBtn.on("pointerdown", () => {
-        this.unequipModule(slot);
-      });
-      slotContainer.addChild(unequipBtn);
-    } else {
-      // Empty slot message
+    const loadout = this.gameEngine.playerLoadout;
+    if (!loadout) {
       const emptyText = new Text({
-        text: "Пусто",
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 12,
-          fill: 0x555555,
-        },
-      });
-      emptyText.x = 10;
-      emptyText.y = 45;
-      slotContainer.addChild(emptyText);
-
-      // Equip button (only if module selected)
-      if (this.selectedModule) {
-        const equipBtn = this.createButton("Установить", 110, 75, 100, 25);
-        equipBtn.on("pointerdown", () => {
-          this.equipModuleToSlot(slot);
-        });
-        slotContainer.addChild(equipBtn);
-      }
-    }
-
-    this.mainContainer.addChild(slotContainer);
-  }
-
-  /**
-   * Render inventory modules list
-   */
-  private renderInventoryModules(x: number, y: number): void {
-    if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player)
-      return;
-
-    const inventoryTitle = new Text({
-      text: "МОДУЛИ В ИНВЕНТАРЕ",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: 0xffaa00,
-        fontWeight: "bold",
-      },
-    });
-    inventoryTitle.x = x;
-    inventoryTitle.y = y;
-    this.mainContainer.addChild(inventoryTitle);
-
-    const modules = this.gameEngine.player.inventory.modules;
-
-    if (modules.length === 0) {
-      const emptyText = new Text({
-        text: "Инвентарь пуст",
+        text: "Нет данных о снаряжении",
         style: {
           fontFamily: "Courier New",
           fontSize: 12,
@@ -340,41 +215,52 @@ export class InventoryScene extends GameScene {
       return;
     }
 
-    let yOffset = y + 35;
-    for (const module of modules) {
-      this.renderModuleCard(x, yOffset, module);
-      yOffset += 90;
-
-      // Stop if too many modules (add scrolling later)
-      if (yOffset > y + 450) break;
+    // Hull card first, then each installed gear item
+    const items: Gear[] = [loadout.hull];
+    for (const id of loadout.installedGearIds()) {
+      const gear = gearById(id);
+      if (gear) items.push(gear);
     }
+
+    let yOffset = y + 35;
+    for (const gear of items) {
+      this.renderGearCard(x, yOffset, gear);
+      yOffset += 70;
+
+      if (yOffset > y + 420) break; // panel bounds (scrolling later)
+    }
+
+    const hint = new Text({
+      text: "Покупка и установка — в магазине оборудования",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 10,
+        fill: 0x555577,
+      },
+    });
+    hint.x = x;
+    hint.y = yOffset + 5;
+    this.mainContainer.addChild(hint);
   }
 
   /**
-   * Render a single module card in inventory
+   * Render a single read-only gear card (name, kind, tech level)
    */
-  private renderModuleCard(x: number, y: number, module: ShipModule): void {
+  private renderGearCard(x: number, y: number, gear: Gear): void {
     if (!this.mainContainer) return;
 
-    const moduleContainer = new Container();
-    moduleContainer.x = x;
-    moduleContainer.y = y;
+    const card = new Container();
+    card.x = x;
+    card.y = y;
 
-    // Module background
-    const moduleBg = new Graphics();
-    moduleBg.rect(0, 0, 370, 75);
-    moduleBg.fill({ color: 0x16213e, alpha: 0.8 });
-    moduleBg.stroke({
-      color: this.selectedModule?.id === module.id ? 0x00ffff : 0x555555,
-      width: this.selectedModule?.id === module.id ? 2 : 1,
-    });
-    moduleBg.eventMode = "static";
-    moduleBg.cursor = "pointer";
-    moduleContainer.addChild(moduleBg);
+    const bg = new Graphics();
+    bg.rect(0, 0, 540, 60);
+    bg.fill({ color: 0x16213e, alpha: 0.8 });
+    bg.stroke({ color: 0x555555, width: 1 });
+    card.addChild(bg);
 
-    // Module name
-    const moduleName = new Text({
-      text: module.name,
+    const name = new Text({
+      text: gear.name,
       style: {
         fontFamily: "Courier New",
         fontSize: 12,
@@ -382,43 +268,25 @@ export class InventoryScene extends GameScene {
         fontWeight: "bold",
       },
     });
-    moduleName.x = 10;
-    moduleName.y = 10;
-    moduleContainer.addChild(moduleName);
+    name.eventMode = "none";
+    name.x = 10;
+    name.y = 10;
+    card.addChild(name);
 
-    // Module category
-    const categoryText = new Text({
-      text: `[${this.getCategoryRussian(module.category)}]`,
+    const meta = new Text({
+      text: `[${KIND_LABEL[gear.kind]}]  Тех. уровень: ${gear.techLevel}`,
       style: {
         fontFamily: "Courier New",
         fontSize: 10,
         fill: 0x888888,
       },
     });
-    categoryText.x = 10;
-    categoryText.y = 30;
-    moduleContainer.addChild(categoryText);
+    meta.eventMode = "none";
+    meta.x = 10;
+    meta.y = 32;
+    card.addChild(meta);
 
-    // Module stats
-    const stats = this.getModuleStatsText(module);
-    const statsText = new Text({
-      text: stats,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 10,
-        fill: 0xaaaaaa,
-      },
-    });
-    statsText.x = 10;
-    statsText.y = 48;
-    moduleContainer.addChild(statsText);
-
-    // Click to select
-    moduleBg.on("pointerdown", () => {
-      this.selectModule(module);
-    });
-
-    this.mainContainer.addChild(moduleContainer);
+    this.mainContainer.addChild(card);
   }
 
   /**
@@ -461,67 +329,6 @@ export class InventoryScene extends GameScene {
     resText.x = x;
     resText.y = y + 25;
     this.mainContainer.addChild(resText);
-  }
-
-  /**
-   * Select a module from inventory
-   */
-  private selectModule(module: ShipModule): void {
-    this.selectedModule = module;
-    this.selectedSlot = null; // Clear slot selection
-    logger.info(`Selected module: ${module.name}`);
-
-    // Re-render to update selection
-    this.refresh();
-  }
-
-  /**
-   * Equip selected module to a slot
-   */
-  private equipModuleToSlot(slot: number): void {
-    if (!this.gameEngine || !this.gameEngine.player || !this.selectedModule)
-      return;
-
-    try {
-      this.gameEngine.equipmentSystem.equipModule(
-        this.gameEngine.player,
-        this.selectedModule.id,
-        slot,
-      );
-      this.selectedModule = null; // Clear selection
-      this.refresh();
-    } catch (error) {
-      logger.error("Failed to equip module:", error);
-    }
-  }
-
-  /**
-   * Unequip module from a slot
-   */
-  private unequipModule(slot: number): void {
-    if (!this.gameEngine || !this.gameEngine.player) return;
-
-    try {
-      this.gameEngine.equipmentSystem.unequipModule(
-        this.gameEngine.player,
-        slot,
-      );
-      this.refresh();
-    } catch (error) {
-      logger.error("Failed to unequip module:", error);
-    }
-  }
-
-  /**
-   * Refresh the entire UI
-   */
-  private refresh(): void {
-    if (this.mainContainer) {
-      this.mainContainer.destroy({ children: true });
-      this.mainContainer = new Container();
-      this.renderer.uiLayer.addChild(this.mainContainer);
-      this.render();
-    }
   }
 
   /**
@@ -571,84 +378,6 @@ export class InventoryScene extends GameScene {
     });
 
     this.mainContainer.addChild(closeBtn);
-  }
-
-  /**
-   * Create a generic button
-   */
-  private createButton(
-    text: string,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-  ): Container {
-    const btn = new Container();
-    btn.x = x;
-    btn.y = y;
-    btn.eventMode = "static";
-    btn.cursor = "pointer";
-
-    const btnBg = new Graphics();
-    btnBg.rect(0, 0, width, height);
-    btnBg.fill({ color: 0x004488, alpha: 0.9 });
-    btnBg.stroke({ color: 0x00ffff, width: 1 });
-    btn.addChild(btnBg);
-
-    const btnText = new Text({
-      text: text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: 0xffffff,
-      },
-    });
-    btnText.x = (width - btnText.width) / 2;
-    btnText.y = (height - btnText.height) / 2;
-    btn.addChild(btnText);
-
-    // Hover effects
-    btn.on("pointerover", () => {
-      btnBg.clear();
-      btnBg.rect(0, 0, width, height);
-      btnBg.fill({ color: 0x0066aa, alpha: 1.0 });
-      btnBg.stroke({ color: 0x00ffff, width: 2 });
-    });
-
-    btn.on("pointerout", () => {
-      btnBg.clear();
-      btnBg.rect(0, 0, width, height);
-      btnBg.fill({ color: 0x004488, alpha: 0.9 });
-      btnBg.stroke({ color: 0x00ffff, width: 1 });
-    });
-
-    return btn;
-  }
-
-  /**
-   * Get module stats as formatted text
-   */
-  private getModuleStatsText(module: ShipModule): string {
-    if (module instanceof WeaponModule) {
-      return `Урон: ${module.damage} | Дальность: ${module.range} | Энергия: ${module.energyCost}`;
-    } else if (module instanceof ShieldModule) {
-      return `Щиты: +${module.shieldBoost} | Перезарядка: ${module.rechargeRate}`;
-    } else if (module instanceof EngineModule) {
-      return `Скорость: +${module.speedBoost} | Уворот: +${module.evasionBoost}`;
-    }
-    return "Неизвестный модуль";
-  }
-
-  /**
-   * Get Russian translation for module category
-   */
-  private getCategoryRussian(category: string): string {
-    const translations: Record<string, string> = {
-      WEAPON: "Оружие",
-      SHIELD: "Щит",
-      ENGINE: "Двигатель",
-    };
-    return translations[category] ?? category;
   }
 
   /**

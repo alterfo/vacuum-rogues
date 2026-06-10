@@ -95,12 +95,12 @@ which all previous "masking fixes" (TilingSprite fallback) missed.
 - Modify: `src/presentation/InventoryScene.ts`
 - Modify: `src/tests/` (InventoryScene test file, create if missing)
 
-- [ ] Decision (recorded): GearCatalog/ShipLoadout is canonical (it already drives speed/derived stats); the legacy `ship.modules`/`inventory.modules` system is inert and must not be player-visible
-- [ ] Write RED unit test: InventoryScene renders the ShipLoadout gear (from the working system) and does NOT render legacy `inventory.modules` entries
-- [ ] Replace the legacy module slots/list in InventoryScene with a read-only view of the GearCatalog loadout (installed gear + derived stats: hull, shields, speed, evasion)
-- [ ] Keep resources/credits section unchanged; do not touch the legacy domain fields themselves (removal is a separate migration task — out of scope)
-- [ ] Re-run letsplay spec; inspect `lp-19-inventory.png` — inventory shows the same gear the shop sells
-- [ ] Run lint + unit suite + regression gate — all green
+- [x] Decision (recorded): GearCatalog/ShipLoadout is canonical (it already drives speed/derived stats); the legacy `ship.modules`/`inventory.modules` system is inert and must not be player-visible
+- [x] Write RED unit test: InventoryScene renders the ShipLoadout gear (from the working system) and does NOT render legacy `inventory.modules` entries (`src/tests/presentation/inventoryScene.test.ts`; confirmed RED: 4/5 failed on old scene)
+- [x] Replace the legacy module slots/list in InventoryScene with a read-only view of the GearCatalog loadout (installed gear + derived stats: hull, shields, speed, evasion; equip/unequip UI removed — managed in the equipment shop)
+- [x] Keep resources/credits section unchanged; do not touch the legacy domain fields themselves (removal is a separate migration task — out of scope)
+- [x] Re-run letsplay spec; inspect `lp-19-inventory.png` — inventory shows the same gear the shop sells (Каркас «Корвет», Двигатель Тип-I, Топливный бак; loadout-derived speed/slots/cargo; 21 steps ok, 0 JS errors)
+- [x] Run lint + unit suite + regression gate — all green (0 lint errors, 963 unit tests, gate 9/9 in 37 s)
 
 ### Task 7: F5 — Combat scene layout polish
 **Files:**
