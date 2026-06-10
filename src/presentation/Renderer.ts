@@ -1,5 +1,5 @@
-import { Application, Container } from 'pixi.js';
-import { logger } from '@/utils/logger';
+import { Application, Container } from "pixi.js";
+import { logger } from "@/utils/logger";
 
 export class Renderer {
   public app: Application;
@@ -24,11 +24,12 @@ export class Renderer {
     });
 
     // Check for Canvas2D fallback (PixiJS v8 uses string type)
-    const rendererType = (this.app.renderer as unknown as { type?: string }).type;
-    if (rendererType === 'canvas') {
-      logger.warn('Canvas2D fallback active - WebGL not available');
+    const rendererType = (this.app.renderer as unknown as { type?: string })
+      .type;
+    if (rendererType === "canvas") {
+      logger.warn("Canvas2D fallback active - WebGL not available");
     } else {
-      logger.info(`Renderer type: ${rendererType ?? 'unknown'}`);
+      logger.info(`Renderer type: ${rendererType ?? "unknown"}`);
     }
 
     this.container.appendChild(this.app.canvas as unknown as Node);
@@ -37,18 +38,26 @@ export class Renderer {
     this.stage.addChild(this.uiLayer);
     this.app.stage.addChild(this.stage);
 
-    logger.info('PixiJS renderer initialized');
+    logger.info("PixiJS renderer initialized");
   }
 
   resize(): void {
-    this.app.renderer.resize(this.container.clientWidth, this.container.clientHeight);
+    this.app.renderer.resize(
+      this.container.clientWidth,
+      this.container.clientHeight,
+    );
   }
 
   clearGameLayer(): void {
     while (this.gameLayer.children.length > 0) {
       const child = this.gameLayer.children[0];
       this.gameLayer.removeChild(child);
-      child.destroy();
+      // children: true — PixiJS v8 destroy() with default options removes but
+      // does NOT destroy children, so nested wrapper Containers (e.g. the
+      // combat _gridContainer) would orphan their Graphics/Sprites undisposed.
+      // Textures stay alive (texture option off) — they are shared via the
+      // texture cache.
+      child.destroy({ children: true });
     }
   }
 
@@ -56,7 +65,7 @@ export class Renderer {
     while (this.uiLayer.children.length > 0) {
       const child = this.uiLayer.children[0];
       this.uiLayer.removeChild(child);
-      child.destroy();
+      child.destroy({ children: true });
     }
   }
 
