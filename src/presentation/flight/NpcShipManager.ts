@@ -216,7 +216,11 @@ export class NpcShipManager implements FlightModule {
     if (this.overmindOverlay) {
       const ov = this.overmindOverlay;
       this.overmindOverlay = null;
-      queueMicrotask(() => ov.destroy({ children: true }));
+      // Guard: a scene transition may run clearUILayer() (which destroys this
+      // overlay) before the microtask fires — destroying it twice throws.
+      queueMicrotask(() => {
+        if (!ov.destroyed) ov.destroy({ children: true });
+      });
     }
   }
 
