@@ -50,11 +50,11 @@ which all previous "masking fixes" (TilingSprite fallback) missed.
 - Modify: `src/config/balance.ts`
 - Modify: `src/tests/flight/` (matching module test)
 
-- [ ] Add a readability dimmer to SpaceBackgroundLayer: full-screen black overlay (or panorama alpha/tint) with strength from a new `BACKGROUND_DIM` constant in `src/config/balance.ts` (start at 0.45; geometry/visual constants live in config per CLAUDE.md)
-- [ ] Write unit test: dimmer Graphics exists in the layer, alpha matches the config constant, and `destroy()` still leaves `gameLayer.children.length === 0`
-- [ ] Re-run letsplay spec; inspect `lp-03-flight-initial.png` and `lp-07-route.png` — planets, ship, route line and NPCs must be clearly readable against the dimmed nebula
-- [ ] Verify the dimmer is NOT mounted when `__hideFlightBackground` hides the background (no double-dark in E2E screenshots)
-- [ ] Run lint + unit suite + regression gate — all green
+- [x] Add a readability dimmer to SpaceBackgroundLayer: full-screen black overlay (or panorama alpha/tint) with strength from a new `BACKGROUND_DIM` constant in `src/config/balance.ts` (start at 0.45; geometry/visual constants live in config per CLAUDE.md)
+- [x] Write unit test: dimmer Graphics exists in the layer, alpha matches the config constant, and `destroy()` still leaves `gameLayer.children.length === 0`
+- [x] Re-run letsplay spec; inspect `lp-03-flight-initial.png` and `lp-07-route.png` — planets, ship, route line and NPCs must be clearly readable against the dimmed nebula
+- [x] Verify the dimmer is NOT mounted when `__hideFlightBackground` hides the background (no double-dark in E2E screenshots)
+- [x] Run lint + unit suite + regression gate — all green
 
 ### Task 3: F3 — Player ship invisible / camera can't reach it
 **Files:**

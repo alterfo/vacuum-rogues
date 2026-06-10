@@ -136,6 +136,14 @@ export const GAME_BALANCE = {
 } as const;
 
 /**
+ * Readability dimmer strength for the flight-scene sky (F2, 2026-06-10
+ * letsplay): alpha of the full-screen black overlay mounted above the nebula
+ * backdrop/clouds/star fields so the game layer (planets, ship, routes, NPCs)
+ * stays readable against the bright panorama. 0 = no dimming, 1 = black sky.
+ */
+export const BACKGROUND_DIM = 0.45;
+
+/**
  * Sun-avoidance tuning (Sprint 2, Task 3).
  *
  * `SUN_EXCLUSION_RADIUS` is the route-planning clearance: when a straight path

@@ -4,6 +4,7 @@ import type { Renderer } from "./Renderer";
 import { SeededRNG } from "@/utils/seededRNG";
 import type { FlightModule } from "./flight/FlightModule";
 import { pickVariant, pickVariantKey, loadTextureAsync } from "./textures";
+import { BACKGROUND_DIM } from "@/config/balance";
 
 interface DriftAsteroid {
   g: Graphics;
@@ -153,6 +154,9 @@ export class SpaceBackgroundLayer implements FlightModule {
   private readonly dustMotes: DustMote[] = [];
   private vignette: Graphics | null = null;
 
+  // Readability dimmer: full-screen black overlay above all sky content (F2).
+  private dimmer: Graphics | null = null;
+
   constructor(
     renderer: Renderer,
     skyContainer: Container,
@@ -184,6 +188,7 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.createNebulae(); // Screen-space nebula clouds (skyContainer) + swarms
     this.createStarField(); // Crisp far stars (screen-fixed)
     this.createTwinkleStars(); // Bright pulsing hero stars (screen-fixed)
+    this.createDimmer(); // Readability dimmer above the whole sky (F2)
     // Foreground dust streaks + edge vignette (UI layer).
     this.createDust();
     this.createVignette();
@@ -217,6 +222,10 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.midground.visible = visible;
     if (this.dustContainer) this.dustContainer.visible = visible;
     if (this.vignette) this.vignette.visible = visible;
+    // The dimmer lives in skyContainer (hidden with the sky by the scene), but
+    // toggle it here too so a hidden background never leaves a lone dark
+    // overlay — E2E screenshots stay plain black, not double-darkened.
+    if (this.dimmer) this.dimmer.visible = visible;
   }
 
   destroy(): void {
@@ -253,6 +262,7 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.twinkleContainer = null;
     this.dustContainer = null;
     this.vignette = null;
+    this.dimmer = null;
     this.camAstG = null;
     this.starLayers.length = 0;
     this.nebulaLayers.length = 0;
@@ -818,6 +828,34 @@ export class SpaceBackgroundLayer implements FlightModule {
       this.twinkleContainer.x = cx + cam.panX * 0.08;
       this.twinkleContainer.y = cy + cam.panY * 0.08;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Readability dimmer (F2 — nebula drowns the game layer)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Full-screen black overlay added as the LAST child of skyContainer so it
+   * uniformly darkens every sky element beneath it (nebula art backdrop,
+   * procedural clouds, star fields, twinkle stars) while the game world — drawn
+   * above the sky — keeps full contrast. Strength comes from BACKGROUND_DIM in
+   * `src/config/balance.ts`. The nebula backdrop sprite is async-mounted at
+   * index 0, so it always lands below this overlay regardless of load order.
+   */
+  private createDimmer(): void {
+    const d = new Graphics();
+    // Slight overdraw so window resizes never expose an undimmed border.
+    d.rect(
+      -this.width * 0.25,
+      -this.height * 0.25,
+      this.width * 1.5,
+      this.height * 1.5,
+    );
+    d.fill({ color: 0x000000, alpha: 1 });
+    d.alpha = BACKGROUND_DIM;
+    d.eventMode = "none";
+    this.dimmer = d;
+    this.skyContainer.addChild(d);
   }
 
   // ---------------------------------------------------------------------------

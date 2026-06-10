@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { Container } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
 import {
   SpaceBackgroundLayer,
   type BackgroundCamera,
   type BackgroundShipVelocity,
 } from "@/presentation/SpaceBackgroundLayer";
 import type { Renderer } from "@/presentation/Renderer";
+import { BACKGROUND_DIM } from "@/config/balance";
 
 /**
  * Build a minimal Renderer stand-in backed by real PixiJS Containers. The
@@ -17,6 +18,7 @@ function makeHarness(): {
   layer: SpaceBackgroundLayer;
   stage: Container;
   uiLayer: Container;
+  gameLayer: Container;
   skyContainer: Container;
 } {
   const stage = new Container();
@@ -45,13 +47,14 @@ function makeHarness(): {
     () => velocity,
   );
 
-  return { layer, stage, uiLayer, skyContainer };
+  return { layer, stage, uiLayer, gameLayer, skyContainer };
 }
 
 interface BackgroundInternals {
   twinkleStars: unknown[];
   swarmLayers: unknown[];
   starLayers: unknown[];
+  dimmer: Graphics | null;
 }
 
 describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
@@ -83,6 +86,40 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
     expect(stage.children.length).toBeGreaterThan(1);
     // Dust streaks + vignette live on the UI layer.
     expect(uiLayer.children.length).toBeGreaterThan(0);
+
+    layer.destroy();
+  });
+
+  it("mounts a readability dimmer above all sky content at BACKGROUND_DIM strength (F2)", () => {
+    const { layer, gameLayer, skyContainer } = makeHarness();
+    layer.initialize();
+
+    const internal = layer as unknown as BackgroundInternals;
+    const dimmer = internal.dimmer;
+    expect(dimmer).not.toBeNull();
+    // The dimmer must sit ON TOP of every sky element (nebula backdrop, clouds,
+    // star fields, twinkle stars) so it dims the whole backdrop uniformly.
+    expect(dimmer!.parent).toBe(skyContainer);
+    expect(skyContainer.getChildIndex(dimmer!)).toBe(
+      skyContainer.children.length - 1,
+    );
+    expect(dimmer!.alpha).toBeCloseTo(BACKGROUND_DIM);
+
+    // The module never touches the game world; destroy() must keep that true.
+    layer.destroy();
+    expect(gameLayer.children.length).toBe(0);
+    expect(internal.dimmer).toBeNull();
+  });
+
+  it("hides the dimmer when the background is hidden (no double-dark in E2E)", () => {
+    const { layer } = makeHarness();
+    layer.initialize();
+
+    const internal = layer as unknown as BackgroundInternals;
+    layer.setVisible(false);
+    expect(internal.dimmer!.visible).toBe(false);
+    layer.setVisible(true);
+    expect(internal.dimmer!.visible).toBe(true);
 
     layer.destroy();
   });
