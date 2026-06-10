@@ -1239,10 +1239,10 @@ export class SpaceFlightScene extends GameScene {
         }
       }
 
-      // Arrived at an open-space destination with nothing else to do → the turn
-      // ends (Play/Pause model).
+      // Arrived at an open-space destination → end the turn. endTurn() (not a
+      // bare flag) resets ALL turn state, incl. the F1 deferred-pause latch.
       this.clearPlannedRoute();
-      this.isTurnRunning = false;
+      this.endTurn();
     }
 
     // Star-touch damage: while the ship is inside the star visual radius the

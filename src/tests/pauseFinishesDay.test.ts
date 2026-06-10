@@ -378,6 +378,37 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
     expect(advanceGalaxyDay).not.toHaveBeenCalled();
   });
 
+  it("clears the deferred-pause latch when the ship arrives at an open-space destination (no leak to the next turn)", () => {
+    // Pause is pressed mid-flight (latch set), then the ship reaches its
+    // open-space waypoint BEFORE the next day boundary — so the turn ends on
+    // arrival, not on the latch. The latch must NOT survive into the next turn;
+    // otherwise the next executed route is aborted after one day with no Pause.
+    s.gameEngine = {
+      player: { ship: { hullHP: 100, maxHull: 100 } },
+      galaxy: { gameDays: 0 },
+      advanceGalaxyDay: vi.fn(),
+    };
+    const phys = makeMovingPhysics();
+    // Arrive this frame: update() stops the ship without advancing distance, so
+    // no day boundary is crossed (the latch's own day-tick path never fires).
+    phys.update = function (this: typeof phys) {
+      this.isMoving = false;
+      this.currentSpeed = 0;
+    };
+    s.shipPhysics = phys;
+    s.isTurnRunning = true;
+    s.distanceTraveled = 0;
+    s.clearPlannedRoute = vi.fn();
+    s.pauseAtDayBoundary = true; // a deferred pause was latched before arrival
+
+    updateShip(16); // ship arrives at the open-space destination this frame
+
+    // The turn ends on arrival, and the latch is consumed — a freshly executed
+    // route next turn must not inherit it and stop itself after one day.
+    expect(s.isTurnRunning).toBe(false);
+    expect(s.pauseAtDayBoundary).toBe(false);
+  });
+
   it("Play from a paused state starts a fresh turn with no stale deferred pause", () => {
     const phys = makeMovingPhysics();
     phys.isMoving = false;
