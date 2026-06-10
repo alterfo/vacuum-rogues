@@ -723,6 +723,91 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('smoke: take-off after the equipment shop parks beside the planet, not at the system edge (playtest3 F4)', async ({ page }) => {
+    // F4: land → equipment shop → return → "Взлёт". The take-off must spawn the
+    // ship beside the planet it left, not fling it to the distant system edge.
+    // Drives the REAL PlanetScene.takeOff() (e2eTakeOff) so the fromPlanetId
+    // re-entry marker is actually exercised across the shop round-trip.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Capture the planet we will land on (e2eLandOnPlanet lands on sprite[0]).
+    const landedPlanetId = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eGetPlanets?: () => { id: string }[] } | null;
+      };
+      return engine.currentScene?.e2eGetPlanets?.()[0]?.id ?? null;
+    });
+    expect(landedPlanetId).not.toBeNull();
+
+    // Land on the planet.
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eLandOnPlanet?: () => Promise<void> } | null;
+      };
+      await engine.currentScene?.e2eLandOnPlanet?.();
+    });
+    await waitForScene(page, 'PlanetScene', 15_000);
+
+    // Open the equipment shop (PLANET → EQUIPMENT_SHOP), then return (the shop's
+    // goBack returns to PLANET) — the round-trip that lost the marker.
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { planet?: unknown } | null;
+        transitionTo: (s: string, ctx?: object) => Promise<void>;
+      };
+      const planet = engine.currentScene?.planet;
+      await engine.transitionTo('EQUIPMENT_SHOP', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'EquipmentShopScene', 15_000);
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { planet?: unknown } | null;
+        transitionTo: (s: string, ctx?: object) => Promise<void>;
+      };
+      const planet = engine.currentScene?.planet;
+      await engine.transitionTo('PLANET', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'PlanetScene', 15_000);
+
+    // Take off via the real "Взлёт" action.
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eTakeOff?: () => Promise<void> } | null;
+      };
+      await engine.currentScene?.e2eTakeOff?.();
+    });
+    await waitForScene(page, 'SpaceFlightScene', 20_000);
+
+    // The ship must be parked beside the planet it left, not at the system edge.
+    const result = await page.evaluate((planetId) => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene;
+      if (!scene) return null;
+      const phys = scene['shipPhysics'] as { shipX: number; shipY: number } | null;
+      const pm = scene['planetManager'] as
+        | { planetSprites: Array<{ planet: { id: string }; screenX: number; screenY: number; displayRadius: number }> }
+        | undefined;
+      const star = scene['starRenderer'] as { centerX: number; centerY: number } | undefined;
+      const sprite = pm?.planetSprites.find((s) => s.planet.id === planetId);
+      if (!phys || !sprite || !star) return null;
+      return {
+        distToPlanet: Math.hypot(phys.shipX - sprite.screenX, phys.shipY - sprite.screenY),
+        distToStar: Math.hypot(phys.shipX - star.centerX, phys.shipY - star.centerY),
+        planetDistToStar: Math.hypot(sprite.screenX - star.centerX, sprite.screenY - star.centerY),
+        displayRadius: sprite.displayRadius,
+      };
+    }, landedPlanetId);
+    expect(result).not.toBeNull();
+    // Parked just outside the planet disc (take-off arc ends ~90px out): the ship
+    // sits within the planet's disc + a generous margin, NOT a system-radius away.
+    expect(result!.distToPlanet).toBeLessThanOrEqual(result!.displayRadius + 220);
+
+    errorCollector.assertAndDetach();
+  });
+
   test('monkey: 50 random inputs in SpaceFlightScene do not crash', async ({ page }) => {
     await setupNewGame(page);
     const errorCollector = new ErrorCollector(page);

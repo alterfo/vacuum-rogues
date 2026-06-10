@@ -1373,6 +1373,17 @@ export class PlanetScene extends GameScene {
   }
 
   /**
+   * E2E helper: drive the real "Взлёт" take-off (F4 regression). Exercises the
+   * production path (`takeOff` → `transitionTo(SPACE_FLIGHT, { fromPlanetId })`)
+   * so the test catches a lost re-entry marker after the shop round-trip; a raw
+   * `transitionTo` would bypass the very code under test.
+   */
+  e2eTakeOff(): Promise<void> {
+    if (!__DEBUG__) return Promise.resolve();
+    return this.takeOff();
+  }
+
+  /**
    * Show a transient feedback message near the bottom of the planet screen.
    */
   private showMessage(text: string, color: number): void {

@@ -50,10 +50,10 @@ check as a hard acceptance gate before commit** — not just green unit tests.
 - Modify: `src/presentation/SpaceFlightScene.ts` (only if `applyReentrySpawn` needs adjustment)
 - Modify: `e2e/playtest-regression.spec.ts`
 
-- [ ] Write the RED E2E test: land on a planet → open equipment shop → return → take off; assert the ship spawns within a marker radius of that planet, NOT at the system boundary. Confirm it FAILS
-- [ ] Fix: PLANET take-off always passes `fromPlanetId` for the current planet (independent of the one-shot `landedPlanetId`), so the shop/station round-trip cannot lose the re-entry marker
-- [ ] Verify the red test passes; add/extend a unit test for the take-off context payload
-- [ ] Run lint + unit + regression — green
+- [x] Wrote the E2E test (`playtest3 F4` in `e2e/playtest-regression.spec.ts`): real flow land → EQUIPMENT_SHOP → return to PLANET → real `takeOff()` (new `PlanetScene.e2eTakeOff` hook so the production `transitionTo(SPACE_FLIGHT,{fromPlanetId})` is exercised, not a raw transition); asserts the ship parks within `displayRadius + 220px` of the planet, not a system-radius away. **Empirical finding: it came up GREEN, not RED.** The fix this task prescribes — PLANET take-off always passing `fromPlanetId` — has been in `PlanetScene.takeOff()` since commit `40f52ea` (long before the playtest2 build the user played), so the planet equipment-shop round-trip never lost the marker. Audited the sibling take-off/undock paths: `StationScene.undock` passes `fromStationId`; the station "Магазин снаряжения" is an in-station sub-view (undock still uses `fromStationId`); `EquipmentShopScene.goBack` returns to PLANET with the planet, which re-arms `landedPlanetId` too. All re-entry markers are passed correctly — F4 as described does not reproduce on the planet path on current code
+- [x] Fix already present (verified, predates this task): `takeOff()` passes `fromPlanetId: this.planet?.id` independent of the one-shot `landedPlanetId`; `SpaceFlightScene.initialize` (lines 476–508) parks the ship beside that planet via the take-off arc and clears `landedPlanetId`
+- [x] Added the unit test for the take-off context payload (`src/tests/presentation/planetSceneTakeOff.test.ts`): `takeOff()` always passes `fromPlanetId` for the current planet, and blocks the transition (no take-off) when the loadout cannot take off. Plus the E2E above as the end-to-end guard
+- [x] Run lint + unit + regression — green (lint 0 errors, 1030 unit tests, 14 regression tests)
 
 ### Task 3: F3 — Game speed (x1/x2/x4) persists across turns and re-entry
 **Files:**
