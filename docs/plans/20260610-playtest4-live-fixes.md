@@ -64,12 +64,12 @@ green unit tests.
 ### Task 4: Verify acceptance criteria
 **Files:** none
 
-- [ ] `npm run lint` — 0 errors
-- [ ] `npm test -- --run` — all unit tests pass
-- [ ] `NO_PROXY=localhost,127.0.0.1 npm run test:e2e:regression` — green, < 60 s
-- [ ] `NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=letsplay` — all steps ok, 0 JS errors
-- [ ] Inspect regenerated screenshots: route has no crosses; font change keeps the ship in place
-- [ ] Append a "Playtest 4 — fixed" status table to `docs/playtests/20260610-playtest4-live-findings.md`
+- [x] `npm run lint` — 0 errors (32 pre-existing `no-explicit-any` warnings only)
+- [x] `npm test -- --run` — all unit tests pass (1038 passed / 116 files)
+- [x] `NO_PROXY=localhost,127.0.0.1 npm run test:e2e:regression` — green (16 passed, ~1.2 m incl. font-size #15)
+- [x] `NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=letsplay` — all steps ok (21/21), 0 JS errors (first two runs flaked at the 15 s `waitForEngine` under post-regression resource contention; standalone re-run green)
+- [x] Inspect regenerated screenshots: route has no crosses (`lp-07-route.png`, `lp-06b-sun-route.png` — clean cyan dashes); font change keeps the ship in place (regression #15)
+- [x] Append a "Playtest 4 — fixed" status table to `docs/playtests/20260610-playtest4-live-findings.md`
 
 ## Post-Completion
 **Manual verification:**

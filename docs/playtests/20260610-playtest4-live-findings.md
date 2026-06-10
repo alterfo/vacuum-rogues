@@ -35,3 +35,13 @@ a course set to a moving NPC/planet; keep the sun-clearance bypass.
 All three folded into `docs/plans/20260610-playtest4-live-fixes.md` (B's
 remove-entirely decision locked in). Run via ralphex regression-first with
 letsplay gates after this build — same flight files, so no concurrent run.
+
+## Playtest 4 — fixed (2026-06-10)
+
+| Finding | Fix | Regression guard |
+|---------|-----|------------------|
+| A — font size flings ship to edge | Font button fires `FlightHud.onFontScaleChange` callback (no direct `transitionTo`); scene captures `shipX/shipY` and re-inits with `preserveShipPos`, honored ahead of `applyReentrySpawn` in `applyEntrySpawn(ctx)`; persisted game speed re-applied via `FlightHud.restoreGameSpeed()` | `playtest-regression.spec.ts` #15 (REAL-mouse gear→S, ship stays put); `flightHud.test.ts`, `spaceFlightSpawn.test.ts` |
+| B — per-day route tick crosses | Removed the day-tick draw loop + `distancePerDay` param from `RouteRenderer.drawRoute`; deleted the dead `dayTickMarks` util and its test; only the cyan dashed line remains | `routeRenderer.test.ts` (no yellow `0xffee66` stroke); visual: `lp-07-route.png`, `lp-06b-sun-route.png` (clean dashes, no crosses) |
+| C — approach/attack course must lead a moving target | New tested `src/utils/intercept.ts#solveInterceptPoint` (time-to-intercept quadratic, falls back to current pos when no real-positive solution); wired into NPC "Приблизиться", orbiting-planet re-chase, and the attack-follow chase; sun-clearance bypass kept on the result | `intercept.test.ts`, `npcShipManager.test.ts` (chase leads ahead of heading), `planetSpriteVelocity.test.ts` |
+
+**Acceptance (all green):** `npm run lint` 0 errors · `npm test -- --run` 1038 passed · `npm run test:e2e:regression` 16 passed · letsplay 21/21 steps, 0 JS errors.
