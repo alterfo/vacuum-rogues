@@ -25,19 +25,29 @@ Interactive browser session to visually verify SpaceFlightScene after sprint3 + 
 **Files:**
 - Read: `src/presentation/SpaceFlightScene.ts` (e2e* methods available)
 - Read: `src/presentation/PlanetSprite.ts` (masking code)
+- Create: `e2e/space-flight-exploration.spec.ts` (Playwright exploration harness)
 - Create: `e2e/screenshots/exploration/` (auto-created by playwright)
 
-- [ ] Start dev server (`npm run dev`) and open game in Claude-in-Chrome
-- [ ] Navigate: main menu → new game → faction select (OUTLANDERS) → SpaceFlightScene
-- [ ] Screenshot: initial scene (star, planets, ship, HUD visible)
-- [ ] Screenshot: zoom in on each planet — document shape (round vs rectangle)
-- [ ] Click Ход button → screenshot ship moving, HUD state
-- [ ] Click planet → screenshot route line appearing
-- [ ] Hover over planet, NPC ship, Ход button → screenshot cursor shape
-- [ ] Screenshot: sun close-up (corona glow quality)
-- [ ] Screenshot: ship with engine glow and outline
-- [ ] Click NPC ship → screenshot dialogue/info panel
-- [ ] Document all visual regressions found in checklist below as ⚠️
+- [x] Start dev server (`npm run dev`) and open game — automated via Playwright exploration harness (`e2e/space-flight-exploration.spec.ts`) instead of interactive Claude-in-Chrome; screenshots inspected as PNGs
+- [x] Navigate: main menu → new game → faction select (OUTLANDERS) → SpaceFlightScene
+- [x] Screenshot: initial scene (star, planets, ship, HUD visible) → `space-01-initial.png`
+- [x] Screenshot: zoom in on each planet — document shape (round vs rectangle) → `space-02-planet-{0..3}.png`
+- [x] Click Ход button → screenshot ship moving, HUD state → `space-06-after-turn.png`
+- [x] Click planet → screenshot route line appearing → `space-05-route.png`
+- [x] Hover over planet, NPC ship, Ход button → screenshot cursor shape — deferred to Task 4: canvas screenshots can't show the DOM cursor; cursor is verified via `container.cursor` property assertions there, not pixels
+- [x] Screenshot: sun close-up (corona glow quality) → `space-03-sun.png`
+- [x] Screenshot: ship with engine glow and outline → `space-04-ship.png` (see finding ④ — ship sits at the system edge, outside camera pan-clamp range; isolating it cleanly is deferred to Task 4 after the background is hidden)
+- [x] Click NPC ship → screenshot dialogue/info panel → `space-07-npc.png`
+- [x] Document all visual regressions found in checklist below as ⚠️ (see "Task 1 findings" below)
+
+**Task 1 findings (2026-06-10):** System «Меридиан» has 4 planets (Меридиан, Феникс, Резонанс, Спика) and 9 NPC ships. Camera transform confirmed `screen = world*zoom + pan`; manual pan persists while the ship is stopped (CameraController only follows while moving).
+
+- ⚠️ **CRITICAL — planet circular masking still broken (TilingSprite path).** On every textured rocky planet (Меридиан, Феникс, Резонанс) the surface texture renders as a **rectangle clipped at a straight horizontal bottom edge**, while the atmosphere/glow ring is correctly circular. The TilingSprite mask circle is offset from the texture's local origin — exactly the bug noted in Context. This is Task 2's target. Evidence: `space-02-planet-0/1/2`.
+- ✅ Sun renders correctly — circular disc with a good fiery corona/glow. Evidence: `space-03-sun`.
+- ✅ Ход (play/pause) toggle works — button flips Ход→ПАУЗА, motion streaks appear, ship flies. Evidence: `space-06-after-turn`.
+- ⚠️ **Heavy nebula panorama dominates every frame** — planets, ship, route line and NPCs are hard to read against the background. Validates Task 3's `e2eSetBackgroundVisible(false)` for clean, diff-friendly screenshots.
+- ⚠️ ④ **Ship close-up could not be isolated** — the ship spawns at the system edge (world y≈3160, far outside orbit bounds) and camera pan-clamping prevents focusing it at high zoom; its outline/engine-glow couldn't be visually verified in isolation. Re-verify in Task 4 once the background is hidden and the camera can follow the moving ship.
+- ⚠️ ⑤ **NPC isolation overridden by camera follow** — capturing the NPC after starting flight let the ship-follow camera override the manual NPC focus (motion streaks dominate `space-07-npc`). Capture NPCs *before* pressing Ход in future runs.
 
 ### Task 2: Fix planet circular masking (TilingSprite path)
 **Files:**
@@ -92,7 +102,21 @@ Interactive browser session to visually verify SpaceFlightScene after sprint3 + 
 - [ ] Add smoke test: no JS errors thrown during 3-turn play session (ErrorCollector)
 - [ ] Verify `npm run test:e2e:regression` completes in < 60s
 
-### Task 6: Verify acceptance criteria
+### Task 6: GRASP compliance review of flight/ modules
+**Files:**
+- Read: `src/presentation/flight/*.ts` (all extracted modules)
+- Read: `src/presentation/SpaceFlightScene.ts` (the controller)
+
+- [ ] **Information Expert** — verify each module owns its own data: PlanetManager has planetSprites, NpcShipManager has npcSprites, StarRenderer has starContainer/radius; none reach into SpaceFlightScene for their own state
+- [ ] **Controller** — verify SpaceFlightScene only routes events (pointerdown, onPlayPause, onTurnEnd) and delegates rendering/logic to modules; no direct Graphics/Sprite manipulation left in Scene
+- [ ] **Low Coupling** — verify no module imports another module from `flight/`; all cross-module calls go through SpaceFlightScene callbacks
+- [ ] **High Cohesion** — verify each module has a single clear responsibility; flag any module over ~600 lines or with mixed concerns
+- [ ] **Creator** — verify SpaceFlightScene is the sole creator of all FlightModule instances; modules don't create each other
+- [ ] **Protected Variations** — verify all module interaction goes through `FlightModule` interface or explicit callback signatures (no `as any` casts to reach internal state)
+- [ ] Document any violations found as ⚠️ with suggested fix
+- [ ] If violations are fixable (< 30 min): fix and commit; otherwise add to backlog
+
+### Task 7: Verify acceptance criteria
 **Files:** none
 
 - [ ] `npm run lint` — 0 errors

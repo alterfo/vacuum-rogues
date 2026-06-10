@@ -28,6 +28,8 @@ logs/
 playwright-report/
 test-results/
 .playwright/
+# Dynamic exploration screenshots (visual debugging artifacts, not baselines)
+e2e/screenshots/exploration/
 
 # Coverage
 coverage/

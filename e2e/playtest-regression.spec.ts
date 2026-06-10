@@ -48,7 +48,9 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     await setupNewGame(page);
     const errorCollector = new ErrorCollector(page);
 
-    // Trigger onPlanetClick via the first planet in scene to plan a route
+    // Plan a route to the first planet via the scene's route handler. After the
+    // SOLID refactor the planet sprites live on planetManager and clicks route
+    // through handlePlanetRouteRequested(id, x, y) rather than onPlanetClick.
     const routeSet = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: Record<string, unknown> | null;
@@ -56,13 +58,19 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
       const scene = engine.currentScene;
       if (!scene) return false;
 
-      const planetSprites = scene['planetSprites'] as Array<{ planet: unknown }> | undefined;
+      const planetManager = scene['planetManager'] as
+        | { planetSprites: Array<{ planet: { id: string }; screenX: number; screenY: number }> }
+        | undefined;
+      const planetSprites = planetManager?.planetSprites;
       if (!planetSprites || planetSprites.length === 0) return false;
 
-      const onPlanetClick = scene['onPlanetClick'] as ((p: unknown) => void) | undefined;
-      if (!onPlanetClick) return false;
+      const routeTo = scene['handlePlanetRouteRequested'] as
+        | ((id: string, x: number, y: number) => void)
+        | undefined;
+      if (!routeTo) return false;
 
-      onPlanetClick.call(scene, planetSprites[0].planet);
+      const first = planetSprites[0];
+      routeTo.call(scene, first.planet.id, first.screenX, first.screenY);
 
       const route = scene['plannedRoute'] as { x: number; y: number } | null;
       return route != null && !isNaN(route.x) && !isNaN(route.y);
