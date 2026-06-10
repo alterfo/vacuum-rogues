@@ -216,20 +216,6 @@ export class SpaceFlightPage extends GamePageBase {
   }
 
   /**
-   * Click on space (not on planet, not on UI)
-   */
-  async clickOnSpace(x: number, y: number) {
-    const canvas = this.page.locator('canvas');
-    const box = await canvas.boundingBox();
-    if (!box) throw new Error('Canvas not found');
-
-    await canvas.click({
-      position: { x, y },
-    });
-    await this.page.waitForTimeout(100);
-  }
-
-  /**
    * Open quest journal via keyboard
    */
   async openQuestJournal() {

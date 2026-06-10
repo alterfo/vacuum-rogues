@@ -187,9 +187,11 @@ export class NpcShipManager implements FlightModule {
    * E2E seam: trigger the contact-panel click for the NPC sprite at `index`,
    * exactly as a real pointer tap would. Lives here (not the scene) because the
    * NPC sprites + click handler are this module's data (Information Expert).
-   * No-op when the index is out of range. Guard `__DEBUG__` at the call site.
+   * No-op when the index is out of range. Guarded by `__DEBUG__` so the body is
+   * stripped from production builds.
    */
   e2eClickNpc(index: number): void {
+    if (!__DEBUG__) return;
     const sprite = this.npcSprites[index];
     if (sprite) this.onNpcClick(sprite.npc);
   }

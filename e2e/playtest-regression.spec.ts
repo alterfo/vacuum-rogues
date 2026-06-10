@@ -112,20 +112,33 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
   // ---------------------------------------------------------------------------
 
   test('smoke: planets render circular, not rectangular (masking regression Task 2)', async ({ page }) => {
+    // Only the TilingSprite-disc fallback path can ever regress to a rectangle;
+    // in a WebGL renderer planets take the GLSL filter / sphere-mesh paths
+    // instead, which clip in-shader / by geometry and never expose a mask via
+    // e2eMaskInfo(). Force every planet onto the tiling-disc path so this guard
+    // actually exercises (and asserts on) the masking invariant — without the
+    // flag e2eMaskInfo() is null for every planet and the loop below is a no-op.
+    await page.addInitScript(() => {
+      (window as Record<string, unknown>).__forcePlanetTilingFallback = true;
+    });
     await setupNewGame(page);
-    const sf = new SpaceFlightPage(page);
 
-    // Let lazy planet surface maps load so any TilingSprite-disc fallback bodies
-    // are built before we introspect their masks.
-    await sf.settle(30);
+    // Tiling-disc bodies are built only once the lazy planet surface map loads
+    // (async). Wait until at least one planet exposes its mask geometry rather
+    // than sleeping a fixed number of frames.
+    await page.waitForFunction(
+      () => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+        };
+        const pm = engine.currentScene?.['planetManager'] as
+          | { planetSprites: Array<{ e2eMaskInfo?: () => unknown | null }> }
+          | undefined;
+        return (pm?.planetSprites ?? []).some((s) => s.e2eMaskInfo?.() != null);
+      },
+      { timeout: 15_000 },
+    );
 
-    // Only the TilingSprite fallback path can ever regress to a rectangle — the
-    // GLSL rotation filter and the sphere-mesh paths clip in-shader / by
-    // geometry. e2eMaskInfo() returns the mask state for planets on that path and
-    // null for the others. For every planet that DID take the tiling path, the
-    // circular mask must be a child of the wrapper Container (PixiJS 8 scene-graph
-    // rule) and centred on the planet origin — exactly the invariant whose
-    // violation rendered planets as bottom-clipped rectangles (Task 2).
     const maskInfos = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
         currentScene: Record<string, unknown> | null;
@@ -143,8 +156,16 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
       return (pm?.planetSprites ?? []).map((s) => s.e2eMaskInfo?.() ?? null);
     });
 
-    for (const info of maskInfos) {
-      if (!info) continue; // shader / sphere-mesh path — circular by construction.
+    // The guard must have actually run — at least one planet built a tiling disc.
+    const checked = maskInfos.filter(
+      (info): info is NonNullable<typeof info> => info != null,
+    );
+    expect(checked.length).toBeGreaterThan(0);
+
+    for (const info of checked) {
+      // The circular mask must be a child of the wrapper Container (PixiJS 8
+      // scene-graph rule) and centred on the planet origin — exactly the
+      // invariant whose violation rendered planets as bottom-clipped rectangles.
       expect(info.maskIsChild).toBe(true);
       // Centred circle: bounds are a square whose centre sits on the origin.
       const cx = info.maskBounds.x + info.maskBounds.width / 2;

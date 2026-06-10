@@ -298,35 +298,50 @@ export class PlanetSprite {
     // sphere mesh / filter (foreshortening) and the parallax background instead.
     this.shadeContainer = null;
 
-    // Preferred: a GLSL sphere-rotation filter on a flat sprite. The shader does
-    // the equirect→sphere projection, circular clip and atmosphere rim-light, and
-    // spins on its axis via the uOffset uniform (ART Task 7 / US-075).
-    // longitude fraction per ms (slow); randomized direction.
-    const filterSpeed =
-      (0.00006 + rng.next() * 0.00006) * (rng.next() < 0.5 ? 1 : -1);
-    const filter = createPlanetRotationFilter(mapTex, filterSpeed);
-    if (filter) {
-      const sprite = new Sprite(mapTex);
-      sprite.anchor.set(0.5);
-      sprite.width = radius * 2;
-      sprite.height = radius * 2;
-      sprite.eventMode = "none"; // clicks fall through to the hit-area graphics
-      sprite.filters = [filter];
-      this.rotationFilter = filter;
-      this.bodyContainer.addChild(sprite);
-      return;
-    }
+    // E2E hook: force the flat TilingSprite-disc fallback path. The GLSL filter
+    // and sphere-mesh paths (taken by default in a WebGL renderer) clip
+    // in-shader / by geometry, so without this a browser test can never reach —
+    // let alone assert on — the TilingSprite disc, which is the only path that
+    // can regress to the "planets render as rectangles" bug (Task 2). Setting
+    // window.__forcePlanetTilingFallback lets the masking regression smoke build
+    // and introspect a real tiling disc. Stripped from production (__DEBUG__).
+    const forceTiling =
+      __DEBUG__ &&
+      typeof window !== "undefined" &&
+      (window as unknown as Record<string, unknown>)
+        .__forcePlanetTilingFallback === true;
 
-    // Fallback: a real rotating sphere mesh (convex foreshortening) — same
-    // technique as the sun (US-070: planets convex too).
-    const sphere = buildSphereMesh(mapTex, radius);
-    if (sphere) {
-      this.sphere = sphere;
-      // longitude fraction per ms (slow); randomized direction.
-      this.axialSpeed =
+    if (!forceTiling) {
+      // Preferred: a GLSL sphere-rotation filter on a flat sprite. The shader
+      // does the equirect→sphere projection, circular clip and atmosphere
+      // rim-light, and spins on its axis via the uOffset uniform (ART Task 7 /
+      // US-075). longitude fraction per ms (slow); randomized direction.
+      const filterSpeed =
         (0.00006 + rng.next() * 0.00006) * (rng.next() < 0.5 ? 1 : -1);
-      this.bodyContainer.addChild(sphere.mesh);
-      return;
+      const filter = createPlanetRotationFilter(mapTex, filterSpeed);
+      if (filter) {
+        const sprite = new Sprite(mapTex);
+        sprite.anchor.set(0.5);
+        sprite.width = radius * 2;
+        sprite.height = radius * 2;
+        sprite.eventMode = "none"; // clicks fall through to the hit-area graphics
+        sprite.filters = [filter];
+        this.rotationFilter = filter;
+        this.bodyContainer.addChild(sprite);
+        return;
+      }
+
+      // Fallback: a real rotating sphere mesh (convex foreshortening) — same
+      // technique as the sun (US-070: planets convex too).
+      const sphere = buildSphereMesh(mapTex, radius);
+      if (sphere) {
+        this.sphere = sphere;
+        // longitude fraction per ms (slow); randomized direction.
+        this.axialSpeed =
+          (0.00006 + rng.next() * 0.00006) * (rng.next() < 0.5 ? 1 : -1);
+        this.bodyContainer.addChild(sphere.mesh);
+        return;
+      }
     }
 
     // Fallback: flat scrolling disc under a circular mask. The TilingSprite has a

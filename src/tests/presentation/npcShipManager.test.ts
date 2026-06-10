@@ -138,6 +138,20 @@ describe("NpcShipManager (extracted FlightModule)", () => {
     expect(manager.npcCount).toBe(0);
   });
 
+  it("e2eClickNpc is a no-op for out-of-range and negative indices", () => {
+    const { manager } = makeHarness([makeNpc("npc_1")]);
+    manager.initialize();
+
+    // Out-of-range and negative indices must not throw (npcSprites[i] is
+    // undefined → the `if (sprite)` guard skips onNpcClick). This pins the guard
+    // a browser test cannot reach (the scene mocks the manager).
+    expect(() => manager.e2eClickNpc(99)).not.toThrow();
+    expect(() => manager.e2eClickNpc(-1)).not.toThrow();
+    expect(manager.isContactPanelOpen).toBe(false);
+
+    manager.destroy();
+  });
+
   it("reports no open modal and tolerates a null galaxy", () => {
     const { manager } = makeHarness([]);
     expect(manager.hasOpenModal()).toBe(false);
