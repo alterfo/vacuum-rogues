@@ -151,9 +151,10 @@ export class InventoryScene extends GameScene {
     const lines = [
       `Название: ${ship.name}`,
       ``,
-      `Корпус: ${ship.hullHP}/${stats.maxHull}`,
-      // Current shields can't exceed the loadout-derived capacity (the legacy
-      // ship field may carry a stale value from before the gear was canonical).
+      // Live HP/shields can't exceed the loadout-derived capacities (the
+      // legacy ship fields may carry stale values from before the gear was
+      // canonical).
+      `Корпус: ${Math.min(ship.hullHP, stats.maxHull)}/${stats.maxHull}`,
       `Щиты: ${Math.min(ship.shields, stats.shields)}/${stats.shields}`,
       `Энергия: ${ship.energy}/${ship.maxEnergy}`,
       // px/ms, same unit and format as the NPC contact panel

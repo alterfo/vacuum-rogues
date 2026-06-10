@@ -142,6 +142,24 @@ describe("InventoryScene — canonical GearCatalog loadout view (F6)", () => {
     scene.destroy();
   });
 
+  it("clamps live hull HP to the loadout-derived maximum", () => {
+    // Legacy ship fields can carry values stale relative to the canonical
+    // loadout (e.g. hullHP from a larger legacy maxHull) — same staleness the
+    // shields line already guards against.
+    const loadout = new ShipLoadout("hull_corvette");
+    const stats = loadout.derivedStats();
+    const engine = makeEngine(loadout);
+    (engine.player!.ship as { hullHP: number }).hullHP = stats.maxHull + 60;
+
+    const scene = new InventoryScene(mockRenderer);
+    scene.initialize({ gameEngine: engine });
+
+    const all = renderedTexts().join("\n");
+    expect(all).toContain(`Корпус: ${stats.maxHull}/${stats.maxHull}`);
+
+    scene.destroy();
+  });
+
   it("renders no interactive equip/unequip affordances (read-only view)", () => {
     const loadout = new ShipLoadout("hull_corvette");
     loadout.install("eq_engine_i");

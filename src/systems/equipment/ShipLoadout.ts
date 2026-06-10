@@ -136,14 +136,7 @@ export class ShipLoadout {
    * be removed, and rejected if incompatible with the ship's faction.
    */
   applyMicromodule(gearId: string, micromoduleId: string): boolean {
-    const mm = micromoduleById(micromoduleId);
-    if (!mm) return false;
-    if (
-      this.faction !== undefined &&
-      mm.incompatibleFactions?.includes(this.faction)
-    ) {
-      return false;
-    }
+    if (!this.micromoduleAccepted(micromoduleId)) return false;
     if (gearId === this.hullId) {
       if (this.hullMicromoduleId) return false; // one per item
       this.hullMicromoduleId = micromoduleId;
@@ -153,6 +146,16 @@ export class ShipLoadout {
     if (!slot || slot.micromoduleId) return false; // not installed / already has one
     slot.micromoduleId = micromoduleId;
     return true;
+  }
+
+  /** A micromodule exists in the catalog and is compatible with the ship's faction. */
+  private micromoduleAccepted(micromoduleId: string): boolean {
+    const mm = micromoduleById(micromoduleId);
+    if (!mm) return false;
+    return !(
+      this.faction !== undefined &&
+      mm.incompatibleFactions?.includes(this.faction)
+    );
   }
 
   /** Multiplier for an item's primary stat from its attached micromodule (if any). */
@@ -279,8 +282,15 @@ export class ShipLoadout {
     }
     for (const slot of snapshot.slotted) {
       if (!loadout.install(slot.gearId)) continue;
-      if (slot.micromoduleId) {
-        loadout.applyMicromodule(slot.gearId, slot.micromoduleId);
+      // Bind the micromodule to the slot just installed, not via
+      // applyMicromodule's first-gearId-match lookup — with two copies of the
+      // same gear that lookup would silently drop the second copy's module.
+      if (
+        slot.micromoduleId &&
+        loadout.micromoduleAccepted(slot.micromoduleId)
+      ) {
+        loadout.slotted[loadout.slotted.length - 1].micromoduleId =
+          slot.micromoduleId;
       }
     }
     return loadout;

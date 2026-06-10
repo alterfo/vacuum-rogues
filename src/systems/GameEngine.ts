@@ -42,6 +42,7 @@ import type {
   IEquipmentService,
 } from "@/core/ports";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
+import type { Faction } from "@/types/faction";
 import { NpcShip } from "@/domain/NpcShip";
 import { GalaxyService, PlayerService, SceneFactory } from "@/core/services";
 import { QuestManagerAdapter, EquipmentSystemAdapter } from "@/core/adapters";
@@ -290,10 +291,7 @@ export class GameEngine {
 
       // Initialize GearCatalog loadout: starter corvette with engine + fuel tank
       if (!this.playerLoadout) {
-        const loadout = new ShipLoadout("hull_corvette");
-        loadout.install("eq_engine_i");
-        loadout.install("eq_tank");
-        this.playerLoadout = loadout;
+        this.playerLoadout = this.starterLoadout();
       }
     }
 
@@ -699,16 +697,9 @@ export class GameEngine {
     // snapshot whose hull no longer exists in the catalog — fall back to the
     // default starter loadout so gear-derived stats still work.
     const restoredLoadout = save.loadout
-      ? ShipLoadout.fromJSON(save.loadout)
+      ? ShipLoadout.fromJSON(save.loadout, this.playerLoadoutFaction())
       : null;
-    if (restoredLoadout) {
-      this.playerLoadout = restoredLoadout;
-    } else {
-      const loadout = new ShipLoadout("hull_corvette");
-      loadout.install("eq_engine_i");
-      loadout.install("eq_tank");
-      this.playerLoadout = loadout;
-    }
+    this.playerLoadout = restoredLoadout ?? this.starterLoadout();
 
     // Restore quest state into the live QuestManager (it owns quests at
     // runtime; the save only carries the serialized questLog).
@@ -772,6 +763,26 @@ export class GameEngine {
       : savedScene;
     await this.transitionTo(sceneType, { gameEngine: this });
     return true;
+  }
+
+  /**
+   * The player's faction as the ShipLoadout `Faction` type, so loadouts can
+   * enforce micromodule faction-incompatibility (canon §11.3). `FactionType`
+   * and `Faction` share their string values for all playable factions.
+   */
+  private playerLoadoutFaction(): Faction | undefined {
+    return this.player?.faction as unknown as Faction | undefined;
+  }
+
+  /** Default starter loadout: corvette with engine + fuel tank. */
+  private starterLoadout(): ShipLoadout {
+    const loadout = new ShipLoadout(
+      "hull_corvette",
+      this.playerLoadoutFaction(),
+    );
+    loadout.install("eq_engine_i");
+    loadout.install("eq_tank");
+    return loadout;
   }
 
   /**

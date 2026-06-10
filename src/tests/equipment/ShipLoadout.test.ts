@@ -152,6 +152,28 @@ describe("ShipLoadout — persistence (toJSON/fromJSON)", () => {
     ).toBeNull();
   });
 
+  it("restores micromodules per slot when the same gear is installed twice", () => {
+    // Two copies of the same gear, each with its own micromodule: restore must
+    // bind each micromodule to its own slot, not the first gearId match.
+    const restored = ShipLoadout.fromJSON({
+      hullId: "hull_bastion",
+      slotted: [
+        { gearId: "eq_shield", micromoduleId: "mm_amplifier_1" },
+        { gearId: "eq_shield", micromoduleId: "mm_amplifier_2" },
+      ],
+    });
+    expect(restored).not.toBeNull();
+    // eq_shield: techLevel 6 → 180 HP per copy before the micromodule bonus.
+    const expected =
+      Math.round(180 * (1 + micromoduleBonus(1))) +
+      Math.round(180 * (1 + micromoduleBonus(2)));
+    expect(restored!.derivedStats().shields).toBe(expected);
+    expect(restored!.toJSON().slotted).toEqual([
+      { gearId: "eq_shield", micromoduleId: "mm_amplifier_1" },
+      { gearId: "eq_shield", micromoduleId: "mm_amplifier_2" },
+    ]);
+  });
+
   it("skips unknown gear/micromodule ids without voiding the loadout", () => {
     const restored = ShipLoadout.fromJSON({
       hullId: "hull_corvette",
