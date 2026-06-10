@@ -17,6 +17,15 @@ vi.mock("pixi.js", () => ({
   // PlanetRotationFilter (via PlanetSprite → SpaceFlightScene) extends Filter at
   // module load, so the partial mock must expose a constructable Filter.
   Filter: class {},
+  // UiButton sets container.hitArea = new Rectangle(...) (real-pointer fix)
+  Rectangle: class {
+    constructor(
+      public x = 0,
+      public y = 0,
+      public width = 0,
+      public height = 0,
+    ) {}
+  },
   Application: vi.fn().mockImplementation(() => ({
     init: vi.fn().mockResolvedValue(undefined),
     canvas: document.createElement("canvas"),

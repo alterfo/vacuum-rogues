@@ -84,6 +84,11 @@ export class NpcShipManager implements FlightModule {
   private overmindOverlay: Container | null = null;
   // Guard: prevents multiple simultaneous CombatScene transition requests.
   private combatTransitionPending = false;
+  // Last camera zoom fanned out by the scene (updateHitAreas). Applied to
+  // newly spawned sprites too — otherwise a ship arriving while the player is
+  // zoomed out keeps its default 40-world-px hit circle (~10 screen px at
+  // MIN_ZOOM) until the next camera transform, making it near-unhoverable.
+  private lastCameraZoom = 1;
 
   // When set, the ship auto-follows this NPC (used by "Атаковать"): on each
   // arrival it re-routes to the target's current position (auto-follow). Read by
@@ -258,6 +263,7 @@ export class NpcShipManager implements FlightModule {
 
   /** Keep NPC hit areas a fixed screen size regardless of zoom level. */
   updateHitAreas(cameraZoom: number): void {
+    this.lastCameraZoom = cameraZoom;
     for (const s of this.npcSprites) s.updateHitArea(cameraZoom);
   }
 
@@ -303,6 +309,7 @@ export class NpcShipManager implements FlightModule {
       bounds,
     );
     sprite.setClickHandler((n) => this.onNpcClick(n));
+    sprite.updateHitArea(this.lastCameraZoom);
     sprite.setHoverHandler(
       (n, sx, sy) => this.deps.showTooltip(`${n.name} [${n.role}]`, sx, sy),
       () => this.deps.hideTooltip(),

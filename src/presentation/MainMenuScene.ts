@@ -1,8 +1,9 @@
 import { GameScene } from "./GameScene";
-import { Graphics, Text, Container } from "pixi.js";
+import { Graphics, Text, Container, Sprite, type Texture } from "pixi.js";
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
+import { pickVariant, pickVariantKey, tex, loadTextureAsync } from "./textures";
 
 interface StarParticle {
   x: number;
@@ -24,6 +25,15 @@ interface DemoShip {
   offsetY: number;
 }
 
+interface MenuPlanet {
+  node: Container;
+  /** Radians per millisecond of slow axial-looking rotation. */
+  spin: number;
+}
+
+/** Matches the ship-art orientation convention (see NpcShipSprite). */
+const SHIP_SPRITE_ROTATION = Math.PI / 2;
+
 export class MainMenuScene extends GameScene {
   private background: Graphics | null = null;
   private buttonsContainer: Container | null = null;
@@ -35,8 +45,12 @@ export class MainMenuScene extends GameScene {
   private starParticles: StarParticle[] = [];
   private starGraphics: Graphics | null = null;
   private demoShips: DemoShip[] = [];
-  private planets: Graphics[] = [];
+  private menuPlanets: MenuPlanet[] = [];
   private saveAvailable = false;
+  // Bumped on every re-render/destroy so in-flight async texture mounts
+  // (lazy nebula) for a stale render generation become no-ops (see CLAUDE.md
+  // lazy-category pattern).
+  private renderGen = 0;
 
   initialize(context?: object): void {
     // Ensure stage is interactive so pointer events reach children
@@ -92,6 +106,11 @@ export class MainMenuScene extends GameScene {
         ship.container.rotation = ship.angle + Math.PI / 2;
       }
     }
+
+    // Slow planet rotation keeps the backdrop alive
+    for (const p of this.menuPlanets) {
+      p.node.rotation += p.spin * deltaTime;
+    }
   }
 
   private async checkSaveAvailability(): Promise<void> {
@@ -104,6 +123,7 @@ export class MainMenuScene extends GameScene {
   }
 
   destroy(): void {
+    this.renderGen++; // invalidate any in-flight async texture mounts
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
@@ -121,7 +141,7 @@ export class MainMenuScene extends GameScene {
     this.gameEngine = null;
     this.starGraphics = null;
     this.demoShips = [];
-    this.planets = [];
+    this.menuPlanets = [];
     this.starParticles = [];
     logger.info("MainMenuScene destroyed");
   }
@@ -136,6 +156,7 @@ export class MainMenuScene extends GameScene {
       return;
     }
 
+    this.renderGen++; // invalidate async mounts from the previous render
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
 
@@ -148,6 +169,9 @@ export class MainMenuScene extends GameScene {
     });
     this.renderer.gameLayer.addChild(this.background);
 
+    // Real nebula art as a dimmed backdrop (lazy category — async pattern)
+    this.mountNebulaBackdrop(width, height);
+
     // Add subtle gradient effect with overlays
     const gradientOverlay = new Graphics();
     gradientOverlay.circle(width * 0.3, height * 0.2, width * 0.4);
@@ -156,23 +180,53 @@ export class MainMenuScene extends GameScene {
     gradientOverlay.fill({ color: 0x1a0520, alpha: 0.1 });
     this.renderer.gameLayer.addChild(gradientOverlay);
 
-    // Add distant planets
-    this.planets = [];
-    const planet1 = new Graphics();
-    planet1.circle(0, 0, 80);
-    planet1.fill({ color: 0x4a3520, alpha: 0.2 });
-    planet1.x = width * 0.15;
-    planet1.y = height * 0.75;
-    this.planets.push(planet1);
-    this.renderer.gameLayer.addChild(planet1);
-
-    const planet2 = new Graphics();
-    planet2.circle(0, 0, 60);
-    planet2.fill({ color: 0x204a45, alpha: 0.15 });
-    planet2.x = width * 0.85;
-    planet2.y = height * 0.3;
-    this.planets.push(planet2);
-    this.renderer.gameLayer.addChild(planet2);
+    // Add distant planets — real planet art when loaded, dim disc fallback
+    this.menuPlanets = [];
+    const planetSpecs = [
+      {
+        prefix: "gas",
+        seed: "menu_planet_1",
+        radius: 90,
+        fx: 0.15,
+        fy: 0.75,
+        alpha: 0.6,
+        spin: 0.00002,
+        fallback: 0x4a3520,
+      },
+      {
+        prefix: "habitat",
+        seed: "menu_planet_2",
+        radius: 58,
+        fx: 0.85,
+        fy: 0.3,
+        alpha: 0.5,
+        spin: -0.000015,
+        fallback: 0x204a45,
+      },
+    ];
+    for (const spec of planetSpecs) {
+      const node = new Container();
+      node.x = width * spec.fx;
+      node.y = height * spec.fy;
+      node.eventMode = "none"; // decorative
+      const planetTex = pickVariant("planets", spec.prefix, spec.seed);
+      if (planetTex) {
+        const sp = new Sprite(planetTex);
+        sp.anchor.set(0.5);
+        const s = (spec.radius * 2) / Math.max(planetTex.width, 1);
+        sp.scale.set(s);
+        sp.alpha = spec.alpha;
+        node.addChild(sp);
+      } else {
+        // Texture not preloaded (tests / very early boot) — keep the old disc
+        const g = new Graphics();
+        g.circle(0, 0, spec.radius);
+        g.fill({ color: spec.fallback, alpha: 0.2 });
+        node.addChild(g);
+      }
+      this.menuPlanets.push({ node, spin: spec.spin });
+      this.renderer.gameLayer.addChild(node);
+    }
 
     // Enhanced animated starfield with multiple layers and colors
     this.starParticles = [];
@@ -200,7 +254,14 @@ export class MainMenuScene extends GameScene {
     this.demoShips = [];
 
     // Main ship (player-like)
-    const ship1 = this.createShip(16, 0x4488cc, 0x88ccff, 0.6);
+    const ship1 = this.createShip(
+      16,
+      0x4488cc,
+      0x88ccff,
+      0.6,
+      "ranger",
+      "menu_ship_1",
+    );
     this.demoShips.push({
       container: ship1,
       angle: 0,
@@ -210,7 +271,14 @@ export class MainMenuScene extends GameScene {
     });
 
     // Smaller escort ships
-    const ship2 = this.createShip(10, 0x44cc88, 0x88ffcc, 0.4);
+    const ship2 = this.createShip(
+      10,
+      0x44cc88,
+      0x88ffcc,
+      0.4,
+      "trader",
+      "menu_ship_2",
+    );
     this.demoShips.push({
       container: ship2,
       angle: Math.PI,
@@ -219,7 +287,14 @@ export class MainMenuScene extends GameScene {
       offsetY: 0.18,
     });
 
-    const ship3 = this.createShip(12, 0xcc8844, 0xffcc88, 0.35);
+    const ship3 = this.createShip(
+      12,
+      0xcc8844,
+      0xffcc88,
+      0.35,
+      "patrol",
+      "menu_ship_3",
+    );
     this.demoShips.push({
       container: ship3,
       angle: Math.PI * 0.5,
@@ -237,11 +312,18 @@ export class MainMenuScene extends GameScene {
       text: "ВАКУУМНЫЕ ПРОЙДОХИ",
       style: {
         fontFamily: "Courier New",
-        fontSize: 32,
+        fontSize: 38,
         fill: 0x00ffff,
         letterSpacing: 6,
         align: "center",
-        lineHeight: 40,
+        lineHeight: 46,
+        dropShadow: {
+          color: 0x00ffff,
+          alpha: 0.4,
+          blur: 10,
+          distance: 0,
+          angle: 0,
+        },
       },
     });
     this.title.anchor.set(0.5);
@@ -405,13 +487,69 @@ export class MainMenuScene extends GameScene {
     }, 5000);
   }
 
+  /**
+   * Lazily mount a real nebula panorama behind the starfield. nebula/ is a
+   * LAZY_PREFIXES category, so the texture may not be cached at first render —
+   * follow the pickVariantKey + loadTextureAsync pattern with a render-
+   * generation guard (CLAUDE.md, Texture Loading).
+   */
+  private mountNebulaBackdrop(width: number, height: number): void {
+    const gen = this.renderGen;
+    const key = pickVariantKey("nebula", "blue_far", "main_menu");
+    if (!key) return;
+
+    const mount = (t: Texture): void => {
+      // Scene re-rendered (resize) or destroyed since the load started
+      if (gen !== this.renderGen) return;
+      const sp = new Sprite(t);
+      sp.anchor.set(0.5);
+      const cover = Math.max(
+        width / Math.max(t.width, 1),
+        height / Math.max(t.height, 1),
+      );
+      sp.scale.set(cover);
+      sp.x = width / 2;
+      sp.y = height / 2;
+      sp.alpha = 0.5; // dimmed — the menu must stay subdued and readable
+      sp.eventMode = "none";
+      // Right above the flat background fill, below stars/planets/ships
+      const layer = this.renderer.gameLayer;
+      layer.addChildAt(sp, Math.min(1, layer.children.length));
+    };
+
+    const cached = tex(key);
+    if (cached) mount(cached);
+    else
+      void loadTextureAsync(key).then((t) => {
+        if (t) mount(t);
+      });
+  }
+
   private createShip(
     size: number,
     primaryColor: number,
     accentColor: number,
     alpha: number,
+    artPrefix?: string,
+    artSeed?: string,
   ): Container {
     const container = new Container();
+
+    // Prefer real ship art (eager category — synchronously available after boot)
+    if (artPrefix && artSeed) {
+      const shipTex = pickVariant("ships", artPrefix, artSeed);
+      if (shipTex) {
+        const sp = new Sprite(shipTex);
+        sp.anchor.set(0.5);
+        const scale = (size * 2.4) / Math.max(shipTex.width, shipTex.height, 1);
+        sp.scale.set(scale);
+        sp.rotation = SHIP_SPRITE_ROTATION;
+        sp.alpha = Math.min(1, alpha + 0.35);
+        container.addChild(sp);
+        return container;
+      }
+    }
+
     const shipG = new Graphics();
 
     // Main ship body

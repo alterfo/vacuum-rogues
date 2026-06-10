@@ -342,6 +342,144 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('smoke: HUD buttons respond to REAL mouse clicks (UiButton hit-geometry regression)', async ({ page }) => {
+    // The e2e* driver methods bypass PixiJS hit-testing entirely, so they can
+    // never catch "button is mouse-dead" bugs. This test clicks with the real
+    // mouse at coordinates derived from scene introspection (allowed exception
+    // to the no-position-clicks rule — the POINT is to exercise hit-testing).
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Warm up the event boundary (rootTarget is set on the first mapped event)
+    await page.mouse.move(5, 5);
+
+    const btn = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+      const c = (hud?.['playPauseButton'] as {
+        container?: { getGlobalPosition: () => { x: number; y: number }; width: number; height: number };
+      })?.container;
+      if (!c) return null;
+      const p = c.getGlobalPosition();
+      return { x: p.x + c.width / 2, y: p.y + c.height / 2 };
+    });
+    expect(btn).not.toBeNull();
+
+    // Real click on Ход → a turn must start (isTurnRunning, not isFlying:
+    // with no route planned the ship stays parked while the world advances)
+    await page.mouse.click(btn!.x, btn!.y);
+    await page.waitForFunction(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      return engine.currentScene?.['isTurnRunning'] === true;
+    }, undefined, { timeout: 3_000 });
+
+    // Real click again (now ПАУЗА) → the turn must stop immediately
+    await page.mouse.click(btn!.x, btn!.y);
+    await page.waitForFunction(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      return engine.currentScene?.['isTurnRunning'] === false;
+    }, undefined, { timeout: 3_000 });
+
+    errorCollector.assertAndDetach();
+  });
+
+  test('smoke: cursor changes over an NPC ship on REAL mouse hover after a turn (playtest2 ②)', async ({ page }) => {
+    // The user's playtest finding ②: the pointer stays the default arrow over
+    // NPC ships. Root cause: every NPC spawned IDLE, so the first day-tick sent
+    // 100% of them TRAVELING → refresh() began departure on every sprite →
+    // eventMode='none' → the whole system was mouse-dead after the first turn.
+    // e2e* seams bypass PixiJS hit-testing, so only a REAL mousemove
+    // (coordinates from scene introspection, never hardcoded) can catch this.
+    await setupNewGame(page);
+    const sf = new SpaceFlightPage(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Warm up the event boundary (rootTarget is set on the first mapped event)
+    await page.mouse.move(5, 5);
+
+    // Run a course-less wait turn until at least one game day passes (the
+    // day-tick is what runs the NPC simulation + sprite refresh), then pause.
+    const day0 = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        galaxy: { gameDays: number } | null;
+      };
+      return engine.galaxy?.gameDays ?? 0;
+    });
+    await sf.startTurn();
+    await page.waitForFunction(
+      (d0) => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          galaxy: { gameDays: number } | null;
+        };
+        return (engine.galaxy?.gameDays ?? 0) > d0;
+      },
+      day0,
+      { timeout: 20_000 },
+    );
+    await sf.pressPause();
+    await sf.settle();
+
+    // At least one NPC must still be interactive (the mass-exodus bug left
+    // zero), centre the camera on it and read back its on-screen position.
+    const target = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene as
+        | ({
+            e2eSetCameraZoom?: (z: number) => void;
+            e2eSetCameraPan?: (x: number, y: number) => void;
+            e2eGetCameraState?: () => { zoom: number; panX: number; panY: number };
+          } & Record<string, unknown>)
+        | null;
+      const mgr = scene?.['npcManager'] as
+        | {
+            npcSprites: Array<{
+              x: number;
+              y: number;
+              container: {
+                cursor: string;
+                eventMode: string;
+                getGlobalPosition: () => { x: number; y: number };
+              };
+            }>;
+          }
+        | undefined;
+      const sprite = mgr?.npcSprites?.find((s) => s.container.eventMode === 'static');
+      if (!scene || !sprite) return null;
+      scene.e2eSetCameraZoom?.(1);
+      const zoom = scene.e2eGetCameraState?.().zoom ?? 1;
+      scene.e2eSetCameraPan?.(
+        window.innerWidth / 2 - sprite.x * zoom,
+        window.innerHeight / 2 - sprite.y * zoom,
+      );
+      const p = sprite.container.getGlobalPosition();
+      // cursorKind is what setClickHandler assigned: "target" (pirate) or
+      // "pointer" (trader/ranger/patrol) — the css the canvas must show follows
+      // from installGameCursors' cursorStyles mapping.
+      return { x: p.x, y: p.y, cursorKind: sprite.container.cursor };
+    });
+    expect(target).not.toBeNull();
+
+    // Real mouse hover over the NPC must switch the canvas cursor to the
+    // role's intent cursor (reticle over pirates, landing pointer otherwise).
+    await page.mouse.move(target!.x, target!.y, { steps: 3 });
+    const expected =
+      target!.cursorKind === 'target' ? /cursor_target|crosshair/ : /cursor_landing|pointer/;
+    await expect
+      .poll(
+        () => page.evaluate(() => document.querySelector('canvas')?.style.cursor ?? ''),
+        { timeout: 3_000 },
+      )
+      .toMatch(expected);
+
+    errorCollector.assertAndDetach();
+  });
+
   test('smoke: reactor quest starts without errors', async ({ page }) => {
     await setupNewGame(page);
     const errorCollector = new ErrorCollector(page);

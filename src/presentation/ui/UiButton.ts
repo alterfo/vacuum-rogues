@@ -1,4 +1,10 @@
-import { Container, Graphics, Text, type FederatedPointerEvent } from "pixi.js";
+import {
+  Container,
+  Graphics,
+  Rectangle,
+  Text,
+  type FederatedPointerEvent,
+} from "pixi.js";
 import { scaledFont } from "@/utils/fontScale";
 
 export type ButtonAccent = "primary" | "danger" | "success" | "neutral";
@@ -82,6 +88,13 @@ export class UiButton {
 
     this.container.eventMode = "static";
     this.container.cursor = "pointer";
+    // CRITICAL: every child has eventMode='none' (so labels never swallow
+    // clicks — CLAUDE.md Rule 3), which in PixiJS 8 leaves the Container with
+    // NO hit-test geometry at all: hitTestRecursive prunes 'none' children and
+    // a bare Container has no bounds of its own. Without an explicit hitArea
+    // the button is mouse-dead (real-pointer regression, 2026-06-10 playtest —
+    // Ход/pause, speed, gear and every planet-menu button were unclickable).
+    this.container.hitArea = new Rectangle(0, 0, btnW, btnH);
 
     this.container.on("pointerdown", (event: FederatedPointerEvent) => {
       event.stopPropagation();

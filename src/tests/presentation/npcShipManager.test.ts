@@ -103,6 +103,27 @@ describe("NpcShipManager (extracted FlightModule)", () => {
     manager.destroy();
   });
 
+  it("sizes newly spawned sprites' hit areas for the current camera zoom", () => {
+    const { manager } = makeHarness([makeNpc("npc_zoom")]);
+
+    // Player is zoomed out BEFORE the ship spawns (system entry / hyperjump
+    // arrival). Without spawn-time compensation the sprite keeps its default
+    // 40-world-px circle (~10 screen px at MIN_ZOOM) until the next camera
+    // transform — near-unhoverable (playtest2 ②).
+    manager.updateHitAreas(0.25);
+    manager.initialize();
+
+    const sprite = (
+      manager as unknown as {
+        npcSprites: Array<{ container: { hitArea: { radius: number } } }>;
+      }
+    ).npcSprites[0];
+    // max(28, 40 / 0.25) = 160 world px ≈ 40 screen px at zoom 0.25.
+    expect(sprite.container.hitArea.radius).toBeCloseTo(160);
+
+    manager.destroy();
+  });
+
   it("skips NPCs that are not present in the player's system", () => {
     const away = makeNpc("npc_away");
     away.state = NpcState.TRAVELING; // in transit → not present

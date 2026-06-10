@@ -152,6 +152,23 @@ cardContainer.addChild(label);
 - Labels on buttons, cards, panels
 - Non-interactive UI text
 
+**Rule 3a (PixiJS 8): A Container Whose Children Are All `eventMode='none'` Needs an Explicit `hitArea`**
+
+Rule 3 (labels get `eventMode='none'`) has a trap: if EVERY child of an interactive Container is `'none'`, the event boundary prunes them all and a bare Container contributes no bounds — the button becomes **mouse-dead** even though `container.eventMode='static'` and direct handler calls work.
+
+```typescript
+// ❌ WRONG — container is static but has NO hit geometry; real clicks never land
+const btn = new Container();
+btn.eventMode = 'static';
+bg.eventMode = 'none'; label.eventMode = 'none'; // all children pruned
+btn.addChild(bg, label);
+
+// ✅ CORRECT — give the container explicit hit geometry
+btn.hitArea = new Rectangle(0, 0, btnW, btnH);
+```
+
+This was the root cause of the 2026-06-10 "every UiButton in the game is unclickable" regression (Ход/пауза, speed, gear, all planet-menu buttons). Guarded by `src/tests/presentation/uiButtonHitArea.test.ts` + the real-mouse smoke in `playtest-regression.spec.ts`.
+
 **Rule 4: Distinguish Mouse Buttons in Event Handlers**
 
 Use `event.button` to handle different mouse buttons separately:
@@ -322,6 +339,8 @@ Every bug found in playtests or reported by the user follows this order — no e
 ### E2E Testing (Playwright)
 - Tests live in `e2e/`, Page Objects in `e2e/page-objects/`.
 - **No `canvas.click({ position: {x, y} })`** — use `page.evaluate(() => window.__gameEngine.currentScene.handler())` or accessibility attributes.
+- **EXCEPTION — interaction regressions REQUIRE real pointer events.** `e2e*` driver methods call handlers directly and bypass PixiJS hit-testing entirely, so they can never catch "button is mouse-dead" bugs (this blind spot hid the UiButton hitArea regression for weeks). For hit-testing smoke tests, use `page.mouse.click(x, y)` with coordinates **derived from scene introspection** (`container.getGlobalPosition()`), never hardcoded. Note: `rootBoundary.rootTarget` is set lazily on the first mapped DOM event — dispatch one `page.mouse.move()` before calling `hitTest()` directly.
+- `page.evaluate` callbacks are **serialized** — they cannot close over spec-module scope. Install shared browser-side helpers on `window` via `addInitScript` and add a module-level `declare function` for TypeScript (see `e2e/letsplay-discovery.spec.ts` `getEngine`).
 - No `waitForTimeout()` — use explicit waits (`waitForFunction`, `waitForSelector`).
 - In dev/test mode, `window.__gameEngine` is exposed for test access.
 - Reusable helpers in `e2e/helpers/`: `GameDriver` (typed `__gameEngine` wrapper), `ErrorCollector` (JS error listener — always call `assertAndDetach()` at test end), `MonkeyTester` (seeded random input generator).
