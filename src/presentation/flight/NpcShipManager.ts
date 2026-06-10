@@ -633,6 +633,10 @@ export class NpcShipManager implements FlightModule {
       color: 0x000000,
       alpha: 0.85,
     });
+    // Swallow clicks on the modal panel so they do not bubble to the stage
+    // route-planning handler behind it (playtest3 F6 audit, CLAUDE.md Rule 2).
+    bg.eventMode = "static";
+    bg.on("pointerdown", (e) => e.stopPropagation());
 
     const border = new Graphics();
     border

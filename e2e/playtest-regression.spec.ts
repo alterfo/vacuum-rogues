@@ -650,6 +650,79 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('smoke: clicking inside the open quest journal keeps it open and builds no route (playtest3 F6)', async ({ page }) => {
+    // F6: clicks inside the journal — both the empty backdrop AND the panel /
+    // labels — bubbled to the stage handler, which closed the modal (and, but
+    // for the modal guard, would have planned a route behind it; CLAUDE.md
+    // Rule 2). The fix swallows every journal click at the catch-all backdrop
+    // (non-button content is eventMode="none"), so a click inside the window
+    // does nothing — the journal stays open and no route is planned. e2e*
+    // shortcuts bypass hit-testing, so only a REAL mouse click can catch this.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Warm up the event boundary (rootTarget is set on the first mapped event).
+    await page.mouse.move(5, 5);
+
+    // No route planned yet.
+    const before = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      return engine.currentScene?.['plannedRoute'] ?? null;
+    });
+    expect(before).toBeNull();
+
+    // Open the quest journal via the HUD — its full-screen catch-all backdrop now
+    // covers the flight stage.
+    const isJournalOpen = () =>
+      page.evaluate(() => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+        };
+        const hud = engine.currentScene?.['hud'] as
+          | { isQuestJournalOpen: () => boolean }
+          | undefined;
+        return hud?.isQuestJournalOpen() ?? false;
+      });
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const hud = engine.currentScene?.['hud'] as
+        | { toggleQuestJournal: () => void }
+        | undefined;
+      hud?.toggleQuestJournal();
+    });
+    expect(await isJournalOpen()).toBe(true);
+
+    const screen = await page.evaluate(() => {
+      const c = document.querySelector('canvas') as HTMLCanvasElement;
+      return { w: c.clientWidth, h: c.clientHeight };
+    });
+
+    // Click the PANEL centre (inside the 600×500 window): this used to hit the
+    // panel Graphics → bubble to the stage guard → CLOSE the journal. After the
+    // fix it is swallowed by the backdrop and the journal stays open.
+    await page.mouse.click(screen.w / 2, screen.h / 2);
+    expect(await isJournalOpen()).toBe(true);
+
+    // Also click an empty corner over the dark backdrop, well outside the panel.
+    await page.mouse.click(40, screen.h - 40);
+    expect(await isJournalOpen()).toBe(true);
+
+    // No route was planned by any of those clicks.
+    const after = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      return engine.currentScene?.['plannedRoute'] ?? null;
+    });
+    expect(after).toBeNull();
+
+    errorCollector.assertAndDetach();
+  });
+
   test('monkey: 50 random inputs in SpaceFlightScene do not crash', async ({ page }) => {
     await setupNewGame(page);
     const errorCollector = new ErrorCollector(page);

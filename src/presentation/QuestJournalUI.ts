@@ -43,14 +43,30 @@ export class QuestJournalUI {
     const backdrop = new Graphics();
     backdrop.rect(-1000, -1000, 3000, 3000);
     backdrop.fill({ color: 0x000000, alpha: 0.7 });
-    backdrop.eventMode = "static"; // Block clicks behind
+    // playtest3 F6: every click inside the journal — empty backdrop AND the
+    // panel/labels — used to bubble to the stage route-planning handler (which
+    // closed the modal or planned a route behind it). eventMode="static" makes
+    // the backdrop a hit target but does NOT stop bubbling on its own
+    // (CLAUDE.md Rule 2). The fix makes the backdrop the single full-screen
+    // catch-all: it swallows every pointer event, and all non-button content
+    // (panel, labels, card backgrounds) is eventMode="none" so clicks fall
+    // through to it (Rule 3). Only the close/navigate buttons stay interactive.
+    backdrop.eventMode = "static";
+    const swallow = (event: { stopPropagation: () => void }): void => {
+      event.stopPropagation();
+    };
+    backdrop.on("pointerdown", swallow);
+    backdrop.on("pointerup", swallow);
+    backdrop.on("pointertap", swallow);
     this.container.addChild(backdrop);
 
-    // Main panel background
+    // Main panel background — non-interactive so clicks fall through to the
+    // catch-all backdrop instead of bubbling to the stage.
     const panel = new Graphics();
     panel.rect(0, 0, this.panelWidth, this.panelHeight);
     panel.fill({ color: 0x1a1a2e, alpha: 0.95 });
     panel.stroke({ color: 0x00ffff, width: 2 });
+    panel.eventMode = "none";
     this.container.addChild(panel);
 
     // Title
@@ -65,6 +81,7 @@ export class QuestJournalUI {
     });
     titleText.x = 20;
     titleText.y = 15;
+    titleText.eventMode = "none";
     this.container.addChild(titleText);
 
     // Close button
@@ -97,6 +114,7 @@ export class QuestJournalUI {
       emptyText.anchor.set(0.5);
       emptyText.x = this.panelWidth / 2;
       emptyText.y = this.panelHeight / 2;
+      emptyText.eventMode = "none";
       this.container.addChild(emptyText);
     }
   }
@@ -116,6 +134,7 @@ export class QuestJournalUI {
     });
     sectionTitle.x = 20;
     sectionTitle.y = startY;
+    sectionTitle.eventMode = "none";
     this.container.addChild(sectionTitle);
 
     let yOffset = startY + 30;
@@ -133,11 +152,12 @@ export class QuestJournalUI {
     const card = new Container();
     card.y = yPos;
 
-    // Card background
+    // Card background — non-interactive so clicks fall through to the backdrop.
     const bg = new Graphics();
     bg.rect(20, 0, this.panelWidth - 40, 100);
     bg.fill({ color: 0x16213e, alpha: 0.8 });
     bg.stroke({ color: quest.isCompleted ? 0x00ff00 : 0x888888, width: 1 });
+    bg.eventMode = "none";
     card.addChild(bg);
 
     // Quest title
@@ -152,6 +172,7 @@ export class QuestJournalUI {
     });
     titleText.x = 30;
     titleText.y = 10;
+    titleText.eventMode = "none";
     card.addChild(titleText);
 
     // Quest type
@@ -165,6 +186,7 @@ export class QuestJournalUI {
     });
     typeText.x = this.panelWidth - 120;
     typeText.y = 10;
+    typeText.eventMode = "none";
     card.addChild(typeText);
 
     // Objectives
@@ -180,6 +202,7 @@ export class QuestJournalUI {
       });
       objText.x = 40;
       objText.y = objY;
+      objText.eventMode = "none";
       card.addChild(objText);
 
       // Add "Navigate" button for VISIT_LOCATION objectives
@@ -272,6 +295,7 @@ export class QuestJournalUI {
     });
     sectionTitle.x = 20;
     sectionTitle.y = startY;
+    sectionTitle.eventMode = "none";
     this.container.addChild(sectionTitle);
 
     // Show count instead of full list to save space
@@ -285,6 +309,7 @@ export class QuestJournalUI {
     });
     completedText.x = 20;
     completedText.y = startY + 30;
+    completedText.eventMode = "none";
     this.container.addChild(completedText);
   }
 
