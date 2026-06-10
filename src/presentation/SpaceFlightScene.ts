@@ -1413,7 +1413,7 @@ export class SpaceFlightScene extends GameScene {
     const toX = this.plannedRoute.x;
     const toY = this.plannedRoute.y;
 
-    this.routeRenderer.drawRoute(points, this.DISTANCE_PER_DAY);
+    this.routeRenderer.drawRoute(points);
 
     // Check if route target is near a planet (within its interaction radius)
     const isLandingOnPlanet = this.planetManager.getPlanetAt(toX, toY) !== null;

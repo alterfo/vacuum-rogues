@@ -9,51 +9,6 @@ export interface Point {
   y: number;
 }
 
-/** A per-day division mark on a route: a centre point + a perpendicular unit. */
-export interface DayTick {
-  x: number;
-  y: number;
-  /** Perpendicular unit vector (draw a short dash along ±(px,py)). */
-  px: number;
-  py: number;
-}
-
-/**
- * Positions of per-day division marks along a route polyline. Walks the
- * polyline accumulating length and emits a tick (with a perpendicular unit
- * vector) every `distancePerDay` pixels — so the player can read how many days
- * the trip takes (US-070 #7).
- */
-export function dayTickMarks(
-  points: Point[],
-  distancePerDay: number,
-): DayTick[] {
-  const ticks: DayTick[] = [];
-  if (distancePerDay <= 0 || points.length < 2) return ticks;
-
-  let acc = 0;
-  let nextDay = distancePerDay;
-  for (let s = 0; s < points.length - 1; s++) {
-    const ax = points[s].x;
-    const ay = points[s].y;
-    const bx = points[s + 1].x;
-    const by = points[s + 1].y;
-    const segLen = Math.hypot(bx - ax, by - ay);
-    if (segLen === 0) continue;
-    const nx = (bx - ax) / segLen;
-    const ny = (by - ay) / segLen;
-    const px = -ny; // perpendicular to the segment
-    const py = nx;
-    while (nextDay <= acc + segLen) {
-      const d = nextDay - acc;
-      ticks.push({ x: ax + nx * d, y: ay + ny * d, px, py });
-      nextDay += distancePerDay;
-    }
-    acc += segLen;
-  }
-  return ticks;
-}
-
 /**
  * Map an arbitrary string (e.g. a planet id) to a stable angle in [0, 2π).
  * Used to give each planet a deterministic, distinct starting point on its

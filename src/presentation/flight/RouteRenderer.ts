@@ -1,11 +1,10 @@
 import { Container, Graphics } from "pixi.js";
-import { dashedPolyline, dayTickMarks } from "@/utils/flightGeometry";
+import { dashedPolyline } from "@/utils/flightGeometry";
 
 /**
  * Draws the planned-course overlay: the dashed cyan line from the ship through
- * its waypoints to the destination, the yellow per-day tick marks along it, and
- * the end-of-route marker (a landing target for planets, a navigation pip for
- * empty space).
+ * its waypoints to the destination, and the end-of-route marker (a landing
+ * target for planets, a navigation pip for empty space).
  *
  * The renderer is stateless with respect to game logic — it owns only the
  * `Graphics` it draws into and renders exactly what it is told. Route planning
@@ -32,16 +31,15 @@ export class RouteRenderer {
   }
 
   /**
-   * Draw the dashed course line + per-day tick marks for `path` — the polyline
-   * from the ship's position through any curved waypoints to the destination.
-   * Replaces any previously drawn route. The end marker is drawn separately via
+   * Draw the dashed course line for `path` — the polyline from the ship's
+   * position through any curved waypoints to the destination. Replaces any
+   * previously drawn route. The end marker is drawn separately via
    * {@link drawLandingMarker}/{@link drawNavigationMarker} so the scene keeps
    * the landing-vs-navigation decision (it owns the planet data).
    *
    * @param path Polyline points (ship start → waypoints → destination).
-   * @param distancePerDay Pixels per game day, for spacing the day tick marks.
    */
-  drawRoute(path: { x: number; y: number }[], distancePerDay: number): void {
+  drawRoute(path: { x: number; y: number }[]): void {
     // Remove old route line
     if (this.routeLineGraphics) {
       this.gameLayer.removeChild(this.routeLineGraphics);
@@ -70,16 +68,6 @@ export class RouteRenderer {
     }
 
     this.routeLineGraphics.stroke({ color: 0x00ffff, width: 2, alpha: 0.6 });
-
-    // Per-day tick marks along the route: a short perpendicular dash every
-    // distancePerDay pixels, so the player can read how many days the trip
-    // takes (like the day "divisions" in the original game). See dayTickMarks.
-    const tickLen = 6;
-    for (const t of dayTickMarks(points, distancePerDay)) {
-      this.routeLineGraphics.moveTo(t.x - t.px * tickLen, t.y - t.py * tickLen);
-      this.routeLineGraphics.lineTo(t.x + t.px * tickLen, t.y + t.py * tickLen);
-    }
-    this.routeLineGraphics.stroke({ color: 0xffee66, width: 2, alpha: 0.9 });
 
     this.gameLayer.addChild(this.routeLineGraphics);
   }

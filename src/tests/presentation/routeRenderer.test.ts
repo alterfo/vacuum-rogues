@@ -23,7 +23,7 @@ describe("RouteRenderer (extracted route overlay)", () => {
       { x: 100, y: 0 },
       { x: 100, y: 100 },
     ];
-    route.drawRoute(path, 50);
+    route.drawRoute(path);
 
     // The overlay is non-null and added to the container.
     expect(route.graphics).not.toBeNull();
@@ -34,6 +34,33 @@ describe("RouteRenderer (extracted route overlay)", () => {
     expect(route.graphics?.eventMode).toBe("none");
   });
 
+  it("draws only the cyan course line — no yellow per-day tick crosses (playtest4 B)", () => {
+    const gameLayer = new Container();
+    const route = new RouteRenderer(gameLayer);
+    // A long straight route that would have spanned several "days".
+    route.drawRoute([
+      { x: 0, y: 0 },
+      { x: 2000, y: 0 },
+    ]);
+
+    const instructions = (
+      route.graphics!.context as unknown as {
+        instructions: {
+          action: string;
+          data: { style?: { color?: number } };
+        }[];
+      }
+    ).instructions;
+    const strokeColors = instructions
+      .filter((i) => i.action === "stroke")
+      .map((i) => i.data.style?.color);
+
+    // The cyan course line is still drawn …
+    expect(strokeColors).toContain(0x00ffff);
+    // … but the yellow per-day tick stroke (0xffee66) is gone entirely.
+    expect(strokeColors).not.toContain(0xffee66);
+  });
+
   it("replaces the previous overlay when redrawn (no leak)", () => {
     const gameLayer = new Container();
     const route = new RouteRenderer(gameLayer);
@@ -42,9 +69,9 @@ describe("RouteRenderer (extracted route overlay)", () => {
       { x: 200, y: 200 },
     ];
 
-    route.drawRoute(path, 50);
+    route.drawRoute(path);
     const first = route.graphics;
-    route.drawRoute(path, 50);
+    route.drawRoute(path);
 
     // Old overlay disposed, exactly one mounted.
     expect(gameLayer.children.length).toBe(1);
@@ -60,13 +87,10 @@ describe("RouteRenderer (extracted route overlay)", () => {
     expect(() => route.drawLandingMarker(10, 10)).not.toThrow();
     expect(route.graphics).toBeNull();
 
-    route.drawRoute(
-      [
-        { x: 0, y: 0 },
-        { x: 100, y: 100 },
-      ],
-      50,
-    );
+    route.drawRoute([
+      { x: 0, y: 0 },
+      { x: 100, y: 100 },
+    ]);
     expect(() => route.drawLandingMarker(100, 100)).not.toThrow();
     expect(() => route.drawNavigationMarker(50, 50)).not.toThrow();
 
@@ -77,13 +101,10 @@ describe("RouteRenderer (extracted route overlay)", () => {
   it("clears the overlay and leaks no children", () => {
     const gameLayer = new Container();
     const route = new RouteRenderer(gameLayer);
-    route.drawRoute(
-      [
-        { x: 0, y: 0 },
-        { x: 100, y: 0 },
-      ],
-      50,
-    );
+    route.drawRoute([
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+    ]);
     const overlay = route.graphics;
 
     route.clearRoute();

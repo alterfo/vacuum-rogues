@@ -113,7 +113,7 @@ describe("RouteRenderer dash continuity (playtest 2 ③: no broken dashes)", () 
 
     const layer = new Container();
     const renderer = new RouteRenderer(layer);
-    renderer.drawRoute(route, 500);
+    renderer.drawRoute(route);
 
     const total = cumulativeLengths(route)[route.length - 1];
     const intervals = dashIntervals(renderer.graphics!, route);
