@@ -18,7 +18,6 @@ import type { ResourceType } from "@/types";
 import { pickVariant, panoramaTex, loadTextureAsync } from "./textures";
 import { scaledFont } from "@/utils/fontScale";
 import { UiButton, type ButtonAccent } from "./ui/UiButton";
-import { PanoramaViewer, createPanoramaViewer } from "./PanoramaViewer";
 
 interface PlanetContext {
   gameEngine?: GameEngine;
@@ -220,9 +219,11 @@ export class PlanetScene extends GameScene {
   /** Bribe paid this landing — gates are lifted for the duration of the visit. */
   private bribed = false;
 
-  // Task 8 — projected 360° panorama viewer (primary). The Task 6 flat-sprite
-  // fields below are the fallback path when the viewer can't be constructed.
-  private panoramaViewer: PanoramaViewer | null = null;
+  // Planet backdrop (F5, 2026-06-10): the flat-sprite light parallax below is
+  // the PRIMARY backdrop. The Task 8 GLSL `PanoramaViewer` projection was
+  // dropped — at FOV 100° it fisheyed the equirect map like a magnifying lens,
+  // contradicting the agreed "light parallax" look. We pan a wide flat sprite
+  // horizontally with a gentle mouse-X drift instead.
 
   // Task 6 — panorama drag-to-look + rotating planet orb
   private panoramaSprite: Sprite | null = null;
@@ -655,10 +656,6 @@ export class PlanetScene extends GameScene {
     }
     this.boundPanoramaMove = null;
     this.boundPanoramaUp = null;
-    if (this.panoramaViewer) {
-      this.panoramaViewer.destroy();
-      this.panoramaViewer = null;
-    }
     this.panoramaSprite = null;
     this.planetOrbSprite = null;
     this.isPanningPanorama = false;
@@ -672,13 +669,6 @@ export class PlanetScene extends GameScene {
 
   private createUI(): void {
     if (!this.planet) return;
-    // createUI is re-invoked on bribe / lazy panorama load; clearGameLayer has
-    // already removed the old viewer's container, so detach its handlers and
-    // null the ref before building a fresh one (Task 8).
-    if (this.panoramaViewer) {
-      this.panoramaViewer.destroy();
-      this.panoramaViewer = null;
-    }
     const ui = new Container();
     this.uiContainer = ui;
     const w = this.renderer.app.screen.width;
@@ -697,25 +687,10 @@ export class PlanetScene extends GameScene {
     const panTex = panoramaTex(panoramaKey) ?? panoramaTex(PANORAMA_FALLBACK);
     const hasPanorama = !!panTex && panTex.width > 1 && panTex.height > 0;
 
-    // Task 8 (primary): project the equirectangular panorama into a rectilinear
-    // ground-level view with seamless 360° drag-to-look.
-    const viewer = hasPanorama
-      ? createPanoramaViewer({
-          texture: panTex,
-          panoramaUrl: panoramaKey,
-          width: w,
-          height: h,
-        })
-      : null;
-
-    if (viewer) {
-      this.panoramaViewer = viewer;
-      this.panoramaSprite = null;
-      this.renderer.gameLayer.addChild(viewer.container);
-    } else if (hasPanorama) {
-      // Task 6 fallback: flat panorama sprite with drag + parallax, used only
-      // when the projected viewer can't be constructed (e.g. WebGPU renderer).
-      this.panoramaViewer = null;
+    if (hasPanorama) {
+      // F5 (primary): flat panorama sprite with drag-to-look + a gentle mouse-X
+      // parallax drift (Task 6). This is the agreed "light parallax" — NOT the
+      // dropped GLSL projection, which fisheyed the equirect map at the edges.
       const panorama = new Sprite(panTex);
       const aspect = panTex!.width / panTex!.height;
       panorama.height = h;
@@ -741,7 +716,6 @@ export class PlanetScene extends GameScene {
       this.renderer.gameLayer.addChild(panorama);
     } else {
       // No panorama art: procedural sky gradient tinted toward the faction colour.
-      this.panoramaViewer = null;
       this.panoramaSprite = null;
       const bands = skyGradientColors(factionColor, 10);
       const bandH = h / bands.length;

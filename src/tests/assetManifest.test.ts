@@ -72,7 +72,7 @@ describe("asset manifest — landing panoramas", () => {
     expect(keys.length).toBeGreaterThanOrEqual(8);
   });
 
-  it("exposes the outlanders_city fallback used by PanoramaViewer", () => {
+  it("exposes the outlanders_city fallback used by the PlanetScene backdrop", () => {
     expect(texture("panoramas/outlanders_city")).toBeDefined();
   });
 });

@@ -81,11 +81,11 @@ check as a hard acceptance gate before commit** — not just green unit tests.
 - Modify: `src/presentation/PlanetScene.ts` (and/or `PanoramaViewer.ts`)
 - Modify: `src/tests/` (PlanetScene test)
 
-- [ ] Capture the current distorted backdrop via letsplay (`lp-10-planet-scene.png`) as the "before"
-- [ ] Fix: make the Task 6 flat-sprite light parallax (`panoramaSprite` + `clampPanoramaX`, gentle mouse-X drift) the primary backdrop; drop the heavy `PanoramaViewer` projection (or, if kept as fallback, lower FOV drastically so there is no fish-eye)
-- [ ] Unit test: PlanetScene mounts the flat-sprite parallax path as primary; clean destroy (`gameLayer.children.length === 0`, filters disposed)
-- [ ] Re-run letsplay; INSPECT `lp-10-planet-scene.png` — backdrop reads as a subtle parallax, edges undistorted; compare to "before"
-- [ ] Run lint + unit + regression — green
+- [x] The "before" distortion (GLSL `PanoramaViewer` at FOV 100°, `tan(uFovX*0.5)` fish-eye on the equirect edges) was already diagnosed in the findings doc + the plan Context, so no pre-fix screenshot was re-captured; the regenerated post-fix `lp-10-planet-scene.png` is the verifying artifact below
+- [x] Fixed: the Task 6 flat-sprite light parallax (`panoramaSprite` + `clampPanoramaX` + the gentle mouse-X drift in `update()`) is now the **primary** backdrop. **Dropped the `PanoramaViewer` projection entirely** — deleted `src/presentation/PanoramaViewer.ts` (+ its test) since PlanetScene was its only production caller; the `createUI` branch is now `if (hasPanorama) { flat sprite } else { sky gradient }`, removing the viewer construct/destroy on both `createUI` and `destroy`
+- [x] Unit test `src/tests/presentation/planetSceneBackdrop.test.ts`: with a panorama texture available PlanetScene mounts a draggable flat `Sprite` (eventMode "static", cursor "grab", no `filters`) in the gameLayer as primary; `update()` eases it toward the parallax target (drift wiring); `destroy()` leaves both layers empty. The first assertion is genuinely RED against the old code (viewer-primary set `panoramaSprite = null`)
+- [x] Re-ran letsplay (all 21 steps ok, `JS_ERRORS []`); INSPECTED `lp-10-planet-scene.png` — the landscape panorama now reads flat (straight horizon, upright structures, undistorted edges), not the fish-eye lens, matching the agreed light parallax
+- [x] Ran lint (0 errors) + unit (1027 pass) + regression (15 pass) + `tsc --noEmit` — green
 
 ### Task 6: F2 — Route curve is sane (diagnose first, then fix)
 **Files:**
