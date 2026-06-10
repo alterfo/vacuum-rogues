@@ -808,6 +808,66 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('smoke: game speed survives a SPACE_FLIGHT re-init (x4 stays x4) (playtest3 F3)', async ({ page }) => {
+    // F3: the game-speed (1×/2×/4×) reset to 1× on every scene re-init because
+    // each rebuild made a fresh ShipPhysics (timeScale=1) + FlightHud
+    // (speedIndex=0). The HUD now persists the choice on the GameEngine and
+    // restores it on (re)build. Click the REAL speed button (coords from scene
+    // introspection — the e2e* seams would bypass the UiButton hit geometry), set
+    // x4, then force a faithful re-init (the font-change path) and assert it sticks.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Warm up the event boundary (rootTarget is set on the first mapped event).
+    await page.mouse.move(5, 5);
+
+    const speedBtn = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+      const c = (hud?.['speedButton'] as {
+        container?: { getGlobalPosition: () => { x: number; y: number }; width: number; height: number };
+      })?.container;
+      if (!c) return null;
+      const p = c.getGlobalPosition();
+      return { x: p.x + c.width / 2, y: p.y + c.height / 2 };
+    });
+    expect(speedBtn).not.toBeNull();
+
+    // Two real clicks cycle 1× → 2× → 4×.
+    await page.mouse.click(speedBtn!.x, speedBtn!.y);
+    await page.mouse.click(speedBtn!.x, speedBtn!.y);
+    await page.waitForFunction(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        gameSpeedMultiplier?: number;
+        currentScene: Record<string, unknown> | null;
+      };
+      const phys = engine.currentScene?.['shipPhysics'] as { timeScale: number } | null;
+      return engine.gameSpeedMultiplier === 4 && phys?.timeScale === 4;
+    }, undefined, { timeout: 3_000 });
+
+    // Force a faithful re-init (same path the font-size change takes): a brand new
+    // SpaceFlightScene with a fresh ShipPhysics + FlightHud.
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      await engine.transitionTo('SPACE_FLIGHT', { gameEngine: engine });
+    });
+    await waitForScene(page, 'SpaceFlightScene', 20_000);
+
+    // The chosen speed survives the rebuild instead of resetting to 1×.
+    const after = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        gameSpeedMultiplier?: number;
+        currentScene: Record<string, unknown> | null;
+      };
+      const phys = engine.currentScene?.['shipPhysics'] as { timeScale: number } | null;
+      return { persisted: engine.gameSpeedMultiplier, timeScale: phys?.timeScale ?? null };
+    });
+    expect(after.persisted).toBe(4);
+    expect(after.timeScale).toBe(4);
+
+    errorCollector.assertAndDetach();
+  });
+
   test('monkey: 50 random inputs in SpaceFlightScene do not crash', async ({ page }) => {
     await setupNewGame(page);
     const errorCollector = new ErrorCollector(page);

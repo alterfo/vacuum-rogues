@@ -60,10 +60,10 @@ check as a hard acceptance gate before commit** — not just green unit tests.
 - Modify: `src/presentation/flight/FlightHud.ts`, `src/systems/ShipPhysics.ts`, and a durable store (`SpaceFlightScene`/GameEngine/flight-context)
 - Modify: `src/tests/` (FlightHud + persistence tests)
 
-- [ ] Diagnose the exact reset trigger at runtime (turn end vs. re-entry vs. HUD rebuild) — log `timeScale`/`speedIndex` across a turn and a land/take-off cycle
-- [ ] Write the RED test reproducing the reset (set x4 → trigger the identified event → assert speed is still x4). Confirm it FAILS
-- [ ] Fix: persist the chosen multiplier durably and re-apply to `ShipPhysics.timeScale` + the FlightHud label/`speedIndex` on `SpaceFlightScene.initialize`
-- [ ] Verify; run lint + unit + regression — green
+- [x] Diagnosed the exact reset trigger: **a turn end does NOT reset** — `endTurn()` only flips `isTurnRunning`; the same `SpaceFlightScene`/`ShipPhysics`/`FlightHud` instances persist across a turn, so `timeScale`/`speedIndex` survive. The reset is **every `transitionTo(SPACE_FLIGHT)` re-init** (land/take-off, star-map round-trip, the font-size change), each of which builds a fresh `ShipPhysics` (timeScale=1) + `FlightHud` (speedIndex=0). So F3's "x4→x1" fires whenever the player leaves and re-enters flight, not on the turn boundary
+- [x] Wrote the RED tests reproducing the reset and confirmed they FAIL on current code: `src/tests/presentation/flightHud.test.ts` "FlightHud game-speed persistence (playtest3 F3)" (cycle persists to GameEngine; a fresh HUD restores it; full rebuild round-trip x4 stays x4; unknown multiplier → 1×) + a real-pointer E2E (`playtest3 F3` in `e2e/playtest-regression.spec.ts`): real-click the speed button to x4, force a faithful re-init, assert `gameSpeedMultiplier`/`shipPhysics.timeScale` stay 4
+- [x] Fixed by persisting the chosen multiplier on the **scene-surviving `GameEngine.gameSpeedMultiplier`** (durable store, like `lastFlightShipPos`; not saved → no schema change). **Deviation from the plan's "re-apply on `SpaceFlightScene.initialize`":** to respect the `SpaceFlightScene` < 1900-line guard *and* the "keep flight logic in modules" rule, the persistence lives entirely in `FlightHud` (which already owns the speed index/label + a `GameEngine` ref): `cycleGameSpeed`→`applyGameSpeed` writes the multiplier to the GameEngine and pushes it to physics via `onSpeedCycle`; `restoreGameSpeed` (called at the end of `createUI`) seeds `speedIndex` + the button label from `gameSpeedMultiplier` and re-applies it to `ShipPhysics.timeScale`. Zero net scene lines (the scene's `onSpeedCycle` wiring is unchanged)
+- [x] Verified; ran lint (0 errors) + unit (1034 pass) + regression (15 pass, incl. the new F3 real-pointer test) — green
 
 ### Task 4: F1 — Pause finishes the current day, then stops
 **Files:**

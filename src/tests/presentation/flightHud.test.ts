@@ -150,6 +150,8 @@ function makeGameEngine(): GameEngine {
     },
     galaxy: { gameDays: 0 },
     questManager: {},
+    // Durable game-speed store (playtest3 F3) — mutable so persistence is real.
+    gameSpeedMultiplier: 1,
   } as unknown as GameEngine;
 }
 
@@ -235,6 +237,89 @@ describe("FlightHud", () => {
     expect(hud.miniMap).toBeNull();
     expect(hud.isQuestJournalOpen()).toBe(false);
     expect(hud.isSettingsPanelOpen()).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Playtest3 F3: the in-flight game-speed (1×/2×/4×) reset to 1× on every
+// SPACE_FLIGHT re-init because each rebuild made a fresh FlightHud (speedIndex=0)
+// + ShipPhysics (timeScale=1). The HUD now persists the choice on the
+// (scene-surviving) GameEngine and restores it whenever it is (re)built.
+// ---------------------------------------------------------------------------
+
+describe("FlightHud game-speed persistence (playtest3 F3)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("cycling persists the multiplier on the GameEngine and pushes it to physics", () => {
+    const m = makeMockRenderer();
+    const engine = makeGameEngine();
+    const hud = new FlightHud(m.renderer, engine, m.renderer.uiLayer);
+    const onSpeedCycle = vi.fn();
+    hud.onSpeedCycle = onSpeedCycle;
+    hud.initialize();
+
+    // First cycle advances 1× → 2×.
+    findButton("1×").onClick({ stopPropagation: vi.fn() });
+    expect(engine.gameSpeedMultiplier).toBe(2);
+    expect(onSpeedCycle).toHaveBeenLastCalledWith(2);
+  });
+
+  it("restores the persisted multiplier when the HUD is (re)built", () => {
+    const m = makeMockRenderer();
+    const engine = makeGameEngine();
+    engine.gameSpeedMultiplier = 4; // chosen before a land/take-off
+    const hud = new FlightHud(m.renderer, engine, m.renderer.uiLayer);
+    const onSpeedCycle = vi.fn();
+    hud.onSpeedCycle = onSpeedCycle;
+    hud.initialize();
+
+    const speed = findButton("1×") as unknown as {
+      setLabel: ReturnType<typeof vi.fn>;
+    };
+    // The fresh HUD adopts 4× rather than resetting to 1×, and re-applies it to
+    // physics through the scene callback.
+    expect(speed.setLabel).toHaveBeenCalledWith("4×");
+    expect(onSpeedCycle).toHaveBeenCalledWith(4);
+  });
+
+  it("survives a full HUD rebuild round-trip (x4 chosen, kept after re-init)", () => {
+    const engine = makeGameEngine();
+
+    // Day-1 HUD: player cycles 1× → 2× → 4×.
+    const m1 = makeMockRenderer();
+    const hud1 = new FlightHud(m1.renderer, engine, m1.renderer.uiLayer);
+    hud1.onSpeedCycle = vi.fn();
+    hud1.initialize();
+    findButton("1×").onClick({ stopPropagation: vi.fn() }); // → 2×
+    findButton("1×").onClick({ stopPropagation: vi.fn() }); // → 4×
+    expect(engine.gameSpeedMultiplier).toBe(4);
+
+    // Re-entry rebuilds the HUD from scratch (fresh speedIndex=0).
+    const m2 = makeMockRenderer();
+    const hud2 = new FlightHud(m2.renderer, engine, m2.renderer.uiLayer);
+    const onSpeedCycle2 = vi.fn();
+    hud2.onSpeedCycle = onSpeedCycle2;
+    hud2.initialize();
+
+    // The choice is restored, not reset to 1×.
+    expect(onSpeedCycle2).toHaveBeenCalledWith(4);
+    expect(engine.gameSpeedMultiplier).toBe(4);
+  });
+
+  it("falls back to 1× for an unknown persisted multiplier", () => {
+    const m = makeMockRenderer();
+    const engine = makeGameEngine();
+    engine.gameSpeedMultiplier = 3.7; // not a valid step
+    const hud = new FlightHud(m.renderer, engine, m.renderer.uiLayer);
+    hud.initialize();
+
+    const speed = findButton("1×") as unknown as {
+      setLabel: ReturnType<typeof vi.fn>;
+    };
+    expect(speed.setLabel).toHaveBeenCalledWith("1×");
+    expect(engine.gameSpeedMultiplier).toBe(1);
   });
 });
 

@@ -80,6 +80,12 @@ export class GameEngine {
   // flight for the star map, so a hyperjump can start from where the ship was
   // (not teleport it next to the sun). Cleared once consumed.
   public lastFlightShipPos: { x: number; y: number } | null = null;
+  // Player's chosen in-flight game-speed multiplier (1×/2×/4×). Held here — not on
+  // the per-scene FlightHud/ShipPhysics, both rebuilt on every SPACE_FLIGHT
+  // re-init — so the speed survives a land/take-off or star-map round-trip
+  // instead of resetting to 1× (playtest3 F3). Re-applied by
+  // SpaceFlightScene.initialize() via applyPersistedGameSpeed().
+  public gameSpeedMultiplier = 1;
   public readonly saveManager: SaveManager;
   public readonly qualityProfile: AdaptiveQualityProfile;
   public readonly onnxRegistry: ONNXModelRegistry;

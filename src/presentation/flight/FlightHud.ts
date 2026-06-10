@@ -502,6 +502,10 @@ export class FlightHud implements FlightModule {
     gearBtn.y = this.renderer.app.screen.height - 130 - GEAR_BTN_H;
     this.uiLayer.addChild(gearBtn.container);
     this.gearButton = gearBtn;
+
+    // Adopt the game-speed the player chose before this (re)build so it survives
+    // a land/take-off or star-map round-trip instead of resetting to 1× (F3).
+    this.restoreGameSpeed();
   }
 
   /** Toggle the font-size mini-panel (S / M / L). */
@@ -600,8 +604,32 @@ export class FlightHud implements FlightModule {
   private cycleGameSpeed(): void {
     const steps = GAME_BALANCE.gameSpeedMultipliers;
     this.speedIndex = (this.speedIndex + 1) % steps.length;
-    const scale = steps[this.speedIndex];
+    this.applyGameSpeed(steps[this.speedIndex]);
+  }
+
+  /**
+   * Restore the persisted game-speed when the HUD is (re)built: every
+   * SPACE_FLIGHT re-init (land/take-off, star map) makes a fresh HUD, which used
+   * to drop back to 1×. We seed {@link speedIndex} + the button label from the
+   * scene-surviving {@link GameEngine.gameSpeedMultiplier} and re-apply it to
+   * physics so the choice sticks (playtest3 F3). Unknown multiplier → 1×.
+   */
+  private restoreGameSpeed(): void {
+    const steps = GAME_BALANCE.gameSpeedMultipliers;
+    const persisted = this.gameEngine?.gameSpeedMultiplier ?? 1;
+    const idx = steps.findIndex((s) => s === persisted);
+    this.speedIndex = idx >= 0 ? idx : 0;
+    this.applyGameSpeed(steps[this.speedIndex]);
+  }
+
+  /**
+   * Apply a multiplier everywhere it matters: the button label, the durable
+   * store on the GameEngine (so it outlives this HUD), and the physics via
+   * {@link onSpeedCycle}. Shared by the user cycle and the on-rebuild restore.
+   */
+  private applyGameSpeed(scale: number): void {
     if (this.speedButton) this.speedButton.setLabel(`${scale}×`);
+    if (this.gameEngine) this.gameEngine.gameSpeedMultiplier = scale;
     this.onSpeedCycle?.(scale);
   }
 
