@@ -206,6 +206,19 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.updateTwinkleStars(bgElapsed);
   }
 
+  /**
+   * Toggle every background sub-layer this module owns (mid-ground parallax,
+   * foreground dust streaks, edge vignette). The screen-fixed sky lives in the
+   * scene-owned `skyContainer`, so the scene hides that separately — see
+   * SpaceFlightScene.e2eSetBackgroundVisible. Used by E2E tests to get a clean
+   * black background for lightweight, diff-friendly screenshots.
+   */
+  setVisible(visible: boolean): void {
+    this.midground.visible = visible;
+    if (this.dustContainer) this.dustContainer.visible = visible;
+    if (this.vignette) this.vignette.visible = visible;
+  }
+
   destroy(): void {
     this.destroyed = true;
 

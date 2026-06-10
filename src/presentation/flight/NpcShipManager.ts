@@ -183,6 +183,17 @@ export class NpcShipManager implements FlightModule {
     return this.npcSprites.length;
   }
 
+  /**
+   * E2E seam: trigger the contact-panel click for the NPC sprite at `index`,
+   * exactly as a real pointer tap would. Lives here (not the scene) because the
+   * NPC sprites + click handler are this module's data (Information Expert).
+   * No-op when the index is out of range. Guard `__DEBUG__` at the call site.
+   */
+  e2eClickNpc(index: number): void {
+    const sprite = this.npcSprites[index];
+    if (sprite) this.onNpcClick(sprite.npc);
+  }
+
   /** Mini-map radar dots: world position + faction colour per NPC. */
   getNpcDots(): { x: number; y: number; color: number }[] {
     return this.npcSprites.map((s) => ({ x: s.x, y: s.y, color: s.mapColor }));

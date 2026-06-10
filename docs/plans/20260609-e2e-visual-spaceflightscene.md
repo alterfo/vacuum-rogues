@@ -67,15 +67,15 @@ Interactive browser session to visually verify SpaceFlightScene after sprint3 + 
 - Modify: `src/presentation/SpaceFlightScene.ts`
 - Create: `e2e/page-objects/SpaceFlightPage.ts`
 
-- [ ] Add `e2eSetBackgroundVisible(visible: boolean): void` — hides `skyContainer` + nebula backdrop so screenshots are lightweight and diff-friendly (guard `__DEBUG__`)
-- [ ] Call `e2eSetBackgroundVisible(false)` in `applyMockHeavySystems` fixture so all E2E tests automatically get clean black background
-- [ ] Add `e2eGetSceneState(): { planetsCount: number; npcsCount: number; isFlying: boolean; turnNumber: number }` (guard `__DEBUG__`)
-- [ ] Add `e2eClickPlanet(index: number): void` — triggers planet click handler for planet at index (guard `__DEBUG__`)
-- [ ] Add `e2eClickNpc(index: number): void` — triggers NPC click for ship at index (guard `__DEBUG__`)
-- [ ] Add `e2ePressPause(): void` — triggers onPlayPause() (guard `__DEBUG__`)
-- [ ] Add `e2eStartTurn(): void` — triggers Ход (guard `__DEBUG__`)
-- [ ] Create `e2e/page-objects/SpaceFlightPage.ts` with typed wrappers around above methods + `waitForScene()`, `screenshot(name)`
-- [ ] Write unit tests for the new e2e* methods (assert they don't throw, guard check)
+- [x] Add `e2eSetBackgroundVisible(visible: boolean): void` — hides `skyContainer` + nebula backdrop so screenshots are lightweight and diff-friendly (guard `__DEBUG__`); delegates to new `SpaceBackgroundLayer.setVisible()` for the mid-ground/dust/vignette sub-layers
+- [x] Call `e2eSetBackgroundVisible(false)` in `applyMockHeavySystems` fixture so all E2E tests automatically get clean black background — implemented via the `window.__hideFlightBackground` flag the fixture sets and `SpaceFlightScene.initialize()` reads on every entry (the fixture's init script runs before any scene exists, so a flag is the only way to call into the not-yet-constructed scene)
+- [x] Add `e2eGetSceneState(): { planetsCount: number; npcsCount: number; isFlying: boolean; turnNumber: number }` (guard `__DEBUG__`)
+- [x] Add `e2eClickPlanet(index: number): void` — triggers planet click handler for planet at index (guard `__DEBUG__`)
+- [x] Add `e2eClickNpc(index: number): void` — triggers NPC click for ship at index (guard `__DEBUG__`); NPC click seam (`NpcShipManager.e2eClickNpc`) lives in the module that owns the sprites (Information Expert)
+- [x] Add `e2ePressPause(): void` — triggers onPlayPause() (guard `__DEBUG__`); only fires when a turn is running
+- [x] Add `e2eStartTurn(): void` — triggers Ход (guard `__DEBUG__`); only fires when no turn is running
+- [x] Create `e2e/page-objects/SpaceFlightPage.ts` with typed wrappers around above methods + `waitForScene()`, `screenshot(name)` — added to the existing `e2e/page-objects/space-flight.page.ts` (which already exports the `SpaceFlightPage` class) instead of a duplicate file: `getSceneState`, `setBackgroundVisible`, `clickPlanet`, `clickNpc`, `startTurn`, `pressPause`, `waitForScene`, `screenshot`
+- [x] Write unit tests for the new e2e* methods (assert they don't throw, guard check) — `src/tests/presentation/spaceFlightE2eMethods.test.ts` (9 tests: forwarding, out-of-range no-op, bare-scene safety)
 
 ### Task 4: Replace space-flight.spec.ts with proper visual E2E suite
 **Files:**

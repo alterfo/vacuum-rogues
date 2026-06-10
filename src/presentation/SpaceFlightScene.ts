@@ -601,6 +601,17 @@ export class SpaceFlightScene extends GameScene {
 
     this.sceneReadyAt = performance.now();
 
+    // E2E fixtures set `window.__hideFlightBackground` (see applyMockHeavySystems)
+    // so every test gets a clean black background for lightweight, diff-friendly
+    // screenshots. Re-read on every entry so re-entry honours it too.
+    if (
+      __DEBUG__ &&
+      typeof window !== "undefined" &&
+      (window as unknown as Record<string, unknown>).__hideFlightBackground
+    ) {
+      this.e2eSetBackgroundVisible(false);
+    }
+
     logger.info(
       "SpaceFlightScene initialized with camera controls: pan (Shift+click), zoom (wheel)",
     );
@@ -1797,5 +1808,59 @@ export class SpaceFlightScene extends GameScene {
   e2ePlayPause(): void {
     if (!__DEBUG__) return;
     this.onPlayPause();
+  }
+
+  /**
+   * E2E helper: hide/show the heavy nebula background (sky + mid-ground parallax
+   * + dust + vignette) so screenshots are lightweight and diff-friendly. The
+   * applyMockHeavySystems fixture flips this off for every E2E test.
+   */
+  e2eSetBackgroundVisible(visible: boolean): void {
+    if (!__DEBUG__) return;
+    if (this.skyContainer) this.skyContainer.visible = visible;
+    this.background?.setVisible(visible);
+  }
+
+  /** E2E helper: snapshot of the scene's high-level state for assertions. */
+  e2eGetSceneState(): {
+    planetsCount: number;
+    npcsCount: number;
+    isFlying: boolean;
+    turnNumber: number;
+  } {
+    if (!__DEBUG__) {
+      return { planetsCount: 0, npcsCount: 0, isFlying: false, turnNumber: 0 };
+    }
+    return {
+      planetsCount: this.planetManager?.planetSprites.length ?? 0,
+      npcsCount: this.npcManager?.npcCount ?? 0,
+      isFlying: this.shipPhysics?.isMoving ?? false,
+      turnNumber: this.gameEngine?.galaxy?.gameDays ?? 0,
+    };
+  }
+
+  /** E2E helper: trigger the planet-click handler for the planet at `index`. */
+  e2eClickPlanet(index: number): void {
+    if (!__DEBUG__) return;
+    const sprite = this.planetManager?.planetSprites[index];
+    if (sprite) this.planetManager.handlePlanetClick(sprite.planet);
+  }
+
+  /** E2E helper: trigger the NPC-contact click for the ship at `index`. */
+  e2eClickNpc(index: number): void {
+    if (!__DEBUG__) return;
+    this.npcManager?.e2eClickNpc(index);
+  }
+
+  /** E2E helper: pause/end the running turn (stops the ship immediately). */
+  e2ePressPause(): void {
+    if (!__DEBUG__) return;
+    if (this.isTurnRunning) this.onPlayPause();
+  }
+
+  /** E2E helper: start a turn (Ход) — runs the planned route or a wait turn. */
+  e2eStartTurn(): void {
+    if (!__DEBUG__) return;
+    if (!this.isTurnRunning) this.onPlayPause();
   }
 }

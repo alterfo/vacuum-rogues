@@ -251,4 +251,111 @@ export class SpaceFlightPage extends GamePageBase {
     });
     expect(isOpen).toBe(true);
   }
+
+  // ---------------------------------------------------------------------------
+  // Task 3 driver wrappers (visual E2E suite). Each forwards to a __DEBUG__
+  // guarded e2e* method on SpaceFlightScene via page.evaluate — no pixel coords.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Wait for the active scene to become SpaceFlightScene. Alias of
+   * waitForSpaceFlight() with the generic name the visual suite expects.
+   */
+  async waitForScene() {
+    await this.waitForSpaceFlight();
+  }
+
+  /**
+   * Read the scene's high-level state (planet/NPC counts, motion, turn number).
+   */
+  async getSceneState() {
+    return await this.page.evaluate(() => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: {
+          e2eGetSceneState?: () => {
+            planetsCount: number;
+            npcsCount: number;
+            isFlying: boolean;
+            turnNumber: number;
+          };
+        } | null;
+      };
+      return (
+        engine.currentScene?.e2eGetSceneState?.() ?? {
+          planetsCount: 0,
+          npcsCount: 0,
+          isFlying: false,
+          turnNumber: 0,
+        }
+      );
+    });
+  }
+
+  /**
+   * Show/hide the heavy nebula background (clean black background for screenshots).
+   */
+  async setBackgroundVisible(visible: boolean) {
+    await this.page.evaluate((v) => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eSetBackgroundVisible?: (visible: boolean) => void } | null;
+      };
+      engine.currentScene?.e2eSetBackgroundVisible?.(v);
+    }, visible);
+  }
+
+  /**
+   * Trigger the planet-click handler for the planet at the given index.
+   */
+  async clickPlanet(index: number) {
+    await this.page.evaluate((i) => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eClickPlanet?: (index: number) => void } | null;
+      };
+      engine.currentScene?.e2eClickPlanet?.(i);
+    }, index);
+  }
+
+  /**
+   * Trigger the NPC-contact click for the ship at the given index.
+   */
+  async clickNpc(index: number) {
+    await this.page.evaluate((i) => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eClickNpc?: (index: number) => void } | null;
+      };
+      engine.currentScene?.e2eClickNpc?.(i);
+    }, index);
+  }
+
+  /**
+   * Start a turn (Ход): run the planned route or a course-less wait turn.
+   */
+  async startTurn() {
+    await this.page.evaluate(() => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eStartTurn?: () => void } | null;
+      };
+      engine.currentScene?.e2eStartTurn?.();
+    });
+  }
+
+  /**
+   * Pause/end the running turn (stops the ship immediately).
+   */
+  async pressPause() {
+    await this.page.evaluate(() => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2ePressPause?: () => void } | null;
+      };
+      engine.currentScene?.e2ePressPause?.();
+    });
+  }
+
+  /**
+   * Capture a named screenshot of the canvas into e2e/screenshots/<name>.png.
+   */
+  async screenshot(name: string) {
+    const canvas = this.page.locator('canvas');
+    await canvas.screenshot({ path: `e2e/screenshots/${name}.png` });
+  }
 }
