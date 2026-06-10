@@ -91,4 +91,49 @@ describe("DialogueSystem session map growth (F7)", () => {
     expect(texts).toContain("Приветствую, странник.");
     expect(texts).toContain("Как дела на станции?");
   });
+
+  it("stays bounded per NPC when dialogues with several NPCs interleave", () => {
+    const system = makeSystem();
+    const other = { id: "npc_pirate_02", name: "Пират Крюк" } as NPC;
+
+    for (let i = 0; i < 10; i++) {
+      system.startDialogue(player, npc);
+      vi.advanceTimersByTime(1000);
+      system.startDialogue(player, other);
+      vi.advanceTimersByTime(1000);
+    }
+
+    // ≤ 2 entries per NPC (latest session + npc.id alias), and each NPC's
+    // alias still points at ITS OWN latest session — a regression that deletes
+    // by npc.id instead of previous.id would corrupt one of them.
+    expect(sessionMap(system).size).toBeLessThanOrEqual(4);
+    expect(sessionMap(system).get(npc.id)!.npc.id).toBe(npc.id);
+    expect(sessionMap(system).get(other.id)!.npc.id).toBe(other.id);
+  });
+
+  it("stays bounded when two dialogues start in the same millisecond", () => {
+    const system = makeSystem();
+
+    // Same timestamp → identical `dlg_<id>_<ts>` session key for both calls.
+    system.startDialogue(player, npc);
+    const second = system.startDialogue(player, npc);
+
+    expect(sessionMap(system).size).toBeLessThanOrEqual(2);
+    expect(sessionMap(system).get(npc.id)).toBe(second);
+  });
+
+  it("caps the carried-over history so open/close cycles cannot grow it forever", () => {
+    const system = makeSystem();
+
+    // Each startDialogue adds one opening anchor on top of the restored
+    // history; without the restore cap this grows by 1 per cycle, unbounded
+    // (submitPlayerChoice — the only other prune point — never runs here).
+    for (let i = 0; i < 80; i++) {
+      system.startDialogue(player, npc);
+      vi.advanceTimersByTime(1000);
+    }
+
+    const latest = system.startDialogue(player, npc);
+    expect(latest.history.length).toBeLessThanOrEqual(51); // 50 restored + anchor
+  });
 });

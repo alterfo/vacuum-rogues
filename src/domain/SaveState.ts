@@ -1,7 +1,7 @@
 import type { Galaxy } from "./Galaxy";
 import type { Player } from "./Player";
 import type { DialogueSession } from "./DialogueSession";
-import type { SerializedSave } from "@/types";
+import type { SerializedSave, ShipLoadoutSnapshot } from "@/types";
 import type { SceneType } from "@/types";
 
 export class SaveState {
@@ -12,6 +12,8 @@ export class SaveState {
     public persistentDialogs: DialogueSession[],
     public timestamp: number,
     public currentSceneType?: SceneType,
+    /** Canonical GearCatalog loadout — absent in saves made before it was persisted. */
+    public loadout?: ShipLoadoutSnapshot,
   ) {}
 
   serialize(): SerializedSave {
@@ -25,6 +27,7 @@ export class SaveState {
         persistentDialogs: this.persistentDialogs,
         timestamp: this.timestamp,
         currentSceneType: this.currentSceneType,
+        loadout: this.loadout,
       }),
     };
   }
@@ -39,6 +42,7 @@ export class SaveState {
       parsed.persistentDialogs ?? [],
       parsed.timestamp ?? data.timestamp,
       parsed.currentSceneType,
+      parsed.loadout,
     );
   }
 }

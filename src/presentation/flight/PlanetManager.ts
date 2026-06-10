@@ -226,6 +226,33 @@ export class PlanetManager implements FlightModule {
     }
   }
 
+  /** E2E: true once at least one planet renders via the GLSL rotation filter. */
+  e2eHasFilterPlanet(): boolean {
+    if (!__DEBUG__) return false;
+    return this.planetSprites.some((s) => s.e2eHasRotationFilter());
+  }
+
+  /**
+   * E2E (F1 pixel assertion): isolate the first GLSL-filtered planet — hide
+   * every other planet sprite this manager owns and strip the target down to
+   * its filtered body (delegated to the sprite, which owns its children) —
+   * and return its on-screen geometry. The manager owns the planet sprites,
+   * so the test seam lives here, not in the spec (Information Expert).
+   */
+  e2eIsolateFilterPlanet(): {
+    screenX: number;
+    screenY: number;
+    displayRadius: number;
+  } | null {
+    if (!__DEBUG__) return null;
+    const target = this.planetSprites.find((s) => s.e2eHasRotationFilter());
+    if (!target) return null;
+    for (const sprite of this.planetSprites) {
+      sprite.container.visible = sprite === target;
+    }
+    return target.e2eIsolateFilterBody();
+  }
+
   // ---------------------------------------------------------------------------
   // Planet sprites
   // ---------------------------------------------------------------------------

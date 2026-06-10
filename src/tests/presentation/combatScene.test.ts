@@ -64,6 +64,17 @@ const HEX = 24;
 const SPAN_X = 8 * HEX * 1.8 + HEX * 0.9;
 const SPAN_Y = 8 * HEX * 1.5;
 
+/**
+ * Vertical offset mirrored from CombatScene.gridOffset(): centred, but clamped
+ * so the bottom hex row stays above the action-button row (0.78·screenH) and
+ * the top row stays below the title/HP bars (80px).
+ */
+function expectedGridY(screenH: number): number {
+  const maxY = Math.round(screenH * 0.78) - SPAN_Y - HEX - 8;
+  const centred = Math.round((screenH - SPAN_Y) / 2);
+  return Math.max(80, Math.min(centred, maxY));
+}
+
 function makeRenderer(width: number, height: number) {
   return {
     app: { screen: { width, height } },
@@ -95,10 +106,10 @@ function gameLayerChildren(
 
 describe("CombatScene — layout polish (F5)", () => {
   beforeEach(() => {
-    (Container as unknown as ReturnType<typeof vi.fn>).mock.results.length = 0;
-    (Sprite as unknown as ReturnType<typeof vi.fn>).mock.calls.length = 0;
-    (Sprite as unknown as ReturnType<typeof vi.fn>).mock.results.length = 0;
-    (pickVariant as ReturnType<typeof vi.fn>).mockReset();
+    // Clears calls/results on ALL constructor mocks (Container, Graphics,
+    // Sprite, Text, pickVariant) — partial resets let Graphics state leak
+    // across tests and made call-count assertions order-dependent.
+    vi.clearAllMocks();
   });
 
   it("centres the hex grid container for a 1280×800 screen", () => {
@@ -110,7 +121,9 @@ describe("CombatScene — layout polish (F5)", () => {
     const [grid] = gameLayerChildren(renderer);
     expect(grid).toBeDefined();
     expect(grid.x).toBe(Math.round((1280 - SPAN_X) / 2));
+    // Tall enough screen → pure centring (clamp is not in play).
     expect(grid.y).toBe(Math.round((800 - SPAN_Y) / 2));
+    expect(grid.y).toBe(expectedGridY(800));
 
     scene.destroy();
   });
@@ -123,7 +136,40 @@ describe("CombatScene — layout polish (F5)", () => {
 
     const [grid] = gameLayerChildren(renderer);
     expect(grid.x).toBe(Math.round((1000 - SPAN_X) / 2));
-    expect(grid.y).toBe(Math.round((600 - SPAN_Y) / 2));
+    expect(grid.y).toBe(expectedGridY(600));
+
+    scene.destroy();
+  });
+
+  it("keeps the bottom hex row clear of the action-button row on short screens", () => {
+    (pickVariant as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
+    const renderer = makeRenderer(1000, 600);
+    const scene = new CombatScene(renderer);
+    scene.initialize({ encounter: makeEncounter() });
+
+    const [grid] = gameLayerChildren(renderer);
+    // Centred placement would put the bottom hex edge exactly on the button
+    // row (156 + 288 + 24 = 468 = 0.78·600); the clamp must pull it up.
+    expect(grid.y + SPAN_Y + HEX).toBeLessThan(Math.round(600 * 0.78));
+    expect(grid.y).toBeGreaterThanOrEqual(80); // and below the title/HP bars
+
+    scene.destroy();
+  });
+
+  it("parents all unit tokens to the centred grid container, not the gameLayer", () => {
+    (pickVariant as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
+    const renderer = makeRenderer(1280, 800);
+    const scene = new CombatScene(renderer);
+    scene.initialize({ encounter: makeEncounter() });
+
+    // Only the grid container itself lands on the gameLayer…
+    expect(
+      (renderer.gameLayer.addChild as ReturnType<typeof vi.fn>).mock.calls,
+    ).toHaveLength(1);
+    // …and it receives the hex graphics + player token + 2 enemy tokens.
+    const grid = (Container as unknown as ReturnType<typeof vi.fn>).mock
+      .results[0].value as { addChild: ReturnType<typeof vi.fn> };
+    expect(grid.addChild.mock.calls).toHaveLength(4);
 
     scene.destroy();
   });
@@ -166,12 +212,13 @@ describe("CombatScene — layout polish (F5)", () => {
       Sprite as unknown as ReturnType<typeof vi.fn>,
     ).not.toHaveBeenCalled();
 
-    // fallback tokens still draw circles
+    // Fallback tokens draw exactly 2 circle() calls each (fill + stroke ring)
+    // for the player + 2 enemies; nothing else in the scene draws circles.
     const graphicsMock = Graphics as unknown as ReturnType<typeof vi.fn>;
     const circleCalls = graphicsMock.mock.results
       .map((r) => r.value as { circle: ReturnType<typeof vi.fn> })
       .reduce((n, g) => n + g.circle.mock.calls.length, 0);
-    expect(circleCalls).toBeGreaterThan(0);
+    expect(circleCalls).toBe(6);
 
     scene.destroy();
   });

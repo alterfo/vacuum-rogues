@@ -123,15 +123,17 @@ export class InventoryScene extends GameScene {
 
   /**
    * Render ship statistics. Hull capacity, shields, speed and slot usage come
-   * from the canonical loadout's derived stats when a loadout exists; live
-   * values (current HP, energy, evasion) come from the ship state.
+   * from the canonical loadout's derived stats; live values (current HP,
+   * shields, energy, evasion) come from the ship state. GameEngine initializes
+   * a loadout on both new game and load, so it is always present here.
    */
   private renderShipStats(x: number, y: number): void {
     if (!this.gameEngine || !this.mainContainer || !this.gameEngine.player)
       return;
+    const stats = this.gameEngine.playerLoadout?.derivedStats();
+    if (!stats) return;
 
     const ship = this.gameEngine.player.ship;
-    const stats = this.gameEngine.playerLoadout?.derivedStats() ?? null;
 
     const statsTitle = new Text({
       text: "КОРАБЛЬ",
@@ -149,18 +151,17 @@ export class InventoryScene extends GameScene {
     const lines = [
       `Название: ${ship.name}`,
       ``,
-      `Корпус: ${ship.hullHP}/${stats ? stats.maxHull : ship.maxHull}`,
-      `Щиты: ${stats ? stats.shields : ship.shields}`,
+      `Корпус: ${ship.hullHP}/${stats.maxHull}`,
+      // Current shields can't exceed the loadout-derived capacity (the legacy
+      // ship field may carry a stale value from before the gear was canonical).
+      `Щиты: ${Math.min(ship.shields, stats.shields)}/${stats.shields}`,
       `Энергия: ${ship.energy}/${ship.maxEnergy}`,
-      `Скорость: ${stats ? stats.speed : ship.speed}`,
+      // px/ms, same unit and format as the NPC contact panel
+      `Скорость: ${stats.speed.toFixed(2)}`,
       `Уворот: ${ship.evasion}`,
+      `Слоты: ${stats.slotsUsed}/${stats.slotsTotal}`,
+      `Трюм: ${stats.cargo}`,
     ];
-    if (stats) {
-      lines.push(
-        `Слоты: ${stats.slotsUsed}/${stats.slotsTotal}`,
-        `Трюм: ${stats.cargo}`,
-      );
-    }
 
     let yOffset = y + 30;
     for (const line of lines) {
@@ -200,20 +201,7 @@ export class InventoryScene extends GameScene {
     this.mainContainer.addChild(sectionTitle);
 
     const loadout = this.gameEngine.playerLoadout;
-    if (!loadout) {
-      const emptyText = new Text({
-        text: "Нет данных о снаряжении",
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 12,
-          fill: 0x666666,
-        },
-      });
-      emptyText.x = x;
-      emptyText.y = y + 35;
-      this.mainContainer.addChild(emptyText);
-      return;
-    }
+    if (!loadout) return; // unreachable: GameEngine always initializes a loadout
 
     // Hull card first, then each installed gear item
     const items: Gear[] = [loadout.hull];
@@ -222,12 +210,28 @@ export class InventoryScene extends GameScene {
       if (gear) items.push(gear);
     }
 
+    // At most 5 cards fit between the section title and the resources row at
+    // the panel bottom (cards are 60px on a 70px step); large hulls hold up to
+    // 9 items, so show an explicit overflow count instead of silent truncation.
+    const MAX_CARDS = 5;
     let yOffset = y + 35;
-    for (const gear of items) {
+    for (const gear of items.slice(0, MAX_CARDS)) {
       this.renderGearCard(x, yOffset, gear);
       yOffset += 70;
-
-      if (yOffset > y + 420) break; // panel bounds (scrolling later)
+    }
+    if (items.length > MAX_CARDS) {
+      const more = new Text({
+        text: `…и ещё ${items.length - MAX_CARDS} — полный список в магазине оборудования`,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 11,
+          fill: 0x8888aa,
+        },
+      });
+      more.x = x;
+      more.y = yOffset;
+      this.mainContainer.addChild(more);
+      yOffset += 18;
     }
 
     const hint = new Text({

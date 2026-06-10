@@ -222,10 +222,9 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.midground.visible = visible;
     if (this.dustContainer) this.dustContainer.visible = visible;
     if (this.vignette) this.vignette.visible = visible;
-    // The dimmer lives in skyContainer (hidden with the sky by the scene), but
-    // toggle it here too so a hidden background never leaves a lone dark
-    // overlay — E2E screenshots stay plain black, not double-darkened.
-    if (this.dimmer) this.dimmer.visible = visible;
+    // The readability dimmer is NOT toggled here: it is a child of
+    // skyContainer, which the scene hides alongside this call, taking the
+    // dimmer with it (no double-dark in E2E screenshots).
   }
 
   destroy(): void {
@@ -843,8 +842,10 @@ export class SpaceBackgroundLayer implements FlightModule {
    * index 0, so it always lands below this overlay regardless of load order.
    */
   private createDimmer(): void {
+    if (this.dimmer) return; // initialize() must not stack a second overlay
     const d = new Graphics();
-    // Slight overdraw so window resizes never expose an undimmed border.
+    // Sized once at initialize (the layer has no resize handler); the 1.5×
+    // overdraw absorbs moderate window growth, like the other sky layers.
     d.rect(
       -this.width * 0.25,
       -this.height * 0.25,

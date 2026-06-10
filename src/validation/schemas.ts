@@ -377,6 +377,18 @@ export const DialogueSessionSchema = z.object({
   currentEmotion: EmotionVectorSchema,
 });
 
+/** Canonical GearCatalog loadout snapshot (ShipLoadoutSnapshot in types). */
+export const ShipLoadoutSnapshotSchema = z.object({
+  hullId: z.string(),
+  hullMicromoduleId: z.string().optional(),
+  slotted: z.array(
+    z.object({
+      gearId: z.string(),
+      micromoduleId: z.string().optional(),
+    }),
+  ),
+});
+
 export const SaveStateSchema = z.object({
   version: z.number().int().positive(),
   timestamp: z.number().int(),
@@ -384,6 +396,8 @@ export const SaveStateSchema = z.object({
   player: PlayerSchema,
   persistentDialogs: z.array(DialogueSessionSchema),
   currentSceneType: z.string().optional(),
+  // Optional: saves made before loadout persistence (≤ 2026-06-10) lack it.
+  loadout: ShipLoadoutSnapshotSchema.optional(),
 });
 
 export function validateSaveState(

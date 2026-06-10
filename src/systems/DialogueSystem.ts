@@ -55,6 +55,9 @@ export class GRUEmotionAdapter {
   }
 }
 
+/** Per-session history cap — applied on restore and after each exchange. */
+const MAX_HISTORY = 50;
+
 export class DialogueSystem {
   private anchorRegistry: DialogueAnchorRegistry;
   private t5Adapter: T5DialogueAdapter;
@@ -85,10 +88,13 @@ export class DialogueSystem {
     );
 
     // Load historical messages if previous session exists, then drop the
-    // stale session's timestamped key so the map stays bounded per NPC.
+    // stale session's timestamped key so the map stays bounded per NPC. The
+    // restored history is capped too: each session adds at least the opening
+    // anchor, so without the cap repeatedly opening a dialogue (no choices —
+    // the only other prune point) grows the per-NPC history without bound.
     const previous = this.sessionHistory.get(npc.id);
     if (previous) {
-      session.history.push(...previous.history);
+      session.history.push(...previous.history.slice(-MAX_HISTORY));
       this.sessionHistory.delete(previous.id);
     }
 
@@ -190,8 +196,8 @@ export class DialogueSystem {
 
     session.addNPCResponse(responseText);
 
-    // Prune history if exceeds 50 turns
-    while (session.history.length > 50) {
+    // Prune history if it exceeds the cap
+    while (session.history.length > MAX_HISTORY) {
       session.history.shift();
     }
 

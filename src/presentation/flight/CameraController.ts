@@ -7,7 +7,11 @@ export interface CameraControllerDeps {
   getShipPhysics(): ShipPhysics | null;
   /** Star centre (screen coords) the pan-clamp keys off of. */
   getStarCenter(): { x: number; y: number };
-  /** Half-extent (px) used to clamp the pan so the backdrop edge never shows. */
+  /**
+   * Half-extent (px) of the ship-reachable area: the camera focus point is
+   * clamped to [star ± boundaryRadius] (see clampPan; F3). The backdrop is
+   * screen-fixed, so panning can never expose its edge.
+   */
   boundaryRadius: number;
 }
 

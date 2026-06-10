@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { Container, Graphics } from "pixi.js";
+import { describe, it, expect, vi } from "vitest";
+import { Container, Graphics, Sprite, Texture } from "pixi.js";
 import {
   SpaceBackgroundLayer,
   type BackgroundCamera,
@@ -7,6 +7,21 @@ import {
 } from "@/presentation/SpaceBackgroundLayer";
 import type { Renderer } from "@/presentation/Renderer";
 import { BACKGROUND_DIM } from "@/config/balance";
+
+// Make the lazy nebula backdrop resolve synchronously from the "cache", so the
+// real mount path (`skyContainer.addChildAt(bg, 0)`) runs during initialize()
+// and its ordering relative to the F2 dimmer can be asserted (in production
+// the texture loads async; jsdom would otherwise never mount it).
+vi.mock("@/presentation/textures", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/presentation/textures")>();
+  return {
+    ...actual,
+    pickVariantKey: vi.fn(() => "nebula/test_backdrop"),
+    pickVariant: vi.fn(() => Texture.WHITE),
+    loadTextureAsync: vi.fn(async () => null),
+  };
+});
 
 /**
  * Build a minimal Renderer stand-in backed by real PixiJS Containers. The
@@ -55,6 +70,7 @@ interface BackgroundInternals {
   swarmLayers: unknown[];
   starLayers: unknown[];
   dimmer: Graphics | null;
+  nebulaBackdropSprite: Sprite | null;
 }
 
 describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
@@ -111,15 +127,27 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
     expect(internal.dimmer).toBeNull();
   });
 
-  it("hides the dimmer when the background is hidden (no double-dark in E2E)", () => {
-    const { layer } = makeHarness();
+  it("keeps the async-mounted nebula backdrop BELOW the dimmer (F2 regression path)", () => {
+    const { layer, skyContainer } = makeHarness();
     layer.initialize();
 
     const internal = layer as unknown as BackgroundInternals;
-    layer.setVisible(false);
-    expect(internal.dimmer!.visible).toBe(false);
-    layer.setVisible(true);
-    expect(internal.dimmer!.visible).toBe(true);
+    const backdrop = internal.nebulaBackdropSprite;
+    const dimmer = internal.dimmer;
+    // The mocked texture cache makes the backdrop mount during initialize().
+    expect(backdrop).not.toBeNull();
+    expect(dimmer).not.toBeNull();
+    // The backdrop is the brightest sky element and mounts AFTER the dimmer in
+    // real load order — `addChildAt(bg, 0)` must splice it underneath. A
+    // regression to plain addChild() would render it above the dimmer and
+    // bring back the unreadable game layer (F2).
+    expect(skyContainer.getChildIndex(backdrop!)).toBe(0);
+    expect(skyContainer.getChildIndex(backdrop!)).toBeLessThan(
+      skyContainer.getChildIndex(dimmer!),
+    );
+    expect(skyContainer.getChildIndex(dimmer!)).toBe(
+      skyContainer.children.length - 1,
+    );
 
     layer.destroy();
   });

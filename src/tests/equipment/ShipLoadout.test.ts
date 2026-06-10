@@ -116,3 +116,53 @@ describe("ShipLoadout — micromodules (US-075)", () => {
     expect(lo.applyMicromodule("wpn_beam", "mm_amplifier_1")).toBe(false);
   });
 });
+
+describe("ShipLoadout — persistence (toJSON/fromJSON)", () => {
+  it("round-trips hull, gear and micromodules through a snapshot", () => {
+    const lo = new ShipLoadout("hull_warden");
+    lo.install("wpn_beam");
+    lo.install("eq_engine_iii");
+    lo.install("eq_tank");
+    lo.applyMicromodule("wpn_beam", "mm_amplifier_2");
+    lo.applyMicromodule("hull_warden", "mm_amplifier_1");
+
+    const restored = ShipLoadout.fromJSON(lo.toJSON());
+    expect(restored).not.toBeNull();
+    expect(restored!.hull.id).toBe("hull_warden");
+    expect(restored!.installedGearIds()).toEqual([
+      "wpn_beam",
+      "eq_engine_iii",
+      "eq_tank",
+    ]);
+    // Derived stats (which fold in both micromodules) must match exactly.
+    expect(restored!.derivedStats()).toEqual(lo.derivedStats());
+  });
+
+  it("survives JSON.stringify/parse (the actual save payload path)", () => {
+    const lo = new ShipLoadout("hull_corvette");
+    lo.install("eq_engine_i");
+    const snapshot = JSON.parse(JSON.stringify(lo.toJSON()));
+    const restored = ShipLoadout.fromJSON(snapshot);
+    expect(restored!.derivedStats()).toEqual(lo.derivedStats());
+  });
+
+  it("returns null for an unknown hull id", () => {
+    expect(
+      ShipLoadout.fromJSON({ hullId: "hull_gone", slotted: [] }),
+    ).toBeNull();
+  });
+
+  it("skips unknown gear/micromodule ids without voiding the loadout", () => {
+    const restored = ShipLoadout.fromJSON({
+      hullId: "hull_corvette",
+      hullMicromoduleId: "mm_gone",
+      slotted: [
+        { gearId: "eq_gone" },
+        { gearId: "eq_engine_i", micromoduleId: "mm_gone" },
+      ],
+    });
+    expect(restored).not.toBeNull();
+    expect(restored!.installedGearIds()).toEqual(["eq_engine_i"]);
+    expect(restored!.derivedStats().canTakeOff).toBe(false); // no fuel tank
+  });
+});

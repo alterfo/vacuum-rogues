@@ -666,6 +666,7 @@ export class GameEngine {
       [], // persistentDialogs would come from DialogueSystem
       Date.now(),
       this.currentSceneType,
+      this.playerLoadout?.toJSON(),
     );
 
     await this.saveManager.write(slotId, state);
@@ -693,10 +694,16 @@ export class GameEngine {
     // module checks work after "Continue". Field data is already correct.
     this.rehydrateLoadedState();
 
-    // Loadout is not persisted in SaveState — initialize a default starter
-    // loadout so gear-derived stats (speed, shields, droid repair) work
-    // immediately after "Continue".
-    if (!this.playerLoadout) {
+    // Restore the canonical loadout from the save (gear bought in the shop
+    // must survive "Continue"); saves from before loadout persistence — or a
+    // snapshot whose hull no longer exists in the catalog — fall back to the
+    // default starter loadout so gear-derived stats still work.
+    const restoredLoadout = save.loadout
+      ? ShipLoadout.fromJSON(save.loadout)
+      : null;
+    if (restoredLoadout) {
+      this.playerLoadout = restoredLoadout;
+    } else {
       const loadout = new ShipLoadout("hull_corvette");
       loadout.install("eq_engine_i");
       loadout.install("eq_tank");

@@ -70,11 +70,22 @@ export function buildSphereMesh(
       }
     }
 
+    const geometry = new MeshGeometry({ positions, uvs, indices });
+    const uvBuffer: Buffer | null = geometry.getBuffer("aUV");
+    if (!uvBuffer) return null;
+
     // Mirror-wrap horizontally so the longitude offset scrolls past the seam
     // without a hard discontinuity even when the map's left/right edges don't
     // tile (F4: plain "repeat" showed the mismatched edges as a seam meridian
     // sweeping the rotating sun). Clamp vertically so the pole rows never
-    // blend with the opposite edge of the texture.
+    // blend with the opposite edge of the texture. This applies to BOTH bodies
+    // sharing this helper — the sun and map-backed planets: on planets the
+    // mirrored half of each rotation cycle is invisible on the procedural
+    // equirect maps, while the old hard seam meridian was not.
+    //
+    // Mutate the shared texture style only after geometry validation above, so
+    // a failed build (null return → TilingSprite fallback) has no side effects
+    // on other consumers of the same cached texture.
     try {
       const style = mapTex.source?.style as
         | { addressModeU?: string; addressModeV?: string }
@@ -87,10 +98,6 @@ export function buildSphereMesh(
     } catch {
       /* wrap mode is best-effort */
     }
-
-    const geometry = new MeshGeometry({ positions, uvs, indices });
-    const uvBuffer: Buffer | null = geometry.getBuffer("aUV");
-    if (!uvBuffer) return null;
 
     const mesh = new Mesh({ geometry, texture: mapTex });
     mesh.tint = tint;

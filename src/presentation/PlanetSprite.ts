@@ -695,6 +695,36 @@ export class PlanetSprite {
     };
   }
 
+  /** E2E: true when this planet renders via the GLSL rotation filter (F1 path). */
+  e2eHasRotationFilter(): boolean {
+    if (!__DEBUG__) return false;
+    return this.rotationFilter !== null;
+  }
+
+  /**
+   * E2E/diagnostics (F1): isolate the GLSL-filtered planet body for a pixel
+   * assertion — hide every sibling visual this sprite owns (glow ring, moons,
+   * labels) so the filtered body is the only thing it draws, and report the
+   * on-screen geometry. Returns null when this planet does not use the
+   * rotation-filter path. Guarded by __DEBUG__ (stripped from production).
+   */
+  e2eIsolateFilterBody(): {
+    screenX: number;
+    screenY: number;
+    displayRadius: number;
+  } | null {
+    if (!__DEBUG__) return null;
+    if (!this.rotationFilter) return null;
+    for (const child of this.container.children) {
+      child.visible = child === this.bodyContainer;
+    }
+    return {
+      screenX: this.screenX,
+      screenY: this.screenY,
+      displayRadius: this.displayRadius,
+    };
+  }
+
   /**
    * Clean up resources
    */

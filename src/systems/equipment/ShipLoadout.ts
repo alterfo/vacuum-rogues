@@ -12,6 +12,7 @@
  * "Корабль" dialog (later) drive this; combat (EPIC-002) reads its derived stats.
  */
 import type { Faction } from "@/types/faction";
+import type { ShipLoadoutSnapshot } from "@/types";
 import {
   GearKind,
   EquipmentClass,
@@ -252,17 +253,37 @@ export class ShipLoadout {
     };
   }
 
-  /** Serialisable snapshot (for persistence later). */
-  toJSON(): {
-    hullId: string;
-    hullMicromoduleId?: string;
-    slotted: SlottedGear[];
-  } {
+  /** Serialisable snapshot — persisted in SaveState and restored by fromJSON. */
+  toJSON(): ShipLoadoutSnapshot {
     return {
       hullId: this.hullId,
       hullMicromoduleId: this.hullMicromoduleId,
       slotted: this.slotted.map((s) => ({ ...s })),
     };
+  }
+
+  /**
+   * Rebuild a loadout from a saved snapshot. Returns null when the hull id is
+   * unknown (e.g. a save from a newer catalog); unknown gear/micromodule ids
+   * are skipped item-by-item so one bad entry doesn't void the whole loadout.
+   */
+  static fromJSON(
+    snapshot: ShipLoadoutSnapshot,
+    faction?: Faction,
+  ): ShipLoadout | null {
+    const hull = gearById(snapshot.hullId);
+    if (!hull || hull.kind !== GearKind.HULL) return null;
+    const loadout = new ShipLoadout(snapshot.hullId, faction);
+    if (snapshot.hullMicromoduleId) {
+      loadout.applyMicromodule(snapshot.hullId, snapshot.hullMicromoduleId);
+    }
+    for (const slot of snapshot.slotted) {
+      if (!loadout.install(slot.gearId)) continue;
+      if (slot.micromoduleId) {
+        loadout.applyMicromodule(slot.gearId, slot.micromoduleId);
+      }
+    }
+    return loadout;
   }
 }
 

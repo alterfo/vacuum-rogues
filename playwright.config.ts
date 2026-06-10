@@ -28,6 +28,28 @@ export default defineConfig({
           args: ['--no-proxy-server'],
         },
       },
+      // Discovery/diagnostic harnesses are manual-only (run via the `letsplay`
+      // project): they are nearly assertion-free by design (soft steps,
+      // screenshot output for human inspection), so keeping them in the
+      // default suite would inflate apparent coverage and silently absorb
+      // scene breakage.
+      testIgnore: [
+        '**/letsplay-discovery.spec.ts',
+        '**/sun-band-exploration.spec.ts',
+      ],
+    },
+    {
+      name: 'letsplay',
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          args: ['--no-proxy-server'],
+        },
+      },
+      testMatch: [
+        '**/letsplay-discovery.spec.ts',
+        '**/sun-band-exploration.spec.ts',
+      ],
     },
     {
       name: 'regression',

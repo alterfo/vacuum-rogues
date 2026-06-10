@@ -510,6 +510,18 @@ export interface SerializedSave {
   readonly payload: string;
 }
 
+/**
+ * Serialized snapshot of the canonical GearCatalog loadout (hull + slotted
+ * gear + micromodules). Produced by ShipLoadout.toJSON(), restored by
+ * ShipLoadout.fromJSON() on load — without it, gear bought in the equipment
+ * shop silently vanished on "Continue" (letsplay F6 follow-up).
+ */
+export interface ShipLoadoutSnapshot {
+  readonly hullId: string;
+  readonly hullMicromoduleId?: string;
+  readonly slotted: { readonly gearId: string; micromoduleId?: string }[];
+}
+
 export interface ResourceCost {
   readonly type: ResourceType;
   readonly amount: number;

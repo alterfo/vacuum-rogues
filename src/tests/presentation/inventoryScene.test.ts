@@ -87,7 +87,7 @@ function makeEngine(loadout: ShipLoadout | null) {
 
 describe("InventoryScene — canonical GearCatalog loadout view (F6)", () => {
   beforeEach(() => {
-    (Text as unknown as ReturnType<typeof vi.fn>).mock.calls.length = 0;
+    (Text as unknown as ReturnType<typeof vi.fn>).mockClear();
   });
 
   it("renders the ShipLoadout hull and installed gear (the working system)", () => {
@@ -129,11 +129,53 @@ describe("InventoryScene — canonical GearCatalog loadout view (F6)", () => {
     scene.initialize({ gameEngine: makeEngine(loadout) });
 
     const all = renderedTexts().join("\n");
-    expect(all).toContain(`${stats.maxHull}`); // hull from loadout
-    expect(all).toContain(`${stats.shields}`); // shields from loadout
-    expect(all).toContain(`${stats.speed}`); // speed from loadout
-    expect(all).toContain("Уворот"); // evasion line present
+    // Full lines, not bare numbers — `toContain("0")` would match almost any
+    // rendered text and verify nothing.
+    expect(all).toContain(`Корпус: 80/${stats.maxHull}`); // live HP / loadout max
+    // Current shields are capped at the loadout-derived capacity (0 here —
+    // the mock ship's legacy `shields: 10` must NOT leak through).
+    expect(all).toContain(`Щиты: 0/${stats.shields}`);
+    expect(all).toContain(`Скорость: ${stats.speed.toFixed(2)}`); // px/ms format
+    expect(all).toContain("Уворот: 5"); // evasion from live ship state
     expect(all).toContain(`Слоты: ${stats.slotsUsed}/${stats.slotsTotal}`);
+
+    scene.destroy();
+  });
+
+  it("renders no interactive equip/unequip affordances (read-only view)", () => {
+    const loadout = new ShipLoadout("hull_corvette");
+    loadout.install("eq_engine_i");
+
+    const scene = new InventoryScene(mockRenderer);
+    scene.initialize({ gameEngine: makeEngine(loadout) });
+
+    const all = renderedTexts().join("\n");
+    expect(all).not.toContain("Снять");
+    expect(all).not.toContain("Установить");
+    expect(all).not.toContain("МОДУЛИ В ИНВЕНТАРЕ");
+
+    scene.destroy();
+  });
+
+  it("shows an overflow count instead of silently dropping gear past 5 cards", () => {
+    // 9-slot hull with 6 installed items → 7 cards worth of gear, 5 rendered.
+    const loadout = new ShipLoadout("hull_bastion");
+    for (const id of [
+      "eq_engine_i",
+      "eq_tank",
+      "eq_radar",
+      "eq_scanner",
+      "eq_droid",
+      "eq_shield",
+    ]) {
+      expect(loadout.install(id)).toBe(true);
+    }
+
+    const scene = new InventoryScene(mockRenderer);
+    scene.initialize({ gameEngine: makeEngine(loadout) });
+
+    const all = renderedTexts().join("\n");
+    expect(all).toContain("…и ещё 2");
 
     scene.destroy();
   });
@@ -145,17 +187,6 @@ describe("InventoryScene — canonical GearCatalog loadout view (F6)", () => {
 
     const all = renderedTexts().join("\n");
     expect(all).toContain("Кредиты: 1234");
-
-    scene.destroy();
-  });
-
-  it("still renders ship state without a loadout (old saves)", () => {
-    const scene = new InventoryScene(mockRenderer);
-    scene.initialize({ gameEngine: makeEngine(null) });
-
-    const texts = renderedTexts();
-    expect(texts.some((t) => t.includes("Тестовый корабль"))).toBe(true);
-    expect(texts.some((t) => t.includes(LEGACY_MODULE_NAME))).toBe(false);
 
     scene.destroy();
   });

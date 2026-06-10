@@ -306,6 +306,12 @@ The screenshot shows the 9×9 hex grid and three action buttons. No ships, units
 
 ### InventoryScene
 
+> **Outdated (2026-06-10, letsplay F6):** the scene was reworked into a read-only
+> view of the canonical GearCatalog loadout (КОРАБЛЬ / УСТАНОВЛЕННОЕ
+> ОБОРУДОВАНИЕ / РЕСУРСЫ); the legacy module slots and the equip/unequip flow
+> described in items 2–3 below no longer exist. Truncation (item 3) is now an
+> explicit "…и ещё N" counter.
+
 The screenshot shows a clean three-column layout: КОРАБЛЬ / УСТАНОВЛЕННЫЕ МОДУЛИ / МОДУЛИ В ИНВЕНТАРЕ. Visual quality is acceptable. Issues:
 
 1. **Close button is 25×25px.** A red `0xff0000` square with "X" at 16px. The size is the smallest of any close button in the game, and the colour choice (pure red on dark) is visually alarming — it looks like an error state rather than a navigation control.

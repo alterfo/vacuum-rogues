@@ -22,13 +22,15 @@ function makeTexture(): Texture {
 describe("buildSphereMesh texture addressing (F4 sun seam)", () => {
   it("uses mirror-repeat on U so the equirect wrap seam never shows as a hard meridian", () => {
     const tex = makeTexture();
-    buildSphereMesh(tex, 100);
+    // Guard: a null (failed) build returns before the style mutation, which
+    // would make this assertion pass vacuously against the default mode.
+    expect(buildSphereMesh(tex, 100)).not.toBeNull();
     expect(tex.source.style.addressModeU).toBe("mirror-repeat");
   });
 
   it("clamps V so the pole rows do not blend with the opposite texture edge", () => {
     const tex = makeTexture();
-    buildSphereMesh(tex, 100);
+    expect(buildSphereMesh(tex, 100)).not.toBeNull();
     expect(tex.source.style.addressModeV).toBe("clamp-to-edge");
   });
 

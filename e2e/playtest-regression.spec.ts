@@ -195,61 +195,47 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     const sf = new SpaceFlightPage(page);
 
     // The GLSL filter mounts only after the lazy planet_maps texture loads.
+    // Scene-owned e2e seam (CLAUDE.md E2E rules) — no reaching into module
+    // internals from the spec.
     await page.waitForFunction(
       () => {
         const engine = (window as Record<string, unknown>).__gameEngine as {
-          currentScene: Record<string, unknown> | null;
+          currentScene: { e2eHasFilterPlanet?: () => boolean } | null;
         };
-        const pm = engine.currentScene?.['planetManager'] as
-          | { planetSprites: Array<Record<string, unknown>> }
-          | undefined;
-        return (pm?.planetSprites ?? []).some((s) => s['rotationFilter'] != null);
+        return engine.currentScene?.e2eHasFilterPlanet?.() === true;
       },
       { timeout: 20_000 },
     );
 
-    // Isolate the planet's filtered body (hide glow rings, moons, orbit lines,
-    // NPCs, star, other planets) and centre the camera on it at MAX_ZOOM, so the
-    // corner pixels can only come from the shader under test or the background.
+    // Isolate the planet's filtered body (the scene hides the rest of the game
+    // layer, the PlanetManager/PlanetSprite strip the sprite to its body) and
+    // centre the camera on it at MAX_ZOOM, so the corner pixels can only come
+    // from the shader under test or the background.
     const region = await page.evaluate(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
-        currentScene: Record<string, unknown> | null;
+        currentScene: {
+          e2eIsolateFilterPlanet?: () => {
+            screenX: number;
+            screenY: number;
+            displayRadius: number;
+          } | null;
+          e2eSetCameraZoom?: (z: number) => void;
+          e2eSetCameraPan?: (x: number, y: number) => void;
+          e2eGetCameraState?: () => { zoom: number; panX: number; panY: number };
+        } | null;
       };
-      const scene = engine.currentScene as {
-        e2eSetCameraZoom?: (z: number) => void;
-        e2eSetCameraPan?: (x: number, y: number) => void;
-        e2eGetCameraState?: () => { zoom: number; panX: number; panY: number };
-      } & Record<string, unknown>;
-      const pm = scene['planetManager'] as {
-        planetSprites: Array<{
-          container: {
-            visible: boolean;
-            parent: { children: Array<{ visible: boolean }> };
-            children: Array<{ visible: boolean }>;
-          };
-          screenX: number;
-          screenY: number;
-          displayRadius: number;
-        } & Record<string, unknown>>;
-      };
-      const target = pm.planetSprites.find((s) => s['rotationFilter'] != null);
-      if (!target) return null;
+      const scene = engine.currentScene;
+      const target = scene?.e2eIsolateFilterPlanet?.() ?? null;
+      if (!scene || !target) return null;
 
-      for (const child of target.container.parent.children) child.visible = false;
-      target.container.visible = true;
-      const body = target['bodyContainer'];
-      for (const child of target.container.children) {
-        child.visible = (child as unknown) === body;
-      }
-
-      const zoom = 2; // CameraController.MAX_ZOOM
-      scene.e2eSetCameraZoom?.(zoom);
+      // Request an over-MAX zoom and read back the EFFECTIVE camera (zoom and
+      // pan are both clamped) instead of hardcoding MAX_ZOOM here.
+      scene.e2eSetCameraZoom?.(99);
+      const zoom = scene.e2eGetCameraState?.().zoom ?? 1;
       scene.e2eSetCameraPan?.(
         window.innerWidth / 2 - target.screenX * zoom,
         window.innerHeight / 2 - target.screenY * zoom,
       );
-      // Read back the EFFECTIVE camera (pan is clamped) and derive the planet's
-      // on-screen centre and radius from it.
       const cam = scene.e2eGetCameraState?.() ?? { zoom, panX: 0, panY: 0 };
       return {
         cx: cam.panX + target.screenX * cam.zoom,

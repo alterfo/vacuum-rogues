@@ -17,6 +17,8 @@ const GRID_ROWS = 9;
 const GRID_SPAN_X = (GRID_COLS - 1) * HEX_SIZE * 1.8 + HEX_SIZE * 0.9;
 const GRID_SPAN_Y = (GRID_ROWS - 1) * HEX_SIZE * 1.5;
 const TOKEN_SPRITE_SIZE = HEX_SIZE * 1.6;
+// Keep the top hex row below the title (y 20) and HP bars (y 46–70).
+const GRID_TOP_MARGIN = 80;
 const PLAYER_COLOR = 0x00ccff;
 const ENEMY_COLOR = 0xff4444;
 const PLAYER_TINT = 0xaaeeff;
@@ -173,12 +175,21 @@ export class CombatScene extends GameScene {
     };
   }
 
-  /** Offset that centres the grid's center-to-center span in the viewport. */
+  /**
+   * Offset that centres the grid's center-to-center span in the viewport,
+   * clamped so the bottom hex row (hexes overhang the span by HEX_SIZE) stays
+   * clear of the action-button row at 0.78·screenH, and the top row stays
+   * below the title/HP bars. On short screens centring alone would overlap
+   * the buttons (e.g. 600px: centred bottom extent 468 = button row 468).
+   */
   private gridOffset(): { x: number; y: number } {
     const { width: screenW, height: screenH } = this.renderer.app.screen;
+    const buttonRowY = Math.round(screenH * 0.78);
+    const maxY = buttonRowY - GRID_SPAN_Y - HEX_SIZE - 8;
+    const centredY = Math.round((screenH - GRID_SPAN_Y) / 2);
     return {
       x: Math.round((screenW - GRID_SPAN_X) / 2),
-      y: Math.round((screenH - GRID_SPAN_Y) / 2),
+      y: Math.max(GRID_TOP_MARGIN, Math.min(centredY, maxY)),
     };
   }
 
@@ -242,6 +253,7 @@ export class CombatScene extends GameScene {
 
   private renderShipTokens(): void {
     if (!this._encounter || !this._gridContainer) return;
+    const grid = this._gridContainer;
 
     // Player token — ranger hull at player start position {q:1, r:4}
     const pPos = this.hexToScreen(1, 4);
@@ -254,7 +266,7 @@ export class CombatScene extends GameScene {
     playerToken.x = pPos.x;
     playerToken.y = pPos.y;
     this._playerToken = playerToken;
-    this._gridContainer.addChild(playerToken);
+    grid.addChild(playerToken);
 
     // Enemy tokens — pirate hulls at their start positions {q:7, r:2+index}
     this._encounter.enemies.forEach((enemy, index) => {
@@ -268,7 +280,7 @@ export class CombatScene extends GameScene {
       enemyToken.x = ePos.x;
       enemyToken.y = ePos.y;
       this._enemyTokens.set(enemy.id, enemyToken);
-      this._gridContainer?.addChild(enemyToken);
+      grid.addChild(enemyToken);
     });
   }
 
@@ -442,10 +454,11 @@ export class CombatScene extends GameScene {
   // ── Flash effects ──────────────────────────────────────────────────────────
 
   private flashToken(token: Container, shieldHit: boolean): void {
-    const original = token.alpha;
     token.alpha = shieldHit ? 0.2 : 0.05;
     setTimeout(() => {
-      if (!token.destroyed) token.alpha = original;
+      // Restore to full opacity, NOT a captured pre-flash alpha: overlapping
+      // flashes (attack + counter within 180ms) would bake the dim in forever.
+      if (!token.destroyed) token.alpha = 1;
     }, 180);
   }
 

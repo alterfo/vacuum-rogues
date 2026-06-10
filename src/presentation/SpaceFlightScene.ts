@@ -1803,6 +1803,30 @@ export class SpaceFlightScene extends GameScene {
     return this.npcManager.npcCount;
   }
 
+  /** E2E helper: true once a planet renders via the GLSL rotation filter (F1). */
+  e2eHasFilterPlanet(): boolean {
+    if (!__DEBUG__) return false;
+    return this.planetManager.e2eHasFilterPlanet();
+  }
+
+  /**
+   * E2E helper (F1 pixel assertion): hide everything on the game layer except
+   * one GLSL-filtered planet body and return its on-screen geometry. The scene
+   * owns the gameLayer, the PlanetManager owns the planet sprites — each hides
+   * only what it owns.
+   */
+  e2eIsolateFilterPlanet(): {
+    screenX: number;
+    screenY: number;
+    displayRadius: number;
+  } | null {
+    if (!__DEBUG__) return null;
+    for (const child of this.renderer.gameLayer.children) {
+      child.visible = false;
+    }
+    return this.planetManager.e2eIsolateFilterPlanet();
+  }
+
   e2ePlayPause(): void {
     if (!__DEBUG__) return;
     this.onPlayPause();
