@@ -84,7 +84,8 @@ export class GameEngine {
   // the per-scene FlightHud/ShipPhysics, both rebuilt on every SPACE_FLIGHT
   // re-init — so the speed survives a land/take-off or star-map round-trip
   // instead of resetting to 1× (playtest3 F3). Re-applied by
-  // SpaceFlightScene.initialize() via applyPersistedGameSpeed().
+  // FlightHud.restoreGameSpeed() on every HUD (re)build. Deliberately NOT in
+  // SaveState/schemas.ts (transient cross-scene state, like lastFlightShipPos).
   public gameSpeedMultiplier = 1;
   public readonly saveManager: SaveManager;
   public readonly qualityProfile: AdaptiveQualityProfile;

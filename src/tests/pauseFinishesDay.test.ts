@@ -300,8 +300,8 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
 
     onPlayPause(); // deferred pause requested mid-day
 
-    // Three updates (200 + 300 = 500) still short of the boundary on the first
-    // two; the day commits on the third.
+    // Three 100px updates (200 + 3×100 = 500): still short of the boundary on
+    // the first two (300, 400); the day commits on the third (500).
     updateShip(16); // 300
     expect(s.isTurnRunning).toBe(true);
     expect(advanceGalaxyDay).not.toHaveBeenCalled();
@@ -350,6 +350,32 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
     expect(s.isTurnRunning).toBe(false);
     expect(s.pauseAtDayBoundary).toBe(false);
     expect(phys.isMoving).toBe(false);
+  });
+
+  it("low-HP emergency hard-stop halts immediately even with a deferred pause latched", () => {
+    const advanceGalaxyDay = vi.fn();
+    s.gameEngine = {
+      player: { ship: { hullHP: 20, maxHull: 100 } }, // 20% — below the 30% floor
+      galaxy: { gameDays: 0 },
+      advanceGalaxyDay,
+    };
+    const phys = makeMovingPhysics();
+    phys.stepPerUpdate = 100; // would NOT cross a day boundary this frame
+    s.shipPhysics = phys;
+    s.isTurnRunning = true;
+    s.distanceTraveled = 200;
+    s.clearPlannedRoute = vi.fn();
+    s.pauseAtDayBoundary = true; // a deferred pause is already pending
+
+    updateShip(16);
+
+    // The low-HP safety stop fires immediately — it does NOT wait for the day
+    // boundary the deferred pause would have waited for. endTurn() clears the
+    // latch and no day is committed (the ship halted before the boundary).
+    expect(s.isTurnRunning).toBe(false);
+    expect(s.pauseAtDayBoundary).toBe(false);
+    expect(phys.isMoving).toBe(false);
+    expect(advanceGalaxyDay).not.toHaveBeenCalled();
   });
 
   it("Play from a paused state starts a fresh turn with no stale deferred pause", () => {
