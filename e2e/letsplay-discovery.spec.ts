@@ -247,7 +247,7 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-07-route');
     });
 
-    // ── 08 Mid-flight + 09 pause-stops-immediately check ──
+    // ── 08 Mid-flight + 09 pause-finishes-the-day check (F1) ──
     await step('08-mid-flight', async () => {
       await page.evaluate(() => {
         const scene = getEngine().currentScene as { e2eStartTurn?: () => void } | null;
@@ -257,7 +257,10 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-08-mid-flight');
     });
 
-    await step('09-pause-immediate-stop', async () => {
+    await step('09-pause-finishes-day', async () => {
+      // F1 (playtest3): Pause defers the stop to the next day boundary, so the
+      // ship is EXPECTED to keep drifting briefly (finishing its day) before it
+      // halts — this is a soft diagnostic, inspected by a human in lp-09.
       const before = await page.evaluate(() => {
         const scene = getEngine().currentScene as Record<string, unknown>;
         const sp = scene['shipPhysics'] as { shipX: number; shipY: number } | null;
@@ -273,7 +276,7 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-09-paused');
       if (before && after) {
         const drift = Math.hypot(after.x - before.x, after.y - before.y);
-        return `drift after pause: ${drift.toFixed(2)}px`;
+        return `drift after pause (F1 finishes the day, expect some): ${drift.toFixed(2)}px`;
       }
     });
 

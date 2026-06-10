@@ -88,9 +88,13 @@ export class SpaceFlightScene extends GameScene {
   // the threshold, not every frame.
   private lowHullStopped = false;
 
-  // Turn control (Play/Pause). The turn "runs" (ship flies, NPCs/planets move,
-  // combat resolves) while isTurnRunning; Pause stops the ship and ends it now.
+  // Turn control: the turn "runs" (ship flies, NPCs/planets move, combat) while true.
   private isTurnRunning = false;
+  // F1 (playtest3): Pause lets the ship finish its current day, then halts — this
+  // latch defers stop+endTurn to the next whole-day boundary
+  // (updateShip()/advanceWaitTime()), cleared by endTurn()/on turn start. The
+  // low-HP auto-stop and a combat abort still halt immediately.
+  private pauseAtDayBoundary = false;
   // Latch: show "pause first" hint only once per turn to avoid message spam.
   private turnHintShown = false;
   private readonly SYSTEM_INNER_RADIUS = SYSTEM_GEOMETRY.innerRadius;
@@ -1291,25 +1295,18 @@ export class SpaceFlightScene extends GameScene {
         this.distanceTraveled -= this.DISTANCE_PER_DAY;
         if (this.gameEngine?.galaxy) {
           this.gameEngine.advanceGalaxyDay();
-          // The HUD day counter refreshes from gameEngine each frame (hud.update).
           this.npcManager.refresh(); // NPCs may have arrived/departed this day
-
-          logger.debug(
-            `Day passed during flight. Current day: ${this.gameEngine.galaxy.gameDays}`,
-          );
+        }
+        // F1 (playtest3): a deferred Pause ends the turn at the day boundary.
+        if (this.pauseAtDayBoundary) {
+          this.endTurn();
+          break;
         }
       }
     }
 
-    // The ship container is synced to the physics position and redrawn for
-    // engine effects by PlayerShipRenderer.update(), called right after this in
-    // the scene's update loop.
-
-    // "Wait" turn (US-070 #5): the player may run a turn with no course — the
-    // ship holds position while the living galaxy (NPCs) and the calendar keep
-    // advancing, until Pause. Advance game days on a timer while idle so time
-    // genuinely passes; combat hold-station and pending warps are handled
-    // elsewhere and excluded here.
+    // "Wait" turn (US-070 #5): a course-less turn — the ship holds position while
+    // NPCs and the calendar keep advancing, until Pause (combat/warps excluded).
     if (
       this.isTurnRunning &&
       !this.shipPhysics.isMoving &&
@@ -1321,10 +1318,9 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Advance the calendar while the ship waits in place (a course-less turn). A
-   * fractional day accumulates smoothly (so planets keep drifting); whole days
-   * are committed to the galaxy as they tick over. Pause stops the wait turn
-   * immediately via onPlayPause(), so there is no day-boundary deferral here.
+   * Advance the calendar while the ship waits in place (a course-less turn).
+   * Fractional days accumulate (planets keep drifting), whole days commit as
+   * they tick. A deferred Pause (F1) ends the wait turn at the day boundary.
    */
   private advanceWaitTime(deltaTime: number): void {
     const scaledDt = deltaTime * (this.shipPhysics?.timeScale ?? 1);
@@ -1334,6 +1330,11 @@ export class SpaceFlightScene extends GameScene {
       if (this.gameEngine?.galaxy) {
         this.gameEngine.advanceGalaxyDay();
         this.npcManager.refresh();
+      }
+      // F1 (playtest3): a deferred Pause ends the wait turn at the day boundary.
+      if (this.pauseAtDayBoundary) {
+        this.endTurn();
+        break;
       }
     }
   }
@@ -1578,22 +1579,25 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Play/Pause turn control. When paused: Play executes the planned route (the
-   * turn starts running). While running: Pause ends the turn at the next day
-   * segment (or immediately if the ship is holding station in combat).
+   * Play/Pause turn control. When paused: Play executes the planned route. While
+   * running: Pause defers the stop to the next whole-day boundary so the ship
+   * finishes its day (F1, playtest3, reversing the sprint-3 immediate stop) —
+   * except a combat auto-follow (no day advancing), which aborts immediately.
    */
   private onPlayPause(): void {
     if (this.isTurnRunning) {
-      // Pause: stop the ship immediately and end the turn so the player can
-      // abort an unwanted route mid-flight — no longer deferred to the next day
-      // segment. Works the same whether flying, holding station, or waiting.
-      this.shipPhysics?.stop();
-      this.endTurn();
+      if (this.npcManager.followNpcId) {
+        this.endTurn(); // combat abort halts now (endTurn stops the ship)
+      } else if (!this.pauseAtDayBoundary) {
+        this.pauseAtDayBoundary = true;
+        this.hud.showMessage("⏸ Завершаю день…", 0x88ccff);
+      }
       return;
     }
     // Play: run the planned route (or close on an attack target). With no course
     // at all, run a "wait" turn — the ship holds position while the world keeps
     // moving and the calendar advances, until Pause (US-070 #5).
+    this.pauseAtDayBoundary = false; // fresh turn — clear any stale latch
     if (this.plannedRoute) {
       this.executeRouteTo(this.plannedRoute.x, this.plannedRoute.y);
     } else if (this.npcManager.followNpcId) {
@@ -1610,6 +1614,7 @@ export class SpaceFlightScene extends GameScene {
   /** End the running turn: stop the ship and freeze the world (pause). */
   private endTurn(): void {
     this.isTurnRunning = false;
+    this.pauseAtDayBoundary = false; // deferred pause consumed (or turn ended)
     this.waitDayAccum = 0;
     this.distanceTraveled = 0;
     this.turnHintShown = false;
@@ -1879,7 +1884,7 @@ export class SpaceFlightScene extends GameScene {
     this.npcManager?.e2eClickNpc(index);
   }
 
-  /** E2E helper: pause/end the running turn (stops the ship immediately). */
+  /** E2E helper: press Pause — defers the stop to the day boundary (F1). */
   e2ePressPause(): void {
     if (!__DEBUG__) return;
     if (this.isTurnRunning) this.onPlayPause();

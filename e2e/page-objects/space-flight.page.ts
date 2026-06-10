@@ -442,4 +442,40 @@ export class SpaceFlightPage extends GamePageBase {
       frames,
     );
   }
+
+  /**
+   * Read the deferred-pause state (F1, playtest3) straight off the scene:
+   * turnRunning (the turn keeps running while the ship finishes its day) and
+   * pauseDeferred (the day-boundary stop latch is set).
+   */
+  async getDeferredPause(): Promise<{ turnRunning: boolean; pauseDeferred: boolean }> {
+    return this.page.evaluate(() => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: { isTurnRunning?: boolean; pauseAtDayBoundary?: boolean } | null;
+      };
+      const s = engine.currentScene;
+      return {
+        turnRunning: s?.isTurnRunning === true,
+        pauseDeferred: s?.pauseAtDayBoundary === true,
+      };
+    });
+  }
+
+  /**
+   * Wait until the running turn has actually ended (isTurnRunning === false).
+   * Needed since F1 (playtest3) defers a Pause to the next day boundary — a
+   * deferred pause does not end the turn synchronously.
+   */
+  async waitForTurnEnd(timeout = 4_000): Promise<void> {
+    await this.page.waitForFunction(
+      () => {
+        const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+          currentScene: { isTurnRunning?: boolean } | null;
+        };
+        return engine.currentScene?.isTurnRunning === false;
+      },
+      undefined,
+      { timeout },
+    );
+  }
 }

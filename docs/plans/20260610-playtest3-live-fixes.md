@@ -70,11 +70,11 @@ check as a hard acceptance gate before commit** — not just green unit tests.
 - Modify: `src/presentation/SpaceFlightScene.ts`, `src/systems/ShipPhysics.ts`, `src/presentation/flight/FlightHud.ts`
 - Modify: `src/tests/` (turn/day + pause tests)
 
-- [ ] Write the RED test: start a turn mid-day, press Pause; assert the ship continues to the day-segment boundary, the day counter lands on a whole day, THEN `isTurnRunning` becomes false (not an immediate mid-day halt). Confirm it FAILS against the current immediate-stop
-- [ ] Fix: on Pause, stop accepting new movement but let the in-progress day-tick run to its segment boundary, then halt and end the turn. Preserve a low-HP emergency hard-stop path if one exists
-- [ ] Update any sprint-3 immediate-pause test to the new contract (document the reversal in the test)
-- [ ] Re-run letsplay; confirm pressing Pause mid-day reads naturally (ship completes its day)
-- [ ] Run lint + unit + regression — green
+- [x] Wrote the RED test (`src/tests/pauseFinishesDay.test.ts`) driving the real `onPlayPause` + `updateShip` day-tick: press Pause mid-day → the ship keeps flying with the `pauseAtDayBoundary` latch set (does NOT stop now); after the next whole-day boundary crosses, exactly one day commits and `isTurnRunning` flips false. Confirmed RED on the old immediate-stop code (it called `stop()`+`endTurn()` synchronously, so "still flying after Pause" failed)
+- [x] Fixed via a deferred-pause latch: `onPlayPause` (while running, non-combat) sets `pauseAtDayBoundary = true` instead of stopping; the whole-day boundary in `updateShip()`'s distance day-tick AND `advanceWaitTime()`'s `waitDayAccum` loop call `endTurn()` the instant the in-progress day completes. **Low-HP emergency hard-stop preserved** (the `<30%` hull path still calls `endTurn()` immediately; `endTurn` clears the latch). A **combat auto-follow** (`followNpcId` set) has no day advancing, so it still aborts immediately. Latch cleared by `endTurn()` and on every turn start
+- [x] Replaced the sprint-3 immediate-pause test: deleted `src/tests/playPauseImmediate.test.ts`, the new `pauseFinishesDay.test.ts` documents the reversal in its header. Updated the e2e contract tests too: `playtest-regression.spec.ts` + `space-flight.spec.ts` "second Ход" now assert the deferred latch (ship keeps flying), and the NPC-clickability/cursor tests `await waitForTurnEnd()` (new page-object helper) since the wait turn now ends ~1 day later. Updated `letsplay` step 09 label + the stale `e2ePressPause` doc comment
+- [x] Re-ran letsplay (all 21 steps ok, `JS_ERRORS []`); inspected the regenerated `lp-09-paused.png` — after Pause the ship is still travelling its dashed route (turn-running HUD), i.e. finishing its day rather than an instant halt: reads naturally
+- [x] Ran lint (0 errors) + unit (1036 pass, incl. the new F1 unit test + the <1900-line scene guard at 1899) + regression (15 pass) — green
 
 ### Task 5: F5 — Planet backdrop is a light parallax, not a magnifying lens
 **Files:**

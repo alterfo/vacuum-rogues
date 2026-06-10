@@ -76,7 +76,7 @@ test.describe('SpaceFlightScene — visual E2E suite', () => {
     expect(await sf.hasPlannedRoute()).toBe(true);
   });
 
-  test('Ход starts the ship; a second Ход stops it immediately (mid-flight stop)', async ({ page }) => {
+  test('Ход starts the ship; a second Ход defers the stop to the day boundary (playtest3 F1)', async ({ page }) => {
     const sf = await setupNewGame(page);
 
     // Plan a route so the turn has somewhere to fly.
@@ -87,9 +87,12 @@ test.describe('SpaceFlightScene — visual E2E suite', () => {
     await sf.startTurn();
     expect((await sf.getSceneState()).isFlying).toBe(true);
 
-    // Ход again → immediate stop (no longer deferred to the next day segment).
+    // Ход again → F1: the ship finishes its current day before stopping, so it
+    // keeps flying with the deferred-pause latch set (no immediate halt).
     await sf.pressPause();
-    expect((await sf.getSceneState()).isFlying).toBe(false);
+    await sf.settle(2);
+    expect((await sf.getSceneState()).isFlying).toBe(true);
+    expect((await sf.getDeferredPause()).pauseDeferred).toBe(true);
   });
 
   test('hovering a planet shows the pointer cursor', async ({ page }) => {
@@ -109,11 +112,12 @@ test.describe('SpaceFlightScene — visual E2E suite', () => {
 
     expect((await sf.getSceneState()).npcsCount).toBeGreaterThan(0);
 
-    // Run a (course-less wait) turn, then end it.
+    // Run a (course-less wait) turn, then end it. F1 (playtest3): Pause finishes
+    // the current waited day before the turn ends — wait for the actual stop.
     await sf.startTurn();
     await sf.settle();
     await sf.pressPause();
-    await sf.settle();
+    await sf.waitForTurnEnd();
 
     // Interactivity is restored when the turn ends...
     expect(await sf.isNpcClickable(0)).toBe(true);

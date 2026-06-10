@@ -1,9 +1,17 @@
 /**
- * Sprint 3 Task 2: the Ход / Pause button must stop the ship immediately when
- * pressed mid-turn, instead of deferring the pause to the next day boundary.
+ * Playtest 3 F1 (2026-06-10): pressing Pause must let the ship FINISH the day
+ * segment it is currently travelling, then stop — it must NOT cut the day off
+ * mid-segment. This deliberately REVERSES the sprint-3 "immediate stop" contract
+ * (see the deleted playPauseImmediate.test.ts).
  *
- * onPlayPause() while isTurnRunning=true should call shipPhysics.stop() and
- * endTurn() right away — whether the ship is flying or holding station.
+ * Contract:
+ *  - onPlayPause() while flying a route → does NOT stop now; latches a deferred
+ *    pause (pauseAtDayBoundary) and keeps the turn running. The ship halts and
+ *    the turn ends only when the next whole-day boundary is crossed in
+ *    updateShip()/advanceWaitTime().
+ *  - A combat auto-follow (followNpcId set) has no advancing day, so an abort
+ *    there still stops immediately.
+ *  - The low-HP auto-stop (separate path) also remains an immediate hard-stop.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -202,60 +210,159 @@ function makeMockRenderer(): Renderer {
   } as unknown as Renderer;
 }
 
-describe("playPauseImmediate: Pause stops the ship immediately mid-turn", () => {
+/**
+ * A controllable ShipPhysics stand-in that walks +stepPerUpdate px along X on
+ * each update() (so updateShip() accumulates distanceTraveled deterministically).
+ */
+function makeMovingPhysics() {
+  return {
+    shipX: 0,
+    shipY: 0,
+    isMoving: true,
+    currentSpeed: 1, // > 0.01 so the day-counter accrues
+    timeScale: 1,
+    stepPerUpdate: 0,
+    update(_dt: number) {
+      if (this.isMoving) this.shipX += this.stepPerUpdate;
+    },
+    stop: vi.fn(function (this: { isMoving: boolean; currentSpeed: number }) {
+      this.isMoving = false;
+      this.currentSpeed = 0;
+    }),
+    setTarget: vi.fn(),
+  };
+}
+
+describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
   let scene: SpaceFlightScene;
   let s: Record<string, unknown>;
-  let stop: ReturnType<typeof vi.fn>;
-  let endTurn: ReturnType<typeof vi.fn>;
-
-  beforeEach(() => {
-    scene = new SpaceFlightScene(makeMockRenderer());
-    s = scene as unknown as Record<string, unknown>;
-
-    stop = vi.fn();
-    endTurn = vi.fn();
-    s.shipPhysics = { isMoving: true, stop };
-    s.endTurn = endTurn;
-    // The toast lives on the HUD module now (onPlayPause's wait branch calls it).
-    s.hud = { showMessage: vi.fn() };
-    s.updateInteractiveCursors = vi.fn();
-    s.executeRouteTo = vi.fn();
-    // NPC auto-follow state is owned by the NPC module now.
-    s.npcManager = { followNpcId: null, getFollowTarget: () => null };
-  });
 
   function onPlayPause(): void {
     (scene as unknown as { onPlayPause(): void }).onPlayPause();
   }
+  function updateShip(dt: number): void {
+    (scene as unknown as { updateShip(dt: number): void }).updateShip(dt);
+  }
 
-  it("stops the ship and ends the turn immediately while flying", () => {
+  beforeEach(() => {
+    scene = new SpaceFlightScene(makeMockRenderer());
+    s = scene as unknown as Record<string, unknown>;
+    s.hud = { showMessage: vi.fn(), setTurnRunning: vi.fn() };
+    s.updateInteractiveCursors = vi.fn();
+    s.executeRouteTo = vi.fn();
+    s.npcManager = {
+      followNpcId: null,
+      getFollowTarget: () => null,
+      refresh: vi.fn(),
+      setCursors: vi.fn(),
+    };
+    s.planetManager = {
+      routeTargetStationId: null,
+      routeTargetPlanetId: null,
+      stationMarkers: [],
+      planetSprites: [],
+      landingThreshold: () => 0,
+      setCursors: vi.fn(),
+    };
+    s.playerShip = { isArcActive: () => false, update: vi.fn() };
+    s.starRenderer = { updateSunContactDamage: () => false };
+    s.pendingWarp = null;
+  });
+
+  it("does NOT stop immediately on Pause — defers to the next day boundary", () => {
+    const phys = makeMovingPhysics();
+    phys.stepPerUpdate = 100;
+    s.shipPhysics = phys;
     s.isTurnRunning = true;
-    (s.shipPhysics as { isMoving: boolean }).isMoving = true;
+    s.distanceTraveled = 200; // partway through a day (DISTANCE_PER_DAY = 500)
 
     onPlayPause();
 
-    expect(stop).toHaveBeenCalledTimes(1);
-    expect(endTurn).toHaveBeenCalledTimes(1);
+    // Pause is latched, NOT applied: the ship keeps flying, turn still running.
+    expect(s.pauseAtDayBoundary).toBe(true);
+    expect(s.isTurnRunning).toBe(true);
+    expect(phys.stop).not.toHaveBeenCalled();
+    expect(phys.isMoving).toBe(true);
   });
 
-  it("stops and ends the turn immediately while holding station (not moving)", () => {
+  it("continues to the day boundary, lands on a whole day, THEN ends the turn", () => {
+    const advanceGalaxyDay = vi.fn();
+    s.gameEngine = {
+      player: { ship: { hullHP: 100, maxHull: 100 } },
+      galaxy: { gameDays: 7 },
+      advanceGalaxyDay,
+    };
+    const phys = makeMovingPhysics();
+    phys.stepPerUpdate = 100; // 5 updates = 500px = 1 day
+    s.shipPhysics = phys;
     s.isTurnRunning = true;
-    (s.shipPhysics as { isMoving: boolean }).isMoving = false;
+    s.distanceTraveled = 200;
+
+    onPlayPause(); // deferred pause requested mid-day
+
+    // Three updates (200 + 300 = 500) still short of the boundary on the first
+    // two; the day commits on the third.
+    updateShip(16); // 300
+    expect(s.isTurnRunning).toBe(true);
+    expect(advanceGalaxyDay).not.toHaveBeenCalled();
+    updateShip(16); // 400
+    expect(s.isTurnRunning).toBe(true);
+    updateShip(16); // 500 → crosses the day boundary
+
+    // Exactly one day committed, then the turn ends at the boundary (endTurn
+    // halts the ship — isMoving false — without a separate stop() call).
+    expect(advanceGalaxyDay).toHaveBeenCalledTimes(1);
+    expect(s.isTurnRunning).toBe(false);
+    expect(s.pauseAtDayBoundary).toBe(false);
+    expect(phys.isMoving).toBe(false);
+  });
+
+  it("commits at most one day on the pause frame even when several elapse at once", () => {
+    const advanceGalaxyDay = vi.fn();
+    s.gameEngine = {
+      player: { ship: { hullHP: 100, maxHull: 100 } },
+      galaxy: { gameDays: 0 },
+      advanceGalaxyDay,
+    };
+    const phys = makeMovingPhysics();
+    phys.stepPerUpdate = 1600; // > 3 days of distance in a single frame
+    s.shipPhysics = phys;
+    s.isTurnRunning = true;
+    s.distanceTraveled = 0;
+
+    onPlayPause();
+    updateShip(16); // moves 1600px (>= 3 days) in one frame
+
+    // The deferred pause halts on the FIRST completed day — one day, not three.
+    expect(advanceGalaxyDay).toHaveBeenCalledTimes(1);
+    expect(s.isTurnRunning).toBe(false);
+  });
+
+  it("aborts immediately during a combat auto-follow (no day boundary to wait for)", () => {
+    const phys = makeMovingPhysics();
+    s.shipPhysics = phys;
+    s.isTurnRunning = true;
+    (s.npcManager as { followNpcId: string | null }).followNpcId = "npc-1";
 
     onPlayPause();
 
-    expect(stop).toHaveBeenCalledTimes(1);
-    expect(endTurn).toHaveBeenCalledTimes(1);
+    // Combat abort still stops now — no deferral (endTurn halts the ship).
+    expect(s.isTurnRunning).toBe(false);
+    expect(s.pauseAtDayBoundary).toBe(false);
+    expect(phys.isMoving).toBe(false);
   });
 
-  it("does not stop or end the turn when paused (starts a wait turn instead)", () => {
+  it("Play from a paused state starts a fresh turn with no stale deferred pause", () => {
+    const phys = makeMovingPhysics();
+    phys.isMoving = false;
+    s.shipPhysics = phys;
     s.isTurnRunning = false;
     s.plannedRoute = null;
+    s.pauseAtDayBoundary = true; // simulate a leftover latch
 
-    onPlayPause();
+    onPlayPause(); // course-less wait turn
 
-    expect(stop).not.toHaveBeenCalled();
-    expect(endTurn).not.toHaveBeenCalled();
     expect(s.isTurnRunning).toBe(true);
+    expect(s.pauseAtDayBoundary).toBe(false);
   });
 });

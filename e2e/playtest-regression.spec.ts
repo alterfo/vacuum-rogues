@@ -278,7 +278,13 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     expect(dark / total).toBeGreaterThanOrEqual(0.95);
   });
 
-  test('smoke: Ход stops the ship immediately when mid-flight (Sprint 3 regression)', async ({ page }) => {
+  test('smoke: Pause mid-flight finishes the current day, not an immediate stop (playtest3 F1)', async ({ page }) => {
+    // F1 reverses the sprint-3 immediate-stop: pressing Pause while flying must
+    // let the ship finish its current day segment, THEN stop. So right after
+    // Pause the ship is still flying with the stop latched (pauseDeferred), not
+    // halted. The whole-day-boundary stop itself is pinned by the unit test
+    // (src/tests/pauseFinishesDay.test.ts) — a full 500px/day flight is too slow
+    // and physics-dependent to gate deterministically here.
     await setupNewGame(page);
     const sf = new SpaceFlightPage(page);
 
@@ -290,9 +296,14 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     await sf.startTurn();
     expect((await sf.getSceneState()).isFlying).toBe(true);
 
-    // Ход again → immediate stop, no longer deferred to the next day segment.
+    // Ход again → the stop is deferred to the day boundary: the ship keeps
+    // flying and the turn stays running, with the deferred-pause latch set.
     await sf.pressPause();
-    expect((await sf.getSceneState()).isFlying).toBe(false);
+    await sf.settle(2);
+    expect((await sf.getSceneState()).isFlying).toBe(true);
+    const dp = await sf.getDeferredPause();
+    expect(dp.turnRunning).toBe(true);
+    expect(dp.pauseDeferred).toBe(true);
   });
 
   test('smoke: NPC ships stay clickable after the first turn (Sprint 3 Task 6 regression)', async ({ page }) => {
@@ -301,11 +312,13 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
 
     expect((await sf.getSceneState()).npcsCount).toBeGreaterThan(0);
 
-    // Run a course-less wait turn, then end it.
+    // Run a course-less wait turn, then end it. F1 (playtest3): Pause finishes
+    // the current (waited) day before the turn ends, so wait for the turn to
+    // actually stop rather than assuming an immediate halt.
     await sf.startTurn();
     await sf.settle();
     await sf.pressPause();
-    await sf.settle();
+    await sf.waitForTurnEnd();
 
     // Interactivity is restored when the turn ends...
     expect(await sf.isNpcClickable(0)).toBe(true);
@@ -323,8 +336,12 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     expect(planetsCount).toBeGreaterThan(0);
 
     for (let turn = 0; turn < 3; turn++) {
-      // Plan a route to a planet, fly part of the way, then stop — each cycle
-      // exercises route planning, flight physics, NPC updates and turn teardown.
+      // Plan a route to a planet and fly part of the way, then request a pause —
+      // each cycle exercises route planning, flight physics and NPC updates.
+      // F1 (playtest3) defers the pause to the day boundary, so the ship keeps
+      // flying its first route across the short settle windows (well short of
+      // both the 500px/day boundary and the distant planet); this stays in
+      // SpaceFlightScene and just checks the session is error-free.
       await sf.clickPlanet(turn % planetsCount);
       await sf.startTurn();
       await sf.settle(8);
@@ -375,13 +392,15 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
       return engine.currentScene?.['isTurnRunning'] === true;
     }, undefined, { timeout: 3_000 });
 
-    // Real click again (now ПАУЗА) → the turn must stop immediately
+    // Real click again (now ПАУЗА) → the button fires and latches a deferred
+    // pause (F1): the turn finishes its current day before ending, so we assert
+    // the latch was set rather than waiting out the ~1s wait-day boundary.
     await page.mouse.click(btn!.x, btn!.y);
     await page.waitForFunction(() => {
       const engine = (window as Record<string, unknown>).__gameEngine as {
-        currentScene: Record<string, unknown> | null;
+        currentScene: { pauseAtDayBoundary?: boolean } | null;
       };
-      return engine.currentScene?.['isTurnRunning'] === false;
+      return engine.currentScene?.pauseAtDayBoundary === true;
     }, undefined, { timeout: 3_000 });
 
     errorCollector.assertAndDetach();
@@ -421,7 +440,9 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
       { timeout: 20_000 },
     );
     await sf.pressPause();
-    await sf.settle();
+    // F1 (playtest3): Pause finishes the current day before ending the turn —
+    // wait for the actual stop so the NPC intent cursors are restored.
+    await sf.waitForTurnEnd();
 
     // At least one NPC must still be interactive (the mass-exodus bug left
     // zero), centre the camera on it and read back its on-screen position.
