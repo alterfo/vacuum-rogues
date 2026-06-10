@@ -50,9 +50,23 @@ export class Galaxy {
     return this.overmindSystems.includes(systemId);
   }
 
-  /** Returns true when OVERMIND controls more than half the galaxy (loss condition). */
+  /** Returns true when OVERMIND controls more than half the galaxy (raw majority check). */
   isOvermindMajority(): boolean {
     return this.overmindSystems.length > this.systems.length / 2;
+  }
+
+  /**
+   * True loss condition: majority AND past grace period AND galaxy is large
+   * enough that the save is not a legacy small-map edge case.
+   */
+  isOvermindVictory(
+    graceDays: number,
+    minSystems: number,
+    currentDay: number,
+  ): boolean {
+    if (this.systems.length < minSystems) return false;
+    if (currentDay <= graceDays) return false;
+    return this.isOvermindMajority();
   }
 
   /** Mark a system as OVERMIND-controlled (idempotent). */

@@ -11,6 +11,7 @@ import { GlobalExceptionHandler } from "@/exceptions/GlobalExceptionHandler";
 import { GameSystemException } from "@/exceptions/GameSystemException";
 import { GameValidationException } from "@/exceptions/GameValidationException";
 import { logger } from "@/utils/logger";
+import { GAME_BALANCE } from "@/config/balance";
 import { Graphics, Text } from "pixi.js";
 import { validatePlayerSettings } from "@/validation/schemas";
 import { Player } from "@/domain/Player";
@@ -458,8 +459,15 @@ export class GameEngine {
       }
     }
 
-    // Loss condition: OVERMIND controls >50% of systems.
-    if (this.galaxy.isOvermindMajority() && !this._gameOverShown) {
+    // Loss condition: OVERMIND majority + past grace period + full-size galaxy.
+    if (
+      this.galaxy.isOvermindVictory(
+        GAME_BALANCE.OVERMIND_LOSS_GRACE_DAYS,
+        GAME_BALANCE.OVERMIND_LOSS_MIN_SYSTEMS,
+        this.galaxy.gameDays,
+      ) &&
+      !this._gameOverShown
+    ) {
       logger.warn(
         "OVERMIND controls majority of galaxy — triggering game over",
       );

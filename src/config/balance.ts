@@ -133,6 +133,10 @@ export const GAME_BALANCE = {
   gameSpeedMultipliers: [1.0, 2.0, 4.0] as const,
   /** Fraction of base price deviation that marks a deal (20% = buy/sell 20% off/above average). */
   tradeDealThreshold: 0.2,
+  /** Grace period (game days) before OVERMIND can trigger a loss — gives the player time to develop. */
+  OVERMIND_LOSS_GRACE_DAYS: 40,
+  /** Minimum galaxy size (system count) for the OVERMIND loss condition to fire — prevents instant-loss on stale small saves. */
+  OVERMIND_LOSS_MIN_SYSTEMS: 12,
 } as const;
 
 /**
