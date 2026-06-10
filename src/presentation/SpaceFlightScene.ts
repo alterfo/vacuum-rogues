@@ -1621,11 +1621,9 @@ export class SpaceFlightScene extends GameScene {
 
   /** Switch planet and NPC cursors so hovering shows intent only when not mid-turn. */
   private updateInteractiveCursors(turnRunning: boolean): void {
-    const planetCursor = turnRunning ? "default" : "pointer";
-    for (const sprite of this.planetManager.planetSprites) {
-      sprite.graphics.cursor = planetCursor;
-    }
-    // NPC cursors + interactivity restore are owned by the NPC module.
+    // Cursor management is owned by the modules that own the sprites (Information
+    // Expert) — the scene only routes the turn state, never touches Graphics.
+    this.planetManager?.setCursors(turnRunning);
     this.npcManager?.setCursors(turnRunning);
   }
 

@@ -11,6 +11,10 @@ import {
   NpcShipManager,
   type NpcShipManagerDeps,
 } from "@/presentation/flight/NpcShipManager";
+import {
+  PlanetManager,
+  type PlanetManagerDeps,
+} from "@/presentation/flight/PlanetManager";
 
 // Mirror the pixi.js + presentation mocks from playPauseImmediate.test.ts so the
 // SpaceFlightScene can be constructed in jsdom without a real renderer.
@@ -234,9 +238,29 @@ describe("hudCursors: HUD buttons keep their pointer cursor across turns", () =>
     );
     (mgr as unknown as { npcSprites: unknown[] }).npcSprites = [pirate, trader];
 
-    // Planet sprites now live on the PlanetManager module; updateInteractiveCursors
-    // reads them from it. A bare stub holding the planet is enough here.
-    s.planetManager = { planetSprites: [planet] };
+    // Planet cursors are owned by the PlanetManager module now — inject a real
+    // manager holding the planet stub so updateInteractiveCursors() delegates to
+    // its setCursors() exactly as it does in the live scene.
+    const planetDeps: PlanetManagerDeps = {
+      getShipPhysics: () => null,
+      getStarCenter: () => ({ x: 0, y: 0 }),
+      isTurnRunning: () => false,
+      getOrbitalDay: () => 0,
+      showPlanetTooltip: () => {},
+      hideTooltip: () => {},
+      clearFollow: () => {},
+    };
+    const planetMgr = new PlanetManager(
+      renderer,
+      null,
+      renderer.gameLayer,
+      renderer.uiLayer,
+      planetDeps,
+    );
+    (planetMgr as unknown as { planetSprites: unknown[] }).planetSprites = [
+      planet,
+    ];
+    s.planetManager = planetMgr;
     s.npcManager = mgr;
     s.playPauseButton = { container: playBtnContainer };
   });

@@ -212,6 +212,20 @@ export class PlanetManager implements FlightModule {
     if (info) queueMicrotask(() => info.destroy());
   }
 
+  /**
+   * Set the planet hover cursors: "pointer" when idle (a click plots a course),
+   * "default" while a turn is running (clicks are disabled). The manager owns the
+   * planet sprites, so it owns their cursor too — mirrors
+   * {@link NpcShipManager.setCursors} so the scene's Controller never reaches into
+   * a sprite's Graphics directly.
+   */
+  setCursors(turnRunning: boolean): void {
+    const cursor = turnRunning ? "default" : "pointer";
+    for (const sprite of this.planetSprites) {
+      sprite.graphics.cursor = cursor;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Planet sprites
   // ---------------------------------------------------------------------------
