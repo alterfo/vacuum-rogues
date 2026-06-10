@@ -31,6 +31,43 @@ interface Moon {
 }
 
 /**
+ * Build the flat-disc fallback for an equirect planet: a horizontally-scrolling
+ * {@link TilingSprite} of the surface map, clipped to a circle. The TilingSprite's
+ * origin is its top-left corner, so it is offset by (-radius, -radius) inside a
+ * plain wrapper {@link Container}; the circular mask lives in that Container's
+ * space centred on the planet origin (0, 0).
+ *
+ * The mask is a child of the wrapper Container — never of the TilingSprite. A
+ * TilingSprite's specialised renderer drops a child mask, so the disc renders as
+ * its full rectangle (the "planets render as rectangles, clipped at a straight
+ * edge" regression). Wrapping in a plain Container, exactly like the procedural
+ * `surface`/maskA path, is the robust clip. Exported for unit testing.
+ */
+export function buildTilingDisc(
+  mapTex: Texture,
+  radius: number,
+): { surface: Container; tiling: TilingSprite; mask: Graphics } {
+  const W = radius * 2;
+  const surface = new Container();
+  surface.eventMode = "none";
+
+  const tiling = new TilingSprite({ texture: mapTex, width: W, height: W });
+  tiling.x = -radius;
+  tiling.y = -radius;
+  const scale = mapTex.height ? W / mapTex.height : 1;
+  tiling.tileScale.set(scale, scale);
+  tiling.eventMode = "none";
+
+  const mask = new Graphics().circle(0, 0, radius).fill({ color: 0xffffff });
+
+  surface.addChild(tiling);
+  surface.addChild(mask);
+  surface.mask = mask;
+
+  return { surface, tiling, mask };
+}
+
+/**
  * Visual representation of a planet in the SpaceFlightScene
  * Handles rendering, hover effects, and click interactions
  */
@@ -71,6 +108,10 @@ export class PlanetSprite {
   // Equirect surface map (preferred): a tiling sprite scrolled horizontally
   // under a circular mask gives a real, seamless axial rotation.
   private tiling: TilingSprite | null = null;
+  // Wrapper Container holding the TilingSprite + its circular mask (the masked
+  // object). Retained for axial-spin updates and e2eMaskInfo introspection.
+  private tilingSurface: Container | null = null;
+  private tilingMask: Graphics | null = null;
   // Preferred map-backed rendering: a rotating sphere mesh (convex), like the sun.
   private sphere: SphereMesh | null = null;
   // Preferred-most map-backed rendering: a GLSL sphere-rotation filter on a flat
@@ -250,7 +291,6 @@ export class PlanetSprite {
    * layer rotated each frame so the lit hemisphere faces the star.
    */
   private buildEquirectSphere(mapTex: Texture, radius: number): void {
-    const W = radius * 2;
     const rng = new SeededRNG(`surf_${this.planet.id}`);
 
     // No fake lighting overlay: the specular/rim "glints" and the directional
@@ -289,25 +329,21 @@ export class PlanetSprite {
       return;
     }
 
-    // Fallback: flat scrolling disc under a circular mask. The mask is parented
-    // under the tiling sprite so it lives in the scene graph (PixiJS 8 requires
-    // this to clip). The sprite is offset by (-radius, -radius), so the mask's
-    // circle is centred at the tiling-local planet centre (radius, radius).
-    const maskC = new Graphics()
-      .circle(radius, radius, radius)
-      .fill({ color: 0xffffff });
-    const tiling = new TilingSprite({ texture: mapTex, width: W, height: W });
-    tiling.x = -radius;
-    tiling.y = -radius;
-    const scale = W / mapTex.height;
-    tiling.tileScale.set(scale, scale);
-    tiling.eventMode = "none";
-    tiling.addChild(maskC);
-    tiling.mask = maskC;
+    // Fallback: flat scrolling disc under a circular mask. The TilingSprite has a
+    // top-left origin, so it is offset by (-radius, -radius) inside a plain
+    // wrapper Container and the circular mask is centred on the planet origin
+    // (0, 0) in that wrapper's space. The mask MUST be a child of the wrapper
+    // Container — NOT of the TilingSprite, whose specialised renderer fails to
+    // apply a child mask, leaving the disc rendering as its full rectangle
+    // clipped at a straight edge (Task 2: planets-render-as-rectangles
+    // regression). This mirrors the known-good procedural `surface`/maskA path.
+    const { surface, tiling, mask } = buildTilingDisc(mapTex, radius);
     this.tiling = tiling;
+    this.tilingSurface = surface;
+    this.tilingMask = mask;
     this.axialSpeed =
       (0.012 + rng.next() * 0.012) * (rng.next() < 0.5 ? 1 : -1);
-    this.bodyContainer.addChild(tiling);
+    this.bodyContainer.addChild(surface);
   }
 
   /** Darken a hex color by an absolute per-channel amount. */
@@ -620,6 +656,31 @@ export class PlanetSprite {
   }
 
   /**
+   * E2E/diagnostics: report the equirect-disc circular mask geometry so a browser
+   * test can assert the planet body clips to a circle. Returns `null` when this
+   * planet did NOT fall back to the TilingSprite disc (it rendered via the GLSL
+   * rotation filter or the sphere mesh, which clip in-shader / by geometry).
+   *
+   * `maskIsChild` is true when the mask Graphics is a child of the masked wrapper
+   * Container (the PixiJS 8 scene-graph requirement). `maskBounds` are the mask's
+   * local bounds — a correctly-centred circle has bounds centred on (0, 0).
+   * Guarded by __DEBUG__ (stripped from production builds).
+   */
+  e2eMaskInfo(): {
+    maskIsChild: boolean;
+    maskBounds: { x: number; y: number; width: number; height: number };
+  } | null {
+    if (!__DEBUG__) return null;
+    if (!this.tilingSurface || !this.tilingMask) return null;
+    const maskIsChild = this.tilingSurface.children.includes(this.tilingMask);
+    const b = this.tilingMask.getLocalBounds();
+    return {
+      maskIsChild,
+      maskBounds: { x: b.x, y: b.y, width: b.width, height: b.height },
+    };
+  }
+
+  /**
    * Clean up resources
    */
   destroy(): void {
@@ -637,9 +698,16 @@ export class PlanetSprite {
       this.rotationFilter = null;
     }
 
-    // Destroy graphics and container (children incl. the filtered sprite).
+    // Destroy graphics and container (children incl. the filtered sprite and the
+    // tiling-disc wrapper + its mask).
     this.graphics.destroy();
     this.container.destroy({ children: true });
+
+    // Drop references to torn-down tiling-disc objects so e2eMaskInfo cannot read
+    // destroyed Graphics bounds after teardown.
+    this.tiling = null;
+    this.tilingSurface = null;
+    this.tilingMask = null;
 
     // Null out callback reference
     this.clickCallback = null;

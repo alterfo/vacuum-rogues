@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { Container as PixiContainer } from "pixi.js";
-import { PlanetSprite } from "@/presentation/PlanetSprite";
+import { Texture } from "pixi.js";
+import { PlanetSprite, buildTilingDisc } from "@/presentation/PlanetSprite";
 import { Planet } from "@/domain/Planet";
 import { PlanetType } from "@/types";
 
@@ -84,5 +85,53 @@ describe("PlanetSprite circular masking", () => {
     // Without render() the loop above asserted nothing (no masks existed). At
     // least one planet type must produce a masked body for this test to bite.
     expect(totalMasked).toBeGreaterThan(0);
+  });
+});
+
+describe("buildTilingDisc circular mask (equirect fallback)", () => {
+  // Regression guard for the "planet renders as a rectangle clipped at a straight
+  // edge" bug. The TilingSprite fallback used to parent its circular mask under
+  // the TilingSprite itself, whose specialised renderer drops a child mask, so
+  // the disc was never clipped. The mask must instead be a child of the plain
+  // wrapper Container (the masked object) and centred on the planet origin.
+  it("masks the disc with a circle centred on the planet origin (0, 0)", () => {
+    const radius = 80;
+    const { surface, tiling, mask } = buildTilingDisc(Texture.WHITE, radius);
+
+    // The mask is a child of the wrapper Container and is assigned as its mask;
+    // it is never a child of the TilingSprite (whose renderer would drop it).
+    expect(surface.children).toContain(mask);
+    expect(surface.mask).toBe(mask);
+    expect(tiling.children).not.toContain(mask);
+
+    // The mask circle's local bounds span -radius..+radius on both axes, so its
+    // centre sits exactly on the planet origin (0, 0).
+    const b = mask.getLocalBounds();
+    expect(b.x + b.width / 2).toBeCloseTo(0);
+    expect(b.y + b.height / 2).toBeCloseTo(0);
+    expect(b.width).toBeCloseTo(radius * 2);
+    expect(b.height).toBeCloseTo(radius * 2);
+
+    // The TilingSprite is offset so its top-left sits at (-radius, -radius),
+    // i.e. the disc is centred on the same origin as the mask.
+    expect(tiling.x).toBe(-radius);
+    expect(tiling.y).toBe(-radius);
+
+    surface.destroy({ children: true });
+  });
+});
+
+describe("PlanetSprite.e2eMaskInfo", () => {
+  it("returns null when the planet did not take the tiling-disc fallback", () => {
+    // In the unit environment no equirect map texture is cached, so the planet
+    // never reaches the TilingSprite path; e2eMaskInfo reports null.
+    const sprite = new PlanetSprite(
+      makePlanet(PlanetType.TERRESTRIAL),
+      0,
+      0,
+      0,
+    );
+    expect(sprite.e2eMaskInfo()).toBeNull();
+    sprite.destroy();
   });
 });
