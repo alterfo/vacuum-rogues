@@ -29,6 +29,28 @@ making the spline shape visible where before it was hidden. Confirm with a
 real route screenshot (the letsplay 06b sun-crossing arc verified clean, so
 this is about *near-but-not-through* routes).
 
+**Diagnosis + fix (2026-06-10, playtest3 Task 6).** Numerically logged
+`avoidStarPath` over six route types (star at origin, exclusion ring `R = 390`,
+visual sun `170`). Findings: routes clear of the ring stay straight (0 bow) and
+clearance is always held — so it is NOT a "straight routes curving" bug nor a
+`dashedPolyline` artifact. The culprit is suspect (a), the **over-wide arc
+clearance**: the bypass rode `1.15R = 448px`, i.e. *15% PAST the exclusion
+ring*. Because the ring (390) is already 2.3× the visual sun (170), this had two
+visible effects — (1) a **boundary discontinuity/inversion**: a route grazing
+the ring at 389px (just inside) bowed out to 448px — **58px FARTHER from the
+star than the straight line it replaced** — while a route at 391px (just
+outside) stayed dead-straight, so crossing the ring by 2px snapped the line from
+straight to a wide bow; (2) routes whose straight shot visually cleared the sun
+and its bright glow (closest ~300px) still bowed conspicuously to 448px, reading
+as a curve around empty space. **Fix:** ride the ring — `arcR = R * 1.01`
+(a hair of margin so the Catmull samples stay outside `R` and the numerical
+safety net stays a true fallback). The boundary bow collapses from 59px → 5px,
+the path closest-to-star holds at 394px (≥ R, clearance guarantee intact, no
+fly-through), and through-the-sun routes still produce a clean arc. Regression:
+`src/tests/flightCurves.test.ts` ("rides just outside the ring…", "does not snap
+from straight to a wide bow at the ring boundary"). Verified visually in the
+regenerated `lp-06b-sun-route.png` (arc hugs the ring) and `lp-07-route.png`.
+
 ### F3 — Game speed resets x4 → x1 (REGRESSION CANDIDATE)
 "постоянно сбрасывается скорость (x4 → x1)". `FlightHud.cycleGameSpeed` tracks
 `speedIndex` and calls `onSpeedCycle(scale)` → `shipPhysics.setTimeScale`.

@@ -92,11 +92,11 @@ check as a hard acceptance gate before commit** — not just green unit tests.
 - Modify: `src/utils/flightGeometry.ts` and/or `src/presentation/flight/RouteRenderer.ts` per diagnosis
 - Modify: `src/tests/` (route geometry/renderer tests)
 
-- [ ] Diagnose at runtime FIRST: plan several routes (near-but-not-through the sun, and clear of it), screenshot each, and log the path points. Determine whether the "strange curve" is an over-wide 1.15R bow on grazing routes, a `dashedPolyline` artifact, or routes curving when they should be straight. Record the finding in the playtest doc
-- [ ] Write the RED test capturing the specific defect found (e.g. a route whose straight segment clears the ring must stay straight; or a grazing route's max deviation must be within an expected bound)
-- [ ] Fix per diagnosis (tighten the arc trigger / clearance, or correct the renderer) — keep the sun-clearance guarantee from playtest2 intact (do not reintroduce fly-through)
-- [ ] Re-run letsplay; INSPECT the route screenshots — straight where expected, a clean (not exaggerated) arc only when actually rounding the sun
-- [ ] Run lint + unit + regression — green
+- [x] Diagnosed at runtime FIRST via a numerical probe (`_diag_f2_route.test.ts`, since removed) logging `avoidStarPath` path points over six route types (clear, grazing-corona, just-outside/just-inside the ring, through-sun, planet-to-planet). **Finding: it is NOT routes-curving-when-straight nor a `dashedPolyline` artifact — clear routes stay straight (0 bow). It is suspect (a), the over-wide `1.15R` arc clearance** (448px = 15% PAST the 390px ring). Two symptoms: a boundary inversion (a 389px-grazing route bowed to 448px — 58px FARTHER than the straight line — while a 391px route stayed straight, so a 2px ring crossing snapped straight→wide-bow), and conspicuous bows around the visually-clear corona band (170–390px). Recorded in `docs/playtests/20260610-playtest3-live-findings.md` under F2
+- [x] Wrote the RED tests in `src/tests/flightCurves.test.ts`: "rides just outside the ring at the arc apex, not a wide 1.15R bow" (apex must be `< R*1.05`, was 1.15R) and "does not snap from straight to a wide bow at the ring boundary" (a 391px route stays a straight single point; a 389px route bows `< R+12`, not the old 58px overshoot). Both fail on the old `1.15R` code (apex 345/448px)
+- [x] Fixed per diagnosis: `arcR = R * 1.01` in `avoidStarPath` (was `R * 1.15`) — the bypass rides just outside the exclusion ring instead of 15% past it. Sun-clearance guarantee intact (path closest-to-star holds at 394px ≥ R=390 across all scenarios; no fly-through); the existing clearance tests (`sunAvoidance`, `routeSunClearance`, the 5000-route property test) stay green
+- [x] Re-ran letsplay (all 21 steps ok, `JS_ERRORS []`); INSPECTED `lp-06b-sun-route.png` (the sun-crossing route now hugs the ring as a clean arc, not the wide bow) and `lp-07-route.png` (planet approach reads as a gentle near-straight line with day ticks) — straight where expected, a clean arc only when rounding the sun
+- [x] Ran lint (0 errors) + unit (1028 pass) + regression (15 pass) — green
 
 ### Task 7: Verify acceptance criteria
 **Files:** none

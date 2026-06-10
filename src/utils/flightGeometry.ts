@@ -208,9 +208,17 @@ export function avoidStarPath(
   const cyp = fy + dy * t;
   if (Math.hypot(sx - cxp, sy - cyp) >= R) return [{ x: tx, y: ty }];
 
-  // Wide clearance (1.15R) so the arc and its tangent approaches bow clear of
-  // the star's outer glow.
-  const arcR = R * 1.15;
+  // The bypass rides just outside the exclusion ring (R). A hair of margin
+  // (1.01R) keeps the Catmull samples outside R on their own so the numerical
+  // safety net below stays a genuine fallback. The old 1.15R "outer-glow
+  // clearance" was the playtest3 F2 "strange curve" bug: R (390px) is already
+  // 2.3× the visual sun (170px), so an extra 15% shoved the route out to 448px
+  // — a route grazing the ring at 389px bowed to 448px (59px FARTHER from the
+  // star than the straight line it replaced), and crossing the ring by 2px
+  // (391→389) snapped from dead-straight to that wide bow. Riding the ring
+  // removes the overshoot and the discontinuity while preserving the
+  // clearance guarantee (the path never enters the ring).
+  const arcR = R * 1.01;
   const thetaA = Math.atan2(fy - sy, fx - sx);
   const thetaB = Math.atan2(ty - sy, tx - sx);
   const dA = Math.hypot(fx - sx, fy - sy);

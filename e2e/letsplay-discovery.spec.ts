@@ -214,8 +214,9 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
         }
         return { points: path.length, minR: Math.round(minR), span: d * 2 };
       });
-      // Frame the bypass arc (radius ≈ 1.15 × exclusion ring around the star)
-      // rather than the whole ship→target span — the arc is the evidence.
+      // Frame the bypass arc (rides just outside the exclusion ring around the
+      // star — playtest3 F2) rather than the whole ship→target span — the arc
+      // is the evidence.
       const fit = Math.max(0.55, 720 / (info.span * 1.3));
       await focus(diag.star.x, diag.star.y, fit);
       await shot(page, 'lp-06b-sun-route');

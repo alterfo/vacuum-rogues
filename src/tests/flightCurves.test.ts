@@ -194,13 +194,34 @@ describe("avoidStarPath smoothness (Task 8: no visible kinks)", () => {
     expect(minTurnAngleDeg(path)).toBeGreaterThanOrEqual(160);
   });
 
-  it("clears the wider 1.15R glow radius at the arc apex", () => {
-    const path = avoidStarPath(-500, 0, 500, 0, 0, 0, 300);
+  it("rides just outside the ring at the arc apex, not a wide 1.15R bow (playtest3 F2)", () => {
+    const R = 300;
+    const path = avoidStarPath(-500, 0, 500, 0, 0, 0, R);
     const apexR = Math.max(
       ...path.slice(0, -1).map((p) => Math.hypot(p.x, p.y)),
     );
-    // The arc bows out to ~1.15R clearance (was 1.08R before Task 8).
-    expect(apexR).toBeGreaterThan(300 * 1.1);
+    // playtest3 F2: the bypass now hugs the exclusion ring (1.01R) instead of
+    // bowing 15% past it (1.15R). The apex must stay outside R (clearance held)
+    // but well inside the old over-wide bow that read as a "strange curve".
+    expect(apexR).toBeGreaterThanOrEqual(R);
+    expect(apexR).toBeLessThan(R * 1.05);
+  });
+
+  it("does not snap from straight to a wide bow at the ring boundary (playtest3 F2)", () => {
+    const R = 390; // SUN_EXCLUSION_RADIUS
+    // A route grazing 1px OUTSIDE the ring stays a dead-straight single point.
+    const outside = avoidStarPath(-1500, R + 1, 1500, R + 1, 0, 0, R);
+    expect(outside).toEqual([{ x: 1500, y: R + 1 }]);
+
+    // A route grazing 1px INSIDE the ring must bow only enough to ride the ring,
+    // NOT overshoot far past it (the old 1.15R pushed it out to 448px — 58px
+    // FARTHER from the star than the straight line it replaced, a visible kink).
+    const inside = avoidStarPath(-1500, R - 1, 1500, R - 1, 0, 0, R);
+    const apexR = Math.max(
+      ...inside.slice(0, -1).map((p) => Math.hypot(p.x, p.y)),
+    );
+    expect(apexR).toBeGreaterThanOrEqual(R); // clearance preserved
+    expect(apexR).toBeLessThan(R + 12); // small nudge, not a 58px overshoot
   });
 
   it("stays kink-free for an off-axis (quarter-turn) bypass", () => {
