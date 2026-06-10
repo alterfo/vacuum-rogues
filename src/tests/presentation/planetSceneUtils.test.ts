@@ -89,6 +89,28 @@ describe("computePlanetMenuLayout (playtest2 ⑥ — menu must fit on-screen)", 
     expect(btnStep).toBeLessThanOrEqual(38);
     expect(btnH).toBeLessThanOrEqual(32);
   });
+
+  // Below ~700px the per-button step drops under the 20px legibility floor; the
+  // height must still never exceed the step or buttons overlap and steal clicks.
+  const shortCases: Array<{ h: number; count: number }> = [
+    { h: 690, count: 9 },
+    { h: 660, count: 8 },
+    { h: 640, count: 9 },
+  ];
+  for (const { h, count } of shortCases) {
+    it(`keeps ${count} buttons non-overlapping on a short ${h}px screen`, () => {
+      const { btnStartY, btnStep, btnH } = computePlanetMenuLayout(
+        h,
+        CONTENT_BOTTOM,
+        count,
+      );
+      // Hard invariant: the button height never exceeds its step (no overlap).
+      expect(btnH).toBeLessThanOrEqual(btnStep);
+      // The last button's bottom edge still stays on-screen.
+      const lastBottom = btnStartY + (count - 1) * btnStep + btnH;
+      expect(lastBottom).toBeLessThanOrEqual(h);
+    });
+  }
 });
 
 describe("visiblePlanetServices (regression — must still pass)", () => {

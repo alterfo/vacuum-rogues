@@ -159,8 +159,13 @@ export function computePlanetMenuLayout(
   // short ones.
   const btnStep = count > 0 ? Math.min(38, avail / count) : 32;
   // Button height sits a hair under the step so consecutive buttons never
-  // overlap; floor 20 keeps the label legible on very short screens.
-  const btnH = Math.max(20, Math.min(Math.floor(btnStep) - 2, 32));
+  // overlap; floor 20 keeps the label legible. The hard cap at `floor(btnStep)`
+  // preserves the no-overlap invariant even on very short screens (< ~700px),
+  // where the 20px floor would otherwise exceed the step and steal clicks.
+  const btnH = Math.min(
+    Math.max(20, Math.min(Math.floor(btnStep) - 2, 32)),
+    Math.floor(btnStep),
+  );
   return { btnStartY, btnStep, btnH };
 }
 

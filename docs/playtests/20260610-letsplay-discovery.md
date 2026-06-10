@@ -115,8 +115,15 @@ letsplay harness 22/22 steps (06b-sun-route added), 0 JS errors.
 | ② cursor unchanged over NPC ships | NPCs spawn dwelling (`PATROLLING`, not `IDLE`) so the first day-tick no longer sends 100% `TRAVELING` (mass exodus → every sprite `eventMode='none'`); `NpcShipManager` applies last camera zoom to newly-spawned hit areas | `src/tests/npcSimulator.test.ts`, `src/tests/presentation/npcShipManager.test.ts` + regression smoke "cursor changes over an NPC ship on REAL mouse hover after a turn (playtest2 ②)" |
 | ③ sun route gaps + fly-through | `clampOutsideRadius()` in flightGeometry — `avoidStarPath` clamps in-ring destinations to the ring edge (every route-building caller covered); `dashedPolyline()` carries the dash phase across the whole bypass spline so ~10px segments still draw dashes | `src/tests/routeSunClearance.test.ts`, `src/tests/flight/routeRendererDashes.test.ts` + `lp-06b-sun-route` (arc continuous, ≥1.15R clearance) |
 | ④ minimap covers camera hint text | `positionCameraDebugText()` anchors the hint (1,0) and pins its right edge to `systemMiniMap.container.x - 12`, derived from the radar's real bounds | `src/tests/presentation/flightHud.test.ts` (non-overlap at 1280×720/1920×1080/1024×768) + `lp-07-route` corner |
-| ⑤ player-ship glow ugly flat smear | `drawShipGlow()` draws three concentric circles (decreasing alpha toward centre) with a gentle blur (strength 3, was 8), outer radius ≤ SHIP_SIZE·1.05 so the halo hugs the hull | `src/tests/flight/playerShipRenderer.test.ts` + `lp-06-ship` (tight halo, smear gone) |
+| ⑤ player-ship glow ugly flat smear | `drawShipGlow()` draws three concentric circles (decreasing alpha toward centre) with a gentle blur (strength 3, was 8). Outer radius hugs the hull: ≤ SHIP_SIZE·1.05 for the procedural triangle (the jsdom/unit-tested path), SHIP_SIZE·1.4 with the ship sprite — still well inside the ~2.6×-larger sprite art (screenshot-verified, not unit-tested) | `src/tests/flight/playerShipRenderer.test.ts` (procedural path) + `lp-06-ship` (tight halo, smear gone — sprite path) |
 | ⑥ PlanetScene buttons (background pans, take-off half-clickable) | UiButton hitArea (①) made them hittable; `computePlanetMenuLayout()` distributes the button stack so the last button («Взлёт») stays on-screen at 720px and rows never overlap | `src/tests/presentation/planetSceneUtils.test.ts` + regression smoke "PlanetScene menu buttons respond to REAL mouse hover + click (playtest2 ⑥)" |
+
+**Also bundled in commit `44300c4` (outside the ①–⑥ findings):** a MainMenuScene
+visual rework — real nebula panorama backdrop (lazy-category `pickVariantKey` +
+`loadTextureAsync` behind a `renderGen` stale-mount guard), real planet art with
+slow axial rotation, real demo-ship art, and a larger title with a drop-shadow.
+Regression-guarded by `src/tests/presentation/mainMenuVisuals.test.ts`. Scope
+beyond the playtest-2 plan; noted here so the change isn't invisible.
 
 ## Reproduction
 
