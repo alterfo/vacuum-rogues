@@ -1,8 +1,11 @@
 /**
- * Loadout persistence (letsplay F6 follow-up): gear bought in the equipment
- * shop must survive save → "Continue". Before this, GameEngine.loadGame always
- * rebuilt the default starter loadout, so the canonical inventory view (and
- * derived speed/shields) silently reverted after every load.
+ * Loadout persistence (letsplay F6 follow-up): the canonical loadout must
+ * survive save → "Continue". Before this, GameEngine.loadGame always rebuilt
+ * the default starter loadout, so the canonical inventory view (and derived
+ * speed/shields) silently reverted after every load. NOTE: no production flow
+ * installs into `playerLoadout` yet (shop purchases land in the legacy
+ * inventory — F6 known gap, CLAUDE.md); these tests mutate the loadout
+ * directly to pin the persistence contract ahead of shop canonicalization.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GameEngine, GameEngineDIDependencies } from "@/systems/GameEngine";

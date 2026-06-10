@@ -104,7 +104,7 @@ GearCatalog gear which DOES work. A player installing the legacy «Быстры�
 ## Reproduction
 
 ```bash
-NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=chromium
+NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=letsplay
 ```
 
 Step results and JS errors are printed as `STEP_RESULTS` / `JS_ERRORS` JSON in

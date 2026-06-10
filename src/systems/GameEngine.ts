@@ -692,10 +692,12 @@ export class GameEngine {
     // module checks work after "Continue". Field data is already correct.
     this.rehydrateLoadedState();
 
-    // Restore the canonical loadout from the save (gear bought in the shop
-    // must survive "Continue"); saves from before loadout persistence — or a
-    // snapshot whose hull no longer exists in the catalog — fall back to the
-    // default starter loadout so gear-derived stats still work.
+    // Restore the canonical loadout from the save; saves from before loadout
+    // persistence — or a snapshot whose hull no longer exists in the catalog —
+    // fall back to the default starter loadout so gear-derived stats still
+    // work. (No shop flow installs into the loadout yet — F6 known gap,
+    // CLAUDE.md — so until shops are canonicalized this round-trips the
+    // starter loadout.)
     const restoredLoadout = save.loadout
       ? ShipLoadout.fromJSON(save.loadout, this.playerLoadoutFaction())
       : null;
