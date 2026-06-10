@@ -1,16 +1,26 @@
 import { GameScene } from "./GameScene";
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics, Sprite, Text } from "pixi.js";
 import type { TacticalEncounter } from "@/domain/TacticalEncounter";
 import type { GameEngine } from "@/systems/GameEngine";
 import { CombatSystem } from "@/systems/CombatSystem";
 import { EnemyShip } from "@/domain/EnemyShip";
 import { EncounterState, SceneType } from "@/types";
 import type { EnemyType, AIProfile } from "@/types";
+import { pickVariant } from "./textures";
 import { logger } from "@/utils/logger";
 
 const HEX_SIZE = 24;
-const GRID_OFFSET_X = 100;
-const GRID_OFFSET_Y = 80;
+const GRID_COLS = 9;
+const GRID_ROWS = 9;
+// Center-to-center span of the hex grid; hexes extend symmetrically past the
+// edge centers, so centring this span centres the visual bounds too.
+const GRID_SPAN_X = (GRID_COLS - 1) * HEX_SIZE * 1.8 + HEX_SIZE * 0.9;
+const GRID_SPAN_Y = (GRID_ROWS - 1) * HEX_SIZE * 1.5;
+const TOKEN_SPRITE_SIZE = HEX_SIZE * 1.6;
+const PLAYER_COLOR = 0x00ccff;
+const ENEMY_COLOR = 0xff4444;
+const PLAYER_TINT = 0xaaeeff;
+const ENEMY_TINT = 0xffaaaa;
 const HP_BAR_W = 140;
 const HP_BAR_H = 10;
 /** Reputation penalty applied to the enemy's faction on a kill. */
@@ -44,9 +54,12 @@ export class CombatScene extends GameScene {
   private _isOvermindCore = false;
   private _npcFactionId: string | null = null;
 
+  // Grid container — centred in the viewport; holds hex cells and ship tokens
+  private _gridContainer: Container | null = null;
+
   // Ship tokens rendered on the hex grid
-  private _playerToken: Graphics | null = null;
-  private _enemyTokens: Map<string, Graphics> = new Map();
+  private _playerToken: Container | null = null;
+  private _enemyTokens: Map<string, Container> = new Map();
 
   // HP bar fill graphics — redrawn on each HP change
   private _playerHpFill: Graphics | null = null;
@@ -136,6 +149,7 @@ export class CombatScene extends GameScene {
     }
     this._uiContainer = null;
     this._weaponPanelContainer = null;
+    this._gridContainer = null;
     this._playerToken = null;
     this._enemyTokens.clear();
     this._playerHpFill = null;
@@ -151,10 +165,20 @@ export class CombatScene extends GameScene {
     return this._system;
   }
 
+  /** Hex cell center in grid-local coordinates (the grid container is centred). */
   private hexToScreen(q: number, r: number): { x: number; y: number } {
     return {
-      x: GRID_OFFSET_X + q * HEX_SIZE * 1.8 + (r % 2) * HEX_SIZE * 0.9,
-      y: GRID_OFFSET_Y + r * HEX_SIZE * 1.5,
+      x: q * HEX_SIZE * 1.8 + (r % 2) * HEX_SIZE * 0.9,
+      y: r * HEX_SIZE * 1.5,
+    };
+  }
+
+  /** Offset that centres the grid's center-to-center span in the viewport. */
+  private gridOffset(): { x: number; y: number } {
+    const { width: screenW, height: screenH } = this.renderer.app.screen;
+    return {
+      x: Math.round((screenW - GRID_SPAN_X) / 2),
+      y: Math.round((screenH - GRID_SPAN_Y) / 2),
     };
   }
 
@@ -167,10 +191,16 @@ export class CombatScene extends GameScene {
   // ── Render: grid ───────────────────────────────────────────────────────────
 
   private renderCombatGrid(): void {
+    const grid = new Container();
+    const offset = this.gridOffset();
+    grid.x = offset.x;
+    grid.y = offset.y;
+    this._gridContainer = grid;
+
     const graphics = new Graphics();
 
-    for (let r = 0; r < 9; r++) {
-      for (let q = 0; q < 9; q++) {
+    for (let r = 0; r < GRID_ROWS; r++) {
+      for (let q = 0; q < GRID_COLS; q++) {
         const { x, y } = this.hexToScreen(q, r);
 
         graphics.stroke({ width: 1, color: 0x224466 });
@@ -190,7 +220,8 @@ export class CombatScene extends GameScene {
       }
     }
 
-    this.renderer.gameLayer.addChild(graphics);
+    grid.addChild(graphics);
+    this.renderer.gameLayer.addChild(grid);
 
     const title = new Text({
       text: "ТАКТИЧЕСКИЙ БОЙ",
@@ -210,29 +241,75 @@ export class CombatScene extends GameScene {
   // ── Render: ship tokens ────────────────────────────────────────────────────
 
   private renderShipTokens(): void {
-    if (!this._encounter) return;
+    if (!this._encounter || !this._gridContainer) return;
 
-    // Player token — cyan circle at player start position {q:1, r:4}
+    // Player token — ranger hull at player start position {q:1, r:4}
     const pPos = this.hexToScreen(1, 4);
-    const playerToken = new Graphics();
-    playerToken.circle(pPos.x, pPos.y, 12).fill({ color: 0x00ccff });
-    playerToken
-      .circle(pPos.x, pPos.y, 12)
-      .stroke({ width: 1.5, color: 0xffffff, alpha: 0.7 });
+    const playerToken = this.makeShipToken(
+      "ranger",
+      "player_ship",
+      PLAYER_COLOR,
+      PLAYER_TINT,
+    );
+    playerToken.x = pPos.x;
+    playerToken.y = pPos.y;
     this._playerToken = playerToken;
-    this.renderer.gameLayer.addChild(playerToken);
+    this._gridContainer.addChild(playerToken);
 
-    // Enemy tokens — red circles at their start positions {q:7, r:2+index}
+    // Enemy tokens — pirate hulls at their start positions {q:7, r:2+index}
     this._encounter.enemies.forEach((enemy, index) => {
       const ePos = this.hexToScreen(7, 2 + index);
-      const enemyToken = new Graphics();
-      enemyToken.circle(ePos.x, ePos.y, 12).fill({ color: 0xff4444 });
-      enemyToken
-        .circle(ePos.x, ePos.y, 12)
-        .stroke({ width: 1.5, color: 0xffffff, alpha: 0.7 });
+      const enemyToken = this.makeShipToken(
+        "pirate",
+        enemy.id,
+        ENEMY_COLOR,
+        ENEMY_TINT,
+      );
+      enemyToken.x = ePos.x;
+      enemyToken.y = ePos.y;
       this._enemyTokens.set(enemy.id, enemyToken);
-      this.renderer.gameLayer.addChild(enemyToken);
+      this._gridContainer?.addChild(enemyToken);
     });
+  }
+
+  /**
+   * Build a unit token: ship sprite (faction-tinted, over a faction ring) when
+   * art is loaded, otherwise the legacy faction-colored circle.
+   */
+  private makeShipToken(
+    prefix: string,
+    seed: string,
+    factionColor: number,
+    tint: number,
+  ): Container {
+    const token = new Container();
+    const shipTex = pickVariant("ships", prefix, seed);
+
+    if (shipTex) {
+      const ring = new Graphics();
+      ring
+        .circle(0, 0, HEX_SIZE * 0.85)
+        .stroke({ width: 1.5, color: factionColor, alpha: 0.8 });
+      ring.eventMode = "none";
+      token.addChild(ring);
+
+      const sprite = new Sprite(shipTex);
+      sprite.anchor.set(0.5);
+      sprite.width = TOKEN_SPRITE_SIZE;
+      sprite.height = TOKEN_SPRITE_SIZE;
+      sprite.tint = tint;
+      sprite.eventMode = "none";
+      token.addChild(sprite);
+    } else {
+      const circle = new Graphics();
+      circle.circle(0, 0, 12).fill({ color: factionColor });
+      circle
+        .circle(0, 0, 12)
+        .stroke({ width: 1.5, color: 0xffffff, alpha: 0.7 });
+      circle.eventMode = "none";
+      token.addChild(circle);
+    }
+    return token;
   }
 
   // ── Render: HP bars ────────────────────────────────────────────────────────
@@ -364,7 +441,7 @@ export class CombatScene extends GameScene {
 
   // ── Flash effects ──────────────────────────────────────────────────────────
 
-  private flashToken(token: Graphics, shieldHit: boolean): void {
+  private flashToken(token: Container, shieldHit: boolean): void {
     const original = token.alpha;
     token.alpha = shieldHit ? 0.2 : 0.05;
     setTimeout(() => {

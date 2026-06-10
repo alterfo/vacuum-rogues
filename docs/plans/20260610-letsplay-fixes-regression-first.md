@@ -107,11 +107,11 @@ which all previous "masking fixes" (TilingSprite fallback) missed.
 - Modify: `src/presentation/CombatScene.ts`
 - Modify: `src/tests/` (CombatScene test file)
 
-- [ ] Centre the hex grid in the viewport (derive offset from grid bounds and `renderer.app.screen`, not hardcoded pixels)
-- [ ] Render player/enemy units as ship sprites (reuse existing ship textures via `texture(key)`) with faction tint, falling back to the current circles if texture missing
-- [ ] Write unit test: grid container is centred for a mocked screen size; units use sprite when texture available
-- [ ] Re-run letsplay spec; inspect `lp-20-combat.png` — grid centred, units read as ships
-- [ ] Run lint + unit suite + regression gate — all green
+- [x] Centre the hex grid in the viewport (derive offset from grid bounds and `renderer.app.screen`, not hardcoded pixels) (grid + tokens now live in a `_gridContainer` whose offset is computed from `GRID_SPAN_X/Y` and the screen size)
+- [x] Render player/enemy units as ship sprites (reuse existing ship textures via `pickVariant("ships", …)`) with faction tint + faction ring, falling back to the current circles if texture missing (player: ranger hull, enemies: pirate hulls)
+- [x] Write unit test: grid container is centred for a mocked screen size; units use sprite when texture available (`src/tests/presentation/combatScene.test.ts`; confirmed RED first: 3/4 failed on old scene)
+- [x] Re-run letsplay spec; inspect `lp-20-combat.png` — grid centred, units read as ships (cyan-ringed ranger vs red-ringed pirate; 21 steps ok, 0 JS errors)
+- [x] Run lint + unit suite + regression gate — all green (0 lint errors, 967 unit tests, gate 9/9 in 36 s)
 
 ### Task 8: Verify acceptance criteria
 **Files:** none
