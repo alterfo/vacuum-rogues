@@ -358,4 +358,102 @@ export class SpaceFlightPage extends GamePageBase {
     const canvas = this.page.locator('canvas');
     await canvas.screenshot({ path: `e2e/screenshots/${name}.png` });
   }
+
+  // ---------------------------------------------------------------------------
+  // Task 4 helpers (visual E2E suite). Scene-state reads for route / cursor /
+  // NPC-clickability assertions, plus a render-loop freeze so canvas screenshots
+  // are deterministic (the world only animates while the game loop ticks).
+  // ---------------------------------------------------------------------------
+
+  /** True when a route is currently planned (scene.plannedRoute is set). */
+  async hasPlannedRoute(): Promise<boolean> {
+    return this.page.evaluate(() => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      return engine.currentScene?.['plannedRoute'] != null;
+    });
+  }
+
+  /** Cursor PixiJS would show when hovering the planet sprite at `index`. */
+  async getPlanetCursor(index: number): Promise<string> {
+    return this.page.evaluate((i) => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const pm = engine.currentScene?.['planetManager'] as
+        | { planetSprites?: { graphics?: { cursor?: string } }[] }
+        | undefined;
+      return pm?.planetSprites?.[i]?.graphics?.cursor ?? '';
+    }, index);
+  }
+
+  /** Cursor PixiJS would show when hovering the NPC ship at `index`. */
+  async getNpcCursor(index: number): Promise<string> {
+    return this.page.evaluate((i) => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const nm = engine.currentScene?.['npcManager'] as
+        | { npcSprites?: { container?: { cursor?: string } }[] }
+        | undefined;
+      return nm?.npcSprites?.[i]?.container?.cursor ?? '';
+    }, index);
+  }
+
+  /** True when the NPC ship at `index` is interactive (eventMode === 'static'). */
+  async isNpcClickable(index: number): Promise<boolean> {
+    return this.page.evaluate((i) => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const nm = engine.currentScene?.['npcManager'] as
+        | { npcSprites?: { container?: { eventMode?: string } }[] }
+        | undefined;
+      return nm?.npcSprites?.[i]?.container?.eventMode === 'static';
+    }, index);
+  }
+
+  /** True while the NPC contact panel (or any NPC modal) is open. */
+  async isContactPanelOpen(): Promise<boolean> {
+    return this.page.evaluate(() => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const nm = engine.currentScene?.['npcManager'] as
+        | { hasOpenModal?: () => boolean }
+        | undefined;
+      return nm?.hasOpenModal?.() ?? false;
+    });
+  }
+
+  /**
+   * Freeze the world by cancelling the GameEngine's requestAnimationFrame loop.
+   * The scene stops advancing (bgElapsed, sun pulse, drift all halt) while
+   * PixiJS keeps rendering the now-static scene — so a subsequent screenshot is
+   * byte-deterministic across runs (Context: WebGL frames vary frame-to-frame).
+   */
+  async freezeWorld(): Promise<void> {
+    await this.page.evaluate(() => {
+      const engine = (window as unknown as Record<string, unknown>).__gameEngine as
+        | (Record<string, unknown> & { animationFrameId?: number })
+        | undefined;
+      const id = engine?.['animationFrameId'] as number | undefined;
+      if (typeof id === 'number') cancelAnimationFrame(id);
+    });
+    await this.settle();
+  }
+
+  /** Wait for a few render frames so the WebGL canvas has a fresh composited frame. */
+  async settle(frames = 4): Promise<void> {
+    await this.page.evaluate(
+      (n) =>
+        new Promise<void>((resolve) => {
+          let i = 0;
+          const tick = () => (i++ < n ? requestAnimationFrame(tick) : resolve());
+          requestAnimationFrame(tick);
+        }),
+      frames,
+    );
+  }
 }
