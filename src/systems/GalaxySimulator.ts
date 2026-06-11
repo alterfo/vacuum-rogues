@@ -153,6 +153,13 @@ export class GalaxySimulator {
       overmindStart.push(sortedByDistance[1].id);
     const overmindCoreId = sortedByDistance[0]?.id ?? "";
 
+    // Seed 1 pirate-controlled system at galaxy start: the 3rd most isolated
+    // system (spatially separated from the 2 OVERMIND starters at indices 0–1).
+    // Without an initial pirate system the balance tick can never create pirates
+    // (the capture branch only fires for systems adjacent to existing pirates).
+    const pirateStart: string[] = [];
+    if (sortedByDistance.length >= 3) pirateStart.push(sortedByDistance[2].id);
+
     // Assign one home system per faction from the non-OVERMIND systems.
     // Spread them across the galaxy by sorting remaining systems by spatial
     // quadrant and picking the most central one per quadrant.
@@ -166,6 +173,7 @@ export class GalaxySimulator {
       [],
       overmindStart,
       overmindCoreId,
+      pirateStart,
     );
 
     // Populate the galaxy with autonomous NPC ships (Feature 8).

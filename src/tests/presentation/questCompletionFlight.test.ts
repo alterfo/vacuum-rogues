@@ -16,19 +16,19 @@ interface FakeQuest {
 function makeEngine(quests: FakeQuest[]): {
   engine: GameEngine;
   forceComplete: ReturnType<typeof vi.fn>;
-  removeOvermind: ReturnType<typeof vi.fn>;
+  tryLiberate: ReturnType<typeof vi.fn>;
 } {
   const forceComplete = vi.fn().mockReturnValue(true);
-  const removeOvermind = vi.fn();
+  const tryLiberate = vi.fn().mockReturnValue(true);
   const engine = {
     player: { currentSystemId: "sys-1" },
     questManager: {
       getActiveQuests: () => quests,
       forceCompleteQuest: forceComplete,
     },
-    galaxy: { removeOvermindSystem: removeOvermind },
+    galaxy: { tryLiberate },
   } as unknown as GameEngine;
-  return { engine, forceComplete, removeOvermind };
+  return { engine, forceComplete, tryLiberate };
 }
 
 const base = {
@@ -88,8 +88,8 @@ describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
     expect(forceComplete).toHaveBeenCalledWith("b1", expect.anything());
   });
 
-  it("liberates the stored OVERMIND system when a DEFENSE quest completes", () => {
-    const { engine, forceComplete, removeOvermind } = makeEngine([
+  it("liberates the stored hostile system when a DEFENSE quest completes", () => {
+    const { engine, forceComplete, tryLiberate } = makeEngine([
       {
         ...base,
         id: "d1",
@@ -101,7 +101,7 @@ describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
     ]);
     new QuestCompletion(engine).defenseBySystemEntry();
     expect(forceComplete).toHaveBeenCalledTimes(1);
-    expect(removeOvermind).toHaveBeenCalledWith("overmind-2");
+    expect(tryLiberate).toHaveBeenCalledWith("overmind-2");
   });
 
   it("is a no-op with no game engine", () => {

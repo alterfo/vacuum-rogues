@@ -72,11 +72,12 @@ export class QuestCompletion {
       if (quest.targetSystemId !== currentSystemId) continue;
       const completed = questManager.forceCompleteQuest(quest.id, player);
       if (completed) {
-        // Remove the OVERMIND system stored in targetObjectId (the one being pushed back).
+        // Liberate the hostile system stored in targetObjectId — also handles
+        // the edge case where it was re-tagged as pirate since quest issuance.
         if (quest.targetObjectId) {
-          galaxy.removeOvermindSystem(quest.targetObjectId);
+          galaxy.tryLiberate(quest.targetObjectId);
           logger.info(
-            `DEFENSE quest completed: ${quest.title}, liberated OVERMIND system ${quest.targetObjectId}`,
+            `DEFENSE quest completed: ${quest.title}, liberated hostile system ${quest.targetObjectId}`,
           );
         }
       }

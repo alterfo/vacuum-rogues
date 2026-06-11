@@ -881,13 +881,8 @@ export class CombatScene extends GameScene {
       player.adjustReputation(this._npcFactionId, KILL_REP_DELTA);
       logger.debug(`Reputation ${this._npcFactionId} ${KILL_REP_DELTA}`);
     }
-    // Liberation: if this system was hostile, free it on a player victory
-    if (
-      this._gameEngine &&
-      !this._isOvermindCore &&
-      this._isHostileSystem &&
-      (credits > 0 || killPoints > 0)
-    ) {
+    // Liberation: if this system was hostile, free it on any player victory.
+    if (this._gameEngine && !this._isOvermindCore && this._isHostileSystem) {
       const liberated = this._gameEngine.liberateCurrentSystem();
       if (liberated) {
         this.showToast("Система освобождена!", 0xffcc00);
