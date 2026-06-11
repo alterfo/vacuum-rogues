@@ -454,6 +454,7 @@ export class GameEngine {
         connections: s.connections,
       }));
       const prevOvermind = new Set(this.galaxy.overmindSystems);
+      const prevPirate = new Set(this.galaxy.pirateSystems);
       const result = stepOwnershipTick(
         nodes,
         this.galaxy.overmindSystems,
@@ -479,6 +480,20 @@ export class GameEngine {
           }
         }
       }
+      for (const id of result.pirateSystems) {
+        if (!prevPirate.has(id)) {
+          const sys = this.galaxy.systems.find((s) => s.id === id);
+          if (sys) {
+            this.galaxy.addNewsEvent({
+              type: "PIRATE_SURGE",
+              systemId: id,
+              day: this.galaxy.gameDays,
+              description: `Пираты захватили систему ${sys.name}`,
+            });
+            logger.info(`Pirates captured: ${sys.name} (${id})`);
+          }
+        }
+      }
 
       // Floor: the balance tick always maintains a minimum cosmic overmind
       // presence (OVERMIND_FLOOR_MIN). Only direct player combat (Task 4) can
@@ -498,7 +513,7 @@ export class GameEngine {
         for (let i = 0; i < needed && available.length > 0; i++) {
           const idx = rng.nextInt(0, available.length - 1);
           const chosen = available.splice(idx, 1)[0];
-          this.galaxy.overmindSystems.push(chosen.id);
+          this.galaxy.addOvermindSystem(chosen.id);
           logger.info(
             `OVERMIND floor: reseeded at ${chosen.name} (${chosen.id})`,
           );
