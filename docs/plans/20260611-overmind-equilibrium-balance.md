@@ -56,10 +56,10 @@ its own over thousands of days.
 - Modify: `src/config/balance.ts` (final tuned constants)
 - Create: `src/tests/galaxy/overmindEquilibrium.test.ts`
 
-- [ ] Write the simulation test: a real generated 30-system galaxy, run the balance tick for 2000+ days with NO player input; assert overmind(+pirate) share stays within a target band (e.g. 8–25%) and `isOvermindMajority()` is NEVER true; assert the share is stationary (no upward trend across the run)
-- [ ] Tune `pCapture`/`pRecapture`/feedback constants in the loop until the band holds for multiple seeds; record the chosen values + observed band in the findings doc
-- [ ] Wire the tuned tick into `GameEngine.simulateDay` (replacing the old +1/5-day expansion), behind the same day cadence
-- [ ] Run lint + unit + regression — green
+- [x] Write the simulation test: a real generated 30-system galaxy, run the balance tick for 2000+ days with NO player input; assert overmind(+pirate) share stays within a target band (e.g. 8–25%) and `isOvermindMajority()` is NEVER true; assert the share is stationary (no upward trend across the run)
+- [x] Tune `pCapture`/`pRecapture`/feedback constants in the loop until the band holds for multiple seeds; record the chosen values + observed band in the findings doc
+- [x] Wire the tuned tick into `GameEngine.simulateDay` (replacing the old +1/5-day expansion), behind the same day cadence
+- [x] Run lint + unit + regression — green
 
 ### Task 4: Player counterplay — liberate systems in combat
 **Files:**

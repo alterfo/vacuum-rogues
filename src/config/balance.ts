@@ -139,12 +139,32 @@ export const GAME_BALANCE = {
   OVERMIND_LOSS_MIN_SYSTEMS: 12,
   /** How often (game days) the self-balancing ownership tick fires. */
   OVERMIND_BALANCE_INTERVAL: 5,
-  /** Base probability per tick that a border faction system is captured by an adjacent overmind/pirate system. */
-  OVERMIND_CAPTURE_PROB: 0.15,
-  /** Base probability per tick that a border hostile (overmind/pirate) system is recaptured by faction resistance. */
-  OVERMIND_RECAPTURE_BASE_PROB: 0.2,
-  /** Negative-feedback strength: pCapture scales down and pRecapture scales up proportionally to hostile share × this factor. */
-  OVERMIND_FEEDBACK_STRENGTH: 2.0,
+  /**
+   * Base capture probability per border faction system per tick.
+   * Must exceed pRecaptureBase * averageDegree (≈3) at target share so the
+   * equilibrium lands in the 15–25% band. Tuned: equilibrium ≈ 23% for d=3.
+   * See docs/playtests/20260611-overmind-balance-findings.md for derivation.
+   */
+  OVERMIND_CAPTURE_PROB: 0.25,
+  /**
+   * Base recapture probability per border hostile system per tick.
+   * Slightly above pCapture/3 so the topology-adjusted equilibrium lands
+   * at ~17% (5 systems) for a 30-system galaxy with average degree 3.
+   */
+  OVERMIND_RECAPTURE_BASE_PROB: 0.12,
+  /**
+   * Negative-feedback strength: pCapture reduces and pRecapture increases by
+   * (hostileShare × feedbackStrength). Higher = tighter equilibrium band.
+   * At fs=4.0, pCapture reaches 0 at 25% share — a hard ceiling that
+   * guarantees the balance tick never pushes the galaxy into majority.
+   */
+  OVERMIND_FEEDBACK_STRENGTH: 4.0,
+  /**
+   * Minimum hostile system count that the GameEngine floor maintains.
+   * When the balance tick would drop to 0, this many systems are reseeded so
+   * the recovery period stays within the 8–25% equilibrium band.
+   */
+  OVERMIND_FLOOR_MIN: 3,
 } as const;
 
 /**

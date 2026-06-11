@@ -17,6 +17,7 @@ import { validatePlayerSettings } from "@/validation/schemas";
 import { Player } from "@/domain/Player";
 import { NpcSimulator } from "@/systems/npc/NpcSimulator";
 import { GalaxySimulator } from "@/systems/GalaxySimulator";
+import { stepOwnershipTick } from "@/systems/galaxy/OvermindBalance";
 import { SeededRNG } from "@/utils/seededRNG";
 import type { Quest } from "@/domain/Quest";
 import {
@@ -439,23 +440,70 @@ export class GameEngine {
       }
     }
 
-    // OVERMIND expansion: every 5 days, take an adjacent non-player system.
-    if (
-      this.galaxy.gameDays % 5 === 0 &&
-      this.galaxy.overmindSystems.length > 0
-    ) {
-      const playerSystemId = this.player?.currentSystemId ?? "";
-      const candidates = this.galaxy.getOvermindAdjacentSystems(playerSystemId);
-      if (candidates.length > 0) {
-        const target = candidates[rng.nextInt(0, candidates.length - 1)];
-        this.galaxy.addOvermindSystem(target.id);
-        this.galaxy.addNewsEvent({
-          type: "OVERMIND_EXPANSION",
-          systemId: target.id,
-          day: this.galaxy.gameDays,
-          description: `OVERMIND захватил систему ${target.name}`,
-        });
-        logger.info(`OVERMIND expanded to: ${target.name} (${target.id})`);
+    // Self-balancing ownership tick: replaces the old unidirectional expansion.
+    // Runs every OVERMIND_BALANCE_INTERVAL days; pure function, no side effects
+    // beyond the returned ownership sets.
+    if (this.galaxy.gameDays % GAME_BALANCE.OVERMIND_BALANCE_INTERVAL === 0) {
+      const balanceCfg = {
+        pCapture: GAME_BALANCE.OVERMIND_CAPTURE_PROB,
+        pRecaptureBase: GAME_BALANCE.OVERMIND_RECAPTURE_BASE_PROB,
+        feedbackStrength: GAME_BALANCE.OVERMIND_FEEDBACK_STRENGTH,
+      };
+      const nodes = this.galaxy.systems.map((s) => ({
+        id: s.id,
+        connections: s.connections,
+      }));
+      const prevOvermind = new Set(this.galaxy.overmindSystems);
+      const result = stepOwnershipTick(
+        nodes,
+        this.galaxy.overmindSystems,
+        this.galaxy.pirateSystems,
+        rng,
+        balanceCfg,
+      );
+      this.galaxy.overmindSystems = result.overmindSystems;
+      this.galaxy.pirateSystems = result.pirateSystems;
+
+      // Emit news for newly captured systems.
+      for (const id of result.overmindSystems) {
+        if (!prevOvermind.has(id)) {
+          const sys = this.galaxy.systems.find((s) => s.id === id);
+          if (sys) {
+            this.galaxy.addNewsEvent({
+              type: "OVERMIND_EXPANSION",
+              systemId: id,
+              day: this.galaxy.gameDays,
+              description: `OVERMIND захватил систему ${sys.name}`,
+            });
+            logger.info(`OVERMIND captured: ${sys.name} (${id})`);
+          }
+        }
+      }
+
+      // Floor: the balance tick always maintains a minimum cosmic overmind
+      // presence (OVERMIND_FLOOR_MIN). Only direct player combat (Task 4) can
+      // reduce below this; natural balance cannot wipe the overmind entirely.
+      const totalHostile =
+        this.galaxy.overmindSystems.length + this.galaxy.pirateSystems.length;
+      if (totalHostile < GAME_BALANCE.OVERMIND_FLOOR_MIN) {
+        const hostile = new Set([
+          ...this.galaxy.overmindSystems,
+          ...this.galaxy.pirateSystems,
+        ]);
+        const playerSystemId = this.player?.currentSystemId ?? "";
+        const available = this.galaxy.systems.filter(
+          (s) => !hostile.has(s.id) && s.id !== playerSystemId,
+        );
+        const needed =
+          GAME_BALANCE.OVERMIND_FLOOR_MIN - this.galaxy.overmindSystems.length;
+        for (let i = 0; i < needed && available.length > 0; i++) {
+          const idx = rng.nextInt(0, available.length - 1);
+          const chosen = available.splice(idx, 1)[0];
+          this.galaxy.overmindSystems.push(chosen.id);
+          logger.info(
+            `OVERMIND floor: reseeded at ${chosen.name} (${chosen.id})`,
+          );
+        }
       }
     }
 
