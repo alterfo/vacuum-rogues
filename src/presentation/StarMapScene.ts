@@ -6,6 +6,8 @@ import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
 import { getSystemVisibility } from "@/utils/starMapUtils";
+import { computeGalaxyThreat } from "@/systems/galaxy/GalaxyStatusIndicator";
+import { GAME_BALANCE } from "@/config/balance";
 
 export interface StarMapContext {
   galaxy?: Galaxy;
@@ -312,6 +314,66 @@ export class StarMapScene extends GameScene {
     fuelText.y = 50;
     this.fixedUIContainer.addChild(fuelText);
 
+    // Galaxy threat indicator
+    if (this.galaxy) {
+      const threat = computeGalaxyThreat(
+        this.galaxy.overmindSystems,
+        this.galaxy.pirateSystems,
+        this.galaxy.systems.length,
+        GAME_BALANCE.OVERMIND_WARNING_THRESHOLD,
+      );
+      const overmindPct = Math.round(threat.overmindShare * 100);
+      const piratePct = Math.round(threat.pirateShare * 100);
+
+      const overmindColor =
+        threat.threatLevel === "critical"
+          ? 0xff2222
+          : threat.threatLevel === "warning"
+            ? 0xff8844
+            : threat.threatLevel === "caution"
+              ? 0xffcc44
+              : 0x88ff88;
+
+      const overmindIndicator = new Text({
+        text: `РАЗУМ: ${threat.overmindCount}/${threat.totalSystems} (${overmindPct}%)`,
+        style: { fontFamily: "Courier New", fontSize: 12, fill: overmindColor },
+      });
+      overmindIndicator.x = 20;
+      overmindIndicator.y = 72;
+      overmindIndicator.eventMode = "none";
+      this.fixedUIContainer.addChild(overmindIndicator);
+
+      const pirateIndicator = new Text({
+        text: `ПИРАТЫ: ${threat.pirateCount}/${threat.totalSystems} (${piratePct}%)`,
+        style: { fontFamily: "Courier New", fontSize: 12, fill: 0xff9944 },
+      });
+      pirateIndicator.x = 20;
+      pirateIndicator.y = 90;
+      pirateIndicator.eventMode = "none";
+      this.fixedUIContainer.addChild(pirateIndicator);
+
+      if (
+        threat.threatLevel === "warning" ||
+        threat.threatLevel === "critical"
+      ) {
+        const warningIndicator = new Text({
+          text:
+            threat.threatLevel === "critical"
+              ? "!! КРИТИЧЕСКАЯ УГРОЗА: РАЗУМ ЗАХВАТЫВАЕТ ГАЛАКТИКУ"
+              : "! ВНИМАНИЕ: РАЗУМ РАСШИРЯЕТСЯ",
+          style: {
+            fontFamily: "Courier New",
+            fontSize: 12,
+            fill: threat.threatLevel === "critical" ? 0xff2222 : 0xff8844,
+          },
+        });
+        warningIndicator.x = 20;
+        warningIndicator.y = 108;
+        warningIndicator.eventMode = "none";
+        this.fixedUIContainer.addChild(warningIndicator);
+      }
+    }
+
     const instructions = new Text({
       text: "Колесо мыши — зум | Перетаскивание — пан | 2x Клик — вход в систему",
       style: {
@@ -481,9 +543,10 @@ export class StarMapScene extends GameScene {
       return dx * dx + dy * dy < cr * cr;
     };
 
-    // Determine visited systems and OVERMIND systems for rendering decisions.
+    // Determine visited systems, OVERMIND and pirate systems for rendering.
     const visitedSystemIds = this.gameEngine?.player?.visitedSystems ?? [];
     const overmindSystems = new Set(this.galaxy.overmindSystems ?? []);
+    const pirateSystems = new Set(this.galaxy.pirateSystems ?? []);
 
     // Draw only explored systems
     let systemsDrawn = 0;
@@ -507,6 +570,7 @@ export class StarMapScene extends GameScene {
       const isPlayer = system.id === this.playerSystemId;
       const isSelected = system.id === this.selectedSystemId;
       const isOvermind = overmindSystems.has(system.id);
+      const isPirate = pirateSystems.has(system.id);
       const visibility = isPlayer
         ? "visited"
         : getSystemVisibility(system.id, visitedSystemIds, this.galaxy.systems);
@@ -519,8 +583,12 @@ export class StarMapScene extends GameScene {
         color = 0x00ff00;
         radius = 7;
       } else if (isOvermind) {
-        // OVERMIND systems: red, regardless of visited status.
-        color = isSelected ? 0xff8800 : 0xff2222;
+        // OVERMIND systems: red
+        color = isSelected ? 0xff6600 : 0xff2222;
+        radius = isSelected ? 5 : 4;
+      } else if (isPirate) {
+        // Pirate systems: orange (distinct from overmind red)
+        color = isSelected ? 0xffcc00 : 0xff8800;
         radius = isSelected ? 5 : 4;
       } else if (isSelected) {
         color = 0xffff00;
@@ -576,7 +644,7 @@ export class StarMapScene extends GameScene {
       this.mapContainer.addChild(hitArea);
 
       // Completely unknown systems: show "?" with no label.
-      if (visibility === "unknown" && !isPlayer && !isOvermind) {
+      if (visibility === "unknown" && !isPlayer && !isOvermind && !isPirate) {
         const qLabel = new Text({
           text: "?",
           style: {
@@ -657,11 +725,13 @@ export class StarMapScene extends GameScene {
 
         const labelFill = isOvermind
           ? 0xff6666
-          : system.id === this.playerSystemId
-            ? 0x00ff00
-            : visibility === "neighbor"
-              ? 0x88aacc
-              : 0x88ccff;
+          : isPirate
+            ? 0xffaa66
+            : system.id === this.playerSystemId
+              ? 0x00ff00
+              : visibility === "neighbor"
+                ? 0x88aacc
+                : 0x88ccff;
 
         const label = new Text({
           text: system.name,

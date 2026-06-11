@@ -166,6 +166,12 @@ export const GAME_BALANCE = {
    */
   OVERMIND_FLOOR_MIN: 3,
   /**
+   * Overmind share threshold at which the star map shows a warning indicator.
+   * At 0.35 (35%) the player gets ~15% headroom before the 50% loss condition,
+   * enough time to liberate one or two systems before the game ends.
+   */
+  OVERMIND_WARNING_THRESHOLD: 0.35,
+  /**
    * HP and shields multiplier applied to enemies in overmind/pirate-controlled
    * systems. Makes early-game players unable to liberate systems solo while
    * a fully geared player (bastion hull + plasma cannon) can win.

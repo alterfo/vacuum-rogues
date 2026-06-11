@@ -76,9 +76,9 @@ its own over thousands of days.
 - Modify: `src/presentation/StarMapScene.ts` (and/or InfoCenter)
 - Modify: `src/tests/` matching test
 
-- [ ] Show overmind/pirate-held systems and the current share on the star map; a warning indicator when the share approaches the loss threshold (so the loss is never a surprise)
-- [ ] Unit test the indicator state at representative shares
-- [ ] Run lint + unit + regression — green
+- [x] Show overmind/pirate-held systems and the current share on the star map; a warning indicator when the share approaches the loss threshold (so the loss is never a surprise)
+- [x] Unit test the indicator state at representative shares
+- [x] Run lint + unit + regression — green
 
 ### Task 6: Verify acceptance criteria
 **Files:** none
