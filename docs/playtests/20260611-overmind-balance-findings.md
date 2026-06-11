@@ -52,3 +52,32 @@ Tuned via 2000-day simulation over 3 independent seeds ("alpha", "beta", "gamma"
 → `s ≈ 18%` (~5–6 systems) for a typical 30-node graph with average degree 3.
 
 **Floor mechanism:** when the balance tick would drop below `OVERMIND_FLOOR_MIN` (3 systems), the `GameEngine` wrapper reseeds random non-player faction systems up to the floor minimum. This prevents the cosmological constant from collapsing to zero from natural forces alone.
+
+## Grace Period & Small-Galaxy Guard (Task 1, 2026-06-11)
+
+| Constant | Value | Effect |
+|---|---|---|
+| `OVERMIND_LOSS_GRACE_DAYS` | 40 | No loss possible in the first 40 game-days, giving the player a development window |
+| `OVERMIND_LOSS_MIN_SYSTEMS` | 12 | Loss condition never fires on galaxies with fewer than 12 systems (guards stale small saves) |
+
+Loss logic: `Galaxy.isOvermindVictory(graceDays, minSystems, gameDays)` — majority AND past grace AND full-size all required simultaneously. Fresh 30-system game: loss condition first reachable at day 40+, only if overmind holds >15 systems (impossible under the equilibrium tuning above).
+
+## Liberation & Progression (Task 4, 2026-06-11)
+
+**Hook:** winning combat in an overmind or pirate system calls `Galaxy.removeOvermindSystem(systemId)` / `Galaxy.removePirateSystem(systemId)` and emits a news/toast event ("Система освобождена!"). A win elsewhere has no effect on galaxy ownership.
+
+**Difficulty scaling in hostile systems:** overmind/pirate enemies receive `OVERMIND_COMBAT_HP_MULT = 1.5` × HP/shields and `OVERMIND_COMBAT_DAMAGE_MULT = 1.5` × damage output compared to neutral enemies.
+
+**Progression verification (unit tests, `combatLiberation.test.ts`):**
+- Early loadout (scout hull, pulse laser — ~150 hull / ~50 shields / ~30 dmg) cannot survive 1-on-1 against a hostile-system enemy scaled at 1.5×. Test confirms: simulated combat ends in player defeat.
+- Top loadout (bastion hull, plasma cannon — ~600 hull / ~250 shields / ~120 dmg) wins against the same 1.5× enemy. Test confirms: player wins within the expected turns.
+
+**Star-map warning (Task 5):** a threat indicator appears when the combined overmind+pirate share exceeds `OVERMIND_WARNING_THRESHOLD = 0.35` (35% / ~10.5 systems). Hostile systems are colour-coded on the map. The player always has forewarning before the loss condition becomes reachable.
+
+## Final Acceptance Results (Task 6, 2026-06-11)
+
+- `npm run lint` — 0 errors (32 style warnings, pre-existing)
+- `npm test -- --run` — 1087 tests, all pass
+- `NO_PROXY=localhost,127.0.0.1 npm run test:e2e:regression` — 16 tests, all pass, ~1.2 min
+- 2000-day equilibrium simulation (3 seeds: alpha/beta/gamma) — majority never reached, rolling avg in 10–24% band, no upward trend: PASS
+- `NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=letsplay` — all 21 steps ok, 0 JS errors: PASS

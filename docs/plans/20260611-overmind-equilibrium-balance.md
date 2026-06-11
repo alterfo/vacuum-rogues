@@ -83,11 +83,11 @@ its own over thousands of days.
 ### Task 6: Verify acceptance criteria
 **Files:** none
 
-- [ ] `npm run lint` 0 errors; `npm test -- --run` all pass
-- [ ] `NO_PROXY=localhost,127.0.0.1 npm run test:e2e:regression` green, < 60 s
-- [ ] The 2000-day equilibrium simulation passes for multiple seeds (no self-fall, share in band)
-- [ ] `NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=letsplay` — all steps ok, 0 JS errors
-- [ ] Update `docs/playtests/20260611-overmind-balance-findings.md` with final constants, observed equilibrium band, and the liberation/progression behaviour
+- [x] `npm run lint` 0 errors; `npm test -- --run` all pass
+- [x] `NO_PROXY=localhost,127.0.0.1 npm run test:e2e:regression` green, < 60 s
+- [x] The 2000-day equilibrium simulation passes for multiple seeds (no self-fall, share in band)
+- [x] `NO_PROXY=localhost,127.0.0.1 npx playwright test e2e/letsplay-discovery.spec.ts --project=letsplay` — all steps ok, 0 JS errors
+- [x] Update `docs/playtests/20260611-overmind-balance-findings.md` with final constants, observed equilibrium band, and the liberation/progression behaviour
 
 ## Post-Completion
 **Manual verification:**
