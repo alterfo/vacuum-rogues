@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   stepOwnershipTick,
-  type BalanceConfig,
+  type OwnershipBalanceConfig,
 } from "@/systems/galaxy/OvermindBalance";
 
 /** Deterministic mock RNG that returns values from a pre-defined list. */
@@ -27,7 +27,7 @@ function chain(n: number) {
   }));
 }
 
-const BASE_CFG: BalanceConfig = {
+const BASE_CFG: OwnershipBalanceConfig = {
   pCapture: 0.5,
   pRecaptureBase: 0.5,
   feedbackStrength: 2.0,

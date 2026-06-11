@@ -494,8 +494,7 @@ export class GameEngine {
         const available = this.galaxy.systems.filter(
           (s) => !hostile.has(s.id) && s.id !== playerSystemId,
         );
-        const needed =
-          GAME_BALANCE.OVERMIND_FLOOR_MIN - this.galaxy.overmindSystems.length;
+        const needed = GAME_BALANCE.OVERMIND_FLOOR_MIN - totalHostile;
         for (let i = 0; i < needed && available.length > 0; i++) {
           const idx = rng.nextInt(0, available.length - 1);
           const chosen = available.splice(idx, 1)[0];

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   stepOwnershipTick,
   type BalanceSystemNode,
-  type BalanceConfig,
+  type OwnershipBalanceConfig,
 } from "@/systems/galaxy/OvermindBalance";
 import { SeededRNG } from "@/utils/seededRNG";
 import { GAME_BALANCE } from "@/config/balance";
@@ -46,7 +46,7 @@ function buildGalaxyTopology(
   return { systems, overmindStart };
 }
 
-const CFG: BalanceConfig = {
+const CFG: OwnershipBalanceConfig = {
   pCapture: GAME_BALANCE.OVERMIND_CAPTURE_PROB,
   pRecaptureBase: GAME_BALANCE.OVERMIND_RECAPTURE_BASE_PROB,
   feedbackStrength: GAME_BALANCE.OVERMIND_FEEDBACK_STRENGTH,
@@ -82,7 +82,7 @@ function runEquilibriumSim(
       // player combat (Task 4) can reduce below it.
       const totalHostile = overmind.length + pirate.length;
       if (totalHostile < GAME_BALANCE.OVERMIND_FLOOR_MIN) {
-        const needed = GAME_BALANCE.OVERMIND_FLOOR_MIN - overmind.length;
+        const needed = GAME_BALANCE.OVERMIND_FLOOR_MIN - totalHostile;
         const hostile = new Set([...overmind, ...pirate]);
         const available = systems.filter((s) => !hostile.has(s.id));
         for (let i = 0; i < needed; i++) {

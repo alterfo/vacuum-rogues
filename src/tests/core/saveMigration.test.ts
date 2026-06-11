@@ -128,6 +128,9 @@ describe("MigrationPipeline", () => {
     expect(gal.overmindSystems).toEqual([]);
     expect(gal.overmindCoreSystemId).toBe("sys-1");
 
+    // Task 25 (overmind balance): pirate-held systems
+    expect(gal.pirateSystems).toEqual([]);
+
     // Task 24: trade boom systems (fixed in v14→v15)
     expect(gal.activeTradeBoomSystems).toEqual({});
   });

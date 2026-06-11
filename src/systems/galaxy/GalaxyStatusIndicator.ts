@@ -1,3 +1,5 @@
+import { GAME_BALANCE } from "@/config/balance";
+
 /**
  * Threat levels for the star-map galaxy state indicator.
  * Driven by the OVERMIND-only share (the actual loss condition).
@@ -10,8 +12,7 @@ export interface GalaxyThreatState {
   totalSystems: number;
   overmindShare: number;
   pirateShare: number;
-  hostileShare: number;
-  /** Derived from overmindShare vs warningThreshold and the 0.45 pre-loss ceiling. */
+  /** Derived from overmindShare vs OVERMIND_WARNING_THRESHOLD and the 0.45 pre-loss ceiling. */
   threatLevel: ThreatLevel;
 }
 
@@ -20,8 +21,8 @@ export interface GalaxyThreatState {
  *
  * Threat levels:
  *   safe     overmindShare < 0.20
- *   caution  [0.20, warningThreshold)
- *   warning  [warningThreshold, 0.45)
+ *   caution  [0.20, OVERMIND_WARNING_THRESHOLD)
+ *   warning  [OVERMIND_WARNING_THRESHOLD, 0.45)
  *   critical ≥ 0.45  (loss imminent — majority is >0.50)
  *
  * Only overmindShare drives the level; pirate share is informational.
@@ -30,7 +31,6 @@ export function computeGalaxyThreat(
   overmindSystems: readonly string[],
   pirateSystems: readonly string[],
   totalSystemCount: number,
-  warningThreshold: number,
 ): GalaxyThreatState {
   if (totalSystemCount === 0) {
     return {
@@ -39,7 +39,6 @@ export function computeGalaxyThreat(
       totalSystems: 0,
       overmindShare: 0,
       pirateShare: 0,
-      hostileShare: 0,
       threatLevel: "safe",
     };
   }
@@ -48,7 +47,7 @@ export function computeGalaxyThreat(
   const pirateCount = pirateSystems.length;
   const overmindShare = overmindCount / totalSystemCount;
   const pirateShare = pirateCount / totalSystemCount;
-  const hostileShare = overmindShare + pirateShare;
+  const warningThreshold = GAME_BALANCE.OVERMIND_WARNING_THRESHOLD;
 
   let threatLevel: ThreatLevel;
   if (overmindShare >= 0.45) {
@@ -67,7 +66,6 @@ export function computeGalaxyThreat(
     totalSystems: totalSystemCount,
     overmindShare,
     pirateShare,
-    hostileShare,
     threatLevel,
   };
 }

@@ -73,8 +73,9 @@ export class Galaxy {
     return this.isOvermindMajority();
   }
 
-  /** Mark a system as OVERMIND-controlled (idempotent). */
+  /** Mark a system as OVERMIND-controlled (idempotent; removes from pirate if present). */
   addOvermindSystem(systemId: string): void {
+    this.removePirateSystem(systemId);
     if (!this.overmindSystems.includes(systemId)) {
       this.overmindSystems.push(systemId);
     }

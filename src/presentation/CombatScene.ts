@@ -101,13 +101,19 @@ export class CombatScene extends GameScene {
       let enemy: EnemyShip;
       if (ctx?.npcEnemy) {
         const npc = ctx.npcEnemy;
+        const hm = this._isHostileSystem
+          ? GAME_BALANCE.OVERMIND_COMBAT_HP_MULT
+          : 1;
+        const dm = this._isHostileSystem
+          ? GAME_BALANCE.OVERMIND_COMBAT_DAMAGE_MULT
+          : 1;
         enemy = new EnemyShip(
           npc.id,
           "FIGHTER" as EnemyType,
-          npc.hullHP,
-          npc.shields,
+          Math.floor(npc.hullHP * hm),
+          Math.floor(npc.shields * hm),
           0.1,
-          npc.damage,
+          Math.floor(npc.damage * dm),
           false,
           [],
           {} as AIProfile,
@@ -876,7 +882,12 @@ export class CombatScene extends GameScene {
       logger.debug(`Reputation ${this._npcFactionId} ${KILL_REP_DELTA}`);
     }
     // Liberation: if this system was hostile, free it on a player victory
-    if (this._gameEngine && !this._isOvermindCore) {
+    if (
+      this._gameEngine &&
+      !this._isOvermindCore &&
+      this._isHostileSystem &&
+      (credits > 0 || killPoints > 0)
+    ) {
       const liberated = this._gameEngine.liberateCurrentSystem();
       if (liberated) {
         this.showToast("Система освобождена!", 0xffcc00);

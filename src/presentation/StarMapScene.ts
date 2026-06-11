@@ -7,7 +7,6 @@ import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
 import { getSystemVisibility } from "@/utils/starMapUtils";
 import { computeGalaxyThreat } from "@/systems/galaxy/GalaxyStatusIndicator";
-import { GAME_BALANCE } from "@/config/balance";
 
 export interface StarMapContext {
   galaxy?: Galaxy;
@@ -320,7 +319,6 @@ export class StarMapScene extends GameScene {
         this.galaxy.overmindSystems,
         this.galaxy.pirateSystems,
         this.galaxy.systems.length,
-        GAME_BALANCE.OVERMIND_WARNING_THRESHOLD,
       );
       const overmindPct = Math.round(threat.overmindShare * 100);
       const piratePct = Math.round(threat.pirateShare * 100);

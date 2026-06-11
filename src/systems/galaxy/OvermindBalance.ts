@@ -9,7 +9,7 @@ export interface BalanceRng {
   next(): number;
 }
 
-export interface BalanceConfig {
+export interface OwnershipBalanceConfig {
   /** Base capture probability per border faction system per tick. */
   pCapture: number;
   /** Base recapture probability per border hostile system per tick. */
@@ -45,7 +45,7 @@ export function stepOwnershipTick(
   overmindSystems: string[],
   pirateSystems: string[],
   rng: BalanceRng,
-  config: BalanceConfig,
+  config: OwnershipBalanceConfig,
 ): BalanceResult {
   const total = systems.length;
   if (total === 0) return { overmindSystems: [], pirateSystems: [] };
