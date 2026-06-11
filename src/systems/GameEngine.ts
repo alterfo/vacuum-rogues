@@ -498,9 +498,11 @@ export class GameEngine {
       // Floor: the balance tick always maintains a minimum cosmic overmind
       // presence (OVERMIND_FLOOR_MIN). Only direct player combat (Task 4) can
       // reduce below this; natural balance cannot wipe the overmind entirely.
-      const totalHostile =
-        this.galaxy.overmindSystems.length + this.galaxy.pirateSystems.length;
-      if (totalHostile < GAME_BALANCE.OVERMIND_FLOOR_MIN) {
+      // Check overmindSystems only — pirates filling the hostile quota must not
+      // mask an overmind wipe-out that bypasses the loss-condition tracker.
+      if (
+        this.galaxy.overmindSystems.length < GAME_BALANCE.OVERMIND_FLOOR_MIN
+      ) {
         const hostile = new Set([
           ...this.galaxy.overmindSystems,
           ...this.galaxy.pirateSystems,
@@ -509,7 +511,8 @@ export class GameEngine {
         const available = this.galaxy.systems.filter(
           (s) => !hostile.has(s.id) && s.id !== playerSystemId,
         );
-        const needed = GAME_BALANCE.OVERMIND_FLOOR_MIN - totalHostile;
+        const needed =
+          GAME_BALANCE.OVERMIND_FLOOR_MIN - this.galaxy.overmindSystems.length;
         for (let i = 0; i < needed && available.length > 0; i++) {
           const idx = rng.nextInt(0, available.length - 1);
           const chosen = available.splice(idx, 1)[0];

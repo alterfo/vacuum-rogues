@@ -697,6 +697,7 @@ export class CombatScene extends GameScene {
         result.xpGained ?? 0,
         (result.loot as import("@/domain/ShipModule").ShipModule[]) ?? [],
         result.killPointsGained ?? 0,
+        result.outcome === EncounterState.PLAYER_WON,
       );
       this.showOutcomePanel(
         result.message,
@@ -725,6 +726,7 @@ export class CombatScene extends GameScene {
         enemyResult.result.xpGained,
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
         enemyResult.result.killPointsGained,
+        enemyResult.result.outcome === EncounterState.PLAYER_WON,
       );
       this.showOutcomePanel(
         enemyResult.result.message,
@@ -757,6 +759,7 @@ export class CombatScene extends GameScene {
         result.xpGained ?? 0,
         (result.loot as import("@/domain/ShipModule").ShipModule[]) ?? [],
         result.killPointsGained ?? 0,
+        result.outcome === EncounterState.PLAYER_WON,
       );
       this.showOutcomePanel(
         result.message,
@@ -785,6 +788,7 @@ export class CombatScene extends GameScene {
         enemyResult.result.xpGained,
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
         enemyResult.result.killPointsGained,
+        enemyResult.result.outcome === EncounterState.PLAYER_WON,
       );
       this.showOutcomePanel(
         enemyResult.result.message,
@@ -823,6 +827,7 @@ export class CombatScene extends GameScene {
         enemyResult.result.xpGained,
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
         enemyResult.result.killPointsGained,
+        enemyResult.result.outcome === EncounterState.PLAYER_WON,
       );
       this.showOutcomePanel(
         enemyResult.result.message,
@@ -864,6 +869,7 @@ export class CombatScene extends GameScene {
     credits: number,
     loot: import("@/domain/ShipModule").ShipModule[],
     killPoints: number = 0,
+    isVictory: boolean = false,
   ): void {
     const player = this._gameEngine?.player;
     if (!player) return;
@@ -881,8 +887,13 @@ export class CombatScene extends GameScene {
       player.adjustReputation(this._npcFactionId, KILL_REP_DELTA);
       logger.debug(`Reputation ${this._npcFactionId} ${KILL_REP_DELTA}`);
     }
-    // Liberation: if this system was hostile, free it on any player victory.
-    if (this._gameEngine && !this._isOvermindCore && this._isHostileSystem) {
+    // Liberation: only free a hostile system when the player actually won.
+    if (
+      this._gameEngine &&
+      !this._isOvermindCore &&
+      this._isHostileSystem &&
+      isVictory
+    ) {
       const liberated = this._gameEngine.liberateCurrentSystem();
       if (liberated) {
         this.showToast("Система освобождена!", 0xffcc00);
