@@ -165,6 +165,17 @@ export const GAME_BALANCE = {
    * the recovery period stays within the 8–25% equilibrium band.
    */
   OVERMIND_FLOOR_MIN: 3,
+  /**
+   * HP and shields multiplier applied to enemies in overmind/pirate-controlled
+   * systems. Makes early-game players unable to liberate systems solo while
+   * a fully geared player (bastion hull + plasma cannon) can win.
+   */
+  OVERMIND_COMBAT_HP_MULT: 1.5,
+  /**
+   * Damage multiplier applied to enemies in overmind/pirate-controlled systems.
+   * At 1.5× the default enemy deals enough damage to defeat an early scout hull.
+   */
+  OVERMIND_COMBAT_DAMAGE_MULT: 1.5,
 } as const;
 
 /**

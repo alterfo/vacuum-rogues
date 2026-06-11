@@ -221,7 +221,8 @@ export interface NewsEvent {
     | "PIRATE_SURGE"
     | "TRADE_BOOM"
     | "PLAGUE"
-    | "DISCOVERY";
+    | "DISCOVERY"
+    | "SYSTEM_LIBERATED";
   /** Ranger NPC that completed a quest (NPC_QUEST_COMPLETE only). */
   npcId?: string;
   /** System where the event occurred. */

@@ -562,6 +562,20 @@ export class GameEngine {
     this.questManager.checkExpiredQuests(this.galaxy.gameDays, this.player);
   }
 
+  /**
+   * Liberate the player's current system from OVERMIND or pirate control.
+   * Called on a player combat victory. Returns true if the system was hostile
+   * and has been freed; false when the current system is already faction-held.
+   */
+  liberateCurrentSystem(): boolean {
+    if (!this.galaxy || !this.player?.currentSystemId) return false;
+    const liberated = this.galaxy.tryLiberate(this.player.currentSystemId);
+    if (liberated) {
+      logger.info(`Player liberated system ${this.player.currentSystemId}`);
+    }
+    return liberated;
+  }
+
   // Lazily-built galactic info registry, cached per game day (EPIC-009).
   private infoRegistryCache: { day: number; reg: GalacticRegistry } | null =
     null;

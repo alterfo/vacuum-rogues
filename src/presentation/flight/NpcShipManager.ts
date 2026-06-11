@@ -543,8 +543,13 @@ export class NpcShipManager implements FlightModule {
     this.combatTransitionPending = true;
     this.followNpcId = null;
     this.deps.endTurn();
+    const playerSystemId = this.gameEngine.player?.currentSystemId ?? "";
+    const isHostileSystem = !!(
+      playerSystemId && this.gameEngine.galaxy?.isHostileSystem(playerSystemId)
+    );
     void this.gameEngine.transitionTo(SceneType.COMBAT, {
       gameEngine: this.gameEngine,
+      isHostileSystem,
       npcEnemy: {
         id: npc.id,
         hullHP: npc.hullHP,

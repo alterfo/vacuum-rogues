@@ -8,6 +8,7 @@ import { EncounterState, SceneType } from "@/types";
 import type { EnemyType, AIProfile } from "@/types";
 import { pickVariant } from "./textures";
 import { logger } from "@/utils/logger";
+import { GAME_BALANCE } from "@/config/balance";
 
 const HEX_SIZE = 24;
 const GRID_COLS = 9;
@@ -43,6 +44,8 @@ export interface CombatContext {
   };
   /** True when this is the OVERMIND core encounter (win condition). */
   isOvermindCore?: boolean;
+  /** True when the combat takes place in an overmind/pirate-controlled system. */
+  isHostileSystem?: boolean;
 }
 
 export class CombatScene extends GameScene {
@@ -54,6 +57,7 @@ export class CombatScene extends GameScene {
   private _outcomeShown = false;
   private _npcId: string | null = null;
   private _isOvermindCore = false;
+  private _isHostileSystem = false;
   private _npcFactionId: string | null = null;
 
   // Grid container — centred in the viewport; holds hex cells and ship tokens
@@ -80,6 +84,7 @@ export class CombatScene extends GameScene {
     this._outcomeShown = false;
     this._npcId = ctx?.npcEnemy?.id ?? null;
     this._isOvermindCore = ctx?.isOvermindCore ?? false;
+    this._isHostileSystem = ctx?.isHostileSystem ?? false;
     this._npcFactionId = ctx?.npcEnemy?.factionId ?? null;
     this._combatLog = [];
     this._enemyTokens.clear();
@@ -109,13 +114,22 @@ export class CombatScene extends GameScene {
           npc.techLevel,
         );
       } else {
+        const baseHp = 60;
+        const baseShields = 20;
+        const baseDmg = 15;
+        const hm = this._isHostileSystem
+          ? GAME_BALANCE.OVERMIND_COMBAT_HP_MULT
+          : 1;
+        const dm = this._isHostileSystem
+          ? GAME_BALANCE.OVERMIND_COMBAT_DAMAGE_MULT
+          : 1;
         enemy = new EnemyShip(
           `enemy_${Date.now()}`,
           "FIGHTER" as EnemyType,
-          60,
-          20,
+          Math.floor(baseHp * hm),
+          Math.floor(baseShields * hm),
           0.1,
-          15,
+          Math.floor(baseDmg * dm),
           false,
           [],
           {} as AIProfile,
@@ -860,6 +874,15 @@ export class CombatScene extends GameScene {
     if (this._npcFactionId && (credits > 0 || killPoints > 0)) {
       player.adjustReputation(this._npcFactionId, KILL_REP_DELTA);
       logger.debug(`Reputation ${this._npcFactionId} ${KILL_REP_DELTA}`);
+    }
+    // Liberation: if this system was hostile, free it on a player victory
+    if (this._gameEngine && !this._isOvermindCore) {
+      const liberated = this._gameEngine.liberateCurrentSystem();
+      if (liberated) {
+        this.showToast("Система освобождена!", 0xffcc00);
+        this.addLogEntry("✦ Система освобождена от захватчиков!");
+        logger.info("System liberated after combat victory");
+      }
     }
   }
 

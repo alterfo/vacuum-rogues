@@ -66,10 +66,10 @@ its own over thousands of days.
 - Modify: `src/presentation/CombatScene.ts` / `src/systems/CombatSystem.ts`, `src/domain/Galaxy.ts`, `src/systems/GameEngine.ts`
 - Modify: `src/tests/` (liberation tests)
 
-- [ ] Write the RED test: a player combat win in an overmind/pirate system liberates it (removed from the overmind/pirate set, flips to faction); a win elsewhere does not
-- [ ] Wire the liberation hook on a player combat victory in a contested system; surface a news/toast event
-- [ ] Scale combat difficulty in overmind systems so an early, ungeared player cannot solo them but a well-geared (best hull/weapons) player can — verify with a stats-based unit test (early loadout loses, top loadout wins on average)
-- [ ] Run lint + unit + regression — green
+- [x] Write the RED test: a player combat win in an overmind/pirate system liberates it (removed from the overmind/pirate set, flips to faction); a win elsewhere does not
+- [x] Wire the liberation hook on a player combat victory in a contested system; surface a news/toast event
+- [x] Scale combat difficulty in overmind systems so an early, ungeared player cannot solo them but a well-geared (best hull/weapons) player can — verify with a stats-based unit test (early loadout loses, top loadout wins on average)
+- [x] Run lint + unit + regression — green
 
 ### Task 5: Surface the galaxy state (warning + readability)
 **Files:**

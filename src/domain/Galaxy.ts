@@ -110,6 +110,32 @@ export class Galaxy {
     if (idx >= 0) this.pirateSystems.splice(idx, 1);
   }
 
+  /**
+   * Liberate a system: remove it from overmind or pirate control and emit a
+   * SYSTEM_LIBERATED news event. Returns true if the system was hostile and
+   * has been freed; false if it was already faction-controlled (no-op).
+   */
+  tryLiberate(systemId: string): boolean {
+    const wasOvermind = this.isOvermindSystem(systemId);
+    const wasPirate = this.isPirateSystem(systemId);
+    if (!wasOvermind && !wasPirate) return false;
+
+    if (wasOvermind) {
+      this.removeOvermindSystem(systemId);
+    } else {
+      this.removePirateSystem(systemId);
+    }
+
+    const sys = this.systems.find((s) => s.id === systemId);
+    this.addNewsEvent({
+      type: "SYSTEM_LIBERATED",
+      systemId,
+      day: this.gameDays,
+      description: `Система ${sys?.name ?? systemId} освобождена от захватчиков!`,
+    });
+    return true;
+  }
+
   /** Returns the hostile (overmind + pirate) share of total systems as [0, 1]. */
   getHostileShare(): number {
     if (this.systems.length === 0) return 0;

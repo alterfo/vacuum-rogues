@@ -346,6 +346,7 @@ export const NewsEventSchema = z.object({
     "TRADE_BOOM",
     "PLAGUE",
     "DISCOVERY",
+    "SYSTEM_LIBERATED",
   ]),
   npcId: z.string().optional(),
   systemId: z.string(),
