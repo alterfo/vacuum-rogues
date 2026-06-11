@@ -8,7 +8,52 @@ vi.mock("pixi.js", () => ({
   Text: vi.fn(),
 }));
 
-import { visiblePlanetServices } from "@/presentation/PlanetScene";
+import {
+  visiblePlanetServices,
+  panoramaKeyForPlanet,
+} from "@/presentation/PlanetScene";
+
+describe("panoramaKeyForPlanet (playtest5 — distinct backdrops per planet)", () => {
+  it("gives different wilderness backdrops to different terrain types", () => {
+    const ice = panoramaKeyForPlanet("ICE", "INDEPENDENT");
+    const volcanic = panoramaKeyForPlanet("VOLCANIC", "INDEPENDENT");
+    const terrestrial = panoramaKeyForPlanet("TERRESTRIAL", "INDEPENDENT");
+    expect(ice).toBe("wilderness_tundra");
+    expect(volcanic).toBe("wilderness_desert");
+    expect(terrestrial).toBe("wilderness_jungle");
+    // The core fix: adjacent planets of different types are NOT identical.
+    expect(new Set([ice, volcanic, terrestrial]).size).toBe(3);
+  });
+
+  it("dresses settled worlds (HABITAT/INDUSTRIAL) in their faction's city", () => {
+    expect(panoramaKeyForPlanet("HABITAT", "SYNDICATE")).toBe("syndicate_city");
+    expect(panoramaKeyForPlanet("INDUSTRIAL", "BASTIONS")).toBe(
+      "bastions_city",
+    );
+  });
+
+  it("falls back to a wilderness backdrop for settled worlds without a faction city", () => {
+    // INDEPENDENT/OVERMIND have no *_city art → terrain backdrop, not a city.
+    expect(panoramaKeyForPlanet("HABITAT", "INDEPENDENT")).toBe(
+      "wilderness_jungle",
+    );
+  });
+
+  it("never returns an empty/undefined key (always a real asset)", () => {
+    for (const t of [
+      "ICE",
+      "VOLCANIC",
+      "GAS_GIANT",
+      "TERRESTRIAL",
+      "HABITAT",
+      "INDUSTRIAL",
+      "UNKNOWN",
+    ]) {
+      const key = panoramaKeyForPlanet(t, "OUTLANDERS");
+      expect(key.length).toBeGreaterThan(0);
+    }
+  });
+});
 
 const ALL = [
   { label: "Губернатор" },

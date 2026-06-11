@@ -168,12 +168,34 @@ export function computePlanetMenuLayout(
   return { btnStartY, btnStep, btnH };
 }
 
-/** Ultimate panorama fallback (Task 8) when a faction's art is unavailable. */
+/** Ultimate panorama fallback (Task 8) when no other key resolves. */
 const PANORAMA_FALLBACK = "outlanders_city";
 
-/** Resolve the panorama asset key for a faction, defaulting to the fallback. */
-function panoramaKeyForFaction(faction: string): string {
-  return FACTION_PANORAMA[faction] ?? PANORAMA_FALLBACK;
+/** Wild/uninhabited backdrops keyed by terrain type (playtest5: planet
+ *  backdrops were all the same because the key was faction-only). */
+const WILDERNESS_PANORAMA: Record<string, string> = {
+  ICE: "wilderness_tundra",
+  VOLCANIC: "wilderness_desert",
+  GAS_GIANT: "wilderness_desert", // no surface — neutral barren backdrop
+  TERRESTRIAL: "wilderness_jungle",
+};
+
+/**
+ * Resolve the panorama asset key for a specific planet. Settled worlds
+ * (HABITAT/INDUSTRIAL) under one of the five real factions wear that faction's
+ * cityscape; every other world wears a wilderness backdrop chosen by its
+ * terrain type. Keying by planet type (not just faction) is what gives adjacent
+ * planets distinct backdrops (playtest5 — "фон у планет одинаковый").
+ */
+export function panoramaKeyForPlanet(
+  planetType: string,
+  faction: string,
+): string {
+  if (planetType === "HABITAT" || planetType === "INDUSTRIAL") {
+    const city = FACTION_PANORAMA[faction];
+    if (city && city.endsWith("_city")) return city;
+  }
+  return WILDERNESS_PANORAMA[planetType] ?? "wilderness_jungle";
 }
 
 function planetTexturePrefix(type: string): string {
@@ -250,7 +272,10 @@ export class PlanetScene extends GameScene {
       s.planets.some((p) => p.id === this.planet?.id),
     );
     const initFaction = initSystem?.ownerFaction ?? "INDEPENDENT";
-    const initKey = panoramaKeyForFaction(initFaction);
+    const initKey = panoramaKeyForPlanet(
+      this.planet?.type ?? "TERRESTRIAL",
+      initFaction,
+    );
     const panoramaKey = `panoramas/${initKey}`;
 
     // Show scene immediately with dark fallback, then swap in panorama when loaded.
@@ -682,8 +707,12 @@ export class PlanetScene extends GameScene {
     const factionName = FACTION_RU[faction] ?? faction;
     const factionColor = FACTION_COLOR[faction] ?? 0x999999;
 
-    // Panoramic background: faction-specific wide panorama, lazy-loaded.
-    const panoramaKey = panoramaKeyForFaction(faction);
+    // Panoramic background: keyed by this planet's type (+ faction for settled
+    // worlds) so adjacent planets differ, lazy-loaded.
+    const panoramaKey = panoramaKeyForPlanet(
+      this.planet?.type ?? "TERRESTRIAL",
+      faction,
+    );
     const panTex = panoramaTex(panoramaKey) ?? panoramaTex(PANORAMA_FALLBACK);
     const hasPanorama = !!panTex && panTex.width > 1 && panTex.height > 0;
 
