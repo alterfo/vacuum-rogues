@@ -361,6 +361,7 @@ export const GalaxySchema = z.object({
   newsFeed: z.array(NewsEventSchema).default([]),
   questBoards: z.record(z.number().int().min(0)).default({}),
   overmindSystems: z.array(z.string()).default([]),
+  pirateSystems: z.array(z.string()).default([]),
   overmindCoreSystemId: z.string().default(""),
   activeTradeBoomSystems: z.record(z.number().int().min(0)).default({}),
 });

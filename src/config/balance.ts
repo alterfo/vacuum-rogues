@@ -137,6 +137,14 @@ export const GAME_BALANCE = {
   OVERMIND_LOSS_GRACE_DAYS: 40,
   /** Minimum galaxy size (system count) for the OVERMIND loss condition to fire — prevents instant-loss on stale small saves. */
   OVERMIND_LOSS_MIN_SYSTEMS: 12,
+  /** How often (game days) the self-balancing ownership tick fires. */
+  OVERMIND_BALANCE_INTERVAL: 5,
+  /** Base probability per tick that a border faction system is captured by an adjacent overmind/pirate system. */
+  OVERMIND_CAPTURE_PROB: 0.15,
+  /** Base probability per tick that a border hostile (overmind/pirate) system is recaptured by faction resistance. */
+  OVERMIND_RECAPTURE_BASE_PROB: 0.2,
+  /** Negative-feedback strength: pCapture scales down and pRecapture scales up proportionally to hostile share × this factor. */
+  OVERMIND_FEEDBACK_STRENGTH: 2.0,
 } as const;
 
 /**

@@ -23,6 +23,8 @@ export class Galaxy {
   questBoards: Record<string, number> = {};
   /** System IDs currently controlled by OVERMIND. Serialized as string[] for save compatibility. */
   overmindSystems: string[] = [];
+  /** System IDs currently controlled by pirates. Serialized as string[] for save compatibility. */
+  pirateSystems: string[] = [];
   /** The core OVERMIND system; destroying it triggers the win condition. */
   overmindCoreSystemId: string = "";
   /**
@@ -40,9 +42,11 @@ export class Galaxy {
     public readonly npcShips: NpcShip[] = [],
     overmindSystems: string[] = [],
     overmindCoreSystemId: string = "",
+    pirateSystems: string[] = [],
   ) {
     this.overmindSystems = overmindSystems;
     this.overmindCoreSystemId = overmindCoreSystemId;
+    this.pirateSystems = pirateSystems;
   }
 
   /** Returns true if this system is currently controlled by OVERMIND. */
@@ -80,6 +84,39 @@ export class Galaxy {
   removeOvermindSystem(systemId: string): void {
     const idx = this.overmindSystems.indexOf(systemId);
     if (idx >= 0) this.overmindSystems.splice(idx, 1);
+  }
+
+  /** Returns true if this system is currently controlled by pirates. */
+  isPirateSystem(systemId: string): boolean {
+    return this.pirateSystems.includes(systemId);
+  }
+
+  /** Returns true if this system is hostile (overmind or pirate). */
+  isHostileSystem(systemId: string): boolean {
+    return this.isOvermindSystem(systemId) || this.isPirateSystem(systemId);
+  }
+
+  /** Mark a system as pirate-controlled (idempotent; removes from overmind if present). */
+  addPirateSystem(systemId: string): void {
+    this.removeOvermindSystem(systemId);
+    if (!this.pirateSystems.includes(systemId)) {
+      this.pirateSystems.push(systemId);
+    }
+  }
+
+  /** Remove a system from pirate control (liberate it). */
+  removePirateSystem(systemId: string): void {
+    const idx = this.pirateSystems.indexOf(systemId);
+    if (idx >= 0) this.pirateSystems.splice(idx, 1);
+  }
+
+  /** Returns the hostile (overmind + pirate) share of total systems as [0, 1]. */
+  getHostileShare(): number {
+    if (this.systems.length === 0) return 0;
+    return (
+      (this.overmindSystems.length + this.pirateSystems.length) /
+      this.systems.length
+    );
   }
 
   /** Returns all star systems adjacent (connected) to any OVERMIND system that are not themselves OVERMIND-controlled and not the player's current system. */

@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 17;
+  static readonly CURRENT_VERSION = 18;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -235,6 +235,14 @@ export class MigrationPipeline {
           if (sys.isFactionHome === undefined) sys.isFactionHome = false;
           if (sys.homeFactionId === undefined) sys.homeFactionId = null;
         }
+      }
+    },
+    // 17 -> 18: Pirate-held systems (Task 2, overmind balance). Add pirateSystems
+    // to galaxy; old saves start with empty list (no pirate-held systems).
+    17: (state: SaveState) => {
+      const galaxy = state.galaxy as unknown as { pirateSystems?: string[] };
+      if (galaxy && !Array.isArray(galaxy.pirateSystems)) {
+        galaxy.pirateSystems = [];
       }
     },
     // 10 -> 11: News feed bookmarks (Task 20). Add newsBookmarks to player;

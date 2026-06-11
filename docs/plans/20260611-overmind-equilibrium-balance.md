@@ -45,11 +45,11 @@ its own over thousands of days.
 - Create: `src/systems/galaxy/OvermindBalance.ts` (pure step function) + `src/tests/galaxy/overmindBalance.test.ts`
 - Modify: `src/domain/Galaxy.ts` (ownership accessors / pirate set if needed), `src/validation/schemas.ts`, `src/data/MigrationPipeline.ts` if a field is added
 
-- [ ] Define the per-tick step: border faction systems may be captured (`pCapture`); border overmind/pirate systems may be recaptured by factions (`pRecapture`), with the **negative-feedback stabilizer** (`pRecapture` rises / `pCapture` falls as overmind+pirate share grows)
-- [ ] Implement it as a pure function over `{systems, overmindSystems, pirateSystems, rng}` → next ownership sets (no GameEngine coupling)
-- [ ] Write unit tests for the step: a border capture and a recapture each occur under forced RNG; share moves toward the equilibrium from both a low and a high start
-- [ ] If new ownership state is persisted, update Zod schema + add a migration; otherwise reuse `overmindSystems`
-- [ ] Run lint + unit + regression — green
+- [x] Define the per-tick step: border faction systems may be captured (`pCapture`); border overmind/pirate systems may be recaptured by factions (`pRecapture`), with the **negative-feedback stabilizer** (`pRecapture` rises / `pCapture` falls as overmind+pirate share grows)
+- [x] Implement it as a pure function over `{systems, overmindSystems, pirateSystems, rng}` → next ownership sets (no GameEngine coupling)
+- [x] Write unit tests for the step: a border capture and a recapture each occur under forced RNG; share moves toward the equilibrium from both a low and a high start
+- [x] If new ownership state is persisted, update Zod schema + add a migration; otherwise reuse `overmindSystems`
+- [x] Run lint + unit + regression — green
 
 ### Task 3: Tune the equilibrium — the "lives forever" simulation gate
 **Files:**
