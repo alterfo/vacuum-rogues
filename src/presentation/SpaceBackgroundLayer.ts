@@ -1,4 +1,5 @@
-import { Container, Graphics, Sprite, BlurFilter } from "pixi.js";
+import { Container, Graphics, Sprite } from "pixi.js";
+import { softGlowTexture } from "./gradientTexture";
 import type { Texture } from "pixi.js";
 import type { Renderer } from "./Renderer";
 import { SeededRNG } from "@/utils/seededRNG";
@@ -274,22 +275,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.dustParticles.length = 0;
   }
 
-  // ---------------------------------------------------------------------------
-  // Shared filter helper (a local copy of SpaceFlightScene.paddedBlur)
-  // ---------------------------------------------------------------------------
-
-  /**
-   * A BlurFilter with generous padding so the falloff stays inside the filter
-   * texture (too-tight padding shows as a hard rectangular band once the layer
-   * is scaled). Resolution pinned to 1 so the texture doesn't balloon with zoom.
-   */
-  private paddedBlur(strength: number): BlurFilter {
-    const f = new BlurFilter({ strength });
-    f.padding = Math.ceil(strength * 3 + 24);
-    f.resolution = 1;
-    return f;
-  }
-
   /** Blend a hex colour toward white by `amount` [0..1]. */
   private lightenColor(color: number, amount: number): number {
     const r = (color >> 16) & 0xff;
@@ -531,7 +516,8 @@ export class SpaceBackgroundLayer implements FlightModule {
     // Clouds are in screen-space (skyContainer), centred on (0,0) relative to
     // nebulaeContainer. nebulaeContainer is placed at screen-centre and translated
     // by cameraPan × NEBULA_DEPTH for gentle parallax — same model as star layers.
-    // Each cloud gets a BlurFilter to dissolve hard circle edges into smooth gradients.
+    // Each cloud is many overlapping low-alpha circles under screen blend (no
+    // BlurFilter — per-frame blurs removed for FPS) reading as a soft gradient.
     const cloudCount = rng.nextInt(4, 6);
 
     for (let c = 0; c < cloudCount; c++) {
@@ -550,80 +536,105 @@ export class SpaceBackgroundLayer implements FlightModule {
       const squash = rng.nextFloat(0.45, 0.92);
       const rot = rng.next() * Math.PI;
 
-      // OUTER HAZE — fills the whole cloud area, very soft
-      const outerG = new Graphics();
-      for (let b = 0; b < 24; b++) {
-        const ang = rng.next() * Math.PI * 2;
-        const dist = rng.next() * cloudR;
-        let bx = Math.cos(ang) * dist;
-        let by = Math.sin(ang) * dist * squash;
-        const rx = bx * Math.cos(rot) - by * Math.sin(rot);
-        const ry = bx * Math.sin(rot) + by * Math.cos(rot);
-        bx = rx;
-        by = ry;
-        const r = rng.nextFloat(55, 140) * (1 - (dist / cloudR) * 0.3);
-        outerG
-          .circle(bx, by, r)
-          .fill({ color: outerColor, alpha: rng.nextFloat(0.05, 0.12) });
-      }
-      cloud.addChild(outerG);
+      // Smooth multi-hue cloud from a few tinted gradient sprites (haze → body →
+      // inner → core), sharing one baked texture — no per-frame BlurFilter. Each
+      // is a squashed, rotated soft ellipse; under screen blend they accumulate
+      // into a soft nebula. Falls back to stacked translucent circles in jsdom.
+      const glowTex = softGlowTexture();
+      if (glowTex) {
+        const addBlob = (
+          diameter: number,
+          color: number,
+          alpha: number,
+        ): void => {
+          const s = new Sprite(glowTex);
+          s.anchor.set(0.5);
+          s.eventMode = "none";
+          s.width = diameter;
+          s.height = diameter * squash;
+          s.rotation = rot;
+          s.tint = color;
+          s.alpha = alpha;
+          cloud.addChild(s);
+        };
+        addBlob(cloudR * 2.3, outerColor, 0.22); // outer haze
+        addBlob(cloudR * 1.7, bodyColor, 0.3); // body
+        addBlob(cloudR * 0.9, innerColor, 0.42); // hot inner
+        addBlob(cloudR * 0.4, coreColor, 0.6); // luminous core
+      } else {
+        // Fallback (no canvas): stacked translucent circles per layer.
+        const outerG = new Graphics();
+        for (let b = 0; b < 24; b++) {
+          const ang = rng.next() * Math.PI * 2;
+          const dist = rng.next() * cloudR;
+          let bx = Math.cos(ang) * dist;
+          let by = Math.sin(ang) * dist * squash;
+          const rx = bx * Math.cos(rot) - by * Math.sin(rot);
+          const ry = bx * Math.sin(rot) + by * Math.cos(rot);
+          bx = rx;
+          by = ry;
+          const r = rng.nextFloat(55, 140) * (1 - (dist / cloudR) * 0.3);
+          outerG
+            .circle(bx, by, r)
+            .fill({ color: outerColor, alpha: rng.nextFloat(0.05, 0.12) });
+        }
+        cloud.addChild(outerG);
 
-      // BODY — denser toward centre
-      const bodyG = new Graphics();
-      for (let b = 0; b < 32; b++) {
-        const ang = rng.next() * Math.PI * 2;
-        const dist = rng.next() * rng.next() * cloudR * 0.85;
-        let bx = Math.cos(ang) * dist;
-        let by = Math.sin(ang) * dist * squash;
-        const rx = bx * Math.cos(rot) - by * Math.sin(rot);
-        const ry = bx * Math.sin(rot) + by * Math.cos(rot);
-        bx = rx;
-        by = ry;
-        const r = rng.nextFloat(35, 100) * (1 - (dist / cloudR) * 0.55);
-        bodyG
-          .circle(bx, by, r)
-          .fill({ color: bodyColor, alpha: rng.nextFloat(0.08, 0.2) });
-      }
-      cloud.addChild(bodyG);
+        const bodyG = new Graphics();
+        for (let b = 0; b < 32; b++) {
+          const ang = rng.next() * Math.PI * 2;
+          const dist = rng.next() * rng.next() * cloudR * 0.85;
+          let bx = Math.cos(ang) * dist;
+          let by = Math.sin(ang) * dist * squash;
+          const rx = bx * Math.cos(rot) - by * Math.sin(rot);
+          const ry = bx * Math.sin(rot) + by * Math.cos(rot);
+          bx = rx;
+          by = ry;
+          const r = rng.nextFloat(35, 100) * (1 - (dist / cloudR) * 0.55);
+          bodyG
+            .circle(bx, by, r)
+            .fill({ color: bodyColor, alpha: rng.nextFloat(0.08, 0.2) });
+        }
+        cloud.addChild(bodyG);
 
-      // HOT INNER — tight bright zone
-      const innerG = new Graphics();
-      for (let b = 0; b < 16; b++) {
-        const ang = rng.next() * Math.PI * 2;
-        const dist = rng.next() * rng.next() * cloudR * 0.42;
-        let bx = Math.cos(ang) * dist;
-        let by = Math.sin(ang) * dist * squash;
-        const rx = bx * Math.cos(rot) - by * Math.sin(rot);
-        const ry = bx * Math.sin(rot) + by * Math.cos(rot);
-        bx = rx;
-        by = ry;
-        const r = rng.nextFloat(18, 55);
-        innerG
-          .circle(bx, by, r)
-          .fill({ color: innerColor, alpha: rng.nextFloat(0.12, 0.28) });
-      }
-      cloud.addChild(innerG);
+        const innerG = new Graphics();
+        for (let b = 0; b < 16; b++) {
+          const ang = rng.next() * Math.PI * 2;
+          const dist = rng.next() * rng.next() * cloudR * 0.42;
+          let bx = Math.cos(ang) * dist;
+          let by = Math.sin(ang) * dist * squash;
+          const rx = bx * Math.cos(rot) - by * Math.sin(rot);
+          const ry = bx * Math.sin(rot) + by * Math.cos(rot);
+          bx = rx;
+          by = ry;
+          const r = rng.nextFloat(18, 55);
+          innerG
+            .circle(bx, by, r)
+            .fill({ color: innerColor, alpha: rng.nextFloat(0.12, 0.28) });
+        }
+        cloud.addChild(innerG);
 
-      // LUMINOUS CORE — tiny bright hot-spots
-      const coreG = new Graphics();
-      const coreCount = rng.nextInt(1, 3);
-      for (let e = 0; e < coreCount; e++) {
-        const ex = rng.nextFloat(-cloudR * 0.15, cloudR * 0.15);
-        const ey = rng.nextFloat(-cloudR * 0.15, cloudR * 0.15) * squash;
-        const cr = rng.nextFloat(10, 28);
-        coreG
-          .circle(ex, ey, cr * 2.2)
-          .fill({ color: coreColor, alpha: rng.nextFloat(0.08, 0.16) });
-        coreG
-          .circle(ex, ey, cr)
-          .fill({ color: coreColor, alpha: rng.nextFloat(0.22, 0.42) });
+        const coreG = new Graphics();
+        const coreCount = rng.nextInt(1, 3);
+        for (let e = 0; e < coreCount; e++) {
+          const ex = rng.nextFloat(-cloudR * 0.15, cloudR * 0.15);
+          const ey = rng.nextFloat(-cloudR * 0.15, cloudR * 0.15) * squash;
+          const cr = rng.nextFloat(10, 28);
+          coreG
+            .circle(ex, ey, cr * 2.2)
+            .fill({ color: coreColor, alpha: rng.nextFloat(0.08, 0.16) });
+          coreG
+            .circle(ex, ey, cr)
+            .fill({ color: coreColor, alpha: rng.nextFloat(0.22, 0.42) });
+        }
+        cloud.addChild(coreG);
       }
-      cloud.addChild(coreG);
 
-      // Container-level screen blend + GPU blur converts sharp circle edges into
-      // volumetric gradients. Applied to whole container = single GPU pass per cloud.
+      // Screen blend so the many overlapping translucent fills accumulate into a
+      // soft volumetric glow. No BlurFilter — a per-frame GPU blur on every cloud
+      // was the FPS killer; the cloud is built from many low-alpha circles that
+      // already read as a gradient under screen blend.
       cloud.blendMode = "screen";
-      cloud.filters = [new BlurFilter({ strength: 72, quality: 3 })];
       cloud.eventMode = "none";
 
       this.nebulaeContainer.addChild(cloud);
@@ -686,12 +697,9 @@ export class SpaceBackgroundLayer implements FlightModule {
         g.circle(mx, my, r * 1.6).fill({ color: tint, alpha: 0.08 });
         g.circle(mx, my, r).fill({ color: tint, alpha: 0.7 });
       }
-      // A subtle per-mote-Graphics blur (strength 2) softens each tiny circle
-      // into a natural glow. Strength stays low — the old cartoon blobs came
-      // from a HIGH-strength container blur (US-070); a weak blur on the mote
-      // Graphics itself reads as light orbs, not blobs. paddedBlur keeps the
-      // falloff inside the filter texture so no rectangular band appears.
-      g.filters = [this.paddedBlur(2)];
+      // Each mote is a bright core + a faint r×1.6 halo circle — that two-ring
+      // fill reads as a small light orb without any BlurFilter (per-frame blurs
+      // removed for FPS). Motes are tiny, so hard edges are imperceptible.
       container.addChild(g);
       this.nebulaeContainer.addChild(container);
 
@@ -718,16 +726,34 @@ export class SpaceBackgroundLayer implements FlightModule {
     if (!this.nebulaeContainer) return;
 
     const pillarCount = rng.nextInt(3, 5);
+    const glowTex = softGlowTexture();
     for (let p = 0; p < pillarCount; p++) {
-      const g = new Graphics();
-
       // Position near the core of the nebula, offset slightly.
       const cx = rng.nextFloat(-sw * 0.35, sw * 0.35);
       const cy = rng.nextFloat(-sh * 0.35, sh * 0.35);
-
-      // Each pillar is 3–5 overlapping dark ellipses at a common angle to form
-      // a column. Random tilt makes them organic rather than axis-aligned.
       const tilt = rng.nextFloat(-Math.PI * 0.45, Math.PI * 0.45);
+
+      if (glowTex) {
+        // One soft, elongated dark gradient ellipse — tinted black under multiply
+        // blend it darkens like an absorption lane, fading smoothly at the edges
+        // (no per-frame BlurFilter).
+        const pillar = new Sprite(glowTex);
+        pillar.anchor.set(0.5);
+        pillar.eventMode = "none";
+        pillar.x = cx;
+        pillar.y = cy;
+        pillar.width = rng.nextFloat(80, 130);
+        pillar.height = rng.nextFloat(240, 360);
+        pillar.rotation = tilt;
+        pillar.tint = 0x000000;
+        pillar.alpha = rng.nextFloat(0.5, 0.72);
+        pillar.blendMode = "multiply";
+        this.nebulaeContainer.addChild(pillar);
+        continue;
+      }
+
+      // Fallback (no canvas): a column of 3–5 overlapping dark ellipses.
+      const g = new Graphics();
       const segments = rng.nextInt(3, 5);
       for (let s = 0; s < segments; s++) {
         const along = rng.nextFloat(-80, 80); // offset along the pillar axis
@@ -739,12 +765,10 @@ export class SpaceBackgroundLayer implements FlightModule {
         g.ellipse(ex, ey, w, h);
         g.fill({ color: 0x000000, alpha: rng.nextFloat(0.55, 0.82) });
       }
-
       const pillarC = new Container();
       pillarC.addChild(g);
       pillarC.rotation = tilt;
       pillarC.blendMode = "multiply";
-      pillarC.filters = [new BlurFilter({ strength: 28, quality: 2 })];
       pillarC.eventMode = "none";
       this.nebulaeContainer.addChild(pillarC);
     }

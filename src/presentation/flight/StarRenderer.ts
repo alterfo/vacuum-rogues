@@ -1,11 +1,5 @@
-import {
-  Container,
-  Graphics,
-  Sprite,
-  TilingSprite,
-  Texture,
-  BlurFilter,
-} from "pixi.js";
+import { Container, Graphics, Sprite, TilingSprite, Texture } from "pixi.js";
+import { softGlowTexture } from "../gradientTexture";
 import type { Renderer } from "../Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import { StarType } from "@/types";
@@ -167,21 +161,8 @@ export class StarRenderer implements FlightModule {
   }
 
   // ---------------------------------------------------------------------------
-  // Shared filter helpers (local copies of SpaceFlightScene's)
+  // Filter cleanup (no flight blurs remain — kept to dispose any stray filter)
   // ---------------------------------------------------------------------------
-
-  /**
-   * A BlurFilter with generous padding so the falloff stays inside the filter
-   * texture (too-tight padding shows as a hard rectangular band once the layer
-   * is scaled by the camera zoom). Resolution pinned to 1 so the texture doesn't
-   * balloon with zoom.
-   */
-  private paddedBlur(strength: number): BlurFilter {
-    const f = new BlurFilter({ strength });
-    f.padding = Math.ceil(strength * 3 + 24);
-    f.resolution = 1;
-    return f;
-  }
 
   /** Recursively destroy every filter attached to a display-object subtree. */
   private disposeFiltersDeep(obj: FilterableNode): void {
@@ -250,7 +231,6 @@ export class StarRenderer implements FlightModule {
     }
     // bright hot core
     disc.circle(0, 0, R * 0.32).fill({ color: 0xfff6cc, alpha: 0.85 });
-    disc.filters = [this.paddedBlur(2)]; // crisp, slight softening
 
     // Clip mottling to the disc so nothing spills past the rim.
     const mask = new Graphics();
@@ -452,11 +432,10 @@ export class StarRenderer implements FlightModule {
   }
 
   /**
-   * Diffuse volumetric glow behind the star. A 3-layer radial glow stack
-   * (4.5R / 2.5R / 1.5R, increasing alpha inward) under a single BlurFilter in
-   * screen blend smears into a smooth, ring-free gradient. A thin bright limb
-   * ring at 1.0R gives the star a defined edge without a harsh clip. Replaces
-   * the old concentric-corona + bezier-prominence decoration.
+   * Diffuse volumetric glow behind the star. ~30 stacked concentric fills
+   * (4.5R → 0.55R, brightening inward) under screen blend accumulate into a
+   * smooth, ring-free radial falloff — NO BlurFilter (per-frame blurs removed
+   * for FPS). A thin bright limb ring at 1.0R gives the star a defined edge.
    */
   private buildStarHalo(R: number): Container {
     const halo = new Container();
@@ -492,28 +471,36 @@ export class StarRenderer implements FlightModule {
     const jitter = this.starJitter();
     glowC = shiftTemperature(glowC, jitter.tempShift);
 
-    // 3-layer radial glow: faint wide outer, brighter mid, bright inner. The
-    // BlurFilter dissolves the three discs into one continuous falloff.
-    const g = new Graphics();
-    (
-      [
-        [4.5, 0.08],
-        [2.5, 0.18],
-        [1.5, 0.3],
-      ] as const
-    ).forEach(([scale, alpha]) => {
-      g.circle(0, 0, R * scale * jitter.coronaScale).fill({
-        color: glowC,
-        alpha: alpha * jitter.glowIntensity,
-      });
-    });
-    halo.addChild(g);
+    // Smooth radial glow from a baked gradient texture (no per-frame BlurFilter —
+    // that was the FPS killer). Tint it to the star colour + scale to the corona
+    // size; under screen blend it reads as a soft halo. Falls back to a stacked-
+    // fill Graphics when no canvas is available (jsdom) — that path bands slightly
+    // but never runs in the real game.
+    const glowTex = softGlowTexture();
+    const outerScale = 4.5 * jitter.coronaScale;
+    if (glowTex) {
+      const glow = new Sprite(glowTex);
+      glow.anchor.set(0.5);
+      glow.eventMode = "none";
+      glow.width = R * outerScale * 2;
+      glow.height = R * outerScale * 2;
+      glow.tint = glowC;
+      glow.alpha = Math.min(1, jitter.glowIntensity);
+      halo.addChild(glow);
+    } else {
+      const g = new Graphics();
+      const RINGS = 30;
+      const innerScale = 0.55;
+      for (let i = 0; i < RINGS; i++) {
+        const t = i / (RINGS - 1); // 0 (outer/faint) → 1 (inner/bright)
+        const scale = outerScale + (innerScale - outerScale) * t;
+        const alpha = (0.03 + 0.05 * t) * jitter.glowIntensity;
+        g.circle(0, 0, R * scale).fill({ color: glowC, alpha });
+      }
+      halo.addChild(g);
+    }
 
     halo.blendMode = "screen";
-    // paddedBlur(80) rather than a raw BlurFilter(80): the padding keeps the
-    // falloff inside the filter texture so it never shows as a rectangular band
-    // once the gameLayer is scaled by the camera zoom.
-    halo.filters = [this.paddedBlur(80)];
 
     // Thin bright limb ring at exactly the star radius — a crisp edge without a
     // hard clip. Drawn unblurred (added after the filter is set so it stays

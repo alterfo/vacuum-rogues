@@ -199,17 +199,19 @@ describe("swarmGlow: glowing, slowly-spinning cosmic swarms", () => {
     expect(layers.length).toBeGreaterThan(0);
   });
 
-  it("applies a single soft blur to each swarm's mote Graphics, not the container", () => {
+  it("keeps swarm motes blur-free (per-frame blurs removed for FPS)", () => {
     const layers = s.swarmLayers as SwarmLayer[];
     for (const layer of layers) {
-      // The container itself stays blur-free (container blur caused the old
-      // cartoon blobs); the glow lives on the mote Graphics child added to it.
+      // Neither the container nor the mote Graphics carries a BlurFilter now —
+      // each mote is a bright core + faint halo circle that reads as a light orb.
       expect(layer.container.filters.length).toBe(0);
       const moteGraphics = layer.container.addChild.mock.calls[0][0] as {
         filters: unknown[];
       };
-      expect(Array.isArray(moteGraphics.filters)).toBe(true);
-      expect(moteGraphics.filters.length).toBe(1);
+      const filters = Array.isArray(moteGraphics.filters)
+        ? moteGraphics.filters
+        : [];
+      expect(filters.length).toBe(0);
     }
   });
 

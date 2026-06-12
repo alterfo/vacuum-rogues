@@ -177,14 +177,16 @@ describe("starHalo: quality glow replaces corona + prominences", () => {
     expect(s.starProminenceData).toBeUndefined();
   });
 
-  it("builds a halo in screen blend with a single blur filter", () => {
+  it("builds a halo in screen blend with NO blur filter (per-frame blurs removed for FPS)", () => {
     const halo = s.starHaloContainer as {
       blendMode: string;
       filters: unknown[];
     };
     expect(halo.blendMode).toBe("screen");
-    expect(Array.isArray(halo.filters)).toBe(true);
-    expect(halo.filters.length).toBe(1);
+    // The glow is now a baked gradient sprite (or a stacked-fill Graphics in the
+    // no-canvas fallback) — never a per-frame BlurFilter.
+    const filters = Array.isArray(halo.filters) ? halo.filters : [];
+    expect(filters.length).toBe(0);
   });
 
   it("update advances elapsed time without prominence animation", () => {

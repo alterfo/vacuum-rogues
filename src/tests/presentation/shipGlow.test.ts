@@ -123,16 +123,16 @@ describe("shipGlow: outline + volumetric glow give the ship 3D presence", () => 
     ship.initialize();
   });
 
-  it("creates a blurred glow blob behind the ship", () => {
+  it("creates a stacked-fill glow blob behind the ship (no blur filter)", () => {
     const glow = s.shipGlow as GraphicsMock | null;
     expect(glow).not.toBeNull();
     expect(glow).toBeDefined();
-    // The glow is a filled circle (the volumetric blob)...
+    // The glow is filled circles (the volumetric blob)...
     expect(glow!.circle).toHaveBeenCalled();
     expect(glow!.fill).toHaveBeenCalled();
-    // ...with exactly one blur filter applied.
-    expect(Array.isArray(glow!.filters)).toBe(true);
-    expect(glow!.filters.length).toBe(1);
+    // ...and carries NO blur filter (per-frame blurs removed for FPS).
+    const filters = Array.isArray(glow!.filters) ? glow!.filters : [];
+    expect(filters.length).toBe(0);
   });
 
   it("re-strokes the procedural hull for a crisp rim outline", () => {

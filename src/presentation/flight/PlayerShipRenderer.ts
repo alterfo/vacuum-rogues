@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, BlurFilter } from "pixi.js";
+import { Container, Graphics, Sprite } from "pixi.js";
 import type { Renderer } from "../Renderer";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { pickVariant } from "../textures";
@@ -141,20 +141,6 @@ export class PlayerShipRenderer implements FlightModule {
   // Filter helper
   // ---------------------------------------------------------------------------
 
-  /**
-   * A BlurFilter with generous padding so the falloff stays inside the filter
-   * texture (too-tight padding shows as a hard rectangular band once the layer
-   * is scaled by the camera zoom). Resolution pinned to 1 so the texture doesn't
-   * balloon with zoom. Local copy of the scene's helper (kept per-module by the
-   * SOLID refactor so modules don't reach back into the scene).
-   */
-  private paddedBlur(strength: number): BlurFilter {
-    const f = new BlurFilter({ strength });
-    f.padding = Math.ceil(strength * 3 + 24);
-    f.resolution = 1;
-    return f;
-  }
-
   /** Recursively destroy every filter attached to a display-object subtree. */
   private disposeFiltersDeep(obj: FilterableNode): void {
     const fs = obj.filters;
@@ -221,10 +207,10 @@ export class PlayerShipRenderer implements FlightModule {
 
   /**
    * Draw the soft depth halo behind the ship: a tight radial falloff made of
-   * three concentric circles with decreasing alpha (brightest at the centre,
-   * fading at the rim) plus a gentle blur. Sized to hug the hull silhouette and
-   * peek just past its edge — never a flat oversized smear (playtest 2 ⑤).
-   * Drawn once (not per frame) so the blur filter texture stays stable.
+   * stacked concentric circles with decreasing alpha (brightest at the centre,
+   * fading at the rim) — no BlurFilter (per-frame blurs removed for FPS). Sized
+   * to hug the hull silhouette and peek just past its edge — never a flat
+   * oversized smear (playtest 2 ⑤). Drawn once (not per frame).
    */
   private drawShipGlow(): void {
     if (!this.shipGlow) return;
@@ -234,15 +220,16 @@ export class PlayerShipRenderer implements FlightModule {
     const outerR = this.shipSprite
       ? this.SHIP_SIZE * 1.4
       : this.SHIP_SIZE * 0.95;
-    const layers: { r: number; alpha: number }[] = [
-      { r: outerR, alpha: 0.1 },
-      { r: outerR * 0.7, alpha: 0.17 },
-      { r: outerR * 0.42, alpha: 0.24 },
-    ];
-    for (const { r, alpha } of layers) {
+    // Many thin concentric fills (largest/faintest → smallest/brightest) stack
+    // into a smooth radial falloff WITHOUT a BlurFilter (per-frame blurs removed
+    // for FPS). The glow is small, so stacked fills read as a soft halo.
+    const GLOW_LAYERS = 10;
+    for (let i = 0; i < GLOW_LAYERS; i++) {
+      const t = i / (GLOW_LAYERS - 1); // 0 outer → 1 inner
+      const r = outerR * (1 - 0.62 * t);
+      const alpha = 0.05 + 0.04 * t;
       this.shipGlow.circle(0, 0, r).fill({ color: 0x3a6fd0, alpha });
     }
-    this.shipGlow.filters = [this.paddedBlur(3)];
   }
 
   /**

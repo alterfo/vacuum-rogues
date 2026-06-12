@@ -13,7 +13,7 @@
  * (no WebGL needed). In jsdom no ship textures are cached, so the procedural
  * triangle path runs (shipSprite === null) and the glow uses the triangle radius.
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { Container, Graphics } from "pixi.js";
 import { PlayerShipRenderer } from "@/presentation/flight/PlayerShipRenderer";
 import { ShipPhysics } from "@/systems/ShipPhysics";
@@ -95,7 +95,7 @@ describe("PlayerShipRenderer glow (playtest 2 ⑤: tight halo, not a smear)", ()
     module.destroy();
   });
 
-  it("attaches a gentle blur filter to the glow", () => {
+  it("carries NO blur filter on the glow (per-frame blurs removed for FPS)", () => {
     const { module } = make();
     module.initialize();
     const glow = (module as unknown as { shipGlow: Graphics }).shipGlow;
@@ -104,22 +104,16 @@ describe("PlayerShipRenderer glow (playtest 2 ⑤: tight halo, not a smear)", ()
       : glow.filters
         ? [glow.filters]
         : [];
-    expect(filters.length).toBe(1);
+    expect(filters.length).toBe(0);
     module.destroy();
   });
 
-  it("disposes the glow blur filter on destroy()", () => {
+  it("tears down the glow cleanly on destroy() (no filter to leak)", () => {
     const { module, gameLayer } = make();
     module.initialize();
-    const glow = (module as unknown as { shipGlow: Graphics }).shipGlow;
-    const filter = (
-      Array.isArray(glow.filters) ? glow.filters[0] : glow.filters
-    ) as { destroy: () => void };
-    const spy = vi.spyOn(filter, "destroy");
 
     module.destroy();
 
-    expect(spy).toHaveBeenCalled();
     expect(gameLayer.children.length).toBe(0);
   });
 });
