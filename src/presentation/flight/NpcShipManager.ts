@@ -17,6 +17,7 @@ import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { solveInterceptPoint } from "@/utils/intercept";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
 import { SceneType, NpcRole, QuestType } from "@/types";
+import { pickNpcDestination, type NpcBehaviorCtx } from "./npcBehavior";
 import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
 import type { FlightModule } from "./FlightModule";
@@ -315,9 +316,32 @@ export class NpcShipManager implements FlightModule {
       () => this.deps.hideTooltip(),
     );
     sprite.container.zIndex = 100; // above planet discs so clicks reach the ship
-    // Non-pirates "visit" a planet: anchor them to loiter near one (deterministic
+
+    // Inject a role-driven target provider so pickNewTarget uses purposeful
+    // destinations (planet visits, pirate hunts) instead of random ring points.
+    sprite.setTargetProvider((seq) => {
+      const bounds = this.npcBounds();
+      const planets = this.deps
+        .getPlanetSprites()
+        .map((p) => ({ x: p.screenX, y: p.screenY }));
+      const ctx: NpcBehaviorCtx = {
+        bounds,
+        planets,
+        traders:
+          npc.role === NpcRole.PIRATE
+            ? this.npcSprites
+                .filter((s) => s !== sprite && s.npc.role === NpcRole.TRADER)
+                .map((s) => ({ x: s.x, y: s.y }))
+            : undefined,
+      };
+      return pickNpcDestination(npc.role, npc.id, seq, ctx);
+    });
+
+    // Non-pirates "visit" a planet: anchor them to orbit near one (deterministic
     // by id) so traders/rangers/patrols cluster at planets instead of aimlessly
-    // crossing the system. Pirates keep roaming the whole band.
+    // crossing the system.  The orbit code path in NpcShipSprite.update() takes
+    // priority over pickNewTarget, so the target provider above is the fallback
+    // when no anchor is set (pirates) or the initial constructor call.
     const planets = this.deps.getPlanetSprites();
     if (npc.role !== NpcRole.PIRATE && planets.length > 0) {
       const idx = this.hashId(npc.id) % planets.length;

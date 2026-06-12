@@ -88,6 +88,16 @@ export class NpcShipSprite {
   private orbitDir = 1; // +1 / -1
   private readonly orbitSpeed = 0.0006; // rad/ms (~10s per lap)
   private clickCallback: ((npc: NpcShip) => void) | null = null;
+  /**
+   * When set, `pickNewTarget` calls this instead of random ring/anchor logic.
+   * Injected by `NpcShipManager` so movement is role-driven without the sprite
+   * importing other modules (dependency inversion).
+   * The `seq` parameter is incremented each call so successive waypoints differ
+   * while remaining deterministic.
+   */
+  private targetProvider: ((seq: number) => { x: number; y: number }) | null =
+    null;
+  private targetSeq = 0;
 
   constructor(npc: NpcShip, x: number, y: number, bounds: SystemBounds) {
     this.npc = npc;
@@ -236,9 +246,16 @@ export class NpcShipSprite {
   }
 
   private pickNewTarget(): void {
-    // If anchored to a planet (a "visit"), loiter in a small area around it so
-    // the ship reads as actually calling at the planet rather than aimlessly
-    // crossing the system. Otherwise wander the whole band (pirates, patrols).
+    // Role-driven destination: use the injected provider when available so the
+    // ship flies purposefully (planet visit, pirate hunt, patrol circuit) rather
+    // than a random ring point.
+    if (this.targetProvider) {
+      const pos = this.targetProvider(this.targetSeq++);
+      this.targetX = pos.x;
+      this.targetY = pos.y;
+      return;
+    }
+    // Fallback for anchored ships (orbit loiter near the planet).
     if (this.anchorX !== null && this.anchorY !== null) {
       const angle = Math.random() * Math.PI * 2;
       const radius = 40 + Math.random() * 130;
@@ -246,12 +263,23 @@ export class NpcShipSprite {
       this.targetY = this.anchorY + Math.sin(angle) * radius;
       return;
     }
+    // Last resort: random ring point (reached only when no provider is set and
+    // no anchor exists — should not happen in normal play after wiring).
     const angle = Math.random() * Math.PI * 2;
     const radius =
       this.bounds.rInner +
       Math.random() * (this.bounds.rOuter - this.bounds.rInner);
     this.targetX = this.bounds.cx + Math.cos(angle) * radius;
     this.targetY = this.bounds.cy + Math.sin(angle) * radius;
+  }
+
+  /**
+   * Inject a role-driven destination provider so `pickNewTarget` uses
+   * purposeful targets instead of random ring points.  Called by
+   * `NpcShipManager` after construction.
+   */
+  setTargetProvider(fn: (seq: number) => { x: number; y: number }): void {
+    this.targetProvider = fn;
   }
 
   /** Orbit a fixed point (a planet) instead of wandering the whole band. */

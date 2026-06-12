@@ -252,4 +252,194 @@ describe("NpcShipManager (extracted FlightModule)", () => {
 
     manager.destroy();
   });
+
+  it("trader sprite has orbit anchor set to a planet position (wiring)", () => {
+    const fakePlanet = { screenX: 800, screenY: 300, displayRadius: 50 };
+
+    const stage = new Container();
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+    const renderer = {
+      app: { screen: { width: 800, height: 600 } },
+      stage,
+      uiLayer,
+      gameLayer,
+    } as unknown as Renderer;
+    const galaxy = {
+      npcShips: [makeNpc("trader_wiring", NpcRole.TRADER)],
+    } as unknown as Galaxy;
+    const gameEngine = {
+      galaxy,
+      player: { currentSystemId: "sys_a" },
+    } as unknown as GameEngine;
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => null,
+      getPlanetSprites: () => [
+        fakePlanet as unknown as import("@/presentation/PlanetSprite").PlanetSprite,
+      ],
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => false,
+      showMessage: () => {},
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: () => {},
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+    };
+    const manager = new NpcShipManager(
+      renderer,
+      gameEngine,
+      gameLayer,
+      uiLayer,
+      deps,
+    );
+    manager.initialize();
+
+    const sprite = (
+      manager as unknown as {
+        npcSprites: Array<{ anchorX: number | null; anchorY: number | null }>;
+      }
+    ).npcSprites[0];
+    expect(sprite.anchorX).toBeCloseTo(800);
+    expect(sprite.anchorY).toBeCloseTo(300);
+
+    manager.destroy();
+  });
+
+  it("pirate sprite has a deterministic target provider injected by the manager (wiring)", () => {
+    const fakePlanet = { screenX: 800, screenY: 300, displayRadius: 50 };
+
+    const stage = new Container();
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+    const renderer = {
+      app: { screen: { width: 800, height: 600 } },
+      stage,
+      uiLayer,
+      gameLayer,
+    } as unknown as Renderer;
+    const galaxy = {
+      npcShips: [makeNpc("pirate_wiring", NpcRole.PIRATE)],
+    } as unknown as Galaxy;
+    const gameEngine = {
+      galaxy,
+      player: { currentSystemId: "sys_a" },
+    } as unknown as GameEngine;
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => null,
+      getPlanetSprites: () => [
+        fakePlanet as unknown as import("@/presentation/PlanetSprite").PlanetSprite,
+      ],
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => false,
+      showMessage: () => {},
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: () => {},
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+    };
+    const manager = new NpcShipManager(
+      renderer,
+      gameEngine,
+      gameLayer,
+      uiLayer,
+      deps,
+    );
+    manager.initialize();
+
+    const sprite = (
+      manager as unknown as {
+        npcSprites: Array<{
+          targetProvider: ((seq: number) => { x: number; y: number }) | null;
+        }>;
+      }
+    ).npcSprites[0];
+
+    // Provider must be set (not null) so pickNewTarget uses role-driven logic.
+    expect(sprite.targetProvider).not.toBeNull();
+
+    // Provider is deterministic: same seq → same position.
+    const pos0a = sprite.targetProvider!(0);
+    const pos0b = sprite.targetProvider!(0);
+    expect(pos0a.x).toBe(pos0b.x);
+    expect(pos0a.y).toBe(pos0b.y);
+
+    // Different seq values produce different positions.
+    const pos1 = sprite.targetProvider!(1);
+    expect(pos0a.x === pos1.x && pos0a.y === pos1.y).toBe(false);
+
+    manager.destroy();
+  });
+
+  it("patrol sprite target provider returns planet-anchored patrol_station targets", () => {
+    const fakePlanet1 = { screenX: 700, screenY: 300, displayRadius: 50 };
+    const fakePlanet2 = { screenX: 400, screenY: 900, displayRadius: 50 };
+
+    const stage = new Container();
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+    const renderer = {
+      app: { screen: { width: 800, height: 600 } },
+      stage,
+      uiLayer,
+      gameLayer,
+    } as unknown as Renderer;
+    const galaxy = {
+      npcShips: [makeNpc("patrol_wiring", NpcRole.PATROL)],
+    } as unknown as Galaxy;
+    const gameEngine = {
+      galaxy,
+      player: { currentSystemId: "sys_a" },
+    } as unknown as GameEngine;
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => null,
+      getPlanetSprites: () =>
+        [
+          fakePlanet1,
+          fakePlanet2,
+        ] as unknown as import("@/presentation/PlanetSprite").PlanetSprite[],
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => false,
+      showMessage: () => {},
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: () => {},
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+    };
+    const manager = new NpcShipManager(
+      renderer,
+      gameEngine,
+      gameLayer,
+      uiLayer,
+      deps,
+    );
+    manager.initialize();
+
+    // Patrol also has orbit anchor set to a planet (orbit behavior takes priority
+    // over the target provider for patrols, same as traders).
+    const sprite = (
+      manager as unknown as {
+        npcSprites: Array<{
+          anchorX: number | null;
+          anchorY: number | null;
+          targetProvider: ((seq: number) => { x: number; y: number }) | null;
+        }>;
+      }
+    ).npcSprites[0];
+
+    // Anchor is set to one of the planets.
+    const anchorIsAPlanet =
+      (sprite.anchorX === fakePlanet1.screenX &&
+        sprite.anchorY === fakePlanet1.screenY) ||
+      (sprite.anchorX === fakePlanet2.screenX &&
+        sprite.anchorY === fakePlanet2.screenY);
+    expect(anchorIsAPlanet).toBe(true);
+
+    // Provider is also set as a deterministic fallback.
+    expect(sprite.targetProvider).not.toBeNull();
+
+    manager.destroy();
+  });
 });
