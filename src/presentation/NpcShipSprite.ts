@@ -98,6 +98,10 @@ export class NpcShipSprite {
   private targetProvider: ((seq: number) => { x: number; y: number }) | null =
     null;
   private targetSeq = 0;
+  /** How long (ms game time) the ship dwells in orbit before moving on. */
+  public readonly dwellDurationMs: number;
+  /** Accumulated orbit time (ms) toward dwellDurationMs. */
+  private dwellElapsed = 0;
 
   constructor(npc: NpcShip, x: number, y: number, bounds: SystemBounds) {
     this.npc = npc;
@@ -107,6 +111,10 @@ export class NpcShipSprite {
     this.bounds = bounds;
     this.targetX = x;
     this.targetY = y;
+    // Deterministic dwell duration (8–20 s of game time) based on ship id so
+    // ships desynchronise naturally and don't all leave their planets at once.
+    const h = NpcShipSprite.hashId(npc.id);
+    this.dwellDurationMs = 8000 + (h % 12001);
 
     this.container = new Container();
     this.graphics = new Graphics();
@@ -155,6 +163,16 @@ export class NpcShipSprite {
       event.stopPropagation();
       this.clickCallback?.(this.npc);
     });
+  }
+
+  /** Whether the sprite currently has an orbit anchor set. */
+  isAnchored(): boolean {
+    return this.anchorX !== null;
+  }
+
+  /** Whether the ship is in the process of leaving the system. */
+  isLeaving(): boolean {
+    return this.departing;
   }
 
   /**
@@ -221,6 +239,18 @@ export class NpcShipSprite {
       }
       this.container.x = this.x;
       this.container.y = this.y;
+
+      // Bounded dwell: after dwellDurationMs the ship finishes its visit and
+      // picks a new destination (another planet or a lane waypoint).  The
+      // manager's update loop watches isAnchored() to clean up its anchor-planet
+      // map and optionally re-anchor the ship when it approaches the next planet.
+      this.dwellElapsed += deltaTime;
+      if (this.dwellElapsed >= this.dwellDurationMs) {
+        this.dwellElapsed = 0;
+        this.anchorX = null;
+        this.anchorY = null;
+        this.pickNewTarget();
+      }
       return;
     }
 
@@ -325,6 +355,16 @@ export class NpcShipSprite {
     g.circle(0, -22, 4);
     g.fill({ color: intent });
     g.stroke({ width: 1, color: 0x000000, alpha: 0.5 });
+  }
+
+  /** FNV-1a hash of a string → stable 32-bit unsigned integer. */
+  private static hashId(s: string): number {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
   }
 
   destroy(): void {

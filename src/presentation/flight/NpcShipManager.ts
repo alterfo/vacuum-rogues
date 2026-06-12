@@ -155,6 +155,12 @@ export class NpcShipManager implements FlightModule {
         sprite.destroy();
         this.npcSprites.splice(i, 1);
       } else {
+        // When a sprite's dwell timer fires it clears its own anchor — remove
+        // the stale entry so updateAnchorPosition is not re-called next frame.
+        if (this.npcAnchorPlanet.has(sprite) && !sprite.isAnchored()) {
+          this.npcAnchorPlanet.delete(sprite);
+        }
+
         this.updateNpcDepth(sprite);
       }
     }
