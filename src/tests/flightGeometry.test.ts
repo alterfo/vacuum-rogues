@@ -1,5 +1,37 @@
 import { describe, it, expect } from "vitest";
-import { radarToWorld, avoidStarPath } from "@/utils/flightGeometry";
+import {
+  radarToWorld,
+  avoidStarPath,
+  questMarkerRadius,
+  shouldReaim,
+} from "@/utils/flightGeometry";
+
+describe("questMarkerRadius (quest ring halos the planet, not a stray circle)", () => {
+  it("scales with the planet's display radius (halo just outside the disc)", () => {
+    // Bug: a fixed 25px ring sat INSIDE a large planet disc, reading as a random
+    // circle. The ring must now encircle the disc → radius > displayRadius.
+    expect(questMarkerRadius(60)).toBe(70);
+    expect(questMarkerRadius(120)).toBe(130);
+    expect(questMarkerRadius(60)).toBeGreaterThan(60);
+    expect(questMarkerRadius(40, 6)).toBe(46);
+  });
+});
+
+describe("shouldReaim (continuous course-correction toward a moving target)", () => {
+  it("does not re-aim while the target stays near the route endpoint", () => {
+    expect(shouldReaim({ x: 100, y: 100 }, { x: 110, y: 105 }, 30)).toBe(false);
+  });
+
+  it("re-aims once the target drifts beyond the threshold", () => {
+    // Endpoint at (100,100); the moving target's fresh lead is now 50px away.
+    expect(shouldReaim({ x: 100, y: 100 }, { x: 150, y: 100 }, 30)).toBe(true);
+  });
+
+  it("uses Euclidean drift (diagonal drift counts)", () => {
+    expect(shouldReaim({ x: 0, y: 0 }, { x: 25, y: 25 }, 30)).toBe(true); // ~35px
+    expect(shouldReaim({ x: 0, y: 0 }, { x: 18, y: 18 }, 30)).toBe(false); // ~25px
+  });
+});
 
 describe("avoidStarPath (US-070 #6: route bows around the star)", () => {
   it("returns a straight shot when the segment already clears the star", () => {

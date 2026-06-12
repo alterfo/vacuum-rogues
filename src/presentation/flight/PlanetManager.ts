@@ -7,7 +7,12 @@ import type { Station } from "@/domain/Station";
 import type { Faction } from "@/types/faction";
 import { PlanetSprite } from "../PlanetSprite";
 import { PlanetInfoPanel } from "../PlanetInfoPanel";
-import { hashToAngle, planetApproachPoint } from "@/utils/flightGeometry";
+import {
+  hashToAngle,
+  planetApproachPoint,
+  questMarkerRadius,
+  shouldReaim,
+} from "@/utils/flightGeometry";
 import { solveInterceptPoint } from "@/utils/intercept";
 import { GAME_BALANCE } from "@/config/balance";
 import { scaledFont } from "@/utils/fontScale";
@@ -216,6 +221,42 @@ export class PlanetManager implements FlightModule {
     );
   }
 
+  /**
+   * Decide what an in-flight ship aimed at the current planet target should do
+   * this frame: `land` once it touches the planet's surface margin (planets
+   * render large, US-070 #3), or `reaim` at the planet's fresh lead point once
+   * the orbiting planet has drifted past the threshold from the route
+   * `endpoint` — so the ship corrects course mid-flight instead of trailing it.
+   * `null` = keep flying the current route. Keeps the landing/lead/threshold
+   * math in the module that owns the planet sprites; the scene just acts on it.
+   */
+  updateRouteToTarget(
+    shipX: number,
+    shipY: number,
+    endpoint: { x: number; y: number } | null,
+    driftPx = 30,
+  ):
+    | { kind: "land"; planet: Planet }
+    | { kind: "reaim"; x: number; y: number }
+    | null {
+    if (!this.routeTargetPlanetId) return null;
+    const sprite = this.planetSprites.find(
+      (s) => s.planet.id === this.routeTargetPlanetId,
+    );
+    if (!sprite) return null;
+    const d = Math.hypot(sprite.screenX - shipX, sprite.screenY - shipY);
+    if (d <= this.landingThreshold(sprite)) {
+      return { kind: "land", planet: sprite.planet };
+    }
+    if (endpoint) {
+      const lead = this.planetLeadPoint(sprite);
+      if (shouldReaim(endpoint, lead, driftPx)) {
+        return { kind: "reaim", x: lead.x, y: lead.y };
+      }
+    }
+    return null;
+  }
+
   /** First station marker the world point (x,y) falls within (or null). */
   getStationAt(x: number, y: number): StationMarker | null {
     return (
@@ -342,11 +383,13 @@ export class PlanetManager implements FlightModule {
     logger.info(`Created ${this.planetSprites.length} planet sprites`);
   }
 
-  /** Add a quest marker (pulsing ring) to a planet sprite. */
+  /** Add a quest marker (ring halo) to a planet sprite. */
   private addQuestMarker(sprite: PlanetSprite): void {
     const marker = new Graphics();
 
-    const radius = 25; // Slightly larger than planet
+    // Halo just OUTSIDE the disc: planets render large (US-070 #3), so a fixed
+    // small ring used to sit inside the planet and read as a stray circle.
+    const radius = questMarkerRadius(sprite.displayRadius);
     marker.circle(0, 0, radius);
     marker.stroke({ width: 3, color: 0xffff00, alpha: 0.8 });
 

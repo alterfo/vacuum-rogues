@@ -1176,25 +1176,21 @@ export class SpaceFlightScene extends GameScene {
       }
     }
 
-    // Proactive landing: planets render large (US-070 #3), so land as soon as
-    // the ship touches the planet's surface margin instead of flying all the way
-    // to its centre (which sits deep inside the disc).
+    // Proactive landing + mid-flight course-correction toward the (orbiting)
+    // planet target. PlanetManager owns the landing-range / lead / threshold
+    // math (Information Expert); the scene just lands or re-plots the route.
     if (this.planetManager.routeTargetPlanetId && this.shipPhysics.isMoving) {
-      const sprite = this.planetManager.planetSprites.find(
-        (s) => s.planet.id === this.planetManager.routeTargetPlanetId,
+      const act = this.planetManager.updateRouteToTarget(
+        this.shipPhysics.shipX,
+        this.shipPhysics.shipY,
+        this.plannedRoute,
       );
-      if (sprite) {
-        const d = Math.hypot(
-          sprite.screenX - this.shipPhysics.shipX,
-          sprite.screenY - this.shipPhysics.shipY,
-        );
-        if (d <= this.planetManager.landingThreshold(sprite)) {
-          const planet = sprite.planet;
-          this.clearPlannedRoute();
-          void this.onLandOnPlanet(planet);
-          return;
-        }
+      if (act?.kind === "land") {
+        this.clearPlannedRoute();
+        void this.onLandOnPlanet(act.planet);
+        return;
       }
+      if (act?.kind === "reaim") this.executeRouteTo(act.x, act.y);
     }
 
     // Check if ship just arrived (was moving, now stopped). Physics flows through
@@ -1231,11 +1227,8 @@ export class SpaceFlightScene extends GameScene {
             void this.onLandOnPlanet(planet);
             return;
           }
-          // Planet keeps drifting along its orbit while we fly — chase a lead
-          // point ahead of it so we converge, not trail it (playtest4 C).
-          const lead = this.planetManager.planetLeadPoint(sprite);
-          this.executeRouteTo(lead.x, lead.y);
-          return;
+          // Not in range on a hard stop (rare — the mid-flight re-aim normally
+          // keeps the ship converging on the moving planet): just end the turn.
         }
       }
 

@@ -461,3 +461,32 @@ export function radarToWorld(
     y: centerY + (localY - mapCenterY) / mapScale,
   };
 }
+
+/**
+ * Radius (world px) of a planet's quest-indicator ring. It is a halo just
+ * *outside* the planet disc so it scales with the (now large) planet rather than
+ * sitting inside it as a stray small circle (bug: a fixed 25px ring read as a
+ * random circle on the planet surface once planets render large, US-070 #3).
+ */
+export function questMarkerRadius(displayRadius: number, margin = 10): number {
+  return displayRadius + margin;
+}
+
+/**
+ * Whether a route aimed at a *moving* target should be re-plotted: true once the
+ * target's fresh (lead) position has drifted more than `threshold` world px from
+ * the current route endpoint. The threshold naturally throttles re-aims — each
+ * re-plot resets the endpoint to the fresh lead, so it won't fire again until the
+ * target drifts another `threshold`. Lets the ship continuously correct its
+ * course toward an orbiting planet / manoeuvring NPC instead of flying to where
+ * the target *was* and only correcting on arrival.
+ */
+export function shouldReaim(
+  endpoint: Point,
+  freshLead: Point,
+  threshold: number,
+): boolean {
+  return (
+    Math.hypot(freshLead.x - endpoint.x, freshLead.y - endpoint.y) > threshold
+  );
+}

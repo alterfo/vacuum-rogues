@@ -34,6 +34,12 @@ export class CameraController {
   private camLeadY = 0;
   // Lerp-return animation: true while the camera is smoothly returning to ship.
   private cameraReturning = false;
+  // Free-look: set when the player manually pans, it suspends the motion-follow
+  // so the camera does NOT snap back to the ship while it is still flying (the
+  // player explicitly asked to look around mid-flight). Re-engaged on the next
+  // fresh flight leg (standstill → moving) and by the ⊙ return-to-ship button.
+  private followSuspended = false;
+  private prevMoving = false;
   // Lower min zoom so the player can pull back to survey the now much larger
   // system (grand scale, EPIC-004).
   readonly MIN_ZOOM = 0.25;
@@ -60,6 +66,9 @@ export class CameraController {
 
   /** Drag-pan: shift the view by a raw screen-pixel delta. */
   pan(dx: number, dy: number): void {
+    // The player took manual control of the view → stop the motion-follow from
+    // yanking it back to the ship until the next flight or a return-to-ship.
+    this.followSuspended = true;
     this.cameraPanX += dx;
     this.cameraPanY += dy;
     this.applyTransform();
@@ -173,6 +182,7 @@ export class CameraController {
     this.camLeadX = 0;
     this.camLeadY = 0;
     this.cameraReturning = true;
+    this.followSuspended = false; // explicit return re-engages the motion-follow
   }
 
   /**
@@ -195,6 +205,17 @@ export class CameraController {
     const ship = this.deps.getShipPhysics();
     if (!ship) return;
     const moving = ship.isMoving && ship.currentSpeed > 0.01;
+    // A fresh flight leg (standstill → moving) re-engages the follow, even if the
+    // player had panned away during a previous flight. A mid-flight re-aim toward
+    // a moving target does NOT stop the ship, so it never trips this and the
+    // player's free-look survives the course correction.
+    if (moving && !this.prevMoving) this.followSuspended = false;
+    this.prevMoving = moving;
+
+    // Free-look: the player panned manually — leave the camera exactly where they
+    // put it (don't snap back to the ship) until a new flight or a return click.
+    if (this.followSuspended) return;
+
     const hasLead =
       Math.abs(this.camLeadX) > 0.5 || Math.abs(this.camLeadY) > 0.5;
     // Follow with smoothed look-ahead while moving; once stopped, let the

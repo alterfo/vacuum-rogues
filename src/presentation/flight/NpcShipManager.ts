@@ -15,6 +15,7 @@ import {
 } from "@/systems/npc/NpcSimulator";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { solveInterceptPoint } from "@/utils/intercept";
+import { shouldReaim } from "@/utils/flightGeometry";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
 import { SceneType, NpcRole, QuestType } from "@/types";
 import { pickNpcDestination, type NpcBehaviorCtx } from "./npcBehavior";
@@ -97,6 +98,19 @@ export class NpcShipManager implements FlightModule {
   // the scene's flight/turn loop; the scene clears it on low-hull stop / route
   // cancel, so it stays a public mutable field.
   followNpcId: string | null = null;
+
+  // When set, the ship is closing on this NPC via "Приблизиться" (non-combat):
+  // the course is continuously re-aimed at the target's lead point while flying,
+  // but never opens fire. Cleared on arrival, on a switch to attack, and when a
+  // fresh route cancels it.
+  private approachNpcId: string | null = null;
+  // Final destination of the last route this manager plotted (the lead point),
+  // so a drifting target can be re-aimed against the true endpoint rather than
+  // the immediate (possibly sun-avoidance) waypoint ShipPhysics exposes.
+  private lastAimX = 0;
+  private lastAimY = 0;
+  /** Lead-drift (world px) before a chase/approach re-plots its course. */
+  private readonly REAIM_DRIFT_PX = 30;
 
   private readonly WEAPON_RANGE = GAME_BALANCE.weaponRange;
   private readonly SCANNER_RANGE = GAME_BALANCE.scannerRange;
@@ -484,10 +498,22 @@ export class NpcShipManager implements FlightModule {
     this.closeNpcContactPanel();
     if (!sprite || !this.deps.getShipPhysics()) return;
     this.followNpcId = null; // approach only — not an attack
+    this.approachNpcId = npc.id; // …but keep tracking it so the course corrects
     this.deps.clearRouteTarget();
     const lead = this.npcLeadPoint(sprite);
-    this.deps.executeRouteTo(lead.x, lead.y);
+    this.aimRoute(lead.x, lead.y);
     this.deps.showMessage(`Сближение: ${npc.name}`, 0x88ccff);
+  }
+
+  /**
+   * Plot a route to (x,y) and remember it as the live destination so a moving
+   * target can be re-aimed against the true endpoint (the immediate waypoint
+   * ShipPhysics exposes may be a sun-avoidance bend, not the destination).
+   */
+  private aimRoute(x: number, y: number): void {
+    this.lastAimX = x;
+    this.lastAimY = y;
+    this.deps.executeRouteTo(x, y);
   }
 
   /** "Связаться": if player has an active TEXT_ADVENTURE quest, launch it; otherwise show greeting. */
@@ -552,9 +578,10 @@ export class NpcShipManager implements FlightModule {
     // Not yet in range — auto-follow to close the gap, aiming at a lead point
     // so the intercept curves to where the target is heading (Task 5).
     this.followNpcId = npc.id;
+    this.approachNpcId = null; // attack supersedes a non-combat approach
     this.deps.clearRouteTarget();
     const lead = this.npcLeadPoint(sprite);
-    this.deps.executeRouteTo(lead.x, lead.y);
+    this.aimRoute(lead.x, lead.y);
     this.deps.showMessage(`Перехват: ${npc.name}`, 0xff5555);
   }
 
@@ -615,6 +642,15 @@ export class NpcShipManager implements FlightModule {
   updateCombat(_deltaTime: number): void {
     const physics = this.deps.getShipPhysics();
     if (!physics) return;
+
+    // Non-combat approach ("Приблизиться"): continuously re-aim at the moving
+    // target's lead point while flying, but never open fire. Handled before the
+    // combat decision so an approach never escalates to a CombatScene launch.
+    if (this.approachNpcId) {
+      this.updateApproach(physics);
+      return;
+    }
+
     const ship = this.gameEngine?.player?.ship;
     if (!ship) return;
 
@@ -633,19 +669,30 @@ export class NpcShipManager implements FlightModule {
         this.deps.showMessage("Цель потеряна", 0xffaa00);
         this.followNpcId = null;
         return;
-      case "chase":
-        if (!physics.isMoving) {
-          // Re-aim at a fresh lead point each leg so the chase curves to lead a
-          // crossing target rather than always heading at its old position.
-          const chased = this.npcSprites.find(
-            (s) => s.npc.id === this.followNpcId,
-          );
-          const lead = chased
-            ? this.npcLeadPoint(chased)
-            : { x: decision.targetX, y: decision.targetY };
-          this.deps.executeRouteTo(lead.x, lead.y);
+      case "chase": {
+        // Re-aim at a fresh lead point so the chase curves to lead a crossing
+        // target rather than heading at its old position. Re-aim at the start of
+        // each leg (stopped) AND continuously mid-flight once the target drifts
+        // beyond the threshold — so the ship corrects course toward a manoeuvring
+        // target instead of trailing it to where it was.
+        const chased = this.npcSprites.find(
+          (s) => s.npc.id === this.followNpcId,
+        );
+        const lead = chased
+          ? this.npcLeadPoint(chased)
+          : { x: decision.targetX, y: decision.targetY };
+        if (
+          !physics.isMoving ||
+          shouldReaim(
+            { x: this.lastAimX, y: this.lastAimY },
+            lead,
+            this.REAIM_DRIFT_PX,
+          )
+        ) {
+          this.aimRoute(lead.x, lead.y);
         }
         return;
+      }
       case "launch":
         if (physics.isMoving) {
           physics.setTarget(physics.shipX, physics.shipY);
@@ -654,6 +701,32 @@ export class NpcShipManager implements FlightModule {
         }
         this.launchCombatWithNpc(decision.npc);
         return;
+    }
+  }
+
+  /**
+   * "Приблизиться" tracking: while the ship is flying toward the approached NPC,
+   * re-plot the course at its fresh lead point once it drifts past the threshold
+   * so the ship corrects toward where the target is now, not where it was at the
+   * click. Clears the tracking when the ship arrives (stops) or the target is
+   * gone — without ever launching combat.
+   */
+  private updateApproach(physics: ShipPhysics): void {
+    const sprite = this.npcSprites.find((s) => s.npc.id === this.approachNpcId);
+    if (!sprite || !physics.isMoving) {
+      // Target lost, or the ship reached the (re-aimed) lead point and stopped.
+      this.approachNpcId = null;
+      return;
+    }
+    const lead = this.npcLeadPoint(sprite);
+    if (
+      shouldReaim(
+        { x: this.lastAimX, y: this.lastAimY },
+        lead,
+        this.REAIM_DRIFT_PX,
+      )
+    ) {
+      this.aimRoute(lead.x, lead.y);
     }
   }
 

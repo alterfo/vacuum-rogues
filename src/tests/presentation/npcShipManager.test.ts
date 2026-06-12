@@ -253,6 +253,81 @@ describe("NpcShipManager (extracted FlightModule)", () => {
     manager.destroy();
   });
 
+  it("re-aims the chase MID-FLIGHT when the target drifts (continuous course-correction)", () => {
+    // The chase used to re-plot only on arrival (when stopped), so the ship flew
+    // to where the target WAS. It must now re-correct while still moving once the
+    // target drifts beyond the threshold.
+    const physics = new ShipPhysics(0, 0, 0.3);
+    physics.isMoving = true; // already en route — the mid-flight case
+    const routeCalls: Array<{ x: number; y: number }> = [];
+
+    const stage = new Container();
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+    const renderer = {
+      app: { screen: { width: 800, height: 600 } },
+      stage,
+      uiLayer,
+      gameLayer,
+    } as unknown as Renderer;
+    const galaxy = { npcShips: [makeNpc("npc_chase", NpcRole.PIRATE)] };
+    const gameEngine = {
+      galaxy,
+      player: { currentSystemId: "sys_a", ship: { maxHull: 100, hullHP: 100 } },
+    } as unknown as GameEngine;
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => physics,
+      getPlanetSprites: () => [],
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => true,
+      showMessage: () => {},
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: (x, y) => routeCalls.push({ x, y }),
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+    };
+
+    const manager = new NpcShipManager(
+      renderer,
+      gameEngine,
+      gameLayer,
+      uiLayer,
+      deps,
+    );
+    manager.initialize();
+    const sprite = (
+      manager as unknown as {
+        npcSprites: Array<{
+          x: number;
+          y: number;
+          container: { rotation: number };
+        }>;
+      }
+    ).npcSprites[0];
+    sprite.x = 500;
+    sprite.y = 0;
+    sprite.container.rotation = Math.PI / 2; // heading +y
+
+    manager.followNpcId = "npc_chase";
+
+    // First tick mid-flight: re-aims (lead is far from the initial endpoint).
+    manager.updateCombat(1 / 60);
+    expect(routeCalls.length).toBe(1);
+
+    // Target drifts well beyond the threshold → another mid-flight correction.
+    sprite.y += 120;
+    manager.updateCombat(1 / 60);
+    expect(routeCalls.length).toBe(2);
+
+    // Target barely moves (< threshold) → NO re-plot (throttled).
+    sprite.y += 4;
+    manager.updateCombat(1 / 60);
+    expect(routeCalls.length).toBe(2);
+
+    manager.destroy();
+  });
+
   it("trader sprite has orbit anchor set to a planet position (wiring)", () => {
     const fakePlanet = { screenX: 800, screenY: 300, displayRadius: 50 };
 
