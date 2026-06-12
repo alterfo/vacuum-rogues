@@ -58,6 +58,20 @@ describe("pickNpcDestination", () => {
     expect(matched).toBe(true);
   });
 
+  it("PIRATE falls back to lane_point when traders array is explicitly empty", () => {
+    // Distinct from the undefined-traders case — exercises the length > 0 branch.
+    const dest = pickNpcDestination(NpcRole.PIRATE, "pirate_1", 0, {
+      ...CTX,
+      traders: [],
+    });
+    expect(dest.intent).toBe("lane_point");
+    const dx = dest.x - BOUNDS.cx;
+    const dy = dest.y - BOUNDS.cy;
+    const r = Math.sqrt(dx * dx + dy * dy);
+    expect(r).toBeGreaterThanOrEqual(BOUNDS.rInner - 0.01);
+    expect(r).toBeLessThanOrEqual(BOUNDS.rOuter + 0.01);
+  });
+
   it("PIRATE returns a lane_point when no traders are present", () => {
     const dest = pickNpcDestination(NpcRole.PIRATE, "pirate_1", 0, CTX);
     expect(dest.intent).toBe("lane_point");

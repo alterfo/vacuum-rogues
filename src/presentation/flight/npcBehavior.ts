@@ -1,5 +1,6 @@
 import { NpcRole } from "@/types";
 import type { SystemBounds } from "../NpcShipSprite";
+import { hashStr } from "@/utils/hashStr";
 
 export interface NpcBehaviorCtx {
   readonly bounds: SystemBounds;
@@ -18,16 +19,6 @@ export interface NpcDestination {
   readonly x: number;
   readonly y: number;
   readonly intent: NpcDestinationIntent;
-}
-
-/** FNV-1a hash of a string → stable 32-bit unsigned integer. */
-function hashStr(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
 }
 
 /**
@@ -74,6 +65,11 @@ export function pickNpcDestination(
       }
       return lanePoint(seed, ctx.bounds);
     }
+
+    default:
+      // Runtime safety: if NpcRole gains a new value without this switch being
+      // updated, fall back to a lane point rather than returning undefined.
+      return lanePoint(hashStr(shipId), ctx.bounds);
   }
 }
 

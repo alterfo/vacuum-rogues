@@ -5,6 +5,7 @@ import { NpcRole } from "@/types";
 import { Faction } from "@/types/faction";
 import { pickVariant } from "./textures";
 import { GAME_BALANCE } from "@/config/balance";
+import { hashStr } from "@/utils/hashStr";
 
 /** Maps an NPC role to its ship-art asset prefix (src/assets/ships/<prefix>). */
 const ROLE_SHIP_PREFIX: Record<NpcRole, string> = {
@@ -98,6 +99,12 @@ export class NpcShipSprite {
   private targetProvider: ((seq: number) => { x: number; y: number }) | null =
     null;
   private targetSeq = 0;
+  /**
+   * Called by `NpcShipManager` when a non-departing ship arrives at its target.
+   * Allows the manager to re-anchor the sprite to the destination planet without
+   * the sprite importing manager types (dependency inversion).
+   */
+  private arrivalCallback: (() => void) | null = null;
   /** How long (ms game time) the ship dwells in orbit before moving on. */
   public readonly dwellDurationMs: number;
   /** Accumulated orbit time (ms) toward dwellDurationMs. */
@@ -113,7 +120,7 @@ export class NpcShipSprite {
     this.targetY = y;
     // Deterministic dwell duration (8–20 s of game time) based on ship id so
     // ships desynchronise naturally and don't all leave their planets at once.
-    const h = NpcShipSprite.hashId(npc.id);
+    const h = hashStr(npc.id);
     this.dwellDurationMs = 8000 + (h % 12001);
 
     this.container = new Container();
@@ -138,7 +145,9 @@ export class NpcShipSprite {
     }
 
     this.render();
-    this.pickNewTarget();
+    // Initial targetX/targetY = spawn position. pickNewTarget() is called by
+    // setTargetProvider() once the manager wires the role-driven provider, so the
+    // very first waypoint is purposeful (not a random ring point).
   }
 
   /** Wire hover callbacks for the tooltip system (must be called after setClickHandler). */
@@ -262,6 +271,10 @@ export class NpcShipSprite {
       if (this.departing) {
         this.gone = true; // reached the boundary → hyperjump out
       } else {
+        // Notify the manager before picking the next target so it can re-anchor
+        // this sprite to the planet it just arrived at (restoring orbit behavior
+        // on every visit, not just the first).
+        this.arrivalCallback?.();
         this.pickNewTarget();
       }
       return;
@@ -306,18 +319,30 @@ export class NpcShipSprite {
   /**
    * Inject a role-driven destination provider so `pickNewTarget` uses
    * purposeful targets instead of random ring points.  Called by
-   * `NpcShipManager` after construction.
+   * `NpcShipManager` after construction.  Immediately picks the first
+   * purposeful waypoint so pirates never use the random-ring fallback.
    */
   setTargetProvider(fn: (seq: number) => { x: number; y: number }): void {
     this.targetProvider = fn;
+    this.pickNewTarget();
+  }
+
+  /** Register a callback fired when this (non-departing) ship arrives at its
+   *  target. `NpcShipManager` uses this to re-anchor the sprite to a planet on
+   *  every visit — not just the first one. */
+  setArrivalCallback(fn: () => void): void {
+    this.arrivalCallback = fn;
   }
 
   /** Orbit a fixed point (a planet) instead of wandering the whole band. */
   setAnchor(x: number, y: number): void {
     this.anchorX = x;
     this.anchorY = y;
-    this.orbitRadius = 50 + Math.random() * 45;
-    this.orbitDir = Math.random() < 0.5 ? 1 : -1;
+    // Deterministic per ship id so orbit radius and direction are stable across
+    // multiple visits to the same planet.
+    const h = hashStr(this.npc.id);
+    this.orbitRadius = 50 + (h % 46);
+    this.orbitDir = (h >>> 16) & 1 ? 1 : -1;
     // Start the orbit angle at the ship's current bearing from the planet so it
     // eases on without a jump.
     this.orbitAngle = Math.atan2(this.y - y, this.x - x);
@@ -355,16 +380,6 @@ export class NpcShipSprite {
     g.circle(0, -22, 4);
     g.fill({ color: intent });
     g.stroke({ width: 1, color: 0x000000, alpha: 0.5 });
-  }
-
-  /** FNV-1a hash of a string → stable 32-bit unsigned integer. */
-  private static hashId(s: string): number {
-    let h = 2166136261;
-    for (let i = 0; i < s.length; i++) {
-      h ^= s.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
   }
 
   destroy(): void {

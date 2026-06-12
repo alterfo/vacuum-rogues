@@ -82,14 +82,31 @@ describe("NpcShipSprite dwell lifecycle", () => {
     sprite.destroy();
   });
 
+  it("isLeaving() is false before beginDeparture() and true after", () => {
+    const sprite = new NpcShipSprite(
+      makeNpc("npc_leaving_flag"),
+      200,
+      0,
+      BOUNDS,
+    );
+    expect(sprite.isLeaving()).toBe(false);
+    sprite.beginDeparture();
+    expect(sprite.isLeaving()).toBe(true);
+    sprite.destroy();
+  });
+
   it("does NOT increment dwell while departing (orbit branch is skipped)", () => {
     // Ship at (200, 0). Departure heads toward the boundary along +X.
-    // Update for a short time — ship moves but anchor is never cleared by dwell.
+    // Update for the FULL dwell duration — the orbit branch is skipped while
+    // departing so dwell can never fire and the anchor stays set.
     const sprite = new NpcShipSprite(makeNpc("npc_depart"), 200, 0, BOUNDS);
     sprite.setAnchor(200, 0);
     sprite.beginDeparture();
 
-    sprite.update(100); // well below boundary travel time AND dwell duration
+    // Use more than dwellDurationMs so we'd definitely fire dwell if the orbit
+    // branch ran — a previous version used 100 ms which was far too small to
+    // catch a buggy implementation.
+    sprite.update(sprite.dwellDurationMs + 1);
 
     // Dwell counter couldn't fire (orbit branch disabled while departing);
     // anchor was set before departure and is still set.
@@ -171,6 +188,50 @@ describe("NpcShipManager dwell-expiry cleanup", () => {
     );
     return { manager, isTurnRunning };
   }
+
+  it("re-anchors a non-pirate sprite when it arrives at the next planet after dwell expiry", () => {
+    // Single planet so pickNpcDestination always returns that planet's position.
+    const planet = { screenX: 300, screenY: 0, displayRadius: 50 };
+    const { manager, isTurnRunning } = makeManagerWithPlanets(
+      [makeNpc("trader_reanchor")],
+      [planet],
+    );
+    manager.initialize();
+
+    const sprite = (
+      manager as unknown as {
+        npcSprites: Array<{
+          x: number;
+          y: number;
+          dwellDurationMs: number;
+          isAnchored(): boolean;
+        }>;
+      }
+    ).npcSprites[0];
+
+    // Fire the dwell — sprite leaves orbit and heads for the planet.
+    isTurnRunning.value = true;
+    manager.update(sprite.dwellDurationMs + 1, 0);
+    expect(sprite.isAnchored()).toBe(false);
+
+    // Teleport the sprite to the planet center (simulates the travel).
+    sprite.x = planet.screenX;
+    sprite.y = planet.screenY;
+
+    // One more update: the sprite arrives (dist < 6), arrivalCallback fires,
+    // and the manager re-anchors it to the planet.
+    manager.update(16, 0);
+    expect(sprite.isAnchored()).toBe(true);
+
+    const anchorMap = (
+      manager as unknown as { npcAnchorPlanet: Map<unknown, unknown> }
+    ).npcAnchorPlanet;
+    const rawSprite = (manager as unknown as { npcSprites: unknown[] })
+      .npcSprites[0];
+    expect(anchorMap.has(rawSprite)).toBe(true);
+
+    manager.destroy();
+  });
 
   it("removes the anchor-planet map entry after the sprite's dwell expires", () => {
     const planet1 = { screenX: 300, screenY: 0, displayRadius: 50 };

@@ -184,6 +184,10 @@ const WILDERNESS_PANORAMA: Record<string, string> = {
   VOLCANIC: "wilderness_desert",
   GAS_GIANT: "wilderness_desert", // no surface — neutral barren backdrop
   TERRESTRIAL: "wilderness_jungle",
+  // Settled types under INDEPENDENT/OVERMIND (no city art) get terrain backdrops
+  // rather than falling through to the hardcoded "wilderness_jungle" default.
+  HABITAT: "wilderness_jungle",
+  INDUSTRIAL: "wilderness_desert",
 };
 
 /**

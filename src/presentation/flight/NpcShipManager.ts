@@ -18,6 +18,7 @@ import { solveInterceptPoint } from "@/utils/intercept";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
 import { SceneType, NpcRole, QuestType } from "@/types";
 import { pickNpcDestination, type NpcBehaviorCtx } from "./npcBehavior";
+import { hashStr } from "@/utils/hashStr";
 import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
 import type { FlightModule } from "./FlightModule";
@@ -348,9 +349,33 @@ export class NpcShipManager implements FlightModule {
     // crossing the system.  The orbit code path in NpcShipSprite.update() takes
     // priority over pickNewTarget, so the target provider above is the fallback
     // when no anchor is set (pirates) or the initial constructor call.
+    // Non-pirates re-anchor on every subsequent planet arrival via the callback
+    // below — not just on initial spawn.
+    sprite.setArrivalCallback(() => {
+      if (sprite.npc.role === NpcRole.PIRATE) return;
+      const ps = this.deps.getPlanetSprites();
+      if (ps.length === 0) return;
+      let nearest = ps[0];
+      let nd = Math.hypot(
+        sprite.x - nearest.screenX,
+        sprite.y - nearest.screenY,
+      );
+      for (const p of ps.slice(1)) {
+        const d = Math.hypot(sprite.x - p.screenX, sprite.y - p.screenY);
+        if (d < nd) {
+          nearest = p;
+          nd = d;
+        }
+      }
+      if (nd < 20) {
+        sprite.setAnchor(nearest.screenX, nearest.screenY);
+        this.npcAnchorPlanet.set(sprite, nearest);
+      }
+    });
+
     const planets = this.deps.getPlanetSprites();
     if (npc.role !== NpcRole.PIRATE && planets.length > 0) {
-      const idx = this.hashId(npc.id) % planets.length;
+      const idx = hashStr(npc.id) % planets.length;
       const p = planets[idx];
       sprite.setAnchor(p.screenX, p.screenY);
       this.npcAnchorPlanet.set(sprite, p);
@@ -406,16 +431,6 @@ export class NpcShipManager implements FlightModule {
       }
     }
     sprite.container.zIndex = 100;
-  }
-
-  /** Small deterministic hash of a string id (FNV-1a) for stable assignment. */
-  private hashId(s: string): number {
-    let h = 2166136261;
-    for (let i = 0; i < s.length; i++) {
-      h ^= s.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
   }
 
   // ---------------------------------------------------------------------------

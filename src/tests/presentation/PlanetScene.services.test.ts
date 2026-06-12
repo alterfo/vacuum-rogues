@@ -63,6 +63,19 @@ describe("panoramaKeyForPlanet (playtest5 — distinct backdrops per planet)", (
     expect(panoramaKeyForPlanet("HABITAT", "INDEPENDENT")).toBe(
       "wilderness_jungle",
     );
+    expect(panoramaKeyForPlanet("HABITAT", "OVERMIND")).toBe(
+      "wilderness_jungle",
+    );
+  });
+
+  it("gives INDUSTRIAL a distinct non-city backdrop (not wilderness_jungle)", () => {
+    // INDUSTRIAL planets under non-city factions must not silently return the
+    // same jungle key as TERRESTRIAL/HABITAT — different planet types need
+    // different fallback backdrops.
+    const industrial = panoramaKeyForPlanet("INDUSTRIAL", "INDEPENDENT");
+    const terrestrial = panoramaKeyForPlanet("TERRESTRIAL", "INDEPENDENT");
+    expect(industrial).toBe("wilderness_desert");
+    expect(industrial).not.toBe(terrestrial);
   });
 
   it("never returns an empty/undefined key (always a real asset)", () => {
