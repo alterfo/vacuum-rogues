@@ -154,7 +154,7 @@ export class QuestJournalUI {
 
     // Card background — non-interactive so clicks fall through to the backdrop.
     const bg = new Graphics();
-    bg.rect(20, 0, this.panelWidth - 40, 100);
+    bg.rect(20, 0, this.panelWidth - 40, 110);
     bg.fill({ color: 0x16213e, alpha: 0.8 });
     bg.stroke({ color: quest.isCompleted ? 0x00ff00 : 0x888888, width: 1 });
     bg.eventMode = "none";
@@ -221,6 +221,24 @@ export class QuestJournalUI {
 
       objY += 18;
     }
+
+    // Reward summary — more journal detail (credits / xp / items / reputation).
+    const r = quest.reward;
+    const parts: string[] = [];
+    if (r?.credits) parts.push(`${r.credits} кр`);
+    if (r?.experience) parts.push(`${r.experience} опыт`);
+    for (const it of r?.items ?? []) parts.push(`${it.amount}×${it.type}`);
+    if (r?.reputationDelta) {
+      parts.push(`${r.reputationDelta > 0 ? "+" : ""}${r.reputationDelta} реп`);
+    }
+    const rewardText = new Text({
+      text: `Награда: ${parts.length ? parts.join(", ") : "—"}`,
+      style: { fontFamily: "Courier New", fontSize: 11, fill: 0xffcc66 },
+    });
+    rewardText.x = 40;
+    rewardText.y = objY + 2;
+    rewardText.eventMode = "none";
+    card.addChild(rewardText);
 
     return card;
   }

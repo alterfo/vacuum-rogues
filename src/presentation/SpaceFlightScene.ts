@@ -1710,23 +1710,23 @@ export class SpaceFlightScene extends GameScene {
    * Navigate ship to quest objective location (planet)
    */
   private navigateToQuestObjective(locationId: string): void {
-    logger.info(`Navigating to quest objective: ${locationId}`);
-
-    // Find planet sprite by locationId
-    const planetSprite = this.planetManager.planetSprites.find(
+    // Target in the CURRENT system → plot a normal route to the planet.
+    const here = this.planetManager.planetSprites.find(
       (s) => s.planet.id === locationId,
     );
-    if (planetSprite && this.shipPhysics) {
-      // Plan a star-avoiding route to the planet (same path as a manual click).
-      this.planRouteTo(planetSprite.screenX, planetSprite.screenY);
-      logger.info(
-        `Planned navigation route to planet ${planetSprite.planet.name}`,
-      );
-
-      // Show planet info panel
-      this.planetManager.handlePlanetClick(planetSprite.planet);
-    } else {
-      logger.warn(`Could not find planet with ID: ${locationId}`);
+    if (here && this.shipPhysics) {
+      this.planRouteTo(here.screenX, here.screenY);
+      this.planetManager.handlePlanetClick(here.planet);
+      return;
+    }
+    // Target in ANOTHER (possibly not-yet-reachable) system → open the star map
+    // pre-selected on that system so the player can plot the warp route there.
+    const target = this.gameEngine?.galaxy?.systemForLocation(locationId);
+    if (target && this.gameEngine) {
+      void this.gameEngine.transitionTo(SceneType.STAR_MAP, {
+        gameEngine: this.gameEngine,
+        pendingSelectedSystemId: target.id,
+      });
     }
   }
 

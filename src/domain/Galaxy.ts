@@ -137,6 +137,19 @@ export class Galaxy {
     return true;
   }
 
+  /**
+   * The star system that contains a location (a planet/station whose id matches)
+   * or whose own id is `locationId` — used to route a quest objective that lives
+   * in another, possibly not-yet-revealed, system. Null if nothing matches.
+   */
+  systemForLocation(locationId: string): StarSystem | null {
+    return (
+      this.systems.find((s) => s.planets.some((p) => p.id === locationId)) ??
+      this.systems.find((s) => s.id === locationId) ??
+      null
+    );
+  }
+
   /** Returns the hostile (overmind + pirate) share of total systems as [0, 1]. */
   getHostileShare(): number {
     if (this.systems.length === 0) return 0;
