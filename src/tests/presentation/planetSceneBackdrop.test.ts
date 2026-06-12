@@ -81,7 +81,9 @@ vi.mock("pixi.js", () => {
 // A wide equirectangular panorama (2:1) so the flat-sprite path mounts.
 vi.mock("@/presentation/textures", () => ({
   panoramaTex: vi.fn(() => ({ width: 4096, height: 2048 })),
+  tex: vi.fn(() => ({ width: 4096, height: 2048 })), // resolved backdrop key
   pickVariant: vi.fn(() => undefined), // planet body falls back to gradient
+  pickVariantKey: vi.fn(() => undefined), // no surfaces art → panorama fallback
   loadTextureAsync: vi.fn(() => Promise.resolve(undefined)),
 }));
 

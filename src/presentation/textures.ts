@@ -19,6 +19,7 @@ let loadPromise: Promise<void> | null = null;
 /** Categories excluded from eager preload — loaded on demand instead. */
 const LAZY_PREFIXES = [
   "panoramas/",
+  "surfaces/",
   "planet_maps/",
   "star_maps/",
   "stars/",

@@ -11,7 +11,33 @@ vi.mock("pixi.js", () => ({
 import {
   visiblePlanetServices,
   panoramaKeyForPlanet,
+  resolvePlanetBackdropKey,
 } from "@/presentation/PlanetScene";
+
+describe("resolvePlanetBackdropKey (per-planet generated backdrops)", () => {
+  // No surfaces/ art is bundled in the test manifest, so the resolver falls
+  // back to the shared type/faction panorama — proving the game is unchanged
+  // until the ComfyUI `surfaces` art is generated, then auto-upgrades.
+  it("falls back to the type/faction panorama when no surface art exists", () => {
+    expect(resolvePlanetBackdropKey("ICE", "planet-x", "INDEPENDENT")).toBe(
+      "panoramas/wilderness_tundra",
+    );
+    expect(resolvePlanetBackdropKey("HABITAT", "p", "SYNDICATE")).toBe(
+      "panoramas/syndicate_city",
+    );
+  });
+
+  it("keeps different planet types distinct even in the fallback", () => {
+    const ice = resolvePlanetBackdropKey("ICE", "a", "INDEPENDENT");
+    const volcanic = resolvePlanetBackdropKey("VOLCANIC", "b", "INDEPENDENT");
+    const terrestrial = resolvePlanetBackdropKey(
+      "TERRESTRIAL",
+      "c",
+      "INDEPENDENT",
+    );
+    expect(new Set([ice, volcanic, terrestrial]).size).toBe(3);
+  });
+});
 
 describe("panoramaKeyForPlanet (playtest5 — distinct backdrops per planet)", () => {
   it("gives different wilderness backdrops to different terrain types", () => {

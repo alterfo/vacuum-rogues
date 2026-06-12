@@ -168,6 +168,26 @@
         }
       }
     },
+    "surfaces": {
+      "size": [2048, 512],
+      "upscale": true,
+      "steps": 40,
+      "cfg": 7.0,
+      "variants": 4,
+      "template": "Ultra-wide cinematic panorama, standing on the surface of an alien planet looking at the horizon, {biome}, photorealistic, sci-fi, dramatic sky, sense of vast scale, sharp foreground detail fading to distant horizon, no people, no UI, no text, 8k, hyperdetailed",
+      "negative": "top-down, aerial view, map, satellite, overhead, portrait, person, character, watermark, text, frame, border, fisheye, vignette, blurry, low quality, planet sphere in sky filling frame",
+      "name_order": ["biome"],
+      "axes": {
+        "biome": {
+          "ice": "frozen glacial world, jagged ice spires and cracked frost plains, pale cyan light, distant aurora over a blizzard horizon",
+          "volcanic": "molten volcanic world, black basalt fields veined with glowing orange lava rivers, ash-grey sky lit red, erupting calderas in the distance",
+          "gas": "metal observation platform floating in the upper clouds of a gas giant, vast swirling amber and cream cloud bands stretching to the horizon, storms below",
+          "terran": "lush temperate alien world, rolling grassland and strange forests, blue sky with scattered clouds, gentle hills fading to a distant mountain range",
+          "industrial": "sprawling industrial planet surface, endless factory complexes and smokestacks, smog-orange sky, pipelines and gantries stretching to the horizon",
+          "city": "alien colony cityscape seen from a street, towering buildings with glowing signs, busy skyline, atmospheric haze, distant spaceport silhouettes"
+        }
+      }
+    },
     "portraits": {
       "size": [832, 1216],
       "variants": 3,

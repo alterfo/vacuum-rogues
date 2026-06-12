@@ -15,7 +15,13 @@ import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import { TradeSystem } from "@/systems/TradeSystem";
 import { QuestType } from "@/types";
 import type { ResourceType } from "@/types";
-import { pickVariant, panoramaTex, loadTextureAsync } from "./textures";
+import {
+  pickVariant,
+  pickVariantKey,
+  panoramaTex,
+  tex,
+  loadTextureAsync,
+} from "./textures";
 import { scaledFont } from "@/utils/fontScale";
 import { UiButton, type ButtonAccent } from "./ui/UiButton";
 
@@ -198,6 +204,34 @@ export function panoramaKeyForPlanet(
   return WILDERNESS_PANORAMA[planetType] ?? "wilderness_jungle";
 }
 
+/** Planet type → `surfaces/` biome prefix (per-planet generated backdrops). */
+const PLANET_BIOME: Record<string, string> = {
+  ICE: "ice",
+  VOLCANIC: "volcanic",
+  GAS_GIANT: "gas",
+  TERRESTRIAL: "terran",
+  INDUSTRIAL: "industrial",
+  HABITAT: "city",
+};
+
+/**
+ * Resolve the FULL manifest key for a planet's backdrop. Prefers a per-planet
+ * generated surface panorama (`surfaces/<biome>_NN`, chosen deterministically
+ * by planet id, so every planet gets its own), and falls back to the shared
+ * type/faction panorama (`panoramas/...`) until that art is generated. Exported
+ * for testing.
+ */
+export function resolvePlanetBackdropKey(
+  planetType: string,
+  planetId: string,
+  faction: string,
+): string {
+  const biome = PLANET_BIOME[planetType] ?? "terran";
+  const surfaceKey = pickVariantKey("surfaces", biome, planetId);
+  if (surfaceKey) return surfaceKey;
+  return `panoramas/${panoramaKeyForPlanet(planetType, faction)}`;
+}
+
 function planetTexturePrefix(type: string): string {
   const map: Record<string, string> = {
     TERRESTRIAL: "terrestrial",
@@ -272,11 +306,11 @@ export class PlanetScene extends GameScene {
       s.planets.some((p) => p.id === this.planet?.id),
     );
     const initFaction = initSystem?.ownerFaction ?? "INDEPENDENT";
-    const initKey = panoramaKeyForPlanet(
+    const backdropKey = resolvePlanetBackdropKey(
       this.planet?.type ?? "TERRESTRIAL",
+      this.planet?.id ?? "",
       initFaction,
     );
-    const panoramaKey = `panoramas/${initKey}`;
 
     // Show scene immediately with dark fallback, then swap in panorama when loaded.
     this.createUI();
@@ -299,14 +333,12 @@ export class PlanetScene extends GameScene {
     stage.on("pointerup", this.boundPanoramaUp);
     stage.on("pointerupoutside", this.boundPanoramaUp);
 
-    if (!panoramaTex(initKey)) {
-      // Task 8: lazy-load the faction panorama behind the US-076 loading overlay,
-      // falling back to outlanders_city if the faction's art is unavailable.
+    if (!tex(backdropKey)) {
+      // Task 8: lazy-load the per-planet backdrop behind the US-076 loading
+      // overlay, falling back to outlanders_city if the art is unavailable.
       this.gameEngine?.showLoadingOverlay("Посадка…");
-      loadTextureAsync(panoramaKey)
-        .then(
-          (tex) => tex ?? loadTextureAsync(`panoramas/${PANORAMA_FALLBACK}`),
-        )
+      loadTextureAsync(backdropKey)
+        .then((t) => t ?? loadTextureAsync(`panoramas/${PANORAMA_FALLBACK}`))
         .then((tex) => {
           this.gameEngine?.hideLoadingOverlay();
           if (tex && this.planet) {
@@ -707,13 +739,14 @@ export class PlanetScene extends GameScene {
     const factionName = FACTION_RU[faction] ?? faction;
     const factionColor = FACTION_COLOR[faction] ?? 0x999999;
 
-    // Panoramic background: keyed by this planet's type (+ faction for settled
-    // worlds) so adjacent planets differ, lazy-loaded.
-    const panoramaKey = panoramaKeyForPlanet(
+    // Panoramic background: per-planet generated surface (surfaces/<biome>_NN)
+    // when available, else the shared type/faction panorama. Lazy-loaded.
+    const backdropKey = resolvePlanetBackdropKey(
       this.planet?.type ?? "TERRESTRIAL",
+      this.planet?.id ?? "",
       faction,
     );
-    const panTex = panoramaTex(panoramaKey) ?? panoramaTex(PANORAMA_FALLBACK);
+    const panTex = tex(backdropKey) ?? panoramaTex(PANORAMA_FALLBACK);
     const hasPanorama = !!panTex && panTex.width > 1 && panTex.height > 0;
 
     if (hasPanorama) {
