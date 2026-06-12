@@ -233,6 +233,48 @@ describe("NpcShipManager dwell-expiry cleanup", () => {
     manager.destroy();
   });
 
+  it("re-anchors even when the planet has drifted more than 20px from the arrival point", () => {
+    // Planet starts at (300, 0), sprite is sent there, but by arrival the planet
+    // has drifted to (325, 0) — 25px away, beyond the old hard-coded 20px guard.
+    // The fix uses nearest.displayRadius (50px) so the re-anchor still fires.
+    const planet = { screenX: 300, screenY: 0, displayRadius: 50 };
+    const { manager, isTurnRunning } = makeManagerWithPlanets(
+      [makeNpc("trader_drift")],
+      [planet],
+    );
+    manager.initialize();
+
+    const sprite = (
+      manager as unknown as {
+        npcSprites: Array<{
+          x: number;
+          y: number;
+          dwellDurationMs: number;
+          isAnchored(): boolean;
+        }>;
+      }
+    ).npcSprites[0];
+
+    // Fire the dwell so the sprite starts traveling.
+    isTurnRunning.value = true;
+    manager.update(sprite.dwellDurationMs + 1, 0);
+    expect(sprite.isAnchored()).toBe(false);
+
+    // Teleport sprite to the OLD planet position (where target was set).
+    sprite.x = 300;
+    sprite.y = 0;
+
+    // Simulate the planet drifting 25px along X while the ship was in transit.
+    // 25 > 20 (old threshold) but < 50 (displayRadius) — this was the failing case.
+    planet.screenX = 325;
+
+    // Arrival update: dist < 6, arrivalCallback fires.
+    manager.update(16, 0);
+    expect(sprite.isAnchored()).toBe(true);
+
+    manager.destroy();
+  });
+
   it("removes the anchor-planet map entry after the sprite's dwell expires", () => {
     const planet1 = { screenX: 300, screenY: 0, displayRadius: 50 };
     const planet2 = { screenX: -300, screenY: 0, displayRadius: 50 };

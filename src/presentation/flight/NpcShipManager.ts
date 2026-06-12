@@ -367,7 +367,7 @@ export class NpcShipManager implements FlightModule {
           nd = d;
         }
       }
-      if (nd < 20) {
+      if (nd < nearest.displayRadius) {
         sprite.setAnchor(nearest.screenX, nearest.screenY);
         this.npcAnchorPlanet.set(sprite, nearest);
       }
