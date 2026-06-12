@@ -13,6 +13,7 @@ import {
   panoramaKeyForPlanet,
   resolvePlanetBackdropKey,
 } from "@/presentation/PlanetScene";
+import { tintFromSeed } from "@/utils/instanceTint";
 
 describe("resolvePlanetBackdropKey (per-planet generated backdrops)", () => {
   // No surfaces/ art is bundled in the test manifest, so the resolver falls
@@ -101,6 +102,19 @@ const ALL = [
   { label: "Исследования" },
   { label: "Взлёт" },
 ];
+
+describe("per-instance backdrop tint (Task 1 — each planet distinct)", () => {
+  // The playtest5 residual: two same-type, same-faction worlds resolve to the
+  // SAME backdrop key, so the panorama art is shared. PlanetScene tints that
+  // sprite by `planet.id` to keep them visibly distinct.
+  it("gives two planets sharing a backdrop key distinct tints", () => {
+    const keyA = resolvePlanetBackdropKey("ICE", "sys1-ice-a", "INDEPENDENT");
+    const keyB = resolvePlanetBackdropKey("ICE", "sys1-ice-b", "INDEPENDENT");
+    expect(keyA).toBe(keyB); // shared art...
+    // ...but the per-id tint disambiguates them.
+    expect(tintFromSeed("sys1-ice-a")).not.toBe(tintFromSeed("sys1-ice-b"));
+  });
+});
 
 describe("visiblePlanetServices (US-070 #12)", () => {
   it("shows the full service set on inhabited worlds", () => {

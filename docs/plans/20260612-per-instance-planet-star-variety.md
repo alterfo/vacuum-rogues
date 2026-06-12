@@ -33,10 +33,10 @@ spread, so each instance is unique without garish recoloring.
 - Create: `src/utils/instanceTint.ts` (+ test) — pure `tintFromSeed(seed, opts)` returning a subtle, bounded tint
 - Modify: `src/tests/presentation/PlanetScene.services.test.ts`
 
-- [ ] Write the RED test: `tintFromSeed(planetA.id)` ≠ `tintFromSeed(planetB.id)` for distinct ids, stable for the same id, and every channel stays within a believable band (e.g. 0.75–1.0 multiplier — no near-black, no neon). Confirm it FAILS (helper absent)
-- [ ] Implement `tintFromSeed` (SeededRNG → small warm/cool + brightness offsets) and apply it as `panorama.tint` (and optionally the planet-orb tint) keyed by `planet.id`, on top of the type-based key
-- [ ] Re-run letsplay (extend the planet step to land on ALL planets in the system, capturing `lp-10-planet-<i>.png` each); INSPECT — every planet's backdrop is visibly different, none broken/over-tinted
-- [ ] Run lint + unit + regression — green
+- [x] Write the RED test: `tintFromSeed(planetA.id)` ≠ `tintFromSeed(planetB.id)` for distinct ids, stable for the same id, and every channel stays within a believable band (e.g. 0.75–1.0 multiplier — no near-black, no neon). Confirm it FAILS (helper absent)
+- [x] Implement `tintFromSeed` (SeededRNG → small warm/cool + brightness offsets) and apply it as `panorama.tint` (and optionally the planet-orb tint) keyed by `planet.id`, on top of the type-based key
+- [x] Re-run letsplay (extend the planet step to land on ALL planets in the system, capturing `lp-10-planet-<i>.png` each); INSPECT — every planet's backdrop is visibly different, none broken/over-tinted
+- [x] Run lint + unit + regression — green
 
 ### Task 2: Per-sun variation (each sun distinct)
 **Files:**

@@ -281,18 +281,55 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       }
     });
 
-    // ── 10 Land on planet → PlanetScene ──
-    await step('10-planet-scene', async () => {
-      await page.evaluate(async () => {
-        const scene = getEngine().currentScene as {
-          e2eLandOnPlanet?: () => Promise<void>;
-        } | null;
-        await scene?.e2eLandOnPlanet?.();
-      });
-      await waitForScene(page, 'PlanetScene', 20_000);
-      await settle(page, 20); // panorama parallax mount
-      await shot(page, 'lp-10-planet-scene');
+    // ── 10 Land on EVERY planet → PlanetScene (per-instance backdrop variety) ──
+    // Each landed backdrop is tinted per planet.id (Task 1): inspect lp-10-planet-*
+    // and confirm two same-type/faction worlds look distinct, none over-tinted.
+    const planetList = await page.evaluate(() => {
+      const engine = getEngine();
+      const sysId = engine.player?.currentSystemId;
+      const sys = engine.galaxy?.systems.find(
+        (s) => (s as { id?: string }).id === sysId,
+      );
+      return ((sys?.planets ?? []) as { id?: string; name?: string }[]).map(
+        (p) => ({ id: p.id ?? '', name: p.name ?? '' }),
+      );
     });
+    // eslint-disable-next-line no-console
+    console.log('PLANET_LIST', JSON.stringify(planetList));
+
+    for (let i = 0; i < planetList.length; i++) {
+      const p = planetList[i];
+      await step(`10-planet-${i}`, async () => {
+        await page.evaluate(async (planetId) => {
+          const engine = getEngine();
+          const planet = engine.galaxy?.systems
+            .flatMap((s) => s.planets as { id?: string }[])
+            .find((pl) => pl.id === planetId);
+          if (!planet) throw new Error(`planet ${planetId} not found`);
+          await engine.transitionTo('PLANET', { gameEngine: engine, planet });
+        }, p.id);
+        await waitForScene(page, 'PlanetScene', 20_000);
+        await settle(page, 20); // panorama parallax + lazy backdrop mount
+        await shot(page, `lp-10-planet-${i}`);
+        if (i === 0) await shot(page, 'lp-10-planet-scene'); // continuity alias
+        return p.name;
+      });
+    }
+
+    // Fallback: if the system somehow had no planets, still land via the helper.
+    if (planetList.length === 0) {
+      await step('10-planet-scene', async () => {
+        await page.evaluate(async () => {
+          const scene = getEngine().currentScene as {
+            e2eLandOnPlanet?: () => Promise<void>;
+          } | null;
+          await scene?.e2eLandOnPlanet?.();
+        });
+        await waitForScene(page, 'PlanetScene', 20_000);
+        await settle(page, 20);
+        await shot(page, 'lp-10-planet-scene');
+      });
+    }
 
     const gotoPlanetSub = async (sceneType: string, sceneName: string): Promise<void> => {
       await page.evaluate(
