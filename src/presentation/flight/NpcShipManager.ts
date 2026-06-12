@@ -609,11 +609,28 @@ export class NpcShipManager implements FlightModule {
     );
   }
 
+  /**
+   * Remember the ship's current flight position on the GameEngine (transient,
+   * unsaved) so the SPACE_FLIGHT re-entry after a CombatScene round-trip resumes
+   * the ship right here instead of edge-spawning it (applyEntrySpawn fallback).
+   */
+  private rememberFlightPos(): void {
+    const physics = this.deps.getShipPhysics();
+    if (physics && this.gameEngine) {
+      this.gameEngine.lastFlightShipPos = {
+        x: physics.shipX,
+        y: physics.shipY,
+      };
+    }
+  }
+
   /** Transition to the turn-based CombatScene for a specific NPC. */
   private launchCombatWithNpc(npc: NpcShip): void {
     if (!this.gameEngine || this.combatTransitionPending) return;
     this.combatTransitionPending = true;
     this.followNpcId = null;
+    this.approachNpcId = null;
+    this.rememberFlightPos(); // so returning from combat resumes here, not the edge
     this.deps.endTurn();
     const playerSystemId = this.gameEngine.player?.currentSystemId ?? "";
     const isHostileSystem = !!(
@@ -822,6 +839,7 @@ export class NpcShipManager implements FlightModule {
       e.stopPropagation();
       this.overmindOverlay = null;
       overlay.destroy();
+      this.rememberFlightPos(); // resume here after combat, not at the system edge
       void this.gameEngine!.transitionTo(SceneType.COMBAT, {
         gameEngine: this.gameEngine!,
         isOvermindCore: true,

@@ -289,14 +289,15 @@ export class SpaceFlightScene extends GameScene {
     const lastPos = this.gameEngine?.lastFlightShipPos ?? null;
     if (this.gameEngine) this.gameEngine.lastFlightShipPos = null; // consume
     const entryVector = ctx?.entryVector ?? { x: 0, y: 1 };
+    // Non-warp re-entry resumes a remembered pos (combat/star-map round-trip must not edge-throw); else arrive at the boundary.
     const entryX = this.pendingWarp
       ? (lastPos?.x ??
         centerX - this.pendingWarp.exitVector.x * this.SYSTEM_INNER_RADIUS)
-      : centerX + entryVector.x * this.SYSTEM_BOUNDARY_RADIUS;
+      : (lastPos?.x ?? centerX + entryVector.x * this.SYSTEM_BOUNDARY_RADIUS);
     const entryY = this.pendingWarp
       ? (lastPos?.y ??
         centerY - this.pendingWarp.exitVector.y * this.SYSTEM_INNER_RADIUS)
-      : centerY + entryVector.y * this.SYSTEM_BOUNDARY_RADIUS;
+      : (lastPos?.y ?? centerY + entryVector.y * this.SYSTEM_BOUNDARY_RADIUS);
     // Cruise speed (px/ms): the GearCatalog loadout's derivedStats().speed,
     // scaled by an equipped EngineModule's bonus (Task 10). Falls back to the
     // legacy ship.speed multiplier when no loadout is set (old saves/tests). The
@@ -1394,6 +1395,12 @@ export class SpaceFlightScene extends GameScene {
    */
   private plotRoute(): void {
     if (!this.shipPhysics || !this.plannedRoute) return;
+
+    // Route overlay is a planning aid — hide it while moving (user request).
+    if (this.isTurnRunning) {
+      this.routeRenderer.clearRoute();
+      return;
+    }
 
     // Polyline ship → (curved waypoints) → destination. When the path is a
     // straight clear shot, routePath is just the destination.
