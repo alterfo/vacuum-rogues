@@ -10,6 +10,11 @@ import type { Renderer } from "../Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import { StarType } from "@/types";
 import { SeededRNG } from "@/utils/seededRNG";
+import {
+  starAppearanceJitter,
+  shiftTemperature,
+  type StarAppearanceJitter,
+} from "@/utils/starAppearance";
 import { buildSphereMesh, type SphereMesh } from "../sphereMesh";
 import { buildTilingDisc } from "../PlanetSprite";
 import { pickVariant, pickVariantKey, loadTextureAsync } from "../textures";
@@ -406,24 +411,44 @@ export class StarRenderer implements FlightModule {
     return sprite;
   }
 
-  /** Tint for the equirect sun map, by the current system's star type. */
+  /**
+   * Deterministic per-system appearance jitter (Task 2): corona size, glow
+   * intensity, and colour temperature, seeded by the current `systemId` so two
+   * suns of the same {@link StarType} still look distinct.
+   */
+  private starJitter(): StarAppearanceJitter {
+    return starAppearanceJitter(
+      this.gameEngine?.player?.currentSystemId ?? "x",
+    );
+  }
+
+  /**
+   * Tint for the equirect sun map: the current system's StarType base nudged by
+   * a small per-system colour-temperature shift (Task 2) so same-type suns vary.
+   */
   private starTint(): number {
     const systemId = this.gameEngine?.player?.currentSystemId;
     const system = this.gameEngine?.galaxy?.systems.find(
       (s) => s.id === systemId,
     );
+    let base: number;
     switch (system?.starType) {
       case StarType.RED_DWARF:
-        return 0xff7a4d; // deep red-orange
+        base = 0xff7a4d; // deep red-orange
+        break;
       case StarType.BLUE_GIANT:
-        return 0x8fb8ff; // blue-white
+        base = 0x8fb8ff; // blue-white
+        break;
       case StarType.WHITE_DWARF:
-        return 0xfff2e6; // near white
+        base = 0xfff2e6; // near white
+        break;
       case StarType.NEUTRON:
-        return 0xcfe0ff; // cold brilliant
+        base = 0xcfe0ff; // cold brilliant
+        break;
       default:
-        return 0xffd9a0; // warm yellow sun
+        base = 0xffd9a0; // warm yellow sun
     }
+    return shiftTemperature(base, this.starJitter().tempShift);
   }
 
   /**
@@ -462,6 +487,11 @@ export class StarRenderer implements FlightModule {
         break;
     }
 
+    // Per-system jitter (Task 2): nudge the glow colour temperature and scale
+    // the corona size + intensity so two same-type suns read as distinct.
+    const jitter = this.starJitter();
+    glowC = shiftTemperature(glowC, jitter.tempShift);
+
     // 3-layer radial glow: faint wide outer, brighter mid, bright inner. The
     // BlurFilter dissolves the three discs into one continuous falloff.
     const g = new Graphics();
@@ -472,7 +502,10 @@ export class StarRenderer implements FlightModule {
         [1.5, 0.3],
       ] as const
     ).forEach(([scale, alpha]) => {
-      g.circle(0, 0, R * scale).fill({ color: glowC, alpha });
+      g.circle(0, 0, R * scale * jitter.coronaScale).fill({
+        color: glowC,
+        alpha: alpha * jitter.glowIntensity,
+      });
     });
     halo.addChild(g);
 

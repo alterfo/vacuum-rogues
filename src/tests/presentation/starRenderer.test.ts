@@ -3,6 +3,7 @@ import { Container, Sprite, Texture, type TilingSprite } from "pixi.js";
 import { StarRenderer } from "@/presentation/flight/StarRenderer";
 import type { Renderer } from "@/presentation/Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
+import { StarType } from "@/types";
 import {
   SUN_CONTACT_HULL_DAMAGE,
   SUN_CONTACT_DAMAGE_INTERVAL_MS,
@@ -198,6 +199,29 @@ describe("StarRenderer (extracted FlightModule)", () => {
     expect(tiling!.children).not.toContain(mask);
 
     star.destroy();
+  });
+
+  it("varies the sun tint per systemId even within one StarType (Task 2)", () => {
+    // Two RED_DWARF systems used to render the identical tint. The per-system
+    // jitter (starAppearanceJitter) must disambiguate them while keeping the
+    // tint a believable variant of the type base.
+    const engineFor = (id: string): GameEngine =>
+      ({
+        player: { currentSystemId: id },
+        galaxy: { systems: [{ id, starType: StarType.RED_DWARF }] },
+      }) as unknown as GameEngine;
+
+    const tintOf = (id: string): number =>
+      (
+        makeHarness(engineFor(id)).star as unknown as {
+          starTint: () => number;
+        }
+      ).starTint();
+
+    const a = tintOf("sys-A");
+    const b = tintOf("sys-B");
+    expect(a).not.toBe(b); // distinct systems → distinct suns
+    expect(tintOf("sys-A")).toBe(a); // stable per system
   });
 
   it("does not burn the hull while outside the star radius", () => {

@@ -425,6 +425,45 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
       await shot(page, 'lp-18-npc-panel');
     });
 
+    // ── 18b Second system's sun (per-system variety — compare with lp-05-sun) ──
+    // Warp to another system (preferring the SAME StarType) and shoot its sun so
+    // the per-systemId jitter (Task 2) is visually inspectable against lp-05-sun.
+    await step('18b-sun-other-system', async () => {
+      const info = await page.evaluate(async () => {
+        const engine = getEngine();
+        const curId = engine.player?.currentSystemId;
+        const systems = (engine.galaxy?.systems ?? []) as {
+          id?: string;
+          starType?: string;
+        }[];
+        const cur = systems.find((s) => s.id === curId);
+        const sameType = systems.find(
+          (s) => s.id !== curId && s.starType === cur?.starType,
+        );
+        const other = sameType ?? systems.find((s) => s.id !== curId);
+        if (!other?.id || !engine.player) return null;
+        engine.player.currentSystemId = other.id;
+        await engine.transitionTo('SPACE_FLIGHT', { gameEngine: engine });
+        return {
+          otherId: other.id,
+          sameType: !!sameType,
+          curType: cur?.starType ?? null,
+          otherType: other.starType ?? null,
+        };
+      });
+      if (!info) return 'no second system — skipped';
+      await waitForScene(page, 'SpaceFlightScene', 20_000);
+      await settle(page, 30); // let the lazy star map upgrade
+      const star = await page.evaluate(() => {
+        const scene = getEngine().currentScene as Record<string, unknown>;
+        const sr = scene['starRenderer'] as { centerX: number; centerY: number };
+        return { x: sr.centerX, y: sr.centerY };
+      });
+      await focus(star.x, star.y, 1.6);
+      await shot(page, 'lp-05b-sun-other');
+      return `${info.curType}→${info.otherType} (sameType=${info.sameType})`;
+    });
+
     // ── 19 Inventory ──
     await step('19-inventory', async () => {
       await page.evaluate(async () => {
