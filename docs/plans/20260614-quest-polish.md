@@ -174,10 +174,10 @@ DELIVERY/DIPLOMACY/TEXT_ADVENTURE получают награду на целе�
 
 **Files:** все изменённые
 
-- [ ] Запустить полный `npm test -- --run`
-- [ ] Запустить `npm run lint`
-- [ ] Проверить что `npm run build` проходит без ошибок TS
-- [ ] Запустить `npm run test:e2e:regression`
+- [x] Запустить полный `npm test -- --run` (1303 tests pass, 145 files)
+- [x] Запустить `npm run lint` (0 errors; only pre-existing `any` warnings in test files)
+- [x] Проверить что `npm run build` проходит без ошибок TS (TS compile + Vite build OK)
+- [x] Запустить `npm run test:e2e:regression` (16/16 pass; needs `NO_PROXY=localhost,127.0.0.1` due to local Privoxy on http_proxy)
 
 ## Technical Details
 
