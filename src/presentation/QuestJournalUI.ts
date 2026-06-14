@@ -15,6 +15,7 @@ export class QuestJournalUI {
   private readonly panelHeight: number = 500;
   private readonly onClose: () => void;
   private readonly onNavigateToObjective?: (locationId: string) => void;
+  private readonly currentDay: number;
 
   constructor(
     questManager: IQuestService,
@@ -22,10 +23,12 @@ export class QuestJournalUI {
     screenHeight: number,
     onClose: () => void,
     onNavigateToObjective?: (locationId: string) => void,
+    currentDay = 0,
   ) {
     this.questManager = questManager;
     this.onClose = onClose;
     this.onNavigateToObjective = onNavigateToObjective;
+    this.currentDay = currentDay;
     this.container = new Container();
 
     // Center panel on screen
@@ -100,8 +103,19 @@ export class QuestJournalUI {
       this.renderCompletedQuestsSection(completedQuestIds, 300);
     }
 
-    // Empty state if no quests
-    if (activeQuests.length === 0 && completedQuestIds.length === 0) {
+    // Expired/failed quests section (if any)
+    const expiredQuests = this.questManager.getExpiredQuests?.() ?? [];
+    if (expiredQuests.length > 0) {
+      const expiredY = completedQuestIds.length > 0 ? 380 : 300;
+      this.renderExpiredQuestsSection(expiredQuests, expiredY);
+    }
+
+    // Empty state if no quests at all
+    if (
+      activeQuests.length === 0 &&
+      completedQuestIds.length === 0 &&
+      expiredQuests.length === 0
+    ) {
       const emptyText = new Text({
         text: "У вас пока нет квестов.\nПосетите планету и поговорите с губернатором!",
         style: {
@@ -240,6 +254,26 @@ export class QuestJournalUI {
     rewardText.eventMode = "none";
     card.addChild(rewardText);
 
+    // Remaining days warning for quests with an approaching deadline.
+    if (quest.deadline > 0 && this.currentDay > 0) {
+      const remaining = quest.getRemainingDays(this.currentDay);
+      if (remaining < 5) {
+        const daysLabel = new Text({
+          text: `⚠ осталось ${remaining} дн.`,
+          style: {
+            fontFamily: "Courier New",
+            fontSize: 11,
+            fill: 0xffaa00,
+            fontWeight: "bold",
+          },
+        });
+        daysLabel.x = this.panelWidth - 180;
+        daysLabel.y = objY + 2;
+        daysLabel.eventMode = "none";
+        card.addChild(daysLabel);
+      }
+    }
+
     return card;
   }
 
@@ -293,6 +327,38 @@ export class QuestJournalUI {
     });
 
     return btn;
+  }
+
+  /**
+   * Render expired/failed quests section
+   */
+  private renderExpiredQuestsSection(quests: Quest[], startY: number): void {
+    const sectionTitle = new Text({
+      text: `ПРОВАЛЕНО / ПРОСРОЧЕНО (${quests.length})`,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 13,
+        fill: 0xff4444,
+        fontWeight: "bold",
+      },
+    });
+    sectionTitle.x = 20;
+    sectionTitle.y = startY;
+    sectionTitle.eventMode = "none";
+    this.container.addChild(sectionTitle);
+
+    let yOffset = startY + 22;
+    for (const quest of quests) {
+      const row = new Text({
+        text: `✗ ${quest.title} — просрочено`,
+        style: { fontFamily: "Courier New", fontSize: 11, fill: 0x888888 },
+      });
+      row.x = 30;
+      row.y = yOffset;
+      row.eventMode = "none";
+      this.container.addChild(row);
+      yOffset += 16;
+    }
   }
 
   /**

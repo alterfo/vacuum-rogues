@@ -89,6 +89,8 @@ export class GameEngine {
   // FlightHud.restoreGameSpeed() on every HUD (re)build. Deliberately NOT in
   // SaveState/schemas.ts (transient cross-scene state, like lastFlightShipPos).
   public gameSpeedMultiplier = 1;
+  /** Called when a quest expires mid-session so the HUD can show a toast. */
+  public questExpiryCallback?: (message: string) => void;
   public readonly saveManager: SaveManager;
   public readonly qualityProfile: AdaptiveQualityProfile;
   public readonly onnxRegistry: ONNXModelRegistry;
@@ -576,7 +578,13 @@ export class GameEngine {
    */
   checkExpiredQuests(): void {
     if (!this.player || !this.galaxy) return;
-    this.questManager.checkExpiredQuests(this.galaxy.gameDays, this.player);
+    const expired = this.questManager.checkExpiredQuests(
+      this.galaxy.gameDays,
+      this.player,
+    );
+    for (const quest of expired) {
+      this.questExpiryCallback?.(`Квест просрочен: «${quest.title}»`);
+    }
   }
 
   /**

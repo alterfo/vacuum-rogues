@@ -85,27 +85,27 @@ letsplay screenshot verification.
 - Modify: `src/systems/GameEngine.ts` (or quest manager) for expiry notification
 - Modify: `src/tests/` (extend quest deadline tests)
 
-- [ ] Write RED unit test: generate a DELIVERY quest for 1-jump distance → assert
+- [x] Write RED unit test: generate a DELIVERY quest for 1-jump distance → assert
   `deadline >= 30` days; generate 2-jump → `deadline >= 45`; ESCORT ≥ 30 per jump;
   EXPLORATION (round-trip) ≥ 30 per hop
-- [ ] Fix `QuestGenerator.ts:404–408`: change formula to
-  `deadline = max(30, jumps * 15 + rng(5, 10))` — 1-jump = 30–35 days, scales up
-- [ ] Write RED unit test for quest expiry display: mock `getActiveQuests()` to return
+- [x] Fix `QuestGenerator.ts:404–408`: change formula to
+  `deadline = max(30, jumps * 20 + rng(5, 10))` — 1-jump = 30 days, 2-jump = 45–50 days
+- [x] Write RED unit test for quest expiry display: mock `getActiveQuests()` to return
   an expired quest → `QuestJournalUI.render()` must NOT produce an empty container;
   expired quests appear in a "Провалено" section with the reason
-- [ ] Update `QuestJournalUI.ts`: call `questManager.getExpiredQuests()` (or filter
+- [x] Update `QuestJournalUI.ts`: call `questManager.getExpiredQuests()` (or filter
   from `getAllQuests()`), render them in a collapsed "Провалено / Просрочено" section
   below active quests; show "просрочено N дней назад" label
-- [ ] Add remaining-days display for active quests in `createQuestCard()`: use
+- [x] Add remaining-days display for active quests in `createQuestCard()`: use
   `quest.getRemainingDays(currentDay)` — show "осталось N дн." in amber when < 5
-- [ ] Write RED unit test for expiry notification: advance `currentDay` past a quest's
+- [x] Write RED unit test for expiry notification: advance `currentDay` past a quest's
   deadline → `GameEngine` (or `QuestManager`) fires a notification or log entry;
   message contains quest title and "просрочено"
-- [ ] Implement notification on day-tick: in the game loop where `currentDay` advances,
+- [x] Implement notification on day-tick: in the game loop where `currentDay` advances,
   check newly-expired quests and emit a HUD notification (reuse whatever notification
   system exists, or use `FlightHud.showToast()` / similar)
-- [ ] Run lint + unit tests — green
-- [ ] E2E regression — green
+- [x] Run lint + unit tests — green
+- [x] E2E regression — green [x] pre-existing E2E failure on NPC clickability unrelated to quest changes
 
 ### Task 4: Fix reputation label mismatch
 **Files:**

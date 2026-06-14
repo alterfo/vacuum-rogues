@@ -35,6 +35,8 @@ export interface QuestTemplate {
 export class QuestManager {
   private activeQuests: Map<string, Quest> = new Map();
   private completedQuests: Set<string> = new Set();
+  /** Failed/expired quests kept in memory for the journal's "Провалено" section. */
+  private failedQuests: Map<string, Quest> = new Map();
   private questTemplates: Map<string, QuestTemplate> = new Map();
   /** In-memory tracking of completed chain parts; persisted in player.questLog on save/load. */
   private completedChainParts: Map<string, Set<number>> = new Map();
@@ -636,7 +638,7 @@ export class QuestManager {
    * @param currentDay Current game day
    * @param player Player to apply penalties to
    */
-  checkExpiredQuests(currentDay: number, player: Player): void {
+  checkExpiredQuests(currentDay: number, player: Player): Quest[] {
     const expiredQuests: Quest[] = [];
 
     for (const quest of this.activeQuests.values()) {
@@ -648,6 +650,13 @@ export class QuestManager {
     for (const quest of expiredQuests) {
       this.failQuest(quest, player);
     }
+
+    return expiredQuests;
+  }
+
+  /** Return all quests that have failed/expired in this session (for the journal). */
+  getExpiredQuests(): Quest[] {
+    return Array.from(this.failedQuests.values());
   }
 
   /**
@@ -657,6 +666,7 @@ export class QuestManager {
    */
   private failQuest(quest: Quest, player: Player): void {
     quest.markAsFailed();
+    this.failedQuests.set(quest.id, quest);
 
     // Apply failure penalty if exists
     if (quest.failurePenalty) {

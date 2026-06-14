@@ -60,8 +60,10 @@ export interface IQuestService {
   getQuestTemplate(templateId: string): QuestTemplate | undefined;
   canCompleteQuest(questId: string): boolean;
   getActiveQuestLocations(): string[];
-  checkExpiredQuests(currentDay: number, player: Player): void;
+  checkExpiredQuests(currentDay: number, player: Player): Quest[];
   getUrgentQuests(currentDay: number): Quest[];
+  /** Failed/expired quests kept in memory for the journal's "Провалено" section. */
+  getExpiredQuests?(): Quest[];
   /** Restore quest state from a loaded save (active quests + completed ids + chain parts). */
   restoreState(
     activeQuests: Quest[],

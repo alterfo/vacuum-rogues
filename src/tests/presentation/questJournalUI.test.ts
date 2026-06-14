@@ -180,3 +180,220 @@ describe("QuestJournalUI backdrop (playtest3 F6)", () => {
     expect(collectLeakyLeaves(root)).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Reward detail: quest cards must show a "Награда:" summary line that lists
+// credits, experience, items, and reputation delta.
+// ---------------------------------------------------------------------------
+type TextNode = { text: string; children: TextNode[] };
+
+function collectTexts(node: TextNode): string[] {
+  const out: string[] = [];
+  if (typeof node.text === "string" && node.text) out.push(node.text);
+  for (const child of node.children ?? []) out.push(...collectTexts(child));
+  return out;
+}
+
+describe("QuestJournalUI reward detail", () => {
+  it("renders 'Награда:' line with credits, xp, and reputation", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    const questWithReward = {
+      id: "q-r1",
+      title: "Доставка с наградой",
+      type: "DELIVERY",
+      isCompleted: false,
+      objectives: [
+        {
+          type: "VISIT_LOCATION",
+          description: "Прилететь",
+          completed: false,
+          currentAmount: 0,
+          targetAmount: 1,
+          locationId: "planet-x",
+        },
+      ],
+      reward: { credits: 750, experience: 200, items: [], reputationDelta: 3 },
+    };
+
+    const qs = {
+      getActiveQuests: vi.fn().mockReturnValue([questWithReward]),
+      getCompletedQuestIds: vi.fn().mockReturnValue([]),
+    } as unknown as import("@/core/ports/IQuestService").IQuestService;
+
+    const ui = new QuestJournalUI(qs, 1280, 720, vi.fn());
+    const root = ui.container as unknown as TextNode;
+    const texts = collectTexts(root);
+
+    const rewardLine = texts.find((t) => t.startsWith("Награда:"));
+    expect(rewardLine).toBeDefined();
+    expect(rewardLine).toContain("750 кр");
+    expect(rewardLine).toContain("200 опыт");
+    expect(rewardLine).toContain("+3 реп");
+  });
+
+  it("shows '—' when quest has no reward", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    const questNoReward = {
+      id: "q-nr1",
+      title: "Квест без награды",
+      type: "COMBAT",
+      isCompleted: false,
+      objectives: [
+        {
+          type: "KILL_ENEMIES",
+          description: "Уничтожить",
+          completed: false,
+          currentAmount: 0,
+          targetAmount: 3,
+        },
+      ],
+    };
+
+    const qs = {
+      getActiveQuests: vi.fn().mockReturnValue([questNoReward]),
+      getCompletedQuestIds: vi.fn().mockReturnValue([]),
+    } as unknown as import("@/core/ports/IQuestService").IQuestService;
+
+    const ui = new QuestJournalUI(qs, 1280, 720, vi.fn());
+    const texts = collectTexts(ui.container as unknown as TextNode);
+
+    const rewardLine = texts.find((t) => t.startsWith("Награда:"));
+    expect(rewardLine).toBe("Награда: —");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 3: expired quests section and remaining-days display
+// ---------------------------------------------------------------------------
+
+describe("QuestJournalUI expired quests section", () => {
+  it("shows 'ПРОВАЛЕНО' section when getExpiredQuests returns failed quests", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    const expiredQuest = {
+      id: "q-expired-1",
+      title: "Доставка медикаментов",
+      type: "DELIVERY",
+      isCompleted: false,
+      isFailed: true,
+      deadline: 5,
+      issuedDay: 0,
+      objectives: [],
+      getRemainingDays: () => 0,
+    };
+
+    const qs = {
+      getActiveQuests: vi.fn().mockReturnValue([]),
+      getCompletedQuestIds: vi.fn().mockReturnValue([]),
+      getExpiredQuests: vi.fn().mockReturnValue([expiredQuest]),
+    } as unknown as import("@/core/ports/IQuestService").IQuestService;
+
+    const ui = new QuestJournalUI(qs, 1280, 720, vi.fn());
+    const texts = collectTexts(ui.container as unknown as TextNode);
+
+    const failedHeader = texts.find((t) => t.includes("ПРОВАЛЕНО"));
+    expect(failedHeader).toBeDefined();
+
+    const expiredRow = texts.find(
+      (t) => t.includes("Доставка медикаментов") && t.includes("просрочено"),
+    );
+    expect(expiredRow).toBeDefined();
+  });
+
+  it("does not render empty state when only expired quests exist", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    const expiredQuest = {
+      id: "q-exp-2",
+      title: "Разведка",
+      type: "EXPLORATION",
+      isCompleted: false,
+      isFailed: true,
+      deadline: 3,
+      issuedDay: 0,
+      objectives: [],
+      getRemainingDays: () => 0,
+    };
+
+    const qs = {
+      getActiveQuests: vi.fn().mockReturnValue([]),
+      getCompletedQuestIds: vi.fn().mockReturnValue([]),
+      getExpiredQuests: vi.fn().mockReturnValue([expiredQuest]),
+    } as unknown as import("@/core/ports/IQuestService").IQuestService;
+
+    const ui = new QuestJournalUI(qs, 1280, 720, vi.fn());
+    const texts = collectTexts(ui.container as unknown as TextNode);
+
+    const emptyMsg = texts.find((t) => t.includes("пока нет квестов"));
+    expect(emptyMsg).toBeUndefined();
+  });
+});
+
+describe("QuestJournalUI remaining days display", () => {
+  it("shows 'осталось N дн.' warning when remaining days < 5 and currentDay > 0", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    // issuedDay=0, deadline=3, currentDay=1 → remaining = 3-1 = 2 < 5 → show warning
+    const urgentQuest = {
+      id: "q-urgent",
+      title: "Срочный эскорт",
+      type: "ESCORT",
+      isCompleted: false,
+      isFailed: false,
+      deadline: 3,
+      issuedDay: 0,
+      objectives: [],
+      reward: { credits: 500, experience: 100, items: [] },
+      getRemainingDays: vi.fn().mockReturnValue(2),
+    };
+
+    const qs = {
+      getActiveQuests: vi.fn().mockReturnValue([urgentQuest]),
+      getCompletedQuestIds: vi.fn().mockReturnValue([]),
+      getExpiredQuests: vi.fn().mockReturnValue([]),
+    } as unknown as import("@/core/ports/IQuestService").IQuestService;
+
+    const ui = new QuestJournalUI(qs, 1280, 720, vi.fn(), undefined, 1);
+    const texts = collectTexts(ui.container as unknown as TextNode);
+
+    const daysWarning = texts.find(
+      (t) => t.includes("осталось") && t.includes("дн."),
+    );
+    expect(daysWarning).toBeDefined();
+    expect(daysWarning).toContain("2");
+  });
+
+  it("does not show remaining days when currentDay is 0 (default)", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    const questWithDeadline = {
+      id: "q-deadline",
+      title: "Квест с дедлайном",
+      type: "DELIVERY",
+      isCompleted: false,
+      isFailed: false,
+      deadline: 2,
+      issuedDay: 0,
+      objectives: [],
+      reward: { credits: 200, experience: 50, items: [] },
+      getRemainingDays: vi.fn().mockReturnValue(2),
+    };
+
+    const qs = {
+      getActiveQuests: vi.fn().mockReturnValue([questWithDeadline]),
+      getCompletedQuestIds: vi.fn().mockReturnValue([]),
+      getExpiredQuests: vi.fn().mockReturnValue([]),
+    } as unknown as import("@/core/ports/IQuestService").IQuestService;
+
+    // No currentDay passed — defaults to 0 → no remaining-days label
+    const ui = new QuestJournalUI(qs, 1280, 720, vi.fn());
+    const texts = collectTexts(ui.container as unknown as TextNode);
+
+    const daysWarning = texts.find(
+      (t) => t.includes("осталось") && t.includes("дн."),
+    );
+    expect(daysWarning).toBeUndefined();
+  });
+});

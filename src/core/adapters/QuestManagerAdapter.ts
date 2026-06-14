@@ -69,8 +69,8 @@ export class QuestManagerAdapter implements IQuestService {
     return this.delegate.getActiveQuestLocations();
   }
 
-  checkExpiredQuests(currentDay: number, player: Player): void {
-    this.delegate.checkExpiredQuests(currentDay, player);
+  checkExpiredQuests(currentDay: number, player: Player): Quest[] {
+    return this.delegate.checkExpiredQuests(currentDay, player);
   }
 
   getUrgentQuests(currentDay: number): Quest[] {

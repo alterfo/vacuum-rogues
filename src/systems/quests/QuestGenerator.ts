@@ -401,10 +401,9 @@ function economics(
     (base + jumps * perJump) * m * rng.nextFloat(0.9, 1.2),
   );
   const experience = Math.round(credits * 0.4);
-  // A generous travel budget: ~2 days per jump + a buffer, longer for relaxed types.
-  const daysPerJump = 2;
-  const buffer = rng.nextInt(2, 4);
-  const deadline = jumps > 0 ? jumps * daysPerJump + buffer : 0;
+  // Minimum 30 days for any jump quest; scales at 20 days/jump (≥45 for 2-hop).
+  const buffer = rng.nextInt(5, 10);
+  const deadline = jumps > 0 ? Math.max(30, jumps * 20 + buffer) : 0;
   return { credits, experience, deadline };
 }
 

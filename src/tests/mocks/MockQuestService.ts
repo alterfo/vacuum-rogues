@@ -56,8 +56,8 @@ export class MockQuestService implements IQuestService {
     return [];
   }
 
-  checkExpiredQuests(_currentDay: number, _player: Player): void {
-    // No-op in mock
+  checkExpiredQuests(_currentDay: number, _player: Player): Quest[] {
+    return [];
   }
 
   getUrgentQuests(_currentDay: number): Quest[] {

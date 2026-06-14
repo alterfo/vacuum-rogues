@@ -127,6 +127,10 @@ export class FlightHud implements FlightModule {
   /** Build the whole HUD. Call after the UI layer has been cleared. */
   initialize(): void {
     this.createUI();
+    if (this.gameEngine) {
+      this.gameEngine.questExpiryCallback = (msg) =>
+        this.showMessage(msg, 0xff4444);
+    }
   }
 
   /** Refresh the per-frame HUD read-outs (button label, date, mini-log fade). */
@@ -656,6 +660,7 @@ export class FlightHud implements FlightModule {
             this.questJournalUI = null;
           },
           (locationId: string) => this.onQuestNavigate?.(locationId),
+          this.gameEngine.galaxy?.gameDays ?? 0,
         );
         this.uiLayer.addChild(this.questJournalUI.container);
         logger.info("Quest journal opened");
