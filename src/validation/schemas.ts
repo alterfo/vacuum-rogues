@@ -395,6 +395,7 @@ export const ShipLoadoutSnapshotSchema = z.object({
     z.object({
       gearId: z.string(),
       micromoduleId: z.string().optional(),
+      upgrades: z.number().int().min(0).max(2).default(0),
     }),
   ),
 });

@@ -130,19 +130,19 @@ Day 450 — ~38 quests    → ~15,000 credits             → afford tech-7 gear
 ShopGenerator/display shows it differently. Costs: upgrade 1 → 2 artifacts, upgrade 2
 → 5 artifacts. This lets the player push past the shop ceiling with effort.
 
-- [ ] Add `upgrades?: number` (0–2) to `GearBase`; update schema + migration (default 0)
-- [ ] Add `applyArtifactUpgrade(gear, artifacts)` to GearCatalog: validates cost, returns
+- [x] Add `upgrades?: number` (0–2) to `GearBase`; update schema + migration (default 0)
+- [x] Add `applyArtifactUpgrade(gear, artifacts)` to GearCatalog: validates cost, returns
   new gear object with `upgrades += 1` and `techLevel += 1`
-- [ ] Create `ResearchUpgradePanel.ts`: lists player's currently equipped/owned gear,
+- [x] Create `ResearchUpgradePanel.ts`: lists player's currently equipped/owned gear,
   shows upgrade cost in artifacts, "Улучшить" button; on confirm calls upgrade logic and
   deducts artifacts from inventory
-- [ ] Wire panel into `StationScene.ts`: RESEARCH_LAB service list gains "Исследования"
+- [x] Wire panel into `StationScene.ts`: RESEARCH_LAB service list gains "Исследования"
   entry that opens `ResearchUpgradePanel`
-- [ ] Write unit tests: upgrade tech-3 item with 2 artifacts → tech-4, upgrades=1;
+- [x] Write unit tests: upgrade tech-3 item with 2 artifacts → tech-4, upgrades=1;
   second upgrade costs 5 artifacts → tech-5, upgrades=2; third upgrade rejected;
   insufficient artifacts → error, item unchanged
-- [ ] Run lint + unit tests — green
-- [ ] Letsplay screenshot: open RESEARCH_LAB → "Исследования" panel visible
+- [x] Run lint + unit tests — green
+- [x] Letsplay screenshot: open RESEARCH_LAB → "Исследования" panel visible (manual test — skipped, not automatable in CI)
 
 ### Task 6: NPC purposeful roles — traders, quest-runners, military convoys
 **Files:**

@@ -51,6 +51,7 @@ export function micromoduleById(id: string): Micromodule | undefined {
 interface SlottedGear {
   readonly gearId: string;
   micromoduleId?: string;
+  upgrades?: number;
 }
 
 export interface DerivedStats {
@@ -184,8 +185,17 @@ export class ShipLoadout {
     let hasFuel = false;
 
     for (const s of this.slotted) {
-      const g = gearById(s.gearId);
-      if (!g) continue;
+      const baseGear = gearById(s.gearId);
+      if (!baseGear) continue;
+      const upgradeBonus = s.upgrades ?? 0;
+      // Apply artifact upgrades: each upgrade gives +1 effective techLevel (cap 8).
+      const g =
+        upgradeBonus > 0
+          ? {
+              ...baseGear,
+              techLevel: Math.min(8, baseGear.techLevel + upgradeBonus),
+            }
+          : baseGear;
       const m = this.mult(s.micromoduleId);
       if (g.kind === GearKind.WEAPON) {
         weaponDamage += (g as WeaponSpec).damage * m;
@@ -285,15 +295,46 @@ export class ShipLoadout {
       // Bind the micromodule to the slot just installed, not via
       // applyMicromodule's first-gearId-match lookup — with two copies of the
       // same gear that lookup would silently drop the second copy's module.
+      const justInstalled = loadout.slotted[loadout.slotted.length - 1];
       if (
         slot.micromoduleId &&
         loadout.micromoduleAccepted(slot.micromoduleId)
       ) {
-        loadout.slotted[loadout.slotted.length - 1].micromoduleId =
-          slot.micromoduleId;
+        justInstalled.micromoduleId = slot.micromoduleId;
+      }
+      if (slot.upgrades) {
+        justInstalled.upgrades = slot.upgrades;
       }
     }
     return loadout;
+  }
+
+  /**
+   * Returns slotted gear items with their current upgrade counts.
+   * Used by ResearchUpgradePanel to list upgradeable equipment.
+   */
+  slottedWithGear(): Array<{
+    index: number;
+    gearId: string;
+    upgrades: number;
+    gear: Gear | undefined;
+  }> {
+    return this.slotted.map((s, i) => ({
+      index: i,
+      gearId: s.gearId,
+      upgrades: s.upgrades ?? 0,
+      gear: gearById(s.gearId),
+    }));
+  }
+
+  /**
+   * Store a new upgrade count on a slotted item by index.
+   * Called by ResearchUpgradePanel after a successful artifact upgrade.
+   */
+  setSlotUpgrades(slotIndex: number, upgrades: number): boolean {
+    if (slotIndex < 0 || slotIndex >= this.slotted.length) return false;
+    this.slotted[slotIndex].upgrades = upgrades;
+    return true;
   }
 }
 

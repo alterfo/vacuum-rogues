@@ -527,7 +527,11 @@ export interface SerializedSave {
 export interface ShipLoadoutSnapshot {
   readonly hullId: string;
   readonly hullMicromoduleId?: string;
-  readonly slotted: { readonly gearId: string; micromoduleId?: string }[];
+  readonly slotted: {
+    readonly gearId: string;
+    micromoduleId?: string;
+    upgrades?: number;
+  }[];
 }
 
 export interface ResourceCost {

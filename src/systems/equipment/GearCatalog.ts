@@ -14,6 +14,7 @@ import {
   WeaponAbility,
   type MicroModule,
 } from "@/types";
+import { GameBusinessException } from "@/exceptions/GameBusinessException";
 
 export enum GearKind {
   HULL = "HULL",
@@ -45,6 +46,7 @@ interface GearBase {
   readonly techLevel: number; // 1..8
   readonly size: number; // capacity units the item occupies
   readonly basePrice: number; // baseline credits before market modifiers
+  readonly upgrades?: number; // 0-2, present only on upgraded copies
 }
 
 export interface HullSpec extends GearBase {
@@ -421,6 +423,46 @@ export function microModuleById(id: string): MicroModule | undefined {
 /** Lookup by id. */
 export function gearById(id: string): Gear | undefined {
   return GEAR_CATALOG.find((g) => g.id === id);
+}
+
+/**
+ * Artifact cost per upgrade tier: first upgrade costs 2, second costs 3 more (5 total).
+ * Max upgrades per item: 2. Values indexed by currentUpgrades (0 or 1).
+ */
+export const ARTIFACT_UPGRADE_COSTS = [2, 3] as const;
+
+/** Returns the artifact cost for the next upgrade, or Infinity if already maxed. */
+export function artifactUpgradeCost(currentUpgrades: number): number {
+  if (currentUpgrades >= 2) return Infinity;
+  return ARTIFACT_UPGRADE_COSTS[currentUpgrades];
+}
+
+/**
+ * Apply one artifact upgrade to a gear piece.
+ * Validates cost and upgrade cap; throws GameBusinessException on failure.
+ * Returns a new gear object (does NOT mutate the catalog).
+ */
+export function applyArtifactUpgrade(
+  gear: Gear,
+  availableArtifacts: number,
+): Gear {
+  const current = gear.upgrades ?? 0;
+  if (current >= 2) {
+    throw new GameBusinessException(
+      "UPGRADE_MAX_REACHED",
+      `${gear.name} is already at maximum upgrade level (+2).`,
+      { gearId: gear.id },
+    );
+  }
+  const cost = ARTIFACT_UPGRADE_COSTS[current];
+  if (availableArtifacts < cost) {
+    throw new GameBusinessException(
+      "INSUFFICIENT_RESOURCES",
+      `Need ${cost} artifacts to upgrade ${gear.name}; only ${availableArtifacts} available.`,
+      { gearId: gear.id, cost, available: availableArtifacts },
+    );
+  }
+  return { ...gear, upgrades: current + 1, techLevel: gear.techLevel + 1 };
 }
 
 /**

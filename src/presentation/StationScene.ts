@@ -15,6 +15,7 @@ import {
 import { ShipModule } from "@/domain/ShipModule";
 import { logger } from "@/utils/logger";
 import { RANK_THRESHOLDS, RANK_LABELS } from "@/config/balance";
+import { ResearchUpgradePanel } from "./ResearchUpgradePanel";
 
 interface StationContext {
   gameEngine?: GameEngine;
@@ -58,7 +59,13 @@ const TYPE_SERVICES: Record<StationType, string[]> = {
     "refuel",
     "leave",
   ],
-  [StationType.RESEARCH_LAB]: ["shop", "infoCenter", "refuel", "leave"],
+  [StationType.RESEARCH_LAB]: [
+    "shop",
+    "research",
+    "infoCenter",
+    "refuel",
+    "leave",
+  ],
   [StationType.CRAFT_CENTER]: [
     "micromodules",
     "hangar",
@@ -78,7 +85,13 @@ const REPAIR_DISCOUNT: Record<StationType, number> = {
 
 // ── Scene ────────────────────────────────────────────────────────────────────
 
-type View = "main" | "shop" | "hangar" | "micromodules" | "micromodule_apply";
+type View =
+  | "main"
+  | "shop"
+  | "hangar"
+  | "micromodules"
+  | "micromodule_apply"
+  | "research";
 
 /** Index of the hangar slot being micro-modded (for sub-panel). */
 interface MicromoduleApplyTarget {
@@ -96,6 +109,7 @@ export class StationScene extends GameScene {
   private shopListings: GearListing[] = [];
   private micromoduleListings: MicroModule[] = [];
   private micromoduleApplyTarget: MicromoduleApplyTarget | null = null;
+  private researchPanel: ResearchUpgradePanel | null = null;
   private shopScroll = 0;
   private readonly ROW_H = 50;
   private readonly VISIBLE_ROWS = 9;
@@ -152,6 +166,7 @@ export class StationScene extends GameScene {
     this.gameEngine = null;
     this.station = null;
     this.micromoduleApplyTarget = null;
+    this.researchPanel = null;
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────
@@ -218,6 +233,8 @@ export class StationScene extends GameScene {
       this.renderMicromoduleShop();
     } else if (this.view === "micromodule_apply") {
       this.renderMicromoduleApplyPanel();
+    } else if (this.view === "research") {
+      this.renderResearch();
     } else {
       this.renderMain();
     }
@@ -465,6 +482,8 @@ export class StationScene extends GameScene {
       }
       case "micromodules":
         return { label: "Микромодули", color: 0xffaa22 };
+      case "research":
+        return { label: "Исследования", color: 0xcc88ff };
       case "leave":
         return { label: "Отстыковаться  Esc", color: 0xff6655 };
       default:
@@ -504,6 +523,10 @@ export class StationScene extends GameScene {
         break;
       case "micromodules":
         this.view = "micromodules";
+        this.render();
+        break;
+      case "research":
+        this.view = "research";
         this.render();
         break;
       case "leave":
@@ -1121,6 +1144,26 @@ export class StationScene extends GameScene {
     this.mainContainer!.addChild(back);
   }
 
+  // ── research upgrade sub-view ─────────────────────────────────────────────
+
+  private renderResearch(): void {
+    const sw = this.renderer.app.screen.width;
+    const sh = this.renderer.app.screen.height;
+    if (!this.gameEngine) return;
+
+    if (!this.researchPanel) {
+      this.researchPanel = new ResearchUpgradePanel(
+        this.gameEngine,
+        () => {
+          this.view = "main";
+          this.render();
+        },
+        (msg, color) => this.showToast(msg, color),
+      );
+    }
+    this.researchPanel.render(this.mainContainer!, sw, sh);
+  }
+
   // ── toast ─────────────────────────────────────────────────────────────────
 
   private addToastSlot(px: number, py: number, pw: number, ph: number): void {
@@ -1385,7 +1428,8 @@ export class StationScene extends GameScene {
       } else if (
         this.view === "shop" ||
         this.view === "hangar" ||
-        this.view === "micromodules"
+        this.view === "micromodules" ||
+        this.view === "research"
       ) {
         this.view = "main";
         this.render();

@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 19;
+  static readonly CURRENT_VERSION = 20;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -254,6 +254,20 @@ export class MigrationPipeline {
       if (galaxy && Array.isArray(galaxy.systems)) {
         for (const sys of galaxy.systems) {
           if (sys.techLevel === undefined) sys.techLevel = 1;
+        }
+      }
+    },
+    // 19 -> 20: Artifact upgrade counts per loadout slot (Task 5). Old saves
+    // lack upgrades on each slotted item; default to 0 (no upgrades applied).
+    19: (state: SaveState) => {
+      const loadout = (
+        state as unknown as {
+          loadout?: { slotted?: Array<{ upgrades?: number }> };
+        }
+      ).loadout;
+      if (loadout && Array.isArray(loadout.slotted)) {
+        for (const slot of loadout.slotted) {
+          if (slot.upgrades === undefined) slot.upgrades = 0;
         }
       }
     },
