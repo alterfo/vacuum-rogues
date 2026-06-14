@@ -695,11 +695,22 @@ export class GameEngine {
       quest.targetNpcName &&
       targetSystemId
     ) {
+      // Pirates already bound to another active or pending bounty are off-limits:
+      // reusing one would let a single kill complete both quests, and the second
+      // rename would clobber the first quest's named target.
+      const boundIds = new Set<string>();
+      for (const q of [
+        ...this.questManager.getActiveQuests(),
+        ...this.questManager.getPendingReturnQuests(),
+      ]) {
+        if (q.targetObjectId) boundIds.add(q.targetObjectId);
+      }
       const pirate = this.galaxy?.npcShips.find(
         (n) =>
           n.currentSystemId === targetSystemId &&
           n.role === NpcRole.PIRATE &&
-          n.state !== NpcState.DEAD,
+          n.state !== NpcState.DEAD &&
+          !boundIds.has(n.id),
       );
       if (pirate) {
         pirate.name = quest.targetNpcName;

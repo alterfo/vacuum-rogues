@@ -16,6 +16,7 @@ import { Overmind } from "@/domain/Overmind";
 import { WarpPath } from "@/domain/WarpPath";
 import type { QuestTemplate } from "@/systems/QuestManager";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
+import type { Quest } from "@/domain/Quest";
 import {
   MockSaveService,
   MockGalaxyService,
@@ -190,6 +191,65 @@ describe("acceptBoardQuest — BOUNTY real NPC assignment", () => {
 
     expect(wrongSystem.name).toBe("pirate_npc_pirate_elsewhere");
     expect(deadInTarget.name).toBe("pirate_npc_pirate_dead");
+    const passedTemplate = spy.mock.calls[0][0];
+    expect(passedTemplate.targetObjectId).toBeNull();
+  });
+
+  it("skips a pirate already bound to another active bounty and binds a free one", () => {
+    const { engine, questService } = makeEngine();
+    const alreadyBound = makePirate(
+      "npc_bound",
+      TARGET_SYSTEM_ID,
+      NpcState.IDLE,
+    );
+    const free = makePirate("npc_free", TARGET_SYSTEM_ID, NpcState.IDLE);
+    engine.galaxy = makeGalaxy([alreadyBound, free]);
+    // An existing active bounty already targets npc_bound.
+    questService.activeQuests = [
+      { targetObjectId: "npc_bound" } as unknown as Quest,
+    ];
+
+    const spy = vi.spyOn(questService, "acceptQuestFromTemplate");
+    engine.acceptBoardQuest(makeBountyQuest(), "planet_issuer");
+
+    // The free pirate is renamed; the already-bound one keeps its name so the
+    // first quest's named target is not clobbered and one kill can't satisfy both.
+    expect(free.name).toBe(TARGET_SHIP_NAME);
+    expect(alreadyBound.name).toBe("pirate_npc_bound");
+    const passedTemplate = spy.mock.calls[0][0];
+    expect(passedTemplate.targetObjectId).toBe("npc_free");
+  });
+
+  it("does not bind or rename a pirate for non-BOUNTY quests", () => {
+    const { engine, questService } = makeEngine();
+    const pirate = makePirate("npc_pirate_1", TARGET_SYSTEM_ID, NpcState.IDLE);
+    engine.galaxy = makeGalaxy([pirate]);
+
+    const base = makeBountyQuest();
+    const quest: GeneratedQuest = {
+      ...base,
+      template: { ...base.template, type: QuestType.DELIVERY },
+    };
+
+    const spy = vi.spyOn(questService, "acceptQuestFromTemplate");
+    engine.acceptBoardQuest(quest, "planet_issuer");
+
+    expect(pirate.name).toBe("pirate_npc_pirate_1");
+    const passedTemplate = spy.mock.calls[0][0];
+    expect(passedTemplate.targetObjectId).toBeNull();
+  });
+
+  it("does not bind a pirate when the quest has no target ship name", () => {
+    const { engine, questService } = makeEngine();
+    const pirate = makePirate("npc_pirate_1", TARGET_SYSTEM_ID, NpcState.IDLE);
+    engine.galaxy = makeGalaxy([pirate]);
+
+    const quest: GeneratedQuest = { ...makeBountyQuest(), targetNpcName: null };
+
+    const spy = vi.spyOn(questService, "acceptQuestFromTemplate");
+    engine.acceptBoardQuest(quest, "planet_issuer");
+
+    expect(pirate.name).toBe("pirate_npc_pirate_1");
     const passedTemplate = spy.mock.calls[0][0];
     expect(passedTemplate.targetObjectId).toBeNull();
   });
