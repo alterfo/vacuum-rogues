@@ -55,6 +55,26 @@ export class QuestCompletion {
     }
   }
 
+  /** Auto-complete ESCORT quests whose convoy reaches the target system. */
+  escortBySystemEntry(): void {
+    if (!this.gameEngine?.player) return;
+    const player = this.gameEngine.player;
+    const questManager = this.gameEngine.questManager;
+    const currentSystemId = player.currentSystemId;
+
+    for (const quest of questManager.getActiveQuests()) {
+      if (quest.type !== QuestType.ESCORT) continue;
+      if (quest.isCompleted || quest.isFailed) continue;
+      if (quest.targetSystemId !== currentSystemId) continue;
+      const completed = questManager.forceCompleteQuest(quest.id, player);
+      if (completed) {
+        logger.info(
+          `ESCORT quest auto-completed on system entry: ${quest.title}`,
+        );
+      }
+    }
+  }
+
   /**
    * Auto-complete DEFENSE quests targeting the current system and liberate the
    * adjacent OVERMIND system stored on the quest.

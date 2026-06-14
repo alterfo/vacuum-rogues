@@ -192,6 +192,7 @@ export class NpcShipManager implements FlightModule {
     this.npcAnchorPlanet.clear();
     this.closeNpcContactPanel();
     this.followNpcId = null;
+    this.approachNpcId = null;
     if (this.overmindOverlay) {
       if (!this.overmindOverlay.destroyed) {
         this.overmindOverlay.destroy({ children: true });

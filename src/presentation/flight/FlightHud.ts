@@ -146,6 +146,7 @@ export class FlightHud implements FlightModule {
   }
 
   destroy(): void {
+    if (this.gameEngine) this.gameEngine.questExpiryCallback = undefined;
     // Buttons live on uiContainer (torn down by clearUILayer); drop the refs.
     this.backButton = null;
     this.playPauseButton = null;

@@ -104,10 +104,40 @@ describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
     expect(tryLiberate).toHaveBeenCalledWith("overmind-2");
   });
 
+  it("completes a matching ESCORT quest when convoy arrives at target system", () => {
+    const { engine, forceComplete } = makeEngine([
+      {
+        ...base,
+        id: "e1",
+        title: "Escort convoy",
+        type: QuestType.ESCORT,
+        targetSystemId: "sys-1",
+      },
+      {
+        ...base,
+        id: "e2",
+        title: "Wrong system",
+        type: QuestType.ESCORT,
+        targetSystemId: "sys-9",
+      },
+      {
+        ...base,
+        id: "e3",
+        title: "Wrong type",
+        type: QuestType.EXPLORATION,
+        targetSystemId: "sys-1",
+      },
+    ]);
+    new QuestCompletion(engine).escortBySystemEntry();
+    expect(forceComplete).toHaveBeenCalledTimes(1);
+    expect(forceComplete).toHaveBeenCalledWith("e1", expect.anything());
+  });
+
   it("is a no-op with no game engine", () => {
     const qc = new QuestCompletion(null);
     expect(() => qc.explorationBySystemEntry()).not.toThrow();
     expect(() => qc.bountyByNpcKill("x")).not.toThrow();
     expect(() => qc.defenseBySystemEntry()).not.toThrow();
+    expect(() => qc.escortBySystemEntry()).not.toThrow();
   });
 });

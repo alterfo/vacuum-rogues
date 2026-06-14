@@ -100,10 +100,7 @@ export class SpaceFlightScene extends GameScene {
   private readonly SYSTEM_BOUNDARY_RADIUS = SYSTEM_GEOMETRY.boundaryRadius;
   private readonly SCANNER_RANGE = GAME_BALANCE.scannerRange;
 
-  // Timestamp (performance.now) when the scene finished initializing. A click
-  // that lands within a short window of entering the scene is the residual
-  // pointer event from the previous scene's button (e.g. the race-selection
-  // confirm), not a deliberate navigation click — it is ignored (US-070 #1).
+  // Clicks within this window of scene init are residual events from the prior scene's button — ignored.
   private sceneReadyAt = 0;
   private readonly INPUT_GRACE_MS = 350;
 
@@ -246,10 +243,10 @@ export class SpaceFlightScene extends GameScene {
       this.questCompletion.bountyByNpcKill(ctx.npcId);
     }
 
-    // Auto-complete EXPLORATION (target = current system) and DEFENSE (OVERMIND
-    // liberation) quests on entry.
+    // Auto-complete system-entry quests: EXPLORATION, DEFENSE (OVERMIND liberation), ESCORT.
     this.questCompletion.explorationBySystemEntry();
     this.questCompletion.defenseBySystemEntry();
+    this.questCompletion.escortBySystemEntry();
 
     // Update lastVisitedDay for data-fog tracking (Task 21) and mark system visited (Task 29).
     if (this.gameEngine?.galaxy && this.gameEngine.player) {

@@ -95,19 +95,20 @@ export class QuestJournalUI {
 
     // Active quests section
     const activeQuests = this.questManager.getActiveQuests();
-    this.renderActiveQuests(activeQuests, 60);
+    let nextSectionY = this.renderActiveQuests(activeQuests, 60);
+    nextSectionY += 10;
 
     // Completed quests section (if any)
     const completedQuestIds = this.questManager.getCompletedQuestIds();
     if (completedQuestIds.length > 0) {
-      this.renderCompletedQuestsSection(completedQuestIds, 300);
+      this.renderCompletedQuestsSection(completedQuestIds, nextSectionY);
+      nextSectionY += 80;
     }
 
     // Expired/failed quests section (if any)
     const expiredQuests = this.questManager.getExpiredQuests?.() ?? [];
     if (expiredQuests.length > 0) {
-      const expiredY = completedQuestIds.length > 0 ? 380 : 300;
-      this.renderExpiredQuestsSection(expiredQuests, expiredY);
+      this.renderExpiredQuestsSection(expiredQuests, nextSectionY);
     }
 
     // Empty state if no quests at all
@@ -136,7 +137,7 @@ export class QuestJournalUI {
   /**
    * Render active quests list
    */
-  private renderActiveQuests(quests: Quest[], startY: number): void {
+  private renderActiveQuests(quests: Quest[], startY: number): number {
     const sectionTitle = new Text({
       text: "АКТИВНЫЕ КВЕСТЫ",
       style: {
@@ -172,7 +173,10 @@ export class QuestJournalUI {
       moreText.y = yOffset;
       moreText.eventMode = "none";
       this.container.addChild(moreText);
+      yOffset += 20;
     }
+
+    return yOffset;
   }
 
   /**
