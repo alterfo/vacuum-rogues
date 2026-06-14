@@ -113,15 +113,15 @@ letsplay screenshot verification.
 - Modify: `src/presentation/GovernmentScene.ts`
 - Create: `src/tests/presentation/reputationLabel.test.ts`
 
-- [ ] Write RED unit test: for reputation values -10, -25, -35, -75 → both
+- [x] Write RED unit test: for reputation values -10, -25, -35, -75 → both
   `getRepTier()` (Government) and `getPlanetRepLabel()` (Planet) must agree on
   whether the player is Neutral vs Hostile; at -25 both must return the same tier
-- [ ] Unify the threshold: adopt the 5-tier scale from PlanetScene as the single
+- [x] Unify the threshold: adopt the 5-tier scale from PlanetScene as the single
   source of truth — extract to `src/utils/reputationUtils.ts`:
   `≥ 50` Союзник | `≥ 10` Дружелюбный | `≥ -20` Нейтральный | `≥ -50` Враждебный | `< -50` Война
-- [ ] Update `GovernmentScene.ts:23–27` to use the shared util (threshold `-20` not `-30`)
-- [ ] Update `PlanetScene.ts:1160–1180` to use the shared util
-- [ ] Run lint + unit tests — green
+- [x] Update `GovernmentScene.ts:23–27` to use the shared util (threshold `-20` not `-30`)
+- [x] Update `PlanetScene.ts:1160–1180` to use the shared util
+- [x] Run lint + unit tests — green
 
 ### Task 5: Fix escort quest details
 **Files:**
