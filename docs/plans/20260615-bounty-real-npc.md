@@ -44,10 +44,10 @@ BOUNTY-квесты генерируют имя корабля-цели (нап�
 **Files:**
 - Modify: `src/presentation/flight/QuestCompletion.ts`
 
-- [ ] В `bountyByNpcKill()`: вычислить `bountyTargetGone = !!quest.targetObjectId && !this.gameEngine?.galaxy?.npcShips.some(n => n.id === quest.targetObjectId)`
-- [ ] Изменить `matchesSystem`: `(!quest.targetObjectId || bountyTargetGone) && quest.targetSystemId === currentSystemId`
-- [ ] В `questCompletionFlight.test.ts` добавить тест «bounty с targetObjectId, но NPC не в galaxy.npcShips → matchesSystem срабатывает»
-- [ ] `npm test -- --run src/tests/presentation/questCompletionFlight.test.ts` — зелёный
+- [x] В `bountyByNpcKill()`: вычислить `bountyTargetGone = !!quest.targetObjectId && !this.gameEngine?.galaxy?.npcShips.some(n => n.id === quest.targetObjectId)`
+- [x] Изменить `matchesSystem`: `(!quest.targetObjectId || bountyTargetGone) && quest.targetSystemId === currentSystemId`
+- [x] В `questCompletionFlight.test.ts` добавить тест «bounty с targetObjectId, но NPC не в galaxy.npcShips → matchesSystem срабатывает»
+- [x] `npm test -- --run src/tests/presentation/questCompletionFlight.test.ts` — зелёный
 
 ### Task 3: Final verification
 **Files:** (none new)

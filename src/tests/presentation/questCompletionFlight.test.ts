@@ -90,6 +90,60 @@ describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
     expect(markDone).toHaveBeenCalledWith("b1");
   });
 
+  it("completes a bounty via system fallback when its bound target left the galaxy (killed off-screen)", () => {
+    const markDone = vi.fn().mockReturnValue(true);
+    const engine = {
+      player: { currentSystemId: "sys-1" },
+      questManager: {
+        getActiveQuests: () => [
+          {
+            ...base,
+            id: "b-gone",
+            title: "Bounty: target gone",
+            type: QuestType.BOUNTY,
+            targetObjectId: "npc-bound",
+            targetSystemId: "sys-1",
+          },
+        ],
+        markObjectivesDone: markDone,
+      },
+      // npc-bound is NOT present — it was killed off-screen by another NPC.
+      galaxy: { npcShips: [{ id: "npc-other" }] },
+      questPendingReturnCallback: undefined,
+    } as unknown as GameEngine;
+
+    // Player kills a different pirate in the target system.
+    new QuestCompletion(engine).bountyByNpcKill("npc-other");
+    expect(markDone).toHaveBeenCalledTimes(1);
+    expect(markDone).toHaveBeenCalledWith("b-gone");
+  });
+
+  it("does NOT complete a bounty via system fallback while its bound target is still alive in the galaxy", () => {
+    const markDone = vi.fn().mockReturnValue(true);
+    const engine = {
+      player: { currentSystemId: "sys-1" },
+      questManager: {
+        getActiveQuests: () => [
+          {
+            ...base,
+            id: "b-alive",
+            title: "Bounty: target alive",
+            type: QuestType.BOUNTY,
+            targetObjectId: "npc-bound",
+            targetSystemId: "sys-1",
+          },
+        ],
+        markObjectivesDone: markDone,
+      },
+      galaxy: { npcShips: [{ id: "npc-bound" }, { id: "npc-other" }] },
+      questPendingReturnCallback: undefined,
+    } as unknown as GameEngine;
+
+    // Killing a different pirate must NOT satisfy a bounty bound to a live target.
+    new QuestCompletion(engine).bountyByNpcKill("npc-other");
+    expect(markDone).not.toHaveBeenCalled();
+  });
+
   it("liberates the stored hostile system when a DEFENSE quest objectives are done", () => {
     const { engine, markDone, tryLiberate } = makeEngine([
       {

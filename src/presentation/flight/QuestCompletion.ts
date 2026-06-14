@@ -24,8 +24,17 @@ export class QuestCompletion {
       if (quest.isCompleted || quest.isFailed || quest.isPendingReturn)
         continue;
       const matchesNpc = quest.targetObjectId === npcId;
+      // If the bound bounty target was killed off-screen (another NPC got it
+      // first, so it's gone from the galaxy), fall back to system matching so
+      // any pirate kill in the target system still completes the quest.
+      const bountyTargetGone =
+        !!quest.targetObjectId &&
+        !this.gameEngine.galaxy?.npcShips?.some(
+          (n) => n.id === quest.targetObjectId,
+        );
       const matchesSystem =
-        !quest.targetObjectId && quest.targetSystemId === currentSystemId;
+        (!quest.targetObjectId || bountyTargetGone) &&
+        quest.targetSystemId === currentSystemId;
       if (!matchesNpc && !matchesSystem) continue;
       const marked = questManager.markObjectivesDone(quest.id);
       if (marked) {
