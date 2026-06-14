@@ -826,13 +826,16 @@ export class GameEngine {
     }
 
     // Migration guard: older saves predate visitedSystems tracking, leaving the
-    // array empty so the star map would be fully fogged on "Continue". Seed it
-    // with at least the current system.
-    if (
-      this.player.visitedSystems.length === 0 &&
-      this.player.currentSystemId
-    ) {
-      this.player.markVisited(this.player.currentSystemId);
+    // array empty. Seed it with every explored system so the star map shows
+    // names for all previously-visited stars, not just the current one.
+    if (this.player.visitedSystems.length === 0) {
+      for (const sys of this.galaxy.systems) {
+        if (sys.explored) this.player.markVisited(sys.id);
+      }
+      // Ensure current system is included even if somehow not yet explored.
+      if (this.player.currentSystemId) {
+        this.player.markVisited(this.player.currentSystemId);
+      }
     }
 
     // Restore scene type (default to SPACE_FLIGHT for better UX).

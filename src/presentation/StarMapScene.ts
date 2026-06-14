@@ -5,7 +5,8 @@ import type { StarSystem } from "@/domain/StarSystem";
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
-import { getSystemVisibility } from "@/utils/starMapUtils";
+import { getSystemVisibility, pickLabelPosition } from "@/utils/starMapUtils";
+import type { LabelBound, StarPos, WarpLine } from "@/utils/starMapUtils";
 import { computeGalaxyThreat } from "@/systems/galaxy/GalaxyStatusIndicator";
 
 export interface StarMapContext {
@@ -455,8 +456,8 @@ export class StarMapScene extends GameScene {
     graphics.stroke({ width: 1, color: 0x1a3a5c });
 
     // Collect star positions and warp lines for label collision detection
-    const starPositions: { x: number; y: number; r: number }[] = [];
-    const warpLines: { x1: number; y1: number; x2: number; y2: number }[] = [];
+    const starPositions: StarPos[] = [];
+    const warpLines: WarpLine[] = [];
 
     for (const system of this.galaxy.systems) {
       if (!system.explored) continue;
@@ -478,69 +479,6 @@ export class StarMapScene extends GameScene {
       }
     }
 
-    // Helper: check if rectangle intersects a line segment
-    const rectIntersectsLine = (
-      rx: number,
-      ry: number,
-      rw: number,
-      rh: number,
-      x1: number,
-      y1: number,
-      x2: number,
-      y2: number,
-    ): boolean => {
-      // Check if line segment intersects rectangle
-      const left = rx,
-        right = rx + rw,
-        top = ry,
-        bottom = ry + rh;
-
-      // If both endpoints are on same side of rect, no intersection
-      if ((x1 < left && x2 < left) || (x1 > right && x2 > right)) return false;
-      if ((y1 < top && y2 < top) || (y1 > bottom && y2 > bottom)) return false;
-
-      // Check if line passes through rectangle
-      const dx = x2 - x1,
-        dy = y2 - y1;
-      if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return false;
-
-      // Parametric line intersection with rect edges
-      const tLeft = dx !== 0 ? (left - x1) / dx : -Infinity;
-      const tRight = dx !== 0 ? (right - x1) / dx : Infinity;
-      const tTop = dy !== 0 ? (top - y1) / dy : -Infinity;
-      const tBottom = dy !== 0 ? (bottom - y1) / dy : Infinity;
-
-      const tMin = Math.max(
-        Math.min(tLeft, tRight),
-        Math.min(tTop, tBottom),
-        0,
-      );
-      const tMax = Math.min(
-        Math.max(tLeft, tRight),
-        Math.max(tTop, tBottom),
-        1,
-      );
-
-      return tMin <= tMax;
-    };
-
-    // Helper: check if rectangle overlaps a circle
-    const rectOverlapsCircle = (
-      rx: number,
-      ry: number,
-      rw: number,
-      rh: number,
-      cx: number,
-      cy: number,
-      cr: number,
-    ): boolean => {
-      const nearestX = Math.max(rx, Math.min(cx, rx + rw));
-      const nearestY = Math.max(ry, Math.min(cy, ry + rh));
-      const dx = cx - nearestX,
-        dy = cy - nearestY;
-      return dx * dx + dy * dy < cr * cr;
-    };
-
     // Determine visited systems, OVERMIND and pirate systems for rendering.
     const visitedSystemIds = this.gameEngine?.player?.visitedSystems ?? [];
     const overmindSystems = new Set(this.galaxy.overmindSystems ?? []);
@@ -548,7 +486,7 @@ export class StarMapScene extends GameScene {
 
     // Draw only explored systems
     let systemsDrawn = 0;
-    const labelBounds: { x: number; y: number; w: number; h: number }[] = [];
+    const labelBounds: LabelBound[] = [];
 
     // Sort systems: current first, then selected, then others (for label priority)
     const sortedSystems = [...this.galaxy.systems]
@@ -658,92 +596,63 @@ export class StarMapScene extends GameScene {
         continue;
       }
 
-      // Smart label placement: try right, left, above, below
+      // Smart label placement: try right, left, above, below.
+      // pickLabelPosition falls back to positions[0] so every system always
+      // gets a name label (prevents unlabelled dots in dense clusters).
       const labelW = system.name.length * 6;
       const labelH = 12;
-      const offset = 12; // Distance from star center
+      const offset = 12;
 
-      const positions = [
+      const candidatePositions = [
         { x: x + offset, y: y - labelH / 2 }, // Right
         { x: x - offset - labelW, y: y - labelH / 2 }, // Left
         { x: x - labelW / 2, y: y - offset - labelH }, // Above
         { x: x - labelW / 2, y: y + offset }, // Below
       ];
 
-      let bestPos: { x: number; y: number } | null = null;
+      // Exclude stars and warp lines that belong to this star (can't block own label).
+      const otherStars = starPositions.filter(
+        (s) => !(Math.abs(s.x - x) < 1 && Math.abs(s.y - y) < 1),
+      );
+      const otherLines = warpLines.filter(
+        (line) =>
+          !(Math.abs(line.x1 - x) < 1 && Math.abs(line.y1 - y) < 1) &&
+          !(Math.abs(line.x2 - x) < 1 && Math.abs(line.y2 - y) < 1),
+      );
 
-      for (const pos of positions) {
-        const lx = pos.x,
-          ly = pos.y;
+      const bestPos = pickLabelPosition(
+        candidatePositions,
+        labelBounds,
+        otherStars,
+        otherLines,
+        labelW,
+        labelH,
+      );
 
-        // Check overlap with other labels
-        const overlapsLabel = labelBounds.some(
-          (b) =>
-            lx < b.x + b.w &&
-            lx + labelW > b.x &&
-            ly < b.y + b.h &&
-            ly + labelH > b.y,
-        );
-        if (overlapsLabel) continue;
+      labelBounds.push({ x: bestPos.x, y: bestPos.y, w: labelW, h: labelH });
 
-        // Check overlap with stars (except current one)
-        const overlapsStar = starPositions.some(
-          (s) =>
-            !(Math.abs(s.x - x) < 1 && Math.abs(s.y - y) < 1) &&
-            rectOverlapsCircle(lx, ly, labelW, labelH, s.x, s.y, s.r),
-        );
-        if (overlapsStar) continue;
+      const labelFill = isOvermind
+        ? 0xff6666
+        : isPirate
+          ? 0xffaa66
+          : system.id === this.playerSystemId
+            ? 0x00ff00
+            : visibility === "neighbor"
+              ? 0x88aacc
+              : 0x88ccff;
 
-        // Check intersection with warp lines (skip lines from/to this star)
-        const intersectsLine = warpLines.some((line) => {
-          const isFromThisStar =
-            Math.abs(line.x1 - x) < 1 && Math.abs(line.y1 - y) < 1;
-          const isToThisStar =
-            Math.abs(line.x2 - x) < 1 && Math.abs(line.y2 - y) < 1;
-          if (isFromThisStar || isToThisStar) return false;
-          return rectIntersectsLine(
-            lx,
-            ly,
-            labelW,
-            labelH,
-            line.x1,
-            line.y1,
-            line.x2,
-            line.y2,
-          );
-        });
-        if (intersectsLine) continue;
-
-        bestPos = pos;
-        break;
-      }
-
-      if (bestPos) {
-        labelBounds.push({ x: bestPos.x, y: bestPos.y, w: labelW, h: labelH });
-
-        const labelFill = isOvermind
-          ? 0xff6666
-          : isPirate
-            ? 0xffaa66
-            : system.id === this.playerSystemId
-              ? 0x00ff00
-              : visibility === "neighbor"
-                ? 0x88aacc
-                : 0x88ccff;
-
-        const label = new Text({
-          text: system.name,
-          style: {
-            fontFamily: "Courier New",
-            fontSize: 10,
-            fill: labelFill,
-          },
-        });
-        label.x = bestPos.x;
-        label.y = bestPos.y;
-        label.eventMode = "none";
-        this.mapContainer.addChild(label);
-      }
+      const label = new Text({
+        text: system.name,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 10,
+          fill: labelFill,
+        },
+      });
+      label.x = bestPos.x;
+      label.y = bestPos.y;
+      label.eventMode = "none";
+      this.mapContainer.addChild(label);
     }
 
     this.mapContainer.addChild(graphics);
