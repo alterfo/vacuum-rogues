@@ -518,3 +518,61 @@ describe("NpcShipManager (extracted FlightModule)", () => {
     manager.destroy();
   });
 });
+
+// ---------------------------------------------------------------------------
+// rememberFlightPos: stashes ship coordinates on GameEngine so that a
+// SPACE_FLIGHT re-entry after CombatScene resumes near the battle, not at the
+// system edge (combat edge-throw fix).
+// ---------------------------------------------------------------------------
+describe("NpcShipManager.rememberFlightPos", () => {
+  it("writes ship position to gameEngine.lastFlightShipPos before combat transition", () => {
+    const stage = new Container();
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+
+    const renderer = {
+      app: { screen: { width: 800, height: 600 } },
+      stage,
+      uiLayer,
+      gameLayer,
+    } as unknown as Renderer;
+
+    const physics = new ShipPhysics(320, 240, 0.15);
+    const lastFlightShipPosHolder: { x: number; y: number } | null = null;
+    const gameEngine = {
+      galaxy: { npcShips: [] } as unknown as Galaxy,
+      player: { currentSystemId: "sys_a" },
+      lastFlightShipPos: lastFlightShipPosHolder,
+    } as unknown as GameEngine;
+
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => physics,
+      getPlanetSprites: () => [],
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => false,
+      showMessage: () => {},
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: () => {},
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+    };
+
+    const manager = new NpcShipManager(
+      renderer,
+      gameEngine,
+      gameLayer,
+      uiLayer,
+      deps,
+    );
+
+    (manager as unknown as { rememberFlightPos(): void }).rememberFlightPos();
+
+    expect(
+      (gameEngine as unknown as { lastFlightShipPos: { x: number; y: number } })
+        .lastFlightShipPos,
+    ).toEqual({ x: 320, y: 240 });
+
+    manager.destroy();
+  });
+});
