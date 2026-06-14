@@ -25,6 +25,7 @@ import {
 import { scaledFont } from "@/utils/fontScale";
 import { tintFromSeed } from "@/utils/instanceTint";
 import { UiButton, type ButtonAccent } from "./ui/UiButton";
+import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
 
 interface PlanetContext {
   gameEngine?: GameEngine;
@@ -1158,26 +1159,8 @@ export class PlanetScene extends GameScene {
     const factionColor = FACTION_COLOR[faction] ?? 0x999999;
 
     const rep = this.gameEngine.player?.reputation[faction] ?? 0;
-    const repLabel =
-      rep >= 50
-        ? "Союзник"
-        : rep >= 20
-          ? "Дружелюбный"
-          : rep >= -20
-            ? "Нейтральный"
-            : rep >= -50
-              ? "Враждебный"
-              : "Война";
-    const repColor =
-      rep >= 50
-        ? 0x00ff88
-        : rep >= 20
-          ? 0x88ff88
-          : rep >= -20
-            ? 0xaaaaaa
-            : rep >= -50
-              ? 0xff8888
-              : 0xff2222;
+    const repLabel = getRepLabel(rep);
+    const repColor = getRepColor(rep);
 
     const goods = this.planet.market.availableResources
       .slice(0, 4)

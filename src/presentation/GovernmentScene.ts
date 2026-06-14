@@ -11,6 +11,7 @@ import {
   governorOfferLine,
   type GeneratedQuest,
 } from "@/systems/quests/QuestGenerator";
+import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
 
 interface GovernmentContext {
   gameEngine?: GameEngine;
@@ -153,10 +154,8 @@ export class GovernmentScene extends GameScene {
 
     const rep = this.gameEngine?.player?.getReputation(faction) ?? 0;
     const tier = getRepTier(rep);
-    const repLabel =
-      tier === "hostile" ? "Враг" : tier === "ally" ? "Союзник" : "Нейтрал";
-    const repColor =
-      tier === "hostile" ? 0xff4444 : tier === "ally" ? 0x00ff88 : 0xaaaaaa;
+    const repLabel = getRepLabel(rep);
+    const repColor = getRepColor(rep);
 
     let y = h * 0.07;
 
