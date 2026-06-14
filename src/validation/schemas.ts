@@ -287,6 +287,7 @@ export const StarSystemSchema = z.object({
     .nullable()
     .default(null),
   stations: z.array(StationSchema).default([]),
+  techLevel: z.number().int().min(1).max(8).default(1),
 });
 
 export const NpcGoalSchema = z.object({

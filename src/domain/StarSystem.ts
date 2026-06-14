@@ -17,6 +17,8 @@ export class StarSystem {
   isFactionHome: boolean = false;
   /** Faction that considers this their home system (null for regular systems). */
   homeFactionId: Faction | null = null;
+  /** Galaxy-wide research tech level (1–8); advances via daily simulation tick. */
+  techLevel: number = 1;
 
   constructor(
     public readonly id: string,

@@ -186,6 +186,9 @@ export class GalaxySimulator {
   simulateDay(galaxy: Galaxy): void {
     galaxy.simulateDay();
 
+    // Advance galaxy-wide tech levels each day tick.
+    advanceTech(galaxy);
+
     // Invoke overmind every 7 days
     if (galaxy.gameDays % 7 === 0) {
       const action = this.overmind.makeMove(galaxy);
@@ -410,6 +413,46 @@ export class GalaxySimulator {
       // Check if within 2 jumps of explored system
       return false;
     });
+  }
+}
+
+// ── Tech advancement ───────────────────────────────────────────────────────
+
+const TECH_MAX = 8;
+const TECH_ADVANCE_INTERVAL_RESEARCH_LAB = 50;
+const TECH_ADVANCE_INTERVAL_PLAIN = 100;
+
+/**
+ * Advance techLevel on ranger-controlled systems every N days.
+ * RESEARCH_LAB systems advance every 50 days; all others every 100 days.
+ * Overmind- or pirate-controlled systems stagnate.
+ */
+export function advanceTech(galaxy: Galaxy): void {
+  const day = galaxy.gameDays;
+  const shouldAdvanceResearchLab =
+    day % TECH_ADVANCE_INTERVAL_RESEARCH_LAB === 0 && day > 0;
+  const shouldAdvancePlain = day % TECH_ADVANCE_INTERVAL_PLAIN === 0 && day > 0;
+
+  if (!shouldAdvanceResearchLab && !shouldAdvancePlain) return;
+
+  const hostileSet = new Set([
+    ...galaxy.overmindSystems,
+    ...galaxy.pirateSystems,
+  ]);
+
+  for (const system of galaxy.systems) {
+    if (hostileSet.has(system.id)) continue;
+    if (system.techLevel >= TECH_MAX) continue;
+
+    const hasResearchLab = system.stations.some(
+      (s) => s.type === StationType.RESEARCH_LAB,
+    );
+
+    if (hasResearchLab && shouldAdvanceResearchLab) {
+      system.techLevel = Math.min(TECH_MAX, system.techLevel + 1);
+    } else if (!hasResearchLab && shouldAdvancePlain) {
+      system.techLevel = Math.min(TECH_MAX, system.techLevel + 1);
+    }
   }
 }
 
