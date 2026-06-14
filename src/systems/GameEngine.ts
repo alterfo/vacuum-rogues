@@ -1,5 +1,5 @@
 import type { GameConfig } from "@/types";
-import { SceneType, FactionType } from "@/types";
+import { SceneType, FactionType, QuestType, NpcRole, NpcState } from "@/types";
 import { Galaxy } from "@/domain/Galaxy";
 import type { GameScene } from "@/presentation/GameScene";
 import { Renderer } from "@/presentation/Renderer";
@@ -680,8 +680,35 @@ export class GameEngine {
     const factionId =
       this.galaxy?.systems.find((s) => s.planets.some((p) => p.id === planetId))
         ?.ownerFaction ?? "";
+
+    // For BOUNTY quests, bind the narrative ship name (e.g. «Стальной ворон») to
+    // a real pirate living in the target system: rename it and link it via
+    // targetObjectId. The GalacticRegistry — rebuilt each game day from each
+    // npcShip.currentSystemId — then surfaces the ship by name in the Info
+    // Center, with its system and jump distance. When no pirate is present we
+    // pass the original template unchanged (targetObjectId null), preserving the
+    // matchesSystem fallback in QuestCompletion.bountyByNpcKill().
+    let template = quest.template;
+    const targetSystemId = quest.template.targetSystemId;
+    if (
+      quest.template.type === QuestType.BOUNTY &&
+      quest.targetNpcName &&
+      targetSystemId
+    ) {
+      const pirate = this.galaxy?.npcShips.find(
+        (n) =>
+          n.currentSystemId === targetSystemId &&
+          n.role === NpcRole.PIRATE &&
+          n.state !== NpcState.DEAD,
+      );
+      if (pirate) {
+        pirate.name = quest.targetNpcName;
+        template = { ...quest.template, targetObjectId: pirate.id };
+      }
+    }
+
     return this.questManager.acceptQuestFromTemplate(
-      quest.template,
+      template,
       planetId,
       this.galaxy?.gameDays ?? 0,
       String(factionId),
