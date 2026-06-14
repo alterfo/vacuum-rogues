@@ -91,6 +91,8 @@ export class GameEngine {
   public gameSpeedMultiplier = 1;
   /** Called when a quest expires mid-session so the HUD can show a toast. */
   public questExpiryCallback?: (message: string) => void;
+  /** Called when a quest moves to pending-return state so the HUD can show a toast. */
+  public questPendingReturnCallback?: (message: string) => void;
   public readonly saveManager: SaveManager;
   public readonly qualityProfile: AdaptiveQualityProfile;
   public readonly onnxRegistry: ONNXModelRegistry;
@@ -751,12 +753,14 @@ export class GameEngine {
       activeQuests: Quest[];
       completedQuests: string[];
       completedChainParts: Record<string, number[]>;
+      pendingReturnQuests: Quest[];
     };
     questLog.activeQuests.length = 0;
     questLog.activeQuests.push(...this.questManager.getActiveQuests());
     questLog.completedQuests.length = 0;
     questLog.completedQuests.push(...this.questManager.getCompletedQuestIds());
     questLog.completedChainParts = this.questManager.getCompletedChainParts();
+    questLog.pendingReturnQuests = this.questManager.getPendingReturnQuests();
 
     const { SaveState } = await import("@/domain/SaveState");
     const state = new SaveState(
@@ -811,11 +815,13 @@ export class GameEngine {
       activeQuests?: Quest[];
       completedQuests?: string[];
       completedChainParts?: Record<string, number[]>;
+      pendingReturnQuests?: Quest[];
     };
     this.questManager.restoreState(
       loadedQuestLog.activeQuests ?? [],
       (loadedQuestLog.completedQuests ?? []) as string[],
       loadedQuestLog.completedChainParts ?? {},
+      loadedQuestLog.pendingReturnQuests ?? [],
     );
 
     // Ensure player has a valid current system

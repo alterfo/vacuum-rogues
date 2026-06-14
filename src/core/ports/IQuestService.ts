@@ -69,11 +69,12 @@ export interface IQuestService {
   getUrgentQuests(currentDay: number): Quest[];
   /** Failed/expired quests kept in memory for the journal's "Провалено" section. */
   getExpiredQuests?(): Quest[];
-  /** Restore quest state from a loaded save (active quests + completed ids + chain parts). */
+  /** Restore quest state from a loaded save (active quests + completed ids + chain parts + pending return). */
   restoreState(
     activeQuests: Quest[],
     completedQuestIds: string[],
     completedChainParts?: Record<string, number[]>,
+    pendingReturnQuests?: Quest[],
   ): void;
   /** Serialize completedChainParts for persistence. */
   getCompletedChainParts(): Record<string, number[]>;
@@ -82,4 +83,13 @@ export interface IQuestService {
    * Used by auto-completion triggers (planet landing, system entry, NPC kill).
    */
   forceCompleteQuest(questId: string, player: Player): boolean;
+  /**
+   * Mark all objectives done without granting reward. Moves quest to
+   * pending-return state. Player must return to issuer planet to claim reward.
+   */
+  markObjectivesDone(questId: string): boolean;
+  /** Return all quests waiting for return-to-issuer reward claim. */
+  getPendingReturnQuests(): Quest[];
+  /** Claim reward for a pending-return quest on landing at the issuer planet. */
+  claimReturnReward(questId: string, player: Player): boolean;
 }

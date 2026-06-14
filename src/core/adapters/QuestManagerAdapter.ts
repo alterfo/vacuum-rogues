@@ -81,16 +81,30 @@ export class QuestManagerAdapter implements IQuestService {
     activeQuests: Quest[],
     completedQuestIds: string[],
     completedChainParts?: Record<string, number[]>,
+    pendingReturnQuests?: Quest[],
   ): void {
     this.delegate.restoreState(
       activeQuests,
       completedQuestIds,
       completedChainParts,
+      pendingReturnQuests,
     );
   }
 
   forceCompleteQuest(questId: string, player: Player): boolean {
     return this.delegate.forceCompleteQuest(questId, player);
+  }
+
+  markObjectivesDone(questId: string): boolean {
+    return this.delegate.markObjectivesDone(questId);
+  }
+
+  getPendingReturnQuests(): Quest[] {
+    return this.delegate.getPendingReturnQuests();
+  }
+
+  claimReturnReward(questId: string, player: Player): boolean {
+    return this.delegate.claimReturnReward(questId, player);
   }
 
   getExpiredQuests(): Quest[] {

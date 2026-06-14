@@ -68,12 +68,25 @@ export class MockQuestService implements IQuestService {
     activeQuests: Quest[],
     completedQuestIds: string[],
     _completedChainParts?: Record<string, number[]>,
+    _pendingReturnQuests?: Quest[],
   ): void {
     this.activeQuests = activeQuests;
     this.completedQuestIds = completedQuestIds;
   }
 
   forceCompleteQuest(_questId: string, _player: Player): boolean {
+    return false;
+  }
+
+  markObjectivesDone(_questId: string): boolean {
+    return false;
+  }
+
+  getPendingReturnQuests(): Quest[] {
+    return [];
+  }
+
+  claimReturnReward(_questId: string, _player: Player): boolean {
     return false;
   }
 

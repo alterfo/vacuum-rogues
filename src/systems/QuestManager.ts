@@ -36,6 +36,8 @@ export class QuestManager {
   private completedQuests: Set<string> = new Set();
   /** Failed/expired quests kept in memory for the journal's "Провалено" section. */
   private failedQuests: Map<string, Quest> = new Map();
+  /** Quests whose objectives are done but reward not yet claimed (player must return to issuer). */
+  private pendingReturnQuests: Map<string, Quest> = new Map();
   private questTemplates: Map<string, QuestTemplate> = new Map();
   /** In-memory tracking of completed chain parts; persisted in player.questLog on save/load. */
   private completedChainParts: Map<string, Set<number>> = new Map();
@@ -252,6 +254,7 @@ export class QuestManager {
     activeQuests: Quest[],
     completedQuestIds: string[],
     completedChainParts: Record<string, number[]> = {},
+    pendingReturnQuests: Quest[] = [],
   ): void {
     this.activeQuests.clear();
     for (const quest of activeQuests) {
@@ -262,6 +265,11 @@ export class QuestManager {
     this.completedChainParts.clear();
     for (const [chainId, parts] of Object.entries(completedChainParts)) {
       this.completedChainParts.set(chainId, new Set(parts));
+    }
+    this.pendingReturnQuests.clear();
+    for (const quest of pendingReturnQuests) {
+      Object.setPrototypeOf(quest, Quest.prototype);
+      this.pendingReturnQuests.set(quest.id, quest);
     }
   }
 
@@ -396,6 +404,85 @@ export class QuestManager {
         `Player sentenced to ${penalty.jailTime} days in jail (not implemented in MVP)`,
       );
     }
+  }
+
+  /**
+   * Mark all quest objectives done and move the quest to the pending-return
+   * state — objectives are satisfied but reward is NOT granted yet. The player
+   * must fly back to the issuer planet and call claimReturnReward there.
+   * Used for BOUNTY/ESCORT/EXPLORATION/DEFENSE auto-triggers.
+   */
+  markObjectivesDone(questId: string): boolean {
+    const quest = this.activeQuests.get(questId);
+    if (!quest || quest.isFailed) return false;
+    for (const obj of quest.objectives) {
+      if (!obj.completed) {
+        quest.updateProgress({
+          objectiveId: obj.id,
+          amount: obj.targetAmount - obj.currentAmount,
+        });
+      }
+    }
+    // updateProgress sets isCompleted=true; override to pending-return state.
+    quest.isCompleted = false;
+    quest.isPendingReturn = true;
+    this.activeQuests.delete(questId);
+    this.pendingReturnQuests.set(questId, quest);
+    logger.info(`Quest pending return (objectives done): ${quest.title}`);
+    return true;
+  }
+
+  /** Return all quests awaiting return-to-issuer reward claim. */
+  getPendingReturnQuests(): Quest[] {
+    return Array.from(this.pendingReturnQuests.values());
+  }
+
+  /**
+   * Claim the reward for a pending-return quest (player landed on issuer planet).
+   * Grants rewards and moves quest to completed state.
+   */
+  claimReturnReward(questId: string, player: Player): boolean {
+    const quest = this.pendingReturnQuests.get(questId);
+    if (!quest) return false;
+
+    player.credits += quest.reward.credits;
+    player.experience += quest.reward.experience;
+    for (const item of quest.reward.items) {
+      const existing = player.inventory.resources.find(
+        (r) => r.type === item.type,
+      );
+      if (existing) {
+        existing.amount += item.amount;
+      } else {
+        player.inventory.resources.push({
+          type: item.type,
+          amount: item.amount,
+        });
+      }
+    }
+
+    quest.isCompleted = true;
+    quest.isPendingReturn = false;
+    this.pendingReturnQuests.delete(questId);
+    this.completedQuests.add(questId);
+
+    if (quest.chainId && quest.chainPart >= 0) {
+      const parts =
+        this.completedChainParts.get(quest.chainId) ?? new Set<number>();
+      parts.add(quest.chainPart);
+      this.completedChainParts.set(quest.chainId, parts);
+      if (parts.has(0) && parts.has(1) && parts.has(2)) {
+        if (!player.completedQuestChains.includes(quest.chainId)) {
+          player.completedQuestChains.push(quest.chainId);
+          logger.info(`Quest chain completed: ${quest.chainId}`);
+        }
+      }
+    }
+
+    logger.info(
+      `Return reward claimed: ${quest.title} +${quest.reward.credits} cr, +${quest.reward.experience} XP`,
+    );
+    return true;
   }
 
   /**

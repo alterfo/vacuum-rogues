@@ -323,6 +323,7 @@ export class PlanetScene extends GameScene {
     logger.info(`PlanetScene: ${this.planet?.name}`);
     this.gameEngine?.audio.playSfx("land").catch(() => {});
     this.checkDeliveryQuestCompletion();
+    this.checkReturnQuestCompletion();
     this.checkCustoms();
 
     // Panorama drag-to-look (Task 6): the wide background pans horizontally as
@@ -457,6 +458,31 @@ export class PlanetScene extends GameScene {
         this.showMessage(
           `Задание выполнено: ${quest.title} +${quest.reward?.credits ?? 0} ₡`,
           0x00ff88,
+        );
+      }
+    }
+  }
+
+  /**
+   * On landing, claim rewards for any pending-return quests whose issuer planet
+   * matches the current planet. Grants credits + XP and shows a success toast.
+   */
+  private checkReturnQuestCompletion(): void {
+    if (!this.gameEngine?.player || !this.planet) return;
+    const player = this.gameEngine.player;
+    const questManager = this.gameEngine.questManager;
+
+    for (const quest of questManager.getPendingReturnQuests()) {
+      if (quest.planetId !== this.planet.id) continue;
+      const claimed = questManager.claimReturnReward(quest.id, player);
+      if (claimed) {
+        this.gameEngine.audio.playSfx("reward").catch(() => {});
+        this.showMessage(
+          `Награда получена: +${quest.reward.credits} ₡`,
+          0xffdd44,
+        );
+        logger.info(
+          `Return reward claimed on landing: ${quest.title} +${quest.reward.credits} cr`,
         );
       }
     }

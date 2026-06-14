@@ -135,6 +135,8 @@ export class FlightHud implements FlightModule {
     if (this.gameEngine) {
       this.gameEngine.questExpiryCallback = (msg) =>
         this.showMessage(msg, 0xff4444);
+      this.gameEngine.questPendingReturnCallback = (msg) =>
+        this.showMessage(msg, 0xffdd44);
     }
   }
 
@@ -146,7 +148,10 @@ export class FlightHud implements FlightModule {
   }
 
   destroy(): void {
-    if (this.gameEngine) this.gameEngine.questExpiryCallback = undefined;
+    if (this.gameEngine) {
+      this.gameEngine.questExpiryCallback = undefined;
+      this.gameEngine.questPendingReturnCallback = undefined;
+    }
     // Buttons live on uiContainer (torn down by clearUILayer); drop the refs.
     this.backButton = null;
     this.playPauseButton = null;

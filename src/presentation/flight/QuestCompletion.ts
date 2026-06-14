@@ -12,7 +12,7 @@ import { logger } from "@/utils/logger";
 export class QuestCompletion {
   constructor(private readonly gameEngine: GameEngine | null) {}
 
-  /** Auto-complete BOUNTY quests targeting the defeated NpcShip. */
+  /** Mark BOUNTY quests targeting the defeated NpcShip as pending-return. */
   bountyByNpcKill(npcId: string): void {
     if (!this.gameEngine?.player) return;
     const player = this.gameEngine.player;
@@ -21,21 +21,25 @@ export class QuestCompletion {
 
     for (const quest of questManager.getActiveQuests()) {
       if (quest.type !== QuestType.BOUNTY) continue;
-      if (quest.isCompleted || quest.isFailed) continue;
+      if (quest.isCompleted || quest.isFailed || quest.isPendingReturn)
+        continue;
       const matchesNpc = quest.targetObjectId === npcId;
       const matchesSystem =
         !quest.targetObjectId && quest.targetSystemId === currentSystemId;
       if (!matchesNpc && !matchesSystem) continue;
-      const completed = questManager.forceCompleteQuest(quest.id, player);
-      if (completed) {
+      const marked = questManager.markObjectivesDone(quest.id);
+      if (marked) {
         logger.info(
-          `BOUNTY quest auto-completed: ${quest.title} (npcId=${npcId})`,
+          `BOUNTY quest objectives done, pending return: ${quest.title} (npcId=${npcId})`,
+        );
+        this.gameEngine.questPendingReturnCallback?.(
+          `Цель уничтожена! Вернитесь за наградой`,
         );
       }
     }
   }
 
-  /** Auto-complete EXPLORATION quests whose target is the current system. */
+  /** Mark EXPLORATION quests targeting the current system as pending-return. */
   explorationBySystemEntry(): void {
     if (!this.gameEngine?.player) return;
     const player = this.gameEngine.player;
@@ -44,18 +48,22 @@ export class QuestCompletion {
 
     for (const quest of questManager.getActiveQuests()) {
       if (quest.type !== QuestType.EXPLORATION) continue;
-      if (quest.isCompleted || quest.isFailed) continue;
+      if (quest.isCompleted || quest.isFailed || quest.isPendingReturn)
+        continue;
       if (quest.targetSystemId !== currentSystemId) continue;
-      const completed = questManager.forceCompleteQuest(quest.id, player);
-      if (completed) {
+      const marked = questManager.markObjectivesDone(quest.id);
+      if (marked) {
         logger.info(
-          `EXPLORATION quest auto-completed on system entry: ${quest.title}`,
+          `EXPLORATION quest objectives done, pending return: ${quest.title}`,
+        );
+        this.gameEngine.questPendingReturnCallback?.(
+          `Система исследована! Вернитесь за наградой`,
         );
       }
     }
   }
 
-  /** Auto-complete ESCORT quests whose convoy reaches the target system. */
+  /** Mark ESCORT quests whose convoy reaches the target system as pending-return. */
   escortBySystemEntry(): void {
     if (!this.gameEngine?.player) return;
     const player = this.gameEngine.player;
@@ -64,20 +72,24 @@ export class QuestCompletion {
 
     for (const quest of questManager.getActiveQuests()) {
       if (quest.type !== QuestType.ESCORT) continue;
-      if (quest.isCompleted || quest.isFailed) continue;
+      if (quest.isCompleted || quest.isFailed || quest.isPendingReturn)
+        continue;
       if (quest.targetSystemId !== currentSystemId) continue;
-      const completed = questManager.forceCompleteQuest(quest.id, player);
-      if (completed) {
+      const marked = questManager.markObjectivesDone(quest.id);
+      if (marked) {
         logger.info(
-          `ESCORT quest auto-completed on system entry: ${quest.title}`,
+          `ESCORT quest objectives done, pending return: ${quest.title}`,
+        );
+        this.gameEngine.questPendingReturnCallback?.(
+          `Конвой доставлен! Вернитесь за наградой`,
         );
       }
     }
   }
 
   /**
-   * Auto-complete DEFENSE quests targeting the current system and liberate the
-   * adjacent OVERMIND system stored on the quest.
+   * Mark DEFENSE quests targeting the current system as pending-return and
+   * liberate the adjacent OVERMIND system stored on the quest.
    */
   defenseBySystemEntry(): void {
     if (!this.gameEngine?.player || !this.gameEngine.galaxy) return;
@@ -88,18 +100,20 @@ export class QuestCompletion {
 
     for (const quest of questManager.getActiveQuests()) {
       if (quest.type !== QuestType.DEFENSE) continue;
-      if (quest.isCompleted || quest.isFailed) continue;
+      if (quest.isCompleted || quest.isFailed || quest.isPendingReturn)
+        continue;
       if (quest.targetSystemId !== currentSystemId) continue;
-      const completed = questManager.forceCompleteQuest(quest.id, player);
-      if (completed) {
-        // Liberate the hostile system stored in targetObjectId — also handles
-        // the edge case where it was re-tagged as pirate since quest issuance.
+      const marked = questManager.markObjectivesDone(quest.id);
+      if (marked) {
         if (quest.targetObjectId) {
           galaxy.tryLiberate(quest.targetObjectId);
           logger.info(
-            `DEFENSE quest completed: ${quest.title}, liberated hostile system ${quest.targetObjectId}`,
+            `DEFENSE quest objectives done: ${quest.title}, liberated hostile system ${quest.targetObjectId}`,
           );
         }
+        this.gameEngine.questPendingReturnCallback?.(
+          `Система обороняется! Вернитесь за наградой`,
+        );
       }
     }
   }

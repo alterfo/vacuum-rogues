@@ -136,17 +136,17 @@ DELIVERY/DIPLOMACY/TEXT_ADVENTURE получают награду на целе�
 - Modify: `src/core/adapters/QuestManagerAdapter.ts`
 - Create: `src/tests/quests/questReturnGate.test.ts`
 
-- [ ] В `QuestManager`: добавить метод `markObjectivesDone(questId: string): boolean` — устанавливает `quest.isPendingReturn = true` без начисления наград, перемещает в `pendingReturnQuests: Map<string, Quest>` (убирает из `activeQuests`)
-- [ ] Добавить `getPendingReturnQuests(): Quest[]` в `QuestManager` и `IQuestService`
-- [ ] Добавить в `QuestManagerAdapter` делегацию `markObjectivesDone` и `getPendingReturnQuests`
-- [ ] В `QuestCompletion.bountyByNpcKill()`: заменить `forceCompleteQuest` → `markObjectivesDone` + уведомление «Цель уничтожена! Вернитесь в {quest.planetId} за наградой»
-- [ ] Аналогично для `escortBySystemEntry()`, `explorationBySystemEntry()`, `defenseBySystemEntry()`
-- [ ] В `PlanetScene.ts`: добавить `checkReturnQuestCompletion()` — при посадке на планету проверяет `questManager.getPendingReturnQuests()` на `quest.planetId === currentPlanetId` → для каждого такого квеста: звук sfx_reward + toast «Награда получена: +N ₡» + вызов `questManager.claimReturnReward(quest.id, player)` (новый метод, внутри = `completeQuest`)
-- [ ] Вызывать `checkReturnQuestCompletion()` в `initialize()` PlanetScene (рядом с `checkDeliveryQuestCompletion()`)
-- [ ] Написать тест: bountyByNpcKill помечает квест `isPendingReturn`, НЕ начисляет кредиты
-- [ ] Написать тест: `getPendingReturnQuests()` возвращает квест после `markObjectivesDone`
-- [ ] Написать тест: `claimReturnReward` начисляет кредиты и перемещает в completedQuests
-- [ ] Запустить `npm test -- --run` — зелёные
+- [x] В `QuestManager`: добавить метод `markObjectivesDone(questId: string): boolean` — устанавливает `quest.isPendingReturn = true` без начисления наград, перемещает в `pendingReturnQuests: Map<string, Quest>` (убирает из `activeQuests`)
+- [x] Добавить `getPendingReturnQuests(): Quest[]` в `QuestManager` и `IQuestService`
+- [x] Добавить в `QuestManagerAdapter` делегацию `markObjectivesDone` и `getPendingReturnQuests`
+- [x] В `QuestCompletion.bountyByNpcKill()`: заменить `forceCompleteQuest` → `markObjectivesDone` + уведомление «Цель уничтожена! Вернитесь в {quest.planetId} за наградой»
+- [x] Аналогично для `escortBySystemEntry()`, `explorationBySystemEntry()`, `defenseBySystemEntry()`
+- [x] В `PlanetScene.ts`: добавить `checkReturnQuestCompletion()` — при посадке на планету проверяет `questManager.getPendingReturnQuests()` на `quest.planetId === currentPlanetId` → для каждого такого квеста: звук sfx_reward + toast «Награда получена: +N ₡» + вызов `questManager.claimReturnReward(quest.id, player)` (новый метод, внутри = `completeQuest`)
+- [x] Вызывать `checkReturnQuestCompletion()` в `initialize()` PlanetScene (рядом с `checkDeliveryQuestCompletion()`)
+- [x] Написать тест: bountyByNpcKill помечает квест `isPendingReturn`, НЕ начисляет кредиты
+- [x] Написать тест: `getPendingReturnQuests()` возвращает квест после `markObjectivesDone`
+- [x] Написать тест: `claimReturnReward` начисляет кредиты и перемещает в completedQuests
+- [x] Запустить `npm test -- --run` — зелёные (1294 tests pass)
 
 ### Task 7: Journal UI — показывать статус «Вернитесь за наградой»
 

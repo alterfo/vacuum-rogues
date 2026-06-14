@@ -9,26 +9,28 @@ interface FakeQuest {
   type: QuestType;
   isCompleted: boolean;
   isFailed: boolean;
+  isPendingReturn?: boolean;
   targetSystemId?: string;
   targetObjectId?: string;
 }
 
 function makeEngine(quests: FakeQuest[]): {
   engine: GameEngine;
-  forceComplete: ReturnType<typeof vi.fn>;
+  markDone: ReturnType<typeof vi.fn>;
   tryLiberate: ReturnType<typeof vi.fn>;
 } {
-  const forceComplete = vi.fn().mockReturnValue(true);
+  const markDone = vi.fn().mockReturnValue(true);
   const tryLiberate = vi.fn().mockReturnValue(true);
   const engine = {
     player: { currentSystemId: "sys-1" },
     questManager: {
       getActiveQuests: () => quests,
-      forceCompleteQuest: forceComplete,
+      markObjectivesDone: markDone,
     },
     galaxy: { tryLiberate },
+    questPendingReturnCallback: undefined,
   } as unknown as GameEngine;
-  return { engine, forceComplete, tryLiberate };
+  return { engine, markDone, tryLiberate };
 }
 
 const base = {
@@ -37,8 +39,8 @@ const base = {
 };
 
 describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
-  it("completes a matching EXPLORATION quest on system entry, ignores others", () => {
-    const { engine, forceComplete } = makeEngine([
+  it("marks pending-return for matching EXPLORATION quest on system entry, ignores others", () => {
+    const { engine, markDone } = makeEngine([
       {
         ...base,
         id: "q1",
@@ -62,12 +64,12 @@ describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
       },
     ]);
     new QuestCompletion(engine).explorationBySystemEntry();
-    expect(forceComplete).toHaveBeenCalledTimes(1);
-    expect(forceComplete).toHaveBeenCalledWith("q1", expect.anything());
+    expect(markDone).toHaveBeenCalledTimes(1);
+    expect(markDone).toHaveBeenCalledWith("q1");
   });
 
-  it("completes a BOUNTY quest matching the killed NPC id", () => {
-    const { engine, forceComplete } = makeEngine([
+  it("marks pending-return for BOUNTY quest matching the killed NPC id", () => {
+    const { engine, markDone } = makeEngine([
       {
         ...base,
         id: "b1",
@@ -84,12 +86,12 @@ describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
       },
     ]);
     new QuestCompletion(engine).bountyByNpcKill("npc-7");
-    expect(forceComplete).toHaveBeenCalledTimes(1);
-    expect(forceComplete).toHaveBeenCalledWith("b1", expect.anything());
+    expect(markDone).toHaveBeenCalledTimes(1);
+    expect(markDone).toHaveBeenCalledWith("b1");
   });
 
-  it("liberates the stored hostile system when a DEFENSE quest completes", () => {
-    const { engine, forceComplete, tryLiberate } = makeEngine([
+  it("liberates the stored hostile system when a DEFENSE quest objectives are done", () => {
+    const { engine, markDone, tryLiberate } = makeEngine([
       {
         ...base,
         id: "d1",
@@ -100,12 +102,12 @@ describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
       },
     ]);
     new QuestCompletion(engine).defenseBySystemEntry();
-    expect(forceComplete).toHaveBeenCalledTimes(1);
+    expect(markDone).toHaveBeenCalledTimes(1);
     expect(tryLiberate).toHaveBeenCalledWith("overmind-2");
   });
 
-  it("completes a matching ESCORT quest when convoy arrives at target system", () => {
-    const { engine, forceComplete } = makeEngine([
+  it("marks pending-return for matching ESCORT quest when convoy arrives at target system", () => {
+    const { engine, markDone } = makeEngine([
       {
         ...base,
         id: "e1",
@@ -129,8 +131,8 @@ describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
       },
     ]);
     new QuestCompletion(engine).escortBySystemEntry();
-    expect(forceComplete).toHaveBeenCalledTimes(1);
-    expect(forceComplete).toHaveBeenCalledWith("e1", expect.anything());
+    expect(markDone).toHaveBeenCalledTimes(1);
+    expect(markDone).toHaveBeenCalledWith("e1");
   });
 
   it("is a no-op with no game engine", () => {
