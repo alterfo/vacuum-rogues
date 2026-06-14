@@ -99,12 +99,12 @@ DELIVERY/DIPLOMACY/TEXT_ADVENTURE получают награду на целе�
 - Modify: `src/presentation/PlanetScene.ts` (передача playerRank в JobBoardPanel)
 - Create: `src/tests/presentation/jobBoardMinRank.test.ts`
 
-- [ ] Добавить параметр `playerRank: number = 0` в конструктор `JobBoardPanel`
-- [ ] В рендере каждой строки квеста: если `quest.template.minRank > 0 && playerRank < quest.template.minRank`, кнопка «Принять» серая + tooltip `Ранг ${quest.template.minRank}+`
-- [ ] В `PlanetScene.ts`: передавать `this.gameEngine.player.rank` (или аналог) при создании `JobBoardPanel`
-- [ ] Написать тест: JobBoardPanel с playerRank=1 и квестом minRank=3 → кнопка disabled
-- [ ] Написать тест: playerRank=5, minRank=3 → кнопка enabled
-- [ ] Запустить `npm test -- --run` — зелёные
+- [x] Добавить параметр `playerRank: number = 0` в конструктор `JobBoardPanel`
+- [x] В рендере каждой строки квеста: если `quest.template.minRank > 0 && playerRank < quest.template.minRank`, кнопка «Принять» серая + tooltip `Ранг ${quest.template.minRank}+`
+- [x] В `PlanetScene.ts`: передавать `this.gameEngine.player.rank` (или аналог) при создании `JobBoardPanel`
+- [x] Написать тест: JobBoardPanel с playerRank=1 и квестом minRank=3 → кнопка disabled
+- [x] Написать тест: playerRank=5, minRank=3 → кнопка enabled
+- [x] Запустить `npm test -- --run` — зелёные
 
 ### Task 5: Quest.isPendingReturn — domain + schema + migration
 

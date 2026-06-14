@@ -1197,35 +1197,38 @@ export class PlanetScene extends GameScene {
     factionText.y = topY;
     ui.addChild(factionText);
 
-    // Line 2: reputation status
-    const repLine = new Text({
-      text: `Отношение: `,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(13),
-        fill: 0x889aaa,
-      },
-    });
-    repLine.eventMode = "none";
-    repLine.anchor.set(0.5, 0);
-    repLine.x = w / 2 - 30;
-    repLine.y = topY + 20;
-    ui.addChild(repLine);
+    // Line 2: reputation status (inhabited planets only)
+    const repYOffset = this.planet.isHabitable ? 20 : 0;
+    if (this.planet.isHabitable) {
+      const repLine = new Text({
+        text: `Отношение: `,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: scaledFont(13),
+          fill: 0x889aaa,
+        },
+      });
+      repLine.eventMode = "none";
+      repLine.anchor.set(0.5, 0);
+      repLine.x = w / 2 - 30;
+      repLine.y = topY + 20;
+      ui.addChild(repLine);
 
-    const repText = new Text({
-      text: `${repLabel} (${rep >= 0 ? "+" : ""}${rep})`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(13),
-        fill: repColor,
-        fontWeight: "bold",
-      },
-    });
-    repText.eventMode = "none";
-    repText.anchor.set(0, 0);
-    repText.x = w / 2 - 30 + repLine.width;
-    repText.y = topY + 20;
-    ui.addChild(repText);
+      const repText = new Text({
+        text: `${repLabel} (${rep >= 0 ? "+" : ""}${rep})`,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: scaledFont(13),
+          fill: repColor,
+          fontWeight: "bold",
+        },
+      });
+      repText.eventMode = "none";
+      repText.anchor.set(0, 0);
+      repText.x = w / 2 - 30 + repLine.width;
+      repText.y = topY + 20;
+      ui.addChild(repText);
+    }
 
     // Line 3: market goods (or inhabitation status)
     const goodsLine = this.planet.isHabitable
@@ -1243,7 +1246,7 @@ export class PlanetScene extends GameScene {
     goodsText.eventMode = "none";
     goodsText.anchor.set(0.5, 0);
     goodsText.x = w / 2;
-    goodsText.y = topY + 40;
+    goodsText.y = topY + 20 + repYOffset;
     ui.addChild(goodsText);
   }
 
@@ -1301,6 +1304,7 @@ export class PlanetScene extends GameScene {
       acceptedIds,
       activeQuests,
       currentDay,
+      this.gameEngine.player?.rank ?? 0,
     );
     this.renderer.uiLayer.addChild(this.jobBoardPanel.container);
   }

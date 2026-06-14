@@ -60,6 +60,8 @@ export class JobBoardPanel {
     activeQuests: Quest[] = [],
     /** Current game day (for countdown calculation). */
     currentDay = 0,
+    /** Player's current rank for minRank gating. */
+    playerRank = 0,
   ) {
     this.callbacks = callbacks;
     this.container = new Container();
@@ -81,6 +83,7 @@ export class JobBoardPanel {
       acceptedQuestIds,
       activeQuests,
       currentDay,
+      playerRank,
     );
   }
 
@@ -91,6 +94,7 @@ export class JobBoardPanel {
     acceptedQuestIds: ReadonlySet<string>,
     activeQuests: Quest[],
     currentDay: number,
+    playerRank = 0,
   ): void {
     const W = JobBoardPanel.W;
     const bg = new Graphics();
@@ -138,8 +142,10 @@ export class JobBoardPanel {
 
     for (const q of quests) {
       const alreadyTaken = acceptedQuestIds.has(q.template.id);
-      const canAccept = !atLimit && !alreadyTaken;
-      this.addRow(q, y, W, canAccept, alreadyTaken);
+      const minRank = q.template.minRank ?? 0;
+      const rankBlocked = minRank > 0 && playerRank < minRank;
+      const canAccept = !atLimit && !alreadyTaken && !rankBlocked;
+      this.addRow(q, y, W, canAccept, alreadyTaken, rankBlocked ? minRank : 0);
       y += JobBoardPanel.ROW_H_OFFER;
     }
   }
@@ -207,6 +213,7 @@ export class JobBoardPanel {
     W: number,
     canAccept: boolean,
     alreadyTaken: boolean,
+    requiredRank = 0,
   ): void {
     const rowH = JobBoardPanel.ROW_H_OFFER - 6;
     const t = q.template;
@@ -330,11 +337,14 @@ export class JobBoardPanel {
     }
     this.container.addChild(btnBg);
 
+    const isRankBlocked = requiredRank > 0 && !alreadyTaken && !canAccept;
     const btnLabel = alreadyTaken
       ? "✓ Принято"
       : canAccept
         ? "Принять"
-        : "Занят";
+        : isRankBlocked
+          ? `Ранг ${requiredRank}+`
+          : "Занят";
     const btnLbl = new Text({
       text: btnLabel,
       style: {
