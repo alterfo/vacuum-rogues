@@ -4,6 +4,8 @@
  * hard to test in isolation).
  */
 
+import { hashStr } from "@/utils/hashStr";
+
 export interface Point {
   x: number;
   y: number;
@@ -15,13 +17,7 @@ export interface Point {
  * orbit so positions are reproducible across scene reloads (US-070 #9).
  */
 export function hashToAngle(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  // h is a 32-bit int; map its unsigned value into [0, 2π).
-  return ((h >>> 0) / 0xffffffff) * Math.PI * 2;
+  return (hashStr(s) / 0xffffffff) * Math.PI * 2;
 }
 
 /**

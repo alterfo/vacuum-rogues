@@ -26,9 +26,14 @@ export interface QuestTemplate {
  * Event payload for quest progress updates.
  */
 export interface QuestProgressEvent {
-  readonly type: "COLLECT_ITEM" | "VISIT_LOCATION" | "DEFEAT_ENEMY";
+  readonly type:
+    | "COLLECT_ITEM"
+    | "VISIT_LOCATION"
+    | "VISIT_SYSTEM"
+    | "DEFEAT_ENEMY";
   readonly itemType?: string;
   readonly locationId?: string;
+  readonly systemId?: string;
   readonly amount?: number;
 }
 

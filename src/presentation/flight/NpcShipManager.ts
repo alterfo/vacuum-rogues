@@ -838,7 +838,7 @@ export class NpcShipManager implements FlightModule {
     attackBtn.on("pointerdown", (e) => {
       e.stopPropagation();
       this.overmindOverlay = null;
-      overlay.destroy();
+      queueMicrotask(() => overlay.destroy({ children: true }));
       this.rememberFlightPos(); // resume here after combat, not at the system edge
       void this.gameEngine!.transitionTo(SceneType.COMBAT, {
         gameEngine: this.gameEngine!,
@@ -878,7 +878,7 @@ export class NpcShipManager implements FlightModule {
     retreatBtn.on("pointerdown", (e) => {
       e.stopPropagation();
       this.overmindOverlay = null;
-      overlay.destroy();
+      queueMicrotask(() => overlay.destroy({ children: true }));
     });
 
     overlay.addChild(bg, border, title, desc, attackBtn, retreatBtn);

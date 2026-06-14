@@ -93,6 +93,10 @@ export class QuestManagerAdapter implements IQuestService {
     return this.delegate.forceCompleteQuest(questId, player);
   }
 
+  getExpiredQuests(): Quest[] {
+    return this.delegate.getExpiredQuests();
+  }
+
   getCompletedChainParts(): Record<string, number[]> {
     return this.delegate.getCompletedChainParts();
   }

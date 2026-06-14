@@ -108,9 +108,16 @@ export const InventorySchema = z.object({
 export const QuestObjectiveSchema = z.object({
   id: z.string(),
   description: z.string(),
+  type: z
+    .enum(["COLLECT_ITEM", "VISIT_LOCATION", "VISIT_SYSTEM", "DEFEAT_ENEMY"])
+    .default("COLLECT_ITEM"),
   targetAmount: z.number().int().positive(),
   currentAmount: z.number().int().min(0),
   completed: z.boolean(),
+  itemType: z.string().optional(),
+  locationId: z.string().optional(),
+  targetSystemId: z.string().optional(),
+  enemyType: z.string().optional(),
 });
 
 export const QuestFailurePenaltySchema = z.object({
