@@ -74,6 +74,36 @@ function makeV0Save(): Record<string, unknown> {
   };
 }
 
+/**
+ * A quest object as it appeared in a save predating the quest-polish plan:
+ * no `isPendingReturn`, no `targetSystemId`/`minReputation`/`chainId` etc.
+ * The migration pipeline must backfill these without dropping the quest.
+ */
+function makeLegacyQuest(): Record<string, unknown> {
+  return {
+    id: "quest_bounty_hunt",
+    title: "Bounty Hunt",
+    type: "BOUNTY",
+    objectives: [
+      {
+        id: "obj-1",
+        description: "Destroy the target ship",
+        type: "DEFEAT_ENEMY",
+        targetAmount: 1,
+        currentAmount: 0,
+        completed: false,
+      },
+    ],
+    isCompleted: false,
+    isFailed: false,
+    planetId: "planet-1",
+    issuedDay: 1,
+    deadline: 0,
+    failurePenalty: null,
+    // NOTE: deliberately omits isPendingReturn to simulate an old save.
+  };
+}
+
 describe("MigrationPipeline", () => {
   it("migrates from version 1 to current and adds all Task 1–24 defaults", () => {
     const raw = makeV0Save();
@@ -151,5 +181,51 @@ describe("MigrationPipeline", () => {
     expect((gal.systems as Record<string, unknown>[])[0].economyType).toBe(
       "MIXED",
     );
+  });
+
+  // Task 8 (quest polish): quest-return persistence — v21→v22 migration.
+  it("backfills isPendingReturn = false on legacy active quests", () => {
+    const raw = makeV0Save();
+    (raw.player as Record<string, unknown>).questLog = {
+      activeQuests: [makeLegacyQuest()],
+      completedQuests: [],
+    };
+    const migrated = MigrationPipeline.migrate(raw as unknown as SaveState);
+
+    const pl = migrated.player as unknown as Record<string, unknown>;
+    const questLog = pl.questLog as Record<string, unknown>;
+    const quests = questLog.activeQuests as Record<string, unknown>[];
+    expect(quests[0].isPendingReturn).toBe(false);
+
+    // The migrated save must still satisfy the Zod schema.
+    expect(() => validateSaveState(migrated)).not.toThrow();
+  });
+
+  it("adds empty pendingReturnQuests to questLog absent from old saves", () => {
+    const raw = makeV0Save();
+    // makeV0Save's questLog has no pendingReturnQuests key at all.
+    expect(
+      (
+        (raw.player as Record<string, unknown>).questLog as Record<
+          string,
+          unknown
+        >
+      ).pendingReturnQuests,
+    ).toBeUndefined();
+
+    const migrated = MigrationPipeline.migrate(raw as unknown as SaveState);
+
+    const pl = migrated.player as unknown as Record<string, unknown>;
+    const questLog = pl.questLog as Record<string, unknown>;
+    expect(questLog.pendingReturnQuests).toEqual([]);
+
+    // After validation the field is present and empty.
+    const parsed = validateSaveState(migrated) as unknown as Record<
+      string,
+      unknown
+    >;
+    const parsedLog = (parsed.player as Record<string, unknown>)
+      .questLog as Record<string, unknown>;
+    expect(parsedLog.pendingReturnQuests).toEqual([]);
   });
 });

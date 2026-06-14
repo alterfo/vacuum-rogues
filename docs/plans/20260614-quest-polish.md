@@ -166,9 +166,9 @@ DELIVERY/DIPLOMACY/TEXT_ADVENTURE получают награду на целе�
 **Files:**
 - Modify: `src/tests/core/saveMigration.test.ts` (добавить случай)
 
-- [ ] Добавить тест: сейв без `isPendingReturn` в quest-объектах мигрирует корректно (поле = false)
-- [ ] Добавить тест: `pendingReturnQuests` отсутствующий в старом сейве → загружается как `[]`
-- [ ] Запустить `npm test -- --run` — зелёные
+- [x] Добавить тест: сейв без `isPendingReturn` в quest-объектах мигрирует корректно (поле = false)
+- [x] Добавить тест: `pendingReturnQuests` отсутствующий в старом сейве → загружается как `[]`
+- [x] Запустить `npm test -- --run` — зелёные (1303 tests pass)
 
 ### Task 9: Финальная верификация
 
