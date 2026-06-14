@@ -28,6 +28,12 @@ export interface ShopOptions {
   readonly refreshEveryDays?: number;
   /** Faction/economy price modifier (e.g. trade hubs cheaper); default ~1. */
   readonly priceFactor?: number;
+  /**
+   * Maximum gear tech level this shop will stock. Items with techLevel above
+   * this cap are excluded entirely (they don't exist yet in-world). When
+   * omitted, no tech ceiling is enforced (legacy / test behaviour).
+   */
+  readonly maxTechLevel?: number;
 }
 
 /**
@@ -48,11 +54,14 @@ export function generateShop(opts: ShopOptions): GearListing[] {
     day,
     refreshEveryDays = SHOP_REFRESH_DAYS,
     priceFactor = 1,
+    maxTechLevel,
   } = opts;
   const bucket = Math.floor(day / Math.max(1, refreshEveryDays));
   const listings: GearListing[] = [];
 
   for (const gear of GEAR_CATALOG) {
+    // Exclude gear whose tech level exceeds the system's current research level.
+    if (maxTechLevel !== undefined && gear.techLevel > maxTechLevel) continue;
     // One independent RNG per (shop, item) → stable stock + price per item.
     const rng = new SeededRNG(`${seed}|shop|${planetId}|${bucket}|${gear.id}`);
     if (rng.next() > stockChance(gear.techLevel)) continue;

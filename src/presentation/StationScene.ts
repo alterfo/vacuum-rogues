@@ -179,18 +179,28 @@ export class StationScene extends GameScene {
     const station = this.station;
     if (!galaxy || !station) return;
 
-    // Research labs carry higher-tech gear only (minTechLevel 3)
-    const techMin = station.type === StationType.RESEARCH_LAB ? 3 : 1;
+    // Find the star system that owns this station to read its tech level.
+    const starSystem = galaxy.systems.find((s) =>
+      s.stations.some((st) => st.id === station.id),
+    );
+    const systemTechLevel = starSystem?.techLevel ?? 1;
+
+    // RESEARCH_LAB stations have access to one tier above the system level
+    // (frontier research premium), capped at 8.
+    const maxTechLevel =
+      station.type === StationType.RESEARCH_LAB
+        ? Math.min(8, systemTechLevel + 1)
+        : systemTechLevel;
     const priceFactor = station.type === StationType.RESEARCH_LAB ? 1.1 : 1.0;
 
-    const allListings = generateShop({
+    this.shopListings = generateShop({
       systemId: station.id,
       planetId: station.id,
       seed: galaxy.id,
       day: galaxy.gameDays,
       priceFactor,
+      maxTechLevel,
     });
-    this.shopListings = allListings.filter((l) => l.gear.techLevel >= techMin);
   }
 
   // ── rendering ─────────────────────────────────────────────────────────────

@@ -65,15 +65,15 @@ contested systems) to make the galaxy feel alive.
 - Modify: `src/systems/equipment/ShopGenerator.ts`
 - Modify: `src/tests/equipment/shopGenerator.test.ts`
 
-- [ ] Pass `system.techLevel` into `generateShop()` as `maxTechLevel` param (replaces
+- [x] Pass `system.techLevel` into `generateShop()` as `maxTechLevel` param (replaces
   hardcoded `techMin`); items with `techLevel > system.techLevel` are excluded entirely
   (not just low-probability — they don't exist yet in-world)
-- [ ] Update `StationScene.ts`: remove hardcoded `techMin=3` for RESEARCH_LAB; instead
+- [x] Update `StationScene.ts`: remove hardcoded `techMin=3` for RESEARCH_LAB; instead
   pass `starSystem.techLevel` to `generateShop()`; RESEARCH_LAB gets +1 bonus to
   `maxTechLevel` (frontier research premium)
-- [ ] Write unit tests: shop with system.techLevel=3 never stocks tech-4+ items;
+- [x] Write unit tests: shop with system.techLevel=3 never stocks tech-4+ items;
   RESEARCH_LAB system at techLevel=3 can stock up to tech-4; cap at 8
-- [ ] Run lint + unit tests — green
+- [x] Run lint + unit tests — green
 
 ### Task 3: Economic re-balance — quest rewards and gear prices
 **Files:**
