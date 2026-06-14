@@ -1369,6 +1369,10 @@ export class SpaceFlightScene extends GameScene {
     );
     this.gameEngine.player.currentSystemId = targetSystemId;
     this.gameEngine.galaxy.revealSystemAndNeighbors(targetSystemId);
+    this.gameEngine.questManager.updateQuestProgress({
+      type: "VISIT_SYSTEM",
+      systemId: targetSystemId,
+    });
     logger.info(
       `Hyperjump to ${target.name} complete. Fuel left: ${this.gameEngine.player.ship.energy}`,
     );

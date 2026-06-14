@@ -151,11 +151,27 @@ export class QuestJournalUI {
     sectionTitle.eventMode = "none";
     this.container.addChild(sectionTitle);
 
+    const cardStep = 120;
+    const maxVisible = Math.floor((this.panelHeight - startY - 30) / cardStep);
+    const visible = quests.slice(0, maxVisible);
+    const overflow = quests.length - visible.length;
+
     let yOffset = startY + 30;
-    for (const quest of quests) {
+    for (const quest of visible) {
       const questUI = this.createQuestCard(quest, yOffset);
       this.container.addChild(questUI);
-      yOffset += 120; // Space for each quest card
+      yOffset += cardStep;
+    }
+
+    if (overflow > 0) {
+      const moreText = new Text({
+        text: `+${overflow} ещё...`,
+        style: { fontFamily: "Courier New", fontSize: 11, fill: 0x888888 },
+      });
+      moreText.x = 20;
+      moreText.y = yOffset;
+      moreText.eventMode = "none";
+      this.container.addChild(moreText);
     }
   }
 
@@ -303,6 +319,7 @@ export class QuestJournalUI {
     });
     btnText.x = 5;
     btnText.y = 2;
+    btnText.eventMode = "none";
     btn.addChild(btnText);
 
     btn.eventMode = "static";

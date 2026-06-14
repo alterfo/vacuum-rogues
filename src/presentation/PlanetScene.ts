@@ -883,7 +883,7 @@ export class PlanetScene extends GameScene {
     // Reputation indicator dots (5 dots, filled left-to-right by rep level)
     const rep = this.gameEngine?.player?.reputation[faction] ?? 0;
     const repLevel =
-      rep >= 50 ? 4 : rep >= 20 ? 3 : rep >= -20 ? 2 : rep >= -50 ? 1 : 0;
+      rep >= 50 ? 4 : rep >= 10 ? 3 : rep >= -20 ? 2 : rep >= -50 ? 1 : 0;
     const dotColors = [0xff2222, 0xff8888, 0xaaaaaa, 0x88ff88, 0x00ff88];
     for (let i = 0; i < 5; i++) {
       const dot = new Graphics();
