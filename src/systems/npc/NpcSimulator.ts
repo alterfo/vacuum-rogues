@@ -48,6 +48,13 @@ const RANGER_QUEST_CHANCE = 0.1;
 /** Per-day chance a pirate NPC raids a trader's cargo in the same off-screen system. */
 const PIRATE_CARGO_RAID_CHANCE = 0.05;
 
+/** How often (game days) PATROL convoys are assembled toward contested borders. */
+const CONVOY_ASSEMBLY_INTERVAL = 30;
+/** Max PATROL ships recruited into a single convoy. */
+const CONVOY_MAX_SHIPS = 3;
+/** Per-convoy chance to liberate a contested system on arrival. */
+const CONVOY_LIBERATION_CHANCE = 0.2;
+
 const FACTIONS: FactionType[] = [
   FactionType.OUTLANDERS,
   FactionType.BASTIONS,
@@ -395,10 +402,23 @@ export class NpcSimulator {
       if (npc.state === NpcState.TRAVELING) {
         npc.daysToArrival -= 1;
         if (npc.daysToArrival <= 0) {
+          const arrivedAt = npc.destinationSystemId;
           this.arrive(npc);
           if (npc.role === NpcRole.TRADER) {
             this.simulateTraderTrade(npc, galaxy, rng);
           }
+          // PATROL arriving as convoy → 20% chance to liberate contested system
+          if (
+            npc.role === NpcRole.PATROL &&
+            npc.convoyId &&
+            arrivedAt &&
+            galaxy.isHostileSystem(arrivedAt) &&
+            rng.next() < CONVOY_LIBERATION_CHANCE
+          ) {
+            galaxy.tryLiberate(arrivedAt);
+            logger.info(`Convoy ${npc.convoyId} liberated ${arrivedAt}`);
+          }
+          if (npc.convoyId) npc.convoyId = undefined;
           // Ranger arriving at quest target → quest complete
           if (
             npc.role === NpcRole.RANGER &&
@@ -442,6 +462,14 @@ export class NpcSimulator {
       if (npc.state === NpcState.IDLE || rng.next() < DEPART_CHANCE) {
         this.departToNewGoal(npc, galaxy, rng);
       }
+    }
+
+    // Assemble military convoys toward contested systems every 30 days.
+    if (
+      galaxy.gameDays > 0 &&
+      galaxy.gameDays % CONVOY_ASSEMBLY_INTERVAL === 0
+    ) {
+      this.assembleConvoys(galaxy, rng);
     }
 
     // Resolve abstract off-screen fights, then keep the population topped up.
@@ -586,6 +614,74 @@ export class NpcSimulator {
       if (npc.state === NpcState.FIGHTING) {
         npc.state = NpcState.PATROLLING;
       }
+    }
+  }
+
+  /**
+   * Assemble military convoys toward contested border systems. Called every
+   * CONVOY_ASSEMBLY_INTERVAL days. For each hostile system adjacent to a
+   * friendly system, recruit idle PATROL ships from the friendly side and
+   * assign them a shared convoyId so they travel together.
+   */
+  private assembleConvoys(galaxy: Galaxy, rng: SeededRNG): void {
+    // Find contested borders: hostile systems that have at least one friendly neighbour.
+    const contestedBorders: Array<{
+      hostileId: string;
+      friendlyNeighbourId: string;
+    }> = [];
+    for (const sys of galaxy.systems) {
+      if (!galaxy.isHostileSystem(sys.id)) continue;
+      for (const conn of sys.connections) {
+        if (!galaxy.isHostileSystem(conn.toSystemId)) {
+          contestedBorders.push({
+            hostileId: sys.id,
+            friendlyNeighbourId: conn.toSystemId,
+          });
+          break;
+        }
+      }
+    }
+    if (contestedBorders.length === 0) return;
+
+    // Pick one contested border at random to send a convoy toward.
+    const border =
+      contestedBorders[rng.nextInt(0, contestedBorders.length - 1)];
+    const { hostileId, friendlyNeighbourId } = border;
+
+    // Gather idle PATROL ships currently in the friendly neighbour system (or
+    // any friendly system connected to the hostile one) that are not already
+    // in a convoy or travelling.
+    const candidatePatrols = galaxy.npcShips.filter(
+      (n) =>
+        n.role === NpcRole.PATROL &&
+        n.state !== NpcState.TRAVELING &&
+        n.state !== NpcState.DEAD &&
+        !n.convoyId &&
+        n.currentSystemId === friendlyNeighbourId,
+    );
+
+    if (candidatePatrols.length === 0) return;
+
+    const count = Math.min(
+      CONVOY_MAX_SHIPS,
+      candidatePatrols.length,
+      rng.nextInt(2, CONVOY_MAX_SHIPS),
+    );
+    const convoyId = `convoy_${galaxy.gameDays}_${hostileId}`;
+    const daysToArrival = this.travelDays(
+      galaxy,
+      friendlyNeighbourId,
+      hostileId,
+    );
+
+    for (let i = 0; i < count; i++) {
+      const npc = candidatePatrols[i];
+      npc.convoyId = convoyId;
+      npc.destinationSystemId = hostileId;
+      npc.daysToArrival = daysToArrival;
+      npc.state = NpcState.TRAVELING;
+      npc.goal = { kind: NpcGoalKind.PATROL, targetSystemId: hostileId };
+      logger.info(`Convoy ${convoyId}: assigned ${npc.name} → ${hostileId}`);
     }
   }
 

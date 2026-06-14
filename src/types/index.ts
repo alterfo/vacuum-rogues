@@ -209,6 +209,8 @@ export interface NpcShipInit {
   cargo?: { goodId: string; qty: number }[];
   /** System ID this ranger NPC is currently traveling toward to complete a quest. */
   activeQuestTarget?: string | null;
+  /** Shared ID grouping ships travelling together as a military convoy. */
+  convoyId?: string;
 }
 
 /** A simulation event emitted by the living-galaxy and collected in newsFeed. */

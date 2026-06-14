@@ -32,6 +32,8 @@ function roleToGoalKind(role: NpcRole): NpcGoalKind {
 /**
  * Deterministic rule-based brain. Picks a destination system (prefers warp
  * neighbours, falls back to any other system) and a goal kind by role.
+ * TRADER NPCs prefer neighbours with a different economy type to simulate
+ * purposeful trade routes.
  */
 export class RuleBasedNpcBrain implements NpcBrain {
   decideGoal(npc: NpcShip, galaxy: Galaxy, rng: SeededRNG): NpcGoal {
@@ -40,12 +42,22 @@ export class RuleBasedNpcBrain implements NpcBrain {
     const neighbours = current
       ? current.connections.map((c) => c.toSystemId)
       : [];
-    const pool =
+    let pool =
       neighbours.length > 0
         ? neighbours
         : galaxy.systems
             .map((s) => s.id)
             .filter((id) => id !== npc.currentSystemId);
+
+    // Traders prefer neighbours with a different economy type so their routes
+    // simulate purposeful cargo runs between complementary systems.
+    if (npc.role === NpcRole.TRADER && current && neighbours.length > 0) {
+      const differentEconomy = neighbours.filter((id) => {
+        const sys = galaxy.systems.find((s) => s.id === id);
+        return sys && sys.economyType !== current.economyType;
+      });
+      if (differentEconomy.length > 0) pool = differentEconomy;
+    }
 
     const targetSystemId =
       pool.length > 0

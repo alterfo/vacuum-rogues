@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 20;
+  static readonly CURRENT_VERSION = 21;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -256,6 +256,11 @@ export class MigrationPipeline {
           if (sys.techLevel === undefined) sys.techLevel = 1;
         }
       }
+    },
+    // 20 -> 21: NPC convoy IDs (Task 6, living-galaxy economy). convoyId is
+    // optional so old NPC ships load fine without it — no data backfill needed.
+    20: (_state: SaveState) => {
+      // No-op: convoyId is optional and absent by default on old ships.
     },
     // 19 -> 20: Artifact upgrade counts per loadout slot (Task 5). Old saves
     // lack upgrades on each slotted item; default to 0 (no upgrades applied).

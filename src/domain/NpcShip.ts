@@ -38,6 +38,8 @@ export class NpcShip {
   cargo: { goodId: string; qty: number }[];
   /** System ID this ranger NPC is traveling toward to complete an off-screen quest. */
   activeQuestTarget: string | null;
+  /** Shared ID grouping ships travelling together as a military convoy. */
+  convoyId?: string;
 
   constructor(init: NpcShipInit) {
     this.id = init.id;
@@ -61,5 +63,6 @@ export class NpcShip {
     this.loadoutSummary = init.loadoutSummary ?? [];
     this.cargo = init.cargo ?? [];
     this.activeQuestTarget = init.activeQuestTarget ?? null;
+    this.convoyId = init.convoyId;
   }
 }

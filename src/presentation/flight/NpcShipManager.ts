@@ -325,12 +325,23 @@ export class NpcShipManager implements FlightModule {
     const radius = entry
       ? bounds.boundary
       : bounds.rInner + Math.random() * (bounds.rOuter - bounds.rInner);
-    const sprite = new NpcShipSprite(
-      npc,
-      bounds.cx + Math.cos(angle) * radius,
-      bounds.cy + Math.sin(angle) * radius,
-      bounds,
-    );
+    let spawnX = bounds.cx + Math.cos(angle) * radius;
+    let spawnY = bounds.cy + Math.sin(angle) * radius;
+
+    // Apply V-formation offset for convoy members so they don't overlap.
+    // The perpendicular direction (angle + π/2) spaces ships ±30px apart.
+    if (npc.convoyId) {
+      const convoyIndex = this.npcSprites.filter(
+        (s) => s.npc.convoyId === npc.convoyId,
+      ).length;
+      const offsets = [0, 30, -30];
+      const perpOffset = offsets[convoyIndex % offsets.length] ?? 0;
+      const perpAngle = angle + Math.PI / 2;
+      spawnX += Math.cos(perpAngle) * perpOffset;
+      spawnY += Math.sin(perpAngle) * perpOffset;
+    }
+
+    const sprite = new NpcShipSprite(npc, spawnX, spawnY, bounds);
     sprite.setClickHandler((n) => this.onNpcClick(n));
     sprite.updateHitArea(this.lastCameraZoom);
     sprite.setHoverHandler(
