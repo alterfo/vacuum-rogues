@@ -15,6 +15,7 @@ export interface QuestFailurePenalty {
 export class Quest {
   isCompleted = false;
   isFailed = false;
+  isPendingReturn = false;
 
   constructor(
     public readonly id: string,
@@ -69,7 +70,7 @@ export class Quest {
    */
   isExpired(currentDay: number): boolean {
     if (this.deadline === 0) return false; // No deadline
-    if (this.isCompleted || this.isFailed) return false; // Already finished
+    if (this.isCompleted || this.isFailed || this.isPendingReturn) return false; // Already finished
     return currentDay > this.issuedDay + this.deadline;
   }
 

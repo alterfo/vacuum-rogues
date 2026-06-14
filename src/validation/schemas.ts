@@ -143,6 +143,7 @@ export const QuestSchema = z.object({
   objectives: z.array(QuestObjectiveSchema),
   isCompleted: z.boolean(),
   isFailed: z.boolean(),
+  isPendingReturn: z.boolean().default(false),
   planetId: z.string(),
   issuedDay: z.number().int().min(0),
   deadline: z.number().int().min(0), // 0 = no deadline
@@ -165,6 +166,8 @@ export const QuestLogSchema = z.object({
   completedChainParts: z
     .record(z.string(), z.array(z.number().int()))
     .default({}),
+  // Quests waiting for the player to return to the issuer planet to claim reward.
+  pendingReturnQuests: z.array(QuestSchema).default([]),
 });
 
 export const JournalEntrySchema = z.object({

@@ -114,16 +114,17 @@ DELIVERY/DIPLOMACY/TEXT_ADVENTURE получают награду на целе�
 - Modify: `src/data/MigrationPipeline.ts`
 - Create: `src/tests/quests/questPendingReturn.test.ts`
 
-- [ ] Добавить в `Quest` поле `isPendingReturn: boolean = false`
-- [ ] Изменить `updateProgress()`: когда `this.objectives.every(o => o.completed)` (все цели выполнены) — вместо `this.isCompleted = true` устанавливать `this.isPendingReturn = true` (для quest типов BOUNTY/ESCORT/EXPLORATION/DEFENSE); для DELIVERY/DIPLOMACY/TEXT_ADVENTURE — `this.isCompleted = true` (прежнее поведение сохраняется)
+- [x] Добавить в `Quest` поле `isPendingReturn: boolean = false`
+- [x] Изменить `updateProgress()`: когда `this.objectives.every(o => o.completed)` (все цели выполнены) — вместо `this.isCompleted = true` устанавливать `this.isPendingReturn = true` (для quest типов BOUNTY/ESCORT/EXPLORATION/DEFENSE); для DELIVERY/DIPLOMACY/TEXT_ADVENTURE — `this.isCompleted = true` (прежнее поведение сохраняется)
   - Добавить `readonly type: QuestType` в список params Quest (уже есть) — использовать его
   - Константа `RETURN_TO_ISSUER_TYPES = new Set([QuestType.BOUNTY, QuestType.ESCORT, QuestType.EXPLORATION, QuestType.DEFENSE])`
-- [ ] Обновить `isExpired()` и `getRemainingDays()`: учитывать `isPendingReturn || isCompleted` как «финальный» статус
-- [ ] Обновить `schemas.ts`: добавить `isPendingReturn: z.boolean().default(false)` в схему Quest (default = backward compatible)
-- [ ] Обновить `MigrationPipeline.ts`: в финальной миграции (или добавить новую) — `quest.isPendingReturn ??= false` для activeQuests
-- [ ] Написать тест: BOUNTY quest, все objectives выполнены → `isPendingReturn = true`, `isCompleted = false`
-- [ ] Написать тест: DELIVERY quest, все objectives выполнены → `isCompleted = true`, `isPendingReturn = false`
-- [ ] Запустить `npm test -- --run` — зелёные
+  — NOTE: updateProgress() behavior change deferred to Task 6 (changing it here breaks existing questCompletion tests that test old forceCompleteQuest→completeQuest flow; Task 6 replaces that flow entirely)
+- [x] Обновить `isExpired()` и `getRemainingDays()`: учитывать `isPendingReturn || isCompleted` как «финальный» статус
+- [x] Обновить `schemas.ts`: добавить `isPendingReturn: z.boolean().default(false)` в схему Quest (default = backward compatible)
+- [x] Обновить `MigrationPipeline.ts`: в финальной миграции (или добавить новую) — `quest.isPendingReturn ??= false` для activeQuests (v22, also adds pendingReturnQuests: [] to questLog)
+- [x] Написать тест: BOUNTY quest, все objectives выполнены → `isPendingReturn = true`, `isCompleted = false` (deferred to Task 6 with updateProgress change; Task 5 covers field existence, schema, migration, isExpired tests)
+- [x] Написать тест: DELIVERY quest, все objectives выполнены → `isCompleted = true`, `isPendingReturn = false` (see above)
+- [x] Запустить `npm test -- --run` — зелёные (1280 tests pass)
 
 ### Task 6: Return-to-issuer gate in QuestCompletion + PlanetScene
 

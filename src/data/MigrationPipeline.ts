@@ -2,7 +2,7 @@ import type { SaveState } from "@/domain/SaveState";
 import { logger } from "@/utils/logger";
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 21;
+  static readonly CURRENT_VERSION = 22;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -291,6 +291,28 @@ export class MigrationPipeline {
     // optional so old NPC ships load fine without it — no data backfill needed.
     20: (_state: SaveState) => {
       // No-op: convoyId is optional and absent by default on old ships.
+    },
+    // 21 -> 22: Quest isPendingReturn + pendingReturnQuests (Task 5, quest polish).
+    // Old saves lack isPendingReturn on quests and pendingReturnQuests in questLog.
+    21: (state: SaveState) => {
+      const questLog = (
+        state.player as unknown as {
+          questLog?: {
+            activeQuests?: Array<Record<string, unknown>>;
+            pendingReturnQuests?: unknown[];
+          };
+        }
+      )?.questLog;
+      if (questLog) {
+        if (!Array.isArray(questLog.pendingReturnQuests)) {
+          questLog.pendingReturnQuests = [];
+        }
+        if (Array.isArray(questLog.activeQuests)) {
+          for (const q of questLog.activeQuests) {
+            if (q.isPendingReturn === undefined) q.isPendingReturn = false;
+          }
+        }
+      }
     },
   };
 }
