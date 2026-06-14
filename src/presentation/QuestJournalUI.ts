@@ -152,7 +152,7 @@ export class QuestJournalUI {
     sectionTitle.eventMode = "none";
     this.container.addChild(sectionTitle);
 
-    const cardStep = 120;
+    const cardStep = 140;
     const maxVisible = Math.floor((this.panelHeight - startY - 30) / cardStep);
     const visible = quests.slice(0, maxVisible);
     const overflow = quests.length - visible.length;
@@ -188,7 +188,7 @@ export class QuestJournalUI {
 
     // Card background — non-interactive so clicks fall through to the backdrop.
     const bg = new Graphics();
-    bg.rect(20, 0, this.panelWidth - 40, 110);
+    bg.rect(20, 0, this.panelWidth - 40, 130);
     bg.fill({ color: 0x16213e, alpha: 0.8 });
     bg.stroke({ color: quest.isCompleted ? 0x00ff00 : 0x888888, width: 1 });
     bg.eventMode = "none";
@@ -277,6 +277,43 @@ export class QuestJournalUI {
     rewardText.y = objY + 2;
     rewardText.eventMode = "none";
     card.addChild(rewardText);
+
+    // Highlights row: derive from available Quest fields (system, issuer planet).
+    const questHighlights: Array<{
+      label: string;
+      value: string;
+      color: number;
+    }> = [];
+    if (quest.targetSystemId) {
+      questHighlights.push({
+        label: "Система",
+        value: quest.targetSystemId,
+        color: 0x66ffcc,
+      });
+    }
+    if (quest.planetId && quest.planetId !== "unknown") {
+      questHighlights.push({
+        label: "Выдан",
+        value: quest.planetId,
+        color: 0xaaaaaa,
+      });
+    }
+    if (questHighlights.length > 0) {
+      const hTagSpacing = 150;
+      let hx = 40;
+      for (const hl of questHighlights) {
+        if (hx > this.panelWidth - 60) break;
+        const tagT = new Text({
+          text: `[${hl.label}: ${hl.value}]`,
+          style: { fontFamily: "Courier New", fontSize: 9, fill: hl.color },
+        });
+        tagT.x = hx;
+        tagT.y = objY + 20;
+        tagT.eventMode = "none";
+        card.addChild(tagT);
+        hx += hTagSpacing;
+      }
+    }
 
     // Remaining days warning for quests with an approaching deadline.
     if (quest.deadline > 0 && this.currentDay > 0) {

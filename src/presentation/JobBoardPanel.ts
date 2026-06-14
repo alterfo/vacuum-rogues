@@ -44,7 +44,7 @@ export class JobBoardPanel {
 
   private static readonly W = 520;
   private static readonly ROW_H = 60;
-  private static readonly ROW_H_OFFER = 110;
+  private static readonly ROW_H_OFFER = 130;
   private static readonly HEAD = 48;
 
   constructor(
@@ -250,6 +250,25 @@ export class JobBoardPanel {
       descText.x = 20;
       descText.y = y + (q.issuerName ? 50 : 36);
       this.container.addChild(descText);
+    }
+
+    // Highlight tags: [Груз: медикаменты]  [Система: Альфа]  [Выдан: планета X]
+    if (q.highlights.length > 0) {
+      const hy = y + JobBoardPanel.ROW_H_OFFER - 30;
+      const tagSpacing = 140;
+      let hx = 20;
+      for (const hl of q.highlights) {
+        if (hx > W - 100) break;
+        const tagT = new Text({
+          text: `[${hl.label}: ${hl.value}]`,
+          style: { fontFamily: "Courier New", fontSize: 9, fill: hl.color },
+        });
+        tagT.eventMode = "none";
+        tagT.x = hx;
+        tagT.y = hy;
+        this.container.addChild(tagT);
+        hx += tagSpacing;
+      }
     }
 
     // Reward / deadline / jumps on the right side of info area

@@ -74,23 +74,23 @@ DELIVERY/DIPLOMACY/TEXT_ADVENTURE получают награду на целе�
 - Modify: `src/presentation/QuestJournalUI.ts`
 - Create: `src/tests/quests/questGeneratorHighlights.test.ts`
 
-- [ ] Добавить в интерфейс `GeneratedQuest`:
+- [x] Добавить в интерфейс `GeneratedQuest`:
   ```typescript
   highlights: ReadonlyArray<{ label: string; value: string; color: number }>;
   issuerPlanetId: string;
   ```
-- [ ] В каждом builder (`buildRoutineQuest`, `buildChainQuest`, `buildFinaleQuest`, `buildLocalDelivery`, `buildTextQuest`, `buildFinaleQuest`, defense-блок) заполнять `highlights` по типу:
+- [x] В каждом builder (`buildRoutineQuest`, `buildChainQuest`, `buildFinaleQuest`, `buildLocalDelivery`, `buildTextQuest`, `buildFinaleQuest`, defense-блок) заполнять `highlights` по типу:
   - DELIVERY: `{ label: 'Груз', value: cargoLabel, color: 0x88ccff }`, `{ label: 'Система', value: target.name, color: 0x66ffcc }`, `{ label: 'Выдан', value: planetId, color: 0xaaaaaa }`
   - BOUNTY: `{ label: 'Цель', value: «shipName», color: 0xff6666 }`, `{ label: 'Система', value: target.name, color: 0x66ffcc }`, `{ label: 'Выдан', value: planetId, color: 0xaaaaaa }`
   - ESCORT: `{ label: 'Конвой', value: convoiName, color: 0x88ff88 }`, `{ label: 'Система', value: target.name, color: 0x66ffcc }`, `{ label: 'Выдан', value: planetId, color: 0xaaaaaa }`
   - DIPLOMACY: `{ label: 'Планета', value: targetPlanetId || target.name, color: 0xffcc66 }`, `{ label: 'Выдан', value: planetId, color: 0xaaaaaa }`
   - EXPLORATION / DEFENSE: `{ label: 'Система', value: target.name, color: 0x66ddff }`, `{ label: 'Выдан', value: planetId, color: 0xaaaaaa }`
-- [ ] Заполнять `issuerPlanetId = planetId` во всех builders
-- [ ] В `JobBoardPanel`: под description рендерить highlight-теги (цветные `Text` объекты) `[Груз: медикаменты]  [Система: Арктур]  [Выдан: планета X]` горизонтально, wrap при нехватке места
-- [ ] В `QuestJournalUI`: в карточке активного квеста добавить строку highlights под описанием
-- [ ] Написать тест: BOUNTY квест имеет highlight `{ label: 'Цель', ... }` и `{ label: 'Система', ... }`
-- [ ] Написать тест: DELIVERY квест имеет highlight `{ label: 'Груз', ... }`
-- [ ] Запустить `npm test -- --run` — зелёные
+- [x] Заполнять `issuerPlanetId = planetId` во всех builders
+- [x] В `JobBoardPanel`: под description рендерить highlight-теги (цветные `Text` объекты) `[Груз: медикаменты]  [Система: Арктур]  [Выдан: планета X]` горизонтально, wrap при нехватке места
+- [x] В `QuestJournalUI`: в карточке активного квеста добавить строку highlights под описанием
+- [x] Написать тест: BOUNTY квест имеет highlight `{ label: 'Цель', ... }` и `{ label: 'Система', ... }`
+- [x] Написать тест: DELIVERY квест имеет highlight `{ label: 'Груз', ... }`
+- [x] Запустить `npm test -- --run` — зелёные
 
 ### Task 4: minRank check in JobBoardPanel
 

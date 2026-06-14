@@ -50,6 +50,14 @@ export interface GeneratedQuest {
   readonly issuerTitle: string;
   /** For BOUNTY quests: the name of the specific ship the player must destroy. */
   readonly targetNpcName: string | null;
+  /** Colored metadata tags shown in the job board and journal (cargo, system, issuer planet, etc.). */
+  readonly highlights: ReadonlyArray<{
+    label: string;
+    value: string;
+    color: number;
+  }>;
+  /** Planet ID where this quest was posted. */
+  readonly issuerPlanetId: string;
 }
 
 export interface BoardOptions {
@@ -410,6 +418,11 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
         issuerName: defIssuer.name,
         issuerTitle: defIssuer.title,
         targetNpcName: null,
+        highlights: [
+          { label: "Система", value: targetSys.name, color: 0x66ddff },
+          { label: "Выдан", value: planetId, color: 0xaaaaaa },
+        ],
+        issuerPlanetId: planetId,
       });
     }
   }
@@ -510,6 +523,11 @@ function buildRoutineQuest(
   let description: string;
   let objectives: QuestTemplate["objectives"];
   let targetNpcName: string | null = null;
+  let highlights: ReadonlyArray<{
+    label: string;
+    value: string;
+    color: number;
+  }> = [];
 
   switch (type) {
     case QuestType.DELIVERY: {
@@ -539,6 +557,11 @@ function buildRoutineQuest(
           locationId: targetPlanetId ?? target.id,
         },
       ];
+      highlights = [
+        { label: "Груз", value: cargo.label, color: 0x88ccff },
+        { label: "Система", value: target.name, color: 0x66ffcc },
+        { label: "Выдан", value: planetId, color: 0xaaaaaa },
+      ];
       break;
     }
     case QuestType.BOUNTY: {
@@ -557,6 +580,11 @@ function buildRoutineQuest(
           targetAmount: 1,
           enemyType: bountyEnemy(rng),
         },
+      ];
+      highlights = [
+        { label: "Цель", value: `«${shipName}»`, color: 0xff6666 },
+        { label: "Система", value: target.name, color: 0x66ffcc },
+        { label: "Выдан", value: planetId, color: 0xaaaaaa },
       ];
       break;
     }
@@ -579,6 +607,11 @@ function buildRoutineQuest(
           targetSystemId: target.id,
         },
       ];
+      highlights = [
+        { label: "Конвой", value: convoiName, color: 0x88ff88 },
+        { label: "Система", value: target.name, color: 0x66ffcc },
+        { label: "Выдан", value: planetId, color: 0xaaaaaa },
+      ];
       break;
     }
     case QuestType.DIPLOMACY: {
@@ -592,6 +625,14 @@ function buildRoutineQuest(
           targetAmount: 1,
           locationId: targetPlanetId ?? target.id,
         },
+      ];
+      highlights = [
+        {
+          label: "Планета",
+          value: targetPlanetId ?? target.name,
+          color: 0xffcc66,
+        },
+        { label: "Выдан", value: planetId, color: 0xaaaaaa },
       ];
       break;
     }
@@ -607,6 +648,10 @@ function buildRoutineQuest(
           targetAmount: 1,
           locationId: targetPlanetId ?? target.id,
         },
+      ];
+      highlights = [
+        { label: "Система", value: target.name, color: 0x66ddff },
+        { label: "Выдан", value: planetId, color: 0xaaaaaa },
       ];
       break;
     }
@@ -646,6 +691,8 @@ function buildRoutineQuest(
     issuerName: issuer.name,
     issuerTitle: issuer.title,
     targetNpcName,
+    highlights,
+    issuerPlanetId: planetId,
   };
 }
 
@@ -713,6 +760,12 @@ function buildChainQuest(
     issuerName: issuer.name,
     issuerTitle: issuer.title,
     targetNpcName: null,
+    highlights: [
+      { label: "Груз", value: cargo.label, color: 0x88ccff },
+      { label: "Система", value: target.name, color: 0x66ffcc },
+      { label: "Выдан", value: planetId, color: 0xaaaaaa },
+    ],
+    issuerPlanetId: planetId,
   };
 }
 
@@ -779,6 +832,12 @@ function buildFinaleQuest(
     issuerName: issuer.name,
     issuerTitle: issuer.title,
     targetNpcName: null,
+    highlights: [
+      { label: "Груз", value: cargo.label, color: 0x88ccff },
+      { label: "Система", value: target.name, color: 0x66ffcc },
+      { label: "Выдан", value: planetId, color: 0xaaaaaa },
+    ],
+    issuerPlanetId: planetId,
   };
 }
 
@@ -821,6 +880,14 @@ function buildLocalDelivery(
     issuerName: issuer.name,
     issuerTitle: issuer.title,
     targetNpcName: null,
+    highlights: [
+      { label: "Груз", value: cargo.label, color: 0x88ccff },
+      ...(origin
+        ? [{ label: "Система", value: origin.name, color: 0x66ffcc }]
+        : []),
+      { label: "Выдан", value: planetId, color: 0xaaaaaa },
+    ],
+    issuerPlanetId: planetId,
   };
 }
 
@@ -868,6 +935,8 @@ function buildTextQuest(
     issuerName: issuer.name,
     issuerTitle: issuer.title,
     targetNpcName: null,
+    highlights: [{ label: "Выдан", value: planetId, color: 0xaaaaaa }],
+    issuerPlanetId: planetId,
   };
 }
 
