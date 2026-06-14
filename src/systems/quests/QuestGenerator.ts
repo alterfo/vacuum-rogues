@@ -16,7 +16,11 @@ import type { QuestTemplate } from "@/systems/QuestManager";
 import { QuestType, ResourceType, EnemyType } from "@/types";
 import { SeededRNG } from "@/utils/seededRNG";
 import { jumpDistances } from "@/systems/galaxy/jumpDistance";
-import { ELITE_QUEST_MIN_RANK } from "@/config/balance";
+import {
+  ELITE_QUEST_MIN_RANK,
+  QUEST_BASE_REWARD,
+  QUEST_REWARD_PER_JUMP,
+} from "@/config/balance";
 import { ALL_QUEST_SCRIPTS } from "@/systems/quests/TextQuestRegistry";
 
 /** Share of issued quests that are branching text-quests (the "cherry"). */
@@ -415,10 +419,10 @@ function economics(
     [QuestType.DEFENSE]: 1.8,
   };
   const m = risk[type] ?? 1;
-  const base = 120;
-  const perJump = 70;
   const credits = Math.round(
-    (base + jumps * perJump) * m * rng.nextFloat(0.9, 1.2),
+    (QUEST_BASE_REWARD + jumps * QUEST_REWARD_PER_JUMP) *
+      m *
+      rng.nextFloat(0.9, 1.2),
   );
   const experience = Math.round(credits * 0.4);
   // Minimum 30 days for any jump quest; scales at 20 days/jump (≥45 for 2-hop).

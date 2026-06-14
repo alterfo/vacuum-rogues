@@ -63,6 +63,12 @@ export const RANK_LABELS = [
   "Легенда",
 ] as const;
 
+/** Base credit reward for a 0-jump quest (before type multiplier and variance). */
+export const QUEST_BASE_REWARD = 400;
+
+/** Additional credits per hyperjump to the target system. */
+export const QUEST_REWARD_PER_JUMP = 220;
+
 /** Minimum rank required to see elite quests (minRank = 3 → Ас). */
 export const ELITE_QUEST_MIN_RANK = 3;
 

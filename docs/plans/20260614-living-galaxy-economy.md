@@ -89,16 +89,16 @@ Day 250 — ~20 quests    → ~8,000 credits              → afford tech-5 gear
 Day 450 — ~38 quests    → ~15,000 credits             → afford tech-7 gear (~12,000)
 ```
 
-- [ ] Increase quest base reward: `base = 400`, `perJump = 220`; with 1.0× multiplier
+- [x] Increase quest base reward: `base = 400`, `perJump = 220`; with 1.0× multiplier
   a 1-jump quest yields ~620 credits; BOUNTY (1.6×) yields ~992 credits
-- [ ] Re-price gear in `GearCatalog.ts` so tech tier maps to these credit bands:
+- [x] Re-price gear in `GearCatalog.ts` so tech tier maps to these credit bands:
   tech 1–2: 500–1,500; tech 3–4: 2,000–5,000; tech 5–6: 5,500–9,000; tech 7–8: 10,000–14,000
   (divide current prices by ~3 across the board, minor per-item tuning)
-- [ ] Add `QUEST_BASE_REWARD: 400` and `QUEST_REWARD_PER_JUMP: 220` to `balance.ts`
+- [x] Add `QUEST_BASE_REWARD: 400` and `QUEST_REWARD_PER_JUMP: 220` to `balance.ts`
   (replace magic numbers in QuestGenerator)
-- [ ] Write unit tests: generate 40 quests of mixed types and 1–3 jumps, assert mean
+- [x] Write unit tests: generate 40 quests of mixed types and 1–3 jumps, assert mean
   reward is between 550 and 900; tech-7 gear price ≤ 14,000; tech-1 gear price ≤ 1,500
-- [ ] Run lint + unit tests — green
+- [x] Run lint + unit tests — green
 
 ### Task 4: Overmind artifact drops from combat
 **Files:**
