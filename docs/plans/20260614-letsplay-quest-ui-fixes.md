@@ -129,20 +129,20 @@ letsplay screenshot verification.
 - Modify: `src/presentation/QuestJournalUI.ts` (or `createQuestCard`)
 - Modify: `src/systems/quests/` tests
 
-- [ ] Write RED unit test: generate an ESCORT quest → assert `quest.description`
+- [x] Write RED unit test: generate an ESCORT quest → assert `quest.description`
   contains a convoy/ship identifier (name or callsign) and `targetSystemId` (not
   just `targetPlanetId`); objective type for ESCORT is `"VISIT_SYSTEM"` not
   `"VISIT_LOCATION"` (planet)
-- [ ] Update `QuestGenerator.ts` ESCORT block: add `convoiName` (randomly generated
+- [x] Update `QuestGenerator.ts` ESCORT block: add `convoiName` (randomly generated
   ship name like "Транспорт «{noun}»") to the quest metadata; set objective to
   `VISIT_SYSTEM` targeting `target.id`; include convoiName in `description`
-- [ ] Update `createQuestCard()` in `QuestJournalUI.ts`: for ESCORT quests display
+- [x] Update `createQuestCard()` in `QuestJournalUI.ts`: for ESCORT quests display
   the convoy name and "Сопроводить в систему X" so the player knows what to look for
-- [ ] "Лететь к цели" for ESCORT must route to the target system, not a planet within
+- [x] "Лететь к цели" for ESCORT must route to the target system, not a planet within
   it — confirm the route-to-target button reads `targetSystemId` for VISIT_SYSTEM
   objectives; fix if it currently uses `locationId` (planet)
-- [ ] Run lint + unit tests — green
-- [ ] E2E regression — green
+- [x] Run lint + unit tests — green
+- [x] E2E regression — green
 
 ### Task 6: Move HUD text hints to a help overlay
 **Files:**

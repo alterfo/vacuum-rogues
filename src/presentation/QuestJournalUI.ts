@@ -219,15 +219,19 @@ export class QuestJournalUI {
       objText.eventMode = "none";
       card.addChild(objText);
 
-      // Add "Navigate" button for VISIT_LOCATION objectives
-      if (
-        !objective.completed &&
-        objective.type === "VISIT_LOCATION" &&
-        objective.locationId &&
-        objective.locationId !== "any_planet" &&
-        this.onNavigateToObjective
-      ) {
-        const navBtn = this.createNavigateButton(objective.locationId);
+      // Add "Navigate" button for VISIT_LOCATION and VISIT_SYSTEM objectives
+      const navTargetId =
+        !objective.completed && this.onNavigateToObjective
+          ? objective.type === "VISIT_LOCATION" &&
+            objective.locationId &&
+            objective.locationId !== "any_planet"
+            ? objective.locationId
+            : objective.type === "VISIT_SYSTEM" && objective.targetSystemId
+              ? objective.targetSystemId
+              : null
+          : null;
+      if (navTargetId) {
+        const navBtn = this.createNavigateButton(navTargetId);
         navBtn.x = this.panelWidth - 170;
         navBtn.y = objY - 2;
         card.addChild(navBtn);

@@ -95,6 +95,26 @@ const FACTION_HOME_PREFIX: Record<string, string> = {
   PROGRESSORS: "[ПРОГРЕССОРЫ]",
 };
 
+/** Nouns used to name escort convoy ships, e.g. "Транспорт «Аврора»". */
+const CONVOY_SHIP_NOUNS = [
+  "Аврора",
+  "Альтаир",
+  "Беркут",
+  "Гармония",
+  "Дельфин",
+  "Заря",
+  "Каравелла",
+  "Комета",
+  "Меркурий",
+  "Орион",
+  "Паллада",
+  "Сириус",
+  "Стрела",
+  "Титан",
+  "Феникс",
+  "Циклон",
+];
+
 /** First-name pool for quest issuers (deterministic per quest slot). */
 const ISSUER_NAMES = [
   "Маклай",
@@ -502,15 +522,22 @@ function buildRoutineQuest(
       break;
     }
     case QuestType.ESCORT: {
+      const convoiName = `Транспорт «${CONVOY_SHIP_NOUNS[rng.nextInt(0, CONVOY_SHIP_NOUNS.length - 1)]}»`;
       title = `Эскорт: ${where}`;
-      description = pickEscortDesc(rng, issuer.name, target.name, credits);
+      description = pickEscortDesc(
+        rng,
+        issuer.name,
+        convoiName,
+        target.name,
+        credits,
+      );
       objectives = [
         {
           id: `${id}_escort`,
-          description: `Довести конвой до ${target.name}`,
-          type: "VISIT_LOCATION",
+          description: `Довести ${convoiName} до системы ${target.name}`,
+          type: "VISIT_SYSTEM",
           targetAmount: 1,
-          locationId: targetPlanetId ?? target.id,
+          targetSystemId: target.id,
         },
       ];
       break;
@@ -860,15 +887,16 @@ function pickBountyDesc(
 function pickEscortDesc(
   rng: SeededRNG,
   issuer: string,
+  convoiName: string,
   targetName: string,
   reward: number,
 ): string {
   const templates = [
-    `Торговый конвой идёт в ${targetName}, но маршрут небезопасен. Охрана ${issuer}а сбежала ещё вчера. Тебе предлагают ${reward} ₢ и искреннюю благодарность — последнее бесплатно.`,
-    `${issuer} сопровождает делегацию в ${targetName} и очень боится. Стрелять первым нельзя, но отвечать — обязательно. Оплата: ${reward} ₢.`,
-    `Груз и пассажиры ${issuer}а следуют в ${targetName}. Предыдущий эскорт «не смог», подробности тебе знать не положено. ${reward} ₢ при доставке.`,
-    `${issuer} нанимает прикрытие до ${targetName}: караван жирный, пираты голодные, математика очевидная. За нервы и топливо — ${reward} ₢.`,
-    `«Просто доведи нас до ${targetName} живыми», — просит ${issuer}. Звучит просто. Платят ${reward} ₢ — значит, не очень.`,
+    `${convoiName} идёт в ${targetName}, но маршрут небезопасен. Охрана ${issuer}а сбежала ещё вчера. Тебе предлагают ${reward} ₢ и искреннюю благодарность — последнее бесплатно.`,
+    `${issuer} сопровождает ${convoiName} в ${targetName} и очень боится. Стрелять первым нельзя, но отвечать — обязательно. Оплата: ${reward} ₢.`,
+    `${convoiName} следует в ${targetName} с грузом и пассажирами. Предыдущий эскорт «не смог», подробности тебе знать не положено. ${reward} ₢ при доставке.`,
+    `${issuer} нанимает прикрытие для ${convoiName} до ${targetName}: конвой жирный, пираты голодные, математика очевидная. За нервы и топливо — ${reward} ₢.`,
+    `«Просто доведи ${convoiName} до ${targetName} живыми», — просит ${issuer}. Звучит просто. Платят ${reward} ₢ — значит, не очень.`,
   ];
   return templates[rng.nextInt(0, templates.length - 1)];
 }

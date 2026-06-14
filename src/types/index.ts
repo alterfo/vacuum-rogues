@@ -415,12 +415,17 @@ export interface Reward {
 export interface QuestObjective {
   readonly id: string;
   readonly description: string;
-  readonly type: "COLLECT_ITEM" | "VISIT_LOCATION" | "DEFEAT_ENEMY"; // Added objective type
+  readonly type:
+    | "COLLECT_ITEM"
+    | "VISIT_LOCATION"
+    | "VISIT_SYSTEM"
+    | "DEFEAT_ENEMY";
   readonly targetAmount: number;
   readonly currentAmount: number;
   readonly completed: boolean;
   readonly itemType?: ResourceType; // For COLLECT_ITEM objectives
   readonly locationId?: string; // For VISIT_LOCATION objectives
+  readonly targetSystemId?: string; // For VISIT_SYSTEM objectives
   readonly enemyType?: EnemyType; // For DEFEAT_ENEMY objectives
 }
 

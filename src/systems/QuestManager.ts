@@ -452,9 +452,10 @@ export class QuestManager {
    * Update quest progress based on player action
    */
   updateQuestProgress(event: {
-    type: "COLLECT_ITEM" | "VISIT_LOCATION" | "DEFEAT_ENEMY";
+    type: "COLLECT_ITEM" | "VISIT_LOCATION" | "VISIT_SYSTEM" | "DEFEAT_ENEMY";
     itemType?: string;
     locationId?: string;
+    systemId?: string;
     amount?: number;
   }): void {
     for (const quest of this.activeQuests.values()) {
@@ -477,6 +478,11 @@ export class QuestManager {
           matches =
             objective.locationId === event.locationId ||
             objective.locationId === "any_planet";
+        } else if (
+          event.type === "VISIT_SYSTEM" &&
+          objective.type === "VISIT_SYSTEM"
+        ) {
+          matches = objective.targetSystemId === event.systemId;
         }
 
         if (matches) {
