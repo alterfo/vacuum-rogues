@@ -155,11 +155,11 @@ DELIVERY/DIPLOMACY/TEXT_ADVENTURE получают награду на целе�
 - Modify: `src/core/ports/IQuestService.ts` (если нужно добавить getPendingReturnQuests в интерфейс)
 - Create: `src/tests/presentation/questJournalPendingReturn.test.ts`
 
-- [ ] В `QuestJournalUI`: добавить третью секцию «Выполнено — забрать награду» между «Активные» и «Провалено»
-- [ ] В карточке pending-return квеста: выделить жёлтым «↩ Вернитесь в {highlight[issuerPlanet]}»
-- [ ] Highlight «Выдан: X» в таких карточках рендерить жёлтым (цвет цели)
-- [ ] Написать тест: QuestJournalUI с pending-return квестом отображает «Вернитесь» секцию
-- [ ] Запустить `npm test -- --run` — зелёные
+- [x] В `QuestJournalUI`: добавить третью секцию «Выполнено — забрать награду» между «Активные» и «Провалено»
+- [x] В карточке pending-return квеста: выделить жёлтым «↩ Вернитесь в {highlight[issuerPlanet]}»
+- [x] Highlight «Выдан: X» в таких карточках рендерить жёлтым (цвет цели)
+- [x] Написать тест: QuestJournalUI с pending-return квестом отображает «Вернитесь» секцию
+- [x] Запустить `npm test -- --run` — зелёные (1301 tests pass)
 
 ### Task 8: Проверка пересечения сохранений — schema + миграция работают
 

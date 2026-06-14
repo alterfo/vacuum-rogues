@@ -98,6 +98,17 @@ export class QuestJournalUI {
     let nextSectionY = this.renderActiveQuests(activeQuests, 60);
     nextSectionY += 10;
 
+    // Pending-return quests section (between active and completed)
+    const pendingReturnQuests =
+      this.questManager.getPendingReturnQuests?.() ?? [];
+    if (pendingReturnQuests.length > 0) {
+      nextSectionY = this.renderPendingReturnSection(
+        pendingReturnQuests,
+        nextSectionY,
+      );
+      nextSectionY += 10;
+    }
+
     // Completed quests section (if any)
     const completedQuestIds = this.questManager.getCompletedQuestIds();
     if (completedQuestIds.length > 0) {
@@ -114,6 +125,7 @@ export class QuestJournalUI {
     // Empty state if no quests at all
     if (
       activeQuests.length === 0 &&
+      pendingReturnQuests.length === 0 &&
       completedQuestIds.length === 0 &&
       expiredQuests.length === 0
     ) {
@@ -389,6 +401,119 @@ export class QuestJournalUI {
     });
 
     return btn;
+  }
+
+  /**
+   * Render "return to issuer" pending-reward section
+   */
+  private renderPendingReturnSection(quests: Quest[], startY: number): number {
+    const sectionTitle = new Text({
+      text: `ВЫПОЛНЕНО — ЗАБРАТЬ НАГРАДУ (${quests.length})`,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 14,
+        fill: 0xffcc00,
+        fontWeight: "bold",
+      },
+    });
+    sectionTitle.x = 20;
+    sectionTitle.y = startY;
+    sectionTitle.eventMode = "none";
+    this.container.addChild(sectionTitle);
+
+    const cardStep = 90;
+    let yOffset = startY + 30;
+    for (const quest of quests) {
+      const card = this.createPendingReturnCard(quest, yOffset);
+      this.container.addChild(card);
+      yOffset += cardStep;
+    }
+
+    return yOffset;
+  }
+
+  /**
+   * Create a compact card for a pending-return quest
+   */
+  private createPendingReturnCard(quest: Quest, yPos: number): Container {
+    const card = new Container();
+    card.y = yPos;
+
+    const bg = new Graphics();
+    bg.rect(20, 0, this.panelWidth - 40, 80);
+    bg.fill({ color: 0x1a1500, alpha: 0.9 });
+    bg.stroke({ color: 0xffcc00, width: 1 });
+    bg.eventMode = "none";
+    card.addChild(bg);
+
+    const titleText = new Text({
+      text: quest.title,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 13,
+        fill: 0xffff88,
+        fontWeight: "bold",
+      },
+    });
+    titleText.x = 30;
+    titleText.y = 8;
+    titleText.eventMode = "none";
+    card.addChild(titleText);
+
+    const typeText = new Text({
+      text: `[${TYPE_LABEL[quest.type] ?? quest.type}]`,
+      style: { fontFamily: "Courier New", fontSize: 11, fill: 0x888888 },
+    });
+    typeText.x = this.panelWidth - 120;
+    typeText.y = 8;
+    typeText.eventMode = "none";
+    card.addChild(typeText);
+
+    // Return-to-issuer prompt in yellow
+    const issuerPlanetId =
+      quest.planetId && quest.planetId !== "unknown" ? quest.planetId : "?";
+    const returnText = new Text({
+      text: `↩ Вернитесь в ${issuerPlanetId}`,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 12,
+        fill: 0xffcc00,
+        fontWeight: "bold",
+      },
+    });
+    returnText.x = 30;
+    returnText.y = 30;
+    returnText.eventMode = "none";
+    card.addChild(returnText);
+
+    // Reward summary
+    const r = quest.reward;
+    const parts: string[] = [];
+    if (r?.credits) parts.push(`${r.credits} кр`);
+    if (r?.experience) parts.push(`${r.experience} опыт`);
+    for (const it of r?.items ?? []) parts.push(`${it.amount}×${it.type}`);
+    const rewardText = new Text({
+      text: `Награда: ${parts.length ? parts.join(", ") : "—"}`,
+      style: { fontFamily: "Courier New", fontSize: 11, fill: 0xffcc66 },
+    });
+    rewardText.x = 30;
+    rewardText.y = 50;
+    rewardText.eventMode = "none";
+    card.addChild(rewardText);
+
+    // "Выдан: X" highlight rendered yellow (target color)
+    if (quest.planetId && quest.planetId !== "unknown") {
+      const issuedTag = new Text({
+        text: `[Выдан: ${quest.planetId}]`,
+        style: { fontFamily: "Courier New", fontSize: 9, fill: 0xffcc00 },
+      });
+      issuedTag.x = this.panelWidth - 200;
+      issuedTag.y = 50;
+      issuedTag.eventMode = "none";
+      card.addChild(issuedTag);
+    }
+
+    return card;
   }
 
   /**
