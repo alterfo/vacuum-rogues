@@ -63,20 +63,38 @@ export const RANK_LABELS = [
   "Легенда",
 ] as const;
 
-/** Base credit reward for a 0-jump quest (before type multiplier and variance). */
+/**
+ * Base credit reward for a 0-jump quest (before type multiplier and variance).
+ *
+ * Target day-curve (active player ≈ 1 quest per 12 game days):
+ *   Day 100 (~8 quests)  → ~5,400 credits earned  → can afford tech-3 gear (~2,000–5,000)
+ *   Day 250 (~20 quests) → ~13,600 credits earned  → can afford tech-5 gear (~5,500–9,000)
+ *   Day 450 (~37 quests) → ~25,100 credits earned  → can afford tech-7 gear (~10,000–14,000)
+ *
+ * Quest mix assumed: 60% 1-hop, 30% 2-hop, 10% 3-hop; 50% DELIVERY (×1.0), 30% BOUNTY (×1.6).
+ * Average reward at this mix: ~680 credits/quest.
+ */
 export const QUEST_BASE_REWARD = 400;
 
-/** Additional credits per hyperjump to the target system. */
+/**
+ * Additional credits per hyperjump to the target system.
+ * Combined with QUEST_BASE_REWARD: a 1-hop DELIVERY yields 620 cr; a 2-hop BOUNTY yields ~1,632 cr.
+ */
 export const QUEST_REWARD_PER_JUMP = 220;
 
 /** Minimum rank required to see elite quests (minRank = 3 → Ас). */
 export const ELITE_QUEST_MIN_RANK = 3;
 
-/** Probability that killing an Overmind enemy drops artifacts (per kill). */
+/**
+ * Probability that killing an Overmind enemy drops artifacts (per kill).
+ * At 40% drop chance with 1–3 artifacts per drop, an active player fighting
+ * 2–3 Overmind encounters per day accumulates ~1.5–3 artifacts/day — enough
+ * to afford the first upgrade (2 artifacts) after ~1–2 combat sessions.
+ */
 export const ARTIFACT_DROP_CHANCE = 0.4;
-/** Minimum artifact count per drop. */
+/** Minimum artifact count per Overmind-kill drop. */
 export const ARTIFACT_DROP_COUNT_MIN = 1;
-/** Maximum artifact count per drop. */
+/** Maximum artifact count per Overmind-kill drop. */
 export const ARTIFACT_DROP_COUNT_MAX = 3;
 
 /** Player rank at which the government faction discount applies. */

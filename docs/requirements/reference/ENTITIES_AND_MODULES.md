@@ -31,6 +31,9 @@ StarSystem
   npcShips: NpcShip[]          ← live slice, not persisted here
   position: {x, y}             ← galaxy-map coordinates
   isExplored: boolean
+  techLevel: number             ← 1–8; advances via advanceTech() in GalaxySimulator;
+                                   RESEARCH_LAB systems gain +1 every 50 days,
+                                   others every 100 days; Overmind/pirate systems stagnate
 
 Star
   type: StarType                ← YELLOW | RED_GIANT | BLUE | WHITE_DWARF | PULSAR
@@ -136,12 +139,14 @@ Equipment
   id: string
   category: EquipmentCategory   ← ENGINE | FUEL_TANK | RADAR | SCANNER | REPAIR_DROID |
                                    GRABBER | SHIELD_GEN | WEAPON | HULL
-  techLevel: number             ← 1..8
+  techLevel: number             ← 1..8; may be boosted above base by artifact upgrades
   factionId: FactionType
   size: number
   quality: number
   stats: Record<string, number>
   micromoduleId: string | null
+  upgrades?: number             ← 0–2; each upgrade costs artifacts and raises techLevel+1;
+                                   applied at RESEARCH_LAB via ResearchUpgradePanel
 
 Weapon (extends Equipment)
   weaponType: WeaponType        ← ENERGY | KINETIC | MISSILE
@@ -163,6 +168,9 @@ NpcShip
   currentSystemId: string
   targetSystemId: string | null
   reputation: Record<FactionType, number>
+  convoyId?: string             ← shared ID for PATROL ships traveling in formation;
+                                   set by assembleConvoy() every 30 days; ships with the
+                                   same convoyId render in V-formation (±30 px offset)
 
 NpcBrain
   state: NpcState               ← IDLE | TRAVELING | TRADING | PATROLLING | ATTACKING | FLEEING

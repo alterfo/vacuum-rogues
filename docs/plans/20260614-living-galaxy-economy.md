@@ -202,9 +202,9 @@ simulate a battle (contested system has 20% chance of liberation per convoy).
 - Modify: `tools/galaxy-sim/model.ipynb`
 - Modify: `src/config/balance.ts` (inline comments)
 
-- [ ] Update notebook with new reward values to confirm model matches intent
-- [ ] Add comments to balance.ts constants explaining the target day-curve
-- [ ] Update ENTITIES_AND_MODULES.md if new fields added to domain
+- [x] Update notebook with new reward values to confirm model matches intent
+- [x] Add comments to balance.ts constants explaining the target day-curve
+- [x] Update ENTITIES_AND_MODULES.md if new fields added to domain
 
 ## Technical Details
 
