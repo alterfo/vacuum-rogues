@@ -106,43 +106,42 @@ describe("GeneratedQuest highlights", () => {
     }
   });
 
+  // Find the first quest of a given type across many seeds. Returns undefined
+  // only if the generator never emits the type — which must FAIL the test rather
+  // than pass silently (the old `if (!x) return` versions were vacuous).
+  function findQuestOfType(type: QuestType, prefix: string) {
+    for (let s = 0; s < 40; s++) {
+      const board = fullBoard(`${prefix}-${s}`);
+      const found = board.find((q) => q.template.type === type);
+      if (found) return found;
+    }
+    return undefined;
+  }
+
   it("ESCORT quest has a 'Конвой' highlight", () => {
-    const board = fullBoard("hl-escort-1");
-    const escort = board.find((q) => q.template.type === QuestType.ESCORT);
-    if (!escort) return; // may not appear in small board — skip silently
-    const convoyHighlight = escort.highlights.find((h) => h.label === "Конвой");
+    const escort = findQuestOfType(QuestType.ESCORT, "hl-escort");
+    expect(escort).toBeDefined();
+    const convoyHighlight = escort!.highlights.find(
+      (h) => h.label === "Конвой",
+    );
     expect(convoyHighlight).toBeDefined();
     expect(convoyHighlight!.value.length).toBeGreaterThan(0);
   });
 
   it("DIPLOMACY quest has a 'Планета' highlight", () => {
-    for (let s = 0; s < 5; s++) {
-      const board = fullBoard(`hl-diplomacy-${s}`);
-      const diplomacy = board.find(
-        (q) => q.template.type === QuestType.DIPLOMACY,
-      );
-      if (!diplomacy) continue;
-      const planetHighlight = diplomacy.highlights.find(
-        (h) => h.label === "Планета",
-      );
-      expect(planetHighlight).toBeDefined();
-      return;
-    }
+    const diplomacy = findQuestOfType(QuestType.DIPLOMACY, "hl-diplomacy");
+    expect(diplomacy).toBeDefined();
+    const planetHighlight = diplomacy!.highlights.find(
+      (h) => h.label === "Планета",
+    );
+    expect(planetHighlight).toBeDefined();
   });
 
   it("EXPLORATION quest has a 'Система' highlight", () => {
-    for (let s = 0; s < 5; s++) {
-      const board = fullBoard(`hl-explore-${s}`);
-      const explore = board.find(
-        (q) => q.template.type === QuestType.EXPLORATION,
-      );
-      if (!explore) continue;
-      const sysHighlight = explore.highlights.find(
-        (h) => h.label === "Система",
-      );
-      expect(sysHighlight).toBeDefined();
-      expect(sysHighlight!.value).toBe("Бета");
-      return;
-    }
+    const explore = findQuestOfType(QuestType.EXPLORATION, "hl-explore");
+    expect(explore).toBeDefined();
+    const sysHighlight = explore!.highlights.find((h) => h.label === "Система");
+    expect(sysHighlight).toBeDefined();
+    expect(sysHighlight!.value).toBe("Бета");
   });
 });

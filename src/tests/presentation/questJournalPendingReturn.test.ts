@@ -114,6 +114,33 @@ describe("QuestJournalUI pending-return section", () => {
     expect(returnPrompt).toBeDefined();
   });
 
+  it("resolves the issuer planet id to a readable name in the return prompt", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    const qs = makeQuestServiceWithPending([
+      makePendingReturnQuest({ planetId: "planet_Альдебаран_0" }),
+    ]);
+    const resolveName = (id: string) =>
+      id === "planet_Альдебаран_0" ? "Альдебаран" : id;
+    const ui = new QuestJournalUI(
+      qs,
+      1280,
+      720,
+      vi.fn(),
+      undefined,
+      0,
+      resolveName,
+    );
+    const texts = collectTexts(ui.container as unknown as TextNode);
+
+    // The readable name is shown; the raw id is not leaked to the player.
+    const returnPrompt = texts.find(
+      (t) => t.includes("Вернитесь") && t.includes("Альдебаран"),
+    );
+    expect(returnPrompt).toBeDefined();
+    expect(returnPrompt).not.toContain("planet_Альдебаран_0");
+  });
+
   it("renders 'Выдан: X' tag in the pending-return card", async () => {
     const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
 

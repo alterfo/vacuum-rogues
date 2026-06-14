@@ -452,6 +452,10 @@ export interface ReputationMap {
 export interface QuestLog {
   readonly activeQuests: Quest[];
   readonly completedQuests: string[];
+  // chainId → completed part indices (0/1/2); persisted for cross-session chains.
+  readonly completedChainParts?: Record<string, number[]>;
+  // Quests whose objectives are done but reward is unclaimed (return-to-issuer).
+  readonly pendingReturnQuests?: Quest[];
 }
 
 export interface Journal {

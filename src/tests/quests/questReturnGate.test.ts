@@ -245,6 +245,95 @@ describe("QuestManager.restoreState with pendingReturnQuests", () => {
   });
 });
 
+describe("QuestManager re-acceptance guard for pending-return quests", () => {
+  function bountyTemplate(id = "tpl_bounty") {
+    return {
+      id,
+      title: "Bounty Hunt",
+      description: "Kill the target",
+      type: QuestType.BOUNTY,
+      objectives: [
+        {
+          id: "obj_kill",
+          description: "Kill target",
+          type: "DEFEAT_ENEMY" as const,
+          targetAmount: 1,
+          enemyType: EnemyType.FIGHTER,
+        },
+      ],
+      reward: REWARD,
+      dialogueAnchors: [],
+      deadline: 20,
+      failurePenalty: null,
+      targetSystemId: "sys_B",
+      targetObjectId: "npc_target_1",
+    };
+  }
+
+  it("acceptQuest refuses an id already in pending-return (no duplicate)", () => {
+    const qm = new QuestManager();
+    const tpl = bountyTemplate();
+    const accepted = qm.acceptQuestFromTemplate(tpl, "planet_origin");
+    expect(accepted).not.toBeNull();
+
+    // Objectives done in flight → quest moves to pending-return.
+    qm.markObjectivesDone(tpl.id);
+    expect(qm.getActiveQuests()).toHaveLength(0);
+    expect(qm.getPendingReturnQuests()).toHaveLength(1);
+
+    // The board would re-offer the same template id; re-accepting must be refused.
+    const reAccepted = qm.acceptQuestFromTemplate(tpl, "planet_origin");
+    expect(reAccepted).toBeNull();
+    // No duplicate id across the two collections.
+    expect(qm.getActiveQuests()).toHaveLength(0);
+    expect(qm.getPendingReturnQuests()).toHaveLength(1);
+  });
+});
+
+describe("QuestManager.claimReturnReward chain completion", () => {
+  function chainQuest(part: number, chainId = "chain_x"): Quest {
+    return new Quest(
+      `q_chain_${part}`,
+      `Chain part ${part}`,
+      QuestType.EXPLORATION,
+      [],
+      REWARD,
+      [],
+      "planet_A",
+      0,
+      10,
+      null,
+      "sys_B",
+      null,
+      0,
+      chainId,
+      part,
+    );
+  }
+
+  it("marks the chain complete on the player once all 3 parts are claimed", () => {
+    const qm = new QuestManager();
+    const player = playerStub();
+    for (const part of [0, 1, 2]) {
+      const q = chainQuest(part);
+      qm["pendingReturnQuests"].set(q.id, q);
+      qm.claimReturnReward(q.id, player);
+    }
+    expect(player.completedQuestChains).toContain("chain_x");
+  });
+
+  it("does NOT mark the chain complete after only a partial claim", () => {
+    const qm = new QuestManager();
+    const player = playerStub();
+    for (const part of [0, 1]) {
+      const q = chainQuest(part);
+      qm["pendingReturnQuests"].set(q.id, q);
+      qm.claimReturnReward(q.id, player);
+    }
+    expect(player.completedQuestChains).not.toContain("chain_x");
+  });
+});
+
 describe("BOUNTY return-gate integration: bountyByNpcKill flow", () => {
   it("markObjectivesDone after NPC kill leaves credits unchanged", () => {
     const qm = new QuestManager();

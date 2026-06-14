@@ -63,8 +63,14 @@ export class QuestManager {
       return null;
     }
 
-    // Check if already active
-    if (this.activeQuests.has(template.id)) {
+    // Check if already active, or awaiting reward claim (pending return).
+    // Without the pending-return guard the same quest can be re-accepted from
+    // the board while a copy still sits in pendingReturnQuests, duplicating the
+    // id across two collections and allowing the reward to be farmed.
+    if (
+      this.activeQuests.has(template.id) ||
+      this.pendingReturnQuests.has(template.id)
+    ) {
       logger.warn(`Quest already active: ${template.id}`);
       return null;
     }
@@ -178,19 +184,14 @@ export class QuestManager {
   }
 
   /**
-   * Complete a quest and distribute rewards
+   * Grant a quest's reward (credits, XP, items) to the player and record chain
+   * progress. Shared by {@link completeQuest} and {@link claimReturnReward} so
+   * the two reward-grant paths can never silently diverge.
    */
-  completeQuest(questId: string, player: Player): boolean {
-    const quest = this.activeQuests.get(questId);
-    if (!quest || !quest.isCompleted) {
-      return false;
-    }
-
-    // Distribute rewards
+  private grantReward(quest: Quest, player: Player): void {
     player.credits += quest.reward.credits;
     player.experience += quest.reward.experience;
 
-    // Add reward items to inventory
     for (const item of quest.reward.items) {
       const existing = player.inventory.resources.find(
         (r) => r.type === item.type,
@@ -204,10 +205,6 @@ export class QuestManager {
         });
       }
     }
-
-    // Remove from active and add to completed
-    this.activeQuests.delete(questId);
-    this.completedQuests.add(questId);
 
     // Chain completion tracking: record which part just finished.
     if (quest.chainId && quest.chainPart >= 0) {
@@ -223,6 +220,37 @@ export class QuestManager {
         }
       }
     }
+  }
+
+  /**
+   * Force every objective on a quest to its target amount. Shared by
+   * {@link forceCompleteQuest} and {@link markObjectivesDone}.
+   */
+  private completeAllObjectives(quest: Quest): void {
+    for (const obj of quest.objectives) {
+      if (!obj.completed) {
+        quest.updateProgress({
+          objectiveId: obj.id,
+          amount: obj.targetAmount - obj.currentAmount,
+        });
+      }
+    }
+  }
+
+  /**
+   * Complete a quest and distribute rewards
+   */
+  completeQuest(questId: string, player: Player): boolean {
+    const quest = this.activeQuests.get(questId);
+    if (!quest || !quest.isCompleted) {
+      return false;
+    }
+
+    this.grantReward(quest, player);
+
+    // Remove from active and add to completed
+    this.activeQuests.delete(questId);
+    this.completedQuests.add(questId);
 
     logger.info(
       `Quest completed: ${quest.title} - Rewards: ${quest.reward.credits} credits, ${quest.reward.experience} XP`,
@@ -415,14 +443,7 @@ export class QuestManager {
   markObjectivesDone(questId: string): boolean {
     const quest = this.activeQuests.get(questId);
     if (!quest || quest.isFailed) return false;
-    for (const obj of quest.objectives) {
-      if (!obj.completed) {
-        quest.updateProgress({
-          objectiveId: obj.id,
-          amount: obj.targetAmount - obj.currentAmount,
-        });
-      }
-    }
+    this.completeAllObjectives(quest);
     // updateProgress sets isCompleted=true; override to pending-return state.
     quest.isCompleted = false;
     quest.isPendingReturn = true;
@@ -445,39 +466,12 @@ export class QuestManager {
     const quest = this.pendingReturnQuests.get(questId);
     if (!quest) return false;
 
-    player.credits += quest.reward.credits;
-    player.experience += quest.reward.experience;
-    for (const item of quest.reward.items) {
-      const existing = player.inventory.resources.find(
-        (r) => r.type === item.type,
-      );
-      if (existing) {
-        existing.amount += item.amount;
-      } else {
-        player.inventory.resources.push({
-          type: item.type,
-          amount: item.amount,
-        });
-      }
-    }
+    this.grantReward(quest, player);
 
     quest.isCompleted = true;
     quest.isPendingReturn = false;
     this.pendingReturnQuests.delete(questId);
     this.completedQuests.add(questId);
-
-    if (quest.chainId && quest.chainPart >= 0) {
-      const parts =
-        this.completedChainParts.get(quest.chainId) ?? new Set<number>();
-      parts.add(quest.chainPart);
-      this.completedChainParts.set(quest.chainId, parts);
-      if (parts.has(0) && parts.has(1) && parts.has(2)) {
-        if (!player.completedQuestChains.includes(quest.chainId)) {
-          player.completedQuestChains.push(quest.chainId);
-          logger.info(`Quest chain completed: ${quest.chainId}`);
-        }
-      }
-    }
 
     logger.info(
       `Return reward claimed: ${quest.title} +${quest.reward.credits} cr, +${quest.reward.experience} XP`,
@@ -495,14 +489,7 @@ export class QuestManager {
     const quest = this.activeQuests.get(questId);
     if (!quest || quest.isFailed) return false;
     if (!quest.isCompleted) {
-      for (const obj of quest.objectives) {
-        if (!obj.completed) {
-          quest.updateProgress({
-            objectiveId: obj.id,
-            amount: obj.targetAmount - obj.currentAmount,
-          });
-        }
-      }
+      this.completeAllObjectives(quest);
     }
     return this.completeQuest(questId, player);
   }

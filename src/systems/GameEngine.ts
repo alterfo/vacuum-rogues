@@ -654,6 +654,10 @@ export class GameEngine {
     const taken = new Set<string>([
       ...this.questManager.getActiveQuests().map((q) => q.id),
       ...this.questManager.getCompletedQuestIds(),
+      // Pending-return quests (objectives done, reward unclaimed) must not
+      // reappear on the board — otherwise they can be re-accepted into a
+      // duplicate active copy while the original awaits its reward.
+      ...this.questManager.getPendingReturnQuests().map((q) => q.id),
     ]);
     return board.filter((q) => {
       if (taken.has(q.template.id)) return false;
@@ -811,15 +815,10 @@ export class GameEngine {
 
     // Restore quest state into the live QuestManager (it owns quests at
     // runtime; the save only carries the serialized questLog).
-    const loadedQuestLog = this.player.questLog as {
-      activeQuests?: Quest[];
-      completedQuests?: string[];
-      completedChainParts?: Record<string, number[]>;
-      pendingReturnQuests?: Quest[];
-    };
+    const loadedQuestLog = this.player.questLog;
     this.questManager.restoreState(
       loadedQuestLog.activeQuests ?? [],
-      (loadedQuestLog.completedQuests ?? []) as string[],
+      loadedQuestLog.completedQuests ?? [],
       loadedQuestLog.completedChainParts ?? {},
       loadedQuestLog.pendingReturnQuests ?? [],
     );

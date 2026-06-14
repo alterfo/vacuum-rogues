@@ -1317,6 +1317,8 @@ export class PlanetScene extends GameScene {
     const acceptedIds = new Set<string>([
       ...activeQuests.map((q) => q.id),
       ...this.gameEngine.questManager.getCompletedQuestIds(),
+      // Pending-return quests are still "taken" — keep them off the board.
+      ...this.gameEngine.questManager.getPendingReturnQuests().map((q) => q.id),
     ]);
     this.jobBoardPanel = new JobBoardPanel(
       quests,

@@ -782,11 +782,28 @@ export class FlightHud implements FlightModule {
           },
           (locationId: string) => this.onQuestNavigate?.(locationId),
           this.gameEngine.galaxy?.gameDays ?? 0,
+          (id: string) => this.resolveQuestLocationName(id),
         );
         this.uiLayer.addChild(this.questJournalUI.container);
         logger.info("Quest journal opened");
       }
     }
+  }
+
+  /**
+   * Resolve a quest's system or planet id to a human-readable name so the
+   * journal shows "Альдебаран" rather than raw ids like "sys_3" /
+   * "planet_Альдебаран_0". Falls back to the id when nothing matches.
+   */
+  private resolveQuestLocationName(id: string): string {
+    const galaxy = this.gameEngine?.galaxy;
+    if (!galaxy) return id;
+    for (const system of galaxy.systems) {
+      if (system.id === id) return system.name;
+      const planet = system.planets.find((p) => p.id === id);
+      if (planet) return planet.name;
+    }
+    return id;
   }
 
   // ---------------------------------------------------------------------------

@@ -16,6 +16,9 @@ export class QuestJournalUI {
   private readonly onClose: () => void;
   private readonly onNavigateToObjective?: (locationId: string) => void;
   private readonly currentDay: number;
+  // Maps a planet/system id to a human-readable display name; falls back to the
+  // raw id when no resolver is supplied (e.g. in unit tests).
+  private readonly resolveName: (id: string) => string;
 
   constructor(
     questManager: IQuestService,
@@ -24,11 +27,13 @@ export class QuestJournalUI {
     onClose: () => void,
     onNavigateToObjective?: (locationId: string) => void,
     currentDay = 0,
+    resolveName?: (id: string) => string,
   ) {
     this.questManager = questManager;
     this.onClose = onClose;
     this.onNavigateToObjective = onNavigateToObjective;
     this.currentDay = currentDay;
+    this.resolveName = resolveName ?? ((id) => id);
     this.container = new Container();
 
     // Center panel on screen
@@ -299,14 +304,14 @@ export class QuestJournalUI {
     if (quest.targetSystemId) {
       questHighlights.push({
         label: "Система",
-        value: quest.targetSystemId,
+        value: this.resolveName(quest.targetSystemId),
         color: 0x66ffcc,
       });
     }
     if (quest.planetId && quest.planetId !== "unknown") {
       questHighlights.push({
         label: "Выдан",
-        value: quest.planetId,
+        value: this.resolveName(quest.planetId),
         color: 0xaaaaaa,
       });
     }
@@ -471,7 +476,9 @@ export class QuestJournalUI {
 
     // Return-to-issuer prompt in yellow
     const issuerPlanetId =
-      quest.planetId && quest.planetId !== "unknown" ? quest.planetId : "?";
+      quest.planetId && quest.planetId !== "unknown"
+        ? this.resolveName(quest.planetId)
+        : "?";
     const returnText = new Text({
       text: `↩ Вернитесь в ${issuerPlanetId}`,
       style: {
@@ -504,7 +511,7 @@ export class QuestJournalUI {
     // "Выдан: X" highlight rendered yellow (target color)
     if (quest.planetId && quest.planetId !== "unknown") {
       const issuedTag = new Text({
-        text: `[Выдан: ${quest.planetId}]`,
+        text: `[Выдан: ${this.resolveName(quest.planetId)}]`,
         style: { fontFamily: "Courier New", fontSize: 9, fill: 0xffcc00 },
       });
       issuedTag.x = this.panelWidth - 200;

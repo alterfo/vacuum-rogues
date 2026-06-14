@@ -98,8 +98,13 @@ Quest
   targetId: string              ← destination planet/NPC
   reward: QuestReward
   deadline: number              ← game days from acceptance
-  status: QuestStatus           ← AVAILABLE | ACTIVE | COMPLETED | FAILED
+  status: QuestStatus           ← AVAILABLE | ACTIVE | PENDING_RETURN | COMPLETED | FAILED
+  isPendingReturn: boolean      ← objectives done, reward unclaimed (return-to-issuer)
   factionId: FactionType
+
+  Note: BOUNTY/ESCORT/EXPLORATION/DEFENSE enter PENDING_RETURN once objectives
+  are satisfied and require the player to land at the issuer planet (giverId) to
+  claim the reward. DELIVERY/DIPLOMACY/TEXT_ADVENTURE complete at the target.
 
 QuestReward
   credits: number
@@ -156,6 +161,7 @@ Weapon (extends Equipment)
 
 QuestLog
   active: Quest[]
+  pendingReturn: Quest[]        ← objectives done, awaiting return-to-issuer claim
   completed: Quest[]            ← IDs + summary stored
 
 NpcShip
