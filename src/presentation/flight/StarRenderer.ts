@@ -7,6 +7,7 @@ import { SeededRNG } from "@/utils/seededRNG";
 import {
   starAppearanceJitter,
   shiftTemperature,
+  GLOW_SPREAD,
   type StarAppearanceJitter,
 } from "@/utils/starAppearance";
 import { buildSphereMesh, type SphereMesh } from "../sphereMesh";
@@ -485,7 +486,9 @@ export class StarRenderer implements FlightModule {
       glow.width = R * outerScale * 2;
       glow.height = R * outerScale * 2;
       glow.tint = glowC;
-      glow.alpha = Math.min(1, jitter.glowIntensity);
+      // Base alpha < 1 leaves headroom for the brightening half of glowIntensity.
+      // Without it, values > 1 are silently clamped and only dimming is visible.
+      glow.alpha = Math.min(1, (1 / (1 + GLOW_SPREAD)) * jitter.glowIntensity);
       halo.addChild(glow);
     } else {
       const g = new Graphics();

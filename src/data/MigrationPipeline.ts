@@ -144,6 +144,22 @@ export class MigrationPipeline {
         }
       }
     },
+    // 10 -> 11: News feed bookmarks (Task 20). Add newsBookmarks to player;
+    // backfill description on legacy news events that lack it.
+    10: (state: SaveState) => {
+      const player = state.player as unknown as { newsBookmarks?: number[] };
+      if (player && !Array.isArray(player.newsBookmarks)) {
+        player.newsBookmarks = [];
+      }
+      const galaxy = state.galaxy as unknown as {
+        newsFeed?: Array<{ description?: string }>;
+      };
+      if (galaxy && Array.isArray(galaxy.newsFeed)) {
+        for (const event of galaxy.newsFeed) {
+          if (!event.description) event.description = "";
+        }
+      }
+    },
     // 11 -> 12: Data fog (Task 21). lastVisitedDay on StarSystem is optional;
     // undefined means "never visited" which is the correct default for old saves.
     11: (_state: SaveState) => {
@@ -257,11 +273,6 @@ export class MigrationPipeline {
         }
       }
     },
-    // 20 -> 21: NPC convoy IDs (Task 6, living-galaxy economy). convoyId is
-    // optional so old NPC ships load fine without it — no data backfill needed.
-    20: (_state: SaveState) => {
-      // No-op: convoyId is optional and absent by default on old ships.
-    },
     // 19 -> 20: Artifact upgrade counts per loadout slot (Task 5). Old saves
     // lack upgrades on each slotted item; default to 0 (no upgrades applied).
     19: (state: SaveState) => {
@@ -276,21 +287,10 @@ export class MigrationPipeline {
         }
       }
     },
-    // 10 -> 11: News feed bookmarks (Task 20). Add newsBookmarks to player;
-    // backfill description on legacy news events that lack it.
-    10: (state: SaveState) => {
-      const player = state.player as unknown as { newsBookmarks?: number[] };
-      if (player && !Array.isArray(player.newsBookmarks)) {
-        player.newsBookmarks = [];
-      }
-      const galaxy = state.galaxy as unknown as {
-        newsFeed?: Array<{ description?: string }>;
-      };
-      if (galaxy && Array.isArray(galaxy.newsFeed)) {
-        for (const event of galaxy.newsFeed) {
-          if (!event.description) event.description = "";
-        }
-      }
+    // 20 -> 21: NPC convoy IDs (Task 6, living-galaxy economy). convoyId is
+    // optional so old NPC ships load fine without it — no data backfill needed.
+    20: (_state: SaveState) => {
+      // No-op: convoyId is optional and absent by default on old ships.
     },
   };
 }

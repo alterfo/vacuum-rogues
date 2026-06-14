@@ -73,7 +73,7 @@ export function pickLabelPosition(
     return pos;
   }
   // Fallback: prefer the first candidate over rendering no label at all.
-  return positions[0];
+  return positions[0] ?? { x: 0, y: 0 };
 }
 
 function rectIntersectsLineSegment(
