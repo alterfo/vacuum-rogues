@@ -204,6 +204,7 @@ export class SpaceFlightScene extends GameScene {
     this.hud.onMiniMapPan = (x, y) => this.camera.focusOnWorld(x, y);
     this.hud.onMiniMapReturn = () => this.camera.startReturn();
     this.hud.onFontScaleChange = () => this.onFontScaleChanged();
+    this.hud.onInventory = () => void this.openInventory();
 
     // NPC module: owns the living-galaxy ships, their contact panel, the
     // auto-follow combat loop and the OVERMIND-core prompt. Constructed first so
@@ -289,7 +290,6 @@ export class SpaceFlightScene extends GameScene {
     const lastPos = this.gameEngine?.lastFlightShipPos ?? null;
     if (this.gameEngine) this.gameEngine.lastFlightShipPos = null; // consume
     const entryVector = ctx?.entryVector ?? { x: 0, y: 1 };
-    // Non-warp re-entry resumes a remembered pos (combat/star-map round-trip must not edge-throw); else arrive at the boundary.
     const entryX = this.pendingWarp
       ? (lastPos?.x ??
         centerX - this.pendingWarp.exitVector.x * this.SYSTEM_INNER_RADIUS)
@@ -1396,12 +1396,10 @@ export class SpaceFlightScene extends GameScene {
   private plotRoute(): void {
     if (!this.shipPhysics || !this.plannedRoute) return;
 
-    // Route overlay is a planning aid — hide it while moving (user request).
     if (this.isTurnRunning) {
       this.routeRenderer.clearRoute();
       return;
     }
-
     // Polyline ship → (curved waypoints) → destination. When the path is a
     // straight clear shot, routePath is just the destination.
     const path =
@@ -1694,9 +1692,6 @@ export class SpaceFlightScene extends GameScene {
     }
   }
 
-  /**
-   * Open inventory scene
-   */
   private async openInventory(): Promise<void> {
     if (!this.gameEngine) return;
     logger.info("Opening inventory");

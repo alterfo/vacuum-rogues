@@ -386,6 +386,102 @@ describe("FlightHud font-scale button (playtest4 A)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Task 6: HUD instruction text replaced with a toggleable [?] help overlay.
+// A persistent [I] inventory button is added to the top-left cluster.
+// ---------------------------------------------------------------------------
+
+describe("FlightHud help overlay and inventory button (Task 6)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("normal HUD state contains no 'ЛКМ', 'Shift', or 'Колесико' text", () => {
+    const m = makeMockRenderer();
+    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
+    hud.initialize();
+    const allTexts = vi
+      .mocked(Text)
+      .mock.results.map((r) => String((r.value as { text: string }).text));
+    const hasHints = allTexts.some(
+      (t) => t.includes("ЛКМ") || t.includes("Shift") || t.includes("Колесико"),
+    );
+    expect(hasHints).toBe(false);
+  });
+
+  it("toggleHelpOverlay opens and closes the help overlay", () => {
+    const m = makeMockRenderer();
+    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
+    hud.initialize();
+    expect(hud.isHelpOverlayOpen()).toBe(false);
+    hud.toggleHelpOverlay();
+    expect(hud.isHelpOverlayOpen()).toBe(true);
+    hud.toggleHelpOverlay();
+    expect(hud.isHelpOverlayOpen()).toBe(false);
+  });
+
+  it("help overlay contains control hint text (ЛКМ) when open", () => {
+    const m = makeMockRenderer();
+    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
+    hud.initialize();
+    hud.toggleHelpOverlay();
+    const allTexts = vi
+      .mocked(Text)
+      .mock.results.map((r) => String((r.value as { text: string }).text));
+    expect(allTexts.some((t) => t.includes("ЛКМ"))).toBe(true);
+  });
+
+  it("[?] button pointerdown opens the help overlay", () => {
+    const m = makeMockRenderer();
+    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
+    hud.initialize();
+    const helpBtnNode = vi
+      .mocked(Text)
+      .mock.results.map(
+        (r) => r.value as { text: string; on: ReturnType<typeof vi.fn> },
+      )
+      .find((t) => String(t.text) === "[?]");
+    expect(
+      helpBtnNode,
+      "[?] Text node must be created by initialize()",
+    ).toBeDefined();
+    const call = helpBtnNode!.on.mock.calls.find(
+      (c: unknown[]) => c[0] === "pointerdown",
+    );
+    expect(call, "[?] must register a pointerdown handler").toBeDefined();
+    (call![1] as (e: { stopPropagation: () => void }) => void)({
+      stopPropagation: vi.fn(),
+    });
+    expect(hud.isHelpOverlayOpen()).toBe(true);
+  });
+
+  it("[I] button pointerdown fires the onInventory callback", () => {
+    const m = makeMockRenderer();
+    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
+    const onInventory = vi.fn();
+    hud.onInventory = onInventory;
+    hud.initialize();
+    const invBtnNode = vi
+      .mocked(Text)
+      .mock.results.map(
+        (r) => r.value as { text: string; on: ReturnType<typeof vi.fn> },
+      )
+      .find((t) => String(t.text) === "[I]");
+    expect(
+      invBtnNode,
+      "[I] Text node must be created by initialize()",
+    ).toBeDefined();
+    const call = invBtnNode!.on.mock.calls.find(
+      (c: unknown[]) => c[0] === "pointerdown",
+    );
+    expect(call, "[I] must register a pointerdown handler").toBeDefined();
+    (call![1] as (e: { stopPropagation: () => void }) => void)({
+      stopPropagation: vi.fn(),
+    });
+    expect(onInventory).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Playtest2 finding ④: the radar (SystemMiniMap, bottom-right) covered the
 // camera hint text «Камера: Zoom …». The hint must derive its position from
 // the radar's actual bounds so the two can never intersect.

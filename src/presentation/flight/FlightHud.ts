@@ -67,6 +67,9 @@ export class FlightHud implements FlightModule {
   private gearButton: UiButton | null = null;
   private settingsPanel: Container | null = null;
 
+  // [?] help overlay (toggled by the [?] Text button in uiContainer).
+  private helpOverlay: Container | null = null;
+
   // System mini-map / radar (bottom-right). The scene drives its per-frame
   // refresh via {@link miniMap}.
   private systemMiniMap: SystemMiniMap | null = null;
@@ -109,6 +112,8 @@ export class FlightHud implements FlightModule {
    * transition the scene itself (playtest4 A, DIP).
    */
   onFontScaleChange: (() => void) | null = null;
+  /** [I] inventory shortcut button was pressed. */
+  onInventory: (() => void) | null = null;
 
   constructor(
     renderer: Renderer,
@@ -150,6 +155,10 @@ export class FlightHud implements FlightModule {
     if (this.settingsPanel) {
       this.settingsPanel.destroy({ children: true });
       this.settingsPanel = null;
+    }
+    if (this.helpOverlay) {
+      this.helpOverlay.destroy({ children: true });
+      this.helpOverlay = null;
     }
     // Transient toast + its timer.
     if (this.toastTimer) {
@@ -277,6 +286,71 @@ export class FlightHud implements FlightModule {
     );
   }
 
+  /** True while the [?] help overlay is open. */
+  isHelpOverlayOpen(): boolean {
+    return this.helpOverlay !== null;
+  }
+
+  /** Toggle the semi-transparent [?] help overlay listing all flight controls. */
+  toggleHelpOverlay(): void {
+    if (this.helpOverlay) {
+      this.helpOverlay.destroy({ children: true });
+      this.helpOverlay = null;
+      return;
+    }
+    const overlay = new Container();
+    overlay.eventMode = "static";
+    overlay.on("pointerdown", (e: { stopPropagation: () => void }) =>
+      e.stopPropagation(),
+    );
+
+    const padding = 12;
+    const hints = new Text({
+      text: [
+        "ЛКМ — курс",
+        "Shift+ЛКМ — прицелиться",
+        "ПКМ — панорама",
+        "Колесико — зум",
+        "[J] — Журнал квестов",
+        "[I] — Инвентарь",
+      ].join("\n"),
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(13),
+        fill: 0xddeeff,
+        lineHeight: scaledFont(20),
+      },
+    });
+    hints.x = padding;
+    hints.y = padding;
+    hints.eventMode = "none";
+
+    const bg = new Graphics();
+    bg.roundRect(
+      0,
+      0,
+      hints.width + padding * 2,
+      hints.height + padding * 2,
+      6,
+    ).fill({ color: 0x050e18, alpha: 0.88 });
+    bg.roundRect(
+      0,
+      0,
+      hints.width + padding * 2,
+      hints.height + padding * 2,
+      6,
+    ).stroke({ color: 0x334455, width: 1 });
+    bg.eventMode = "none";
+
+    overlay.addChild(bg);
+    overlay.addChild(hints);
+    overlay.x = 20;
+    overlay.y = 165;
+
+    this.uiLayer.addChild(overlay);
+    this.helpOverlay = overlay;
+  }
+
   /** Close the quest journal immediately (Escape key handling). */
   closeQuestJournal(): void {
     if (this.questJournalUI) {
@@ -314,21 +388,6 @@ export class FlightHud implements FlightModule {
     this.uiContainer = new Container();
     // Container uses default eventMode ('auto') - it won't block clicks since it has no handlers
     // Child elements with eventMode='static' will receive events
-
-    // Instructions (non-interactive)
-    const instructions = new Text({
-      text: "ЛКМ - курс | Shift+ЛКМ/ПКМ - пан | Колесико - зум | [J] - Квесты | [I] - Инвентарь",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(13),
-        fill: 0x88ccff,
-      },
-    });
-    instructions.alpha = 0.8;
-    instructions.x = 20;
-    instructions.y = 20;
-    instructions.eventMode = "none"; // Explicitly set to non-interactive
-    this.uiContainer.addChild(instructions);
 
     // Camera debug display (development only). Right-edge anchored: the text
     // grows leftward as pan values widen, so it can never extend under the
@@ -388,6 +447,62 @@ export class FlightHud implements FlightModule {
       questBtn.alpha = 1;
     });
     this.uiContainer.addChild(questBtn);
+
+    // Inventory shortcut button [I]
+    const invBtn = new Text({
+      text: "[I]",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(14),
+        fill: 0xffaa00,
+        fontWeight: "bold" as const,
+      },
+    });
+    invBtn.x = 20;
+    invBtn.y = 110;
+    invBtn.eventMode = "static";
+    invBtn.cursor = "pointer";
+    invBtn.on("pointerdown", (event) => {
+      event.stopPropagation();
+      this.gameEngine?.audio?.playUiClick();
+      this.onInventory?.();
+    });
+    invBtn.on("pointerover", () => {
+      this.gameEngine?.audio?.playUiHover();
+      invBtn.alpha = 0.7;
+    });
+    invBtn.on("pointerout", () => {
+      invBtn.alpha = 1;
+    });
+    this.uiContainer.addChild(invBtn);
+
+    // Help toggle button [?]
+    const helpBtn = new Text({
+      text: "[?]",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(14),
+        fill: 0x88ccff,
+        fontWeight: "bold" as const,
+      },
+    });
+    helpBtn.x = 20;
+    helpBtn.y = 140;
+    helpBtn.eventMode = "static";
+    helpBtn.cursor = "pointer";
+    helpBtn.on("pointerdown", (event) => {
+      event.stopPropagation();
+      this.gameEngine?.audio?.playUiClick();
+      this.toggleHelpOverlay();
+    });
+    helpBtn.on("pointerover", () => {
+      this.gameEngine?.audio?.playUiHover();
+      helpBtn.alpha = 0.7;
+    });
+    helpBtn.on("pointerout", () => {
+      helpBtn.alpha = 1;
+    });
+    this.uiContainer.addChild(helpBtn);
 
     // Star map button
     const backBtn = new Text({
