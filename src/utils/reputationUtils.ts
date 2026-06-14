@@ -2,8 +2,8 @@ export function getRepLabel(rep: number): string {
   if (rep >= 50) return "Союзник";
   if (rep >= 10) return "Дружелюбный";
   if (rep >= -20) return "Нейтральный";
-  if (rep >= -50) return "Враждебный";
-  return "Война";
+  if (rep >= -50) return "Недовольный";
+  return "Враждебный";
 }
 
 export function getRepColor(rep: number): number {

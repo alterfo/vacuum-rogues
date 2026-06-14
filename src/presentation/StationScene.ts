@@ -5,7 +5,11 @@ import type { GameEngine } from "@/systems/GameEngine";
 import type { Station } from "@/domain/Station";
 import { SceneType, StationType, type MicroModule } from "@/types";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
-import { MICRO_MODULES } from "@/systems/equipment/GearCatalog";
+import {
+  MICRO_MODULES,
+  GearKind,
+  gearById,
+} from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
   gearToModule,
@@ -222,7 +226,9 @@ export class StationScene extends GameScene {
 
   private render(): void {
     if (!this.mainContainer) return;
-    this.mainContainer.removeChildren();
+    this.mainContainer
+      .removeChildren()
+      .forEach((c) => c.destroy({ children: true }));
     this.toast = null;
 
     if (this.view === "shop") {
@@ -794,7 +800,7 @@ export class StationScene extends GameScene {
         buyBtn.cursor = "pointer";
         buyBtn.on("pointerdown", (e) => {
           e.stopPropagation();
-          this.buyItem(listing);
+          this.buyItemWithTradeIn(listing);
         });
         buyBtn.on("pointerover", () => {
           buyBtn.alpha = 0.7;
@@ -839,6 +845,195 @@ export class StationScene extends GameScene {
     player.inventory.addItem(gearToModule(listing.gear));
     this.showToast(`Куплено: ${listing.gear.name}`, 0x44ff88);
     this.render();
+  }
+
+  private buyItemWithTradeIn(listing: GearListing): void {
+    const loadout = this.gameEngine?.playerLoadout;
+    const player = this.gameEngine?.player;
+    if (!player || !loadout) {
+      this.buyItem(listing);
+      return;
+    }
+
+    let currentId: string | null = null;
+    if (
+      listing.gear.kind === GearKind.HULL &&
+      loadout.hull.id !== listing.gear.id
+    ) {
+      currentId = loadout.hull.id;
+    } else if (listing.gear.kind === GearKind.WEAPON) {
+      currentId =
+        loadout
+          .installedGearIds()
+          .find(
+            (id) =>
+              gearById(id)?.kind === GearKind.WEAPON && id !== listing.gear.id,
+          ) ?? null;
+    }
+
+    if (!currentId) {
+      this.buyItem(listing);
+      return;
+    }
+
+    const currentGear = gearById(currentId);
+    if (!currentGear) {
+      this.buyItem(listing);
+      return;
+    }
+
+    const tradeIn = Math.floor(currentGear.basePrice * 0.4);
+    const delta = listing.price - tradeIn;
+    this.showTradeInModal(listing, currentId, currentGear.name, tradeIn, delta);
+  }
+
+  private showTradeInModal(
+    listing: GearListing,
+    currentId: string,
+    currentName: string,
+    tradeIn: number,
+    delta: number,
+  ): void {
+    const sw = this.renderer.app.screen.width;
+    const sh = this.renderer.app.screen.height;
+    const player = this.gameEngine?.player;
+    if (!player) return;
+
+    const overlay = new Container();
+    const shade = new Graphics();
+    shade.rect(0, 0, sw, sh).fill({ color: 0x000000, alpha: 0.75 });
+    shade.eventMode = "static";
+    overlay.addChild(shade);
+
+    const PW = Math.min(480, sw - 60);
+    const PH = 220;
+    const PX = (sw - PW) / 2;
+    const PY = (sh - PH) / 2;
+
+    const panel = new Graphics();
+    panel.rect(PX, PY, PW, PH).fill({ color: 0x080c18, alpha: 1 });
+    panel.rect(PX, PY, PW, PH).stroke({ color: 0x445566, width: 1 });
+    overlay.addChild(panel);
+
+    const addText = (
+      text: string,
+      y: number,
+      color: number,
+      size = 13,
+    ): void => {
+      const t = new Text({
+        text,
+        style: { fontSize: size, fill: color, fontFamily: "monospace" },
+      });
+      t.anchor.set(0.5, 0);
+      t.x = PX + PW / 2;
+      t.y = PY + y;
+      t.eventMode = "none";
+      overlay.addChild(t);
+    };
+
+    addText("[ ЗАМЕНА СНАРЯЖЕНИЯ ]", 14, 0x44ddff, 15);
+    addText(`Сдать: ${currentName}  →  +${tradeIn} ₡`, 50, 0xaaaaaa);
+    addText(
+      `Новый: ${listing.gear.name}  →  −${listing.price} ₡`,
+      70,
+      0xddeeff,
+    );
+
+    const canSwap = player.credits >= Math.max(0, delta);
+    const swapLabel =
+      delta > 0
+        ? `Заменить (доплатить ${delta} ₡)`
+        : `Заменить (получить ${-delta} ₡)`;
+    const swapColor = canSwap ? 0x003311 : 0x331100;
+    const swapTextColor = canSwap ? 0x44ff88 : 0x886644;
+
+    const makeBtn = (
+      label: string,
+      yOff: number,
+      bgColor: number,
+      textColor: number,
+      onClick: () => void,
+      enabled = true,
+    ): void => {
+      const BW = PW - 60;
+      const btn = new Container();
+      btn.x = PX + 30;
+      btn.y = PY + yOff;
+      btn.eventMode = enabled ? "static" : "none";
+      btn.cursor = "pointer";
+
+      const bg = new Graphics();
+      bg.rect(0, 0, BW, 34).fill({ color: bgColor, alpha: 0.9 });
+      bg.rect(0, 0, BW, 34).stroke({ color: 0x556677, width: 1 });
+      btn.addChild(bg);
+
+      const lbl = new Text({
+        text: label,
+        style: { fontSize: 13, fill: textColor, fontFamily: "monospace" },
+      });
+      lbl.anchor.set(0.5, 0.5);
+      lbl.x = BW / 2;
+      lbl.y = 17;
+      lbl.eventMode = "none";
+      btn.addChild(lbl);
+
+      btn.on("pointerdown", (e) => {
+        e.stopPropagation();
+        onClick();
+      });
+      btn.on("pointerover", () => {
+        bg.alpha = 1;
+      });
+      btn.on("pointerout", () => {
+        bg.alpha = 0.9;
+      });
+      overlay.addChild(btn);
+    };
+
+    makeBtn(
+      swapLabel,
+      105,
+      swapColor,
+      swapTextColor,
+      () => {
+        const loadout = this.gameEngine?.playerLoadout;
+        if (!loadout) return;
+        const cost = Math.max(0, delta);
+        const refund = Math.max(0, -delta);
+        player.credits = player.credits - cost + refund;
+        if (listing.gear.kind === GearKind.HULL) {
+          loadout.setHull(listing.gear.id);
+        } else {
+          loadout.remove(currentId);
+          loadout.install(listing.gear.id);
+        }
+        this.mainContainer!.removeChild(overlay);
+        overlay.destroy({ children: true });
+        this.showToast(`Установлено: ${listing.gear.name}`, 0x44ff88);
+        this.render();
+      },
+      canSwap,
+    );
+
+    makeBtn(
+      `Купить в запас (${listing.price} ₡)`,
+      148,
+      0x111822,
+      0x88ccff,
+      () => {
+        this.mainContainer!.removeChild(overlay);
+        overlay.destroy({ children: true });
+        this.buyItem(listing);
+      },
+    );
+
+    makeBtn("Отмена", 185, 0x0a0a0a, 0x888888, () => {
+      this.mainContainer!.removeChild(overlay);
+      overlay.destroy({ children: true });
+    });
+
+    this.mainContainer!.addChild(overlay);
   }
 
   // ── micromodule shop sub-view ──────────────────────────────────────────────

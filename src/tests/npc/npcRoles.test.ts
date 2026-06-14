@@ -179,20 +179,21 @@ describe("NPC roles — PATROL convoy assembly", () => {
     const galaxy = makeContestedGalaxy();
     const sim = new NpcSimulator();
 
-    for (let i = 0; i < 3; i++) {
+    // 5 patrol ships so that even if some depart on the assembly tick, ≥2 remain.
+    for (let i = 0; i < 5; i++) {
       galaxy.npcShips.push(
         makeNpc(`patrol_${i}`, "sys_a", NpcState.PATROLLING, NpcRole.PATROL),
       );
     }
 
+    // Jump to day 29 so the very next tick fires convoy assembly (day 30 % 30 === 0).
+    galaxy.gameDays = 29;
     const rng = new SeededRNG("convoy_dest_seed");
-    for (let d = 0; d < 30; d++) {
-      galaxy.gameDays++;
-      sim.tick(galaxy, rng);
-    }
+    galaxy.gameDays++;
+    sim.tick(galaxy, rng);
 
     const convoyed = galaxy.npcShips.filter((n) => n.convoyId);
-    if (convoyed.length < 2) return; // guard: at least 2 needed to compare
+    expect(convoyed.length).toBeGreaterThanOrEqual(2);
 
     const firstId = convoyed[0].convoyId;
     const firstDest = convoyed[0].destinationSystemId;

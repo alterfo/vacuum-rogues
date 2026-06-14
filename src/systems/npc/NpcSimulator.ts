@@ -196,12 +196,7 @@ export class NpcSimulator {
    * Spawn a pirate NPC directly in the specified system and return it.
    * Used by GalaxySimulator for PIRATE_SURGE events.
    */
-  spawnPirateInSystem(
-    _galaxy: Galaxy,
-    rng: SeededRNG,
-    id: string,
-    systemId: string,
-  ): NpcShip {
+  spawnPirateInSystem(rng: SeededRNG, id: string, systemId: string): NpcShip {
     const stats = ROLE_STATS[NpcRole.PIRATE];
     const faction = FactionType.OUTLANDERS;
     return new NpcShip({

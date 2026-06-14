@@ -292,12 +292,7 @@ export class GalaxySimulator {
         for (let i = 0; i < pirateCount; i++) {
           const id = `npc_surge_${event.systemId}_${event.day}_${i}`;
           galaxy.npcShips.push(
-            this.npcSimulator.spawnPirateInSystem(
-              galaxy,
-              rng,
-              id,
-              event.systemId,
-            ),
+            this.npcSimulator.spawnPirateInSystem(rng, id, event.systemId),
           );
         }
         if (system) {

@@ -27,7 +27,7 @@ export class ResearchUpgradePanel {
 
   /** Render the panel into `parent`; clears existing children first. */
   render(parent: Container, sw: number, sh: number): void {
-    parent.removeChildren();
+    parent.removeChildren().forEach((c) => c.destroy({ children: true }));
     this.buildPanel(parent, sw, sh);
   }
 

@@ -6,32 +6,32 @@ describe("getRepLabel — 5-tier scale", () => {
     expect(getRepLabel(-10)).toBe("Нейтральный");
   });
 
-  it("returns Враждебный at -25 (boundary: both scenes must agree)", () => {
-    expect(getRepLabel(-25)).toBe("Враждебный");
+  it("returns Недовольный at -25", () => {
+    expect(getRepLabel(-25)).toBe("Недовольный");
   });
 
-  it("returns Враждебный at -35", () => {
-    expect(getRepLabel(-35)).toBe("Враждебный");
+  it("returns Недовольный at -35", () => {
+    expect(getRepLabel(-35)).toBe("Недовольный");
   });
 
-  it("returns Война at -75", () => {
-    expect(getRepLabel(-75)).toBe("Война");
+  it("returns Враждебный at -75", () => {
+    expect(getRepLabel(-75)).toBe("Враждебный");
   });
 
   it("returns Нейтральный at exactly -20 (boundary)", () => {
     expect(getRepLabel(-20)).toBe("Нейтральный");
   });
 
-  it("returns Враждебный at -21", () => {
-    expect(getRepLabel(-21)).toBe("Враждебный");
+  it("returns Недовольный at -21", () => {
+    expect(getRepLabel(-21)).toBe("Недовольный");
   });
 
-  it("returns Враждебный at exactly -50", () => {
-    expect(getRepLabel(-50)).toBe("Враждебный");
+  it("returns Недовольный at exactly -50", () => {
+    expect(getRepLabel(-50)).toBe("Недовольный");
   });
 
-  it("returns Война at -51", () => {
-    expect(getRepLabel(-51)).toBe("Война");
+  it("returns Враждебный at -51", () => {
+    expect(getRepLabel(-51)).toBe("Враждебный");
   });
 
   it("returns Дружелюбный at 10", () => {
@@ -44,8 +44,12 @@ describe("getRepLabel — 5-tier scale", () => {
 });
 
 describe("getRepColor — matches label tiers", () => {
-  it("hostile range is red", () => {
+  it("displeased range is pink", () => {
     expect(getRepColor(-25)).toBe(0xff8888);
+    expect(getRepColor(-50)).toBe(0xff8888);
+  });
+
+  it("hostile range is red", () => {
     expect(getRepColor(-75)).toBe(0xff2222);
   });
 
