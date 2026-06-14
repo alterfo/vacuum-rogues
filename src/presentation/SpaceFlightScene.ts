@@ -1699,8 +1699,12 @@ export class SpaceFlightScene extends GameScene {
    */
   private async openInventory(): Promise<void> {
     if (!this.gameEngine) return;
-
     logger.info("Opening inventory");
+    if (this.shipPhysics)
+      this.gameEngine.lastFlightShipPos = {
+        x: this.shipPhysics.shipX,
+        y: this.shipPhysics.shipY,
+      };
     await this.gameEngine.transitionTo(SceneType.INVENTORY, {
       gameEngine: this.gameEngine,
     });

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { InventoryScene } from "@/presentation/InventoryScene";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { Text } from "pixi.js";
+import { SceneType } from "@/types";
 
 vi.mock("pixi.js", () => ({
   Container: vi.fn().mockImplementation(() => ({
@@ -53,7 +54,10 @@ const mockRenderer = {
 
 const LEGACY_MODULE_NAME = "ЛЕГАСИ-БЛАСТЕР-9000";
 
-function makeEngine(loadout: ShipLoadout | null) {
+function makeEngine(
+  loadout: ShipLoadout | null,
+  lastFlightShipPos: { x: number; y: number } | null = null,
+) {
   return {
     player: {
       credits: 1234,
@@ -81,6 +85,7 @@ function makeEngine(loadout: ShipLoadout | null) {
       },
     },
     playerLoadout: loadout,
+    lastFlightShipPos,
     transitionTo: vi.fn().mockResolvedValue(undefined),
   } as unknown as import("@/systems/GameEngine").GameEngine;
 }
@@ -205,6 +210,43 @@ describe("InventoryScene — canonical GearCatalog loadout view (F6)", () => {
 
     const all = renderedTexts().join("\n");
     expect(all).toContain("Кредиты: 1234");
+
+    scene.destroy();
+  });
+
+  it("passes preserveShipPos from lastFlightShipPos when closing via Escape", async () => {
+    const shipPos = { x: 200, y: 300 };
+    const loadout = new ShipLoadout("hull_corvette");
+    const engine = makeEngine(loadout, shipPos);
+
+    const scene = new InventoryScene(mockRenderer);
+    scene.initialize({ gameEngine: engine });
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(engine.transitionTo).toHaveBeenCalledWith(SceneType.SPACE_FLIGHT, {
+      preserveShipPos: shipPos,
+    });
+
+    scene.destroy();
+  });
+
+  it("transitions to SPACE_FLIGHT without preserveShipPos when lastFlightShipPos is null", async () => {
+    const loadout = new ShipLoadout("hull_corvette");
+    const engine = makeEngine(loadout, null);
+
+    const scene = new InventoryScene(mockRenderer);
+    scene.initialize({ gameEngine: engine });
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const calls = (engine.transitionTo as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const [sceneArg, ctxArg] = calls[0];
+    expect(sceneArg).toBe(SceneType.SPACE_FLIGHT);
+    expect(ctxArg?.preserveShipPos).toBeUndefined();
 
     scene.destroy();
   });

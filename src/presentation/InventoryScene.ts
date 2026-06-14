@@ -394,9 +394,11 @@ export class InventoryScene extends GameScene {
     if (!this.gameEngine) return;
 
     logger.info("Closing inventory");
-    // Return to previous scene (stored in GameEngine)
-    // For now, default to SPACE_FLIGHT
-    await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT);
+    const shipPos = this.gameEngine.lastFlightShipPos ?? undefined;
+    await this.gameEngine.transitionTo(
+      SceneType.SPACE_FLIGHT,
+      shipPos ? { preserveShipPos: shipPos } : undefined,
+    );
   }
 
   /**
