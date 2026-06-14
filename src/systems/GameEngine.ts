@@ -715,6 +715,12 @@ export class GameEngine {
       if (pirate) {
         pirate.name = quest.targetNpcName;
         template = { ...quest.template, targetObjectId: pirate.id };
+        // The Info Center registry is cached per game-day and only rebuilt on
+        // world advance. Renaming a ship mid-day mutates galaxy state the cached
+        // snapshot won't reflect, so the player couldn't find the freshly-named
+        // target until the next day-tick. Drop the cache so it rebuilds on the
+        // next lookup — the whole point of binding a real NPC is findability.
+        this.infoRegistryCache = null;
       }
     }
 

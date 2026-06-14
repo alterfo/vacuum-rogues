@@ -253,4 +253,28 @@ describe("acceptBoardQuest — BOUNTY real NPC assignment", () => {
     const passedTemplate = spy.mock.calls[0][0];
     expect(passedTemplate.targetObjectId).toBeNull();
   });
+
+  it("invalidates the same-day Info Center cache so the renamed ship is findable", () => {
+    const { engine } = makeEngine();
+    const pirate = makePirate("npc_pirate_1", TARGET_SYSTEM_ID, NpcState.IDLE);
+    engine.galaxy = makeGalaxy([pirate]);
+
+    // Player browses the Info Center first, populating the per-day cache with
+    // the pirate's pre-rename name.
+    const before = engine
+      .getInfoRegistry()!
+      .findShips({ name: TARGET_SHIP_NAME, originSystemId: ISSUER_SYSTEM_ID });
+    expect(before).toHaveLength(0);
+
+    // Accepting the bounty renames the pirate the same game-day (no day-tick).
+    engine.acceptBoardQuest(makeBountyQuest(), "planet_issuer");
+    expect(pirate.name).toBe(TARGET_SHIP_NAME);
+
+    // Re-querying the Info Center the same day must surface the renamed ship —
+    // the cache has to be rebuilt rather than serving the stale snapshot.
+    const after = engine
+      .getInfoRegistry()!
+      .findShips({ name: TARGET_SHIP_NAME, originSystemId: ISSUER_SYSTEM_ID });
+    expect(after.map((s) => s.id)).toContain("npc_pirate_1");
+  });
 });
