@@ -51,6 +51,15 @@ export class Inventory {
     });
   }
 
+  addResource(type: ResourceType, amount: number): void {
+    const existing = this.resources.find((r) => r.type === type);
+    if (existing) {
+      existing.amount += amount;
+    } else {
+      this.resources.push({ type, amount });
+    }
+  }
+
   consumeResources(cost: ResourceStack[]): void {
     if (!this.hasResources(cost)) {
       throw new GameBusinessException(

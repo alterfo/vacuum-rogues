@@ -148,6 +148,13 @@ export class CombatScene extends GameScene {
         cover: [],
         nebulae: [],
       });
+      const playerSystemId = this._gameEngine?.player?.currentSystemId ?? "";
+      const ge = this._gameEngine;
+      system.isOvermindSystem =
+        playerSystemId !== "" &&
+        ge != null &&
+        ge.galaxy != null &&
+        ge.galaxy.isOvermindSystem(playerSystemId);
       this._system = system;
     }
 
@@ -698,6 +705,7 @@ export class CombatScene extends GameScene {
         (result.loot as import("@/domain/ShipModule").ShipModule[]) ?? [],
         result.killPointsGained ?? 0,
         result.outcome === EncounterState.PLAYER_WON,
+        result.items,
       );
       this.showOutcomePanel(
         result.message,
@@ -727,6 +735,7 @@ export class CombatScene extends GameScene {
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
         enemyResult.result.killPointsGained,
         enemyResult.result.outcome === EncounterState.PLAYER_WON,
+        enemyResult.result.items,
       );
       this.showOutcomePanel(
         enemyResult.result.message,
@@ -760,6 +769,7 @@ export class CombatScene extends GameScene {
         (result.loot as import("@/domain/ShipModule").ShipModule[]) ?? [],
         result.killPointsGained ?? 0,
         result.outcome === EncounterState.PLAYER_WON,
+        result.items,
       );
       this.showOutcomePanel(
         result.message,
@@ -789,6 +799,7 @@ export class CombatScene extends GameScene {
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
         enemyResult.result.killPointsGained,
         enemyResult.result.outcome === EncounterState.PLAYER_WON,
+        enemyResult.result.items,
       );
       this.showOutcomePanel(
         enemyResult.result.message,
@@ -828,6 +839,7 @@ export class CombatScene extends GameScene {
         enemyResult.result.loot as import("@/domain/ShipModule").ShipModule[],
         enemyResult.result.killPointsGained,
         enemyResult.result.outcome === EncounterState.PLAYER_WON,
+        enemyResult.result.items,
       );
       this.showOutcomePanel(
         enemyResult.result.message,
@@ -870,6 +882,7 @@ export class CombatScene extends GameScene {
     loot: import("@/domain/ShipModule").ShipModule[],
     killPoints: number = 0,
     isVictory: boolean = false,
+    resourceItems?: { type: import("@/types").ResourceType; amount: number }[],
   ): void {
     const player = this._gameEngine?.player;
     if (!player) return;
@@ -881,6 +894,14 @@ export class CombatScene extends GameScene {
     if (loot.length > 0) {
       this.showToast("Трофеи получены", 0x44ff88);
       this.addLogEntry(`Трофеи: ${loot.map((l) => l.name).join(", ")}`);
+    }
+    if (resourceItems && resourceItems.length > 0) {
+      for (const ri of resourceItems) {
+        player.inventory.addResource(ri.type, ri.amount);
+      }
+      const total = resourceItems.reduce((s, r) => s + r.amount, 0);
+      this.showToast(`Артефакты +${total}`, 0xffcc44);
+      this.addLogEntry(`Артефакты Овермайнда: +${total}`);
     }
     // Reputation penalty with the enemy's faction on a kill
     if (this._npcFactionId && (credits > 0 || killPoints > 0)) {

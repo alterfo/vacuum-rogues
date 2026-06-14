@@ -106,16 +106,16 @@ Day 450 — ~38 quests    → ~15,000 credits             → afford tech-7 gear
 - Modify: `src/config/balance.ts`
 - Modify: `src/tests/combat/combatSystem.test.ts` (or new)
 
-- [ ] Add balance constants: `ARTIFACT_DROP_CHANCE: 0.4` (40% per Overmind kill),
+- [x] Add balance constants: `ARTIFACT_DROP_CHANCE: 0.4` (40% per Overmind kill),
   `ARTIFACT_DROP_COUNT_MIN: 1`, `ARTIFACT_DROP_COUNT_MAX: 3`
-- [ ] In `resolveVictory()`: if the destroyed enemy is from an Overmind system (check
+- [x] In `resolveVictory()`: if the destroyed enemy is from an Overmind system (check
   `galaxy.isOvermindSystem(combatContext.systemId)`), roll artifact drop; if hit, add
   `{ type: ResourceType.ARTIFACTS, amount: rng(1, 3) }` to the victory reward's `items`
   array so the existing pickup flow delivers them to `player.inventory.resources`
-- [ ] Write RED unit test: mock an Overmind-system combat, call `resolveVictory()` with
+- [x] Write RED unit test: mock an Overmind-system combat, call `resolveVictory()` with
   seeded RNG that rolls < 0.4, assert reward includes `ARTIFACTS ≥ 1`; roll ≥ 0.4 →
   no artifacts; non-Overmind system → never artifacts
-- [ ] Run lint + unit tests — green
+- [x] Run lint + unit tests — green
 
 ### Task 5: RESEARCH_LAB artifact upgrade system
 **Files:**

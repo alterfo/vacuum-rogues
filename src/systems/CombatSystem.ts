@@ -3,8 +3,14 @@ import type {
   CombatResult,
   EncounterResult,
   TerrainConfig,
+  ResourceType,
 } from "@/types";
 import { EncounterState, WeaponAbility } from "@/types";
+import {
+  ARTIFACT_DROP_CHANCE,
+  ARTIFACT_DROP_COUNT_MIN,
+  ARTIFACT_DROP_COUNT_MAX,
+} from "@/config/balance";
 import type { PlayerShip } from "@/domain/PlayerShip";
 import type { EnemyShip } from "@/domain/EnemyShip";
 import type { TacticalEncounter } from "@/domain/TacticalEncounter";
@@ -28,11 +34,14 @@ export interface CombatRewardResult {
   creditsGained: number;
   killPointsGained: number;
   loot: ShipModule[];
+  items: { type: ResourceType; amount: number }[];
 }
 
 export class CombatSystem {
   public encounter: TacticalEncounter | null = null;
   public grid: HexGrid;
+  /** Set to true when combat takes place in an Overmind-controlled system. */
+  public isOvermindSystem: boolean = false;
   private combatAI: CombatAI;
   /** Weapon cooldown tracking: weaponGearId → turns remaining. */
   private playerWeaponCooldowns = new Map<string, number>();
@@ -286,7 +295,9 @@ export class CombatSystem {
         damageDealt,
         damageTaken: 0,
         xpGained: result.xpGained,
+        killPointsGained: result.killPointsGained,
         loot: result.loot as ShipModule[],
+        items: result.items,
         message: result.message,
         outcome: result.outcome,
       };
@@ -461,6 +472,7 @@ export class CombatSystem {
         xpGained: rewards.creditsGained,
         killPointsGained: rewards.killPointsGained,
         loot: rewards.loot,
+        items: rewards.items.length > 0 ? rewards.items : undefined,
         message: `Победа! +${rewards.creditsGained} ₡${rewards.loot.length > 0 ? ` + ${rewards.loot[0].name}` : ""}`,
       };
     }
@@ -486,12 +498,14 @@ export class CombatSystem {
 
   /**
    * Calculate victory rewards: credits and kill points based on enemy tech
-   * levels, plus a 30% equipment drop chance per enemy.
+   * levels, plus a 30% equipment drop chance per enemy. If combat took place
+   * in an Overmind system, also rolls for artifact drops.
    */
   resolveVictory(enemies: EnemyShip[]): CombatRewardResult {
     let creditsGained = 0;
     let killPointsGained = 0;
     const loot: ShipModule[] = [];
+    const items: { type: ResourceType; amount: number }[] = [];
 
     for (const enemy of enemies) {
       creditsGained += enemy.techLevel * 50;
@@ -501,9 +515,19 @@ export class CombatSystem {
         const drop = this.rollLootDrop(enemy.techLevel);
         if (drop) loot.push(drop);
       }
+
+      if (this.isOvermindSystem && Math.random() < ARTIFACT_DROP_CHANCE) {
+        const count =
+          ARTIFACT_DROP_COUNT_MIN +
+          Math.floor(
+            Math.random() *
+              (ARTIFACT_DROP_COUNT_MAX - ARTIFACT_DROP_COUNT_MIN + 1),
+          );
+        items.push({ type: "ARTIFACTS" as ResourceType, amount: count });
+      }
     }
 
-    return { creditsGained, killPointsGained, loot };
+    return { creditsGained, killPointsGained, loot, items };
   }
 
   private rollLootDrop(techLevel: number): ShipModule | null {

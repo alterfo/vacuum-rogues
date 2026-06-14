@@ -72,6 +72,13 @@ export const QUEST_REWARD_PER_JUMP = 220;
 /** Minimum rank required to see elite quests (minRank = 3 → Ас). */
 export const ELITE_QUEST_MIN_RANK = 3;
 
+/** Probability that killing an Overmind enemy drops artifacts (per kill). */
+export const ARTIFACT_DROP_CHANCE = 0.4;
+/** Minimum artifact count per drop. */
+export const ARTIFACT_DROP_COUNT_MIN = 1;
+/** Maximum artifact count per drop. */
+export const ARTIFACT_DROP_COUNT_MAX = 3;
+
 /** Player rank at which the government faction discount applies. */
 export const RANK_DISCOUNT_THRESHOLD = 5;
 
