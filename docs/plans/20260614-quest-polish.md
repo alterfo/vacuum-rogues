@@ -57,14 +57,14 @@ DELIVERY/DIPLOMACY/TEXT_ADVENTURE получают награду на целе�
 - Modify: `src/systems/quests/QuestGenerator.ts`
 - Create: `src/tests/quests/questGeneratorBounty.test.ts`
 
-- [ ] Добавить пул имён кораблей `BOUNTY_SHIP_NAMES` в `QuestGenerator.ts` (20+ имён: «Стальная Тень», «Красный Клинок», «Ночной Призрак», «Ядовитый Зуб», «Железная Хватка», «Серебряный Вор», «Чёрная Молния», «Кровавый Рассвет», «Злой Рок», «Стальная Крыса», и т.д.)
-- [ ] В `buildRoutineQuest` для `QuestType.BOUNTY`: сгенерировать имя корабля через RNG из пула, сохранить в переменную `targetShipName`
-- [ ] Обновить `pickBountyDesc()`: добавить параметр `shipName: string`, во все 5 шаблонов добавить явное упоминание «корабль «{shipName}»»
-- [ ] Добавить к описанию чёткую строку: `\nЦель: корабль «{shipName}», система {targetName}`
-- [ ] Добавить `targetNpcName: string | null` в `GeneratedQuest` interface; заполнять для BOUNTY
-- [ ] Написать тест: BOUNTY квест содержит ship name в description и в `targetNpcName`
-- [ ] Написать тест: `pickBountyDesc` с shipName включает имя в результат
-- [ ] Запустить `npm test -- --run` — зелёные
+- [x] Добавить пул имён кораблей `BOUNTY_SHIP_NAMES` в `QuestGenerator.ts` (20+ имён: «Стальная Тень», «Красный Клинок», «Ночной Призрак», «Ядовитый Зуб», «Железная Хватка», «Серебряный Вор», «Чёрная Молния», «Кровавый Рассвет», «Злой Рок», «Стальная Крыса», и т.д.)
+- [x] В `buildRoutineQuest` для `QuestType.BOUNTY`: сгенерировать имя корабля через RNG из пула, сохранить в переменную `targetShipName`
+- [x] Обновить `pickBountyDesc()`: добавить параметр `shipName: string`, во все 5 шаблонов добавить явное упоминание «корабль «{shipName}»»
+- [x] Добавить к описанию чёткую строку: `\nЦель: корабль «{shipName}», система {targetName}`
+- [x] Добавить `targetNpcName: string | null` в `GeneratedQuest` interface; заполнять для BOUNTY
+- [x] Написать тест: BOUNTY квест содержит ship name в description и в `targetNpcName`
+- [x] Написать тест: `pickBountyDesc` с shipName включает имя в результат
+- [x] Запустить `npm test -- --run` — зелёные
 
 ### Task 3: Structured highlights in GeneratedQuest + render in UI
 

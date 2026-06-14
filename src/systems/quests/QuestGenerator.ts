@@ -48,6 +48,8 @@ export interface GeneratedQuest {
   readonly issuerName: string;
   /** Title that fits the job (e.g. "Губернатор", "Снабженец", "Шериф"). */
   readonly issuerTitle: string;
+  /** For BOUNTY quests: the name of the specific ship the player must destroy. */
+  readonly targetNpcName: string | null;
 }
 
 export interface BoardOptions {
@@ -117,6 +119,32 @@ const CONVOY_SHIP_NOUNS = [
   "Титан",
   "Феникс",
   "Циклон",
+];
+
+/** Names of wanted ships for BOUNTY quests. */
+const BOUNTY_SHIP_NAMES = [
+  "Стальная Тень",
+  "Красный Клинок",
+  "Ночной Призрак",
+  "Ядовитый Зуб",
+  "Железная Хватка",
+  "Серебряный Вор",
+  "Чёрная Молния",
+  "Кровавый Рассвет",
+  "Злой Рок",
+  "Стальная Крыса",
+  "Жёлтый Скорпион",
+  "Туманный Волк",
+  "Пепельный Коготь",
+  "Осколок Бездны",
+  "Ржавый Приговор",
+  "Голодный Демон",
+  "Стальной Ворон",
+  "Проклятый Странник",
+  "Тёмный Прилив",
+  "Кроваво-Красная Звезда",
+  "Угрюмый Кочевник",
+  "Зубастая Пасть",
 ];
 
 /** First-name pool for quest issuers (deterministic per quest slot). */
@@ -381,6 +409,7 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
         jumps,
         issuerName: defIssuer.name,
         issuerTitle: defIssuer.title,
+        targetNpcName: null,
       });
     }
   }
@@ -480,6 +509,7 @@ function buildRoutineQuest(
   let title: string;
   let description: string;
   let objectives: QuestTemplate["objectives"];
+  let targetNpcName: string | null = null;
 
   switch (type) {
     case QuestType.DELIVERY: {
@@ -512,12 +542,17 @@ function buildRoutineQuest(
       break;
     }
     case QuestType.BOUNTY: {
+      const shipName =
+        BOUNTY_SHIP_NAMES[rng.nextInt(0, BOUNTY_SHIP_NAMES.length - 1)];
+      targetNpcName = shipName;
       title = `Охота: ${where}`;
-      description = pickBountyDesc(rng, issuer.name, target.name, credits);
+      description =
+        pickBountyDesc(rng, issuer.name, shipName, target.name, credits) +
+        `\nЦель: корабль «${shipName}», система ${target.name}`;
       objectives = [
         {
           id: `${id}_kill`,
-          description: `Уничтожить цель в ${target.name}`,
+          description: `Уничтожить корабль «${shipName}» в ${target.name}`,
           type: "DEFEAT_ENEMY",
           targetAmount: 1,
           enemyType: bountyEnemy(rng),
@@ -610,6 +645,7 @@ function buildRoutineQuest(
     jumps,
     issuerName: issuer.name,
     issuerTitle: issuer.title,
+    targetNpcName,
   };
 }
 
@@ -676,6 +712,7 @@ function buildChainQuest(
     jumps,
     issuerName: issuer.name,
     issuerTitle: issuer.title,
+    targetNpcName: null,
   };
 }
 
@@ -741,6 +778,7 @@ function buildFinaleQuest(
     jumps,
     issuerName: issuer.name,
     issuerTitle: issuer.title,
+    targetNpcName: null,
   };
 }
 
@@ -782,6 +820,7 @@ function buildLocalDelivery(
     jumps: 0,
     issuerName: issuer.name,
     issuerTitle: issuer.title,
+    targetNpcName: null,
   };
 }
 
@@ -828,6 +867,7 @@ function buildTextQuest(
     jumps: 0,
     issuerName: issuer.name,
     issuerTitle: issuer.title,
+    targetNpcName: null,
   };
 }
 
@@ -867,6 +907,7 @@ function pickDeliveryDesc(
 function pickBountyDesc(
   rng: SeededRNG,
   issuer: string,
+  shipName: string,
   targetName: string,
   reward: number,
 ): string {
@@ -879,11 +920,11 @@ function pickBountyDesc(
   ];
   const gang = gangs[rng.nextInt(0, gangs.length - 1)];
   const templates = [
-    `Шайка ${gang} обнаглела и обложила данью торговцев у ${targetName}. ${issuer} просит навести порядок. Награда щедрая — чтобы перебить страх: ${reward} ₢.`,
-    `Цель прячется в системе ${targetName}. ${issuer} предупреждает: стреляет первой, переговоров не ведёт. Зато мёртвой стоит ${reward} ₢ — живой не нужна никому.`,
-    `${gang} атаковали конвой близ ${targetName}. Пострадавшие требуют справедливости, ${issuer} требует результата, а ты потребуешь ${reward} ₢. Кажется, все довольны.`,
-    `${issuer} давно мечтает, чтобы ${gang} перестали существовать где-то у ${targetName}. Бюджет на мечту: ${reward} ₢. Вопросов о методах не будет.`,
-    `Розыск: один очень нехороший тип засел в ${targetName}. ${issuer} клянётся, что он того заслужил. ${reward} ₢, и можешь не уточнять подробности.`,
+    `Шайка ${gang} обнаглела и обложила данью торговцев у ${targetName}. ${issuer} просит навести порядок — корабль «${shipName}» в розыске. Награда щедрая — чтобы перебить страх: ${reward} ₢.`,
+    `Корабль «${shipName}» прячется в системе ${targetName}. ${issuer} предупреждает: стреляет первым, переговоров не ведёт. Зато мёртвым стоит ${reward} ₢ — живым не нужен никому.`,
+    `${gang} атаковали конвой близ ${targetName}, флагман — корабль «${shipName}». Пострадавшие требуют справедливости, ${issuer} требует результата, а ты потребуешь ${reward} ₢.`,
+    `${issuer} давно мечтает, чтобы корабль «${shipName}» где-то у ${targetName} перестал существовать. Бюджет на мечту: ${reward} ₢. Вопросов о методах не будет.`,
+    `Розыск: корабль «${shipName}» засел в ${targetName}. ${issuer} клянётся, что команда того заслужила. ${reward} ₢, и можешь не уточнять подробности.`,
   ];
   return templates[rng.nextInt(0, templates.length - 1)];
 }
