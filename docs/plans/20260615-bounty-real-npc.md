@@ -52,7 +52,7 @@ BOUNTY-квесты генерируют имя корабля-цели (нап�
 ### Task 3: Final verification
 **Files:** (none new)
 
-- [ ] `npm run lint` — без ошибок
-- [ ] `npm test -- --run` — все тесты зелёные
-- [ ] `npm run build` — сборка чистая
-- [ ] NO_PROXY=localhost,127.0.0.1 npm run test:e2e:regression — E2E regression OK
+- [x] `npm run lint` — без ошибок
+- [x] `npm test -- --run` — все тесты зелёные
+- [x] `npm run build` — сборка чистая
+- [x] NO_PROXY=localhost,127.0.0.1 npm run test:e2e:regression — E2E regression OK
