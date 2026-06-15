@@ -206,14 +206,14 @@ Combat happens in the flight scene, not in a separate hex grid scene (CombatScen
 - Create: `src/presentation/flight/DamageNumbers.ts`
 - Create: `src/tests/flight/damageResolution.test.ts`
 
-- [ ] Write a failing test: `resolveCombatRound(playerDmg, npcDmg, playerHP, npcHP)` returns `{ newPlayerHP, newNpcHP }` with both taking damage simultaneously in one call.
-- [ ] Player clicks enemy NPC sprite inside CombatModule to set `selectedTarget`; clicking outside deselects.
-- [ ] On "Атаковать": resolve one combat round simultaneously — player deals `weapon.damage` to NPC, NPC deals `npc.damage` to player ship; apply to `npc.hullHP` and `player.ship.hullHP`.
-- [ ] Create `DamageNumbers` helper: spawns PixiJS `Text` at a world position, floats upward (+Y) over 0.8 s, fades out, then removes itself. Red for damage taken, yellow for damage dealt.
-- [ ] Show damage numbers at target's world position after each round.
-- [ ] If NPC `hullHP ≤ 0`: NPC dies (call existing death path in `NpcShipManager`), trigger loot drop (Task 9), call `combatModule.endCombat()`.
-- [ ] If player `hullHP < 30% maxHull`: auto-end combat with a hull-low warning toast; NPC remains in system hostile.
-- [ ] Run full test suite — must pass.
+- [x] Write a failing test: `resolveCombatRound(playerDmg, npcDmg, playerHP, npcHP)` returns `{ newPlayerHP, newNpcHP }` with both taking damage simultaneously in one call. (`damageResolution.test.ts`: both-damaged, floor-at-0, and lethal-NPC-still-costs-player-hull simultaneity cases.)
+- [x] Player clicks enemy NPC sprite inside CombatModule to set `selectedTarget`; clicking outside deselects. (`CombatModule.selectTarget(sprite | null)` — a no-op outside a fight; `startCombat` default-selects the aggressor. `NpcShipManager.onNpcClick` routes a click to `selectCombatTarget` while `isInCombat()`; the scene's `onPointerDown` calls `selectTarget(null)` on an empty-space click during combat.)
+- [x] On "Атаковать": resolve one combat round simultaneously — player deals `weapon.damage` to NPC, NPC deals `npc.damage` to player ship; apply to `npc.hullHP` and `player.ship.hullHP`. (`resolveRound` reads the HUD's selected weapon damage + the target NPC damage, applies both via the pure `resolveCombatRound`, gated on `targetInRange()`. New `getPlayerShip` dep exposes the player hull.)
+- [x] Create `DamageNumbers` helper: spawns PixiJS `Text` at a world position, floats upward over 0.8 s, fades out, then removes itself. Red for damage taken, yellow for damage dealt. (Owned by `CombatModule`, mounted on the game/world layer at zIndex 200; advanced every frame in `update()` so the killing blow's number finishes after combat ends. Floats screen-up = −Y; the plan's "(+Y)" was a typo — universal damage-number convention is upward.)
+- [x] Show damage numbers at target's world position after each round. (Yellow dealt at the NPC sprite position, red taken at the player ship position.)
+- [x] If NPC `hullHP ≤ 0`: NPC dies (call existing death path in `NpcShipManager`), trigger loot drop (Task 9), call `combatModule.endCombat()`. (New `NpcShipManager.handleInFlightDeath(sprite, rng?)`: `spawnLootForNpc` + `removeNpc` from the domain + sprite teardown; wired via the `onNpcDestroyed` dep.)
+- [x] If player `hullHP < 30% maxHull`: auto-end combat with a hull-low warning toast; NPC remains in system hostile. (`LOW_HULL_FRACTION = 0.3`; emits "Корпус критический — отступаем!" via `showMessage` and ends combat without destroying the NPC.)
+- [x] Run full test suite — must pass. (damageResolution 18 tests + combatModule/combatHud + moduleContracts size-guard (scene 1899 lines) green; tsc + lint 0 errors. Full suite: 1471 pass, only the pre-existing, unrelated `questBountyNpcAssignment.test.ts` failure from in-progress bounty-fallback work in the dirty tree — verified passing with that file reverted to HEAD; untouched by this task.)
 
 ### Task 14: Hostility state machine (neutral → hostile on attack)
 **Files:**

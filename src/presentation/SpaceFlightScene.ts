@@ -61,23 +61,17 @@ export class SpaceFlightScene extends GameScene {
   private questCompletion!: QuestCompletion;
   private bgElapsed = 0; // Animation clock for background (ms)
   private shipPhysics: ShipPhysics | null = null;
-  // In-flight HUD: turn/speed/settings buttons, day counter, mini-map, mini-log,
-  // toasts and tooltips (a FlightModule); button presses fan back through
-  // callbacks wired in initialize(). The scene drives the mini-map refresh via
-  // `hud.miniMap` (it reads route + camera state).
+  // In-flight HUD (turn/speed/settings buttons, day counter, mini-map, mini-log,
+  // toasts, tooltips); button presses fan back through callbacks set in initialize().
   private hud!: FlightHud;
 
-  // Owns all planet sprites, station markers, the planet info panel and the
-  // route-target state — extracted from this scene as a FlightModule. The scene
-  // reads its planetSprites/stationMarkers/routeTarget* fields for route
-  // planning, landing/docking and re-entry spawn; route logic stays here.
+  // Owns planet sprites, station markers, the planet info panel and route-target
+  // state (a FlightModule); the scene reads its fields for route/landing/re-entry.
   private planetManager!: PlanetManager;
-  // Renders the central sun (glow halo, rotating surface, limb fade) and owns the
-  // star geometry the scene reads for collision/orbit/route math — extracted from
-  // this scene as a FlightModule. Exposes centerX/centerY/radius/avoidRadius.
+  // Renders the central sun and owns the star geometry the scene reads for
+  // collision/orbit/route math. Exposes centerX/centerY/radius/avoidRadius.
   private starRenderer!: StarRenderer;
-  // Draws the static orbit circles and the system-boundary ring — extracted from
-  // this scene as a FlightModule. Owns its own display objects on the game layer.
+  // Draws the static orbit circles and the system-boundary ring (a FlightModule).
   private orbitRenderer!: OrbitRenderer;
 
   // Living-galaxy NPC ships present in the player's system (Feature 8): sprite
@@ -211,6 +205,9 @@ export class SpaceFlightScene extends GameScene {
       getUiLayer: () => this.renderer.uiLayer,
       getGameLayer: () => this.renderer.gameLayer,
       getScreenSize: () => this.renderer.app.screen,
+      getPlayerShip: () => this.gameEngine?.player?.ship ?? null,
+      onNpcDestroyed: (s) => this.npcManager.handleInFlightDeath(s),
+      showMessage: (t, c) => this.hud.showMessage(t, c),
     });
 
     // NPC module: owns the living-galaxy ships, contact panel, auto-follow combat
@@ -237,6 +234,8 @@ export class SpaceFlightScene extends GameScene {
         },
         endTurn: () => this.endTurn(),
         startInFlightCombat: (sprite) => this.combatModule.startCombat(sprite),
+        isInCombat: () => this.combatModule.isActive,
+        selectCombatTarget: (s) => this.combatModule.selectTarget(s),
       },
     );
 
@@ -882,8 +881,9 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // In-flight combat freezes navigation — no new course while a fight resolves.
-    if (this.combatModule?.isActive && !isPanButton) return;
+    // In-flight combat freezes navigation; empty-space click deselects (Task 13).
+    if (this.combatModule?.isActive && !isPanButton)
+      return void this.combatModule.selectTarget(null);
 
     // Lock navigation while already en route to the warp edge (still allow
     // replanning if stopped — route shown but Play not pressed).

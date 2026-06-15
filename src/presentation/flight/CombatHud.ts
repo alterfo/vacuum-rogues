@@ -58,6 +58,13 @@ export class CombatHud {
   /** The currently selected weapon's gear id (null when none/closed). */
   selectedWeaponId: string | null = null;
 
+  /** The currently selected weapon's spec (null when none selected/closed). */
+  get selectedWeapon(): WeaponSpec | null {
+    return (
+      this.cards.find((c) => c.weaponId === this.selectedWeaponId)?.spec ?? null
+    );
+  }
+
   // --- Callbacks the module wires (DIP): the HUD fans presses out. ---
   /** A weapon card was selected (also fired on the default-select at open). */
   onWeaponSelected: ((weaponId: string) => void) | null = null;

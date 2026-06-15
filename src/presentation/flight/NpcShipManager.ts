@@ -73,6 +73,10 @@ export interface NpcShipManagerDeps {
    * lightweight test/host setups without combat still satisfy the contract.
    */
   startInFlightCombat?(sprite: NpcShipSprite): void;
+  /** True while in-flight combat is resolving (clicking an NPC retargets it). */
+  isInCombat?(): boolean;
+  /** Set the in-flight combat target to a clicked enemy sprite (Task 13). */
+  selectCombatTarget?(sprite: NpcShipSprite): void;
 }
 
 /**
@@ -603,6 +607,28 @@ export class NpcShipManager implements FlightModule {
     }
   }
 
+  /**
+   * In-flight combat killed this NPC: drop its loot at the wreck, delete it from
+   * the galaxy domain so the next refresh won't respawn it, and remove the sprite
+   * from the scene. Called by the scene when {@link CombatModule} resolves a
+   * lethal round (Task 13). `rng` is injectable for deterministic loot in tests.
+   */
+  handleInFlightDeath(
+    sprite: NpcShipSprite,
+    rng: () => number = Math.random,
+  ): void {
+    this.spawnLootForNpc(sprite.npc, sprite.x, sprite.y, rng);
+    const galaxy = this.gameEngine?.galaxy;
+    if (galaxy) this.npcSimulator.removeNpc(galaxy, sprite.npc.id);
+    const idx = this.npcSprites.indexOf(sprite);
+    if (idx >= 0) this.npcSprites.splice(idx, 1);
+    this.npcAnchorPlanet.delete(sprite);
+    if (sprite.container.parent) {
+      sprite.container.parent.removeChild(sprite.container);
+    }
+    sprite.destroy();
+  }
+
   /** Roll the per-kill loot count: 0, 1 or 2 (uniform thirds). */
   private rollLootCount(rng: () => number): number {
     const r = rng();
@@ -718,6 +744,13 @@ export class NpcShipManager implements FlightModule {
 
   /** Open the contact panel for a clicked NPC ship. */
   private onNpcClick(npc: NpcShip): void {
+    // During an in-flight fight a click on an enemy ship retargets the combat
+    // module instead of opening the contact panel (Task 13).
+    if (this.deps.isInCombat?.()) {
+      const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
+      if (sprite) this.deps.selectCombatTarget?.(sprite);
+      return;
+    }
     if (this.deps.isTurnRunning()) return;
 
     this.closeNpcContactPanel();
