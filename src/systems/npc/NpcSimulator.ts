@@ -757,6 +757,18 @@ export class NpcSimulator {
       if (!hostileSet.has(id)) this.establishedGarrisons.delete(id);
     }
 
+    // A system freed via another path (convoy liberation, DEFENSE quest, or a
+    // direct tryLiberate) may still hold standing-garrison ships frozen in place
+    // by the garrison hold and flagged hostile (red threat ring). Despawn them so
+    // a liberated system never keeps frozen hostile ghosts.
+    for (let i = galaxy.npcShips.length - 1; i >= 0; i--) {
+      const ship = galaxy.npcShips[i];
+      if (!this.garrisonIds.has(ship.id)) continue;
+      if (hostileSet.has(ship.currentSystemId)) continue;
+      this.garrisonIds.delete(ship.id);
+      galaxy.npcShips.splice(i, 1);
+    }
+
     for (const systemId of hostile) {
       if (this.countGarrisonPresent(galaxy, systemId) > 0) {
         // Garrison reformed or invaders re-entered → cancel any countdown.
@@ -1154,7 +1166,17 @@ export class NpcSimulator {
       );
 
       if (defenders.length === 0) {
-        if (attackers.length < CAPTURE_FLEET_MIN) continue;
+        if (attackers.length < CAPTURE_FLEET_MIN) {
+          // Assault force was whittled below capture strength yet outlived every
+          // defender: the survivors can't hold the system. Despawn them instead
+          // of freezing them forever via the capture-fleet hold.
+          for (const a of attackers) {
+            this.captureFleetIds.delete(a.id);
+            const idx = galaxy.npcShips.indexOf(a);
+            if (idx >= 0) galaxy.npcShips.splice(idx, 1);
+          }
+          continue;
+        }
         galaxy.addOvermindSystem(systemId);
         const sys = galaxy.systems.find((s) => s.id === systemId);
         const event: NewsEvent = {

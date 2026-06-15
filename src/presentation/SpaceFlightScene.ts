@@ -206,12 +206,16 @@ export class SpaceFlightScene extends GameScene {
       getGameLayer: () => this.renderer.gameLayer,
       getScreenSize: () => this.renderer.app.screen,
       getPlayerShip: () => this.gameEngine?.player?.ship ?? null,
-      onNpcDestroyed: (s) => this.npcManager.handleInFlightDeath(s),
+      onNpcDestroyed: (s) => {
+        // Capture id before the death path deletes the NPC, then complete its BOUNTY.
+        const npcId = s.npc.id;
+        this.npcManager.handleInFlightDeath(s);
+        this.questCompletion.bountyByNpcKill(npcId);
+      },
       showMessage: (t, c) => this.hud.showMessage(t, c),
     });
 
-    // NPC module: owns the living-galaxy ships, contact panel, auto-follow combat
-    // loop and OVERMIND prompt. Built first so victory/overmind branches can use it.
+    // NPC module: living-galaxy ships, contact panel, auto-follow combat, OVERMIND prompt.
     this.npcManager = new NpcShipManager(
       this.renderer,
       this.gameEngine,
@@ -239,8 +243,8 @@ export class SpaceFlightScene extends GameScene {
       },
     );
 
-    // If returning victorious from CombatScene, remove the defeated NPC from
-    // the galaxy domain before the NPC module builds the sprite list.
+    // Returning victorious from CombatScene: drop the defeated NPC from the
+    // galaxy domain before the NPC module builds the sprite list.
     if (
       ctx?.combatResult === "victory" &&
       ctx.npcId &&

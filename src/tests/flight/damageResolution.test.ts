@@ -115,7 +115,10 @@ function makeSprite(id: string, x: number, y: number, npc?: Partial<NpcShip>) {
   } as unknown as NpcShipSprite;
 }
 
-function makeModule(ship?: { hullHP: number; maxHull: number }): {
+function makeModule(
+  ship?: { hullHP: number; maxHull: number },
+  weapons: string[] = ["wpn_pulse"],
+): {
   module: CombatModule;
   ship: { hullHP: number; maxHull: number };
   destroyed: NpcShipSprite[];
@@ -132,7 +135,8 @@ function makeModule(ship?: { hullHP: number; maxHull: number }): {
     setTarget() {},
   } as unknown as ShipPhysics;
   const loadout = new ShipLoadout("hull_warden");
-  loadout.install("wpn_pulse"); // damage 14, range 240
+  // wpn_pulse: damage 14, range 240 · wpn_railgun: damage 26, range 360.
+  for (const w of weapons) loadout.install(w);
   const playerShip = ship ?? { hullHP: 100, maxHull: 100 };
   const destroyed: NpcShipSprite[] = [];
   const messages: { text: string; color?: number }[] = [];
@@ -192,6 +196,27 @@ describe("CombatModule round resolution (Task 13)", () => {
       .damageNumbers;
     // One yellow (dealt to NPC) + one red (taken by player).
     expect(dn.activeCount).toBe(2);
+  });
+
+  it("switching to a longer-range weapon mid-fight re-arms the gate and applies its damage", () => {
+    // Two weapons: pulse (range 240) default-selected, railgun (range 360).
+    const { module } = makeModule(undefined, ["wpn_pulse", "wpn_railgun"]);
+    const hud = hudOf(module);
+    const sprite = makeSprite("npc_1", 300, 0, { hullHP: 100, damage: 20 });
+    module.startCombat(sprite);
+
+    // Default pulse can't reach 300px: gate disarmed, attack deals nothing.
+    module.update(16);
+    expect(hud.isAttackEnabled).toBe(false);
+    attack(module, hud);
+    expect(sprite.npc.hullHP).toBe(100);
+
+    // Switch to the longer-range railgun: gate re-arms, round deals its damage.
+    hud.selectWeapon("wpn_railgun");
+    module.update(16);
+    expect(hud.isAttackEnabled).toBe(true);
+    attack(module, hud);
+    expect(sprite.npc.hullHP).toBe(74); // 100 - 26 railgun damage
   });
 });
 

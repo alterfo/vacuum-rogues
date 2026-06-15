@@ -10,6 +10,7 @@ import { advanceTech } from "@/systems/GalaxySimulator";
 
 const FACTION = "INDEPENDENT" as Faction;
 const STAR_TYPE = "YELLOW_DWARF" as StarType;
+const TECH_MAX = 8;
 
 function makeSystem(id: string, stationType?: StationType): StarSystem {
   const stations = stationType
@@ -141,5 +142,3 @@ describe("advanceTech", () => {
     expect(sys.techLevel).toBe(1);
   });
 });
-
-const TECH_MAX = 8;
