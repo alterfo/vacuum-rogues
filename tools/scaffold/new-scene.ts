@@ -424,7 +424,17 @@ function main(): void {
     process.stdout.write("\nManual follow-up:\n");
     for (const c of result.checklist) process.stdout.write(`  - ${c}\n`);
   }
-  if (result.changed.length === 0 && result.skipped.length === 0) {
+  // Exit codes signal lockstep integrity to automated callers (ralphex/CI/`&&`):
+  //   3 = partial apply — some files were created/edited, but a warning means at
+  //       least one required registration could not be (missing anchor/file), so
+  //       the scene is half-wired (e.g. class created but no SceneFactory case).
+  //   1 = nothing was applied at all.
+  //   0 = every required edit applied (or already present on an idempotent re-run).
+  const didNothing = result.changed.length === 0 && result.skipped.length === 0;
+  if (result.warnings.length > 0 && !didNothing) {
+    process.exit(3);
+  }
+  if (didNothing) {
     process.exit(1);
   }
 }
