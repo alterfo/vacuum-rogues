@@ -109,6 +109,16 @@ export class NpcShipSprite {
   public readonly dwellDurationMs: number;
   /** Accumulated orbit time (ms) toward dwellDurationMs. */
   private dwellElapsed = 0;
+  /**
+   * When true this is a captured-system garrison aggressor: it breaks off any
+   * planet orbit and pursues the player ship (target refreshed each frame by
+   * {@link NpcShipManager} via {@link setPursuitTarget}) instead of wandering.
+   * The actual exchange of fire is resolved in-flight by the combat module
+   * (later tasks); the sprite only handles the chase.
+   */
+  public aggressive = false;
+  private pursuitX: number | null = null;
+  private pursuitY: number | null = null;
 
   constructor(npc: NpcShip, x: number, y: number, bounds: SystemBounds) {
     this.npc = npc;
@@ -230,6 +240,29 @@ export class NpcShipSprite {
   update(deltaTime: number): void {
     if (this.gone) return;
 
+    // Garrison aggressor: chase the player ship's live position, ignoring orbit
+    // and dwell timers and never re-anchoring. The manager refreshes the pursuit
+    // target each frame; in-flight combat (later modules) handles the firing.
+    if (
+      this.aggressive &&
+      !this.departing &&
+      this.pursuitX !== null &&
+      this.pursuitY !== null
+    ) {
+      const dx = this.pursuitX - this.x;
+      const dy = this.pursuitY - this.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 6) {
+        const step = Math.min(dist, this.speed * deltaTime);
+        this.x += (dx / dist) * step;
+        this.y += (dy / dist) * step;
+        this.container.rotation = Math.atan2(dy, dx);
+        this.container.x = this.x;
+        this.container.y = this.y;
+      }
+      return;
+    }
+
     // Visiting a planet: smoothly orbit it (eases onto the ring, then circles).
     // This reads as a deliberate "calling at the planet" rather than the chaotic
     // random hops it did before (US-070: NPCs need a clear purpose).
@@ -332,6 +365,28 @@ export class NpcShipSprite {
    *  every visit — not just the first one. */
   setArrivalCallback(fn: () => void): void {
     this.arrivalCallback = fn;
+  }
+
+  /**
+   * Flag (or clear) garrison-aggressor pursuit. Turning it on breaks any planet
+   * orbit so the ship leaves its station to chase the player; turning it off
+   * clears the live pursuit target.
+   */
+  setAggressive(on: boolean): void {
+    this.aggressive = on;
+    if (on) {
+      this.anchorX = null;
+      this.anchorY = null;
+    } else {
+      this.pursuitX = null;
+      this.pursuitY = null;
+    }
+  }
+
+  /** Live pursuit target (the player ship's world position), refreshed each frame. */
+  setPursuitTarget(x: number, y: number): void {
+    this.pursuitX = x;
+    this.pursuitY = y;
   }
 
   /** Orbit a fixed point (a planet) instead of wandering the whole band. */

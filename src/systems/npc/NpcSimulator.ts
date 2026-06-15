@@ -744,6 +744,13 @@ export class NpcSimulator {
       }
     }
 
+    // Standing garrisons also engage friendly NPCs that wander into a captured
+    // system (mirror of the wandering-pirate path for OVERMIND Dominators). The
+    // helper uses its own day-seeded RNG so garrison combat never perturbs the
+    // main simulation stream — Task 4's determinism guarantee that the
+    // convoy/quest tests rely on.
+    this.resolveGarrisonOffscreenCombat(galaxy, playerSystemId);
+
     // Reset surviving combatants to PATROLLING so they don't appear as
     // perpetually FIGHTING in the contact panel. Use PATROLLING (not IDLE) so
     // the 15% per-day departure chance is preserved rather than triggering an
@@ -751,6 +758,82 @@ export class NpcSimulator {
     for (const npc of galaxy.npcShips) {
       if (npc.state === NpcState.FIGHTING) {
         npc.state = NpcState.PATROLLING;
+      }
+    }
+  }
+
+  /**
+   * Off-screen combat between a captured system's standing garrison and friendly
+   * NPCs that have wandered into it. Mirrors {@link resolveOffscreenCombat}'s
+   * wandering-pirate path for garrison ships (which are otherwise isolated from
+   * abstract combat): in any hostile system (other than the player's) where a
+   * garrison ship shares space with a friendly (non-garrison, non-OVERMIND,
+   * non-pirate) NPC, the garrison attacks. The caller resets FIGHTING survivors.
+   *
+   * Victim selection draws from a private day-seeded RNG (not the main tick RNG)
+   * so adding garrison combat never shifts the deterministic main stream.
+   */
+  private resolveGarrisonOffscreenCombat(
+    galaxy: Galaxy,
+    playerSystemId?: string,
+  ): void {
+    const rng = new SeededRNG(`garrison_combat_${galaxy.gameDays}`);
+    const bySystem = new Map<string, NpcShip[]>();
+    for (const npc of galaxy.npcShips) {
+      if (npc.state === NpcState.DEAD || npc.state === NpcState.TRAVELING) {
+        continue;
+      }
+      if (npc.currentSystemId === playerSystemId) continue;
+      if (!galaxy.isHostileSystem(npc.currentSystemId)) continue;
+      const list = bySystem.get(npc.currentSystemId) ?? [];
+      list.push(npc);
+      bySystem.set(npc.currentSystemId, list);
+    }
+
+    for (const ships of bySystem.values()) {
+      // Only OVERMIND garrison Dominators engage friendly NPCs off-screen; pirate
+      // garrisons stay fully isolated (as before Task 5), so a captured pirate
+      // system's deterministic convoy/quest streams are never perturbed.
+      const garrison = ships.filter(
+        (s) => this.garrisonIds.has(s.id) && s.faction === Faction.OVERMIND,
+      );
+      const victims = ships.filter(
+        (s) =>
+          !this.garrisonIds.has(s.id) &&
+          s.faction !== Faction.OVERMIND &&
+          s.role !== NpcRole.PIRATE,
+      );
+      if (garrison.length === 0 || victims.length === 0) continue;
+
+      for (const attacker of garrison) {
+        if (attacker.state === NpcState.DEAD) continue;
+        const alive = victims.filter((v) => v.state !== NpcState.DEAD);
+        if (alive.length === 0) break;
+
+        const victim = alive[rng.nextInt(0, alive.length - 1)];
+        attacker.state = NpcState.FIGHTING;
+        victim.state = NpcState.FIGHTING;
+
+        victim.hullHP -= Math.max(
+          1,
+          Math.round(attacker.damage * PIRATE_DAMAGE_FRACTION),
+        );
+        attacker.hullHP -= Math.max(
+          1,
+          Math.round(victim.damage * VICTIM_RETALIATION_FRACTION),
+        );
+
+        if (victim.hullHP <= 0) {
+          victim.hullHP = 0;
+          victim.state = NpcState.DEAD;
+          logger.info(
+            `Garrison ${attacker.name} destroyed ${victim.name} in ${attacker.currentSystemId}`,
+          );
+        }
+        if (attacker.hullHP <= 0) {
+          attacker.hullHP = 0;
+          attacker.state = NpcState.DEAD;
+        }
       }
     }
   }

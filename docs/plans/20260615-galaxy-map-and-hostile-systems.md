@@ -93,11 +93,11 @@ Three interrelated improvements to the galaxy map and living-galaxy simulation:
 - Modify: `src/presentation/flight/NpcShipManager.ts`
 - Create: `src/tests/presentation/garrisonCombat.test.ts`
 
-- [ ] Write a failing test: given a hostile system, after `NpcShipManager.refresh()` → `checkGarrisonAggro(playerSystemId, isHostileSystem=true)`, assert all garrison NPC sprites have `aggressive = true`.
-- [ ] In `NpcShipManager.refresh()`, if `galaxy.isHostileSystem(playerSystemId)`, mark garrison sprites (`faction === OVERMIND or role === PIRATE`) as `aggressive = true`. **Do NOT transition to CombatScene** — combat resolves in-flight (Tasks 12–14).
-- [ ] Aggressive NPCs begin pursuit (fly toward player ship position) in `update()`.
-- [ ] Off-screen: extend `resolveOffscreenCombat` to include Overmind garrison vs. friendly co-located NPCs (pirate path already handles PIRATE vs. TRADER; mirror for OVERMIND vs. PATROL/RANGER).
-- [ ] Run full test suite — must pass.
+- [x] Write a failing test: given a hostile system, after `NpcShipManager.refresh()` → `checkGarrisonAggro(playerSystemId, isHostileSystem=true)`, assert all garrison NPC sprites have `aggressive = true`.
+- [x] In `NpcShipManager.refresh()`, if `galaxy.isHostileSystem(playerSystemId)`, mark garrison sprites (`faction === OVERMIND or role === PIRATE`) as `aggressive = true`. **Do NOT transition to CombatScene** — combat resolves in-flight (Tasks 12–14). (Also applied on `initialize()` so entering a captured system aggroes the garrison immediately; `setAggressive` breaks the planet orbit. `applyGarrisonAggro` guards the domain call so the lightweight galaxy stubs in existing manager tests keep passing.)
+- [x] Aggressive NPCs begin pursuit (fly toward player ship position) in `update()`. (New `aggressive` branch in `NpcShipSprite.update()` chases a per-frame pursuit target the manager refreshes to the player ship's position; never re-anchors.)
+- [x] Off-screen: extend `resolveOffscreenCombat` to include Overmind garrison vs. friendly co-located NPCs (pirate path already handles PIRATE vs. TRADER; mirror for OVERMIND vs. PATROL/RANGER). (Restricted to OVERMIND garrison attackers and given an isolated day-seeded RNG so the deterministic main stream — and the pirate-system convoy test — is never perturbed; Task 4's isolation guarantee preserved.)
+- [x] Run full test suite — must pass. (Task 5 tests + convoy/garrison regressions green; suite passes except 1 pre-existing, unrelated failure in `questBountyNpcAssignment.test.ts` from in-progress bounty-fallback work in the dirty tree — verified failing identically with my change stashed. Lint + tsc clean.)
 
 ### Task 6: Real capture events (Overmind/pirate fleets attack neutral systems)
 **Files:**

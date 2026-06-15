@@ -18,6 +18,7 @@ import { solveInterceptPoint } from "@/utils/intercept";
 import { shouldReaim } from "@/utils/flightGeometry";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
 import { SceneType, NpcRole, QuestType } from "@/types";
+import { Faction } from "@/types/faction";
 import { pickNpcDestination, type NpcBehaviorCtx } from "./npcBehavior";
 import { hashStr } from "@/utils/hashStr";
 import { scaledFont } from "@/utils/fontScale";
@@ -147,6 +148,9 @@ export class NpcShipManager implements FlightModule {
     for (const npc of npcsPresentInSystem(galaxy, systemId)) {
       this.addNpcSprite(npc, false);
     }
+    // Entering a captured system: its standing garrison immediately turns hostile
+    // and pursues the player (combat resolves in-flight, not via CombatScene).
+    this.applyGarrisonAggro();
     logger.info(`Created ${this.npcSprites.length} NPC sprites`);
   }
 
@@ -156,9 +160,15 @@ export class NpcShipManager implements FlightModule {
     // combat) — not only while the ship is physically moving.
     if (!this.deps.isTurnRunning()) return;
 
-    const timeScale = this.deps.getShipPhysics()?.timeScale ?? 1;
+    const physics = this.deps.getShipPhysics();
+    const timeScale = physics?.timeScale ?? 1;
     for (let i = this.npcSprites.length - 1; i >= 0; i--) {
       const sprite = this.npcSprites[i];
+      // Garrison aggressors chase the player ship: refresh their live pursuit
+      // target to the ship's current position before advancing them.
+      if (sprite.aggressive && physics) {
+        sprite.setPursuitTarget(physics.shipX, physics.shipY);
+      }
       // Keep the orbit center aligned with the planet's current orbital position.
       const anchorPlanet = this.npcAnchorPlanet.get(sprite);
       if (anchorPlanet) {
@@ -438,6 +448,46 @@ export class NpcShipManager implements FlightModule {
     // Close the contact panel if its NPC has left the system.
     if (this.contactNpcId && !presentIds.has(this.contactNpcId)) {
       this.closeNpcContactPanel();
+    }
+
+    // Re-evaluate garrison aggression: a freshly arrived garrison ship (or a
+    // system that just turned hostile) must start pursuing the player too.
+    this.applyGarrisonAggro();
+  }
+
+  /**
+   * Resolve whether the player's current system is hostile and flag its garrison
+   * sprites accordingly. Convenience wrapper around {@link checkGarrisonAggro}
+   * used by {@link initialize} and {@link refresh}.
+   */
+  private applyGarrisonAggro(): void {
+    const galaxy = this.gameEngine?.galaxy;
+    const systemId = this.gameEngine?.player?.currentSystemId;
+    if (!galaxy || !systemId) return;
+    // Guard the domain call: lightweight galaxy stubs (tests) may omit it.
+    const hostile =
+      typeof galaxy.isHostileSystem === "function" &&
+      galaxy.isHostileSystem(systemId);
+    this.checkGarrisonAggro(systemId, hostile);
+  }
+
+  /**
+   * Flag captured-system garrison sprites (OVERMIND faction or PIRATE role) as
+   * aggressors while the player is inside a hostile system, so they break orbit
+   * and pursue the player ship. Non-garrison ships are never flagged, and the
+   * flag is cleared when the system is not hostile. Combat is NOT escalated to
+   * CombatScene here — it resolves in-flight via the combat module (Tasks 11–14).
+   */
+  checkGarrisonAggro(_playerSystemId: string, isHostileSystem: boolean): void {
+    for (const sprite of this.npcSprites) {
+      const npc = sprite.npc;
+      const isGarrison =
+        npc.faction === Faction.OVERMIND || npc.role === NpcRole.PIRATE;
+      const aggro = isHostileSystem && isGarrison;
+      sprite.setAggressive(aggro);
+      // Drop the orbit-planet anchor so the aggressor isn't re-anchored each
+      // frame (setAggressive already cleared the sprite's own anchor fields).
+      if (aggro) this.npcAnchorPlanet.delete(sprite);
     }
   }
 
