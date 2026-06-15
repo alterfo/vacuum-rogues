@@ -1,0 +1,77 @@
+# Local ralphex task-execution prompt override for SpaceRangers.
+#
+# WHY THIS FILE EXISTS (Task 5 of docs/plans/20260614-ai-dev-tooling.md):
+# ralphex starts every task iteration with a cold context. Without guidance the
+# model re-reads 4-5 whole source files just to remember what the task touches,
+# which burns context budget and invites lockstep-edit mistakes. This override
+# prepends a "vacuum MCP-first orientation" preamble to the default ralphex task
+# prompt so the model locates symbols by line number BEFORE reading files, and
+# reads only the **Files:** the task lists.
+#
+# HOW RALPHEX LOADS THIS:
+# ralphex resolves task.txt with the chain local (.ralphex/prompts/) -> global
+# (~/.config/ralphex/prompts/) -> embedded default. A local file fully REPLACES
+# the default (it does not merge), so the verbatim default body is reproduced
+# below the preamble. ralphex strips this contiguous leading "#" comment block
+# (2+ lines) before sending the prompt to the model, so these notes never reach
+# the model -- they are for human maintainers only.
+#
+# EXPECTED BEHAVIOR (manual verification, since ralphex runtime is not unit-testable):
+# In .ralphex/progress/progress-*.txt for a run that uses this prompt, the first
+# tool calls of an iteration should be vacuum MCP calls (find_symbol /
+# get_architecture / get_scene_info) BEFORE any Read of a whole source file. If
+# the task lists a **Files:** block, only those files should be read.
+#
+# KEEP IN SYNC: if ralphex's bundled defaults/prompts/task.txt changes in a future
+# release, re-extract it and re-apply the preamble (see ralphex-update skill).
+
+BEFORE reading any source files, orient with the `vacuum` MCP server (one tool call beats five greps):
+1. Call `find_symbol` for each key type/class/interface the task mentions (e.g. QuestType, NpcRole) to get an exact `file:line` instead of grepping.
+2. Call `get_architecture` to confirm which layer owns the change and which lockstep files (schema, migration, SceneFactory) must move together.
+3. For a scene task, call `get_scene_info` to see lifecycle line numbers without reading the whole 1,000+ line scene file. For balance questions call `get_balance_constants`. To find a file's tests call `find_tests_for`.
+4. Then read ONLY the line ranges you need around those line numbers — not entire files.
+5. If the current task has a `**Files:**` section, read only those files (optionally run `tools/context-inject.sh {{PLAN_FILE}}` to print the active task's Files block and on-disk status). Do not scan the whole codebase.
+
+This orientation step keeps per-task context small and prevents missing one of the lockstep files. After it, proceed with the task exactly as described below.
+
+Read the plan file at {{PLAN_FILE}}. Find the FIRST Task section (### Task N: or ### Iteration N:) that has uncompleted checkboxes ([ ]).
+
+If NO Task section has [ ] but ## Success criteria, ## Overview, or ## Context still has [ ]: either satisfy those items and mark them [x] if actionable, or output <<<RALPHEX:ALL_TASKS_DONE>>> if they are verification-only (manual testing, deployment, etc.) — do not loop indefinitely when remaining items are not actionable by you.
+
+If a Task section has [ ] checkboxes you cannot complete (manual testing, deployment verification, external checks): mark them [x] with a note like "[x] manual test (skipped - not automatable)" and proceed. Do not loop indefinitely on non-automatable items inside Task sections.
+
+NOTE: Progress is logged to {{PROGRESS_FILE}} - this file contains detailed execution steps and can be reviewed for debugging.
+
+CRITICAL CONSTRAINT: Complete ONE Task section per iteration.
+A Task section is a "### Task N:" or "### Iteration N:" header with all its checkboxes underneath.
+Complete ALL checkboxes in that section, then STOP.
+Do NOT continue to the next section - the external loop will call you again for it.
+
+STEP 0 - ANNOUNCE:
+Before starting work, output a brief overview (up to 200 words) explaining:
+- Which task number you picked and its title
+- What the task will accomplish
+- Key files or components involved
+This helps the user understand what's happening in the current iteration.
+
+STEP 1 - IMPLEMENT:
+- Read the plan's Overview and Context sections to understand the work
+- Implement ALL items in the current Task section (all [ ] checkboxes under it)
+- Write tests for the implementation
+
+STEP 2 - VALIDATE:
+- Run the test and lint commands specified in the plan (e.g., "cargo test", "go test ./...", etc.)
+- Fix any failures, repeat until all validation passes
+
+STEP 3 - COMPLETE (after validation passes):
+- Update progress: edit {{PLAN_FILE}} and change [ ] to [x] for each checkbox you implemented in the current Task section. If Task sections are complete but ## Success criteria, ## Overview, or ## Context has [ ] items that the implementation satisfies, mark them [x] in this same edit to avoid extra loop iterations. If any such items are NOT satisfied, do NOT mark them and do NOT output ALL_TASKS_DONE — continue to the next iteration to address them.
+- Commit all changes (code + updated plan) with message: feat: <brief task description>
+- Check if any [ ] checkboxes remain in Task sections (### Task N: or ### Iteration N:)
+- If NO more [ ] checkboxes in the entire plan, output exactly: <<<RALPHEX:ALL_TASKS_DONE>>>
+- If more Task sections have [ ] checkboxes, STOP HERE - do not continue
+
+If any phase fails after reasonable fix attempts, output exactly: <<<RALPHEX:TASK_FAILED>>>
+
+REMINDER: ONE section (Task/Iteration) per loop cycle. After commit, STOP and let the loop handle the next section.
+
+OUTPUT FORMAT: No markdown formatting (no **bold**, `code`, # headers). Plain text and - lists are fine. Do not echo phase names or step numbers - just do the work.

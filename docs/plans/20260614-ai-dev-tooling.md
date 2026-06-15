@@ -184,9 +184,11 @@ ralphex should pre-populate those files' content.
 `find_symbol` tool FIRST, before reading any files, to get precise line numbers — then read
 only the needed line ranges, not whole files.
 
-- [ ] Check if `.ralphex/prompts/task.txt` already exists; if not, extract the default from
-  ralphex's bundled prompts (`~/.claude/plugins/cache/ralphex/*/assets/prompts/make_task.txt`)
-- [ ] Add a preamble to the task prompt (prepend, don't replace):
+- [x] Check if `.ralphex/prompts/task.txt` already exists; if not, extract the default from
+  ralphex's bundled prompts (resolved at `~/.claude/plugins/cache/ralphex/ralphex/0.20.0/pkg/config/defaults/prompts/task.txt`)
+- [x] Add a preamble to the task prompt (prepend, don't replace — ralphex loads a local
+  `task.txt` as a FULL replacement, so the verbatim default body is reproduced below the
+  preamble); also created `tools/context-inject.sh` to print the active task's **Files:** block:
   ```
   BEFORE reading any source files:
   1. Use the `vacuum` MCP tool `find_symbol` to locate key types/classes mentioned in the task
@@ -194,10 +196,12 @@ only the needed line ranges, not whole files.
   3. Read only the line ranges you need, not entire files
   4. If the task has a **Files:** section, read only those files (not the whole codebase)
   ```
-- [ ] Test: run ralphex with a simple 1-task plan, observe in progress log that MCP tool
-  is called before file reads (manual verification from progress file output)
-- [ ] No automated test possible (requires ralphex runtime); document expected behavior
-  in a comment in the prompt file
+- [x] manual test (skipped - not automatable): running ralphex to observe MCP-before-reads in
+  the progress log requires the ralphex runtime. Expected behavior is documented in the prompt
+  file's comment header; the helper script `tools/context-inject.sh` is covered by an automated
+  test (`tools/context-inject.test.ts`, 6 cases).
+- [x] No automated test possible (requires ralphex runtime); documented expected behavior
+  in the comment header of `.ralphex/prompts/task.txt`
 
 ### Task 6: Verify tooling works end-to-end
 **Files:** all created above
