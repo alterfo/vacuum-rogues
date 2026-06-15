@@ -40,12 +40,23 @@ export const MAX_ACTIVE_QUESTS = 3;
  */
 export class JobBoardPanel {
   public readonly container: Container;
+  /** Rendered panel height (capped to the screen) — exposed for tests. */
+  public panelHeight = 0;
   private readonly callbacks: JobBoardCallbacks;
+
+  /** Masked container holding the available-offer rows (the scrollable area). */
+  private offersContainer: Container | null = null;
+  /** How many rows the offer list is currently scrolled down by. */
+  private offerScrollOffset = 0;
+  private scrollUpBtn: Text | null = null;
+  private scrollDownBtn: Text | null = null;
 
   private static readonly W = 520;
   private static readonly ROW_H = 60;
   private static readonly ROW_H_OFFER = 130;
   private static readonly HEAD = 48;
+  /** Reserved bottom bar for the scroll arrows when the list overflows. */
+  private static readonly SCROLL_BAR_H = 26;
 
   constructor(
     quests: GeneratedQuest[],
@@ -69,11 +80,14 @@ export class JobBoardPanel {
     const activeRows = activeQuests.length;
     const activeSection =
       activeRows > 0 ? activeRows * JobBoardPanel.ROW_H + 36 : 0;
-    const h =
+    const fullH =
       JobBoardPanel.HEAD +
       activeSection +
       availableRows * JobBoardPanel.ROW_H_OFFER +
       16;
+    // Never let the board overflow the screen — cap it and scroll the offers.
+    const h = Math.min(fullH, screenHeight - 16);
+    this.panelHeight = h;
     this.container.x = Math.round((screenWidth - JobBoardPanel.W) / 2);
     this.container.y = Math.round(Math.max(8, (screenHeight - h) / 2));
     this.render(
@@ -140,13 +154,125 @@ export class JobBoardPanel {
       return;
     }
 
+    // ---- Scrollable offers area ----------------------------------------
+    const offerAreaTop = y;
+    const bottomPad = 8;
+    const ROW_H_OFFER = JobBoardPanel.ROW_H_OFFER;
+    const contentHeight = quests.length * ROW_H_OFFER;
+    let offerAreaHeight = h - offerAreaTop - bottomPad;
+    const overflows = contentHeight > offerAreaHeight;
+    if (overflows) {
+      // Reserve a strip at the bottom for the scroll arrows.
+      offerAreaHeight -= JobBoardPanel.SCROLL_BAR_H;
+    }
+    const visibleRows = Math.max(1, Math.floor(offerAreaHeight / ROW_H_OFFER));
+    const maxScroll = Math.max(0, quests.length - visibleRows);
+
+    // Mask sits on the panel (parent), so it stays fixed while the offers
+    // container scrolls underneath it (PixiJS 8 mask rule — see EquipmentShop).
+    const mask = new Graphics();
+    mask
+      .rect(10, offerAreaTop, W - 20, offerAreaHeight)
+      .fill({ color: 0xffffff });
+    this.container.addChild(mask);
+
+    const offers = new Container();
+    offers.mask = mask;
+    this.container.addChild(offers);
+    this.offersContainer = offers;
+
     for (const q of quests) {
       const alreadyTaken = acceptedQuestIds.has(q.template.id);
       const minRank = q.template.minRank ?? 0;
       const rankBlocked = minRank > 0 && playerRank < minRank;
       const canAccept = !atLimit && !alreadyTaken && !rankBlocked;
-      this.addRow(q, y, W, canAccept, alreadyTaken, rankBlocked ? minRank : 0);
-      y += JobBoardPanel.ROW_H_OFFER;
+      this.addRow(
+        q,
+        y,
+        W,
+        canAccept,
+        alreadyTaken,
+        rankBlocked ? minRank : 0,
+        offers,
+      );
+      y += ROW_H_OFFER;
+    }
+
+    if (maxScroll > 0) {
+      this.addScrollControls(W, offerAreaTop + offerAreaHeight + 2, maxScroll);
+      // Wheel anywhere over the panel scrolls the offers (events bubble up
+      // from the rows / background to the panel container).
+      this.container.on("wheel", (e) => {
+        this.scrollOffers(e.deltaY > 0 ? 1 : -1, maxScroll);
+      });
+    }
+  }
+
+  /**
+   * Scroll the offer list by `delta` rows, clamped to `[0, maxOffset]`.
+   * Public so the scroll arrows, wheel handler and tests can drive it.
+   */
+  public scrollOffers(delta: number, maxOffset: number): void {
+    const next = Math.max(
+      0,
+      Math.min(maxOffset, this.offerScrollOffset + delta),
+    );
+    if (next === this.offerScrollOffset) return;
+    this.offerScrollOffset = next;
+    if (this.offersContainer) {
+      // `|| 0` normalises the `-0` you'd otherwise get at offset 0.
+      this.offersContainer.y = -next * JobBoardPanel.ROW_H_OFFER || 0;
+    }
+    this.updateScrollArrows(maxOffset);
+  }
+
+  /** Up/down arrow buttons shown in the reserved bottom strip. */
+  private addScrollControls(W: number, barY: number, maxScroll: number): void {
+    const makeArrow = (glyph: string, dx: number, dir: number): Text => {
+      const t = new Text({
+        text: glyph,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 16,
+          fill: 0x66ccff,
+          fontWeight: "bold",
+        },
+      });
+      t.anchor.set(0.5);
+      t.x = W / 2 + dx;
+      t.y = barY + 10;
+      t.eventMode = "static";
+      t.cursor = "pointer";
+      t.on("pointerdown", (e) => {
+        e.stopPropagation();
+        this.scrollOffers(dir, maxScroll);
+      });
+      this.container.addChild(t);
+      return t;
+    };
+    this.scrollUpBtn = makeArrow("▲", -52, -1);
+    this.scrollDownBtn = makeArrow("▼", 52, 1);
+
+    const hint = new Text({
+      text: "колесо / стрелки",
+      style: { fontFamily: "Courier New", fontSize: 10, fill: 0x668899 },
+    });
+    hint.anchor.set(0.5);
+    hint.x = W / 2;
+    hint.y = barY + 10;
+    hint.eventMode = "none";
+    this.container.addChild(hint);
+
+    this.updateScrollArrows(maxScroll);
+  }
+
+  /** Dim arrows that can't scroll further in their direction. */
+  private updateScrollArrows(maxScroll: number): void {
+    if (this.scrollUpBtn) {
+      this.scrollUpBtn.alpha = this.offerScrollOffset > 0 ? 1 : 0.3;
+    }
+    if (this.scrollDownBtn) {
+      this.scrollDownBtn.alpha = this.offerScrollOffset < maxScroll ? 1 : 0.3;
     }
   }
 
@@ -214,6 +340,7 @@ export class JobBoardPanel {
     canAccept: boolean,
     alreadyTaken: boolean,
     requiredRank = 0,
+    parent: Container = this.container,
   ): void {
     const rowH = JobBoardPanel.ROW_H_OFFER - 6;
     const t = q.template;
@@ -223,22 +350,22 @@ export class JobBoardPanel {
     row.roundRect(10, y, W - 20, rowH, 5).fill({ color: 0x0e2236, alpha: 0.9 });
     row.stroke({ color, width: 1, alpha: 0.7 });
     row.eventMode = "static";
-    this.container.addChild(row);
+    parent.addChild(row);
 
     // Type tag
     const tag = TYPE_LABEL[t.type] ?? t.type;
-    this.label(tag, 20, y + 6, 11, color);
+    this.label(tag, 20, y + 6, 11, color, false, parent);
 
     // Title (truncated)
     const title = t.title.length > 36 ? t.title.slice(0, 35) + "…" : t.title;
-    this.label(title, 20, y + 20, 12, 0xffffff, true);
+    this.label(title, 20, y + 20, 12, 0xffffff, true, parent);
 
     // Issuer line: who posted the job (e.g. "— Снабженец Маклай").
     if (q.issuerName) {
       const issuer = q.issuerTitle
         ? `— ${q.issuerTitle} ${q.issuerName}`
         : `— ${q.issuerName}`;
-      this.label(issuer, 20, y + 36, 10, 0x77aacc);
+      this.label(issuer, 20, y + 36, 10, 0x77aacc, false, parent);
     }
 
     // Description (full text, grey, small, wrapped)
@@ -256,7 +383,7 @@ export class JobBoardPanel {
       descText.eventMode = "none";
       descText.x = 20;
       descText.y = y + (q.issuerName ? 50 : 36);
-      this.container.addChild(descText);
+      parent.addChild(descText);
     }
 
     // Highlight tags: [Груз: медикаменты]  [Система: Альфа]  [Выдан: планета X]
@@ -273,7 +400,7 @@ export class JobBoardPanel {
         tagT.eventMode = "none";
         tagT.x = hx;
         tagT.y = hy;
-        this.container.addChild(tagT);
+        parent.addChild(tagT);
         hx += tagSpacing;
       }
     }
@@ -290,7 +417,7 @@ export class JobBoardPanel {
     m.anchor.set(1, 0);
     m.x = W - 90;
     m.y = y + 20;
-    this.container.addChild(m);
+    parent.addChild(m);
 
     // "Принять" button on the right
     const btnW = 74;
@@ -335,7 +462,7 @@ export class JobBoardPanel {
         .fill({ color: 0x111111, alpha: 0.8 });
       btnBg.stroke({ color: 0x333333, width: 1 });
     }
-    this.container.addChild(btnBg);
+    parent.addChild(btnBg);
 
     const isRankBlocked = requiredRank > 0 && !alreadyTaken && !canAccept;
     const btnLabel = alreadyTaken
@@ -358,7 +485,7 @@ export class JobBoardPanel {
     btnLbl.anchor.set(0.5);
     btnLbl.x = btnX + btnW / 2;
     btnLbl.y = btnY + btnH / 2;
-    this.container.addChild(btnLbl);
+    parent.addChild(btnLbl);
   }
 
   private addCloseX(W: number): void {
@@ -395,6 +522,7 @@ export class JobBoardPanel {
     size: number,
     color: number,
     bold = false,
+    parent: Container = this.container,
   ): void {
     const t = new Text({
       text,
@@ -408,7 +536,7 @@ export class JobBoardPanel {
     t.x = x;
     t.y = y;
     t.eventMode = "none";
-    this.container.addChild(t);
+    parent.addChild(t);
   }
 
   destroy(): void {
