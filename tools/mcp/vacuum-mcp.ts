@@ -5,7 +5,8 @@
  * of reading 5 files. Each tool wraps a cheap shell/import lookup (see tools.ts).
  *
  * Run standalone:  npx tsx tools/mcp/vacuum-mcp.ts
- * Registered for Claude Code in .claude/settings.json under mcpServers.vacuum.
+ * Registered for Claude Code in project-root .mcp.json under mcpServers.vacuum
+ * (settings.json only sets enableAllProjectMcpServers to auto-approve it).
  *
  * The tool logic lives in tools.ts (SDK-free) so it stays unit-testable without
  * the MCP transport. This file only wires those functions to the protocol.
