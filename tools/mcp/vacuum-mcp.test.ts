@@ -6,12 +6,15 @@
  * to prove each lookup returns the right shape against the real source tree.
  */
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   findSymbol,
   findTestsFor,
   getArchitecture,
   getBalanceConstants,
   getSceneInfo,
+  REPO_ROOT,
 } from "./tools";
 
 describe("vacuum-mcp tools", () => {
@@ -35,11 +38,17 @@ describe("vacuum-mcp tools", () => {
   });
 
   describe("findTestsFor", () => {
-    it("returns a non-empty array of tests for QuestManager", () => {
+    it("returns test files that actually import QuestManager", () => {
       const tests = findTestsFor("src/systems/QuestManager.ts");
       expect(Array.isArray(tests)).toBe(true);
       expect(tests.length).toBeGreaterThan(0);
-      expect(tests.every((t) => t.includes("src/tests/"))).toBe(true);
+      // Every result is under src/tests/ (the grep root guarantees that
+      // trivially) — so also assert the returned files genuinely reference the
+      // symbol, which is the behaviour the tool actually promises.
+      const referencesSymbol = tests.some((t) =>
+        readFileSync(join(REPO_ROOT, t), "utf8").includes("QuestManager"),
+      );
+      expect(referencesSymbol).toBe(true);
     });
 
     it("returns an empty array for an unsafe path", () => {

@@ -120,11 +120,20 @@ export function insertClassField(
   const m = classRe.exec(content);
   if (!m) return { content, skipped: false, found: false };
 
+  // Scope the "already declared?" check to THIS class body only. Multi-class
+  // files (e.g. ShipModule.ts, GalacticEvent.ts) must not false-skip just
+  // because a sibling class declares a field of the same name — that would
+  // edit the schema/migration while leaving the domain object missing the field.
+  const classOpen = m.index + m[0].length - 1;
+  const classClose = matchingBrace(content, classOpen);
+  if (classClose === -1) return { content, skipped: false, found: false };
+  const classBody = content.slice(classOpen, classClose);
+
   // Already declared? (field followed by `:` or `=`, optionally with modifiers)
   const fieldRe = new RegExp(
     `(?:^|\\n)\\s*(?:public\\s+|private\\s+|protected\\s+|readonly\\s+)*${field}\\b\\s*[:=]`,
   );
-  if (fieldRe.test(content)) return { content, skipped: true, found: true };
+  if (fieldRe.test(classBody)) return { content, skipped: true, found: true };
 
   const insertAt = m.index + m[0].length;
   const line = `\n  readonly ${field}: ${type} = ${defaultLiteral(type, defaultRaw)};`;
@@ -195,14 +204,18 @@ export function insertMigration(
   const closeBrace = matchingBrace(content, openBrace);
   if (closeBrace === -1) return { content, skipped: false, found: false };
 
+  const entityVar = lowerFirst(entity);
   const migBlock = content.slice(openBrace, closeBrace);
-  // Idempotency: did a previous run already add a backfill for this field?
-  const fieldRe = new RegExp(`\\b${field}\\b`);
-  if (fieldRe.test(migBlock)) {
+  // Idempotency: did a previous run already add a backfill for THIS entity.field?
+  // Match the backfill assignment the tool emits (e.g. `player.level`), not a
+  // bare `\bfield\b` — the latter false-skips when the field name happens to
+  // appear in an unrelated migration comment or a sibling field's backfill,
+  // leaving the schema/class edited but no migration written (broken lockstep).
+  const backfillRe = new RegExp(`\\b${entityVar}\\.${field}\\b`);
+  if (backfillRe.test(migBlock)) {
     return { content, skipped: true, found: true, fromVersion: oldVersion };
   }
 
-  const entityVar = lowerFirst(entity);
   const lit = defaultLiteral(type, defaultRaw);
   const entry =
     `    // ${oldVersion} -> ${newVersion}: ${field} added to ${entity} (scaffolded).\n` +

@@ -11,4 +11,4 @@ Two critical rules:
 - **E2E runs its own dev server on port 5175, not 5173** (`playwright.config.ts`) — don't
   rely on a running `npm run dev`. E2E also needs `NO_PROXY=localhost,127.0.0.1`.
 
-Snapshot/helper/diagnostic-harness details live in the spec files and `e2e/helpers/`.
+Fixtures, snapshots, CI gate, harnesses: see `e2e/e2e-rules.md`.

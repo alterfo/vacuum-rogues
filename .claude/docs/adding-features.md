@@ -1,6 +1,8 @@
 # Adding New Features
 
 ## New Scene
+> Tip: `npx tsx tools/scaffold/new-scene.ts --name <Name> [--context-dependent]` does steps 1–5 automatically (see `tools/README.md`).
+
 1. Create class extending `GameScene` in `src/presentation/`
 2. Add `SceneType.MY_SCENE` to `src/types/index.ts`
 3. Add a `case SceneType.MY_SCENE:` to `src/core/services/SceneFactory.ts`
@@ -25,6 +27,8 @@
 4. Add test in `src/tests/`
 
 ## New Domain Field
+> Tip: `npx tsx tools/scaffold/domain-field.ts --entity <Entity> --field <name> --type <number|boolean|string> --default <v>` does steps 1–3 automatically (see `tools/README.md`).
+
 1. Update type in `src/types/index.ts` or `src/domain/*.ts`
 2. Update Zod schema in `src/validation/schemas.ts`
 3. Add migration in `src/data/MigrationPipeline.ts` if needed

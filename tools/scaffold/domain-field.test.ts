@@ -271,3 +271,65 @@ describe("scaffoldDomainField — error cases", () => {
     expect(read("src/validation/schemas.ts")).toBe(before);
   });
 });
+
+describe("scaffoldDomainField — multi-class files (regression)", () => {
+  it("inserts into the target class even when a sibling class declares the same field", () => {
+    writeFixtures();
+    // Mirrors real multi-class files (GalacticEvent.ts, ShipModule.ts): a sibling
+    // class already declares `severity`. The field-existence check must be scoped
+    // to the TARGET class body, not the whole file, or the target is false-skipped.
+    const MULTI = `export class GalacticEvent {
+}
+
+export class InvasionEvent extends GalacticEvent {
+  readonly severity: number = 1;
+}
+`;
+    writeFileSync(join(root, "src/domain/GalacticEvent.ts"), MULTI);
+    const res = scaffoldDomainField(
+      { entity: "GalacticEvent", field: "severity", type: "number", default: "0" },
+      root,
+    );
+    expect(res.changed).toContain("src/domain/GalacticEvent.ts");
+    expect(res.skipped).not.toContain("src/domain/GalacticEvent.ts");
+    const file = read("src/domain/GalacticEvent.ts");
+    const baseBody = file.slice(
+      file.indexOf("class GalacticEvent {"),
+      file.indexOf("export class InvasionEvent"),
+    );
+    expect(baseBody).toContain("readonly severity: number = 0;");
+  });
+});
+
+describe("scaffoldDomainField — migration idempotency (regression)", () => {
+  it("writes the migration when the field name only appears in an unrelated comment", () => {
+    writeFixtures();
+    // The migration block's COMMENT mentions the word "level", but no backfill for
+    // a Player `level` field exists. A bare `\\blevel\\b` idempotency check would
+    // wrongly skip the migration (leaving schema/class edited — broken lockstep).
+    const MIG = `import type { SaveState } from "@/domain/SaveState";
+
+export class MigrationPipeline {
+  static readonly CURRENT_VERSION = 22;
+
+  private static migrations: Record<number, (state: SaveState) => void> = {
+    21: (state: SaveState) => {
+      // 20 -> 21: Galaxy tech level added to systems.
+      const player = state.player as unknown as { foo?: number };
+      if (player && player.foo === undefined) player.foo = 0;
+    },
+  };
+}
+`;
+    writeFileSync(join(root, "src/data/MigrationPipeline.ts"), MIG);
+    const res = scaffoldDomainField(
+      { entity: "Player", field: "level", type: "number", default: "0" },
+      root,
+    );
+    expect(res.changed).toContain("src/data/MigrationPipeline.ts");
+    expect(res.skipped).not.toContain("src/data/MigrationPipeline.ts");
+    const mig = read("src/data/MigrationPipeline.ts");
+    expect(mig).toContain("CURRENT_VERSION = 23");
+    expect(mig).toContain("player.level = 0;");
+  });
+});

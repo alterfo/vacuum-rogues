@@ -67,7 +67,7 @@ export function findTestsFor(srcPath: string): string[] {
   if (!SAFE_PATH.test(srcPath)) return [];
   const base = basename(srcPath, extname(srcPath));
   if (!IDENT.test(base)) return [];
-  return grepLines(["-rlnE", "--include=*.ts", `import.*${base}`, "src/tests"]);
+  return grepLines(["-rlE", "--include=*.ts", `import.*${base}`, "src/tests"]);
 }
 
 /** get_architecture — static layer map / lockstep rules / entry points. */
@@ -95,8 +95,17 @@ export async function getBalanceConstants(): Promise<Record<string, unknown>> {
   // Include every other exported constant by its export name.
   for (const [key, value] of Object.entries(mod)) {
     if (key === "BALANCE") continue;
-    // Skip Zod schemas / functions; keep plain data.
+    // Skip functions and Zod schema objects (they expose a `safeParse` method);
+    // keep plain data constants only, so the output is the flat numeric map
+    // callers expect rather than including e.g. the BalanceSchema definition.
     if (typeof value === "function") continue;
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      typeof (value as { safeParse?: unknown }).safeParse === "function"
+    ) {
+      continue;
+    }
     result[key] = value;
   }
   return result;
