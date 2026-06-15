@@ -628,16 +628,31 @@ export class NpcSimulator {
           if (npc.role === NpcRole.TRADER) {
             this.simulateTraderTrade(npc, galaxy, rng);
           }
-          // PATROL arriving as convoy → 20% chance to liberate contested system
+          // A convoy/rally arriving at a contested system has a chance to
+          // liberate it. PATROL convoys roll from the main stream (unchanged);
+          // liberation-rally RANGERS roll from an isolated, day+id-seeded RNG so
+          // the Ranger assault can actually free the system without perturbing
+          // the deterministic main stream. Without this the rally was cosmetic:
+          // rangers could never clear the auto-replenished garrison (Task 7).
+          const isConvoyPatrol = npc.role === NpcRole.PATROL && !!npc.convoyId;
+          const isRallyRanger =
+            npc.role === NpcRole.RANGER &&
+            !!npc.convoyId &&
+            npc.convoyId.startsWith("liberation_");
           if (
-            npc.role === NpcRole.PATROL &&
-            npc.convoyId &&
+            (isConvoyPatrol || isRallyRanger) &&
             arrivedAt &&
-            galaxy.isHostileSystem(arrivedAt) &&
-            rng.next() < CONVOY_LIBERATION_CHANCE
+            galaxy.isHostileSystem(arrivedAt)
           ) {
-            galaxy.tryLiberate(arrivedAt);
-            logger.info(`Convoy ${npc.convoyId} liberated ${arrivedAt}`);
+            const roll = isRallyRanger
+              ? new SeededRNG(
+                  `liberation_assault_${galaxy.gameDays}_${npc.id}`,
+                ).next()
+              : rng.next();
+            if (roll < CONVOY_LIBERATION_CHANCE) {
+              galaxy.tryLiberate(arrivedAt);
+              logger.info(`Convoy ${npc.convoyId} liberated ${arrivedAt}`);
+            }
           }
           if (npc.convoyId) npc.convoyId = undefined;
           // Ranger arriving at quest target → quest complete
@@ -904,8 +919,11 @@ export class NpcSimulator {
         continue;
       }
       if (npc.currentSystemId === playerSystemId) continue;
-      // Standing-garrison ships are isolated from abstract off-screen combat.
+      // Standing-garrison and besieging capture-fleet ships are isolated from
+      // abstract off-screen combat: they never perturb the deterministic main
+      // stream, and a passing pirate can't wipe a besieging Overmind fleet.
       if (this.garrisonIds.has(npc.id)) continue;
+      if (this.captureFleetIds.has(npc.id)) continue;
       const list = bySystem.get(npc.currentSystemId) ?? [];
       list.push(npc);
       bySystem.set(npc.currentSystemId, list);
