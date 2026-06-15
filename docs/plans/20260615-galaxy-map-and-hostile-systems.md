@@ -161,14 +161,14 @@ Three interrelated improvements to the galaxy map and living-galaxy simulation:
 - Modify: `src/presentation/flight/NpcShipManager.ts`
 - Create: `src/tests/equipment/gravTractor.test.ts`
 
-- [ ] Add `ModuleType.GRAV_TRACTOR` to the `ModuleType` enum.
-- [ ] Add `gravTractorRange: number` to `DerivedStats` (in `src/systems/equipment/ShipLoadout.ts` or types).
-- [ ] Add 3 tiers to `GearCatalog`: `grav_tractor_1` (range 80px, 2000 cr), `grav_tractor_2` (range 150px, 5000 cr), `grav_tractor_3` (range 250px, 12000 cr).
-- [ ] Write a failing test: player loadout with `grav_tractor_2`; `derivedStats().gravTractorRange` equals 150.
-- [ ] In `NpcShipManager.update()`, if `playerLoadout.derivedStats().gravTractorRange > 0`, check each `spaceLoot` item within range. If within range AND `player.cargo.length < player.ship.cargoCapacity`, pick up item (add to cargo, remove from `spaceLoot`, log). If cargo full, skip without pickup.
-- [ ] Write test: loot within tractor range is picked up; loot beyond range is not; loot is not picked up when cargo is full.
-- [ ] Update `src/validation/schemas.ts` for new module type.
-- [ ] Run full test suite — must pass.
+- [x] Add `ModuleType.GRAV_TRACTOR` to the `ModuleType` enum. (Adapted to the canonical gear system: there is no `ModuleType` enum — equipment families live in `EquipmentClass` (GearCatalog). Added `EquipmentClass.GRAV_TRACTOR`.)
+- [x] Add `gravTractorRange: number` to `DerivedStats` (in `src/systems/equipment/ShipLoadout.ts` or types). (Added to `DerivedStats`; `derivedStats()` computes it from the best installed GRAV_TRACTOR's `potency`, micromodule-scaled like other equipment.)
+- [x] Add 3 tiers to `GearCatalog`: `grav_tractor_1` (range 80px, 2000 cr), `grav_tractor_2` (range 150px, 5000 cr), `grav_tractor_3` (range 250px, 12000 cr). (`potency` encodes range; tech levels set to 3/4/7 to satisfy the `economyBalance.test.ts` price-band bands — tech does not affect tractor range.)
+- [x] Write a failing test: player loadout with `grav_tractor_2`; `derivedStats().gravTractorRange` equals 150.
+- [x] In `NpcShipManager.update()`, if `playerLoadout.derivedStats().gravTractorRange > 0`, check each `spaceLoot` item within range. If within range AND `player.cargo.length < player.ship.cargoCapacity`, pick up item (add to cargo, remove from `spaceLoot`, log). If cargo full, skip without pickup. (`applyGravTractor()` runs every frame right after `updateLoot` — independent of turn state so a parked ship still collects post-combat drops. Cargo usage uses the canonical model: sum of `inventory.resources` amounts vs `ship.cargoCapacity` — `length` would never reach capacity since only ~10 ResourceTypes exist. Module drops salvage into METALS, Overmind artifacts into ARTIFACTS; full hold logs a warning and breaks.)
+- [x] Write test: loot within tractor range is picked up; loot beyond range is not; loot is not picked up when cargo is full. (Plus no-tractor and artifact-into-ARTIFACTS cases.)
+- [x] Update `src/validation/schemas.ts` for new module type. (No change needed — `ShipLoadoutSnapshotSchema.slotted[].gearId` is `z.string()`, so new gear ids validate as plain strings; the new resource targets METALS/ARTIFACTS are already valid `ResourceType`s. Verified.)
+- [x] Run full test suite — must pass. (gravTractor + derivedStats + spaceLoot + economyBalance green; full suite passes except the 1 pre-existing, unrelated `questBountyNpcAssignment.test.ts` failure from in-progress bounty-fallback work in the dirty tree — the file was modified at session start and is untouched by this task. Lint 0 errors, tsc clean.)
 
 ### Task 11: In-flight combat module skeleton
 **Files:**

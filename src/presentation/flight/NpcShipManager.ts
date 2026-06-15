@@ -21,7 +21,7 @@ import {
   GAME_BALANCE,
   ARTIFACT_DROP_CHANCE,
 } from "@/config/balance";
-import { SceneType, NpcRole, QuestType } from "@/types";
+import { SceneType, NpcRole, QuestType, ResourceType } from "@/types";
 import type { SpaceLootItem } from "@/types";
 import { Faction } from "@/types/faction";
 import { pickNpcDestination, type NpcBehaviorCtx } from "./npcBehavior";
@@ -186,6 +186,9 @@ export class NpcShipManager implements FlightModule {
     // Loot pulses and despawns on real elapsed time, regardless of whether the
     // turn is running (it must clear even after combat ends and the ship stops).
     this.updateLoot(deltaTime);
+    // A gravity tractor pulls nearby loot into the hold every frame — including
+    // after combat ends and the ship is parked, so a kill's drops are collected.
+    this.applyGravTractor();
 
     // The world runs while the turn is running (flying, or holding station in
     // combat) — not only while the ship is physically moving.
@@ -633,17 +636,66 @@ export class NpcShipManager implements FlightModule {
     for (let i = this.spaceLoot.length - 1; i >= 0; i--) {
       const item = this.spaceLoot[i];
       if (this.lootClockMs - item.spawnedAt > this.LOOT_TTL_MS) {
-        const g = this.lootGraphics.get(item.id);
-        if (g) {
-          if (g.parent) g.parent.removeChild(g);
-          if (!g.destroyed) g.destroy();
-          this.lootGraphics.delete(item.id);
-        }
-        this.spaceLoot.splice(i, 1);
+        this.removeLootAt(i);
         continue;
       }
       const g = this.lootGraphics.get(item.id);
       if (g) g.alpha = pulse;
+    }
+  }
+
+  /** Remove the loot item at `index` and dispose its glowing dot. */
+  private removeLootAt(index: number): void {
+    const item = this.spaceLoot[index];
+    if (!item) return;
+    const g = this.lootGraphics.get(item.id);
+    if (g) {
+      if (g.parent) g.parent.removeChild(g);
+      if (!g.destroyed) g.destroy();
+      this.lootGraphics.delete(item.id);
+    }
+    this.spaceLoot.splice(index, 1);
+  }
+
+  /**
+   * Gravity tractor auto-pickup: when the player's loadout has a tractor
+   * (`gravTractorRange > 0`), pull each floating loot item within that range
+   * into the hold. Cargo usage tracks the canonical model (sum of resource
+   * amounts vs `ship.cargoCapacity`, as in TradeSystem); a full hold logs a
+   * warning and skips — loot stays in space until space frees up or despawns.
+   * Module drops are salvaged into METALS; Overmind artifacts into ARTIFACTS.
+   */
+  private applyGravTractor(): void {
+    if (this.spaceLoot.length === 0) return;
+    const loadout = this.gameEngine?.playerLoadout;
+    const player = this.gameEngine?.player;
+    const physics = this.deps.getShipPhysics();
+    if (!loadout || !player || !physics) return;
+    const range = loadout.derivedStats().gravTractorRange;
+    if (range <= 0) return;
+    const rangeSq = range * range;
+    const capacity = player.ship.cargoCapacity;
+    for (let i = this.spaceLoot.length - 1; i >= 0; i--) {
+      const item = this.spaceLoot[i];
+      const dx = item.x - physics.shipX;
+      const dy = item.y - physics.shipY;
+      if (dx * dx + dy * dy > rangeSq) continue; // out of tractor reach
+      const used = player.inventory.resources.reduce(
+        (sum, r) => sum + r.amount,
+        0,
+      );
+      if (used >= capacity) {
+        logger.warn("Гравитяга: трюм полон, добыча оставлена в космосе");
+        break; // hold won't free up this frame — stop pulling
+      }
+      const type = item.artifactId
+        ? ResourceType.ARTIFACTS
+        : ResourceType.METALS;
+      player.inventory.addResource(type, 1);
+      this.removeLootAt(i);
+      const label = item.artifactId ? "артефакт" : (item.moduleId ?? "модуль");
+      this.deps.showMessage(`Гравитяга подобрала: ${label}`, 0xffdd33);
+      logger.info(`Gravity tractor picked up loot ${item.id} (${type})`);
     }
   }
 

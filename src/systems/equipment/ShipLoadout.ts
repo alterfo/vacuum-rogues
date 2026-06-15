@@ -72,6 +72,8 @@ export interface DerivedStats {
   readonly shieldPower: number;
   readonly repairRate: number;
   readonly fuelCapacity: number;
+  /** Auto-pickup range (px) of the best installed gravity tractor; 0 with none. */
+  readonly gravTractorRange: number;
   readonly canTakeOff: boolean;
 }
 
@@ -181,6 +183,7 @@ export class ShipLoadout {
     let shieldPower = 0;
     let repairRate = 0;
     let fuelCapacity = 0;
+    let gravTractorRange = 0;
     let hasEngine = false;
     let hasFuel = false;
 
@@ -238,6 +241,13 @@ export class ShipLoadout {
             // 1 + tech × 0.5 HP/day; take the best droid if multiple installed
             repairRate = Math.max(repairRate, (1 + e.techLevel * 0.5) * m);
             break;
+          case EquipmentClass.GRAV_TRACTOR:
+            // Auto-pickup range = potency px; best tractor wins, micromodule scales it
+            gravTractorRange = Math.max(
+              gravTractorRange,
+              Math.round(e.potency * m),
+            );
+            break;
           case EquipmentClass.GRAPPLE:
             break;
         }
@@ -261,6 +271,7 @@ export class ShipLoadout {
       shieldPower,
       repairRate: Number(repairRate.toFixed(2)),
       fuelCapacity,
+      gravTractorRange,
       // Canon §11.4: cannot take off without an engine and a fuel tank.
       canTakeOff: hasEngine && hasFuel,
     };

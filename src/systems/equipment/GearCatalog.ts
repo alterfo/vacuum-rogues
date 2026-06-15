@@ -38,6 +38,8 @@ export enum EquipmentClass {
   REPAIR_DROID = "REPAIR_DROID",
   GRAPPLE = "GRAPPLE",
   SHIELD = "SHIELD",
+  /** Gravity tractor: auto-pickup of nearby space loot. `potency` = pickup range in px. */
+  GRAV_TRACTOR = "GRAV_TRACTOR",
 }
 
 interface GearBase {
@@ -314,6 +316,39 @@ const EQUIPMENT: EquipmentSpec[] = [
     basePrice: 7800,
     equipmentClass: EquipmentClass.SHIELD,
     potency: 80,
+  },
+  // Gravity tractors (Task 10): potency encodes the auto-pickup range in px.
+  // Tech levels track the economy price bands (economyBalance.test.ts); they do
+  // not affect range, which is the potency field.
+  {
+    id: "grav_tractor_1",
+    name: "Гравитяга Тип-I",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 3,
+    size: 2,
+    basePrice: 2000,
+    equipmentClass: EquipmentClass.GRAV_TRACTOR,
+    potency: 80,
+  },
+  {
+    id: "grav_tractor_2",
+    name: "Гравитяга Тип-II",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 4,
+    size: 2,
+    basePrice: 5000,
+    equipmentClass: EquipmentClass.GRAV_TRACTOR,
+    potency: 150,
+  },
+  {
+    id: "grav_tractor_3",
+    name: "Гравитяга Тип-III",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 7,
+    size: 3,
+    basePrice: 12000,
+    equipmentClass: EquipmentClass.GRAV_TRACTOR,
+    potency: 250,
   },
 ];
 
