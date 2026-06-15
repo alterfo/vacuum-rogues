@@ -127,6 +127,32 @@ describe("NpcSimulator liberation campaigns", () => {
     expect(r2.destinationSystemId).toBe("sys_a");
   });
 
+  it("retries the rally on a later tick when no ranger is staged on the liberation date", () => {
+    const galaxy = makeGalaxy();
+    galaxy.addOvermindSystem("sys_a");
+
+    const sim = new NpcSimulator();
+    const event = sim.assembleLiberationCampaign(
+      galaxy,
+      new SeededRNG("retry_seed"),
+    );
+    expect(event?.liberationDate).toBe(30);
+
+    // Liberation date reached but the staging system is empty — the campaign must
+    // NOT be consumed (regression: it used to mark itself dispatched and fizzle).
+    galaxy.gameDays = 30;
+    sim.tick(galaxy, new SeededRNG("retry_tick_empty"));
+
+    // A ranger arrives at the staging system afterwards; the next tick rallies it.
+    const r1 = makeRanger("r1", "sys_b");
+    galaxy.npcShips.push(r1);
+    galaxy.gameDays = 31;
+    sim.tick(galaxy, new SeededRNG("retry_tick_staged"));
+
+    expect(r1.state).toBe(NpcState.TRAVELING);
+    expect(r1.destinationSystemId).toBe("sys_a");
+  });
+
   it("does not announce a campaign when no system is hostile", () => {
     const galaxy = makeGalaxy();
     const sim = new NpcSimulator();

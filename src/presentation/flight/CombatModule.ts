@@ -1,6 +1,7 @@
 import type { Container } from "pixi.js";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
+import { GearKind } from "@/systems/equipment/GearCatalog";
 import type { NpcShipSprite } from "../NpcShipSprite";
 import type { FlightModule } from "./FlightModule";
 import { CombatHud } from "./CombatHud";
@@ -127,6 +128,12 @@ export class CombatModule implements FlightModule {
    */
   startCombat(npc: NpcShipSprite): void {
     if (this.isActive) return;
+    // A weaponless player can't deal damage; freezing them for combat would
+    // soft-lock — the garrison stays in range and re-triggers startCombat every
+    // frame, while "Атаковать" never arms and "Отступить" just reopens. Skip
+    // combat entirely so the ship stays free to fly away instead.
+    const loadout = this.deps.getPlayerLoadout?.() ?? null;
+    if (loadout && !this.hasWeapon(loadout)) return;
     this.isActive = true;
     this.activeTarget = npc;
     this.selectedTarget = npc; // aim at the aggressor by default
@@ -210,6 +217,13 @@ export class CombatModule implements FlightModule {
       this.deps.showMessage?.("Корпус критический — отступаем!", 0xff4444);
       this.endCombat();
     }
+  }
+
+  /** Whether the loadout has at least one weapon to fight with. */
+  private hasWeapon(loadout: ShipLoadout): boolean {
+    return loadout
+      .slottedWithGear()
+      .some((s) => s.gear?.kind === GearKind.WEAPON);
   }
 
   /** Whether the selected target sits within the selected weapon's range circle. */

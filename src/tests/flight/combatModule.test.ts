@@ -9,6 +9,8 @@ import {
   type NpcShipManagerDeps,
 } from "@/presentation/flight/NpcShipManager";
 import type { NpcShipSprite } from "@/presentation/NpcShipSprite";
+import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
+import { GearKind } from "@/systems/equipment/GearCatalog";
 import type { Renderer } from "@/presentation/Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Galaxy } from "@/domain/Galaxy";
@@ -70,6 +72,34 @@ describe("CombatModule skeleton (Task 11)", () => {
     module.startCombat(first);
     module.startCombat(makeSprite("npc_2"));
     expect(module.activeTarget).toBe(first);
+  });
+
+  it("does not start (or freeze for) combat when the player has no weapon", () => {
+    const physics = makePhysics();
+    const loadout = { slottedWithGear: () => [] } as unknown as ShipLoadout;
+    const module = new CombatModule({
+      getShipPhysics: () => physics,
+      getPlayerLoadout: () => loadout,
+    });
+    module.startCombat(makeSprite("npc_1"));
+    // Weaponless: combat is skipped so the ship stays free to fly away (no soft-lock).
+    expect(module.isActive).toBe(false);
+    expect(module.activeTarget).toBeNull();
+    expect(physics.isMoving).toBe(true);
+  });
+
+  it("starts combat when at least one weapon is equipped", () => {
+    const physics = makePhysics();
+    const loadout = {
+      slottedWithGear: () => [{ gear: { kind: GearKind.WEAPON } }],
+    } as unknown as ShipLoadout;
+    const module = new CombatModule({
+      getShipPhysics: () => physics,
+      getPlayerLoadout: () => loadout,
+    });
+    module.startCombat(makeSprite("npc_1"));
+    expect(module.isActive).toBe(true);
+    expect(physics.isMoving).toBe(false);
   });
 
   it("endCombat clears the target and deactivates", () => {

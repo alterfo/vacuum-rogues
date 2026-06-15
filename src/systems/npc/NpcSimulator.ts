@@ -1353,9 +1353,18 @@ export class NpcSimulator {
     for (const campaign of this.liberationCampaigns) {
       if (campaign.dispatched) continue;
       if (galaxy.gameDays < campaign.liberationDate) continue;
-      campaign.dispatched = true;
-      if (!galaxy.isHostileSystem(campaign.targetSystemId)) continue;
-      this.dispatchLiberationRally(galaxy, campaign);
+      // Target already freed (e.g. by the 3-day clear rule) — retire the campaign.
+      if (!galaxy.isHostileSystem(campaign.targetSystemId)) {
+        campaign.dispatched = true;
+        continue;
+      }
+      // Only retire the campaign once at least one ranger actually departs;
+      // otherwise retry on later ticks until rangers are staged to rally. (Marking
+      // it dispatched on an empty staging system permanently consumed the campaign
+      // and the announced rally never happened.)
+      if (this.dispatchLiberationRally(galaxy, campaign)) {
+        campaign.dispatched = true;
+      }
     }
   }
 
@@ -1363,12 +1372,13 @@ export class NpcSimulator {
    * Send idle ranger NPCs gathered in a campaign's staging system toward its
    * target as a single convoy (shared convoyId), using the same convoy
    * mechanism as {@link assembleConvoys}. Garrison and capture-fleet ships are
-   * excluded. No-op when no rangers are staged.
+   * excluded. Returns true when at least one ranger departed, false when none
+   * were staged (so the caller can retry the campaign on a later tick).
    */
   private dispatchLiberationRally(
     galaxy: Galaxy,
     campaign: LiberationCampaign,
-  ): void {
+  ): boolean {
     const rangers = galaxy.npcShips.filter(
       (n) =>
         n.role === NpcRole.RANGER &&
@@ -1379,7 +1389,7 @@ export class NpcSimulator {
         !this.captureFleetIds.has(n.id) &&
         n.currentSystemId === campaign.stagingSystemId,
     );
-    if (rangers.length === 0) return;
+    if (rangers.length === 0) return false;
 
     const count = Math.min(LIBERATION_RALLY_MAX_SHIPS, rangers.length);
     const convoyId = `liberation_${campaign.liberationDate}_${campaign.targetSystemId}`;
@@ -1403,6 +1413,7 @@ export class NpcSimulator {
         `Liberation rally ${convoyId}: ${npc.name} → ${campaign.targetSystemId}`,
       );
     }
+    return true;
   }
 
   /**
