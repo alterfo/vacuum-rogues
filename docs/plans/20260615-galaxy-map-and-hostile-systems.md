@@ -81,12 +81,12 @@ Three interrelated improvements to the galaxy map and living-galaxy simulation:
 - Modify: `src/domain/Galaxy.ts` (add `garrisonSystems` tracking or use existing hostileSystems)
 - Create: `src/tests/npc/hostileGarrison.test.ts`
 
-- [ ] Write a failing test: mark `sys_a` as an Overmind system; call `NpcSimulator.ensureGarrison(galaxy, rng)`; assert `npcsPresentInSystem(galaxy, "sys_a")` returns 5–10 hostile-role ships.
-- [ ] Add `ensureGarrison(galaxy: Galaxy, rng: SeededRNG): void` to `NpcSimulator`: for each `overmindSystem` and `pirateSystem`, if the count of hostile NPC ships present (`role === PATROL or PIRATE`, `currentSystemId === systemId`, `state !== DEAD`) is below `GARRISON_MIN = 5`, spawn up to `GARRISON_MAX = 10` until the minimum is met. Use `spawnPirateInSystem` for pirate systems; introduce `spawnOvermindInSystem` for overmind systems (same stats as PATROL but `faction = OVERMIND`).
-- [ ] Call `ensureGarrison` from `NpcSimulator.tick()` after `pruneAndReplenish`.
-- [ ] Add constants `GARRISON_MIN = 5`, `GARRISON_MAX = 10` to the top of `NpcSimulator.ts`.
-- [ ] Write test: after `ensureGarrison`, hostile ships are of the correct faction/role.
-- [ ] Run full test suite — must pass.
+- [x] Write a failing test: mark `sys_a` as an Overmind system; call `NpcSimulator.ensureGarrison(galaxy, rng)`; assert `npcsPresentInSystem(galaxy, "sys_a")` returns 5–10 hostile-role ships.
+- [x] Add `ensureGarrison(galaxy: Galaxy, rng: SeededRNG): void` to `NpcSimulator`: for each `overmindSystem` and `pirateSystem`, if the count of hostile NPC ships present (`faction === OVERMIND or role === PIRATE`, `currentSystemId === systemId`, present = not DEAD/TRAVELING) is below `GARRISON_MIN = 5`, spawn up to a random `[GARRISON_MIN, GARRISON_MAX = 10]` target. Uses `spawnPirateInSystem` for pirate systems; added `spawnOvermindInSystem` for overmind systems (same stats as PATROL but `faction = OVERMIND`). Garrison ships are tracked in an in-memory `garrisonIds` set and fully isolated from the wandering-population streams (hold position, excluded from off-screen combat and replenishment count) so adding garrisons never perturbs the deterministic main simulation.
+- [x] Call `ensureGarrison` from `NpcSimulator.tick()` after `pruneAndReplenish` (with an isolated day-seeded RNG to avoid perturbing the main stream).
+- [x] Add constants `GARRISON_MIN = 5`, `GARRISON_MAX = 10` to the top of `NpcSimulator.ts`.
+- [x] Write test: after `ensureGarrison`, hostile ships are of the correct faction/role.
+- [x] Run full test suite — must pass. (Garrison tests + convoy regression green; suite passes except 1 pre-existing, unrelated failure in `questBountyNpcAssignment.test.ts` — confirmed failing with my change reverted via `git stash`.)
 
 ### Task 5: Garrison aggro — mark hostile NPC sprites as aggressive
 **Files:**

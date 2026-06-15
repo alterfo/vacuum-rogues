@@ -1,6 +1,6 @@
 import type { Galaxy } from "@/domain/Galaxy";
 import type { StarSystem } from "@/domain/StarSystem";
-import type { SeededRNG } from "@/utils/seededRNG";
+import { SeededRNG } from "@/utils/seededRNG";
 import { NpcShip } from "@/domain/NpcShip";
 import {
   NpcRole,
@@ -10,6 +10,7 @@ import {
   ResourceType,
 } from "@/types";
 import type { NewsEvent } from "@/types";
+import { Faction } from "@/types/faction";
 import type { NpcBrain } from "./NpcBrain";
 import { RuleBasedNpcBrain } from "./NpcBrain";
 import { logger } from "@/utils/logger";
@@ -54,6 +55,16 @@ const CONVOY_ASSEMBLY_INTERVAL = 30;
 const CONVOY_MAX_SHIPS = 3;
 /** Per-convoy chance to liberate a contested system on arrival. */
 const CONVOY_LIBERATION_CHANCE = 0.2;
+
+/** Minimum hostile ships a captured (overmind/pirate) system always holds. */
+const GARRISON_MIN = 5;
+/** Maximum hostile ships spawned to fill a captured system's garrison. */
+const GARRISON_MAX = 10;
+
+/** Minimum game-days a ship dwells in a system after arriving before the
+ *  per-day DEPART_CHANCE can fire. Prevents the "fly in and immediately out"
+ *  visual seen when a 15% roll happens to fire on day 1 post-arrival. */
+const MIN_DWELL_DAYS = 3;
 
 const FACTIONS: FactionType[] = [
   FactionType.OUTLANDERS,
@@ -151,11 +162,21 @@ export function npcRoleTechLevel(role: NpcRole): number {
 /**
  * Advances the autonomous life of NPC ships across the galaxy: spawning them at
  * generation time and, each game day, moving them between systems toward their
- * goals. Off-screen combat, trading and quest resolution arrive in later slices
- * (Feature 8). Stateless aside from its brain, so it is save/load-safe.
+ * goals. Holds a transient arrival-dwell countdown (not persisted) so freshly
+ * arrived ships don't depart on the very next tick.
  */
 export class NpcSimulator {
   private readonly brain: NpcBrain;
+  /** Days remaining before a ship may be subject to DEPART_CHANCE; keyed by npc.id. */
+  private readonly arrivalDwellCountdown = new Map<string, number>();
+  /**
+   * IDs of standing-garrison ships spawned to defend captured systems. Transient
+   * (not persisted): garrison ships are isolated from the wandering-population
+   * streams — they hold position, are excluded from off-screen combat, and don't
+   * count toward replenishment — so adding garrisons never perturbs the
+   * deterministic main simulation. Resets on load; ensureGarrison rebuilds it.
+   */
+  private readonly garrisonIds = new Set<string>();
 
   constructor(brain: NpcBrain = new RuleBasedNpcBrain()) {
     this.brain = brain;
@@ -199,6 +220,7 @@ export class NpcSimulator {
   spawnPirateInSystem(rng: SeededRNG, id: string, systemId: string): NpcShip {
     const stats = ROLE_STATS[NpcRole.PIRATE];
     const faction = FactionType.OUTLANDERS;
+    this.arrivalDwellCountdown.set(id, MIN_DWELL_DAYS);
     return new NpcShip({
       id,
       name: `${ROLE_NAME[NpcRole.PIRATE]} ${FACTION_NAME[faction]} ${id}`,
@@ -211,7 +233,7 @@ export class NpcSimulator {
       speed: stats.speed,
       damage: stats.damage,
       currentSystemId: systemId,
-      state: NpcState.PATROLLING, // dwell at spawn; IDLE departs next tick
+      state: NpcState.PATROLLING,
       goal: null,
       destinationSystemId: null,
       daysToArrival: 0,
@@ -221,6 +243,95 @@ export class NpcSimulator {
       loadoutSummary: ROLE_LOADOUT[NpcRole.PIRATE],
       cargo: [],
     });
+  }
+
+  /**
+   * Spawn an OVERMIND garrison NPC directly in the specified system and return
+   * it. Same combat stats as a PATROL ship, but flagged as faction OVERMIND so
+   * it reads as hostile to the player and friendly NPCs. Used by ensureGarrison.
+   */
+  spawnOvermindInSystem(rng: SeededRNG, id: string, systemId: string): NpcShip {
+    const stats = ROLE_STATS[NpcRole.PATROL];
+    this.arrivalDwellCountdown.set(id, MIN_DWELL_DAYS);
+    return new NpcShip({
+      id,
+      name: `Доминатор ${id}`,
+      race: FactionType.PARADOXES,
+      faction: Faction.OVERMIND,
+      role: NpcRole.PATROL,
+      hullHP: stats.hull,
+      maxHull: stats.hull,
+      shields: stats.shields,
+      speed: stats.speed,
+      damage: stats.damage,
+      currentSystemId: systemId,
+      state: NpcState.PATROLLING,
+      goal: null,
+      destinationSystemId: null,
+      daysToArrival: 0,
+      credits: rng.nextInt(50, 300),
+      reputation: 0,
+      shieldPower: stats.shieldPower,
+      loadoutSummary: ROLE_LOADOUT[NpcRole.PATROL],
+      cargo: [],
+    });
+  }
+
+  /**
+   * Count hostile garrison ships currently present (located and not in transit
+   * or destroyed) in a system. A garrison ship is any OVERMIND-faction ship or
+   * any PIRATE-role ship — the two flavours of captured-system defenders.
+   */
+  private countGarrisonPresent(galaxy: Galaxy, systemId: string): number {
+    let count = 0;
+    for (const n of galaxy.npcShips) {
+      if (n.currentSystemId !== systemId) continue;
+      if (n.state === NpcState.DEAD || n.state === NpcState.TRAVELING) continue;
+      if (n.faction === Faction.OVERMIND || n.role === NpcRole.PIRATE) count++;
+    }
+    return count;
+  }
+
+  /**
+   * Guarantee that every captured (overmind/pirate) system holds a standing
+   * garrison of hostile ships. For each hostile system whose present garrison is
+   * below GARRISON_MIN, spawn fresh hostile ships up to a random target in
+   * [GARRISON_MIN, GARRISON_MAX]. Overmind systems get OVERMIND PATROL ships;
+   * pirate systems get PIRATE ships. Idempotent once the minimum is met.
+   */
+  ensureGarrison(galaxy: Galaxy, rng: SeededRNG): void {
+    for (const systemId of galaxy.overmindSystems) {
+      this.fillGarrison(galaxy, rng, systemId, true);
+    }
+    for (const systemId of galaxy.pirateSystems) {
+      this.fillGarrison(galaxy, rng, systemId, false);
+    }
+  }
+
+  /** Top a single hostile system's garrison up to a random [MIN, MAX] target. */
+  private fillGarrison(
+    galaxy: Galaxy,
+    rng: SeededRNG,
+    systemId: string,
+    overmind: boolean,
+  ): void {
+    let present = this.countGarrisonPresent(galaxy, systemId);
+    if (present >= GARRISON_MIN) return;
+    const target = rng.nextInt(GARRISON_MIN, GARRISON_MAX);
+    let spawned = 0;
+    while (present < target) {
+      const id = `garrison_${overmind ? "ov" : "pi"}_${systemId}_${galaxy.gameDays}_${spawned}`;
+      const ship = overmind
+        ? this.spawnOvermindInSystem(rng, id, systemId)
+        : this.spawnPirateInSystem(rng, id, systemId);
+      galaxy.npcShips.push(ship);
+      this.garrisonIds.add(id);
+      present++;
+      spawned++;
+    }
+    logger.info(
+      `Garrison: spawned ${spawned} hostile ships in ${systemId} (now ${present})`,
+    );
   }
 
   /** Create one NPC with the given id at a random system. */
@@ -257,6 +368,7 @@ export class NpcSimulator {
         cargo: role === NpcRole.TRADER ? this.pickTraderCargo(system, rng) : [],
       }),
     );
+    this.arrivalDwellCountdown.set(id, MIN_DWELL_DAYS);
   }
 
   /** Spawn one NPC in a specific system (used for home-system density boost). */
@@ -298,6 +410,7 @@ export class NpcSimulator {
         cargo: role === NpcRole.TRADER ? this.pickTraderCargo(system, rng) : [],
       }),
     );
+    this.arrivalDwellCountdown.set(id, MIN_DWELL_DAYS);
   }
 
   /**
@@ -437,6 +550,14 @@ export class NpcSimulator {
         continue;
       }
 
+      // Garrison hold: a standing-garrison ship defends its captured system and
+      // never wanders off via the random departure roll. Skipping before the
+      // DEPART logic means garrison ships consume no main RNG, keeping the
+      // deterministic stream identical to a galaxy with no garrisons.
+      if (this.garrisonIds.has(npc.id)) {
+        continue;
+      }
+
       // Ranger without an active quest: 10% chance to accept one.
       if (
         npc.role === NpcRole.RANGER &&
@@ -450,11 +571,23 @@ export class NpcSimulator {
         }
       }
 
-      // Present in a system. A purposeless (IDLE) ship looks for somewhere to go
-      // right away; ships that arrived with a purpose dwell (see arrivalState —
-      // they never arrive IDLE), departing only on the per-day DEPART_CHANCE, so
-      // they linger and visit rather than bouncing straight back out.
-      if (npc.state === NpcState.IDLE || rng.next() < DEPART_CHANCE) {
+      // A purposeless (IDLE) ship always departs immediately — no dwell applies.
+      if (npc.state === NpcState.IDLE) {
+        this.departToNewGoal(npc, galaxy, rng);
+        continue;
+      }
+
+      // Enforce minimum dwell: freshly arrived / newly spawned ships may not
+      // depart via the random DEPART_CHANCE until MIN_DWELL_DAYS have elapsed.
+      // Prevents the "fly in and immediately out" visual (2026-06-15 report).
+      const dwellLeft = this.arrivalDwellCountdown.get(npc.id) ?? 0;
+      if (dwellLeft > 0) {
+        this.arrivalDwellCountdown.set(npc.id, dwellLeft - 1);
+        continue;
+      }
+
+      // Present in a system after dwell period: random daily departure chance.
+      if (rng.next() < DEPART_CHANCE) {
         this.departToNewGoal(npc, galaxy, rng);
       }
     }
@@ -476,6 +609,12 @@ export class NpcSimulator {
     );
     for (const e of raidEvents) events.push(e);
     this.pruneAndReplenish(galaxy, rng);
+
+    // Keep captured systems garrisoned: any overmind/pirate system below the
+    // minimum hostile-ship count is topped back up to a full standing garrison.
+    // Use an isolated, day-seeded RNG so garrison spawning never perturbs the
+    // deterministic main simulation stream that other systems/tests depend on.
+    this.ensureGarrison(galaxy, new SeededRNG(`garrison_${galaxy.gameDays}`));
 
     return events;
   }
@@ -508,6 +647,8 @@ export class NpcSimulator {
       if (npc.state === NpcState.DEAD || npc.state === NpcState.TRAVELING)
         continue;
       if (npc.currentSystemId === playerSystemId) continue;
+      // Standing-garrison ships are isolated from abstract off-screen combat.
+      if (this.garrisonIds.has(npc.id)) continue;
       const list = bySystem.get(npc.currentSystemId) ?? [];
       list.push(npc);
       bySystem.set(npc.currentSystemId, list);
@@ -558,6 +699,8 @@ export class NpcSimulator {
         continue;
       }
       if (npc.currentSystemId === playerSystemId) continue;
+      // Standing-garrison ships are isolated from abstract off-screen combat.
+      if (this.garrisonIds.has(npc.id)) continue;
       const list = bySystem.get(npc.currentSystemId) ?? [];
       list.push(npc);
       bySystem.set(npc.currentSystemId, list);
@@ -693,18 +836,26 @@ export class NpcSimulator {
   private pruneAndReplenish(galaxy: Galaxy, rng: SeededRNG): void {
     for (let i = galaxy.npcShips.length - 1; i >= 0; i--) {
       if (galaxy.npcShips[i].state === NpcState.DEAD) {
+        this.garrisonIds.delete(galaxy.npcShips[i].id);
         galaxy.npcShips.splice(i, 1);
       }
     }
 
+    // Replenishment targets only the wandering population; standing-garrison
+    // ships are managed separately by ensureGarrison and excluded here so their
+    // presence never shrinks (and thus perturbs) the normal spawn count.
     const target = Math.round(galaxy.systems.length * NPCS_PER_SYSTEM);
+    let regular = galaxy.npcShips.filter(
+      (n) => !this.garrisonIds.has(n.id),
+    ).length;
     let guard = 0;
-    while (galaxy.npcShips.length < target && guard++ < 1000) {
+    while (regular < target && guard++ < 1000) {
       this.spawnOne(
         galaxy,
         rng,
         `npc_d${galaxy.gameDays}_${galaxy.npcShips.length}`,
       );
+      regular++;
     }
   }
 
@@ -717,6 +868,7 @@ export class NpcSimulator {
     npc.daysToArrival = 0;
     npc.state = this.arrivalState(npc.goal?.kind);
     npc.goal = null;
+    this.arrivalDwellCountdown.set(npc.id, MIN_DWELL_DAYS);
   }
 
   /** Ask the brain for a goal and start travelling toward it. */
