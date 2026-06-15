@@ -55,10 +55,10 @@ Three interrelated improvements to the galaxy map and living-galaxy simulation:
 - Modify: `src/systems/quests/QuestGenerator.ts`
 - Create: `src/tests/quests/questKnownSystems.test.ts`
 
-- [ ] Write a failing test: build a galaxy where half the systems are `explored = false`; call `QuestGenerator.generate()` with a planet in an explored system; assert no generated quest has a `targetSystemId` whose system has `explored = false`.
-- [ ] In `QuestGenerator`, wherever candidate target systems are gathered (delivery, bounty, escort targets), filter out systems where `!system.explored`.
-- [ ] Ensure DEFENSE quests (which target hostile neighbours) also respect the explored filter — a hostile system must be explored (adjacent to player's visited systems) before it can appear as a defense target.
-- [ ] Run full test suite — must pass.
+- [x] Write a failing test: build a galaxy where half the systems are `explored = false`; call `QuestGenerator.generate()` with a planet in an explored system; assert no generated quest has a `targetSystemId` whose system has `explored = false`.
+- [x] In `QuestGenerator`, wherever candidate target systems are gathered (delivery, bounty, escort targets), filter out systems where `!system.explored`.
+- [x] Ensure DEFENSE quests (which target hostile neighbours) also respect the explored filter — a hostile system must be explored (adjacent to player's visited systems) before it can appear as a defense target.
+- [x] Run full test suite — must pass. (Task 2 tests green; suite passes except 1 pre-existing, unrelated failure in `questBountyNpcAssignment.test.ts` from in-progress bounty-fallback work in the dirty tree — verified failing with my change stashed.)
 
 ### Task 3: Star map purchase service on planets
 **Files:**
@@ -88,16 +88,15 @@ Three interrelated improvements to the galaxy map and living-galaxy simulation:
 - [ ] Write test: after `ensureGarrison`, hostile ships are of the correct faction/role.
 - [ ] Run full test suite — must pass.
 
-### Task 5: Garrison attacks all entrants (player + friendly NPCs)
+### Task 5: Garrison aggro — mark hostile NPC sprites as aggressive
 **Files:**
 - Modify: `src/presentation/flight/NpcShipManager.ts`
-- Modify: `src/presentation/SpaceFlightScene.ts` (or the NPC contact/combat trigger path)
-- Create: `src/tests/presentation/garrisonCombat.test.ts` (unit test for trigger logic)
+- Create: `src/tests/presentation/garrisonCombat.test.ts`
 
-- [ ] Write a failing test: given a hostile system with garrison ships, simulate `NpcShipManager.refresh()` followed by `NpcShipManager.checkGarrisonAggro(playerSystemId, isHostileSystem)`; assert that at least one garrison NPC is flagged as `aggressive`.
-- [ ] In `NpcShipManager`, after `refresh()`, if `galaxy.isHostileSystem(playerSystemId)`, mark all NPC sprites with `faction === OVERMIND or role === PIRATE` as `aggressive = true` (auto-attack stance).
-- [ ] Aggressive NPCs automatically begin pursuit (use existing follow/combat path triggered in `update()`).
-- [ ] Off-screen: garrison ships also fight friendly (PATROL, RANGER, TRADER) NPCs co-located — extend `resolveOffscreenCombat` to include garrison vs. friendly encounters in hostile systems (already handled by pirate logic; confirm Overmind is included).
+- [ ] Write a failing test: given a hostile system, after `NpcShipManager.refresh()` → `checkGarrisonAggro(playerSystemId, isHostileSystem=true)`, assert all garrison NPC sprites have `aggressive = true`.
+- [ ] In `NpcShipManager.refresh()`, if `galaxy.isHostileSystem(playerSystemId)`, mark garrison sprites (`faction === OVERMIND or role === PIRATE`) as `aggressive = true`. **Do NOT transition to CombatScene** — combat resolves in-flight (Tasks 12–14).
+- [ ] Aggressive NPCs begin pursuit (fly toward player ship position) in `update()`.
+- [ ] Off-screen: extend `resolveOffscreenCombat` to include Overmind garrison vs. friendly co-located NPCs (pirate path already handles PIRATE vs. TRADER; mirror for OVERMIND vs. PATROL/RANGER).
 - [ ] Run full test suite — must pass.
 
 ### Task 6: Real capture events (Overmind/pirate fleets attack neutral systems)
@@ -171,18 +170,80 @@ Three interrelated improvements to the galaxy map and living-galaxy simulation:
 - [ ] Update `src/validation/schemas.ts` for new module type.
 - [ ] Run full test suite — must pass.
 
-### Task 11: Verify acceptance criteria
+### Task 11: In-flight combat module skeleton
+**Files:**
+- Create: `src/presentation/flight/CombatModule.ts` (new FlightModule)
+- Modify: `src/presentation/SpaceFlightScene.ts` (register module, pass deps)
+- Create: `src/tests/flight/combatModule.test.ts`
+
+Combat happens in the flight scene, not in a separate hex grid scene (CombatScene). The hex CombatScene remains for text-quest scripted encounters only; all NPC encounters use in-flight combat.
+
+- [ ] Write a failing test: `CombatModule.initialize()` registers without errors; `combatModule.isActive` is `false` initially; `combatModule.startCombat(npc)` sets `isActive = true` and stores the target NPC.
+- [ ] Create `CombatModule implements FlightModule` with: `activeTarget: NpcShipSprite | null`, `isActive: boolean`, `startCombat(npc)`, `endCombat()`, `initialize()`, `update(dt)`, `destroy()`.
+- [ ] Wire `CombatModule` into `SpaceFlightScene` (add to modules list, pass same `deps` bundle as other modules).
+- [ ] When an aggressive NPC sprite reaches within attack range of the player ship (`NpcShipManager.update()`), call `combatModule.startCombat(sprite)` instead of transitioning to `CombatScene`.
+- [ ] While `combatModule.isActive`, suspend player movement (set `shipPhysics.isMoving = false`, freeze new course selection).
+- [ ] `endCombat()` resumes player movement and clears `activeTarget`.
+- [ ] Run full test suite — must pass.
+
+### Task 12: Weapon selection UI and range display
+**Files:**
+- Create: `src/presentation/flight/CombatHud.ts`
+- Modify: `src/presentation/flight/CombatModule.ts`
+- Create: `src/tests/flight/combatHud.test.ts`
+
+- [ ] Write a failing test: `CombatHud.buildWeaponPanel(loadout)` returns one button per equipped weapon; selecting a weapon emits `onWeaponSelected(weaponId)`.
+- [ ] `CombatHud` shows equipped weapons as clickable cards (weapon name, damage, range). Default-selects first weapon on combat start.
+- [ ] When a weapon is selected, draw a dashed circle at `player ship position`, radius = `weapon.range` in world-px. Remove previous circle.
+- [ ] "Атаковать" confirm button is enabled only when a target NPC is selected AND is within weapon range.
+- [ ] "Отступить" button ends combat immediately (player takes no damage, but may trigger hostile status on the NPC — see Task 15).
+- [ ] Run full test suite — must pass.
+
+### Task 13: Target selection, simultaneous damage resolution, floating numbers
+**Files:**
+- Modify: `src/presentation/flight/CombatModule.ts`
+- Modify: `src/presentation/flight/NpcShipManager.ts`
+- Create: `src/presentation/flight/DamageNumbers.ts`
+- Create: `src/tests/flight/damageResolution.test.ts`
+
+- [ ] Write a failing test: `resolveCombatRound(playerDmg, npcDmg, playerHP, npcHP)` returns `{ newPlayerHP, newNpcHP }` with both taking damage simultaneously in one call.
+- [ ] Player clicks enemy NPC sprite inside CombatModule to set `selectedTarget`; clicking outside deselects.
+- [ ] On "Атаковать": resolve one combat round simultaneously — player deals `weapon.damage` to NPC, NPC deals `npc.damage` to player ship; apply to `npc.hullHP` and `player.ship.hullHP`.
+- [ ] Create `DamageNumbers` helper: spawns PixiJS `Text` at a world position, floats upward (+Y) over 0.8 s, fades out, then removes itself. Red for damage taken, yellow for damage dealt.
+- [ ] Show damage numbers at target's world position after each round.
+- [ ] If NPC `hullHP ≤ 0`: NPC dies (call existing death path in `NpcShipManager`), trigger loot drop (Task 9), call `combatModule.endCombat()`.
+- [ ] If player `hullHP < 30% maxHull`: auto-end combat with a hull-low warning toast; NPC remains in system hostile.
+- [ ] Run full test suite — must pass.
+
+### Task 14: Hostility state machine (neutral → hostile on attack)
+**Files:**
+- Modify: `src/domain/NpcShip.ts`
+- Modify: `src/types/index.ts` (add `hostile` flag to NpcShip or use existing state)
+- Modify: `src/validation/schemas.ts`
+- Modify: `src/presentation/flight/NpcShipManager.ts`
+- Create: `src/tests/npc/npcHostility.test.ts`
+
+- [ ] Write a failing test: NpcShip with `role === TRADER, hostile = false`; calling `npc.markHostile()` sets `hostile = true`; subsequent `isAggressive()` returns `true`.
+- [ ] Add `hostile: boolean` field to `NpcShip` (default `false`). Update `NpcShipInit`, `schemas.ts` with `.default(false)`.
+- [ ] Garrison/pirate NPCs start with `hostile = true` (set in `spawnPirateInSystem`, `spawnOvermindInSystem`).
+- [ ] When player attacks a non-hostile NPC (`combatModule.startCombat` triggered by player click on a neutral sprite), mark that NPC as `hostile = true` and all NPCs of the same `faction` in the system also become `hostile = true`.
+- [ ] `NpcShipSprite` shows a red tint or threat indicator while `npc.hostile === true`.
+- [ ] Write test: attacking one neutral NPC marks all same-faction NPCs in the system as hostile.
+- [ ] Run full test suite — must pass.
+
+### Task 15: Verify acceptance criteria
 **Files:**
 - Read: all modified files
 
 - [ ] Galaxy generator produces connected graphs for 10 random seeds (BFS test).
-- [ ] Quest generator never assigns unexplored target systems (test with half-explored galaxy).
-- [ ] Star map purchase: buying 2-hop map in `sys_a` reveals all systems within 2 warp jumps.
-- [ ] Hostile system: `npcsPresentInSystem` returns ≥ 5 hostile ships for every overmind/pirate system.
-- [ ] Capture: a 3-ship Overmind fleet successfully captures a neutral system after defenders defeated.
+- [ ] Quest generator never assigns unexplored target systems.
+- [ ] Star map: buying 2-hop map reveals all systems within 2 warp jumps.
+- [ ] Hostile system: garrison ≥ 5 hostile ships in every overmind/pirate system.
+- [ ] Capture: Overmind fleet captures a neutral system after defenders defeated.
 - [ ] Liberation campaign: news event appears, rangers converge, system liberated after 3 clear days.
-- [ ] Loot: killing an NPC in the player system spawns a loot item visible on screen.
-- [ ] Tractor: `grav_tractor_1` picks up loot within 80px.
+- [ ] In-flight combat: weapon selection shows range circle; attack deals simultaneous damage with floating numbers.
+- [ ] Attacking a neutral NPC makes the NPC (and same-faction) hostile.
+- [ ] Loot: killing an NPC spawns a loot item; gravity tractor picks it up within range.
 - [ ] Run `npm test -- --run` — 0 failures.
 - [ ] Run `npm run lint` — 0 errors.
 
@@ -193,6 +254,10 @@ Three interrelated improvements to the galaxy map and living-galaxy simulation:
 - **Liberation countdown clock**: uses `galaxy.gameDays` increment (not real time), so save/load safe — the `Map` resets on load but the countdown restarts naturally when the next tick checks garrison count.
 - **Loot render**: use `Graphics` circle, zIndex = 90 (above NPC ships at 100 but visible), pulsing alpha (0.6 → 1.0 → 0.6, 1 Hz).
 - **Cargo capacity**: `player.ship.cargoCapacity` is already defined per ship class in `src/types/index.ts`; `player.cargo` (resource array) length check is sufficient at MVP.
+- **CombatScene fate**: the existing hex-grid `CombatScene` is kept for scripted text-quest encounters only. All NPC encounters use `CombatModule` (in-flight). Do not delete `CombatScene` — text quests depend on it via `SceneType.COMBAT`.
+- **In-flight combat flow**: player flies → aggressive NPC enters range → `CombatModule.startCombat(npc)` → player movement frozen → weapon panel shown → player selects weapon + clicks target → "Атаковать" resolves one round simultaneously (both sides take damage) → repeat until NPC dead or player retreats. NPC always attacks back at player on each round regardless of range (they're already in contact).
+- **Weapon range visual**: dashed `Graphics` circle drawn on `gameLayer` (world-space), same as route/orbit overlays. Remove on weapon deselect or combat end.
+- **Floating damage numbers**: `DamageNumbers` helper spawns PixiJS `Text` in world-space, not screen-space — position follows `gameLayer` zoom/pan automatically.
 
 ## Post-Completion
 

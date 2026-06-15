@@ -242,8 +242,15 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
   // Hyperjump distance from the origin to every reachable system.
   const jumpDist = jumpDistances(systems, originSystemId);
   // Systems we can actually send the player to (anything but the origin).
+  // Unexplored ("?") systems are excluded — a quest must never point the
+  // player at a system they have not yet charted (Task 2). `explored` is a
+  // real boolean in production; the `!== false` guard keeps undefined-stub
+  // systems in older tests reachable.
   const reachable = systems
-    .filter((s) => s.id !== originSystemId && jumpDist.has(s.id))
+    .filter(
+      (s) =>
+        s.id !== originSystemId && jumpDist.has(s.id) && s.explored !== false,
+    )
     .sort((a, b) => a.id.localeCompare(b.id)); // stable order for determinism
   const origin = systems.find((s) => s.id === originSystemId) ?? null;
 
@@ -362,12 +369,16 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     );
   }
   // Inject 1 DEFENSE quest when OVERMIND has adjacent systems the player can contest.
-  if (overmindAdjacentSystems.length > 0) {
+  // A defense target must be explored — the player cannot be sent to defend a
+  // system they have not yet charted (Task 2).
+  const exploredAdjacent = overmindAdjacentSystems.filter((id) => {
+    const s = systems.find((sys) => sys.id === id);
+    return s != null && s.explored !== false;
+  });
+  if (exploredAdjacent.length > 0) {
     const defRng = new SeededRNG(`${boardSeed}|defense`);
     const targetAdjacentId =
-      overmindAdjacentSystems[
-        defRng.nextInt(0, overmindAdjacentSystems.length - 1)
-      ];
+      exploredAdjacent[defRng.nextInt(0, exploredAdjacent.length - 1)];
     // The OVERMIND system adjacent to the target (to be removed on completion).
     // Find the first OVERMIND system that is connected to the target.
     const targetSys = systems.find((s) => s.id === targetAdjacentId) ?? null;
@@ -908,6 +919,9 @@ function buildTextQuest(
   const script =
     ALL_QUEST_SCRIPTS[rng.nextInt(0, ALL_QUEST_SCRIPTS.length - 1)];
 
+  const planet = origin?.planets.find((p) => p.id === planetId);
+  const planetName = planet?.name ?? planetId;
+
   return {
     template: {
       id,
@@ -917,7 +931,7 @@ function buildTextQuest(
       objectives: [
         {
           id: `${id}_resolve`,
-          description: "Завершить задание",
+          description: `Завершить задание на ${planetName}`,
           type: "VISIT_LOCATION",
           targetAmount: 1,
           locationId: planetId,
@@ -928,6 +942,7 @@ function buildTextQuest(
       deadline: 0,
       failurePenalty: null,
       targetObjectId: script.id,
+      targetSystemId: origin?.id ?? null,
     },
     targetSystemId: origin?.id ?? planetId,
     targetPlanetId: planetId,
