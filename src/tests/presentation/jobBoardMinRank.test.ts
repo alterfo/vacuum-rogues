@@ -46,6 +46,14 @@ vi.mock("pixi.js", () => {
       node.text = opts?.text != null ? String(opts.text) : "";
       return node;
     }),
+    Rectangle: vi
+      .fn()
+      .mockImplementation((x: number, y: number, w: number, h: number) => ({
+        x,
+        y,
+        width: w,
+        height: h,
+      })),
   };
 });
 

@@ -1,4 +1,4 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics, Rectangle, Text } from "pixi.js";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import type { Quest } from "@/domain/Quest";
 import { QuestType } from "@/types";
@@ -46,6 +46,10 @@ export class JobBoardPanel {
 
   /** Masked container holding the available-offer rows (the scrollable area). */
   private offersContainer: Container | null = null;
+  /** Hit-area clipping the offers to the visible window (a mask clips render only). */
+  private offersHitArea: Rectangle | null = null;
+  /** Panel-y of the top of the offers window (for hit-area scroll tracking). */
+  private offerAreaTopPx = 0;
   /** How many rows the offer list is currently scrolled down by. */
   private offerScrollOffset = 0;
   private scrollUpBtn: Text | null = null;
@@ -181,6 +185,19 @@ export class JobBoardPanel {
     this.container.addChild(offers);
     this.offersContainer = offers;
 
+    // A PixiJS 8 mask clips RENDERING only, not hit-testing — without an
+    // explicit hitArea the scrolled-out rows' "Принять" buttons stay clickable
+    // through the header/active section (presentation/CLAUDE.md Rule 3a). Clip
+    // hits to the same visible window; scrollOffers keeps it aligned.
+    this.offerAreaTopPx = offerAreaTop;
+    this.offersHitArea = new Rectangle(
+      10,
+      offerAreaTop,
+      W - 20,
+      offerAreaHeight,
+    );
+    offers.hitArea = this.offersHitArea;
+
     for (const q of quests) {
       const alreadyTaken = acceptedQuestIds.has(q.template.id);
       const minRank = q.template.minRank ?? 0;
@@ -222,6 +239,12 @@ export class JobBoardPanel {
     if (this.offersContainer) {
       // `|| 0` normalises the `-0` you'd otherwise get at offset 0.
       this.offersContainer.y = -next * JobBoardPanel.ROW_H_OFFER || 0;
+      // Keep the hit window fixed on screen as the content scrolls under it, so
+      // masked-out rows stay un-clickable (mask clips render only).
+      if (this.offersHitArea) {
+        this.offersHitArea.y =
+          this.offerAreaTopPx + next * JobBoardPanel.ROW_H_OFFER;
+      }
     }
     this.updateScrollArrows(maxOffset);
   }

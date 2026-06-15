@@ -6,7 +6,7 @@
  * the robust behaviour: as soon as the objects tab is active, typing updates
  * the query and Enter runs the search, no extra click required.
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 
 vi.mock("pixi.js", () => {
   const makeContainer = () => {
@@ -63,11 +63,20 @@ type SceneInternals = {
   runObjectsSearch: () => void;
 };
 
+// Each InfoCenterScene registers a window "keydown" listener in its constructor;
+// destroy() removes it. Track instances so the suite doesn't leak listeners.
+const createdScenes: { destroy: () => void }[] = [];
+
 async function makeScene(): Promise<SceneInternals> {
   const { InfoCenterScene } = await import("@/presentation/InfoCenterScene");
   const scene = new InfoCenterScene(mockRenderer);
+  createdScenes.push(scene as unknown as { destroy: () => void });
   return scene as unknown as SceneInternals;
 }
+
+afterEach(() => {
+  for (const scene of createdScenes.splice(0)) scene.destroy();
+});
 
 describe("InfoCenterScene objects search", () => {
   it("appends typed characters to objectsQuery when the objects tab is active", async () => {
@@ -103,6 +112,24 @@ describe("InfoCenterScene objects search", () => {
     const spy = vi.spyOn(scene, "runObjectsSearch");
     scene.onKeyDown({ key: "Enter" });
     expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores Ctrl/Cmd-modified keys so paste shortcuts don't inject characters", async () => {
+    const scene = await makeScene();
+    scene.activeTab = "objects";
+    scene.objectsQuery = "";
+    scene.onKeyDown({ key: "v", metaKey: true });
+    scene.onKeyDown({ key: "c", ctrlKey: true });
+    expect(scene.objectsQuery).toBe("");
+  });
+
+  it("ignores multi-character keys like ArrowLeft and Shift", async () => {
+    const scene = await makeScene();
+    scene.activeTab = "objects";
+    scene.objectsQuery = "ab";
+    scene.onKeyDown({ key: "ArrowLeft" });
+    scene.onKeyDown({ key: "Shift" });
+    expect(scene.objectsQuery).toBe("ab");
   });
 
   it("ignores typing when a different tab is active", async () => {

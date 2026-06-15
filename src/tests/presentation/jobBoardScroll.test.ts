@@ -51,6 +51,14 @@ vi.mock("pixi.js", () => {
       node.text = opts?.text != null ? String(opts.text) : "";
       return node;
     }),
+    Rectangle: vi
+      .fn()
+      .mockImplementation((x: number, y: number, w: number, h: number) => ({
+        x,
+        y,
+        width: w,
+        height: h,
+      })),
   };
 });
 
@@ -123,6 +131,55 @@ describe("JobBoardPanel scrolling", () => {
     expect(offers!.y).toBeLessThan(0);
     // Scrolling back to the top restores the original offset.
     panel.scrollOffers(-10, 3);
+    expect(offers!.y).toBe(0);
+  });
+
+  it("clips offer hit-testing to the visible window as it scrolls", async () => {
+    // A PixiJS mask clips RENDERING only; without a tracking hitArea the
+    // scrolled-out rows' "Принять" buttons would stay clickable in their old
+    // on-screen spots. The hit window must stay fixed on screen while content
+    // scrolls under it.
+    const { JobBoardPanel } = await import("@/presentation/JobBoardPanel");
+    const quests = Array.from({ length: 6 }, (_, i) => makeQuest(i));
+    const panel = new JobBoardPanel(quests, SCREEN_W, SCREEN_H, {
+      onAccept: vi.fn(),
+      onClose: vi.fn(),
+    });
+    const offers = (
+      panel as unknown as {
+        offersContainer: { y: number; hitArea: { y: number } | null } | null;
+      }
+    ).offersContainer;
+    expect(offers).not.toBeNull();
+    expect(offers!.hitArea).toBeTruthy();
+    // On-screen top of the hit window = local hitArea.y + container offset.
+    const worldTop = offers!.hitArea!.y + offers!.y;
+    panel.scrollOffers(1, 5);
+    expect(offers!.y).toBeLessThan(0);
+    expect(offers!.hitArea!.y + offers!.y).toBeCloseTo(worldTop, 5);
+  });
+
+  it("scrolls the offers when the panel receives a wheel event", async () => {
+    const { JobBoardPanel } = await import("@/presentation/JobBoardPanel");
+    const quests = Array.from({ length: 6 }, (_, i) => makeQuest(i));
+    const panel = new JobBoardPanel(quests, SCREEN_W, SCREEN_H, {
+      onAccept: vi.fn(),
+      onClose: vi.fn(),
+    });
+    const onCalls = (
+      panel.container as unknown as {
+        on: { mock: { calls: [string, (e: { deltaY: number }) => void][] } };
+      }
+    ).on.mock.calls;
+    const wheel = onCalls.find((c) => c[0] === "wheel")?.[1];
+    expect(wheel).toBeDefined();
+    const offers = (
+      panel as unknown as { offersContainer: { y: number } | null }
+    ).offersContainer;
+    expect(offers!.y).toBe(0);
+    wheel!({ deltaY: 100 });
+    expect(offers!.y).toBeLessThan(0);
+    wheel!({ deltaY: -100 });
     expect(offers!.y).toBe(0);
   });
 
