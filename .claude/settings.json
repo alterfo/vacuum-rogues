@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "vacuum": {
+      "command": "npx",
+      "args": ["tsx", "tools/mcp/vacuum-mcp.ts"]
+    }
+  }
+}

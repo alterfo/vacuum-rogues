@@ -1,0 +1,14 @@
+{
+  "name": "vacuum-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server exposing fast symbol/architecture lookup for the Вакуумные Пройдохи codebase. Reuses the workspace node_modules (run via `npx tsx tools/mcp/vacuum-mcp.ts`).",
+  "bin": {
+    "vacuum-mcp": "vacuum-mcp.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.23.0"
+  }
+}

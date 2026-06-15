@@ -1,0 +1,79 @@
+{
+  "project": "Galactic Horizon: Neural Onslaught (Вакуумные Пройдохи)",
+  "description": "Browser-based space RPG/strategy. TypeScript + PixiJS 8 + onnxruntime-web. Local ONNX models for dialogue and tactical AI.",
+  "layers": [
+    {
+      "name": "Presentation",
+      "dir": "src/presentation/",
+      "responsibility": "PixiJS scenes, sprites, rendering, player input",
+      "may_depend_on": ["Systems", "Domain", "Types/Config"]
+    },
+    {
+      "name": "Systems",
+      "dir": "src/systems/",
+      "responsibility": "GameEngine, AudioManager, trade, dialogue, galaxy generation; sub-modules: equipment/, npc/, quests/, info/, combat/, galaxy/",
+      "may_depend_on": ["Domain", "AI/Infrastructure", "Types/Config"]
+    },
+    {
+      "name": "Domain",
+      "dir": "src/domain/",
+      "responsibility": "Pure entities (Player, Galaxy, StarSystem) — no PixiJS/ONNX/DOM deps",
+      "may_depend_on": ["Types/Config"]
+    },
+    {
+      "name": "AI/Infrastructure",
+      "dir": "src/ai/, src/data/",
+      "responsibility": "ONNX inference, Web Workers, IndexedDB, save management",
+      "may_depend_on": ["Domain", "Types/Config"]
+    },
+    {
+      "name": "Types/Config",
+      "dir": "src/types/, src/config/",
+      "responsibility": "Shared types, enums, balance constants. FactionType replaces old RaceType.",
+      "may_depend_on": []
+    }
+  ],
+  "dependency_rule": "Strict top -> bottom only. A lower layer must never import from a higher one.",
+  "key_entry_points": {
+    "src/main.ts": "App entry: Service Worker registration, GameEngine initialization",
+    "src/systems/GameEngine.ts": "Central engine: scene transitions, game loop, save coordination",
+    "src/presentation/GameScene.ts": "Base scene class: initialize(), update(dt), destroy()",
+    "src/core/services/SceneFactory.ts": "Maps SceneType enum -> concrete scene instance",
+    "src/types/index.ts": "SceneType, QuestType, FactionType and all shared enums/types",
+    "src/config/balance.ts": "BALANCE, GAME_BALANCE, SYSTEM_GEOMETRY and balance constants",
+    "src/validation/schemas.ts": "Zod schemas mirroring domain types — save-game validation"
+  },
+  "lockstep_rules": [
+    {
+      "trigger": "Add a domain field (src/types/index.ts or src/domain/*.ts)",
+      "must_also_touch": [
+        "src/validation/schemas.ts (add matching Zod field — else saves break)",
+        "src/data/MigrationPipeline.ts (add a migration if old saves need it)"
+      ],
+      "generator": "npx tsx tools/scaffold/domain-field.ts --entity <E> --field <f> --type <t> --default <d>"
+    },
+    {
+      "trigger": "Add a new scene (extends GameScene)",
+      "must_also_touch": [
+        "src/types/index.ts (add SceneType.MY_SCENE)",
+        "src/core/services/SceneFactory.ts (add case SceneType.MY_SCENE)",
+        "src/systems/GameEngine.ts contextDependentScenes (if scene needs transient context)",
+        "e2e/page-objects/MySceneScenePage.ts (Page Object for E2E)"
+      ],
+      "generator": "npx tsx tools/scaffold/new-scene.ts --name <Name> [--context-dependent]"
+    },
+    {
+      "trigger": "Add a quest type (QuestType enum)",
+      "must_also_touch": ["20+ files across quests/, generators, UI — no generator yet (future work)"]
+    }
+  ],
+  "onnx_rule": "Never call ort.InferenceSession.run() on main thread — use ONNXModelRegistry.infer(). Models load lazily -> cached in IndexedDB -> inference runs in Web Workers only.",
+  "errors_rule": "Throw only GameBusinessException, GameSystemException, GameValidationException, or InferenceException (src/exceptions/). Use src/utils/logger.ts, never console.log.",
+  "texture_rule": "Heavy art categories (panoramas/, surfaces/, planet_maps/, star_maps/, stars/, nebula/) are in LAZY_PREFIXES — load via pickVariantKey + loadTextureAsync, not synchronous pickVariant.",
+  "test_commands": {
+    "unit": "npm test -- --run",
+    "single_file": "npm test -- --run src/tests/<file>.test.ts",
+    "lint": "npm run lint",
+    "e2e_regression": "npm run test:e2e:regression"
+  }
+}

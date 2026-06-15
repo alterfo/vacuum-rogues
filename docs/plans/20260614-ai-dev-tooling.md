@@ -66,12 +66,13 @@ get_scene_info(sceneName: string)
   → returns key lifecycle lines without reading the whole file
 ```
 
-- [ ] Create `tools/mcp/vacuum-mcp.ts` using `@modelcontextprotocol/sdk/server` with the
-  5 tools above; use `StdioServerTransport`; all tools shell-exec with `child_process.execSync`
-  (sync is fine — MCP calls are blocking by design)
-- [ ] Create `tools/mcp/architecture.json` with the static layer map, lockstep rules,
+- [x] Create `tools/mcp/vacuum-mcp.ts` using `@modelcontextprotocol/sdk/server` with the
+  5 tools above; use `StdioServerTransport`; all tools shell-exec with `child_process.execFileSync`
+  (sync is fine — MCP calls are blocking by design; execFileSync avoids shell injection).
+  Pure logic split into `tools/mcp/tools.ts` (SDK-free) so smoke tests run without the protocol.
+- [x] Create `tools/mcp/architecture.json` with the static layer map, lockstep rules,
   and entry points (hand-authored from CLAUDE.md content, ~50 lines of JSON)
-- [ ] Register in `.claude/settings.json`:
+- [x] Register in `.claude/settings.json`:
   ```json
   "mcpServers": {
     "vacuum": {
@@ -80,11 +81,11 @@ get_scene_info(sceneName: string)
     }
   }
   ```
-- [ ] Write smoke tests: call each tool function directly (not via MCP protocol), assert
+- [x] Write smoke tests: call each tool function directly (not via MCP protocol), assert
   `find_symbol("QuestType")` returns a string containing "src/types/index.ts",
   `find_tests_for("src/systems/QuestManager.ts")` returns non-empty array,
   `get_balance_constants()` returns object with `STARTING_MONEY: 1000`
-- [ ] Run lint + tests — green
+- [x] Run lint + tests — green
 
 ### Task 2: Domain field generator — atomically touch all 6 lockstep files
 **Files:**
