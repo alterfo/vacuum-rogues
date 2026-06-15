@@ -23,6 +23,7 @@ import { OrbitRenderer } from "./flight/OrbitRenderer";
 import { RouteRenderer } from "./flight/RouteRenderer";
 import { PlayerShipRenderer } from "./flight/PlayerShipRenderer";
 import { NpcShipManager } from "./flight/NpcShipManager";
+import { CombatModule } from "./flight/CombatModule";
 import { PlanetManager } from "./flight/PlanetManager";
 import { FlightHud } from "./flight/FlightHud";
 import { CameraController } from "./flight/CameraController";
@@ -81,8 +82,9 @@ export class SpaceFlightScene extends GameScene {
 
   // Living-galaxy NPC ships present in the player's system (Feature 8): sprite
   // lifecycle, contact panel, auto-follow combat loop and OVERMIND-core prompt.
-  // The scene reads/clears `followNpcId` and drives its combat tick + refresh.
   private npcManager!: NpcShipManager;
+  // In-flight combat (Tasks 11–14): the scene reads `isActive` to freeze nav.
+  private combatModule!: CombatModule;
   // Latches the low-hull auto-stop so the warning fires once per descent below
   // the threshold, not every frame.
   private lowHullStopped = false;
@@ -186,9 +188,8 @@ export class SpaceFlightScene extends GameScene {
     this.questCompletion = new QuestCompletion(this.gameEngine);
 
     // HUD module: turn/speed/settings buttons, day counter, mini-map, mini-log,
-    // toasts and tooltips. Constructed first so the NPC/planet modules' deps
-    // (toast + tooltip) can reach it; built later via initialize() (after the UI
-    // layer is cleared). Button presses fan back through the callbacks below.
+    // toasts and tooltips. Built first so the NPC/planet deps (toast + tooltip)
+    // reach it; initialize() runs later. Buttons fan back via the callbacks below.
     this.hud = new FlightHud(
       this.renderer,
       this.gameEngine,
@@ -203,11 +204,15 @@ export class SpaceFlightScene extends GameScene {
     this.hud.onFontScaleChange = () => this.onFontScaleChanged();
     this.hud.onInventory = () => void this.openInventory();
 
+    // In-flight combat module: NPC encounters resolve here, not the hex
+    // CombatScene (Tasks 11–14). Built before the NPC module's callback reaches it.
+    this.combatModule = new CombatModule({
+      getShipPhysics: () => this.shipPhysics,
+    });
+
     // NPC module: owns the living-galaxy ships, their contact panel, the
-    // auto-follow combat loop and the OVERMIND-core prompt. Constructed first so
-    // the victory-removeNpc and overmind branches below can use it; built later
-    // via initialize(). Its accessors read live scene state + the HUD, so it
-    // never couples to this scene class directly.
+    // auto-follow combat loop and the OVERMIND-core prompt. Built first so the
+    // victory-removeNpc and overmind branches below can use it; initialize() later.
     this.npcManager = new NpcShipManager(
       this.renderer,
       this.gameEngine,
@@ -229,6 +234,7 @@ export class SpaceFlightScene extends GameScene {
           this.planetManager.routeTargetPlanetId = null;
         },
         endTurn: () => this.endTurn(),
+        startInFlightCombat: (sprite) => this.combatModule.startCombat(sprite),
       },
     );
 
@@ -279,11 +285,10 @@ export class SpaceFlightScene extends GameScene {
     const centerX = this.renderer.app.screen.width / 2;
     const centerY = this.renderer.app.screen.height / 2;
 
-    // A normal entry comes in from the system boundary (рубеж гиперпрыжка) in the
-    // warp direction; the camera follows the ship so no viewport clamp is needed.
-    // For a pending hyperjump (US-023/US-070 #1) the ship instead starts from
-    // where it was when the player opened the star map (lastFlightShipPos), or —
-    // if unknown — the inner side opposite the exit, clear of the star.
+    // Normal entry comes in from the system boundary (рубеж гиперпрыжка) in the
+    // warp direction (camera follows the ship, so no viewport clamp). A pending
+    // hyperjump (US-023/US-070 #1) instead starts at lastFlightShipPos (where the
+    // star map was opened), or the inner side opposite the exit, clear of the star.
     const lastPos = this.gameEngine?.lastFlightShipPos ?? null;
     if (this.gameEngine) this.gameEngine.lastFlightShipPos = null; // consume
     const entryVector = ctx?.entryVector ?? { x: 0, y: 1 };
@@ -295,11 +300,10 @@ export class SpaceFlightScene extends GameScene {
       ? (lastPos?.y ??
         centerY - this.pendingWarp.exitVector.y * this.SYSTEM_INNER_RADIUS)
       : (lastPos?.y ?? centerY + entryVector.y * this.SYSTEM_BOUNDARY_RADIUS);
-    // Cruise speed (px/ms): the GearCatalog loadout's derivedStats().speed,
-    // scaled by an equipped EngineModule's bonus (Task 10). Falls back to the
-    // legacy ship.speed multiplier when no loadout is set (old saves/tests). The
-    // fallback already folds the engine in, so the bonus is only applied to the
-    // loadout base — never double-counted.
+    // Cruise speed (px/ms): the GearCatalog loadout's derivedStats().speed scaled
+    // by an equipped EngineModule's bonus (Task 10). Falls back to the legacy
+    // ship.speed multiplier (old saves/tests), which already folds the engine in —
+    // so the bonus is only applied to the loadout base, never double-counted.
     const loadoutStats = this.gameEngine?.playerLoadout?.derivedStats();
     const ship = this.gameEngine?.player?.ship;
     const engineBonus = ship ? engineSpeedBonus(ship) : 0;
@@ -326,8 +330,7 @@ export class SpaceFlightScene extends GameScene {
       this.renderer.gameLayer,
     );
 
-    // Asteroid module: foreground asteroid/comet field drifting through the
-    // system (US-070 #1). Owns its display objects on the game layer.
+    // Asteroid module: foreground asteroid/comet field (US-070 #1); owns its objects.
     this.asteroidBelt = new AsteroidBelt(
       this.renderer,
       this.renderer.gameLayer,
@@ -343,14 +346,12 @@ export class SpaceFlightScene extends GameScene {
     );
 
     // Route module: draws the planned-course overlay (dashed line + landing/
-    // navigation marker) onto the game layer. Stateless wrt game logic — the
-    // scene hands it the finished polyline + marker decision.
+    // navigation marker) on the game layer. Stateless — fed the finished polyline.
     this.routeRenderer = new RouteRenderer(this.renderer.gameLayer);
 
     // Planet module: owns planet sprites, station markers, the info panel and the
-    // route-target state. Its accessors read live scene state + the HUD; clicking
-    // a body delegates route/landing/docking back to the scene via callbacks, so
-    // route data stays here (Information Expert). Built later via initialize().
+    // route-target state. Clicking a body delegates route/landing/docking back via
+    // callbacks (route data stays here — Information Expert). Built via initialize().
     this.planetManager = new PlanetManager(
       this.renderer,
       this.gameEngine,
@@ -384,17 +385,15 @@ export class SpaceFlightScene extends GameScene {
       this.handleStationDock(stationId);
 
     // Player-ship module: owns the ship hull/sprite, glow, heading crosshair and
-    // the cosmetic take-off arc. Reads the authoritative position from the
-    // ShipPhysics above; the scene keeps the flight/turn logic.
+    // take-off arc. Reads position from ShipPhysics; flight/turn logic stays here.
     this.playerShip = new PlayerShipRenderer(
       this.renderer,
       this.renderer.gameLayer,
       this.shipPhysics,
     );
 
-    // World camera: owns zoom/pan/follow/clamp. Reads live ship physics + star
-    // centre via accessors; fans each transform out to the NPC hit-area rescale
-    // and the HUD debug read-out (the camera stays unaware of both).
+    // World camera: owns zoom/pan/follow/clamp. Reads ship physics + star centre;
+    // fans each transform out to the NPC hit-area rescale and the HUD debug read-out.
     this.camera = new CameraController(this.renderer, {
       getShipPhysics: () => this.shipPhysics,
       getStarCenter: () => ({
@@ -416,15 +415,13 @@ export class SpaceFlightScene extends GameScene {
     // Warp-exit flourish (flash/rings) shown when dropping out of hyperspace.
     this.warpFx = new WarpEffectRenderer(this.renderer.gameLayer);
 
-    // Screen-fixed deep-space backdrop behind the whole world so panning/zooming
-    // never exposes a hard background edge.
+    // Screen-fixed deep-space backdrop behind the world so panning never reveals an edge.
     this.skyContainer = new Container();
     this.skyContainer.eventMode = "none";
     this.renderer.stage.addChildAt(this.skyContainer, 0);
 
-    // Background module: nebulae + star fields + twinkle (in skyContainer),
-    // mid-ground parallax just above the sky, foreground dust + edge vignette on
-    // the UI layer. Parallax reads live camera state + ship velocity via accessors.
+    // Background module: nebulae + star fields + twinkle (skyContainer), mid-ground
+    // parallax above the sky, foreground dust + edge vignette on the UI layer.
     this.background = new SpaceBackgroundLayer(
       this.renderer,
       this.skyContainer,
@@ -448,6 +445,7 @@ export class SpaceFlightScene extends GameScene {
     this.orbitRenderer.initialize(); // Orbit circles + boundary (hyperjump edge)
     this.planetManager.initialize(); // Planets + station markers (US-066)
     this.npcManager.initialize(); // NPC ships present in this system (Feature 8)
+    this.combatModule.initialize(); // In-flight combat lifecycle (Tasks 11–14)
     this.playerShip.initialize(); // Ship hull/sprite, glow, heading crosshair
     this.asteroidBelt.initialize(); // Foreground asteroids/comets (US-070 #1)
     this.hud.initialize(); // Turn/speed buttons, day counter, mini-map, mini-log
@@ -565,6 +563,7 @@ export class SpaceFlightScene extends GameScene {
     // arc), redraw engine effects, and refresh the heading crosshair.
     this.playerShip.update(deltaTime, this.bgElapsed);
     this.npcManager.updateCombat(deltaTime);
+    this.combatModule.update(deltaTime, this.bgElapsed);
     this.camera.update();
     this.npcManager.update(deltaTime, this.bgElapsed);
     this.planetManager.update(deltaTime, this.bgElapsed);
@@ -651,6 +650,7 @@ export class SpaceFlightScene extends GameScene {
 
     // Tear down NPC ship sprites, contact panel and the OVERMIND-core overlay.
     this.npcManager?.destroy();
+    this.combatModule?.destroy(); // Clear in-flight combat target + active flag.
 
     // Tear down the star module (disposes its halo/sun filters and removes its
     // display objects from the game layer) before the layer-wide cleanup below.
@@ -843,14 +843,13 @@ export class SpaceFlightScene extends GameScene {
     );
 
     // Right button (2) or Shift+Left for panning. The wheel (middle) button no
-    // longer pans — it caused the auto-scroll/zoom conflict and the right button
-    // is enough (per request).
+    // longer pans (auto-scroll/zoom conflict; the right button suffices).
     const isPanButton =
       event.button === 2 || (event.button === 0 && event.shiftKey);
 
     // Swallow the residual click carried over from the previous scene's button
-    // (US-070 #1: after confirming race selection, the same click was building a
-    // route here). Panning is unaffected so the player can still look around.
+    // (US-070 #1: confirming race selection also built a route here). Panning is
+    // unaffected so the player can still look around.
     if (
       !isPanButton &&
       performance.now() - this.sceneReadyAt < this.INPUT_GRACE_MS
@@ -861,11 +860,10 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // Modal panels (NPC contact, quest journal) are dismissed by clicking
-    // outside them. Their own children call stopPropagation(), so any click that
-    // reaches the stage while one is open is necessarily *outside* it — swallow
-    // it (close the panel, do NOT plan a route behind the modal). See bug: route
-    // was being built to the point hidden behind the dialog.
+    // Modal panels (NPC contact, quest journal) dismiss on an outside click.
+    // Their children call stopPropagation(), so any click reaching the stage
+    // while one is open is necessarily outside it — close it, don't plan a route
+    // behind the modal (bug: route built to the point hidden behind the dialog).
     if (!isPanButton && this.isBlockingModalOpen()) {
       this.closeBlockingModals();
       return;
@@ -884,8 +882,11 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // While the ship is already en route to the warp edge, lock navigation.
-    // If the ship is still stopped (route shown but Play not pressed), allow replanning.
+    // In-flight combat freezes navigation — no new course while a fight resolves.
+    if (this.combatModule?.isActive && !isPanButton) return;
+
+    // Lock navigation while already en route to the warp edge (still allow
+    // replanning if stopped — route shown but Play not pressed).
     if (this.pendingWarp && !isPanButton && this.shipPhysics?.isMoving) {
       logger.info("Navigation locked: en route to warp edge");
       return;

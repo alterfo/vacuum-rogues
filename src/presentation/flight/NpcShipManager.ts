@@ -67,6 +67,12 @@ export interface NpcShipManagerDeps {
   clearRouteTarget(): void;
   /** End the running turn (used before a combat-scene transition). */
   endTurn(): void;
+  /**
+   * Begin in-flight combat against an aggressive sprite that reached attack
+   * range (the scene routes this to its CombatModule — Tasks 11–14). Optional so
+   * lightweight test/host setups without combat still satisfy the contract.
+   */
+  startInFlightCombat?(sprite: NpcShipSprite): void;
 }
 
 /**
@@ -199,9 +205,16 @@ export class NpcShipManager implements FlightModule {
     for (let i = this.npcSprites.length - 1; i >= 0; i--) {
       const sprite = this.npcSprites[i];
       // Garrison aggressors chase the player ship: refresh their live pursuit
-      // target to the ship's current position before advancing them.
+      // target to the ship's current position before advancing them, then open
+      // in-flight combat once they close to attack range (no CombatScene hop —
+      // the scene's CombatModule resolves the fight; Tasks 11–14).
       if (sprite.aggressive && physics) {
         sprite.setPursuitTarget(physics.shipX, physics.shipY);
+        const dx = sprite.x - physics.shipX;
+        const dy = sprite.y - physics.shipY;
+        if (dx * dx + dy * dy <= this.WEAPON_RANGE * this.WEAPON_RANGE) {
+          this.deps.startInFlightCombat?.(sprite);
+        }
       }
       // Keep the orbit center aligned with the planet's current orbital position.
       const anchorPlanet = this.npcAnchorPlanet.get(sprite);
