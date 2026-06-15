@@ -313,7 +313,6 @@ export class InfoCenterScene extends GameScene {
   // objects tab state
   private objectsQuery = "";
   private objectsResults: ObjectResult[] = [];
-  private objectsInputFocused = false;
 
   // gear tab state — multi-select; empty set = all types shown
   private gearFacets = new Set<EquipmentFacet>(["engine" as EquipmentFacet]);
@@ -473,7 +472,6 @@ export class InfoCenterScene extends GameScene {
       tabBg.on("pointerdown", (e) => {
         e.stopPropagation();
         this.activeTab = tab.id;
-        this.objectsInputFocused = tab.id === "objects";
         this.render();
       });
       this.mainContainer.addChild(tabBg);
@@ -685,16 +683,15 @@ export class InfoCenterScene extends GameScene {
     const inputBg = new Graphics();
     inputBg.rect(PAD, 4, pw - PAD * 2 - 110, 30);
     inputBg.fill({ color: 0x0d1522 });
-    inputBg.stroke({
-      color: this.objectsInputFocused ? 0x88ccff : 0x334455,
-      width: 1,
-    });
+    // The objects tab takes keyboard input as soon as it is open, so the input
+    // box always renders in its focused (blue) state here.
+    inputBg.stroke({ color: 0x88ccff, width: 1 });
     inputBg.eventMode = "static";
     inputBg.cursor = "text";
+    // Clicking the box just swallows the event; the tab is already accepting
+    // keystrokes, so there is no separate focus state to toggle.
     inputBg.on("pointerdown", (e) => {
       e.stopPropagation();
-      this.objectsInputFocused = true;
-      this.render();
     });
     container.addChild(inputBg);
 
@@ -715,17 +712,16 @@ export class InfoCenterScene extends GameScene {
     inputLabel.eventMode = "none";
     container.addChild(inputLabel);
 
-    // cursor blink indicator
-    if (this.objectsInputFocused) {
-      const cursor = new Text({
-        text: "|",
-        style: { fontSize: 13, fill: 0x88ccff, fontFamily: "monospace" },
-      });
-      cursor.x = PAD + 8 + inputLabel.width;
-      cursor.y = 11;
-      cursor.eventMode = "none";
-      container.addChild(cursor);
-    }
+    // cursor indicator — always shown; the input is focused whenever this tab
+    // is open.
+    const cursor = new Text({
+      text: "|",
+      style: { fontSize: 13, fill: 0x88ccff, fontFamily: "monospace" },
+    });
+    cursor.x = PAD + 8 + inputLabel.width;
+    cursor.y = 11;
+    cursor.eventMode = "none";
+    container.addChild(cursor);
 
     // Search button
     const btnX = pw - PAD - 100;
@@ -1356,7 +1352,9 @@ export class InfoCenterScene extends GameScene {
       if (e.key === "ArrowDown") this.scrollNews(1);
       return;
     }
-    if (this.activeTab === "objects" && this.objectsInputFocused) {
+    // The objects tab is always "focused" for typing while it is active — no
+    // separate click on the input box is required (playtest 2026-06-15 fix).
+    if (this.activeTab === "objects") {
       if (e.key === "Enter") {
         this.runObjectsSearch();
         this.render();
