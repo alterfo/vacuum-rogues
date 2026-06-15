@@ -1059,25 +1059,15 @@ export class SpaceFlightScene extends GameScene {
     this.applyReentrySpawn(ctx?.fromStationId);
   }
 
-  /**
-   * Font size changed in the ⚙ panel: re-init SPACE_FLIGHT to re-apply the scale,
-   * passing the ship position so it stays put instead of edge-spawning (playtest4
-   * A). Persisted game speed (playtest3 F3) survives via restoreGameSpeed().
-   */
+  /** Font size changed in ⚙: re-init SPACE_FLIGHT to re-apply scale; ship pinned so it stays put (playtest4 A), game speed survives restoreGameSpeed() (playtest3 F3). */
   private onFontScaleChanged(): void {
     if (!this.gameEngine || !this.shipPhysics) return;
-    // Belt-and-suspenders (playtest6): pin lastFlightShipPos BEFORE the
-    // transition so the new initialize() seeds entryX/Y from the saved spot
-    // instead of the system edge. The preserveShipPos context below is the
-    // duplicate teleport-after mechanism; setting the field first removes the
-    // one-frame visual jump that timing between the two could otherwise show.
-    this.gameEngine.lastFlightShipPos = {
-      x: this.shipPhysics.shipX,
-      y: this.shipPhysics.shipY,
-    };
+    // playtest6: pin lastFlightShipPos BEFORE the transition so re-init seeds entryX/Y here (not the system edge); preserveShipPos below is the duplicate teleport-after path.
+    const pos = { x: this.shipPhysics.shipX, y: this.shipPhysics.shipY };
+    this.gameEngine.lastFlightShipPos = pos;
     void this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
-      preserveShipPos: { x: this.shipPhysics.shipX, y: this.shipPhysics.shipY },
+      preserveShipPos: pos,
     });
   }
 
