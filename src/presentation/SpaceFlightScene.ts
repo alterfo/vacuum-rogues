@@ -290,10 +290,8 @@ export class SpaceFlightScene extends GameScene {
     const centerX = this.renderer.app.screen.width / 2;
     const centerY = this.renderer.app.screen.height / 2;
 
-    // Normal entry comes in from the system boundary (рубеж гиперпрыжка) in the
-    // warp direction (camera follows the ship, so no viewport clamp). A pending
-    // hyperjump (US-023/US-070 #1) instead starts at lastFlightShipPos (where the
-    // star map was opened), or the inner side opposite the exit, clear of the star.
+    // Normal entry comes from the system boundary (рубеж гиперпрыжка) in the warp
+    // direction; a pending hyperjump (US-023/US-070 #1) starts at lastFlightShipPos.
     const lastPos = this.gameEngine?.lastFlightShipPos ?? null;
     if (this.gameEngine) this.gameEngine.lastFlightShipPos = null; // consume
     const entryVector = ctx?.entryVector ?? { x: 0, y: 1 };
@@ -305,10 +303,8 @@ export class SpaceFlightScene extends GameScene {
       ? (lastPos?.y ??
         centerY - this.pendingWarp.exitVector.y * this.SYSTEM_INNER_RADIUS)
       : (lastPos?.y ?? centerY + entryVector.y * this.SYSTEM_BOUNDARY_RADIUS);
-    // Cruise speed (px/ms): the GearCatalog loadout's derivedStats().speed scaled
-    // by an equipped EngineModule's bonus (Task 10). Falls back to the legacy
-    // ship.speed multiplier (old saves/tests), which already folds the engine in —
-    // so the bonus is only applied to the loadout base, never double-counted.
+    // Cruise speed (px/ms): loadout derivedStats().speed scaled by an EngineModule
+    // bonus (Task 10); legacy ship.speed fallback already folds the engine in.
     const loadoutStats = this.gameEngine?.playerLoadout?.derivedStats();
     const ship = this.gameEngine?.player?.ship;
     const engineBonus = ship ? engineSpeedBonus(ship) : 0;
@@ -321,14 +317,12 @@ export class SpaceFlightScene extends GameScene {
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
 
-    // Explicit z-ordering so interactive ships hit-test above the big planet
-    // discs (else a planet's disc swallows clicks meant for an NPC over it —
-    // US-070 #6). Tiers: bg 0, star/planets default, NPCs Z_NPC, ship Z_SHIP.
+    // Explicit z-ordering so interactive ships hit-test above the big planet discs
+    // (US-070 #6). Tiers: bg 0, star/planets default, NPCs Z_NPC, ship Z_SHIP.
     this.renderer.gameLayer.sortableChildren = true;
 
-    // Star module: owns the sun (glow, rotating surface) and the star geometry
-    // (centre/radius/avoid-radius) the rest of the scene reads. Constructed here
-    // so createPlanets/route planning can read its centre below; built later.
+    // Star module: owns the sun and the star geometry (centre/radius/avoid-radius)
+    // the rest of the scene reads. Constructed here so createPlanets can read centre.
     this.starRenderer = new StarRenderer(
       this.renderer,
       this.gameEngine,

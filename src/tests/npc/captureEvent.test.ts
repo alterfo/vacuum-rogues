@@ -78,17 +78,15 @@ describe("NpcSimulator.assembleCaptureFleet", () => {
     const sim = new NpcSimulator();
     sim.assembleCaptureFleet(galaxy, new SeededRNG("news_seed"));
 
-    let captured = false;
-    for (let i = 0; i < 20 && !captured; i++) {
+    let capturedSystemId: string | undefined;
+    for (let i = 0; i < 20 && !capturedSystemId; i++) {
       const events = sim.tick(galaxy, new SeededRNG(`news_tick_${i}`));
-      if (events.some((e) => e.type === "SYSTEM_CAPTURED")) captured = true;
+      capturedSystemId = events.find(
+        (e) => e.type === "SYSTEM_CAPTURED",
+      )?.systemId;
     }
 
-    expect(captured).toBe(true);
-    const captureEvent = galaxy.newsFeed.find(
-      (e) => e.type === "SYSTEM_CAPTURED",
-    );
-    expect(captureEvent?.systemId).toBe("sys_a");
+    expect(capturedSystemId).toBe("sys_a");
   });
 
   it("does not capture a defended system while defenders survive", () => {

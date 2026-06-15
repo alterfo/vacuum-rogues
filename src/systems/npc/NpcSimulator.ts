@@ -1185,7 +1185,8 @@ export class NpcSimulator {
           day: galaxy.gameDays,
           description: `Система ${sys?.name ?? systemId} захвачена Доминаторами!`,
         };
-        galaxy.addNewsEvent(event);
+        // Return via the events array only — the caller (advanceGalaxyDay) writes
+        // it to the news feed. Adding here too double-posted the capture headline.
         events.push(event);
         logger.info(`Capture fleet seized ${systemId}`);
         for (const a of attackers) this.promoteToGarrison(a.id);
