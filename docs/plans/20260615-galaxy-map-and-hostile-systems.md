@@ -192,12 +192,12 @@ Combat happens in the flight scene, not in a separate hex grid scene (CombatScen
 - Modify: `src/presentation/flight/CombatModule.ts`
 - Create: `src/tests/flight/combatHud.test.ts`
 
-- [ ] Write a failing test: `CombatHud.buildWeaponPanel(loadout)` returns one button per equipped weapon; selecting a weapon emits `onWeaponSelected(weaponId)`.
-- [ ] `CombatHud` shows equipped weapons as clickable cards (weapon name, damage, range). Default-selects first weapon on combat start.
-- [ ] When a weapon is selected, draw a dashed circle at `player ship position`, radius = `weapon.range` in world-px. Remove previous circle.
-- [ ] "Атаковать" confirm button is enabled only when a target NPC is selected AND is within weapon range.
-- [ ] "Отступить" button ends combat immediately (player takes no damage, but may trigger hostile status on the NPC — see Task 15).
-- [ ] Run full test suite — must pass.
+- [x] Write a failing test: `CombatHud.buildWeaponPanel(loadout)` returns one button per equipped weapon; selecting a weapon emits `onWeaponSelected(weaponId)`. (`combatHud.test.ts`: one-card-per-weapon, non-weapon gear ignored, click→onWeaponSelected, default-select on open, range-circle replace/no-leak, attack-gate, retreat, teardown.)
+- [x] `CombatHud` shows equipped weapons as clickable cards (weapon name, damage, range). Default-selects first weapon on combat start. (UiButton cards labelled `name\nУрон D · Дальн. R`, drawn from `loadout.slottedWithGear()` filtered to `GearKind.WEAPON`; selected card highlighted in accent cyan; `open()` default-selects `cards[0]`.)
+- [x] When a weapon is selected, draw a dashed circle at `player ship position`, radius = `weapon.range` in world-px. Remove previous circle. (Single reused `Graphics` on the game/world layer, cleared + redrawn per selection — so the prior circle is replaced, never leaked; centre = `getShipPos()`.)
+- [x] "Атаковать" confirm button is enabled only when a target NPC is selected AND is within weapon range. (`CombatModule.update()` computes `targetInRange()` each frame and pushes it via `hud.setAttackEnabled`; the button's click is gated on `attackEnabled` and dimmed to 0.4 alpha when disarmed.)
+- [x] "Отступить" button ends combat immediately (player takes no damage, but may trigger hostile status on the NPC — see Task 15). (`onRetreat` wired to `CombatModule.endCombat()`, which closes the HUD and resumes movement; the hostile-status side-effect lands in Task 15.)
+- [x] Run full test suite — must pass. (combatHud + combatModule + moduleContracts size-guard green; tsc + lint 0 errors. Full suite: 1453 pass, only the pre-existing, unrelated `questBountyNpcAssignment.test.ts` failure from in-progress bounty-fallback work in the dirty tree — that file was modified at session start and is untouched by this task.)
 
 ### Task 13: Target selection, simultaneous damage resolution, floating numbers
 **Files:**

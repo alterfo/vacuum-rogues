@@ -204,15 +204,17 @@ export class SpaceFlightScene extends GameScene {
     this.hud.onFontScaleChange = () => this.onFontScaleChanged();
     this.hud.onInventory = () => void this.openInventory();
 
-    // In-flight combat module: NPC encounters resolve here, not the hex
-    // CombatScene (Tasks 11–14). Built before the NPC module's callback reaches it.
+    // In-flight combat module (Tasks 11–14): encounters resolve here, not the hex CombatScene.
     this.combatModule = new CombatModule({
       getShipPhysics: () => this.shipPhysics,
+      getPlayerLoadout: () => this.gameEngine?.playerLoadout ?? null,
+      getUiLayer: () => this.renderer.uiLayer,
+      getGameLayer: () => this.renderer.gameLayer,
+      getScreenSize: () => this.renderer.app.screen,
     });
 
-    // NPC module: owns the living-galaxy ships, their contact panel, the
-    // auto-follow combat loop and the OVERMIND-core prompt. Built first so the
-    // victory-removeNpc and overmind branches below can use it; initialize() later.
+    // NPC module: owns the living-galaxy ships, contact panel, auto-follow combat
+    // loop and OVERMIND prompt. Built first so victory/overmind branches can use it.
     this.npcManager = new NpcShipManager(
       this.renderer,
       this.gameEngine,
@@ -709,11 +711,9 @@ export class SpaceFlightScene extends GameScene {
 
   /**
    * Recursively destroy every filter attached to a display-object subtree.
-   * PixiJS v8 `Container.destroy({children})` / `clearGameLayer()` removes the
-   * display objects but does NOT dispose their `filters` — each BlurFilter holds
-   * a GPU render texture that leaks on every scene teardown otherwise (the swarm
-   * motes, ship glow, star halo, nebula clouds and pillars all carry one). Call
-   * this before tearing a layer down so the textures are released.
+   * PixiJS v8 `Container.destroy({children})` removes display objects but does NOT
+   * dispose their `filters` — each BlurFilter holds a GPU render texture that leaks
+   * on every scene teardown otherwise. Call this before tearing a layer down.
    */
   private disposeFiltersDeep(obj: FilterableNode): void {
     const fs = obj.filters;
