@@ -1366,10 +1366,9 @@ export class SpaceFlightScene extends GameScene {
     );
     this.gameEngine.player.currentSystemId = targetSystemId;
     this.gameEngine.galaxy.revealSystemAndNeighbors(targetSystemId);
-    this.gameEngine.questManager.updateQuestProgress({
-      type: "VISIT_SYSTEM",
-      systemId: targetSystemId,
-    });
+    // ESCORT (the only VISIT_SYSTEM-objective quest) completes via
+    // QuestCompletion.escortBySystemEntry() through the return-to-issuer gate; a
+    // VISIT_SYSTEM progress event here would pre-complete and strand it.
     logger.info(
       `Hyperjump to ${target.name} complete. Fuel left: ${this.gameEngine.player.ship.energy}`,
     );

@@ -81,8 +81,13 @@ export class QuestCompletion {
 
     for (const quest of questManager.getActiveQuests()) {
       if (quest.type !== QuestType.ESCORT) continue;
-      if (quest.isCompleted || quest.isFailed || quest.isPendingReturn)
-        continue;
+      // NOTE: isCompleted is intentionally NOT skipped here. Escort quests use a
+      // VISIT_SYSTEM objective; arriving fires the matching quest-progress event
+      // which pre-sets isCompleted=true. Such a quest is still sitting in
+      // activeQuests (the return gate has not run yet) and must be routed to
+      // pending-return, otherwise its reward is never claimable. A genuinely
+      // finished escort has already left activeQuests, so this can't double-fire.
+      if (quest.isFailed || quest.isPendingReturn) continue;
       if (quest.targetSystemId !== currentSystemId) continue;
       const marked = questManager.markObjectivesDone(quest.id);
       if (marked) {

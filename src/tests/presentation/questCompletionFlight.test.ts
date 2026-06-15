@@ -189,6 +189,26 @@ describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
     expect(markDone).toHaveBeenCalledWith("e1");
   });
 
+  it("routes an already-completed ESCORT quest to pending-return (VISIT_SYSTEM pre-completion must not strand it)", () => {
+    // The hyperjump fires a VISIT_SYSTEM quest-progress event that completes
+    // the escort objective and sets isCompleted=true BEFORE the next flight
+    // scene's escortBySystemEntry() runs. The handler must still route it
+    // through the return gate instead of skipping it as "already done".
+    const { engine, markDone } = makeEngine([
+      {
+        ...base,
+        id: "e1",
+        title: "Escort convoy",
+        type: QuestType.ESCORT,
+        targetSystemId: "sys-1",
+        isCompleted: true,
+      },
+    ]);
+    new QuestCompletion(engine).escortBySystemEntry();
+    expect(markDone).toHaveBeenCalledTimes(1);
+    expect(markDone).toHaveBeenCalledWith("e1");
+  });
+
   it("is a no-op with no game engine", () => {
     const qc = new QuestCompletion(null);
     expect(() => qc.explorationBySystemEntry()).not.toThrow();
