@@ -135,6 +135,11 @@ export class GalaxySimulator {
       }
     }
 
+    // The 3-nearest-neighbour pass can leave isolated "?" clusters that are
+    // unreachable from the rest of the galaxy. Merge any disconnected
+    // components so every system is reachable (no orphan clusters).
+    ensureConnectivity(generatedSystems);
+
     this.systems = generatedSystems;
     this.overmind = new Overmind();
     this._eventQueue = [];
@@ -408,6 +413,93 @@ export class GalaxySimulator {
       // Check if within 2 jumps of explored system
       return false;
     });
+  }
+}
+
+// ── Warp-graph connectivity ─────────────────────────────────────────────────
+
+/**
+ * Partition `systems` into connected components over the *undirected* warp graph
+ * (a link `A → B` makes A and B reachable from each other — gameplay treats warp
+ * links as traversable in either direction). Returns one array per component.
+ */
+function undirectedComponents(systems: StarSystem[]): StarSystem[][] {
+  const byId = new Map(systems.map((s) => [s.id, s]));
+  const adj = new Map<string, Set<string>>();
+  for (const s of systems) adj.set(s.id, new Set());
+  for (const s of systems) {
+    for (const conn of s.connections) {
+      if (!byId.has(conn.toSystemId)) continue;
+      adj.get(s.id)!.add(conn.toSystemId);
+      adj.get(conn.toSystemId)!.add(s.id);
+    }
+  }
+
+  const seen = new Set<string>();
+  const components: StarSystem[][] = [];
+  for (const start of systems) {
+    if (seen.has(start.id)) continue;
+    const component: StarSystem[] = [];
+    const queue = [start.id];
+    seen.add(start.id);
+    for (let head = 0; head < queue.length; head++) {
+      const id = queue[head];
+      const sys = byId.get(id);
+      if (sys) component.push(sys);
+      for (const neighbor of adj.get(id) ?? []) {
+        if (!seen.has(neighbor)) {
+          seen.add(neighbor);
+          queue.push(neighbor);
+        }
+      }
+    }
+    components.push(component);
+  }
+  return components;
+}
+
+/**
+ * Guarantee the warp graph is fully connected. After the nearest-neighbour pass,
+ * find all disconnected components and, while more than one exists, splice the
+ * smallest component into the largest via the cheapest (spatially closest)
+ * cross-component link. Links are added bidirectionally so reachability holds in
+ * both directions. Exported for direct unit testing.
+ */
+export function ensureConnectivity(systems: StarSystem[]): void {
+  if (systems.length <= 1) return;
+
+  let components = undirectedComponents(systems);
+  // Worst case one merge per extra component; the +1 guards against any
+  // pathological non-progress so the loop can never spin forever.
+  let guard = systems.length + 1;
+  while (components.length > 1 && guard-- > 0) {
+    components.sort((a, b) => b.length - a.length);
+    const largest = components[0];
+    const smallest = components[components.length - 1];
+
+    let bestFrom: StarSystem | null = null;
+    let bestTo: StarSystem | null = null;
+    let bestDist = Infinity;
+    for (const a of smallest) {
+      for (const b of largest) {
+        const dq = a.coordinates.q - b.coordinates.q;
+        const dr = a.coordinates.r - b.coordinates.r;
+        const dist = Math.sqrt(dq * dq + dr * dr);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestFrom = a;
+          bestTo = b;
+        }
+      }
+    }
+
+    if (bestFrom && bestTo) {
+      const cost = Math.max(1, Math.round(bestDist / 10));
+      bestFrom.connections.push(new WarpPath(bestFrom.id, bestTo.id, cost));
+      bestTo.connections.push(new WarpPath(bestTo.id, bestFrom.id, cost));
+    }
+
+    components = undirectedComponents(systems);
   }
 }
 
