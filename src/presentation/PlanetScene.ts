@@ -116,6 +116,22 @@ export function skyGradientColors(baseColor: number, steps: number): number[] {
 const BRIBE_COST = 500;
 const PLANET_VISUAL_RADIUS = 196;
 
+/**
+ * Star-map purchase tiers (Task 3): buying a tier reveals every system within
+ * `hops` warp jumps of the current system. Pricing climbs faster than reach so
+ * deep reveals stay a meaningful credit sink.
+ */
+export interface StarMapTier {
+  hops: number;
+  cost: number;
+  label: string;
+}
+const STAR_MAP_TIERS: StarMapTier[] = [
+  { hops: 1, cost: 500, label: "Ближняя (1 переход)" },
+  { hops: 2, cost: 1500, label: "Средняя (2 перехода)" },
+  { hops: 3, cost: 4000, label: "Дальняя (3 перехода)" },
+];
+
 const FACTION_RU: Record<string, string> = {
   OUTLANDERS: "Окраинники",
   BASTIONS: "Бастион",
@@ -202,10 +218,13 @@ const WILDERNESS_PANORAMA: Record<string, string> = {
 export function panoramaKeyForPlanet(
   planetType: string,
   faction: string,
+  isHabitable: boolean = false,
 ): string {
-  if (planetType === "HABITAT" || planetType === "INDUSTRIAL") {
+  if (isHabitable) {
     const city = FACTION_PANORAMA[faction];
     if (city && city.endsWith("_city")) return city;
+    // Habitable but no city art (INDEPENDENT, OVERMIND) → most liveable-looking wilderness.
+    return "wilderness_jungle";
   }
   return WILDERNESS_PANORAMA[planetType] ?? "wilderness_jungle";
 }
@@ -231,11 +250,12 @@ export function resolvePlanetBackdropKey(
   planetType: string,
   planetId: string,
   faction: string,
+  isHabitable: boolean = false,
 ): string {
   const biome = PLANET_BIOME[planetType] ?? "terran";
   const surfaceKey = pickVariantKey("surfaces", biome, planetId);
   if (surfaceKey) return surfaceKey;
-  return `panoramas/${panoramaKeyForPlanet(planetType, faction)}`;
+  return `panoramas/${panoramaKeyForPlanet(planetType, faction, isHabitable)}`;
 }
 
 function planetTexturePrefix(type: string): string {
@@ -316,6 +336,7 @@ export class PlanetScene extends GameScene {
       this.planet?.type ?? "TERRESTRIAL",
       this.planet?.id ?? "",
       initFaction,
+      this.planet?.isHabitable ?? false,
     );
 
     // Show scene immediately with dark fallback, then swap in panorama when loaded.
@@ -325,6 +346,7 @@ export class PlanetScene extends GameScene {
     this.checkDeliveryQuestCompletion();
     this.checkReturnQuestCompletion();
     this.checkCustoms();
+    this.checkAndResumeTextQuest();
 
     // Panorama drag-to-look (Task 6): the wide background pans horizontally as
     // the player drags. Move/up are tracked on the stage so a drag started over
@@ -527,6 +549,40 @@ export class PlanetScene extends GameScene {
       penalty,
       system.ownerFaction,
     );
+  }
+
+  /**
+   * On landing, resume any active TEXT_ADVENTURE quest issued on this planet.
+   * This handles the case where a player accepted a text quest, flew away mid-quest
+   * (via "Сдаться" or Escape), and then returned — they need to be able to re-enter.
+   */
+  private checkAndResumeTextQuest(): void {
+    if (!this.gameEngine || !this.planet) return;
+    const activeQuests = this.gameEngine.questManager.getActiveQuests();
+    const pending = activeQuests.find(
+      (q) =>
+        q.type === QuestType.TEXT_ADVENTURE &&
+        q.planetId === this.planet!.id &&
+        !q.isCompleted &&
+        !q.isFailed,
+    );
+    if (!pending) return;
+    const scriptId = pending.targetObjectId;
+    if (!scriptId) return;
+
+    // Defer slightly so PlanetScene finishes rendering before the transition.
+    setTimeout(() => {
+      if (!this.gameEngine || !this.planet) return;
+      this.gameEngine
+        .startTextQuest(
+          scriptId,
+          undefined,
+          SceneType.PLANET,
+          { gameEngine: this.gameEngine, planet: this.planet },
+          pending.id,
+        )
+        .catch((e) => logger.error("PlanetScene: text quest resume failed", e));
+    }, 100);
   }
 
   private showCustomsModal(
@@ -777,6 +833,7 @@ export class PlanetScene extends GameScene {
       this.planet?.type ?? "TERRESTRIAL",
       this.planet?.id ?? "",
       faction,
+      this.planet?.isHabitable ?? false,
     );
     const panTex = tex(backdropKey) ?? panoramaTex(PANORAMA_FALLBACK);
     const hasPanorama = !!panTex && panTex.width > 1 && panTex.height > 0;
@@ -1076,6 +1133,12 @@ export class PlanetScene extends GameScene {
         action: () => this.openResearch(),
       },
       {
+        icon: "🗺",
+        label: "Карты",
+        accent: "neutral",
+        action: () => this.openStarMap(),
+      },
+      {
         icon: "🚀",
         label: "Взлёт",
         accent: "danger",
@@ -1146,9 +1209,17 @@ export class PlanetScene extends GameScene {
       ui.addChild(btn.container);
     };
 
+    // Captured (overmind/pirate) systems offer no star-map service.
+    const systemHostile = !!(
+      system && this.gameEngine?.galaxy?.isHostileSystem?.(system.id)
+    );
+
     let y = btnStartY;
     for (const b of visible) {
-      makeServiceBtn(b, y, isHostile && b.label !== "Взлёт");
+      const blocked =
+        (isHostile && b.label !== "Взлёт") ||
+        (b.label === "Карты" && systemHostile);
+      makeServiceBtn(b, y, blocked);
       y += btnStep;
     }
 
@@ -1340,16 +1411,28 @@ export class PlanetScene extends GameScene {
   private acceptJob(q: GeneratedQuest): void {
     if (!this.gameEngine || !this.planet) return;
     const accepted = this.gameEngine.acceptBoardQuest(q, this.planet.id);
-    if (accepted) {
-      if (q.template.type === QuestType.TEXT_ADVENTURE) {
-        this.showMessage("Текст-квест (скоро)", 0xffaa44);
-      } else {
-        this.showMessage(`Задание принято: ${q.template.title}`, 0x00ff88);
-      }
-      this.openJobBoard(); // refresh — the accepted quest drops off the board
-    } else {
+    if (!accepted) {
       this.showMessage("Не удалось принять задание", 0xffaa00);
+      return;
     }
+    if (q.template.type === QuestType.TEXT_ADVENTURE) {
+      const scriptId = q.template.targetObjectId ?? q.template.id;
+      this.closeJobBoard();
+      this.gameEngine
+        .startTextQuest(
+          scriptId,
+          undefined,
+          SceneType.PLANET,
+          { gameEngine: this.gameEngine, planet: this.planet },
+          accepted.id,
+        )
+        .catch((e) =>
+          logger.error("PlanetScene: text quest transition failed", e),
+        );
+      return;
+    }
+    this.showMessage(`Задание принято: ${q.template.title}`, 0x00ff88);
+    this.openJobBoard(); // refresh — the accepted quest drops off the board
   }
 
   private closeJobBoard(): void {
@@ -1417,6 +1500,186 @@ export class PlanetScene extends GameScene {
     // Research station is not implemented yet; give honest feedback instead of
     // silently swallowing the click.
     this.showMessage("Исследовательская станция пока в разработке", 0xffaa00);
+  }
+
+  /**
+   * Star-map purchase modal (Task 3): buy an N-hop reveal of nearby systems for
+   * credits, resolving quests that point at unexplored "?" systems. Each tier
+   * reveals everything within `hops` warp jumps of the current system.
+   */
+  private openStarMap(): void {
+    if (!this.gameEngine?.player || !this.planet) return;
+    const galaxy = this.gameEngine.galaxy;
+    if (!galaxy) return;
+    const system = galaxy.systems.find((s) =>
+      s.planets.some((p) => p.id === this.planet!.id),
+    );
+    if (!system) return;
+    const player = this.gameEngine.player;
+
+    const w = this.renderer.app.screen.width;
+    const h = this.renderer.app.screen.height;
+    const modal = new Container();
+
+    // Backdrop — blocks all underlying interaction.
+    const backdrop = new Graphics();
+    backdrop.rect(0, 0, w, h).fill({ color: 0x000000, alpha: 0.75 });
+    backdrop.eventMode = "static";
+    backdrop.on("pointerdown", (e) => e.stopPropagation());
+    modal.addChild(backdrop);
+
+    const boxW = 460;
+    const boxH = 320;
+    const boxX = (w - boxW) / 2;
+    const boxY = (h - boxH) / 2;
+    const box = new Graphics();
+    box.rect(boxX, boxY, boxW, boxH).fill({ color: 0x0d0d1a, alpha: 0.98 });
+    box.rect(boxX, boxY, boxW, boxH).stroke({ color: 0x44aaff, width: 2 });
+    modal.addChild(box);
+
+    const addLabel = (
+      text: string,
+      x: number,
+      y: number,
+      size: number,
+      color: number,
+      bold = false,
+    ): void => {
+      const t = new Text({
+        text,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: size,
+          fill: color,
+          fontWeight: bold ? "bold" : "normal",
+          align: "center",
+        },
+      });
+      t.anchor.set(0.5, 0);
+      t.x = x;
+      t.y = y;
+      t.eventMode = "none";
+      modal.addChild(t);
+    };
+
+    addLabel(
+      "🗺 КАРТЫ ЗВЁЗДНЫХ СИСТЕМ",
+      w / 2,
+      boxY + 18,
+      scaledFont(16),
+      0x44aaff,
+      true,
+    );
+    addLabel(
+      `Кредиты: ${player.credits.toLocaleString("ru")} ₡`,
+      w / 2,
+      boxY + 46,
+      scaledFont(12),
+      0xffdd44,
+    );
+
+    const close = (): void => {
+      if (!modal.destroyed) modal.destroy({ children: true });
+    };
+
+    const makeBtn = (
+      label: string,
+      yOffset: number,
+      color: number,
+      enabled: boolean,
+      onClick: () => void,
+    ): void => {
+      const btnW = 380;
+      const btn = new Container();
+      btn.x = (w - btnW) / 2;
+      btn.y = boxY + yOffset;
+      const bg = new Graphics();
+      bg.rect(0, 0, btnW, 40).fill({
+        color: enabled ? color : 0x1a1a2e,
+        alpha: enabled ? 0.85 : 0.9,
+      });
+      bg.rect(0, 0, btnW, 40).stroke({
+        color: enabled ? 0x888888 : 0x334455,
+        width: 1,
+      });
+      bg.eventMode = "none";
+      btn.addChild(bg);
+      const lbl = new Text({
+        text: label,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: scaledFont(13),
+          fill: enabled ? 0xffffff : 0x8899aa,
+          fontWeight: "bold",
+        },
+      });
+      lbl.anchor.set(0.5);
+      lbl.x = btnW / 2;
+      lbl.y = 20;
+      lbl.eventMode = "none";
+      btn.addChild(lbl);
+      if (enabled) {
+        btn.eventMode = "static";
+        btn.cursor = "pointer";
+        btn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          onClick();
+        });
+        btn.on("pointerover", () => {
+          bg.clear();
+          bg.rect(0, 0, btnW, 40).fill({ color, alpha: 1.0 });
+          bg.rect(0, 0, btnW, 40).stroke({ color: 0xffffff, width: 1 });
+        });
+        btn.on("pointerout", () => {
+          bg.clear();
+          bg.rect(0, 0, btnW, 40).fill({ color, alpha: 0.85 });
+          bg.rect(0, 0, btnW, 40).stroke({ color: 0x888888, width: 1 });
+        });
+      } else {
+        btn.eventMode = "none";
+      }
+      modal.addChild(btn);
+    };
+
+    const cheapest = Math.min(...STAR_MAP_TIERS.map((t) => t.cost));
+    if (player.credits < cheapest) {
+      // Cannot afford even the cheapest tier — show a disabled state.
+      makeBtn("Нет кредитов", 90, 0x331111, false, () => {});
+    } else {
+      let yOff = 86;
+      for (const tier of STAR_MAP_TIERS) {
+        const affordable = player.credits >= tier.cost;
+        makeBtn(
+          `${tier.label} — ${tier.cost.toLocaleString("ru")} ₡`,
+          yOff,
+          0x224466,
+          affordable,
+          () => {
+            if (player.credits < tier.cost) return;
+            player.credits -= tier.cost;
+            const revealed = galaxy.revealSystemsWithinHops(
+              system.id,
+              tier.hops,
+            );
+            logger.info(
+              `Star map purchased: ${tier.hops} hops, ${tier.cost} cr, revealed ${revealed} systems`,
+            );
+            close();
+            this.showMessage(
+              revealed > 0
+                ? `Открыто систем: ${revealed}`
+                : "Новых систем не открыто",
+              0x44ddff,
+            );
+          },
+        );
+        yOff += 52;
+      }
+    }
+
+    makeBtn("Закрыть", 250, 0x333344, true, close);
+
+    this.renderer.uiLayer.addChild(modal);
   }
 
   private async takeOff(): Promise<void> {

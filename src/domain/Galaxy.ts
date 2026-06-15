@@ -274,4 +274,61 @@ export class Galaxy {
       `Revealed system: ${system.name} and ${revealedCount} neighbors`,
     );
   }
+
+  /**
+   * Star-map purchase reveal (Task 3): BFS up to `hops` warp jumps from
+   * `systemId`, marking each discovered system `explored = true` /
+   * `fogOfWar = false`. The graph is treated as undirected (a warp link is
+   * traversable in either direction). The origin is marked explored but is not
+   * counted. Returns the number of *newly* revealed systems (already-explored
+   * systems within range do not count).
+   */
+  revealSystemsWithinHops(systemId: string, hops: number): number {
+    const origin = this.systems.find((s) => s.id === systemId);
+    if (!origin) {
+      logger.warn(`Cannot reveal systems: ${systemId} not found`);
+      return 0;
+    }
+
+    // Undirected adjacency over the warp graph.
+    const byId = new Map(this.systems.map((s) => [s.id, s]));
+    const adj = new Map<string, Set<string>>();
+    for (const s of this.systems) adj.set(s.id, new Set());
+    for (const s of this.systems) {
+      for (const c of s.connections) {
+        if (byId.has(c.toSystemId)) {
+          adj.get(s.id)!.add(c.toSystemId);
+          adj.get(c.toSystemId)!.add(s.id);
+        }
+      }
+    }
+
+    origin.explored = true;
+    origin.fogOfWar = false;
+
+    let revealed = 0;
+    const dist = new Map<string, number>([[systemId, 0]]);
+    const queue = [systemId];
+    for (let head = 0; head < queue.length; head++) {
+      const cur = queue[head];
+      const d = dist.get(cur)!;
+      if (d >= hops) continue;
+      for (const n of adj.get(cur) ?? []) {
+        if (dist.has(n)) continue;
+        dist.set(n, d + 1);
+        queue.push(n);
+        const neighbor = byId.get(n)!;
+        if (!neighbor.explored) {
+          neighbor.explored = true;
+          neighbor.fogOfWar = false;
+          revealed++;
+        }
+      }
+    }
+
+    logger.info(
+      `Revealed ${revealed} systems within ${hops} hops of ${origin.name}`,
+    );
+    return revealed;
+  }
 }

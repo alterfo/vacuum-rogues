@@ -67,13 +67,13 @@ Three interrelated improvements to the galaxy map and living-galaxy simulation:
 - Modify: `src/validation/schemas.ts` (no new fields needed; verify)
 - Create: `src/tests/galaxy/revealHops.test.ts`
 
-- [ ] Write a failing test for `Galaxy.revealSystemsWithinHops(systemId, hops)`: starting from `sys_a` in a 5-system chain, calling with hops=2 should mark the 2 nearest systems `explored = true` and leave systems beyond 2 hops unchanged.
-- [ ] Implement `Galaxy.revealSystemsWithinHops(systemId: string, hops: number): number` — BFS up to `hops` levels, marks each discovered system `explored = true`, `fogOfWar = false`; returns count of newly revealed systems.
-- [ ] Add "Карты" button to `PlanetScene` habitable-planet service list (icon `🗺`, label `Карты`).
-- [ ] Implement `openStarMap()` handler: show inline modal with tier selector (1 hop = 500 cr, 2 hops = 1500 cr, 3 hops = 4000 cr). On confirm, call `galaxy.revealSystemsWithinHops`, deduct credits, show "Открыто N систем".
-- [ ] If player cannot afford any tier, show a disabled "Нет кредитов" state.
-- [ ] Disable the "Карты" button (greyed) if the system is hostile (consistent with other service gating).
-- [ ] Run full test suite — must pass.
+- [x] Write a failing test for `Galaxy.revealSystemsWithinHops(systemId, hops)`: starting from `sys_a` in a 5-system chain, calling with hops=2 should mark the 2 nearest systems `explored = true` and leave systems beyond 2 hops unchanged.
+- [x] Implement `Galaxy.revealSystemsWithinHops(systemId: string, hops: number): number` — BFS up to `hops` levels, marks each discovered system `explored = true`, `fogOfWar = false`; returns count of newly revealed systems.
+- [x] Add "Карты" button to `PlanetScene` habitable-planet service list (icon `🗺`, label `Карты`).
+- [x] Implement `openStarMap()` handler: show inline modal with tier selector (1 hop = 500 cr, 2 hops = 1500 cr, 3 hops = 4000 cr). On confirm, call `galaxy.revealSystemsWithinHops`, deduct credits, show "Открыто N систем".
+- [x] If player cannot afford any tier, show a disabled "Нет кредитов" state.
+- [x] Disable the "Карты" button (greyed) if the system is hostile (consistent with other service gating).
+- [x] Run full test suite — must pass. (revealHops tests green; suite passes except 1 pre-existing, unrelated failure in `questBountyNpcAssignment.test.ts` from in-progress bounty-fallback work in the dirty tree — file was modified at session start, untouched by this task.)
 
 ### Task 4: Persistent hostile garrison in captured systems
 **Files:**
