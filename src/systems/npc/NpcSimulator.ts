@@ -307,6 +307,7 @@ export class NpcSimulator {
       shieldPower: stats.shieldPower,
       loadoutSummary: ROLE_LOADOUT[NpcRole.PIRATE],
       cargo: [],
+      hostile: true,
     });
   }
 
@@ -339,6 +340,7 @@ export class NpcSimulator {
       shieldPower: stats.shieldPower,
       loadoutSummary: ROLE_LOADOUT[NpcRole.PATROL],
       cargo: [],
+      hostile: true,
     });
   }
 

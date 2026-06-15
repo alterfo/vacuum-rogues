@@ -10,9 +10,10 @@ import type { Faction } from "@/types/faction";
 
 /**
  * Autonomous NPC ship that lives in the galaxy independent of the player
- * (other rangers, traders, pirates, patrols). Pure data class — behaviour is
- * driven by NpcSimulator / NpcBrain. Kept method-free so loaded saves (plain
- * objects) satisfy the shape without prototype rehydration.
+ * (other rangers, traders, pirates, patrols). Mostly a data class — behaviour is
+ * driven by NpcSimulator / NpcBrain. The few methods it carries (hostility
+ * state) are safe across save/load because GameEngine.rehydrateLoadedState
+ * re-attaches the prototype to every loaded NpcShip.
  */
 export class NpcShip {
   id: string;
@@ -40,6 +41,13 @@ export class NpcShip {
   activeQuestTarget: string | null;
   /** Shared ID grouping ships travelling together as a military convoy. */
   convoyId?: string;
+  /**
+   * True when this NPC is openly hostile to the player: garrison/pirate ships
+   * spawn hostile, and any neutral ship the player attacks (plus its same-faction
+   * neighbours in-system) is flagged hostile. Drives the threat indicator and
+   * {@link isAggressive}.
+   */
+  hostile: boolean;
 
   constructor(init: NpcShipInit) {
     this.id = init.id;
@@ -64,5 +72,16 @@ export class NpcShip {
     this.cargo = init.cargo ?? [];
     this.activeQuestTarget = init.activeQuestTarget ?? null;
     this.convoyId = init.convoyId;
+    this.hostile = init.hostile ?? false;
+  }
+
+  /** Flag this NPC as openly hostile to the player (turns it aggressive). */
+  markHostile(): void {
+    this.hostile = true;
+  }
+
+  /** Whether this NPC will actively attack the player on sight. */
+  isAggressive(): boolean {
+    return this.hostile === true;
   }
 }

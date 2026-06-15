@@ -211,6 +211,8 @@ export interface NpcShipInit {
   activeQuestTarget?: string | null;
   /** Shared ID grouping ships travelling together as a military convoy. */
   convoyId?: string;
+  /** True when openly hostile to the player (garrison/pirate spawns, or attacked). */
+  hostile?: boolean;
 }
 
 /** A simulation event emitted by the living-galaxy and collected in newsFeed. */

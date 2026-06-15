@@ -223,13 +223,13 @@ Combat happens in the flight scene, not in a separate hex grid scene (CombatScen
 - Modify: `src/presentation/flight/NpcShipManager.ts`
 - Create: `src/tests/npc/npcHostility.test.ts`
 
-- [ ] Write a failing test: NpcShip with `role === TRADER, hostile = false`; calling `npc.markHostile()` sets `hostile = true`; subsequent `isAggressive()` returns `true`.
-- [ ] Add `hostile: boolean` field to `NpcShip` (default `false`). Update `NpcShipInit`, `schemas.ts` with `.default(false)`.
-- [ ] Garrison/pirate NPCs start with `hostile = true` (set in `spawnPirateInSystem`, `spawnOvermindInSystem`).
-- [ ] When player attacks a non-hostile NPC (`combatModule.startCombat` triggered by player click on a neutral sprite), mark that NPC as `hostile = true` and all NPCs of the same `faction` in the system also become `hostile = true`.
-- [ ] `NpcShipSprite` shows a red tint or threat indicator while `npc.hostile === true`.
-- [ ] Write test: attacking one neutral NPC marks all same-faction NPCs in the system as hostile.
-- [ ] Run full test suite — must pass.
+- [x] Write a failing test: NpcShip with `role === TRADER, hostile = false`; calling `npc.markHostile()` sets `hostile = true`; subsequent `isAggressive()` returns `true`.
+- [x] Add `hostile: boolean` field to `NpcShip` (default `false`). Update `NpcShipInit`, `schemas.ts` with `.default(false)`. (Added `markHostile()`/`isAggressive()` methods; safe across save/load because `GameEngine.rehydrateLoadedState` already re-attaches the `NpcShip` prototype to loaded ships. Old saves without the field read `hostile === undefined` → harmless falsy, and the schema default backfills `false` on validation — no migration needed, consistent with `shieldPower`/`convoyId`.)
+- [x] Garrison/pirate NPCs start with `hostile = true` (set in `spawnPirateInSystem`, `spawnOvermindInSystem`).
+- [x] When player attacks a non-hostile NPC (`combatModule.startCombat` triggered by player click on a neutral sprite), mark that NPC as `hostile = true` and all NPCs of the same `faction` in the system also become `hostile = true`. (New public `NpcShipManager.escalateHostility(target)` marks the target + every same-faction ship sharing its system hostile and refreshes affected sprite visuals; wired into the player-attack entry `onAttackNpc` — the still-active player-initiated attack path. Idempotent for already-hostile garrison/pirate ships.)
+- [x] `NpcShipSprite` shows a red tint or threat indicator while `npc.hostile === true`. (Red threat ring drawn in `render()` when `npc.hostile`; new `refreshThreat()` re-renders when a ship turns hostile mid-flight. Garrison/pirate ships now spawn with the ring already on.)
+- [x] Write test: attacking one neutral NPC marks all same-faction NPCs in the system as hostile. (`npcHostility.test.ts`: domain markHostile/isAggressive + default, same-faction propagation via the real `onAttackNpc` path — different-faction in-system and same-faction in another system both spared — and garrison idempotency.)
+- [x] Run full test suite — must pass. (npcHostility 4 tests + npc/garrison/manager/loot/sim regressions green; tsc + lint 0 errors. Full suite: 1475 pass, only the pre-existing, unrelated `questBountyNpcAssignment.test.ts` failure from in-progress bounty-fallback work in the dirty tree — verified failing identically with my non-test changes stashed; that file was modified at session start and is untouched by this task.)
 
 ### Task 15: Verify acceptance criteria
 **Files:**

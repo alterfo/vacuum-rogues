@@ -435,6 +435,22 @@ export class NpcShipSprite {
     g.circle(0, -22, 4);
     g.fill({ color: intent });
     g.stroke({ width: 1, color: 0x000000, alpha: 0.5 });
+
+    // Threat ring: an NPC that has turned openly hostile (a standing garrison,
+    // or a neutral the player attacked) gets a red outline so friend and foe
+    // read apart at a glance.
+    if (this.npc.hostile) {
+      g.circle(0, 0, 24).stroke({ width: 2, color: 0xff2020, alpha: 0.9 });
+    }
+  }
+
+  /**
+   * Re-render so the threat ring reflects the current {@link NpcShip.hostile}
+   * state. Called by {@link NpcShipManager} when a ship turns hostile mid-flight
+   * (the player attacked it or one of its faction-mates).
+   */
+  refreshThreat(): void {
+    this.render();
   }
 
   destroy(): void {

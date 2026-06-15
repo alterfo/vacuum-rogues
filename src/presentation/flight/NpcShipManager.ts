@@ -549,6 +549,27 @@ export class NpcShipManager implements FlightModule {
   }
 
   /**
+   * The player attacked {@link target}: mark it openly hostile and propagate that
+   * hostility to every same-faction ship sharing the target's system — attacking
+   * one member of a faction turns the whole local contingent against you (Task
+   * 14). Garrison/pirate ships already spawn hostile, so this is idempotent for
+   * them. Refreshes the threat indicator on any affected sprite.
+   */
+  escalateHostility(target: NpcShip): void {
+    target.markHostile();
+    const systemId = target.currentSystemId;
+    for (const npc of this.gameEngine?.galaxy?.npcShips ?? []) {
+      if (npc.faction === target.faction && npc.currentSystemId === systemId) {
+        npc.markHostile();
+      }
+    }
+    // Re-render any sprite whose NPC just turned hostile so the threat ring shows.
+    for (const sprite of this.npcSprites) {
+      if (sprite.npc.hostile) sprite.refreshThreat();
+    }
+  }
+
+  /**
    * Set NPC zIndex so the ship is occluded by planet discs it passes behind.
    * Planet discs sit at zIndex 50; ships at 40 render under them, ships at 100
    * render above. We switch to 40 whenever the ship's world position is within
@@ -861,6 +882,10 @@ export class NpcShipManager implements FlightModule {
    * CombatScene transition once in range.
    */
   private onAttackNpc(npc: NpcShip): void {
+    // Declaring an attack turns the target — and every same-faction ship in the
+    // player's system — openly hostile (Task 14). No-op for garrison/pirate ships
+    // that already spawned hostile.
+    this.escalateHostility(npc);
     const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
     this.closeNpcContactPanel();
     const physics = this.deps.getShipPhysics();
