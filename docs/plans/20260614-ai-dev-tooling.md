@@ -136,13 +136,13 @@ npx tsx tools/scaffold/new-scene.ts --name ResearchUpgrade --context-dependent
    array in `GameEngine.ts`
 5. `e2e/page-objects/ResearchUpgradeScenePage.ts` — empty Page Object stub
 
-- [ ] Implement `new-scene.ts`: generate scene stub from template string; insert SceneType enum
+- [x] Implement `new-scene.ts`: generate scene stub from template string; insert SceneType enum
   value (find `= "LAST_VALUE"` pattern, insert after); insert SceneFactory case (find closing
   `default:` of switch); optionally insert into contextDependentScenes array
-- [ ] Write tests: run generator into temp dir, assert all 5 outputs exist and contain
+- [x] Write tests: run generator into temp dir, assert all 5 outputs exist and contain
   expected class/enum/case strings; assert SceneFactory has the new case; assert GameEngine
   contextDependentScenes contains the new type when `--context-dependent` is passed
-- [ ] Run lint + tests — green
+- [x] Run lint + tests — green
 
 ### Task 4: Slim CLAUDE.md files — under 1 KB each, playtest traps in separate reference files
 **Files:**
