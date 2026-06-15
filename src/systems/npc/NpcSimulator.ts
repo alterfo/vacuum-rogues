@@ -68,6 +68,13 @@ const CAPTURE_FLEET_MIN = 3;
 /** Maximum ships recruited into a single capture fleet. */
 const CAPTURE_FLEET_MAX = 5;
 
+/** How often (game days) the Rangers announce a liberation campaign. */
+const LIBERATION_CAMPAIGN_INTERVAL = 50;
+/** Days between a liberation announcement and the rally/assault date. */
+const LIBERATION_RALLY_DELAY = 30;
+/** Max ranger ships rallied from a staging system in a single campaign. */
+const LIBERATION_RALLY_MAX_SHIPS = 5;
+
 /** Minimum game-days a ship dwells in a system after arriving before the
  *  per-day DEPART_CHANCE can fire. Prevents the "fly in and immediately out"
  *  visual seen when a 15% roll happens to fire on day 1 post-arrival. */
@@ -166,6 +173,18 @@ export function npcRoleTechLevel(role: NpcRole): number {
   return map[role] ?? 1;
 }
 
+/** A scheduled Ranger campaign to liberate a hostile system. */
+interface LiberationCampaign {
+  /** Hostile system the campaign aims to free. */
+  targetSystemId: string;
+  /** Friendly system rangers rally at before the assault. */
+  stagingSystemId: string;
+  /** Absolute galaxy day the rally departs the staging system. */
+  liberationDate: number;
+  /** True once the staging rangers have been sent toward the target. */
+  dispatched: boolean;
+}
+
 /**
  * Advances the autonomous life of NPC ships across the galaxy: spawning them at
  * generation time and, each game day, moving them between systems toward their
@@ -193,6 +212,15 @@ export class NpcSimulator {
    * standing garrison (moved to {@link garrisonIds}).
    */
   private readonly captureFleetIds = new Set<string>();
+  /**
+   * Active Ranger liberation campaigns: each holds a hostile target, the
+   * friendly staging system, and the absolute day the rally departs. Transient
+   * (not persisted) — campaigns whose date has not yet arrived simply restart
+   * naturally on the next 50-day announcement after a load. Once a campaign's
+   * date is reached the rangers rallying at the staging system depart together
+   * toward the target (see {@link resolveLiberationCampaigns}).
+   */
+  private readonly liberationCampaigns: LiberationCampaign[] = [];
 
   constructor(brain: NpcBrain = new RuleBasedNpcBrain()) {
     this.brain = brain;
@@ -520,6 +548,10 @@ export class NpcSimulator {
   tick(galaxy: Galaxy, rng: SeededRNG, playerSystemId?: string): NewsEvent[] {
     const events: NewsEvent[] = [];
 
+    // Start of day: dispatch any liberation rally whose date has arrived, before
+    // the per-NPC movement loop gets a chance to scatter the staging rangers.
+    this.resolveLiberationCampaigns(galaxy);
+
     for (const npc of galaxy.npcShips) {
       if (npc.state === NpcState.DEAD) continue;
 
@@ -632,6 +664,20 @@ export class NpcSimulator {
         galaxy,
         new SeededRNG(`capture_${galaxy.gameDays}`),
       );
+    }
+
+    // Announce a Ranger liberation campaign against a hostile system every 50
+    // days. The isolated, day-seeded RNG keeps target selection from perturbing
+    // the deterministic main stream that other systems/tests depend on.
+    if (
+      galaxy.gameDays > 0 &&
+      galaxy.gameDays % LIBERATION_CAMPAIGN_INTERVAL === 0
+    ) {
+      const campaignEvent = this.assembleLiberationCampaign(
+        galaxy,
+        new SeededRNG(`liberation_${galaxy.gameDays}`),
+      );
+      if (campaignEvent) events.push(campaignEvent);
     }
 
     // Resolve abstract off-screen fights, then keep the population topped up.
@@ -1081,6 +1127,129 @@ export class NpcSimulator {
   private promoteToGarrison(npcId: string): void {
     this.captureFleetIds.delete(npcId);
     this.garrisonIds.add(npcId);
+  }
+
+  /**
+   * Announce a Ranger campaign to liberate a hostile system. Picks one hostile
+   * system as the target and a friendly (non-hostile) neighbour as the staging
+   * point, schedules the rally LIBERATION_RALLY_DELAY days out, and records the
+   * campaign so rangers depart the staging system once that date arrives (see
+   * {@link resolveLiberationCampaigns}). Returns the LIBERATION_CAMPAIGN news
+   * event, or null when no hostile system borders a friendly one — or one is
+   * already pending for the chosen target (no duplicate rallies). Called every
+   * LIBERATION_CAMPAIGN_INTERVAL days from {@link tick}.
+   */
+  assembleLiberationCampaign(galaxy: Galaxy, rng: SeededRNG): NewsEvent | null {
+    // Fronts the Rangers can liberate: hostile system → friendly neighbour to stage from.
+    const fronts: Array<{ targetId: string; stagingId: string }> = [];
+    for (const sys of galaxy.systems) {
+      if (!galaxy.isHostileSystem(sys.id)) continue;
+      for (const conn of sys.connections) {
+        if (!galaxy.isHostileSystem(conn.toSystemId)) {
+          fronts.push({ targetId: sys.id, stagingId: conn.toSystemId });
+          break;
+        }
+      }
+    }
+    if (fronts.length === 0) return null;
+
+    const front = fronts[rng.nextInt(0, fronts.length - 1)];
+    const { targetId, stagingId } = front;
+
+    // Don't stack a second pending rally on a target already being campaigned for.
+    if (
+      this.liberationCampaigns.some(
+        (c) => c.targetSystemId === targetId && !c.dispatched,
+      )
+    ) {
+      return null;
+    }
+
+    const liberationDate = galaxy.gameDays + LIBERATION_RALLY_DELAY;
+    this.liberationCampaigns.push({
+      targetSystemId: targetId,
+      stagingSystemId: stagingId,
+      liberationDate,
+      dispatched: false,
+    });
+
+    const target = galaxy.systems.find((s) => s.id === targetId);
+    const staging = galaxy.systems.find((s) => s.id === stagingId);
+    logger.info(
+      `Liberation campaign announced: ${targetId} (rally in ${stagingId}, day ${liberationDate})`,
+    );
+    return {
+      type: "LIBERATION_CAMPAIGN",
+      systemId: targetId,
+      day: galaxy.gameDays,
+      targetSystemId: targetId,
+      stagingSystemId: stagingId,
+      liberationDate,
+      description: `Рейнджеры освободят ${target?.name ?? targetId} через ${LIBERATION_RALLY_DELAY} дней. Сбор в ${staging?.name ?? stagingId}`,
+    };
+  }
+
+  /**
+   * Dispatch the Ranger rally for any campaign whose liberation date has been
+   * reached. Each campaign dispatches once. Called at the start of {@link tick}
+   * so the staging rangers depart together before the per-NPC movement loop can
+   * scatter them. Campaigns whose target is no longer hostile (already freed)
+   * are dropped without sending anyone.
+   */
+  private resolveLiberationCampaigns(galaxy: Galaxy): void {
+    for (const campaign of this.liberationCampaigns) {
+      if (campaign.dispatched) continue;
+      if (galaxy.gameDays < campaign.liberationDate) continue;
+      campaign.dispatched = true;
+      if (!galaxy.isHostileSystem(campaign.targetSystemId)) continue;
+      this.dispatchLiberationRally(galaxy, campaign);
+    }
+  }
+
+  /**
+   * Send idle ranger NPCs gathered in a campaign's staging system toward its
+   * target as a single convoy (shared convoyId), using the same convoy
+   * mechanism as {@link assembleConvoys}. Garrison and capture-fleet ships are
+   * excluded. No-op when no rangers are staged.
+   */
+  private dispatchLiberationRally(
+    galaxy: Galaxy,
+    campaign: LiberationCampaign,
+  ): void {
+    const rangers = galaxy.npcShips.filter(
+      (n) =>
+        n.role === NpcRole.RANGER &&
+        n.state !== NpcState.TRAVELING &&
+        n.state !== NpcState.DEAD &&
+        !n.convoyId &&
+        !this.garrisonIds.has(n.id) &&
+        !this.captureFleetIds.has(n.id) &&
+        n.currentSystemId === campaign.stagingSystemId,
+    );
+    if (rangers.length === 0) return;
+
+    const count = Math.min(LIBERATION_RALLY_MAX_SHIPS, rangers.length);
+    const convoyId = `liberation_${campaign.liberationDate}_${campaign.targetSystemId}`;
+    const daysToArrival = this.travelDays(
+      galaxy,
+      campaign.stagingSystemId,
+      campaign.targetSystemId,
+    );
+
+    for (let i = 0; i < count; i++) {
+      const npc = rangers[i];
+      npc.convoyId = convoyId;
+      npc.destinationSystemId = campaign.targetSystemId;
+      npc.daysToArrival = daysToArrival;
+      npc.state = NpcState.TRAVELING;
+      npc.goal = {
+        kind: NpcGoalKind.PATROL,
+        targetSystemId: campaign.targetSystemId,
+      };
+      logger.info(
+        `Liberation rally ${convoyId}: ${npc.name} → ${campaign.targetSystemId}`,
+      );
+    }
   }
 
   /**

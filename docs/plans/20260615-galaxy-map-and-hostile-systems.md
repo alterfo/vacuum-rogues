@@ -118,12 +118,12 @@ Three interrelated improvements to the galaxy map and living-galaxy simulation:
 - Modify: `src/systems/galaxy/GalaxyNewsSystem.ts` (or equivalent news emitter)
 - Create: `src/tests/npc/liberationCampaign.test.ts`
 
-- [ ] Write a failing test: galaxy with 1 hostile system; tick 50 days; assert a `LIBERATION_CAMPAIGN` news event was emitted within those 50 days containing `targetSystemId`, `stagingSystemId`, and `liberationDate` (absolute day number).
-- [ ] Add `LIBERATION_CAMPAIGN_INTERVAL = 50` constant to `NpcSimulator`.
-- [ ] In `tick()`: every `LIBERATION_CAMPAIGN_INTERVAL` days, if any hostile systems exist, pick 1 as `targetSystemId`; pick adjacent friendly system as `stagingSystemId`; set `liberationDate = galaxy.gameDays + 30`. Emit `LIBERATION_CAMPAIGN` news event with these fields and description `"Рейнджеры освободят {target} через 30 дней. Сбор в {staging}"`.
-- [ ] After `liberationDate` is reached, ranger NPCs in `stagingSystemId` automatically depart toward `targetSystemId` (set `destinationSystemId`, `goal.kind = PATROL`). Use the same convoy mechanism as `assembleConvoys` but keyed to the campaign.
-- [ ] Write test: ranger NPCs near staging system depart toward target after `liberationDate`.
-- [ ] Run full test suite — must pass.
+- [x] Write a failing test: galaxy with 1 hostile system; tick 50 days; assert a `LIBERATION_CAMPAIGN` news event was emitted within those 50 days containing `targetSystemId`, `stagingSystemId`, and `liberationDate` (absolute day number).
+- [x] Add `LIBERATION_CAMPAIGN_INTERVAL = 50` constant to `NpcSimulator`. (Plus `LIBERATION_RALLY_DELAY = 30`, `LIBERATION_RALLY_MAX_SHIPS = 5`.)
+- [x] In `tick()`: every `LIBERATION_CAMPAIGN_INTERVAL` days, if any hostile systems exist, pick 1 as `targetSystemId`; pick adjacent friendly system as `stagingSystemId`; set `liberationDate = galaxy.gameDays + 30`. Emit `LIBERATION_CAMPAIGN` news event with these fields and description `"Рейнджеры освободят {target} через 30 дней. Сбор в {staging}"`. (`assembleLiberationCampaign(galaxy, rng)` runs every 50 days via an isolated day-seeded RNG; added `LIBERATION_CAMPAIGN` to the `NewsEvent` union + the new optional `targetSystemId`/`stagingSystemId`/`liberationDate` fields, `schemas.ts`, and both exhaustive `NewsEvent`-keyed maps in `InfoCenterScene.ts`. Returns null — no duplicate rally — if a campaign is already pending for the chosen target.)
+- [x] After `liberationDate` is reached, ranger NPCs in `stagingSystemId` automatically depart toward `targetSystemId` (set `destinationSystemId`, `goal.kind = PATROL`). Use the same convoy mechanism as `assembleConvoys` but keyed to the campaign. (Campaigns tracked in an in-memory `liberationCampaigns` array; `resolveLiberationCampaigns` runs at the start of `tick()` — before the per-NPC movement loop — so staged rangers depart together with a shared campaign convoyId before they can scatter. Drops the rally if the target was already freed.)
+- [x] Write test: ranger NPCs near staging system depart toward target after `liberationDate`.
+- [x] Run full test suite — must pass. (Liberation tests + capture/garrison/convoy regressions green; suite passes except 1 pre-existing, unrelated failure in `questBountyNpcAssignment.test.ts` — verified failing identically with my non-test changes stashed. Lint 0 errors, tsc clean.)
 
 ### Task 8: System liberation detection
 **Files:**

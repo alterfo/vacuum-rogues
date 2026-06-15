@@ -360,11 +360,15 @@ export const NewsEventSchema = z.object({
     "DISCOVERY",
     "SYSTEM_LIBERATED",
     "SYSTEM_CAPTURED",
+    "LIBERATION_CAMPAIGN",
   ]),
   npcId: z.string().optional(),
   systemId: z.string(),
   day: z.number().int().min(0),
   description: z.string().default(""),
+  targetSystemId: z.string().optional(),
+  stagingSystemId: z.string().optional(),
+  liberationDate: z.number().int().min(0).optional(),
 });
 
 export const GalaxySchema = z.object({

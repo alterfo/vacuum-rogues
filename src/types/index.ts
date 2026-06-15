@@ -225,7 +225,8 @@ export interface NewsEvent {
     | "PLAGUE"
     | "DISCOVERY"
     | "SYSTEM_LIBERATED"
-    | "SYSTEM_CAPTURED";
+    | "SYSTEM_CAPTURED"
+    | "LIBERATION_CAMPAIGN";
   /** Ranger NPC that completed a quest (NPC_QUEST_COMPLETE only). */
   npcId?: string;
   /** System where the event occurred. */
@@ -234,6 +235,12 @@ export interface NewsEvent {
   day: number;
   /** Human-readable description shown in the news feed. */
   description: string;
+  /** Hostile system a liberation campaign targets (LIBERATION_CAMPAIGN only). */
+  targetSystemId?: string;
+  /** Friendly system rangers rally at before the assault (LIBERATION_CAMPAIGN only). */
+  stagingSystemId?: string;
+  /** Absolute galaxy day the rally departs / assault begins (LIBERATION_CAMPAIGN only). */
+  liberationDate?: number;
 }
 
 export enum EconomyType {
