@@ -75,6 +75,10 @@ const LIBERATION_RALLY_DELAY = 30;
 /** Max ranger ships rallied from a staging system in a single campaign. */
 const LIBERATION_RALLY_MAX_SHIPS = 5;
 
+/** Consecutive garrison-free days a captured system must hold before it is
+ *  automatically liberated (mirrors the player/ranger "clear and hold" rule). */
+const LIBERATION_CLEAR_DAYS = 3;
+
 /** Minimum game-days a ship dwells in a system after arriving before the
  *  per-day DEPART_CHANCE can fire. Prevents the "fly in and immediately out"
  *  visual seen when a 15% roll happens to fire on day 1 post-arrival. */
@@ -221,6 +225,23 @@ export class NpcSimulator {
    * toward the target (see {@link resolveLiberationCampaigns}).
    */
   private readonly liberationCampaigns: LiberationCampaign[] = [];
+  /**
+   * System ids whose standing garrison has been established at least once.
+   * Transient (not persisted). A hostile system that is established but now holds
+   * zero live garrison ships has been *cleared* (by the player or rangers) rather
+   * than freshly captured — {@link fillGarrison} leaves it empty so the
+   * {@link resolveLiberationDetection} countdown can run instead of resurrecting
+   * the garrison every tick. Pruned when a system is no longer hostile so a
+   * recapture re-garrisons from scratch.
+   */
+  private readonly establishedGarrisons = new Set<string>();
+  /**
+   * Per-system liberation countdown: days of consecutive garrison-free presence
+   * remaining before a captured system is auto-liberated. Transient (not
+   * persisted) — it restarts naturally on the next tick after a load, mirroring
+   * arrivalDwellCountdown. Reset the moment any hostile ship is present again.
+   */
+  private readonly liberationCountdown = new Map<string, number>();
 
   constructor(brain: NpcBrain = new RuleBasedNpcBrain()) {
     this.brain = brain;
@@ -360,7 +381,15 @@ export class NpcSimulator {
     overmind: boolean,
   ): void {
     let present = this.countGarrisonPresent(galaxy, systemId);
-    if (present >= GARRISON_MIN) return;
+    if (present >= GARRISON_MIN) {
+      this.establishedGarrisons.add(systemId);
+      return;
+    }
+    // A fully wiped garrison in an already-established system has been *cleared*
+    // (player/ranger combat), not freshly captured. Leave it empty so the
+    // liberation countdown can run rather than resurrecting the garrison every
+    // tick. Only initial establishment or topping up a partial garrison spawns.
+    if (present === 0 && this.establishedGarrisons.has(systemId)) return;
     const target = rng.nextInt(GARRISON_MIN, GARRISON_MAX);
     let spawned = 0;
     while (present < target) {
@@ -373,6 +402,7 @@ export class NpcSimulator {
       present++;
       spawned++;
     }
+    this.establishedGarrisons.add(systemId);
     logger.info(
       `Garrison: spawned ${spawned} hostile ships in ${systemId} (now ${present})`,
     );
@@ -697,7 +727,54 @@ export class NpcSimulator {
     // deterministic main simulation stream that other systems/tests depend on.
     this.ensureGarrison(galaxy, new SeededRNG(`garrison_${galaxy.gameDays}`));
 
+    // Liberate any captured system whose garrison has been cleared and held empty
+    // for LIBERATION_CLEAR_DAYS. Runs after ensureGarrison so a freshly captured
+    // system is garrisoned (and excluded) before its first detection pass.
+    this.resolveLiberationDetection(galaxy);
+
     return events;
+  }
+
+  /**
+   * Auto-liberate captured systems whose garrison has been cleared. For each
+   * hostile (overmind/pirate) system: if any hostile garrison ship is present the
+   * countdown resets; otherwise the per-system clock ticks down from
+   * LIBERATION_CLEAR_DAYS and {@link Galaxy.tryLiberate} fires (emitting a
+   * SYSTEM_LIBERATED news event) when it reaches zero. Bookkeeping for systems
+   * that are no longer hostile (freed via another path) is pruned so a later
+   * recapture re-garrisons from scratch.
+   */
+  private resolveLiberationDetection(galaxy: Galaxy): void {
+    const hostile = [...galaxy.overmindSystems, ...galaxy.pirateSystems];
+    const hostileSet = new Set(hostile);
+
+    for (const id of [...this.liberationCountdown.keys()]) {
+      if (!hostileSet.has(id)) this.liberationCountdown.delete(id);
+    }
+    for (const id of [...this.establishedGarrisons]) {
+      if (!hostileSet.has(id)) this.establishedGarrisons.delete(id);
+    }
+
+    for (const systemId of hostile) {
+      if (this.countGarrisonPresent(galaxy, systemId) > 0) {
+        // Garrison reformed or invaders re-entered → cancel any countdown.
+        this.liberationCountdown.delete(systemId);
+        continue;
+      }
+      const remaining =
+        (this.liberationCountdown.get(systemId) ?? LIBERATION_CLEAR_DAYS) - 1;
+      if (remaining <= 0) {
+        this.liberationCountdown.delete(systemId);
+        this.establishedGarrisons.delete(systemId);
+        if (galaxy.tryLiberate(systemId)) {
+          logger.info(
+            `System ${systemId} liberated: garrison cleared and held`,
+          );
+        }
+      } else {
+        this.liberationCountdown.set(systemId, remaining);
+      }
+    }
   }
 
   /** Pick a random system other than the NPC's current one as a quest destination. */

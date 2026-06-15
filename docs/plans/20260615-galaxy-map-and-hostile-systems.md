@@ -131,11 +131,11 @@ Three interrelated improvements to the galaxy map and living-galaxy simulation:
 - Modify: `src/domain/Galaxy.ts` (`tryLiberate` already exists; add `liberationPendingDays` tracking)
 - Create: `src/tests/npc/liberationDetect.test.ts`
 
-- [ ] Write a failing test: hostile system `sys_a` has 0 hostile garrison ships and `galaxy.isHostileSystem("sys_a") === true`; after 3 `tick()` calls, assert `galaxy.isHostileSystem("sys_a") === false`.
-- [ ] Add in-memory `liberationCountdown = new Map<string, number>()` to `NpcSimulator` (similar to `arrivalDwellCountdown`).
-- [ ] In `tick()`: for each hostile system, count hostile garrison ships present (`state !== DEAD, state !== TRAVELING`). If count === 0, start/continue liberation countdown (3 days). When countdown reaches 0, call `galaxy.tryLiberate(systemId)` and emit `SYSTEM_LIBERATED` news event.
-- [ ] If hostile ships re-enter during countdown, reset the countdown.
-- [ ] Run full test suite — must pass.
+- [x] Write a failing test: hostile system `sys_a` has 0 hostile garrison ships and `galaxy.isHostileSystem("sys_a") === true`; after 3 `tick()` calls, assert `galaxy.isHostileSystem("sys_a") === false`. (`liberationDetect.test.ts`: liberation, before-countdown, re-entry-reset, and intact-garrison non-liberation cases.)
+- [x] Add in-memory `liberationCountdown = new Map<string, number>()` to `NpcSimulator` (similar to `arrivalDwellCountdown`). (Plus an `establishedGarrisons` Set so a *cleared* garrison stays empty for the countdown instead of being resurrected by `ensureGarrison` — the freshly-captured vs. combat-cleared distinction; pruned when a system stops being hostile so a recapture re-garrisons.)
+- [x] In `tick()`: for each hostile system, count hostile garrison ships present (`state !== DEAD, state !== TRAVELING`). If count === 0, start/continue liberation countdown (3 days). When countdown reaches 0, call `galaxy.tryLiberate(systemId)` and emit `SYSTEM_LIBERATED` news event. (`resolveLiberationDetection`, called after `ensureGarrison` so freshly captured systems are garrisoned before their first pass; `LIBERATION_CLEAR_DAYS = 3`; `tryLiberate` already emits `SYSTEM_LIBERATED` to `newsFeed`, so it is not double-pushed into the tick return — consistent with the convoy-liberation path.)
+- [x] If hostile ships re-enter during countdown, reset the countdown. (Any present garrison ship deletes the `liberationCountdown` entry; `fillGarrison` tops the garrison back up since `present > 0`.)
+- [x] Run full test suite — must pass. (liberationDetect + npc-suite + npcSimulator integration green; full suite passes except the 1 pre-existing, unrelated `questBountyNpcAssignment.test.ts` failure from in-progress bounty-fallback work in the dirty tree — verified failing identically with my NpcSimulator change stashed. Lint 0 errors, tsc clean.)
 
 ### Task 9: Space loot drops from destroyed NPC ships
 **Files:**
