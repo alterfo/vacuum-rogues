@@ -103,17 +103,17 @@ npx tsx tools/scaffold/domain-field.ts --entity Player --field techResearch --ty
 3. Appends a migration stub to `MigrationPipeline.ts` at the latest version
 4. Prints a checklist of manual steps remaining (adding to SaveStateSerializer if needed)
 
-- [ ] Implement `domain-field.ts`: parse `--entity`, `--field`, `--type`, `--default` args;
+- [x] Implement `domain-field.ts`: parse `--entity`, `--field`, `--type`, `--default` args;
   use regex-based AST-free insertion (find the last `readonly` field in the class, insert after;
   find the Zod schema object closing, insert before `}`); read current migration version from
   `MigrationPipeline.ts` and append migration stub at version N+1
-- [ ] Handle error cases: entity file not found, field already exists (no-op with warning),
+- [x] Handle error cases: entity file not found, field already exists (no-op with warning),
   schema not found
-- [ ] Write tests using a temp directory: copy fixture files (minimal Player.ts + schemas.ts +
+- [x] Write tests using a temp directory: copy fixture files (minimal Player.ts + schemas.ts +
   MigrationPipeline.ts stubs), run generator, assert all 3 files are correctly modified;
   assert idempotent (running twice doesn't duplicate the field)
-- [ ] Run lint + tests — green
-- [ ] Verify manually: run on a REAL entity (`Player`, field `testField`, type `number`, default `0`),
+- [x] Run lint + tests — green
+- [x] Verify manually: run on a REAL entity (`Player`, field `testField`, type `number`, default `0`),
   confirm `npm test -- --run` still passes, then revert
 
 ### Task 3: Scene generator — atomically touch all 5 scene registration files
