@@ -145,13 +145,13 @@ Three interrelated improvements to the galaxy map and living-galaxy simulation:
 - Modify: `src/validation/schemas.ts`
 - Create: `src/tests/presentation/spaceLoot.test.ts`
 
-- [ ] Add `SpaceLootItem` type to `src/types/index.ts`: `{ id: string; moduleId?: string; artifactId?: string; x: number; y: number; spawnedAt: number }`.
-- [ ] Update `src/validation/schemas.ts` with `SpaceLootItem` schema.
-- [ ] Write a failing test: simulate NPC combat-death in `NpcShipManager`; assert a `SpaceLootItem` is added to `NpcShipManager.spaceLoot` array.
-- [ ] In `NpcShipManager`, when an NPC is removed after death (combat callback), generate 0–2 `SpaceLootItem`s based on NPC role and garrison status (Overmind: artifacts 40% chance; others: random module from NPC's `loadoutSummary`). Place items at the NPC's world position.
-- [ ] Render loot items as small glowing dots (yellow for modules, cyan for artifacts) in `SpaceFlightScene` via `NpcShipManager.update()`.
-- [ ] Despawn items older than 60 s (compare `galaxy.gameDays` elapsed or real elapsed ms).
-- [ ] Run full test suite — must pass.
+- [x] Add `SpaceLootItem` type to `src/types/index.ts`: `{ id: string; moduleId?: string; artifactId?: string; x: number; y: number; spawnedAt: number }`.
+- [x] Update `src/validation/schemas.ts` with `SpaceLootItem` schema. (Added `SpaceLootItemSchema`; transient/not wired into `SaveStateSchema` per the type's in-memory-only contract.)
+- [x] Write a failing test: simulate NPC combat-death in `NpcShipManager`; assert a `SpaceLootItem` is added to `NpcShipManager.spaceLoot` array. (`spaceLoot.test.ts`: spawn/count, world-position, artifact, module, 0-item, despawn-after-60s, alive-before-60s.)
+- [x] In `NpcShipManager`, when an NPC is removed after death (combat callback), generate 0–2 `SpaceLootItem`s based on NPC role and garrison status (Overmind: artifacts 40% chance; others: random module from NPC's `loadoutSummary`). Place items at the NPC's world position. (Public `spawnLootForNpc(npc, x, y, rng?)` — the in-flight combat death path in later tasks invokes it; `rng` injectable for deterministic resolution/tests. Falls back to `DEFAULT_LOOT_MODULES` when the NPC has no scanned loadout.)
+- [x] Render loot items as small glowing dots (yellow for modules, cyan for artifacts) in `SpaceFlightScene` via `NpcShipManager.update()`. (Per-item `Graphics` dot at zIndex 90 — above planet discs (50), below NPC hulls (100) — pulsing alpha at ~1 Hz.)
+- [x] Despawn items older than 60 s (compare `galaxy.gameDays` elapsed or real elapsed ms). (Manager-internal `lootClockMs` accumulates raw `deltaTime` — real elapsed ms, independent of game time-scale — so despawn is deterministic and save/load-safe; `LOOT_TTL_MS = 60_000`.)
+- [x] Run full test suite — must pass. (spaceLoot tests green; full suite passes except the 1 pre-existing, unrelated `questBountyNpcAssignment.test.ts` failure from in-progress bounty-fallback work in the dirty tree — verified failing identically with my non-test changes stashed. Lint 0 errors, tsc clean.)
 
 ### Task 10: Gravity tractor module (auto-pickup)
 **Files:**

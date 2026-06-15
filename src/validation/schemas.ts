@@ -371,6 +371,17 @@ export const NewsEventSchema = z.object({
   liberationDate: z.number().int().min(0).optional(),
 });
 
+// Transient space-loot items (in-memory only; not part of SaveState). Schema
+// kept here for shape validation/consistency with the SpaceLootItem type.
+export const SpaceLootItemSchema = z.object({
+  id: z.string(),
+  moduleId: z.string().optional(),
+  artifactId: z.string().optional(),
+  x: z.number(),
+  y: z.number(),
+  spawnedAt: z.number(),
+});
+
 export const GalaxySchema = z.object({
   id: z.string(),
   gameDays: z.number().int().min(0),

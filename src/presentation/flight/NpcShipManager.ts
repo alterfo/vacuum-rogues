@@ -16,14 +16,29 @@ import {
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { solveInterceptPoint } from "@/utils/intercept";
 import { shouldReaim } from "@/utils/flightGeometry";
-import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
+import {
+  SYSTEM_GEOMETRY,
+  GAME_BALANCE,
+  ARTIFACT_DROP_CHANCE,
+} from "@/config/balance";
 import { SceneType, NpcRole, QuestType } from "@/types";
+import type { SpaceLootItem } from "@/types";
 import { Faction } from "@/types/faction";
 import { pickNpcDestination, type NpcBehaviorCtx } from "./npcBehavior";
 import { hashStr } from "@/utils/hashStr";
 import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
 import type { FlightModule } from "./FlightModule";
+
+/**
+ * Fallback module ids for loot dropped by an NPC with no scanned loadout, so a
+ * kill always yields something recognisable to salvage.
+ */
+const DEFAULT_LOOT_MODULES = [
+  "salvaged_plating",
+  "spare_capacitor",
+  "scrap_thruster",
+];
 
 /**
  * Live state the manager reads from (or pushes back to) the host scene without
@@ -113,6 +128,18 @@ export class NpcShipManager implements FlightModule {
   /** Lead-drift (world px) before a chase/approach re-plots its course. */
   private readonly REAIM_DRIFT_PX = 30;
 
+  // Floating loot dropped by destroyed NPC ships (transient, presentation-only).
+  // Public so the in-flight combat module (later tasks) and the gravity-tractor
+  // pickup can read/mutate it; despawned after LOOT_TTL_MS by updateLoot().
+  readonly spaceLoot: SpaceLootItem[] = [];
+  // Per-loot glowing dot, keyed by loot id (yellow modules / cyan artifacts).
+  private readonly lootGraphics = new Map<string, Graphics>();
+  // Monotonic elapsed-ms clock driving loot lifetime + pulse (advanced in update,
+  // independent of game time-scale so despawn tracks real elapsed time).
+  private lootClockMs = 0;
+  /** Loot lifetime before it despawns (60 s). */
+  private readonly LOOT_TTL_MS = 60_000;
+
   private readonly WEAPON_RANGE = GAME_BALANCE.weaponRange;
   private readonly SCANNER_RANGE = GAME_BALANCE.scannerRange;
   private readonly SYSTEM_INNER_RADIUS = SYSTEM_GEOMETRY.innerRadius;
@@ -156,6 +183,10 @@ export class NpcShipManager implements FlightModule {
 
   /** Advance NPC movement only while the world is running (turn-based). */
   update(deltaTime: number, _bgElapsed: number): void {
+    // Loot pulses and despawns on real elapsed time, regardless of whether the
+    // turn is running (it must clear even after combat ends and the ship stops).
+    this.updateLoot(deltaTime);
+
     // The world runs while the turn is running (flying, or holding station in
     // combat) — not only while the ship is physically moving.
     if (!this.deps.isTurnRunning()) return;
@@ -200,6 +231,12 @@ export class NpcShipManager implements FlightModule {
     }
     this.npcSprites = [];
     this.npcAnchorPlanet.clear();
+    for (const g of this.lootGraphics.values()) {
+      if (g.parent) g.parent.removeChild(g);
+      if (!g.destroyed) g.destroy();
+    }
+    this.lootGraphics.clear();
+    this.spaceLoot.length = 0;
     this.closeNpcContactPanel();
     this.followNpcId = null;
     this.approachNpcId = null;
@@ -507,6 +544,107 @@ export class NpcShipManager implements FlightModule {
       }
     }
     sprite.container.zIndex = 100;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Space loot (drops from destroyed NPC ships)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Spawn 0–2 floating loot items at a destroyed NPC's world position. Overmind
+   * ships drop Overmind artifacts (40% per item, otherwise a salvaged module);
+   * everyone else drops a random module from their scanned loadout. Called by
+   * the in-flight combat death path (later tasks) when an NPC ship is destroyed.
+   * `rng` is injectable so combat resolution / tests can drive the roll
+   * deterministically (defaults to `Math.random`).
+   */
+  spawnLootForNpc(
+    npc: NpcShip,
+    worldX: number,
+    worldY: number,
+    rng: () => number = Math.random,
+  ): void {
+    const isOvermind = npc.faction === Faction.OVERMIND;
+    const count = this.rollLootCount(rng);
+    for (let i = 0; i < count; i++) {
+      let moduleId: string | undefined;
+      let artifactId: string | undefined;
+      if (isOvermind && rng() < ARTIFACT_DROP_CHANCE) {
+        artifactId = "ARTIFACTS";
+      } else {
+        moduleId = this.pickModuleId(npc, rng);
+      }
+      const item: SpaceLootItem = {
+        id: `loot_${npc.id}_${Math.floor(this.lootClockMs)}_${i}`,
+        moduleId,
+        artifactId,
+        x: worldX,
+        y: worldY,
+        spawnedAt: this.lootClockMs,
+      };
+      this.spaceLoot.push(item);
+      this.mountLootSprite(item);
+    }
+  }
+
+  /** Roll the per-kill loot count: 0, 1 or 2 (uniform thirds). */
+  private rollLootCount(rng: () => number): number {
+    const r = rng();
+    if (r < 1 / 3) return 0;
+    if (r < 2 / 3) return 1;
+    return 2;
+  }
+
+  /** Pick a module id for a non-artifact drop: a scanned loadout item, else a
+   *  generic salvage id when the NPC has no visible loadout. */
+  private pickModuleId(npc: NpcShip, rng: () => number): string {
+    const pool =
+      npc.loadoutSummary.length > 0 ? npc.loadoutSummary : DEFAULT_LOOT_MODULES;
+    return pool[Math.floor(rng() * pool.length) % pool.length];
+  }
+
+  /** Mount a small glowing dot for a loot item (yellow module / cyan artifact). */
+  private mountLootSprite(item: SpaceLootItem): void {
+    const color = item.artifactId ? 0x33ffff : 0xffdd33;
+    const g = new Graphics();
+    g.circle(0, 0, 10).fill({ color, alpha: 0.22 });
+    g.circle(0, 0, 5).fill({ color, alpha: 0.95 });
+    g.x = item.x;
+    g.y = item.y;
+    g.zIndex = 90; // above planet discs (50), below NPC hulls (100)
+    g.eventMode = "none";
+    this.gameLayer.addChild(g);
+    this.lootGraphics.set(item.id, g);
+  }
+
+  /**
+   * Advance the loot clock, pulse each dot's alpha (0.6 → 1.0 → 0.6 at ~1 Hz)
+   * and despawn items older than {@link LOOT_TTL_MS}. Runs every frame.
+   */
+  private updateLoot(deltaTime: number): void {
+    if (this.spaceLoot.length === 0) {
+      this.lootClockMs += deltaTime;
+      return;
+    }
+    this.lootClockMs += deltaTime;
+    const pulse =
+      0.6 +
+      0.4 * (0.5 + 0.5 * Math.sin((this.lootClockMs / 1000) * Math.PI * 2));
+    for (let i = this.spaceLoot.length - 1; i >= 0; i--) {
+      const item = this.spaceLoot[i];
+      if (this.lootClockMs - item.spawnedAt > this.LOOT_TTL_MS) {
+        const g = this.lootGraphics.get(item.id);
+        if (g) {
+          if (g.parent) g.parent.removeChild(g);
+          if (!g.destroyed) g.destroy();
+          this.lootGraphics.delete(item.id);
+        }
+        this.spaceLoot.splice(i, 1);
+        continue;
+      }
+      const g = this.lootGraphics.get(item.id);
+      if (g) g.alpha = pulse;
+    }
   }
 
   // ---------------------------------------------------------------------------

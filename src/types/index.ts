@@ -243,6 +243,23 @@ export interface NewsEvent {
   liberationDate?: number;
 }
 
+/**
+ * A floating loot item dropped by a destroyed NPC ship in the player's flight
+ * scene (Feature: space loot drops). Transient/presentation-only — lives in the
+ * NpcShipManager's in-memory `spaceLoot` array, never persisted in SaveState.
+ * Carries either a `moduleId` (salvaged equipment) or an `artifactId` (Overmind
+ * artifact); `x`/`y` are world-space and `spawnedAt` is the manager's elapsed-ms
+ * clock at spawn (used to despawn the item after its lifetime).
+ */
+export interface SpaceLootItem {
+  id: string;
+  moduleId?: string;
+  artifactId?: string;
+  x: number;
+  y: number;
+  spawnedAt: number;
+}
+
 export enum EconomyType {
   AGRICULTURAL = "AGRICULTURAL",
   INDUSTRIAL = "INDUSTRIAL",
