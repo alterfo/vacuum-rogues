@@ -90,4 +90,11 @@ Every bug follows this order — no exceptions:
 
 **Decision (letsplay F6, 2026-06-10): GearCatalog/ShipLoadout is canonical.** The legacy `ship.modules`/`inventory.modules` system is inert; `InventoryScene` renders a read-only view of the loadout. Full removal requires a save migration — remains open. The legacy system is still **player-visible in `StationScene`'s hangar panel** and fed by three production flows (combat loot, gear purchases, micromodule crafting). Canonicalizing the hangar panel is the open legacy-removal work; it needs its own plan.
 
+## Tooling
+
+Dev helpers (details in `tools/README.md`):
+- `vacuum` MCP — `find_symbol`/`get_architecture` to orient
+- `scaffold/domain-field.ts` — add a field across lockstep files
+- `scaffold/new-scene.ts` — register a scene across all 5 files
+
 @.claude/docs/adding-features.md

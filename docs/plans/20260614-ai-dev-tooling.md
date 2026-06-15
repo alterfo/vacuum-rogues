@@ -227,9 +227,9 @@ only the needed line ranges, not whole files.
 - Create: `tools/README.md`
 - Modify: `CLAUDE.md` root (add 3-line "tooling" section)
 
-- [ ] Write `tools/README.md`: one paragraph each on vacuum-mcp, domain-field generator,
+- [x] Write `tools/README.md`: one paragraph each on vacuum-mcp, domain-field generator,
   new-scene generator; example commands; when to use each
-- [ ] Add to root `CLAUDE.md` under new "## Tooling" section (≤ 200 chars):
+- [x] Add to root `CLAUDE.md` under new "## Tooling" section (≤ 200 chars):
   `vacuum MCP`, `scaffold/domain-field.ts`, `scaffold/new-scene.ts` — one-line each
 
 ## Technical Details
