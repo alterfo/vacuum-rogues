@@ -422,4 +422,45 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
     expect(s.isTurnRunning).toBe(true);
     expect(s.pauseAtDayBoundary).toBe(false);
   });
+
+  // In-flight combat freezes the ship (isMoving=false) but the turn it began in
+  // is still running. Without a guard the course-less "wait turn" path would burn
+  // game-days through the modal fight; combat must pause the calendar.
+  it("does NOT advance the calendar while in-flight combat is active", () => {
+    const advanceGalaxyDay = vi.fn();
+    s.gameEngine = {
+      player: { ship: { hullHP: 100, maxHull: 100 } },
+      galaxy: { gameDays: 3 },
+      advanceGalaxyDay,
+    };
+    const phys = makeMovingPhysics();
+    phys.isMoving = false; // combat froze the ship in place
+    phys.currentSpeed = 0;
+    s.shipPhysics = phys;
+    s.isTurnRunning = true; // combat began mid-turn (player was flying)
+    s.combatModule = { isActive: true };
+
+    updateShip(5000); // 5× MS_PER_WAIT_DAY — would commit 5 wait-days if unguarded
+
+    expect(advanceGalaxyDay).not.toHaveBeenCalled();
+  });
+
+  it("resumes the wait-turn calendar once combat ends", () => {
+    const advanceGalaxyDay = vi.fn();
+    s.gameEngine = {
+      player: { ship: { hullHP: 100, maxHull: 100 } },
+      galaxy: { gameDays: 3 },
+      advanceGalaxyDay,
+    };
+    const phys = makeMovingPhysics();
+    phys.isMoving = false; // ship idle after the fight
+    phys.currentSpeed = 0;
+    s.shipPhysics = phys;
+    s.isTurnRunning = true;
+    s.combatModule = { isActive: false }; // combat ended → wait turn resumes
+
+    updateShip(5000);
+
+    expect(advanceGalaxyDay).toHaveBeenCalled();
+  });
 });

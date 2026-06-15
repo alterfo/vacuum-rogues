@@ -1295,12 +1295,14 @@ export class SpaceFlightScene extends GameScene {
     }
 
     // "Wait" turn (US-070 #5): a course-less turn — the ship holds position while
-    // NPCs and the calendar keep advancing, until Pause (combat/warps excluded).
+    // NPCs and the calendar keep advancing, until Pause. Combat also freezes the
+    // ship (isMoving=false), so guard on it too or days burn through the fight.
     if (
       this.isTurnRunning &&
       !this.shipPhysics.isMoving &&
       !this.npcManager.followNpcId &&
-      !this.pendingWarp
+      !this.pendingWarp &&
+      !this.combatModule?.isActive
     ) {
       this.advanceWaitTime(deltaTime);
     }

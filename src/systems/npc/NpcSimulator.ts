@@ -360,6 +360,34 @@ export class NpcSimulator {
   }
 
   /**
+   * Re-derive the transient garrison / capture-fleet hold sets from the live
+   * ship list. These sets are not persisted, so after a save→load (a fresh
+   * GameEngine whose NpcSimulator starts with empty sets) the standing-garrison
+   * and capture-fleet ships are still in `galaxy.npcShips` but no longer
+   * recognised as held — they would fall through to the random-departure path,
+   * scatter out of their captured systems as rogue hostiles, and perturb the
+   * deterministic stream. Their ids carry a stable prefix (`garrison_*` /
+   * `capture_*`) so they can be reclassified: a `capture_*` survivor folded into
+   * a captured garrison keeps its id, so route by where it now sits (parked in a
+   * hostile system → garrison; otherwise still en route / besieging). Idempotent
+   * and RNG-free, so within a single session it is a no-op.
+   */
+  private reconcileTransientState(galaxy: Galaxy): void {
+    for (const npc of galaxy.npcShips) {
+      if (npc.state === NpcState.DEAD) continue;
+      if (npc.id.startsWith("garrison_")) {
+        this.garrisonIds.add(npc.id);
+      } else if (npc.id.startsWith("capture_")) {
+        const parkedInHostile =
+          npc.state !== NpcState.TRAVELING &&
+          galaxy.isHostileSystem(npc.currentSystemId);
+        if (parkedInHostile) this.garrisonIds.add(npc.id);
+        else this.captureFleetIds.add(npc.id);
+      }
+    }
+  }
+
+  /**
    * Guarantee that every captured (overmind/pirate) system holds a standing
    * garrison of hostile ships. For each hostile system whose present garrison is
    * below GARRISON_MIN, spawn fresh hostile ships up to a random target in
@@ -579,6 +607,11 @@ export class NpcSimulator {
    */
   tick(galaxy: Galaxy, rng: SeededRNG, playerSystemId?: string): NewsEvent[] {
     const events: NewsEvent[] = [];
+
+    // Re-derive the (transient, unpersisted) garrison / capture-fleet hold sets
+    // from the live ships before anything reads them, so standing garrisons
+    // survive a save→load instead of scattering on the first post-load tick.
+    this.reconcileTransientState(galaxy);
 
     // Start of day: dispatch any liberation rally whose date has arrived, before
     // the per-NPC movement loop gets a chance to scatter the staging rangers.
