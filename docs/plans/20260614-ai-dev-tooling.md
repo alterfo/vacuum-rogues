@@ -206,15 +206,21 @@ only the needed line ranges, not whole files.
 ### Task 6: Verify tooling works end-to-end
 **Files:** all created above
 
-- [ ] Run `npx tsx tools/scaffold/new-scene.ts --name TestScene` → 5 files created/modified
-- [ ] Run `npx tsx tools/scaffold/domain-field.ts --entity Player --field testPing --type boolean --default false`
-  → 3 files modified; `npm test -- --run` green; revert changes
-- [ ] Start MCP server: `npx tsx tools/mcp/vacuum-mcp.ts` → no crash
-- [ ] Call MCP from Claude: ask "use vacuum MCP to find where QuestType is defined"
-  → returns file:line in one call
-- [ ] Confirm CLAUDE.md sizes: all within budget
-- [ ] Run `npm run lint` — zero errors
-- [ ] Run `npm test -- --run` — green (tooling tests pass)
+- [x] Ran new-scene scaffold → all 5 registration files created/modified (scene class,
+  SceneType enum, SceneFactory import+case, GameEngine.contextDependentScenes, E2E Page
+  Object), then reverted. Note: the literal `--name TestScene` example trips the tool's
+  intentional "drop the Scene suffix" guard; verified with `--name TestVerify --context-dependent`.
+- [x] Ran `domain-field.ts --entity Player --field testPing --type boolean --default false`
+  → 3 files modified (Player.ts field, schemas.ts Zod, MigrationPipeline.ts 22→23 backfill);
+  `npm test -- --run` green (1386 tests); reverted changes.
+- [x] Started MCP server `npx tsx tools/mcp/vacuum-mcp.ts` via a protocol round-trip
+  (StdioClientTransport) → no crash, all 5 tools listed, clean shutdown.
+- [x] Called MCP `find_symbol("QuestType")` over the real MCP protocol → returned
+  `src/types/index.ts:60:export enum QuestType {` (file:line) in one call.
+- [x] Confirmed CLAUDE.md sizes within budget: flight 999 (<1000), presentation 1139 (<1500),
+  e2e 796 (<800).
+- [x] Ran `npm run lint` — 0 errors (31 pre-existing `any` warnings in unrelated test files).
+- [x] Ran `npm test -- --run` — green (154 files, 1386 tests) on the reverted tree.
 
 ### Task 7: [Final] Document the tooling
 **Files:**
