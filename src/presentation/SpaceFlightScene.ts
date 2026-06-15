@@ -1066,6 +1066,15 @@ export class SpaceFlightScene extends GameScene {
    */
   private onFontScaleChanged(): void {
     if (!this.gameEngine || !this.shipPhysics) return;
+    // Belt-and-suspenders (playtest6): pin lastFlightShipPos BEFORE the
+    // transition so the new initialize() seeds entryX/Y from the saved spot
+    // instead of the system edge. The preserveShipPos context below is the
+    // duplicate teleport-after mechanism; setting the field first removes the
+    // one-frame visual jump that timing between the two could otherwise show.
+    this.gameEngine.lastFlightShipPos = {
+      x: this.shipPhysics.shipX,
+      y: this.shipPhysics.shipY,
+    };
     void this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
       preserveShipPos: { x: this.shipPhysics.shipX, y: this.shipPhysics.shipY },
