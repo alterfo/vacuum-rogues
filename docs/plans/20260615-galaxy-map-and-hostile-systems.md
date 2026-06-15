@@ -105,12 +105,12 @@ Three interrelated improvements to the galaxy map and living-galaxy simulation:
 - Modify: `src/domain/Galaxy.ts`
 - Create: `src/tests/npc/captureEvent.test.ts`
 
-- [ ] Write a failing test: create a 2-system galaxy (sys_a friendly, sys_b already hostile). Call `NpcSimulator.assembleCaptureFleet(galaxy, rng)`. After the fleet arrives at sys_a (`tick()` enough times), assert `galaxy.isHostileSystem("sys_a") === true`.
-- [ ] Add `assembleCaptureFleet(galaxy, rng)` (runs every `CAPTURE_FLEET_INTERVAL = 60` days): pick 1 random neutral/friendly system adjacent to a hostile system as the attack target; spawn 3–5 Overmind PATROL ships in the hostile neighbour system, destination = target, goal kind = `HUNT`.
-- [ ] Add `NpcGoalKind.HUNT` to `NpcGoalKind` enum if not present (check `src/types/index.ts`).
-- [ ] When a HUNT-goal fleet arrives and `npcsPresentInSystem` contains ≥ 3 hostile HUNT ships: check if any friendly defenders present; if none, call `galaxy.addOvermindSystem(targetId)` and emit `SYSTEM_CAPTURED` news event; if defenders present, combat resolves over subsequent ticks.
-- [ ] Call `assembleCaptureFleet` from `tick()` at the correct interval.
-- [ ] Run full test suite — must pass.
+- [x] Write a failing test: create a 2-system galaxy (sys_a friendly, sys_b already hostile). Call `NpcSimulator.assembleCaptureFleet(galaxy, rng)`. After the fleet arrives at sys_a (`tick()` enough times), assert `galaxy.isHostileSystem("sys_a") === true`. (Plus tests for fleet composition, SYSTEM_CAPTURED news event, defended-system non-capture, and no-op on a galaxy with no hostile systems.)
+- [x] Add `assembleCaptureFleet(galaxy, rng)` (runs every `CAPTURE_FLEET_INTERVAL = 60` days): pick 1 random neutral/friendly system adjacent to a hostile system as the attack target; spawn `CAPTURE_FLEET_MIN=3`–`CAPTURE_FLEET_MAX=5` Overmind PATROL ships in the hostile neighbour system, destination = target, goal kind = `HUNT`. Fleet ships are tracked in an in-memory `captureFleetIds` set and held in position after arrival (excluded from the wandering streams) so capture campaigns never perturb the deterministic main simulation.
+- [x] Add `NpcGoalKind.HUNT` to `NpcGoalKind` enum if not present (check `src/types/index.ts`). (Already present.)
+- [x] When a HUNT-goal fleet arrives and `npcsPresentInSystem` contains ≥ 3 hostile HUNT ships: check if any friendly defenders present; if none, call `galaxy.addOvermindSystem(targetId)` and emit `SYSTEM_CAPTURED` news event; if defenders present, combat resolves over subsequent ticks. (Implemented via `resolveCaptureFleets`, called each tick; uses an isolated day-seeded RNG; survivors fold into the standing garrison on capture. Added `SYSTEM_CAPTURED` to the `NewsEvent` union, `schemas.ts`, and the two exhaustive `NewsEvent`-keyed maps in `InfoCenterScene.ts`.)
+- [x] Call `assembleCaptureFleet` from `tick()` at the correct interval. (Every 60 days when `gameDays > 0`, using an isolated day-seeded RNG so the main stream is never perturbed.)
+- [x] Run full test suite — must pass. (Capture tests + garrison/convoy regressions green; suite passes except 1 pre-existing, unrelated failure in `questBountyNpcAssignment.test.ts` — verified failing identically with my non-test changes stashed. Lint 0 errors, tsc clean.)
 
 ### Task 7: Liberation campaigns — news announcement + ranger rally
 **Files:**

@@ -42,6 +42,7 @@ const NEWS_TYPE_LABEL: Record<NewsEvent["type"], string> = {
   PLAGUE: "[ЭПИДЕМИЯ]",
   DISCOVERY: "[ОТКРЫТИЕ]",
   SYSTEM_LIBERATED: "[ОСВОБОЖДЕНИЕ]",
+  SYSTEM_CAPTURED: "[ЗАХВАТ]",
 };
 
 const NEWS_TYPE_COLOR: Record<NewsEvent["type"], number> = {
@@ -54,6 +55,7 @@ const NEWS_TYPE_COLOR: Record<NewsEvent["type"], number> = {
   PLAGUE: 0xcc44aa,
   DISCOVERY: 0x44aaff,
   SYSTEM_LIBERATED: 0xffcc00,
+  SYSTEM_CAPTURED: 0xff3388,
 };
 
 const GEAR_SORT_LABELS: Record<string, string> = {

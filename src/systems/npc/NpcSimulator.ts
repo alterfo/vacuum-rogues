@@ -61,6 +61,13 @@ const GARRISON_MIN = 5;
 /** Maximum hostile ships spawned to fill a captured system's garrison. */
 const GARRISON_MAX = 10;
 
+/** How often (game days) the Overmind launches a fleet to capture a new system. */
+const CAPTURE_FLEET_INTERVAL = 60;
+/** Minimum ships in a capture fleet (also the threshold needed to seize a system). */
+const CAPTURE_FLEET_MIN = 3;
+/** Maximum ships recruited into a single capture fleet. */
+const CAPTURE_FLEET_MAX = 5;
+
 /** Minimum game-days a ship dwells in a system after arriving before the
  *  per-day DEPART_CHANCE can fire. Prevents the "fly in and immediately out"
  *  visual seen when a 15% roll happens to fire on day 1 post-arrival. */
@@ -177,6 +184,15 @@ export class NpcSimulator {
    * deterministic main simulation. Resets on load; ensureGarrison rebuilds it.
    */
   private readonly garrisonIds = new Set<string>();
+  /**
+   * IDs of ships currently part of an Overmind capture fleet en route to (or
+   * besieging) a neutral system. Transient (not persisted). Like garrison ships
+   * they are held in position after arrival and excluded from the wandering
+   * population streams, so capture campaigns never perturb the deterministic
+   * main simulation. On a successful capture the survivors fold into the new
+   * standing garrison (moved to {@link garrisonIds}).
+   */
+  private readonly captureFleetIds = new Set<string>();
 
   constructor(brain: NpcBrain = new RuleBasedNpcBrain()) {
     this.brain = brain;
@@ -558,6 +574,14 @@ export class NpcSimulator {
         continue;
       }
 
+      // Capture-fleet hold: once an Overmind assault force arrives at its target
+      // it besieges (holds position) until the system falls or it is destroyed,
+      // rather than wandering off. Like the garrison hold this consumes no main
+      // RNG, so capture campaigns never perturb the deterministic stream.
+      if (this.captureFleetIds.has(npc.id)) {
+        continue;
+      }
+
       // Ranger without an active quest: 10% chance to accept one.
       if (
         npc.role === NpcRole.RANGER &&
@@ -600,8 +624,19 @@ export class NpcSimulator {
       this.assembleConvoys(galaxy, rng);
     }
 
+    // Launch an Overmind capture fleet at a neutral border system every 60 days.
+    // Uses an isolated, day-seeded RNG so capture campaigns never perturb the
+    // deterministic main stream that other systems/tests depend on.
+    if (galaxy.gameDays > 0 && galaxy.gameDays % CAPTURE_FLEET_INTERVAL === 0) {
+      this.assembleCaptureFleet(
+        galaxy,
+        new SeededRNG(`capture_${galaxy.gameDays}`),
+      );
+    }
+
     // Resolve abstract off-screen fights, then keep the population topped up.
     this.resolveOffscreenCombat(galaxy, rng, playerSystemId);
+    for (const e of this.resolveCaptureFleets(galaxy)) events.push(e);
     const raidEvents = this.resolveOffscreenPirateRaids(
       galaxy,
       rng,
@@ -907,6 +942,148 @@ export class NpcSimulator {
   }
 
   /**
+   * Launch an Overmind capture fleet against a neutral border system. Picks a
+   * random non-hostile system adjacent to a hostile one as the attack target,
+   * then spawns CAPTURE_FLEET_MIN–CAPTURE_FLEET_MAX OVERMIND PATROL ships in the
+   * hostile neighbour, bound for the target with a HUNT goal. The fleet travels
+   * via the normal {@link tick} travel mechanism and, once it arrives, besieges
+   * the target until it falls (see {@link resolveCaptureFleets}) or is repelled.
+   * No-op when no hostile system borders a neutral one.
+   */
+  assembleCaptureFleet(galaxy: Galaxy, rng: SeededRNG): void {
+    // Borders the Overmind can push outward from: hostile system → neutral neighbour.
+    const fronts: Array<{ hostileId: string; targetId: string }> = [];
+    for (const sys of galaxy.systems) {
+      if (!galaxy.isHostileSystem(sys.id)) continue;
+      for (const conn of sys.connections) {
+        if (!galaxy.isHostileSystem(conn.toSystemId)) {
+          fronts.push({ hostileId: sys.id, targetId: conn.toSystemId });
+        }
+      }
+    }
+    if (fronts.length === 0) return;
+
+    const front = fronts[rng.nextInt(0, fronts.length - 1)];
+    const { hostileId, targetId } = front;
+    const count = rng.nextInt(CAPTURE_FLEET_MIN, CAPTURE_FLEET_MAX);
+    const daysToArrival = this.travelDays(galaxy, hostileId, targetId);
+    const fleetId = `capture_${galaxy.gameDays}_${targetId}`;
+
+    for (let i = 0; i < count; i++) {
+      const id = `${fleetId}_${i}`;
+      const ship = this.spawnOvermindInSystem(rng, id, hostileId);
+      ship.destinationSystemId = targetId;
+      ship.daysToArrival = daysToArrival;
+      ship.state = NpcState.TRAVELING;
+      ship.goal = { kind: NpcGoalKind.HUNT, targetSystemId: targetId };
+      galaxy.npcShips.push(ship);
+      this.captureFleetIds.add(id);
+    }
+    logger.info(
+      `Capture fleet ${fleetId}: ${count} Overmind ships ${hostileId} → ${targetId}`,
+    );
+  }
+
+  /**
+   * Resolve the siege phase of every active capture fleet. For each system where
+   * arrived capture-fleet ships are present:
+   *  - if the system is already hostile, fold survivors into the standing garrison;
+   *  - else if friendly defenders remain, resolve one combat round (plays out
+   *    over subsequent ticks) using an isolated day-seeded RNG;
+   *  - else, once the assault force is at strength (≥ CAPTURE_FLEET_MIN), seize
+   *    the system: mark it Overmind-controlled, emit a SYSTEM_CAPTURED news
+   *    event, and fold the besiegers into the new garrison.
+   * Returns any news events generated. No-op when no capture fleet is active.
+   */
+  private resolveCaptureFleets(galaxy: Galaxy): NewsEvent[] {
+    const events: NewsEvent[] = [];
+    if (this.captureFleetIds.size === 0) return events;
+
+    const rng = new SeededRNG(`capture_resolve_${galaxy.gameDays}`);
+    const bySystem = new Map<string, NpcShip[]>();
+    for (const npc of galaxy.npcShips) {
+      if (!this.captureFleetIds.has(npc.id)) continue;
+      if (npc.state === NpcState.DEAD || npc.state === NpcState.TRAVELING) {
+        continue;
+      }
+      const list = bySystem.get(npc.currentSystemId) ?? [];
+      list.push(npc);
+      bySystem.set(npc.currentSystemId, list);
+    }
+
+    for (const [systemId, attackers] of bySystem) {
+      // Target already fell (captured this campaign or another): garrison the survivors.
+      if (galaxy.isHostileSystem(systemId)) {
+        for (const a of attackers) this.promoteToGarrison(a.id);
+        continue;
+      }
+
+      const defenders = galaxy.npcShips.filter(
+        (n) =>
+          n.currentSystemId === systemId &&
+          n.state !== NpcState.DEAD &&
+          n.state !== NpcState.TRAVELING &&
+          !this.captureFleetIds.has(n.id) &&
+          n.faction !== Faction.OVERMIND &&
+          n.role !== NpcRole.PIRATE,
+      );
+
+      if (defenders.length === 0) {
+        if (attackers.length < CAPTURE_FLEET_MIN) continue;
+        galaxy.addOvermindSystem(systemId);
+        const sys = galaxy.systems.find((s) => s.id === systemId);
+        const event: NewsEvent = {
+          type: "SYSTEM_CAPTURED",
+          systemId,
+          day: galaxy.gameDays,
+          description: `Система ${sys?.name ?? systemId} захвачена Доминаторами!`,
+        };
+        galaxy.addNewsEvent(event);
+        events.push(event);
+        logger.info(`Capture fleet seized ${systemId}`);
+        for (const a of attackers) this.promoteToGarrison(a.id);
+        continue;
+      }
+
+      // Defenders hold: resolve one attrition round (mirrors off-screen combat).
+      for (const attacker of attackers) {
+        if (attacker.state === NpcState.DEAD) continue;
+        const alive = defenders.filter((d) => d.state !== NpcState.DEAD);
+        if (alive.length === 0) break;
+        const victim = alive[rng.nextInt(0, alive.length - 1)];
+
+        victim.hullHP -= Math.max(
+          1,
+          Math.round(attacker.damage * PIRATE_DAMAGE_FRACTION),
+        );
+        attacker.hullHP -= Math.max(
+          1,
+          Math.round(victim.damage * VICTIM_RETALIATION_FRACTION),
+        );
+
+        if (victim.hullHP <= 0) {
+          victim.hullHP = 0;
+          victim.state = NpcState.DEAD;
+          logger.info(
+            `Capture fleet ${attacker.name} destroyed defender ${victim.name} in ${systemId}`,
+          );
+        }
+        if (attacker.hullHP <= 0) {
+          attacker.hullHP = 0;
+          attacker.state = NpcState.DEAD;
+        }
+      }
+    }
+    return events;
+  }
+
+  /** Move a ship from the capture fleet into the captured system's standing garrison. */
+  private promoteToGarrison(npcId: string): void {
+    this.captureFleetIds.delete(npcId);
+    this.garrisonIds.add(npcId);
+  }
+
+  /**
    * Remove a specific NPC from the galaxy (e.g. destroyed by the player in
    * a CombatScene encounter). No-op if the id is not found.
    */
@@ -920,16 +1097,18 @@ export class NpcSimulator {
     for (let i = galaxy.npcShips.length - 1; i >= 0; i--) {
       if (galaxy.npcShips[i].state === NpcState.DEAD) {
         this.garrisonIds.delete(galaxy.npcShips[i].id);
+        this.captureFleetIds.delete(galaxy.npcShips[i].id);
         galaxy.npcShips.splice(i, 1);
       }
     }
 
-    // Replenishment targets only the wandering population; standing-garrison
-    // ships are managed separately by ensureGarrison and excluded here so their
-    // presence never shrinks (and thus perturbs) the normal spawn count.
+    // Replenishment targets only the wandering population; standing-garrison and
+    // capture-fleet ships are managed separately (ensureGarrison /
+    // assembleCaptureFleet) and excluded here so their presence never shrinks
+    // (and thus perturbs) the normal spawn count.
     const target = Math.round(galaxy.systems.length * NPCS_PER_SYSTEM);
     let regular = galaxy.npcShips.filter(
-      (n) => !this.garrisonIds.has(n.id),
+      (n) => !this.garrisonIds.has(n.id) && !this.captureFleetIds.has(n.id),
     ).length;
     let guard = 0;
     while (regular < target && guard++ < 1000) {
