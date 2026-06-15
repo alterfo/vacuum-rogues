@@ -10,8 +10,9 @@ rationale.
 
 `tools/mcp/vacuum-mcp.ts` is a Model Context Protocol server that lets an agent
 orient at the **start** of a task with one tool call instead of reading five
-files. It is registered for Claude Code in `.claude/settings.json`
-(`mcpServers.vacuum`) and is available automatically inside ralphex subshells.
+files. It is registered for Claude Code in the project-root `.mcp.json`
+(`mcpServers.vacuum`); `.claude/settings.json` sets `enableAllProjectMcpServers`
+so it is auto-approved (no interactive prompt) inside ralphex subshells.
 The tool logic is split into `tools/mcp/tools.ts` (SDK-free, so smoke tests run
 without the protocol); `architecture.json` holds the static layer map. Tools:
 

@@ -22,8 +22,10 @@ This plan does NOT touch game logic — only developer tooling under `tools/` an
   - Test coverage: `StationScene.ts` (1,403 lines) has no dedicated test file
 - No existing MCP setup; project uses `@modelcontextprotocol/sdk` ecosystem (npm available)
 - TypeScript + tsx available (`npx tsx`); no Python dependency needed for tooling
-- ralphex runs Claude CLI in subshells; MCP servers registered in `.claude/settings.json`
-  are available in those subshells automatically
+- ralphex runs Claude CLI in subshells; MCP servers are defined in a project-root `.mcp.json`
+  and auto-approved (no interactive prompt) via `enableAllProjectMcpServers` in
+  `.claude/settings.json`, so they are available in those subshells automatically
+  (NB: `settings.json` does not accept `mcpServers` definitions — those live in `.mcp.json`)
 
 ## Development Approach
 - Each task is pure tooling — no game logic touched, no schema migrations
@@ -37,7 +39,8 @@ This plan does NOT touch game logic — only developer tooling under `tools/` an
 **Files:**
 - Create: `tools/mcp/vacuum-mcp.ts`
 - Create: `tools/mcp/package.json` (minimal, reuses workspace node_modules)
-- Modify: `.claude/settings.json` (register MCP server)
+- Create: `.mcp.json` (register MCP server — project scope)
+- Modify: `.claude/settings.json` (`enableAllProjectMcpServers` to auto-approve)
 - Create: `tools/mcp/vacuum-mcp.test.ts`
 
 **What it does:** a lightweight MCP server Sonnet can query at the START of any task
@@ -72,8 +75,12 @@ get_scene_info(sceneName: string)
   Pure logic split into `tools/mcp/tools.ts` (SDK-free) so smoke tests run without the protocol.
 - [x] Create `tools/mcp/architecture.json` with the static layer map, lockstep rules,
   and entry points (hand-authored from CLAUDE.md content, ~50 lines of JSON)
-- [x] Register in `.claude/settings.json`:
+- [x] Register in project-root `.mcp.json` (Claude Code reads server *definitions* from
+  `.mcp.json`/`~/.claude.json`, NOT from `settings.json`), and set
+  `enableAllProjectMcpServers: true` in `.claude/settings.json` so it is auto-approved in
+  ralphex's non-interactive subshells:
   ```json
+  // .mcp.json
   "mcpServers": {
     "vacuum": {
       "command": "npx",
