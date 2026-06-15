@@ -156,20 +156,20 @@ npx tsx tools/scaffold/new-scene.ts --name ResearchUpgrade --context-dependent
 Sonnet should be able to work without the reference files and only read them when it hits
 a specific problem.
 
-- [ ] Rewrite `src/presentation/flight/CLAUDE.md` to ≤ 1,000 chars: one-line description of
+- [x] Rewrite `src/presentation/flight/CLAUDE.md` to ≤ 1,000 chars: one-line description of
   each module, the critical line-count guard (`SpaceFlightScene < 1,900 lines`), and ONE
   sentence pointing to `playtest-traps.md` for historical bugs
-- [ ] Extract all playtest trap content from the current flight CLAUDE.md into
+- [x] Extract all playtest trap content from the current flight CLAUDE.md into
   `src/presentation/flight/playtest-traps.md` (unchanged content, just relocated)
-- [ ] Rewrite `src/presentation/CLAUDE.md` to ≤ 1,500 chars: list the 3 most-commonly-hit
+- [x] Rewrite `src/presentation/CLAUDE.md` to ≤ 1,500 chars: list the 3 most-commonly-hit
   PixiJS rules (hitArea, mask must be addChild'd, eventMode on Text), point to
   `pixi-rules.md` for the full list
-- [ ] Extract the 9-rule PixiJS list + texture loading convention into `src/presentation/pixi-rules.md`
-- [ ] Rewrite `e2e/CLAUDE.md` to ≤ 800 chars: only the 2 critical rules
+- [x] Extract the 9-rule PixiJS list + texture loading convention into `src/presentation/pixi-rules.md`
+- [x] Rewrite `e2e/CLAUDE.md` to ≤ 800 chars: only the 2 critical rules
   (real pointer events for interaction bugs; dev server on 5175 not 5173)
-- [ ] Verify char counts: `wc -c src/presentation/flight/CLAUDE.md` < 1,000;
+- [x] Verify char counts: `wc -c src/presentation/flight/CLAUDE.md` < 1,000;
   `wc -c src/presentation/CLAUDE.md` < 1,500; `wc -c e2e/CLAUDE.md` < 800
-- [ ] Run lint — green (CLAUDE.md files aren't linted but ensure no broken @-references)
+- [x] Run lint — green (CLAUDE.md files aren't linted but ensure no broken @-references)
 
 ### Task 5: Task-scoped context injection for ralphex — pre-read Files: block
 **Files:**
