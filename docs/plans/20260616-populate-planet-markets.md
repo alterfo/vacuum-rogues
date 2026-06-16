@@ -102,10 +102,15 @@ accessor so future callers don't depend on array position.
 - [x] run affected tests — must pass before next task
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify Overview: production markets non-empty; drift/impact/events act on them
-- [ ] run full unit suite — all green
-- [ ] run `npm run lint` — clean
-- [ ] confirm no existing test assertions changed
+- [x] verify Overview: production markets non-empty; drift/impact/events act on them
+      (GalaxySimulator L89/L632 call `planet.market.populate(seedMarket(...))`;
+      livePricing.test.ts + marketPopulation.test.ts prove non-empty markets respond
+      to advanceMarketDay/executeTrade)
+- [x] run full unit suite — all green (1522 tests / 176 files pass)
+- [x] run `npm run lint` — clean (0 errors; 31 pre-existing `any` warnings confined to
+      unrelated quest test files, none in market code)
+- [x] confirm no existing test assertions changed (quest-test diffs are additions only,
+      zero removed lines; this plan only created new test files)
 
 ## Technical Details
 - Seeding bias: derive supply/demand from `economyBaseline(economyType, resource)`
