@@ -1,7 +1,7 @@
-import { Container, Graphics } from "pixi.js";
-import { UiButton } from "../ui/UiButton";
+import { Container, Graphics, Text } from "pixi.js";
 import { GearKind, type WeaponSpec } from "@/systems/equipment/GearCatalog";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
+import type { NpcShipSprite } from "../NpcShipSprite";
 
 /**
  * Live state the combat HUD reads from the host scene without depending on the
@@ -10,32 +10,42 @@ import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 export interface CombatHudDeps {
   /** Player ship world position — centre of the weapon-range overlay. */
   getShipPos(): { x: number; y: number } | null;
-  /** Current viewport size, used to anchor the weapon panel along the bottom. */
+  /** Current viewport size, used to anchor the overlay in the top-right. */
   getScreenSize(): { width: number; height: number };
+  /** Player's canonical loadout — source of the auto-selected weapon + range. */
+  getPlayerLoadout(): ShipLoadout | null;
 }
 
-/** One weapon card in the panel: its gear id, spec and the clickable button. */
-export interface WeaponCard {
-  readonly weaponId: string;
-  readonly spec: WeaponSpec;
-  readonly button: UiButton;
-}
+const RANGE_COLOR = 0x00ffee;
 
-const SELECTED_COLOR = 0x00ffee;
-const UNSELECTED_COLOR = 0x667788;
+// Compact overlay geometry (top-right): target name + two HP bars.
+const PANEL_W = 240;
+const PANEL_H = 60;
+const PANEL_MARGIN = 20;
+const BAR_X = 8;
+const BAR_W = PANEL_W - BAR_X * 2;
+const BAR_H = 10;
+const TARGET_BAR_Y = 24;
+const PLAYER_BAR_Y = 42;
+
+const PANEL_BG = 0x0a1018;
+const BAR_BG = 0x222a33;
+const TARGET_HP_COLOR = 0xff4444; // red — enemy
+const PLAYER_HP_COLOR = 0x44ff88; // green — player
 
 /**
- * In-flight combat HUD (Task 12): the weapon-selection panel plus the
- * "Атаковать" / "Отступить" action buttons, and the dashed weapon-range circle
- * drawn in world space at the player ship.
+ * In-flight combat HUD (real-time model): a compact top-right overlay showing
+ * the selected target's name + hull bar (red) and the player's hull bar (green),
+ * plus the dashed weapon-range circle drawn in world space around the player
+ * ship. There is no longer a weapon-selection panel or "Атаковать"/"Отступить"
+ * buttons — the player's weapon auto-fires and target selection happens by
+ * clicking enemy sprites; this HUD is purely a status readout.
  *
- * It owns its own display objects on the layers handed in: the panel lives on
- * the UI layer, the range circle on the game (world) layer so it pans/zooms with
- * the route and orbit overlays. {@link CombatModule} drives it — opening it on
- * combat start (default-selecting the first weapon), toggling the "Атаковать"
- * enabled state as the target moves in/out of range, and closing it on end. The
- * HUD fans button presses back out through {@link onWeaponSelected},
- * {@link onAttack} and {@link onRetreat}; it never reaches into the module.
+ * It owns its display objects on the layers handed in: the overlay lives on the
+ * UI layer, the range circle on the game (world) layer so it pans/zooms with the
+ * route and orbit overlays. {@link CombatModule} drives it — opening it on combat
+ * start, pushing HP each frame via {@link updateTargetHP} / {@link updatePlayerHP},
+ * following the ship with {@link syncRangeCircle}, and closing it on end.
  */
 export class CombatHud {
   private readonly uiLayer: Container;
@@ -43,35 +53,14 @@ export class CombatHud {
   private readonly deps: CombatHudDeps;
 
   private panel: Container | null = null;
-  private cards: WeaponCard[] = [];
-  private _attackButton: UiButton | null = null;
-  private _retreatButton: UiButton | null = null;
+  private targetLabel: Text | null = null;
+  private targetBarFill: Graphics | null = null;
+  private playerBarFill: Graphics | null = null;
   private rangeCircle: Graphics | null = null;
 
   private _rangeRadius = 0;
-  private attackEnabled = false;
-  // Content widths tracked as the rows are built so {@link positionPanel} never
-  // measures Text bounds (canvas font metrics are unavailable under jsdom).
-  private weaponRowWidth = 0;
-  private actionRowWidth = 0;
-
-  /** The currently selected weapon's gear id (null when none/closed). */
-  selectedWeaponId: string | null = null;
-
-  /** The currently selected weapon's spec (null when none selected/closed). */
-  get selectedWeapon(): WeaponSpec | null {
-    return (
-      this.cards.find((c) => c.weaponId === this.selectedWeaponId)?.spec ?? null
-    );
-  }
-
-  // --- Callbacks the module wires (DIP): the HUD fans presses out. ---
-  /** A weapon card was selected (also fired on the default-select at open). */
-  onWeaponSelected: ((weaponId: string) => void) | null = null;
-  /** "Атаковать" pressed while enabled — resolve one combat round (Task 13). */
-  onAttack: (() => void) | null = null;
-  /** "Отступить" pressed — end the fight immediately. */
-  onRetreat: (() => void) | null = null;
+  private targetHpFraction = 0;
+  private playerHpFraction = 1;
 
   constructor(uiLayer: Container, gameLayer: Container, deps: CombatHudDeps) {
     this.uiLayer = uiLayer;
@@ -79,110 +68,97 @@ export class CombatHud {
     this.deps = deps;
   }
 
+  /**
+   * The player's active weapon — always the first equipped weapon in the
+   * loadout (auto-selected; there is no manual weapon switching any more).
+   */
+  get selectedWeapon(): WeaponSpec | null {
+    const loadout = this.deps.getPlayerLoadout();
+    if (!loadout) return null;
+    return (
+      loadout
+        .slottedWithGear()
+        .map((s) => s.gear)
+        .find((g): g is WeaponSpec => !!g && g.kind === GearKind.WEAPON) ?? null
+    );
+  }
+
   /** Radius (world-px) of the current weapon-range circle; 0 when none drawn. */
   get rangeRadius(): number {
     return this._rangeRadius;
   }
 
-  /** Whether the "Атаковать" button is currently armed. */
-  get isAttackEnabled(): boolean {
-    return this.attackEnabled;
+  /** Whether the overlay is currently mounted. */
+  get isOpen(): boolean {
+    return this.panel !== null;
   }
 
-  /** The "Атаковать" confirm button (null before {@link open}). */
-  get attackButton(): UiButton | null {
-    return this._attackButton;
+  /** Current target hull fill ratio (0..1) shown in the red bar. */
+  get targetHpRatio(): number {
+    return this.targetHpFraction;
   }
 
-  /** The "Отступить" retreat button (null before {@link open}). */
-  get retreatButton(): UiButton | null {
-    return this._retreatButton;
+  /** Current player hull fill ratio (0..1) shown in the green bar. */
+  get playerHpRatio(): number {
+    return this.playerHpFraction;
   }
 
   /**
-   * Open the HUD for a fight: build the weapon panel + action buttons, anchor it
-   * along the bottom, and default-select the first weapon (drawing its range).
+   * Open the HUD for a fight: build the compact overlay, anchor it top-right,
+   * set the target name + HP, and draw the dashed range circle (auto-selected
+   * weapon's range) around the player ship.
    */
-  open(loadout: ShipLoadout | null): void {
+  open(target: NpcShipSprite | null): void {
     this.close();
-    this.buildWeaponPanel(loadout);
-    this.buildActionButtons();
+    this.buildPanel();
     this.positionPanel();
-    if (this.cards.length > 0) this.selectWeapon(this.cards[0].weaponId);
+    this.setTarget(target);
+    this.updatePlayerHP(1, 1);
+    const weapon = this.selectedWeapon;
+    this.drawRangeCircle(weapon ? weapon.range : 0);
   }
 
   /**
-   * Build one clickable card per equipped weapon (name, damage, range). Returns
-   * the cards; clicking one selects it and emits {@link onWeaponSelected}.
+   * Point the overlay at a (possibly null) target: update the name label and the
+   * red hull bar. Called on open and whenever {@link CombatModule} switches the
+   * selected target.
    */
-  buildWeaponPanel(loadout: ShipLoadout | null): WeaponCard[] {
-    this.ensurePanel();
-    for (const c of this.cards) {
-      if (!c.button.container.destroyed) c.button.container.destroy();
+  setTarget(target: NpcShipSprite | null): void {
+    if (this.targetLabel) {
+      this.targetLabel.text = target ? target.npc.name : "Цель не выбрана";
     }
-    this.cards = [];
+    if (target) this.updateTargetHP(target.npc.hullHP, target.npc.maxHull);
+    else this.updateTargetHP(0, 1);
+  }
 
-    const CARD_W = 168;
-    const CARD_H = 52;
-    const GAP = 8;
-    const weapons = this.extractWeapons(loadout);
-    weapons.forEach((spec, i) => {
-      const card = new UiButton(
-        "",
-        `${spec.name}\nУрон ${spec.damage} · Дальн. ${spec.range}`,
-        "neutral",
-        (event) => {
-          event.stopPropagation();
-          this.selectWeapon(spec.id);
-        },
-        CARD_W,
-        CARD_H,
-      );
-      card.x = i * (CARD_W + GAP);
-      card.y = 0;
-      this.panel!.addChild(card.container);
-      this.cards.push({ weaponId: spec.id, spec, button: card });
-    });
-    this.weaponRowWidth =
-      weapons.length > 0 ? weapons.length * (CARD_W + GAP) - GAP : 0;
-    return this.cards;
+  /** Push the selected target's hull into the red bar (0..1 of `max`). */
+  updateTargetHP(current: number, max: number): void {
+    this.targetHpFraction = max > 0 ? clamp01(current / max) : 0;
+    this.redrawBar(this.targetBarFill, this.targetHpFraction, TARGET_HP_COLOR);
+  }
+
+  /** Push the player's hull into the green bar (0..1 of `max`). */
+  updatePlayerHP(current: number, max: number): void {
+    this.playerHpFraction = max > 0 ? clamp01(current / max) : 0;
+    this.redrawBar(this.playerBarFill, this.playerHpFraction, PLAYER_HP_COLOR);
   }
 
   /**
-   * Select a weapon: highlight its card, (re)draw the dashed range circle at the
-   * player ship, and notify the module. Reuses the single range Graphics so the
-   * previous circle is replaced, never leaked.
+   * Redraw the dashed range circle at the player ship's current position so it
+   * follows the moving ship. Cheap; safe to call every frame while combat is on.
    */
-  selectWeapon(weaponId: string): void {
-    const card = this.cards.find((c) => c.weaponId === weaponId);
-    if (!card) return;
-    this.selectedWeaponId = weaponId;
-    for (const c of this.cards) {
-      c.button.setAccentColor(
-        c.weaponId === weaponId ? SELECTED_COLOR : UNSELECTED_COLOR,
-      );
-    }
-    this.drawRangeCircle(card.spec.range);
-    this.onWeaponSelected?.(weaponId);
-  }
-
-  /**
-   * Arm/disarm the "Атаковать" button. The module computes the gate (a target is
-   * selected AND within the selected weapon's range) and pushes the result here.
-   */
-  setAttackEnabled(enabled: boolean): void {
-    this.attackEnabled = enabled;
-    this.applyAttackEnabledVisual();
+  syncRangeCircle(): void {
+    if (this.rangeCircle) this.drawRangeCircle(this._rangeRadius);
   }
 
   /** Tear down every display object the HUD owns and reset its state. */
   close(): void {
-    this.selectedWeaponId = null;
     this._rangeRadius = 0;
-    this.attackEnabled = false;
-    this.cards = [];
-    this._attackButton = null;
-    this._retreatButton = null;
+    this.targetHpFraction = 0;
+    this.playerHpFraction = 1;
+    this.targetLabel = null;
+    this.targetBarFill = null;
+    this.playerBarFill = null;
     if (this.rangeCircle && !this.rangeCircle.destroyed) {
       this.rangeCircle.destroy();
     }
@@ -197,65 +173,77 @@ export class CombatHud {
   // Internals
   // ---------------------------------------------------------------------------
 
-  private ensurePanel(): void {
-    if (this.panel) return;
-    this.panel = new Container();
-    this.uiLayer.addChild(this.panel);
+  /** Build the static overlay chrome (panel bg, name label, two bar tracks). */
+  private buildPanel(): void {
+    const panel = new Container();
+    panel.eventMode = "none"; // pure readout — never intercepts clicks
+    this.uiLayer.addChild(panel);
+
+    const bg = new Graphics();
+    bg.roundRect(0, 0, PANEL_W, PANEL_H, 6).fill({
+      color: PANEL_BG,
+      alpha: 0.82,
+    });
+    bg.stroke({ color: RANGE_COLOR, width: 1, alpha: 0.5 });
+    bg.eventMode = "none";
+    panel.addChild(bg);
+
+    const label = new Text({
+      text: "",
+      style: { fill: 0xffffff, fontSize: 13, fontWeight: "bold" },
+    });
+    label.x = BAR_X;
+    label.y = 5;
+    label.eventMode = "none";
+    panel.addChild(label);
+
+    panel.addChild(this.buildBarTrack(TARGET_BAR_Y));
+    panel.addChild(this.buildBarTrack(PLAYER_BAR_Y));
+
+    const targetFill = new Graphics();
+    targetFill.x = BAR_X;
+    targetFill.y = TARGET_BAR_Y;
+    targetFill.eventMode = "none";
+    panel.addChild(targetFill);
+
+    const playerFill = new Graphics();
+    playerFill.x = BAR_X;
+    playerFill.y = PLAYER_BAR_Y;
+    playerFill.eventMode = "none";
+    panel.addChild(playerFill);
+
+    this.panel = panel;
+    this.targetLabel = label;
+    this.targetBarFill = targetFill;
+    this.playerBarFill = playerFill;
   }
 
-  private extractWeapons(loadout: ShipLoadout | null): WeaponSpec[] {
-    if (!loadout) return [];
-    return loadout
-      .slottedWithGear()
-      .map((s) => s.gear)
-      .filter((g): g is WeaponSpec => !!g && g.kind === GearKind.WEAPON);
+  /** A static dark bar-track rectangle at the given local Y. */
+  private buildBarTrack(y: number): Graphics {
+    const track = new Graphics();
+    track.roundRect(BAR_X, y, BAR_W, BAR_H, 2).fill(BAR_BG);
+    track.eventMode = "none";
+    return track;
   }
 
-  private buildActionButtons(): void {
-    this.ensurePanel();
-    const BTN_W = 132;
-    const BTN_H = 36;
-    const ROW_Y = 52 + 10; // below the weapon cards
-    const attack = new UiButton(
-      "⚔",
-      "Атаковать",
-      "danger",
-      (event) => {
-        event.stopPropagation();
-        if (this.attackEnabled) this.onAttack?.();
-      },
-      BTN_W,
-      BTN_H,
-    );
-    attack.x = 0;
-    attack.y = ROW_Y;
-    const retreat = new UiButton(
-      "✕",
-      "Отступить",
-      "neutral",
-      (event) => {
-        event.stopPropagation();
-        this.onRetreat?.();
-      },
-      BTN_W,
-      BTN_H,
-    );
-    retreat.x = BTN_W + 8;
-    retreat.y = ROW_Y;
-    this.panel!.addChild(attack.container);
-    this.panel!.addChild(retreat.container);
-    this._attackButton = attack;
-    this._retreatButton = retreat;
-    this.actionRowWidth = BTN_W * 2 + 8;
-    this.applyAttackEnabledVisual();
+  /** Redraw an HP-bar fill from 0 to `fraction` of the bar width. */
+  private redrawBar(
+    fill: Graphics | null,
+    fraction: number,
+    color: number,
+  ): void {
+    if (!fill) return;
+    fill.clear();
+    const w = BAR_W * fraction;
+    if (w > 0) fill.roundRect(0, 0, w, BAR_H, 2).fill(color);
   }
 
+  /** Anchor the overlay in the top-right corner. */
   private positionPanel(): void {
     if (!this.panel) return;
-    const { width, height } = this.deps.getScreenSize();
-    const contentWidth = Math.max(this.weaponRowWidth, this.actionRowWidth);
-    this.panel.x = Math.max(20, width / 2 - contentWidth / 2);
-    this.panel.y = height - 170;
+    const { width } = this.deps.getScreenSize();
+    this.panel.x = Math.max(20, width - PANEL_W - PANEL_MARGIN);
+    this.panel.y = PANEL_MARGIN;
   }
 
   /** Draw (or redraw) the dashed range circle at the ship in world space. */
@@ -269,6 +257,7 @@ export class CombatHud {
     const pos = this.deps.getShipPos() ?? { x: 0, y: 0 };
     const g = this.rangeCircle;
     g.clear();
+    if (radius <= 0) return;
     const dashes = 60;
     const step = (Math.PI * 2) / dashes;
     for (let i = 0; i < dashes; i += 2) {
@@ -276,14 +265,11 @@ export class CombatHud {
       g.moveTo(pos.x + Math.cos(a0) * radius, pos.y + Math.sin(a0) * radius);
       g.arc(pos.x, pos.y, radius, a0, a0 + step);
     }
-    g.stroke({ color: SELECTED_COLOR, width: 2, alpha: 0.6 });
+    g.stroke({ color: RANGE_COLOR, width: 2, alpha: 0.6 });
   }
+}
 
-  private applyAttackEnabledVisual(): void {
-    if (!this._attackButton) return;
-    this._attackButton.container.alpha = this.attackEnabled ? 1 : 0.4;
-    this._attackButton.container.cursor = this.attackEnabled
-      ? "pointer"
-      : "default";
-  }
+/** Clamp a ratio into [0, 1]. */
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v));
 }

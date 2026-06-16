@@ -31,6 +31,11 @@ that this plan intentionally replaces. Task 1 is explicitly authorized to delete
 rewrite those two test files in full — they are not "known-good tests for a surviving
 feature", they are tests for the feature being removed. No other existing test files
 may be modified.
+**Task 2 addendum (2026-06-16):** `src/tests/flight/combatHud.test.ts` was found to test
+the SAME removed modal weapon-panel feature (weapon cards + Атаковать/Отступить buttons +
+`onWeaponSelected`/`onAttack`/`onRetreat`). It is the same category the exception describes
+(tests for the feature being removed), so Task 2 rewrote it in full for the new compact
+target/HP overlay. No tests for surviving features were touched.
 
 ## Implementation Steps
 
@@ -60,16 +65,16 @@ may be modified.
 **Files:**
 - Modify: `src/presentation/flight/CombatHud.ts`
 
-- [ ] Remove weapon-selection card list and "Атаковать"/"Отступить" buttons
-- [ ] Replace panel with a compact top-right overlay (240×60 px): selected target name + HP bar (red fill)
-- [ ] Add player HP bar below the target bar (green fill)
-- [ ] `open(target: NpcShipSprite | null)` — show overlay, set target name; `close()` — hide
-- [ ] `updateTargetHP(current, max)` and `updatePlayerHP(current, max)` — called from CombatModule.update
-- [ ] Keep range circle on game layer (dashed circle around player ship while combat active)
-- [ ] Remove `onAttack` and `onRetreat` callbacks; `onWeaponSelected` also removed
-- [ ] `selectedWeapon` getter: always return the first equipped weapon from loadout (auto-selected)
-- [ ] `rangeRadius` getter: unchanged
-- [ ] Write unit test: HUD shows after open(), hides after close(), container in correct layer
+- [x] Remove weapon-selection card list and "Атаковать"/"Отступить" buttons
+- [x] Replace panel with a compact top-right overlay (240×60 px): selected target name + HP bar (red fill)
+- [x] Add player HP bar below the target bar (green fill)
+- [x] `open(target: NpcShipSprite | null)` — show overlay, set target name; `close()` — hide (added `setTarget` for mid-fight target switches)
+- [x] `updateTargetHP(current, max)` and `updatePlayerHP(current, max)` — called from CombatModule.update (via new `syncHud()`)
+- [x] Keep range circle on game layer (dashed circle around player ship while combat active; `syncRangeCircle()` follows the moving ship each frame)
+- [x] Remove `onAttack` and `onRetreat` callbacks; `onWeaponSelected` also removed (dropped `UiButton`/`WeaponCard`; CombatModule no longer wires `onRetreat`)
+- [x] `selectedWeapon` getter: always return the first equipped weapon from loadout (auto-selected) — sourced via new `getPlayerLoadout` HUD dep
+- [x] `rangeRadius` getter: unchanged
+- [x] Write unit test: HUD shows after open(), hides after close(), container in correct layer (rewrote `combatHud.test.ts` — see Task 2 addendum above)
 
 ### Task 3: Redirect NpcShipManager — kill CombatScene transition
 **Files:**

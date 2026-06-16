@@ -124,8 +124,8 @@ export class CombatModule implements FlightModule {
         return p ? { x: p.shipX, y: p.shipY } : null;
       },
       getScreenSize,
+      getPlayerLoadout: () => this.deps.getPlayerLoadout?.() ?? null,
     });
-    this.hud.onRetreat = () => this.endCombat();
   }
 
   /**
@@ -140,7 +140,11 @@ export class CombatModule implements FlightModule {
     this.pruneDisengaged();
     this.advancePlayerTimer(deltaTime);
     this.advanceNpcTimers(deltaTime);
-    if (this.combatants.size === 0) this.endCombat();
+    if (this.combatants.size === 0) {
+      this.endCombat();
+      return;
+    }
+    this.syncHud();
   }
 
   /**
@@ -155,15 +159,16 @@ export class CombatModule implements FlightModule {
     if (loadout && !this.hasWeapon(loadout)) return;
     if (this.combatants.has(npc)) return; // idempotent
 
+    this.combatants.add(npc);
+    this.npcFireTimers.set(npc, 0);
+    if (!this.selectedTarget) this.selectedTarget = npc;
+
     if (!this.isActive) {
       this.isActive = true;
       this.playerFireTimer = 0;
       this.lowHullWarned = false;
-      this.hud?.open(loadout);
+      this.hud?.open(this.selectedTarget);
     }
-    this.combatants.add(npc);
-    this.npcFireTimers.set(npc, 0);
-    if (!this.selectedTarget) this.selectedTarget = npc;
     logger.info(`In-flight combat: engaged ${npc.npc.id}`);
   }
 
@@ -175,6 +180,7 @@ export class CombatModule implements FlightModule {
   selectTarget(sprite: NpcShipSprite | null): void {
     if (!this.isActive) return;
     this.selectedTarget = sprite;
+    this.hud?.setTarget(sprite);
   }
 
   /** End the current fight: drop every combatant, reset timers, close the HUD. */
@@ -281,7 +287,18 @@ export class CombatModule implements FlightModule {
     this.npcFireTimers.delete(npc);
     if (this.selectedTarget === npc) {
       this.selectedTarget = this.combatants.values().next().value ?? null;
+      this.hud?.setTarget(this.selectedTarget);
     }
+  }
+
+  /** Push live target/player HP into the HUD and follow the moving ship. */
+  private syncHud(): void {
+    if (!this.hud) return;
+    const target = this.selectedTarget;
+    if (target) this.hud.updateTargetHP(target.npc.hullHP, target.npc.maxHull);
+    const ship = this.deps.getPlayerShip?.() ?? null;
+    if (ship) this.hud.updatePlayerHP(ship.hullHP, ship.maxHull);
+    this.hud.syncRangeCircle();
   }
 
   /** Distance (world px) from the player ship to an NPC sprite, or null without physics. */
