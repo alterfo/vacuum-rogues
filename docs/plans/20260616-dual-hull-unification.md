@@ -118,10 +118,29 @@ model, not two, and the sync landmine disappears.
 - Modify: src/data/MigrationPipeline.ts (versioned migration), src/validation/schemas.ts
 - Create: src/tests/data/hullUnificationMigration.test.ts
 
-- [ ] convert `ship.modules` + `inventory.modules` into a `ShipLoadoutSnapshot`;
+- [x] convert `ship.modules` + `inventory.modules` into a `ShipLoadoutSnapshot`;
       bump save version; old saves load without data loss
-- [ ] write tests: representative old save migrates to an equivalent loadout
-- [ ] run affected tests — must pass before next task
+      (new migration step 22→23 in MigrationPipeline; CURRENT_VERSION 22→23. Synthesizes
+      `state.loadout` from the legacy installed modules + bag: hull derived from `hullClass`
+      via the GearCatalog (`hullIdForHullClass`), installed fitting first then the loose bag,
+      capped at hull slots. Legacy `ShipModule.id` == gear id, so modules resolve via `gearById`;
+      micromoduleId carries onto the slot. Unknown/hull ids skipped item-by-item (mirrors
+      `ShipLoadout.fromJSON`). Guards: returns early if `state.loadout` already exists — saves
+      made after loadout persistence keep their authoritative snapshot (idempotent + no overwrite).
+      Reserves engine+tank slots (`eq_engine_i`/`eq_tank`) so migrated ships stay flyable —
+      legacy ships flew on a flat speed stat, the canonical model gates takeoff on engine+tank,
+      mirroring the starterLoadout fallback pre-loadout saves got until now. No schema change
+      needed: `loadout` is already optional; dropping the legacy `modules` fields is Task 5.)
+- [x] write tests: representative old save migrates to an equivalent loadout
+      (src/tests/data/hullUnificationMigration.test.ts: installed weapon → slotted gear; hullClass→hullId
+      mapping (CORVETTE→hull_corvette, DESTROYER→hull_bastion); engine+tank guarantee keeps canTakeOff;
+      micromodule carry-over; inventory bag spares included; unknown/hull ids skipped without voiding;
+      already-canonical loadout untouched; idempotent re-migration; round-trips via ShipLoadout.fromJSON
+      with hull-derived cargo; synthesized snapshot passes ShipLoadoutSnapshotSchema.)
+- [x] run affected tests — must pass before next task (43 passed: hullUnificationMigration, saveMigration,
+      questPendingReturn, npcSimulator; tsc + eslint clean. Broader equipment+core sweep: 171 passed, only
+      the pre-existing unrelated gravTractor.test.ts failure — orthogonal to migration, left untouched per
+      the don't-touch-tests rule.)
 
 ### Task 5: Remove legacy fields and the stopgap bridge
 **Files:**

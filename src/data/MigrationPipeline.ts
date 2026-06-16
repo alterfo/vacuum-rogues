@@ -1,8 +1,43 @@
 import type { SaveState } from "@/domain/SaveState";
+import type { ShipLoadoutSnapshot } from "@/types";
+import {
+  GEAR_CATALOG,
+  GearKind,
+  EquipmentClass,
+  gearById,
+  type HullSpec,
+  type EquipmentSpec,
+} from "@/systems/equipment/GearCatalog";
 import { logger } from "@/utils/logger";
 
+/** A legacy ShipModule as it appears in an un-rehydrated save (plain JSON). */
+interface LegacyModuleJSON {
+  id: string;
+  micromoduleId?: string;
+}
+
+/** Default fitting that keeps a migrated ship flyable (mirrors starterLoadout). */
+const MIGRATION_ENGINE_ID = "eq_engine_i";
+const MIGRATION_TANK_ID = "eq_tank";
+
+/** Resolve a legacy `hullClass` label to its GearCatalog hull id. */
+function hullIdForHullClass(hullClass: string | undefined): string {
+  const match = GEAR_CATALOG.find(
+    (g): g is HullSpec => g.kind === GearKind.HULL && g.hullClass === hullClass,
+  );
+  return match?.id ?? "hull_corvette";
+}
+
+function isEquipmentClass(id: string, cls: EquipmentClass): boolean {
+  const g = gearById(id);
+  return (
+    g?.kind === GearKind.EQUIPMENT &&
+    (g as EquipmentSpec).equipmentClass === cls
+  );
+}
+
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 22;
+  static readonly CURRENT_VERSION = 23;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -313,6 +348,70 @@ export class MigrationPipeline {
           }
         }
       }
+    },
+    // 22 -> 23: Dual-hull unification (Task 4). Synthesize the canonical
+    // ShipLoadoutSnapshot from the legacy `ship.modules` + `inventory.modules`
+    // so the fitting carries forward once the legacy arrays are retired
+    // (Task 5). One-way and idempotent: saves that already carry a `loadout`
+    // (made after loadout persistence) keep their authoritative snapshot and
+    // are never rebuilt. Unknown/hull gear ids are skipped item-by-item
+    // (mirrors ShipLoadout.fromJSON) so one stale id never voids the loadout.
+    22: (state: SaveState) => {
+      const s = state as unknown as {
+        loadout?: ShipLoadoutSnapshot;
+        player?: {
+          ship?: {
+            hullClass?: string;
+            modules?: Array<LegacyModuleJSON | null>;
+          };
+          inventory?: { modules?: Array<LegacyModuleJSON | null> };
+        };
+      };
+      // Already canonical — keep the authoritative loadout, don't rebuild it.
+      if (s.loadout) return;
+
+      const ship = s.player?.ship;
+      const hullId = hullIdForHullClass(ship?.hullClass);
+      const hull = gearById(hullId) as HullSpec | undefined;
+      const slots = hull?.slots ?? 0;
+
+      // Installed fitting first (priority), then the loose inventory bag; the
+      // canonical model has no bag, so spares are installed into free slots.
+      const candidates = [
+        ...(ship?.modules ?? []),
+        ...(s.player?.inventory?.modules ?? []),
+      ].filter(
+        (m): m is LegacyModuleJSON =>
+          !!m && !!gearById(m.id) && gearById(m.id)!.kind !== GearKind.HULL,
+      );
+
+      // Reserve engine + fuel-tank slots so the migrated ship can still take
+      // off (legacy ships flew on a flat speed stat with no engine module; the
+      // canonical model gates takeoff on an installed engine + tank). Mirrors
+      // the starterLoadout fallback that pre-loadout saves got until now.
+      const slotted: ShipLoadoutSnapshot["slotted"] = [];
+      if (
+        !candidates.some((m) => isEquipmentClass(m.id, EquipmentClass.ENGINE))
+      ) {
+        slotted.push({ gearId: MIGRATION_ENGINE_ID });
+      }
+      if (
+        !candidates.some((m) =>
+          isEquipmentClass(m.id, EquipmentClass.FUEL_TANK),
+        )
+      ) {
+        slotted.push({ gearId: MIGRATION_TANK_ID });
+      }
+      for (const m of candidates) {
+        if (slotted.length >= slots) break;
+        slotted.push(
+          m.micromoduleId
+            ? { gearId: m.id, micromoduleId: m.micromoduleId }
+            : { gearId: m.id },
+        );
+      }
+
+      s.loadout = { hullId, slotted };
     },
   };
 }
