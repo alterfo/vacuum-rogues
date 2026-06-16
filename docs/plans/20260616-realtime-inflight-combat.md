@@ -91,11 +91,11 @@ target/HP overlay. No tests for surviving features were touched.
 **Files:**
 - Modify: `src/presentation/SpaceFlightScene.ts`
 
-- [ ] Rename `startInFlightCombat` dep callback to call `combatModule.addCombatant(sprite)` instead of `combatModule.startCombat(sprite)`
-- [ ] Remove `combatResult === "victory"` branch in constructor (hex return no longer happens for combat)
-- [ ] Remove `ctx?.combatResult` and `ctx?.npcId` fields from the context type (keep other fields)
-- [ ] `CombatModule.update` now needs to call `deps.onNpcDestroyed` + `questCompletion.bountyByNpcKill` for each NPC killed by timer — verify the existing `onNpcDestroyed` callback chain still fires
-- [ ] Write regression test: NpcShipManager constructed with `startInFlightCombat` dep, no `SceneType.COMBAT` import needed
+- [x] Rename `startInFlightCombat` dep callback to call `combatModule.addCombatant(sprite)` instead of `combatModule.startCombat(sprite)` (already wired at `SpaceFlightScene.ts:240` from Task 1 — verified)
+- [x] Remove `combatResult === "victory"` branch in constructor (hex return no longer happens for combat)
+- [x] Remove `ctx?.combatResult` and `ctx?.npcId` fields from the context type (keep other fields) — also dropped the now-dangling `!ctx?.combatResult` guard on the OVERMIND-core prompt; CombatScene still passes these fields back from the OVERMIND boss fight but they are now simply ignored (loose `object` context)
+- [x] `CombatModule.update` now needs to call `deps.onNpcDestroyed` + `questCompletion.bountyByNpcKill` for each NPC killed by timer — verify the existing `onNpcDestroyed` callback chain still fires (verified: `CombatModule.update` → `resolveRound` → `deps.onNpcDestroyed?.(target)` at `CombatModule.ts:279`; the scene wiring at `SpaceFlightScene.ts:209` runs `handleInFlightDeath` + `bountyByNpcKill`; covered by `combatModule.test.ts` "a killed NPC is removed, fires onNpcDestroyed once")
+- [x] Write regression test: NpcShipManager constructed with `startInFlightCombat` dep, no `SceneType.COMBAT` import needed (added the garrison-aggressor auto-engage test to `npcShipManager.test.ts` — distinct from Task 3's player-click test: the aggressive NPC inside weapon range routes through `startInFlightCombat` on `update()` with zero `transitionTo` calls; also refreshed the stale freeze-model description in `flight/CLAUDE.md`)
 
 ### Task 5: Verify and integration tests
 **Files:**

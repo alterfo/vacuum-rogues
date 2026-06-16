@@ -646,4 +646,80 @@ describe("NpcShipManager.rememberFlightPos", () => {
 
     manager.destroy();
   });
+
+  it("a garrison aggressor inside weapon range engages via startInFlightCombat, not a scene hop (Task 4)", () => {
+    // The auto-engage path: an aggressive NPC closing inside WEAPON_RANGE used to
+    // freeze the ship and hop to the hex CombatScene. It must now route into the
+    // real-time CombatModule (startInFlightCombat) on the next update() tick, with
+    // no transitionTo call — the ship keeps moving.
+    const engaged: Array<{ npc: { id: string } }> = [];
+    const transitions: unknown[] = [];
+
+    const stage = new Container();
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+    const renderer = {
+      app: { screen: { width: 800, height: 600 } },
+      stage,
+      uiLayer,
+      gameLayer,
+    } as unknown as Renderer;
+
+    // Ship parked at the origin; the aggressor will be placed right on top of it.
+    const physics = new ShipPhysics(0, 0, 0.2);
+    const galaxy = { npcShips: [makeNpc("aggressor", NpcRole.PIRATE)] };
+    const gameEngine = {
+      galaxy,
+      player: { currentSystemId: "sys_a", ship: { maxHull: 100, hullHP: 100 } },
+      transitionTo: (...args: unknown[]) => {
+        transitions.push(args);
+      },
+    } as unknown as GameEngine;
+
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => physics,
+      getPlanetSprites: () => [],
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => true,
+      showMessage: () => {},
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: () => {},
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+      startInFlightCombat: (sprite) =>
+        engaged.push(sprite as unknown as { npc: { id: string } }),
+    };
+
+    const manager = new NpcShipManager(
+      renderer,
+      gameEngine,
+      gameLayer,
+      uiLayer,
+      deps,
+    );
+    manager.initialize();
+
+    const sprite = (
+      manager as unknown as {
+        npcSprites: Array<{
+          x: number;
+          y: number;
+          setAggressive(on: boolean): void;
+        }>;
+      }
+    ).npcSprites[0];
+    sprite.setAggressive(true);
+    sprite.x = 0; // on the ship → within WEAPON_RANGE
+    sprite.y = 0;
+
+    manager.update(1 / 60, 100);
+
+    expect(engaged.length).toBeGreaterThanOrEqual(1);
+    expect(engaged[0].npc.id).toBe("aggressor");
+    // The freeze-and-hop path is gone: no scene transition.
+    expect(transitions.length).toBe(0);
+
+    manager.destroy();
+  });
 });

@@ -168,9 +168,6 @@ export class SpaceFlightScene extends GameScene {
           // Set when undocking from a space station: the ship spawns next to
           // that station instead of being flung to the system edge (Task 9).
           fromStationId?: string;
-          // Set when returning from CombatScene (Task 11).
-          combatResult?: "victory" | "retreat";
-          npcId?: string;
           // Pure HUD re-init (font-scale change): keep the ship where it was
           // instead of edge-spawning (playtest4 A). See applyEntrySpawn().
           preserveShipPos?: { x: number; y: number };
@@ -243,17 +240,6 @@ export class SpaceFlightScene extends GameScene {
       },
     );
 
-    // Returning victorious from CombatScene: drop the defeated NPC from the
-    // galaxy domain before the NPC module builds the sprite list.
-    if (
-      ctx?.combatResult === "victory" &&
-      ctx.npcId &&
-      this.gameEngine?.galaxy
-    ) {
-      this.npcManager.removeDefeatedNpc(this.gameEngine.galaxy, ctx.npcId);
-      this.questCompletion.bountyByNpcKill(ctx.npcId);
-    }
-
     // Auto-complete system-entry quests: EXPLORATION, DEFENSE (OVERMIND liberation), ESCORT.
     this.questCompletion.explorationBySystemEntry();
     this.questCompletion.defenseBySystemEntry();
@@ -271,12 +257,8 @@ export class SpaceFlightScene extends GameScene {
       );
     }
 
-    // OVERMIND core system: show the final encounter prompt (fresh entry only).
-    if (
-      this.gameEngine?.galaxy &&
-      this.gameEngine.player &&
-      !ctx?.combatResult
-    ) {
+    // OVERMIND core system: show the final encounter prompt on system entry.
+    if (this.gameEngine?.galaxy && this.gameEngine.player) {
       const coreId = this.gameEngine.galaxy.overmindCoreSystemId;
       if (
         coreId &&

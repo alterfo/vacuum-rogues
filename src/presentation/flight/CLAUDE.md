@@ -7,12 +7,14 @@ Modules: SpaceBackgroundLayer, StarRenderer, AsteroidBelt, OrbitRenderer, Player
 NpcShipManager, PlanetManager, CombatModule, FlightHud. Helpers (not FlightModules):
 RouteRenderer, WarpEffectRenderer, CameraController, QuestCompletion, CombatHud, DamageNumbers.
 
-In-flight combat: an aggressive NPC closing inside `WEAPON_RANGE` triggers
-`CombatModule.startCombat()`, which freezes player movement and opens the weapon HUD; a round
-deals simultaneous damage with floating numbers. A lethal round calls `NpcShipManager`'s
-in-flight death path (loot drop + domain removal); the scene also completes any bound BOUNTY.
-The hex `CombatScene` survives only for scripted text-quest encounters and player-initiated
-attacks via "Атаковать".
+In-flight combat (real-time): an aggressive NPC closing inside `WEAPON_RANGE`, or the player
+clicking "Атаковать" on a contact, calls `CombatModule.addCombatant()` — the ship keeps moving
+(no freeze, no scene transition). Each engaged NPC fires at the player every
+`GAME_BALANCE.combatFireIntervalMs`, and the player's auto-selected weapon fires at the
+selected target on the same cadence (`CombatModule.update` drives the timers). A lethal shot
+calls `NpcShipManager`'s in-flight death path (loot drop + domain removal) via the
+`onNpcDestroyed` callback; the scene also completes any bound BOUNTY. The hex `CombatScene`
+survives only for scripted text-quest encounters and the OVERMIND-core boss fight.
 
 Rules: a module never imports another — the scene mediates via callbacks + `*Deps` bundles;
 each `destroy()` must leave `gameLayer.children.length === 0`; dispose `BlurFilter`s in
