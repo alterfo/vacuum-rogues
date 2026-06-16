@@ -41,6 +41,34 @@ export function economyBaseline(
   }
 }
 
+/** Minimal shape needed to apply a trade-impact nudge — the data fields a
+ *  deserialized (method-less) market still carries. */
+interface MarketImpactTarget {
+  readonly availableResources: ResourceType[];
+  priceMultipliers: number[];
+}
+
+/**
+ * Apply a persistent trade-impact nudge to one resource's dynamic price
+ * multiplier, operating purely on the data fields. Works on both real
+ * {@link Market} instances and the PLAIN objects SaveManager produces on load
+ * (which have no prototype methods) — so a trade can never throw just because
+ * the market lost its methods. Buy nudges positive (price up), sell negative.
+ */
+export function applyMarketTradeImpact(
+  market: MarketImpactTarget,
+  resourceType: ResourceType,
+  signedDelta: number,
+): void {
+  const idx = market.availableResources.indexOf(resourceType);
+  if (idx < 0) return;
+  const current = market.priceMultipliers[idx] ?? 1.0;
+  market.priceMultipliers[idx] = Math.max(
+    0.4,
+    Math.min(2.5, current + signedDelta),
+  );
+}
+
 export class Market {
   /**
    * Per-resource dynamic price multipliers. Initialized to the economy-type
@@ -71,22 +99,66 @@ export class Market {
   }
 
   /**
-   * Drift each resource's price multiplier ±2–8% toward the economy-type
-   * baseline. Called once per game day from GameEngine.advanceGalaxyDay().
-   * Prices clamped to [0.4, 2.5] relative to base.
+   * Resource-keyed seam so callers stop depending on the position of a resource
+   * inside `availableResources`. True iff the market actually trades `resource`.
+   */
+  hasResource(resource: ResourceType): boolean {
+    return this.availableResources.indexOf(resource) >= 0;
+  }
+
+  /**
+   * The dynamic price multiplier for `resource`, resolved by key rather than by
+   * array index. Returns the neutral default (1.0) when the resource is absent
+   * (e.g. an empty stub market) or its multiplier slot is missing.
+   */
+  multiplierFor(resource: ResourceType): number {
+    const idx = this.availableResources.indexOf(resource);
+    if (idx < 0) return 1.0;
+    return this.priceMultipliers[idx] ?? 1.0;
+  }
+
+  /**
+   * Drift each resource's dynamic price multiplier ±2–8% back toward the
+   * neutral value 1.0. Called once per game day from
+   * GameEngine.advanceGalaxyDay(). Prices clamped to [0.4, 2.5] relative to base.
+   *
+   * The mean-reversion target is **1.0, not the economy-type baseline**: the
+   * economy baseline (cheap food on agri worlds, dear tech, etc.) is already
+   * applied separately by TradeSystem.getMarketPrice() as a static `econMult`.
+   * Reverting the multiplier toward the baseline too would double-apply the
+   * economy effect — cheap goods would keep getting cheaper and dear goods
+   * dearer every day, which widened every arbitrage route instead of closing
+   * it. `priceMultipliers` is purely the *dynamic* layer (player/NPC trade
+   * impact + events) that relaxes back to neutral over a few days.
    */
   advanceMarketDay(rngFn: () => number): void {
+    const target = 1.0;
     for (let i = 0; i < this.availableResources.length; i++) {
-      const resource = this.availableResources[i];
-      const baseline = economyBaseline(this.economyType, resource);
-      const current = this.priceMultipliers[i] ?? baseline;
+      const current = this.priceMultipliers[i] ?? target;
       const driftMag = 0.02 + rngFn() * 0.06; // 2–8%
-      const direction = current < baseline ? 1 : -1;
-      this.priceMultipliers[i] = Math.max(
-        0.4,
-        Math.min(2.5, current + direction * driftMag),
-      );
+      const direction = current < target ? 1 : -1;
+      // Don't overshoot the neutral target (avoids day-to-day oscillation once
+      // a route has relaxed back to balance).
+      const next =
+        direction > 0
+          ? Math.min(target, current + driftMag)
+          : Math.max(target, current - driftMag);
+      this.priceMultipliers[i] = Math.max(0.4, Math.min(2.5, next));
     }
+  }
+
+  /**
+   * Apply a persistent trade-impact nudge to one resource's dynamic price
+   * multiplier. Buying depletes local stock (price up); selling gluts the
+   * market (price down). The nudge persists in `priceMultipliers` and relaxes
+   * back toward 1.0 via {@link advanceMarketDay}, so repeated arbitrage trips
+   * progressively close the spread instead of leaving it untouched.
+   *
+   * Used by both the player ({@link import("@/systems/TradeSystem").TradeSystem})
+   * and NPC traders so the same market reacts to everyone who trades on it.
+   */
+  applyTradeImpact(resourceType: ResourceType, signedDelta: number): void {
+    applyMarketTradeImpact(this, resourceType, signedDelta);
   }
 
   trade(
