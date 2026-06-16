@@ -102,7 +102,10 @@ type View =
 
 /** The fitted loadout gear being micro-modded (for the apply sub-panel). */
 interface MicromoduleApplyTarget {
-  /** Catalog gear id of the installed item receiving the micromodule. */
+  /** Slot index of the installed item receiving the micromodule (authoritative
+   *  so the exact clicked copy is targeted with duplicate gear fitted). */
+  slotIndex: number;
+  /** Catalog gear id of that item — for display + category matching. */
   gearId: string;
 }
 
@@ -1021,7 +1024,13 @@ export class StationScene extends GameScene {
         const refund = Math.max(0, -delta);
         player.credits = player.credits - cost + refund;
         if (listing.gear.kind === GearKind.HULL) {
-          loadout.setHull(listing.gear.id);
+          // Gear that no longer fits a smaller hull returns to the inventory bag
+          // rather than being destroyed.
+          const dropped = loadout.setHull(listing.gear.id);
+          for (const gearId of dropped) {
+            const g = gearById(gearId);
+            if (g) player.inventory.addItem(gearToModule(g));
+          }
           // Project the new hull's HP pool + class label onto the live ship from
           // the canonical loadout so combat/repair reflect it immediately.
           applyLoadoutHullToShip(player.ship, loadout);
@@ -1318,8 +1327,9 @@ export class StationScene extends GameScene {
         applyBtn.on("pointerdown", (e) => {
           e.stopPropagation();
           // Canonical apply (dual-hull Task 3): the micromodule lands on the
-          // fitted loadout gear, consuming it from the inventory bag.
-          const applied = loadout.applyMicromodule(target.gearId, mm.id);
+          // exact fitted slot (by index, so the clicked copy is targeted with
+          // duplicate gear), consuming it from the inventory bag.
+          const applied = loadout.applyMicromoduleAt(target.slotIndex, mm.id);
           if (applied) {
             const idx = player.inventory.micromodules.indexOf(mm);
             if (idx >= 0) player.inventory.micromodules.splice(idx, 1);
@@ -1494,11 +1504,15 @@ export class StationScene extends GameScene {
         unBtn.cursor = "pointer";
         unBtn.on("pointerdown", (e) => {
           e.stopPropagation();
-          // Returning a removed item to the legacy inventory bag keeps it from
-          // being lost — there's no canonical uninstalled-gear store yet (that
-          // arrives with the Task 5 legacy removal).
-          if (loadout.remove(gear.id)) {
-            player.inventory.addItem(gearToModule(gear));
+          // Remove the exact clicked slot (by index, not first id-match) so the
+          // right copy is removed when two identical items are fitted. Returning
+          // it to the legacy inventory bag keeps it from being lost — there's no
+          // canonical uninstalled-gear store yet. Carry any applied micromodule
+          // onto the bagged item so re-installing restores it.
+          if (loadout.removeAt(i)) {
+            const removed = gearToModule(gear);
+            if (slot.micromoduleId) removed.micromoduleId = slot.micromoduleId;
+            player.inventory.addItem(removed);
           }
           this.render();
         });
@@ -1528,7 +1542,7 @@ export class StationScene extends GameScene {
             mmBtn.cursor = "pointer";
             mmBtn.on("pointerdown", (e) => {
               e.stopPropagation();
-              this.micromoduleApplyTarget = { gearId: gear.id };
+              this.micromoduleApplyTarget = { slotIndex: i, gearId: gear.id };
               this.view = "micromodule_apply";
               this.render();
             });
@@ -1624,6 +1638,14 @@ export class StationScene extends GameScene {
           eqBtn.on("pointerdown", (e) => {
             e.stopPropagation();
             if (this.equipment.installGear(loadout, mod.id)) {
+              // Restore a micromodule carried on a previously-removed item onto
+              // the freshly-filled slot (installGear appends to the end).
+              if (mod.micromoduleId) {
+                loadout.applyMicromoduleAt(
+                  loadout.installedGearIds().length - 1,
+                  mod.micromoduleId,
+                );
+              }
               player.inventory.modules.splice(idx, 1);
             }
             this.render();

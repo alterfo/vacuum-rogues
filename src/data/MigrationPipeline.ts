@@ -385,31 +385,50 @@ export class MigrationPipeline {
           !!m && !!gearById(m.id) && gearById(m.id)!.kind !== GearKind.HULL,
       );
 
-      // Reserve engine + fuel-tank slots so the migrated ship can still take
+      // Reserve an engine + fuel tank FIRST so the migrated ship can always take
       // off (legacy ships flew on a flat speed stat with no engine module; the
-      // canonical model gates takeoff on an installed engine + tank). Mirrors
-      // the starterLoadout fallback that pre-loadout saves got until now.
+      // canonical model gates takeoff on an installed engine + tank). Prefer a
+      // real migrated copy if the legacy fitting/bag carries one, else synthesize
+      // the starter equivalent. Reserving *before* the slot-cap fill is what
+      // guarantees both survive — otherwise a full set of installed weapons could
+      // push a bagged engine/tank past the hull's slot count and ground the ship.
+      const toSlot = (
+        m: LegacyModuleJSON,
+      ): ShipLoadoutSnapshot["slotted"][number] =>
+        m.micromoduleId
+          ? { gearId: m.id, micromoduleId: m.micromoduleId }
+          : { gearId: m.id };
+
+      const engineIdx = candidates.findIndex((m) =>
+        isEquipmentClass(m.id, EquipmentClass.ENGINE),
+      );
+      const tankIdx = candidates.findIndex((m) =>
+        isEquipmentClass(m.id, EquipmentClass.FUEL_TANK),
+      );
+
       const slotted: ShipLoadoutSnapshot["slotted"] = [];
-      if (
-        !candidates.some((m) => isEquipmentClass(m.id, EquipmentClass.ENGINE))
-      ) {
-        slotted.push({ gearId: MIGRATION_ENGINE_ID });
-      }
-      if (
-        !candidates.some((m) =>
-          isEquipmentClass(m.id, EquipmentClass.FUEL_TANK),
-        )
-      ) {
-        slotted.push({ gearId: MIGRATION_TANK_ID });
-      }
-      for (const m of candidates) {
+      slotted.push(
+        engineIdx >= 0
+          ? toSlot(candidates[engineIdx])
+          : { gearId: MIGRATION_ENGINE_ID },
+      );
+      slotted.push(
+        tankIdx >= 0
+          ? toSlot(candidates[tankIdx])
+          : { gearId: MIGRATION_TANK_ID },
+      );
+
+      // Fill the remaining slots with the rest of the fitting — installed gear
+      // first (it precedes the bag in `candidates`), then loose spares — skipping
+      // the engine/tank already reserved above.
+      for (let i = 0; i < candidates.length; i++) {
+        if (i === engineIdx || i === tankIdx) continue;
         if (slotted.length >= slots) break;
-        slotted.push(
-          m.micromoduleId
-            ? { gearId: m.id, micromoduleId: m.micromoduleId }
-            : { gearId: m.id },
-        );
+        slotted.push(toSlot(candidates[i]));
       }
+      // A hull with fewer slots than the reserved engine+tank can't carry both;
+      // never exceed the hull's slot count.
+      if (slotted.length > slots) slotted.length = slots;
 
       s.loadout = { hullId, slotted };
     },

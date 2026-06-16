@@ -86,9 +86,13 @@ Every bug follows this order — no exceptions:
 3. **Visually verify** UI/rendering fixes via screenshot — green text-level tests are NOT sufficient evidence for visual bugs.
 4. If the fix breaks an adjacent test, that's a root-cause signal — re-diagnose instead of patching the other test.
 
-## Known Caveat: Legacy Equipment System
+## Equipment System: ShipLoadout is Canonical
 
-**Decision (letsplay F6, 2026-06-10): GearCatalog/ShipLoadout is canonical.** The legacy `ship.modules`/`inventory.modules` system is inert; `InventoryScene` renders a read-only view of the loadout. Full removal requires a save migration — remains open. The legacy system is still **player-visible in `StationScene`'s hangar panel** and fed by three production flows (combat loot, gear purchases, micromodule crafting). Canonicalizing the hangar panel is the open legacy-removal work; it needs its own plan.
+**`GearCatalog`/`ShipLoadout` is the single source of truth** for the hull and every derived stat (cargo, slots, weapon damage, speed, HP). The dual-hull unification (`docs/plans/20260616-dual-hull-unification.md`, save **v22→23**) removed the legacy `PlayerShip.modules` 3-slot array, the `HULL_CLASS_SPECS`-backed stat getters, `equipModule`/`unequipModule`, `GameEngine.rehydrateModule`, the `syncShipToHullClass` bridge, and the dead `IEquipmentService` port. All three former feeding flows (combat loot, gear purchases, micromodule crafting) and the `StationScene` hangar panel now read/write the loadout.
+
+- The live `PlayerShip` carries only its in-combat HP/shield/energy pools + a `hullClass` label; these are projected from the loadout via `applyLoadoutHullToShip(ship, loadout)` at hull-change time (both hull shops call it after `loadout.setHull(...)`). Cargo capacity is read through `cargoCapacityOf(loadout)` — no per-ship fallback.
+- Hull swaps go through `ShipLoadout.setHull`, which **returns the gear ids it dropped** (gear that no longer fits a smaller hull); callers return those to the inventory bag rather than destroying them. Hangar slot edits use the slot-indexed `removeAt`/`applyMicromoduleAt` (not the by-id variants) so the exact clicked copy is targeted with duplicate gear fitted.
+- **Residual (not yet removed):** the legacy `inventory.modules` bag still exists as a purchase/remove fallback in `StationScene` (used when the loadout has no free slot), and `PlayerShipSchema.modules` is `.optional()` so pre-v23 saves still validate. Retiring the bag entirely is the remaining cleanup.
 
 ## Tooling
 

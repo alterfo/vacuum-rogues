@@ -211,4 +211,78 @@ describe("MigrationPipeline v22→v23 — dual-hull loadout synthesis", () => {
       ShipLoadoutSnapshotSchema.parse(getLoadout(migrated)),
     ).not.toThrow();
   });
+
+  it("reserves a bagged engine + tank even when installed weapons fill the hull", () => {
+    // Regression (dual-hull review): a scout (4 slots) fully fitted with weapons
+    // plus a real engine + tank loose in the bag must still take off — the
+    // engine/tank are reserved before the weapons consume the slot cap, instead
+    // of being pushed past it and grounding the ship.
+    const raw = makeLegacyFittedSave({
+      hullClass: "LIGHT_FIGHTER", // hull_scout, 4 slots
+      shipModules: [
+        legacyModule("wpn_pulse"),
+        legacyModule("wpn_beam"),
+        legacyModule("wpn_railgun"),
+      ],
+      inventoryModules: [legacyModule("eq_engine_i"), legacyModule("eq_tank")],
+    });
+    const migrated = MigrationPipeline.migrate(raw as unknown as SaveState);
+
+    const snapshot = getLoadout(migrated);
+    const ids = snapshot.slotted.map((s) => s.gearId);
+    expect(ids).toContain("eq_engine_i");
+    expect(ids).toContain("eq_tank");
+    expect(snapshot.slotted.length).toBeLessThanOrEqual(4);
+    expect(ShipLoadout.fromJSON(snapshot)!.derivedStats().canTakeOff).toBe(
+      true,
+    );
+  });
+
+  it("keeps installed fitting over bag spares when candidates exceed slots", () => {
+    // corvette (5 slots): synthetic engine+tank reserve 2 slots, leaving 3 for
+    // the 3 installed weapons; the 2 bag spares overflow and are dropped.
+    const raw = makeLegacyFittedSave({
+      hullClass: "CORVETTE", // hull_corvette, 5 slots
+      shipModules: [
+        legacyModule("wpn_pulse"),
+        legacyModule("wpn_beam"),
+        legacyModule("wpn_railgun"),
+      ],
+      inventoryModules: [
+        legacyModule("wpn_scatter"),
+        legacyModule("wpn_rocket"),
+      ],
+    });
+    const migrated = MigrationPipeline.migrate(raw as unknown as SaveState);
+
+    const snapshot = getLoadout(migrated);
+    const ids = snapshot.slotted.map((s) => s.gearId);
+    expect(snapshot.slotted.length).toBe(5);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        "eq_engine_i",
+        "eq_tank",
+        "wpn_pulse",
+        "wpn_beam",
+        "wpn_railgun",
+      ]),
+    );
+    expect(ids).not.toContain("wpn_scatter");
+    expect(ids).not.toContain("wpn_rocket");
+  });
+
+  it("re-running the v22 synthesis on its own output leaves the loadout unchanged", () => {
+    // Genuine idempotency of the step (vs the version-guarded top-level re-call):
+    // reset the version so the migrator body runs again, and confirm the
+    // `if (s.loadout) return` guard keeps the already-synthesized snapshot.
+    const raw = makeLegacyFittedSave({
+      shipModules: [legacyModule("wpn_pulse"), null, null],
+    });
+    const once = MigrationPipeline.migrate(raw as unknown as SaveState);
+    const first = JSON.stringify(getLoadout(once));
+
+    (once as unknown as { version: number }).version = 22;
+    const twice = MigrationPipeline.migrate(once);
+    expect(JSON.stringify(getLoadout(twice))).toEqual(first);
+  });
 });

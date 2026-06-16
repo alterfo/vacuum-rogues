@@ -439,9 +439,15 @@ export class EquipmentShopScene extends GameScene {
 
     // The canonical loadout is the single source of truth: swap the hull there
     // (it drops any slotted gear that no longer fits), then project the new
-    // hull's HP pool + class label onto the live ship from the loadout.
+    // hull's HP pool + class label onto the live ship from the loadout. Gear
+    // that no longer fits a smaller hull returns to the inventory bag rather than
+    // being destroyed.
     player.credits -= listing.price;
-    loadout.setHull(hull.id);
+    const dropped = loadout.setHull(hull.id);
+    for (const gearId of dropped) {
+      const g = gearById(gearId);
+      if (g) player.inventory.addItem(gearToModule(g));
+    }
     applyLoadoutHullToShip(player.ship, loadout);
 
     logger.info(

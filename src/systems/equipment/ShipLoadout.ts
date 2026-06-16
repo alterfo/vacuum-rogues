@@ -107,15 +107,24 @@ export class ShipLoadout {
     return gearById(this.hullId) as HullSpec;
   }
 
-  /** Replace the hull (keeps slotted gear only if it still fits). */
-  setHull(hullId: string): boolean {
+  /**
+   * Replace the hull. Gear that no longer fits the new (smaller) slot count is
+   * dropped; the dropped gear ids are returned so the caller can return them to
+   * the player's inventory instead of silently destroying them. Returns an empty
+   * array for an invalid hull id (the hull is unchanged) or a no-drop swap.
+   */
+  setHull(hullId: string): string[] {
     const h = gearById(hullId);
-    if (!h || h.kind !== GearKind.HULL) return false;
+    if (!h || h.kind !== GearKind.HULL) return [];
     this.hullId = hullId;
     // Drop excess gear that no longer fits the new slot count.
-    while (this.slotted.length > (h as HullSpec).slots) this.slotted.pop();
+    const dropped: string[] = [];
+    while (this.slotted.length > (h as HullSpec).slots) {
+      const removed = this.slotted.pop();
+      if (removed) dropped.push(removed.gearId);
+    }
     this.hullMicromoduleId = undefined;
-    return true;
+    return dropped;
   }
 
   /** Gear ids currently installed (excluding the hull). */
@@ -163,6 +172,22 @@ export class ShipLoadout {
   }
 
   /**
+   * Remove the installed gear at a specific slot index. Targets the exact slot
+   * rather than the first id-match, so the hangar removes the clicked copy even
+   * when two identical items are fitted (one possibly micro-modded).
+   */
+  removeAt(index: number): boolean {
+    if (index < 0 || index >= this.slotted.length) return false;
+    this.slotted.splice(index, 1);
+    return true;
+  }
+
+  /** Micromodule attached to the gear at a slot index, if any. */
+  micromoduleAt(index: number): string | undefined {
+    return this.slotted[index]?.micromoduleId;
+  }
+
+  /**
    * Attach a micromodule to an installed item or the hull. One per item, cannot
    * be removed, and rejected if incompatible with the ship's faction.
    */
@@ -175,6 +200,21 @@ export class ShipLoadout {
     }
     const slot = this.slotted.find((s) => s.gearId === gearId);
     if (!slot || slot.micromoduleId) return false; // not installed / already has one
+    slot.micromoduleId = micromoduleId;
+    return true;
+  }
+
+  /**
+   * Attach a micromodule to the item at a specific slot index (vs the first
+   * id-match in {@link applyMicromodule}). The hangar uses this so a micromodule
+   * lands on the exact clicked copy when duplicate gear is fitted. One per item;
+   * rejected if incompatible with the ship's faction.
+   */
+  applyMicromoduleAt(index: number, micromoduleId: string): boolean {
+    if (index < 0 || index >= this.slotted.length) return false;
+    if (!this.micromoduleAccepted(micromoduleId)) return false;
+    const slot = this.slotted[index];
+    if (slot.micromoduleId) return false; // one per item
     slot.micromoduleId = micromoduleId;
     return true;
   }
