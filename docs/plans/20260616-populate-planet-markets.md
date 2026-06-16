@@ -71,12 +71,12 @@ accessor so future callers don't depend on array position.
   → `{ availableResources, supplyVector, demandVector }`)
 - Create: src/tests/galaxy/marketSeeding.test.ts
 
-- [ ] choose which resources a planet trades (all 10, or a deterministic subset) and
+- [x] choose which resources a planet trades (all 10, or a deterministic subset) and
       seed `supply`/`demand` biased by economy type (e.g. AGRICULTURAL → high ORGANICS
       supply, scarce ELECTRONICS) so cross-planet spreads exist and make sense
-- [ ] deterministic from `planetId` (stable across save/load); vectors clamped > 0
-- [ ] write tests: determinism, per-economy bias direction, bounds
-- [ ] run affected tests — must pass before next task
+- [x] deterministic from `planetId` (stable across save/load); vectors clamped > 0
+- [x] write tests: determinism, per-economy bias direction, bounds
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Wire population into galaxy generation
 **Files:**
