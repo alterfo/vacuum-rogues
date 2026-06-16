@@ -3,6 +3,7 @@ import { Container, Graphics, Sprite, Text } from "pixi.js";
 import type { TacticalEncounter } from "@/domain/TacticalEncounter";
 import type { GameEngine } from "@/systems/GameEngine";
 import { CombatSystem } from "@/systems/CombatSystem";
+import { EquipmentSystem } from "@/systems/EquipmentSystem";
 import { EnemyShip } from "@/domain/EnemyShip";
 import { EncounterState, SceneType } from "@/types";
 import type { EnemyType, AIProfile } from "@/types";
@@ -52,6 +53,7 @@ export class CombatScene extends GameScene {
   private _encounter?: TacticalEncounter;
   private _gameEngine?: GameEngine;
   private _system: CombatSystem | null = null;
+  private readonly _equipment = new EquipmentSystem();
   private _uiContainer: Container | null = null;
   private _weaponPanelContainer: Container | null = null;
   private _outcomeShown = false;
@@ -535,7 +537,7 @@ export class CombatScene extends GameScene {
 
     const waitBtn = this.makeButton(
       "[ Ждать ]",
-      0x888888,
+      0xb4b4b4,
       Math.round(screenW * 0.35),
       btnY,
     );
@@ -614,7 +616,7 @@ export class CombatScene extends GameScene {
 
     const label = new Text({
       text: "ВООРУЖЕНИЕ:",
-      style: { fontFamily: "Courier New", fontSize: 11, fill: 0x888888 },
+      style: { fontFamily: "Courier New", fontSize: 11, fill: 0xb4b4b4 },
     });
     label.x = 50;
     label.y = panelY;
@@ -888,8 +890,16 @@ export class CombatScene extends GameScene {
     if (!player) return;
     if (credits > 0) player.credits += credits;
     if (killPoints > 0) player.killPoints += killPoints;
+    // Dual-hull Task 2: combat loot is rolled from the gear catalog, so feed
+    // each drop into the canonical loadout (installs into a free slot). Only
+    // when the loadout is full / the id isn't installable gear does it fall
+    // back to the legacy inventory bag, which Task 5 retires.
+    const loadout = this._gameEngine?.playerLoadout ?? null;
     for (const item of loot) {
-      player.inventory.addItem(item);
+      const installed = loadout
+        ? this._equipment.installLoot(loadout, item.id)
+        : false;
+      if (!installed) player.inventory.addItem(item);
     }
     if (loot.length > 0) {
       this.showToast("Трофеи получены", 0x44ff88);

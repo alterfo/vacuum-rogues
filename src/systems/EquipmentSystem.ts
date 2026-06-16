@@ -3,6 +3,8 @@ import type { ShipModule } from "@/domain/ShipModule";
 import { WeaponModule, ShieldModule, EngineModule } from "@/domain/ShipModule";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
 import { logger } from "@/utils/logger";
+import type { ShipLoadout } from "./equipment/ShipLoadout";
+import { gearById, GearKind } from "./equipment/GearCatalog";
 
 /**
  * Total fractional speed bonus from every installed EngineModule (its
@@ -179,5 +181,25 @@ export class EquipmentSystem {
       }
     }
     return totalCost;
+  }
+
+  /**
+   * Feed a combat-loot drop into the canonical loadout (dual-hull Task 2).
+   *
+   * Combat loot is rolled straight from `GEAR_CATALOG`, so a drop is identified
+   * by its catalog gear id. We install it into a free loadout slot — never
+   * replacing fitted gear — and return whether it landed. `false` means the id
+   * isn't installable gear (unknown id, or a hull) or the loadout is full, so
+   * the caller can fall back to the legacy inventory bag until that bag is
+   * retired in Task 5.
+   */
+  installLoot(loadout: ShipLoadout, gearId: string): boolean {
+    const gear = gearById(gearId);
+    if (!gear || gear.kind === GearKind.HULL) return false;
+    const installed = loadout.install(gearId);
+    if (installed) {
+      logger.info(`Loot ${gear.name} installed into loadout`);
+    }
+    return installed;
   }
 }

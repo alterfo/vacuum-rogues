@@ -76,9 +76,16 @@ model, not two, and the sync landmine disappears.
 - Modify: src/presentation/CombatScene.ts (+ loot source), src/systems/EquipmentSystem.ts
 - Create/Modify: src/tests/combat/lootToLoadout.test.ts
 
-- [ ] dropped weapons/equipment become installable `Gear`, not `ship.modules` entries
-- [ ] write tests: a loot drop is installable via `ShipLoadout`
-- [ ] run affected tests — must pass before next task
+- [x] dropped weapons/equipment become installable `Gear`, not `ship.modules` entries
+      (loot is rolled from `GEAR_CATALOG`; `EquipmentSystem.installLoot(loadout, gearId)` installs the
+      drop into a free loadout slot; `CombatScene.applyRewardsToPlayer` feeds every drop through it,
+      falling back to the legacy inventory bag only when the loadout is full — Task 5 retires that bag.)
+- [x] write tests: a loot drop is installable via `ShipLoadout`
+      (src/tests/combat/lootToLoadout.test.ts: installLoot installs weapon/equipment, rejects hull/unknown
+      id, never replaces fitted gear when full; every `resolveVictory` drop resolves to installable Gear.)
+- [x] run affected tests — must pass before next task (31 passed: lootToLoadout, combat, combatSystem,
+      combatScene. Pre-existing unrelated gravTractor.test.ts failure confirmed present without these
+      changes — left untouched per the don't-touch-tests rule.)
 
 ### Task 3: Redirect gear purchase + micromodule crafting to the loadout
 **Files:**
