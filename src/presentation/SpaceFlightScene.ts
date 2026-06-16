@@ -237,7 +237,7 @@ export class SpaceFlightScene extends GameScene {
           this.planetManager.routeTargetPlanetId = null;
         },
         endTurn: () => this.endTurn(),
-        startInFlightCombat: (sprite) => this.combatModule.startCombat(sprite),
+        startInFlightCombat: (sprite) => this.combatModule.addCombatant(sprite),
         isInCombat: () => this.combatModule.isActive,
         selectCombatTarget: (s) => this.combatModule.selectTarget(s),
       },

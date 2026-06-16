@@ -2,236 +2,288 @@ import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import {
   CombatModule,
+  resolveMultiRound,
   type CombatModuleDeps,
 } from "@/presentation/flight/CombatModule";
-import {
-  NpcShipManager,
-  type NpcShipManagerDeps,
-} from "@/presentation/flight/NpcShipManager";
 import type { NpcShipSprite } from "@/presentation/NpcShipSprite";
-import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
-import { GearKind } from "@/systems/equipment/GearCatalog";
-import type { Renderer } from "@/presentation/Renderer";
-import type { GameEngine } from "@/systems/GameEngine";
-import type { Galaxy } from "@/domain/Galaxy";
+import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
-import { ShipPhysics as RealShipPhysics } from "@/systems/ShipPhysics";
-import { NpcShip } from "@/domain/NpcShip";
-import { NpcRole, NpcState, FactionType } from "@/types";
-import { Faction } from "@/types/faction";
+import { GAME_BALANCE } from "@/config/balance";
 
-/** A minimal ShipPhysics stand-in carrying the fields CombatModule touches. */
-function makePhysics(): ShipPhysics & {
-  isMoving: boolean;
-  currentSpeed: number;
-} {
+const FIRE = GAME_BALANCE.combatFireIntervalMs; // 2500 ms
+
+/** ShipPhysics stand-in carrying the fields CombatModule reads. */
+function makePhysics(
+  x = 0,
+  y = 0,
+): ShipPhysics & { isMoving: boolean; currentSpeed: number } {
   return {
-    shipX: 100,
-    shipY: 200,
+    shipX: x,
+    shipY: y,
     isMoving: true,
-    currentSpeed: 0.1,
+    currentSpeed: 1,
     setTarget(_x: number, _y: number): void {},
   } as unknown as ShipPhysics & { isMoving: boolean; currentSpeed: number };
 }
 
-function makeSprite(id: string): NpcShipSprite {
-  return { npc: { id } } as unknown as NpcShipSprite;
+/** NpcShipSprite stand-in with just the position + npc fields CombatModule touches. */
+function makeSprite(
+  id: string,
+  x: number,
+  y: number,
+  opts: { hullHP?: number; damage?: number; name?: string } = {},
+): NpcShipSprite {
+  return {
+    x,
+    y,
+    npc: {
+      id,
+      name: opts.name ?? id,
+      hullHP: opts.hullHP ?? 100,
+      damage: opts.damage ?? 20,
+    },
+  } as unknown as NpcShipSprite;
 }
 
-function makeDeps(physics: ShipPhysics | null): CombatModuleDeps {
-  return { getShipPhysics: () => physics };
+function makeModule(
+  opts: {
+    ship?: { hullHP: number; maxHull: number };
+    weapons?: string[];
+    physics?: ShipPhysics & { isMoving: boolean; currentSpeed: number };
+  } = {},
+): {
+  module: CombatModule;
+  ship: { hullHP: number; maxHull: number };
+  destroyed: NpcShipSprite[];
+  messages: { text: string; color?: number }[];
+  physics: ShipPhysics & { isMoving: boolean; currentSpeed: number };
+} {
+  const physics = opts.physics ?? makePhysics();
+  const loadout = new ShipLoadout("hull_warden");
+  for (const w of opts.weapons ?? ["wpn_pulse"]) loadout.install(w); // pulse: dmg 14, range 240
+  const ship = opts.ship ?? { hullHP: 100, maxHull: 100 };
+  const destroyed: NpcShipSprite[] = [];
+  const messages: { text: string; color?: number }[] = [];
+  const deps: CombatModuleDeps = {
+    getShipPhysics: () => physics,
+    getPlayerLoadout: () => loadout,
+    getPlayerShip: () => ship,
+    onNpcDestroyed: (s) => destroyed.push(s),
+    showMessage: (text, color) => messages.push({ text, color }),
+  };
+  return { module: new CombatModule(deps), ship, destroyed, messages, physics };
 }
 
-describe("CombatModule skeleton (Task 11)", () => {
-  it("initializes without throwing and starts inactive", () => {
-    const module = new CombatModule(makeDeps(null));
-    expect(() => module.initialize()).not.toThrow();
-    expect(module.isActive).toBe(false);
-    expect(module.activeTarget).toBeNull();
+// ---------------------------------------------------------------------------
+// resolveMultiRound — pure synchronized-round helper
+// ---------------------------------------------------------------------------
+describe("resolveMultiRound (Task 1)", () => {
+  it("player takes the summed incoming damage; target (index 0) takes player damage", () => {
+    const r = resolveMultiRound(
+      14,
+      [
+        { id: "a", damage: 20, hullHP: 100 },
+        { id: "b", damage: 15, hullHP: 100 },
+      ],
+      100,
+    );
+    expect(r.newPlayerHP).toBe(65); // 100 - (20 + 15)
+    expect(r.npcs[0]).toEqual({ id: "a", hullHP: 86, dead: false }); // 100 - 14
+    expect(r.npcs[1]).toEqual({ id: "b", hullHP: 100, dead: false }); // untouched
   });
 
-  it("startCombat activates and stores the target NPC", () => {
-    const module = new CombatModule(makeDeps(makePhysics()));
-    const sprite = makeSprite("npc_1");
-    module.startCombat(sprite);
+  it("floors player HP at 0 — the death threshold (no negative hull)", () => {
+    const r = resolveMultiRound(
+      14,
+      [
+        { id: "a", damage: 60, hullHP: 100 },
+        { id: "b", damage: 60, hullHP: 100 },
+      ],
+      100,
+    );
+    expect(r.newPlayerHP).toBe(0);
+  });
+
+  it("flags a target dead when player damage drops its hull to 0", () => {
+    const r = resolveMultiRound(14, [{ id: "a", damage: 5, hullHP: 10 }], 100);
+    expect(r.npcs[0]).toEqual({ id: "a", hullHP: 0, dead: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CombatModule — engagement lifecycle
+// ---------------------------------------------------------------------------
+describe("CombatModule engagement (Task 1)", () => {
+  it("addCombatant activates, joins the set and auto-selects the first target", () => {
+    const { module } = makeModule();
+    const a = makeSprite("a", 50, 0);
+    module.addCombatant(a);
     expect(module.isActive).toBe(true);
-    expect(module.activeTarget).toBe(sprite);
+    expect(module.combatants.has(a)).toBe(true);
+    expect(module.selectedTarget).toBe(a);
   });
 
-  it("startCombat freezes player movement", () => {
-    const physics = makePhysics();
-    const module = new CombatModule(makeDeps(physics));
-    module.startCombat(makeSprite("npc_1"));
-    expect(physics.isMoving).toBe(false);
-    expect(physics.currentSpeed).toBe(0);
+  it("addCombatant is idempotent for the same sprite", () => {
+    const { module } = makeModule();
+    const a = makeSprite("a", 50, 0);
+    module.addCombatant(a);
+    module.addCombatant(a);
+    expect(module.combatants.size).toBe(1);
   });
 
-  it("a second startCombat while active keeps the original target", () => {
-    const module = new CombatModule(makeDeps(null));
-    const first = makeSprite("npc_1");
-    module.startCombat(first);
-    module.startCombat(makeSprite("npc_2"));
-    expect(module.activeTarget).toBe(first);
+  it("does NOT freeze the player ship on engage", () => {
+    const { module, physics } = makeModule();
+    module.addCombatant(makeSprite("a", 50, 0));
+    expect(physics.isMoving).toBe(true); // ship stays free to keep moving
+    expect(physics.currentSpeed).toBe(1);
   });
 
-  it("does not start (or freeze for) combat when the player has no weapon", () => {
+  it("a weaponless player can't engage (stays free to flee)", () => {
     const physics = makePhysics();
     const loadout = { slottedWithGear: () => [] } as unknown as ShipLoadout;
     const module = new CombatModule({
       getShipPhysics: () => physics,
       getPlayerLoadout: () => loadout,
     });
-    module.startCombat(makeSprite("npc_1"));
-    // Weaponless: combat is skipped so the ship stays free to fly away (no soft-lock).
+    module.addCombatant(makeSprite("a", 50, 0));
     expect(module.isActive).toBe(false);
-    expect(module.activeTarget).toBeNull();
-    expect(physics.isMoving).toBe(true);
+    expect(module.combatants.size).toBe(0);
   });
 
-  it("starts combat when at least one weapon is equipped", () => {
-    const physics = makePhysics();
-    const loadout = {
-      slottedWithGear: () => [{ gear: { kind: GearKind.WEAPON } }],
-    } as unknown as ShipLoadout;
-    const module = new CombatModule({
-      getShipPhysics: () => physics,
-      getPlayerLoadout: () => loadout,
-    });
-    module.startCombat(makeSprite("npc_1"));
-    expect(module.isActive).toBe(true);
-    expect(physics.isMoving).toBe(false);
-  });
-
-  it("endCombat clears the target and deactivates", () => {
-    const module = new CombatModule(makeDeps(makePhysics()));
-    module.startCombat(makeSprite("npc_1"));
+  it("endCombat clears the set, target and active flag", () => {
+    const { module } = makeModule();
+    module.addCombatant(makeSprite("a", 50, 0));
     module.endCombat();
     expect(module.isActive).toBe(false);
-    expect(module.activeTarget).toBeNull();
+    expect(module.combatants.size).toBe(0);
+    expect(module.selectedTarget).toBeNull();
   });
 
-  it("runs the full lifecycle without throwing", () => {
-    const module = new CombatModule(makeDeps(makePhysics()));
+  it("selectTarget is a no-op outside a fight", () => {
+    const { module } = makeModule();
+    module.selectTarget(makeSprite("x", 0, 0));
+    expect(module.selectedTarget).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CombatModule — timer-driven firing
+// ---------------------------------------------------------------------------
+describe("CombatModule fire timers (Task 1)", () => {
+  it("the player does not fire before the interval elapses", () => {
+    const { module } = makeModule();
+    const a = makeSprite("a", 50, 0, { hullHP: 100 });
+    module.addCombatant(a);
+    module.update(FIRE - 100);
+    expect(a.npc.hullHP).toBe(100);
+  });
+
+  it("player and NPC both fire once the interval elapses", () => {
+    const { module, ship } = makeModule();
+    const a = makeSprite("a", 50, 0, { hullHP: 100, damage: 20 });
+    module.addCombatant(a);
+    module.update(FIRE);
+    expect(a.npc.hullHP).toBe(86); // 100 - 14 pulse damage
+    expect(ship.hullHP).toBe(80); // 100 - 20 npc damage
+  });
+
+  it("two engaged NPCs both fire — the player takes their summed damage", () => {
+    const { module, ship } = makeModule();
+    module.addCombatant(makeSprite("a", 40, 0, { damage: 20 }));
+    module.addCombatant(makeSprite("b", 60, 0, { damage: 15 }));
+    module.update(FIRE);
+    expect(ship.hullHP).toBe(65); // 100 - (20 + 15)
+  });
+
+  it("neither side fires while out of weapon range", () => {
+    const { module, ship } = makeModule();
+    const a = makeSprite("a", 1000, 0, { hullHP: 100 }); // beyond 240 range, within scanner
+    module.addCombatant(a);
+    module.update(FIRE);
+    expect(a.npc.hullHP).toBe(100);
+    expect(ship.hullHP).toBe(100);
+    expect(module.isActive).toBe(true); // still engaged, just can't reach
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CombatModule — death + removal
+// ---------------------------------------------------------------------------
+describe("CombatModule death & removal (Task 1)", () => {
+  it("a killed NPC is removed, fires onNpcDestroyed once and ends combat when last", () => {
+    const { module, destroyed, messages } = makeModule();
+    const a = makeSprite("a", 50, 0, { hullHP: 10 }); // dies to one 14-dmg shot
+    module.addCombatant(a);
+    module.update(FIRE);
+    expect(module.combatants.has(a)).toBe(false);
+    expect(destroyed).toEqual([a]);
+    expect(module.isActive).toBe(false); // set emptied
+    expect(messages.some((m) => m.text.includes("уничтожена"))).toBe(true);
+  });
+
+  it("killing the selected target re-picks a survivor", () => {
+    const { module, destroyed } = makeModule();
+    const a = makeSprite("a", 40, 0, { hullHP: 10 });
+    const b = makeSprite("b", 60, 0, { hullHP: 100 });
+    module.addCombatant(a);
+    module.addCombatant(b);
+    module.update(FIRE);
+    expect(destroyed).toEqual([a]);
+    expect(module.combatants.has(b)).toBe(true);
+    expect(module.selectedTarget).toBe(b);
+    expect(module.isActive).toBe(true);
+  });
+
+  it("drops a combatant that drifts beyond scanner range", () => {
+    const { module } = makeModule();
+    const a = makeSprite("a", GAME_BALANCE.scannerRange + 500, 0);
+    module.addCombatant(a);
+    module.update(16);
+    expect(module.combatants.has(a)).toBe(false);
+    expect(module.isActive).toBe(false);
+  });
+
+  it("warns once when the hull drops below the retreat threshold, without freezing", () => {
+    const { module, messages, physics } = makeModule({
+      ship: { hullHP: 45, maxHull: 100 },
+    });
+    module.addCombatant(makeSprite("a", 50, 0, { hullHP: 100, damage: 20 }));
+    module.update(FIRE); // 45 - 20 = 25, below 30% of 100
+    module.update(FIRE); // 25 - 20 = 5, still below — warning must not repeat
+    const warnings = messages.filter((m) => m.text.includes("Корпус"));
+    expect(warnings.length).toBe(1);
+    expect(physics.isMoving).toBe(true); // not frozen
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CombatModule — lifecycle robustness with a render context
+// ---------------------------------------------------------------------------
+describe("CombatModule lifecycle (Task 1)", () => {
+  it("runs initialize → engage → update → destroy with render layers without throwing", () => {
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+    const loadout = new ShipLoadout("hull_warden");
+    loadout.install("wpn_pulse");
+    const module = new CombatModule({
+      getShipPhysics: () => makePhysics(),
+      getPlayerLoadout: () => loadout,
+      getUiLayer: () => uiLayer,
+      getGameLayer: () => gameLayer,
+      getScreenSize: () => ({ width: 800, height: 600 }),
+      getPlayerShip: () => ({ hullHP: 100, maxHull: 100 }),
+    });
     expect(() => {
       module.initialize();
-      module.update(1 / 60, 100);
-      module.startCombat(makeSprite("npc_1"));
-      module.update(1 / 60, 100);
+      module.addCombatant(makeSprite("a", 50, 0));
+      module.update(FIRE);
       module.endCombat();
       module.destroy();
     }).not.toThrow();
   });
 
   it("survives destroy() with no prior combat (defensive teardown)", () => {
-    const module = new CombatModule(makeDeps(null));
+    const module = new CombatModule({ getShipPhysics: () => null });
     expect(() => module.destroy()).not.toThrow();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Wiring: an aggressive garrison sprite that reaches attack range of the player
-// ship triggers the in-flight combat callback (not a CombatScene transition).
-// ---------------------------------------------------------------------------
-function makeOvermind(id: string): NpcShip {
-  return new NpcShip({
-    id,
-    name: id,
-    race: FactionType.OUTLANDERS,
-    faction: Faction.OVERMIND,
-    role: NpcRole.PATROL,
-    hullHP: 100,
-    maxHull: 100,
-    shields: 0,
-    speed: 0.1,
-    damage: 20,
-    currentSystemId: "sys_a",
-    state: NpcState.PATROLLING,
-    goal: null,
-    destinationSystemId: null,
-    daysToArrival: 0,
-    credits: 0,
-    reputation: 0,
-  });
-}
-
-function aggressiveManager(
-  physics: ShipPhysics,
-  startInFlightCombat: (sprite: NpcShipSprite) => void,
-): NpcShipManager {
-  const gameLayer = new Container();
-  const uiLayer = new Container();
-  const renderer = {
-    app: { screen: { width: 800, height: 600 } },
-    stage: new Container(),
-    uiLayer,
-    gameLayer,
-  } as unknown as Renderer;
-  const galaxy = {
-    npcShips: [makeOvermind("ov_1")],
-    isHostileSystem: (id: string) => id === "sys_a",
-  } as unknown as Galaxy;
-  const gameEngine = {
-    galaxy,
-    player: { currentSystemId: "sys_a" },
-  } as unknown as GameEngine;
-  const deps: NpcShipManagerDeps = {
-    getShipPhysics: () => physics,
-    getPlanetSprites: () => [],
-    getStarCenter: () => ({ x: 400, y: 300 }),
-    isTurnRunning: () => true,
-    showMessage: () => {},
-    showTooltip: () => {},
-    hideTooltip: () => {},
-    executeRouteTo: () => {},
-    clearRouteTarget: () => {},
-    endTurn: () => {},
-    startInFlightCombat,
-  };
-  return new NpcShipManager(renderer, gameEngine, gameLayer, uiLayer, deps);
-}
-
-function spriteList(manager: NpcShipManager): NpcShipSprite[] {
-  return (manager as unknown as { npcSprites: NpcShipSprite[] }).npcSprites;
-}
-
-describe("NpcShipManager → CombatModule wiring", () => {
-  it("calls startInFlightCombat when an aggressive sprite reaches attack range", () => {
-    const physics = new RealShipPhysics(0, 0, 0.3);
-    let combatTarget: NpcShipSprite | null = null;
-    const manager = aggressiveManager(physics, (s) => {
-      combatTarget = s;
-    });
-    manager.initialize();
-    manager.checkGarrisonAggro("sys_a", true);
-
-    const sprite = spriteList(manager)[0];
-    // Park the aggressor well inside weapon range of the player at (0,0).
-    (sprite as unknown as { x: number; y: number }).x = 50;
-    (sprite as unknown as { x: number; y: number }).y = 0;
-
-    manager.update(16, 0);
-
-    expect(combatTarget).toBe(sprite);
-    manager.destroy();
-  });
-
-  it("does not trigger combat for an aggressor still out of range", () => {
-    const physics = new RealShipPhysics(0, 0, 0.3);
-    let triggered = false;
-    const manager = aggressiveManager(physics, () => {
-      triggered = true;
-    });
-    manager.initialize();
-    manager.checkGarrisonAggro("sys_a", true);
-
-    const sprite = spriteList(manager)[0];
-    // 2000px away — far beyond the 240px weapon range.
-    (sprite as unknown as { x: number; y: number }).x = 2000;
-    (sprite as unknown as { x: number; y: number }).y = 0;
-
-    manager.update(16, 0);
-
-    expect(triggered).toBe(false);
-    manager.destroy();
   });
 });

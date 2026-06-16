@@ -149,6 +149,8 @@ export const GAME_BALANCE = {
   npcSpeed: 0.2,
   /** Weapon engagement range in world px. */
   weaponRange: 240,
+  /** Real-time in-flight combat cadence: a ship fires once per this many ms while in range. */
+  combatFireIntervalMs: 2500,
   /** Scanner (radar) range in world px. */
   scannerRange: 1200,
   /** Star sprite radius (visual, not physics). */
