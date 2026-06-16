@@ -575,4 +575,75 @@ describe("NpcShipManager.rememberFlightPos", () => {
 
     manager.destroy();
   });
+
+  it("launchCombatWithNpc engages in-flight combat without a scene transition", () => {
+    // The player-attack path used to hop to the hex CombatScene. It must now
+    // route into the real-time CombatModule (startInFlightCombat) and select the
+    // clicked NPC as the auto-fire target — and never transition scenes.
+    const engaged: Array<{ npc: { id: string } }> = [];
+    const targeted: Array<{ npc: { id: string } }> = [];
+    const transitions: unknown[] = [];
+
+    const stage = new Container();
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+    const renderer = {
+      app: { screen: { width: 800, height: 600 } },
+      stage,
+      uiLayer,
+      gameLayer,
+    } as unknown as Renderer;
+
+    const galaxy = { npcShips: [makeNpc("npc_target", NpcRole.PIRATE)] };
+    const gameEngine = {
+      galaxy,
+      player: { currentSystemId: "sys_a" },
+      transitionTo: (...args: unknown[]) => {
+        transitions.push(args);
+      },
+    } as unknown as GameEngine;
+
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => null,
+      getPlanetSprites: () => [],
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => true,
+      showMessage: () => {},
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: () => {},
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+      startInFlightCombat: (sprite) =>
+        engaged.push(sprite as unknown as { npc: { id: string } }),
+      selectCombatTarget: (sprite) =>
+        targeted.push(sprite as unknown as { npc: { id: string } }),
+    };
+
+    const manager = new NpcShipManager(
+      renderer,
+      gameEngine,
+      gameLayer,
+      uiLayer,
+      deps,
+    );
+    manager.initialize();
+    // Pre-arm a chase so we can confirm engaging clears the auto-follow intent.
+    manager.followNpcId = "npc_target";
+
+    const npc = galaxy.npcShips[0];
+    (
+      manager as unknown as { launchCombatWithNpc(n: typeof npc): void }
+    ).launchCombatWithNpc(npc);
+
+    expect(engaged.length).toBe(1);
+    expect(engaged[0].npc.id).toBe("npc_target");
+    expect(targeted.length).toBe(1);
+    expect(targeted[0].npc.id).toBe("npc_target");
+    // No hex CombatScene hop, and the chase intent is cleared once engaged.
+    expect(transitions.length).toBe(0);
+    expect(manager.followNpcId).toBeNull();
+
+    manager.destroy();
+  });
 });

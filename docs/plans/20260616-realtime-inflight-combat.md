@@ -80,12 +80,12 @@ target/HP overlay. No tests for surviving features were touched.
 **Files:**
 - Modify: `src/presentation/flight/NpcShipManager.ts`
 
-- [ ] Replace `launchCombatWithNpc(npc)` body: call `deps.startInFlightCombat?.(sprite)` instead of `transitionTo(SceneType.COMBAT, ...)`; remove `rememberFlightPos()` call (no longer needed for combat)
-- [ ] `onAttackNpc`: already calls `launchCombatWithNpc` → now routes to in-flight, no behaviour change at call site
-- [ ] `deps.startInFlightCombat` now calls `CombatModule.addCombatant` — rename callback in SpaceFlightScene wiring too
-- [ ] Remove `combatTransitionPending` guard (no longer relevant) and its usages
-- [ ] Aggressive NPC update path (line ~219): already calls `deps.startInFlightCombat?.(sprite)` → now correctly calls `addCombatant`
-- [ ] Write test: when `launchCombatWithNpc` is called, `startInFlightCombat` fires and no scene transition happens
+- [x] Replace `launchCombatWithNpc(npc)` body: call `deps.startInFlightCombat?.(sprite)` instead of `transitionTo(SceneType.COMBAT, ...)`; remove `rememberFlightPos()` call (no longer needed for combat) — also dropped the now-unused `npcRoleTechLevel` import and added `deps.selectCombatTarget?.(sprite)` so a player-initiated attack auto-targets the clicked enemy
+- [x] `onAttackNpc`: already calls `launchCombatWithNpc` → now routes to in-flight, no behaviour change at call site (only its docstring was refreshed)
+- [x] `deps.startInFlightCombat` now calls `CombatModule.addCombatant` — rename callback in SpaceFlightScene wiring too (verified: `SpaceFlightScene.ts:240` already wires `startInFlightCombat: (sprite) => this.combatModule.addCombatant(sprite)` from Task 1)
+- [x] Remove `combatTransitionPending` guard (no longer relevant) and its usages (field decl + `destroy()` reset removed; also removed the `physics.isMoving = false` freeze in `updateCombat`'s `launch` case so the ship keeps moving)
+- [x] Aggressive NPC update path (line ~219): already calls `deps.startInFlightCombat?.(sprite)` → now correctly calls `addCombatant` (verified unchanged)
+- [x] Write test: when `launchCombatWithNpc` is called, `startInFlightCombat` fires and no scene transition happens (added to `npcShipManager.test.ts`)
 
 ### Task 4: Clean up SpaceFlightScene wiring
 **Files:**

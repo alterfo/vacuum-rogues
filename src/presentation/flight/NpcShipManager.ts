@@ -8,11 +8,7 @@ import type { SystemBounds } from "../NpcShipSprite";
 import { NpcContactPanel } from "../NpcContactPanel";
 import type { NpcShip } from "@/domain/NpcShip";
 import type { Galaxy } from "@/domain/Galaxy";
-import {
-  npcsPresentInSystem,
-  NpcSimulator,
-  npcRoleTechLevel,
-} from "@/systems/npc/NpcSimulator";
+import { npcsPresentInSystem, NpcSimulator } from "@/systems/npc/NpcSimulator";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { solveInterceptPoint } from "@/utils/intercept";
 import { shouldReaim } from "@/utils/flightGeometry";
@@ -111,8 +107,6 @@ export class NpcShipManager implements FlightModule {
   private npcContactPanel: NpcContactPanel | null = null;
   private contactNpcId: string | null = null;
   private overmindOverlay: Container | null = null;
-  // Guard: prevents multiple simultaneous CombatScene transition requests.
-  private combatTransitionPending = false;
   // Last camera zoom fanned out by the scene (updateHitAreas). Applied to
   // newly spawned sprites too — otherwise a ship arriving while the player is
   // zoomed out keeps its default 40-world-px hit circle (~10 screen px at
@@ -266,7 +260,6 @@ export class NpcShipManager implements FlightModule {
       }
       this.overmindOverlay = null;
     }
-    this.combatTransitionPending = false;
   }
 
   // ---------------------------------------------------------------------------
@@ -876,10 +869,9 @@ export class NpcShipManager implements FlightModule {
   }
 
   /**
-   * "Атаковать": if already within weapon range, transition immediately to
-   * turn-based CombatScene. Otherwise, close the panel and set the ship to
-   * auto-follow (intercept) the target — updateCombat() will trigger the
-   * CombatScene transition once in range.
+   * "Атаковать": if already within weapon range, engage real-time in-flight
+   * combat immediately. Otherwise, close the panel and set the ship to
+   * auto-follow (intercept) the target — updateCombat() engages once in range.
    */
   private onAttackNpc(npc: NpcShip): void {
     // Declaring an attack turns the target — and every same-faction ship in the
@@ -947,30 +939,20 @@ export class NpcShipManager implements FlightModule {
     }
   }
 
-  /** Transition to the turn-based CombatScene for a specific NPC. */
+  /**
+   * Engage real-time in-flight combat against a specific NPC (no CombatScene hop
+   * and no ship freeze — the scene's CombatModule resolves the fight while ships
+   * keep moving). Adds the NPC to the combatant set and selects it as the
+   * player's auto-fire target. The auto-follow/approach intent is cleared now
+   * that the target is engaged.
+   */
   private launchCombatWithNpc(npc: NpcShip): void {
-    if (!this.gameEngine || this.combatTransitionPending) return;
-    this.combatTransitionPending = true;
+    const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
+    if (!sprite) return;
     this.followNpcId = null;
     this.approachNpcId = null;
-    this.rememberFlightPos(); // so returning from combat resumes here, not the edge
-    this.deps.endTurn();
-    const playerSystemId = this.gameEngine.player?.currentSystemId ?? "";
-    const isHostileSystem = !!(
-      playerSystemId && this.gameEngine.galaxy?.isHostileSystem(playerSystemId)
-    );
-    void this.gameEngine.transitionTo(SceneType.COMBAT, {
-      gameEngine: this.gameEngine,
-      isHostileSystem,
-      npcEnemy: {
-        id: npc.id,
-        hullHP: npc.hullHP,
-        shields: npc.shields,
-        damage: npc.damage,
-        techLevel: npcRoleTechLevel(npc.role),
-        factionId: npc.race,
-      },
-    });
+    this.deps.startInFlightCombat?.(sprite);
+    this.deps.selectCombatTarget?.(sprite);
   }
 
   /**
@@ -1034,11 +1016,8 @@ export class NpcShipManager implements FlightModule {
         return;
       }
       case "launch":
-        if (physics.isMoving) {
-          physics.setTarget(physics.shipX, physics.shipY);
-          physics.isMoving = false;
-          physics.currentSpeed = 0;
-        }
+        // In range: engage in-flight combat. The ship is NOT frozen — it keeps
+        // its momentum and the player can re-route to flee or strafe.
         this.launchCombatWithNpc(decision.npc);
         return;
     }
