@@ -731,8 +731,15 @@ export class StationScene extends GameScene {
     this.mainContainer!.addChild(mask);
     this.mainContainer!.addChild(listContainer);
 
-    const ownedIds =
-      this.gameEngine?.player?.inventory.modules.map((m) => m.id) ?? [];
+    // "Owned" = in the bag OR installed in the canonical loadout. Since a
+    // purchase now installs straight into the loadout (dual-hull Task 3), the
+    // bag alone misses installed gear — without the loadout ids the shop would
+    // keep offering [Купить] for an item already fitted, letting the player
+    // re-buy duplicates. Mirrors EquipmentShopScene's installed-id guard.
+    const ownedIds = [
+      ...(this.gameEngine?.player?.inventory.modules.map((m) => m.id) ?? []),
+      ...(this.gameEngine?.playerLoadout?.installedGearIds() ?? []),
+    ];
 
     for (const [i, listing] of visible.entries()) {
       const y = LIST_Y + i * this.ROW_H;
@@ -1026,11 +1033,12 @@ export class StationScene extends GameScene {
         player.credits = player.credits - cost + refund;
         if (listing.gear.kind === GearKind.HULL) {
           // Gear that no longer fits a smaller hull returns to the inventory bag
-          // rather than being destroyed.
-          const dropped = loadout.setHull(listing.gear.id);
-          for (const gearId of dropped) {
-            const g = gearById(gearId);
-            if (g) player.inventory.addItem(gearToModule(g));
+          // rather than being destroyed; slotToBagModule preserves each dropped
+          // slot's micromodule + artifact-upgrade count (lossless re-bag).
+          const dropped = loadout.swapHull(listing.gear.id);
+          for (const slot of dropped) {
+            const g = gearById(slot.gearId);
+            if (g) player.inventory.addItem(slotToBagModule(g, slot));
           }
           // Project the new hull's HP pool + class label onto the live ship from
           // the canonical loadout so combat/repair reflect it immediately.

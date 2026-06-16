@@ -108,23 +108,41 @@ export class ShipLoadout {
   }
 
   /**
-   * Replace the hull. Gear that no longer fits the new (smaller) slot count is
-   * dropped; the dropped gear ids are returned so the caller can return them to
-   * the player's inventory instead of silently destroying them. Returns an empty
-   * array for an invalid hull id (the hull is unchanged) or a no-drop swap.
+   * Replace the hull, returning the **full** dropped-slot records (gear id plus
+   * any attached micromodule and artifact-upgrade count) for gear that no longer
+   * fits a smaller hull. Callers re-bag these losslessly via `slotToBagModule`
+   * so the micromodules/artifacts the player spent are not destroyed. Returns an
+   * empty array for an invalid hull id (the hull is unchanged) or a no-drop swap.
    */
-  setHull(hullId: string): string[] {
+  swapHull(hullId: string): Array<{
+    gearId: string;
+    micromoduleId?: string;
+    upgrades?: number;
+  }> {
     const h = gearById(hullId);
     if (!h || h.kind !== GearKind.HULL) return [];
     this.hullId = hullId;
     // Drop excess gear that no longer fits the new slot count.
-    const dropped: string[] = [];
+    const dropped: SlottedGear[] = [];
     while (this.slotted.length > (h as HullSpec).slots) {
       const removed = this.slotted.pop();
-      if (removed) dropped.push(removed.gearId);
+      if (removed) dropped.push(removed);
     }
     this.hullMicromoduleId = undefined;
-    return dropped;
+    return dropped.map((s) => ({
+      gearId: s.gearId,
+      micromoduleId: s.micromoduleId,
+      upgrades: s.upgrades,
+    }));
+  }
+
+  /**
+   * Replace the hull, returning just the dropped gear ids. Thin id-projection
+   * over {@link swapHull} for callers that don't need the micromodule/upgrade
+   * detail when re-bagging.
+   */
+  setHull(hullId: string): string[] {
+    return this.swapHull(hullId).map((s) => s.gearId);
   }
 
   /** Gear ids currently installed (excluding the hull). */

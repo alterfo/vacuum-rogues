@@ -15,6 +15,7 @@ import {
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
   gearToModule,
+  slotToBagModule,
   KIND_LABEL,
   KIND_COLOR,
   applyLoadoutHullToShip,
@@ -443,10 +444,13 @@ export class EquipmentShopScene extends GameScene {
     // that no longer fits a smaller hull returns to the inventory bag rather than
     // being destroyed.
     player.credits -= listing.price;
-    const dropped = loadout.setHull(hull.id);
-    for (const gearId of dropped) {
-      const g = gearById(gearId);
-      if (g) player.inventory.addItem(gearToModule(g));
+    // Re-bag dropped gear losslessly: slotToBagModule carries the slot's
+    // micromodule + artifact-upgrade count so a hull downsize never destroys
+    // the resources the player spent on them.
+    const dropped = loadout.swapHull(hull.id);
+    for (const slot of dropped) {
+      const g = gearById(slot.gearId);
+      if (g) player.inventory.addItem(slotToBagModule(g, slot));
     }
     applyLoadoutHullToShip(player.ship, loadout);
 

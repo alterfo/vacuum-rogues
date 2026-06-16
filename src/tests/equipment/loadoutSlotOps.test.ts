@@ -33,6 +33,40 @@ describe("ShipLoadout.setHull — returns dropped gear ids", () => {
   });
 });
 
+describe("ShipLoadout.swapHull — re-bags dropped gear losslessly", () => {
+  it("returns the dropped slot's micromodule and upgrade count, not just the id", () => {
+    const loadout = new ShipLoadout("hull_bastion"); // 9 slots
+    for (let i = 0; i < 9; i++) loadout.install("wpn_pulse");
+    // Micro-mod + artifact-upgrade the last slot (slot 8). It is among the slots
+    // dropped when downsizing to the 4-slot scout (swapHull pops from the end),
+    // so its micromodule + upgrades must survive in the returned record — else a
+    // hull downsize silently destroys the resources spent on them.
+    loadout.applyMicromoduleAt(8, "mm_amplifier_1");
+    loadout.setSlotUpgrades(8, 2);
+
+    const dropped = loadout.swapHull("hull_scout"); // 4 slots → drops 5
+
+    expect(dropped).toHaveLength(5);
+    const enriched = dropped.find((s) => s.micromoduleId === "mm_amplifier_1");
+    expect(enriched).toBeDefined();
+    expect(enriched?.gearId).toBe("wpn_pulse");
+    expect(enriched?.upgrades).toBe(2);
+  });
+
+  it("setHull stays a thin id-projection over swapHull", () => {
+    const loadout = new ShipLoadout("hull_bastion");
+    for (let i = 0; i < 9; i++) loadout.install("wpn_pulse");
+
+    expect(loadout.setHull("hull_scout")).toEqual([
+      "wpn_pulse",
+      "wpn_pulse",
+      "wpn_pulse",
+      "wpn_pulse",
+      "wpn_pulse",
+    ]);
+  });
+});
+
 describe("ShipLoadout.removeAt — removes the exact slot", () => {
   it("removes the clicked copy when two identical items are fitted", () => {
     const loadout = new ShipLoadout("hull_corvette");
