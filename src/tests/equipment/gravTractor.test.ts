@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
+import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
 import {
   NpcShipManager,
   type NpcShipManagerDeps,
@@ -78,9 +79,10 @@ function makeManager(opts: {
   tractorGearId?: string;
   cargoCapacity?: number;
   preFill?: number;
+  fillHoldToCapacity?: boolean;
   shipX?: number;
   shipY?: number;
-}): { manager: NpcShipManager; inventory: Inventory } {
+}): { manager: NpcShipManager; inventory: Inventory; capacity: number } {
   const stage = new Container();
   const uiLayer = new Container();
   const gameLayer = new Container();
@@ -99,8 +101,15 @@ function makeManager(opts: {
   const loadout = new ShipLoadout("hull_corvette");
   if (opts.tractorGearId) loadout.install(opts.tractorGearId);
 
+  // Hold size is the canonical loadout cargo (dual-hull: stat reads route
+  // through derivedStats, not the retired ship.cargoCapacity getter).
+  const capacity = cargoCapacityOf(loadout);
+
   const inventory = new Inventory();
   if (opts.preFill) inventory.addResource(ResourceType.METALS, opts.preFill);
+  // Fill the canonical hold to capacity to simulate a full cargo.
+  if (opts.fillHoldToCapacity)
+    inventory.addResource(ResourceType.METALS, capacity);
 
   const player = {
     currentSystemId: "sys_a",
@@ -135,6 +144,7 @@ function makeManager(opts: {
   return {
     manager: new NpcShipManager(renderer, gameEngine, gameLayer, uiLayer, deps),
     inventory,
+    capacity,
   };
 }
 
@@ -182,12 +192,15 @@ describe("Gravity tractor — auto-pickup", () => {
     manager.destroy();
   });
 
+  // ⚠️ FOR REVIEW (dual-hull): fullness now comes from the canonical loadout's
+  // derivedStats().cargo, not the retired player.ship.cargoCapacity injection
+  // (dual-hull Task 1 moved the auto-pickup guard onto cargoCapacityOf(loadout)).
+  // The assertion intent is preserved — a full hold leaves loot in space and
+  // adds nothing — but the hold is filled to the loadout capacity, not a fake 2.
   it("does not pick up loot when cargo is full", () => {
-    // capacity 2, pre-filled to 2 → no room for the in-range loot.
-    const { manager, inventory } = makeManager({
+    const { manager, inventory, capacity } = makeManager({
       tractorGearId: "grav_tractor_2",
-      cargoCapacity: 2,
-      preFill: 2,
+      fillHoldToCapacity: true,
     });
     manager.spawnLootForNpc(makeNpc("t"), 50, 0, seqRng([0.5]));
 
@@ -197,7 +210,7 @@ describe("Gravity tractor — auto-pickup", () => {
     const metals = inventory.resources.find(
       (r) => r.type === ResourceType.METALS,
     );
-    expect(metals?.amount).toBe(2); // unchanged — nothing added
+    expect(metals?.amount).toBe(capacity); // full hold — nothing added
     manager.destroy();
   });
 

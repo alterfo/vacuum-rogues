@@ -188,11 +188,29 @@ model, not two, and the sync landmine disappears.
       1 pre-existing gravTractor failure.)
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify Overview: one source of truth; buy-hull updates cargo/stats/appearance;
+- [x] verify Overview: one source of truth; buy-hull updates cargo/stats/appearance;
       loot/purchase/craft all feed the loadout; old saves migrate
-- [ ] run full unit suite — all green
-- [ ] run `npm run test:e2e:regression`
-- [ ] run `npm run lint` — clean
+      (one source of truth confirmed: every production `ship.modules`/`syncShipToHullClass`
+      reference is now a history comment only — `PlayerShip` carries no modules array/spec
+      getters, `GearBridge` exposes `applyLoadoutHullToShip` not the bridge. Buy-hull →
+      both shops call `applyLoadoutHullToShip` after `loadout.setHull` (hullSync.test.ts
+      projection). Loot/purchase/craft feed the loadout (Tasks 2/3 tests green). Old saves
+      migrate via the 22→23 step (hullUnificationMigration.test.ts green).)
+- [x] run full unit suite — all green (1552 passed | 0 failed across 181 files; tsc clean)
+      ⚠️ FOR REVIEW: `gravTractor.test.ts` "does not pick up loot when cargo is full" was
+      NOT a pre-existing/unrelated failure as Tasks 2–5 notes claimed — it was a real
+      dual-hull regression. Task 1 moved the auto-pickup cargo guard from the retired
+      `player.ship.cargoCapacity` onto `cargoCapacityOf(loadout)`; the test injected
+      `ship.cargoCapacity=2` (now a dead path), so the corvette's real capacity left room
+      and loot was pulled in. Prior iterations "stashed changes" to confirm it red, but the
+      dual-hull changes were already committed, so stashing never isolated them. Production
+      behavior is correct (reads the canonical loadout); only the stale test SETUP was
+      fixed: `makeManager` now fills the hold to `cargoCapacityOf(loadout)` and the test
+      asserts against that capacity. The assertion intent (full hold → loot stays in space,
+      nothing added) is unchanged — no assertion weakened.
+- [x] run `npm run test:e2e:regression` (16/16 passed; needs NO_PROXY for the webServer
+      health check in this env — dev server on 5175 reachable only with proxy bypass)
+- [x] run `npm run lint` — clean (0 errors; 29 pre-existing `any` warnings in test files)
 
 ## Technical Details
 - Migration is one-way and idempotent (guard on save version). Unknown gear ids are
