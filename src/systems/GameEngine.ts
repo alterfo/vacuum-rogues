@@ -705,16 +705,27 @@ export class GameEngine {
       ]) {
         if (q.targetObjectId) boundIds.add(q.targetObjectId);
       }
-      const pirate = this.galaxy?.npcShips.find(
-        (n) =>
-          n.currentSystemId === targetSystemId &&
-          n.role === NpcRole.PIRATE &&
-          n.state !== NpcState.DEAD &&
-          !boundIds.has(n.id),
-      );
+      const pirate =
+        this.galaxy?.npcShips.find(
+          (n) =>
+            n.currentSystemId === targetSystemId &&
+            n.role === NpcRole.PIRATE &&
+            n.state !== NpcState.DEAD &&
+            !boundIds.has(n.id),
+        ) ??
+        this.galaxy?.npcShips.find(
+          (n) =>
+            n.role === NpcRole.PIRATE &&
+            n.state !== NpcState.DEAD &&
+            !boundIds.has(n.id),
+        );
       if (pirate) {
         pirate.name = quest.targetNpcName;
-        template = { ...quest.template, targetObjectId: pirate.id };
+        template = {
+          ...quest.template,
+          targetObjectId: pirate.id,
+          targetSystemId: pirate.currentSystemId ?? targetSystemId,
+        };
         // The Info Center registry is cached per game-day and only rebuilt on
         // world advance. Renaming a ship mid-day mutates galaxy state the cached
         // snapshot won't reflect, so the player couldn't find the freshly-named

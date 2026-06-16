@@ -869,7 +869,7 @@ function buildLocalDelivery(
     template: {
       id,
       title: "Местный подряд",
-      description: `${issuer.title} ${issuer.name} подкинул местный подряд: развезти «${cargo.label}» по орбитальным складам, не покидая систему. Платят немного, зато спокойно и без прыжков.`,
+      description: `${issuer.title} ${issuer.name} предлагает местный подряд: закупить «${cargo.label}» на рынке ${origin?.name ?? "системы"} и сдать здесь же. Платят немного, зато без прыжков.`,
       type: QuestType.DELIVERY,
       objectives: [
         {

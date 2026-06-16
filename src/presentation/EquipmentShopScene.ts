@@ -7,8 +7,10 @@ import { SceneType, PlanetType, HULL_CLASS_SPECS } from "@/types";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
 import {
   GearKind,
+  gearById,
   type Gear,
   type HullSpec,
+  type EquipmentSpec,
 } from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
@@ -63,7 +65,7 @@ export class EquipmentShopScene extends GameScene {
   private scrollOffset = 0;
   private activeTab: ShopTab = "gear";
   private readonly ROW_H = 52;
-  private readonly VISIBLE_ROWS = 8;
+  private readonly VISIBLE_ROWS = 7;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(renderer: Renderer) {
@@ -187,23 +189,31 @@ export class EquipmentShopScene extends GameScene {
       // Column headers
       this.renderColumnHeaders(PX, PY + 76, PW);
 
-      // Scrollable item list
+      // Scrollable item list — mask must be a child of the clipped container
+      // (PixiJS 8 rule: mask must be addChild()'d to the masked object)
+      const listH = this.VISIBLE_ROWS * this.ROW_H;
+      const listClip = new Container();
+      this.mainContainer.addChild(listClip);
       const listMask = new Graphics();
-      listMask.rect(PX, PY + 96, PW, this.VISIBLE_ROWS * this.ROW_H);
+      listMask.rect(PX, PY + 96, PW - 30, listH);
       listMask.fill({ color: 0xffffff });
-      this.mainContainer.addChild(listMask);
+      listClip.addChild(listMask);
+      listClip.mask = listMask;
 
       this.listContainer = new Container();
-      this.listContainer.mask = listMask;
-      this.mainContainer.addChild(this.listContainer);
+      listClip.addChild(this.listContainer);
 
       this.renderRows(PX, PY + 96, PW);
 
-      // Scroll buttons
-      this.addScrollButtons(
-        PX + PW - 28,
-        PY + 96,
-        this.VISIBLE_ROWS * this.ROW_H,
+      // Scroll buttons (outside clip so they're always visible)
+      this.addScrollButtons(PX + PW - 28, PY + 96, listH);
+
+      // Current loadout strip below the list
+      this.renderLoadoutStrip(
+        PX,
+        PY + 96 + listH + 4,
+        PW,
+        PH - 96 - listH - 48,
       );
     } else {
       this.renderHullPanel(PX, PY + 76, PW, PH - 76 - 44);
@@ -480,6 +490,33 @@ export class EquipmentShopScene extends GameScene {
     this.mainContainer!.addChild(divider);
   }
 
+  /** Gear IDs currently installed in the canonical loadout. */
+  private installedGearIds(): Set<string> {
+    return new Set(this.gameEngine?.playerLoadout?.installedGearIds() ?? []);
+  }
+
+  /**
+   * For an equipment item, find the currently installed gear of the same class
+   * (used to show "→ Заменит X" in the comparison column).
+   */
+  private installedOfSameClass(gear: Gear): EquipmentSpec | null {
+    if (gear.kind !== GearKind.EQUIPMENT) return null;
+    const shopItem = gear as EquipmentSpec;
+    const loadout = this.gameEngine?.playerLoadout;
+    if (!loadout) return null;
+    for (const id of loadout.installedGearIds()) {
+      const installed = gearById(id);
+      if (
+        installed &&
+        installed.kind === GearKind.EQUIPMENT &&
+        (installed as EquipmentSpec).equipmentClass === shopItem.equipmentClass
+      ) {
+        return installed as EquipmentSpec;
+      }
+    }
+    return null;
+  }
+
   private renderRows(startX: number, startY: number, w: number): void {
     if (!this.listContainer) return;
     this.listContainer.removeChildren();
@@ -488,6 +525,7 @@ export class EquipmentShopScene extends GameScene {
     const ownedIds = new Set(
       this.gameEngine?.player?.inventory.modules.map((m) => m.id) ?? [],
     );
+    const installedIds = this.installedGearIds();
 
     for (let i = 0; i < this.listings.length; i++) {
       const listing = this.listings[i];
@@ -495,19 +533,34 @@ export class EquipmentShopScene extends GameScene {
       const rowY = startY + i * this.ROW_H - this.scrollOffset * this.ROW_H;
       const canAfford = playerCredits >= listing.price;
       const alreadyOwned = ownedIds.has(gear.id);
+      const isInstalled = installedIds.has(gear.id);
 
+      const replacing = this.installedOfSameClass(gear);
+      const rowColor = isInstalled
+        ? 0x0a1f10
+        : i % 2 === 0
+          ? 0x060e18
+          : 0x050b14;
       const rowBg = new Graphics();
       rowBg.rect(startX, rowY, w - 30, this.ROW_H - 2);
-      rowBg.fill({ color: i % 2 === 0 ? 0x060e18 : 0x050b14 });
+      rowBg.fill({ color: rowColor });
+      if (isInstalled) rowBg.stroke({ width: 1, color: 0x226622 });
       this.listContainer.addChild(rowBg);
 
       // Name + stat line
+      const nameColor = isInstalled
+        ? 0x44ff88
+        : alreadyOwned
+          ? 0x447744
+          : canAfford
+            ? 0xddeeff
+            : 0x667788;
       const nameText = new Text({
-        text: gear.name,
+        text: isInstalled ? `★ ${gear.name}` : gear.name,
         style: {
           fontFamily: "Courier New",
           fontSize: 13,
-          fill: alreadyOwned ? 0x447744 : canAfford ? 0xddeeff : 0x667788,
+          fill: nameColor,
           fontWeight: "bold",
         },
       });
@@ -516,12 +569,21 @@ export class EquipmentShopScene extends GameScene {
       nameText.y = rowY + 6;
       this.listContainer.addChild(nameText);
 
+      // Stat line — show comparison delta if this item replaces an installed one
+      let statLine = gearStatLine(gear);
+      if (replacing && !isInstalled) {
+        const shopPotency = (gear as EquipmentSpec).potency;
+        const curPotency = replacing.potency;
+        const delta = shopPotency - curPotency;
+        const sign = delta >= 0 ? "+" : "";
+        statLine += `  (${sign}${delta} vs ${replacing.name})`;
+      }
       const statText = new Text({
-        text: gearStatLine(gear),
+        text: statLine,
         style: {
           fontFamily: "Courier New",
           fontSize: 10,
-          fill: 0x445566,
+          fill: replacing && !isInstalled ? 0x88aacc : 0x445566,
         },
       });
       statText.eventMode = "none";
@@ -572,20 +634,32 @@ export class EquipmentShopScene extends GameScene {
       this.listContainer.addChild(priceText);
 
       // Buy button
-      const btnLabel = alreadyOwned ? "Есть" : canAfford ? "[Купить]" : "Мало₡";
+      const btnLabel = isInstalled
+        ? "Установлен"
+        : alreadyOwned
+          ? "Есть"
+          : canAfford
+            ? "[Купить]"
+            : "Мало₡";
       const buyBtn = new Text({
         text: btnLabel,
         style: {
           fontFamily: "Courier New",
           fontSize: 12,
-          fill: alreadyOwned ? 0x447744 : canAfford ? 0x00ff88 : 0x445544,
+          fill: isInstalled
+            ? 0x44ff88
+            : alreadyOwned
+              ? 0x447744
+              : canAfford
+                ? 0x00ff88
+                : 0x445544,
           fontWeight: "bold",
         },
       });
       buyBtn.x = startX + w * 0.89;
       buyBtn.y = rowY + 16;
 
-      if (canAfford && !alreadyOwned) {
+      if (canAfford && !alreadyOwned && !isInstalled) {
         buyBtn.eventMode = "static";
         buyBtn.cursor = "pointer";
         buyBtn.on("pointerdown", (e) => {
@@ -633,6 +707,75 @@ export class EquipmentShopScene extends GameScene {
       this.scroll(1);
     });
     this.mainContainer!.addChild(downBtn);
+  }
+
+  /**
+   * Render a compact strip showing what's currently installed in the loadout.
+   * Gives the player at-a-glance comparison without leaving the shop.
+   */
+  private renderLoadoutStrip(x: number, y: number, w: number, h: number): void {
+    if (!this.mainContainer || h < 24) return;
+    const loadout = this.gameEngine?.playerLoadout;
+
+    const stripBg = new Graphics();
+    stripBg.rect(x, y, w - 30, Math.max(h, 28));
+    stripBg.fill({ color: 0x040c14, alpha: 0.8 });
+    stripBg.stroke({ width: 1, color: 0x1a3050 });
+    this.mainContainer.addChild(stripBg);
+
+    const label = new Text({
+      text: "УСТАНОВЛЕНО:",
+      style: { fontFamily: "Courier New", fontSize: 10, fill: 0x446688 },
+    });
+    label.eventMode = "none";
+    label.x = x + 8;
+    label.y = y + 6;
+    this.mainContainer.addChild(label);
+
+    if (!loadout) {
+      const none = new Text({
+        text: "нет данных",
+        style: { fontFamily: "Courier New", fontSize: 10, fill: 0x334455 },
+      });
+      none.eventMode = "none";
+      none.x = x + 110;
+      none.y = y + 6;
+      this.mainContainer.addChild(none);
+      return;
+    }
+
+    const ids = loadout.installedGearIds();
+    if (ids.length === 0) {
+      const none = new Text({
+        text: "слоты пусты",
+        style: { fontFamily: "Courier New", fontSize: 10, fill: 0x334455 },
+      });
+      none.eventMode = "none";
+      none.x = x + 110;
+      none.y = y + 6;
+      this.mainContainer.addChild(none);
+      return;
+    }
+
+    let tx = x + 110;
+    for (const gearId of ids) {
+      const gear = gearById(gearId);
+      if (!gear) continue;
+      const chip = new Text({
+        text: `[${gear.name} T${gear.techLevel}]`,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 10,
+          fill: KIND_COLOR[gear.kind] ?? 0x88aacc,
+        },
+      });
+      chip.eventMode = "none";
+      chip.x = tx;
+      chip.y = y + 6;
+      this.mainContainer.addChild(chip);
+      tx += chip.width + 10;
+      if (tx > x + w - 40) break; // prevent overflow
+    }
   }
 
   private scroll(dir: number): void {

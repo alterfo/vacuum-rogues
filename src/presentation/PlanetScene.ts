@@ -2,6 +2,7 @@ import { GameScene } from "./GameScene";
 import {
   Container,
   Graphics,
+  Rectangle,
   Sprite,
   Text,
   type FederatedPointerEvent,
@@ -1621,6 +1622,11 @@ export class PlanetScene extends GameScene {
       if (enabled) {
         btn.eventMode = "static";
         btn.cursor = "pointer";
+        // bg + lbl are eventMode='none', so the Container has no hit-test
+        // geometry of its own — without an explicit hitArea the button is
+        // mouse-dead in PixiJS 8 (CLAUDE.md presentation Rule 2). This left the
+        // "Закрыть" button unclickable when credits were too low to buy a tier.
+        btn.hitArea = new Rectangle(0, 0, btnW, 40);
         btn.on("pointerdown", (e) => {
           e.stopPropagation();
           onClick();

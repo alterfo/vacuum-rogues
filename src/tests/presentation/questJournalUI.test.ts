@@ -331,6 +331,106 @@ describe("QuestJournalUI expired quests section", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// "Местный подряд" fix: COLLECT_ITEM (local delivery) progress is never emitted
+// in production, so objective.currentAmount stays frozen at 0. The journal must
+// instead read the player's actual cargo via the cargoCarried resolver so the
+// counter reflects what's in the hold (the same inventory the landing
+// auto-completion checks).
+// ---------------------------------------------------------------------------
+
+describe("QuestJournalUI live cargo progress (Местный подряд)", () => {
+  function deliveryQuest() {
+    return {
+      id: "q-deliver",
+      title: "Местный подряд",
+      type: "DELIVERY",
+      isCompleted: false,
+      isFailed: false,
+      objectives: [
+        {
+          id: "q-deliver_collect",
+          type: "COLLECT_ITEM",
+          description: "Загрузить медикаменты",
+          completed: false,
+          currentAmount: 0, // frozen: COLLECT_ITEM event is never emitted in prod
+          targetAmount: 8,
+          itemType: "MEDICINE",
+        },
+      ],
+      reward: { credits: 150, experience: 60, items: [] },
+    };
+  }
+
+  it("shows carried cargo from the resolver, not the frozen currentAmount", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+    const qs = {
+      getActiveQuests: vi.fn().mockReturnValue([deliveryQuest()]),
+      getCompletedQuestIds: vi.fn().mockReturnValue([]),
+    } as unknown as IQuestService;
+
+    // 5 medicine units in the hold → journal must read 5/8, not the frozen 0/8.
+    const ui = new QuestJournalUI(
+      qs,
+      1280,
+      720,
+      vi.fn(),
+      undefined,
+      0,
+      undefined,
+      (itemType: string) => (itemType === "MEDICINE" ? 5 : 0),
+    );
+    const objLine = collectTexts(ui.container as unknown as TextNode).find(
+      (t) => t.includes("Загрузить медикаменты"),
+    );
+    expect(objLine).toBeDefined();
+    expect(objLine).toContain("5/8");
+    expect(objLine).not.toContain("0/8");
+  });
+
+  it("clamps to target and flags 'ready to deliver' once the hold meets the goal", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+    const qs = {
+      getActiveQuests: vi.fn().mockReturnValue([deliveryQuest()]),
+      getCompletedQuestIds: vi.fn().mockReturnValue([]),
+    } as unknown as IQuestService;
+
+    // 12 units carried (more than the 8 required) → clamp to 8/8 + ready hint.
+    const ui = new QuestJournalUI(
+      qs,
+      1280,
+      720,
+      vi.fn(),
+      undefined,
+      0,
+      undefined,
+      () => 12,
+    );
+    const objLine = collectTexts(ui.container as unknown as TextNode).find(
+      (t) => t.includes("Загрузить медикаменты"),
+    );
+    expect(objLine).toBeDefined();
+    expect(objLine).toContain("8/8");
+    expect(objLine).toContain("✓");
+    expect(objLine).toContain("сдать");
+  });
+
+  it("falls back to currentAmount when no cargo resolver is supplied", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+    const qs = {
+      getActiveQuests: vi.fn().mockReturnValue([deliveryQuest()]),
+      getCompletedQuestIds: vi.fn().mockReturnValue([]),
+    } as unknown as IQuestService;
+
+    const ui = new QuestJournalUI(qs, 1280, 720, vi.fn());
+    const objLine = collectTexts(ui.container as unknown as TextNode).find(
+      (t) => t.includes("Загрузить медикаменты"),
+    );
+    expect(objLine).toBeDefined();
+    expect(objLine).toContain("0/8");
+  });
+});
+
 describe("QuestJournalUI remaining days display", () => {
   it("shows 'осталось N дн.' warning when remaining days < 5 and currentDay > 0", async () => {
     const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");

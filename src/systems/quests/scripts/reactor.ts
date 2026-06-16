@@ -57,17 +57,16 @@ export const reactorScript: QuestScript = {
   ],
   startLocation: "init_reactor",
   locations: [
-    // Init: immediately run a stability check so a lucky random start succeeds at once
+    // Init: player reads the alarm message, then manually advances to the control panel
     {
       id: "init_reactor",
-      text: "АВАРИЙНЫЙ СИГНАЛ!\n\nРеактор нестабилен. Инициализация систем контроля...",
+      text: "АВАРИЙНЫЙ СИГНАЛ!\n\nРеактор нестабилен. Инициализация систем контроля...\n\nАктивируйте панель управления и стабилизируйте стержни до взрыва.",
       transitions: [
         {
           id: "begin",
-          label: "...",
+          label: "→ К пульту управления",
           toLocation: "check_stable",
           effects: [],
-          autoExecute: true,
         },
       ],
     },

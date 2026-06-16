@@ -161,6 +161,42 @@ describe("NpcSimulator", () => {
     expect(npc.state).not.toBe(NpcState.TRAVELING);
   });
 
+  it("a freshly arrived NPC does not depart the day after arrival (flyby regression)", () => {
+    const galaxy = makeGalaxy();
+    const sim = new NpcSimulator();
+
+    // 50 rangers traveling to sys_a, all arrive on tick 1.
+    const arrivalIds: string[] = [];
+    for (let i = 0; i < 50; i++) {
+      const id = `arr_${i}`;
+      arrivalIds.push(id);
+      const npc = makeNpc(id, "sys_b", NpcState.TRAVELING);
+      npc.destinationSystemId = "sys_a";
+      npc.daysToArrival = 1;
+      galaxy.npcShips.push(npc);
+    }
+
+    sim.tick(galaxy, new SeededRNG("arr_t1"));
+    const justArrived = arrivalIds.map(
+      (id) => galaxy.npcShips.find((n) => n.id === id)!,
+    );
+    expect(
+      justArrived.every(
+        (n) => n.currentSystemId === "sys_a" && n.state !== NpcState.TRAVELING,
+      ),
+    ).toBe(true);
+
+    // Without a minimum-dwell fix, DEPART_CHANCE (15%) would send ~7–8 of 50
+    // back into TRAVELING on the very next day — the "fly in and immediately out"
+    // bug reported in playtest (2026-06-15). With MIN_DWELL_DAYS enforced,
+    // none of the freshly arrived ships may depart.
+    sim.tick(galaxy, new SeededRNG("arr_t2"));
+    const departedDay1 = justArrived.filter(
+      (n) => n.state === NpcState.TRAVELING,
+    );
+    expect(departedDay1).toHaveLength(0);
+  });
+
   it("lists only present (non-traveling, non-dead) NPCs in a system", () => {
     const galaxy = makeGalaxy();
     galaxy.npcShips.push(

@@ -863,8 +863,15 @@ function advanceAutoReactor(vm: QuestVM): void {
   while (!vm.isFinished() && steps < MAX) {
     steps++;
     const avail = vm.availableTransitions();
-    if (avail.length === 0 || !avail[0].autoExecute) break;
-    vm.execute(avail[0].id);
+    if (avail.length === 0) break;
+    // Auto-execute transitions advance automatically; a lone manual transition
+    // (e.g. the init "begin" button) is also stepped through by the helper so
+    // tests don't need to replicate the user click.
+    if (avail[0].autoExecute || avail.length === 1) {
+      vm.execute(avail[0].id);
+    } else {
+      break;
+    }
   }
 }
 

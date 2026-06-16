@@ -20,31 +20,56 @@ describe("resolvePlanetBackdropKey (per-planet generated backdrops)", () => {
   // back to the shared type/faction panorama — proving the game is unchanged
   // until the ComfyUI `surfaces` art is generated, then auto-upgrades.
   it("falls back to the type/faction panorama when no surface art exists", () => {
-    expect(resolvePlanetBackdropKey("ICE", "planet-x", "INDEPENDENT")).toBe(
-      "panoramas/wilderness_tundra",
-    );
-    expect(resolvePlanetBackdropKey("HABITAT", "p", "SYNDICATE")).toBe(
+    expect(
+      resolvePlanetBackdropKey("ICE", "planet-x", "INDEPENDENT", false),
+    ).toBe("panoramas/wilderness_tundra");
+    expect(resolvePlanetBackdropKey("HABITAT", "p", "SYNDICATE", true)).toBe(
       "panoramas/syndicate_city",
     );
   });
 
   it("keeps different planet types distinct even in the fallback", () => {
-    const ice = resolvePlanetBackdropKey("ICE", "a", "INDEPENDENT");
-    const volcanic = resolvePlanetBackdropKey("VOLCANIC", "b", "INDEPENDENT");
+    const ice = resolvePlanetBackdropKey("ICE", "a", "INDEPENDENT", false);
+    const volcanic = resolvePlanetBackdropKey(
+      "VOLCANIC",
+      "b",
+      "INDEPENDENT",
+      false,
+    );
     const terrestrial = resolvePlanetBackdropKey(
       "TERRESTRIAL",
       "c",
       "INDEPENDENT",
+      false,
     );
     expect(new Set([ice, volcanic, terrestrial]).size).toBe(3);
+  });
+
+  it("habitable TERRESTRIAL planet shows faction city, not wilderness", () => {
+    // Bug: before this fix, isHabitable was not passed → wilderness_jungle on
+    // a settled TERRESTRIAL planet. Now habitable = city if faction has one.
+    expect(
+      resolvePlanetBackdropKey("TERRESTRIAL", "p", "OUTLANDERS", true),
+    ).toBe("panoramas/outlanders_city");
+    expect(resolvePlanetBackdropKey("TERRESTRIAL", "p", "BASTIONS", true)).toBe(
+      "panoramas/bastions_city",
+    );
+    // Uninhabitable stays wilderness.
+    expect(
+      resolvePlanetBackdropKey("TERRESTRIAL", "p", "OUTLANDERS", false),
+    ).toBe("panoramas/wilderness_jungle");
   });
 });
 
 describe("panoramaKeyForPlanet (playtest5 — distinct backdrops per planet)", () => {
   it("gives different wilderness backdrops to different terrain types", () => {
-    const ice = panoramaKeyForPlanet("ICE", "INDEPENDENT");
-    const volcanic = panoramaKeyForPlanet("VOLCANIC", "INDEPENDENT");
-    const terrestrial = panoramaKeyForPlanet("TERRESTRIAL", "INDEPENDENT");
+    const ice = panoramaKeyForPlanet("ICE", "INDEPENDENT", false);
+    const volcanic = panoramaKeyForPlanet("VOLCANIC", "INDEPENDENT", false);
+    const terrestrial = panoramaKeyForPlanet(
+      "TERRESTRIAL",
+      "INDEPENDENT",
+      false,
+    );
     expect(ice).toBe("wilderness_tundra");
     expect(volcanic).toBe("wilderness_desert");
     expect(terrestrial).toBe("wilderness_jungle");
@@ -53,28 +78,33 @@ describe("panoramaKeyForPlanet (playtest5 — distinct backdrops per planet)", (
   });
 
   it("dresses settled worlds (HABITAT/INDUSTRIAL) in their faction's city", () => {
-    expect(panoramaKeyForPlanet("HABITAT", "SYNDICATE")).toBe("syndicate_city");
-    expect(panoramaKeyForPlanet("INDUSTRIAL", "BASTIONS")).toBe(
+    expect(panoramaKeyForPlanet("HABITAT", "SYNDICATE", true)).toBe(
+      "syndicate_city",
+    );
+    expect(panoramaKeyForPlanet("INDUSTRIAL", "BASTIONS", true)).toBe(
       "bastions_city",
     );
   });
 
-  it("falls back to a wilderness backdrop for settled worlds without a faction city", () => {
-    // INDEPENDENT/OVERMIND have no *_city art → terrain backdrop, not a city.
-    expect(panoramaKeyForPlanet("HABITAT", "INDEPENDENT")).toBe(
+  it("falls back to wilderness_jungle for habitable worlds without a faction city", () => {
+    // INDEPENDENT/OVERMIND have no *_city art → jungle, the most liveable-looking fallback.
+    expect(panoramaKeyForPlanet("HABITAT", "INDEPENDENT", true)).toBe(
       "wilderness_jungle",
     );
-    expect(panoramaKeyForPlanet("HABITAT", "OVERMIND")).toBe(
+    expect(panoramaKeyForPlanet("HABITAT", "OVERMIND", true)).toBe(
       "wilderness_jungle",
     );
   });
 
-  it("gives INDUSTRIAL a distinct non-city backdrop (not wilderness_jungle)", () => {
-    // INDUSTRIAL planets under non-city factions must not silently return the
-    // same jungle key as TERRESTRIAL/HABITAT — different planet types need
-    // different fallback backdrops.
-    const industrial = panoramaKeyForPlanet("INDUSTRIAL", "INDEPENDENT");
-    const terrestrial = panoramaKeyForPlanet("TERRESTRIAL", "INDEPENDENT");
+  it("gives INDUSTRIAL a distinct uninhabitable backdrop (not wilderness_jungle)", () => {
+    // Uninhabitable INDUSTRIAL under non-city factions must not silently return
+    // the same jungle key as uninhabitable TERRESTRIAL.
+    const industrial = panoramaKeyForPlanet("INDUSTRIAL", "INDEPENDENT", false);
+    const terrestrial = panoramaKeyForPlanet(
+      "TERRESTRIAL",
+      "INDEPENDENT",
+      false,
+    );
     expect(industrial).toBe("wilderness_desert");
     expect(industrial).not.toBe(terrestrial);
   });
@@ -89,9 +119,22 @@ describe("panoramaKeyForPlanet (playtest5 — distinct backdrops per planet)", (
       "INDUSTRIAL",
       "UNKNOWN",
     ]) {
-      const key = panoramaKeyForPlanet(t, "OUTLANDERS");
+      const key = panoramaKeyForPlanet(t, "OUTLANDERS", false);
       expect(key.length).toBeGreaterThan(0);
     }
+  });
+
+  it("habitable planet of any type shows faction city backdrop", () => {
+    // Core bug fix: before, only HABITAT/INDUSTRIAL types got the city backdrop.
+    expect(panoramaKeyForPlanet("TERRESTRIAL", "PROGRESSORS", true)).toBe(
+      "progressors_city",
+    );
+    expect(panoramaKeyForPlanet("ICE", "PARADOXES", true)).toBe(
+      "paradoxes_city",
+    );
+    expect(panoramaKeyForPlanet("VOLCANIC", "SYNDICATE", true)).toBe(
+      "syndicate_city",
+    );
   });
 });
 

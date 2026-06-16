@@ -84,9 +84,11 @@ export function buildPlanetTooltipLines(
     color: FACTION_COLOR[controllingFaction] ?? 0x999999,
   });
 
-  // 4. Player relation to the controlling faction.
-  const rep = getReputation(controllingFaction);
-  lines.push({ text: reputationLabel(rep), color: reputationColor(rep) });
+  // 4. Player relation — only meaningful on inhabited planets.
+  if (planet.isHabitable) {
+    const rep = getReputation(controllingFaction);
+    lines.push({ text: reputationLabel(rep), color: reputationColor(rep) });
+  }
 
   // 5. Capture warning (red) — explicit when seized by a hostile faction.
   if (planet.capturedBy !== null && planet.capturedBy !== undefined) {

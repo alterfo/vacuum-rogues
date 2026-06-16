@@ -171,10 +171,10 @@ describe("acceptBoardQuest — BOUNTY real NPC assignment", () => {
     expect(passedTemplate.targetObjectId).toBe("npc_pirate_1");
   });
 
-  it("leaves targetObjectId null when no live pirate is in the target system", () => {
+  it("falls back to a pirate in another system when target system has none", () => {
     const { engine, questService } = makeEngine();
-    // Pirate in the wrong system + a dead pirate in the target system → no match.
-    const wrongSystem = makePirate(
+    // No live pirate in the target system; one alive in the issuer system.
+    const elsewhere = makePirate(
       "npc_pirate_elsewhere",
       ISSUER_SYSTEM_ID,
       NpcState.IDLE,
@@ -184,13 +184,31 @@ describe("acceptBoardQuest — BOUNTY real NPC assignment", () => {
       TARGET_SYSTEM_ID,
       NpcState.DEAD,
     );
-    engine.galaxy = makeGalaxy([wrongSystem, deadInTarget]);
+    engine.galaxy = makeGalaxy([elsewhere, deadInTarget]);
 
     const spy = vi.spyOn(questService, "acceptQuestFromTemplate");
     engine.acceptBoardQuest(makeBountyQuest(), "planet_issuer");
 
-    expect(wrongSystem.name).toBe("pirate_npc_pirate_elsewhere");
+    // The fallback pirate is renamed and linked; targetSystemId updated to match.
+    expect(elsewhere.name).toBe(TARGET_SHIP_NAME);
     expect(deadInTarget.name).toBe("pirate_npc_pirate_dead");
+    const passedTemplate = spy.mock.calls[0][0];
+    expect(passedTemplate.targetObjectId).toBe("npc_pirate_elsewhere");
+    expect(passedTemplate.targetSystemId).toBe(ISSUER_SYSTEM_ID);
+  });
+
+  it("leaves targetObjectId null when no live unbound pirate exists anywhere", () => {
+    const { engine, questService } = makeEngine();
+    // Only dead pirates — no live unbound pirate to bind.
+    const deadA = makePirate("npc_dead_a", TARGET_SYSTEM_ID, NpcState.DEAD);
+    const deadB = makePirate("npc_dead_b", ISSUER_SYSTEM_ID, NpcState.DEAD);
+    engine.galaxy = makeGalaxy([deadA, deadB]);
+
+    const spy = vi.spyOn(questService, "acceptQuestFromTemplate");
+    engine.acceptBoardQuest(makeBountyQuest(), "planet_issuer");
+
+    expect(deadA.name).toBe("pirate_npc_dead_a");
+    expect(deadB.name).toBe("pirate_npc_dead_b");
     const passedTemplate = spy.mock.calls[0][0];
     expect(passedTemplate.targetObjectId).toBeNull();
   });

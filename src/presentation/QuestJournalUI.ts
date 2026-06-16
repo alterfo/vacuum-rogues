@@ -3,6 +3,7 @@ import type { IQuestService } from "@/core/ports/IQuestService";
 import type { Quest } from "@/domain/Quest";
 import { logger } from "@/utils/logger";
 import { TYPE_LABEL } from "@/presentation/JobBoardPanel";
+import { QuestType } from "@/types";
 
 /**
  * Quest Journal UI - displays active and completed quests with progress
@@ -19,6 +20,10 @@ export class QuestJournalUI {
   // Maps a planet/system id to a human-readable display name; falls back to the
   // raw id when no resolver is supplied (e.g. in unit tests).
   private readonly resolveName: (id: string) => string;
+  // Returns how many units of a given itemType the player currently carries.
+  // Used to show live cargo progress for COLLECT_ITEM objectives instead of the
+  // frozen currentAmount (which is never incremented in production).
+  private readonly cargoCarried: ((itemType: string) => number) | undefined;
 
   constructor(
     questManager: IQuestService,
@@ -28,12 +33,14 @@ export class QuestJournalUI {
     onNavigateToObjective?: (locationId: string) => void,
     currentDay = 0,
     resolveName?: (id: string) => string,
+    cargoCarried?: (itemType: string) => number,
   ) {
     this.questManager = questManager;
     this.onClose = onClose;
     this.onNavigateToObjective = onNavigateToObjective;
     this.currentDay = currentDay;
     this.resolveName = resolveName ?? ((id) => id);
+    this.cargoCarried = cargoCarried;
     this.container = new Container();
 
     // Center panel on screen
@@ -243,12 +250,29 @@ export class QuestJournalUI {
     // Objectives
     let objY = 35;
     for (const objective of quest.objectives) {
+      // For COLLECT_ITEM objectives use live cargo count from the resolver
+      // (production never emits COLLECT_ITEM progress events, so currentAmount
+      // stays frozen at 0 without this).
+      let displayAmount = objective.currentAmount;
+      let isReadyToDeliver = false;
+      if (
+        objective.type === "COLLECT_ITEM" &&
+        objective.itemType &&
+        this.cargoCarried &&
+        !objective.completed
+      ) {
+        const carried = this.cargoCarried(objective.itemType);
+        displayAmount = Math.min(carried, objective.targetAmount);
+        isReadyToDeliver = carried >= objective.targetAmount;
+      }
+      const completedOrReady = objective.completed || isReadyToDeliver;
+      const suffix = isReadyToDeliver ? " — ✓ сдать" : "";
       const objText = new Text({
-        text: `${objective.completed ? "✓" : "○"} ${objective.description}: ${objective.currentAmount}/${objective.targetAmount}`,
+        text: `${completedOrReady ? "✓" : "○"} ${objective.description}: ${displayAmount}/${objective.targetAmount}${suffix}`,
         style: {
           fontFamily: "Courier New",
           fontSize: 11,
-          fill: objective.completed ? 0x00ff00 : 0xaaaaaa,
+          fill: completedOrReady ? 0x00ff00 : 0xaaaaaa,
         },
       });
       objText.x = 40;
@@ -309,10 +333,13 @@ export class QuestJournalUI {
       });
     }
     if (quest.planetId && quest.planetId !== "unknown") {
+      // For text-adventure quests the issuer planet IS the completion planet.
+      const planetLabel =
+        quest.type === QuestType.TEXT_ADVENTURE ? "Планета" : "Выдан";
       questHighlights.push({
-        label: "Выдан",
+        label: planetLabel,
         value: this.resolveName(quest.planetId),
-        color: 0xaaaaaa,
+        color: quest.type === QuestType.TEXT_ADVENTURE ? 0x66ffcc : 0xaaaaaa,
       });
     }
     if (questHighlights.length > 0) {

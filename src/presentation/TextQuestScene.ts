@@ -231,6 +231,90 @@ export class TextQuestScene extends GameScene {
     ui.addChild(paramPanel);
 
     this.refreshVmParamPanel();
+
+    // Permanent action buttons at the bottom of the right panel
+    const btnPanelW = RIGHT_W - 16;
+    const restartBtn = this.makeRightPanelButton(
+      "Начать заново",
+      w - RIGHT_W + 8,
+      h - 86,
+      btnPanelW,
+      30,
+      () => {
+        if (this.successTimer !== null) {
+          clearTimeout(this.successTimer);
+          this.successTimer = null;
+        }
+        if (this.questScript) {
+          this.vm = new QuestVM(this.questScript, this.vmSeed);
+          this.renderVmLocation();
+        }
+      },
+    );
+    ui.addChild(restartBtn);
+
+    const quitBtn = this.makeRightPanelButton(
+      "Сдаться",
+      w - RIGHT_W + 8,
+      h - 48,
+      btnPanelW,
+      30,
+      () => this.doReturn(),
+    );
+    ui.addChild(quitBtn);
+  }
+
+  private makeRightPanelButton(
+    label: string,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    onClick: () => void,
+  ): Container {
+    const btn = new Container();
+    btn.x = x;
+    btn.y = y;
+
+    const bg = new Graphics();
+    bg.rect(0, 0, w, h);
+    bg.fill({ color: 0x050e1a, alpha: 0.9 });
+    bg.stroke({ color: 0x6688aa, width: 1 });
+    btn.addChild(bg);
+
+    const lbl = new Text({
+      text: label,
+      style: { fontFamily: "Courier New", fontSize: 11, fill: 0x99bbcc },
+    });
+    lbl.anchor.set(0.5);
+    lbl.x = w / 2;
+    lbl.y = h / 2;
+    lbl.eventMode = "none";
+    btn.addChild(lbl);
+
+    btn.eventMode = "static";
+    btn.cursor = "pointer";
+    btn.hitArea = {
+      contains: (px: number, py: number) =>
+        px >= 0 && py >= 0 && px <= w && py <= h,
+    };
+    btn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      onClick();
+    });
+    btn.on("pointerover", () => {
+      bg.clear();
+      bg.rect(0, 0, w, h);
+      bg.fill({ color: 0x0a1a2e, alpha: 1 });
+      bg.stroke({ color: 0xaaccee, width: 1 });
+    });
+    btn.on("pointerout", () => {
+      bg.clear();
+      bg.rect(0, 0, w, h);
+      bg.fill({ color: 0x050e1a, alpha: 0.9 });
+      bg.stroke({ color: 0x6688aa, width: 1 });
+    });
+    return btn;
   }
 
   private refreshVmParamPanel(): void {
@@ -352,15 +436,20 @@ export class TextQuestScene extends GameScene {
       return;
     }
 
-    const limit = Math.min(transitions.length, 6);
+    const limit = Math.min(transitions.length, 8);
+    // Switch to a 2-column grid when there are more buttons than fit single-column
+    const useTwoCols = limit > 4;
+    const colW = useTwoCols ? Math.floor((btnW - 8) / 2) : btnW;
     for (let i = 0; i < limit; i++) {
       const t = transitions[i];
+      const col = useTwoCols ? i % 2 : 0;
+      const row = useTwoCols ? Math.floor(i / 2) : i;
       this.addVmTransitionButton(
         this.vmChoiceContainer,
         t.label,
-        8,
-        i * (btnH + gap),
-        btnW,
+        8 + col * (colW + 8),
+        row * (btnH + gap),
+        colW,
         btnH,
         () => this.executeVmTransition(t.id),
       );
@@ -442,7 +531,7 @@ export class TextQuestScene extends GameScene {
     if (!this.vm) return;
     if (this.vm.isSuccess()) {
       if (this.questId && this.gameEngine?.player) {
-        this.gameEngine.questManager.completeQuest(
+        this.gameEngine.questManager.forceCompleteQuest(
           this.questId,
           this.gameEngine.player,
         );
@@ -453,32 +542,8 @@ export class TextQuestScene extends GameScene {
         this.doReturn();
       }, 2000);
     } else {
-      this.showToast("Провал.", 0xff6644);
-      this.showVmRetryButton();
+      this.showToast("Провал. Нажмите «Начать заново».", 0xff6644);
     }
-  }
-
-  private showVmRetryButton(): void {
-    if (!this.vmChoiceContainer) return;
-    const w = this.renderer.app.screen.width;
-    const RIGHT_W = 192;
-    const CONTENT_W = w - RIGHT_W - 8;
-    const btnW = CONTENT_W - 32;
-
-    this.addVmTransitionButton(
-      this.vmChoiceContainer,
-      "Попробовать снова",
-      8,
-      0,
-      btnW,
-      36,
-      () => {
-        if (this.questScript) {
-          this.vm = new QuestVM(this.questScript, this.vmSeed);
-          this.renderVmLocation();
-        }
-      },
-    );
   }
 
   private onVmKeyDown(event: KeyboardEvent): void {
