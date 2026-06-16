@@ -5,6 +5,7 @@ import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
 import { SceneType, ResourceType } from "@/types";
 import { TradeSystem } from "@/systems/TradeSystem";
+import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
 import { logger } from "@/utils/logger";
 import { GAME_BALANCE } from "@/config/balance";
 
@@ -141,7 +142,12 @@ export class TradeScene extends GameScene {
       (sum, r) => sum + r.amount,
       0,
     );
-    const cargoCapacity = player.ship.cargoCapacity;
+    // Authoritative hold size comes from the canonical loadout, not the legacy
+    // hull-class getter (which can drift when only one model is updated).
+    const cargoCapacity = cargoCapacityOf(
+      this.gameEngine.playerLoadout,
+      player.ship,
+    );
     const freeHold = Math.max(0, cargoCapacity - totalCargo);
 
     let y = top + 28;

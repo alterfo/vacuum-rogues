@@ -23,6 +23,7 @@ import { pickNpcDestination, type NpcBehaviorCtx } from "./npcBehavior";
 import { hashStr } from "@/utils/hashStr";
 import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
+import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
 import type { FlightModule } from "./FlightModule";
 
 /**
@@ -715,10 +716,12 @@ export class NpcShipManager implements FlightModule {
     const player = this.gameEngine?.player;
     const physics = this.deps.getShipPhysics();
     if (!loadout || !player || !physics) return;
-    const range = loadout.derivedStats().gravTractorRange;
+    const stats = loadout.derivedStats();
+    const range = stats.gravTractorRange;
     if (range <= 0) return;
     const rangeSq = range * range;
-    const capacity = player.ship.cargoCapacity;
+    // Hold size is the loadout's cargo (authoritative), not the legacy getter.
+    const capacity = cargoCapacityOf(loadout, player.ship);
     for (let i = this.spaceLoot.length - 1; i >= 0; i--) {
       const item = this.spaceLoot[i];
       const dx = item.x - physics.shipX;
