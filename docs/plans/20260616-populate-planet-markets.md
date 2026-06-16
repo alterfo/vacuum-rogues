@@ -85,11 +85,11 @@ accessor so future callers don't depend on array position.
 - Modify: src/systems/PlanetGenerator.ts only if the seed must move there
 - Create: src/tests/galaxy/marketPopulation.test.ts
 
-- [ ] populated markets for every planet after `generateGalaxy`; `priceMultipliers`
+- [x] populated markets for every planet after `generateGalaxy`; `priceMultipliers`
       length matches `availableResources`
-- [ ] write test: generated galaxy has non-empty markets; round-trips through
+- [x] write test: generated galaxy has non-empty markets; round-trips through
       `schemas.ts` validation
-- [ ] run affected tests — must pass before next task
+- [x] run affected tests — must pass before next task
 
 ### Task 4: Confirm the dynamic layer now engages
 **Files:**

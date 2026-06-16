@@ -8,6 +8,7 @@ import { Station } from "@/domain/Station";
 import { SeededRNG } from "@/utils/seededRNG";
 import { SystemNameGenerator } from "@/utils/systemNameGenerator";
 import { PlanetGenerator } from "./PlanetGenerator";
+import { seedMarket } from "./galaxy/marketSeeding";
 import { NpcSimulator } from "./npc/NpcSimulator";
 import { logger } from "@/utils/logger";
 import {
@@ -81,9 +82,11 @@ export class GalaxySimulator {
       const planetGen = new PlanetGenerator(seed, `sys_${i}`);
       const planets = await planetGen.generate(systemNames[i]);
 
-      // Propagate economy type to each planet's market
+      // Propagate economy type to each planet's market and seed it with real
+      // supply/demand so the dynamic-pricing layer has data to act on.
       for (const planet of planets) {
         planet.market.economyType = economyType;
+        planet.market.populate(seedMarket(economyType, planet.id));
       }
 
       // Generate 1 station per system (type depends on index/seed)
@@ -622,9 +625,11 @@ function assignFactionHomeSystems(
       // StarSystem.economyType is readonly; cast needed for assignment.
       (best as unknown as { economyType: EconomyType }).economyType =
         econOverride;
-      // Propagate to each planet's market.
+      // Propagate to each planet's market and re-seed under the override
+      // economy so faction-home prices reflect their identity.
       for (const planet of best.planets) {
         planet.market.economyType = econOverride;
+        planet.market.populate(seedMarket(econOverride, planet.id));
       }
     }
     chosen.push(best);

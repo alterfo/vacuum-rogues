@@ -118,6 +118,30 @@ export class Market {
   }
 
   /**
+   * Bring a freshly-generated stub market to life: replace the resource
+   * catalogue and supply/demand vectors with deterministically-seeded data (see
+   * `seedMarket` in `systems/galaxy/marketSeeding`) once the economy type is
+   * known, and reset `priceMultipliers` to the neutral baseline so the dynamic
+   * layer starts clean. Keeps the invariant
+   * `priceMultipliers.length === availableResources.length` inside the domain.
+   *
+   * `availableResources` is a readonly *reference* but its contents are
+   * replaceable, so it is rewritten in place. Accepts a structural shape rather
+   * than importing from the systems layer, so the domain keeps no upward deps.
+   */
+  populate(vectors: {
+    readonly availableResources: readonly ResourceType[];
+    readonly supplyVector: readonly number[];
+    readonly demandVector: readonly number[];
+  }): void {
+    this.availableResources.length = 0;
+    this.availableResources.push(...vectors.availableResources);
+    this.supplyVector = [...vectors.supplyVector];
+    this.demandVector = [...vectors.demandVector];
+    this.priceMultipliers = this.availableResources.map(() => 1.0);
+  }
+
+  /**
    * Drift each resource's dynamic price multiplier ±2–8% back toward the
    * neutral value 1.0. Called once per game day from
    * GameEngine.advanceGalaxyDay(). Prices clamped to [0.4, 2.5] relative to base.
