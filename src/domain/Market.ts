@@ -178,8 +178,11 @@ export class Market {
    * back toward 1.0 via {@link advanceMarketDay}, so repeated arbitrage trips
    * progressively close the spread instead of leaving it untouched.
    *
-   * Used by both the player ({@link import("@/systems/TradeSystem").TradeSystem})
-   * and NPC traders so the same market reacts to everyone who trades on it.
+   * Convenience instance wrapper around {@link applyMarketTradeImpact}. NOTE: the
+   * production trade path (`TradeSystem.executeTrade`) calls the standalone
+   * `applyMarketTradeImpact` function directly, and NPC traders currently only
+   * nudge `supplyVector` — neither calls this method yet. It exists as the
+   * resource-keyed seam for future callers (see the living-trade-economy plan).
    */
   applyTradeImpact(resourceType: ResourceType, signedDelta: number): void {
     applyMarketTradeImpact(this, resourceType, signedDelta);

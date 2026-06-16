@@ -36,8 +36,13 @@ const JITTER_SPAN = 0.3;
  *
  * Pure and deterministic: the same `planetId` always produces the same vectors
  * (seeded RNG keyed on `market:<planetId>`, never `Math.random`), so saves and
- * replays stay stable. The galaxy seed is already encoded in `planetId` (planet
- * ids embed the generated system name), so no separate galaxy key is needed.
+ * replays stay stable. Planet ids are unique within a galaxy (they embed the
+ * generated system name, which is unique per galaxy), which is what makes the
+ * key stable across save/load. Note the key is `planetId` ALONE — it does NOT
+ * mix in the galaxy seed, so two galaxies that happen to share a system name
+ * give that planet identical vectors. Acceptable today (one galaxy per
+ * playthrough); fold the galaxy seed into the key if cross-galaxy variety is
+ * ever wanted.
  */
 export function seedMarket(
   economyType: EconomyType,
