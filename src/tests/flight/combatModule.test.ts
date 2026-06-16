@@ -287,3 +287,83 @@ describe("CombatModule lifecycle (Task 1)", () => {
     expect(() => module.destroy()).not.toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// CombatModule — multi-NPC integration (Task 5)
+// End-to-end exercises of the real-time engagement across update() rounds,
+// asserting the four behaviours the integration pass guards.
+// ---------------------------------------------------------------------------
+describe("CombatModule multi-NPC integration (Task 5)", () => {
+  it("two engaged NPCs both advance their timers and fire together when the interval elapses", () => {
+    const { module, ship } = makeModule();
+    const a = makeSprite("a", 40, 0, { hullHP: 100, damage: 20 });
+    const b = makeSprite("b", 60, 0, { hullHP: 100, damage: 15 });
+    module.addCombatant(a);
+    module.addCombatant(b);
+
+    // Timers advance but stay short of the interval: no one has fired yet.
+    module.update(FIRE - 1);
+    expect(ship.hullHP).toBe(100);
+    expect(a.npc.hullHP).toBe(100);
+
+    // One more ms crosses the interval — both NPC timers fire, summing damage;
+    // the player's auto-fire lands on the selected target (a) only.
+    module.update(1);
+    expect(ship.hullHP).toBe(65); // 100 - (20 + 15)
+    expect(a.npc.hullHP).toBe(86); // selected target, 100 - 14 pulse
+    expect(b.npc.hullHP).toBe(100); // not the selected target — untouched by player fire
+  });
+
+  it("a slain NPC leaves the combatant set and fires onNpcDestroyed exactly once", () => {
+    const { module, destroyed } = makeModule();
+    const a = makeSprite("a", 40, 0, { hullHP: 10, damage: 20 }); // selected, dies in one shot
+    const b = makeSprite("b", 60, 0, { hullHP: 100, damage: 15 });
+    module.addCombatant(a);
+    module.addCombatant(b);
+
+    module.update(FIRE);
+    expect(destroyed).toEqual([a]); // reported once
+    expect(module.combatants.has(a)).toBe(false);
+    expect(module.combatants.has(b)).toBe(true);
+    expect(module.selectedTarget).toBe(b); // re-picked from survivors
+    expect(module.isActive).toBe(true); // fight continues against b
+
+    // A second round must not re-report the already-dead NPC.
+    module.update(FIRE);
+    expect(destroyed.filter((s) => s === a)).toHaveLength(1);
+  });
+
+  it("isActive drops to false once the combatant set empties — last NPC killed", () => {
+    const { module, destroyed } = makeModule();
+    const a = makeSprite("a", 50, 0, { hullHP: 10 }); // lone NPC, dies to one shot
+    module.addCombatant(a);
+    module.update(FIRE);
+    expect(destroyed).toEqual([a]);
+    expect(module.combatants.size).toBe(0);
+    expect(module.isActive).toBe(false);
+    expect(module.selectedTarget).toBeNull();
+  });
+
+  it("isActive drops to false once the combatant set empties — last NPC fled", () => {
+    const { module } = makeModule();
+    const a = makeSprite("a", GAME_BALANCE.scannerRange + 400, 0);
+    module.addCombatant(a);
+    module.update(16); // pruneDisengaged drops the out-of-scanner NPC
+    expect(module.combatants.size).toBe(0);
+    expect(module.isActive).toBe(false);
+  });
+
+  it("warns the player below LOW_HULL_FRACTION (30%) without freezing the ship", () => {
+    const { module, messages, physics } = makeModule({
+      ship: { hullHP: 45, maxHull: 100 },
+    });
+    // NPC tanky enough to survive the player's return fire so the fight persists.
+    module.addCombatant(makeSprite("a", 50, 0, { hullHP: 1000, damage: 20 }));
+
+    module.update(FIRE); // 45 - 20 = 25, below 30% of 100 → retreat warning
+    const warning = messages.find((m) => m.text.includes("отступайте"));
+    expect(warning).toBeDefined();
+    expect(physics.isMoving).toBe(true); // ship is free to flee, never frozen
+    expect(physics.currentSpeed).toBe(1);
+  });
+});
