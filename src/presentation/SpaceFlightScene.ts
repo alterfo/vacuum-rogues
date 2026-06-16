@@ -1569,7 +1569,11 @@ export class SpaceFlightScene extends GameScene {
    */
   private onPlayPause(): void {
     if (this.isTurnRunning) {
-      if (this.npcManager.followNpcId) {
+      // A combat auto-follow OR an active in-flight fight has no advancing day to
+      // defer the pause to — combat freezes the calendar (see updateShip's wait
+      // guard), so the day-boundary latch would never fire and the player would
+      // be stuck unable to pause a stationary fight. Halt the turn immediately.
+      if (this.npcManager.followNpcId || this.combatModule?.isActive) {
         this.endTurn(); // combat abort halts now (endTurn stops the ship)
       } else if (!this.pauseAtDayBoundary) {
         this.pauseAtDayBoundary = true;

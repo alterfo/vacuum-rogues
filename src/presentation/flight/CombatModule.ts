@@ -163,6 +163,11 @@ export class CombatModule implements FlightModule {
    */
   selectTarget(sprite: NpcShipSprite | null): void {
     if (!this.isActive) return;
+    // Only an engaged combatant can be targeted: clicking a passing neutral must
+    // not retarget the weapon to a ship it can never hit (the fire path guards on
+    // membership, so an off-set target would show its HP bar yet silently never
+    // take fire). null still deselects.
+    if (sprite && !this.combatants.has(sprite)) return;
     this.selectedTarget = sprite;
     this.hud?.setTarget(sprite);
   }
@@ -189,9 +194,20 @@ export class CombatModule implements FlightModule {
   // Internals
   // ---------------------------------------------------------------------------
 
-  /** Drop combatants that have drifted beyond scanner range (true disengage). */
+  /**
+   * Drop combatants that have drifted beyond scanner range (true disengage), or
+   * whose sprite was destroyed by a non-combat path (e.g. it hyperjumped out and
+   * {@link NpcShipManager} removed it). Without the destroyed-sprite check a
+   * ghost combatant would linger in the set and keep "firing" at the player —
+   * and, if it stayed the selected target, a stray player shot would re-run the
+   * death path on an already-destroyed sprite (double-free / duplicate loot).
+   */
   private pruneDisengaged(): void {
     for (const npc of [...this.combatants]) {
+      if (npc.container?.destroyed) {
+        this.removeCombatant(npc);
+        continue;
+      }
       const d = this.distanceToShip(npc);
       if (d === null || d > GAME_BALANCE.scannerRange)
         this.removeCombatant(npc);

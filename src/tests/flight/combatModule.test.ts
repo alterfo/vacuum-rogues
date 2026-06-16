@@ -129,6 +129,26 @@ describe("CombatModule engagement (Task 1)", () => {
     module.selectTarget(makeSprite("x", 0, 0));
     expect(module.selectedTarget).toBeNull();
   });
+
+  it("selectTarget ignores a non-combatant during a fight (keeps the current target)", () => {
+    const { module } = makeModule();
+    const a = makeSprite("a", 40, 0);
+    module.addCombatant(a);
+    module.selectTarget(makeSprite("stranger", 60, 0)); // never engaged
+    expect(module.selectedTarget).toBe(a); // unchanged — stranger isn't a combatant
+  });
+
+  it("selectTarget switches between engaged combatants, and null deselects", () => {
+    const { module } = makeModule();
+    const a = makeSprite("a", 40, 0);
+    const b = makeSprite("b", 60, 0);
+    module.addCombatant(a);
+    module.addCombatant(b);
+    module.selectTarget(b);
+    expect(module.selectedTarget).toBe(b);
+    module.selectTarget(null);
+    expect(module.selectedTarget).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -206,6 +226,22 @@ describe("CombatModule death & removal (Task 1)", () => {
     module.update(16);
     expect(module.combatants.has(a)).toBe(false);
     expect(module.isActive).toBe(false);
+  });
+
+  it("drops a combatant whose sprite was destroyed by a non-combat path (no ghost fire / re-kill)", () => {
+    const { module, ship, destroyed } = makeModule();
+    const a = makeSprite("a", 50, 0, { hullHP: 100, damage: 20 });
+    module.addCombatant(a);
+    // The NpcShipManager destroyed the sprite (e.g. it hyperjumped out) without
+    // notifying the combat module — its container is now destroyed.
+    (a as unknown as { container: { destroyed: boolean } }).container = {
+      destroyed: true,
+    };
+    module.update(FIRE);
+    expect(module.combatants.has(a)).toBe(false);
+    expect(module.isActive).toBe(false);
+    expect(ship.hullHP).toBe(100); // the ghost never fired at the player
+    expect(destroyed).toEqual([]); // and was never re-reported as a fresh kill
   });
 
   it("warns once when the hull drops below the retreat threshold, without freezing", () => {

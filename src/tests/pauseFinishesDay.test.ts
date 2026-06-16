@@ -352,6 +352,23 @@ describe("Pause finishes the current day, then stops (playtest3 F1)", () => {
     expect(phys.isMoving).toBe(false);
   });
 
+  it("aborts immediately while an in-flight fight is active (stationary combat has no day to defer to)", () => {
+    const phys = makeMovingPhysics();
+    phys.isMoving = false; // combat froze the ship in place
+    phys.currentSpeed = 0;
+    s.shipPhysics = phys;
+    s.isTurnRunning = true;
+    (s.npcManager as { followNpcId: string | null }).followNpcId = null;
+    s.combatModule = { isActive: true };
+
+    onPlayPause();
+
+    // Pause halts the turn now: the deferred-pause latch would never fire while
+    // the calendar is frozen during combat, leaving the player stuck.
+    expect(s.isTurnRunning).toBe(false);
+    expect(s.pauseAtDayBoundary).toBe(false);
+  });
+
   it("low-HP emergency hard-stop halts immediately even with a deferred pause latched", () => {
     const advanceGalaxyDay = vi.fn();
     s.gameEngine = {
