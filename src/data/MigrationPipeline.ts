@@ -386,6 +386,22 @@ export class MigrationPipeline {
           ? { gearId: m.id, micromoduleId: m.micromoduleId }
           : { gearId: m.id };
 
+      // Track exactly which legacy modules are folded into the loadout (by
+      // object reference) so they can be dropped from the rendered inventory
+      // bag below. Otherwise the same physical item lives in BOTH the loadout
+      // and `inventory.modules`, and the hangar's [надеть] would install a
+      // second copy — a permanent item dupe on every migrated save.
+      const folded = new Set<LegacyModuleJSON>();
+      const dropFoldedFromBag = (): void => {
+        const bag = s.player?.inventory?.modules;
+        if (!bag || folded.size === 0) return;
+        // Keep overflow/un-fitted spares + unknown ids (no data loss); only the
+        // exact objects now carried by the loadout leave the bag. `ship.modules`
+        // is left as-is — it is no longer read in production and PlayerShip
+        // drops the field, so it evaporates on the next save.
+        s.player!.inventory!.modules = bag.filter((m) => !m || !folded.has(m));
+      };
+
       // A pre-v23 save can already carry a persisted `loadout`, but between
       // loadout-persistence (v19) and this migration NO shop flow fed the
       // loadout's *fitting* — only hull purchases reached it (via setHull), so
@@ -419,7 +435,9 @@ export class MigrationPipeline {
           }
           if (existing.slotted.length >= cap) break;
           existing.slotted.push(toSlot(m));
+          folded.add(m);
         }
+        dropFoldedFromBag();
         return;
       }
 
@@ -442,16 +460,18 @@ export class MigrationPipeline {
       );
 
       const slotted: ShipLoadoutSnapshot["slotted"] = [];
-      slotted.push(
-        engineIdx >= 0
-          ? toSlot(candidates[engineIdx])
-          : { gearId: MIGRATION_ENGINE_ID },
-      );
-      slotted.push(
-        tankIdx >= 0
-          ? toSlot(candidates[tankIdx])
-          : { gearId: MIGRATION_TANK_ID },
-      );
+      if (engineIdx >= 0) {
+        slotted.push(toSlot(candidates[engineIdx]));
+        folded.add(candidates[engineIdx]);
+      } else {
+        slotted.push({ gearId: MIGRATION_ENGINE_ID });
+      }
+      if (tankIdx >= 0) {
+        slotted.push(toSlot(candidates[tankIdx]));
+        folded.add(candidates[tankIdx]);
+      } else {
+        slotted.push({ gearId: MIGRATION_TANK_ID });
+      }
 
       // Fill the remaining slots with the rest of the fitting — installed gear
       // first (it precedes the bag in `candidates`), then loose spares — skipping
@@ -460,12 +480,14 @@ export class MigrationPipeline {
         if (i === engineIdx || i === tankIdx) continue;
         if (slotted.length >= slots) break;
         slotted.push(toSlot(candidates[i]));
+        folded.add(candidates[i]);
       }
       // A hull with fewer slots than the reserved engine+tank can't carry both;
       // never exceed the hull's slot count.
       if (slotted.length > slots) slotted.length = slots;
 
       s.loadout = { hullId, slotted };
+      dropFoldedFromBag();
     },
   };
 }

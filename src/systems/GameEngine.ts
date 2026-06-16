@@ -38,6 +38,7 @@ import type {
   IQuestService,
 } from "@/core/ports";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
+import { applyLoadoutHullToShip } from "@/systems/equipment/GearBridge";
 import type { Faction } from "@/types/faction";
 import { NpcShip } from "@/domain/NpcShip";
 import { GalaxyService, PlayerService, SceneFactory } from "@/core/services";
@@ -857,6 +858,16 @@ export class GameEngine {
       ? ShipLoadout.fromJSON(save.loadout, this.playerLoadoutFaction())
       : null;
     this.playerLoadout = restoredLoadout ?? this.starterLoadout();
+
+    // Project the canonical loadout's hull onto the live ship at load time, just
+    // as both hull shops do at hull-change time. The save's `ship.maxHull`/
+    // `hullClass` are restored verbatim from JSON and would otherwise drift from
+    // the loadout (a migrated/rebalanced hull, or a hull micromodule) — combat
+    // and the daily droid repair read `ship.maxHull`, so without this the two
+    // models could disagree, the exact landmine the dual-hull unification removes.
+    if (this.player?.ship) {
+      applyLoadoutHullToShip(this.player.ship, this.playerLoadout);
+    }
 
     // Restore quest state into the live QuestManager (it owns quests at
     // runtime; the save only carries the serialized questLog).

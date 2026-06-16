@@ -323,4 +323,81 @@ describe("MigrationPipeline v22→v23 — dual-hull loadout synthesis", () => {
     const twice = MigrationPipeline.migrate(once);
     expect(JSON.stringify(getLoadout(twice))).toEqual(first);
   });
+
+  // The legacy `inventory.modules` bag is still rendered + installable in the
+  // hangar. If the migration folds a bag item into the loadout but leaves it in
+  // the bag, the player can install a SECOND copy — a permanent item dupe.
+  function getBagIds(migrated: SaveState): string[] {
+    return (
+      migrated as unknown as {
+        player?: { inventory?: { modules?: Array<{ id: string } | null> } };
+      }
+    )
+      .player!.inventory!.modules!.filter((m): m is { id: string } => !!m)
+      .map((m) => m.id);
+  }
+
+  it("removes folded bag gear from inventory.modules so the hangar cannot dupe it", () => {
+    const raw = makeLegacyFittedSave({
+      shipModules: [null, null, null],
+      inventoryModules: [legacyModule("wpn_railgun")],
+    });
+    const migrated = MigrationPipeline.migrate(raw as unknown as SaveState);
+
+    // Folded into the loadout...
+    expect(getLoadout(migrated).slotted.map((s) => s.gearId)).toContain(
+      "wpn_railgun",
+    );
+    // ...and gone from the bag, so it exists in exactly one place.
+    expect(getBagIds(migrated)).not.toContain("wpn_railgun");
+  });
+
+  it("keeps overflow bag spares in inventory.modules (no data loss)", () => {
+    // corvette (5 slots): engine+tank+3 installed weapons fill the hull; the 2
+    // bag spares overflow the loadout and must survive in the bag, not vanish.
+    const raw = makeLegacyFittedSave({
+      hullClass: "CORVETTE",
+      shipModules: [
+        legacyModule("wpn_pulse"),
+        legacyModule("wpn_beam"),
+        legacyModule("wpn_railgun"),
+      ],
+      inventoryModules: [
+        legacyModule("wpn_scatter"),
+        legacyModule("wpn_rocket"),
+      ],
+    });
+    const migrated = MigrationPipeline.migrate(raw as unknown as SaveState);
+
+    expect(getLoadout(migrated).slotted.length).toBe(5);
+    expect(getBagIds(migrated)).toEqual(
+      expect.arrayContaining(["wpn_scatter", "wpn_rocket"]),
+    );
+  });
+
+  it("keeps a genuine bag spare matching existing loadout gear, only dropping what it folds", () => {
+    // Loadout already holds an engine; a spare engine in the bag is a real
+    // second item — it must stay in the bag (consumed by the idempotency dedup,
+    // NOT folded), while the bag weapon that IS folded leaves the bag.
+    const starter: ShipLoadoutSnapshot = {
+      hullId: "hull_corvette",
+      slotted: [{ gearId: "eq_engine_i" }, { gearId: "eq_tank" }],
+    };
+    const raw = makeLegacyFittedSave({
+      hullClass: "CORVETTE",
+      inventoryModules: [
+        legacyModule("eq_engine_i"),
+        legacyModule("wpn_pulse"),
+      ],
+      loadout: starter,
+    });
+    const migrated = MigrationPipeline.migrate(raw as unknown as SaveState);
+
+    expect(getLoadout(migrated).slotted.map((s) => s.gearId)).toContain(
+      "wpn_pulse",
+    );
+    const bag = getBagIds(migrated);
+    expect(bag).not.toContain("wpn_pulse"); // folded → out of the bag
+    expect(bag).toContain("eq_engine_i"); // genuine spare → stays
+  });
 });

@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GameEngine, GameEngineDIDependencies } from "@/systems/GameEngine";
-import { FactionType, SceneType } from "@/types";
+import { FactionType, HullClass, SceneType } from "@/types";
 import {
   MockSaveService,
   MockGalaxyService,
@@ -186,5 +186,41 @@ describe("GameEngine loadout persistence", () => {
 
     expect(await engine.loadGame("auto")).toBe(true);
     expect(engine.playerLoadout!.hull.id).toBe("hull_corvette");
+  });
+
+  it("loadGame projects the loadout hull onto the live ship so maxHull cannot drift", async () => {
+    // The dual-hull guarantee: ShipLoadout is the single source of truth for the
+    // hull. The save's `ship.maxHull`/`hullClass` are restored verbatim from
+    // JSON and could disagree with the loadout (a migrated/rebalanced hull); the
+    // load path must reconcile them, just as both hull shops do on a hull swap.
+    await makeLiveGame();
+    // Stale live ship stats that no longer match the canonical loadout hull.
+    engine.player!.ship.maxHull = 50;
+    engine.player!.ship.hullHP = 50;
+
+    const loadout = new ShipLoadout("hull_warden"); // FRIGATE, hp 220
+    loadout.install("eq_engine_iii");
+    loadout.install("eq_tank");
+
+    const save = new SaveState(
+      1,
+      engine.galaxy!,
+      engine.player!,
+      [],
+      Date.now(),
+      SceneType.SPACE_FLIGHT,
+      loadout.toJSON(),
+    );
+    (diDeps.saveService as MockSaveService).setSave("auto", save);
+    vi.spyOn(engine, "transitionTo").mockResolvedValue(undefined);
+
+    expect(await engine.loadGame("auto")).toBe(true);
+    expect(engine.player!.ship.maxHull).toBe(
+      engine.playerLoadout!.derivedStats().maxHull,
+    );
+    expect(engine.player!.ship.maxHull).toBe(220);
+    expect(engine.player!.ship.hullClass).toBe(HullClass.FRIGATE);
+    // Current HP is clamped to the new cap, never silently healed past it.
+    expect(engine.player!.ship.hullHP).toBeLessThanOrEqual(220);
   });
 });
