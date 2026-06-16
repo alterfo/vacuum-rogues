@@ -95,11 +95,11 @@ accessor so future callers don't depend on array position.
 **Files:**
 - Create: src/tests/economy/livePricing.test.ts
 
-- [ ] integration test on a generated (populated) planet: `advanceMarketDay` moves a
+- [x] integration test on a generated (populated) planet: `advanceMarketDay` moves a
       multiplier; `executeTrade` shifts price via `applyMarketTradeImpact`; repeated
       cross-planet round-trips narrow the spread (extends marketDynamics intent)
-- [ ] regression: same-planet buy→sell still loses credits (SELL_SPREAD intact)
-- [ ] run affected tests — must pass before next task
+- [x] regression: same-planet buy→sell still loses credits (SELL_SPREAD intact)
+- [x] run affected tests — must pass before next task
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify Overview: production markets non-empty; drift/impact/events act on them
