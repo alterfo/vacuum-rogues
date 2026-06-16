@@ -9,14 +9,18 @@ import {
   MICRO_MODULES,
   GearKind,
   gearById,
+  microModuleById,
+  type HullSpec,
 } from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
   gearToModule,
+  gearMicromoduleCategory,
   KIND_LABEL,
   KIND_COLOR,
+  syncShipToHullClass,
 } from "@/systems/equipment/GearBridge";
-import { ShipModule } from "@/domain/ShipModule";
+import { EquipmentSystem } from "@/systems/EquipmentSystem";
 import { logger } from "@/utils/logger";
 import { RANK_THRESHOLDS, RANK_LABELS } from "@/config/balance";
 import { ResearchUpgradePanel } from "./ResearchUpgradePanel";
@@ -97,10 +101,10 @@ type View =
   | "micromodule_apply"
   | "research";
 
-/** Index of the hangar slot being micro-modded (for sub-panel). */
+/** The fitted loadout gear being micro-modded (for the apply sub-panel). */
 interface MicromoduleApplyTarget {
-  slotIndex: number;
-  module: ShipModule;
+  /** Catalog gear id of the installed item receiving the micromodule. */
+  gearId: string;
 }
 
 const STATION_BRIBE_COST = 500;
@@ -113,6 +117,7 @@ export class StationScene extends GameScene {
   private shopListings: GearListing[] = [];
   private micromoduleListings: MicroModule[] = [];
   private micromoduleApplyTarget: MicromoduleApplyTarget | null = null;
+  private readonly equipment = new EquipmentSystem();
   private researchPanel: ResearchUpgradePanel | null = null;
   private shopScroll = 0;
   private readonly ROW_H = 50;
@@ -493,7 +498,7 @@ export class StationScene extends GameScene {
       case "leave":
         return { label: "Отстыковаться  Esc", color: 0xff6655 };
       default:
-        return { label: svc, color: 0x888888 };
+        return { label: svc, color: 0xb4b4b4 };
     }
   }
 
@@ -842,8 +847,22 @@ export class StationScene extends GameScene {
     const player = this.gameEngine?.player;
     if (!player || player.credits < listing.price) return;
     player.credits -= listing.price;
-    player.inventory.addItem(gearToModule(listing.gear));
-    this.showToast(`Куплено: ${listing.gear.name}`, 0x44ff88);
+    // Canonical path (dual-hull Task 3): a purchase lands directly in the
+    // loadout when a slot is free; the legacy inventory bag is only a fallback
+    // for a full (or absent) loadout until it is retired in Task 5.
+    const loadout = this.gameEngine?.playerLoadout ?? null;
+    const installed = loadout
+      ? this.equipment.installGear(loadout, listing.gear.id)
+      : false;
+    if (!installed) {
+      player.inventory.addItem(gearToModule(listing.gear));
+    }
+    this.showToast(
+      installed
+        ? `Установлено: ${listing.gear.name}`
+        : `Куплено: ${listing.gear.name}`,
+      0x44ff88,
+    );
     this.render();
   }
 
@@ -1004,6 +1023,9 @@ export class StationScene extends GameScene {
         player.credits = player.credits - cost + refund;
         if (listing.gear.kind === GearKind.HULL) {
           loadout.setHull(listing.gear.id);
+          // Keep the legacy ship (cargoCapacity getter, maxHull) in sync so the
+          // trade hold and ship stats reflect the new hull immediately.
+          syncShipToHullClass(player, (listing.gear as HullSpec).hullClass);
         } else {
           loadout.remove(currentId);
           loadout.install(listing.gear.id);
@@ -1028,7 +1050,7 @@ export class StationScene extends GameScene {
       },
     );
 
-    makeBtn("Отмена", 185, 0x0a0a0a, 0x888888, () => {
+    makeBtn("Отмена", 185, 0x0a0a0a, 0xb4b4b4, () => {
       this.mainContainer!.removeChild(overlay);
       overlay.destroy({ children: true });
     });
@@ -1104,7 +1126,7 @@ export class StationScene extends GameScene {
           ? 0xffcc44
           : mm.bonusTier === 2
             ? 0x88ccff
-            : 0x888888;
+            : 0xb4b4b4;
       const tierBadge = new Text({
         text: `Ур.${mm.bonusTier}  ${TIER_BONUS[mm.bonusTier]}`,
         style: { fontSize: 11, fill: tierColor, fontFamily: "monospace" },
@@ -1210,8 +1232,11 @@ export class StationScene extends GameScene {
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;
     const player = this.gameEngine?.player;
+    const loadout = this.gameEngine?.playerLoadout ?? null;
     const target = this.micromoduleApplyTarget;
-    if (!player || !target) {
+    const targetGear = target ? gearById(target.gearId) : undefined;
+    if (!player || !loadout || !target || !targetGear) {
+      this.micromoduleApplyTarget = null;
       this.view = "hangar";
       this.render();
       return;
@@ -1233,7 +1258,7 @@ export class StationScene extends GameScene {
     this.mainContainer!.addChild(panel);
 
     const title = new Text({
-      text: `Выбор микромодуля для: ${target.module.name}`,
+      text: `Выбор микромодуля для: ${targetGear.name}`,
       style: { fontSize: 13, fill: 0xffaa22, fontFamily: "monospace" },
     });
     title.x = PX + 14;
@@ -1241,9 +1266,10 @@ export class StationScene extends GameScene {
     title.eventMode = "none";
     this.mainContainer!.addChild(title);
 
-    // Micromodules in inventory matching the module's category
+    // Micromodules in inventory matching the fitted item's category
+    const targetCategory = gearMicromoduleCategory(targetGear);
     const matching = player.inventory.micromodules.filter(
-      (mm) => mm.targetCategory === target.module.category,
+      (mm) => mm.targetCategory === targetCategory,
     );
 
     if (matching.length === 0) {
@@ -1271,7 +1297,7 @@ export class StationScene extends GameScene {
             ? 0xffcc44
             : mm.bonusTier === 2
               ? 0x88ccff
-              : 0x888888;
+              : 0xb4b4b4;
         const info = new Text({
           text: `${mm.name}  (${TIER_BONUS[mm.bonusTier]} ${mm.bonusType})`,
           style: { fontSize: 12, fill: tierColor, fontFamily: "monospace" },
@@ -1292,15 +1318,21 @@ export class StationScene extends GameScene {
         applyBtn.cursor = "pointer";
         applyBtn.on("pointerdown", (e) => {
           e.stopPropagation();
-          target.module.micromoduleId = mm.id;
-          const idx = player.inventory.micromodules.indexOf(mm);
-          if (idx >= 0) player.inventory.micromodules.splice(idx, 1);
-          logger.info(
-            `Applied micromodule ${mm.id} to module ${target.module.id}`,
-          );
+          // Canonical apply (dual-hull Task 3): the micromodule lands on the
+          // fitted loadout gear, consuming it from the inventory bag.
+          const applied = loadout.applyMicromodule(target.gearId, mm.id);
+          if (applied) {
+            const idx = player.inventory.micromodules.indexOf(mm);
+            if (idx >= 0) player.inventory.micromodules.splice(idx, 1);
+            logger.info(
+              `Applied micromodule ${mm.id} to loadout gear ${target.gearId}`,
+            );
+            this.showToast(`Применён: ${mm.name}`, 0x44ff88);
+          } else {
+            this.showToast("Не удалось применить микромодуль", 0xff8844);
+          }
           this.micromoduleApplyTarget = null;
           this.view = "hangar";
-          this.showToast(`Применён: ${mm.name}`, 0x44ff88);
           this.render();
         });
         applyBtn.on("pointerover", () => {
@@ -1416,28 +1448,33 @@ export class StationScene extends GameScene {
     slotsLabel.eventMode = "none";
     this.mainContainer!.addChild(slotsLabel);
 
-    const ship = player.ship;
-    for (let i = 0; i < 3; i++) {
-      const mod = ship.modules[i];
+    // Slots render the canonical loadout (dual-hull Task 3): one row per hull
+    // slot, occupied rows drawn from the installed gear.
+    const loadout = this.gameEngine?.playerLoadout ?? null;
+    const slots = loadout?.installedSlots() ?? [];
+    const slotsTotal = loadout?.hull.slots ?? 0;
+    for (let i = 0; i < slotsTotal; i++) {
+      const slot = slots[i];
+      const gear = slot ? gearById(slot.gearId) : undefined;
       const slotY = PY + 70 + i * 44;
 
       const slotBg = new Graphics();
       slotBg
         .rect(PX + 20, slotY, PW - 40, 36)
-        .fill({ color: mod ? 0x0d2030 : 0x081018, alpha: 1 });
+        .fill({ color: gear ? 0x0d2030 : 0x081018, alpha: 1 });
       slotBg
         .rect(PX + 20, slotY, PW - 40, 36)
-        .stroke({ color: mod ? 0x336655 : 0x1a2a3a, width: 1 });
+        .stroke({ color: gear ? 0x336655 : 0x1a2a3a, width: 1 });
       slotBg.eventMode = "none";
       this.mainContainer!.addChild(slotBg);
 
       const slotText = new Text({
-        text: mod
-          ? `[Слот ${i + 1}]  ${mod.name}  (ур. ${mod.level})`
+        text: gear
+          ? `[Слот ${i + 1}]  ${gear.name}  (T${gear.techLevel})`
           : `[Слот ${i + 1}]  — пусто —`,
         style: {
           fontSize: 12,
-          fill: mod ? 0x88ddaa : 0x445566,
+          fill: gear ? 0x88ddaa : 0x445566,
           fontFamily: "monospace",
         },
       });
@@ -1446,7 +1483,7 @@ export class StationScene extends GameScene {
       slotText.eventMode = "none";
       this.mainContainer!.addChild(slotText);
 
-      if (mod) {
+      if (gear && slot && loadout) {
         const unBtn = new Text({
           text: "[снять]",
           style: { fontSize: 11, fill: 0xff8844, fontFamily: "monospace" },
@@ -1458,17 +1495,24 @@ export class StationScene extends GameScene {
         unBtn.cursor = "pointer";
         unBtn.on("pointerdown", (e) => {
           e.stopPropagation();
-          const removed = ship.unequipModule(i);
-          if (removed) player.inventory.modules.push(removed);
+          // Returning a removed item to the legacy inventory bag keeps it from
+          // being lost — there's no canonical uninstalled-gear store yet (that
+          // arrives with the Task 5 legacy removal).
+          if (loadout.remove(gear.id)) {
+            player.inventory.addItem(gearToModule(gear));
+          }
           this.render();
         });
         this.mainContainer!.addChild(unBtn);
 
-        // Micromodule button: show if no micromodule applied yet
-        if (!mod.micromoduleId) {
-          const hasMatchingMm = player.inventory.micromodules.some(
-            (mm) => mm.targetCategory === mod.category,
-          );
+        // Micromodule controls — one per item, cannot be removed.
+        const mmCategory = gearMicromoduleCategory(gear);
+        if (!slot.micromoduleId) {
+          const hasMatchingMm =
+            mmCategory !== null &&
+            player.inventory.micromodules.some(
+              (mm) => mm.targetCategory === mmCategory,
+            );
           const mmBtn = new Text({
             text: "[+ микромодуль]",
             style: {
@@ -1485,7 +1529,7 @@ export class StationScene extends GameScene {
             mmBtn.cursor = "pointer";
             mmBtn.on("pointerdown", (e) => {
               e.stopPropagation();
-              this.micromoduleApplyTarget = { slotIndex: i, module: mod };
+              this.micromoduleApplyTarget = { gearId: gear.id };
               this.view = "micromodule_apply";
               this.render();
             });
@@ -1500,8 +1544,8 @@ export class StationScene extends GameScene {
           }
           this.mainContainer!.addChild(mmBtn);
         } else {
-          const mmEntry = MICRO_MODULES.find((m) => m.id === mod.micromoduleId);
-          const mmLabel = mmEntry?.name ?? mod.micromoduleId ?? "?";
+          const mmLabel =
+            microModuleById(slot.micromoduleId)?.name ?? slot.micromoduleId;
           const mmTag = new Text({
             text: `[мм: ${mmLabel}]`,
             style: { fontSize: 10, fill: 0xffcc44, fontFamily: "monospace" },
@@ -1515,13 +1559,15 @@ export class StationScene extends GameScene {
       }
     }
 
-    // Inventory section
+    // Inventory section — the legacy bag of owned-but-uninstalled gear. Items
+    // install into a free loadout slot; the bag itself is retired in Task 5.
+    const invY = PY + 70 + slotsTotal * 44 + 12;
     const invLabel = new Text({
       text: "Инвентарь:",
       style: { fontSize: 12, fill: 0x6688aa, fontFamily: "monospace" },
     });
     invLabel.x = PX + 20;
-    invLabel.y = PY + 216;
+    invLabel.y = invY;
     invLabel.eventMode = "none";
     this.mainContainer!.addChild(invLabel);
 
@@ -1532,12 +1578,14 @@ export class StationScene extends GameScene {
         style: { fontSize: 12, fill: 0x334455, fontFamily: "monospace" },
       });
       empty.x = PX + 20;
-      empty.y = PY + 238;
+      empty.y = invY + 22;
       empty.eventMode = "none";
       this.mainContainer!.addChild(empty);
     } else {
+      const hasFreeSlot =
+        !!loadout && loadout.installedGearIds().length < loadout.hull.slots;
       invMods.forEach((mod, idx) => {
-        const iy = PY + 238 + idx * 44;
+        const iy = invY + 22 + idx * 44;
         if (iy + 40 > PY + PH - 60) return; // clip to panel
 
         const invBg = new Graphics();
@@ -1559,11 +1607,14 @@ export class StationScene extends GameScene {
         invText.eventMode = "none";
         this.mainContainer!.addChild(invText);
 
-        // Equip buttons per slot
-        const freeSlots = [0, 1, 2].filter((s) => ship.modules[s] === null);
-        if (freeSlots.length > 0) {
+        // Install into a free loadout slot (only for catalog gear — legacy
+        // modules with no catalog id stay in the bag until the Task 4 migration).
+        const catalogGear = gearById(mod.id);
+        const installable =
+          hasFreeSlot && !!catalogGear && catalogGear.kind !== GearKind.HULL;
+        if (installable && loadout) {
           const eqBtn = new Text({
-            text: `[надеть → слот ${freeSlots[0] + 1}]`,
+            text: "[надеть]",
             style: { fontSize: 11, fill: 0x44ddaa, fontFamily: "monospace" },
           });
           eqBtn.anchor.set(1, 0.5);
@@ -1573,8 +1624,9 @@ export class StationScene extends GameScene {
           eqBtn.cursor = "pointer";
           eqBtn.on("pointerdown", (e) => {
             e.stopPropagation();
-            ship.equipModule(freeSlots[0], mod);
-            player.inventory.modules.splice(idx, 1);
+            if (this.equipment.installGear(loadout, mod.id)) {
+              player.inventory.modules.splice(idx, 1);
+            }
             this.render();
           });
           this.mainContainer!.addChild(eqBtn);

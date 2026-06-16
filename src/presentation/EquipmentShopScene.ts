@@ -3,7 +3,7 @@ import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
-import { SceneType, PlanetType, HULL_CLASS_SPECS } from "@/types";
+import { SceneType, PlanetType } from "@/types";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
 import {
   GearKind,
@@ -17,7 +17,9 @@ import {
   gearToModule,
   KIND_LABEL,
   KIND_COLOR,
+  syncShipToHullClass,
 } from "@/systems/equipment/GearBridge";
+import { EquipmentSystem } from "@/systems/EquipmentSystem";
 import { logger } from "@/utils/logger";
 
 interface ShopContext {
@@ -58,6 +60,7 @@ function gearStatLine(gear: Gear): string {
 export class EquipmentShopScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private planet: Planet | null = null;
+  private readonly equipment = new EquipmentSystem();
   private mainContainer: Container | null = null;
   private listContainer: Container | null = null;
   private creditsText: Text | null = null;
@@ -439,12 +442,13 @@ export class EquipmentShopScene extends GameScene {
     }
     player.ship.modules = [null, null, null];
 
-    // Deduct credits and update hull class
+    // Deduct credits and update hull. Sync BOTH representations: the legacy
+    // ship (cargoCapacity/maxHull) via the shared bridge, and the canonical
+    // loadout (drives InventoryScene stats + combat) via setHull — otherwise
+    // one of the two views keeps showing the old hull.
     player.credits -= listing.price;
-    player.ship.hullClass = hull.hullClass;
-    const spec = HULL_CLASS_SPECS[hull.hullClass];
-    player.ship.maxHull = spec.maxHp;
-    player.ship.hullHP = Math.min(player.ship.hullHP, spec.maxHp);
+    syncShipToHullClass(player, hull.hullClass);
+    this.gameEngine?.playerLoadout?.setHull(hull.id);
 
     logger.info(
       `Installed hull ${hull.name} (${hull.hullClass}) for ${listing.price} credits. Modules moved to inventory.`,
@@ -799,11 +803,22 @@ export class EquipmentShopScene extends GameScene {
     if (player.credits < listing.price) return;
 
     player.credits -= listing.price;
-    player.inventory.addItem(gearToModule(listing.gear));
+    // Canonical path (dual-hull Task 3): a purchase lands directly in the
+    // loadout when there's a free slot; only when the loadout is full (or absent)
+    // does it fall back to the legacy inventory bag retired in Task 5.
+    const loadout = this.gameEngine?.playerLoadout ?? null;
+    const installed = loadout
+      ? this.equipment.installGear(loadout, listing.gear.id)
+      : false;
+    if (!installed) {
+      player.inventory.addItem(gearToModule(listing.gear));
+    }
     this.gameEngine?.audio.playSfx("buy").catch(() => {});
 
     logger.info(
-      `Bought ${listing.gear.name} for ${listing.price} credits (balance: ${player.credits})`,
+      `Bought ${listing.gear.name} for ${listing.price} credits (${
+        installed ? "installed" : "to inventory"
+      }, balance: ${player.credits})`,
     );
 
     // Update credits display and re-render rows so affordability badges update.

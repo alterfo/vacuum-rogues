@@ -184,22 +184,31 @@ export class EquipmentSystem {
   }
 
   /**
-   * Feed a combat-loot drop into the canonical loadout (dual-hull Task 2).
+   * Install a catalog gear item into a free loadout slot (dual-hull Task 2/3).
    *
-   * Combat loot is rolled straight from `GEAR_CATALOG`, so a drop is identified
-   * by its catalog gear id. We install it into a free loadout slot — never
-   * replacing fitted gear — and return whether it landed. `false` means the id
-   * isn't installable gear (unknown id, or a hull) or the loadout is full, so
-   * the caller can fall back to the legacy inventory bag until that bag is
-   * retired in Task 5.
+   * The single seam through which every "acquire gear" flow — combat loot, shop
+   * purchase, hangar re-fit — lands gear in the canonical {@link ShipLoadout}.
+   * Gear is identified by its `GEAR_CATALOG` id; it installs into a free slot,
+   * never replacing fitted gear. Returns `false` when the id isn't installable
+   * (unknown, or a hull — hulls are swapped via `setHull`) or the loadout is
+   * full, letting the caller fall back to the legacy inventory bag until that
+   * bag is retired in Task 5.
    */
-  installLoot(loadout: ShipLoadout, gearId: string): boolean {
+  installGear(loadout: ShipLoadout, gearId: string): boolean {
     const gear = gearById(gearId);
     if (!gear || gear.kind === GearKind.HULL) return false;
     const installed = loadout.install(gearId);
     if (installed) {
-      logger.info(`Loot ${gear.name} installed into loadout`);
+      logger.info(`${gear.name} installed into loadout`);
     }
     return installed;
+  }
+
+  /**
+   * Feed a combat-loot drop into the canonical loadout (dual-hull Task 2).
+   * Semantic alias for {@link installGear} kept for the combat call site.
+   */
+  installLoot(loadout: ShipLoadout, gearId: string): boolean {
+    return this.installGear(loadout, gearId);
   }
 }

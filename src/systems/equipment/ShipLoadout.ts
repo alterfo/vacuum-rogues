@@ -17,6 +17,7 @@ import {
   GearKind,
   EquipmentClass,
   gearById,
+  MICRO_MODULES,
   type Gear,
   type HullSpec,
   type WeaponSpec,
@@ -45,7 +46,17 @@ const MICROMODULE_CATALOG: Micromodule[] = [
 ];
 
 export function micromoduleById(id: string): Micromodule | undefined {
-  return MICROMODULE_CATALOG.find((m) => m.id === id);
+  const local = MICROMODULE_CATALOG.find((m) => m.id === id);
+  if (local) return local;
+  // Bridge the GearCatalog craft micromodules (bought at CRAFT_CENTER stations,
+  // dual-hull Task 3): once applied in the hangar they live in the loadout, so
+  // the loadout must resolve them too. `bonusTier` maps 1:1 onto `level`
+  // (1 = strongest), so the derived-stat bonus is identical to a same-tier
+  // amplifier.
+  const craft = MICRO_MODULES.find((m) => m.id === id);
+  return craft
+    ? { id: craft.id, name: craft.name, level: craft.bonusTier }
+    : undefined;
 }
 
 interface SlottedGear {
@@ -110,6 +121,23 @@ export class ShipLoadout {
   /** Gear ids currently installed (excluding the hull). */
   installedGearIds(): string[] {
     return this.slotted.map((s) => s.gearId);
+  }
+
+  /**
+   * Read view of each occupied slot — gear id, attached micromodule and upgrade
+   * count. Used by the hangar panel (dual-hull Task 3) to render the loadout as
+   * the editable fitting, replacing the legacy `ship.modules` array.
+   */
+  installedSlots(): ReadonlyArray<{
+    gearId: string;
+    micromoduleId?: string;
+    upgrades: number;
+  }> {
+    return this.slotted.map((s) => ({
+      gearId: s.gearId,
+      micromoduleId: s.micromoduleId,
+      upgrades: s.upgrades ?? 0,
+    }));
   }
 
   /** Can this gear be installed right now (exists, not a hull, free slot)? */

@@ -1,9 +1,14 @@
 import { ShipModule } from "@/domain/ShipModule";
-import { HULL_CLASS_SPECS, type HullClass, type ModuleCategory } from "@/types";
+import { HULL_CLASS_SPECS, ModuleCategory, type HullClass } from "@/types";
 import type { Player } from "@/domain/Player";
 import type { PlayerShip } from "@/domain/PlayerShip";
 import type { ShipLoadout } from "./ShipLoadout";
-import { GearKind, type Gear } from "./GearCatalog";
+import {
+  GearKind,
+  EquipmentClass,
+  type Gear,
+  type EquipmentSpec,
+} from "./GearCatalog";
 
 /** Convert a catalog Gear item to the ShipModule stored in inventory. */
 export function gearToModule(gear: Gear): ShipModule {
@@ -60,6 +65,27 @@ export const KIND_LABEL: Record<GearKind, string> = {
   [GearKind.WEAPON]: "Оружие",
   [GearKind.EQUIPMENT]: "Снаряжение",
 };
+
+/**
+ * Which micromodule `targetCategory` matches a piece of installed gear.
+ *
+ * Micromodules are bucketed by {@link ModuleCategory}; loadout gear is bucketed
+ * by {@link GearKind}/{@link EquipmentClass}. The hangar uses this to offer only
+ * compatible micromodules for a fitted item (dual-hull Task 3): a weapon takes a
+ * WEAPON module, an engine an ENGINE module, a shield a SHIELD module, and every
+ * other equipment the generic EQUIPMENT module. Hulls have no micromodule
+ * category here (the hull micromodule is applied by hull, not in this seam).
+ */
+export function gearMicromoduleCategory(gear: Gear): ModuleCategory | null {
+  if (gear.kind === GearKind.WEAPON) return ModuleCategory.WEAPON;
+  if (gear.kind === GearKind.EQUIPMENT) {
+    const cls = (gear as EquipmentSpec).equipmentClass;
+    if (cls === EquipmentClass.ENGINE) return ModuleCategory.ENGINE;
+    if (cls === EquipmentClass.SHIELD) return ModuleCategory.SHIELD;
+    return ModuleCategory.EQUIPMENT;
+  }
+  return null;
+}
 
 /** Badge colour per gear kind. */
 export const KIND_COLOR: Record<GearKind, number> = {

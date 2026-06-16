@@ -93,10 +93,25 @@ model, not two, and the sync landmine disappears.
   src/presentation/EquipmentShopScene.ts
 - Create/Modify: src/tests/equipment/purchaseCraftToLoadout.test.ts
 
-- [ ] hangar panel renders the loadout (read/write), not `ship.modules`
-- [ ] purchases and crafted micromodules land in the loadout
-- [ ] write tests: buy/craft paths mutate the loadout only
-- [ ] run affected tests — must pass before next task
+- [x] hangar panel renders the loadout (read/write), not `ship.modules`
+      (StationScene.renderHangar now draws one row per `loadout.hull.slots` from
+      `loadout.installedSlots()`; [снять] calls `loadout.remove` and returns the item to the legacy
+      bag; the inventory bag installs via `EquipmentSystem.installGear`. New `ShipLoadout.installedSlots()`
+      read accessor exposes per-slot micromodule/upgrade state.)
+- [x] purchases and crafted micromodules land in the loadout
+      (both shops' buyItem install the purchase via `installGear`, falling back to the bag only when the
+      loadout is full; the micromodule-apply panel calls `loadout.applyMicromodule(gearId, mm.id)`.
+      `ShipLoadout.micromoduleById` now bridges the GearCatalog craft micromodules — `bonusTier`→`level`
+      — so crafted modules resolve in the loadout. New `gearMicromoduleCategory` maps fitted gear to a
+      micromodule category for matching.)
+- [x] write tests: buy/craft paths mutate the loadout only
+      (src/tests/equipment/purchaseCraftToLoadout.test.ts: installGear installs purchased weapon/equipment,
+      rejects hull/unknown/full; a real shop listing installs; crafted mm_wpn_1/mm_eng_1 apply via the
+      loadout and boost derivedStats; gearMicromoduleCategory mapping; one-micromodule-per-item still holds.)
+- [x] run affected tests — must pass before next task (70 passed: purchaseCraftToLoadout, micromodule,
+      ShipLoadout, derivedStats, hullSync, statReads, equipmentShop, lootToLoadout, loadout-persistence;
+      tsc + eslint clean. Full suite: 1546 passed, only the pre-existing unrelated gravTractor.test.ts
+      failure — confirmed red with these changes stashed, left untouched per the don't-touch-tests rule.)
 
 ### Task 4: Save migration legacy modules → loadout
 **Files:**
