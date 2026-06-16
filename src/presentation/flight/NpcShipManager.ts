@@ -721,7 +721,7 @@ export class NpcShipManager implements FlightModule {
     if (range <= 0) return;
     const rangeSq = range * range;
     // Hold size is the loadout's cargo (authoritative), not the legacy getter.
-    const capacity = cargoCapacityOf(loadout, player.ship);
+    const capacity = cargoCapacityOf(loadout);
     for (let i = this.spaceLoot.length - 1; i >= 0; i--) {
       const item = this.spaceLoot[i];
       const dx = item.x - physics.shipX;

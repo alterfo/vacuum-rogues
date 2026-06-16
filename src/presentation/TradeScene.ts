@@ -144,10 +144,7 @@ export class TradeScene extends GameScene {
     );
     // Authoritative hold size comes from the canonical loadout, not the legacy
     // hull-class getter (which can drift when only one model is updated).
-    const cargoCapacity = cargoCapacityOf(
-      this.gameEngine.playerLoadout,
-      player.ship,
-    );
+    const cargoCapacity = cargoCapacityOf(this.gameEngine.playerLoadout);
     const freeHold = Math.max(0, cargoCapacity - totalCargo);
 
     let y = top + 28;
@@ -428,6 +425,7 @@ export class TradeScene extends GameScene {
         resource,
         qty,
         isBuy,
+        cargoCapacityOf(this.gameEngine.playerLoadout),
       );
       const name = TradeScene.RESOURCE_NAMES[resource] ?? resource;
       if (result.success) {

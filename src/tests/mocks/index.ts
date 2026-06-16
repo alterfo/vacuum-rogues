@@ -5,4 +5,3 @@ export { MockOnnxService } from "./MockOnnxService";
 export { MockExceptionHandler } from "./MockExceptionHandler";
 export { MockSceneFactory } from "./MockSceneFactory";
 export { MockQuestService } from "./MockQuestService";
-export { MockEquipmentService } from "./MockEquipmentService";

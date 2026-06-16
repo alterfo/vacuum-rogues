@@ -10,4 +10,3 @@ export type {
   QuestProgressEvent,
   QuestTemplate,
 } from "./IQuestService";
-export type { IEquipmentService } from "./IEquipmentService";

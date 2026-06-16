@@ -225,6 +225,11 @@ export class TradeSystem {
     resource: ResourceType,
     amount: number,
     isBuy: boolean,
+    // Hold size from the canonical ShipLoadout (dual-hull Task 5). Optional so
+    // the existing 5-arg callers/tests still compile; defaults to unbounded,
+    // which only matters in pure-pricing tests that never approach the cap. The
+    // trade UI passes the real loadout-derived capacity.
+    cargoCapacity: number = Infinity,
   ): TransactionResult {
     if (amount <= 0) {
       throw new GameBusinessException(
@@ -255,7 +260,7 @@ export class TradeSystem {
         (sum, r) => sum + r.amount,
         0,
       );
-      if (totalCargo + amount > player.ship.cargoCapacity) {
+      if (totalCargo + amount > cargoCapacity) {
         return {
           success: false,
           finalPrice: totalPrice,

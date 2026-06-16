@@ -75,11 +75,17 @@ export const PlayerShipSchema = z.object({
       "HEAVY_FREIGHTER",
     ])
     .default("CORVETTE"),
-  modules: z.tuple([
-    ShipModuleSchema.nullable(),
-    ShipModuleSchema.nullable(),
-    ShipModuleSchema.nullable(),
-  ]),
+  // Legacy 3-slot fitting — removed from PlayerShip in the dual-hull
+  // unification (Task 5); the canonical ShipLoadout is now authoritative. Kept
+  // optional so pre-migration saves (which still carry it) validate, while new
+  // saves omit it. The migration (v22→23) folds these into `loadout`.
+  modules: z
+    .tuple([
+      ShipModuleSchema.nullable(),
+      ShipModuleSchema.nullable(),
+      ShipModuleSchema.nullable(),
+    ])
+    .optional(),
 });
 
 export const ResourceStackSchema = z.object({

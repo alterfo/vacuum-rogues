@@ -1,14 +1,18 @@
-import { type FactionType, HullClass, HULL_CLASS_SPECS } from "@/types";
-import type { ShipModule } from "./ShipModule";
-import { GameBusinessException } from "@/exceptions/GameBusinessException";
+import { type FactionType, HullClass } from "@/types";
 
+/**
+ * The player's live ship: its in-combat HP/shield/energy pools, movement stats,
+ * and a `hullClass` label.
+ *
+ * Ship fitting is NOT modelled here — the canonical {@link ShipLoadout} (over
+ * {@link GearCatalog}) is the single source of truth for the hull and every
+ * derived stat (cargo, slots, weapon damage, speed, …). The legacy 3-slot
+ * `modules` array and the `HULL_CLASS_SPECS` stat getters were removed in the
+ * dual-hull unification (Task 5); `hullClass`, `maxHull` and `hullHP` are
+ * projected onto this ship from the loadout at hull-change time via
+ * {@link applyLoadoutHullToShip}.
+ */
 export class PlayerShip {
-  modules: [ShipModule | null, ShipModule | null, ShipModule | null] = [
-    null,
-    null,
-    null,
-  ];
-
   constructor(
     public readonly id: string,
     public name: string,
@@ -23,42 +27,6 @@ export class PlayerShip {
     public readonly factionBaseline: FactionType,
     public hullClass: HullClass = HullClass.CORVETTE,
   ) {}
-
-  get weaponSlots(): number {
-    return HULL_CLASS_SPECS[this.hullClass].weaponSlots;
-  }
-
-  get equipmentSlots(): number {
-    return HULL_CLASS_SPECS[this.hullClass].equipmentSlots;
-  }
-
-  get cargoCapacity(): number {
-    return HULL_CLASS_SPECS[this.hullClass].cargoCapacity;
-  }
-
-  equipModule(slot: number, module: ShipModule): void {
-    if (slot < 0 || slot > 2) {
-      throw new GameBusinessException(
-        "INVALID_MODULE_SLOT",
-        `Module slot ${slot} is invalid. Valid slots: 0-2.`,
-        { slot, moduleId: module.id },
-      );
-    }
-    this.modules[slot] = module;
-  }
-
-  unequipModule(slot: number): ShipModule | null {
-    if (slot < 0 || slot > 2) {
-      throw new GameBusinessException(
-        "INVALID_MODULE_SLOT",
-        `Module slot ${slot} is invalid. Valid slots: 0-2.`,
-        { slot },
-      );
-    }
-    const mod = this.modules[slot];
-    this.modules[slot] = null;
-    return mod;
-  }
 
   repair(): void {
     this.hullHP = this.maxHull;

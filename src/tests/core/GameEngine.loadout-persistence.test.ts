@@ -17,7 +17,6 @@ import {
   MockOnnxService,
   MockExceptionHandler,
   MockQuestService,
-  MockEquipmentService,
 } from "@/tests/mocks";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 import { SaveState } from "@/domain/SaveState";
@@ -94,7 +93,6 @@ describe("GameEngine loadout persistence", () => {
       exceptionHandler: new MockExceptionHandler(),
       qualityProfile: new AdaptiveQualityProfile(),
       questService: new MockQuestService(),
-      equipmentService: new MockEquipmentService(),
     };
     engine = new GameEngine(diDeps);
   });

@@ -28,12 +28,7 @@ import { buildRegistry } from "@/systems/info/InfoService";
 import type { GalacticRegistry } from "@/systems/info/GalacticRegistry";
 import { PlayerShip } from "@/domain/PlayerShip";
 import { Inventory } from "@/domain/Inventory";
-import {
-  ShipModule,
-  WeaponModule,
-  ShieldModule,
-  EngineModule,
-} from "@/domain/ShipModule";
+import { WeaponModule, ShieldModule, EngineModule } from "@/domain/ShipModule";
 import type {
   ISaveService,
   IGalaxyService,
@@ -41,13 +36,12 @@ import type {
   IOnnxService,
   IExceptionHandler,
   IQuestService,
-  IEquipmentService,
 } from "@/core/ports";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { Faction } from "@/types/faction";
 import { NpcShip } from "@/domain/NpcShip";
 import { GalaxyService, PlayerService, SceneFactory } from "@/core/services";
-import { QuestManagerAdapter, EquipmentSystemAdapter } from "@/core/adapters";
+import { QuestManagerAdapter } from "@/core/adapters";
 import { TextQuestRuntime } from "@/systems/quests/TextQuestRuntime";
 import {
   OnnxQuestNarrator,
@@ -70,7 +64,6 @@ export interface GameEngineDIDependencies {
   exceptionHandler: IExceptionHandler;
   qualityProfile: AdaptiveQualityProfile;
   questService: IQuestService;
-  equipmentService: IEquipmentService;
 }
 
 export class GameEngine {
@@ -97,7 +90,6 @@ export class GameEngine {
   public readonly qualityProfile: AdaptiveQualityProfile;
   public readonly onnxRegistry: ONNXModelRegistry;
   public readonly questManager: IQuestService;
-  public readonly equipmentSystem: IEquipmentService;
   public renderer: Renderer | null = null;
   /** GearCatalog-based loadout driving derived ship stats (speed, shields, etc.). */
   public playerLoadout: ShipLoadout | null = null;
@@ -132,7 +124,6 @@ export class GameEngine {
       this.galaxyService = diDependencies.galaxyService;
       this.playerService = diDependencies.playerService;
       this.questManager = diDependencies.questService;
-      this.equipmentSystem = diDependencies.equipmentService;
     } else {
       // Legacy mode: direct instantiation (backward compatibility)
       this.qualityProfile = new AdaptiveQualityProfile();
@@ -142,7 +133,6 @@ export class GameEngine {
       this.playerService = new PlayerService();
       this.exceptionHandler = GlobalExceptionHandler.getInstance();
       this.questManager = new QuestManagerAdapter();
-      this.equipmentSystem = new EquipmentSystemAdapter();
     }
 
     this.sceneFactory = new SceneFactory();
@@ -977,15 +967,9 @@ export class GameEngine {
       }
       if (this.player.ship) {
         Object.setPrototypeOf(this.player.ship, PlayerShip.prototype);
-        for (const mod of this.player.ship.modules) {
-          this.rehydrateModule(mod);
-        }
       }
       if (this.player.inventory) {
         Object.setPrototypeOf(this.player.inventory, Inventory.prototype);
-        for (const mod of this.player.inventory.modules) {
-          this.rehydrateModule(mod);
-        }
       }
     }
 
@@ -996,24 +980,6 @@ export class GameEngine {
           (system as { stations: unknown[] }).stations = [];
         }
       }
-    }
-  }
-
-  /** Re-attach the correct ShipModule subclass prototype based on category. */
-  private rehydrateModule(mod: ShipModule | null): void {
-    if (!mod) return;
-    switch (mod.category) {
-      case "WEAPON":
-        Object.setPrototypeOf(mod, WeaponModule.prototype);
-        break;
-      case "SHIELD":
-        Object.setPrototypeOf(mod, ShieldModule.prototype);
-        break;
-      case "ENGINE":
-        Object.setPrototypeOf(mod, EngineModule.prototype);
-        break;
-      default:
-        Object.setPrototypeOf(mod, ShipModule.prototype);
     }
   }
 

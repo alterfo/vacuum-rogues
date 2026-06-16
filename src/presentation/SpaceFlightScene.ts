@@ -13,7 +13,6 @@ import {
   takeoffArcPath,
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
-import { engineSpeedBonus } from "@/systems/EquipmentSystem";
 import { PanZoomController } from "@/systems/PanZoomController";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
 import { SpaceBackgroundLayer } from "./SpaceBackgroundLayer";
@@ -286,13 +285,14 @@ export class SpaceFlightScene extends GameScene {
       ? (lastPos?.y ??
         centerY - this.pendingWarp.exitVector.y * this.SYSTEM_INNER_RADIUS)
       : (lastPos?.y ?? centerY + entryVector.y * this.SYSTEM_BOUNDARY_RADIUS);
-    // Cruise speed (px/ms): loadout derivedStats().speed scaled by an EngineModule
-    // bonus (Task 10); legacy ship.speed fallback already folds the engine in.
+    // Cruise speed (px/ms): the loadout's derivedStats().speed already folds in
+    // the best installed engine (dual-hull Task 5 removed the legacy
+    // ship.modules engine bonus). The ship.speed branch only covers the
+    // (transient) pre-loadout window.
     const loadoutStats = this.gameEngine?.playerLoadout?.derivedStats();
     const ship = this.gameEngine?.player?.ship;
-    const engineBonus = ship ? engineSpeedBonus(ship) : 0;
     const cruise = loadoutStats
-      ? loadoutStats.speed * (1 + engineBonus)
+      ? loadoutStats.speed
       : (this.DISTANCE_PER_DAY / 1000) *
         Math.min(1.4, Math.max(0.8, ship?.speed ?? 1));
     this.shipPhysics = new ShipPhysics(entryX, entryY, cruise || 0.1);

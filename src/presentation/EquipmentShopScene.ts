@@ -17,7 +17,7 @@ import {
   gearToModule,
   KIND_LABEL,
   KIND_COLOR,
-  syncShipToHullClass,
+  applyLoadoutHullToShip,
 } from "@/systems/equipment/GearBridge";
 import { EquipmentSystem } from "@/systems/EquipmentSystem";
 import { logger } from "@/utils/logger";
@@ -311,8 +311,10 @@ export class EquipmentShopScene extends GameScene {
     );
 
     const currentClass = player?.ship.hullClass ?? "CORVETTE";
+    // Hold size comes from the canonical loadout (single source of truth).
+    const cargo = this.gameEngine?.playerLoadout?.derivedStats().cargo ?? "—";
     const infoText = new Text({
-      text: `Текущий корпус: ${currentClass}  HP: ${player?.ship.maxHull ?? "—"}  Трюм: ${player?.ship.cargoCapacity ?? "—"}`,
+      text: `Текущий корпус: ${currentClass}  HP: ${player?.ship.maxHull ?? "—"}  Трюм: ${cargo}`,
       style: { fontFamily: "Courier New", fontSize: 12, fill: 0x8899aa },
     });
     infoText.eventMode = "none";
@@ -431,27 +433,19 @@ export class EquipmentShopScene extends GameScene {
 
   private buyHull(listing: GearListing, hull: HullSpec): void {
     const player = this.gameEngine?.player;
-    if (!player) return;
+    const loadout = this.gameEngine?.playerLoadout;
+    if (!player || !loadout) return;
     if (player.credits < listing.price) return;
 
-    // Move all installed modules to inventory
-    for (const mod of player.ship.modules) {
-      if (mod !== null) {
-        player.inventory.addItem(mod);
-      }
-    }
-    player.ship.modules = [null, null, null];
-
-    // Deduct credits and update hull. Sync BOTH representations: the legacy
-    // ship (cargoCapacity/maxHull) via the shared bridge, and the canonical
-    // loadout (drives InventoryScene stats + combat) via setHull — otherwise
-    // one of the two views keeps showing the old hull.
+    // The canonical loadout is the single source of truth: swap the hull there
+    // (it drops any slotted gear that no longer fits), then project the new
+    // hull's HP pool + class label onto the live ship from the loadout.
     player.credits -= listing.price;
-    syncShipToHullClass(player, hull.hullClass);
-    this.gameEngine?.playerLoadout?.setHull(hull.id);
+    loadout.setHull(hull.id);
+    applyLoadoutHullToShip(player.ship, loadout);
 
     logger.info(
-      `Installed hull ${hull.name} (${hull.hullClass}) for ${listing.price} credits. Modules moved to inventory.`,
+      `Installed hull ${hull.name} (${hull.hullClass}) for ${listing.price} credits.`,
     );
 
     this.rebuild();

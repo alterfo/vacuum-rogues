@@ -149,10 +149,43 @@ model, not two, and the sync landmine disappears.
   both shops (drop the sync calls)
 - Modify: any remaining `ship.modules` references
 
-- [ ] delete legacy `modules`/getters + `syncShipToHullClass`; compile clean
-- [ ] ⚠️ for each existing test asserting legacy behavior: add a loadout replacement
+- [x] delete legacy `modules`/getters + `syncShipToHullClass`; compile clean
+      (PlayerShip dropped its `modules` array, `equipModule`/`unequipModule`, and the
+      `cargoCapacity`/`weaponSlots`/`equipmentSlots` getters — it now carries only the live
+      HP/shield/energy/speed pools + a `hullClass` label. GearBridge.`syncShipToHullClass` (which
+      read `HULL_CLASS_SPECS`) is replaced by `applyLoadoutHullToShip(ship, loadout)`, a one-way
+      projection from the canonical loadout's `derivedStats()` — both hull shops call it after
+      `loadout.setHull(...)`, so the live ship's maxHull/hullClass can no longer drift. `cargoCapacityOf`
+      now reads the loadout only (no ship fallback). GameEngine dropped `rehydrateModule` + its two
+      module loops. EquipmentSystem slimmed to `installGear`/`installLoot`; `engineSpeedBonus` removed
+      (SpaceFlightScene reads `derivedStats().speed`, which already folds in the best engine — this also
+      drops a latent double-count). CombatScene's weapon panel reads the loadout's weapon gear (the
+      slotted gear id IS the GEAR_CATALOG id, so cooldown/firing in CombatSystem resolve unchanged).
+      The production-dead `IEquipmentService` port + EquipmentSystemAdapter + MockEquipmentService were
+      removed end-to-end (GameEngine field/DI deps, main.ts wiring, core ports/adapters indices). schemas
+      lockstep: `PlayerShipSchema.modules` made `.optional()` so pre-migration saves still validate while
+      new saves omit it. TradeSystem.executeTrade took an optional 6th `cargoCapacity` arg (default
+      Infinity) so its ~20-test-locked 5-arg signature is preserved; the trade UI passes the
+      loadout-derived hold. tsc + eslint clean (0 errors).)
+- [x] ⚠️ for each existing test asserting legacy behavior: add a loadout replacement
       test first, flag for review, then retire the legacy assertion
-- [ ] run affected tests — must pass before next task
+      (⚠️ FOR REVIEW — retired legacy assertions, each replaced with a loadout-based test in the same
+      file, flagged with a ⚠️ comment: hull.test.ts "PlayerShip derived getters" → ShipLoadout
+      derivedStats hull stats; "Hull buying — modules move to inventory" → ShipLoadout.setHull drop-excess;
+      the HULL_CLASS_SPECS + GearCatalog describes kept untouched. hullSync.test.ts (whole file tested the
+      removed bridge) → applyLoadoutHullToShip projection (maxHull raise + hullClass label + hullHP clamp).
+      statReads.test.ts → 1-arg `cargoCapacityOf`, dropped the removed `ship.cargoCapacity`/null-fallback
+      assertions. engineSpeed.test.ts (tested `engineSpeedBonus` + `ship.equipModule`) → loadout
+      `derivedStats().speed` (higher-tech engine faster, no engine = 0, ShipPhysics cruise > 0).
+      GameEngine.di.test.ts "should use injected equipment service" retired with the port. Fixture-only
+      lockstep (not assertion changes): four other diDeps builders dropped the deleted
+      MockEquipmentService import + entry — persist-location, market-rehydration, loadout-persistence,
+      questBountyNpcAssignment.)
+- [x] run affected tests — must pass before next task (full suite: 1551 passed, only the pre-existing
+      unrelated gravTractor.test.ts failure — confirmed red on the clean branch with these changes stashed
+      (1 failed | 8 passed), left untouched per the don't-touch-tests rule. tsc clean; eslint 0 errors.
+      Affected sweep — equipment + di + engineSpeed + lootToLoadout + hullUnificationMigration: 145 passed,
+      1 pre-existing gravTractor failure.)
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify Overview: one source of truth; buy-hull updates cargo/stats/appearance;

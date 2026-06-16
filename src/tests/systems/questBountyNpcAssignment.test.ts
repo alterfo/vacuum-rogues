@@ -24,7 +24,6 @@ import {
   MockOnnxService,
   MockExceptionHandler,
   MockQuestService,
-  MockEquipmentService,
 } from "@/tests/mocks";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 
@@ -148,7 +147,6 @@ function makeEngine(): { engine: GameEngine; questService: MockQuestService } {
     exceptionHandler: new MockExceptionHandler(),
     qualityProfile: new AdaptiveQualityProfile(),
     questService,
-    equipmentService: new MockEquipmentService(),
   };
   return { engine: new GameEngine(diDeps), questService };
 }

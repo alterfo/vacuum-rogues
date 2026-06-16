@@ -1,6 +1,6 @@
 import { GameEngine } from './systems/GameEngine';
 import { DIContainer } from './core/DIContainer';
-import { SaveManagerAdapter, ONNXAdapter, ExceptionHandlerAdapter, QuestManagerAdapter, EquipmentSystemAdapter } from './core/adapters';
+import { SaveManagerAdapter, ONNXAdapter, ExceptionHandlerAdapter, QuestManagerAdapter } from './core/adapters';
 import { GalaxyService, PlayerService } from './core/services';
 import { AdaptiveQualityProfile } from './ai/AdaptiveQualityProfile';
 import { logger } from './utils/logger';
@@ -78,7 +78,6 @@ function initializeDIContainer(qualityProfile: AdaptiveQualityProfile): DIContai
   container.register('IOnnxService', new ONNXAdapter(qualityProfile));
   container.register('IExceptionHandler', new ExceptionHandlerAdapter());
   container.register('IQuestService', new QuestManagerAdapter());
-  container.register('IEquipmentService', new EquipmentSystemAdapter());
 
   return container;
 }
@@ -113,7 +112,6 @@ async function main(): Promise<void> {
       exceptionHandler: container.resolve('IExceptionHandler'),
       qualityProfile,
       questService: container.resolve('IQuestService'),
-      equipmentService: container.resolve('IEquipmentService'),
     });
 
     await engine.initialize({

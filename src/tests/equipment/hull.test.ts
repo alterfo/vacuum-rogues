@@ -1,37 +1,12 @@
 import { describe, it, expect } from "vitest";
-import {
-  HullClass,
-  HULL_CLASS_SPECS,
-  FactionType,
-  ModuleCategory,
-} from "@/types";
-import { PlayerShip } from "@/domain/PlayerShip";
-import { ShipModule } from "@/domain/ShipModule";
-import { Inventory } from "@/domain/Inventory";
+import { HullClass, HULL_CLASS_SPECS } from "@/types";
+import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import {
   GEAR_CATALOG,
   GearKind,
   gearById,
   type HullSpec,
 } from "@/systems/equipment/GearCatalog";
-
-function makeShip(hullClass: HullClass = HullClass.CORVETTE): PlayerShip {
-  const spec = HULL_CLASS_SPECS[hullClass];
-  return new PlayerShip(
-    "ship1",
-    "Test Ship",
-    spec.maxHp,
-    spec.maxHp,
-    50,
-    50,
-    100,
-    100,
-    1.0,
-    0.8,
-    FactionType.PROGRESSORS,
-    hullClass,
-  );
-}
 
 describe("HullClass specs — slot counts", () => {
   it("LIGHT_FIGHTER has 2 weapon slots, 2 equipment slots, cargo 20", () => {
@@ -85,103 +60,50 @@ describe("HullClass specs — slot counts", () => {
   });
 });
 
-describe("PlayerShip derived getters", () => {
-  it("weaponSlots matches HULL_CLASS_SPECS for FRIGATE", () => {
-    const ship = makeShip(HullClass.FRIGATE);
-    expect(ship.weaponSlots).toBe(
-      HULL_CLASS_SPECS[HullClass.FRIGATE].weaponSlots,
-    );
+// ⚠️ dual-hull Task 5: the legacy "PlayerShip derived getters" describe (which
+// asserted ship.weaponSlots/equipmentSlots/cargoCapacity off HULL_CLASS_SPECS)
+// was retired with those getters. Derived hull stats are now read from the
+// canonical ShipLoadout — these are its loadout-based replacements.
+describe("ShipLoadout — derived hull stats (replaces PlayerShip getters)", () => {
+  const HULL_IDS = GEAR_CATALOG.filter(
+    (g): g is HullSpec => g.kind === GearKind.HULL,
+  ).map((h) => h.id);
+
+  it("derivedStats cargo + slot totals match the installed hull spec", () => {
+    for (const hullId of HULL_IDS) {
+      const loadout = new ShipLoadout(hullId);
+      const hull = loadout.hull;
+      const stats = loadout.derivedStats();
+      expect(stats.cargo).toBe(hull.cargo);
+      expect(stats.slotsTotal).toBe(hull.slots);
+    }
   });
 
-  it("equipmentSlots matches HULL_CLASS_SPECS for TRANSPORT", () => {
-    const ship = makeShip(HullClass.TRANSPORT);
-    expect(ship.equipmentSlots).toBe(
-      HULL_CLASS_SPECS[HullClass.TRANSPORT].equipmentSlots,
-    );
-  });
-
-  it("cargoCapacity matches HULL_CLASS_SPECS for HEAVY_FREIGHTER", () => {
-    const ship = makeShip(HullClass.HEAVY_FREIGHTER);
-    expect(ship.cargoCapacity).toBe(
-      HULL_CLASS_SPECS[HullClass.HEAVY_FREIGHTER].cargoCapacity,
-    );
-  });
-
-  it("defaults to CORVETTE when no hullClass provided", () => {
-    const ship = new PlayerShip(
-      "s",
-      "Ship",
-      100,
-      100,
-      50,
-      50,
-      100,
-      100,
-      1,
-      0.8,
-      FactionType.OUTLANDERS,
-    );
-    expect(ship.hullClass).toBe(HullClass.CORVETTE);
-    expect(ship.weaponSlots).toBe(
-      HULL_CLASS_SPECS[HullClass.CORVETTE].weaponSlots,
+  it("a roomier hull derives a bigger hold than the corvette", () => {
+    const corvette = new ShipLoadout("hull_corvette");
+    const freighter = new ShipLoadout("hull_freighter");
+    expect(freighter.derivedStats().cargo).toBeGreaterThan(
+      corvette.derivedStats().cargo,
     );
   });
 });
 
-describe("Hull buying — modules move to inventory", () => {
-  it("buying a hull uninstalls all ship modules to inventory", () => {
-    const ship = makeShip(HullClass.CORVETTE);
-    const mod1 = new ShipModule(
-      "eq1",
-      ModuleCategory.ENGINE,
-      "Engine",
-      { type: "engine", value: 10 },
-      2,
+// ⚠️ dual-hull Task 5: the legacy "Hull buying — modules move to inventory"
+// describe (ship.modules[] mutation) was retired with the modules array. The
+// canonical hull swap is ShipLoadout.setHull, which drops gear that no longer
+// fits — this is its loadout-based replacement.
+describe("ShipLoadout.setHull — hull swap (replaces legacy module shuffle)", () => {
+  it("swaps the hull and drops slotted gear that no longer fits", () => {
+    const loadout = new ShipLoadout("hull_bastion"); // most slots
+    const slots = loadout.hull.slots;
+    for (let i = 0; i < slots; i++) loadout.install("eq_engine_i");
+    expect(loadout.installedSlots()).toHaveLength(slots);
+
+    loadout.setHull("hull_scout"); // fewest slots
+    expect(loadout.hull.hullClass).toBe(HullClass.LIGHT_FIGHTER);
+    expect(loadout.installedSlots().length).toBeLessThanOrEqual(
+      loadout.hull.slots,
     );
-    const mod2 = new ShipModule(
-      "eq2",
-      ModuleCategory.SHIELD,
-      "Shield",
-      { type: "shield", value: 5 },
-      3,
-    );
-    ship.modules[0] = mod1;
-    ship.modules[1] = mod2;
-
-    const inventory = new Inventory();
-
-    for (const mod of ship.modules) {
-      if (mod !== null) {
-        inventory.addItem(mod);
-      }
-    }
-    ship.modules = [null, null, null];
-
-    const newSpec = HULL_CLASS_SPECS[HullClass.DESTROYER];
-    ship.hullClass = HullClass.DESTROYER;
-    ship.maxHull = newSpec.maxHp;
-    ship.hullHP = Math.min(ship.hullHP, newSpec.maxHp);
-
-    expect(inventory.modules).toHaveLength(2);
-    expect(inventory.modules[0].id).toBe("eq1");
-    expect(inventory.modules[1].id).toBe("eq2");
-    expect(ship.modules).toEqual([null, null, null]);
-    expect(ship.hullClass).toBe(HullClass.DESTROYER);
-    expect(ship.maxHull).toBe(newSpec.maxHp);
-  });
-
-  it("hullHP is clamped to new maxHull when downgrading hull", () => {
-    const ship = makeShip(HullClass.DESTROYER);
-    ship.hullHP = 350;
-    ship.modules = [null, null, null];
-
-    const newSpec = HULL_CLASS_SPECS[HullClass.LIGHT_FIGHTER];
-    ship.hullClass = HullClass.LIGHT_FIGHTER;
-    ship.maxHull = newSpec.maxHp;
-    ship.hullHP = Math.min(ship.hullHP, newSpec.maxHp);
-
-    expect(ship.hullHP).toBeLessThanOrEqual(ship.maxHull);
-    expect(ship.hullHP).toBe(newSpec.maxHp);
   });
 });
 

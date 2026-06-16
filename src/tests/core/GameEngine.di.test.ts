@@ -9,7 +9,6 @@ import {
   MockOnnxService,
   MockExceptionHandler,
   MockQuestService,
-  MockEquipmentService,
 } from "@/tests/mocks";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 
@@ -81,7 +80,6 @@ describe("GameEngine with DI", () => {
       exceptionHandler: new MockExceptionHandler(),
       qualityProfile: new AdaptiveQualityProfile(),
       questService: new MockQuestService(),
-      equipmentService: new MockEquipmentService(),
     };
   });
 
@@ -174,21 +172,8 @@ describe("GameEngine with DI", () => {
     expect(questService.lastTemplateId).toBe("quest_delivery_ore");
   });
 
-  it("should use injected equipment service", () => {
-    const equipmentService = diDeps.equipmentService as MockEquipmentService;
-    const engine = new GameEngine(diDeps);
-
-    // Mock player with minimal required fields
-    const mockPlayer = {
-      inventory: { modules: [] },
-      ship: { modules: [] },
-    } as unknown as import("@/domain/Player").Player;
-    engine.equipmentSystem.equipModule(mockPlayer, "weapon_laser_1", 0);
-
-    expect(equipmentService.equipCalls).toHaveLength(1);
-    expect(equipmentService.equipCalls[0]).toEqual({
-      moduleId: "weapon_laser_1",
-      slot: 0,
-    });
-  });
+  // ⚠️ dual-hull Task 5: the "should use injected equipment service" test was
+  // retired with the IEquipmentService port. The legacy equip/unequip path it
+  // exercised (ship.modules) was removed; gear now installs into the canonical
+  // ShipLoadout (covered by purchaseCraftToLoadout / lootToLoadout tests).
 });

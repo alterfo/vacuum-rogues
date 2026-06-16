@@ -4,6 +4,11 @@ import type { TacticalEncounter } from "@/domain/TacticalEncounter";
 import type { GameEngine } from "@/systems/GameEngine";
 import { CombatSystem } from "@/systems/CombatSystem";
 import { EquipmentSystem } from "@/systems/EquipmentSystem";
+import {
+  gearById,
+  GearKind,
+  type WeaponSpec,
+} from "@/systems/equipment/GearCatalog";
 import { EnemyShip } from "@/domain/EnemyShip";
 import { EncounterState, SceneType } from "@/types";
 import type { EnemyType, AIProfile } from "@/types";
@@ -606,9 +611,14 @@ export class CombatScene extends GameScene {
     const { height: screenH } = this.renderer.app.screen;
     const panelY = Math.round(screenH * 0.68);
 
+    // Weapons come from the canonical loadout (dual-hull Task 5 retired the
+    // legacy ship.modules fitting). The slotted gear id IS the GEAR_CATALOG id,
+    // so cooldown/firing keyed by it resolve unchanged in CombatSystem.
     const weaponModules = (
-      player.ship.modules as (import("@/domain/ShipModule").ShipModule | null)[]
-    ).filter((m) => m !== null && m.category === "WEAPON");
+      this._gameEngine?.playerLoadout?.installedSlots() ?? []
+    )
+      .map((s) => gearById(s.gearId))
+      .filter((g): g is WeaponSpec => !!g && g.kind === GearKind.WEAPON);
     if (weaponModules.length === 0) return;
 
     const container = new Container();
@@ -625,7 +635,6 @@ export class CombatScene extends GameScene {
 
     let btnX = 50;
     for (const mod of weaponModules) {
-      if (!mod) continue;
       const cooldown = system.getWeaponCooldown(mod.id);
       const onCd = cooldown > 0;
       const btn = this.makeWeaponButton(

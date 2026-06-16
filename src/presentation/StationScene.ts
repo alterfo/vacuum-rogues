@@ -10,7 +10,6 @@ import {
   GearKind,
   gearById,
   microModuleById,
-  type HullSpec,
 } from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
@@ -18,7 +17,7 @@ import {
   gearMicromoduleCategory,
   KIND_LABEL,
   KIND_COLOR,
-  syncShipToHullClass,
+  applyLoadoutHullToShip,
 } from "@/systems/equipment/GearBridge";
 import { EquipmentSystem } from "@/systems/EquipmentSystem";
 import { logger } from "@/utils/logger";
@@ -1023,9 +1022,9 @@ export class StationScene extends GameScene {
         player.credits = player.credits - cost + refund;
         if (listing.gear.kind === GearKind.HULL) {
           loadout.setHull(listing.gear.id);
-          // Keep the legacy ship (cargoCapacity getter, maxHull) in sync so the
-          // trade hold and ship stats reflect the new hull immediately.
-          syncShipToHullClass(player, (listing.gear as HullSpec).hullClass);
+          // Project the new hull's HP pool + class label onto the live ship from
+          // the canonical loadout so combat/repair reflect it immediately.
+          applyLoadoutHullToShip(player.ship, loadout);
         } else {
           loadout.remove(currentId);
           loadout.install(listing.gear.id);

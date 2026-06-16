@@ -1,6 +1,5 @@
 import { ShipModule } from "@/domain/ShipModule";
-import { HULL_CLASS_SPECS, ModuleCategory, type HullClass } from "@/types";
-import type { Player } from "@/domain/Player";
+import { ModuleCategory } from "@/types";
 import type { PlayerShip } from "@/domain/PlayerShip";
 import type { ShipLoadout } from "./ShipLoadout";
 import {
@@ -22,41 +21,39 @@ export function gearToModule(gear: Gear): ShipModule {
 }
 
 /**
- * Keep the legacy `player.ship` in step with a newly installed hull.
+ * Project the loadout's hull onto the live `PlayerShip` after a hull change.
  *
- * GearCatalog/ShipLoadout is canonical for derived stats, but `PlayerShip`
- * still backs two things the loadout doesn't: `cargoCapacity` (a getter off
- * `hullClass`, read by the trade UI and NPC cargo logic) and `maxHull` (read by
- * combat). Both hull shops change only ONE of the two representations, so
- * buying a bigger hull used to leave the cargo hold (and ship stats) on the old
- * hull's numbers — the "купил корпус, инвентарь не поменялся" bug. Both shops
- * now call this so the two representations never drift apart.
+ * {@link ShipLoadout} is the single source of truth for the hull, but the live
+ * ship still carries the in-combat HP pool (`maxHull`/`hullHP`, read by combat
+ * and the daily droid repair) and a `hullClass` label (read by scaling/combat
+ * code). Both hull shops call this right after `loadout.setHull(...)` so the
+ * live ship reflects the new hull — sourced from the loadout's `derivedStats()`,
+ * never a parallel `HULL_CLASS_SPECS` lookup, so the two can no longer drift.
+ * Replaces the removed `syncShipToHullClass` bridge (dual-hull Task 5).
  */
-export function syncShipToHullClass(
-  player: Player,
-  hullClass: HullClass,
+export function applyLoadoutHullToShip(
+  ship: PlayerShip,
+  loadout: ShipLoadout,
 ): void {
-  player.ship.hullClass = hullClass;
-  const spec = HULL_CLASS_SPECS[hullClass];
-  player.ship.maxHull = spec.maxHp;
-  player.ship.hullHP = Math.min(player.ship.hullHP, spec.maxHp);
+  ship.hullClass = loadout.hull.hullClass;
+  const maxHull = loadout.derivedStats().maxHull;
+  ship.maxHull = maxHull;
+  ship.hullHP = Math.min(ship.hullHP, maxHull);
 }
 
 /**
  * Authoritative cargo capacity for the player's ship.
  *
- * `ShipLoadout` is the single source of truth for derived stats, so the hold
- * size is the loadout hull's `cargo` (via `derivedStats().cargo`). The legacy
- * `ship.cargoCapacity` getter is only a fallback for the (transient) window
- * before a loadout exists — once Task 5 drops that getter this fallback goes
- * with it. Both the trade UI and the NPC cargo logic read through here so they
- * never diverge from the loadout again.
+ * {@link ShipLoadout} is the single source of truth for derived stats, so the
+ * hold size is the loadout hull's `cargo` (via `derivedStats().cargo`). With the
+ * legacy `ship.cargoCapacity` getter removed (Task 5) there is no per-ship
+ * fallback; a missing loadout means no hold (0). Both the trade UI and the NPC
+ * cargo logic read through here so they never diverge from the loadout.
  */
 export function cargoCapacityOf(
   loadout: ShipLoadout | null | undefined,
-  ship: PlayerShip,
 ): number {
-  return loadout ? loadout.derivedStats().cargo : ship.cargoCapacity;
+  return loadout ? loadout.derivedStats().cargo : 0;
 }
 
 /** Russian display label per gear kind. */
