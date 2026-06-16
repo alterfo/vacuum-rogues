@@ -139,9 +139,12 @@ export class CombatModule implements FlightModule {
    * instead of being locked into a fight it can't win).
    */
   addCombatant(npc: NpcShipSprite): void {
+    if (this.combatants.has(npc)) return; // idempotent — cheapest check first
+    // The garrison-aggro path calls this every frame for each in-range
+    // aggressor; the membership guard above means already-engaged NPCs never
+    // reach the loadout rebuild below.
     const loadout = this.deps.getPlayerLoadout?.() ?? null;
     if (loadout && !this.hasWeapon(loadout)) return;
-    if (this.combatants.has(npc)) return; // idempotent
 
     this.combatants.add(npc);
     this.npcFireTimers.set(npc, 0);
