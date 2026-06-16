@@ -7,7 +7,6 @@ import { NpcShipSprite } from "../NpcShipSprite";
 import type { SystemBounds } from "../NpcShipSprite";
 import { NpcContactPanel } from "../NpcContactPanel";
 import type { NpcShip } from "@/domain/NpcShip";
-import type { Galaxy } from "@/domain/Galaxy";
 import { npcsPresentInSystem, NpcSimulator } from "@/systems/npc/NpcSimulator";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { solveInterceptPoint } from "@/utils/intercept";
@@ -348,14 +347,6 @@ export class NpcShipManager implements FlightModule {
   updateHitAreas(cameraZoom: number): void {
     this.lastCameraZoom = cameraZoom;
     for (const s of this.npcSprites) s.updateHitArea(cameraZoom);
-  }
-
-  /**
-   * Remove a defeated NPC from the galaxy domain (called on a victorious return
-   * from CombatScene, before {@link initialize} rebuilds the sprite list).
-   */
-  removeDefeatedNpc(galaxy: Galaxy, npcId: string): void {
-    this.npcSimulator.removeNpc(galaxy, npcId);
   }
 
   // ---------------------------------------------------------------------------
@@ -1017,7 +1008,8 @@ export class NpcShipManager implements FlightModule {
       }
       case "launch":
         // In range: engage in-flight combat. The ship is NOT frozen — it keeps
-        // its momentum and the player can re-route to flee or strafe.
+        // its current momentum (navigation is locked while the fight is on, so
+        // the player can't plot a new course, but the ship is never pinned).
         this.launchCombatWithNpc(decision.npc);
         return;
     }

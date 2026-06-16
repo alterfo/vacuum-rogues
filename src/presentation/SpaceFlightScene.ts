@@ -198,6 +198,7 @@ export class SpaceFlightScene extends GameScene {
     // In-flight combat module (Tasks 11–14): encounters resolve here, not the hex CombatScene.
     this.combatModule = new CombatModule({
       getShipPhysics: () => this.shipPhysics,
+      isTurnRunning: () => this.isTurnRunning,
       getPlayerLoadout: () => this.gameEngine?.playerLoadout ?? null,
       getUiLayer: () => this.renderer.uiLayer,
       getGameLayer: () => this.renderer.gameLayer,
@@ -1277,8 +1278,10 @@ export class SpaceFlightScene extends GameScene {
     }
 
     // "Wait" turn (US-070 #5): a course-less turn — the ship holds position while
-    // NPCs and the calendar keep advancing, until Pause. Combat also freezes the
-    // ship (isMoving=false), so guard on it too or days burn through the fight.
+    // NPCs and the calendar keep advancing, until Pause. During an in-flight
+    // fight the ship is often stationary but must NOT burn calendar days, so the
+    // combat guard suppresses wait-time while a fight is on (combat advances in
+    // real time instead — see CombatModule.update).
     if (
       this.isTurnRunning &&
       !this.shipPhysics.isMoving &&

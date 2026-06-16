@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import {
   CombatModule,
-  resolveMultiRound,
   type CombatModuleDeps,
 } from "@/presentation/flight/CombatModule";
 import type { NpcShipSprite } from "@/presentation/NpcShipSprite";
@@ -50,6 +49,7 @@ function makeModule(
     ship?: { hullHP: number; maxHull: number };
     weapons?: string[];
     physics?: ShipPhysics & { isMoving: boolean; currentSpeed: number };
+    turnRunning?: () => boolean;
   } = {},
 ): {
   module: CombatModule;
@@ -70,45 +70,10 @@ function makeModule(
     getPlayerShip: () => ship,
     onNpcDestroyed: (s) => destroyed.push(s),
     showMessage: (text, color) => messages.push({ text, color }),
+    ...(opts.turnRunning ? { isTurnRunning: opts.turnRunning } : {}),
   };
   return { module: new CombatModule(deps), ship, destroyed, messages, physics };
 }
-
-// ---------------------------------------------------------------------------
-// resolveMultiRound — pure synchronized-round helper
-// ---------------------------------------------------------------------------
-describe("resolveMultiRound (Task 1)", () => {
-  it("player takes the summed incoming damage; target (index 0) takes player damage", () => {
-    const r = resolveMultiRound(
-      14,
-      [
-        { id: "a", damage: 20, hullHP: 100 },
-        { id: "b", damage: 15, hullHP: 100 },
-      ],
-      100,
-    );
-    expect(r.newPlayerHP).toBe(65); // 100 - (20 + 15)
-    expect(r.npcs[0]).toEqual({ id: "a", hullHP: 86, dead: false }); // 100 - 14
-    expect(r.npcs[1]).toEqual({ id: "b", hullHP: 100, dead: false }); // untouched
-  });
-
-  it("floors player HP at 0 — the death threshold (no negative hull)", () => {
-    const r = resolveMultiRound(
-      14,
-      [
-        { id: "a", damage: 60, hullHP: 100 },
-        { id: "b", damage: 60, hullHP: 100 },
-      ],
-      100,
-    );
-    expect(r.newPlayerHP).toBe(0);
-  });
-
-  it("flags a target dead when player damage drops its hull to 0", () => {
-    const r = resolveMultiRound(14, [{ id: "a", damage: 5, hullHP: 10 }], 100);
-    expect(r.npcs[0]).toEqual({ id: "a", hullHP: 0, dead: true });
-  });
-});
 
 // ---------------------------------------------------------------------------
 // CombatModule — engagement lifecycle
@@ -253,6 +218,38 @@ describe("CombatModule death & removal (Task 1)", () => {
     const warnings = messages.filter((m) => m.text.includes("Корпус"));
     expect(warnings.length).toBe(1);
     expect(physics.isMoving).toBe(true); // not frozen
+  });
+
+  it("floors the player hull at 0 through the live NPC-fire path (no negative hull)", () => {
+    const { module, ship } = makeModule({ ship: { hullHP: 15, maxHull: 100 } });
+    // Tanky NPC survives the player's return fire so it keeps shooting.
+    module.addCombatant(makeSprite("a", 50, 0, { hullHP: 1000, damage: 20 }));
+    module.update(FIRE); // 15 - 20 would be -5, must clamp to 0
+    expect(ship.hullHP).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CombatModule — turn gating (combat pauses with the world)
+// ---------------------------------------------------------------------------
+describe("CombatModule turn gating", () => {
+  it("does not fire while the turn is paused, then resumes once it runs", () => {
+    let running = false;
+    const { module, ship } = makeModule({ turnRunning: () => running });
+    const a = makeSprite("a", 50, 0, { hullHP: 100, damage: 20 });
+    module.addCombatant(a);
+
+    // Paused: timers must not advance, so no shots land even past the interval.
+    module.update(FIRE * 2);
+    expect(ship.hullHP).toBe(100);
+    expect(a.npc.hullHP).toBe(100);
+    expect(module.isActive).toBe(true); // the fight is still engaged, just frozen
+
+    // Resume the turn — the next elapsed interval fires on both sides.
+    running = true;
+    module.update(FIRE);
+    expect(ship.hullHP).toBe(80); // 100 - 20 npc damage
+    expect(a.npc.hullHP).toBe(86); // 100 - 14 pulse damage
   });
 });
 

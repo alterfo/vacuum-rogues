@@ -349,7 +349,9 @@ SpaceFlightScene
   │   └─ "Посадить" ───────────► PlanetScene
   ├─ Click station ─────────────► StationScene
   ├─ Click NPC ─────────────────► NpcContactPanel (inline)
-  │   └─ "Атаковать" ──────────► CombatScene
+  │   └─ "Атаковать" ──────────► real-time in-flight combat (CombatModule, no scene change)
+  │        (hex CombatScene is now reached only from scripted TextQuestScene
+  │         encounters and the OVERMIND-core boss fight)
   ├─ [M] / StarMap button ──────► StarMapScene
   │   └─ "Назад" ──────────────► SpaceFlightScene (REQUIRED)
   ├─ [J] ───────────────────────► QuestJournalUI (overlay)

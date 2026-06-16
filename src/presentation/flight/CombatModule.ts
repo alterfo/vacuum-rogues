@@ -9,33 +9,6 @@ import { CombatHud } from "./CombatHud";
 import { DamageNumbers } from "./DamageNumbers";
 import { logger } from "@/utils/logger";
 
-/**
- * Resolve one synchronized round of real-time combat for unit testing: every
- * engaged NPC fires its `damage` at the player (the player loses the summed
- * incoming damage), and the player fires `playerDmg` at its current target —
- * by convention the FIRST entry of `npcs`. HP is floored at 0 on both sides;
- * each returned NPC carries a `dead` flag when its hull reaches 0. Pure +
- * side-effect-free so the timer-driven {@link CombatModule.update} logic can be
- * verified without a render context (Task 1).
- */
-export function resolveMultiRound(
-  playerDmg: number,
-  npcs: { id: string; damage: number; hullHP: number }[],
-  playerHP: number,
-): {
-  newPlayerHP: number;
-  npcs: { id: string; hullHP: number; dead: boolean }[];
-} {
-  const incoming = npcs.reduce((sum, n) => sum + n.damage, 0);
-  return {
-    newPlayerHP: Math.max(0, playerHP - incoming),
-    npcs: npcs.map((n, i) => {
-      const hullHP = i === 0 ? Math.max(0, n.hullHP - playerDmg) : n.hullHP;
-      return { id: n.id, hullHP, dead: hullHP <= 0 };
-    }),
-  };
-}
-
 /** Player gets a one-shot retreat warning when its hull drops below this fraction of max. */
 const LOW_HULL_FRACTION = 0.3;
 
@@ -51,6 +24,12 @@ const LOW_HULL_FRACTION = 0.3;
 export interface CombatModuleDeps {
   /** Authoritative player ship physics (null before the ship spawns). */
   getShipPhysics(): ShipPhysics | null;
+  /**
+   * Whether the turn is running (Play, not Pause). Combat only advances while
+   * the turn runs, matching the ship/NPC movement gating. Optional so unit tests
+   * can drive the timers directly; absent or true means the fight advances.
+   */
+  isTurnRunning?(): boolean;
   /** Player's canonical loadout — source of the equipped weapon. */
   getPlayerLoadout?(): ShipLoadout | null;
   /** Live UI layer the HUD overlay is mounted on. */
@@ -137,6 +116,11 @@ export class CombatModule implements FlightModule {
   update(deltaTime: number, _bgElapsed?: number): void {
     this.damageNumbers?.update(deltaTime);
     if (!this.isActive) return;
+    // The fight only advances while the turn is running. Pausing freezes the
+    // world (the scene gates ship + NPC movement the same way), so combat must
+    // not keep draining the player's hull in real time while paused. Damage
+    // numbers (above) still float so a killing blow's number finishes its arc.
+    if (this.deps.isTurnRunning?.() === false) return;
     this.pruneDisengaged();
     this.advancePlayerTimer(deltaTime);
     this.advanceNpcTimers(deltaTime);
