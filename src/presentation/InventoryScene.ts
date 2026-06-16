@@ -11,12 +11,11 @@ import { SceneType } from "@/types";
  * Inventory Scene — read-only view of the ship: canonical GearCatalog loadout
  * (hull + installed gear + derived stats) and resources/credits.
  *
- * The legacy `ship.modules` / `inventory.modules` system is inert (F6,
- * letsplay 2026-06-10) and deliberately NOT rendered here. NOTE: no production
- * flow installs into `gameEngine.playerLoadout` yet — shop purchases still
- * land in the legacy inventory (F6 known gap, CLAUDE.md), so this view shows
- * the starter (or save-restored) loadout until shops are canonicalized.
- * Accessible via "I" key from SpaceFlightScene or StarMapScene.
+ * The `ShipLoadout` is now the canonical fitting: shop purchases, combat loot
+ * and micromodule crafting all install into `gameEngine.playerLoadout`
+ * (dual-hull unification, 2026-06-16). The legacy `inventory.modules` bag only
+ * survives as a residual store for unfitted gear and is deliberately NOT
+ * rendered here. Accessible via "I" key from SpaceFlightScene or StarMapScene.
  */
 export class InventoryScene extends GameScene {
   private gameEngine: GameEngine | null = null;
@@ -285,7 +284,7 @@ export class InventoryScene extends GameScene {
       style: {
         fontFamily: "Courier New",
         fontSize: 10,
-        fill: 0x888888,
+        fill: 0xb4b4b4,
       },
     });
     meta.eventMode = "none";

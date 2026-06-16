@@ -21,6 +21,23 @@ export function gearToModule(gear: Gear): ShipModule {
 }
 
 /**
+ * Project a loadout slot back into a bag {@link ShipModule} when gear is
+ * unfitted in the hangar. The single seam for "slot → bag" so the item's
+ * attached micromodule **and** artifact-upgrade count survive the round-trip;
+ * re-installing restores both. Without this the upgrades (and the artifacts
+ * spent on them) were silently lost on unequip.
+ */
+export function slotToBagModule(
+  gear: Gear,
+  slot: { micromoduleId?: string; upgrades?: number },
+): ShipModule {
+  const mod = gearToModule(gear);
+  if (slot.micromoduleId) mod.micromoduleId = slot.micromoduleId;
+  if (slot.upgrades) mod.upgrades = slot.upgrades;
+  return mod;
+}
+
+/**
  * Project the loadout's hull onto the live `PlayerShip` after a hull change.
  *
  * {@link ShipLoadout} is the single source of truth for the hull, but the live

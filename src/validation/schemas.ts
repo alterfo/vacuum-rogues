@@ -52,6 +52,9 @@ export const ShipModuleSchema = z.object({
   }),
   level: z.number().int().min(1),
   micromoduleId: z.string().optional(),
+  // Artifact-upgrade count carried on an unfitted item (parity with the loadout
+  // slot's `upgrades`, capped at 2) so unequip→re-fit keeps research upgrades.
+  upgrades: z.number().int().min(0).max(2).optional(),
 });
 
 export const PlayerShipSchema = z.object({

@@ -14,6 +14,7 @@ import {
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
   gearToModule,
+  slotToBagModule,
   gearMicromoduleCategory,
   KIND_LABEL,
   KIND_COLOR,
@@ -1507,12 +1508,11 @@ export class StationScene extends GameScene {
           // Remove the exact clicked slot (by index, not first id-match) so the
           // right copy is removed when two identical items are fitted. Returning
           // it to the legacy inventory bag keeps it from being lost — there's no
-          // canonical uninstalled-gear store yet. Carry any applied micromodule
-          // onto the bagged item so re-installing restores it.
+          // canonical uninstalled-gear store yet. Carry the applied micromodule
+          // AND artifact-upgrade count onto the bagged item so re-installing
+          // restores both (slotToBagModule is the single slot→bag projection).
           if (loadout.removeAt(i)) {
-            const removed = gearToModule(gear);
-            if (slot.micromoduleId) removed.micromoduleId = slot.micromoduleId;
-            player.inventory.addItem(removed);
+            player.inventory.addItem(slotToBagModule(gear, slot));
           }
           this.render();
         });
@@ -1638,13 +1638,15 @@ export class StationScene extends GameScene {
           eqBtn.on("pointerdown", (e) => {
             e.stopPropagation();
             if (this.equipment.installGear(loadout, mod.id)) {
-              // Restore a micromodule carried on a previously-removed item onto
-              // the freshly-filled slot (installGear appends to the end).
+              // Restore the micromodule AND artifact-upgrade count carried on a
+              // previously-removed item onto the freshly-filled slot (installGear
+              // appends to the end).
+              const lastSlot = loadout.installedGearIds().length - 1;
               if (mod.micromoduleId) {
-                loadout.applyMicromoduleAt(
-                  loadout.installedGearIds().length - 1,
-                  mod.micromoduleId,
-                );
+                loadout.applyMicromoduleAt(lastSlot, mod.micromoduleId);
+              }
+              if (mod.upgrades) {
+                loadout.setSlotUpgrades(lastSlot, mod.upgrades);
               }
               player.inventory.modules.splice(idx, 1);
             }
