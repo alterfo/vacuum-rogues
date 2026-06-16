@@ -162,7 +162,12 @@ describe("MigrationPipeline v22→v23 — dual-hull loadout synthesis", () => {
     );
   });
 
-  it("leaves an already-canonical loadout untouched (no overwrite)", () => {
+  it("preserves an existing loadout's hull and gear, folding in legacy fitting (no data loss, no overwrite)", () => {
+    // A pre-v23 save carries a persisted loadout (authoritative hull + the gear
+    // already slotted) AND legacy weapons/equipment that never reached the
+    // loadout (bought/looted gear lived in ship.modules until this migration).
+    // The migration must keep the loadout's hull + existing gear and additively
+    // recover the legacy fitting into free slots — never drop either source.
     const canonical: ShipLoadoutSnapshot = {
       hullId: "hull_warden",
       slotted: [{ gearId: "wpn_beam" }],
@@ -175,8 +180,41 @@ describe("MigrationPipeline v22→v23 — dual-hull loadout synthesis", () => {
     const migrated = MigrationPipeline.migrate(raw as unknown as SaveState);
 
     const loadout = getLoadout(migrated);
+    // Existing loadout hull is kept (not rebuilt from the legacy hullClass).
     expect(loadout.hullId).toBe("hull_warden");
-    expect(loadout.slotted.map((s) => s.gearId)).toEqual(["wpn_beam"]);
+    const ids = loadout.slotted.map((s) => s.gearId);
+    // Existing loadout gear is preserved (not overwritten)...
+    expect(ids).toContain("wpn_beam");
+    // ...and the legacy fitting is recovered rather than silently dropped.
+    expect(ids).toContain("wpn_pulse");
+  });
+
+  it("recovers legacy ship.modules gear when the loadout holds only the starter fitting", () => {
+    // The real-world data-loss case: every save written after loadout
+    // persistence (v19) carries a starter-only loadout (engine + tank), while
+    // the player's bought/looted weapons still live in ship.modules. They must
+    // survive the migration.
+    const starter: ShipLoadoutSnapshot = {
+      hullId: "hull_corvette",
+      slotted: [{ gearId: "eq_engine_i" }, { gearId: "eq_tank" }],
+    };
+    const raw = makeLegacyFittedSave({
+      hullClass: "CORVETTE",
+      shipModules: [legacyModule("wpn_pulse"), null, null],
+      inventoryModules: [legacyModule("wpn_beam")],
+      loadout: starter,
+    });
+    const migrated = MigrationPipeline.migrate(raw as unknown as SaveState);
+
+    const ids = getLoadout(migrated).slotted.map((s) => s.gearId);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        "eq_engine_i",
+        "eq_tank",
+        "wpn_pulse",
+        "wpn_beam",
+      ]),
+    );
   });
 
   it("is idempotent — re-migrating yields the same loadout", () => {

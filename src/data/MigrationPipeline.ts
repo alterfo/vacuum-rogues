@@ -367,13 +367,7 @@ export class MigrationPipeline {
           inventory?: { modules?: Array<LegacyModuleJSON | null> };
         };
       };
-      // Already canonical — keep the authoritative loadout, don't rebuild it.
-      if (s.loadout) return;
-
       const ship = s.player?.ship;
-      const hullId = hullIdForHullClass(ship?.hullClass);
-      const hull = gearById(hullId) as HullSpec | undefined;
-      const slots = hull?.slots ?? 0;
 
       // Installed fitting first (priority), then the loose inventory bag; the
       // canonical model has no bag, so spares are installed into free slots.
@@ -385,13 +379,6 @@ export class MigrationPipeline {
           !!m && !!gearById(m.id) && gearById(m.id)!.kind !== GearKind.HULL,
       );
 
-      // Reserve an engine + fuel tank FIRST so the migrated ship can always take
-      // off (legacy ships flew on a flat speed stat with no engine module; the
-      // canonical model gates takeoff on an installed engine + tank). Prefer a
-      // real migrated copy if the legacy fitting/bag carries one, else synthesize
-      // the starter equivalent. Reserving *before* the slot-cap fill is what
-      // guarantees both survive — otherwise a full set of installed weapons could
-      // push a bagged engine/tank past the hull's slot count and ground the ship.
       const toSlot = (
         m: LegacyModuleJSON,
       ): ShipLoadoutSnapshot["slotted"][number] =>
@@ -399,6 +386,54 @@ export class MigrationPipeline {
           ? { gearId: m.id, micromoduleId: m.micromoduleId }
           : { gearId: m.id };
 
+      // A pre-v23 save can already carry a persisted `loadout`, but between
+      // loadout-persistence (v19) and this migration NO shop flow fed the
+      // loadout's *fitting* — only hull purchases reached it (via setHull), so
+      // its hull + starter engine/tank are authoritative while the player's
+      // bought and looted weapons/equipment still live in the legacy
+      // `ship.modules` / `inventory.modules`. Fold that legacy fitting into the
+      // loadout's free slots so it carries forward without data loss; we only
+      // append (never drop existing loadout gear), so a genuinely authoritative
+      // snapshot is preserved unchanged when there is nothing legacy to add.
+      if (s.loadout) {
+        const existing = s.loadout;
+        const existingHull = gearById(existing.hullId) as HullSpec | undefined;
+        const cap = existingHull?.slots ?? existing.slotted.length;
+        const slotKey = (gearId: string, micromoduleId?: string): string =>
+          micromoduleId ? `${gearId}#${micromoduleId}` : gearId;
+        // Multiset of fittings already in the loadout, so a legacy module that is
+        // already reflected there is consumed rather than duplicated — this keeps
+        // the merge idempotent — while genuine duplicate copies (e.g. an installed
+        // weapon plus a spare of the same id) still each land in their own slot.
+        const present = new Map<string, number>();
+        for (const slot of existing.slotted) {
+          const key = slotKey(slot.gearId, slot.micromoduleId);
+          present.set(key, (present.get(key) ?? 0) + 1);
+        }
+        for (const m of candidates) {
+          const key = slotKey(m.id, m.micromoduleId);
+          const have = present.get(key) ?? 0;
+          if (have > 0) {
+            present.set(key, have - 1);
+            continue;
+          }
+          if (existing.slotted.length >= cap) break;
+          existing.slotted.push(toSlot(m));
+        }
+        return;
+      }
+
+      const hullId = hullIdForHullClass(ship?.hullClass);
+      const hull = gearById(hullId) as HullSpec | undefined;
+      const slots = hull?.slots ?? 0;
+
+      // Reserve an engine + fuel tank FIRST so the migrated ship can always take
+      // off (legacy ships flew on a flat speed stat with no engine module; the
+      // canonical model gates takeoff on an installed engine + tank). Prefer a
+      // real migrated copy if the legacy fitting/bag carries one, else synthesize
+      // the starter equivalent. Reserving *before* the slot-cap fill is what
+      // guarantees both survive — otherwise a full set of installed weapons could
+      // push a bagged engine/tank past the hull's slot count and ground the ship.
       const engineIdx = candidates.findIndex((m) =>
         isEquipmentClass(m.id, EquipmentClass.ENGINE),
       );
