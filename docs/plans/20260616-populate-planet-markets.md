@@ -26,9 +26,17 @@ accessor so future callers don't depend on array position.
   `economyBaseline(economyType, resource)` in `src/domain/Market.ts`.
 - **Dynamic layer (already built):** `Market.advanceMarketDay()` (reverts to 1.0),
   `applyMarketTradeImpact()` (pure, resource-keyed), `Market.getPrice()`.
-- **Persistence:** `src/validation/schemas.ts` Market schema already persists
-  `economyType` (L274) and the vectors — **no new fields**, so no migration; just
-  confirm populated arrays validate.
+- **Persistence:** the galaxy saves through `SaveStateSerializer`'s plain
+  `JSON.stringify`/`JSON.parse`, **not** `GalaxySchema.parse`. `StarSystemSchema`
+  has no `planets`/market sub-schema (`L274` is the *system's* `economyType`, not a
+  market field), so market vectors persist as raw JSON and are not Zod-validated.
+  This plan adds **no new persisted field** (the arrays already existed, just
+  empty), so no schema migration is required.
+- **Known gap (follow-up):** population runs only at fresh generation. Saves
+  created before this feature keep empty stub markets and the load path only
+  restores prototypes, so the dynamic layer stays inert on those saves. A
+  load-time re-seed of empty markets in `GameEngine.rehydrateLoadedState` is the
+  follow-up — best landed together with the market-rehydration prototype fix.
 - **Tests:** existing economy tests (`economy.test.ts`, `tradeSystem.test.ts`,
   `economy/marketDynamics.test.ts`) construct markets explicitly with resources,
   so they are unaffected by populating *production* markets. Add new tests.

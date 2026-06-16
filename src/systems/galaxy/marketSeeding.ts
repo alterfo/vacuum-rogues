@@ -23,11 +23,6 @@ const MIN_VECTOR = 0.1;
 const JITTER_LOW = 0.85;
 const JITTER_SPAN = 0.3;
 
-function defaultRng(planetId: string): () => number {
-  const rng = new SeededRNG(`market:${planetId}`);
-  return () => rng.next();
-}
-
 /**
  * Deterministically seed a planet's market with real `availableResources` plus
  * `supply`/`demand` vectors biased by its economy type, so the already-shipped
@@ -40,22 +35,23 @@ function defaultRng(planetId: string): () => number {
  * The result is stable cross-planet arbitrage spreads that make economic sense.
  *
  * Pure and deterministic: the same `planetId` always produces the same vectors
- * (seeded RNG, never `Math.random`), so saves and replays stay stable. Pass an
- * explicit `rng` (e.g. seeded from `galaxy.id + planetId`) to vary the seed.
+ * (seeded RNG keyed on `market:<planetId>`, never `Math.random`), so saves and
+ * replays stay stable. The galaxy seed is already encoded in `planetId` (planet
+ * ids embed the generated system name), so no separate galaxy key is needed.
  */
 export function seedMarket(
   economyType: EconomyType,
   planetId: string,
-  rng: () => number = defaultRng(planetId),
 ): SeededMarketVectors {
+  const rng = new SeededRNG(`market:${planetId}`);
   const availableResources = [...ALL_RESOURCES];
   const supplyVector: number[] = [];
   const demandVector: number[] = [];
 
   for (const resource of availableResources) {
     const baseline = economyBaseline(economyType, resource);
-    const supplyJitter = JITTER_LOW + rng() * JITTER_SPAN;
-    const demandJitter = JITTER_LOW + rng() * JITTER_SPAN;
+    const supplyJitter = JITTER_LOW + rng.next() * JITTER_SPAN;
+    const demandJitter = JITTER_LOW + rng.next() * JITTER_SPAN;
     // Inverse of the baseline ⇒ cheap goods are abundant (high supply, low
     // demand); dear goods are scarce (low supply, high demand).
     supplyVector.push(Math.max(MIN_VECTOR, (1 / baseline) * supplyJitter));

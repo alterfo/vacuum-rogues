@@ -116,10 +116,18 @@ describe("Live pricing — generated production markets drive the dynamic layer"
     let lastProfit = firstProfit;
     for (let i = 0; i < 5; i++) lastProfit = roundTrip();
 
-    // Buying at `src` pushes its price up and selling at `dst` pushes its price
-    // down (applyMarketTradeImpact, the same lever NPC traders use), so the
-    // route is worth strictly less by the last trip than it was on the first.
+    // The route is worth strictly less by the last trip than the first.
     expect(lastProfit).toBeLessThan(firstProfit);
+
+    // ...and prove the priceMultiplier lever (applyMarketTradeImpact, the same
+    // one NPC traders use) is actually what moved — not just the supply/demand
+    // vector decay executeTrade also applies. Repeated BUYs at `src` must have
+    // ratcheted its multiplier up; repeated SELLs at `dst` must have pushed its
+    // multiplier down. Asserting this directly keeps the test honest: if the
+    // nudge regressed to a no-op, the vector decay alone would still shrink the
+    // spread and this test would otherwise pass blind.
+    expect(src.market.multiplierFor(good)).toBeGreaterThan(1.0);
+    expect(dst.market.multiplierFor(good)).toBeLessThan(1.0);
   });
 
   it("regression: same-planet buy→sell still loses credits on a populated market (SELL_SPREAD intact)", async () => {

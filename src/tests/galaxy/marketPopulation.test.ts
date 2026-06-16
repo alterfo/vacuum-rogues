@@ -50,18 +50,33 @@ describe("market population — generated planets have live markets", () => {
     expect(marketsOf(b)).toEqual(marketsOf(a));
   });
 
-  it("round-trips through JSON save + schemas.ts galaxy validation with markets intact", async () => {
+  it("survives the JSON save round-trip with market vectors intact", async () => {
     const galaxy = await new GalaxySimulator().generateGalaxy("validate", 5);
 
-    // JSON.stringify is the real save path (SaveStateSerializer); the populated
-    // market data survives the round-trip.
+    // JSON.stringify is the real save path (SaveStateSerializer) — NOT
+    // GalaxySchema. The populated market arrays must survive that round-trip.
     const plain = JSON.parse(JSON.stringify(galaxy));
     const firstPlanet = plain.systems.flatMap(
       (s: { planets: unknown[] }) => s.planets,
-    )[0] as { market: { availableResources: unknown[] } };
-    expect(firstPlanet.market.availableResources.length).toBeGreaterThan(0);
+    )[0] as {
+      market: {
+        availableResources: unknown[];
+        supplyVector: unknown[];
+        demandVector: unknown[];
+        priceMultipliers: unknown[];
+      };
+    };
+    const m = firstPlanet.market;
+    expect(m.availableResources.length).toBeGreaterThan(0);
+    // All four parallel arrays must persist at the same length.
+    expect(m.supplyVector).toHaveLength(m.availableResources.length);
+    expect(m.demandVector).toHaveLength(m.availableResources.length);
+    expect(m.priceMultipliers).toHaveLength(m.availableResources.length);
 
-    // Populating markets must not break the persisted galaxy schema.
+    // Sanity: a populated galaxy still passes galaxy-level schema validation.
+    // NOTE: StarSystemSchema has no `planets` field, so Zod strips planets and
+    // this does NOT validate market structure — the JSON assertions above are
+    // what actually guard market persistence.
     expect(() => GalaxySchema.parse(plain)).not.toThrow();
   });
 });

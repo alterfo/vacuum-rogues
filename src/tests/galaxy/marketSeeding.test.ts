@@ -29,8 +29,10 @@ describe("seedMarket — deterministic market population", () => {
     const a = seedMarket(EconomyType.MIXED, "alpha");
     const b = seedMarket(EconomyType.MIXED, "beta");
     // On MIXED every baseline is 1.0, so any difference is purely the jitter —
-    // proves the per-planet seed actually varies the vectors.
+    // proves the per-planet seed actually varies BOTH vectors (demand jitter is
+    // a separate rng draw, so it must vary independently of supply).
     expect(b.supplyVector).not.toEqual(a.supplyVector);
+    expect(b.demandVector).not.toEqual(a.demandVector);
   });
 
   it("trades the full resource catalogue with matching vector lengths", () => {
