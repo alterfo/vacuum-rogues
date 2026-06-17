@@ -24,6 +24,7 @@ import { EquipmentSystem } from "@/systems/EquipmentSystem";
 import { logger } from "@/utils/logger";
 import { RANK_THRESHOLDS, RANK_LABELS } from "@/config/balance";
 import { ResearchUpgradePanel } from "./ResearchUpgradePanel";
+import { attachWheelScroll } from "./ui/WheelScroll";
 
 interface StationContext {
   gameEngine?: GameEngine;
@@ -126,6 +127,7 @@ export class StationScene extends GameScene {
   private readonly ROW_H = 50;
   private readonly VISIBLE_ROWS = 9;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
+  private detachWheel: (() => void) | null = null;
   private toast: Text | null = null;
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
   /** Bribe paid this docking — gates are lifted for the duration of the visit. */
@@ -157,6 +159,11 @@ export class StationScene extends GameScene {
 
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.boundKeyDown);
+    // Mouse-wheel scrolls the shop list (matches the ArrowUp/Down keys); only
+    // the shop view is scrollable, so other views ignore the wheel.
+    this.detachWheel = attachWheelScroll((dir) => {
+      if (this.view === "shop") this.scrollShop(dir);
+    });
 
     logger.info(`StationScene: docked at ${this.station?.name}`);
   }
@@ -168,6 +175,10 @@ export class StationScene extends GameScene {
     if (this.boundKeyDown) {
       window.removeEventListener("keydown", this.boundKeyDown);
       this.boundKeyDown = null;
+    }
+    if (this.detachWheel) {
+      this.detachWheel();
+      this.detachWheel = null;
     }
     if (this.mainContainer) {
       this.renderer.uiLayer.removeChild(this.mainContainer);

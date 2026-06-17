@@ -1025,4 +1025,72 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
 
     errorCollector.assertAndDetach();
   });
+
+  test('regression: mouse wheel scrolls the equipment-shop list', async ({ page }) => {
+    // The shop relied on a PixiJS federated `backdrop.on("wheel")` that the list
+    // rows (eventMode "static") swallowed, so the wheel never reached the scroll
+    // logic. The fix is a window-level wheel listener (attachWheelScroll). Drive
+    // a REAL wheel event and assert the list scrolls down to the clamp and back.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Land on a planet, then open the equipment shop.
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eLandOnPlanet?: () => Promise<void> } | null;
+      };
+      await engine.currentScene?.e2eLandOnPlanet?.();
+    });
+    await waitForScene(page, 'PlanetScene', 15_000);
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { planet?: unknown } | null;
+        transitionTo: (s: string, ctx?: object) => Promise<void>;
+      };
+      const planet = engine.currentScene?.planet;
+      await engine.transitionTo('EQUIPMENT_SHOP', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'EquipmentShopScene', 15_000);
+
+    // Precondition: the shop overflows its visible window (else nothing scrolls).
+    const meta = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene;
+      return {
+        listings: (scene?.['listings'] as unknown[] | undefined)?.length ?? 0,
+        visible: (scene?.['VISIBLE_ROWS'] as number | undefined) ?? 0,
+        offset: (scene?.['scrollOffset'] as number | undefined) ?? -1,
+      };
+    });
+    const maxScroll = Math.max(0, meta.listings - meta.visible);
+    expect(maxScroll).toBeGreaterThan(0);
+    expect(meta.offset).toBe(0);
+
+    // Move the pointer over the canvas, then fire REAL wheel-down events past the
+    // clamp — the window-level listener must scroll the list to maxScroll.
+    const box = await page.locator('canvas').first().boundingBox();
+    if (box) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    for (let i = 0; i < meta.listings + 3; i++) await page.mouse.wheel(0, 120);
+    const afterDown = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      return (engine.currentScene?.['scrollOffset'] as number | undefined) ?? -1;
+    });
+    expect(afterDown).toBe(maxScroll);
+
+    // Real wheel-up events past the clamp must return the list to the top.
+    for (let i = 0; i < meta.listings + 3; i++) await page.mouse.wheel(0, -120);
+    const afterUp = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      return (engine.currentScene?.['scrollOffset'] as number | undefined) ?? -1;
+    });
+    expect(afterUp).toBe(0);
+
+    errorCollector.assertAndDetach();
+  });
 });

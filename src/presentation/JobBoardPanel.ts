@@ -1,4 +1,5 @@
 import { Container, Graphics, Rectangle, Text } from "pixi.js";
+import { attachWheelScroll } from "./ui/WheelScroll";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import type { Quest } from "@/domain/Quest";
 import { QuestType } from "@/types";
@@ -54,6 +55,8 @@ export class JobBoardPanel {
   private offerScrollOffset = 0;
   private scrollUpBtn: Text | null = null;
   private scrollDownBtn: Text | null = null;
+  /** Detaches the window-level wheel listener; run in `destroy()`. */
+  private detachWheel: (() => void) | null = null;
 
   private static readonly W = 520;
   private static readonly ROW_H = 60;
@@ -217,11 +220,14 @@ export class JobBoardPanel {
 
     if (maxScroll > 0) {
       this.addScrollControls(W, offerAreaTop + offerAreaHeight + 2, maxScroll);
-      // Wheel anywhere over the panel scrolls the offers (events bubble up
-      // from the rows / background to the panel container).
-      this.container.on("wheel", (e) => {
-        this.scrollOffers(e.deltaY > 0 ? 1 : -1, maxScroll);
-      });
+      // Window-level wheel listener scrolls the offers. A federated
+      // `container.on("wheel")` is unreliable: PixiJS dispatches `wheel` only to
+      // the object under the pointer, and the rows on top swallow it. `render`
+      // runs once (constructor), so capturing `maxScroll` here is safe; detached
+      // in `destroy()`.
+      this.detachWheel = attachWheelScroll((dir) =>
+        this.scrollOffers(dir, maxScroll),
+      );
     }
   }
 
@@ -563,6 +569,10 @@ export class JobBoardPanel {
   }
 
   destroy(): void {
+    if (this.detachWheel) {
+      this.detachWheel();
+      this.detachWheel = null;
+    }
     if (!this.container.destroyed) this.container.destroy({ children: true });
   }
 }

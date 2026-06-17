@@ -72,11 +72,16 @@ adds a **sell** action (refund at the existing `basePrice × 0.4` trade-in rate)
   src/presentation/JobBoardPanel.ts, src/presentation/MainMenuScene.ts (same)
 - Modify/Create: e2e regression spec asserting wheel scrolls a list
 
-- [ ] each scrollable scene attaches the helper to its scroll method and detaches on
-      destroy/close (no leaked listeners)
-- [ ] remove the now-dead federated `wheel` handlers
-- [ ] add an E2E regression assertion that the equipment-shop list scrolls on wheel
-- [ ] run affected tests + regression — must pass before next task
+- [x] each scrollable scene attaches the helper to its scroll method and detaches on
+      destroy/close (no leaked listeners) — EquipmentShopScene, StationScene (shop view),
+      InfoCenterScene (news tab), JobBoardPanel; MainMenuScene has no scrollable list
+      (single-slot "Continue"), so nothing to wire there
+- [x] remove the now-dead federated `wheel` handlers (EquipmentShopScene backdrop.on,
+      JobBoardPanel container.on); migrated jobBoardScroll.test.ts to the window listener
+- [x] add an E2E regression assertion that the equipment-shop list scrolls on wheel
+      (playtest-regression.spec.ts: real page.mouse.wheel drives scrollOffset to the clamp + back)
+- [x] run affected tests + regression — must pass before next task (lint 0 errors, tsc clean,
+      21 affected unit tests green, 17/17 e2e regression green)
 
 ### Task 3: Canonical owned-uninstalled-gear store
 **Files:**

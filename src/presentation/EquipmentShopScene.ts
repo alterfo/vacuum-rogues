@@ -21,6 +21,7 @@ import {
   applyLoadoutHullToShip,
 } from "@/systems/equipment/GearBridge";
 import { EquipmentSystem } from "@/systems/EquipmentSystem";
+import { attachWheelScroll } from "./ui/WheelScroll";
 import { logger } from "@/utils/logger";
 
 interface ShopContext {
@@ -71,6 +72,7 @@ export class EquipmentShopScene extends GameScene {
   private readonly ROW_H = 52;
   private readonly VISIBLE_ROWS = 7;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
+  private detachWheel: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
@@ -89,6 +91,7 @@ export class EquipmentShopScene extends GameScene {
 
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.boundKeyDown);
+    this.detachWheel = attachWheelScroll((dir) => this.scroll(dir));
 
     logger.info(
       `EquipmentShopScene: ${this.listings.length} items at ${this.planet?.name}`,
@@ -101,6 +104,10 @@ export class EquipmentShopScene extends GameScene {
     if (this.boundKeyDown) {
       window.removeEventListener("keydown", this.boundKeyDown);
       this.boundKeyDown = null;
+    }
+    if (this.detachWheel) {
+      this.detachWheel();
+      this.detachWheel = null;
     }
     if (this.mainContainer) {
       this.mainContainer.destroy({ children: true });
@@ -249,11 +256,9 @@ export class EquipmentShopScene extends GameScene {
       back.alpha = 1;
     });
     this.mainContainer.addChild(back);
-
-    // Scroll wheel
-    backdrop.on("wheel", (e) => {
-      this.scroll(e.deltaY > 0 ? 1 : -1);
-    });
+    // Mouse-wheel scroll is handled by a window-level listener (attached in
+    // initialize via attachWheelScroll); a federated `backdrop.on("wheel")`
+    // never fires because the list rows on top swallow the event.
   }
 
   private renderTabs(x: number, y: number, w: number): void {

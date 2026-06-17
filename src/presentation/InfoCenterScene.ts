@@ -22,6 +22,7 @@ import {
   type WeaponSpec,
   type Gear,
 } from "@/systems/equipment/GearCatalog";
+import { attachWheelScroll } from "./ui/WheelScroll";
 import { logger } from "@/utils/logger";
 
 interface InfoContext {
@@ -327,6 +328,7 @@ export class InfoCenterScene extends GameScene {
   private gearResults: EquipmentHit[] = [];
 
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
+  private detachWheel: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
@@ -370,6 +372,11 @@ export class InfoCenterScene extends GameScene {
 
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.boundKeyDown);
+    // Mouse-wheel scrolls the news list (matches the ArrowUp/Down keys); only
+    // the news tab is scrollable, so other tabs ignore the wheel.
+    this.detachWheel = attachWheelScroll((dir) => {
+      if (this.activeTab === "news") this.scrollNews(dir);
+    });
   }
 
   update(_dt: number): void {}
@@ -378,6 +385,10 @@ export class InfoCenterScene extends GameScene {
     if (this.boundKeyDown) {
       window.removeEventListener("keydown", this.boundKeyDown);
       this.boundKeyDown = null;
+    }
+    if (this.detachWheel) {
+      this.detachWheel();
+      this.detachWheel = null;
     }
     if (this.mainContainer) {
       this.renderer.uiLayer.removeChild(this.mainContainer);

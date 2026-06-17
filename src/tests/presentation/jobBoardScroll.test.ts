@@ -159,28 +159,43 @@ describe("JobBoardPanel scrolling", () => {
     expect(offers!.hitArea!.y + offers!.y).toBeCloseTo(worldTop, 5);
   });
 
-  it("scrolls the offers when the panel receives a wheel event", async () => {
+  it("scrolls the offers when a window wheel event fires", async () => {
+    // The panel used to rely on a federated `container.on("wheel")` that the
+    // rows on top swallowed; it now scrolls via a window-level wheel listener
+    // (attachWheelScroll). Capture that listener and assert it scrolls + that
+    // destroy() detaches it (no leaked listeners across panel rebuilds).
     const { JobBoardPanel } = await import("@/presentation/JobBoardPanel");
-    const quests = Array.from({ length: 6 }, (_, i) => makeQuest(i));
-    const panel = new JobBoardPanel(quests, SCREEN_W, SCREEN_H, {
-      onAccept: vi.fn(),
-      onClose: vi.fn(),
-    });
-    const onCalls = (
-      panel.container as unknown as {
-        on: { mock: { calls: [string, (e: { deltaY: number }) => void][] } };
-      }
-    ).on.mock.calls;
-    const wheel = onCalls.find((c) => c[0] === "wheel")?.[1];
-    expect(wheel).toBeDefined();
-    const offers = (
-      panel as unknown as { offersContainer: { y: number } | null }
-    ).offersContainer;
-    expect(offers!.y).toBe(0);
-    wheel!({ deltaY: 100 });
-    expect(offers!.y).toBeLessThan(0);
-    wheel!({ deltaY: -100 });
-    expect(offers!.y).toBe(0);
+    const wheelHandlers: ((e: WheelEvent) => void)[] = [];
+    const addSpy = vi
+      .spyOn(window, "addEventListener")
+      .mockImplementation((type, handler) => {
+        if (String(type) === "wheel") {
+          wheelHandlers.push(handler as (e: WheelEvent) => void);
+        }
+      });
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+    try {
+      const quests = Array.from({ length: 6 }, (_, i) => makeQuest(i));
+      const panel = new JobBoardPanel(quests, SCREEN_W, SCREEN_H, {
+        onAccept: vi.fn(),
+        onClose: vi.fn(),
+      });
+      expect(wheelHandlers).toHaveLength(1);
+      const wheel = wheelHandlers[0];
+      const offers = (
+        panel as unknown as { offersContainer: { y: number } | null }
+      ).offersContainer;
+      expect(offers!.y).toBe(0);
+      wheel({ deltaY: 100, preventDefault: vi.fn() } as unknown as WheelEvent);
+      expect(offers!.y).toBeLessThan(0);
+      wheel({ deltaY: -100, preventDefault: vi.fn() } as unknown as WheelEvent);
+      expect(offers!.y).toBe(0);
+      panel.destroy();
+      expect(removeSpy).toHaveBeenCalledWith("wheel", wheel);
+    } finally {
+      addSpy.mockRestore();
+      removeSpy.mockRestore();
+    }
   });
 
   it("shows scroll arrows only when content overflows", async () => {
