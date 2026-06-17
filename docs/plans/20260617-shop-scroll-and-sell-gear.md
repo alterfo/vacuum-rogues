@@ -111,11 +111,20 @@ adds a **sell** action (refund at the existing `basePrice × 0.4` trade-in rate)
   `sellUninstalledGear(player, gearId)` → refund + remove from store)
 - Create: src/tests/equipment/sellGear.test.ts
 
-- [ ] uninstalled gear appears as ТРЮМ content; selling refunds `basePrice × 0.4` and
+- [x] uninstalled gear appears as ТРЮМ content; selling refunds `basePrice × 0.4` and
       removes it; cannot sell installed gear
-- [ ] write unit tests: price, refund, removal, reject-if-installed
-- [ ] add an E2E regression assertion for the sell flow
-- [ ] run affected tests + regression — must pass before next task
+      (`sellGear.ts`: `sellGearPrice`/`sellUninstalledGear`; ТРЮМ strip in
+      EquipmentShopScene + hangar section in StationScene with «Продать» (+ «надеть»);
+      buy call-sites now park non-installed purchases in `ownedGearIds` via
+      `acquireUninstalledGear`; installed gear lives in the loadout, never the owned
+      store, so the sell is a no-op for it)
+- [x] write unit tests: price, refund, removal, reject-if-installed
+      (src/tests/equipment/sellGear.test.ts, 9 cases)
+- [x] add an E2E regression assertion for the sell flow
+      (playtest-regression.spec.ts: seed owned gear → open shop → REAL click «Продать»
+      → credits +1120, item gone from the hold)
+- [x] run affected tests + regression — must pass before next task (tsc clean, lint 0,
+      452 unit tests green, 18/18 e2e regression green)
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify Overview: wheel scrolls all listed scenes; uninstalled gear shows in ТРЮМ

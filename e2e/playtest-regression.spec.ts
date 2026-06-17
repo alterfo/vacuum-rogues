@@ -1093,4 +1093,88 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
 
     errorCollector.assertAndDetach();
   });
+
+  test('regression: owned-uninstalled gear shows in the ТРЮМ and sells for the trade-in refund', async ({ page }) => {
+    // Task 4: gear the player owns but hasn't installed lives in the canonical
+    // `inventory.ownedGearIds` store. The equipment shop renders it in the ТРЮМ
+    // strip with a «Продать» button that refunds basePrice × 0.4 and removes the
+    // copy. Drive a REAL click on that button and assert the credit refund + the
+    // item disappearing from the hold.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Warm the event boundary, land on a planet, then seed an owned-uninstalled
+    // item BEFORE opening the shop so the ТРЮМ strip renders it on init.
+    await page.mouse.move(5, 5);
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eLandOnPlanet?: () => Promise<void> } | null;
+      };
+      await engine.currentScene?.e2eLandOnPlanet?.();
+    });
+    await waitForScene(page, 'PlanetScene', 15_000);
+
+    const before = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        player: { credits: number; inventory: { ownedGearIds: string[] } } | null;
+      };
+      const player = engine.player!;
+      player.inventory.ownedGearIds = player.inventory.ownedGearIds ?? [];
+      player.inventory.ownedGearIds.push('eq_radar'); // basePrice 2800 → refund 1120
+      return { credits: player.credits, owned: player.inventory.ownedGearIds.length };
+    });
+
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { planet?: unknown } | null;
+        transitionTo: (s: string, ctx?: object) => Promise<void>;
+      };
+      const planet = engine.currentScene?.planet;
+      await engine.transitionTo('EQUIPMENT_SHOP', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'EquipmentShopScene', 15_000);
+
+    // The «Продать» button is the only pointer child of the hold container; read
+    // its on-screen centre (top-left + half-extent — the label has no anchor).
+    const sellBtn = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const hold = engine.currentScene?.['holdContainer'] as
+        | {
+            children: Array<{
+              cursor?: string;
+              width: number;
+              height: number;
+              text?: string;
+              getGlobalPosition: () => { x: number; y: number };
+            }>;
+          }
+        | undefined;
+      const btn = hold?.children.find((c) => c.cursor === 'pointer');
+      if (!btn) return null;
+      const p = btn.getGlobalPosition();
+      return { x: p.x + btn.width / 2, y: p.y + btn.height / 2, text: btn.text ?? '' };
+    });
+    expect(sellBtn).not.toBeNull();
+    expect(sellBtn!.text).toContain('Продать');
+    expect(sellBtn!.text).toContain('1120'); // floor(2800 * 0.4)
+
+    // REAL click on «Продать» → credits rise by the refund and the hold empties.
+    await page.mouse.click(sellBtn!.x, sellBtn!.y);
+    const after = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        player: { credits: number; inventory: { ownedGearIds: string[] } } | null;
+      };
+      const player = engine.player!;
+      return {
+        credits: player.credits,
+        ownsRadar: player.inventory.ownedGearIds.includes('eq_radar'),
+      };
+    });
+    expect(after.credits).toBe(before.credits + 1120);
+    expect(after.ownsRadar).toBe(false);
+
+    errorCollector.assertAndDetach();
+  });
 });

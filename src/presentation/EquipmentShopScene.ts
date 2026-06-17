@@ -14,12 +14,17 @@ import {
 } from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
-  gearToModule,
   slotToBagModule,
+  acquireUninstalledGear,
+  ownedUninstalledGear,
   KIND_LABEL,
   KIND_COLOR,
   applyLoadoutHullToShip,
 } from "@/systems/equipment/GearBridge";
+import {
+  sellGearPrice,
+  sellUninstalledGear,
+} from "@/systems/equipment/sellGear";
 import { EquipmentSystem } from "@/systems/EquipmentSystem";
 import { attachWheelScroll } from "./ui/WheelScroll";
 import { logger } from "@/utils/logger";
@@ -65,6 +70,8 @@ export class EquipmentShopScene extends GameScene {
   private readonly equipment = new EquipmentSystem();
   private mainContainer: Container | null = null;
   private listContainer: Container | null = null;
+  private holdContainer: Container | null = null;
+  private holdPos: { x: number; y: number; w: number } | null = null;
   private creditsText: Text | null = null;
   private listings: GearListing[] = [];
   private scrollOffset = 0;
@@ -116,6 +123,8 @@ export class EquipmentShopScene extends GameScene {
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
     this.listContainer = null;
+    this.holdContainer = null;
+    this.holdPos = null;
     this.creditsText = null;
     this.gameEngine = null;
     this.planet = null;
@@ -219,13 +228,16 @@ export class EquipmentShopScene extends GameScene {
       // Scroll buttons (outside clip so they're always visible)
       this.addScrollButtons(PX + PW - 28, PY + 96, listH);
 
-      // Current loadout strip below the list
-      this.renderLoadoutStrip(
-        PX,
-        PY + 96 + listH + 4,
-        PW,
-        PH - 96 - listH - 48,
-      );
+      // Current loadout strip (installed gear), then the ТРЮМ strip (owned but
+      // uninstalled gear, each with a sell action) below it.
+      const stripY = PY + 96 + listH + 4;
+      this.renderLoadoutStrip(PX, stripY, PW, 28);
+      if (!this.holdContainer) {
+        this.holdContainer = new Container();
+        this.mainContainer.addChild(this.holdContainer);
+      }
+      this.holdPos = { x: PX, y: stripY + 32, w: PW };
+      this.renderHold();
     } else {
       this.renderHullPanel(PX, PY + 76, PW, PH - 76 - 44);
     }
@@ -791,6 +803,103 @@ export class EquipmentShopScene extends GameScene {
     }
   }
 
+  /**
+   * ТРЮМ (hold) strip: gear the player owns but hasn't installed — the canonical
+   * `ownedUninstalledGear` store — each with a «Продать» action at the trade-in
+   * rate. Rendered into its own container so a sell rebuilds just this strip
+   * (the rest of the shop is built once in `render`).
+   */
+  private renderHold(): void {
+    const hold = this.holdContainer;
+    const pos = this.holdPos;
+    const player = this.gameEngine?.player;
+    if (!hold || !pos || !player) return;
+    hold.removeChildren();
+
+    const { x, y, w } = pos;
+    const stripBg = new Graphics();
+    stripBg.rect(x, y, w - 30, 28);
+    stripBg.fill({ color: 0x0a0a04, alpha: 0.8 });
+    stripBg.stroke({ width: 1, color: 0x30401a });
+    hold.addChild(stripBg);
+
+    const label = new Text({
+      text: "ТРЮМ:",
+      style: { fontFamily: "Courier New", fontSize: 10, fill: 0x88aa44 },
+    });
+    label.eventMode = "none";
+    label.x = x + 8;
+    label.y = y + 8;
+    hold.addChild(label);
+
+    const loadout = this.gameEngine?.playerLoadout ?? null;
+    const ids = ownedUninstalledGear(player, loadout);
+    if (ids.length === 0) {
+      const none = new Text({
+        text: "пусто",
+        style: { fontFamily: "Courier New", fontSize: 10, fill: 0x334455 },
+      });
+      none.eventMode = "none";
+      none.x = x + 70;
+      none.y = y + 8;
+      hold.addChild(none);
+      return;
+    }
+
+    let tx = x + 70;
+    for (const gearId of ids) {
+      const gear = gearById(gearId);
+      if (!gear) continue;
+      const chip = new Text({
+        text: `[${gear.name}]`,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 10,
+          fill: KIND_COLOR[gear.kind] ?? 0x88aacc,
+        },
+      });
+      chip.eventMode = "none";
+      chip.x = tx;
+      chip.y = y + 8;
+      hold.addChild(chip);
+      tx += chip.width + 4;
+
+      const sellBtn = new Text({
+        text: `Продать ${sellGearPrice(gear)}₡`,
+        style: { fontFamily: "Courier New", fontSize: 10, fill: 0x44ff88 },
+      });
+      sellBtn.eventMode = "static";
+      sellBtn.cursor = "pointer";
+      sellBtn.x = tx;
+      sellBtn.y = y + 8;
+      sellBtn.on("pointerdown", (e) => {
+        e.stopPropagation();
+        this.sellHoldItem(gearId);
+      });
+      sellBtn.on("pointerover", () => {
+        sellBtn.alpha = 0.7;
+      });
+      sellBtn.on("pointerout", () => {
+        sellBtn.alpha = 1;
+      });
+      hold.addChild(sellBtn);
+      tx += sellBtn.width + 14;
+      if (tx > x + w - 60) break; // prevent overflow off the strip
+    }
+  }
+
+  private sellHoldItem(gearId: string): void {
+    const player = this.gameEngine?.player;
+    if (!player) return;
+    const refund = sellUninstalledGear(player, gearId);
+    if (refund <= 0) return;
+    this.gameEngine?.audio.playSfx("buy").catch(() => {});
+    if (this.creditsText) {
+      this.creditsText.text = `${player.credits.toLocaleString("ru")} ₡`;
+    }
+    this.renderHold();
+  }
+
   private scroll(dir: number): void {
     const maxScroll = Math.max(0, this.listings.length - this.VISIBLE_ROWS);
     this.scrollOffset = Math.max(
@@ -820,7 +929,10 @@ export class EquipmentShopScene extends GameScene {
       ? this.equipment.installGear(loadout, listing.gear.id)
       : false;
     if (!installed) {
-      player.inventory.addItem(gearToModule(listing.gear));
+      // No free slot: the purchase lands in the canonical owned-uninstalled
+      // store (shown in the ТРЮМ strip, sellable from there) rather than the
+      // legacy modules bag.
+      acquireUninstalledGear(player, listing.gear.id);
     }
     this.gameEngine?.audio.playSfx("buy").catch(() => {});
 
@@ -839,6 +951,8 @@ export class EquipmentShopScene extends GameScene {
     const PW = Math.min(820, sw - 40);
     const PY = (sh - Math.min(580, sh - 40)) / 2;
     this.renderRows((sw - PW) / 2, PY + 96, PW);
+    // A purchase with no free slot lands in the ТРЮМ — refresh that strip too.
+    this.renderHold();
   }
 
   private onKeyDown(e: KeyboardEvent): void {

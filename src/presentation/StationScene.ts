@@ -13,13 +13,19 @@ import {
 } from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
-  gearToModule,
   slotToBagModule,
   gearMicromoduleCategory,
+  acquireUninstalledGear,
+  ownedUninstalledGear,
+  installOwnedGear,
   KIND_LABEL,
   KIND_COLOR,
   applyLoadoutHullToShip,
 } from "@/systems/equipment/GearBridge";
+import {
+  sellGearPrice,
+  sellUninstalledGear,
+} from "@/systems/equipment/sellGear";
 import { EquipmentSystem } from "@/systems/EquipmentSystem";
 import { logger } from "@/utils/logger";
 import { RANK_THRESHOLDS, RANK_LABELS } from "@/config/balance";
@@ -876,7 +882,9 @@ export class StationScene extends GameScene {
       ? this.equipment.installGear(loadout, listing.gear.id)
       : false;
     if (!installed) {
-      player.inventory.addItem(gearToModule(listing.gear));
+      // No free slot: park the purchase in the canonical owned-uninstalled
+      // store (shown in the hangar ТРЮМ, sellable from there).
+      acquireUninstalledGear(player, listing.gear.id);
     }
     this.showToast(
       installed
@@ -1670,6 +1678,109 @@ export class StationScene extends GameScene {
               player.inventory.modules.splice(idx, 1);
             }
             this.render();
+          });
+          this.mainContainer!.addChild(eqBtn);
+        }
+      });
+    }
+
+    // ТРЮМ section — owned-but-uninstalled gear (the canonical store). Each item
+    // can be fitted into a free slot («надеть») or sold at the trade-in rate
+    // («Продать»); installed gear lives in the loadout and is never listed here.
+    const ownedIds = ownedUninstalledGear(player, loadout);
+    const holdY = invY + 22 + Math.max(invMods.length, 1) * 44 + 16;
+    const holdLabel = new Text({
+      text: "ТРЮМ (на продажу):",
+      style: { fontSize: 12, fill: 0x88aa44, fontFamily: "monospace" },
+    });
+    holdLabel.x = PX + 20;
+    holdLabel.y = holdY;
+    holdLabel.eventMode = "none";
+    this.mainContainer!.addChild(holdLabel);
+
+    if (ownedIds.length === 0) {
+      const empty = new Text({
+        text: "Трюм пуст",
+        style: { fontSize: 12, fill: 0x334455, fontFamily: "monospace" },
+      });
+      empty.x = PX + 20;
+      empty.y = holdY + 22;
+      empty.eventMode = "none";
+      this.mainContainer!.addChild(empty);
+    } else {
+      const hasFreeSlot =
+        !!loadout && loadout.installedGearIds().length < loadout.hull.slots;
+      ownedIds.forEach((gearId, idx) => {
+        const gear = gearById(gearId);
+        if (!gear) return;
+        const hy = holdY + 22 + idx * 44;
+        if (hy + 40 > PY + PH - 34) return; // clip above the back button
+
+        const rowBg = new Graphics();
+        rowBg
+          .rect(PX + 20, hy, PW - 40, 36)
+          .fill({ color: 0x14160a, alpha: 1 });
+        rowBg
+          .rect(PX + 20, hy, PW - 40, 36)
+          .stroke({ color: 0x30401a, width: 1 });
+        rowBg.eventMode = "none";
+        this.mainContainer!.addChild(rowBg);
+
+        const rowText = new Text({
+          text: `${gear.name}  (T${gear.techLevel})`,
+          style: { fontSize: 12, fill: 0xccddaa, fontFamily: "monospace" },
+        });
+        rowText.x = PX + 30;
+        rowText.y = hy + 10;
+        rowText.eventMode = "none";
+        this.mainContainer!.addChild(rowText);
+
+        const sellBtn = new Text({
+          text: `[Продать ${sellGearPrice(gear)}₡]`,
+          style: { fontSize: 11, fill: 0x44ff88, fontFamily: "monospace" },
+        });
+        sellBtn.anchor.set(1, 0.5);
+        sellBtn.x = PX + PW - 26;
+        sellBtn.y = hy + 18;
+        sellBtn.eventMode = "static";
+        sellBtn.cursor = "pointer";
+        sellBtn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          const refund = sellUninstalledGear(player, gearId);
+          if (refund > 0) {
+            this.showToast(`Продано: ${gear.name} (+${refund} ₡)`, 0x44ff88);
+          }
+          this.render();
+        });
+        sellBtn.on("pointerover", () => {
+          sellBtn.alpha = 0.7;
+        });
+        sellBtn.on("pointerout", () => {
+          sellBtn.alpha = 1;
+        });
+        this.mainContainer!.addChild(sellBtn);
+
+        // Fit into a free slot — only catalog non-hull gear is installable.
+        if (hasFreeSlot && gear.kind !== GearKind.HULL && loadout) {
+          const eqBtn = new Text({
+            text: "[надеть]",
+            style: { fontSize: 11, fill: 0x44ddaa, fontFamily: "monospace" },
+          });
+          eqBtn.anchor.set(1, 0.5);
+          eqBtn.x = sellBtn.x - sellBtn.width - 14;
+          eqBtn.y = hy + 18;
+          eqBtn.eventMode = "static";
+          eqBtn.cursor = "pointer";
+          eqBtn.on("pointerdown", (e) => {
+            e.stopPropagation();
+            installOwnedGear(player, loadout, gearId);
+            this.render();
+          });
+          eqBtn.on("pointerover", () => {
+            eqBtn.alpha = 0.7;
+          });
+          eqBtn.on("pointerout", () => {
+            eqBtn.alpha = 1;
           });
           this.mainContainer!.addChild(eqBtn);
         }
