@@ -1,6 +1,7 @@
 import { ShipModule } from "@/domain/ShipModule";
 import { ModuleCategory } from "@/types";
 import type { PlayerShip } from "@/domain/PlayerShip";
+import type { Player } from "@/domain/Player";
 import type { ShipLoadout } from "./ShipLoadout";
 import {
   GearKind,
@@ -71,6 +72,69 @@ export function cargoCapacityOf(
   loadout: ShipLoadout | null | undefined,
 ): number {
   return loadout ? loadout.derivedStats().cargo : 0;
+}
+
+/**
+ * Owned-but-uninstalled gear ids = the inventory's `ownedGearIds` store minus
+ * whatever is currently installed in the loadout. The single accessor both the
+ * station hangar and the equipment-shop ТРЮМ view read, so the "what can I sell"
+ * list can never diverge from one scene to the next. The installed subtraction
+ * is defensive — `ownedGearIds` already excludes installed gear once the
+ * install/uninstall transitions are wired — so a duplicate that is also fitted
+ * is not double-counted.
+ */
+export function ownedUninstalledGear(
+  player: Player,
+  loadout: ShipLoadout | null | undefined,
+): string[] {
+  const remaining = [...(loadout?.installedGearIds() ?? [])];
+  return (player.inventory.ownedGearIds ?? []).filter((id) => {
+    const i = remaining.indexOf(id);
+    if (i >= 0) {
+      remaining.splice(i, 1);
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * Acquire gear that was not auto-installed — a purchase or loot drop with no
+ * free loadout slot — into the owned-uninstalled store.
+ */
+export function acquireUninstalledGear(player: Player, gearId: string): void {
+  player.inventory.addOwnedGear(gearId);
+}
+
+/**
+ * Install an owned-uninstalled item into a free loadout slot, moving its id out
+ * of the owned store and into the loadout. Returns false and changes nothing
+ * when the item isn't installable (unknown id, a hull, or no free slot).
+ */
+export function installOwnedGear(
+  player: Player,
+  loadout: ShipLoadout,
+  gearId: string,
+): boolean {
+  if (!loadout.install(gearId)) return false;
+  player.inventory.removeOwnedGear(gearId);
+  return true;
+}
+
+/**
+ * Unequip the gear at a loadout slot index back into the owned-uninstalled
+ * store. Returns false (and changes nothing) for an out-of-range slot.
+ */
+export function uninstallToOwned(
+  player: Player,
+  loadout: ShipLoadout,
+  slotIndex: number,
+): boolean {
+  const slot = loadout.installedSlots()[slotIndex];
+  if (!slot) return false;
+  if (!loadout.removeAt(slotIndex)) return false;
+  player.inventory.addOwnedGear(slot.gearId);
+  return true;
 }
 
 /** Russian display label per gear kind. */

@@ -112,6 +112,10 @@ export const InventorySchema = z.object({
   micromodules: z.array(MicroModuleSchema).default([]),
   resources: z.array(ResourceStackSchema),
   cosmetics: z.array(z.object({ id: z.string(), name: z.string() })),
+  // Canonical owned-but-uninstalled gear store (catalog gear ids). Defaults to
+  // [] so pre-existing saves (which lack the field) validate and load with an
+  // empty hold rather than failing.
+  ownedGearIds: z.array(z.string()).default([]),
 });
 
 export const QuestObjectiveSchema = z.object({

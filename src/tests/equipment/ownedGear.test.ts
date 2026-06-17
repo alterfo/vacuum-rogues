@@ -1,0 +1,181 @@
+import { describe, it, expect } from "vitest";
+import { Inventory } from "@/domain/Inventory";
+import type { Player } from "@/domain/Player";
+import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
+import {
+  ownedUninstalledGear,
+  acquireUninstalledGear,
+  installOwnedGear,
+  uninstallToOwned,
+} from "@/systems/equipment/GearBridge";
+import { InventorySchema } from "@/validation/schemas";
+
+/**
+ * Task 3: the canonical owned-but-uninstalled-gear store. Purchases/loot that
+ * aren't auto-installed land in `inventory.ownedGearIds`; installing moves an id
+ * into the loadout; unequipping moves it back. `ownedUninstalledGear` is the
+ * single accessor (owned − installed) both the hangar and shop ТРЮМ views read.
+ */
+
+/** Minimal Player stand-in — the GearBridge helpers only touch `.inventory`. */
+function playerWith(inventory: Inventory): Player {
+  return { inventory } as unknown as Player;
+}
+
+describe("Inventory.ownedGearIds store", () => {
+  it("defaults to empty for a fresh inventory", () => {
+    expect(new Inventory().ownedGearIds).toEqual([]);
+  });
+
+  it("addOwnedGear appends; removeOwnedGear drops the first copy", () => {
+    const inv = new Inventory();
+    inv.addOwnedGear("wpn_pulse");
+    inv.addOwnedGear("wpn_pulse");
+    inv.addOwnedGear("eq_radar");
+    expect(inv.ownedGearIds).toEqual(["wpn_pulse", "wpn_pulse", "eq_radar"]);
+
+    expect(inv.removeOwnedGear("wpn_pulse")).toBe(true);
+    expect(inv.ownedGearIds).toEqual(["wpn_pulse", "eq_radar"]);
+  });
+
+  it("removeOwnedGear returns false when the id is not owned", () => {
+    const inv = new Inventory();
+    inv.addOwnedGear("eq_radar");
+    expect(inv.removeOwnedGear("wpn_pulse")).toBe(false);
+    expect(inv.ownedGearIds).toEqual(["eq_radar"]);
+  });
+});
+
+describe("ownedUninstalledGear — owned minus installed", () => {
+  it("returns the owned store when nothing is installed", () => {
+    const inv = new Inventory();
+    inv.addOwnedGear("wpn_pulse");
+    inv.addOwnedGear("eq_radar");
+    const loadout = new ShipLoadout("hull_corvette");
+
+    expect(ownedUninstalledGear(playerWith(inv), loadout)).toEqual([
+      "wpn_pulse",
+      "eq_radar",
+    ]);
+  });
+
+  it("subtracts installed gear copy-for-copy (a fitted duplicate is excluded once)", () => {
+    const inv = new Inventory();
+    inv.addOwnedGear("wpn_pulse");
+    inv.addOwnedGear("wpn_pulse");
+    const loadout = new ShipLoadout("hull_corvette");
+    loadout.install("wpn_pulse");
+
+    // Two owned, one fitted → one copy still uninstalled.
+    expect(ownedUninstalledGear(playerWith(inv), loadout)).toEqual([
+      "wpn_pulse",
+    ]);
+  });
+
+  it("tolerates a missing loadout (owned store is the full list)", () => {
+    const inv = new Inventory();
+    inv.addOwnedGear("eq_radar");
+    expect(ownedUninstalledGear(playerWith(inv), null)).toEqual(["eq_radar"]);
+  });
+});
+
+describe("acquire / install / uninstall transitions", () => {
+  it("acquireUninstalledGear lands a non-installed purchase in the store", () => {
+    const inv = new Inventory();
+    acquireUninstalledGear(playerWith(inv), "wpn_pulse");
+    expect(inv.ownedGearIds).toEqual(["wpn_pulse"]);
+  });
+
+  it("installOwnedGear moves an id from the store into the loadout", () => {
+    const inv = new Inventory();
+    inv.addOwnedGear("eq_radar");
+    const loadout = new ShipLoadout("hull_corvette");
+    const player = playerWith(inv);
+
+    expect(installOwnedGear(player, loadout, "eq_radar")).toBe(true);
+    expect(loadout.installedGearIds()).toContain("eq_radar");
+    expect(inv.ownedGearIds).toEqual([]);
+    expect(ownedUninstalledGear(player, loadout)).toEqual([]);
+  });
+
+  it("installOwnedGear rejects a hull and leaves the store untouched", () => {
+    const inv = new Inventory();
+    inv.addOwnedGear("hull_scout");
+    const loadout = new ShipLoadout("hull_corvette");
+
+    expect(installOwnedGear(playerWith(inv), loadout, "hull_scout")).toBe(
+      false,
+    );
+    expect(inv.ownedGearIds).toEqual(["hull_scout"]);
+    expect(loadout.installedGearIds()).not.toContain("hull_scout");
+  });
+
+  it("installOwnedGear fails (no move) when every slot is full", () => {
+    const inv = new Inventory();
+    inv.addOwnedGear("eq_radar");
+    const loadout = new ShipLoadout("hull_corvette");
+    for (let i = 0; i < loadout.hull.slots; i++) loadout.install("wpn_pulse");
+
+    expect(installOwnedGear(playerWith(inv), loadout, "eq_radar")).toBe(false);
+    expect(inv.ownedGearIds).toEqual(["eq_radar"]);
+  });
+
+  it("uninstallToOwned moves a fitted slot back into the store", () => {
+    const inv = new Inventory();
+    const loadout = new ShipLoadout("hull_corvette");
+    loadout.install("eq_radar");
+    const player = playerWith(inv);
+
+    expect(uninstallToOwned(player, loadout, 0)).toBe(true);
+    expect(loadout.installedGearIds()).not.toContain("eq_radar");
+    expect(inv.ownedGearIds).toEqual(["eq_radar"]);
+    expect(ownedUninstalledGear(player, loadout)).toEqual(["eq_radar"]);
+  });
+
+  it("uninstallToOwned returns false for an out-of-range slot", () => {
+    const inv = new Inventory();
+    const loadout = new ShipLoadout("hull_corvette");
+    loadout.install("eq_radar");
+
+    expect(uninstallToOwned(playerWith(inv), loadout, 5)).toBe(false);
+    expect(inv.ownedGearIds).toEqual([]);
+    expect(loadout.installedGearIds()).toContain("eq_radar");
+  });
+
+  it("full round-trip: acquire → install → uninstall returns to the store", () => {
+    const inv = new Inventory();
+    const loadout = new ShipLoadout("hull_corvette");
+    const player = playerWith(inv);
+
+    acquireUninstalledGear(player, "eq_radar");
+    expect(installOwnedGear(player, loadout, "eq_radar")).toBe(true);
+    expect(ownedUninstalledGear(player, loadout)).toEqual([]);
+
+    const slot = loadout.installedGearIds().indexOf("eq_radar");
+    expect(uninstallToOwned(player, loadout, slot)).toBe(true);
+    expect(ownedUninstalledGear(player, loadout)).toEqual(["eq_radar"]);
+  });
+});
+
+describe("InventorySchema persists ownedGearIds", () => {
+  it("defaults to [] when the field is absent (old saves)", () => {
+    const parsed = InventorySchema.parse({
+      modules: [],
+      micromodules: [],
+      resources: [],
+      cosmetics: [],
+    });
+    expect(parsed.ownedGearIds).toEqual([]);
+  });
+
+  it("round-trips owned gear ids", () => {
+    const parsed = InventorySchema.parse({
+      modules: [],
+      micromodules: [],
+      resources: [],
+      cosmetics: [],
+      ownedGearIds: ["wpn_pulse", "eq_radar"],
+    });
+    expect(parsed.ownedGearIds).toEqual(["wpn_pulse", "eq_radar"]);
+  });
+});

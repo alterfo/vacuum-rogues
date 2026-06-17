@@ -91,11 +91,17 @@ adds a **sell** action (refund at the existing `basePrice × 0.4` trade-in rate)
   loadout)` = owned − installed)
 - Create: src/tests/equipment/ownedGear.test.ts
 
-- [ ] purchases/loot that aren't auto-installed land in `ownedGearIds`; installing
+- [x] purchases/loot that aren't auto-installed land in `ownedGearIds`; installing
       moves an id from owned → loadout; uninstalling moves it back
-- [ ] schema-mirror the new field (save compatibility; default empty for old saves)
-- [ ] write tests: owned − installed derivation; install/uninstall transitions
-- [ ] run affected tests — must pass before next task
+      (mechanism: `Inventory.addOwnedGear`/`removeOwnedGear` + GearBridge
+      `acquireUninstalledGear`/`installOwnedGear`/`uninstallToOwned`; the
+      EquipmentShop/Station call-sites are wired in Task 4 per its Files list)
+- [x] schema-mirror the new field (save compatibility; default empty for old saves)
+      (`InventorySchema.ownedGearIds: z.array(z.string()).default([])`)
+- [x] write tests: owned − installed derivation; install/uninstall transitions
+      (src/tests/equipment/ownedGear.test.ts, 15 cases)
+- [x] run affected tests — must pass before next task (180 unit tests green across
+      data/equipment/inventory/loadout-persistence suites; lint + tsc clean)
 
 ### Task 4: Show uninstalled gear in ТРЮМ + sell action
 **Files:**

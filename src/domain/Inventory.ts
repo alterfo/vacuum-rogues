@@ -17,6 +17,14 @@ export class Inventory {
   micromodules: MicroModule[] = [];
   resources: ResourceStack[] = [];
   cosmetics: CosmeticItem[] = [];
+  /**
+   * Canonical store of gear the player owns but has **not** installed (catalog
+   * gear ids). Replaces the ad-hoc "legacy bag" role: purchases/loot that aren't
+   * auto-installed land here; installing moves an id out (into the loadout) and
+   * unequipping moves it back. Read through `ownedUninstalledGear` (GearBridge),
+   * the single accessor both the hangar and equipment-shop ТРЮМ views consume.
+   */
+  ownedGearIds: string[] = [];
 
   addItem(item: ShipModule | CosmeticItem): void {
     if ("category" in item) {
@@ -42,6 +50,20 @@ export class Inventory {
       `Item ${itemId} not found in inventory.`,
       { itemId },
     );
+  }
+
+  /** Record a gear id as owned-but-uninstalled (a purchase/loot with no free slot). */
+  addOwnedGear(gearId: string): void {
+    (this.ownedGearIds ??= []).push(gearId);
+  }
+
+  /** Remove the first owned copy of a gear id. Returns true if one was removed. */
+  removeOwnedGear(gearId: string): boolean {
+    const list = (this.ownedGearIds ??= []);
+    const i = list.indexOf(gearId);
+    if (i < 0) return false;
+    list.splice(i, 1);
+    return true;
   }
 
   hasResources(cost: ResourceStack[]): boolean {
