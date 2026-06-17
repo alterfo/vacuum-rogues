@@ -59,14 +59,16 @@ describe("ownedUninstalledGear — owned minus installed", () => {
     ]);
   });
 
-  it("subtracts installed gear copy-for-copy (a fitted duplicate is excluded once)", () => {
+  it("keeps an owned spare visible even when a duplicate is fitted", () => {
+    // Reproduces buying a second copy of already-installed gear with the slots
+    // full: the spare lands in `ownedGearIds` while a duplicate stays fitted. The
+    // spare is a distinct, paid-for item — it must remain visible and sellable,
+    // never cancelled out against the installed copy.
     const inv = new Inventory();
-    inv.addOwnedGear("wpn_pulse");
     inv.addOwnedGear("wpn_pulse");
     const loadout = new ShipLoadout("hull_corvette");
     loadout.install("wpn_pulse");
 
-    // Two owned, one fitted → one copy still uninstalled.
     expect(ownedUninstalledGear(playerWith(inv), loadout)).toEqual([
       "wpn_pulse",
     ]);

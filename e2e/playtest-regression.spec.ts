@@ -1134,6 +1134,18 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     });
     await waitForScene(page, 'EquipmentShopScene', 15_000);
 
+    // Bug guard (rebuild): switching tabs rebuilds the shop, destroying
+    // `mainContainer` and its child `holdContainer`. The ТРЮМ must re-render
+    // afterwards — regression for `holdContainer` being left as a destroyed
+    // reference (so `render()` skips re-creating it and `renderHold()` runs on a
+    // dead container). Drive the same `rebuild()` a tab switch triggers.
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { rebuild?: () => void } | null;
+      };
+      engine.currentScene?.rebuild?.();
+    });
+
     // The «Продать» button is the only pointer child of the hold container; read
     // its on-screen centre (top-left + half-extent — the label has no anchor).
     const sellBtn = await page.evaluate(() => {

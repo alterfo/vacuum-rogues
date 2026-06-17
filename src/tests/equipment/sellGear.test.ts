@@ -97,12 +97,11 @@ describe("sellUninstalledGear — refund + remove from the owned store", () => {
     expect(loadout.installedGearIds()).toContain("eq_radar");
   });
 
-  it("sells the uninstalled copy while a fitted duplicate stays installed", () => {
-    // Two owned, one fitted (the accessor subtracts the installed copy): one is
-    // still sellable. Selling it drops a copy from the store and the fitted one
-    // stays in the loadout.
+  it("sells an owned spare while a fitted duplicate stays installed", () => {
+    // One owned spare, one fitted (a second copy bought with the slots full). The
+    // spare is sellable; selling it drops the copy from the store and leaves the
+    // fitted one in the loadout untouched.
     const inv = new Inventory();
-    inv.addOwnedGear("wpn_pulse");
     inv.addOwnedGear("wpn_pulse");
     const loadout = new ShipLoadout("hull_corvette");
     loadout.install("wpn_pulse");

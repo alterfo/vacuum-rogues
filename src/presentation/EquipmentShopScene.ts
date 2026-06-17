@@ -485,6 +485,11 @@ export class EquipmentShopScene extends GameScene {
     this.renderer.uiLayer.addChild(this.mainContainer);
     this.listContainer = null;
     this.creditsText = null;
+    // `holdContainer` was a child of the destroyed `mainContainer`, so it is now
+    // destroyed too. Null it (and its layout) so `render()` re-creates and
+    // re-parents it instead of calling `renderHold()` on a dead container.
+    this.holdContainer = null;
+    this.holdPos = null;
     this.render();
   }
 

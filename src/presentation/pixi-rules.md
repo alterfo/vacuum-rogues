@@ -54,6 +54,10 @@ btn.hitArea = new Rectangle(0, 0, btnW, btnH);
 
 Root cause of the 2026-06-10 "every UiButton unclickable" regression. Guarded by `src/tests/presentation/uiButtonHitArea.test.ts` + real-mouse smoke in `playtest-regression.spec.ts`.
 
+**Rule 3b (PixiJS 8): Mouse-Wheel Scroll on a List Must Use a Window-Level Listener, Not a Federated `wheel` Handler**
+
+PixiJS dispatches `wheel` only to the object directly under the pointer; scrollable rows with `eventMode='static'` sit on top of the list backdrop and swallow the event, so a `backdrop.on('wheel')` / `container.on('wheel')` handler never fires. Use the shared helper `attachWheelScroll(onScroll)` from `src/presentation/ui/WheelScroll.ts` — it adds a `{ passive:false }` window listener and returns a detach fn that **must** be called in `destroy()`/close to avoid stacked listeners across scene transitions. Wired into `EquipmentShopScene`, `StationScene`, `InfoCenterScene`, `JobBoardPanel` (`SpaceFlightScene`/`StarMapScene` use their own equivalent window listeners for camera zoom). Pinned by `src/tests/presentation/wheelScroll.test.ts` + `jobBoardScroll.test.ts`.
+
 **Rule 4: Distinguish Mouse Buttons in Event Handlers**
 
 Use `event.button`: `0` = left (primary), `1` = middle (pan), `2` = right (context menu).

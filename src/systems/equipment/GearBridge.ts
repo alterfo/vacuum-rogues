@@ -75,27 +75,23 @@ export function cargoCapacityOf(
 }
 
 /**
- * Owned-but-uninstalled gear ids = the inventory's `ownedGearIds` store minus
- * whatever is currently installed in the loadout. The single accessor both the
- * station hangar and the equipment-shop ТРЮМ view read, so the "what can I sell"
- * list can never diverge from one scene to the next. The installed subtraction
- * is defensive — `ownedGearIds` already excludes installed gear once the
- * install/uninstall transitions are wired — so a duplicate that is also fitted
- * is not double-counted.
+ * Owned-but-uninstalled gear ids = the inventory's `ownedGearIds` store, which is
+ * the authoritative uninstalled set: a purchase/loot with no free slot is added
+ * (`acquireUninstalledGear`), installing removes the id (`installOwnedGear`), and
+ * unequipping adds it back (`uninstallToOwned`), so an installed copy is never in
+ * the store. The single accessor both the station hangar and the equipment-shop
+ * ТРЮМ view read, so the "what can I sell" list can never diverge between scenes.
+ *
+ * Do **not** subtract the loadout's installed ids: a player can own a *spare*
+ * copy of gear that is also fitted (e.g. bought a second engine with every slot
+ * full). That spare is a distinct item — subtracting it would hide a paid-for,
+ * sellable copy and silently strand the credits spent on it.
  */
 export function ownedUninstalledGear(
   player: Player,
-  loadout: ShipLoadout | null | undefined,
+  _loadout?: ShipLoadout | null,
 ): string[] {
-  const remaining = [...(loadout?.installedGearIds() ?? [])];
-  return (player.inventory.ownedGearIds ?? []).filter((id) => {
-    const i = remaining.indexOf(id);
-    if (i >= 0) {
-      remaining.splice(i, 1);
-      return false;
-    }
-    return true;
-  });
+  return [...(player.inventory.ownedGearIds ?? [])];
 }
 
 /**
