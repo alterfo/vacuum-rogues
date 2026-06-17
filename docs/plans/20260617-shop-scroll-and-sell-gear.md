@@ -127,12 +127,20 @@ adds a **sell** action (refund at the existing `basePrice × 0.4` trade-in rate)
       452 unit tests green, 18/18 e2e regression green)
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify Overview: wheel scrolls all listed scenes; uninstalled gear shows in ТРЮМ
+- [x] verify Overview: wheel scrolls all listed scenes; uninstalled gear shows in ТРЮМ
       and is sellable at the trade-in rate
-- [ ] run full unit suite — all green
-- [ ] run `npm run test:e2e:regression`
-- [ ] run `npm run lint` — clean
-- [ ] confirm no existing test assertions changed
+      (e2e regression #17 drives a REAL page.mouse.wheel that scrolls the equipment-shop
+      list to the clamp and back; #18 seeds owned gear, opens the shop, clicks «Продать»
+      and asserts credits +1120 with the item gone from the hold; wheel wiring for
+      station/info-center/job-board covered by their window-listener unit tests)
+- [x] run full unit suite — all green (1604/1604 across 186 files)
+- [x] run `npm run test:e2e:regression` (18/18 green; needs no_proxy=localhost,127.0.0.1
+      so Playwright's webServer health-check bypasses the local Privoxy that 503s localhost)
+- [x] run `npm run lint` — clean (0 errors; 29 pre-existing `any` warnings, none new)
+- [x] confirm no existing test assertions changed (only jobBoardScroll.test.ts changed —
+      a documented Task-2 migration that preserves the scroll assertions and adds
+      attach/detach lifecycle coverage, since the federated wheel handler it tested was
+      removed; playtest-regression.spec.ts is additions-only)
 
 ## Technical Details
 - **Why federated wheel fails:** PixiJS only dispatches `wheel` to the object under
