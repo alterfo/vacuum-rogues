@@ -45,6 +45,7 @@ const NEWS_TYPE_LABEL: Record<NewsEvent["type"], string> = {
   SYSTEM_LIBERATED: "[ОСВОБОЖДЕНИЕ]",
   SYSTEM_CAPTURED: "[ЗАХВАТ]",
   LIBERATION_CAMPAIGN: "[ПОХОД]",
+  TRADE_OPPORTUNITY: "[МАРШРУТ]",
 };
 
 const NEWS_TYPE_COLOR: Record<NewsEvent["type"], number> = {
@@ -59,6 +60,7 @@ const NEWS_TYPE_COLOR: Record<NewsEvent["type"], number> = {
   SYSTEM_LIBERATED: 0xffcc00,
   SYSTEM_CAPTURED: 0xff3388,
   LIBERATION_CAMPAIGN: 0x66ccff,
+  TRADE_OPPORTUNITY: 0xffd166,
 };
 
 const GEAR_SORT_LABELS: Record<string, string> = {

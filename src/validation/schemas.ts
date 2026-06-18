@@ -375,6 +375,7 @@ export const NewsEventSchema = z.object({
     "SYSTEM_LIBERATED",
     "SYSTEM_CAPTURED",
     "LIBERATION_CAMPAIGN",
+    "TRADE_OPPORTUNITY",
   ]),
   npcId: z.string().optional(),
   systemId: z.string(),
@@ -383,6 +384,43 @@ export const NewsEventSchema = z.object({
   targetSystemId: z.string().optional(),
   stagingSystemId: z.string().optional(),
   liberationDate: z.number().int().min(0).optional(),
+  // TRADE_OPPORTUNITY rumor fields (optional — absent on all other event types).
+  resource: z.string().optional(),
+  fromSystemId: z.string().optional(),
+  toSystemId: z.string().optional(),
+  marginPct: z.number().optional(),
+});
+
+/** Tradeable goods enum, mirrored from ResourceType (see ResourceStackSchema). */
+export const ResourceTypeSchema = z.enum([
+  "FUEL",
+  "METALS",
+  "CRYSTALS",
+  "ORGANICS",
+  "ARTIFACTS",
+  "WEAPONS",
+  "MEDICINE",
+  "ELECTRONICS",
+  "LUXURY",
+  "DATA_CORES",
+]);
+
+/**
+ * A lifecycle-tracked trade-route rumor persisted on the Galaxy. Mirrors
+ * `RouteRumor` in src/domain/RouteRumor.ts (wired into GalaxySchema in Task 3).
+ */
+export const RouteRumorSchema = z.object({
+  id: z.string(),
+  resource: ResourceTypeSchema,
+  fromSystemId: z.string(),
+  fromPlanetId: z.string(),
+  toSystemId: z.string(),
+  toPlanetId: z.string(),
+  fromPrice: z.number(),
+  toPrice: z.number(),
+  marginPct: z.number(),
+  createdDay: z.number().int().min(0),
+  lastMarginPct: z.number(),
 });
 
 // Transient space-loot items (in-memory only; not part of SaveState). Schema

@@ -91,12 +91,12 @@ trade on arrival.
 - Modify: src/validation/schemas.ts (mirror new NewsEvent fields + Galaxy rumor store)
 - Create: src/tests/trade/routeRumor.test.ts
 
-- [ ] define `RouteRumor` (route candidate + `createdDay`, `lastMarginPct`, `id`)
-- [ ] extend `NewsEvent` union and optional fields; update Zod schema in `schemas.ts`
-- [ ] add a Russian formatter `describeRumor(rumor, galaxy)` →
+- [x] define `RouteRumor` (route candidate + `createdDay`, `lastMarginPct`, `id`)
+- [x] extend `NewsEvent` union and optional fields; update Zod schema in `schemas.ts`
+- [x] add a Russian formatter `describeRumor(rumor, galaxy)` →
       "Везите <товар> из <A> в <B>: маржа ~N%"
-- [ ] write tests: type round-trips through schema; formatter output
-- [ ] run tests — must pass before next task
+- [x] write tests: type round-trips through schema; formatter output
+- [x] run tests — must pass before next task
 
 ### Task 3: Rumor lifecycle on the daily tick
 **Files:**

@@ -228,7 +228,8 @@ export interface NewsEvent {
     | "DISCOVERY"
     | "SYSTEM_LIBERATED"
     | "SYSTEM_CAPTURED"
-    | "LIBERATION_CAMPAIGN";
+    | "LIBERATION_CAMPAIGN"
+    | "TRADE_OPPORTUNITY";
   /** Ranger NPC that completed a quest (NPC_QUEST_COMPLETE only). */
   npcId?: string;
   /** System where the event occurred. */
@@ -243,6 +244,14 @@ export interface NewsEvent {
   stagingSystemId?: string;
   /** Absolute galaxy day the rally departs / assault begins (LIBERATION_CAMPAIGN only). */
   liberationDate?: number;
+  /** Traded good of a route opportunity (TRADE_OPPORTUNITY only). */
+  resource?: ResourceType;
+  /** Buy-low source system of a route opportunity (TRADE_OPPORTUNITY only). */
+  fromSystemId?: string;
+  /** Sell-high destination system of a route opportunity (TRADE_OPPORTUNITY only). */
+  toSystemId?: string;
+  /** Headline margin percentage of a route opportunity (TRADE_OPPORTUNITY only). */
+  marginPct?: number;
 }
 
 /**
