@@ -178,11 +178,12 @@ export class Market {
    * back toward 1.0 via {@link advanceMarketDay}, so repeated arbitrage trips
    * progressively close the spread instead of leaving it untouched.
    *
-   * Convenience instance wrapper around {@link applyMarketTradeImpact}. NOTE: the
-   * production trade path (`TradeSystem.executeTrade`) calls the standalone
-   * `applyMarketTradeImpact` function directly, and NPC traders currently only
-   * nudge `supplyVector` — neither calls this method yet. It exists as the
-   * resource-keyed seam for future callers (see the living-trade-economy plan).
+   * Convenience instance wrapper around {@link applyMarketTradeImpact}. NOTE:
+   * both the production trade path (`TradeSystem.executeTrade`) and NPC traders
+   * (`NpcSimulator.simulateTraderTrade`) call the standalone
+   * `applyMarketTradeImpact` function directly (method-less loaded markets stay
+   * safe); this instance method remains the resource-keyed seam for any caller
+   * holding a live {@link Market}.
    */
   applyTradeImpact(resourceType: ResourceType, signedDelta: number): void {
     applyMarketTradeImpact(this, resourceType, signedDelta);

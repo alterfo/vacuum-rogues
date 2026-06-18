@@ -11,6 +11,7 @@ import {
 } from "@/types";
 import type { NewsEvent } from "@/types";
 import type { RouteRumor } from "@/domain/RouteRumor";
+import { applyMarketTradeImpact } from "@/domain/Market";
 import { Faction } from "@/types/faction";
 import { GAME_BALANCE } from "@/config/balance";
 import type { NpcBrain } from "./NpcBrain";
@@ -28,6 +29,26 @@ const VICTIM_RETALIATION_FRACTION = 0.3;
 const PIRATE_LOOT = 200;
 /** How much one unit of NPC cargo shifts a market's supply vector on trade. */
 const NPC_TRADE_SUPPLY_IMPACT = 0.02;
+
+/**
+ * Per-unit nudge an NPC trade applies to the SAME persistent `priceMultipliers`
+ * lever the player's `TradeSystem.executeTrade` uses — so NPC trade flow
+ * converges a route's spread (buying depletes stock → price up; selling gluts
+ * the market → price down) instead of only touching the transient supplyVector,
+ * which relaxes away. Scaled to half the player's per-unit impact so one NPC leg
+ * moves a route less than a player round-trip, while a flow of diverted traders
+ * still closes the spread. Capped per trade like the player's lever.
+ */
+const NPC_TRADE_PRICE_IMPACT_PER_UNIT = GAME_BALANCE.marketImpactPerUnit * 0.5;
+
+/** Magnitude of the persistent price-multiplier nudge for an NPC `qty`-unit
+ *  trade, capped per transaction (mirrors {@link GAME_BALANCE.marketImpactMaxPerTrade}). */
+function npcTradeImpact(qty: number): number {
+  return Math.min(
+    qty * NPC_TRADE_PRICE_IMPACT_PER_UNIT,
+    GAME_BALANCE.marketImpactMaxPerTrade,
+  );
+}
 
 /** Units a trader picks up when it diverts onto a route rumor (a bulk run). */
 const RUMOR_TRADE_QTY = 20;
@@ -601,6 +622,14 @@ export class NpcSimulator {
           5.0,
           (market.supplyVector[idx] ?? 1) + item.qty * NPC_TRADE_SUPPLY_IMPACT,
         );
+        // Persistent price impact (negative = sell gluts the market → price
+        // falls). Same lever the player uses, so NPC flow converges a route's
+        // sell-high side the same way player round-trips do.
+        applyMarketTradeImpact(
+          market,
+          item.goodId as ResourceType,
+          -npcTradeImpact(item.qty),
+        );
       }
     }
 
@@ -614,6 +643,13 @@ export class NpcSimulator {
         market.supplyVector[idx] = Math.max(
           0.1,
           (market.supplyVector[idx] ?? 1) - item.qty * NPC_TRADE_SUPPLY_IMPACT,
+        );
+        // Persistent price impact (positive = buying depletes stock → price
+        // rises), raising this planet's prices as a buy source.
+        applyMarketTradeImpact(
+          market,
+          item.goodId as ResourceType,
+          npcTradeImpact(item.qty),
         );
       }
     }

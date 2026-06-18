@@ -148,11 +148,11 @@ trade on arrival.
   sell at dest lowers — so NPC flow converges the route like the player does)
 - Create: src/tests/trade/rumorConvergence.test.ts
 
-- [ ] NPC buy/sell apply persistent `applyTradeImpact` with NPC-scaled magnitude
-- [ ] convergence test: seed a route, run player+NPC trading for N days, assert margin
+- [x] NPC buy/sell apply persistent `applyTradeImpact` with NPC-scaled magnitude
+- [x] convergence test: seed a route, run player+NPC trading for N days, assert margin
       shrinks below `rumorMarginExpire` and the rumor closes (self-balancing)
-- [ ] regression test: same-planet buy→sell still loses credits (SELL_SPREAD intact)
-- [ ] run tests — must pass before next task
+- [x] regression test: same-planet buy→sell still loses credits (SELL_SPREAD intact)
+- [x] run tests — must pass before next task
 
 ### Task 7: Surface rumors to the player (news / Info Center)
 **Files:**
