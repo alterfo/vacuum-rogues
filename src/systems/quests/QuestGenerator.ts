@@ -20,6 +20,8 @@ import {
   ELITE_QUEST_MIN_RANK,
   QUEST_BASE_REWARD,
   QUEST_REWARD_PER_JUMP,
+  RESOURCE_BASE_PRICES,
+  LOCAL_DELIVERY_REWARD_MARGIN,
 } from "@/config/balance";
 import { ALL_QUEST_SCRIPTS } from "@/systems/quests/TextQuestRegistry";
 
@@ -865,27 +867,35 @@ function buildLocalDelivery(
   const issuer = pickIssuer(rng, QuestType.DELIVERY);
   const cargo = pickCargo(rng);
   const targetPlanetId = pickTargetPlanet(origin);
+  const resolvedSystemId = origin?.id ?? planetId;
+  // Compute the cargo amount once so the objective and the reward stay in sync.
+  const targetAmount = rng.nextInt(4, 10);
+  // Anchor the payout to the goods' base cost so buying the cargo on the market
+  // and delivering it always nets a profit (margin) rather than a loss.
+  const goodsCost = RESOURCE_BASE_PRICES[cargo.resource] * targetAmount;
+  const rewardCredits = Math.round(goodsCost * LOCAL_DELIVERY_REWARD_MARGIN);
   return {
     template: {
       id,
       title: "Местный подряд",
-      description: `${issuer.title} ${issuer.name} предлагает местный подряд: закупить «${cargo.label}» на рынке ${origin?.name ?? "системы"} и сдать здесь же. Платят немного, зато без прыжков.`,
+      description: `${issuer.title} ${issuer.name} предлагает местный подряд: закупить «${cargo.label}» на рынке ${origin?.name ?? "системы"} и сдать здесь же. Оплата покрывает закупку и оставляет навар, и всё без прыжков.`,
       type: QuestType.DELIVERY,
       objectives: [
         {
           id: `${id}_collect`,
           description: `Загрузить ${cargo.label}`,
           type: "COLLECT_ITEM",
-          targetAmount: rng.nextInt(4, 10),
+          targetAmount,
           itemType: cargo.resource,
         },
       ],
-      reward: { credits: rng.nextInt(120, 220), experience: 60, items: [] },
+      reward: { credits: rewardCredits, experience: 60, items: [] },
       dialogueAnchors: [],
       deadline: 0,
       failurePenalty: null,
+      targetSystemId: resolvedSystemId,
     },
-    targetSystemId: origin?.id ?? planetId,
+    targetSystemId: resolvedSystemId,
     targetPlanetId,
     jumps: 0,
     issuerName: issuer.name,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ResourceType } from "@/types";
 
 /**
  * Type-safe game balance constants.
@@ -84,6 +85,35 @@ export const QUEST_REWARD_PER_JUMP = 220;
 
 /** Minimum rank required to see elite quests (minRank = 3 → Ас). */
 export const ELITE_QUEST_MIN_RANK = 3;
+
+/**
+ * Canonical base credit value per resource — the single source of truth for the
+ * "reference" price a good is worth before market demand/supply modifiers.
+ * Consumed by {@link TradeSystem} (its private `basePrices` map seeds from this)
+ * and by the quest generator's local-delivery reward math, so a delivery
+ * contract's payout always anchors to the same number the market charges.
+ */
+export const RESOURCE_BASE_PRICES: Record<ResourceType, number> = {
+  FUEL: 50,
+  METALS: 100,
+  CRYSTALS: 250,
+  ORGANICS: 75,
+  ARTIFACTS: 1000,
+  WEAPONS: 500,
+  MEDICINE: 150,
+  ELECTRONICS: 300,
+  LUXURY: 400,
+  DATA_CORES: 600,
+};
+
+/**
+ * Profit multiplier applied to a local-delivery ("Местный подряд") reward.
+ * The player has to *buy* the cargo on the market before delivering it, so the
+ * reward is `round(basePrice × targetAmount × LOCAL_DELIVERY_REWARD_MARGIN)`.
+ * At 1.5 the payout covers the goods bought at base price plus a 50% margin,
+ * leaving the contract profitable even when the market is somewhat above base.
+ */
+export const LOCAL_DELIVERY_REWARD_MARGIN = 1.5;
 
 /**
  * Probability that killing an Overmind enemy drops artifacts (per kill).

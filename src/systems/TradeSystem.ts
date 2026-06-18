@@ -13,6 +13,7 @@ import {
   RANK_DISCOUNT_THRESHOLD,
   RANK_DISCOUNT_FACTOR,
   GAME_BALANCE,
+  RESOURCE_BASE_PRICES,
 } from "@/config/balance";
 
 export interface PriceRegressorAdapter {
@@ -41,18 +42,9 @@ export class TradeSystem {
   private regressorAdapter: PriceRegressorAdapter;
 
   constructor() {
-    this.basePrices = new Map<ResourceType, number>([
-      ["FUEL" as ResourceType, 50],
-      ["METALS" as ResourceType, 100],
-      ["CRYSTALS" as ResourceType, 250],
-      ["ORGANICS" as ResourceType, 75],
-      ["ARTIFACTS" as ResourceType, 1000],
-      ["WEAPONS" as ResourceType, 500],
-      ["MEDICINE" as ResourceType, 150],
-      ["ELECTRONICS" as ResourceType, 300],
-      ["LUXURY" as ResourceType, 400],
-      ["DATA_CORES" as ResourceType, 600],
-    ]);
+    this.basePrices = new Map<ResourceType, number>(
+      Object.entries(RESOURCE_BASE_PRICES) as [ResourceType, number][],
+    );
     this.regressorAdapter = new HeuristicPriceRegressor();
   }
 

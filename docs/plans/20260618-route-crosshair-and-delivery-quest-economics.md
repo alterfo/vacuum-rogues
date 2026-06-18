@@ -71,14 +71,16 @@ purchase cost plus a margin so the contract is actually worth taking.
 - Create/Modify: src/tests/quests/localDeliveryReward.test.ts (new); adapt
   `localDeliveryQuest.test.ts` only under the ⚠️ waiver above
 
-- [ ] compute reward from `targetAmount` × base price × margin; compute `targetAmount`
+- [x] compute reward from `targetAmount` × base price × margin; compute `targetAmount`
       once and reuse it for both the objective and the reward
-- [ ] description reflects a real (small) profit, not "платят немного" implying a loss
-- [ ] write test: for every cargo type, reward.credits ≥ targetAmount × basePrice (the
+- [x] description reflects a real (small) profit, not "платят немного" implying a loss
+- [x] write test: for every cargo type, reward.credits ≥ targetAmount × basePrice (the
       contract never loses money at base price)
-- [ ] ⚠️ if `localDeliveryQuest.test.ts` reds on the flat-reward assertion, STOP and flag;
-      after authorization, update it to the profitable model
-- [ ] run affected tests — must pass before next task
+- [x] ⚠️ if `localDeliveryQuest.test.ts` reds on the flat-reward assertion, STOP and flag;
+      after authorization, update it to the profitable model — N/A: the existing test only
+      asserts copy + mechanics (not the flat 120–220 reward), so it stayed green; no waiver
+      needed and no existing assertion was changed
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Verify acceptance criteria
 - [ ] verify Overview: no crosshair while flying a route; local-delivery contracts pay
