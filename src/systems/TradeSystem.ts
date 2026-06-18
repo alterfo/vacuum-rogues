@@ -6,12 +6,13 @@ import type {
 } from "@/types";
 import type { Planet } from "@/domain/Planet";
 import type { Player } from "@/domain/Player";
-import { economyBaseline } from "@/domain/Market";
+import { economyBaseline, applyMarketTradeImpact } from "@/domain/Market";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
 import { logger } from "@/utils/logger";
 import {
   RANK_DISCOUNT_THRESHOLD,
   RANK_DISCOUNT_FACTOR,
+  GAME_BALANCE,
 } from "@/config/balance";
 
 export interface PriceRegressorAdapter {
@@ -136,6 +137,56 @@ export class TradeSystem {
   }
 
   /**
+   * Faction/rank-neutral reference price for one unit of `resource` at `planet`,
+   * computed with no {@link Player}: zero reputation and no high-rank discount.
+   * This is the *true* galaxy price the route scanner ranks on, so rumors
+   * reflect the real cross-planet spread rather than one pilot's discounts. It
+   * mirrors {@link getMarketPrice} (base × modifier × planet factor × econ ×
+   * drift, clamped to [base×0.3, base×3.0]) minus the player-specific layers.
+   */
+  referenceMarketPrice(planet: Planet, resource: ResourceType): number {
+    const basePrice = this.basePrices.get(resource) ?? 100;
+
+    if (basePrice < 0) {
+      throw new GameBusinessException(
+        "INVALID_BASE_PRICE",
+        "Base price must be non-negative.",
+      );
+    }
+
+    const idx = planet.market.availableResources.indexOf(resource);
+    const demand = idx >= 0 ? (planet.market.demandVector[idx] ?? 1) : 1;
+    const supply =
+      idx >= 0 ? Math.max(planet.market.supplyVector[idx] ?? 1, 0.01) : 1;
+
+    // Neutral features: reputation and the player-only flags are zeroed.
+    const features = [demand / supply - 1, 0, 0, 0];
+    const modifier = this.regressorAdapter.predictModifier(features);
+
+    let finalPrice =
+      basePrice * (1 + modifier) * this.planetPriceFactor(planet.id, resource);
+
+    const econMult = economyBaseline(
+      planet.market.economyType ?? ("MIXED" as EconomyType),
+      resource,
+    );
+    finalPrice *= econMult;
+
+    const driftIdx = planet.market.availableResources.indexOf(resource);
+    if (driftIdx >= 0) {
+      finalPrice *= planet.market.priceMultipliers[driftIdx] ?? 1.0;
+    }
+
+    // No rank discount here — reference price is player-neutral by design.
+    finalPrice = Math.max(
+      basePrice * 0.3,
+      Math.min(basePrice * 3.0, finalPrice),
+    );
+
+    return Math.round(finalPrice);
+  }
+
+  /**
    * Price the player pays to BUY one unit at this planet (reference market
    * price adjusted by the faction's buy modifier).
    */
@@ -207,6 +258,19 @@ export class TradeSystem {
   /** Base price for a resource (used for penalty/fine calculations). */
   getBasePrice(resource: ResourceType): number {
     return this.basePrices.get(resource) ?? 100;
+  }
+
+  /**
+   * Magnitude of the persistent price-multiplier nudge for a trade of `amount`
+   * units, capped per transaction so a single same-planet buy→sell can never
+   * profit (see {@link GAME_BALANCE.marketImpactMaxPerTrade}). The nudge still
+   * accumulates across separate visits, so repeated arbitrage closes the gap.
+   */
+  static tradeImpact(amount: number): number {
+    return Math.min(
+      amount * GAME_BALANCE.marketImpactPerUnit,
+      GAME_BALANCE.marketImpactMaxPerTrade,
+    );
   }
 
   /** Deterministic per-planet/per-resource price multiplier in [0.7, 1.3). */
@@ -285,6 +349,15 @@ export class TradeSystem {
           (planet.market.supplyVector[idx] ?? 1) - amount * 0.01,
         );
       }
+      // Persistent market impact: buying depletes stock → local price rises.
+      // Same lever NPC traders use, so arbitrage routes self-correct. Uses the
+      // standalone helper (not the Market method) so a deserialized, method-less
+      // market can't make the trade throw after credits/cargo already changed.
+      applyMarketTradeImpact(
+        planet.market,
+        resource,
+        TradeSystem.tradeImpact(amount),
+      );
     } else {
       const stack = player.inventory.resources.find((r) => r.type === resource);
       if (!stack || stack.amount < amount) {
@@ -307,6 +380,13 @@ export class TradeSystem {
           (planet.market.demandVector[idx] ?? 1) - amount * 0.01,
         );
       }
+      // Persistent market impact: selling gluts the market → local price falls.
+      // Standalone helper (see buy branch) so a method-less loaded market is safe.
+      applyMarketTradeImpact(
+        planet.market,
+        resource,
+        -TradeSystem.tradeImpact(amount),
+      );
 
       logger.info(
         `Player sold ${amount} ${resource} for ${totalPrice} credits`,
