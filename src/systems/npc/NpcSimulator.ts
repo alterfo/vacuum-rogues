@@ -240,6 +240,16 @@ export class NpcSimulator {
   /** Days remaining before a ship may be subject to DEPART_CHANCE; keyed by npc.id. */
   private readonly arrivalDwellCountdown = new Map<string, number>();
   /**
+   * For a TRADER currently diverted onto a route rumor: the rumor's *destination
+   * planet id*, so the on-arrival sell-leg lowers that exact (dear) planet's
+   * price and actually closes the tracked rumor's spread. Keyed by npc.id and
+   * consumed (deleted) on arrival. Transient — a mid-flight trader on a loaded
+   * save simply falls back to the first market planet. Set only when a trader
+   * diverts; production systems are multi-planet, so the rumor's target planet
+   * is usually NOT the first market planet in the destination system.
+   */
+  private readonly rumorDestPlanet = new Map<string, string>();
+  /**
    * IDs of standing-garrison ships spawned to defend captured systems. Transient
    * (not persisted): garrison ships are isolated from the wandering-population
    * streams — they hold position, are excluded from off-screen combat, and don't
@@ -601,13 +611,21 @@ export class NpcSimulator {
     npc: NpcShip,
     galaxy: Galaxy,
     rng: SeededRNG,
+    sellPlanetId?: string,
   ): void {
     const system = galaxy.systems.find((s) => s.id === npc.currentSystemId);
     if (!system) return;
 
-    const planet = system.planets.find(
-      (p) => p.market && p.market.availableResources.length > 0,
-    );
+    const hasMarket = (p: {
+      market?: { availableResources: ResourceType[] };
+    }) => !!p.market && p.market.availableResources.length > 0;
+    // When the trader diverted onto a rumor, trade at the rumor's dear target
+    // planet so the sell-leg lowers the price the rumor re-score actually reads;
+    // otherwise (or if that planet is gone) fall back to the first market planet.
+    const planet =
+      (sellPlanetId
+        ? system.planets.find((p) => p.id === sellPlanetId && hasMarket(p))
+        : undefined) ?? system.planets.find(hasMarket);
     if (!planet) return;
 
     const market = planet.market;
@@ -681,7 +699,9 @@ export class NpcSimulator {
           const arrivedAt = npc.destinationSystemId;
           this.arrive(npc);
           if (npc.role === NpcRole.TRADER) {
-            this.simulateTraderTrade(npc, galaxy, rng);
+            const sellPlanetId = this.rumorDestPlanet.get(npc.id);
+            this.rumorDestPlanet.delete(npc.id);
+            this.simulateTraderTrade(npc, galaxy, rng, sellPlanetId);
           }
           // A convoy/rally arriving at a contested system has a chance to
           // liberate it. PATROL convoys roll from the main stream (unchanged);
@@ -1569,6 +1589,10 @@ export class NpcSimulator {
     );
     npc.cargo = [{ goodId: rumor.resource, qty: RUMOR_TRADE_QTY }];
     npc.state = NpcState.TRAVELING;
+    // Remember the rumor's dear destination planet so the on-arrival sell-leg
+    // lowers THAT planet's price (the one the rumor re-score reads), not just
+    // whichever planet happens to be first in the destination system.
+    this.rumorDestPlanet.set(npc.id, rumor.toPlanetId);
     return rumor;
   }
 
