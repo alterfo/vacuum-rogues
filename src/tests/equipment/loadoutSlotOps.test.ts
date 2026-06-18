@@ -5,16 +5,36 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
  * Slot-precise loadout operations (dual-hull review fixes): the hangar must
  * operate on the exact clicked slot, and hull swaps must not destroy gear.
  */
+
+/**
+ * Fill a bastion in a valid SR-canon category mix totalling its 9 slots:
+ * 4 weapons (the weapon-bank cap) + engine + radar + 3 additional-equipment
+ * items. Weapons occupy slots 0-3, so a downsize that pops from the end drops
+ * the engine/radar/equipment tail (slots 4-8) and keeps the weapons.
+ */
+function fillBastionMix(lo: ShipLoadout): void {
+  for (let i = 0; i < 4; i++) lo.install("wpn_pulse");
+  lo.install("eq_engine_i"); // slot 4
+  lo.install("eq_radar"); // slot 5
+  lo.install("eq_tank"); // slot 6
+  lo.install("eq_scanner"); // slot 7
+  lo.install("eq_droid"); // slot 8
+}
+
 describe("ShipLoadout.setHull — returns dropped gear ids", () => {
   it("returns the gear ids dropped when swapping to a smaller hull", () => {
     const loadout = new ShipLoadout("hull_bastion"); // 9 slots
-    for (let i = 0; i < 9; i++) loadout.install("wpn_pulse");
+    fillBastionMix(loadout);
 
-    const dropped = loadout.setHull("hull_scout"); // 4 slots
+    const dropped = loadout.setHull("hull_scout"); // 4 slots → drops 5
 
     expect(loadout.installedGearIds().length).toBe(4);
     expect(dropped).toHaveLength(5);
-    expect(dropped.every((id) => id === "wpn_pulse")).toBe(true);
+    // The 4 weapons (slots 0-3) survive; the engine/radar/equipment tail is
+    // what a bastion-sized fitting drops when downsizing to the scout.
+    expect([...dropped].sort()).toEqual(
+      ["eq_droid", "eq_engine_i", "eq_radar", "eq_scanner", "eq_tank"].sort(),
+    );
   });
 
   it("returns an empty array (and keeps gear) when nothing is dropped", () => {
@@ -36,11 +56,12 @@ describe("ShipLoadout.setHull — returns dropped gear ids", () => {
 describe("ShipLoadout.swapHull — re-bags dropped gear losslessly", () => {
   it("returns the dropped slot's micromodule and upgrade count, not just the id", () => {
     const loadout = new ShipLoadout("hull_bastion"); // 9 slots
-    for (let i = 0; i < 9; i++) loadout.install("wpn_pulse");
-    // Micro-mod + artifact-upgrade the last slot (slot 8). It is among the slots
-    // dropped when downsizing to the 4-slot scout (swapHull pops from the end),
-    // so its micromodule + upgrades must survive in the returned record — else a
-    // hull downsize silently destroys the resources spent on them.
+    fillBastionMix(loadout);
+    // Micro-mod + artifact-upgrade slot 8 (the last additional-equipment item,
+    // eq_droid). It is among the slots dropped when downsizing to the 4-slot
+    // scout (swapHull pops from the end), so its micromodule + upgrades must
+    // survive in the returned record — else a hull downsize silently destroys
+    // the resources spent on them.
     loadout.applyMicromoduleAt(8, "mm_amplifier_1");
     loadout.setSlotUpgrades(8, 2);
 
@@ -49,20 +70,22 @@ describe("ShipLoadout.swapHull — re-bags dropped gear losslessly", () => {
     expect(dropped).toHaveLength(5);
     const enriched = dropped.find((s) => s.micromoduleId === "mm_amplifier_1");
     expect(enriched).toBeDefined();
-    expect(enriched?.gearId).toBe("wpn_pulse");
+    expect(enriched?.gearId).toBe("eq_droid");
     expect(enriched?.upgrades).toBe(2);
   });
 
   it("setHull stays a thin id-projection over swapHull", () => {
     const loadout = new ShipLoadout("hull_bastion");
-    for (let i = 0; i < 9; i++) loadout.install("wpn_pulse");
+    fillBastionMix(loadout);
 
+    // Dropped in pop order (last-installed first): the equipment tail, then
+    // radar, then engine — the 4 weapons in slots 0-3 stay.
     expect(loadout.setHull("hull_scout")).toEqual([
-      "wpn_pulse",
-      "wpn_pulse",
-      "wpn_pulse",
-      "wpn_pulse",
-      "wpn_pulse",
+      "eq_droid",
+      "eq_scanner",
+      "eq_tank",
+      "eq_radar",
+      "eq_engine_i",
     ]);
   });
 });

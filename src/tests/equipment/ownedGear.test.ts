@@ -114,12 +114,22 @@ describe("acquire / install / uninstall transitions", () => {
 
   it("installOwnedGear fails (no move) when every slot is full", () => {
     const inv = new Inventory();
-    inv.addOwnedGear("eq_radar");
+    inv.addOwnedGear("wpn_railgun");
     const loadout = new ShipLoadout("hull_corvette");
-    for (let i = 0; i < loadout.hull.slots; i++) loadout.install("wpn_pulse");
+    // Fill every bank in a valid SR-canon mix: 2 weapons + engine + radar +
+    // 3 additional equipment leaves no free weapon slot for the owned railgun.
+    loadout.install("wpn_pulse");
+    loadout.install("wpn_pulse");
+    loadout.install("eq_engine_i");
+    loadout.install("eq_radar");
+    loadout.install("eq_tank");
+    loadout.install("eq_scanner");
+    loadout.install("eq_droid");
 
-    expect(installOwnedGear(playerWith(inv), loadout, "eq_radar")).toBe(false);
-    expect(inv.ownedGearIds).toEqual(["eq_radar"]);
+    expect(installOwnedGear(playerWith(inv), loadout, "wpn_railgun")).toBe(
+      false,
+    );
+    expect(inv.ownedGearIds).toEqual(["wpn_railgun"]);
   });
 
   it("uninstallToOwned moves a fitted slot back into the store", () => {

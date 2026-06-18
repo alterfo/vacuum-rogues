@@ -62,11 +62,21 @@ describe("EquipmentSystem.installGear — purchases land in the loadout", () => 
     const eq = new EquipmentSystem();
     const loadout = new ShipLoadout("hull_corvette");
     const slots = loadout.hull.slots;
-    for (let i = 0; i < slots; i++) {
-      expect(loadout.install("wpn_pulse")).toBe(true);
+    // Fill every bank in a valid SR-canon mix: 2 weapons + engine + radar +
+    // 1 additional equipment fills the corvette's 5 slots, weapon bank included.
+    const fill = [
+      "wpn_pulse",
+      "wpn_pulse",
+      "eq_engine_i",
+      "eq_radar",
+      "eq_tank",
+    ];
+    for (const id of fill) {
+      expect(loadout.install(id)).toBe(true);
     }
 
-    expect(eq.installGear(loadout, "eq_radar")).toBe(false);
+    // Weapon bank is full → a purchased weapon cannot be force-installed.
+    expect(eq.installGear(loadout, "wpn_railgun")).toBe(false);
     expect(loadout.installedGearIds().length).toBe(slots);
   });
 

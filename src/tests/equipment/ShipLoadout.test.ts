@@ -8,16 +8,23 @@ describe("ShipLoadout — fitting (US-073)", () => {
     expect(() => new ShipLoadout("nope")).toThrow();
   });
 
-  it("installs gear up to the hull's slot count, then refuses", () => {
-    const lo = new ShipLoadout("hull_scout"); // 4 slots
+  it("enforces per-category slot caps from the hull, not a flat total", () => {
+    // SR-canon: the hull dictates slots per category, not one shared total.
+    // hull_scout = weapon 2 / engine 1 / radar 1 / equipment 2.
+    const lo = new ShipLoadout("hull_scout");
+    // Weapon bank holds two, then refuses a third.
     expect(lo.install("wpn_pulse")).toBe(true);
-    expect(lo.install("eq_engine_i")).toBe(true);
+    expect(lo.install("wpn_railgun")).toBe(true);
+    expect(lo.canInstall("wpn_scatter")).toBe(false);
+    expect(lo.install("wpn_scatter")).toBe(false);
+    // Additional-equipment bank holds two, then refuses a third.
     expect(lo.install("eq_tank")).toBe(true);
-    expect(lo.install("eq_radar")).toBe(true);
-    expect(lo.derivedStats().slotsUsed).toBe(4);
-    // 5th item — no free slot.
-    expect(lo.canInstall("eq_scanner")).toBe(false);
-    expect(lo.install("eq_scanner")).toBe(false);
+    expect(lo.install("eq_scanner")).toBe(true);
+    expect(lo.canInstall("eq_droid")).toBe(false);
+    expect(lo.install("eq_droid")).toBe(false);
+    const cats = lo.derivedStats().categories;
+    expect(cats.weapon).toEqual({ used: 2, total: 2 });
+    expect(cats.equipment).toEqual({ used: 2, total: 2 });
   });
 
   it("cannot install a hull as gear", () => {
@@ -68,15 +75,22 @@ describe("ShipLoadout — fitting (US-073)", () => {
     expect(noFuel.derivedStats().canTakeOff).toBe(false);
   });
 
-  it("uses the strongest engine and sums fuel tanks", () => {
-    const lo = new ShipLoadout("hull_bastion"); // 9 slots
-    lo.install("eq_engine_i"); // tech 2 → 0.05 + 0.06 = 0.11 px/ms
-    lo.install("eq_engine_iii"); // tech 5 → 0.05 + 0.15 = 0.20 px/ms → wins
+  it("keeps a single engine slot (a new engine replaces the old) and sums fuel tanks", () => {
+    // SR-canon single-engine model: the engine is one dedicated slot, so a
+    // better engine *replaces* the current one rather than stacking a second.
+    const lo = new ShipLoadout("hull_bastion");
+    expect(lo.install("eq_engine_i")).toBe(true); // tech 2 → 0.11 px/ms
+    expect(lo.install("eq_engine_iii")).toBe(true); // tech 5 → 0.20 px/ms, replaces
+    expect(
+      lo.installedGearIds().filter((id) => id.startsWith("eq_engine")),
+    ).toEqual(["eq_engine_iii"]);
+    // Fuel tanks live in the equipment bank and still sum.
     lo.install("eq_tank"); // 50 + 40 = 90
     lo.install("eq_tank"); // +90 → 180
     const s = lo.derivedStats();
     expect(s.speed).toBeCloseTo(0.2);
     expect(s.fuelCapacity).toBe(180);
+    expect(s.categories.engine).toEqual({ used: 1, total: 1 });
   });
 });
 

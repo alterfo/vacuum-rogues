@@ -78,6 +78,30 @@ export interface EquipmentSpec extends GearBase {
 
 export type Gear = HullSpec | WeaponSpec | EquipmentSpec;
 
+/** The four canon slot banks a piece of gear can occupy (SR-canon §11.3). */
+export type SlotCategory = "weapon" | "engine" | "radar" | "equipment";
+
+/**
+ * Which categorized slot bank this gear occupies. Weapons fill the weapon bank;
+ * the engine takes its single "Система движения" slot; the radar takes its
+ * single "Система отслеживания" slot; every other equipment family (fuel tank,
+ * shield, repair droid, scanner, grav-tractor, grapple) shares the "additional
+ * equipment" bank. A hull is the ship itself, not a slottable item, so it has no
+ * category.
+ */
+export function slotCategoryFor(gear: Gear): SlotCategory | undefined {
+  if (gear.kind === GearKind.HULL) return undefined;
+  if (gear.kind === GearKind.WEAPON) return "weapon";
+  switch ((gear as EquipmentSpec).equipmentClass) {
+    case EquipmentClass.ENGINE:
+      return "engine";
+    case EquipmentClass.RADAR:
+      return "radar";
+    default:
+      return "equipment";
+  }
+}
+
 const HULLS: HullSpec[] = [
   {
     id: "hull_scout",

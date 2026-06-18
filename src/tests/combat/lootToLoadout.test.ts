@@ -68,14 +68,23 @@ describe("EquipmentSystem.installLoot — feed combat loot into the loadout", ()
   it("returns false (never replaces fitted gear) when the loadout is full", () => {
     const eq = new EquipmentSystem();
     const loadout = new ShipLoadout("hull_corvette");
-    // Corvette has 5 slots — fill every one.
+    // Corvette has 5 slots — fill every bank in a valid SR-canon mix:
+    // 2 weapons + engine + radar + 1 additional equipment.
     const slots = loadout.hull.slots;
-    for (let i = 0; i < slots; i++) {
-      expect(loadout.install("wpn_pulse")).toBe(true);
+    const fill = [
+      "wpn_pulse",
+      "wpn_pulse",
+      "eq_engine_i",
+      "eq_radar",
+      "eq_tank",
+    ];
+    for (const id of fill) {
+      expect(loadout.install(id)).toBe(true);
     }
     expect(loadout.installedGearIds().length).toBe(slots);
 
-    expect(eq.installLoot(loadout, "eq_radar")).toBe(false);
+    // Weapon bank full → a looted weapon cannot be slotted.
+    expect(eq.installLoot(loadout, "wpn_railgun")).toBe(false);
     expect(loadout.installedGearIds().length).toBe(slots);
   });
 });

@@ -96,7 +96,15 @@ describe("ShipLoadout.setHull — hull swap (replaces legacy module shuffle)", (
   it("swaps the hull and drops slotted gear that no longer fits", () => {
     const loadout = new ShipLoadout("hull_bastion"); // most slots
     const slots = loadout.hull.slots;
-    for (let i = 0; i < slots; i++) loadout.install("eq_engine_i");
+    // Fill every bank in a valid SR-canon mix totalling the hull's 9 slots:
+    // 4 weapons + engine + radar + 3 additional-equipment items. (A single
+    // category can no longer flat-fill — engine/radar are dedicated 1-slots.)
+    for (let i = 0; i < 4; i++) loadout.install("wpn_pulse");
+    loadout.install("eq_engine_i");
+    loadout.install("eq_radar");
+    loadout.install("eq_tank");
+    loadout.install("eq_scanner");
+    loadout.install("eq_droid");
     expect(loadout.installedSlots()).toHaveLength(slots);
 
     loadout.setHull("hull_scout"); // fewest slots

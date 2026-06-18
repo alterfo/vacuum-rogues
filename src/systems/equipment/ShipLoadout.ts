@@ -17,11 +17,13 @@ import {
   GearKind,
   EquipmentClass,
   gearById,
+  slotCategoryFor,
   MICRO_MODULES,
   type Gear,
   type HullSpec,
   type WeaponSpec,
   type EquipmentSpec,
+  type SlotCategory,
 } from "@/systems/equipment/GearCatalog";
 
 /** A micromodule: modifies one item's primary stat (canon §11.3). */
@@ -71,6 +73,15 @@ export interface DerivedStats {
   readonly cargo: number;
   readonly slotsTotal: number;
   readonly slotsUsed: number;
+  /**
+   * Per-category slot usage (SR-canon §11.3): the weapon bank, the single
+   * engine/radar slots and the shared additional-equipment bank, each as
+   * `{used, total}`. `total` comes from the hull (`weaponSlots`/`equipmentSlots`,
+   * 1 for engine and 1 for radar).
+   */
+  readonly categories: Readonly<
+    Record<SlotCategory, { readonly used: number; readonly total: number }>
+  >;
   readonly weaponDamage: number;
   readonly weaponCount: number;
   readonly speed: number; // 0 with no engine → cannot move
@@ -167,16 +178,64 @@ export class ShipLoadout {
     }));
   }
 
-  /** Can this gear be installed right now (exists, not a hull, free slot)? */
+  /** Slots the hull provides for a category (weapon/equipment banks; engine/radar = 1). */
+  private slotCapacity(cat: SlotCategory): number {
+    const hull = this.hull;
+    switch (cat) {
+      case "weapon":
+        return hull.weaponSlots;
+      case "engine":
+        return 1;
+      case "radar":
+        return 1;
+      case "equipment":
+        return hull.equipmentSlots;
+    }
+  }
+
+  /** How many installed items currently occupy a category's bank. */
+  private countByCategory(cat: SlotCategory): number {
+    let n = 0;
+    for (const s of this.slotted) {
+      const g = gearById(s.gearId);
+      if (g && slotCategoryFor(g) === cat) n++;
+    }
+    return n;
+  }
+
+  /**
+   * Can this gear be installed right now? The gear must exist and not be a hull,
+   * and its **category** bank must have room. Weapon and additional-equipment
+   * banks reject once full (`hull.weaponSlots`/`equipmentSlots`). Engine and
+   * radar are single dedicated slots that always accept — a new one *replaces*
+   * the current fitting (SR-canon swap), so they never exceed their cap of 1.
+   */
   canInstall(gearId: string): boolean {
     const g = gearById(gearId);
     if (!g || g.kind === GearKind.HULL) return false;
-    return this.slotted.length < this.hull.slots;
+    const cat = slotCategoryFor(g);
+    if (!cat) return false;
+    if (cat === "engine" || cat === "radar") return true;
+    return this.countByCategory(cat) < this.slotCapacity(cat);
   }
 
-  /** Install gear into a free slot. Returns false if it can't be installed. */
+  /**
+   * Install gear into its category bank. Returns false if it can't be installed.
+   * Installing an engine or radar drops the existing one in that single slot so
+   * the new fitting replaces it rather than stacking a second copy the hull has
+   * no slot for.
+   */
   install(gearId: string): boolean {
     if (!this.canInstall(gearId)) return false;
+    const g = gearById(gearId) as Gear;
+    const cat = slotCategoryFor(g);
+    if (cat === "engine" || cat === "radar") {
+      const existing = this.slotted.findIndex((s) => {
+        const sg = gearById(s.gearId);
+        return sg !== undefined && slotCategoryFor(sg) === cat;
+      });
+      if (existing >= 0) this.slotted.splice(existing, 1);
+    }
     this.slotted.push({ gearId });
     return true;
   }
@@ -346,6 +405,24 @@ export class ShipLoadout {
       cargo: hull.cargo,
       slotsTotal: hull.slots,
       slotsUsed: this.slotted.length,
+      categories: {
+        weapon: {
+          used: this.countByCategory("weapon"),
+          total: this.slotCapacity("weapon"),
+        },
+        engine: {
+          used: this.countByCategory("engine"),
+          total: this.slotCapacity("engine"),
+        },
+        radar: {
+          used: this.countByCategory("radar"),
+          total: this.slotCapacity("radar"),
+        },
+        equipment: {
+          used: this.countByCategory("equipment"),
+          total: this.slotCapacity("equipment"),
+        },
+      },
       weaponDamage: Math.round(weaponDamage),
       weaponCount,
       // Speed is in px/ms; 0 when no engine installed → cannot move or take off
