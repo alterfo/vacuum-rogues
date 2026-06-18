@@ -134,12 +134,12 @@ trade on arrival.
 - Modify: src/config/balance.ts (`rumorNpcBaseChance`, `rumorNpcMarginScale`)
 - Create: src/tests/npc/npcRumorReaction.test.ts
 
-- [ ] reaction probability scales with margin and tapers to ~0 as margin → expire threshold
-- [ ] only TRADER-role NPCs react; pirates/garrisons unaffected
-- [ ] draws use the passed `SeededRNG` (deterministic)
-- [ ] write tests: high-margin rumor pulls a measurable fraction of traders; near-expiry
+- [x] reaction probability scales with margin and tapers to ~0 as margin → expire threshold
+- [x] only TRADER-role NPCs react; pirates/garrisons unaffected
+- [x] draws use the passed `SeededRNG` (deterministic)
+- [x] write tests: high-margin rumor pulls a measurable fraction of traders; near-expiry
       rumor pulls almost none; non-traders ignore it
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 6: NPC trades move the SAME persistent balance
 **Files:**

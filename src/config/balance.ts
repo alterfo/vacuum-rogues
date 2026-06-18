@@ -243,6 +243,20 @@ export const GAME_BALANCE = {
   rumorMarginExpire: 10,
   /** Maximum number of TRADE_OPPORTUNITY rumors active at once. */
   rumorMaxActive: 4,
+  /**
+   * NPC trader reaction to route rumors (living-trade-economy). A TRADER's
+   * per-departure chance to divert onto the most-profitable active rumor is
+   * `clamp(rumorNpcBaseChance + rumorNpcMarginScale × max(0, marginPct −
+   * rumorMarginExpire), 0, rumorNpcMaxChance)`. Anchoring the scale to the margin
+   * *above* the expire threshold makes the pull taper to ~`rumorNpcBaseChance`
+   * (almost none) as a rumor's spread closes toward expiry, while a fat fresh
+   * margin pulls a sizeable fraction of passing traders.
+   */
+  rumorNpcBaseChance: 0.02,
+  /** Added reaction probability per percentage-point of margin above expiry. */
+  rumorNpcMarginScale: 0.02,
+  /** Hard cap on a trader's per-departure rumor-reaction probability. */
+  rumorNpcMaxChance: 0.6,
 } as const;
 
 /**
