@@ -129,3 +129,77 @@ describe("CombatHud HP bars (Task 2)", () => {
     expect(hud.targetHpRatio).toBeCloseTo(0.5);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Engaged-enemy reticles (Task 4): a world-space bracket per combatant so the
+// auto-mode fight reads at a glance; the selected target is drawn distinct.
+// ---------------------------------------------------------------------------
+describe("CombatHud engaged-enemy markers (Task 4)", () => {
+  it("syncMarkers draws one reticle per combatant", () => {
+    const { hud } = makeHud();
+    const a = makeSprite("a");
+    const b = makeSprite("b");
+    hud.open(a);
+    hud.syncMarkers([a, b], a);
+    expect(hud.engagedMarkerCount).toBe(2);
+  });
+
+  it("syncMarkers removes the reticle for a combatant that left the fight", () => {
+    const { hud } = makeHud();
+    const a = makeSprite("a");
+    const b = makeSprite("b");
+    hud.open(a);
+    hud.syncMarkers([a, b], a);
+    hud.syncMarkers([a], a); // b destroyed / fled
+    expect(hud.engagedMarkerCount).toBe(1);
+  });
+
+  it("syncMarkers before open() is a no-op (no render context yet)", () => {
+    const { hud } = makeHud();
+    hud.syncMarkers([makeSprite("a")], null);
+    expect(hud.engagedMarkerCount).toBe(0);
+  });
+
+  it("close() disposes every reticle", () => {
+    const { hud } = makeHud();
+    const a = makeSprite("a");
+    hud.open(a);
+    hud.syncMarkers([a], a);
+    expect(hud.engagedMarkerCount).toBe(1);
+    hud.close();
+    expect(hud.engagedMarkerCount).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-turn fire flashes (Task 4): a fading beam per shot so each exchanged "ход"
+// reads as a discrete event; advanced/cleared by update().
+// ---------------------------------------------------------------------------
+describe("CombatHud fire flashes (Task 4)", () => {
+  it("flashShot spawns a beam that update() fades and removes", () => {
+    const { hud } = makeHud();
+    hud.open(makeSprite("a"));
+    hud.flashShot(0, 0, 100, 0, true);
+    expect(hud.activeFlashCount).toBe(1);
+    hud.update(150); // partway through the 220 ms lifetime
+    expect(hud.activeFlashCount).toBe(1);
+    hud.update(100); // crosses the lifetime → removed
+    expect(hud.activeFlashCount).toBe(0);
+  });
+
+  it("flashShot before open() is a no-op (no render context yet)", () => {
+    const { hud } = makeHud();
+    hud.flashShot(0, 0, 10, 10, false);
+    expect(hud.activeFlashCount).toBe(0);
+  });
+
+  it("close() clears any live flashes", () => {
+    const { hud } = makeHud();
+    hud.open(makeSprite("a"));
+    hud.flashShot(0, 0, 50, 50, true);
+    hud.flashShot(0, 0, -50, 50, false);
+    expect(hud.activeFlashCount).toBe(2);
+    hud.close();
+    expect(hud.activeFlashCount).toBe(0);
+  });
+});

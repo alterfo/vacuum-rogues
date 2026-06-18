@@ -115,6 +115,9 @@ export class CombatModule implements FlightModule {
    */
   update(deltaTime: number, _bgElapsed?: number): void {
     this.damageNumbers?.update(deltaTime);
+    // Fade per-turn fire flashes every frame so a killing-blow's flash finishes
+    // its arc even after the fight ends (mirrors the damage-number behaviour).
+    this.hud?.update(deltaTime);
     if (!this.isActive) return;
     // The fight only advances while the turn is running. Pausing freezes the
     // world (the scene gates ship + NPC movement the same way), so combat must
@@ -262,6 +265,8 @@ export class CombatModule implements FlightModule {
         physics.shipY,
         false,
       );
+      // Per-turn fire flash from the enemy to the player ship (who shoots whom).
+      this.hud?.flashShot(npc.x, npc.y, physics.shipX, physics.shipY, false);
     }
     if (
       ship.hullHP > 0 &&
@@ -278,6 +283,17 @@ export class CombatModule implements FlightModule {
     const npc = target.npc;
     npc.hullHP = Math.max(0, npc.hullHP - weapon.damage);
     this.damageNumbers?.spawn(weapon.damage, target.x, target.y, true);
+    // Per-turn fire flash from the player ship to the target (who shoots whom).
+    const physics = this.deps.getShipPhysics();
+    if (physics) {
+      this.hud?.flashShot(
+        physics.shipX,
+        physics.shipY,
+        target.x,
+        target.y,
+        true,
+      );
+    }
     if (npc.hullHP <= 0) {
       this.deps.showMessage?.(`Цель уничтожена: ${npc.name}`, 0xffdd33);
       this.deps.onNpcDestroyed?.(target);
@@ -303,6 +319,9 @@ export class CombatModule implements FlightModule {
     const ship = this.deps.getPlayerShip?.() ?? null;
     if (ship) this.hud.updatePlayerHP(ship.hullHP, ship.maxHull);
     this.hud.syncRangeCircle();
+    // Keep an engaged-enemy reticle on every combatant (the selected target is
+    // drawn distinct) so the auto-mode fight reads at a glance.
+    this.hud.syncMarkers([...this.combatants], this.selectedTarget);
   }
 
   /** Distance (world px) from the player ship to an NPC sprite, or null without physics. */

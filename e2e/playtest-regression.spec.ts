@@ -327,6 +327,94 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     expect(await sf.isContactPanelOpen()).toBe(true);
   });
 
+  test('regression: a hostile NPC engages, orbits and trades fire in auto-mode (Task 4 dogfight)', async ({ page }) => {
+    // Task 4 acceptance: an aggressive NPC closes/orbits the player and both ships
+    // auto-fire each ход. Stage a deterministic fight (fit a weapon, drop the first
+    // NPC just inside weapon range as a hostile aggressor, engage it in the
+    // real-time CombatModule), run the turn, then prove the dogfight: combat stays
+    // engaged, the aggressor maneuvers (its position moves) and BOTH hulls drop.
+    // The combat guard freezes the wait-day calendar while a fight is active, so
+    // no day-tick refresh() can de-aggro the staged NPC mid-test.
+    await setupNewGame(page);
+    const sf = new SpaceFlightPage(page);
+    const errorCollector = new ErrorCollector(page);
+
+    expect((await sf.getSceneState()).npcsCount).toBeGreaterThan(0);
+
+    const staged = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+        playerLoadout?: {
+          derivedStats: () => { weaponCount: number };
+          install: (id: string) => unknown;
+        } | null;
+        player?: { ship?: { hullHP: number } } | null;
+      };
+      const scene = engine.currentScene;
+      if (!scene) return null;
+      // A weaponless player can't fight (CombatModule guards on it) — fit a pulse.
+      const loadout = engine.playerLoadout;
+      if (loadout && loadout.derivedStats().weaponCount === 0) {
+        loadout.install('wpn_pulse');
+      }
+      const npcManager = scene['npcManager'] as
+        | {
+            e2eForceAggressorInRange: (
+              range: number,
+            ) => { npc: { hullHP: number }; x: number; y: number } | null;
+          }
+        | undefined;
+      const combat = scene['combatModule'] as
+        | { addCombatant: (s: unknown) => void; isActive: boolean }
+        | undefined;
+      const sprite = npcManager?.e2eForceAggressorInRange(240);
+      if (!sprite || !combat) return null;
+      combat.addCombatant(sprite);
+      return {
+        engaged: combat.isActive,
+        npcHull0: sprite.npc.hullHP,
+        playerHull0: engine.player?.ship?.hullHP ?? 0,
+        npcX0: sprite.x,
+        npcY0: sprite.y,
+      };
+    });
+    expect(staged).not.toBeNull();
+    expect(staged!.engaged).toBe(true); // engages on contact
+
+    // Run the turn so the real-time fight advances (NPC orbits + both auto-fire).
+    await sf.startTurn();
+
+    // Poll until the dogfight is unmistakable: still engaged, the aggressor has
+    // maneuvered away from its spawn point (it orbits rather than sitting still),
+    // and BOTH hulls have dropped (each side fired at least one ход).
+    await page.waitForFunction(
+      (s0) => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+          player?: { ship?: { hullHP: number } } | null;
+        };
+        const combat = engine.currentScene?.['combatModule'] as
+          | {
+              isActive: boolean;
+              selectedTarget: { npc: { hullHP: number }; x: number; y: number } | null;
+            }
+          | undefined;
+        const target = combat?.selectedTarget;
+        if (!combat?.isActive || !target) return false;
+        const playerHull = engine.player?.ship?.hullHP ?? 0;
+        const moved = Math.hypot(target.x - s0.npcX0, target.y - s0.npcY0) > 5;
+        return playerHull < s0.playerHull0 && target.npc.hullHP < s0.npcHull0 && moved;
+      },
+      staged!,
+      { timeout: 20_000 },
+    );
+
+    // Screenshot the live dogfight (range ring, reticles, fire flashes, hull bars).
+    await sf.screenshot('dogfight-task4');
+
+    errorCollector.assertAndDetach();
+  });
+
   test('smoke: no JS errors during a 3-turn play session', async ({ page }) => {
     await setupNewGame(page);
     const sf = new SpaceFlightPage(page);

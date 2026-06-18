@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Container } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
 import {
   CombatModule,
   type CombatModuleDeps,
@@ -318,6 +318,61 @@ describe("CombatModule lifecycle (Task 1)", () => {
   it("survives destroy() with no prior combat (defensive teardown)", () => {
     const module = new CombatModule({ getShipPhysics: () => null });
     expect(() => module.destroy()).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CombatModule — auto-mode visual feedback wiring (Task 4)
+// The HUD owns the engaged-enemy reticles + per-turn fire flashes; this asserts
+// the module actually drives them onto the shared game layer during a fight.
+// ---------------------------------------------------------------------------
+describe("CombatModule auto-mode feedback (Task 4)", () => {
+  function countGraphics(node: Container): number {
+    let n = 0;
+    for (const child of node.children) {
+      if (child instanceof Graphics) n++;
+      if (child instanceof Container) n += countGraphics(child);
+    }
+    return n;
+  }
+
+  function moduleWithLayers(): { module: CombatModule; gameLayer: Container } {
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+    const loadout = new ShipLoadout("hull_warden");
+    loadout.install("wpn_pulse");
+    const module = new CombatModule({
+      getShipPhysics: () => makePhysics(0, 0),
+      getPlayerLoadout: () => loadout,
+      getUiLayer: () => uiLayer,
+      getGameLayer: () => gameLayer,
+      getScreenSize: () => ({ width: 800, height: 600 }),
+      getPlayerShip: () => ({ hullHP: 100, maxHull: 100 }),
+    });
+    module.initialize();
+    return { module, gameLayer };
+  }
+
+  it("a fire round draws an engaged reticle + fire-flash beams on the game layer", () => {
+    const { module, gameLayer } = moduleWithLayers();
+    module.addCombatant(makeSprite("a", 50, 0, { hullHP: 100, damage: 20 }));
+    // Before any round: only the dashed range circle is on the layer.
+    expect(countGraphics(gameLayer)).toBe(1);
+    module.update(FIRE); // both sides fire once → marker + two flash beams appear
+    // Range circle (1) + engaged reticle (1) + player/enemy flash beams (2).
+    expect(countGraphics(gameLayer)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("ending the fight tears every combat overlay off the game layer", () => {
+    const { module, gameLayer } = moduleWithLayers();
+    module.addCombatant(makeSprite("a", 50, 0));
+    module.update(FIRE);
+    expect(countGraphics(gameLayer)).toBeGreaterThan(0);
+    module.endCombat();
+    // Every combat Graphics (range ring, reticles, flash beams) is gone. Floating
+    // damage-number Text persists by design until destroy(), so assert on the
+    // Graphics overlays rather than the raw child count.
+    expect(countGraphics(gameLayer)).toBe(0);
   });
 });
 

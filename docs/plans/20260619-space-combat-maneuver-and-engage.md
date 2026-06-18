@@ -97,10 +97,10 @@ pause, tactical positioning + per-turn weapon fire (Steam combat guides).
   current target, range ring at `weaponRange`, per-turn fire flashes, both hull bars)
 - Modify/Create: e2e regression spec for the dogfight
 
-- [ ] auto-mode reads clearly: engaged enemies highlighted, fire flashes each turn,
+- [x] auto-mode reads clearly: engaged enemies highlighted, fire flashes each turn,
       weapon-range ring shown, player + enemy hull visible; clicking an enemy retargets
-- [ ] add e2e assertion that a hostile NPC engages, orbits, and fires; screenshot it
-- [ ] run affected tests + regression — must pass before next task
+- [x] add e2e assertion that a hostile NPC engages, orbits, and fires; screenshot it
+- [x] run affected tests + regression — must pass before next task
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify Overview: aggressors close, circle the player, and trade fire each turn;

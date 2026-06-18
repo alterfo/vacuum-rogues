@@ -305,6 +305,34 @@ export class NpcShipManager implements FlightModule {
     if (sprite) this.onNpcClick(sprite.npc);
   }
 
+  /**
+   * E2E seam: place the first NPC just inside weapon range of the player ship,
+   * flag it as a hostile aggressor and arm its pursuit, then return the sprite so
+   * the scene can engage it in a deterministic dogfight. No-op (null) without a
+   * ship or any NPCs. Guarded by `__DEBUG__` so it is stripped from production.
+   */
+  e2eForceAggressorInRange(weaponRange: number): NpcShipSprite | null {
+    if (!__DEBUG__) return null;
+    const physics = this.deps.getShipPhysics();
+    const sprite = this.npcSprites[0];
+    if (!physics || !sprite) return null;
+    sprite.x = physics.shipX + weaponRange * 0.6;
+    sprite.y = physics.shipY;
+    sprite.container.x = sprite.x;
+    sprite.container.y = sprite.y;
+    // Deterministic combat stats so the staged fight reliably trades hull on both
+    // sides (a generated NPC could roll 0 damage or already be near death).
+    sprite.npc.hullHP = 200;
+    sprite.npc.maxHull = 200;
+    sprite.npc.damage = 12;
+    sprite.npc.markHostile();
+    this.npcAnchorPlanet.delete(sprite);
+    sprite.setAggressive(true);
+    sprite.setPursuitTarget(physics.shipX, physics.shipY, physics.currentSpeed);
+    sprite.refreshThreat();
+    return sprite;
+  }
+
   /** Mini-map radar dots: world position + faction colour per NPC. */
   getNpcDots(): { x: number; y: number; color: number }[] {
     return this.npcSprites.map((s) => ({ x: s.x, y: s.y, color: s.mapColor }));
