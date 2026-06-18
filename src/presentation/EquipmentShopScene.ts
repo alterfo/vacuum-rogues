@@ -17,15 +17,17 @@ import {
   slotToBagModule,
   acquireUninstalledGear,
   ownedUninstalledGear,
+  gearFit,
+  type GearFit,
   KIND_LABEL,
   KIND_COLOR,
   applyLoadoutHullToShip,
 } from "@/systems/equipment/GearBridge";
+import type { SlotCategory } from "@/systems/equipment/GearCatalog";
 import {
   sellGearPrice,
   sellUninstalledGear,
 } from "@/systems/equipment/sellGear";
-import { EquipmentSystem } from "@/systems/EquipmentSystem";
 import { attachWheelScroll } from "./ui/WheelScroll";
 import { logger } from "@/utils/logger";
 
@@ -59,6 +61,39 @@ function gearStatLine(gear: Gear): string {
   return `Мощность: ${gear.potency}`;
 }
 
+/** Bank labels for the per-listing fit indicator (mirrors the hangar's banks). */
+const BANK_LABEL: Record<SlotCategory, string> = {
+  weapon: "ОРУЖИЕ",
+  engine: "ДВИГАТЕЛЬ",
+  radar: "РАДАР",
+  equipment: "ОБОРУДОВАНИЕ",
+};
+
+/**
+ * Render the per-listing fit hint: whether the item will fit the current hull
+ * (by category + mass) once the player goes to install it from the warehouse.
+ * Returns null for gear with no slot (a hull) so the row shows no indicator.
+ * Colours stay ≥0xb4b4b4 readable: green «Влезет», amber «Нет слота», red «Перегруз».
+ */
+function fitIndicator(fit: GearFit): { text: string; color: number } | null {
+  switch (fit.status) {
+    case "fits":
+      return { text: "✓ Влезет", color: 0x66dd99 };
+    case "no-slot":
+      return {
+        text: `Нет слота: ${BANK_LABEL[fit.category]}`,
+        color: 0xffb454,
+      };
+    case "over-mass":
+      return {
+        text: `Перегруз +${fit.mass - fit.massFree}`,
+        color: 0xff7755,
+      };
+    case "n/a":
+      return null;
+  }
+}
+
 /**
  * Equipment shop scene (EPIC-007 / Feature 12): browse and purchase gear from
  * a planet's deterministic inventory. Credits are deducted immediately; bought
@@ -67,7 +102,6 @@ function gearStatLine(gear: Gear): string {
 export class EquipmentShopScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private planet: Planet | null = null;
-  private readonly equipment = new EquipmentSystem();
   private mainContainer: Container | null = null;
   private listContainer: Container | null = null;
   private holdContainer: Container | null = null;
@@ -556,6 +590,7 @@ export class EquipmentShopScene extends GameScene {
       this.gameEngine?.player?.inventory.modules.map((m) => m.id) ?? [],
     );
     const installedIds = this.installedGearIds();
+    const loadout = this.gameEngine?.playerLoadout ?? null;
 
     for (let i = 0; i < this.listings.length; i++) {
       const listing = this.listings[i];
@@ -706,6 +741,24 @@ export class EquipmentShopScene extends GameScene {
         buyBtn.eventMode = "none";
       }
       this.listContainer.addChild(buyBtn);
+
+      // Per-listing fit hint: does this gear fit the current hull (by category +
+      // mass) once installed from the warehouse? Hulls have no slot → no hint.
+      const fit = loadout ? fitIndicator(gearFit(loadout, gear.id)) : null;
+      if (fit) {
+        const fitText = new Text({
+          text: fit.text,
+          style: {
+            fontFamily: "Courier New",
+            fontSize: 10,
+            fill: fit.color,
+          },
+        });
+        fitText.eventMode = "none";
+        fitText.x = startX + w * 0.78;
+        fitText.y = rowY + 34;
+        this.listContainer.addChild(fitText);
+      }
     }
   }
 
@@ -926,25 +979,17 @@ export class EquipmentShopScene extends GameScene {
     if (player.credits < listing.price) return;
 
     player.credits -= listing.price;
-    // Canonical path (dual-hull Task 3): a purchase lands directly in the
-    // loadout when there's a free slot; only when the loadout is full (or absent)
-    // does it fall back to the legacy inventory bag retired in Task 5.
-    const loadout = this.gameEngine?.playerLoadout ?? null;
-    const installed = loadout
-      ? this.equipment.installGear(loadout, listing.gear.id)
-      : false;
-    if (!installed) {
-      // No free slot: the purchase lands in the canonical owned-uninstalled
-      // store (shown in the ТРЮМ strip, sellable from there) rather than the
-      // legacy modules bag.
-      acquireUninstalledGear(player, listing.gear.id);
-    }
+    // SR-canon (Task 4): a purchase always lands in the warehouse (the canonical
+    // owned-uninstalled store, shown in the ТРЮМ strip and sellable from there).
+    // Fitting gear is a separate hangar action — the shop never auto-installs, so
+    // the player can stock spares the current hull can't yet hold and decide what
+    // to fit (by category + mass) in the hangar.
+    acquireUninstalledGear(player, listing.gear.id);
     this.gameEngine?.audio.playSfx("buy").catch(() => {});
 
     logger.info(
-      `Bought ${listing.gear.name} for ${listing.price} credits (${
-        installed ? "installed" : "to inventory"
-      }, balance: ${player.credits})`,
+      `Bought ${listing.gear.name} for ${listing.price} credits ` +
+        `(to warehouse, balance: ${player.credits})`,
     );
 
     // Update credits display and re-render rows so affordability badges update.

@@ -6,8 +6,11 @@ import type { ShipLoadout } from "./ShipLoadout";
 import {
   GearKind,
   EquipmentClass,
+  gearById,
+  slotCategoryFor,
   type Gear,
   type EquipmentSpec,
+  type SlotCategory,
 } from "./GearCatalog";
 
 /** Convert a catalog Gear item to the ShipModule stored in inventory. */
@@ -131,6 +134,41 @@ export function uninstallToOwned(
   if (!loadout.removeAt(slotIndex)) return false;
   player.inventory.addOwnedGear(slot.gearId);
   return true;
+}
+
+/**
+ * Whether a piece of gear would fit the current loadout if it were installed,
+ * and — when it wouldn't — why. A pure projection of {@link ShipLoadout.canInstall}
+ * into a structured result so the equipment shop can show a per-listing "fits /
+ * no free <category> slot / over mass" indicator **before** purchase, and the
+ * hangar can phrase its install-block toast, both from the one source of truth.
+ *
+ * - `fits` — the gear's category bank has room and it stays within the mass budget.
+ * - `no-slot` — the weapon/equipment bank is full (engine/radar always have room:
+ *   a new one replaces the current single fitting, so they never report `no-slot`).
+ * - `over-mass` — a slot is free but installing would push Σ mass over the hull's
+ *   `massCapacity`; carries the gear `mass` and current `massFree` for the readout.
+ * - `n/a` — the id is unknown or names a hull (the ship itself, not a slotted item).
+ */
+export type GearFit =
+  | { status: "fits" }
+  | { status: "no-slot"; category: SlotCategory; used: number; total: number }
+  | { status: "over-mass"; mass: number; massFree: number }
+  | { status: "n/a" };
+
+export function gearFit(loadout: ShipLoadout, gearId: string): GearFit {
+  const gear = gearById(gearId);
+  if (!gear || gear.kind === GearKind.HULL) return { status: "n/a" };
+  if (loadout.canInstall(gearId)) return { status: "fits" };
+  const cat = slotCategoryFor(gear);
+  const stats = loadout.derivedStats();
+  if (cat && cat !== "engine" && cat !== "radar") {
+    const c = stats.categories[cat];
+    if (c.used >= c.total) {
+      return { status: "no-slot", category: cat, used: c.used, total: c.total };
+    }
+  }
+  return { status: "over-mass", mass: gear.mass, massFree: stats.massFree };
 }
 
 /** Russian display label per gear kind. */

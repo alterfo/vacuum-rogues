@@ -160,10 +160,18 @@ dual-hull unification does.
   show whether it will fit the current hull by category + mass before purchase)
 - Create/Modify: src/tests/equipment/shopPurchaseFit.test.ts
 
-- [ ] purchasing adds gear to the warehouse; install happens in the hangar (Task 3)
-- [ ] surface "fits / no free <category> slot / over mass" per listing
-- [ ] write tests: purchase adds to warehouse; fit indicator correct
-- [ ] run affected tests — must pass before next task
+- [x] purchasing adds gear to the warehouse; install happens in the hangar (Task 3)
+      (buyItem now always routes via acquireUninstalledGear — no shop-side auto-install;
+      the dead EquipmentSystem field/import removed)
+- [x] surface "fits / no free <category> slot / over mass" per listing
+      (new pure `gearFit` in GearBridge → structured {fits|no-slot|over-mass|n/a};
+      renderRows shows ✓ Влезет / Нет слота: <bank> / Перегруз +N per non-hull row,
+      grays/colours readable; hulls (n/a) show no hint)
+- [x] write tests: purchase adds to warehouse; fit indicator correct
+      (src/tests/equipment/shopPurchaseFit.test.ts: warehouse-routing leaves the
+      loadout untouched + stocks spares; gearFit fits/no-slot/over-mass/swap/n/a)
+- [x] run affected tests — must pass before next task (full suite green: 1632 passed;
+      lint 0 errors; tsc clean)
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify Overview: slots are hull-determined and categorized; engine/radar are
