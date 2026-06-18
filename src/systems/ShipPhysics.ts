@@ -17,6 +17,12 @@ export class ShipPhysics {
   // through them without stopping — the next waypoint is taken before arrival so
   // speed is never zeroed mid-route (US-070: smooth motion around the sun).
   private path: { x: number; y: number }[] = [];
+  // True while flying an auto-plotted route (setPath). Stays set through the
+  // final leg too — unlike hasPath(), which empties as waypoints are consumed —
+  // so the route stays "active" until the ship actually arrives or is stopped.
+  // The route line + destination marker already show where the ship is going, so
+  // the renderer hides the redundant heading crosshair while this is true.
+  private followingRoute: boolean = false;
   private readonly maxSpeed: number;
   // Gentle accel/decel for a physical feel. Deceleration is tuned so the ship
   // eases to a stop over roughly DISTANCE_PER_DAY (≈500px) at cruise — i.e. the
@@ -44,6 +50,7 @@ export class ShipPhysics {
 
   setTarget(x: number, y: number): void {
     this.path = [];
+    this.followingRoute = false; // a bare point-move is not a plotted route
     this.targetX = x;
     this.targetY = y;
     this.isMoving = true;
@@ -61,6 +68,7 @@ export class ShipPhysics {
     this.targetX = first.x;
     this.targetY = first.y;
     this.isMoving = true;
+    this.followingRoute = true; // flying a plotted route (crosshair stays hidden)
   }
 
   /**
@@ -71,6 +79,7 @@ export class ShipPhysics {
    */
   teleport(x: number, y: number): void {
     this.path = [];
+    this.followingRoute = false;
     this.shipX = x;
     this.shipY = y;
     this.targetX = x;
@@ -86,6 +95,7 @@ export class ShipPhysics {
    */
   stop(): void {
     this.path = [];
+    this.followingRoute = false;
     this.targetX = this.shipX;
     this.targetY = this.shipY;
     this.currentSpeed = 0;
@@ -100,6 +110,16 @@ export class ShipPhysics {
   /** Waypoints still queued ahead of the current target. */
   hasPath(): boolean {
     return this.path.length > 0;
+  }
+
+  /**
+   * True while auto-flying a plotted route (set by {@link setPath}, cleared on
+   * arrival / {@link stop} / {@link setTarget} / {@link teleport}). Unlike
+   * {@link hasPath}, this stays true on the final leg, so callers can treat the
+   * whole route — not just the legs with queued waypoints — as "on a route".
+   */
+  isFollowingRoute(): boolean {
+    return this.followingRoute;
   }
 
   getDistanceToTarget(): number {
@@ -149,6 +169,7 @@ export class ShipPhysics {
     if (distance <= this.STOP_THRESHOLD) {
       this.currentSpeed = 0;
       this.isMoving = false;
+      this.followingRoute = false; // route complete — crosshair gate lifts
       // Snap to target if very close
       if (distance < 2) {
         this.shipX = this.targetX;

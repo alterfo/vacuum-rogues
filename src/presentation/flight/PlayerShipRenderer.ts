@@ -56,13 +56,19 @@ export class PlayerShipRenderer implements FlightModule {
   // engine-flame pulse and the target-crosshair pulse.
   private bgElapsed = 0;
 
+  // Lowercased hull class (e.g. "heavy_freighter") used to pick per-hull ship
+  // art. Empty ⇒ no specific hull known; the renderer falls back to ranger art.
+  private readonly hullClassKey: string;
+
   constructor(
     _renderer: Renderer,
     gameLayer: Container,
     shipPhysics: ShipPhysics,
+    hullClass = "",
   ) {
     this.gameLayer = gameLayer;
     this.shipPhysics = shipPhysics;
+    this.hullClassKey = hullClass.toLowerCase();
   }
 
   // ---------------------------------------------------------------------------
@@ -170,9 +176,13 @@ export class PlayerShipRenderer implements FlightModule {
     this.shipGraphics = new Graphics();
     this.shipContainer.addChild(this.shipGraphics);
 
-    // Prefer ship art (ranger hull) when available; the procedural triangle is
-    // the fallback (drawShip skips the hull when a sprite is present).
-    const shipTex = pickVariant("ships", "ranger", "player_ship");
+    // Prefer per-hull ship art keyed by the installed hull class (so buying a
+    // new hull changes the ship's look), then the generic ranger hull, then the
+    // procedural triangle (drawShip skips the hull when a sprite is present).
+    const shipTex =
+      (this.hullClassKey &&
+        pickVariant("player_ships", this.hullClassKey, "player_ship")) ||
+      pickVariant("ships", "ranger", "player_ship");
     if (shipTex) {
       const sp = new Sprite(shipTex);
       sp.anchor.set(0.5);
@@ -250,8 +260,15 @@ export class PlayerShipRenderer implements FlightModule {
 
     const distance = this.shipPhysics.getDistanceToTarget();
 
-    // Show indicator only if ship is moving and target is far enough
-    if (this.shipPhysics.isMoving && distance > 20) {
+    // Show indicator only if ship is moving toward a far enough point AND it's a
+    // bare point-move, not an auto-plotted route. On a route the dashed route
+    // line + destination marker already show where the ship is going, so the
+    // pulsing crosshair is just noise (playtest: hide it during route flight).
+    if (
+      this.shipPhysics.isMoving &&
+      distance > 20 &&
+      !this.shipPhysics.isFollowingRoute()
+    ) {
       this.targetIndicator.visible = true;
       this.targetIndicator.clear();
 
