@@ -169,12 +169,17 @@ trade on arrival.
 - [x] run tests — must pass before next task
 
 ### Task 8: Verify acceptance criteria
-- [ ] verify Overview behaviours: rumors appear, NPCs react probabilistically, player+NPC
+- [x] verify Overview behaviours: rumors appear, NPCs react probabilistically, player+NPC
       trading converges routes, rumors expire and NPC flow tapers, balance never runs away
-- [ ] run full unit suite (`npm test -- --run`) — all green
-- [ ] run `npm run test:e2e:regression`
-- [ ] run `npm run lint` — clean
-- [ ] confirm no existing test assertions were modified
+      (covered by green suite: rumorDirector/rumorDailyTick/infoCenterRumors + e2e rumor
+      render; npcRumorReaction; rumorConvergence asserts margin shrinks below expiry and the
+      rumor closes; SELL_SPREAD regression intact)
+- [x] run full unit suite (`npm test -- --run`) — all green (1686 passed, 197 files)
+- [x] run `npm run test:e2e:regression` (19/19 passed, incl. TRADE_OPPORTUNITY rumor render)
+- [x] run `npm run lint` — clean (0 errors; 29 pre-existing `any` warnings in unrelated
+      quest/scene test files)
+- [x] confirm no existing test assertions were modified (all 7 rumor-feature test files are
+      pure additions — status A, 0 deletions)
 
 ## Technical Details
 - **Neutral pricing for scanning:** `referenceMarketPrice` strips faction/rank modifiers so
