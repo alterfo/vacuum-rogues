@@ -121,10 +121,10 @@ trade on arrival.
 - Modify: src/tests/globalEvents.test.ts is OFF-LIMITS — add new test file instead
 - Create: src/tests/trade/rumorDailyTick.test.ts
 
-- [ ] wire the director into the daily loop; ensure ordering (drift → scan → rumor update)
-- [ ] guard for galaxies with <2 market systems (no rumors, no crash)
-- [ ] write tests: a day with a seeded spread produces a TRADE_OPPORTUNITY news entry
-- [ ] run tests — must pass before next task
+- [x] wire the director into the daily loop; ensure ordering (drift → scan → rumor update)
+- [x] guard for galaxies with <2 market systems (no rumors, no crash)
+- [x] write tests: a day with a seeded spread produces a TRADE_OPPORTUNITY news entry
+- [x] run tests — must pass before next task
 
 ### Task 5: NPC traders react to rumors
 **Files:**

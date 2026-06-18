@@ -1,5 +1,12 @@
 import type { GameConfig } from "@/types";
-import { SceneType, FactionType, QuestType, NpcRole, NpcState } from "@/types";
+import {
+  SceneType,
+  FactionType,
+  QuestType,
+  NpcRole,
+  NpcState,
+  ResourceType,
+} from "@/types";
 import { Galaxy } from "@/domain/Galaxy";
 import type { GameScene } from "@/presentation/GameScene";
 import { Renderer } from "@/presentation/Renderer";
@@ -17,6 +24,9 @@ import { validatePlayerSettings } from "@/validation/schemas";
 import { Player } from "@/domain/Player";
 import { NpcSimulator } from "@/systems/npc/NpcSimulator";
 import { GalaxySimulator } from "@/systems/GalaxySimulator";
+import { TradeSystem } from "@/systems/TradeSystem";
+import { scanTradeRoutes } from "@/systems/trade/RouteScanner";
+import { updateRumors } from "@/systems/trade/RumorDirector";
 import { stepOwnershipTick } from "@/systems/galaxy/OvermindBalance";
 import { SeededRNG } from "@/utils/seededRNG";
 import type { Quest } from "@/domain/Quest";
@@ -113,6 +123,7 @@ export class GameEngine {
   private readonly sceneFactory: SceneFactory;
   private readonly npcSimulator = new NpcSimulator();
   private readonly galaxySimulator = new GalaxySimulator();
+  private readonly tradeSystem = new TradeSystem();
 
   constructor(diDependencies?: GameEngineDIDependencies) {
     if (diDependencies) {
@@ -422,6 +433,37 @@ export class GameEngine {
           description: `Рыночные цены изменились в системе ${system.name}`,
         });
       }
+    }
+
+    // Trade-route rumors (living-trade-economy): after today's drift settles,
+    // re-scan the galaxy's neutral spreads and advance the rumor lifecycle so
+    // TRADE_OPPORTUNITY rumors open/refresh/expire against current prices.
+    // Ordering matters — drift → scan → rumor update — so rumors reflect the
+    // prices that were just rolled. Skip galaxies with fewer than two
+    // market-bearing systems: no cross-system route can exist there, so there is
+    // nothing to scan (and the guard keeps degenerate maps from crashing).
+    const marketSystemCount = this.galaxy.systems.filter((s) =>
+      s.planets.some((p) => !!p.market),
+    ).length;
+    if (marketSystemCount >= 2) {
+      updateRumors(
+        this.galaxy,
+        () =>
+          scanTradeRoutes(
+            this.galaxy!,
+            (planet, resource) =>
+              this.tradeSystem.referenceMarketPrice(planet, resource),
+            // One route per ResourceType at most — keep them all visible so a
+            // closing rumor stays in the re-score set until it truly expires.
+            { maxRoutes: Object.values(ResourceType).length, minMarginPct: 0 },
+          ),
+        this.galaxy.gameDays,
+        {
+          marginOpen: GAME_BALANCE.rumorMarginOpen,
+          marginExpire: GAME_BALANCE.rumorMarginExpire,
+          maxActive: GAME_BALANCE.rumorMaxActive,
+        },
+      );
     }
 
     // Droid repair: if player has a droid installed, heal hull by repairRate HP/day
