@@ -73,10 +73,10 @@ pause, tactical positioning + per-turn weapon fire (Steam combat guides).
   combatFireIntervalMs per ship; both sides)
 - Create/Modify: src/tests/flight/combatEngagement.test.ts
 
-- [ ] an in-range aggressor reliably enters combat and STAYS engaged while orbiting;
+- [x] an in-range aggressor reliably enters combat and STAYS engaged while orbiting;
       both ships fire exactly once per `combatFireIntervalMs` (the turn)
-- [ ] write tests: engage on range; N turns → N shots each; hull decreases on both sides
-- [ ] run affected tests — must pass before next task
+- [x] write tests: engage on range; N turns → N shots each; hull decreases on both sides
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Evasion — re-route each turn, escape on a faster engine
 **Files:**
