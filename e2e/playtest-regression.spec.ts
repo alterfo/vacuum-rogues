@@ -1189,4 +1189,83 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
 
     errorCollector.assertAndDetach();
   });
+
+  test('regression: a TRADE_OPPORTUNITY rumor renders in the Info Center news tab', async ({ page }) => {
+    // Task 7 (living-trade-economy-rumors): active trade-route rumors are
+    // surfaced to the player as a "Торговые возможности" band atop the news
+    // tab. Seed one rumor on the galaxy, open the Info Center on a planet, and
+    // assert both the section header and the formatted rumor line render.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Seed a single active rumor between the first two systems.
+    const seeded = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        galaxy: {
+          gameDays: number;
+          systems: Array<{ id: string; name: string; planets: Array<{ id: string }> }>;
+          activeRumors: unknown[];
+        } | null;
+      };
+      const sys = engine.galaxy?.systems ?? [];
+      if (sys.length < 2) return null;
+      const a = sys[0];
+      const b = sys[1];
+      const rumor = {
+        id: `FUEL:${a.id}->${b.id}`,
+        resource: 'FUEL',
+        fromSystemId: a.id,
+        fromPlanetId: a.planets[0]?.id ?? `${a.id}p`,
+        toSystemId: b.id,
+        toPlanetId: b.planets[0]?.id ?? `${b.id}p`,
+        fromPrice: 100,
+        toPrice: 160,
+        marginPct: 60,
+        createdDay: engine.galaxy!.gameDays,
+        lastMarginPct: 60,
+      };
+      engine.galaxy!.activeRumors = [rumor];
+      return { fromName: a.name, toName: b.name };
+    });
+    expect(seeded).not.toBeNull();
+
+    // Open the Info Center on a planet in the current (or first) system.
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        galaxy: { systems: Array<{ id: string; planets: Array<{ id: string }> }> } | null;
+        player: { currentSystemId: string } | null;
+        transitionTo: (scene: string, ctx?: object) => Promise<void>;
+      };
+      const systems = engine.galaxy?.systems ?? [];
+      const here =
+        systems.find((s) => s.id === engine.player?.currentSystemId) ?? systems[0];
+      const planet = here?.planets[0];
+      await engine.transitionTo('INFO_CENTER', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'InfoCenterScene', 15_000);
+
+    // Collect every rendered text node under the scene's mainContainer.
+    const texts = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const out: string[] = [];
+      const walk = (node: unknown): void => {
+        if (!node || typeof node !== 'object') return;
+        const n = node as { text?: unknown; children?: unknown[] };
+        if (typeof n.text === 'string' && n.text) out.push(n.text);
+        for (const c of n.children ?? []) walk(c);
+      };
+      walk(engine.currentScene?.['mainContainer']);
+      return out;
+    });
+
+    // The section header and a formatted rumor row both render.
+    expect(texts.some((t) => t.includes('ТОРГОВЫЕ ВОЗМОЖНОСТИ'))).toBe(true);
+    expect(
+      texts.some((t) => t.includes('Везите') && t.includes('маржа')),
+    ).toBe(true);
+
+    errorCollector.assertAndDetach();
+  });
 });

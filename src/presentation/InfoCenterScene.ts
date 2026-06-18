@@ -5,6 +5,7 @@ import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
 import type { Station } from "@/domain/Station";
 import type { StarSystem } from "@/domain/StarSystem";
+import { buildRumorPanel, RUMOR_PANEL_HEADER } from "./rumorPanel";
 import { SceneType, NpcRole, ResourceType } from "@/types";
 import type { NewsEvent } from "@/types";
 import type {
@@ -590,10 +591,20 @@ export class InfoCenterScene extends GameScene {
   // ── news tab ───────────────────────────────────────────────────────────────
 
   private renderNews(container: Container, pw: number, ph: number): void {
-    const ROW_H = 38;
-    const VISIBLE = Math.floor(ph / ROW_H);
     const PAD = 16;
+    const ROW_H = 38;
     const STAR_W = 28;
+
+    // Trade-route rumors band sits above the scrollable news list (unmasked).
+    const rumorH = this.renderRumorPanel(container, pw);
+
+    // The news list scrolls inside its own masked sub-container, offset below
+    // the rumor band so the mask never clips the rumors.
+    const listArea = new Container();
+    listArea.y = rumorH;
+    container.addChild(listArea);
+    const listH = Math.max(ROW_H, ph - rumorH);
+    const VISIBLE = Math.floor(listH / ROW_H);
 
     const clampedScroll = Math.max(
       0,
@@ -607,10 +618,10 @@ export class InfoCenterScene extends GameScene {
     );
 
     const mask = new Graphics();
-    mask.rect(PAD, 0, pw - PAD * 2, ph);
+    mask.rect(PAD, 0, pw - PAD * 2, listH);
     mask.fill({ color: 0xffffff });
-    container.addChild(mask);
-    container.mask = mask;
+    listArea.addChild(mask);
+    listArea.mask = mask;
 
     const bookmarks = this.gameEngine?.player?.newsBookmarks ?? [];
 
@@ -620,7 +631,7 @@ export class InfoCenterScene extends GameScene {
       const rowBg = new Graphics();
       rowBg.rect(PAD, y + 2, pw - PAD * 2, ROW_H - 4);
       rowBg.fill({ color: i % 2 === 0 ? 0x0d1220 : 0x0a0e18 });
-      container.addChild(rowBg);
+      listArea.addChild(rowBg);
 
       const dayBadge = new Text({
         text: `Д${item.day}`,
@@ -629,7 +640,7 @@ export class InfoCenterScene extends GameScene {
       dayBadge.x = PAD + 6;
       dayBadge.y = y + ROW_H / 2 - 7;
       dayBadge.eventMode = "none";
-      container.addChild(dayBadge);
+      listArea.addChild(dayBadge);
 
       const news = new Text({
         text: item.text,
@@ -644,7 +655,7 @@ export class InfoCenterScene extends GameScene {
       news.x = PAD + 46;
       news.y = y + ROW_H / 2 - 7;
       news.eventMode = "none";
-      container.addChild(news);
+      listArea.addChild(news);
 
       const isBookmarked = bookmarks.includes(item.bookmarkKey);
       const star = new Text({
@@ -663,7 +674,7 @@ export class InfoCenterScene extends GameScene {
         e.stopPropagation();
         this.toggleBookmark(item.bookmarkKey);
       });
-      container.addChild(star);
+      listArea.addChild(star);
     }
 
     if (this.newsItems.length > VISIBLE) {
@@ -673,10 +684,77 @@ export class InfoCenterScene extends GameScene {
       });
       hint.anchor.set(1, 1);
       hint.x = pw - PAD;
-      hint.y = ph - 2;
+      hint.y = listH - 2;
       hint.eventMode = "none";
-      container.addChild(hint);
+      listArea.addChild(hint);
     }
+  }
+
+  /**
+   * Draws the "Торговые возможности" band at the top of the news tab — the
+   * active trade-route rumors (most-profitable first) or an empty-state line.
+   * Returns the vertical space it consumed so the news list can sit below it.
+   */
+  private renderRumorPanel(container: Container, pw: number): number {
+    const PAD = 16;
+    const HEADER_H = 24;
+    const ROW_H = 22;
+    const data = buildRumorPanel(this.gameEngine?.galaxy ?? null);
+
+    const header = new Text({
+      text: `▸ ${RUMOR_PANEL_HEADER}`,
+      style: {
+        fontSize: 13,
+        fill: 0xffd166,
+        fontFamily: "monospace",
+        fontWeight: "bold",
+      },
+    });
+    header.x = PAD;
+    header.y = 4;
+    header.eventMode = "none";
+    container.addChild(header);
+
+    let y = HEADER_H;
+
+    if (data.emptyText) {
+      const empty = new Text({
+        text: data.emptyText,
+        style: { fontSize: 13, fill: 0xb4b4b4, fontFamily: "monospace" },
+      });
+      empty.x = PAD + 10;
+      empty.y = y;
+      empty.eventMode = "none";
+      container.addChild(empty);
+      y += ROW_H;
+    } else {
+      for (const line of data.lines) {
+        const row = new Text({
+          text: `• ${line.text}`,
+          style: {
+            fontSize: 13,
+            fill: 0xffd166,
+            fontFamily: "monospace",
+            wordWrap: true,
+            wordWrapWidth: pw - PAD * 2 - 12,
+          },
+        });
+        row.x = PAD + 10;
+        row.y = y;
+        row.eventMode = "none";
+        container.addChild(row);
+        y += ROW_H;
+      }
+    }
+
+    y += 4;
+    const sep = new Graphics();
+    sep.rect(PAD, y, pw - PAD * 2, 1);
+    sep.fill({ color: 0x334455 });
+    container.addChild(sep);
+    y += 8;
+
+    return y;
   }
 
   private toggleBookmark(key: number): void {

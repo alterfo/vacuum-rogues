@@ -161,12 +161,12 @@ trade on arrival.
 - Modify: e2e/ regression spec (rumor row renders)
 - Create/Modify: src/tests/presentation/* if a unit-level render test fits
 
-- [ ] list active rumors (sorted by margin) with the Russian formatter; readable contrast
+- [x] list active rumors (sorted by margin) with the Russian formatter; readable contrast
       (reuse the `0xb4b4b4`+ palette, no sub-AA grays)
-- [ ] empty-state copy when no active rumors
-- [ ] add e2e/regression assertion that a rumor renders
-- [ ] screenshot-verify the panel
-- [ ] run tests — must pass before next task
+- [x] empty-state copy when no active rumors
+- [x] add e2e/regression assertion that a rumor renders
+- [x] screenshot-verify the panel
+- [x] run tests — must pass before next task
 
 ### Task 8: Verify acceptance criteria
 - [ ] verify Overview behaviours: rumors appear, NPCs react probabilistically, player+NPC
