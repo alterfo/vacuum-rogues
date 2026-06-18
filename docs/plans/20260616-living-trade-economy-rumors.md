@@ -106,13 +106,13 @@ trade on arrival.
 - Modify: src/validation/schemas.ts (Galaxy `activeRumors`)
 - Create: src/tests/trade/rumorDirector.test.ts
 
-- [ ] `updateRumors`: refresh existing rumors' margins from current prices; expire those
+- [x] `updateRumors`: refresh existing rumors' margins from current prices; expire those
       below `rumorMarginExpire` (emit a "акция закончилась" news); open new rumors above
       `rumorMarginOpen` up to `rumorMaxActive`; emit TRADE_OPPORTUNITY news for new ones
-- [ ] store/trim active rumors on `Galaxy`; persist via schema
-- [ ] write tests: open above-threshold, expire when spread closes, cap respected,
+- [x] store/trim active rumors on `Galaxy`; persist via schema
+- [x] write tests: open above-threshold, expire when spread closes, cap respected,
       news emitted exactly once per open/close
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 4: Hook rumors into GameEngine.advanceGalaxyDay
 **Files:**

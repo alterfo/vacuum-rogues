@@ -2,6 +2,7 @@ import type { StarSystem } from "./StarSystem";
 import type { Overmind } from "./Overmind";
 import type { GalacticEvent } from "./GalacticEvent";
 import type { NpcShip } from "./NpcShip";
+import type { RouteRumor } from "./RouteRumor";
 import type { NewsEvent } from "@/types";
 import { GameSystemException } from "@/exceptions/GameSystemException";
 import { logger } from "@/utils/logger";
@@ -32,6 +33,13 @@ export class Galaxy {
    * While active, market prices in that system are reduced by 15%.
    */
   activeTradeBoomSystems: Record<string, number> = {};
+  /**
+   * Currently published trade-route rumors (living-trade-economy). Maintained by
+   * `RumorDirector.updateRumors` on the daily tick: opened above
+   * `rumorMarginOpen`, re-scored each day, and expired below `rumorMarginExpire`.
+   * Persisted so a rumor's lifecycle survives save/load.
+   */
+  activeRumors: RouteRumor[] = [];
 
   constructor(
     public readonly id: string,
@@ -226,6 +234,16 @@ export class Galaxy {
         delete this.activeTradeBoomSystems[systemId];
       }
     }
+  }
+
+  /**
+   * Active trade-route rumors, sorted most-profitable first (by live
+   * `lastMarginPct`). Returns a fresh array so callers cannot mutate the store.
+   */
+  getActiveRumors(): RouteRumor[] {
+    return [...this.activeRumors].sort(
+      (a, b) => b.lastMarginPct - a.lastMarginPct,
+    );
   }
 
   /** Append a news event, trimming the feed to NEWS_FEED_MAX. */

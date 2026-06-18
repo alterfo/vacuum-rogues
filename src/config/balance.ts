@@ -166,6 +166,21 @@ export const GAME_BALANCE = {
   gameSpeedMultipliers: [1.0, 2.0, 4.0] as const,
   /** Fraction of base price deviation that marks a deal (20% = buy/sell 20% off/above average). */
   tradeDealThreshold: 0.2,
+  /**
+   * Player market impact: each unit traded nudges that planet's persistent
+   * price multiplier so cross-planet arbitrage self-corrects. Buying drives the
+   * local price UP (depletes stock); selling drives it DOWN (gluts the market).
+   * Repeated round-trips therefore narrow the spread instead of widening it.
+   */
+  marketImpactPerUnit: 0.004,
+  /**
+   * Per-transaction ceiling on that nudge. Kept comfortably below the buy/sell
+   * spread headroom so a single buy-then-sell on the SAME planet can never turn
+   * a profit, even at the best faction sell multiplier (SYNDICATE 1.15:
+   * 0.8 × 1.15 × (1 + 0.06) = 0.975 < 1). The nudge still accumulates across
+   * separate visits up to the Market [0.4, 2.5] multiplier clamp.
+   */
+  marketImpactMaxPerTrade: 0.06,
   /** Grace period (game days) before OVERMIND can trigger a loss — gives the player time to develop. */
   OVERMIND_LOSS_GRACE_DAYS: 40,
   /** Minimum galaxy size (system count) for the OVERMIND loss condition to fire — prevents instant-loss on stale small saves. */
@@ -215,6 +230,19 @@ export const GAME_BALANCE = {
    * At 1.5× the default enemy deals enough damage to defeat an early scout hull.
    */
   OVERMIND_COMBAT_DAMAGE_MULT: 1.5,
+  /**
+   * Trade-route rumor lifecycle (living-trade-economy). A route's neutral spread
+   * must EXCEED `rumorMarginOpen` (%) to be published as a TRADE_OPPORTUNITY
+   * rumor, and an already-open rumor closes ("акция закончилась") once its
+   * re-scored spread falls to/below `rumorMarginExpire` (%). The open threshold
+   * sits comfortably above the expire threshold so player+NPC trade can close
+   * the spread through that hysteresis band before the rumor expires.
+   */
+  rumorMarginOpen: 25,
+  /** Margin (%) at/below which an active route rumor expires. */
+  rumorMarginExpire: 10,
+  /** Maximum number of TRADE_OPPORTUNITY rumors active at once. */
+  rumorMaxActive: 4,
 } as const;
 
 /**

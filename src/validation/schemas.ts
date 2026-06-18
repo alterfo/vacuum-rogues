@@ -445,6 +445,7 @@ export const GalaxySchema = z.object({
   pirateSystems: z.array(z.string()).default([]),
   overmindCoreSystemId: z.string().default(""),
   activeTradeBoomSystems: z.record(z.number().int().min(0)).default({}),
+  activeRumors: z.array(RouteRumorSchema).default([]),
 });
 
 export const DialogueSessionSchema = z.object({
