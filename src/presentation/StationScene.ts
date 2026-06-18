@@ -3,6 +3,8 @@ import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Station } from "@/domain/Station";
+import type { Player } from "@/domain/Player";
+import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { SceneType, StationType, type MicroModule } from "@/types";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
 import {
@@ -10,6 +12,9 @@ import {
   GearKind,
   gearById,
   microModuleById,
+  slotCategoryFor,
+  type SlotCategory,
+  type Gear,
 } from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
@@ -97,6 +102,48 @@ const REPAIR_DISCOUNT: Record<StationType, number> = {
   [StationType.RESEARCH_LAB]: 1.1,
   [StationType.CRAFT_CENTER]: 1.0,
 };
+
+// ── Hangar (SR-canon categorized fitting) ────────────────────────────────────
+
+/** Display label for each fitting bank (canon §11.3). */
+const CATEGORY_LABEL: Record<SlotCategory, string> = {
+  weapon: "ОРУЖИЕ",
+  engine: "ДВИГАТЕЛЬ",
+  radar: "РАДАР",
+  equipment: "ОБОРУДОВАНИЕ",
+};
+
+/** Order the four banks render in: weapons row, engine, radar, equipment. */
+const HANGAR_BANKS: readonly SlotCategory[] = [
+  "weapon",
+  "engine",
+  "radar",
+  "equipment",
+];
+
+/** Russian goods names for the cargo hold (ТРЮМ) read-out. */
+const RESOURCE_LABEL: Record<string, string> = {
+  FUEL: "Топливо",
+  METALS: "Металлы",
+  CRYSTALS: "Кристаллы",
+  ORGANICS: "Органика",
+  ARTIFACTS: "Артефакты",
+  WEAPONS: "Оружие",
+  MEDICINE: "Медикаменты",
+  ELECTRONICS: "Электроника",
+  LUXURY: "Роскошь",
+  DATA_CORES: "Ядра данных",
+};
+
+/** Computed geometry shared across the hangar's column renderers. */
+interface HangarLayout {
+  readonly leftX: number;
+  readonly leftW: number;
+  readonly rightX: number;
+  readonly rightW: number;
+  readonly contentTop: number;
+  readonly contentBottom: number;
+}
 
 // ── Scene ────────────────────────────────────────────────────────────────────
 
@@ -1450,8 +1497,8 @@ export class StationScene extends GameScene {
     const player = this.gameEngine?.player;
     if (!player) return;
 
-    const PW = Math.min(540, sw - 80);
-    const PH = Math.min(560, sh - 80);
+    const PW = Math.min(900, sw - 60);
+    const PH = Math.min(620, sh - 60);
     const PX = (sw - PW) / 2;
     const PY = (sh - PH) / 2;
 
@@ -1466,282 +1513,377 @@ export class StationScene extends GameScene {
     panel.eventMode = "none";
     this.mainContainer!.addChild(panel);
 
+    const loadout = this.gameEngine?.playerLoadout ?? null;
+
     const title = new Text({
       text: "АНГАР — ОСНАСТКА КОРАБЛЯ",
       style: { fontSize: 14, fill: 0x88ddaa, fontFamily: "monospace" },
     });
     title.x = PX + 20;
-    title.y = PY + 16;
+    title.y = PY + 14;
     title.eventMode = "none";
     this.mainContainer!.addChild(title);
 
-    // Slots section
-    const slotsLabel = new Text({
-      text: "Установленные модули:",
-      style: { fontSize: 12, fill: 0x6688aa, fontFamily: "monospace" },
+    // Hull is the ship itself (canon §11.3), shown as a centred banner rather
+    // than occupying a slot.
+    const hullBanner = new Text({
+      text: loadout ? `Корпус: ${loadout.hull.name}` : "Корпус: —",
+      style: { fontSize: 12, fill: 0xb4c4d4, fontFamily: "monospace" },
     });
-    slotsLabel.x = PX + 20;
-    slotsLabel.y = PY + 48;
-    slotsLabel.eventMode = "none";
-    this.mainContainer!.addChild(slotsLabel);
+    hullBanner.anchor.set(0.5, 0);
+    hullBanner.x = PX + PW / 2;
+    hullBanner.y = PY + 14;
+    hullBanner.eventMode = "none";
+    this.mainContainer!.addChild(hullBanner);
 
-    // Slots render the canonical loadout (dual-hull Task 3): one row per hull
-    // slot, occupied rows drawn from the installed gear.
-    const loadout = this.gameEngine?.playerLoadout ?? null;
-    const slots = loadout?.installedSlots() ?? [];
-    const slotsTotal = loadout?.hull.slots ?? 0;
-    for (let i = 0; i < slotsTotal; i++) {
-      const slot = slots[i];
-      const gear = slot ? gearById(slot.gearId) : undefined;
-      const slotY = PY + 70 + i * 44;
+    this.renderHangarStats(loadout, PX, PY, PW);
 
-      const slotBg = new Graphics();
-      slotBg
-        .rect(PX + 20, slotY, PW - 40, 36)
-        .fill({ color: gear ? 0x0d2030 : 0x081018, alpha: 1 });
-      slotBg
-        .rect(PX + 20, slotY, PW - 40, 36)
-        .stroke({ color: gear ? 0x336655 : 0x1a2a3a, width: 1 });
-      slotBg.eventMode = "none";
-      this.mainContainer!.addChild(slotBg);
+    const CW = PW - 36;
+    const gap = 18;
+    const leftW = Math.round((CW - gap) * 0.55);
+    const layout: HangarLayout = {
+      leftX: PX + 18,
+      leftW,
+      rightX: PX + 18 + leftW + gap,
+      rightW: CW - leftW - gap,
+      contentTop: PY + 84,
+      contentBottom: PY + PH - 38,
+    };
 
-      const slotText = new Text({
-        text: gear
-          ? `[Слот ${i + 1}]  ${gear.name}  (T${gear.techLevel})`
-          : `[Слот ${i + 1}]  — пусто —`,
+    this.renderFittingBanks(layout, loadout, player);
+    this.renderWarehouseAndCargo(layout, loadout, player);
+
+    // Back button
+    const backBtn = new Text({
+      text: "[ ← Назад ]",
+      style: { fontSize: 14, fill: 0xb4c4d4, fontFamily: "monospace" },
+    });
+    backBtn.anchor.set(0.5, 1);
+    backBtn.x = PX + PW / 2;
+    backBtn.y = PY + PH - 14;
+    backBtn.eventMode = "static";
+    backBtn.cursor = "pointer";
+    backBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      this.view = "main";
+      this.render();
+    });
+    this.mainContainer!.addChild(backBtn);
+  }
+
+  /** МАССА / СВОБОДНО / СКОРОСТЬ / ЗАЩИТА strip under the title. */
+  private renderHangarStats(
+    loadout: ShipLoadout | null,
+    PX: number,
+    PY: number,
+    PW: number,
+  ): void {
+    const stats = loadout?.derivedStats() ?? null;
+    const massUsed = stats?.massUsed ?? 0;
+    const massCap = stats?.massCapacity ?? 0;
+    const massFree = stats?.massFree ?? 0;
+    const speed = stats ? stats.speed.toFixed(2) : "0.00";
+    const shields = stats?.shields ?? 0;
+
+    const segs: Array<{ text: string; fill: number }> = [
+      { text: `МАССА ${massUsed}/${massCap}`, fill: 0xffcc66 },
+      {
+        text: `СВОБОДНО ${massFree}`,
+        fill: massFree > 0 ? 0x66dd88 : 0xff6644,
+      },
+      { text: `СКОРОСТЬ ${speed}`, fill: 0x88ccff },
+      { text: `ЗАЩИТА ${shields}`, fill: 0x88ffcc },
+    ];
+    const colW = (PW - 40) / segs.length;
+    segs.forEach((s, i) => {
+      const t = new Text({
+        text: s.text,
+        style: { fontSize: 12, fill: s.fill, fontFamily: "monospace" },
+      });
+      t.x = PX + 20 + i * colW;
+      t.y = PY + 54;
+      t.eventMode = "none";
+      this.mainContainer!.addChild(t);
+    });
+  }
+
+  /**
+   * The four categorized fitting banks (weapons / engine / radar / equipment) in
+   * the left column: a header per bank showing `used/total` from the hull, the
+   * filled slots (with [снять] + micromodule controls), then the remaining empty
+   * slots. Rendering clips to the column; an overflow row marks any spill-over.
+   */
+  private renderFittingBanks(
+    layout: HangarLayout,
+    loadout: ShipLoadout | null,
+    player: Player,
+  ): void {
+    const { leftX, leftW, contentTop, contentBottom } = layout;
+    const stats = loadout?.derivedStats() ?? null;
+    const installed = loadout?.installedSlots() ?? [];
+    // Flat slot index of each installed item, grouped by category — the index is
+    // needed so [снять]/micromodule target the exact clicked copy.
+    const byCat = (cat: SlotCategory) =>
+      installed
+        .map((slot, idx) => ({ slot, idx, gear: gearById(slot.gearId) }))
+        .filter((e) => e.gear && slotCategoryFor(e.gear) === cat);
+
+    let y = contentTop;
+    let clipped = false;
+    for (const cat of HANGAR_BANKS) {
+      if (clipped) break;
+      const c = stats?.categories[cat] ?? { used: 0, total: 0 };
+
+      const header = new Text({
+        text: `${CATEGORY_LABEL[cat]}  ${c.used}/${c.total}`,
         style: {
           fontSize: 12,
-          fill: gear ? 0x88ddaa : 0x445566,
+          fill: c.used < c.total ? 0x88ccaa : 0xddaa66,
           fontFamily: "monospace",
         },
       });
-      slotText.x = PX + 30;
-      slotText.y = slotY + 10;
-      slotText.eventMode = "none";
-      this.mainContainer!.addChild(slotText);
+      header.x = leftX;
+      header.y = y;
+      header.eventMode = "none";
+      this.mainContainer!.addChild(header);
+      y += 22;
 
-      if (gear && slot && loadout) {
-        const unBtn = new Text({
-          text: "[снять]",
-          style: { fontSize: 11, fill: 0xff8844, fontFamily: "monospace" },
+      const entries = byCat(cat);
+      for (const e of entries) {
+        if (y + 34 > contentBottom) {
+          clipped = true;
+          break;
+        }
+        this.renderFilledSlot(layout, loadout!, player, e, y);
+        y += 38;
+      }
+      if (clipped) break;
+
+      const empties = Math.max(0, c.total - entries.length);
+      for (let k = 0; k < empties; k++) {
+        if (y + 26 > contentBottom) {
+          clipped = true;
+          break;
+        }
+        const slotBg = new Graphics();
+        slotBg.rect(leftX, y, leftW, 24).fill({ color: 0x0a1218, alpha: 1 });
+        slotBg.rect(leftX, y, leftW, 24).stroke({ color: 0x1a2a3a, width: 1 });
+        slotBg.eventMode = "none";
+        this.mainContainer!.addChild(slotBg);
+        const txt = new Text({
+          text: "— свободно —",
+          style: { fontSize: 11, fill: 0xb4bcc4, fontFamily: "monospace" },
         });
-        unBtn.anchor.set(1, 0.5);
-        unBtn.x = PX + PW - 26;
-        unBtn.y = slotY + 18;
-        unBtn.eventMode = "static";
-        unBtn.cursor = "pointer";
-        unBtn.on("pointerdown", (e) => {
+        txt.x = leftX + 8;
+        txt.y = y + 6;
+        txt.eventMode = "none";
+        this.mainContainer!.addChild(txt);
+        y += 28;
+      }
+      y += 8;
+    }
+    if (clipped) {
+      const more = new Text({
+        text: "…ещё слоты ниже",
+        style: { fontSize: 10, fill: 0xb4bcc4, fontFamily: "monospace" },
+      });
+      more.x = leftX;
+      more.y = contentBottom + 2;
+      more.eventMode = "none";
+      this.mainContainer!.addChild(more);
+    }
+  }
+
+  /** One occupied fitting slot: name, [снять], and micromodule control. */
+  private renderFilledSlot(
+    layout: HangarLayout,
+    loadout: ShipLoadout,
+    player: Player,
+    entry: {
+      slot: { gearId: string; micromoduleId?: string; upgrades: number };
+      idx: number;
+      gear: Gear | undefined;
+    },
+    y: number,
+  ): void {
+    const { leftX, leftW } = layout;
+    const gear = entry.gear!;
+    const slot = entry.slot;
+    const idx = entry.idx;
+
+    const slotBg = new Graphics();
+    slotBg.rect(leftX, y, leftW, 34).fill({ color: 0x0d2030, alpha: 1 });
+    slotBg.rect(leftX, y, leftW, 34).stroke({ color: 0x336655, width: 1 });
+    slotBg.eventMode = "none";
+    this.mainContainer!.addChild(slotBg);
+
+    const name = new Text({
+      text: `${gear.name} (T${gear.techLevel})`,
+      style: { fontSize: 11, fill: 0xb8e6c8, fontFamily: "monospace" },
+    });
+    name.x = leftX + 8;
+    name.y = y + 4;
+    name.eventMode = "none";
+    this.mainContainer!.addChild(name);
+
+    const unBtn = new Text({
+      text: "[снять]",
+      style: { fontSize: 11, fill: 0xff8844, fontFamily: "monospace" },
+    });
+    unBtn.anchor.set(1, 0.5);
+    unBtn.x = leftX + leftW - 8;
+    unBtn.y = y + 11;
+    unBtn.eventMode = "static";
+    unBtn.cursor = "pointer";
+    unBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      // Remove the exact clicked slot by index (not first id-match) so the right
+      // copy is removed with two identical items fitted. slotToBagModule carries
+      // the applied micromodule AND artifact-upgrade count onto the bagged item
+      // so re-installing restores both.
+      if (loadout.removeAt(idx)) {
+        player.inventory.addItem(slotToBagModule(gear, slot));
+      }
+      this.render();
+    });
+    this.mainContainer!.addChild(unBtn);
+
+    // Micromodule control — one per item, never removed.
+    const mmCategory = gearMicromoduleCategory(gear);
+    if (slot.micromoduleId) {
+      const mmLabel =
+        microModuleById(slot.micromoduleId)?.name ?? slot.micromoduleId;
+      const mmTag = new Text({
+        text: `мм: ${mmLabel}`,
+        style: { fontSize: 10, fill: 0xffcc44, fontFamily: "monospace" },
+      });
+      mmTag.x = leftX + 8;
+      mmTag.y = y + 20;
+      mmTag.eventMode = "none";
+      this.mainContainer!.addChild(mmTag);
+    } else {
+      const hasMatchingMm =
+        mmCategory !== null &&
+        player.inventory.micromodules.some(
+          (mm) => mm.targetCategory === mmCategory,
+        );
+      const mmBtn = new Text({
+        text: "[+ микромодуль]",
+        style: {
+          fontSize: 10,
+          fill: hasMatchingMm ? 0xffaa22 : 0xb4bcc4,
+          fontFamily: "monospace",
+        },
+      });
+      mmBtn.anchor.set(1, 0.5);
+      mmBtn.x = leftX + leftW - 8;
+      mmBtn.y = y + 26;
+      if (hasMatchingMm) {
+        mmBtn.eventMode = "static";
+        mmBtn.cursor = "pointer";
+        mmBtn.on("pointerdown", (e) => {
           e.stopPropagation();
-          // Remove the exact clicked slot (by index, not first id-match) so the
-          // right copy is removed when two identical items are fitted. Returning
-          // it to the legacy inventory bag keeps it from being lost — there's no
-          // canonical uninstalled-gear store yet. Carry the applied micromodule
-          // AND artifact-upgrade count onto the bagged item so re-installing
-          // restores both (slotToBagModule is the single slot→bag projection).
-          if (loadout.removeAt(i)) {
-            player.inventory.addItem(slotToBagModule(gear, slot));
-          }
+          this.micromoduleApplyTarget = { slotIndex: idx, gearId: gear.id };
+          this.view = "micromodule_apply";
           this.render();
         });
-        this.mainContainer!.addChild(unBtn);
-
-        // Micromodule controls — one per item, cannot be removed.
-        const mmCategory = gearMicromoduleCategory(gear);
-        if (!slot.micromoduleId) {
-          const hasMatchingMm =
-            mmCategory !== null &&
-            player.inventory.micromodules.some(
-              (mm) => mm.targetCategory === mmCategory,
-            );
-          const mmBtn = new Text({
-            text: "[+ микромодуль]",
-            style: {
-              fontSize: 10,
-              fill: hasMatchingMm ? 0xffaa22 : 0x445566,
-              fontFamily: "monospace",
-            },
-          });
-          mmBtn.anchor.set(1, 0.5);
-          mmBtn.x = PX + PW - 26;
-          mmBtn.y = slotY + 30;
-          if (hasMatchingMm) {
-            mmBtn.eventMode = "static";
-            mmBtn.cursor = "pointer";
-            mmBtn.on("pointerdown", (e) => {
-              e.stopPropagation();
-              this.micromoduleApplyTarget = { slotIndex: i, gearId: gear.id };
-              this.view = "micromodule_apply";
-              this.render();
-            });
-            mmBtn.on("pointerover", () => {
-              mmBtn.alpha = 0.7;
-            });
-            mmBtn.on("pointerout", () => {
-              mmBtn.alpha = 1;
-            });
-          } else {
-            mmBtn.eventMode = "none";
-          }
-          this.mainContainer!.addChild(mmBtn);
-        } else {
-          const mmLabel =
-            microModuleById(slot.micromoduleId)?.name ?? slot.micromoduleId;
-          const mmTag = new Text({
-            text: `[мм: ${mmLabel}]`,
-            style: { fontSize: 10, fill: 0xffcc44, fontFamily: "monospace" },
-          });
-          mmTag.anchor.set(1, 0.5);
-          mmTag.x = PX + PW - 26;
-          mmTag.y = slotY + 30;
-          mmTag.eventMode = "none";
-          this.mainContainer!.addChild(mmTag);
-        }
-      }
-    }
-
-    // Inventory section — the legacy bag of owned-but-uninstalled gear. Items
-    // install into a free loadout slot; the bag itself is retired in Task 5.
-    const invY = PY + 70 + slotsTotal * 44 + 12;
-    const invLabel = new Text({
-      text: "Инвентарь:",
-      style: { fontSize: 12, fill: 0x6688aa, fontFamily: "monospace" },
-    });
-    invLabel.x = PX + 20;
-    invLabel.y = invY;
-    invLabel.eventMode = "none";
-    this.mainContainer!.addChild(invLabel);
-
-    const invMods = player.inventory.modules;
-    if (invMods.length === 0) {
-      const empty = new Text({
-        text: "Нет модулей в инвентаре",
-        style: { fontSize: 12, fill: 0x334455, fontFamily: "monospace" },
-      });
-      empty.x = PX + 20;
-      empty.y = invY + 22;
-      empty.eventMode = "none";
-      this.mainContainer!.addChild(empty);
-    } else {
-      const hasFreeSlot =
-        !!loadout && loadout.installedGearIds().length < loadout.hull.slots;
-      invMods.forEach((mod, idx) => {
-        const iy = invY + 22 + idx * 44;
-        if (iy + 40 > PY + PH - 60) return; // clip to panel
-
-        const invBg = new Graphics();
-        invBg
-          .rect(PX + 20, iy, PW - 40, 36)
-          .fill({ color: 0x0d1a28, alpha: 1 });
-        invBg
-          .rect(PX + 20, iy, PW - 40, 36)
-          .stroke({ color: 0x223344, width: 1 });
-        invBg.eventMode = "none";
-        this.mainContainer!.addChild(invBg);
-
-        const invText = new Text({
-          text: `${mod.name}  (ур. ${mod.level})`,
-          style: { fontSize: 12, fill: 0xaaccee, fontFamily: "monospace" },
+        mmBtn.on("pointerover", () => {
+          mmBtn.alpha = 0.7;
         });
-        invText.x = PX + 30;
-        invText.y = iy + 10;
-        invText.eventMode = "none";
-        this.mainContainer!.addChild(invText);
-
-        // Install into a free loadout slot (only for catalog gear — legacy
-        // modules with no catalog id stay in the bag until the Task 4 migration).
-        const catalogGear = gearById(mod.id);
-        const installable =
-          hasFreeSlot && !!catalogGear && catalogGear.kind !== GearKind.HULL;
-        if (installable && loadout) {
-          const eqBtn = new Text({
-            text: "[надеть]",
-            style: { fontSize: 11, fill: 0x44ddaa, fontFamily: "monospace" },
-          });
-          eqBtn.anchor.set(1, 0.5);
-          eqBtn.x = PX + PW - 26;
-          eqBtn.y = iy + 18;
-          eqBtn.eventMode = "static";
-          eqBtn.cursor = "pointer";
-          eqBtn.on("pointerdown", (e) => {
-            e.stopPropagation();
-            if (this.equipment.installGear(loadout, mod.id)) {
-              // Restore the micromodule AND artifact-upgrade count carried on a
-              // previously-removed item onto the freshly-filled slot (installGear
-              // appends to the end).
-              const lastSlot = loadout.installedGearIds().length - 1;
-              if (mod.micromoduleId) {
-                loadout.applyMicromoduleAt(lastSlot, mod.micromoduleId);
-              }
-              if (mod.upgrades) {
-                loadout.setSlotUpgrades(lastSlot, mod.upgrades);
-              }
-              player.inventory.modules.splice(idx, 1);
-            }
-            this.render();
-          });
-          this.mainContainer!.addChild(eqBtn);
-        }
-      });
+        mmBtn.on("pointerout", () => {
+          mmBtn.alpha = 1;
+        });
+      } else {
+        mmBtn.eventMode = "none";
+      }
+      this.mainContainer!.addChild(mmBtn);
     }
+  }
 
-    // ТРЮМ section — owned-but-uninstalled gear (the canonical store). Each item
-    // can be fitted into a free slot («надеть») or sold at the trade-in rate
-    // («Продать»); installed gear lives in the loadout and is never listed here.
-    const ownedIds = ownedUninstalledGear(player, loadout);
-    const holdY = invY + 22 + Math.max(invMods.length, 1) * 44 + 16;
-    const holdLabel = new Text({
-      text: "ТРЮМ (на продажу):",
+  /**
+   * Right column: the СКЛАД warehouse (owned-but-uninstalled gear + the legacy
+   * bag, each installable into its matching category or sellable) above the ТРЮМ
+   * cargo hold (goods, read-only). Installing routes through the loadout's
+   * category+mass rules; a blocked install shows a toast explaining why.
+   */
+  private renderWarehouseAndCargo(
+    layout: HangarLayout,
+    loadout: ShipLoadout | null,
+    player: Player,
+  ): void {
+    const { rightX, rightW, contentTop, contentBottom } = layout;
+    // СКЛАД occupies the top ~60 % of the column; ТРЮМ the rest.
+    const splitY = Math.round(contentTop + (contentBottom - contentTop) * 0.6);
+
+    const sklLabel = new Text({
+      text: "СКЛАД (снаряжение):",
       style: { fontSize: 12, fill: 0x88aa44, fontFamily: "monospace" },
     });
-    holdLabel.x = PX + 20;
-    holdLabel.y = holdY;
-    holdLabel.eventMode = "none";
-    this.mainContainer!.addChild(holdLabel);
+    sklLabel.x = rightX;
+    sklLabel.y = contentTop;
+    sklLabel.eventMode = "none";
+    this.mainContainer!.addChild(sklLabel);
 
-    if (ownedIds.length === 0) {
+    // Warehouse rows: canonical owned-uninstalled gear first (sellable), then the
+    // legacy inventory bag (install-only until the bag is retired). Both install
+    // into the matching category bank.
+    const ownedIds = ownedUninstalledGear(player, loadout);
+    const legacy = player.inventory.modules;
+    type Row =
+      | { kind: "owned"; gearId: string }
+      | { kind: "legacy"; index: number };
+    const rows: Row[] = [
+      ...ownedIds.map((gearId) => ({ kind: "owned", gearId }) as Row),
+      ...legacy.map((_, index) => ({ kind: "legacy", index }) as Row),
+    ];
+
+    let y = contentTop + 22;
+    if (rows.length === 0) {
       const empty = new Text({
-        text: "Трюм пуст",
-        style: { fontSize: 12, fill: 0x334455, fontFamily: "monospace" },
+        text: "Склад пуст",
+        style: { fontSize: 12, fill: 0xb4bcc4, fontFamily: "monospace" },
       });
-      empty.x = PX + 20;
-      empty.y = holdY + 22;
+      empty.x = rightX;
+      empty.y = y;
       empty.eventMode = "none";
       this.mainContainer!.addChild(empty);
-    } else {
-      const hasFreeSlot =
-        !!loadout && loadout.installedGearIds().length < loadout.hull.slots;
-      ownedIds.forEach((gearId, idx) => {
-        const gear = gearById(gearId);
-        if (!gear) return;
-        const hy = holdY + 22 + idx * 44;
-        if (hy + 40 > PY + PH - 34) return; // clip above the back button
+    }
+    for (const row of rows) {
+      if (y + 34 > splitY - 6) break; // clip to the СКЛАД region
+      const gearId =
+        row.kind === "owned" ? row.gearId : (legacy[row.index]?.id ?? "");
+      const gear = gearById(gearId);
+      const name =
+        row.kind === "owned"
+          ? (gear?.name ?? gearId)
+          : (legacy[row.index]?.name ?? gearId);
 
-        const rowBg = new Graphics();
-        rowBg
-          .rect(PX + 20, hy, PW - 40, 36)
-          .fill({ color: 0x14160a, alpha: 1 });
-        rowBg
-          .rect(PX + 20, hy, PW - 40, 36)
-          .stroke({ color: 0x30401a, width: 1 });
-        rowBg.eventMode = "none";
-        this.mainContainer!.addChild(rowBg);
+      const rowBg = new Graphics();
+      rowBg.rect(rightX, y, rightW, 30).fill({ color: 0x14160a, alpha: 1 });
+      rowBg.rect(rightX, y, rightW, 30).stroke({ color: 0x30401a, width: 1 });
+      rowBg.eventMode = "none";
+      this.mainContainer!.addChild(rowBg);
 
-        const rowText = new Text({
-          text: `${gear.name}  (T${gear.techLevel})`,
-          style: { fontSize: 12, fill: 0xccddaa, fontFamily: "monospace" },
-        });
-        rowText.x = PX + 30;
-        rowText.y = hy + 10;
-        rowText.eventMode = "none";
-        this.mainContainer!.addChild(rowText);
+      const rowText = new Text({
+        text: gear ? `${name} (T${gear.techLevel})` : name,
+        style: { fontSize: 11, fill: 0xccddaa, fontFamily: "monospace" },
+      });
+      rowText.x = rightX + 8;
+      rowText.y = y + 3;
+      rowText.eventMode = "none";
+      this.mainContainer!.addChild(rowText);
 
+      const btnRight = rightX + rightW - 8;
+
+      // Sell — only the canonical owned store is sellable.
+      if (row.kind === "owned" && gear) {
         const sellBtn = new Text({
           text: `[Продать ${sellGearPrice(gear)}₡]`,
           style: { fontSize: 11, fill: 0x44ff88, fontFamily: "monospace" },
         });
         sellBtn.anchor.set(1, 0.5);
-        sellBtn.x = PX + PW - 26;
-        sellBtn.y = hy + 18;
+        sellBtn.x = btnRight;
+        sellBtn.y = y + 21;
         sellBtn.eventMode = "static";
         sellBtn.cursor = "pointer";
         sellBtn.on("pointerdown", (e) => {
@@ -1752,57 +1894,134 @@ export class StationScene extends GameScene {
           }
           this.render();
         });
-        sellBtn.on("pointerover", () => {
-          sellBtn.alpha = 0.7;
-        });
-        sellBtn.on("pointerout", () => {
-          sellBtn.alpha = 1;
-        });
         this.mainContainer!.addChild(sellBtn);
+      }
 
-        // Fit into a free slot — only catalog non-hull gear is installable.
-        if (hasFreeSlot && gear.kind !== GearKind.HULL && loadout) {
-          const eqBtn = new Text({
-            text: "[надеть]",
-            style: { fontSize: 11, fill: 0x44ddaa, fontFamily: "monospace" },
-          });
-          eqBtn.anchor.set(1, 0.5);
-          eqBtn.x = sellBtn.x - sellBtn.width - 14;
-          eqBtn.y = hy + 18;
-          eqBtn.eventMode = "static";
-          eqBtn.cursor = "pointer";
-          eqBtn.on("pointerdown", (e) => {
-            e.stopPropagation();
-            installOwnedGear(player, loadout, gearId);
-            this.render();
-          });
-          eqBtn.on("pointerover", () => {
-            eqBtn.alpha = 0.7;
-          });
-          eqBtn.on("pointerout", () => {
-            eqBtn.alpha = 1;
-          });
-          this.mainContainer!.addChild(eqBtn);
-        }
-      });
+      // Install into the matching category — catalog non-hull gear only.
+      const installable = !!gear && gear.kind !== GearKind.HULL && !!loadout;
+      if (installable && loadout) {
+        const eqBtn = new Text({
+          text: "[Установить]",
+          style: { fontSize: 11, fill: 0x44ddaa, fontFamily: "monospace" },
+        });
+        eqBtn.anchor.set(1, 0.5);
+        eqBtn.x = btnRight;
+        eqBtn.y = y + 8;
+        eqBtn.eventMode = "static";
+        eqBtn.cursor = "pointer";
+        eqBtn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          this.installFromWarehouse(loadout, player, row);
+        });
+        eqBtn.on("pointerover", () => {
+          eqBtn.alpha = 0.7;
+        });
+        eqBtn.on("pointerout", () => {
+          eqBtn.alpha = 1;
+        });
+        this.mainContainer!.addChild(eqBtn);
+      }
+      y += 38;
     }
 
-    // Back button
-    const backBtn = new Text({
-      text: "[ ← Назад ]",
-      style: { fontSize: 14, fill: 0x6688aa, fontFamily: "monospace" },
+    // ── ТРЮМ — cargo hold (goods), separate read-only panel. ──
+    const stats = loadout?.derivedStats() ?? null;
+    const resources = player.inventory.resources.filter((r) => r.amount > 0);
+    const usedCargo = resources.reduce((n, r) => n + r.amount, 0);
+    const holdLabel = new Text({
+      text: `ТРЮМ ${usedCargo}/${stats?.cargo ?? 0}:`,
+      style: { fontSize: 12, fill: 0x88ccff, fontFamily: "monospace" },
     });
-    backBtn.anchor.set(0.5, 1);
-    backBtn.x = PX + PW / 2;
-    backBtn.y = PY + PH - 16;
-    backBtn.eventMode = "static";
-    backBtn.cursor = "pointer";
-    backBtn.on("pointerdown", (e) => {
-      e.stopPropagation();
-      this.view = "main";
-      this.render();
-    });
-    this.mainContainer!.addChild(backBtn);
+    holdLabel.x = rightX;
+    holdLabel.y = splitY;
+    holdLabel.eventMode = "none";
+    this.mainContainer!.addChild(holdLabel);
+
+    let cy = splitY + 22;
+    if (resources.length === 0) {
+      const empty = new Text({
+        text: "Трюм пуст",
+        style: { fontSize: 12, fill: 0xb4bcc4, fontFamily: "monospace" },
+      });
+      empty.x = rightX;
+      empty.y = cy;
+      empty.eventMode = "none";
+      this.mainContainer!.addChild(empty);
+    } else {
+      for (const r of resources) {
+        if (cy + 18 > contentBottom) break;
+        const label = RESOURCE_LABEL[r.type] ?? r.type;
+        const line = new Text({
+          text: `${label} ×${r.amount}`,
+          style: { fontSize: 11, fill: 0xb4c4d4, fontFamily: "monospace" },
+        });
+        line.x = rightX + 6;
+        line.y = cy;
+        line.eventMode = "none";
+        this.mainContainer!.addChild(line);
+        cy += 18;
+      }
+    }
+  }
+
+  /**
+   * Install a warehouse row into the loadout, routing it to its category bank.
+   * Blocks with an explanatory toast when the category is full or the install
+   * would exceed the hull's mass budget (even with a free slot elsewhere).
+   */
+  private installFromWarehouse(
+    loadout: ShipLoadout,
+    player: Player,
+    row: { kind: "owned"; gearId: string } | { kind: "legacy"; index: number },
+  ): void {
+    const mod =
+      row.kind === "legacy" ? player.inventory.modules[row.index] : null;
+    const gearId = row.kind === "owned" ? row.gearId : (mod?.id ?? "");
+    const blocked = this.explainInstallBlock(loadout, gearId);
+    if (blocked) {
+      this.showToast(blocked, 0xff6644);
+      return;
+    }
+    if (row.kind === "owned") {
+      installOwnedGear(player, loadout, gearId);
+    } else if (mod) {
+      if (this.equipment.installGear(loadout, mod.id)) {
+        // Restore the micromodule + artifact-upgrade count carried on a
+        // previously-removed item onto the freshly-filled slot (install appends).
+        const lastSlot = loadout.installedGearIds().length - 1;
+        if (mod.micromoduleId) {
+          loadout.applyMicromoduleAt(lastSlot, mod.micromoduleId);
+        }
+        if (mod.upgrades) {
+          loadout.setSlotUpgrades(lastSlot, mod.upgrades);
+        }
+        player.inventory.modules.splice(row.index, 1);
+      }
+    }
+    this.render();
+  }
+
+  /**
+   * Why an install is blocked, or null when it would succeed. Engine/radar are
+   * single slots that *replace* the current fitting, so they only fail on mass;
+   * the weapon/equipment banks also fail when full.
+   */
+  private explainInstallBlock(
+    loadout: ShipLoadout,
+    gearId: string,
+  ): string | null {
+    if (loadout.canInstall(gearId)) return null;
+    const gear = gearById(gearId);
+    if (!gear || gear.kind === GearKind.HULL) return "Нельзя установить";
+    const cat = slotCategoryFor(gear);
+    const stats = loadout.derivedStats();
+    if (cat && cat !== "engine" && cat !== "radar") {
+      const c = stats.categories[cat];
+      if (c.used >= c.total) {
+        return `Нет слота: ${CATEGORY_LABEL[cat]} (${c.used}/${c.total})`;
+      }
+    }
+    return `Перегруз: масса ${gear.mass} > свободно ${stats.massFree}`;
   }
 
   private showToast(msg: string, color: number): void {

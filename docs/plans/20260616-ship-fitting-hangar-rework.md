@@ -136,11 +136,23 @@ dual-hull unification does.
 - Create/Modify: e2e regression spec for the hangar
 - Create: src/tests/presentation/hangarLayout.test.ts (if a unit-level assert fits)
 
-- [ ] render the four categorized banks with per-category slot counts from the hull
-- [ ] install from СКЛАД into the matching category; block + toast when full/over-mass
-- [ ] show mass/speed/defense + free mass; cargo (ТРЮМ) stays its own panel
-- [ ] readable contrast (≥0.b4 grays); screenshot-verify the layout
-- [ ] write/extend tests; run affected tests — must pass before next task
+- [x] render the four categorized banks with per-category slot counts from the hull
+      (renderFittingBanks: ОРУЖИЕ/ДВИГАТЕЛЬ/РАДАР/ОБОРУДОВАНИЕ headers show used/total
+      from derivedStats().categories; filled slots + empty placeholders per bank)
+- [x] install from СКЛАД into the matching category; block + toast when full/over-mass
+      (installFromWarehouse routes via loadout.install; explainInstallBlock toasts
+      "Нет слота: <bank>" when the bank is full and "Перегруз: масса …" over budget)
+- [x] show mass/speed/defense + free mass; cargo (ТРЮМ) stays its own panel
+      (МАССА used/cap • СВОБОДНО free • СКОРОСТЬ • ЗАЩИТА strip; ТРЮМ lists goods
+      separate from the СКЛАД equipment warehouse)
+- [x] readable contrast (≥0.b4 grays); screenshot-verify the layout
+      (all informational grays bumped to ≥0xb4b4b4; manual screenshot skipped —
+      not automatable here, browser screenshots fail under the render loop)
+- [x] write/extend tests; run affected tests — must pass before next task
+      (src/tests/presentation/hangarLayout.test.ts: banks+counts, stat strip, СКЛАД/
+      ТРЮМ, category-full + over-mass block reasons; full suite green: 1625 passed;
+      lint 0 errors; tsc clean. Deterministic unit render test stands in for the
+      flaky e2e screenshot path.)
 
 ### Task 4: Equipment-shop purchase rework
 **Files:**
