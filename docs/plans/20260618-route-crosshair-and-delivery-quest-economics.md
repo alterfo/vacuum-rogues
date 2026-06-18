@@ -83,12 +83,17 @@ purchase cost plus a margin so the contract is actually worth taking.
 - [x] run affected tests — must pass before next task
 
 ### Task 3: Verify acceptance criteria
-- [ ] verify Overview: no crosshair while flying a route; local-delivery contracts pay
-      at least the goods' cost plus a margin
-- [ ] run full unit suite — all green
-- [ ] run `npm run test:e2e:regression`
-- [ ] run `npm run lint` — clean
-- [ ] confirm no existing test assertions changed except the authorized reward one
+- [x] verify Overview: no crosshair while flying a route (PlayerShipRenderer
+      `updateTargetIndicator` gates on `!shipPhysics.isFollowingRoute()`, L270);
+      local-delivery contracts pay at least the goods' cost plus a margin
+      (`reward.credits = round(basePrice × targetAmount × 1.5)`, QuestGenerator L876)
+- [x] run full unit suite — all green (201 files, 1700 tests)
+- [x] run `npm run test:e2e:regression` — 19 passed (needs NO_PROXY=localhost so the
+      Playwright webServer readiness probe bypasses Privoxy)
+- [x] run `npm run lint` — clean (0 errors; only pre-existing `any` warnings in tests)
+- [x] confirm no existing test assertions changed except the authorized reward one —
+      both plan commits (e315398, 8bba6e2) only ADD new test files
+      (routeCrosshair.test.ts, localDeliveryReward.test.ts); no existing assertion modified
 
 ## Technical Details
 - **Crosshair:** the route line (`RouteRenderer`) already communicates the destination,
