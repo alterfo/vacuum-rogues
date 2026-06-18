@@ -6,6 +6,7 @@ import { Faction } from "@/types/faction";
 import { pickVariant } from "./textures";
 import { GAME_BALANCE } from "@/config/balance";
 import { hashStr } from "@/utils/hashStr";
+import { decideManeuver, ManeuverMode } from "@/systems/combat/combatManeuver";
 
 /** Maps an NPC role to its ship-art asset prefix (src/assets/ships/<prefix>). */
 const ROLE_SHIP_PREFIX: Record<NpcRole, string> = {
@@ -119,6 +120,12 @@ export class NpcShipSprite {
   public aggressive = false;
   private pursuitX: number | null = null;
   private pursuitY: number | null = null;
+  /** Player cruise speed last reported with the pursuit target — feeds the
+   *  break-off/over-matched decision in {@link decideManeuver}. */
+  private pursuitTargetSpeed = 0;
+  /** +1 / -1: which way this aggressor circles the player (seeded per ship id
+   *  so foes don't all orbit the same direction). Set in the constructor. */
+  private aggressorOrbitDir: 1 | -1 = 1;
 
   constructor(npc: NpcShip, x: number, y: number, bounds: SystemBounds) {
     this.npc = npc;
@@ -132,6 +139,9 @@ export class NpcShipSprite {
     // ships desynchronise naturally and don't all leave their planets at once.
     const h = hashStr(npc.id);
     this.dwellDurationMs = 8000 + (h % 12001);
+    // Seed the orbit direction from a different bit than the planet orbit dir so
+    // aggressors circle the player either way, deterministically per ship id.
+    this.aggressorOrbitDir = (h >>> 17) & 1 ? 1 : -1;
 
     this.container = new Container();
     this.graphics = new Graphics();
@@ -240,23 +250,37 @@ export class NpcShipSprite {
   update(deltaTime: number): void {
     if (this.gone) return;
 
-    // Garrison aggressor: chase the player ship's live position, ignoring orbit
-    // and dwell timers and never re-anchoring. The manager refreshes the pursuit
-    // target each frame; in-flight combat (later modules) handles the firing.
+    // Garrison aggressor: maneuver against the player ship's live position —
+    // CLOSE to weapon range, then ORBIT (circle/strafe) instead of tail-chasing;
+    // BREAK_OFF when over-matched or badly hurt. The manager refreshes the
+    // pursuit target each frame; in-flight combat (later modules) handles firing.
     if (
       this.aggressive &&
       !this.departing &&
       this.pursuitX !== null &&
       this.pursuitY !== null
     ) {
-      const dx = this.pursuitX - this.x;
-      const dy = this.pursuitY - this.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist > 6) {
-        const step = Math.min(dist, this.speed * deltaTime);
-        this.x += (dx / dist) * step;
-        this.y += (dy / dist) * step;
-        this.container.rotation = Math.atan2(dy, dx);
+      const range = Math.hypot(this.pursuitX - this.x, this.pursuitY - this.y);
+      const decision = decideManeuver({
+        range,
+        weaponRange: GAME_BALANCE.weaponRange,
+        selfSpeed: this.speed,
+        targetSpeed: this.pursuitTargetSpeed,
+        selfX: this.x,
+        selfY: this.y,
+        targetX: this.pursuitX,
+        targetY: this.pursuitY,
+        hullRatio:
+          this.npc.maxHull > 0 ? this.npc.hullHP / this.npc.maxHull : 1,
+        orbitDir: this.aggressorOrbitDir,
+      });
+      // While closing, don't jitter when essentially on top of the target;
+      // orbiting/breaking off always move (they steer sideways/away, not onto it).
+      if (decision.mode !== ManeuverMode.CLOSE || range > 6) {
+        const step = this.speed * deltaTime;
+        this.x += Math.cos(decision.heading) * step;
+        this.y += Math.sin(decision.heading) * step;
+        this.container.rotation = decision.heading;
         this.container.x = this.x;
         this.container.y = this.y;
       }
@@ -383,10 +407,16 @@ export class NpcShipSprite {
     }
   }
 
-  /** Live pursuit target (the player ship's world position), refreshed each frame. */
-  setPursuitTarget(x: number, y: number): void {
+  /**
+   * Live pursuit target (the player ship's world position + current speed),
+   * refreshed each frame by {@link NpcShipManager}. The speed feeds the
+   * over-matched break-off check in {@link decideManeuver} — a stationary player
+   * (speed 0) is never treated as out-running the aggressor.
+   */
+  setPursuitTarget(x: number, y: number, targetSpeed = 0): void {
     this.pursuitX = x;
     this.pursuitY = y;
+    this.pursuitTargetSpeed = targetSpeed;
   }
 
   /** Orbit a fixed point (a planet) instead of wandering the whole band. */

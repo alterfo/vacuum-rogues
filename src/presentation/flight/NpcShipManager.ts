@@ -202,12 +202,18 @@ export class NpcShipManager implements FlightModule {
     const timeScale = physics?.timeScale ?? 1;
     for (let i = this.npcSprites.length - 1; i >= 0; i--) {
       const sprite = this.npcSprites[i];
-      // Garrison aggressors chase the player ship: refresh their live pursuit
-      // target to the ship's current position before advancing them, then open
-      // in-flight combat once they close to attack range (no CombatScene hop —
-      // the scene's CombatModule resolves the fight; Tasks 11–14).
+      // Garrison aggressors maneuver against the player ship: refresh their live
+      // pursuit target (position + the player's CURRENT speed, which drives the
+      // over-matched break-off check — a parked player isn't fleeing, so the
+      // aggressor closes in) before advancing them, then open in-flight combat
+      // once they close to attack range (no CombatScene hop — the scene's
+      // CombatModule resolves the fight; Tasks 11–14).
       if (sprite.aggressive && physics) {
-        sprite.setPursuitTarget(physics.shipX, physics.shipY);
+        sprite.setPursuitTarget(
+          physics.shipX,
+          physics.shipY,
+          physics.currentSpeed,
+        );
         const dx = sprite.x - physics.shipX;
         const dy = sprite.y - physics.shipY;
         if (dx * dx + dy * dy <= this.WEAPON_RANGE * this.WEAPON_RANGE) {
