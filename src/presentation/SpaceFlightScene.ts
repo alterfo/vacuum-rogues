@@ -76,7 +76,9 @@ export class SpaceFlightScene extends GameScene {
   // Living-galaxy NPC ships present in the player's system (Feature 8): sprite
   // lifecycle, contact panel, auto-follow combat loop and OVERMIND-core prompt.
   private npcManager!: NpcShipManager;
-  // In-flight combat (Tasks 11–14): the scene reads `isActive` to freeze nav.
+  // In-flight combat (Tasks 11–14): the scene reads `isActive` to retarget on an
+  // enemy click and to abort the turn on pause; navigation stays open so the
+  // player can re-plan a route mid-fight to evade (Task 3).
   private combatModule!: CombatModule;
   // Latches the low-hull auto-stop so the warning fires once per descent below
   // the threshold, not every frame.
@@ -862,9 +864,11 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // In-flight combat freezes navigation; empty-space click deselects (Task 13).
-    if (this.combatModule?.isActive && !isPanButton)
-      return void this.combatModule.selectTarget(null);
+    // In-flight combat no longer freezes navigation (Task 3: evasion): the
+    // player can re-plan a route mid-fight to flee an aggressor — route planning
+    // still requires a pause (gated above), and combat keeps resolving while the
+    // ship flies the new course. Enemy retargeting is via the enemy sprite click
+    // (NpcShipManager routes it to selectCombatTarget while a fight is on).
 
     // Lock navigation while already en route to the warp edge (still allow
     // replanning if stopped — route shown but Play not pressed).

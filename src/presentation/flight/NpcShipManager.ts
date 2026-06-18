@@ -146,6 +146,7 @@ export class NpcShipManager implements FlightModule {
 
   private readonly WEAPON_RANGE = GAME_BALANCE.weaponRange;
   private readonly SCANNER_RANGE = GAME_BALANCE.scannerRange;
+  private readonly COMBAT_ESCAPE_RANGE = GAME_BALANCE.combatEscapeRange;
   private readonly SYSTEM_INNER_RADIUS = SYSTEM_GEOMETRY.innerRadius;
   private readonly SYSTEM_OUTER_RADIUS = SYSTEM_GEOMETRY.outerRadius;
   private readonly SYSTEM_BOUNDARY_RADIUS = SYSTEM_GEOMETRY.boundaryRadius;
@@ -209,15 +210,29 @@ export class NpcShipManager implements FlightModule {
       // once they close to attack range (no CombatScene hop — the scene's
       // CombatModule resolves the fight; Tasks 11–14).
       if (sprite.aggressive && physics) {
-        sprite.setPursuitTarget(
-          physics.shipX,
-          physics.shipY,
-          physics.currentSpeed,
-        );
         const dx = sprite.x - physics.shipX;
         const dy = sprite.y - physics.shipY;
-        if (dx * dx + dy * dy <= this.WEAPON_RANGE * this.WEAPON_RANGE) {
-          this.deps.startInFlightCombat?.(sprite);
+        const distSq = dx * dx + dy * dy;
+        // Escape (Task 3): a faster player who has opened beyond the escape range
+        // breaks the chase — the out-run aggressor gives up pursuit this
+        // encounter (engaged combatants are pruned at the same range by
+        // CombatModule). A parked/slower player never out-runs it, so the
+        // aggressor keeps closing.
+        if (
+          distSq > this.COMBAT_ESCAPE_RANGE * this.COMBAT_ESCAPE_RANGE &&
+          physics.canOutrun(GAME_BALANCE.npcSpeed)
+        ) {
+          sprite.setAggressive(false);
+          this.npcAnchorPlanet.delete(sprite);
+        } else {
+          sprite.setPursuitTarget(
+            physics.shipX,
+            physics.shipY,
+            physics.currentSpeed,
+          );
+          if (distSq <= this.WEAPON_RANGE * this.WEAPON_RANGE) {
+            this.deps.startInFlightCombat?.(sprite);
+          }
         }
       }
       // Keep the orbit center aligned with the planet's current orbital position.

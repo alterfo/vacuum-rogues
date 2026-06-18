@@ -146,6 +146,17 @@ export class ShipPhysics {
     return this.maxSpeed;
   }
 
+  /**
+   * Speed-based escape test: true while this ship is actively moving faster than
+   * a pursuer cruising at `pursuerSpeed` (px/ms) — i.e. the gap to that pursuer
+   * is opening, so a faster engine breaks pursuit. A parked or slower ship
+   * out-runs no one (a stationary player is not "fleeing"), so the comparison is
+   * against the live `currentSpeed`, not the engine's max capability.
+   */
+  canOutrun(pursuerSpeed: number): boolean {
+    return this.isMoving && this.currentSpeed > pursuerSpeed;
+  }
+
   update(deltaTime: number): void {
     // Cap deltaTime to prevent physics explosion on lag spikes, then apply
     // timeScale so the HUD speed button accelerates visual movement.

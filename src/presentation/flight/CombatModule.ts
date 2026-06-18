@@ -198,12 +198,13 @@ export class CombatModule implements FlightModule {
   // ---------------------------------------------------------------------------
 
   /**
-   * Drop combatants that have drifted beyond scanner range (true disengage), or
-   * whose sprite was destroyed by a non-combat path (e.g. it hyperjumped out and
-   * {@link NpcShipManager} removed it). Without the destroyed-sprite check a
-   * ghost combatant would linger in the set and keep "firing" at the player —
-   * and, if it stayed the selected target, a stray player shot would re-run the
-   * death path on an already-destroyed sprite (double-free / duplicate loot).
+   * Drop combatants the player has opened beyond {@link GAME_BALANCE.combatEscapeRange}
+   * (a successful escape ends the fight), or whose sprite was destroyed by a
+   * non-combat path (e.g. it hyperjumped out and {@link NpcShipManager} removed
+   * it). Without the destroyed-sprite check a ghost combatant would linger in the
+   * set and keep "firing" at the player — and, if it stayed the selected target,
+   * a stray player shot would re-run the death path on an already-destroyed
+   * sprite (double-free / duplicate loot).
    */
   private pruneDisengaged(): void {
     for (const npc of [...this.combatants]) {
@@ -212,7 +213,7 @@ export class CombatModule implements FlightModule {
         continue;
       }
       const d = this.distanceToShip(npc);
-      if (d === null || d > GAME_BALANCE.scannerRange)
+      if (d === null || d > GAME_BALANCE.combatEscapeRange)
         this.removeCombatant(npc);
     }
   }

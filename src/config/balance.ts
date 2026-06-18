@@ -183,6 +183,14 @@ export const GAME_BALANCE = {
   combatFireIntervalMs: 2500,
   /** Scanner (radar) range in world px. */
   scannerRange: 1200,
+  /**
+   * Distance (world px) at which a fight ends: an engaged combatant the player
+   * opens beyond this is dropped from the combat set, and an aggressor that has
+   * opened this far while being out-run breaks off its pursuit. ≈ scanner range
+   * (a target off the scanner is no longer fightable), kept as its own tunable
+   * constant so escape distance can be balanced independently of detection range.
+   */
+  combatEscapeRange: 1200,
   /** Star sprite radius (visual, not physics). */
   starRadius: 170,
   /** Gap (px) from planet surface to route endpoint — route preview stops at

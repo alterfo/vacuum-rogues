@@ -85,11 +85,11 @@ pause, tactical positioning + per-turn weapon fire (Steam combat guides).
 - Modify: src/config/balance.ts (`combatEscapeRange` / pursuit speed factors)
 - Create: src/tests/combat/combatEscape.test.ts
 
-- [ ] re-planning the route mid-fight works (ship keeps moving); opening distance beyond
+- [x] re-planning the route mid-fight works (ship keeps moving); opening distance beyond
       the escape range ends the fight; a faster player out-runs a slower pursuer, a
       slower/equal one cannot
-- [ ] write tests: faster→escapes, slower→stays engaged; disengage at escape range
-- [ ] run affected tests — must pass before next task
+- [x] write tests: faster→escapes, slower→stays engaged; disengage at escape range
+- [x] run affected tests — must pass before next task
 
 ### Task 4: Auto-mode combat feedback (who fires whom, range, hull)
 **Files:**
