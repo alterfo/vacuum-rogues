@@ -174,12 +174,22 @@ dual-hull unification does.
       lint 0 errors; tsc clean)
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify Overview: slots are hull-determined and categorized; engine/radar are
+- [x] verify Overview: slots are hull-determined and categorized; engine/radar are
       single dedicated slots; mass budget enforced; hangar matches the SR layout
-- [ ] run full unit suite — all green
-- [ ] run `npm run test:e2e:regression`
-- [ ] run `npm run lint` — clean
-- [ ] confirm no existing test assertions were weakened (⚠️ items resolved/reviewed)
+      (ShipLoadout.slotCapacity reads hull.weaponSlots/equipmentSlots, engine/radar=1
+      with install-replace; canInstall rejects over hull.massCapacity; derivedStats
+      exposes per-category used/total + massUsed/massCapacity/massFree; StationScene
+      renderFittingBanks + МАССА/СВОБОДНО/СКОРОСТЬ/ЗАЩИТА strip + СКЛАД/ТРЮМ panels)
+- [x] run full unit suite — all green (1632 passed, 190 files)
+- [x] run `npm run test:e2e:regression` (18 passed; required disabling http_proxy for
+      localhost so Playwright's webServer health-check resolves — Privoxy on :8118)
+- [x] run `npm run lint` — clean (0 errors; 29 pre-existing `any` warnings in test
+      files, none introduced by this rework)
+- [x] confirm no existing test assertions were weakened (⚠️ items resolved/reviewed)
+      (only the 6 authorized files adapted — ShipLoadout/loadoutSlotOps/hull/
+      lootToLoadout/purchaseCraftToLoadout/ownedGear, the sanctioned "9 tests"; 4 new
+      files added — slotCategories/shipMass/shopPurchaseFit/hangarLayout; Gear.test.ts
+      +2 is additive mass-fixture fields. No ⚠️ blockers were recorded.)
 
 ## Technical Details
 - **Categories (4):** weapons (`weaponSlots`), engine (1), radar (1), equipment
