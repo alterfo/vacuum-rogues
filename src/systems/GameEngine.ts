@@ -1007,6 +1007,16 @@ export class GameEngine {
   private rehydrateLoadedState(): void {
     if (this.galaxy) {
       Object.setPrototypeOf(this.galaxy, Galaxy.prototype);
+      // Class field initializers (`activeRumors = []`) do NOT run when a loaded
+      // plain object is reparented via setPrototypeOf, and SaveManager returns the
+      // raw parsed object (Zod `.default([])` applies only to the discarded
+      // validated copy). Saves created before the trade-rumor feature therefore
+      // arrive with `activeRumors === undefined`, which throws in
+      // getActiveRumors()/updateRumors() on the first daily tick. Restore it here,
+      // mirroring the visitedSystems / stations guards below.
+      if (!Array.isArray(this.galaxy.activeRumors)) {
+        this.galaxy.activeRumors = [];
+      }
       for (const npc of this.galaxy.npcShips ?? []) {
         Object.setPrototypeOf(npc, NpcShip.prototype);
       }

@@ -1546,8 +1546,20 @@ export class NpcSimulator {
     if (rng.next() >= rumorReactionChance(rumor.lastMarginPct)) return null;
 
     // Divert onto the route: head for the destination carrying the rumor's
-    // resource (abstractly bought at the source). The source/destination market
-    // impact is applied by the trade simulation (Task 6).
+    // resource bought at the source. The buy-leg raises the (cheap) source here;
+    // the sell-leg lowers the (dear) destination when the trader arrives and runs
+    // simulateTraderTrade — so NPC flow converges BOTH legs of the route the way
+    // the player's round-trips do (Task 6), not just the sell side.
+    const sourceMarket = galaxy.systems
+      .find((s) => s.id === rumor.fromSystemId)
+      ?.planets.find((p) => p.id === rumor.fromPlanetId)?.market;
+    if (sourceMarket) {
+      applyMarketTradeImpact(
+        sourceMarket,
+        rumor.resource,
+        npcTradeImpact(RUMOR_TRADE_QTY),
+      );
+    }
     npc.goal = { kind: NpcGoalKind.TRADE, targetSystemId: rumor.toSystemId };
     npc.destinationSystemId = rumor.toSystemId;
     npc.daysToArrival = this.travelDays(

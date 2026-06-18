@@ -233,6 +233,7 @@ describe("NPC trades move the SAME persistent balance (priceMultipliers)", () =>
 
     const margins: number[] = [opened!.marginPct];
     let closed = false;
+    let dayClosed = 0;
     for (let day = 1; day <= 60 && !closed; day++) {
       // Player runs the route: buy at the cheap source (price up), carry, sell
       // at the dear destination (price down). Two round-trips per day.
@@ -260,6 +261,7 @@ describe("NPC trades move the SAME persistent balance (priceMultipliers)", () =>
         margins.push(still.lastMarginPct);
       } else {
         closed = true;
+        dayClosed = day;
       }
     }
 
@@ -267,6 +269,14 @@ describe("NPC trades move the SAME persistent balance (priceMultipliers)", () =>
     expect(closed).toBe(true);
     expect(galaxy.activeRumors.find(isMetalsRoute)).toBeUndefined();
     expect(margins[margins.length - 1]).toBeLessThan(margins[0]);
+
+    // Isolate the TRADE lever from passive mean-reversion: with player + NPC
+    // trades driving it, this seeded route closes by day 3. Drift alone (no
+    // trades, same RNG) needs ~28 days to relax the 0.5↔2.5 spread back through
+    // the expiry band. Asserting a tight bound here means deleting the persistent
+    // applyMarketTradeImpact lever (the feature's core mechanism) would FAIL this
+    // test instead of silently passing ~25 days later inside the 60-day budget.
+    expect(dayClosed).toBeLessThanOrEqual(8);
 
     // The route's *recomputed* neutral spread is now at/below the expiry band.
     const fromPrice = trade.referenceMarketPrice(sourcePlanet, METALS);

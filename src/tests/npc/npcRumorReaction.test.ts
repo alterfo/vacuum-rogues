@@ -182,6 +182,45 @@ describe("NPC trader rumor reaction", () => {
     expect(fat).toBeGreaterThan(thin);
   });
 
+  it("a diverting trader raises the rumor's SOURCE price (buy-side impact, Task 6)", () => {
+    // A fat-margin rumor FROM→TO; the source market starts neutral (mult 1.0).
+    // Idle traders at the source divert through pickTraderGoal, abstractly buying
+    // the rumor resource there — which must lift the cheap source's persistent
+    // multiplier (the buy leg that converges the route alongside the sell leg).
+    const galaxy = makeRouteGalaxy();
+    galaxy.activeRumors.push(makeRumor(80));
+    for (let i = 0; i < 200; i++) {
+      galaxy.npcShips.push(makeShip(`trader_${i}`, NpcRole.TRADER));
+    }
+    const sourceMarket = galaxy.systems.find((s) => s.id === FROM)!.planets[0]
+      .market;
+    expect(sourceMarket.multiplierFor(RESOURCE)).toBe(1.0);
+
+    new NpcSimulator().tick(galaxy, new SeededRNG("source_buy"));
+
+    // At least one trader diverted (sanity) and the source price rose above
+    // neutral from the cumulative buy impact.
+    const diverted = galaxy.npcShips.filter(reactedToRumor).length;
+    expect(diverted).toBeGreaterThan(0);
+    expect(sourceMarket.multiplierFor(RESOURCE)).toBeGreaterThan(1.0);
+  });
+
+  it("never moves the source price when there are no rumors", () => {
+    // No rumor → no trader can divert → the source market stays exactly neutral
+    // regardless of how the random goal draws resolve (the rng-only-when-rumors
+    // invariant, asserted on the persistent multiplier rather than NPC state).
+    const galaxy = makeRouteGalaxy();
+    for (let i = 0; i < 50; i++) {
+      galaxy.npcShips.push(makeShip(`trader_${i}`, NpcRole.TRADER));
+    }
+    const sourceMarket = galaxy.systems.find((s) => s.id === FROM)!.planets[0]
+      .market;
+
+    new NpcSimulator().tick(galaxy, new SeededRNG("no_rumor_no_impact"));
+
+    expect(sourceMarket.multiplierFor(RESOURCE)).toBe(1.0);
+  });
+
   it("non-trader NPCs ignore rumors entirely", () => {
     for (const role of [NpcRole.PIRATE, NpcRole.PATROL, NpcRole.RANGER]) {
       const frac = reactionFraction(50, role, `nontrader_${role}`);
