@@ -1506,6 +1506,7 @@ export class NpcSimulator {
       if (galaxy.npcShips[i].state === NpcState.DEAD) {
         this.garrisonIds.delete(galaxy.npcShips[i].id);
         this.captureFleetIds.delete(galaxy.npcShips[i].id);
+        this.rumorDestPlanet.delete(galaxy.npcShips[i].id);
         galaxy.npcShips.splice(i, 1);
       }
     }
