@@ -92,6 +92,21 @@ describe("gearFit — per-listing fit indicator", () => {
     expect(gearFit(lo, "eq_engine_iii")).toEqual({ status: "fits" });
   });
 
+  it("an over-mass engine swap reports the swap-adjusted free budget", () => {
+    const lo = new ShipLoadout("hull_scout"); // massCapacity 30
+    lo.install("eq_engine_i"); // mass 6 in the single engine slot
+    lo.install("wpn_torpedo"); // 12
+    lo.install("wpn_torpedo"); // 12 → massUsed 30, massFree 0
+    // Swapping to eq_engine_iii (mass 8) frees the old engine's 6 first, so the
+    // real overflow is only +2. The readout must credit that displaced mass
+    // (massFree 6, not the raw 0) so the deficit shown matches the swap.
+    expect(gearFit(lo, "eq_engine_iii")).toEqual({
+      status: "over-mass",
+      mass: 8,
+      massFree: 6,
+    });
+  });
+
   it("reports 'n/a' for a hull (the ship itself) and for an unknown id", () => {
     const lo = new ShipLoadout("hull_scout");
     expect(gearFit(lo, "hull_bastion")).toEqual({ status: "n/a" });

@@ -115,8 +115,13 @@ export function installOwnedGear(
   loadout: ShipLoadout,
   gearId: string,
 ): boolean {
+  // Installing an engine/radar replaces the single fitting in that slot; capture
+  // the displaced id first so it returns to the owned store instead of being
+  // destroyed (canon: the swapped-out part goes back to your stock).
+  const displaced = loadout.displacedBy(gearId);
   if (!loadout.install(gearId)) return false;
   player.inventory.removeOwnedGear(gearId);
+  if (displaced) player.inventory.addOwnedGear(displaced);
   return true;
 }
 
@@ -147,7 +152,9 @@ export function uninstallToOwned(
  * - `no-slot` — the weapon/equipment bank is full (engine/radar always have room:
  *   a new one replaces the current single fitting, so they never report `no-slot`).
  * - `over-mass` — a slot is free but installing would push Σ mass over the hull's
- *   `massCapacity`; carries the gear `mass` and current `massFree` for the readout.
+ *   `massCapacity`; carries the gear `mass` and the *effective* `massFree` for the
+ *   readout (for an engine/radar swap the displaced fitting's mass is credited
+ *   back first, so the deficit shown matches the real overflow after the swap).
  * - `n/a` — the id is unknown or names a hull (the ship itself, not a slotted item).
  */
 export type GearFit =
@@ -168,7 +175,15 @@ export function gearFit(loadout: ShipLoadout, gearId: string): GearFit {
       return { status: "no-slot", category: cat, used: c.used, total: c.total };
     }
   }
-  return { status: "over-mass", mass: gear.mass, massFree: stats.massFree };
+  // An engine/radar swap frees the displaced fitting's mass first, so the free
+  // budget the player effectively has is `massFree + that displaced mass`.
+  const displaced = loadout.displacedBy(gearId);
+  const replacedMass = displaced ? (gearById(displaced)?.mass ?? 0) : 0;
+  return {
+    status: "over-mass",
+    mass: gear.mass,
+    massFree: stats.massFree + replacedMass,
+  };
 }
 
 /** Russian display label per gear kind. */

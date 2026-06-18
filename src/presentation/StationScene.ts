@@ -23,6 +23,7 @@ import {
   acquireUninstalledGear,
   ownedUninstalledGear,
   installOwnedGear,
+  gearFit,
   KIND_LABEL,
   KIND_COLOR,
   applyLoadoutHullToShip,
@@ -925,6 +926,9 @@ export class StationScene extends GameScene {
     // loadout when a slot is free; the legacy inventory bag is only a fallback
     // for a full (or absent) loadout until it is retired in Task 5.
     const loadout = this.gameEngine?.playerLoadout ?? null;
+    // An engine/radar buy replaces the fitted single-slot part; capture it first
+    // so the swapped-out part is re-stocked, not destroyed.
+    const displaced = loadout ? loadout.displacedBy(listing.gear.id) : null;
     const installed = loadout
       ? this.equipment.installGear(loadout, listing.gear.id)
       : false;
@@ -932,6 +936,8 @@ export class StationScene extends GameScene {
       // No free slot: park the purchase in the canonical owned-uninstalled
       // store (shown in the hangar ТРЮМ, sellable from there).
       acquireUninstalledGear(player, listing.gear.id);
+    } else if (displaced) {
+      acquireUninstalledGear(player, displaced);
     }
     this.showToast(
       installed
@@ -1094,6 +1100,26 @@ export class StationScene extends GameScene {
       () => {
         const loadout = this.gameEngine?.playerLoadout;
         if (!loadout) return;
+        // A weapon swap removes the traded-in weapon then installs the new one;
+        // the mass budget can reject a heavier replacement even though the slot
+        // is free. Verify it fits *before* charging/removing, otherwise the
+        // player would be billed and lose the old weapon for nothing.
+        if (listing.gear.kind !== GearKind.HULL) {
+          const stats = loadout.derivedStats();
+          const oldMass = gearById(currentId)?.mass ?? 0;
+          if (
+            stats.massUsed - oldMass + listing.gear.mass >
+            stats.massCapacity
+          ) {
+            this.mainContainer!.removeChild(overlay);
+            overlay.destroy({ children: true });
+            this.showToast(
+              `Перегруз: ${listing.gear.name} не помещается`,
+              0xff6644,
+            );
+            return;
+          }
+        }
         const cost = Math.max(0, delta);
         const refund = Math.max(0, -delta);
         player.credits = player.credits - cost + refund;
@@ -2010,18 +2036,19 @@ export class StationScene extends GameScene {
     loadout: ShipLoadout,
     gearId: string,
   ): string | null {
-    if (loadout.canInstall(gearId)) return null;
-    const gear = gearById(gearId);
-    if (!gear || gear.kind === GearKind.HULL) return "Нельзя установить";
-    const cat = slotCategoryFor(gear);
-    const stats = loadout.derivedStats();
-    if (cat && cat !== "engine" && cat !== "radar") {
-      const c = stats.categories[cat];
-      if (c.used >= c.total) {
-        return `Нет слота: ${CATEGORY_LABEL[cat]} (${c.used}/${c.total})`;
-      }
+    // One source of truth for the fit decision — gearFit (also used by the
+    // equipment-shop per-listing hint) — so the toast can never drift from it.
+    const fit = gearFit(loadout, gearId);
+    switch (fit.status) {
+      case "fits":
+        return null;
+      case "n/a":
+        return "Нельзя установить";
+      case "no-slot":
+        return `Нет слота: ${CATEGORY_LABEL[fit.category]} (${fit.used}/${fit.total})`;
+      case "over-mass":
+        return `Перегруз: масса ${fit.mass} > свободно ${fit.massFree}`;
     }
-    return `Перегруз: масса ${gear.mass} > свободно ${stats.massFree}`;
   }
 
   private showToast(msg: string, color: number): void {

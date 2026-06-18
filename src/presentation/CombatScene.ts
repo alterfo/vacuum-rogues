@@ -9,6 +9,7 @@ import {
   GearKind,
   type WeaponSpec,
 } from "@/systems/equipment/GearCatalog";
+import { gearToModule } from "@/systems/equipment/GearBridge";
 import { EnemyShip } from "@/domain/EnemyShip";
 import { EncounterState, SceneType } from "@/types";
 import type { EnemyType, AIProfile } from "@/types";
@@ -905,10 +906,18 @@ export class CombatScene extends GameScene {
     // back to the legacy inventory bag, which Task 5 retires.
     const loadout = this._gameEngine?.playerLoadout ?? null;
     for (const item of loot) {
+      // A looted engine/radar replaces the fitted single-slot part; capture the
+      // displaced id first so it lands in the bag rather than being destroyed.
+      const displaced = loadout ? loadout.displacedBy(item.id) : null;
       const installed = loadout
         ? this._equipment.installLoot(loadout, item.id)
         : false;
-      if (!installed) player.inventory.addItem(item);
+      if (!installed) {
+        player.inventory.addItem(item);
+      } else if (displaced) {
+        const dg = gearById(displaced);
+        if (dg) player.inventory.addItem(gearToModule(dg));
+      }
     }
     if (loot.length > 0) {
       this.showToast("Трофеи получены", 0x44ff88);

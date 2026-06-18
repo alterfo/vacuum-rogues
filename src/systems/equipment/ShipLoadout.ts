@@ -272,6 +272,25 @@ export class ShipLoadout {
     return true;
   }
 
+  /**
+   * The gear id occupying the single slot (engine/radar) that installing
+   * `gearId` would replace — i.e. the item {@link install} silently drops when
+   * it swaps the single fitting. Returns null for a multi-slot category (weapon/
+   * equipment), an empty single slot, or an unknown id. Install callers re-home
+   * this id (warehouse/bag) so a swap does not *destroy* the paid-for fitting.
+   */
+  displacedBy(gearId: string): string | null {
+    const g = gearById(gearId);
+    if (!g) return null;
+    const cat = slotCategoryFor(g);
+    if (cat !== "engine" && cat !== "radar") return null;
+    const existing = this.slotted.find((s) => {
+      const sg = gearById(s.gearId);
+      return sg !== undefined && slotCategoryFor(sg) === cat;
+    });
+    return existing?.gearId ?? null;
+  }
+
   /** Remove the first installed copy of this gear. */
   remove(gearId: string): boolean {
     const i = this.slotted.findIndex((s) => s.gearId === gearId);

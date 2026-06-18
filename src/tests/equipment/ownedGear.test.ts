@@ -100,6 +100,23 @@ describe("acquire / install / uninstall transitions", () => {
     expect(ownedUninstalledGear(player, loadout)).toEqual([]);
   });
 
+  it("installOwnedGear returns the displaced engine to the store (swap, no loss)", () => {
+    // An engine install replaces the single engine slot. The swapped-out engine
+    // must land back in the owned store, not be destroyed — otherwise the player
+    // loses a paid-for part every time they upgrade an engine from the hangar.
+    const inv = new Inventory();
+    inv.addOwnedGear("eq_engine_iii");
+    const loadout = new ShipLoadout("hull_corvette");
+    loadout.install("eq_engine_i");
+    const player = playerWith(inv);
+
+    expect(installOwnedGear(player, loadout, "eq_engine_iii")).toBe(true);
+    expect(loadout.installedGearIds()).toContain("eq_engine_iii");
+    expect(loadout.installedGearIds()).not.toContain("eq_engine_i");
+    // The old engine is recoverable in the store, not gone.
+    expect(inv.ownedGearIds).toEqual(["eq_engine_i"]);
+  });
+
   it("installOwnedGear rejects a hull and leaves the store untouched", () => {
     const inv = new Inventory();
     inv.addOwnedGear("hull_scout");

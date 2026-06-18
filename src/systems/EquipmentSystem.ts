@@ -13,12 +13,14 @@ import { gearById, GearKind } from "./equipment/GearCatalog";
  */
 export class EquipmentSystem {
   /**
-   * Install a catalog gear item into a free loadout slot (dual-hull Task 2/3).
+   * Install a catalog gear item into the loadout (dual-hull Task 2/3).
    *
-   * Gear is identified by its `GEAR_CATALOG` id; it installs into a free slot,
-   * never replacing fitted gear. Returns `false` when the id isn't installable
-   * (unknown, or a hull — hulls are swapped via `setHull`) or the loadout is
-   * full, letting the caller fall back to the legacy inventory bag.
+   * Gear is identified by its `GEAR_CATALOG` id. Weapon/equipment land in a free
+   * bank slot; an engine/radar *replaces* the single fitted part in that slot
+   * (the displaced part is re-homed by the caller via `loadout.displacedBy`, not
+   * destroyed). Returns `false` when the id isn't installable (unknown, or a
+   * hull — hulls are swapped via `setHull`) or the bank is full / over the mass
+   * budget, letting the caller fall back to the legacy inventory bag.
    */
   installGear(loadout: ShipLoadout, gearId: string): boolean {
     const gear = gearById(gearId);
