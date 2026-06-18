@@ -82,6 +82,12 @@ export interface DerivedStats {
   readonly categories: Readonly<
     Record<SlotCategory, { readonly used: number; readonly total: number }>
   >;
+  /** Σ mass of installed gear (МАССА used). */
+  readonly massUsed: number;
+  /** The hull's total mass budget (МАССА). */
+  readonly massCapacity: number;
+  /** Remaining mass budget (СВОБОДНО): `massCapacity − massUsed`. */
+  readonly massFree: number;
   readonly weaponDamage: number;
   readonly weaponCount: number;
   readonly speed: number; // 0 with no engine → cannot move
@@ -203,20 +209,46 @@ export class ShipLoadout {
     return n;
   }
 
+  /** Total mass of installed gear (the hull's own frame mass is not counted). */
+  private usedMass(): number {
+    let m = 0;
+    for (const s of this.slotted) {
+      m += gearById(s.gearId)?.mass ?? 0;
+    }
+    return m;
+  }
+
   /**
    * Can this gear be installed right now? The gear must exist and not be a hull,
-   * and its **category** bank must have room. Weapon and additional-equipment
-   * banks reject once full (`hull.weaponSlots`/`equipmentSlots`). Engine and
-   * radar are single dedicated slots that always accept — a new one *replaces*
-   * the current fitting (SR-canon swap), so they never exceed their cap of 1.
+   * its **category** bank must have room, and it must fit the hull's **mass
+   * budget** (МАССА/СВОБОДНО). Weapon and additional-equipment banks reject once
+   * full (`hull.weaponSlots`/`equipmentSlots`). Engine and radar are single
+   * dedicated slots that always have room — a new one *replaces* the current
+   * fitting (SR-canon swap), so the replaced item's mass is freed first. An
+   * install is rejected when it would push Σ mass over `hull.massCapacity`,
+   * **even if the slot is free** (canon: a heavy bank overloads the ship).
    */
   canInstall(gearId: string): boolean {
     const g = gearById(gearId);
     if (!g || g.kind === GearKind.HULL) return false;
     const cat = slotCategoryFor(g);
     if (!cat) return false;
-    if (cat === "engine" || cat === "radar") return true;
-    return this.countByCategory(cat) < this.slotCapacity(cat);
+    const single = cat === "engine" || cat === "radar";
+    if (!single && this.countByCategory(cat) >= this.slotCapacity(cat)) {
+      return false;
+    }
+    // Mass budget: a swapped-out single-slot fitting frees its mass first.
+    const replacedMass = single ? this.massInSingleSlot(cat) : 0;
+    return this.usedMass() - replacedMass + g.mass <= this.hull.massCapacity;
+  }
+
+  /** Mass of the item occupying a single-slot category (engine/radar), or 0. */
+  private massInSingleSlot(cat: SlotCategory): number {
+    const existing = this.slotted.find((s) => {
+      const sg = gearById(s.gearId);
+      return sg !== undefined && slotCategoryFor(sg) === cat;
+    });
+    return existing ? (gearById(existing.gearId)?.mass ?? 0) : 0;
   }
 
   /**
@@ -423,6 +455,9 @@ export class ShipLoadout {
           total: this.slotCapacity("equipment"),
         },
       },
+      massUsed: this.usedMass(),
+      massCapacity: hull.massCapacity,
+      massFree: hull.massCapacity - this.usedMass(),
       weaponDamage: Math.round(weaponDamage),
       weaponCount,
       // Speed is in px/ms; 0 when no engine installed → cannot move or take off

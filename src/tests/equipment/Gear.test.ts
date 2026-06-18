@@ -28,11 +28,13 @@ describe("GearCatalog", () => {
       techLevel: 3,
       size: 6,
       basePrice: 1000,
+      mass: 14,
       hp: 100,
       slots: 4,
       weaponSlots: 2,
       equipmentSlots: 2,
       cargo: 10,
+      massCapacity: 40,
     };
     const higherTech = gearMarketPrice({ ...base, techLevel: 6 });
     const lowerTech = gearMarketPrice({ ...base, techLevel: 2 });

@@ -48,6 +48,13 @@ interface GearBase {
   readonly techLevel: number; // 1..8
   readonly size: number; // capacity units the item occupies
   readonly basePrice: number; // baseline credits before market modifiers
+  /**
+   * Mass the item adds to the ship's load (SR-canon МАССА/СВОБОДНО). Installed
+   * gear sums against the hull's {@link HullSpec.massCapacity}; a hull's own
+   * `mass` is its frame weight and is *not* counted (the hull is the ship, not a
+   * slotted item — see {@link ShipLoadout.derivedStats}).
+   */
+  readonly mass: number;
   readonly upgrades?: number; // 0-2, present only on upgraded copies
 }
 
@@ -59,6 +66,8 @@ export interface HullSpec extends GearBase {
   readonly weaponSlots: number;
   readonly equipmentSlots: number;
   readonly cargo: number; // hold capacity
+  /** Total mass budget (МАССА): Σ installed gear mass must not exceed this. */
+  readonly massCapacity: number;
 }
 
 export interface WeaponSpec extends GearBase {
@@ -111,11 +120,13 @@ const HULLS: HullSpec[] = [
     techLevel: 2,
     size: 8,
     basePrice: 1200,
+    mass: 9,
     hp: 90,
     slots: 4,
     weaponSlots: 2,
     equipmentSlots: 2,
     cargo: 20,
+    massCapacity: 30,
   },
   {
     id: "hull_corvette",
@@ -125,11 +136,13 @@ const HULLS: HullSpec[] = [
     techLevel: 3,
     size: 10,
     basePrice: 3000,
+    mass: 14,
     hp: 140,
     slots: 5,
     weaponSlots: 2,
     equipmentSlots: 3,
     cargo: 30,
+    massCapacity: 40,
   },
   {
     id: "hull_courier",
@@ -139,11 +152,13 @@ const HULLS: HullSpec[] = [
     techLevel: 3,
     size: 10,
     basePrice: 2500,
+    mass: 12,
     hp: 120,
     slots: 5,
     weaponSlots: 1,
     equipmentSlots: 4,
     cargo: 45,
+    massCapacity: 36,
   },
   {
     id: "hull_warden",
@@ -153,11 +168,13 @@ const HULLS: HullSpec[] = [
     techLevel: 5,
     size: 12,
     basePrice: 7000,
+    mass: 22,
     hp: 220,
     slots: 7,
     weaponSlots: 3,
     equipmentSlots: 4,
     cargo: 35,
+    massCapacity: 70,
   },
   {
     id: "hull_freighter",
@@ -167,11 +184,13 @@ const HULLS: HullSpec[] = [
     techLevel: 4,
     size: 16,
     basePrice: 4500,
+    mass: 28,
     hp: 180,
     slots: 6,
     weaponSlots: 2,
     equipmentSlots: 4,
     cargo: 120,
+    massCapacity: 60,
   },
   {
     id: "hull_bastion",
@@ -181,11 +200,13 @@ const HULLS: HullSpec[] = [
     techLevel: 7,
     size: 14,
     basePrice: 12000,
+    mass: 36,
     hp: 360,
     slots: 9,
     weaponSlots: 4,
     equipmentSlots: 5,
     cargo: 50,
+    massCapacity: 95,
   },
 ];
 
@@ -197,6 +218,7 @@ const WEAPONS: WeaponSpec[] = [
     techLevel: 2,
     size: 3,
     basePrice: 800,
+    mass: 4,
     weaponClass: WeaponClass.ENERGY,
     damage: 14,
     range: 240,
@@ -210,6 +232,7 @@ const WEAPONS: WeaponSpec[] = [
     techLevel: 5,
     size: 4,
     basePrice: 7500,
+    mass: 9,
     weaponClass: WeaponClass.ENERGY,
     damage: 30,
     range: 300,
@@ -223,6 +246,7 @@ const WEAPONS: WeaponSpec[] = [
     techLevel: 4,
     size: 5,
     basePrice: 3800,
+    mass: 8,
     weaponClass: WeaponClass.FRAGMENT,
     damage: 26,
     range: 360,
@@ -236,6 +260,7 @@ const WEAPONS: WeaponSpec[] = [
     techLevel: 3,
     size: 4,
     basePrice: 2200,
+    mass: 6,
     weaponClass: WeaponClass.FRAGMENT,
     damage: 22,
     range: 180,
@@ -249,6 +274,7 @@ const WEAPONS: WeaponSpec[] = [
     techLevel: 6,
     size: 6,
     basePrice: 8500,
+    mass: 12,
     weaponClass: WeaponClass.MISSILE,
     damage: 55,
     range: 420,
@@ -262,6 +288,7 @@ const WEAPONS: WeaponSpec[] = [
     techLevel: 3,
     size: 4,
     basePrice: 2500,
+    mass: 6,
     weaponClass: WeaponClass.MISSILE,
     damage: 35,
     range: 320,
@@ -278,6 +305,7 @@ const EQUIPMENT: EquipmentSpec[] = [
     techLevel: 2,
     size: 3,
     basePrice: 900,
+    mass: 6,
     equipmentClass: EquipmentClass.ENGINE,
     potency: 0.9,
   },
@@ -288,6 +316,7 @@ const EQUIPMENT: EquipmentSpec[] = [
     techLevel: 5,
     size: 3,
     basePrice: 6500,
+    mass: 8,
     equipmentClass: EquipmentClass.ENGINE,
     potency: 1.4,
   },
@@ -298,6 +327,7 @@ const EQUIPMENT: EquipmentSpec[] = [
     techLevel: 1,
     size: 2,
     basePrice: 500,
+    mass: 3,
     equipmentClass: EquipmentClass.FUEL_TANK,
     potency: 40,
   },
@@ -308,6 +338,7 @@ const EQUIPMENT: EquipmentSpec[] = [
     techLevel: 4,
     size: 2,
     basePrice: 2800,
+    mass: 4,
     equipmentClass: EquipmentClass.RADAR,
     potency: 1400,
   },
@@ -318,6 +349,7 @@ const EQUIPMENT: EquipmentSpec[] = [
     techLevel: 4,
     size: 2,
     basePrice: 2600,
+    mass: 3,
     equipmentClass: EquipmentClass.SCANNER,
     potency: 6,
   },
@@ -328,6 +360,7 @@ const EQUIPMENT: EquipmentSpec[] = [
     techLevel: 5,
     size: 3,
     basePrice: 6000,
+    mass: 5,
     equipmentClass: EquipmentClass.REPAIR_DROID,
     potency: 3,
   },
@@ -338,6 +371,7 @@ const EQUIPMENT: EquipmentSpec[] = [
     techLevel: 6,
     size: 4,
     basePrice: 7800,
+    mass: 8,
     equipmentClass: EquipmentClass.SHIELD,
     potency: 80,
   },
@@ -351,6 +385,7 @@ const EQUIPMENT: EquipmentSpec[] = [
     techLevel: 3,
     size: 2,
     basePrice: 2000,
+    mass: 3,
     equipmentClass: EquipmentClass.GRAV_TRACTOR,
     potency: 80,
   },
@@ -361,6 +396,7 @@ const EQUIPMENT: EquipmentSpec[] = [
     techLevel: 4,
     size: 2,
     basePrice: 5000,
+    mass: 4,
     equipmentClass: EquipmentClass.GRAV_TRACTOR,
     potency: 150,
   },
@@ -371,6 +407,7 @@ const EQUIPMENT: EquipmentSpec[] = [
     techLevel: 7,
     size: 3,
     basePrice: 12000,
+    mass: 6,
     equipmentClass: EquipmentClass.GRAV_TRACTOR,
     potency: 250,
   },

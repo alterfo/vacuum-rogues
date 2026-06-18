@@ -122,11 +122,11 @@ dual-hull unification does.
   `massUsed`/`massCapacity`/`massFree`)
 - Create: src/tests/equipment/shipMass.test.ts
 
-- [ ] assign sensible per-gear mass + per-hull massCapacity (heavier hulls → more capacity)
-- [ ] install rejected when over mass even if a slot is free; derivedStats mass fields correct
-- [ ] confirm no save migration needed (loadout stores ids; mass is catalog-derived)
-- [ ] write tests: under/at/over capacity; massFree math
-- [ ] run affected tests — must pass before next task
+- [x] assign sensible per-gear mass + per-hull massCapacity (heavier hulls → more capacity)
+- [x] install rejected when over mass even if a slot is free; derivedStats mass fields correct
+- [x] confirm no save migration needed (loadout stores ids; mass is catalog-derived)
+- [x] write tests: under/at/over capacity; massFree math
+- [x] run affected tests — must pass before next task (full suite green: 1620 passed; lint 0 errors; tsc clean)
 
 ### Task 3: SR-canon hangar layout
 **Files:**
