@@ -7,10 +7,12 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
  */
 
 /**
- * Fill a bastion in a valid SR-canon category mix totalling its 9 slots:
+ * Fill a bastion in a valid SR-canon category mix occupying every bank:
  * 4 weapons (the weapon-bank cap) + engine + radar + 3 additional-equipment
- * items. Weapons occupy slots 0-3, so a downsize that pops from the end drops
- * the engine/radar/equipment tail (slots 4-8) and keeps the weapons.
+ * items (= 9 weapon/equipment slots plus the 2 dedicated engine/radar slots).
+ * A downsize must drop *per category*: a smaller hull keeps as many items as
+ * each of its banks allows, never an over-cap bank — and never sacrifices the
+ * engine/radar that a flat pop-from-the-end would have shed.
  */
 function fillBastionMix(lo: ShipLoadout): void {
   for (let i = 0; i < 4; i++) lo.install("wpn_pulse");
@@ -22,18 +24,28 @@ function fillBastionMix(lo: ShipLoadout): void {
 }
 
 describe("ShipLoadout.setHull — returns dropped gear ids", () => {
-  it("returns the gear ids dropped when swapping to a smaller hull", () => {
-    const loadout = new ShipLoadout("hull_bastion"); // 9 slots
+  it("drops per-category overflow, not a flat pop, when downsizing", () => {
+    const loadout = new ShipLoadout("hull_bastion"); // weapons 4 / equip 5
     fillBastionMix(loadout);
 
-    const dropped = loadout.setHull("hull_scout"); // 4 slots → drops 5
+    const dropped = loadout.setHull("hull_scout"); // weapons 2 / equip 2
 
-    expect(loadout.installedGearIds().length).toBe(4);
-    expect(dropped).toHaveLength(5);
-    // The 4 weapons (slots 0-3) survive; the engine/radar/equipment tail is
-    // what a bastion-sized fitting drops when downsizing to the scout.
+    // Scout keeps 2 weapons (cap) + engine + radar + 2 equipment = 6 items.
+    // Only the 2 over-cap weapons and the 1 over-cap equipment (eq_droid, the
+    // last-installed) are dropped — the engine/radar survive.
+    expect(loadout.installedGearIds().length).toBe(6);
+    expect(dropped).toHaveLength(3);
     expect([...dropped].sort()).toEqual(
-      ["eq_droid", "eq_engine_i", "eq_radar", "eq_scanner", "eq_tank"].sort(),
+      ["eq_droid", "wpn_pulse", "wpn_pulse"].sort(),
+    );
+    // The surviving loadout must satisfy every category cap (no over-cap bank)
+    // and stay flyable — the exact invariant the flat-pop swap violated.
+    const cats = loadout.derivedStats().categories;
+    for (const c of Object.values(cats))
+      expect(c.used).toBeLessThanOrEqual(c.total);
+    expect(loadout.derivedStats().canTakeOff).toBe(true);
+    expect(loadout.derivedStats().massUsed).toBeLessThanOrEqual(
+      loadout.derivedStats().massCapacity,
     );
   });
 
@@ -55,19 +67,18 @@ describe("ShipLoadout.setHull — returns dropped gear ids", () => {
 
 describe("ShipLoadout.swapHull — re-bags dropped gear losslessly", () => {
   it("returns the dropped slot's micromodule and upgrade count, not just the id", () => {
-    const loadout = new ShipLoadout("hull_bastion"); // 9 slots
+    const loadout = new ShipLoadout("hull_bastion"); // weapons 4 / equip 5
     fillBastionMix(loadout);
     // Micro-mod + artifact-upgrade slot 8 (the last additional-equipment item,
-    // eq_droid). It is among the slots dropped when downsizing to the 4-slot
-    // scout (swapHull pops from the end), so its micromodule + upgrades must
-    // survive in the returned record — else a hull downsize silently destroys
-    // the resources spent on them.
+    // eq_droid). The scout's 2-slot equipment bank drops it as the over-cap
+    // equipment item, so its micromodule + upgrades must survive in the returned
+    // record — else a hull downsize silently destroys the resources spent on them.
     loadout.applyMicromoduleAt(8, "mm_amplifier_1");
     loadout.setSlotUpgrades(8, 2);
 
-    const dropped = loadout.swapHull("hull_scout"); // 4 slots → drops 5
+    const dropped = loadout.swapHull("hull_scout"); // drops 2 weapons + eq_droid
 
-    expect(dropped).toHaveLength(5);
+    expect(dropped).toHaveLength(3);
     const enriched = dropped.find((s) => s.micromoduleId === "mm_amplifier_1");
     expect(enriched).toBeDefined();
     expect(enriched?.gearId).toBe("eq_droid");
@@ -78,14 +89,12 @@ describe("ShipLoadout.swapHull — re-bags dropped gear losslessly", () => {
     const loadout = new ShipLoadout("hull_bastion");
     fillBastionMix(loadout);
 
-    // Dropped in pop order (last-installed first): the equipment tail, then
-    // radar, then engine — the 4 weapons in slots 0-3 stay.
+    // Dropped per category, last-installed first: the 2 over-cap weapons, then
+    // the 1 over-cap equipment item (eq_droid). The engine/radar are kept.
     expect(loadout.setHull("hull_scout")).toEqual([
+      "wpn_pulse",
+      "wpn_pulse",
       "eq_droid",
-      "eq_scanner",
-      "eq_tank",
-      "eq_radar",
-      "eq_engine_i",
     ]);
   });
 });

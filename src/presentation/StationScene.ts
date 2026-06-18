@@ -19,6 +19,7 @@ import {
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
   slotToBagModule,
+  gearToModule,
   gearMicromoduleCategory,
   acquireUninstalledGear,
   ownedUninstalledGear,
@@ -2011,6 +2012,10 @@ export class StationScene extends GameScene {
     if (row.kind === "owned") {
       installOwnedGear(player, loadout, gearId);
     } else if (mod) {
+      // An engine/radar install replaces the fitted single-slot part; capture it
+      // first so the displaced item is re-bagged, not destroyed (the owned/buy/
+      // loot paths all re-home it — this legacy path must too).
+      const displaced = loadout.displacedBy(mod.id);
       if (this.equipment.installGear(loadout, mod.id)) {
         // Restore the micromodule + artifact-upgrade count carried on a
         // previously-removed item onto the freshly-filled slot (install appends).
@@ -2022,6 +2027,10 @@ export class StationScene extends GameScene {
           loadout.setSlotUpgrades(lastSlot, mod.upgrades);
         }
         player.inventory.modules.splice(row.index, 1);
+        if (displaced) {
+          const dg = gearById(displaced);
+          if (dg) player.inventory.addItem(gearToModule(dg));
+        }
       }
     }
     this.render();

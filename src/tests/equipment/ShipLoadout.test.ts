@@ -188,6 +188,37 @@ describe("ShipLoadout — persistence (toJSON/fromJSON)", () => {
     ]);
   });
 
+  it("restores an over-cap saved fitting as-is (no auto-eviction on load)", () => {
+    // The v22→v23 migration legitimately packs 3 weapons onto a corvette whose
+    // weapon bank is 2 (it reserves engine+tank, then keeps the installed
+    // weapons). fromJSON must read that snapshot verbatim — funnelling it
+    // through `install` would silently drop the 3rd weapon on every load.
+    const restored = ShipLoadout.fromJSON({
+      hullId: "hull_corvette", // weaponSlots 2
+      slotted: [
+        { gearId: "wpn_pulse" },
+        { gearId: "wpn_beam" },
+        { gearId: "wpn_railgun" },
+        { gearId: "eq_engine_i" },
+        { gearId: "eq_tank" },
+      ],
+    });
+    expect(restored).not.toBeNull();
+    expect(restored!.installedGearIds()).toEqual([
+      "wpn_pulse",
+      "wpn_beam",
+      "wpn_railgun",
+      "eq_engine_i",
+      "eq_tank",
+    ]);
+    // The over-cap weapon bank is read as-is: used (3) exceeds total (2), which
+    // the category model explicitly permits for an already-saved loadout.
+    expect(restored!.derivedStats().categories.weapon).toEqual({
+      used: 3,
+      total: 2,
+    });
+  });
+
   it("skips unknown gear/micromodule ids without voiding the loadout", () => {
     const restored = ShipLoadout.fromJSON({
       hullId: "hull_corvette",

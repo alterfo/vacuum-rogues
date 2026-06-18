@@ -139,11 +139,31 @@ export class ShipLoadout {
     const h = gearById(hullId);
     if (!h || h.kind !== GearKind.HULL) return [];
     this.hullId = hullId;
-    // Drop excess gear that no longer fits the new slot count.
     const dropped: SlottedGear[] = [];
-    while (this.slotted.length > (h as HullSpec).slots) {
-      const removed = this.slotted.pop();
-      if (removed) dropped.push(removed);
+    // 1. Per-category overflow: drop the last-installed items of any bank that
+    //    now exceeds the new hull's capacity. The flat `hull.slots` total is NOT
+    //    the real cap under the category model (it omits the dedicated engine +
+    //    radar slots, so a valid loadout can hold `slots + 2` items); popping to
+    //    it kept over-cap weapons while dropping the engine/radar and leaving an
+    //    unflyable ship. Weapon/equipment banks shrink to their new cap; engine/
+    //    radar (cap 1) shed any duplicate carried over from a legacy save.
+    const cats: SlotCategory[] = ["weapon", "engine", "radar", "equipment"];
+    for (const cat of cats) {
+      while (this.countByCategory(cat) > this.slotCapacity(cat)) {
+        const idx = this.lastIndexInCategory(cat);
+        if (idx < 0) break;
+        dropped.push(this.slotted.splice(idx, 1)[0]);
+      }
+    }
+    // 2. Mass overflow: a smaller hull also carries less mass budget, so a swap
+    //    that stays within every category cap can still be over МАССА. Drop
+    //    further gear (preferring non-essential parts so the ship keeps its
+    //    engine + fuel and can still take off) until Σ mass fits the new hull.
+    while (
+      this.usedMass() > this.hull.massCapacity &&
+      this.slotted.length > 0
+    ) {
+      dropped.push(this.slotted.splice(this.lastDroppableForMass(), 1)[0]);
     }
     this.hullMicromoduleId = undefined;
     return dropped.map((s) => ({
@@ -151,6 +171,31 @@ export class ShipLoadout {
       micromoduleId: s.micromoduleId,
       upgrades: s.upgrades,
     }));
+  }
+
+  /** Index of the last-installed item in a category bank, or -1 if none. */
+  private lastIndexInCategory(cat: SlotCategory): number {
+    for (let i = this.slotted.length - 1; i >= 0; i--) {
+      const g = gearById(this.slotted[i].gearId);
+      if (g && slotCategoryFor(g) === cat) return i;
+    }
+    return -1;
+  }
+
+  /** A part the ship needs to take off (engine or fuel tank), so mass-eviction keeps it. */
+  private isTakeoffEssential(gearId: string): boolean {
+    const g = gearById(gearId);
+    if (!g || g.kind !== GearKind.EQUIPMENT) return false;
+    const cls = (g as EquipmentSpec).equipmentClass;
+    return cls === EquipmentClass.ENGINE || cls === EquipmentClass.FUEL_TANK;
+  }
+
+  /** Slot to drop when over mass: the last non-essential part, else the last slot. */
+  private lastDroppableForMass(): number {
+    for (let i = this.slotted.length - 1; i >= 0; i--) {
+      if (!this.isTakeoffEssential(this.slotted[i].gearId)) return i;
+    }
+    return this.slotted.length - 1;
   }
 
   /**
@@ -519,20 +564,27 @@ export class ShipLoadout {
       loadout.applyMicromodule(snapshot.hullId, snapshot.hullMicromoduleId);
     }
     for (const slot of snapshot.slotted) {
-      if (!loadout.install(slot.gearId)) continue;
-      // Bind the micromodule to the slot just installed, not via
-      // applyMicromodule's first-gearId-match lookup — with two copies of the
-      // same gear that lookup would silently drop the second copy's module.
-      const justInstalled = loadout.slotted[loadout.slotted.length - 1];
+      // Restore the saved fitting *as-is* (canon: an existing loadout is read
+      // verbatim, no auto-eviction). Going through `install` would re-apply the
+      // category/mass caps and silently drop any slot that overflows them — e.g.
+      // the v22→v23 migration legitimately packs 3 weapons onto a 2-weapon-slot
+      // hull, which `install` would truncate on every load. Unknown gear/hull
+      // ids are still skipped item-by-item so one bad entry can't void the rest.
+      const g = gearById(slot.gearId);
+      if (!g || g.kind === GearKind.HULL) continue;
+      const entry: SlottedGear = { gearId: slot.gearId };
+      // Bind the micromodule per slot (not via applyMicromodule's first-gearId
+      // match, which with two copies of the same gear would drop the second).
       if (
         slot.micromoduleId &&
         loadout.micromoduleAccepted(slot.micromoduleId)
       ) {
-        justInstalled.micromoduleId = slot.micromoduleId;
+        entry.micromoduleId = slot.micromoduleId;
       }
       if (slot.upgrades) {
-        justInstalled.upgrades = slot.upgrades;
+        entry.upgrades = slot.upgrades;
       }
+      loadout.slotted.push(entry);
     }
     return loadout;
   }

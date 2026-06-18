@@ -109,9 +109,16 @@ describe("ShipLoadout.setHull — hull swap (replaces legacy module shuffle)", (
 
     loadout.setHull("hull_scout"); // fewest slots
     expect(loadout.hull.hullClass).toBe(HullClass.LIGHT_FIGHTER);
-    expect(loadout.installedSlots().length).toBeLessThanOrEqual(
-      loadout.hull.slots,
-    );
+    // The surviving fitting must respect every per-category cap (the real
+    // capacity model) and stay within the new hull's mass budget — not merely
+    // the flat `hull.slots` total, which omits the dedicated engine/radar slots
+    // and let a flat pop keep over-cap weapons while dropping the engine.
+    const stats = loadout.derivedStats();
+    for (const c of Object.values(stats.categories)) {
+      expect(c.used).toBeLessThanOrEqual(c.total);
+    }
+    expect(stats.massUsed).toBeLessThanOrEqual(stats.massCapacity);
+    expect(stats.canTakeOff).toBe(true);
   });
 });
 
