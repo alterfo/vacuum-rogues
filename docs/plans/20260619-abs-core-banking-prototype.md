@@ -139,10 +139,10 @@ safest → most coupled so each phase is gated by the green economy suite:**
   disburse loan, repayment schedule)
 - Create: src/tests/banking/products.test.ts
 
-- [ ] savings: deposit credits, EOD interest capitalizes; loan: disburse to buy a hull,
+- [x] savings: deposit credits, EOD interest capitalizes; loan: disburse to buy a hull,
       scheduled repayment + interest at EOD; all via balanced postings
-- [ ] write tests: deposit grows with interest; loan amortizes; books balanced throughout
-- [ ] run affected tests — must pass before next task
+- [x] write tests: deposit grows with interest; loan amortizes; books balanced throughout
+- [x] run affected tests — must pass before next task
 
 ### Task 7: Galactic Bank UI + bus/GL visualization (the demo payoff)
 **Files:**
