@@ -87,10 +87,10 @@ rebuilds the open OVERMIND-core overlay; the contact panel still uses fixed size
   → PixiJS `Text` using `scaledFont(basePx)` and a readable color floor for dark panels)
 - Create: src/tests/presentation/scaledText.test.ts
 
-- [ ] `scaledText` applies `scaledFont(basePx)`; clamps near-background grays/blue-grays
+- [x] `scaledText` applies `scaledFont(basePx)`; clamps near-background grays/blue-grays
       up to a legible floor (≥ ~0xb4b4b4 luminance) while passing bright colors through
-- [ ] write tests: scaling tracks S/M/L; dim color is brightened, bright color preserved
-- [ ] run affected tests — must pass before next task
+- [x] write tests: scaling tracks S/M/L; dim color is brightened, bright color preserved
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Route the panels through it (Job Board first, then the main scenes)
 **Files:**
