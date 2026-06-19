@@ -174,6 +174,38 @@ export function repayLoan(
   transfer(bus, fromAccountId, loanId, amount, reason);
 }
 
+/**
+ * Write off a **sub-credit loan residual** the customer cannot repay. A repayment
+ * is a `Transfer` from the current account, but `player.credits` is whole-number
+ * currency (its save schema rejects a fraction), so only whole credits can move
+ * onto the current account — and EOD interest leaves the loan balance fractional.
+ * A debt smaller than one credit therefore can never be retired by a transfer; if
+ * the bank didn't forgive it, the loan would stay permanently negative and block
+ * any future loan. The dust is written off against the interest income the bank
+ * accrued, a balanced 2-leg entry on the loan + a GL account only — the current
+ * account is untouched, so the `player.credits` projection stays whole. A
+ * non-positive residual is a no-op.
+ */
+export function forgiveLoanResidual(
+  bus: BankBus,
+  loanId: string,
+  glIncomeId: string,
+  residual: number,
+  reason = "Списание остатка по кредиту",
+): void {
+  if (residual <= 0) return;
+  bus.dispatch({
+    kind: "PostTransaction",
+    reason,
+    postings: [
+      // Credit the loan account toward zero…
+      { accountId: loanId, amount: residual },
+      // …reversing the sliver of interest income that produced the residual.
+      { accountId: glIncomeId, amount: -residual },
+    ],
+  });
+}
+
 // ─── Amortization (pure) ──────────────────────────────────────────────────────
 
 /** One row of a repayment plan: how a fixed payment splits into interest + principal. */

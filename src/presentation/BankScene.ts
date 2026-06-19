@@ -7,7 +7,7 @@ import type { Station } from "@/domain/Station";
 import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
 import { scaledText } from "./ui/scaledText";
-import type { AccountType } from "@/domain/banking/Ledger";
+import { INTERNAL_ACCOUNTS, type AccountType } from "@/domain/banking/Ledger";
 import type { BankEvent } from "@/systems/banking/bus";
 import type { Unsubscribe } from "@/systems/banking/bus";
 import { DEFAULT_LOAN_DAILY_RATE } from "@/systems/banking/BankingService";
@@ -17,6 +17,7 @@ import {
 } from "@/systems/banking/economy";
 import {
   deposit,
+  forgiveLoanResidual,
   loanAccountId,
   openSavings,
   repayLoan,
@@ -541,13 +542,33 @@ export class BankScene extends GameScene {
       this.showToast("Нет действующего кредита", 0x66ddff);
       return;
     }
+    // Whole credits we can move off the integer-only current account this press.
     const amount = wholeCreditsToCurrent(REPAY_STEP, owed, player.credits);
-    if (amount <= 0) {
+    if (amount <= 0 && owed >= 1) {
+      // A whole credit of debt remains but the player has no funds to pay it.
       this.showToast("Недостаточно средств для погашения", 0xff8866);
       return;
     }
-    repayLoan(engine.bankBus, player.currentAccountId, loanId, amount);
-    this.showToast(`Погашено ${formatCredits(amount)}`, 0xff8866);
+    if (amount > 0) {
+      repayLoan(engine.bankBus, player.currentAccountId, loanId, amount);
+    }
+    // Whatever sub-credit residual remains (EOD interest leaves the loan balance
+    // fractional, and a Transfer can only move whole credits onto the current
+    // account) is written off so the loan closes at exactly 0 — otherwise it
+    // would stay permanently negative and block every future loan.
+    const residual = -engine.bankingService.balanceOf(loanId);
+    if (residual > 0 && residual < 1) {
+      forgiveLoanResidual(
+        engine.bankBus,
+        loanId,
+        INTERNAL_ACCOUNTS.INTEREST_INCOME,
+        residual,
+      );
+    }
+    this.showToast(
+      amount > 0 ? `Погашено ${formatCredits(amount)}` : "Кредит закрыт",
+      0xff8866,
+    );
     this.render();
   }
 

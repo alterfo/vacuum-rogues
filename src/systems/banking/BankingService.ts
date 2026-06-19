@@ -112,6 +112,22 @@ export class BankingService {
     this.seq = snapshot.seq;
   }
 
+  /**
+   * Reset the bank to a fresh, empty book of record (a newly seeded ledger,
+   * business date 0, no EOD closed). Used when loading a **pre-banking save** that
+   * carries no {@link BankingSnapshot}: the player's current account is re-seeded
+   * from their saved `credits`, so any ledger state left over from an earlier game
+   * in the same page session must be cleared first — otherwise the Bank UI would
+   * show the previous game's accounts and statement. The bus handler is unchanged
+   * (it still points at this service).
+   */
+  resetLedger(): void {
+    this.ledger = createLedger();
+    this.currentDate = 0;
+    this.lastEodDate = null;
+    this.seq = 0;
+  }
+
   /** Convenience read-through to the ledger balance. */
   balanceOf(accountId: string, asOf?: number): number {
     return this.ledger.balanceOf(accountId, asOf);

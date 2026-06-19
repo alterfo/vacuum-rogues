@@ -951,6 +951,11 @@ export class GameEngine {
     // path: credits → opening balance).
     if (save.banking) {
       this.bankingService.restore(save.banking);
+    } else {
+      // Pre-banking save: no book of record. Clear any ledger left over from an
+      // earlier game in this session so the re-seed below starts from clean books
+      // (otherwise the Bank UI would show the previous game's statement).
+      this.bankingService.resetLedger();
     }
 
     // Re-wire the loaded player into the АБС: bind the `credits` projection and

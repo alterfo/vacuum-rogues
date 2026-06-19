@@ -205,6 +205,26 @@ describe("describeCommand / describePosting", () => {
       }),
     ).toBe("Выдача кредита 5 000 ₡");
     expect(describeCommand({ kind: "RunEndOfDay" })).toBe("Конец дня (EOD)");
+    // PostTransaction now flows through the live panel in production (loan-residual
+    // write-off), and AccrueInterest is the EOD interest leg — both must render.
+    expect(
+      describeCommand({
+        kind: "PostTransaction",
+        reason: "Списание остатка по кредиту",
+        postings: [
+          { accountId: "loan:p", amount: 0.5 },
+          { accountId: "gl:interest_income", amount: -0.5 },
+        ],
+      }),
+    ).toBe("Проводка — Списание остатка по кредиту");
+    expect(
+      describeCommand({
+        kind: "AccrueInterest",
+        accountId: "sav:p",
+        glAccountId: "gl:interest_expense",
+        amount: 12,
+      }),
+    ).toBe("Проценты 12 ₡");
   });
 
   it("describes a committed posting with its leg count", () => {

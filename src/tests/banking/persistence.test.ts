@@ -8,9 +8,11 @@ import {
   restoreLedger,
   type BankingSnapshot,
 } from "@/domain/banking/Ledger";
-import { BankBus, type BankEvent } from "@/systems/banking/bus";
+import { BankBus } from "@/systems/banking/bus";
 import { BankingService } from "@/systems/banking/BankingService";
+import { openPlayerCurrentAccount } from "@/systems/banking/economy";
 import { BankingSnapshotSchema, validateSaveState } from "@/validation/schemas";
+import { MigrationPipeline } from "@/data/MigrationPipeline";
 import { SaveState } from "@/domain/SaveState";
 import type { Galaxy } from "@/domain/Galaxy";
 import type { Player } from "@/domain/Player";
@@ -277,17 +279,125 @@ describe("SaveState — banking field survives serialize/deserialize", () => {
   });
 });
 
-describe("SaveStateSchema — banking is optional (old saves validate)", () => {
-  it("accepts a save object missing the banking field", () => {
-    // A near-empty shape would fail the heavy galaxy/player checks; here we only
-    // assert the schema does not *require* `banking` by reading the shape.
-    const events: BankEvent[] = [];
+describe("BankingService.resetLedger — pre-banking save load is leak-free", () => {
+  it("discards a prior game's ledger so the re-seed reflects only the loaded credits", () => {
+    // An earlier game in the same page session left accounts + journal behind.
     const bus = new BankBus();
-    bus.subscribe((e) => events.push(e));
-    // The shape exposes banking as optional — parsing a partial proves it.
-    const result = BankingSnapshotSchema.optional().safeParse(undefined);
-    expect(result.success).toBe(true);
-    // And validateSaveState is the exported entry point used by SaveManager.
-    expect(typeof validateSaveState).toBe("function");
+    const service = new BankingService(bus, { startDate: 5 });
+    bus.dispatch({
+      kind: "OpenAccount",
+      account: {
+        id: PLAYER,
+        type: AccountType.CURRENT,
+        label: "Игрок",
+        ownerId: "player",
+      },
+    });
+    bus.dispatch({
+      kind: "Transfer",
+      fromAccountId: INTERNAL_ACCOUNTS.CASH,
+      toAccountId: PLAYER,
+      amount: 9999,
+      reason: "Прошлая игра",
+    });
+    expect(service.getLedger().listEntries().length).toBeGreaterThan(0);
+
+    // Loading a pre-banking save (no snapshot) resets the book of record first.
+    service.resetLedger();
+    expect(service.businessDate).toBe(0);
+    expect(service.getLedger().listEntries()).toHaveLength(0);
+    expect(service.getLedger().hasAccount(PLAYER)).toBe(false);
+    // The internal GL accounts are re-seeded, so the migration re-seed can post.
+    expect(service.getLedger().hasAccount(INTERNAL_ACCOUNTS.CASH)).toBe(true);
+
+    // Re-seeding from the loaded player now reflects only that player's credits —
+    // none of the previous game's 9999 leaks through.
+    const player = {
+      id: "player",
+      credits: 1000,
+      currentAccountId: PLAYER,
+    } as unknown as Player;
+    openPlayerCurrentAccount(bus, service, player);
+    expect(service.balanceOf(PLAYER)).toBe(1000);
+  });
+});
+
+/** A minimal but schema-valid pre-banking save (version 1, no `banking` field). */
+function makeOldSaveWithoutBanking(): Record<string, unknown> {
+  return {
+    version: 1,
+    timestamp: 1_000_000,
+    persistentDialogs: [],
+    galaxy: {
+      id: "galaxy-test",
+      gameDays: 3,
+      systems: [
+        {
+          id: "sys-1",
+          name: "Alpha",
+          coordinates: { q: 0, r: 0 },
+          starType: "YELLOW_DWARF",
+          explored: true,
+          fogOfWar: false,
+          planets: [],
+          connections: [],
+        },
+      ],
+      npcShips: [],
+    },
+    player: {
+      id: "player-1",
+      name: "Tester",
+      experience: 0,
+      level: 1,
+      credits: 1000,
+      reputation: {},
+      questLog: { activeQuests: [], completedQuests: [] },
+      journal: { entries: [] },
+      currentSystemId: "sys-1",
+      ship: {
+        id: "Ranger-1",
+        name: "Ranger-1",
+        hullHP: 100,
+        maxHull: 100,
+        shields: 50,
+        maxShields: 50,
+        energy: 100,
+        maxEnergy: 100,
+        speed: 1.0,
+        evasion: 0.8,
+        modules: [null, null, null],
+      },
+      inventory: { modules: [], resources: [], cosmetics: [] },
+    },
+  };
+}
+
+describe("SaveStateSchema — banking is optional (old saves validate)", () => {
+  it("accepts a migrated pre-banking save that carries no banking snapshot", () => {
+    const migrated = MigrationPipeline.migrate(
+      makeOldSaveWithoutBanking() as never,
+    );
+    // The migration deliberately does NOT add a banking snapshot (those saves
+    // re-seed from `credits` on load), so the validated shape must still lack it…
+    expect((migrated as { banking?: unknown }).banking).toBeUndefined();
+    // …and the production save schema must accept it (banking is `.optional()`).
+    expect(() => validateSaveState(migrated)).not.toThrow();
+  });
+
+  it("still accepts the save once a banking snapshot is attached", () => {
+    const migrated = MigrationPipeline.migrate(
+      makeOldSaveWithoutBanking() as never,
+    ) as unknown as Record<string, unknown>;
+    const { service } = makePopulatedService();
+    expect(() =>
+      validateSaveState({ ...migrated, banking: service.toSnapshot() }),
+    ).not.toThrow();
+  });
+
+  it("BankingSnapshotSchema is itself optional-safe (a missing snapshot parses)", () => {
+    expect(BankingSnapshotSchema.optional().safeParse(undefined).success).toBe(
+      true,
+    );
   });
 });

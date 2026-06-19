@@ -9,6 +9,7 @@ import { BankingService } from "@/systems/banking/BankingService";
 import {
   amortizationSchedule,
   deposit,
+  forgiveLoanResidual,
   loanPayment,
   openLoanAccount,
   openSavings,
@@ -218,5 +219,59 @@ describe("products — loan lifecycle through the bus", () => {
     repayLoan(h.bus, PLAYER, loanId, 500);
     expect(h.service.balanceOf(loanId)).toBe(-1500); // 2000 owed − 500 repaid
     expect(balanced(h.service)).toBe(true);
+  });
+
+  it("forgiveLoanResidual closes a sub-credit residual no whole-credit repayment can clear", () => {
+    const h = makeHarness(10000);
+    const loanId = openLoanAccount(h.bus, h.service, "player");
+    h.bus.dispatch({
+      kind: "DisburseLoan",
+      loanAccountId: loanId,
+      toAccountId: PLAYER,
+      amount: 4321, // odd principal so EOD interest accrues fractional dust
+      reason: "Loan",
+    });
+
+    // A day passes: EOD accrues fractional interest (2 % of 4321 = 86.42), so the
+    // outstanding balance is no longer a whole number.
+    h.bus.dispatch({ kind: "RunEndOfDay" });
+    expect(Number.isInteger(h.service.balanceOf(loanId))).toBe(false);
+
+    // Repay in WHOLE credits only — `player.credits` is integer, so a Transfer
+    // onto the current account must move a whole amount (mirrors the Bank UI's
+    // wholeCreditsToCurrent flooring). Drive it down as far as whole credits allow.
+    for (let i = 0; i < 20; i++) {
+      const owed = -h.service.balanceOf(loanId);
+      const whole = Math.floor(Math.min(1000, owed));
+      if (whole <= 0) break;
+      repayLoan(h.bus, PLAYER, loanId, whole);
+    }
+
+    // The soft-lock: whole-credit repayment alone can never reach 0 — a sub-credit
+    // residual is stuck, leaving the loan permanently negative (which would block
+    // every future loan via BankScene's `balanceOf(loanId) < 0` guard).
+    const residual = -h.service.balanceOf(loanId);
+    expect(residual).toBeGreaterThan(0);
+    expect(residual).toBeLessThan(1);
+
+    // The bank writes the dust off: the loan closes at exactly 0 and the books
+    // stay balanced (no fractional amount ever touched the current account).
+    forgiveLoanResidual(
+      h.bus,
+      loanId,
+      INTERNAL_ACCOUNTS.INTEREST_INCOME,
+      residual,
+    );
+    expect(h.service.balanceOf(loanId)).toBe(0);
+    expect(balanced(h.service)).toBe(true);
+  });
+
+  it("a non-positive residual write-off is a no-op (no empty entry booked)", () => {
+    const h = makeHarness(0);
+    const loanId = openLoanAccount(h.bus, h.service, "player");
+    const before = h.service.getLedger().listEntries().length;
+    forgiveLoanResidual(h.bus, loanId, INTERNAL_ACCOUNTS.INTEREST_INCOME, 0);
+    forgiveLoanResidual(h.bus, loanId, INTERNAL_ACCOUNTS.INTEREST_INCOME, -5);
+    expect(h.service.getLedger().listEntries().length).toBe(before);
   });
 });
