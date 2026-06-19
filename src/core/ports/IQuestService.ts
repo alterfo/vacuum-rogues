@@ -1,6 +1,7 @@
 import type { Quest, QuestFailurePenalty } from "@/domain/Quest";
 import type { Player } from "@/domain/Player";
 import type { QuestType, QuestObjective, Reward } from "@/types";
+import type { BankAccess } from "@/systems/banking/economy";
 
 /**
  * Quest template for creating new quests
@@ -92,4 +93,10 @@ export interface IQuestService {
   getPendingReturnQuests(): Quest[];
   /** Claim reward for a pending-return quest on landing at the issuer planet. */
   claimReturnReward(questId: string, player: Player): boolean;
+  /**
+   * Hand the quest system the bank so reward/fine credit moves book a balanced
+   * ledger entry via the bus instead of poking `player.credits`. Optional —
+   * unit-test doubles that never wire the bank simply don't implement it.
+   */
+  attachBank?(access: BankAccess | null): void;
 }

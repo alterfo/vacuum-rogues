@@ -34,6 +34,10 @@ import {
   sellGearPrice,
   sellUninstalledGear,
 } from "@/systems/equipment/sellGear";
+import {
+  adjustPlayerCredits,
+  GL_COUNTERPARTY,
+} from "@/systems/banking/economy";
 import { EquipmentSystem } from "@/systems/EquipmentSystem";
 import { logger } from "@/utils/logger";
 import { RANK_THRESHOLDS, RANK_LABELS } from "@/config/balance";
@@ -635,7 +639,13 @@ export class StationScene extends GameScene {
       this.showToast(`Нужно ${cost} ₡ — недостаточно средств`, 0xff5544);
       return;
     }
-    player.credits -= cost;
+    adjustPlayerCredits(
+      this.gameEngine?.bank,
+      player,
+      -cost,
+      GL_COUNTERPARTY.SERVICES,
+      "Ремонт корпуса",
+    );
     ship.hullHP = ship.maxHull;
     this.showToast(`Корпус восстановлен за ${cost} ₡`, 0x44ff88);
     this.render();
@@ -656,7 +666,13 @@ export class StationScene extends GameScene {
       this.showToast(`Нужно ${cost} ₡ — недостаточно средств`, 0xff5544);
       return;
     }
-    player.credits -= cost;
+    adjustPlayerCredits(
+      this.gameEngine?.bank,
+      player,
+      -cost,
+      GL_COUNTERPARTY.SERVICES,
+      "Заправка",
+    );
     ship.energy = ship.maxEnergy;
     this.showToast(`Топливо пополнено за ${cost} ₡`, 0x44aaff);
     this.render();
@@ -703,7 +719,13 @@ export class StationScene extends GameScene {
       );
       return;
     }
-    player.credits -= STATION_BRIBE_COST;
+    adjustPlayerCredits(
+      this.gameEngine?.bank,
+      player,
+      -STATION_BRIBE_COST,
+      GL_COUNTERPARTY.BRIBES,
+      "Взятка персоналу станции",
+    );
     this.bribed = true;
     logger.info(
       `StationScene: bribed staff at ${this.station?.name} (faction ${faction})`,
@@ -925,7 +947,13 @@ export class StationScene extends GameScene {
   private buyItem(listing: GearListing): void {
     const player = this.gameEngine?.player;
     if (!player || player.credits < listing.price) return;
-    player.credits -= listing.price;
+    adjustPlayerCredits(
+      this.gameEngine?.bank,
+      player,
+      -listing.price,
+      GL_COUNTERPARTY.EQUIPMENT,
+      `Покупка: ${listing.gear.name}`,
+    );
     // Canonical path (dual-hull Task 3): a purchase lands directly in the
     // loadout when a slot is free; the legacy inventory bag is only a fallback
     // for a full (or absent) loadout until it is retired in Task 5.
@@ -1126,7 +1154,15 @@ export class StationScene extends GameScene {
         }
         const cost = Math.max(0, delta);
         const refund = Math.max(0, -delta);
-        player.credits = player.credits - cost + refund;
+        // Net signed change is `refund - cost` (== -delta): a positive delta
+        // charges the upgrade, a negative one refunds a downgrade.
+        adjustPlayerCredits(
+          this.gameEngine?.bank,
+          player,
+          refund - cost,
+          GL_COUNTERPARTY.EQUIPMENT,
+          `Замена: ${listing.gear.name}`,
+        );
         if (listing.gear.kind === GearKind.HULL) {
           // Gear that no longer fits a smaller hull returns to the inventory bag
           // rather than being destroyed; slotToBagModule preserves each dropped
@@ -1301,7 +1337,13 @@ export class StationScene extends GameScene {
         buyBtn.cursor = "pointer";
         buyBtn.on("pointerdown", (e) => {
           e.stopPropagation();
-          player.credits -= price;
+          adjustPlayerCredits(
+            this.gameEngine?.bank,
+            player,
+            -price,
+            GL_COUNTERPARTY.EQUIPMENT,
+            `Покупка: ${mm.name}`,
+          );
           player.inventory.micromodules.push(mm);
           this.showToast(`Куплено: ${mm.name}`, 0x44ff88);
           this.render();
@@ -1928,7 +1970,11 @@ export class StationScene extends GameScene {
         sellBtn.cursor = "pointer";
         sellBtn.on("pointerdown", (e) => {
           e.stopPropagation();
-          const refund = sellUninstalledGear(player, gearId);
+          const refund = sellUninstalledGear(
+            player,
+            gearId,
+            this.gameEngine?.bank,
+          );
           if (refund > 0) {
             this.showToast(`Продано: ${gear.name} (+${refund} ₡)`, 0x44ff88);
           }

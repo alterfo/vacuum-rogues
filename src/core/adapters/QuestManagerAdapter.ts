@@ -6,6 +6,7 @@ import type {
 import type { Quest } from "@/domain/Quest";
 import type { Player } from "@/domain/Player";
 import { QuestManager } from "@/systems/QuestManager";
+import type { BankAccess } from "@/systems/banking/economy";
 
 /**
  * Adapter: makes QuestManager compatible with IQuestService port.
@@ -113,5 +114,9 @@ export class QuestManagerAdapter implements IQuestService {
 
   getCompletedChainParts(): Record<string, number[]> {
     return this.delegate.getCompletedChainParts();
+  }
+
+  attachBank(access: BankAccess | null): void {
+    this.delegate.attachBank(access);
   }
 }

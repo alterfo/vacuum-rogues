@@ -29,6 +29,10 @@ import {
   sellGearPrice,
   sellUninstalledGear,
 } from "@/systems/equipment/sellGear";
+import {
+  adjustPlayerCredits,
+  GL_COUNTERPARTY,
+} from "@/systems/banking/economy";
 import { attachWheelScroll } from "./ui/WheelScroll";
 import { logger } from "@/utils/logger";
 
@@ -476,7 +480,13 @@ export class EquipmentShopScene extends GameScene {
     // hull's HP pool + class label onto the live ship from the loadout. Gear
     // that no longer fits a smaller hull returns to the inventory bag rather than
     // being destroyed.
-    player.credits -= listing.price;
+    adjustPlayerCredits(
+      this.gameEngine?.bank,
+      player,
+      -listing.price,
+      GL_COUNTERPARTY.EQUIPMENT,
+      `Покупка: ${hull.name}`,
+    );
     // Re-bag dropped gear losslessly: slotToBagModule carries the slot's
     // micromodule + artifact-upgrade count so a hull downsize never destroys
     // the resources the player spent on them.
@@ -877,7 +887,7 @@ export class EquipmentShopScene extends GameScene {
   private sellHoldItem(gearId: string): void {
     const player = this.gameEngine?.player;
     if (!player) return;
-    const refund = sellUninstalledGear(player, gearId);
+    const refund = sellUninstalledGear(player, gearId, this.gameEngine?.bank);
     if (refund <= 0) return;
     this.gameEngine?.audio.playSfx("buy").catch(() => {});
     if (this.creditsText) {
@@ -906,7 +916,13 @@ export class EquipmentShopScene extends GameScene {
     if (!player) return;
     if (player.credits < listing.price) return;
 
-    player.credits -= listing.price;
+    adjustPlayerCredits(
+      this.gameEngine?.bank,
+      player,
+      -listing.price,
+      GL_COUNTERPARTY.EQUIPMENT,
+      `Покупка: ${listing.gear.name}`,
+    );
     // SR-canon (Task 4): a purchase always lands in the warehouse (the canonical
     // owned-uninstalled store, shown in the ТРЮМ strip and sellable from there).
     // Fitting gear is a separate hangar action — the shop never auto-installs, so

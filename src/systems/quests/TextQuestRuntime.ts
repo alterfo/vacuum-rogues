@@ -8,6 +8,11 @@ import type {
 } from "@/types";
 import type { Player } from "@/domain/Player";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
+import {
+  adjustPlayerCredits,
+  GL_COUNTERPARTY,
+  type BankAccess,
+} from "@/systems/banking/economy";
 
 export class TextQuestRuntime {
   private quest: TextQuest | null = null;
@@ -57,10 +62,31 @@ export class TextQuestRuntime {
     return this.getNode(choice.nextNodeId);
   }
 
-  applyOutcome(outcome: QuestOutcome, player: Player): void {
-    player.credits += outcome.creditsDelta;
-    if (outcome.creditsDelta < 0) {
-      player.credits = Math.max(0, player.credits);
+  applyOutcome(
+    outcome: QuestOutcome,
+    player: Player,
+    bank?: BankAccess | null,
+  ): void {
+    // Route the credit move through the bus (a gain credits the player, a loss
+    // is clamped to the balance so credits never go negative — the old rule),
+    // booking against rewards/fines so it shows up as a balanced GL posting.
+    if (outcome.creditsDelta >= 0) {
+      adjustPlayerCredits(
+        bank,
+        player,
+        outcome.creditsDelta,
+        GL_COUNTERPARTY.REWARDS,
+        "Текстовый квест",
+      );
+    } else {
+      const applied = Math.min(-outcome.creditsDelta, player.credits);
+      adjustPlayerCredits(
+        bank,
+        player,
+        -applied,
+        GL_COUNTERPARTY.FINES,
+        "Текстовый квест",
+      );
     }
 
     if (outcome.reputationDelta !== 0 && outcome.factionId) {

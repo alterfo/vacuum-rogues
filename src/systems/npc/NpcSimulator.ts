@@ -17,6 +17,11 @@ import { GAME_BALANCE } from "@/config/balance";
 import type { NpcBrain } from "./NpcBrain";
 import { RuleBasedNpcBrain } from "./NpcBrain";
 import { logger } from "@/utils/logger";
+import {
+  creditNpc,
+  GL_COUNTERPARTY,
+  type BankAccess,
+} from "@/systems/banking/economy";
 
 /** Average number of NPC ships spawned per star system. */
 const NPCS_PER_SYSTEM = 4;
@@ -293,8 +298,16 @@ export class NpcSimulator {
    */
   private readonly liberationCountdown = new Map<string, number>();
 
+  /** Bank for booking NPC pirate plunder through the bus (null until wired). */
+  private bank: BankAccess | null = null;
+
   constructor(brain: NpcBrain = new RuleBasedNpcBrain()) {
     this.brain = brain;
+  }
+
+  /** Wire the bank so NPC plunder books a balanced ledger entry via the bus. */
+  attachBank(access: BankAccess | null): void {
+    this.bank = access;
   }
 
   /**
@@ -1030,7 +1043,13 @@ export class NpcSimulator {
         if (victim.hullHP <= 0) {
           victim.hullHP = 0;
           victim.state = NpcState.DEAD;
-          pirate.credits += PIRATE_LOOT;
+          creditNpc(
+            this.bank,
+            pirate,
+            PIRATE_LOOT,
+            GL_COUNTERPARTY.PLUNDER,
+            "Пиратский трофей",
+          );
           logger.info(
             `NPC ${pirate.name} destroyed ${victim.name} in ${pirate.currentSystemId}`,
           );

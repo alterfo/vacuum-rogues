@@ -10,6 +10,10 @@ import {
   type WeaponSpec,
 } from "@/systems/equipment/GearCatalog";
 import { gearToModule } from "@/systems/equipment/GearBridge";
+import {
+  adjustPlayerCredits,
+  GL_COUNTERPARTY,
+} from "@/systems/banking/economy";
 import { EnemyShip } from "@/domain/EnemyShip";
 import { EncounterState, SceneType } from "@/types";
 import type { EnemyType, AIProfile } from "@/types";
@@ -898,7 +902,15 @@ export class CombatScene extends GameScene {
   ): void {
     const player = this._gameEngine?.player;
     if (!player) return;
-    if (credits > 0) player.credits += credits;
+    if (credits > 0) {
+      adjustPlayerCredits(
+        this._gameEngine?.bank,
+        player,
+        credits,
+        GL_COUNTERPARTY.REWARDS,
+        "Боевой трофей",
+      );
+    }
     if (killPoints > 0) player.killPoints += killPoints;
     // Dual-hull Task 2: combat loot is rolled from the gear catalog, so feed
     // each drop into the canonical loadout (installs into a free slot). Only

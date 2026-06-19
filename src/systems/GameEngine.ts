@@ -66,7 +66,7 @@ import type { QuestScript } from "@/systems/quests/QuestScript";
 import { AudioManager } from "@/systems/AudioManager";
 import { BankBus, type Unsubscribe } from "@/systems/banking/bus";
 import { BankingService } from "@/systems/banking/BankingService";
-import { setupPlayerBanking } from "@/systems/banking/economy";
+import { setupPlayerBanking, type BankAccess } from "@/systems/banking/economy";
 
 /**
  * Optional DI dependencies for GameEngine.
@@ -120,6 +120,15 @@ export class GameEngine {
   public readonly bankBus = new BankBus();
   /** The authoritative core-banking ledger + command handler on {@link bankBus}. */
   public readonly bankingService = new BankingService(this.bankBus);
+
+  /**
+   * The bus + service bundle consumer sites thread into the credit helpers
+   * (`adjustPlayerCredits` / `creditNpc`) so every money move books a balanced
+   * ledger entry instead of poking `player.credits` directly.
+   */
+  public get bank(): BankAccess {
+    return { bus: this.bankBus, service: this.bankingService };
+  }
 
   private exceptionHandler: IExceptionHandler;
   private animationFrameId = 0;
@@ -181,6 +190,10 @@ export class GameEngine {
       this.bankingService,
       this.player,
     );
+    // Hand the bank to the systems that move money outside a scene (quest rewards
+    // / fines, NPC pirate plunder) so they book ledger entries via the bus too.
+    this.questManager.attachBank?.(this.bank);
+    this.npcSimulator.attachBank(this.bank);
   }
 
   async initialize(config: GameConfig): Promise<void> {

@@ -10,6 +10,11 @@ import { economyBaseline, applyMarketTradeImpact } from "@/domain/Market";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
 import { logger } from "@/utils/logger";
 import {
+  adjustPlayerCredits,
+  GL_COUNTERPARTY,
+  type BankAccess,
+} from "@/systems/banking/economy";
+import {
   RANK_DISCOUNT_THRESHOLD,
   RANK_DISCOUNT_FACTOR,
   GAME_BALANCE,
@@ -286,6 +291,11 @@ export class TradeSystem {
     // which only matters in pure-pricing tests that never approach the cap. The
     // trade UI passes the real loadout-derived capacity.
     cargoCapacity: number = Infinity,
+    // The АБС bank (АБС Task 4): when wired, the buy/sell credit move books a
+    // balanced ledger entry against the commodity market via the bus instead of
+    // poking `player.credits`. Optional — pure-pricing tests pass nothing and
+    // fall back to a direct mutation, preserving the legacy delta.
+    bank?: BankAccess | null,
   ): TransactionResult {
     if (amount <= 0) {
       throw new GameBusinessException(
@@ -325,7 +335,13 @@ export class TradeSystem {
         };
       }
 
-      player.credits -= totalPrice;
+      adjustPlayerCredits(
+        bank,
+        player,
+        -totalPrice,
+        GL_COUNTERPARTY.MARKET,
+        `Покупка: ${resource}`,
+      );
       const stack = player.inventory.resources.find((r) => r.type === resource);
       if (stack) {
         stack.amount += amount;
@@ -362,7 +378,13 @@ export class TradeSystem {
       }
 
       stack.amount -= amount;
-      player.credits += totalPrice;
+      adjustPlayerCredits(
+        bank,
+        player,
+        totalPrice,
+        GL_COUNTERPARTY.MARKET,
+        `Продажа: ${resource}`,
+      );
 
       // Update planet demand
       const idx = planet.market.availableResources.indexOf(resource);

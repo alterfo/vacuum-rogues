@@ -14,6 +14,10 @@ import { logger } from "@/utils/logger";
 import { JobBoardPanel } from "./JobBoardPanel";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import { TradeSystem } from "@/systems/TradeSystem";
+import {
+  adjustPlayerCredits,
+  GL_COUNTERPARTY,
+} from "@/systems/banking/economy";
 import { QuestType } from "@/types";
 import type { ResourceType } from "@/types";
 import {
@@ -726,7 +730,13 @@ export class PlanetScene extends GameScene {
           );
           return;
         }
-        player.credits -= penalty;
+        adjustPlayerCredits(
+          this.gameEngine?.bank,
+          player,
+          -penalty,
+          GL_COUNTERPARTY.FINES,
+          "Таможенный штраф",
+        );
         player.adjustReputation(faction, -20);
         logger.info(
           `Customs fine paid: ${penalty} cr, rep -20 with ${faction}`,
@@ -751,7 +761,13 @@ export class PlanetScene extends GameScene {
           );
           return;
         }
-        player.credits -= bribeCost;
+        adjustPlayerCredits(
+          this.gameEngine?.bank,
+          player,
+          -bribeCost,
+          GL_COUNTERPARTY.BRIBES,
+          "Взятка таможне",
+        );
         logger.info(`Customs bribed: ${bribeCost} cr`);
         modal.destroy({ children: true });
         this.showMessage(`Взятка уплачена: −${bribeCost} ₡`, 0xffaa44);
@@ -1358,7 +1374,13 @@ export class PlanetScene extends GameScene {
       );
       return;
     }
-    player.credits -= BRIBE_COST;
+    adjustPlayerCredits(
+      this.gameEngine?.bank,
+      player,
+      -BRIBE_COST,
+      GL_COUNTERPARTY.BRIBES,
+      "Взятка таможне",
+    );
     this.bribed = true;
     logger.info(
       `PlanetScene: bribed customs at ${this.planet?.name} (faction ${faction})`,
@@ -1464,7 +1486,13 @@ export class PlanetScene extends GameScene {
       return;
     }
 
-    this.gameEngine.player.credits -= cost;
+    adjustPlayerCredits(
+      this.gameEngine.bank,
+      this.gameEngine.player,
+      -cost,
+      GL_COUNTERPARTY.SERVICES,
+      "Ремонт корпуса",
+    );
     ship.repair();
     logger.info(`Repaired for ${cost}`);
     this.showMessage(
@@ -1662,7 +1690,13 @@ export class PlanetScene extends GameScene {
           affordable,
           () => {
             if (player.credits < tier.cost) return;
-            player.credits -= tier.cost;
+            adjustPlayerCredits(
+              this.gameEngine?.bank,
+              player,
+              -tier.cost,
+              GL_COUNTERPARTY.SERVICES,
+              "Покупка звёздной карты",
+            );
             const revealed = galaxy.revealSystemsWithinHops(
               system.id,
               tier.hops,

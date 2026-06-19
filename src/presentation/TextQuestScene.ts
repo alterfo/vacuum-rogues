@@ -780,7 +780,7 @@ export class TextQuestScene extends GameScene {
       // Terminal node — apply outcome and show result
       const outcome = choice.outcome;
       if (outcome) {
-        this.runtime.applyOutcome(outcome, player);
+        this.runtime.applyOutcome(outcome, player, this.gameEngine?.bank);
         this.showResultPanel(outcome);
       } else {
         this.doReturn();

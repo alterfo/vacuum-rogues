@@ -103,22 +103,22 @@ regulatory reporting, ISO 20022.
 across 5 modules; reads stay untouched via the projection, only writes migrate). Go
 safest → most coupled so each phase is gated by the green economy suite:**
 
-- [ ] **Phase A — Systems/Quests first (confidence 1.0, no UI coupling, covered by delta tests):**
+- [x] **Phase A — Systems/Quests first (confidence 1.0, no UI coupling, covered by delta tests):**
       `TradeSystem.executeTrade` (L328/365), `QuestManager.grantReward` (L192) /
       `applyFailurePenalty` (L423), `quests/TextQuestRuntime.applyOutcome` (L61–63),
       `equipment/sellGear` (L35); then `npc/NpcSimulator` pirate loot (L1033, NPC account)
-- [ ] **Phase B — leaf scenes (single/few writes, low process membership):**
+- [x] **Phase B — leaf scenes (single/few writes, low process membership):**
       `CombatScene` loot (L901), `EquipmentShopScene` (L479/909), `StationScene`
       (repair/refuel/bribe/hull/micromodule ×6: L638/659/706/928/1129/1304)
-- [ ] **Phase C — `PlanetScene` last (in 4 of 5 affected processes; mixes reads + 5 writes:
+- [x] **Phase C — `PlanetScene` last (in 4 of 5 affected processes; mixes reads + 5 writes:
       penalty L764, bribe L789/1396, research L1502/1700)** — migrate only after the bus +
       projection are proven by A/B
-- [ ] every credit write goes through the bus; net `player.credits` delta unchanged at each
+- [x] every credit write goes through the bus; net `player.credits` delta unchanged at each
       site; the GL stays balanced (Σ all postings == 0)
-- [ ] ⚠️ existing economy/quest tests must stay green (they assert deltas) — if any reds,
+- [x] ⚠️ existing economy/quest tests must stay green (they assert deltas) — if any reds,
       STOP: the migration changed a delta, fix rather than weaken the test
-- [ ] write tests: a representative buy/sell/reward/fine posts balanced and matches old delta
-- [ ] run affected tests + full economy suite — must pass before next task (gate between
+- [x] write tests: a representative buy/sell/reward/fine posts balanced and matches old delta
+- [x] run affected tests + full economy suite — must pass before next task (gate between
       Phase A → B → C)
 
 ### Task 5: End-of-day batch on the daily tick

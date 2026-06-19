@@ -409,6 +409,7 @@ export class TradeScene extends GameScene {
         qty,
         isBuy,
         cargoCapacityOf(this.gameEngine.playerLoadout),
+        this.gameEngine.bank,
       );
       const name = TradeScene.RESOURCE_NAMES[resource] ?? resource;
       if (result.success) {

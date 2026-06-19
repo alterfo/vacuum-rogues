@@ -1,5 +1,10 @@
 import type { Player } from "@/domain/Player";
 import { gearById, type Gear } from "./GearCatalog";
+import {
+  adjustPlayerCredits,
+  GL_COUNTERPARTY,
+  type BankAccess,
+} from "@/systems/banking/economy";
 
 /**
  * Trade-in rate for selling gear: 40 % of base price — the same factor the
@@ -27,11 +32,21 @@ export function sellGearPrice(gear: Gear): number {
  * first. This is the single seam both the hangar and equipment-shop ТРЮМ views
  * call, so the sell rule can't diverge between scenes.
  */
-export function sellUninstalledGear(player: Player, gearId: string): number {
+export function sellUninstalledGear(
+  player: Player,
+  gearId: string,
+  bank?: BankAccess | null,
+): number {
   const gear = gearById(gearId);
   if (!gear) return 0;
   if (!player.inventory.removeOwnedGear(gearId)) return 0;
   const refund = sellGearPrice(gear);
-  player.credits += refund;
+  adjustPlayerCredits(
+    bank,
+    player,
+    refund,
+    GL_COUNTERPARTY.EQUIPMENT,
+    `Продажа: ${gear.name}`,
+  );
   return refund;
 }

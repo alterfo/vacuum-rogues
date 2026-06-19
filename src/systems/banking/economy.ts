@@ -4,6 +4,162 @@ import type { BankBus, Unsubscribe } from "./bus";
 import type { BankingService } from "./BankingService";
 
 /**
+ * The minimum a consumer site needs to move money through the АБС: the bus it
+ * dispatches commands onto plus read access to the service/ledger (to check an
+ * account exists before transferring). `GameEngine.bank` returns one of these and
+ * scenes/systems thread it into the credit helpers below. When it is absent (unit
+ * tests that never wired the bank), the helpers fall back to a direct
+ * `player.credits` mutation so the legacy delta is preserved exactly.
+ */
+export interface BankAccess {
+  readonly bus: BankBus;
+  readonly service: BankingService;
+}
+
+/**
+ * Named GL counterparty accounts every migrated money move books against, so a
+ * trade/reward/fine/fee has a real source/sink in the ledger and reads
+ * meaningfully in the Bank UI. They are opened lazily the first time they are
+ * referenced (as {@link AccountType.GL_INTERNAL} accounts).
+ */
+export const GL_COUNTERPARTY = {
+  /** Trade buy/sell (the commodity market). */
+  MARKET: "gl:market",
+  /** Quest rewards and combat/loot payouts. */
+  REWARDS: "gl:rewards",
+  /** Quest fines and customs penalties. */
+  FINES: "gl:fines",
+  /** Station services: repair, refuel, research, star maps. */
+  SERVICES: "gl:services",
+  /** Bribes paid to customs / station staff. */
+  BRIBES: "gl:bribes",
+  /** Gear, hull and micromodule purchases / sales. */
+  EQUIPMENT: "gl:equipment",
+  /** NPC pirate plunder (the destroyed ship's wreck). */
+  PLUNDER: "gl:plunder",
+} as const;
+
+const GL_LABELS: Record<string, string> = {
+  [GL_COUNTERPARTY.MARKET]: "Товарный рынок",
+  [GL_COUNTERPARTY.REWARDS]: "Награды и трофеи",
+  [GL_COUNTERPARTY.FINES]: "Штрафы",
+  [GL_COUNTERPARTY.SERVICES]: "Услуги станций",
+  [GL_COUNTERPARTY.BRIBES]: "Взятки",
+  [GL_COUNTERPARTY.EQUIPMENT]: "Оборудование",
+  [GL_COUNTERPARTY.PLUNDER]: "Трофеи пиратов",
+};
+
+/** Open a GL counterparty account on first use (idempotent). */
+function ensureCounterparty(access: BankAccess, accountId: string): void {
+  if (access.service.getLedger().hasAccount(accountId)) return;
+  access.bus.dispatch({
+    kind: "OpenAccount",
+    account: {
+      id: accountId,
+      type: AccountType.GL_INTERNAL,
+      label: GL_LABELS[accountId] ?? accountId,
+    },
+  });
+}
+
+/**
+ * Apply a *signed* change to the player's credits through the bus: a positive
+ * delta is a gain (counterparty → player), a negative one a charge (player →
+ * counterparty). The `BalanceChanged` projection writes the new balance back into
+ * `player.credits`, so the net effect equals the old `credits += delta`.
+ *
+ * Falls back to a direct mutation when banking is not wired (the player's current
+ * account is not on the ledger) — keeping the legacy delta for unit tests that
+ * never set up the bank. A zero delta is a no-op (no empty entry is booked).
+ */
+export function adjustPlayerCredits(
+  access: BankAccess | null | undefined,
+  player: Player,
+  signedDelta: number,
+  counterpartyId: string,
+  reason: string,
+): void {
+  if (signedDelta === 0) return;
+  if (
+    access &&
+    access.service.getLedger().hasAccount(player.currentAccountId)
+  ) {
+    ensureCounterparty(access, counterpartyId);
+    if (signedDelta > 0) {
+      transfer(
+        access.bus,
+        counterpartyId,
+        player.currentAccountId,
+        signedDelta,
+        reason,
+      );
+    } else {
+      transfer(
+        access.bus,
+        player.currentAccountId,
+        counterpartyId,
+        -signedDelta,
+        reason,
+      );
+    }
+  } else {
+    player.credits += signedDelta;
+  }
+}
+
+/** Minimal NPC shape {@link creditNpc} needs — kept structural so the domain isn't imported. */
+export interface NpcAccountHolder {
+  readonly id: string;
+  readonly name?: string;
+  credits: number;
+}
+
+/**
+ * Credit an NPC's current account (e.g. pirate plunder) through the bus. NPC
+ * balances are not projected, so this keeps `npc.credits` in lockstep with the
+ * ledger: it opens + seeds the NPC's current account from its existing credits on
+ * first use, books the gain from `counterpartyId`, then reads the new GL balance
+ * back into `npc.credits`. Falls back to a direct mutation when banking is absent.
+ */
+export function creditNpc(
+  access: BankAccess | null | undefined,
+  npc: NpcAccountHolder,
+  amount: number,
+  counterpartyId: string,
+  reason: string,
+): void {
+  if (amount === 0) return;
+  if (!access) {
+    npc.credits += amount;
+    return;
+  }
+  const npcAccountId = currentAccountId(npc.id);
+  if (!access.service.getLedger().hasAccount(npcAccountId)) {
+    access.bus.dispatch({
+      kind: "OpenAccount",
+      account: {
+        id: npcAccountId,
+        type: AccountType.CURRENT,
+        label: `НПС ${npc.name ?? npc.id}`,
+        ownerId: npc.id,
+      },
+    });
+    if (npc.credits !== 0) {
+      transfer(
+        access.bus,
+        INTERNAL_ACCOUNTS.CASH,
+        npcAccountId,
+        npc.credits,
+        "Открытие счёта НПС",
+      );
+    }
+  }
+  ensureCounterparty(access, counterpartyId);
+  transfer(access.bus, counterpartyId, npcAccountId, amount, reason);
+  npc.credits = access.service.balanceOf(npcAccountId);
+}
+
+/**
  * The economy seam between the game and the АБС core. Game code never pokes the
  * ledger directly; it moves money with the {@link transfer} facade (a thin wrapper
  * over a `Transfer` command on the bus), and `player.credits` becomes a *read

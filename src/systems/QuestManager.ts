@@ -2,6 +2,11 @@ import { Quest, QuestFailurePenalty } from "@/domain/Quest";
 import type { Player } from "@/domain/Player";
 import type { QuestType, QuestObjective, Reward } from "@/types";
 import { logger } from "@/utils/logger";
+import {
+  adjustPlayerCredits,
+  GL_COUNTERPARTY,
+  type BankAccess,
+} from "@/systems/banking/economy";
 
 /**
  * Quest template for creating new quests
@@ -41,8 +46,15 @@ export class QuestManager {
   private questTemplates: Map<string, QuestTemplate> = new Map();
   /** In-memory tracking of completed chain parts; persisted in player.questLog on save/load. */
   private completedChainParts: Map<string, Set<number>> = new Map();
+  /** Bank for routing reward/fine credit moves through the bus (null until wired). */
+  private bank: BankAccess | null = null;
 
   constructor() {}
+
+  /** Wire the bank so reward/fine moves book a balanced ledger entry via the bus. */
+  attachBank(access: BankAccess | null): void {
+    this.bank = access;
+  }
 
   /**
    * Create and accept a new quest from template
@@ -189,7 +201,13 @@ export class QuestManager {
    * the two reward-grant paths can never silently diverge.
    */
   private grantReward(quest: Quest, player: Player): void {
-    player.credits += quest.reward.credits;
+    adjustPlayerCredits(
+      this.bank,
+      player,
+      quest.reward.credits,
+      GL_COUNTERPARTY.REWARDS,
+      `Награда: ${quest.title}`,
+    );
     player.experience += quest.reward.experience;
 
     for (const item of quest.reward.items) {
@@ -418,9 +436,17 @@ export class QuestManager {
       );
     }
 
-    // Apply credits fine
+    // Apply credits fine — clamp the charge to the player's balance so credits
+    // never go negative (the old behaviour), then book that exact magnitude.
     if (penalty.creditsFine && penalty.creditsFine > 0) {
-      player.credits = Math.max(0, player.credits - penalty.creditsFine);
+      const applied = Math.min(penalty.creditsFine, player.credits);
+      adjustPlayerCredits(
+        this.bank,
+        player,
+        -applied,
+        GL_COUNTERPARTY.FINES,
+        `Штраф: ${quest.title}`,
+      );
       logger.info(
         `Credits fine: -${penalty.creditsFine} credits (now ${player.credits})`,
       );
