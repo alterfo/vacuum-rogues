@@ -128,10 +128,10 @@ safest → most coupled so each phase is gated by the green economy suite:**
   roll business date)
 - Create: src/tests/banking/endOfDay.test.ts
 
-- [ ] EOD accrues interest on savings/loans, posts balanced accrual entries, rolls the
+- [x] EOD accrues interest on savings/loans, posts balanced accrual entries, rolls the
       business date, emits `StatementCut`
-- [ ] write tests: interest math; books balanced after EOD; idempotent per business date
-- [ ] run affected tests — must pass before next task
+- [x] write tests: interest math; books balanced after EOD; idempotent per business date
+- [x] run affected tests — must pass before next task
 
 ### Task 6: Thin products — savings deposit + loan
 **Files:**

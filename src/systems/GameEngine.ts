@@ -626,6 +626,13 @@ export class GameEngine {
     // Check for expired quests and apply failure penalties.
     this.checkExpiredQuests();
 
+    // End-of-day banking batch (АБС): accrue interest on savings/loan accounts,
+    // cut statements, and roll the bank's business date. Dispatched on the
+    // universal bus so the core books balanced accrual entries and consumers
+    // (the HUD, the Bank UI) react via events. Runs after today's fines so they
+    // land on the day's statement; idempotent per business date.
+    this.bankBus.dispatch({ kind: "RunEndOfDay" });
+
     // Win condition: rank >= VETERAN (2) + 3+ factions with rep > 50.
     if (this.checkWinCondition() && !this._winScreenShown) {
       this._winScreenShown = true;

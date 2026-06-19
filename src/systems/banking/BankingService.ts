@@ -1,5 +1,7 @@
 import {
   AccountType,
+  BALANCE_EPSILON,
+  INTERNAL_ACCOUNTS,
   Ledger,
   createLedger,
   journalEntry,
@@ -16,11 +18,24 @@ import type {
 } from "./bus";
 import { BankBus } from "./bus";
 
+/**
+ * Daily interest the bank pays on a savings deposit, as a fraction of the
+ * value-dated balance (≈ 0.1 %/day). Demo-scaled so accrual is visible over a
+ * normal play session, not a real APR.
+ */
+export const DEFAULT_SAVINGS_DAILY_RATE = 0.001;
+/** Daily interest the bank charges on an outstanding loan (≈ 0.2 %/day). */
+export const DEFAULT_LOAN_DAILY_RATE = 0.002;
+
 export interface BankingServiceOptions {
   /** Reuse an existing ledger (e.g. one rehydrated from a save). Defaults to a fresh seeded ledger. */
   readonly ledger?: Ledger;
   /** Initial business date. Defaults to 0. */
   readonly startDate?: number;
+  /** Daily savings interest rate (fraction of balance). Defaults to {@link DEFAULT_SAVINGS_DAILY_RATE}. */
+  readonly savingsDailyRate?: number;
+  /** Daily loan interest rate (fraction of outstanding principal). Defaults to {@link DEFAULT_LOAN_DAILY_RATE}. */
+  readonly loanDailyRate?: number;
 }
 
 /**
@@ -39,6 +54,10 @@ export class BankingService {
   private readonly ledger: Ledger;
   private currentDate: number;
   private seq = 0;
+  private readonly savingsDailyRate: number;
+  private readonly loanDailyRate: number;
+  /** The last business date a full EOD batch closed — guards against re-running it. */
+  private lastEodDate: number | null = null;
 
   constructor(
     private readonly bus: BankBus,
@@ -46,6 +65,9 @@ export class BankingService {
   ) {
     this.ledger = options.ledger ?? createLedger();
     this.currentDate = options.startDate ?? 0;
+    this.savingsDailyRate =
+      options.savingsDailyRate ?? DEFAULT_SAVINGS_DAILY_RATE;
+    this.loanDailyRate = options.loanDailyRate ?? DEFAULT_LOAN_DAILY_RATE;
     bus.setHandler((command) => this.handle(command));
   }
 
@@ -157,18 +179,68 @@ export class BankingService {
 
   private handleRunEndOfDay(cmd: RunEndOfDayCommand): void {
     const date = cmd.date ?? this.currentDate;
-    // Task 5 layers interest accrual + fees onto this hook. For now EOD just
-    // cuts statements for the customer accounts and rolls the business date.
+    // Idempotent per business date: a date already closed never re-accrues or
+    // re-cuts — running the batch twice for the same day is a safe no-op (no
+    // double interest, no spurious statement, no date roll).
+    if (this.lastEodDate !== null && date <= this.lastEodDate) return;
+
+    this.accrueDailyInterest(date);
+
+    // Cut statements for the customer accounts, mark the day closed, and roll
+    // the business date forward.
     const customerAccounts = this.ledger
       .listAccounts()
       .filter((a) => a.type !== AccountType.GL_INTERNAL)
       .map((a) => a.id);
+    this.lastEodDate = date;
     this.currentDate = date + 1;
     this.bus.publish({
       kind: "StatementCut",
       date,
       accountIds: customerAccounts,
     });
+  }
+
+  /**
+   * Accrue one day's interest on every interest-bearing account as of `date`:
+   *
+   *   interest = balanceOf(account, date) × dailyRate
+   *
+   * Both kinds collapse to that one signed formula because balances are signed.
+   * A savings deposit (positive balance) earns a positive credit, booked against
+   * the bank's interest **expense** GL leg. A loan (negative balance — the
+   * customer owes principal) earns a negative posting that grows the debt,
+   * booked against the bank's interest **income** GL leg. Each accrual is one
+   * balanced {@link JournalEntry}; a zero (or float-noise) interest is skipped so
+   * EOD never books an empty entry.
+   */
+  private accrueDailyInterest(date: number): void {
+    for (const account of this.ledger.listAccounts()) {
+      let rate: number;
+      let glAccountId: string;
+      let reason: string;
+      if (account.type === AccountType.SAVINGS) {
+        rate = this.savingsDailyRate;
+        glAccountId = INTERNAL_ACCOUNTS.INTEREST_EXPENSE;
+        reason = "EOD: проценты по вкладу";
+      } else if (account.type === AccountType.LOAN) {
+        rate = this.loanDailyRate;
+        glAccountId = INTERNAL_ACCOUNTS.INTEREST_INCOME;
+        reason = "EOD: проценты по кредиту";
+      } else {
+        continue;
+      }
+      const interest = this.ledger.balanceOf(account.id, date) * rate;
+      if (Math.abs(interest) <= BALANCE_EPSILON) continue;
+      this.handleAccrueInterest({
+        kind: "AccrueInterest",
+        accountId: account.id,
+        glAccountId,
+        amount: interest,
+        date,
+        reason,
+      });
+    }
   }
 
   /**
