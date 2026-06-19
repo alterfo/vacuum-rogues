@@ -1,5 +1,6 @@
 import type { Player } from "@/domain/Player";
 import { AccountType, INTERNAL_ACCOUNTS } from "@/domain/banking/Ledger";
+import { logger } from "@/utils/logger";
 import type { BankBus, Unsubscribe } from "./bus";
 import type { BankingService } from "./BankingService";
 
@@ -102,9 +103,20 @@ export function adjustPlayerCredits(
         reason,
       );
     }
-  } else {
-    player.credits += signedDelta;
+    return;
   }
+  // No bank wired (unit/pricing tests) → a direct mutation preserves the legacy
+  // delta exactly. But a *present* `access` whose player account is missing means
+  // money is moving before `setupPlayerBanking` opened it: the fallback then
+  // silently desyncs `player.credits` from the ledger (and double-counts on
+  // reload). That can only be a wiring bug, so make it loud in dev.
+  if (__DEBUG__ && access) {
+    logger.warn(
+      `adjustPlayerCredits: "${player.currentAccountId}" is not on the ledger; ` +
+        `direct-mutating credits (projection will desync — wire setupPlayerBanking first).`,
+    );
+  }
+  player.credits += signedDelta;
 }
 
 /** Minimal NPC shape {@link creditNpc} needs — kept structural so the domain isn't imported. */

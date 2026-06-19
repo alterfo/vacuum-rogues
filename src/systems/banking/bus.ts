@@ -81,7 +81,7 @@ export interface DisburseLoanCommand {
   readonly date?: number;
 }
 
-/** Run the end-of-day batch (accruals, fees, statements, business-date roll). */
+/** Run the end-of-day batch (interest accruals, statements, business-date roll). */
 export interface RunEndOfDayCommand {
   readonly kind: "RunEndOfDay";
   readonly date?: number;

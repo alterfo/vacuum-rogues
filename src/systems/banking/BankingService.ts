@@ -49,8 +49,8 @@ export interface BankingServiceOptions {
  * projection, the HUD, the Bank UI) can react without ever reading the ledger
  * themselves.
  *
- * EOD (`RunEndOfDay`) is intentionally thin here — it rolls the business date and
- * cuts statements; Task 5 layers accruals and fees onto the same hook.
+ * EOD (`RunEndOfDay`) accrues interest on the interest-bearing accounts, cuts
+ * statements, and rolls the business date (idempotent per date). No fee batch.
  */
 export class BankingService {
   private ledger: Ledger;
@@ -279,7 +279,10 @@ export class BankingService {
       }
       const interest = this.ledger.balanceOf(account.id, date) * rate;
       if (Math.abs(interest) <= BALANCE_EPSILON) continue;
-      this.handleAccrueInterest({
+      // Dispatch the accrual onto the bus (not a direct handler call) so the EOD
+      // batch is itself a visible consumer — the `AccrueInterest` command shows up
+      // in `observeCommands` (the Bank UI's teaching panel) like any other.
+      this.bus.dispatch({
         kind: "AccrueInterest",
         accountId: account.id,
         glAccountId,

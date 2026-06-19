@@ -335,6 +335,23 @@ describe("consumer migration — NPC pirate plunder (creditNpc)", () => {
     expect(booksBalanced(service)).toBe(true);
   });
 
+  it("seeds the NPC account once and accumulates across repeated loot (account-exists branch)", () => {
+    // A pirate that destroys two victims calls creditNpc twice — the production
+    // path that exercises the "account already open" branch (seed skipped, just
+    // transfer + re-read). Verify no re-seed/double-count and npc.credits == GL.
+    const bus = new BankBus();
+    const service = new BankingService(bus, { startDate: 1 });
+    const access: BankAccess = { bus, service };
+    const pirate: NpcAccountHolder = { id: "npc_raider", credits: 50 };
+
+    creditNpc(access, pirate, 120, GL_COUNTERPARTY.PLUNDER, "Трофей 1");
+    creditNpc(access, pirate, 80, GL_COUNTERPARTY.PLUNDER, "Трофей 2");
+
+    expect(pirate.credits).toBe(250); // 50 seed + 120 + 80, seeded only once
+    expect(service.balanceOf("cur:npc_raider")).toBe(250);
+    expect(booksBalanced(service)).toBe(true);
+  });
+
   it("falls back to a direct mutation when no bank is wired", () => {
     const pirate: NpcAccountHolder = { id: "npc2", credits: 10 };
     creditNpc(null, pirate, 200, GL_COUNTERPARTY.PLUNDER, "loot");
@@ -349,6 +366,25 @@ describe("consumer migration — fallback with no bank preserves the legacy delt
     expect(player.credits).toBe(700);
     adjustPlayerCredits(null, player, 120, GL_COUNTERPARTY.REWARDS, "reward");
     expect(player.credits).toBe(820);
+  });
+
+  it("adjustPlayerCredits falls back to direct mutation when the bank is wired but the player account is not yet seeded", () => {
+    // A real runtime state: a scene holds gameEngine.bank but setupPlayerBanking
+    // has not opened this player's current account. The helper must NOT dispatch a
+    // Transfer from a non-existent account (that throws LEDGER_UNKNOWN_ACCOUNT) —
+    // it falls back to the legacy direct mutation.
+    const bus = new BankBus();
+    const service = new BankingService(bus, { startDate: 1 });
+    const access: BankAccess = { bus, service };
+    const player = makePlayer(1_000); // deliberately NOT wired via setupPlayerBanking
+
+    expect(service.getLedger().hasAccount(player.currentAccountId)).toBe(false);
+    expect(() =>
+      adjustPlayerCredits(access, player, -300, GL_COUNTERPARTY.MARKET, "buy"),
+    ).not.toThrow();
+    expect(player.credits).toBe(700);
+    // No spurious account/entry was created on the ledger for the player.
+    expect(service.getLedger().hasAccount(player.currentAccountId)).toBe(false);
   });
 
   it("a zero delta books no entry", () => {

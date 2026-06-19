@@ -266,6 +266,45 @@ describe("products — loan lifecycle through the bus", () => {
     expect(balanced(h.service)).toBe(true);
   });
 
+  it("forgiveLoanResidual reverses interest income and never touches the current account", () => {
+    // "Balanced + loan == 0" alone is satisfiable by a wrong counter-leg (e.g.
+    // writing the dust off against CASH or the current account — which would
+    // re-introduce the fractional-projection bug this function exists to avoid).
+    // Pin the exact GL direction: the loan credit must reverse interest INCOME and
+    // leave the current account untouched.
+    const h = makeHarness(0);
+    const loanId = openLoanAccount(h.bus, h.service, "player");
+    h.bus.dispatch({
+      kind: "DisburseLoan",
+      loanAccountId: loanId,
+      toAccountId: PLAYER,
+      amount: 1000,
+      reason: "Loan",
+    });
+    const incomeBefore = h.service.balanceOf(INTERNAL_ACCOUNTS.INTEREST_INCOME);
+    const currentBefore = h.service.balanceOf(PLAYER);
+    const residual = 0.37; // sub-credit dust the bank writes off
+
+    forgiveLoanResidual(
+      h.bus,
+      loanId,
+      INTERNAL_ACCOUNTS.INTEREST_INCOME,
+      residual,
+    );
+
+    // The write-off credits the loan toward zero by exactly `residual`…
+    expect(h.service.balanceOf(loanId)).toBeCloseTo(-1000 + residual, 6);
+    // …reversing the same sliver of interest income (NOT cash / the current account)…
+    expect(h.service.balanceOf(INTERNAL_ACCOUNTS.INTEREST_INCOME)).toBeCloseTo(
+      incomeBefore - residual,
+      6,
+    );
+    // …and the player's current account is untouched, so the integer projection
+    // stays whole (the whole reason the dust is written off this way).
+    expect(h.service.balanceOf(PLAYER)).toBe(currentBefore);
+    expect(balanced(h.service)).toBe(true);
+  });
+
   it("a non-positive residual write-off is a no-op (no empty entry booked)", () => {
     const h = makeHarness(0);
     const loanId = openLoanAccount(h.bus, h.service, "player");

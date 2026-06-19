@@ -150,6 +150,36 @@ describe("EOD — loan interest accrual", () => {
   });
 });
 
+describe("EOD — interest accrual flows on the bus (teaching panel visibility)", () => {
+  it("dispatches each accrual as an observable AccrueInterest command", () => {
+    const h = makeHarness();
+    openSavings(h.bus);
+    openLoan(h.bus);
+    fund(h.bus, SAVINGS, 1000);
+    h.bus.dispatch({
+      kind: "DisburseLoan",
+      loanAccountId: LOAN,
+      toAccountId: PLAYER,
+      amount: 5000,
+      reason: "Loan",
+    });
+
+    const accruals: string[] = [];
+    h.bus.observeCommands((c) => {
+      if (c.kind === "AccrueInterest") accruals.push(c.accountId);
+    });
+
+    h.bus.dispatch({ kind: "RunEndOfDay" });
+
+    // The EOD batch is itself a bus consumer: each interest leg is dispatched as an
+    // AccrueInterest command (not a silent direct handler call), so the Bank UI's
+    // observeCommands panel can show them like any other consumer traffic.
+    expect(accruals).toContain(SAVINGS);
+    expect(accruals).toContain(LOAN);
+    expect(accruals).toHaveLength(2);
+  });
+});
+
 describe("EOD — scope", () => {
   it("never accrues interest on a plain current account", () => {
     const h = makeHarness();
