@@ -102,10 +102,13 @@ Three galaxy-map (`StarMapScene`) fixes the player hit while flying:
 - [x] run affected tests — must pass before next task
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify all three Overview items: charted systems named, battle marker on live fights, modal readable
-- [ ] run full unit suite — all green
-- [ ] run `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing test assertions changed
+- [x] verify all three Overview items: charted systems named (starMapUtils `charted` tier +
+      StarMapScene name branch), battle marker on live fights (battleSystems helper →
+      NpcSimulator.battleSystemIds → half-red/half-green marker), modal readable (bg alpha 0.8→0.95)
+- [x] run full unit suite — all green (223 files, 1915 tests passing)
+- [x] run `npm run test:e2e:regression` (23 passed); `npm run lint` clean (0 errors, only
+      pre-existing no-explicit-any warnings in unrelated test files)
+- [x] confirm no existing test assertions changed (only 3 new test files added across Tasks 1–4)
 
 ## Technical Details
 - "Charted" vs "visited": a chart purchase reveals the **name** (and dot/lanes); full system detail
