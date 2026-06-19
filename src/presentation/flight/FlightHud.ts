@@ -107,9 +107,9 @@ export class FlightHud implements FlightModule {
   /** Radar centre button: smoothly return the camera to the ship. */
   onMiniMapReturn: (() => void) | null = null;
   /**
-   * Font size (S/M/L) was changed in the ⚙ panel. The scene re-inits SPACE_FLIGHT
-   * to re-apply the scale while preserving the ship position — the HUD must NOT
-   * transition the scene itself (playtest4 A, DIP).
+   * Font size (S/M/L) was changed in the ⚙ panel. The scene restyles the
+   * text-bearing flight modules in place (no SPACE_FLIGHT re-init) — the HUD must
+   * NOT transition the scene itself (playtest4 A, DIP).
    */
   onFontScaleChange: (() => void) | null = null;
   /** [I] inventory shortcut button was pressed. */
@@ -195,6 +195,67 @@ export class FlightHud implements FlightModule {
     this.dayCounterText = null;
     this.uiContainer = null;
     this.turnRunning = false;
+  }
+
+  /**
+   * Restyle the HUD's text at the current font scale WITHOUT a scene re-init
+   * (Task 1): tear down the HUD's own display objects and rebuild them via
+   * {@link createUI}, which reads {@link scaledFont} at text-creation time. The
+   * world (planets/ships/asteroids/backdrop) is untouched — only the HUD's text
+   * (day counter, buttons, mini-log, radar) is recreated at the new size. The
+   * live turn state survives the rebuild; the game speed is re-seeded by
+   * {@link createUI} via {@link restoreGameSpeed}.
+   */
+  refreshFontScale(): void {
+    const wasTurnRunning = this.turnRunning;
+    this.teardownUI();
+    this.createUI();
+    // createUI seeds a fresh Play/Pause button → re-apply the live turn state so
+    // the label/colour matches (createUI defaults it to the paused look).
+    this.setTurnRunning(wasTurnRunning);
+  }
+
+  /**
+   * Destroy the HUD's own display objects (everything {@link createUI} builds) so
+   * {@link refreshFontScale} can rebuild them at a new scale. Unlike
+   * {@link destroy} this keeps the engine callbacks + persistent state and leaves
+   * any transient overlays the player has open (toast, tooltip, quest journal,
+   * help overlay) alone — they read {@link scaledFont} when next opened.
+   */
+  private teardownUI(): void {
+    if (this.settingsPanel) {
+      this.settingsPanel.destroy({ children: true });
+      this.settingsPanel = null;
+    }
+    // Speed + gear buttons mount on the UI layer directly (not uiContainer), so
+    // destroy their containers explicitly. UiButton has no destroy() of its own.
+    if (this.speedButton) {
+      this.speedButton.container.destroy({ children: true });
+      this.speedButton = null;
+    }
+    if (this.gearButton) {
+      this.gearButton.container.destroy({ children: true });
+      this.gearButton = null;
+    }
+    // Mini-log entries are children of miniLogContainer → destroyed with it.
+    this.miniLogEntries = [];
+    if (this.miniLogContainer) {
+      this.miniLogContainer.destroy({ children: true });
+      this.miniLogContainer = null;
+    }
+    if (this.systemMiniMap) {
+      this.systemMiniMap.destroy();
+      this.systemMiniMap = null;
+    }
+    if (this.uiContainer) {
+      this.uiContainer.destroy({ children: true });
+      this.uiContainer = null;
+    }
+    // These live on the now-destroyed uiContainer — drop the dangling refs.
+    this.backButton = null;
+    this.playPauseButton = null;
+    this.cameraDebugText = null;
+    this.dayCounterText = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -715,9 +776,9 @@ export class FlightHud implements FlightModule {
           this.settingsPanel.destroy({ children: true });
           this.settingsPanel = null;
         }
-        // Fan the change out to the scene, which re-inits SPACE_FLIGHT to
-        // re-apply the font scale while preserving the ship position. The HUD
-        // never transitions the scene itself (playtest4 A, DIP).
+        // Fan the change out to the scene, which restyles the text-bearing
+        // modules in place (no scene re-init, so the world doesn't flicker). The
+        // HUD never transitions the scene itself (playtest4 A, DIP).
         this.onFontScaleChange?.();
       });
       panel.addChild(hit);
@@ -783,6 +844,12 @@ export class FlightHud implements FlightModule {
           (locationId: string) => this.onQuestNavigate?.(locationId),
           this.gameEngine.galaxy?.gameDays ?? 0,
           (id: string) => this.resolveQuestLocationName(id),
+          (itemType: string) => {
+            const stack = this.gameEngine?.player?.inventory.resources.find(
+              (r) => r.type === itemType,
+            );
+            return stack?.amount ?? 0;
+          },
         );
         this.uiLayer.addChild(this.questJournalUI.container);
         logger.info("Quest journal opened");

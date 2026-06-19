@@ -374,6 +374,7 @@ export class SpaceFlightScene extends GameScene {
       this.renderer,
       this.renderer.gameLayer,
       this.shipPhysics,
+      this.gameEngine?.player?.ship.hullClass ?? "",
     );
 
     // World camera: owns zoom/pan/follow/clamp. Reads ship physics + star centre;
@@ -1051,16 +1052,17 @@ export class SpaceFlightScene extends GameScene {
     this.applyReentrySpawn(ctx?.fromStationId);
   }
 
-  /** Font size changed in ⚙: re-init SPACE_FLIGHT to re-apply scale; ship pinned so it stays put (playtest4 A), game speed survives restoreGameSpeed() (playtest3 F3). */
+  /**
+   * Font size changed in ⚙: restyle the text-bearing flight modules in place
+   * rather than re-initialising the whole scene (the old path rebuilt planets/
+   * ships/asteroids/NPCs + the nebula backdrop just to resize text). Each module
+   * reads `scaledFont` at text-creation time, so refreshing only their labels
+   * picks up the new size — world geometry and the ship position stay as-is. (T1)
+   */
   private onFontScaleChanged(): void {
-    if (!this.gameEngine || !this.shipPhysics) return;
-    // playtest6: pin lastFlightShipPos BEFORE the transition so re-init seeds entryX/Y here (not the system edge); preserveShipPos below is the duplicate teleport-after path.
-    const pos = { x: this.shipPhysics.shipX, y: this.shipPhysics.shipY };
-    this.gameEngine.lastFlightShipPos = pos;
-    void this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
-      gameEngine: this.gameEngine,
-      preserveShipPos: pos,
-    });
+    this.hud?.refreshFontScale();
+    this.planetManager?.refreshFontScale();
+    this.npcManager?.refreshFontScale();
   }
 
   /**

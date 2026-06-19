@@ -283,6 +283,22 @@ export class NpcShipManager implements FlightModule {
     }
   }
 
+  /**
+   * Restyle the manager's text at the current font scale WITHOUT a scene re-init
+   * (Task 1). The NPC ship sprites carry no text labels, so their containers are
+   * left untouched (no rebuild); the only persistent {@link scaledFont} text the
+   * manager owns is the OVERMIND-core prompt overlay, which is rebuilt at the new
+   * size when open. (The contact panel uses fixed sizes — routed through the
+   * shared scaledText helper in a later task.)
+   */
+  refreshFontScale(): void {
+    if (this.overmindOverlay && !this.overmindOverlay.destroyed) {
+      this.overmindOverlay.destroy({ children: true });
+      this.overmindOverlay = null;
+      this.showOvermindCorePrompt();
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Queries the scene reads from
   // ---------------------------------------------------------------------------

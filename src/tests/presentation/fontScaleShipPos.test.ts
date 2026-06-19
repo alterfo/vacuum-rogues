@@ -1,14 +1,17 @@
 /**
- * Playtest6 bug 1: changing the font size (⚙ → S/M/L) re-inits SPACE_FLIGHT to
- * re-apply the scale. The ship visually "jumped" because the new initialize()
- * seeded entryX/Y from the system edge while the preserveShipPos teleport ran a
- * frame later — a timing race produced a one-frame snap.
+ * Font-scale change contract (font-scale restyle plan, Task 1).
  *
- * Belt-and-suspenders fix: onFontScaleChanged() now pins
- * gameEngine.lastFlightShipPos to the current ship position BEFORE the
- * transition, so the new initialize() seeds entryX/Y from the saved spot. This
- * test pins that contract directly (running the full initialize() in jsdom isn't
- * practical — PlanetSprite is mocked there).
+ * History: changing the font size (⚙ → S/M/L) used to re-init the whole
+ * SPACE_FLIGHT scene "to re-apply the scale", which rebuilt planets/ships/
+ * asteroids/NPCs + the nebula backdrop just to resize text (slow + a jarring
+ * full redraw), and needed a lastFlightShipPos pin to dodge an edge-spawn race.
+ *
+ * That re-init is now GONE: onFontScaleChanged() restyles the text-bearing flight
+ * modules in place (hud / planetManager / npcManager → refreshFontScale()). This
+ * test pins the new contract — no scene transition, no ship-position pin, the
+ * world is left untouched — so the heavy re-init can't silently come back.
+ * (Running the full initialize() in jsdom isn't practical — PlanetSprite is
+ * mocked here — so the module fields are stubbed directly.)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -148,18 +151,28 @@ function makeMockRenderer(): Renderer {
   } as unknown as Renderer;
 }
 
-describe("Playtest6 bug 1: font-scale change pins lastFlightShipPos", () => {
+describe("Font-scale change restyles in place (no scene re-init)", () => {
   let scene: SpaceFlightScene;
   let s: Record<string, unknown>;
+  let hud: { refreshFontScale: ReturnType<typeof vi.fn> };
+  let planetManager: { refreshFontScale: ReturnType<typeof vi.fn> };
+  let npcManager: { refreshFontScale: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     scene = new SpaceFlightScene(makeMockRenderer());
     s = scene as unknown as Record<string, unknown>;
     // Park the ship in the middle of the system, far from any edge spawn.
     s.shipPhysics = new ShipPhysics(900, 410, 0.1);
+    // Stub the text-bearing modules so we can observe the restyle delegation.
+    hud = { refreshFontScale: vi.fn() };
+    planetManager = { refreshFontScale: vi.fn() };
+    npcManager = { refreshFontScale: vi.fn() };
+    s.hud = hud;
+    s.planetManager = planetManager;
+    s.npcManager = npcManager;
   });
 
-  it("sets gameEngine.lastFlightShipPos to the current ship coords before transition", () => {
+  it("restyles the text-bearing modules in place instead of re-initialising", () => {
     const gameEngine: {
       transitionTo: ReturnType<typeof vi.fn>;
       lastFlightShipPos: { x: number; y: number } | null;
@@ -168,41 +181,22 @@ describe("Playtest6 bug 1: font-scale change pins lastFlightShipPos", () => {
 
     (scene as unknown as { onFontScaleChanged(): void }).onFontScaleChanged();
 
-    expect(gameEngine.lastFlightShipPos).not.toBeNull();
-    expect(gameEngine.lastFlightShipPos?.x).toBeCloseTo(900, 5);
-    expect(gameEngine.lastFlightShipPos?.y).toBeCloseTo(410, 5);
+    expect(hud.refreshFontScale).toHaveBeenCalledTimes(1);
+    expect(planetManager.refreshFontScale).toHaveBeenCalledTimes(1);
+    expect(npcManager.refreshFontScale).toHaveBeenCalledTimes(1);
   });
 
-  it("pins lastFlightShipPos BEFORE invoking transitionTo (no edge-spawn race)", () => {
-    let posAtTransition: { x: number; y: number } | null = null;
-    const gameEngine: {
-      transitionTo: ReturnType<typeof vi.fn>;
-      lastFlightShipPos: { x: number; y: number } | null;
-    } = { transitionTo: vi.fn(), lastFlightShipPos: null };
-    // Capture what initialize() would read at the moment of transition.
-    gameEngine.transitionTo.mockImplementation(() => {
-      posAtTransition = gameEngine.lastFlightShipPos;
-    });
-    s.gameEngine = gameEngine;
-
-    (scene as unknown as { onFontScaleChanged(): void }).onFontScaleChanged();
-
-    expect(gameEngine.transitionTo).toHaveBeenCalledTimes(1);
-    expect(posAtTransition).not.toBeNull();
-    expect(posAtTransition!.x).toBeCloseTo(900, 5);
-    expect(posAtTransition!.y).toBeCloseTo(410, 5);
-  });
-
-  it("does nothing when shipPhysics is absent (guard)", () => {
+  it("does NOT re-init the scene or pin the ship position", () => {
     const gameEngine: {
       transitionTo: ReturnType<typeof vi.fn>;
       lastFlightShipPos: { x: number; y: number } | null;
     } = { transitionTo: vi.fn(), lastFlightShipPos: null };
     s.gameEngine = gameEngine;
-    s.shipPhysics = null;
 
     (scene as unknown as { onFontScaleChanged(): void }).onFontScaleChanged();
 
+    // No scene transition (the world is left exactly as-is) and no ship-position
+    // pin: the ship never moves, so there is nothing to preserve.
     expect(gameEngine.transitionTo).not.toHaveBeenCalled();
     expect(gameEngine.lastFlightShipPos).toBeNull();
   });

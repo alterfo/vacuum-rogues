@@ -25,6 +25,9 @@ export interface StationMarker {
   container: Container;
   x: number;
   y: number;
+  /** The marker's name label — kept so a font-scale change can restyle it in
+   *  place (no marker rebuild). See {@link PlanetManager.refreshFontScale}. */
+  label: Text;
 }
 
 /**
@@ -168,6 +171,19 @@ export class PlanetManager implements FlightModule {
     if (this.planetInfoPanel) {
       this.planetInfoPanel.destroy();
       this.planetInfoPanel = null;
+    }
+  }
+
+  /**
+   * Restyle the manager's text labels at the current font scale WITHOUT a scene
+   * re-init (Task 1): the only persistent text the manager owns is the station
+   * marker name labels, so just re-apply {@link scaledFont} to each in place. The
+   * planet sprites, station diamonds, hit-areas and orbits are left untouched —
+   * a font change no longer rebuilds the world.
+   */
+  refreshFontScale(): void {
+    for (const m of this.stationMarkers) {
+      m.label.style.fontSize = scaledFont(10);
     }
   }
 
@@ -523,7 +539,13 @@ export class PlanetManager implements FlightModule {
       ctn.addChild(hit);
 
       this.gameLayer.addChild(ctn);
-      this.stationMarkers.push({ station, container: ctn, x: wx, y: wy });
+      this.stationMarkers.push({
+        station,
+        container: ctn,
+        x: wx,
+        y: wy,
+        label,
+      });
     }
 
     logger.info(`Created ${this.stationMarkers.length} station markers`);

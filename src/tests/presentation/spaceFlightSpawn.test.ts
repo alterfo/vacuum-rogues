@@ -226,12 +226,14 @@ describe("Task 9: re-entry spawn beside station / landed planet", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Playtest4 finding A: a font-size change re-inits SPACE_FLIGHT to re-apply the
-// scale; that re-init must NOT edge-spawn the ship via applyReentrySpawn (no
-// marker). The scene passes preserveShipPos through the context, and the entry
-// spawn honors it with precedence over the take-off/re-entry paths.
+// preserveShipPos entry-spawn precedence: a re-entry into SPACE_FLIGHT carrying a
+// preserveShipPos context must teleport the ship there, never edge-spawn it via
+// applyReentrySpawn (no marker). The font-scale restyle plan (Task 1) removed the
+// font-change re-init, but preserveShipPos still guards the other re-entry paths
+// (docking/landing/star-map round-trip), so this contract stays; a second test
+// pins that a font change now restyles in place instead of re-initialising.
 // ---------------------------------------------------------------------------
-describe("Playtest4 A: font-scale re-init preserves ship position", () => {
+describe("preserveShipPos entry spawn + font-scale restyle-in-place", () => {
   let scene: SpaceFlightScene;
   let s: Record<string, unknown>;
 
@@ -255,16 +257,24 @@ describe("Playtest4 A: font-scale re-init preserves ship position", () => {
     expect(dist(phys.shipX, phys.shipY, EDGE.x, EDGE.y)).toBeGreaterThan(200);
   });
 
-  it("onFontScaleChanged re-inits SPACE_FLIGHT with the current ship pos preserved", () => {
+  it("onFontScaleChanged restyles modules in place — no scene re-init", () => {
     const transitionTo = vi.fn();
-    s.gameEngine = { transitionTo };
+    s.gameEngine = { transitionTo, lastFlightShipPos: null };
+    const hud = { refreshFontScale: vi.fn() };
+    const npcManager = { refreshFontScale: vi.fn() };
+    s.hud = hud;
+    s.planetManager = { refreshFontScale: vi.fn() };
+    s.npcManager = npcManager;
+
     (scene as unknown as { onFontScaleChanged(): void }).onFontScaleChanged();
-    expect(transitionTo).toHaveBeenCalledTimes(1);
-    const [, ctx] = transitionTo.mock.calls[0] as [
-      unknown,
-      { preserveShipPos?: { x: number; y: number } },
-    ];
-    expect(ctx.preserveShipPos?.x).toBeCloseTo(900, 5);
-    expect(ctx.preserveShipPos?.y).toBeCloseTo(410, 5);
+
+    // The world is restyled in place, not rebuilt: no scene transition fires.
+    expect(transitionTo).not.toHaveBeenCalled();
+    expect(hud.refreshFontScale).toHaveBeenCalledTimes(1);
+    expect(npcManager.refreshFontScale).toHaveBeenCalledTimes(1);
+    expect(
+      (s.planetManager as { refreshFontScale: ReturnType<typeof vi.fn> })
+        .refreshFontScale,
+    ).toHaveBeenCalledTimes(1);
   });
 });
