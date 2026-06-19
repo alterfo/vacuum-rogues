@@ -136,12 +136,21 @@ NpcShipManager / DamageNumbers / UiButton / PlanetScene already read `scaledFont
 on their player-facing text per the plan's Context.)
 
 ### Task 4: Verify acceptance criteria
-- [ ] verify Overview: font change no longer rebuilds the world; panels scale with the
-      setting and are readable
-- [ ] run full unit suite — all green
-- [ ] run `npm run test:e2e:regression`
-- [ ] run `npm run lint` — clean
-- [ ] confirm no existing test assertions changed
+- [x] verify Overview: font change no longer rebuilds the world; panels scale with the
+      setting and are readable — regression `playtest-regression.spec.ts` test 17
+      ("changing the font size keeps the ship in place") proves the world is not
+      rebuilt on a font change, and test 22 ("Job Board text scales with the S/M/L
+      font setting") proves panel scaling + legibility.
+- [x] run full unit suite — all green (1780 tests / 211 files passed)
+- [x] run `npm run test:e2e:regression` — 22 passed (Privoxy intercepts localhost →
+      503 on Playwright's webServer health check; run with
+      `NO_PROXY=localhost,127.0.0.1,::1` to bypass, per memory feedback-ralphex-operations)
+- [x] run `npm run lint` — clean (0 errors; 29 pre-existing `@typescript-eslint/no-explicit-any`
+      warnings in test files, untouched by this plan)
+- [x] confirm no existing test assertions changed — this verification task touched no
+      tests; the only existing-test edits in the feature were the two Task 1 re-points
+      (`fontScaleShipPos.test.ts`, `spaceFlightSpawn.test.ts`), documented there as an
+      intentional contract change for the removed re-init behavior.
 
 ## Technical Details
 - **Restyle vs re-init:** the modules already read `scaledFont` at text-creation time,
