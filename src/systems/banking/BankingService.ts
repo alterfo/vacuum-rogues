@@ -5,6 +5,8 @@ import {
   Ledger,
   createLedger,
   journalEntry,
+  restoreLedger,
+  type BankingSnapshot,
   type JournalEntry,
 } from "@/domain/banking/Ledger";
 import type {
@@ -51,7 +53,7 @@ export interface BankingServiceOptions {
  * cuts statements; Task 5 layers accruals and fees onto the same hook.
  */
 export class BankingService {
-  private readonly ledger: Ledger;
+  private ledger: Ledger;
   private currentDate: number;
   private seq = 0;
   private readonly savingsDailyRate: number;
@@ -79,6 +81,35 @@ export class BankingService {
   /** Read access to the ledger for projections / statements (never mutate it directly). */
   getLedger(): Ledger {
     return this.ledger;
+  }
+
+  /**
+   * Capture the full persisted state of the bank — the ledger (accounts +
+   * journal) plus the EOD cursors and the journal-id sequence — so it can be
+   * written into a save and reloaded with {@link restore}. Everything here is
+   * plain JSON-serializable data.
+   */
+  toSnapshot(): BankingSnapshot {
+    return {
+      businessDate: this.currentDate,
+      lastEodDate: this.lastEodDate,
+      seq: this.seq,
+      ledger: this.ledger.snapshot(),
+    };
+  }
+
+  /**
+   * Replace this service's state with a previously {@link toSnapshot}'d one (on
+   * load). Rebuilds the ledger via {@link restoreLedger} — which re-validates the
+   * books, so a corrupt save is rejected here — and restores the business date,
+   * last-closed EOD date, and the id sequence so freshly posted entries keep
+   * unique ids. The bus handler is unchanged (it still points at this service).
+   */
+  restore(snapshot: BankingSnapshot): void {
+    this.ledger = restoreLedger(snapshot.ledger);
+    this.currentDate = snapshot.businessDate;
+    this.lastEodDate = snapshot.lastEodDate;
+    this.seq = snapshot.seq;
   }
 
   /** Convenience read-through to the ledger balance. */

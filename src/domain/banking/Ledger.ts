@@ -289,6 +289,28 @@ export class Ledger {
   }
 
   /**
+   * A plain copy of the ledger's full state (accounts + journal) for persistence.
+   * Each account/posting is shallow-cloned out of its frozen runtime object so the
+   * snapshot is freely serializable; {@link restoreLedger} rebuilds a live ledger
+   * from it.
+   */
+  snapshot(): LedgerSnapshot {
+    return {
+      accounts: this.listAccounts().map((a) => ({ ...a })),
+      entries: this.entries.map((e) => ({
+        id: e.id,
+        date: e.date,
+        reason: e.reason,
+        postings: e.postings.map((p) => ({
+          accountId: p.accountId,
+          amount: p.amount,
+          valueDate: p.valueDate,
+        })),
+      })),
+    };
+  }
+
+  /**
    * Σ of *all* postings across the whole ledger. The global double-entry
    * invariant guarantees this is always (approximately) zero.
    */
@@ -303,5 +325,67 @@ export class Ledger {
 export function createLedger(): Ledger {
   const ledger = new Ledger();
   seedInternalAccounts(ledger);
+  return ledger;
+}
+
+/**
+ * A plain, JSON-serializable snapshot of a {@link Ledger} — the account registry
+ * plus the full journal. Both halves are already primitive data (frozen at
+ * runtime, but structurally just records), so this round-trips through
+ * `JSON.stringify`/`parse` unchanged. The bank persists this in the save so the
+ * authoritative book of record survives a reload (rather than being re-seeded
+ * from `player.credits`).
+ */
+export interface LedgerSnapshot {
+  readonly accounts: Account[];
+  readonly entries: JournalEntry[];
+}
+
+/**
+ * The full persisted state of the in-game АБС: the {@link LedgerSnapshot} plus the
+ * `BankingService`'s own cursors (the business date the EOD batch has reached, the
+ * last date it closed, and the journal-id sequence). Lives in the domain so the
+ * save container (`SaveState`) can reference it without depending on the systems
+ * layer; the service produces/consumes it via `toSnapshot()` / `restore()`.
+ */
+export interface BankingSnapshot {
+  readonly businessDate: number;
+  readonly lastEodDate: number | null;
+  readonly seq: number;
+  readonly ledger: LedgerSnapshot;
+}
+
+/**
+ * Rebuild a {@link Ledger} from a {@link LedgerSnapshot}. The accounts are opened
+ * first (so the entries can reference them), then every journal entry is
+ * re-`post()`ed — which re-validates the double-entry invariant and account
+ * existence, so a tampered/corrupt save that smuggled in an unbalanced or
+ * dangling entry is rejected on load rather than silently corrupting the books.
+ *
+ * Uses a bare `new Ledger()` (NOT {@link createLedger}) because the snapshot
+ * already carries the five internal GL accounts — re-seeding would collide.
+ *
+ * @throws GameValidationException on a duplicate account, unbalanced entry, or a
+ *   posting to an account the snapshot never opened.
+ */
+export function restoreLedger(snapshot: LedgerSnapshot): Ledger {
+  const ledger = new Ledger();
+  for (const account of snapshot.accounts) {
+    ledger.openAccount(account);
+  }
+  for (const entry of snapshot.entries) {
+    ledger.post(
+      journalEntry({
+        id: entry.id,
+        date: entry.date,
+        reason: entry.reason,
+        postings: entry.postings.map((p) => ({
+          accountId: p.accountId,
+          amount: p.amount,
+          valueDate: p.valueDate,
+        })),
+      }),
+    );
+  }
   return ledger;
 }

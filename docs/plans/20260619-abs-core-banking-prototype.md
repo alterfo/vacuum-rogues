@@ -160,11 +160,11 @@ safest → most coupled so each phase is gated by the green economy suite:**
 **Files:**
 - Modify: src/validation/schemas.ts + save flow (persist accounts + ledger; migration for
   old saves: open accounts and seed the player current account from existing `credits`)
-- [ ] accounts + ledger persist and reload; old saves migrate (credits → opening balance)
-- [ ] verify Overview: all credit moves flow through the bus as balanced postings; books
+- [x] accounts + ledger persist and reload; old saves migrate (credits → opening balance)
+- [x] verify Overview: all credit moves flow through the bus as balanced postings; books
       always balance; EOD runs; bank UI + bus visualization work
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing economy/quest test assertions changed
+- [x] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
+- [x] confirm no existing economy/quest test assertions changed
 
 ## Technical Details
 - **Invariant:** at every moment Σ(all postings.amount) == 0 and balanceOf(account) =

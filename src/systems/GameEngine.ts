@@ -914,6 +914,9 @@ export class GameEngine {
       Date.now(),
       this.currentSceneType,
       this.playerLoadout?.toJSON(),
+      // Persist the АБС book of record (accounts + journal + EOD cursors) so the
+      // ledger reloads verbatim instead of being re-seeded from `player.credits`.
+      this.bankingService.toSnapshot(),
     );
 
     await this.saveManager.write(slotId, state);
@@ -941,9 +944,19 @@ export class GameEngine {
     // module checks work after "Continue". Field data is already correct.
     this.rehydrateLoadedState();
 
-    // Re-wire the loaded player into the АБС: open their current account and
-    // project credits onto it. The ledger is not yet persisted (Task 8), so this
-    // seeds the opening balance from the loaded `credits` (migration behaviour).
+    // Restore the persisted АБС book of record (accounts + journal + EOD cursors)
+    // verbatim, so balances, statements and open savings/loan accounts survive the
+    // reload. Old saves lack the snapshot — there `setupPlayerBanking` below
+    // re-seeds the player current account from the loaded `credits` (the migration
+    // path: credits → opening balance).
+    if (save.banking) {
+      this.bankingService.restore(save.banking);
+    }
+
+    // Re-wire the loaded player into the АБС: bind the `credits` projection and
+    // open their current account. With a restored ledger this is a no-op seed
+    // (the account already balances to `credits`); on an old save it opens +
+    // seeds the account from `credits`.
     this.setupPlayerBanking();
 
     // Restore the canonical loadout from the save; saves from before loadout

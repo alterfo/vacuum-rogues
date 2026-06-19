@@ -473,6 +473,52 @@ export const ShipLoadoutSnapshotSchema = z.object({
   ),
 });
 
+/** Account flavours the АБС ledger persists (mirrors AccountType in domain/banking/Ledger). */
+export const LedgerAccountTypeSchema = z.enum([
+  "CURRENT",
+  "SAVINGS",
+  "LOAN",
+  "GL_INTERNAL",
+]);
+
+/** One persisted GL account (mirrors `Account` in domain/banking/Ledger). */
+export const LedgerAccountSchema = z.object({
+  id: z.string(),
+  type: LedgerAccountTypeSchema,
+  label: z.string(),
+  ownerId: z.string().optional(),
+});
+
+/** One signed posting leg (mirrors `Posting` in domain/banking/Ledger). */
+export const LedgerPostingSchema = z.object({
+  accountId: z.string(),
+  amount: z.number(),
+  valueDate: z.number(),
+});
+
+/** One balanced journal entry (mirrors `JournalEntry` in domain/banking/Ledger). */
+export const LedgerJournalEntrySchema = z.object({
+  id: z.string(),
+  date: z.number(),
+  reason: z.string(),
+  postings: z.array(LedgerPostingSchema),
+});
+
+/**
+ * The persisted АБС core-banking state — accounts + journal + EOD cursors
+ * (mirrors `BankingSnapshot` in domain/banking/Ledger). `restoreLedger` re-posts
+ * every entry on load, so the double-entry invariant is re-checked there too.
+ */
+export const BankingSnapshotSchema = z.object({
+  businessDate: z.number(),
+  lastEodDate: z.number().nullable(),
+  seq: z.number(),
+  ledger: z.object({
+    accounts: z.array(LedgerAccountSchema),
+    entries: z.array(LedgerJournalEntrySchema),
+  }),
+});
+
 export const SaveStateSchema = z.object({
   version: z.number().int().positive(),
   timestamp: z.number().int(),
@@ -482,6 +528,9 @@ export const SaveStateSchema = z.object({
   currentSceneType: z.string().optional(),
   // Optional: saves made before loadout persistence (≤ 2026-06-10) lack it.
   loadout: ShipLoadoutSnapshotSchema.optional(),
+  // Optional: saves made before the ledger was persisted lack it; those migrate
+  // by re-seeding the player current account from `player.credits` on load.
+  banking: BankingSnapshotSchema.optional(),
 });
 
 export function validateSaveState(
