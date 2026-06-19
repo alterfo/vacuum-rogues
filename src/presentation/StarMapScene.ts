@@ -488,6 +488,11 @@ export class StarMapScene extends GameScene {
     const chartedSystemIds = this.galaxy.systems
       .filter((s) => s.explored)
       .map((s) => s.id);
+    // Systems holding a live fight (both hostile and friendly/Ranger ships) get
+    // a half-red/half-green marker layered above their ownership colour. Purely
+    // a render of the transient NPC population — no persistence.
+    const battleSet =
+      this.gameEngine?.npc?.battleSystemIds(this.galaxy) ?? new Set<string>();
 
     // Draw only explored systems
     let systemsDrawn = 0;
@@ -555,6 +560,26 @@ export class StarMapScene extends GameScene {
       // Draw system circle
       graphics.circle(x, y, radius);
       graphics.fill({ color });
+
+      // Live fight here: overlay a half-red (hostile) / half-green (friendly)
+      // marker above the ownership colour. Two filled semicircles split
+      // vertically — red on the left, green on the right.
+      if (battleSet.has(system.id)) {
+        const battleR = Math.max(radius, 5) + 1;
+        // Left half — red (hostiles): bottom → left → top.
+        graphics.moveTo(x, y);
+        graphics.arc(x, y, battleR, Math.PI / 2, (3 * Math.PI) / 2);
+        graphics.closePath();
+        graphics.fill({ color: 0xff2222 });
+        // Right half — green (friendly/Ranger): top → right → bottom.
+        graphics.moveTo(x, y);
+        graphics.arc(x, y, battleR, -Math.PI / 2, Math.PI / 2);
+        graphics.closePath();
+        graphics.fill({ color: 0x22ff44 });
+        // Thin outline so the two-tone disc reads against the star field.
+        graphics.circle(x, y, battleR);
+        graphics.stroke({ width: 1, color: 0xffffff });
+      }
       systemsDrawn++;
 
       // Add clickable hit area with double-click support
@@ -777,7 +802,7 @@ export class StarMapScene extends GameScene {
     const totalPanelHeight = basePanelHeight + planetListHeight;
 
     const bg = new Graphics();
-    bg.fill({ color: 0x000000, alpha: 0.8 });
+    bg.fill({ color: 0x000000, alpha: 0.95 });
     bg.rect(0, 0, 200, totalPanelHeight);
     bg.stroke({ width: 2, color: 0x00ffff });
     this.infoPanel.addChild(bg);

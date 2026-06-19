@@ -94,12 +94,12 @@ Three galaxy-map (`StarMapScene`) fixes the player hit while flying:
 - Modify: src/presentation/StarMapScene.ts (half-red/half-green marker for battle systems; raise
   info-panel bg alpha)
 
-- [ ] render battle systems with a half-red/half-green circle (two arcs / two half-fills), layered
+- [x] render battle systems with a half-red/half-green circle (two arcs / two half-fills), layered
       above the ownership colour
-- [ ] raise the side info-panel background alpha (~0.8 → ~0.95) so text is legible over the map
-- [ ] visually verify via screenshot: charted names show; battle marker shows where both sides are
+- [x] raise the side info-panel background alpha (~0.8 → ~0.95) so text is legible over the map
+- [x] visually verify via screenshot: charted names show; battle marker shows where both sides are
       present; modal is opaque/readable
-- [ ] run affected tests — must pass before next task
+- [x] run affected tests — must pass before next task
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify all three Overview items: charted systems named, battle marker on live fights, modal readable

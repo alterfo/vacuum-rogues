@@ -130,6 +130,16 @@ export class GameEngine {
     return { bus: this.bankBus, service: this.bankingService };
   }
 
+  /**
+   * Read-only access to the live NPC simulation. Scenes use this to project
+   * transient population state (e.g. the star map's half-red/half-green battle
+   * marker via {@link NpcSimulator.battleSystemIds}). Not for mutation — the
+   * engine drives the simulator's `tick`.
+   */
+  public get npc(): NpcSimulator {
+    return this.npcSimulator;
+  }
+
   private exceptionHandler: IExceptionHandler;
   private animationFrameId = 0;
   private lastTime = 0;
