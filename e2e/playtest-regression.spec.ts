@@ -954,15 +954,33 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     expect(before!.maxOffset!).toBeGreaterThan(0);
     expect(before!.offset).toBe(0);
 
-    // A real wheel scroll over the journal advances the offset (reveals the rest).
+    // A real wheel scroll over the journal advances the offset (reveals the rest)
+    // WITHOUT zooming the camera underneath it. The journal's scrollable list and
+    // the scene's camera both listen on window 'wheel'; the scene must suppress
+    // the zoom while a blocking modal is open (else the map zooms behind the
+    // open journal as you scroll it).
+    const readZoom = (): Promise<number | null> =>
+      page.evaluate(() => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+        };
+        const camera = engine.currentScene?.['camera'] as
+          | { zoom: number }
+          | undefined;
+        return camera?.zoom ?? null;
+      });
     const screen = await page.evaluate(() => {
       const c = document.querySelector('canvas') as HTMLCanvasElement;
       return { w: c.clientWidth, h: c.clientHeight };
     });
+    const zoomBefore = await readZoom();
+    expect(zoomBefore).not.toBeNull();
     await page.mouse.move(screen.w / 2, screen.h / 2);
     await page.mouse.wheel(0, 300);
     const after = await probe();
     expect(after!.offset!).toBeGreaterThan(0);
+    // The camera zoom must be untouched — scrolling the journal did not zoom.
+    expect(await readZoom()).toBeCloseTo(zoomBefore!, 5);
 
     errorCollector.assertAndDetach();
   });

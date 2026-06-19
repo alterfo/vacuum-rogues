@@ -965,6 +965,12 @@ export class SpaceFlightScene extends GameScene {
   private onWheel(event: WheelEvent): void {
     event.preventDefault();
 
+    // Do not zoom while a blocking modal (quest journal, NPC contact, planet
+    // info panel, settings) is open. The journal's scrollable list owns the
+    // wheel via its own window listener; without this guard a wheel notch over
+    // the open journal both scrolls it AND zooms the camera underneath it.
+    if (this.isBlockingModalOpen()) return;
+
     // Do not zoom while a pan drag is in progress. Middle-button "auto-scroll"
     // (and trackpad momentum) can emit wheel events during a pan; suppressing
     // them here keeps panning from also zooming (bug: pan + unwanted zoom).
