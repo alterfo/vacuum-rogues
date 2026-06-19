@@ -6,7 +6,7 @@
 1. Create class extending `GameScene` in `src/presentation/`
 2. Add `SceneType.MY_SCENE` to `src/types/index.ts`
 3. Add a `case SceneType.MY_SCENE:` to `src/core/services/SceneFactory.ts`
-4. If the scene requires transient context (planet, NPC, station), add it to `contextDependentScenes` in `GameEngine.loadGame()` so "Continue" falls back to SPACE_FLIGHT instead of a blank screen (currently: `PLANET`, `TRADE`, `DIALOGUE`, `COMBAT`, `INVENTORY`, `STATION`, `EQUIPMENT_SHOP`, `GOVERNMENT`, `TEXT_QUEST`, `WIN_SCREEN`, `INFO_CENTER`)
+4. If the scene requires transient context (planet, NPC, station), add it to `contextDependentScenes` in `GameEngine.loadGame()` so "Continue" falls back to SPACE_FLIGHT instead of a blank screen (currently: `PLANET`, `TRADE`, `DIALOGUE`, `COMBAT`, `INVENTORY`, `STATION`, `EQUIPMENT_SHOP`, `GOVERNMENT`, `TEXT_QUEST`, `WIN_SCREEN`, `INFO_CENTER`, `BANK`)
 5. Add Page Object in `e2e/page-objects/` for E2E tests
 
 ## New Audio Track or SFX

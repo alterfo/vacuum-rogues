@@ -8,9 +8,13 @@ import { BankBus } from "@/systems/banking/bus";
 import { BankingService } from "@/systems/banking/BankingService";
 import {
   currentAccountId,
+  openPlayerCurrentAccount,
   setupPlayerBanking,
   transfer,
 } from "@/systems/banking/economy";
+import { deposit, openSavings, withdraw } from "@/systems/banking/products";
+import { wholeCreditsToCurrent } from "@/presentation/bankSceneView";
+import { PlayerSchema } from "@/validation/schemas";
 import { PlayerService } from "@/core/services/PlayerService";
 import { FactionType } from "@/types";
 import type { Player } from "@/domain/Player";
@@ -145,6 +149,57 @@ describe("economy projection — stays in sync over N operations", () => {
     }
     // Net: 1000 - 120 + 75 - 40 + 500 - 333 + 10 = 1092.
     expect(h.player.credits).toBe(1092);
+  });
+});
+
+describe("economy projection — re-seeding on reload is idempotent", () => {
+  it("re-opening the current account does not double-seed credits (old-save migration safety)", () => {
+    const h = makeHarness(1000);
+    expect(h.player.credits).toBe(1000);
+    expect(h.service.balanceOf(INTERNAL_ACCOUNTS.CASH)).toBe(-1000);
+
+    // A reload re-runs banking setup on an already-seeded player. The account
+    // exists and the opening delta is 0, so this must be a no-op — not a second
+    // 1000-credit seed.
+    openPlayerCurrentAccount(h.bus, h.service, h.player);
+
+    expect(h.player.credits).toBe(1000);
+    expect(glCredits(h)).toBe(1000);
+    expect(h.service.balanceOf(INTERNAL_ACCOUNTS.CASH)).toBe(-1000);
+    expect(Math.abs(h.service.getLedger().totalBalance())).toBeLessThanOrEqual(
+      BALANCE_EPSILON,
+    );
+  });
+});
+
+describe("economy projection — interest never leaves credits fractional (save-safe)", () => {
+  it("withdrawing after compounding EOD interest keeps player.credits a whole number", () => {
+    const h = makeHarness(5000);
+    const sav = openSavings(h.bus, h.service, h.player.id);
+    deposit(h.bus, h.player.currentAccountId, sav, 3000);
+    // Run several end-of-day batches so daily interest compounds the savings
+    // balance into a fractional value.
+    for (let day = 1; day <= 5; day++) {
+      h.bus.dispatch({ kind: "RunEndOfDay", date: day });
+    }
+    const savBal = h.service.balanceOf(sav);
+    expect(Number.isInteger(savBal)).toBe(false); // interest made it fractional
+
+    // The Galactic Bank withdraws only whole credits onto the current account;
+    // any sub-credit remainder stays on savings.
+    const amount = wholeCreditsToCurrent(savBal);
+    withdraw(h.bus, sav, h.player.currentAccountId, amount);
+
+    expect(Number.isInteger(h.player.credits)).toBe(true);
+    expect(h.player.credits).toBe(glCredits(h));
+    // A fractional projected balance would throw on reload (validateSaveState);
+    // the int() credits field must accept it.
+    expect(PlayerSchema.shape.credits.safeParse(h.player.credits).success).toBe(
+      true,
+    );
+    expect(Math.abs(h.service.getLedger().totalBalance())).toBeLessThanOrEqual(
+      BALANCE_EPSILON,
+    );
   });
 });
 

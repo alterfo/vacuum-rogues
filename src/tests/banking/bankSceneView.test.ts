@@ -12,6 +12,7 @@ import {
   formatCredits,
   playerAccountRows,
   statementRows,
+  wholeCreditsToCurrent,
 } from "@/presentation/bankSceneView";
 
 describe("formatCredits", () => {
@@ -29,6 +30,31 @@ describe("formatCredits", () => {
   it("rounds fractional accruals", () => {
     expect(formatCredits(1000.4)).toBe("1 000 ₡");
     expect(formatCredits(999.6)).toBe("1 000 ₡");
+  });
+});
+
+describe("wholeCreditsToCurrent", () => {
+  it("floors a fractional balance to whole credits", () => {
+    // EOD interest leaves savings/loan balances fractional; only whole credits
+    // may land on a current account (player.credits is int() in the save schema).
+    expect(wholeCreditsToCurrent(1000, 502.001)).toBe(502);
+    expect(wholeCreditsToCurrent(3015.7)).toBe(3015);
+  });
+
+  it("caps by the smallest limit", () => {
+    expect(wholeCreditsToCurrent(1000, 5000)).toBe(1000);
+    expect(wholeCreditsToCurrent(1000, 250.9, 800)).toBe(250);
+  });
+
+  it("returns 0 (a no-op) when only a sub-credit remainder is left", () => {
+    expect(wholeCreditsToCurrent(1000, 0.4)).toBe(0);
+    expect(wholeCreditsToCurrent(1000, -5)).toBe(0);
+  });
+
+  it("always yields an integer so the projected credits stays save-safe", () => {
+    for (const v of [0.1, 1.999, 999.9999, 1000.5]) {
+      expect(Number.isInteger(wholeCreditsToCurrent(2000, v))).toBe(true);
+    }
   });
 });
 

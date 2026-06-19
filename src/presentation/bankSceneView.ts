@@ -120,6 +120,20 @@ export function statementRows(
 }
 
 /**
+ * The whole-credit amount to move onto a *current* account, capped by every
+ * value in `limits`. EOD interest leaves savings/loan balances fractional, but
+ * `player.credits` is whole-number currency — and its save schema rejects a
+ * non-integer (`PlayerSchema.credits` is `int()`), so projecting a fractional
+ * current-account balance corrupts the save on reload. A withdrawal/repayment
+ * must therefore move only whole credits onto the current account; any
+ * sub-credit remainder stays on the savings/loan account. Returns 0 (a no-op)
+ * when nothing whole can move.
+ */
+export function wholeCreditsToCurrent(...limits: number[]): number {
+  return Math.max(0, Math.floor(Math.min(...limits)));
+}
+
+/**
  * One-line description of a command flowing onto the bus, for the live
  * "consumers → шина → проводки" panel (the teaching artifact).
  */

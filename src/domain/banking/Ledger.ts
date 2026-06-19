@@ -123,6 +123,15 @@ export function journalEntry(input: JournalEntryInput): JournalEntry {
     );
   }
 
+  const badLeg = postings.find((p) => !Number.isFinite(p.amount));
+  if (badLeg) {
+    throw new GameValidationException(
+      "LEDGER_DEGENERATE_ENTRY",
+      `Journal entry "${input.id}" has a non-finite amount on ${badLeg.accountId} (${badLeg.amount}).`,
+      { id: input.id, accountId: badLeg.accountId, amount: badLeg.amount },
+    );
+  }
+
   if (!isBalanced(postings)) {
     throw new GameValidationException(
       "LEDGER_UNBALANCED",

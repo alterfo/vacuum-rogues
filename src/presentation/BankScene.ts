@@ -31,6 +31,7 @@ import {
   formatCredits,
   playerAccountRows,
   statementRows,
+  wholeCreditsToCurrent,
   type AccountRow,
   type StatementRow,
 } from "./bankSceneView";
@@ -493,7 +494,7 @@ export class BankScene extends GameScene {
     if (!engine || !player) return;
     const savId = savingsAccountId(player.id);
     const savBal = engine.bankingService.balanceOf(savId);
-    const amount = Math.min(WITHDRAW_STEP, savBal);
+    const amount = wholeCreditsToCurrent(WITHDRAW_STEP, savBal);
     if (amount <= 0) {
       this.showToast("На вкладе нет средств", 0xff8866);
       return;
@@ -540,7 +541,7 @@ export class BankScene extends GameScene {
       this.showToast("Нет действующего кредита", 0x66ddff);
       return;
     }
-    const amount = Math.min(REPAY_STEP, owed, player.credits);
+    const amount = wholeCreditsToCurrent(REPAY_STEP, owed, player.credits);
     if (amount <= 0) {
       this.showToast("Недостаточно средств для погашения", 0xff8866);
       return;

@@ -88,6 +88,22 @@ describe("journalEntry — double-entry validation", () => {
     ).toThrowError(GameValidationException);
   });
 
+  it("rejects a non-finite amount (NaN/Infinity) with a clear error", () => {
+    for (const bad of [NaN, Infinity, -Infinity]) {
+      expect(() =>
+        journalEntry({
+          id: "nonfinite",
+          date: 1,
+          reason: "Bad amount",
+          postings: [
+            { accountId: PLAYER, amount: bad },
+            { accountId: INTERNAL_ACCOUNTS.CASH, amount: -bad },
+          ],
+        }),
+      ).toThrowError(GameValidationException);
+    }
+  });
+
   it("tolerates IEEE-754 noise within BALANCE_EPSILON", () => {
     const a = 0.1;
     const b = 0.2;
