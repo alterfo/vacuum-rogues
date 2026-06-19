@@ -1,5 +1,5 @@
 /** Visibility tiers for star map rendering */
-export type SystemVisibility = "visited" | "neighbor" | "unknown";
+export type SystemVisibility = "visited" | "charted" | "neighbor" | "unknown";
 
 export interface LabelBound {
   x: number;
@@ -116,17 +116,27 @@ interface SystemRef {
  * Returns the visibility tier for a system on the star map.
  *
  * - visited: player has personally been to this system
+ * - charted: revealed by a purchased star chart (`explored`) — name is known
+ *   even though the player has never been there
  * - neighbor: reachable in 1 jump from any visited system (bidirectional)
- * - unknown: no connection to any visited system
+ * - unknown: no connection to any visited system, and not charted
+ *
+ * Precedence: visited > charted > neighbor > unknown. Both `charted` and
+ * `neighbor` are "named" tiers (their name renders); only `unknown` shows "?".
+ * `chartedSystemIds` defaults to empty so existing callers are unaffected.
  */
 export function getSystemVisibility(
   systemId: string,
   visitedSystemIds: readonly string[],
   allSystems: readonly SystemRef[],
+  chartedSystemIds: readonly string[] = [],
 ): SystemVisibility {
   const visitedSet = new Set(visitedSystemIds);
 
   if (visitedSet.has(systemId)) return "visited";
+
+  // A purchased chart reveals the system name even without a visit.
+  if (chartedSystemIds.includes(systemId)) return "charted";
 
   // Check if any visited system connects to this one, or this one connects to any visited system
   for (const system of allSystems) {

@@ -483,6 +483,11 @@ export class StarMapScene extends GameScene {
     const visitedSystemIds = this.gameEngine?.player?.visitedSystems ?? [];
     const overmindSystems = new Set(this.galaxy.overmindSystems ?? []);
     const pirateSystems = new Set(this.galaxy.pirateSystems ?? []);
+    // Charted systems (revealed by a purchased star chart) reveal their name
+    // even when never visited — so they render named, not as "?".
+    const chartedSystemIds = this.galaxy.systems
+      .filter((s) => s.explored)
+      .map((s) => s.id);
 
     // Draw only explored systems
     let systemsDrawn = 0;
@@ -509,7 +514,12 @@ export class StarMapScene extends GameScene {
       const isPirate = pirateSystems.has(system.id);
       const visibility = isPlayer
         ? "visited"
-        : getSystemVisibility(system.id, visitedSystemIds, this.galaxy.systems);
+        : getSystemVisibility(
+            system.id,
+            visitedSystemIds,
+            this.galaxy.systems,
+            chartedSystemIds,
+          );
       const isVisited = visibility === "visited";
 
       let color: number;
@@ -529,8 +539,8 @@ export class StarMapScene extends GameScene {
       } else if (isSelected) {
         color = 0xffff00;
         radius = 5;
-      } else if (visibility === "neighbor") {
-        // Neighbor system: known but not personally visited — dim dot.
+      } else if (visibility === "neighbor" || visibility === "charted") {
+        // Known but not personally visited (neighbor or charted) — dim dot.
         color = 0x334455;
         radius = 3;
       } else if (!isVisited) {
@@ -637,7 +647,7 @@ export class StarMapScene extends GameScene {
           ? 0xffaa66
           : system.id === this.playerSystemId
             ? 0x00ff00
-            : visibility === "neighbor"
+            : visibility === "neighbor" || visibility === "charted"
               ? 0x88aacc
               : 0x88ccff;
 
