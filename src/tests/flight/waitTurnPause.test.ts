@@ -17,10 +17,11 @@
  * Pause effectively no longer stops it at a useful point. Each frame must advance
  * at most one wait-day so the turn always stays haltable.
  *
- * This file is the Task-1 red reproduction. The baseline test proves the harness
- * is sound (normal wait → Pause → stop works), so the failing test is failing for
- * the genuine root cause, not a mis-set fixture. Adjacent edge cases (post-combat,
- * N-days elapsed, gate stranding) are added in Task 2.
+ * Fix (Task 2): `advanceWaitTime` clamps the per-frame dt to one wait-day
+ * (`Math.min(deltaTime, MS_PER_WAIT_DAY)`), mirroring the dt cap in
+ * `ShipPhysics.update`. The baseline test proves the harness is sound (normal
+ * wait → Pause → stop works); the former-red repro is now green, alongside the
+ * adjacent edge cases (large dt + Pause, N-days elapsed, post-combat latch).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -247,25 +248,64 @@ describe("Wait-turn pause stays haltable after a while", () => {
     expect(s.isTurnRunning).toBe(false);
   });
 
-  // RED (the bug): the tab is backgrounded for ~10 minutes, then RAF resumes with
-  // one enormous deltaTime. The wait accumulator is unclamped, so a single frame
-  // flushes ~600 game-days at once — the turn runs away and the player can no
-  // longer halt it in time. A frame must advance at most one wait-day.
-  //
-  // Committed as `it.fails` so the suite (and the pre-commit gate) stays green
-  // while the bug exists: the body's assertion genuinely throws today (600 > 1),
-  // which is exactly what `it.fails` asserts. Task 2's fix makes the assertion
-  // pass — at which point `it.fails` itself fails and must be flipped to `it`.
-  // Verified red as a plain `it` first: "expected 600 to be less than or equal
-  // to 1".
-  it.fails(
-    "a backgrounded tab must not flush an unbounded number of wait-days in one frame",
-    () => {
-      startWaitTurn();
+  // GREEN after the Task-2 fix (was the Task-1 red repro, committed as `it.fails`):
+  // the tab is backgrounded for ~10 minutes, then RAF resumes with one enormous
+  // deltaTime. `advanceWaitTime` now clamps the per-frame dt to one wait-day, so a
+  // single frame advances at most one game-day instead of flushing ~600 at once —
+  // the turn can no longer run away faster than the player can react.
+  it("a backgrounded tab must not flush an unbounded number of wait-days in one frame", () => {
+    startWaitTurn();
 
-      updateShip(600_000); // ~10 minutes elapsed while the tab was backgrounded
+    updateShip(600_000); // ~10 minutes elapsed while the tab was backgrounded
 
-      expect(advanceGalaxyDay.mock.calls.length).toBeLessThanOrEqual(1);
-    },
-  );
+    expect(advanceGalaxyDay.mock.calls.length).toBeLessThanOrEqual(1);
+  });
+
+  // Edge case (large dt + Pause): even after a huge resume-frame, the turn is
+  // still running (only one day passed) and a subsequent Pause halts it at the
+  // very next day boundary — the latch is never stranded by the big frame.
+  it("after a huge resume-frame, Pause still stops the wait turn promptly", () => {
+    startWaitTurn();
+
+    updateShip(600_000); // backgrounded-tab resume — advances at most one day
+    expect(s.isTurnRunning).toBe(true); // one day ≠ a runaway; turn still haltable
+
+    onPlayPause(); // request pause
+    updateShip(1000); // next whole wait-day → deferred pause fires
+    expect(s.isTurnRunning).toBe(false);
+  });
+
+  // Edge case (N days elapsed): a wait turn that has run for many days is just as
+  // haltable as a fresh one — running "for a while" must not desync the latch.
+  it("a wait turn that has run for many days still stops on Pause", () => {
+    startWaitTurn();
+
+    for (let day = 0; day < 200; day++) updateShip(1000); // 200 game-days pass
+    expect(s.isTurnRunning).toBe(true);
+    expect(advanceGalaxyDay.mock.calls.length).toBe(200);
+
+    onPlayPause(); // request pause after 200 days
+    updateShip(1000); // next whole wait-day → deferred pause fires
+    expect(s.isTurnRunning).toBe(false);
+  });
+
+  // Edge case (post-combat): Pause is requested, then a fight starts mid-wait.
+  // The wait gate suppresses `advanceWaitTime` during combat (the calendar
+  // freezes), so the deferred latch is parked, not consumed — the turn keeps
+  // running. When combat clears, the next day boundary consumes the stale latch
+  // and the turn ends. The latch must survive a combat interval without
+  // stranding the turn.
+  it("a deferred Pause survives a combat interval and fires once combat clears", () => {
+    startWaitTurn();
+    onPlayPause(); // request pause (latch set)
+
+    (s.combatModule as { isActive: boolean }).isActive = true; // fight starts
+    for (let day = 0; day < 5; day++) updateShip(1000); // calendar frozen by gate
+    expect(s.isTurnRunning).toBe(true); // latch parked, not stranded
+    expect(advanceGalaxyDay.mock.calls.length).toBe(0); // no days burned in combat
+
+    (s.combatModule as { isActive: boolean }).isActive = false; // fight ends
+    updateShip(1000); // next whole wait-day → stale latch consumed
+    expect(s.isTurnRunning).toBe(false);
+  });
 });

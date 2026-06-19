@@ -84,10 +84,21 @@ cause empirically, fix it, and prove pause always stops a wait turn — even "af
   pause latch immediately when no day-boundary will arrive, and/or keep HUD turn-state in sync)
 - Modify (if HUD desync confirmed): src/presentation/flight/FlightHud.ts
 
-- [ ] apply the minimal fix for the confirmed cause; the Task 1 test goes green
-- [ ] add tests for the adjacent edge cases (large dt, post-combat, N-days elapsed) — all green
-- [ ] ⚠️ if the fix reds an existing turn/day-advance test, STOP and re-diagnose (don't weaken it)
-- [ ] run affected tests — must pass before next task
+- [x] apply the minimal fix for the confirmed cause; the Task 1 test goes green
+      — `advanceWaitTime` now clamps the per-frame dt to one wait-day
+      (`const clampedDt = Math.min(deltaTime, this.MS_PER_WAIT_DAY)`), mirroring the
+      dt cap in `ShipPhysics.update`. The former-red `it.fails` repro is flipped to
+      `it` and passes; a single 600 000 ms resume-frame now advances exactly one day.
+- [x] add tests for the adjacent edge cases (large dt, post-combat, N-days elapsed) — all green
+      — added to `src/tests/flight/waitTurnPause.test.ts`: "after a huge resume-frame,
+      Pause still stops promptly", "a wait turn that has run for many days still stops on
+      Pause" (200 days), and "a deferred Pause survives a combat interval and fires once
+      combat clears". All 5 tests green.
+- [x] ⚠️ if the fix reds an existing turn/day-advance test, STOP and re-diagnose (don't weaken it)
+      — no existing test red: pauseFinishesDay (10), routeOnlyInPause (4), routeHideWhileMoving (3),
+      spaceFlightE2eMethods (9), flightHud (22) all still green; no existing assertions changed.
+- [x] run affected tests — must pass before next task — 53 tests across the 6 adjacent
+      flight/turn/pause files pass; `npm run lint` clean (0 errors).
 
 ### Task 3: Verify acceptance criteria
 - [ ] verify Overview: a wait turn can always be paused, regardless of how long it has run

@@ -1311,7 +1311,16 @@ export class SpaceFlightScene extends GameScene {
    * they tick. A deferred Pause (F1) ends the wait turn at the day boundary.
    */
   private advanceWaitTime(deltaTime: number): void {
-    const scaledDt = deltaTime * (this.shipPhysics?.timeScale ?? 1);
+    // Clamp the per-frame dt to at most one wait-day. A backgrounded tab (or a
+    // long frame hitch) resumes with one enormous deltaTime; fed raw, the
+    // `while` loop below would flush hundreds of game-days in a single frame and
+    // the wait turn would "run away" faster than the player can react — the
+    // deferred Pause latch never gets a chance to halt it at a useful point
+    // ("pause stops working"). One wait-day per frame keeps the turn always
+    // haltable. ShipPhysics.update applies the same idea to its own dt (caps at
+    // 100 ms); 1000 ms still crosses exactly one day, so normal pacing is intact.
+    const clampedDt = Math.min(deltaTime, this.MS_PER_WAIT_DAY);
+    const scaledDt = clampedDt * (this.shipPhysics?.timeScale ?? 1);
     this.waitDayAccum += scaledDt / this.MS_PER_WAIT_DAY;
     while (this.waitDayAccum >= 1) {
       this.waitDayAccum -= 1;
