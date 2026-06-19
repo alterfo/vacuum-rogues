@@ -82,10 +82,32 @@ is imperceptible. This widens the range to a clearly-visible, well-mixed spread 
   JobBoardPanel.ts, MainMenuScene.ts (replace hand-rolled masked-list + scroll with
   `ScrollableList`; keep `WheelScroll` underneath)
 
-- [ ] each panel's long list renders through `ScrollableList` (one design everywhere);
+- [x] each panel's long list renders through `ScrollableList` (one design everywhere);
       remaining low-traffic lists noted as ➕ follow-up if not migrated here
-- [ ] write/extend tests for at least one migrated panel
-- [ ] run affected tests + regression — must pass before next task
+      → `InfoCenterScene` news tab migrated onto `ScrollableList` (renders ALL
+      rows, no `slice`; the component owns mask/hit-area/clamp/drag). Added an
+      additive `enableWheel?: boolean` option so the scene keeps its single
+      wheel+ArrowUp/Down driver (`scrollNews`) instead of double-binding.
+      ➕ Follow-up (deliberately NOT migrated here — each is higher-risk than the
+      one-design win warrants this batch):
+        - `JobBoardPanel` — its scroll internals (`offersContainer.y` as a
+          row-offset, `scrollOffers(delta,maxOffset)`, ▲/▼ arrows) are pinned by
+          `jobBoardScroll.test.ts`; migrating would change those structures and
+          break existing assertions (standing rule: don't touch existing tests).
+        - `EquipmentShopScene` / `StationScene` shop — both use a windowed
+          `slice` + re-render-on-scroll model fused with keyboard nav and
+          buy/install interactions + toasts; a clean migration needs the same
+          render-all + offset rework as InfoCenter but with much larger blast
+          radius. Track separately.
+        - `MainMenuScene` — has NO scrollable list (parallax stars only); the
+          plan's mention of it is inaccurate, nothing to migrate.
+- [x] write/extend tests for at least one migrated panel
+      → `src/tests/presentation/infoCenterNewsScroll.test.ts` (renders every
+      item, scroll/clamp, position survives a bookmark re-render, no-overflow
+      no-scroll). Plus an `enableWheel:false` case in `scrollableList.test.ts`.
+- [x] run affected tests + regression — must pass before next task
+      → presentation suite 340 green; e2e regression 21/21 green (incl. the
+      Info-Center news-tab rumor test); lint + `tsc --noEmit` clean.
 
 ### Task 4: Varied planet rotation (perceptible, per-planet)
 **Files:**

@@ -24,6 +24,7 @@ import {
   type Gear,
 } from "@/systems/equipment/GearCatalog";
 import { attachWheelScroll } from "./ui/WheelScroll";
+import { ScrollableList } from "./ui/ScrollableList";
 import { logger } from "@/utils/logger";
 
 interface InfoContext {
@@ -316,7 +317,13 @@ export class InfoCenterScene extends GameScene {
   // tab state
   private activeTab: Tab = "news";
   private newsItems: NewsItem[] = [];
+  // Persisted scroll position of the news list, in PIXELS (survives the re-render
+  // triggered by a bookmark toggle / tab switch). Restored onto a freshly-built
+  // ScrollableList each render.
   private newsScroll = 0;
+  // The reusable scrollable region wrapping ALL news rows (no slicing). Rebuilt
+  // each render; owns a drag handler that destroy() must tear down.
+  private newsList: ScrollableList<NewsItem> | null = null;
 
   // objects tab state
   private objectsQuery = "";
@@ -393,6 +400,10 @@ export class InfoCenterScene extends GameScene {
       this.detachWheel();
       this.detachWheel = null;
     }
+    if (this.newsList) {
+      this.newsList.destroy();
+      this.newsList = null;
+    }
     if (this.mainContainer) {
       this.renderer.uiLayer.removeChild(this.mainContainer);
       this.mainContainer.destroy({ children: true });
@@ -407,6 +418,14 @@ export class InfoCenterScene extends GameScene {
 
   private render(): void {
     if (!this.mainContainer) return;
+    // Capture the live scroll position (wheel/drag may have moved it) and tear
+    // the old list down before removeChildren orphans its container — destroy()
+    // detaches the drag handlers that removeChildren alone would leak.
+    if (this.newsList) {
+      this.newsScroll = this.newsList.offset;
+      this.newsList.destroy();
+      this.newsList = null;
+    }
     this.mainContainer.removeChildren();
 
     if (this.blocked) {
@@ -590,104 +609,125 @@ export class InfoCenterScene extends GameScene {
 
   // ── news tab ───────────────────────────────────────────────────────────────
 
+  /** Fixed per-row height of the news list, in px. */
+  private static readonly NEWS_ROW_H = 38;
+
   private renderNews(container: Container, pw: number, ph: number): void {
     const PAD = 16;
-    const ROW_H = 38;
+    const ROW_H = InfoCenterScene.NEWS_ROW_H;
     const STAR_W = 28;
 
     // Trade-route rumors band sits above the scrollable news list (unmasked).
     const rumorH = this.renderRumorPanel(container, pw);
 
-    // The news list scrolls inside its own masked sub-container, offset below
-    // the rumor band so the mask never clips the rumors.
-    const listArea = new Container();
-    listArea.y = rumorH;
-    container.addChild(listArea);
+    // The news list scrolls inside the shared `ScrollableList` (one design across
+    // every list panel — see plan 20260618), offset below the rumor band so the
+    // clip never covers the rumors. ALL items render (no slicing); the component
+    // owns the mask, hit-area tracking, clamping and drag.
     const listH = Math.max(ROW_H, ph - rumorH);
     const VISIBLE = Math.floor(listH / ROW_H);
-
-    const clampedScroll = Math.max(
-      0,
-      Math.min(this.newsScroll, Math.max(0, this.newsItems.length - VISIBLE)),
-    );
-    this.newsScroll = clampedScroll;
-
-    const visible = this.newsItems.slice(
-      clampedScroll,
-      clampedScroll + VISIBLE,
-    );
-
-    const mask = new Graphics();
-    mask.rect(PAD, 0, pw - PAD * 2, listH);
-    mask.fill({ color: 0xffffff });
-    listArea.addChild(mask);
-    listArea.mask = mask;
-
     const bookmarks = this.gameEngine?.player?.newsBookmarks ?? [];
 
-    for (const [i, item] of visible.entries()) {
-      const y = i * ROW_H;
-
-      const rowBg = new Graphics();
-      rowBg.rect(PAD, y + 2, pw - PAD * 2, ROW_H - 4);
-      rowBg.fill({ color: i % 2 === 0 ? 0x0d1220 : 0x0a0e18 });
-      listArea.addChild(rowBg);
-
-      const dayBadge = new Text({
-        text: `Д${item.day}`,
-        style: { fontSize: 11, fill: 0x88aacc, fontFamily: "monospace" },
-      });
-      dayBadge.x = PAD + 6;
-      dayBadge.y = y + ROW_H / 2 - 7;
-      dayBadge.eventMode = "none";
-      listArea.addChild(dayBadge);
-
-      const news = new Text({
-        text: item.text,
-        style: {
-          fontSize: 13,
-          fill: item.color,
-          fontFamily: "monospace",
-          wordWrap: true,
-          wordWrapWidth: pw - PAD * 2 - 50 - STAR_W,
-        },
-      });
-      news.x = PAD + 46;
-      news.y = y + ROW_H / 2 - 7;
-      news.eventMode = "none";
-      listArea.addChild(news);
-
-      const isBookmarked = bookmarks.includes(item.bookmarkKey);
-      const star = new Text({
-        text: isBookmarked ? "★" : "☆",
-        style: {
-          fontSize: 16,
-          fill: isBookmarked ? 0xffdd44 : 0x334455,
-          fontFamily: "monospace",
-        },
-      });
-      star.x = pw - PAD - STAR_W + 4;
-      star.y = y + ROW_H / 2 - 9;
-      star.eventMode = "static";
-      star.cursor = "pointer";
-      star.on("pointerdown", (e) => {
-        e.stopPropagation();
-        this.toggleBookmark(item.bookmarkKey);
-      });
-      listArea.addChild(star);
-    }
+    this.newsList = new ScrollableList<NewsItem>({
+      x: 0,
+      y: rumorH,
+      width: pw,
+      height: listH,
+      itemHeight: ROW_H,
+      items: this.newsItems,
+      // The scene owns one wheel handler (also bound to ArrowUp/Down) that drives
+      // this list via scrollNews — don't also bind the window wheel here or each
+      // notch would scroll twice.
+      enableWheel: false,
+      renderItem: (item, i) =>
+        this.buildNewsRow(item, i, pw, PAD, ROW_H, STAR_W, bookmarks),
+    });
+    // Restore the persisted pixel offset; scrollTo clamps, so reflect the clamp
+    // back into newsScroll/the footer hint.
+    this.newsList.scrollTo(this.newsScroll);
+    this.newsScroll = this.newsList.offset;
+    container.addChild(this.newsList.container);
 
     if (this.newsItems.length > VISIBLE) {
+      // Footer lives on the (unmasked) content container so it stays fixed while
+      // the rows scroll under the clip.
+      const firstRow = Math.round(this.newsScroll / ROW_H);
       const hint = new Text({
-        text: `↑↓  ${clampedScroll + 1}–${Math.min(clampedScroll + VISIBLE, this.newsItems.length)} / ${this.newsItems.length}`,
+        text: `↑↓  ${firstRow + 1}–${Math.min(firstRow + VISIBLE, this.newsItems.length)} / ${this.newsItems.length}`,
         style: { fontSize: 11, fill: 0x334455, fontFamily: "monospace" },
       });
       hint.anchor.set(1, 1);
       hint.x = pw - PAD;
-      hint.y = listH - 2;
+      hint.y = rumorH + listH - 2;
       hint.eventMode = "none";
-      listArea.addChild(hint);
+      container.addChild(hint);
     }
+  }
+
+  /** Builds one news row at a local origin (the list positions it by index). */
+  private buildNewsRow(
+    item: NewsItem,
+    i: number,
+    pw: number,
+    PAD: number,
+    ROW_H: number,
+    STAR_W: number,
+    bookmarks: readonly number[],
+  ): Container {
+    const row = new Container();
+
+    const rowBg = new Graphics();
+    rowBg.rect(PAD, 2, pw - PAD * 2, ROW_H - 4);
+    rowBg.fill({ color: i % 2 === 0 ? 0x0d1220 : 0x0a0e18 });
+    // 'none' so a click on the row body falls through to the list's drag hit-area
+    // (a child with default eventMode would swallow the drag pointerdown).
+    rowBg.eventMode = "none";
+    row.addChild(rowBg);
+
+    const dayBadge = new Text({
+      text: `Д${item.day}`,
+      style: { fontSize: 11, fill: 0x88aacc, fontFamily: "monospace" },
+    });
+    dayBadge.x = PAD + 6;
+    dayBadge.y = ROW_H / 2 - 7;
+    dayBadge.eventMode = "none";
+    row.addChild(dayBadge);
+
+    const news = new Text({
+      text: item.text,
+      style: {
+        fontSize: 13,
+        fill: item.color,
+        fontFamily: "monospace",
+        wordWrap: true,
+        wordWrapWidth: pw - PAD * 2 - 50 - STAR_W,
+      },
+    });
+    news.x = PAD + 46;
+    news.y = ROW_H / 2 - 7;
+    news.eventMode = "none";
+    row.addChild(news);
+
+    const isBookmarked = bookmarks.includes(item.bookmarkKey);
+    const star = new Text({
+      text: isBookmarked ? "★" : "☆",
+      style: {
+        fontSize: 16,
+        fill: isBookmarked ? 0xffdd44 : 0x334455,
+        fontFamily: "monospace",
+      },
+    });
+    star.x = pw - PAD - STAR_W + 4;
+    star.y = ROW_H / 2 - 9;
+    star.eventMode = "static";
+    star.cursor = "pointer";
+    star.on("pointerdown", (e) => {
+      e.stopPropagation();
+      this.toggleBookmark(item.bookmarkKey);
+    });
+    row.addChild(star);
+
+    return row;
   }
 
   /**
@@ -1467,14 +1507,17 @@ export class InfoCenterScene extends GameScene {
     }
   }
 
-  private scrollNews(delta: number): void {
-    this.newsScroll = Math.max(
-      0,
-      Math.min(
-        this.newsScroll + delta,
-        Math.max(0, this.newsItems.length - 10),
-      ),
-    );
+  /** Scroll the news list by `deltaRows` rows (wheel notch / arrow press). */
+  private scrollNews(deltaRows: number): void {
+    if (!this.newsList) {
+      this.render();
+      return;
+    }
+    // Nudge the live list (it clamps), then sync newsScroll BEFORE the re-render —
+    // render() re-reads the offset off the list, so the order matters. The
+    // re-render refreshes the footer "X–Y / N" hint.
+    this.newsList.scrollBy(deltaRows * InfoCenterScene.NEWS_ROW_H);
+    this.newsScroll = this.newsList.offset;
     this.render();
   }
 

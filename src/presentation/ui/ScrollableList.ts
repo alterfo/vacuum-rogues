@@ -42,6 +42,13 @@ export interface ScrollableListOptions<T> {
   wheelStep?: number;
   /** Enable click-drag scrolling (default true). */
   enableDrag?: boolean;
+  /**
+   * Attach the shared window-level wheel listener (default true). Set false when
+   * the host scene already owns a wheel handler that drives this list (e.g. a
+   * tab that maps both the mouse wheel and ArrowUp/Down keys through one
+   * scroller) — otherwise both listeners fire and the list scrolls twice.
+   */
+  enableWheel?: boolean;
 }
 
 export class ScrollableList<T> {
@@ -78,6 +85,7 @@ export class ScrollableList<T> {
       renderItem,
       wheelStep,
       enableDrag = true,
+      enableWheel = true,
     } = options;
 
     this.itemHeight = itemHeight;
@@ -121,8 +129,9 @@ export class ScrollableList<T> {
 
     // Window-level wheel: federated `wheel` on the content is swallowed by the
     // rows on top, so use the shared DOM listener. Only attach when there is
-    // something to scroll (otherwise we'd needlessly preventDefault page scroll).
-    if (this.maxScroll > 0) {
+    // something to scroll (otherwise we'd needlessly preventDefault page scroll)
+    // and when the host hasn't opted to drive the wheel itself.
+    if (enableWheel && this.maxScroll > 0) {
       this.detachWheel = attachWheelScroll((dir) =>
         this.scrollBy(dir * this.wheelStep),
       );

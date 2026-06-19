@@ -173,6 +173,28 @@ describe("ScrollableList", () => {
     }
   });
 
+  it("does not attach a wheel listener when enableWheel is false", () => {
+    // Hosts that already own a wheel handler driving this list (e.g. the
+    // Infocenter news tab, which maps wheel + ArrowUp/Down through one scroller)
+    // opt out so the two listeners don't double-scroll.
+    const wheelHandlers: unknown[] = [];
+    const addSpy = vi
+      .spyOn(window, "addEventListener")
+      .mockImplementation((type, handler) => {
+        if (String(type) === "wheel") wheelHandlers.push(handler);
+      });
+    try {
+      const list = makeList(12, { enableWheel: false }); // overflows, but opted out
+      expect(list.overflows).toBe(true);
+      expect(wheelHandlers).toHaveLength(0);
+      // scrollBy still works (host drives it).
+      list.scrollBy(80);
+      expect(list.offset).toBe(80);
+    } finally {
+      addSpy.mockRestore();
+    }
+  });
+
   it("does not attach a wheel listener when content fits", () => {
     const wheelHandlers: unknown[] = [];
     const addSpy = vi
