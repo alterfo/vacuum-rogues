@@ -74,11 +74,11 @@ regulatory reporting, ISO 20022.
   `StatementCut`), src/systems/banking/BankingService.ts
 - Create: src/tests/banking/bankingService.test.ts
 
-- [ ] `BankingService` handles each command → balanced postings → publishes events; a
+- [x] `BankingService` handles each command → balanced postings → publishes events; a
       `Transfer(from,to,amount)` debits one current account and credits another
-- [ ] write tests: each command posts correct double-entry + emits `BalanceChanged`;
+- [x] write tests: each command posts correct double-entry + emits `BalanceChanged`;
       multiple subscribers receive events
-- [ ] run affected tests — must pass before next task
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Economy seam — `player.credits` becomes a GL projection
 **Files:**
