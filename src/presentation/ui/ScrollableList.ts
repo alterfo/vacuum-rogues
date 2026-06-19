@@ -105,6 +105,9 @@ export class ScrollableList<T> {
     // `.mask` to an un-parented Graphics is ignored by PixiJS 8.
     this.clipMask = new Graphics();
     this.clipMask.rect(0, 0, width, height).fill({ color: 0xffffff });
+    // A mask is a render-only clip; it must never be a hit target (otherwise it
+    // would swallow clicks meant for the rows or a modal backdrop beneath it).
+    this.clipMask.eventMode = "none";
     this.container.addChild(this.clipMask);
     this.content.mask = this.clipMask;
 

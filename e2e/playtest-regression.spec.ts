@@ -832,6 +832,141 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('smoke: quest journal with >2 active quests scrolls to reveal them all (no dead "+N ещё")', async ({ page }) => {
+    // Plan 20260618 Task 2: the journal used to slice(0, ~2) the active quests
+    // and print the rest as a non-interactive "+N ещё..." stub you could never
+    // open. Now every active quest renders into a wheel-scrollable region. Seed
+    // 4 quests so the section overflows (only ~2 fit), open the journal, and
+    // assert: no "+N ещё" stub, every title is present (no truncation), and a
+    // real wheel scroll advances the active list so the lower quests are reached.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    const seeded = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        questManager: {
+          acceptQuestFromTemplate: (
+            t: unknown,
+            p?: string,
+            d?: number,
+            f?: string,
+          ) => unknown;
+          getActiveQuests: () => { id: string }[];
+        };
+      };
+      const qm = engine.questManager;
+      for (let n = 1; n <= 4; n++) {
+        qm.acceptQuestFromTemplate(
+          {
+            id: `e2e-scroll-${n}`,
+            title: `E2E Свиток ${n}`,
+            description: 'scroll test',
+            type: 'EXPLORATION',
+            objectives: [
+              {
+                id: `e2e-scroll-${n}-o`,
+                description: 'Разведать',
+                type: 'VISIT_SYSTEM',
+                targetAmount: 1,
+                targetSystemId: 'sys-x',
+              },
+            ],
+            reward: { credits: 100 * n, experience: 10 * n, items: [] },
+            dialogueAnchors: [],
+            deadline: 0,
+            failurePenalty: null,
+          },
+          'unknown',
+          0,
+          '',
+        );
+      }
+      return qm.getActiveQuests().length;
+    });
+    expect(seeded).toBeGreaterThanOrEqual(4);
+
+    // Open the journal via the HUD.
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const hud = engine.currentScene?.['hud'] as
+        | { toggleQuestJournal: () => void }
+        | undefined;
+      hud?.toggleQuestJournal();
+    });
+
+    // Probe the rendered journal: collect every Text string and read the active
+    // list's scroll state straight off the Pixi tree (private fields are plain
+    // runtime props).
+    const probe = (): Promise<{
+      texts: string[];
+      offset: number | null;
+      maxOffset: number | null;
+      overflows: boolean;
+    } | null> =>
+      page.evaluate(() => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+        };
+        const hud = engine.currentScene?.['hud'] as
+          | {
+              questJournalUI: {
+                container: { text?: unknown; children?: unknown[] };
+                activeList: {
+                  offset: number;
+                  maxOffset: number;
+                  overflows: boolean;
+                } | null;
+              } | null;
+            }
+          | undefined;
+        const ui = hud?.questJournalUI ?? null;
+        if (!ui) return null;
+        const texts: string[] = [];
+        const walk = (node: { text?: unknown; children?: unknown[] }): void => {
+          if (typeof node.text === 'string' && node.text) texts.push(node.text);
+          for (const c of (node.children as {
+            text?: unknown;
+            children?: unknown[];
+          }[]) ?? [])
+            walk(c);
+        };
+        walk(ui.container);
+        return {
+          texts,
+          offset: ui.activeList?.offset ?? null,
+          maxOffset: ui.activeList?.maxOffset ?? null,
+          overflows: ui.activeList?.overflows ?? false,
+        };
+      });
+
+    const before = await probe();
+    expect(before).not.toBeNull();
+    // The dead "+N ещё" overflow stub is gone.
+    expect(before!.texts.some((t) => /\+\d+\s*ещё/.test(t))).toBe(false);
+    // Every active quest title is rendered (no slice/truncation).
+    for (let n = 1; n <= 4; n++) {
+      expect(before!.texts).toContain(`E2E Свиток ${n}`);
+    }
+    // The active section overflows and starts parked at the top.
+    expect(before!.overflows).toBe(true);
+    expect(before!.maxOffset!).toBeGreaterThan(0);
+    expect(before!.offset).toBe(0);
+
+    // A real wheel scroll over the journal advances the offset (reveals the rest).
+    const screen = await page.evaluate(() => {
+      const c = document.querySelector('canvas') as HTMLCanvasElement;
+      return { w: c.clientWidth, h: c.clientHeight };
+    });
+    await page.mouse.move(screen.w / 2, screen.h / 2);
+    await page.mouse.wheel(0, 300);
+    const after = await probe();
+    expect(after!.offset!).toBeGreaterThan(0);
+
+    errorCollector.assertAndDetach();
+  });
+
   test('smoke: take-off after the equipment shop parks beside the planet, not at the system edge (playtest3 F4)', async ({ page }) => {
     // F4: land → equipment shop → return → "Взлёт". The take-off must spawn the
     // ship beside the planet it left, not fling it to the distant system edge.

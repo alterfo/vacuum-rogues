@@ -71,10 +71,10 @@ is imperceptible. This widens the range to a clearly-visible, well-mixed spread 
   `ScrollableList` of ALL active quests; sections become scrollable regions)
 - Create/Modify: e2e regression spec (journal scrolls to all active quests)
 
-- [ ] all active quests reachable via scroll; remove the non-interactive `+N ещё...`
-- [ ] readable contrast retained (≥ `0xb4b4b4`); screenshot-verify the scrolled journal
-- [ ] add e2e assertion: with >2 active quests, scrolling reveals them
-- [ ] run affected tests + regression — must pass before next task
+- [x] all active quests reachable via scroll; remove the non-interactive `+N ещё...`
+- [x] readable contrast retained (≥ `0xb4b4b4`); screenshot-verify the scrolled journal
+- [x] add e2e assertion: with >2 active quests, scrolling reveals them
+- [x] run affected tests + regression — must pass before next task
 
 ### Task 3: Standardize the other list panels on `ScrollableList`
 **Files:**

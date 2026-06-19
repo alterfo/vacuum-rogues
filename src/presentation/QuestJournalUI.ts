@@ -4,6 +4,7 @@ import type { Quest } from "@/domain/Quest";
 import { logger } from "@/utils/logger";
 import { TYPE_LABEL } from "@/presentation/JobBoardPanel";
 import { QuestType } from "@/types";
+import { ScrollableList } from "@/presentation/ui/ScrollableList";
 
 /**
  * Quest Journal UI - displays active and completed quests with progress
@@ -24,6 +25,10 @@ export class QuestJournalUI {
   // Used to show live cargo progress for COLLECT_ITEM objectives instead of the
   // frozen currentAmount (which is never incremented in production).
   private readonly cargoCarried: ((itemType: string) => number) | undefined;
+  // Scrollable region wrapping the active quests when they overflow the panel
+  // (replaces the old slice + dead "+N ещё" label). Null while everything fits.
+  // Owns a window-level wheel listener that destroy() must tear down.
+  private activeList: ScrollableList<Quest> | null = null;
 
   constructor(
     questManager: IQuestService,
@@ -177,30 +182,46 @@ export class QuestJournalUI {
     this.container.addChild(sectionTitle);
 
     const cardStep = 140;
-    const maxVisible = Math.floor((this.panelHeight - startY - 30) / cardStep);
-    const visible = quests.slice(0, maxVisible);
-    const overflow = quests.length - visible.length;
+    const cardsTop = startY + 30;
+    // How many cards fit in the space the active section is allotted. Matches the
+    // old `maxVisible` formula so the layout below the section is unchanged.
+    const fitCount = Math.max(
+      1,
+      Math.floor((this.panelHeight - startY - 30) / cardStep),
+    );
 
-    let yOffset = startY + 30;
-    for (const quest of visible) {
-      const questUI = this.createQuestCard(quest, yOffset);
-      this.container.addChild(questUI);
-      yOffset += cardStep;
+    if (quests.length <= fitCount) {
+      // Everything fits — render the cards directly (no scroll, no truncation).
+      let yOffset = cardsTop;
+      for (const quest of quests) {
+        const questUI = this.createQuestCard(quest, yOffset);
+        this.container.addChild(questUI);
+        yOffset += cardStep;
+      }
+      return yOffset;
     }
 
-    if (overflow > 0) {
-      const moreText = new Text({
-        text: `+${overflow} ещё...`,
-        style: { fontFamily: "Courier New", fontSize: 11, fill: 0x888888 },
-      });
-      moreText.x = 20;
-      moreText.y = yOffset;
-      moreText.eventMode = "none";
-      this.container.addChild(moreText);
-      yOffset += 20;
-    }
-
-    return yOffset;
+    // Overflow: wrap ALL active quests in a scrollable region so every one is
+    // reachable by scrolling — replacing the old `slice` + non-interactive
+    // "+N ещё..." dead-end. Drag is disabled on purpose: a dragging content
+    // container is an eventMode="static" hit target whose pointerdown does not
+    // stopPropagation, which would re-open the playtest3 F6 click-through (the
+    // modal relies on non-button content falling through to the catch-all
+    // backdrop). Scroll is wheel-driven here.
+    const viewportHeight = fitCount * cardStep;
+    this.activeList = new ScrollableList<Quest>({
+      x: 0,
+      y: cardsTop,
+      width: this.panelWidth,
+      height: viewportHeight,
+      itemHeight: cardStep,
+      items: quests,
+      // The list positions each row by index; build the card at a local origin.
+      renderItem: (quest) => this.createQuestCard(quest, 0),
+      enableDrag: false,
+    });
+    this.container.addChild(this.activeList.container);
+    return cardsTop + viewportHeight;
   }
 
   /**
@@ -214,7 +235,7 @@ export class QuestJournalUI {
     const bg = new Graphics();
     bg.rect(20, 0, this.panelWidth - 40, 130);
     bg.fill({ color: 0x16213e, alpha: 0.8 });
-    bg.stroke({ color: quest.isCompleted ? 0x00ff00 : 0x888888, width: 1 });
+    bg.stroke({ color: quest.isCompleted ? 0x00ff00 : 0xb4b4b4, width: 1 });
     bg.eventMode = "none";
     card.addChild(bg);
 
@@ -239,7 +260,7 @@ export class QuestJournalUI {
       style: {
         fontFamily: "Courier New",
         fontSize: 11,
-        fill: 0x888888,
+        fill: 0xb4b4b4,
       },
     });
     typeText.x = this.panelWidth - 120;
@@ -494,7 +515,7 @@ export class QuestJournalUI {
 
     const typeText = new Text({
       text: `[${TYPE_LABEL[quest.type] ?? quest.type}]`,
-      style: { fontFamily: "Courier New", fontSize: 11, fill: 0x888888 },
+      style: { fontFamily: "Courier New", fontSize: 11, fill: 0xb4b4b4 },
     });
     typeText.x = this.panelWidth - 120;
     typeText.y = 8;
@@ -572,7 +593,7 @@ export class QuestJournalUI {
     for (const quest of quests) {
       const row = new Text({
         text: `✗ ${quest.title} — просрочено`,
-        style: { fontFamily: "Courier New", fontSize: 11, fill: 0x888888 },
+        style: { fontFamily: "Courier New", fontSize: 11, fill: 0xb4b4b4 },
       });
       row.x = 30;
       row.y = yOffset;
@@ -609,7 +630,7 @@ export class QuestJournalUI {
       style: {
         fontFamily: "Courier New",
         fontSize: 12,
-        fill: 0x888888,
+        fill: 0xb4b4b4,
       },
     });
     completedText.x = 20;
@@ -669,6 +690,14 @@ export class QuestJournalUI {
    * Clean up resources
    */
   destroy(): void {
+    // Tear down the active-quests scroll region first so its window-level wheel
+    // listener is detached (container.destroy alone cannot remove it). Pixi's
+    // destroy is idempotent, so a later container.destroy({children:true}) won't
+    // double-free the already-removed list container.
+    if (this.activeList) {
+      this.activeList.destroy();
+      this.activeList = null;
+    }
     // Idempotent: the journal is closed via a deferred microtask (see
     // FlightHud.closeModals) which may run after the scene's clearUILayer() has
     // already destroyed this container — destroying it twice throws.
