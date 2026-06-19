@@ -327,8 +327,10 @@ describe("FlightHud game-speed persistence (playtest3 F3)", () => {
 // Playtest4 finding A: changing the font size (S/M/L in the ⚙ panel) re-inited
 // SPACE_FLIGHT *from the HUD* with no context, which edge-spawned the ship. The
 // HUD must no longer transition the scene itself — it just persists the size,
-// closes the panel and fans the change out via onFontScaleChange (DIP); the
-// scene owns the re-init (preserving the ship position).
+// closes the panel and fans the change out via onFontScaleChange (DIP). The
+// scene now restyles the text-bearing modules in place via refreshFontScale()
+// (no re-init) — see fontScaleRestyle.test.ts; this test only pins the HUD's
+// contract that it never transitions the scene on a font change.
 // ---------------------------------------------------------------------------
 
 /** Collect the font-button pointerdown handlers created while the panel is open. */

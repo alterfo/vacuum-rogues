@@ -988,7 +988,7 @@ export class FlightHud implements FlightModule {
     // Build container
     const padding = 8;
     const lineHeight = 18;
-    const fontSize = 13;
+    const fontSize = scaledFont(13);
 
     const container = new Container();
     container.eventMode = "none";

@@ -95,3 +95,57 @@ describe("scaledText fill", () => {
     ).toBe(DIM_BLUE_GRAY);
   });
 });
+
+describe("relativeLuminance is WCAG-anchored", () => {
+  // Anchor the transfer function to concrete values: the readability floor and
+  // every "lifted" color is calibrated on these constants, so a flipped channel
+  // coefficient or wrong gamma must fail a test rather than silently shift the
+  // floor (the relative > comparisons elsewhere move both sides together).
+  it("maps black to 0 and white to 1", () => {
+    expect(relativeLuminance(0x000000)).toBe(0);
+    expect(relativeLuminance(0xffffff)).toBeCloseTo(1, 5);
+  });
+
+  it("weights green > red > blue (locks the channel coefficients)", () => {
+    expect(relativeLuminance(0x00ff00)).toBeGreaterThan(
+      relativeLuminance(0xff0000),
+    );
+    expect(relativeLuminance(0xff0000)).toBeGreaterThan(
+      relativeLuminance(0x0000ff),
+    );
+  });
+
+  it("matches the sRGB gamma curve at mid-gray", () => {
+    expect(relativeLuminance(0x808080)).toBeCloseTo(0.2158, 3);
+  });
+});
+
+describe("scaledText forwards style opts", () => {
+  it("passes each provided ScaledTextOpts field into the Text style", () => {
+    setFontScale("M");
+    const t = scaledText("hello world", 12, 0xffffff, {
+      fontFamily: "monospace",
+      fontWeight: "bold",
+      fontStyle: "italic",
+      align: "center",
+      wordWrap: true,
+      wordWrapWidth: 123,
+      lineHeight: 22,
+      letterSpacing: 3,
+    });
+    expect(t.style.fontFamily).toBe("monospace");
+    expect(t.style.fontWeight).toBe("bold");
+    expect(t.style.fontStyle).toBe("italic");
+    expect(t.style.align).toBe("center");
+    expect(t.style.wordWrap).toBe(true);
+    expect(t.style.wordWrapWidth).toBe(123);
+    expect(t.style.lineHeight).toBe(22);
+    expect(t.style.letterSpacing).toBe(3);
+  });
+
+  it("defaults fontFamily to Courier New and leaves wordWrap off when omitted", () => {
+    const t = scaledText("x", 12, 0xffffff);
+    expect(t.style.fontFamily).toBe("Courier New");
+    expect(t.style.wordWrap).toBe(false);
+  });
+});
