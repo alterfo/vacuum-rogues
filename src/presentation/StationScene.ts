@@ -73,6 +73,7 @@ const TYPE_SERVICES: Record<StationType, string[]> = {
     "shop",
     "hangar",
     "infoCenter",
+    "bank",
     "repair",
     "refuel",
     "leave",
@@ -82,6 +83,7 @@ const TYPE_SERVICES: Record<StationType, string[]> = {
     "quests",
     "rankPromotion",
     "infoCenter",
+    "bank",
     "repair",
     "refuel",
     "leave",
@@ -558,6 +560,8 @@ export class StationScene extends GameScene {
         return { label: "Ангар / Оснастка", color: 0x88ddaa };
       case "infoCenter":
         return { label: "Инфоцентр", color: 0x66bbff };
+      case "bank":
+        return { label: "Банк", color: 0xffd24a };
       case "quests":
         return { label: "Задания", color: 0xffee66 };
       case "rankPromotion": {
@@ -599,6 +603,14 @@ export class StationScene extends GameScene {
       case "infoCenter":
         if (this.gameEngine && this.station) {
           await this.gameEngine.transitionTo(SceneType.INFO_CENTER, {
+            gameEngine: this.gameEngine,
+            station: this.station,
+          });
+        }
+        break;
+      case "bank":
+        if (this.gameEngine && this.station) {
+          await this.gameEngine.transitionTo(SceneType.BANK, {
             gameEngine: this.gameEngine,
             station: this.station,
           });

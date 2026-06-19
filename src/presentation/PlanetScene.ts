@@ -349,6 +349,7 @@ export class PlanetScene extends GameScene {
     logger.info(`PlanetScene: ${this.planet?.name}`);
     this.gameEngine?.audio.playSfx("land").catch(() => {});
     this.checkDeliveryQuestCompletion();
+    this.checkDiplomacyQuestCompletion();
     this.checkReturnQuestCompletion();
     this.checkCustoms();
     this.checkAndResumeTextQuest();
@@ -486,6 +487,38 @@ export class PlanetScene extends GameScene {
           `Задание выполнено: ${quest.title} +${quest.reward?.credits ?? 0} ₡`,
           0x00ff88,
         );
+      }
+    }
+  }
+
+  /**
+   * Mark DIPLOMACY quests as pending-return when the player lands on the target
+   * planet. The player then returns to the issuer planet to collect payment.
+   */
+  private checkDiplomacyQuestCompletion(): void {
+    if (!this.gameEngine?.player || !this.planet) return;
+    const planetId = this.planet.id;
+    const systemId = this.gameEngine.player.currentSystemId;
+    const questManager = this.gameEngine.questManager;
+
+    for (const quest of questManager.getActiveQuests()) {
+      if (quest.type !== QuestType.DIPLOMACY) continue;
+      if (quest.isCompleted || quest.isFailed || quest.isPendingReturn)
+        continue;
+      const hit = quest.objectives.some(
+        (o) =>
+          o.type === "VISIT_LOCATION" &&
+          !o.completed &&
+          (o.locationId === planetId || o.locationId === systemId),
+      );
+      if (!hit) continue;
+      const marked = questManager.markObjectivesDone(quest.id);
+      if (marked) {
+        logger.info(`DIPLOMACY quest delivered: ${quest.title}`);
+        this.gameEngine.questPendingReturnCallback?.(
+          `Послание доставлено! Вернитесь за наградой`,
+        );
+        this.showMessage(`${quest.title} — вернитесь за наградой`, 0xffcc66);
       }
     }
   }
@@ -1144,6 +1177,12 @@ export class PlanetScene extends GameScene {
         action: () => this.openMarket(),
       },
       {
+        icon: "⛁",
+        label: "Банк",
+        accent: "primary",
+        action: () => this.openBank(),
+      },
+      {
         icon: "✦",
         label: "Исследования",
         accent: "neutral",
@@ -1394,6 +1433,15 @@ export class PlanetScene extends GameScene {
   private async openGovernor(): Promise<void> {
     if (!this.planet || !this.gameEngine) return;
     await this.gameEngine.transitionTo(SceneType.GOVERNMENT, {
+      gameEngine: this.gameEngine,
+      planet: this.planet,
+    });
+  }
+
+  /** Open the Galactic Bank (АБС): accounts, statement, deposit/loan, bus panel. */
+  private async openBank(): Promise<void> {
+    if (!this.planet || !this.gameEngine) return;
+    await this.gameEngine.transitionTo(SceneType.BANK, {
       gameEngine: this.gameEngine,
       planet: this.planet,
     });

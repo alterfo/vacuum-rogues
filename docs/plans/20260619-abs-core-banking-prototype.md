@@ -151,10 +151,10 @@ safest → most coupled so each phase is gated by the green economy suite:**
 - Modify: StationScene/PlanetScene to open the bank
 - Create/Modify: e2e regression spec for the bank screen
 
-- [ ] bank screen shows accounts + a balanced statement; deposit/loan work; the bus panel
+- [x] bank screen shows accounts + a balanced statement; deposit/loan work; the bus panel
       shows commands flowing from consumers → postings (readable contrast, scaled fonts)
-- [ ] add e2e: open the bank, see a posting from a recent trade; screenshot it
-- [ ] run affected tests + regression — must pass before next task
+- [x] add e2e: open the bank, see a posting from a recent trade; screenshot it
+- [x] run affected tests + regression — must pass before next task
 
 ### Task 8: Persistence + verify acceptance criteria
 **Files:**

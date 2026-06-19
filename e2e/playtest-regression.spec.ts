@@ -1607,4 +1607,51 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
 
     errorCollector.assertAndDetach();
   });
+
+  test('regression: Galactic Bank opens, a trade shows as a balanced posting (АБС Task 7)', async ({ page }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Open the bank via engine navigation (a planet is threaded so "Назад"
+    // returns there, but the bank renders straight from the ledger).
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        transitionTo: (s: string, ctx?: object) => Promise<void>;
+        galaxy: { systems: { planets: unknown[] }[] } | null;
+      };
+      const planet = engine.galaxy?.systems?.flatMap((s) => s.planets)?.[0];
+      await engine.transitionTo('BANK', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'BankScene');
+
+    // Book a trade through the REAL production credit facade (adjustPlayerCredits
+    // → bus → ledger) via the scene's debug seam, then assert it appears as a
+    // posting on the current-account statement AND the books stay balanced.
+    const result = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: {
+          e2eSimulateTrade?: (amt: number, reason?: string) => void;
+          e2eStatement?: () => Array<{ reason: string; delta: number }>;
+        } | null;
+        bankingService: { getLedger: () => { totalBalance: () => number } };
+      };
+      const scene = engine.currentScene;
+      scene?.e2eSimulateTrade?.(750, 'Продажа: Металлы');
+      const statement = scene?.e2eStatement?.() ?? [];
+      const tradeRow = statement.find((r) => r.reason === 'Продажа: Металлы');
+      return {
+        hasTrade: tradeRow?.delta === 750,
+        totalBalance: engine.bankingService.getLedger().totalBalance(),
+      };
+    });
+
+    expect(result.hasTrade).toBe(true);
+    // Double-entry invariant: Σ all postings == 0 after the trade.
+    expect(Math.abs(result.totalBalance)).toBeLessThan(1e-6);
+
+    await page.waitForTimeout(200); // let the statement row render a frame
+    await page.screenshot({ path: 'e2e/screenshots/bank-task7.png' });
+
+    errorCollector.assertAndDetach();
+  });
 });

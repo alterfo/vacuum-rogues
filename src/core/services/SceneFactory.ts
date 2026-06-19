@@ -17,6 +17,7 @@ import { StationScene } from "@/presentation/StationScene";
 import { GovernmentScene } from "@/presentation/GovernmentScene";
 import { TextQuestScene } from "@/presentation/TextQuestScene";
 import { WinScene } from "@/presentation/WinScene";
+import { BankScene } from "@/presentation/BankScene";
 
 /**
  * Factory for creating scene instances.
@@ -56,6 +57,8 @@ export class SceneFactory implements ISceneFactory {
         return new TextQuestScene(renderer);
       case SceneType.WIN_SCREEN:
         return new WinScene(renderer);
+      case SceneType.BANK:
+        return new BankScene(renderer);
       default:
         return null;
     }

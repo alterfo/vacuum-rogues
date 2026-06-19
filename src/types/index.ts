@@ -133,6 +133,7 @@ export enum SceneType {
   GOVERNMENT = "GOVERNMENT",
   TEXT_QUEST = "TEXT_QUEST",
   WIN_SCREEN = "WIN_SCREEN",
+  BANK = "BANK",
 }
 
 export enum StationType {
