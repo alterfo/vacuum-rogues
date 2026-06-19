@@ -150,3 +150,34 @@ describe("decideManeuver — heading math", () => {
     expect(Math.cos(angleDiff(d.heading, toTarget))).toBeLessThan(0);
   });
 });
+
+describe("decideManeuver — boundary cases", () => {
+  it("identical positions (range 0) yield a finite heading, never NaN", () => {
+    // atan2(0, 0) = 0; the radial-bias clamp keeps the heading finite even when
+    // the aggressor sits exactly on the target. A NaN heading would freeze or
+    // teleport the sprite (cos/sin(NaN) = NaN).
+    const d = decideManeuver(input({ range: 0, targetX: 0, targetY: 0 }));
+    expect(d.mode).toBe(ManeuverMode.ORBIT);
+    expect(Number.isFinite(d.heading)).toBe(true);
+  });
+
+  it("hull exactly at the break-off threshold does NOT break off (strict <)", () => {
+    // The guard is `hullRatio < BREAK_OFF_HULL_RATIO`; equality must keep fighting,
+    // so an off-by-one flip to `<=` is caught here.
+    const d = decideManeuver(
+      input({ range: 500, targetX: 500, hullRatio: BREAK_OFF_HULL_RATIO }),
+    );
+    expect(d.mode).not.toBe(ManeuverMode.BREAK_OFF);
+    expect(d.mode).toBe(ManeuverMode.CLOSE);
+  });
+
+  it("equal target speed out of range does NOT break off (strict >)", () => {
+    // `outmatched` is `targetSpeed > selfSpeed`; an exactly-matched target is not
+    // out-matched, so the aggressor keeps closing rather than fleeing. Guards an
+    // off-by-one flip to `>=`.
+    const d = decideManeuver(
+      input({ range: 500, targetX: 500, selfSpeed: 0.2, targetSpeed: 0.2 }),
+    );
+    expect(d.mode).toBe(ManeuverMode.CLOSE);
+  });
+});
