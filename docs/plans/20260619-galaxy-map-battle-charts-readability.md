@@ -81,11 +81,13 @@ Three galaxy-map (`StarMapScene`) fixes the player hit while flying:
 - Modify: src/systems/npc/NpcSimulator.ts (public `battleSystemIds()` reading live ships via the helper)
 - Create/Modify: src/tests/npc/battleSystemIds.test.ts
 
-- [ ] add a public query that feeds the live NPC ship list to `systemsWithActiveBattle` and returns
+- [x] add a public query that feeds the live NPC ship list to `systemsWithActiveBattle` and returns
       the battle set (transient — no persistence)
-- [ ] run `impact` on the touched NpcSimulator surface before editing; warn if HIGH/CRITICAL
-- [ ] write tests for the query against a seeded simulation state
-- [ ] run affected tests — must pass before next task
+- [x] run `impact` on the touched NpcSimulator surface before editing; warn if HIGH/CRITICAL
+      (HIGH: class is a 33-dependent hub, but `battleSystemIds` is purely additive — no existing
+      caller breaks)
+- [x] write tests for the query against a seeded simulation state
+- [x] run affected tests — must pass before next task
 
 ### Task 4: Two-tone battle marker + readable info modal
 **Files:**

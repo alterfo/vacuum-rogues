@@ -22,6 +22,10 @@ import {
   GL_COUNTERPARTY,
   type BankAccess,
 } from "@/systems/banking/economy";
+import {
+  systemsWithActiveBattle,
+  type BattleShip,
+} from "@/utils/battleSystems";
 
 /** Average number of NPC ships spawned per star system. */
 const NPCS_PER_SYSTEM = 4;
@@ -420,6 +424,27 @@ export class NpcSimulator {
       if (n.faction === Faction.OVERMIND || n.role === NpcRole.PIRATE) count++;
     }
     return count;
+  }
+
+  /**
+   * System ids that currently hold a *live fight*: at least one hostile
+   * (pirate/Overmind) ship AND at least one friendly/Ranger ship both present
+   * (located, not in transit or destroyed) in the same system. Feeds the live
+   * NPC ship list to {@link systemsWithActiveBattle} — purely a projection of
+   * the transient population, so it is render-only with no persistence. The
+   * star map reads this to paint the half-red/half-green battle marker.
+   */
+  battleSystemIds(galaxy: Galaxy): Set<string> {
+    const present: BattleShip[] = [];
+    for (const n of galaxy.npcShips) {
+      if (n.state === NpcState.DEAD || n.state === NpcState.TRAVELING) continue;
+      present.push({
+        systemId: n.currentSystemId,
+        hostile: n.hostile,
+        faction: n.faction,
+      });
+    }
+    return systemsWithActiveBattle(present);
   }
 
   /**
