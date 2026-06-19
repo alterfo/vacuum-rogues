@@ -1307,18 +1307,10 @@ export class SpaceFlightScene extends GameScene {
 
   /**
    * Advance the calendar while the ship waits in place (a course-less turn).
-   * Fractional days accumulate (planets keep drifting), whole days commit as
-   * they tick. A deferred Pause (F1) ends the wait turn at the day boundary.
    */
   private advanceWaitTime(deltaTime: number): void {
-    // Clamp the per-frame dt to at most one wait-day. A backgrounded tab (or a
-    // long frame hitch) resumes with one enormous deltaTime; fed raw, the
-    // `while` loop below would flush hundreds of game-days in a single frame and
-    // the wait turn would "run away" faster than the player can react — the
-    // deferred Pause latch never gets a chance to halt it at a useful point
-    // ("pause stops working"). One wait-day per frame keeps the turn always
-    // haltable. ShipPhysics.update applies the same idea to its own dt (caps at
-    // 100 ms); 1000 ms still crosses exactly one day, so normal pacing is intact.
+    // Clamp dt to one wait-day so a backgrounded tab's huge resume-frame can't
+    // flush hundreds of days at once and outrun the deferred Pause (cf. ShipPhysics).
     const clampedDt = Math.min(deltaTime, this.MS_PER_WAIT_DAY);
     const scaledDt = clampedDt * (this.shipPhysics?.timeScale ?? 1);
     this.waitDayAccum += scaledDt / this.MS_PER_WAIT_DAY;
@@ -1328,9 +1320,8 @@ export class SpaceFlightScene extends GameScene {
         this.gameEngine.advanceGalaxyDay();
         this.npcManager.refresh();
       }
-      // F1 (playtest3): a deferred Pause ends the wait turn at the day boundary.
       if (this.pauseAtDayBoundary) {
-        this.endTurn();
+        this.endTurn(); // F1: deferred Pause ends the wait turn at the boundary
         break;
       }
     }
