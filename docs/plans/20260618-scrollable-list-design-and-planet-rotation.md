@@ -136,12 +136,20 @@ is imperceptible. This widens the range to a clearly-visible, well-mixed spread 
       lint 0 errors; `tsc --noEmit` clean.
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify Overview: journal (and the other panels) scroll to every item; planets
+- [x] verify Overview: journal (and the other panels) scroll to every item; planets
       visibly spin at varied speeds and directions
-- [ ] run full unit suite — all green
-- [ ] run `npm run test:e2e:regression`
-- [ ] run `npm run lint` — clean
-- [ ] confirm no existing test assertions changed
+      → journal scroll confirmed by regression #14 ("quest journal with >2 active
+      quests scrolls to reveal them all — no dead +N ещё"); InfoCenter news-tab
+      migration confirmed by regression #21 (TRADE_OPPORTUNITY rumor renders);
+      planet spin variety covered by `planetSpin.test.ts` (distinct ids → distinct
+      speed/direction, speeds in the visible 12–60 s band, direction-mixed sample)
+      and was screenshot-verified in Task 4.
+- [x] run full unit suite — all green → 208 files / 1766 tests passed
+- [x] run `npm run test:e2e:regression` → 21/21 passed (~1.6m, NO_PROXY for webServer)
+- [x] run `npm run lint` — clean → 0 errors (29 pre-existing `any` warnings in
+      unrelated test files, untouched by this plan)
+- [x] confirm no existing test assertions changed → only `playtest-regression.spec.ts`
+      modified, purely additive (0 deleted lines); all other test files are new
 
 ## Technical Details
 - **ScrollableList:** content container translated by a clamped `scrollOffset`; a
