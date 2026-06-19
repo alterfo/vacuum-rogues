@@ -41,11 +41,25 @@ export class Player {
     public readonly reputation: ReputationMap,
     public readonly questLog: QuestLog,
     public readonly journal: Journal,
+    /**
+     * Spendable credits. A *read projection* of the player's current-account GL
+     * balance in the bank's АБС: refreshed by `bindCreditsProjection` on every
+     * `BalanceChanged` for {@link currentAccountId}. The authoritative book of
+     * record is the ledger; this is the cached number reads/HUD use.
+     */
     public credits: number,
     public ship: PlayerShip,
     public readonly inventory: Inventory,
     public currentSystemId: string = "",
   ) {}
+
+  /**
+   * Ledger account id of the player's current account in the bank's АБС.
+   * `credits` is a read projection of this account's GL balance.
+   */
+  get currentAccountId(): string {
+    return `cur:${this.id}`;
+  }
 
   /** Returns reputation score with a faction (0 if never interacted). */
   getReputation(factionId: string): number {

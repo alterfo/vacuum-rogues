@@ -54,6 +54,9 @@ import { NpcShip } from "@/domain/NpcShip";
 import { GalaxyService, PlayerService, SceneFactory } from "@/core/services";
 import { QuestManagerAdapter } from "@/core/adapters";
 import { TextQuestRuntime } from "@/systems/quests/TextQuestRuntime";
+import { StarSystem } from "@/domain/StarSystem";
+import { Planet } from "@/domain/Planet";
+import { Market } from "@/domain/Market";
 import {
   OnnxQuestNarrator,
   type QuestNarrator,
@@ -61,6 +64,9 @@ import {
 import { getQuestScript } from "@/systems/quests/TextQuestRegistry";
 import type { QuestScript } from "@/systems/quests/QuestScript";
 import { AudioManager } from "@/systems/AudioManager";
+import { BankBus, type Unsubscribe } from "@/systems/banking/bus";
+import { BankingService } from "@/systems/banking/BankingService";
+import { setupPlayerBanking } from "@/systems/banking/economy";
 
 /**
  * Optional DI dependencies for GameEngine.
@@ -110,6 +116,10 @@ export class GameEngine {
   public readonly questNarrator: QuestNarrator;
   /** Audio subsystem: background music + SFX. */
   public readonly audio = new AudioManager();
+  /** The АБС "универсальная шина": consumers dispatch banking commands here. */
+  public readonly bankBus = new BankBus();
+  /** The authoritative core-banking ledger + command handler on {@link bankBus}. */
+  public readonly bankingService = new BankingService(this.bankBus);
 
   private exceptionHandler: IExceptionHandler;
   private animationFrameId = 0;
@@ -118,6 +128,8 @@ export class GameEngine {
   private loadingOverlayObjects: (Graphics | Text)[] = [];
   private _gameOverShown = false;
   private _winScreenShown = false;
+  /** Drops the active `credits` projection binding before re-binding a new player. */
+  private bankProjectionUnsub: Unsubscribe | null = null;
   private readonly galaxyService: IGalaxyService;
   private readonly playerService: IPlayerService;
   private readonly sceneFactory: SceneFactory;
@@ -153,6 +165,22 @@ export class GameEngine {
     this.exceptionHandler.onCriticalError = (response) => {
       this.handleCriticalError(response);
     };
+  }
+
+  /**
+   * Wire the current player into the АБС: open their current account, seed it
+   * from `player.credits`, and bind `credits` as a projection of that account's
+   * GL balance. Idempotent — drops any prior binding first and only seeds the
+   * gap, so it is safe to call again after a load. No-op without a player.
+   */
+  private setupPlayerBanking(): void {
+    if (!this.player) return;
+    this.bankProjectionUnsub?.();
+    this.bankProjectionUnsub = setupPlayerBanking(
+      this.bankBus,
+      this.bankingService,
+      this.player,
+    );
   }
 
   async initialize(config: GameConfig): Promise<void> {
@@ -308,6 +336,9 @@ export class GameEngine {
       if (!this.playerLoadout) {
         this.playerLoadout = this.starterLoadout();
       }
+
+      // Open the player's current account in the АБС and project credits onto it.
+      this.setupPlayerBanking();
     }
 
     // Resolve starting system for new game
@@ -890,6 +921,11 @@ export class GameEngine {
     // module checks work after "Continue". Field data is already correct.
     this.rehydrateLoadedState();
 
+    // Re-wire the loaded player into the АБС: open their current account and
+    // project credits onto it. The ledger is not yet persisted (Task 8), so this
+    // seeds the opening balance from the loaded `credits` (migration behaviour).
+    this.setupPlayerBanking();
+
     // Restore the canonical loadout from the save; saves from before loadout
     // persistence — or a snapshot whose hull no longer exists in the catalog —
     // fall back to the default starter loadout so gear-derived stats still
@@ -1036,11 +1072,21 @@ export class GameEngine {
       }
     }
 
-    // Ensure stations array exists on each StarSystem (added in Task 26).
+    // Restore prototypes down the galaxy → system → planet → market chain.
+    // Without this, loaded markets are method-less plain objects: the daily
+    // drift guard (`typeof advanceMarketDay === "function"`) fails so prices
+    // freeze on loaded saves, and any Market method call throws.
     if (this.galaxy) {
       for (const system of this.galaxy.systems) {
+        Object.setPrototypeOf(system, StarSystem.prototype);
         if (!Array.isArray((system as { stations?: unknown }).stations)) {
           (system as { stations: unknown[] }).stations = [];
+        }
+        for (const planet of system.planets ?? []) {
+          Object.setPrototypeOf(planet, Planet.prototype);
+          if (planet.market) {
+            Object.setPrototypeOf(planet.market, Market.prototype);
+          }
         }
       }
     }

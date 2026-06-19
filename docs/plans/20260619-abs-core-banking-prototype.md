@@ -87,10 +87,10 @@ regulatory reporting, ISO 20022.
 - Create: src/systems/banking/economy.ts (`transfer(from,to,amount,reason)` facade)
 - Create: src/tests/banking/economyProjection.test.ts
 
-- [ ] a transfer through the bus moves `player.credits` by exactly the signed delta; the
+- [x] a transfer through the bus moves `player.credits` by exactly the signed delta; the
       projection stays in sync with the player current account's GL balance
-- [ ] write tests: projection equals GL balance after N operations; reads unaffected
-- [ ] run affected tests — must pass before next task
+- [x] write tests: projection equals GL balance after N operations; reads unaffected
+- [x] run affected tests — must pass before next task
 
 ### Task 4: Migrate the 23 consumer sites onto the bus
 **Files:**
