@@ -70,11 +70,11 @@ Three galaxy-map (`StarMapScene`) fixes the player hit while flying:
 - Create: src/utils/battleSystems.ts (`systemsWithActiveBattle(ships)`)
 - Create: src/tests/starMap/battleSystems.test.ts
 
-- [ ] pure helper: given live NPC ships (`{systemId, hostile, faction}`), return the set of system
+- [x] pure helper: given live NPC ships (`{systemId, hostile, faction}`), return the set of system
       ids that hold **both** a hostile (pirate/Overmind) and a friendly/Ranger ship
-- [ ] write unit tests: both sides present → battle; only hostiles → none; only friendlies → none;
+- [x] write unit tests: both sides present → battle; only hostiles → none; only friendlies → none;
       empty → none
-- [ ] run affected tests — must pass before next task
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Expose live battle systems from the simulation
 **Files:**
