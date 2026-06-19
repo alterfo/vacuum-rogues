@@ -4,6 +4,7 @@ import {
   type BattleShip,
 } from "@/utils/battleSystems";
 import { Faction } from "@/types/faction";
+import { NpcRole } from "@/types";
 
 /**
  * A live fight = a system holding BOTH a hostile (pirate/Overmind) ship and a
@@ -26,6 +27,13 @@ describe("systemsWithActiveBattle", () => {
     hostile: false,
     faction: Faction.BASTIONS,
   });
+  // Regular wandering pirate: not flagged hostile, but PIRATE role is hostile.
+  const roguePirate = (systemId: string): BattleShip => ({
+    systemId,
+    hostile: false,
+    faction: Faction.SYNDICATE,
+    role: NpcRole.PIRATE,
+  });
 
   it("flags a system with both a hostile and a friendly ship", () => {
     const battle = systemsWithActiveBattle([pirate("S1"), ranger("S1")]);
@@ -36,6 +44,19 @@ describe("systemsWithActiveBattle", () => {
   it("treats an Overmind ship as the hostile side even if not flagged hostile", () => {
     const battle = systemsWithActiveBattle([overmind("S2"), ranger("S2")]);
     expect(battle.has("S2")).toBe(true);
+  });
+
+  it("treats a PIRATE-role ship as the hostile side even if not flagged hostile", () => {
+    const battle = systemsWithActiveBattle([roguePirate("S5"), ranger("S5")]);
+    expect(battle.has("S5")).toBe(true);
+  });
+
+  it("returns none for a PIRATE-role ship alone (no friendly side present)", () => {
+    const battle = systemsWithActiveBattle([
+      roguePirate("S6"),
+      roguePirate("S6"),
+    ]);
+    expect(battle.size).toBe(0);
   });
 
   it("returns none when only hostiles are present", () => {

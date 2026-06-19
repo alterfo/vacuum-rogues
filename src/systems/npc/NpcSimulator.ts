@@ -442,6 +442,7 @@ export class NpcSimulator {
         systemId: n.currentSystemId,
         hostile: n.hostile,
         faction: n.faction,
+        role: n.role,
       });
     }
     return systemsWithActiveBattle(present);

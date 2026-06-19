@@ -86,6 +86,18 @@ describe("NpcSimulator.battleSystemIds", () => {
     expect(sim.battleSystemIds(galaxy)).toEqual(new Set(["sys_a"]));
   });
 
+  it("treats a regular (unflagged) PIRATE-role ship as the hostile side", () => {
+    const galaxy = makeGalaxy();
+    galaxy.npcShips.push(
+      // Wandering pirate spawned via spawnOne: hostile defaults to false.
+      makeShip("sys_a", { hostile: false, role: NpcRole.PIRATE }),
+      makeShip("sys_a", { hostile: false, role: NpcRole.RANGER }),
+    );
+
+    const sim = new NpcSimulator();
+    expect(sim.battleSystemIds(galaxy)).toEqual(new Set(["sys_a"]));
+  });
+
   it("returns no battle when only hostiles are present", () => {
     const galaxy = makeGalaxy();
     galaxy.npcShips.push(
