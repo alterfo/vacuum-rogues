@@ -116,11 +116,24 @@ is imperceptible. This widens the range to a clearly-visible, well-mixed spread 
   optional small axial-tilt variation), all three render paths
 - Create: src/tests/presentation/planetSpin.test.ts
 
-- [ ] extract spin into a pure `planetSpin(planetId)` → `{ speed, direction }` with a
+- [x] extract spin into a pure `planetSpin(planetId)` → `{ speed, direction }` with a
       clearly-visible speed range and ~50/50 direction; reuse across filter/sphere/tiling
-- [ ] write tests: distinct ids → distinct speed/direction; speeds in the visible band;
+      → `planetSpin(planetId)` in `PlanetSprite.ts` returns `{speed, direction}`:
+      speed in `1/60000…1/12000` longitude/ms (one rotation per ~12–60 s, a 5×
+      spread vs the old 2×) seeded `spin_<id>`, direction an independent ~50/50
+      draw. All three map-backed paths in `buildEquirectSphere` (GLSL filter,
+      sphere mesh, tiling disc) consume it; the tiling disc scales by
+      `TILING_SCROLL_SCALE` (px/ms vs longitude/ms). The `surf_` RNG that only
+      fed spin in this method is gone.
+- [x] write tests: distinct ids → distinct speed/direction; speeds in the visible band;
       a sample of ids is direction-mixed (not all one sign)
-- [ ] run affected tests — must pass before next task
+      → `src/tests/presentation/planetSpin.test.ts`: deterministic per id,
+      distinct ids differ, speeds in `[1/60000, 1/12000]` (period 12–60 s),
+      direction ±1 well-mixed over 300 ids (both signs >30%), wide spread
+      (max/min > 3×).
+- [x] run affected tests — must pass before next task
+      → planetSpin + planetSpriteVelocity + planetSpriteMask = 12 green;
+      lint 0 errors; `tsc --noEmit` clean.
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify Overview: journal (and the other panels) scroll to every item; planets

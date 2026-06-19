@@ -67,6 +67,47 @@ export function buildTilingDisc(
   return { surface, tiling, mask };
 }
 
+/** Per-planet axial spin: a clearly-visible speed and a well-mixed direction. */
+export interface PlanetSpin {
+  /** Longitude fraction advanced per millisecond. Always positive (a magnitude). */
+  speed: number;
+  /** Spin direction: +1 (prograde) or -1 (retrograde). */
+  direction: number;
+}
+
+/** Slowest visible spin: ≈0.0000167 longitude/ms → one rotation per ~60 s. */
+const SPIN_SLOWEST = 1 / 60000;
+/** Fastest tasteful spin: ≈0.0000833 longitude/ms → one rotation per ~12 s. */
+const SPIN_FASTEST = 1 / 12000;
+/**
+ * The tiling-disc fallback scrolls a TilingSprite in texture px/ms rather than
+ * longitude-fraction/ms; this factor converts a {@link planetSpin} speed into
+ * that scroll rate so the disc spins at roughly the same perceptual rate as the
+ * sphere/filter paths (preserves the legacy filter→tiling speed ratio).
+ */
+const TILING_SCROLL_SCALE = 200;
+
+/**
+ * Pure, seeded axial spin for a planet — a deterministic function of its id.
+ *
+ * The legacy range (0.00006–0.00012 longitude/ms, ~one turn per 8–17 s) was both
+ * too narrow and too uniform, so every planet appeared to spin identically. This
+ * widens the band to ~one rotation per 12–60 s — a 5× spread so two planets read
+ * as clearly different — and draws the direction independently (~50/50) so some
+ * planets spin retrograde. Shared by all three map-backed render paths (GLSL
+ * filter, sphere mesh, tiling disc) so a body spins consistently whichever path
+ * renders it. The `spin_` seed prefix decorrelates it from the surface-feature
+ * RNG (`surf_`) and the moon RNG (`moon_`).
+ */
+export function planetSpin(planetId: string): PlanetSpin {
+  const rng = new SeededRNG(`spin_${planetId}`);
+  // Longitude fraction per ms; one full rotation takes 1/speed ms.
+  const speed = SPIN_SLOWEST + rng.next() * (SPIN_FASTEST - SPIN_SLOWEST);
+  // Independent draw so the sign is well-mixed (not coupled to the speed).
+  const direction = rng.next() < 0.5 ? 1 : -1;
+  return { speed, direction };
+}
+
 /**
  * Visual representation of a planet in the SpaceFlightScene
  * Handles rendering, hover effects, and click interactions
@@ -291,7 +332,10 @@ export class PlanetSprite {
    * layer rotated each frame so the lit hemisphere faces the star.
    */
   private buildEquirectSphere(mapTex: Texture, radius: number): void {
-    const rng = new SeededRNG(`surf_${this.planet.id}`);
+    // Per-planet axial spin: a clearly-visible, well-mixed speed + direction,
+    // shared by all three render paths below so the body spins identically
+    // whichever one renders it (US: varied planet rotation).
+    const spin = planetSpin(this.planet.id);
 
     // No fake lighting overlay: the specular/rim "glints" and the directional
     // terminator read as weird blobs on the disc. Depth comes from the convex
@@ -315,9 +359,8 @@ export class PlanetSprite {
       // Preferred: a GLSL sphere-rotation filter on a flat sprite. The shader
       // does the equirect→sphere projection, circular clip and atmosphere
       // rim-light, and spins on its axis via the uOffset uniform (ART Task 7 /
-      // US-075). longitude fraction per ms (slow); randomized direction.
-      const filterSpeed =
-        (0.00006 + rng.next() * 0.00006) * (rng.next() < 0.5 ? 1 : -1);
+      // US-075). Longitude fraction per ms; per-planet speed + direction.
+      const filterSpeed = spin.speed * spin.direction;
       const filter = createPlanetRotationFilter(mapTex, filterSpeed);
       if (filter) {
         const sprite = new Sprite(mapTex);
@@ -336,9 +379,8 @@ export class PlanetSprite {
       const sphere = buildSphereMesh(mapTex, radius);
       if (sphere) {
         this.sphere = sphere;
-        // longitude fraction per ms (slow); randomized direction.
-        this.axialSpeed =
-          (0.00006 + rng.next() * 0.00006) * (rng.next() < 0.5 ? 1 : -1);
+        // Longitude fraction per ms; per-planet speed + direction.
+        this.axialSpeed = spin.speed * spin.direction;
         this.bodyContainer.addChild(sphere.mesh);
         return;
       }
@@ -356,8 +398,8 @@ export class PlanetSprite {
     this.tiling = tiling;
     this.tilingSurface = surface;
     this.tilingMask = mask;
-    this.axialSpeed =
-      (0.012 + rng.next() * 0.012) * (rng.next() < 0.5 ? 1 : -1);
+    // texture px/ms = longitude-fraction/ms × the tiling scroll scale.
+    this.axialSpeed = spin.speed * spin.direction * TILING_SCROLL_SCALE;
     this.bodyContainer.addChild(surface);
   }
 
