@@ -1,4 +1,5 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
+import { scaledText } from "./ui/scaledText";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -453,9 +454,9 @@ export class InfoCenterScene extends GameScene {
     panel.stroke({ color: 0x334455, width: 1 });
     this.mainContainer.addChild(panel);
 
-    const title = new Text({
-      text: "[ ИНФОЦЕНТР ]",
-      style: { fontSize: 22, fill: 0x88ccff, fontFamily: "monospace" },
+    const title = scaledText("[ ИНФОЦЕНТР ]", 22, 0x88ccff, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     title.anchor.set(0.5, 0);
     title.x = PX + PW / 2;
@@ -464,9 +465,9 @@ export class InfoCenterScene extends GameScene {
     this.mainContainer.addChild(title);
 
     const day = this.gameEngine?.galaxy?.gameDays ?? 0;
-    const dayText = new Text({
-      text: `День ${day}`,
-      style: { fontSize: 13, fill: 0x88aacc, fontFamily: "monospace" },
+    const dayText = scaledText(`День ${day}`, 13, 0x88aacc, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     dayText.anchor.set(1, 0);
     dayText.x = PX + PW - 14;
@@ -475,10 +476,12 @@ export class InfoCenterScene extends GameScene {
     this.mainContainer.addChild(dayText);
 
     const credits = this.gameEngine?.player?.credits ?? 0;
-    const creditsText = new Text({
-      text: `Кредиты: ${credits.toLocaleString()} ₢`,
-      style: { fontSize: 13, fill: 0x88ddaa, fontFamily: "monospace" },
-    });
+    const creditsText = scaledText(
+      `Кредиты: ${credits.toLocaleString()} ₢`,
+      13,
+      0x88ddaa,
+      { rawColor: true, fontFamily: "monospace" },
+    );
     creditsText.anchor.set(0, 0);
     creditsText.x = PX + 14;
     creditsText.y = PY + 16;
@@ -513,14 +516,12 @@ export class InfoCenterScene extends GameScene {
       });
       this.mainContainer.addChild(tabBg);
 
-      const tabLabel = new Text({
-        text: tab.label,
-        style: {
-          fontSize: 12,
-          fill: isActive ? 0x88ccff : 0x7799bb,
-          fontFamily: "monospace",
-        },
-      });
+      const tabLabel = scaledText(
+        tab.label,
+        12,
+        isActive ? 0x88ccff : 0x7799bb,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       tabLabel.anchor.set(0.5, 0.5);
       tabLabel.x = tx + TAB_W / 2;
       tabLabel.y = TAB_Y + TAB_H / 2;
@@ -544,9 +545,9 @@ export class InfoCenterScene extends GameScene {
       this.renderGear(content, PW, CONTENT_H);
     }
 
-    const back = new Text({
-      text: "[ Закрыть  Esc ]",
-      style: { fontSize: 14, fill: 0x88ccff, fontFamily: "monospace" },
+    const back = scaledText("[ Закрыть  Esc ]", 14, 0x88ccff, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     back.anchor.set(0.5, 1);
     back.x = PX + PW / 2;
@@ -576,24 +577,21 @@ export class InfoCenterScene extends GameScene {
     bg.eventMode = "static";
     this.mainContainer!.addChild(bg);
 
-    const msg = new Text({
-      text: "Инфоцентр недоступен\n\n(Враждебное отношение)",
-      style: {
-        fontSize: 20,
-        fill: 0x884444,
-        fontFamily: "monospace",
-        align: "center",
-      },
-    });
+    const msg = scaledText(
+      "Инфоцентр недоступен\n\n(Враждебное отношение)",
+      20,
+      0x884444,
+      { rawColor: true, fontFamily: "monospace", align: "center" },
+    );
     msg.anchor.set(0.5, 0.5);
     msg.x = sw / 2;
     msg.y = sh / 2 - 20;
     msg.eventMode = "none";
     this.mainContainer!.addChild(msg);
 
-    const back = new Text({
-      text: "[ Закрыть  Esc ]",
-      style: { fontSize: 14, fill: 0x88ccff, fontFamily: "monospace" },
+    const back = scaledText("[ Закрыть  Esc ]", 14, 0x88ccff, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     back.anchor.set(0.5, 1);
     back.x = sw / 2;
@@ -652,10 +650,12 @@ export class InfoCenterScene extends GameScene {
       // Footer lives on the (unmasked) content container so it stays fixed while
       // the rows scroll under the clip.
       const firstRow = Math.round(this.newsScroll / ROW_H);
-      const hint = new Text({
-        text: `↑↓  ${firstRow + 1}–${Math.min(firstRow + VISIBLE, this.newsItems.length)} / ${this.newsItems.length}`,
-        style: { fontSize: 11, fill: 0x334455, fontFamily: "monospace" },
-      });
+      const hint = scaledText(
+        `↑↓  ${firstRow + 1}–${Math.min(firstRow + VISIBLE, this.newsItems.length)} / ${this.newsItems.length}`,
+        11,
+        0x334455,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       hint.anchor.set(1, 1);
       hint.x = pw - PAD;
       hint.y = rumorH + listH - 2;
@@ -684,24 +684,20 @@ export class InfoCenterScene extends GameScene {
     rowBg.eventMode = "none";
     row.addChild(rowBg);
 
-    const dayBadge = new Text({
-      text: `Д${item.day}`,
-      style: { fontSize: 11, fill: 0x88aacc, fontFamily: "monospace" },
+    const dayBadge = scaledText(`Д${item.day}`, 11, 0x88aacc, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     dayBadge.x = PAD + 6;
     dayBadge.y = ROW_H / 2 - 7;
     dayBadge.eventMode = "none";
     row.addChild(dayBadge);
 
-    const news = new Text({
-      text: item.text,
-      style: {
-        fontSize: 13,
-        fill: item.color,
-        fontFamily: "monospace",
-        wordWrap: true,
-        wordWrapWidth: pw - PAD * 2 - 50 - STAR_W,
-      },
+    const news = scaledText(item.text, 13, item.color, {
+      rawColor: true,
+      fontFamily: "monospace",
+      wordWrap: true,
+      wordWrapWidth: pw - PAD * 2 - 50 - STAR_W,
     });
     news.x = PAD + 46;
     news.y = ROW_H / 2 - 7;
@@ -709,14 +705,12 @@ export class InfoCenterScene extends GameScene {
     row.addChild(news);
 
     const isBookmarked = bookmarks.includes(item.bookmarkKey);
-    const star = new Text({
-      text: isBookmarked ? "★" : "☆",
-      style: {
-        fontSize: 16,
-        fill: isBookmarked ? 0xffdd44 : 0x334455,
-        fontFamily: "monospace",
-      },
-    });
+    const star = scaledText(
+      isBookmarked ? "★" : "☆",
+      16,
+      isBookmarked ? 0xffdd44 : 0x334455,
+      { rawColor: true, fontFamily: "monospace" },
+    );
     star.x = pw - PAD - STAR_W + 4;
     star.y = ROW_H / 2 - 9;
     star.eventMode = "static";
@@ -741,14 +735,10 @@ export class InfoCenterScene extends GameScene {
     const ROW_H = 22;
     const data = buildRumorPanel(this.gameEngine?.galaxy ?? null);
 
-    const header = new Text({
-      text: `▸ ${RUMOR_PANEL_HEADER}`,
-      style: {
-        fontSize: 13,
-        fill: 0xffd166,
-        fontFamily: "monospace",
-        fontWeight: "bold",
-      },
+    const header = scaledText(`▸ ${RUMOR_PANEL_HEADER}`, 13, 0xffd166, {
+      rawColor: true,
+      fontFamily: "monospace",
+      fontWeight: "bold",
     });
     header.x = PAD;
     header.y = 4;
@@ -758,9 +748,9 @@ export class InfoCenterScene extends GameScene {
     let y = HEADER_H;
 
     if (data.emptyText) {
-      const empty = new Text({
-        text: data.emptyText,
-        style: { fontSize: 13, fill: 0xb4b4b4, fontFamily: "monospace" },
+      const empty = scaledText(data.emptyText, 13, 0xb4b4b4, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       empty.x = PAD + 10;
       empty.y = y;
@@ -769,15 +759,11 @@ export class InfoCenterScene extends GameScene {
       y += ROW_H;
     } else {
       for (const line of data.lines) {
-        const row = new Text({
-          text: `• ${line.text}`,
-          style: {
-            fontSize: 13,
-            fill: 0xffd166,
-            fontFamily: "monospace",
-            wordWrap: true,
-            wordWrapWidth: pw - PAD * 2 - 12,
-          },
+        const row = scaledText(`• ${line.text}`, 13, 0xffd166, {
+          rawColor: true,
+          fontFamily: "monospace",
+          wordWrap: true,
+          wordWrapWidth: pw - PAD * 2 - 12,
         });
         row.x = PAD + 10;
         row.y = y;
@@ -834,14 +820,12 @@ export class InfoCenterScene extends GameScene {
       this.objectsQuery.length > 0
         ? this.objectsQuery
         : "Введите имя NPC или планеты...";
-    const inputLabel = new Text({
-      text: queryText,
-      style: {
-        fontSize: 13,
-        fill: this.objectsQuery.length > 0 ? 0xeeddaa : 0x88aacc,
-        fontFamily: "monospace",
-      },
-    });
+    const inputLabel = scaledText(
+      queryText,
+      13,
+      this.objectsQuery.length > 0 ? 0xeeddaa : 0x88aacc,
+      { rawColor: true, fontFamily: "monospace" },
+    );
     inputLabel.x = PAD + 6;
     inputLabel.y = 11;
     inputLabel.eventMode = "none";
@@ -849,9 +833,9 @@ export class InfoCenterScene extends GameScene {
 
     // cursor indicator — always shown; the input is focused whenever this tab
     // is open.
-    const cursor = new Text({
-      text: "|",
-      style: { fontSize: 13, fill: 0x88ccff, fontFamily: "monospace" },
+    const cursor = scaledText("|", 13, 0x88ccff, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     cursor.x = PAD + 8 + inputLabel.width;
     cursor.y = 11;
@@ -873,9 +857,9 @@ export class InfoCenterScene extends GameScene {
     });
     container.addChild(searchBtn);
 
-    const searchBtnLabel = new Text({
-      text: "[ Найти ]",
-      style: { fontSize: 13, fill: 0x88ccff, fontFamily: "monospace" },
+    const searchBtnLabel = scaledText("[ Найти ]", 13, 0x88ccff, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     searchBtnLabel.anchor.set(0.5, 0.5);
     searchBtnLabel.x = btnX + 47;
@@ -889,13 +873,14 @@ export class InfoCenterScene extends GameScene {
     const VISIBLE = Math.floor((ph - LIST_Y) / ROW_H);
 
     if (this.objectsResults.length === 0) {
-      const empty = new Text({
-        text:
-          this.objectsQuery.length === 0
-            ? "Введите запрос и нажмите Найти или Enter"
-            : "Ничего не найдено",
-        style: { fontSize: 13, fill: 0x88aacc, fontFamily: "monospace" },
-      });
+      const empty = scaledText(
+        this.objectsQuery.length === 0
+          ? "Введите запрос и нажмите Найти или Enter"
+          : "Ничего не найдено",
+        13,
+        0x88aacc,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       empty.x = PAD;
       empty.y = LIST_Y + 10;
       empty.eventMode = "none";
@@ -938,13 +923,9 @@ export class InfoCenterScene extends GameScene {
       const staleStr = stale ? " (уст.)" : "";
       const lineText = `${typeLabel} ${name.padEnd(16)} ${sysName}${staleStr} — ${distStr}`;
 
-      const lineLabel = new Text({
-        text: lineText,
-        style: {
-          fontSize: 12,
-          fill: stale ? 0x7799aa : 0xaabbcc,
-          fontFamily: "monospace",
-        },
+      const lineLabel = scaledText(lineText, 12, stale ? 0x7799aa : 0xaabbcc, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       lineLabel.x = PAD + 4;
       lineLabel.y = y + ROW_H / 2 - 8;
@@ -965,9 +946,9 @@ export class InfoCenterScene extends GameScene {
       });
       container.addChild(mapBtn);
 
-      const mapBtnLabel = new Text({
-        text: "→ карта",
-        style: { fontSize: 11, fill: 0x6699bb, fontFamily: "monospace" },
+      const mapBtnLabel = scaledText("→ карта", 11, 0x6699bb, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       mapBtnLabel.anchor.set(0.5, 0.5);
       mapBtnLabel.x = mapBtnX + 35;
@@ -977,10 +958,12 @@ export class InfoCenterScene extends GameScene {
     }
 
     if (this.objectsResults.length > VISIBLE) {
-      const hint = new Text({
-        text: `показаны первые ${VISIBLE} из ${this.objectsResults.length}`,
-        style: { fontSize: 11, fill: 0x334455, fontFamily: "monospace" },
-      });
+      const hint = scaledText(
+        `показаны первые ${VISIBLE} из ${this.objectsResults.length}`,
+        11,
+        0x334455,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       hint.anchor.set(1, 1);
       hint.x = pw - PAD;
       hint.y = ph - 2;
@@ -1063,14 +1046,12 @@ export class InfoCenterScene extends GameScene {
         this.render();
       });
       container.addChild(pill);
-      const pillLabel = new Text({
-        text: FACET_LABELS[facet],
-        style: {
-          fontSize: 11,
-          fill: isActive ? 0x88ccff : 0x7799bb,
-          fontFamily: "monospace",
-        },
-      });
+      const pillLabel = scaledText(
+        FACET_LABELS[facet],
+        11,
+        isActive ? 0x88ccff : 0x7799bb,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       pillLabel.anchor.set(0.5, 0.5);
       pillLabel.x = px + pw2 / 2;
       pillLabel.y = PILL_Y + PILL_H / 2;
@@ -1098,28 +1079,32 @@ export class InfoCenterScene extends GameScene {
       equippedBg.eventMode = "none";
       container.addChild(equippedBg);
 
-      const equippedHdr = new Text({
-        text: "▶ Установлено:",
-        style: { fontSize: 10, fill: 0x55aa55, fontFamily: "monospace" },
+      const equippedHdr = scaledText("▶ Установлено:", 10, 0x55aa55, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       equippedHdr.x = PAD + 6;
       equippedHdr.y = EQUIPPED_Y + 4;
       equippedHdr.eventMode = "none";
       container.addChild(equippedHdr);
 
-      const equippedName = new Text({
-        text: `T${equippedItem.techLevel}  ${equippedItem.name}`,
-        style: { fontSize: 11, fill: 0x88dd88, fontFamily: "monospace" },
-      });
+      const equippedName = scaledText(
+        `T${equippedItem.techLevel}  ${equippedItem.name}`,
+        11,
+        0x88dd88,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       equippedName.x = PAD + 6;
       equippedName.y = EQUIPPED_Y + 16;
       equippedName.eventMode = "none";
       container.addChild(equippedName);
 
-      const equippedStats = new Text({
-        text: gearStatLine(equippedItem),
-        style: { fontSize: 10, fill: 0x66bb66, fontFamily: "monospace" },
-      });
+      const equippedStats = scaledText(
+        gearStatLine(equippedItem),
+        10,
+        0x66bb66,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       equippedStats.x = PAD + 220;
       equippedStats.y = EQUIPPED_Y + 16;
       equippedStats.eventMode = "none";
@@ -1131,9 +1116,9 @@ export class InfoCenterScene extends GameScene {
     let cx = PAD;
 
     // Tech level range
-    const techLabel = new Text({
-      text: "Т.ур:",
-      style: { fontSize: 12, fill: 0x88aacc, fontFamily: "monospace" },
+    const techLabel = scaledText("Т.ур:", 12, 0x88aacc, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     techLabel.x = cx;
     techLabel.y = CTRL_Y + 7;
@@ -1157,9 +1142,9 @@ export class InfoCenterScene extends GameScene {
     });
     container.addChild(techMinBg);
 
-    const techMinVal = new Text({
-      text: String(this.gearMinTech),
-      style: { fontSize: 12, fill: 0xaabbcc, fontFamily: "monospace" },
+    const techMinVal = scaledText(String(this.gearMinTech), 12, 0xaabbcc, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     techMinVal.anchor.set(0.5, 0.5);
     techMinVal.x = cx + 17;
@@ -1168,9 +1153,9 @@ export class InfoCenterScene extends GameScene {
     container.addChild(techMinVal);
     cx += 34;
 
-    const techSep = new Text({
-      text: "–",
-      style: { fontSize: 12, fill: 0x88aacc, fontFamily: "monospace" },
+    const techSep = scaledText("–", 12, 0x88aacc, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     techSep.x = cx + 2;
     techSep.y = CTRL_Y + 7;
@@ -1194,9 +1179,9 @@ export class InfoCenterScene extends GameScene {
     });
     container.addChild(techMaxBg);
 
-    const techMaxVal = new Text({
-      text: String(this.gearMaxTech),
-      style: { fontSize: 12, fill: 0xaabbcc, fontFamily: "monospace" },
+    const techMaxVal = scaledText(String(this.gearMaxTech), 12, 0xaabbcc, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     techMaxVal.anchor.set(0.5, 0.5);
     techMaxVal.x = cx + 17;
@@ -1206,9 +1191,9 @@ export class InfoCenterScene extends GameScene {
     cx += 34 + GAP;
 
     // Max price
-    const priceLabel = new Text({
-      text: "Цена≤:",
-      style: { fontSize: 12, fill: 0x88aacc, fontFamily: "monospace" },
+    const priceLabel = scaledText("Цена≤:", 12, 0x88aacc, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     priceLabel.x = cx;
     priceLabel.y = CTRL_Y + 7;
@@ -1231,10 +1216,12 @@ export class InfoCenterScene extends GameScene {
     });
     container.addChild(priceBg);
 
-    const priceVal = new Text({
-      text: maxPrice === 0 ? "любая" : `${maxPrice}₡`,
-      style: { fontSize: 11, fill: 0xaabbcc, fontFamily: "monospace" },
-    });
+    const priceVal = scaledText(
+      maxPrice === 0 ? "любая" : `${maxPrice}₡`,
+      11,
+      0xaabbcc,
+      { rawColor: true, fontFamily: "monospace" },
+    );
     priceVal.anchor.set(0.5, 0.5);
     priceVal.x = cx + 36;
     priceVal.y = CTRL_Y + CTRL_H / 2;
@@ -1243,9 +1230,9 @@ export class InfoCenterScene extends GameScene {
     cx += 72 + GAP;
 
     // Sort
-    const sortLabel = new Text({
-      text: "Сорт:",
-      style: { fontSize: 12, fill: 0x88aacc, fontFamily: "monospace" },
+    const sortLabel = scaledText("Сорт:", 12, 0x88aacc, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     sortLabel.x = cx;
     sortLabel.y = CTRL_Y + 7;
@@ -1267,9 +1254,9 @@ export class InfoCenterScene extends GameScene {
     });
     container.addChild(sortBg);
 
-    const sortVal = new Text({
-      text: GEAR_SORT_LABELS[this.gearSort],
-      style: { fontSize: 12, fill: 0xaabbcc, fontFamily: "monospace" },
+    const sortVal = scaledText(GEAR_SORT_LABELS[this.gearSort], 12, 0xaabbcc, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     sortVal.anchor.set(0.5, 0.5);
     sortVal.x = cx + 42;
@@ -1293,9 +1280,9 @@ export class InfoCenterScene extends GameScene {
     });
     container.addChild(findBtn);
 
-    const findBtnLabel = new Text({
-      text: "[ Найти ]",
-      style: { fontSize: 12, fill: 0x88ccff, fontFamily: "monospace" },
+    const findBtnLabel = scaledText("[ Найти ]", 12, 0x88ccff, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     findBtnLabel.anchor.set(0.5, 0.5);
     findBtnLabel.x = findBtnX + 37;
@@ -1309,10 +1296,12 @@ export class InfoCenterScene extends GameScene {
     const VISIBLE = Math.floor((ph - LIST_Y) / ROW_H);
 
     if (this.gearResults.length === 0) {
-      const empty = new Text({
-        text: "Нажмите Найти для поиска снаряжения",
-        style: { fontSize: 13, fill: 0x88aacc, fontFamily: "monospace" },
-      });
+      const empty = scaledText(
+        "Нажмите Найти для поиска снаряжения",
+        13,
+        0x88aacc,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       empty.x = PAD;
       empty.y = LIST_Y + 10;
       empty.eventMode = "none";
@@ -1341,22 +1330,18 @@ export class InfoCenterScene extends GameScene {
       const planetSys = `${hit.planet} / ${hit.system}`.slice(0, 22).padEnd(22);
       const lineText = `T${hit.gear.techLevel} ${gearName} ${planetSys}${staleStr} — ${hit.price}₡  ${distStr}`;
 
-      const lineLabel = new Text({
-        text: lineText,
-        style: {
-          fontSize: 11,
-          fill: stale ? 0x7799aa : 0xaabbcc,
-          fontFamily: "monospace",
-        },
+      const lineLabel = scaledText(lineText, 11, stale ? 0x7799aa : 0xaabbcc, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       lineLabel.x = PAD + 4;
       lineLabel.y = y + 5;
       lineLabel.eventMode = "none";
       container.addChild(lineLabel);
 
-      const statsLabel = new Text({
-        text: gearStatLine(hit.gear),
-        style: { fontSize: 10, fill: 0x557799, fontFamily: "monospace" },
+      const statsLabel = scaledText(gearStatLine(hit.gear), 10, 0x557799, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       statsLabel.x = PAD + 4;
       statsLabel.y = y + 20;
@@ -1377,9 +1362,9 @@ export class InfoCenterScene extends GameScene {
       });
       container.addChild(mapBtn);
 
-      const mapBtnLabel = new Text({
-        text: "→ карта",
-        style: { fontSize: 10, fill: 0x6699bb, fontFamily: "monospace" },
+      const mapBtnLabel = scaledText("→ карта", 10, 0x6699bb, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       mapBtnLabel.anchor.set(0.5, 0.5);
       mapBtnLabel.x = mapBtnX + 32;
@@ -1389,10 +1374,12 @@ export class InfoCenterScene extends GameScene {
     }
 
     if (this.gearResults.length > VISIBLE) {
-      const hint = new Text({
-        text: `показаны первые ${VISIBLE} из ${this.gearResults.length}`,
-        style: { fontSize: 11, fill: 0x334455, fontFamily: "monospace" },
-      });
+      const hint = scaledText(
+        `показаны первые ${VISIBLE} из ${this.gearResults.length}`,
+        11,
+        0x334455,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       hint.anchor.set(1, 1);
       hint.x = pw - PAD;
       hint.y = ph - 2;

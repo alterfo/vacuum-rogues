@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
+import { scaledText } from "./ui/scaledText";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -152,14 +153,9 @@ export class TextQuestScene extends GameScene {
     this.renderer.uiLayer.addChild(ui);
 
     // Title
-    const title = new Text({
-      text: this.questScript?.title ?? "",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 18,
-        fill: 0xff99ff,
-        fontWeight: "bold",
-      },
+    const title = scaledText(this.questScript?.title ?? "", 18, 0xff99ff, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     title.anchor.set(0, 0);
     title.x = 16;
@@ -183,16 +179,11 @@ export class TextQuestScene extends GameScene {
     descBg.stroke({ color: 0xff99ff, width: 1, alpha: 0.2 });
     ui.addChild(descBg);
 
-    const narText = new Text({
-      text: "...",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0xddeeff,
-        wordWrap: true,
-        wordWrapWidth: CONTENT_W - 48,
-        lineHeight: 22,
-      },
+    const narText = scaledText("...", 14, 0xddeeff, {
+      rawColor: true,
+      wordWrap: true,
+      wordWrapWidth: CONTENT_W - 48,
+      lineHeight: 22,
     });
     narText.x = 24;
     narText.y = contentTop + 12;
@@ -215,9 +206,8 @@ export class TextQuestScene extends GameScene {
     paramBg.stroke({ color: 0x334466, width: 1 });
     ui.addChild(paramBg);
 
-    const paramTitle = new Text({
-      text: "ПАРАМЕТРЫ",
-      style: { fontFamily: "Courier New", fontSize: 11, fill: 0x6688aa },
+    const paramTitle = scaledText("ПАРАМЕТРЫ", 11, 0x6688aa, {
+      rawColor: true,
     });
     paramTitle.x = w - RIGHT_W + 8;
     paramTitle.y = 10;
@@ -282,10 +272,7 @@ export class TextQuestScene extends GameScene {
     bg.stroke({ color: 0x6688aa, width: 1 });
     btn.addChild(bg);
 
-    const lbl = new Text({
-      text: label,
-      style: { fontFamily: "Courier New", fontSize: 11, fill: 0x99bbcc },
-    });
+    const lbl = scaledText(label, 11, 0x99bbcc, { rawColor: true });
     lbl.anchor.set(0.5);
     lbl.x = w / 2;
     lbl.y = h / 2;
@@ -333,24 +320,16 @@ export class TextQuestScene extends GameScene {
       if (!param.showInUI) continue;
       const value = this.vm.getParam(param.id);
 
-      const nameT = new Text({
-        text: param.name,
-        style: { fontFamily: "Courier New", fontSize: 11, fill: 0x99bbcc },
-      });
+      const nameT = scaledText(param.name, 11, 0x99bbcc, { rawColor: true });
       nameT.x = 0;
       nameT.y = yOff;
       nameT.eventMode = "none";
       this.vmParamPanel.addChild(nameT);
       yOff += 16;
 
-      const valT = new Text({
-        text: String(value),
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 13,
-          fill: 0xeeeeff,
-          fontWeight: "bold",
-        },
+      const valT = scaledText(String(value), 13, 0xeeeeff, {
+        rawColor: true,
+        fontWeight: "bold",
       });
       valT.x = 0;
       valT.y = yOff;
@@ -413,10 +392,7 @@ export class TextQuestScene extends GameScene {
     // Auto-execute: all available transitions are auto (routing/branching nodes)
     const autoT = transitions.find((t) => t.autoExecute);
     if (autoT && transitions.every((t) => t.autoExecute)) {
-      const ellipsis = new Text({
-        text: "...",
-        style: { fontFamily: "Courier New", fontSize: 16, fill: 0x6688aa },
-      });
+      const ellipsis = scaledText("...", 16, 0x6688aa, { rawColor: true });
       ellipsis.x = 8;
       ellipsis.y = 8;
       ellipsis.eventMode = "none";
@@ -475,15 +451,10 @@ export class TextQuestScene extends GameScene {
     bg.stroke({ color: 0xff99ff, width: 1 });
     btn.addChild(bg);
 
-    const lbl = new Text({
-      text: label,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 13,
-        fill: 0xeeeeff,
-        wordWrap: true,
-        wordWrapWidth: w - 24,
-      },
+    const lbl = scaledText(label, 13, 0xeeeeff, {
+      rawColor: true,
+      wordWrap: true,
+      wordWrapWidth: w - 24,
     });
     lbl.x = 12;
     lbl.y = (h - lbl.height) / 2;
@@ -568,14 +539,9 @@ export class TextQuestScene extends GameScene {
     this.renderer.uiLayer.addChild(ui);
 
     // Title
-    const title = new Text({
-      text: this.quest?.title ?? "",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 20,
-        fill: 0xff99ff,
-        fontWeight: "bold",
-      },
+    const title = scaledText(this.quest?.title ?? "", 20, 0xff99ff, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     title.anchor.set(0.5, 0);
     title.x = w / 2;
@@ -597,16 +563,11 @@ export class TextQuestScene extends GameScene {
     narAreaBg.stroke({ color: 0xff99ff, width: 1, alpha: 0.2 });
     ui.addChild(narAreaBg);
 
-    const narText = new Text({
-      text: "...",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0xddeeff,
-        wordWrap: true,
-        wordWrapWidth: w * 0.9 - 32,
-        lineHeight: 22,
-      },
+    const narText = scaledText("...", 14, 0xddeeff, {
+      rawColor: true,
+      wordWrap: true,
+      wordWrapWidth: w * 0.9 - 32,
+      lineHeight: 22,
     });
     narText.x = w * 0.05 + 16;
     narText.y = 72;
@@ -626,14 +587,9 @@ export class TextQuestScene extends GameScene {
   }
 
   private addExitButton(parent: Container, cx: number, cy: number): void {
-    const t = new Text({
-      text: "[ Выйти ]",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 15,
-        fill: 0xaaaaaa,
-        fontWeight: "bold",
-      },
+    const t = scaledText("[ Выйти ]", 15, 0xaaaaaa, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     t.anchor.set(0.5);
     t.x = cx;
@@ -753,26 +709,19 @@ export class TextQuestScene extends GameScene {
     }
     btn.addChild(bg);
 
-    const lbl = new Text({
-      text: disabled ? `${label}  ` : label,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 13,
-        fill: disabled ? 0x445566 : 0xeeeeff,
-        wordWrap: true,
-        wordWrapWidth: w - 24,
-      },
-    });
+    const lbl = scaledText(
+      disabled ? `${label}  ` : label,
+      13,
+      disabled ? 0x445566 : 0xeeeeff,
+      { rawColor: true, wordWrap: true, wordWrapWidth: w - 24 },
+    );
     lbl.x = 12;
     lbl.y = (h - lbl.height) / 2;
     lbl.eventMode = "none";
     btn.addChild(lbl);
 
     if (disabled && tooltip) {
-      const hint = new Text({
-        text: `↳ ${tooltip}`,
-        style: { fontFamily: "Courier New", fontSize: 11, fill: 0xff6644 },
-      });
+      const hint = scaledText(`↳ ${tooltip}`, 11, 0xff6644, { rawColor: true });
       hint.x = 12;
       hint.y = h - 16;
       hint.eventMode = "none";
@@ -871,14 +820,9 @@ export class TextQuestScene extends GameScene {
     box.stroke({ color: 0xff99ff, width: 2 });
     overlay.addChild(box);
 
-    const header = new Text({
-      text: "✦ КВЕСТ ЗАВЕРШЁН",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 18,
-        fill: 0xff99ff,
-        fontWeight: "bold",
-      },
+    const header = scaledText("✦ КВЕСТ ЗАВЕРШЁН", 18, 0xff99ff, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     header.anchor.set(0.5, 0);
     header.x = w / 2;
@@ -901,10 +845,7 @@ export class TextQuestScene extends GameScene {
 
     let lineY = boxY + 52;
     for (const line of lines) {
-      const lt = new Text({
-        text: line,
-        style: { fontFamily: "Courier New", fontSize: 13, fill: 0xccddee },
-      });
+      const lt = scaledText(line, 13, 0xccddee, { rawColor: true });
       lt.anchor.set(0.5, 0);
       lt.x = w / 2;
       lt.y = lineY;
@@ -928,14 +869,9 @@ export class TextQuestScene extends GameScene {
     contBg.stroke({ color: 0xff99ff, width: 1 });
     contBtn.addChild(contBg);
 
-    const contLbl = new Text({
-      text: "[ Продолжить ]",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 15,
-        fill: 0xff99ff,
-        fontWeight: "bold",
-      },
+    const contLbl = scaledText("[ Продолжить ]", 15, 0xff99ff, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     contLbl.anchor.set(0.5);
     contLbl.x = contBtnW / 2;
@@ -1006,15 +942,10 @@ export class TextQuestScene extends GameScene {
   private showToast(text: string, color: number): void {
     if (!this.uiContainer) return;
     const w = this.renderer.app.screen.width;
-    const toast = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 13,
-        fill: color,
-        fontWeight: "bold",
-        align: "center",
-      },
+    const toast = scaledText(text, 13, color, {
+      rawColor: true,
+      fontWeight: "bold",
+      align: "center",
     });
     toast.anchor.set(0.5);
     toast.x = w / 2;

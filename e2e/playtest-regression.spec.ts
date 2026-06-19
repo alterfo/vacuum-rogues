@@ -1509,4 +1509,102 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
 
     errorCollector.assertAndDetach();
   });
+
+  test('regression: Job Board text scales with the S/M/L font setting (font-scale plan Task 3)', async ({
+    page,
+  }) => {
+    // Plan 20260618 Task 3: the Job Board hardcoded `fontSize:` so the S/M/L
+    // setting never reached it (and its body/footer rendered dim sub-AA
+    // blue-grays). Now every label routes through `scaledText`. Open the board
+    // at S and at L and assert the «ДОСКА ЗАДАНИЙ» header font size grows with
+    // the setting (proving the setting reaches the panel); screenshot each.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Land on a planet so PlanetScene.openJobBoard() is the live scene method.
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        galaxy: {
+          systems: Array<{
+            id: string;
+            planets: Array<{ id: string; isHabitable: boolean }>;
+          }>;
+        } | null;
+        player: { currentSystemId: string } | null;
+        transitionTo: (scene: string, ctx?: object) => Promise<void>;
+      };
+      const systems = engine.galaxy?.systems ?? [];
+      const here = systems.find((s) => s.id === engine.player?.currentSystemId);
+      const planet =
+        here?.planets.find((p) => p.isHabitable) ??
+        systems.flatMap((s) => s.planets).find((p) => p.isHabitable) ??
+        systems.flatMap((s) => s.planets)[0];
+      if (!planet) return;
+      await engine.transitionTo('PLANET', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'PlanetScene', 15_000);
+
+    // The lazy faction-panorama load shows a loading overlay and rebuilds the
+    // scene UI once; wait until it has settled so the opened board is not torn
+    // down/covered by that rebuild (otherwise the first screenshot is blank).
+    await page.waitForFunction(
+      () => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          loadingOverlayObjects?: unknown[];
+        };
+        return (engine.loadingOverlayObjects?.length ?? 0) === 0;
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
+
+    // Open the board at a font-scale key and read the «ДОСКА ЗАДАНИЙ» header's
+    // rendered font size straight off the Pixi tree (scaledFont reads the
+    // localStorage-backed setting at text-creation, so no reload is needed).
+    const openAndMeasure = (key: 'S' | 'L'): Promise<number | null> =>
+      page.evaluate((k) => {
+        localStorage.setItem('fontScale', k);
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+        };
+        const scene = engine.currentScene as Record<string, unknown> | null;
+        const open = scene?.['openJobBoard'] as (() => void) | undefined;
+        if (!open) return null;
+        open.call(scene);
+        const panel = scene?.['jobBoardPanel'] as {
+          container: unknown;
+        } | null;
+        if (!panel) return null;
+        let headerSize: number | null = null;
+        const walk = (node: {
+          text?: unknown;
+          style?: { fontSize?: unknown };
+          children?: unknown[];
+        }): void => {
+          if (node.text === 'ДОСКА ЗАДАНИЙ') {
+            const fs = node.style?.fontSize;
+            headerSize =
+              typeof fs === 'number' ? fs : parseFloat(String(fs ?? ''));
+          }
+          for (const c of (node.children as (typeof node)[]) ?? []) walk(c);
+        };
+        walk(panel.container as never);
+        return headerSize;
+      }, key);
+
+    const smallSize = await openAndMeasure('S');
+    await page.waitForTimeout(300); // let the newly-added panel render a frame
+    await page.screenshot({ path: 'e2e/screenshots/jobboard-fontscale-S.png' });
+    const largeSize = await openAndMeasure('L');
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: 'e2e/screenshots/jobboard-fontscale-L.png' });
+
+    expect(smallSize).not.toBeNull();
+    expect(largeSize).not.toBeNull();
+    expect(Number.isFinite(smallSize!)).toBe(true);
+    // The S/M/L setting reaches the board: L renders strictly larger than S.
+    expect(largeSize!).toBeGreaterThan(smallSize!);
+
+    errorCollector.assertAndDetach();
+  });
 });

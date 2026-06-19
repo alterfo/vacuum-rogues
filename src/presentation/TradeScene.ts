@@ -1,4 +1,5 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
+import { scaledText } from "./ui/scaledText";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -225,10 +226,7 @@ export class TradeScene extends GameScene {
         });
       }
       if (isBuyDeal) {
-        const arrow = new Text({
-          text: "▼",
-          style: { fontFamily: "Courier New", fontSize: 10, fill: 0x00ff44 },
-        });
+        const arrow = scaledText("▼", 10, 0x00ff44, { rawColor: true });
         arrow.x = 70;
         arrow.y = 1;
         arrow.eventMode = "none";
@@ -253,10 +251,7 @@ export class TradeScene extends GameScene {
         });
         sellBtn.cursor = "pointer";
         if (isSellDeal) {
-          const arrow = new Text({
-            text: "▲",
-            style: { fontFamily: "Courier New", fontSize: 10, fill: 0xffcc00 },
-          });
+          const arrow = scaledText("▲", 10, 0xffcc00, { rawColor: true });
           arrow.x = 70;
           arrow.y = 1;
           arrow.eventMode = "none";
@@ -291,7 +286,7 @@ export class TradeScene extends GameScene {
       panelX + 20,
       panelY + panelH - 38,
       11,
-      0x777777,
+      0xb4b4b4,
     );
   }
 
@@ -318,10 +313,7 @@ export class TradeScene extends GameScene {
     minusBg.fill({ color: 0x332200, alpha: 0.9 });
     minusBg.stroke({ color: 0x996600, width: 1 });
     minusBtn.addChild(minusBg);
-    const minusLbl = new Text({
-      text: "−",
-      style: { fontFamily: "Courier New", fontSize: 14, fill: 0xffcc44 },
-    });
+    const minusLbl = scaledText("−", 14, 0xffcc44, { rawColor: true });
     minusLbl.anchor.set(0.5);
     minusLbl.x = btnW / 2;
     minusLbl.y = btnH / 2;
@@ -336,10 +328,7 @@ export class TradeScene extends GameScene {
     this.mainContainer.addChild(minusBtn);
 
     // qty label
-    const qtyLbl = new Text({
-      text: String(qty),
-      style: { fontFamily: "Courier New", fontSize: 13, fill: 0xffffff },
-    });
+    const qtyLbl = scaledText(String(qty), 13, 0xffffff, { rawColor: true });
     qtyLbl.anchor.set(0.5, 0);
     qtyLbl.x = x + btnW + 18;
     qtyLbl.y = y + 2;
@@ -357,10 +346,7 @@ export class TradeScene extends GameScene {
     plusBg.fill({ color: 0x002233, alpha: 0.9 });
     plusBg.stroke({ color: 0x006699, width: 1 });
     plusBtn.addChild(plusBg);
-    const plusLbl = new Text({
-      text: "+",
-      style: { fontFamily: "Courier New", fontSize: 14, fill: 0x44ccff },
-    });
+    const plusLbl = scaledText("+", 14, 0x44ccff, { rawColor: true });
     plusLbl.anchor.set(0.5);
     plusLbl.x = btnW / 2;
     plusLbl.y = btnH / 2;
@@ -385,10 +371,7 @@ export class TradeScene extends GameScene {
     maxBg.fill({ color: 0x1a1a44, alpha: 0.9 });
     maxBg.stroke({ color: 0x4444aa, width: 1 });
     maxBtn.addChild(maxBg);
-    const maxLbl = new Text({
-      text: "М",
-      style: { fontFamily: "Courier New", fontSize: 12, fill: 0x8888ff },
-    });
+    const maxLbl = scaledText("М", 12, 0x8888ff, { rawColor: true });
     maxLbl.anchor.set(0.5);
     maxLbl.x = 14;
     maxLbl.y = btnH / 2;
@@ -482,14 +465,9 @@ export class TradeScene extends GameScene {
   private showToast(message: string, color: number): void {
     if (!this.mainContainer) return;
     const screenW = this.renderer.app.screen.width;
-    const toast = new Text({
-      text: message,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: color,
-        fontWeight: "bold",
-      },
+    const toast = scaledText(message, 16, color, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     toast.anchor.set(0.5, 0);
     toast.x = screenW / 2;
@@ -554,14 +532,9 @@ export class TradeScene extends GameScene {
     bold = false,
   ): void {
     if (!this.mainContainer) return;
-    const t = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: size,
-        fill: color,
-        fontWeight: bold ? "bold" : "normal",
-      },
+    const t = scaledText(text, size, color, {
+      rawColor: true,
+      fontWeight: bold ? "bold" : "normal",
     });
     t.x = x;
     t.y = y;
@@ -589,10 +562,7 @@ export class TradeScene extends GameScene {
     bg.stroke({ color: 0x00ffff, width: 1 });
     btn.addChild(bg);
 
-    const label = new Text({
-      text,
-      style: { fontFamily: "Courier New", fontSize: 12, fill: 0xffffff },
-    });
+    const label = scaledText(text, 12, 0xffffff, { rawColor: true });
     label.anchor.set(0.5);
     label.x = width / 2;
     label.y = height / 2;

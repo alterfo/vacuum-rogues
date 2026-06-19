@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
+import { scaledText } from "./ui/scaledText";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -206,30 +207,24 @@ export class EquipmentShopScene extends GameScene {
     header.fill({ color: 0x081828 });
     this.mainContainer.addChild(header);
 
-    const title = new Text({
-      text: `МАГАЗИН СНАРЯЖЕНИЯ — ${this.planet?.name ?? ""}`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0x00ccff,
-        fontWeight: "bold",
-      },
-    });
+    const title = scaledText(
+      `МАГАЗИН СНАРЯЖЕНИЯ — ${this.planet?.name ?? ""}`,
+      14,
+      0x00ccff,
+      { rawColor: true, fontWeight: "bold" },
+    );
     title.eventMode = "none";
     title.x = PX + 14;
     title.y = PY + 14;
     this.mainContainer.addChild(title);
 
     const credits = this.gameEngine?.player?.credits ?? 0;
-    this.creditsText = new Text({
-      text: `${credits.toLocaleString("ru")} ₡`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0xffee55,
-        fontWeight: "bold",
-      },
-    });
+    this.creditsText = scaledText(
+      `${credits.toLocaleString("ru")} ₡`,
+      14,
+      0xffee55,
+      { rawColor: true, fontWeight: "bold" },
+    );
     this.creditsText.eventMode = "none";
     this.creditsText.anchor.set(1, 0);
     this.creditsText.x = PX + PW - 14;
@@ -277,14 +272,9 @@ export class EquipmentShopScene extends GameScene {
     }
 
     // Back button
-    const back = new Text({
-      text: "[ НАЗАД ]",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0xaaaaaa,
-        fontWeight: "bold",
-      },
+    const back = scaledText("[ НАЗАД ]", 14, 0xaaaaaa, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     back.anchor.set(0.5);
     back.x = PX + PW / 2;
@@ -315,14 +305,9 @@ export class EquipmentShopScene extends GameScene {
     let tabX = x + 14;
     for (const { label, tab } of tabs) {
       const isActive = this.activeTab === tab;
-      const tabBtn = new Text({
-        text: label,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 13,
-          fill: isActive ? 0x00ccff : 0x446688,
-          fontWeight: isActive ? "bold" : "normal",
-        },
+      const tabBtn = scaledText(label, 13, isActive ? 0x00ccff : 0x446688, {
+        rawColor: true,
+        fontWeight: isActive ? "bold" : "normal",
       });
       tabBtn.eventMode = "none";
       tabBtn.x = tabX;
@@ -365,20 +350,24 @@ export class EquipmentShopScene extends GameScene {
     const currentClass = player?.ship.hullClass ?? "CORVETTE";
     // Hold size comes from the canonical loadout (single source of truth).
     const cargo = this.gameEngine?.playerLoadout?.derivedStats().cargo ?? "—";
-    const infoText = new Text({
-      text: `Текущий корпус: ${currentClass}  HP: ${player?.ship.maxHull ?? "—"}  Трюм: ${cargo}`,
-      style: { fontFamily: "Courier New", fontSize: 12, fill: 0x8899aa },
-    });
+    const infoText = scaledText(
+      `Текущий корпус: ${currentClass}  HP: ${player?.ship.maxHull ?? "—"}  Трюм: ${cargo}`,
+      12,
+      0x8899aa,
+      { rawColor: true },
+    );
     infoText.eventMode = "none";
     infoText.x = x + 14;
     infoText.y = y + 8;
     this.mainContainer.addChild(infoText);
 
     if (hullListings.length === 0) {
-      const noHulls = new Text({
-        text: "Корпуса не доступны в этом магазине",
-        style: { fontFamily: "Courier New", fontSize: 13, fill: 0x446688 },
-      });
+      const noHulls = scaledText(
+        "Корпуса не доступны в этом магазине",
+        13,
+        0x446688,
+        { rawColor: true },
+      );
       noHulls.eventMode = "none";
       noHulls.x = x + 14;
       noHulls.y = y + 40;
@@ -403,46 +392,42 @@ export class EquipmentShopScene extends GameScene {
       if (isCurrent) rowBg.stroke({ width: 1, color: 0x1a4060 });
       this.mainContainer.addChild(rowBg);
 
-      const nameText = new Text({
-        text: hull.name,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 13,
-          fill: isCurrent ? 0x44aaff : canAfford ? 0xddeeff : 0x667788,
-          fontWeight: "bold",
-        },
-      });
+      const nameText = scaledText(
+        hull.name,
+        13,
+        isCurrent ? 0x44aaff : canAfford ? 0xddeeff : 0x667788,
+        { rawColor: true, fontWeight: "bold" },
+      );
       nameText.eventMode = "none";
       nameText.x = x + 14;
       nameText.y = rowY + 6;
       this.mainContainer.addChild(nameText);
 
-      const specText = new Text({
-        text: `HP: ${hull.hp}  Оружие: ${hull.weaponSlots}  Снаряж: ${hull.equipmentSlots}  Трюм: ${hull.cargo}  T${hull.techLevel}`,
-        style: { fontFamily: "Courier New", fontSize: 11, fill: 0x445566 },
-      });
+      const specText = scaledText(
+        `HP: ${hull.hp}  Оружие: ${hull.weaponSlots}  Снаряж: ${hull.equipmentSlots}  Трюм: ${hull.cargo}  T${hull.techLevel}`,
+        11,
+        0x445566,
+        { rawColor: true },
+      );
       specText.eventMode = "none";
       specText.x = x + 14;
       specText.y = rowY + 26;
       this.mainContainer.addChild(specText);
 
-      const priceText = new Text({
-        text: `${listing.price.toLocaleString("ru")}₡`,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 12,
-          fill: canAfford ? 0xffee55 : 0x556655,
-        },
-      });
+      const priceText = scaledText(
+        `${listing.price.toLocaleString("ru")}₡`,
+        12,
+        canAfford ? 0xffee55 : 0x556655,
+        { rawColor: true },
+      );
       priceText.eventMode = "none";
       priceText.x = x + w * 0.7;
       priceText.y = rowY + 16;
       this.mainContainer.addChild(priceText);
 
       if (isCurrent) {
-        const currentBadge = new Text({
-          text: "Установлен",
-          style: { fontFamily: "Courier New", fontSize: 12, fill: 0x44aaff },
+        const currentBadge = scaledText("Установлен", 12, 0x44aaff, {
+          rawColor: true,
         });
         currentBadge.eventMode = "none";
         currentBadge.x = x + w * 0.85;
@@ -450,15 +435,12 @@ export class EquipmentShopScene extends GameScene {
         this.mainContainer.addChild(currentBadge);
       } else {
         const btnLabel = canAfford ? "[Установить]" : "Мало₡";
-        const buyBtn = new Text({
-          text: btnLabel,
-          style: {
-            fontFamily: "Courier New",
-            fontSize: 12,
-            fill: canAfford ? 0x00ff88 : 0x445544,
-            fontWeight: "bold",
-          },
-        });
+        const buyBtn = scaledText(
+          btnLabel,
+          12,
+          canAfford ? 0x00ff88 : 0x445544,
+          { rawColor: true, fontWeight: "bold" },
+        );
         buyBtn.x = x + w * 0.85;
         buyBtn.y = rowY + 16;
 
@@ -535,14 +517,7 @@ export class EquipmentShopScene extends GameScene {
       { text: "ЦЕНА", relX: 0.78 },
     ];
     for (const col of cols) {
-      const t = new Text({
-        text: col.text,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 11,
-          fill: 0x446688,
-        },
-      });
+      const t = scaledText(col.text, 11, 0x446688, { rawColor: true });
       t.eventMode = "none";
       t.x = x + w * col.relX;
       t.y = y + 4;
@@ -620,15 +595,12 @@ export class EquipmentShopScene extends GameScene {
           : canAfford
             ? 0xddeeff
             : 0x667788;
-      const nameText = new Text({
-        text: isInstalled ? `★ ${gear.name}` : gear.name,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 13,
-          fill: nameColor,
-          fontWeight: "bold",
-        },
-      });
+      const nameText = scaledText(
+        isInstalled ? `★ ${gear.name}` : gear.name,
+        13,
+        nameColor,
+        { rawColor: true, fontWeight: "bold" },
+      );
       nameText.eventMode = "none";
       nameText.x = startX + w * 0.01;
       nameText.y = rowY + 6;
@@ -643,41 +615,32 @@ export class EquipmentShopScene extends GameScene {
         const sign = delta >= 0 ? "+" : "";
         statLine += `  (${sign}${delta} vs ${replacing.name})`;
       }
-      const statText = new Text({
-        text: statLine,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 10,
-          fill: replacing && !isInstalled ? 0x88aacc : 0x445566,
-        },
-      });
+      const statText = scaledText(
+        statLine,
+        10,
+        replacing && !isInstalled ? 0x88aacc : 0x445566,
+        { rawColor: true },
+      );
       statText.eventMode = "none";
       statText.x = startX + w * 0.01;
       statText.y = rowY + 25;
       this.listContainer.addChild(statText);
 
       // Kind badge
-      const kindText = new Text({
-        text: KIND_LABEL[gear.kind],
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 12,
-          fill: KIND_COLOR[gear.kind],
-        },
-      });
+      const kindText = scaledText(
+        KIND_LABEL[gear.kind],
+        12,
+        KIND_COLOR[gear.kind],
+        { rawColor: true },
+      );
       kindText.eventMode = "none";
       kindText.x = startX + w * 0.52;
       kindText.y = rowY + 16;
       this.listContainer.addChild(kindText);
 
       // Tech level
-      const techText = new Text({
-        text: `T${gear.techLevel}`,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 12,
-          fill: 0x8899aa,
-        },
+      const techText = scaledText(`T${gear.techLevel}`, 12, 0x8899aa, {
+        rawColor: true,
       });
       techText.eventMode = "none";
       techText.x = startX + w * 0.68;
@@ -685,14 +648,12 @@ export class EquipmentShopScene extends GameScene {
       this.listContainer.addChild(techText);
 
       // Price
-      const priceText = new Text({
-        text: `${listing.price.toLocaleString("ru")}₡`,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 12,
-          fill: canAfford ? 0xffee55 : 0x556655,
-        },
-      });
+      const priceText = scaledText(
+        `${listing.price.toLocaleString("ru")}₡`,
+        12,
+        canAfford ? 0xffee55 : 0x556655,
+        { rawColor: true },
+      );
       priceText.eventMode = "none";
       priceText.x = startX + w * 0.78;
       priceText.y = rowY + 16;
@@ -706,21 +667,18 @@ export class EquipmentShopScene extends GameScene {
           : canAfford
             ? "[Купить]"
             : "Мало₡";
-      const buyBtn = new Text({
-        text: btnLabel,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 12,
-          fill: isInstalled
-            ? 0x44ff88
-            : alreadyOwned
-              ? 0x447744
-              : canAfford
-                ? 0x00ff88
-                : 0x445544,
-          fontWeight: "bold",
-        },
-      });
+      const buyBtn = scaledText(
+        btnLabel,
+        12,
+        isInstalled
+          ? 0x44ff88
+          : alreadyOwned
+            ? 0x447744
+            : canAfford
+              ? 0x00ff88
+              : 0x445544,
+        { rawColor: true, fontWeight: "bold" },
+      );
       buyBtn.x = startX + w * 0.89;
       buyBtn.y = rowY + 16;
 
@@ -746,14 +704,7 @@ export class EquipmentShopScene extends GameScene {
       // mass) once installed from the warehouse? Hulls have no slot → no hint.
       const fit = loadout ? fitIndicator(gearFit(loadout, gear.id)) : null;
       if (fit) {
-        const fitText = new Text({
-          text: fit.text,
-          style: {
-            fontFamily: "Courier New",
-            fontSize: 10,
-            fill: fit.color,
-          },
-        });
+        const fitText = scaledText(fit.text, 10, fit.color, { rawColor: true });
         fitText.eventMode = "none";
         fitText.x = startX + w * 0.78;
         fitText.y = rowY + 34;
@@ -763,10 +714,7 @@ export class EquipmentShopScene extends GameScene {
   }
 
   private addScrollButtons(x: number, y: number, totalH: number): void {
-    const upBtn = new Text({
-      text: "▲",
-      style: { fontFamily: "Courier New", fontSize: 16, fill: 0x446688 },
-    });
+    const upBtn = scaledText("▲", 16, 0x446688, { rawColor: true });
     upBtn.x = x;
     upBtn.y = y;
     upBtn.eventMode = "static";
@@ -777,10 +725,7 @@ export class EquipmentShopScene extends GameScene {
     });
     this.mainContainer!.addChild(upBtn);
 
-    const downBtn = new Text({
-      text: "▼",
-      style: { fontFamily: "Courier New", fontSize: 16, fill: 0x446688 },
-    });
+    const downBtn = scaledText("▼", 16, 0x446688, { rawColor: true });
     downBtn.x = x;
     downBtn.y = y + totalH - 20;
     downBtn.eventMode = "static";
@@ -806,20 +751,14 @@ export class EquipmentShopScene extends GameScene {
     stripBg.stroke({ width: 1, color: 0x1a3050 });
     this.mainContainer.addChild(stripBg);
 
-    const label = new Text({
-      text: "УСТАНОВЛЕНО:",
-      style: { fontFamily: "Courier New", fontSize: 10, fill: 0x446688 },
-    });
+    const label = scaledText("УСТАНОВЛЕНО:", 10, 0x446688, { rawColor: true });
     label.eventMode = "none";
     label.x = x + 8;
     label.y = y + 6;
     this.mainContainer.addChild(label);
 
     if (!loadout) {
-      const none = new Text({
-        text: "нет данных",
-        style: { fontFamily: "Courier New", fontSize: 10, fill: 0x334455 },
-      });
+      const none = scaledText("нет данных", 10, 0x334455, { rawColor: true });
       none.eventMode = "none";
       none.x = x + 110;
       none.y = y + 6;
@@ -829,10 +768,7 @@ export class EquipmentShopScene extends GameScene {
 
     const ids = loadout.installedGearIds();
     if (ids.length === 0) {
-      const none = new Text({
-        text: "слоты пусты",
-        style: { fontFamily: "Courier New", fontSize: 10, fill: 0x334455 },
-      });
+      const none = scaledText("слоты пусты", 10, 0x334455, { rawColor: true });
       none.eventMode = "none";
       none.x = x + 110;
       none.y = y + 6;
@@ -844,14 +780,12 @@ export class EquipmentShopScene extends GameScene {
     for (const gearId of ids) {
       const gear = gearById(gearId);
       if (!gear) continue;
-      const chip = new Text({
-        text: `[${gear.name} T${gear.techLevel}]`,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 10,
-          fill: KIND_COLOR[gear.kind] ?? 0x88aacc,
-        },
-      });
+      const chip = scaledText(
+        `[${gear.name} T${gear.techLevel}]`,
+        10,
+        KIND_COLOR[gear.kind] ?? 0x88aacc,
+        { rawColor: true },
+      );
       chip.eventMode = "none";
       chip.x = tx;
       chip.y = y + 6;
@@ -881,10 +815,7 @@ export class EquipmentShopScene extends GameScene {
     stripBg.stroke({ width: 1, color: 0x30401a });
     hold.addChild(stripBg);
 
-    const label = new Text({
-      text: "ТРЮМ:",
-      style: { fontFamily: "Courier New", fontSize: 10, fill: 0x88aa44 },
-    });
+    const label = scaledText("ТРЮМ:", 10, 0x88aa44, { rawColor: true });
     label.eventMode = "none";
     label.x = x + 8;
     label.y = y + 8;
@@ -893,10 +824,7 @@ export class EquipmentShopScene extends GameScene {
     const loadout = this.gameEngine?.playerLoadout ?? null;
     const ids = ownedUninstalledGear(player, loadout);
     if (ids.length === 0) {
-      const none = new Text({
-        text: "пусто",
-        style: { fontFamily: "Courier New", fontSize: 10, fill: 0x334455 },
-      });
+      const none = scaledText("пусто", 10, 0x334455, { rawColor: true });
       none.eventMode = "none";
       none.x = x + 70;
       none.y = y + 8;
@@ -908,24 +836,24 @@ export class EquipmentShopScene extends GameScene {
     for (const gearId of ids) {
       const gear = gearById(gearId);
       if (!gear) continue;
-      const chip = new Text({
-        text: `[${gear.name}]`,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 10,
-          fill: KIND_COLOR[gear.kind] ?? 0x88aacc,
-        },
-      });
+      const chip = scaledText(
+        `[${gear.name}]`,
+        10,
+        KIND_COLOR[gear.kind] ?? 0x88aacc,
+        { rawColor: true },
+      );
       chip.eventMode = "none";
       chip.x = tx;
       chip.y = y + 8;
       hold.addChild(chip);
       tx += chip.width + 4;
 
-      const sellBtn = new Text({
-        text: `Продать ${sellGearPrice(gear)}₡`,
-        style: { fontFamily: "Courier New", fontSize: 10, fill: 0x44ff88 },
-      });
+      const sellBtn = scaledText(
+        `Продать ${sellGearPrice(gear)}₡`,
+        10,
+        0x44ff88,
+        { rawColor: true },
+      );
       sellBtn.eventMode = "static";
       sellBtn.cursor = "pointer";
       sellBtn.x = tx;

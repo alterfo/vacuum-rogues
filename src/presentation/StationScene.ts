@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from "pixi.js";
+import { scaledText } from "./ui/scaledText";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -332,9 +333,9 @@ export class StationScene extends GameScene {
     this.mainContainer!.addChild(bg);
 
     if (!this.station) {
-      const errMsg = new Text({
-        text: "Ошибка: станция недоступна",
-        style: { fontSize: 18, fill: 0xff4444, fontFamily: "monospace" },
+      const errMsg = scaledText("Ошибка: станция недоступна", 18, 0xff4444, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       errMsg.anchor.set(0.5, 0.5);
       errMsg.x = sw / 2;
@@ -342,9 +343,9 @@ export class StationScene extends GameScene {
       errMsg.eventMode = "none";
       this.mainContainer!.addChild(errMsg);
 
-      const backBtn = new Text({
-        text: "[ Назад ]",
-        style: { fontSize: 16, fill: 0x88ccff, fontFamily: "monospace" },
+      const backBtn = scaledText("[ Назад ]", 16, 0x88ccff, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       backBtn.anchor.set(0.5, 0.5);
       backBtn.x = sw / 2;
@@ -385,9 +386,9 @@ export class StationScene extends GameScene {
     badge.fill({ color });
     this.mainContainer!.addChild(badge);
 
-    const typeLabel = new Text({
-      text: TYPE_LABEL[stationType],
-      style: { fontSize: 11, fill: color, fontFamily: "monospace" },
+    const typeLabel = scaledText(TYPE_LABEL[stationType], 11, color, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     typeLabel.x = PX + 34;
     typeLabel.y = PY + 14;
@@ -395,9 +396,9 @@ export class StationScene extends GameScene {
     this.mainContainer!.addChild(typeLabel);
 
     // Station name
-    const title = new Text({
-      text: this.station?.name ?? "Станция",
-      style: { fontSize: 20, fill: 0xeeeeff, fontFamily: "monospace" },
+    const title = scaledText(this.station?.name ?? "Станция", 20, 0xeeeeff, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     title.anchor.set(0.5, 0);
     title.x = PX + PW / 2;
@@ -430,14 +431,12 @@ export class StationScene extends GameScene {
     for (const svc of services) {
       const { label, color: btnColor } = this.serviceButton(svc);
       const blocked = isHostile && svc !== "leave";
-      const btn = new Text({
-        text: `[ ${label} ]`,
-        style: {
-          fontSize: 15,
-          fill: blocked ? 0x445566 : btnColor,
-          fontFamily: "monospace",
-        },
-      });
+      const btn = scaledText(
+        `[ ${label} ]`,
+        15,
+        blocked ? 0x445566 : btnColor,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       btn.anchor.set(0.5, 0.5);
       btn.x = btnX + BTN_W / 2;
       btn.y = btnY + BTN_H / 2;
@@ -463,10 +462,12 @@ export class StationScene extends GameScene {
 
     // Bribe button when hostile to the station's faction.
     if (isHostile) {
-      const brBtn = new Text({
-        text: `[ Дать взятку (${STATION_BRIBE_COST} ₡) ]`,
-        style: { fontSize: 14, fill: 0xffaa44, fontFamily: "monospace" },
-      });
+      const brBtn = scaledText(
+        `[ Дать взятку (${STATION_BRIBE_COST} ₡) ]`,
+        14,
+        0xffaa44,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       brBtn.anchor.set(0.5, 0.5);
       brBtn.x = btnX + BTN_W / 2;
       brBtn.y = btnY + BTN_H / 2;
@@ -501,19 +502,23 @@ export class StationScene extends GameScene {
     );
     const credits = player.credits;
 
-    const statsText = new Text({
-      text: `Корпус: ${hullPct}%   Топливо: ${fuelPct}%`,
-      style: { fontSize: 12, fill: 0x6688aa, fontFamily: "monospace" },
-    });
+    const statsText = scaledText(
+      `Корпус: ${hullPct}%   Топливо: ${fuelPct}%`,
+      12,
+      0x6688aa,
+      { rawColor: true, fontFamily: "monospace" },
+    );
     statsText.x = px + 20;
     statsText.y = y;
     statsText.eventMode = "none";
     this.mainContainer!.addChild(statsText);
 
-    const credText = new Text({
-      text: `${credits.toLocaleString("ru")} ₡`,
-      style: { fontSize: 12, fill: 0xffcc44, fontFamily: "monospace" },
-    });
+    const credText = scaledText(
+      `${credits.toLocaleString("ru")} ₡`,
+      12,
+      0xffcc44,
+      { rawColor: true, fontFamily: "monospace" },
+    );
     credText.anchor.set(1, 0);
     credText.x = px + pw - 20;
     credText.y = y;
@@ -749,9 +754,9 @@ export class StationScene extends GameScene {
     this.mainContainer!.addChild(panel);
 
     // Header
-    const title = new Text({
-      text: "[ МАГАЗИН СНАРЯЖЕНИЯ ]",
-      style: { fontSize: 18, fill: 0x44ddff, fontFamily: "monospace" },
+    const title = scaledText("[ МАГАЗИН СНАРЯЖЕНИЯ ]", 18, 0x44ddff, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     title.anchor.set(0.5, 0);
     title.x = PX + PW / 2;
@@ -760,10 +765,12 @@ export class StationScene extends GameScene {
     this.mainContainer!.addChild(title);
 
     const playerCredits = this.gameEngine?.player?.credits ?? 0;
-    const credits = new Text({
-      text: `${playerCredits.toLocaleString("ru")} ₡`,
-      style: { fontSize: 13, fill: 0xffcc44, fontFamily: "monospace" },
-    });
+    const credits = scaledText(
+      `${playerCredits.toLocaleString("ru")} ₡`,
+      13,
+      0xffcc44,
+      { rawColor: true, fontFamily: "monospace" },
+    );
     credits.anchor.set(1, 0);
     credits.x = PX + PW - 14;
     credits.y = PY + 14;
@@ -818,23 +825,21 @@ export class StationScene extends GameScene {
       listContainer.addChild(rowBg);
 
       // Kind badge
-      const kindBadge = new Text({
-        text: KIND_LABEL[listing.gear.kind],
-        style: {
-          fontSize: 11,
-          fill: KIND_COLOR[listing.gear.kind],
-          fontFamily: "monospace",
-        },
-      });
+      const kindBadge = scaledText(
+        KIND_LABEL[listing.gear.kind],
+        11,
+        KIND_COLOR[listing.gear.kind],
+        { rawColor: true, fontFamily: "monospace" },
+      );
       kindBadge.x = PX + PAD + 6;
       kindBadge.y = y + 8;
       kindBadge.eventMode = "none";
       listContainer.addChild(kindBadge);
 
       // Tech level
-      const tech = new Text({
-        text: `T${listing.gear.techLevel}`,
-        style: { fontSize: 11, fill: 0x556677, fontFamily: "monospace" },
+      const tech = scaledText(`T${listing.gear.techLevel}`, 11, 0x556677, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       tech.x = PX + PAD + 74;
       tech.y = y + 8;
@@ -842,9 +847,9 @@ export class StationScene extends GameScene {
       listContainer.addChild(tech);
 
       // Name
-      const name = new Text({
-        text: listing.gear.name,
-        style: { fontSize: 13, fill: 0xddeeff, fontFamily: "monospace" },
+      const name = scaledText(listing.gear.name, 13, 0xddeeff, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       name.x = PX + PAD + 6;
       name.y = y + 26;
@@ -852,14 +857,12 @@ export class StationScene extends GameScene {
       listContainer.addChild(name);
 
       // Price
-      const price = new Text({
-        text: `${listing.price} ₡`,
-        style: {
-          fontSize: 13,
-          fill: canAfford ? 0xffcc44 : 0x664433,
-          fontFamily: "monospace",
-        },
-      });
+      const price = scaledText(
+        `${listing.price} ₡`,
+        13,
+        canAfford ? 0xffcc44 : 0x664433,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       price.anchor.set(1, 0);
       price.x = PX + PW - PAD - 110;
       price.y = y + 16;
@@ -869,9 +872,9 @@ export class StationScene extends GameScene {
       // Buy button
       const buyLabel = isOwned ? "Есть" : canAfford ? "[Купить]" : "Мало₡";
       const buyColor = isOwned ? 0x448844 : canAfford ? 0x44ff88 : 0x554433;
-      const buyBtn = new Text({
-        text: buyLabel,
-        style: { fontSize: 13, fill: buyColor, fontFamily: "monospace" },
+      const buyBtn = scaledText(buyLabel, 13, buyColor, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       buyBtn.anchor.set(1, 0.5);
       buyBtn.x = PX + PW - PAD - 8;
@@ -896,9 +899,9 @@ export class StationScene extends GameScene {
     }
 
     // Back button
-    const back = new Text({
-      text: "[ ← Назад ]",
-      style: { fontSize: 14, fill: 0x88ccff, fontFamily: "monospace" },
+    const back = scaledText("[ ← Назад ]", 14, 0x88ccff, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     back.anchor.set(0.5, 1);
     back.x = PX + PW / 2;
@@ -1023,9 +1026,9 @@ export class StationScene extends GameScene {
       color: number,
       size = 13,
     ): void => {
-      const t = new Text({
-        text,
-        style: { fontSize: size, fill: color, fontFamily: "monospace" },
+      const t = scaledText(text, size, color, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       t.anchor.set(0.5, 0);
       t.x = PX + PW / 2;
@@ -1070,9 +1073,9 @@ export class StationScene extends GameScene {
       bg.rect(0, 0, BW, 34).stroke({ color: 0x556677, width: 1 });
       btn.addChild(bg);
 
-      const lbl = new Text({
-        text: label,
-        style: { fontSize: 13, fill: textColor, fontFamily: "monospace" },
+      const lbl = scaledText(label, 13, textColor, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       lbl.anchor.set(0.5, 0.5);
       lbl.x = BW / 2;
@@ -1190,9 +1193,9 @@ export class StationScene extends GameScene {
     panel.rect(PX, PY, PW, PH).stroke({ color: 0x443322, width: 1 });
     this.mainContainer!.addChild(panel);
 
-    const title = new Text({
-      text: "[ МИКРОМОДУЛИ ]",
-      style: { fontSize: 17, fill: 0xffaa22, fontFamily: "monospace" },
+    const title = scaledText("[ МИКРОМОДУЛИ ]", 17, 0xffaa22, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     title.anchor.set(0.5, 0);
     title.x = PX + PW / 2;
@@ -1201,10 +1204,12 @@ export class StationScene extends GameScene {
     this.mainContainer!.addChild(title);
 
     const playerCredits = player?.credits ?? 0;
-    const credText = new Text({
-      text: `${playerCredits.toLocaleString("ru")} ₡`,
-      style: { fontSize: 13, fill: 0xffcc44, fontFamily: "monospace" },
-    });
+    const credText = scaledText(
+      `${playerCredits.toLocaleString("ru")} ₡`,
+      13,
+      0xffcc44,
+      { rawColor: true, fontFamily: "monospace" },
+    );
     credText.anchor.set(1, 0);
     credText.x = PX + PW - 14;
     credText.y = PY + 14;
@@ -1237,41 +1242,41 @@ export class StationScene extends GameScene {
           : mm.bonusTier === 2
             ? 0x88ccff
             : 0xb4b4b4;
-      const tierBadge = new Text({
-        text: `Ур.${mm.bonusTier}  ${TIER_BONUS[mm.bonusTier]}`,
-        style: { fontSize: 11, fill: tierColor, fontFamily: "monospace" },
-      });
+      const tierBadge = scaledText(
+        `Ур.${mm.bonusTier}  ${TIER_BONUS[mm.bonusTier]}`,
+        11,
+        tierColor,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       tierBadge.x = PX + 20;
       tierBadge.y = rowY + 6;
       tierBadge.eventMode = "none";
       this.mainContainer!.addChild(tierBadge);
 
-      const nameText = new Text({
-        text: mm.name,
-        style: { fontSize: 13, fill: 0xddeeff, fontFamily: "monospace" },
+      const nameText = scaledText(mm.name, 13, 0xddeeff, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       nameText.x = PX + 20;
       nameText.y = rowY + 24;
       nameText.eventMode = "none";
       this.mainContainer!.addChild(nameText);
 
-      const catText = new Text({
-        text: mm.targetCategory,
-        style: { fontSize: 11, fill: 0x557788, fontFamily: "monospace" },
+      const catText = scaledText(mm.targetCategory, 11, 0x557788, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       catText.x = PX + 180;
       catText.y = rowY + 24;
       catText.eventMode = "none";
       this.mainContainer!.addChild(catText);
 
-      const priceText = new Text({
-        text: `${price} ₡`,
-        style: {
-          fontSize: 13,
-          fill: canAfford ? 0xffcc44 : 0x664433,
-          fontFamily: "monospace",
-        },
-      });
+      const priceText = scaledText(
+        `${price} ₡`,
+        13,
+        canAfford ? 0xffcc44 : 0x664433,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       priceText.anchor.set(1, 0.5);
       priceText.x = PX + PW - 110;
       priceText.y = rowY + ROW / 2;
@@ -1284,9 +1289,9 @@ export class StationScene extends GameScene {
         : canAfford
           ? 0x44ff88
           : 0x554433;
-      const buyBtn = new Text({
-        text: buyLabel,
-        style: { fontSize: 13, fill: buyColor, fontFamily: "monospace" },
+      const buyBtn = scaledText(buyLabel, 13, buyColor, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       buyBtn.anchor.set(1, 0.5);
       buyBtn.x = PX + PW - 14;
@@ -1315,9 +1320,9 @@ export class StationScene extends GameScene {
       rowY += ROW;
     }
 
-    const back = new Text({
-      text: "[ ← Назад ]",
-      style: { fontSize: 14, fill: 0x88ccff, fontFamily: "monospace" },
+    const back = scaledText("[ ← Назад ]", 14, 0x88ccff, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     back.anchor.set(0.5, 1);
     back.x = PX + PW / 2;
@@ -1367,10 +1372,12 @@ export class StationScene extends GameScene {
     panel.rect(PX, PY, PW, PH).stroke({ color: 0x443322, width: 1 });
     this.mainContainer!.addChild(panel);
 
-    const title = new Text({
-      text: `Выбор микромодуля для: ${targetGear.name}`,
-      style: { fontSize: 13, fill: 0xffaa22, fontFamily: "monospace" },
-    });
+    const title = scaledText(
+      `Выбор микромодуля для: ${targetGear.name}`,
+      13,
+      0xffaa22,
+      { rawColor: true, fontFamily: "monospace" },
+    );
     title.x = PX + 14;
     title.y = PY + 12;
     title.eventMode = "none";
@@ -1383,10 +1390,12 @@ export class StationScene extends GameScene {
     );
 
     if (matching.length === 0) {
-      const none = new Text({
-        text: "Нет подходящих микромодулей в инвентаре",
-        style: { fontSize: 12, fill: 0x445566, fontFamily: "monospace" },
-      });
+      const none = scaledText(
+        "Нет подходящих микромодулей в инвентаре",
+        12,
+        0x445566,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       none.x = PX + 20;
       none.y = PY + 60;
       none.eventMode = "none";
@@ -1408,18 +1417,20 @@ export class StationScene extends GameScene {
             : mm.bonusTier === 2
               ? 0x88ccff
               : 0xb4b4b4;
-        const info = new Text({
-          text: `${mm.name}  (${TIER_BONUS[mm.bonusTier]} ${mm.bonusType})`,
-          style: { fontSize: 12, fill: tierColor, fontFamily: "monospace" },
-        });
+        const info = scaledText(
+          `${mm.name}  (${TIER_BONUS[mm.bonusTier]} ${mm.bonusType})`,
+          12,
+          tierColor,
+          { rawColor: true, fontFamily: "monospace" },
+        );
         info.x = PX + 20;
         info.y = rowY + 14;
         info.eventMode = "none";
         this.mainContainer!.addChild(info);
 
-        const applyBtn = new Text({
-          text: "[Применить]",
-          style: { fontSize: 12, fill: 0x44ff88, fontFamily: "monospace" },
+        const applyBtn = scaledText("[Применить]", 12, 0x44ff88, {
+          rawColor: true,
+          fontFamily: "monospace",
         });
         applyBtn.anchor.set(1, 0.5);
         applyBtn.x = PX + PW - 14;
@@ -1458,9 +1469,9 @@ export class StationScene extends GameScene {
       }
     }
 
-    const back = new Text({
-      text: "[ ← Назад ]",
-      style: { fontSize: 14, fill: 0x88ccff, fontFamily: "monospace" },
+    const back = scaledText("[ ← Назад ]", 14, 0x88ccff, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     back.anchor.set(0.5, 1);
     back.x = PX + PW / 2;
@@ -1505,9 +1516,9 @@ export class StationScene extends GameScene {
   // ── toast ─────────────────────────────────────────────────────────────────
 
   private addToastSlot(px: number, py: number, pw: number, ph: number): void {
-    const toast = new Text({
-      text: "",
-      style: { fontSize: 13, fill: 0x44ff88, fontFamily: "monospace" },
+    const toast = scaledText("", 13, 0x44ff88, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     toast.anchor.set(0.5, 1);
     toast.x = px + pw / 2;
@@ -1542,9 +1553,9 @@ export class StationScene extends GameScene {
 
     const loadout = this.gameEngine?.playerLoadout ?? null;
 
-    const title = new Text({
-      text: "АНГАР — ОСНАСТКА КОРАБЛЯ",
-      style: { fontSize: 14, fill: 0x88ddaa, fontFamily: "monospace" },
+    const title = scaledText("АНГАР — ОСНАСТКА КОРАБЛЯ", 14, 0x88ddaa, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     title.x = PX + 20;
     title.y = PY + 14;
@@ -1553,10 +1564,12 @@ export class StationScene extends GameScene {
 
     // Hull is the ship itself (canon §11.3), shown as a centred banner rather
     // than occupying a slot.
-    const hullBanner = new Text({
-      text: loadout ? `Корпус: ${loadout.hull.name}` : "Корпус: —",
-      style: { fontSize: 12, fill: 0xb4c4d4, fontFamily: "monospace" },
-    });
+    const hullBanner = scaledText(
+      loadout ? `Корпус: ${loadout.hull.name}` : "Корпус: —",
+      12,
+      0xb4c4d4,
+      { rawColor: true, fontFamily: "monospace" },
+    );
     hullBanner.anchor.set(0.5, 0);
     hullBanner.x = PX + PW / 2;
     hullBanner.y = PY + 14;
@@ -1581,9 +1594,9 @@ export class StationScene extends GameScene {
     this.renderWarehouseAndCargo(layout, loadout, player);
 
     // Back button
-    const backBtn = new Text({
-      text: "[ ← Назад ]",
-      style: { fontSize: 14, fill: 0xb4c4d4, fontFamily: "monospace" },
+    const backBtn = scaledText("[ ← Назад ]", 14, 0xb4c4d4, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     backBtn.anchor.set(0.5, 1);
     backBtn.x = PX + PW / 2;
@@ -1623,9 +1636,9 @@ export class StationScene extends GameScene {
     ];
     const colW = (PW - 40) / segs.length;
     segs.forEach((s, i) => {
-      const t = new Text({
-        text: s.text,
-        style: { fontSize: 12, fill: s.fill, fontFamily: "monospace" },
+      const t = scaledText(s.text, 12, s.fill, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       t.x = PX + 20 + i * colW;
       t.y = PY + 54;
@@ -1661,14 +1674,12 @@ export class StationScene extends GameScene {
       if (clipped) break;
       const c = stats?.categories[cat] ?? { used: 0, total: 0 };
 
-      const header = new Text({
-        text: `${CATEGORY_LABEL[cat]}  ${c.used}/${c.total}`,
-        style: {
-          fontSize: 12,
-          fill: c.used < c.total ? 0x88ccaa : 0xddaa66,
-          fontFamily: "monospace",
-        },
-      });
+      const header = scaledText(
+        `${CATEGORY_LABEL[cat]}  ${c.used}/${c.total}`,
+        12,
+        c.used < c.total ? 0x88ccaa : 0xddaa66,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       header.x = leftX;
       header.y = y;
       header.eventMode = "none";
@@ -1697,9 +1708,9 @@ export class StationScene extends GameScene {
         slotBg.rect(leftX, y, leftW, 24).stroke({ color: 0x1a2a3a, width: 1 });
         slotBg.eventMode = "none";
         this.mainContainer!.addChild(slotBg);
-        const txt = new Text({
-          text: "— свободно —",
-          style: { fontSize: 11, fill: 0xb4bcc4, fontFamily: "monospace" },
+        const txt = scaledText("— свободно —", 11, 0xb4bcc4, {
+          rawColor: true,
+          fontFamily: "monospace",
         });
         txt.x = leftX + 8;
         txt.y = y + 6;
@@ -1710,9 +1721,9 @@ export class StationScene extends GameScene {
       y += 8;
     }
     if (clipped) {
-      const more = new Text({
-        text: "…ещё слоты ниже",
-        style: { fontSize: 10, fill: 0xb4bcc4, fontFamily: "monospace" },
+      const more = scaledText("…ещё слоты ниже", 10, 0xb4bcc4, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       more.x = leftX;
       more.y = contentBottom + 2;
@@ -1744,18 +1755,18 @@ export class StationScene extends GameScene {
     slotBg.eventMode = "none";
     this.mainContainer!.addChild(slotBg);
 
-    const name = new Text({
-      text: `${gear.name} (T${gear.techLevel})`,
-      style: { fontSize: 11, fill: 0xb8e6c8, fontFamily: "monospace" },
+    const name = scaledText(`${gear.name} (T${gear.techLevel})`, 11, 0xb8e6c8, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     name.x = leftX + 8;
     name.y = y + 4;
     name.eventMode = "none";
     this.mainContainer!.addChild(name);
 
-    const unBtn = new Text({
-      text: "[снять]",
-      style: { fontSize: 11, fill: 0xff8844, fontFamily: "monospace" },
+    const unBtn = scaledText("[снять]", 11, 0xff8844, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     unBtn.anchor.set(1, 0.5);
     unBtn.x = leftX + leftW - 8;
@@ -1780,9 +1791,9 @@ export class StationScene extends GameScene {
     if (slot.micromoduleId) {
       const mmLabel =
         microModuleById(slot.micromoduleId)?.name ?? slot.micromoduleId;
-      const mmTag = new Text({
-        text: `мм: ${mmLabel}`,
-        style: { fontSize: 10, fill: 0xffcc44, fontFamily: "monospace" },
+      const mmTag = scaledText(`мм: ${mmLabel}`, 10, 0xffcc44, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       mmTag.x = leftX + 8;
       mmTag.y = y + 20;
@@ -1794,14 +1805,12 @@ export class StationScene extends GameScene {
         player.inventory.micromodules.some(
           (mm) => mm.targetCategory === mmCategory,
         );
-      const mmBtn = new Text({
-        text: "[+ микромодуль]",
-        style: {
-          fontSize: 10,
-          fill: hasMatchingMm ? 0xffaa22 : 0xb4bcc4,
-          fontFamily: "monospace",
-        },
-      });
+      const mmBtn = scaledText(
+        "[+ микромодуль]",
+        10,
+        hasMatchingMm ? 0xffaa22 : 0xb4bcc4,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       mmBtn.anchor.set(1, 0.5);
       mmBtn.x = leftX + leftW - 8;
       mmBtn.y = y + 26;
@@ -1842,9 +1851,9 @@ export class StationScene extends GameScene {
     // СКЛАД occupies the top ~60 % of the column; ТРЮМ the rest.
     const splitY = Math.round(contentTop + (contentBottom - contentTop) * 0.6);
 
-    const sklLabel = new Text({
-      text: "СКЛАД (снаряжение):",
-      style: { fontSize: 12, fill: 0x88aa44, fontFamily: "monospace" },
+    const sklLabel = scaledText("СКЛАД (снаряжение):", 12, 0x88aa44, {
+      rawColor: true,
+      fontFamily: "monospace",
     });
     sklLabel.x = rightX;
     sklLabel.y = contentTop;
@@ -1866,9 +1875,9 @@ export class StationScene extends GameScene {
 
     let y = contentTop + 22;
     if (rows.length === 0) {
-      const empty = new Text({
-        text: "Склад пуст",
-        style: { fontSize: 12, fill: 0xb4bcc4, fontFamily: "monospace" },
+      const empty = scaledText("Склад пуст", 12, 0xb4bcc4, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       empty.x = rightX;
       empty.y = y;
@@ -1891,10 +1900,12 @@ export class StationScene extends GameScene {
       rowBg.eventMode = "none";
       this.mainContainer!.addChild(rowBg);
 
-      const rowText = new Text({
-        text: gear ? `${name} (T${gear.techLevel})` : name,
-        style: { fontSize: 11, fill: 0xccddaa, fontFamily: "monospace" },
-      });
+      const rowText = scaledText(
+        gear ? `${name} (T${gear.techLevel})` : name,
+        11,
+        0xccddaa,
+        { rawColor: true, fontFamily: "monospace" },
+      );
       rowText.x = rightX + 8;
       rowText.y = y + 3;
       rowText.eventMode = "none";
@@ -1904,10 +1915,12 @@ export class StationScene extends GameScene {
 
       // Sell — only the canonical owned store is sellable.
       if (row.kind === "owned" && gear) {
-        const sellBtn = new Text({
-          text: `[Продать ${sellGearPrice(gear)}₡]`,
-          style: { fontSize: 11, fill: 0x44ff88, fontFamily: "monospace" },
-        });
+        const sellBtn = scaledText(
+          `[Продать ${sellGearPrice(gear)}₡]`,
+          11,
+          0x44ff88,
+          { rawColor: true, fontFamily: "monospace" },
+        );
         sellBtn.anchor.set(1, 0.5);
         sellBtn.x = btnRight;
         sellBtn.y = y + 21;
@@ -1927,9 +1940,9 @@ export class StationScene extends GameScene {
       // Install into the matching category — catalog non-hull gear only.
       const installable = !!gear && gear.kind !== GearKind.HULL && !!loadout;
       if (installable && loadout) {
-        const eqBtn = new Text({
-          text: "[Установить]",
-          style: { fontSize: 11, fill: 0x44ddaa, fontFamily: "monospace" },
+        const eqBtn = scaledText("[Установить]", 11, 0x44ddaa, {
+          rawColor: true,
+          fontFamily: "monospace",
         });
         eqBtn.anchor.set(1, 0.5);
         eqBtn.x = btnRight;
@@ -1955,10 +1968,12 @@ export class StationScene extends GameScene {
     const stats = loadout?.derivedStats() ?? null;
     const resources = player.inventory.resources.filter((r) => r.amount > 0);
     const usedCargo = resources.reduce((n, r) => n + r.amount, 0);
-    const holdLabel = new Text({
-      text: `ТРЮМ ${usedCargo}/${stats?.cargo ?? 0}:`,
-      style: { fontSize: 12, fill: 0x88ccff, fontFamily: "monospace" },
-    });
+    const holdLabel = scaledText(
+      `ТРЮМ ${usedCargo}/${stats?.cargo ?? 0}:`,
+      12,
+      0x88ccff,
+      { rawColor: true, fontFamily: "monospace" },
+    );
     holdLabel.x = rightX;
     holdLabel.y = splitY;
     holdLabel.eventMode = "none";
@@ -1966,9 +1981,9 @@ export class StationScene extends GameScene {
 
     let cy = splitY + 22;
     if (resources.length === 0) {
-      const empty = new Text({
-        text: "Трюм пуст",
-        style: { fontSize: 12, fill: 0xb4bcc4, fontFamily: "monospace" },
+      const empty = scaledText("Трюм пуст", 12, 0xb4bcc4, {
+        rawColor: true,
+        fontFamily: "monospace",
       });
       empty.x = rightX;
       empty.y = cy;
@@ -1978,9 +1993,9 @@ export class StationScene extends GameScene {
       for (const r of resources) {
         if (cy + 18 > contentBottom) break;
         const label = RESOURCE_LABEL[r.type] ?? r.type;
-        const line = new Text({
-          text: `${label} ×${r.amount}`,
-          style: { fontSize: 11, fill: 0xb4c4d4, fontFamily: "monospace" },
+        const line = scaledText(`${label} ×${r.amount}`, 11, 0xb4c4d4, {
+          rawColor: true,
+          fontFamily: "monospace",
         });
         line.x = rightX + 6;
         line.y = cy;

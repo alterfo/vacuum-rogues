@@ -1,5 +1,6 @@
 import { Container, Graphics, Rectangle, Text } from "pixi.js";
 import { attachWheelScroll } from "./ui/WheelScroll";
+import { scaledText } from "./ui/scaledText";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import type { Quest } from "@/domain/Quest";
 import { QuestType } from "@/types";
@@ -124,7 +125,16 @@ export class JobBoardPanel {
     bg.eventMode = "static";
     this.container.addChild(bg);
 
-    this.label("ДОСКА ЗАДАНИЙ", 16, 14, 18, 0x00ffff, true);
+    this.label(
+      "ДОСКА ЗАДАНИЙ",
+      16,
+      14,
+      18,
+      0x00ffff,
+      true,
+      this.container,
+      true,
+    );
     this.addCloseX(W);
 
     const atLimit = activeQuestCount >= MAX_ACTIVE_QUESTS;
@@ -135,6 +145,9 @@ export class JobBoardPanel {
         JobBoardPanel.HEAD - 16,
         11,
         0xff8844,
+        false,
+        this.container,
+        true,
       );
     }
 
@@ -142,7 +155,16 @@ export class JobBoardPanel {
 
     // Active quests section with countdown
     if (activeQuests.length > 0) {
-      this.label("АКТИВНЫЕ ЗАДАНИЯ", 16, y + 6, 13, 0xffcc44, true);
+      this.label(
+        "АКТИВНЫЕ ЗАДАНИЯ",
+        16,
+        y + 6,
+        13,
+        0xffcc44,
+        true,
+        this.container,
+        true,
+      );
       y += 26;
       for (const q of activeQuests) {
         this.addActiveRow(q, y, W, currentDay);
@@ -152,12 +174,30 @@ export class JobBoardPanel {
       const divider = new Graphics();
       divider.rect(10, y + 2, W - 20, 1).fill({ color: 0x334466, alpha: 0.9 });
       this.container.addChild(divider);
-      this.label("ДОСТУПНЫЕ ЗАДАНИЯ", 16, y + 8, 13, 0x88ccff, true);
+      this.label(
+        "ДОСТУПНЫЕ ЗАДАНИЯ",
+        16,
+        y + 8,
+        13,
+        0x88ccff,
+        true,
+        this.container,
+        true,
+      );
       y += 24;
     }
 
     if (quests.length === 0) {
-      this.label("Свободных заданий нет.", 16, y + 8, 14, 0xffaa00);
+      this.label(
+        "Свободных заданий нет.",
+        16,
+        y + 8,
+        14,
+        0xffaa00,
+        false,
+        this.container,
+        true,
+      );
       return;
     }
 
@@ -258,15 +298,7 @@ export class JobBoardPanel {
   /** Up/down arrow buttons shown in the reserved bottom strip. */
   private addScrollControls(W: number, barY: number, maxScroll: number): void {
     const makeArrow = (glyph: string, dx: number, dir: number): Text => {
-      const t = new Text({
-        text: glyph,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 16,
-          fill: 0x66ccff,
-          fontWeight: "bold",
-        },
-      });
+      const t = scaledText(glyph, 16, 0x66ccff, { fontWeight: "bold" });
       t.anchor.set(0.5);
       t.x = W / 2 + dx;
       t.y = barY + 10;
@@ -282,10 +314,9 @@ export class JobBoardPanel {
     this.scrollUpBtn = makeArrow("▲", -52, -1);
     this.scrollDownBtn = makeArrow("▼", 52, 1);
 
-    const hint = new Text({
-      text: "колесо / стрелки",
-      style: { fontFamily: "Courier New", fontSize: 10, fill: 0x668899 },
-    });
+    // Footer hint: the old 0x668899 blue-gray was the dimmest text on the panel;
+    // scaledText lifts it to the readability floor and scales it with the setting.
+    const hint = scaledText("колесо / стрелки", 10, 0x668899);
     hint.anchor.set(0.5);
     hint.x = W / 2;
     hint.y = barY + 10;
@@ -321,7 +352,7 @@ export class JobBoardPanel {
     row.eventMode = "static";
     this.container.addChild(row);
 
-    this.label(typeLabel, 20, y + 6, 11, color);
+    this.label(typeLabel, 20, y + 6, 11, color, false, this.container, true);
 
     const title = q.title.length > 28 ? q.title.slice(0, 27) + "…" : q.title;
     this.label(title, 20, y + 22, 12, 0xdddddd, true);
@@ -346,14 +377,9 @@ export class JobBoardPanel {
       }
     }
 
-    const cd = new Text({
-      text: countdownText,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: countdownColor,
-        fontWeight: "bold",
-      },
+    const cd = scaledText(countdownText, 11, countdownColor, {
+      fontWeight: "bold",
+      rawColor: true,
     });
     cd.eventMode = "none";
     cd.anchor.set(1, 0);
@@ -383,7 +409,7 @@ export class JobBoardPanel {
 
     // Type tag
     const tag = TYPE_LABEL[t.type] ?? t.type;
-    this.label(tag, 20, y + 6, 11, color, false, parent);
+    this.label(tag, 20, y + 6, 11, color, false, parent, true);
 
     // Title (truncated)
     const title = t.title.length > 36 ? t.title.slice(0, 35) + "…" : t.title;
@@ -397,17 +423,13 @@ export class JobBoardPanel {
       this.label(issuer, 20, y + 36, 10, 0x77aacc, false, parent);
     }
 
-    // Description (full text, grey, small, wrapped)
+    // Description (full text, grey, small, wrapped). Routed through scaledText:
+    // the old dim 0x889aaa blue-gray was sub-AA on the dark panel; the readability
+    // floor lifts it to a legible level and it now tracks the S/M/L setting.
     if (t.description) {
-      const descText = new Text({
-        text: t.description,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 10,
-          fill: 0x889aaa,
-          wordWrap: true,
-          wordWrapWidth: W - 120,
-        },
+      const descText = scaledText(t.description, 10, 0x889aaa, {
+        wordWrap: true,
+        wordWrapWidth: W - 120,
       });
       descText.eventMode = "none";
       descText.x = 20;
@@ -422,9 +444,8 @@ export class JobBoardPanel {
       let hx = 20;
       for (const hl of q.highlights) {
         if (hx > W - 100) break;
-        const tagT = new Text({
-          text: `[${hl.label}: ${hl.value}]`,
-          style: { fontFamily: "Courier New", fontSize: 9, fill: hl.color },
+        const tagT = scaledText(`[${hl.label}: ${hl.value}]`, 9, hl.color, {
+          rawColor: true,
         });
         tagT.eventMode = "none";
         tagT.x = hx;
@@ -438,10 +459,7 @@ export class JobBoardPanel {
     const deadlineDays = t.deadline > 0 ? `  ⏱ ${t.deadline}д` : "";
     const jumpsText = q.jumps > 0 ? `  ⤴ ${q.jumps}` : "";
     const meta = `💰 ${t.reward.credits}${deadlineDays}${jumpsText}`;
-    const m = new Text({
-      text: meta,
-      style: { fontFamily: "Courier New", fontSize: 11, fill: 0xffe27a },
-    });
+    const m = scaledText(meta, 11, 0xffe27a, { rawColor: true });
     m.eventMode = "none";
     m.anchor.set(1, 0);
     m.x = W - 90;
@@ -501,15 +519,12 @@ export class JobBoardPanel {
         : isRankBlocked
           ? `Ранг ${requiredRank}+`
           : "Занят";
-    const btnLbl = new Text({
-      text: btnLabel,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: alreadyTaken ? 0x44aa66 : canAccept ? 0x00ffaa : 0x555555,
-        fontWeight: "bold",
-      },
-    });
+    const btnLbl = scaledText(
+      btnLabel,
+      11,
+      alreadyTaken ? 0x44aa66 : canAccept ? 0x00ffaa : 0x555555,
+      { fontWeight: "bold", rawColor: true },
+    );
     btnLbl.eventMode = "none";
     btnLbl.anchor.set(0.5);
     btnLbl.x = btnX + btnW / 2;
@@ -529,14 +544,9 @@ export class JobBoardPanel {
     });
     this.container.addChild(bg);
 
-    const x = new Text({
-      text: "✕",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: 0xff6666,
-        fontWeight: "bold",
-      },
+    const x = scaledText("✕", 16, 0xff6666, {
+      fontWeight: "bold",
+      rawColor: true,
     });
     x.eventMode = "none";
     x.x = W - 24;
@@ -544,6 +554,12 @@ export class JobBoardPanel {
     this.container.addChild(x);
   }
 
+  /**
+   * Panel label routed through `scaledText` so the S/M/L setting reaches it.
+   * `raw` preserves the given fill verbatim (for semantic accent colors — type
+   * tags, alerts, gold reward); omit it for neutral/dim text so the readability
+   * floor lifts near-background blue-grays to a legible level.
+   */
   private label(
     text: string,
     x: number,
@@ -552,15 +568,11 @@ export class JobBoardPanel {
     color: number,
     bold = false,
     parent: Container = this.container,
+    raw = false,
   ): void {
-    const t = new Text({
-      text,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: size,
-        fill: color,
-        fontWeight: bold ? "bold" : "normal",
-      },
+    const t = scaledText(text, size, color, {
+      fontWeight: bold ? "bold" : "normal",
+      ...(raw ? { rawColor: true } : {}),
     });
     t.x = x;
     t.y = y;

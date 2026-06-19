@@ -101,11 +101,39 @@ rebuilds the open OVERMIND-core overlay; the contact panel still uses fixed size
   `fontSize:` + dim fills with `scaledText`)
 - Modify/Create: e2e regression spec (Job Board scales + is readable)
 
-- [ ] JobBoardPanel text scales with S/M/L and is legible (no sub-AA blue-gray)
-- [ ] the main panel scenes use `scaledText`; remaining low-traffic files noted as a
+- [x] JobBoardPanel text scales with S/M/L and is legible (no sub-AA blue-gray)
+- [x] the main panel scenes use `scaledText`; remaining low-traffic files noted as a
       ➕ follow-up if not migrated in this task
-- [ ] add e2e assertion that the Job Board font scales; screenshot at S and L
-- [ ] run affected tests + regression — must pass before next task
+- [x] add e2e assertion that the Job Board font scales; screenshot at S and L
+- [x] run affected tests + regression — must pass before next task
+
+⚠️ **JobBoardPanel** fully migrated: its `label()` helper + every inline `new Text`
+now go through `scaledText`. The named screenshot offenders — body `0x889aaa`,
+footer `0x668899`, issuer `0x77aacc` — are routed *without* `rawColor` so the
+readability floor lifts them; semantic accents (type tags, alert countdowns,
+button states, reward gold, the cyan/gold section headers) pass `rawColor: true`
+so they keep their hue and only the font scales (the floor would otherwise
+desaturate saturated reds/oranges below its luminance). New unit test
+`jobBoardScaledText.test.ts` pins all three behaviours; e2e
+`playtest-regression.spec.ts` opens the board at S and L, asserts the «ДОСКА
+ЗАДАНИЙ» header grows with the setting, and screenshots each
+(`e2e/screenshots/jobboard-fontscale-{S,L}.png`).
+
+The 6 **main panel scenes** (StationScene, TradeScene, EquipmentShopScene,
+InfoCenterScene, QuestJournalUI, TextQuestScene — 166 call sites) were migrated
+to `scaledText` via an AST codemod with **`rawColor: true`** — they gain S/M/L
+scaling (their actual gap; they hardcoded `fontSize:`) while every color is
+preserved exactly (zero color-regression risk; a prior contrast pass had already
+brightened their grays, and disabled-state dims must stay dim). At the default M
+scale the conversion is layout-neutral (`scaledFont(base) === base`).
+
+➕ **Follow-up (not in this task):** the remaining low-traffic panels still hardcode
+`fontSize:` — StarMapScene, InventoryScene, CombatScene, ResearchUpgradePanel,
+GovernmentScene, RaceSelectionScene, PlanetInfoPanel, NpcContactPanel,
+DialogueScene, WinScene, MainMenuScene, SystemMiniMap, CombatHud. Route these
+through `scaledText` for full S/M/L coverage. (FlightHud / PlanetManager /
+NpcShipManager / DamageNumbers / UiButton / PlanetScene already read `scaledFont`
+on their player-facing text per the plan's Context.)
 
 ### Task 4: Verify acceptance criteria
 - [ ] verify Overview: font change no longer rebuilds the world; panels scale with the

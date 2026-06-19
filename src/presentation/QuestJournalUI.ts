@@ -1,4 +1,5 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
+import { scaledText } from "./ui/scaledText";
 import type { IQuestService } from "@/core/ports/IQuestService";
 import type { Quest } from "@/domain/Quest";
 import { logger } from "@/utils/logger";
@@ -90,14 +91,9 @@ export class QuestJournalUI {
     this.container.addChild(panel);
 
     // Title
-    const titleText = new Text({
-      text: "ЖУРНАЛ КВЕСТОВ",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 18,
-        fill: 0x00ffff,
-        fontWeight: "bold",
-      },
+    const titleText = scaledText("ЖУРНАЛ КВЕСТОВ", 18, 0x00ffff, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     titleText.x = 20;
     titleText.y = 15;
@@ -146,15 +142,12 @@ export class QuestJournalUI {
       completedQuestIds.length === 0 &&
       expiredQuests.length === 0
     ) {
-      const emptyText = new Text({
-        text: "У вас пока нет квестов.\nПосетите планету и поговорите с губернатором!",
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 14,
-          fill: 0xaaaaaa,
-          align: "center",
-        },
-      });
+      const emptyText = scaledText(
+        "У вас пока нет квестов.\nПосетите планету и поговорите с губернатором!",
+        14,
+        0xaaaaaa,
+        { rawColor: true, align: "center" },
+      );
       emptyText.anchor.set(0.5);
       emptyText.x = this.panelWidth / 2;
       emptyText.y = this.panelHeight / 2;
@@ -167,14 +160,9 @@ export class QuestJournalUI {
    * Render active quests list
    */
   private renderActiveQuests(quests: Quest[], startY: number): number {
-    const sectionTitle = new Text({
-      text: "АКТИВНЫЕ КВЕСТЫ",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0xffaa00,
-        fontWeight: "bold",
-      },
+    const sectionTitle = scaledText("АКТИВНЫЕ КВЕСТЫ", 14, 0xffaa00, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     sectionTitle.x = 20;
     sectionTitle.y = startY;
@@ -240,29 +228,24 @@ export class QuestJournalUI {
     card.addChild(bg);
 
     // Quest title
-    const titleText = new Text({
-      text: quest.title,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 13,
-        fill: quest.isCompleted ? 0x00ff00 : 0xffffff,
-        fontWeight: "bold",
-      },
-    });
+    const titleText = scaledText(
+      quest.title,
+      13,
+      quest.isCompleted ? 0x00ff00 : 0xffffff,
+      { rawColor: true, fontWeight: "bold" },
+    );
     titleText.x = 30;
     titleText.y = 10;
     titleText.eventMode = "none";
     card.addChild(titleText);
 
     // Quest type
-    const typeText = new Text({
-      text: `[${TYPE_LABEL[quest.type] ?? quest.type}]`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 11,
-        fill: 0xb4b4b4,
-      },
-    });
+    const typeText = scaledText(
+      `[${TYPE_LABEL[quest.type] ?? quest.type}]`,
+      11,
+      0xb4b4b4,
+      { rawColor: true },
+    );
     typeText.x = this.panelWidth - 120;
     typeText.y = 10;
     typeText.eventMode = "none";
@@ -288,14 +271,12 @@ export class QuestJournalUI {
       }
       const completedOrReady = objective.completed || isReadyToDeliver;
       const suffix = isReadyToDeliver ? " — ✓ сдать" : "";
-      const objText = new Text({
-        text: `${completedOrReady ? "✓" : "○"} ${objective.description}: ${displayAmount}/${objective.targetAmount}${suffix}`,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 11,
-          fill: completedOrReady ? 0x00ff00 : 0xaaaaaa,
-        },
-      });
+      const objText = scaledText(
+        `${completedOrReady ? "✓" : "○"} ${objective.description}: ${displayAmount}/${objective.targetAmount}${suffix}`,
+        11,
+        completedOrReady ? 0x00ff00 : 0xaaaaaa,
+        { rawColor: true },
+      );
       objText.x = 40;
       objText.y = objY;
       objText.eventMode = "none";
@@ -331,10 +312,12 @@ export class QuestJournalUI {
     if (r?.reputationDelta) {
       parts.push(`${r.reputationDelta > 0 ? "+" : ""}${r.reputationDelta} реп`);
     }
-    const rewardText = new Text({
-      text: `Награда: ${parts.length ? parts.join(", ") : "—"}`,
-      style: { fontFamily: "Courier New", fontSize: 11, fill: 0xffcc66 },
-    });
+    const rewardText = scaledText(
+      `Награда: ${parts.length ? parts.join(", ") : "—"}`,
+      11,
+      0xffcc66,
+      { rawColor: true },
+    );
     rewardText.x = 40;
     rewardText.y = objY + 2;
     rewardText.eventMode = "none";
@@ -368,9 +351,8 @@ export class QuestJournalUI {
       let hx = 40;
       for (const hl of questHighlights) {
         if (hx > this.panelWidth - 60) break;
-        const tagT = new Text({
-          text: `[${hl.label}: ${hl.value}]`,
-          style: { fontFamily: "Courier New", fontSize: 9, fill: hl.color },
+        const tagT = scaledText(`[${hl.label}: ${hl.value}]`, 9, hl.color, {
+          rawColor: true,
         });
         tagT.x = hx;
         tagT.y = objY + 20;
@@ -384,15 +366,12 @@ export class QuestJournalUI {
     if (quest.deadline > 0 && this.currentDay > 0) {
       const remaining = quest.getRemainingDays(this.currentDay);
       if (remaining < 5) {
-        const daysLabel = new Text({
-          text: `⚠ осталось ${remaining} дн.`,
-          style: {
-            fontFamily: "Courier New",
-            fontSize: 11,
-            fill: 0xffaa00,
-            fontWeight: "bold",
-          },
-        });
+        const daysLabel = scaledText(
+          `⚠ осталось ${remaining} дн.`,
+          11,
+          0xffaa00,
+          { rawColor: true, fontWeight: "bold" },
+        );
         daysLabel.x = this.panelWidth - 180;
         daysLabel.y = objY + 2;
         daysLabel.eventMode = "none";
@@ -415,13 +394,8 @@ export class QuestJournalUI {
     btnBg.stroke({ color: 0xffff00, width: 1 });
     btn.addChild(btnBg);
 
-    const btnText = new Text({
-      text: "→ Лететь к цели",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 10,
-        fill: 0xffff00,
-      },
+    const btnText = scaledText("→ Лететь к цели", 10, 0xffff00, {
+      rawColor: true,
     });
     btnText.x = 5;
     btnText.y = 2;
@@ -460,15 +434,12 @@ export class QuestJournalUI {
    * Render "return to issuer" pending-reward section
    */
   private renderPendingReturnSection(quests: Quest[], startY: number): number {
-    const sectionTitle = new Text({
-      text: `ВЫПОЛНЕНО — ЗАБРАТЬ НАГРАДУ (${quests.length})`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0xffcc00,
-        fontWeight: "bold",
-      },
-    });
+    const sectionTitle = scaledText(
+      `ВЫПОЛНЕНО — ЗАБРАТЬ НАГРАДУ (${quests.length})`,
+      14,
+      0xffcc00,
+      { rawColor: true, fontWeight: "bold" },
+    );
     sectionTitle.x = 20;
     sectionTitle.y = startY;
     sectionTitle.eventMode = "none";
@@ -499,24 +470,21 @@ export class QuestJournalUI {
     bg.eventMode = "none";
     card.addChild(bg);
 
-    const titleText = new Text({
-      text: quest.title,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 13,
-        fill: 0xffff88,
-        fontWeight: "bold",
-      },
+    const titleText = scaledText(quest.title, 13, 0xffff88, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     titleText.x = 30;
     titleText.y = 8;
     titleText.eventMode = "none";
     card.addChild(titleText);
 
-    const typeText = new Text({
-      text: `[${TYPE_LABEL[quest.type] ?? quest.type}]`,
-      style: { fontFamily: "Courier New", fontSize: 11, fill: 0xb4b4b4 },
-    });
+    const typeText = scaledText(
+      `[${TYPE_LABEL[quest.type] ?? quest.type}]`,
+      11,
+      0xb4b4b4,
+      { rawColor: true },
+    );
     typeText.x = this.panelWidth - 120;
     typeText.y = 8;
     typeText.eventMode = "none";
@@ -527,15 +495,12 @@ export class QuestJournalUI {
       quest.planetId && quest.planetId !== "unknown"
         ? this.resolveName(quest.planetId)
         : "?";
-    const returnText = new Text({
-      text: `↩ Вернитесь в ${issuerPlanetId}`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 12,
-        fill: 0xffcc00,
-        fontWeight: "bold",
-      },
-    });
+    const returnText = scaledText(
+      `↩ Вернитесь в ${issuerPlanetId}`,
+      12,
+      0xffcc00,
+      { rawColor: true, fontWeight: "bold" },
+    );
     returnText.x = 30;
     returnText.y = 30;
     returnText.eventMode = "none";
@@ -547,10 +512,12 @@ export class QuestJournalUI {
     if (r?.credits) parts.push(`${r.credits} кр`);
     if (r?.experience) parts.push(`${r.experience} опыт`);
     for (const it of r?.items ?? []) parts.push(`${it.amount}×${it.type}`);
-    const rewardText = new Text({
-      text: `Награда: ${parts.length ? parts.join(", ") : "—"}`,
-      style: { fontFamily: "Courier New", fontSize: 11, fill: 0xffcc66 },
-    });
+    const rewardText = scaledText(
+      `Награда: ${parts.length ? parts.join(", ") : "—"}`,
+      11,
+      0xffcc66,
+      { rawColor: true },
+    );
     rewardText.x = 30;
     rewardText.y = 50;
     rewardText.eventMode = "none";
@@ -558,10 +525,12 @@ export class QuestJournalUI {
 
     // "Выдан: X" highlight rendered yellow (target color)
     if (quest.planetId && quest.planetId !== "unknown") {
-      const issuedTag = new Text({
-        text: `[Выдан: ${this.resolveName(quest.planetId)}]`,
-        style: { fontFamily: "Courier New", fontSize: 9, fill: 0xffcc00 },
-      });
+      const issuedTag = scaledText(
+        `[Выдан: ${this.resolveName(quest.planetId)}]`,
+        9,
+        0xffcc00,
+        { rawColor: true },
+      );
       issuedTag.x = this.panelWidth - 200;
       issuedTag.y = 50;
       issuedTag.eventMode = "none";
@@ -575,15 +544,12 @@ export class QuestJournalUI {
    * Render expired/failed quests section
    */
   private renderExpiredQuestsSection(quests: Quest[], startY: number): void {
-    const sectionTitle = new Text({
-      text: `ПРОВАЛЕНО / ПРОСРОЧЕНО (${quests.length})`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 13,
-        fill: 0xff4444,
-        fontWeight: "bold",
-      },
-    });
+    const sectionTitle = scaledText(
+      `ПРОВАЛЕНО / ПРОСРОЧЕНО (${quests.length})`,
+      13,
+      0xff4444,
+      { rawColor: true, fontWeight: "bold" },
+    );
     sectionTitle.x = 20;
     sectionTitle.y = startY;
     sectionTitle.eventMode = "none";
@@ -591,9 +557,8 @@ export class QuestJournalUI {
 
     let yOffset = startY + 22;
     for (const quest of quests) {
-      const row = new Text({
-        text: `✗ ${quest.title} — просрочено`,
-        style: { fontFamily: "Courier New", fontSize: 11, fill: 0xb4b4b4 },
+      const row = scaledText(`✗ ${quest.title} — просрочено`, 11, 0xb4b4b4, {
+        rawColor: true,
       });
       row.x = 30;
       row.y = yOffset;
@@ -610,29 +575,24 @@ export class QuestJournalUI {
     questIds: string[],
     startY: number,
   ): void {
-    const sectionTitle = new Text({
-      text: `ЗАВЕРШЁННЫЕ КВЕСТЫ (${questIds.length})`,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0x00ff00,
-        fontWeight: "bold",
-      },
-    });
+    const sectionTitle = scaledText(
+      `ЗАВЕРШЁННЫЕ КВЕСТЫ (${questIds.length})`,
+      14,
+      0x00ff00,
+      { rawColor: true, fontWeight: "bold" },
+    );
     sectionTitle.x = 20;
     sectionTitle.y = startY;
     sectionTitle.eventMode = "none";
     this.container.addChild(sectionTitle);
 
     // Show count instead of full list to save space
-    const completedText = new Text({
-      text: "Вы завершили несколько квестов!\nПродолжайте исследовать галактику.",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 12,
-        fill: 0xb4b4b4,
-      },
-    });
+    const completedText = scaledText(
+      "Вы завершили несколько квестов!\nПродолжайте исследовать галактику.",
+      12,
+      0xb4b4b4,
+      { rawColor: true },
+    );
     completedText.x = 20;
     completedText.y = startY + 30;
     completedText.eventMode = "none";
@@ -652,14 +612,9 @@ export class QuestJournalUI {
     closeBg.fill({ color: 0xff0000, alpha: 0.8 });
     closeBtn.addChild(closeBg);
 
-    const closeText = new Text({
-      text: "X",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 14,
-        fill: 0xffffff,
-        fontWeight: "bold",
-      },
+    const closeText = scaledText("X", 14, 0xffffff, {
+      rawColor: true,
+      fontWeight: "bold",
     });
     closeText.x = 5;
     closeText.y = 2;
