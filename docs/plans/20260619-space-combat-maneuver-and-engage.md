@@ -103,12 +103,15 @@ pause, tactical positioning + per-turn weapon fire (Steam combat guides).
 - [x] run affected tests + regression — must pass before next task
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify Overview: aggressors close, circle the player, and trade fire each turn;
+- [x] verify Overview: aggressors close, circle the player, and trade fire each turn;
       fast engines escape; combat is automatic and readable
-- [ ] run full unit suite — all green
-- [ ] run `npm run test:e2e:regression`
-- [ ] run `npm run lint` — clean
-- [ ] confirm no existing test assertions changed
+      (combatManeuver/combatEngagement/combatEscape/combatHud unit tests + passing e2e
+      dogfight #7 cover close→orbit→break-off, per-turn fire, escape, and HUD readability)
+- [x] run full unit suite — all green (1736 passed, 204 files)
+- [x] run `npm run test:e2e:regression` (20 passed, incl. Task 4 dogfight test)
+- [x] run `npm run lint` — clean (0 errors; 29 pre-existing `any` warnings in unrelated tests)
+- [x] confirm no existing test assertions changed (combat commits are additive new tests;
+      sole deletion is an import expansion in combatModule.test.ts)
 
 ## Technical Details
 - **"Ход" = fire cadence:** `combatFireIntervalMs` is one turn — each ship fires one shot
