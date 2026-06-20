@@ -82,10 +82,10 @@ leads to `WIN_SCREEN`. Add a proper **death flow**:
   `SceneType.GAME_OVER`, SceneFactory case, e2e page object)
 - Modify: src/types/index.ts, src/core/services/SceneFactory.ts, e2e/page-objects/
 
-- [ ] scaffold + implement a GAME_OVER scene showing the death state with two actions:
+- [x] scaffold + implement a GAME_OVER scene showing the death state with two actions:
       «Загрузить сохранение» and «Начать заново» (readable contrast, scaled fonts)
-- [ ] write tests: the scene constructs and exposes the two actions; page object can find them
-- [ ] run affected tests — must pass before next task
+- [x] write tests: the scene constructs and exposes the two actions; page object can find them
+- [x] run affected tests — must pass before next task
 
 ### Task 4: Wire actions — load autosave / start over
 **Files:**
