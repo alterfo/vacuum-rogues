@@ -183,6 +183,36 @@ export class CombatModule implements FlightModule {
   }
 
   /**
+   * Every weapon fitted in the loadout — the selectable list the active-pause
+   * overlay offers (the player picks one to fire). Empty without a loadout.
+   * {@link playerWeapon} (the auto-fire default) is just the first of these.
+   */
+  fittedWeapons(): WeaponSpec[] {
+    const loadout = this.deps.getPlayerLoadout?.() ?? null;
+    if (!loadout) return [];
+    return loadout
+      .slottedWithGear()
+      .map((s) => s.gear)
+      .filter((g): g is WeaponSpec => !!g && g.kind === GearKind.WEAPON);
+  }
+
+  /**
+   * Active-pause confirmed action: fire exactly one shot at `target` with the
+   * player-chosen `weapon`, then keep `target` as the auto-fire selection so the
+   * real-time fight continues against it once time resumes. Resets the player's
+   * fire cadence so the resumed auto-fire doesn't immediately double-fire. A
+   * no-op outside an active fight or against a non-combatant (mirrors the
+   * auto-fire guard in {@link advancePlayerTimer}). Reuses {@link firePlayerShot}
+   * so the kill/loot/damage-number path is identical to the real-time loop.
+   */
+  confirmAttack(target: NpcShipSprite, weapon: WeaponSpec): void {
+    if (!this.isActive || !this.combatants.has(target)) return;
+    this.selectTarget(target);
+    this.firePlayerShot(target, weapon);
+    this.playerFireTimer = 0;
+  }
+
+  /**
    * Set (or clear) the NPC the player's weapon auto-fires at. Clicking an enemy
    * sprite during a fight selects it; clicking empty space deselects. A no-op
    * outside an active fight.
@@ -367,14 +397,7 @@ export class CombatModule implements FlightModule {
 
   /** The player's active weapon — the first equipped weapon in the loadout. */
   private playerWeapon(): WeaponSpec | null {
-    const loadout = this.deps.getPlayerLoadout?.() ?? null;
-    if (!loadout) return null;
-    return (
-      loadout
-        .slottedWithGear()
-        .map((s) => s.gear)
-        .find((g): g is WeaponSpec => !!g && g.kind === GearKind.WEAPON) ?? null
-    );
+    return this.fittedWeapons()[0] ?? null;
   }
 
   /** Whether the loadout has at least one weapon to fight with. */

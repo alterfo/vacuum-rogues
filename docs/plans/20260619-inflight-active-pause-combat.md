@@ -81,12 +81,12 @@ over each engagement.
   CombatScene weapon-panel shape), src/presentation/flight/CombatHud.ts / FlightHud.ts (anchor)
 - Create/Modify: e2e regression spec for the pause overlay
 
-- [ ] overlay lists fitted weapons (from `ShipLoadout`) and lets the player pick a target + weapon;
+- [x] overlay lists fitted weapons (from `ShipLoadout`) and lets the player pick a target + weapon;
       confirming routes through the controller (Task 1)
-- [ ] no-weapons / no-target cases handled gracefully with a message
-- [ ] visually verify the overlay via screenshot
-- [ ] add e2e: an attack pauses the game and shows the overlay; picking a weapon fires + resumes
-- [ ] run affected tests + regression — must pass before next task
+- [x] no-weapons / no-target cases handled gracefully with a message
+- [x] visually verify the overlay via screenshot
+- [x] add e2e: an attack pauses the game and shows the overlay; picking a weapon fires + resumes
+- [x] run affected tests + regression — must pass before next task
 
 ### Task 4: Resume / disengage + preserve combat hooks
 **Files:**

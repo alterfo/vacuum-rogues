@@ -415,6 +415,115 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('regression: an incoming attack auto-pauses and shows the target/weapon overlay; firing resumes (active-pause Task 3)', async ({ page }) => {
+    // Active-pause acceptance: when a hostile opens fire the game pauses and a
+    // centred target/weapon overlay appears; clicking Огонь! fires one shot and
+    // resumes real time. Stage a deterministic fight (fit a weapon, drop the
+    // first NPC just inside range as a hostile, engage it), run the turn until
+    // the first incoming shot lands, then assert the pause + overlay, screenshot
+    // it, and REAL-click the fire button (UiButton hit-geometry must work).
+    await setupNewGame(page);
+    const sf = new SpaceFlightPage(page);
+    const errorCollector = new ErrorCollector(page);
+
+    const staged = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+        playerLoadout?: {
+          derivedStats: () => { weaponCount: number };
+          install: (id: string) => unknown;
+        } | null;
+      };
+      const scene = engine.currentScene;
+      if (!scene) return false;
+      const loadout = engine.playerLoadout;
+      if (loadout && loadout.derivedStats().weaponCount === 0) {
+        loadout.install('wpn_pulse');
+      }
+      const npcManager = scene['npcManager'] as
+        | { e2eForceAggressorInRange: (range: number) => { npc: { hullHP: number } } | null }
+        | undefined;
+      const combat = scene['combatModule'] as
+        | { addCombatant: (s: unknown) => void; isActive: boolean }
+        | undefined;
+      const sprite = npcManager?.e2eForceAggressorInRange(240);
+      if (!sprite || !combat) return false;
+      combat.addCombatant(sprite);
+      return combat.isActive;
+    });
+    expect(staged).toBe(true);
+
+    // Run the turn so the NPC's first shot lands → onPlayerUnderAttack → pause.
+    await sf.startTurn();
+    await page.waitForFunction(
+      () => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+        };
+        const cp = engine.currentScene?.['combatPause'] as { paused: boolean } | undefined;
+        return cp?.paused === true;
+      },
+      undefined,
+      { timeout: 20_000 },
+    );
+
+    // The overlay modal must be mounted on the UI layer (labelled handle), and
+    // the enemy hull at the moment of pause (the first exchange already landed).
+    const opened = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene;
+      const uiLayer = (scene?.['renderer'] as { uiLayer: { getChildByLabel: (l: string, deep?: boolean) => unknown } }).uiLayer;
+      const overlay = uiLayer.getChildByLabel('combat-pause-overlay', true);
+      const combat = scene?.['combatModule'] as { selectedTarget: { npc: { hullHP: number } } | null } | undefined;
+      return { hasOverlay: overlay != null, enemyHull: combat?.selectedTarget?.npc.hullHP ?? null };
+    });
+    expect(opened.hasOverlay).toBe(true);
+    expect(opened.enemyHull).not.toBeNull();
+
+    // Visual verification: the centred overlay with target + weapon lists.
+    await sf.screenshot('combat-pause-overlay');
+
+    // REAL-click the fire button (warm up the event boundary first; e2e* seams
+    // bypass hit-testing, so only a real click can catch a mouse-dead button).
+    await page.mouse.move(5, 5);
+    const fire = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene;
+      const uiLayer = (scene?.['renderer'] as { uiLayer: { getChildByLabel: (l: string, deep?: boolean) => unknown } }).uiLayer;
+      const btn = uiLayer.getChildByLabel('combat-pause-overlay', true) as
+        | { getChildByLabel: (l: string, deep?: boolean) => { getGlobalPosition: () => { x: number; y: number }; width: number; height: number } | null }
+        | null;
+      const c = btn?.getChildByLabel('cp-fire', true);
+      if (!c) return null;
+      const p = c.getGlobalPosition();
+      return { x: p.x + c.width / 2, y: p.y + c.height / 2 };
+    });
+    expect(fire).not.toBeNull();
+    await page.mouse.click(fire!.x, fire!.y);
+
+    // Firing resumes time (paused → false) and lands one more shot on the enemy.
+    await page.waitForFunction(
+      (hull0) => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+        };
+        const scene = engine.currentScene;
+        const cp = scene?.['combatPause'] as { paused: boolean } | undefined;
+        const combat = scene?.['combatModule'] as { selectedTarget: { npc: { hullHP: number } } | null } | undefined;
+        const hull = combat?.selectedTarget?.npc.hullHP ?? 0;
+        return cp?.paused === false && hull < hull0;
+      },
+      opened.enemyHull as number,
+      { timeout: 10_000 },
+    );
+
+    errorCollector.assertAndDetach();
+  });
+
   test('smoke: no JS errors during a 3-turn play session', async ({ page }) => {
     await setupNewGame(page);
     const sf = new SpaceFlightPage(page);

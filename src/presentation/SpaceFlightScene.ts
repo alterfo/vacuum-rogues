@@ -23,7 +23,7 @@ import { RouteRenderer } from "./flight/RouteRenderer";
 import { PlayerShipRenderer } from "./flight/PlayerShipRenderer";
 import { NpcShipManager } from "./flight/NpcShipManager";
 import { CombatModule } from "./flight/CombatModule";
-import { CombatPauseController } from "./flight/combatPause";
+import { createCombatPauseUi } from "./flight/combatPauseUi";
 import { PlanetManager } from "./flight/PlanetManager";
 import { FlightHud } from "./flight/FlightHud";
 import { CameraController } from "./flight/CameraController";
@@ -81,9 +81,7 @@ export class SpaceFlightScene extends GameScene {
   private npcManager!: NpcShipManager;
   // In-flight combat (Tasks 11–14): scene reads `isActive` to retarget on a click.
   private combatModule!: CombatModule;
-  // Active-pause combat (Task 1 controller, Task 2 freeze): an incoming attack
-  // flips `paused`, folded into the module `isTurnRunning` gates + `updateShip`.
-  private readonly combatPause = new CombatPauseController<unknown, unknown>();
+  private combatPause = createCombatPauseUi(); // active-pause; rewired in initialize()
   // Latches the low-hull auto-stop so the warning fires once per descent.
   private lowHullStopped = false;
 
@@ -222,6 +220,7 @@ export class SpaceFlightScene extends GameScene {
         this.combatPause.requestPause("incoming-attack"),
       showMessage: (t, c) => this.hud.showMessage(t, c),
     });
+    this.combatPause = createCombatPauseUi(this.renderer, this.combatModule);
 
     // NPC module: living-galaxy ships, contact panel, auto-follow combat, OVERMIND prompt.
     this.npcManager = new NpcShipManager(
