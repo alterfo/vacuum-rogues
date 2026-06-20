@@ -217,6 +217,7 @@ export class SpaceFlightScene extends GameScene {
         this.npcManager.handleInFlightDeath(s);
         this.questCompletion.bountyByNpcKill(npcId);
       },
+      onPlayerDestroyed: () => this.gameEngine?.triggerPlayerDeath(),
       showMessage: (t, c) => this.hud.showMessage(t, c),
     });
 

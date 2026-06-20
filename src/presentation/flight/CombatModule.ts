@@ -42,6 +42,13 @@ export interface CombatModuleDeps {
   getPlayerShip?(): { hullHP: number; maxHull: number } | null;
   /** Resolve a killed NPC: drop loot, remove the sprite + domain entry. */
   onNpcDestroyed?(sprite: NpcShipSprite): void;
+  /**
+   * Player ship hull reached 0 from incoming NPC fire → game over. Fired at
+   * most once per fight (a one-shot guard inside the module), and the host
+   * (`GameEngine.triggerPlayerDeath`) guards again so a stray same-frame shot
+   * can't re-fire the death flow.
+   */
+  onPlayerDestroyed?(): void;
   /** Transient toast feedback (kill confirmation / low-hull retreat). */
   showMessage?(text: string, color?: number): void;
 }
@@ -77,6 +84,13 @@ export class CombatModule implements FlightModule {
 
   /** Guards the one-shot low-hull retreat warning per fight. */
   private lowHullWarned = false;
+
+  /**
+   * Guards the one-shot player-death notification per fight: once the player's
+   * hull hits 0 we surface the death exactly once, even if more NPC shots land
+   * the same frame. Reset by {@link CombatModule.endCombat}.
+   */
+  private playerDeathReported = false;
 
   /**
    * The NPC the player's weapon auto-fires at. Defaults to the first combatant;
@@ -186,6 +200,7 @@ export class CombatModule implements FlightModule {
     this.selectedTarget = null;
     this.playerFireTimer = 0;
     this.lowHullWarned = false;
+    this.playerDeathReported = false;
     this.hud?.close();
   }
 
@@ -267,6 +282,15 @@ export class CombatModule implements FlightModule {
       );
       // Per-turn fire flash from the enemy to the player ship (who shoots whom).
       this.hud?.flashShot(npc.x, npc.y, physics.shipX, physics.shipY, false);
+    }
+    // Hull reached 0 → the player is destroyed. Surface it to the host exactly
+    // once; the host fires the game-over flow (and guards again for idempotency).
+    if (ship.hullHP <= 0) {
+      if (!this.playerDeathReported) {
+        this.playerDeathReported = true;
+        this.deps.onPlayerDestroyed?.();
+      }
+      return;
     }
     if (
       ship.hullHP > 0 &&

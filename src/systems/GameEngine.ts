@@ -113,6 +113,13 @@ export class GameEngine {
   public questExpiryCallback?: (message: string) => void;
   /** Called when a quest moves to pending-return state so the HUD can show a toast. */
   public questPendingReturnCallback?: (message: string) => void;
+  /**
+   * Fired by {@link GameEngine.triggerPlayerDeath} when the player ship is
+   * destroyed in flight combat. The game-over presentation (GAME_OVER scene
+   * transition, Task 4) hooks in here; kept as a seam so the death detection +
+   * idempotent guard can be tested without a renderer.
+   */
+  public playerDeathCallback?: () => void;
   public readonly saveManager: SaveManager;
   public readonly qualityProfile: AdaptiveQualityProfile;
   public readonly onnxRegistry: ONNXModelRegistry;
@@ -157,6 +164,8 @@ export class GameEngine {
   private loadingOverlayObjects: (Graphics | Text)[] = [];
   private _gameOverShown = false;
   private _winScreenShown = false;
+  /** One-shot guard so player death fires the game-over flow exactly once. */
+  private _playerDeathShown = false;
   /** Drops the active `credits` projection binding before re-binding a new player. */
   private bankProjectionUnsub: Unsubscribe | null = null;
   private readonly galaxyService: IGalaxyService;
@@ -981,6 +990,11 @@ export class GameEngine {
     this.galaxy = save.galaxy;
     this.player = save.player;
 
+    // Loading a checkpoint (e.g. the takeoff autosave after a death) re-arms the
+    // one-shot death guard, so the restored player can die again — otherwise the
+    // game-over flow would never re-fire after the first death.
+    this._playerDeathShown = false;
+
     // Saved state is plain JSON: restore class prototypes so domain methods
     // (galaxy.simulateDay, ship.repair, inventory.addItem) and `instanceof`
     // module checks work after "Continue". Field data is already correct.
@@ -1265,6 +1279,21 @@ export class GameEngine {
     this.modalObjects.push(btnText);
   }
 
+  /**
+   * Player ship destroyed in flight combat → game over. Fires the death flow
+   * exactly once (idempotent guard mirroring `_gameOverShown`): a stray later
+   * shot the same frame is a no-op. Crucially this does NOT touch the `"auto"`
+   * takeoff autosave — that save is the checkpoint the GAME_OVER screen rolls
+   * back to, so death must be non-destructive to it. The actual GAME_OVER
+   * scene transition is wired in via {@link playerDeathCallback} (Task 4).
+   */
+  triggerPlayerDeath(): void {
+    if (this._playerDeathShown) return;
+    this._playerDeathShown = true;
+    logger.warn("Player ship destroyed — triggering game over");
+    this.playerDeathCallback?.();
+  }
+
   handleError(error: Error): void {
     const response = this.exceptionHandler.handle(error);
     logger.error(
@@ -1440,6 +1469,7 @@ export class GameEngine {
     this.playerLoadout = null;
     this._gameOverShown = false;
     this._winScreenShown = false;
+    this._playerDeathShown = false;
     this.playerService.deletePlayer();
     const seed = `SR_${Date.now()}`;
     this.galaxy = await this.galaxyService.generate(seed, 30);

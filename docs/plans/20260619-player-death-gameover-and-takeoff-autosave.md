@@ -71,10 +71,10 @@ leads to `WIN_SCREEN`. Add a proper **death flow**:
   src/systems/GameEngine.ts (a guarded `triggerPlayerDeath()` that fires the GAME_OVER transition once)
 - Create: src/tests/combat/playerDeath.test.ts
 
-- [ ] player hull ≤ 0 in flight combat fires game-over exactly once (idempotent guard, like
+- [x] player hull ≤ 0 in flight combat fires game-over exactly once (idempotent guard, like
       `_gameOverShown`); the death path does NOT overwrite the `"auto"` autosave
-- [ ] write tests: hull ≤ 0 → one trigger; repeated calls no-op; autosave untouched on death
-- [ ] run affected tests — must pass before next task
+- [x] write tests: hull ≤ 0 → one trigger; repeated calls no-op; autosave untouched on death
+- [x] run affected tests — must pass before next task
 
 ### Task 3: GAME_OVER scene (register + render)
 **Files:**
