@@ -87,6 +87,8 @@ export class SpaceFlightScene extends GameScene {
   // the threshold, not every frame.
   private lowHullStopped = false;
 
+  private destroyed = false;
+
   // Turn control: the turn "runs" (ship flies, NPCs/planets move, combat) while true.
   private isTurnRunning = false;
   // F1 (playtest3): Pause lets the ship finish its current day, then halts — this
@@ -556,6 +558,9 @@ export class SpaceFlightScene extends GameScene {
     this.playerShip.update(deltaTime, this.bgElapsed);
     this.npcManager.updateCombat(deltaTime);
     this.combatModule.update(deltaTime, this.bgElapsed);
+    // A lethal hit here fires GAME_OVER synchronously, destroying this scene
+    // mid-frame; bail before driving the now-destroyed modules below.
+    if (this.destroyed) return;
     this.camera.update();
     this.npcManager.update(deltaTime, this.bgElapsed);
     this.planetManager.update(deltaTime, this.bgElapsed);
@@ -567,6 +572,7 @@ export class SpaceFlightScene extends GameScene {
   }
 
   destroy(): void {
+    this.destroyed = true;
     // Remove all pointer event listeners
     if (this.boundPointerDown) {
       this.renderer.app.stage.off("pointerdown", this.boundPointerDown);
