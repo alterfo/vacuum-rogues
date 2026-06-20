@@ -101,6 +101,35 @@ describe("CombatModule.confirmAttack (Task 3)", () => {
     expect(stranger.npc.hullHP).toBe(100); // untouched — never engaged
   });
 
+  it("lands a deliberate shot on an engaged target beyond weapon range (unlike auto-fire)", () => {
+    // The headline rule of confirmAttack: a hand-picked shot is NOT range-gated,
+    // while the real-time auto-fire is. Park an engaged enemy beyond pulse range
+    // (240) but inside combatEscapeRange (1200) so it stays a combatant.
+    const controller = new CombatPauseController<NpcShipSprite, WeaponSpec>({
+      onConfirm: (a) => module.confirmAttack(a.target, a.weapon),
+    });
+    const ship = { hullHP: 100, maxHull: 100 };
+    const loadout = new ShipLoadout("hull_warden");
+    loadout.install("wpn_pulse");
+    const deps: CombatModuleDeps = {
+      getShipPhysics: () => makePhysics(),
+      getPlayerLoadout: () => loadout,
+      getPlayerShip: () => ship,
+      isTurnRunning: () => !controller.paused,
+    };
+    const module = new CombatModule(deps);
+    const farEnemy = makeSprite("far", 500, 0); // > PULSE.range, < combatEscapeRange
+    module.addCombatant(farEnemy);
+
+    // Auto-fire is range-gated: a full interval lands nothing on the far enemy.
+    module.update(FIRE);
+    expect(farEnemy.npc.hullHP).toBe(100);
+
+    // A deliberate confirmed shot lands anyway.
+    module.confirmAttack(farEnemy, PULSE);
+    expect(farEnemy.npc.hullHP).toBe(100 - PULSE.damage);
+  });
+
   it("resets the fire cadence so the resumed auto-fire waits a full interval", () => {
     const { module, enemy } = makeFight();
     module.confirmAttack(enemy, PULSE); // one manual shot

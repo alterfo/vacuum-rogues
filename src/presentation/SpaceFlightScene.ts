@@ -564,9 +564,9 @@ export class SpaceFlightScene extends GameScene {
     this.npcManager.update(deltaTime, this.bgElapsed);
     this.planetManager.update(deltaTime, this.bgElapsed);
     this.updateSystemMiniMap();
-    // Push the turn state so the HUD shows the right Play/Pause label, then let
-    // it refresh its per-frame read-outs (button, day counter, mini-log fade).
-    this.hud.setTurnRunning(this.isTurnRunning);
+    // Push the *effective* turn state for the Play/Pause label, then refresh HUD
+    // read-outs. A combat freeze keeps isTurnRunning raw-true, so gate the label.
+    this.hud.setTurnRunning(this.isTurnRunning && !this.combatPause.paused);
     this.hud.update(deltaTime, this.bgElapsed);
   }
 

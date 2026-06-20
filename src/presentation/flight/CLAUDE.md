@@ -28,7 +28,8 @@ NPC AI and fire timers all halt. The `CombatPauseOverlay` lets the player pick a
 **Огонь!** fires one shot (`CombatModule.confirmAttack`) and resumes, **Продолжить** (or `Escape`)
 resumes without firing. The controller also **re-pauses when the selected auto-fire target is
 lost** — killed or out of range *while a survivor remains*: `CombatModule.removeCombatant` raises
-`onTargetLost`, wired to `CombatPauseController.notifyTargetLost`. Losing the *last* combatant ends
+`onTargetLost`, wired to `CombatPauseController.loseTarget` (which adopts the lost ship as the
+current selection, then re-pauses via `notifyTargetLost`). Losing the *last* combatant ends
 the fight (`endCombat` → `onCombatEnded` → `controller.reset` re-arms the debounce) instead of
 pausing onto an empty overlay. While paused, `onKeyDown` suppresses flight shortcuts so the player
 can't escape the deliberate choice.
