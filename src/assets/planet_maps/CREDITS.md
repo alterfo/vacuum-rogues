@@ -32,3 +32,35 @@ filename alone:
 The rotation shader (`PlanetRotationFilter`) defaults to the `<type>_04` map and
 prefers an AI variant only when one is present. Keep this attribution while any
 CC BY map is shipped.
+
+## Terran art is alien-by-design
+
+`PlanetType.TERRESTRIAL` worlds are **deliberately not Earth** (plan
+`docs/plans/20260620-alien-terran-planet-art.md`). The ComfyUI prompts for the
+terran axis (`tools/comfyui/asset_prompts.json` → `planet_maps` and `planets`)
+describe an *alien but habitable* biosphere — exotic ocean liquids (turquoise,
+emerald, indigo, wine), non-Earth vegetation (crimson, violet, amber-gold, cyan),
+unfamiliar landmasses, lavender/pale-green haze — and the category negatives
+explicitly exclude Earth (`Earth, blue marble, recognizable Earth continents,
+real-world map, satellite photo of Earth, Africa, Americas, real-world
+coastlines`). The `terranPromptAlien` unit test pins this so an edit can't
+quietly reintroduce blue-marble imagery.
+
+The CC BY `terrestrial_04`/`terrestrial_05` Earth daymaps above are the legacy
+seed art; once the alien terran sets are generated they replace these on disk
+under the same suffix convention (`_01`…`_03` AI-generated). Variety is
+glob-driven: selection (`pickVariant`/`pickVariantKey`, FNV-1a hash by planet id)
+spreads stably across every globbed `terrestrial_NN`, so landing more variant
+files widens variety with no code change.
+
+**Generation params (manual, GPU host `oleg@192.168.88.193`, RTX 4090):**
+
+- `planet_maps` (equirectangular, 1024×512, 2:1): Flux 360° LoRA path —
+  `python3 tools/comfyui/generate_assets.py --category planet_maps --clean`.
+  Must stay 360° equirect, never a top-down sphere sprite.
+- `planets` (globe sprite, 1024×1024, centered disc, transparent): SDXL with an
+  explicit `--ckpt` (the default Flux model breaks `CheckpointLoaderSimple`) —
+  `--category planets --ckpt realvisxl_v5.safetensors --clean`.
+- Verify via `/history` (queued ≠ success); don't `/free` the shared GPU. rsync
+  the emitted `terrestrial_NN` into `src/assets/planet_maps/` and
+  `src/assets/planets/`.

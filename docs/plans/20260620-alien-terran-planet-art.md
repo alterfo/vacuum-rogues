@@ -97,9 +97,11 @@ on the GPU host as a manual follow-up (ralphex cannot drive ComfyUI).
 **Files:**
 - Modify: src/assets/planet_maps/CREDITS.md (note terran art is alien-by-design / generation params)
 
-- [ ] verify Overview: terran prompts are alien + varied, selection covers them, fallback safe
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing asset/planet test assertions changed
+- [x] verify Overview: terran prompts are alien + varied, selection covers them, fallback safe
+- [x] run full unit suite — all green (2017 tests); `npm run test:e2e:regression` (23 passed, needs
+      `NO_PROXY=localhost`); `npm run lint` clean (0 errors)
+- [x] confirm no existing asset/planet test assertions changed (alien-terran commits only ADDED
+      `terranPromptAlien.test.ts` + `terranVariantSelection.test.ts`; CREDITS.md is not a test)
 
 ## Technical Details
 - **Variety axes (terran):** ocean/liquid colour (turquoise, emerald, wine, indigo, methane-blue);
