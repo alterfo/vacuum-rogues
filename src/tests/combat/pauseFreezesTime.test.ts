@@ -142,4 +142,34 @@ describe("active-pause freezes simulation time (Task 2)", () => {
     controller.resume();
     expect(controller.paused).toBe(false); // gate reports running again
   });
+
+  it("with several aligned aggressors, only one shot lands on the pausing frame", () => {
+    // Three aggressors in range, all engaged the same frame → fire timers aligned
+    // at 0. On the frame the interval first elapses, the first NPC shot raises the
+    // active-pause; the world is frozen the instant pause is raised, so the two
+    // survivors must NOT also fire this frame (else the player eats 3× damage on
+    // the very frame the pause was meant to protect them).
+    const controller = new CombatPauseController<NpcShipSprite, WeaponSpec>();
+    const ship = { hullHP: 100, maxHull: 100 };
+    const loadout = new ShipLoadout("hull_warden");
+    loadout.install("wpn_pulse");
+    const deps: CombatModuleDeps = {
+      getShipPhysics: () => makePhysics(),
+      getPlayerLoadout: () => loadout,
+      getPlayerShip: () => ship,
+      isTurnRunning: () => !controller.paused,
+      onPlayerUnderAttack: () => {
+        controller.requestPause("incoming-attack");
+      },
+    };
+    const module = new CombatModule(deps);
+    module.addCombatant(makeSprite("a", 50, 0, 20));
+    module.addCombatant(makeSprite("b", 60, 0, 20));
+    module.addCombatant(makeSprite("c", 70, 0, 20));
+
+    module.update(FIRE);
+
+    expect(controller.paused).toBe(true);
+    expect(ship.hullHP).toBe(80); // exactly one 20-damage NPC shot, not 40 or 20
+  });
 });

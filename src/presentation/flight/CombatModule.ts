@@ -303,6 +303,13 @@ export class CombatModule implements FlightModule {
   /** Advance every NPC's fire timer; fire its shot at the player when it elapses and the NPC is in range. */
   private advanceNpcTimers(deltaTime: number): void {
     for (const npc of this.combatants) {
+      // A landed NPC shot can raise the active-pause (the first incoming hit of an
+      // engagement). The world is frozen the instant that pause is raised, so the
+      // remaining aggressors must not still fire this frame — with several enemies
+      // whose timers are aligned (all added with timer 0), the first shot pauses
+      // and every survivor would otherwise drain the player's hull on the same
+      // pausing frame. Re-check the same gate as the top of update() per iteration.
+      if (this.deps.isTurnRunning?.() === false) break;
       const t = (this.npcFireTimers.get(npc) ?? 0) + deltaTime;
       const d = this.distanceToShip(npc);
       if (
