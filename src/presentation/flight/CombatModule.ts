@@ -163,6 +163,11 @@ export class CombatModule implements FlightModule {
     if (this.deps.isTurnRunning?.() === false) return;
     this.pruneDisengaged();
     this.advancePlayerTimer(deltaTime);
+    // A killing player shot can re-pause the fight mid-frame: the selected target
+    // was lost but a survivor remains → onTargetLost → active-pause. The world is
+    // frozen the instant that pause is raised, so surviving NPCs must not still
+    // fire this frame (re-check the same gate as the top of update()).
+    if (this.deps.isTurnRunning?.() === false) return;
     this.advanceNpcTimers(deltaTime);
     if (this.combatants.size === 0) {
       this.endCombat();

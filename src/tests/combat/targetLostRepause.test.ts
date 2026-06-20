@@ -101,6 +101,33 @@ describe("target-lost re-pause (production wiring)", () => {
     expect(module.selectedTarget).toBe(b); // re-picked survivor
   });
 
+  it("re-pauses when a CONFIRMED kill of the selected target leaves a survivor", () => {
+    // Regression: the confirm path fires through the controller while still paused.
+    // If `confirm()` ran `onConfirm` (the kill) before leaving the pause, the
+    // synchronous target-lost re-pause hit the already-paused guard and was
+    // swallowed — dropping the player back into real time against the survivor.
+    const { module, controller, pauseReason } = makeFight();
+    const a = makeSprite("a", 50, 14); // selected; 14 HP — one confirmed pulse is lethal
+    const b = makeSprite("b", 60, 100); // survivor, in range
+    module.addCombatant(a);
+    module.addCombatant(b);
+    expect(module.selectedTarget).toBe(a);
+
+    // Pause without auto-fire, then the player confirms a lethal shot on `a`.
+    controller.requestPause("incoming-attack");
+    controller.selectTarget(a);
+    controller.selectWeapon(module.fittedWeapons()[0]);
+    const action = controller.confirm();
+
+    expect(action).not.toBeNull();
+    expect(a.npc.hullHP).toBe(0); // killed by the confirmed shot
+    // The confirmed kill lost the selected target while `b` survives → re-pause so
+    // the player picks a new target instead of drifting into real time.
+    expect(controller.paused).toBe(true);
+    expect(pauseReason()).toBe("target-lost");
+    expect(module.selectedTarget).toBe(b); // re-picked survivor
+  });
+
   it("does NOT re-pause when the last combatant dies (fight ends cleanly)", () => {
     const { module, controller, pauseReason } = makeFight();
     const a = makeSprite("a", 50, 10); // only combatant, dies to one pulse

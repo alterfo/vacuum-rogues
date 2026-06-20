@@ -137,8 +137,15 @@ export class CombatPauseController<TTarget, TWeapon> {
       target: this._target,
       weapon: this._weapon,
     };
-    this.deps.onConfirm?.(action);
+    // Resume *before* firing. The confirmed shot can synchronously lose its own
+    // target — a kill that leaves a survivor re-pauses via {@link notifyTargetLost}
+    // → {@link enterPause}. If we fired while still paused, that re-pause would hit
+    // the already-paused guard in `enterPause` and be swallowed, then `leavePause`
+    // would drop the player back into real time against the survivors. Leaving the
+    // pause first lets the target-lost re-pause take effect (overlay re-opens onto
+    // a fresh target); a non-killing confirm just stays resumed.
     this.leavePause();
+    this.deps.onConfirm?.(action);
     return action;
   }
 

@@ -1673,8 +1673,8 @@ export class SpaceFlightScene extends GameScene {
    */
   private onKeyDown(event: KeyboardEvent): void {
     if (event.key === "Escape") {
-      // B4: first Escape closes the top-most panel, second cancels route.
-      if (this.npcManager.isContactPanelOpen) {
+      if (this.combatPause.paused) this.combatPause.resume();
+      else if (this.npcManager.isContactPanelOpen) {
         this.npcManager.closeContactPanel();
       } else if (this.hud.isQuestJournalOpen()) {
         this.hud.closeQuestJournal();
@@ -1687,7 +1687,7 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
     if (event.key === "j" || event.key === "J") {
-      if (!this.combatPause.paused) this.hud.toggleQuestJournal(); // suppressed while paused
+      if (!this.combatPause.paused) this.hud.toggleQuestJournal();
     } else if (event.key === "i" || event.key === "I") {
       if (!this.combatPause.paused) this.openInventory();
     }
