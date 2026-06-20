@@ -93,10 +93,10 @@ over each engagement.
 - Modify: src/presentation/flight/CombatModule.ts / SpaceFlightScene.ts (resume after action;
   disengage path; keep NPC-death → BOUNTY/quest hooks firing)
 
-- [ ] after a confirmed action time resumes; disengage/flee still works; `onNpcDestroyed` /
+- [x] after a confirmed action time resumes; disengage/flee still works; `onNpcDestroyed` /
       bounty/quest completion still fire as before
-- [ ] write tests: a kill during active-pause still triggers the bounty hook
-- [ ] run affected tests — must pass before next task
+- [x] write tests: a kill during active-pause still triggers the bounty hook
+- [x] run affected tests — must pass before next task
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify Overview: attack auto-pauses, target+weapon selectable, action resumes time, hooks intact

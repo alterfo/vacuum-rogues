@@ -55,6 +55,14 @@ export interface CombatModuleDeps {
    * shot per engagement, so the module fires it unconditionally (Low Coupling).
    */
   onPlayerUnderAttack?(): void;
+  /**
+   * The fight ended (every combatant killed or fled, or the module was torn
+   * down). The host wires this to {@link CombatPauseController.reset} so the
+   * active-pause debounce re-arms — otherwise the next engagement would never
+   * pause on its first incoming shot (the "incoming-attack" trigger stays
+   * consumed across fights). Fired from {@link CombatModule.endCombat}.
+   */
+  onCombatEnded?(): void;
   /** Transient toast feedback (kill confirmation / low-hull retreat). */
   showMessage?(text: string, color?: number): void;
 }
@@ -238,6 +246,9 @@ export class CombatModule implements FlightModule {
     this.lowHullWarned = false;
     this.playerDeathReported = false;
     this.hud?.close();
+    // Re-arm the active-pause debounce so the next engagement pauses fresh on
+    // its first incoming shot (idempotent — safe on a no-op end / teardown).
+    this.deps.onCombatEnded?.();
   }
 
   destroy(): void {

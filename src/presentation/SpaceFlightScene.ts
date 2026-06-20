@@ -210,14 +210,14 @@ export class SpaceFlightScene extends GameScene {
       getScreenSize: () => this.renderer.app.screen,
       getPlayerShip: () => this.gameEngine?.player?.ship ?? null,
       onNpcDestroyed: (s) => {
-        // Capture id before the death path deletes the NPC, then complete its BOUNTY.
-        const npcId = s.npc.id;
+        const npcId = s.npc.id; // capture before the death path deletes the NPC, then complete its BOUNTY
         this.npcManager.handleInFlightDeath(s);
         this.questCompletion.bountyByNpcKill(npcId);
       },
       onPlayerDestroyed: () => this.gameEngine?.triggerPlayerDeath(),
       onPlayerUnderAttack: () =>
         this.combatPause.requestPause("incoming-attack"),
+      onCombatEnded: () => this.combatPause.reset(), // re-arm pause debounce
       showMessage: (t, c) => this.hud.showMessage(t, c),
     });
     this.combatPause = createCombatPauseUi(this.renderer, this.combatModule);
