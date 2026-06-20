@@ -191,6 +191,55 @@ describe("EOD loan default — seizure", () => {
     expect(balanced(h.service)).toBe(true);
   });
 
+  it("floors a fractional seizure to whole credits, leaving the current account integral, and writes off the sub-credit residual", () => {
+    // A fresh harness with a rate that makes the outstanding fractional, so the
+    // seize amount (min(available, outstanding)) is itself fractional and the
+    // Math.floor in seizeTowardLoan is load-bearing. CLAUDE.md: a non-integer
+    // current-account balance throws on reload (PlayerSchema.credits is int()).
+    const bus = new BankBus();
+    const service = new BankingService(bus, {
+      startDate: 1,
+      loanDailyRate: 0.025, // 2.5 %/day → 100 → −102.5 (a fractional debt)
+    });
+    const events: BankEvent[] = [];
+    bus.subscribe((e) => events.push(e));
+    bus.dispatch({
+      kind: "OpenAccount",
+      account: {
+        id: PLAYER,
+        type: AccountType.CURRENT,
+        label: "Игрок",
+        ownerId: "player",
+      },
+    });
+    bus.dispatch({
+      kind: "OpenAccount",
+      account: {
+        id: LOAN,
+        type: AccountType.LOAN,
+        label: "Кредит",
+        ownerId: "player",
+      },
+    });
+    const h: Harness = { bus, service, events };
+
+    disburse(h, 100); // current = 100, loan = −100
+    fund(h, 50); // current = 150 — more than the (fractional) debt will be
+
+    eod(h); // day 1: not due → base accrual → loan = −102.5, current = 150
+    expect(service.balanceOf(LOAN)).toBeCloseTo(-102.5, 6);
+
+    eod(h); // day 2: overdue → seize floor(min(150, 102.5)) = 102, then residual write-off
+    // Seized exactly 102 (floored), so current stays a whole number.
+    expect(service.balanceOf(PLAYER)).toBe(48);
+    expect(Number.isInteger(service.balanceOf(PLAYER))).toBe(true);
+    // The 0.5 sub-credit residual is written off → the loan closes cleanly at 0…
+    expect(service.balanceOf(LOAN)).toBe(0);
+    // …so the borrower who actually had the funds is not dinged into default.
+    expect(defaults(events)).toHaveLength(0);
+    expect(balanced(service)).toBe(true);
+  });
+
   it("a seizure that retires the loan caps at the outstanding (does not drain extra) and clears arrears", () => {
     const h = makeHarness();
     disburse(h, 5000); // current = 5000

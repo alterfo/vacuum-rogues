@@ -284,4 +284,26 @@ describe("loanPanelLines", () => {
     expect(lines.some((l) => l.label === "Сумма кредита")).toBe(false);
     expect(lines.some((l) => l.label === "Платёж/день")).toBe(true);
   });
+
+  it("surfaces the next-due countdown for an active loan when the business date is known", () => {
+    const arrears = { penaltyActive: false, defaulted: false, nextDueDate: 12 };
+    const lines = loanPanelLines(summary, 3200, arrears, 9);
+    const due = lines.find((l) => l.label === "След. платёж");
+    expect(due?.value).toBe("через 3 дн.");
+    expect(due?.tone).toBe("plain");
+  });
+
+  it("marks the next-due row overdue (debt tone) once the due date has passed", () => {
+    const arrears = { penaltyActive: true, defaulted: false, nextDueDate: 9 };
+    const lines = loanPanelLines(summary, 3200, arrears, 9);
+    const due = lines.find((l) => l.label === "След. платёж");
+    expect(due?.value).toBe("просрочен");
+    expect(due?.tone).toBe("debt");
+  });
+
+  it("omits the next-due row when no business date is supplied (offer / no clock)", () => {
+    const arrears = { penaltyActive: false, defaulted: false, nextDueDate: 12 };
+    const lines = loanPanelLines(summary, 3200, arrears);
+    expect(lines.some((l) => l.label === "След. платёж")).toBe(false);
+  });
 });

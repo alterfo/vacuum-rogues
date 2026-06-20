@@ -10,7 +10,6 @@ import { scaledText } from "./ui/scaledText";
 import { INTERNAL_ACCOUNTS, type AccountType } from "@/domain/banking/Ledger";
 import type { BankEvent } from "@/systems/banking/bus";
 import type { Unsubscribe } from "@/systems/banking/bus";
-import { DEFAULT_LOAN_DAILY_RATE } from "@/systems/banking/BankingService";
 import {
   GL_COUNTERPARTY,
   adjustPlayerCredits,
@@ -284,13 +283,18 @@ export class BankScene extends GameScene {
 
     const summary = loanTermsSummary({
       principal: LOAN_PRINCIPAL,
-      dailyRate: DEFAULT_LOAN_DAILY_RATE,
+      dailyRate: engine.bankingService.loanRate,
       periods: LOAN_PERIODS,
     });
     const loanId = loanAccountId(player.id);
     const outstanding = -engine.bankingService.balanceOf(loanId);
     const arrears = engine.bankingService.loanDefaultStateOf(loanId);
-    const lines = loanPanelLines(summary, outstanding, arrears);
+    const lines = loanPanelLines(
+      summary,
+      outstanding,
+      arrears,
+      engine.bankingService.businessDate,
+    );
 
     y = this.sectionHeader(
       ui,
@@ -607,7 +611,7 @@ export class BankScene extends GameScene {
       player.currentAccountId,
       {
         principal: LOAN_PRINCIPAL,
-        dailyRate: DEFAULT_LOAN_DAILY_RATE,
+        dailyRate: engine.bankingService.loanRate,
         periods: LOAN_PERIODS,
       },
     );

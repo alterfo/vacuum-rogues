@@ -192,6 +192,8 @@ export interface LoanArrears {
   readonly penaltyActive: boolean;
   /** `true` once the loan has crossed the default threshold (blocks new loans). */
   readonly defaulted: boolean;
+  /** Business date the next scheduled installment falls due (surfaced as a countdown). */
+  readonly nextDueDate?: number;
 }
 
 /**
@@ -222,13 +224,16 @@ export function borrowBlockReason(
  * outstanding debt, the per-day payment and the rate. Pure: derived entirely
  * from the (unit-tested) {@link LoanTermsSummary} + the outstanding balance, so
  * the scene only maps these rows to `Text`. `outstanding` is positive when in
- * debt (i.e. `-balanceOf(loanAccount)`). When the active loan is in arrears the
+ * debt (i.e. `-balanceOf(loanAccount)`). When `businessDate` is given and the loan
+ * carries a tracked `nextDueDate`, the active view also shows when the next
+ * installment falls due (a countdown). When the active loan is in arrears the
  * panel appends a status line explaining the penalty rate / the new-loan block.
  */
 export function loanPanelLines(
   summary: LoanTermsSummary,
   outstanding: number,
   arrears?: LoanArrears,
+  businessDate?: number,
 ): LoanPanelLine[] {
   const rate = formatDailyRate(summary.dailyRate);
   const payment = `≈ ${formatCredits(summary.perPeriodPayment)}`;
@@ -242,6 +247,14 @@ export function loanPanelLines(
       { label: "Платёж/день", value: payment },
       { label: "Ставка", value: rate, tone: "muted" },
     ];
+    if (arrears?.nextDueDate !== undefined && businessDate !== undefined) {
+      const daysUntil = arrears.nextDueDate - businessDate;
+      lines.push({
+        label: "След. платёж",
+        value: daysUntil > 0 ? `через ${daysUntil} дн.` : "просрочен",
+        tone: daysUntil > 0 ? "plain" : "debt",
+      });
+    }
     if (arrears?.defaulted) {
       lines.push({
         label: "Статус",

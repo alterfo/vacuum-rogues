@@ -102,6 +102,16 @@ export class BankingService {
     return this.currentDate;
   }
 
+  /**
+   * The base daily interest rate charged on a loan, *before* any overdue penalty
+   * bump — the rate EOD actually accrues at ({@link accrueDailyInterest}). The Bank
+   * UI reads this so the displayed loan terms match real accrual instead of
+   * re-importing a default constant that silently diverges if the rate is configured.
+   */
+  get loanRate(): number {
+    return this.loanDailyRate;
+  }
+
   /** Read access to the ledger for projections / statements (never mutate it directly). */
   getLedger(): Ledger {
     return this.ledger;
