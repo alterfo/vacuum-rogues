@@ -1385,10 +1385,8 @@ export class SpaceFlightScene extends GameScene {
 
   /**
    * Plot the planned-course overlay and hand it to {@link RouteRenderer} to draw.
-   * Route planning (the ship→waypoints→destination polyline and the
-   * landing-vs-navigation decision) is the scene's job — it owns the route data
-   * and the planet sprites; the renderer just draws what it's told. (Named
-   * `plotRoute`, not `draw*`: the actual drawing is delegated to the renderer.)
+   * Route planning (the ship→waypoints→destination polyline + landing-vs-nav
+   * decision) is the scene's job; the renderer just draws what it's told.
    */
   private plotRoute(): void {
     if (!this.shipPhysics || !this.plannedRoute) return;
@@ -1397,33 +1395,25 @@ export class SpaceFlightScene extends GameScene {
       this.routeRenderer.clearRoute();
       return;
     }
-    // Polyline ship → (curved waypoints) → destination. When the path is a
-    // straight clear shot, routePath is just the destination.
+    // Polyline ship → (curved waypoints) → destination (bare destination on a clear shot).
     const path =
       this.routePath.length > 0 ? this.routePath : [this.plannedRoute];
     const points = [
       { x: this.shipPhysics.shipX, y: this.shipPhysics.shipY },
       ...path,
     ];
-    const toX = this.plannedRoute.x;
-    const toY = this.plannedRoute.y;
+    const { x: toX, y: toY } = this.plannedRoute;
 
     this.routeRenderer.drawRoute(points);
 
-    // Check if route target is near a planet (within its interaction radius)
-    const isLandingOnPlanet = this.planetManager.getPlanetAt(toX, toY) !== null;
-
-    // Draw different marker based on whether this is a landing or empty space navigation
-    if (isLandingOnPlanet) {
+    // Landing marker when the target sits on a planet, else a navigation marker.
+    if (this.planetManager.getPlanetAt(toX, toY) !== null) {
       this.routeRenderer.drawLandingMarker(toX, toY);
     } else {
       this.routeRenderer.drawNavigationMarker(toX, toY);
     }
   }
 
-  /**
-   * Clear planned route and route line
-   */
   /**
    * Build a path from (fx,fy) to (tx,ty) that bows around the star instead of
    * flying through it. Returns just [{to}] when the straight segment is clear,
@@ -1501,7 +1491,17 @@ export class SpaceFlightScene extends GameScene {
   ): void {
     if (!this.shipPhysics) return;
     this.playerShip.finishTakeoff(); // a fresh course cancels any in-progress take-off arc
-    this.routePath = this.computeFlightPath(x, y, landing);
+    // Single source: when parked and re-firing the course just planned & drawn
+    // for this exact point (Ход / second click), fly that drawn path verbatim.
+    // Callers don't re-thread the `landing` spiral hint, so a recompute would
+    // drop the spiral-in / star bow and beeline a path the preview never showed
+    // (drawn ≠ flown). Moving-ship reaim still recomputes (its routePath is stale).
+    const parkedReplan =
+      !this.shipPhysics.isMoving &&
+      this.plannedRoute?.x === x &&
+      this.plannedRoute?.y === y &&
+      this.routePath.length > 0;
+    if (!parkedReplan) this.routePath = this.computeFlightPath(x, y, landing);
     // Hand the whole curved path to physics; it flows through the waypoints
     // without stopping (smooth motion around the star — US-070 #5).
     this.shipPhysics.setPath(this.routePath);
