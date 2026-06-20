@@ -19,7 +19,8 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import { GAME_BALANCE } from "@/config/balance";
 import { GameEngine, GameEngineDIDependencies } from "@/systems/GameEngine";
-import { FactionType } from "@/types";
+import { FactionType, SceneType } from "@/types";
+import type { Renderer } from "@/presentation/Renderer";
 import {
   MockSaveService,
   MockGalaxyService,
@@ -204,5 +205,54 @@ describe("GameEngine.triggerPlayerDeath (Task 2)", () => {
     await engine.loadGame("auto");
     engine.triggerPlayerDeath();
     expect(cb).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("GameEngine.triggerPlayerDeath → GAME_OVER transition (Task 4)", () => {
+  let diDeps: GameEngineDIDependencies;
+  let engine: GameEngine;
+
+  beforeEach(() => {
+    localStorage.clear();
+    diDeps = {
+      saveService: new MockSaveService(),
+      galaxyService: new MockGalaxyService(),
+      playerService: new MockPlayerService(),
+      onnxService: new MockOnnxService(),
+      exceptionHandler: new MockExceptionHandler(),
+      qualityProfile: new AdaptiveQualityProfile(),
+      questService: new MockQuestService(),
+    };
+    engine = new GameEngine(diDeps);
+    // A truthy renderer lets the production death path drive the GAME_OVER
+    // transition (transitionTo is stubbed so no real scene graph is needed).
+    engine.renderer = {} as Renderer;
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it("transitions to GAME_OVER exactly once when a renderer is present", () => {
+    const transitionTo = vi
+      .spyOn(engine, "transitionTo")
+      .mockResolvedValue(undefined);
+    engine.triggerPlayerDeath();
+    engine.triggerPlayerDeath(); // guarded — must not re-transition
+    expect(transitionTo).toHaveBeenCalledTimes(1);
+    expect(transitionTo).toHaveBeenCalledWith(
+      SceneType.GAME_OVER,
+      expect.objectContaining({ gameEngine: engine }),
+    );
+  });
+
+  it("does NOT overwrite the takeoff autosave when transitioning to GAME_OVER", () => {
+    vi.spyOn(engine, "transitionTo").mockResolvedValue(undefined);
+    const saveSpy = vi.spyOn(engine, "saveGame");
+    const writeSpy = vi.spyOn(diDeps.saveService, "write");
+    engine.triggerPlayerDeath();
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(writeSpy).not.toHaveBeenCalled();
   });
 });

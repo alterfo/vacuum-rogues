@@ -93,11 +93,11 @@ leads to `WIN_SCREEN`. Add a proper **death flow**:
   src/systems/GameEngine.ts (death → `transitionTo(SceneType.GAME_OVER)`)
 - Create/Modify: e2e regression spec for the death flow
 
-- [ ] death transitions to GAME_OVER; «Загрузить» restores the last takeoff autosave; «Начать заново»
+- [x] death transitions to GAME_OVER; «Загрузить» restores the last takeoff autosave; «Начать заново»
       starts a fresh game (reusing the existing load / new-game paths)
-- [ ] visually verify the game-over screen + both actions via screenshot
-- [ ] add e2e: kill the player → GAME_OVER appears; load returns to the takeoff state
-- [ ] run affected tests + regression — must pass before next task
+- [x] visually verify the game-over screen + both actions via screenshot
+- [x] add e2e: kill the player → GAME_OVER appears; load returns to the takeoff state
+- [x] run affected tests + regression — must pass before next task
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify Overview: takeoff autosaves; death shows GAME_OVER; load/restart work; autosave preserved

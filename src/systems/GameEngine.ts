@@ -471,12 +471,18 @@ export class GameEngine {
     // Play background music track matching the new scene.
     this.playSceneTrack(sceneType);
 
-    // Auto-save on scene transition (only for gameplay scenes with valid state)
+    // Auto-save on scene transition (only for gameplay scenes with valid state).
+    // GAME_OVER is excluded: it is the terminal death screen, and the `"auto"`
+    // slot is the takeoff checkpoint the death rolls back to — autosaving the
+    // GAME_OVER state here would clobber that checkpoint (and, since GAME_OVER is
+    // not a contextDependentScene, a later load would re-enter the death screen
+    // and bounce straight back). Death must be non-destructive to the autosave.
     if (
       this.galaxy &&
       this.player &&
       sceneType !== SceneType.MAIN_MENU &&
-      sceneType !== SceneType.RACE_SELECTION
+      sceneType !== SceneType.RACE_SELECTION &&
+      sceneType !== SceneType.GAME_OVER
     ) {
       this.saveGame("auto").catch((e) => {
         logger.error("Auto-save failed:", e);
@@ -1284,14 +1290,23 @@ export class GameEngine {
    * exactly once (idempotent guard mirroring `_gameOverShown`): a stray later
    * shot the same frame is a no-op. Crucially this does NOT touch the `"auto"`
    * takeoff autosave — that save is the checkpoint the GAME_OVER screen rolls
-   * back to, so death must be non-destructive to it. The actual GAME_OVER
-   * scene transition is wired in via {@link playerDeathCallback} (Task 4).
+   * back to, so death must be non-destructive to it.
+   *
+   * Production drives the terminal {@link SceneType.GAME_OVER} transition here.
+   * The transition is renderer-guarded so the headless death-detection tests
+   * (no renderer) still exercise the idempotent guard + {@link playerDeathCallback}
+   * seam without `transitionTo` throwing.
    */
   triggerPlayerDeath(): void {
     if (this._playerDeathShown) return;
     this._playerDeathShown = true;
     logger.warn("Player ship destroyed — triggering game over");
     this.playerDeathCallback?.();
+    if (this.renderer) {
+      this.transitionTo(SceneType.GAME_OVER, { gameEngine: this }).catch((e) =>
+        logger.error("Game-over transition failed:", e),
+      );
+    }
   }
 
   handleError(error: Error): void {

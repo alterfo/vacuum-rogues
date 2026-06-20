@@ -1654,4 +1654,65 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
 
     errorCollector.assertAndDetach();
   });
+
+  test('regression: player death routes to GAME_OVER with both recovery actions (player-death plan Task 4)', async ({
+    page,
+  }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Establish the take-off checkpoint the death rolls back to. A real planet
+    // take-off writes the "auto" slot (player-death plan Task 1); the player
+    // starts straight in flight here, so write the same checkpoint directly.
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        saveGame: (slot: string) => Promise<void>;
+      };
+      await engine.saveGame('auto');
+    });
+
+    // Kill the player through the REAL production death seam: triggerPlayerDeath
+    // is what SpaceFlightScene's CombatModule.onPlayerDestroyed calls when the
+    // hull hits 0. It must route to the terminal GAME_OVER scene (Task 4 wiring).
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        triggerPlayerDeath: () => void;
+      };
+      engine.triggerPlayerDeath();
+    });
+    await waitForScene(page, 'GameOverScene');
+
+    // The screen offers exactly the two non-destructive recoveries, in order.
+    const actions = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eActions?: () => string[] } | null;
+      };
+      return engine.currentScene?.e2eActions?.() ?? [];
+    });
+    expect(actions).toEqual(['Загрузить сохранение', 'Начать заново']);
+
+    await page.waitForTimeout(200); // let the terminal screen paint a frame
+    await page.screenshot({ path: 'e2e/screenshots/gameover-deathflow.png' });
+
+    // Linger on the death screen (a real player reads it before acting). This is
+    // the regression that mattered: the GAME_OVER transition must NOT autosave
+    // over the "auto" takeoff checkpoint — otherwise the slot would now hold the
+    // GAME_OVER state and «Загрузить» would re-enter the death screen instead of
+    // returning to flight. Loading immediately used to race ahead of that buggy
+    // autosave; the wait forces the autosave-clobber path if it ever returns.
+    await page.waitForTimeout(1500);
+
+    // «Загрузить сохранение» rolls back to the last takeoff autosave: the "auto"
+    // slot was written on takeoff and death left it untouched, so the load
+    // restores the saved SPACE_FLIGHT state (off GAME_OVER, back into flight).
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eRunAction?: (label: string) => void } | null;
+      };
+      engine.currentScene?.e2eRunAction?.('Загрузить сохранение');
+    });
+    await waitForScene(page, 'SpaceFlightScene', 15_000);
+
+    errorCollector.assertAndDetach();
+  });
 });
