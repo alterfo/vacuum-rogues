@@ -46,6 +46,19 @@ describe("NpcShip persistent world position", () => {
     expect(npc.hasWorldPosition()).toBe(true);
   });
 
+  it("treats an absent (undefined) position as unplaced — no NaN spawn", () => {
+    // A loaded ship can carry `undefined` here: SaveManager returns the raw
+    // parsed object (schema `.default(null)` is discarded) and rehydration
+    // re-attaches the prototype without running the constructor's `?? null`.
+    // hasWorldPosition() must read `undefined` as "not placed" (like the
+    // migration's own undefined check) so the spawn path seed-derives a real
+    // offset instead of computing `cx + undefined` = NaN.
+    const npc = makeNpc("npc_1");
+    (npc as unknown as { worldX: unknown }).worldX = undefined;
+    (npc as unknown as { worldY: unknown }).worldY = undefined;
+    expect(npc.hasWorldPosition()).toBe(false);
+  });
+
   it("round-trips the position through the schema (persists)", () => {
     const npc = makeNpc("npc_1");
     npc.setWorldPosition(742.5, -118.25);

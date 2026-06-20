@@ -97,7 +97,15 @@ export class NpcShip {
 
   /** Whether this NPC has a persisted world position yet. */
   hasWorldPosition(): boolean {
-    return this.worldX !== null && this.worldY !== null;
+    // `!= null` (not `!== null`) so an absent field (`undefined`) reads as
+    // "unplaced", matching the migration's own `=== undefined`/`=== null`
+    // backfill check. A loaded ship can carry `undefined` here — SaveManager
+    // returns the raw parsed object (the schema's `.default(null)` applies only
+    // to the discarded validated copy) and rehydration re-attaches the prototype
+    // without running the constructor's `?? null`. Treating `undefined` as
+    // "placed" would spawn the sprite at `cx + undefined` = NaN and then the
+    // tracked-orbit tick would persist NaN forever.
+    return this.worldX != null && this.worldY != null;
   }
 
   /** Flag this NPC as openly hostile to the player (turns it aggressive). */
