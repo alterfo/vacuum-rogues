@@ -82,11 +82,20 @@ Three independent polish fixes:
   state that points at the ТРЮМ strip)
 - Create: src/tests/equipment/shopOwnedLabel.test.ts
 
-- [ ] owned-but-uninstalled gear no longer shows a dead "Есть"; the row clearly conveys it is owned
-      and offers the next action (install / go to ТРЮМ)
-- [ ] keep the change minimal to avoid colliding with the equipment-overhaul plan's install flow
-- [ ] write tests for the pure label/action selection across states (buy / owned / installed / no-funds)
-- [ ] run affected tests — must pass before next task
+- [x] owned-but-uninstalled gear no longer shows a dead "Есть"; the row clearly conveys it is owned
+      and offers the next action — extracted a pure `shopRowAction(state)` selector
+      (`src/presentation/equipment/shopRowAction.ts`): owned + fits → actionable "[Установить]" (routes
+      through `installOwnedGear`), owned + can't-fit → clear non-dead "В трюме" status pointing at the
+      ТРЮМ strip. The row's owned-set is now canonical-store ∪ legacy bag, and install is gated on the
+      canonical `ownedGearIds` store so `installOwnedGear` acts on real owned gear.
+- [x] keep the change minimal to avoid colliding with the equipment-overhaul plan's install flow —
+      reused `installOwnedGear`/`ownedUninstalledGear` (no bespoke install path); install refresh reuses
+      the existing `rebuild()`. No schema/domain change.
+- [x] write tests for the pure label/action selection across states (buy / owned / installed / no-funds)
+      — `src/tests/equipment/shopOwnedLabel.test.ts` (8 tests: each state, precedence, and "no state
+      renders the old dead 'Есть'")
+- [x] run affected tests — must pass before next task (shopOwnedLabel 8 passed; equipment suite 191
+      passed; lint 0 errors; `tsc --noEmit` clean)
 
 ### Task 4: Verify acceptance criteria
 - [ ] verify Overview: drawn route matches the flight path; no system-edge ring; clear shop label

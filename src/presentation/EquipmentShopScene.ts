@@ -18,12 +18,14 @@ import {
   slotToBagModule,
   acquireUninstalledGear,
   ownedUninstalledGear,
+  installOwnedGear,
   gearFit,
   type GearFit,
   KIND_LABEL,
   KIND_COLOR,
   applyLoadoutHullToShip,
 } from "@/systems/equipment/GearBridge";
+import { shopRowAction } from "./equipment/shopRowAction";
 import type { SlotCategory } from "@/systems/equipment/GearCatalog";
 import {
   sellGearPrice,
@@ -570,12 +572,21 @@ export class EquipmentShopScene extends GameScene {
     if (!this.listContainer) return;
     this.listContainer.removeChildren();
 
-    const playerCredits = this.gameEngine?.player?.credits ?? 0;
-    const ownedIds = new Set(
-      this.gameEngine?.player?.inventory.modules.map((m) => m.id) ?? [],
-    );
-    const installedIds = this.installedGearIds();
+    const player = this.gameEngine?.player ?? null;
+    const playerCredits = player?.credits ?? 0;
     const loadout = this.gameEngine?.playerLoadout ?? null;
+    // Canonical owned-uninstalled store (feeds the ТРЮМ strip and is what a
+    // purchase lands in); a shop install acts on this set via installOwnedGear.
+    const canonicalOwned = new Set(
+      player ? ownedUninstalledGear(player, loadout) : [],
+    );
+    // Owned for badge purposes = canonical store ∪ legacy bag (loot/unequip
+    // still feed the bag) — so an owned item is never mislabelled "[Купить]".
+    const ownedIds = new Set<string>([
+      ...canonicalOwned,
+      ...(player?.inventory.modules.map((m) => m.id) ?? []),
+    ]);
+    const installedIds = this.installedGearIds();
 
     for (let i = 0; i < this.listings.length; i++) {
       const listing = this.listings[i];
@@ -584,6 +595,11 @@ export class EquipmentShopScene extends GameScene {
       const canAfford = playerCredits >= listing.price;
       const alreadyOwned = ownedIds.has(gear.id);
       const isInstalled = installedIds.has(gear.id);
+      // Fit projection drives both the per-row fit hint and whether an owned
+      // item can be installed straight from the shop (canonical store + fits).
+      const fitResult = loadout ? gearFit(loadout, gear.id) : null;
+      const installable =
+        canonicalOwned.has(gear.id) && fitResult?.status === "fits";
 
       const replacing = this.installedOfSameClass(gear);
       const rowColor = isInstalled
@@ -669,35 +685,29 @@ export class EquipmentShopScene extends GameScene {
       priceText.y = rowY + 16;
       this.listContainer.addChild(priceText);
 
-      // Buy button
-      const btnLabel = isInstalled
-        ? "Установлен"
-        : alreadyOwned
-          ? "Есть"
-          : canAfford
-            ? "[Купить]"
-            : "Мало₡";
-      const buyBtn = scaledText(
-        btnLabel,
-        12,
-        isInstalled
-          ? 0x44ff88
-          : alreadyOwned
-            ? 0x447744
-            : canAfford
-              ? 0x00ff88
-              : 0x445544,
-        { rawColor: true, fontWeight: "bold" },
-      );
+      // Right-hand control: buy / install / owned-in-hold / no-funds. Owned but
+      // uninstalled gear is never a dead "Есть" — it is an actionable
+      // "[Установить]" when it fits, else a clear "В трюме" status.
+      const rowAction = shopRowAction({
+        isInstalled,
+        owned: alreadyOwned,
+        installable,
+        canAfford,
+      });
+      const buyBtn = scaledText(rowAction.label, 12, rowAction.color, {
+        rawColor: true,
+        fontWeight: "bold",
+      });
       buyBtn.x = startX + w * 0.89;
       buyBtn.y = rowY + 16;
 
-      if (canAfford && !alreadyOwned && !isInstalled) {
+      if (rowAction.actionable) {
         buyBtn.eventMode = "static";
         buyBtn.cursor = "pointer";
         buyBtn.on("pointerdown", (e) => {
           e.stopPropagation();
-          this.buyItem(listing);
+          if (rowAction.action === "install") this.installHeldGear(gear.id);
+          else this.buyItem(listing);
         });
         buyBtn.on("pointerover", () => {
           buyBtn.alpha = 0.7;
@@ -712,7 +722,7 @@ export class EquipmentShopScene extends GameScene {
 
       // Per-listing fit hint: does this gear fit the current hull (by category +
       // mass) once installed from the warehouse? Hulls have no slot → no hint.
-      const fit = loadout ? fitIndicator(gearFit(loadout, gear.id)) : null;
+      const fit = fitResult ? fitIndicator(fitResult) : null;
       if (fit) {
         const fitText = scaledText(fit.text, 10, fit.color, { rawColor: true });
         fitText.eventMode = "none";
@@ -882,6 +892,22 @@ export class EquipmentShopScene extends GameScene {
       tx += sellBtn.width + 14;
       if (tx > x + w - 60) break; // prevent overflow off the strip
     }
+  }
+
+  /**
+   * Install an owned-uninstalled item straight from the shop (the actionable
+   * "[Установить]" control on an owned row). Routes through the canonical
+   * `installOwnedGear` seam — no bespoke install path — then fully rebuilds so
+   * the row flips to "Установлен", the УСТАНОВЛЕНО strip gains it, and the item
+   * leaves the ТРЮМ strip.
+   */
+  private installHeldGear(gearId: string): void {
+    const player = this.gameEngine?.player;
+    const loadout = this.gameEngine?.playerLoadout;
+    if (!player || !loadout) return;
+    if (!installOwnedGear(player, loadout, gearId)) return;
+    this.gameEngine?.audio.playSfx("buy").catch(() => {});
+    this.rebuild();
   }
 
   private sellHoldItem(gearId: string): void {
