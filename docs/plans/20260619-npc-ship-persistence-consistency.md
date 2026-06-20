@@ -102,11 +102,21 @@ and a mere star-map visit (no jump, no day advance) never alters a system's ship
   src/systems/npc/NpcSimulator.ts (only tick on a real jump/day-advance)
 - Create: src/tests/npc/starMapRoundTrip.test.ts
 
-- [ ] opening the galaxy map and returning **without a jump** does not tick the simulation:
+- [x] opening the galaxy map and returning **without a jump** does not tick the simulation:
       `galaxy.npcShips` composition + positions for the current system are unchanged
-- [ ] a real jump/day-advance still ticks NPCs (wandering, garrisons) as before
-- [ ] write tests: round-trip leaves the system's ship set + positions identical; a jump does tick
-- [ ] run affected tests — must pass before next task
+      (verified by construction: the simulation clock is owned solely by
+      `GameEngine.advanceGalaxyDay` — the only caller of `NpcSimulator.tick` — which fires only
+      from `SpaceFlightScene`'s move/wait day-loops, never from a `transitionTo`. `StarMapScene`
+      itself advances no day/tick. No production change needed; the discipline already held.)
+- [x] a real jump/day-advance still ticks NPCs (wandering, garrisons) as before
+      (`advanceGalaxyDay` unchanged: increments `gameDays` and ticks the simulator; test asserts it)
+- [x] write tests: round-trip leaves the system's ship set + positions identical; a jump does tick
+      (`src/tests/npc/starMapRoundTrip.test.ts`: drives real `GameEngine.transitionTo`
+      STAR_MAP→SPACE_FLIGHT with a stubbed scene factory + a real generated galaxy; spies prove
+      `npc.tick`/`advanceGalaxyDay` are NOT called, `gameDays` + composition + worldX/worldY frozen;
+      a second test proves `advanceGalaxyDay` ticks once and advances the day)
+- [x] run affected tests — must pass before next task (starMapRoundTrip + full npc/core suites +
+      npcSimulator: 140 passed; lint + tsc clean)
 
 ### Task 4: Tracked movement — positions evolve only via ticks
 **Files:**
