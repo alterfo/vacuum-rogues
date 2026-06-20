@@ -256,6 +256,62 @@ export function loanPayment(
   return (principal * dailyRate * factor) / (factor - 1);
 }
 
+/** Human-readable terms a loan is offered on, derived purely from {@link LoanTerms}. */
+export interface LoanTermsSummary {
+  /** Principal disbursed up-front to the current account. */
+  readonly principal: number;
+  /** Per-period (per-EOD-day) interest rate — mirrors the bank's loan accrual. */
+  readonly dailyRate: number;
+  /** Number of scheduled repayment periods (EOD days). */
+  readonly periods: number;
+  /** The fixed level payment due each period (the annuity payment). */
+  readonly perPeriodPayment: number;
+  /** Sum of every scheduled payment — always ≥ `principal` (interest is charged). */
+  readonly totalRepayable: number;
+  /** `totalRepayable − principal`: the cost of borrowing. */
+  readonly totalInterest: number;
+  /**
+   * The business date each period's payment falls due, i.e.
+   * `[startBusinessDate + 1 … startBusinessDate + periods]` (one EOD day apart).
+   */
+  readonly dueDates: readonly number[];
+  /** The amortization schedule this summary was derived from. */
+  readonly schedule: readonly AmortizationPeriod[];
+}
+
+/**
+ * Derive the human-readable {@link LoanTermsSummary} a borrower needs to decide on
+ * a loan — the per-period payment, the total repayable (and the interest it implies),
+ * and when each payment falls due — from the {@link amortizationSchedule}. Pure: it
+ * books nothing and reads no live ledger state, so the Bank UI (and tests) can show
+ * the terms before the loan is taken.
+ *
+ * `startBusinessDate` is the business date the loan is taken on; period `i` falls due
+ * one EOD day later, on `startBusinessDate + i`. Defaults to `0` (relative dates).
+ *
+ * @throws GameValidationException `LOAN_BAD_TERMS` (inherited from {@link loanPayment})
+ * for a non-positive period count or a negative rate.
+ */
+export function loanTermsSummary(
+  terms: LoanTerms,
+  startBusinessDate = 0,
+): LoanTermsSummary {
+  const { principal, dailyRate, periods } = terms;
+  const schedule = amortizationSchedule(principal, dailyRate, periods);
+  const perPeriodPayment = loanPayment(principal, dailyRate, periods);
+  const totalRepayable = schedule.reduce((sum, p) => sum + p.payment, 0);
+  return {
+    principal,
+    dailyRate,
+    periods,
+    perPeriodPayment,
+    totalRepayable,
+    totalInterest: totalRepayable - principal,
+    dueDates: schedule.map((p) => startBusinessDate + p.period),
+    schedule,
+  };
+}
+
 /**
  * Build the full amortization schedule for a loan. Each period accrues `dailyRate`
  * interest on the outstanding balance, then the fixed {@link loanPayment} is
