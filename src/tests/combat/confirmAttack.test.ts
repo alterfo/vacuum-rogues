@@ -112,6 +112,17 @@ describe("CombatModule.confirmAttack (Task 3)", () => {
     module.update(1);
     expect(enemy.npc.hullHP).toBeLessThan(afterConfirm);
   });
+
+  it("resumed auto-fire keeps using the confirmed weapon, not the first fitted one", () => {
+    const { module, enemy } = makeFight();
+    // Beam (dmg 30) is the *second* fitted weapon; the default auto-fire weapon is
+    // the pulse (dmg 14, index 0). Confirming the beam must make the resumed
+    // real-time auto-fire keep using the beam — not silently revert to the pulse.
+    module.confirmAttack(enemy, BEAM);
+    const afterConfirm = enemy.npc.hullHP; // 100 - 30
+    module.update(FIRE); // one resumed auto-fire shot lands
+    expect(enemy.npc.hullHP).toBe(afterConfirm - BEAM.damage); // beam again, not pulse
+  });
 });
 
 describe("active-pause confirm wiring (Task 3)", () => {

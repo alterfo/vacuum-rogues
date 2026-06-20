@@ -122,6 +122,15 @@ export class CombatModule implements FlightModule {
    */
   selectedTarget: NpcShipSprite | null = null;
 
+  /**
+   * The weapon the player chose in the active-pause overlay. A confirmed shot
+   * sets it so the *resumed* real-time auto-fire keeps using that weapon (mirrors
+   * how the confirmed target persists via {@link selectedTarget}); null until the
+   * first confirm, where {@link advancePlayerTimer} falls back to the default
+   * {@link playerWeapon}. Cleared on {@link endCombat}.
+   */
+  private selectedWeapon: WeaponSpec | null = null;
+
   /** True while at least one combatant is engaged. */
   isActive = false;
 
@@ -240,6 +249,11 @@ export class CombatModule implements FlightModule {
   confirmAttack(target: NpcShipSprite, weapon: WeaponSpec): void {
     if (!this.isActive || !this.combatants.has(target)) return;
     this.selectTarget(target);
+    // Persist the chosen weapon so the resumed real-time auto-fire keeps using it
+    // (the docstring's "the real-time fight continues against it" applies to the
+    // weapon too, not just the target — otherwise auto-fire silently reverts to
+    // the first fitted weapon).
+    this.selectedWeapon = weapon;
     this.firePlayerShot(target, weapon);
     this.playerFireTimer = 0;
   }
@@ -266,6 +280,7 @@ export class CombatModule implements FlightModule {
     this.combatants.clear();
     this.npcFireTimers.clear();
     this.selectedTarget = null;
+    this.selectedWeapon = null;
     this.playerFireTimer = 0;
     this.lowHullWarned = false;
     this.playerDeathReported = false;
@@ -337,7 +352,7 @@ export class CombatModule implements FlightModule {
     this.playerFireTimer += deltaTime;
     if (this.playerFireTimer < GAME_BALANCE.combatFireIntervalMs) return;
     const target = this.selectedTarget;
-    const weapon = this.playerWeapon();
+    const weapon = this.activeWeapon();
     if (!target || !this.combatants.has(target) || !weapon) return;
     const d = this.distanceToShip(target);
     if (d === null || d > weapon.range) return;
@@ -447,6 +462,18 @@ export class CombatModule implements FlightModule {
   /** The player's active weapon — the first equipped weapon in the loadout. */
   private playerWeapon(): WeaponSpec | null {
     return this.fittedWeapons()[0] ?? null;
+  }
+
+  /**
+   * The weapon the resumed auto-fire uses: the one the player confirmed in the
+   * overlay if it is still fitted, else the default {@link playerWeapon}. The
+   * still-fitted guard keeps a stale selection (e.g. the weapon was unequipped
+   * mid-fight) from firing a weapon the loadout no longer carries.
+   */
+  private activeWeapon(): WeaponSpec | null {
+    const sel = this.selectedWeapon;
+    if (sel && this.fittedWeapons().some((w) => w.id === sel.id)) return sel;
+    return this.playerWeapon();
   }
 
   /** Whether the loadout has at least one weapon to fight with. */
