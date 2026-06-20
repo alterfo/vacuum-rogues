@@ -105,10 +105,10 @@ the ABS prototype's "thin core-banking" guardrail.
   src/systems/banking save flow
 - Create: src/tests/banking/loanDefaultPersistence.test.ts
 
-- [ ] defaulted player cannot take a new loan; the block + active penalty are explained in the UI
-- [ ] loan-default state persists and reloads; old saves migrate (no state ⇒ not in debt, not defaulted)
-- [ ] write tests: persistence round-trip; old-save migration; blocked-borrow path
-- [ ] run affected tests — must pass before next task
+- [x] defaulted player cannot take a new loan; the block + active penalty are explained in the UI
+- [x] loan-default state persists and reloads; old saves migrate (no state ⇒ not in debt, not defaulted)
+- [x] write tests: persistence round-trip; old-save migration; blocked-borrow path
+- [x] run affected tests — must pass before next task
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify Overview: terms shown, missed payment penalized, reputation + block + seizure work, GL balanced

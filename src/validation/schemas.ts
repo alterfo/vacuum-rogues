@@ -504,10 +504,22 @@ export const LedgerJournalEntrySchema = z.object({
   postings: z.array(LedgerPostingSchema),
 });
 
+/** One persisted per-loan arrears record (mirrors `LoanDefaultSnapshot` in domain/banking/Ledger). */
+export const LoanDefaultSnapshotSchema = z.object({
+  loanAccountId: z.string(),
+  missedPayments: z.number(),
+  penaltyActive: z.boolean(),
+  defaulted: z.boolean(),
+  nextDueDate: z.number(),
+  owedAtLastDue: z.number(),
+});
+
 /**
- * The persisted АБС core-banking state — accounts + journal + EOD cursors
- * (mirrors `BankingSnapshot` in domain/banking/Ledger). `restoreLedger` re-posts
- * every entry on load, so the double-entry invariant is re-checked there too.
+ * The persisted АБС core-banking state — accounts + journal + EOD cursors + the
+ * per-loan arrears state (mirrors `BankingSnapshot` in domain/banking/Ledger).
+ * `restoreLedger` re-posts every entry on load, so the double-entry invariant is
+ * re-checked there too. `loanDefaults` is optional: saves made before it existed
+ * carry none and re-seed each outstanding loan lazily at the next EOD.
  */
 export const BankingSnapshotSchema = z.object({
   businessDate: z.number(),
@@ -517,6 +529,7 @@ export const BankingSnapshotSchema = z.object({
     accounts: z.array(LedgerAccountSchema),
     entries: z.array(LedgerJournalEntrySchema),
   }),
+  loanDefaults: z.array(LoanDefaultSnapshotSchema).optional(),
 });
 
 export const SaveStateSchema = z.object({

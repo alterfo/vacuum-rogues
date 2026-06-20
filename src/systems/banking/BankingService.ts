@@ -119,6 +119,14 @@ export class BankingService {
       lastEodDate: this.lastEodDate,
       seq: this.seq,
       ledger: this.ledger.snapshot(),
+      loanDefaults: [...this.loanDefaults].map(([loanAccountId, state]) => ({
+        loanAccountId,
+        missedPayments: state.missedPayments,
+        penaltyActive: state.penaltyActive,
+        defaulted: state.defaulted,
+        nextDueDate: state.nextDueDate,
+        owedAtLastDue: this.loanOwedAtLastDue.get(loanAccountId) ?? 0,
+      })),
     };
   }
 
@@ -134,10 +142,21 @@ export class BankingService {
     this.currentDate = snapshot.businessDate;
     this.lastEodDate = snapshot.lastEodDate;
     this.seq = snapshot.seq;
-    // Loan-default state is not yet persisted (Task 5) — clear any left over from
-    // a prior in-session game; an outstanding loan re-seeds it lazily at next EOD.
+    // Restore the per-loan arrears state. Clear first so nothing leaks from a
+    // prior in-session game; a save made before this field existed carries none,
+    // so each outstanding loan re-seeds its state lazily (current, not defaulted)
+    // at the next EOD — the correct migration default.
     this.loanDefaults.clear();
     this.loanOwedAtLastDue.clear();
+    for (const ld of snapshot.loanDefaults ?? []) {
+      this.loanDefaults.set(ld.loanAccountId, {
+        missedPayments: ld.missedPayments,
+        penaltyActive: ld.penaltyActive,
+        defaulted: ld.defaulted,
+        nextDueDate: ld.nextDueDate,
+      });
+      this.loanOwedAtLastDue.set(ld.loanAccountId, ld.owedAtLastDue);
+    }
   }
 
   /**
@@ -161,6 +180,16 @@ export class BankingService {
   /** Convenience read-through to the ledger balance. */
   balanceOf(accountId: string, asOf?: number): number {
     return this.ledger.balanceOf(accountId, asOf);
+  }
+
+  /**
+   * The tracked arrears state of `loanAccountId`, or `undefined` if none is
+   * tracked (no loan, or a loan restored from a pre-default save before its first
+   * EOD re-seed). The Bank UI reads this to surface the penalty/default status and
+   * to block a new loan while the current one is defaulted.
+   */
+  loanDefaultStateOf(loanAccountId: string): LoanDefaultState | undefined {
+    return this.loanDefaults.get(loanAccountId);
   }
 
   /** Route a command to its handler. Exhaustive over {@link BankCommand}. */

@@ -186,6 +186,34 @@ export interface LoanPanelLine {
   readonly tone?: "debt" | "muted" | "plain";
 }
 
+/** The arrears flags the loan panel and the borrow gate read (a subset of `LoanDefaultState`). */
+export interface LoanArrears {
+  /** `true` while the loan is overdue and accruing at the penalty rate. */
+  readonly penaltyActive: boolean;
+  /** `true` once the loan has crossed the default threshold (blocks new loans). */
+  readonly defaulted: boolean;
+}
+
+/**
+ * Why a new loan is blocked, or `null` if the player may borrow. A **defaulted**
+ * loan blocks with its own message (погасите задолженность); an outstanding but
+ * not-yet-defaulted loan blocks with the ordinary "repay the current one first".
+ * Pure, so the `doTakeLoan` gate is unit-testable. `outstanding` is positive when
+ * in debt (`-balanceOf(loanAccount)`).
+ */
+export function borrowBlockReason(
+  outstanding: number,
+  arrears?: LoanArrears,
+): string | null {
+  if (arrears?.defaulted) {
+    return "Кредит в дефолте — сначала погасите задолженность";
+  }
+  if (outstanding > 0) {
+    return "Сначала погасите текущий кредит";
+  }
+  return null;
+}
+
 /**
  * The label/value lines the Bank's loan panel renders. With no outstanding debt
  * (`outstanding <= 0`) it shows the **offer** — principal, per-day rate, term,
@@ -194,16 +222,18 @@ export interface LoanPanelLine {
  * outstanding debt, the per-day payment and the rate. Pure: derived entirely
  * from the (unit-tested) {@link LoanTermsSummary} + the outstanding balance, so
  * the scene only maps these rows to `Text`. `outstanding` is positive when in
- * debt (i.e. `-balanceOf(loanAccount)`).
+ * debt (i.e. `-balanceOf(loanAccount)`). When the active loan is in arrears the
+ * panel appends a status line explaining the penalty rate / the new-loan block.
  */
 export function loanPanelLines(
   summary: LoanTermsSummary,
   outstanding: number,
+  arrears?: LoanArrears,
 ): LoanPanelLine[] {
   const rate = formatDailyRate(summary.dailyRate);
   const payment = `≈ ${formatCredits(summary.perPeriodPayment)}`;
   if (outstanding > 0) {
-    return [
+    const lines: LoanPanelLine[] = [
       {
         label: "Текущий долг",
         value: formatCredits(outstanding),
@@ -212,6 +242,20 @@ export function loanPanelLines(
       { label: "Платёж/день", value: payment },
       { label: "Ставка", value: rate, tone: "muted" },
     ];
+    if (arrears?.defaulted) {
+      lines.push({
+        label: "Статус",
+        value: "Дефолт — займы заблокированы",
+        tone: "debt",
+      });
+    } else if (arrears?.penaltyActive) {
+      lines.push({
+        label: "Статус",
+        value: "Просрочка — штрафная ставка",
+        tone: "debt",
+      });
+    }
+    return lines;
   }
   return [
     { label: "Сумма кредита", value: formatCredits(summary.principal) },

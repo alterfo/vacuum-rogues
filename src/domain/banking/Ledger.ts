@@ -351,17 +351,45 @@ export interface LedgerSnapshot {
 }
 
 /**
+ * One persisted per-loan arrears record (mirrors `LoanDefaultState` in
+ * systems/banking/loanDefault, plus the EOD `owedAtLastDue` baseline), keyed by
+ * loan account id. Defined here as plain primitives — rather than importing the
+ * systems-layer type — so the domain layer stays dependency-free and the record
+ * round-trips through JSON unchanged.
+ */
+export interface LoanDefaultSnapshot {
+  readonly loanAccountId: string;
+  /** Consecutive missed scheduled payments. `0` ⇒ current / up to date. */
+  readonly missedPayments: number;
+  /** `true` while overdue — the penalty interest rate applies. */
+  readonly penaltyActive: boolean;
+  /** `true` once the policy threshold of consecutive misses was reached. */
+  readonly defaulted: boolean;
+  /** Business date the next scheduled installment falls due. */
+  readonly nextDueDate: number;
+  /** Balance owed at the loan's last due-check (the EOD serviced/arrears baseline). */
+  readonly owedAtLastDue: number;
+}
+
+/**
  * The full persisted state of the in-game АБС: the {@link LedgerSnapshot} plus the
  * `BankingService`'s own cursors (the business date the EOD batch has reached, the
- * last date it closed, and the journal-id sequence). Lives in the domain so the
- * save container (`SaveState`) can reference it without depending on the systems
- * layer; the service produces/consumes it via `toSnapshot()` / `restore()`.
+ * last date it closed, and the journal-id sequence) and the per-loan arrears state.
+ * Lives in the domain so the save container (`SaveState`) can reference it without
+ * depending on the systems layer; the service produces/consumes it via
+ * `toSnapshot()` / `restore()`.
  */
 export interface BankingSnapshot {
   readonly businessDate: number;
   readonly lastEodDate: number | null;
   readonly seq: number;
   readonly ledger: LedgerSnapshot;
+  /**
+   * Per-loan default/arrears state ({@link LoanDefaultSnapshot}). Absent on saves
+   * made before this field existed — those re-seed each outstanding loan's state
+   * lazily at the next EOD (current, not defaulted), which is the correct default.
+   */
+  readonly loanDefaults?: readonly LoanDefaultSnapshot[];
 }
 
 /**

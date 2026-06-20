@@ -28,6 +28,7 @@ import {
 } from "@/systems/banking/products";
 import {
   accountTypeLabel,
+  borrowBlockReason,
   describeCommand,
   describePosting,
   formatCredits,
@@ -286,10 +287,10 @@ export class BankScene extends GameScene {
       dailyRate: DEFAULT_LOAN_DAILY_RATE,
       periods: LOAN_PERIODS,
     });
-    const outstanding = -engine.bankingService.balanceOf(
-      loanAccountId(player.id),
-    );
-    const lines = loanPanelLines(summary, outstanding);
+    const loanId = loanAccountId(player.id);
+    const outstanding = -engine.bankingService.balanceOf(loanId);
+    const arrears = engine.bankingService.loanDefaultStateOf(loanId);
+    const lines = loanPanelLines(summary, outstanding, arrears);
 
     y = this.sectionHeader(
       ui,
@@ -590,8 +591,13 @@ export class BankScene extends GameScene {
     const player = engine?.player;
     if (!engine || !player) return;
     const loanId = loanAccountId(player.id);
-    if (engine.bankingService.balanceOf(loanId) < 0) {
-      this.showToast("Сначала погасите текущий кредит", 0xffcc44);
+    const outstanding = -engine.bankingService.balanceOf(loanId);
+    const block = borrowBlockReason(
+      outstanding,
+      engine.bankingService.loanDefaultStateOf(loanId),
+    );
+    if (block) {
+      this.showToast(block, 0xffcc44);
       return;
     }
     takeLoan(
