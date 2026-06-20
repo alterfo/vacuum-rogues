@@ -8,6 +8,7 @@ import {
   type HullSpec,
   type EquipmentSpec,
 } from "@/systems/equipment/GearCatalog";
+import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
 import { logger } from "@/utils/logger";
 
 /** A legacy ShipModule as it appears in an un-rehydrated save (plain JSON). */
@@ -37,7 +38,7 @@ function isEquipmentClass(id: string, cls: EquipmentClass): boolean {
 }
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 23;
+  static readonly CURRENT_VERSION = 24;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -488,6 +489,37 @@ export class MigrationPipeline {
 
       s.loadout = { hullId, slotted };
       dropFoldedFromBag();
+    },
+    // 23 -> 24: Persistent NPC world positions (NPC persistence Task 1). Old
+    // saves lack worldX/worldY on NPC ships, so re-entering a system used to
+    // re-scatter them with Math.random(). Seed a deterministic interior offset
+    // (keyed by galaxy id + ship id) so the placement is reproducible, not
+    // random; the simulation owns it thereafter. Ships already carrying a
+    // position keep it (idempotent).
+    23: (state: SaveState) => {
+      const galaxy = state.galaxy as unknown as {
+        id?: string;
+        npcShips?: Array<{
+          id: string;
+          worldX?: number | null;
+          worldY?: number | null;
+        }>;
+      };
+      if (galaxy && Array.isArray(galaxy.npcShips)) {
+        const seed = galaxy.id ?? "galaxy";
+        for (const npc of galaxy.npcShips) {
+          if (
+            npc.worldX === undefined ||
+            npc.worldX === null ||
+            npc.worldY === undefined ||
+            npc.worldY === null
+          ) {
+            const pos = deterministicNpcOffset(seed, npc.id);
+            npc.worldX = pos.x;
+            npc.worldY = pos.y;
+          }
+        }
+      }
     },
   };
 }

@@ -359,6 +359,8 @@ export const NpcShipSchema = z.object({
     .default([]),
   activeQuestTarget: z.string().nullable().default(null),
   convoyId: z.string().optional(),
+  worldX: z.number().nullable().default(null),
+  worldY: z.number().nullable().default(null),
   hostile: z.boolean().default(false),
 });
 

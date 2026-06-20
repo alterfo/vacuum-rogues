@@ -212,6 +212,9 @@ export interface NpcShipInit {
   activeQuestTarget?: string | null;
   /** Shared ID grouping ships travelling together as a military convoy. */
   convoyId?: string;
+  /** Persisted world position offset from the system star centre (null until placed). */
+  worldX?: number | null;
+  worldY?: number | null;
   /** True when openly hostile to the player (garrison/pirate spawns, or attacked). */
   hostile?: boolean;
 }

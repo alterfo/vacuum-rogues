@@ -42,6 +42,14 @@ export class NpcShip {
   /** Shared ID grouping ships travelling together as a military convoy. */
   convoyId?: string;
   /**
+   * Persisted world position as an offset from the system's star centre
+   * (`null` until first placed). Owned solely by the simulation/placement layer
+   * and mutated only via {@link setWorldPosition} — so a system's ships keep
+   * their spots across scene transitions and save/load (no per-entry re-scatter).
+   */
+  worldX: number | null;
+  worldY: number | null;
+  /**
    * True when this NPC is openly hostile to the player: garrison/pirate ships
    * spawn hostile, and any neutral ship the player attacks (plus its same-faction
    * neighbours in-system) is flagged hostile. Drives the threat indicator and
@@ -72,7 +80,24 @@ export class NpcShip {
     this.cargo = init.cargo ?? [];
     this.activeQuestTarget = init.activeQuestTarget ?? null;
     this.convoyId = init.convoyId;
+    this.worldX = init.worldX ?? null;
+    this.worldY = init.worldY ?? null;
     this.hostile = init.hostile ?? false;
+  }
+
+  /**
+   * Set the persisted world position (offset from the system star centre). The
+   * only mutator of {@link worldX}/{@link worldY}: the simulation/placement layer
+   * calls this, so position change is tracked, never an incidental side-effect.
+   */
+  setWorldPosition(x: number, y: number): void {
+    this.worldX = x;
+    this.worldY = y;
+  }
+
+  /** Whether this NPC has a persisted world position yet. */
+  hasWorldPosition(): boolean {
+    return this.worldX !== null && this.worldY !== null;
   }
 
   /** Flag this NPC as openly hostile to the player (turns it aggressive). */
