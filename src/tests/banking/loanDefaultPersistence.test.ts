@@ -209,6 +209,18 @@ describe("loan-default — borrow gate", () => {
     ).toBeNull();
   });
 
+  it("allows borrowing once a defaulted loan is fully repaid (stale flag must not lock out)", () => {
+    // A defaulted loan paid down to zero keeps its `defaulted` flag (the EOD
+    // recovery path skips a zero-balance loan), but with no outstanding debt the
+    // borrow gate must not permanently block the player.
+    expect(
+      borrowBlockReason(0, { penaltyActive: true, defaulted: true }),
+    ).toBeNull();
+    expect(
+      borrowBlockReason(-1, { penaltyActive: true, defaulted: true }),
+    ).toBeNull();
+  });
+
   it("the real defaulted service blocks a new loan", () => {
     const h = makeDefaultedService();
     const outstanding = -h.service.balanceOf(LOAN);

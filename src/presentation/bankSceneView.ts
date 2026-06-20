@@ -197,20 +197,24 @@ export interface LoanArrears {
 }
 
 /**
- * Why a new loan is blocked, or `null` if the player may borrow. A **defaulted**
- * loan blocks with its own message (погасите задолженность); an outstanding but
- * not-yet-defaulted loan blocks with the ordinary "repay the current one first".
- * Pure, so the `doTakeLoan` gate is unit-testable. `outstanding` is positive when
- * in debt (`-balanceOf(loanAccount)`).
+ * Why a new loan is blocked, or `null` if the player may borrow. The block is
+ * gated on there being **actual outstanding debt**: a **defaulted** loan blocks
+ * with its own message (погасите задолженность), an outstanding but not-yet-defaulted
+ * loan with the ordinary "repay the current one first". Once the debt is settled
+ * (`outstanding <= 0`) borrowing is allowed even if the `defaulted` flag is still
+ * set — the flag persists on a paid-off loan (the EOD recovery path skips a
+ * zero-balance loan), and the reputation hit already landed, so a settled debt
+ * must not be a permanent borrowing ban. Pure, so the `doTakeLoan` gate is
+ * unit-testable. `outstanding` is positive when in debt (`-balanceOf(loanAccount)`).
  */
 export function borrowBlockReason(
   outstanding: number,
   arrears?: LoanArrears,
 ): string | null {
-  if (arrears?.defaulted) {
-    return "Кредит в дефолте — сначала погасите задолженность";
-  }
   if (outstanding > 0) {
+    if (arrears?.defaulted) {
+      return "Кредит в дефолте — сначала погасите задолженность";
+    }
     return "Сначала погасите текущий кредит";
   }
   return null;
