@@ -111,9 +111,14 @@ the ABS prototype's "thin core-banking" guardrail.
 - [x] run affected tests — must pass before next task
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify Overview: terms shown, missed payment penalized, reputation + block + seizure work, GL balanced
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing banking/economy test assertions changed
+- [x] verify Overview: terms shown, missed payment penalized, reputation + block + seizure work, GL balanced
+      — confirmed wired in production: `loanPanelLines`/`loanTermsSummary` (BankScene terms),
+      `penaltyDailyRate`/`loanDefault` in BankingService EOD (penalty), `adjustReputation` on default
+      event (GameEngine), `borrowBlockReason` (new-loan block), `seizeTowardLoan` balanced transfer
+- [x] run full unit suite — all green (227 files / 1961 tests); `npm run test:e2e:regression`
+      (23/23 passed incl. balanced-posting banking smoke); `npm run lint` clean (0 errors)
+- [x] confirm no existing banking/economy test assertions changed — only `bankSceneView.test.ts`
+      touched among existing tests, and that change is purely additive (Task 2 helper cases; 0 lines removed)
 
 ## Technical Details
 - **Penalty rate:** a multiplier on `dailyRate` while overdue (e.g. ×1.5), reverting once caught up.
