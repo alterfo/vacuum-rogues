@@ -49,6 +49,12 @@ export interface CombatModuleDeps {
    * can't re-fire the death flow.
    */
   onPlayerDestroyed?(): void;
+  /**
+   * An incoming NPC shot landed on the player — the active-pause trigger. Raised
+   * on every hit; the {@link CombatPauseController} debounces it down to the first
+   * shot per engagement, so the module fires it unconditionally (Low Coupling).
+   */
+  onPlayerUnderAttack?(): void;
   /** Transient toast feedback (kill confirmation / low-hull retreat). */
   showMessage?(text: string, color?: number): void;
 }
@@ -271,6 +277,10 @@ export class CombatModule implements FlightModule {
   private fireNpcShot(npc: NpcShipSprite): void {
     const ship = this.deps.getPlayerShip?.() ?? null;
     if (!ship) return;
+    // Raise the active-pause trigger on every landed shot; the pause controller
+    // debounces it to the first hit per engagement (it does not re-pause once the
+    // player has resumed this fight).
+    this.deps.onPlayerUnderAttack?.();
     ship.hullHP = Math.max(0, ship.hullHP - npc.npc.damage);
     const physics = this.deps.getShipPhysics();
     if (physics) {
