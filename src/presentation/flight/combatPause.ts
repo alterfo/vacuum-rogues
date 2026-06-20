@@ -101,6 +101,19 @@ export class CombatPauseController<TTarget, TWeapon> {
     return this.enterPause("target-lost");
   }
 
+  /**
+   * Host adapter for "the combat module's current auto-fire target was lost": adopt
+   * it as the selection, then {@link notifyTargetLost} to re-pause. The module has
+   * already decided this was the *current* target (it only reports the selected one),
+   * so we sync the controller's selection first — it can drift from the module's
+   * between pauses (e.g. a survivor re-pick after a confirmed kill), and a stale
+   * selection would otherwise swallow the re-pause. Returns whether it re-paused.
+   */
+  loseTarget(target: TTarget): boolean {
+    this.selectTarget(target);
+    return this.notifyTargetLost(target);
+  }
+
   /** Choose the target for the next confirmed action (null deselects). */
   selectTarget(target: TTarget | null): void {
     this._target = target;

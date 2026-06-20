@@ -84,7 +84,6 @@ export class SpaceFlightScene extends GameScene {
   private combatPause = createCombatPauseUi(); // active-pause; rewired in initialize()
   // Latches the low-hull auto-stop so the warning fires once per descent.
   private lowHullStopped = false;
-
   private destroyed = false;
 
   // Turn control: the turn "runs" (ship flies, NPCs/planets move, combat) while true.
@@ -218,6 +217,7 @@ export class SpaceFlightScene extends GameScene {
       onPlayerUnderAttack: () =>
         this.combatPause.requestPause("incoming-attack"),
       onCombatEnded: () => this.combatPause.reset(), // re-arm pause debounce
+      onTargetLost: (npc) => this.combatPause.loseTarget(npc), // re-pause on lost target
       showMessage: (t, c) => this.hud.showMessage(t, c),
     });
     this.combatPause = createCombatPauseUi(this.renderer, this.combatModule);
@@ -1687,9 +1687,9 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
     if (event.key === "j" || event.key === "J") {
-      this.hud.toggleQuestJournal();
+      if (!this.combatPause.paused) this.hud.toggleQuestJournal(); // suppressed while paused
     } else if (event.key === "i" || event.key === "I") {
-      this.openInventory();
+      if (!this.combatPause.paused) this.openInventory();
     }
   }
 

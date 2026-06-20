@@ -63,6 +63,15 @@ export interface CombatModuleDeps {
    * consumed across fights). Fired from {@link CombatModule.endCombat}.
    */
   onCombatEnded?(): void;
+  /**
+   * The player's *currently selected* auto-fire target was lost mid-fight — killed
+   * or drifted out of range — while other combatants are still engaged. The host
+   * wires this to {@link CombatPauseController.notifyTargetLost} so the game
+   * re-pauses and the player picks a new target instead of silently auto-continuing
+   * in real time. Only fired when a survivor remains: losing the *last* combatant
+   * ends the fight ({@link endCombat}) rather than re-pausing onto an empty overlay.
+   */
+  onTargetLost?(sprite: NpcShipSprite): void;
   /** Transient toast feedback (kill confirmation / low-hull retreat). */
   showMessage?(text: string, color?: number): void;
 }
@@ -209,9 +218,12 @@ export class CombatModule implements FlightModule {
    * player-chosen `weapon`, then keep `target` as the auto-fire selection so the
    * real-time fight continues against it once time resumes. Resets the player's
    * fire cadence so the resumed auto-fire doesn't immediately double-fire. A
-   * no-op outside an active fight or against a non-combatant (mirrors the
-   * auto-fire guard in {@link advancePlayerTimer}). Reuses {@link firePlayerShot}
-   * so the kill/loot/damage-number path is identical to the real-time loop.
+   * no-op outside an active fight or against a non-combatant. Unlike the auto-fire
+   * guard in {@link advancePlayerTimer}, a *deliberate* confirmed shot is not gated
+   * on the weapon's range — every engaged combatant is within
+   * {@link GAME_BALANCE.combatEscapeRange}, and a hand-picked shot is allowed to
+   * land. Reuses {@link firePlayerShot} so the kill/loot/damage-number path is
+   * identical to the real-time loop.
    */
   confirmAttack(target: NpcShipSprite, weapon: WeaponSpec): void {
     if (!this.isActive || !this.combatants.has(target)) return;
@@ -383,6 +395,13 @@ export class CombatModule implements FlightModule {
     if (this.selectedTarget === npc) {
       this.selectedTarget = this.combatants.values().next().value ?? null;
       this.hud?.setTarget(this.selectedTarget);
+      // The player's chosen target was lost mid-fight. If a survivor remains the
+      // engagement is still live, so raise the active-pause "target lost" trigger
+      // — the host re-pauses and the player picks a new target rather than
+      // auto-continuing in real time. When no combatant remains the fight is
+      // ending (update() → endCombat); deliberately do NOT pause onto an empty
+      // overlay in that case.
+      if (this.selectedTarget) this.deps.onTargetLost?.(npc);
     }
   }
 
