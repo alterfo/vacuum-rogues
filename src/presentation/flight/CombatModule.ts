@@ -162,6 +162,13 @@ export class CombatModule implements FlightModule {
     // numbers (above) still float so a killing blow's number finishes its arc.
     if (this.deps.isTurnRunning?.() === false) return;
     this.pruneDisengaged();
+    // pruneDisengaged can drop the *selected* target (it drifted beyond escape
+    // range) and synchronously raise a target-lost active-pause via onTargetLost
+    // → loseTarget → enterPause. The world is frozen the instant that pause is
+    // raised, so the player's auto-fire must not still land on the re-picked
+    // survivor this frame — re-check the gate before it, mirroring the guard
+    // before advanceNpcTimers below.
+    if (this.deps.isTurnRunning?.() === false) return;
     this.advancePlayerTimer(deltaTime);
     // A killing player shot can re-pause the fight mid-frame: the selected target
     // was lost but a survivor remains → onTargetLost → active-pause. The world is

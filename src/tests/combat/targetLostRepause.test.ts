@@ -128,6 +128,30 @@ describe("target-lost re-pause (production wiring)", () => {
     expect(module.selectedTarget).toBe(b); // re-picked survivor
   });
 
+  it("does NOT fire the player's auto-shot on the frame a prune-triggered re-pause is raised", () => {
+    // Regression: pruneDisengaged() can drop the *selected* target (drifted beyond
+    // escape range) and synchronously raise a target-lost pause via
+    // onTargetLost → loseTarget → enterPause, BEFORE advancePlayerTimer() runs in
+    // the same update(). Without a freeze re-check between prune and the player's
+    // auto-fire, the player landed a free shot on the re-picked survivor on the
+    // very frame the world was meant to freeze.
+    const { module, controller, pauseReason } = makeFight();
+    const a = makeSprite("a", ESCAPE + 300, 100); // selected, already beyond escape range
+    const b = makeSprite("b", 60, 100); // survivor, inside weapon range
+    module.addCombatant(a); // auto-selected (first combatant)
+    module.addCombatant(b);
+    expect(module.selectedTarget).toBe(a);
+
+    // First interval: prune removes `a` (escaped) and re-pauses onto `b`. The
+    // player's fire timer is ready this frame, but the pause must suppress the shot.
+    module.update(FIRE);
+
+    expect(controller.paused).toBe(true);
+    expect(pauseReason()).toBe("target-lost");
+    expect(module.selectedTarget).toBe(b); // re-picked survivor
+    expect(b.npc.hullHP).toBe(100); // NO shot landed on the pausing frame
+  });
+
   it("does NOT re-pause when the last combatant dies (fight ends cleanly)", () => {
     const { module, controller, pauseReason } = makeFight();
     const a = makeSprite("a", 50, 10); // only combatant, dies to one pulse
