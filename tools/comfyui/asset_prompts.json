@@ -47,15 +47,15 @@
     },
     "planet_maps": {
       "size": [1024, 512],
-      "variants": 3,
+      "variants": 6,
       "steps": 42,
       "cfg": 6.5,
       "template": "Seamless full-frame flat texture, a wide 2:1 rectangular surface swatch that completely fills the frame edge to edge with NO central object and no border, {type}, evenly and uniformly lit, flat lighting, no shadows, no curvature, ultra-detailed surface material, sharp focus",
-      "negative": "globe, sphere, orb, ball, circle, round, disc, ring, concentric circles, eye, iris, planet object, planet in space, vignette, dark corners, radial, road map, street map, atlas, compass, charts, text, labels, grid, frame, border, margins, letterbox, black background, stars, outer space, horizon, 3d render of a sphere",
+      "negative": "globe, sphere, orb, ball, circle, round, disc, ring, concentric circles, eye, iris, planet object, planet in space, vignette, dark corners, radial, road map, street map, atlas, compass, charts, text, labels, grid, frame, border, margins, letterbox, black background, stars, outer space, horizon, 3d render of a sphere, Earth, planet Earth, recognizable Earth continents, real-world map, blue marble, satellite photo of Earth, Africa, Americas, real-world coastlines",
       "name_order": ["type"],
       "axes": {
         "type": {
-          "terrestrial": "blue ocean water with green and brown landmasses and scattered thin white clouds, seen from directly overhead, satellite imagery of terrain",
+          "terrestrial": "an alien yet habitable living world, exotic seas of turquoise, emerald, indigo and wine liquid, sprawling forests and plains of crimson, violet, amber-gold and cyan alien vegetation, unfamiliar jagged volcanic coastlines and scattered archipelagos and crystalline shelves, drifting lavender and pale-green atmospheric haze, otherworldly biosphere terrain seen from directly overhead",
           "gas": "swirling horizontal cloud bands in orange, cream and amber with turbulent storm eddies, gas-giant atmosphere seen from directly overhead",
           "ice": "cracked white and pale-cyan ice sheets with frost, fractures and ridges, frozen polar terrain seen from directly overhead",
           "volcanic": "black basalt rock veined with glowing orange and yellow lava rivers and cracks, volcanic terrain seen from directly overhead",
@@ -112,6 +112,24 @@
           "trader": "bulky merchant freighter with cargo pods, worn metal",
           "pirate": "asymmetric raider with spikes and dark red plating, menacing",
           "patrol": "sleek military patrol craft, cyan accents, clean lines"
+        }
+      }
+    },
+    "player_ships": {
+      "size": [1024, 1024],
+      "variants": 2,
+      "alpha": true,
+      "template": "A sci-fi starship spacecraft seen from directly above, orthographic top-down view, flat, the ship pointing straight up with its nose/bow at the top edge of the image and its engine thrusters at the bottom, vertical symmetry, {hull}, glowing engine thrusters at the rear (bottom), clean readable silhouette, centered, full ship visible, plain flat neutral grey background, concept art, sharp focus",
+      "negative": "legs, animal, creature, robot dog, mecha, walker, person, side view, perspective view, nose pointing sideways, nose pointing down, horizontal ship, tilted, diagonal, ground, sky, planet, scenery, cropped, multiple ships",
+      "name_order": ["hull"],
+      "axes": {
+        "hull": {
+          "light_fighter": "small nimble single-seat fighter, compact arrowhead silhouette, metallic blue hull with cyan glow, twin light cannons",
+          "corvette": "balanced corvette, sleek mid-size warship hull, grey-blue plating with cyan running lights, a few weapon hardpoints",
+          "transport": "civilian transport, rounded utilitarian hull with external cargo pods, worn beige-grey metal, minimal weapons",
+          "frigate": "military frigate, angular armored warship, layered grey armor plates, multiple weapon turrets, aggressive stance",
+          "heavy_freighter": "huge heavy freighter, massive boxy cargo hauler with rows of container pods, industrial grey, slow and bulky",
+          "destroyer": "capital destroyer, large heavily-armed battleship hull, dark armored plating with red accents, many weapon batteries, imposing"
         }
       }
     },
