@@ -88,10 +88,10 @@ on the GPU host as a manual follow-up (ralphex cannot drive ComfyUI).
   terran selection spans all globbed variants and falls back cleanly if a variant is absent)
 - Create: src/tests/presentation/terranVariantSelection.test.ts
 
-- [ ] confirm `pickVariant`/`pickVariantKey` for `TERRESTRIAL` is stable per planet id and ranges over
+- [x] confirm `pickVariant`/`pickVariantKey` for `TERRESTRIAL` is stable per planet id and ranges over
       every available terran variant; missing-variant fallback does not throw
-- [ ] write tests: deterministic per-id selection; distinct ids spread across variants; missing-file fallback
-- [ ] run affected tests — must pass before next task
+- [x] write tests: deterministic per-id selection; distinct ids spread across variants; missing-file fallback
+- [x] run affected tests — must pass before next task
 
 ### Task 4: Verify acceptance criteria + credits
 **Files:**
