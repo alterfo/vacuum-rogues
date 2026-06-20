@@ -16,6 +16,7 @@ import { Faction } from "@/types/faction";
 import { GAME_BALANCE } from "@/config/balance";
 import type { NpcBrain } from "./NpcBrain";
 import { RuleBasedNpcBrain } from "./NpcBrain";
+import { npcOrbitStep, advanceNpcOrbit } from "./npcPlacement";
 import { logger } from "@/utils/logger";
 import {
   creditNpc,
@@ -842,6 +843,13 @@ export class NpcSimulator {
       }
     }
 
+    // Tracked in-system movement: nudge each placed (present) ship along its
+    // deterministic orbit. The simulation is the single owner of position change
+    // (like the ABS ledger owns balances) — between ticks a ship's persisted spot
+    // is frozen, and a tick advances it reproducibly. Uses no main RNG, so the
+    // deterministic stream other systems/tests depend on is untouched.
+    this.advanceTrackedPositions(galaxy);
+
     // Assemble military convoys toward contested systems every 30 days.
     if (
       galaxy.gameDays > 0 &&
@@ -897,6 +905,32 @@ export class NpcSimulator {
     this.resolveLiberationDetection(galaxy);
 
     return events;
+  }
+
+  /**
+   * Advance every placed, present ship's persisted in-system position one tracked
+   * tick along its deterministic orbit (radius-preserving rotation by a per-ship
+   * seed-derived step). Owns position change: a ship's spot is frozen between
+   * ticks and moves only here, reproducibly — so off-screen systems evolve the
+   * same way every run and a save captures a coherent layout.
+   *
+   * Skips DEAD/TRAVELING ships (no meaningful in-system spot) and any ship that
+   * has never been placed (`worldX/worldY` still null): first placement stays the
+   * presentation layer's seed-derived job (it never invents one mid-simulation).
+   */
+  private advanceTrackedPositions(galaxy: Galaxy): void {
+    for (const npc of galaxy.npcShips) {
+      if (npc.state === NpcState.DEAD || npc.state === NpcState.TRAVELING) {
+        continue;
+      }
+      if (!npc.hasWorldPosition()) continue;
+      const step = npcOrbitStep(galaxy.id, npc.id);
+      const next = advanceNpcOrbit(
+        { x: npc.worldX as number, y: npc.worldY as number },
+        step,
+      );
+      npc.setWorldPosition(next.x, next.y);
+    }
   }
 
   /**

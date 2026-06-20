@@ -28,3 +28,36 @@ export function deterministicNpcOffset(
     y: Math.sin(angle) * radius,
   };
 }
+
+/**
+ * Per-day angular velocity (radians) of an NPC's slow in-system orbit about the
+ * star, derived deterministically from the galaxy seed + ship id (small, signed).
+ * A constant per ship, so N tracked ticks rotate it by exactly `N × step` — the
+ * single source of in-system position change (the simulation owns it; see
+ * {@link advanceNpcOrbit}). Pure: no main-RNG consumption, so it never perturbs
+ * the deterministic simulation stream.
+ */
+export function npcOrbitStep(galaxySeed: string, npcId: string): number {
+  const rng = new SeededRNG(`npcdrift:${galaxySeed}:${npcId}`);
+  // ~3°–15°/day, random sign: a slow, visible drift — never a teleport.
+  const magnitude = rng.nextFloat(Math.PI / 60, Math.PI / 12);
+  return rng.next() < 0.5 ? -magnitude : magnitude;
+}
+
+/**
+ * Advance a persisted NPC offset one tracked tick along its deterministic
+ * in-system orbit: rotate it `step` radians about the star centre. Pure, and
+ * radius-preserving (a rotation), so the ship stays in its `[inner, outer]` band
+ * — positions evolve only through this tracked step, never drifting out of bounds.
+ */
+export function advanceNpcOrbit(
+  offset: { x: number; y: number },
+  step: number,
+): { x: number; y: number } {
+  const cos = Math.cos(step);
+  const sin = Math.sin(step);
+  return {
+    x: offset.x * cos - offset.y * sin,
+    y: offset.x * sin + offset.y * cos,
+  };
+}

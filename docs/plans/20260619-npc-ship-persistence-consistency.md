@@ -124,10 +124,21 @@ and a mere star-map visit (no jump, no day advance) never alters a system's ship
   src/presentation/flight/NpcShipManager.ts (write live positions back so they persist)
 - Create/Modify: src/tests/npc/trackedMovement.test.ts
 
-- [ ] NPC positions change only through tracked simulation ticks (deterministic), and the live
+- [x] NPC positions change only through tracked simulation ticks (deterministic), and the live
       in-flight position is written back so a save captures where the ship actually is
-- [ ] write tests: a tick moves a ship deterministically; without a tick, position is frozen
-- [ ] run affected tests — must pass before next task
+      (`NpcSimulator.tick` now calls `advanceTrackedPositions`: each placed, present
+      (non-DEAD/non-TRAVELING) ship is rotated one deterministic orbit step via new pure helpers
+      `npcOrbitStep`/`advanceNpcOrbit` in `npcPlacement.ts` — radius-preserving, no main-RNG
+      consumption, never invents a position for an unplaced ship. Presentation write-back added:
+      `NpcShipManager.persistLivePositions()` mirrors each live sprite offset back to its domain
+      ship, called on `destroy()` so a save/scene-transition captures the live layout — no scatter.)
+- [x] write tests: a tick moves a ship deterministically; without a tick, position is frozen
+      (`src/tests/npc/trackedMovement.test.ts`: one orbit step/tick, N-step accumulation over N
+      ticks, deterministic across galaxies, frozen without a tick, unplaced ship stays null,
+      traveling ship frozen; plus write-back: live position persisted + re-entry respawns it)
+- [x] run affected tests — must pass before next task (trackedMovement 8 passed; npc suites +
+      npcSimulator + garrisonCombat 103 passed; flight + presentation 493 passed; save/validation/
+      core 51 passed; lint + tsc clean)
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify Overview: positions stable across re-entry; composition stable on star-map round-trip;

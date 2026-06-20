@@ -258,7 +258,27 @@ export class NpcShipManager implements FlightModule {
     }
   }
 
+  /**
+   * Write each live NPC sprite's position back to its domain ship as an offset
+   * from the star centre, so the persisted world position reflects where the ship
+   * actually is in flight (a save captures the live layout, and a star-map
+   * round-trip respawns each ship exactly where the player last saw it — no
+   * re-scatter). Presentation never invents a position from scratch — first
+   * placement is the seed-derived job in {@link addNpcSprite}; this only mirrors
+   * the live render position back. Called on teardown (which precedes a save /
+   * scene transition) and exposed for an explicit pre-save flush.
+   */
+  persistLivePositions(): void {
+    const center = this.deps.getStarCenter();
+    for (const sprite of this.npcSprites) {
+      sprite.npc.setWorldPosition(sprite.x - center.x, sprite.y - center.y);
+    }
+  }
+
   destroy(): void {
+    // Capture where each ship actually is before tearing the sprites down, so the
+    // persisted position survives the scene transition / save (no re-scatter).
+    this.persistLivePositions();
     for (const sprite of this.npcSprites) {
       if (sprite.container.parent) {
         sprite.container.parent.removeChild(sprite.container);
