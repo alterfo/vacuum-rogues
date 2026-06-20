@@ -100,9 +100,9 @@ leads to `WIN_SCREEN`. Add a proper **death flow**:
 - [x] run affected tests + regression — must pass before next task
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify Overview: takeoff autosaves; death shows GAME_OVER; load/restart work; autosave preserved
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing save/scene test assertions changed
+- [x] verify Overview: takeoff autosaves; death shows GAME_OVER; load/restart work; autosave preserved
+- [x] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
+- [x] confirm no existing save/scene test assertions changed
 
 ## Technical Details
 - **Checkpoint model:** the `"auto"` slot is the single takeoff checkpoint; death is non-destructive to
