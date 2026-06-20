@@ -23,6 +23,7 @@ import { RouteRenderer } from "./flight/RouteRenderer";
 import { PlayerShipRenderer } from "./flight/PlayerShipRenderer";
 import { NpcShipManager } from "./flight/NpcShipManager";
 import { CombatModule } from "./flight/CombatModule";
+import { CombatPauseController } from "./flight/combatPause";
 import { PlanetManager } from "./flight/PlanetManager";
 import { FlightHud } from "./flight/FlightHud";
 import { CameraController } from "./flight/CameraController";
@@ -76,25 +77,23 @@ export class SpaceFlightScene extends GameScene {
   // Draws the static orbit circles and the system-boundary ring (a FlightModule).
   private orbitRenderer!: OrbitRenderer;
 
-  // Living-galaxy NPC ships present in the player's system (Feature 8): sprite
-  // lifecycle, contact panel, auto-follow combat loop and OVERMIND-core prompt.
+  // Living-galaxy NPC ships (Feature 8): lifecycle, contact panel, combat, OVERMIND.
   private npcManager!: NpcShipManager;
-  // In-flight combat (Tasks 11–14): the scene reads `isActive` to retarget on an
-  // enemy click and to abort the turn on pause; navigation stays open so the
-  // player can re-plan a route mid-fight to evade (Task 3).
+  // In-flight combat (Tasks 11–14): scene reads `isActive` to retarget on a click.
   private combatModule!: CombatModule;
-  // Latches the low-hull auto-stop so the warning fires once per descent below
-  // the threshold, not every frame.
+  // Active-pause combat (Task 1 controller, Task 2 freeze): an incoming attack
+  // flips `paused`, folded into the module `isTurnRunning` gates + `updateShip`.
+  private readonly combatPause = new CombatPauseController<unknown, unknown>();
+  // Latches the low-hull auto-stop so the warning fires once per descent.
   private lowHullStopped = false;
 
   private destroyed = false;
 
   // Turn control: the turn "runs" (ship flies, NPCs/planets move, combat) while true.
   private isTurnRunning = false;
-  // F1 (playtest3): Pause lets the ship finish its current day, then halts — this
-  // latch defers stop+endTurn to the next whole-day boundary
-  // (updateShip()/advanceWaitTime()), cleared by endTurn()/on turn start. The
-  // low-HP auto-stop and a combat abort still halt immediately.
+  // F1 (playtest3): Pause lets the ship finish its current day, then halts — a
+  // latch defers stop+endTurn to the next whole-day boundary (updateShip/
+  // advanceWaitTime), cleared by endTurn()/turn start; low-HP + combat abort halt now.
   private pauseAtDayBoundary = false;
   // Latch: show "pause first" hint only once per turn to avoid message spam.
   private turnHintShown = false;
@@ -204,10 +203,9 @@ export class SpaceFlightScene extends GameScene {
     this.hud.onFontScaleChange = () => this.onFontScaleChanged();
     this.hud.onInventory = () => void this.openInventory();
 
-    // In-flight combat module (Tasks 11–14): encounters resolve here, not the hex CombatScene.
     this.combatModule = new CombatModule({
       getShipPhysics: () => this.shipPhysics,
-      isTurnRunning: () => this.isTurnRunning,
+      isTurnRunning: () => this.isTurnRunning && !this.combatPause.paused,
       getPlayerLoadout: () => this.gameEngine?.playerLoadout ?? null,
       getUiLayer: () => this.renderer.uiLayer,
       getGameLayer: () => this.renderer.gameLayer,
@@ -220,6 +218,8 @@ export class SpaceFlightScene extends GameScene {
         this.questCompletion.bountyByNpcKill(npcId);
       },
       onPlayerDestroyed: () => this.gameEngine?.triggerPlayerDeath(),
+      onPlayerUnderAttack: () =>
+        this.combatPause.requestPause("incoming-attack"),
       showMessage: (t, c) => this.hud.showMessage(t, c),
     });
 
@@ -236,7 +236,7 @@ export class SpaceFlightScene extends GameScene {
           x: this.starRenderer.centerX,
           y: this.starRenderer.centerY,
         }),
-        isTurnRunning: () => this.isTurnRunning,
+        isTurnRunning: () => this.isTurnRunning && !this.combatPause.paused,
         showMessage: (text, color) => this.hud.showMessage(text, color),
         showTooltip: (text, sx, sy) => this.hud.showTooltip(text, sx, sy),
         hideTooltip: () => this.hud.hideTooltip(),
@@ -1147,6 +1147,7 @@ export class SpaceFlightScene extends GameScene {
 
   private updateShip(deltaTime: number): void {
     if (!this.shipPhysics) return;
+    if (this.combatPause.paused) return; // active-pause: freeze movement + calendar
 
     // Take-off arc in progress (Task 5): the ship renderer walks the cosmetic
     // outward curve (see PlayerShipRenderer.update) — skip the day-counting

@@ -71,9 +71,9 @@ over each engagement.
   ship/NPC/fire-timer updates halt while paused)
 - Create/Modify: src/tests/combat/pauseFreezesTime.test.ts
 
-- [ ] while paused, per-frame simulation (movement, fire timers) does not advance; resumes on action
-- [ ] write tests: paused → update is a no-op for sim state; resumed → advances
-- [ ] run affected tests — must pass before next task
+- [x] while paused, per-frame simulation (movement, fire timers) does not advance; resumes on action
+- [x] write tests: paused → update is a no-op for sim state; resumed → advances
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Target + weapon selection overlay
 **Files:**
