@@ -8,6 +8,7 @@ import type { SystemBounds } from "../NpcShipSprite";
 import { NpcContactPanel } from "../NpcContactPanel";
 import type { NpcShip } from "@/domain/NpcShip";
 import { npcsPresentInSystem, NpcSimulator } from "@/systems/npc/NpcSimulator";
+import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { solveInterceptPoint } from "@/utils/intercept";
 import { shouldReaim } from "@/utils/flightGeometry";
@@ -434,28 +435,52 @@ export class NpcShipManager implements FlightModule {
   /**
    * Spawn a single NPC sprite. When `entry` is true the ship just hyperjumped
    * in, so it appears on the system boundary and flies inward; otherwise it is
-   * placed at a random interior position.
+   * placed at its persisted interior position — reused verbatim if the ship
+   * already has one, else seed-derived once (deterministic, never random) and
+   * stored so the next entry resolves to the same spot (no re-scatter).
    */
   private addNpcSprite(npc: NpcShip, entry: boolean): void {
     const bounds = this.npcBounds();
-    const angle = Math.random() * Math.PI * 2;
-    const radius = entry
-      ? bounds.boundary
-      : bounds.rInner + Math.random() * (bounds.rOuter - bounds.rInner);
-    let spawnX = bounds.cx + Math.cos(angle) * radius;
-    let spawnY = bounds.cy + Math.sin(angle) * radius;
+    let spawnX: number;
+    let spawnY: number;
 
-    // Apply V-formation offset for convoy members so they don't overlap.
-    // The perpendicular direction (angle + π/2) spaces ships ±30px apart.
-    if (npc.convoyId) {
-      const convoyIndex = this.npcSprites.filter(
-        (s) => s.npc.convoyId === npc.convoyId,
-      ).length;
-      const offsets = [0, 30, -30];
-      const perpOffset = offsets[convoyIndex % offsets.length] ?? 0;
-      const perpAngle = angle + Math.PI / 2;
-      spawnX += Math.cos(perpAngle) * perpOffset;
-      spawnY += Math.sin(perpAngle) * perpOffset;
+    if (!entry && npc.hasWorldPosition()) {
+      // Persistent interior position (offset from the star centre): respawn the
+      // ship exactly where it was, so a star-map round-trip leaves it in place.
+      spawnX = bounds.cx + (npc.worldX as number);
+      spawnY = bounds.cy + (npc.worldY as number);
+    } else {
+      // Deterministic placement keyed by the galaxy seed + ship id (no
+      // Math.random): reproducible for old saves and stable across re-entry.
+      const galaxySeed = this.gameEngine?.galaxy?.id ?? "";
+      const base = deterministicNpcOffset(galaxySeed, npc.id);
+      const angle = Math.atan2(base.y, base.x);
+      // A ship that just hyperjumped in appears on the system boundary and flies
+      // inward; an interior spawn sits at the seed-derived band offset.
+      let offsetX = entry ? Math.cos(angle) * bounds.boundary : base.x;
+      let offsetY = entry ? Math.sin(angle) * bounds.boundary : base.y;
+
+      // Apply V-formation offset for convoy members so they don't overlap.
+      // The perpendicular direction (angle + π/2) spaces ships ±30px apart.
+      if (npc.convoyId) {
+        const convoyIndex = this.npcSprites.filter(
+          (s) => s.npc.convoyId === npc.convoyId,
+        ).length;
+        const offsets = [0, 30, -30];
+        const perpOffset = offsets[convoyIndex % offsets.length] ?? 0;
+        const perpAngle = angle + Math.PI / 2;
+        offsetX += Math.cos(perpAngle) * perpOffset;
+        offsetY += Math.sin(perpAngle) * perpOffset;
+      }
+
+      // Persist the resolved interior position so the next entry reuses it; the
+      // simulation owns position change thereafter (presentation never invents
+      // one). A boundary entry is transient (the ship flies inward), so it is
+      // NOT persisted — it gets a stable interior position on the next re-entry.
+      if (!entry) npc.setWorldPosition(offsetX, offsetY);
+
+      spawnX = bounds.cx + offsetX;
+      spawnY = bounds.cy + offsetY;
     }
 
     const sprite = new NpcShipSprite(npc, spawnX, spawnY, bounds);

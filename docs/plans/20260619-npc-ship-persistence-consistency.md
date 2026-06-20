@@ -84,10 +84,17 @@ and a mere star-map visit (no jump, no day advance) never alters a system's ship
   placement via `SeededRNG` from the galaxy seed, then persist it — no `Math.random()`)
 - Create: src/tests/npc/deterministicPlacement.test.ts
 
-- [ ] replace `Math.random()` placement with: use stored position if present; else seed-derive a
+- [x] replace `Math.random()` placement with: use stored position if present; else seed-derive a
       stable interior position and persist it
-- [ ] write tests: same ship/system/seed → identical position twice; stored position reused on re-entry
-- [ ] run affected tests — must pass before next task
+      (`addNpcSprite` reads `npc.hasWorldPosition()`; first interior spawn uses
+      `deterministicNpcOffset(galaxy.id, npc.id)` + convoy offset, then `setWorldPosition` persists it.
+      Boundary entry stays seed-angled, not persisted — it re-resolves to an interior spot next entry.)
+- [x] write tests: same ship/system/seed → identical position twice; stored position reused on re-entry
+      (`src/tests/npc/deterministicPlacement.test.ts`: seed-derived offset persisted; identical on
+      re-entry; identical across independent managers (no `Math.random`); differs by id/seed; pre-stored
+      position reused verbatim)
+- [x] run affected tests — must pass before next task (deterministicPlacement + npcShipManager +
+      npcShipPosition + npcShipDwell green; full npc/presentation/flight suites 563 passed; lint + tsc clean)
 
 ### Task 3: No re-simulation on a star-map round-trip
 **Files:**
