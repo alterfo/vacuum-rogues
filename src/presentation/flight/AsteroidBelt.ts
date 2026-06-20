@@ -1,9 +1,14 @@
 import { Container, Graphics } from "pixi.js";
 import type { Renderer } from "../Renderer";
 import { SYSTEM_GEOMETRY } from "@/config/balance";
+import {
+  buildCometFlyby,
+  hyperbolaPoint,
+  type CometFlyby,
+} from "@/utils/flightGeometry";
 import type { FlightModule } from "./FlightModule";
 
-/** A single drifting rock or orbiting comet in the foreground asteroid field. */
+/** A single drifting rock or flyby comet in the foreground asteroid field. */
 interface AsteroidMote {
   graphics: Graphics;
   x: number;
@@ -12,12 +17,13 @@ interface AsteroidMote {
   vy: number;
   spin: number; // rad/ms (asteroids only)
   comet: boolean;
-  // Orbital parameters — comets only
-  orbitA: number; // semi-major axis (world px)
-  orbitB: number; // semi-minor axis (world px)
-  orbitAngle: number; // current angle (rad)
-  orbitSpeed: number; // rad/ms, sign = direction
-  orbitTilt: number; // orbit plane rotation in world xy (rad)
+  // Hyperbolic flyby state — comets only. Unlike the old closed ellipse, a comet
+  // follows an OPEN hyperbola (e > 1): it enters at the field edge, sweeps past
+  // the star once, and leaves; a fresh flyby is built each pass (never periodic).
+  flyby: CometFlyby | null; // hyperbola params + entry/exit sweep range
+  theta: number; // current true anomaly along the sweep (rad), thetaStart→thetaEnd
+  thetaSpeed: number; // rad/ms sweep rate (always advances toward thetaEnd)
+  cometCooldown: number; // ms left offscreen before a fresh comet flies in (0 = active)
 }
 
 /**
@@ -95,6 +101,7 @@ export class AsteroidBelt implements FlightModule {
     this.asteroidContainer.eventMode = "none";
     this.asteroidContainer.zIndex = 120; // in front of ship (110) / planets
     const count = 8;
+    const cometCount = 2; // a couple of single-pass comet flybys among the rocks
     for (let i = 0; i < count; i++) {
       const g = new Graphics();
       g.eventMode = "none";
@@ -106,12 +113,11 @@ export class AsteroidBelt implements FlightModule {
         vx: 0,
         vy: 0,
         spin: 0,
-        comet: false,
-        orbitA: 0,
-        orbitB: 0,
-        orbitAngle: 0,
-        orbitSpeed: 0,
-        orbitTilt: 0,
+        comet: i < cometCount,
+        flyby: null,
+        theta: 0,
+        thetaSpeed: 0,
+        cometCooldown: 0,
       };
       this.drawAsteroid(a);
       this.respawnAsteroid(a, true);
@@ -224,24 +230,23 @@ export class AsteroidBelt implements FlightModule {
     const R = this.asteroidFieldRadius();
 
     if (a.comet) {
-      // Elliptical orbit around the star. Highly eccentric like real comets.
-      a.orbitA = R * (0.38 + Math.random() * 0.5); // 38–88% of boundary
-      a.orbitB = a.orbitA * (0.2 + Math.random() * 0.45); // b/a = 0.20–0.65
-      a.orbitAngle = Math.random() * Math.PI * 2;
-      a.orbitSpeed =
-        (0.00004 + Math.random() * 0.00008) * (Math.random() < 0.5 ? 1 : -1);
-      a.orbitTilt = Math.random() * Math.PI * 2;
-      // Set initial world position from orbital parameters
-      const cos = Math.cos(a.orbitAngle);
-      const sin = Math.sin(a.orbitAngle);
-      a.x =
-        cx +
-        a.orbitA * cos * Math.cos(a.orbitTilt) -
-        a.orbitB * sin * Math.sin(a.orbitTilt);
-      a.y =
-        cy +
-        a.orbitA * cos * Math.sin(a.orbitTilt) +
-        a.orbitB * sin * Math.cos(a.orbitTilt);
+      // Open hyperbolic flyby (e > 1): the comet enters at the field edge,
+      // sweeps once past the star (perihelion inside the field), and leaves —
+      // never a closed orbit. A fresh flyby is built each pass.
+      const flyby = buildCometFlyby(cx, cy, R);
+      a.flyby = flyby;
+      const sweep = flyby.thetaEnd - flyby.thetaStart;
+      // Cross the whole entry→exit sweep over ~45–90 s (gentle, like the old orbit).
+      a.thetaSpeed = sweep / (45000 + Math.random() * 45000);
+      a.cometCooldown = 0;
+      // An initial (scene-start) comet starts somewhere mid-sweep so the first
+      // one isn't pinned to the rim; a respawn enters cleanly at the edge.
+      a.theta = initial
+        ? flyby.thetaStart + Math.random() * sweep
+        : flyby.thetaStart;
+      const p = hyperbolaPoint(flyby.params, a.theta);
+      a.x = p.x;
+      a.y = p.y;
     } else {
       const speed = 0.012 + Math.random() * 0.03;
       const entryAng = Math.random() * Math.PI * 2;
@@ -271,18 +276,27 @@ export class AsteroidBelt implements FlightModule {
     const limitSq = limit * limit;
     for (const a of this.asteroids) {
       if (a.comet) {
-        // Advance orbital angle (Kepler-lite: uniform angular speed)
-        a.orbitAngle += a.orbitSpeed * deltaTime;
-        const cos = Math.cos(a.orbitAngle);
-        const sin = Math.sin(a.orbitAngle);
-        a.x =
-          cx +
-          a.orbitA * cos * Math.cos(a.orbitTilt) -
-          a.orbitB * sin * Math.sin(a.orbitTilt);
-        a.y =
-          cy +
-          a.orbitA * cos * Math.sin(a.orbitTilt) +
-          a.orbitB * sin * Math.cos(a.orbitTilt);
+        // Offscreen between passes: a fresh comet flies in once cooldown elapses.
+        if (a.cometCooldown > 0) {
+          a.cometCooldown -= deltaTime;
+          if (a.cometCooldown <= 0) {
+            this.drawAsteroid(a);
+            this.respawnAsteroid(a);
+            a.graphics.visible = true;
+          }
+          continue;
+        }
+        // Advance along the open hyperbola (Kepler-lite: uniform sweep rate).
+        a.theta += a.thetaSpeed * deltaTime;
+        if (!a.flyby || a.theta >= a.flyby.thetaEnd) {
+          // Swept past the exit edge: the comet leaves; a fresh one returns later.
+          a.graphics.visible = false;
+          a.cometCooldown = 8000 + Math.random() * 12000; // 8–20 s gap
+          continue;
+        }
+        const p = hyperbolaPoint(a.flyby.params, a.theta);
+        a.x = p.x;
+        a.y = p.y;
         a.graphics.x = a.x;
         a.graphics.y = a.y;
         // Tail points away from the star (solar wind). local +x → anti-sunward.

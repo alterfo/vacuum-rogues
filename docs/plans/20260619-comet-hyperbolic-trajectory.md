@@ -60,11 +60,11 @@ and exits — then a fresh comet spawns later. Asteroids (the non-comet rocks) a
   field; leave asteroid drift untouched)
 - Create/Modify: src/tests/flight/cometMotion.test.ts
 
-- [ ] comets advance along the hyperbola, exit past the field edge, and a new comet spawns later;
+- [x] comets advance along the hyperbola, exit past the field edge, and a new comet spawns later;
       asteroids unchanged
-- [ ] write tests: a comet's distance-to-star is non-periodic and exits the field; asteroid path
+- [x] write tests: a comet's distance-to-star is non-periodic and exits the field; asteroid path
       regression unchanged
-- [ ] run affected tests — must pass before next task
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Verify acceptance criteria
 - [ ] verify Overview: comets fly a single hyperbolic pass and leave; asteroids behave as before
