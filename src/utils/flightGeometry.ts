@@ -468,6 +468,114 @@ export function questMarkerRadius(displayRadius: number, margin = 10): number {
   return displayRadius + margin;
 }
 
+// ---------------------------------------------------------------------------
+// Hyperbolic flyby (open, single-pass comet trajectory)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parameters of a hyperbolic flyby focused on the star. A conic with the focus
+ * at the star has the polar form `r(θ) = p / (1 + e·cos θ)` where `θ` is the
+ * true anomaly (0 at perihelion), `e > 1` for a hyperbola, and the semi-latus
+ * rectum `p = q·(1 + e)` with `q` the perihelion distance. The bound branch (the
+ * one that wraps the focus) exists for `|θ| < acos(−1/e)`; outside that the body
+ * has escaped to infinity along an asymptote. This is the open analogue of the
+ * elliptical orbit the comets used to fly — a single pass, never periodic.
+ */
+export interface HyperbolaParams {
+  /** Focus (star centre) world x. */
+  focusX: number;
+  /** Focus (star centre) world y. */
+  focusY: number;
+  /** Perihelion distance `q` (closest approach to the focus), world px. */
+  perihelion: number;
+  /** Eccentricity `e` — must be > 1 for an open (hyperbolic) path. */
+  eccentricity: number;
+  /** World bearing (rad) of the perihelion direction from the focus. */
+  orientation: number;
+}
+
+/** Semi-latus rectum `p = q·(1 + e)` for a focus-centred conic. */
+function semiLatusRectum(p: HyperbolaParams): number {
+  return p.perihelion * (1 + p.eccentricity);
+}
+
+/**
+ * World point on the hyperbola at true anomaly `theta` (0 = perihelion). Valid
+ * on the bound branch `|theta| < hyperbolaAsymptoteAngle(e)`; at the asymptote
+ * the radius diverges. The denominator is clamped to a small positive value so a
+ * caller that walks slightly past the asymptote gets a finite (far) point rather
+ * than a sign-flipped jump onto the other branch.
+ */
+export function hyperbolaPoint(p: HyperbolaParams, theta: number): Point {
+  const denom = Math.max(1e-6, 1 + p.eccentricity * Math.cos(theta));
+  const r = semiLatusRectum(p) / denom;
+  const bearing = p.orientation + theta;
+  return {
+    x: p.focusX + r * Math.cos(bearing),
+    y: p.focusY + r * Math.sin(bearing),
+  };
+}
+
+/**
+ * True anomaly of the asymptote (`θ_max = acos(−1/e)`): the limiting angle at
+ * which the hyperbolic radius diverges. The incoming/outgoing asymptotes are at
+ * `orientation ± θ_max`, symmetric about the perihelion direction.
+ */
+export function hyperbolaAsymptoteAngle(eccentricity: number): number {
+  return Math.acos(-1 / eccentricity);
+}
+
+/**
+ * The (positive) true anomaly at which the body crosses a given `radius` from
+ * the focus. The incoming crossing is at `−` this value, the outgoing at `+`.
+ * For any `radius ≥ perihelion` this is strictly inside the asymptote angle, so
+ * a flyby entering at the field edge is always well-defined.
+ */
+export function hyperbolaTrueAnomalyAtRadius(
+  p: HyperbolaParams,
+  radius: number,
+): number {
+  const cosTheta = (semiLatusRectum(p) / radius - 1) / p.eccentricity;
+  return Math.acos(Math.max(-1, Math.min(1, cosTheta)));
+}
+
+/** A single-pass comet flyby: hyperbola params plus the entry/exit sweep range. */
+export interface CometFlyby {
+  params: HyperbolaParams;
+  /** True anomaly at entry (negative — incoming, at the field edge). */
+  thetaStart: number;
+  /** True anomaly at exit (positive — outgoing, at the field edge). */
+  thetaEnd: number;
+}
+
+/**
+ * Build a comet flyby focused on the star at (`focusX`,`focusY`): an open
+ * hyperbola (`e > 1`) whose perihelion sits well inside the field and whose
+ * entry/exit happen at `fieldRadius`. The comet sweeps the true anomaly once
+ * from `thetaStart` (incoming, at the edge) through 0 (perihelion) to `thetaEnd`
+ * (outgoing, at the edge) and never returns. `rng` is injectable for
+ * deterministic tests (defaults to `Math.random`).
+ */
+export function buildCometFlyby(
+  focusX: number,
+  focusY: number,
+  fieldRadius: number,
+  rng: () => number = Math.random,
+): CometFlyby {
+  const eccentricity = 1.15 + rng() * 0.85; // 1.15–2.0, always > 1
+  const perihelion = fieldRadius * (0.12 + rng() * 0.33); // 12–45% of field
+  const orientation = rng() * Math.PI * 2;
+  const params: HyperbolaParams = {
+    focusX,
+    focusY,
+    perihelion,
+    eccentricity,
+    orientation,
+  };
+  const thetaEdge = hyperbolaTrueAnomalyAtRadius(params, fieldRadius);
+  return { params, thetaStart: -thetaEdge, thetaEnd: thetaEdge };
+}
+
 /**
  * Whether a route aimed at a *moving* target should be re-plotted: true once the
  * target's fresh (lead) position has drifted more than `threshold` world px from
