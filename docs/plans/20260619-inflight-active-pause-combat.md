@@ -99,9 +99,13 @@ over each engagement.
 - [x] run affected tests — must pass before next task
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify Overview: attack auto-pauses, target+weapon selectable, action resumes time, hooks intact
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing combat test assertions changed
+- [x] verify Overview: attack auto-pauses, target+weapon selectable, action resumes time, hooks intact
+      (covered by combatPause/pauseFreezesTime/confirmAttack/pauseHooks unit tests + e2e regression #8
+      "an incoming attack auto-pauses and shows the target/weapon overlay; firing resumes")
+- [x] run full unit suite — all green (244 files / 2103 tests); `npm run test:e2e:regression` (25
+      passed); `npm run lint` clean (0 errors)
+- [x] confirm no existing combat test assertions changed (all combat-pause tests are new files;
+      working-tree test diffs are quest-only and insertions-only — no assertions modified)
 
 ## Technical Details
 - **Active-pause vs turn-based:** time is frozen only while the overlay is open; once the player acts
