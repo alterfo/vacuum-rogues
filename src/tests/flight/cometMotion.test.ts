@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Container } from "pixi.js";
 import { AsteroidBelt } from "@/presentation/flight/AsteroidBelt";
 import type { Renderer } from "@/presentation/Renderer";
-import { buildCometFlyby } from "@/utils/flightGeometry";
+import { buildCometFlyby, hyperbolaPoint } from "@/utils/flightGeometry";
 
 /** Deterministic 0..1 generator (mulberry32) so a flyby is reproducible. */
 function seededRng(seed: number): () => number {
@@ -87,9 +87,12 @@ describe("AsteroidBelt comet motion (hyperbolic flyby)", () => {
     comet.graphics.visible = true;
 
     const dists: number[] = [];
-    const firstPos = { x: comet.x, y: comet.y };
+    // The entry point is the flyby's incoming edge crossing (true anomaly
+    // thetaStart) — NOT comet.x/comet.y here, which still hold the random spawn
+    // position until the first update() drives the body onto the flyby path.
+    const firstPos = hyperbolaPoint(flyby.params, flyby.thetaStart);
     let exited = false;
-    let lastPos = firstPos;
+    let lastPos = { x: comet.x, y: comet.y };
     const dt = 50;
     for (let i = 0; i < 400; i++) {
       belt.update(dt, 0);
