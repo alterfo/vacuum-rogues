@@ -115,7 +115,12 @@ export class OrbitRenderer implements FlightModule {
 
   /**
    * Draw the system boundary — the edge where ships hyperjump in and out.
-   * Faint dashed-looking ring; non-interactive so it never blocks clicks.
+   *
+   * The edge ring is intentionally **hidden** (`visible = false`): players found
+   * the stroked boundary ("рамочка") distracting, so we no longer highlight the
+   * system edge. The geometry constant ({@link SYSTEM_GEOMETRY.boundaryRadius})
+   * still governs warp-in/out; only this decoration is suppressed. The node is
+   * kept (created, then hidden) so the container layout is unchanged.
    */
   private createSystemBoundary(): void {
     if (!this.container) return;
@@ -123,6 +128,7 @@ export class OrbitRenderer implements FlightModule {
     ring.circle(this.centerX, this.centerY, SYSTEM_GEOMETRY.boundaryRadius);
     ring.stroke({ width: 2, color: 0x2266aa, alpha: 0.35 });
     ring.eventMode = "none";
+    ring.visible = false; // do not highlight the system edge
     this.container.addChild(ring);
   }
 }

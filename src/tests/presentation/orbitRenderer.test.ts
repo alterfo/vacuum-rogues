@@ -95,4 +95,20 @@ describe("OrbitRenderer (extracted FlightModule)", () => {
     orbits.destroy();
     expect(gameLayer.children.length).toBe(0);
   });
+
+  it("does not highlight the system edge — the boundary ring is hidden", () => {
+    const gameLayer = new Container();
+    const renderer = makeRenderer(gameLayer);
+    // Null galaxy → the container's single child is the boundary ring itself,
+    // so we can assert it is created-but-hidden (no edge highlight).
+    const orbits = new OrbitRenderer(renderer, gameLayer, null, "sys-1");
+
+    orbits.initialize();
+
+    const container = gameLayer.children[0] as Container;
+    const ring = container.children[0];
+    expect(ring.visible).toBe(false);
+
+    orbits.destroy();
+  });
 });
