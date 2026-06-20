@@ -1777,6 +1777,12 @@ export class PlanetScene extends GameScene {
       this.showMessage("Нет двигателя — взлёт невозможен", 0xff4444);
       return;
     }
+    // Checkpoint every take-off into the "auto" slot. This is the rollback point
+    // a player death loads (see GAME_OVER flow); a failed save must not block the
+    // launch, so log and proceed.
+    await this.gameEngine.saveGame("auto").catch((e) => {
+      logger.error("PlanetScene: take-off autosave failed", e);
+    });
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
       // Spawn the ship next to this planet, not at the distant system edge.

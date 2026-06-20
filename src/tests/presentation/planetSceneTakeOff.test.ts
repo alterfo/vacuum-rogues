@@ -33,6 +33,9 @@ function makeScene(opts: { planetId?: string; canTakeOff?: boolean }): {
   const fields = scene as unknown as Record<string, unknown>;
   fields.gameEngine = {
     transitionTo,
+    // take-off now checkpoints to the "auto" slot before the flight transition
+    // (death-rollback); provide the collaborator so the scene can run.
+    saveGame: vi.fn().mockResolvedValue(undefined),
     playerLoadout: {
       derivedStats: () => ({ canTakeOff: opts.canTakeOff ?? true }),
     },
