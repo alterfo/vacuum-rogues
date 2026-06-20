@@ -1309,6 +1309,20 @@ export class GameEngine {
     }
   }
 
+  /**
+   * «Начать заново» from the GAME_OVER screen: start a completely fresh game.
+   * Mirrors the new-game modal path — it MUST reset game state
+   * (`generateDefaultGameState`: null the player, regenerate the galaxy, clear the
+   * win/death guards) BEFORE entering race selection. Without the reset the dead
+   * player survives, so the SPACE_FLIGHT new-game guard (`!this.player`, see
+   * {@link transitionTo}) never fires and race-selection would drop the player back
+   * into the old galaxy with the destroyed ship instead of a fresh start.
+   */
+  async restartNewGame(): Promise<void> {
+    await this.generateDefaultGameState();
+    await this.transitionTo(SceneType.RACE_SELECTION, { gameEngine: this });
+  }
+
   handleError(error: Error): void {
     const response = this.exceptionHandler.handle(error);
     logger.error(

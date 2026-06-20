@@ -255,4 +255,34 @@ describe("GameEngine.triggerPlayerDeath → GAME_OVER transition (Task 4)", () =
     expect(saveSpy).not.toHaveBeenCalled();
     expect(writeSpy).not.toHaveBeenCalled();
   });
+
+  it("«Начать заново» (restartNewGame) clears the dead player + regenerates the galaxy", async () => {
+    engine.galaxy = await diDeps.galaxyService.generate("old", 5);
+    engine.player = diDeps.playerService.createPlayer({
+      factionType: FactionType.OUTLANDERS,
+    });
+    const deadGalaxy = engine.galaxy;
+    // Player died → death guard latched.
+    const transitionTo = vi
+      .spyOn(engine, "transitionTo")
+      .mockResolvedValue(undefined);
+    engine.triggerPlayerDeath();
+
+    await engine.restartNewGame();
+
+    // A bare transitionTo(RACE_SELECTION) would leave the dead player in place;
+    // restartNewGame must reset state so the SPACE_FLIGHT new-game guard fires.
+    expect(engine.player).toBeNull();
+    expect(engine.galaxy).not.toBe(deadGalaxy);
+    expect(transitionTo).toHaveBeenCalledWith(
+      SceneType.RACE_SELECTION,
+      expect.objectContaining({ gameEngine: engine }),
+    );
+
+    // Death guard re-armed: a fresh game can die again.
+    const cb = vi.fn();
+    engine.playerDeathCallback = cb;
+    engine.triggerPlayerDeath();
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
 });

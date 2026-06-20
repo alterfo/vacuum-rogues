@@ -97,16 +97,16 @@ describe("GameOverScene render + actions (Task 3)", () => {
     ]);
   });
 
-  it("«Начать заново» dispatches a RACE_SELECTION transition (new game)", () => {
-    const transitionTo = vi.fn().mockResolvedValue(undefined);
+  it("«Начать заново» resets to a fresh game via restartNewGame", () => {
+    // Must route through restartNewGame (which nulls the dead player + regenerates
+    // the galaxy) — NOT a bare transitionTo(RACE_SELECTION), which would carry the
+    // destroyed ship into the "new" game (engine new-game guard never fires).
+    const restartNewGame = vi.fn().mockResolvedValue(undefined);
     scene.initialize({
-      gameEngine: { transitionTo } as unknown as GameEngine,
+      gameEngine: { restartNewGame } as unknown as GameEngine,
     });
     scene.e2eRunAction("Начать заново");
-    expect(transitionTo).toHaveBeenCalledWith(
-      SceneType.RACE_SELECTION,
-      expect.anything(),
-    );
+    expect(restartNewGame).toHaveBeenCalledTimes(1);
   });
 
   it('«Загрузить сохранение» loads the "auto" takeoff autosave', () => {
@@ -122,6 +122,40 @@ describe("GameOverScene render + actions (Task 3)", () => {
     });
     scene.e2eRunAction("Загрузить сохранение");
     expect(loadGame).toHaveBeenCalledWith("auto");
+  });
+
+  it("«Загрузить сохранение» hides the overlay (no transition) when no autosave exists", async () => {
+    const loadGame = vi.fn().mockResolvedValue(false);
+    const showLoadingOverlay = vi.fn();
+    const hideLoadingOverlay = vi.fn();
+    const transitionTo = vi.fn().mockResolvedValue(undefined);
+    scene.initialize({
+      gameEngine: {
+        loadGame,
+        showLoadingOverlay,
+        hideLoadingOverlay,
+        transitionTo,
+      } as unknown as GameEngine,
+    });
+    scene.e2eRunAction("Загрузить сохранение");
+    await vi.waitFor(() => expect(hideLoadingOverlay).toHaveBeenCalledTimes(1));
+    expect(showLoadingOverlay).toHaveBeenCalledTimes(1);
+    expect(transitionTo).not.toHaveBeenCalled();
+  });
+
+  it("«Загрузить сохранение» hides the overlay when the load rejects", async () => {
+    const loadGame = vi.fn().mockRejectedValue(new Error("disk error"));
+    const showLoadingOverlay = vi.fn();
+    const hideLoadingOverlay = vi.fn();
+    scene.initialize({
+      gameEngine: {
+        loadGame,
+        showLoadingOverlay,
+        hideLoadingOverlay,
+      } as unknown as GameEngine,
+    });
+    expect(() => scene.e2eRunAction("Загрузить сохранение")).not.toThrow();
+    await vi.waitFor(() => expect(hideLoadingOverlay).toHaveBeenCalledTimes(1));
   });
 
   it("destroy() clears the scene container reference", () => {

@@ -2,7 +2,6 @@ import { Container, Graphics } from "pixi.js";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
-import { SceneType } from "@/types";
 import { scaledText } from "./ui/scaledText";
 import { logger } from "@/utils/logger";
 
@@ -131,7 +130,12 @@ export class GameOverScene extends GameScene {
       });
   }
 
-  /** «Начать заново» → the existing new-game / race-selection path. */
+  /**
+   * «Начать заново» → the existing new-game path. Routes through
+   * {@link GameEngine.restartNewGame} so game state is reset (player nulled,
+   * galaxy regenerated, guards cleared) BEFORE race selection — otherwise the
+   * dead player carries over and the "fresh" game reuses the destroyed ship.
+   */
   private startOver(): void {
     const engine = this.gameEngine;
     if (!engine) {
@@ -139,10 +143,8 @@ export class GameOverScene extends GameScene {
       return;
     }
     engine
-      .transitionTo(SceneType.RACE_SELECTION, { gameEngine: engine })
-      .catch((err) =>
-        logger.error("GameOverScene: start-over transition failed", err),
-      );
+      .restartNewGame()
+      .catch((err) => logger.error("GameOverScene: start-over failed", err));
   }
 
   private addText(

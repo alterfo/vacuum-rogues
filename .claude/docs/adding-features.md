@@ -9,6 +9,8 @@
 4. If the scene requires transient context (planet, NPC, station), add it to `contextDependentScenes` in `GameEngine.loadGame()` so "Continue" falls back to SPACE_FLIGHT instead of a blank screen (currently: `PLANET`, `TRADE`, `DIALOGUE`, `COMBAT`, `INVENTORY`, `STATION`, `EQUIPMENT_SHOP`, `GOVERNMENT`, `TEXT_QUEST`, `WIN_SCREEN`, `INFO_CENTER`, `BANK`)
 5. Add Page Object in `e2e/page-objects/` for E2E tests
 
+**Terminal scenes (win/lose, e.g. `WIN_SCREEN`, `GAME_OVER`) must NOT be auto-saved.** `GameEngine.transitionTo()` autosaves to the `"auto"` slot on every gameplay transition; entering a terminal screen would clobber the player's last real checkpoint (and a later "Continue" would re-enter the dead/end screen). Exclude such a scene from that block (`sceneType !== SceneType.X` — see `GAME_OVER`). Pick **one** mechanism per terminal scene: either exclude it from autosave (`GAME_OVER`) **or** keep it in `contextDependentScenes` so a load bounces to SPACE_FLIGHT (`WIN_SCREEN`) — do not leave a terminal scene both resumable and autosaving.
+
 ## New Audio Track or SFX
 - Music files: `public/audio/mus_<key>.ogg` — add a `TrackKey` entry in `src/systems/AudioManager.ts`
 - SFX files: `public/audio/sfx_<key>.ogg` — add a `SfxKey` entry in `src/systems/AudioManager.ts`
