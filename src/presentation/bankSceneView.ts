@@ -4,6 +4,7 @@ import {
   type Ledger,
 } from "@/domain/banking/Ledger";
 import type { BankCommand } from "@/systems/banking/bus";
+import type { LoanTermsSummary } from "@/systems/banking/products";
 
 /**
  * Pure view-model for {@link BankScene} — the Galactic Bank screen reads the
@@ -162,4 +163,65 @@ export function describeCommand(cmd: BankCommand): string {
 export function describePosting(entry: JournalEntry): string {
   const legs = entry.postings.length;
   return `✓ ГК: ${entry.reason} (${legs} пров.)`;
+}
+
+/**
+ * Format a per-day loan interest *fraction* as a Russian-locale percent string,
+ * e.g. `0.002 → "0,2 %/день"`. Up to two decimals, trailing zeros trimmed, with
+ * a comma decimal separator to match the rest of the UI.
+ */
+export function formatDailyRate(dailyRate: number): string {
+  const pct = dailyRate * 100;
+  const str = Number.isInteger(pct)
+    ? String(pct)
+    : pct.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  return `${str.replace(".", ",")} %/день`;
+}
+
+/** One label/value line of the loan panel; `tone` drives the value colour. */
+export interface LoanPanelLine {
+  readonly label: string;
+  readonly value: string;
+  /** `debt` (red), `muted` (amber — totals), else the plain bright value. */
+  readonly tone?: "debt" | "muted" | "plain";
+}
+
+/**
+ * The label/value lines the Bank's loan panel renders. With no outstanding debt
+ * (`outstanding <= 0`) it shows the **offer** — principal, per-day rate, term,
+ * the per-day payment and the total repayable — so the player reads the terms
+ * before borrowing. With an active loan it shows the **live position** — the
+ * outstanding debt, the per-day payment and the rate. Pure: derived entirely
+ * from the (unit-tested) {@link LoanTermsSummary} + the outstanding balance, so
+ * the scene only maps these rows to `Text`. `outstanding` is positive when in
+ * debt (i.e. `-balanceOf(loanAccount)`).
+ */
+export function loanPanelLines(
+  summary: LoanTermsSummary,
+  outstanding: number,
+): LoanPanelLine[] {
+  const rate = formatDailyRate(summary.dailyRate);
+  const payment = `≈ ${formatCredits(summary.perPeriodPayment)}`;
+  if (outstanding > 0) {
+    return [
+      {
+        label: "Текущий долг",
+        value: formatCredits(outstanding),
+        tone: "debt",
+      },
+      { label: "Платёж/день", value: payment },
+      { label: "Ставка", value: rate, tone: "muted" },
+    ];
+  }
+  return [
+    { label: "Сумма кредита", value: formatCredits(summary.principal) },
+    { label: "Ставка", value: rate },
+    { label: "Срок", value: `${summary.periods} дн.` },
+    { label: "Платёж/день", value: payment },
+    {
+      label: "К возврату",
+      value: formatCredits(summary.totalRepayable),
+      tone: "muted",
+    },
+  ];
 }

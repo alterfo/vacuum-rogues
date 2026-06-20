@@ -10,10 +10,13 @@ import {
   describeCommand,
   describePosting,
   formatCredits,
+  formatDailyRate,
+  loanPanelLines,
   playerAccountRows,
   statementRows,
   wholeCreditsToCurrent,
 } from "@/presentation/bankSceneView";
+import { loanTermsSummary } from "@/systems/banking/products";
 
 describe("formatCredits", () => {
   it("renders small amounts without grouping", () => {
@@ -238,5 +241,47 @@ describe("describeCommand / describePosting", () => {
       ],
     });
     expect(describePosting(entry)).toBe("✓ ГК: Продажа: Металлы (2 пров.)");
+  });
+});
+
+describe("formatDailyRate", () => {
+  it("renders a fractional rate as a comma-decimal percent", () => {
+    expect(formatDailyRate(0.002)).toBe("0,2 %/день");
+    expect(formatDailyRate(0.025)).toBe("2,5 %/день");
+  });
+
+  it("drops trailing zeros and shows whole percents without a decimal", () => {
+    expect(formatDailyRate(0.02)).toBe("2 %/день");
+    expect(formatDailyRate(0.1)).toBe("10 %/день");
+    expect(formatDailyRate(0)).toBe("0 %/день");
+  });
+});
+
+describe("loanPanelLines", () => {
+  const terms = { principal: 5000, dailyRate: 0.002, periods: 10 };
+  const summary = loanTermsSummary(terms);
+
+  it("shows the offer (term, rate, payment, total) when there is no debt", () => {
+    const lines = loanPanelLines(summary, 0);
+    const byLabel = Object.fromEntries(lines.map((l) => [l.label, l.value]));
+    // The principal disbursed and the per-day interest rate are surfaced.
+    expect(byLabel["Сумма кредита"]).toBe(formatCredits(5000));
+    expect(byLabel["Ставка"]).toBe("0,2 %/день");
+    expect(byLabel["Срок"]).toBe("10 дн.");
+    // Total repayable always exceeds the principal (interest is charged).
+    expect(byLabel["К возврату"]).toBe(formatCredits(summary.totalRepayable));
+    expect(summary.totalRepayable).toBeGreaterThan(5000);
+    // No outstanding-debt line in the offer view.
+    expect(byLabel["Текущий долг"]).toBeUndefined();
+  });
+
+  it("shows the live outstanding debt when a loan is active", () => {
+    const lines = loanPanelLines(summary, 3200);
+    const debt = lines.find((l) => l.label === "Текущий долг");
+    expect(debt?.value).toBe(formatCredits(3200));
+    expect(debt?.tone).toBe("debt");
+    // The active view drops the up-front "Сумма кредита"/"К возврату" offer rows.
+    expect(lines.some((l) => l.label === "Сумма кредита")).toBe(false);
+    expect(lines.some((l) => l.label === "Платёж/день")).toBe(true);
   });
 });

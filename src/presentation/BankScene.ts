@@ -19,6 +19,7 @@ import {
   deposit,
   forgiveLoanResidual,
   loanAccountId,
+  loanTermsSummary,
   openSavings,
   repayLoan,
   savingsAccountId,
@@ -30,6 +31,7 @@ import {
   describeCommand,
   describePosting,
   formatCredits,
+  loanPanelLines,
   playerAccountRows,
   statementRows,
   wholeCreditsToCurrent,
@@ -256,6 +258,84 @@ export class BankScene extends GameScene {
     for (const a of actions) {
       this.makeButton(ui, a.label, x, y, width, btnH, a.color, a.run);
       y += btnH + gap;
+    }
+    y += 6;
+
+    this.renderLoanTerms(ui, x, y, width);
+  }
+
+  /**
+   * Loan panel: the terms a loan is offered on (rate, term, per-day payment,
+   * total repayable) when the player has no debt, or the live position
+   * (outstanding + per-day payment) when a loan is active. All values come from
+   * the pure {@link loanPanelLines} / {@link loanTermsSummary}; the scene only
+   * lays the label/value rows out.
+   */
+  private renderLoanTerms(
+    ui: Container,
+    x: number,
+    y: number,
+    width: number,
+  ): void {
+    const engine = this.gameEngine;
+    const player = engine?.player;
+    if (!engine || !player) return;
+
+    const summary = loanTermsSummary({
+      principal: LOAN_PRINCIPAL,
+      dailyRate: DEFAULT_LOAN_DAILY_RATE,
+      periods: LOAN_PERIODS,
+    });
+    const outstanding = -engine.bankingService.balanceOf(
+      loanAccountId(player.id),
+    );
+    const lines = loanPanelLines(summary, outstanding);
+
+    y = this.sectionHeader(
+      ui,
+      outstanding > 0 ? "КРЕДИТ — действующий" : "КРЕДИТ — условия",
+      x,
+      y,
+      width,
+    );
+
+    const rowH = 20;
+    const padY = 8;
+    const panelH = padY * 2 + lines.length * rowH;
+    const panel = new Graphics();
+    panel
+      .roundRect(x, y, width, panelH, 4)
+      .fill({ color: 0x0a1424, alpha: 0.9 });
+    panel
+      .roundRect(x, y, width, panelH, 4)
+      .stroke({ color: 0x22364e, width: 1 });
+    panel.eventMode = "none";
+    ui.addChild(panel);
+
+    let ly = y + padY;
+    for (const line of lines) {
+      const label = scaledText(line.label, 11, 0x99bbcc);
+      label.x = x + 10;
+      label.y = ly;
+      label.eventMode = "none";
+      ui.addChild(label);
+
+      const color =
+        line.tone === "debt"
+          ? 0xff8866
+          : line.tone === "muted"
+            ? 0xffd88a
+            : 0xeaffea;
+      const value = scaledText(line.value, 11, color, {
+        fontWeight: "bold",
+        align: "right",
+      });
+      value.anchor.set(1, 0);
+      value.x = x + width - 10;
+      value.y = ly;
+      value.eventMode = "none";
+      ui.addChild(value);
+      ly += rowH;
     }
   }
 

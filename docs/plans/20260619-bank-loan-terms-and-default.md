@@ -68,10 +68,10 @@ the ABS prototype's "thin core-banking" guardrail.
 - Modify: src/presentation/BankScene.ts (show rate/periods/total/next-payment before borrowing;
   show outstanding + next-due for an active loan; route dark-panel text through `scaledText`)
 
-- [ ] display terms at the "Взять кредит" action and the live outstanding/next-due for an active loan
-- [ ] visually verify via screenshot that terms + outstanding read clearly
-- [ ] (no new logic — covered by Task 1 tests; add a render smoke test only if a helper is extracted)
-- [ ] run affected tests — must pass before next task
+- [x] display terms at the "Взять кредит" action and the live outstanding/next-due for an active loan
+- [x] visually verify via screenshot that terms + outstanding read clearly
+- [x] (no new logic — covered by Task 1 tests; add a render smoke test only if a helper is extracted) — extracted pure `loanPanelLines`/`formatDailyRate` in bankSceneView.ts with unit tests
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Default state machine + penalty rate (pure)
 **Files:**
