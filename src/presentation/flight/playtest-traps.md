@@ -47,6 +47,14 @@ Completed `20260612-npc-purposeful-behavior`:
 - **`hashStr` in `src/utils/hashStr.ts` is the single FNV-1a implementation** — do not add copies in NpcShipSprite, NpcShipManager, or npcBehavior.
 - **`setAnchor()` orbit params are deterministic per ship id** — `orbitRadius` and `orbitDir` use `hashStr(this.npc.id)`, not `Math.random()`.
 
+## NPC Persistence & Placement Conventions
+
+Completed `20260619-npc-ship-persistence-consistency` (NPC ships keep their spots across scene transitions / save load — no per-entry re-scatter):
+- **NPC interior spawn position is persisted, never random** (`NpcShipManager.addNpcSprite`). An interior spawn (`!entry`) reuses `npc.worldX/worldY` if set, else seed-derives one via `deterministicNpcOffset(galaxyId, npcId)` and persists it with `setWorldPosition` — **never `Math.random()`** (random placement re-scattered every ship on each re-entry and on a star-map round-trip). Do NOT reintroduce random angle/radius placement here. Guarded by `src/tests/npc/deterministicPlacement.test.ts`.
+- **`destroy()` flushes live positions back via `persistLivePositions()`** — it mirrors each live sprite offset into its domain ship so the scene-transition autosave (which fires after `destroy()`) captures where ships actually are. This is a **load-bearing side effect**: do not fast-path or reorder the manager's teardown past it. **Known gap:** in-flight saves that fire *before* teardown (hyperjump autosave in `SpaceFlightScene.doHyperjump`, emergency autosave in `GameEngine.handleCriticalError`) bypass the flush and persist start-of-session positions; call `persistLivePositions()` before those saves if you wire it. Guarded by `src/tests/npc/trackedMovement.test.ts` (write-back + re-entry respawn).
+- **Boundary entries (`entry=true`, just hyperjumped in) are NOT persisted at spawn** — they fly inward from the system edge, and the next fresh entry re-derives an interior spot. Note the teardown write-back above still captures wherever a boundary ship has settled if the player lingers.
+- **The simulation owns subsequent movement, not the sprite** (`NpcSimulator.advanceTrackedPositions`): a deterministic orbit step per tick (radius-preserving, no main-RNG). For the *active* system the live sprite drift is what gets persisted (write-back wins); for off-screen systems the tracked orbit is the sole driver. Don't expect the orbit step to visibly move ships in the system the player is currently flying in.
+
 ## Combat Maneuver Conventions
 
 Completed `20260619-space-combat-maneuver-and-engage` (real-time-with-turns in-flight combat; the hex `CombatScene` survives only for scripted/boss fights):

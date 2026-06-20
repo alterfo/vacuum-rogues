@@ -265,8 +265,14 @@ export class NpcShipManager implements FlightModule {
    * round-trip respawns each ship exactly where the player last saw it — no
    * re-scatter). Presentation never invents a position from scratch — first
    * placement is the seed-derived job in {@link addNpcSprite}; this only mirrors
-   * the live render position back. Called on teardown (which precedes a save /
-   * scene transition) and exposed for an explicit pre-save flush.
+   * the live render position back. Called on teardown, which precedes the normal
+   * scene-transition autosave, so that save captures the live layout.
+   *
+   * KNOWN GAP: in-flight saves that fire BEFORE teardown — the hyperjump autosave
+   * (`SpaceFlightScene.doHyperjump`) and the emergency autosave
+   * (`GameEngine.handleCriticalError`) — do not flush through here, so they
+   * persist the positions from the start of the session, not the live ones. This
+   * method is public so those paths can call it before serializing once wired.
    */
   persistLivePositions(): void {
     const center = this.deps.getStarCenter();
@@ -495,8 +501,10 @@ export class NpcShipManager implements FlightModule {
 
       // Persist the resolved interior position so the next entry reuses it; the
       // simulation owns position change thereafter (presentation never invents
-      // one). A boundary entry is transient (the ship flies inward), so it is
-      // NOT persisted — it gets a stable interior position on the next re-entry.
+      // one from scratch — persistLivePositions() only mirrors live drift back).
+      // A boundary entry is transient (the ship flies inward), so its spawn point
+      // is NOT persisted here; if the player lingers, destroy()'s write-back
+      // captures wherever it settled, otherwise the next entry re-derives one.
       if (!entry) npc.setWorldPosition(offsetX, offsetY);
 
       spawnX = bounds.cx + offsetX;

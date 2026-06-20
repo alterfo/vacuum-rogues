@@ -144,4 +144,39 @@ describe("MigrationPipeline v23 -> v24 NPC positions", () => {
     expect(ship.worldX).toBe(11);
     expect(ship.worldY).toBe(22);
   });
+
+  it("re-seeds an explicit-null position (not just a missing field)", () => {
+    const save = {
+      version: 23,
+      galaxy: {
+        id: "galaxy-abc",
+        npcShips: [{ id: "npc_a", worldX: null, worldY: null }],
+      },
+    } as unknown as SaveState;
+    const migrated = MigrationPipeline.migrate(save);
+    const ship = (
+      migrated.galaxy as unknown as {
+        npcShips: Array<{ worldX: number; worldY: number }>;
+      }
+    ).npcShips[0];
+    const expected = deterministicNpcOffset("galaxy-abc", "npc_a");
+    expect(ship.worldX).toBe(expected.x);
+    expect(ship.worldY).toBe(expected.y);
+  });
+
+  it("does not crash on a galaxy with no npcShips array", () => {
+    const save = {
+      version: 23,
+      galaxy: { id: "galaxy-abc" },
+    } as unknown as SaveState;
+    const migrated = MigrationPipeline.migrate(save);
+    // Version still advances; nothing to seed, no throw.
+    expect(migrated.version).toBe(MigrationPipeline.CURRENT_VERSION);
+  });
+
+  it("does not crash on a save with no galaxy", () => {
+    const save = { version: 23 } as unknown as SaveState;
+    const migrated = MigrationPipeline.migrate(save);
+    expect(migrated.version).toBe(MigrationPipeline.CURRENT_VERSION);
+  });
 });

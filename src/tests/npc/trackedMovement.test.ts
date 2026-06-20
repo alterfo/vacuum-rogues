@@ -147,6 +147,19 @@ describe("NpcSimulator tracked in-system movement", () => {
     expect(npc.worldX).toBe(50);
     expect(npc.worldY).toBe(-50);
   });
+
+  it("leaves a DEAD ship's position frozen (no spot to advance)", () => {
+    const npc = makeNpc("npc_dead", NpcState.DEAD);
+    npc.setWorldPosition(50, -50);
+    const galaxy = makeGalaxy([npc]);
+
+    new NpcSimulator().tick(galaxy, new SeededRNG("rng"));
+
+    // A destroyed ship is skipped by advanceTrackedPositions — its stored
+    // offset must not orbit (it is no longer a live in-system presence).
+    expect(npc.worldX).toBe(50);
+    expect(npc.worldY).toBe(-50);
+  });
 });
 
 // ---------------------------------------------------------------------------
