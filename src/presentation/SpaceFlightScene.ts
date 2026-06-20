@@ -38,6 +38,9 @@ interface FilterableNode {
   children?: ReadonlyArray<unknown>;
 }
 
+/** Planet spiral-in hint: where to curve the approach when landing. */
+type LandingHint = { planetX: number; planetY: number; planetRadius: number };
+
 export class SpaceFlightScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   // Renders the player ship (hull/sprite, glow, heading crosshair, take-off arc)
@@ -108,8 +111,11 @@ export class SpaceFlightScene extends GameScene {
   private waitDayAccum: number = 0;
   private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070)
 
-  // Two-step movement: plan route, then execute
-  private plannedRoute: { x: number; y: number } | null = null;
+  // Two-step movement: plan route, then execute. plannedRoute carries the spiral
+  // hint behind it so a re-execute that drops it (Ход / onPlayPause) re-derives
+  // from the ship's CURRENT position, not a stale backtracking path (US-070).
+  private plannedRoute: { x: number; y: number; landing?: LandingHint } | null =
+    null;
   // Full curved path (around the star) kept for drawing the route line; the
   // ship flows through it via ShipPhysics.setPath (no scene-side waypoint queue).
   private routePath: { x: number; y: number }[] = [];
@@ -1446,7 +1452,7 @@ export class SpaceFlightScene extends GameScene {
   private computeFlightPath(
     tx: number,
     ty: number,
-    landing?: { planetX: number; planetY: number; planetRadius: number },
+    landing?: LandingHint,
   ): { x: number; y: number }[] {
     if (!this.shipPhysics) return [{ x: tx, y: ty }];
     const fx = this.shipPhysics.shipX;
@@ -1472,40 +1478,27 @@ export class SpaceFlightScene extends GameScene {
    * the first click, only curving once executed). A planet destination previews
    * the curved spiral-in approach (Task 5).
    */
-  private planRouteTo(
-    x: number,
-    y: number,
-    landing?: { planetX: number; planetY: number; planetRadius: number },
-  ): void {
+  private planRouteTo(x: number, y: number, landing?: LandingHint): void {
     if (!this.shipPhysics) return;
-    this.plannedRoute = { x, y };
+    this.plannedRoute = { x, y, landing };
     this.routePath = this.computeFlightPath(x, y, landing);
     this.plotRoute();
   }
 
   /** Start flying to (x,y) along a star-avoiding (and, for planets, spiral) path. */
-  private executeRouteTo(
-    x: number,
-    y: number,
-    landing?: { planetX: number; planetY: number; planetRadius: number },
-  ): void {
+  private executeRouteTo(x: number, y: number, landing?: LandingHint): void {
     if (!this.shipPhysics) return;
     this.playerShip.finishTakeoff(); // a fresh course cancels any in-progress take-off arc
-    // Single source: when parked and re-firing the course just planned & drawn
-    // for this exact point (Ход / second click), fly that drawn path verbatim.
-    // Callers don't re-thread the `landing` spiral hint, so a recompute would
-    // drop the spiral-in / star bow and beeline a path the preview never showed
-    // (drawn ≠ flown). Moving-ship reaim still recomputes (its routePath is stale).
-    const parkedReplan =
-      !this.shipPhysics.isMoving &&
-      this.plannedRoute?.x === x &&
-      this.plannedRoute?.y === y &&
-      this.routePath.length > 0;
-    if (!parkedReplan) this.routePath = this.computeFlightPath(x, y, landing);
+    // Single source: re-derive from the ship's CURRENT position (drawn == flown),
+    // recovering the spiral hint that callers (Ход) drop for this planned point —
+    // recomputing, not replaying routePath, avoids a resumed-flight backtrack.
+    const same = this.plannedRoute?.x === x && this.plannedRoute?.y === y;
+    const hint = landing ?? (same ? this.plannedRoute?.landing : undefined);
+    this.routePath = this.computeFlightPath(x, y, hint);
     // Hand the whole curved path to physics; it flows through the waypoints
     // without stopping (smooth motion around the star — US-070 #5).
     this.shipPhysics.setPath(this.routePath);
-    this.plannedRoute = { x, y };
+    this.plannedRoute = { x, y, landing: hint };
     this.isTurnRunning = true; // executing a route runs the turn (Play)
     this.updateInteractiveCursors(true);
     this.plotRoute();

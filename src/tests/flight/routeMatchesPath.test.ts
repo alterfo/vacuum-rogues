@@ -268,4 +268,29 @@ describe("Task 1: drawn route == flown path (single source)", () => {
 
     expect(flown).toEqual(drawnPlan.slice(1));
   });
+
+  it("resuming a paused mid-route flight re-bows from the ship's CURRENT position (no stale backtrack)", () => {
+    // Plan a star-crossing route — a genuine multi-waypoint bow from the origin.
+    h.plan(700, 300);
+    const planned = h.lastDrawn();
+    expect(planned.length).toBeGreaterThan(2);
+
+    // The ship has flown past the star to the east side; the turn then paused
+    // there (endTurn leaves plannedRoute + the original routePath intact). A
+    // resume must NOT replay that origin-side path (whose early waypoints are now
+    // behind the ship → the ship would fly backward toward the star).
+    const sp = h.s.shipPhysics as ShipPhysics;
+    sp.shipX = 560;
+    sp.shipY = 300;
+    sp.isMoving = false;
+
+    h.execute(700, 300); // resume (no landing hint, like Ход / onPlayPause)
+    const flown = h.lastSetPath();
+
+    // From (560,300) the shot to (700,300) is clear of the star, so the flown
+    // path is a single forward segment — proof it re-derived from the current
+    // position instead of replaying the stale origin-side bow (which would aim
+    // the ship back at a waypoint it already passed → flying backward).
+    expect(flown).toEqual([{ x: 700, y: 300 }]);
+  });
 });
