@@ -83,6 +83,16 @@ export interface GameEngineDIDependencies {
   questService: IQuestService;
 }
 
+/**
+ * The faction whose standing a loan default damages. The Galactic Bank (АБС) is a
+ * galaxy-wide institution with no faction of its own, so its reputation sanction
+ * lands on the order-and-establishment faction that underwrites it. Centralized so
+ * the mapping is changed in one place.
+ */
+const BANK_FACTION_ID: FactionType = FactionType.BASTIONS;
+/** One-off reputation hit applied the moment a player loan crosses into default. */
+const BANK_DEFAULT_REPUTATION_PENALTY = 15;
+
 export class GameEngine {
   public currentScene: GameScene | null = null;
   public currentSceneType: SceneType = SceneType.MAIN_MENU;
@@ -184,6 +194,28 @@ export class GameEngine {
     this.exceptionHandler.onCriticalError = (response) => {
       this.handleCriticalError(response);
     };
+
+    // АБС: when the EOD batch defaults the player's loan, apply the one-off
+    // bank-faction reputation sanction. The event fires once per default crossing
+    // (see BankingService.processLoanDefaults), so the hit is not re-applied on
+    // each subsequent overdue day. NPC loans (if any) carry no reputation.
+    this.bankBus.subscribe((event) => {
+      if (
+        event.kind === "LoanDefaulted" &&
+        this.player &&
+        event.ownerId === this.player.id
+      ) {
+        this.player.adjustReputation(
+          BANK_FACTION_ID,
+          -BANK_DEFAULT_REPUTATION_PENALTY,
+        );
+        logger.warn(
+          `Loan ${event.loanAccountId} defaulted (${event.missedPayments} missed, ` +
+            `${event.outstanding.toFixed(2)} owed) — ${BANK_FACTION_ID} reputation ` +
+            `−${BANK_DEFAULT_REPUTATION_PENALTY}.`,
+        );
+      }
+    });
   }
 
   /**

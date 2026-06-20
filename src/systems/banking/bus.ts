@@ -120,10 +120,30 @@ export interface StatementCutEvent {
   readonly accountIds: readonly string[];
 }
 
+/**
+ * A loan crossed into default during the EOD batch (the consecutive-miss count
+ * reached the policy threshold for the first time). Emitted **once per default
+ * event** — the one moment the game applies its bank-faction reputation sanction
+ * (the {@link BankingService} owns no reputation; `GameEngine` subscribes and
+ * applies the hit). A loan that recovers and defaults again reports a fresh event.
+ */
+export interface LoanDefaultedEvent {
+  readonly kind: "LoanDefaulted";
+  /** Owner of the loan (the player or an NPC), e.g. the reputation subject. */
+  readonly ownerId: string;
+  /** Ledger account id of the defaulted loan. */
+  readonly loanAccountId: string;
+  /** Consecutive missed scheduled payments at the moment of default. */
+  readonly missedPayments: number;
+  /** Outstanding balance still owed (positive) when the default tripped. */
+  readonly outstanding: number;
+}
+
 export type BankEvent =
   | TransactionPostedEvent
   | BalanceChangedEvent
-  | StatementCutEvent;
+  | StatementCutEvent
+  | LoanDefaultedEvent;
 
 // ─── The bus ────────────────────────────────────────────────────────────────
 

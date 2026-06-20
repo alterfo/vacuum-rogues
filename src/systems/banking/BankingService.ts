@@ -19,6 +19,16 @@ import type {
   TransferCommand,
 } from "./bus";
 import { BankBus } from "./bus";
+import { currentAccountId } from "./economy";
+import {
+  enteredDefault,
+  isPaymentOverdue,
+  newLoanDefaultState,
+  penaltyDailyRate,
+  recordMissedDue,
+  recordScheduledPayment,
+  type LoanDefaultState,
+} from "./loanDefault";
 
 /**
  * Daily interest the bank pays on a savings deposit, as a fraction of the
@@ -60,6 +70,20 @@ export class BankingService {
   private readonly loanDailyRate: number;
   /** The last business date a full EOD batch closed — guards against re-running it. */
   private lastEodDate: number | null = null;
+  /**
+   * Per-loan default state keyed by loan account id (Task 5 persists this). Holds
+   * the arrears bookkeeping the EOD batch drives the {@link LoanDefaultState}
+   * machine off — registered when a loan is disbursed, lazily re-seeded for a loan
+   * restored without one.
+   */
+  private loanDefaults = new Map<string, LoanDefaultState>();
+  /**
+   * Balance owed at each loan's last due-check, keyed by loan account id. The
+   * baseline EOD compares the new outstanding against to tell a **serviced** loan
+   * (debt fell — the borrower repaid more than the interest) from one in **arrears**
+   * (debt grew) without re-deriving the amortization schedule.
+   */
+  private loanOwedAtLastDue = new Map<string, number>();
 
   constructor(
     private readonly bus: BankBus,
@@ -110,6 +134,10 @@ export class BankingService {
     this.currentDate = snapshot.businessDate;
     this.lastEodDate = snapshot.lastEodDate;
     this.seq = snapshot.seq;
+    // Loan-default state is not yet persisted (Task 5) — clear any left over from
+    // a prior in-session game; an outstanding loan re-seeds it lazily at next EOD.
+    this.loanDefaults.clear();
+    this.loanOwedAtLastDue.clear();
   }
 
   /**
@@ -126,6 +154,8 @@ export class BankingService {
     this.currentDate = 0;
     this.lastEodDate = null;
     this.seq = 0;
+    this.loanDefaults.clear();
+    this.loanOwedAtLastDue.clear();
   }
 
   /** Convenience read-through to the ledger balance. */
@@ -222,6 +252,11 @@ export class BankingService {
       ],
     });
     this.postAndEmit(entry);
+    // A fresh loan opens current: the first installment falls due one EOD day
+    // later, and the baseline owed is the principal just disbursed (so the first
+    // overdue check can tell a serviced loan from one in arrears).
+    this.loanDefaults.set(cmd.loanAccountId, newLoanDefaultState(date + 1));
+    this.loanOwedAtLastDue.set(cmd.loanAccountId, cmd.amount);
   }
 
   private handleRunEndOfDay(cmd: RunEndOfDayCommand): void {
@@ -231,6 +266,9 @@ export class BankingService {
     // double interest, no spurious statement, no date roll).
     if (this.lastEodDate !== null && date <= this.lastEodDate) return;
 
+    // Drive each loan's default machine first (seizure + arrears bookkeeping) so a
+    // freshly-missed loan accrues *this* day's interest at the penalty rate.
+    this.processLoanDefaults(date);
     this.accrueDailyInterest(date);
 
     // Cut statements for the customer accounts, mark the day closed, and roll
@@ -271,7 +309,12 @@ export class BankingService {
         glAccountId = INTERNAL_ACCOUNTS.INTEREST_EXPENSE;
         reason = "EOD: проценты по вкладу";
       } else if (account.type === AccountType.LOAN) {
-        rate = this.loanDailyRate;
+        // An overdue loan accrues at the penalty rate (the default machine flips
+        // penaltyActive on a missed due); a current one at the base rate.
+        const state = this.loanDefaults.get(account.id);
+        rate = state
+          ? penaltyDailyRate(this.loanDailyRate, state)
+          : this.loanDailyRate;
         glAccountId = INTERNAL_ACCOUNTS.INTEREST_INCOME;
         reason = "EOD: проценты по кредиту";
       } else {
@@ -291,6 +334,128 @@ export class BankingService {
         reason,
       });
     }
+  }
+
+  /**
+   * Drive every outstanding loan's default machine one EOD step, *before* interest
+   * accrues, for each loan whose scheduled payment has fallen due as of `date`:
+   *
+   *  - A **serviced** loan (the balance owed fell since its last due — the borrower
+   *    repaid more than the period's interest) clears arrears ({@link recordScheduledPayment})
+   *    and advances the due, with no seizure.
+   *  - Otherwise the loan is in **arrears**: the bank seizes opportunistically
+   *    ({@link seizeTowardLoan}) toward the debt. If that retires the loan the
+   *    arrears clear; if not, the miss is recorded ({@link recordMissedDue}) — the
+   *    penalty rate switches on and, at the policy threshold, the loan defaults and
+   *    a single `LoanDefaulted` event is published for the game's reputation sanction.
+   *
+   * All money movement is balanced bus traffic; the GL stays balanced throughout.
+   */
+  private processLoanDefaults(date: number): void {
+    const loans = this.ledger
+      .listAccounts()
+      .filter((a) => a.type === AccountType.LOAN);
+    for (const loan of loans) {
+      let outstanding = -this.ledger.balanceOf(loan.id, date);
+      if (outstanding <= BALANCE_EPSILON) continue; // nothing owed → no arrears
+
+      let state = this.loanDefaults.get(loan.id);
+      if (!state) {
+        // A loan with no tracked state (e.g. restored from a pre-default save):
+        // open it current with a one-day grace, baselined at today's balance.
+        state = newLoanDefaultState(date + 1);
+        this.loanDefaults.set(loan.id, state);
+        this.loanOwedAtLastDue.set(loan.id, outstanding);
+      }
+      if (!isPaymentOverdue(state, date)) continue; // not yet due
+
+      const prevOwed = this.loanOwedAtLastDue.get(loan.id) ?? outstanding;
+      const before = state;
+      let after: LoanDefaultState;
+      if (outstanding < prevOwed - BALANCE_EPSILON) {
+        // Serviced: the borrower paid the debt down since the last due. No seizure.
+        after = recordScheduledPayment(state);
+      } else {
+        // In arrears: seize what we can from the current account toward the loan.
+        if (loan.ownerId) {
+          this.seizeTowardLoan(loan.ownerId, loan.id, outstanding, date);
+        }
+        outstanding = -this.ledger.balanceOf(loan.id, date);
+        // A sub-credit residual can't be cleared by a whole-credit seizure — write
+        // it off (mirrors the Bank UI's forgiveLoanResidual) so a borrower who
+        // *did* have the funds closes cleanly instead of being dinged for the dust.
+        if (outstanding > BALANCE_EPSILON && outstanding < 1) {
+          this.writeOffLoanResidual(loan.id, outstanding, date);
+          outstanding = -this.ledger.balanceOf(loan.id, date);
+        }
+        after =
+          outstanding <= BALANCE_EPSILON
+            ? recordScheduledPayment(state) // seizure caught the loan up
+            : recordMissedDue(state);
+      }
+      this.loanDefaults.set(loan.id, after);
+      this.loanOwedAtLastDue.set(loan.id, Math.max(outstanding, 0));
+      if (enteredDefault(before, after)) {
+        this.bus.publish({
+          kind: "LoanDefaulted",
+          ownerId: loan.ownerId ?? loan.id,
+          loanAccountId: loan.id,
+          missedPayments: after.missedPayments,
+          outstanding,
+        });
+      }
+    }
+  }
+
+  /**
+   * Seize whole credits from `ownerId`'s current account toward their overdue
+   * loan: a balanced `Transfer` of `min(available, outstanding)` floored to whole
+   * credits, so the integer-only current account stays whole and never goes
+   * negative. A no-op when the current account is missing, empty, or under a credit.
+   */
+  private seizeTowardLoan(
+    ownerId: string,
+    loanId: string,
+    outstanding: number,
+    date: number,
+  ): void {
+    const currentId = currentAccountId(ownerId);
+    if (!this.ledger.hasAccount(currentId)) return;
+    const available = Math.max(this.ledger.balanceOf(currentId, date), 0);
+    const seize = Math.floor(Math.min(available, outstanding));
+    if (seize < 1) return;
+    this.bus.dispatch({
+      kind: "Transfer",
+      fromAccountId: currentId,
+      toAccountId: loanId,
+      amount: seize,
+      reason: "Списание по просроченному кредиту",
+      date,
+    });
+  }
+
+  /**
+   * Write off a sub-credit loan residual against the bank's interest income — a
+   * balanced 2-leg entry on the loan + GL only (the current account is untouched,
+   * so the whole-number `player.credits` projection stays integral). Inlined here
+   * (mirrors the products layer's forgiveLoanResidual) so the core need not depend
+   * on the retail products above it.
+   */
+  private writeOffLoanResidual(
+    loanId: string,
+    residual: number,
+    date: number,
+  ): void {
+    if (residual <= 0) return;
+    this.bus.dispatch({
+      kind: "PostTransaction",
+      reason: "EOD: списание остатка по кредиту",
+      date,
+      postings: [
+        { accountId: loanId, amount: residual },
+        { accountId: INTERNAL_ACCOUNTS.INTEREST_INCOME, amount: -residual },
+      ],
+    });
   }
 
   /**

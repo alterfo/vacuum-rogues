@@ -91,12 +91,12 @@ the ABS prototype's "thin core-banking" guardrail.
   loss; auto-seize from current account when funds arrive — via the bus)
 - Create: src/tests/banking/loanDefaultEod.test.ts
 
-- [ ] EOD applies the penalty rate to an overdue loan and triggers reputation loss once per default
-- [ ] seizure posts a balanced transfer (current → loan) capped at available funds; never makes
+- [x] EOD applies the penalty rate to an overdue loan and triggers reputation loss once per default
+- [x] seizure posts a balanced transfer (current → loan) capped at available funds; never makes
       `player.credits` negative; GL stays balanced
-- [ ] ⚠️ existing banking/economy tests must stay green — if any reds, STOP and fix the posting
-- [ ] write tests: EOD penalty math; seizure capped + balanced; books balanced after default EOD
-- [ ] run affected tests + full banking suite — must pass before next task
+- [x] ⚠️ existing banking/economy tests must stay green — if any reds, STOP and fix the posting
+- [x] write tests: EOD penalty math; seizure capped + balanced; books balanced after default EOD
+- [x] run affected tests + full banking suite — must pass before next task
 
 ### Task 5: Block new loans on default + persist loan-default state
 **Files:**
