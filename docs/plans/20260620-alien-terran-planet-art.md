@@ -77,10 +77,10 @@ on the GPU host as a manual follow-up (ralphex cannot drive ComfyUI).
   palette + anti-Earth negatives; raise `variants`)
 - Modify: src/tests/assets/terranPromptAlien.test.ts (extend to the `planets` category)
 
-- [ ] rewrite the terran `planets` (globe) axis to the same alien direction; keep the template/
+- [x] rewrite the terran `planets` (globe) axis to the same alien direction; keep the template/
       framing (single centered globe) unchanged
-- [ ] write tests: `planets` terran axis alien + no Earth tokens
-- [ ] run affected tests — must pass before next task
+- [x] write tests: `planets` terran axis alien + no Earth tokens
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Variant-selection guard + variety test
 **Files:**

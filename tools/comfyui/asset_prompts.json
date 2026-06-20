@@ -28,15 +28,15 @@
     },
     "planets": {
       "size": [1024, 1024],
-      "variants": 6,
+      "variants": 8,
       "alpha": true,
       "circle": true,
       "template": "A single complete planet rendered as a perfect circle, the entire globe centered and fully surrounded by empty space with nothing around it and nothing below it, {type}, soft directional sunlight from one side, plain flat uniform neutral grey background, studio product shot of a planet globe, sharp focus, highly detailed",
-      "negative": "clouds outside the planet, mist, fog, haze, waves, ocean below, platform, pedestal, base, stand, ground, surface below the planet, foreground, two planets, multiple planets, second planet, moon, spaceship, partial planet, cropped sphere, bottom cut off",
+      "negative": "clouds outside the planet, mist, fog, haze, waves, ocean below, platform, pedestal, base, stand, ground, surface below the planet, foreground, two planets, multiple planets, second planet, moon, spaceship, partial planet, cropped sphere, bottom cut off, Earth, planet Earth, recognizable Earth continents, real-world map, blue marble, satellite photo of Earth, Africa, Americas, real-world coastlines",
       "name_order": ["type"],
       "axes": {
         "type": {
-          "terrestrial": "blue oceans, white swirling clouds, green and brown continents",
+          "terrestrial": "an alien yet habitable living world, exotic oceans of turquoise, emerald, indigo and wine liquid, continents cloaked in crimson, violet, amber-gold and cyan alien vegetation, unfamiliar jagged coastlines and scattered archipelagos and crystalline shelves, drifting lavender and pale-green clouds, otherworldly biosphere globe",
           "gas": "banded gas giant with a great swirling storm spot, orange and cream bands",
           "ice": "white and pale-cyan frozen world with cracked ice and frost",
           "volcanic": "black basalt surface with glowing orange lava rivers and fissures",
