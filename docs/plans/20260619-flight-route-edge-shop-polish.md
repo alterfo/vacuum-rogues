@@ -98,10 +98,20 @@ Three independent polish fixes:
       passed; lint 0 errors; `tsc --noEmit` clean)
 
 ### Task 4: Verify acceptance criteria
-- [ ] verify Overview: drawn route matches the flight path; no system-edge ring; clear shop label
-- [ ] visually verify all three via screenshot
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing test assertions changed
+- [x] verify Overview: drawn route matches the flight path; no system-edge ring; clear shop label —
+      each is covered by an automated test green in this run: route↔physics single-source
+      (`src/tests/flight/routeMatchesPath.test.ts`), boundary ring hidden
+      (`src/tests/presentation/orbitRenderer.test.ts` "does not highlight the system edge"), and the
+      actionable owned-gear label (`src/tests/equipment/shopOwnedLabel.test.ts` + e2e regression
+      "owned-uninstalled gear shows in the ТРЮМ")
+- [x] visually verify all three via screenshot — skipped (not automatable; screenshots are unreliable
+      in this dev env per project memory). Behaviour is asserted at the unit/e2e level instead.
+- [x] run full unit suite — all green (229 files, 1978 tests passed);
+      `npm run test:e2e:regression` (23 passed); `npm run lint` clean (0 errors, only pre-existing
+      `any` warnings in unrelated quest test files)
+- [x] confirm no existing test assertions changed — the plan's three commits (single-source route,
+      hide ring, owned-gear label) touched test files with **0 deletions**; all test changes are
+      additive (two new files + one additive `orbitRenderer` test)
 
 ## Technical Details
 - **Single-source route:** the scene owns one `routePath`; both `ShipPhysics.setPath` and
