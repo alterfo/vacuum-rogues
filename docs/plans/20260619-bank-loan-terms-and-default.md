@@ -79,10 +79,10 @@ the ABS prototype's "thin core-banking" guardrail.
   flag, next-due business date — pure transitions)
 - Create: src/tests/banking/loanDefault.test.ts
 
-- [ ] model: on-time payment clears the due period; a missed due increments misses and activates the
+- [x] model: on-time payment clears the due period; a missed due increments misses and activates the
       penalty rate; ≥ N consecutive misses sets `defaulted`
-- [ ] write unit tests for every transition (on-time, one miss, penalty active, defaulted, recovery)
-- [ ] run affected tests — must pass before next task
+- [x] write unit tests for every transition (on-time, one miss, penalty active, defaulted, recovery)
+- [x] run affected tests — must pass before next task
 
 ### Task 4: Wire default into EOD — penalty accrual, reputation, seizure
 **Files:**
