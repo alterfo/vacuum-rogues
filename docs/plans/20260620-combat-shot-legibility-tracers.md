@@ -75,10 +75,10 @@ direction and attribution read at a glance — including with several combatants
   passes the right shooter coords for each combatant)
 - Create/Modify: src/tests/flight/combatTracerReadability.test.ts
 
-- [ ] player fire and enemy fire are visually distinct; multiple enemies firing produce separate
+- [x] player fire and enemy fire are visually distinct; multiple enemies firing produce separate
       attributable bolts (each from its own shooter position)
-- [ ] write tests: player vs enemy colour differs; N concurrent shots → N independent tracers
-- [ ] run affected tests — must pass before next task
+- [x] write tests: player vs enemy colour differs; N concurrent shots → N independent tracers
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Verify acceptance criteria
 - [ ] verify Overview: shots clearly read shooter→target, colour-coded, with muzzle + impact cues

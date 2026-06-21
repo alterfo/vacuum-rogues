@@ -52,8 +52,25 @@ const FLASH_TTL_MS = 220;
 export const TRACER_TRAVEL_MS = 130;
 /** Length (world px) of the bright streak trailing behind the bolt head. */
 const TRACER_STREAK_LEN = 26;
+// Player fire is a saturated cyan-green, enemy fire a hot red-orange: opposite
+// ends of the spectrum so attribution reads instantly even with several bolts
+// crossing at once. Kept clearly distinct in hue *and* channel balance
+// (player favours green/cyan, enemy red) — see combatTracerReadability.test.ts.
 export const PLAYER_FLASH_COLOR = 0x66ffcc;
 export const NPC_FLASH_COLOR = 0xff5544;
+/**
+ * White-hot core drawn over the coloured streak/head/impact. A bright neutral
+ * centre lifts every bolt off the star field (the coloured halo alone can wash
+ * out against bright nebula/star pixels) without a per-frame BlurFilter
+ * (see feedback-no-blur-filters-flight) — the halo carries the side's hue.
+ */
+const TRACER_CORE_COLOR = 0xffffff;
+/** Outer coloured glow width (world px) — the wide, soft side-coloured halo. */
+const TRACER_HALO_WIDTH = 6;
+/** Coloured bolt body width (world px) — the solid side-coloured streak. */
+const TRACER_BODY_WIDTH = 3;
+/** White-hot centre-line width (world px) — the legibility core over the halo. */
+const TRACER_CORE_WIDTH = 1.4;
 
 /** Live state for one in-flight tracer (a single shot shooter→target). */
 interface FlashState {
@@ -338,12 +355,15 @@ export class CombatHud {
   }
 
   /**
-   * Redraw one tracer for its current age. Travel phase: a bright streak whose
-   * head sits at the interpolated position with a short tail trailing back
-   * toward the shooter (so the eye reads the direction of travel) plus a muzzle
+   * Redraw one tracer for its current age. Travel phase: a layered streak — a
+   * wide side-coloured halo, a solid coloured body and a white-hot centre line —
+   * whose head sits at the interpolated position with a short tail trailing back
+   * toward the shooter (so the eye reads the direction of travel), plus a muzzle
    * glow that fades as the bolt leaves the source. Impact phase: an expanding
-   * ring + core blooming at the target, fading over the remaining lifetime.
-   * Graphics primitives only — no BlurFilter.
+   * coloured ring + a white-hot core blooming at the target, fading over the
+   * remaining lifetime. The wide halo + bright neutral core make each bolt read
+   * over the star field, and the opposed player/enemy hues make attribution
+   * unmistakable. Graphics primitives only — no BlurFilter.
    */
   private drawFlash(f: FlashState): void {
     const color = f.fromPlayer ? PLAYER_FLASH_COLOR : NPC_FLASH_COLOR;
@@ -359,18 +379,42 @@ export class CombatHud {
       const tailLen = Math.min(TRACER_STREAK_LEN, travelled);
       const tailX = head.x - (dx / len) * tailLen;
       const tailY = head.y - (dy / len) * tailLen;
+      // Three stacked strokes (wide soft halo → coloured body → white core) so
+      // the bolt stands proud of a bright star field without any blur filter.
       g.moveTo(tailX, tailY)
         .lineTo(head.x, head.y)
-        .stroke({ color, width: 3, alpha: 0.95 });
-      g.circle(head.x, head.y, 3).fill({ color, alpha: 1 }); // bolt head
-      const muzzleAlpha = 0.85 * (1 - f.age / TRACER_TRAVEL_MS);
-      g.circle(f.from.x, f.from.y, 4).fill({ color, alpha: muzzleAlpha });
+        .stroke({ color, width: TRACER_HALO_WIDTH, alpha: 0.4 });
+      g.moveTo(tailX, tailY)
+        .lineTo(head.x, head.y)
+        .stroke({ color, width: TRACER_BODY_WIDTH, alpha: 0.95 });
+      g.moveTo(tailX, tailY)
+        .lineTo(head.x, head.y)
+        .stroke({
+          color: TRACER_CORE_COLOR,
+          width: TRACER_CORE_WIDTH,
+          alpha: 0.85,
+        });
+      g.circle(head.x, head.y, 4).fill({ color, alpha: 1 }); // bolt head halo
+      g.circle(head.x, head.y, 1.8).fill({
+        color: TRACER_CORE_COLOR,
+        alpha: 0.95,
+      }); // hot core
+      const muzzleAlpha = 0.9 * (1 - f.age / TRACER_TRAVEL_MS);
+      g.circle(f.from.x, f.from.y, 6).fill({
+        color,
+        alpha: muzzleAlpha * 0.45,
+      });
+      g.circle(f.from.x, f.from.y, 3).fill({ color, alpha: muzzleAlpha });
     } else {
       const k = (f.age - TRACER_TRAVEL_MS) / (FLASH_TTL_MS - TRACER_TRAVEL_MS); // 0→1
       const a = 1 - k;
-      const r = 5 + k * 6; // expanding ring
-      g.circle(f.to.x, f.to.y, r).fill({ color, alpha: 0.55 * a });
-      g.circle(f.to.x, f.to.y, r).stroke({ color, width: 2, alpha: a });
+      const r = 5 + k * 8; // expanding ring
+      g.circle(f.to.x, f.to.y, r).fill({ color, alpha: 0.5 * a });
+      g.circle(f.to.x, f.to.y, r).stroke({ color, width: 2.5, alpha: a });
+      g.circle(f.to.x, f.to.y, 2 + 2 * a).fill({
+        color: TRACER_CORE_COLOR,
+        alpha: 0.8 * a,
+      }); // hot core bloom
     }
   }
 
