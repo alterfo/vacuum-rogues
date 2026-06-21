@@ -90,6 +90,11 @@ describe("commsOptionsFor", () => {
     expect(opts).not.toContain("flee");
   });
 
+  it("neutral always offers attack (you can open fire on a neutral ship)", () => {
+    const npc = makeNpc({ role: NpcRole.TRADER });
+    expect(commsOptionsFor(npc, "neutral")).toContain("attack");
+  });
+
   it("hostile-other → fight or flee, never trade", () => {
     const npc = makeNpc({ role: NpcRole.PATROL, hostile: true });
     const opts = commsOptionsFor(npc, "hostile-other");

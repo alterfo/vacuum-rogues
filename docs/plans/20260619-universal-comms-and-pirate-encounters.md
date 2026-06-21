@@ -134,3 +134,29 @@ Make ship-to-ship communication a real interaction layer:
 **Manual verification:** fly near pirates and confirm an occasional "кошелёк или жизнь" hail; pay and
 watch them disengage (and credits drop by the tribute); refuse and fight; hail a neutral ship and
 hire it to attack a target; hail an Overmind ship and confirm only gibberish.
+
+## Known Limitations (post-review 2026-06-21)
+The pure decision logic, the universal window, the ABS payments, and the Overmind gibberish are all
+implemented and tested. Two behaviours are narrower than the Overview prose and need a follow-up
+decision before they match the design intent:
+
+1. **Hire/ally is paid but inert.** `offerHireContract` (`NpcShipManager`) charges the player via
+   `payHire` (money moves correctly through the bus) and sets `npc.goal = hireGoal(target)` +
+   `npc.activeQuestTarget = target.id`. But there is **no NPC-vs-NPC combat path** in the simulator
+   or `CombatModule` (aggression/pursuit/fire only ever target the player ship), and
+   `activeQuestTarget` is consumed only for RANGER quest completion against a *system* id — so the
+   hired ship never actually attacks the mark. The day-tick also recomputes `npc.goal`. Net: the
+   player pays for an effect that does not occur. Fix requires either implementing NPC-vs-NPC
+   engagement or not charging until that effect exists.
+2. **Pirate shakedown only fires for already-aggressive pirates.** The trigger in
+   `NpcShipManager.update()` is nested under `if (sprite.aggressive)`, and `wantsToShakedown`
+   early-returns false unless `npc.isAggressive()` (locked by `pirateShakedown.test.ts`:
+   "never demands from a non-hostile pirate"). In production a sprite is only `aggressive` via
+   garrison aggro (player inside an Overmind-captured system) or after the player attacks — so a
+   *passing* pirate in normal flight never demands tribute. Broadening to "passing pirates" is a
+   gameplay-balance change that would red the locked pure-function test, so it needs an explicit
+   decision (relax the gate + update the test, or spawn a fraction of wandering pirates hostile).
+
+**File-reference note:** the runtime wiring landed in `src/presentation/flight/NpcShipManager.ts`
+(not `SpaceFlightScene.ts`) and the Overmind gibberish in `src/systems/comms/commsOptions.ts`
+(not `DialogueScene.ts`); the per-task **Files** blocks above predate that and are stale.

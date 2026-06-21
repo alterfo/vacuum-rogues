@@ -212,6 +212,17 @@ function payPlayerToNpc(
     npc.credits = access.service.balanceOf(npcAccountId);
     return;
   }
+  // No bank wired (unit tests) → a direct mutation preserves the legacy delta.
+  // But a *present* `access` whose player account is missing means money is
+  // moving before `setupPlayerBanking` opened it: the fallback then silently
+  // desyncs `player.credits` from the ledger. That can only be a wiring bug, so
+  // make it loud in dev (mirrors {@link adjustPlayerCredits}).
+  if (__DEBUG__ && access) {
+    logger.warn(
+      `payPlayerToNpc: "${player.currentAccountId}" is not on the ledger; ` +
+        `direct-mutating credits (projection will desync — wire setupPlayerBanking first).`,
+    );
+  }
   player.credits -= amount;
   npc.credits += amount;
 }
