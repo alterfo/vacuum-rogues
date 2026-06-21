@@ -94,9 +94,9 @@ ransom *dialog/payment* is owned by the universal-comms plan (this plan decides 
   incl. pirates via the matrix; capture-fleet expansion goal confirmed/retained)
 - Create: src/tests/npc/overmindAggression.test.ts
 
-- [ ] Overmind attacks every non-Overmind ship (player, trader, pirate, Ranger); its capture goal persists
-- [ ] write tests: overmind targets a pirate + a trader + the player; capture cadence intact
-- [ ] run affected tests — must pass before next task
+- [x] Overmind attacks every non-Overmind ship (player, trader, pirate, Ranger); its capture goal persists
+- [x] write tests: overmind targets a pirate + a trader + the player; capture cadence intact
+- [x] run affected tests — must pass before next task
 
 ### Task 5: Cross-faction combat (off-screen + in-flight)
 **Files:**

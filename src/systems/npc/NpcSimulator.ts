@@ -16,7 +16,11 @@ import { Faction } from "@/types/faction";
 import { GAME_BALANCE } from "@/config/balance";
 import type { NpcBrain } from "./NpcBrain";
 import { RuleBasedNpcBrain, selectPirateTarget } from "./NpcBrain";
-import { factionKindOf, pirateCoordination } from "./factionHostility";
+import {
+  factionKindOf,
+  isHostile,
+  pirateCoordination,
+} from "./factionHostility";
 import { npcOrbitStep, advanceNpcOrbit } from "./npcPlacement";
 import { logger } from "@/utils/logger";
 import {
@@ -1172,12 +1176,15 @@ export class NpcSimulator {
   }
 
   /**
-   * Off-screen combat between a captured system's standing garrison and friendly
-   * NPCs that have wandered into it. Mirrors {@link resolveOffscreenCombat}'s
+   * Off-screen combat between a captured system's Overmind garrison and any ship
+   * that has wandered into it. Mirrors {@link resolveOffscreenCombat}'s
    * wandering-pirate path for garrison ships (which are otherwise isolated from
-   * abstract combat): in any hostile system (other than the player's) where a
-   * garrison ship shares space with a friendly (non-garrison, non-OVERMIND,
-   * non-pirate) NPC, the garrison attacks. The caller resets FIGHTING survivors.
+   * abstract combat): in any hostile system (other than the player's) where an
+   * Overmind garrison ship shares space with any non-garrison ship the matrix
+   * marks it hostile to, the garrison attacks. The Overmind is **indiscriminate**
+   * (Task 4) — its prey are every non-Overmind kind via {@link isHostile},
+   * **including a wandering pirate** (the Overmind and pirates are mutual enemies),
+   * not just friendly traders/rangers. The caller resets FIGHTING survivors.
    *
    * Victim selection draws from a private day-seeded RNG (not the main tick RNG)
    * so adding garrison combat never shifts the deterministic main stream.
@@ -1200,17 +1207,21 @@ export class NpcSimulator {
     }
 
     for (const ships of bySystem.values()) {
-      // Only OVERMIND garrison Dominators engage friendly NPCs off-screen; pirate
-      // garrisons stay fully isolated (as before Task 5), so a captured pirate
-      // system's deterministic convoy/quest streams are never perturbed.
+      // Only OVERMIND garrison Dominators engage off-screen here; pirate
+      // garrisons stay fully isolated, so a captured pirate system's
+      // deterministic convoy/quest streams are never perturbed.
       const garrison = ships.filter(
         (s) => this.garrisonIds.has(s.id) && s.faction === Faction.OVERMIND,
       );
+      // Indiscriminate Overmind aggression (Task 4): every non-garrison ship the
+      // hostility matrix marks an Overmind attacker hostile to — that is every
+      // non-Overmind kind, **including a wandering pirate** (mutual enemies), not
+      // only friendly traders/rangers. One source of truth (the matrix), no
+      // re-derived relation logic.
       const victims = ships.filter(
         (s) =>
           !this.garrisonIds.has(s.id) &&
-          s.faction !== Faction.OVERMIND &&
-          s.role !== NpcRole.PIRATE,
+          isHostile("overmind", factionKindOf(s), { pirateRep: 0 }),
       );
       if (garrison.length === 0 || victims.length === 0) continue;
 
@@ -1223,13 +1234,18 @@ export class NpcSimulator {
         attacker.state = NpcState.FIGHTING;
         victim.state = NpcState.FIGHTING;
 
+        // The entrenched home-turf garrison swats the lone intruder: it deals
+        // damage but takes **no erosive retaliation** in this abstract off-screen
+        // resolution. The garrison is a standing, auto-replenished defensive
+        // force meant to hold its captured system indefinitely — letting one or
+        // two wanderers grind it down over weeks would break that
+        // standing-garrison persistence invariant (garrison ships are otherwise
+        // isolated and must not be whittled out of existence by random traffic).
+        // Now that the Overmind preys on every intruder including pirates
+        // (damage 30, common wanderers), this keeps the garrison stable.
         victim.hullHP -= Math.max(
           1,
           Math.round(attacker.damage * PIRATE_DAMAGE_FRACTION),
-        );
-        attacker.hullHP -= Math.max(
-          1,
-          Math.round(victim.damage * VICTIM_RETALIATION_FRACTION),
         );
 
         if (victim.hullHP <= 0) {
@@ -1238,10 +1254,6 @@ export class NpcSimulator {
           logger.info(
             `Garrison ${attacker.name} destroyed ${victim.name} in ${attacker.currentSystemId}`,
           );
-        }
-        if (attacker.hullHP <= 0) {
-          attacker.hullHP = 0;
-          attacker.state = NpcState.DEAD;
         }
       }
     }
