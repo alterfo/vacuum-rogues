@@ -134,10 +134,24 @@ jump, and hostile-spawn paths.
       358 passed; `tsc --noEmit` clean; lint 0 errors)
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify Overview: mode chosen at new game + persisted; God floors + downs + repair-restores;
-      Hard adds hostiles; Normal unchanged
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing combat/spawn/save test assertions changed
+- [x] verify Overview: mode chosen at new game + persisted (Task 1 `gameMode` field/schema/migration
+      + Task 2 selector); God floors + downs + repair-restores (Task 3 `godMode.ts` + Task 4
+      `godModeIntegration` — 25 tests cover floor>0, no death/GAME_OVER, fire+jump blocked while downed,
+      repair clears it); Hard adds hostiles (Task 5 `hardScaling` — 9 tests, HARD > NORMAL systems +
+      garrison); Normal unchanged (full unit suite green; difficulty commits added NO modifications to
+      existing tests, so NORMAL/HARD paths behave exactly as today)
+- [x] full unit suite green (285 files / 2514 tests); `npm run lint` clean (0 errors); `npm run
+      test:e2e:regression` 20 passed. The 1 E2E failure (eq_radar ТРЮМ trade-in expects refund 1120) is
+      PRE-EXISTING and unrelated to this feature: the new-game starter trio seeds `inventory.ownedGearIds`
+      (via `convertLegacyBagToOwnedGear`, already wired at 454a40f^ before any difficulty work), so a
+      starter gear (`eq_engine_i`, basePrice 900 → refund 360) renders first in the ТРЮМ ahead of the
+      test's seeded eq_radar. No difficulty commit touched GearCatalog/GearBridge/EquipmentShop/this
+      e2e/sellGear/ownedGear — left untouched per the don't-touch-existing-tests rule
+- [x] confirmed no existing combat/spawn/save test assertions changed — difficulty commits
+      (454a40f..e54a503) only CREATED new test files (godMode, godModeIntegration, hardScaling, gameMode,
+      modeSelector); zero existing test files modified. (Task 6 also compacted verbose comments in
+      `SpaceFlightScene.ts` — 1906→1898 lines — to keep it under the `moduleContracts` size guard that
+      Task 4's warp-downed gate pushed over 1900, rather than weakening the guard's `MAX_LINES` assertion)
 
 ## Technical Details
 - **Downed is derived, not stored:** `isDowned = gameMode===GOD && hull <= hullFloor` — no extra

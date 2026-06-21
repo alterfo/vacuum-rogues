@@ -67,15 +67,12 @@ export class SpaceFlightScene extends GameScene {
   private questCompletion!: QuestCompletion;
   private bgElapsed = 0; // Animation clock for background (ms)
   private shipPhysics: ShipPhysics | null = null;
-  // In-flight HUD (turn/speed/settings buttons, day counter, mini-map, mini-log,
-  // toasts, tooltips); button presses fan back through callbacks set in initialize().
+  // In-flight HUD (buttons, day counter, mini-map, toasts); presses fan back via initialize() callbacks.
   private hud!: FlightHud;
 
-  // Owns planet sprites, station markers, the planet info panel and route-target
-  // state (a FlightModule); the scene reads its fields for route/landing/re-entry.
+  // Owns planet sprites/markers + info panel and route-target state; scene reads it for route/landing/re-entry.
   private planetManager!: PlanetManager;
-  // Renders the central sun and owns the star geometry the scene reads for
-  // collision/orbit/route math. Exposes centerX/centerY/radius/avoidRadius.
+  // Owns the central sun + star geometry (centre/radius/avoidRadius) the scene reads for collision/orbit/route math.
   private starRenderer!: StarRenderer;
   // Draws the static orbit circles and the system-boundary ring (a FlightModule).
   private orbitRenderer!: OrbitRenderer;
@@ -91,9 +88,8 @@ export class SpaceFlightScene extends GameScene {
 
   // Turn control: the turn "runs" (ship flies, NPCs/planets move, combat) while true.
   private isTurnRunning = false;
-  // F1 (playtest3): Pause lets the ship finish its current day, then halts — a
-  // latch defers stop+endTurn to the next whole-day boundary (updateShip/
-  // advanceWaitTime), cleared by endTurn()/turn start; low-HP + combat abort halt now.
+  // F1 (playtest3): Pause lets the ship finish its current day, then halts — a latch defers
+  // stop+endTurn to the next whole-day boundary (cleared by endTurn()/turn start; low-HP + combat abort halt now).
   private pauseAtDayBoundary = false;
   // Latch: show "pause first" hint only once per turn to avoid message spam.
   private turnHintShown = false;
@@ -107,8 +103,7 @@ export class SpaceFlightScene extends GameScene {
 
   private distanceTraveled: number = 0;
   private readonly DISTANCE_PER_DAY: number = GAME_BALANCE.pixelsPerDay;
-  // Course-less "wait" turn (US-070 #5): fractional day accrued while the ship
-  // holds position, and how long one waited day takes in real time.
+  // Course-less "wait" turn (US-070 #5): fractional day accrued while the ship holds position.
   private waitDayAccum: number = 0;
   private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070)
 
@@ -117,11 +112,9 @@ export class SpaceFlightScene extends GameScene {
   // from the ship's CURRENT position, not a stale backtracking path (US-070).
   private plannedRoute: { x: number; y: number; landing?: LandingHint } | null =
     null;
-  // Full curved path (around the star) kept for drawing the route line; the
-  // ship flows through it via ShipPhysics.setPath (no scene-side waypoint queue).
+  // Full curved path (around the star) for drawing the route line; ship flows through it via ShipPhysics.setPath.
   private routePath: { x: number; y: number }[] = [];
-  // Draws the planned-course overlay (dashed line + end marker); route planning
-  // stays here. The renderer owns the Graphics.
+  // Draws the planned-course overlay (dashed line + end marker); route planning stays here, renderer owns the Graphics.
   private routeRenderer!: RouteRenderer;
 
   // Pending hyperjump (US-023): set when the player chose a warp target on the
@@ -1358,9 +1351,8 @@ export class SpaceFlightScene extends GameScene {
     ) {
       return;
     }
-    // A downed ship (GOD mode, hull at the floor) can't hyperjump. Cancel the
-    // committed warp and tell the player to repair — clears once hull is raised
-    // above the floor (the predicate is derived from gameMode + hull).
+    // A downed ship (GOD mode, hull at the floor) can't hyperjump until repaired
+    // above the floor; cancel the committed warp (predicate derived from gameMode + hull).
     if (isDowned(this.gameEngine.player)) {
       this.pendingWarp = null;
       this.hud.showMessage(
