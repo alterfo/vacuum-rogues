@@ -300,6 +300,111 @@ export function micromoduleTargetCategory(
   return (microModuleById(id) ?? hullMicroModuleById(id))?.targetCategory;
 }
 
+// ── Drag-and-drop micromodule fitting (overhaul Task 6) ──────────────────────
+
+/**
+ * Where a dragged micromodule was dropped: onto a fitted gear slot (by flat slot
+ * index, so the exact clicked copy is targeted with duplicate gear) or onto the
+ * hull's own micromodule bank.
+ */
+export type MicromoduleDropTarget =
+  | { readonly kind: "gear"; readonly slotIndex: number }
+  | { readonly kind: "hull" };
+
+/**
+ * The outcome of dropping a micromodule on a target — `"ok"` means it fits and
+ * (for {@link applyMicromoduleDrop}) was applied; every other value is a reject
+ * reason the UI turns into a clear hint via {@link micromoduleDropHint}.
+ */
+export type MicromoduleDropOutcome =
+  | "ok"
+  | "unknown" // not a real micromodule id
+  | "no-target" // dropped on an empty/invalid gear slot
+  | "wrong-category" // module category ≠ what the target accepts
+  | "occupied" // gear slot already holds a micromodule (one per item)
+  | "hull-full" // no free hull micromodule slot
+  | "incompatible"; // rejected by the ship's faction
+
+/**
+ * Pure decision for a drag-drop: does `micromoduleId` fit `target` on `loadout`?
+ * Reuses the canonical accessors — `micromoduleTargetCategory` /
+ * `gearMicromoduleCategory` for the slot-vs-category match, the loadout's hull
+ * bank counts for slot limits, and `loadout.isMicromoduleCompatible` for the
+ * faction gate — so there is no new fit logic, only routing the existing rules
+ * to a structured reason. The apply methods (`applyMicromoduleAt` /
+ * `applyMicromodule`) do NOT themselves check the module *category*, so this
+ * gate is load-bearing: it stops a weapon module landing on the hull, or a hull
+ * module on a weapon.
+ */
+export function evaluateMicromoduleDrop(
+  loadout: ShipLoadout,
+  target: MicromoduleDropTarget,
+  micromoduleId: string,
+): MicromoduleDropOutcome {
+  const category = micromoduleTargetCategory(micromoduleId);
+  if (category === undefined) return "unknown";
+  if (!loadout.isMicromoduleCompatible(micromoduleId)) return "incompatible";
+
+  if (target.kind === "hull") {
+    if (category !== ModuleCategory.HULL) return "wrong-category";
+    if (loadout.hullMicromodules().length >= loadout.hullMicromoduleSlots()) {
+      return "hull-full";
+    }
+    return "ok";
+  }
+
+  // Gear slot.
+  const slot = loadout.installedSlots()[target.slotIndex];
+  if (!slot) return "no-target";
+  const gear = gearById(slot.gearId);
+  if (!gear) return "no-target";
+  if (slot.micromoduleId) return "occupied";
+  if (gearMicromoduleCategory(gear) !== category) return "wrong-category";
+  return "ok";
+}
+
+/**
+ * Evaluate then apply a drag-dropped micromodule. On `"ok"` it mutates the
+ * loadout via the canonical apply method for the target kind; otherwise it
+ * leaves the loadout untouched and returns the reject reason. The caller
+ * consumes the micromodule from inventory only when this returns `"ok"`.
+ */
+export function applyMicromoduleDrop(
+  loadout: ShipLoadout,
+  target: MicromoduleDropTarget,
+  micromoduleId: string,
+): MicromoduleDropOutcome {
+  const outcome = evaluateMicromoduleDrop(loadout, target, micromoduleId);
+  if (outcome !== "ok") return outcome;
+  const applied =
+    target.kind === "hull"
+      ? loadout.applyMicromodule(loadout.hull.id, micromoduleId)
+      : loadout.applyMicromoduleAt(target.slotIndex, micromoduleId);
+  // evaluate already proved the slot/faction/category — a false here would be a
+  // logic drift between the two, so surface it rather than silently swallow it.
+  return applied ? "ok" : "no-target";
+}
+
+/** Player-facing Russian hint for a rejected micromodule drop. */
+export function micromoduleDropHint(outcome: MicromoduleDropOutcome): string {
+  switch (outcome) {
+    case "ok":
+      return "Микромодуль установлен";
+    case "unknown":
+      return "Неизвестный микромодуль";
+    case "no-target":
+      return "Перетащите на установленный модуль или корпус";
+    case "wrong-category":
+      return "Микромодуль не подходит к этому слоту";
+    case "occupied":
+      return "В этом модуле уже есть микромодуль";
+    case "hull-full":
+      return "Нет свободных слотов корпуса";
+    case "incompatible":
+      return "Фракция корабля отвергает этот микромодуль";
+  }
+}
+
 /** Badge colour per gear kind. */
 export const KIND_COLOR: Record<GearKind, number> = {
   [GearKind.HULL]: 0x88ccff,

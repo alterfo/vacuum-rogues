@@ -438,6 +438,17 @@ export class ShipLoadout {
     return true;
   }
 
+  /**
+   * Public read of {@link micromoduleAccepted}: does this micromodule exist and
+   * is it compatible with the ship's faction? The drag-drop fitting (overhaul
+   * Task 6) needs to distinguish a faction-reject from a wrong-slot reject to
+   * show the right hint, so the evaluation in `GearBridge.evaluateMicromoduleDrop`
+   * reads the faction gate through this seam (the loadout owns the faction).
+   */
+  isMicromoduleCompatible(micromoduleId: string): boolean {
+    return this.micromoduleAccepted(micromoduleId);
+  }
+
   /** A micromodule exists in the catalog and is compatible with the ship's faction. */
   private micromoduleAccepted(micromoduleId: string): boolean {
     const mm = micromoduleById(micromoduleId);

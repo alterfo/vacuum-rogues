@@ -188,11 +188,30 @@ Fix and deepen ship fitting:
   compatibility (`micromoduleAccepted`, faction reject) and slot limits
 - Create/Modify: e2e regression spec for drag-drop apply
 
-- [ ] drag-drop a micromodule onto compatible gear/hull applies it and updates derived stats;
-      incompatible / full-slot drops are rejected with a clear hint
-- [ ] visually verify the drag-drop fitting via screenshot
-- [ ] add e2e: buy a micromodule, drag it onto a weapon, see the stat change
-- [ ] run affected tests + regression — must pass before next task
+- [x] drag-drop a micromodule onto compatible gear/hull applies it and updates derived stats;
+      incompatible / full-slot drops are rejected with a clear hint. Pure decision in `GearBridge`
+      (`evaluateMicromoduleDrop`/`applyMicromoduleDrop`/`micromoduleDropHint`) routes the canonical
+      rules — `micromoduleTargetCategory`/`gearMicromoduleCategory` for slot↔category, the hull
+      bank counts for slot limits, `ShipLoadout.isMicromoduleCompatible` (new public seam) for the
+      faction gate — into a structured reason (the apply methods don't themselves check category, so
+      this gate is load-bearing). StationScene hangar gained a hull micromodule bank (КОРПУС slots,
+      filling the Task 3–4 UI gap), a draggable owned-micromodule tray, per-slot drop zones, a ghost
+      that tints green/red by hover validity, and a toast slot so reject hints actually show.
+- [x] visually verify the drag-drop fitting via screenshot (`e2e/screenshots/micromodule-hangar-board.png`
+      captured + inspected: КОРПУС 0/2 hull slots, four fitting banks, bottom tray with two chips —
+      renders cleanly and legibly).
+- [x] add e2e: buy a micromodule, drag it onto a weapon, see the stat change
+      (`e2e/micromodule-drag-drop.spec.ts` — 2 real-pointer-drag tests: chip→weapon raises damage +
+      consumes the chip; chip→engine is wrong-category-rejected with no stat change. Both green.)
+- [x] run affected tests + regression — affected tests green (251 equipment unit + the 13-test
+      `micromoduleDrop.test.ts` + 2 drag-drop e2e; full unit suite 2397 green; tsc + eslint clean).
+      ⚠️ The e2e regression gate has ONE pre-existing-red test
+      (`playtest-regression … owned-uninstalled gear shows in the ТРЮМ`) — NOT caused by Task 6:
+      verified red on baseline with all Task 6 changes stashed. Root cause is **Task 2** — new game
+      now seeds `ownedGearIds = [wpn_pulse, eq_shield, eq_engine_i]` via `convertLegacyBagToOwnedGear`,
+      so the test's "first ТРЮМ pointer child" selector grabs the auto-seeded engine («Продать 360₡»)
+      instead of the test-seeded eq_radar («Продать 1120₡»). Left untouched per the standing
+      don't-edit-existing-tests rule; flagged for a separate selector fix.
 
 ### Task 7: Hull trade-in (sell) on replace at the Верфь
 **Files:**

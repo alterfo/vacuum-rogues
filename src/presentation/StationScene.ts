@@ -1,4 +1,10 @@
-import { Container, Graphics, Text } from "pixi.js";
+import {
+  Container,
+  Graphics,
+  Rectangle,
+  Text,
+  type FederatedPointerEvent,
+} from "pixi.js";
 import { scaledText } from "./ui/scaledText";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
@@ -33,6 +39,10 @@ import {
   KIND_LABEL,
   KIND_COLOR,
   applyLoadoutHullToShip,
+  evaluateMicromoduleDrop,
+  applyMicromoduleDrop,
+  micromoduleDropHint,
+  type MicromoduleDropTarget,
 } from "@/systems/equipment/GearBridge";
 import {
   sellGearPrice,
@@ -202,6 +212,37 @@ export class StationScene extends GameScene {
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
   /** Bribe paid this docking — gates are lifted for the duration of the visit. */
   private bribed = false;
+  /**
+   * Drop zones registered while the hangar renders (Task 6 drag-drop fitting):
+   * each fitted gear slot and each hull micromodule slot, in screen coords. A
+   * dropped micromodule chip hit-tests against these to find its target.
+   */
+  private dropZones: Array<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    target: MicromoduleDropTarget;
+  }> = [];
+  /** In-flight micromodule drag — the chip's module + the ghost following the pointer. */
+  private dragMicromodule: {
+    mm: MicroModule;
+    ghost: Container;
+    /** Ghost border/fill, re-tinted to signal a valid (green) / invalid (red) hover. */
+    bg: Graphics;
+    w: number;
+    h: number;
+  } | null = null;
+  private dragMoveHandler: ((e: FederatedPointerEvent) => void) | null = null;
+  private dragEndHandler: ((e: FederatedPointerEvent) => void) | null = null;
+  /** Screen rects of the draggable tray chips (drag *source*), for E2E. */
+  private chipRects: Array<{
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }> = [];
 
   constructor(renderer: Renderer) {
     super(renderer);
@@ -242,6 +283,8 @@ export class StationScene extends GameScene {
   update(_dt: number): void {}
 
   destroy(): void {
+    this.cancelMicromoduleDrag();
+    this.dropZones = [];
     if (this.toastTimeout) clearTimeout(this.toastTimeout);
     if (this.boundKeyDown) {
       window.removeEventListener("keydown", this.boundKeyDown);
@@ -1678,20 +1721,40 @@ export class StationScene extends GameScene {
 
     this.renderHangarStats(loadout, PX, PY, PW);
 
+    // The drag-drop fitting board (Task 6) re-registers its drop zones + chip
+    // source rects each render.
+    this.dropZones = [];
+    this.chipRects = [];
+
     const CW = PW - 36;
     const gap = 18;
     const leftW = Math.round((CW - gap) * 0.55);
+    // Reserve a strip along the bottom for the draggable micromodule tray, above
+    // the [Назад] button. The two columns clip to `contentBottom` as before.
+    const trayH = 64;
+    const trayY = PY + PH - 38 - trayH;
     const layout: HangarLayout = {
       leftX: PX + 18,
       leftW,
       rightX: PX + 18 + leftW + gap,
       rightW: CW - leftW - gap,
       contentTop: PY + 84,
-      contentBottom: PY + PH - 38,
+      contentBottom: trayY - 8,
     };
 
-    this.renderFittingBanks(layout, loadout, player);
+    // Hull micromodule bank sits atop the left column; the fitting banks flow
+    // below the y it consumes.
+    const banksTop = this.renderHullMicromoduleBank(layout, loadout);
+    this.renderFittingBanks(
+      { ...layout, contentTop: banksTop },
+      loadout,
+      player,
+    );
     this.renderWarehouseAndCargo(layout, loadout, player);
+    this.renderMicromoduleTray(PX + 18, trayY, PW - 36, trayH, player, loadout);
+
+    // Toast slot so drag-drop fit hints (and sell/unequip messages) show here.
+    this.addToastSlot(PX, PY, PW, PH);
 
     // Back button
     const backBtn = scaledText("[ ← Назад ]", 14, 0xb4c4d4, {
@@ -1855,6 +1918,17 @@ export class StationScene extends GameScene {
     slotBg.eventMode = "none";
     this.mainContainer!.addChild(slotBg);
 
+    // Drop target: a dragged micromodule released over this fitted item lands on
+    // its exact slot index (Task 6). Only empty slots accept one (one per item);
+    // a filled-slot drop is rejected with a hint by applyMicromoduleDrop.
+    this.dropZones.push({
+      x: leftX,
+      y,
+      w: leftW,
+      h: 34,
+      target: { kind: "gear", slotIndex: idx },
+    });
+
     const name = scaledText(`${gear.name} (T${gear.techLevel})`, 11, 0xb8e6c8, {
       rawColor: true,
       fontFamily: "monospace",
@@ -1937,6 +2011,357 @@ export class StationScene extends GameScene {
       }
       this.mainContainer!.addChild(mmBtn);
     }
+  }
+
+  // ── micromodule drag-drop fitting (Task 6) ──────────────────────────────────
+
+  /**
+   * The hull's own micromodule bank, rendered atop the left column as the drop
+   * target for hull micromodules (defense/cargo/energy-redirect). Shows each of
+   * the hull's 1–4 slots — fitted module name or "— свободно —" — and registers
+   * the whole bank as a single `{kind:"hull"}` drop zone. Returns the y below it
+   * so the fitting banks flow underneath. A null loadout renders nothing.
+   */
+  private renderHullMicromoduleBank(
+    layout: HangarLayout,
+    loadout: ShipLoadout | null,
+  ): number {
+    const { leftX, leftW, contentTop } = layout;
+    if (!loadout) return contentTop;
+    const slots = loadout.hullMicromoduleSlots();
+    const fitted = loadout.hullMicromodules();
+
+    const header = scaledText(
+      `КОРПУС — МИКРОМОДУЛИ  ${fitted.length}/${slots}`,
+      12,
+      fitted.length < slots ? 0x88ccaa : 0xddaa66,
+      { rawColor: true, fontFamily: "monospace" },
+    );
+    header.x = leftX;
+    header.y = contentTop;
+    header.eventMode = "none";
+    this.mainContainer!.addChild(header);
+
+    const rowY = contentTop + 20;
+    const chipH = 22;
+    const gap = 6;
+    const chipW = Math.floor((leftW - gap * (slots - 1)) / Math.max(1, slots));
+    for (let i = 0; i < slots; i++) {
+      const x = leftX + i * (chipW + gap);
+      const id = fitted[i];
+      const filled = !!id;
+      const chip = new Graphics();
+      chip
+        .rect(x, rowY, chipW, chipH)
+        .fill({ color: filled ? 0x1a2630 : 0x0a1218, alpha: 1 });
+      chip
+        .rect(x, rowY, chipW, chipH)
+        .stroke({ color: filled ? 0xffaa22 : 0x33557a, width: 1 });
+      chip.eventMode = "none";
+      this.mainContainer!.addChild(chip);
+
+      const label = scaledText(
+        filled ? (microModuleById(id)?.name ?? id) : "— свободно —",
+        9,
+        filled ? 0xffcc44 : 0x8aa0b4,
+        { rawColor: true, fontFamily: "monospace" },
+      );
+      label.anchor.set(0.5, 0.5);
+      label.x = x + chipW / 2;
+      label.y = rowY + chipH / 2;
+      label.eventMode = "none";
+      this.mainContainer!.addChild(label);
+    }
+
+    // One drop zone spanning the bank: applyMicromoduleDrop routes a HULL module
+    // into the next free slot (or rejects with "hull-full" when all are taken).
+    this.dropZones.push({
+      x: leftX,
+      y: rowY,
+      w: leftW,
+      h: chipH,
+      target: { kind: "hull" },
+    });
+
+    return rowY + chipH + 12;
+  }
+
+  /**
+   * The draggable owned-micromodule tray along the bottom of the hangar. Each
+   * owned micromodule is a chip the player drags onto a fitted item or the hull
+   * bank. Empty → a hint to buy them at a Центр крафта.
+   */
+  private renderMicromoduleTray(
+    px: number,
+    py: number,
+    pw: number,
+    ph: number,
+    player: Player,
+    loadout: ShipLoadout | null,
+  ): void {
+    const tray = new Graphics();
+    tray.rect(px, py, pw, ph).fill({ color: 0x070d14, alpha: 1 });
+    tray.rect(px, py, pw, ph).stroke({ color: 0x223344, width: 1 });
+    tray.eventMode = "none";
+    this.mainContainer!.addChild(tray);
+
+    const owned = player.inventory.micromodules;
+    const label = scaledText(
+      owned.length > 0
+        ? "МИКРОМОДУЛИ — перетащите на модуль или корпус:"
+        : "МИКРОМОДУЛИ — нет в наличии (купите в Центре крафта)",
+      11,
+      owned.length > 0 ? 0xffaa22 : 0x8aa0b4,
+      { rawColor: true, fontFamily: "monospace" },
+    );
+    label.x = px + 8;
+    label.y = py + 6;
+    label.eventMode = "none";
+    this.mainContainer!.addChild(label);
+
+    if (owned.length === 0 || !loadout) return;
+
+    const chipY = py + 28;
+    const chipH = 26;
+    const gap = 8;
+    let x = px + 8;
+    for (let i = 0; i < owned.length; i++) {
+      const mm = owned[i];
+      const text = `${mm.name}`;
+      const w = Math.min(220, 14 + text.length * 6.2);
+      if (x + w > px + pw - 8) {
+        // No more horizontal room — flag the overflow rather than clip silently.
+        const more = scaledText(`…+${owned.length - i}`, 11, 0x8aa0b4, {
+          rawColor: true,
+          fontFamily: "monospace",
+        });
+        more.x = x;
+        more.y = chipY + 6;
+        more.eventMode = "none";
+        this.mainContainer!.addChild(more);
+        break;
+      }
+      this.renderMicromoduleChip(mm, x, chipY, w, chipH);
+      x += w + gap;
+    }
+  }
+
+  /** One draggable micromodule chip in the tray. */
+  private renderMicromoduleChip(
+    mm: MicroModule,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ): void {
+    const chip = new Container();
+    chip.x = x;
+    chip.y = y;
+    const bg = new Graphics();
+    bg.rect(0, 0, w, h).fill({ color: 0x14202c, alpha: 1 });
+    bg.rect(0, 0, w, h).stroke({ color: 0xffaa22, width: 1 });
+    chip.addChild(bg);
+    const t = scaledText(mm.name, 10, 0xffcc44, {
+      rawColor: true,
+      fontFamily: "monospace",
+    });
+    t.anchor.set(0.5, 0.5);
+    t.x = w / 2;
+    t.y = h / 2;
+    t.eventMode = "none";
+    chip.addChild(t);
+
+    chip.eventMode = "static";
+    chip.cursor = "grab";
+    // hitArea so the all-`none` children don't prune the event boundary.
+    chip.hitArea = new Rectangle(0, 0, w, h);
+    chip.on("pointerdown", (e: FederatedPointerEvent) => {
+      e.stopPropagation();
+      this.beginMicromoduleDrag(mm, e);
+    });
+    this.mainContainer!.addChild(chip);
+    this.chipRects.push({ id: mm.id, x, y, w, h });
+  }
+
+  /** Begin dragging a micromodule chip: a ghost follows the pointer until release. */
+  private beginMicromoduleDrag(
+    mm: MicroModule,
+    e: FederatedPointerEvent,
+  ): void {
+    if (this.dragMicromodule) return;
+
+    const ghost = new Container();
+    const gw = Math.min(220, 14 + mm.name.length * 6.2);
+    const gh = 24;
+    const gbg = new Graphics();
+    gbg.rect(0, 0, gw, gh).fill({ color: 0x1a2a3a, alpha: 0.95 });
+    gbg.rect(0, 0, gw, gh).stroke({ color: 0xffcc44, width: 1 });
+    ghost.addChild(gbg);
+    const gt = scaledText(mm.name, 10, 0xffdd66, {
+      rawColor: true,
+      fontFamily: "monospace",
+    });
+    gt.anchor.set(0.5, 0.5);
+    gt.x = gw / 2;
+    gt.y = gh / 2;
+    ghost.addChild(gt);
+    ghost.eventMode = "none";
+    ghost.x = e.global.x - gw / 2;
+    ghost.y = e.global.y - gh / 2;
+    // The ghost lives on the uiLayer, above mainContainer, so it floats over the
+    // board while dragging.
+    this.renderer.uiLayer.addChild(ghost);
+
+    this.dragMicromodule = { mm, ghost, bg: gbg, w: gw, h: gh };
+
+    this.dragMoveHandler = (ev: FederatedPointerEvent) =>
+      this.updateMicromoduleDrag(ev);
+    this.dragEndHandler = (ev: FederatedPointerEvent) =>
+      this.endMicromoduleDrag(ev);
+    const stage = this.renderer.app.stage;
+    stage.eventMode = "static";
+    stage.on("globalpointermove", this.dragMoveHandler);
+    stage.on("pointerup", this.dragEndHandler);
+    stage.on("pointerupoutside", this.dragEndHandler);
+  }
+
+  /** Move the drag ghost; tint it by whether the hovered zone would accept the drop. */
+  private updateMicromoduleDrag(e: FederatedPointerEvent): void {
+    const drag = this.dragMicromodule;
+    if (!drag) return;
+    drag.ghost.x = e.global.x - drag.w / 2;
+    drag.ghost.y = e.global.y - drag.h / 2;
+
+    const loadout = this.gameEngine?.playerLoadout ?? null;
+    const zone = this.dropZoneAt(e.global.x, e.global.y);
+    let tint = 0xffffff; // neutral (no multiply)
+    if (zone && loadout) {
+      tint =
+        evaluateMicromoduleDrop(loadout, zone.target, drag.mm.id) === "ok"
+          ? 0x44ff88
+          : 0xff6644;
+    }
+    drag.bg.tint = tint;
+  }
+
+  /** Release the drag: apply onto the hovered zone (or no-op) and refresh. */
+  private endMicromoduleDrag(e: FederatedPointerEvent): void {
+    const drag = this.dragMicromodule;
+    if (!drag) return;
+    const dropX = e.global.x;
+    const dropY = e.global.y;
+    this.cancelMicromoduleDrag();
+
+    const player = this.gameEngine?.player;
+    const loadout = this.gameEngine?.playerLoadout ?? null;
+    const zone = this.dropZoneAt(dropX, dropY);
+    if (!player || !loadout || !zone) {
+      // Released over empty space — silently cancelled.
+      this.render();
+      return;
+    }
+
+    const outcome = applyMicromoduleDrop(loadout, zone.target, drag.mm.id);
+    if (outcome === "ok") {
+      const idx = player.inventory.micromodules.indexOf(drag.mm);
+      if (idx >= 0) player.inventory.micromodules.splice(idx, 1);
+      logger.info(
+        `Drag-applied micromodule ${drag.mm.id} → ${zone.target.kind}`,
+      );
+    }
+    this.render();
+    this.showToast(
+      micromoduleDropHint(outcome),
+      outcome === "ok" ? 0x44ff88 : 0xff8844,
+    );
+  }
+
+  /** Tear down an in-flight drag: remove the ghost and detach stage listeners. */
+  private cancelMicromoduleDrag(): void {
+    if (this.dragMicromodule) {
+      this.renderer.uiLayer.removeChild(this.dragMicromodule.ghost);
+      this.dragMicromodule.ghost.destroy({ children: true });
+      this.dragMicromodule = null;
+    }
+    const stage = this.renderer.app.stage;
+    if (this.dragMoveHandler) {
+      stage.off("globalpointermove", this.dragMoveHandler);
+      this.dragMoveHandler = null;
+    }
+    if (this.dragEndHandler) {
+      stage.off("pointerup", this.dragEndHandler);
+      stage.off("pointerupoutside", this.dragEndHandler);
+      this.dragEndHandler = null;
+    }
+  }
+
+  /** The registered drop zone containing the screen point, if any. */
+  private dropZoneAt(
+    gx: number,
+    gy: number,
+  ): { target: MicromoduleDropTarget } | null {
+    for (const z of this.dropZones) {
+      if (gx >= z.x && gx <= z.x + z.w && gy >= z.y && gy <= z.y + z.h) {
+        return z;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * E2E hook (Task 6): resolve a drag-drop by screen point without a real pointer
+   * gesture — drives `applyMicromoduleDrop` through the same path the release
+   * handler uses, so a test can buy a micromodule and "drop" it on a slot.
+   * Returns the outcome string.
+   */
+  e2eDropMicromoduleAt(micromoduleId: string, gx: number, gy: number): string {
+    const player = this.gameEngine?.player;
+    const loadout = this.gameEngine?.playerLoadout ?? null;
+    const zone = this.dropZoneAt(gx, gy);
+    if (!player || !loadout || !zone) return "no-target";
+    const mm = player.inventory.micromodules.find(
+      (m) => m.id === micromoduleId,
+    );
+    if (!mm) return "unknown";
+    const outcome = applyMicromoduleDrop(loadout, zone.target, mm.id);
+    if (outcome === "ok") {
+      const idx = player.inventory.micromodules.indexOf(mm);
+      if (idx >= 0) player.inventory.micromodules.splice(idx, 1);
+    }
+    this.render();
+    this.showToast(
+      micromoduleDropHint(outcome),
+      outcome === "ok" ? 0x44ff88 : 0xff8844,
+    );
+    return outcome;
+  }
+
+  /** Screen-coord drop zones for the current hangar render (read-only, for E2E). */
+  e2eDropZones(): ReadonlyArray<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    target: MicromoduleDropTarget;
+  }> {
+    return this.dropZones;
+  }
+
+  /** Screen-coord drag-source chip rects for the current hangar render (E2E). */
+  e2eMicromoduleChips(): ReadonlyArray<{
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }> {
+    return this.chipRects;
+  }
+
+  /** Open the hangar fitting board (navigation hook for E2E; not the interaction). */
+  e2eOpenHangar(): void {
+    this.view = "hangar";
+    this.render();
   }
 
   /**
