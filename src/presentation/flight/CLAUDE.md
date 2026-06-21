@@ -7,6 +7,9 @@ Modules: SpaceBackgroundLayer, StarRenderer, AsteroidBelt, OrbitRenderer, Player
 NpcShipManager, PlanetManager, CombatModule, FlightHud. Helpers (not FlightModules):
 RouteRenderer, WarpEffectRenderer, CameraController, QuestCompletion, CombatHud, DamageNumbers,
 combatPause (pure active-pause state machine — PixiJS-free, unit-tested standalone),
+cometDustTail (pure dust-tail particle emitter for flyby comets — PixiJS-free, owns a fixed-size
+mote pool with a hard live-count bound; `AsteroidBelt` mirrors each pool slot 1:1 onto a pooled
+PixiJS `Particle`. Same pure-logic-tested-standalone pattern as `combatPause`),
 CombatPauseOverlay (the target/weapon modal), combatPauseUi (`createCombatPauseUi` cross-links
 controller ↔ overlay ↔ `CombatModule`; called with no args it returns a bare overlay-less
 controller for field-init / unit tests, rebuilt wired in `initialize()`).

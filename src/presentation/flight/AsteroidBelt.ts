@@ -15,6 +15,7 @@ import {
 import {
   dustParticleTexture,
   rockTexture,
+  ROCK_VARIANT_COUNT,
   softGlowTexture,
 } from "../gradientTexture";
 import { CometDustTail, moteAlpha, moteScale } from "./cometDustTail";
@@ -69,7 +70,6 @@ interface AsteroidMote {
   // jsdom / unit tests — so the module degrades without throwing).
   head: Sprite | null; // glowing icy head (softGlowTexture sprite)
   tail: CometDustTail | null; // pure dust-tail emitter (PixiJS-free)
-  tailLayer: ParticleContainer | null; // the visual particle container
   particles: Particle[]; // pooled visuals, mirrored 1:1 with tail.slots
 }
 
@@ -168,7 +168,6 @@ export class AsteroidBelt implements FlightModule {
         cometCooldown: 0,
         head: null,
         tail: null,
-        tailLayer: null,
         particles: [],
       };
       if (a.comet) this.setupCometVisuals(a);
@@ -202,7 +201,6 @@ export class AsteroidBelt implements FlightModule {
       layer.blendMode = "add";
       layer.eventMode = "none";
       a.tail = new CometDustTail(MAX_TAIL_PARTICLES);
-      a.tailLayer = layer;
       a.particles = [];
       for (let i = 0; i < MAX_TAIL_PARTICLES; i++) {
         const part = new Particle({
@@ -243,7 +241,7 @@ export class AsteroidBelt implements FlightModule {
   private setupAsteroidVisuals(a: AsteroidMote): void {
     const container = this.asteroidContainer;
     if (!container) return;
-    const tex = rockTexture(Math.floor(Math.random() * 64));
+    const tex = rockTexture(Math.floor(Math.random() * ROCK_VARIANT_COUNT));
     if (!tex) return; // jsdom — drawn-polygon fallback on `graphics`
     const sprite = new Sprite(tex);
     sprite.anchor.set(0.5);

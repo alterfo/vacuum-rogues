@@ -124,4 +124,28 @@ describe("CometDustTail (pure dust-tail emitter)", () => {
     tail.reset();
     expect(tail.count).toBe(0);
   });
+
+  it("dt = 0 (active-pause frame) ages nothing, drifts nothing, emits nothing", () => {
+    const tail = new CometDustTail(8, half);
+    tail.spawn(0, 0, 1, 0);
+    const m = tail.slots.find((s) => s.active)!;
+    const { x, y, age } = m;
+
+    // A paused frame still calls update with dt = 0 while emitting — it must be
+    // a no-op: no new motes, no drift, no aging.
+    tail.update(0, 50, 60, 1, 0, true);
+
+    expect(tail.count).toBe(1); // no spawn
+    expect(m.x).toBe(x); // no drift
+    expect(m.y).toBe(y);
+    expect(m.age).toBe(age); // no aging
+  });
+
+  it("moteAlpha / moteScale guard a zero-life mote (no NaN)", () => {
+    // Recycled pool slots default to life 0; the helpers must return 0, not
+    // NaN (age/0), which would silently corrupt the tail render.
+    const dead = mote({ life: 0, age: 0 });
+    expect(moteAlpha(dead)).toBe(0);
+    expect(moteScale(dead)).toBe(0);
+  });
 });
