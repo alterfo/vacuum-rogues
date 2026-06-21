@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ResourceType } from "@/types";
+import type { GameMode, ResourceType } from "@/types";
 
 /**
  * Type-safe game balance constants.
@@ -345,3 +345,77 @@ export const SUN_CONTACT_DAMAGE_INTERVAL_MS = 500;
  * until repaired above the floor). NORMAL/HARD have no floor (hull can reach 0).
  */
 export const GOD_MODE_HULL_FLOOR_FRACTION = 0.05;
+
+/**
+ * Per-difficulty-mode hostile scaling. NORMAL and GOD are the baseline — they
+ * reproduce today's exact hostile-system count and garrison sizes. HARD seeds
+ * modestly more hostile (overmind/pirate) systems and larger standing garrisons
+ * ("чуть больше пиратов и Сверхразума"). Tune here, never at call sites.
+ */
+export const DIFFICULTY_HOSTILE_SCALING: Record<
+  GameMode,
+  { hostileSystemMultiplier: number; garrisonBonus: number }
+> = {
+  GOD: { hostileSystemMultiplier: 1.0, garrisonBonus: 0 },
+  NORMAL: { hostileSystemMultiplier: 1.0, garrisonBonus: 0 },
+  HARD: { hostileSystemMultiplier: 1.5, garrisonBonus: 2 },
+};
+
+/**
+ * Number of hostile systems to seed for a mode given a baseline count.
+ * NORMAL/GOD return the baseline unchanged (today's behaviour); HARD scales it
+ * up by {@link DIFFICULTY_HOSTILE_SCALING}'s multiplier (rounded). Pure.
+ */
+export function scaledHostileSystemCount(
+  mode: GameMode,
+  baseCount: number,
+): number {
+  const mult = DIFFICULTY_HOSTILE_SCALING[mode]?.hostileSystemMultiplier ?? 1.0;
+  return Math.round(baseCount * mult);
+}
+
+/**
+ * Garrison `[min, max]` ship range for a mode given the baseline range.
+ * NORMAL/GOD return the baseline unchanged; HARD shifts both bounds up by the
+ * mode's `garrisonBonus`. Pure.
+ */
+export function scaledGarrisonRange(
+  mode: GameMode,
+  baseMin: number,
+  baseMax: number,
+): { min: number; max: number } {
+  const bonus = DIFFICULTY_HOSTILE_SCALING[mode]?.garrisonBonus ?? 0;
+  return { min: baseMin + bonus, max: baseMax + bonus };
+}
+
+/**
+ * For a given mode, choose the additional hostile systems to seed beyond the
+ * baseline so the totals reach the HARD-scaled targets. `isolatedFirstIds` is
+ * every system id ordered most-isolated-first (the same ordering the galaxy
+ * generator uses to pick starting hostiles). Already-hostile ids are skipped.
+ * NORMAL/GOD return empty arrays (no change → exactly today's counts). Pure.
+ */
+export function additionalHostileSeeds(
+  mode: GameMode,
+  isolatedFirstIds: string[],
+  overmindIds: string[],
+  pirateIds: string[],
+): { overmind: string[]; pirate: string[] } {
+  const extraOvermind = Math.max(
+    0,
+    scaledHostileSystemCount(mode, overmindIds.length) - overmindIds.length,
+  );
+  const extraPirate = Math.max(
+    0,
+    scaledHostileSystemCount(mode, pirateIds.length) - pirateIds.length,
+  );
+  if (extraOvermind === 0 && extraPirate === 0) {
+    return { overmind: [], pirate: [] };
+  }
+  const taken = new Set([...overmindIds, ...pirateIds]);
+  const pool = isolatedFirstIds.filter((id) => !taken.has(id));
+  return {
+    overmind: pool.slice(0, extraOvermind),
+    pirate: pool.slice(extraOvermind, extraOvermind + extraPirate),
+  };
+}

@@ -122,10 +122,16 @@ jump, and hostile-spawn paths.
   src/systems/npc/NpcSimulator.ts (scale `GARRISON_MIN/MAX` by mode)
 - Create: src/tests/difficulty/hardScaling.test.ts
 
-- [ ] HARD seeds modestly more overmind+pirate systems and larger garrisons than NORMAL; NORMAL/GOD
-      keep today's counts exactly
-- [ ] write tests: HARD hostile count + garrison > NORMAL; NORMAL == current baseline
-- [ ] run affected tests — must pass before next task
+- [x] HARD seeds modestly more overmind+pirate systems and larger garrisons than NORMAL; NORMAL/GOD
+      keep today's counts exactly (`balance.ts`: `DIFFICULTY_HOSTILE_SCALING` HARD = 1.5× hostile systems
+      + garrison bonus +2, NORMAL/GOD = 1.0×/+0; pure `scaledHostileSystemCount`/`scaledGarrisonRange`/
+      `additionalHostileSeeds`; `NpcSimulator.setGameMode` scales `fillGarrison` range; `GameEngine.applyDifficultyHostileScaling`
+      augments the boot-generated galaxy's hostile seeding for HARD after the mode is chosen, re-armed on load)
+- [x] write tests: HARD hostile count + garrison > NORMAL; NORMAL == current baseline
+      (`src/tests/difficulty/hardScaling.test.ts` — 9 tests: pure config NORMAL/GOD baseline + HARD > NORMAL,
+      additionalHostileSeeds picks isolated-frontier neutrals + skips hostiles, garrison NORMAL∈[5,10] + HARD > NORMAL same seed)
+- [x] run affected tests — must pass before next task (hardScaling + npc + galaxy + gameMode + godMode suites:
+      358 passed; `tsc --noEmit` clean; lint 0 errors)
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify Overview: mode chosen at new game + persisted; God floors + downs + repair-restores;

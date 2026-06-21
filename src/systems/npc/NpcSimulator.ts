@@ -9,11 +9,11 @@ import {
   FactionType,
   ResourceType,
 } from "@/types";
-import type { NewsEvent } from "@/types";
+import type { GameMode, NewsEvent } from "@/types";
 import type { RouteRumor } from "@/domain/RouteRumor";
 import { applyMarketTradeImpact } from "@/domain/Market";
 import { Faction } from "@/types/faction";
-import { GAME_BALANCE } from "@/config/balance";
+import { GAME_BALANCE, scaledGarrisonRange } from "@/config/balance";
 import type { NpcBrain } from "./NpcBrain";
 import { RuleBasedNpcBrain, selectPirateTarget } from "./NpcBrain";
 import {
@@ -312,6 +312,14 @@ export class NpcSimulator {
   /** Bank for booking NPC pirate plunder through the bus (null until wired). */
   private bank: BankAccess | null = null;
 
+  /**
+   * Per-run difficulty mode (default NORMAL). Only HARD changes behaviour — it
+   * grows standing garrisons via {@link scaledGarrisonRange}. NORMAL/GOD keep
+   * today's exact garrison sizes. Set by GameEngine when a new game starts or a
+   * save is loaded; derived, never persisted on the simulator itself.
+   */
+  private gameMode: GameMode = "NORMAL";
+
   constructor(brain: NpcBrain = new RuleBasedNpcBrain()) {
     this.brain = brain;
   }
@@ -319,6 +327,11 @@ export class NpcSimulator {
   /** Wire the bank so NPC plunder books a balanced ledger entry via the bus. */
   attachBank(access: BankAccess | null): void {
     this.bank = access;
+  }
+
+  /** Set the difficulty mode that scales hostile garrison sizes (HARD only). */
+  setGameMode(mode: GameMode): void {
+    this.gameMode = mode;
   }
 
   /**
@@ -506,8 +519,14 @@ export class NpcSimulator {
     systemId: string,
     overmind: boolean,
   ): void {
+    // HARD shifts the garrison range up; NORMAL/GOD keep [GARRISON_MIN, MAX].
+    const { min: garrisonMin, max: garrisonMax } = scaledGarrisonRange(
+      this.gameMode,
+      GARRISON_MIN,
+      GARRISON_MAX,
+    );
     let present = this.countGarrisonPresent(galaxy, systemId);
-    if (present >= GARRISON_MIN) {
+    if (present >= garrisonMin) {
       this.establishedGarrisons.add(systemId);
       return;
     }
@@ -516,7 +535,7 @@ export class NpcSimulator {
     // liberation countdown can run rather than resurrecting the garrison every
     // tick. Only initial establishment or topping up a partial garrison spawns.
     if (present === 0 && this.establishedGarrisons.has(systemId)) return;
-    const target = rng.nextInt(GARRISON_MIN, GARRISON_MAX);
+    const target = rng.nextInt(garrisonMin, garrisonMax);
     let spawned = 0;
     while (present < target) {
       const id = `garrison_${overmind ? "ov" : "pi"}_${systemId}_${galaxy.gameDays}_${spawned}`;

@@ -18,7 +18,7 @@ import { GlobalExceptionHandler } from "@/exceptions/GlobalExceptionHandler";
 import { GameSystemException } from "@/exceptions/GameSystemException";
 import { GameValidationException } from "@/exceptions/GameValidationException";
 import { logger } from "@/utils/logger";
-import { GAME_BALANCE } from "@/config/balance";
+import { GAME_BALANCE, additionalHostileSeeds } from "@/config/balance";
 import { Graphics, Text } from "pixi.js";
 import { validatePlayerSettings } from "@/validation/schemas";
 import { Player } from "@/domain/Player";
@@ -371,6 +371,12 @@ export class GameEngine {
         (context as { selectedGameMode?: GameMode })?.selectedGameMode ??
         "NORMAL";
       this.player.setGameMode(selectedGameMode);
+
+      // HARD seeds modestly more hostiles (overmind/pirate systems + larger
+      // garrisons). The galaxy was generated at boot before the mode was known,
+      // so augment its initial hostile seeding now; NORMAL/GOD are no-ops →
+      // exactly today's counts. The extra systems persist in the save.
+      this.applyDifficultyHostileScaling();
 
       // Starter spare gear. These are authored as legacy ShipModules ("Лазер
       // МК-1" / "Базовый щит" / "Быстрый двигатель") then converted to installable
@@ -1022,6 +1028,11 @@ export class GameEngine {
     // module checks work after "Continue". Field data is already correct.
     this.rehydrateLoadedState();
 
+    // Re-apply the saved run's difficulty to the NPC garrison sizing (HARD only;
+    // NORMAL/GOD are no-ops). The galaxy's extra HARD hostile systems are already
+    // persisted, so only the per-day garrison range needs re-arming on load.
+    this.npcSimulator.setGameMode(this.player.gameMode);
+
     // Restore the persisted АБС book of record (accounts + journal + EOD cursors)
     // verbatim, so balances, statements and open savings/loan accounts survive the
     // reload. Old saves lack the snapshot — there `setupPlayerBanking` below
@@ -1507,6 +1518,43 @@ export class GameEngine {
       obj.destroy();
     }
     this.loadingOverlayObjects = [];
+  }
+
+  /**
+   * Apply the chosen difficulty mode's hostile scaling to the freshly-generated
+   * galaxy. HARD seeds modestly more overmind/pirate systems (picking the
+   * next-most-isolated neutral systems, mirroring the generator's own ordering)
+   * and arms the NPC simulator to grow standing garrisons. NORMAL/GOD leave both
+   * untouched, so their hostile counts stay exactly today's. Called from the
+   * new-game path once the player's `gameMode` is set and the galaxy exists.
+   */
+  private applyDifficultyHostileScaling(): void {
+    if (!this.player || !this.galaxy) return;
+    const mode = this.player.gameMode;
+
+    // Arm the daily garrison sizing (HARD grows the [min,max] range).
+    this.npcSimulator.setGameMode(mode);
+
+    // Order every system most-isolated-first (q²+r² magnitude descending) — the
+    // same criterion the generator uses to pick the starting hostiles — so the
+    // extra HARD hostiles sit on the next-most-isolated frontier systems.
+    const isolatedFirstIds = [...this.galaxy.systems]
+      .sort(
+        (a, b) =>
+          b.coordinates.q ** 2 +
+          b.coordinates.r ** 2 -
+          (a.coordinates.q ** 2 + a.coordinates.r ** 2),
+      )
+      .map((s) => s.id);
+
+    const extra = additionalHostileSeeds(
+      mode,
+      isolatedFirstIds,
+      this.galaxy.overmindSystems,
+      this.galaxy.pirateSystems,
+    );
+    for (const id of extra.overmind) this.galaxy.addOvermindSystem(id);
+    for (const id of extra.pirate) this.galaxy.addPirateSystem(id);
   }
 
   private async generateDefaultGameState(): Promise<void> {
