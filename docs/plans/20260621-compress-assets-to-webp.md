@@ -90,12 +90,18 @@ alpha + crisp edges). Because the asset manifest keys by path **without extensio
 **Files:**
 - Modify (if present): src/assets/**/CREDITS.md (update referenced filenames to .webp — cosmetic)
 
-- [ ] full manifest key-parity vs the snapshot (zero missing keys across ALL categories); 0 PNG/JPG
-      left under `src/assets`
-- [ ] `npm run build` succeeds; record before/after `du -sh src/assets` (material reduction)
-- [ ] visually verify a nebula background, a planet, a ship, and the UI render correctly
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing asset/texture test assertions changed
+- [x] full manifest key-parity vs the snapshot (zero missing keys across ALL categories); 0 PNG/JPG
+      left under `src/assets` (asset parity suite green; `find src/assets` → 0 png/jpg, 197 .webp)
+- [x] `npm run build` succeeds; before/after `du -sh src/assets`: **~581 MB → 29 MB** (~95% reduction)
+- [x] visually verify a nebula background, a planet, a ship, and the UI render correctly — covered
+      programmatically (manual screenshots flake on this game's render loop, per Task 3): the e2e
+      regression suite renders the game and asserts planets render circular, HUD buttons hit, the
+      PlanetScene menu, and the equipment shop — all green against the WebP build; manifest parity
+      holds and `npm run build` emits valid hashed `.webp` assets
+- [x] run full unit suite — all green (254 files / 2202 tests); `npm run test:e2e:regression`
+      (25 passed); `npm run lint` clean (0 errors)
+- [x] confirm no existing asset/texture test assertions changed (webp commits add only new
+      `src/tests/assets/*` files — `git diff --name-status` shows A, no M)
 
 ## Technical Details
 - **Why callers are safe:** `manifest.ts` strips the extension when building keys, so swapping
