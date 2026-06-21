@@ -30,6 +30,7 @@ import { FlightHud } from "./flight/FlightHud";
 import { CameraController } from "./flight/CameraController";
 import { WarpEffectRenderer } from "./flight/WarpEffectRenderer";
 import { QuestCompletion } from "./flight/QuestCompletion";
+import { handleFlightKey } from "./flight/flightKeyHandler";
 
 /** Minimal structural view of a display object for recursive filter disposal. */
 interface FilterableNode {
@@ -1669,46 +1670,22 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Handle keyboard input (J key for quest journal)
+   * Handle keyboard input. Routing lives in the pure `handleFlightKey` helper;
+   * this delegate just hands it the live scene members (the three private
+   * methods wrapped so the helper stays decoupled from the scene class).
    */
   private onKeyDown(event: KeyboardEvent): void {
-    if (event.key === "Escape") {
-      if (this.combatPause.paused) this.combatPause.resume();
-      else if (this.npcManager.isContactPanelOpen) {
-        this.npcManager.closeContactPanel();
-      } else if (this.hud.isQuestJournalOpen()) {
-        this.hud.closeQuestJournal();
-      } else if (this.planetManager.hasInfoPanel) {
-        this.planetManager.closeInfoPanel();
-      } else if (this.plannedRoute) {
-        this.clearPlannedRoute();
-        this.hud.showMessage("Маршрут отменён", 0xffaa00);
-      }
-      return;
-    }
-    // Space runs the planned turn: the keyboard equivalent of the confirming
-    // second click — execute the current planned route without re-clicking the
-    // target. With no route planned it's a no-op + hint. Guarded so a held key
-    // (auto-repeat), a combat pause, or an already-running turn can't re-fire
-    // executeRouteTo (double-fire / crash).
-    if (event.key === " " || event.code === "Space") {
-      event.preventDefault(); // Space would otherwise scroll the page
-      if (event.repeat || this.combatPause.paused || this.isTurnRunning) return;
-      if (this.plannedRoute) {
-        this.executeRouteTo(this.plannedRoute.x, this.plannedRoute.y);
-        logger.info(
-          `▶️ Space: executing planned route to (${this.plannedRoute.x.toFixed(0)}, ${this.plannedRoute.y.toFixed(0)})`,
-        );
-      } else {
-        this.hud.showMessage("Проложите маршрут", 0xffaa00);
-      }
-      return;
-    }
-    if (event.key === "j" || event.key === "J") {
-      if (!this.combatPause.paused) this.hud.toggleQuestJournal();
-    } else if (event.key === "i" || event.key === "I") {
-      if (!this.combatPause.paused) this.openInventory();
-    }
+    handleFlightKey(event, {
+      combatPause: this.combatPause,
+      npcManager: this.npcManager,
+      hud: this.hud,
+      planetManager: this.planetManager,
+      plannedRoute: this.plannedRoute,
+      isTurnRunning: this.isTurnRunning,
+      clearPlannedRoute: () => this.clearPlannedRoute(),
+      executeRouteTo: (x, y) => this.executeRouteTo(x, y),
+      openInventory: () => void this.openInventory(),
+    });
   }
 
   private async openInventory(): Promise<void> {

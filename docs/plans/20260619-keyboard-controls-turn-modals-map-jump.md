@@ -122,9 +122,23 @@ Make core interactions keyboard-/mouse-consistent:
       33 tests; lint + tsc clean)
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify Overview: Space runs the turn, modals confirm/cancel on Enter/Esc, map double-click jumps
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing input/scene test assertions changed
+- [x] verify Overview: Space runs the turn, modals confirm/cancel on Enter/Esc, map double-click jumps
+      — all three behaviours are implemented (Tasks 1–4) and unit-tested green: `spaceRunsTurn`
+      (Space → one `executeRouteTo`, no-route hint, guards), `bindModalKeys` + `modalKeys.integration`
+      (Enter→primary / Esc→close on DialogueScene + NpcContactPanel), `doubleClickJump`
+      (native `pointertap` detail ≥2 → warp, single → info only)
+- [x] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
+      — full unit suite 2435 passed / 277 files (the deferred `SpaceFlightScene <1900` size-guard red
+      is now green: Task 1's Space handler was extracted to the pure `flight/flightKeyHandler.ts`,
+      `onKeyDown` is a thin delegate → 1894 lines; tsc clean). `npm run lint` = 0 errors (43 pre-existing
+      `any` warnings, none in new files). `npm run test:e2e:regression` = 20 passed, all keyboard/turn/map
+      cases green; 1 unrelated pre-existing failure (`owned-uninstalled gear … trade-in refund`) caused by
+      the equipment starter-trio now seeding `ownedGearIds` so the ТРЮМ shows a basePrice-900 starter sell
+      button ahead of the pushed `eq_radar` (refund 360 vs expected 1120) — an equipment-overhaul concern,
+      not this plan (the failing flow never enters `onKeyDown`); left for the equipment work per one-concern-per-task
+- [x] confirm no existing input/scene test assertions changed — zero test files were modified in Task 5;
+      the size-guard fix was a behaviour-preserving extraction (existing `spaceRunsTurn` + `moduleContracts`
+      suites pass unchanged, 33 tests)
 
 ## Technical Details
 - **Space semantics:** Space is "execute the planned route" — the keyboard equivalent of the second
