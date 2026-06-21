@@ -249,6 +249,7 @@ function makeScene(denial: LandingDenialReason | null) {
   const transitionTo = vi.fn().mockResolvedValue(undefined);
   const showMessage = vi.fn();
   const clearPlannedRoute = vi.fn();
+  const endTurn = vi.fn();
   const scene = {
     gameEngine: {
       player: { ship: { energy: 0, maxEnergy: 100 } },
@@ -262,16 +263,17 @@ function makeScene(denial: LandingDenialReason | null) {
     },
     shipPhysics: null,
     clearPlannedRoute,
+    endTurn,
   };
-  return { scene, transitionTo, showMessage, clearPlannedRoute };
+  return { scene, transitionTo, showMessage, clearPlannedRoute, endTurn };
 }
 
 const land = (scene: unknown, planet: Captured) =>
   onLandOnPlanet.call(scene, planet);
 
 describe("SpaceFlightScene.onLandOnPlanet (captured-system gate wiring)", () => {
-  it("blocks a denied landing: no PLANET transition, clear message, route cleared", async () => {
-    const { scene, transitionTo, showMessage, clearPlannedRoute } =
+  it("blocks a denied landing: no PLANET transition, clear message, route cleared, turn ended", async () => {
+    const { scene, transitionTo, showMessage, clearPlannedRoute, endTurn } =
       makeScene("overmind");
     await land(scene, { capturedBy: Faction.OVERMIND });
 
@@ -282,6 +284,9 @@ describe("SpaceFlightScene.onLandOnPlanet (captured-system gate wiring)", () => 
     );
     // Route cleared so the auto-land can't re-fire and the player isn't stranded.
     expect(clearPlannedRoute).toHaveBeenCalled();
+    // Turn ended so the parked ship doesn't drop into the wait-turn calendar
+    // burn (the arrival-land path calls us with the turn still running).
+    expect(endTurn).toHaveBeenCalled();
   });
 
   it("surfaces the pirate-rep reason when that is the denial", async () => {

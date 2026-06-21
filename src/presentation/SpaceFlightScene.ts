@@ -802,13 +802,13 @@ export class SpaceFlightScene extends GameScene {
   }
 
   private async onLandOnPlanet(planet: Planet): Promise<void> {
-    // Captured-system gate — the single choke point every landing path funnels
-    // through (no bypass). Blocked → message + clear route so the parked ship can
-    // still fly away (not stranded) and the auto-land can't re-fire.
+    // Captured-system gate (single choke point, no bypass). Blocked → message +
+    // clear route + endTurn() (else the arrival-land path leaves the ship in a wait-turn burn).
     const denial = this.planetManager.landingDenial(planet);
     if (denial) {
       this.hud.showMessage(landingDenialMessage(denial), 0xff4444);
       this.clearPlannedRoute();
+      this.endTurn();
       return;
     }
     // Only land once the ship has actually reached the planet (days accrue in
