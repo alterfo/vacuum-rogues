@@ -53,10 +53,15 @@ export function handleFlightKey(
   if (event.key === " " || event.code === "Space") {
     event.preventDefault(); // Space would otherwise scroll the page
     if (event.repeat || ctx.combatPause.paused || ctx.isTurnRunning) return;
-    // Don't launch the turn behind an open modal — the contact / planet-info
-    // panel must be dismissed (Esc) first, otherwise the ship flies off while
-    // the panel still demands a choice.
-    if (ctx.npcManager.isContactPanelOpen || ctx.planetManager.hasInfoPanel)
+    // Don't launch the turn behind an open modal — the contact panel, quest
+    // journal, or planet-info panel must be dismissed (Esc) first, otherwise the
+    // ship flies off while the panel still demands a choice. (Mirrors the
+    // mouse-click route-plan guard `isBlockingModalOpen`.)
+    if (
+      ctx.npcManager.isContactPanelOpen ||
+      ctx.hud.isQuestJournalOpen() ||
+      ctx.planetManager.hasInfoPanel
+    )
       return;
     if (ctx.plannedRoute) {
       ctx.executeRouteTo(ctx.plannedRoute.x, ctx.plannedRoute.y);

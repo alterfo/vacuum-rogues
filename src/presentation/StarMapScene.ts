@@ -1,11 +1,5 @@
 import { GameScene } from "./GameScene";
-import {
-  Graphics,
-  Text,
-  Container,
-  BlurFilter,
-  type FederatedPointerEvent,
-} from "pixi.js";
+import { Graphics, Text, Container, BlurFilter } from "pixi.js";
 import type { Galaxy } from "@/domain/Galaxy";
 import type { StarSystem } from "@/domain/StarSystem";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -32,6 +26,16 @@ export class StarMapScene extends GameScene {
   private gameEngine: GameEngine | null = null;
 
   private readonly MAP_SCALE = 4;
+
+  // Double-click (→ jump) detection. Keyed on the STABLE system id + a time
+  // window, NOT PixiJS's native per-target click counter: a single click runs
+  // `renderStarMap`, which destroys and rebuilds every hit-area Graphics, so
+  // consecutive physical clicks land on different target objects and the
+  // boundary's `event.detail` count resets to 1 (it can never reach 2). This
+  // scene-level state survives the rebuild because it is keyed by id.
+  private readonly DOUBLE_CLICK_MS = 350;
+  private lastTapSystemId: string | null = null;
+  private lastTapAt = 0;
 
   // Viewport state for zoom/pan
   private viewportX = 0;
@@ -714,13 +718,16 @@ export class StarMapScene extends GameScene {
   /**
    * Build the transparent hit-target for a system dot.
    *
-   * Double-click → jump is driven by PixiJS's native click counter
-   * (`event.detail` on `pointertap`, incremented for consecutive taps on the
-   * same target within the boundary's threshold) rather than a hand-rolled
-   * `Date.now()` comparison on `pointerdown`. The old timestamp scheme raced the
-   * single-click info-panel open and dropped jumps; reading the native count
-   * makes the double-click dependable. A single tap still only opens the info
-   * panel. `hasDragged` suppresses a pan that ends over a system.
+   * Double-click → jump is detected on `pointertap` against the scene-level
+   * `lastTapSystemId`/`lastTapAt` keyed on the STABLE `system.id` + a time
+   * window — NOT PixiJS's native `event.detail` counter. `handleSystemClick`
+   * runs `renderStarMap`, which destroys and rebuilds every hit-area Graphics,
+   * so consecutive physical clicks land on different target objects and the
+   * boundary resets its per-target count to 1 (detail never reaches 2). Keying
+   * on the id (which survives the rebuild) makes the jump dependable while a
+   * single tap still only opens the info panel. `hasDragged` suppresses a pan
+   * that ends over a system. (Replaces the old `pointerdown` timestamp scheme
+   * that raced the single-click info-panel open and dropped jumps.)
    */
   private createSystemHitArea(
     x: number,
@@ -733,14 +740,22 @@ export class StarMapScene extends GameScene {
     hitArea.eventMode = "static";
     hitArea.cursor = "pointer";
 
-    hitArea.on("pointertap", (e: FederatedPointerEvent) => {
+    hitArea.on("pointertap", () => {
       if (this.hasDragged) return;
 
-      // detail >= 2 ⇒ the native boundary counted a double(+) click.
-      if ((e?.detail ?? 1) >= 2) {
+      const now = Date.now();
+      const isDouble =
+        this.lastTapSystemId === system.id &&
+        now - this.lastTapAt < this.DOUBLE_CLICK_MS;
+      if (isDouble) {
+        // Consume the pair so a 3rd quick tap doesn't re-trigger the jump.
+        this.lastTapSystemId = null;
+        this.lastTapAt = 0;
         logger.debug(`System double-clicked: ${system.name}`);
         this.handleSystemDoubleClick(system);
       } else {
+        this.lastTapSystemId = system.id;
+        this.lastTapAt = now;
         logger.debug(`System clicked: ${system.name}`);
         this.handleSystemClick(system);
       }

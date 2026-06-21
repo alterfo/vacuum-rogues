@@ -166,6 +166,15 @@ describe("handleFlightKey — Space launch guards", () => {
     expect(ctx.executeRouteTo).not.toHaveBeenCalled();
   });
 
+  it("does not launch the turn while the quest journal is open", () => {
+    const ctx = makeCtx({ plannedRoute: { x: 5, y: 5 } });
+    ctx.hud.isQuestJournalOpen.mockReturnValue(true);
+
+    handleFlightKey(space(), ctx);
+
+    expect(ctx.executeRouteTo).not.toHaveBeenCalled();
+  });
+
   it("calls preventDefault on Space even when the launch is suppressed", () => {
     const ctx = makeCtx({
       npcManager: { isContactPanelOpen: true, closeContactPanel: vi.fn() },
