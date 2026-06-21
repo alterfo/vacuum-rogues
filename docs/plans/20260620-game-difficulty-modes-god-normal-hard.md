@@ -77,10 +77,10 @@ jump, and hostile-spawn paths.
   src/systems/GameEngine.ts (new-game path sets `player.gameMode`)
 - Create: src/tests/presentation/modeSelector.test.ts
 
-- [ ] the new-game screen offers the three modes (default Средний) and Start applies the selection
-- [ ] visually verify the selector via screenshot
-- [ ] write tests: selecting a mode + Start creates a player with that `gameMode`
-- [ ] run affected tests — must pass before next task
+- [x] the new-game screen offers the three modes (default Средний) and Start applies the selection (Бог/Средний/Сложный chips fill the empty bottom-right grid slot; Start passes `selectedGameMode`, GameEngine new-game path calls `player.setGameMode`)
+- [x] visually verify the selector via screenshot (Playwright capture of RaceSelectionScene — default Средний highlighted + HARD-selected state both correct, no overlap with cards/Start button)
+- [x] write tests: selecting a mode + Start creates a player with that `gameMode` (src/tests/presentation/modeSelector.test.ts — default NORMAL, GOD, HARD, unknown→NORMAL, faction+mode independence)
+- [x] run affected tests — must pass before next task (presentation + GameEngine.di + gameMode suites: 388 passed; lint clean)
 
 ### Task 3: God-mode hull floor + downed predicate (pure)
 **Files:**

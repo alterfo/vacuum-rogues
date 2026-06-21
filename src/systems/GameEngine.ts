@@ -1,4 +1,4 @@
-import type { GameConfig } from "@/types";
+import type { GameConfig, GameMode } from "@/types";
 import {
   SceneType,
   FactionType,
@@ -363,6 +363,14 @@ export class GameEngine {
         captainName: "Captain",
         startingMoney: 1000,
       });
+
+      // Per-run difficulty mode chosen on the new-game screen (default NORMAL).
+      // Read here (not in createPlayer) so the field is set on the canonical
+      // Player the engine owns; "downed" is derived from mode + hull, not stored.
+      const selectedGameMode =
+        (context as { selectedGameMode?: GameMode })?.selectedGameMode ??
+        "NORMAL";
+      this.player.setGameMode(selectedGameMode);
 
       // Starter spare gear. These are authored as legacy ShipModules ("Лазер
       // МК-1" / "Базовый щит" / "Быстрый двигатель") then converted to installable

@@ -3,6 +3,7 @@ import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import { FactionType, SceneType } from "@/types";
+import type { GameMode } from "@/types";
 import { logger } from "@/utils/logger";
 import { pickVariant } from "./textures";
 import {
@@ -14,12 +15,36 @@ import {
 } from "@/config/factionConfig";
 
 /**
+ * Difficulty modes offered on the new-game screen. Default is Средний (NORMAL),
+ * reproducing today's behaviour; God floors hull + downs the ship until repair;
+ * Hard adds hostiles. The chosen mode is passed into new-game player creation.
+ */
+const GAME_MODE_OPTIONS: { mode: GameMode; title: string; desc: string }[] = [
+  {
+    mode: "GOD",
+    title: "Бог",
+    desc: "Корабль не гибнет — при нуле прочности глохнут оружие и гиперпрыжок до ремонта",
+  },
+  {
+    mode: "NORMAL",
+    title: "Средний",
+    desc: "Стандартная сложность",
+  },
+  {
+    mode: "HARD",
+    title: "Сложный",
+    desc: "Больше пиратов и Сверхразума, крупнее гарнизоны",
+  },
+];
+
+/**
  * Faction Selection Scene - allows player to choose their faction before starting the game
  */
 export class RaceSelectionScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private mainContainer: Container | null = null;
   private selectedFaction: FactionType = FactionType.OUTLANDERS;
+  private selectedMode: GameMode = "NORMAL";
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(renderer: Renderer) {
@@ -120,6 +145,19 @@ export class RaceSelectionScene extends GameScene {
       this.renderFactionCard(faction, x, y, cardWidth, cardHeight);
     }
 
+    // The difficulty selector fills the next grid cell after the last faction
+    // card (with 5 factions that's the empty bottom-right slot — no overlap with
+    // the cards or the Start button).
+    const modeSlot = factions.length;
+    const modeRow = Math.floor(modeSlot / 3);
+    const modeCol = modeSlot % 3;
+    this.renderModeSelector(
+      startX + modeCol * (cardWidth + gap),
+      startY + modeRow * (cardHeight + gap),
+      cardWidth,
+      cardHeight,
+    );
+
     // Back button (top-left)
     const backBtn = new Text({
       text: "[ Назад ]",
@@ -147,6 +185,153 @@ export class RaceSelectionScene extends GameScene {
 
     // Start button
     this.renderStartButton(screenWidth / 2, screenHeight - 80);
+  }
+
+  /**
+   * Render the difficulty-mode selector (Бог / Средний / Сложный) inside a
+   * card-sized box. The chosen mode is carried into new-game player creation by
+   * {@link startGame}.
+   */
+  private renderModeSelector(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): void {
+    if (!this.mainContainer) return;
+
+    const panel = new Container();
+    panel.x = x;
+    panel.y = y;
+
+    // Faint backing panel so the box reads as part of the grid.
+    const bg = new Graphics();
+    bg.rect(0, 0, width, height);
+    bg.fill({ color: 0x0a1a2a, alpha: 0.6 });
+    bg.stroke({ color: 0x335577, width: 1 });
+    bg.eventMode = "none";
+    panel.addChild(bg);
+
+    // Header
+    const header = new Text({
+      text: "СЛОЖНОСТЬ",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 16,
+        fill: 0x88ccff,
+        fontWeight: "bold",
+        letterSpacing: 3,
+      },
+    });
+    header.anchor.set(0.5, 0);
+    header.x = width / 2;
+    header.y = 10;
+    header.eventMode = "none";
+    panel.addChild(header);
+
+    this.mainContainer.addChild(panel);
+
+    // Three full-width chips stacked vertically below the header.
+    const inset = 10;
+    const headerH = 38;
+    const chipGap = 10;
+    const count = GAME_MODE_OPTIONS.length;
+    const chipW = width - inset * 2;
+    const chipH = (height - headerH - inset - chipGap * (count - 1)) / count;
+    for (let i = 0; i < count; i++) {
+      const cy = y + headerH + i * (chipH + chipGap);
+      this.renderModeChip(GAME_MODE_OPTIONS[i], x + inset, cy, chipW, chipH);
+    }
+  }
+
+  /**
+   * Render a single difficulty chip; the currently-selected mode is highlighted.
+   */
+  private renderModeChip(
+    opt: { mode: GameMode; title: string; desc: string },
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): void {
+    if (!this.mainContainer) return;
+
+    const chip = new Container();
+    chip.x = x;
+    chip.y = y;
+
+    const isSelected = opt.mode === this.selectedMode;
+    const bg = new Graphics();
+    bg.rect(0, 0, width, height);
+    bg.fill({ color: isSelected ? 0x1a3a4a : 0x0a1a2a, alpha: 0.95 });
+    bg.stroke({
+      color: isSelected ? 0x00ffff : 0x444444,
+      width: isSelected ? 3 : 2,
+    });
+    bg.eventMode = "static";
+    bg.cursor = "pointer";
+    chip.addChild(bg);
+
+    const title = new Text({
+      text: opt.title,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 14,
+        fill: isSelected ? 0x00ffff : 0xffffff,
+        fontWeight: "bold",
+      },
+    });
+    title.x = 10;
+    title.y = 6;
+    title.eventMode = "none";
+    chip.addChild(title);
+
+    const desc = new Text({
+      text: opt.desc,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 10,
+        fill: 0xbbbbbb,
+        wordWrap: true,
+        wordWrapWidth: width - 20,
+        lineHeight: 12,
+      },
+    });
+    desc.x = 10;
+    desc.y = 24;
+    desc.eventMode = "none";
+    chip.addChild(desc);
+
+    bg.on("pointerdown", () => {
+      this.selectMode(opt.mode);
+    });
+
+    bg.on("pointerover", () => {
+      if (!isSelected) {
+        bg.clear();
+        bg.rect(0, 0, width, height);
+        bg.fill({ color: 0x152535, alpha: 0.98 });
+        bg.stroke({ color: 0x00ffff, width: 2 });
+      }
+    });
+
+    bg.on("pointerout", () => {
+      if (!isSelected) {
+        bg.clear();
+        bg.rect(0, 0, width, height);
+        bg.fill({ color: 0x0a1a2a, alpha: 0.95 });
+        bg.stroke({ color: 0x444444, width: 2 });
+      }
+    });
+
+    this.mainContainer.addChild(chip);
+  }
+
+  /** Select a difficulty mode and re-render to reflect the choice. */
+  private selectMode(mode: GameMode): void {
+    this.selectedMode = mode;
+    logger.info(`Selected game mode: ${mode}`);
+    this.refresh();
   }
 
   /**
@@ -440,12 +625,15 @@ export class RaceSelectionScene extends GameScene {
   private async startGame(): Promise<void> {
     if (!this.gameEngine) return;
 
-    logger.info(`Starting game with faction: ${this.selectedFaction}`);
+    logger.info(
+      `Starting game with faction: ${this.selectedFaction}, mode: ${this.selectedMode}`,
+    );
 
-    // Pass selected faction to GameEngine for player creation
+    // Pass selected faction + difficulty mode to GameEngine for player creation
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
       selectedFaction: this.selectedFaction,
+      selectedGameMode: this.selectedMode,
     });
   }
 
@@ -458,6 +646,17 @@ export class RaceSelectionScene extends GameScene {
     const upper = faction.toUpperCase() as FactionType;
     const valid = (Object.values(FactionType) as string[]).includes(upper);
     this.selectFaction(valid ? upper : FactionType.OUTLANDERS);
+  }
+
+  /**
+   * E2E hook: select a difficulty mode by name string.
+   * Accepts a GameMode value (case-insensitive); defaults to NORMAL.
+   */
+  e2eSelectMode(mode: string): void {
+    if (!__DEBUG__) return;
+    const upper = mode.toUpperCase();
+    const valid = GAME_MODE_OPTIONS.some((o) => o.mode === upper);
+    this.selectMode(valid ? (upper as GameMode) : "NORMAL");
   }
 
   /**
