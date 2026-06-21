@@ -2,6 +2,32 @@ import { Container, Graphics, Text } from "pixi.js";
 import type { NpcShip } from "@/domain/NpcShip";
 import { NpcRole, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
+import {
+  commsContextFor,
+  commsOptionsFor,
+  type CommsContext,
+  type CommsOption,
+} from "@/systems/comms/commsOptions";
+
+/** Button label per context-driven comms option (universal hail window). */
+const OPTION_LABELS: Record<CommsOption, string> = {
+  trade: "Торговать",
+  hire: "Нанять",
+  ally: "Союз",
+  attack: "Атаковать",
+  "pay-tribute": "Откупиться",
+  flee: "Бежать",
+};
+
+/** Button colour per comms option. */
+const OPTION_COLORS: Record<CommsOption, number> = {
+  trade: 0x885500,
+  hire: 0x556600,
+  ally: 0x336688,
+  attack: 0x880000,
+  "pay-tribute": 0x886600,
+  flee: 0x444466,
+};
 
 const FACTION_TYPE_LABELS: Record<FactionType, string> = {
   [FactionType.OUTLANDERS]: "Окраинник",
@@ -34,6 +60,12 @@ export interface NpcContactCallbacks {
   onAttack: () => void;
   onApproach: () => void;
   onClose: () => void;
+  /** Context-driven options of the universal hail; wired by later tasks. A
+   *  comms option only renders a button once its handler is supplied. */
+  onHire?: () => void;
+  onAlly?: () => void;
+  onPayTribute?: () => void;
+  onFlee?: () => void;
 }
 
 /**
@@ -44,13 +76,18 @@ export class NpcContactPanel {
   private readonly callbacks: NpcContactCallbacks;
 
   private static readonly W = 240;
-  // Taller when in radar range: scan button + possible result area (Task 8).
-  private static readonly H_IN_RANGE = 350;
+  // First action button sits below the stat readout; the panel grows to fit the
+  // number of context-driven buttons it actually renders.
+  private static readonly BTN_TOP = 162;
+  private static readonly BTN_STEP = 30;
   private static readonly H_OUT = 230;
 
   private readonly inRange: boolean;
   private readonly playerScanPower: number;
+  private readonly context: CommsContext;
   private scanResultLabel: Text | null = null;
+  // Y where the scan readout is mounted — set after buttons so it never overlaps.
+  private scanResultY = 284;
 
   constructor(
     npc: NpcShip,
@@ -59,18 +96,87 @@ export class NpcContactPanel {
     callbacks: NpcContactCallbacks,
     inRange = true,
     playerScanPower = 0,
+    context: CommsContext = commsContextFor(npc),
   ) {
     this.callbacks = callbacks;
     this.inRange = inRange;
     this.playerScanPower = playerScanPower;
+    this.context = context;
     this.container = new Container();
     this.container.x = screenWidth - NpcContactPanel.W - 20;
     this.container.y = 80;
     this.render(npc);
   }
 
+  /**
+   * Map a comms option to its wired callback (if any). An option without a
+   * handler is simply not rendered — this is how later tasks (hire/ally/tribute/
+   * flee) light up their buttons additively without changing this renderer.
+   */
+  private optionHandler(opt: CommsOption): (() => void) | undefined {
+    switch (opt) {
+      case "trade":
+        return this.callbacks.onTrade;
+      case "attack":
+        return this.callbacks.onAttack;
+      case "hire":
+        return this.callbacks.onHire;
+      case "ally":
+        return this.callbacks.onAlly;
+      case "pay-tribute":
+        return this.callbacks.onPayTribute;
+      case "flee":
+        return this.callbacks.onFlee;
+    }
+  }
+
+  /**
+   * Build the in-range action button set for this hail: talk/scan standing
+   * affordances bracketing the context-driven {@link commsOptionsFor} options.
+   * An option whose handler is not yet wired is silently skipped, so the neutral
+   * panel renders the familiar Связаться/Торговать/Атаковать/Сканировать set.
+   */
+  private buildActionButtons(
+    npc: NpcShip,
+  ): { label: string; color: number; onClick: () => void }[] {
+    const out: { label: string; color: number; onClick: () => void }[] = [];
+    // Talk + scan frame a normal hail; a forced pirate shakedown or a futile
+    // Overmind hail (gibberish — Task 5) drops them.
+    const showStanding =
+      this.context !== "pirate-shakedown" && this.context !== "overmind";
+    if (showStanding) {
+      out.push({
+        label: "Связаться",
+        color: 0x004488,
+        onClick: this.callbacks.onHail,
+      });
+    }
+    for (const opt of commsOptionsFor(npc, this.context)) {
+      const onClick = this.optionHandler(opt);
+      if (!onClick) continue;
+      out.push({
+        label: OPTION_LABELS[opt],
+        color: OPTION_COLORS[opt],
+        onClick,
+      });
+    }
+    if (showStanding) {
+      out.push({
+        label: "Сканировать",
+        color: 0x005544,
+        onClick: () => this.onScan(npc),
+      });
+    }
+    return out;
+  }
+
   private render(npc: NpcShip): void {
-    const h = this.inRange ? NpcContactPanel.H_IN_RANGE : NpcContactPanel.H_OUT;
+    // Compute the in-range action buttons first so the panel can size itself to
+    // the number it actually renders (the universal hail varies by context).
+    const buttons = this.inRange ? this.buildActionButtons(npc) : [];
+    const h = this.inRange
+      ? NpcContactPanel.BTN_TOP + buttons.length * NpcContactPanel.BTN_STEP + 70
+      : NpcContactPanel.H_OUT;
     const bg = new Graphics();
     bg.rect(0, 0, NpcContactPanel.W, h);
     bg.fill({ color: 0x000000, alpha: 0.85 });
@@ -112,8 +218,8 @@ export class NpcContactPanel {
     );
 
     if (this.inRange) {
-      // Within radar range: detailed scan readout, then the full action set
-      // (US-070 #3 — more is known about a ship once it is on the scanner).
+      // Within radar range: detailed scan readout, then the context-driven action
+      // set (US-070 #3 — more is known about a ship once it is on the scanner).
       this.addLabel(`Щиты: ${Math.round(npc.shields)}`, 12, 120, 12, 0x66ccff);
       this.addLabel(`Урон: ${Math.round(npc.damage)}`, 130, 120, 12, 0xffaa66);
       this.addLabel(`Скорость: ${npc.speed.toFixed(2)}`, 12, 138, 12, 0xcccccc);
@@ -125,10 +231,12 @@ export class NpcContactPanel {
         0xffee88,
       );
 
-      this.addButton("Связаться", 12, 162, 0x004488, this.callbacks.onHail);
-      this.addButton("Торговать", 12, 192, 0x885500, this.callbacks.onTrade);
-      this.addButton("Атаковать", 12, 222, 0x880000, this.callbacks.onAttack);
-      this.addButton("Сканировать", 12, 252, 0x005544, () => this.onScan(npc));
+      let y = NpcContactPanel.BTN_TOP;
+      for (const b of buttons) {
+        this.addButton(b.label, 12, y, b.color, b.onClick);
+        y += NpcContactPanel.BTN_STEP;
+      }
+      this.scanResultY = y + 4;
     } else {
       // Beyond radar range (US-070 #3): no hail/trade — the ship can only close
       // the distance to firing range, after which the panel offers them. Attack
@@ -282,7 +390,7 @@ export class NpcContactPanel {
       },
     });
     label.x = 12;
-    label.y = 284;
+    label.y = this.scanResultY;
     label.eventMode = "none";
     this.scanResultLabel = label;
     this.container.addChild(label);
