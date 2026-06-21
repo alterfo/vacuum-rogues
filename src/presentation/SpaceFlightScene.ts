@@ -1686,6 +1686,24 @@ export class SpaceFlightScene extends GameScene {
       }
       return;
     }
+    // Space runs the planned turn: the keyboard equivalent of the confirming
+    // second click — execute the current planned route without re-clicking the
+    // target. With no route planned it's a no-op + hint. Guarded so a held key
+    // (auto-repeat), a combat pause, or an already-running turn can't re-fire
+    // executeRouteTo (double-fire / crash).
+    if (event.key === " " || event.code === "Space") {
+      event.preventDefault(); // Space would otherwise scroll the page
+      if (event.repeat || this.combatPause.paused || this.isTurnRunning) return;
+      if (this.plannedRoute) {
+        this.executeRouteTo(this.plannedRoute.x, this.plannedRoute.y);
+        logger.info(
+          `▶️ Space: executing planned route to (${this.plannedRoute.x.toFixed(0)}, ${this.plannedRoute.y.toFixed(0)})`,
+        );
+      } else {
+        this.hud.showMessage("Проложите маршрут", 0xffaa00);
+      }
+      return;
+    }
     if (event.key === "j" || event.key === "J") {
       if (!this.combatPause.paused) this.hud.toggleQuestJournal();
     } else if (event.key === "i" || event.key === "I") {
