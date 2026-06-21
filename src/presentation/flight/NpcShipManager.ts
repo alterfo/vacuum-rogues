@@ -8,7 +8,13 @@ import type { SystemBounds } from "../NpcShipSprite";
 import { NpcContactPanel } from "../NpcContactPanel";
 import type { NpcShip } from "@/domain/NpcShip";
 import { npcsPresentInSystem, NpcSimulator } from "@/systems/npc/NpcSimulator";
-import { wantsToShakedown, shipCombatStrength } from "@/systems/npc/NpcBrain";
+import {
+  wantsToShakedown,
+  shipCombatStrength,
+  shakedownTribute,
+  attemptFlee,
+} from "@/systems/npc/NpcBrain";
+import { payTribute } from "@/systems/banking/economy";
 import { SeededRNG } from "@/utils/seededRNG";
 import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
@@ -964,9 +970,10 @@ export class NpcShipManager implements FlightModule {
 
   /**
    * Open the universal comms window in pirate-shakedown context ("Кошелёк или
-   * жизнь!") and halt flight so the demand interrupts the player. The pay /
-   * refuse / flee resolution is wired in Task 3 — for now the panel surfaces the
-   * demand and the always-available attack response.
+   * жизнь!") and halt flight so the demand interrupts the player. The panel
+   * surfaces the three responses: Откупиться (pay tribute → the pirate
+   * disengages), Атаковать (refuse → fight), and Бежать (flee → escape-by-speed
+   * roll). Pay/flee are resolved here (Task 3); attack reuses {@link onAttackNpc}.
    */
   private openShakedownHail(npc: NpcShip): void {
     this.deps.endTurn(); // freeze flight so the hail can't be flown past
@@ -984,6 +991,8 @@ export class NpcShipManager implements FlightModule {
         onAttack: () => this.onAttackNpc(npc),
         onApproach: () => this.onApproachNpc(npc),
         onClose: () => this.closeNpcContactPanel(),
+        onPayTribute: () => this.onPayTribute(npc),
+        onFlee: () => this.onFleeShakedown(npc),
       },
       true, // the pirate has closed to talking distance — full readout + options
       scanPower,
@@ -991,6 +1000,72 @@ export class NpcShipManager implements FlightModule {
     );
     this.uiLayer.addChild(this.npcContactPanel.container);
     this.deps.showMessage(`${npc.name}: «Кошелёк или жизнь!»`, 0xff5555);
+  }
+
+  /**
+   * "Откупиться": pay the pirate's tribute through the bank bus (a balanced
+   * player → pirate transfer — never a direct credit write) and the pirate
+   * disengages, leaving the player alone this encounter. The tribute is a pure
+   * function of the player's purse ({@link shakedownTribute}).
+   */
+  private onPayTribute(npc: NpcShip): void {
+    const player = this.gameEngine?.player;
+    this.closeNpcContactPanel();
+    if (!player) return;
+    const tribute = shakedownTribute(player.credits);
+    payTribute(
+      this.gameEngine?.bank,
+      player,
+      npc,
+      tribute,
+      `Откуп пирату «${npc.name}»`,
+    );
+    this.disengagePirate(npc);
+    this.deps.showMessage(
+      `Откуп ${tribute} кр. — ${npc.name} отступает.`,
+      0xffee88,
+    );
+  }
+
+  /**
+   * "Бежать": attempt to out-run the pirate. The escape is a pure
+   * {@link attemptFlee} roll on the player's vs the pirate's speed, seeded
+   * deterministically by ship id + galaxy day. Success → the pirate breaks off;
+   * failure → the pirate runs you down and opens fire.
+   */
+  private onFleeShakedown(npc: NpcShip): void {
+    this.closeNpcContactPanel();
+    const physics = this.deps.getShipPhysics();
+    const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
+    const playerSpeed = physics?.getMaxSpeed() ?? 0;
+    const day = this.gameEngine?.galaxy?.gameDays ?? 0;
+    const escaped = attemptFlee(
+      playerSpeed,
+      npc.speed,
+      new SeededRNG(`flee:${npc.id}:${day}`),
+    );
+    if (escaped) {
+      this.disengagePirate(npc);
+      this.deps.showMessage(`Вы оторвались от ${npc.name}!`, 0x88ff88);
+      return;
+    }
+    // Caught — the pirate attacks. Engage in-flight combat with it as the target.
+    this.deps.showMessage(`Уйти не удалось — ${npc.name} атакует!`, 0xff5555);
+    if (sprite) {
+      this.deps.startInFlightCombat?.(sprite);
+      this.deps.selectCombatTarget?.(sprite);
+    }
+  }
+
+  /**
+   * A pirate breaks off its shakedown (paid off or out-run): drop its pursuit
+   * aggression and orbit anchor so it stops chasing the player this encounter.
+   */
+  private disengagePirate(npc: NpcShip): void {
+    const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
+    if (!sprite) return;
+    sprite.setAggressive(false);
+    this.npcAnchorPlanet.delete(sprite);
   }
 
   /**

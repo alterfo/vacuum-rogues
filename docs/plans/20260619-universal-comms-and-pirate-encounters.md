@@ -82,12 +82,12 @@ Make ship-to-ship communication a real interaction layer:
   src/systems/banking/economy.ts (tribute transfer — reuse facade)
 - Create: src/tests/comms/shakedownOutcome.test.ts
 
-- [ ] pay → balanced bus transfer (player → pirate) + pirate disengages; refuse → combat begins;
+- [x] pay → balanced bus transfer (player → pirate) + pirate disengages; refuse → combat begins;
       flee → escape chance from relative speed
-- [ ] ⚠️ existing economy tests must stay green — if any reds, STOP and fix the posting
-- [ ] write unit tests: pay moves credits by exactly `-tribute` + GL balanced; refuse → hostile;
+- [x] ⚠️ existing economy tests must stay green — if any reds, STOP and fix the posting
+- [x] write unit tests: pay moves credits by exactly `-tribute` + GL balanced; refuse → hostile;
       flee escape probability
-- [ ] run affected tests + economy suite — must pass before next task
+- [x] run affected tests + economy suite — must pass before next task
 
 ### Task 4: Player hire / ally offers
 **Files:**

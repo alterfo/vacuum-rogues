@@ -127,24 +127,15 @@ export interface NpcAccountHolder {
 }
 
 /**
- * Credit an NPC's current account (e.g. pirate plunder) through the bus. NPC
- * balances are not projected, so this keeps `npc.credits` in lockstep with the
- * ledger: it opens + seeds the NPC's current account from its existing credits on
- * first use, books the gain from `counterpartyId`, then reads the new GL balance
- * back into `npc.credits`. Falls back to a direct mutation when banking is absent.
+ * Open + seed an NPC's current account on first use (idempotent), returning its
+ * ledger id. NPC balances are not projected, so the account is seeded from the
+ * NPC's existing `credits` (a `Transfer` out of the bank's cash GL) the first
+ * time it is referenced, keeping the ledger consistent with `npc.credits`.
  */
-export function creditNpc(
-  access: BankAccess | null | undefined,
+function ensureNpcCurrentAccount(
+  access: BankAccess,
   npc: NpcAccountHolder,
-  amount: number,
-  counterpartyId: string,
-  reason: string,
-): void {
-  if (amount === 0) return;
-  if (!access) {
-    npc.credits += amount;
-    return;
-  }
+): string {
   const npcAccountId = currentAccountId(npc.id);
   if (!access.service.getLedger().hasAccount(npcAccountId)) {
     access.bus.dispatch({
@@ -166,9 +157,62 @@ export function creditNpc(
       );
     }
   }
+  return npcAccountId;
+}
+
+/**
+ * Credit an NPC's current account (e.g. pirate plunder) through the bus. NPC
+ * balances are not projected, so this keeps `npc.credits` in lockstep with the
+ * ledger: it opens + seeds the NPC's current account from its existing credits on
+ * first use, books the gain from `counterpartyId`, then reads the new GL balance
+ * back into `npc.credits`. Falls back to a direct mutation when banking is absent.
+ */
+export function creditNpc(
+  access: BankAccess | null | undefined,
+  npc: NpcAccountHolder,
+  amount: number,
+  counterpartyId: string,
+  reason: string,
+): void {
+  if (amount === 0) return;
+  if (!access) {
+    npc.credits += amount;
+    return;
+  }
+  const npcAccountId = ensureNpcCurrentAccount(access, npc);
   ensureCounterparty(access, counterpartyId);
   transfer(access.bus, counterpartyId, npcAccountId, amount, reason);
   npc.credits = access.service.balanceOf(npcAccountId);
+}
+
+/**
+ * Pay a pirate-shakedown tribute ("кошелёк или жизнь") from the player to the
+ * demanding pirate through the bus. A balanced `Transfer` from the player's
+ * current account → the pirate's current account (the counterparty), so
+ * `player.credits` drops by exactly `amount` (via the projection), the pirate's
+ * credits rise, and the GL stays balanced. Opens + seeds the pirate's account on
+ * first use. Falls back to a direct mutation on both sides when banking is not
+ * wired (unit tests without a bus). A non-positive `amount` is a no-op.
+ */
+export function payTribute(
+  access: BankAccess | null | undefined,
+  player: Player,
+  npc: NpcAccountHolder,
+  amount: number,
+  reason: string,
+): void {
+  if (amount <= 0) return;
+  if (
+    access &&
+    access.service.getLedger().hasAccount(player.currentAccountId)
+  ) {
+    const npcAccountId = ensureNpcCurrentAccount(access, npc);
+    transfer(access.bus, player.currentAccountId, npcAccountId, amount, reason);
+    npc.credits = access.service.balanceOf(npcAccountId);
+    return;
+  }
+  player.credits -= amount;
+  npc.credits += amount;
 }
 
 /**

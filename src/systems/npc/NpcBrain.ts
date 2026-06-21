@@ -158,3 +158,88 @@ export function wantsToShakedown(
   if (chance <= 0) return false;
   return rng.next() < chance;
 }
+
+// ---------------------------------------------------------------------------
+// Shakedown resolution — pay / refuse / flee
+// (docs/plans/20260619-universal-comms-and-pirate-encounters.md, Task 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Tuning for the pure shakedown *outcome* helpers below. Kept separate from the
+ * {@link SHAKEDOWN} demand-decision tuning so the tribute size and flee odds can
+ * be tuned without touching the "does a pirate demand?" gate.
+ */
+export const SHAKEDOWN_OUTCOME = {
+  /** Fraction of the player's purse a pirate demands as tribute. */
+  tributeFraction: 0.25,
+  /** Floor on the demand (a pirate won't bother shaking you down for pennies). */
+  minTribute: 100,
+  /** Cap on the demand so a rich player is never crippled by one hail. */
+  maxTribute: 5000,
+  /** Escape chance for a much slower ship (the speed ratio is fully unfavourable). */
+  fleeMinChance: 0.1,
+  /** Escape chance for a much faster ship (the speed ratio is fully favourable). */
+  fleeMaxChance: 0.9,
+  /** At/below this player:pirate speed ratio the escape chance floors out. */
+  fleeSlowRatio: 0.6,
+  /** At/above this player:pirate speed ratio the escape chance saturates. */
+  fleeFastRatio: 1.4,
+} as const;
+
+/**
+ * The tribute a pirate demands given the player's current purse. Pure: a fixed
+ * fraction of the player's credits, clamped to [{@link SHAKEDOWN_OUTCOME.minTribute},
+ * {@link SHAKEDOWN_OUTCOME.maxTribute}] — but never more than the player actually
+ * has (a broke player can be emptied, not put into debt). Zero for a penniless
+ * player. The result is whole credits (rounded) so the move onto a current account
+ * stays save-safe.
+ */
+export function shakedownTribute(playerCredits: number): number {
+  if (playerCredits <= 0) return 0;
+  const demand = Math.round(playerCredits * SHAKEDOWN_OUTCOME.tributeFraction);
+  const bounded = Math.min(
+    Math.max(demand, SHAKEDOWN_OUTCOME.minTribute),
+    SHAKEDOWN_OUTCOME.maxTribute,
+  );
+  return Math.min(bounded, Math.floor(playerCredits));
+}
+
+/**
+ * Probability (0–1) that the player out-runs a shaking-down pirate by fleeing.
+ * Pure function of the two ships' speeds: ramps linearly from
+ * {@link SHAKEDOWN_OUTCOME.fleeMinChance} at/below {@link SHAKEDOWN_OUTCOME.fleeSlowRatio}
+ * to {@link SHAKEDOWN_OUTCOME.fleeMaxChance} at/above {@link SHAKEDOWN_OUTCOME.fleeFastRatio}
+ * of the player:pirate speed ratio. A dead-in-the-water player (speed ≤ 0) can
+ * never escape; a motionless pirate (speed ≤ 0) is always escaped.
+ */
+export function fleeEscapeChance(
+  playerSpeed: number,
+  pirateSpeed: number,
+): number {
+  if (playerSpeed <= 0) return 0;
+  if (pirateSpeed <= 0) return 1;
+  const ratio = playerSpeed / pirateSpeed;
+  const span =
+    SHAKEDOWN_OUTCOME.fleeFastRatio - SHAKEDOWN_OUTCOME.fleeSlowRatio;
+  const t = Math.min(
+    1,
+    Math.max(0, (ratio - SHAKEDOWN_OUTCOME.fleeSlowRatio) / span),
+  );
+  return (
+    SHAKEDOWN_OUTCOME.fleeMinChance +
+    t * (SHAKEDOWN_OUTCOME.fleeMaxChance - SHAKEDOWN_OUTCOME.fleeMinChance)
+  );
+}
+
+/**
+ * Roll whether the player escapes a shakedown by fleeing — pure + deterministic
+ * given the RNG, gated by {@link fleeEscapeChance}. A failed roll means the pirate
+ * runs the player down and the fight begins.
+ */
+export function attemptFlee(
+  playerSpeed: number,
+  pirateSpeed: number,
+  rng: SeededRNG,
+): boolean {
+  return rng.next() < fleeEscapeChance(playerSpeed, pirateSpeed);
+}
