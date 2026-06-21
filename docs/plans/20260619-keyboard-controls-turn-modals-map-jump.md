@@ -73,10 +73,10 @@ Make core interactions keyboard-/mouse-consistent:
 - Create: src/presentation/ui/bindModalKeys.ts (`bindModalKeys({onConfirm, onCancel})` → cleanup fn)
 - Create: src/tests/ui/bindModalKeys.test.ts
 
-- [ ] helper attaches a `keydown` listener mapping Enter→confirm, Esc→cancel, and returns a cleanup
+- [x] helper attaches a `keydown` listener mapping Enter→confirm, Esc→cancel, and returns a cleanup
       that removes it (no leaks); ignores keys when an input field is focused
-- [ ] write unit tests: Enter→confirm, Esc→cancel, cleanup removes the listener, repeated bind/unbind safe
-- [ ] run affected tests — must pass before next task
+- [x] write unit tests: Enter→confirm, Esc→cancel, cleanup removes the listener, repeated bind/unbind safe
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Apply Enter/Esc to the modal set
 **Files:**
