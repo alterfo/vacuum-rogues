@@ -17,7 +17,7 @@ import {
   hireFee,
   hireGoal,
 } from "@/systems/npc/NpcBrain";
-import { payTribute, payHire } from "@/systems/banking/economy";
+import { payTribute } from "@/systems/banking/economy";
 import { SeededRNG } from "@/utils/seededRNG";
 import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
@@ -1178,8 +1178,6 @@ export class NpcShipManager implements FlightModule {
    */
   private offerHireContract(npc: NpcShip, mode: "hire" | "ally"): void {
     this.closeNpcContactPanel();
-    const player = this.gameEngine?.player;
-    if (!player) return;
     const target = this.nearestHostileNpc(npc.id);
     if (!target) {
       this.deps.showMessage(
@@ -1188,36 +1186,32 @@ export class NpcShipManager implements FlightModule {
       );
       return;
     }
-    const fee = hireFee(target);
-    if (player.credits < fee) {
-      this.deps.showMessage(
-        `${npc.name}: «Меньше ${fee} кр. и не подходи.»`,
-        0xffaa00,
-      );
-      return;
-    }
-    if (!acceptsHire(npc, fee, target)) {
+    // acceptsHire still gates the meaningful declines (won't betray its own
+    // faction / itself / won't take the coin while hostile to the player). The
+    // price branch is always satisfied here since the offer equals the fee.
+    if (!acceptsHire(npc, hireFee(target), target)) {
       this.deps.showMessage(`${npc.name}: «Своих не трогаю.»`, 0xffaa00);
       return;
     }
-    payHire(
-      this.gameEngine?.bank,
-      player,
-      npc,
-      fee,
-      `Контракт «${npc.name}» против «${target.name}»`,
-    );
-    npc.goal = hireGoal(target);
+    // Known Limitation #1 (plan 20260619-universal-comms-and-pirate-encounters):
+    // the simulator has no NPC-vs-NPC engagement path yet, so a hire/ally contract
+    // cannot actually be delivered. Do NOT debit the player (via payHire) for an
+    // effect that will not occur — the previous code charged the full fee for an
+    // inert contract, a money-loss bug. Payment is deferred until the merc can
+    // really engage the mark. The hunt goal is still recorded for that future
+    // path (harmless if the daily tick later recomputes it).
+    //
     // NOTE: do NOT stash the mark in `npc.activeQuestTarget` — that field is a
     // *system* id consumed by NpcSimulator's RANGER questing (completion compares
     // it to `currentSystemId`; a ranger only accepts a new quest while it is null,
     // and it persists via the save schema). Writing a *ship* id here permanently
     // wedges a hired ranger out of questing. `npc.goal = hireGoal(target)` already
     // records the contract for any future NPC-vs-NPC engagement.
-    const verb = mode === "ally" ? "вступает в бой" : "берёт контракт";
+    npc.goal = hireGoal(target);
+    const verb = mode === "ally" ? "готов вступить в бой" : "берёт контракт";
     this.deps.showMessage(
-      `${npc.name} ${verb} против ${target.name} за ${fee} кр.`,
-      0x88ff88,
+      `${npc.name} ${verb} против ${target.name} — бой между кораблями пока не поддержан, плата не взята.`,
+      0xffcc44,
     );
   }
 

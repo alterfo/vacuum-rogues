@@ -140,15 +140,17 @@ The pure decision logic, the universal window, the ABS payments, and the Overmin
 implemented and tested. Two behaviours are narrower than the Overview prose and need a follow-up
 decision before they match the design intent:
 
-1. **Hire/ally is paid but inert.** `offerHireContract` (`NpcShipManager`) charges the player via
-   `payHire` (money moves correctly through the bus) and sets `npc.goal = hireGoal(target)`. But
-   there is **no NPC-vs-NPC combat path** in the simulator or `CombatModule` (aggression/pursuit/fire
-   only ever target the player ship), and the day-tick recomputes `npc.goal` — so the hired ship
-   never actually attacks the mark. Net: the player pays for an effect that does not occur. Fix
-   requires either implementing NPC-vs-NPC engagement or not charging until that effect exists.
-   (Post-review 2026-06-21: the harmful `npc.activeQuestTarget = target.id` write was removed — that
-   field is a *system* id for RANGER questing, so stashing a ship id there wedged a hired ranger out
-   of questing and persisted the corruption in saves.)
+1. **Hire/ally is inert (but no longer charged).** `offerHireContract` (`NpcShipManager`) sets
+   `npc.goal = hireGoal(target)`, but there is **no NPC-vs-NPC combat path** in the simulator or
+   `CombatModule` (aggression/pursuit/fire only ever target the player ship), and the day-tick
+   recomputes `npc.goal` — so the hired ship never actually attacks the mark. Completing the feature
+   requires implementing NPC-vs-NPC engagement.
+   (Post-review 2026-06-21, second pass: the `payHire` charge was **removed** — the previous code
+   debited the full fee for an effect that never occurs, a money-loss bug. The contract is now an
+   honest no-charge stub until NPC-vs-NPC engagement exists; the merc message states the plata is not
+   taken. Earlier the harmful `npc.activeQuestTarget = target.id` write was also removed — that field
+   is a *system* id for RANGER questing, so stashing a ship id there wedged a hired ranger out of
+   questing and persisted the corruption in saves.)
 2. **Pirate shakedown only fires for already-aggressive pirates.** The trigger in
    `NpcShipManager.update()` is nested under `if (sprite.aggressive)`, and `wantsToShakedown`
    early-returns false unless `npc.isAggressive()` (locked by `pirateShakedown.test.ts`:
