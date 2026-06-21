@@ -69,10 +69,10 @@ alpha + crisp edges). Because the asset manifest keys by path **without extensio
   portraits,ships,player_ships,surfaces}/**.{png,jpg,jpeg} → .webp
 - Create: src/tests/assets/keyParity.photoreal.test.ts
 
-- [ ] run the converter on the photoreal categories (lossy ~q80); no PNG/JPG remain in them
-- [ ] manifest key-parity holds for these categories (every prior key still resolves)
-- [ ] write tests: keys for the converted categories match the snapshot; files are `.webp`
-- [ ] run affected tests — must pass before next task
+- [x] run the converter on the photoreal categories (lossy ~q80); no PNG/JPG remain in them
+- [x] manifest key-parity holds for these categories (every prior key still resolves)
+- [x] write tests: keys for the converted categories match the snapshot; files are `.webp`
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Convert UI + icons → lossless/high-q WebP
 **Files:**
