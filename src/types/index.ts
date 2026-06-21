@@ -27,6 +27,16 @@ export enum FactionType {
   PROGRESSORS = "PROGRESSORS",
 }
 
+/**
+ * Per-run difficulty mode, chosen on the new-game screen and persisted on the
+ * save (not the global PlayerSettings — it is per playthrough).
+ * - GOD: the ship is never destroyed — a lethal hit floors its hull above 0 and
+ *   leaves it "downed" (can't fire/hyperjump until repaired above the floor).
+ * - NORMAL: baseline behaviour.
+ * - HARD: modestly more hostile systems + larger garrisons.
+ */
+export type GameMode = "GOD" | "NORMAL" | "HARD";
+
 export enum EnemyType {
   SCOUT = "SCOUT",
   FIGHTER = "FIGHTER",

@@ -39,7 +39,7 @@ function isEquipmentClass(id: string, cls: EquipmentClass): boolean {
 }
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 26;
+  static readonly CURRENT_VERSION = 27;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -574,6 +574,15 @@ export class MigrationPipeline {
           : [];
       }
       delete loadout.hullMicromoduleId;
+    },
+    // 26 -> 27: Per-run difficulty mode (Game Difficulty Modes Task 1). Old saves
+    // predate the mode selector — default every existing playthrough to NORMAL so
+    // it reproduces today's behaviour exactly. Idempotent (skips when present).
+    26: (state: SaveState) => {
+      const player = state.player as unknown as { gameMode?: string };
+      if (player && player.gameMode === undefined) {
+        player.gameMode = "NORMAL";
+      }
     },
   };
 }

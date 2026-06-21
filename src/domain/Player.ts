@@ -3,6 +3,7 @@ import type {
   QuestLog,
   Journal,
   FactionType,
+  GameMode,
   TextQuestState,
 } from "@/types";
 import type { PlayerShip } from "./PlayerShip";
@@ -30,6 +31,14 @@ export class Player {
    * the ship next to that planet instead of at the distant system edge.
    */
   landedPlanetId: string | null = null;
+  /**
+   * Per-run difficulty mode. Readonly to callers — set only via {@link setGameMode}
+   * (chosen on the new-game screen). Defaults to NORMAL so old saves and every
+   * Player construction path behave exactly as before. Persisted as a plain field
+   * (PlayerSchema.gameMode); the "downed" state is *derived* from it + hull, not
+   * stored separately.
+   */
+  readonly gameMode: GameMode = "NORMAL";
 
   constructor(
     public readonly id: string,
@@ -81,6 +90,11 @@ export class Player {
     if (!this.visitedSystems.includes(systemId)) {
       this.visitedSystems.push(systemId);
     }
+  }
+
+  /** Sets the per-run difficulty mode (chosen on the new-game screen). */
+  setGameMode(mode: GameMode): void {
+    (this as { gameMode: GameMode }).gameMode = mode;
   }
 
   /** Adjusts reputation with a faction by delta, clamped to [-100, 100]. */

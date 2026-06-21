@@ -248,6 +248,7 @@ export const PlayerSchema = z.object({
   faction: z
     .enum(["OUTLANDERS", "BASTIONS", "SYNDICATE", "PARADOXES", "PROGRESSORS"])
     .default("OUTLANDERS"),
+  gameMode: z.enum(["GOD", "NORMAL", "HARD"]).default("NORMAL"),
 });
 
 export const StationSchema = z.object({
