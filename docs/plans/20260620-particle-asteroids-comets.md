@@ -83,10 +83,10 @@ drift — only the **rendering** changes.
   optional faint debris particle) — keep the drift + edge-respawn logic
 - Create: src/tests/flight/asteroidSprite.test.ts
 
-- [ ] asteroids render as baked shaded rock sprites that tumble (rotation advances with dt); flat
+- [x] asteroids render as baked shaded rock sprites that tumble (rotation advances with dt); flat
       polygon rocks removed; drift/respawn unchanged
-- [ ] write tests: asteroid uses a rock-texture sprite; rotation advances; distinct asteroids vary
-- [ ] run affected tests — must pass before next task
+- [x] write tests: asteroid uses a rock-texture sprite; rotation advances; distinct asteroids vary
+- [x] run affected tests — must pass before next task
 
 ### Task 4: Verify acceptance criteria + performance
 - [ ] verify Overview: comets have soft particle tails, asteroids look like tumbling rocks, no flat

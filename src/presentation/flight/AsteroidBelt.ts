@@ -12,7 +12,11 @@ import {
   hyperbolaPoint,
   type CometFlyby,
 } from "@/utils/flightGeometry";
-import { dustParticleTexture, softGlowTexture } from "../gradientTexture";
+import {
+  dustParticleTexture,
+  rockTexture,
+  softGlowTexture,
+} from "../gradientTexture";
 import { CometDustTail, moteAlpha, moteScale } from "./cometDustTail";
 import type { FlightModule } from "./FlightModule";
 
@@ -31,9 +35,23 @@ const TAIL_TINT = 0xcfe4ff;
 const TAIL_FULL = 1500;
 const TAIL_FADE = 2200;
 
+/**
+ * Asteroid rock sprite: the baked 128 px {@link rockTexture} scaled down to a
+ * ~36–80 px boulder, with per-asteroid scale variation so the field isn't
+ * uniform.
+ */
+const ROCK_BASE_SCALE = 0.28;
+const ROCK_SCALE_VAR = 0.34;
+/** Subtle per-rock tints (warm/cool stone hues) breaking the uniform grey. */
+const ROCK_TINTS = [0xffffff, 0xe8dccb, 0xcfc9bf, 0xd9c7ad, 0xbfc2c0, 0xe0d2bd];
+
 /** A single drifting rock or flyby comet in the foreground asteroid field. */
 interface AsteroidMote {
   graphics: Graphics;
+  // Baked, shaded rock sprite (asteroids only; null when no 2D canvas is
+  // available — jsdom / unit tests — so the asteroid falls back to its drawn
+  // polygon on `graphics` instead of throwing).
+  rock: Sprite | null;
   x: number;
   y: number;
   vx: number; // px/ms (asteroids only)
@@ -137,6 +155,7 @@ export class AsteroidBelt implements FlightModule {
       this.asteroidContainer.addChild(g);
       const a: AsteroidMote = {
         graphics: g,
+        rock: null,
         x: 0,
         y: 0,
         vx: 0,
@@ -153,6 +172,7 @@ export class AsteroidBelt implements FlightModule {
         particles: [],
       };
       if (a.comet) this.setupCometVisuals(a);
+      else this.setupAsteroidVisuals(a);
       this.drawAsteroid(a);
       this.respawnAsteroid(a, true);
       this.asteroids.push(a);
@@ -212,6 +232,29 @@ export class AsteroidBelt implements FlightModule {
     }
   }
 
+  /**
+   * Build the baked rock sprite for a drifting asteroid (natural-rock rework,
+   * 2026-06-20). Replaces the flat `poly`+crater Graphics with a shaded
+   * {@link rockTexture} Sprite — its 3D read comes from baked top-left lighting,
+   * NOT a per-frame redraw. Per-asteroid scale/tint/rotation variation breaks
+   * the uniform look. `rockTexture` returns null with no 2D canvas (jsdom): the
+   * asteroid then keeps its drawn-polygon fallback (see drawAsteroid) — no throw.
+   */
+  private setupAsteroidVisuals(a: AsteroidMote): void {
+    const container = this.asteroidContainer;
+    if (!container) return;
+    const tex = rockTexture(Math.floor(Math.random() * 64));
+    if (!tex) return; // jsdom — drawn-polygon fallback on `graphics`
+    const sprite = new Sprite(tex);
+    sprite.anchor.set(0.5);
+    sprite.scale.set(ROCK_BASE_SCALE + Math.random() * ROCK_SCALE_VAR);
+    sprite.rotation = Math.random() * Math.PI * 2;
+    sprite.tint = ROCK_TINTS[Math.floor(Math.random() * ROCK_TINTS.length)];
+    sprite.eventMode = "none";
+    a.rock = sprite;
+    container.addChild(sprite);
+  }
+
   /** Draw an irregular grey rock (or the comet's fallback nucleus). */
   private drawAsteroid(a: AsteroidMote): void {
     const g = a.graphics;
@@ -228,6 +271,9 @@ export class AsteroidBelt implements FlightModule {
       }
       return;
     }
+    // A baked rock sprite carries the visual (see setupAsteroidVisuals); the
+    // Graphics stays empty. Only the no-canvas (jsdom) fallback draws a polygon.
+    if (a.rock) return;
     {
       const r = 9 + Math.random() * 14;
       const pts: number[] = [];
@@ -303,6 +349,10 @@ export class AsteroidBelt implements FlightModule {
     }
     a.graphics.x = a.x;
     a.graphics.y = a.y;
+    if (a.rock) {
+      a.rock.x = a.x;
+      a.rock.y = a.y;
+    }
     if (a.comet) {
       // A fresh flyby starts with an empty tail (old motes belonged to the prior
       // pass, possibly across the field) and the head shown at the entry point.
@@ -411,6 +461,12 @@ export class AsteroidBelt implements FlightModule {
         a.graphics.x = a.x;
         a.graphics.y = a.y;
         a.graphics.rotation += a.spin * deltaTime;
+        if (a.rock) {
+          // Tumble: the baked rock sprite spins in world space as it drifts.
+          a.rock.x = a.x;
+          a.rock.y = a.y;
+          a.rock.rotation += a.spin * deltaTime;
+        }
         const dx = a.x - cx;
         const dy = a.y - cy;
         if (dx * dx + dy * dy > limitSq) {
