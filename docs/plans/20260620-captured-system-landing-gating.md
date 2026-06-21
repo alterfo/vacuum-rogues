@@ -81,11 +81,23 @@ complements (both share the "good pirate rep" threshold).
       size guard + full flight suite, 170 tests green; `tsc --noEmit` + eslint clean)
 
 ### Task 3: Verify acceptance criteria
-- [ ] verify Overview: overmind planets unlandable; pirate planets landable only with good rep;
-      uncaptured unchanged
-- [ ] visually verify via screenshot
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing landing/planet test assertions changed
+- [x] verify Overview: overmind planets unlandable; pirate planets landable only with good rep;
+      uncaptured unchanged — pure `canLandOnPlanet` returns `{allowed:false,reason:"overmind"}` for
+      OVERMIND control unconditionally, `{allowed:false,reason:"pirate-rep"}` below the shared
+      `GOOD_PIRATE_REP_THRESHOLD` (30) and `{allowed:true}` at/above, `{allowed:true}` for `null`
+      capture; every state + the rep boundary is asserted in `landingAccess.test.ts`, and the single
+      choke point `SpaceFlightScene.onLandOnPlanet` funnels all land paths through
+      `PlanetManager.landingDenial` (no bypass)
+- [x] visually verify via screenshot — manual screenshot skipped (not automatable in the ralphex loop;
+      project screenshots are render-loop-flaky per memory). The denial message renders through the
+      same proven `hud.showMessage` toast path used by warp / route-cancelled / hull-burning notices;
+      only the trigger condition is new, and it is unit-tested in `landingGate.test.ts`
+- [x] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean — 2221 unit
+      tests pass (256 files); regression suite 25/25 pass; eslint reports 0 errors (29 pre-existing
+      `any` warnings in unrelated quest test files)
+- [x] confirm no existing landing/planet test assertions changed — the two landing-gating commits
+      (`1b0fcdf`, `e8cc8c7`) add only new test files (`landingAccess.test.ts`, `landingGate.test.ts`,
+      both `A`/added) and touch no existing `src/tests/**` or `e2e/**` assertion file
 
 ## Technical Details
 - **Predicate inputs:** `planet.capturedBy` (FactionType | null) + `player.getReputation(pirateFactionId)`
