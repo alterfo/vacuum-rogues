@@ -152,6 +152,21 @@ describe("CombatModule.confirmAttack (Task 3)", () => {
     module.update(FIRE); // one resumed auto-fire shot lands
     expect(enemy.npc.hullHP).toBe(afterConfirm - BEAM.damage); // beam again, not pulse
   });
+
+  it("falls back to the default weapon when the confirmed one is unequipped mid-fight", () => {
+    // Regression guard for activeWeapon()'s still-fitted check: a confirmed weapon
+    // persists as the resumed auto-fire weapon ONLY while it stays fitted. If the
+    // player unequips it mid-fight, the resumed auto-fire must fall back to the
+    // remaining fitted weapon (the default playerWeapon) — never fire a weapon the
+    // loadout no longer carries.
+    const { module, enemy, loadout } = makeFight();
+    module.confirmAttack(enemy, BEAM); // beam (dmg 30) becomes the selected weapon
+    const afterConfirm = enemy.npc.hullHP; // 100 - 30
+    expect(loadout.remove("wpn_beam")).toBe(true); // beam unequipped mid-fight
+    module.update(FIRE); // one resumed auto-fire shot lands
+    // Pulse (dmg 14, the only weapon still fitted) lands — NOT the now-gone beam.
+    expect(enemy.npc.hullHP).toBe(afterConfirm - PULSE.damage);
+  });
 });
 
 describe("active-pause confirm wiring (Task 3)", () => {

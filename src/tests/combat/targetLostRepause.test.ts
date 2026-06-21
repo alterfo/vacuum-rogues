@@ -152,6 +152,26 @@ describe("target-lost re-pause (production wiring)", () => {
     expect(b.npc.hullHP).toBe(100); // NO shot landed on the pausing frame
   });
 
+  it("does NOT let a SURVIVING NPC fire on the frame a prune-triggered re-pause is raised", () => {
+    // Companion to the test above, from the NPC side: pruneDisengaged() drops the
+    // selected `a` (escaped) and synchronously re-pauses onto `b` BEFORE
+    // advanceNpcTimers() runs in the same update(). The surviving `b` is in NPC
+    // weapon range with a ready timer, so without the freeze re-check between
+    // prune and the NPC fire loop it would land a free 20-damage shot on the very
+    // frame the world was meant to freeze. The player's hull must be untouched.
+    const { module, controller, ship, pauseReason } = makeFight();
+    const a = makeSprite("a", ESCAPE + 300, 100); // selected, already beyond escape range
+    const b = makeSprite("b", 60, 100); // survivor, inside NPC weapon range, ready to fire
+    module.addCombatant(a); // auto-selected (first combatant)
+    module.addCombatant(b);
+
+    module.update(FIRE);
+
+    expect(controller.paused).toBe(true);
+    expect(pauseReason()).toBe("target-lost");
+    expect(ship.hullHP).toBe(100); // NO surviving-NPC shot landed on the pausing frame
+  });
+
   it("does NOT re-pause when the last combatant dies (fight ends cleanly)", () => {
     const { module, controller, pauseReason } = makeFight();
     const a = makeSprite("a", 50, 10); // only combatant, dies to one pulse
