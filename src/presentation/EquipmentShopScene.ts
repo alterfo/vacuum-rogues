@@ -19,6 +19,7 @@ import {
   acquireUninstalledGear,
   ownedUninstalledGear,
   installOwnedGear,
+  uninstallToOwned,
   gearFit,
   type GearFit,
   KIND_LABEL,
@@ -797,9 +798,10 @@ export class EquipmentShopScene extends GameScene {
     }
 
     let tx = x + 110;
-    for (const gearId of ids) {
+    ids.forEach((gearId, slotIndex) => {
       const gear = gearById(gearId);
-      if (!gear) continue;
+      if (!gear) return;
+      if (tx > x + w - 60) return; // prevent overflow off the strip
       const chip = scaledText(
         `[${gear.name} T${gear.techLevel}]`,
         10,
@@ -809,10 +811,30 @@ export class EquipmentShopScene extends GameScene {
       chip.eventMode = "none";
       chip.x = tx;
       chip.y = y + 6;
-      this.mainContainer.addChild(chip);
-      tx += chip.width + 10;
-      if (tx > x + w - 40) break; // prevent overflow
-    }
+      this.mainContainer!.addChild(chip);
+      tx += chip.width + 4;
+
+      // «Снять» returns the fitted gear to the ТРЮМ (owned-uninstalled store) via
+      // the canonical `uninstallToOwned` seam — the Верфь mirror of the hangar
+      // unequip, so a bought-and-fitted part can be pulled back off here too.
+      const off = scaledText("Снять", 10, 0xffaa44, { rawColor: true });
+      off.eventMode = "static";
+      off.cursor = "pointer";
+      off.x = tx;
+      off.y = y + 6;
+      off.on("pointerdown", (e) => {
+        e.stopPropagation();
+        this.uninstallFittedGear(slotIndex);
+      });
+      off.on("pointerover", () => {
+        off.alpha = 0.7;
+      });
+      off.on("pointerout", () => {
+        off.alpha = 1;
+      });
+      this.mainContainer!.addChild(off);
+      tx += off.width + 12;
+    });
   }
 
   /**
@@ -906,6 +928,21 @@ export class EquipmentShopScene extends GameScene {
     const loadout = this.gameEngine?.playerLoadout;
     if (!player || !loadout) return;
     if (!installOwnedGear(player, loadout, gearId)) return;
+    this.gameEngine?.audio.playSfx("buy").catch(() => {});
+    this.rebuild();
+  }
+
+  /**
+   * Uninstall a fitted item at the Верфь, returning it to the owned-uninstalled
+   * store (ТРЮМ) via the canonical `uninstallToOwned` seam — the planet-shop
+   * mirror of the hangar unequip. The slot index matches the УСТАНОВЛЕНО strip's
+   * iteration order (`loadout.installedGearIds()` aligns with `installedSlots()`).
+   */
+  private uninstallFittedGear(slotIndex: number): void {
+    const player = this.gameEngine?.player;
+    const loadout = this.gameEngine?.playerLoadout;
+    if (!player || !loadout) return;
+    if (!uninstallToOwned(player, loadout, slotIndex)) return;
     this.gameEngine?.audio.playSfx("buy").catch(() => {});
     this.rebuild();
   }
