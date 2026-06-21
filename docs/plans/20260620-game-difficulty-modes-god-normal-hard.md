@@ -101,11 +101,19 @@ jump, and hostile-spawn paths.
   while downed, with a clear hint)
 - Create: src/tests/combat/godModeIntegration.test.ts
 
-- [ ] in GOD a lethal hit leaves the ship alive+downed (no death/GAME_OVER); weapons + hyperjump are
-      blocked while downed; repairing above the floor re-enables them
-- [ ] ⚠️ NORMAL behaviour unchanged — existing combat/death tests stay green; if any reds, STOP
-- [ ] write tests: lethal hit in GOD → alive+downed+no death; fire/jump blocked while downed; repair restores
-- [ ] run affected tests — must pass before next task
+- [x] in GOD a lethal hit leaves the ship alive+downed (no death/GAME_OVER); weapons + hyperjump are
+      blocked while downed; repairing above the floor re-enables them (`CombatModule.fireNpcShot` routes
+      player-hull damage through `applyDamageWithMode` — GOD floors above 0 and warns once, never reaching
+      `onPlayerDestroyed`; `advancePlayerTimer`/`confirmAttack` bail on the new `isPlayerDowned` gate;
+      `SpaceFlightScene.performWarp` + `StarMapScene.performWarpJump` bail on `isDowned(player)` with a
+      repair hint; all derived from gameMode+hull so a repair above the floor clears them)
+- [x] ⚠️ NORMAL behaviour unchanged — existing combat/death tests stay green; if any reds, STOP (full
+      combat suite 178 passed incl. playerDeath; NORMAL/HARD still reach 0 + report death — absent mode ⇒ NORMAL)
+- [x] write tests: lethal hit in GOD → alive+downed+no death; fire/jump blocked while downed; repair restores
+      (`src/tests/combat/godModeIntegration.test.ts` — 10 tests: GOD floor+no-death+one-shot warn, NORMAL/HARD
+      death control, auto-fire + confirmAttack blocked while downed, repair re-enables fire, isDowned jump gate)
+- [x] run affected tests — must pass before next task (combat suite + flight combatModule/combatEngagement:
+      178 passed; `tsc --noEmit` clean; lint 0 errors)
 
 ### Task 5: Hard-mode hostile scaling
 **Files:**

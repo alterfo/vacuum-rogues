@@ -50,7 +50,22 @@ export function applyDamageWithMode(
 ): ModeDamageResult {
   const floor = hullFloorFor(mode, maxHull);
   const newHull = Math.max(floor, hull - damage);
-  return { hull: newHull, downed: mode === "GOD" && newHull <= floor };
+  return { hull: newHull, downed: isHullDowned(mode, newHull, maxHull) };
+}
+
+/**
+ * Player-free "downed" predicate over a raw hull reading: true only in GOD mode
+ * when `hull` is at or below the GOD floor for `maxHull`. The shared core behind
+ * both {@link isDowned} (scene/jump gates) and the combat damage path, so the
+ * "GOD && hull ≤ floor" rule lives in exactly one place. NORMAL/HARD are never
+ * downed.
+ */
+export function isHullDowned(
+  mode: GameMode,
+  hull: number,
+  maxHull: number,
+): boolean {
+  return mode === "GOD" && hull <= hullFloorFor(mode, maxHull);
 }
 
 /**
@@ -59,8 +74,5 @@ export function applyDamageWithMode(
  * hull, so repairing above the floor clears it. NORMAL/HARD are never downed.
  */
 export function isDowned(player: Player): boolean {
-  if (player.gameMode !== "GOD") return false;
-  return (
-    player.ship.hullHP <= hullFloorFor(player.gameMode, player.ship.maxHull)
-  );
+  return isHullDowned(player.gameMode, player.ship.hullHP, player.ship.maxHull);
 }

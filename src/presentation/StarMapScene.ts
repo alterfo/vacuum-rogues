@@ -8,6 +8,7 @@ import { logger } from "@/utils/logger";
 import { getSystemVisibility, pickLabelPosition } from "@/utils/starMapUtils";
 import type { LabelBound, StarPos, WarpLine } from "@/utils/starMapUtils";
 import { computeGalaxyThreat } from "@/systems/galaxy/GalaxyStatusIndicator";
+import { isDowned } from "@/systems/combat/godMode";
 
 export interface StarMapContext {
   galaxy?: Galaxy;
@@ -1230,6 +1231,14 @@ export class StarMapScene extends GameScene {
 
     if (!this.gameEngine?.player) {
       logger.warn("Cannot warp: no player or game engine");
+      return;
+    }
+
+    // A downed ship (GOD mode, hull at the floor) can't hyperjump — block the
+    // map double-click jump with a clear hint. Clears once the hull is repaired
+    // above the floor (the predicate is derived from gameMode + hull).
+    if (isDowned(this.gameEngine.player)) {
+      this.showMessage("Корабль повреждён — нужен ремонт");
       return;
     }
 

@@ -3,6 +3,8 @@ import type { ShipPhysics } from "@/systems/ShipPhysics";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { GearKind, type WeaponSpec } from "@/systems/equipment/GearCatalog";
 import { GAME_BALANCE } from "@/config/balance";
+import type { GameMode } from "@/types";
+import { applyDamageWithMode, isHullDowned } from "@/systems/combat/godMode";
 import type { NpcShipSprite } from "../NpcShipSprite";
 import type { FlightModule } from "./FlightModule";
 import { CombatHud } from "./CombatHud";
@@ -40,6 +42,13 @@ export interface CombatModuleDeps {
   getScreenSize?(): { width: number; height: number };
   /** Player ship — incoming NPC fire reduces its hull each round (Task 1). */
   getPlayerShip?(): { hullHP: number; maxHull: number } | null;
+  /**
+   * Current difficulty mode. In GOD a lethal hit floors the player's hull above
+   * 0 and "downs" the ship (no death, but it can't fire or hyperjump until
+   * repaired above the floor); NORMAL/HARD are unchanged. Absent ⇒ NORMAL, so
+   * lightweight callers (unit tests) need not supply it.
+   */
+  getGameMode?(): GameMode;
   /** Resolve a killed NPC: drop loot, remove the sprite + domain entry. */
   onNpcDestroyed?(sprite: NpcShipSprite): void;
   /**
@@ -107,6 +116,13 @@ export class CombatModule implements FlightModule {
 
   /** Guards the one-shot low-hull retreat warning per fight. */
   private lowHullWarned = false;
+
+  /**
+   * Guards the one-shot "ship downed" warning per fight (GOD mode only): once a
+   * lethal hit floors the hull we tell the player exactly once that they must
+   * repair before they can fire or jump again. Reset by {@link endCombat}.
+   */
+  private downedWarned = false;
 
   /**
    * Guards the one-shot player-death notification per fight: once the player's
@@ -248,6 +264,9 @@ export class CombatModule implements FlightModule {
    */
   confirmAttack(target: NpcShipSprite, weapon: WeaponSpec): void {
     if (!this.isActive || !this.combatants.has(target)) return;
+    // A downed ship (GOD mode, hull at the floor) can't fire — even a deliberate
+    // hand-picked shot is blocked until the hull is repaired above the floor.
+    if (this.isPlayerDowned()) return;
     this.selectTarget(target);
     // Persist the chosen weapon so the resumed real-time auto-fire keeps using it
     // (the docstring's "the real-time fight continues against it" applies to the
@@ -283,6 +302,7 @@ export class CombatModule implements FlightModule {
     this.selectedWeapon = null;
     this.playerFireTimer = 0;
     this.lowHullWarned = false;
+    this.downedWarned = false;
     this.playerDeathReported = false;
     this.hud?.close();
     // Re-arm the active-pause debounce so the next engagement pauses fresh on
@@ -351,6 +371,8 @@ export class CombatModule implements FlightModule {
   private advancePlayerTimer(deltaTime: number): void {
     this.playerFireTimer += deltaTime;
     if (this.playerFireTimer < GAME_BALANCE.combatFireIntervalMs) return;
+    // A downed ship (GOD mode, hull at the floor) can't auto-fire until repaired.
+    if (this.isPlayerDowned()) return;
     const target = this.selectedTarget;
     const weapon = this.activeWeapon();
     if (!target || !this.combatants.has(target) || !weapon) return;
@@ -368,7 +390,17 @@ export class CombatModule implements FlightModule {
     // debounces it to the first hit per engagement (it does not re-pause once the
     // player has resumed this fight).
     this.deps.onPlayerUnderAttack?.();
-    ship.hullHP = Math.max(0, ship.hullHP - npc.npc.damage);
+    // Route the hit through the difficulty mode: GOD floors the hull above 0 and
+    // marks the ship "downed" instead of killing it; NORMAL/HARD clamp to 0 (the
+    // old `Math.max(0, …)` behaviour). Absent mode ⇒ NORMAL.
+    const mode = this.deps.getGameMode?.() ?? "NORMAL";
+    const result = applyDamageWithMode(
+      mode,
+      ship.hullHP,
+      npc.npc.damage,
+      ship.maxHull,
+    );
+    ship.hullHP = result.hull;
     const physics = this.deps.getShipPhysics();
     if (physics) {
       this.damageNumbers?.spawn(
@@ -379,6 +411,19 @@ export class CombatModule implements FlightModule {
       );
       // Per-turn fire flash from the enemy to the player ship (who shoots whom).
       this.hud?.flashShot(npc.x, npc.y, physics.shipX, physics.shipY, false);
+    }
+    // GOD mode: the lethal hit floored the hull above 0 and downed the ship —
+    // it survives but can't fire or hyperjump until repaired. This pre-empts the
+    // death/GAME_OVER path entirely (hull never reaches 0 in GOD). Warn once.
+    if (result.downed) {
+      if (!this.downedWarned) {
+        this.downedWarned = true;
+        this.deps.showMessage?.(
+          "Корабль выведен из строя — нужен ремонт",
+          0xff8800,
+        );
+      }
+      return;
     }
     // Hull reached 0 → the player is destroyed. Surface it to the host exactly
     // once; the host fires the game-over flow (and guards again for idempotency).
@@ -474,6 +519,19 @@ export class CombatModule implements FlightModule {
     const sel = this.selectedWeapon;
     if (sel && this.fittedWeapons().some((w) => w.id === sel.id)) return sel;
     return this.playerWeapon();
+  }
+
+  /**
+   * Whether the player ship is currently "downed" — GOD mode with the hull at
+   * or below the GOD floor. A downed ship can't fire (auto or confirmed). Derived
+   * from the live mode + hull, so a repair above the floor re-enables fire with
+   * no extra state. NORMAL/HARD (or no mode) are never downed.
+   */
+  private isPlayerDowned(): boolean {
+    const ship = this.deps.getPlayerShip?.() ?? null;
+    if (!ship) return false;
+    const mode = this.deps.getGameMode?.() ?? "NORMAL";
+    return isHullDowned(mode, ship.hullHP, ship.maxHull);
   }
 
   /** Whether the loadout has at least one weapon to fight with. */

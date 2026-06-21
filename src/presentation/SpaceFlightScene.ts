@@ -24,6 +24,7 @@ import { RouteRenderer } from "./flight/RouteRenderer";
 import { PlayerShipRenderer } from "./flight/PlayerShipRenderer";
 import { NpcShipManager } from "./flight/NpcShipManager";
 import { CombatModule } from "./flight/CombatModule";
+import { isDowned } from "@/systems/combat/godMode";
 import { createCombatPauseUi } from "./flight/combatPauseUi";
 import { PlanetManager } from "./flight/PlanetManager";
 import { FlightHud } from "./flight/FlightHud";
@@ -210,6 +211,7 @@ export class SpaceFlightScene extends GameScene {
       getGameLayer: () => this.renderer.gameLayer,
       getScreenSize: () => this.renderer.app.screen,
       getPlayerShip: () => this.gameEngine?.player?.ship ?? null,
+      getGameMode: () => this.gameEngine?.player?.gameMode ?? "NORMAL",
       onNpcDestroyed: (s) => {
         const npcId = s.npc.id; // capture before the death path deletes the NPC, then complete its BOUNTY
         this.npcManager.handleInFlightDeath(s);
@@ -1354,6 +1356,17 @@ export class SpaceFlightScene extends GameScene {
       !this.gameEngine?.player ||
       !this.gameEngine.galaxy
     ) {
+      return;
+    }
+    // A downed ship (GOD mode, hull at the floor) can't hyperjump. Cancel the
+    // committed warp and tell the player to repair — clears once hull is raised
+    // above the floor (the predicate is derived from gameMode + hull).
+    if (isDowned(this.gameEngine.player)) {
+      this.pendingWarp = null;
+      this.hud.showMessage(
+        "Корабль повреждён — гиперпрыжок недоступен, нужен ремонт",
+        0xff8800,
+      );
       return;
     }
     this.warpInProgress = true;
