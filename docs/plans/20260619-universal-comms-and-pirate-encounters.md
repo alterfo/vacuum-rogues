@@ -107,9 +107,9 @@ Make ship-to-ship communication a real interaction layer:
   src/presentation/DialogueScene.ts
 - Create: src/tests/comms/overmindGibberish.test.ts
 
-- [ ] hailing an Overmind ship returns a gibberish line and exposes no actionable comms options
-- [ ] write unit tests asserting no trade/hire/ally options for Overmind
-- [ ] run affected tests — must pass before next task
+- [x] hailing an Overmind ship returns a gibberish line and exposes no actionable comms options
+- [x] write unit tests asserting no trade/hire/ally options for Overmind
+- [x] run affected tests — must pass before next task
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify Overview: universal window, pirate shakedown, hire/ally, Overmind gibberish — all work

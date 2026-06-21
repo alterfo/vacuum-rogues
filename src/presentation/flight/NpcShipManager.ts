@@ -36,6 +36,10 @@ import { hashStr } from "@/utils/hashStr";
 import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
 import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
+import {
+  commsContextFor,
+  overmindGibberish,
+} from "@/systems/comms/commsOptions";
 import type { FlightModule } from "./FlightModule";
 
 /**
@@ -943,6 +947,17 @@ export class NpcShipManager implements FlightModule {
       scanPower,
     );
     this.uiLayer.addChild(this.npcContactPanel.container);
+
+    // Hailing an Overmind ("Предтечи") craft is futile: it answers with nonsense
+    // and the panel surfaces no actionable options (commsOptionsFor → []). Emit a
+    // gibberish transmission so the dead-end reads as alien static, not a bug.
+    if (inRange && commsContextFor(npc) === "overmind") {
+      const day = this.gameEngine?.galaxy?.gameDays ?? 0;
+      const line = overmindGibberish(
+        new SeededRNG(`overmind:${npc.id}:${day}`),
+      );
+      this.deps.showMessage(`${npc.name}: «${line}»`, 0xaa66ff);
+    }
   }
 
   /**
