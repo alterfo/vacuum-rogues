@@ -8,6 +8,8 @@ import type { SystemBounds } from "../NpcShipSprite";
 import { NpcContactPanel } from "../NpcContactPanel";
 import type { NpcShip } from "@/domain/NpcShip";
 import { npcsPresentInSystem, NpcSimulator } from "@/systems/npc/NpcSimulator";
+import { wantsToShakedown, shipCombatStrength } from "@/systems/npc/NpcBrain";
+import { SeededRNG } from "@/utils/seededRNG";
 import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { solveInterceptPoint } from "@/utils/intercept";
@@ -125,6 +127,10 @@ export class NpcShipManager implements FlightModule {
   // but never opens fire. Cleared on arrival, on a switch to attack, and when a
   // fresh route cancels it.
   private approachNpcId: string | null = null;
+  // Pirate ids already rolled for a "кошелёк или жизнь" shakedown this encounter,
+  // so a passing pirate demands tribute at most once (the roll is deterministic
+  // and must not re-fire every frame it sits inside scanner range).
+  private readonly shakedownEvaluated = new Set<string>();
   // Final destination of the last route this manager plotted (the lead point),
   // so a drifting target can be re-aimed against the true endpoint rather than
   // the immediate (possibly sun-avoidance) waypoint ShipPhysics exposes.
@@ -214,6 +220,22 @@ export class NpcShipManager implements FlightModule {
         const dx = sprite.x - physics.shipX;
         const dy = sprite.y - physics.shipY;
         const distSq = dx * dx + dy * dy;
+        // "Кошелёк или жизнь" (Task 2): a hostile pirate that closes to talking
+        // (scanner) range may open a shakedown hail BEFORE weapon range instead
+        // of attacking outright. Rolled once per pirate, deterministically. A
+        // positive roll opens the contact panel in pirate-shakedown context and
+        // halts flight so the demand interrupts the player.
+        if (
+          sprite.npc.role === NpcRole.PIRATE &&
+          !this.shakedownEvaluated.has(sprite.npc.id) &&
+          distSq <= this.SCANNER_RANGE * this.SCANNER_RANGE
+        ) {
+          this.shakedownEvaluated.add(sprite.npc.id);
+          if (this.rollShakedown(sprite.npc)) {
+            this.openShakedownHail(sprite.npc);
+            return; // turn halted by the hail — stop advancing NPCs this frame
+          }
+        }
         // Escape (Task 3): a faster player who has opened beyond the escape range
         // breaks the chase — the out-run aggressor gives up pursuit this
         // encounter (engaged combatants are pruned at the same range by
@@ -302,6 +324,7 @@ export class NpcShipManager implements FlightModule {
     this.closeNpcContactPanel();
     this.followNpcId = null;
     this.approachNpcId = null;
+    this.shakedownEvaluated.clear();
     if (this.overmindOverlay) {
       if (!this.overmindOverlay.destroyed) {
         this.overmindOverlay.destroy({ children: true });
@@ -909,6 +932,65 @@ export class NpcShipManager implements FlightModule {
       scanPower,
     );
     this.uiLayer.addChild(this.npcContactPanel.container);
+  }
+
+  /**
+   * The player's current combat strength (hull + shields + weapon damage), used
+   * to gauge how a passing pirate sizes the player up before a shakedown. Reads
+   * the live ship pools + the loadout's derived weapon damage; 0 when no ship.
+   */
+  private playerCombatStrength(): number {
+    const ship = this.gameEngine?.player?.ship;
+    if (!ship) return 0;
+    const damage =
+      this.gameEngine?.playerLoadout?.derivedStats().weaponDamage ?? 0;
+    return shipCombatStrength({
+      hullHP: ship.hullHP,
+      shields: ship.shields,
+      damage,
+    });
+  }
+
+  /**
+   * Roll the pure {@link wantsToShakedown} decision for a pirate, seeded
+   * deterministically by ship id + galaxy day so the outcome is stable for the
+   * encounter (and reproducible in tests / replays).
+   */
+  private rollShakedown(npc: NpcShip): boolean {
+    const day = this.gameEngine?.galaxy?.gameDays ?? 0;
+    const rng = new SeededRNG(`shakedown:${npc.id}:${day}`);
+    return wantsToShakedown(npc, this.playerCombatStrength(), rng);
+  }
+
+  /**
+   * Open the universal comms window in pirate-shakedown context ("Кошелёк или
+   * жизнь!") and halt flight so the demand interrupts the player. The pay /
+   * refuse / flee resolution is wired in Task 3 — for now the panel surfaces the
+   * demand and the always-available attack response.
+   */
+  private openShakedownHail(npc: NpcShip): void {
+    this.deps.endTurn(); // freeze flight so the hail can't be flown past
+    this.closeNpcContactPanel();
+    this.contactNpcId = npc.id;
+    const scanPower =
+      this.gameEngine?.playerLoadout?.derivedStats().scanPower ?? 0;
+    this.npcContactPanel = new NpcContactPanel(
+      npc,
+      this.renderer.app.screen.width,
+      this.renderer.app.screen.height,
+      {
+        onHail: () => this.onHailNpc(npc),
+        onTrade: () => this.onTradeNpc(npc),
+        onAttack: () => this.onAttackNpc(npc),
+        onApproach: () => this.onApproachNpc(npc),
+        onClose: () => this.closeNpcContactPanel(),
+      },
+      true, // the pirate has closed to talking distance — full readout + options
+      scanPower,
+      "pirate-shakedown",
+    );
+    this.uiLayer.addChild(this.npcContactPanel.container);
+    this.deps.showMessage(`${npc.name}: «Кошелёк или жизнь!»`, 0xff5555);
   }
 
   /**

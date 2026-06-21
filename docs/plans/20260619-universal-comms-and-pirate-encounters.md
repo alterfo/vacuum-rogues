@@ -70,11 +70,11 @@ Make ship-to-ship communication a real interaction layer:
   src/presentation/SpaceFlightScene.ts (raise the comms hail when a hostile pirate passes in range)
 - Create: src/tests/npc/pirateShakedown.test.ts
 
-- [ ] pure decision: a passing pirate demands tribute with a probability gated by relative strength
+- [x] pure decision: a passing pirate demands tribute with a probability gated by relative strength
       and hostility (seeded RNG, deterministic in tests)
-- [ ] SpaceFlightScene opens the universal comms window in the shakedown context on a positive decision
-- [ ] write unit tests for the decision across strength ratios + seeds
-- [ ] run affected tests — must pass before next task
+- [x] SpaceFlightScene opens the universal comms window in the shakedown context on a positive decision
+- [x] write unit tests for the decision across strength ratios + seeds
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Resolve the shakedown — pay / refuse / flee
 **Files:**

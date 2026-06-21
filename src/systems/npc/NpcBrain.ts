@@ -80,3 +80,81 @@ export class OnnxNpcBrain implements NpcBrain {
     return this.fallback.decideGoal(npc, galaxy, rng);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Pirate shakedown decision ("Кошелёк или жизнь" —
+// docs/plans/20260619-universal-comms-and-pirate-encounters.md, Task 2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Tuning for the pure {@link wantsToShakedown} decision. A bully picks on the
+ * weak: the demand chance ramps with the pirate's strength relative to the
+ * player and is zero for a pirate the player clearly out-guns.
+ */
+export const SHAKEDOWN = {
+  /** Weight applied to a ship's per-shot damage when scoring its strength. */
+  damageWeight: 4,
+  /** Below this pirate:player strength ratio a pirate won't bother — chance 0. */
+  minRatio: 0.8,
+  /** At/above this ratio the demand chance saturates at {@link maxChance}. */
+  strongRatio: 1.6,
+  /** The most likely a passing pirate is to open a shakedown hail. */
+  maxChance: 0.5,
+} as const;
+
+/** The minimal combat-stat shape {@link shipCombatStrength} scores. */
+export interface ShipCombatStats {
+  hullHP: number;
+  shields: number;
+  damage: number;
+}
+
+/**
+ * A single combat-strength scalar for a ship: survivability (hull + shields)
+ * plus weighted offence (per-shot damage). Used to gauge how a passing pirate
+ * sizes up the player before deciding whether to demand tribute. Pure — no RNG,
+ * no I/O. Negative inputs are floored at 0 so a wrecked ship never scores below
+ * an unarmed one.
+ */
+export function shipCombatStrength(stats: ShipCombatStats): number {
+  const survivability = Math.max(0, stats.hullHP) + Math.max(0, stats.shields);
+  const offence = Math.max(0, stats.damage) * SHAKEDOWN.damageWeight;
+  return survivability + offence;
+}
+
+/**
+ * Probability (0–1) that this pirate opens a "кошелёк или жизнь" shakedown hail,
+ * given the player's combat strength. Pure: zero for a pirate weaker than
+ * {@link SHAKEDOWN.minRatio} of the player, ramping linearly to
+ * {@link SHAKEDOWN.maxChance} at/above {@link SHAKEDOWN.strongRatio}. A helpless
+ * player (strength ≤ 0) always draws the maximum demand chance.
+ */
+export function shakedownChance(npc: NpcShip, playerStrength: number): number {
+  const pirateStrength = shipCombatStrength(npc);
+  if (playerStrength <= 0) return SHAKEDOWN.maxChance;
+  const ratio = pirateStrength / playerStrength;
+  if (ratio < SHAKEDOWN.minRatio) return 0;
+  const t = Math.min(
+    1,
+    (ratio - SHAKEDOWN.minRatio) / (SHAKEDOWN.strongRatio - SHAKEDOWN.minRatio),
+  );
+  return t * SHAKEDOWN.maxChance;
+}
+
+/**
+ * Decide whether an already-hostile passing pirate opens a shakedown hail
+ * instead of attacking outright. Pure + deterministic given the RNG: only an
+ * aggressive PIRATE can demand tribute, and the roll is gated by
+ * {@link shakedownChance} (relative strength). Non-pirates, non-hostile ships,
+ * and pirates the player out-guns always return false.
+ */
+export function wantsToShakedown(
+  npc: NpcShip,
+  playerStrength: number,
+  rng: SeededRNG,
+): boolean {
+  if (npc.role !== NpcRole.PIRATE || !npc.isAggressive()) return false;
+  const chance = shakedownChance(npc, playerStrength);
+  if (chance <= 0) return false;
+  return rng.next() < chance;
+}
