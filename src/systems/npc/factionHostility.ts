@@ -2,6 +2,7 @@ import type { NpcShip } from "@/domain/NpcShip";
 import { NpcRole } from "@/types";
 import { Faction } from "@/types/faction";
 import { GOOD_PIRATE_REP_THRESHOLD } from "@/config/balance";
+import { GameSystemException } from "@/exceptions/GameSystemException";
 
 /**
  * Faction-hostility matrix — the single source of truth for who-is-hostile-to-whom
@@ -31,8 +32,9 @@ export type FactionKind =
 
 /**
  * Context the matrix needs beyond the two participants' kinds: the player's
- * pirate reputation (the good-rep exemption) and — for later pack-behaviour
- * tasks — who controls the encounter's system.
+ * pirate reputation (the good-rep exemption). Solo-vs-pack coordination is keyed
+ * off system control separately via {@link pirateCoordination}, so it is not
+ * carried here.
  */
 export interface HostilityContext {
   /**
@@ -41,12 +43,6 @@ export interface HostilityContext {
    * attack, no ransom). Ignored for non-player participants.
    */
   readonly pirateRep: number;
-  /**
-   * Who controls the encounter's system, if captured. Not consulted by the
-   * binary enmity relation here; carried for the solo-vs-pack targeting layered
-   * on in a later task (`galaxy.pirateSystems` / `galaxy.overmindSystems`).
-   */
-  readonly systemControl?: "pirate" | "overmind" | null;
 }
 
 /**
@@ -68,6 +64,17 @@ export function factionKindOf(
       return "ranger";
     case NpcRole.PATROL:
       return "patrol";
+    default: {
+      // Exhaustive over the four NpcRole values today; a new role must be
+      // classified here rather than silently falling through to `undefined`
+      // (which would make every matrix call treat the ship as a non-combatant).
+      const unhandled: never = npc.role;
+      throw new GameSystemException(
+        "FACTION_KIND_UNHANDLED_ROLE",
+        `factionKindOf: unhandled NpcRole ${String(unhandled)}`,
+        { role: npc.role },
+      );
+    }
   }
 }
 
