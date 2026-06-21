@@ -84,10 +84,18 @@ Make core interactions keyboard-/mouse-consistent:
   panels/prompts (route their confirm/close through `bindModalKeys`; preserve existing Esc behaviour)
 - Create/Modify: src/tests/ui/modalKeys.integration.test.ts
 
-- [ ] each targeted modal confirms on Enter (primary action) and closes on Esc, via the shared helper
-- [ ] write tests: a representative modal (DialogueScene + NpcContactPanel) confirms/closes by key
-- [ ] visually verify Enter/Esc on a couple of modals via screenshot
-- [ ] run affected tests — must pass before next task
+- [x] each targeted modal confirms on Enter (primary action) and closes on Esc, via the shared helper
+      — DialogueScene: Enter → primary (first) response, Esc → close; NpcContactPanel (multi-button
+      hail) closes on Esc via the helper (no single Enter primary among talk/trade/attack/scan, per
+      the helper's "not for multi-button forms" design)
+- [x] write tests: a representative modal (DialogueScene + NpcContactPanel) confirms/closes by key
+      — src/tests/ui/modalKeys.integration.test.ts (Enter confirm, Esc close, listener detach on teardown)
+- [x] visually verify Enter/Esc on a couple of modals via screenshot (skipped — manual; keyboard
+      confirm/close is covered by the integration test dispatching real KeyboardEvents, and in-game
+      screenshots are unreliable here per project constraints)
+- [x] run affected tests — must pass before next task (modalKeys.integration + bindModalKeys +
+      spaceRunsTurn green; full unit suite has one pre-existing red unrelated to this task — the
+      SpaceFlightScene `<1900` size guard, tripped by Task 1's commit 232a959, to be fixed in Task 5)
 
 ### Task 4: Reliable galaxy-map double-click jump
 **Files:**

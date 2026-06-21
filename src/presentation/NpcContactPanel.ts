@@ -8,6 +8,7 @@ import {
   type CommsContext,
   type CommsOption,
 } from "@/systems/comms/commsOptions";
+import { bindModalKeys } from "./ui/bindModalKeys";
 
 /** Button label per context-driven comms option (universal hail window). */
 const OPTION_LABELS: Record<CommsOption, string> = {
@@ -88,6 +89,11 @@ export class NpcContactPanel {
   private scanResultLabel: Text | null = null;
   // Y where the scan readout is mounted — set after buttons so it never overlaps.
   private scanResultY = 284;
+  // Esc closes the hail window via the shared modal-key convention. This is a
+  // multi-button panel (the helper is intentionally not for multi-button forms),
+  // so it wires only Esc→close — there is no single Enter primary among
+  // talk/trade/attack/scan. Detached in destroy() so the listener never leaks.
+  private readonly detachKeys: () => void;
 
   constructor(
     npc: NpcShip,
@@ -106,6 +112,9 @@ export class NpcContactPanel {
     this.container.x = screenWidth - NpcContactPanel.W - 20;
     this.container.y = 80;
     this.render(npc);
+    this.detachKeys = bindModalKeys({
+      onCancel: () => this.callbacks.onClose(),
+    });
   }
 
   /**
@@ -397,6 +406,8 @@ export class NpcContactPanel {
   }
 
   destroy(): void {
+    // Detach the Esc listener first (idempotent) so it can't outlive the panel.
+    this.detachKeys();
     // Idempotent: the panel may be torn down both by a deferred close and by the
     // scene's clearUILayer(); destroying an already-destroyed container throws.
     if (!this.container.destroyed) {

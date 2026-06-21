@@ -4,6 +4,7 @@ import type { GameEngine } from "@/systems/GameEngine";
 import type { NPC } from "@/domain/NPC";
 import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
+import { bindModalKeys } from "./ui/bindModalKeys";
 
 /**
  * Dialogue node representing a single dialogue exchange
@@ -51,6 +52,9 @@ export class DialogueScene extends GameScene {
   private npcNameText: Text | null = null;
   private dialogueText: Text | null = null;
   private responseButtons: Container[] = [];
+  // Shared modal-key convention: Enter = the node's primary (first) response,
+  // Esc = close the dialogue. Detached in destroy() so the listener never leaks.
+  private detachModalKeys: (() => void) | null = null;
 
   initialize(context?: object): void {
     const ctx = context as {
@@ -95,7 +99,23 @@ export class DialogueScene extends GameScene {
     this.createDialogueUI();
     this.displayNode(this.dialogueTree.startNodeId);
 
+    // Enter confirms the primary (first) reply; Esc closes the dialogue.
+    this.detachModalKeys = bindModalKeys({
+      onConfirm: () => this.confirmPrimaryResponse(),
+      onCancel: () => void this.goBack(),
+    });
+
     logger.info(`DialogueScene initialized with NPC: ${this.currentNPC.name}`);
+  }
+
+  /**
+   * Enter picks the current node's first response — the default/primary reply
+   * (no-op if the node has none). Reads `currentNode` at press time so it always
+   * targets whatever node is on screen.
+   */
+  private confirmPrimaryResponse(): void {
+    const primary = this.currentNode?.responses[0];
+    if (primary) this.onResponseSelected(primary);
   }
 
   update(_deltaTime: number): void {
@@ -103,6 +123,8 @@ export class DialogueScene extends GameScene {
   }
 
   destroy(): void {
+    this.detachModalKeys?.();
+    this.detachModalKeys = null;
     this.responseButtons = [];
     this.dialogueContainer = null;
     this.npcPortrait = null;
