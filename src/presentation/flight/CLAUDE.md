@@ -14,10 +14,11 @@ CombatPauseOverlay (the target/weapon modal), combatPauseUi (`createCombatPauseU
 controller ↔ overlay ↔ `CombatModule`; called with no args it returns a bare overlay-less
 controller for field-init / unit tests, rebuilt wired in `initialize()`),
 flightKeyHandler (`handleFlightKey(event, ctx)` — pure flight-scene keydown router: Esc closes the
-top open surface in priority order — combat pause → contact panel → quest journal → planet info —
-else cancels a planned route; Space runs the planned turn — the keyboard equivalent of the
-confirming second click, suppressed while a turn/combat pause is active or a contact/planet-info
-panel is open; j/i toggle journal/inventory. `SpaceFlightScene.onKeyDown` is a thin delegate that
+top open surface in priority order — combat pause → contact panel → quest journal → planet info →
+settings panel — else cancels a planned route; Space runs the planned turn — the keyboard
+equivalent of the confirming second click, suppressed while a turn/combat pause is active or a
+contact/quest-journal/planet-info/settings panel is open (mirrors the mouse-click
+`isBlockingModalOpen` guard); j/i toggle journal/inventory. `SpaceFlightScene.onKeyDown` is a thin delegate that
 builds `ctx` from live scene members; the extraction keeps the controller under the 1900-line
 guard. Unit-tested standalone in `flightKeyHandler.test.ts`).
 

@@ -14,6 +14,8 @@ export interface FlightKeyContext {
     isQuestJournalOpen(): boolean;
     closeQuestJournal(): void;
     toggleQuestJournal(): void;
+    isSettingsPanelOpen?(): boolean;
+    closeModals?(): void;
     showMessage(text: string, color: number): void;
   };
   planetManager: { hasInfoPanel: boolean; closeInfoPanel(): void };
@@ -27,11 +29,11 @@ export interface FlightKeyContext {
 /**
  * Route a flight-scene keydown:
  * - Escape closes the top open panel (combat pause → contact → journal → planet
- *   info), else cancels a planned route.
+ *   info → settings), else cancels a planned route.
  * - Space runs the planned turn (the keyboard equivalent of the confirming
  *   second click); guarded so a held key, a combat pause, an already-running
- *   turn, or an open contact/planet-info panel can't fire `executeRouteTo`.
- *   No route → no-op + hint.
+ *   turn, or an open contact/journal/planet-info/settings panel can't fire
+ *   `executeRouteTo`. No route → no-op + hint.
  * - j toggles the quest journal; i opens the inventory.
  */
 export function handleFlightKey(
@@ -44,6 +46,7 @@ export function handleFlightKey(
       ctx.npcManager.closeContactPanel();
     else if (ctx.hud.isQuestJournalOpen()) ctx.hud.closeQuestJournal();
     else if (ctx.planetManager.hasInfoPanel) ctx.planetManager.closeInfoPanel();
+    else if (ctx.hud.isSettingsPanelOpen?.()) ctx.hud.closeModals?.();
     else if (ctx.plannedRoute) {
       ctx.clearPlannedRoute();
       ctx.hud.showMessage("Маршрут отменён", 0xffaa00);
@@ -54,13 +57,15 @@ export function handleFlightKey(
     event.preventDefault(); // Space would otherwise scroll the page
     if (event.repeat || ctx.combatPause.paused || ctx.isTurnRunning) return;
     // Don't launch the turn behind an open modal — the contact panel, quest
-    // journal, or planet-info panel must be dismissed (Esc) first, otherwise the
-    // ship flies off while the panel still demands a choice. (Mirrors the
-    // mouse-click route-plan guard `isBlockingModalOpen`.)
+    // journal, planet-info, or settings panel must be dismissed (Esc) first,
+    // otherwise the ship flies off while the panel still demands a choice.
+    // (Mirrors the mouse-click route-plan guard `isBlockingModalOpen`, which
+    // also treats the settings panel as blocking.)
     if (
       ctx.npcManager.isContactPanelOpen ||
       ctx.hud.isQuestJournalOpen() ||
-      ctx.planetManager.hasInfoPanel
+      ctx.planetManager.hasInfoPanel ||
+      ctx.hud.isSettingsPanelOpen?.()
     )
       return;
     if (ctx.plannedRoute) {
