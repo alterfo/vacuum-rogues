@@ -13,8 +13,11 @@ import {
   shipCombatStrength,
   shakedownTribute,
   attemptFlee,
+  acceptsHire,
+  hireFee,
+  hireGoal,
 } from "@/systems/npc/NpcBrain";
-import { payTribute } from "@/systems/banking/economy";
+import { payTribute, payHire } from "@/systems/banking/economy";
 import { SeededRNG } from "@/utils/seededRNG";
 import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
@@ -933,6 +936,8 @@ export class NpcShipManager implements FlightModule {
         onAttack: () => this.onAttackNpc(npc),
         onApproach: () => this.onApproachNpc(npc),
         onClose: () => this.closeNpcContactPanel(),
+        onHire: () => this.offerHireContract(npc, "hire"),
+        onAlly: () => this.offerHireContract(npc, "ally"),
       },
       inRange,
       scanPower,
@@ -1135,6 +1140,78 @@ export class NpcShipManager implements FlightModule {
       `Торговля с ${npc.name} пока недоступна в полёте.`,
       0xffaa00,
     );
+  }
+
+  /**
+   * "Нанять" / "Союз": offer the hailed ship credits to turn on the player's
+   * current threat. Both reduce to a merc contract against the nearest ship that
+   * is openly hostile to the player (the target you actually need help with) —
+   * they differ only in framing. The player pays the ship's {@link hireFee}
+   * asking price; an accepted contract pays through the bank bus (a balanced
+   * player → NPC transfer, never a direct credit write) and {@link hireGoal}
+   * retargets the hired ship to hunt the mark. Declined when no hostile target is
+   * present, the ship won't attack its own faction, or the player can't afford
+   * the fee.
+   */
+  private offerHireContract(npc: NpcShip, mode: "hire" | "ally"): void {
+    this.closeNpcContactPanel();
+    const player = this.gameEngine?.player;
+    if (!player) return;
+    const target = this.nearestHostileNpc(npc.id);
+    if (!target) {
+      this.deps.showMessage(
+        "Рядом нет враждебных целей для контракта.",
+        0xffaa00,
+      );
+      return;
+    }
+    const fee = hireFee(target);
+    if (player.credits < fee) {
+      this.deps.showMessage(
+        `${npc.name}: «Меньше ${fee} кр. и не подходи.»`,
+        0xffaa00,
+      );
+      return;
+    }
+    if (!acceptsHire(npc, fee, target)) {
+      this.deps.showMessage(`${npc.name}: «Своих не трогаю.»`, 0xffaa00);
+      return;
+    }
+    payHire(
+      this.gameEngine?.bank,
+      player,
+      npc,
+      fee,
+      `Контракт «${npc.name}» против «${target.name}»`,
+    );
+    npc.goal = hireGoal(target);
+    npc.activeQuestTarget = target.id;
+    const verb = mode === "ally" ? "вступает в бой" : "берёт контракт";
+    this.deps.showMessage(
+      `${npc.name} ${verb} против ${target.name} за ${fee} кр.`,
+      0x88ff88,
+    );
+  }
+
+  /**
+   * The nearest NPC openly hostile to the player (excluding `excludeId`), by
+   * world distance to the player ship — the threat a hired/allied ship is paid to
+   * deal with. Null when no hostile ship is present or the player ship is absent.
+   */
+  private nearestHostileNpc(excludeId: string): NpcShip | null {
+    const physics = this.deps.getShipPhysics();
+    if (!physics) return null;
+    let best: NpcShip | null = null;
+    let bestDist = Infinity;
+    for (const sprite of this.npcSprites) {
+      if (sprite.npc.id === excludeId || !sprite.npc.isAggressive()) continue;
+      const d = Math.hypot(sprite.x - physics.shipX, sprite.y - physics.shipY);
+      if (d < bestDist) {
+        bestDist = d;
+        best = sprite.npc;
+      }
+    }
+    return best;
   }
 
   /**

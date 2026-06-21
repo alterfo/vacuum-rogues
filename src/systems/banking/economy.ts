@@ -186,15 +186,16 @@ export function creditNpc(
 }
 
 /**
- * Pay a pirate-shakedown tribute ("кошелёк или жизнь") from the player to the
- * demanding pirate through the bus. A balanced `Transfer` from the player's
- * current account → the pirate's current account (the counterparty), so
- * `player.credits` drops by exactly `amount` (via the projection), the pirate's
- * credits rise, and the GL stays balanced. Opens + seeds the pirate's account on
- * first use. Falls back to a direct mutation on both sides when banking is not
- * wired (unit tests without a bus). A non-positive `amount` is a no-op.
+ * Move `amount` credits from the player to an NPC through the bus — the shared
+ * primitive behind {@link payTribute} (shakedown) and {@link payHire} (merc
+ * contract). A balanced `Transfer` from the player's current account → the NPC's
+ * current account (the counterparty), so `player.credits` drops by exactly
+ * `amount` (via the projection), the NPC's credits rise, and the GL stays
+ * balanced. Opens + seeds the NPC's account on first use. Falls back to a direct
+ * mutation on both sides when banking is not wired (unit tests without a bus). A
+ * non-positive `amount` is a no-op.
  */
-export function payTribute(
+function payPlayerToNpc(
   access: BankAccess | null | undefined,
   player: Player,
   npc: NpcAccountHolder,
@@ -213,6 +214,40 @@ export function payTribute(
   }
   player.credits -= amount;
   npc.credits += amount;
+}
+
+/**
+ * Pay a pirate-shakedown tribute ("кошелёк или жизнь") from the player to the
+ * demanding pirate through the bus. A balanced player → pirate transfer (the
+ * pirate is the counterparty), so `player.credits` drops by exactly `amount` and
+ * the GL stays balanced. A non-positive `amount` is a no-op. See
+ * {@link payPlayerToNpc}.
+ */
+export function payTribute(
+  access: BankAccess | null | undefined,
+  player: Player,
+  npc: NpcAccountHolder,
+  amount: number,
+  reason: string,
+): void {
+  payPlayerToNpc(access, player, npc, amount, reason);
+}
+
+/**
+ * Pay a hire/ally fee from the player to a contracted NPC through the bus — the
+ * player pays a merc to attack a target or aid in a fight (Task 4). Same ABS
+ * contract as {@link payTribute}: a balanced player → NPC transfer, so
+ * `player.credits` drops by exactly `amount`, the NPC's credits rise, and the GL
+ * stays balanced. A non-positive `amount` is a no-op. See {@link payPlayerToNpc}.
+ */
+export function payHire(
+  access: BankAccess | null | undefined,
+  player: Player,
+  npc: NpcAccountHolder,
+  amount: number,
+  reason: string,
+): void {
+  payPlayerToNpc(access, player, npc, amount, reason);
 }
 
 /**

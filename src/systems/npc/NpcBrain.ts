@@ -243,3 +243,62 @@ export function attemptFlee(
 ): boolean {
   return rng.next() < fleeEscapeChance(playerSpeed, pirateSpeed);
 }
+
+// ---------------------------------------------------------------------------
+// Player hire / ally offers
+// (docs/plans/20260619-universal-comms-and-pirate-encounters.md, Task 4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Tuning for the pure {@link hireFee} / {@link acceptsHire} merc-contract
+ * decision. A hired ship sizes up the job: it wants a flat {@link baseFee} just
+ * for taking the contract, plus a risk premium proportional to how dangerous the
+ * named target is ({@link riskFactor} × the target's combat strength).
+ */
+export const HIRE = {
+  /** Flat fee a hired ship demands just for taking the contract. */
+  baseFee: 200,
+  /** Risk premium per point of the target's combat strength. */
+  riskFactor: 1.5,
+} as const;
+
+/**
+ * The fee a ship demands to be hired against {@link target}: a flat
+ * {@link HIRE.baseFee} plus a risk premium proportional to the target's combat
+ * strength (a tougher mark costs more). Pure; whole credits (rounded) so the
+ * payment onto a current account stays save-safe.
+ */
+export function hireFee(target: ShipCombatStats): number {
+  const risk = shipCombatStrength(target) * HIRE.riskFactor;
+  return Math.round(HIRE.baseFee + risk);
+}
+
+/**
+ * Decide whether a ship accepts the player's offer of `offer` credits to attack
+ * `target` (hire) or aid against it in a fight (ally). Pure — no RNG, no I/O. A
+ * ship:
+ *  - won't take the coin while it is itself openly hostile to the player
+ *    ({@link NpcShip.isAggressive}),
+ *  - won't turn its guns on its own faction (no betraying allies), nor on itself,
+ *  - otherwise accepts iff the offer meets its {@link hireFee} asking price.
+ */
+export function acceptsHire(
+  npc: NpcShip,
+  offer: number,
+  target: NpcShip,
+): boolean {
+  if (npc.isAggressive()) return false;
+  if (target.id === npc.id) return false;
+  if (target.faction === npc.faction) return false;
+  return offer >= hireFee(target);
+}
+
+/**
+ * The goal a freshly-hired ship adopts: HUNT the contracted target's system.
+ * Pure — the manager assigns the result to the hired NPC's `goal` so the merc
+ * breaks off and heads after the mark (the goal persists via the existing save
+ * schema, so no new persistence is needed for the contract to survive a reload).
+ */
+export function hireGoal(target: NpcShip): NpcGoal {
+  return { kind: NpcGoalKind.HUNT, targetSystemId: target.currentSystemId };
+}

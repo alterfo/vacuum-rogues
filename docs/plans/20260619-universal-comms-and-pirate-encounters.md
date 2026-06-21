@@ -96,10 +96,10 @@ Make ship-to-ship communication a real interaction layer:
   (retarget the hired NPC), src/systems/banking/economy.ts (hire payment)
 - Create: src/tests/comms/hireOffer.test.ts
 
-- [ ] offering credits to attack a target / aid a fight → NPC accepts or declines (pure logic);
+- [x] offering credits to attack a target / aid a fight → NPC accepts or declines (pure logic);
       payment is a balanced bus transfer; accepted NPC retargets
-- [ ] write unit tests: accept above threshold, decline below, payment balanced
-- [ ] run affected tests — must pass before next task
+- [x] write unit tests: accept above threshold, decline below, payment balanced
+- [x] run affected tests — must pass before next task
 
 ### Task 5: Overmind gibberish
 **Files:**
