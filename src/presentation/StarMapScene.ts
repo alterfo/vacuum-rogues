@@ -1,5 +1,11 @@
 import { GameScene } from "./GameScene";
-import { Graphics, Text, Container, BlurFilter } from "pixi.js";
+import {
+  Graphics,
+  Text,
+  Container,
+  BlurFilter,
+  type FederatedPointerEvent,
+} from "pixi.js";
 import type { Galaxy } from "@/domain/Galaxy";
 import type { StarSystem } from "@/domain/StarSystem";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -582,37 +588,8 @@ export class StarMapScene extends GameScene {
       }
       systemsDrawn++;
 
-      // Add clickable hit area with double-click support
-      const hitArea = new Graphics();
-      hitArea.circle(x, y, 12);
-      hitArea.fill({ color: 0xffffff, alpha: 0.001 });
-      hitArea.eventMode = "static";
-      hitArea.cursor = "pointer";
-
-      // Double-click detection: track last click time
-      let lastClickTime = 0;
-      const doubleClickDelay = 300; // ms
-
-      hitArea.on("pointerdown", () => {
-        if (this.hasDragged) return;
-
-        const now = Date.now();
-        const timeSinceLastClick = now - lastClickTime;
-
-        if (timeSinceLastClick < doubleClickDelay) {
-          // Double-click detected
-          logger.debug(`System double-clicked: ${system.name}`);
-          this.handleSystemDoubleClick(system);
-          lastClickTime = 0; // Reset to prevent triple-click from triggering
-        } else {
-          // Single click
-          logger.debug(`System clicked: ${system.name}`);
-          this.handleSystemClick(system);
-          lastClickTime = now;
-        }
-      });
-
-      this.mapContainer.addChild(hitArea);
+      // Add clickable hit area with reliable double-click → jump support.
+      this.mapContainer.addChild(this.createSystemHitArea(x, y, system));
 
       // Completely unknown systems: show "?" with no label.
       if (visibility === "unknown" && !isPlayer && !isOvermind && !isPirate) {
@@ -732,6 +709,44 @@ export class StarMapScene extends GameScene {
         await this.performWarpJump(system, fuelCost);
       }
     }
+  }
+
+  /**
+   * Build the transparent hit-target for a system dot.
+   *
+   * Double-click → jump is driven by PixiJS's native click counter
+   * (`event.detail` on `pointertap`, incremented for consecutive taps on the
+   * same target within the boundary's threshold) rather than a hand-rolled
+   * `Date.now()` comparison on `pointerdown`. The old timestamp scheme raced the
+   * single-click info-panel open and dropped jumps; reading the native count
+   * makes the double-click dependable. A single tap still only opens the info
+   * panel. `hasDragged` suppresses a pan that ends over a system.
+   */
+  private createSystemHitArea(
+    x: number,
+    y: number,
+    system: StarSystem,
+  ): Graphics {
+    const hitArea = new Graphics();
+    hitArea.circle(x, y, 12);
+    hitArea.fill({ color: 0xffffff, alpha: 0.001 });
+    hitArea.eventMode = "static";
+    hitArea.cursor = "pointer";
+
+    hitArea.on("pointertap", (e: FederatedPointerEvent) => {
+      if (this.hasDragged) return;
+
+      // detail >= 2 ⇒ the native boundary counted a double(+) click.
+      if ((e?.detail ?? 1) >= 2) {
+        logger.debug(`System double-clicked: ${system.name}`);
+        this.handleSystemDoubleClick(system);
+      } else {
+        logger.debug(`System clicked: ${system.name}`);
+        this.handleSystemClick(system);
+      }
+    });
+
+    return hitArea;
   }
 
   private handleSystemClick(system: StarSystem): void {

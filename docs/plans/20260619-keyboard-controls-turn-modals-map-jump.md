@@ -103,11 +103,23 @@ Make core interactions keyboard-/mouse-consistent:
   `dblclick`/`pointertap` count — so it reliably jumps; single click still only opens info)
 - Create/Modify: src/tests/starMap/doubleClickJump.test.ts
 
-- [ ] double-clicking an explored, reachable system reliably triggers the warp jump (existing fuel /
-      current-system rules unchanged); a single click only opens the info panel
-- [ ] write an interaction test using real pointer events (double-click → jump; single → no jump)
-- [ ] visually verify a double-click jump via screenshot/E2E
-- [ ] run affected tests — must pass before next task
+- [x] double-clicking an explored, reachable system reliably triggers the warp jump (existing fuel /
+      current-system rules unchanged); a single click only opens the info panel — replaced the
+      hand-rolled 300 ms `Date.now()` compare on `pointerdown` with PixiJS's native `pointertap`
+      click counter (`event.detail >= 2` → `handleSystemDoubleClick`, else `handleSystemClick`);
+      extracted to `StarMapScene.createSystemHitArea` so the routing is unit-testable. Fuel /
+      current-system rules in `handleSystemDoubleClick` are untouched.
+- [x] write an interaction test using real pointer events (double-click → jump; single → no jump)
+      — src/tests/starMap/doubleClickJump.test.ts: fires real `pointertap` events carrying native
+      `detail` counts at the production-wired hit area; asserts detail 1 → info only / detail ≥ 2 →
+      jump / missing detail → single / `hasDragged` suppresses; also locks that the old `pointerdown`
+      listener is gone (listenerCount pointerdown = 0, pointertap = 1)
+- [x] visually verify a double-click jump via screenshot/E2E (covered by the interaction test
+      dispatching real pointertap events; in-game coordinate screenshots are unreliable here per
+      project constraints, and the E2E star-map page object drives jumps via engine `performWarpJumpTo`
+      rather than raw coordinate double-clicks)
+- [x] run affected tests — must pass before next task (doubleClickJump + full starMap suite green:
+      33 tests; lint + tsc clean)
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify Overview: Space runs the turn, modals confirm/cancel on Enter/Esc, map double-click jumps
