@@ -73,10 +73,10 @@ ransom *dialog/payment* is owned by the universal-comms plan (this plan decides 
   decision used by the universal-comms plan)
 - Create: src/tests/npc/pirateTargeting.test.ts
 
-- [ ] pirates prefer weaker targets and demand ransom from them; a player above the good-rep threshold
+- [x] pirates prefer weaker targets and demand ransom from them; a player above the good-rep threshold
       is exempt from attack/ransom
-- [ ] write tests: weak target chosen over strong; good-rep player skipped; ransom decision gated on weakness
-- [ ] run affected tests — must pass before next task
+- [x] write tests: weak target chosen over strong; good-rep player skipped; ransom decision gated on weakness
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Solo vs pack behavior
 **Files:**

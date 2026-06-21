@@ -3,6 +3,11 @@ import type { Galaxy } from "@/domain/Galaxy";
 import type { SeededRNG } from "@/utils/seededRNG";
 import type { NpcGoal } from "@/types";
 import { NpcGoalKind, NpcRole } from "@/types";
+import {
+  isHostile,
+  type FactionKind,
+  type HostilityContext,
+} from "./factionHostility";
 
 /**
  * Decides the next goal for an NPC whose current goal is done (or who is IDLE).
@@ -123,6 +128,45 @@ export function shipCombatStrength(stats: ShipCombatStats): number {
 }
 
 /**
+ * A candidate prey for a pirate's target selection: its {@link FactionKind} (so
+ * the matrix can rule out pack-mates and a good-rep player) plus the combat stats
+ * that gauge how weak — i.e. how attractive — a mark it is.
+ */
+export interface PirateTargetCandidate {
+  readonly id: string;
+  readonly kind: FactionKind;
+  readonly stats: ShipCombatStats;
+}
+
+/**
+ * Pick the prey a pirate goes after: the **weakest** hostile candidate (a bully
+ * picks on the weak — lowest {@link shipCombatStrength}). Pure — no RNG, no I/O.
+ *
+ * Candidates the pirate is not hostile to are skipped via the {@link isHostile}
+ * matrix — pack-mates (other pirates) and a **good-rep player** are never targeted
+ * — so the good-pirate-rep exemption is enforced by the single source of truth
+ * rather than re-derived here. Ties resolve to the earliest candidate in input
+ * order (callers pass a stable order). Returns `null` when no candidate is a valid
+ * target.
+ */
+export function selectPirateTarget(
+  candidates: ReadonlyArray<PirateTargetCandidate>,
+  ctx: HostilityContext,
+): PirateTargetCandidate | null {
+  let best: PirateTargetCandidate | null = null;
+  let bestStrength = Infinity;
+  for (const candidate of candidates) {
+    if (!isHostile("pirate", candidate.kind, ctx)) continue;
+    const strength = shipCombatStrength(candidate.stats);
+    if (strength < bestStrength) {
+      best = candidate;
+      bestStrength = strength;
+    }
+  }
+  return best;
+}
+
+/**
  * Probability (0–1) that this pirate opens a "кошелёк или жизнь" shakedown hail,
  * given the player's combat strength. Pure: zero for a pirate weaker than
  * {@link SHAKEDOWN.minRatio} of the player, ramping linearly to
@@ -157,6 +201,27 @@ export function wantsToShakedown(
   const chance = shakedownChance(npc, playerStrength);
   if (chance <= 0) return false;
   return rng.next() < chance;
+}
+
+/**
+ * Good-rep-aware variant of {@link wantsToShakedown} for the human player. A
+ * player at/above the shared good-pirate-rep threshold is **left alone** — no
+ * shakedown is even rolled — because the {@link isHostile} matrix (the single
+ * source of truth for the exemption) reports the pirate as non-hostile to a
+ * good-rep player. Below the threshold this defers entirely to
+ * {@link wantsToShakedown} (role + aggression + relative-strength gating). Pure +
+ * deterministic given the RNG; the production seam (`NpcShipManager.rollShakedown`)
+ * threads the player's pirate reputation through here so a friendly player is
+ * never shaken down.
+ */
+export function wantsToShakedownPlayer(
+  npc: NpcShip,
+  playerStrength: number,
+  pirateRep: number,
+  rng: SeededRNG,
+): boolean {
+  if (!isHostile("pirate", "player", { pirateRep })) return false;
+  return wantsToShakedown(npc, playerStrength, rng);
 }
 
 // ---------------------------------------------------------------------------

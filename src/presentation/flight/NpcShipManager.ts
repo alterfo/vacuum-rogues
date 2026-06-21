@@ -9,7 +9,7 @@ import { NpcContactPanel } from "../NpcContactPanel";
 import type { NpcShip } from "@/domain/NpcShip";
 import { npcsPresentInSystem, NpcSimulator } from "@/systems/npc/NpcSimulator";
 import {
-  wantsToShakedown,
+  wantsToShakedownPlayer,
   shipCombatStrength,
   shakedownTribute,
   attemptFlee,
@@ -17,6 +17,8 @@ import {
   hireFee,
   hireGoal,
 } from "@/systems/npc/NpcBrain";
+import { isHostile } from "@/systems/npc/factionHostility";
+import { PIRATE_FACTION_ID } from "@/systems/galaxy/landingAccess";
 import { payTribute } from "@/systems/banking/economy";
 import { SeededRNG } from "@/utils/seededRNG";
 import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
@@ -230,44 +232,57 @@ export class NpcShipManager implements FlightModule {
       // once they close to attack range (no CombatScene hop — the scene's
       // CombatModule resolves the fight; Tasks 11–14).
       if (sprite.aggressive && physics) {
-        const dx = sprite.x - physics.shipX;
-        const dy = sprite.y - physics.shipY;
-        const distSq = dx * dx + dy * dy;
-        // "Кошелёк или жизнь" (Task 2): a hostile pirate that closes to talking
-        // (scanner) range may open a shakedown hail BEFORE weapon range instead
-        // of attacking outright. Rolled once per pirate, deterministically. A
-        // positive roll opens the contact panel in pirate-shakedown context and
-        // halts flight so the demand interrupts the player.
+        // Good pirate reputation leaves the player alone (no attack, no ransom):
+        // an aggressive pirate breaks off pursuit before it can shake the player
+        // down or open fire. The good-rep exemption lives in the factionHostility
+        // matrix (single source of truth); reactive aggression after the player
+        // attacks first is handled elsewhere (markHostile), not gated here.
         if (
           sprite.npc.role === NpcRole.PIRATE &&
-          !this.shakedownEvaluated.has(sprite.npc.id) &&
-          distSq <= this.SCANNER_RANGE * this.SCANNER_RANGE
-        ) {
-          this.shakedownEvaluated.add(sprite.npc.id);
-          if (this.rollShakedown(sprite.npc)) {
-            this.openShakedownHail(sprite.npc);
-            return; // turn halted by the hail — stop advancing NPCs this frame
-          }
-        }
-        // Escape (Task 3): a faster player who has opened beyond the escape range
-        // breaks the chase — the out-run aggressor gives up pursuit this
-        // encounter (engaged combatants are pruned at the same range by
-        // CombatModule). A parked/slower player never out-runs it, so the
-        // aggressor keeps closing.
-        if (
-          distSq > this.COMBAT_ESCAPE_RANGE * this.COMBAT_ESCAPE_RANGE &&
-          physics.canOutrun(GAME_BALANCE.npcSpeed)
+          this.playerIsGoodWithPirates()
         ) {
           sprite.setAggressive(false);
           this.npcAnchorPlanet.delete(sprite);
         } else {
-          sprite.setPursuitTarget(
-            physics.shipX,
-            physics.shipY,
-            physics.currentSpeed,
-          );
-          if (distSq <= this.WEAPON_RANGE * this.WEAPON_RANGE) {
-            this.deps.startInFlightCombat?.(sprite);
+          const dx = sprite.x - physics.shipX;
+          const dy = sprite.y - physics.shipY;
+          const distSq = dx * dx + dy * dy;
+          // "Кошелёк или жизнь" (Task 2): a hostile pirate that closes to talking
+          // (scanner) range may open a shakedown hail BEFORE weapon range instead
+          // of attacking outright. Rolled once per pirate, deterministically. A
+          // positive roll opens the contact panel in pirate-shakedown context and
+          // halts flight so the demand interrupts the player.
+          if (
+            sprite.npc.role === NpcRole.PIRATE &&
+            !this.shakedownEvaluated.has(sprite.npc.id) &&
+            distSq <= this.SCANNER_RANGE * this.SCANNER_RANGE
+          ) {
+            this.shakedownEvaluated.add(sprite.npc.id);
+            if (this.rollShakedown(sprite.npc)) {
+              this.openShakedownHail(sprite.npc);
+              return; // turn halted by the hail — stop advancing NPCs this frame
+            }
+          }
+          // Escape (Task 3): a faster player who has opened beyond the escape range
+          // breaks the chase — the out-run aggressor gives up pursuit this
+          // encounter (engaged combatants are pruned at the same range by
+          // CombatModule). A parked/slower player never out-runs it, so the
+          // aggressor keeps closing.
+          if (
+            distSq > this.COMBAT_ESCAPE_RANGE * this.COMBAT_ESCAPE_RANGE &&
+            physics.canOutrun(GAME_BALANCE.npcSpeed)
+          ) {
+            sprite.setAggressive(false);
+            this.npcAnchorPlanet.delete(sprite);
+          } else {
+            sprite.setPursuitTarget(
+              physics.shipX,
+              physics.shipY,
+              physics.currentSpeed,
+            );
+            if (distSq <= this.WEAPON_RANGE * this.WEAPON_RANGE) {
+              this.deps.startInFlightCombat?.(sprite);
+            }
           }
         }
       }
@@ -978,14 +993,41 @@ export class NpcShipManager implements FlightModule {
   }
 
   /**
-   * Roll the pure {@link wantsToShakedown} decision for a pirate, seeded
+   * The player's current reputation with the pirate faction. A player at/above
+   * the good-pirate-rep threshold is left alone by pirates (no attack, no ransom)
+   * — see {@link playerIsGoodWithPirates} and {@link rollShakedown}. Optional
+   * chaining tolerates a mock player without the method (treated as rep 0).
+   */
+  private playerPirateRep(): number {
+    return this.gameEngine?.player?.getReputation?.(PIRATE_FACTION_ID) ?? 0;
+  }
+
+  /**
+   * Whether the player has good enough pirate reputation to be left alone: the
+   * {@link isHostile} matrix (single source of truth) reports a pirate as
+   * non-hostile to the player. Drives the in-flight attack exemption.
+   */
+  private playerIsGoodWithPirates(): boolean {
+    return !isHostile("pirate", "player", {
+      pirateRep: this.playerPirateRep(),
+    });
+  }
+
+  /**
+   * Roll the pure {@link wantsToShakedownPlayer} decision for a pirate, seeded
    * deterministically by ship id + galaxy day so the outcome is stable for the
-   * encounter (and reproducible in tests / replays).
+   * encounter (and reproducible in tests / replays). A player with good pirate
+   * reputation is exempt — the decision short-circuits to `false`.
    */
   private rollShakedown(npc: NpcShip): boolean {
     const day = this.gameEngine?.galaxy?.gameDays ?? 0;
     const rng = new SeededRNG(`shakedown:${npc.id}:${day}`);
-    return wantsToShakedown(npc, this.playerCombatStrength(), rng);
+    return wantsToShakedownPlayer(
+      npc,
+      this.playerCombatStrength(),
+      this.playerPirateRep(),
+      rng,
+    );
   }
 
   /**
