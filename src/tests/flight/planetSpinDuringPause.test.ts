@@ -153,6 +153,11 @@ describe("PlanetManager.update — spin keeps running while paused", () => {
     knobs = { turnRunning: false, timeScale: 1, orbitalDay: 0 };
     ({ manager } = makeHarness(knobs));
     manager.initialize();
+    // Precondition: the assertions below all live inside `for ... of
+    // manager.planetSprites`, so an empty collection would make every test pass
+    // vacuously. Guard it so a future regression in sprite creation fails loudly
+    // instead of silently disarming this spin-during-pause regression test.
+    expect(manager.planetSprites).toHaveLength(2);
   });
 
   it("advances axial spin + moons every frame while paused (real-time, base 1×)", () => {
