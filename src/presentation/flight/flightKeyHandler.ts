@@ -9,7 +9,19 @@ import { logger } from "@/utils/logger";
  */
 export interface FlightKeyContext {
   combatPause: { paused: boolean; resume(): void };
-  npcManager: { isContactPanelOpen: boolean; closeContactPanel(): void };
+  npcManager: {
+    isContactPanelOpen: boolean;
+    closeContactPanel(): void;
+    /**
+     * True while ANY manager-owned blocking modal is open — the NPC contact
+     * panel *or* the OVERMIND-core overlay. Mirrors
+     * `SpaceFlightScene.isBlockingModalOpen` (`npcManager.hasOpenModal()`), so
+     * the Space launch guard suppresses the same surfaces the mouse route-plan
+     * guard does. Optional: callers/tests that only model the contact panel may
+     * omit it, in which case the guard falls back to `isContactPanelOpen`.
+     */
+    hasOpenModal?(): boolean;
+  };
   hud: {
     isQuestJournalOpen(): boolean;
     closeQuestJournal(): void;
@@ -56,13 +68,15 @@ export function handleFlightKey(
   if (event.key === " " || event.code === "Space") {
     event.preventDefault(); // Space would otherwise scroll the page
     if (event.repeat || ctx.combatPause.paused || ctx.isTurnRunning) return;
-    // Don't launch the turn behind an open modal — the contact panel, quest
-    // journal, planet-info, or settings panel must be dismissed (Esc) first,
-    // otherwise the ship flies off while the panel still demands a choice.
-    // (Mirrors the mouse-click route-plan guard `isBlockingModalOpen`, which
-    // also treats the settings panel as blocking.)
+    // Don't launch the turn behind an open modal — the contact panel, the
+    // OVERMIND-core overlay, the quest journal, planet-info, or the settings
+    // panel must be dismissed first, otherwise the ship flies off while the
+    // panel still demands a choice. `hasOpenModal()` covers both
+    // manager-owned overlays (contact panel + OVERMIND core); fall back to
+    // `isContactPanelOpen` when a caller doesn't model it. Mirrors the
+    // mouse-click route-plan guard `isBlockingModalOpen`.
     if (
-      ctx.npcManager.isContactPanelOpen ||
+      (ctx.npcManager.hasOpenModal?.() ?? ctx.npcManager.isContactPanelOpen) ||
       ctx.hud.isQuestJournalOpen() ||
       ctx.planetManager.hasInfoPanel ||
       ctx.hud.isSettingsPanelOpen?.()

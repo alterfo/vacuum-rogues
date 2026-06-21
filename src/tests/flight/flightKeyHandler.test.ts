@@ -21,6 +21,7 @@ type Ctx = FlightKeyContext & {
   npcManager: {
     isContactPanelOpen: boolean;
     closeContactPanel: ReturnType<typeof vi.fn>;
+    hasOpenModal?: ReturnType<typeof vi.fn>;
   };
   hud: {
     isQuestJournalOpen: ReturnType<typeof vi.fn>;
@@ -167,6 +168,40 @@ describe("handleFlightKey — Space launch guards", () => {
     handleFlightKey(space(), ctx);
 
     expect(ctx.executeRouteTo).not.toHaveBeenCalled();
+  });
+
+  it("does not launch the turn while the OVERMIND-core overlay is open (hasOpenModal, no contact panel)", () => {
+    // `hasOpenModal()` is true while the OVERMIND overlay is up even though the
+    // contact panel is closed — the Space guard must mirror the mouse-click
+    // `isBlockingModalOpen` guard, which gates on `hasOpenModal()`.
+    const ctx = makeCtx({
+      plannedRoute: { x: 5, y: 5 },
+      npcManager: {
+        isContactPanelOpen: false,
+        closeContactPanel: vi.fn(),
+        hasOpenModal: vi.fn().mockReturnValue(true),
+      },
+    });
+
+    handleFlightKey(space(), ctx);
+
+    expect(ctx.executeRouteTo).not.toHaveBeenCalled();
+  });
+
+  it("launches the planned route when hasOpenModal reports no open modal", () => {
+    const ctx = makeCtx({
+      plannedRoute: { x: 7, y: 8 },
+      npcManager: {
+        isContactPanelOpen: false,
+        closeContactPanel: vi.fn(),
+        hasOpenModal: vi.fn().mockReturnValue(false),
+      },
+    });
+
+    handleFlightKey(space(), ctx);
+
+    expect(ctx.executeRouteTo).toHaveBeenCalledTimes(1);
+    expect(ctx.executeRouteTo).toHaveBeenCalledWith(7, 8);
   });
 
   it("does not launch the turn while a planet info panel is open", () => {
