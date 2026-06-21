@@ -40,12 +40,56 @@ const MARKER_COLOR = 0xff5555;
 const SELECTED_MARKER_COLOR = 0xffe066;
 const MARKER_R = 26; // bracket half-extent around the hull (world px)
 
-// Per-turn fire flash: a brief beam from shooter to target that fades over its
-// lifetime so each exchanged shot reads as a discrete "ход". Cyan-green when the
-// player fires, red when an enemy fires.
+// Per-turn fire flash: a tracer bolt that visibly travels shooter→target so each
+// exchanged shot reads as a discrete "ход" with an unmistakable direction. The
+// bolt head streaks from source to target over TRACER_TRAVEL_MS (a muzzle glow
+// anchors the source); on arrival an impact flash blooms at the target and fades
+// over the rest of FLASH_TTL_MS. Cyan-green when the player fires, red when an
+// enemy fires. Built from Graphics primitives only — no per-frame BlurFilter
+// (see feedback-no-blur-filters-flight).
 const FLASH_TTL_MS = 220;
-const PLAYER_FLASH_COLOR = 0x66ffcc;
-const NPC_FLASH_COLOR = 0xff5544;
+/** Travel duration (ms): the bolt head interpolates source→target over this. */
+export const TRACER_TRAVEL_MS = 130;
+/** Length (world px) of the bright streak trailing behind the bolt head. */
+const TRACER_STREAK_LEN = 26;
+export const PLAYER_FLASH_COLOR = 0x66ffcc;
+export const NPC_FLASH_COLOR = 0xff5544;
+
+/** Live state for one in-flight tracer (a single shot shooter→target). */
+interface FlashState {
+  g: Graphics;
+  age: number;
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  fromPlayer: boolean;
+}
+
+/** Read-only snapshot of a live tracer for tests/inspection (no Graphics ref). */
+export interface TracerSnapshot {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  age: number;
+  fromPlayer: boolean;
+  color: number;
+  /** Interpolated bolt-head position (clamped to `to` after arrival). */
+  pos: { x: number; y: number };
+  /** Lifecycle phase: streaking to the target, or blooming at it. */
+  phase: "travel" | "impact";
+}
+
+/**
+ * Interpolated bolt-head position along a shot, clamped to the target once the
+ * bolt has arrived (`age >= {@link TRACER_TRAVEL_MS}`). Pure — the deterministic
+ * core of the traveling tracer, unit-tested directly.
+ */
+export function tracerBoltPos(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  age: number,
+): { x: number; y: number } {
+  const t = Math.max(0, Math.min(1, age / TRACER_TRAVEL_MS));
+  return { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
+}
 
 /**
  * In-flight combat HUD (real-time model): a compact top-right overlay showing
@@ -76,9 +120,9 @@ export class CombatHud {
   private markerLayer: Container | null = null;
   private readonly markers = new Map<NpcShipSprite, Graphics>();
 
-  /** World-space layer holding the live (fading) fire-flash beams. */
+  /** World-space layer holding the live (traveling/fading) tracer bolts. */
   private flashLayer: Container | null = null;
-  private readonly flashes: { g: Graphics; age: number }[] = [];
+  private readonly flashes: FlashState[] = [];
 
   private _rangeRadius = 0;
   private targetHpFraction = 0;
@@ -130,9 +174,27 @@ export class CombatHud {
     return this.markers.size;
   }
 
-  /** Number of fire-flash beams still fading on screen. */
+  /** Number of tracer bolts still traveling or fading on screen. */
   get activeFlashCount(): number {
     return this.flashes.length;
+  }
+
+  /**
+   * Read-only snapshot of every live tracer (test/inspection hook): source,
+   * target, age, shooter side + colour, and the current interpolated bolt
+   * position / lifecycle phase. Mirrors {@link activeFlashCount} as a
+   * deterministic view of the motion logic without exposing the Graphics.
+   */
+  get tracerStates(): readonly TracerSnapshot[] {
+    return this.flashes.map((f) => ({
+      from: { ...f.from },
+      to: { ...f.to },
+      age: f.age,
+      fromPlayer: f.fromPlayer,
+      color: f.fromPlayer ? PLAYER_FLASH_COLOR : NPC_FLASH_COLOR,
+      pos: tracerBoltPos(f.from, f.to, f.age),
+      phase: f.age < TRACER_TRAVEL_MS ? "travel" : "impact",
+    }));
   }
 
   /**
@@ -224,9 +286,14 @@ export class CombatHud {
   }
 
   /**
-   * Spawn a per-turn fire flash: a fading beam from the shooter to its target so
-   * each exchanged shot reads as a discrete "ход". `fromPlayer` colours it
-   * cyan-green (player fire) or red (enemy fire). No-op without a render context.
+   * Spawn a per-turn fire flash: a tracer bolt that visibly travels from the
+   * shooter `(x0,y0)` to its target `(x1,y1)` so each exchanged shot reads as a
+   * discrete "ход" with an unmistakable direction. `fromPlayer` colours it
+   * cyan-green (player fire) or red (enemy fire). The bolt streaks to the target
+   * over {@link TRACER_TRAVEL_MS} (muzzle glow at the source), then blooms into
+   * an impact flash there for the rest of {@link FLASH_TTL_MS}. The signature is
+   * unchanged, so {@link CombatModule} needs no behavioural change. No-op without
+   * a render context.
    */
   flashShot(
     x0: number,
@@ -236,18 +303,24 @@ export class CombatHud {
     fromPlayer: boolean,
   ): void {
     if (!this.flashLayer) return;
-    const color = fromPlayer ? PLAYER_FLASH_COLOR : NPC_FLASH_COLOR;
     const g = new Graphics();
     g.eventMode = "none";
-    g.moveTo(x0, y0).lineTo(x1, y1).stroke({ color, width: 2.5, alpha: 0.9 });
-    g.circle(x0, y0, 4).fill({ color, alpha: 0.95 }); // muzzle glow at the shooter
     this.flashLayer.addChild(g);
-    this.flashes.push({ g, age: 0 });
+    const f: FlashState = {
+      g,
+      age: 0,
+      from: { x: x0, y: y0 },
+      to: { x: x1, y: y1 },
+      fromPlayer,
+    };
+    this.flashes.push(f);
+    this.drawFlash(f); // first frame: muzzle flash + bolt at the source
   }
 
   /**
-   * Advance the fire-flash beams: fade each toward transparent over
-   * {@link FLASH_TTL_MS} and remove it once spent. Driven by
+   * Advance the tracer bolts: move each bolt head shooter→target over
+   * {@link TRACER_TRAVEL_MS}, switch it to a fading impact flash on arrival, and
+   * remove it once it crosses {@link FLASH_TTL_MS}. Driven by
    * {@link CombatModule.update} every frame (independent of the fire cadence).
    */
   update(deltaTime: number): void {
@@ -255,13 +328,49 @@ export class CombatHud {
     for (let i = this.flashes.length - 1; i >= 0; i--) {
       const f = this.flashes[i];
       f.age += deltaTime;
-      const t = f.age / FLASH_TTL_MS;
-      if (t >= 1) {
+      if (f.age >= FLASH_TTL_MS) {
         if (!f.g.destroyed) f.g.destroy();
         this.flashes.splice(i, 1);
       } else {
-        f.g.alpha = 1 - t;
+        this.drawFlash(f);
       }
+    }
+  }
+
+  /**
+   * Redraw one tracer for its current age. Travel phase: a bright streak whose
+   * head sits at the interpolated position with a short tail trailing back
+   * toward the shooter (so the eye reads the direction of travel) plus a muzzle
+   * glow that fades as the bolt leaves the source. Impact phase: an expanding
+   * ring + core blooming at the target, fading over the remaining lifetime.
+   * Graphics primitives only — no BlurFilter.
+   */
+  private drawFlash(f: FlashState): void {
+    const color = f.fromPlayer ? PLAYER_FLASH_COLOR : NPC_FLASH_COLOR;
+    const g = f.g;
+    g.clear();
+    g.alpha = 1;
+    if (f.age < TRACER_TRAVEL_MS) {
+      const head = tracerBoltPos(f.from, f.to, f.age);
+      const dx = f.to.x - f.from.x;
+      const dy = f.to.y - f.from.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const travelled = len * (f.age / TRACER_TRAVEL_MS);
+      const tailLen = Math.min(TRACER_STREAK_LEN, travelled);
+      const tailX = head.x - (dx / len) * tailLen;
+      const tailY = head.y - (dy / len) * tailLen;
+      g.moveTo(tailX, tailY)
+        .lineTo(head.x, head.y)
+        .stroke({ color, width: 3, alpha: 0.95 });
+      g.circle(head.x, head.y, 3).fill({ color, alpha: 1 }); // bolt head
+      const muzzleAlpha = 0.85 * (1 - f.age / TRACER_TRAVEL_MS);
+      g.circle(f.from.x, f.from.y, 4).fill({ color, alpha: muzzleAlpha });
+    } else {
+      const k = (f.age - TRACER_TRAVEL_MS) / (FLASH_TTL_MS - TRACER_TRAVEL_MS); // 0→1
+      const a = 1 - k;
+      const r = 5 + k * 6; // expanding ring
+      g.circle(f.to.x, f.to.y, r).fill({ color, alpha: 0.55 * a });
+      g.circle(f.to.x, f.to.y, r).stroke({ color, width: 2, alpha: a });
     }
   }
 
