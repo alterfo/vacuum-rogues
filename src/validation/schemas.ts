@@ -35,7 +35,10 @@ export function validatePlayerSettings(data: unknown): PlayerSettings {
 export const MicroModuleSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
-  targetCategory: z.enum(["WEAPON", "SHIELD", "ENGINE", "EQUIPMENT"]),
+  // "HULL" covers the hull-micromodule family (HULL_MICRO_MODULES) that science
+  // stations sell into inventory.micromodules; omitting it bricks any save made
+  // while the player owns one (load-time validateSaveState rejects it).
+  targetCategory: z.enum(["WEAPON", "SHIELD", "ENGINE", "EQUIPMENT", "HULL"]),
   bonusType: z.string(),
   bonusTier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
 });

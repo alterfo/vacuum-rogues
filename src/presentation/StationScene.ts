@@ -2308,34 +2308,6 @@ export class StationScene extends GameScene {
     return null;
   }
 
-  /**
-   * E2E hook (Task 6): resolve a drag-drop by screen point without a real pointer
-   * gesture — drives `applyMicromoduleDrop` through the same path the release
-   * handler uses, so a test can buy a micromodule and "drop" it on a slot.
-   * Returns the outcome string.
-   */
-  e2eDropMicromoduleAt(micromoduleId: string, gx: number, gy: number): string {
-    const player = this.gameEngine?.player;
-    const loadout = this.gameEngine?.playerLoadout ?? null;
-    const zone = this.dropZoneAt(gx, gy);
-    if (!player || !loadout || !zone) return "no-target";
-    const mm = player.inventory.micromodules.find(
-      (m) => m.id === micromoduleId,
-    );
-    if (!mm) return "unknown";
-    const outcome = applyMicromoduleDrop(loadout, zone.target, mm.id);
-    if (outcome === "ok") {
-      const idx = player.inventory.micromodules.indexOf(mm);
-      if (idx >= 0) player.inventory.micromodules.splice(idx, 1);
-    }
-    this.render();
-    this.showToast(
-      micromoduleDropHint(outcome),
-      outcome === "ok" ? 0x44ff88 : 0xff8844,
-    );
-    return outcome;
-  }
-
   /** Screen-coord drop zones for the current hangar render (read-only, for E2E). */
   e2eDropZones(): ReadonlyArray<{
     x: number;

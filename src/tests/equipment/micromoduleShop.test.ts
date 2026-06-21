@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { z } from "zod";
+import { MicroModuleSchema } from "@/validation/schemas";
 import { BankBus } from "@/systems/banking/bus";
 import { BankingService } from "@/systems/banking/BankingService";
 import {
@@ -102,6 +104,23 @@ describe("micromodule shop — buying", () => {
     const result = buyMicromodule(h.access, h.player, hull);
     expect(result.ok).toBe(true);
     expect(playerOwnsMicromodule(h.player, hull.id)).toBe(true);
+  });
+
+  it("a bought hull micromodule survives save validation (regression: HULL targetCategory)", () => {
+    // HULL_MICRO_MODULES carry targetCategory "HULL"; buying one pushes it into
+    // inventory.micromodules, persisted via z.array(MicroModuleSchema). If the
+    // schema enum omits "HULL", the next load throws SAVE_VALIDATION_FAILED and
+    // the save is unrecoverable. Validate the persisted shape for every hull
+    // micromodule the shop can sell.
+    for (const hull of HULL_MICRO_MODULES) {
+      const fresh = makeHarness(10000);
+      const result = buyMicromodule(fresh.access, fresh.player, hull);
+      expect(result.ok).toBe(true);
+      const parsed = z
+        .array(MicroModuleSchema)
+        .safeParse(fresh.player.inventory.micromodules);
+      expect(parsed.success).toBe(true);
+    }
   });
 
   it("posts a balanced player→equipment transfer (credits drop by exactly the price)", () => {
