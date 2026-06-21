@@ -35,6 +35,14 @@ import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
 interface PlanetContext {
   gameEngine?: GameEngine;
   planet?: Planet;
+  /**
+   * `false` when this landing is the immediate return from an exited text quest
+   * (win / «Сдаться» / «Выйти» / Esc — set by `TextQuestScene.doReturn`). It
+   * suppresses the one auto-resume of the still-active TEXT_ADVENTURE quest that
+   * would otherwise bounce the player straight back in (the customs restart /
+   * can't-exit loop). Omitted on a genuine fresh landing, which resumes normally.
+   */
+  resumeTextQuest?: boolean;
 }
 
 /** A planet-surface action button (governor, garage, market, …, take-off). */
@@ -305,6 +313,9 @@ export class PlanetScene extends GameScene {
   private jobBoardPanel: JobBoardPanel | null = null;
   /** Bribe paid this landing — gates are lifted for the duration of the visit. */
   private bribed = false;
+  /** Set from `resumeTextQuest === false` in the init context: skips the one
+   *  auto-resume on the immediate return from an exited text quest. */
+  private suppressTextQuestResume = false;
 
   // Planet backdrop (F5, 2026-06-10): the flat-sprite light parallax below is
   // the PRIMARY backdrop. The Task 8 GLSL `PanoramaViewer` projection was
@@ -329,6 +340,7 @@ export class PlanetScene extends GameScene {
     this.gameEngine = ctx?.gameEngine ?? null;
     this.planet = ctx?.planet ?? null;
     this.bribed = false;
+    this.suppressTextQuestResume = ctx?.resumeTextQuest === false;
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
 
@@ -596,6 +608,9 @@ export class PlanetScene extends GameScene {
    */
   private checkAndResumeTextQuest(): void {
     if (!this.gameEngine || !this.planet) return;
+    // Immediate return from an exited quest: skip the auto-resume once so a
+    // won/abandoned quest does not relaunch (the customs restart / loop bug).
+    if (this.suppressTextQuestResume) return;
     const activeQuests = this.gameEngine.questManager.getActiveQuests();
     const pending = activeQuests.find(
       (q) =>

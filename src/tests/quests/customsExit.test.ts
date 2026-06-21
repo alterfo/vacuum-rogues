@@ -191,8 +191,8 @@ describe("Customs quest — win exits once and does not restart", () => {
 });
 
 // ── doReturn must tell the destination NOT to auto-resume the quest ────────────
-// (RED until Task 2): without this signal, returning to PLANET re-launches the
-// still-active quest in an inescapable loop.
+// Task 2 fix: `doReturn()` tags the return context with `resumeTextQuest: false`,
+// so returning to PLANET does not re-launch the still-active quest.
 
 describe("Customs quest — surrender / exit / Esc return without re-launching", () => {
   beforeEach(() => {
@@ -218,23 +218,17 @@ describe("Customs quest — surrender / exit / Esc return without re-launching",
     return { scene, transitionTo };
   }
 
-  // `it.fails`: reproduction asserts the post-fix contract and currently fails
-  // (no `resumeTextQuest` flag yet). Task 2 converts these to a plain `it`.
-  it.fails(
-    "«Сдаться» returns to the prior scene and flags no auto-resume",
-    () => {
-      const { scene, transitionTo } = initScene();
-      (scene as any).doReturn();
-      expect(transitionTo).toHaveBeenCalledTimes(1);
-      const [sceneArg, ctx] = transitionTo.mock.calls[0];
-      expect(sceneArg).toBe(SceneType.PLANET);
-      expect((ctx as { resumeTextQuest?: boolean }).resumeTextQuest).toBe(
-        false,
-      );
-    },
-  );
+  // Post-fix contract: `doReturn()` returns to PLANET with `resumeTextQuest:false`.
+  it("«Сдаться» returns to the prior scene and flags no auto-resume", () => {
+    const { scene, transitionTo } = initScene();
+    (scene as any).doReturn();
+    expect(transitionTo).toHaveBeenCalledTimes(1);
+    const [sceneArg, ctx] = transitionTo.mock.calls[0];
+    expect(sceneArg).toBe(SceneType.PLANET);
+    expect((ctx as { resumeTextQuest?: boolean }).resumeTextQuest).toBe(false);
+  });
 
-  it.fails("Escape returns to the prior scene and flags no auto-resume", () => {
+  it("Escape returns to the prior scene and flags no auto-resume", () => {
     const { scene, transitionTo } = initScene();
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     expect(transitionTo).toHaveBeenCalledTimes(1);
@@ -242,6 +236,56 @@ describe("Customs quest — surrender / exit / Esc return without re-launching",
     expect(sceneArg).toBe(SceneType.PLANET);
     expect((ctx as { resumeTextQuest?: boolean }).resumeTextQuest).toBe(false);
     scene.destroy();
+  });
+});
+
+// ── Adjacent case: a failure terminal does not auto-return, but the player can
+//    still exit it cleanly (no-resume) — the failed quest must not relaunch. ────
+
+describe("Customs quest — failure terminal exits without re-launching", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
+  /** Position the live VM on the `quest_failure_credits` terminal. */
+  function driveToFailureTerminal(scene: TextQuestScene): void {
+    const vm = (scene as any).vm as QuestVM;
+    (vm as any).currentLocationId = "quest_failure_credits";
+    (scene as any).renderVmLocation();
+  }
+
+  it("a failure terminal shows retry (no auto-return) and then exits with no-resume", () => {
+    const renderer = makeRenderer();
+    const { engine, transitionTo } = makeEngine();
+    const scene = new TextQuestScene(renderer);
+    scene.initialize({
+      gameEngine: engine,
+      questScript: customsScript,
+      seed: 1,
+      questId: "q_customs",
+      returnScene: SceneType.PLANET,
+      returnContext: { gameEngine: engine, planet: { id: "planet_x" } },
+    });
+
+    driveToFailureTerminal(scene);
+    const vm = (scene as any).vm as QuestVM;
+    expect(vm.isFinished()).toBe(true);
+    expect(vm.isSuccess()).toBe(false);
+    // Failure does not auto-return — the player chooses «Начать заново» or exits.
+    vi.advanceTimersByTime(3000);
+    expect(transitionTo).not.toHaveBeenCalled();
+
+    // Exiting a failed shift returns to PLANET with the no-resume flag set, so
+    // the still-active quest is not relaunched on the return.
+    (scene as any).doReturn();
+    expect(transitionTo).toHaveBeenCalledTimes(1);
+    const [sceneArg, ctx] = transitionTo.mock.calls[0];
+    expect(sceneArg).toBe(SceneType.PLANET);
+    expect((ctx as { resumeTextQuest?: boolean }).resumeTextQuest).toBe(false);
   });
 });
 
@@ -256,21 +300,17 @@ describe("PlanetScene.checkAndResumeTextQuest — no relaunch loop", () => {
     vi.useRealTimers();
   });
 
-  // `it.fails`: the loop reproduction — currently relaunches the still-active
-  // quest. Task 2 honours the suppression flag and converts this to a plain `it`.
-  it.fails(
-    "does NOT auto-relaunch when entered as the return from an exited quest",
-    () => {
-      const { scene, startTextQuest } = makePlanetScene({
-        planetId: "planet_x",
-        activeQuests: [activeCustomsQuest("planet_x")],
-        suppressResume: true, // doReturn flagged resumeTextQuest:false
-      });
-      (scene as any).checkAndResumeTextQuest();
-      vi.advanceTimersByTime(200);
-      expect(startTextQuest).not.toHaveBeenCalled();
-    },
-  );
+  // Task 2 honours the suppression flag: the immediate return does not relaunch.
+  it("does NOT auto-relaunch when entered as the return from an exited quest", () => {
+    const { scene, startTextQuest } = makePlanetScene({
+      planetId: "planet_x",
+      activeQuests: [activeCustomsQuest("planet_x")],
+      suppressResume: true, // doReturn flagged resumeTextQuest:false
+    });
+    (scene as any).checkAndResumeTextQuest();
+    vi.advanceTimersByTime(200);
+    expect(startTextQuest).not.toHaveBeenCalled();
+  });
 
   it("still resumes a pending quest on a genuine fresh landing (no suppression)", () => {
     const { scene, startTextQuest } = makePlanetScene({

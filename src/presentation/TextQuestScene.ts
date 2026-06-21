@@ -963,6 +963,11 @@ export class TextQuestScene extends GameScene {
       .transitionTo(this.returnScene, {
         gameEngine: this.gameEngine,
         ...this.returnContext,
+        // Exiting the quest (win / «Сдаться» / «Выйти» / Esc) must NOT bounce
+        // straight back in: tell the destination scene to skip its auto-resume
+        // of the still-active TEXT_ADVENTURE quest for this one return. A genuine
+        // fresh landing carries no flag and resumes as before.
+        resumeTextQuest: false,
       })
       .catch((e) =>
         logger.error("TextQuestScene: return transition failed", e),

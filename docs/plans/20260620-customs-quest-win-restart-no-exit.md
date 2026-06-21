@@ -78,10 +78,20 @@ finished or surrendered quest exits once and does not restart, and verify.
   the VM terminal handling if the win node never reaches `handleVmFinished`
 - Modify (if completion isn't recorded): the `forceCompleteQuest` call path so customs is marked done
 
-- [ ] apply the minimal fix for the confirmed cause; the Task 1 test goes green
-- [ ] ⚠️ if the fix reds an existing quest test, STOP and re-diagnose (don't weaken it)
-- [ ] write tests for the adjacent cases (failure terminal exits; surrender mid-quest exits) — all green
-- [ ] run affected tests — must pass before next task
+- [x] apply the minimal fix for the confirmed cause; the Task 1 test goes green
+      — `TextQuestScene.doReturn()` now tags the return context with `resumeTextQuest: false`;
+      `PlanetScene` stores it as `suppressTextQuestResume` (from `ctx.resumeTextQuest === false`) and
+      `checkAndResumeTextQuest()` early-returns when set, so the immediate return does not relaunch.
+      The three Task 1 reproductions were converted from `it.fails` to plain `it` (assertions
+      unchanged) and are green.
+- [x] ⚠️ if the fix reds an existing quest test, STOP and re-diagnose (don't weaken it)
+      — no existing test red'd: 246 quest tests + 392 presentation tests all green; no assertion changed.
+- [x] write tests for the adjacent cases (failure terminal exits; surrender mid-quest exits) — all green
+      — added "failure terminal exits without re-launching" (failure terminal shows retry, no auto-return,
+      then exits to PLANET with `resumeTextQuest:false`); surrender-mid-quest is covered by the «Сдаться»
+      case (doReturn called before any terminal).
+- [x] run affected tests — must pass before next task — `customsExit.test.ts` 6/6; quests 246/246;
+      presentation 392/392; lint 0 errors.
 
 ### Task 3: Verify acceptance criteria
 - [ ] verify Overview: winning customs ends + exits (no restart); «Сдаться» and «Выйти»/Esc exit
