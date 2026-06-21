@@ -19,6 +19,7 @@ import { RuleBasedNpcBrain, selectPirateTarget } from "./NpcBrain";
 import {
   factionKindOf,
   isHostile,
+  mutuallyHostile,
   pirateCoordination,
 } from "./factionHostility";
 import { npcOrbitStep, advanceNpcOrbit } from "./npcPlacement";
@@ -1084,7 +1085,14 @@ export class NpcSimulator {
 
     for (const [systemId, ships] of bySystem) {
       const pirates = ships.filter((s) => s.role === NpcRole.PIRATE);
-      const victims = ships.filter((s) => s.role !== NpcRole.PIRATE);
+      // Overmind ships are excluded here: a wandering pirate ↔ wandering Overmind
+      // is a mutual-enemy *cross-faction* brawl owned by resolveCrossFactionCombat
+      // (single source of truth), not the pirate-preys-on-victims path. (Garrison
+      // Overmind ships are already filtered above; this only matters for the rare
+      // wandering Overmind, so existing pirate-raid behaviour is unchanged.)
+      const victims = ships.filter(
+        (s) => s.role !== NpcRole.PIRATE && s.faction !== Faction.OVERMIND,
+      );
       if (pirates.length === 0 || victims.length === 0) continue;
 
       // Solo vs pack (Task 3): in a system the pirates have captured they swarm as
@@ -1144,6 +1152,13 @@ export class NpcSimulator {
     // main simulation stream — Task 4's determinism guarantee that the
     // convoy/quest tests rely on.
     this.resolveGarrisonOffscreenCombat(galaxy, playerSystemId);
+
+    // Cross-faction brawl (Task 5): co-present WANDERING Overmind and pirate ships
+    // are mutual enemies and trade hull damage off-screen, independent of the
+    // player — the off-screen counterpart of the in-flight Overmind-vs-pirate
+    // engagement. Matrix-driven (one source of truth) and isolated from the main
+    // RNG stream, so it never perturbs the deterministic simulation.
+    this.resolveCrossFactionCombat(galaxy, playerSystemId);
 
     // Reset surviving combatants to PATROLLING so they don't appear as
     // perpetually FIGHTING in the contact panel. Use PATROLLING (not IDLE) so
@@ -1253,6 +1268,86 @@ export class NpcSimulator {
           victim.state = NpcState.DEAD;
           logger.info(
             `Garrison ${attacker.name} destroyed ${victim.name} in ${attacker.currentSystemId}`,
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Off-screen cross-faction combat (Task 5): co-present **wandering** Overmind
+   * and pirate ships in any non-player system are mutual enemies (the hostility
+   * matrix), so they trade hull damage independent of the player — the off-screen
+   * counterpart of the in-flight Overmind-vs-pirate brawl. Damage is **mutual**
+   * (both sides are aggressors), unlike the one-directional
+   * {@link resolveGarrisonOffscreenCombat}: standing-garrison and besieging
+   * capture-fleet Overmind ships are deliberately excluded here so a passing
+   * raider can never grind a held position down (the standing-garrison persistence
+   * invariant) — they engage only through the no-retaliation garrison path. The
+   * matrix is the single source of truth ({@link mutuallyHostile}); victim
+   * selection draws from a private day-seeded RNG so adding this never perturbs the
+   * deterministic main stream. The caller resets FIGHTING survivors to PATROLLING.
+   */
+  private resolveCrossFactionCombat(
+    galaxy: Galaxy,
+    playerSystemId?: string,
+  ): void {
+    const rng = new SeededRNG(`crossfaction_${galaxy.gameDays}`);
+    const bySystem = new Map<string, NpcShip[]>();
+    for (const npc of galaxy.npcShips) {
+      if (npc.state === NpcState.DEAD || npc.state === NpcState.TRAVELING) {
+        continue;
+      }
+      if (npc.currentSystemId === playerSystemId) continue;
+      if (this.garrisonIds.has(npc.id)) continue;
+      if (this.captureFleetIds.has(npc.id)) continue;
+      const list = bySystem.get(npc.currentSystemId) ?? [];
+      list.push(npc);
+      bySystem.set(npc.currentSystemId, list);
+    }
+
+    // Mutual enmity is a property of the kinds, not the encounter — confirm it once
+    // through the matrix rather than re-deriving the relation per system.
+    if (!mutuallyHostile("overmind", "pirate", { pirateRep: 0 })) return;
+
+    for (const ships of bySystem.values()) {
+      const overminds = ships.filter((s) => factionKindOf(s) === "overmind");
+      const pirates = ships.filter((s) => factionKindOf(s) === "pirate");
+      if (overminds.length === 0 || pirates.length === 0) continue;
+
+      for (const ov of overminds) {
+        if (ov.state === NpcState.DEAD) continue;
+        const alive = pirates.filter((p) => p.state !== NpcState.DEAD);
+        if (alive.length === 0) break;
+
+        const pirate = alive[rng.nextInt(0, alive.length - 1)];
+        ov.state = NpcState.FIGHTING;
+        pirate.state = NpcState.FIGHTING;
+
+        // Mutual damage — both are aggressors in a cross-faction brawl (the
+        // Overmind strikes, the pirate fires back), each at the same per-day
+        // fraction as the wandering-pirate path.
+        pirate.hullHP -= Math.max(
+          1,
+          Math.round(ov.damage * PIRATE_DAMAGE_FRACTION),
+        );
+        ov.hullHP -= Math.max(
+          1,
+          Math.round(pirate.damage * PIRATE_DAMAGE_FRACTION),
+        );
+
+        if (pirate.hullHP <= 0) {
+          pirate.hullHP = 0;
+          pirate.state = NpcState.DEAD;
+          logger.info(
+            `Overmind ${ov.name} destroyed pirate ${pirate.name} in ${ov.currentSystemId}`,
+          );
+        }
+        if (ov.hullHP <= 0) {
+          ov.hullHP = 0;
+          ov.state = NpcState.DEAD;
+          logger.info(
+            `Pirate destroyed Overmind ${ov.name} in ${ov.currentSystemId}`,
           );
         }
       }

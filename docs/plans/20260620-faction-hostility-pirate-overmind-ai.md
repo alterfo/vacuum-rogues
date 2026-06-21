@@ -105,11 +105,11 @@ ransom *dialog/payment* is owned by the universal-comms plan (this plan decides 
   the matrix, not only NPC-vs-player)
 - Create: src/tests/npc/crossFactionCombat.test.ts
 
-- [ ] pirate and overmind ships fight each other off-screen and in-flight (matrix-driven), independent
+- [x] pirate and overmind ships fight each other off-screen and in-flight (matrix-driven), independent
       of the player
-- [ ] ⚠️ existing combat/sim tests stay green — if any reds, STOP and re-diagnose
-- [ ] write tests: co-present pirate+overmind → mutual damage off-screen; in-flight NPC-vs-NPC engage
-- [ ] run affected tests — must pass before next task
+- [x] ⚠️ existing combat/sim tests stay green — if any reds, STOP and re-diagnose
+- [x] write tests: co-present pirate+overmind → mutual damage off-screen; in-flight NPC-vs-NPC engage
+- [x] run affected tests — must pass before next task
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify Overview: overmind hostile to all + expands; pirates hit weak ships, ransom, solo/pack,

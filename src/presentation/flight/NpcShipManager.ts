@@ -17,7 +17,12 @@ import {
   hireFee,
   hireGoal,
 } from "@/systems/npc/NpcBrain";
-import { isHostile } from "@/systems/npc/factionHostility";
+import {
+  isHostile,
+  factionKindOf,
+  overmindCombatTargets,
+  type RangedNpc,
+} from "@/systems/npc/factionHostility";
 import { PIRATE_FACTION_ID } from "@/systems/galaxy/landingAccess";
 import { payTribute } from "@/systems/banking/economy";
 import { SeededRNG } from "@/utils/seededRNG";
@@ -142,6 +147,10 @@ export class NpcShipManager implements FlightModule {
   // but never opens fire. Cleared on arrival, on a switch to attack, and when a
   // fresh route cancels it.
   private approachNpcId: string | null = null;
+  // ms accumulated toward the next in-flight NPC-vs-NPC (cross-faction) fire
+  // round — the Overmind-vs-pirate brawl resolves on the same cadence as the
+  // player's combat fire interval. Reset each time a round fires.
+  private npcCrossfireTimer = 0;
   // Pirate ids already rolled for a "кошелёк или жизнь" shakedown this encounter,
   // so a passing pirate demands tribute at most once (the roll is deterministic
   // and must not re-fire every frame it sits inside scanner range).
@@ -306,6 +315,64 @@ export class NpcShipManager implements FlightModule {
         this.updateNpcDepth(sprite);
       }
     }
+
+    // After moving every ship, resolve any in-flight NPC-vs-NPC brawl (the
+    // Overmind's indiscriminate aggression playing out against a strayed pirate /
+    // liberating ranger), independent of the player.
+    this.resolveNpcVsNpcCombat(deltaTime);
+  }
+
+  /**
+   * In-flight NPC-vs-NPC combat (Task 5): the Overmind's indiscriminate aggression
+   * plays out as a real cross-faction brawl in the player's system, independent of
+   * the player. Every {@link GAME_BALANCE.combatFireIntervalMs} each present
+   * Overmind sprite fires on the nearest **mutually-hostile** sprite within weapon
+   * range (a strayed pirate in a captured system, a liberating ranger…) selected
+   * through the shared hostility matrix ({@link overmindCombatTargets}, the single
+   * source of truth). Damage is mutual — the foe shoots back — and a lethal round
+   * routes through the normal in-flight death path ({@link handleInFlightDeath}:
+   * loot drop + domain removal). Scoped to Overmind attackers and gated on weapon
+   * range, so a system with no Overmind present is wholly unperturbed. Peaceful
+   * kinds (traders) are never mutual-hostile with the Overmind, so the brawl stays
+   * between armed factions; the Overmind's aggression toward the player is the
+   * separate garrison-aggro path above.
+   */
+  private resolveNpcVsNpcCombat(deltaTime: number): void {
+    this.npcCrossfireTimer += deltaTime;
+    if (this.npcCrossfireTimer < GAME_BALANCE.combatFireIntervalMs) return;
+    this.npcCrossfireTimer = 0;
+    if (this.npcSprites.length < 2) return;
+
+    const combatants: RangedNpc[] = this.npcSprites.map((s) => ({
+      id: s.npc.id,
+      kind: factionKindOf(s.npc),
+      x: s.x,
+      y: s.y,
+    }));
+    const engagements = overmindCombatTargets(combatants, this.WEAPON_RANGE, {
+      pirateRep: 0,
+    });
+    if (engagements.size === 0) return;
+
+    const byId = new Map(this.npcSprites.map((s) => [s.npc.id, s]));
+    const killed = new Set<NpcShipSprite>();
+    for (const [attackerId, targetId] of engagements) {
+      const attacker = byId.get(attackerId);
+      const target = byId.get(targetId);
+      if (!attacker || !target) continue;
+      if (killed.has(attacker) || killed.has(target)) continue;
+      // Mutual damage — the Overmind strikes and the foe fires back.
+      target.npc.hullHP = Math.max(0, target.npc.hullHP - attacker.npc.damage);
+      attacker.npc.hullHP = Math.max(
+        0,
+        attacker.npc.hullHP - target.npc.damage,
+      );
+      if (target.npc.hullHP <= 0) killed.add(target);
+      if (attacker.npc.hullHP <= 0) killed.add(attacker);
+    }
+    // Resolve kills after the round so the loot/removal splice never disturbs the
+    // engagement iteration.
+    for (const sprite of killed) this.handleInFlightDeath(sprite);
   }
 
   /**

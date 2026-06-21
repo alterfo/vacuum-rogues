@@ -167,3 +167,75 @@ export function pirateCoordination(
 ): PirateCoordination {
   return systemControl === "pirate" ? "pack" : "solo";
 }
+
+/**
+ * Whether two kinds are **mutual** enemies — each {@link isHostile} to the other.
+ * A spontaneous NPC-vs-NPC brawl (a fight that breaks out between two NPCs,
+ * independent of the player) requires mutual enmity: a party that both *wants* to
+ * attack and is attacked *back*. This naturally excludes the peaceful kinds
+ * (`trader`/`player`), which the matrix marks as non-aggressors — a pirate preys on
+ * a trader, but the trader never initiates, so that one-sided predation stays in
+ * the player-facing / off-screen-raid flow rather than the cross-faction brawl. The
+ * single source of truth for who spontaneously fights whom (the in-flight
+ * {@link overmindCombatTargets} and the off-screen sim's cross-faction resolution
+ * both consult it), so no relation logic is re-derived.
+ */
+export function mutuallyHostile(
+  a: FactionKind,
+  b: FactionKind,
+  ctx: HostilityContext,
+): boolean {
+  return isHostile(a, b, ctx) && isHostile(b, a, ctx);
+}
+
+/**
+ * A combat participant reduced to the fields cross-faction target selection reads:
+ * its id, hostility {@link FactionKind}, and live world position.
+ */
+export interface RangedNpc {
+  readonly id: string;
+  readonly kind: FactionKind;
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * In-flight NPC-vs-NPC engagements for one combat round: for every **Overmind**
+ * combatant, the nearest other combatant it is {@link mutuallyHostile} to and
+ * within `range` of. This is the Overmind's indiscriminate aggression realised as
+ * a real cross-faction brawl in the player's system, independent of the player (a
+ * strayed pirate in a captured system, a liberating ranger…). Pure — no RNG, no
+ * I/O — and keyed off the shared matrix so the relation is never re-derived.
+ *
+ * Scoped to **Overmind attackers** this iteration so a system with no Overmind
+ * present is wholly unperturbed (bounding the blast radius); the Overmind only
+ * spawns in captured/besieging contexts, so the brawl is confined to exactly the
+ * warzones where the two sides meet. Returns `attackerId → targetId`, omitting any
+ * Overmind with no in-range mutual foe.
+ */
+export function overmindCombatTargets(
+  combatants: readonly RangedNpc[],
+  range: number,
+  ctx: HostilityContext,
+): Map<string, string> {
+  const targets = new Map<string, string>();
+  const r2 = range * range;
+  for (const a of combatants) {
+    if (a.kind !== "overmind") continue;
+    let bestId: string | null = null;
+    let bestD2 = Infinity;
+    for (const b of combatants) {
+      if (b.id === a.id) continue;
+      if (!mutuallyHostile(a.kind, b.kind, ctx)) continue;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 <= r2 && d2 < bestD2) {
+        bestD2 = d2;
+        bestId = b.id;
+      }
+    }
+    if (bestId) targets.set(a.id, bestId);
+  }
+  return targets;
+}
