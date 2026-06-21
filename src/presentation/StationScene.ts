@@ -18,6 +18,7 @@ import {
   GearKind,
   gearById,
   microModuleById,
+  hullMicroModuleById,
   slotCategoryFor,
   type SlotCategory,
   type Gear,
@@ -2061,7 +2062,9 @@ export class StationScene extends GameScene {
       this.mainContainer!.addChild(chip);
 
       const label = scaledText(
-        filled ? (microModuleById(id)?.name ?? id) : "— свободно —",
+        filled
+          ? (hullMicroModuleById(id)?.name ?? microModuleById(id)?.name ?? id)
+          : "— свободно —",
         9,
         filled ? 0xffcc44 : 0x8aa0b4,
         { rawColor: true, fontFamily: "monospace" },

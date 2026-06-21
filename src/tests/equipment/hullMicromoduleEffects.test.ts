@@ -3,6 +3,7 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import {
   gearById,
   hullMicroModuleById,
+  microModuleById,
   hullMicromoduleEffectKind,
   HULL_MICRO_MODULES,
   type HullSpec,
@@ -166,5 +167,16 @@ describe("ShipLoadout — hull micromodule effects in derivedStats", () => {
   it("lookup helper resolves a hull micromodule by id", () => {
     expect(hullMicroModuleById(ARMOR_1)?.bonusType).toBe("defense");
     expect(hullMicroModuleById("unknown")).toBeUndefined();
+  });
+
+  // Regression: the hull family is a *separate* catalog from MICRO_MODULES, so a
+  // hull micromodule id is NOT resolvable via `microModuleById` — any UI that
+  // displays a fitted hull micromodule's name (StationScene's КОРПУС bank) must
+  // use the hull-aware resolver, else it renders the raw id.
+  it("hull micromodule ids are not resolvable via the gear-only microModuleById", () => {
+    for (const mm of HULL_MICRO_MODULES) {
+      expect(microModuleById(mm.id)).toBeUndefined();
+      expect(hullMicroModuleById(mm.id)?.name).toBe(mm.name);
+    }
   });
 });
