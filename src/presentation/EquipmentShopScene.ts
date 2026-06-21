@@ -15,7 +15,6 @@ import {
 } from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
-  slotToBagModule,
   acquireUninstalledGear,
   ownedUninstalledGear,
   installOwnedGear,
@@ -24,7 +23,6 @@ import {
   type GearFit,
   KIND_LABEL,
   KIND_COLOR,
-  applyLoadoutHullToShip,
 } from "@/systems/equipment/GearBridge";
 import { shopRowAction } from "./equipment/shopRowAction";
 import type { SlotCategory } from "@/systems/equipment/GearCatalog";
@@ -32,6 +30,10 @@ import {
   sellGearPrice,
   sellUninstalledGear,
 } from "@/systems/equipment/sellGear";
+import {
+  hullTradeInPrice,
+  buyHullWithTradeIn,
+} from "@/systems/equipment/sellHull";
 import {
   adjustPlayerCredits,
   GL_COUNTERPARTY,
@@ -382,14 +384,22 @@ export class EquipmentShopScene extends GameScene {
       return;
     }
 
+    const currentHull = this.gameEngine?.playerLoadout?.hull;
     const ROW = 70;
     for (let i = 0; i < hullListings.length; i++) {
       const listing = hullListings[i];
       const hull = listing.gear as HullSpec;
       const rowY = y + 34 + i * ROW;
       const playerCredits = player?.credits ?? 0;
-      const canAfford = playerCredits >= listing.price;
       const isCurrent = player?.ship.hullClass === hull.hullClass;
+      // Installing a replacement trades in the current hull, so the player only
+      // needs the net (price − trade-in). The current-hull row trades nothing.
+      const tradeIn =
+        currentHull && currentHull.id !== hull.id
+          ? hullTradeInPrice(currentHull)
+          : 0;
+      const netPrice = Math.max(0, listing.price - tradeIn);
+      const canAfford = playerCredits >= netPrice;
 
       const rowBg = new Graphics();
       rowBg.rect(x + 4, rowY, w - 36, ROW - 4);
@@ -431,6 +441,20 @@ export class EquipmentShopScene extends GameScene {
       priceText.x = x + w * 0.7;
       priceText.y = rowY + 16;
       this.mainContainer.addChild(priceText);
+
+      // Show the trade-in credit for the old hull so the net cost is legible.
+      if (tradeIn > 0) {
+        const tradeInText = scaledText(
+          `сдача +${tradeIn.toLocaleString("ru")}₡`,
+          10,
+          0x55cc88,
+          { rawColor: true },
+        );
+        tradeInText.eventMode = "none";
+        tradeInText.x = x + w * 0.7;
+        tradeInText.y = rowY + 36;
+        this.mainContainer.addChild(tradeInText);
+      }
 
       if (isCurrent) {
         const currentBadge = scaledText("Установлен", 12, 0x44aaff, {
@@ -476,32 +500,33 @@ export class EquipmentShopScene extends GameScene {
     const player = this.gameEngine?.player;
     const loadout = this.gameEngine?.playerLoadout;
     if (!player || !loadout) return;
-    if (player.credits < listing.price) return;
+    // Installing a replacement trades in the old hull, so the player only needs
+    // to afford the net (price − trade-in), not the full price.
+    const tradeIn =
+      loadout.hull.id === hull.id ? 0 : hullTradeInPrice(loadout.hull);
+    const netPrice = Math.max(0, listing.price - tradeIn);
+    if (player.credits < netPrice) return;
 
-    // The canonical loadout is the single source of truth: swap the hull there
-    // (it drops any slotted gear that no longer fits), then project the new
-    // hull's HP pool + class label onto the live ship from the loadout. Gear
-    // that no longer fits a smaller hull returns to the inventory bag rather than
-    // being destroyed.
-    adjustPlayerCredits(
+    // The canonical loadout is the single source of truth: the shared
+    // trade-in flow charges the new hull, credits the old hull's trade-in
+    // through the banking bus, swaps the loadout (re-bagging gear that no
+    // longer fits a smaller hull losslessly), then projects the new hull's HP
+    // pool + class label onto the live ship. The loadout always holds exactly
+    // one hull, so the player can never end hull-less.
+    const result = buyHullWithTradeIn(
       this.gameEngine?.bank,
       player,
-      -listing.price,
-      GL_COUNTERPARTY.EQUIPMENT,
-      `Покупка: ${hull.name}`,
+      loadout,
+      hull,
+      listing.price,
     );
-    // Re-bag dropped gear losslessly: slotToBagModule carries the slot's
-    // micromodule + artifact-upgrade count so a hull downsize never destroys
-    // the resources the player spent on them.
-    const dropped = loadout.swapHull(hull.id);
-    for (const slot of dropped) {
-      const g = gearById(slot.gearId);
-      if (g) player.inventory.addItem(slotToBagModule(g, slot));
-    }
-    applyLoadoutHullToShip(player.ship, loadout);
 
     logger.info(
-      `Installed hull ${hull.name} (${hull.hullClass}) for ${listing.price} credits.`,
+      `Installed hull ${hull.name} (${hull.hullClass}) for ${listing.price} credits` +
+        (result.tradeIn > 0
+          ? ` (traded in old hull for ${result.tradeIn})`
+          : "") +
+        ".",
     );
 
     this.rebuild();

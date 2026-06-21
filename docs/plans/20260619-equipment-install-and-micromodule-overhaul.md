@@ -221,13 +221,24 @@ Fix and deepen ship fitting:
   banking bus when installing a replacement; show the trade-in amount on the hull listing)
 - Create: src/tests/equipment/hullTradeIn.test.ts
 
-- [ ] installing a new hull refunds the old hull's trade-in value (a fraction of its `basePrice`)
-      through the bus; the hull listing shows the trade-in credit; the player can never end hull-less
-- [ ] ⚠️ existing economy tests must stay green — the net credit delta (price − trade-in) is balanced
-      and GL-posted; if any reds, STOP and fix the posting
-- [ ] write tests: buying a replacement nets `price − tradeIn`; trade-in is a balanced bus posting;
-      no hull-less state
-- [ ] run affected tests — must pass before next task
+- [x] installing a new hull refunds the old hull's trade-in value (a fraction of its `basePrice`)
+      through the bus; the hull listing shows the trade-in credit; the player can never end hull-less.
+      New pure `src/systems/equipment/sellHull.ts`: `hullTradeInPrice(hull)` = `floor(basePrice × 0.4)`
+      (the shared `SELL_RATE`) and `buyHullWithTradeIn(bank, player, loadout, newHull, price)` — the
+      single source of truth for the trade-in. It posts two balanced bus transfers (charge `price`,
+      credit the old hull's trade-in), swaps the canonical `ShipLoadout` (re-bagging dropped gear
+      losslessly via `slotToBagModule`), then re-projects the hull onto the live ship. The loadout
+      always holds exactly one hull → never hull-less. `EquipmentShopScene.buyHull` now calls it and
+      gates affordability on the net (`price − tradeIn`); the hull listing shows a `сдача +N₡` line.
+- [x] ⚠️ existing economy tests must stay green — the net credit delta (price − trade-in) is balanced
+      and GL-posted (equipment GL nets `price − tradeIn`, ledger `totalBalance ≈ 0`, projection
+      mirrors the ledger). economy + banking + equipment suites green (455 tests).
+- [x] write tests: buying a replacement nets `price − tradeIn`; trade-in is a balanced bus posting;
+      no hull-less state (`src/tests/equipment/hullTradeIn.test.ts` — 7 tests: tiered price + whole-
+      credit, net charge, balanced posting + projection parity, live-ship projection, lossless re-bag
+      on downsize, same-hull no-refund edge)
+- [x] run affected tests — must pass before next task (equipment+economy+banking 455 green; new
+      hullTradeIn 7 green; tsc + eslint clean)
 
 ### Task 8: Verify acceptance criteria + persistence
 **Files:**
