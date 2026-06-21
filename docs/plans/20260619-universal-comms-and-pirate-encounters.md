@@ -112,10 +112,15 @@ Make ship-to-ship communication a real interaction layer:
 - [x] run affected tests — must pass before next task
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify Overview: universal window, pirate shakedown, hire/ally, Overmind gibberish — all work
-- [ ] visually verify the comms window via screenshot in each context
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing test assertions changed
+- [x] verify Overview: universal window, pirate shakedown, hire/ally, Overmind gibberish — all work
+      (all four contexts confirmed via screenshot: neutral → trade/hire/ally/attack;
+      pirate-shakedown → pay/fight/flee + «Кошелёк или жизнь!»; overmind → no options + gibberish line)
+- [x] visually verify the comms window via screenshot in each context (drove the live SpaceFlightScene
+      npcManager to open the panel in neutral / pirate-shakedown / overmind contexts and captured each)
+- [x] run full unit suite — all green (250 files, 2171 tests); `npm run test:e2e:regression` (25/25);
+      `npm run lint` clean (0 errors; 29 pre-existing `no-explicit-any` warnings in unrelated quest tests)
+- [x] confirm no existing test assertions changed (the 5 comms commits added only 5 new test files,
+      855 insertions / 0 deletions under src/tests — no existing assertion touched)
 
 ## Technical Details
 - **One window, many contexts:** the panel is a thin renderer over `commsOptionsFor(npc, context)`;
