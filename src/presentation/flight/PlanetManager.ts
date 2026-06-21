@@ -142,21 +142,28 @@ export class PlanetManager implements FlightModule {
   }
 
   /**
-   * Advance planet orbital positions (a pure function of elapsed game days) and,
-   * while the turn runs, their cosmetic axial spin / moons. The mini-map refresh
-   * stays in the scene (it reads route + camera state).
+   * Advance planet orbital positions (a pure function of elapsed game days) and
+   * their cosmetic axial spin / moons. The mini-map refresh stays in the scene
+   * (it reads route + camera state).
+   *
+   * Pause applies **only to ships** (and combat): the ambient solar system stays
+   * alive, so axial spin + moons advance on real elapsed time even while paused —
+   * matching the sun ({@link StarRenderer}) and comets ({@link AsteroidBelt}),
+   * which are driven by `deltaTime` unconditionally. Fast-forward (`timeScale`)
+   * scales the spin only while the turn is actually running; when paused the
+   * planet keeps spinning at the base 1× rate. The orbital position, by contrast,
+   * stays a deterministic function of game-days (frozen when paused, by design —
+   * chase/intercept lead + route targeting rely on `position = f(gameDays)`).
    */
   update(deltaTime: number, _bgElapsed: number): void {
     const currentDays = this.deps.getOrbitalDay();
+    const timeScale = this.deps.isTurnRunning()
+      ? (this.deps.getShipPhysics()?.timeScale ?? 1)
+      : 1;
+    const scaledDt = deltaTime * timeScale;
     for (const sprite of this.planetSprites) {
       sprite.setOrbitForDay(currentDays);
-    }
-
-    if (this.deps.isTurnRunning()) {
-      const scaledDt = deltaTime * (this.deps.getShipPhysics()?.timeScale ?? 1);
-      for (const sprite of this.planetSprites) {
-        sprite.update(scaledDt);
-      }
+      sprite.update(scaledDt);
     }
   }
 
