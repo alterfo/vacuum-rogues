@@ -187,6 +187,7 @@ describe("Customs quest — win exits once and does not restart", () => {
       ([s]: [SceneType]) => s === SceneType.TEXT_QUEST,
     );
     expect(reLaunched).toBe(false);
+    scene.destroy(); // release the global keydown listener (no cross-test leak)
   });
 });
 
@@ -226,6 +227,7 @@ describe("Customs quest — surrender / exit / Esc return without re-launching",
     const [sceneArg, ctx] = transitionTo.mock.calls[0];
     expect(sceneArg).toBe(SceneType.PLANET);
     expect((ctx as { resumeTextQuest?: boolean }).resumeTextQuest).toBe(false);
+    scene.destroy(); // release the global keydown listener (no cross-test leak)
   });
 
   it("Escape returns to the prior scene and flags no auto-resume", () => {
@@ -286,6 +288,7 @@ describe("Customs quest — failure terminal exits without re-launching", () => 
     const [sceneArg, ctx] = transitionTo.mock.calls[0];
     expect(sceneArg).toBe(SceneType.PLANET);
     expect((ctx as { resumeTextQuest?: boolean }).resumeTextQuest).toBe(false);
+    scene.destroy(); // release the global keydown listener (no cross-test leak)
   });
 });
 
