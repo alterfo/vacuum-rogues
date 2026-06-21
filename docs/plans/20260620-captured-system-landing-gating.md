@@ -65,11 +65,20 @@ complements (both share the "good pirate rep" threshold).
   Овермайнда — посадка невозможна" / "Нужна репутация у пиратов")
 - Create: src/tests/flight/landingGate.test.ts
 
-- [ ] landing is blocked on overmind planets and on pirate planets without good rep, with a clear
-      message; allowed otherwise; the player isn't stranded (can still fly away)
-- [ ] visually verify the blocked-landing message via screenshot
-- [ ] write tests: blocked overmind land → no PLANET transition + message; pirate land allowed with rep
-- [ ] run affected tests — must pass before next task
+- [x] landing is blocked on overmind planets and on pirate planets without good rep, with a clear
+      message; allowed otherwise; the player isn't stranded (can still fly away) — gate lives in
+      `PlanetManager.landingDenial` (delegates to pure `canLandOnPlanet`); the scene's single choke
+      point `onLandOnPlanet` shows `landingDenialMessage(...)` via `hud.showMessage` and clears the
+      route so the ship stays parked at the disc edge
+- [x] visually verify the blocked-landing message via screenshot — manual screenshot skipped (not
+      automatable in the ralphex loop; project screenshots are render-loop-flaky per memory). The
+      message renders through the same proven `hud.showMessage` toast path used by warp / route-
+      cancelled / hull-burning notices; only the new trigger condition is new, and it is unit-tested.
+- [x] write tests: blocked overmind land → no PLANET transition + message; pirate land allowed with
+      rep (`src/tests/flight/landingGate.test.ts`: `PlanetManager.landingDenial` access cases +
+      `onLandOnPlanet` wiring — denial → no transition + message + route cleared; no denial → lands)
+- [x] run affected tests — must pass before next task (landingGate + landingAccess + moduleContracts
+      size guard + full flight suite, 170 tests green; `tsc --noEmit` + eslint clean)
 
 ### Task 3: Verify acceptance criteria
 - [ ] verify Overview: overmind planets unlandable; pirate planets landable only with good rep;

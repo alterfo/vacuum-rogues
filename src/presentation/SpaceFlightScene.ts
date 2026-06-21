@@ -15,6 +15,7 @@ import {
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import { PanZoomController } from "@/systems/PanZoomController";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
+import { landingDenialMessage } from "@/systems/galaxy/landingAccess";
 import { SpaceBackgroundLayer } from "./SpaceBackgroundLayer";
 import { StarRenderer } from "./flight/StarRenderer";
 import { AsteroidBelt } from "./flight/AsteroidBelt";
@@ -801,25 +802,24 @@ export class SpaceFlightScene extends GameScene {
   }
 
   private async onLandOnPlanet(planet: Planet): Promise<void> {
-    // Guard: only allow landing when the ship has actually reached the planet.
-    // Game-days already accrue during the flight (see updateShip), so we do NOT
-    // simulate flightDays here — doing so previously let a single click both
-    // teleport the player and skip days for free.
-    const sprite = this.planetManager.planetSprites.find(
-      (s) => s.planet.id === planet.id,
-    );
-    if (sprite && this.shipPhysics) {
-      const dx = sprite.screenX - this.shipPhysics.shipX;
-      const dy = sprite.screenY - this.shipPhysics.shipY;
-      if (
-        Math.sqrt(dx * dx + dy * dy) >
-        this.planetManager.landingThreshold(sprite)
-      ) {
-        logger.warn("Cannot land: ship has not reached the planet yet");
-        return;
-      }
+    // Captured-system gate — the single choke point every landing path funnels
+    // through (no bypass). Blocked → message + clear route so the parked ship can
+    // still fly away (not stranded) and the auto-land can't re-fire.
+    const denial = this.planetManager.landingDenial(planet);
+    if (denial) {
+      this.hud.showMessage(landingDenialMessage(denial), 0xff4444);
+      this.clearPlannedRoute();
+      return;
     }
-
+    // Only land once the ship has actually reached the planet (days accrue in
+    // updateShip; simulating flightDays here would teleport the player for free).
+    if (
+      this.shipPhysics &&
+      !this.planetManager.shipReachedPlanet(planet, this.shipPhysics)
+    ) {
+      logger.warn("Cannot land: ship has not reached the planet yet");
+      return;
+    }
     if (this.gameEngine?.player?.ship) {
       this.gameEngine.player.ship.energy =
         this.gameEngine.player.ship.maxEnergy;

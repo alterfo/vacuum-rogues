@@ -49,3 +49,16 @@ export function canLandOnPlanet(
   }
   return { allowed: true };
 }
+
+/**
+ * Player-facing reason a captured-system landing was refused. Pure mapping so the
+ * message text is unit-testable independently of the PixiJS HUD that shows it.
+ */
+export function landingDenialMessage(reason: LandingDenialReason): string {
+  switch (reason) {
+    case "overmind":
+      return "Система под контролем Овермайнда — посадка невозможна";
+    case "pirate-rep":
+      return "Планета захвачена пиратами — нужна репутация у пиратов";
+  }
+}

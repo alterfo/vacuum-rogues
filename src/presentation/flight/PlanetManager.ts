@@ -15,6 +15,10 @@ import {
 } from "@/utils/flightGeometry";
 import { solveInterceptPoint } from "@/utils/intercept";
 import { GAME_BALANCE } from "@/config/balance";
+import {
+  canLandOnPlanet,
+  type LandingDenialReason,
+} from "@/systems/galaxy/landingAccess";
 import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
 import type { FlightModule } from "./FlightModule";
@@ -198,6 +202,37 @@ export class PlanetManager implements FlightModule {
    */
   landingThreshold(sprite: PlanetSprite): number {
     return sprite.displayRadius + this.LANDING_RANGE;
+  }
+
+  /**
+   * True once the ship has reached `planet`'s landing margin — the sprite-find +
+   * distance + {@link landingThreshold} check the scene's land guard used to
+   * inline. A planet with no live sprite counts as reached (the scene then
+   * defers to its own logic). Information Expert: the manager owns the planet
+   * sprites and the threshold geometry.
+   */
+  shipReachedPlanet(planet: Planet, physics: ShipPhysics): boolean {
+    const sprite = this.planetSprites.find((s) => s.planet.id === planet.id);
+    if (!sprite) return true;
+    const d = Math.hypot(
+      sprite.screenX - physics.shipX,
+      sprite.screenY - physics.shipY,
+    );
+    return d <= this.landingThreshold(sprite);
+  }
+
+  /**
+   * Captured-system landing gate: the denial reason when the current player may
+   * not land on `planet` (Overmind-held → always; pirate-held → without good
+   * pirate rep), else null. The manager owns the planet bodies, so the access
+   * rule lives here (delegating to the pure {@link canLandOnPlanet}); the scene
+   * shows the message + clears the route.
+   */
+  landingDenial(planet: Planet): LandingDenialReason | null {
+    const player = this.gameEngine?.player;
+    if (!player) return null;
+    const access = canLandOnPlanet(planet, player);
+    return access.allowed ? null : (access.reason ?? null);
   }
 
   /** First planet whose disc the world point (x,y) falls within (or null). */
