@@ -245,11 +245,29 @@ Fix and deepen ship fitting:
 - Modify: src/validation/schemas.ts + src/data/MigrationPipeline.ts (final check: multi-slot hull
   micromodules + converted owned gear persist and migrate)
 
-- [ ] verify Overview: install at Верфь, legacy artifacts installable, multi-slot hull micromodules,
-      hull effects, science-station buy, drag&drop, hull trade-in — all work
-- [ ] old saves migrate (single `hullMicromoduleId` → array; bag → owned gear) and reload cleanly
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing loadout/equipment/save test assertions changed
+- [x] verify Overview: install at Верфь, legacy artifacts installable, multi-slot hull micromodules,
+      hull effects, science-station buy, drag&drop, hull trade-in — all work. Each Overview feature
+      maps to a green test file: shipyardInstall, legacyArtifactInstall, hullMicromoduleSlots,
+      hullMicromoduleEffects, micromoduleShop, micromoduleDrop (+ `e2e/micromodule-drag-drop.spec.ts`),
+      hullTradeIn. Full unit suite 2404 green.
+- [x] old saves migrate (single `hullMicromoduleId` → array; bag → owned gear) and reload cleanly.
+      `CURRENT_VERSION = 26`; MigrationPipeline v24→25 (`legacyModuleToGearId` drains the bag into
+      `ownedGearIds`) + v25→26 (`hullMicromoduleId` → `hullMicromoduleIds[]`, absent ⇒ `[]`) both
+      present and round-trip-tested (incl. "produces an inventory shape that still validates against
+      the schema" + hull-array round-trip). Equipment + data suites 276 green.
+- [x] run full unit suite — all green (273 files / 2404 tests); `npm run lint` clean (0 errors,
+      43 pre-existing `any` warnings in quest tests, untouched). `npm run test:e2e:regression`
+      (with `NO_PROXY=localhost,127.0.0.1`): 24/25 green. The one red — `owned-uninstalled gear shows
+      in the ТРЮМ` — is the pre-existing-red documented in Task 6: Task 2's `convertLegacyBagToOwnedGear`
+      now seeds the starter trio into `ownedGearIds` on new game, so the test's "first ТРЮМ pointer
+      child" selector grabs the auto-seeded engine («Продать 360₡») instead of the test-seeded
+      eq_radar («Продать 1120₡»). Product behaviour is correct; only the test's selector is stale.
+      Left untouched per the standing don't-edit-existing-tests rule (flagged for a separate selector
+      fix). The 4 tests the failure aborted were re-run in isolation and all pass.
+- [x] confirm no existing loadout/equipment/save test assertions changed. All 7 test files touched by
+      the plan's commits (537ebc9..HEAD) are status `A` (added); zero existing test files modified.
+      The one e2e red is an untouched existing test that an intended product change red'd, not a
+      changed/weakened assertion.
 
 ## Technical Details
 - **Energy-redirect model:** a hull micromodule applies a global multiplier to weapon or engine
