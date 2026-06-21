@@ -298,6 +298,16 @@ export const GAME_BALANCE = {
 } as const;
 
 /**
+ * Pirate reputation at/above which the player is treated as on good terms with
+ * pirates. Shared "good pirate rep" gate between the faction-hostility AI plan
+ * (pirates leave the player alone — no attack/ransom) and the captured-system
+ * landing gate (player may land on pirate-captured planets). Reputation is
+ * clamped −100..100; this sits clearly positive, well above the hostility floor
+ * (`Player.isHostileTo` < −30).
+ */
+export const GOOD_PIRATE_REP_THRESHOLD = 30;
+
+/**
  * Readability dimmer strength for the flight-scene sky (F2, 2026-06-10
  * letsplay): alpha of the full-screen black overlay mounted above the nebula
  * backdrop/clouds/star fields so the game layer (planets, ship, routes, NPCs)
