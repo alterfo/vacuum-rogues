@@ -15,7 +15,8 @@ import { applyMarketTradeImpact } from "@/domain/Market";
 import { Faction } from "@/types/faction";
 import { GAME_BALANCE } from "@/config/balance";
 import type { NpcBrain } from "./NpcBrain";
-import { RuleBasedNpcBrain } from "./NpcBrain";
+import { RuleBasedNpcBrain, selectPirateTarget } from "./NpcBrain";
+import { factionKindOf, pirateCoordination } from "./factionHostility";
 import { npcOrbitStep, advanceNpcOrbit } from "./npcPlacement";
 import { logger } from "@/utils/logger";
 import {
@@ -1077,17 +1078,29 @@ export class NpcSimulator {
       bySystem.set(npc.currentSystemId, list);
     }
 
-    for (const ships of bySystem.values()) {
+    for (const [systemId, ships] of bySystem) {
       const pirates = ships.filter((s) => s.role === NpcRole.PIRATE);
       const victims = ships.filter((s) => s.role !== NpcRole.PIRATE);
       if (pirates.length === 0 || victims.length === 0) continue;
+
+      // Solo vs pack (Task 3): in a system the pirates have captured they swarm as
+      // a pack, focus-firing the single weakest co-located mark (group
+      // engagement); in any foreign system each is a lone raider that strikes a
+      // random victim. The pack focus is deterministic (no main-RNG draw), so it
+      // never perturbs the deterministic stream other systems/tests rely on.
+      const pack =
+        pirateCoordination(
+          galaxy.isPirateSystem(systemId) ? "pirate" : null,
+        ) === "pack";
 
       for (const pirate of pirates) {
         if (pirate.state === NpcState.DEAD) continue;
         const alive = victims.filter((v) => v.state !== NpcState.DEAD);
         if (alive.length === 0) break;
 
-        const victim = alive[rng.nextInt(0, alive.length - 1)];
+        const victim = pack
+          ? this.packFocusVictim(alive)
+          : alive[rng.nextInt(0, alive.length - 1)];
         pirate.state = NpcState.FIGHTING;
         victim.state = NpcState.FIGHTING;
 
@@ -1137,6 +1150,25 @@ export class NpcSimulator {
         npc.state = NpcState.PATROLLING;
       }
     }
+  }
+
+  /**
+   * The single mark a pirate **pack** concentrates fire on: the weakest of the
+   * co-located alive victims, chosen through the shared {@link selectPirateTarget}
+   * target-selection (combat-strength weighted) so the captured system's pirates
+   * gang up on one ship (group engagement) rather than spreading out. Deterministic
+   * — no RNG — so pack focus never perturbs the deterministic main stream. Falls
+   * back to the first victim if the matrix somehow rules them all out (a co-located
+   * non-pirate is always valid prey, so this is defensive only).
+   */
+  private packFocusVictim(alive: NpcShip[]): NpcShip {
+    const candidates = alive.map((v) => ({
+      id: v.id,
+      kind: factionKindOf(v),
+      stats: { hullHP: v.hullHP, shields: v.shields, damage: v.damage },
+    }));
+    const pick = selectPirateTarget(candidates, { pirateRep: 0 });
+    return alive.find((v) => v.id === pick?.id) ?? alive[0];
   }
 
   /**

@@ -84,9 +84,9 @@ ransom *dialog/payment* is owned by the universal-comms plan (this plan decides 
   foreign systems; coordinate as a pack in systems they have captured — using `galaxy.pirateSystems`)
 - Create: src/tests/npc/pirateSoloVsPack.test.ts
 
-- [ ] in a pirate-captured system pirates engage as a group; in a foreign system they hunt alone
-- [ ] write tests: captured-system → pack engagement; foreign system → solo
-- [ ] run affected tests — must pass before next task
+- [x] in a pirate-captured system pirates engage as a group; in a foreign system they hunt alone
+- [x] write tests: captured-system → pack engagement; foreign system → solo
+- [x] run affected tests — must pass before next task
 
 ### Task 4: Overmind indiscriminate aggression + expansion
 **Files:**

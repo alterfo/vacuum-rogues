@@ -143,3 +143,27 @@ export function shipsAreHostile(
 ): boolean {
   return isHostile(factionKindOf(attacker), factionKindOf(target), ctx);
 }
+
+/**
+ * How pirates coordinate against prey in a given system. Pirates **swarm as a
+ * pack** in systems they have captured (`galaxy.pirateSystems`) — their own turf,
+ * where they focus-fire a shared mark — and act as **lone raiders (solo)** in any
+ * foreign system, each hunting its own quarry independently. Pure decision keyed
+ * off the encounter system's control; the single source of truth for the
+ * solo-vs-pack split that both the off-screen sim and in-flight combat consult.
+ */
+export type PirateCoordination = "pack" | "solo";
+
+/**
+ * Resolve the pirate {@link PirateCoordination} for a system given who controls
+ * it. Only a **pirate-captured** system makes pirates coordinate as a pack; every
+ * other control state (overmind-held, contested, or neutral/foreign) leaves them
+ * hunting solo. Takes the same `systemControl` value carried by
+ * {@link HostilityContext} so callers thread `galaxy.pirateSystems` membership
+ * through one place rather than re-deriving the rule.
+ */
+export function pirateCoordination(
+  systemControl: "pirate" | "overmind" | null | undefined,
+): PirateCoordination {
+  return systemControl === "pirate" ? "pack" : "solo";
+}
