@@ -48,7 +48,10 @@ import type {
   IQuestService,
 } from "@/core/ports";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
-import { applyLoadoutHullToShip } from "@/systems/equipment/GearBridge";
+import {
+  applyLoadoutHullToShip,
+  convertLegacyBagToOwnedGear,
+} from "@/systems/equipment/GearBridge";
 import type { Faction } from "@/types/faction";
 import { NpcShip } from "@/domain/NpcShip";
 import { GalaxyService, PlayerService, SceneFactory } from "@/core/services";
@@ -361,7 +364,11 @@ export class GameEngine {
         startingMoney: 1000,
       });
 
-      // Add starter modules to inventory for testing
+      // Starter spare gear. These are authored as legacy ShipModules ("Лазер
+      // МК-1" / "Базовый щит" / "Быстрый двигатель") then converted to installable
+      // owned gear via the same seam old saves take (convertLegacyBagToOwnedGear /
+      // MigrationPipeline v24→v25) — so a new game's spares can be fitted at the
+      // Верфь rather than sitting stranded in the hold (dual-hull residual fix).
       this.player.inventory.addItem(
         new WeaponModule(
           "weapon_laser_1",
@@ -393,6 +400,7 @@ export class GameEngine {
           0.1,
         ),
       );
+      convertLegacyBagToOwnedGear(this.player);
 
       logger.info(`Created new player with faction: ${this.player.faction}`);
 

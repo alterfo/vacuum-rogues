@@ -1859,8 +1859,11 @@ export class StationScene extends GameScene {
         player.inventory.micromodules.some(
           (mm) => mm.targetCategory === mmCategory,
         );
+      // Explicit label: spell out the action when a compatible micromodule is on
+      // hand, and *why* it's disabled otherwise — the old "[+ микромодуль]" never
+      // said it slots an upgrade chip nor that you needed to own a matching one.
       const mmBtn = scaledText(
-        "[+ микромодуль]",
+        hasMatchingMm ? "[установить микромодуль]" : "[нет микромодулей]",
         10,
         hasMatchingMm ? 0xffaa22 : 0xb4bcc4,
         { rawColor: true, fontFamily: "monospace" },

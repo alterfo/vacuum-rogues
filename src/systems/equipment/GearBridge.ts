@@ -106,6 +106,73 @@ export function acquireUninstalledGear(player: Player, gearId: string): void {
 }
 
 /**
+ * Legacy starter-module ids → the catalog gear they should become.
+ *
+ * The dual-hull unification left pre-loadout {@link ShipModule}s in the
+ * `inventory.modules` bag whose ids are **not** catalog gear ids (the "Residual"
+ * in CLAUDE.md) — e.g. the new-game starter trio "Лазер МК-1" / "Базовый щит" /
+ * "Быстрый двигатель". With no `gearById` match they can't be installed (the
+ * hangar gates its install button on a catalog lookup), so they sit stranded in
+ * the hold. This table maps each to the nearest catalog equivalent so it becomes
+ * installable owned gear.
+ */
+const LEGACY_MODULE_GEAR_MAP: Record<string, string> = {
+  weapon_laser_1: "wpn_pulse", // «Лазер МК-1» → Импульсный лазер
+  shield_basic_1: "eq_shield", // «Базовый щит» → Генератор поля
+  engine_fast_1: "eq_engine_i", // «Быстрый двигатель» → Двигатель Тип-I
+};
+
+/** Fallback by {@link ModuleCategory} for any other legacy bag module. */
+const LEGACY_CATEGORY_GEAR: Record<string, string> = {
+  WEAPON: "wpn_pulse",
+  SHIELD: "eq_shield",
+  ENGINE: "eq_engine_i",
+  EQUIPMENT: "eq_scanner",
+};
+
+/**
+ * Map a legacy `inventory.modules` bag entry to the catalog gear id it should
+ * become so it can be installed via the canonical loadout. Returns `undefined`
+ * when the entry is **already** a catalog gear id (a legit spare — left in the
+ * bag untouched) or has no sensible catalog equivalent. An explicit starter-trio
+ * mapping takes priority; otherwise the module's `category` picks a generic
+ * catalog item of that family.
+ */
+export function legacyModuleToGearId(module: {
+  id: string;
+  category?: string;
+}): string | undefined {
+  if (gearById(module.id)) return undefined;
+  const explicit = LEGACY_MODULE_GEAR_MAP[module.id];
+  if (explicit) return explicit;
+  if (module.category) return LEGACY_CATEGORY_GEAR[module.category];
+  return undefined;
+}
+
+/**
+ * Convert legacy bag artifacts (dual-hull residual) into installable owned gear.
+ *
+ * Each `inventory.modules` entry that maps to a catalog gear (via
+ * {@link legacyModuleToGearId}) is moved into `ownedGearIds` and dropped from the
+ * bag; entries with no catalog equivalent (and legit catalog-id spares) are left
+ * in place — no data loss. Returns the number converted. Idempotent: once the
+ * bag is drained of mappable entries a re-run is a no-op. The migration applies
+ * the same conversion to old saves at the JSON level (MigrationPipeline v24→v25).
+ */
+export function convertLegacyBagToOwnedGear(player: Player): number {
+  const bag = player.inventory.modules;
+  let converted = 0;
+  for (let i = bag.length - 1; i >= 0; i--) {
+    const gearId = legacyModuleToGearId(bag[i]);
+    if (!gearId) continue;
+    player.inventory.addOwnedGear(gearId);
+    bag.splice(i, 1);
+    converted++;
+  }
+  return converted;
+}
+
+/**
  * Install an owned-uninstalled item into a free loadout slot, moving its id out
  * of the owned store and into the loadout. Returns false and changes nothing
  * when the item isn't installable (unknown id, a hull, or no free slot).

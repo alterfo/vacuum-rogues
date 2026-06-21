@@ -8,6 +8,7 @@ import {
   type HullSpec,
   type EquipmentSpec,
 } from "@/systems/equipment/GearCatalog";
+import { legacyModuleToGearId } from "@/systems/equipment/GearBridge";
 import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
 import { logger } from "@/utils/logger";
 
@@ -38,7 +39,7 @@ function isEquipmentClass(id: string, cls: EquipmentClass): boolean {
 }
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 24;
+  static readonly CURRENT_VERSION = 25;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -520,6 +521,37 @@ export class MigrationPipeline {
           }
         }
       }
+    },
+    // 24 -> 25: Convert legacy `inventory.modules` bag artifacts (dual-hull
+    // residual) into installable owned gear. The starter trio "Лазер МК-1" /
+    // "Базовый щит" / "Быстрый двигатель" (ids weapon_laser_1 / shield_basic_1 /
+    // engine_fast_1) are NOT catalog gear ids, so the hangar's install button —
+    // gated on a `gearById` lookup — never appeared and they sat stranded in the
+    // hold. Each bag entry that maps to a catalog gear (legacyModuleToGearId:
+    // explicit starter map, else the module's category) is moved into
+    // `ownedGearIds` and dropped from the bag; catalog-id spares and unmappable
+    // entries stay in the bag (no data loss). Idempotent.
+    24: (state: SaveState) => {
+      const inventory = (
+        state.player as unknown as {
+          inventory?: {
+            modules?: Array<{ id: string; category?: string } | null>;
+            ownedGearIds?: string[];
+          };
+        }
+      )?.inventory;
+      if (!inventory || !Array.isArray(inventory.modules)) return;
+      if (!Array.isArray(inventory.ownedGearIds)) inventory.ownedGearIds = [];
+      const remaining: Array<{ id: string; category?: string } | null> = [];
+      for (const mod of inventory.modules) {
+        const gearId = mod ? legacyModuleToGearId(mod) : undefined;
+        if (gearId) {
+          inventory.ownedGearIds.push(gearId);
+        } else {
+          remaining.push(mod);
+        }
+      }
+      inventory.modules = remaining;
     },
   };
 }

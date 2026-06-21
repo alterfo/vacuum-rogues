@@ -96,11 +96,20 @@ Fix and deepen ship fitting:
   src/data/MigrationPipeline.ts (one-time bag → owned-gear conversion), src/validation/schemas.ts
 - Create: src/tests/equipment/legacyArtifactInstall.test.ts
 
-- [ ] "Лазер мк-1", "Базовый щит", "быстрый двигатель" (and other bag modules) become installable;
-      clarify/replace the "[+ микромодуль]" label so its meaning is explicit
-- [ ] migration converts old-save bag modules to installable owned gear; schema updated in lockstep
-- [ ] write tests: a legacy bag module installs onto a compatible hull; migration round-trip
-- [ ] run affected tests — must pass before next task
+- [x] "Лазер мк-1", "Базовый щит", "быстрый двигатель" (and other bag modules) become installable;
+      clarify/replace the "[+ микромодуль]" label so its meaning is explicit. Added
+      `legacyModuleToGearId` + `convertLegacyBagToOwnedGear` (GearBridge): the starter trio
+      (weapon_laser_1/shield_basic_1/engine_fast_1, non-catalog ids) map to wpn_pulse/eq_shield/
+      eq_engine_i and drain from `inventory.modules` → `ownedGearIds`. GameEngine new-game now
+      converts them; StationScene label is now "[установить микромодуль]" / "[нет микромодулей]".
+- [x] migration converts old-save bag modules to installable owned gear; schema updated in lockstep.
+      MigrationPipeline v24→v25 (CURRENT_VERSION 24→25) runs `legacyModuleToGearId` on the raw bag.
+      Schema lockstep: conversion moves between existing fields (`modules` → `ownedGearIds`), both
+      already in InventorySchema — no new field needed.
+- [x] write tests: a legacy bag module installs onto a compatible hull; migration round-trip
+      (`src/tests/equipment/legacyArtifactInstall.test.ts` — 10 tests: mapping, convert+install,
+      idempotence, v24→v25 round-trip, schema-validates, no-op on empty save)
+- [x] run affected tests — must pass before next task (full unit suite 2351 green; tsc + eslint clean)
 
 ### Task 3: Multi-slot hull micromodules — data + loadout
 **Files:**
