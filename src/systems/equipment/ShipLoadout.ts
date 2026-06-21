@@ -19,6 +19,8 @@ import {
   gearById,
   slotCategoryFor,
   MICRO_MODULES,
+  hullMicroModuleById,
+  hullMicromoduleEffectKind,
   DEFAULT_HULL_MICROMODULE_SLOTS,
   type Gear,
   type HullSpec,
@@ -56,7 +58,8 @@ export function micromoduleById(id: string): Micromodule | undefined {
   // the loadout must resolve them too. `bonusTier` maps 1:1 onto `level`
   // (1 = strongest), so the derived-stat bonus is identical to a same-tier
   // amplifier.
-  const craft = MICRO_MODULES.find((m) => m.id === id);
+  const craft =
+    MICRO_MODULES.find((m) => m.id === id) ?? hullMicroModuleById(id);
   return craft
     ? { id: craft.id, name: craft.name, level: craft.bonusTier }
     : undefined;
@@ -141,11 +144,26 @@ export class ShipLoadout {
     return [...this.hullMicromoduleIds];
   }
 
-  /** Combined hull-micromodule multiplier (product over the fitted hull slots). */
-  private hullMult(): number {
-    let m = 1;
-    for (const id of this.hullMicromoduleIds) m *= this.mult(id);
-    return m;
+  /**
+   * Hull-micromodule effect multipliers, one per derived stat the hull slots can
+   * boost (install/micromodule overhaul Task 4). Each fitted hull micromodule's
+   * tiered multiplier ({@link mult}) lands on the stat its
+   * {@link hullMicromoduleEffectKind} selects — defense → maxHull, cargo → hold,
+   * energy-redirect → weapon damage or engine speed. A generic/legacy micromodule
+   * fitted in a hull slot classifies as `defense`, so the pre-Task-4 behaviour
+   * (any hull micromodule scaled HP) is preserved. Products stack within a stat.
+   */
+  private hullEffectMults(): {
+    defense: number;
+    cargo: number;
+    weapon: number;
+    engine: number;
+  } {
+    const mults = { defense: 1, cargo: 1, weapon: 1, engine: 1 };
+    for (const id of this.hullMicromoduleIds) {
+      mults[hullMicromoduleEffectKind(id)] *= this.mult(id);
+    }
+    return mults;
   }
 
   /**
@@ -440,7 +458,8 @@ export class ShipLoadout {
   /** Compute the resulting ship stats from the installed gear. */
   derivedStats(): DerivedStats {
     const hull = this.hull;
-    const maxHull = Math.round(hull.hp * this.hullMult());
+    const hullEff = this.hullEffectMults();
+    const maxHull = Math.round(hull.hp * hullEff.defense);
     let weaponDamage = 0;
     let weaponCount = 0;
     // Best engine speed in px/ms: 0.05 + techLevel × 0.03
@@ -523,10 +542,16 @@ export class ShipLoadout {
       }
     }
 
+    // Energy-redirect hull micromodules apply a *global* multiplier to the
+    // weapon/engine derived stat — fitted in a hull slot, not on the weapon or
+    // engine itself (canon: improve them without a module directly on them).
+    weaponDamage *= hullEff.weapon;
+    bestEngineSpeed *= hullEff.engine;
+
     return {
       hull: this.hullId,
       maxHull,
-      cargo: hull.cargo,
+      cargo: Math.round(hull.cargo * hullEff.cargo),
       slotsTotal: hull.slots,
       slotsUsed: this.slotted.length,
       categories: {

@@ -532,6 +532,132 @@ export function microModuleById(id: string): MicroModule | undefined {
   return MICRO_MODULES.find((m) => m.id === id);
 }
 
+/**
+ * Hull micromodules (install/micromodule overhaul Task 4): a distinct family fitted
+ * into a hull's own micromodule slots (`HullSpec.micromoduleSlots`), not onto a piece
+ * of gear. Kept **separate** from {@link MICRO_MODULES} (the 4-category gear modules)
+ * so each catalog stays single-purpose. The {@link MicroModule.bonusType} picks the
+ * effect; {@link ShipLoadout.derivedStats} turns it into a global multiplier:
+ * - `defense`      → maxHull (boost defense)
+ * - `cargo`        → hold capacity (boost cargo)
+ * - `energyWeapon` → total weapon damage (redirect energy to weapons)
+ * - `energyEngine` → engine speed (redirect energy to the engine — "engine-targeted")
+ *
+ * The magnitude is the same tiered bonus as any micromodule (tier 1 strongest), so a
+ * hull module reuses `micromoduleBonus(bonusTier)` in the loadout. Sold at CRAFT_CENTER
+ * stations alongside {@link MICRO_MODULES}.
+ */
+export const HULL_MICRO_MODULES: readonly MicroModule[] = [
+  // DEFENSE — boosts derived maxHull
+  {
+    id: "mm_hull_armor_1",
+    name: "Броневой набор ур.1",
+    targetCategory: ModuleCategory.HULL,
+    bonusType: "defense",
+    bonusTier: 1,
+  },
+  {
+    id: "mm_hull_armor_2",
+    name: "Броневой набор ур.2",
+    targetCategory: ModuleCategory.HULL,
+    bonusType: "defense",
+    bonusTier: 2,
+  },
+  {
+    id: "mm_hull_armor_3",
+    name: "Броневой набор ур.3",
+    targetCategory: ModuleCategory.HULL,
+    bonusType: "defense",
+    bonusTier: 3,
+  },
+  // CARGO — boosts hold capacity
+  {
+    id: "mm_hull_hold_1",
+    name: "Расширитель трюма ур.1",
+    targetCategory: ModuleCategory.HULL,
+    bonusType: "cargo",
+    bonusTier: 1,
+  },
+  {
+    id: "mm_hull_hold_2",
+    name: "Расширитель трюма ур.2",
+    targetCategory: ModuleCategory.HULL,
+    bonusType: "cargo",
+    bonusTier: 2,
+  },
+  {
+    id: "mm_hull_hold_3",
+    name: "Расширитель трюма ур.3",
+    targetCategory: ModuleCategory.HULL,
+    bonusType: "cargo",
+    bonusTier: 3,
+  },
+  // ENERGY → WEAPON — redirect reactor output to weapon damage
+  {
+    id: "mm_hull_pwr_wpn_1",
+    name: "Перенаправление энергии: орудия ур.1",
+    targetCategory: ModuleCategory.HULL,
+    bonusType: "energyWeapon",
+    bonusTier: 1,
+  },
+  {
+    id: "mm_hull_pwr_wpn_2",
+    name: "Перенаправление энергии: орудия ур.2",
+    targetCategory: ModuleCategory.HULL,
+    bonusType: "energyWeapon",
+    bonusTier: 2,
+  },
+  // ENERGY → ENGINE — redirect reactor output to engine speed (engine-targeted)
+  {
+    id: "mm_hull_pwr_eng_1",
+    name: "Перенаправление энергии: двигатель ур.1",
+    targetCategory: ModuleCategory.HULL,
+    bonusType: "energyEngine",
+    bonusTier: 1,
+  },
+  {
+    id: "mm_hull_pwr_eng_2",
+    name: "Перенаправление энергии: двигатель ур.2",
+    targetCategory: ModuleCategory.HULL,
+    bonusType: "energyEngine",
+    bonusTier: 2,
+  },
+];
+
+/** Lookup a hull micromodule by id (the {@link HULL_MICRO_MODULES} family). */
+export function hullMicroModuleById(id: string): MicroModule | undefined {
+  return HULL_MICRO_MODULES.find((m) => m.id === id);
+}
+
+/** Which derived ship stat a hull micromodule's multiplier lands on. */
+export type HullMicromoduleEffectKind =
+  | "defense"
+  | "cargo"
+  | "weapon"
+  | "engine";
+
+/**
+ * Classify a hull-slot micromodule by the derived stat it boosts. A non-hull or
+ * unknown id fitted in a hull slot falls back to `"defense"` (maxHull) — the
+ * pre-Task-4 behaviour, where *any* micromodule on the hull simply scaled its HP —
+ * so legacy saves and generic amplifiers keep working unchanged.
+ */
+export function hullMicromoduleEffectKind(
+  id: string,
+): HullMicromoduleEffectKind {
+  const mm = hullMicroModuleById(id);
+  switch (mm?.bonusType) {
+    case "cargo":
+      return "cargo";
+    case "energyWeapon":
+      return "weapon";
+    case "energyEngine":
+      return "engine";
+    default:
+      return "defense";
+  }
+}
+
 /** Lookup by id. */
 export function gearById(id: string): Gear | undefined {
   return GEAR_CATALOG.find((g) => g.id === id);

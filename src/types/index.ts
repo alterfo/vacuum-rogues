@@ -40,6 +40,15 @@ export enum ModuleCategory {
   SHIELD = "SHIELD",
   ENGINE = "ENGINE",
   EQUIPMENT = "EQUIPMENT",
+  /**
+   * Hull micromodules (install/micromodule overhaul Task 4): fitted into a hull's
+   * own micromodule slots, not onto a piece of gear. Their {@link MicroModule.bonusType}
+   * selects the effect — boost defense/cargo, or redirect energy to weapons/engine —
+   * applied as a global multiplier in {@link ShipLoadout.derivedStats}. Never stored
+   * on a {@link ShipModule} (the legacy bag), so the `ShipModuleSchema.category`
+   * enum deliberately omits it.
+   */
+  HULL = "HULL",
 }
 
 export interface MicroModule {

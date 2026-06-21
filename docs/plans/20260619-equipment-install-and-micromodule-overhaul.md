@@ -142,10 +142,21 @@ Fix and deepen ship fitting:
   src/systems/equipment/GearBridge.ts (`targetCategory` for hull/engine micromodules)
 - Create: src/tests/equipment/hullMicromoduleEffects.test.ts
 
-- [ ] hull micromodules boost defense / cargo / redirect energy to weapons or engine (improving those
-      stats without a module fitted directly on them); engine-targeted modules buff engine stats
-- [ ] write tests: each effect changes the expected `derivedStats()` field by the expected amount
-- [ ] run affected tests — must pass before next task
+- [x] hull micromodules boost defense / cargo / redirect energy to weapons or engine (improving those
+      stats without a module fitted directly on them); engine-targeted modules buff engine stats.
+      New `ModuleCategory.HULL` + separate `HULL_MICRO_MODULES` family (10 defs: defense/cargo ×3 tiers,
+      energy→weapon ×2, energy→engine ×2) kept apart from the 12-entry `MICRO_MODULES` so the locked
+      `micromodule.test.ts` count/category asserts stay green. `hullMicromoduleEffectKind` classifies
+      each id; `ShipLoadout.hullEffectMults()` turns the tiered `mult` into a per-stat multiplier
+      applied in `derivedStats()` — defense→maxHull, cargo→cargo, energyWeapon→weaponDamage,
+      energyEngine→engine speed (global, no module on the gear). Generic/legacy hull micromodules
+      default to `defense`, preserving the pre-Task-4 maxHull behaviour. GearBridge gains
+      `micromoduleTargetCategory` (resolves both catalogs) without touching the locked
+      `gearMicromoduleCategory(hull)===null` test.
+- [x] write tests: each effect changes the expected `derivedStats()` field by the expected amount
+      (`src/tests/equipment/hullMicromoduleEffects.test.ts` — 14 tests: per-effect deltas, isolation,
+      absent-system no-op, stacking, round-trip, classification helpers)
+- [x] run affected tests — must pass before next task (full unit suite 2376 green; tsc + eslint clean)
 
 ### Task 5: Buy micromodules at science stations
 **Files:**

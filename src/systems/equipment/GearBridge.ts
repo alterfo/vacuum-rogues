@@ -8,6 +8,8 @@ import {
   EquipmentClass,
   gearById,
   slotCategoryFor,
+  microModuleById,
+  hullMicroModuleById,
   type Gear,
   type EquipmentSpec,
   type SlotCategory,
@@ -267,8 +269,10 @@ export const KIND_LABEL: Record<GearKind, string> = {
  * by {@link GearKind}/{@link EquipmentClass}. The hangar uses this to offer only
  * compatible micromodules for a fitted item (dual-hull Task 3): a weapon takes a
  * WEAPON module, an engine an ENGINE module, a shield a SHIELD module, and every
- * other equipment the generic EQUIPMENT module. Hulls have no micromodule
- * category here (the hull micromodule is applied by hull, not in this seam).
+ * other equipment the generic EQUIPMENT module. Hulls have no *fitted-gear*
+ * micromodule category here — hull micromodules target the hull directly
+ * (ModuleCategory.HULL) and are matched by {@link micromoduleTargetCategory},
+ * not this seam.
  */
 export function gearMicromoduleCategory(gear: Gear): ModuleCategory | null {
   if (gear.kind === GearKind.WEAPON) return ModuleCategory.WEAPON;
@@ -279,6 +283,21 @@ export function gearMicromoduleCategory(gear: Gear): ModuleCategory | null {
     return ModuleCategory.EQUIPMENT;
   }
   return null;
+}
+
+/**
+ * The {@link ModuleCategory} a micromodule *targets*, resolved across both
+ * catalogs — the 4-category gear modules ({@link microModuleById}) and the hull
+ * family ({@link hullMicroModuleById}, `ModuleCategory.HULL`). The inverse of
+ * {@link gearMicromoduleCategory}: given a micromodule it tells you what kind of
+ * slot accepts it, so the drag-drop fitting (Task 6) can reject an
+ * energy-redirect hull module dropped on a weapon, or a weapon module dropped on
+ * the hull. Returns `undefined` for an unknown id.
+ */
+export function micromoduleTargetCategory(
+  id: string,
+): ModuleCategory | undefined {
+  return (microModuleById(id) ?? hullMicroModuleById(id))?.targetCategory;
 }
 
 /** Badge colour per gear kind. */
