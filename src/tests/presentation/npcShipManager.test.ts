@@ -647,6 +647,75 @@ describe("NpcShipManager.rememberFlightPos", () => {
     manager.destroy();
   });
 
+  it("a caught shakedown flee engages combat AND resumes the frozen turn (regression)", () => {
+    // Regression: openShakedownHail freezes the turn (endTurn → isTurnRunning=false)
+    // so the «Кошелёк или жизнь!» hail can't be flown past. CombatModule.update is
+    // gated on isTurnRunning, so a failed flee that only called startInFlightCombat
+    // left the fight DORMANT — no NPC fire, no active-pause overlay — until the player
+    // manually pressed Play. The caught branch must now re-arm the turn (executeRouteTo)
+    // as well as engage combat.
+    const engaged: Array<{ npc: { id: string } }> = [];
+    const targeted: Array<{ npc: { id: string } }> = [];
+    const routes: Array<{ x: number; y: number }> = [];
+
+    const stage = new Container();
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+    const renderer = {
+      app: { screen: { width: 800, height: 600 } },
+      stage,
+      uiLayer,
+      gameLayer,
+    } as unknown as Renderer;
+
+    const galaxy = { npcShips: [makeNpc("npc_pirate", NpcRole.PIRATE)] };
+    const gameEngine = {
+      galaxy,
+      player: { currentSystemId: "sys_a" },
+    } as unknown as GameEngine;
+
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => null, // playerSpeed 0 → fleeEscapeChance 0 → always caught
+      getPlanetSprites: () => [],
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => false,
+      showMessage: () => {},
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: (x, y) => routes.push({ x, y }),
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+      startInFlightCombat: (sprite) =>
+        engaged.push(sprite as unknown as { npc: { id: string } }),
+      selectCombatTarget: (sprite) =>
+        targeted.push(sprite as unknown as { npc: { id: string } }),
+    };
+
+    const manager = new NpcShipManager(
+      renderer,
+      gameEngine,
+      gameLayer,
+      uiLayer,
+      deps,
+    );
+    manager.initialize();
+
+    const npc = galaxy.npcShips[0];
+    (
+      manager as unknown as { onFleeShakedown(n: typeof npc): void }
+    ).onFleeShakedown(npc);
+
+    // Combat engaged on the caught pirate…
+    expect(engaged.length).toBe(1);
+    expect(engaged[0].npc.id).toBe("npc_pirate");
+    expect(targeted.length).toBe(1);
+    // …AND the frozen turn was resumed (the fix) so the fight actually runs.
+    expect(routes.length).toBe(1);
+    expect(manager.followNpcId).toBe("npc_pirate");
+
+    manager.destroy();
+  });
+
   it("a garrison aggressor inside weapon range engages via startInFlightCombat, not a scene hop (Task 4)", () => {
     // The auto-engage path: an aggressive NPC closing inside WEAPON_RANGE used to
     // freeze the ship and hop to the hex CombatScene. It must now route into the

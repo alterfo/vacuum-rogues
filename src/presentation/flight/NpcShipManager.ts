@@ -1069,11 +1069,19 @@ export class NpcShipManager implements FlightModule {
       this.deps.showMessage(`Вы оторвались от ${npc.name}!`, 0x88ff88);
       return;
     }
-    // Caught — the pirate attacks. Engage in-flight combat with it as the target.
+    // Caught — the pirate runs you down and opens fire. Engage in-flight combat
+    // AND resume the turn that openShakedownHail froze via endTurn(): CombatModule
+    // .update is gated on isTurnRunning, so without re-arming it the fight would sit
+    // dormant (no NPC fire, no active-pause overlay) until the player manually
+    // pressed Play. Closing on the pirate through executeRouteTo re-arms the turn
+    // and tracks the (moving) mark — the same path the "refuse → Атаковать" button
+    // uses when the target is out of weapon range.
     this.deps.showMessage(`Уйти не удалось — ${npc.name} атакует!`, 0xff5555);
     if (sprite) {
+      this.followNpcId = npc.id;
       this.deps.startInFlightCombat?.(sprite);
       this.deps.selectCombatTarget?.(sprite);
+      this.deps.executeRouteTo(sprite.x, sprite.y);
     }
   }
 
@@ -1200,7 +1208,12 @@ export class NpcShipManager implements FlightModule {
       `Контракт «${npc.name}» против «${target.name}»`,
     );
     npc.goal = hireGoal(target);
-    npc.activeQuestTarget = target.id;
+    // NOTE: do NOT stash the mark in `npc.activeQuestTarget` — that field is a
+    // *system* id consumed by NpcSimulator's RANGER questing (completion compares
+    // it to `currentSystemId`; a ranger only accepts a new quest while it is null,
+    // and it persists via the save schema). Writing a *ship* id here permanently
+    // wedges a hired ranger out of questing. `npc.goal = hireGoal(target)` already
+    // records the contract for any future NPC-vs-NPC engagement.
     const verb = mode === "ally" ? "вступает в бой" : "берёт контракт";
     this.deps.showMessage(
       `${npc.name} ${verb} против ${target.name} за ${fee} кр.`,
