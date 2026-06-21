@@ -11,6 +11,13 @@ import { Faction } from "@/types/faction";
  */
 export const PIRATE_FACTION_ID = "PIRATE";
 
+/**
+ * Captured-planet faction id for the Overmind (mirrors {@link PIRATE_FACTION_ID}).
+ * Capture is tracked per-*system* (`galaxy.overmindSystems`), so callers that
+ * resolve a planet's controller from the galaxy feed this id into the predicate.
+ */
+export const OVERMIND_FACTION_ID: string = Faction.OVERMIND;
+
 /** Why a landing was refused. */
 export type LandingDenialReason = "overmind" | "pirate-rep";
 

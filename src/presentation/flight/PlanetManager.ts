@@ -17,6 +17,8 @@ import { solveInterceptPoint } from "@/utils/intercept";
 import { GAME_BALANCE } from "@/config/balance";
 import {
   canLandOnPlanet,
+  OVERMIND_FACTION_ID,
+  PIRATE_FACTION_ID,
   type LandingDenialReason,
 } from "@/systems/galaxy/landingAccess";
 import { scaledFont } from "@/utils/fontScale";
@@ -231,7 +233,25 @@ export class PlanetManager implements FlightModule {
   landingDenial(planet: Planet): LandingDenialReason | null {
     const player = this.gameEngine?.player;
     if (!player) return null;
-    const access = canLandOnPlanet(planet, player);
+    // Effective controller: Overmind / pirate capture is tracked per-*system* on
+    // the galaxy (`overmindSystems` / `pirateSystems`, mutated by GameEngine's
+    // ownership tick) — **never** on `planet.capturedBy` (typed FactionType, which
+    // has no Overmind/Pirate member and is never written in production). Every
+    // flight-scene planet belongs to the current system, so the system the player
+    // is in decides who holds it; fall back to the planet's own `capturedBy` only
+    // when galaxy / system context is unavailable (e.g. a unit harness).
+    const galaxy = this.gameEngine?.galaxy;
+    const systemId = player.currentSystemId;
+    let captor: string | null =
+      (planet.capturedBy as unknown as string | null) ?? null;
+    if (galaxy && systemId) {
+      if (galaxy.isOvermindSystem(systemId)) captor = OVERMIND_FACTION_ID;
+      else if (galaxy.isPirateSystem(systemId)) captor = PIRATE_FACTION_ID;
+    }
+    const access = canLandOnPlanet(
+      { capturedBy: captor as Planet["capturedBy"] },
+      player,
+    );
     return access.allowed ? null : (access.reason ?? null);
   }
 

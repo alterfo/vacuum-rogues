@@ -174,6 +174,67 @@ describe("PlanetManager.landingDenial (captured-system access)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// PlanetManager.landingDenial — the *production* capture source: capture is
+// tracked per-system on the galaxy (`overmindSystems` / `pirateSystems`), NOT on
+// `planet.capturedBy` (which is typed FactionType, has no Overmind/Pirate member,
+// and is never written). The gate must read the system the player is in.
+// ---------------------------------------------------------------------------
+
+function denialForSystem(opts: {
+  overmind?: string[];
+  pirate?: string[];
+  systemId: string;
+  rep: number;
+  capturedBy?: string | null;
+}) {
+  const self = {
+    gameEngine: {
+      player: {
+        getReputation: () => opts.rep,
+        currentSystemId: opts.systemId,
+      },
+      galaxy: {
+        isOvermindSystem: (id: string) => (opts.overmind ?? []).includes(id),
+        isPirateSystem: (id: string) => (opts.pirate ?? []).includes(id),
+      },
+    },
+  };
+  return landingDenial.call(self, { capturedBy: opts.capturedBy ?? null });
+}
+
+describe("PlanetManager.landingDenial (galaxy per-system capture source)", () => {
+  it("blocks landing when the current system is Overmind-held (planet.capturedBy stays null)", () => {
+    expect(
+      denialForSystem({ overmind: ["sys-1"], systemId: "sys-1", rep: 100 }),
+    ).toBe("overmind");
+  });
+
+  it("blocks a pirate-held system below the rep threshold", () => {
+    expect(
+      denialForSystem({
+        pirate: ["sys-1"],
+        systemId: "sys-1",
+        rep: GOOD_PIRATE_REP_THRESHOLD - 1,
+      }),
+    ).toBe("pirate-rep");
+  });
+
+  it("allows a pirate-held system at/above the rep threshold", () => {
+    expect(
+      denialForSystem({
+        pirate: ["sys-1"],
+        systemId: "sys-1",
+        rep: GOOD_PIRATE_REP_THRESHOLD,
+      }),
+    ).toBeNull();
+  });
+
+  it("allows landing when the current system is uncaptured", () => {
+    expect(denialForSystem({ systemId: "sys-1", rep: 0 })).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // SpaceFlightScene.onLandOnPlanet — the wiring: consult landingDenial, then
 // block (no transition + message + route cleared) or land (transition).
 // ---------------------------------------------------------------------------
