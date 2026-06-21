@@ -112,10 +112,12 @@ ransom *dialog/payment* is owned by the universal-comms plan (this plan decides 
 - [x] run affected tests — must pass before next task
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify Overview: overmind hostile to all + expands; pirates hit weak ships, ransom, solo/pack,
+- [x] verify Overview: overmind hostile to all + expands; pirates hit weak ships, ransom, solo/pack,
       enemy of overmind; good-rep player left alone
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing NPC/combat test assertions changed
+- [x] run full unit suite — all green (2308 tests / 261 files); `npm run test:e2e:regression` (25 passed);
+      `npm run lint` clean (0 errors; 29 pre-existing `any` warnings in unrelated test files)
+- [x] confirm no existing NPC/combat test assertions changed (the 5 plan commits add 5 net-new npc test
+      files — pure insertions — and modify only production code)
 
 ## Technical Details
 - **One matrix, many callers:** both the off-screen `NpcSimulator` and in-flight `CombatModule` ask
