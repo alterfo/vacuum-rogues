@@ -48,6 +48,18 @@ function flashLayerOf(gameLayer: Container): Container {
   return gameLayer.children[gameLayer.children.length - 1] as Container;
 }
 
+/**
+ * Recorded draw-instruction actions on a tracer Graphics (CPU-side, no renderer
+ * needed in PixiJS 8). Lets a test prove `drawFlash` actually emitted geometry
+ * rather than trusting the parallel `tracerStates` bookkeeping — a no-op draw
+ * would otherwise leave every motion test green.
+ */
+function drawActions(child: unknown): string[] {
+  const instr = (child as { context?: { instructions?: { action: string }[] } })
+    .context?.instructions;
+  return Array.isArray(instr) ? instr.map((i) => i.action) : [];
+}
+
 describe("traveling tracer — creation + colour", () => {
   it("flashShot registers a tracer with the correct from/to endpoints", () => {
     const { hud } = makeHud();
@@ -98,6 +110,46 @@ describe("traveling tracer — position interpolates over travel", () => {
     expect(tracerBoltPos(from, to, TRACER_TRAVEL_MS).x).toBeCloseTo(100);
     // Past arrival the head stays pinned to the target (no overshoot).
     expect(tracerBoltPos(from, to, TRACER_TRAVEL_MS * 3).x).toBeCloseTo(100);
+    // Before launch (age < 0) the head clamps to the source (low clamp).
+    expect(tracerBoltPos(from, to, -100).x).toBeCloseTo(0);
+  });
+});
+
+describe("traveling tracer — drawFlash emits geometry (not a no-op)", () => {
+  it("draws the bolt streak in the travel phase and the bloom in the impact phase", () => {
+    const { hud, gameLayer } = makeHud();
+    hud.open(makeSprite("a"));
+    hud.flashShot(0, 0, 100, 0, true);
+
+    // Travel phase: the bolt streak (stroke) + head/muzzle glow (fill) are
+    // actually recorded — proves drawFlash ran, not just the bookkeeping.
+    const bolt = flashLayerOf(gameLayer).children[0];
+    expect(hud.tracerStates[0].phase).toBe("travel");
+    const travel = drawActions(bolt);
+    expect(travel).toContain("stroke");
+    expect(travel).toContain("fill");
+
+    // Impact phase: the same Graphics is cleared and redrawn as the target
+    // bloom, so the other drawFlash branch is exercised too.
+    hud.update(TRACER_TRAVEL_MS + 1);
+    expect(hud.tracerStates[0].phase).toBe("impact");
+    const impact = drawActions(bolt);
+    expect(impact.length).toBeGreaterThan(0);
+    expect(impact).toContain("fill");
+  });
+
+  it("a zero-length shot (shooter on its target) draws without throwing and still expires", () => {
+    const { hud, gameLayer } = makeHud();
+    hud.open(makeSprite("a"));
+    hud.flashShot(50, 50, 50, 50, false); // from === to (degenerate close-range)
+    const [t] = hud.tracerStates;
+    expect(Number.isFinite(t.pos.x)).toBe(true);
+    expect(Number.isFinite(t.pos.y)).toBe(true);
+    expect(
+      drawActions(flashLayerOf(gameLayer).children[0]).length,
+    ).toBeGreaterThan(0);
+    hud.update(1000); // runs past FLASH_TTL_MS without getting stuck
+    expect(hud.activeFlashCount).toBe(0);
   });
 });
 
@@ -152,7 +204,9 @@ describe("traveling tracer — independence + no blur", () => {
     hud.open(makeSprite("a"));
     hud.flashShot(0, 0, 100, 0, true);
     hud.update(TRACER_TRAVEL_MS + 1); // through travel into impact
-    for (const child of flashLayerOf(gameLayer).children) {
+    const children = flashLayerOf(gameLayer).children;
+    expect(children.length).toBeGreaterThan(0); // else the loop asserts nothing
+    for (const child of children) {
       const filters = (child as { filters?: unknown }).filters;
       const noFilters =
         filters == null || (Array.isArray(filters) && filters.length === 0);
