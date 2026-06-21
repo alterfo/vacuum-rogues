@@ -29,8 +29,9 @@ export interface FlightKeyContext {
  * - Escape closes the top open panel (combat pause → contact → journal → planet
  *   info), else cancels a planned route.
  * - Space runs the planned turn (the keyboard equivalent of the confirming
- *   second click); guarded so a held key, a combat pause, or an already-running
- *   turn can't re-fire `executeRouteTo`. No route → no-op + hint.
+ *   second click); guarded so a held key, a combat pause, an already-running
+ *   turn, or an open contact/planet-info panel can't fire `executeRouteTo`.
+ *   No route → no-op + hint.
  * - j toggles the quest journal; i opens the inventory.
  */
 export function handleFlightKey(
@@ -52,6 +53,11 @@ export function handleFlightKey(
   if (event.key === " " || event.code === "Space") {
     event.preventDefault(); // Space would otherwise scroll the page
     if (event.repeat || ctx.combatPause.paused || ctx.isTurnRunning) return;
+    // Don't launch the turn behind an open modal — the contact / planet-info
+    // panel must be dismissed (Esc) first, otherwise the ship flies off while
+    // the panel still demands a choice.
+    if (ctx.npcManager.isContactPanelOpen || ctx.planetManager.hasInfoPanel)
+      return;
     if (ctx.plannedRoute) {
       ctx.executeRouteTo(ctx.plannedRoute.x, ctx.plannedRoute.y);
       logger.info(

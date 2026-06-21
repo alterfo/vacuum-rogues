@@ -12,7 +12,14 @@ mote pool with a hard live-count bound; `AsteroidBelt` mirrors each pool slot 1:
 PixiJS `Particle`. Same pure-logic-tested-standalone pattern as `combatPause`),
 CombatPauseOverlay (the target/weapon modal), combatPauseUi (`createCombatPauseUi` cross-links
 controller ↔ overlay ↔ `CombatModule`; called with no args it returns a bare overlay-less
-controller for field-init / unit tests, rebuilt wired in `initialize()`).
+controller for field-init / unit tests, rebuilt wired in `initialize()`),
+flightKeyHandler (`handleFlightKey(event, ctx)` — pure flight-scene keydown router: Esc closes the
+top open surface in priority order — combat pause → contact panel → quest journal → planet info —
+else cancels a planned route; Space runs the planned turn — the keyboard equivalent of the
+confirming second click, suppressed while a turn/combat pause is active or a contact/planet-info
+panel is open; j/i toggle journal/inventory. `SpaceFlightScene.onKeyDown` is a thin delegate that
+builds `ctx` from live scene members; the extraction keeps the controller under the 1900-line
+guard. Unit-tested standalone in `flightKeyHandler.test.ts`).
 
 In-flight combat (real-time, with active pause): an aggressive NPC closing inside `WEAPON_RANGE`,
 or the player clicking "Атаковать" on a contact, calls `CombatModule.addCombatant()` — no scene

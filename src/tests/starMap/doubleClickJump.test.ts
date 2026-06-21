@@ -102,6 +102,18 @@ describe("star-map double-click jump", () => {
     expect(p.single).not.toHaveBeenCalled();
   });
 
+  it("on a real double-click sequence (detail 1 then 2) still routes the jump", () => {
+    // Production reality: PixiJS fires pointertap on EVERY tap with a rising
+    // detail count, so a genuine double-click is two events — the first
+    // (detail 1) opens the info panel, the second (detail 2) jumps. The jump
+    // wins because performWarpJump transitions/destroys the scene; this pins
+    // that the second event reaches handleSystemDoubleClick.
+    tap(p.hitArea, 1);
+    tap(p.hitArea, 2);
+    expect(p.single).toHaveBeenCalledTimes(1);
+    expect(p.double).toHaveBeenCalledTimes(1);
+  });
+
   it("treats a higher click count (detail 3) as a double-click jump too", () => {
     tap(p.hitArea, 3);
     expect(p.double).toHaveBeenCalledTimes(1);
