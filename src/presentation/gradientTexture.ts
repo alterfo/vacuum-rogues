@@ -43,3 +43,165 @@ export function softGlowTexture(): Texture | null {
   cached = Texture.from(canvas);
   return cached;
 }
+
+/**
+ * Soft dust-mote texture for the comet particle tail (natural-comet rework,
+ * 2026-06-20). A small, very diffuse white radial dot — no hard core — baked
+ * ONCE so a `ParticleContainer` of tinted/scaled/faded `Sprite`s of it reads as
+ * a soft volumetric dust trail with **zero per-frame cost** (no `BlurFilter`,
+ * per `feedback-no-blur-filters-flight`). Returns `null` with no 2D context
+ * (jsdom / unit tests) so callers fall back without crashing.
+ */
+let dustCached: Texture | null | undefined;
+
+export function dustParticleTexture(): Texture | null {
+  if (dustCached !== undefined) return dustCached;
+
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    dustCached = null;
+    return null;
+  }
+
+  const r = size / 2;
+  const grad = ctx.createRadialGradient(r, r, 0, r, r, r);
+  // No bright core — a faint, soft mote that fully fades by the edge so many
+  // overlapping copies accumulate into a smooth diffuse cloud, not hard dots.
+  grad.addColorStop(0.0, "rgba(255,255,255,0.55)");
+  grad.addColorStop(0.35, "rgba(255,255,255,0.22)");
+  grad.addColorStop(0.7, "rgba(255,255,255,0.06)");
+  grad.addColorStop(1.0, "rgba(255,255,255,0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  dustCached = Texture.from(canvas);
+  return dustCached;
+}
+
+/**
+ * Deterministic small PRNG (mulberry32) so a given rock `seed` always bakes the
+ * same rock — distinct seeds give distinct rocks, identical seeds reuse the
+ * cached texture.
+ */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** How many distinct rock textures are baked; seeds wrap onto this set. */
+export const ROCK_VARIANT_COUNT = 8;
+const rockCache = new Map<number, Texture | null>();
+
+/**
+ * Baked, shaded rock-texture sprite for the foreground asteroids (natural-comet
+ * /asteroid rework, 2026-06-20). Replaces the flat `poly`+crater `Graphics`
+ * rocks with an irregular grey rock lit from the top-left (radial gradient),
+ * speckled with noise and a few craters — baked ONCE per variant and cached so
+ * each asteroid is just a tinted/rotated `Sprite` (no per-frame redraw). The
+ * `seed` wraps onto {@link ROCK_VARIANT_COUNT} variants to bound memory.
+ * Returns `null` with no 2D context (jsdom / unit tests).
+ */
+export function rockTexture(seed: number): Texture | null {
+  const variant =
+    ((Math.trunc(seed) % ROCK_VARIANT_COUNT) + ROCK_VARIANT_COUNT) %
+    ROCK_VARIANT_COUNT;
+  const existing = rockCache.get(variant);
+  if (existing !== undefined) return existing;
+
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    rockCache.set(variant, null);
+    return null;
+  }
+
+  const rng = mulberry32(0x9e3779b9 ^ ((variant + 1) * 0x85ebca6b));
+  const cx = size / 2;
+  const cy = size / 2;
+  const baseR = size * 0.4;
+
+  // Irregular rock silhouette — a jittered polygon, clipped so the shading and
+  // craters stay inside the rock.
+  const sides = 9;
+  const pts: Array<[number, number]> = [];
+  for (let i = 0; i < sides; i++) {
+    const ang = (i / sides) * Math.PI * 2;
+    const rr = baseR * (0.66 + rng() * 0.42);
+    pts.push([cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr]);
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < sides; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+  ctx.clip();
+
+  // Shaded body: a radial gradient offset toward the top-left light gives a lit
+  // highlight fading to a dark shadowed rim — the 3D read the flat fill lacked.
+  const lightX = cx - baseR * 0.45;
+  const lightY = cy - baseR * 0.45;
+  const tone = 88 + Math.floor(rng() * 46); // grey base 88..134
+  const hi = (d: number) => Math.min(255, tone + d);
+  const lo = (d: number) => Math.max(0, tone - d);
+  const grad = ctx.createRadialGradient(
+    lightX,
+    lightY,
+    baseR * 0.1,
+    cx,
+    cy,
+    baseR * 1.3,
+  );
+  grad.addColorStop(0.0, `rgb(${hi(58)}, ${hi(50)}, ${hi(40)})`);
+  grad.addColorStop(0.5, `rgb(${tone}, ${lo(6)}, ${lo(14)})`);
+  grad.addColorStop(1.0, `rgb(${lo(58)}, ${lo(62)}, ${lo(66)})`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  // Surface speckle — fine light/dark grit breaks the smooth gradient.
+  for (let i = 0; i < 70; i++) {
+    const x = rng() * size;
+    const y = rng() * size;
+    const rad = 0.5 + rng() * 1.6;
+    ctx.fillStyle =
+      rng() < 0.5
+        ? `rgba(0,0,0,${(0.04 + rng() * 0.1).toFixed(3)})`
+        : `rgba(255,255,255,${(0.03 + rng() * 0.08).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(x, y, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Craters — a dark bowl with a light rim catching the top-left light.
+  const craters = 2 + Math.floor(rng() * 3);
+  for (let i = 0; i < craters; i++) {
+    const x = cx + (rng() - 0.5) * baseR * 1.3;
+    const y = cy + (rng() - 0.5) * baseR * 1.3;
+    const cr = baseR * (0.12 + rng() * 0.2);
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.beginPath();
+    ctx.arc(x, y, cr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.13)";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(x - cr * 0.15, y - cr * 0.15, cr, Math.PI * 0.9, Math.PI * 1.95);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  const tex = Texture.from(canvas);
+  rockCache.set(variant, tex);
+  return tex;
+}
