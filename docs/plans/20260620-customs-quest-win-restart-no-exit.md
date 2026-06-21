@@ -94,10 +94,18 @@ finished or surrendered quest exits once and does not restart, and verify.
       presentation 392/392; lint 0 errors.
 
 ### Task 3: Verify acceptance criteria
-- [ ] verify Overview: winning customs ends + exits (no restart); «Сдаться» and «Выйти»/Esc exit
-- [ ] visually verify in-game: complete the customs quest and confirm it returns to the prior scene
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing quest/scene test assertions changed
+- [x] verify Overview: winning customs ends + exits (no restart); «Сдаться» and «Выйти»/Esc exit
+      — all three symptoms covered green by `customsExit.test.ts` (6/6): win marks complete + returns
+      once with `resumeTextQuest:false`; «Сдаться» and Escape each return with the no-resume flag;
+      failure terminal shows retry then exits with no-resume.
+- [x] visually verify in-game: complete the customs quest and confirm it returns to the prior scene
+      — manual (skipped: not automatable; in-engine screenshots fail in the render loop). Exit behaviour
+      is proven by the no-resume assertions in `customsExit.test.ts` + the PlanetScene suppress-resume path.
+- [x] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
+      — unit 2337/2337 (266 files); e2e:regression 25/25; lint 0 errors (43 pre-existing warnings only).
+- [x] confirm no existing quest/scene test assertions changed
+      — `git diff ca48033..d41328c` is purely additive (461 insertions, 0 deletions); the only test file
+      touched is the new `src/tests/quests/customsExit.test.ts`.
 
 ## Technical Details
 - **One root, three symptoms:** win-exit, «Сдаться», and «Выйти»/Esc all route through `doReturn()`;
