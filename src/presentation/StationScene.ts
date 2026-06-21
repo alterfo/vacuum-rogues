@@ -9,7 +9,6 @@ import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { SceneType, StationType, type MicroModule } from "@/types";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
 import {
-  MICRO_MODULES,
   GearKind,
   gearById,
   microModuleById,
@@ -17,6 +16,11 @@ import {
   type SlotCategory,
   type Gear,
 } from "@/systems/equipment/GearCatalog";
+import {
+  micromoduleShopCatalog,
+  micromodulePrice,
+  buyMicromodule,
+} from "@/systems/equipment/micromoduleShop";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
   slotToBagModule,
@@ -186,6 +190,10 @@ export class StationScene extends GameScene {
   private readonly equipment = new EquipmentSystem();
   private researchPanel: ResearchUpgradePanel | null = null;
   private shopScroll = 0;
+  private micromoduleScroll = 0;
+  /** Rows the micromodule list can show at once — set by its render, read by the
+   *  scroll clamp so the full catalog (gear + hull families) is reachable. */
+  private micromoduleVisibleRows = 0;
   private readonly ROW_H = 50;
   private readonly VISIBLE_ROWS = 9;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
@@ -225,6 +233,7 @@ export class StationScene extends GameScene {
     // the shop view is scrollable, so other views ignore the wheel.
     this.detachWheel = attachWheelScroll((dir) => {
       if (this.view === "shop") this.scrollShop(dir);
+      else if (this.view === "micromodules") this.scrollMicromodules(dir);
     });
 
     logger.info(`StationScene: docked at ${this.station?.name}`);
@@ -264,8 +273,9 @@ export class StationScene extends GameScene {
   private buildMicromoduleListings(): void {
     // Craft centers sell a deterministic subset based on station id seed
     const seed = this.station?.id.charCodeAt(0) ?? 0;
-    // Offer all 12 micromodules (full catalog at craft centers)
-    this.micromoduleListings = [...MICRO_MODULES];
+    // Offer the full catalog at craft centers: the 12 gear micromodules plus the
+    // hull micromodule family (defense / cargo / energy-redirect).
+    this.micromoduleListings = micromoduleShopCatalog();
     // Shuffle deterministically so different stations have different order
     this.micromoduleListings.sort(
       (a, b) =>
@@ -624,6 +634,7 @@ export class StationScene extends GameScene {
         break;
       case "micromodules":
         this.view = "micromodules";
+        this.micromoduleScroll = 0;
         this.render();
         break;
       case "research":
@@ -1267,12 +1278,27 @@ export class StationScene extends GameScene {
     const ROW = 46;
     let rowY = PY + 50;
     const TIER_BONUS = ["", "+20%", "+12%", "+6%"] as const;
-    const TIER_PRICE = [0, 3200, 1800, 800] as const;
 
-    for (const mm of this.micromoduleListings) {
+    // The full catalog (21 entries) overflows the panel — slice from the scroll
+    // offset so every micromodule is reachable at a single station.
+    const visibleRows = Math.max(1, Math.floor((PH - 96 - 50) / ROW) + 1);
+    this.micromoduleVisibleRows = visibleRows;
+    this.micromoduleScroll = Math.max(
+      0,
+      Math.min(
+        this.micromoduleScroll,
+        Math.max(0, this.micromoduleListings.length - visibleRows),
+      ),
+    );
+    const visibleMicromodules = this.micromoduleListings.slice(
+      this.micromoduleScroll,
+      this.micromoduleScroll + visibleRows,
+    );
+
+    for (const mm of visibleMicromodules) {
       if (rowY + ROW > PY + PH - 50) break;
 
-      const price = TIER_PRICE[mm.bonusTier];
+      const price = micromodulePrice(mm);
       const canAfford = playerCredits >= price;
       const alreadyOwned = (player?.inventory.micromodules ?? []).some(
         (m) => m.id === mm.id,
@@ -1349,15 +1375,17 @@ export class StationScene extends GameScene {
         buyBtn.cursor = "pointer";
         buyBtn.on("pointerdown", (e) => {
           e.stopPropagation();
-          adjustPlayerCredits(
-            this.gameEngine?.bank,
-            player,
-            -price,
-            GL_COUNTERPARTY.EQUIPMENT,
-            `Покупка: ${mm.name}`,
-          );
-          player.inventory.micromodules.push(mm);
-          this.showToast(`Куплено: ${mm.name}`, 0x44ff88);
+          const result = buyMicromodule(this.gameEngine?.bank, player, mm);
+          if (result.ok) {
+            this.showToast(`Куплено: ${mm.name}`, 0x44ff88);
+          } else {
+            this.showToast(
+              result.reason === "already-owned"
+                ? "Уже куплено"
+                : "Недостаточно кредитов",
+              0xff8844,
+            );
+          }
           this.render();
         });
         buyBtn.on("pointerover", () => {
@@ -1372,6 +1400,24 @@ export class StationScene extends GameScene {
       this.mainContainer!.addChild(buyBtn);
 
       rowY += ROW;
+    }
+
+    if (this.micromoduleListings.length > visibleRows) {
+      const shown = Math.min(
+        this.micromoduleScroll + visibleRows,
+        this.micromoduleListings.length,
+      );
+      const scrollHint = scaledText(
+        `▲▼ ${this.micromoduleScroll + 1}–${shown} из ${this.micromoduleListings.length}`,
+        11,
+        0x668899,
+        { rawColor: true, fontFamily: "monospace" },
+      );
+      scrollHint.anchor.set(0, 1);
+      scrollHint.x = PX + 16;
+      scrollHint.y = PY + PH - 10;
+      scrollHint.eventMode = "none";
+      this.mainContainer!.addChild(scrollHint);
     }
 
     const back = scaledText("[ ← Назад ]", 14, 0x88ccff, {
@@ -2172,6 +2218,9 @@ export class StationScene extends GameScene {
     if (this.view === "shop") {
       if (e.key === "ArrowUp") this.scrollShop(-1);
       if (e.key === "ArrowDown") this.scrollShop(1);
+    } else if (this.view === "micromodules") {
+      if (e.key === "ArrowUp") this.scrollMicromodules(-1);
+      if (e.key === "ArrowDown") this.scrollMicromodules(1);
     }
   }
 
@@ -2181,6 +2230,20 @@ export class StationScene extends GameScene {
       Math.min(
         this.shopScroll + delta,
         Math.max(0, this.shopListings.length - this.VISIBLE_ROWS),
+      ),
+    );
+    this.render();
+  }
+
+  private scrollMicromodules(delta: number): void {
+    this.micromoduleScroll = Math.max(
+      0,
+      Math.min(
+        this.micromoduleScroll + delta,
+        Math.max(
+          0,
+          this.micromoduleListings.length - this.micromoduleVisibleRows,
+        ),
       ),
     );
     this.render();

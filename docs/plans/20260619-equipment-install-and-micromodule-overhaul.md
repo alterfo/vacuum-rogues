@@ -164,11 +164,22 @@ Fix and deepen ship fitting:
   expanded `MICRO_MODULES`; purchase routes through the banking bus (ABS), goes into owned inventory
 - Create: src/tests/equipment/micromoduleShop.test.ts
 
-- [ ] CRAFT_CENTER (science) stations stock the micromodules; buying one (balanced bus transfer)
-      adds it to the player's owned micromodules
-- [ ] ⚠️ existing economy tests must stay green — purchase delta unchanged, GL balanced
-- [ ] write tests: a science-station buy adds the micromodule and posts a balanced transfer
-- [ ] run affected tests — must pass before next task
+- [x] CRAFT_CENTER (science) stations stock the micromodules; buying one (balanced bus transfer)
+      adds it to the player's owned micromodules. New pure `src/systems/equipment/micromoduleShop.ts`
+      (single source of truth): `micromoduleShopCatalog()` now stocks the **expanded** catalog —
+      the 12 gear `MICRO_MODULES` plus the 9-entry hull family `HULL_MICRO_MODULES` (defense/cargo/
+      energy-redirect from Task 4); `micromodulePrice()` (tiered) + `buyMicromodule(bank, player, mm)`
+      posts a balanced player→`gl:equipment` `adjustPlayerCredits` transfer and pushes to
+      `inventory.micromodules`. StationScene's CRAFT_CENTER shop now calls these (and gained
+      wheel/arrow scrolling so all 21 entries are reachable at one station).
+- [x] ⚠️ existing economy tests must stay green — purchase delta unchanged, GL balanced (full unit
+      suite 2384 green; economy/banking suites green; purchase still routes through the same
+      `adjustPlayerCredits` seam as before — no GL change)
+- [x] write tests: a science-station buy adds the micromodule and posts a balanced transfer
+      (`src/tests/equipment/micromoduleShop.test.ts` — 8 tests: catalog (gear+hull), tiered price,
+      buy→owned, hull-module buy, balanced player→equipment posting, already-owned + unaffordable
+      rejection with no money moved, multi-buy stays balanced)
+- [x] run affected tests — must pass before next task (full unit suite 2384 green; tsc + eslint clean)
 
 ### Task 6: Drag-and-drop apply onto gear / hull
 **Files:**
