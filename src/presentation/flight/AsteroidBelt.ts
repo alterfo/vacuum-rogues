@@ -1,4 +1,10 @@
-import { Container, Graphics } from "pixi.js";
+import {
+  Container,
+  Graphics,
+  Particle,
+  ParticleContainer,
+  Sprite,
+} from "pixi.js";
 import type { Renderer } from "../Renderer";
 import { SYSTEM_GEOMETRY } from "@/config/balance";
 import {
@@ -6,7 +12,24 @@ import {
   hyperbolaPoint,
   type CometFlyby,
 } from "@/utils/flightGeometry";
+import { dustParticleTexture, softGlowTexture } from "../gradientTexture";
+import { CometDustTail, moteAlpha, moteScale } from "./cometDustTail";
 import type { FlightModule } from "./FlightModule";
+
+/** Per-comet hard cap on simultaneously-live dust motes (FPS bound). */
+const MAX_TAIL_PARTICLES = 64;
+/** Base scale of the 64 px dust sprite (×{@link moteScale} per mote). */
+const TAIL_SPRITE_SCALE = 1.15;
+/** Global tail opacity multiplier (additive, on top of per-mote fade). */
+const TAIL_ALPHA = 0.55;
+/** softGlowTexture is 256 px (r 128); 0.45 → a ~58 px icy head glow. */
+const HEAD_SCALE = 0.45;
+/** Icy white-blue head + dust tints. */
+const HEAD_TINT = 0xd8eaff;
+const TAIL_TINT = 0xcfe4ff;
+/** Distance band (world px from the star) over which the comet fades in/out. */
+const TAIL_FULL = 1500;
+const TAIL_FADE = 2200;
 
 /** A single drifting rock or flyby comet in the foreground asteroid field. */
 interface AsteroidMote {
@@ -24,6 +47,12 @@ interface AsteroidMote {
   theta: number; // current true anomaly along the sweep (rad), thetaStart→thetaEnd
   thetaSpeed: number; // rad/ms sweep rate (always advances toward thetaEnd)
   cometCooldown: number; // ms left offscreen before a fresh comet flies in (0 = active)
+  // Particle-comet visuals (comets only; null when no 2D canvas is available —
+  // jsdom / unit tests — so the module degrades without throwing).
+  head: Sprite | null; // glowing icy head (softGlowTexture sprite)
+  tail: CometDustTail | null; // pure dust-tail emitter (PixiJS-free)
+  tailLayer: ParticleContainer | null; // the visual particle container
+  particles: Particle[]; // pooled visuals, mirrored 1:1 with tail.slots
 }
 
 /**
@@ -118,7 +147,12 @@ export class AsteroidBelt implements FlightModule {
         theta: 0,
         thetaSpeed: 0,
         cometCooldown: 0,
+        head: null,
+        tail: null,
+        tailLayer: null,
+        particles: [],
       };
+      if (a.comet) this.setupCometVisuals(a);
       this.drawAsteroid(a);
       this.respawnAsteroid(a, true);
       this.asteroids.push(a);
@@ -127,71 +161,75 @@ export class AsteroidBelt implements FlightModule {
     this.gameLayer.addChild(this.asteroidContainer);
   }
 
-  /** Draw an irregular grey rock (or a comet with solar-wind tail). */
+  /**
+   * Build the particle-comet visuals (head glow sprite + dust-tail emitter +
+   * pooled particle layer). Soft edges come from the baked `softGlowTexture` /
+   * `dustParticleTexture` alpha — NOT a per-frame BlurFilter
+   * (`feedback-no-blur-filters-flight`). All three are null when no 2D canvas is
+   * available (jsdom / unit tests); the comet then falls back to a small drawn
+   * nucleus and the tail is simply absent — no throw.
+   */
+  private setupCometVisuals(a: AsteroidMote): void {
+    const container = this.asteroidContainer;
+    if (!container) return;
+
+    const dustTex = dustParticleTexture();
+    if (dustTex) {
+      const layer = new ParticleContainer({
+        // x/y, scale (vertex) and alpha (color) all change per frame.
+        dynamicProperties: { position: true, vertex: true, color: true },
+      });
+      layer.blendMode = "add";
+      layer.eventMode = "none";
+      a.tail = new CometDustTail(MAX_TAIL_PARTICLES);
+      a.tailLayer = layer;
+      a.particles = [];
+      for (let i = 0; i < MAX_TAIL_PARTICLES; i++) {
+        const part = new Particle({
+          texture: dustTex,
+          alpha: 0,
+          anchorX: 0.5,
+          anchorY: 0.5,
+          tint: TAIL_TINT,
+        });
+        layer.addParticle(part);
+        a.particles.push(part);
+      }
+      // Tail below the head: insert at the back of the field container.
+      container.addChildAt(layer, 0);
+    }
+
+    const headTex = softGlowTexture();
+    if (headTex) {
+      const head = new Sprite(headTex);
+      head.anchor.set(0.5);
+      head.scale.set(HEAD_SCALE);
+      head.tint = HEAD_TINT;
+      head.blendMode = "add";
+      head.eventMode = "none";
+      a.head = head;
+      container.addChild(head); // above the tail layer
+    }
+  }
+
+  /** Draw an irregular grey rock (or the comet's fallback nucleus). */
   private drawAsteroid(a: AsteroidMote): void {
     const g = a.graphics;
     g.clear();
-    const r = a.comet ? 13 + Math.random() * 5 : 9 + Math.random() * 14;
     if (a.comet) {
-      // Tail in local +x direction; rotation is updated each frame so +x always
-      // points anti-sunward (solar wind blows tail away from the star).
-      // Photorealistic look: many overlapping narrow wedges at slightly different
-      // angles accumulate into a smooth volumetric gradient — no solid triangles.
-
-      // DUST TAIL — 10 wedge layers fanning across ±14° total spread
-      const dustColor = 0xd0e0ff;
-      for (let i = 0; i < 10; i++) {
-        const ang = (i / 9 - 0.5) * 0.24; // ±0.12 rad ≈ ±7°
-        const len = r * (28 - i * 0.6);
-        const hw = r * (2.6 - i * 0.08); // half-width at origin
-        g.poly([Math.cos(ang) * len, Math.sin(ang) * len, 0, -hw, 0, hw]).fill({
-          color: dustColor,
-          alpha: 0.028,
-        });
+      // The comet's glow + dust tail are particle/sprite-based (see
+      // setupCometVisuals + updateAsteroids). When no baked head texture is
+      // available (jsdom), draw a minimal icy nucleus so it still reads — no
+      // flat wedge/circle tail.
+      if (!a.head) {
+        const r = 13 + Math.random() * 5;
+        g.circle(0, 0, r * 0.9).fill({ color: 0xcce4ff, alpha: 0.9 });
+        g.circle(0, 0, r * 0.4).fill({ color: 0xeef6ff, alpha: 0.96 });
       }
-      // Brighter inner spine — tight wedges
-      for (let i = 0; i < 6; i++) {
-        const ang = (i / 5 - 0.5) * 0.07;
-        const len = r * 18;
-        const hw = r * 0.8;
-        g.poly([Math.cos(ang) * len, Math.sin(ang) * len, 0, -hw, 0, hw]).fill({
-          color: 0xe8f0ff,
-          alpha: 0.045,
-        });
-      }
-      // ION TAIL — straight, narrow, blue-white
-      g.poly([
-        r * 38,
-        r * 0.18,
-        r * 38,
-        -r * 0.18,
-        0,
-        -r * 0.3,
-        0,
-        r * 0.3,
-      ]).fill({ color: 0x7aacff, alpha: 0.13 });
-      g.poly([
-        r * 30,
-        r * 0.11,
-        r * 30,
-        -r * 0.11,
-        0,
-        -r * 0.18,
-        0,
-        r * 0.18,
-      ]).fill({ color: 0x99c2ff, alpha: 0.2 });
-
-      // COMA — stacked diffuse halos around the nucleus
-      g.circle(0, 0, r * 5.0).fill({ color: 0x80a8d0, alpha: 0.03 });
-      g.circle(0, 0, r * 3.2).fill({ color: 0xa0c0e0, alpha: 0.06 });
-      g.circle(0, 0, r * 2.0).fill({ color: 0xc0d8f0, alpha: 0.1 });
-      g.circle(0, 0, r * 1.2).fill({ color: 0xd8eaff, alpha: 0.18 });
-
-      // NUCLEUS — icy, compact, with a hot interior point
-      g.circle(0, 0, r * 0.9).fill({ color: 0xcce4ff, alpha: 0.92 });
-      g.circle(0, 0, r * 0.45).fill({ color: 0xeef6ff, alpha: 0.96 });
-      g.circle(0, 0, r * 0.15).fill({ color: 0xffffff, alpha: 1.0 });
-    } else {
+      return;
+    }
+    {
+      const r = 9 + Math.random() * 14;
       const pts: number[] = [];
       const sides = 7;
       for (let i = 0; i < sides; i++) {
@@ -265,6 +303,43 @@ export class AsteroidBelt implements FlightModule {
     }
     a.graphics.x = a.x;
     a.graphics.y = a.y;
+    if (a.comet) {
+      // A fresh flyby starts with an empty tail (old motes belonged to the prior
+      // pass, possibly across the field) and the head shown at the entry point.
+      a.tail?.reset();
+      this.hideTail(a);
+      if (a.head) {
+        a.head.x = a.x;
+        a.head.y = a.y;
+        a.head.visible = true;
+      }
+    }
+  }
+
+  /** Push every pooled dust particle to fully transparent (comet hidden). */
+  private hideTail(a: AsteroidMote): void {
+    for (const part of a.particles) part.alpha = 0;
+  }
+
+  /** Mirror the pure emitter's live motes onto the pooled PixiJS particles. */
+  private syncTail(a: AsteroidMote, fade: number): void {
+    if (!a.tail) return;
+    const slots = a.tail.slots;
+    for (let i = 0; i < slots.length; i++) {
+      const m = slots[i];
+      const part = a.particles[i];
+      if (!part) continue;
+      if (m.active) {
+        part.x = m.x;
+        part.y = m.y;
+        const sc = TAIL_SPRITE_SCALE * moteScale(m);
+        part.scaleX = sc;
+        part.scaleY = sc;
+        part.alpha = moteAlpha(m) * fade * TAIL_ALPHA;
+      } else {
+        part.alpha = 0;
+      }
+    }
   }
 
   /** Drift + spin the asteroids in world space, respawning past the field edge. */
@@ -281,7 +356,7 @@ export class AsteroidBelt implements FlightModule {
           a.cometCooldown -= deltaTime;
           if (a.cometCooldown <= 0) {
             this.drawAsteroid(a);
-            this.respawnAsteroid(a);
+            this.respawnAsteroid(a); // shows head + resets tail
             a.graphics.visible = true;
           }
           continue;
@@ -291,29 +366,45 @@ export class AsteroidBelt implements FlightModule {
         if (!a.flyby || a.theta >= a.flyby.thetaEnd) {
           // Swept past the exit edge: the comet leaves; a fresh one returns later.
           a.graphics.visible = false;
+          if (a.head) a.head.visible = false;
+          a.tail?.reset();
+          this.hideTail(a);
           a.cometCooldown = 8000 + Math.random() * 12000; // 8–20 s gap
           continue;
         }
         const p = hyperbolaPoint(a.flyby.params, a.theta);
         a.x = p.x;
         a.y = p.y;
-        a.graphics.x = a.x;
-        a.graphics.y = a.y;
-        // Tail points away from the star (solar wind). local +x → anti-sunward.
+        // Anti-sunward unit vector (solar wind blows the dust away from the star).
         const sunDx = a.x - cx;
         const sunDy = a.y - cy;
-        a.graphics.rotation = Math.atan2(sunDy, sunDx);
-        // Tail visible only in the inner system (orbit 2-3 zone ≈ 1050–1950 px).
-        // Fade in from 2200 px, fully visible inside 1500 px.
-        const dist = Math.hypot(sunDx, sunDy);
-        const FULL = 1500;
-        const FADE = 2200;
-        a.graphics.alpha =
-          dist <= FULL
+        const dist = Math.hypot(sunDx, sunDy) || 1;
+        const ux = sunDx / dist;
+        const uy = sunDy / dist;
+        // Head/tail visible only in the inner system (orbit 2-3 zone). Fully
+        // visible inside 1500 px, faded out by 2200 px.
+        const fade =
+          dist <= TAIL_FULL
             ? 1
-            : dist >= FADE
+            : dist >= TAIL_FADE
               ? 0
-              : 1 - (dist - FULL) / (FADE - FULL);
+              : 1 - (dist - TAIL_FULL) / (TAIL_FADE - TAIL_FULL);
+        // Glowing head follows the hyperbola (fallback nucleus on graphics too).
+        a.graphics.x = a.x;
+        a.graphics.y = a.y;
+        a.graphics.alpha = fade;
+        if (a.head) {
+          a.head.x = a.x;
+          a.head.y = a.y;
+          a.head.alpha = fade;
+        }
+        // Dust tail: emit at the head while visible; motes drift anti-sunward in
+        // world space (the ParticleContainer sits at the field origin, so the
+        // trail is left behind as the head sweeps on).
+        if (a.tail) {
+          a.tail.update(deltaTime, a.x, a.y, ux, uy, fade > 0.04);
+          this.syncTail(a, fade);
+        }
       } else {
         a.x += a.vx * deltaTime;
         a.y += a.vy * deltaTime;

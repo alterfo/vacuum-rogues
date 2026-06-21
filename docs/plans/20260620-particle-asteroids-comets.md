@@ -71,10 +71,10 @@ drift — only the **rendering** changes.
   sprite tinted icy-white) — keep the hyperbolic head motion
 - Create: src/tests/flight/cometParticleTail.test.ts
 
-- [ ] comet renders as a glowing head trailing a soft particle dust tail (bounded count); the flat
+- [x] comet renders as a glowing head trailing a soft particle dust tail (bounded count); the flat
       wedge/circle tail is removed; no BlurFilter
-- [ ] write tests: emitter spawns at head, drifts anti-sunward, ages/fades/prunes, count ≤ max
-- [ ] run affected tests — must pass before next task
+- [x] write tests: emitter spawns at head, drifts anti-sunward, ages/fades/prunes, count ≤ max
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Asteroids — baked rock sprites with tumble
 **Files:**
