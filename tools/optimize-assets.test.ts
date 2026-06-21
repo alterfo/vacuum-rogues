@@ -12,7 +12,7 @@
  * `src/` would violate the build's `rootDir: src`. Vitest's tools glob
  * (see vitest.config `include`) picks it up, so it runs with the suite.
  */
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -25,6 +25,20 @@ import {
   convertFile,
   webpOptionsFor,
 } from "./optimize-assets";
+
+/** First image-data chunk fourcc of a RIFF/WebP file: "VP8L" = lossless, "VP8 " = lossy. */
+function webpImageChunks(path: string): string[] {
+  const b = readFileSync(path);
+  const chunks: string[] = [];
+  let off = 12; // skip RIFF header + "WEBP"
+  while (off + 8 <= b.length && chunks.length < 20) {
+    const id = b.toString("ascii", off, off + 4);
+    const size = b.readUInt32LE(off + 4);
+    chunks.push(id);
+    off += 8 + size + (size & 1); // chunks are padded to even length
+  }
+  return chunks;
+}
 
 describe("webpOptionsFor — per-category quality", () => {
   it("returns lossy ~q80 for every photoreal category", () => {
@@ -112,8 +126,40 @@ describe("convertFile — fixture PNG → WebP round-trip", () => {
     expect(meta.width).toBe(WIDTH);
     expect(meta.height).toBe(HEIGHT);
 
+    // The on-disk file is byte-for-byte the verified buffer (destBytes). A
+    // regression guard against re-encoding the buffer on write (which would
+    // make the file size diverge from destBytes and discard the chosen encode).
+    expect(statSync(res.dest).size).toBe(res.destBytes);
+
     // Materially smaller.
     expect(res.destBytes).toBeLessThan(res.srcBytes);
+  });
+
+  it("writes a LOSSLESS WebP for the ui category (not a lossy re-encode)", async () => {
+    // Regression: the writer must preserve webpOptionsFor("ui").lossless. A
+    // re-encode through sharp on write would silently emit a lossy "VP8 " chunk.
+    const W = 16;
+    const H = 16;
+    const raw = Buffer.alloc(W * H * 4);
+    for (let i = 0; i < W * H; i++) {
+      raw[i * 4 + 0] = 12;
+      raw[i * 4 + 1] = 200;
+      raw[i * 4 + 2] = 64;
+      raw[i * 4 + 3] = 255;
+    }
+    const src = join(dir, "lossless_ui.png");
+    await sharp(raw, { raw: { width: W, height: H, channels: 4 } })
+      .png()
+      .toFile(src);
+
+    const res = await convertFile(src, "ui");
+    expect(res).toBeDefined();
+    if (!res) return;
+
+    expect(webpOptionsFor("ui").lossless).toBe(true);
+    const chunks = webpImageChunks(res.dest);
+    expect(chunks).toContain("VP8L");
+    expect(chunks).not.toContain("VP8 ");
   });
 
   it("preserves the alpha channel through conversion", async () => {
@@ -138,6 +184,27 @@ describe("convertFile — fixture PNG → WebP round-trip", () => {
 
     const meta = await sharp(res.dest).metadata();
     expect(meta.hasAlpha).toBe(true);
+  });
+
+  it("dry-run writes nothing and deletes nothing", async () => {
+    // The tool deletes originals; --dry-run must be a true no-op on disk.
+    const W = 16;
+    const H = 16;
+    const raw = Buffer.alloc(W * H * 3);
+    for (let i = 0; i < raw.length; i++) raw[i] = (i * 7) & 0xff;
+    const src = join(dir, "dryrun.png");
+    await sharp(raw, { raw: { width: W, height: H, channels: 3 } })
+      .png()
+      .toFile(src);
+
+    const res = await convertFile(src, "planets", true);
+    expect(res).toBeDefined();
+    if (!res) return;
+
+    // Source intact, no .webp written, but destBytes is still the real size.
+    expect(existsSync(src)).toBe(true);
+    expect(existsSync(res.dest)).toBe(false);
+    expect(res.destBytes).toBeGreaterThan(0);
   });
 
   it("returns undefined for a non-convertible (already webp) path", async () => {

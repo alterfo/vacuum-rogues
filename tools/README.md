@@ -69,6 +69,34 @@ npx tsx tools/scaffold/new-scene.ts --name ResearchUpgrade --context-dependent
 npm test -- --run tools/scaffold/new-scene.test.ts
 ```
 
+## optimize-assets.ts — convert `src/assets/**` art to WebP
+
+`tools/optimize-assets.ts` converts every PNG/JPG under `src/assets/**` to a
+sibling `.webp` in place, then deletes the original — but only after re-reading
+the encoded WebP and verifying it kept the source dimensions. Files already WebP
+are skipped, so the script is idempotent and safe to re-run. Quality is chosen
+per category by the pure `webpOptionsFor`: photoreal categories (nebula,
+panoramas, planets, planet_maps, stars, star_maps, portraits, ships,
+player_ships, surfaces) → lossy q80; `ui` + `icons` → **lossless** (preserves
+crisp edges + alpha). It writes the exact verified bytes (`writeFileSync`), not
+`sharp(buffer).toFile`, which would re-encode and silently drop the lossless
+choice. Requires the `sharp` devDependency (native binaries).
+
+Because `src/assets/manifest.ts` keys by path **without** extension and already
+globs `.webp`, conversion is transparent to every `texture()` caller. Asset-key
+parity is locked by `src/tests/assets/manifestKeys.snapshot.json` — adding new
+art keys means updating that snapshot.
+
+**When to use:** after dropping new PNG/JPG art into `src/assets/<category>/`, to
+shrink it before committing.
+
+```bash
+npx tsx tools/optimize-assets.ts                 # convert all categories
+npx tsx tools/optimize-assets.ts --category ui   # one category
+npx tsx tools/optimize-assets.ts --dry-run       # report only, no writes
+npm test -- --run tools/optimize-assets.test.ts
+```
+
 ## context-inject.sh — surface a ralphex task's Files: block
 
 `tools/context-inject.sh <plan-file> [task-number]` prints the active task's

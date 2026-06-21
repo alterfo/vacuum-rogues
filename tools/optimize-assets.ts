@@ -27,6 +27,7 @@ import {
   readdirSync,
   statSync,
   unlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -119,6 +120,12 @@ export async function convertFile(
 
   const destAbs = srcAbs.replace(CONVERTIBLE, ".webp");
   const srcMeta = await sharp(srcAbs).metadata();
+  // A source whose dimensions sharp can't read can't be dimension-verified —
+  // refuse it rather than letting `undefined === undefined` pass the check
+  // below and delete the original on an unverifiable conversion.
+  if (srcMeta.width == null || srcMeta.height == null) {
+    throw new Error(`could not read source dimensions for ${srcAbs}`);
+  }
   const opts = webpOptionsFor(category);
 
   // Encode to a buffer first so we can verify before touching the filesystem.
@@ -138,11 +145,14 @@ export async function convertFile(
   const srcBytes = statSync(srcAbs).size;
 
   if (!dryRun) {
-    await sharp(buffer).toFile(destAbs);
+    // Write the EXACT verified bytes. `sharp(buffer).toFile(destAbs)` would
+    // re-decode and re-encode the buffer with sharp's DEFAULT (lossy q80) WebP
+    // settings, silently discarding the per-category lossless/quality choice
+    // (e.g. ui/icons would ship lossy instead of lossless) and producing an
+    // on-disk file that differs from the buffer we just verified.
+    writeFileSync(destAbs, buffer);
     // Only remove the original after the .webp is safely on disk.
-    if (destAbs !== srcAbs && existsSync(destAbs)) {
-      unlinkSync(srcAbs);
-    }
+    unlinkSync(srcAbs);
   }
 
   return {
@@ -150,8 +160,8 @@ export async function convertFile(
     dest: destAbs,
     srcBytes,
     destBytes: buffer.length,
-    width: srcMeta.width ?? 0,
-    height: srcMeta.height ?? 0,
+    width: srcMeta.width,
+    height: srcMeta.height,
     category,
   };
 }

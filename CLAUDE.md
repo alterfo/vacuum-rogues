@@ -70,6 +70,8 @@ if (key) {
 ```
 Any new art category with >10 MB total must be added to `LAZY_PREFIXES`.
 
+**Assets are WebP.** All `src/assets/**` art is WebP (converted from PNG/JPG, ~581 MB → ~32 MB). The manifest (`src/assets/manifest.ts`) keys by path **without** extension and globs `.webp`, so swapping `x.png` → `x.webp` leaves `texture("<cat>/<name>")` resolving unchanged — the conversion is transparent to every caller. New PNG/JPG art must be run through `tools/optimize-assets.ts` (needs the `sharp` devDep; lossy q80 for photoreal, lossless for `ui`/`icons`) before commit; key-parity is locked by `src/tests/assets/manifestKeys.snapshot.json`.
+
 ## Domain & Types
 - Domain fields should be `readonly`. Mutation via explicit methods only.
 - **Any change to `src/types/index.ts` or `src/domain/**/*.ts` requires updating `src/validation/schemas.ts`** — otherwise save games break. This includes the АБС ledger types in `src/domain/banking/Ledger.ts` (`Account`/`Posting`/`JournalEntry`/`BankingSnapshot`/`LoanDefaultSnapshot`), mirrored by `Ledger*Schema`/`BankingSnapshotSchema`/`LoanDefaultSnapshotSchema`.
