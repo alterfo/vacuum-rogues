@@ -68,7 +68,17 @@ export interface HullSpec extends GearBase {
   readonly cargo: number; // hold capacity
   /** Total mass budget (МАССА): Σ installed gear mass must not exceed this. */
   readonly massCapacity: number;
+  /**
+   * Number of hull micromodule slots (1–4): bounds `ShipLoadout.hullMicromoduleIds`.
+   * Bigger hulls carry more. Optional so synthetic test hulls validate; every
+   * catalog hull sets it explicitly and `ShipLoadout` falls back to
+   * {@link DEFAULT_HULL_MICROMODULE_SLOTS} for any hull that omits it.
+   */
+  readonly micromoduleSlots?: number;
 }
+
+/** Hull micromodule slot count assumed for a hull that omits `micromoduleSlots`. */
+export const DEFAULT_HULL_MICROMODULE_SLOTS = 1;
 
 export interface WeaponSpec extends GearBase {
   readonly kind: GearKind.WEAPON;
@@ -127,6 +137,7 @@ const HULLS: HullSpec[] = [
     equipmentSlots: 2,
     cargo: 20,
     massCapacity: 30,
+    micromoduleSlots: 1,
   },
   {
     id: "hull_corvette",
@@ -143,6 +154,7 @@ const HULLS: HullSpec[] = [
     equipmentSlots: 3,
     cargo: 30,
     massCapacity: 40,
+    micromoduleSlots: 2,
   },
   {
     id: "hull_courier",
@@ -159,6 +171,7 @@ const HULLS: HullSpec[] = [
     equipmentSlots: 4,
     cargo: 45,
     massCapacity: 36,
+    micromoduleSlots: 2,
   },
   {
     id: "hull_warden",
@@ -175,6 +188,7 @@ const HULLS: HullSpec[] = [
     equipmentSlots: 4,
     cargo: 35,
     massCapacity: 70,
+    micromoduleSlots: 3,
   },
   {
     id: "hull_freighter",
@@ -191,6 +205,7 @@ const HULLS: HullSpec[] = [
     equipmentSlots: 4,
     cargo: 120,
     massCapacity: 60,
+    micromoduleSlots: 3,
   },
   {
     id: "hull_bastion",
@@ -207,6 +222,7 @@ const HULLS: HullSpec[] = [
     equipmentSlots: 5,
     cargo: 50,
     massCapacity: 95,
+    micromoduleSlots: 4,
   },
 ];
 

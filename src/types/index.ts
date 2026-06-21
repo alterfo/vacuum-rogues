@@ -573,6 +573,17 @@ export interface SerializedSave {
  */
 export interface ShipLoadoutSnapshot {
   readonly hullId: string;
+  /**
+   * Micromodules fitted in the hull's slots (multi-slot per the install/
+   * micromodule overhaul). The save-layer migration (v25→26) converts the legacy
+   * single `hullMicromoduleId` into this array; absent ⇒ no hull micromodules.
+   */
+  readonly hullMicromoduleIds?: string[];
+  /**
+   * @deprecated Legacy single hull micromodule (pre-v26). Kept so old snapshots
+   * still type-check and {@link ShipLoadout.fromJSON} can read them; migration
+   * folds it into `hullMicromoduleIds`. Never written by `toJSON` anymore.
+   */
   readonly hullMicromoduleId?: string;
   readonly slotted: {
     readonly gearId: string;

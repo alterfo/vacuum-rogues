@@ -39,7 +39,7 @@ function isEquipmentClass(id: string, cls: EquipmentClass): boolean {
 }
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 25;
+  static readonly CURRENT_VERSION = 26;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -552,6 +552,28 @@ export class MigrationPipeline {
         }
       }
       inventory.modules = remaining;
+    },
+    // 25 -> 26: Multi-slot hull micromodules. The loadout used to carry a single
+    // `hullMicromoduleId`; hulls now expose 1–4 micromodule slots and the loadout
+    // holds an array `hullMicromoduleIds`. Convert the legacy single id into a
+    // one-element array and drop the old field. Idempotent: skip when the array
+    // is already present or there is no loadout / no legacy id.
+    25: (state: SaveState) => {
+      const loadout = (
+        state as unknown as {
+          loadout?: {
+            hullMicromoduleId?: string;
+            hullMicromoduleIds?: string[];
+          };
+        }
+      ).loadout;
+      if (!loadout) return;
+      if (!Array.isArray(loadout.hullMicromoduleIds)) {
+        loadout.hullMicromoduleIds = loadout.hullMicromoduleId
+          ? [loadout.hullMicromoduleId]
+          : [];
+      }
+      delete loadout.hullMicromoduleId;
     },
   };
 }

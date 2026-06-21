@@ -465,6 +465,10 @@ export const DialogueSessionSchema = z.object({
 /** Canonical GearCatalog loadout snapshot (ShipLoadoutSnapshot in types). */
 export const ShipLoadoutSnapshotSchema = z.object({
   hullId: z.string(),
+  // `hullMicromoduleIds` is canonical (multi-slot). `hullMicromoduleId` (legacy,
+  // single) stays optional because validation runs BEFORE migration — a pre-v26
+  // save still carries the single id and must validate before v25→26 converts it.
+  hullMicromoduleIds: z.array(z.string()).optional(),
   hullMicromoduleId: z.string().optional(),
   slotted: z.array(
     z.object({

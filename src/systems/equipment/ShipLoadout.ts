@@ -19,6 +19,7 @@ import {
   gearById,
   slotCategoryFor,
   MICRO_MODULES,
+  DEFAULT_HULL_MICROMODULE_SLOTS,
   type Gear,
   type HullSpec,
   type WeaponSpec,
@@ -107,7 +108,13 @@ export interface DerivedStats {
 
 export class ShipLoadout {
   private hullId: string;
-  private hullMicromoduleId?: string;
+  /**
+   * Micromodules fitted into the hull's own micromodule slots (canon §11.3,
+   * multi-slot per the install/micromodule overhaul). Bounded by the hull's
+   * `micromoduleSlots`; a hull swap clears them (the displaced hull's slots no
+   * longer exist). Replaces the former single `hullMicromoduleId`.
+   */
+  private hullMicromoduleIds: string[] = [];
   private readonly slotted: SlottedGear[] = [];
   private readonly faction?: Faction;
 
@@ -122,6 +129,23 @@ export class ShipLoadout {
 
   get hull(): HullSpec {
     return gearById(this.hullId) as HullSpec;
+  }
+
+  /** Number of hull micromodule slots this hull provides (1–4). */
+  hullMicromoduleSlots(): number {
+    return this.hull.micromoduleSlots ?? DEFAULT_HULL_MICROMODULE_SLOTS;
+  }
+
+  /** Micromodules currently fitted in the hull's slots (read-only copy). */
+  hullMicromodules(): readonly string[] {
+    return [...this.hullMicromoduleIds];
+  }
+
+  /** Combined hull-micromodule multiplier (product over the fitted hull slots). */
+  private hullMult(): number {
+    let m = 1;
+    for (const id of this.hullMicromoduleIds) m *= this.mult(id);
+    return m;
   }
 
   /**
@@ -165,7 +189,8 @@ export class ShipLoadout {
     ) {
       dropped.push(this.slotted.splice(this.lastDroppableForMass(), 1)[0]);
     }
-    this.hullMicromoduleId = undefined;
+    // The previous hull's micromodule slots no longer exist on the new hull.
+    this.hullMicromoduleIds = [];
     return dropped.map((s) => ({
       gearId: s.gearId,
       micromoduleId: s.micromoduleId,
@@ -367,8 +392,11 @@ export class ShipLoadout {
   applyMicromodule(gearId: string, micromoduleId: string): boolean {
     if (!this.micromoduleAccepted(micromoduleId)) return false;
     if (gearId === this.hullId) {
-      if (this.hullMicromoduleId) return false; // one per item
-      this.hullMicromoduleId = micromoduleId;
+      // Bounded by the hull's micromodule-slot count (one micromodule per slot).
+      if (this.hullMicromoduleIds.length >= this.hullMicromoduleSlots()) {
+        return false;
+      }
+      this.hullMicromoduleIds.push(micromoduleId);
       return true;
     }
     const slot = this.slotted.find((s) => s.gearId === gearId);
@@ -412,7 +440,7 @@ export class ShipLoadout {
   /** Compute the resulting ship stats from the installed gear. */
   derivedStats(): DerivedStats {
     const hull = this.hull;
-    const maxHull = Math.round(hull.hp * this.mult(this.hullMicromoduleId));
+    const maxHull = Math.round(hull.hp * this.hullMult());
     let weaponDamage = 0;
     let weaponCount = 0;
     // Best engine speed in px/ms: 0.05 + techLevel × 0.03
@@ -543,7 +571,7 @@ export class ShipLoadout {
   toJSON(): ShipLoadoutSnapshot {
     return {
       hullId: this.hullId,
-      hullMicromoduleId: this.hullMicromoduleId,
+      hullMicromoduleIds: [...this.hullMicromoduleIds],
       slotted: this.slotted.map((s) => ({ ...s })),
     };
   }
@@ -560,8 +588,15 @@ export class ShipLoadout {
     const hull = gearById(snapshot.hullId);
     if (!hull || hull.kind !== GearKind.HULL) return null;
     const loadout = new ShipLoadout(snapshot.hullId, faction);
-    if (snapshot.hullMicromoduleId) {
-      loadout.applyMicromodule(snapshot.hullId, snapshot.hullMicromoduleId);
+    // New saves carry an array (migration converts the legacy single id). Read a
+    // stray legacy `hullMicromoduleId` defensively for any snapshot built the old
+    // way (e.g. one that bypassed the save-layer migration). Each id is bounded
+    // by the hull's slot count via applyMicromodule.
+    const hullMms =
+      snapshot.hullMicromoduleIds ??
+      (snapshot.hullMicromoduleId ? [snapshot.hullMicromoduleId] : []);
+    for (const id of hullMms) {
+      loadout.applyMicromodule(snapshot.hullId, id);
     }
     for (const slot of snapshot.slotted) {
       // Restore the saved fitting *as-is* (canon: an existing loadout is read

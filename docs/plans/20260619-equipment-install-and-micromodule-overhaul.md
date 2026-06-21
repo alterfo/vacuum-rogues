@@ -118,12 +118,21 @@ Fix and deepen ship fitting:
   by the hull's slot count), src/types/index.ts (`ShipLoadoutData`)
 - Create: src/tests/equipment/hullMicromoduleSlots.test.ts
 
-- [ ] run `impact`/`detect_changes` on `ShipLoadout`, `HullSpec`, `ShipLoadoutData`, `applyMicromodule`
-      and report the blast radius before editing
-- [ ] a hull accepts up to `micromoduleSlots` hull micromodules and rejects beyond; `toJSON`/restore
-      carry the array
-- [ ] write tests: accept up to N, reject N+1, round-trip the array
-- [ ] run affected tests — must pass before next task
+- [x] run `impact`/`detect_changes` on `ShipLoadout`, `HullSpec`, `ShipLoadoutData`, `applyMicromodule`
+      and report the blast radius before editing — ShipLoadout CRITICAL (68 upstream, internal field
+      change behind unchanged public methods); applyMicromodule HIGH (4, signature unchanged); HullSpec
+      MEDIUM (33, additive optional field). `ShipLoadoutData` is actually `ShipLoadoutSnapshot`.
+- [x] a hull accepts up to `micromoduleSlots` hull micromodules and rejects beyond; `toJSON`/restore
+      carry the array. `HullSpec.micromoduleSlots` (optional, 1–4; `DEFAULT_HULL_MICROMODULE_SLOTS`
+      fallback) set per hull (scout 1, corvette/courier 2, warden/freighter 3, bastion 4);
+      `hullMicromoduleId` → `hullMicromoduleIds: string[]` bounded by `hullMicromoduleSlots()`; new
+      `hullMicromodules()` accessor; `hullMult()` combines them onto maxHull; hull swap clears them.
+- [x] write tests: accept up to N, reject N+1, round-trip the array
+      (`src/tests/equipment/hullMicromoduleSlots.test.ts` — 11 tests incl. legacy-id read + v25→26
+      migration round-trip). Lockstep: `ShipLoadoutSnapshot` type (legacy field kept @deprecated for
+      old-save validation), `ShipLoadoutSnapshotSchema` (both fields optional — validation precedes
+      migration), MigrationPipeline v25→26 converts single id → array.
+- [x] run affected tests — must pass before next task (full unit suite 2362 green; tsc + eslint clean)
 
 ### Task 4: Hull micromodule effects (defense / cargo / energy-redirect)
 **Files:**
