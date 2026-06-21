@@ -337,3 +337,11 @@ export const SUN_CONTACT_HULL_DAMAGE = 5;
 
 /** Minimum interval (game-time ms) between sun-contact hull-damage ticks. */
 export const SUN_CONTACT_DAMAGE_INTERVAL_MS = 500;
+
+/**
+ * GOD-mode hull floor as a fraction of the ship's maxHull. In GOD mode a lethal
+ * hit can never drop the hull below `ceil(maxHull × this)` (always ≥ 1 HP), so
+ * the ship survives but is clearly crippled ("downed" — can't fire or hyperjump
+ * until repaired above the floor). NORMAL/HARD have no floor (hull can reach 0).
+ */
+export const GOD_MODE_HULL_FLOOR_FRACTION = 0.05;

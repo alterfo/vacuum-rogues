@@ -88,10 +88,10 @@ jump, and hostile-spawn paths.
   `isDowned(player)` — pure)
 - Create: src/tests/combat/godMode.test.ts
 
-- [ ] pure helpers: in GOD, damage floors hull above 0 (never 0) and `isDowned` is true at/below the
-      floor; NORMAL/HARD damage is unchanged (can reach 0)
-- [ ] write tests: god floor keeps hull > 0 + downed; normal reaches 0; recovery above floor clears downed
-- [ ] run affected tests — must pass before next task
+- [x] pure helpers: in GOD, damage floors hull above 0 (never 0) and `isDowned` is true at/below the
+      floor; NORMAL/HARD damage is unchanged (can reach 0) (`src/systems/combat/godMode.ts`: `hullFloorFor` = `ceil(maxHull × GOD_MODE_HULL_FLOOR_FRACTION)` ≥ 1 in GOD / 0 otherwise; `applyDamageWithMode` floors GOD above 0 + marks downed, NORMAL/HARD clamp to 0; `isDowned` derived from gameMode + hull)
+- [x] write tests: god floor keeps hull > 0 + downed; normal reaches 0; recovery above floor clears downed (`src/tests/combat/godMode.test.ts` — 15 tests incl. repair-above-floor clears downed)
+- [x] run affected tests — must pass before next task (godMode + gameMode suites: 23 passed; lint clean)
 
 ### Task 4: Wire god mode into combat, weapons, and jump
 **Files:**
