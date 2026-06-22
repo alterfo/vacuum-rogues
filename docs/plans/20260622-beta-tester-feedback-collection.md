@@ -101,17 +101,24 @@ Standing rules:
 - Modify: `src/presentation/flight/flightSystemMenu.ts` (menu entry)
 - Create/Modify tests under `src/tests/`
 
-- [ ] `gitnexus impact` on the touched menu wiring; confirm scope.
-- [ ] Add a «Сообщить отзыв» button to the Main Menu that builds the URL from
+- [x] `gitnexus impact` on the touched menu wiring; confirm scope. (impact +
+      `detect_changes` — scope = MainMenuScene + FlightHud only; medium risk, no
+      surprises. The new opener seam lives in `src/systems/feedback/openFeedback.ts`.)
+- [x] Add a «Сообщить отзыв» button to the Main Menu that builds the URL from
       `buildInfo` + last-known context (scene=MAIN_MENU, seed if a game exists) and
-      opens it via `window.open(url, "_blank", "noopener")`.
-- [ ] Add a «Сообщить отзыв» entry to `flightSystemMenu` that captures **live**
+      opens it via `window.open(url, "_blank", "noopener")`. (`MainMenuScene.handleFeedback`
+      → `openFeedback` → `openInNewTab`.)
+- [x] Add a «Сообщить отзыв» entry to `flightSystemMenu` that captures **live**
       context (current scene, in-game day, galaxy seed) and opens the same URL —
-      the high-value in-session path.
-- [ ] write a test that the menu wiring calls the opener with a URL produced by
+      the high-value in-session path. (`FlightHud.onFeedback` wired in
+      `wireFlightSystemMenu`; galaxy id embeds the seed.)
+- [x] write a test that the menu wiring calls the opener with a URL produced by
       `buildFeedbackUrl` carrying the live context (inject a fake opener; assert the
-      URL). Do not alter existing menu tests' assertions.
-- [ ] run tests — green; **capture a screenshot** of both buttons in place.
+      URL). Do not alter existing menu tests' assertions. (`inFlightMenuFeedback.test.ts`
+      + `openFeedback.test.ts`; existing menu tests untouched.)
+- [x] run tests — green; **capture a screenshot** of both buttons in place.
+      (281 flight+feedback unit tests green; E2E `beta-feedback-button.spec.ts`
+      captured `e2e/screenshots/{main-menu,in-flight}-feedback-button.png`.)
 
 ### Task 5: Verify acceptance criteria
 **Files:**

@@ -1,4 +1,10 @@
 import { SceneType } from "@/types";
+import { buildInfo } from "@/systems/feedback/buildInfo";
+import {
+  openFeedback,
+  openInNewTab,
+  type UrlOpener,
+} from "@/systems/feedback/openFeedback";
 
 import type { GameEngine } from "@/systems/GameEngine";
 import type { FlightHud } from "./FlightHud";
@@ -22,10 +28,16 @@ import type { FlightHud } from "./FlightHud";
  * because the take-off autosave is written *after* `transitionTo` initialises the
  * scene — so the first menu open can find a save the init seed missed. No save ⇒
  * the HUD dims the action with a hint instead of offering a dead button.
+ *
+ * «Сообщить отзыв» captures **live** context (current scene, in-game day, galaxy
+ * seed) and opens the prefilled GitHub Issue Form in a new tab. The opener is
+ * injectable (`open`, defaults to {@link openInNewTab}) so the wiring is
+ * unit-testable with a fake opener.
  */
 export function wireFlightSystemMenu(
   hud: FlightHud,
   gameEngine: GameEngine | null,
+  open: UrlOpener = openInNewTab,
 ): void {
   hud.onLoadSave = () =>
     hud.showSystemMenuConfirm(() => {
@@ -53,6 +65,24 @@ export function wireFlightSystemMenu(
       ?.catch(() => {
         hud.showMessage("Не удалось вернуться в меню", 0xff4444);
       });
+
+  // Snapshot live context at click time and open the prefilled Issue Form. The
+  // galaxy id embeds the run seed (`galaxy_<seed>`), the day is the whole-day
+  // calendar, and the scene is whatever the engine is showing (SPACE_FLIGHT here,
+  // but read live so a future caller stays correct).
+  hud.onFeedback = () => {
+    const { version, sha } = buildInfo();
+    openFeedback(
+      {
+        version,
+        sha,
+        scene: gameEngine?.currentSceneType ?? SceneType.SPACE_FLIGHT,
+        day: gameEngine?.galaxy?.gameDays ?? 0,
+        seed: gameEngine?.galaxy?.id ?? "—",
+      },
+      open,
+    );
+  };
 
   const refreshSaveAvailability = () => {
     const saveManager = gameEngine?.saveManager;

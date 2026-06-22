@@ -3,6 +3,8 @@ import { Graphics, Text, Container, Sprite, type Texture } from "pixi.js";
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
+import { buildInfo } from "@/systems/feedback/buildInfo";
+import { openFeedback } from "@/systems/feedback/openFeedback";
 import { pickVariant, pickVariantKey, tex, loadTextureAsync } from "./textures";
 
 interface StarParticle {
@@ -390,7 +392,33 @@ export class MainMenuScene extends GameScene {
     }
     this.buttonsContainer.addChild(continueBtn);
 
+    const feedbackBtn = createButton(
+      "Сообщить отзыв",
+      100,
+      () => this.handleFeedback(),
+      16,
+      0x66ccff,
+    );
+    this.buttonsContainer.addChild(feedbackBtn);
+
     this.renderer.uiLayer.addChild(this.buttonsContainer);
+  }
+
+  /**
+   * Open the prefilled GitHub Issue Form in a new tab. From the menu the only
+   * live context is the build + (if a run is loaded) its galaxy seed/day; the
+   * scene is MAIN_MENU. The URL shape is owned by `buildFeedbackUrl`.
+   */
+  private handleFeedback(): void {
+    const { version, sha } = buildInfo();
+    const galaxy = this.gameEngine?.galaxy ?? null;
+    openFeedback({
+      version,
+      sha,
+      scene: SceneType.MAIN_MENU,
+      day: galaxy?.gameDays ?? 0,
+      seed: galaxy?.id ?? "—",
+    });
   }
 
   private async handleNewGame(): Promise<void> {

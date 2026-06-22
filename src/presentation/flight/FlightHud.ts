@@ -139,6 +139,12 @@ export class FlightHud implements FlightModule {
   /** «В главное меню» pressed in the in-flight system menu. */
   onMainMenu: (() => void) | null = null;
   /**
+   * «Сообщить отзыв» pressed in the in-flight system menu. The scene captures
+   * live context (scene, in-game day, galaxy seed) and opens the prefilled
+   * GitHub Issue Form — the high-value in-session feedback path.
+   */
+  onFeedback: (() => void) | null = null;
+  /**
    * Fired when the in-flight system menu panel opens. The scene uses it to
    * refresh save availability (`saveManager.hasSave()`) → {@link setLoadSaveEnabled},
    * so «Загрузить сохранение» reflects a save that may have landed after init
@@ -932,12 +938,13 @@ export class FlightHud implements FlightModule {
     const GAP = 10;
     const HINT_H = 18;
     const panelW = 300;
+    // Продолжить · Загрузить · Сообщить отзыв · В главное меню (4 buttons, 3 gaps).
     // The disabled «Загрузить» variant adds a one-line "no save" hint beneath it.
     const panelH =
       PAD +
       TITLE_H +
-      3 * BTN_H +
-      2 * GAP +
+      4 * BTN_H +
+      3 * GAP +
       PAD +
       (this.loadSaveEnabled ? 0 : HINT_H);
     const btnW = panelW - PAD * 2;
@@ -1041,6 +1048,23 @@ export class FlightHud implements FlightModule {
       panel.addChild(hint);
       btnY += HINT_H + GAP;
     }
+
+    const feedbackBtn = new UiButton(
+      "",
+      "Сообщить отзыв",
+      "primary",
+      (event) => {
+        event.stopPropagation();
+        this.gameEngine?.audio?.playUiClick();
+        this.onFeedback?.();
+      },
+      btnW,
+      BTN_H,
+    );
+    feedbackBtn.x = PAD;
+    feedbackBtn.y = btnY;
+    panel.addChild(feedbackBtn.container);
+    btnY += BTN_H + GAP;
 
     const mainMenuBtn = new UiButton(
       "",
