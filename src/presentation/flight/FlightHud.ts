@@ -74,6 +74,11 @@ export class FlightHud implements FlightModule {
   // Confirm sub-panel raised by «Загрузить сохранение» (guards against losing the
   // current run). Torn down together with the menu by {@link closeSystemMenu}.
   private systemMenuConfirmPanel: Container | null = null;
+  // Whether «Загрузить сохранение» is offered. Pushed by the scene from
+  // `saveManager.hasSave()` via {@link setLoadSaveEnabled}; the menu reads it at
+  // build time. Default true — a take-off autosave almost always exists in
+  // flight — so the action only goes dim when there is genuinely no save.
+  private loadSaveEnabled = true;
 
   // [?] help overlay (toggled by the [?] Text button in uiContainer).
   private helpOverlay: Container | null = null;
@@ -129,6 +134,13 @@ export class FlightHud implements FlightModule {
   onLoadSave: (() => void) | null = null;
   /** «В главное меню» pressed in the in-flight system menu. */
   onMainMenu: (() => void) | null = null;
+  /**
+   * Fired when the in-flight system menu panel opens. The scene uses it to
+   * refresh save availability (`saveManager.hasSave()`) → {@link setLoadSaveEnabled},
+   * so «Загрузить сохранение» reflects a save that may have landed after init
+   * (the take-off autosave runs after `transitionTo` initialises the scene).
+   */
+  onSystemMenuOpen: (() => void) | null = null;
 
   constructor(
     renderer: Renderer,
@@ -366,6 +378,26 @@ export class FlightHud implements FlightModule {
   /** True while the in-flight system menu is open. */
   isSystemMenuOpen(): boolean {
     return this.systemMenuPanel !== null;
+  }
+
+  /** True while «Загрузить сохранение» is offered (a save exists to load). */
+  isLoadSaveEnabled(): boolean {
+    return this.loadSaveEnabled;
+  }
+
+  /**
+   * Push save availability into the menu (the scene computes it from the async
+   * `saveManager.hasSave()`). When it flips while the menu is open, rebuild the
+   * panel so «Загрузить сохранение» switches between the live action and the
+   * dimmed "no save" hint — a no-op when the value is unchanged.
+   */
+  setLoadSaveEnabled(enabled: boolean): void {
+    if (this.loadSaveEnabled === enabled) return;
+    this.loadSaveEnabled = enabled;
+    if (this.systemMenuPanel) {
+      this.closeSystemMenu();
+      this.toggleSystemMenu();
+    }
   }
 
   /** True while the quest journal is open. */
@@ -879,8 +911,16 @@ export class FlightHud implements FlightModule {
     const TITLE_H = 34;
     const BTN_H = 40;
     const GAP = 10;
+    const HINT_H = 18;
     const panelW = 300;
-    const panelH = PAD + TITLE_H + 3 * BTN_H + 2 * GAP + PAD;
+    // The disabled «Загрузить» variant adds a one-line "no save" hint beneath it.
+    const panelH =
+      PAD +
+      TITLE_H +
+      3 * BTN_H +
+      2 * GAP +
+      PAD +
+      (this.loadSaveEnabled ? 0 : HINT_H);
     const btnW = panelW - PAD * 2;
 
     const panel = new Container();
@@ -931,22 +971,57 @@ export class FlightHud implements FlightModule {
     panel.addChild(resumeBtn.container);
     btnY += BTN_H + GAP;
 
-    const loadBtn = new UiButton(
-      "",
-      "Загрузить сохранение",
-      "primary",
-      (event) => {
-        event.stopPropagation();
-        this.gameEngine?.audio?.playUiClick();
-        this.onLoadSave?.();
-      },
-      btnW,
-      BTN_H,
-    );
-    loadBtn.x = PAD;
-    loadBtn.y = btnY;
-    panel.addChild(loadBtn.container);
-    btnY += BTN_H + GAP;
+    if (this.loadSaveEnabled) {
+      const loadBtn = new UiButton(
+        "",
+        "Загрузить сохранение",
+        "primary",
+        (event) => {
+          event.stopPropagation();
+          this.gameEngine?.audio?.playUiClick();
+          this.onLoadSave?.();
+        },
+        btnW,
+        BTN_H,
+      );
+      loadBtn.x = PAD;
+      loadBtn.y = btnY;
+      panel.addChild(loadBtn.container);
+      btnY += BTN_H + GAP;
+    } else {
+      // No save to load: render an inert, dimmed button + a hint so the action
+      // reads as unavailable rather than a dead click (dead-end gating, Task 3).
+      const loadBtn = new UiButton(
+        "",
+        "Загрузить сохранение",
+        "neutral",
+        () => {},
+        btnW,
+        BTN_H,
+      );
+      loadBtn.x = PAD;
+      loadBtn.y = btnY;
+      loadBtn.container.eventMode = "none";
+      loadBtn.container.cursor = "default";
+      loadBtn.container.alpha = 0.5;
+      panel.addChild(loadBtn.container);
+      btnY += BTN_H;
+
+      const hint = new Text({
+        text: "Нет сохранения",
+        style: {
+          fontFamily: "Courier New",
+          fontSize: scaledFont(12),
+          fill: 0x99a8ba,
+        },
+      });
+      hint.anchor.set(0.5, 0);
+      hint.x = panelW / 2;
+      hint.y = btnY + 1;
+      hint.eventMode = "none";
+      panel.addChild(hint);
+      btnY += HINT_H + GAP;
+    }
 
     const mainMenuBtn = new UiButton(
       "",
@@ -968,6 +1043,9 @@ export class FlightHud implements FlightModule {
     panel.y = Math.round((screenH - panelH) / 2);
     this.uiLayer.addChild(panel);
     this.systemMenuPanel = panel;
+    // Let the scene re-check save availability now the menu is up (the autosave
+    // may have landed since init). A flip rebuilds the panel via setLoadSaveEnabled.
+    this.onSystemMenuOpen?.();
   }
 
   /**

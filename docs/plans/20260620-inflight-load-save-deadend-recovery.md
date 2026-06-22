@@ -84,10 +84,10 @@ fragile auto-detect of "stuck".
   stalled at <30% hull)
 - Create: src/tests/flight/inFlightMenuGating.test.ts
 
-- [ ] «Загрузить сохранение» is disabled with a hint when no save exists; enabled when one does; the
+- [x] «Загрузить сохранение» is disabled with a hint when no save exists; enabled when one does; the
       menu is reachable in the low-hull-stalled dead-end (not blocked by the engine stall)
-- [ ] write tests: no-save → disabled; save present → enabled; menu opens regardless of turn/stall state
-- [ ] run affected tests — must pass before next task
+- [x] write tests: no-save → disabled; save present → enabled; menu opens regardless of turn/stall state
+- [x] run affected tests — must pass before next task
 
 ### Task 4: Verify acceptance criteria
 - [ ] verify Overview: an in-flight menu offers Load + Main-menu any time; loading recovers from the
