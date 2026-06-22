@@ -25,20 +25,33 @@ export interface FeedbackContext {
   readonly scene: string;
   readonly day: number;
   readonly seed: string;
+  /**
+   * Extra `[key, value]` diagnostic lines appended after the five core fields
+   * (e.g. player/credits/viewport/userAgent from the global issue button).
+   * Optional and order-preserving — omitting it leaves the core shape byte-for-
+   * byte unchanged, so the per-scene buttons that pass only the core fields are
+   * unaffected.
+   */
+  readonly extras?: ReadonlyArray<readonly [string, string]>;
 }
 
 /**
  * Multi-line plain-text body for the diagnostics field. Key order mirrors the
- * form's placeholder so a tester sees the same shape they expect.
+ * form's placeholder so a tester sees the same shape they expect; any
+ * {@link FeedbackContext.extras} are appended verbatim after the core fields.
  */
 export function formatDiagnostics(ctx: FeedbackContext): string {
-  return [
+  const lines = [
     `version: ${ctx.version}`,
     `sha: ${ctx.sha}`,
     `scene: ${ctx.scene}`,
     `day: ${ctx.day}`,
     `seed: ${ctx.seed}`,
-  ].join("\n");
+  ];
+  if (ctx.extras) {
+    for (const [key, value] of ctx.extras) lines.push(`${key}: ${value}`);
+  }
+  return lines.join("\n");
 }
 
 /**

@@ -5,6 +5,8 @@ import { GalaxyService, PlayerService } from './core/services';
 import { AdaptiveQualityProfile } from './ai/AdaptiveQualityProfile';
 import { logger } from './utils/logger';
 import { GameConfig } from './config/balance';
+import { gatherDiagnostics } from './systems/feedback/gatherDiagnostics';
+import { openFeedback } from './systems/feedback/openFeedback';
 
 declare const __DEBUG__: boolean;
 
@@ -109,6 +111,19 @@ function failBootLoader(): void {
   if (text) text.textContent = 'Не удалось загрузить игру. Обновите страницу.';
 }
 
+/**
+ * Reveal the always-on global «Оставить issue» button and wire its click to open
+ * a prefilled GitHub issue with a full diagnostics snapshot (scene, day, seed,
+ * player, viewport, device, build, userAgent…) of the live game. The button is
+ * a DOM overlay, so it persists across every PixiJS scene transition.
+ */
+function wireIssueButton(engine: GameEngine): void {
+  const btn = document.getElementById('vr-issue-btn');
+  if (!btn) return;
+  btn.addEventListener('click', () => openFeedback(gatherDiagnostics(engine)));
+  btn.classList.add('ready');
+}
+
 async function main(): Promise<void> {
   checkDomainLock();
 
@@ -138,6 +153,7 @@ async function main(): Promise<void> {
     });
     logger.info('Вакуумные Пройдохи initialized');
     hideBootLoader();
+    wireIssueButton(engine);
 
     // Expose engine to window for E2E testing (dev/test mode only)
     if (typeof __DEBUG__ !== 'undefined' && __DEBUG__) {

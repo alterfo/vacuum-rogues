@@ -80,6 +80,58 @@
       #boot-loader .bl-ring { animation-duration: 2.6s; }
       #boot-loader .bl-text::after { animation: none; content: '…'; }
     }
+
+    /* Global «Оставить issue» button: a small bug icon pinned to a screen corner,
+       above the game canvas on every scene (it lives in the DOM, not the PixiJS
+       scene graph, so scene transitions never remove it). Hidden until main.ts
+       reveals it once the engine is ready; click → prefilled GitHub issue with a
+       full diagnostics snapshot attached. */
+    #vr-issue-btn {
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      z-index: 9000;
+      width: 40px;
+      height: 40px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(2, 18, 26, 0.72);
+      border: 1px solid rgba(0, 255, 255, 0.45);
+      border-radius: 50%;
+      color: #0ff;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0, 255, 255, 0.18);
+      transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #vr-issue-btn.ready { display: flex; }
+    #vr-issue-btn:hover {
+      background: rgba(0, 40, 52, 0.92);
+      box-shadow: 0 0 16px rgba(0, 255, 255, 0.5);
+    }
+    #vr-issue-btn:active { transform: scale(0.92); }
+    #vr-issue-btn svg { width: 22px; height: 22px; pointer-events: none; }
+    #vr-issue-btn .vr-issue-tip {
+      position: absolute;
+      right: 50px;
+      top: 50%;
+      transform: translateY(-50%);
+      white-space: nowrap;
+      background: rgba(2, 18, 26, 0.96);
+      border: 1px solid rgba(0, 255, 255, 0.4);
+      color: #0ff;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      padding: 4px 8px;
+      border-radius: 4px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s;
+    }
+    #vr-issue-btn:hover .vr-issue-tip,
+    #vr-issue-btn:focus-visible .vr-issue-tip { opacity: 1; }
   </style>
 </head>
 <body>
@@ -89,6 +141,22 @@
     <div class="bl-ring"></div>
     <div class="bl-text">Загрузка</div>
   </div>
+  <button id="vr-issue-btn" type="button" aria-label="Оставить issue" title="Оставить issue">
+    <span class="vr-issue-tip">Оставить issue</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="m8 2 1.88 1.88" />
+      <path d="M14.12 3.88 16 2" />
+      <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+      <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+      <path d="M12 20v-9" />
+      <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+      <path d="M6 13H2" />
+      <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+      <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+      <path d="M22 13h-4" />
+      <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+    </svg>
+  </button>
   <script type="module" src="./main.ts"></script>
 </body>
 </html>
