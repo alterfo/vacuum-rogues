@@ -8,8 +8,9 @@
 // beta-feedback.yml`) so every report is reproducible without asking the tester
 // for build/scene/seed details.
 
-/** Owner/name slug of the GitHub repo issues are filed against. */
-export const FEEDBACK_REPO_SLUG = "alterfo/vacuum-rogues";
+/** Owner/name slug of the GitHub repo issues are filed against. Public, issues-only
+ * tracker (the game repo is private — a private slug 404s for external testers). */
+export const FEEDBACK_REPO_SLUG = "alterfo/vacuum-rogues-feedback";
 /** Issue Form template file selected via the `template` query param. */
 export const FEEDBACK_TEMPLATE = "beta-feedback.yml";
 /** Title prefix the form already defaults to; re-asserted via the URL. */
