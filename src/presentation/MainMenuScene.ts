@@ -40,6 +40,7 @@ export class MainMenuScene extends GameScene {
   private background: Graphics | null = null;
   private buttonsContainer: Container | null = null;
   private title: Text | null = null;
+  private intro: Text | null = null;
   private gameEngine: GameEngine | null = null;
   private messageTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private currentMsgText: Text | null = null;
@@ -140,6 +141,7 @@ export class MainMenuScene extends GameScene {
     this.background = null;
     this.buttonsContainer = null;
     this.title = null;
+    this.intro = null;
     this.gameEngine = null;
     this.starGraphics = null;
     this.demoShips = [];
@@ -333,10 +335,40 @@ export class MainMenuScene extends GameScene {
     this.title.y = height / 3;
     this.renderer.uiLayer.addChild(this.title);
 
+    // One-paragraph premise, between the title and the buttons.
+    this.intro = new Text({
+      text:
+        "Галактика на изломе: пробудились древние Предтечи, и их Сверхразум " +
+        "обращает систему за системой в безмолвный механический рой. Вы — " +
+        "вакуумный пройдоха: вольный пилот без флага и присяги, что живёт " +
+        "торговлей, контрактами и точным выстрелом. Лавируйте между фракциями, " +
+        "набивайте трюм и репутацию, решайте, кому помочь, а кого пощипать, — " +
+        "и, быть может, именно ваш потрёпанный корабль решит, устоит ли " +
+        "обитаемый космос.",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: 15,
+        fill: 0xaad4e6,
+        align: "center",
+        lineHeight: 22,
+        wordWrap: true,
+        wordWrapWidth: Math.min(600, width - 80),
+      },
+    });
+    this.intro.anchor.set(0.5, 0);
+    this.intro.x = width / 2;
+    this.intro.y = height / 3 + 48;
+    this.renderer.uiLayer.addChild(this.intro);
+
     // Buttons container
     this.buttonsContainer = new Container();
     this.buttonsContainer.x = width / 2;
-    this.buttonsContainer.y = height / 2;
+    // Keep the buttons at mid-screen, but push them below the premise paragraph
+    // if it would otherwise reach them (robust across short windows).
+    this.buttonsContainer.y = Math.max(
+      height / 2,
+      this.intro.y + this.intro.height + 28,
+    );
 
     // Helper to create clickable text button
     const createButton = (
