@@ -69,6 +69,37 @@ describe("Местный подряд (local delivery) quest copy", () => {
     expect(collect!.description).toContain(String(collect!.targetAmount));
   });
 
+  it("names the in-system destination planet in the contract copy (no jumps)", () => {
+    // Task 1 goal: the copy must tell the player WHERE the goods go — the
+    // in-system destination planet by name — and that it needs no jumps. Without
+    // this assertion a regression dropping the destination (the exact "can't tell
+    // where to deliver" bug this plan fixes) would ship green.
+    const system = {
+      id: "ISO",
+      name: "Захолустье",
+      connections: [],
+      planets: [{ id: "ISO_p1", name: "Дальний Хутор", isHabitable: true }],
+    } as unknown as StarSystem;
+
+    const board = generateQuestBoard({
+      systems: [system],
+      originSystemId: "ISO",
+      planetId: "ISO_p1",
+      day: 0,
+      seed: "seed",
+      count: 5,
+      textRatio: 0,
+    });
+
+    const local = board.find((q) => q.template.title === "Местный подряд");
+    expect(local).toBeDefined();
+    if (!local) return;
+
+    const desc = local.template.description;
+    expect(desc).toContain("Дальний Хутор");
+    expect(desc).toContain("без прыжков");
+  });
+
   it("resolves a real SYSTEM id (origin's board system) even when origin is unknown — never a planet id", () => {
     // originSystemId is NOT present in `systems`, forcing origin === null inside
     // buildLocalDelivery. Previously the fallback was `planetId` (a PLANET id),
