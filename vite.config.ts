@@ -1,6 +1,20 @@
 import { defineConfig } from 'vite';
 import path from 'path';
+import { execSync } from 'child_process';
 import obfuscator from 'rollup-plugin-obfuscator';
+
+// Resolve the build's git SHA: CI sets GITHUB_SHA (full hash → shorten to 7);
+// locally fall back to `git rev-parse --short HEAD`; 'dev' if git is unavailable
+// (e.g. building from a source tarball).
+function resolveBuildSha(): string {
+  const ci = process.env.GITHUB_SHA;
+  if (ci) return ci.slice(0, 7);
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim() || 'dev';
+  } catch {
+    return 'dev';
+  }
+}
 
 export default defineConfig(({ mode }) => ({
   root: 'src',
@@ -55,6 +69,7 @@ export default defineConfig(({ mode }) => ({
   define: {
     __DEBUG__: JSON.stringify(mode === 'development'),
     __BUILD_VERSION__: JSON.stringify(process.env.npm_package_version ?? 'dev'),
+    __BUILD_SHA__: JSON.stringify(resolveBuildSha()),
   },
   // NOTE: do NOT add `assetsInclude: ['**/*.worker.ts']` — it forces Vite to
   // treat the worker as a static asset and inline its RAW TypeScript (served as

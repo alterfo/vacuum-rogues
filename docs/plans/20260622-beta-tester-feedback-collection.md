@@ -74,12 +74,12 @@ Standing rules:
 - Modify: `src/vite-env.d.ts` (declare `__BUILD_SHA__`)
 - Create: `src/systems/feedback/buildInfo.ts` (+ test)
 
-- [ ] Add `__BUILD_SHA__` define = `process.env.GITHUB_SHA` (CI) ?? a local
+- [x] Add `__BUILD_SHA__` define = `process.env.GITHUB_SHA` (CI) ?? a local
       `git rev-parse --short HEAD` ?? `'dev'`; declare the global in `vite-env.d.ts`.
-- [ ] Create `buildInfo.ts` exposing `{ version, sha }` and a `formatBuildLine()`
+- [x] Create `buildInfo.ts` exposing `{ version, sha }` and a `formatBuildLine()`
       reading the globals (guarded so tests can inject values).
-- [ ] write tests for `formatBuildLine()` (version+sha present; dev fallback).
-- [ ] run tests — green.
+- [x] write tests for `formatBuildLine()` (version+sha present; dev fallback).
+- [x] run tests — green.
 
 ### Task 3: Pure feedback-URL builder
 **Files:**
