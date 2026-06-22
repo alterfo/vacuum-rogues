@@ -92,6 +92,23 @@ function checkDomainLock(): void {
   }
 }
 
+/** Fade out + remove the instant boot loader once the engine is ready. */
+function hideBootLoader(): void {
+  const el = document.getElementById('boot-loader');
+  if (!el) return;
+  el.classList.add('hidden');
+  window.setTimeout(() => el.remove(), 500);
+}
+
+/** Boot failed — keep the loader up but swap the spinner for an error message. */
+function failBootLoader(): void {
+  const el = document.getElementById('boot-loader');
+  if (!el) return;
+  el.classList.add('error');
+  const text = el.querySelector('.bl-text');
+  if (text) text.textContent = 'Не удалось загрузить игру. Обновите страницу.';
+}
+
 async function main(): Promise<void> {
   checkDomainLock();
 
@@ -120,6 +137,7 @@ async function main(): Promise<void> {
       overmindSpeed: 1.0,
     });
     logger.info('Вакуумные Пройдохи initialized');
+    hideBootLoader();
 
     // Expose engine to window for E2E testing (dev/test mode only)
     if (typeof __DEBUG__ !== 'undefined' && __DEBUG__) {
@@ -127,6 +145,7 @@ async function main(): Promise<void> {
     }
   } catch (error) {
     logger.error('Failed to initialize game:', error);
+    failBootLoader();
   }
 }
 

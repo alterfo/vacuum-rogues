@@ -20,10 +20,75 @@
       height: 100vh;
       position: relative;
     }
+
+    /* Boot loader: pure HTML/CSS so it paints instantly — before the JS bundle,
+       textures and ONNX wasm finish downloading (noticeable on the deployed
+       site, where the network is slower than localhost). main.ts fades it out
+       once the engine is initialised, or shows an error if boot fails. */
+    #boot-loader {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.6rem;
+      background: radial-gradient(ellipse at center, #04141f 0%, #000 70%);
+      color: #0ff;
+      font-family: 'Courier New', monospace;
+      transition: opacity 0.45s ease;
+    }
+    #boot-loader.hidden { opacity: 0; pointer-events: none; }
+    #boot-loader .bl-title {
+      font-size: clamp(1.1rem, 4vw, 2.1rem);
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      text-shadow: 0 0 12px rgba(0, 255, 255, 0.55);
+    }
+    #boot-loader .bl-ring {
+      width: 54px;
+      height: 54px;
+      border: 3px solid rgba(0, 255, 255, 0.18);
+      border-top-color: #0ff;
+      border-radius: 50%;
+      animation: bl-spin 0.9s linear infinite;
+      box-shadow: 0 0 18px rgba(0, 255, 255, 0.35);
+    }
+    #boot-loader .bl-text {
+      font-size: 0.85rem;
+      letter-spacing: 0.22em;
+      opacity: 0.78;
+      min-width: 7em;
+      text-align: center;
+    }
+    #boot-loader .bl-text::after {
+      content: '';
+      animation: bl-dots 1.4s steps(4, end) infinite;
+    }
+    #boot-loader.error .bl-ring { display: none; }
+    #boot-loader.error .bl-text { color: #ff6b6b; opacity: 1; }
+    #boot-loader.error .bl-text::after { content: '' !important; animation: none; }
+    @keyframes bl-spin { to { transform: rotate(360deg); } }
+    @keyframes bl-dots {
+      0% { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75% { content: '...'; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #boot-loader .bl-ring { animation-duration: 2.6s; }
+      #boot-loader .bl-text::after { animation: none; content: '…'; }
+    }
   </style>
 </head>
 <body>
   <div id="game-container"></div>
+  <div id="boot-loader" role="status" aria-live="polite">
+    <div class="bl-title">Вакуумные Пройдохи</div>
+    <div class="bl-ring"></div>
+    <div class="bl-text">Загрузка</div>
+  </div>
   <script type="module" src="./main.ts"></script>
 </body>
 </html>
