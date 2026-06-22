@@ -52,5 +52,20 @@ describe("Местный подряд (local delivery) quest copy", () => {
     expect(collect!.targetAmount).toBeGreaterThanOrEqual(4);
     expect(local.jumps).toBe(0);
     expect(local.targetSystemId).toBe("ISO");
+    // template.targetSystemId must match so acceptBoardQuest stores it on the
+    // accepted Quest; without this, checkDeliveryQuestCompletion never fires.
+    expect(local.template.targetSystemId).toBe("ISO");
+
+    // The copy must state HOW MUCH to buy: the numeric targetAmount appears in
+    // the description so the player is not left guessing the quantity.
+    expect(desc).toContain(String(collect!.targetAmount));
+    // ...and the cargo label so the player knows WHAT to buy.
+    const cargoHighlight = local.highlights.find((h) => h.label === "Груз");
+    expect(cargoHighlight).toBeDefined();
+    expect(desc).toContain(cargoHighlight!.value);
+
+    // The objective line is self-describing: it carries the amount so the
+    // journal's COLLECT_ITEM row tells the player the quantity at a glance.
+    expect(collect!.description).toContain(String(collect!.targetAmount));
   });
 });

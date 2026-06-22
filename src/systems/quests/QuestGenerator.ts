@@ -868,6 +868,13 @@ function buildLocalDelivery(
   const cargo = pickCargo(rng);
   const targetPlanetId = pickTargetPlanet(origin);
   const resolvedSystemId = origin?.id ?? planetId;
+  // Human-readable name for where the goods go: the target planet's name, then
+  // its id, then the origin system name — so the copy can name the destination.
+  const targetPlanetName =
+    origin?.planets.find((p) => p.id === targetPlanetId)?.name ??
+    targetPlanetId ??
+    origin?.name ??
+    "месте выдачи";
   // Compute the cargo amount once so the objective and the reward stay in sync.
   const targetAmount = rng.nextInt(4, 10);
   // Anchor the payout to the goods' base cost so buying the cargo on the market
@@ -878,12 +885,12 @@ function buildLocalDelivery(
     template: {
       id,
       title: "Местный подряд",
-      description: `${issuer.title} ${issuer.name} предлагает местный подряд: закупить «${cargo.label}» на рынке ${origin?.name ?? "системы"} и сдать здесь же. Оплата покрывает закупку и оставляет навар, и всё без прыжков.`,
+      description: `${issuer.title} ${issuer.name} предлагает местный подряд: закупить ${targetAmount} ед. «${cargo.label}» на рынке ${origin?.name ?? "системы"} и доставить на ${targetPlanetName} (та же система, без прыжков). Оплата покрывает закупку и оставляет навар.`,
       type: QuestType.DELIVERY,
       objectives: [
         {
           id: `${id}_collect`,
-          description: `Загрузить ${cargo.label}`,
+          description: `Загрузить ${targetAmount} ед. ${cargo.label}`,
           type: "COLLECT_ITEM",
           targetAmount,
           itemType: cargo.resource,
