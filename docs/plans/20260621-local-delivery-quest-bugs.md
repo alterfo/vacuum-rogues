@@ -147,24 +147,29 @@ Related patterns:
 - Modify: `src/presentation/PlanetScene.ts` (`checkDeliveryQuestCompletion`)
 - Create: `src/tests/quests/deliveryCompletion.test.ts`
 
-- [ ] Run `gitnexus impact {target: "checkDeliveryQuestCompletion"}` and confirm
+- [x] Run `gitnexus impact {target: "checkDeliveryQuestCompletion"}` and confirm
       the only caller is `PlanetScene.initialize`.
-- [ ] Create a pure helper, e.g. `evaluateDelivery(quest, player, currentSystemId)`
+      (Risk: LOW; sole d=1 caller is `PlanetScene.initialize`.)
+- [x] Create a pure helper, e.g. `evaluateDelivery(quest, player, currentSystemId)`
       returning a discriminated result: `{ kind: "complete", collectObj, stack }`
       | `{ kind: "shortfall", cargo, required, carried }` | `{ kind: "n/a" }`.
       No Pixi/DOM imports — domain-only. This is the single source of truth for
       "can this delivery complete here, and if not, why".
-- [ ] Refactor `checkDeliveryQuestCompletion` to call the helper: on `complete`,
+      (`src/systems/quests/deliveryCompletion.ts`; structural inputs so tests
+      need no full Quest/Player.)
+- [x] Refactor `checkDeliveryQuestCompletion` to call the helper: on `complete`,
       keep the existing force-complete + cargo-deduct + reward toast; on
       `shortfall`, show an informative toast naming the cargo and the
       carried/required counts (e.g. «{quest.title}: нужно {required} ед.
       «{cargo}», в трюме {carried}») instead of silently `continue`-ing. Gate the
       shortfall toast to delivery quests targeting the current system so it is not
       spammy mid-journey, and show at most one per landing.
-- [ ] ADD `deliveryCompletion.test.ts` covering: exact amount → complete; over
+      (Gate is inherent: `evaluateDelivery` returns `n/a` for non-current-system
+      quests; `shortfallShown` flag caps it at one toast per landing.)
+- [x] ADD `deliveryCompletion.test.ts` covering: exact amount → complete; over
       amount → complete; below amount → shortfall with correct counts; missing
       cargo → shortfall; wrong system → n/a. (Pure function, no scene needed.)
-- [ ] Run `npm test -- --run src/tests/quests/deliveryCompletion.test.ts` — green.
+- [x] Run `npm test -- --run src/tests/quests/deliveryCompletion.test.ts` — green.
 
 ### Task 5: Verify acceptance criteria
 **Files:**

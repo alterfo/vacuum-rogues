@@ -20,6 +20,8 @@ import {
 } from "@/systems/banking/economy";
 import { QuestType } from "@/types";
 import type { ResourceType } from "@/types";
+import { evaluateDelivery } from "@/systems/quests/deliveryCompletion";
+import { resourceLabelRu } from "@/domain/RouteRumor";
 import {
   pickVariant,
   pickVariantKey,
@@ -465,28 +467,35 @@ export class PlanetScene extends GameScene {
     const player = this.gameEngine.player;
     const questManager = this.gameEngine.questManager;
 
-    for (const quest of questManager.getActiveQuests()) {
-      if (quest.type !== QuestType.DELIVERY) continue;
-      if (quest.isCompleted || quest.isFailed) continue;
-      if (quest.targetSystemId !== currentSystemId) continue;
+    // At most one shortfall toast per landing so a hold full of unfinished
+    // contracts does not spam the player.
+    let shortfallShown = false;
 
-      // Find the COLLECT_ITEM objective to know what cargo is expected
-      const collectObj = quest.objectives.find(
-        (o) => o.type === "COLLECT_ITEM" && !o.completed,
-      );
-      let stackToDeduct: { type: string; amount: number } | undefined;
-      if (collectObj && collectObj.itemType) {
-        const stack = player.inventory.resources.find(
-          (r) => r.type === collectObj.itemType,
-        );
-        if (!stack || stack.amount < collectObj.targetAmount) continue;
-        stackToDeduct = stack as { type: string; amount: number };
+    for (const quest of questManager.getActiveQuests()) {
+      const result = evaluateDelivery(quest, player, currentSystemId);
+      if (result.kind === "n/a") continue;
+
+      if (result.kind === "shortfall") {
+        // The player landed in the target system but is short on cargo (e.g.
+        // bought too little). Tell them exactly what is still needed instead of
+        // silently doing nothing.
+        if (!shortfallShown) {
+          const cargoName = resourceLabelRu(result.cargo);
+          this.showMessage(
+            `${quest.title}: нужно ${result.required} ед. «${cargoName}», в трюме ${result.carried}`,
+            0xffaa33,
+          );
+          shortfallShown = true;
+        }
+        continue;
       }
 
+      // result.kind === "complete"
+      const { collectObj, stack } = result;
       const completed = questManager.forceCompleteQuest(quest.id, player);
       if (completed) {
-        if (stackToDeduct && collectObj && collectObj.itemType) {
-          stackToDeduct.amount -= collectObj.targetAmount;
+        if (stack && collectObj && collectObj.itemType) {
+          stack.amount -= collectObj.targetAmount;
           player.contrabandGoods = player.contrabandGoods.filter(
             (g) => g !== (collectObj.itemType as string),
           );
