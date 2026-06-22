@@ -90,12 +90,21 @@ fragile auto-detect of "stuck".
 - [x] run affected tests — must pass before next task
 
 ### Task 4: Verify acceptance criteria
-- [ ] verify Overview: an in-flight menu offers Load + Main-menu any time; loading recovers from the
-      dead-end (attacked, <30% hull, zero credits, quests elsewhere)
-- [ ] visually verify the menu + load via screenshot
-- [ ] add e2e: open the in-flight menu and confirm both actions are present/usable
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing flight/HUD/save test assertions changed
+- [x] verify Overview: an in-flight menu offers Load + Main-menu any time; loading recovers from the
+      dead-end (attacked, <30% hull, zero credits, quests elsewhere) — new e2e
+      `e2e/in-flight-menu.spec.ts` opens the menu from live flight, asserts «Загрузить сохранение» +
+      «В главное меню» present and the load action usable (save present), and proves the menu still
+      opens in the low-hull dead-end (hull <30%, turn running)
+- [x] visually verify the menu + load via screenshot — `e2e/screenshots/in-flight-system-menu.png`
+      shows СИСТЕМНОЕ МЕНЮ over the live flight scene: Продолжить (green) / Загрузить сохранение
+      (cyan, enabled) / В главное меню (red), readable contrast
+- [x] add e2e: open the in-flight menu and confirm both actions are present/usable — 2 tests in
+      `e2e/in-flight-menu.spec.ts`, both green
+- [x] run full unit suite — all green (288 files / 2531 tests); `npm run lint` clean (0 errors);
+      `npm run test:e2e:regression` — in-flight feature unaffected; 20 pass, 1 PRE-EXISTING unrelated
+      failure (equipment ТРЮМ trade-in «Продать» button — EquipmentShopScene WIP, not run by my spec)
+- [x] confirm no existing flight/HUD/save test assertions changed — only added a new e2e spec; no
+      existing test file touched in this task
 
 ## Technical Details
 - **General, not auto-detect:** the menu is always reachable, so it covers every dead-end (this
