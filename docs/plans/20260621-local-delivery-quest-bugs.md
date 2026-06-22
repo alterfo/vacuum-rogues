@@ -175,14 +175,21 @@ Related patterns:
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] Confirm every Overview goal is met: amount + named destination in copy;
-      shortfall feedback on landing; payout > market cost; target system id always
-      a real system id.
-- [ ] Run `detect_changes({scope: "compare", base_ref: "master"})` and confirm
-      only the expected symbols/flows are affected (no unrelated quest types).
-- [ ] Run the full unit suite `npm test -- --run` — all green, including the
-      untouched `localDeliveryQuest`/`localDeliveryReward` assertions.
-- [ ] Run `npm run lint` — clean.
+- [x] Confirm every Overview goal is met: amount + named destination in copy
+      (`QuestGenerator.ts` L900 description + L905 objective); shortfall feedback
+      on landing (`deliveryCompletion.ts` discriminated result + `PlanetScene.ts`
+      L478-488 toast with required/carried counts); payout > market cost
+      (`LOCAL_DELIVERY_REWARD_MARGIN = 3.5` > 3.0 ceiling); target system id always
+      a real system id (`resolvedSystemId = origin?.id ?? originSystemId`).
+- [x] Ran `detect_changes({scope: "compare", base_ref: "master"})`: across the
+      four task commits only the expected files/symbols are affected — `balance.ts`,
+      `PlanetScene.ts`, `QuestGenerator.ts`, new `deliveryCompletion.ts` + tests; no
+      unrelated quest types touched.
+- [x] Ran the full unit suite `npm test -- --run` — all green (292 files, 2558
+      tests), including the untouched `localDeliveryQuest`/`localDeliveryReward`
+      assertions.
+- [x] Ran `npm run lint` — 0 errors (only pre-existing `any` warnings in unrelated
+      test files).
 
 ### Task 6: Update documentation
 **Files:**
