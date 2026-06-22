@@ -68,4 +68,29 @@ describe("Местный подряд (local delivery) quest copy", () => {
     // journal's COLLECT_ITEM row tells the player the quantity at a glance.
     expect(collect!.description).toContain(String(collect!.targetAmount));
   });
+
+  it("resolves a real SYSTEM id (origin's board system) even when origin is unknown — never a planet id", () => {
+    // originSystemId is NOT present in `systems`, forcing origin === null inside
+    // buildLocalDelivery. Previously the fallback was `planetId` (a PLANET id),
+    // which made checkDeliveryQuestCompletion (system-level match) never fire.
+    const board = generateQuestBoard({
+      systems: [isolatedSystem()],
+      originSystemId: "GHOST_SYS",
+      planetId: "ISO_p1",
+      day: 0,
+      seed: "seed",
+      count: 5,
+      textRatio: 0,
+    });
+
+    const local = board.find((q) => q.template.title === "Местный подряд");
+    expect(local).toBeDefined();
+    if (!local) return;
+
+    // The target system id must be the canonical system id (originSystemId),
+    // not the issuing planet id, so completion can match the current system.
+    expect(local.template.targetSystemId).toBe("GHOST_SYS");
+    expect(local.targetSystemId).toBe("GHOST_SYS");
+    expect(local.template.targetSystemId).not.toBe("ISO_p1");
+  });
 });

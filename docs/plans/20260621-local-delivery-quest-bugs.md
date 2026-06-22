@@ -107,17 +107,17 @@ Related patterns:
 - Modify: `src/systems/quests/QuestGenerator.ts` (`buildLocalDelivery` + its caller)
 - Modify: `src/tests/quests/localDeliveryQuest.test.ts` (ADD a regression case)
 
-- [ ] Thread `originSystemId` into `buildLocalDelivery` from `generateQuestBoard`
+- [x] Thread `originSystemId` into `buildLocalDelivery` from `generateQuestBoard`
       (it is already in scope at the call site ~L286).
-- [ ] Set `resolvedSystemId = origin?.id ?? originSystemId` (a canonical system
+- [x] Set `resolvedSystemId = origin?.id ?? originSystemId` (a canonical system
       id) instead of `origin?.id ?? planetId`, so `template.targetSystemId` /
       `targetSystemId` are never a planet id. Keep `targetPlanetId` as the
       `pickTargetPlanet` result (may be null when origin is unknown).
-- [ ] ADD a regression test: call `generateQuestBoard` with an `originSystemId`
+- [x] ADD a regression test: call `generateQuestBoard` with an `originSystemId`
       that is NOT present in `systems` (forces `origin === null`); assert the
       resulting local-delivery `template.targetSystemId === originSystemId` (not
       the planet id), so `checkDeliveryQuestCompletion` can still match.
-- [ ] Run the quest tests — green.
+- [x] Run the quest tests — green.
 
 ### Task 3: Reward must exceed the real market purchase cost
 **Files:**

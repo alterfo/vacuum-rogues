@@ -283,7 +283,15 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
         applyPrefix(
           isText
             ? buildTextQuest(rng, planetId, bucket, i, day, origin)
-            : buildLocalDelivery(rng, planetId, bucket, i, day, origin),
+            : buildLocalDelivery(
+                rng,
+                planetId,
+                bucket,
+                i,
+                day,
+                origin,
+                originSystemId,
+              ),
         ),
       );
       continue;
@@ -862,12 +870,16 @@ function buildLocalDelivery(
   i: number,
   _day: number,
   origin: StarSystem | null,
+  originSystemId: string,
 ): GeneratedQuest {
   const id = slotId(planetId, bucket, i);
   const issuer = pickIssuer(rng, QuestType.DELIVERY);
   const cargo = pickCargo(rng);
   const targetPlanetId = pickTargetPlanet(origin);
-  const resolvedSystemId = origin?.id ?? planetId;
+  // Always resolve to a real SYSTEM id. When `origin` is unknown we must fall
+  // back to `originSystemId` (the board's system id) — never `planetId`, which
+  // is a planet id and would make `checkDeliveryQuestCompletion` never match.
+  const resolvedSystemId = origin?.id ?? originSystemId;
   // Human-readable name for where the goods go: the target planet's name, then
   // its id, then the origin system name — so the copy can name the destination.
   const targetPlanetName =
