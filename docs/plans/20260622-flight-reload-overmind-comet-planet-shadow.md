@@ -153,18 +153,33 @@ Standing rules that bound this work:
   colour/scale gradient, additive — NO BlurFilter)
 - Modify/Create tests under `src/tests/` (emitter), screenshot for the visual
 
-- [ ] `gitnexus impact` on `CometDustTail` + its `AsteroidBelt` renderer.
-- [ ] Strengthen the emitter for a denser, longer, tapered stream (higher emission,
-      tuned life/speed/size falloff) while keeping the **hard live-mote bound** —
-      raise the pool ceiling only as much as the FPS guard allows.
-- [ ] Add a bright **coma** at the head (a soft additive glow sprite at the comet
-      nucleus) and a head→tail **colour/alpha/scale gradient** (bright warm/white
-      coma fading to a cooler, thinner tail), all additive — **no BlurFilter**
-      (bake any soft glow into a gradient texture per the flight no-blur rule).
-- [ ] write/extend emitter tests for the new shape (count stays ≤ max; motes taper);
-      do not weaken existing `cometDustTail` tests.
-- [ ] run emitter tests — green; **capture a screenshot** of a flyby comet to
-      confirm the coma + tail read.
+- [x] `gitnexus impact` on `CometDustTail` + its `AsteroidBelt` renderer. Blast
+      radius LOW and confined: `cometDustTail.ts` (pure) is imported only by
+      `AsteroidBelt.ts` (flight modules never import each other) + the
+      `cometParticleTail` test; `syncTail` is private to the renderer. Index just
+      hadn't re-analyzed the 2026-06-20 symbols; no HIGH/CRITICAL.
+- [x] Strengthen the emitter for a denser, longer, tapered stream: `EMIT_RATE`
+      0.03→0.05 (~50/s), `TAIL_SPEED` 0.16→0.2, life band 1500–3000→1600–3400
+      (mid-band kept <3000 so the recycle test stays green), `SPREAD` 0.45→0.32
+      (directed, not a fan), `moteScale` falloff 0.5→0.6 (deeper taper). Pool
+      ceiling 64→96 — saturates a dense trail while staying within the
+      ParticleContainer/additive-overdraw FPS budget (2 comets ≤192 batched).
+- [x] Added a bright two-layer **coma** (icy halo + warm-white compact core
+      `softGlowTexture` sprites, additive) at the nucleus, and a head→tail
+      **colour/alpha/scale gradient** — per-mote tint lerps a warm-white coma
+      (`TAIL_HEAD_TINT`) to a cool-blue tail tip (`TAIL_TIP_TINT`) via the pure
+      `lerpHex`/`moteLifeFraction`, scale/alpha already taper. **No BlurFilter**
+      — soft edges are the baked `softGlowTexture`/`dustParticleTexture` gradients.
+- [x] write/extend emitter tests for the new shape — new additive file
+      `cometTailShape.test.ts` (dense-pool saturation ≤ max; monotone scale taper
+      head→tip; `moteLifeFraction` 0→1 + recycled-slot guard; `lerpHex`
+      endpoints/midpoint/clamp + warm→cool channel grade); existing
+      `cometParticleTail` assertions untouched.
+- [x] run emitter tests — green (42: cometParticleTail + cometTailShape +
+      asteroidBelt + moduleContracts; tsc + eslint clean). **Screenshot**
+      captured via a deterministic Playwright harness (comet driven into the
+      inner system, world frozen) → `e2e/screenshots/comet-tail-task3.png`:
+      confirms a bright coma head + a denser, tapered, colour-graded dust tail.
 
 ### Task 4: Star-direction terminator (sun shadow) on planets
 **Files:**

@@ -18,19 +18,34 @@ import {
   ROCK_VARIANT_COUNT,
   softGlowTexture,
 } from "../gradientTexture";
-import { CometDustTail, moteAlpha, moteScale } from "./cometDustTail";
+import {
+  CometDustTail,
+  lerpHex,
+  moteAlpha,
+  moteLifeFraction,
+  moteScale,
+} from "./cometDustTail";
 import type { FlightModule } from "./FlightModule";
 
-/** Per-comet hard cap on simultaneously-live dust motes (FPS bound). */
-const MAX_TAIL_PARTICLES = 64;
+/** Per-comet hard cap on simultaneously-live dust motes (FPS bound). A denser
+ * stream needs a bigger pool; 96 stays well within the ParticleContainer/
+ * additive-overdraw budget (2 comets ⇒ ≤192 small batched sprites). */
+const MAX_TAIL_PARTICLES = 96;
 /** Base scale of the 64 px dust sprite (×{@link moteScale} per mote). */
 const TAIL_SPRITE_SCALE = 1.15;
-/** Global tail opacity multiplier (additive, on top of per-mote fade). */
-const TAIL_ALPHA = 0.55;
-/** softGlowTexture is 256 px (r 128); 0.45 → a ~58 px icy head glow. */
-const HEAD_SCALE = 0.45;
-/** Icy white-blue head + dust tints. */
-const HEAD_TINT = 0xd8eaff;
+/** Global tail opacity multiplier (additive, on top of per-mote fade) — the
+ * denser overlapping motes still accumulate, but each stays soft. */
+const TAIL_ALPHA = 0.5;
+/** Head→tail colour grade: a warm white coma fading to a cool blue tail tip. */
+const TAIL_HEAD_TINT = 0xfff0cf;
+const TAIL_TIP_TINT = 0x8fbcff;
+/** Outer coma halo: softGlowTexture is 256 px (r 128); 0.72 → a ~92 px glow. */
+const HEAD_SCALE = 0.72;
+/** Bright inner nucleus core (smaller, near-white, sits inside the coma halo). */
+const CORE_SCALE = 0.34;
+/** Icy white-blue coma + warm-white core tints. */
+const HEAD_TINT = 0xd6ecff;
+const CORE_TINT = 0xfff4e0;
 const TAIL_TINT = 0xcfe4ff;
 /** Distance band (world px from the star) over which the comet fades in/out. */
 const TAIL_FULL = 1500;
@@ -68,7 +83,8 @@ interface AsteroidMote {
   cometCooldown: number; // ms left offscreen before a fresh comet flies in (0 = active)
   // Particle-comet visuals (comets only; null when no 2D canvas is available —
   // jsdom / unit tests — so the module degrades without throwing).
-  head: Sprite | null; // glowing icy head (softGlowTexture sprite)
+  head: Sprite | null; // outer coma halo (softGlowTexture sprite)
+  core: Sprite | null; // bright inner nucleus core (softGlowTexture sprite)
   tail: CometDustTail | null; // pure dust-tail emitter (PixiJS-free)
   particles: Particle[]; // pooled visuals, mirrored 1:1 with tail.slots
 }
@@ -167,6 +183,7 @@ export class AsteroidBelt implements FlightModule {
         thetaSpeed: 0,
         cometCooldown: 0,
         head: null,
+        core: null,
         tail: null,
         particles: [],
       };
@@ -217,6 +234,9 @@ export class AsteroidBelt implements FlightModule {
       container.addChildAt(layer, 0);
     }
 
+    // Coma: two stacked additive glow sprites of the baked softGlowTexture — a
+    // wide icy halo with a smaller, brighter near-white nucleus core inside it —
+    // give a real comet-head read with no per-frame BlurFilter.
     const headTex = softGlowTexture();
     if (headTex) {
       const head = new Sprite(headTex);
@@ -227,6 +247,15 @@ export class AsteroidBelt implements FlightModule {
       head.eventMode = "none";
       a.head = head;
       container.addChild(head); // above the tail layer
+
+      const core = new Sprite(headTex);
+      core.anchor.set(0.5);
+      core.scale.set(CORE_SCALE);
+      core.tint = CORE_TINT;
+      core.blendMode = "add";
+      core.eventMode = "none";
+      a.core = core;
+      container.addChild(core); // bright nucleus above the halo
     }
   }
 
@@ -361,6 +390,11 @@ export class AsteroidBelt implements FlightModule {
         a.head.y = a.y;
         a.head.visible = true;
       }
+      if (a.core) {
+        a.core.x = a.x;
+        a.core.y = a.y;
+        a.core.visible = true;
+      }
     }
   }
 
@@ -384,6 +418,9 @@ export class AsteroidBelt implements FlightModule {
         part.scaleX = sc;
         part.scaleY = sc;
         part.alpha = moteAlpha(m) * fade * TAIL_ALPHA;
+        // Grade the colour along the trail: warm/white near the coma, cooling
+        // to blue toward the tapering tail tip.
+        part.tint = lerpHex(TAIL_HEAD_TINT, TAIL_TIP_TINT, moteLifeFraction(m));
       } else {
         part.alpha = 0;
       }
@@ -415,6 +452,7 @@ export class AsteroidBelt implements FlightModule {
           // Swept past the exit edge: the comet leaves; a fresh one returns later.
           a.graphics.visible = false;
           if (a.head) a.head.visible = false;
+          if (a.core) a.core.visible = false;
           a.tail?.reset();
           this.hideTail(a);
           a.cometCooldown = 8000 + Math.random() * 12000; // 8–20 s gap
@@ -445,6 +483,12 @@ export class AsteroidBelt implements FlightModule {
           a.head.x = a.x;
           a.head.y = a.y;
           a.head.alpha = fade;
+        }
+        if (a.core) {
+          a.core.x = a.x;
+          a.core.y = a.y;
+          // The hot nucleus reads brighter than the surrounding halo.
+          a.core.alpha = fade;
         }
         // Dust tail: emit at the head while visible; motes drift anti-sunward in
         // world space (the ParticleContainer sits at the field origin, so the
