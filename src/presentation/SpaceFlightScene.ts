@@ -851,10 +851,9 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // Modal panels (NPC contact, quest journal) dismiss on an outside click.
-    // Their children call stopPropagation(), so any click reaching the stage
-    // while one is open is necessarily outside it — close it, don't plan a route
-    // behind the modal (bug: route built to the point hidden behind the dialog).
+    // Modal panels (NPC contact, quest journal, system menu) dismiss on an
+    // outside click: their children stopPropagation(), so any click reaching the
+    // stage while one is open is outside it — close it, don't plan a route behind.
     if (!isPanButton && this.isBlockingModalOpen()) {
       this.closeBlockingModals();
       return;
@@ -1648,7 +1647,8 @@ export class SpaceFlightScene extends GameScene {
       this.npcManager.hasOpenModal() ||
       this.hud.isQuestJournalOpen() ||
       this.planetManager.hasInfoPanel ||
-      this.hud.isSettingsPanelOpen()
+      this.hud.isSettingsPanelOpen() ||
+      this.hud.isSystemModalOpen()
     );
   }
 

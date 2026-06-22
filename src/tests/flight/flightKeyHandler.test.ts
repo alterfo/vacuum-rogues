@@ -29,6 +29,8 @@ type Ctx = FlightKeyContext & {
     toggleQuestJournal: ReturnType<typeof vi.fn>;
     isSettingsPanelOpen: ReturnType<typeof vi.fn>;
     closeModals: ReturnType<typeof vi.fn>;
+    isSystemModalOpen: ReturnType<typeof vi.fn>;
+    closeSystemMenu: ReturnType<typeof vi.fn>;
     showMessage: ReturnType<typeof vi.fn>;
   };
   planetManager: {
@@ -50,6 +52,8 @@ function makeCtx(overrides: Partial<Ctx> = {}): Ctx {
       toggleQuestJournal: vi.fn(),
       isSettingsPanelOpen: vi.fn().mockReturnValue(false),
       closeModals: vi.fn(),
+      isSystemModalOpen: vi.fn().mockReturnValue(false),
+      closeSystemMenu: vi.fn(),
       showMessage: vi.fn(),
     },
     planetManager: { hasInfoPanel: false, closeInfoPanel: vi.fn() },
@@ -131,6 +135,16 @@ describe("handleFlightKey — Esc priority chain", () => {
     handleFlightKey(esc(), ctx);
 
     expect(ctx.hud.closeModals).toHaveBeenCalledTimes(1);
+    expect(ctx.clearPlannedRoute).not.toHaveBeenCalled();
+  });
+
+  it("closes the system menu ahead of cancelling the route", () => {
+    ctx.hud.isSystemModalOpen.mockReturnValue(true);
+    ctx.plannedRoute = { x: 1, y: 2 };
+
+    handleFlightKey(esc(), ctx);
+
+    expect(ctx.hud.closeSystemMenu).toHaveBeenCalledTimes(1);
     expect(ctx.clearPlannedRoute).not.toHaveBeenCalled();
   });
 
@@ -227,6 +241,15 @@ describe("handleFlightKey — Space launch guards", () => {
   it("does not launch the turn while the settings panel is open", () => {
     const ctx = makeCtx({ plannedRoute: { x: 5, y: 5 } });
     ctx.hud.isSettingsPanelOpen.mockReturnValue(true);
+
+    handleFlightKey(space(), ctx);
+
+    expect(ctx.executeRouteTo).not.toHaveBeenCalled();
+  });
+
+  it("does not launch the turn while the system menu is open", () => {
+    const ctx = makeCtx({ plannedRoute: { x: 5, y: 5 } });
+    ctx.hud.isSystemModalOpen.mockReturnValue(true);
 
     handleFlightKey(space(), ctx);
 

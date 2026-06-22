@@ -380,6 +380,17 @@ export class FlightHud implements FlightModule {
     return this.systemMenuPanel !== null;
   }
 
+  /**
+   * True while the system menu OR its load-confirm sub-panel is open. The scene's
+   * outside-click / wheel / Space-launch guards treat both as one blocking modal
+   * (the confirm replaces the menu, so only ever one is up at a time).
+   */
+  isSystemModalOpen(): boolean {
+    return (
+      this.systemMenuPanel !== null || this.systemMenuConfirmPanel !== null
+    );
+  }
+
   /** True while «Загрузить сохранение» is offered (a save exists to load). */
   isLoadSaveEnabled(): boolean {
     return this.loadSaveEnabled;

@@ -74,6 +74,25 @@ describe("FlightHud — in-flight system menu", () => {
     hud.destroy();
   });
 
+  it("opens the panel when the [МЕНЮ] button is clicked (real pointer path)", () => {
+    const { hud, uiLayer } = build();
+    hud.initialize();
+
+    expect(hud.isSystemMenuOpen()).toBe(false);
+
+    // Click the real [МЕНЮ] HUD button (not toggleSystemMenu) so the button's own
+    // wiring — eventMode + pointerdown handler — is exercised, per the project's
+    // real-pointer-tests-for-hit-geometry rule.
+    const menuBtn = allTexts(uiLayer).find((t) => t.text === "[МЕНЮ]");
+    expect(menuBtn, "the [МЕНЮ] HUD button exists").toBeDefined();
+    expect(menuBtn!.eventMode).toBe("static");
+    menuBtn!.emit("pointerdown", { stopPropagation: () => {} } as never);
+
+    expect(hud.isSystemMenuOpen()).toBe(true);
+
+    hud.destroy();
+  });
+
   it("exposes Продолжить / Загрузить сохранение / В главное меню while open", () => {
     const { hud, uiLayer } = build();
     hud.initialize();

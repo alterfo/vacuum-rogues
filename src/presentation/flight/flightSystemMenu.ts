@@ -28,7 +28,13 @@ export function wireFlightSystemMenu(
   gameEngine: GameEngine | null,
 ): void {
   hud.onLoadSave = () =>
-    hud.showSystemMenuConfirm(() => void gameEngine?.loadGame("auto"));
+    hud.showSystemMenuConfirm(() => {
+      // Gated on hasSave(), but the slot could vanish/corrupt between the probe
+      // and this confirm — surface a toast instead of an unhandled rejection.
+      void gameEngine?.loadGame("auto")?.catch(() => {
+        hud.showMessage("Не удалось загрузить сохранение", 0xff4444);
+      });
+    });
   hud.onMainMenu = () => void gameEngine?.transitionTo(SceneType.MAIN_MENU);
 
   const refreshSaveAvailability = () => {

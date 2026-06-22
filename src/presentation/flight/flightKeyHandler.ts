@@ -28,6 +28,14 @@ export interface FlightKeyContext {
     toggleQuestJournal(): void;
     isSettingsPanelOpen?(): boolean;
     closeModals?(): void;
+    /**
+     * True while the in-flight system menu or its load-confirm sub-panel is open.
+     * Optional so existing callers/tests that don't model the menu can omit it
+     * (the `?.()` guard then reads falsy). Mirrors the mouse-click
+     * `isBlockingModalOpen` guard so Esc/Space treat it like every other modal.
+     */
+    isSystemModalOpen?(): boolean;
+    closeSystemMenu?(): void;
     showMessage(text: string, color: number): void;
   };
   planetManager: { hasInfoPanel: boolean; closeInfoPanel(): void };
@@ -41,11 +49,11 @@ export interface FlightKeyContext {
 /**
  * Route a flight-scene keydown:
  * - Escape closes the top open panel (combat pause → contact → journal → planet
- *   info → settings), else cancels a planned route.
+ *   info → settings → system menu), else cancels a planned route.
  * - Space runs the planned turn (the keyboard equivalent of the confirming
  *   second click); guarded so a held key, a combat pause, an already-running
- *   turn, or an open contact/journal/planet-info/settings panel can't fire
- *   `executeRouteTo`. No route → no-op + hint.
+ *   turn, or an open contact/journal/planet-info/settings/system-menu panel
+ *   can't fire `executeRouteTo`. No route → no-op + hint.
  * - j toggles the quest journal; i opens the inventory.
  */
 export function handleFlightKey(
@@ -59,6 +67,7 @@ export function handleFlightKey(
     else if (ctx.hud.isQuestJournalOpen()) ctx.hud.closeQuestJournal();
     else if (ctx.planetManager.hasInfoPanel) ctx.planetManager.closeInfoPanel();
     else if (ctx.hud.isSettingsPanelOpen?.()) ctx.hud.closeModals?.();
+    else if (ctx.hud.isSystemModalOpen?.()) ctx.hud.closeSystemMenu?.();
     else if (ctx.plannedRoute) {
       ctx.clearPlannedRoute();
       ctx.hud.showMessage("Маршрут отменён", 0xffaa00);
@@ -79,7 +88,8 @@ export function handleFlightKey(
       (ctx.npcManager.hasOpenModal?.() ?? ctx.npcManager.isContactPanelOpen) ||
       ctx.hud.isQuestJournalOpen() ||
       ctx.planetManager.hasInfoPanel ||
-      ctx.hud.isSettingsPanelOpen?.()
+      ctx.hud.isSettingsPanelOpen?.() ||
+      ctx.hud.isSystemModalOpen?.()
     )
       return;
     if (ctx.plannedRoute) {
