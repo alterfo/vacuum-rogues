@@ -195,9 +195,13 @@ Related patterns:
 **Files:**
 - Modify: `docs/` quest/requirements notes if the contract is documented there.
 
-- [ ] If the "Местный подряд" contract is described in requirements/design docs,
-      update the copy/mechanic description to match (amount shown, in-system named
-      destination, guaranteed-profit reward). If not documented, no change.
+- [x] Verified the "Местный подряд" contract is NOT described in any
+      requirements/design/architecture/reference doc — only in `docs/plans/`
+      (this active plan + the completed `20260618-route-crosshair-and-delivery-quest-economics.md`,
+      which are historical working docs, not living requirements). EPIC-008
+      documents only the generic cross-system DELIVERY quest ("haul to system N"),
+      not this same-system buy-and-deliver variant. Per the conditional ("If not
+      documented, no change"), no documentation change is needed.
 
 ## Technical Details
 - Reward formula shape is unchanged: `round(base × amount × LOCAL_DELIVERY_REWARD_MARGIN)`.
