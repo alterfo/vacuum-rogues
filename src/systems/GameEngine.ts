@@ -502,6 +502,12 @@ export class GameEngine {
       const landedPlanet = (context as { planet?: { id?: string } } | undefined)
         ?.planet;
       if (landedPlanet?.id) this.player.landedPlanetId = landedPlanet.id;
+      // Landing parks the ship on the planet: its last free-flight position is no
+      // longer where the ship is. Drop the captured position now so a later
+      // take-off autosave (which runs after landedPlanetId is cleared and the
+      // scene is back to SPACE_FLIGHT) cannot re-persist the stale pre-landing
+      // position and teleport the ship there on the next reload.
+      this.forgetFlightPosition();
     }
 
     this.currentScene.initialize(finalContext);
@@ -527,6 +533,23 @@ export class GameEngine {
         logger.error("Auto-save failed:", e);
       });
     }
+  }
+
+  /**
+   * Invalidate the ship's captured free-flight position. Called when the ship
+   * lands (it is parked on a planet, not at a free-flight position). Drops BOTH
+   * the live turn-end capture (`liveFlightShipPos`) AND the sticky persisted
+   * position (`flightShipPos`): the latter is otherwise only ever overwritten
+   * (never cleared) by `saveGame`, so without this a take-off autosave would
+   * re-persist the stale pre-landing position and the next reload would teleport
+   * the ship there. The ship re-establishes `flightShipPos` on its first
+   * post-takeoff turn-end. (System exit clears `liveFlightShipPos` in
+   * `performWarp`; the load-time systemId guard covers the cross-system case —
+   * landing is the same-system case that guard cannot catch.)
+   */
+  forgetFlightPosition(): void {
+    this.liveFlightShipPos = null;
+    this.flightShipPos = null;
   }
 
   /**

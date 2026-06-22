@@ -179,6 +179,37 @@ describe("GameEngine flight-position persistence (reload spawn)", () => {
       });
     });
 
+    it("forgets the flight position on landing so a take-off autosave can't resurrect it", async () => {
+      // Regression (playtest 2026-06-22 follow-up): land → take-off → reload
+      // teleported the ship to its stale pre-landing position. The sticky
+      // flightShipPos persists from the pre-landing turn-end; landing clears it
+      // (forgetFlightPosition, called from transitionTo(PLANET)) so the take-off
+      // autosave — which runs with landedPlanetId already cleared and the scene
+      // back to SPACE_FLIGHT — cannot re-persist the stale position.
+      await seedGame("sys-1");
+      engine.currentSceneType = SceneType.SPACE_FLIGHT;
+      engine.lastFlightShipPos = { x: 500, y: 600 };
+      await engine.saveGame("auto");
+      // The pre-landing free-flight position is persisted (sticky).
+      expect((await diDeps.saveService.read("auto"))!.flightShipPos).toEqual({
+        x: 500,
+        y: 600,
+        systemId: "sys-1",
+      });
+
+      // Landing invalidates the captured position.
+      engine.forgetFlightPosition();
+
+      // Take-off: scene back to SPACE_FLIGHT, lastFlightShipPos consumed to null,
+      // and the stale live capture was dropped on landing.
+      engine.currentSceneType = SceneType.SPACE_FLIGHT;
+      engine.lastFlightShipPos = null;
+      await engine.saveGame("auto");
+
+      const saved = await diDeps.saveService.read("auto");
+      expect(saved!.flightShipPos).toBeUndefined();
+    });
+
     it("ignores the live free-flight position when not in flight", async () => {
       // A stale liveFlightShipPos must not leak into a non-flight save (e.g. a
       // PLANET/menu autosave) — those spawns are owned by the landed-planet /
