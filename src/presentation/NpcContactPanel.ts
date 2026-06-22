@@ -160,13 +160,32 @@ export class NpcContactPanel {
         onClick: this.callbacks.onHail,
       });
     }
+    let hasAttack = false;
     for (const opt of commsOptionsFor(npc, this.context)) {
       const onClick = this.optionHandler(opt);
       if (!onClick) continue;
+      if (opt === "attack") hasAttack = true;
       out.push({
         label: OPTION_LABELS[opt],
         color: OPTION_COLORS[opt],
         onClick,
+      });
+    }
+    // A hostile or Overmind contact must always expose "Атаковать" in range: the
+    // Overmind answers a hail with gibberish ({@link commsOptionsFor} → []), which
+    // would otherwise strip the only meaningful action and leave an enemy that can
+    // never be engaged. The neutral panel already lists attack via commsOptionsFor
+    // (so it is untouched), and a hostile-other / pirate-shakedown context already
+    // carries it — the guard only adds the missing button for the Overmind.
+    const hostileContact =
+      this.context === "overmind" ||
+      this.context === "hostile-other" ||
+      this.context === "pirate-shakedown";
+    if (hostileContact && !hasAttack) {
+      out.push({
+        label: OPTION_LABELS.attack,
+        color: OPTION_COLORS.attack,
+        onClick: this.callbacks.onAttack,
       });
     }
     if (showStanding) {

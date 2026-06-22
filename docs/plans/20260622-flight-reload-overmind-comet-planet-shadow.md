@@ -114,21 +114,37 @@ Standing rules that bound this work:
 - Modify: `src/systems/npc/factionHostility.ts` only if the matrix must mark Overmind→player
 - Create/Modify tests under `src/tests/`
 
-- [ ] `gitnexus impact` on `buildActionButtons` and the NPC aggro update; confirm scope.
-- [ ] In `buildActionButtons`, always append an in-range **"Атаковать"** for a
+- [x] `gitnexus impact` on `buildActionButtons` and the NPC aggro update; confirm scope.
+      `checkGarrisonAggro` impact = LOW (direct callers: `applyGarrisonAggro` +
+      `garrisonCombat.test.ts`); `buildActionButtons` is a private renderer (read
+      directly). No HIGH/CRITICAL.
+- [x] In `buildActionButtons`, always append an in-range **"Атаковать"** for a
       hostile/Overmind contact (so the gibberish/no-comms path can never strip the
       only meaningful action). Keep the neutral panel's existing button set intact.
-- [ ] Make Overmind sprites **aggressive toward the player**: flag them so the
+      Guarded on `hostileContact && !hasAttack`, so only the Overmind (empty
+      `commsOptionsFor`) gains the missing button; neutral/hostile-other/shakedown
+      are untouched (they already list attack).
+- [x] Make Overmind sprites **aggressive toward the player**: flag them so the
       existing aggressor path (`sprite.aggressive` → close to `WEAPON_RANGE` →
       `addCombatant`/fire) engages, mirroring garrison aggressors. Reuse the
       hostility matrix as the single source of truth; do not fork engagement logic.
-- [ ] Verify the player's "Атаковать" → intercept → in-range `launchCombatWithNpc`
+      `checkGarrisonAggro` now flags a live (`isAggressive()`) Overmind via
+      `isHostile("overmind","player",…)` regardless of the captured-system flag —
+      so a capture fleet besieging a still-neutral system hunts the player. A
+      passive (non-hostile) Overmind stub stays in orbit (existing test green).
+- [x] Verify the player's "Атаковать" → intercept → in-range `launchCombatWithNpc`
       path works against an Overmind target (no early-out for the Overmind role).
-- [ ] write tests: in-range Overmind contact exposes an "Атаковать" action; an
+      Covered by the "player's Атаковать engages an in-range Overmind" test.
+- [x] write tests: in-range Overmind contact exposes an "Атаковать" action; an
       Overmind sprite within weapon range is added as a combatant and fires at the
       player (and the player's attack engages it). Add to existing combat/contact
-      test suites without altering their assertions.
-- [ ] run touched tests — green.
+      test suites without altering their assertions. New files
+      `overmindContactPanel.test.ts` (panel, mocked pixi) +
+      `overmindCombat.test.ts` (aggro + real CombatModule arena); no existing
+      assertion touched.
+- [x] run touched tests — green (9 new + garrisonCombat/combatEngagement/
+      npcShipManager/npcHostility/modalKeys/factionHostility/crossFactionCombat/
+      overmindAggression/moduleContracts/combatEscape = 136 green; tsc + eslint clean).
 
 ### Task 3: Make the comet tail read like a comet (coma + tapered graded tail)
 **Files:**

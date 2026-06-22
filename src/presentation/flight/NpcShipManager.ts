@@ -761,7 +761,19 @@ export class NpcShipManager implements FlightModule {
       const npc = sprite.npc;
       const isGarrison =
         npc.faction === Faction.OVERMIND || npc.role === NpcRole.PIRATE;
-      const aggro = isHostileSystem && isGarrison;
+      // The Overmind is indiscriminately hostile to the player (faction-hostility
+      // matrix — the single source of truth). A live Overmind craft spawns hostile
+      // and besieges neutral border systems *before* they fall, so it must hunt the
+      // player wherever it is present — not only inside an already-captured
+      // (hostile-flagged) system. Gated on isAggressive() so a passive Overmind
+      // (e.g. a non-hostile test stub) stays in orbit. Other garrison ships
+      // (pirates) keep their captured-system gate: they only break orbit to chase
+      // the player while it sits inside a hostile system.
+      const overmindHunts =
+        factionKindOf(npc) === "overmind" &&
+        npc.isAggressive() &&
+        isHostile("overmind", "player", { pirateRep: 0 });
+      const aggro = overmindHunts || (isHostileSystem && isGarrison);
       sprite.setAggressive(aggro);
       // Drop the orbit-planet anchor so the aggressor isn't re-anchored each
       // frame (setAggressive already cleared the sprite's own anchor fields).
