@@ -124,19 +124,21 @@ Related patterns:
 - Modify: `src/config/balance.ts` (`LOCAL_DELIVERY_REWARD_MARGIN` value only)
 - Create: `src/tests/quests/localDeliveryProfit.test.ts`
 
-- [ ] Inspect `TradeSystem.getBuyPrice` and the economy/drift/faction multipliers
+- [x] Inspect `TradeSystem.getBuyPrice` and the economy/drift/faction multipliers
       to bound the realistic worst-case buy markup over `RESOURCE_BASE_PRICES`
       (economyMult × driftMult × faction.buyMult).
-- [ ] Raise `LOCAL_DELIVERY_REWARD_MARGIN` so it comfortably exceeds that
+      (Bound: `getMarketPrice` clamps to `base × 3.0`; max faction `buyMultiplier`
+      is 1.0 → worst-case buy cost = `base × amount × 3.0`.)
+- [x] Raise `LOCAL_DELIVERY_REWARD_MARGIN` so it comfortably exceeds that
       worst-case markup (keep a profit headroom). Change the **constant value
       only** — the formula `round(goodsCost × LOCAL_DELIVERY_REWARD_MARGIN)`
       stays, so `localDeliveryReward.test.ts` (which references the constant)
       remains green. Document the chosen margin with a comment tying it to the
-      market markup.
-- [ ] ADD `localDeliveryProfit.test.ts`: for each cargo type, assert the contract
+      market markup. (1.5 → 3.5; ~17% headroom over the 3.0 ceiling.)
+- [x] ADD `localDeliveryProfit.test.ts`: for each cargo type, assert the contract
       reward is strictly greater than the worst-case market buy cost
       (`base × amount × worstCaseBuyMarkup`), proving the contract is never a loss.
-- [ ] Run `npm test -- --run src/tests/quests/localDeliveryReward.test.ts
+- [x] Run `npm test -- --run src/tests/quests/localDeliveryReward.test.ts
       src/tests/quests/localDeliveryProfit.test.ts` — both green.
 
 ### Task 4: Explicit feedback instead of a silent no-payout (pure helper)

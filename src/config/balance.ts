@@ -110,10 +110,17 @@ export const RESOURCE_BASE_PRICES: Record<ResourceType, number> = {
  * Profit multiplier applied to a local-delivery ("Местный подряд") reward.
  * The player has to *buy* the cargo on the market before delivering it, so the
  * reward is `round(basePrice × targetAmount × LOCAL_DELIVERY_REWARD_MARGIN)`.
- * At 1.5 the payout covers the goods bought at base price plus a 50% margin,
- * leaving the contract profitable even when the market is somewhat above base.
+ *
+ * The market BUY price can run well above base: {@link TradeSystem.getMarketPrice}
+ * clamps the demand/economy/drift-adjusted price to a hard ceiling of
+ * `basePrice × 3.0`, and {@link TradeSystem.getBuyPrice} then applies a faction
+ * buy multiplier whose maximum is 1.0 (every faction's `buyMultiplier ≤ 1.0`).
+ * So the realistic worst-case purchase cost is `basePrice × 3.0` per unit. At
+ * 1.5 the contract was a *guaranteed loss* whenever the market sat above 1.5×
+ * base. The margin must therefore exceed 3.0; 3.5 dominates the worst case with
+ * ~17% headroom, so the payout always nets a profit no matter how hot the market.
  */
-export const LOCAL_DELIVERY_REWARD_MARGIN = 1.5;
+export const LOCAL_DELIVERY_REWARD_MARGIN = 3.5;
 
 /**
  * Probability that killing an Overmind enemy drops artifacts (per kill).
