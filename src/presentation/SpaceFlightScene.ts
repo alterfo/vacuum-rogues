@@ -104,20 +104,16 @@ export class SpaceFlightScene extends GameScene {
 
   private distanceTraveled: number = 0;
   private readonly DISTANCE_PER_DAY: number = GAME_BALANCE.pixelsPerDay;
-  // Course-less "wait" turn (US-070 #5): fractional day accrued while the ship holds position.
-  private waitDayAccum: number = 0;
+  private waitDayAccum: number = 0; // wait-turn (US-070 #5): fractional day accrued while holding position
   private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070)
+  // Fractional "day of turn" (gameDays + sub-day move/wait); feeds orbits + the HUD date read-out.
   private get currentDay(): number {
-    return (
-      (this.gameEngine?.galaxy?.gameDays ?? 0) +
-      this.distanceTraveled / this.DISTANCE_PER_DAY +
-      this.waitDayAccum
-    );
+    const days = this.gameEngine?.galaxy?.gameDays ?? 0;
+    const frac = this.distanceTraveled / this.DISTANCE_PER_DAY;
+    return days + frac + this.waitDayAccum;
   }
-
-  // Two-step movement: plan route, then execute. plannedRoute carries the spiral
-  // hint behind it so a re-execute that drops it (Ход / onPlayPause) re-derives
-  // from the ship's CURRENT position, not a stale backtracking path (US-070).
+  // Two-step movement: plan route, then execute. plannedRoute carries the spiral hint behind it so a
+  // re-execute that drops it (Ход / onPlayPause) re-derives from the ship's CURRENT position, not a stale path (US-070).
   private plannedRoute: { x: number; y: number; landing?: LandingHint } | null =
     null;
   // Full curved path (around the star) for drawing the route line; ship flows through it via ShipPhysics.setPath.

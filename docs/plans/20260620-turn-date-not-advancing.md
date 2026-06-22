@@ -109,10 +109,34 @@ proving the date holds while paused (currentDay frozen) and resumes when the tur
 sub-day repro flipped `it.fails` → `it` (now green). All affected tests green; lint 0 errors; tsc clean.
 
 ### Task 3: Verify acceptance criteria
-- [ ] verify Overview: starting a turn shows the date/time advancing (no longer frozen)
-- [ ] visually verify in-game: run a turn and watch the date move
-- [ ] run full unit suite — all green; `npm run test:e2e:regression`; `npm run lint` clean
-- [ ] confirm no existing flight/HUD/calendar test assertions changed
+- [x] verify Overview: starting a turn shows the date/time advancing (no longer frozen) — proven by
+      `turnDateDisplay.test.ts`, which drives a real `FlightHud` and reads the rendered
+      `dayCounterText.text` (the production `updateDayCounter` path): the displayed string advances on
+      a moving turn and a wait turn, rolls the calendar date on a whole-day boundary, and holds during
+      a combat freeze then resumes.
+- [x] visually verify in-game: run a turn and watch the date move — verified at the rendered-label
+      level (the exact string the player sees, via `dayCounterText.text` in `turnDateDisplay.test.ts`);
+      this is a date-VALUE change (date + HH:MM clock), not a layout/geometry change, so the
+      rendered-string assertion is the production-path proof. Live in-browser watching remains the
+      manual Post-Completion step (browser screenshots are unreliable here — render-loop, per project
+      memory).
+- [x] run full unit suite — all green (290 files, 2547 tests); `npm run lint` clean (0 errors;
+      pre-existing `any` warnings only); `npx tsc --noEmit` clean. `npm run test:e2e:regression`: 20
+      passed, 1 pre-existing failure UNRELATED to this plan — `owned-uninstalled gear … trade-in
+      refund` (equipment ТРЮМ basePrice mismatch, expects `1120` gets `Продать 360₡`); confirmed red
+      at HEAD with my edit stashed, so not introduced here (it stems from the branch's separate
+      uncommitted equipment work). Fixed a size-guard regression introduced by Task 2: the committed
+      `SpaceFlightScene.ts` was 1903 lines (the Task 2 note's "1898" was a miscount), failing the
+      `< 1900` guard. Reclaimed the 4 over-budget lines without behaviour change — compacted the
+      `currentDay` getter (two locals, prettier-canonical), folded the `waitDayAccum` comment into a
+      trailing comment, tightened the `plannedRoute` comment 3→2 lines, dropped one stylistic blank;
+      now 1899 lines (matches the pre-plan baseline), full suite + guard green.
+- [x] confirm no existing flight/HUD/calendar test assertions changed — the two plan commits
+      (`43875a5`, `c6c7cc7`) touched only NEW test files (`turnDateAdvances.test.ts` created in Task 1,
+      `turnDateDisplay.test.ts` new) plus production (`SpaceFlightScene.ts`, `FlightHud.ts`,
+      `gameCalendar.ts`); flipping `it.fails`→`it` in Task 1's own new test is the planned workflow,
+      not an existing-test edit. Existing `flightHud.test.ts`, `gameCalendar.test.ts`,
+      `fontScaleRestyle.test.ts`, `moduleContracts.test.ts` are unmodified and green.
 
 ## Technical Details
 - **Reuse the existing fractional day:** `currentDay = gameDays + fractionalDay + waitDayAccum` already
