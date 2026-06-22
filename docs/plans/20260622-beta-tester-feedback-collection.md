@@ -85,15 +85,15 @@ Standing rules:
 **Files:**
 - Create: `src/systems/feedback/feedbackLink.ts` (+ test)
 
-- [ ] Implement `buildFeedbackUrl(ctx: { version; sha; scene; day; seed })` →
+- [x] Implement `buildFeedbackUrl(ctx: { version; sha; scene; day; seed })` →
       `https://github.com/alterfo/vacuum-rogues/issues/new` with
       `template=beta-feedback.yml`, a title prefix, and the diagnostics field
       prefilled (URL-encoded multi-line: version, sha, scene, day, seed). Repo slug
       is a single named constant.
-- [ ] write tests: correct base URL + `template` param; diagnostics field carries
+- [x] write tests: correct base URL + `template` param; diagnostics field carries
       every context value; proper percent-encoding of newlines/spaces/Cyrillic;
       stable field id matches the form from Task 1.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 4: In-game «Сообщить отзыв» button (Main Menu + in-flight menu)
 **Files:**
