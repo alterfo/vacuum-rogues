@@ -260,9 +260,18 @@ Related patterns:
 **Files:**
 - Modify: `src/presentation/flight/CLAUDE.md`, `src/systems/galaxy/CLAUDE.md`
 
-- [ ] Remove the "hex CombatScene survives for the boss / text quests" notes; state
+- [x] Remove the "hex CombatScene survives for the boss / text quests" notes; state
       that combat is real-time-only via `CombatModule`, and document the starter
-      weapon + the fire-is-real-time (pause-gated, not turn-gated) rule.
+      weapon + the fire-is-real-time (pause-gated, not turn-gated) rule. Done:
+      `flight/CLAUDE.md` now states combat is real-time-only (hex scene deleted, boss +
+      text-quests resolve in-flight), documents the `wpn_pulse` starter weapon + the
+      weaponless HUD hint + mutual auto-pursuit, and adds a "fire is gated on the active
+      pause, not the route-turn" rule. `galaxy/CLAUDE.md` reframes the hostile-difficulty
+      note: the multipliers are kept in `balance.ts` but have no production consumer now
+      that the hex scene is gone. Also cleaned two dangling deletion references:
+      `presentation/CLAUDE.md` (dropped `CombatScene` from the fontSize-hardcoding list)
+      and `playtest-traps.md` (the "hex CombatScene survives for scripted/boss fights"
+      note now points at this plan and states all combat is in-flight).
 
 ## Technical Details
 - Fire gating changes from `isTurnRunning && !paused` to **`!paused`** for combat

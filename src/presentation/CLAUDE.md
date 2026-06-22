@@ -11,7 +11,7 @@ Pass `rawColor: true` only for already-bright/semantic colors (accents, intentio
 disabled states, light backgrounds) where the floor would distort hue. Migrated: JobBoardPanel,
 StationScene, TradeScene, EquipmentShopScene, InfoCenterScene, QuestJournalUI, TextQuestScene.
 Still hardcoding `fontSize:` (route through `scaledText` when you touch them): StarMapScene,
-InventoryScene, CombatScene, ResearchUpgradePanel, GovernmentScene, RaceSelectionScene,
+InventoryScene, ResearchUpgradePanel, GovernmentScene, RaceSelectionScene,
 PlanetInfoPanel, NpcContactPanel, DialogueScene, WinScene, MainMenuScene, SystemMiniMap, CombatHud.
 (Flight modules that already read `scaledFont` — FlightHud, PlanetManager, DamageNumbers, UiButton,
 PlanetScene — don't need it; for the in-flight restyle-in-place rule see `flight/playtest-traps.md`.)

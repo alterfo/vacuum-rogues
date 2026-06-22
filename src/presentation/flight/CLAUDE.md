@@ -22,14 +22,29 @@ contact/quest-journal/planet-info/settings panel is open (mirrors the mouse-clic
 builds `ctx` from live scene members; the extraction keeps the controller under the 1900-line
 guard. Unit-tested standalone in `flightKeyHandler.test.ts`).
 
-In-flight combat (real-time, with active pause): an aggressive NPC closing inside `WEAPON_RANGE`,
-or the player clicking "Атаковать" on a contact, calls `CombatModule.addCombatant()` — no scene
-transition (the hex `CombatScene` survives only for scripted text-quest encounters and the
-OVERMIND-core boss fight). Each engaged NPC fires at the player every
-`GAME_BALANCE.combatFireIntervalMs`, and the player's auto-selected weapon fires at the
-selected target on the same cadence (`CombatModule.update` drives the timers). A lethal shot
-calls `NpcShipManager`'s in-flight death path (loot drop + domain removal) via the
-`onNpcDestroyed` callback; the scene also completes any bound BOUNTY.
+In-flight combat is **real-time only** — there is no hex combat scene. The legacy `CombatScene`
+(and `SceneType.COMBAT`) was deleted; **every** fight resolves in-flight, including the
+OVERMIND-core boss and former scripted text-quest encounters. An aggressive NPC closing inside
+`WEAPON_RANGE`, or the player clicking "Атаковать" on a contact, calls `CombatModule.addCombatant()`
+— no scene transition. A fresh game starts armed: `GameEngine.starterLoadout()` fits a weapon
+(`wpn_pulse`) so the player can fight immediately; `addCombatant` on a genuinely weaponless ship
+surfaces a throttled HUD hint ("Нет оружия — установите его в ангаре") instead of silently
+no-opping. Once engaged, both sides **auto-pursue** to hold `WEAPON_RANGE`: the player ship
+auto-tracks the selected target and each aggressive NPC closes on the player (`NpcShipManager`
+pursuit, gated on `isInCombat()`, frozen by the active pause). Each engaged NPC fires at the player
+every `GAME_BALANCE.combatFireIntervalMs`, and the player's auto-selected weapon fires at the
+selected target on the same cadence (`CombatModule.update` drives the timers). A lethal shot calls
+`NpcShipManager`'s in-flight death path (loot drop + domain removal) via the `onNpcDestroyed`
+callback; the scene also completes any bound BOUNTY. Killing the OVERMIND core in flight wins the
+game (`handleInFlightDeath` → `showGameOutcomeScreen(true)`).
+
+**Fire is real-time, gated on the active pause — not the route-turn.** `CombatModule.update` ticks
+its fire timers whenever it is **not paused** (its `isPaused` dep = `combatPause.paused`), so once
+combat is engaged both the player's weapon and NPC return fire keep firing whether or not a
+route-"Ход" is running — that decoupling is what makes NPCs shoot back. Ship movement and the
+calendar stay turn-gated (the navigation half of the Space-Rangers model). When the module's
+`endCombat` fires (last combatant gone), `onCombatEnded` calls `SpaceFlightScene.endTurn()` so a
+resolved fight never leaves `isTurnRunning` stuck true.
 
 **Active pause (Space-Rangers/FTL style):** the fight is real-time *until* a shot lands on the
 player. `CombatModule.fireNpcShot` raises `onPlayerUnderAttack`; the `CombatPauseController`
