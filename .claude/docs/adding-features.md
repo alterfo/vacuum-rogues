@@ -29,6 +29,13 @@
 3. Implement fallback in `src/ai/FallbackEngine.ts`
 4. Add test in `src/tests/`
 
+## New Build Define
+Vite `define` globals live in `vite.config.ts` (`__DEBUG__`, `__BUILD_VERSION__`, `__BUILD_SHA__` — the last two stamp the beta-feedback diagnostics). A new define needs **both**:
+1. The `define` entry in `vite.config.ts` (a `JSON.stringify(...)`'d literal).
+2. A matching `declare const __NAME__: ...` in `src/vite-env.d.ts`.
+
+Read it through a `typeof __NAME__ !== "undefined"` guard (see `src/systems/feedback/buildInfo.ts`) so a runtime without the define (a bare Node import / Vitest, which only defines a subset) falls back instead of throwing `ReferenceError`. Note: the deployed build runs in a **separate repo's CI** (the alterfo blog fetches this repo's `master`), so `process.env.GITHUB_SHA`/`npm_package_version` there describe the *blog's* build — prefer the local git checkout / `package.json` for game-identity values.
+
 ## New Domain Field
 > Tip: `npx tsx tools/scaffold/domain-field.ts --entity <Entity> --field <name> --type <number|boolean|string> --default <v>` does steps 1–3 automatically (see `tools/README.md`).
 

@@ -153,13 +153,24 @@ npm test -- --watch
 npm test -- --reporter=verbose path/to/test.ts
 ```
 
+## Обратная связь (бета-тест)
+
+Играбельная сборка: **https://alterfo.github.io/vacuum-rogues**
+
+Нашли баг или хотите поделиться впечатлением? Нажмите кнопку **«Сообщить
+отзыв»** — она есть в главном меню и в системном меню в полёте. Кнопка
+открывает заранее заполненную форму GitHub Issue в новой вкладке: поле
+«Диагностика» уже содержит версию сборки, git-SHA, текущую сцену, игровой день
+и seed галактики — пожалуйста, не меняйте его, оно нужно для воспроизведения.
+Нужен аккаунт GitHub.
+
 ## Деплой
 
-### Vercel (рекомендуется)
+### GitHub Pages (текущий прод)
 
-1. Подключить репозиторий на [vercel.com](https://vercel.com)
-2. Настроить переменные окружения (если нужны)
-3. Автоматический деплой при push в `main`
+Push в `master` запускает `.github/workflows/notify-alterfo.yml`, который шлёт
+`repository_dispatch` на `alterfo/alterfo.github.io-src`; тот фетчит свежий
+`master` этого репозитория и пересобирает GitHub Pages — ручной bump не нужен.
 
 ### Ручной деплой
 
@@ -170,11 +181,12 @@ npm run build
 
 ## Переменные окружения (для CI/CD)
 
-Создайте секреты в GitHub Repository Settings:
-
-- `VERCEL_TOKEN` — токен деплоя Vercel
-- `VERCEL_ORG_ID` — ID организации Vercel (если есть)
-- `VERCEL_PROJECT_ID` — ID проекта Vercel
+- `BLOG_DISPATCH_TOKEN` — секрет этого репозитория (PAT): создаёт
+  `repository_dispatch` на `alterfo/alterfo.github.io-src` для пересборки прода
+  (см. `.github/workflows/notify-alterfo.yml`).
+- `GITHUB_SHA` — выставляется GitHub Actions автоматически; используется как
+  запасной источник git-SHA для диагностики в форме отзыва (основной — локальный
+  `git rev-parse` сборочного чекаута; см. `vite.config.ts`).
 
 ## Лицензия
 
