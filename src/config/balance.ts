@@ -176,7 +176,12 @@ export const SYSTEM_GEOMETRY = {
  */
 export const GameConfig = {
   GAME_TITLE: "ВАКУУМНЫЕ ПРОЙДОХИ",
-  ALLOWED_ORIGINS: ["vacuum-rogues.com", "localhost", "127.0.0.1"] as string[],
+  ALLOWED_ORIGINS: [
+    "vacuum-rogues.com",
+    "alterfo.github.io",
+    "localhost",
+    "127.0.0.1",
+  ] as string[],
 } as const;
 
 export const GAME_BALANCE = {
