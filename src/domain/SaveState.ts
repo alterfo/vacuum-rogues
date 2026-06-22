@@ -5,6 +5,18 @@ import type { BankingSnapshot } from "./banking/Ledger";
 import type { SerializedSave, ShipLoadoutSnapshot } from "@/types";
 import type { SceneType } from "@/types";
 
+/**
+ * Last known in-flight ship position, persisted so a reload resumes the ship
+ * where it was instead of edge-spawning. Coordinates are screen-space and
+ * system-relative, so `systemId` records which system they belong to — the
+ * restore is applied only when it matches the loaded `player.currentSystemId`.
+ */
+export interface FlightShipPos {
+  x: number;
+  y: number;
+  systemId: string;
+}
+
 export class SaveState {
   constructor(
     public version: number,
@@ -21,6 +33,14 @@ export class SaveState {
      * the player's current account from `player.credits` on load.
      */
     public banking?: BankingSnapshot,
+    /**
+     * Last known in-flight ship position (system-relative). Carries its own
+     * `systemId` so a reload only restores it when the loaded system matches —
+     * otherwise the ship falls back to the default edge spawn. Optional and
+     * additive: saves made before this existed simply lack it (no version bump).
+     * See `GameEngine.saveGame`/`loadGame` and `applyEntrySpawn`.
+     */
+    public flightShipPos?: FlightShipPos,
   ) {}
 
   serialize(): SerializedSave {
@@ -36,6 +56,7 @@ export class SaveState {
         currentSceneType: this.currentSceneType,
         loadout: this.loadout,
         banking: this.banking,
+        flightShipPos: this.flightShipPos,
       }),
     };
   }
@@ -52,6 +73,7 @@ export class SaveState {
       parsed.currentSceneType,
       parsed.loadout,
       parsed.banking,
+      parsed.flightShipPos,
     );
   }
 }

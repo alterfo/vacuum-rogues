@@ -554,6 +554,12 @@ export const SaveStateSchema = z.object({
   // Optional: saves made before the ledger was persisted lack it; those migrate
   // by re-seeding the player current account from `player.credits` on load.
   banking: BankingSnapshotSchema.optional(),
+  // Optional: last in-flight ship position (system-relative, with its own
+  // systemId). Saves made before this existed lack it (no version bump) and fall
+  // back to the default edge spawn on load. See GameEngine.saveGame/loadGame.
+  flightShipPos: z
+    .object({ x: z.number(), y: z.number(), systemId: z.string() })
+    .optional(),
 });
 
 export function validateSaveState(

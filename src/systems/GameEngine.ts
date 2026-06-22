@@ -8,6 +8,7 @@ import {
   ResourceType,
 } from "@/types";
 import { Galaxy } from "@/domain/Galaxy";
+import type { FlightShipPos } from "@/domain/SaveState";
 import type { GameScene } from "@/presentation/GameScene";
 import { Renderer } from "@/presentation/Renderer";
 import { preloadTextures } from "@/presentation/textures";
@@ -105,6 +106,14 @@ export class GameEngine {
   // flight for the star map, so a hyperjump can start from where the ship was
   // (not teleport it next to the sun). Cleared once consumed.
   public lastFlightShipPos: { x: number; y: number } | null = null;
+  // Sticky, system-tagged copy of the last in-flight ship position, PERSISTED in
+  // the save (unlike lastFlightShipPos) so a browser reload resumes the ship
+  // where it was instead of edge-spawning. Refreshed from lastFlightShipPos
+  // whenever that is set (always a live flight position written by the flight
+  // scene); kept across a later non-flight autosave so the last good position is
+  // not lost. The systemId guards the restore — applied only when the loaded
+  // system matches (else the ship falls back to the default edge spawn).
+  private flightShipPos: FlightShipPos | null = null;
   // Player's chosen in-flight game-speed multiplier (1×/2×/4×). Held here — not on
   // the per-scene FlightHud/ShipPhysics, both rebuilt on every SPACE_FLIGHT
   // re-init — so the speed survives a land/take-off or star-map round-trip
@@ -984,6 +993,20 @@ export class GameEngine {
     questLog.completedChainParts = this.questManager.getCompletedChainParts();
     questLog.pendingReturnQuests = this.questManager.getPendingReturnQuests();
 
+    // Refresh the persisted flight position from the live one whenever the flight
+    // scene has set it (lastFlightShipPos is always a live flight position in the
+    // current system). Kept sticky — a later non-flight autosave (e.g. the
+    // SPACE_FLIGHT re-entry after inventory, which consumes lastFlightShipPos to
+    // null) must not clear the last good position. The systemId guards the
+    // restore on load. See loadGame.
+    if (this.lastFlightShipPos && this.player.currentSystemId) {
+      this.flightShipPos = {
+        x: this.lastFlightShipPos.x,
+        y: this.lastFlightShipPos.y,
+        systemId: this.player.currentSystemId,
+      };
+    }
+
     const { SaveState } = await import("@/domain/SaveState");
     const state = new SaveState(
       this.saveManager.currentVersion,
@@ -996,6 +1019,7 @@ export class GameEngine {
       // Persist the АБС book of record (accounts + journal + EOD cursors) so the
       // ledger reloads verbatim instead of being re-seeded from `player.credits`.
       this.bankingService.toSnapshot(),
+      this.flightShipPos ?? undefined,
     );
 
     await this.saveManager.write(slotId, state);
@@ -1135,7 +1159,24 @@ export class GameEngine {
     const sceneType = contextDependentScenes.includes(savedScene)
       ? SceneType.SPACE_FLIGHT
       : savedScene;
-    await this.transitionTo(sceneType, { gameEngine: this });
+
+    // Carry the persisted flight position forward so a subsequent autosave keeps
+    // it, and resume the ship where it was on reload: pass it as
+    // `preserveShipPos` only when we land in SPACE_FLIGHT and the saved position
+    // belongs to the loaded system (else applyEntrySpawn edge-spawns as before).
+    this.flightShipPos = save.flightShipPos ?? null;
+    const resumePos =
+      sceneType === SceneType.SPACE_FLIGHT &&
+      save.flightShipPos &&
+      save.flightShipPos.systemId === this.player.currentSystemId
+        ? { x: save.flightShipPos.x, y: save.flightShipPos.y }
+        : undefined;
+    await this.transitionTo(
+      sceneType,
+      resumePos
+        ? { gameEngine: this, preserveShipPos: resumePos }
+        : { gameEngine: this },
+    );
     return true;
   }
 
