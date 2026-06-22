@@ -159,6 +159,40 @@ describe("GameEngine flight-position persistence (reload spawn)", () => {
         systemId: "sys-1",
       });
     });
+
+    it("persists the live free-flight position when the player never left flight", async () => {
+      // The headline reload case: warp/take-off into a system, fly around, reload.
+      // No scene exit happened (lastFlightShipPos stays null), so the position is
+      // captured into liveFlightShipPos on each turn-end and must still persist.
+      await seedGame("sys-1");
+      engine.currentSceneType = SceneType.SPACE_FLIGHT;
+      engine.lastFlightShipPos = null;
+      engine.liveFlightShipPos = { x: 777, y: 888 };
+
+      await engine.saveGame("auto");
+
+      const saved = await diDeps.saveService.read("auto");
+      expect(saved!.flightShipPos).toEqual({
+        x: 777,
+        y: 888,
+        systemId: "sys-1",
+      });
+    });
+
+    it("ignores the live free-flight position when not in flight", async () => {
+      // A stale liveFlightShipPos must not leak into a non-flight save (e.g. a
+      // PLANET/menu autosave) — those spawns are owned by the landed-planet /
+      // edge path, and the field is only valid while SPACE_FLIGHT is active.
+      await seedGame("sys-1");
+      engine.currentSceneType = SceneType.PLANET;
+      engine.lastFlightShipPos = null;
+      engine.liveFlightShipPos = { x: 777, y: 888 };
+
+      await engine.saveGame("auto");
+
+      const saved = await diDeps.saveService.read("auto");
+      expect(saved!.flightShipPos).toBeUndefined();
+    });
   });
 
   describe("loadGame", () => {

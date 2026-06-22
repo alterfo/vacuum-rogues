@@ -106,6 +106,14 @@ export class GameEngine {
   // flight for the star map, so a hyperjump can start from where the ship was
   // (not teleport it next to the sun). Cleared once consumed.
   public lastFlightShipPos: { x: number; y: number } | null = null;
+  // Live in-flight ship position captured on each turn-end during FREE flight (no
+  // scene exit), so the headline reload case — warp/take-off in, fly around, reload
+  // — resumes where the ship stopped instead of edge-spawning. Distinct from
+  // lastFlightShipPos: it is NOT read by the entry-spawn path (so it can never leak
+  // into a warp/take-off spawn) and is cleared when the ship leaves the system
+  // (performWarp). saveGame folds it into flightShipPos only while SPACE_FLIGHT is
+  // the active scene; the systemId tag still guards the restore on load.
+  public liveFlightShipPos: { x: number; y: number } | null = null;
   // Sticky, system-tagged copy of the last in-flight ship position, PERSISTED in
   // the save (unlike lastFlightShipPos) so a browser reload resumes the ship
   // where it was instead of edge-spawning. Refreshed from lastFlightShipPos
@@ -994,15 +1002,21 @@ export class GameEngine {
     questLog.pendingReturnQuests = this.questManager.getPendingReturnQuests();
 
     // Refresh the persisted flight position from the live one whenever the flight
-    // scene has set it (lastFlightShipPos is always a live flight position in the
-    // current system). Kept sticky — a later non-flight autosave (e.g. the
-    // SPACE_FLIGHT re-entry after inventory, which consumes lastFlightShipPos to
-    // null) must not clear the last good position. The systemId guards the
+    // scene has set it. lastFlightShipPos is written right before a scene exit
+    // (star map / inventory / combat) and consumed to null on the next flight
+    // entry; liveFlightShipPos is the free-flight turn-end capture (only valid
+    // while SPACE_FLIGHT is the active scene). Kept sticky — a later non-flight
+    // autosave must not clear the last good position. The systemId guards the
     // restore on load. See loadGame.
-    if (this.lastFlightShipPos && this.player.currentSystemId) {
+    const livePos =
+      this.lastFlightShipPos ??
+      (this.currentSceneType === SceneType.SPACE_FLIGHT
+        ? this.liveFlightShipPos
+        : null);
+    if (livePos && this.player.currentSystemId) {
       this.flightShipPos = {
-        x: this.lastFlightShipPos.x,
-        y: this.lastFlightShipPos.y,
+        x: livePos.x,
+        y: livePos.y,
         systemId: this.player.currentSystemId,
       };
     }

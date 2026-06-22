@@ -33,6 +33,7 @@ import { WarpEffectRenderer } from "./flight/WarpEffectRenderer";
 import { QuestCompletion } from "./flight/QuestCompletion";
 import { handleFlightKey } from "./flight/flightKeyHandler";
 import { wireFlightSystemMenu } from "./flight/flightSystemMenu";
+import { endFlightTurn } from "./flight/flightTurnEnd";
 
 /** Minimal structural view of a display object for recursive filter disposal. */
 interface FilterableNode {
@@ -1365,6 +1366,7 @@ export class SpaceFlightScene extends GameScene {
 
     const { targetSystemId, fuelCost, exitVector } = this.pendingWarp;
     this.pendingWarp = null; // consume so the jump can't re-fire
+    this.gameEngine.liveFlightShipPos = null; // ship left system: drop the capture
 
     const target = this.gameEngine.galaxy.systems.find(
       (s) => s.id === targetSystemId,
@@ -1623,14 +1625,8 @@ export class SpaceFlightScene extends GameScene {
     this.distanceTraveled = 0;
     this.turnHintShown = false;
     this.updateInteractiveCursors(false);
-    if (this.shipPhysics) {
-      this.shipPhysics.setTarget(
-        this.shipPhysics.shipX,
-        this.shipPhysics.shipY,
-      );
-      this.shipPhysics.isMoving = false;
-      this.shipPhysics.currentSpeed = 0;
-    }
+    // Settle the ship in place and persist where it stopped (reload-resume).
+    if (this.shipPhysics) endFlightTurn(this.shipPhysics, this.gameEngine);
   }
 
   /** Switch planet and NPC cursors so hovering shows intent only when not mid-turn. */
