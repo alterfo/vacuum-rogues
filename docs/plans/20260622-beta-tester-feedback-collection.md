@@ -58,14 +58,14 @@ Standing rules:
 - Create: `.github/ISSUE_TEMPLATE/beta-feedback.yml`
 - Create: `.github/ISSUE_TEMPLATE/config.yml`
 
-- [ ] Author `beta-feedback.yml` (GitHub Issue Form) with fields: short summary
+- [x] Author `beta-feedback.yml` (GitHub Issue Form) with fields: short summary
       (input), what happened / steps (textarea), expected vs actual (textarea),
       severity (dropdown: blocker/major/minor/cosmetic), and a **«Диагностика»**
       textarea (prefillable by query param; testers leave it as-is) plus default
       `labels: [beta-feedback]` and a title prefix.
-- [ ] Add `config.yml` with `blank_issues_enabled: false` and a contact link to the
+- [x] Add `config.yml` with `blank_issues_enabled: false` and a contact link to the
       external fallback (optional) so the form is the default path.
-- [ ] Validate the YAML parses as a GitHub Issue Form (well-formed `body` field
+- [x] Validate the YAML parses as a GitHub Issue Form (well-formed `body` field
       list with unique `id`s used by the prefill in Task 3).
 
 ### Task 2: Inject git SHA into the build + buildInfo helper

@@ -1,0 +1,63 @@
+name: Отзыв бета-тестера
+description: Сообщить о баге или впечатлении из игры «Вакуумные Пройдохи»
+title: "[Beta] "
+labels: [beta-feedback]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо, что помогаете тестировать игру! Заполните поля ниже — это
+        займёт минуту. Поле «Диагностика» уже заполнено автоматически (версия
+        сборки, сцена, день, seed) — пожалуйста, не меняйте его.
+  - type: input
+    id: summary
+    attributes:
+      label: Коротко о проблеме
+      description: Одно предложение — что случилось.
+      placeholder: Например, «Корабль застрял в астероиде после варпа»
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Что произошло / шаги воспроизведения
+      description: Опишите по шагам, что вы делали и что увидели.
+      placeholder: |
+        1. Прилетел на планету Тортуга
+        2. Открыл верфь
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Ожидалось / получилось
+      description: Что вы ожидали и что произошло на самом деле.
+    validations:
+      required: false
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Серьёзность
+      description: Насколько критична проблема?
+      options:
+        - blocker (играть невозможно)
+        - major (серьёзно мешает)
+        - minor (мелкая проблема)
+        - cosmetic (косметика)
+      default: 2
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Диагностика
+      description: Заполняется автоматически — пожалуйста, не меняйте.
+      placeholder: |
+        version: dev
+        sha: dev
+        scene: MAIN_MENU
+        day: 0
+        seed: -
+    validations:
+      required: false
