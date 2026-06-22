@@ -115,6 +115,21 @@ describe("CombatModule engagement (Task 1)", () => {
     expect(module.combatants.size).toBe(0);
   });
 
+  it("a weaponless engagement surfaces a clear HUD hint instead of a silent no-op", () => {
+    const physics = makePhysics();
+    const loadout = { slottedWithGear: () => [] } as unknown as ShipLoadout;
+    const messages: { text: string; color?: number }[] = [];
+    const module = new CombatModule({
+      getShipPhysics: () => physics,
+      getPlayerLoadout: () => loadout,
+      showMessage: (text, color) => messages.push({ text, color }),
+    });
+    module.addCombatant(makeSprite("a", 50, 0));
+    expect(module.isActive).toBe(false); // still does not engage без оружия
+    expect(module.combatants.size).toBe(0);
+    expect(messages.some((m) => m.text.includes("Нет оружия"))).toBe(true);
+  });
+
   it("endCombat clears the set, target and active flag", () => {
     const { module } = makeModule();
     module.addCombatant(makeSprite("a", 50, 0));

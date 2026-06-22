@@ -1240,6 +1240,10 @@ export class GameEngine {
     );
     loadout.install("eq_engine_i");
     loadout.install("eq_tank");
+    // A fresh game must be able to fight: fit a starter weapon (Импульсный
+    // лазер). The corvette has 2 weapon slots and a 40-mass budget, so the
+    // engine (6) + tank (3) + weapon (4) = 13 fits with room to spare.
+    loadout.install("wpn_pulse");
     return loadout;
   }
 

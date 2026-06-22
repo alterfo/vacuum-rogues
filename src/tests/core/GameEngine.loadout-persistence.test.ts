@@ -164,10 +164,36 @@ describe("GameEngine loadout persistence", () => {
 
     expect(await engine.loadGame("auto")).toBe(true);
     expect(engine.playerLoadout!.hull.id).toBe("hull_corvette");
+    // The starter loadout now fits a weapon (wpn_pulse) so a fresh game / a
+    // pre-persistence save can actually fight — see GameEngine.starterLoadout.
     expect(engine.playerLoadout!.installedGearIds()).toEqual([
       "eq_engine_i",
       "eq_tank",
+      "wpn_pulse",
     ]);
+  });
+
+  it("the starter loadout includes a weapon and exposes weapon damage (a fresh game can fight)", async () => {
+    // Regression: starterLoadout() previously fitted only engine + tank, so a
+    // brand-new game had nothing to shoot and CombatModule.addCombatant no-op'd.
+    await makeLiveGame();
+    const save = new SaveState(
+      1,
+      engine.galaxy!,
+      engine.player!,
+      [],
+      Date.now(),
+      SceneType.SPACE_FLIGHT,
+      undefined, // pre-persistence save ⇒ falls back to the starter loadout
+    );
+    (diDeps.saveService as MockSaveService).setSave("auto", save);
+    vi.spyOn(engine, "transitionTo").mockResolvedValue(undefined);
+
+    expect(await engine.loadGame("auto")).toBe(true);
+    expect(engine.playerLoadout!.installedGearIds()).toContain("wpn_pulse");
+    expect(engine.playerLoadout!.derivedStats().weaponDamage).toBeGreaterThan(
+      0,
+    );
   });
 
   it("loadGame falls back to the starter loadout when the saved hull id is unknown", async () => {

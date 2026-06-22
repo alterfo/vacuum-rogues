@@ -150,6 +150,15 @@ export class CombatModule implements FlightModule {
   /** True while at least one combatant is engaged. */
   isActive = false;
 
+  /**
+   * Wall-clock ms of the last "нет оружия" hint. The garrison-aggro path calls
+   * {@link addCombatant} every frame for each in-range aggressor, so a
+   * weaponless player would otherwise see the toast spammed every frame; this
+   * throttles it to {@link WEAPONLESS_HINT_COOLDOWN_MS}.
+   */
+  private weaponlessHintAtMs = 0;
+  private static readonly WEAPONLESS_HINT_COOLDOWN_MS = 3000;
+
   constructor(deps: CombatModuleDeps) {
     this.deps = deps;
   }
@@ -221,7 +230,14 @@ export class CombatModule implements FlightModule {
     // aggressor; the membership guard above means already-engaged NPCs never
     // reach the loadout rebuild below.
     const loadout = this.deps.getPlayerLoadout?.() ?? null;
-    if (loadout && !this.hasWeapon(loadout)) return;
+    if (loadout && !this.hasWeapon(loadout)) {
+      // Don't silently drop the engagement — tell the player why the fight
+      // never starts so the state is legible (no auto-fire без оружия). The
+      // ship stays free to flee instead of being locked into an unwinnable
+      // fight.
+      this.warnWeaponless();
+      return;
+    }
 
     this.combatants.add(npc);
     this.npcFireTimers.set(npc, 0);
@@ -539,5 +555,20 @@ export class CombatModule implements FlightModule {
     return loadout
       .slottedWithGear()
       .some((s) => s.gear?.kind === GearKind.WEAPON);
+  }
+
+  /**
+   * Surface the weaponless-engagement hint, throttled to one toast per
+   * {@link WEAPONLESS_HINT_COOLDOWN_MS} (the aggro path calls every frame).
+   */
+  private warnWeaponless(): void {
+    const now = Date.now();
+    if (
+      now - this.weaponlessHintAtMs <
+      CombatModule.WEAPONLESS_HINT_COOLDOWN_MS
+    )
+      return;
+    this.weaponlessHintAtMs = now;
+    this.deps.showMessage?.("Нет оружия — установите его в ангаре", 0xff4444);
   }
 }
