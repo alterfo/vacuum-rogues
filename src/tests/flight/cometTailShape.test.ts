@@ -51,7 +51,9 @@ describe("comet tail shape (denser + tapered + graded)", () => {
     expect(moteScale(head)).toBeGreaterThan(moteScale(mid));
     expect(moteScale(mid)).toBeGreaterThan(moteScale(tip));
     // The tip is meaningfully thinner than the head (a real taper, not flat).
-    expect(moteScale(tip)).toBeLessThan(moteScale(head) * 0.6);
+    // Threshold pins the deepened falloff (0.6): with the old 0.5 falloff the
+    // tip would read 0.55·head and this would fail — a real regression guard.
+    expect(moteScale(tip)).toBeLessThan(moteScale(head) * 0.5);
   });
 
   it("moteLifeFraction maps age → head(0)..tip(1), guarding a recycled slot", () => {

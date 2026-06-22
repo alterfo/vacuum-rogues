@@ -243,5 +243,38 @@ describe("GameEngine flight-position persistence (reload spawn)", () => {
         gameEngine: engine,
       });
     });
+
+    it("does not resume the flight position for a save made while landed", async () => {
+      // A PLANET save (ship landed) falls back to SPACE_FLIGHT on load, but the
+      // landed-planet spawn (applyReentrySpawn via landedPlanetId) must win over
+      // a possibly-stale flightShipPos — landing never refreshes it. So no
+      // preserveShipPos even though the system id matches.
+      const player = diDeps.playerService.createPlayer({
+        factionType: FactionType.OUTLANDERS,
+      });
+      player.currentSystemId = homeSystemId;
+      player.landedPlanetId = "planet-1";
+      const save = new SaveState(
+        1,
+        engine.galaxy!,
+        player,
+        [],
+        Date.now(),
+        SceneType.PLANET,
+        undefined,
+        undefined,
+        { x: 123, y: 456, systemId: homeSystemId },
+      );
+      (diDeps.saveService as MockSaveService).setSave("auto", save);
+      const transitionSpy = vi
+        .spyOn(engine, "transitionTo")
+        .mockResolvedValue(undefined);
+
+      await engine.loadGame("auto");
+
+      expect(transitionSpy).toHaveBeenCalledWith(SceneType.SPACE_FLIGHT, {
+        gameEngine: engine,
+      });
+    });
   });
 });

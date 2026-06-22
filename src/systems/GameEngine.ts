@@ -1164,9 +1164,15 @@ export class GameEngine {
     // it, and resume the ship where it was on reload: pass it as
     // `preserveShipPos` only when we land in SPACE_FLIGHT and the saved position
     // belongs to the loaded system (else applyEntrySpawn edge-spawns as before).
+    // A save made while the ship was *landed* (`landedPlanetId` set — e.g. a
+    // PLANET/TRADE/BANK save that falls back to SPACE_FLIGHT) must spawn beside
+    // that planet via applyReentrySpawn, NOT teleport to a possibly-stale flight
+    // position (landing does not refresh `flightShipPos`), so suppress the resume
+    // in that case and let the landed-planet spawn win.
     this.flightShipPos = save.flightShipPos ?? null;
     const resumePos =
       sceneType === SceneType.SPACE_FLIGHT &&
+      !this.player.landedPlanetId &&
       save.flightShipPos &&
       save.flightShipPos.systemId === this.player.currentSystemId
         ? { x: save.flightShipPos.x, y: save.flightShipPos.y }

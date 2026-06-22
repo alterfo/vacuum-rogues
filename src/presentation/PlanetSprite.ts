@@ -692,15 +692,15 @@ export class PlanetSprite {
 
   /** Orient the day/night shading so the lit hemisphere faces the star. */
   private orientShading(): void {
-    const dx = this.centerX - this.screenX;
-    const dy = this.centerY - this.screenY;
+    // Single source for the planet→star direction (also the GLSL `uLightDir`).
+    const { x: lx, y: ly } = this.lightDirection();
     if (this.shadeContainer) {
-      this.shadeContainer.rotation = Math.atan2(dy, dx);
+      this.shadeContainer.rotation = Math.atan2(ly, lx);
     }
     // Feed the GLSL terminator the same star direction. The disc body is
-    // unrotated, so screen-space (dx, dy) maps straight onto the shader's
+    // unrotated, so screen-space (lx, ly) maps straight onto the shader's
     // disc-local axes; the filter normalizes and writes uLightDir.
-    this.rotationFilter?.setLightDirection(dx, dy);
+    this.rotationFilter?.setLightDirection(lx, ly);
   }
 
   update(deltaTime: number): void {
