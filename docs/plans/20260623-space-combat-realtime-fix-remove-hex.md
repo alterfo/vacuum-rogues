@@ -244,11 +244,17 @@ Related patterns:
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only combat/scene
-      symbols affected.
-- [ ] Full unit suite `npm test -- --run` green; `npm run lint` clean; `npm run
-      build` succeeds with no reference to the removed scene.
-- [ ] `SpaceFlightScene.ts` still < 1900 lines.
+- [x] `detect_changes` ran. The master comparison is dominated by the 339-commit
+      branch divergence (unrelated prior features), so the combat work was scoped to
+      its 5 commits (`bf691fb..HEAD`): it touches only combat/scene symbols —
+      SceneFactory, CombatScene (deleted), SpaceFlightScene, CombatModule,
+      NpcShipManager, GameEngine, `types/index` (SceneType.COMBAT removed), and their
+      tests. No unrelated symbols affected.
+- [x] Full unit suite green (2625 tests / 307 files); `npm run lint` clean (0 errors,
+      pre-existing warnings only); `npm run build` succeeds. No live reference to the
+      removed scene — the only `CombatScene`/`SceneType.COMBAT` matches left are
+      comments and test descriptions.
+- [x] `SpaceFlightScene.ts` is 1898 lines (< 1900).
 
 ### Task 7: Update documentation
 **Files:**
