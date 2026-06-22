@@ -203,7 +203,11 @@ export class SpaceFlightScene extends GameScene {
 
     this.combatModule = new CombatModule({
       getShipPhysics: () => this.shipPhysics,
-      isTurnRunning: () => this.isTurnRunning && !this.combatPause.paused,
+      // Combat fire is real-time — gated on the active-pause ONLY, not the route
+      // "Ход". An engaged fight ticks (both sides shoot) whether or not a turn is
+      // running; only the active-pause freezes it. (Ship movement + the calendar
+      // stay turn-gated via updateShip/isTurnRunning as before.)
+      isPaused: () => this.combatPause.paused,
       getPlayerLoadout: () => this.gameEngine?.playerLoadout ?? null,
       getUiLayer: () => this.renderer.uiLayer,
       getGameLayer: () => this.renderer.gameLayer,

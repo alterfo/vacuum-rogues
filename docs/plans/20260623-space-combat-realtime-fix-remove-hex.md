@@ -111,20 +111,25 @@ Related patterns:
 - Modify: `src/presentation/SpaceFlightScene.ts` (combat deps: pause signal)
 - Create/Modify tests under `src/tests/`
 
-- [ ] `gitnexus impact` on `CombatModule.update`; confirm the host is the only caller.
-- [ ] Gate combat fire on the **active-pause only**, not the route-turn: give
+- [x] `gitnexus impact` on `CombatModule.update`; confirm the host is the only caller.
+      (LOW risk — 1 direct caller: `SpaceFlightScene.update` per-frame loop.)
+- [x] Gate combat fire on the **active-pause only**, not the route-turn: give
       `CombatModule` an `isPaused: () => combatPause.paused` dep and freeze fire on
       `paused`, removing the `isTurnRunning() === false → return` early-returns so an
       engaged fight ticks in real time whether or not a "Ход" is running. (Ship
-      movement + calendar stay turn-gated as today.)
-- [ ] Verify NPC return fire (`fireNpcShot`) actually runs each
+      movement + calendar stay turn-gated as today.) Done via a private `isFrozen()`
+      that uses `isPaused` as the sole freeze signal when supplied (production), and
+      falls back to the legacy `isTurnRunning` gate only when `isPaused` is absent —
+      so the existing `pauseFreezesTime` tests (which fold the pause into
+      `isTurnRunning`) stay green untouched. Host wiring now passes `isPaused`.
+- [x] Verify NPC return fire (`fireNpcShot`) actually runs each
       `combatFireIntervalMs` once engaged, reducing player hull and raising the
-      active-pause on the first hit.
-- [ ] write tests: with combatants engaged and **no route-turn running** (and not
+      active-pause on the first hit. (Covered by the new tests below.)
+- [x] write tests: with combatants engaged and **no route-turn running** (and not
       paused), `update` fires the player's weapon at the target AND each NPC fires
       back (hull deltas on both sides); while `paused`, neither fires. (Would fail
-      today — fire is currently turn-gated.)
-- [ ] run touched tests — green.
+      today — fire is currently turn-gated.) New: `src/tests/combat/realtimeFire.test.ts`.
+- [x] run touched tests — green (187 combat/flight tests pass; lint + tsc clean).
 
 ### Task 3: Automatic mutual pursuit during combat
 **Files:**

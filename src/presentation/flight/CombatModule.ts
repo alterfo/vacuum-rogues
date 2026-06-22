@@ -27,9 +27,19 @@ export interface CombatModuleDeps {
   /** Authoritative player ship physics (null before the ship spawns). */
   getShipPhysics(): ShipPhysics | null;
   /**
-   * Whether the turn is running (Play, not Pause). Combat only advances while
-   * the turn runs, matching the ship/NPC movement gating. Optional so unit tests
-   * can drive the timers directly; absent or true means the fight advances.
+   * Whether the active-pause is freezing the world. Combat fire is gated on the
+   * **active-pause only**, not the route-turn — an engaged fight ticks in real
+   * time whether or not a "Ход" is running (Space-Rangers model). When this is
+   * supplied it is the *sole* freeze signal and {@link isTurnRunning} is ignored.
+   * Optional so lightweight callers (unit tests) can drive the timers directly.
+   */
+  isPaused?(): boolean;
+  /**
+   * Legacy turn-running signal. Only consulted when {@link isPaused} is **not**
+   * supplied: a host (or test) that folds the active-pause into this accessor
+   * (returning `false` while frozen) still freezes fire correctly. Production
+   * wires {@link isPaused} instead, so fire is decoupled from the route-turn.
+   * Absent + no `isPaused` ⇒ the fight always advances.
    */
   isTurnRunning?(): boolean;
   /** Player's canonical loadout — source of the equipped weapon. */
@@ -190,11 +200,12 @@ export class CombatModule implements FlightModule {
     // its arc even after the fight ends (mirrors the damage-number behaviour).
     this.hud?.update(deltaTime);
     if (!this.isActive) return;
-    // The fight only advances while the turn is running. Pausing freezes the
-    // world (the scene gates ship + NPC movement the same way), so combat must
-    // not keep draining the player's hull in real time while paused. Damage
-    // numbers (above) still float so a killing blow's number finishes its arc.
-    if (this.deps.isTurnRunning?.() === false) return;
+    // Combat fire is gated on the active-pause ONLY — the fight ticks in real
+    // time whether or not a route-"Ход" is running (decoupled from the turn).
+    // Pausing freezes the world, so combat must not keep draining the player's
+    // hull while paused. Damage numbers (above) still float so a killing blow's
+    // number finishes its arc.
+    if (this.isFrozen()) return;
     this.pruneDisengaged();
     // pruneDisengaged can drop the *selected* target (it drifted beyond escape
     // range) and synchronously raise a target-lost active-pause via onTargetLost
@@ -202,13 +213,13 @@ export class CombatModule implements FlightModule {
     // raised, so the player's auto-fire must not still land on the re-picked
     // survivor this frame — re-check the gate before it, mirroring the guard
     // before advanceNpcTimers below.
-    if (this.deps.isTurnRunning?.() === false) return;
+    if (this.isFrozen()) return;
     this.advancePlayerTimer(deltaTime);
     // A killing player shot can re-pause the fight mid-frame: the selected target
     // was lost but a survivor remains → onTargetLost → active-pause. The world is
     // frozen the instant that pause is raised, so surviving NPCs must not still
     // fire this frame (re-check the same gate as the top of update()).
-    if (this.deps.isTurnRunning?.() === false) return;
+    if (this.isFrozen()) return;
     this.advanceNpcTimers(deltaTime);
     if (this.combatants.size === 0) {
       this.endCombat();
@@ -367,7 +378,7 @@ export class CombatModule implements FlightModule {
       // whose timers are aligned (all added with timer 0), the first shot pauses
       // and every survivor would otherwise drain the player's hull on the same
       // pausing frame. Re-check the same gate as the top of update() per iteration.
-      if (this.deps.isTurnRunning?.() === false) break;
+      if (this.isFrozen()) break;
       const t = (this.npcFireTimers.get(npc) ?? 0) + deltaTime;
       const d = this.distanceToShip(npc);
       if (
@@ -548,6 +559,18 @@ export class CombatModule implements FlightModule {
     if (!ship) return false;
     const mode = this.deps.getGameMode?.() ?? "NORMAL";
     return isHullDowned(mode, ship.hullHP, ship.maxHull);
+  }
+
+  /**
+   * Whether combat fire is currently frozen. Combat is gated on the active-pause
+   * ONLY (real-time, decoupled from the route-turn): when the host wires
+   * {@link CombatModuleDeps.isPaused} that is the sole freeze signal. Legacy
+   * callers that fold the pause into {@link CombatModuleDeps.isTurnRunning}
+   * (returning `false` while frozen) are honoured only when `isPaused` is absent.
+   */
+  private isFrozen(): boolean {
+    if (this.deps.isPaused) return this.deps.isPaused();
+    return this.deps.isTurnRunning?.() === false;
   }
 
   /** Whether the loadout has at least one weapon to fight with. */
