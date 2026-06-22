@@ -75,6 +75,14 @@ Any new art category with >10 MB total must be added to `LAZY_PREFIXES`.
 ## Domain & Types
 - Domain fields should be `readonly`. Mutation via explicit methods only.
 - **Any change to `src/types/index.ts` or `src/domain/**/*.ts` requires updating `src/validation/schemas.ts`** — otherwise save games break. This includes the АБС ledger types in `src/domain/banking/Ledger.ts` (`Account`/`Posting`/`JournalEntry`/`BankingSnapshot`/`LoanDefaultSnapshot`), mirrored by `Ledger*Schema`/`BankingSnapshotSchema`/`LoanDefaultSnapshotSchema`.
+- **A new *persisted* domain field** additionally needs a `src/data/MigrationPipeline.ts` migration that defaults it for old saves, with a `CURRENT_VERSION` bump (e.g. the per-run `Player.gameMode` field added v26→27, defaulting old saves to `"NORMAL"`). A purely **catalog-derived** field the schema already tolerates (mass, `ownedGearIds`, per-loan default state) needs **no version bump** — see the cases in the sections below.
+
+## Difficulty Modes: God / Normal / Hard
+
+`Player.gameMode` (`GameMode = "GOD" | "NORMAL" | "HARD"`, `docs/plans/20260620-game-difficulty-modes-god-normal-hard.md`) is a **per-run** choice picked on the new-game screen (`RaceSelectionScene`), persisted on the save (not `PlayerSettings`) and set only via `Player.setGameMode`. Absent/old saves ⇒ `NORMAL` (the death + hostile paths behave exactly as before).
+
+- **GOD = ship never destroyed.** `src/systems/combat/godMode.ts` is the single source of truth: `hullFloorFor(mode,maxHull)` = `ceil(maxHull × GOD_MODE_HULL_FLOOR_FRACTION)` (≥1, never 0) in GOD / 0 otherwise; `applyDamageWithMode(...)` floors the hull above 0 in GOD and clamps to 0 (old `Math.max(0,…)`) in NORMAL/HARD. **"Downed" is *derived*, never persisted** — `isDowned(player)` re-computes `gameMode===GOD && hull ≤ floor` from current hull, so a save/load while downed re-derives it and a repair above the floor clears it automatically. **Route every player-hull damage path through `applyDamageWithMode`** (combat `CombatModule.fireNpcShot`, sun contact `StarRenderer.updateSunContactDamage`) and every fire/jump gate through `isDowned` (`CombatModule`, `SpaceFlightScene.performWarp`, `StarMapScene.performWarpJump`) — do not re-derive the floor or the downed rule at a call site. The GOD floor pre-empts the death/GAME_OVER trigger; the scripted hex `CombatScene` (text-quest encounters + boss) is **out of scope** (it shows a defeat panel, never destroys the ship).
+- **HARD scaling is config-only** in `src/config/balance.ts` (`DIFFICULTY_HOSTILE_SCALING` — HARD ×1.5 hostile systems, garrison +2; NORMAL/GOD = ×1.0/+0). `GameEngine.applyDifficultyHostileScaling` augments the boot-generated galaxy's hostile seeding (extra overmind/pirate systems persist via `GalaxySchema`) and `NpcSimulator.setGameMode` grows the daily garrison `[min,max]` — both re-armed on load. Tune in `balance.ts`, never at call sites.
 
 ## Money System: the Ledger is Canonical (АБС core-banking)
 

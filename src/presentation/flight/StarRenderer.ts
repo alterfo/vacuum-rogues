@@ -19,6 +19,7 @@ import {
   SUN_CONTACT_HULL_DAMAGE,
   SUN_CONTACT_DAMAGE_INTERVAL_MS,
 } from "@/config/balance";
+import { applyDamageWithMode } from "@/systems/combat/godMode";
 import type { FlightModule } from "./FlightModule";
 
 /** A display object that may carry filters (for recursive filter disposal). */
@@ -140,14 +141,20 @@ export class StarRenderer implements FlightModule {
     let justStartedBurning = false;
     if (touchingStar && turnRunning) {
       this.sunContactDamageTimer += deltaTime * timeScale;
-      const burnShip = this.gameEngine?.player?.ship;
+      const burnPlayer = this.gameEngine?.player;
+      const burnShip = burnPlayer?.ship;
       while (this.sunContactDamageTimer >= SUN_CONTACT_DAMAGE_INTERVAL_MS) {
         this.sunContactDamageTimer -= SUN_CONTACT_DAMAGE_INTERVAL_MS;
-        if (burnShip) {
-          burnShip.hullHP = Math.max(
-            0,
-            burnShip.hullHP - SUN_CONTACT_HULL_DAMAGE,
-          );
+        if (burnPlayer && burnShip) {
+          // Route through the difficulty-mode damage rule so GOD honours the
+          // hull floor here too (the star can't drain a GOD ship to 0); NORMAL
+          // and HARD clamp to 0 exactly as the old Math.max(0, …) did.
+          burnShip.hullHP = applyDamageWithMode(
+            burnPlayer.gameMode,
+            burnShip.hullHP,
+            SUN_CONTACT_HULL_DAMAGE,
+            burnShip.maxHull,
+          ).hull;
         }
       }
       if (!this.starTouchActive) {

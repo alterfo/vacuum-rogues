@@ -3,7 +3,7 @@ import { Container, Sprite, Texture, type TilingSprite } from "pixi.js";
 import { StarRenderer } from "@/presentation/flight/StarRenderer";
 import type { Renderer } from "@/presentation/Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
-import { StarType } from "@/types";
+import { StarType, type GameMode } from "@/types";
 import {
   SUN_CONTACT_HULL_DAMAGE,
   SUN_CONTACT_DAMAGE_INTERVAL_MS,
@@ -43,13 +43,21 @@ function makeHarness(gameEngine: GameEngine | null = null): {
   return { star, gameLayer };
 }
 
-/** A gameEngine stub exposing only the ship whose hull the sun burns. */
-function makeBurnEngine(hullHP: number): {
+/**
+ * A gameEngine stub exposing only the player + ship whose hull the sun burns.
+ * `gameMode`/`maxHull` feed the difficulty-mode damage rule (GOD honours the
+ * hull floor); omitting `gameMode` reproduces the old non-GOD clamp-to-0.
+ */
+function makeBurnEngine(
+  hullHP: number,
+  gameMode?: GameMode,
+  maxHull = 100,
+): {
   engine: GameEngine;
-  ship: { hullHP: number };
+  ship: { hullHP: number; maxHull: number };
 } {
-  const ship = { hullHP };
-  const engine = { player: { ship } } as unknown as GameEngine;
+  const ship = { hullHP, maxHull };
+  const engine = { player: { ship, gameMode } } as unknown as GameEngine;
   return { engine, ship };
 }
 
@@ -149,6 +157,37 @@ describe("StarRenderer (extracted FlightModule)", () => {
       2,
     );
     expect(ship.hullHP).toBe(100 - SUN_CONTACT_HULL_DAMAGE * 3);
+  });
+
+  it("GOD mode floors the sun-contact burn at the hull floor (never 0)", () => {
+    // GOD floor = ceil(maxHull × 5%) = 5 for maxHull 100. Burning far past zero
+    // in NORMAL must stop at the floor in GOD, never reaching 0 — the same
+    // "ship is never destroyed" invariant the combat path enforces.
+    const { engine, ship } = makeBurnEngine(100, "GOD", 100);
+    const { star } = makeHarness(engine);
+
+    star.updateSunContactDamage(
+      SUN_CONTACT_DAMAGE_INTERVAL_MS * 1000, // enough to drain a NORMAL ship to 0
+      star.centerX,
+      star.centerY,
+      true,
+      1,
+    );
+    expect(ship.hullHP).toBe(5);
+  });
+
+  it("NORMAL mode (no gameMode set) still clamps the sun-contact burn to 0", () => {
+    const { engine, ship } = makeBurnEngine(100);
+    const { star } = makeHarness(engine);
+
+    star.updateSunContactDamage(
+      SUN_CONTACT_DAMAGE_INTERVAL_MS * 1000,
+      star.centerX,
+      star.centerY,
+      true,
+      1,
+    );
+    expect(ship.hullHP).toBe(0);
   });
 
   it("does not burn the hull while the turn is paused", () => {

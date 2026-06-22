@@ -45,9 +45,13 @@ function makePlayer(mode: GameMode, hullHP: number, maxHull = 100): Player {
 
 describe("hullFloorFor", () => {
   it("GOD floor is a small positive fraction of maxHull (always > 0)", () => {
-    expect(hullFloorFor("GOD", 100)).toBe(
-      Math.ceil(100 * GOD_MODE_HULL_FLOOR_FRACTION),
-    );
+    // Concrete expected values (not re-derived from the formula under test) so a
+    // wrong-but-self-consistent change — e.g. floor() instead of ceil(), or a
+    // different fraction — is caught. With the current 5% fraction:
+    expect(GOD_MODE_HULL_FLOOR_FRACTION).toBe(0.05);
+    expect(hullFloorFor("GOD", 100)).toBe(5);
+    expect(hullFloorFor("GOD", 200)).toBe(10);
+    expect(hullFloorFor("GOD", 90)).toBe(5); // ceil(4.5) → rounds up, not down
     expect(hullFloorFor("GOD", 100)).toBeGreaterThan(0);
   });
 
