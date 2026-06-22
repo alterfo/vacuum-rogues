@@ -71,11 +71,11 @@ fragile auto-detect of "stuck".
   `onMainMenu` → `transitionTo(SceneType.MAIN_MENU)`) — keep additions minimal (size guard < 1900)
 - Create: src/tests/flight/inFlightMenuActions.test.ts
 
-- [ ] «Загрузить сохранение» asks a confirm (discards current progress), then calls `loadGame("auto")`
+- [x] «Загрузить сохранение» asks a confirm (discards current progress), then calls `loadGame("auto")`
       once; «В главное меню» transitions to MAIN_MENU
-- [ ] write tests: load → one `loadGame("auto")`; main-menu → one `transitionTo(MAIN_MENU)`
-- [ ] confirm `SpaceFlightScene.ts` stays under the 1900-line guard
-- [ ] run affected tests — must pass before next task
+- [x] write tests: load → one `loadGame("auto")`; main-menu → one `transitionTo(MAIN_MENU)`
+- [x] confirm `SpaceFlightScene.ts` stays under the 1900-line guard
+- [x] run affected tests — must pass before next task
 
 ### Task 3: Gate load on an existing save + dead-end reachability
 **Files:**

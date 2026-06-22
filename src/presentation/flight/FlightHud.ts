@@ -71,6 +71,9 @@ export class FlightHud implements FlightModule {
   // reachable so the player can load a save or quit from any dead-end — a
   // general escape hatch, not a fragile "stuck" auto-detect.
   private systemMenuPanel: Container | null = null;
+  // Confirm sub-panel raised by «Загрузить сохранение» (guards against losing the
+  // current run). Torn down together with the menu by {@link closeSystemMenu}.
+  private systemMenuConfirmPanel: Container | null = null;
 
   // [?] help overlay (toggled by the [?] Text button in uiContainer).
   private helpOverlay: Container | null = null;
@@ -474,6 +477,13 @@ export class FlightHud implements FlightModule {
       this.systemMenuPanel = null;
       queueMicrotask(() => {
         if (!mp.destroyed) mp.destroy({ children: true });
+      });
+    }
+    if (this.systemMenuConfirmPanel) {
+      const cp = this.systemMenuConfirmPanel;
+      this.systemMenuConfirmPanel = null;
+      queueMicrotask(() => {
+        if (!cp.destroyed) cp.destroy({ children: true });
       });
     }
   }
@@ -960,12 +970,116 @@ export class FlightHud implements FlightModule {
     this.systemMenuPanel = panel;
   }
 
-  /** Close + destroy the in-flight system menu panel (idempotent). */
+  /**
+   * Raise a confirm sub-panel over «Загрузить сохранение» — loading the autosave
+   * discards the current run, so guard it. «Да» closes the panel and runs
+   * `onConfirm` (the scene's `loadGame("auto")`); «Отмена» just dismisses. The
+   * menu panel is closed first so the two never overlap; the confirm is torn
+   * down with the menu by {@link closeSystemMenu}.
+   */
+  showSystemMenuConfirm(onConfirm: () => void): void {
+    this.closeSystemMenu(); // drop the menu (and any stale confirm) underneath
+
+    const screenW = this.renderer.app.screen.width;
+    const screenH = this.renderer.app.screen.height;
+    const PAD = 16;
+    const MSG_H = 56;
+    const BTN_H = 40;
+    const GAP = 10;
+    const panelW = 320;
+    const panelH = PAD + MSG_H + BTN_H + PAD;
+    const btnW = (panelW - PAD * 2 - GAP) / 2;
+
+    const panel = new Container();
+    panel.eventMode = "static";
+    panel.on("pointerdown", (e) => e.stopPropagation());
+
+    const bg = new Graphics();
+    bg.roundRect(0, 0, panelW, panelH, 8).fill({
+      color: 0x0a1520,
+      alpha: 0.96,
+    });
+    bg.roundRect(0, 0, panelW, panelH, 8).stroke({ color: 0x334455, width: 1 });
+    panel.addChild(bg);
+
+    const msg = new Text({
+      text: "Загрузить сохранение?\nТекущий прогресс будет потерян.",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(14),
+        fill: 0xdde6ee,
+        align: "center" as const,
+        wordWrap: true,
+        wordWrapWidth: panelW - PAD * 2,
+      },
+    });
+    msg.anchor.set(0.5, 0);
+    msg.x = panelW / 2;
+    msg.y = PAD;
+    msg.eventMode = "none";
+    panel.addChild(msg);
+
+    const btnY = PAD + MSG_H;
+
+    const yesBtn = new UiButton(
+      "",
+      "Да",
+      "primary",
+      (event) => {
+        event.stopPropagation();
+        this.gameEngine?.audio?.playUiClick();
+        this.closeSystemMenuConfirm();
+        onConfirm();
+      },
+      btnW,
+      BTN_H,
+    );
+    yesBtn.x = PAD;
+    yesBtn.y = btnY;
+    panel.addChild(yesBtn.container);
+
+    const cancelBtn = new UiButton(
+      "",
+      "Отмена",
+      "neutral",
+      (event) => {
+        event.stopPropagation();
+        this.gameEngine?.audio?.playUiClick();
+        this.closeSystemMenuConfirm();
+      },
+      btnW,
+      BTN_H,
+    );
+    cancelBtn.x = PAD + btnW + GAP;
+    cancelBtn.y = btnY;
+    panel.addChild(cancelBtn.container);
+
+    panel.x = Math.round((screenW - panelW) / 2);
+    panel.y = Math.round((screenH - panelH) / 2);
+    this.uiLayer.addChild(panel);
+    this.systemMenuConfirmPanel = panel;
+  }
+
+  /** Close + destroy the load confirm sub-panel (idempotent). */
+  closeSystemMenuConfirm(): void {
+    if (this.systemMenuConfirmPanel) {
+      this.systemMenuConfirmPanel.destroy({ children: true });
+      this.systemMenuConfirmPanel = null;
+    }
+  }
+
+  /** True while the load confirm sub-panel is open (test/lifecycle hook). */
+  isSystemMenuConfirmOpen(): boolean {
+    return this.systemMenuConfirmPanel !== null;
+  }
+
+  /** Close + destroy the in-flight system menu panel + confirm (idempotent). */
   closeSystemMenu(): void {
     if (this.systemMenuPanel) {
       this.systemMenuPanel.destroy({ children: true });
       this.systemMenuPanel = null;
     }
+    this.closeSystemMenuConfirm();
   }
 
   /** Cycle game speed through 1×/2×/4× and update the button label + physics. */

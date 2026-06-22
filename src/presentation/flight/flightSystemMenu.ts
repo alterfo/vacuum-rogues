@@ -1,0 +1,27 @@
+import { SceneType } from "@/types";
+
+import type { GameEngine } from "@/systems/GameEngine";
+import type { FlightHud } from "./FlightHud";
+
+/**
+ * Wire the always-available in-flight system menu's two escape actions to the
+ * engine. The menu + its confirm UI live in the HUD; the scene only owns these
+ * thin callbacks (DIP), which keeps `SpaceFlightScene` under its line guard and
+ * gives the wiring a single, unit-testable source of truth.
+ *
+ * - «Загрузить сохранение» raises a confirm (the current run is discarded), then
+ *   loads the `"auto"` slot via the existing {@link GameEngine.loadGame} — which
+ *   owns its own scene transition, so calling it from flight is safe.
+ * - «В главное меню» leaves to {@link SceneType.MAIN_MENU}.
+ *
+ * Both engine methods are async; we deliberately fire-and-forget (`void`) — the
+ * HUD/scene have nothing to await and `loadGame` drives the transition itself.
+ */
+export function wireFlightSystemMenu(
+  hud: FlightHud,
+  gameEngine: GameEngine | null,
+): void {
+  hud.onLoadSave = () =>
+    hud.showSystemMenuConfirm(() => void gameEngine?.loadGame("auto"));
+  hud.onMainMenu = () => void gameEngine?.transitionTo(SceneType.MAIN_MENU);
+}

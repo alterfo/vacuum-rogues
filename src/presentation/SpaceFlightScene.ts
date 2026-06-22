@@ -32,6 +32,7 @@ import { CameraController } from "./flight/CameraController";
 import { WarpEffectRenderer } from "./flight/WarpEffectRenderer";
 import { QuestCompletion } from "./flight/QuestCompletion";
 import { handleFlightKey } from "./flight/flightKeyHandler";
+import { wireFlightSystemMenu } from "./flight/flightSystemMenu";
 
 /** Minimal structural view of a display object for recursive filter disposal. */
 interface FilterableNode {
@@ -179,9 +180,7 @@ export class SpaceFlightScene extends GameScene {
     // Quest auto-completion driven by flight events (system entry / NPC kill).
     this.questCompletion = new QuestCompletion(this.gameEngine);
 
-    // HUD module: turn/speed/settings buttons, day counter, mini-map, mini-log,
-    // toasts and tooltips. Built first so the NPC/planet deps (toast + tooltip)
-    // reach it; initialize() runs later. Buttons fan back via the callbacks below.
+    // HUD module: buttons, day counter, mini-map, mini-log, toasts, tooltips. Built first so the NPC/planet deps (toast + tooltip) reach it; buttons fan back via the callbacks below.
     this.hud = new FlightHud(
       this.renderer,
       this.gameEngine,
@@ -195,6 +194,7 @@ export class SpaceFlightScene extends GameScene {
     this.hud.onMiniMapReturn = () => this.camera.startReturn();
     this.hud.onFontScaleChange = () => this.onFontScaleChanged();
     this.hud.onInventory = () => void this.openInventory();
+    wireFlightSystemMenu(this.hud, this.gameEngine); // in-flight load/main-menu escape hatch (Task 2)
 
     this.combatModule = new CombatModule({
       getShipPhysics: () => this.shipPhysics,
