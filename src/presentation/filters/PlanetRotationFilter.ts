@@ -62,10 +62,14 @@ out vec4 finalColor;
 uniform sampler2D uTexture;     // filter input (unused — kept for the binding)
 uniform sampler2D uMapTexture;  // equirectangular surface map
 
-uniform float uOffset;  // longitude scroll, [0,1)
-uniform float uRim;     // atmosphere rim-light strength
+uniform float uOffset;    // longitude scroll, [0,1)
+uniform float uRim;       // atmosphere rim-light strength
+uniform vec2  uLightDir;  // screen-space unit direction planet -> star
 
 const float PI = 3.14159265359;
+// Dim fill on the night side (starlight / atmospheric scatter) so the shadowed
+// hemisphere reads as shaded, never pitch black.
+const float NIGHT_AMBIENT = 0.2;
 
 void main(void)
 {
@@ -93,10 +97,21 @@ void main(void)
 
     // Limb darkening toward the edge gives the disc volume.
     float shade = mix(1.0, 0.55, smoothstep(0.55, 1.0, r));
-    vec3 color = surf.rgb * shade;
 
-    // Subtle blue atmosphere rim-light at the limb.
-    float rim = smoothstep(0.86, 1.0, r) * uRim;
+    // Star-direction terminator (day/night). The disc point p is also the (x, y)
+    // of the front-hemisphere sphere normal n = (p.x, p.y, sqrt(1 - r^2)); the
+    // star lies in the screen plane (z = 0), so the diffuse term reduces to
+    // dot(n, vec3(uLightDir, 0)) = dot(p, uLightDir). A smooth band softens the
+    // terminator and the night side keeps NIGHT_AMBIENT fill. The band is biased
+    // a touch toward the dark side so the disc centre still reads as lit rather
+    // than sitting exactly on the terminator.
+    float ndotl = dot(p, uLightDir);
+    float day = smoothstep(-0.35, 0.30, ndotl);
+    float light = mix(NIGHT_AMBIENT, 1.0, day);
+    vec3 color = surf.rgb * shade * light;
+
+    // Subtle blue atmosphere rim-light, only on the lit limb facing the star.
+    float rim = smoothstep(0.86, 1.0, r) * uRim * day;
     color += vec3(0.40, 0.58, 1.0) * rim;
 
     // Anti-aliased circular edge (premultiplied output).
@@ -129,6 +144,9 @@ export class PlanetRotationFilter extends Filter {
   public readonly texturePath: string | undefined;
   private readonly planetUniforms: UniformGroup;
   private _offset = 0;
+  // Screen-space unit direction planet -> star, mirrored onto the uLightDir
+  // uniform. Mutated in place so the GPU upload always reads current values.
+  private readonly _lightDir = new Float32Array([1, 0]);
 
   constructor(options: PlanetRotationFilterOptions) {
     const texture = options.texture ?? Texture.EMPTY;
@@ -136,6 +154,7 @@ export class PlanetRotationFilter extends Filter {
     const planetUniforms = new UniformGroup({
       uOffset: { value: 0, type: "f32" },
       uRim: { value: options.rimStrength ?? 0.35, type: "f32" },
+      uLightDir: { value: new Float32Array([1, 0]), type: "vec2<f32>" },
     });
     const glProgram = GlProgram.from({
       vertex: VERTEX,
@@ -186,6 +205,26 @@ export class PlanetRotationFilter extends Filter {
   advance(deltaMs: number): void {
     this._offset = wrapUnit(this._offset + this.rotationSpeed * deltaMs);
     this.planetUniforms.uniforms.uOffset = this._offset;
+  }
+
+  /** Current screen-space light direction `[x, y]` (unit vector toward the star). */
+  get lightDir(): readonly [number, number] {
+    return [this._lightDir[0], this._lightDir[1]];
+  }
+
+  /**
+   * Point the day/night terminator at the star: normalize the screen-space
+   * planet→star vector `(dx, dy)` and write it into the `uLightDir` uniform so
+   * the lit hemisphere faces the star. A zero-length vector (planet exactly on
+   * the star) is ignored so the last good direction is retained. Independent of
+   * {@link advance} — the surface still spins under a fixed sun.
+   */
+  setLightDirection(dx: number, dy: number): void {
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) return;
+    this._lightDir[0] = dx / len;
+    this._lightDir[1] = dy / len;
+    this.planetUniforms.uniforms.uLightDir = this._lightDir;
   }
 
   /**

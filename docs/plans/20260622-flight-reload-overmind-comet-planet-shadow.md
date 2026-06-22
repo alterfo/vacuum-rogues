@@ -188,19 +188,31 @@ Standing rules that bound this work:
   (feed the star-direction each frame)
 - Create/Modify tests under `src/tests/` (uniform wiring), screenshot for the visual
 
-- [ ] `gitnexus impact` on `PlanetRotationFilter` and `PlanetSprite` shading.
-- [ ] Add a `uLightDir` (vec2, screen-space direction to the star) uniform to the
-      filter; in the fragment shader reconstruct the sphere normal from the disc UV,
-      dot with `uLightDir`, and darken the night side with a smooth terminator
-      (keep the existing limb-darkening + rim-light; the rim-light should sit on the
-      lit limb).
-- [ ] Each frame, set `uLightDir` from the planet→star vector
-      (`StarRenderer.centerX/Y` − planet screen pos), normalized; rotation (`uOffset`)
-      stays independent so the surface still spins under a fixed sun.
-- [ ] write a test asserting the filter exposes/updates `uLightDir` and that
-      `PlanetManager` feeds a star-pointing direction (math-level; no GL needed).
-- [ ] run touched tests — green; **capture a screenshot** confirming a visible
-      day/night terminator with the lit side facing the star.
+- [x] `gitnexus impact` on `PlanetRotationFilter` and `PlanetSprite` shading.
+      Blast radius LOW/exact — `PlanetRotationFilter` is confined to the Filters
+      module (3 direct dependents, 0 execution flows); `PlanetSprite` shading is a
+      private renderer. No HIGH/CRITICAL.
+- [x] Add a `uLightDir` (vec2, screen-space direction to the star) uniform to the
+      filter; in the fragment shader the disc point `p` IS the sphere normal's
+      (x,y), and the star sits in the screen plane (z=0), so the diffuse term
+      reduces to `dot(p, uLightDir)`. A smooth band darkens the night side
+      (`NIGHT_AMBIENT` fill, biased toward the dark side so the disc centre still
+      reads lit); limb-darkening kept; rim-light gated by `day` so it sits only on
+      the lit limb.
+- [x] Each frame, set `uLightDir` from the planet→star vector
+      (`PlanetSprite.centerX/Y` − planet screen pos) in `orientShading`, normalized
+      by `setLightDirection`; rotation (`uOffset`) stays independent so the surface
+      still spins under a fixed sun (verified by the "independent of axial rotation"
+      test). PlanetManager drives this via `setOrbitForDay`/`update`.
+- [x] write a test asserting the filter exposes/updates `uLightDir` (default,
+      normalize, zero-guard, advance-independence, shader source guards) and that
+      `PlanetSprite.lightDirection()` feeds a star-pointing unit direction
+      (math-level; no GL) — `src/tests/presentation/planetSunShadow.test.ts`.
+- [x] run touched tests — green (planetSunShadow + planetRotationFilter +
+      presentation/* + moduleContracts = 431 green; tsc + eslint clean).
+      **Screenshot** captured via the isolate-filter-planet e2e seam →
+      `e2e/screenshots/planet-shadow-task4.png`: a visible day/night terminator
+      with the blue rim-light on the lit limb facing the star.
 
 ### Task 5: Verify acceptance criteria
 **Files:**

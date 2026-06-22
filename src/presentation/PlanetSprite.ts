@@ -676,14 +676,31 @@ export class PlanetSprite {
     };
   }
 
+  /**
+   * Screen-space unit direction from this planet to the system star (its
+   * orbital centre). Tracks the planet around its orbit (recomputed from the
+   * live screen position); falls back to (1, 0) at the star itself. Feeds both
+   * the procedural shade rotation and the GLSL terminator (`uLightDir`).
+   */
+  lightDirection(): { x: number; y: number } {
+    const dx = this.centerX - this.screenX;
+    const dy = this.centerY - this.screenY;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) return { x: 1, y: 0 };
+    return { x: dx / len, y: dy / len };
+  }
+
   /** Orient the day/night shading so the lit hemisphere faces the star. */
   private orientShading(): void {
+    const dx = this.centerX - this.screenX;
+    const dy = this.centerY - this.screenY;
     if (this.shadeContainer) {
-      this.shadeContainer.rotation = Math.atan2(
-        this.centerY - this.screenY,
-        this.centerX - this.screenX,
-      );
+      this.shadeContainer.rotation = Math.atan2(dy, dx);
     }
+    // Feed the GLSL terminator the same star direction. The disc body is
+    // unrotated, so screen-space (dx, dy) maps straight onto the shader's
+    // disc-local axes; the filter normalizes and writes uLightDir.
+    this.rotationFilter?.setLightDirection(dx, dy);
   }
 
   update(deltaTime: number): void {
