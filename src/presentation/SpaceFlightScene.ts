@@ -107,6 +107,13 @@ export class SpaceFlightScene extends GameScene {
   // Course-less "wait" turn (US-070 #5): fractional day accrued while the ship holds position.
   private waitDayAccum: number = 0;
   private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070)
+  private get currentDay(): number {
+    return (
+      (this.gameEngine?.galaxy?.gameDays ?? 0) +
+      this.distanceTraveled / this.DISTANCE_PER_DAY +
+      this.waitDayAccum
+    );
+  }
 
   // Two-step movement: plan route, then execute. plannedRoute carries the spiral
   // hint behind it so a re-execute that drops it (Ход / onPlayPause) re-derives
@@ -186,6 +193,7 @@ export class SpaceFlightScene extends GameScene {
       this.gameEngine,
       this.renderer.uiLayer,
     );
+    this.hud.setDayProvider(() => this.currentDay); // date read-out shows sub-day turn progress
     this.hud.onPlayPause = () => this.onPlayPause();
     this.hud.onSpeedCycle = (scale) => this.shipPhysics?.setTimeScale(scale);
     this.hud.onStarMap = () => void this.returnToStarMap();
@@ -353,11 +361,7 @@ export class SpaceFlightScene extends GameScene {
           y: this.starRenderer.centerY,
         }),
         isTurnRunning: () => this.isTurnRunning,
-        getOrbitalDay: () => {
-          const gameDays = this.gameEngine?.galaxy?.gameDays ?? 0;
-          const fractionalDay = this.distanceTraveled / this.DISTANCE_PER_DAY;
-          return gameDays + fractionalDay + this.waitDayAccum;
-        },
+        getOrbitalDay: () => this.currentDay,
         showPlanetTooltip: (planet, faction, sx, sy) =>
           this.hud.showPlanetTooltip(planet, faction, sx, sy),
         hideTooltip: () => this.hud.hideTooltip(),

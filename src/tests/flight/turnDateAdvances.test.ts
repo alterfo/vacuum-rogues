@@ -210,25 +210,20 @@ describe("the HUD date the player sees advances during a turn", () => {
     hud.destroy();
   });
 
-  // RED until the fix — committed as `it.fails` (the codebase convention for a
-  // Task-1 red repro, mirroring waitTurnPause.test.ts) so the pre-commit suite
-  // stays green while the bug is documented; Task 2 flips it to `it` once the fix
-  // lands. While a turn is mid-day the day-of-turn carries a growing fraction
+  // GREEN after the Task 2 fix (was the Task-1 red repro, committed as `it.fails`).
+  // While a turn is mid-day the day-of-turn carries a growing fraction
   // (gameDays + distanceTraveled/DISTANCE_PER_DAY + waitDayAccum); the displayed
-  // date must reflect that sub-day progress so the player sees time moving. Today
-  // the HUD floors to the integer day, so all three reads are the same string —
-  // the date looks frozen.
-  it.fails(
-    "sub-day progress within one whole day is visible to the player",
-    () => {
-      const { hud, render } = buildHud();
-      const atDayStart = render(5.0);
-      const atQuarterDay = render(5.25);
-      const atThreeQuarterDay = render(5.75);
+  // date now reflects that sub-day progress (a HH:MM clock from the fractional
+  // part) so the player sees time moving. Before the fix the HUD floored to the
+  // integer day and all three reads were the same string — the date looked frozen.
+  it("sub-day progress within one whole day is visible to the player", () => {
+    const { hud, render } = buildHud();
+    const atDayStart = render(5.0);
+    const atQuarterDay = render(5.25);
+    const atThreeQuarterDay = render(5.75);
 
-      expect(atQuarterDay).not.toBe(atDayStart);
-      expect(atThreeQuarterDay).not.toBe(atQuarterDay);
-      hud.destroy();
-    },
-  );
+    expect(atQuarterDay).not.toBe(atDayStart);
+    expect(atThreeQuarterDay).not.toBe(atQuarterDay);
+    hud.destroy();
+  });
 });

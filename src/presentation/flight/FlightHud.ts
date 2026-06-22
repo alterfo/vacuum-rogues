@@ -7,7 +7,7 @@ import type { Faction } from "@/types/faction";
 import { SystemMiniMap } from "../SystemMiniMap";
 import { QuestJournalUI } from "../QuestJournalUI";
 import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
-import { formatGameDate } from "@/utils/gameCalendar";
+import { formatGameDate, formatGameTimestamp } from "@/utils/gameCalendar";
 import {
   currentFontSizeKey,
   scaledFont,
@@ -49,6 +49,10 @@ export class FlightHud implements FlightModule {
   private uiContainer: Container | null = null;
   // Current date display (top-left).
   private dayCounterText: Text | null = null;
+  // Optional fractional "day of turn" source pushed by the scene so the date
+  // read-out shows sub-day progress within a turn (gameDays + distance/wait
+  // fraction); without it the counter falls back to the whole-day `gameDays`.
+  private dayProvider: (() => number) | null = null;
   // Star-map button (top-right) — repositioned on resize.
   private backButton: Text | null = null;
   // Camera debug read-out (development only); the scene's camera loop sets its text.
@@ -221,6 +225,7 @@ export class FlightHud implements FlightModule {
     }
     this.cameraDebugText = null;
     this.dayCounterText = null;
+    this.dayProvider = null;
     this.uiContainer = null;
     this.turnRunning = false;
   }
@@ -1261,13 +1266,23 @@ export class FlightHud implements FlightModule {
   // Per-frame read-outs
   // ---------------------------------------------------------------------------
 
-  /** Update day counter UI text. */
+  /**
+   * Push the scene's fractional "day of turn" so the date read-out reflects
+   * sub-day progress (a short turn no longer looks frozen). Pass `null` to fall
+   * back to the whole-day `galaxy.gameDays`.
+   */
+  setDayProvider(provider: (() => number) | null): void {
+    this.dayProvider = provider;
+  }
+
+  /** Update day counter UI text (date + sub-day clock). */
   private updateDayCounter(): void {
-    if (this.dayCounterText && this.gameEngine?.galaxy) {
-      this.dayCounterText.text = formatGameDate(
-        this.gameEngine.galaxy.gameDays,
-      );
-    }
+    if (!this.dayCounterText) return;
+    const day = this.dayProvider
+      ? this.dayProvider()
+      : (this.gameEngine?.galaxy?.gameDays ?? null);
+    if (day === null) return;
+    this.dayCounterText.text = formatGameTimestamp(day);
   }
 
   /** Refresh the Play/Pause button label/colour to match the turn state. */

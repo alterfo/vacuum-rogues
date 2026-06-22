@@ -52,3 +52,20 @@ export function formatGameDate(gameDays: number): string {
   const { year, month, day } = toGameDate(gameDays);
   return `${day} ${MONTHS_RU[month - 1]} ${year} г.`;
 }
+
+/**
+ * Date + sub-day clock, e.g. "6 января 4000 г. 06:00". Unlike {@link formatGameDate}
+ * this surfaces the *fractional* part of `gameDays` as a 24-hour time-of-day so a
+ * turn whose ship hasn't yet crossed a whole day still shows time visibly moving
+ * (the HUD date read-out reuses the scene's fractional `currentDay`). The whole-day
+ * portion still drives the calendar date.
+ */
+export function formatGameTimestamp(gameDays: number): string {
+  const safe = Math.max(0, gameDays);
+  const frac = safe - Math.floor(safe);
+  const totalMinutes = Math.floor(frac * 24 * 60);
+  const hh = Math.floor(totalMinutes / 60);
+  const mm = totalMinutes % 60;
+  const clock = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  return `${formatGameDate(safe)} ${clock}`;
+}

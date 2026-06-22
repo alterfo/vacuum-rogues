@@ -88,13 +88,25 @@ because `FlightHud.updateDayCounter` renders the integer `gameDays`.
   cause is confirmed — keep additions tiny for the size guard)
 - Create: src/tests/flight/turnDateDisplay.test.ts
 
-- [ ] apply the minimal fix for the confirmed cause so the date visibly advances during a turn; the
+- [x] apply the minimal fix for the confirmed cause so the date visibly advances during a turn; the
       Task 1 test goes green
-- [ ] if combat-frozen is the cause, ensure `combatModule.isActive` clears when the fight ends so the
+- [x] if combat-frozen is the cause, ensure `combatModule.isActive` clears when the fight ends so the
       calendar resumes (do not change the intended freeze-during-combat behaviour)
-- [ ] confirm `SpaceFlightScene.ts` stays under the 1900-line guard
-- [ ] write tests for the adjacent cases (moving + wait + post-combat resume) — all green
-- [ ] run affected tests — must pass before next task
+- [x] confirm `SpaceFlightScene.ts` stays under the 1900-line guard
+- [x] write tests for the adjacent cases (moving + wait + post-combat resume) — all green
+- [x] run affected tests — must pass before next task
+
+Result: minimal display-only fix for hypothesis 1 (whole-day granularity). New pure helper
+`formatGameTimestamp(gameDays)` in `gameCalendar.ts` renders the calendar date + a HH:MM clock from
+the fractional part. `FlightHud` gained `setDayProvider` (a fractional "day of turn" source); the
+scene pushes its `currentDay` getter (now extracted from the former inline `getOrbitalDay` body so
+orbits AND the date read-out share one source) into it, so `updateDayCounter` shows sub-day progress;
+without a provider it falls back to the whole-day `galaxy.gameDays`. The createUI initial label is
+left as date-only (keeps `fontScaleRestyle.test.ts` green). `SpaceFlightScene.ts` = 1898 lines (< 1900
+guard). Combat-frozen was ruled out in Task 1 (cause = hypothesis 1), so no `isActive`/freeze change
+was needed — the freeze is intended; `turnDateDisplay.test.ts` adds a post-combat-resume regression
+proving the date holds while paused (currentDay frozen) and resumes when the turn continues. Task 1's
+sub-day repro flipped `it.fails` → `it` (now green). All affected tests green; lint 0 errors; tsc clean.
 
 ### Task 3: Verify acceptance criteria
 - [ ] verify Overview: starting a turn shows the date/time advancing (no longer frozen)
