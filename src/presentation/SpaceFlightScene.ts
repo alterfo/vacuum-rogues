@@ -204,9 +204,7 @@ export class SpaceFlightScene extends GameScene {
     this.combatModule = new CombatModule({
       getShipPhysics: () => this.shipPhysics,
       // Combat fire is real-time — gated on the active-pause ONLY, not the route
-      // "Ход". An engaged fight ticks (both sides shoot) whether or not a turn is
-      // running; only the active-pause freezes it. (Ship movement + the calendar
-      // stay turn-gated via updateShip/isTurnRunning as before.)
+      // "Ход". Ship movement + the calendar stay turn-gated via updateShip.
       isPaused: () => this.combatPause.paused,
       getPlayerLoadout: () => this.gameEngine?.playerLoadout ?? null,
       getUiLayer: () => this.renderer.uiLayer,
@@ -253,6 +251,11 @@ export class SpaceFlightScene extends GameScene {
         startInFlightCombat: (sprite) => this.combatModule.addCombatant(sprite),
         isInCombat: () => this.combatModule.isActive,
         selectCombatTarget: (s) => this.combatModule.selectTarget(s),
+        // Real-time mutual pursuit while engaged (Task 3) — see updateCombatPursuit.
+        getCombatTargetId: () =>
+          this.combatModule.selectedTarget?.npc.id ?? null,
+        isCombatant: (sprite) => this.combatModule.combatants.has(sprite),
+        isPaused: () => this.combatPause.paused,
       },
     );
 
@@ -566,8 +569,7 @@ export class SpaceFlightScene extends GameScene {
     this.npcManager.update(deltaTime, this.bgElapsed);
     this.planetManager.update(deltaTime, this.bgElapsed);
     this.updateSystemMiniMap();
-    // Push the *effective* turn state for the Play/Pause label, then refresh HUD
-    // read-outs. A combat freeze keeps isTurnRunning raw-true, so gate the label.
+    // *Effective* turn state: gate the raw flag on the combat-pause freeze.
     this.hud.setTurnRunning(this.isTurnRunning && !this.combatPause.paused);
     this.hud.update(deltaTime, this.bgElapsed);
   }
@@ -1209,9 +1211,8 @@ export class SpaceFlightScene extends GameScene {
         return;
       }
 
-      // Auto-follow an attacked NPC is owned by updateCombat (chase → hold →
-      // fire). On arrival here we simply keep the turn running and let combat
-      // decide whether to re-route or open fire.
+      // Pre-combat chase is owned by updateCombat: on arrival keep the turn
+      // running and let it re-route or engage rather than ending the turn here.
       if (this.npcManager.followNpcId) return;
 
       // If the route targeted a planet, land on arrival (the player set the

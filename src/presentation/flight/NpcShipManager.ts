@@ -96,6 +96,20 @@ export interface NpcShipManagerDeps {
   isInCombat?(): boolean;
   /** Set the in-flight combat target to a clicked enemy sprite (Task 13). */
   selectCombatTarget?(sprite: NpcShipSprite): void;
+  /**
+   * Id of the live auto-fire combat target (the CombatModule's selected enemy),
+   * or null. Drives the player's real-time auto-track during a fight so it keeps
+   * weapon range without a fresh "Ход" (Task 3). Optional for test/host setups.
+   */
+  getCombatTargetId?(): string | null;
+  /**
+   * Whether a sprite is an active in-flight combatant. Keeps an engaged enemy
+   * pursuing even when the captured-system garrison gate would otherwise clear
+   * its aggression (Task 3). Optional for lightweight setups.
+   */
+  isCombatant?(sprite: NpcShipSprite): boolean;
+  /** True while the active-pause is frozen — combat maneuvering halts (Task 3). */
+  isPaused?(): boolean;
 }
 
 /**
@@ -248,8 +262,12 @@ export class NpcShipManager implements FlightModule {
         // attacks first is handled elsewhere (markHostile), not gated here.
         if (
           sprite.npc.role === NpcRole.PIRATE &&
-          this.playerIsGoodWithPirates()
+          this.playerIsGoodWithPirates() &&
+          !(this.deps.isCombatant?.(sprite) ?? false)
         ) {
+          // Good pirate rep buys peace — UNLESS the fight is already joined (you
+          // attacked it / it's an active combatant), in which case it keeps
+          // pursuing instead of breaking off mid-engagement.
           sprite.setAggressive(false);
           this.npcAnchorPlanet.delete(sprite);
         } else {
@@ -773,7 +791,11 @@ export class NpcShipManager implements FlightModule {
         factionKindOf(npc) === "overmind" &&
         npc.isAggressive() &&
         isHostile("overmind", "player", { pirateRep: 0 });
-      const aggro = overmindHunts || (isHostileSystem && isGarrison);
+      // An active in-flight combatant keeps pursuing regardless of the
+      // captured-system gate (Task 3): a pirate you engaged in a now-neutral
+      // system must not have its aggression cleared out from under the fight.
+      const engaged = this.deps.isCombatant?.(sprite) ?? false;
+      const aggro = overmindHunts || (isHostileSystem && isGarrison) || engaged;
       sprite.setAggressive(aggro);
       // Drop the orbit-planet anchor so the aggressor isn't re-anchored each
       // frame (setAggressive already cleared the sprite's own anchor fields).
@@ -1440,6 +1462,10 @@ export class NpcShipManager implements FlightModule {
     if (!sprite) return;
     this.followNpcId = null;
     this.approachNpcId = null;
+    // A player-initiated engagement makes the target an active aggressor so it
+    // auto-closes on the player and holds weapon range (Task 3) instead of
+    // orbiting its planet / drifting. Garrison + shakedown paths already flag it.
+    sprite.setAggressive(true);
     this.deps.startInFlightCombat?.(sprite);
     this.deps.selectCombatTarget?.(sprite);
   }
@@ -1453,6 +1479,16 @@ export class NpcShipManager implements FlightModule {
   updateCombat(_deltaTime: number): void {
     const physics = this.deps.getShipPhysics();
     if (!physics) return;
+
+    // Real-time combat tracking (Task 3): while a fight is engaged, auto-track
+    // the live combat target every frame — close to weapon range and hold it
+    // without a fresh "Ход". Distinct from the pre-combat chase resolver below
+    // (which brings an out-of-range target INTO the fight); once engaged this
+    // branch owns the player's maneuvering.
+    if (this.deps.isInCombat?.()) {
+      this.updateCombatPursuit(physics);
+      return;
+    }
 
     // Non-combat approach ("Приблизиться"): continuously re-aim at the moving
     // target's lead point while flying, but never open fire. Handled before the
@@ -1510,6 +1546,39 @@ export class NpcShipManager implements FlightModule {
         // the player can't plot a new course, but the ship is never pinned).
         this.launchCombatWithNpc(decision.npc);
         return;
+    }
+  }
+
+  /**
+   * Real-time combat auto-track (Task 3): while a fight is engaged, keep the
+   * player ship inside weapon range of the live combat target without a fresh
+   * "Ход". Re-aims toward the target's lead point whenever it drifts beyond
+   * weapon range (closing the gap), and holds position once inside range so the
+   * ship trades fire instead of ramming. Frozen by the active-pause.
+   */
+  private updateCombatPursuit(physics: ShipPhysics): void {
+    if (this.deps.isPaused?.()) return; // active-pause: maneuvering frozen
+    const targetId = this.deps.getCombatTargetId?.() ?? null;
+    if (!targetId) return;
+    const sprite = this.npcSprites.find((s) => s.npc.id === targetId);
+    if (!sprite) return;
+    const dx = sprite.x - physics.shipX;
+    const dy = sprite.y - physics.shipY;
+    // Inside weapon range — hold station (keep firing), don't fly onto the target.
+    if (dx * dx + dy * dy <= this.WEAPON_RANGE * this.WEAPON_RANGE) return;
+    // Drifted out of range — re-close, leading the target so the chase curves to
+    // where it's heading. Throttle re-plots: re-aim on a fresh leg (stopped) or
+    // once the lead point drifts past the threshold (continuous correction).
+    const lead = this.npcLeadPoint(sprite);
+    if (
+      !physics.isMoving ||
+      shouldReaim(
+        { x: this.lastAimX, y: this.lastAimY },
+        lead,
+        this.REAIM_DRIFT_PX,
+      )
+    ) {
+      this.aimRoute(lead.x, lead.y);
     }
   }
 

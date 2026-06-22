@@ -137,20 +137,35 @@ Related patterns:
 - Modify: `src/presentation/SpaceFlightScene.ts` (real-time combat maneuver)
 - Create/Modify tests under `src/tests/`
 
-- [ ] While a fight is active, make the player ship **auto-track** the selected
+- [x] While a fight is active, make the player ship **auto-track** the selected
       target in real time — continuously close to and hold weapon range without a
       fresh "Ход" each time. Reuse `followNpcId`/`npcLeadPoint`/`solveInterceptPoint`
-      but drive the aim every frame while engaged.
-- [ ] Make every engaged NPC **auto-close on the player** to weapon range and hold
+      but drive the aim every frame while engaged. Done: `updateCombat` early-routes
+      to a new `updateCombatPursuit(physics)` while `isInCombat()`, which re-aims
+      (`npcLeadPoint`→`solveInterceptPoint`) at the live combat target
+      (`getCombatTargetId` dep = `combatModule.selectedTarget`) whenever it drifts
+      beyond `WEAPON_RANGE`, and holds station once inside range. Frozen by the
+      active-pause via a new `isPaused` dep.
+- [x] Make every engaged NPC **auto-close on the player** to weapon range and hold
       it (extend the `sprite.aggressive` aggressor maneuver, ~L237-292) so enemies
       pursue instead of orbiting/drifting; ensure the pirates' captured-system gate
-      doesn't suppress pursuit once they are combatants.
-- [ ] Scope it: combat maneuvering is real-time **only while engaged** (distinct
+      doesn't suppress pursuit once they are combatants. Done: `launchCombatWithNpc`
+      now flags the engaged sprite `setAggressive(true)` (player-initiated combat
+      pursues like garrison/shakedown paths already do); `checkGarrisonAggro` ORs in
+      a new `isCombatant(sprite)` dep so the captured-system gate never stands an
+      active combatant down, and the good-rep-pirate break-off is skipped for an
+      active combatant.
+- [x] Scope it: combat maneuvering is real-time **only while engaged** (distinct
       from route navigation); ending/disengaging combat restores normal turn-gated
-      movement.
-- [ ] write tests: an engaged player closes the gap to its target each tick; an
+      movement. (The pursuit branch is gated on `isInCombat()`; the CombatModule
+      prunes out-of-escape-range combatants, after which the resolver's normal
+      chase/idle path resumes.)
+- [x] write tests: an engaged player closes the gap to its target each tick; an
       aggressive NPC combatant moves toward the player and reaches weapon range.
-- [ ] run touched tests — green.
+      New: `src/tests/combat/combatPursuit.test.ts` (2 tests — both would fail
+      before: player held station / engaged combatant lost aggression at the gate).
+- [x] run touched tests — green (1028 combat/npc/flight/presentation tests pass;
+      tsc + lint clean; `SpaceFlightScene.ts` back under 1900 lines).
 
 ### Task 4: Active-pause resolves and the turn ends cleanly
 **Files:**
