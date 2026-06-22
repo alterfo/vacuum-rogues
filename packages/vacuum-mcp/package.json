@@ -1,0 +1,63 @@
+{
+  "name": "vacuum-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that returns full symbol bodies from source files — hybrid grep + ast-grep, zero daemon. Supports TypeScript, JavaScript, Python, Go.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "bin": {
+    "vacuum-mcp": "./dist/bin/vacuum-mcp.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ast-grep",
+    "find-symbol",
+    "typescript",
+    "code-navigation",
+    "claude",
+    "cursor",
+    "ai-tools"
+  ],
+  "author": "Oleg Sidorkin",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/olegsidorkin/vacuum-mcp"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@ast-grep/napi": "^0.43.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  }
+}

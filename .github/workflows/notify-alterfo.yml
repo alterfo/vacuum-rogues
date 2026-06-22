@@ -1,0 +1,25 @@
+name: Notify alterfo site
+
+# On every push to master, tell the alterfo.github.io-src "Deploy" workflow to rebuild so
+# alterfo.github.io/vacuum-rogues ships the latest game. The alterfo deploy fetches this repo's
+# latest master (read-only deploy key) instead of a pinned submodule commit, so no manual bump.
+#
+# Requires a repo secret ALTERFO_DISPATCH_TOKEN: a token that can create a repository_dispatch
+# on alterfo/alterfo.github.io-src (fine-grained PAT scoped to that repo with Contents: write,
+# or a classic PAT with the `repo` scope). See that repo's README → "Авто-подхват изменений игры".
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger alterfo deploy (repository_dispatch)
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${{ secrets.ALTERFO_DISPATCH_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/alterfo/alterfo.github.io-src/dispatches \
+            -d '{"event_type":"vacuum-rogues-updated"}'

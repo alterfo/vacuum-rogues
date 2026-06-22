@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# GitNexus local index (binary, repo-specific)
+.gitnexus/
+
 # Build output
 dist/
 
@@ -33,6 +36,9 @@ e2e/screenshots/exploration/
 
 # Coverage
 coverage/
+
+# Jupyter checkpoint junk
+.ipynb_checkpoints/
 
 # Temporary files
 *.tmp

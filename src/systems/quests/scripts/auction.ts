@@ -1,13 +1,14 @@
 import type { QuestScript } from "../QuestScript";
 
 // Design: Maelon scrap auction. 8 lots, budget 800cr.
-// Each lot has a class (1–4, random). Value = class × 100.
+// Each lot has a class (2–4, random). Value = class × 100. Class 1 excluded —
+// premium Maelon scrap only; a class-1 win at bid_low yields zero profit.
 // Player: skip | bid_low (100cr, risky) | bid_high (250cr, guaranteed win).
 // Bot responses after bid_low:
 //   - Aggressive bot (budget 600cr, bids +100): outbids until broke (3 lots max).
 //   - Random bot (roll 0/1 per lot): 50% chance outbids bid_low.
 // Win condition: profit >= 500 after all 8 lots.
-// Strategy: let aggressive bot exhaust itself, then bid_low on remaining lots.
+// Strategy: let aggressive bot exhaust itself on early lots, then bid_low on the rest.
 export const auctionScript: QuestScript = {
   id: "auction",
   title: "Аукцион",
@@ -48,7 +49,7 @@ export const auctionScript: QuestScript = {
     {
       id: "lot_1_class",
       name: "Лот 1",
-      min: 1,
+      min: 2,
       max: 4,
       initial: "random",
       showInUI: false,
@@ -56,7 +57,7 @@ export const auctionScript: QuestScript = {
     {
       id: "lot_2_class",
       name: "Лот 2",
-      min: 1,
+      min: 2,
       max: 4,
       initial: "random",
       showInUI: false,
@@ -64,7 +65,7 @@ export const auctionScript: QuestScript = {
     {
       id: "lot_3_class",
       name: "Лот 3",
-      min: 1,
+      min: 2,
       max: 4,
       initial: "random",
       showInUI: false,
@@ -72,7 +73,7 @@ export const auctionScript: QuestScript = {
     {
       id: "lot_4_class",
       name: "Лот 4",
-      min: 1,
+      min: 2,
       max: 4,
       initial: "random",
       showInUI: false,
@@ -80,7 +81,7 @@ export const auctionScript: QuestScript = {
     {
       id: "lot_5_class",
       name: "Лот 5",
-      min: 1,
+      min: 2,
       max: 4,
       initial: "random",
       showInUI: false,
@@ -88,7 +89,7 @@ export const auctionScript: QuestScript = {
     {
       id: "lot_6_class",
       name: "Лот 6",
-      min: 1,
+      min: 2,
       max: 4,
       initial: "random",
       showInUI: false,
@@ -96,7 +97,7 @@ export const auctionScript: QuestScript = {
     {
       id: "lot_7_class",
       name: "Лот 7",
-      min: 1,
+      min: 2,
       max: 4,
       initial: "random",
       showInUI: false,
@@ -104,7 +105,7 @@ export const auctionScript: QuestScript = {
     {
       id: "lot_8_class",
       name: "Лот 8",
-      min: 1,
+      min: 2,
       max: 4,
       initial: "random",
       showInUI: false,

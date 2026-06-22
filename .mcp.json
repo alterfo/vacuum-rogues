@@ -3,6 +3,10 @@
     "vacuum": {
       "command": "npx",
       "args": ["tsx", "tools/mcp/vacuum-mcp.ts"]
+    },
+    "gitnexus": {
+      "command": "npx",
+      "args": ["gitnexus", "mcp"]
     }
   }
 }

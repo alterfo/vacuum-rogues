@@ -283,7 +283,7 @@ export class GovernmentScene extends GameScene {
     y += 44;
 
     // Back button
-    this.addButton(ui, "[ Назад ]", w / 2, y, 0x888888, () => this.goBack());
+    this.addButton(ui, "[ Назад ]", w / 2, y, 0xb4b4b4, () => this.goBack());
 
     this.renderer.uiLayer.addChild(ui);
   }

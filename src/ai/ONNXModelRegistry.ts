@@ -9,7 +9,10 @@ import { InferenceTimeoutException } from "@/exceptions/InferenceTimeoutExceptio
 import { GameSystemException } from "@/exceptions/GameSystemException";
 import { logger } from "@/utils/logger";
 import { SimpleONNXModel } from "./SimpleONNXModel";
-import workerUrl from "./inference.worker.ts?url";
+// `?worker` makes Vite COMPILE the worker into its own chunk and gives us a
+// Worker constructor. The old `?url` shipped the raw `.ts` (served as
+// video/mp2t) which only worked because the dev server transpiled on the fly.
+import InferenceWorker from "./inference.worker.ts?worker";
 
 const INFERENCE_TIMEOUTS: Record<string, number> = {
   t5_dialogue: 3000,
@@ -26,7 +29,7 @@ export class ONNXModelRegistry {
   private indexedDB: IndexedDBCache;
 
   constructor(_qualityProfile: AdaptiveQualityProfile) {
-    this.workerPool = new WebWorkerPool(workerUrl, 4);
+    this.workerPool = new WebWorkerPool(() => new InferenceWorker(), 4);
     this.indexedDB = new IndexedDBCache();
   }
 

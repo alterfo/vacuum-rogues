@@ -1157,6 +1157,16 @@ describe("Auction quest", () => {
     }
   });
 
+  it("no lot class is 1 — minimum is 2 so class-1 useless lots never appear", () => {
+    for (let seed = 0; seed < 50; seed++) {
+      const vm = new QuestVM(auctionScript, seed);
+      for (let n = 1; n <= 8; n++) {
+        const c = vm.getParam(`lot_${n}_class`);
+        expect(c).toBeGreaterThanOrEqual(2);
+      }
+    }
+  });
+
   it("lot_class_current is set from lot_1_class after prepare_lot_1", () => {
     const vm = new QuestVM(auctionScript, 1);
     const expected = vm.getParam("lot_1_class");

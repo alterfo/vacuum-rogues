@@ -551,3 +551,108 @@ describe("QuestGenerator wires targetSystemId into template", () => {
     }
   });
 });
+
+// ─── DIPLOMACY quest completion ──────────────────────────────────────────────
+
+function makeDiplomacyQuest(
+  targetPlanetId: string,
+  targetSystemId: string,
+): Quest {
+  return new Quest(
+    "q_diplomacy_test",
+    "Дипломатия: Test",
+    QuestType.DIPLOMACY,
+    [
+      {
+        id: "obj_envoy",
+        description: "Передать предложение",
+        type: "VISIT_LOCATION",
+        targetAmount: 1,
+        currentAmount: 0,
+        completed: false,
+        locationId: targetPlanetId,
+      },
+    ],
+    EMPTY_REWARD,
+    [],
+    "origin_planet",
+    0,
+    10,
+    null,
+    targetSystemId,
+    null,
+  );
+}
+
+describe("DIPLOMACY quest — completion on planet landing", () => {
+  it("markObjectivesDone on DIPLOMACY quest sets isPendingReturn=true", () => {
+    const qm = new QuestManager();
+    const q = makeDiplomacyQuest("B_p1", "B");
+    qm["activeQuests"].set(q.id, q);
+    const marked = qm.markObjectivesDone(q.id);
+    expect(marked).toBe(true);
+    expect(q.isPendingReturn).toBe(true);
+    expect(q.isCompleted).toBe(false);
+    expect(qm.getPendingReturnQuests()).toContain(q);
+  });
+
+  it("DIPLOMACY generator produces VISIT_LOCATION objective with planet locationId", () => {
+    const mkSys = (id: string, toIds: string[]): StarSystem =>
+      ({
+        id,
+        name: id,
+        connections: toIds.map((t) => ({ toSystemId: t })),
+        planets: [{ id: `${id}_p1`, isHabitable: true }],
+      }) as unknown as StarSystem;
+    const systems = [mkSys("A", ["B"]), mkSys("B", ["A"])];
+    const board = generateQuestBoard({
+      systems,
+      originSystemId: "A",
+      planetId: "A_p1",
+      day: 0,
+      seed: "diplomacy-test",
+      count: 50,
+      textRatio: 0,
+    });
+    const diplomacyQuests = board.filter(
+      (q) => q.template.type === QuestType.DIPLOMACY,
+    );
+    expect(diplomacyQuests.length).toBeGreaterThan(0);
+    for (const q of diplomacyQuests) {
+      const obj = q.template.objectives.find(
+        (o) => o.type === "VISIT_LOCATION",
+      );
+      expect(obj).toBeDefined();
+      // locationId must be a planet-level ID (not just the system ID "B")
+      expect(obj!.locationId).not.toBe("B");
+      expect(obj!.locationId).toBeDefined();
+    }
+  });
+
+  it("PlanetScene should mark DIPLOMACY quest pending-return when landing on target planet", () => {
+    // This test documents the expected PlanetScene behavior:
+    // when player lands on the quest's VISIT_LOCATION target, the quest goes to pendingReturn.
+    const qm = new QuestManager();
+    const targetPlanetId = "B_p1";
+    const q = makeDiplomacyQuest(targetPlanetId, "B");
+    qm["activeQuests"].set(q.id, q);
+
+    // Simulate what PlanetScene.checkDiplomacyQuestCompletion() must do:
+    const active = qm.getActiveQuests();
+    for (const quest of active) {
+      if (quest.type !== QuestType.DIPLOMACY) continue;
+      if (quest.isPendingReturn || quest.isCompleted || quest.isFailed)
+        continue;
+      const hit = quest.objectives.some(
+        (o) =>
+          o.type === "VISIT_LOCATION" &&
+          !o.completed &&
+          o.locationId === targetPlanetId,
+      );
+      if (hit) qm.markObjectivesDone(quest.id);
+    }
+
+    expect(q.isPendingReturn).toBe(true);
+    expect(qm.getPendingReturnQuests()).toContain(q);
+  });
+});

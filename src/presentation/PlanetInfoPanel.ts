@@ -107,7 +107,7 @@ export class PlanetInfoPanel {
     } else {
       const hint = new Text({
         text: "Подлетите ближе,\nчтобы приземлиться",
-        style: { fontFamily: "Courier New", fontSize: 10, fill: 0x888888 },
+        style: { fontFamily: "Courier New", fontSize: 10, fill: 0xb4b4b4 },
       });
       hint.x = 10;
       hint.y = 110;

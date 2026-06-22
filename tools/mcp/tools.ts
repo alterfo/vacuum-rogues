@@ -5,29 +5,26 @@
  * smoke tests (vacuum-mcp.test.ts) call directly. Keeping them SDK-free means
  * the tests do not need the MCP protocol or transport to run under vitest.
  *
- * All shell-outs use execFileSync with an argument array (never a shell string)
- * so caller-supplied names cannot be injected. Symbol/scene names are also
- * validated against a strict identifier allowlist before use.
+ * findSymbol / findTestsFor delegate to the standalone vacuum-mcp package
+ * (packages/vacuum-mcp). Project-specific tools (getArchitecture, getBalanceConstants,
+ * getSceneInfo) remain here.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve, basename, extname } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  findSymbolText,
+  findTestsFor as pkgFindTestsFor,
+} from "../../packages/vacuum-mcp/src/find-symbol.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** Repository root: tools/mcp/tools.ts -> two levels up. */
 export const REPO_ROOT = resolve(here, "..", "..");
 
-/** Identifiers we are willing to feed to grep (class/type/enum/scene names). */
+/** Identifiers we are willing to feed to grep (scene names). */
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
-/** Source paths we accept for find_tests_for (no traversal, no shell metachars). */
-const SAFE_PATH = /^[A-Za-z0-9_./-]+$/;
 
-/**
- * Run grep and return matching lines. grep exits 1 when there are no matches;
- * we treat that as an empty result rather than an error. Any other failure
- * (exit >= 2, e.g. bad path) is re-thrown.
- */
 function grepLines(args: string[]): string[] {
   try {
     const out = execFileSync("grep", args, {
@@ -38,36 +35,25 @@ function grepLines(args: string[]): string[] {
     return out.split("\n").filter((l) => l.trim().length > 0);
   } catch (err) {
     const status = (err as { status?: number }).status;
-    if (status === 1) return []; // no matches
+    if (status === 1) return [];
     throw err;
   }
 }
 
 /**
- * find_symbol — locate where a type/class/interface/enum/const/function is declared.
- * Returns matching "file:line: text" lines (definitions preferred over usages).
+ * find_symbol — return the full source body of a declared symbol.
+ * Delegates to the vacuum-mcp package (grep + ast-grep hybrid).
  */
 export function findSymbol(name: string): string {
-  if (!IDENT.test(name)) {
-    return `error: "${name}" is not a valid identifier`;
-  }
-  const pattern = `(export )?(default )?(abstract )?(class|interface|enum|type|const|function|let|var) ${name}\\b`;
-  // --include=*.ts keeps grep off the binary art assets under src/assets.
-  const lines = grepLines(["-rnE", "--include=*.ts", pattern, "src"]);
-  return lines.length > 0
-    ? lines.join("\n")
-    : `no declaration found for "${name}" in src/`;
+  return findSymbolText(name, REPO_ROOT, { searchDirs: ["src"] });
 }
 
 /**
- * find_tests_for — list test files that import the given source file by basename.
- * Returns an array of test file paths (possibly empty).
+ * find_tests_for — list test files that import the given source file.
+ * Delegates to the vacuum-mcp package.
  */
 export function findTestsFor(srcPath: string): string[] {
-  if (!SAFE_PATH.test(srcPath)) return [];
-  const base = basename(srcPath, extname(srcPath));
-  if (!IDENT.test(base)) return [];
-  return grepLines(["-rlE", "--include=*.ts", `import.*${base}`, "src/tests"]);
+  return pkgFindTestsFor(srcPath, REPO_ROOT);
 }
 
 /** get_architecture — static layer map / lockstep rules / entry points. */

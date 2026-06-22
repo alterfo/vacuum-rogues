@@ -14,7 +14,12 @@ export class WebWorkerPool {
   private taskIdCounter = 0;
 
   constructor(
-    private readonly workerScript: string,
+    // Either a script URL (string) or a factory that builds a Worker. The
+    // factory form is what production uses: ONNXModelRegistry passes
+    // `() => new InferenceWorker()` from a Vite `?worker` import so the worker
+    // is COMPILED into a real chunk. The string form (`new Worker(url)`) only
+    // worked in dev — in prod the `?url` import shipped raw uncompiled `.ts`.
+    private readonly workerSource: string | (() => Worker),
     private readonly poolSize = 4,
   ) {
     this.initialize();
@@ -28,7 +33,10 @@ export class WebWorkerPool {
 
   private addWorker(index: number): void {
     try {
-      const worker = new Worker(this.workerScript, { type: "module" });
+      const worker =
+        typeof this.workerSource === "function"
+          ? this.workerSource()
+          : new Worker(this.workerSource, { type: "module" });
       worker.onmessage = (event) => this.handleMessage(index, event);
       worker.onerror = (error) => this.handleError(index, error);
       this.workers[index] = worker;

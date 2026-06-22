@@ -467,23 +467,31 @@ export class SpaceBackgroundLayer implements FlightModule {
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;
 
-    // Photorealistic nebula palettes — [dark-outer, mid-body, inner-hot, core-bright, accent].
+    // Photorealistic nebula palettes — [dark-outer, mid-body, inner-hot,
+    // core-bright, accent]. One palette per available backdrop-art FAMILY so the
+    // procedural clouds tint to match the nebula sprite behind them. The index
+    // aligns 1:1 with `families` below. Previously only red/blue art was ever
+    // selected (green + teal tiles shipped but unused), so most systems showed
+    // the same backdrop — every family is now in rotation.
     const palettes = [
-      [0x6e0a00, 0xcc2000, 0xff4400, 0xff8800, 0xffbb22], // warm red-orange
-      [0x05082a, 0x0d1a88, 0x2244cc, 0x4466ff, 0x88aaff], // deep blue-violet
-      [0x380012, 0x880030, 0xdd1060, 0xff44aa, 0xffaadd], // crimson-magenta
-      [0x2a1000, 0x993300, 0xff6600, 0xffaa00, 0xffee44], // amber-gold
-      [0x180040, 0x440088, 0x8800cc, 0xaa44ff, 0xddaaff], // purple-indigo
+      [0x6e0a00, 0xcc2000, 0xff4400, 0xff8800, 0xffbb22], // red — warm red-orange
+      [0x05082a, 0x0d1a88, 0x2244cc, 0x4466ff, 0x88aaff], // blue — deep blue-violet
+      [0x002a14, 0x0a7a3a, 0x18cc66, 0x44ffaa, 0xaaffcc], // green — emerald
+      [0x00222a, 0x067a7a, 0x10cccc, 0x44ffff, 0xaaffff], // teal — cyan
     ];
+    const families = ["red", "blue", "green", "teal"];
     const palIdx = rng.nextInt(0, palettes.length - 1);
     const palette = palettes[palIdx];
+    const palName = families[palIdx];
 
     // Backdrop art sprite — lazily loaded so large nebula PNGs don't block boot.
-    const palNames = ["red", "blue", "red", "red", "blue"];
-    const palName = palNames[palIdx];
+    // Vary the parallax DEPTH layer too (each family ships far/mid/near), giving
+    // 4 families × 3 depths = 12 distinct backdrops instead of 2.
+    const depths = ["mid", "near", "far"];
+    const depth = depths[rng.nextInt(0, depths.length - 1)];
     const backdropKey =
-      pickVariantKey("nebula", `${palName}_mid`, systemId) ??
-      pickVariantKey("nebula", `${palName}_near`, systemId);
+      pickVariantKey("nebula", `${palName}_${depth}`, systemId) ??
+      pickVariantKey("nebula", `${palName}_mid`, systemId);
     if (backdropKey) {
       // Show immediately from cache if already loaded (e.g. revisiting system),
       // otherwise load async and splice into skyContainer once ready.
@@ -502,8 +510,8 @@ export class SpaceBackgroundLayer implements FlightModule {
         this.skyContainer.addChildAt(bg, 0);
       };
       const cached =
-        pickVariant("nebula", `${palName}_mid`, systemId) ??
-        pickVariant("nebula", `${palName}_near`, systemId);
+        pickVariant("nebula", `${palName}_${depth}`, systemId) ??
+        pickVariant("nebula", `${palName}_mid`, systemId);
       if (cached) {
         mountBackdrop(cached);
       } else {
