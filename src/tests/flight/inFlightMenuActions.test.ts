@@ -35,10 +35,15 @@ interface EngineSpies {
   transitionTo: Mock;
 }
 
-function build(): { hud: FlightHud; uiLayer: Container; engine: EngineSpies } {
+function build(opts: { loadResolves?: boolean } = {}): {
+  hud: FlightHud;
+  uiLayer: Container;
+  engine: EngineSpies;
+  gameEngine: GameEngine;
+} {
   const uiLayer = new Container();
   const renderer = makeRenderer(uiLayer);
-  const loadGame = vi.fn(async () => true);
+  const loadGame = vi.fn(async () => opts.loadResolves ?? true);
   const transitionTo = vi.fn(async () => {});
   const gameEngine = {
     galaxy: { gameDays: 0 },
@@ -56,7 +61,7 @@ function build(): { hud: FlightHud; uiLayer: Container; engine: EngineSpies } {
   hud.initialize();
   // Wire exactly as SpaceFlightScene.initialize() does — same code path.
   wireFlightSystemMenu(hud, gameEngine);
-  return { hud, uiLayer, engine: { loadGame, transitionTo } };
+  return { hud, uiLayer, engine: { loadGame, transitionTo }, gameEngine };
 }
 
 /** Recursively collect every PixiJS Text node under a display object. */
@@ -121,15 +126,53 @@ describe("FlightHud — in-flight system menu actions", () => {
     hud.destroy();
   });
 
-  it("«В главное меню» transitions to MAIN_MENU exactly once", () => {
-    const { hud, uiLayer, engine } = build();
+  it("«В главное меню» transitions to MAIN_MENU once, passing the engine context", () => {
+    const { hud, uiLayer, engine, gameEngine } = build();
 
     hud.toggleSystemMenu();
     clickLabel(uiLayer, "В главное меню");
 
     expect(engine.transitionTo).toHaveBeenCalledTimes(1);
-    expect(engine.transitionTo).toHaveBeenCalledWith(SceneType.MAIN_MENU);
+    // MAIN_MENU is not auto-injected with gameEngine by transitionTo, so the
+    // context MUST be passed explicitly — else the main menu boots dead.
+    expect(engine.transitionTo).toHaveBeenCalledWith(SceneType.MAIN_MENU, {
+      gameEngine,
+    });
     expect(engine.loadGame).not.toHaveBeenCalled();
+
+    hud.destroy();
+  });
+
+  it("«Да» when the auto slot is missing (loadGame resolves false) toasts a failure, not silence", async () => {
+    const { hud, uiLayer, engine } = build({ loadResolves: false });
+
+    hud.toggleSystemMenu();
+    clickLabel(uiLayer, "Загрузить сохранение");
+    clickLabel(uiLayer, "Да");
+
+    expect(engine.loadGame).toHaveBeenCalledTimes(1);
+    // Flush the loadGame promise + its .then so the false-resolution toast lands
+    // (a macrotask drains all pending microtasks).
+    await new Promise((r) => setTimeout(r, 0));
+    expect(hasLabel(uiLayer, "Не удалось загрузить сохранение")).toBe(true);
+
+    hud.destroy();
+  });
+
+  it("[МЕНЮ] toggled while the confirm is open closes the modal, never stacks a menu", () => {
+    const { hud, uiLayer } = build();
+
+    hud.toggleSystemMenu();
+    clickLabel(uiLayer, "Загрузить сохранение");
+    expect(hud.isSystemMenuConfirmOpen()).toBe(true);
+
+    // The [МЕНЮ] toggle must tear the whole modal down, not raise a second menu
+    // panel layered over the open confirm.
+    hud.toggleSystemMenu();
+    expect(hud.isSystemMenuConfirmOpen()).toBe(false);
+    expect(hud.isSystemMenuOpen()).toBe(false);
+    expect(hasLabel(uiLayer, "Да")).toBe(false);
+    expect(hasLabel(uiLayer, "Продолжить")).toBe(false);
 
     hud.destroy();
   });

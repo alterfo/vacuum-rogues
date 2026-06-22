@@ -29,13 +29,30 @@ export function wireFlightSystemMenu(
 ): void {
   hud.onLoadSave = () =>
     hud.showSystemMenuConfirm(() => {
-      // Gated on hasSave(), but the slot could vanish/corrupt between the probe
-      // and this confirm — surface a toast instead of an unhandled rejection.
-      void gameEngine?.loadGame("auto")?.catch(() => {
-        hud.showMessage("Не удалось загрузить сохранение", 0xff4444);
-      });
+      // Gated on hasSave(), but that returns true for *any* slot while we load
+      // the "auto" slot specifically — a missing/corrupt auto slot resolves
+      // `false` (no throw, no transition) and a vanished slot can reject. Handle
+      // both so the player never lands silently back on the dead-end.
+      void gameEngine
+        ?.loadGame("auto")
+        .then((ok) => {
+          // On success loadGame drives its own transition (HUD already torn
+          // down); only the failure branch still has a live HUD to toast.
+          if (!ok) hud.showMessage("Не удалось загрузить сохранение", 0xff4444);
+        })
+        .catch(() => {
+          hud.showMessage("Не удалось загрузить сохранение", 0xff4444);
+        });
     });
-  hud.onMainMenu = () => void gameEngine?.transitionTo(SceneType.MAIN_MENU);
+  // MAIN_MENU is NOT in transitionTo's gameEngine auto-inject list, so the
+  // context must be passed explicitly — otherwise MainMenuScene boots with a
+  // null engine and both «Новая игра»/«Продолжить» are dead.
+  hud.onMainMenu = () =>
+    void gameEngine
+      ?.transitionTo(SceneType.MAIN_MENU, { gameEngine })
+      ?.catch(() => {
+        hud.showMessage("Не удалось вернуться в меню", 0xff4444);
+      });
 
   const refreshSaveAvailability = () => {
     const saveManager = gameEngine?.saveManager;

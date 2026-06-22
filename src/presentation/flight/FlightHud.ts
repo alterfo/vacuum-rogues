@@ -911,7 +911,10 @@ export class FlightHud implements FlightModule {
    * dead-end; the scene wires the load/quit callbacks (DIP).
    */
   toggleSystemMenu(): void {
-    if (this.systemMenuPanel) {
+    // The confirm sub-panel is a child state of the open menu; if either surface
+    // is up, [МЕНЮ] closes the whole modal rather than stacking a second menu
+    // panel over an open confirm (closeSystemMenu tears down both).
+    if (this.systemMenuPanel || this.systemMenuConfirmPanel) {
       this.closeSystemMenu();
       return;
     }
