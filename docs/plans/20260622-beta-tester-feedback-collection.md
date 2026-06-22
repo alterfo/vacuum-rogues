@@ -124,12 +124,24 @@ Standing rules:
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] Issue Form renders on `…/issues/new?template=beta-feedback.yml` with the
+- [x] Issue Form renders on `…/issues/new?template=beta-feedback.yml` with the
       diagnostics prefilled when opened from the button (manual/live check).
-- [ ] Both buttons open the prefilled issue in a new tab with correct context.
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only expected scope.
-- [ ] full unit suite `npm test -- --run` green (incl. untouched assertions);
-      `npm run lint` clean.
+      [manual test (skipped - not automatable): requires the deployed GitHub Pages
+      site + a live GitHub session; the form YAML + prefill `id` are unit-covered.]
+- [x] Both buttons open the prefilled issue in a new tab with correct context.
+      [manual test (skipped - not automatable): the opener seam + URL are unit-tested
+      (`inFlightMenuFeedback.test.ts`, `openFeedback.test.ts`) and both buttons are
+      screenshot-verified (`e2e/screenshots/{main-menu,in-flight}-feedback-button.png`);
+      opening a real browser tab is a live check.]
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — only expected scope.
+      (Branch is long-lived with many unrelated features, so the meaningful scope is
+      the feature's own commits `b31a5f0..HEAD`: only the 2 Issue-Form YAMLs, the build
+      defines `vite.config.ts`/`vite-env.d.ts`, the 3 `src/systems/feedback/` modules +
+      tests, the `MainMenuScene`/`flightSystemMenu`/`FlightHud` menu surfaces, E2E spec +
+      screenshots, and this plan. No surprise scope.)
+- [x] full unit suite `npm test -- --run` green (incl. untouched assertions);
+      `npm run lint` clean. (302 files / 2608 tests passed; lint 0 errors, 48
+      pre-existing `any` warnings in test files.)
 
 ## Technical Details
 - Everything is static-host-safe: the only network action is opening a GitHub URL
