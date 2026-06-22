@@ -28,12 +28,19 @@ Scenario: Дата идёт во время полёта
   `formatGameDate`. Календарь 12 × 30 = 360 дней (без сложных правил).
 - Внутренний счётчик `Galaxy.gameDays` сохраняется (на нём завязаны квесты);
   меняется только **отображение** на дату.
-- Применено в `SpaceFlightScene` (создание и обновление счётчика).
+- Внутри хода отображается ещё и суточное время (HH:MM): `formatGameTimestamp(gameDays)`
+  показывает дробную часть дня как время суток, чтобы дата визуально двигалась до пересечения
+  целого дня (иначе короткий ход выглядел «замёрзшим»). Рендер живёт в
+  `FlightHud.updateDayCounter`; сцена прокидывает дробный `SpaceFlightScene.currentDay`
+  через `setDayProvider`.
 
 ## Затрагиваемые файлы
 - `src/utils/gameCalendar.ts`
+- `src/presentation/flight/FlightHud.ts`
 - `src/presentation/SpaceFlightScene.ts`
 - `src/tests/gameCalendar.test.ts`
+- `src/tests/flight/turnDateAdvances.test.ts`
+- `src/tests/flight/turnDateDisplay.test.ts`
 
 ## Out of Scope
 - Дюрации («Перелёт: X дн.») остаются в днях — это интервалы, не даты

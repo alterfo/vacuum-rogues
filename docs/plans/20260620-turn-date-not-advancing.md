@@ -130,7 +130,7 @@ sub-day repro flipped `it.fails` → `it` (now green). All affected tests green;
       `< 1900` guard. Reclaimed the 4 over-budget lines without behaviour change — compacted the
       `currentDay` getter (two locals, prettier-canonical), folded the `waitDayAccum` comment into a
       trailing comment, tightened the `plannedRoute` comment 3→2 lines, dropped one stylistic blank;
-      now 1899 lines (matches the pre-plan baseline), full suite + guard green.
+      now 1898 lines (< 1900 guard), full suite + guard green.
 - [x] confirm no existing flight/HUD/calendar test assertions changed — the two plan commits
       (`43875a5`, `c6c7cc7`) touched only NEW test files (`turnDateAdvances.test.ts` created in Task 1,
       `turnDateDisplay.test.ts` new) plus production (`SpaceFlightScene.ts`, `FlightHud.ts`,

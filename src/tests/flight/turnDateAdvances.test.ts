@@ -112,12 +112,17 @@ describe("a turn advances sub-day time (the date SOURCE moves)", () => {
     };
     const updateShip = (dt: number) =>
       (scene as unknown as { updateShip(dt: number): void }).updateShip(dt);
-    /** The fractional day the player's date OUGHT to reflect (orbit source). */
-    const currentDay = () =>
+    /** The scene's REAL fractional-day getter — the production source shared by
+     * planet orbits (`getOrbitalDay`) and the HUD date read-out. Reading it here
+     * (not a local re-derivation) keeps the assertion honest: a regression in the
+     * getter — wrong sign, dropped `waitDayAccum`, wrong divisor — turns the test red. */
+    const currentDay = () => s.currentDay as number;
+    /** Independent hand-computed expectation, to pin the getter's exact formula. */
+    const expectedDay = () =>
       galaxy.gameDays +
       (s.distanceTraveled as number) / DISTANCE_PER_DAY +
       (s.waitDayAccum as number);
-    return { s, galaxy, updateShip, currentDay };
+    return { s, galaxy, updateShip, currentDay, expectedDay };
   }
 
   it("a short moving turn advances the fractional day but NOT the whole-day counter", () => {
@@ -133,7 +138,8 @@ describe("a turn advances sub-day time (the date SOURCE moves)", () => {
         this.shipX += 120;
       }),
     };
-    const { s, galaxy, updateShip, currentDay } = buildScene(physics);
+    const { s, galaxy, updateShip, currentDay, expectedDay } =
+      buildScene(physics);
     s.isTurnRunning = true;
 
     const dayBefore = currentDay();
@@ -143,7 +149,8 @@ describe("a turn advances sub-day time (the date SOURCE moves)", () => {
 
     expect(galaxy.gameDays).toBe(0); // whole-day counter frozen mid-turn …
     expect(s.distanceTraveled as number).toBeGreaterThan(0); // … but distance accrued
-    expect(currentDay()).toBeGreaterThan(dayBefore); // fractional day advanced
+    expect(currentDay()).toBeGreaterThan(dayBefore); // real getter's fractional day advanced
+    expect(currentDay()).toBe(expectedDay()); // … and matches the canonical formula
   });
 
   it("a short wait turn advances the fractional day but NOT the whole-day counter", () => {
@@ -155,7 +162,8 @@ describe("a turn advances sub-day time (the date SOURCE moves)", () => {
       timeScale: 1,
       update: vi.fn(),
     };
-    const { s, galaxy, updateShip, currentDay } = buildScene(physics);
+    const { s, galaxy, updateShip, currentDay, expectedDay } =
+      buildScene(physics);
     s.isTurnRunning = true;
 
     const dayBefore = currentDay();
@@ -164,7 +172,52 @@ describe("a turn advances sub-day time (the date SOURCE moves)", () => {
 
     expect(galaxy.gameDays).toBe(0); // whole-day counter frozen mid-wait …
     expect(s.waitDayAccum as number).toBeGreaterThan(0); // … but wait-time accrued
-    expect(currentDay()).toBeGreaterThan(dayBefore); // fractional day advanced
+    expect(currentDay()).toBeGreaterThan(dayBefore); // real getter's fractional day advanced
+    expect(currentDay()).toBe(expectedDay()); // … and matches the canonical formula
+  });
+
+  // End-to-end: a real scene turn drives a REAL FlightHud's date label through the
+  // whole chain — scene accumulators → scene.currentDay getter → setDayProvider
+  // closure → updateDayCounter → formatGameTimestamp → Text. The unit tests above
+  // and in turnDateDisplay.test.ts each cover one link; this asserts they compose,
+  // wired the way SpaceFlightScene.createUI does it (`setDayProvider(() => this.currentDay)`).
+  it("a real scene turn moves the real HUD date label (composed end-to-end)", () => {
+    const physics = {
+      shipX: 0,
+      shipY: 0,
+      isMoving: true,
+      currentSpeed: 1,
+      timeScale: 1,
+      update: vi.fn(function (this: { shipX: number }) {
+        this.shipX += 120;
+      }),
+    };
+    const { s, updateShip, currentDay } = buildScene(physics);
+    s.isTurnRunning = true;
+
+    // A real FlightHud (real PixiJS Text in jsdom) whose own engine only feeds the
+    // initialize()/fallback path; the date source is the SEPARATE scene's getter.
+    const hudEngine = {
+      galaxy: { gameDays: 0 },
+      audio: { playUiClick() {}, playUiHover() {}, playToast() {} },
+      questManager: {},
+      player: { getReputation: () => 0 },
+    } as unknown as GameEngine;
+    const hud = new FlightHud(makeRenderer(), hudEngine, new Container());
+    hud.initialize();
+    hud.setDayProvider(() => currentDay()); // mirrors the production wiring shape
+    const label = () =>
+      (hud as unknown as { dayCounterText: Text }).dayCounterText.text;
+
+    hud.update(16, 0);
+    const before = label();
+    updateShip(16);
+    updateShip(16);
+    updateShip(16); // accrue sub-day distance on the real scene (still day 0)
+    hud.update(16, 0);
+
+    expect(label()).not.toBe(before); // the rendered label moved, driven by the scene turn
+    hud.destroy();
   });
 });
 

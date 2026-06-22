@@ -45,6 +45,14 @@ the fight (`endCombat` → `onCombatEnded` → `controller.reset` re-arms the de
 pausing onto an empty overlay. While paused, `onKeyDown` suppresses flight shortcuts so the player
 can't escape the deliberate choice.
 
+**Single sub-day clock:** the fractional `SpaceFlightScene.currentDay` getter
+(`gameDays + distanceTraveled/DISTANCE_PER_DAY + waitDayAccum`) is the **one** source for
+sub-day time — it feeds both planet orbits (the `getOrbitalDay` dep) **and** the HUD date
+read-out, pushed in via `FlightHud.setDayProvider(() => this.currentDay)`.
+`FlightHud.updateDayCounter` renders it with `formatGameTimestamp` (date + HH:MM clock); with no
+provider wired it falls back to whole-day `galaxy.gameDays`. Do **not** re-derive the fractional
+day at a call site or render the HUD date straight from `gameDays` (that was the frozen-date bug).
+
 Rules: a module never imports another — the scene mediates via callbacks + `*Deps` bundles;
 each `destroy()` must leave `gameLayer.children.length === 0`; dispose `BlurFilter`s in
 `destroy()`. **Line-count guard: `SpaceFlightScene.ts` < 1900 lines**
