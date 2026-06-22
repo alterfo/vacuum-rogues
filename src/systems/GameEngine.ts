@@ -1191,9 +1191,21 @@ export class GameEngine {
       SceneType.BANK,
     ];
     const savedScene = save.currentSceneType ?? SceneType.SPACE_FLIGHT;
-    const sceneType = contextDependentScenes.includes(savedScene)
-      ? SceneType.SPACE_FLIGHT
-      : savedScene;
+    // A save may name a scene that no longer exists — notably the removed hex
+    // SceneType.COMBAT (combat is now real-time in-flight only). An old autosave
+    // taken inside the hex CombatScene persisted currentSceneType: "COMBAT"
+    // (transitionTo autosaves every gameplay scene), and that string still
+    // validates (schema is z.string()). Without this guard it would reach
+    // transitionTo("COMBAT") → SceneFactory returns null → INVALID_SCENE crash on
+    // "Continue". Treat any unknown/removed scene like a context-dependent one and
+    // fall back to SPACE_FLIGHT.
+    const isKnownScene = (Object.values(SceneType) as string[]).includes(
+      savedScene,
+    );
+    const sceneType =
+      !isKnownScene || contextDependentScenes.includes(savedScene)
+        ? SceneType.SPACE_FLIGHT
+        : savedScene;
 
     // Carry the persisted flight position forward so a subsequent autosave keeps
     // it, and resume the ship where it was on reload: pass it as

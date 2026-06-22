@@ -88,32 +88,8 @@ test.describe('Visual Regression Tests', () => {
     await page.screenshot({ path: `${SCREENSHOT_DIR}/inventory.png` });
   });
 
-  test('combat scene renders correctly', async ({ page }) => {
-    await page.goto('/');
-    const mainMenu = new MainMenuPage(page);
-    await mainMenu.waitForMainMenu();
-    await mainMenu.startNewGame();
-    await mainMenu.selectRace('OUTLANDERS');
-    await mainMenu.clickStartGame();
-    const spaceFlight = new SpaceFlightPage(page);
-    await spaceFlight.waitForSpaceFlight();
-    await page.evaluate(async () => {
-      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
-        transitionTo: (scene: string) => Promise<void>;
-      };
-      await engine.transitionTo('COMBAT');
-    });
-    await page.waitForFunction(
-      () => {
-        const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
-          currentScene: { constructor: { name: string } } | null;
-        };
-        return engine?.currentScene?.constructor.name === 'CombatScene';
-      },
-      { timeout: 10000 },
-    );
-    await page.screenshot({ path: `${SCREENSHOT_DIR}/combat.png` });
-  });
+  // Combat is real-time in-flight only — the hex CombatScene (SceneType.COMBAT)
+  // was removed, so there is no standalone combat scene to screenshot.
 
   test('station scene renders correctly', async ({ page }) => {
     await page.goto('/');

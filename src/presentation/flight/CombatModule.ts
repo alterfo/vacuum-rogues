@@ -100,8 +100,9 @@ export interface CombatModuleDeps {
  * added as combatants and fire at the player every
  * {@link GAME_BALANCE.combatFireIntervalMs}; the player's weapon auto-fires at
  * the same cadence against the {@link CombatModule.selectedTarget}. Nothing
- * freezes — ships keep moving and there is no scene transition (the turn-based
- * hex {@link CombatScene} survives only for scripted text-quest encounters).
+ * freezes — ships keep moving and there is no scene transition. Combat is
+ * real-time-only: the hex CombatScene was deleted, so every fight (including the
+ * OVERMIND-core boss and former scripted text-quest encounters) resolves here.
  *
  * Combatants leave the set when they die (player fire) or drift beyond scanner
  * range; combat ends automatically once the set empties.

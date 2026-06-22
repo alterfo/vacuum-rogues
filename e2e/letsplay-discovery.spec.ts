@@ -475,15 +475,8 @@ test.describe('Letsplay discovery — full loop, real visuals', () => {
     });
 
     // ── 20 Combat ──
-    await step('20-combat', async () => {
-      await page.evaluate(async () => {
-        const engine = getEngine();
-        await engine.transitionTo('COMBAT', { gameEngine: engine });
-      });
-      await waitForScene(page, 'CombatScene', 15_000);
-      await settle(page, 15);
-      await shot(page, 'lp-20-combat');
-    });
+    // Combat is real-time in-flight only now (the hex CombatScene / SceneType.COMBAT
+    // was removed), so there is no standalone combat scene to drive here.
 
     // ── 21 Return to main menu ──
     await step('21-back-to-menu', async () => {

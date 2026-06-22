@@ -273,5 +273,36 @@ describe("GameEngine persist location (US-021)", () => {
         gameEngine: engine,
       });
     });
+
+    it("falls back to SPACE_FLIGHT for a removed scene type (legacy hex COMBAT save)", async () => {
+      engine.galaxy = await diDeps.galaxyService.generate("test", 5);
+      engine.player = diDeps.playerService.createPlayer({
+        factionType: FactionType.OUTLANDERS,
+      });
+
+      // An old autosave taken inside the deleted hex CombatScene persisted
+      // currentSceneType: "COMBAT" (transitionTo autosaved every gameplay scene).
+      // The enum value is gone, so loading must NOT reach transitionTo("COMBAT")
+      // (→ SceneFactory null → INVALID_SCENE crash) — it falls back to flight.
+      const save = new SaveState(
+        1,
+        engine.galaxy,
+        engine.player,
+        [],
+        Date.now(),
+        "COMBAT" as SceneType,
+      );
+      (diDeps.saveService as MockSaveService).setSave("auto", save);
+
+      const transitionSpy = vi
+        .spyOn(engine, "transitionTo")
+        .mockResolvedValue(undefined);
+
+      const result = await engine.loadGame("auto");
+      expect(result).toBe(true);
+      expect(transitionSpy).toHaveBeenCalledWith(SceneType.SPACE_FLIGHT, {
+        gameEngine: engine,
+      });
+    });
   });
 });

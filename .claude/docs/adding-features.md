@@ -6,7 +6,7 @@
 1. Create class extending `GameScene` in `src/presentation/`
 2. Add `SceneType.MY_SCENE` to `src/types/index.ts`
 3. Add a `case SceneType.MY_SCENE:` to `src/core/services/SceneFactory.ts`
-4. If the scene requires transient context (planet, NPC, station), add it to `contextDependentScenes` in `GameEngine.loadGame()` so "Continue" falls back to SPACE_FLIGHT instead of a blank screen (currently: `PLANET`, `TRADE`, `DIALOGUE`, `COMBAT`, `INVENTORY`, `STATION`, `EQUIPMENT_SHOP`, `GOVERNMENT`, `TEXT_QUEST`, `WIN_SCREEN`, `INFO_CENTER`, `BANK`)
+4. If the scene requires transient context (planet, NPC, station), add it to `contextDependentScenes` in `GameEngine.loadGame()` so "Continue" falls back to SPACE_FLIGHT instead of a blank screen (currently: `PLANET`, `TRADE`, `DIALOGUE`, `INVENTORY`, `STATION`, `EQUIPMENT_SHOP`, `GOVERNMENT`, `TEXT_QUEST`, `WIN_SCREEN`, `INFO_CENTER`, `BANK`). `loadGame` also routes any *unknown/removed* scene type (e.g. the deleted `COMBAT`) to SPACE_FLIGHT, so retiring a scene never crashes an old save on load.
 5. Add Page Object in `e2e/page-objects/` for E2E tests
 
 **Terminal scenes (win/lose, e.g. `WIN_SCREEN`, `GAME_OVER`) must NOT be auto-saved.** `GameEngine.transitionTo()` autosaves to the `"auto"` slot on every gameplay transition; entering a terminal screen would clobber the player's last real checkpoint (and a later "Continue" would re-enter the dead/end screen). Exclude such a scene from that block (`sceneType !== SceneType.X` — see `GAME_OVER`). Pick **one** mechanism per terminal scene: either exclude it from autosave (`GAME_OVER`) **or** keep it in `contextDependentScenes` so a load bounces to SPACE_FLIGHT (`WIN_SCREEN`) — do not leave a terminal scene both resumable and autosaving.

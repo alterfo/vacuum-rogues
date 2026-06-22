@@ -1653,14 +1653,24 @@ export class NpcShipManager implements FlightModule {
       OVERMIND_CORE_ID,
       systemId,
     );
-    // Boss stats: far tougher than a patrol Доминатор (mirrors the old hex
-    // encounter's overmind_core: 300 hull / 150 shields / 45 damage).
+    // Boss stats: far tougher than a patrol Доминатор. Real-time combat does NOT
+    // model shields (firePlayerShot/fireNpcShot only touch hullHP), so fold the
+    // old hex encounter's 150-shield layer into the hull — 300 hull + 150 shields
+    // = 450 effective HP — to preserve the boss's intended toughness. Damage 45 as
+    // before.
     core.name = "Ядро OVERMIND";
-    core.hullHP = 300;
-    core.maxHull = 300;
-    core.shields = 150;
+    core.hullHP = 450;
+    core.maxHull = 450;
     core.damage = 45;
     core.markHostile();
+
+    // Register the boss in the domain galaxy like every other in-system spawn
+    // (garrison/capture-fleet callers push too): a day boundary during the fight
+    // calls advanceGalaxyDay() → refresh(), which begins-departure on any sprite
+    // absent from galaxy.npcShips. Without this the core flies out and the win
+    // becomes unreachable; handleInFlightDeath's removeNpc would also no-op.
+    const galaxy = this.gameEngine?.galaxy;
+    if (galaxy) galaxy.npcShips.push(core);
 
     this.addNpcSprite(core, true); // enter from the boundary and fly in
     const sprite = this.npcSprites.find((s) => s.npc.id === OVERMIND_CORE_ID);

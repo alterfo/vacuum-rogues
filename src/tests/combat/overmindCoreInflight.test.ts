@@ -90,6 +90,35 @@ describe("OVERMIND core — real-time in-flight boss (no hex CombatScene)", () =
     manager.destroy();
   });
 
+  it("registers the boss in the galaxy so a day-tick refresh keeps it (no despawn)", () => {
+    const { manager, galaxy } = makeHarness();
+
+    (
+      manager as unknown as { spawnOvermindCoreCombatant(): void }
+    ).spawnOvermindCoreCombatant();
+
+    // The boss must live in the domain galaxy — npcsPresentInSystem reads it, and
+    // a day boundary during the fight calls refresh() which begins-departure on
+    // any sprite absent from galaxy.npcShips. Boss stats folded the shield layer
+    // into the hull (300 + 150 = 450).
+    const ships = galaxy.npcShips as { id: string; maxHull: number }[];
+    const coreShip = ships.find((n) => n.id === "overmind_core");
+    expect(coreShip).toBeDefined();
+    expect(coreShip!.maxHull).toBe(450);
+
+    const sprites = (manager as unknown as { npcSprites: NpcShipSprite[] })
+      .npcSprites;
+    const core = sprites.find((s) => s.npc.id === "overmind_core");
+    expect(core).toBeDefined();
+
+    // A refresh (fired on every in-flight day boundary) must NOT send the boss
+    // departing — it would if the core were absent from galaxy.npcShips.
+    manager.refresh();
+    expect((core as unknown as { departing: boolean }).departing).toBe(false);
+
+    manager.destroy();
+  });
+
   it("is idempotent — a second prompt-attack does not double-spawn", () => {
     const { manager, engaged } = makeHarness();
     const spawn = () =>
