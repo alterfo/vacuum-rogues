@@ -67,6 +67,11 @@ export class FlightHud implements FlightModule {
   private gearButton: UiButton | null = null;
   private settingsPanel: Container | null = null;
 
+  // In-flight system menu (top-left [МЕНЮ] button) + its toggled panel. Always
+  // reachable so the player can load a save or quit from any dead-end — a
+  // general escape hatch, not a fragile "stuck" auto-detect.
+  private systemMenuPanel: Container | null = null;
+
   // [?] help overlay (toggled by the [?] Text button in uiContainer).
   private helpOverlay: Container | null = null;
 
@@ -114,6 +119,13 @@ export class FlightHud implements FlightModule {
   onFontScaleChange: (() => void) | null = null;
   /** [I] inventory shortcut button was pressed. */
   onInventory: (() => void) | null = null;
+  /**
+   * «Загрузить сохранение» pressed in the in-flight system menu. The scene
+   * confirms then loads the `"auto"` slot (the dead-end recovery path).
+   */
+  onLoadSave: (() => void) | null = null;
+  /** «В главное меню» pressed in the in-flight system menu. */
+  onMainMenu: (() => void) | null = null;
 
   constructor(
     renderer: Renderer,
@@ -162,6 +174,7 @@ export class FlightHud implements FlightModule {
       this.settingsPanel.destroy({ children: true });
       this.settingsPanel = null;
     }
+    this.closeSystemMenu();
     if (this.helpOverlay) {
       this.helpOverlay.destroy({ children: true });
       this.helpOverlay = null;
@@ -227,6 +240,7 @@ export class FlightHud implements FlightModule {
       this.settingsPanel.destroy({ children: true });
       this.settingsPanel = null;
     }
+    this.closeSystemMenu();
     // Speed + gear buttons mount on the UI layer directly (not uiContainer), so
     // destroy their containers explicitly. UiButton has no destroy() of its own.
     if (this.speedButton) {
@@ -330,6 +344,11 @@ export class FlightHud implements FlightModule {
     if (this.dayCounterText) {
       this.dayCounterText.y = 50;
     }
+    if (this.systemMenuPanel) {
+      const b = this.systemMenuPanel.getLocalBounds();
+      this.systemMenuPanel.x = Math.round((w - b.width) / 2);
+      this.systemMenuPanel.y = Math.round((h - b.height) / 2);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -339,6 +358,11 @@ export class FlightHud implements FlightModule {
   /** True while the font-size settings panel is open. */
   isSettingsPanelOpen(): boolean {
     return this.settingsPanel !== null;
+  }
+
+  /** True while the in-flight system menu is open. */
+  isSystemMenuOpen(): boolean {
+    return this.systemMenuPanel !== null;
   }
 
   /** True while the quest journal is open. */
@@ -443,6 +467,13 @@ export class FlightHud implements FlightModule {
       // panel) before the microtask fires — destroying it twice throws.
       queueMicrotask(() => {
         if (!sp.destroyed) sp.destroy({ children: true });
+      });
+    }
+    if (this.systemMenuPanel) {
+      const mp = this.systemMenuPanel;
+      this.systemMenuPanel = null;
+      queueMicrotask(() => {
+        if (!mp.destroyed) mp.destroy({ children: true });
       });
     }
   }
@@ -570,6 +601,36 @@ export class FlightHud implements FlightModule {
       helpBtn.alpha = 1;
     });
     this.uiContainer.addChild(helpBtn);
+
+    // System menu button [МЕНЮ] — top-left, opens the always-available in-flight
+    // system menu (Продолжить / Загрузить сохранение / В главное меню) so the
+    // player can recover from any dead-end (e.g. stranded, <30% hull, broke).
+    const menuBtn = new Text({
+      text: "[МЕНЮ]",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(14),
+        fill: 0xffaa00,
+        fontWeight: "bold" as const,
+      },
+    });
+    menuBtn.x = 20;
+    menuBtn.y = 20;
+    menuBtn.eventMode = "static";
+    menuBtn.cursor = "pointer";
+    menuBtn.on("pointerdown", (event) => {
+      event.stopPropagation();
+      this.gameEngine?.audio?.playUiClick();
+      this.toggleSystemMenu();
+    });
+    menuBtn.on("pointerover", () => {
+      this.gameEngine?.audio?.playUiHover();
+      menuBtn.alpha = 0.7;
+    });
+    menuBtn.on("pointerout", () => {
+      menuBtn.alpha = 1;
+    });
+    this.uiContainer.addChild(menuBtn);
 
     // Star map button
     const backBtn = new Text({
@@ -788,6 +849,123 @@ export class FlightHud implements FlightModule {
     panel.y = panelY;
     this.uiLayer.addChild(panel);
     this.settingsPanel = panel;
+  }
+
+  /**
+   * Toggle the in-flight system menu — a centred modal panel with «Продолжить»
+   * (close), «Загрузить сохранение» (→ {@link onLoadSave}) and «В главное меню»
+   * (→ {@link onMainMenu}). Always reachable so the player can escape any
+   * dead-end; the scene wires the load/quit callbacks (DIP).
+   */
+  toggleSystemMenu(): void {
+    if (this.systemMenuPanel) {
+      this.closeSystemMenu();
+      return;
+    }
+
+    const screenW = this.renderer.app.screen.width;
+    const screenH = this.renderer.app.screen.height;
+    const PAD = 16;
+    const TITLE_H = 34;
+    const BTN_H = 40;
+    const GAP = 10;
+    const panelW = 300;
+    const panelH = PAD + TITLE_H + 3 * BTN_H + 2 * GAP + PAD;
+    const btnW = panelW - PAD * 2;
+
+    const panel = new Container();
+    panel.eventMode = "static";
+    // Swallow clicks on the panel so the scene's outside-click handler doesn't
+    // close it from under the player (mirrors the settings panel).
+    panel.on("pointerdown", (e) => e.stopPropagation());
+
+    const bg = new Graphics();
+    bg.roundRect(0, 0, panelW, panelH, 8).fill({
+      color: 0x0a1520,
+      alpha: 0.96,
+    });
+    bg.roundRect(0, 0, panelW, panelH, 8).stroke({ color: 0x334455, width: 1 });
+    panel.addChild(bg);
+
+    const title = new Text({
+      text: "СИСТЕМНОЕ МЕНЮ",
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(16),
+        fill: 0x00ccff,
+        fontWeight: "bold" as const,
+      },
+    });
+    title.anchor.set(0.5, 0);
+    title.x = panelW / 2;
+    title.y = PAD;
+    title.eventMode = "none";
+    panel.addChild(title);
+
+    let btnY = PAD + TITLE_H;
+
+    const resumeBtn = new UiButton(
+      "",
+      "Продолжить",
+      "success",
+      (event) => {
+        event.stopPropagation();
+        this.gameEngine?.audio?.playUiClick();
+        this.closeSystemMenu();
+      },
+      btnW,
+      BTN_H,
+    );
+    resumeBtn.x = PAD;
+    resumeBtn.y = btnY;
+    panel.addChild(resumeBtn.container);
+    btnY += BTN_H + GAP;
+
+    const loadBtn = new UiButton(
+      "",
+      "Загрузить сохранение",
+      "primary",
+      (event) => {
+        event.stopPropagation();
+        this.gameEngine?.audio?.playUiClick();
+        this.onLoadSave?.();
+      },
+      btnW,
+      BTN_H,
+    );
+    loadBtn.x = PAD;
+    loadBtn.y = btnY;
+    panel.addChild(loadBtn.container);
+    btnY += BTN_H + GAP;
+
+    const mainMenuBtn = new UiButton(
+      "",
+      "В главное меню",
+      "danger",
+      (event) => {
+        event.stopPropagation();
+        this.gameEngine?.audio?.playUiClick();
+        this.onMainMenu?.();
+      },
+      btnW,
+      BTN_H,
+    );
+    mainMenuBtn.x = PAD;
+    mainMenuBtn.y = btnY;
+    panel.addChild(mainMenuBtn.container);
+
+    panel.x = Math.round((screenW - panelW) / 2);
+    panel.y = Math.round((screenH - panelH) / 2);
+    this.uiLayer.addChild(panel);
+    this.systemMenuPanel = panel;
+  }
+
+  /** Close + destroy the in-flight system menu panel (idempotent). */
+  closeSystemMenu(): void {
+    if (this.systemMenuPanel) {
+      this.systemMenuPanel.destroy({ children: true });
+      this.systemMenuPanel = null;
+    }
   }
 
   /** Cycle game speed through 1×/2×/4× and update the button label + physics. */
