@@ -203,8 +203,6 @@ export class SpaceFlightScene extends GameScene {
 
     this.combatModule = new CombatModule({
       getShipPhysics: () => this.shipPhysics,
-      // Combat fire is real-time — gated on the active-pause ONLY, not the route
-      // "Ход". Ship movement + the calendar stay turn-gated via updateShip.
       isPaused: () => this.combatPause.paused,
       getPlayerLoadout: () => this.gameEngine?.playerLoadout ?? null,
       getUiLayer: () => this.renderer.uiLayer,
@@ -220,7 +218,10 @@ export class SpaceFlightScene extends GameScene {
       onPlayerDestroyed: () => this.gameEngine?.triggerPlayerDeath(),
       onPlayerUnderAttack: () =>
         this.combatPause.requestPause("incoming-attack"),
-      onCombatEnded: () => this.combatPause.reset(), // re-arm pause debounce
+      onCombatEnded: () => {
+        this.combatPause.reset(); // re-arm pause debounce
+        if (!this.destroyed) this.endTurn(); // combat over → end the turn (skip teardown)
+      },
       onTargetLost: (npc) => this.combatPause.loseTarget(npc), // re-pause on lost target
       showMessage: (t, c) => this.hud.showMessage(t, c),
     });
@@ -251,7 +252,6 @@ export class SpaceFlightScene extends GameScene {
         startInFlightCombat: (sprite) => this.combatModule.addCombatant(sprite),
         isInCombat: () => this.combatModule.isActive,
         selectCombatTarget: (s) => this.combatModule.selectTarget(s),
-        // Real-time mutual pursuit while engaged (Task 3) — see updateCombatPursuit.
         getCombatTargetId: () =>
           this.combatModule.selectedTarget?.npc.id ?? null,
         isCombatant: (sprite) => this.combatModule.combatants.has(sprite),
@@ -557,8 +557,7 @@ export class SpaceFlightScene extends GameScene {
     this.starRenderer.update(deltaTime, this.bgElapsed);
     this.warpFx.update(deltaTime);
     this.updateShip(deltaTime);
-    // Sync the ship sprite to the post-physics position (or walk the take-off
-    // arc), redraw engine effects, and refresh the heading crosshair.
+    // Sync the ship sprite to physics (or walk the take-off arc) + redraw FX.
     this.playerShip.update(deltaTime, this.bgElapsed);
     this.npcManager.updateCombat(deltaTime);
     this.combatModule.update(deltaTime, this.bgElapsed);

@@ -358,15 +358,23 @@ export class CombatModule implements FlightModule {
    * sprite (double-free / duplicate loot).
    */
   private pruneDisengaged(): void {
-    for (const npc of [...this.combatants]) {
-      if (npc.container?.destroyed) {
-        this.removeCombatant(npc);
-        continue;
-      }
-      const d = this.distanceToShip(npc);
-      if (d === null || d > GAME_BALANCE.combatEscapeRange)
-        this.removeCombatant(npc);
-    }
+    const toDrop = [...this.combatants].filter((npc) => this.shouldDrop(npc));
+    // Drop the *selected* target LAST: a bulk prune that empties the set must not
+    // raise a transient target-lost re-pause onto a survivor that is itself pruned
+    // the same frame — that would freeze the fight on an empty overlay (a stuck
+    // turn with no combatants). Removing the others first means the selected drop
+    // only re-pauses when a genuine survivor remains.
+    for (const npc of toDrop)
+      if (npc !== this.selectedTarget) this.removeCombatant(npc);
+    if (this.selectedTarget && toDrop.includes(this.selectedTarget))
+      this.removeCombatant(this.selectedTarget);
+  }
+
+  /** A combatant disengages when its sprite is destroyed or opens beyond escape range. */
+  private shouldDrop(npc: NpcShipSprite): boolean {
+    if (npc.container?.destroyed) return true;
+    const d = this.distanceToShip(npc);
+    return d === null || d > GAME_BALANCE.combatEscapeRange;
   }
 
   /** Advance every NPC's fire timer; fire its shot at the player when it elapses and the NPC is in range. */

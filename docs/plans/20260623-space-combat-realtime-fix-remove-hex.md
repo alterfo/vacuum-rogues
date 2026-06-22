@@ -173,15 +173,28 @@ Related patterns:
   `SpaceFlightScene.ts` (pause→fire→resume→end lifecycle)
 - Create/Modify tests under `src/tests/`
 
-- [ ] Trace the stall: a route-turn that enters combat and active-pauses must be
+- [x] Trace the stall: a route-turn that enters combat and active-pauses must be
       able to **complete or stop** — confirm («Огонь!») fires one shot, resumes, and
       either the fight continues in real time or, when the last combatant dies/flees,
-      `endCombat` runs and the turn ends (no permanently-stuck `isTurnRunning`).
-- [ ] Ensure «Продолжить»/Esc resume and a target-lost re-pause never leave the
-      turn flag stuck true with no combatants.
-- [ ] write tests for the lifecycle: requestPause → confirm → resume → last
-      combatant removed → combat ends and the turn-running projection clears.
-- [ ] run touched tests — green.
+      `endCombat` runs and the turn ends (no permanently-stuck `isTurnRunning`). Done:
+      `SpaceFlightScene`'s `onCombatEnded` now also calls `endTurn()` (skipped on
+      teardown so a terminal scene isn't autosaved), so when the module's `endCombat`
+      fires the route-turn flag clears — previously nothing ended the turn and a
+      resolved fight left `isTurnRunning` stuck true ("ход не кончается после выстрела").
+- [x] Ensure «Продолжить»/Esc resume and a target-lost re-pause never leave the
+      turn flag stuck true with no combatants. Done: `CombatModule.pruneDisengaged`
+      now drops the *selected* target LAST (`shouldDrop` helper) so a bulk prune that
+      empties the set can't raise a transient target-lost re-pause onto a survivor
+      that is itself pruned the same frame — which would freeze the fight on an empty
+      overlay (stuck turn, no combatants). Genuine target-lost re-pauses (a real
+      survivor remains) are unchanged.
+- [x] write tests for the lifecycle: requestPause → confirm → resume → last
+      combatant removed → combat ends and the turn-running projection clears. New:
+      `src/tests/combat/turnEndsAfterCombat.test.ts` (4 tests, production wiring:
+      pause→confirm-kill-last→ends; real-time auto-fire kill→ends; Продолжить→bulk
+      flee→ends with no empty-overlay pause; target-lost re-pause→confirm-kill→ends).
+- [x] run touched tests — green (396 combat/flight tests pass incl. the size guard;
+      tsc + lint clean; `SpaceFlightScene.ts` 1899 lines, under the 1900 guard).
 
 ### Task 5: Delete the hex CombatScene (real-time only)
 **Files:**
