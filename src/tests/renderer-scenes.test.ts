@@ -255,35 +255,7 @@ describe("Renderer and Scenes", () => {
       expect(engine.currentScene).not.toBeInstanceOf(MainMenuScene);
     });
 
-    it("AC3: Transition to COMBAT shows hex grid placeholder", async () => {
-      const engine = new GameEngine();
-
-      const mockRenderer = {
-        app: {
-          screen: { width: 800, height: 600 },
-          canvas: document.createElement("canvas"),
-          renderer: { type: "webgl", resize: vi.fn() },
-          ticker: { start: vi.fn() },
-          stage: { eventMode: "auto", addChild: vi.fn() },
-        },
-        gameLayer: {
-          addChild: vi.fn(),
-          addChildAt: vi.fn(),
-          children: [],
-          removeChild: vi.fn(),
-        },
-        uiLayer: { addChild: vi.fn(), children: [], removeChild: vi.fn() },
-        stage: { addChild: vi.fn() },
-        clearGameLayer: vi.fn(),
-        clearUILayer: vi.fn(),
-      } as unknown as Renderer;
-
-      engine.renderer = mockRenderer;
-
-      await engine.transitionTo(SceneType.COMBAT, { gameEngine: engine });
-
-      expect(engine.currentScene).toBeDefined();
-      // CombatScene should be instantiated (exact implementation varies)
-    });
+    // (Removed: the hex CombatScene no longer exists — combat is real-time
+    // in-flight only, so there is no SceneType.COMBAT transition to assert.)
   });
 });

@@ -49,9 +49,17 @@ describe("SceneFactory", () => {
     expect(scene).toBeDefined();
   });
 
-  it("should create CombatScene", () => {
-    const scene = factory.createScene(SceneType.COMBAT, mockRenderer);
-    expect(scene).toBeDefined();
+  // The hex CombatScene was removed (real-time in-flight combat only). The
+  // SceneType.COMBAT value is gone and the factory no longer resolves it.
+  it("no longer exposes a COMBAT scene type", () => {
+    expect(
+      (SceneType as unknown as Record<string, string | undefined>).COMBAT,
+    ).toBeUndefined();
+  });
+
+  it("returns null for a removed/unknown scene type", () => {
+    const scene = factory.createScene("COMBAT" as SceneType, mockRenderer);
+    expect(scene).toBeNull();
   });
 
   it("should create DialogueScene", () => {

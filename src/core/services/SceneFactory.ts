@@ -5,7 +5,6 @@ import { SceneType } from "@/types";
 import { MainMenuScene } from "@/presentation/MainMenuScene";
 import { RaceSelectionScene } from "@/presentation/RaceSelectionScene";
 import { StarMapScene } from "@/presentation/StarMapScene";
-import { CombatScene } from "@/presentation/CombatScene";
 import { DialogueScene } from "@/presentation/DialogueScene";
 import { InventoryScene } from "@/presentation/InventoryScene";
 import { SpaceFlightScene } from "@/presentation/SpaceFlightScene";
@@ -34,8 +33,6 @@ export class SceneFactory implements ISceneFactory {
         return new RaceSelectionScene(renderer);
       case SceneType.STAR_MAP:
         return new StarMapScene(renderer);
-      case SceneType.COMBAT:
-        return new CombatScene(renderer);
       case SceneType.DIALOGUE:
         return new DialogueScene(renderer);
       case SceneType.INVENTORY:

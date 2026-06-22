@@ -60,6 +60,13 @@ const DEFAULT_LOOT_MODULES = [
 ];
 
 /**
+ * Galaxy/combatant id of the synthetic OVERMIND-core final boss. Killing the
+ * sprite carrying this id in real-time in-flight combat wins the game
+ * (see {@link NpcShipManager.handleInFlightDeath}).
+ */
+const OVERMIND_CORE_ID = "overmind_core";
+
+/**
  * Live state the manager reads from (or pushes back to) the host scene without
  * depending on the concrete {@link SpaceFlightScene}. Route planning, the turn
  * loop, the HUD (toast/tooltip) and the authoritative ship/planet/star geometry
@@ -893,6 +900,7 @@ export class NpcShipManager implements FlightModule {
     sprite: NpcShipSprite,
     rng: () => number = Math.random,
   ): void {
+    const wasOvermindCore = sprite.npc.id === OVERMIND_CORE_ID;
     this.spawnLootForNpc(sprite.npc, sprite.x, sprite.y, rng);
     const galaxy = this.gameEngine?.galaxy;
     if (galaxy) this.npcSimulator.removeNpc(galaxy, sprite.npc.id);
@@ -903,6 +911,9 @@ export class NpcShipManager implements FlightModule {
       sprite.container.parent.removeChild(sprite.container);
     }
     sprite.destroy();
+    // Destroying the OVERMIND core in-flight is the win condition (the old hex
+    // CombatScene victory called showGameOutcomeScreen(true) on the same kill).
+    if (wasOvermindCore) this.gameEngine?.showGameOutcomeScreen(true);
   }
 
   /** Roll the per-kill loot count: 0, 1 or 2 (uniform thirds). */
@@ -1437,10 +1448,12 @@ export class NpcShipManager implements FlightModule {
 
   /**
    * Remember the ship's current flight position on the GameEngine (transient,
-   * unsaved) so the SPACE_FLIGHT re-entry after a CombatScene round-trip resumes
-   * the ship right here instead of edge-spawning it (applyEntrySpawn fallback).
+   * unsaved) so a SPACE_FLIGHT re-entry resumes the ship right here instead of
+   * edge-spawning it (applyEntrySpawn fallback). Retained as a re-entry helper
+   * after the hex CombatScene round-trip was removed (combat is now real-time
+   * in-flight, so the boss no longer needs to stash position before a hop).
    */
-  private rememberFlightPos(): void {
+  rememberFlightPos(): void {
     const physics = this.deps.getShipPhysics();
     if (physics && this.gameEngine) {
       this.gameEngine.lastFlightShipPos = {
@@ -1623,6 +1636,41 @@ export class NpcShipManager implements FlightModule {
   // OVERMIND core final-encounter prompt
   // ---------------------------------------------------------------------------
 
+  /**
+   * Spawn the OVERMIND-core final boss as a real in-flight combatant — real-time
+   * combat only, no hex CombatScene. The core enters as a hostile OVERMIND craft
+   * that auto-closes on the player (aggressor maneuver, Task 3) and is selected
+   * as the player's auto-fire target; killing it in-flight wins the game
+   * ({@link handleInFlightDeath}). Idempotent: a second prompt-attack while the
+   * core is already engaged is a no-op.
+   */
+  private spawnOvermindCoreCombatant(): void {
+    if (this.npcSprites.some((s) => s.npc.id === OVERMIND_CORE_ID)) return;
+    const systemId = this.gameEngine?.player?.currentSystemId ?? "";
+    const rng = new SeededRNG(`overmind-core:${systemId}`);
+    const core = this.npcSimulator.spawnOvermindInSystem(
+      rng,
+      OVERMIND_CORE_ID,
+      systemId,
+    );
+    // Boss stats: far tougher than a patrol Доминатор (mirrors the old hex
+    // encounter's overmind_core: 300 hull / 150 shields / 45 damage).
+    core.name = "Ядро OVERMIND";
+    core.hullHP = 300;
+    core.maxHull = 300;
+    core.shields = 150;
+    core.damage = 45;
+    core.markHostile();
+
+    this.addNpcSprite(core, true); // enter from the boundary and fly in
+    const sprite = this.npcSprites.find((s) => s.npc.id === OVERMIND_CORE_ID);
+    if (!sprite) return;
+    sprite.setAggressive(true); // pursue the player to weapon range
+    this.deps.startInFlightCombat?.(sprite);
+    this.deps.selectCombatTarget?.(sprite);
+    this.deps.showMessage("Ядро OVERMIND вступает в бой!", 0xff2200);
+  }
+
   /** Show a prompt when entering the OVERMIND core system so the player can fight the final encounter. */
   showOvermindCorePrompt(): void {
     if (!this.gameEngine) return;
@@ -1700,18 +1748,9 @@ export class NpcShipManager implements FlightModule {
       e.stopPropagation();
       this.overmindOverlay = null;
       queueMicrotask(() => overlay.destroy({ children: true }));
-      this.rememberFlightPos(); // resume here after combat, not at the system edge
-      void this.gameEngine!.transitionTo(SceneType.COMBAT, {
-        gameEngine: this.gameEngine!,
-        isOvermindCore: true,
-        npcEnemy: {
-          id: "overmind_core",
-          hullHP: 300,
-          shields: 150,
-          damage: 45,
-          techLevel: 7,
-        },
-      });
+      // Real-time only: the core fights in-flight via the CombatModule (no hex
+      // CombatScene hop). Killing it wins the game (handleInFlightDeath).
+      this.spawnOvermindCoreCombatant();
     });
 
     const retreatBtn = new Container();

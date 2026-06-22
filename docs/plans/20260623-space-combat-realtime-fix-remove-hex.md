@@ -206,21 +206,39 @@ Related patterns:
 - Modify (feature-removal): `src/tests/renderer-scenes.test.ts`,
   `src/tests/core/SceneFactory.test.ts`
 
-- [ ] `gitnexus impact` on `SceneType.COMBAT` and `CombatScene`; enumerate every
-      reference. Warn — central enum/factory (likely HIGH).
-- [ ] Re-point the OVERMIND-core boss encounter (`NpcShipManager.ts:1635`) to the
-      in-flight `CombatModule` (spawn the core as an in-flight combatant) instead of
-      `transitionTo(SceneType.COMBAT)`; do the same for any scripted text-quest
-      combat that targeted the hex scene. If a faithful in-flight boss is out of
-      scope, gate the prompt to resolve in-flight rather than open the hex.
-- [ ] Remove `CombatScene.ts`, the `SceneType.COMBAT` enum value, the SceneFactory
-      case, and the GameEngine contextDependent/loadGame references. Decide the fate
-      of `OVERMIND_COMBAT_HP_MULT`/`OVERMIND_COMBAT_DAMAGE_MULT` (drop, or apply them
-      in `CombatModule` for hostile systems — note in the plan if deferred).
-- [ ] Update `renderer-scenes.test.ts` / `SceneFactory.test.ts` to drop the COMBAT
-      scene expectations (feature removed — not a weakened assertion); add a test
-      that `SceneType.COMBAT` no longer resolves / is gone.
-- [ ] run touched tests + `tsc` — green (no dangling `SceneType.COMBAT`).
+- [x] `gitnexus impact` on `SceneType.COMBAT` and `CombatScene`; enumerate every
+      reference. (CombatScene impact = LOW — the only direct creator is
+      `SceneFactory`. Full reference set: SceneFactory import+case, GameEngine L487
+      autosave block / L1185 contextDependentScenes / L1687 playSceneTrack music
+      case, NpcShipManager boss-attack `transitionTo`, and the two scene-registration
+      tests. No HIGH/CRITICAL — the enum value is not a hub.)
+- [x] Re-point the OVERMIND-core boss to the in-flight `CombatModule`: the prompt's
+      «Атаковать ядро» now calls a new `NpcShipManager.spawnOvermindCoreCombatant()`
+      that mints the core via `npcSimulator.spawnOvermindInSystem` (300 hull / 150
+      shields / 45 damage, hostile), spawns it as an aggressive in-flight combatant,
+      and selects it as the player's auto-fire target — no `SceneType.COMBAT` hop.
+      Killing it in-flight wins the game: `handleInFlightDeath` calls
+      `gameEngine.showGameOutcomeScreen(true)` when the dead sprite is the core (the
+      same win the hex victory used to fire). No scripted text-quest combat targeted
+      the hex scene (none transitioned to `SceneType.COMBAT`).
+- [x] Removed `CombatScene.ts` (+ its `combatScene.test.ts`), the `SceneType.COMBAT`
+      enum value, the SceneFactory import+case, and all three GameEngine references
+      (autosave block, contextDependentScenes, playSceneTrack music case).
+      `OVERMIND_COMBAT_HP_MULT`/`OVERMIND_COMBAT_DAMAGE_MULT` are **kept** in
+      `balance.ts` (still asserted by `combatLiberation.test.ts`, which must not be
+      weakened); their only production consumer (the hex scene) is gone, so applying
+      hostile-system difficulty scaling inside `CombatModule` stays **deferred** —
+      already a documented known limitation in `galaxy/CLAUDE.md`.
+- [x] Updated `SceneFactory.test.ts` (dropped "should create CombatScene"; added
+      "no longer exposes a COMBAT scene type" + "returns null for a removed/unknown
+      scene type") and `renderer-scenes.test.ts` (dropped the AC3 COMBAT-transition
+      test). New `src/tests/combat/overmindCoreInflight.test.ts` (4 tests) asserts the
+      in-flight boss spawn + win hook — all would have failed before (no in-flight
+      boss path existed; the prompt transitioned scenes instead).
+- [x] run touched tests + `tsc` — green: 1005 combat/flight/presentation/galaxy/core
+      tests pass, `tsc --noEmit` clean, `npm run lint` 0 errors. No dangling
+      `SceneType.COMBAT` in production code (only comments + `galaxy/CLAUDE.md`,
+      handled in Task 7).
 
 ### Task 6: Verify acceptance criteria
 **Files:**

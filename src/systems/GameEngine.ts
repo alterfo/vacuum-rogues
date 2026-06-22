@@ -484,7 +484,6 @@ export class GameEngine {
       sceneType === SceneType.PLANET ||
       sceneType === SceneType.DIALOGUE ||
       sceneType === SceneType.INVENTORY ||
-      sceneType === SceneType.COMBAT ||
       sceneType === SceneType.TRADE ||
       sceneType === SceneType.EQUIPMENT_SHOP ||
       sceneType === SceneType.INFO_CENTER ||
@@ -1182,7 +1181,6 @@ export class GameEngine {
       SceneType.PLANET,
       SceneType.TRADE,
       SceneType.DIALOGUE,
-      SceneType.COMBAT,
       SceneType.INVENTORY,
       SceneType.STATION,
       SceneType.EQUIPMENT_SHOP,
@@ -1683,9 +1681,6 @@ export class GameEngine {
         break;
       case SceneType.SPACE_FLIGHT:
         this.audio.playTrack("explore_calm").catch(() => {});
-        break;
-      case SceneType.COMBAT:
-        this.audio.playTrack("combat").catch(() => {});
         break;
       case SceneType.PLANET:
         this.audio.playTrack("planet_hub").catch(() => {});
