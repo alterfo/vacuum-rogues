@@ -67,13 +67,6 @@ interface StarLayer {
   zoomDepth: number;
 }
 
-interface DustMote {
-  graphics: Graphics;
-  x: number;
-  y: number;
-  depth: number; // 0..1 — nearer motes streak faster (parallax)
-}
-
 interface SwarmLayer {
   container: Container;
   driftX: number;
@@ -119,7 +112,6 @@ export class SpaceBackgroundLayer implements FlightModule {
   private readonly skyContainer: Container;
   private readonly systemId: string;
   private readonly getCamera: () => BackgroundCamera;
-  private readonly getShipVelocity: () => BackgroundShipVelocity | null;
   private destroyed = false;
 
   // Mid-ground parallax container (sits above the sky, below the game world).
@@ -150,9 +142,7 @@ export class SpaceBackgroundLayer implements FlightModule {
   private twinkleContainer: Container | null = null; // parallaxed with the near layer
   private readonly swarmLayers: SwarmLayer[] = []; // Glowing swarms in the nebula
 
-  // Foreground dust motes + vignette (on the UI layer).
-  private dustContainer: Container | null = null;
-  private readonly dustMotes: DustMote[] = [];
+  // Edge vignette (on the UI layer).
   private vignette: Graphics | null = null;
 
   // Readability dimmer: full-screen black overlay above all sky content (F2).
@@ -163,13 +153,16 @@ export class SpaceBackgroundLayer implements FlightModule {
     skyContainer: Container,
     systemId: string,
     getCamera: () => BackgroundCamera,
-    getShipVelocity: () => BackgroundShipVelocity | null,
+    // Retained for the constructor contract (the scene + module-contract tests
+    // pass a velocity provider). Its only consumer — the foreground speed-streak
+    // dust — was removed: those 190 per-frame Graphics redraws hurt FPS and read
+    // as "stretching stars".
+    _getShipVelocity: () => BackgroundShipVelocity | null,
   ) {
     this.renderer = renderer;
     this.skyContainer = skyContainer;
     this.systemId = systemId;
     this.getCamera = getCamera;
-    this.getShipVelocity = getShipVelocity;
   }
 
   private get width(): number {
@@ -190,8 +183,7 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.createStarField(); // Crisp far stars (screen-fixed)
     this.createTwinkleStars(); // Bright pulsing hero stars (screen-fixed)
     this.createDimmer(); // Readability dimmer above the whole sky (F2)
-    // Foreground dust streaks + edge vignette (UI layer).
-    this.createDust();
+    // Edge vignette (UI layer).
     this.createVignette();
     // Mid-ground parallax layer (between the sky and the game world).
     this.initMidground();
@@ -206,7 +198,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.updateCamAsteroid(_dt);
     // Screen-fixed sky parallax + animation.
     this.updateStarField();
-    this.updateDust(_dt);
     this.updateNebulae(bgElapsed);
     this.updateSwarms(bgElapsed);
     this.updateTwinkleStars(bgElapsed);
@@ -214,14 +205,13 @@ export class SpaceBackgroundLayer implements FlightModule {
 
   /**
    * Toggle every background sub-layer this module owns (mid-ground parallax,
-   * foreground dust streaks, edge vignette). The screen-fixed sky lives in the
+   * edge vignette). The screen-fixed sky lives in the
    * scene-owned `skyContainer`, so the scene hides that separately — see
    * SpaceFlightScene.e2eSetBackgroundVisible. Used by E2E tests to get a clean
    * black background for lightweight, diff-friendly screenshots.
    */
   setVisible(visible: boolean): void {
     this.midground.visible = visible;
-    if (this.dustContainer) this.dustContainer.visible = visible;
     if (this.vignette) this.vignette.visible = visible;
     // The readability dimmer is NOT toggled here: it is a child of
     // skyContainer, which the scene hides alongside this call, taking the
@@ -243,13 +233,10 @@ export class SpaceBackgroundLayer implements FlightModule {
       this.midground.destroy({ children: true });
     }
 
-    // Dust + vignette live on the UI layer, which the host scene tears down via
+    // The vignette lives on the UI layer, which the host scene tears down via
     // renderer.clearUILayer() (it removes AND destroys every UI-layer child).
-    // Just detach them here so the module is also safe standalone; never destroy
-    // them directly (clearUILayer owns that, and avoids a double-free).
-    if (this.dustContainer?.parent) {
-      this.dustContainer.parent.removeChild(this.dustContainer);
-    }
+    // Just detach it here so the module is also safe standalone; never destroy
+    // it directly (clearUILayer owns that, and avoids a double-free).
     if (this.vignette?.parent) {
       this.vignette.parent.removeChild(this.vignette);
     }
@@ -260,7 +247,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.nebulaBackdropSprite = null;
     this.nebulaeContainer = null;
     this.twinkleContainer = null;
-    this.dustContainer = null;
     this.vignette = null;
     this.dimmer = null;
     this.camAstG = null;
@@ -268,7 +254,6 @@ export class SpaceBackgroundLayer implements FlightModule {
     this.nebulaLayers.length = 0;
     this.twinkleStars.length = 0;
     this.swarmLayers.length = 0;
-    this.dustMotes.length = 0;
     this.driftAsteroids.length = 0;
     this.activeComets.length = 0;
     this.bgShips.length = 0;
@@ -892,89 +877,8 @@ export class SpaceBackgroundLayer implements FlightModule {
   }
 
   // ---------------------------------------------------------------------------
-  // Foreground dust streaks + vignette (UI layer)
+  // Edge vignette (UI layer)
   // ---------------------------------------------------------------------------
-
-  /**
-   * Foreground dust motes (screen-fixed) that streak past with the ship's
-   * velocity — the primary sense-of-speed cue, like flying through fine debris.
-   * Added to the UI layer (above the world, below the HUD) so they always fill
-   * the screen and never expose a world edge.
-   */
-  private createDust(): void {
-    const width = this.renderer.app.screen.width;
-    const height = this.renderer.app.screen.height;
-
-    this.dustContainer = new Container();
-    this.dustContainer.eventMode = "none";
-
-    const count = 190;
-    for (let i = 0; i < count; i++) {
-      const g = new Graphics();
-      const x = Math.random() * width;
-      const y = Math.random() * height;
-      g.x = x;
-      g.y = y;
-      g.eventMode = "none";
-      this.dustContainer.addChild(g);
-      this.dustMotes.push({
-        graphics: g,
-        x,
-        y,
-        depth: 0.3 + Math.random() * 0.7,
-      });
-    }
-
-    // First child of the UI layer → above the world, below HUD/minimap.
-    this.renderer.uiLayer.addChildAt(this.dustContainer, 0);
-  }
-
-  /**
-   * Move dust motes opposite the ship's velocity (parallax by depth), wrapping
-   * around the screen. Fast motion stretches each mote into a short streak.
-   */
-  private updateDust(deltaTime: number): void {
-    const vel = this.getShipVelocity();
-    if (!vel || this.dustMotes.length === 0) return;
-
-    const width = this.renderer.app.screen.width;
-    const height = this.renderer.app.screen.height;
-
-    const velX = Math.cos(vel.angle) * vel.speed;
-    const velY = Math.sin(vel.angle) * vel.speed;
-
-    for (const mote of this.dustMotes) {
-      const vx = -velX * mote.depth * deltaTime * 1.8;
-      const vy = -velY * mote.depth * deltaTime * 1.8;
-      mote.x += vx;
-      mote.y += vy;
-
-      // Wrap around the screen edges so the field is seamless.
-      if (mote.x < 0) mote.x += width;
-      else if (mote.x > width) mote.x -= width;
-      if (mote.y < 0) mote.y += height;
-      else if (mote.y > height) mote.y -= height;
-
-      mote.graphics.x = mote.x;
-      mote.graphics.y = mote.y;
-
-      const speed = Math.hypot(vx, vy);
-      const g = mote.graphics;
-      g.clear();
-      // Only render motion streaks (the sense-of-speed cue). At rest nothing is
-      // drawn — static foreground dots read as dirt on the screen, which the
-      // player would want to wipe off (US-070 #1: no stars in the foreground).
-      if (speed > 2.5) {
-        const alpha = Math.min(0.6, (speed - 2.5) * 0.12) * (0.4 + mote.depth);
-        const len = Math.min(34, speed * 2.8);
-        const nx = vx / speed;
-        const ny = vy / speed;
-        g.moveTo(0, 0)
-          .lineTo(-nx * len, -ny * len)
-          .stroke({ color: 0xbfd8ff, width: mote.depth * 1.4, alpha });
-      }
-    }
-  }
 
   /**
    * Screen-fixed vignette that darkens the edges so the action reads in the
