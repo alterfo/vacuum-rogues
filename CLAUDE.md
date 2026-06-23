@@ -106,6 +106,18 @@ Every bug follows this order — no exceptions:
 3. **Visually verify** UI/rendering fixes via screenshot — green text-level tests are NOT sufficient evidence for visual bugs.
 4. If the fix breaks an adjacent test, that's a root-cause signal — re-diagnose instead of patching the other test.
 
+### Three test tiers — pick by bug class (`docs/plans/20260623-real-engine-playtest-harness.md`)
+
+Choosing the wrong tier is how bugs pass 2630 green unit tests yet break the real game (combat not firing, «Новая игра» not resetting, the hex-removal save-crash). Route every regression by what actually broke:
+
+| Tier | Where | Catches | When to use |
+|------|-------|---------|-------------|
+| **Unit (mocked logic)** | `src/tests/**/*.test.ts` with `Mock*` services / `vi.mock("pixi.js")` | pure logic in isolation | a **pure function / domain rule** is wrong (math, state machine, validation) |
+| **Real-engine playtest (integration behaviour)** | `src/tests/playtest/**` — boots the **real** `GameEngine` + real `GalaxyService`/`QuestManager`/`BankingService`, stubs only PixiJS, asserts observable state **+ zero logged/thrown errors** | **wiring between real components** (scene transitions, combat module, quest completion, banking bus, new-game reset) | an **integration/scene/wiring** bug — the seam between systems, not the logic inside one |
+| **Playwright E2E (rendered/visual)** | `e2e/**` (`playtest-regression.spec.ts`) | real rendering + pointer interaction the headless harness can't see | a **visual/interaction** bug (layout, hit geometry, what's actually drawn) |
+
+**Convention:** an integration/scene bug's regression goes in the **real-engine playtest harness** (behaviour over the real system) — **never** a mocked unit test that re-creates the false green by mocking the very seam that broke. Unit tests stay for pure logic only. The playtest suite (`npm run test:playtest`, ~3 s) is a **pre-push gate** (`lefthook.yml`), so ralphex validates its own fixes against the real flow inside its loop.
+
 ## Equipment System: ShipLoadout is Canonical
 
 **`GearCatalog`/`ShipLoadout` is the single source of truth** for the hull and every derived stat (cargo, slots, weapon damage, speed, HP). The dual-hull unification (`docs/plans/20260616-dual-hull-unification.md`, save **v22→23**) removed the legacy `PlayerShip.modules` 3-slot array, the `HULL_CLASS_SPECS`-backed stat getters, `equipModule`/`unequipModule`, `GameEngine.rehydrateModule`, the `syncShipToHullClass` bridge, and the dead `IEquipmentService` port. All three former feeding flows (combat loot, gear purchases, micromodule crafting) and the `StationScene` hangar panel now read/write the loadout.

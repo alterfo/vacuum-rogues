@@ -100,11 +100,11 @@ This is additive — the 2630 existing unit tests stay untouched.
   optionally the Playwright `playtest-regression` in CI)
 - Modify: `CLAUDE.md`
 
-- [ ] Add the `src/tests/playtest` suite to the pre-push gate (it's Vitest, fast).
-- [ ] Document the convention in `CLAUDE.md`: integration/scene bugs get their
+- [x] Add the `src/tests/playtest` suite to the pre-push gate (it's Vitest, fast).
+- [x] Document the convention in `CLAUDE.md`: integration/scene bugs get their
       regression in the **real-engine playtest harness** (behaviour over the real
       system), not a mocked unit test; unit tests stay for pure logic.
-- [ ] (Optional) wire the Playwright `playtest-regression` spec into CI for the
+- [x] (Optional) wire the Playwright `playtest-regression` spec into CI for the
       visual/rendered layer the headless harness can't see.
 
 ### Task 5: Verify acceptance criteria

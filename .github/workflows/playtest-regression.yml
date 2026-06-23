@@ -1,0 +1,42 @@
+name: Playtest Regression (visual)
+
+# Fast Playwright gate (< 60 s) for the rendered/visual layer that the headless
+# real-engine playtest harness (Vitest, src/tests/playtest/**) cannot see. The
+# Vitest harness stubs PixiJS, so it asserts wiring + observable state but never
+# real rendering — this spec drives the real game in a real browser to catch
+# visual/interaction regressions. See docs/plans/20260623-real-engine-playtest-harness.md.
+
+on:
+  pull_request:
+    branches: [master, main, develop]
+
+jobs:
+  playtest-regression:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright (chromium only)
+        run: npx playwright install --with-deps chromium
+
+      - name: Run regression playtest suite
+        run: npm run test:e2e:regression
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playtest-regression-report
+          path: playwright-report/
+          retention-days: 30

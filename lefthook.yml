@@ -28,6 +28,14 @@ commit-msg:
 
 pre-push:
   commands:
+    # Real-engine playtest harness (Vitest, fast ~3 s): boots the REAL GameEngine +
+    # real systems and drives behaviour scenarios through the journeys that keep
+    # breaking (combat, new-game reset, local-delivery, save-load), asserting
+    # observable state + zero logged/thrown errors. Distinct from full-test so an
+    # integration/wiring break fails with a clear, fast signal — the gap unit tests
+    # (which mock the seams) can't catch. See docs/plans/20260623-real-engine-playtest-harness.md.
+    playtest:
+      run: npm run test:playtest
     full-test:
       run: npm test -- --run
     full-lint:
