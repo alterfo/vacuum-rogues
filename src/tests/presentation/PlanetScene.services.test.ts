@@ -16,15 +16,15 @@ import {
 import { tintFromSeed } from "@/utils/instanceTint";
 
 describe("resolvePlanetBackdropKey (per-planet generated backdrops)", () => {
-  // No surfaces/ art is bundled in the test manifest, so the resolver falls
-  // back to the shared type/faction panorama — proving the game is unchanged
-  // until the ComfyUI `surfaces` art is generated, then auto-upgrades.
-  it("falls back to the type/faction panorama when no surface art exists", () => {
+  // The ComfyUI `surfaces` art is now generated, so the resolver "auto-upgrades"
+  // (as the original fallback comment anticipated): each planet maps to a
+  // per-biome surface texture (keyed per-planet) instead of the shared panorama.
+  it("uses per-biome surface art (auto-upgraded from the panorama fallback)", () => {
     expect(
       resolvePlanetBackdropKey("ICE", "planet-x", "INDEPENDENT", false),
-    ).toBe("panoramas/wilderness_tundra");
-    expect(resolvePlanetBackdropKey("HABITAT", "p", "SYNDICATE", true)).toBe(
-      "panoramas/syndicate_city",
+    ).toMatch(/^surfaces\/ice_/);
+    expect(resolvePlanetBackdropKey("HABITAT", "p", "SYNDICATE", true)).toMatch(
+      /^surfaces\/city_/,
     );
   });
 
@@ -45,19 +45,19 @@ describe("resolvePlanetBackdropKey (per-planet generated backdrops)", () => {
     expect(new Set([ice, volcanic, terrestrial]).size).toBe(3);
   });
 
-  it("habitable TERRESTRIAL planet shows faction city, not wilderness", () => {
-    // Bug: before this fix, isHabitable was not passed → wilderness_jungle on
-    // a settled TERRESTRIAL planet. Now habitable = city if faction has one.
+  it("maps TERRESTRIAL planets to per-biome terran surface art (surfaces take precedence)", () => {
+    // With `surfaces` art present it wins over the type/faction panorama, so a
+    // TERRESTRIAL planet resolves to a `terran` surface regardless of faction or
+    // habitability (the faction-city panoramas are now a fallback only).
     expect(
       resolvePlanetBackdropKey("TERRESTRIAL", "p", "OUTLANDERS", true),
-    ).toBe("panoramas/outlanders_city");
-    expect(resolvePlanetBackdropKey("TERRESTRIAL", "p", "BASTIONS", true)).toBe(
-      "panoramas/bastions_city",
-    );
-    // Uninhabitable stays wilderness.
+    ).toMatch(/^surfaces\/terran_/);
+    expect(
+      resolvePlanetBackdropKey("TERRESTRIAL", "p", "BASTIONS", true),
+    ).toMatch(/^surfaces\/terran_/);
     expect(
       resolvePlanetBackdropKey("TERRESTRIAL", "p", "OUTLANDERS", false),
-    ).toBe("panoramas/wilderness_jungle");
+    ).toMatch(/^surfaces\/terran_/);
   });
 });
 
@@ -147,14 +147,15 @@ const ALL = [
 ];
 
 describe("per-instance backdrop tint (Task 1 — each planet distinct)", () => {
-  // The playtest5 residual: two same-type, same-faction worlds resolve to the
-  // SAME backdrop key, so the panorama art is shared. PlanetScene tints that
-  // sprite by `planet.id` to keep them visibly distinct.
-  it("gives two planets sharing a backdrop key distinct tints", () => {
+  // Two ICE worlds both resolve to per-biome `surfaces/ice_*` art (keyed per
+  // planet id), and PlanetScene additionally tints the sprite by `planet.id` so
+  // even a hash-collision on the surface variant stays visibly distinct.
+  it("gives two ICE planets per-biome surface art, disambiguated per id (tint)", () => {
     const keyA = resolvePlanetBackdropKey("ICE", "sys1-ice-a", "INDEPENDENT");
     const keyB = resolvePlanetBackdropKey("ICE", "sys1-ice-b", "INDEPENDENT");
-    expect(keyA).toBe(keyB); // shared art...
-    // ...but the per-id tint disambiguates them.
+    expect(keyA).toMatch(/^surfaces\/ice_/);
+    expect(keyB).toMatch(/^surfaces\/ice_/);
+    // The per-id tint always disambiguates them.
     expect(tintFromSeed("sys1-ice-a")).not.toBe(tintFromSeed("sys1-ice-b"));
   });
 });
