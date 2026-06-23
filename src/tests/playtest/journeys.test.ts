@@ -298,8 +298,11 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
       module.update(FIRE);
 
       // Then it routes to the loot/death seam (onNpcDestroyed) and — crucially —
-      // a normal NPC kill is NOT a victory (only the OVERMIND core wins the game,
-      // so NPC-vs-NPC crossfire can never fire a false-positive win).
+      // CombatModule itself never decides a win on a kill: it delegates death to
+      // onNpcDestroyed and leaves the victory decision to the scene/NpcShipManager
+      // (only the OVERMIND core wins). The end-to-end "normal kill ≠ victory" rule
+      // lives in NpcShipManager.handleInFlightDeath, which this scenario does not
+      // drive — see the harness's known coverage gap on the combat scene seam.
       expect(looted).toContain(npc);
       expect(winSpy).not.toHaveBeenCalled();
       module.destroy();

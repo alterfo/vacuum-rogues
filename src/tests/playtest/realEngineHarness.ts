@@ -96,29 +96,39 @@ export class RealEngineHarness {
    */
   static async boot(opts: HarnessOptions = {}): Promise<RealEngineHarness> {
     const harness = new RealEngineHarness(opts);
+    // These install global patches (logger.error, the canvas prototype, window
+    // listeners). The async work below can reject, in which case boot() never
+    // returns the harness and the caller's `afterEach` cannot dispose it — so we
+    // must clean up the patches ourselves before rethrowing, or they leak into
+    // every subsequent test in the worker.
     harness.installErrorSink();
     harness.installCanvas2DStub();
 
-    // A real Renderer over the stubbed PixiJS Application — gives every scene a
-    // genuine `renderer.app.screen` / game+ui layers to build into.
-    const container = document.createElement("div");
-    container.id = "game-container";
-    document.body.appendChild(container);
-    harness.container = container;
-    const renderer = new Renderer(container);
-    await renderer.initialize();
-    harness.engine.renderer = renderer;
+    try {
+      // A real Renderer over the stubbed PixiJS Application — gives every scene a
+      // genuine `renderer.app.screen` / game+ui layers to build into.
+      const container = document.createElement("div");
+      container.id = "game-container";
+      document.body.appendChild(container);
+      harness.container = container;
+      const renderer = new Renderer(container);
+      await renderer.initialize();
+      harness.engine.renderer = renderer;
 
-    // Real galaxy so the game-start scenes have systems to resolve against.
-    harness.engine.galaxy = await harness.galaxyService.generate(
-      harness.seed,
-      harness.systemCount,
-    );
+      // Real galaxy so the game-start scenes have systems to resolve against.
+      harness.engine.galaxy = await harness.galaxyService.generate(
+        harness.seed,
+        harness.systemCount,
+      );
 
-    await harness.engine.transitionTo(SceneType.MAIN_MENU, {
-      gameEngine: harness.engine,
-    });
-    return harness;
+      await harness.engine.transitionTo(SceneType.MAIN_MENU, {
+        gameEngine: harness.engine,
+      });
+      return harness;
+    } catch (error) {
+      harness.dispose();
+      throw error;
+    }
   }
 
   /**

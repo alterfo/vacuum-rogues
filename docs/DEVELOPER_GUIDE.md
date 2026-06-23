@@ -134,8 +134,6 @@ that must actually be *rendered* to be seen.
 
 ### E2E rules (Playwright): test **what** to click, not **where**
 
-### Принцип: тест должен знать **что** кликать, а не **где**
-
 Текущие тесты используют `canvas.click({ position: { x: ..., y: ... } })` — это технический долг. При рефакторинге UI они будут падать.
 
 ### Стратегии в порядке предпочтения
