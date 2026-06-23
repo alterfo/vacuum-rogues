@@ -69,19 +69,19 @@ This is additive — the 2630 existing unit tests stay untouched.
 **Files:**
 - Create: `src/tests/playtest/journeys.test.ts`
 
-- [ ] Scenario **new game is fresh**: Given an in-progress game with quests/credits/
+- [x] Scenario **new game is fresh**: Given an in-progress game with quests/credits/
       flight pos, When «Новая игра», Then player/quests/ledger/flight-pos are reset.
-- [ ] Scenario **fly → land → trade**: Given a fresh game in flight, When the player
+- [x] Scenario **fly → land → trade**: Given a fresh game in flight, When the player
       routes to a planet and lands, Then the planet scene is reachable and the market
       is openable (no errors).
-- [ ] Scenario **local delivery to a neighbour**: Given a «Местный подряд», When the
+- [x] Scenario **local delivery to a neighbour**: Given a «Местный подряд», When the
       player buys cargo and lands on the **target** planet, Then it completes and pays
       (and landing on the issuer planet does not).
-- [ ] Scenario **combat engages**: Given a weaponed player and a hostile NPC in
+- [x] Scenario **combat engages**: Given a weaponed player and a hostile NPC in
       range, When combat ticks, Then both sides fire and hull drops (NPC death routes
       to loot, player death to game-over) — no false win from NPC-vs-NPC crossfire.
-- [ ] Assert the **error-invariant** (`errors()` empty) at the end of every scenario.
-- [ ] run scenarios — green.
+- [x] Assert the **error-invariant** (`errors()` empty) at the end of every scenario.
+- [x] run scenarios — green.
 
 ### Task 3: Error-invariant + "always actionable" net
 **Files:**
