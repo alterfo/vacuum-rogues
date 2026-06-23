@@ -87,12 +87,12 @@ This is additive — the 2630 existing unit tests stay untouched.
 **Files:**
 - Create: `src/tests/playtest/invariants.test.ts`
 
-- [ ] A broad scenario that boots a new game and drives a short scripted sequence
+- [x] A broad scenario that boots a new game and drives a short scripted sequence
       (turn, land, open each reachable scene), asserting **zero logged/thrown
       errors** and that the player is never left with no available action (no
       dead-ends) — the cheap catch-all for the "X is not a constructor / cannot read
       property" class.
-- [ ] run — green.
+- [x] run — green.
 
 ### Task 4: Make the playtest a gate + convention
 **Files:**
