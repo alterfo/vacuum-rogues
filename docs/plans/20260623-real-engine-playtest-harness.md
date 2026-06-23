@@ -132,9 +132,12 @@ This is additive — the 2630 existing unit tests stay untouched.
 **Files:**
 - Modify: `docs/DEVELOPER_GUIDE.md` / testing notes
 
-- [ ] Describe the three tiers — unit (mocked logic), **real-engine playtest
+- [x] Describe the three tiers — unit (mocked logic), **real-engine playtest
       (integration behaviour)**, Playwright E2E (rendered/visual) — and when to use
-      each.
+      each. Done: `docs/DEVELOPER_GUIDE.md` §4 now leads with a three-tier table
+      (where / catches / use-when), a "why the middle tier exists" note, run
+      commands per tier, and the regression-routing convention; FAQ §8 adds a
+      real-engine-playtest row pointing back to §4.
 
 ## Technical Details
 - The harness stubs only PixiJS; everything else is real, so it exercises real

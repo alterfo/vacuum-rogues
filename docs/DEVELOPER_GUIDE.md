@@ -93,7 +93,46 @@ hitArea.on('pointerdown', () => this.handleSystemClick(system));
 
 ---
 
-## 4. Правила E2E-тестирования (Playwright)
+## 4. Testing — three tiers
+
+Pick the tier by **what actually broke**. Choosing the wrong one is how a bug
+passes 2630 green unit tests yet still breaks the real game (combat not firing,
+«Новая игра» not resetting, the hex-removal save-crash) — see
+`docs/plans/20260623-real-engine-playtest-harness.md`.
+
+| Tier | Where | Catches | Use when |
+|------|-------|---------|----------|
+| **Unit (mocked logic)** | `src/tests/**/*.test.ts` with `Mock*` services / `vi.mock("pixi.js")` | pure logic in isolation | a **pure function / domain rule** is wrong (math, state machine, validation) |
+| **Real-engine playtest (integration behaviour)** | `src/tests/playtest/**` | the **wiring between real components** — scene transitions, combat module, quest completion, banking bus, new-game reset | an **integration/scene/wiring** bug — the seam *between* systems, not the logic inside one |
+| **Playwright E2E (rendered/visual)** | `e2e/**` (`playtest-regression.spec.ts`) | real rendering + pointer interaction the headless harness can't see | a **visual/interaction** bug — layout, hit geometry, what is actually drawn |
+
+### Why the middle tier exists
+
+Unit tests heavily **mock** PixiJS *and* the services, so they validate pure
+logic in isolation — never the wiring between real components. The real-engine
+playtest harness boots the **real** `GameEngine` with the **real**
+`GalaxyService` / `PlayerService` / `QuestManager` / `BankingService` (only PixiJS
+is stubbed), drives behaviour scenarios (Given-When-Then) through the journeys
+that keep breaking, and asserts observable game state **plus an error-invariant**
+(zero `logger.error` / thrown / unhandled-rejection during the run). It is fast
+Vitest (~3 s), so it runs as a **pre-push gate** (`lefthook.yml`) and ralphex can
+validate its own fixes against the real flow inside its loop.
+
+**Convention:** an integration/scene bug's regression goes in the **real-engine
+playtest harness** (behaviour over the real system) — **never** a mocked unit test
+that re-creates the false green by mocking the very seam that broke. Unit tests
+stay for pure logic only; reach for Playwright only when the defect is something
+that must actually be *rendered* to be seen.
+
+### Run commands
+
+| Tier | Command |
+|------|---------|
+| Unit | `npm test -- --run` (once) / `npm test` (watch) |
+| Real-engine playtest | `npm run test:playtest` (~3 s, pre-push gated) |
+| Playwright E2E | `npm run test:e2e` / `npm run test:e2e:regression` (fast gate) |
+
+### E2E rules (Playwright): test **what** to click, not **where**
 
 ### Принцип: тест должен знать **что** кликать, а не **где**
 
@@ -187,8 +226,9 @@ GameEngine.transitionTo(SceneType.X)
 | Где логгер? | `src/utils/logger.ts` — используй его вместо `console` |
 | Как добавить расу? | `src/domain/Race.ts` + `src/types/index.ts` (`RaceType`) |
 | Как настроить PWA-кэш? | `src/sw.ts` — список `CORE_ASSETS` и стратегии кэширования |
-| Где unit-тесты? | `src/tests/*.test.ts` (Vitest + jsdom) |
-| Где E2E-тесты? | `e2e/*.spec.ts` (Playwright) |
+| Где unit-тесты? | `src/tests/*.test.ts` (Vitest + jsdom) — pure logic |
+| Где real-engine playtest? | `src/tests/playtest/**` (`npm run test:playtest`) — integration/wiring over the real `GameEngine`; see §4 |
+| Где E2E-тесты? | `e2e/*.spec.ts` (Playwright) — rendered/visual |
 
 ---
 
