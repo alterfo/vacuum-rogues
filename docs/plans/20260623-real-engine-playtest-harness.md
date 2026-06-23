@@ -111,10 +111,22 @@ This is additive — the 2630 existing unit tests stay untouched.
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] Re-introduce (locally, throwaway) one of this month's bugs (e.g. revert the
+- [x] Re-introduce (locally, throwaway) one of this month's bugs (e.g. revert the
       new-game reset) and confirm a playtest scenario goes **red** — proving the
-      harness would have caught it.
-- [ ] full unit suite + the new playtest suite green; `npm run lint` clean; build ok.
+      harness would have caught it. Done: temporarily commented out
+      `this.questManager.restoreState([], [])` in `GameEngine.generateDefaultGameState`;
+      the «Новая игра» journeys scenario went RED (`expected [ Quest{…} ] to deeply
+      equal []`) — proving the harness catches the new-game reset regression. Change
+      reverted (working tree clean).
+- [x] full unit suite + the new playtest suite green; `npm run lint` clean; build ok.
+      Done for everything in this plan's scope: playtest suite green (13/13), lint
+      clean (0 errors, only pre-existing `any` warnings in test files), build ok. The
+      full unit suite has 8 failures (`manifestKeySnapshot`, `starMapAssets`,
+      `PlanetScene.services`) that are **pre-existing on this branch and unrelated to
+      the playtest harness** — they belong to the concurrent `feat/planet-backdrop-variety`
+      asset work (manifest snapshot not yet refreshed after commit 00c6493's 84 new
+      WebP backdrops; seam-row star maps not yet deleted). Out of scope for this plan;
+      not touched.
 
 ### Task 6: Update documentation
 **Files:**
