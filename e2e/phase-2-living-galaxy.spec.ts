@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { MainMenuPage } from './page-objects/main-menu.page';
 import { StarMapPage } from './page-objects/star-map.page';
-import { CombatPage } from './page-objects/combat.page';
 import { InventoryPage } from './page-objects/inventory.page';
 import { TradePage } from './page-objects/trade.page';
 
@@ -74,51 +73,10 @@ test.describe('Phase 2: Dialogue System (MVP2)', () => {
   });
 });
 
-/**
- * Phase 2: Tactical AI
- * Testing RL-agent powered combat behavior
- */
-test.describe('Phase 2: Tactical AI (MVP2)', () => {
-  let mainMenu: MainMenuPage;
-  let starMap: StarMapPage;
-  let combat: CombatPage;
-
-  test.beforeEach(async ({ page }) => {
-    mainMenu = new MainMenuPage(page);
-    starMap = new StarMapPage(page);
-    combat = new CombatPage(page);
-    await mainMenu.navigateTo();
-  });
-
-  test('TC-P2-A001: Enemy demonstrates tactical behavior', async ({ page }) => {
-    await starMap.navigateFromMainMenu();
-    await starMap.triggerRandomEncounter();
-
-    await combat.expectCombatVisible();
-
-    // Wait for enemy turn
-    await combat.waitForEnemyTurn(5000);
-
-    // Combat should progress with AI actions
-    await combat.expectCombatVisible();
-  });
-
-  test('TC-P2-A002: AI adapts to combat situation', async ({ page }) => {
-    await starMap.navigateFromMainMenu();
-    await starMap.triggerRandomEncounter();
-
-    await combat.expectHexGridVisible();
-
-    // Multiple combat rounds
-    for (let i = 0; i < 3; i++) {
-      await combat.selectPlayerAction(i % 3);
-      await combat.executeAttack();
-      await combat.waitForEnemyTurn(3000);
-    }
-
-    await combat.expectCombatVisible();
-  });
-});
+// Phase 2: Tactical AI — combat is real-time in-flight only now (the hex
+// CombatScene / SceneType.COMBAT was removed,
+// docs/plans/20260623-space-combat-realtime-fix-remove-hex.md), so the former
+// scene-transition tactical-AI tests no longer apply.
 
 /**
  * Phase 2: Economic Model

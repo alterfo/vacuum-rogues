@@ -394,6 +394,43 @@ describe("NpcShipManager in-flight NPC-vs-NPC combat", () => {
     manager.destroy();
   });
 
+  it("never engages the OVERMIND core via crossfire (no false-positive win)", () => {
+    // The core is the player's duel target (engaged through CombatModule);
+    // killing it wins the game in handleInFlightDeath. A co-present hostile NPC
+    // must NOT be able to kill it via NPC-vs-NPC crossfire and fire a false
+    // victory before the player ever lands a shot. The core is filtered out of
+    // the crossfire engagement set, so it can only die to the player's fire.
+    const core = makeNpc("overmind_core", {
+      role: NpcRole.PATROL,
+      faction: Faction.OVERMIND,
+      hull: 450,
+      damage: 45,
+    });
+    const pirate = makeNpc("pirate_flight", {
+      role: NpcRole.PIRATE,
+      hull: 9999,
+      damage: 500, // would one-shot the core if it were not excluded
+    });
+    const manager = makeManager([core, pirate]);
+    manager.initialize();
+
+    const sprites = spritesOf(manager);
+    sprites.find((s) => s.npc.id === "overmind_core")!.x = 0;
+    sprites.find((s) => s.npc.id === "overmind_core")!.y = 0;
+    sprites.find((s) => s.npc.id === "pirate_flight")!.x = 100;
+    sprites.find((s) => s.npc.id === "pirate_flight")!.y = 0;
+
+    // Many rounds — even sustained crossfire must never touch the core.
+    for (let i = 0; i < 20; i++) {
+      crossfire(manager, GAME_BALANCE.combatFireIntervalMs);
+    }
+
+    expect(core.hullHP).toBe(450); // untouched — never an engagement participant
+    expect(manager.npcCount).toBe(2); // both still present (no win, no kill)
+
+    manager.destroy();
+  });
+
   it("does nothing when no Overmind is present (normal systems unperturbed)", () => {
     const pirate = makeNpc("pirate_only", { role: NpcRole.PIRATE, hull: 100 });
     const trader = makeNpc("trader_only", { role: NpcRole.TRADER, hull: 100 });

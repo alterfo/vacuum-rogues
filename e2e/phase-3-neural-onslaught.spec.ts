@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { MainMenuPage } from './page-objects/main-menu.page';
 import { StarMapPage } from './page-objects/star-map.page';
-import { CombatPage } from './page-objects/combat.page';
 import { checkIndexedDB, expectNoJavaScriptErrors } from './fixtures/game-fixtures';
 
 /**
@@ -43,12 +42,10 @@ test.describe('Phase 3: Global AI Enemy (Alpha)', () => {
 
   test('TC-P3-G003: Player actions affect AI behavior', async ({ page }) => {
     await starMap.navigateFromMainMenu();
-
-    // Engage in combat
-    await starMap.triggerRandomEncounter();
     await page.waitForTimeout(3000);
 
-    // Return to star map
+    // Galaxy stays rendered while the player navigates (combat is now real-time
+    // in-flight, no separate encounter scene to transition into).
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
   });

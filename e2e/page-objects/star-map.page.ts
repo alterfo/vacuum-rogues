@@ -106,18 +106,6 @@ export class StarMapPage extends GamePageBase {
   }
 
   /**
-   * Trigger random encounter via engine
-   */
-  async triggerRandomEncounter() {
-    await this.page.evaluate(async () => {
-      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
-        transitionTo: (scene: string) => Promise<void>;
-      };
-      await engine.transitionTo('COMBAT');
-    });
-  }
-
-  /**
    * Open warp navigation to a system
    */
   async openWarpNavigation(systemId: string) {

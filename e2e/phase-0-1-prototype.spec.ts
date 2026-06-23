@@ -132,79 +132,9 @@ test.describe('Phase 1: Star Map (MVP1)', () => {
   });
 });
 
-/**
- * Phase 1: Combat System
- * Testing tactical combat encounters
- */
-test.describe('Phase 1: Combat System (MVP1)', () => {
-  let mainMenu: MainMenuPage;
-  let starMap: StarMapPage;
-
-  test.beforeEach(async ({ page }) => {
-    mainMenu = new MainMenuPage(page);
-    starMap = new StarMapPage(page);
-    await mainMenu.navigateTo();
-  });
-
-  test('TC-P1-C001: Enter combat encounter from star map', async ({
-    page,
-  }) => {
-    await starMap.navigateFromMainMenu();
-    await starMap.triggerRandomEncounter();
-
-    // Combat scene should be active
-    const canvas = page.locator('canvas');
-    await expect(canvas).toBeVisible();
-  });
-
-  test('TC-P1-C002: Hex grid should be displayed in combat', async ({
-    page,
-  }) => {
-    await starMap.navigateFromMainMenu();
-    await starMap.triggerRandomEncounter();
-
-    await page.waitForFunction(() => {
-      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
-        currentScene: { constructor: { name: string } } | null;
-      };
-      return engine?.currentScene?.constructor.name === 'CombatScene';
-    }, { timeout: 10000 });
-
-    const canvas = page.locator('canvas');
-    await expect(canvas).toBeVisible();
-    const box = await canvas.boundingBox();
-    expect(box?.width).toBeGreaterThan(0);
-  });
-
-  test('TC-P1-C003: Combat actions can be executed', async ({ page }) => {
-    await starMap.navigateFromMainMenu();
-    await starMap.triggerRandomEncounter();
-
-    await page.waitForFunction(() => {
-      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
-        currentScene: { constructor: { name: string } } | null;
-      };
-      return engine?.currentScene?.constructor.name === 'CombatScene';
-    }, { timeout: 10000 });
-
-    await page.evaluate(() => {
-      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
-        currentScene: { e2eWeakenEnemy?: () => void } | null;
-      };
-      engine?.currentScene?.e2eWeakenEnemy?.();
-    });
-
-    await page.evaluate(async () => {
-      const engine = (window as unknown as Record<string, unknown>).__gameEngine as {
-        currentScene: { e2eAttack?: () => Promise<void> } | null;
-      };
-      await engine?.currentScene?.e2eAttack?.();
-    });
-
-    const canvas = page.locator('canvas');
-    await expect(canvas).toBeVisible();
-  });
-});
+// Combat is real-time in-flight only now — the hex CombatScene (SceneType.COMBAT)
+// was removed (docs/plans/20260623-space-combat-realtime-fix-remove-hex.md), so
+// the former "Phase 1: Combat System" scene-transition tests no longer apply.
 
 /**
  * Phase 1: Save/Load System

@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { MainMenuPage } from './page-objects/main-menu.page';
 import { StarMapPage } from './page-objects/star-map.page';
-import { CombatPage } from './page-objects/combat.page';
 import { InventoryPage } from './page-objects/inventory.page';
 import { TradePage } from './page-objects/trade.page';
 import {
@@ -165,12 +164,11 @@ test.describe('Phase 4: Cross-Browser Testing (Beta)', () => {
  * Complete gameplay loop testing
  */
 test.describe('Phase 4: Full Gameplay Loop (Beta)', () => {
-  test('TC-P4-F001: Complete journey: Launch → Explore → Combat → Trade → Save', async ({
+  test('TC-P4-F001: Complete journey: Launch → Explore → Trade → Save', async ({
     page,
   }) => {
     const mainMenu = new MainMenuPage(page);
     const starMap = new StarMapPage(page);
-    const combat = new CombatPage(page);
     const trade = new TradePage(page);
 
     // 1. Launch game
@@ -185,23 +183,15 @@ test.describe('Phase 4: Full Gameplay Loop (Beta)', () => {
     await starMap.clickOnSystemPercent(0.3, 0.4);
     await starMap.clickOnSystemPercent(0.6, 0.6);
 
-    // 4. Enter combat
-    await starMap.triggerRandomEncounter();
-    await combat.expectCombatVisible();
+    // (Combat is real-time in-flight only now — no separate encounter scene —
+    // so it is exercised by the in-flight combat unit/integration suites, not
+    // this scene-hop journey test.)
 
-    // 5. Execute combat actions
-    await combat.selectPlayerAction(0);
-    await combat.executeAttack();
-
-    // 6. Return to star map
-    await page.waitForTimeout(2000);
-    await starMap.expectStarMapVisible();
-
-    // 7. Trade
+    // 4. Trade
     await trade.navigateFromStarMap();
     await trade.expectTradeVisible();
 
-    // 8. Save is auto-created
+    // 5. Save is auto-created
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
   });
@@ -271,17 +261,10 @@ test.describe('Phase 4: Regression Suite (Beta)', () => {
     await expect(page.locator('canvas')).toBeVisible();
   });
 
-  test('TC-P4-R003: No regressions in combat', async ({ page }) => {
-    const mainMenu = new MainMenuPage(page);
-    const starMap = new StarMapPage(page);
-    const combat = new CombatPage(page);
-
-    await mainMenu.navigateTo();
-    await mainMenu.clickNewGame();
-
-    await starMap.triggerRandomEncounter();
-    await combat.expectCombatVisible();
-  });
+  // TC-P4-R003 (combat regression) removed: combat is real-time in-flight only
+  // now (the hex CombatScene / SceneType.COMBAT was deleted,
+  // docs/plans/20260623-space-combat-realtime-fix-remove-hex.md). In-flight
+  // combat regressions are covered by the combat unit/integration suites.
 });
 
 /**
@@ -355,21 +338,10 @@ test.describe('Phase 4: Acceptance Criteria Validation', () => {
     await starMap.expectMinimumSystemsCount(10);
   });
 
-  test('AC-Phase1-002: Combat can be won with loot', async ({ page }) => {
-    const mainMenu = new MainMenuPage(page);
-    const starMap = new StarMapPage(page);
-    const combat = new CombatPage(page);
-
-    await mainMenu.navigateTo();
-    await mainMenu.clickNewGame();
-
-    await starMap.triggerRandomEncounter();
-    await combat.expectCombatVisible();
-
-    // Simulate winning
-    await combat.waitForEnemyTurn(3000);
-    await combat.expectCombatEnded(true);
-  });
+  // AC-Phase1-002 (combat won with loot) removed: combat is real-time in-flight
+  // only now (the hex CombatScene / SceneType.COMBAT was deleted,
+  // docs/plans/20260623-space-combat-realtime-fix-remove-hex.md). The in-flight
+  // loot drop on a kill is covered by the combat unit/integration suites.
 
   test('AC-Phase1-003: Quests can be completed', async ({ page }) => {
     const mainMenu = new MainMenuPage(page);

@@ -368,12 +368,18 @@ export class NpcShipManager implements FlightModule {
     this.npcCrossfireTimer = 0;
     if (this.npcSprites.length < 2) return;
 
-    const combatants: RangedNpc[] = this.npcSprites.map((s) => ({
-      id: s.npc.id,
-      kind: factionKindOf(s.npc),
-      x: s.x,
-      y: s.y,
-    }));
+    // Exclude the OVERMIND core: it is the player's duel target (engaged via
+    // CombatModule) and killing it wins the game in handleInFlightDeath. Letting
+    // a strayed pirate / liberating ranger kill it via NPC-vs-NPC crossfire would
+    // fire a false-positive victory before the player ever lands a shot.
+    const combatants: RangedNpc[] = this.npcSprites
+      .filter((s) => s.npc.id !== OVERMIND_CORE_ID)
+      .map((s) => ({
+        id: s.npc.id,
+        kind: factionKindOf(s.npc),
+        x: s.x,
+        y: s.y,
+      }));
     const engagements = overmindCombatTargets(combatants, this.WEAPON_RANGE, {
       pirateRep: 0,
     });
