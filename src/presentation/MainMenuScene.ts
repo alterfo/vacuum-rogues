@@ -455,11 +455,13 @@ export class MainMenuScene extends GameScene {
 
   private async handleNewGame(): Promise<void> {
     logger.info("New game selected");
-    // Transition to RACE_SELECTION for character creation
+    // Run the FULL reset before character creation: restartNewGame clears the
+    // prior in-session player/galaxy/quests/ledger/flight position, then enters
+    // RACE_SELECTION. A bare transitionTo(RACE_SELECTION) would leave the old
+    // player set, so the `!player` new-game gate is skipped and the previous game
+    // carries through (playtest 2026-06-23).
     if (this.gameEngine) {
-      await this.gameEngine.transitionTo(SceneType.RACE_SELECTION, {
-        gameEngine: this.gameEngine,
-      });
+      await this.gameEngine.restartNewGame();
     } else {
       logger.error("GameEngine not available!");
     }

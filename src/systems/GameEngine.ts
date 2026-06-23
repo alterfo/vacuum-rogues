@@ -1662,6 +1662,14 @@ export class GameEngine {
     this._winScreenShown = false;
     this._playerDeathShown = false;
     this.playerService.deletePlayer();
+    // Full reset for a fresh game: clear quests, the banking ledger and the
+    // persisted/transient flight position so «Новая игра» never inherits the
+    // prior in-session game's quests, credits or ship location (playtest
+    // 2026-06-23). The new player's account is re-seeded when it's created.
+    this.questManager.restoreState([], []);
+    this.bankingService.resetLedger();
+    this.flightShipPos = null;
+    this.lastFlightShipPos = null;
     const seed = `SR_${Date.now()}`;
     this.galaxy = await this.galaxyService.generate(seed, 30);
     logger.info(`Generated default game state with seed: ${seed}`);
