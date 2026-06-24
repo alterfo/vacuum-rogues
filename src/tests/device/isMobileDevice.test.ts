@@ -117,6 +117,28 @@ describe("isMobileDevice — phone-class detection", () => {
     ).toBe(false);
   });
 
+  it("a phone UA with a fine pointer is not mobile — the coarse gate short-circuits the UA path", () => {
+    // A bot / desktop spoofing a phone UA: the `coarse && (...)` gate must win,
+    // so neither the phone-UA nor the small-viewport branch can flag it.
+    expect(
+      isMobileDevice(env({ ua: UA.iphone, coarse: false, w: 390, h: 844 })),
+    ).toBe(false);
+  });
+
+  it("uses the shorter side for the small-viewport test (landscape phone: width is the short side)", () => {
+    // Width is the shorter side here — Math.min(w,h) must pick it, not innerHeight.
+    expect(
+      isMobileDevice(
+        env({
+          ua: UA.desktop,
+          coarse: true,
+          w: MOBILE_MAX_VIEWPORT_PX - 1,
+          h: 1024,
+        }),
+      ),
+    ).toBe(true);
+  });
+
   describe("degraded environments", () => {
     it("falls back to maxTouchPoints when matchMedia is absent", () => {
       expect(

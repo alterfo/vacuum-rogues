@@ -141,7 +141,11 @@ function maybeShowMobileGate(): void {
     window.setTimeout(() => gate.classList.remove('show'), 350);
     markDismissed();
   };
-  document.getElementById('mobile-gate-continue')?.addEventListener('click', dismiss);
+  // Dismissal is one-shot (it persists via markDismissed and hides the gate), so
+  // bind once — keeps maybeShowMobileGate idempotent if ever called more than once.
+  document
+    .getElementById('mobile-gate-continue')
+    ?.addEventListener('click', dismiss, { once: true });
 }
 
 async function main(): Promise<void> {
