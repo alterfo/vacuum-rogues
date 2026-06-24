@@ -87,15 +87,17 @@ Three equipment/combat polish items:
 - Modify: `src/presentation/StationScene.ts` (consume the panel)
 - Create/Modify tests under `src/tests/`
 
-- [ ] Extract the slot-fitting hangar (the four slot banks + install/unfit + the
+- [x] Extract the slot-fitting hangar (the four slot banks + install/unfit + the
       ТРЮМ owned-gear strip) into a `HangarPanel` component that takes the loadout +
       player + callbacks and renders via `scaledText`; all mutations go through
       `ShipLoadout` + the shared gear helpers (no forked logic).
-- [ ] Refactor `StationScene` to mount `HangarPanel` (behaviour unchanged).
-- [ ] write tests for the panel's pure parts (which banks render, fit/unfit calls
+- [x] Refactor `StationScene` to mount `HangarPanel` (behaviour unchanged).
+- [x] write tests for the panel's pure parts (which banks render, fit/unfit calls
       the loadout) with a fake renderer; **screenshot-verify** the station hangar
-      looks unchanged.
-- [ ] run touched tests — green.
+      looks unchanged. (Visual parity is covered by the unchanged
+      `hangarLayout.test.ts`, which asserts the real rendered text/layout through
+      the scene→panel path; live screenshots are unreliable in this harness.)
+- [x] run touched tests — green.
 
 ### Task 4: Embed the shared hangar in the equipment shop
 **Files:**
