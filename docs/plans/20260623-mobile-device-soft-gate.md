@@ -44,15 +44,15 @@ missing mobile layout.)
 - Create: `src/systems/device/isMobileDevice.ts`
 - Create: `src/tests/device/isMobileDevice.test.ts`
 
-- [ ] Implement `isMobileDevice(env?)` that returns true for a phone-class device,
+- [x] Implement `isMobileDevice(env?)` that returns true for a phone-class device,
       combining signals: a coarse primary pointer (`matchMedia('(pointer: coarse)')`),
       a small viewport (e.g. `min(innerWidth, innerHeight) < 768`), and a
       phone/tablet user-agent hint — injectable via an `env` param (defaults to the
       real `window`/`navigator`).
-- [ ] write tests over a device matrix: phone UA + coarse + small → true; desktop
+- [x] write tests over a device matrix: phone UA + coarse + small → true; desktop
       (fine pointer, large, desktop UA) → false; large touchscreen / hybrid →
       conservative (don't over-trigger); missing APIs degrade safely.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 2: Soft gate overlay + dismiss/persist wiring
 **Files:**
