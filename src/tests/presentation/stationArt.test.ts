@@ -52,9 +52,14 @@ describe("STATION_TEXTURE_PREFIX — total, stable, unique mapping", () => {
 });
 
 describe("stationSpriteKey — graceful fallback + determinism", () => {
-  it("returns null today (no station/ art committed yet)", () => {
+  it("resolves a real station/<prefix>_NN key now that art is committed", () => {
+    // Art has landed (src/assets/station/*), so the same resolver that returned
+    // null pre-art now yields a stable manifest key for every type.
     for (const type of ALL_TYPES) {
-      expect(stationSpriteKey(type, "station-1")).toBeNull();
+      const key = stationSpriteKey(type, "station-1");
+      expect(key, `key for ${type}`).toMatch(
+        new RegExp(`^station/${STATION_TEXTURE_PREFIX[type]}_\\d+$`),
+      );
     }
   });
 
@@ -75,9 +80,11 @@ describe("stationSpriteKey — graceful fallback + determinism", () => {
     }
   });
 
-  it("returns null for an empty id/seed (no throw)", () => {
-    // Edge: a station with an empty id still degrades to the diamond fallback
-    // rather than throwing — pickVariantKey hashes any seed, including "".
-    expect(stationSpriteKey(StationType.TRADE_POST, "")).toBeNull();
+  it("resolves a key even for an empty id/seed (no throw)", () => {
+    // Edge: pickVariantKey hashes any seed, including "" — an empty id still maps
+    // to a real variant rather than throwing.
+    expect(stationSpriteKey(StationType.TRADE_POST, "")).toMatch(
+      /^station\/trade_\d+$/,
+    );
   });
 });
