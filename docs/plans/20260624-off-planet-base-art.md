@@ -103,20 +103,20 @@ There are five station types to cover: `TRADE_POST`, `REPAIR_DOCK`,
 - Modify: `src/presentation/flight/PlanetManager.ts`
 - Create/Modify: `src/tests/presentation/planetManagerStations.test.ts`
 
-- [ ] In `createStations()`, replace the bare diamond `Graphics` with: resolve
+- [x] In `createStations()`, replace the bare diamond `Graphics` with: resolve
       `stationSpriteKey(station.type, station.id)`; if it yields a cached texture,
       add a `Sprite` (anchor 0.5, ~40×40, `eventMode="none"`); **else** draw the
       existing diamond exactly as today. Keep the `stationColor` label, the
       transparent circular hit-area + `onStationClick`, `zIndex`, and the
       `stationMarkers.push({...})` bookkeeping unchanged.
-- [ ] (If the sprite key resolves but the texture is not yet cached, just draw the
+- [x] (If the sprite key resolves but the texture is not yet cached, just draw the
       diamond — do **not** add async/lazy loading; station art is non-lazy and
       eager-preloaded like `ships`.)
-- [ ] write tests (mock `pixi.js` + `stationSpriteKey`): with a mocked texture the
+- [x] write tests (mock `pixi.js` + `stationSpriteKey`): with a mocked texture the
       marker uses a sprite; with `null` it uses the diamond; **both** paths still
       produce a label, a working `static` hit-area that calls `onStationClick`, and
       a `stationMarkers` entry. Assert `getStationAt`/docking still find the marker.
-- [ ] run tests — must pass before next task.
+- [x] run tests — must pass before next task.
 
 ### Task 3: Add the `station` art category to ComfyUI prompts
 **Files:**

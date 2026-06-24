@@ -1,4 +1,4 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics, Sprite, Text } from "pixi.js";
 import type { Renderer } from "../Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
@@ -23,6 +23,8 @@ import {
 } from "@/systems/galaxy/landingAccess";
 import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
+import { tex } from "../textures";
+import { stationSpriteKey } from "./stationArt";
 import type { FlightModule } from "./FlightModule";
 
 /** A space-station marker: its domain record, display container and world position. */
@@ -564,16 +566,34 @@ export class PlanetManager implements FlightModule {
       ctn.y = wy;
       ctn.zIndex = 90;
 
-      // Diamond shape coloured by station type.
       const stationColor = this.stationColor(
         station.type as import("@/types").StationType,
       );
-      const g = new Graphics();
-      g.poly([0, -14, 10, 0, 0, 14, -10, 0]);
-      g.fill({ color: stationColor, alpha: 0.85 });
-      g.stroke({ color: 0xffffff, width: 1, alpha: 0.4 });
-      g.eventMode = "none";
-      ctn.addChild(g);
+
+      // Prefer a per-type station sprite; fall back to the colour-coded diamond
+      // when no `station/` art is committed/cached yet (graceful, eager — no
+      // async/lazy loading; station art is non-lazy like `ships`/`planets`).
+      const spriteKey = stationSpriteKey(
+        station.type as import("@/types").StationType,
+        station.id,
+      );
+      const stationTex = spriteKey ? tex(spriteKey) : undefined;
+      if (stationTex) {
+        const sprite = new Sprite(stationTex);
+        sprite.anchor.set(0.5);
+        sprite.width = 40;
+        sprite.height = 40;
+        sprite.eventMode = "none";
+        ctn.addChild(sprite);
+      } else {
+        // Diamond shape coloured by station type.
+        const g = new Graphics();
+        g.poly([0, -14, 10, 0, 0, 14, -10, 0]);
+        g.fill({ color: stationColor, alpha: 0.85 });
+        g.stroke({ color: 0xffffff, width: 1, alpha: 0.4 });
+        g.eventMode = "none";
+        ctn.addChild(g);
+      }
 
       const label = new Text({
         text: station.name.slice(0, 22),
