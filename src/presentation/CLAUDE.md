@@ -16,6 +16,21 @@ PlanetInfoPanel, NpcContactPanel, DialogueScene, WinScene, MainMenuScene, System
 (Flight modules that already read `scaledFont` — FlightHud, PlanetManager, DamageNumbers, UiButton,
 PlanetScene — don't need it; for the in-flight restyle-in-place rule see `flight/playtest-traps.md`.)
 
+**Station markers render sprite-or-diamond** (`flight/PlanetManager.createStations`).
+Each off-planet base resolves a per-type sprite via `stationSpriteKey(type, id)`
+(`flight/stationArt.ts`): `STATION_TEXTURE_PREFIX` maps every `StationType` to an
+`src/assets/station/<prefix>_NN` art prefix (`TRADE_POST→trade`, `REPAIR_DOCK→drydock`,
+`MILITARY_BASE→military`, `RESEARCH_LAB→science`, `CRAFT_CENTER→fabricator`), mirroring
+`PLANET_TEXTURE_PREFIX`. A **cached** texture mounts as a 40×40 `eventMode="none"`
+`Sprite`; otherwise the marker falls back to the existing colour-coded diamond. Station
+art is **non-lazy/eager** (small transparent WebP, kept out of `LAZY_PREFIXES`) and
+resolved **synchronously** via `pickVariant` — no async/lazy load, and no save/schema
+impact (art is type+id-derived, like planet discs). The label, transparent circular
+hit-area + `onStationClick`, `zIndex` and `stationMarkers` bookkeeping are identical on
+both paths. The matching ComfyUI prompt category is `station` in
+`tools/comfyui/asset_prompts.json` (mirrors `ships`); the art lands in a separate commit
+and lights up the sprite path automatically via the Vite glob manifest.
+
 Three most-hit PixiJS 8 traps:
 - **`eventMode='none'` on Text over clickable areas** — Text defaults to `'auto'` and blocks
   clicks underneath; set `'none'` on labels so clicks pass through.

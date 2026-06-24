@@ -157,9 +157,11 @@ There are five station types to cover: `TRADE_POST`, `REPAIR_DOCK`,
 **Files:**
 - Modify: `.claude/docs/adding-features.md` or `src/presentation/CLAUDE.md`
 
-- [ ] Note the new `station` art category + the sprite-or-diamond fallback in
+- [x] Note the new `station` art category + the sprite-or-diamond fallback in
       `PlanetManager.createStations`, the `STATION_TEXTURE_PREFIX` map, and that
       station sprites are non-lazy (eager) transparent art keyed by `pickVariant`.
+      (Documented in `src/presentation/CLAUDE.md` — "Station markers render
+      sprite-or-diamond" paragraph.)
 
 ## Technical Details
 - **No save/schema impact:** art is resolved from `station.type` + `station.id`
