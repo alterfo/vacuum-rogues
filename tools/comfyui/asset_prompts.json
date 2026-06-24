@@ -1,17 +1,29 @@
 {
   "_comment": "Bullet-proof prompts + per-category flags for Galactic Horizon. alpha=true -> background removed (transparent PNG) via a cutout node; tileable=true -> seamless circular tiling. Names/folders per docs/design/ASSET_PIPELINE.md, no proprietary names.",
   "negative_common": "text, words, letters, caption, watermark, signature, logo, blurry, out of focus, low quality, jpeg artifacts, deformed, duplicate, extra objects, frame, border",
-  "defaults": { "steps": 30, "cfg": 6.0, "sampler": "dpmpp_2m", "scheduler": "karras", "upscale_model": "4x-UltraSharp.pth" },
+  "defaults": {
+    "steps": 30,
+    "cfg": 6.0,
+    "sampler": "dpmpp_2m",
+    "scheduler": "karras",
+    "upscale_model": "4x-UltraSharp.pth"
+  },
   "categories": {
     "nebula": {
-      "size": [1024, 1024],
+      "size": [
+        1024,
+        1024
+      ],
       "tileable": true,
       "upscale": true,
       "steps": 40,
       "cfg": 7.0,
       "template": "Hubble Space Telescope photograph, NASA astrophotography, real deep space nebula, {palette} narrow-band false color composite, hydrogen-alpha emission, ionized gas clouds, cosmic dust pillars, fine pinpoint stars scattered throughout, {layer}, photorealistic scientific photograph, no focal point, no central object, diffuse and spread across entire frame, ultra-detailed, 8k",
       "negative": "painting, illustration, artwork, digital art, drawing, anime, cartoon, render, 3d, cgi, painterly, stylized, planet sphere, sun, black hole, spacecraft, person, character, horizon, ground, central bright object, vortex spiral, symmetrical, frame border, vignette, oversaturated",
-      "name_order": ["palette", "layer"],
+      "name_order": [
+        "palette",
+        "layer"
+      ],
       "axes": {
         "palette": {
           "red": "deep crimson and amber, hydrogen-alpha red emission, warm gold dust lanes",
@@ -27,13 +39,18 @@
       }
     },
     "planets": {
-      "size": [1024, 1024],
+      "size": [
+        1024,
+        1024
+      ],
       "variants": 8,
       "alpha": true,
       "circle": true,
       "template": "A single complete planet rendered as a perfect circle, the entire globe centered and fully surrounded by empty space with nothing around it and nothing below it, {type}, soft directional sunlight from one side, plain flat uniform neutral grey background, studio product shot of a planet globe, sharp focus, highly detailed",
       "negative": "clouds outside the planet, mist, fog, haze, waves, ocean below, platform, pedestal, base, stand, ground, surface below the planet, foreground, two planets, multiple planets, second planet, moon, spaceship, partial planet, cropped sphere, bottom cut off, Earth, planet Earth, recognizable Earth continents, real-world map, blue marble, satellite photo of Earth, Africa, Americas, real-world coastlines",
-      "name_order": ["type"],
+      "name_order": [
+        "type"
+      ],
       "axes": {
         "type": {
           "terrestrial": "an alien yet habitable living world, exotic oceans of turquoise, emerald, indigo and wine liquid, continents cloaked in crimson, violet, amber-gold and cyan alien vegetation, unfamiliar jagged coastlines and scattered archipelagos and crystalline shelves, drifting lavender and pale-green clouds, otherworldly biosphere globe",
@@ -46,13 +63,18 @@
       }
     },
     "planet_maps": {
-      "size": [1024, 512],
+      "size": [
+        1024,
+        512
+      ],
       "variants": 6,
       "steps": 42,
       "cfg": 6.5,
       "template": "Seamless full-frame flat texture, a wide 2:1 rectangular surface swatch that completely fills the frame edge to edge with NO central object and no border, {type}, evenly and uniformly lit, flat lighting, no shadows, no curvature, ultra-detailed surface material, sharp focus",
       "negative": "globe, sphere, orb, ball, circle, round, disc, ring, concentric circles, eye, iris, planet object, planet in space, vignette, dark corners, radial, road map, street map, atlas, compass, charts, text, labels, grid, frame, border, margins, letterbox, black background, stars, outer space, horizon, 3d render of a sphere, Earth, planet Earth, recognizable Earth continents, real-world map, blue marble, satellite photo of Earth, Africa, Americas, real-world coastlines",
-      "name_order": ["type"],
+      "name_order": [
+        "type"
+      ],
       "axes": {
         "type": {
           "terrestrial": "an alien yet habitable living world, exotic seas of turquoise, emerald, indigo and wine liquid, sprawling forests and plains of crimson, violet, amber-gold and cyan alien vegetation, unfamiliar jagged volcanic coastlines and scattered archipelagos and crystalline shelves, drifting lavender and pale-green atmospheric haze, otherworldly biosphere terrain seen from directly overhead",
@@ -65,13 +87,18 @@
       }
     },
     "star_maps": {
-      "size": [1024, 512],
+      "size": [
+        1024,
+        512
+      ],
       "variants": 6,
       "steps": 42,
       "cfg": 7.5,
       "template": "Seamless equirectangular surface texture of {type}, ultra close-up macro photograph of stellar plasma, solar granulation cells, boiling convective plasma, solar prominences arching out, coronal loops, plasma jets erupting from surface, photorealistic NASA solar telescope imagery, extreme detail, flat even lighting, fills entire 2:1 rectangular frame edge to edge with no border",
       "negative": "planet, space background, stars in background, black background, sphere shape, globe, circle, disc, dark background, vignette, planet silhouette, text, watermark, grid, frame, border, margins",
-      "name_order": ["type"],
+      "name_order": [
+        "type"
+      ],
       "axes": {
         "type": {
           "yellow": "a yellow G-type main sequence star, golden-orange plasma granulation, bright photosphere, warm sunspot regions",
@@ -83,12 +110,17 @@
       }
     },
     "stars": {
-      "size": [1024, 1024],
+      "size": [
+        1024,
+        1024
+      ],
       "variants": 6,
       "alpha": true,
       "template": "{type}, glowing stellar sphere with corona and solar flares, intense additive light, centered, solid black background, highly detailed",
       "negative": "planet, spaceship, text, lens flare streaks across the frame",
-      "name_order": ["type"],
+      "name_order": [
+        "type"
+      ],
       "axes": {
         "type": {
           "yellow": "yellow main-sequence star, warm golden turbulent plasma surface",
@@ -100,12 +132,17 @@
       }
     },
     "ships": {
-      "size": [1024, 1024],
+      "size": [
+        1024,
+        1024
+      ],
       "variants": 10,
       "alpha": true,
       "template": "A sci-fi starship spacecraft seen from directly above, orthographic top-down view, flat, the ship pointing straight up with its nose/bow at the top edge of the image and its engine thrusters at the bottom, vertical symmetry, {role}, glowing engine thrusters at the rear (bottom), clean readable silhouette, centered, full ship visible, plain flat neutral grey background, concept art, sharp focus",
       "negative": "legs, animal, creature, robot dog, mecha, walker, person, side view, perspective view, nose pointing sideways, nose pointing down, horizontal ship, tilted, diagonal, ground, sky, planet, scenery, cropped, multiple ships",
-      "name_order": ["role"],
+      "name_order": [
+        "role"
+      ],
       "axes": {
         "role": {
           "ranger": "small agile ranger vessel, metallic blue hull with cyan glow",
@@ -116,12 +153,17 @@
       }
     },
     "player_ships": {
-      "size": [1024, 1024],
+      "size": [
+        1024,
+        1024
+      ],
       "variants": 2,
       "alpha": true,
       "template": "A sci-fi starship spacecraft seen from directly above, orthographic top-down view, flat, the ship pointing straight up with its nose/bow at the top edge of the image and its engine thrusters at the bottom, vertical symmetry, {hull}, glowing engine thrusters at the rear (bottom), clean readable silhouette, centered, full ship visible, plain flat neutral grey background, concept art, sharp focus",
       "negative": "legs, animal, creature, robot dog, mecha, walker, person, side view, perspective view, nose pointing sideways, nose pointing down, horizontal ship, tilted, diagonal, ground, sky, planet, scenery, cropped, multiple ships",
-      "name_order": ["hull"],
+      "name_order": [
+        "hull"
+      ],
       "axes": {
         "hull": {
           "light_fighter": "small nimble single-seat fighter, compact arrowhead silhouette, metallic blue hull with cyan glow, twin light cannons",
@@ -134,12 +176,17 @@
       }
     },
     "station": {
-      "size": [1024, 1024],
+      "size": [
+        1024,
+        1024
+      ],
       "variants": 4,
       "alpha": true,
-      "template": "A sci-fi orbital space station seen from directly above, orthographic top-down view, flat, no perspective, {type}, glowing windows and running lights, clean readable silhouette, centered, full station visible, plain flat neutral grey background, concept art, sharp focus",
-      "negative": "legs, animal, creature, robot dog, mecha, walker, person, side view, perspective view, horizontal, tilted, diagonal, ground, sky, planet, scenery, horizon, cropped, multiple stations, ship in flight",
-      "name_order": ["type"],
+      "template": "A sci-fi orbital space station seen from directly above, orthographic top-down view, no perspective, {type}, glowing windows and running lights, clean readable silhouette, centered, full station visible, lit by a single distant star from the TOP of the frame with a soft gradient shadow falling toward the bottom edge, consistent directional top lighting, one light source from directly above, plain flat neutral grey background, concept art, sharp focus",
+      "negative": "legs, animal, creature, robot dog, mecha, walker, person, side view, perspective view, horizontal, tilted, diagonal, ground, sky, planet, scenery, horizon, cropped, multiple stations, ship in flight, light from below, side lighting, bottom lighting, multiple light sources, conflicting shadows, rim light from the bottom",
+      "name_order": [
+        "type"
+      ],
       "axes": {
         "type": {
           "trade": "bustling modular trade station with docking rings and cargo pods",
@@ -151,11 +198,16 @@
       }
     },
     "icons": {
-      "size": [768, 768],
+      "size": [
+        768,
+        768
+      ],
       "alpha": true,
       "template": "A single sci-fi ship module: {module}, centered, the whole object fully visible, glossy 3d render, soft studio light, plain flat neutral grey background, game inventory icon, consistent lighting angle",
       "negative": "multiple objects, scene, background scenery, text, hands, person, cropped",
-      "name_order": ["module"],
+      "name_order": [
+        "module"
+      ],
       "axes": {
         "module": {
           "engine": "a starship ion engine thruster",
@@ -168,11 +220,16 @@
       }
     },
     "ui": {
-      "size": [1024, 1024],
+      "size": [
+        1024,
+        1024
+      ],
       "alpha": true,
       "template": "A sci-fi game UI element, {name}, glowing cyan-blue holographic bezel, brushed metal edges, rounded corners, semi-transparent dark glass, on a solid black background, clean, symmetrical",
       "negative": "text, letters, words, clutter, character",
-      "name_order": ["name"],
+      "name_order": [
+        "name"
+      ],
       "axes": {
         "name": {
           "panel": "a rectangular info panel frame",
@@ -183,13 +240,18 @@
       }
     },
     "panoramas": {
-      "size": [2048, 512],
+      "size": [
+        2048,
+        512
+      ],
       "upscale": true,
       "steps": 40,
       "cfg": 7.0,
       "template": "Ultra-wide cinematic panorama, standing on an alien planet surface looking at the horizon, {scene}, photorealistic, sci-fi, dramatic sky, sense of vast scale, sharp foreground detail fading to distant horizon, no people, no UI, no text, 8k, hyperdetailed",
       "negative": "top-down, aerial view, map, satellite, overhead, portrait, person, character, watermark, text, frame, border, fisheye, vignette, blurry, low quality",
-      "name_order": ["scene"],
+      "name_order": [
+        "scene"
+      ],
       "axes": {
         "scene": {
           "outlanders_city": "frontier colony settlement, dust plains, low buildings with glowing signs, twin moons rising on the horizon, warm orange sky at dusk",
@@ -204,14 +266,19 @@
       }
     },
     "surfaces": {
-      "size": [2048, 512],
+      "size": [
+        2048,
+        512
+      ],
       "upscale": true,
       "steps": 40,
       "cfg": 7.0,
       "variants": 4,
       "template": "Ultra-wide cinematic panorama, standing on the surface of an alien planet looking at the horizon, {biome}, photorealistic, sci-fi, dramatic sky, sense of vast scale, sharp foreground detail fading to distant horizon, no people, no UI, no text, 8k, hyperdetailed",
       "negative": "top-down, aerial view, map, satellite, overhead, portrait, person, character, watermark, text, frame, border, fisheye, vignette, blurry, low quality, planet sphere in sky filling frame",
-      "name_order": ["biome"],
+      "name_order": [
+        "biome"
+      ],
       "axes": {
         "biome": {
           "ice": "frozen glacial world, jagged ice spires and cracked frost plains, pale cyan light, distant aurora over a blizzard horizon",
@@ -224,12 +291,17 @@
       }
     },
     "portraits": {
-      "size": [832, 1216],
+      "size": [
+        832,
+        1216
+      ],
       "variants": 3,
       "alpha": true,
       "template": "Portrait bust of an alien humanoid, sci-fi, {faction}, head and shoulders, centered, plain flat neutral grey background, soft cinematic light, original character, painterly, sharp focus, distinct non-human features",
       "negative": "full body, multiple characters, text, busy background, scenery, helmet covering face",
-      "name_order": ["faction"],
+      "name_order": [
+        "faction"
+      ],
       "axes": {
         "faction": {
           "outlanders": "rugged frontier colonist, weathered orange-tan skin, practical gear",

@@ -584,6 +584,11 @@ export class PlanetManager implements FlightModule {
         sprite.width = 40;
         sprite.height = 40;
         sprite.eventMode = "none";
+        // Sprites are baked lit from their top edge; rotate so the lit side faces
+        // the star, making each station's shading consistent with the sun's
+        // direction (the far side falls into shadow) instead of a fixed angle.
+        sprite.rotation =
+          Math.atan2(center.y - wy, center.x - wx) + Math.PI / 2;
         ctn.addChild(sprite);
       } else {
         // Diamond shape coloured by station type.
