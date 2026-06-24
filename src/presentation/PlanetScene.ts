@@ -22,13 +22,7 @@ import { QuestType } from "@/types";
 import type { ResourceType } from "@/types";
 import { evaluateDelivery } from "@/systems/quests/deliveryCompletion";
 import { resourceLabelRu } from "@/domain/RouteRumor";
-import {
-  pickVariant,
-  pickVariantKey,
-  panoramaTex,
-  tex,
-  loadTextureAsync,
-} from "./textures";
+import { pickVariantKey, panoramaTex, tex, loadTextureAsync } from "./textures";
 import { scaledFont } from "@/utils/fontScale";
 import { tintFromSeed } from "@/utils/instanceTint";
 import { UiButton, type ButtonAccent } from "./ui/UiButton";
@@ -273,27 +267,6 @@ export function resolvePlanetBackdropKey(
   return `panoramas/${panoramaKeyForPlanet(planetType, faction, isHabitable)}`;
 }
 
-function planetTexturePrefix(type: string): string {
-  const map: Record<string, string> = {
-    TERRESTRIAL: "terrestrial",
-    GAS_GIANT: "gas",
-    ICE: "ice",
-    VOLCANIC: "volcanic",
-    INDUSTRIAL: "industrial",
-    HABITAT: "habitat",
-  };
-  return map[type] ?? "terrestrial";
-}
-
-const PLANET_FALLBACK_COLORS: Record<string, number[]> = {
-  TERRESTRIAL: [0x0a2c4c, 0x1a5c8c, 0x2a7c44, 0x3a9c55, 0x1e6e4a],
-  GAS_GIANT: [0x5c2a00, 0x8c5a1a, 0xaa7733, 0xcc9944, 0xaa7733],
-  ICE: [0x6699cc, 0xaaccff, 0xccddff, 0xeeeeff, 0xccddff],
-  VOLCANIC: [0x400800, 0x8c1a00, 0xcc3300, 0xff5500, 0xcc3300],
-  INDUSTRIAL: [0x223344, 0x334455, 0x445566, 0x556677, 0x445566],
-  HABITAT: [0x11883a, 0x22aa44, 0x33bb55, 0x44cc66, 0x33bb55],
-};
-
 const RESOURCE_RU: Record<string, string> = {
   FUEL: "Топливо",
   METALS: "Металлы",
@@ -325,12 +298,11 @@ export class PlanetScene extends GameScene {
   // contradicting the agreed "light parallax" look. We pan a wide flat sprite
   // horizontally with a gentle mouse-X drift instead.
 
-  // Task 6 — panorama drag-to-look + rotating planet orb
+  // Task 6 — panorama drag-to-look
   private panoramaSprite: Sprite | null = null;
   private panoramaWidth = 0;
   private isPanningPanorama = false;
   private lastPanoramaPointerX = 0;
-  private planetOrbSprite: Sprite | null = null;
   private boundPanoramaMove: ((e: FederatedPointerEvent) => void) | null = null;
   private boundPanoramaUp: (() => void) | null = null;
   // Parallax: base X set at sprite creation; targetX tracks smooth destination.
@@ -403,12 +375,6 @@ export class PlanetScene extends GameScene {
   }
 
   update(deltaTime: number): void {
-    // Subtle planet-orb rotation (Task 6). deltaTime is in ms; ~0.04 rad/s gives
-    // a slow, barely-perceptible spin (full turn ≈ 160 s).
-    if (this.planetOrbSprite && !this.planetOrbSprite.destroyed) {
-      this.planetOrbSprite.rotation += deltaTime * 0.00004;
-    }
-
     // Parallax easing: smooth the panorama toward the mouse-driven target.
     if (
       !this.isPanningPanorama &&
@@ -876,7 +842,6 @@ export class PlanetScene extends GameScene {
     this.boundPanoramaMove = null;
     this.boundPanoramaUp = null;
     this.panoramaSprite = null;
-    this.planetOrbSprite = null;
     this.isPanningPanorama = false;
     this.closeJobBoard();
     this.renderer.clearGameLayer();
@@ -965,52 +930,12 @@ export class PlanetScene extends GameScene {
     overlay.eventMode = "none";
     this.renderer.gameLayer.addChild(overlay);
 
-    const planetCX = w / 2;
+    // `planetCY` stays as a pure layout anchor for the name/info/menu flow below
+    // (`nameY = planetCY + PLANET_VISUAL_RADIUS + 16`). The floating planet orb
+    // and its concentric atmospheric-glow rings were removed — the surface
+    // backdrop already represents the planet, and the banded glow read as faint
+    // ghost planets — so nothing visible is drawn at the planet centre anymore.
     const planetCY = Math.min(h * 0.2, PLANET_VISUAL_RADIUS + 10);
-
-    // Atmospheric glow: concentric semi-transparent rings
-    const glowAlphas = [0.15, 0.08, 0.03];
-    const glowRings = [
-      PLANET_VISUAL_RADIUS + 22,
-      PLANET_VISUAL_RADIUS + 40,
-      PLANET_VISUAL_RADIUS + 60,
-    ];
-    for (let i = 0; i < glowRings.length; i++) {
-      const glow = new Graphics();
-      glow.circle(planetCX, planetCY, glowRings[i]);
-      glow.fill({ color: factionColor, alpha: glowAlphas[i] });
-      glow.eventMode = "none";
-      this.renderer.gameLayer.addChild(glow);
-    }
-
-    // Planet body: use texture variant or procedural gradient fallback
-    const prefix = planetTexturePrefix(this.planet.type);
-    const planetTex = pickVariant("planets", prefix, this.planet.id);
-    if (planetTex) {
-      const sprite = new Sprite(planetTex);
-      sprite.anchor.set(0.5);
-      sprite.x = planetCX;
-      sprite.y = planetCY;
-      sprite.width = PLANET_VISUAL_RADIUS * 2;
-      sprite.height = PLANET_VISUAL_RADIUS * 2;
-      sprite.eventMode = "none";
-      this.planetOrbSprite = sprite;
-      this.renderer.gameLayer.addChild(sprite);
-    } else {
-      this.planetOrbSprite = null;
-      const fallbackColors = PLANET_FALLBACK_COLORS[this.planet.type] ?? [
-        0x555566, 0x666677,
-      ];
-      const steps = fallbackColors.length;
-      const gfx = new Graphics();
-      for (let i = steps - 1; i >= 0; i--) {
-        const r = PLANET_VISUAL_RADIUS * ((i + 1) / steps);
-        gfx.circle(planetCX, planetCY, r);
-        gfx.fill({ color: fallbackColors[i] });
-      }
-      gfx.eventMode = "none";
-      this.renderer.gameLayer.addChild(gfx);
-    }
 
     // Faction banner: top-left strip with faction name
     const bannerX = 16;
