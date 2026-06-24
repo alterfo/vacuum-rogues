@@ -70,16 +70,16 @@ Three equipment/combat polish items:
 - Modify (expectation): `src/tests/core/GameEngine.loadout-persistence.test.ts`
 - Create/Modify tests under `src/tests/`
 
-- [ ] Install `grav_tractor_1` (the grapple/захват) in `starterLoadout()` alongside
+- [x] Install `grav_tractor_1` (the grapple/захват) in `starterLoadout()` alongside
       engine + tank + weapon; verify it fits the corvette's EQUIPMENT bank + mass
       budget (engine+tank+weapon+grav-tractor ≤ 40).
-- [ ] Ensure a fresh game leaves **no install-required gear in the hold**
+- [x] Ensure a fresh game leaves **no install-required gear in the hold**
       (`inventory.modules` / `ownedGearIds` empty) — everything essential is fitted.
-- [ ] write tests: starter loadout reports an installed weapon + grav-tractor (auto-
+- [x] write tests: starter loadout reports an installed weapon + grav-tractor (auto-
       pickup range > 0) + engine; the starting inventory has no uninstalled gear.
-- [ ] Update the starter-gear-list expectation to include `grav_tractor_1` (feature
+- [x] Update the starter-gear-list expectation to include `grav_tractor_1` (feature
       change; keep the rest of the assertion).
-- [ ] run touched tests — green.
+- [x] run touched tests — green.
 
 ### Task 3: Extract a reusable HangarPanel from StationScene
 **Files:**

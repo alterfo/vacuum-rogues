@@ -160,6 +160,36 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
     });
   });
 
+  describe("Scenario: a fresh game ships fully fitted (starter loadout)", () => {
+    it("installs weapon + grapple + engine and leaves nothing loose in the hold", async () => {
+      // Given the real new-game path (player + starter loadout).
+      await harness.newGame();
+      const player = harness.player()!;
+      const loadout = harness.engine.playerLoadout!;
+
+      // Then the essential gear is installed: weapon, grapple (gravity tractor)
+      // and engine — a ready-to-play ship with no fitting required.
+      const installed = loadout.installedGearIds();
+      expect(installed).toContain("wpn_pulse"); // weapon
+      expect(installed).toContain("grav_tractor_1"); // grapple/захват
+      expect(installed).toContain("eq_engine_i"); // engine
+
+      const stats = loadout.derivedStats();
+      expect(stats.weaponDamage).toBeGreaterThan(0);
+      expect(stats.gravTractorRange).toBeGreaterThan(0); // auto-pickup range
+
+      // The starter loadout fits the corvette's mass budget (≤ 40).
+      expect(stats.massUsed).toBeLessThanOrEqual(stats.massCapacity);
+
+      // And the hold has nothing install-required loose: no legacy bag modules,
+      // no uninstalled owned gear for the player to discover and fit.
+      expect(player.inventory.modules).toEqual([]);
+      expect(player.inventory.ownedGearIds ?? []).toEqual([]);
+
+      expect(harness.errors()).toEqual([]);
+    });
+  });
+
   describe("Scenario: fly → land → trade", () => {
     it("reaches the planet scene and the market is openable, with no errors", async () => {
       // Given a fresh game in flight.

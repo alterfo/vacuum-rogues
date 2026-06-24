@@ -39,7 +39,6 @@ import { buildRegistry } from "@/systems/info/InfoService";
 import type { GalacticRegistry } from "@/systems/info/GalacticRegistry";
 import { PlayerShip } from "@/domain/PlayerShip";
 import { Inventory } from "@/domain/Inventory";
-import { WeaponModule, ShieldModule, EngineModule } from "@/domain/ShipModule";
 import type {
   ISaveService,
   IGalaxyService,
@@ -49,10 +48,7 @@ import type {
   IQuestService,
 } from "@/core/ports";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
-import {
-  applyLoadoutHullToShip,
-  convertLegacyBagToOwnedGear,
-} from "@/systems/equipment/GearBridge";
+import { applyLoadoutHullToShip } from "@/systems/equipment/GearBridge";
 import type { Faction } from "@/types/faction";
 import { NpcShip } from "@/domain/NpcShip";
 import { GalaxyService, PlayerService, SceneFactory } from "@/core/services";
@@ -395,43 +391,9 @@ export class GameEngine {
       // exactly today's counts. The extra systems persist in the save.
       this.applyDifficultyHostileScaling();
 
-      // Starter spare gear. These are authored as legacy ShipModules ("Лазер
-      // МК-1" / "Базовый щит" / "Быстрый двигатель") then converted to installable
-      // owned gear via the same seam old saves take (convertLegacyBagToOwnedGear /
-      // MigrationPipeline v24→v25) — so a new game's spares can be fitted at the
-      // Верфь rather than sitting stranded in the hold (dual-hull residual fix).
-      this.player.inventory.addItem(
-        new WeaponModule(
-          "weapon_laser_1",
-          "Лазер МК-1",
-          { type: "damage", value: 10 },
-          1,
-          15,
-          3,
-          10,
-        ),
-      );
-      this.player.inventory.addItem(
-        new ShieldModule(
-          "shield_basic_1",
-          "Базовый щит",
-          { type: "shield", value: 20 },
-          1,
-          25,
-          5,
-        ),
-      );
-      this.player.inventory.addItem(
-        new EngineModule(
-          "engine_fast_1",
-          "Быстрый двигатель",
-          { type: "speed", value: 0.2 },
-          1,
-          0.3,
-          0.1,
-        ),
-      );
-      convertLegacyBagToOwnedGear(this.player);
+      // A fresh game ships fully fitted (engine + tank + weapon + grapple) with
+      // nothing install-required left loose in the hold — see starterLoadout().
+      // No starter spares are seeded into inventory.modules / ownedGearIds.
 
       logger.info(`Created new player with faction: ${this.player.faction}`);
 
@@ -1242,7 +1204,11 @@ export class GameEngine {
     return this.player?.faction as unknown as Faction | undefined;
   }
 
-  /** Default starter loadout: corvette with engine + fuel tank. */
+  /**
+   * Default starter loadout: a fully fitted corvette — engine + fuel tank +
+   * weapon + grapple (gravity tractor). Everything essential is installed so a
+   * fresh game has nothing install-required loose in the hold.
+   */
   private starterLoadout(): ShipLoadout {
     const loadout = new ShipLoadout(
       "hull_corvette",
@@ -1251,9 +1217,13 @@ export class GameEngine {
     loadout.install("eq_engine_i");
     loadout.install("eq_tank");
     // A fresh game must be able to fight: fit a starter weapon (Импульсный
-    // лазер). The corvette has 2 weapon slots and a 40-mass budget, so the
-    // engine (6) + tank (3) + weapon (4) = 13 fits with room to spare.
+    // лазер). The corvette has 2 weapon slots and a 40-mass budget.
     loadout.install("wpn_pulse");
+    // The grapple/захват — a gravity tractor (Гравитяга Тип-I) — lets the ship
+    // tow loot in from a distance. EQUIPMENT bank, mass 3. Total fitted mass:
+    // engine (6) + tank (3) + weapon (4) + grav-tractor (3) = 16 ≤ 40, and the
+    // equipment bank (3 slots) holds tank + grav-tractor with room to spare.
+    loadout.install("grav_tractor_1");
     return loadout;
   }
 

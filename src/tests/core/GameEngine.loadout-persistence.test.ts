@@ -164,12 +164,14 @@ describe("GameEngine loadout persistence", () => {
 
     expect(await engine.loadGame("auto")).toBe(true);
     expect(engine.playerLoadout!.hull.id).toBe("hull_corvette");
-    // The starter loadout now fits a weapon (wpn_pulse) so a fresh game / a
-    // pre-persistence save can actually fight — see GameEngine.starterLoadout.
+    // The starter loadout ships fully fitted: weapon (wpn_pulse) so a fresh
+    // game / a pre-persistence save can fight, plus the grapple/захват
+    // (grav_tractor_1) — see GameEngine.starterLoadout.
     expect(engine.playerLoadout!.installedGearIds()).toEqual([
       "eq_engine_i",
       "eq_tank",
       "wpn_pulse",
+      "grav_tractor_1",
     ]);
   });
 
