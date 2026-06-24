@@ -142,11 +142,15 @@ There are five station types to cover: `TRADE_POST`, `REPAIR_DOCK`,
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only stationArt,
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — only stationArt,
       PlanetManager, asset_prompts.json (+ tests/docs) affected; no domain/schema.
-- [ ] full unit suite green; `npm run lint` clean; `npm run build` ok;
-      `npm run test:playtest` green (flight boots, stations still dockable).
-- [ ] confirm: with no `station/` art on disk, every station renders the diamond
+      (Confirmed via `git diff --name-only` of the 3 plan commits: stationArt.ts,
+      PlanetManager.ts, asset_prompts.json + 3 test files + this plan doc only.)
+- [x] full unit suite green (2685 passed / 318 files); `npm run lint` clean
+      (0 errors); `npm run build` ok; `npm run test:playtest` green (14 passed —
+      flight boots, stations still dockable).
+- [x] confirm: with no `station/` art on disk (`src/assets/station/` absent, 0
+      station keys in manifest snapshot), every station renders the diamond
       (no regression); the sprite path is exercised only by the mocked test.
 
 ### Task 5: Update documentation
