@@ -24,8 +24,8 @@ Each off-planet base resolves a per-type sprite via `stationSpriteKey(type, id)`
 `PLANET_TEXTURE_PREFIX`. A **cached** texture mounts as a 40×40 `eventMode="none"`
 `Sprite`; otherwise the marker falls back to the existing colour-coded diamond. Station
 art is **non-lazy/eager** (small transparent WebP, kept out of `LAZY_PREFIXES`) and
-resolved **synchronously** via `pickVariant` — no async/lazy load, and no save/schema
-impact (art is type+id-derived, like planet discs). The label, transparent circular
+resolved **synchronously** via `pickVariantKey` + `tex` (cache lookup) — no async/lazy
+load, and no save/schema impact (art is type+id-derived, like planet discs). The label, transparent circular
 hit-area + `onStationClick`, `zIndex` and `stationMarkers` bookkeeping are identical on
 both paths. The matching ComfyUI prompt category is `station` in
 `tools/comfyui/asset_prompts.json` (mirrors `ships`); the art lands in a separate commit

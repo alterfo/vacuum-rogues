@@ -75,9 +75,9 @@ describe("stationSpriteKey — graceful fallback + determinism", () => {
     }
   });
 
-  it("returns null for an unknown prefix / absent category (no throw)", () => {
-    // Defensive: the resolver maps known types only, but the underlying
-    // pickVariantKey degrades to undefined for any absent category/prefix.
+  it("returns null for an empty id/seed (no throw)", () => {
+    // Edge: a station with an empty id still degrades to the diamond fallback
+    // rather than throwing — pickVariantKey hashes any seed, including "".
     expect(stationSpriteKey(StationType.TRADE_POST, "")).toBeNull();
   });
 });
