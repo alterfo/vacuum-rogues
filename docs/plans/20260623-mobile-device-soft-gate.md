@@ -79,10 +79,15 @@ missing mobile layout.)
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only device gate +
-      main.ts/index.html affected.
-- [ ] full unit suite green; `npm run lint` clean; `npm run build` ok; the desktop
-      boot path is unchanged (gate never shows on desktop).
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — only device gate +
+      main.ts/index.html affected. (Full-branch compare vs master is dominated by
+      unrelated branch history, so verified precisely via the device-gate commits'
+      git diff: exactly 6 files — `isMobileDevice.ts`, `mobileGateState.ts`,
+      `main.ts`, `index.html`, + their 2 tests.)
+- [x] full unit suite green (2664 tests); `npm run lint` clean (0 errors; 48
+      pre-existing `any` warnings, none in device-gate code); `npm run build` ok; the
+      desktop boot path is unchanged — `maybeShowMobileGate()` early-returns when
+      `shouldShowMobileGate()` is false (always on desktop), so the gate never shows.
 
 ### Task 4: Update documentation
 **Files:**
