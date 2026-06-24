@@ -121,12 +121,18 @@ menu exactly as they are, and removes the now-dead helpers. No domain/data chang
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only `PlanetScene.ts`
-      + the new test (and any refreshed E2E screenshot) affected.
-- [ ] full unit suite green; `npm run test:playtest` green; `npm run lint` clean;
-      `npm run build` ok (no `noUnusedLocals` errors from removed helpers).
-- [ ] if the E2E fallback path was used, refresh `e2e/screenshots/` for the planet
-      screen.
+- [x] `detect_changes` (compared against the orb commit's parent `1b9286f` to isolate
+      it on this long-lived branch) — the only code symbol changed is
+      `PlanetScene.createUI` in `PlanetScene.ts`; the new test is a new file. (gitnexus
+      flags HIGH only because `createUI` sits in 8 "Initialize → X" scene-init flows;
+      the change only deletes orb/glow draw calls, not the init contract — full suite
+      green confirms.)
+- [x] full unit suite green (315 files / 2667 tests); `npm run test:playtest` green
+      (14 tests); `npm run lint` clean (0 errors); `tsc --noEmit` exit 0 and
+      `npm run build` ok — no `noUnusedLocals` errors from removed helpers.
+- [x] E2E fallback path was NOT used — the regression lives in the real-engine
+      playtest tier (`src/tests/playtest/planetScreenNoOrb.test.ts`), so no
+      `e2e/screenshots/` refresh is needed.
 
 ### Task 4: Update documentation
 **Files:**
