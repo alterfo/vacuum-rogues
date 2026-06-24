@@ -581,8 +581,8 @@ export class PlanetManager implements FlightModule {
       if (stationTex) {
         const sprite = new Sprite(stationTex);
         sprite.anchor.set(0.5);
-        sprite.width = 40;
-        sprite.height = 40;
+        sprite.width = 80;
+        sprite.height = 80;
         sprite.eventMode = "none";
         // Sprites are baked lit from their top edge; rotate so the lit side faces
         // the star, making each station's shading consistent with the sun's
@@ -613,9 +613,9 @@ export class PlanetManager implements FlightModule {
       label.eventMode = "none";
       ctn.addChild(label);
 
-      // Hit area for clicking.
+      // Hit area for clicking (matches the ~80px sprite footprint).
       const hit = new Graphics();
-      hit.circle(0, 0, 20);
+      hit.circle(0, 0, 40);
       hit.fill({ color: 0xffffff, alpha: 0.001 });
       hit.eventMode = "static";
       hit.cursor = "pointer";

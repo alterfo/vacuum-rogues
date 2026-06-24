@@ -4,7 +4,7 @@
  * cached texture, and falls back to the existing colour-coded DIAMOND otherwise.
  *
  * These pixi-mocked tests pin the contract the renderer must keep in BOTH paths:
- *  - sprite path (mocked `stationSpriteKey` + cached `tex`): a 40×40, anchor-0.5,
+ *  - sprite path (mocked `stationSpriteKey` + cached `tex`): an 80×80, anchor-0.5,
  *    non-interactive Sprite is mounted (no diamond `poly`);
  *  - diamond path (`stationSpriteKey` → null): the diamond Graphics is drawn (no
  *    Sprite);
@@ -210,7 +210,7 @@ describe("PlanetManager.createStations — sprite-or-diamond render", () => {
     art.tex.mockReset();
   });
 
-  it("draws a 40×40 non-interactive Sprite when art resolves to a cached texture", () => {
+  it("draws an 80×80 non-interactive Sprite when art resolves to a cached texture", () => {
     art.stationSpriteKey.mockReturnValue("station/trade_01");
     const fakeTexture = { __station: true };
     art.tex.mockReturnValue(fakeTexture);
@@ -226,14 +226,14 @@ describe("PlanetManager.createStations — sprite-or-diamond render", () => {
     );
     expect(art.tex).toHaveBeenCalledWith("station/trade_01");
 
-    // Exactly one Sprite, sized 40×40, anchored centre, click-transparent.
+    // Exactly one Sprite, sized 80×80, anchored centre, click-transparent.
     expect(pixi.sprites.length).toBe(1);
     const sprite = pixi.sprites[0];
     expect(
       (sprite.anchor as { set: ReturnType<typeof vi.fn> }).set,
     ).toHaveBeenCalledWith(0.5);
-    expect(sprite.width).toBe(40);
-    expect(sprite.height).toBe(40);
+    expect(sprite.width).toBe(80);
+    expect(sprite.height).toBe(80);
     expect(sprite.eventMode).toBe("none");
 
     // No diamond was drawn (no Graphics had its `poly` called).
