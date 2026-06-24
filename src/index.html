@@ -81,6 +81,68 @@
       #boot-loader .bl-text::after { animation: none; content: '…'; }
     }
 
+    /* Soft mobile gate: a friendly, dismissible full-screen notice shown on boot
+       when the device looks phone-class (src/systems/device/isMobileDevice.ts) and
+       the visitor hasn't acknowledged it yet (sr_mobile_ack). Pure HTML/CSS like
+       the boot loader so it paints instantly; main.ts reveals it via .show and the
+       «Всё равно продолжить» button hides it + persists the choice. The engine
+       still boots underneath — the gate only sets expectations, so a misdetected
+       desktop loses nothing. */
+    #mobile-gate {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.4rem;
+      padding: 2rem 1.6rem;
+      box-sizing: border-box;
+      text-align: center;
+      background: radial-gradient(ellipse at center, #04141f 0%, #000 72%);
+      color: #0ff;
+      font-family: 'Courier New', monospace;
+      transition: opacity 0.35s ease;
+    }
+    #mobile-gate.show { display: flex; }
+    #mobile-gate.hidden { opacity: 0; pointer-events: none; }
+    #mobile-gate .mg-title {
+      font-size: clamp(1.1rem, 6vw, 1.8rem);
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      text-shadow: 0 0 12px rgba(0, 255, 255, 0.55);
+      max-width: 22ch;
+    }
+    #mobile-gate .mg-body {
+      font-size: clamp(0.9rem, 4.2vw, 1.05rem);
+      line-height: 1.6;
+      letter-spacing: 0.02em;
+      opacity: 0.85;
+      max-width: 34ch;
+    }
+    #mobile-gate .mg-continue {
+      margin-top: 0.6rem;
+      padding: 0.9rem 1.6rem;
+      background: rgba(2, 18, 26, 0.72);
+      border: 1px solid rgba(0, 255, 255, 0.5);
+      border-radius: 6px;
+      color: #0ff;
+      font-family: 'Courier New', monospace;
+      font-size: clamp(0.95rem, 4.4vw, 1.1rem);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 0 12px rgba(0, 255, 255, 0.2);
+      transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #mobile-gate .mg-continue:hover {
+      background: rgba(0, 40, 52, 0.92);
+      box-shadow: 0 0 18px rgba(0, 255, 255, 0.5);
+    }
+    #mobile-gate .mg-continue:active { transform: scale(0.96); }
+
     /* Global «Оставить issue» button: a small bug icon pinned to a screen corner,
        above the game canvas on every scene (it lives in the DOM, not the PixiJS
        scene graph, so scene transitions never remove it). Hidden until main.ts
@@ -140,6 +202,14 @@
     <div class="bl-title">Вакуумные Пройдохи</div>
     <div class="bl-ring"></div>
     <div class="bl-text">Загрузка</div>
+  </div>
+  <div id="mobile-gate" role="dialog" aria-modal="true" aria-labelledby="mg-title">
+    <div class="mg-title" id="mg-title">Тесновато для рейса, пилот</div>
+    <div class="mg-body">
+      «Вакуумные Пройдохи» рассчитаны на десктоп — клавиатура и крупный экран; на
+      телефоне будет тесно. Зайдите с компьютера для полного полёта.
+    </div>
+    <button id="mobile-gate-continue" class="mg-continue" type="button">Всё равно продолжить</button>
   </div>
   <button id="vr-issue-btn" type="button" aria-label="Оставить issue" title="Оставить issue">
     <span class="vr-issue-tip">Оставить issue</span>

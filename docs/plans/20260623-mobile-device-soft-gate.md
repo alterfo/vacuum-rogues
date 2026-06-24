@@ -61,19 +61,19 @@ missing mobile layout.)
 - Create: `src/systems/device/mobileGateState.ts` (+ test) for the dismissed flag
 - Create/Modify tests under `src/tests/`
 
-- [ ] Add a hidden `#mobile-gate` HTML/CSS overlay (themed like the boot loader)
+- [x] Add a hidden `#mobile-gate` HTML/CSS overlay (themed like the boot loader)
       with the friendly in-universe copy — e.g. title «Тесновато для рейса, пилот»,
       body "«Вакуумные Пройдохи» рассчитаны на десктоп — клавиатура и крупный экран;
       на телефоне будет тесно. Зайдите с компьютера для полного полёта." — and a
       **«Всё равно продолжить»** button.
-- [ ] `mobileGateState`: `wasDismissed()` / `markDismissed()` over `localStorage`
+- [x] `mobileGateState`: `wasDismissed()` / `markDismissed()` over `localStorage`
       (`sr_mobile_ack`), injectable for tests.
-- [ ] In `main.ts`, after boot, call a `maybeShowMobileGate()` that reveals the
+- [x] In `main.ts`, after boot, call a `maybeShowMobileGate()` that reveals the
       overlay when `isMobileDevice() && !wasDismissed()`; «Всё равно продолжить»
       hides it and `markDismissed()` (so it won't nag on every load).
-- [ ] write tests: shown when mobile + not dismissed; not shown on desktop or after
+- [x] write tests: shown when mobile + not dismissed; not shown on desktop or after
       dismissal; dismiss persists. (Pure decision + state, fake env/storage.)
-- [ ] run tests — green; **screenshot-verify** the overlay (mobile viewport).
+- [x] run tests — green; **screenshot-verify** the overlay (mobile viewport).
 
 ### Task 3: Verify acceptance criteria
 **Files:**

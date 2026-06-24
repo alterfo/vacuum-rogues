@@ -7,6 +7,7 @@ import { logger } from './utils/logger';
 import { GameConfig } from './config/balance';
 import { gatherDiagnostics } from './systems/feedback/gatherDiagnostics';
 import { openFeedback } from './systems/feedback/openFeedback';
+import { shouldShowMobileGate, markDismissed } from './systems/device/mobileGateState';
 
 declare const __DEBUG__: boolean;
 
@@ -124,8 +125,28 @@ function wireIssueButton(engine: GameEngine): void {
   btn.classList.add('ready');
 }
 
+/**
+ * Soft mobile boot gate: when the device looks phone-class and the visitor hasn't
+ * dismissed the notice (`sr_mobile_ack`), reveal the `#mobile-gate` overlay. The
+ * engine still boots underneath — «Всё равно продолжить» hides the overlay and
+ * remembers the choice so it won't nag on the next load. Never shown on desktop.
+ */
+function maybeShowMobileGate(): void {
+  if (!shouldShowMobileGate()) return;
+  const gate = document.getElementById('mobile-gate');
+  if (!gate) return;
+  gate.classList.add('show');
+  const dismiss = (): void => {
+    gate.classList.add('hidden');
+    window.setTimeout(() => gate.classList.remove('show'), 350);
+    markDismissed();
+  };
+  document.getElementById('mobile-gate-continue')?.addEventListener('click', dismiss);
+}
+
 async function main(): Promise<void> {
   checkDomainLock();
+  maybeShowMobileGate();
 
   history.pushState(null, '', location.href);
   window.addEventListener('popstate', () => history.pushState(null, '', location.href));
