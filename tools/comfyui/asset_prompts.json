@@ -133,6 +133,23 @@
         }
       }
     },
+    "station": {
+      "size": [1024, 1024],
+      "variants": 4,
+      "alpha": true,
+      "template": "A sci-fi orbital space station seen from directly above, orthographic top-down view, flat, no perspective, {type}, glowing windows and running lights, clean readable silhouette, centered, full station visible, plain flat neutral grey background, concept art, sharp focus",
+      "negative": "legs, animal, creature, robot dog, mecha, walker, person, side view, perspective view, horizontal, tilted, diagonal, ground, sky, planet, scenery, horizon, cropped, multiple stations, ship in flight",
+      "name_order": ["type"],
+      "axes": {
+        "type": {
+          "trade": "bustling modular trade station with docking rings and cargo pods",
+          "drydock": "open shipyard drydock with gantries and a ship in cradle",
+          "military": "armoured fortress station with turrets and hangar bays",
+          "science": "sleek research station with sensor dishes and glowing labs",
+          "fabricator": "industrial fabrication station with foundry glow and assembly arms"
+        }
+      }
+    },
     "icons": {
       "size": [768, 768],
       "alpha": true,

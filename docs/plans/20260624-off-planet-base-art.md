@@ -123,7 +123,7 @@ There are five station types to cover: `TRADE_POST`, `REPAIR_DOCK`,
 - Modify: `tools/comfyui/asset_prompts.json`
 - Create/Modify: `src/tests/assets/stationPrompts.test.ts` (lightweight JSON-shape guard)
 
-- [ ] Add `categories.station` mirroring `ships`: 1024×1024, transparent centred
+- [x] Add `categories.station` mirroring `ships`: 1024×1024, transparent centred
       **top-down orthographic** sprite, `name_order: ["type"]`, `variants: 4`, and
       `axes.type` with one prompt per station type (keys `trade`/`drydock`/
       `military`/`science`/`fabricator` matching `STATION_TEXTURE_PREFIX`), e.g.
@@ -133,10 +133,10 @@ There are five station types to cover: `TRADE_POST`, `REPAIR_DOCK`,
       science = "sleek research station with sensor dishes and glowing labs";
       fabricator = "industrial fabrication station with foundry glow and assembly arms".
       Negative: reuse the `ships`/`negative_common` anti-perspective/anti-scenery set.
-- [ ] write a JSON-shape test: `categories.station` exists, has all five `axes.type`
+- [x] write a JSON-shape test: `categories.station` exists, has all five `axes.type`
       keys exactly matching `Object.values(STATION_TEXTURE_PREFIX)`, and a non-empty
       `template` (guards the art prefixes from drifting out of sync with the code map).
-- [ ] run tests — must pass before next task.
+- [x] run tests — must pass before next task.
 
 ### Task 4: Verify acceptance criteria
 **Files:**
