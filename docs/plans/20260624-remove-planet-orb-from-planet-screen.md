@@ -138,9 +138,10 @@ menu exactly as they are, and removes the now-dead helpers. No domain/data chang
 **Files:**
 - Modify: `src/presentation/CLAUDE.md` (Planet Backdrop conventions) or a short note
 
-- [ ] Note that `PlanetScene` no longer draws a central planet orb or atmosphere
+- [x] Note that `PlanetScene` no longer draws a central planet orb or atmosphere
       glow — the planet is represented by the surface backdrop only; the `planets`
-      disc art remains in use by the flight scene (`PlanetSprite`).
+      disc art remains in use by the flight scene (`PlanetSprite`). (Added to the
+      Planet Backdrop Conventions section of `src/presentation/pixi-rules.md`.)
 
 ## Technical Details
 - Pure UI removal in `PlanetScene.createUI` + `update`. The name/info/menu layout is
