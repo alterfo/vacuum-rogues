@@ -122,8 +122,14 @@ export class CombatModule implements FlightModule {
   /** ms elapsed since each combatant last fired at the player. */
   private readonly npcFireTimers = new Map<NpcShipSprite, number>();
 
-  /** ms elapsed since the player's weapon last fired. */
-  private playerFireTimer = 0;
+  /**
+   * ms elapsed since each fitted weapon last fired, keyed by the weapon's index
+   * in {@link fittedWeapons}. Every weapon auto-fires on the shared
+   * {@link GAME_BALANCE.combatFireIntervalMs} cadence but tracks its own timer so
+   * a weapon held out of range (no combatant within its `range`) keeps its
+   * cadence independently of the others. Reset on engage / confirm / end.
+   */
+  private readonly weaponFireTimers = new Map<number, number>();
 
   /** Guards the one-shot low-hull retreat warning per fight. */
   private lowHullWarned = false;
@@ -148,15 +154,6 @@ export class CombatModule implements FlightModule {
    * to deselect.
    */
   selectedTarget: NpcShipSprite | null = null;
-
-  /**
-   * The weapon the player chose in the active-pause overlay. A confirmed shot
-   * sets it so the *resumed* real-time auto-fire keeps using that weapon (mirrors
-   * how the confirmed target persists via {@link selectedTarget}); null until the
-   * first confirm, where {@link advancePlayerTimer} falls back to the default
-   * {@link playerWeapon}. Cleared on {@link endCombat}.
-   */
-  private selectedWeapon: WeaponSpec | null = null;
 
   /** True while at least one combatant is engaged. */
   isActive = false;
@@ -215,7 +212,7 @@ export class CombatModule implements FlightModule {
     // survivor this frame — re-check the gate before it, mirroring the guard
     // before advanceNpcTimers below.
     if (this.isFrozen()) return;
-    this.advancePlayerTimer(deltaTime);
+    this.advancePlayerWeapons(deltaTime);
     // A killing player shot can re-pause the fight mid-frame: the selected target
     // was lost but a survivor remains → onTargetLost → active-pause. The world is
     // frozen the instant that pause is raised, so surviving NPCs must not still
@@ -257,7 +254,7 @@ export class CombatModule implements FlightModule {
 
     if (!this.isActive) {
       this.isActive = true;
-      this.playerFireTimer = 0;
+      this.weaponFireTimers.clear();
       this.lowHullWarned = false;
       this.hud?.open(this.selectedTarget);
     }
@@ -266,8 +263,9 @@ export class CombatModule implements FlightModule {
 
   /**
    * Every weapon fitted in the loadout — the selectable list the active-pause
-   * overlay offers (the player picks one to fire). Empty without a loadout.
-   * {@link playerWeapon} (the auto-fire default) is just the first of these.
+   * overlay offers (the player picks one to fire), and the full set the real-time
+   * loop ({@link advancePlayerWeapons}) auto-fires each within its own range.
+   * Empty without a loadout.
    */
   fittedWeapons(): WeaponSpec[] {
     const loadout = this.deps.getPlayerLoadout?.() ?? null;
@@ -281,14 +279,15 @@ export class CombatModule implements FlightModule {
   /**
    * Active-pause confirmed action: fire exactly one shot at `target` with the
    * player-chosen `weapon`, then keep `target` as the auto-fire selection so the
-   * real-time fight continues against it once time resumes. Resets the player's
-   * fire cadence so the resumed auto-fire doesn't immediately double-fire. A
-   * no-op outside an active fight or against a non-combatant. Unlike the auto-fire
-   * guard in {@link advancePlayerTimer}, a *deliberate* confirmed shot is not gated
+   * real-time fight continues against it once time resumes. Resets every weapon's
+   * fire cadence so the resumed real-time auto-fire doesn't immediately double-fire.
+   * A no-op outside an active fight or against a non-combatant. Unlike the auto-fire
+   * loop in {@link advancePlayerWeapons}, a *deliberate* confirmed shot is not gated
    * on the weapon's range — every engaged combatant is within
    * {@link GAME_BALANCE.combatEscapeRange}, and a hand-picked shot is allowed to
    * land. Reuses {@link firePlayerShot} so the kill/loot/damage-number path is
-   * identical to the real-time loop.
+   * identical to the real-time loop. (The real-time loop fires *all* fitted weapons;
+   * this is the single deliberate shot the player aims by hand.)
    */
   confirmAttack(target: NpcShipSprite, weapon: WeaponSpec): void {
     if (!this.isActive || !this.combatants.has(target)) return;
@@ -296,13 +295,8 @@ export class CombatModule implements FlightModule {
     // hand-picked shot is blocked until the hull is repaired above the floor.
     if (this.isPlayerDowned()) return;
     this.selectTarget(target);
-    // Persist the chosen weapon so the resumed real-time auto-fire keeps using it
-    // (the docstring's "the real-time fight continues against it" applies to the
-    // weapon too, not just the target — otherwise auto-fire silently reverts to
-    // the first fitted weapon).
-    this.selectedWeapon = weapon;
     this.firePlayerShot(target, weapon);
-    this.playerFireTimer = 0;
+    this.weaponFireTimers.clear();
   }
 
   /**
@@ -327,8 +321,7 @@ export class CombatModule implements FlightModule {
     this.combatants.clear();
     this.npcFireTimers.clear();
     this.selectedTarget = null;
-    this.selectedWeapon = null;
-    this.playerFireTimer = 0;
+    this.weaponFireTimers.clear();
     this.lowHullWarned = false;
     this.downedWarned = false;
     this.playerDeathReported = false;
@@ -403,19 +396,64 @@ export class CombatModule implements FlightModule {
     }
   }
 
-  /** Advance the player's fire timer; fire at the selected target when it elapses and the target is in range. */
-  private advancePlayerTimer(deltaTime: number): void {
-    this.playerFireTimer += deltaTime;
-    if (this.playerFireTimer < GAME_BALANCE.combatFireIntervalMs) return;
+  /**
+   * Advance every fitted weapon's fire timer and, as each elapses, fire it at the
+   * nearest combatant **within that weapon's own range** ("в зоне поражения
+   * орудия"), preferring the {@link selectedTarget} when it is in range. A weapon
+   * with no combatant in range holds — its timer stays "ready" (clamped to the
+   * interval) so it fires the instant a target closes, rather than re-waiting a
+   * full interval. Each weapon keeps its own timer (keyed by its index in
+   * {@link fittedWeapons}) so cadence is per-weapon on the shared interval.
+   */
+  private advancePlayerWeapons(deltaTime: number): void {
     // A downed ship (GOD mode, hull at the floor) can't auto-fire until repaired.
     if (this.isPlayerDowned()) return;
-    const target = this.selectedTarget;
-    const weapon = this.activeWeapon();
-    if (!target || !this.combatants.has(target) || !weapon) return;
-    const d = this.distanceToShip(target);
-    if (d === null || d > weapon.range) return;
-    this.playerFireTimer = 0;
-    this.firePlayerShot(target, weapon);
+    const weapons = this.fittedWeapons();
+    for (let i = 0; i < weapons.length; i++) {
+      // A player shot can kill a target → removeCombatant → onTargetLost →
+      // active-pause. The world is frozen the instant that pause is raised, so a
+      // later weapon in this loop must not still fire on the pausing frame
+      // (mirrors the per-iteration re-check in advanceNpcTimers).
+      if (this.isFrozen()) break;
+      const weapon = weapons[i];
+      const t = (this.weaponFireTimers.get(i) ?? 0) + deltaTime;
+      if (t < GAME_BALANCE.combatFireIntervalMs) {
+        this.weaponFireTimers.set(i, t);
+        continue;
+      }
+      const target = this.pickTargetInRange(weapon);
+      if (!target) {
+        // No combatant in this weapon's range — hold but stay primed.
+        this.weaponFireTimers.set(i, GAME_BALANCE.combatFireIntervalMs);
+        continue;
+      }
+      this.weaponFireTimers.set(i, 0);
+      this.firePlayerShot(target, weapon);
+    }
+  }
+
+  /**
+   * The combatant `weapon` auto-fires at: the {@link selectedTarget} when it is
+   * within the weapon's `range`, else the nearest other combatant inside that
+   * range. Null when no combatant is reachable (the weapon holds fire).
+   */
+  private pickTargetInRange(weapon: WeaponSpec): NpcShipSprite | null {
+    const sel = this.selectedTarget;
+    if (sel && this.combatants.has(sel)) {
+      const d = this.distanceToShip(sel);
+      if (d !== null && d <= weapon.range) return sel;
+    }
+    let best: NpcShipSprite | null = null;
+    let bestDist = Infinity;
+    for (const npc of this.combatants) {
+      const d = this.distanceToShip(npc);
+      if (d === null || d > weapon.range) continue;
+      if (d < bestDist) {
+        bestDist = d;
+        best = npc;
+      }
+    }
+    return best;
   }
 
   /** One NPC shot: reduce player hull, spawn a red number, warn once on low hull. */
@@ -538,23 +576,6 @@ export class CombatModule implements FlightModule {
     const physics = this.deps.getShipPhysics();
     if (!physics) return null;
     return Math.hypot(target.x - physics.shipX, target.y - physics.shipY);
-  }
-
-  /** The player's active weapon — the first equipped weapon in the loadout. */
-  private playerWeapon(): WeaponSpec | null {
-    return this.fittedWeapons()[0] ?? null;
-  }
-
-  /**
-   * The weapon the resumed auto-fire uses: the one the player confirmed in the
-   * overlay if it is still fitted, else the default {@link playerWeapon}. The
-   * still-fitted guard keeps a stale selection (e.g. the weapon was unequipped
-   * mid-fight) from firing a weapon the loadout no longer carries.
-   */
-  private activeWeapon(): WeaponSpec | null {
-    const sel = this.selectedWeapon;
-    if (sel && this.fittedWeapons().some((w) => w.id === sel.id)) return sel;
-    return this.playerWeapon();
   }
 
   /**

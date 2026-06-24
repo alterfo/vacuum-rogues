@@ -142,29 +142,27 @@ describe("CombatModule.confirmAttack (Task 3)", () => {
     expect(enemy.npc.hullHP).toBeLessThan(afterConfirm);
   });
 
-  it("resumed auto-fire keeps using the confirmed weapon, not the first fitted one", () => {
+  it("resumed real-time auto-fire fires ALL fitted weapons (Task 1 multi-weapon)", () => {
     const { module, enemy } = makeFight();
-    // Beam (dmg 30) is the *second* fitted weapon; the default auto-fire weapon is
-    // the pulse (dmg 14, index 0). Confirming the beam must make the resumed
-    // real-time auto-fire keep using the beam — not silently revert to the pulse.
-    module.confirmAttack(enemy, BEAM);
+    // The confirmed shot is a single deliberate weapon (the beam). The *resumed*
+    // real-time loop is the multi-weapon path: it fires every fitted weapon at an
+    // in-range target — both the pulse (dmg 14) and the beam (dmg 30) here — not a
+    // single persisted "active" weapon.
+    module.confirmAttack(enemy, BEAM); // one deliberate beam shot
     const afterConfirm = enemy.npc.hullHP; // 100 - 30
-    module.update(FIRE); // one resumed auto-fire shot lands
-    expect(enemy.npc.hullHP).toBe(afterConfirm - BEAM.damage); // beam again, not pulse
+    module.update(FIRE); // a resumed interval — every fitted weapon fires
+    expect(enemy.npc.hullHP).toBe(afterConfirm - PULSE.damage - BEAM.damage);
   });
 
-  it("falls back to the default weapon when the confirmed one is unequipped mid-fight", () => {
-    // Regression guard for activeWeapon()'s still-fitted check: a confirmed weapon
-    // persists as the resumed auto-fire weapon ONLY while it stays fitted. If the
-    // player unequips it mid-fight, the resumed auto-fire must fall back to the
-    // remaining fitted weapon (the default playerWeapon) — never fire a weapon the
-    // loadout no longer carries.
+  it("resumed auto-fire fires only the still-fitted weapons after one is unequipped mid-fight", () => {
+    // A weapon unequipped mid-fight leaves the resumed real-time loop — never
+    // firing a weapon the loadout no longer carries. With the beam removed only
+    // the pulse remains fitted, so only the pulse lands.
     const { module, enemy, loadout } = makeFight();
-    module.confirmAttack(enemy, BEAM); // beam (dmg 30) becomes the selected weapon
+    module.confirmAttack(enemy, BEAM); // one deliberate beam shot
     const afterConfirm = enemy.npc.hullHP; // 100 - 30
     expect(loadout.remove("wpn_beam")).toBe(true); // beam unequipped mid-fight
-    module.update(FIRE); // one resumed auto-fire shot lands
-    // Pulse (dmg 14, the only weapon still fitted) lands — NOT the now-gone beam.
+    module.update(FIRE); // a resumed interval — only the still-fitted pulse fires
     expect(enemy.npc.hullHP).toBe(afterConfirm - PULSE.damage);
   });
 });

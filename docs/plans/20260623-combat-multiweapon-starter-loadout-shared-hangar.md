@@ -51,18 +51,18 @@ Three equipment/combat polish items:
 - Modify: `src/presentation/flight/CombatModule.ts` (real-time auto-fire)
 - Create/Modify tests under `src/tests/`
 
-- [ ] Replace the single-`selectedWeapon` auto-fire with a loop over
+- [x] Replace the single-`selectedWeapon` auto-fire with a loop over
       `fittedWeapons()`: each weapon, on the shared `combatFireIntervalMs` cadence,
       fires at the **nearest combatant within that weapon's `range`** (preferring the
       selected target when it is in range); a weapon with no target in range holds.
       Give each weapon its own fire timer so cadence is per-weapon.
-- [ ] Keep the active-pause overlay «Огонь!» (`confirmAttack`) as the deliberate
+- [x] Keep the active-pause overlay «Огонь!» (`confirmAttack`) as the deliberate
       single-shot path; the real-time loop is what now uses all weapons.
-- [ ] write tests: two weapons of different ranges + two targets at different
+- [x] write tests: two weapons of different ranges + two targets at different
       distances → each weapon fires at a target inside its range; a weapon whose
       range reaches no combatant does not fire; total damage reflects all in-range
       weapons.
-- [ ] run touched tests — green.
+- [x] run touched tests — green.
 
 ### Task 2: Complete the starter loadout (grapple installed, empty bag)
 **Files:**

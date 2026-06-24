@@ -102,13 +102,14 @@ function makeFight(opts: { enemyHp?: number } = {}): {
 
 describe("active-pause preserves the kill hook (Task 4)", () => {
   it("a kill confirmed during active-pause still fires onNpcDestroyed (bounty seam)", () => {
-    // Enemy low enough that one confirmed beam shot is lethal (the auto pulse
-    // softens it first, the confirmed beam finishes it).
-    const { module, controller, enemy, destroyed } = makeFight({ enemyHp: 20 });
+    // Enemy low enough that one confirmed beam shot is lethal — but high enough to
+    // survive the multi-weapon auto-fire (pulse 14 + beam 30 = 44) so the fight
+    // reaches the pause. The confirmed beam (30) then finishes the 16 HP left.
+    const { module, controller, enemy, destroyed } = makeFight({ enemyHp: 60 });
 
     module.update(FIRE); // both sides fire; the incoming shot pauses the fight
     expect(controller.paused).toBe(true);
-    expect(enemy.npc.hullHP).toBeGreaterThan(0); // auto pulse only softened it
+    expect(enemy.npc.hullHP).toBeGreaterThan(0); // auto-fire only softened it
 
     controller.selectTarget(enemy);
     controller.selectWeapon(BEAM);
@@ -124,7 +125,7 @@ describe("active-pause preserves the kill hook (Task 4)", () => {
 describe("disengage re-arms the active-pause debounce (Task 4)", () => {
   it("after a fight ends, the next engagement pauses again on its first incoming shot", () => {
     const { module, controller, enemy, combatEnded } = makeFight({
-      enemyHp: 20,
+      enemyHp: 60, // survives the multi-weapon auto-fire so the fight pauses first
     });
 
     // Kill the only combatant during active-pause, then resume.
