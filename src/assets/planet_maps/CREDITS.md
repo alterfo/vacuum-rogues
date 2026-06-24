@@ -9,7 +9,7 @@ The `*_04` / `*_05` equirectangular surface maps in this folder are derived from
 
 | File(s) | Source texture |
 |---------|----------------|
-| `terrestrial_04`, `habitat_04` | Earth daymap |
+| `terrestrial_05` | Mars |
 | `gas_04` | Jupiter |
 | `gas_05` | Saturn |
 | `ice_04` | Neptune |
@@ -23,15 +23,21 @@ The `*_04` / `*_05` equirectangular surface maps in this folder are derived from
 Variant suffixes encode provenance so attribution can be reasoned about by
 filename alone:
 
-- `<type>_01` … `<type>_03` — **AI-generated** locally (ComfyUI, Flux 360° LoRA),
-  no third-party license.
-- `<type>_04` and higher — **Solar System Scope**, CC BY 4.0 (the verified
-  originals are tabled above; additional `_06`+ tiles follow the same CC BY 4.0
-  source and convention).
+- `<type>_01` … `<type>_03` — **AI-generated** locally (ComfyUI), no third-party
+  license.
+- `<type>_04` and higher — originally **Solar System Scope**, CC BY 4.0 (the
+  verified originals are tabled above; additional `_06`+ tiles follow the same CC
+  BY 4.0 source and convention).
 
-The rotation shader (`PlanetRotationFilter`) defaults to the `<type>_04` map and
-prefers an AI variant only when one is present. Keep this attribution while any
-CC BY map is shipped.
+**Exception — terran & habitat `_04` are now AI-generated.** The `terrestrial_04`
+and `habitat_04` Earth daymaps were replaced on disk with alien AI maps (see
+"Terran art is alien-by-design" below), so for `terrestrial`/`habitat` *every*
+shipped AI variant (`_01`…`_04`) is locally generated. The `_04+ = Solar System
+Scope` convention still holds for `gas`/`ice`/`volcanic`/`industrial`.
+
+Variant selection (`pickVariant`/`pickVariantKey`, FNV-1a hash by planet id)
+spreads stably across every globbed `<type>_NN`. Keep CC BY attribution while any
+Solar System Scope map is shipped.
 
 ## Terran art is alien-by-design
 
@@ -46,18 +52,22 @@ real-world map, satellite photo of Earth, Africa, Americas, real-world
 coastlines`). The `terranPromptAlien` unit test pins this so an edit can't
 quietly reintroduce blue-marble imagery.
 
-The CC BY `terrestrial_04`/`terrestrial_05` Earth daymaps above are the legacy
-seed art; once the alien terran sets are generated they replace these on disk
-under the same suffix convention (`_01`…`_03` AI-generated). Variety is
-glob-driven: selection (`pickVariant`/`pickVariantKey`, FNV-1a hash by planet id)
-spreads stably across every globbed `terrestrial_NN`, so landing more variant
-files widens variety with no code change.
+**Done:** the Earth daymaps have been replaced. `terrestrial_01`…`_04` and
+`habitat_01`…`_04` are now alien AI maps (SDXL flat-swatch, `realvisxl_v5`, the
+`planet_maps` prompts in `asset_prompts.json`). Only `terrestrial_05` (a CC BY
+Mars map) remains from the original solar-system seed art. Variety is glob-driven:
+selection (`pickVariant`/`pickVariantKey`, FNV-1a hash by planet id) spreads
+stably across every globbed `terrestrial_NN`, so landing more variant files
+widens variety with no code change.
 
 **Generation params (manual, GPU host `oleg@192.168.88.193`, RTX 4090):**
 
-- `planet_maps` (equirectangular, 1024×512, 2:1): Flux 360° LoRA path —
-  `python3 tools/comfyui/generate_assets.py --category planet_maps --clean`.
-  Must stay 360° equirect, never a top-down sphere sprite.
+- `planet_maps` (2:1 flat surface swatch, upscaled to 2048×1024): SDXL flat-swatch
+  path with an explicit `--ckpt` —
+  `python3 tools/comfyui/generate_assets.py --category planet_maps --ckpt realvisxl_v5.safetensors --clean`.
+  The `asset_prompts.json` template + negative force a flat edge-to-edge texture
+  (no sphere/globe/Earth). A Flux-360° equirect path also exists
+  (`workflow_flux_360_planets.json`) but needs a working Flux checkpoint on the host.
 - `planets` (globe sprite, 1024×1024, centered disc, transparent): SDXL with an
   explicit `--ckpt` (the default Flux model breaks `CheckpointLoaderSimple`) —
   `--category planets --ckpt realvisxl_v5.safetensors --clean`.
