@@ -93,8 +93,11 @@ missing mobile layout.)
 **Files:**
 - Modify: `src/presentation/CLAUDE.md` or `docs/` notes
 
-- [ ] Note the soft device gate: `isMobileDevice` detection + the dismissible
+- [x] Note the soft device gate: `isMobileDevice` detection + the dismissible
       `#mobile-gate` overlay + the `sr_mobile_ack` persistence; desktop unaffected.
+      (Documented in the main `CLAUDE.md` under a new "Soft Mobile Gate" subsection
+      next to the boot entry point — the most discoverable home for a boot-level
+      HTML gate, since `src/presentation/CLAUDE.md` is strictly PixiJS layer rules.)
 
 ## Technical Details
 - Soft, not hard: the engine still boots underneath; the overlay just sets

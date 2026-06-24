@@ -47,9 +47,17 @@ npm run test:e2e:regression # Run regression playtest suite only (fast gate, < 6
 
 ### Key Entry Points
 
-- `src/main.ts` — App entry: Service Worker registration, GameEngine initialization
+- `src/main.ts` — App entry: Service Worker registration, GameEngine initialization, boot gates (`checkDomainLock` + the soft mobile gate, below)
 - `src/systems/GameEngine.ts` — Central engine: scene transitions, game loop, save coordination
 - `src/presentation/GameScene.ts` — Base scene class: `initialize()`, `update(dt)`, `destroy()`
+
+### Soft Mobile Gate
+
+A **soft, dismissible** boot notice for phone-class visitors (`docs/plans/20260623-mobile-device-soft-gate.md`) — the game is keyboard/large-screen oriented, so a friendly in-universe overlay sets expectations without hard-locking anyone out. The engine still boots underneath; **desktop is unaffected** (the gate never shows).
+
+- **Detection** (`src/systems/device/isMobileDevice.ts`): pure, injectable `isMobileDevice(env?)` = `coarse && (small || phoneUA)` — a coarse primary pointer (`matchMedia('(pointer: coarse)')`, falling back to `maxTouchPoints`) AND either a small viewport (`min(w,h) < MOBILE_MAX_VIEWPORT_PX` = 768) or a phone user-agent. Conservative by design: tablets/hybrids/large touchscreens keep their desktop profile; missing APIs degrade toward "not mobile". `env` defaults to live `window`/`navigator`, read through `typeof` guards (safe under Vitest).
+- **Persistence** (`src/systems/device/mobileGateState.ts`): browser-level `localStorage` flag `sr_mobile_ack` (same kind as `sr_settings`/`sr_help_seen` — **no save-schema/migration change**). `wasDismissed()`/`markDismissed()` + the pure decision `shouldShowMobileGate(env?, store?)` = `isMobileDevice() && !wasDismissed()`; both injectable and degrade to "not dismissed"/no-op when storage is unavailable.
+- **Overlay + wiring**: the hidden `#mobile-gate` HTML/CSS overlay lives in `src/index.html` (themed like the boot loader); `maybeShowMobileGate()` in `main.ts` reveals it when `shouldShowMobileGate()` is true and «Всё равно продолжить» hides it + `markDismissed()` (so it won't nag on the next load).
 
 ### ONNX/AI Pipeline
 
@@ -163,7 +171,7 @@ Dev helpers (details in `tools/README.md`):
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **SpaceRangersOnline** (7096 symbols, 26104 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **SpaceRangersOnline** (10075 symbols, 35340 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -172,8 +180,9 @@ This project is indexed by GitNexus as **SpaceRangersOnline** (7096 symbols, 261
 - **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
 - **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "master"})`.
 - **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
 - When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
+- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
 
 ## Never Do
 
