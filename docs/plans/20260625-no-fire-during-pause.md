@@ -66,14 +66,21 @@ in-flight projectiles — honor the single `isPaused`/`isFrozen` gate.
 **Files:**
 - Modify: `src/presentation/flight/CombatModule.ts`
 
-- [ ] Gate the **player multi-weapon** fire loop on `isFrozen()` (top-of-loop +
+- [x] Gate the **player multi-weapon** fire loop on `isFrozen()` (top-of-loop +
       per-iteration break, mirroring `advanceNpcTimers`), so no weapon fires while
-      paused — including the frame the pause is raised.
-- [ ] Freeze **projectiles/tracers in flight** while paused (no movement, no damage
-      application) — only resume on unpause.
-- [ ] write tests: paused ⇒ zero player + zero NPC shots + frozen projectiles over
+      paused — including the frame the pause is raised. Already gated: `update`
+      early-returns at `if (this.isFrozen()) return;` before `advancePlayerWeapons`,
+      and the loop re-checks `if (this.isFrozen()) break;` per iteration (~L417).
+- [x] Freeze **projectiles/tracers in flight** while paused (no movement, no damage
+      application) — only resume on unpause. `CombatModule.update` now advances the
+      HUD tracers only when `!this.isFrozen()` (was unconditional at the top of the
+      frame), so a shot launched the instant before the pause freezes mid-flight.
+- [x] write tests: paused ⇒ zero player + zero NPC shots + frozen projectiles over
       N ticks; unpaused ⇒ fire resumes on cadence; the Task 1 repro now passes.
-- [ ] run tests — green (the locked combat-pause tests stay green).
+      `combatPauseFreeze.test.ts`: frozen-tracer regression (flipped `it.fails`→`it`),
+      "no player or NPC shot while paused", "resumes fire on cadence once unpaused".
+- [x] run tests — green (the locked combat-pause tests stay green). All 33 flight
+      test files (261 tests) pass; lint clean (0 errors).
 
 ### Task 3: Verify acceptance criteria
 **Files:**

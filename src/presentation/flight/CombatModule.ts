@@ -194,9 +194,13 @@ export class CombatModule implements FlightModule {
    */
   update(deltaTime: number, _bgElapsed?: number): void {
     this.damageNumbers?.update(deltaTime);
-    // Fade per-turn fire flashes every frame so a killing-blow's flash finishes
-    // its arc even after the fight ends (mirrors the damage-number behaviour).
-    this.hud?.update(deltaTime);
+    // Advance in-flight tracers ONLY while the world isn't frozen by the active
+    // pause: a shot launched the instant before the pause must freeze mid-flight
+    // (no travel, no impact flash) and resume on unpause — mirroring the fire-loop
+    // gate below, so the active pause freezes the *whole* fight, not just new
+    // shots. After the fight *ends* the pause is reset (isFrozen()===false), so a
+    // killing-blow's flash still fades out — it finishes its arc as before.
+    if (!this.isFrozen()) this.hud?.update(deltaTime);
     if (!this.isActive) return;
     // Combat fire is gated on the active-pause ONLY — the fight ticks in real
     // time whether or not a route-"Ход" is running (decoupled from the turn).
