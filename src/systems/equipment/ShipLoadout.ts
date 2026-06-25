@@ -181,11 +181,31 @@ export class ShipLoadout {
     const h = gearById(hullId);
     if (!h || h.kind !== GearKind.HULL) return [];
     this.hullId = hullId;
+    const dropped = this.evictToCurrentHullCapacity();
+    // The previous hull's micromodule slots no longer exist on the new hull.
+    this.hullMicromoduleIds = [];
+    return dropped.map((s) => ({
+      gearId: s.gearId,
+      micromoduleId: s.micromoduleId,
+      upgrades: s.upgrades,
+    }));
+  }
+
+  /**
+   * Drop any installed gear that exceeds the **current** hull's per-category
+   * slot or mass capacity, returning the evicted slot records (gear id +
+   * micromodule + upgrades) in drop order. The shared eviction used by both a
+   * hull swap ({@link swapHull}) and a load-time revalidation
+   * ({@link revalidateToCurrentHull}); it reads the live `this.hull`, so callers
+   * point it at the right hull (the new one in a swap; the unchanged one on
+   * load). Does NOT touch hull micromodules — the caller owns that.
+   */
+  private evictToCurrentHullCapacity(): SlottedGear[] {
     const dropped: SlottedGear[] = [];
     // 1. Per-category overflow: drop the last-installed items of any bank that
-    //    now exceeds the new hull's capacity. The flat `hull.slots` total is NOT
-    //    the real cap under the category model (it omits the dedicated engine +
-    //    radar slots, so a valid loadout can hold `slots + 2` items); popping to
+    //    now exceeds the current hull's capacity. The flat `hull.slots` total is
+    //    NOT the real cap under the category model (it omits the dedicated engine
+    //    + radar slots, so a valid loadout can hold `slots + 2` items); popping to
     //    it kept over-cap weapons while dropping the engine/radar and leaving an
     //    unflyable ship. Weapon/equipment banks shrink to their new cap; engine/
     //    radar (cap 1) shed any duplicate carried over from a legacy save.
@@ -197,19 +217,36 @@ export class ShipLoadout {
         dropped.push(this.slotted.splice(idx, 1)[0]);
       }
     }
-    // 2. Mass overflow: a smaller hull also carries less mass budget, so a swap
+    // 2. Mass overflow: a smaller hull also carries less mass budget, so a loadout
     //    that stays within every category cap can still be over МАССА. Drop
     //    further gear (preferring non-essential parts so the ship keeps its
-    //    engine + fuel and can still take off) until Σ mass fits the new hull.
+    //    engine + fuel and can still take off) until Σ mass fits the hull.
     while (
       this.usedMass() > this.hull.massCapacity &&
       this.slotted.length > 0
     ) {
       dropped.push(this.slotted.splice(this.lastDroppableForMass(), 1)[0]);
     }
-    // The previous hull's micromodule slots no longer exist on the new hull.
-    this.hullMicromoduleIds = [];
-    return dropped.map((s) => ({
+    return dropped;
+  }
+
+  /**
+   * Revalidate the restored loadout against the **current** hull spec without
+   * changing the hull, dropping gear that now exceeds the per-category slot or
+   * mass capacity — e.g. a catalog rebalance shrank this hull *after* the save
+   * was written, so a previously-valid loadout is now over-capacity. Returns the
+   * dropped slot records so the load path can re-bag them losslessly via
+   * `slotToBagModule`, exactly as a hull swap does, instead of leaving the save
+   * in an invalid over-fit state. Unlike {@link swapHull} the hull micromodules
+   * are kept (the hull is unchanged). A loadout that already fits returns an
+   * empty array, so a normal save is untouched.
+   */
+  revalidateToCurrentHull(): Array<{
+    gearId: string;
+    micromoduleId?: string;
+    upgrades?: number;
+  }> {
+    return this.evictToCurrentHullCapacity().map((s) => ({
       gearId: s.gearId,
       micromoduleId: s.micromoduleId,
       upgrades: s.upgrades,

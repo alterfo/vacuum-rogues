@@ -59,13 +59,23 @@ fails if a change would brick old saves.
 - Modify: `GameEngine.loadGame` / `ShipLoadout` restore path
 - Create: `src/tests/core/loadoutRevalidateOnLoad.test.ts`
 
-- [ ] On load, revalidate the restored loadout against the **current** hull spec; if it
+- [x] On load, revalidate the restored loadout against the **current** hull spec; if it
       exceeds slots/mass capacity (because a catalog change shrank the hull), **drop the
       excess gear to the inventory bag** (reuse the `setHull` drop semantics) instead of
-      loading an invalid state.
-- [ ] write tests: a save whose loadout over-fills a now-smaller hull loads cleanly with
-      the excess moved to the bag; a normal save is untouched.
-- [ ] run tests — green.
+      loading an invalid state. (`ShipLoadout.revalidateToCurrentHull()` — extracted the
+      shared `evictToCurrentHullCapacity()` from `swapHull` so the per-category + mass
+      eviction runs against the *unchanged* current hull, keeping hull micromodules;
+      `GameEngine.loadGame` calls it right after `fromJSON` and re-bags each dropped slot
+      losslessly via `slotToBagModule` → `inventory.addItem`.)
+- [x] write tests: a save whose loadout over-fills a now-smaller hull loads cleanly with
+      the excess moved to the bag; a normal save is untouched. (`loadoutRevalidateOnLoad.test.ts`:
+      4 pure `revalidateToCurrentHull` cases (weapon overflow, mass overflow keeping
+      engine+fuel, within-cap no-op, micromodule/upgrade preserved on the drop record) +
+      2 `GameEngine.loadGame` integration cases (over-capacity → excess re-homed in the
+      bag + still flyable; within-capacity → bag untouched).)
+- [x] run tests — green. (6/6 new; loadout-persistence + 260 equipment + golden-save
+      compat (19) + ShipLoadout/swapHull suites (56) all green; `tsc --noEmit` + eslint
+      clean; `detect_changes` low-risk, 0 affected processes.)
 
 ### Task 3: Deploy gate + golden-save playtest
 **Files:**

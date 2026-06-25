@@ -49,7 +49,11 @@ import type {
   IQuestService,
 } from "@/core/ports";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
-import { applyLoadoutHullToShip } from "@/systems/equipment/GearBridge";
+import {
+  applyLoadoutHullToShip,
+  slotToBagModule,
+} from "@/systems/equipment/GearBridge";
+import { gearById } from "@/systems/equipment/GearCatalog";
 import type { Faction } from "@/types/faction";
 import { NpcShip } from "@/domain/NpcShip";
 import { GalaxyService, PlayerService, SceneFactory } from "@/core/services";
@@ -1096,6 +1100,20 @@ export class GameEngine {
       ? ShipLoadout.fromJSON(save.loadout, this.playerLoadoutFaction())
       : null;
     this.playerLoadout = restoredLoadout ?? this.starterLoadout();
+
+    // Load-time loadout revalidation (save-compat safety net): a catalog
+    // rebalance may have shrunk this hull's slot/mass capacity *after* the save
+    // was written, leaving the restored loadout over-capacity. Drop the excess
+    // to the inventory bag — the same drop semantics a hull swap uses — so a
+    // catalog shrink can't brick an old save; it loads in a valid, playable
+    // state instead. A loadout that still fits drops nothing (normal saves are
+    // untouched). `fromJSON` already caps hull micromodules to the hull's slots.
+    if (this.player) {
+      for (const slot of this.playerLoadout.revalidateToCurrentHull()) {
+        const g = gearById(slot.gearId);
+        if (g) this.player.inventory.addItem(slotToBagModule(g, slot));
+      }
+    }
 
     // Project the canonical loadout's hull onto the live ship at load time, just
     // as both hull shops do at hull-change time. The save's `ship.maxHull`/
