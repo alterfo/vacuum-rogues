@@ -234,6 +234,33 @@ describe("HangarPanel — shared slot-fitting component", () => {
     expect(ctx.showToast).toHaveBeenCalled();
   });
 
+  it("blocks an over-mass warehouse install — toasts the reason, no mutation", () => {
+    // hull_scout: massCapacity 30. Fill it to capacity, then try to install a
+    // gear that fits a free bank but blows the mass budget.
+    const loadout = new ShipLoadout("hull_scout");
+    loadout.install("wpn_torpedo"); // mass 12 → weapon 1/2
+    loadout.install("wpn_torpedo"); // mass 12 → weapon 2/2, used 24
+    loadout.install("eq_engine_i"); // mass 6 → used 30 (at capacity)
+    const before = loadout.installedGearIds().slice();
+    const player = makePlayer(["eq_shield"]); // free EQUIPMENT bank, mass 8 → over budget
+    const ctx = makeCtx(loadout, player);
+
+    new HangarPanel(renderer).render(ctx);
+
+    const installBtn = findButton("[Установить]");
+    expect(installBtn).toBeDefined();
+    installBtn!.handlers.pointerdown(fakeEvent);
+
+    // No-op: gear stays in the warehouse, loadout unchanged, reason toasted red.
+    expect(player.inventory.ownedGearIds).toContain("eq_shield");
+    expect(loadout.installedGearIds()).toEqual(before);
+    expect(loadout.installedGearIds()).not.toContain("eq_shield");
+    expect(ctx.showToast).toHaveBeenCalledWith(
+      expect.stringContaining("Перегруз"),
+      expect.any(Number),
+    );
+  });
+
   it("renders nothing scene-coupled with a null loadout (banner falls back)", () => {
     const player = makePlayer();
     new HangarPanel(renderer).render(makeCtx(null, player));

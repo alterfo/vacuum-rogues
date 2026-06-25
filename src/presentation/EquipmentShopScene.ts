@@ -747,9 +747,10 @@ export class EquipmentShopScene extends GameScene {
       priceText.y = rowY + 16;
       this.listContainer.addChild(priceText);
 
-      // Right-hand control: buy / install / owned-in-hold / no-funds. Owned but
-      // uninstalled gear is never a dead "Есть" — it is an actionable
-      // "[Установить]" when it fits, else a clear "В трюме" status.
+      // Right-hand control: buy / owned-in-hold / no-funds. Fitting lives on the
+      // АНГАР tab (the single fitting surface), so this listing never offers an
+      // install action — owned-but-uninstalled gear reads as a clear "В трюме"
+      // status (never a dead "Есть"), and the ТРЮМ strip / АНГАР tab fit it.
       const rowAction = shopRowAction({
         isInstalled,
         owned: alreadyOwned,
