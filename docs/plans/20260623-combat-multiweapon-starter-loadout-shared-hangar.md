@@ -140,9 +140,13 @@ Three equipment/combat polish items:
 **Files:**
 - Modify: `CLAUDE.md` (equipment section), `src/presentation/CLAUDE.md`
 
-- [ ] Document: the starter ship ships fully fitted (weapon/grapple/engine, empty
+- [x] Document: the starter ship ships fully fitted (weapon/grapple/engine, empty
       bag); combat fires all weapons within range; the hangar is one shared
       `HangarPanel` mounted by both the station and the equipment shop.
+      (Updated `CLAUDE.md` equipment section — new ready-to-fly-starter/shared-hangar/
+      multi-weapon bullet + reconciled the now-stale micromodule-surface and
+      `uninstallToOwned`/«Снять» notes that Task 4 invalidated — and
+      `src/presentation/CLAUDE.md` with the shared-`HangarPanel` component rule.)
 
 ## Technical Details
 - Multi-weapon: per-weapon timers on the shared cadence; target = nearest combatant

@@ -31,6 +31,17 @@ both paths. The matching ComfyUI prompt category is `station` in
 `tools/comfyui/asset_prompts.json` (mirrors `ships`); the art lands in a separate commit
 and lights up the sprite path automatically via the Vite glob manifest.
 
+**The slot-fitting hangar is one shared component** (`ui/HangarPanel.ts`,
+`docs/plans/20260623-combat-multiweapon-starter-loadout-shared-hangar.md`). It renders the
+four category banks + install/unfit + the ТРЮМ owned-gear strip via `scaledText` and mutates
+the canonical `ShipLoadout` through the shared gear helpers — **never** fork fit logic into a
+scene. **Both** `StationScene` and the `EquipmentShopScene` **АНГАР tab** mount the same
+`HangarPanel` (constructed with the scene's renderer), so fitting looks/behaves identically at
+either entry point; the per-slot micromodule-apply modal is the shared
+`ui/MicromoduleApplyPanel.ts`, opened from a fitted slot in both scenes. A fresh game arrives
+fully fitted (weapon/grapple/engine, empty hold — see `GameEngine.starterLoadout()`), so the
+hangar's job is swapping/upgrading, not first-time assembly.
+
 Three most-hit PixiJS 8 traps:
 - **`eventMode='none'` on Text over clickable areas** — Text defaults to `'auto'` and blocks
   clicks underneath; set `'none'` on labels so clicks pass through.
