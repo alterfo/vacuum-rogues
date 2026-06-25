@@ -5,6 +5,7 @@ import { NpcRole } from "@/types";
 import { Faction } from "@/types/faction";
 import { pickVariant } from "./textures";
 import { GAME_BALANCE } from "@/config/balance";
+import { npcCruiseSpeed } from "./flight/npcCruiseSpeed";
 import { hashStr } from "@/utils/hashStr";
 import { decideManeuver, ManeuverMode } from "@/systems/combat/combatManeuver";
 
@@ -87,7 +88,11 @@ export class NpcShipSprite {
   // only the faction halo + intent dot are drawn (US-070 #8).
   private shipSprite: Sprite | null = null;
   private readonly bounds: SystemBounds;
-  private readonly speed = GAME_BALANCE.npcSpeed;
+  // Cruise/pursuit speed (px/ms), by class: interceptors (OVERMIND/PIRATE) are
+  // fast and out-run the starter; basic ships are slower than it. Set in the
+  // constructor from the npc; exposed via {@link cruiseSpeed} so the manager's
+  // escape + intercept-lead math uses this ship's real speed, not a constant.
+  private readonly speed: number;
   private departing = false;
   private gone = false;
   // When set, the ship orbits this point (a planet it's "visiting").
@@ -142,6 +147,7 @@ export class NpcShipSprite {
 
   constructor(npc: NpcShip, x: number, y: number, bounds: SystemBounds) {
     this.npc = npc;
+    this.speed = npcCruiseSpeed(npc);
     this.mapColor = FACTION_COLORS[npc.faction] ?? 0x999999;
     this.x = x;
     this.y = y;
@@ -181,6 +187,14 @@ export class NpcShipSprite {
     // Initial targetX/targetY = spawn position. pickNewTarget() is called by
     // setTargetProvider() once the manager wires the role-driven provider, so the
     // very first waypoint is purposeful (not a random ring point).
+  }
+
+  /** This ship's cruise/pursuit speed (px/ms) — fast for interceptor-class
+   *  ships, slow (out-runnable by a fresh starter) for basic ones. Read by the
+   *  manager's escape predicate + intercept-lead so they use the ship's real
+   *  speed rather than a single global constant. */
+  get cruiseSpeed(): number {
+    return this.speed;
   }
 
   /** Wire hover callbacks for the tooltip system (must be called after setClickHandler). */

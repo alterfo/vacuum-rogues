@@ -5,6 +5,7 @@ import type { ShipPhysics } from "@/systems/ShipPhysics";
 import type { PlanetSprite } from "../PlanetSprite";
 import { NpcShipSprite } from "../NpcShipSprite";
 import type { SystemBounds } from "../NpcShipSprite";
+import { isInterceptorClass } from "./npcCruiseSpeed";
 import { NpcContactPanel } from "../NpcContactPanel";
 import type { NpcShip } from "@/domain/NpcShip";
 import { npcsPresentInSystem, NpcSimulator } from "@/systems/npc/NpcSimulator";
@@ -343,7 +344,7 @@ export class NpcShipManager implements FlightModule {
           // aggressor keeps closing.
           if (
             distSq > this.COMBAT_ESCAPE_RANGE * this.COMBAT_ESCAPE_RANGE &&
-            physics.canOutrun(GAME_BALANCE.npcSpeed)
+            physics.canOutrun(sprite.cruiseSpeed)
           ) {
             sprite.setAggressive(false);
             this.npcAnchorPlanet.delete(sprite);
@@ -829,8 +830,10 @@ export class NpcShipManager implements FlightModule {
   checkGarrisonAggro(_playerSystemId: string, isHostileSystem: boolean): void {
     for (const sprite of this.npcSprites) {
       const npc = sprite.npc;
-      const isGarrison =
-        npc.faction === Faction.OVERMIND || npc.role === NpcRole.PIRATE;
+      // Interceptor-class ships (OVERMIND/PIRATE) are exactly the garrison
+      // aggressors — and exactly the ships fast enough that the starter can't
+      // out-run them (see npcCruiseSpeed): one predicate, no drift.
+      const isGarrison = isInterceptorClass(npc);
       // The Overmind is indiscriminately hostile to the player (faction-hostility
       // matrix — the single source of truth). A live Overmind craft spawns hostile
       // and besieges neutral border systems *before* they fall, so it must hunt the

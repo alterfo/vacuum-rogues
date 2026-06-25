@@ -187,8 +187,21 @@ export const GameConfig = {
 export const GAME_BALANCE = {
   /** World pixels a ship must travel for 1 in-game day to elapse. */
   pixelsPerDay: 500,
-  /** NPC drift speed in px/ms. */
+  /**
+   * Drift/pursuit speed (px/ms) of an **interceptor-class** NPC — OVERMIND craft
+   * and PIRATE raiders (see `npcCruiseSpeed`). Deliberately faster than the
+   * fresh starter ship (~0.11 px/ms with `eq_engine_i`), so escaping an *elite*
+   * threat stays upgrade-gated (the top engine `eq_engine_iii` only *ties* it).
+   */
   npcSpeed: 0.2,
+  /**
+   * Drift/pursuit speed (px/ms) of a **basic** NPC (ordinary traders/patrols).
+   * Kept below the fresh starter ship's speed (~0.11) so a new player can always
+   * out-run a *basic* threat from the start — you are never outclassed by a
+   * common ship, only by a rare interceptor. (Above 0.0; the combat-escape model
+   * assumes a slower player can't flee `npcSpeed`, not this basic tier.)
+   */
+  npcBasicSpeed: 0.08,
   /** Weapon engagement range in world px. */
   weaponRange: 240,
   /** Real-time in-flight combat cadence: a ship fires once per this many ms while in range. */

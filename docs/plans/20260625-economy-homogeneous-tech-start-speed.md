@@ -55,14 +55,22 @@ Goal feel: **harder to win** (a long, earned climb to top tech) but **easier to 
   `src/presentation/flight/NpcShipManager.ts`
 - Create/Modify: `src/tests/balance/shipSpeed.test.ts`
 
-- [ ] Make the player's starting `maxSpeed` **≥** the basic-NPC speed (raise the player,
+- [x] Make the player's starting `maxSpeed` **≥** the basic-NPC speed (raise the player,
       and/or split NPC speed by class so basic ships are ≤ player and only specialised
       interceptors are faster — never a *basic* enemy at the start). Keep the arc-movement
       model intact.
-- [ ] write tests: a fresh player can match/outrun the basic NPC speed (`canOutrun`
+      → Split by class: added `GAME_BALANCE.npcBasicSpeed = 0.08` (basic traders/patrols,
+      below the ~0.11 starter speed) while `npcSpeed = 0.2` stays the interceptor tier
+      (OVERMIND/PIRATE). New pure `npcCruiseSpeed`/`isInterceptorClass`
+      (`src/presentation/flight/npcCruiseSpeed.ts`) is the single source for both the
+      per-sprite speed (`NpcShipSprite.cruiseSpeed`) and the garrison-aggro gate; the
+      escape predicate now reads the aggressor's own `cruiseSpeed`. Arc-movement intact.
+- [x] write tests: a fresh player can match/outrun the basic NPC speed (`canOutrun`
       true for the starter ship vs a basic NPC); interceptor-class (if added) stays a
       deliberate exception.
-- [ ] run tests — green.
+      → `src/tests/balance/shipSpeed.test.ts`: split exists, classification, starter >
+      basic, cruising starter out-runs basic but NOT interceptor (upgrade-gated).
+- [x] run tests — green. (full unit suite 2839 green, playtest gate green, lint/tsc clean)
 
 ### Task 2: Steep, rare top tier (expensive top tech)
 **Files:**
