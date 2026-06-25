@@ -75,4 +75,91 @@ describe("NpcShipSprite clickability (Task 6)", () => {
 
     sprite.destroy();
   });
+
+  // --- Arc-movement/combat hit-area hardening (20260625 Task 2) ----------------
+  // The "ships become unclickable mid-fight" report. Two concrete causes guarded
+  // here: a non-finite camera zoom collapsing the radius to NaN (a circle that
+  // never hit-tests), and `eventMode` getting clobbered without ever being
+  // re-asserted on a live ship.
+
+  function hitRadius(sprite: NpcShipSprite): number {
+    const area = sprite.container.hitArea as Circle;
+    return area.radius;
+  }
+
+  it("never lets the hit radius drop below the floor, even at huge zoom", () => {
+    const sprite = new NpcShipSprite(makeNpc("npc_zoom"), 200, 0, bounds);
+    sprite.setClickHandler(() => {});
+
+    sprite.updateHitArea(10); // very zoomed in → 40/10 = 4, must be floored
+    expect(hitRadius(sprite)).toBeGreaterThanOrEqual(28);
+
+    sprite.updateHitArea(0.25); // zoomed out → 40/0.25 = 160, grows freely
+    expect(hitRadius(sprite)).toBeCloseTo(160);
+
+    sprite.destroy();
+  });
+
+  it("ignores a non-finite/zero camera zoom instead of collapsing the hit-area (regression)", () => {
+    const sprite = new NpcShipSprite(makeNpc("npc_nan"), 200, 0, bounds);
+    sprite.setClickHandler(() => {});
+
+    sprite.updateHitArea(0.5); // establish a good zoom → radius 80
+    const good = hitRadius(sprite);
+    expect(good).toBeCloseTo(80);
+
+    // A transient bad transform (NaN / 0 / negative) must NOT produce a NaN
+    // radius — that circle never hit-tests, making the ship permanently dead.
+    for (const bad of [Number.NaN, 0, -3, Number.POSITIVE_INFINITY]) {
+      sprite.updateHitArea(bad);
+      const r = hitRadius(sprite);
+      expect(Number.isFinite(r)).toBe(true);
+      expect(r).toBeGreaterThanOrEqual(28);
+      expect(r).toBeCloseTo(good); // keeps the last good zoom
+    }
+
+    sprite.destroy();
+  });
+
+  it("re-asserts eventMode='static' when the hit-area is refreshed (survives a clobber)", () => {
+    const sprite = new NpcShipSprite(makeNpc("npc_clobber"), 200, 0, bounds);
+    sprite.setClickHandler(() => {});
+
+    // Simulate combat/cursor logic clobbering interactivity to passive.
+    sprite.container.eventMode = "passive";
+    sprite.updateHitArea(1);
+    expect(sprite.container.eventMode).toBe("static");
+
+    sprite.destroy();
+  });
+
+  it("restoreInteractivity restores a finite circular hit-area, not just eventMode", () => {
+    const sprite = new NpcShipSprite(makeNpc("npc_restore"), 200, 0, bounds);
+    sprite.setClickHandler(() => {});
+    sprite.updateHitArea(0.5); // radius 80 at this zoom
+
+    // Lose interactivity mid-turn, then the turn ends → full restore.
+    sprite.container.eventMode = "none";
+    sprite.restoreInteractivity();
+
+    expect(sprite.container.eventMode).toBe("static");
+    expect(sprite.container.hitArea).toBeInstanceOf(Circle);
+    const r = hitRadius(sprite);
+    expect(Number.isFinite(r)).toBe(true);
+    expect(r).toBeGreaterThanOrEqual(28);
+
+    sprite.destroy();
+  });
+
+  it("keeps a departing ship non-interactive across an updateHitArea call", () => {
+    const sprite = new NpcShipSprite(makeNpc("npc_depart"), 200, 0, bounds);
+    sprite.setClickHandler(() => {});
+    sprite.beginDeparture();
+
+    // A camera transform while the ship jumps out must not re-arm it.
+    sprite.updateHitArea(1);
+    expect(sprite.container.eventMode).toBe("none");
+
+    sprite.destroy();
+  });
 });

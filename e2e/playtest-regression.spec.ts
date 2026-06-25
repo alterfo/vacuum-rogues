@@ -1824,4 +1824,121 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
 
     errorCollector.assertAndDetach();
   });
+
+  test('regression: an NPC stays hit-testable across zoom AND once a fight is engaged (20260625 Task 2)', async ({ page }) => {
+    // The reported bug: NPC ships "stop responding to clicks at some point" —
+    // the hit-area collapsing at certain zoom/combat states. A headless unit
+    // can't see hit geometry, so this is a REAL-pointer proof: it engages a
+    // fight, then for several camera zooms centres the camera on the aggressor,
+    // moves the real mouse over it, and asks the live PixiJS event boundary
+    // (`rootBoundary.hitTest`) what is under the cursor — it must be the NPC's
+    // own container (eventMode='static' with a finite hit-circle). A NaN-radius
+    // circle (the collapse bug) fails to contain even its own centre, and a
+    // clobbered eventMode drops the container from the boundary, so either
+    // regression turns this red.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Warm the event boundary (rootTarget is set on the first mapped event).
+    await page.mouse.move(5, 5);
+
+    // Fit a weapon and stage an aggressor in range, then ENGAGE combat so the
+    // hit-area is exercised in the exact state the bug report describes.
+    const engaged = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+        playerLoadout?: {
+          derivedStats: () => { weaponCount: number };
+          install: (id: string) => unknown;
+        } | null;
+      };
+      const scene = engine.currentScene;
+      if (!scene) return false;
+      const loadout = engine.playerLoadout;
+      if (loadout && loadout.derivedStats().weaponCount === 0) {
+        loadout.install('wpn_pulse');
+      }
+      const npcManager = scene['npcManager'] as
+        | { e2eForceAggressorInRange: (range: number) => { npc: { id: string } } | null }
+        | undefined;
+      const combat = scene['combatModule'] as
+        | { addCombatant: (s: unknown) => void; isActive: boolean }
+        | undefined;
+      const sprite = npcManager?.e2eForceAggressorInRange(240);
+      if (!sprite || !combat) return false;
+      combat.addCombatant(sprite);
+      return combat.isActive;
+    });
+    expect(engaged).toBe(true);
+
+    // Probe the engaged aggressor at a zoomed-OUT, neutral, and zoomed-IN camera.
+    for (const zoom of [0.4, 1, 2.2]) {
+      // Centre the camera on the aggressor at this zoom and read its on-screen
+      // position (the camera transform also refreshes NPC hit-areas).
+      const pos = await page.evaluate((z) => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+        };
+        const scene = engine.currentScene as
+          | ({
+              e2eSetCameraZoom?: (z: number) => void;
+              e2eSetCameraPan?: (x: number, y: number) => void;
+              e2eGetCameraState?: () => { zoom: number };
+            } & Record<string, unknown>)
+          | null;
+        const combat = scene?.['combatModule'] as
+          | { selectedTarget: { x: number; y: number; container: { getGlobalPosition: () => { x: number; y: number } } } | null }
+          | undefined;
+        const sprite = combat?.selectedTarget;
+        if (!scene || !sprite) return null;
+        scene.e2eSetCameraZoom?.(z);
+        const zoomNow = scene.e2eGetCameraState?.().zoom ?? z;
+        scene.e2eSetCameraPan?.(
+          window.innerWidth / 2 - sprite.x * zoomNow,
+          window.innerHeight / 2 - sprite.y * zoomNow,
+        );
+        const p = sprite.container.getGlobalPosition();
+        return { x: p.x, y: p.y };
+      }, zoom);
+      expect(pos, `aggressor position at zoom ${zoom}`).not.toBeNull();
+
+      // Move the REAL mouse over the ship (sets the boundary's rootTarget).
+      await page.mouse.move(pos!.x, pos!.y, { steps: 2 });
+
+      // Ask the live event boundary what is under the cursor — it must be the
+      // NPC's own container, proving the hit-area survived this zoom + combat.
+      const hit = await page.evaluate((p) => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+        };
+        const scene = engine.currentScene as Record<string, unknown> | null;
+        const combat = scene?.['combatModule'] as
+          | { selectedTarget: { container: unknown } | null }
+          | undefined;
+        const renderer = scene?.['renderer'] as
+          | { app: { renderer: { events: { rootBoundary: { hitTest: (x: number, y: number) => unknown } } } } }
+          | undefined;
+        const target = combat?.selectedTarget;
+        if (!renderer || !target) return { ok: false, reason: 'no renderer/target' };
+        const boundary = renderer.app.renderer.events.rootBoundary;
+        const found = boundary.hitTest(p.x, p.y);
+        // The hit must BE the NPC container (or one of its descendants).
+        let node = found as { parent?: unknown } | null;
+        let isNpc = false;
+        for (let i = 0; node && i < 8; i++) {
+          if (node === target.container) {
+            isNpc = true;
+            break;
+          }
+          node = (node as { parent?: { parent?: unknown } }).parent as { parent?: unknown } | null;
+        }
+        return { ok: isNpc, reason: found ? 'hit-not-npc' : 'nothing-hit' };
+      }, pos!);
+
+      expect(hit.ok, `hit-test on aggressor at zoom ${zoom} (${hit.reason})`).toBe(true);
+    }
+
+    await new SpaceFlightPage(page).screenshot('npc-clickable-task2');
+    errorCollector.assertAndDetach();
+  });
 });

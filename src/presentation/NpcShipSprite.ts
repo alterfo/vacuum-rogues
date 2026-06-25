@@ -21,6 +21,14 @@ const ROLE_SHIP_PREFIX: Record<NpcRole, string> = {
  *  nose with the direction of travel. */
 const SHIP_SPRITE_ROTATION = Math.PI / 2;
 
+/** Click hit-area geometry. The radius is `HIT_RADIUS_PX / cameraZoom` so the
+ *  clickable area stays a fixed ~screen size, but never shrinks below
+ *  `MIN_HIT_RADIUS_PX` (world px). The floor — plus the finite-zoom guard in
+ *  {@link NpcShipSprite.assertClickable} — is what keeps a ship from going
+ *  mouse-dead at high zoom or when the camera zoom briefly reads NaN/0. */
+const HIT_RADIUS_PX = 40;
+const MIN_HIT_RADIUS_PX = 28;
+
 /** Hull colour by faction. */
 const FACTION_COLORS: Record<Faction, number> = {
   [Faction.OUTLANDERS]: 0xff6600,
@@ -90,6 +98,11 @@ export class NpcShipSprite {
   private orbitDir = 1; // +1 / -1
   private readonly orbitSpeed = 0.0006; // rad/ms (~10s per lap)
   private clickCallback: ((npc: NpcShip) => void) | null = null;
+  /** Last finite camera zoom applied to the hit-area, so interactivity can be
+   *  re-asserted (turn-end / combat) without a fresh camera transform. Seeded to
+   *  1 and only overwritten by a finite, positive zoom (a NaN/0 zoom is ignored
+   *  rather than collapsing the hit circle). */
+  private lastHitZoom = 1;
   /**
    * When set, `pickNewTarget` calls this instead of random ring/anchor logic.
    * Injected by `NpcShipManager` so movement is role-driven without the sprite
@@ -184,14 +197,31 @@ export class NpcShipSprite {
   /** Wire a click handler; stops propagation so the stage doesn't also fire. */
   setClickHandler(cb: (npc: NpcShip) => void): void {
     this.clickCallback = cb;
-    this.container.eventMode = "static";
-    this.container.hitArea = new Circle(0, 0, 40);
+    this.assertClickable();
     this.container.cursor =
       this.npc.role === NpcRole.PIRATE ? "target" : "pointer";
     this.container.on("pointerdown", (event) => {
       event.stopPropagation();
       this.clickCallback?.(this.npc);
     });
+  }
+
+  /**
+   * The clickability invariant for a live (non-departing/gone) ship: the
+   * container is statically interactive with a finite circular hit-area never
+   * smaller than {@link MIN_HIT_RADIUS_PX}. Re-asserting both `eventMode` and the
+   * hit geometry on every camera transform / turn-end heals any clobber that
+   * combat or a cursor switch may have left, and the finite-zoom floor means a
+   * transient NaN/0 zoom can never collapse the hit circle to "never hits"
+   * (`Math.max(28, 40/NaN) === NaN`, which `Circle.contains` always rejects).
+   */
+  private assertClickable(): void {
+    this.container.eventMode = "static";
+    const worldR = Math.max(
+      MIN_HIT_RADIUS_PX,
+      HIT_RADIUS_PX / this.lastHitZoom,
+    );
+    this.container.hitArea = new Circle(0, 0, worldR);
   }
 
   /** Whether the sprite currently has an orbit anchor set. */
@@ -206,12 +236,17 @@ export class NpcShipSprite {
 
   /**
    * Scale the hit circle inversely with camera zoom so the clickable area stays
-   * ~40 screen-px regardless of how far the player has zoomed out.
+   * ~40 screen-px regardless of how far the player has zoomed out, and re-assert
+   * interactivity so combat / cursor switches never leave a live ship mouse-dead.
+   * A non-finite or non-positive `cameraZoom` is ignored (the last good zoom is
+   * kept) so a transient bad transform can't collapse the hit-area.
    */
   updateHitArea(cameraZoom: number): void {
-    if (this.container.eventMode === "none") return; // departing — skip
-    const worldR = Math.max(28, 40 / cameraZoom);
-    this.container.hitArea = new Circle(0, 0, worldR);
+    if (this.departing || this.gone) return; // jumping out — non-interactive
+    if (Number.isFinite(cameraZoom) && cameraZoom > 0) {
+      this.lastHitZoom = cameraZoom;
+    }
+    this.assertClickable();
   }
 
   /**
@@ -222,7 +257,7 @@ export class NpcShipSprite {
    */
   restoreInteractivity(): void {
     if (this.departing || this.gone) return;
-    this.container.eventMode = "static";
+    this.assertClickable();
   }
 
   /**

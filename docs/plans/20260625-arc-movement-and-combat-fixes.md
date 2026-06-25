@@ -88,13 +88,21 @@ Three flight/combat/UI fixes the player reported together:
 - Modify: `src/presentation/NpcShipSprite.ts` (and/or `NpcShipManager`)
 - Create: `e2e/` real-pointer test (or extend `playtest-regression.spec.ts`)
 
-- [ ] Diagnose why the hit-area is lost (collapsing `worldR`, or `eventMode`/
+- [x] Diagnose why the hit-area is lost (collapsing `worldR`, or `eventMode`/
       `hitArea` clobbered when combat starts / cursors switch) and fix it so the
       clickable radius never shrinks below a sane minimum and `eventMode="static"`
-      survives combat + `setCursors`.
-- [ ] write a **real-pointer** E2E asserting an NPC stays hit-testable across zoom
-      and once a fight is engaged (the headless unit can't see hit geometry).
-- [ ] run tests — green.
+      survives combat + `setCursors`. (Root causes: a non-finite/≤0 `cameraZoom`
+      made `Math.max(28, 40/NaN)` → `NaN`, a hit-circle that never contains even
+      its own centre; and `updateHitArea`/`restoreInteractivity` never re-asserted
+      `eventMode="static"` on a live ship. Fix: a single `assertClickable()`
+      invariant — re-asserts `eventMode="static"` + a finite radius ≥ 28, and the
+      finite-zoom guard remembers the last good zoom so a transient bad transform
+      can't collapse the circle.)
+- [x] write a **real-pointer** E2E asserting an NPC stays hit-testable across zoom
+      and once a fight is engaged (`rootBoundary.hitTest` over the aggressor at
+      three zooms during an engaged fight returns the NPC container).
+- [x] run tests — green. (8 unit + targeted combat/presentation suites + the new
+      E2E; 2 of the new unit tests proven red-on-legacy then green.)
 
 ### Task 3: Space the hangar «Установить» / «Продать» buttons
 **Files:**
