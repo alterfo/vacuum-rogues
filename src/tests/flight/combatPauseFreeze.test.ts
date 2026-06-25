@@ -121,6 +121,43 @@ describe("combat freezes fully during the active pause", () => {
     }
   });
 
+  it("resumes an in-flight tracer's travel once unpaused", () => {
+    const { module, hud, setPaused } = makePausableFight();
+
+    // First volley fires while unpaused → tracers spawn at age 0.
+    module.update(FIRE);
+    expect(hud.tracerStates.length).toBeGreaterThan(0);
+
+    // Freeze the world: a short frame must not advance the tracer.
+    setPaused(true);
+    module.update(16);
+    const frozen = hud.tracerStates.map((t) => ({
+      age: t.age,
+      x: t.pos.x,
+      y: t.pos.y,
+    }));
+    expect(frozen.length).toBeGreaterThan(0);
+
+    // Unpause: the same tracer must resume travelling — age and position advance
+    // again (the freeze is a pause, not a destroy). 16 ms < the fire interval, so
+    // no new shot spawns and the snapshots line up 1:1.
+    setPaused(false);
+    module.update(16);
+    const resumed = hud.tracerStates.map((t) => ({
+      age: t.age,
+      x: t.pos.x,
+      y: t.pos.y,
+    }));
+    expect(resumed.length).toBe(frozen.length);
+    for (let i = 0; i < frozen.length; i++) {
+      expect(resumed[i].age).toBeGreaterThan(frozen[i].age); // travel resumed
+    }
+    // At least one tracer actually moved in space (player→enemy bolt travels).
+    expect(
+      resumed.some((r, i) => r.x !== frozen[i].x || r.y !== frozen[i].y),
+    ).toBe(true);
+  });
+
   it("fires no player or NPC shot while paused (no new tracers, no damage)", () => {
     const { module, hud, ship, enemy, setPaused } = makePausableFight();
     // Pause before any fire cadence elapses: a fully frozen world must emit no
