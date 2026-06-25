@@ -98,9 +98,14 @@ in-flight projectiles — honor the single `isPaused`/`isFrozen` gate.
 **Files:**
 - Modify: `src/presentation/flight/CLAUDE.md` (combat-pause section)
 
-- [ ] Note that ALL fire + in-flight projectiles freeze on the single
+- [x] Note that ALL fire + in-flight projectiles freeze on the single
       `isPaused`/`isFrozen` gate (player weapons + NPC + projectiles), not just new
-      NPC shots.
+      NPC shots. Added to the Active-pause paragraph in
+      `src/presentation/flight/CLAUDE.md`: the freeze gate halts the whole fight —
+      `advancePlayerWeapons` + `advanceNpcTimers` both behind `update`'s `isFrozen()`
+      early-return + per-iteration break, and in-flight tracers advance only when
+      `!isFrozen()` (frozen mid-flight, resume on unpause); regression
+      `combatPauseFreeze.test.ts`; no second pause concept.
 
 ## Post-Completion
 **Manual verification:** get into a fight, take a hit (raises the pause) → nothing
