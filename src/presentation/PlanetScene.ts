@@ -438,7 +438,12 @@ export class PlanetScene extends GameScene {
     let shortfallShown = false;
 
     for (const quest of questManager.getActiveQuests()) {
-      const result = evaluateDelivery(quest, player, currentSystemId);
+      const result = evaluateDelivery(
+        quest,
+        player,
+        currentSystemId,
+        this.planet.id,
+      );
       if (result.kind === "n/a") continue;
 
       if (result.kind === "shortfall") {

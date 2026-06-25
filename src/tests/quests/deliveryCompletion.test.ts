@@ -115,4 +115,50 @@ describe("evaluateDelivery (pure on-landing completion helper)", () => {
     expect(result.collectObj).toBeUndefined();
     expect(result.stack).toBeUndefined();
   });
+
+  describe("target planet gating (Местный подряд neighbour)", () => {
+    it("right system but wrong planet (the issuer) → n/a (silent)", () => {
+      const quest = deliveryQuest({ targetPlanetId: "P_neighbour" });
+      const player = playerWith([{ type: "LUXURY", amount: 99 }]);
+      // Landing back on the issuer planet, holding the cargo, does NOT complete.
+      expect(evaluateDelivery(quest, player, "SYS", "P_issuer").kind).toBe(
+        "n/a",
+      );
+    });
+
+    it("right system AND the named target planet with cargo → complete", () => {
+      const quest = deliveryQuest({ targetPlanetId: "P_neighbour" });
+      const player = playerWith([{ type: "LUXURY", amount: 5 }]);
+      const result = evaluateDelivery(quest, player, "SYS", "P_neighbour");
+      expect(result.kind).toBe("complete");
+      if (result.kind !== "complete") return;
+      expect(result.stack).toEqual({ type: "LUXURY", amount: 5 });
+    });
+
+    it("on the target planet but short on cargo → shortfall (not n/a)", () => {
+      const quest = deliveryQuest({ targetPlanetId: "P_neighbour" });
+      const player = playerWith([{ type: "LUXURY", amount: 2 }]);
+      const result = evaluateDelivery(quest, player, "SYS", "P_neighbour");
+      expect(result.kind).toBe("shortfall");
+      if (result.kind !== "shortfall") return;
+      expect(result.carried).toBe(2);
+      expect(result.required).toBe(5);
+    });
+
+    it("legacy quest (null target planet) → completes system-level on any planet", () => {
+      const quest = deliveryQuest({ targetPlanetId: null });
+      const player = playerWith([{ type: "LUXURY", amount: 5 }]);
+      // Even landing on an arbitrary planet completes it (back-compat).
+      expect(evaluateDelivery(quest, player, "SYS", "P_anything").kind).toBe(
+        "complete",
+      );
+    });
+
+    it("target planet set but caller omits current planet → system-level (back-compat)", () => {
+      const quest = deliveryQuest({ targetPlanetId: "P_neighbour" });
+      const player = playerWith([{ type: "LUXURY", amount: 5 }]);
+      // No planet id threaded → the planet gate does not fire.
+      expect(evaluateDelivery(quest, player, "SYS").kind).toBe("complete");
+    });
+  });
 });

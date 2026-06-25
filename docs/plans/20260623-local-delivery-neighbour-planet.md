@@ -98,16 +98,16 @@ neighbour with the cargo, and single-planet systems fall back to a different que
 - Modify: `src/presentation/PlanetScene.ts` (`checkDeliveryQuestCompletion` passes the planet)
 - Create/Modify tests under `src/tests/`
 
-- [ ] Extend `evaluateDelivery` to take the current **planet id** and, when the
+- [x] Extend `evaluateDelivery` to take the current **planet id** and, when the
       quest has a `targetPlanetId`, require `currentPlanetId === targetPlanetId`
       (in addition to the system + cargo checks). When `targetPlanetId` is null
       (legacy quests), keep the system-level behaviour (back-compat).
-- [ ] Thread the current planet id from `checkDeliveryQuestCompletion`.
-- [ ] write tests: landing on the **issuer** planet with cargo → not complete (n/a
+- [x] Thread the current planet id from `checkDeliveryQuestCompletion`.
+- [x] write tests: landing on the **issuer** planet with cargo → not complete (n/a
       / wrong planet); landing on the **target** planet with cargo → complete; on
       the target planet but short cargo → shortfall; a legacy quest (null target
       planet) → still completes system-level.
-- [ ] run touched tests — green.
+- [x] run touched tests — green.
 
 ### Task 4: Navigation points to the neighbour
 **Files:**

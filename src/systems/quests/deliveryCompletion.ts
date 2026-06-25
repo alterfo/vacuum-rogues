@@ -28,6 +28,11 @@ export interface DeliveryQuestLike {
   isCompleted: boolean;
   isFailed: boolean;
   targetSystemId: string | null;
+  /**
+   * Specific target planet the cargo must be couriered to (e.g. the «Местный
+   * подряд» neighbour). Null/absent → system-level completion (legacy quests).
+   */
+  targetPlanetId?: string | null;
   objectives: QuestObjective[];
 }
 
@@ -38,8 +43,10 @@ export interface DeliveryQuestLike {
  *   delivery with no COLLECT_ITEM objective, which completes unconditionally).
  * - `shortfall` — the quest targets this system but the player is short on the
  *   required cargo. Carries the cargo + carried/required counts for the toast.
- * - `n/a`       — not a relevant delivery here (wrong type, already finished, or
- *   targeting a different system); the scene should ignore it silently.
+ * - `n/a`       — not a relevant delivery here (wrong type, already finished,
+ *   targeting a different system, or — for a contract that names a specific
+ *   target planet — landing on the wrong planet in that system, e.g. back on the
+ *   issuer); the scene should ignore it silently.
  */
 export type DeliveryEvaluation =
   | { kind: "complete"; collectObj?: QuestObjective; stack?: ResourceStackLike }
@@ -52,17 +59,32 @@ export type DeliveryEvaluation =
   | { kind: "n/a" };
 
 /**
- * Decide whether `quest` can be completed on landing in `currentSystemId`.
+ * Decide whether `quest` can be completed on landing in `currentSystemId` (and,
+ * when supplied, on `currentPlanetId`).
  * Pure: reads only the quest objectives and the player's carried resources.
+ *
+ * When the contract names a specific `targetPlanetId` (a «Местный подряд»
+ * neighbour the cargo is couriered to), the delivery only completes by landing
+ * on THAT planet — landing anywhere else in the system (the issuer included) is
+ * silently ignored. Legacy quests (null target planet) keep the system-level
+ * behaviour, as do callers that don't thread the current planet id.
  */
 export function evaluateDelivery(
   quest: DeliveryQuestLike,
   player: DeliveryPlayerLike,
   currentSystemId: string,
+  currentPlanetId?: string | null,
 ): DeliveryEvaluation {
   if (quest.type !== QuestType.DELIVERY) return { kind: "n/a" };
   if (quest.isCompleted || quest.isFailed) return { kind: "n/a" };
   if (quest.targetSystemId !== currentSystemId) return { kind: "n/a" };
+  if (
+    quest.targetPlanetId != null &&
+    currentPlanetId != null &&
+    currentPlanetId !== quest.targetPlanetId
+  ) {
+    return { kind: "n/a" };
+  }
 
   const collectObj = quest.objectives.find(
     (o) => o.type === "COLLECT_ITEM" && !o.completed,
