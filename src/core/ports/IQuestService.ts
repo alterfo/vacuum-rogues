@@ -21,6 +21,8 @@ export interface QuestTemplate {
   readonly failurePenalty: QuestFailurePenalty | null; // Penalty on failure/expiration
   readonly targetSystemId?: string | null;
   readonly targetObjectId?: string | null;
+  /** Specific target planet (e.g. the local-delivery neighbour); null = system-level. */
+  readonly targetPlanetId?: string | null;
 }
 
 /**

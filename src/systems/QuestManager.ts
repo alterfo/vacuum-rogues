@@ -23,6 +23,8 @@ export interface QuestTemplate {
   failurePenalty: QuestFailurePenalty | null; // Penalty on failure/expiration
   targetSystemId?: string | null;
   targetObjectId?: string | null;
+  /** Specific target planet (e.g. the local-delivery neighbour); null = system-level. */
+  targetPlanetId?: string | null;
   /** Minimum faction reputation required to see this quest (0 = no restriction). */
   minReputation?: number;
   /** Minimum player rank required to see this quest (0 = no restriction). */
@@ -111,6 +113,7 @@ export class QuestManager {
       template.chainId ?? null,
       template.chainPart ?? -1,
       factionId,
+      template.targetPlanetId ?? null,
     );
 
     this.activeQuests.set(quest.id, quest);

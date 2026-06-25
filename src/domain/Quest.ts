@@ -40,6 +40,12 @@ export class Quest {
     public readonly chainPart: number = -1,
     /** Faction that issued this quest — used for reputation penalty on failure. Empty = fall back to planetId key. */
     public readonly factionId: string = "",
+    /**
+     * Specific target planet in the target system the objective must be fulfilled
+     * at — e.g. the «Местный подряд» neighbour the cargo is couriered to. Null
+     * means system-level completion (legacy quests + non-locational objectives).
+     */
+    public readonly targetPlanetId: string | null = null,
   ) {}
 
   updateProgress(event: { objectiveId: string; amount: number }): void {

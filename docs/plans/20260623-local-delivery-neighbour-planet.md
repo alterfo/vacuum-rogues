@@ -85,12 +85,12 @@ neighbour with the cargo, and single-planet systems fall back to a different que
 - Modify: `src/systems/QuestManager.ts` (`acceptBoardQuest` stores it)
 - Create/Modify tests under `src/tests/`
 
-- [ ] Add optional `targetPlanetId` to the Quest type + `QuestSchema`
+- [x] Add optional `targetPlanetId` to the Quest type + `QuestSchema`
       (`z.string().nullable().default(null)` → old saves validate, no version bump).
-- [ ] `acceptBoardQuest` copies `template.targetPlanetId ?? null` onto the Quest.
-- [ ] write tests: an accepted local-delivery quest exposes `targetPlanetId ===`
+- [x] `acceptBoardQuest` copies `template.targetPlanetId ?? null` onto the Quest.
+- [x] write tests: an accepted local-delivery quest exposes `targetPlanetId ===`
       the neighbour; a save/quest without the field validates and defaults `null`.
-- [ ] run touched tests — green.
+- [x] run touched tests — green.
 
 ### Task 3: Completion requires landing on the target planet
 **Files:**

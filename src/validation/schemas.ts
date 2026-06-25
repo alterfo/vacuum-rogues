@@ -166,6 +166,9 @@ export const QuestSchema = z.object({
   failurePenalty: QuestFailurePenaltySchema.nullable(),
   targetSystemId: z.string().nullable().default(null),
   targetObjectId: z.string().nullable().default(null),
+  // Specific target planet (local-delivery neighbour). Optional + nullable so
+  // saves made before it existed validate and default to null (no version bump).
+  targetPlanetId: z.string().nullable().default(null),
   minReputation: z.number().int().min(0).default(0),
   chainId: z.string().nullable().default(null),
   chainPart: z.number().int().default(-1),

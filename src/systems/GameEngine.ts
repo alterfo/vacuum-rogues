@@ -36,6 +36,7 @@ import {
   questKeyForQuest,
   type GeneratedQuest,
 } from "@/systems/quests/QuestGenerator";
+import type { QuestTemplate } from "@/systems/QuestManager";
 import { buildRegistry } from "@/systems/info/InfoService";
 import type { GalacticRegistry } from "@/systems/info/GalacticRegistry";
 import { PlayerShip } from "@/domain/PlayerShip";
@@ -979,8 +980,17 @@ export class GameEngine {
       }
     }
 
+    // Carry the generated quest's concrete target planet (e.g. the «Местный
+    // подряд» neighbour the cargo is couriered to) onto the template so the
+    // accepted Quest knows which in-system planet completes it. Null for quests
+    // with no specific planet — those stay system-level.
+    const templateWithPlanet: QuestTemplate = {
+      ...template,
+      targetPlanetId: quest.targetPlanetId,
+    };
+
     return this.questManager.acceptQuestFromTemplate(
-      template,
+      templateWithPlanet,
       planetId,
       this.galaxy?.gameDays ?? 0,
       String(factionId),
