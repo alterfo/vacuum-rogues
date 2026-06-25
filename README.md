@@ -151,6 +151,12 @@ npm test -- --watch
 
 # Запуск конкретных тестов
 npm test -- --reporter=verbose path/to/test.ts
+
+# Гейт совместимости сохранений (golden-saves; ~2 с, запускается в pre-push и CI)
+npm run test:save-compat
+
+# Реал-движковый плейтест (pre-push гейт, ~3 с)
+npm run test:playtest
 ```
 
 ## Обратная связь (бета-тест)

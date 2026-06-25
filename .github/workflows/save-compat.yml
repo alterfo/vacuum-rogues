@@ -10,6 +10,8 @@ name: Save Compatibility
 # See docs/plans/20260625-save-compatibility-safety-net.md.
 
 on:
+  push:
+    branches: [master, main, develop]
   pull_request:
     branches: [master, main, develop]
 

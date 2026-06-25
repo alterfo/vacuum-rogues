@@ -184,6 +184,57 @@ describe("ShipLoadout.revalidateToCurrentHull (pure)", () => {
       upgrades: 2,
     });
   });
+
+  it("keeps fitted hull micromodules when trimming over-capacity slots", () => {
+    // The one behavior that distinguishes revalidateToCurrentHull from swapHull
+    // (which clears hull micromodules): the hull is unchanged on a load, so its
+    // fitted micromodules must survive even while over-capacity gear is shed.
+    // A regression that cleared hullMicromoduleIds in the shared eviction path
+    // would silently strip a beta-tester's fitted hull micromodules on load.
+    const snapshot: ShipLoadoutSnapshot = {
+      hullId: "hull_corvette",
+      slotted: [
+        { gearId: "wpn_pulse" },
+        { gearId: "wpn_pulse" },
+        { gearId: "wpn_pulse" },
+        { gearId: "wpn_pulse" },
+      ],
+    };
+    const loadout = ShipLoadout.fromJSON(snapshot)!;
+    expect(loadout.applyMicromodule("hull_corvette", "mm_hull_armor_1")).toBe(
+      true,
+    );
+    expect(loadout.hullMicromodules()).toEqual(["mm_hull_armor_1"]);
+
+    const dropped = loadout.revalidateToCurrentHull();
+
+    // The 2 over-cap weapons are shed, but the hull micromodule is untouched.
+    expect(dropped).toHaveLength(2);
+    expect(loadout.hullMicromodules()).toEqual(["mm_hull_armor_1"]);
+  });
+
+  it("sheds a duplicate single-slot part carried over from a legacy save", () => {
+    // Engine/radar are dedicated cap-1 banks. A legacy/corrupt save with two
+    // engines fitted must drop the duplicate on load (not keep an invalid 2nd
+    // engine) while staying takeoff-capable on the surviving engine + fuel.
+    const snapshot: ShipLoadoutSnapshot = {
+      hullId: "hull_corvette",
+      slotted: [
+        { gearId: "eq_engine_i" },
+        { gearId: "eq_engine_i" },
+        { gearId: "eq_tank" },
+        { gearId: "wpn_pulse" },
+      ],
+    };
+    const loadout = ShipLoadout.fromJSON(snapshot)!;
+    expect(loadout.derivedStats().categories.engine.used).toBe(2);
+
+    const dropped = loadout.revalidateToCurrentHull();
+
+    expect(dropped.map((d) => d.gearId)).toEqual(["eq_engine_i"]);
+    expect(loadout.derivedStats().categories.engine.used).toBe(1);
+    expect(loadout.derivedStats().canTakeOff).toBe(true);
+  });
 });
 
 describe("GameEngine.loadGame loadout revalidation", () => {
@@ -250,6 +301,47 @@ describe("GameEngine.loadGame loadout revalidation", () => {
     expect(added.every((m) => m.id === "wpn_pulse")).toBe(true);
     // Still flyable.
     expect(engine.playerLoadout!.derivedStats().canTakeOff).toBe(true);
+  });
+
+  it("re-homes a dropped slot's micromodule + upgrades into the bag losslessly", async () => {
+    await makeLiveGame();
+    // The over-cap weapon that gets dropped carries a fitted micromodule and
+    // artifact upgrades. The load path must re-bag it via slotToBagModule (not a
+    // bare id), so the player doesn't lose the artifacts they spent. Per-category
+    // eviction drops the LAST-installed weapons, so the modded copy is among them.
+    const overfit: ShipLoadoutSnapshot = {
+      hullId: "hull_corvette",
+      slotted: [
+        { gearId: "eq_engine_i" },
+        { gearId: "eq_tank" },
+        { gearId: "wpn_pulse" },
+        { gearId: "wpn_pulse" },
+        { gearId: "wpn_pulse" },
+        { gearId: "wpn_pulse", micromoduleId: "mm_amplifier_1", upgrades: 2 },
+      ],
+    };
+    const bagBefore = engine.player!.inventory.modules.length;
+    const save = new SaveState(
+      1,
+      engine.galaxy!,
+      engine.player!,
+      [],
+      Date.now(),
+      SceneType.SPACE_FLIGHT,
+      overfit,
+    );
+    (diDeps.saveService as MockSaveService).setSave("auto", save);
+    vi.spyOn(engine, "transitionTo").mockResolvedValue(undefined);
+
+    expect(await engine.loadGame("auto")).toBe(true);
+
+    const added = engine.player!.inventory.modules.slice(bagBefore);
+    expect(added).toHaveLength(2);
+    // The modded weapon kept its micromodule + upgrade count through the re-bag.
+    const modded = added.find((m) => m.micromoduleId === "mm_amplifier_1");
+    expect(modded).toBeDefined();
+    expect(modded!.id).toBe("wpn_pulse");
+    expect(modded!.upgrades).toBe(2);
   });
 
   it("a within-capacity save is loaded untouched (nothing added to the bag)", async () => {
