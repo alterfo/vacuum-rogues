@@ -87,7 +87,33 @@ JSON** instead of ONNX, pinned by a **parity test**.
       dialogue/AI path.
 - [ ] run tests — green; `npm run build` ok (smaller bundle, no onnxruntime).
 
-### Task 4: Verify acceptance criteria
+### Task 4: BC training pipeline — data-gen + train script + weights contract
+**Files:**
+- Create: `src/tests/playtest/letsplay/exportBcData.ts` (+ test), `tools/ai/train_player.py`, `tools/ai/README.md`
+- Create: `src/tests/playtest/letsplay/weightsContract.test.ts`
+
+> This is the **code** side of training (the data-gen + train + export pipeline). The
+> *actual training run* is a manual Post-Completion step. BC clones a heuristic, so it
+> needs **no env in the loop** — just logged `(features, action)` pairs → a supervised
+> classifier → weights JSON. Uses the current `HeuristicPolicy` now; re-run later on the
+> memory-using teacher from `agent-memory`.
+
+- [ ] **Data-gen (TS):** a dev-only exporter that runs `PlayerAgent` + `HeuristicPolicy`
+      for K headless sessions and writes `(featurize(obs), actionIndex)` rows to JSONL
+      (the BC dataset). Deterministic by seed.
+- [ ] **Train script (Python):** `tools/ai/train_player.py` loads the JSONL, trains the
+      tiny MLP as a multi-class classifier (cross-entropy, `featurize`-width → 10 actions),
+      and **exports weights as JSON** matching `mlp.ts`'s `MlpWeights` shape.
+- [ ] **Contract test (TS):** a fixture `(weights.json, input) → expected scores` pins
+      that `mlp.forward` reproduces a reference net within `1e-5` (parity), and that the
+      exported shape loads via `loadWeights`.
+- [ ] write tests: the exporter produces well-formed JSONL (right feature width, legal
+      action indices); the weights contract/parity test passes against a checked-in tiny
+      reference net.
+- [ ] run tests — green. (Generating real data + training + dropping the weights in is
+      Post-Completion.)
+
+### Task 5: Verify acceptance criteria
 **Files:**
 - Modify: (none — verification only)
 
@@ -97,7 +123,7 @@ JSON** instead of ONNX, pinned by a **parity test**.
 - [ ] full unit suite green; `npm run test:playtest` green; `npm run letsplay` runs;
       lint clean; build ok and the bundle no longer contains onnxruntime.
 
-### Task 5: Update documentation
+### Task 6: Update documentation
 **Files:**
 - Modify: `CLAUDE.md` (ONNX pipeline section), `src/presentation/` notes
 

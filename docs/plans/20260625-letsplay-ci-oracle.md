@@ -54,7 +54,27 @@ by an agent actually playing.
       changes.
 - [ ] verify the gate runs in CI and is reproducible.
 
-### Task 4: Verify + docs
+### Task 4: Automated oddity / asset / visual-sameness assertions
+**Files:**
+- Create: `src/tests/oddities/balanceInvariants.test.ts`, `assetCoverage.test.ts`, `visualVariety.test.ts`
+
+> Standing rule (memory `feedback-letsplay-oddity-hunting`): the oracle must catch
+> *oddities*, not just crashes — balance/logic cringe, missing images, and visual
+> sameness like the all-yellow suns.
+
+- [ ] **Balance invariants:** no gear item is strictly dominated by a cheaper one
+      (price-vs-value monotonic per role); no dead stat (e.g. `cooldownTurns` must affect
+      fire cadence); the player can match/outrun a basic NPC; reachable escape range;
+      delivery/combat rewards are bounded (not guaranteed-profit printers).
+- [ ] **Asset coverage:** every `pickVariant` prefix used in production resolves to ≥1
+      asset (no entity renders a missing/placeholder image); flag categories whose art
+      exists but is *never referenced* (e.g. unused `star_maps`).
+- [ ] **Visual variety:** a generated galaxy yields varied star types (not all yellow);
+      same-type planets/backdrops spread across variants rather than collapsing to one.
+      (Purely-pixel checks stay manual via `window.__gameEngine` screenshots.)
+- [ ] write the assertions; wire them into `letsplay:ci`. run — green.
+
+### Task 5: Verify + docs
 - [ ] full suite + the new gate green; lint/build ok; document the oracle (what it
       catches, how to triage a failure, how to rebaseline a band).
 

@@ -88,7 +88,38 @@ Goal feel: **harder to win** (a long, earned climb to top tech) but **easier to 
 - [ ] run tests — green (existing economy/quest tests stay green; adjust only if the
       curve intentionally changed).
 
-### Task 4: Verify acceptance criteria
+### Task 4: Fix gear-curve inversions + money-printers (oddity sweep)
+**Files:**
+- Modify: `src/systems/equipment/GearCatalog.ts`, `src/config/balance.ts`, `src/systems/banking/BankingService.ts`
+- Create/Modify: `src/tests/balance/gearCurve.test.ts`
+
+- [ ] Remove the dominance inversions found in the sweep: the **Courier** (2500 cr,
+      cargo 45) shouldn't be cheaper *and* roomier than the **Corvette** (3000, cargo
+      30); the cheapest hull (**Scout**) shouldn't have the best HP-per-credit of the
+      lineup. Re-price so each step up is a genuine upgrade for its role.
+- [ ] Tame the money-printers: the local-delivery margin (**3.5×**) vs worst-case buy
+      (**3.0×**) is structural free profit, and artifact drops (**40% × 1–3 × 1000 cr**)
+      make combat a printer — narrow the delivery margin and/or drop rate; consider the
+      generous savings yield (**~44%/yr**).
+- [ ] write tests: hull/weapon value is monotonic with price for its role (no strictly-
+      dominated pricier item); delivery is not guaranteed-profit; combat reward is
+      bounded.
+- [ ] run tests — green.
+
+### Task 5: Diversify star types (every sun is the same yellow)
+**Files:**
+- Modify: `src/systems/GalaxySimulator.ts` (the hardcoded `"YELLOW_DWARF"` at ~L105)
+- Create/Modify: `src/tests/galaxy/starTypeVariety.test.ts`
+
+- [ ] Seed a **varied** star type per system (yellow/blue-giant/red-dwarf/white-dwarf/
+      neutron on a weighted distribution) instead of the universal `YELLOW_DWARF` —
+      which lights up the existing-but-unused `star_maps/{blue_giant,red_dwarf,
+      white_dwarf,neutron}_*` art (16 assets) and ends "every sun is identical".
+- [ ] write tests: a generated galaxy has a varied star-type distribution (not all
+      yellow); each type resolves to its star-map prefix.
+- [ ] run tests — green.
+
+### Task 6: Verify acceptance criteria
 **Files:**
 - Modify: (none — verification only)
 
@@ -96,7 +127,7 @@ Goal feel: **harder to win** (a long, earned climb to top tech) but **easier to 
       + NPC seeding affected; confirm **no schema/migration**.
 - [ ] full unit suite green; `npm run test:playtest` green; lint clean; build ok.
 
-### Task 5: Update documentation
+### Task 7: Update documentation
 **Files:**
 - Modify: `src/config/balance.ts` comment + a balance note
 
