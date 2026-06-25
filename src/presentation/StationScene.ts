@@ -183,6 +183,11 @@ export class StationScene extends GameScene {
 
     this.render();
 
+    // Claim rewards for any return-requiring quests this station issued and the
+    // player has now satisfied (re-docked here). Without this, station-issued
+    // BOUNTY/ESCORT/etc. quests stay stuck in pending-return forever.
+    this.checkReturnQuestCompletion();
+
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.boundKeyDown);
     // Mouse-wheel scrolls the shop list (matches the ArrowUp/Down keys); only
@@ -676,6 +681,36 @@ export class StationScene extends GameScene {
     if (panel) {
       this.renderer?.uiLayer?.removeChild(panel.container);
       panel.destroy();
+    }
+  }
+
+  /**
+   * On docking, claim rewards for any pending-return quests issued at THIS
+   * station (`quest.planetId === this.station.id`). A military base issues
+   * return-requiring quests (BOUNTY/ESCORT/EXPLORATION/DEFENSE/DIPLOMACY) tagged
+   * with the station id; `PlanetScene.checkReturnQuestCompletion` only claims
+   * *planet*-issued ones, so without a station-side equivalent these would be
+   * stuck in pending-return permanently (and silently dropped off the board).
+   * Mirrors PlanetScene.checkReturnQuestCompletion (toast instead of message).
+   */
+  private checkReturnQuestCompletion(): void {
+    if (!this.gameEngine?.player || !this.station) return;
+    const player = this.gameEngine.player;
+    const questManager = this.gameEngine.questManager;
+    if (!questManager) return;
+    for (const quest of questManager.getPendingReturnQuests()) {
+      if (quest.planetId !== this.station.id) continue;
+      const claimed = questManager.claimReturnReward(quest.id, player);
+      if (claimed) {
+        this.gameEngine.audio.playSfx("reward").catch(() => {});
+        this.showToast(
+          `Награда получена: +${quest.reward.credits} ₡`,
+          0xffdd44,
+        );
+        logger.info(
+          `Return reward claimed at station: ${quest.title} +${quest.reward.credits} cr`,
+        );
+      }
     }
   }
 

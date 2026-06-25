@@ -139,7 +139,17 @@ function makeQuest(id: string): GeneratedQuest {
   } as unknown as GeneratedQuest;
 }
 
-function makeEngine() {
+interface PendingQuestStub {
+  id: string;
+  title: string;
+  planetId: string;
+  reward: { credits: number };
+}
+
+function makeEngine(opts?: {
+  pendingReturn?: PendingQuestStub[];
+  claimReturnReward?: (questId: string, player: unknown) => boolean;
+}) {
   return {
     player: {
       rank: 0,
@@ -148,12 +158,14 @@ function makeEngine() {
       isHostileTo: () => false,
     },
     galaxy: { id: "g1", gameDays: 0, systems: [] },
+    audio: { playSfx: vi.fn(() => Promise.resolve()) },
     getQuestBoard: vi.fn((_id: string) => [makeQuest("q1"), makeQuest("q2")]),
     acceptBoardQuest: vi.fn(() => ({ id: "q1" })),
     questManager: {
       getActiveQuests: () => [],
       getCompletedQuestIds: () => [],
-      getPendingReturnQuests: () => [],
+      getPendingReturnQuests: () => opts?.pendingReturn ?? [],
+      claimReturnReward: opts?.claimReturnReward ?? vi.fn(() => true),
     },
   } as unknown as GameEngine;
 }
@@ -219,6 +231,56 @@ describe("StationScene — «Задания» action", () => {
     expect(jobBoard(scene)).toBeNull();
     expect(engine.getQuestBoard).not.toHaveBeenCalled();
 
+    scene.destroy();
+  });
+
+  // Regression: a station-issued return-requiring quest (planetId = station.id)
+  // must be claimable by re-docking at that station. Before the fix, only
+  // PlanetScene claimed return quests, so station-issued ones (BOUNTY/ESCORT/…)
+  // were stuck in pending-return forever and silently dropped off the board.
+  it("claims a pending-return quest issued at THIS station on dock", () => {
+    const claim = vi.fn(() => true);
+    const engine = makeEngine({
+      pendingReturn: [
+        {
+          id: "q-bounty",
+          title: "Охота",
+          planetId: "base-1",
+          reward: { credits: 500 },
+        },
+      ],
+      claimReturnReward: claim,
+    });
+    const scene = new StationScene(renderer);
+    scene.initialize({
+      gameEngine: engine,
+      station: makeStation(StationType.MILITARY_BASE),
+    });
+
+    expect(claim).toHaveBeenCalledWith("q-bounty", expect.anything());
+    scene.destroy();
+  });
+
+  it("does NOT claim a pending-return quest issued at a DIFFERENT station/planet", () => {
+    const claim = vi.fn(() => true);
+    const engine = makeEngine({
+      pendingReturn: [
+        {
+          id: "q-elsewhere",
+          title: "Чужое",
+          planetId: "other-base",
+          reward: { credits: 500 },
+        },
+      ],
+      claimReturnReward: claim,
+    });
+    const scene = new StationScene(renderer);
+    scene.initialize({
+      gameEngine: engine,
+      station: makeStation(StationType.MILITARY_BASE),
+    });
+
+    expect(claim).not.toHaveBeenCalled();
     scene.destroy();
   });
 });

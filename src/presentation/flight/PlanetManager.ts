@@ -623,9 +623,9 @@ export class PlanetManager implements FlightModule {
       label.eventMode = "none";
       ctn.addChild(label);
 
-      // Hit area for clicking (matches the ~80px sprite footprint).
+      // Hit area for clicking (matches the sprite footprint, scales with it).
       const hit = new Graphics();
-      hit.circle(0, 0, 40);
+      hit.circle(0, 0, STATION_SPRITE_SIZE / 2);
       hit.fill({ color: 0xffffff, alpha: 0.001 });
       hit.eventMode = "static";
       hit.cursor = "pointer";

@@ -21,8 +21,8 @@ Each off-planet base resolves a per-type sprite via `stationSpriteKey(type, id)`
 (`flight/stationArt.ts`): `STATION_TEXTURE_PREFIX` maps every `StationType` to an
 `src/assets/station/<prefix>_NN` art prefix (`TRADE_POST→trade`, `REPAIR_DOCK→drydock`,
 `MILITARY_BASE→military`, `RESEARCH_LAB→science`, `CRAFT_CENTER→fabricator`), mirroring
-`PLANET_TEXTURE_PREFIX`. A **cached** texture mounts as a 40×40 `eventMode="none"`
-`Sprite`; otherwise the marker falls back to the existing colour-coded diamond. Station
+`PLANET_TEXTURE_PREFIX`. A **cached** texture mounts as an 80×80 (`STATION_SPRITE_SIZE`)
+`eventMode="none"` `Sprite`; otherwise the marker falls back to the existing colour-coded diamond. Station
 art is **non-lazy/eager** (small transparent WebP, kept out of `LAZY_PREFIXES`) and
 resolved **synchronously** via `pickVariantKey` + `tex` (cache lookup) — no async/lazy
 load, and no save/schema impact (art is type+id-derived, like planet discs). The name label
@@ -43,7 +43,14 @@ listing (`getQuestBoard`/`acceptBoardQuest`, threading the active/completed/pend
 exclusions; `TEXT_ADVENTURE` quests route to the text-quest scene). At any **other** station
 type it shows the «Задания выдаются только на военных базах» toast. Do **not** restore the old
 unconditional toast — it contradicted itself at an actual military base. The panel is torn down
-in `destroy()` via `closeJobBoard()`.
+in `destroy()` via `closeJobBoard()`. A station-issued quest carries `planetId = station.id`, so
+return-requiring types (BOUNTY/ESCORT/EXPLORATION/DEFENSE/DIPLOMACY) can only be claimed back at
+the station: `StationScene.checkReturnQuestCompletion()` (called on dock from `initialize()`)
+mirrors `PlanetScene`'s and `claimReturnReward`s any pending-return quest whose `planetId`
+matches `station.id` — **keep it**, else those quests stay stuck in pending-return forever
+(`PlanetScene` only claims *planet*-issued ones). (Known gap: `QuestJournalUI.returnDestination` /
+`resolveQuestLocationName` still resolve only *planets*, so a station-issued return quest's journal
+card can't yet name/route to its station issuer.)
 
 **The slot-fitting hangar is one shared component** (`ui/HangarPanel.ts`,
 `docs/plans/20260623-combat-multiweapon-starter-loadout-shared-hangar.md`). It renders the
