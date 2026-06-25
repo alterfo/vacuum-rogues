@@ -64,13 +64,13 @@ supersedes).
 - Create: `src/tests/playtest/letsplay/observe.ts`
 - Create: `src/tests/playtest/letsplay/observe.test.ts`
 
-- [ ] `observe(engine)` → a pure snapshot: current scene, player credits/hull/fuel/
+- [x] `observe(engine)` → a pure snapshot: current scene, player credits/hull/fuel/
       cargo/position, nearby planets/stations/NPCs, active quests, and the **set of
       legal player actions** for the current scene (move/dock/land/trade/take-quest/
       attack/flee/repair/wait/warp).
-- [ ] write tests: deterministic snapshot for a booted harness; legal-action set
+- [x] write tests: deterministic snapshot for a booted harness; legal-action set
       matches the scene (e.g. no "trade" outside a market).
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 2: PlayerAgent loop + pluggable PlayerPolicy + heuristic baseline
 **Files:**
