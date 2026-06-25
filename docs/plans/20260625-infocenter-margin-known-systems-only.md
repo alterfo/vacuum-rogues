@@ -33,9 +33,9 @@ still show, but not the number).
 **Files:**
 - Create: `src/systems/galaxy/systemKnown.ts` (+ test) — or co-locate near `Player`/`Galaxy`
 
-- [ ] `isSystemKnown(player, galaxy, systemId)` → `system.explored || player.hasVisited(id)`.
-- [ ] write tests: explored-only true; visited-only true; neither false; unknown id false.
-- [ ] run tests — green.
+- [x] `isSystemKnown(player, galaxy, systemId)` → `system.explored || player.hasVisited(id)`.
+- [x] write tests: explored-only true; visited-only true; neither false; unknown id false.
+- [x] run tests — green.
 
 ### Task 2: Mask the margin for unknown systems in the InfoCenter
 **Files:**
