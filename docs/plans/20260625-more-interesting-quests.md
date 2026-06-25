@@ -88,12 +88,17 @@ must keep each new script **dedup-friendly**: a stable, unique `id`.)
 **Files:**
 - Modify: `src/systems/quests/QuestGenerator.ts`
 
-- [ ] Add more `ISSUER_TITLES` + objective/flavor-text variety for the procedural
+- [x] Add more `ISSUER_TITLES` + objective/flavor-text variety for the procedural
       `ROUTINE_TYPES` (DELIVERY/BOUNTY/ESCORT/DIPLOMACY/EXPLORATION) so repeated
       routine quests read distinctly (no logic change to targets/economics).
-- [ ] write/extend a generator test asserting the added flavor is reachable and the
+      (titles widened per type; +4 templates each for delivery/bounty/escort/
+      diplomacy/exploration; wider issuer-name/convoy/gang pools — RNG draw count
+      unchanged so boards stay deterministic.)
+- [x] write/extend a generator test asserting the added flavor is reachable and the
       board still generates deterministically under a fixed seed.
-- [ ] run tests — green.
+      (`src/tests/quests/questGeneratorFlavor.test.ts`, 4 tests)
+- [x] run tests — green. (questGeneratorFlavor 4 + full quest suite 305 + journeys
+      8; lint clean.)
 
 ### Task 4: Verify acceptance criteria
 **Files:**
