@@ -71,17 +71,17 @@ Three flight/combat/UI fixes the player reported together:
 - Modify: `src/systems/ShipPhysics.ts`
 - Modify: `src/tests/**` ShipPhysics movement tests
 
-- [ ] Replace the alignment-gated speed logic so the ship **always advances forward**
+- [x] Replace the alignment-gated speed logic so the ship **always advances forward**
       along `shipAngle` at a maintained cruise speed (accelerate to `maxSpeed`; do
       **not** drop speed because the target is off-axis), and turn `shipAngle` toward
       the target at `rotationSpeed` **only while moving** ⇒ the path arcs (minimum
       turn radius). A target behind is reached by arcing around, never by pivoting.
-- [ ] Preserve final-leg deceleration (stop AT the destination), intermediate
+- [x] Preserve final-leg deceleration (stop AT the destination), intermediate
       waypoint fly-through, and sun-avoidance pathing.
-- [ ] write tests: off-axis/behind target ⇒ speed stays > 0 and heading changes are
+- [x] write tests: off-axis/behind target ⇒ speed stays > 0 and heading changes are
       turn-rate-bounded (arc); min turn radius bounded; final approach still stops;
       no regression on straight-line travel timing.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 2: Keep NPC ships clickable (hit-area fix)
 **Files:**

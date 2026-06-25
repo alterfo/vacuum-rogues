@@ -189,63 +189,58 @@ export class ShipPhysics {
       return;
     }
 
-    // Rotation update - calculate angle to target
-    const dx = this.targetX - this.shipX;
-    const dy = this.targetY - this.shipY;
-    const targetAngle = Math.atan2(dy, dx);
-
-    // Normalize angle difference to [-π, π]
-    let angleDiff = targetAngle - this.shipAngle;
-    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-
-    // Apply rotation with maximum rotation per frame
-    const maxRotation = this.rotationSpeed * dt;
-    if (Math.abs(angleDiff) <= maxRotation) {
-      this.shipAngle = targetAngle;
-    } else {
-      this.shipAngle += Math.sign(angleDiff) * maxRotation;
-    }
-
-    // Calculate alignment factor: how well the ship is pointing at target
-    // 1.0 = perfectly aligned, 0.0 = perpendicular or worse
-    const alignmentFactor = Math.max(0, Math.cos(angleDiff));
-
-    // Only accelerate if ship is reasonably aligned with target (within 60°)
-    const isAligned = Math.abs(angleDiff) < Math.PI / 3;
-
-    // Only the final leg (no more queued waypoints) decelerates to a stop;
-    // intermediate waypoints are flown through at speed (smooth route — they are
-    // switched at WAYPOINT_SWITCH above). This eases the "last mile" over ≈a day.
+    // Momentum / arc-only movement (no rotate-in-place): the ship ALWAYS cruises
+    // forward along its heading and steers toward the target by turning at a
+    // bounded rate — it does NOT slow or stop because the target is off-axis.
+    // A target behind is reached by looping around, never by pivoting on the spot.
+    //
+    // Speed first (so heading only ever changes while the ship is moving):
+    // accelerate to cruise while far / on intermediate legs; only the FINAL leg
+    // decelerates to a stop at the destination (eases the "last mile" over ≈a day;
+    // intermediate waypoints are switched at WAYPOINT_SWITCH above, flown through
+    // at speed).
     const finalLeg = this.path.length === 0;
     const stoppingDistance =
       (this.currentSpeed * this.currentSpeed) / (2 * this.deceleration);
 
-    // Speed update: accelerate while far / on intermediate legs; decelerate only
-    // when approaching the final destination.
     if (finalLeg && distance <= stoppingDistance && this.currentSpeed > 0) {
       // Deceleration phase (final approach) — eases over the last ~day's distance.
       this.currentSpeed = Math.max(
         0,
         this.currentSpeed - this.deceleration * dt,
       );
-    } else if (this.currentSpeed < this.maxSpeed && isAligned) {
-      // Acceleration / cruise phase — only when pointing at target.
+    } else if (this.currentSpeed < this.maxSpeed) {
+      // Acceleration / cruise phase — maintained regardless of heading alignment.
       this.currentSpeed = Math.min(
         this.maxSpeed,
         this.currentSpeed + this.acceleration * dt,
       );
-    } else if (!isAligned && this.currentSpeed > this.maxSpeed * 0.3) {
-      // Slow down if not aligned and going too fast
-      this.currentSpeed = Math.max(
-        this.maxSpeed * 0.3,
-        this.currentSpeed - this.deceleration * dt * 0.5,
-      );
     }
 
-    // Position update - apply alignment factor to prevent sideways drift
-    const effectiveSpeed = this.currentSpeed * alignmentFactor;
-    const moveDistance = effectiveSpeed * dt;
+    // Turn toward the target at a bounded rate, but only WHILE MOVING. Because
+    // forward distance is currentSpeed*dt and the per-frame heading change is
+    // capped at rotationSpeed*dt, the path curves with a minimum turn radius of
+    // currentSpeed / rotationSpeed (≈19px at cruise) — an arc, never a pivot.
+    if (this.currentSpeed > 0) {
+      const dx = this.targetX - this.shipX;
+      const dy = this.targetY - this.shipY;
+      const targetAngle = Math.atan2(dy, dx);
+
+      // Normalize angle difference to [-π, π]
+      let angleDiff = targetAngle - this.shipAngle;
+      while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+      const maxRotation = this.rotationSpeed * dt;
+      if (Math.abs(angleDiff) <= maxRotation) {
+        this.shipAngle = targetAngle;
+      } else {
+        this.shipAngle += Math.sign(angleDiff) * maxRotation;
+      }
+    }
+
+    // Position update — always advance forward along the current heading.
+    const moveDistance = this.currentSpeed * dt;
     this.shipX += Math.cos(this.shipAngle) * moveDistance;
     this.shipY += Math.sin(this.shipAngle) * moveDistance;
   }

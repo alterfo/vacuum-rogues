@@ -115,4 +115,104 @@ describe("ShipPhysics", () => {
     expect(p1.shipX).toBeCloseTo(p2.shipX, 5);
     expect(p1.currentSpeed).toBeCloseTo(p2.currentSpeed, 5);
   });
+
+  // ── Momentum / arc-only movement (no rotate-in-place) ──────────────────────
+  describe("arc-only momentum movement", () => {
+    const ROTATION_SPEED = Math.PI / 2 / 300; // rad/ms (mirrors ShipPhysics)
+
+    it("a target directly behind is reached by arcing — speed never collapses to a pivot", () => {
+      const maxSpeed = 0.1;
+      const p = new ShipPhysics(0, 0, maxSpeed);
+      p.shipAngle = 0; // pointing +x; target is directly behind (-x)
+      p.setTarget(-1000, 0);
+
+      const dt = 16;
+      const maxStep = ROTATION_SPEED * dt;
+      let prevAngle = p.shipAngle;
+      let minSpeedWhileMoving = Infinity;
+      let maxHeadingStep = 0;
+      let maxForwardX = -Infinity; // proves the ship advances FORWARD, not pivots
+      let arrived = false;
+
+      for (let i = 0; i < 5000; i++) {
+        p.update(dt);
+        if (!p.isMoving) {
+          arrived = true;
+          break;
+        }
+        minSpeedWhileMoving = Math.min(minSpeedWhileMoving, p.currentSpeed);
+        maxForwardX = Math.max(maxForwardX, p.shipX);
+        let step = Math.abs(p.shipAngle - prevAngle);
+        while (step > Math.PI) step = Math.abs(step - 2 * Math.PI);
+        maxHeadingStep = Math.max(maxHeadingStep, step);
+        prevAngle = p.shipAngle;
+      }
+
+      expect(arrived).toBe(true); // looped around and reached the target
+      expect(p.getDistanceToTarget()).toBeLessThanOrEqual(8); // at the destination
+      // Never pivoted in place: forward speed stayed > 0 the whole way…
+      expect(minSpeedWhileMoving).toBeGreaterThan(0);
+      // …and the ship physically moved forward (+x) before looping back to -x.
+      expect(maxForwardX).toBeGreaterThan(5);
+      // Heading changes are turn-rate bounded every frame (an arc, not a snap).
+      expect(maxHeadingStep).toBeLessThanOrEqual(maxStep + 1e-9);
+    });
+
+    it("at cruise the turn radius equals maxSpeed/rotationSpeed (≈19px) — bounded below", () => {
+      const maxSpeed = 0.1;
+      const p = new ShipPhysics(0, 0, maxSpeed);
+      p.setTarget(100_000, 0); // long straight leg to reach cruise speed
+      for (let i = 0; i < 300; i++) p.update(16);
+      expect(p.currentSpeed).toBeCloseTo(maxSpeed, 6); // at cruise
+
+      // Now steer perpendicular & far away so it turns continuously at cruise.
+      p.setTarget(0, -100_000);
+      const before = { x: p.shipX, y: p.shipY, a: p.shipAngle };
+      p.update(16);
+      const ds = Math.hypot(p.shipX - before.x, p.shipY - before.y);
+      let da = Math.abs(p.shipAngle - before.a);
+      while (da > Math.PI) da = Math.abs(da - 2 * Math.PI);
+      const radius = ds / da;
+      expect(radius).toBeCloseTo(maxSpeed / ROTATION_SPEED, 0); // ≈19px
+    });
+
+    it("an off-axis target still decelerates to a full stop at the destination", () => {
+      const p = new ShipPhysics(0, 0, 0.1);
+      p.shipAngle = Math.PI / 2; // pointing +y; target is off to the side (+x)
+      p.setTarget(1000, 0);
+      for (let i = 0; i < 5000 && p.isMoving; i++) p.update(16);
+      expect(p.isMoving).toBe(false);
+      expect(p.currentSpeed).toBe(0);
+      expect(p.getDistanceToTarget()).toBeLessThanOrEqual(8);
+    });
+
+    it("intermediate waypoints are flown through without stopping (speed stays high)", () => {
+      const p = new ShipPhysics(0, 0, 0.1);
+      p.setPath([
+        { x: 500, y: 0 },
+        { x: 1000, y: 0 },
+      ]);
+      // Reach cruise on the first leg.
+      for (let i = 0; i < 80; i++) p.update(16);
+      expect(p.currentSpeed).toBeCloseTo(0.1, 2);
+      // Drive across the first waypoint; speed must not dip to a stop at the corner.
+      let minSpeedAcrossCorner = Infinity;
+      for (let i = 0; i < 60; i++) {
+        p.update(16);
+        if (p.isMoving) {
+          minSpeedAcrossCorner = Math.min(minSpeedAcrossCorner, p.currentSpeed);
+        }
+      }
+      expect(minSpeedAcrossCorner).toBeGreaterThan(0.05); // flew through the waypoint
+    });
+
+    it("straight-line travel timing is unchanged (aligned target ⇒ full forward speed)", () => {
+      const p = new ShipPhysics(0, 0, 0.1);
+      p.setTarget(5000, 0); // dead ahead (aligned), far enough never to decelerate
+      for (let i = 0; i < 300; i++) p.update(16);
+      expect(p.currentSpeed).toBeCloseTo(0.1, 6); // at full cruise
+      expect(p.shipY).toBeCloseTo(0, 6); // no sideways drift on a straight leg
+      expect(p.shipX).toBeGreaterThan(0);
+    });
+  });
 });
