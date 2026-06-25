@@ -1,0 +1,124 @@
+import { describe, it, expect } from "vitest";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
+
+/**
+ * Task 4 of the dev-only letsplay engine: **enforce dev-only — never in prod.**
+ *
+ * The letsplay engine (`src/tests/playtest/letsplay/`) plays the game as the
+ * player against the *real* `GameEngine`, so it imports freely from production
+ * `@/...` modules. That direction is fine — production never imports *it*. This
+ * guard locks that one-way street in two ways:
+ *
+ *  1. **No production module imports the letsplay engine.** We scan every `.ts`
+ *     under `src/` *except* `src/tests/**` (the prod surface = the import graph
+ *     reachable from `src/main.ts`; nothing under `src/tests/` is bundled), and
+ *     assert none of them statically imports anything resolving into the
+ *     letsplay engine dir. If this stays green, `npm run build` can never pull
+ *     the engine into the prod bundle.
+ *  2. **The engine does not statically import `onnxruntime-web`.** The future
+ *     neural policy (Task 5) loads ONNX via a **dev-only dynamic `import()`** so
+ *     the runtime is never added to a static (and hence bundleable) import edge.
+ *     A static `import ... from "onnxruntime-web"` would defeat that, so we ban
+ *     it here. Dynamic `import("onnxruntime-web")` is allowed.
+ */
+
+const SRC_ROOT = resolve(__dirname, "..", "..");
+const TESTS_DIR = join(SRC_ROOT, "tests");
+const LETSPLAY_DIR = join(SRC_ROOT, "tests", "playtest", "letsplay");
+
+/** Recursively collect every `.ts` file under `dir`, skipping `.d.ts`. */
+function collectTsFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...collectTsFiles(full));
+    } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".d.ts")) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+/** Production `.ts`: everything under `src/` that is NOT under `src/tests/`. */
+function productionTsFiles(): string[] {
+  return collectTsFiles(SRC_ROOT).filter((f) => !f.startsWith(TESTS_DIR + sep));
+}
+
+/**
+ * Extract the *static* module specifiers from a file: `import ... from "x"`,
+ * `export ... from "x"`, and bare `import "x"`. Deliberately ignores dynamic
+ * `import("x")` — those are runtime-gated and allowed for the dev-only ONNX seam.
+ */
+function staticSpecifiers(source: string): string[] {
+  const specs: string[] = [];
+  const re = /(?:^|\n)\s*(?:import|export)\b[^;\n]*?from\s*["']([^"']+)["']/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source)) !== null) specs.push(m[1]);
+  // bare side-effect imports: import "x";
+  const bare = /(?:^|\n)\s*import\s*["']([^"']+)["']/g;
+  while ((m = bare.exec(source)) !== null) specs.push(m[1]);
+  return specs;
+}
+
+/** Resolve a specifier to an absolute path, or null for a bare package import. */
+function resolveSpecifier(fromFile: string, spec: string): string | null {
+  if (spec.startsWith("@/")) return join(SRC_ROOT, spec.slice(2));
+  if (spec.startsWith("./") || spec.startsWith("../")) {
+    return resolve(dirname(fromFile), spec);
+  }
+  return null; // bare package (pixi.js, zod, onnxruntime-web, …)
+}
+
+describe("letsplay engine is dev-only (never in prod)", () => {
+  it("no production module imports anything from the letsplay engine dir", () => {
+    const offenders: string[] = [];
+    for (const file of productionTsFiles()) {
+      const source = readFileSync(file, "utf8");
+      for (const spec of staticSpecifiers(source)) {
+        const resolved = resolveSpecifier(file, spec);
+        if (resolved && (resolved + sep).startsWith(LETSPLAY_DIR + sep)) {
+          offenders.push(`${relative(SRC_ROOT, file)} imports "${spec}"`);
+        }
+      }
+    }
+    expect(
+      offenders,
+      `Production modules must never import the letsplay engine ` +
+        `(it would pull it into the prod bundle):\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("the letsplay engine does not statically import onnxruntime-web", () => {
+    const offenders: string[] = [];
+    for (const file of collectTsFiles(LETSPLAY_DIR)) {
+      const source = readFileSync(file, "utf8");
+      for (const spec of staticSpecifiers(source)) {
+        if (spec === "onnxruntime-web" || spec.startsWith("onnxruntime")) {
+          offenders.push(
+            `${relative(SRC_ROOT, file)} statically imports "${spec}"`,
+          );
+        }
+      }
+    }
+    expect(
+      offenders,
+      `The neural policy must load ONNX via a dev-only dynamic import(); ` +
+        `a static import would add a bundleable edge:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("the letsplay engine dir exists and contains the engine modules", () => {
+    // Sanity: the scan above is only meaningful if the dir is actually present.
+    const names = readdirSync(LETSPLAY_DIR);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "observe.ts",
+        "PlayerPolicy.ts",
+        "HeuristicPolicy.ts",
+        "PlayerAgent.ts",
+      ]),
+    );
+  });
+});

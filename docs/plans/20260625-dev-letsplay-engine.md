@@ -103,13 +103,13 @@ supersedes).
 **Files:**
 - Create: `src/tests/architecture/letsplayDevOnly.test.ts`
 
-- [ ] Guard test: scan `src/**` excluding `src/tests/**` and assert **no production
+- [x] Guard test: scan `src/**` excluding `src/tests/**` and assert **no production
       module imports** anything under the letsplay engine dir; assert the engine does
       not statically import `onnxruntime-web` (the future neural policy uses a dev-only
       dynamic `import()`).
-- [ ] confirm `npm run build` (prod) does not pull the letsplay engine (it isn't in
+- [x] confirm `npm run build` (prod) does not pull the letsplay engine (it isn't in
       `main.ts`'s graph) and the prod bundle is unaffected.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 5: Neural-policy seam (stub, dev-only)
 **Files:**
