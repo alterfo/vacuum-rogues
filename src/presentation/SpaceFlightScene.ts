@@ -96,6 +96,8 @@ export class SpaceFlightScene extends GameScene {
   private pauseAtDayBoundary = false;
   // Latch: show "pause first" hint only once per turn to avoid message spam.
   private turnHintShown = false;
+  // True only while the combat pursuit re-plots its own course (Task 3 break-off).
+  private pursuitReplot = false;
   private readonly SYSTEM_INNER_RADIUS = SYSTEM_GEOMETRY.innerRadius;
   private readonly SYSTEM_BOUNDARY_RADIUS = SYSTEM_GEOMETRY.boundaryRadius;
   private readonly SCANNER_RANGE = GAME_BALANCE.scannerRange;
@@ -246,7 +248,11 @@ export class SpaceFlightScene extends GameScene {
         showMessage: (text, color) => this.hud.showMessage(text, color),
         showTooltip: (text, sx, sy) => this.hud.showTooltip(text, sx, sy),
         hideTooltip: () => this.hud.hideTooltip(),
-        executeRouteTo: (x, y) => this.executeRouteTo(x, y),
+        executeRouteTo: (x, y) => {
+          this.pursuitReplot = true;
+          this.executeRouteTo(x, y);
+          this.pursuitReplot = false;
+        },
         clearRouteTarget: () => {
           this.planetManager.routeTargetPlanetId = null;
         },
@@ -848,8 +854,7 @@ export class SpaceFlightScene extends GameScene {
       event.button === 2 || (event.button === 0 && event.shiftKey);
 
     // Swallow the residual click carried over from the previous scene's button
-    // (US-070 #1: confirming race selection also built a route here). Panning is
-    // unaffected so the player can still look around.
+    // (US-070 #1: confirming race selection also built a route here).
     if (
       !isPanButton &&
       performance.now() - this.sceneReadyAt < this.INPUT_GRACE_MS
@@ -860,16 +865,13 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // Modal panels (NPC contact, quest journal, system menu) dismiss on an
-    // outside click: their children stopPropagation(), so any click reaching the
-    // stage while one is open is outside it — close it, don't plan a route behind.
+    // Modal panels dismiss on an outside click (their children stopPropagation()).
     if (!isPanButton && this.isBlockingModalOpen()) {
       this.closeBlockingModals();
       return;
     }
 
-    // While a turn is running, block route building and panel interactions.
-    // Panning is always allowed so the player can still survey the map.
+    // While a turn is running, block route building (panning stays allowed).
     if (this.isTurnRunning && !isPanButton) {
       if (!this.turnHintShown) {
         this.turnHintShown = true;
@@ -881,14 +883,11 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
-    // In-flight combat no longer freezes navigation (Task 3: evasion): the
-    // player can re-plan a route mid-fight to flee an aggressor — route planning
-    // still requires a pause (gated above), and combat keeps resolving while the
-    // ship flies the new course. Enemy retargeting is via the enemy sprite click
-    // (NpcShipManager routes it to selectCombatTarget while a fight is on).
+    // In-flight combat no longer freezes navigation (Task 3): a route committed
+    // mid-fight breaks off the auto-pursuit (executeRouteTo) so the ship can flee;
+    // combat keeps resolving. Enemy retargeting is via the enemy sprite click.
 
-    // Lock navigation while already en route to the warp edge (still allow
-    // replanning if stopped — route shown but Play not pressed).
+    // Lock navigation while en route to the warp edge (replanning OK when stopped).
     if (this.pendingWarp && !isPanButton && this.shipPhysics?.isMoving) {
       logger.info("Navigation locked: en route to warp edge");
       return;
@@ -1503,18 +1502,22 @@ export class SpaceFlightScene extends GameScene {
     this.plotRoute();
   }
 
-  /** Start flying to (x,y) along a star-avoiding (and, for planets, spiral) path. */
+  /**
+   * Start flying to (x,y) along a star-avoiding (and, for planets, spiral) path.
+   * A player course committed mid-fight breaks off the combat auto-pursuit (Task
+   * 3) so the ship flies there; the pursuit's own re-plots (`pursuitReplot`) opt out.
+   */
   private executeRouteTo(x: number, y: number, landing?: LandingHint): void {
     if (!this.shipPhysics) return;
+    if (!this.pursuitReplot && this.combatModule?.isActive)
+      this.npcManager.breakOffCombatPursuit();
     this.playerShip.finishTakeoff(); // a fresh course cancels any in-progress take-off arc
     // Single source: re-derive from the ship's CURRENT position (drawn == flown),
-    // recovering the spiral hint that callers (Ход) drop for this planned point —
-    // recomputing, not replaying routePath, avoids a resumed-flight backtrack.
+    // recovering the spiral hint callers (Ход) drop (recompute, don't replay).
     const same = this.plannedRoute?.x === x && this.plannedRoute?.y === y;
     const hint = landing ?? (same ? this.plannedRoute?.landing : undefined);
     this.routePath = this.computeFlightPath(x, y, hint);
-    // Hand the whole curved path to physics; it flows through the waypoints
-    // without stopping (smooth motion around the star — US-070 #5).
+    // Physics flows through the waypoints without stopping (US-070 #5).
     this.shipPhysics.setPath(this.routePath);
     this.plannedRoute = { x, y, landing: hint };
     this.isTurnRunning = true; // executing a route runs the turn (Play)
@@ -1585,17 +1588,15 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Play/Pause turn control. When paused: Play executes the planned route. While
-   * running: Pause defers the stop to the next whole-day boundary so the ship
-   * finishes its day (F1, playtest3, reversing the sprint-3 immediate stop) —
-   * except a combat auto-follow (no day advancing), which aborts immediately.
+   * Play/Pause turn control. Paused: Play executes the planned route. Running:
+   * Pause defers the stop to the next whole-day boundary so the ship finishes its
+   * day (F1, playtest3) — except a combat auto-follow, which aborts immediately.
    */
   private onPlayPause(): void {
     if (this.isTurnRunning) {
-      // A combat auto-follow OR an active in-flight fight has no advancing day to
-      // defer the pause to — combat freezes the calendar (see updateShip's wait
-      // guard), so the day-boundary latch would never fire and the player would
-      // be stuck unable to pause a stationary fight. Halt the turn immediately.
+      // A combat auto-follow / active fight has no advancing day to defer the
+      // pause to (combat freezes the calendar), so the day-boundary latch would
+      // never fire — halt the turn immediately instead.
       if (this.npcManager.followNpcId || this.combatModule?.isActive) {
         this.endTurn(); // combat abort halts now (endTurn stops the ship)
       } else if (!this.pauseAtDayBoundary) {
@@ -1605,8 +1606,7 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
     // Play: run the planned route (or close on an attack target). With no course
-    // at all, run a "wait" turn — the ship holds position while the world keeps
-    // moving and the calendar advances, until Pause (US-070 #5).
+    // at all, run a "wait" turn — time passes, the ship holds position (US-070 #5).
     this.pauseAtDayBoundary = false; // fresh turn — clear any stale latch
     if (this.plannedRoute) {
       this.executeRouteTo(this.plannedRoute.x, this.plannedRoute.y);

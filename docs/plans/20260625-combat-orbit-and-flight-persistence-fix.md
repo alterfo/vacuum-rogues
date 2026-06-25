@@ -98,11 +98,26 @@ reload resumes where you were.
 **Files:**
 - Modify: `src/presentation/SpaceFlightScene.ts` / `NpcShipManager` engage gate
 
-- [ ] Let a player route to a planet (or an explicit flee/disengage) **override** the combat
+- [x] Let a player route to a planet (or an explicit flee/disengage) **override** the combat
       auto-pursuit so the ship heads to the destination instead of being pinned in orbit;
       combat re-engages only if a hostile is back in range (and per the escape rules).
-- [ ] write tests: setting a planet route during combat steers to the planet; disengage works.
-- [ ] run tests — green.
+      (`NpcShipManager.breakOffCombatPursuit()` sets `pursuitSuspended`; while set,
+      `updateCombatPursuit` yields navigation — returns without steering — so the player's
+      plotted course flies. The override self-clears the instant the route completes
+      (`physics.isMoving` false) so pursuit re-engages only if a hostile is still in range,
+      and is re-armed on a fresh engagement / explicit retarget — `launchCombatWithNpc`,
+      `onNpcClick`'s retarget branch — and reset in `destroy`. The scene's `executeRouteTo`
+      calls `breakOffCombatPursuit()` when `combatModule.isActive`, gated by a `pursuitReplot`
+      flag so the pursuit's own star-avoidance re-plots — which route through the same
+      `executeRouteTo` dep — don't self-suspend.)
+- [x] write tests: setting a planet route during combat steers to the planet; disengage works.
+      (`src/tests/flight/combatBreakoff.test.ts`: control shows the auto-pursuit overrides a
+      player route target; break-off shows the route target is preserved, the ship actually
+      flies toward the planet — away from the orbited enemy — instead of staying pinned, and
+      the override self-clears on arrival so combat re-engages. 4 green.)
+- [x] run tests — green. (combatBreakoff 4 green; full flight/combat/npc 701 green,
+      presentation 435 green, real-engine playtest 67 green; lint 0 errors, tsc clean;
+      `SpaceFlightScene.ts` kept under the 1900-line module guard via comment-trim reclaim.)
 
 ### Task 4: Persist live in-flight position across reload
 **Files:**

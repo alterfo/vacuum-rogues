@@ -246,6 +246,13 @@ export class NpcShipManager implements FlightModule {
   // ship never decelerates or stops mid-orbit (it would fall behind the target and
   // slingshot out) — only the heading matters; the ship keeps cruising.
   private readonly COMBAT_ORBIT_CARROT = 2000;
+  // Break-off (Task 3): set when the player commits a manual route mid-fight (to a
+  // planet / to flee). While set, the combat auto-pursuit yields navigation so the
+  // ship flies the player's course instead of being pinned in its strafe orbit. It
+  // clears the instant the player's route completes (ship stops) — pursuit then
+  // re-engages only if a hostile is still in range — and on a fresh engagement /
+  // explicit retarget (the player chose to fight again).
+  private pursuitSuspended = false;
   private readonly SCANNER_RANGE = GAME_BALANCE.scannerRange;
   private readonly COMBAT_ESCAPE_RANGE = GAME_BALANCE.combatEscapeRange;
   private readonly SYSTEM_INNER_RADIUS = SYSTEM_GEOMETRY.innerRadius;
@@ -499,6 +506,7 @@ export class NpcShipManager implements FlightModule {
     this.closeNpcContactPanel();
     this.followNpcId = null;
     this.approachNpcId = null;
+    this.pursuitSuspended = false;
     this.shakedownEvaluated.clear();
     if (this.overmindOverlay) {
       if (!this.overmindOverlay.destroyed) {
@@ -1095,6 +1103,9 @@ export class NpcShipManager implements FlightModule {
     if (this.deps.isInCombat?.()) {
       const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
       if (sprite) this.deps.selectCombatTarget?.(sprite);
+      // Clicking an enemy mid-fight is an explicit "engage this one" — drop any
+      // break-off so the auto-pursuit resumes toward the (re)selected target.
+      this.pursuitSuspended = false;
       return;
     }
     if (this.deps.isTurnRunning()) return;
@@ -1537,6 +1548,7 @@ export class NpcShipManager implements FlightModule {
     this.followNpcId = null;
     this.approachNpcId = null;
     this.steerTargetId = null; // fresh chase leg — reset the lead smoother
+    this.pursuitSuspended = false; // fresh engagement re-arms the auto-pursuit
     // A player-initiated engagement makes the target an active aggressor so it
     // auto-closes on the player and holds weapon range (Task 3) instead of
     // orbiting its planet / drifting. Garrison + shakedown paths already flag it.
@@ -1628,6 +1640,20 @@ export class NpcShipManager implements FlightModule {
   }
 
   /**
+   * Break off the combat auto-pursuit so a player-plotted route (to a planet, or
+   * an explicit flee) takes over navigation instead of the ship being pinned in
+   * its strafe orbit (Task 3). The scene calls this whenever the player commits a
+   * manual route while a fight is engaged. The override is self-clearing: once the
+   * route completes (ship stops) {@link updateCombatPursuit} resumes pursuit — and
+   * a fresh engagement / explicit retarget clears it immediately (the player chose
+   * to fight again). Combat (auto-fire) keeps resolving throughout; only the
+   * auto-maneuvering yields.
+   */
+  breakOffCombatPursuit(): void {
+    this.pursuitSuspended = true;
+  }
+
+  /**
    * Real-time combat auto-track (Task 3): while a fight is engaged, keep the
    * player ship inside weapon range of the live combat target without a fresh
    * "Ход". Outside weapon range it re-closes toward the target's smoothed lead;
@@ -1643,6 +1669,15 @@ export class NpcShipManager implements FlightModule {
    */
   private updateCombatPursuit(physics: ShipPhysics): void {
     if (this.deps.isPaused?.()) return; // active-pause: maneuvering frozen
+    // Player break-off (Task 3): a manually plotted route (to a planet / to flee)
+    // takes over navigation — yield the auto-pursuit while the player's course is
+    // flying so the ship is never pinned in its strafe orbit. The override ends the
+    // instant the route completes (ship stops): pursuit re-engages only if a hostile
+    // is still in range (and per the escape rules).
+    if (this.pursuitSuspended) {
+      if (physics.isMoving) return;
+      this.pursuitSuspended = false;
+    }
     const targetId = this.deps.getCombatTargetId?.() ?? null;
     if (!targetId) return;
     const sprite = this.npcSprites.find((s) => s.npc.id === targetId);
