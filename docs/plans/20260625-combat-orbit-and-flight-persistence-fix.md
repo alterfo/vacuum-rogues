@@ -50,11 +50,18 @@ reload resumes where you were.
 **Files:**
 - Create: `src/tests/flight/combatOrbit.test.ts`, `src/tests/core/flightReloadPosition.test.ts`
 
-- [ ] Pursuit test: an in-range arc-moving ship under `updateCombatPursuit` currently
+- [x] Pursuit test: an in-range arc-moving ship under `updateCombatPursuit` currently
       fails to maintain weapon range (overshoots / orbits unboundedly) → RED.
-- [ ] Persistence test: enter a system, move the ship, save + reload mid-flight → currently
+      (`src/tests/flight/combatOrbit.test.ts`: post-entry maxDist ≈1043px vs WEAPON_RANGE 240,
+      in-range fraction ≈0.17 — confirmed RED, wrapped in `it.fails` so it's committable past
+      the pre-commit test gate and turns red the moment Task 2's fix lands.)
+- [x] Persistence test: enter a system, move the ship, save + reload mid-flight → currently
       restores the edge, not the live position → RED.
-- [ ] run — confirm both RED.
+      (`src/tests/core/flightReloadPosition.test.ts`: probes the Task-4 seams
+      `recordLiveFlightPos`/`flushFlightAutosave` via casts — undefined today, so the live
+      position never persists; `it.fails` for the same commit-gate reason.)
+- [x] run — confirm both RED. (Plain `it` run: 4 assertions failed as expected; positive
+      controls — "first closes to weapon range" + "inert outside flight" — pass.)
 
 ### Task 2: Combat holds the target in range (controlled orbit/strafe)
 **Files:**
