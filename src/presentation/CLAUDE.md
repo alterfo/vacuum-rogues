@@ -100,8 +100,14 @@ endpoints explored on the star-map or visited. "Known" is the pure predicate
 threads the `player` and masks the margin («маржа ~?%» via `describeRumor(r, galaxy,
 true)`) for a route touching an undiscovered system, while the товар/route text still
 renders — so the player can't read the profit of a route into a system they've never
-seen. With **no** `player` (legacy callers/tests) nothing is masked. Presentation/visibility
-only — the rumor data is unchanged, so no domain/schema/save change.
+seen. With **no** `player` (legacy callers/tests) nothing is masked. The **same masking
+covers the news feed**: a `TRADE_OPPORTUNITY` event's description is baked unmasked at
+open time (and persisted), so `buildNews` re-masks it at render time via
+`maskTradeNewsMargin(desc, event, galaxy, player)` (also in `rumorPanel.ts`) — keyed on
+the event's `fromSystemId`/`toSystemId` against current knowledge, so the «[МАРШРУТ]» row
+can't leak the number the panel above it hides (and the margin re-appears once the system
+is explored). Presentation/visibility only — the rumor data is unchanged, so no
+domain/schema/save change.
 
 Three most-hit PixiJS 8 traps:
 - **`eventMode='none'` on Text over clickable areas** — Text defaults to `'auto'` and blocks

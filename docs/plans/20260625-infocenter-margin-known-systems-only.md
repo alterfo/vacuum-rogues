@@ -11,8 +11,9 @@ still show, but not the number).
 
 ## Context (from discovery)
 - **"Known" signals already exist:** `Player.visitedSystems` + `Player.hasVisited(id)`;
-  `Galaxy` marks `system.explored = true` on star-map reveal (`revealSystem` /
-  `revealWithinHops`). So **known = `system.explored || player.hasVisited(id)`**.
+  `Galaxy` marks `system.explored = true` on star-map reveal
+  (`revealSystemAndNeighbors` / `revealSystemsWithinHops`). So
+  **known = `system.explored || player.hasVisited(id)`**.
 - **InfoCenter (`src/presentation/InfoCenterScene.ts`):** renders rumor/route hits via
   `buildRumorPanel` (`./rumorPanel`), mapping `systemId → name` and showing margins.
 - **Margins (`src/systems/trade/RouteScanner.ts`):** `marginPct` / `RouteRumor` carry the

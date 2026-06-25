@@ -8,6 +8,7 @@ import type { Station } from "@/domain/Station";
 import type { StarSystem } from "@/domain/StarSystem";
 import {
   buildRumorPanel,
+  maskTradeNewsMargin,
   RUMOR_PANEL_HEADER,
   RUMOR_PANEL_MAX,
 } from "./rumorPanel";
@@ -125,7 +126,14 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
     const sysName = systemMap.get(event.systemId)?.name ?? event.systemId;
     const label = NEWS_TYPE_LABEL[event.type] ?? "[СОБЫТИЕ]";
     const color = NEWS_TYPE_COLOR[event.type] ?? 0xaaaaaa;
-    const desc = event.description || `${label} в системе ${sysName}`;
+    // Partial observability: re-mask a trade-rumor margin baked into the feed for
+    // a route the player hasn't discovered (mirrors the rumor panel above).
+    const desc = maskTradeNewsMargin(
+      event.description || `${label} в системе ${sysName}`,
+      event,
+      galaxy,
+      gameEngine.player ?? null,
+    );
     items.push({
       day: event.day,
       text: desc,

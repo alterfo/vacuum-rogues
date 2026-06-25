@@ -6,7 +6,11 @@
  * empty-state fallback. Tested without a PixiJS renderer.
  */
 import { describe, it, expect } from "vitest";
-import { buildRumorPanel, RUMOR_PANEL_MAX } from "@/presentation/rumorPanel";
+import {
+  buildRumorPanel,
+  maskTradeNewsMargin,
+  RUMOR_PANEL_MAX,
+} from "@/presentation/rumorPanel";
 import { Galaxy } from "@/domain/Galaxy";
 import { createRumor } from "@/domain/RouteRumor";
 import type { RouteLike } from "@/domain/RouteRumor";
@@ -160,6 +164,38 @@ describe("buildRumorPanel — partial observability (margins masked for unknown 
     expect(data.lines[0].text).not.toContain("?");
   });
 
+  it("masks the margin when the SOURCE endpoint is unknown (destination known)", () => {
+    // Guards the `from` half of the both-endpoints AND: destination is explored
+    // but the source isn't, so the margin must still be hidden.
+    const galaxy = makeGalaxyWithExplored([
+      { id: "S1", name: "Соль", explored: false }, // source undiscovered
+      { id: "S2", name: "Вега", explored: true },
+    ]);
+    galaxy.activeRumors = [
+      createRumor(route(ResourceType.FUEL, "S1", "S2", 30), 1),
+    ];
+    const player = makePlayer([]); // visited nothing
+
+    const data = buildRumorPanel(galaxy, RUMOR_PANEL_MAX, player);
+    expect(data.lines[0].text).not.toMatch(NUMERIC_MARGIN);
+    expect(data.lines[0].text).toContain("маржа ~?%");
+  });
+
+  it("masks the margin when neither endpoint is known (player supplied)", () => {
+    const galaxy = makeGalaxyWithExplored([
+      { id: "S1", name: "Соль", explored: false },
+      { id: "S2", name: "Вега", explored: false },
+    ]);
+    galaxy.activeRumors = [
+      createRumor(route(ResourceType.FUEL, "S1", "S2", 30), 1),
+    ];
+    const player = makePlayer([]);
+
+    const data = buildRumorPanel(galaxy, RUMOR_PANEL_MAX, player);
+    expect(data.lines[0].text).not.toMatch(NUMERIC_MARGIN);
+    expect(data.lines[0].text).toContain("маржа ~?%");
+  });
+
   it("shows the margin when an unexplored endpoint has been visited", () => {
     const galaxy = makeGalaxyWithExplored([
       { id: "S1", name: "Соль", explored: true },
@@ -206,5 +242,79 @@ describe("buildRumorPanel — partial observability (margins masked for unknown 
 
     const data = buildRumorPanel(galaxy, RUMOR_PANEL_MAX);
     expect(data.lines[0].text).toContain("маржа ~30%");
+  });
+});
+
+describe("maskTradeNewsMargin — InfoCenter news feed respects partial observability", () => {
+  const NUMERIC_MARGIN = /маржа ~\d+%/;
+  // Mirrors a TRADE_OPPORTUNITY description baked by describeRumor at open time.
+  const DESC = "Везите Топливо из Соль в Вега: маржа ~70%";
+
+  function tradeEvent(from = "S1", to = "S2") {
+    return { type: "TRADE_OPPORTUNITY", fromSystemId: from, toSystemId: to };
+  }
+
+  it("masks the baked margin when a route endpoint is undiscovered", () => {
+    const galaxy = makeGalaxyWithExplored([
+      { id: "S1", name: "Соль", explored: true },
+      { id: "S2", name: "Вега", explored: false }, // undiscovered
+    ]);
+    const out = maskTradeNewsMargin(DESC, tradeEvent(), galaxy, makePlayer([]));
+    expect(out).not.toMatch(NUMERIC_MARGIN);
+    expect(out).toContain("маржа ~?%");
+    // Route/товар text survives.
+    expect(out).toContain("Топливо");
+    expect(out).toContain("Соль");
+    expect(out).toContain("Вега");
+  });
+
+  it("keeps the margin when both endpoints are known", () => {
+    const galaxy = makeGalaxyWithExplored([
+      { id: "S1", name: "Соль", explored: true },
+      { id: "S2", name: "Вега", explored: true },
+    ]);
+    const out = maskTradeNewsMargin(DESC, tradeEvent(), galaxy, makePlayer([]));
+    expect(out).toBe(DESC);
+  });
+
+  it("masks when the SOURCE endpoint is unknown (destination known)", () => {
+    const galaxy = makeGalaxyWithExplored([
+      { id: "S1", name: "Соль", explored: false }, // undiscovered source
+      { id: "S2", name: "Вега", explored: true },
+    ]);
+    const out = maskTradeNewsMargin(DESC, tradeEvent(), galaxy, makePlayer([]));
+    expect(out).not.toMatch(NUMERIC_MARGIN);
+    expect(out).toContain("маржа ~?%");
+  });
+
+  it("leaves non-trade news events untouched", () => {
+    const galaxy = makeGalaxyWithExplored([
+      { id: "S1", name: "Соль", explored: false },
+      { id: "S2", name: "Вега", explored: false },
+    ]);
+    const event = {
+      type: "MARKET_SHIFT",
+      fromSystemId: "S1",
+      toSystemId: "S2",
+    };
+    const desc =
+      "Везти Топливо из Соль в Вега больше невыгодно — акция закончилась.";
+    expect(maskTradeNewsMargin(desc, event, galaxy, makePlayer([]))).toBe(desc);
+  });
+
+  it("does not mask when no player is supplied (legacy/headless path)", () => {
+    const galaxy = makeGalaxyWithExplored([
+      { id: "S1", name: "Соль", explored: false },
+      { id: "S2", name: "Вега", explored: false },
+    ]);
+    expect(maskTradeNewsMargin(DESC, tradeEvent(), galaxy, null)).toBe(DESC);
+  });
+
+  it("passes through a trade event missing endpoint ids", () => {
+    const galaxy = makeGalaxyWithExplored([
+      { id: "S1", name: "Соль", explored: false },
+    ]);
+    const event = { type: "TRADE_OPPORTUNITY" };
+    expect(maskTradeNewsMargin(DESC, event, galaxy, makePlayer([]))).toBe(DESC);
   });
 });

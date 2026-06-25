@@ -1,6 +1,6 @@
 import type { Galaxy } from "@/domain/Galaxy";
 import type { Player } from "@/domain/Player";
-import { describeRumor } from "@/domain/RouteRumor";
+import { describeRumor, RUMOR_MARGIN_MASKED } from "@/domain/RouteRumor";
 import { isSystemKnown } from "@/systems/galaxy/systemKnown";
 
 // ── Trade-route rumors panel (pure projection, no PixiJS) ─────────────────────
@@ -56,4 +56,44 @@ export function buildRumorPanel(
     }),
     emptyText: null,
   };
+}
+
+/** A baked margin number in a news/rumor string, e.g. "маржа ~70%". */
+const NEWS_MARGIN_RE = /маржа ~\d+%/;
+
+/** Structural shape of the `TRADE_OPPORTUNITY` news event fields masking consults. */
+export interface TradeNewsLike {
+  type: string;
+  fromSystemId?: string;
+  toSystemId?: string;
+}
+
+/**
+ * Partial observability for the InfoCenter **news feed** (the «[МАРШРУТ]» rows).
+ * A `TRADE_OPPORTUNITY` event's `description` is baked unmasked at open time (and
+ * persisted), so the same margin the rumor panel hides would otherwise leak one
+ * band below. Re-mask it at render time against the player's *current* knowledge:
+ * the number («маржа ~N%» → «маржа ~?%») is hidden unless **both** endpoints are
+ * known (explored/visited). Non-trade events, events without both endpoints, and
+ * the no-`player` legacy path pass through untouched (so a margin re-appears once
+ * the player explores the system).
+ */
+export function maskTradeNewsMargin(
+  desc: string,
+  event: TradeNewsLike,
+  galaxy: Galaxy,
+  player: Player | null,
+): string {
+  if (
+    player == null ||
+    event.type !== "TRADE_OPPORTUNITY" ||
+    !event.fromSystemId ||
+    !event.toSystemId
+  ) {
+    return desc;
+  }
+  const known =
+    isSystemKnown(player, galaxy, event.fromSystemId) &&
+    isSystemKnown(player, galaxy, event.toSystemId);
+  return known ? desc : desc.replace(NEWS_MARGIN_RE, RUMOR_MARGIN_MASKED);
 }
