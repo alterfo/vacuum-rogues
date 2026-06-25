@@ -37,6 +37,57 @@ Sprint 3 Task 9; updated playtest4 A: pass `fromStationId`/`fromPlanetId` in the
 - **The pulsing heading crosshair is hidden during auto-route flight** (`PlayerShipRenderer.updateTargetIndicator` gates `targetIndicator.visible` on `!shipPhysics.isFollowingRoute()`). `isFollowingRoute()` differs from `hasPath()`: it is set by `setPath` and stays true through the final leg until arrival/`stop`/`setTarget`/`teleport`, so the whole route counts as "on a route" — the dashed line + destination marker already show the destination, making the crosshair redundant. Guarded by `src/tests/flight/routeCrosshair.test.ts`.
 - **Lead a moving target through the single solver `src/utils/intercept.ts#solveInterceptPoint`** (playtest4 C) — ONLY intercept solver (no dup). **Units trap:** solver wants px/ms; `PlanetSprite.orbitalVelocityPerDay()` returns px/**game-day**, so `planetLeadPoint` converts via `vel · getMaxSpeed() / GAME_BALANCE.pixelsPerDay`. Guarded by `src/tests/intercept.test.ts`, `src/tests/presentation/npcShipManager.test.ts`, `src/tests/presentation/planetManager.test.ts`, `src/tests/presentation/planetSpriteVelocity.test.ts`.
 
+## Ship Movement Model — Momentum / Arc-Only (no rotate-in-place)
+
+Completed `20260625-arc-movement-and-combat-fixes` (Task 1). `ShipPhysics.update`
+(`src/systems/ShipPhysics.ts`) is a **momentum / arc** model — the ship **always cruises
+forward** along `shipAngle` and steers toward the target by **turning at a bounded rate**;
+it does **NOT** slow or stop because the target is off-axis. A target behind is reached by
+**looping around**, never by pivoting on the spot.
+
+- **Speed is updated FIRST, heading only changes while moving** (`currentSpeed > 0`), so a
+  parked ship never spins in place. Accelerate to `maxSpeed` while far / on intermediate
+  legs; **only the final leg** (`path.length === 0`) decelerates to a stop within
+  `stoppingDistance` — the "last mile" eases over ≈a day. Intermediate waypoints are flown
+  **through** at speed (switched at `WAYPOINT_SWITCH`).
+- **Heading turns at `rotationSpeed*dt` max per frame** toward `atan2(dy,dx)`; forward
+  travel is `currentSpeed*dt`, so the path curves with a **minimum turn radius of
+  `currentSpeed / rotationSpeed` (≈19px at cruise)** — an arc, never a pivot.
+- **Do NOT reintroduce the old alignment-gated speed logic** (the deleted model dropped
+  `currentSpeed` toward 0 when `|angleDiff| ≥ π/3` and scaled position by
+  `cos(angleDiff)`, so an off-axis target made the ship stop and pivot). That read as
+  twitchy/unnatural and is exactly what this replaced.
+- Preserved: final-leg deceleration (stop AT the destination), waypoint fly-through,
+  sun-avoidance pathing, straight-line travel timing. Pure-physics change — no domain /
+  schema / save impact. Guarded by `src/tests/shipPhysics.test.ts` (off-axis/behind target
+  keeps speed > 0 with turn-rate-bounded heading changes; min turn radius bounded; final
+  approach still stops; straight-line timing unchanged).
+
+## NPC Clickability Invariant (`assertClickable`)
+
+Completed `20260625-arc-movement-and-combat-fixes` (Task 2). The "NPC ships stop responding
+to clicks mid-fight" report had two root causes in `NpcShipSprite`: a non-finite/≤0
+`cameraZoom` made `Math.max(28, 40/NaN) → NaN` (a hit circle that `Circle.contains` always
+rejects — permanently mouse-dead), and `updateHitArea`/`restoreInteractivity` never
+re-asserted `eventMode="static"` on a live ship, so a combat/cursor clobber was never healed.
+
+- **`assertClickable()` is the single clickability invariant for a live ship**
+  (not departing/gone): it re-asserts `eventMode="static"` **and** a finite circular
+  `hitArea` of `Math.max(MIN_HIT_RADIUS_PX, HIT_RADIUS_PX / lastHitZoom)`
+  (`MIN_HIT_RADIUS_PX = 28`, `HIT_RADIUS_PX = 40` world px). **Both** `setClickHandler`,
+  `updateHitArea`, and `restoreInteractivity` route through it — do not re-set `eventMode`
+  / `hitArea` inline at a call site.
+- **The finite-zoom guard never collapses the circle:** `updateHitArea(cameraZoom)` only
+  overwrites `lastHitZoom` when the zoom is **finite and positive**; a transient NaN/0
+  transform is ignored and the last good zoom is kept, so the hit-area can never shrink to
+  "never hits". `lastHitZoom` seeds to 1.
+- The radius floor (28 world px) keeps the ship clickable at high zoom; re-asserting
+  `eventMode` on every camera transform / turn-end heals any combat or cursor-switch
+  clobber. Per the repo rule, hit geometry is verified by a **real-pointer E2E**
+  (`rootBoundary.hitTest` over an engaged aggressor at three zoom levels returns the NPC
+  container — `playtest-regression.spec.ts`), not just unit assertions; the unit invariants
+  live in `src/tests/presentation/npcShipClickable.test.ts` (two proven red-on-legacy).
+
 ## NPC Purposeful Behavior Conventions
 
 Completed `20260612-npc-purposeful-behavior`:

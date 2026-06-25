@@ -73,6 +73,21 @@ each `destroy()` must leave `gameLayer.children.length === 0`; dispose `BlurFilt
 `destroy()`. **Line-count guard: `SpaceFlightScene.ts` < 1900 lines**
 (`src/tests/flight/moduleContracts.test.ts`).
 
+**Ship movement is momentum / arc-only (no rotate-in-place).** `ShipPhysics.update`
+(`src/systems/ShipPhysics.ts`) always cruises forward along `shipAngle` and steers toward
+the target by turning at a bounded `rotationSpeed` **only while moving** — it never slows or
+pivots because the target is off-axis (a target behind is reached by arcing around). This
+gives a minimum turn radius of `currentSpeed / rotationSpeed` (≈19px at cruise); only the
+final leg decelerates to a stop. Do NOT re-add alignment-gated speed (the old stop-and-pivot
+model). Detail + the no-regression contract in `playtest-traps.md`.
+
+**NPC clickability invariant: `NpcShipSprite.assertClickable()`.** A live (non-departing/gone)
+ship is always `eventMode="static"` with a finite hit-circle ≥ 28 world px;
+`setClickHandler`/`updateHitArea`/`restoreInteractivity` all route through it (never set
+`eventMode`/`hitArea` inline), and a NaN/0 camera zoom is ignored so a transient bad transform
+can't collapse the circle and leave a ship mouse-dead in combat. Detail in `playtest-traps.md`.
+
 Historical playtest bugs and detailed conventions (re-entry spawn, NPC spawn states, route
-dashing, sun clearance, pause-finishes-day, font-scale ship pos, NPC purposeful behavior)
-live in `playtest-traps.md` — read it before touching those areas.
+dashing, sun clearance, pause-finishes-day, font-scale ship pos, NPC purposeful behavior,
+ship movement model, NPC clickability invariant) live in `playtest-traps.md` — read it before
+touching those areas.

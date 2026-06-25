@@ -151,8 +151,13 @@ Three flight/combat/UI fixes the player reported together:
 **Files:**
 - Modify: `src/presentation/flight/playtest-traps.md` / `flight/CLAUDE.md`
 
-- [ ] Document the momentum/arc movement model (no in-place rotation; min turn
+- [x] Document the momentum/arc movement model (no in-place rotation; min turn
       radius), the NPC hit-area invariant, and the hangar button spacing.
+      (Movement model + NPC `assertClickable` invariant added to
+      `flight/playtest-traps.md` as two new sections, with discovery pointers in
+      `flight/CLAUDE.md`; the warehouse-row button-spacing convention added to the
+      presentation-layer `src/presentation/CLAUDE.md` where `HangarPanel` is
+      documented — the hangar is a shared UI component, not a flight module.)
 
 ## Technical Details
 - Arc motion is `position += heading*speed*dt` with `heading` turned at a bounded

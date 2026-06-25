@@ -42,6 +42,15 @@ either entry point; the per-slot micromodule-apply modal is the shared
 fully fitted (weapon/grapple/engine, empty hold — see `GameEngine.starterLoadout()`), so the
 hangar's job is swapping/upgrading, not first-time assembly.
 
+**Warehouse-row action buttons need vertical clearance** (`HangarPanel.renderWarehouseAndCargo`,
+`20260625-arc-movement-and-combat-fixes` Task 3). The stacked «Установить» (install) and
+«Продать» (sell) actions in a СКЛАД row once sat 13 px apart — inside the ~14 px text height —
+so their hit boxes overlapped and got mis-tapped. Each row is 40 px tall with «Установить» at
+`y+12` and «Продать» at `y+32` (a 20 px centre gap, clear of the text height); the row step is
+48 px and the clip guard `y+42`. Keep the centre gap **greater than the button text height** when
+re-laying these out. Guarded by `src/tests/presentation/HangarPanel.test.ts` (asserts the gap
+exceeds the button height and a 16 px minimum).
+
 Three most-hit PixiJS 8 traps:
 - **`eventMode='none'` on Text over clickable areas** — Text defaults to `'auto'` and blocks
   clicks underneath; set `'none'` on labels so clicks pass through.
