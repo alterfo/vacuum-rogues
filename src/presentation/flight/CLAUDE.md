@@ -147,7 +147,11 @@ hover handler (the same verdict the land-attempt uses) and threads the reason th
 which appends a red line. The wording comes from the **shared** `landingDenialMessage(reason)`
 (`systems/galaxy/landingAccess.ts`) — single source, so the hover and land-attempt show the
 *same* text (Overmind / pirate-rep). The line is additive and absent when landing is allowed;
-presentation-only, no domain/schema/save change.
+presentation-only, no domain/schema/save change. **When a denial is present the builder also
+names the live occupier (Овермайнд / Пираты) on the controlling-faction + relation lines** —
+capture is tracked **per-system on the galaxy**, not on `planet.capturedBy` (never written in
+production), so without this the controller line would name the stale benign system owner and
+contradict the red denial line.
 
 Historical playtest bugs and detailed conventions (re-entry spawn, NPC spawn states, route
 dashing, sun clearance, pause-finishes-day, font-scale ship pos, NPC purposeful behavior,

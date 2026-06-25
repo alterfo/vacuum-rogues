@@ -2,6 +2,7 @@ import { Faction } from "@/types/faction";
 import type { Planet } from "@/domain/Planet";
 import {
   landingDenialMessage,
+  PIRATE_FACTION_ID,
   type LandingDenialReason,
 } from "@/systems/galaxy/landingAccess";
 
@@ -29,6 +30,20 @@ export const FACTION_COLOR: Record<Faction, number> = {
 
 /** Hostile factions that "capture" planets — flagged in red on the tooltip. */
 const CAPTURE_FACTIONS: ReadonlySet<Faction> = new Set([Faction.OVERMIND]);
+
+/**
+ * Display name + colour for a captured-planet occupier that is **not** a
+ * `Faction` enum member. Pirates are an NPC role keyed by {@link PIRATE_FACTION_ID}
+ * (not a `Faction`), so the `FACTION_*` maps above don't carry them; the Overmind
+ * *is* a real `Faction` and resolves through those maps. Used to keep the
+ * controlling-faction line consistent with a galaxy-derived landing denial.
+ */
+const OCCUPIER_DISPLAY_NAME: Record<string, string> = {
+  [PIRATE_FACTION_ID]: "Пираты",
+};
+const OCCUPIER_COLOR: Record<string, number> = {
+  [PIRATE_FACTION_ID]: 0xff4444,
+};
 
 export function reputationLabel(rep: number): string {
   if (rep >= 50) return "Союзник";
@@ -63,13 +78,15 @@ export interface TooltipLine {
  *      flying there. Reuses {@link landingDenialMessage} so the hover and the
  *      land-attempt show the *same* wording (single source — no second copy).
  *
- * The controlling faction is the captor when the planet is captured, otherwise
- * the system's owning faction. Reputation is looked up against the controlling
- * faction so the relation line tracks who actually holds the planet.
+ * The controlling faction is the live occupier when `landingDenial` is set
+ * (Overmind / pirates), else the captor when the planet is captured, else the
+ * system's owning faction. Reputation is looked up against the controlling
+ * faction so the relation line tracks who actually holds the planet — and so
+ * the controller/relation lines never contradict the denial line below.
  *
  * `landingDenial` is the live access verdict (Overmind / pirate-rep), computed
  * by the caller from current galaxy/player state — `null`/omitted when landing
- * is allowed, so the line is additive and absent on a landable planet.
+ * is allowed, so the denial line is additive and absent on a landable planet.
  */
 export function buildPlanetTooltipLines(
   planet: Pick<Planet, "name" | "isHabitable" | "capturedBy">,
@@ -90,11 +107,31 @@ export function buildPlanetTooltipLines(
   );
 
   // 3. Controlling faction (capture-aware) name in faction colour.
-  const controllingFaction =
-    (planet.capturedBy as Faction | null | undefined) ?? systemFaction;
+  //
+  // A live landing denial means the system is occupied (Overmind / pirates),
+  // resolved by the caller from **per-system galaxy state** — NOT
+  // `planet.capturedBy`, which is never written in production. Prefer that
+  // occupier so the controller (and the relation line below) name the real
+  // holder instead of the stale benign system owner, which would otherwise
+  // contradict the red denial line (#6).
+  const occupier: string | null =
+    landingDenial === "overmind"
+      ? Faction.OVERMIND
+      : landingDenial === "pirate-rep"
+        ? PIRATE_FACTION_ID
+        : null;
+  const controllingFaction = (occupier ??
+    (planet.capturedBy as Faction | null | undefined) ??
+    systemFaction) as Faction;
   lines.push({
-    text: FACTION_DISPLAY_NAME[controllingFaction] ?? controllingFaction,
-    color: FACTION_COLOR[controllingFaction] ?? 0x999999,
+    text:
+      FACTION_DISPLAY_NAME[controllingFaction] ??
+      OCCUPIER_DISPLAY_NAME[controllingFaction] ??
+      controllingFaction,
+    color:
+      FACTION_COLOR[controllingFaction] ??
+      OCCUPIER_COLOR[controllingFaction] ??
+      0x999999,
   });
 
   // 4. Player relation — only meaningful on inhabited planets.

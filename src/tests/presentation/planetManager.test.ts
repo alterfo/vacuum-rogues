@@ -4,7 +4,7 @@
  * These exercise the module directly with mocked PlanetSprite/PlanetInfoPanel so
  * no WebGL/texture context is needed.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 
 vi.mock("pixi.js", () => {
   const makeContainer = () => ({
@@ -184,6 +184,93 @@ describe("PlanetManager", () => {
     const empty = makeHarness([]);
     empty.manager.initialize();
     expect(empty.manager.planetSprites.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The hover tooltip surfaces the landing-denial reason. The seam under test is
+// the closure PlanetManager hands to PlanetSprite.setTooltipHandlers — it must
+// thread this.landingDenial(p) into deps.showPlanetTooltip's 5th arg. Capture
+// (overmind / pirate) is tracked per-system on the galaxy, NOT on
+// planet.capturedBy, so this can only be verified through the wired manager.
+// ---------------------------------------------------------------------------
+describe("PlanetManager hover tooltip threads the landing denial", () => {
+  function makeHoverHarness(opts: {
+    overmind?: boolean;
+    pirate?: boolean;
+    rep?: number;
+  }): { manager: PlanetManager; showPlanetTooltip: Mock } {
+    const renderer = makeMockRenderer();
+    const showPlanetTooltip = vi.fn();
+    const planet = makePlanet("pa");
+    const gameEngine = {
+      player: {
+        currentSystemId: "sys_a",
+        getReputation: () => opts.rep ?? 0,
+      },
+      galaxy: {
+        gameDays: 0,
+        systems: [
+          {
+            id: "sys_a",
+            planets: [planet],
+            stations: [],
+            ownerFaction: "INDEPENDENT",
+          },
+        ],
+        isOvermindSystem: (id: string) => !!opts.overmind && id === "sys_a",
+        isPirateSystem: (id: string) => !!opts.pirate && id === "sys_a",
+      },
+      questManager: { getActiveQuestLocations: () => [] },
+    } as unknown as GameEngine;
+    const deps: PlanetManagerDeps = {
+      getShipPhysics: () => ({ shipX: 0, shipY: 0 }) as unknown as ShipPhysics,
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => false,
+      getOrbitalDay: () => 0,
+      showPlanetTooltip,
+      hideTooltip: () => {},
+      clearFollow: () => {},
+    };
+    const manager = new PlanetManager(
+      renderer,
+      gameEngine,
+      renderer.gameLayer,
+      renderer.uiLayer,
+      deps,
+    );
+    return { manager, showPlanetTooltip };
+  }
+
+  /** Drive the onOver closure the manager registered for the first sprite. */
+  function hoverFirstPlanet(manager: PlanetManager): void {
+    manager.initialize();
+    const sprite = manager.planetSprites[0];
+    const onOver = (sprite.setTooltipHandlers as unknown as Mock).mock
+      .calls[0][0] as (p: Planet, sx: number, sy: number) => void;
+    onOver(sprite.planet, 10, 20);
+  }
+
+  it("passes 'overmind' as the 5th arg in an Overmind-held system", () => {
+    const { manager, showPlanetTooltip } = makeHoverHarness({ overmind: true });
+    hoverFirstPlanet(manager);
+    expect(showPlanetTooltip).toHaveBeenCalledTimes(1);
+    expect(showPlanetTooltip.mock.calls[0][4]).toBe("overmind");
+  });
+
+  it("passes 'pirate-rep' when a pirate system is held without good rep", () => {
+    const { manager, showPlanetTooltip } = makeHoverHarness({
+      pirate: true,
+      rep: -10,
+    });
+    hoverFirstPlanet(manager);
+    expect(showPlanetTooltip.mock.calls[0][4]).toBe("pirate-rep");
+  });
+
+  it("passes null when landing is allowed (no capture)", () => {
+    const { manager, showPlanetTooltip } = makeHoverHarness({});
+    hoverFirstPlanet(manager);
+    expect(showPlanetTooltip.mock.calls[0][4]).toBeNull();
   });
 });
 

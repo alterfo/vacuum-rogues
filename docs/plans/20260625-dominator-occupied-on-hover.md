@@ -58,10 +58,12 @@ player can decide before flying there.
 **Files:**
 - Modify: (none — verification only)
 
-- [x] `detect_changes({scope:"compare", base_ref:"master"})` — scope verified via
-      the feature commit (a9ecfd1) `--stat`: only PlanetManager.ts, FlightHud.ts
-      (HUD tooltip), the new shared `util/planetTooltip.ts` content builder, and
-      SpaceFlightScene.ts wiring (+ the new test) — exactly the planned seam.
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — source scope: only
+      PlanetManager.ts, FlightHud.ts (HUD tooltip), the existing shared
+      `utils/planetTooltip.ts` content builder (extended with the optional
+      `landingDenial` param + the red occupied line), and SpaceFlightScene.ts
+      wiring (+ the new test) — the planned seam. (The feature commit a9ecfd1 also
+      swept in unrelated gitnexus skill / AGENTS.md doc churn — doc-only, no code.)
 - [x] full unit suite green (3059 passed); `npm run test:playtest` green (67
       passed); `npm run lint` clean (0 errors); `npm run build` ok.
 

@@ -9,6 +9,14 @@ import {
 } from "@/utils/planetTooltip";
 import { landingDenialMessage } from "@/systems/galaxy/landingAccess";
 
+/** True when no tooltip line carries either landing-denial message. */
+const hasNoDenialLine = (lines: { text: string }[]): boolean =>
+  !lines.some(
+    (l) =>
+      l.text === landingDenialMessage("overmind") ||
+      l.text === landingDenialMessage("pirate-rep"),
+  );
+
 // Minimal Market stub so Planet can be constructed without real infrastructure.
 const stubMarket = {
   goods: [],
@@ -185,11 +193,19 @@ describe("buildPlanetTooltipLines", () => {
       repAlways(0),
       null,
     );
-    expect(omitted).toHaveLength(4);
-    expect(explicitNull).toHaveLength(4);
-    expect(
-      explicitNull.some((l) => l.text === landingDenialMessage("overmind")),
-    ).toBe(false);
+    // Same shape with the arg omitted vs. an explicit null, and neither carries
+    // a denial line (content check — not just a length proxy).
+    const baseline = buildPlanetTooltipLines(
+      planet,
+      Faction.OUTLANDERS,
+      repAlways(0),
+    ).length;
+    expect(omitted).toHaveLength(baseline);
+    expect(explicitNull).toHaveLength(baseline);
+    expect(hasNoDenialLine(omitted)).toBe(true);
+    expect(hasNoDenialLine(explicitNull)).toBe(true);
+    // Controller line still the system owner when landing is allowed.
+    expect(omitted[2].text).toBe(FACTION_DISPLAY_NAME[Faction.OUTLANDERS]);
   });
 
   it("appends the overmind denial line (red) using the shared wording", () => {
@@ -216,5 +232,54 @@ describe("buildPlanetTooltipLines", () => {
     const denial = lines[lines.length - 1];
     expect(denial.text).toBe(landingDenialMessage("pirate-rep"));
     expect(denial.color).toBe(0xff4444);
+  });
+
+  // Production scenario: capture is tracked per-system on the galaxy, so the
+  // planet's own `capturedBy` stays null while `landingDenial` says "overmind".
+  // The controller/relation lines must name the Overmind, not the benign system
+  // owner — otherwise the tooltip contradicts its own denial line.
+  it("names the Overmind as controller (not the system owner) when overmind-denied", () => {
+    const planet = makePlanet({ capturedBy: null });
+    const lines = buildPlanetTooltipLines(
+      planet,
+      Faction.OUTLANDERS,
+      repAlways(0),
+      "overmind",
+    );
+    expect(lines[2].text).toBe(FACTION_DISPLAY_NAME[Faction.OVERMIND]);
+    expect(lines[2].color).toBe(FACTION_COLOR[Faction.OVERMIND]);
+    expect(lines[2].text).not.toBe(FACTION_DISPLAY_NAME[Faction.OUTLANDERS]);
+  });
+
+  it("looks reputation up against the Overmind (not the system owner) when overmind-denied", () => {
+    const planet = makePlanet({ capturedBy: null });
+    const seen: Faction[] = [];
+    buildPlanetTooltipLines(
+      planet,
+      Faction.OUTLANDERS,
+      (f) => {
+        seen.push(f);
+        return 0;
+      },
+      "overmind",
+    );
+    expect(seen).toContain(Faction.OVERMIND);
+    expect(seen).not.toContain(Faction.OUTLANDERS);
+  });
+
+  it("names the pirates as controller (red) when pirate-rep-denied", () => {
+    const planet = makePlanet({ capturedBy: null });
+    const lines = buildPlanetTooltipLines(
+      planet,
+      Faction.OUTLANDERS,
+      repAlways(0),
+      "pirate-rep",
+    );
+    expect(lines[2].text).toBe("Пираты");
+    expect(lines[2].text).not.toBe(FACTION_DISPLAY_NAME[Faction.OUTLANDERS]);
+    // Denial line is still appended last.
+    expect(lines[lines.length - 1].text).toBe(
+      landingDenialMessage("pirate-rep"),
+    );
   });
 });
