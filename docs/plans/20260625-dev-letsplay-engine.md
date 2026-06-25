@@ -91,13 +91,13 @@ supersedes).
 - Create: `src/tests/playtest/letsplay/letsplay.run.ts` (+ a `letsplay` npm script)
 - Create: `src/tests/playtest/letsplay/letsplaySession.test.ts`
 
-- [ ] A runner that plays K sessions of N steps with the `HeuristicPolicy`, writing a
+- [x] A runner that plays K sessions of N steps with the `HeuristicPolicy`, writing a
       transcript + a **failure report** (every logged/thrown error or always-actionable
       invariant violation), exit-non-zero on failures (a dev bug-finder). Wire an
       `npm run letsplay` that runs it via vitest (dev-only, like `test:playtest`).
-- [ ] write a session test: a short real-engine session completes with zero
+- [x] write a session test: a short real-engine session completes with zero
       errors/invariant violations.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 4: Enforce dev-only (never in prod)
 **Files:**

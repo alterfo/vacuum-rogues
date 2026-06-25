@@ -51,3 +51,5 @@ coverage/
 reference_help/
 # Letsplay discovery screenshots (regenerated every run, inspected manually)
 e2e/screenshots/letsplay/
+# Letsplay engine run artifacts (transcript + failure report, regenerated each run)
+.letsplay/
