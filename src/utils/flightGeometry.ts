@@ -594,3 +594,87 @@ export function shouldReaim(
     Math.hypot(freshLead.x - endpoint.x, freshLead.y - endpoint.y) > threshold
   );
 }
+
+// ---------------------------------------------------------------------------
+// Smooth chase steering (auto-follow / combat-pursuit anti-stutter)
+// ---------------------------------------------------------------------------
+
+/** Tuning for {@link smoothLeadPoint}. */
+export interface LeadSmootherOptions {
+  /**
+   * EMA weight in (0,1]: the fraction of the gap to the fresh `raw` lead closed
+   * per update. Smaller = heavier smoothing (more lag, less jitter).
+   */
+  alpha: number;
+  /**
+   * Hard cap (world px) on how far the smoothed point may move in a single
+   * update — bounds the per-frame aim delta even when a noisy target-velocity
+   * estimate whips `raw` a long way.
+   */
+  maxStepPx: number;
+}
+
+/**
+ * Smooth a fresh (noisy) intercept/lead point toward its previous smoothed
+ * value: an EMA step of `alpha` toward `raw`, then clamped so the point never
+ * moves more than `maxStepPx` in one update. With no `previous` value the raw
+ * point is adopted verbatim (first frame of a chase).
+ *
+ * Why: the live chase derives the target's velocity from its *rendered* heading
+ * (`cos/sin(rotation) × npcSpeed`), which wobbles frame-to-frame on an arcing
+ * NPC; `solveInterceptPoint` multiplies that wobble by the (large) time to
+ * intercept, so the raw lead jumps tens of px per frame and the aim oscillates.
+ * Blending toward the previous value removes the whip while still tracking a
+ * steadily-moving target (the smoothed point converges monotonically — it never
+ * overshoots, since `alpha ≤ 1` and the clamp only ever shortens the step).
+ */
+export function smoothLeadPoint(
+  previous: Point | null,
+  raw: Point,
+  opts: LeadSmootherOptions,
+): Point {
+  if (!previous) return { x: raw.x, y: raw.y };
+  const alpha = Math.max(0, Math.min(1, opts.alpha));
+  let dx = (raw.x - previous.x) * alpha;
+  let dy = (raw.y - previous.y) * alpha;
+  const step = Math.hypot(dx, dy);
+  if (step > opts.maxStepPx && step > 1e-9) {
+    const k = opts.maxStepPx / step;
+    dx *= k;
+    dy *= k;
+  }
+  return { x: previous.x + dx, y: previous.y + dy };
+}
+
+/** State the re-aim gate ({@link shouldReplotRoute}) carries between frames. */
+export interface ReaimGateState {
+  /** The route endpoint the ship is currently steering toward. */
+  endpoint: Point;
+  /** Timestamp (ms) of the last curved-route re-plot. */
+  lastReplotMs: number;
+}
+
+/**
+ * Decide whether a moving-target chase should re-plot its *curved* route now —
+ * the hysteresis that keeps continuous turn-rate steering from thrashing the
+ * spline every frame. Re-plots only when BOTH:
+ *   1. at least `minIntervalMs` has elapsed since the last re-plot (time
+ *      hysteresis — even a large drift won't re-plot more than once per
+ *      interval), and
+ *   2. the fresh lead has drifted past `thresholdPx` from the current endpoint
+ *      (the existing {@link shouldReaim} distance gate).
+ *
+ * Sub-threshold jitter therefore never re-plots, and a fast-manoeuvring target
+ * re-plots at most once per interval — the continuous heading nudge (driven by
+ * {@link smoothLeadPoint}) handles everything in between.
+ */
+export function shouldReplotRoute(
+  state: ReaimGateState,
+  freshLead: Point,
+  thresholdPx: number,
+  nowMs: number,
+  minIntervalMs: number,
+): boolean {
+  if (nowMs - state.lastReplotMs < minIntervalMs) return false;
+  return shouldReaim(state.endpoint, freshLead, thresholdPx);
+}

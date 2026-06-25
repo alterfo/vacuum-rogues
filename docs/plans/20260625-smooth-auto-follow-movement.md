@@ -90,15 +90,22 @@ jitter doesn't re-plot at all.
 - Modify: `src/utils/flightGeometry.ts` (or new `chaseSteering.ts`)
 - Create: `src/tests/flight/chaseSteering.test.ts`
 
-- [ ] Add a pure **lead-point smoother**: blend the raw `npcLeadPoint`/
+- [x] Add a pure **lead-point smoother**: blend the raw `npcLeadPoint`/
       `solveInterceptPoint` toward its previous value (EMA or max-step clamp) so a
       noisy per-frame target velocity can't whip the aim around.
-- [ ] Add a pure **re-aim gate** combining `shouldReaim`'s distance threshold with
+      (`flightGeometry.ts` `smoothLeadPoint(previous, raw, {alpha, maxStepPx})`:
+      EMA step then hard max-step clamp; adopts raw verbatim on the first frame.)
+- [x] Add a pure **re-aim gate** combining `shouldReaim`'s distance threshold with
       a minimum re-plot interval (hysteresis), so sub-threshold jitter never
-      re-plots the route.
-- [ ] write tests: smoother converges monotonically + bounds per-frame aim delta
+      re-plots the route. (`flightGeometry.ts` `shouldReplotRoute(state, freshLead,
+      thresholdPx, nowMs, minIntervalMs)` — requires BOTH the elapsed interval AND
+      the `shouldReaim` distance drift.)
+- [x] write tests: smoother converges monotonically + bounds per-frame aim delta
       for a steady target; hysteresis blocks under-threshold / allows over-threshold.
-- [ ] run tests — green.
+      (`src/tests/flight/chaseSteering.test.ts`, 8 tests: monotonic convergence,
+      per-frame delta ≤ maxStepPx ≤ SMOOTH_BOUND_PX on the noisy steady chase,
+      sub-threshold/time-window blocks, ≥-interval re-plot spacing.)
+- [x] run tests — green.
 
 ### Task 3: Continuous turn-rate steering for moving targets
 **Files:**
