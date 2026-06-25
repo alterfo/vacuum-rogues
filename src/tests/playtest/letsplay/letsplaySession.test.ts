@@ -90,6 +90,11 @@ describe("checkInvariants (pure net)", () => {
       }),
     );
     expect(over.map((x) => x.invariant)).toContain("hull-within-max");
+
+    const badCredits = checkInvariants(
+      obs({ player: { ...obs({}).player!, credits: Number.NaN } }),
+    );
+    expect(badCredits.map((x) => x.invariant)).toContain("credits-finite");
   });
 });
 

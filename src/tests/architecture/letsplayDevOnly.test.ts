@@ -53,11 +53,17 @@ function productionTsFiles(): string[] {
  */
 function staticSpecifiers(source: string): string[] {
   const specs: string[] = [];
-  const re = /(?:^|\n)\s*(?:import|export)\b[^;\n]*?from\s*["']([^"']+)["']/g;
+  // `import ... from "x"` / `export ... from "x"`. The clause between the keyword
+  // and `from` routinely spans multiple lines (named imports one-per-line — the
+  // codebase's default style), so the body class must include newlines. It is
+  // bounded by the statement terminator `;` (or the next statement) instead of
+  // `\n`, otherwise a multi-line import slips past the guard entirely.
+  const re =
+    /(?:^|[\n;])\s*(?:import|export)\b[^;]*?\bfrom\s*["']([^"']+)["']/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) specs.push(m[1]);
   // bare side-effect imports: import "x";
-  const bare = /(?:^|\n)\s*import\s*["']([^"']+)["']/g;
+  const bare = /(?:^|[\n;])\s*import\s*["']([^"']+)["']/g;
   while ((m = bare.exec(source)) !== null) specs.push(m[1]);
   return specs;
 }
@@ -106,6 +112,32 @@ describe("letsplay engine is dev-only (never in prod)", () => {
       offenders,
       `The neural policy must load ONNX via a dev-only dynamic import(); ` +
         `a static import would add a bundleable edge:\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("staticSpecifiers catches multi-line imports (no false-green hole)", () => {
+    // Regression: the body between the keyword and `from` spans multiple lines
+    // in the codebase's default named-import style. An earlier matcher excluded
+    // newlines (`[^;\n]`), so a multi-line `import … from "onnxruntime-web"` or a
+    // multi-line import of a letsplay module slipped past BOTH guards while they
+    // stayed green. These must all be detected; the dynamic import must not.
+    expect(
+      staticSpecifiers(
+        `import {\n  InferenceSession,\n  Tensor,\n} from "onnxruntime-web";`,
+      ),
+    ).toContain("onnxruntime-web");
+    expect(
+      staticSpecifiers(
+        `export {\n  observe,\n} from "@/tests/playtest/letsplay/observe";`,
+      ),
+    ).toContain("@/tests/playtest/letsplay/observe");
+    // Single-line static import still caught.
+    expect(staticSpecifiers(`import x from "onnxruntime-web";`)).toContain(
+      "onnxruntime-web",
+    );
+    // Dev-only dynamic import is still (correctly) ignored.
+    expect(
+      staticSpecifiers(`const ort = await import("onnxruntime-web");`),
     ).toEqual([]);
   });
 

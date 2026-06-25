@@ -20,6 +20,8 @@ npm run test:e2e            # Run Playwright E2E tests (starts dev server on por
 npm run test:e2e:headed     # E2E with visible browser
 npm run test:e2e:debug      # E2E in debug mode
 npm run test:e2e:regression # Run regression playtest suite only (fast gate, < 60 s, for CI)
+npm run test:playtest       # Real-engine playtest suite (pre-push gate, ~3 s)
+npm run letsplay            # Dev-only letsplay bug-finder — an agent plays the real engine
 ```
 
 **Run single test file:** `npm test -- --run src/tests/pathfinding.test.ts`

@@ -47,8 +47,10 @@ npm run test:playtest   # includes the fast in-suite letsplay session test (~3 s
 ```
 
 `letsplay.run.ts` exposes `runLetsplay({ sessions, steps, seedPrefix, policy })` — plays
-**K sessions of N steps**, each on a freshly-booted real engine (independent and
-reproducible from `"<seedPrefix>-<i>"`). It returns a `LetsplayReport` whose `failures`
+**K sessions of N steps** (defaults `sessions: 3`, `steps: 40`, `seedPrefix: "LETSPLAY"`),
+each on a freshly-booted real engine (independent and reproducible from
+`"<seedPrefix>-<i>"`). `npm run letsplay` drives this with `K`/`N` taken from the
+`LETSPLAY_SESSIONS` / `LETSPLAY_STEPS` env vars (defaulting to the same `3 × 40`). It returns a `LetsplayReport` whose `failures`
 flatten **every** harness-sink error **and** every always-actionable-invariant breach
 (`checkInvariants`: a non-terminal scene must offer a non-`wait` action; hull is finite
 in `[0, maxHull]`; credits is finite). `ok === failures.length === 0` is the clean-run
