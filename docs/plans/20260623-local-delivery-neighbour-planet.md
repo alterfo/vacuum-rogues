@@ -61,20 +61,22 @@ neighbour with the cargo, and single-planet systems fall back to a different que
 - Modify (fixtures): `src/tests/quests/localDeliveryQuest.test.ts`, `localDeliveryReward.test.ts`
 - Create: `src/tests/quests/localDeliveryNeighbour.test.ts`
 
-- [ ] Give `pickTargetPlanet` an `excludeId` (the issuer planet): prefer a
+- [x] Give `pickTargetPlanet` an `excludeId` (the issuer planet): prefer a
       different habitable planet, else any other planet, else `null` (no neighbour).
-- [ ] In `buildLocalDelivery`, pass the issuer `planetId` as `excludeId` and set
+- [x] In `buildLocalDelivery`, pass the issuer `planetId` as `excludeId` and set
       `targetPlanetId` to the resulting neighbour; update the copy to name the
       neighbour ("доставить … на {neighbour} в этой же системе, без прыжков").
-- [ ] In the board builder, when `reachable.length === 0` **and** the origin
+- [x] In the board builder, when `reachable.length === 0` **and** the origin
       system has `< 2` planets, build a **text quest** instead of a local delivery
-      (no same-planet contract is ever emitted).
-- [ ] Update the existing single-planet fixtures to 2 planets so they still
+      (no same-planet contract is ever emitted). (Unknown/null origin — tests only —
+      keeps the legacy system-level local delivery.)
+- [x] Update the existing single-planet fixtures to 2 planets so they still
       produce a local delivery; preserve their original assertions.
-- [ ] write tests: multi-planet system → `targetPlanetId` ≠ issuer (habitable
+      (`localDeliveryQuest`/`localDeliveryReward`/`localDeliveryProfit`.)
+- [x] write tests: multi-planet system → `targetPlanetId` ≠ issuer (habitable
       neighbour preferred); single-planet isolated system → the slot is a text
-      quest, not «Местный подряд».
-- [ ] run touched tests — green.
+      quest, not «Местный подряд». (`localDeliveryNeighbour.test.ts`.)
+- [x] run touched tests — green.
 
 ### Task 2: Carry the target planet on the accepted Quest (lockstep)
 **Files:**

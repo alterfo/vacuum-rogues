@@ -7,13 +7,21 @@ import { generateQuestBoard } from "@/systems/quests/QuestGenerator";
  * which only fires when no other system is reachable. An isolated single-system
  * galaxy (no connections) makes reachable.length === 0, so every non-text board
  * slot falls back to the local delivery quest.
+ *
+ * Feature update (neighbour delivery): the contract now targets a *different*
+ * planet in the same system, so the origin needs ≥2 planets — a single-planet
+ * system falls back to a text quest. The fixture grows a 2nd planet (issuer
+ * ISO_p1 + neighbour ISO_p2) so a local delivery still generates here.
  */
 function isolatedSystem(): StarSystem {
   return {
     id: "ISO",
     name: "Захолустье",
     connections: [],
-    planets: [{ id: "ISO_p1", isHabitable: true }],
+    planets: [
+      { id: "ISO_p1", name: "Столица", isHabitable: true },
+      { id: "ISO_p2", name: "Соседка", isHabitable: true },
+    ],
   } as unknown as StarSystem;
 }
 
@@ -74,11 +82,17 @@ describe("Местный подряд (local delivery) quest copy", () => {
     // in-system destination planet by name — and that it needs no jumps. Without
     // this assertion a regression dropping the destination (the exact "can't tell
     // where to deliver" bug this plan fixes) would ship green.
+    //
+    // The destination is now a *neighbour* (≠ issuer planet ISO_p1), so the named
+    // planet "Дальний Хутор" is the second planet the player must fly to.
     const system = {
       id: "ISO",
       name: "Захолустье",
       connections: [],
-      planets: [{ id: "ISO_p1", name: "Дальний Хутор", isHabitable: true }],
+      planets: [
+        { id: "ISO_p1", name: "Столица", isHabitable: true },
+        { id: "ISO_p2", name: "Дальний Хутор", isHabitable: true },
+      ],
     } as unknown as StarSystem;
 
     const board = generateQuestBoard({

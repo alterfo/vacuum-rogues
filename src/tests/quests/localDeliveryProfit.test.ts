@@ -18,6 +18,11 @@ import type { ResourceType } from "@/types";
  * buildLocalDelivery only fires as the fallback when no other system is reachable
  * (reachable.length === 0). An isolated single-system galaxy makes every non-text
  * board slot a local delivery, so a sweep of seeds covers all five cargo types.
+ *
+ * Feature update (neighbour delivery): the contract targets a *different* planet
+ * in the same system, so the origin needs ≥2 planets (a single-planet origin now
+ * falls back to a text quest). The fixture grows a 2nd planet so a local delivery
+ * still generates — the profitability guarantee under test is unchanged.
  */
 const WORST_CASE_BUY_MARKUP = 3.0;
 
@@ -26,7 +31,10 @@ function isolatedSystem(): StarSystem {
     id: "ISO",
     name: "Захолустье",
     connections: [],
-    planets: [{ id: "ISO_p1", isHabitable: true }],
+    planets: [
+      { id: "ISO_p1", isHabitable: true },
+      { id: "ISO_p2", isHabitable: true },
+    ],
   } as unknown as StarSystem;
 }
 

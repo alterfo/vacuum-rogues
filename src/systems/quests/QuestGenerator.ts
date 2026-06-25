@@ -433,8 +433,14 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     const isText = rng.next() < textRatio;
 
     if (isText || reachable.length === 0) {
+      // A «Местный подряд» local delivery now goes to a *different* planet in the
+      // same system, so it needs a real neighbour. A KNOWN single-planet origin
+      // has none — emit a text quest instead of a degenerate same-planet contract.
+      // An unknown origin (null, only in tests) keeps the legacy local delivery
+      // with a system-level (null target planet) completion.
+      const originHasNeighbour = !origin || origin.planets.length >= 2;
       return applyPrefix(
-        isText
+        isText || !originHasNeighbour
           ? buildTextQuest(rng, planetId, bucket, i, day, origin)
           : buildLocalDelivery(
               rng,
@@ -619,11 +625,23 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
   return out;
 }
 
-/** Prefer a habitable planet in a system as a concrete target, else any, else null. */
-function pickTargetPlanet(system: StarSystem | null): string | null {
+/**
+ * Prefer a habitable planet in a system as a concrete target, else any, else null.
+ * `excludeId` (the issuer planet) is skipped so an in-system courier run targets a
+ * genuine *neighbour* — a different habitable planet if one exists, else any other
+ * planet, else null (no neighbour ⇒ caller falls back to a non-delivery quest).
+ */
+function pickTargetPlanet(
+  system: StarSystem | null,
+  excludeId: string | null = null,
+): string | null {
   if (!system || system.planets.length === 0) return null;
-  const habitable = system.planets.find((p) => p.isHabitable);
-  return (habitable ?? system.planets[0]).id;
+  const candidates = excludeId
+    ? system.planets.filter((p) => p.id !== excludeId)
+    : system.planets;
+  if (candidates.length === 0) return null;
+  const habitable = candidates.find((p) => p.isHabitable);
+  return (habitable ?? candidates[0]).id;
 }
 
 /** Stable quest id for a board slot. */
@@ -1043,7 +1061,11 @@ function buildLocalDelivery(
   const id = slotId(planetId, bucket, i);
   const issuer = pickIssuer(rng, QuestType.DELIVERY);
   const cargo = pickCargo(rng);
-  const targetPlanetId = pickTargetPlanet(origin);
+  // Target a genuine *neighbour* — a different planet in the same system than the
+  // issuing planet — so the contract is a real courier run, not "buy here, deliver
+  // here". `excludeId = planetId` (the issuer) is skipped; null only when origin is
+  // unknown (tests), where completion stays system-level.
+  const targetPlanetId = pickTargetPlanet(origin, planetId);
   // Always resolve to a real SYSTEM id. When `origin` is unknown we must fall
   // back to `originSystemId` (the board's system id) — never `planetId`, which
   // is a planet id and would make `checkDeliveryQuestCompletion` never match.
@@ -1065,7 +1087,7 @@ function buildLocalDelivery(
     template: {
       id,
       title: "Местный подряд",
-      description: `${issuer.title} ${issuer.name} предлагает местный подряд: закупить ${targetAmount} ед. «${cargo.label}» на рынке ${origin?.name ?? "системы"} и доставить на ${targetPlanetName} (та же система, без прыжков). Оплата покрывает закупку и оставляет навар.`,
+      description: `${issuer.title} ${issuer.name} предлагает местный подряд: закупить ${targetAmount} ед. «${cargo.label}» на рынке ${origin?.name ?? "системы"} и доставить на соседнюю планету ${targetPlanetName} в этой же системе (без прыжков). Оплата покрывает закупку и оставляет навар.`,
       type: QuestType.DELIVERY,
       objectives: [
         {
