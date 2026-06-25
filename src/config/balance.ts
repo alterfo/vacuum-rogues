@@ -123,6 +123,21 @@ export const RESOURCE_BASE_PRICES: Record<ResourceType, number> = {
 export const LOCAL_DELIVERY_REWARD_MARGIN = 3.5;
 
 /**
+ * Tech level at and above which a piece of gear counts as the **rare, high-end
+ * top tier** (`isRareGear` in {@link GearCatalog}). The economy is meant to feel
+ * *homogeneous-but-expensive*: most of the galaxy runs similar mid-tech, and a
+ * top-tier hull/engine is a long, earned climb — much pricier than the mid tier
+ * (≥ 4×) and only stocked by the richest, high-end markets. The gear shop already
+ * makes high-tech items rarer with tech level ({@link ShopGenerator.generateShop});
+ * a rare flag halves that stock chance again, so the apex hull/engine truly is
+ * something only the wealthiest can field. Keep in lockstep with the catalog's
+ * `rare: true` apex items (top hull «Бастион», top engine «Двигатель Тип-V», top
+ * weapon «торпеда», top грав-тяга) — those sit at the ceiling of the documented
+ * tech-7/8 price band (≤ 14000), never above it.
+ */
+export const RARE_TECH_THRESHOLD = 6;
+
+/**
  * Probability that killing an Overmind enemy drops artifacts (per kill).
  * At 40% drop chance with 1–3 artifacts per drop, an active player fighting
  * 2–3 Overmind encounters per day accumulates ~1.5–3 artifacts/day — enough
@@ -191,7 +206,9 @@ export const GAME_BALANCE = {
    * Drift/pursuit speed (px/ms) of an **interceptor-class** NPC — OVERMIND craft
    * and PIRATE raiders (see `npcCruiseSpeed`). Deliberately faster than the
    * fresh starter ship (~0.11 px/ms with `eq_engine_i`), so escaping an *elite*
-   * threat stays upgrade-gated (the top engine `eq_engine_iii` only *ties* it).
+   * threat stays upgrade-gated: the mid engine `eq_engine_iii` (tech 5) only
+   * *ties* it, and only the rare, very-expensive apex engine `eq_engine_v`
+   * (tech 7) finally *out-runs* it — the reward for the long climb to top tech.
    */
   npcSpeed: 0.2,
   /**

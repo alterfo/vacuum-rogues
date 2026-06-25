@@ -76,12 +76,28 @@ Goal feel: **harder to win** (a long, earned climb to top tech) but **easier to 
 **Files:**
 - Modify: `src/systems/equipment/GearCatalog.ts`, `src/config/balance.ts`
 
-- [ ] Re-curve hull/engine `basePrice` so top-tier items are **much** more expensive
+- [x] Re-curve hull/engine `basePrice` so top-tier items are **much** more expensive
       (top hull/engine ≫ mid, e.g. ≥ 4× the mid tier) and gate their availability to
       rare, high-end markets — only the richest field them.
-- [ ] write tests: the price curve is monotone with a steep top step; top-tier items are
+      → Top hull «Бастион» (12000) is exactly ≥4× the median mid hull «Корвет» (3000)
+      and the steepest step in the curve (warden 7000 → 12000). Added a **new apex
+      engine** «Двигатель Тип-V» (`eq_engine_v`, tech 7, 13500) — rare and very
+      expensive, its 0.26 px/ms finally out-runs the interceptor tier. Marked the
+      apex pieces `rare: true` (bastion / eq_engine_v / wpn_torpedo / grav_tractor_3).
+      New `isRareGear(gear)` = explicit flag OR `techLevel ≥ RARE_TECH_THRESHOLD` (6,
+      a new `balance.ts` knob). Bastion price kept at 12000 (locked by
+      `hullTradeIn.test.ts`); all rare items stay ≤ 14000 (economyBalance band). Gating:
+      `ShopGenerator.stockChance` now halves a rare item's stock chance
+      (`RARE_STOCK_FACTOR = 0.5`) on top of the tech-level falloff — only the richest
+      markets field the apex. **No schema/migration** (gear is catalog-derived).
+- [x] write tests: the price curve is monotone with a steep top step; top-tier items are
       flagged rare/high-end.
-- [ ] run tests — green.
+      → `src/tests/balance/topTierPricing.test.ts` (8 tests): steepest step at the top,
+      apex hull ≥4× median mid, apex engine ≥4× entry engine, apex hull/engine flagged
+      rare, the new top engine exists, rare⇒high-tech & common⇒not, rare ≤14000 ceiling,
+      and a rare apex appears in far fewer shops than a common item (gated availability).
+- [x] run tests — green. (full unit suite 2847 green +1 skipped; playtest gate 64 green;
+      lint 0 errors; `tsc --noEmit` clean.)
 
 ### Task 3: Homogeneous galaxy tech + slower progression
 **Files:**

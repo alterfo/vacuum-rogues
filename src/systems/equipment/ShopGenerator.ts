@@ -14,11 +14,20 @@ import { SeededRNG } from "@/utils/seededRNG";
 import {
   GEAR_CATALOG,
   gearMarketPrice,
+  isRareGear,
   type Gear,
 } from "@/systems/equipment/GearCatalog";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 
 export const SHOP_REFRESH_DAYS = 7;
+
+/**
+ * Extra scarcity multiplier on a **rare, high-end** item's stock chance
+ * ({@link isRareGear}), on top of the tech-level falloff in {@link stockChance}.
+ * Halving the chance is what makes the apex hull/engine something only the
+ * richest, high-end markets field — "homogeneous-but-expensive" tech.
+ */
+export const RARE_STOCK_FACTOR = 0.5;
 
 export interface ShopOptions {
   readonly systemId: string;
@@ -37,12 +46,15 @@ export interface ShopOptions {
 }
 
 /**
- * Probability that a given gear item is stocked, by tech level: ubiquitous at
- * low tech, rare at high tech (so the best gear is worth hunting across systems).
+ * Probability that a given gear item is stocked: ubiquitous at low tech, rare at
+ * high tech (so the best gear is worth hunting across systems), and rarer still
+ * for the flagged high-end top tier ({@link isRareGear}) — only the richest
+ * markets field the apex hull/engine.
  */
-function stockChance(techLevel: number): number {
+function stockChance(gear: Gear): number {
   // T1 ≈ 0.9 → T8 ≈ 0.2
-  return Math.max(0.15, 0.95 - (techLevel - 1) * 0.1);
+  const byTech = Math.max(0.15, 0.95 - (gear.techLevel - 1) * 0.1);
+  return isRareGear(gear) ? byTech * RARE_STOCK_FACTOR : byTech;
 }
 
 /** Generate a planet's gear shop inventory (deterministic). */
@@ -64,7 +76,7 @@ export function generateShop(opts: ShopOptions): GearListing[] {
     if (maxTechLevel !== undefined && gear.techLevel > maxTechLevel) continue;
     // One independent RNG per (shop, item) → stable stock + price per item.
     const rng = new SeededRNG(`${seed}|shop|${planetId}|${bucket}|${gear.id}`);
-    if (rng.next() > stockChance(gear.techLevel)) continue;
+    if (rng.next() > stockChance(gear)) continue;
     // Per-shop price jitter on top of the faction/economy factor.
     const jitter = rng.nextFloat(0.9, 1.15);
     const price = gearMarketPrice(gear, priceFactor * jitter);

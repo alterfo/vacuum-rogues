@@ -15,6 +15,7 @@ import {
   type MicroModule,
 } from "@/types";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
+import { RARE_TECH_THRESHOLD } from "@/config/balance";
 
 export enum GearKind {
   HULL = "HULL",
@@ -56,6 +57,14 @@ interface GearBase {
    */
   readonly mass: number;
   readonly upgrades?: number; // 0-2, present only on upgraded copies
+  /**
+   * Marks the **rare, high-end top tier** (see {@link isRareGear}): the apex
+   * hull/engine/weapon a long credit climb earns. Rare gear sits at the ceiling
+   * of the endgame price band and is stocked far less often than common gear —
+   * only the richest, high-end markets field it ({@link ShopGenerator}). Optional:
+   * absent ⇒ common (the implicit default for every mid/low-tech item).
+   */
+  readonly rare?: boolean;
 }
 
 export interface HullSpec extends GearBase {
@@ -223,6 +232,9 @@ const HULLS: HullSpec[] = [
     cargo: 50,
     massCapacity: 95,
     micromoduleSlots: 4,
+    // The apex hull: ≥4× the mid-tier «Корвет» (3000) and the steepest step in
+    // the curve. Rare — only the wealthiest field it (see `isRareGear`).
+    rare: true,
   },
 ];
 
@@ -296,6 +308,7 @@ const WEAPONS: WeaponSpec[] = [
     range: 420,
     ability: WeaponAbility.HOMING,
     cooldownTurns: 3,
+    rare: true, // apex weapon — rare, high-end stock only
   },
   {
     id: "wpn_rocket",
@@ -335,6 +348,22 @@ const EQUIPMENT: EquipmentSpec[] = [
     mass: 8,
     equipmentClass: EquipmentClass.ENGINE,
     potency: 1.4,
+  },
+  {
+    // Apex engine: the rare, very-expensive top tier. Its tech-7 cruise speed
+    // (0.05 + 7×0.03 = 0.26 px/ms) finally out-runs the interceptor tier
+    // (`npcSpeed` 0.2) — the reward for the long climb to top tech. Priced at the
+    // ceiling of the tech-7/8 band (≤ 14000) and stocked only by high-end markets.
+    id: "eq_engine_v",
+    name: "Двигатель Тип-V",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 7,
+    size: 3,
+    basePrice: 13500,
+    mass: 10,
+    equipmentClass: EquipmentClass.ENGINE,
+    potency: 1.8,
+    rare: true,
   },
   {
     id: "eq_tank",
@@ -426,6 +455,7 @@ const EQUIPMENT: EquipmentSpec[] = [
     mass: 6,
     equipmentClass: EquipmentClass.GRAV_TRACTOR,
     potency: 250,
+    rare: true, // apex grav-tractor — rare, high-end stock only
   },
 ];
 
@@ -661,6 +691,19 @@ export function hullMicromoduleEffectKind(
 /** Lookup by id. */
 export function gearById(id: string): Gear | undefined {
   return GEAR_CATALOG.find((g) => g.id === id);
+}
+
+/**
+ * Whether a piece of gear is the **rare, high-end top tier** — the apex
+ * hull/engine/weapon a long credit climb earns. True when the item carries the
+ * explicit `rare: true` flag *or* sits at/above {@link RARE_TECH_THRESHOLD}, so a
+ * new high-tech item is rare by default without needing the flag. Rare gear is
+ * stocked far less often ({@link ShopGenerator}) — only the wealthiest markets
+ * field it — which is how "homogeneous-but-expensive" tech keeps the top tier
+ * scarce instead of randomly outclassing the player.
+ */
+export function isRareGear(gear: Gear): boolean {
+  return gear.rare === true || gear.techLevel >= RARE_TECH_THRESHOLD;
 }
 
 /**
