@@ -33,6 +33,7 @@ import { SeededRNG } from "@/utils/seededRNG";
 import type { Quest } from "@/domain/Quest";
 import {
   generateQuestBoard,
+  questKeyForQuest,
   type GeneratedQuest,
 } from "@/systems/quests/QuestGenerator";
 import { buildRegistry } from "@/systems/info/InfoService";
@@ -803,6 +804,15 @@ export class GameEngine {
       .getOvermindAdjacentSystems(this.player.currentSystemId)
       .map((s) => s.id);
 
+    // Content keys of quests the player already engaged, so the generator never
+    // re-offers them ("задания не должны повторяться"). Active + pending-return
+    // quests carry full templates, so their content key is computable; completed
+    // quests are ids-only (no retained template) and stay deduped by id below.
+    const excludeKeys = [
+      ...this.questManager.getActiveQuests(),
+      ...this.questManager.getPendingReturnQuests(),
+    ].map(questKeyForQuest);
+
     const board = generateQuestBoard({
       systems: this.galaxy.systems,
       originSystemId: this.player.currentSystemId,
@@ -810,6 +820,7 @@ export class GameEngine {
       day: this.galaxy.gameDays,
       seed: this.galaxy.id,
       completedQuestChains: this.player.completedQuestChains,
+      excludeKeys,
       overmindSystems: this.galaxy.overmindSystems,
       overmindAdjacentSystems: overmindAdjacent,
     });

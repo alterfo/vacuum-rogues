@@ -70,14 +70,30 @@ the current board** should not be generated again as a fresh offer.
 - Modify: the board call site (threads active + completed quests in)
 - Modify: `src/tests/questScripts.test.ts` / quest generator tests as needed
 
-- [ ] Extend `generateQuestBoard` options with exclusion key sets (active,
+- [x] Extend `generateQuestBoard` options with exclusion key sets (active,
       completed) and skip any candidate whose `questKey` is excluded or already
       placed on the board being built; keep filling to size from the remaining pool.
-- [ ] Thread the player's active + completed quests into the call site (mirror the
+      (Added the opt-in `BoardOptions.excludeKeys`; the slot loop is refactored
+      into a `buildForSlot(i)` closure + a dedupe-aware fill loop with a back-fill
+      cap. When `excludeKeys` is `undefined` the legacy output is byte-identical
+      — every existing generator/length test stays green; when present (even `[]`)
+      it dedupes against the exclusions **and** within the board, back-filling
+      from later slots to reach `count`. The DEFENSE injection is guarded too.)
+- [x] Thread the player's active + completed quests into the call site (mirror the
       existing `completedQuestChains` wiring).
-- [ ] write tests: excluded keys never emitted; board still fills; deterministic
+      (`GameEngine.getQuestBoard` now maps active + pending-return quests through
+      the new `questKeyForQuest` into `excludeKeys`. Completed quests are ids-only
+      — no retained template — so they stay deduped by id in the existing
+      post-filter, exactly as the Task 1 decision specified. No schema change.)
+- [x] write tests: excluded keys never emitted; board still fills; deterministic
       under a fixed seed; the Task 1 characterization now passes (no repeat).
-- [ ] run tests — green.
+      (New `src/tests/quests/questBoardDedupe.test.ts`: excluded keys never
+      emitted, fills to size, within-board dedupe, fixed-seed determinism,
+      best-effort termination on an exhausted pool, `questKeyForQuest` parity with
+      an accepted copy, and legacy-path unchanged. The characterization `it.fails`
+      is flipped to a passing `it`.)
+- [x] run tests — green. (177 quest tests + 67 dependent tests + the
+      `test:playtest` gate all green; `tsc --noEmit` and ESLint clean.)
 
 ### Task 3: Verify acceptance criteria
 **Files:**

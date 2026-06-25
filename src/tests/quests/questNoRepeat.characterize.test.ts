@@ -117,24 +117,22 @@ describe("quest board no-repeat (characterization)", () => {
     }
   });
 
-  // RED: regenerating the board re-offers a quest the player has already taken.
-  // `it.fails` asserts the inner expectation FAILS today (the repeat is real),
-  // which keeps the suite green at commit time. Task 2 adds the exclusion input
-  // and converts this to a normal `it(...)`.
-  it.fails(
-    "regenerating the board re-offers a quest the player has already taken (repeat reproduced)",
-    () => {
-      const board1 = generateQuestBoard(baseOpts());
-      expect(board1.length).toBeGreaterThan(0);
-      const taken = board1[0];
-      const takenKey = questKey(taken);
+  // GREEN (Task 2): with the taken quest's key excluded, regenerating the board
+  // no longer re-offers it, and the board still fills to its target size from the
+  // remaining pool. (Task 1 pinned this as a RED `it.fails`; Task 2 wired the
+  // `excludeKeys` input and converted it to a normal passing test.)
+  it("regenerating the board with the taken quest excluded does not re-offer it", () => {
+    const board1 = generateQuestBoard(baseOpts());
+    expect(board1.length).toBeGreaterThan(0);
+    const taken = board1[0];
+    const takenKey = questKey(taken);
 
-      // The player accepted (or completed) `taken`. Re-open the same board:
-      const board2 = generateQuestBoard(baseOpts());
+    // The player accepted `taken`. Re-open the board, excluding its content key:
+    const board2 = generateQuestBoard(baseOpts({ excludeKeys: [takenKey] }));
 
-      // Desired (Task 2): a taken/completed quest is never re-offered.
-      // Current: the generator has no per-quest exclusion, so it reappears.
-      expect(board2.map(questKey)).not.toContain(takenKey);
-    },
-  );
+    // The taken quest is never re-offered…
+    expect(board2.map(questKey)).not.toContain(takenKey);
+    // …and the board still fills to its full size from the remaining pool.
+    expect(board2.length).toBe(board1.length);
+  });
 });

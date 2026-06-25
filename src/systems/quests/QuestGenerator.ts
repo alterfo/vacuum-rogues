@@ -78,6 +78,16 @@ export interface BoardOptions {
   readonly chainRatio?: number;
   /** Chain IDs already fully completed by the player; those chains show a finale quest instead. */
   readonly completedQuestChains?: readonly string[];
+  /**
+   * Content {@link questKey}s the board must NOT re-offer — typically the
+   * player's active + pending-return quests, so a quest already taken never
+   * reappears as a fresh offer ("задания не должны повторяться"). When present
+   * (even empty `[]`), the board also dedupes **within itself** and back-fills
+   * from later slots so it still reaches `count`. When `undefined`, the board is
+   * produced exactly as before (no dedupe) — preserving the legacy output every
+   * existing test relies on.
+   */
+  readonly excludeKeys?: readonly string[];
   /** OVERMIND-controlled system IDs; used to build DEFENSE quest targets. */
   readonly overmindSystems?: readonly string[];
   /** System IDs adjacent to OVERMIND-controlled systems (non-OVERMIND). Triggers 1 DEFENSE quest when non-empty. */
@@ -239,18 +249,64 @@ export function governorOfferLine(quest: GeneratedQuest): string {
  */
 export function questKey(quest: GeneratedQuest): string {
   const t = quest.template;
-  if (t.type === QuestType.TEXT_ADVENTURE) {
-    return `TEXT|${t.targetObjectId ?? t.id}`;
+  return questKeyFromParts({
+    type: t.type,
+    // The GeneratedQuest's resolved target system wins over the template's,
+    // matching the historical behaviour (`quest.targetSystemId || t.targetSystemId`).
+    targetSystemId: quest.targetSystemId || (t.targetSystemId ?? ""),
+    targetObjectId: t.targetObjectId,
+    id: t.id,
+    objectives: t.objectives,
+    chainId: t.chainId,
+    chainPart: t.chainPart,
+  });
+}
+
+/**
+ * The minimal shape `questKey` needs — shared by a generated quest's template
+ * and a restored {@link Quest} so the *same* key is computed for both. Lets the
+ * board generator exclude the player's active/pending quests by content (not by
+ * the slot id, which differs once a quest is accepted).
+ */
+export interface QuestKeyParts {
+  readonly type: QuestType;
+  readonly targetSystemId: string | null | undefined;
+  readonly targetObjectId: string | null | undefined;
+  /** Fallback identity for text-quests that carry no `targetObjectId`. */
+  readonly id: string;
+  readonly objectives: ReadonlyArray<{
+    type: string;
+    locationId?: string;
+    targetSystemId?: string;
+    itemType?: string;
+  }>;
+  readonly chainId?: string | null;
+  readonly chainPart?: number | null;
+}
+
+/** Core key derivation, shared by {@link questKey} and {@link questKeyForQuest}. */
+function questKeyFromParts(p: QuestKeyParts): string {
+  if (p.type === QuestType.TEXT_ADVENTURE) {
+    return `TEXT|${p.targetObjectId ?? p.id}`;
   }
-  const objSig = t.objectives
+  const objSig = p.objectives
     .map(
       (o) =>
         `${o.type}:${o.locationId ?? ""}:${o.targetSystemId ?? ""}:${o.itemType ?? ""}`,
     )
     .join(",");
-  const chain = t.chainId ? `${t.chainId}#${t.chainPart ?? ""}` : "";
-  const system = quest.targetSystemId || (t.targetSystemId ?? "");
-  return `${t.type}|${system}|${chain}|${objSig}`;
+  const chain = p.chainId ? `${p.chainId}#${p.chainPart ?? ""}` : "";
+  const system = p.targetSystemId ?? "";
+  return `${p.type}|${system}|${chain}|${objSig}`;
+}
+
+/**
+ * The {@link questKey} of a restored {@link Quest} (or any object carrying the
+ * same fields). Used at the board call site to exclude the player's active and
+ * pending-return quests from re-generation ("задания не должны повторяться").
+ */
+export function questKeyForQuest(quest: QuestKeyParts): string {
+  return questKeyFromParts(quest);
 }
 
 export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
@@ -266,6 +322,7 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     eliteRatio = QUEST_ELITE_RATIO,
     chainRatio = QUEST_CHAIN_RATIO,
     completedQuestChains = [],
+    excludeKeys,
     overmindSystems = [],
     overmindAdjacentSystems = [],
     homeFactionId = null,
@@ -310,28 +367,29 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     };
   };
 
-  const out: GeneratedQuest[] = [];
-  for (let i = 0; i < count; i++) {
+  /**
+   * Build the quest for board slot `i`, deterministic in `(boardSeed, i)`.
+   * Mutates `chainPartsOnBoard` (closure) exactly as the legacy inline loop did,
+   * so the slot's output is byte-identical whether or not dedupe is enabled.
+   */
+  const buildForSlot = (i: number): GeneratedQuest => {
     const rng = new SeededRNG(`${boardSeed}|${i}`);
     const isText = rng.next() < textRatio;
 
     if (isText || reachable.length === 0) {
-      out.push(
-        applyPrefix(
-          isText
-            ? buildTextQuest(rng, planetId, bucket, i, day, origin)
-            : buildLocalDelivery(
-                rng,
-                planetId,
-                bucket,
-                i,
-                day,
-                origin,
-                originSystemId,
-              ),
-        ),
+      return applyPrefix(
+        isText
+          ? buildTextQuest(rng, planetId, bucket, i, day, origin)
+          : buildLocalDelivery(
+              rng,
+              planetId,
+              bucket,
+              i,
+              day,
+              origin,
+              originSystemId,
+            ),
       );
-      continue;
     }
 
     const type = ROUTINE_TYPES[rng.nextInt(0, ROUTINE_TYPES.length - 1)];
@@ -343,77 +401,81 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     if (isChain) {
       if (completedQuestChains.includes(chainId) && chainPartsOnBoard === 0) {
         // Chain is complete: show the finale quest once per board.
-        out.push(
-          applyPrefix(
-            buildFinaleQuest(
-              rng,
-              chainId,
-              target,
-              jumps,
-              planetId,
-              bucket,
-              i,
-              day,
-            ),
+        const q = applyPrefix(
+          buildFinaleQuest(
+            rng,
+            chainId,
+            target,
+            jumps,
+            planetId,
+            bucket,
+            i,
+            day,
           ),
         );
         // Increment so subsequent isChain rolls fall through to the else branch
         // (routine quest) instead of adding a duplicate finale.
         chainPartsOnBoard++;
+        return q;
       } else if (!completedQuestChains.includes(chainId)) {
-        out.push(
-          applyPrefix(
-            buildChainQuest(
-              rng,
-              type,
-              target,
-              jumps,
-              planetId,
-              bucket,
-              i,
-              day,
-              chainId,
-              chainPartsOnBoard,
-            ),
+        const q = applyPrefix(
+          buildChainQuest(
+            rng,
+            type,
+            target,
+            jumps,
+            planetId,
+            bucket,
+            i,
+            day,
+            chainId,
+            chainPartsOnBoard,
           ),
         );
         chainPartsOnBoard++;
-      } else {
-        // Chain finale already on board: emit normal quest instead.
-        out.push(
-          applyPrefix(
-            buildRoutineQuest(
-              rng,
-              type,
-              target,
-              jumps,
-              planetId,
-              bucket,
-              i,
-              day,
-            ),
-          ),
-        );
+        return q;
       }
-      continue;
+      // Chain finale already on board: emit normal quest instead.
+      return applyPrefix(
+        buildRoutineQuest(rng, type, target, jumps, planetId, bucket, i, day),
+      );
     }
 
     const isElite = rng.next() < eliteRatio;
-    out.push(
-      applyPrefix(
-        buildRoutineQuest(
-          rng,
-          type,
-          target,
-          jumps,
-          planetId,
-          bucket,
-          i,
-          day,
-          isElite,
-        ),
+    return applyPrefix(
+      buildRoutineQuest(
+        rng,
+        type,
+        target,
+        jumps,
+        planetId,
+        bucket,
+        i,
+        day,
+        isElite,
       ),
     );
+  };
+
+  // Dedupe is opt-in: only when the caller passes `excludeKeys` (the player's
+  // active/pending quests). Then a candidate whose content key is excluded — or
+  // already placed on this board — is skipped, and later slots back-fill so the
+  // board still reaches `count`. With no `excludeKeys`, the loop runs the legacy
+  // path (slots 0..count-1, no skipping) and the output is unchanged.
+  const dedupe = excludeKeys !== undefined;
+  const seen = new Set<string>(excludeKeys ?? []);
+  // Cap back-fill attempts so an exhausted pool (more exclusions than distinct
+  // quests reachable) can never spin forever; best-effort fill to `count`.
+  const cap = dedupe ? count * 8 + 32 : count;
+  const out: GeneratedQuest[] = [];
+  for (let i = 0; out.length < count && i < cap; i++) {
+    const q = buildForSlot(i);
+    if (dedupe) {
+      const k = questKey(q);
+      if (seen.has(k)) continue;
+      seen.add(k);
+    }
+    out.push(q);
   }
   // Inject 1 DEFENSE quest when OVERMIND has adjacent systems the player can contest.
   // A defense target must be explored — the player cannot be sent to defend a
@@ -444,7 +506,7 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
       );
       const defIssuer = pickIssuer(defRng, QuestType.DEFENSE);
       const defId = `${slotId(planetId, Math.floor(day / Math.max(1, refreshEveryDays)), out.length)}_defense`;
-      out.push({
+      const defenseQuest: GeneratedQuest = {
         template: {
           id: defId,
           title: `Оборона: ${targetSys.name} (${jumps} прыж.)`,
@@ -481,7 +543,11 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
           { label: "Выдан", value: planetId, color: 0xaaaaaa },
         ],
         issuerPlanetId: planetId,
-      });
+      };
+      // Don't re-offer a DEFENSE quest the player already has active/pending.
+      if (!dedupe || !seen.has(questKey(defenseQuest))) {
+        out.push(defenseQuest);
+      }
     }
   }
 
