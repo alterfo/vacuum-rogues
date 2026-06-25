@@ -5,6 +5,7 @@ import { GearKind, type WeaponSpec } from "@/systems/equipment/GearCatalog";
 import { GAME_BALANCE } from "@/config/balance";
 import type { GameMode } from "@/types";
 import { applyDamageWithMode, isHullDowned } from "@/systems/combat/godMode";
+import { npcWeaponRange } from "@/systems/combat/npcWeapon";
 import type { NpcShipSprite } from "../NpcShipSprite";
 import type { FlightModule } from "./FlightModule";
 import { CombatHud } from "./CombatHud";
@@ -392,7 +393,14 @@ export class CombatModule implements FlightModule {
     return d === null || d > GAME_BALANCE.combatEscapeRange;
   }
 
-  /** Advance every NPC's fire timer; fire its shot at the player when it elapses and the NPC is in range. */
+  /**
+   * Advance every NPC's fire timer; fire its shot at the player when it elapses
+   * and the NPC is within **its own weapon range** ({@link npcWeaponRange}, by
+   * role) — not the single flat {@link GAME_BALANCE.weaponRange} every NPC used to
+   * share. So enemies vary and a long-range player weapon can't trivially
+   * out-range every foe: a patrol (340) can return fire from nearly the player's
+   * best common reach.
+   */
   private advanceNpcTimers(deltaTime: number): void {
     for (const npc of this.combatants) {
       // A landed NPC shot can raise the active-pause (the first incoming hit of an
@@ -407,7 +415,7 @@ export class CombatModule implements FlightModule {
       if (
         t >= GAME_BALANCE.combatFireIntervalMs &&
         d !== null &&
-        d <= GAME_BALANCE.weaponRange
+        d <= npcWeaponRange(npc.npc)
       ) {
         this.npcFireTimers.set(npc, 0);
         this.fireNpcShot(npc);

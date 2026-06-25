@@ -68,13 +68,22 @@ trivially out-ranged, and fleeing is possible.
 - Modify: `NpcShipManager`/`NpcShipSprite` (assign a `WeaponSpec`/range per NPC), `CombatModule.advanceNpcTimers`
 - Create/Modify: `src/tests/flight/npcWeapons.test.ts`
 
-- [ ] Give NPCs a per-ship weapon (range + damage from a small set scaled by role/tier)
+- [x] Give NPCs a per-ship weapon (range + damage from a small set scaled by role/tier)
       and have `advanceNpcTimers` use **that** range instead of the global
       `GAME_BALANCE.weaponRange` — so the player can't trivially out-range every enemy
-      and NPCs vary.
-- [ ] write tests: an NPC engages at its own weapon range (not a flat 240); different
+      and NPCs vary. (New pure helper `npcWeaponRange(npc)` /  `NPC_WEAPON_RANGE`
+      in `src/systems/combat/npcWeapon.ts`: TRADER 200 / PIRATE 260 / RANGER 300 /
+      PATROL 340, derived from the already-persisted `role` — **no schema/migration**.
+      Damage stays per-NPC on `NpcShip.damage` (ROLE_STATS). `advanceNpcTimers` now
+      gates fire on `d <= npcWeaponRange(npc.npc)`, falling back to the legacy flat
+      240 for a role-less stand-in so existing combat tests stay green.)
+- [x] write tests: an NPC engages at its own weapon range (not a flat 240); different
       NPC types differ; the player's range edge is bounded, not infinite.
-- [ ] run tests — green.
+      (`src/tests/flight/npcWeapons.test.ts` — 7 tests: a PATROL returns fire from 300
+      where the old flat 240 could not, a TRADER holds past its 200, the PATROL drops
+      out past its own 340; four distinct role ranges; the best common player weapon
+      (railgun 360) still out-ranges the toughest enemy but the edge ≤ 40 px.)
+- [x] run tests — green.
 
 ### Task 3: Verify escape/flee actually works
 **Files:**
