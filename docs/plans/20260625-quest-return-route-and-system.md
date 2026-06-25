@@ -49,13 +49,13 @@ if it's elsewhere, then approach the target planet in-system).
 - Create: `src/systems/quests/questDestination.ts`
 - Create: `src/tests/quests/questDestination.test.ts`
 
-- [ ] `questDestination(quest, galaxy, currentSystemId)` → `{ systemId,
+- [x] `questDestination(quest, galaxy, currentSystemId)` → `{ systemId,
       systemName, planetId, planetName | null, sameSystem }` (resolves names from
       the galaxy; tolerates a null `targetPlanetId`).
-- [ ] `questRouteAction(dest)` → `{ kind: "approach-planet", planetId }` when
+- [x] `questRouteAction(dest)` → `{ kind: "approach-planet", planetId }` when
       `sameSystem`, else `{ kind: "warp-to-system", systemId }`.
-- [ ] write tests for both (same-system, cross-system, null planet, unknown id).
-- [ ] run tests — green.
+- [x] write tests for both (same-system, cross-system, null planet, unknown id).
+- [x] run tests — green.
 
 ### Task 2: Show the system name on the objective
 **Files:**
