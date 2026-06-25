@@ -902,7 +902,7 @@ export class HangarPanel {
       container.addChild(empty);
     }
     for (const row of rows) {
-      if (y + 34 > splitY - 6) break; // clip to the СКЛАД region
+      if (y + 42 > splitY - 6) break; // clip to the СКЛАД region
       const gearId =
         row.kind === "owned" ? row.gearId : (legacy[row.index]?.id ?? "");
       const gear = gearById(gearId);
@@ -911,9 +911,12 @@ export class HangarPanel {
           ? (gear?.name ?? gearId)
           : (legacy[row.index]?.name ?? gearId);
 
+      // Taller row so the two stacked actions below get a clear vertical gap
+      // («Установить» and «Продать» were 13 px apart — within text height, so
+      // they overlapped and got mis-tapped; see Task 3).
       const rowBg = new Graphics();
-      rowBg.rect(rightX, y, rightW, 30).fill({ color: 0x14160a, alpha: 1 });
-      rowBg.rect(rightX, y, rightW, 30).stroke({ color: 0x30401a, width: 1 });
+      rowBg.rect(rightX, y, rightW, 40).fill({ color: 0x14160a, alpha: 1 });
+      rowBg.rect(rightX, y, rightW, 40).stroke({ color: 0x30401a, width: 1 });
       rowBg.eventMode = "none";
       container.addChild(rowBg);
 
@@ -924,7 +927,7 @@ export class HangarPanel {
         { rawColor: true, fontFamily: "monospace" },
       );
       rowText.x = rightX + 8;
-      rowText.y = y + 3;
+      rowText.y = y + 4;
       rowText.eventMode = "none";
       container.addChild(rowText);
 
@@ -940,7 +943,9 @@ export class HangarPanel {
         );
         sellBtn.anchor.set(1, 0.5);
         sellBtn.x = btnRight;
-        sellBtn.y = y + 21;
+        // Lower action: a 20 px centre gap from «Установить» (y + 12) clears the
+        // ~14 px text height so the two buttons never overlap.
+        sellBtn.y = y + 32;
         sellBtn.eventMode = "static";
         sellBtn.cursor = "pointer";
         sellBtn.on("pointerdown", (e) => {
@@ -966,7 +971,8 @@ export class HangarPanel {
         });
         eqBtn.anchor.set(1, 0.5);
         eqBtn.x = btnRight;
-        eqBtn.y = y + 8;
+        // Upper action — paired with «Продать» (y + 32) at a 20 px gap.
+        eqBtn.y = y + 12;
         eqBtn.eventMode = "static";
         eqBtn.cursor = "pointer";
         eqBtn.on("pointerdown", (e) => {
@@ -981,7 +987,7 @@ export class HangarPanel {
         });
         container.addChild(eqBtn);
       }
-      y += 38;
+      y += 48;
     }
 
     // ── ТРЮМ — cargo hold (goods), separate read-only panel. ──

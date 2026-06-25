@@ -108,12 +108,23 @@ Three flight/combat/UI fixes the player reported together:
 **Files:**
 - Modify: `src/presentation/EquipmentShopScene.ts` (the hangar panel from the combat-hangar plan)
 
-- [ ] Increase the gap between the «Установить» (install) and «Продать» (sell)
+- [x] Increase the gap between the «Установить» (install) and «Продать» (sell)
       actions so they're not mis-tapped; align with the panel's existing button
-      spacing.
-- [ ] write/extend a layout test asserting the two buttons don't overlap and have a
-      minimum gap; **screenshot-verify**.
-- [ ] run tests — green.
+      spacing. (Fixed in the shared `HangarPanel.renderWarehouseAndCargo` — the
+      single fitting surface both StationScene and the EquipmentShop АНГАР tab
+      mount, so the fix lands at both entry points. The two actions sat 13 px
+      apart in the same right-hand column — inside the ~14 px text height, so
+      their hit boxes overlapped. Grew each warehouse row 30→40 px, moved
+      «Установить» to `y+12` and «Продать» to `y+32` (a 20 px centre gap, clear of
+      the text height), and bumped the row step 38→48 + the clip guard 34→42.)
+- [x] write/extend a layout test asserting the two buttons don't overlap and have a
+      minimum gap; **screenshot-verify**. (New `HangarPanel.test.ts` case asserts
+      the centre gap exceeds the button height — `gap > height` — and a clear
+      minimum of 16 px; the old 13 px gap would fail it. Screenshot-verify is a
+      manual visual step — this app's per-frame render loop makes headless
+      screenshots unreliable [memory: browser-debugging-spacerangers], so the
+      layout test is the automatable substitute.)
+- [x] run tests — green. (10/10 `HangarPanel.test.ts`; lint clean.)
 
 ### Task 4: Verify acceptance criteria (incl. "combat reads cleanly")
 **Files:**

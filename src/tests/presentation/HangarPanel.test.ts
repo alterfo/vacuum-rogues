@@ -234,6 +234,34 @@ describe("HangarPanel — shared slot-fitting component", () => {
     expect(ctx.showToast).toHaveBeenCalled();
   });
 
+  it("spaces «Установить» / «Продать» so the stacked actions never overlap", () => {
+    // Regression (Task 3): the two warehouse actions sat 13 px apart in the same
+    // right-hand column — inside the text height — so their hit boxes overlapped
+    // and got mis-tapped. They must keep a clear vertical gap exceeding the
+    // button height.
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer(["eq_radar"]); // owned → both actions render
+    const ctx = makeCtx(loadout, player);
+
+    new HangarPanel(renderer).render(ctx);
+
+    const installBtn = findButton("[Установить]") as unknown as
+      | { y: number; height: number }
+      | undefined;
+    const sellBtn = findButton("[Продать") as unknown as
+      | { y: number; height: number }
+      | undefined;
+    expect(installBtn).toBeDefined();
+    expect(sellBtn).toBeDefined();
+
+    // Same column (anchor 1,0.5), so non-overlap is purely a vertical-gap test:
+    // centres must be at least one button height apart (the old 13 px gap < 14 px
+    // height overlapped). Require a comfortable minimum beyond that.
+    const gap = Math.abs(sellBtn!.y - installBtn!.y);
+    expect(gap).toBeGreaterThan(installBtn!.height); // boxes don't overlap
+    expect(gap).toBeGreaterThanOrEqual(16); // clear, un-mis-tappable spacing
+  });
+
   it("blocks an over-mass warehouse install — toasts the reason, no mutation", () => {
     // hull_scout: massCapacity 30. Fill it to capacity, then try to install a
     // gear that fits a free bank but blows the mass budget.
