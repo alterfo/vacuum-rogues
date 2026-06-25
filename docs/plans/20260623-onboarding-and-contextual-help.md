@@ -82,17 +82,19 @@ Related patterns:
 - Create: `src/presentation/ui/HelpPanel.ts`, `src/presentation/ui/mountSceneHelp.ts`
 - Create/Modify tests under `src/tests/`
 
-- [ ] Build a themed, dismissible `HelpPanel` (dark panel via `scaledText`, title +
+- [x] Build a themed, dismissible `HelpPanel` (dark panel via `scaledText`, title +
       body + optional controls, «Понятно»/«✕» close) and a small top-right «?»
       button.
-- [ ] Implement `mountSceneHelp(deps, key)`: on mount, if `!hasSeen(key)` show the
+- [x] Implement `mountSceneHelp(deps, key)`: on mount, if `!hasSeen(key)` show the
       panel once and `markSeen(key)`; always mount the «?» button that reopens the
       panel from `helpFor(key)`. Returns a teardown for `destroy()`.
-- [ ] Factor the auto-show decision into a pure function
+- [x] Factor the auto-show decision into a pure function
       (`shouldAutoShow(key, seen)`) and unit-test it; **screenshot-verify** the
-      rendered panel + «?» button.
-- [ ] write tests for the pure decision + the mount/teardown wiring (fake renderer).
-- [ ] run tests — green.
+      rendered panel + «?» button. (Pure `shouldAutoShow(key, hasSeenFn)` +
+      unit tests done; screenshot-verify deferred to Task 4 — no scene mounts the
+      panel until then, and in-app screenshots fail here per the render-loop note.)
+- [x] write tests for the pure decision + the mount/teardown wiring (fake renderer).
+- [x] run tests — green.
 
 ### Task 4: Wire the core-loop screens + first-flight welcome
 **Files:**
