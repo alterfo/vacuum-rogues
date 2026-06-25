@@ -104,13 +104,32 @@ Goal feel: **harder to win** (a long, earned climb to top tech) but **easier to 
 - Modify: `src/config/balance.ts` (income/price curve), galaxy/NPC tech seeding (`GalaxySimulator`/`NpcSimulator`)
 - Create/Modify: `src/tests/balance/progression.test.ts`, NPC tech-seeding tests
 
-- [ ] Compress the galaxy's NPC tech spread toward a homogeneous mid-tier (no wild
+- [x] Compress the galaxy's NPC tech spread toward a homogeneous mid-tier (no wild
       disparities), and tune income vs. top-tier price so reaching top tech takes a long
       earned climb (update the documented progression comment in `balance.ts`).
-- [ ] write tests: NPC tech distribution is homogeneous (low variance) except rare
+      → NPC tech was already role-derived and tight (`npcRoleTechLevel`: TRADER 1,
+      RANGER/PIRATE 2, PATROL 3 — locked by `warpToCombat.test.ts`); documented &
+      locked that homogeneity with a new single-source-of-truth `NPC_TECH_BAND =
+      {min:1,max:3}` in `NpcSimulator.ts` (whole band < `RARE_TECH_THRESHOLD` 6, so
+      a *common* NPC never fields apex tech). Income (`QUEST_BASE_REWARD`/`PER_JUMP`)
+      and gear prices are both locked by `economyBalance.test.ts`, so the climb is set
+      by Task 2's steep, rare, gated apex prices; added a pure progression model
+      (`QUEST_INTERVAL_DAYS=12` + `modelledDaysToAfford(price, avgReward)`) and rewrote
+      the `balance.ts` progression comment to the new long-climb curve (~210 days for
+      the apex hull, ~470 for the hull+engine pair — an order of magnitude beyond the
+      old ~2-week buy). Config/comment only — **no schema/migration**.
+- [x] write tests: NPC tech distribution is homogeneous (low variance) except rare
       high-end; the modelled days-to-top-hull is far larger than before.
-- [ ] run tests — green (existing economy/quest tests stay green; adjust only if the
-      curve intentionally changed).
+      → `src/tests/balance/npcTechDistribution.test.ts` (4): every role's tech in the
+      band, whole band below the rare threshold, tight cross-role spread (≤2), and a
+      2000-sample uniform-role draw has low variance (<1.0), mid-tier mean (1.5–2.5),
+      and never an apex ship. `src/tests/balance/progression.test.ts` (4): apex
+      hull/engine flagged rare, `modelledDaysToAfford` monotone w/ price & cadence,
+      apex-hull days ≫ the old fortnight buy (>5×, >80), full apex loadout ≥10× a
+      fortnight and strictly > hull-alone (mean reward read from a real quest board).
+- [x] run tests — green (existing economy/quest tests stay green; adjust only if the
+      curve intentionally changed). → full unit suite 2855 green +1 skipped; playtest
+      gate 64 green +1 skipped; `tsc --noEmit` + lint clean. No existing test touched.
 
 ### Task 4: Fix gear-curve inversions + money-printers (oddity sweep)
 **Files:**

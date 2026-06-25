@@ -67,15 +67,51 @@ export const RANK_LABELS = [
 /**
  * Base credit reward for a 0-jump quest (before type multiplier and variance).
  *
- * Target day-curve (active player ≈ 1 quest per 12 game days):
- *   Day 100 (~8 quests)  → ~5,400 credits earned  → can afford tech-3 gear (~2,000–5,000)
- *   Day 250 (~20 quests) → ~13,600 credits earned  → can afford tech-5 gear (~5,500–9,000)
- *   Day 450 (~37 quests) → ~25,100 credits earned  → can afford tech-7 gear (~10,000–14,000)
+ * Progression feel (homogeneous-but-expensive): most of the galaxy runs similar
+ * mid-tech ({@link NPC_TECH_BAND}), so a player is never randomly outclassed by a
+ * *common* ship — but the rare apex hull/engine (tech ≥ {@link RARE_TECH_THRESHOLD})
+ * is a long, earned climb only the richest field, gated to scarce high-end markets.
+ *
+ * Modelled active-player day-curve (≈ 1 quest per {@link QUEST_INTERVAL_DAYS} days,
+ * ~680 cr/quest ⇒ ≈ 57 cr/day from quests alone; trade margins make the early tiers
+ * faster but cannot buy a *rare* apex item that isn't stocked):
+ *   Day 100 (~8 quests)  → ~5,400 cr earned  → mid-tier tech-3 gear (~2,000–5,000)
+ *   Day 250 (~20 quests) → ~13,600 cr earned → tech-5 gear (~5,500–9,000)
+ *   Day ~210 just for the apex hull «Бастион» (12,000); ~470 for the apex
+ *     hull + apex engine «Тип-V» pair (~25,500) — an order of magnitude beyond the
+ *     old ~2-week trade buy of the (then cheap, ubiquitous) top hull. The long climb
+ *     is the point: harder to win, easier to play. See {@link modelledDaysToAfford}.
  *
  * Quest mix assumed: 60% 1-hop, 30% 2-hop, 10% 3-hop; 50% DELIVERY (×1.0), 30% BOUNTY (×1.6).
  * Average reward at this mix: ~680 credits/quest.
  */
 export const QUEST_BASE_REWARD = 400;
+
+/**
+ * Modelled active-player quest cadence used to document the progression curve:
+ * an engaged player completes roughly one quest every this-many game days.
+ * Combined with the quest board's mean reward it yields a credits/day rate, the
+ * single source of truth for {@link modelledDaysToAfford}. Pure data — no
+ * persisted field, no migration.
+ */
+export const QUEST_INTERVAL_DAYS = 12;
+
+/**
+ * Pure days-to-save model: how many game days an active player needs to afford
+ * `priceCredits` at the given average quest reward and the documented
+ * one-quest-per-{@link QUEST_INTERVAL_DAYS}-days cadence. A conservative
+ * lower bound (quest income only; ignores trade/bounty top-ups), used by the
+ * progression test to assert the rare apex tech is now a *long* climb rather
+ * than the old ~2-week buy.
+ */
+export function modelledDaysToAfford(
+  priceCredits: number,
+  avgQuestReward: number,
+): number {
+  if (avgQuestReward <= 0) return Number.POSITIVE_INFINITY;
+  const incomePerDay = avgQuestReward / QUEST_INTERVAL_DAYS;
+  return Math.ceil(priceCredits / incomePerDay);
+}
 
 /**
  * Additional credits per hyperjump to the target system.

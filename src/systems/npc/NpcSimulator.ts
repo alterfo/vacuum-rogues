@@ -220,8 +220,23 @@ const ROLE_LOADOUT: Record<NpcRole, string[]> = {
 };
 
 /**
- * Map NpcRole to a tech level (1–3) used for CombatScene enemy initialization.
- * Determines weapon/shield strength of the spawned enemy.
+ * The homogeneous mid-tier band every common NPC's tech is confined to. Most of
+ * the galaxy runs similar mid-tech (tech 1–3, centred on 2) — no wild disparities
+ * — so a player is never randomly outclassed by a *common* ship. The rare
+ * high-end (the apex hull/engine, tech ≥ `RARE_TECH_THRESHOLD` = 6) is reserved
+ * for the player's long earned climb and the richest markets; it is **never**
+ * seeded onto a common wandering NPC. Keep {@link npcRoleTechLevel}'s range inside
+ * this band (the homogeneous-but-expensive economy: see `balance.ts` progression
+ * note).
+ */
+export const NPC_TECH_BAND = { min: 1, max: 3 } as const;
+
+/**
+ * Map NpcRole to a tech level used for CombatScene enemy initialization.
+ * Determines weapon/shield strength of the spawned enemy. The four roles map to
+ * a tight, homogeneous mid-tier spread within {@link NPC_TECH_BAND} (TRADER 1,
+ * RANGER/PIRATE 2, PATROL 3) — never the rare apex tier — so the galaxy reads as
+ * similarly teched and a fresh player is never outclassed by a *common* ship.
  */
 export function npcRoleTechLevel(role: NpcRole): number {
   const map: Record<NpcRole, number> = {
