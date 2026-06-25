@@ -102,8 +102,13 @@ station types.
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes` — PlanetManager + StationScene (+ quest wiring) affected; no schema.
-- [ ] full unit suite green; `npm run test:playtest` green; lint/build ok.
+- [x] `detect_changes` — PlanetManager + StationScene (+ quest wiring) affected; no schema.
+      (Verified via `git diff 873367d^..7660fbd`: only `PlanetManager.ts`,
+      `StationScene.ts`, `JobBoardPanel.ts`, `QuestJournalUI.ts`, `scaledText.ts` + their
+      tests changed; no `schemas.ts`/`MigrationPipeline.ts`/`types/index.ts` touched.)
+- [x] full unit suite green; `npm run test:playtest` green; lint/build ok.
+      (Unit: 3034 passed / 3 skipped; playtest: 67 passed / 1 skipped; lint: 0 errors
+      (48 pre-existing `any` warnings); `npm run build` ✓ built in 3.74s.)
 
 ### Task 5: Update documentation
 **Files:**
