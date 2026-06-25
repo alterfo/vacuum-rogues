@@ -146,10 +146,16 @@ Related patterns:
 - Modify: the settings panel / main menu (a «Показать обучение заново» action)
 - Create/Modify tests under `src/tests/`
 
-- [ ] Add a «Показать обучение заново» control that calls `resetSeen()` so all
-      first-time hints show again on next visit.
-- [ ] write a test that the control invokes `resetSeen()`.
-- [ ] run tests — green.
+- [x] Add a «Показать обучение заново» control that calls `resetSeen()` so all
+      first-time hints show again on next visit. (Added as a Main-Menu button
+      `MainMenuScene.handleReplayOnboarding()` → `resetSeen()` + a positive
+      confirmation toast; `showMessage` gained an optional color arg and the
+      toast now sits clear of the 4-button stack.)
+- [x] write a test that the control invokes `resetSeen()`.
+      (`mainMenuReplayOnboarding.test.ts` — mocks `onboardingState`, asserts the
+      handler calls `resetSeen` once + confirms to the player.)
+- [x] run tests — green. (8 MainMenu tests green incl. the new pair; lint clean
+      (0 errors); `npm run build` OK.)
 
 ### Task 7: Verify acceptance criteria
 **Files:**

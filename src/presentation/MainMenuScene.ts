@@ -5,6 +5,7 @@ import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
 import { buildInfo } from "@/systems/feedback/buildInfo";
 import { openFeedback } from "@/systems/feedback/openFeedback";
+import { resetSeen } from "@/systems/onboarding/onboardingState";
 import { pickVariant, pickVariantKey, tex, loadTextureAsync } from "./textures";
 
 interface StarParticle {
@@ -433,6 +434,17 @@ export class MainMenuScene extends GameScene {
     );
     this.buttonsContainer.addChild(feedbackBtn);
 
+    // Replay the first-time onboarding hints (clears the browser-level "seen"
+    // set so every screen's auto-hint shows again on next visit).
+    const replayHelpBtn = createButton(
+      "Показать обучение заново",
+      140,
+      () => this.handleReplayOnboarding(),
+      16,
+      0x66ccff,
+    );
+    this.buttonsContainer.addChild(replayHelpBtn);
+
     this.renderer.uiLayer.addChild(this.buttonsContainer);
   }
 
@@ -451,6 +463,18 @@ export class MainMenuScene extends GameScene {
       day: galaxy?.gameDays ?? 0,
       seed: galaxy?.id ?? "—",
     });
+  }
+
+  /**
+   * Replay onboarding: clear the browser-level "seen" set so every screen's
+   * first-time help hint auto-shows again on the next visit (and «?» still
+   * works as before). Browser-level only — no game-state/schema change, so it
+   * survives «Новая игра» exactly like the rest of the onboarding flags.
+   */
+  private handleReplayOnboarding(): void {
+    logger.info("Replaying onboarding — clearing seen help-hints");
+    resetSeen();
+    this.showMessage("Обучение сброшено — подсказки появятся снова", 0x66ffcc);
   }
 
   private async handleNewGame(): Promise<void> {
@@ -504,7 +528,7 @@ export class MainMenuScene extends GameScene {
     }
   }
 
-  private showMessage(message: string): void {
+  private showMessage(message: string, color = 0xff4444): void {
     const width = this.renderer.app.screen.width;
     const height = this.renderer.app.screen.height;
 
@@ -526,7 +550,7 @@ export class MainMenuScene extends GameScene {
       style: {
         fontFamily: "Courier New",
         fontSize: 16,
-        fill: 0xff4444,
+        fill: color,
       },
     });
     msgText.anchor.set(0.5);
@@ -534,7 +558,8 @@ export class MainMenuScene extends GameScene {
     const buttonsY = this.buttonsContainer
       ? this.buttonsContainer.y
       : height / 2;
-    msgText.y = buttonsY + 100;
+    // Below the button stack (the lowest button sits at relative y≈140).
+    msgText.y = buttonsY + 180;
     this.renderer.uiLayer.addChild(msgText);
     this.currentMsgText = msgText;
 
