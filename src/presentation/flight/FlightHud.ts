@@ -1263,6 +1263,8 @@ export class FlightHud implements FlightModule {
             );
             return stack?.amount ?? 0;
           },
+          this.gameEngine.galaxy ?? undefined,
+          this.gameEngine.player?.currentSystemId ?? "",
         );
         this.uiLayer.addChild(this.questJournalUI.container);
         logger.info("Quest journal opened");

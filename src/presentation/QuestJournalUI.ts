@@ -6,6 +6,11 @@ import { logger } from "@/utils/logger";
 import { TYPE_LABEL } from "@/presentation/JobBoardPanel";
 import { QuestType } from "@/types";
 import { ScrollableList } from "@/presentation/ui/ScrollableList";
+import {
+  questDestination,
+  type QuestDestination,
+  type QuestDestinationGalaxyLike,
+} from "@/systems/quests/questDestination";
 
 /**
  * Quest Journal UI - displays active and completed quests with progress
@@ -26,6 +31,13 @@ export class QuestJournalUI {
   // Used to show live cargo progress for COLLECT_ITEM objectives instead of the
   // frozen currentAmount (which is never incremented in production).
   private readonly cargoCarried: ((itemType: string) => number) | undefined;
+  // Structural galaxy view used to NAME the system a pending-return quest sends
+  // the player back to (the issuer planet's system). Undefined in unit tests /
+  // before the galaxy is wired — the system suffix is then simply omitted.
+  private readonly galaxy: QuestDestinationGalaxyLike | undefined;
+  // The player's current system id, fed to `questDestination` so the resolved
+  // descriptor's `sameSystem` is correct (used by the plot-route button).
+  private readonly currentSystemId: string;
   // Scrollable region wrapping the active quests when they overflow the panel
   // (replaces the old slice + dead "+N ещё" label). Null while everything fits.
   // Owns a window-level wheel listener that destroy() must tear down.
@@ -40,6 +52,8 @@ export class QuestJournalUI {
     currentDay = 0,
     resolveName?: (id: string) => string,
     cargoCarried?: (itemType: string) => number,
+    galaxy?: QuestDestinationGalaxyLike,
+    currentSystemId = "",
   ) {
     this.questManager = questManager;
     this.onClose = onClose;
@@ -47,6 +61,8 @@ export class QuestJournalUI {
     this.currentDay = currentDay;
     this.resolveName = resolveName ?? ((id) => id);
     this.cargoCarried = cargoCarried;
+    this.galaxy = galaxy;
+    this.currentSystemId = currentSystemId;
     this.container = new Container();
 
     // Center panel on screen
@@ -457,6 +473,28 @@ export class QuestJournalUI {
   }
 
   /**
+   * Resolve the destination a pending-return quest sends the player back to:
+   * the issuer planet (`quest.planetId`) and the system that hosts it. Returns
+   * the {@link questDestination} descriptor (system name + sameSystem, reused by
+   * the plot-route button), or null when no galaxy is wired (unit tests) or the
+   * issuer planet can't be located in it.
+   */
+  private returnDestination(quest: Quest): QuestDestination | null {
+    if (!this.galaxy || !quest.planetId || quest.planetId === "unknown") {
+      return null;
+    }
+    const issuerSystem = this.galaxy.systems.find((s) =>
+      s.planets.some((p) => p.id === quest.planetId),
+    );
+    if (!issuerSystem) return null;
+    return questDestination(
+      { targetSystemId: issuerSystem.id, targetPlanetId: quest.planetId },
+      this.galaxy,
+      this.currentSystemId,
+    );
+  }
+
+  /**
    * Create a compact card for a pending-return quest
    */
   private createPendingReturnCard(quest: Quest, yPos: number): Container {
@@ -490,13 +528,16 @@ export class QuestJournalUI {
     typeText.eventMode = "none";
     card.addChild(typeText);
 
-    // Return-to-issuer prompt in yellow
+    // Return-to-issuer prompt in yellow — name the system the issuer planet
+    // sits in (so the player knows WHERE to fly, not just which planet).
     const issuerPlanetId =
       quest.planetId && quest.planetId !== "unknown"
         ? this.resolveName(quest.planetId)
         : "?";
+    const dest = this.returnDestination(quest);
+    const systemSuffix = dest ? ` — система ${dest.systemName}` : "";
     const returnText = scaledText(
-      `↩ Вернитесь в ${issuerPlanetId}`,
+      `↩ Вернитесь в ${issuerPlanetId}${systemSuffix}`,
       12,
       0xffcc00,
       { rawColor: true, fontWeight: "bold" },

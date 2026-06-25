@@ -190,6 +190,59 @@ describe("QuestJournalUI pending-return section", () => {
     expect(emptyMsg).toBeUndefined();
   });
 
+  it("names the issuer planet's system in the return prompt when a galaxy is wired", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    // Galaxy whose system "Сириус" hosts the issuer planet "planet-alpha".
+    const galaxy = {
+      systems: [
+        {
+          id: "sys-home",
+          name: "Сириус",
+          planets: [{ id: "planet-alpha", name: "Альфа" }],
+        },
+      ],
+    };
+    const qs = makeQuestServiceWithPending([
+      makePendingReturnQuest({ planetId: "planet-alpha" }),
+    ]);
+    const ui = new QuestJournalUI(
+      qs,
+      1280,
+      720,
+      vi.fn(),
+      undefined,
+      0,
+      undefined,
+      undefined,
+      galaxy,
+      "sys-elsewhere", // player is in a different system
+    );
+    const texts = collectTexts(ui.container as unknown as TextNode);
+
+    const returnPrompt = texts.find(
+      (t) => t.includes("Вернитесь") && t.includes("система"),
+    );
+    expect(returnPrompt).toBeDefined();
+    expect(returnPrompt).toContain("Сириус");
+  });
+
+  it("omits the system suffix when no galaxy is wired (graceful fallback)", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    const qs = makeQuestServiceWithPending([
+      makePendingReturnQuest({ planetId: "planet-alpha" }),
+    ]);
+    // No galaxy arg → the system name can't be resolved; the prompt must not
+    // dangle a "— система" with nothing after it.
+    const ui = new QuestJournalUI(qs, 1280, 720, vi.fn());
+    const texts = collectTexts(ui.container as unknown as TextNode);
+
+    const returnPrompt = texts.find((t) => t.includes("Вернитесь"));
+    expect(returnPrompt).toBeDefined();
+    expect(returnPrompt).not.toContain("система");
+  });
+
   it("shows reward summary in pending-return card", async () => {
     const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
 

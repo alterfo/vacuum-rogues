@@ -61,12 +61,12 @@ if it's elsewhere, then approach the target planet in-system).
 **Files:**
 - Modify: the quest journal / active-objective UI (e.g. `src/presentation/QuestJournalUI.ts`)
 
-- [ ] For objectives with a `targetSystemId`, render the **system name** next to
+- [x] For objectives with a `targetSystemId`, render the **system name** next to
       the planet (e.g. «Вернуться: <planet> — система <system>») via
       `questDestination`.
-- [ ] write/extend a UI-content test asserting the system name appears for a
+- [x] write/extend a UI-content test asserting the system name appears for a
       return/target objective.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 3: «Проложить маршрут» button → existing routing
 **Files:**
