@@ -1,9 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { QuestVM } from "@/systems/quests/QuestVM";
-import { ALL_QUEST_SCRIPTS } from "@/systems/quests/TextQuestRegistry";
+import {
+  ALL_QUEST_SCRIPTS,
+  getQuestScript,
+} from "@/systems/quests/TextQuestRegistry";
 import { derelictSalvageScript } from "@/systems/quests/scripts/derelict-salvage";
 import { smugglingRunScript } from "@/systems/quests/scripts/smuggling-run";
 import { hostageRescueScript } from "@/systems/quests/scripts/hostage-rescue";
+import { sabotageHeistScript } from "@/systems/quests/scripts/sabotage-heist";
+import { firstContactScript } from "@/systems/quests/scripts/first-contact";
+import { plagueCrisisScript } from "@/systems/quests/scripts/plague-crisis";
 import type { QuestScript } from "@/systems/quests/QuestScript";
 
 // Advance through all autoExecute transitions until a manual choice or finished.
@@ -47,6 +53,9 @@ describe("New quest scripts — structural invariants", () => {
     derelictSalvageScript,
     smugglingRunScript,
     hostageRescueScript,
+    sabotageHeistScript,
+    firstContactScript,
+    plagueCrisisScript,
   ];
 
   for (const script of scripts) {
@@ -433,6 +442,338 @@ describe("Hostage Rescue quest", () => {
       advanceAuto(vm2);
       expect(vm1.currentLocation().id).toBe(vm2.currentLocation().id);
       expect(vm1.isSuccess()).toBe(vm2.isSuccess());
+    }
+  });
+});
+
+describe("Sabotage Heist quest", () => {
+  it("starts at approach with 0 credits, 100 rating, no partner", () => {
+    const vm = new QuestVM(sabotageHeistScript, 1);
+    expect(vm.currentLocation().id).toBe("approach");
+    expect(vm.getParam("credits")).toBe(0);
+    expect(vm.getParam("rating")).toBe(100);
+    expect(vm.getParam("partner")).toBe(0);
+  });
+
+  it("bribe gives a partner and costs 500 credits", () => {
+    const vm = new QuestVM(sabotageHeistScript, 1);
+    vm.execute("bribe_contact");
+    expect(vm.getParam("partner")).toBe(1);
+    expect(vm.getParam("credits")).toBe(-500);
+    expect(vm.currentLocation().id).toBe("inside");
+  });
+
+  it("bribe + grab core + honored partner: clean success, partner takes a cut, +rep", () => {
+    const vm = new QuestVM(sabotageHeistScript, 1);
+    vm.execute("bribe_contact"); // -500, partner = 1
+    vm.execute("grab_core"); // loot 3
+    vm.execute("meet_partner");
+    vm.execute("trust_partner"); // roll randomised
+    vm.setParam("roll", 8); // honored
+    advanceAuto(vm); // trust_check → escape_gate → payout_gate → disposition_gate → ending_clean
+    expect(vm.currentLocation().id).toBe("ending_clean");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("loot")).toBe(2); // 3 - 1 partner cut
+    expect(vm.getParam("rating")).toBe(110); // 100 + 10 honored
+    expect(vm.getParam("credits")).toBe(500); // -500 + 1000 (loot>=1 tier)
+  });
+
+  it("partner betrayal on a bad roll loses the loot (failure)", () => {
+    const vm = new QuestVM(sabotageHeistScript, 1);
+    vm.execute("bribe_contact");
+    vm.execute("grab_all"); // loot 5
+    vm.execute("meet_partner");
+    vm.execute("trust_partner");
+    vm.setParam("roll", 0); // betrayed
+    advanceAuto(vm); // → ending_betrayed
+    expect(vm.currentLocation().id).toBe("ending_betrayed");
+    expect(vm.isSuccess()).toBe(false);
+    expect(vm.getParam("loot")).toBe(0);
+    expect(vm.getParam("rating")).toBe(90); // 100 - 10
+  });
+
+  it("double-crossing the partner keeps the full haul but costs reputation", () => {
+    const vm = new QuestVM(sabotageHeistScript, 1);
+    vm.execute("bribe_contact"); // -500
+    vm.execute("grab_all"); // loot 5, alarm 3
+    vm.execute("double_cross"); // crossed = 1, rating -20
+    advanceAuto(vm); // escape_gate (alarm 3 < 6) → payout (loot>=5 +4000) → ending_double_cross
+    expect(vm.currentLocation().id).toBe("ending_double_cross");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("rating")).toBe(80); // 100 - 20
+    expect(vm.getParam("credits")).toBe(3500); // -500 + 4000
+  });
+
+  it("a loud entry plus the greedy grab gets you caught (failure)", () => {
+    const vm = new QuestVM(sabotageHeistScript, 1);
+    vm.execute("force_airlock"); // alarm 4
+    vm.execute("grab_all"); // alarm 7, loot 5
+    vm.execute("slip_out");
+    advanceAuto(vm); // escape_gate (alarm 7 >= 6) → ending_caught
+    expect(vm.currentLocation().id).toBe("ending_caught");
+    expect(vm.isSuccess()).toBe(false);
+  });
+
+  it("a quiet grab after a loud entry escapes cleanly", () => {
+    const vm = new QuestVM(sabotageHeistScript, 1);
+    vm.execute("force_airlock"); // alarm 4
+    vm.execute("grab_core"); // loot 3, no extra alarm
+    vm.execute("slip_out");
+    advanceAuto(vm); // alarm 4 < 6 → payout (loot>=3 +2500) → ending_clean
+    expect(vm.currentLocation().id).toBe("ending_clean");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("credits")).toBe(2500);
+  });
+
+  it("hacking clean (good roll) keeps the alarm down", () => {
+    const vm = new QuestVM(sabotageHeistScript, 1);
+    vm.execute("hack_grid"); // roll randomised
+    vm.setParam("roll", 9); // clean
+    advanceAuto(vm); // hack_check → inside
+    expect(vm.currentLocation().id).toBe("inside");
+    expect(vm.getParam("alarm")).toBe(0);
+  });
+
+  it("hacking loud (bad roll) raises the alarm", () => {
+    const vm = new QuestVM(sabotageHeistScript, 1);
+    vm.execute("hack_grid");
+    vm.setParam("roll", 0); // loud
+    advanceAuto(vm);
+    expect(vm.currentLocation().id).toBe("inside");
+    expect(vm.getParam("alarm")).toBe(5);
+  });
+
+  it("partner-only options are hidden without a partner", () => {
+    const vm = new QuestVM(sabotageHeistScript, 1);
+    vm.execute("force_airlock");
+    vm.execute("grab_core");
+    const ids = vm.availableTransitions().map((t) => t.id);
+    expect(ids).toContain("slip_out");
+    expect(ids).not.toContain("meet_partner");
+    expect(ids).not.toContain("double_cross");
+  });
+
+  it("result is deterministic for the same seed (partner path)", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const vm1 = new QuestVM(sabotageHeistScript, seed);
+      const vm2 = new QuestVM(sabotageHeistScript, seed);
+      vm1.execute("bribe_contact");
+      vm1.execute("grab_core");
+      vm1.execute("meet_partner");
+      vm1.execute("trust_partner");
+      advanceAuto(vm1);
+      vm2.execute("bribe_contact");
+      vm2.execute("grab_core");
+      vm2.execute("meet_partner");
+      vm2.execute("trust_partner");
+      advanceAuto(vm2);
+      expect(vm1.currentLocation().id).toBe(vm2.currentLocation().id);
+      expect(vm1.isSuccess()).toBe(vm2.isSuccess());
+    }
+  });
+});
+
+describe("First Contact quest", () => {
+  it("starts at the encounter with 0 trust and 100 rating", () => {
+    const vm = new QuestVM(firstContactScript, 1);
+    expect(vm.currentLocation().id).toBe("encounter");
+    expect(vm.getParam("trust")).toBe(0);
+    expect(vm.getParam("rating")).toBe(100);
+  });
+
+  it("greeting + reciprocate reaches a full alliance", () => {
+    const vm = new QuestVM(firstContactScript, 1);
+    vm.execute("broadcast"); // trust +2
+    vm.execute("reciprocate"); // trust +4 = 6
+    advanceAuto(vm); // exchange → resolution_gate → ending_alliance (trust >= 6)
+    expect(vm.currentLocation().id).toBe("ending_alliance");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("trust")).toBe(6);
+    expect(vm.getParam("credits")).toBe(3000);
+    expect(vm.getParam("rating")).toBe(130);
+  });
+
+  it("greeting + wary acceptance reaches a trade pact", () => {
+    const vm = new QuestVM(firstContactScript, 1);
+    vm.execute("broadcast"); // +2
+    vm.execute("accept_wary"); // +1 = 3
+    advanceAuto(vm); // → ending_trade_pact (trust >= 2)
+    expect(vm.currentLocation().id).toBe("ending_trade_pact");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("credits")).toBe(1500);
+    expect(vm.getParam("rating")).toBe(115);
+  });
+
+  it("demanding their tech sours it into a wary peace", () => {
+    const vm = new QuestVM(firstContactScript, 1);
+    vm.execute("broadcast"); // +2
+    vm.execute("demand_tech"); // -4 = -2
+    advanceAuto(vm); // → ending_wary_peace (trust < 2)
+    expect(vm.currentLocation().id).toBe("ending_wary_peace");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("credits")).toBe(0); // no credit reward
+    expect(vm.getParam("rating")).toBe(105);
+  });
+
+  it("a curious scan (good roll) leads into the greeting", () => {
+    const vm = new QuestVM(firstContactScript, 1);
+    vm.execute("scan"); // roll randomised
+    vm.setParam("roll", 9); // curious
+    advanceAuto(vm); // scan_reaction → greeting
+    expect(vm.currentLocation().id).toBe("greeting");
+    expect(vm.getParam("trust")).toBe(0);
+  });
+
+  it("an alarming scan (bad roll) then standing down still reaches a wary peace", () => {
+    const vm = new QuestVM(firstContactScript, 1);
+    vm.execute("scan");
+    vm.setParam("roll", 0); // alarmed
+    advanceAuto(vm); // scan_reaction → standoff (trust -4)
+    expect(vm.currentLocation().id).toBe("standoff");
+    expect(vm.getParam("trust")).toBe(-4);
+    vm.execute("stand_down"); // +4 = 0
+    advanceAuto(vm); // exchange → resolution_gate → ending_wary_peace
+    expect(vm.currentLocation().id).toBe("ending_wary_peace");
+    expect(vm.isSuccess()).toBe(true);
+  });
+
+  it("firing a warning shot starts a war (failure)", () => {
+    const vm = new QuestVM(firstContactScript, 1);
+    vm.execute("raise_shields"); // -3
+    vm.execute("fire_warning"); // -6 = -9
+    advanceAuto(vm); // hostility_gate → ending_war (trust <= -6)
+    expect(vm.currentLocation().id).toBe("ending_war");
+    expect(vm.isSuccess()).toBe(false);
+    expect(vm.getParam("rating")).toBe(70);
+  });
+
+  it("holding aim after raising shields ends in a cold standoff (failure)", () => {
+    const vm = new QuestVM(firstContactScript, 1);
+    vm.execute("raise_shields"); // -3
+    vm.execute("hold_aim"); // -2 = -5 (> -6)
+    advanceAuto(vm); // hostility_gate → ending_cold_standoff
+    expect(vm.currentLocation().id).toBe("ending_cold_standoff");
+    expect(vm.isSuccess()).toBe(false);
+    expect(vm.getParam("rating")).toBe(95);
+  });
+
+  it("result is deterministic for the same seed (scan path)", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const vm1 = new QuestVM(firstContactScript, seed);
+      const vm2 = new QuestVM(firstContactScript, seed);
+      vm1.execute("scan");
+      advanceAuto(vm1);
+      vm2.execute("scan");
+      advanceAuto(vm2);
+      expect(vm1.currentLocation().id).toBe(vm2.currentLocation().id);
+      expect(vm1.getParam("trust")).toBe(vm2.getParam("trust"));
+    }
+  });
+});
+
+describe("Plague Crisis quest", () => {
+  it("starts at briefing with 10 time, 0 credits, 100 rating", () => {
+    const vm = new QuestVM(plagueCrisisScript, 1);
+    expect(vm.currentLocation().id).toBe("briefing");
+    expect(vm.getParam("time")).toBe(10);
+    expect(vm.getParam("credits")).toBe(0);
+    expect(vm.getParam("rating")).toBe(100);
+  });
+
+  it("fast clear route + treating everyone saves the whole colony in time", () => {
+    const vm = new QuestVM(plagueCrisisScript, 1);
+    vm.execute("fast_route"); // time 8, roll randomised
+    vm.setParam("roll", 8); // clear
+    advanceAuto(vm); // fast_check → arrival (time 7)
+    expect(vm.currentLocation().id).toBe("arrival");
+    expect(vm.getParam("time")).toBe(7);
+    vm.execute("treat_all"); // time 2
+    advanceAuto(vm); // treat_all_outcome → ending_treat_all
+    expect(vm.currentLocation().id).toBe("ending_treat_all");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("time")).toBe(2);
+    expect(vm.getParam("credits")).toBe(2000);
+    expect(vm.getParam("rating")).toBe(130);
+  });
+
+  it("the slow route leaves no time to treat everyone (too late, failure)", () => {
+    const vm = new QuestVM(plagueCrisisScript, 1);
+    vm.execute("safe_route"); // time 4
+    expect(vm.currentLocation().id).toBe("arrival");
+    vm.execute("treat_all"); // time -1 → crit → ending_too_late
+    expect(vm.currentLocation().id).toBe("ending_too_late");
+    expect(vm.isSuccess()).toBe(false);
+  });
+
+  it("a costly fast detour also runs out of time when treating everyone", () => {
+    const vm = new QuestVM(plagueCrisisScript, 1);
+    vm.execute("fast_route"); // time 8
+    vm.setParam("roll", 0); // hit
+    advanceAuto(vm); // fast_hit → arrival (time 3)
+    expect(vm.getParam("time")).toBe(3);
+    vm.execute("treat_all"); // time -2 → too late
+    expect(vm.currentLocation().id).toBe("ending_too_late");
+    expect(vm.isSuccess()).toBe(false);
+  });
+
+  it("triage saves most even after the slow route (success)", () => {
+    const vm = new QuestVM(plagueCrisisScript, 1);
+    vm.execute("safe_route"); // time 4
+    vm.execute("triage"); // time 2
+    expect(vm.currentLocation().id).toBe("ending_triage");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("credits")).toBe(1500);
+    expect(vm.getParam("rating")).toBe(115);
+  });
+
+  it("profiteering saves some but tanks reputation (success)", () => {
+    const vm = new QuestVM(plagueCrisisScript, 1);
+    vm.execute("safe_route"); // time 4
+    vm.execute("profiteer"); // time 2
+    expect(vm.currentLocation().id).toBe("ending_profiteer");
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.getParam("credits")).toBe(2500);
+    expect(vm.getParam("rating")).toBe(75);
+  });
+
+  it("result is deterministic for the same seed (fast route)", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const vm1 = new QuestVM(plagueCrisisScript, seed);
+      const vm2 = new QuestVM(plagueCrisisScript, seed);
+      vm1.execute("fast_route");
+      advanceAuto(vm1);
+      vm2.execute("fast_route");
+      advanceAuto(vm2);
+      expect(vm1.currentLocation().id).toBe(vm2.currentLocation().id);
+      expect(vm1.getParam("time")).toBe(vm2.getParam("time"));
+    }
+  });
+});
+
+describe("Quest script registry", () => {
+  it("all script ids are unique within ALL_QUEST_SCRIPTS", () => {
+    const ids = ALL_QUEST_SCRIPTS.map((s) => s.id);
+    const unique = new Set(ids);
+    expect(unique.size).toBe(ids.length);
+  });
+
+  it("every script resolves via getQuestScript by its id", () => {
+    for (const script of ALL_QUEST_SCRIPTS) {
+      expect(getQuestScript(script.id)).toBe(script);
+    }
+  });
+
+  it("includes the six Task 1 + Task 2 branching scripts", () => {
+    const ids = new Set(ALL_QUEST_SCRIPTS.map((s) => s.id));
+    for (const id of [
+      "derelict-salvage",
+      "smuggling-run",
+      "hostage-rescue",
+      "sabotage-heist",
+      "first-contact",
+      "plague-crisis",
+    ]) {
+      expect(ids.has(id)).toBe(true);
     }
   });
 });

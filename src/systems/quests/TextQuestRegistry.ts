@@ -8,6 +8,9 @@ import { auctionScript } from "./scripts/auction";
 import { derelictSalvageScript } from "./scripts/derelict-salvage";
 import { smugglingRunScript } from "./scripts/smuggling-run";
 import { hostageRescueScript } from "./scripts/hostage-rescue";
+import { sabotageHeistScript } from "./scripts/sabotage-heist";
+import { firstContactScript } from "./scripts/first-contact";
+import { plagueCrisisScript } from "./scripts/plague-crisis";
 
 export const ALL_QUEST_SCRIPTS: readonly QuestScript[] = [
   customsScript,
@@ -19,6 +22,9 @@ export const ALL_QUEST_SCRIPTS: readonly QuestScript[] = [
   derelictSalvageScript,
   smugglingRunScript,
   hostageRescueScript,
+  sabotageHeistScript,
+  firstContactScript,
+  plagueCrisisScript,
 ];
 
 const REGISTRY = new Map<string, QuestScript>(

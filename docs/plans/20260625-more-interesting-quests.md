@@ -75,14 +75,14 @@ must keep each new script **dedup-friendly**: a stable, unique `id`.)
 - Modify: `src/systems/quests/TextQuestRegistry.ts`
 - Extend: `src/tests/quests/newQuestScripts.test.ts`
 
-- [ ] Author 3 more branching scripts (heist with a betrayal branch; first-contact
+- [x] Author 3 more branching scripts (heist with a betrayal branch; first-contact
       diplomacy with peace/hostility outcomes; medical/plague time-pressure choice),
-      stable unique ids.
-- [ ] Register all 3 in `ALL_QUEST_SCRIPTS`.
-- [ ] write `QuestVM` tests per script (branches terminal, rewards correct, no dead
+      stable unique ids. (`sabotage-heist`, `first-contact`, `plague-crisis`)
+- [x] Register all 3 in `ALL_QUEST_SCRIPTS`. (now 12 scripts)
+- [x] write `QuestVM` tests per script (branches terminal, rewards correct, no dead
       ends, ids unique); add a registry test asserting all ids in `ALL_QUEST_SCRIPTS`
-      are unique and resolve via `getQuestScript`.
-- [ ] run tests — green.
+      are unique and resolve via `getQuestScript`. (`newQuestScripts.test.ts`, 95 tests)
+- [x] run tests — green (newQuestScripts 95 + questScripts 100 = 195 passing).
 
 ### Task 3: Widen procedural quest flavor
 **Files:**
