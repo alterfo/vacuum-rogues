@@ -59,7 +59,7 @@ still show, but not the number).
 **Files:**
 - Modify: `src/presentation/CLAUDE.md` (InfoCenter note)
 
-- [ ] Note that InfoCenter margins respect partial observability — shown only for known
+- [x] Note that InfoCenter margins respect partial observability — shown only for known
       (explored/visited) systems.
 
 ## Post-Completion

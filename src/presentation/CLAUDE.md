@@ -91,6 +91,18 @@ the chosen id (planet id or system id) to the existing
 ctor (both optional — the system suffix/button simply omit when absent). Pure
 helper + reuse of existing routing: no domain/schema/save change.
 
+**InfoCenter trade margins respect partial observability** (`rumorPanel.ts`,
+`docs/plans/20260625-infocenter-margin-known-systems-only.md`). A rumor's **margin
+number** is shown only when **every system the route depends on is known** — both
+endpoints explored on the star-map or visited. "Known" is the pure predicate
+`isSystemKnown(player, galaxy, systemId)` (`src/systems/galaxy/systemKnown.ts`) =
+`player.hasVisited(id) || system.explored`. `buildRumorPanel(galaxy, max, player)`
+threads the `player` and masks the margin («маржа ~?%» via `describeRumor(r, galaxy,
+true)`) for a route touching an undiscovered system, while the товар/route text still
+renders — so the player can't read the profit of a route into a system they've never
+seen. With **no** `player` (legacy callers/tests) nothing is masked. Presentation/visibility
+only — the rumor data is unchanged, so no domain/schema/save change.
+
 Three most-hit PixiJS 8 traps:
 - **`eventMode='none'` on Text over clickable areas** — Text defaults to `'auto'` and blocks
   clicks underneath; set `'none'` on labels so clicks pass through.
