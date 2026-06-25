@@ -81,9 +81,14 @@ pause** (pause = everything stops, correct).
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only SpaceFlightScene
-      (+ the helper + tests) affected; no schema/migration.
-- [ ] full unit suite green; `npm run test:playtest` green; lint clean; build ok.
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — only SpaceFlightScene
+      (+ the helper + tests) affected; no schema/migration. (Confirmed: changed
+      symbols = SpaceFlightScene.currentDay/updateShip/advanceWaitTime/endTurn + the
+      new `flight/combatOrbitClock.ts` helper + the two flight tests; no schema/
+      migration/domain symbol in the diff.)
+- [x] full unit suite green; `npm run test:playtest` green; lint clean; build ok.
+      (Unit: 334 files, 2805 passed / 1 skipped. Playtest: 8 files, 63 passed / 1
+      skipped. Lint: 0 errors. Build: ✓ in ~3.9s.)
 
 ### Task 4: Update documentation
 **Files:**
