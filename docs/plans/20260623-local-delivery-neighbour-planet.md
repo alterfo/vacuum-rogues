@@ -132,10 +132,17 @@ neighbour with the cargo, and single-planet systems fall back to a different que
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only quest
-      generation/completion + schema affected.
-- [ ] full unit suite `npm test -- --run` green (incl. the updated fixtures);
-      `npm run lint` clean; `npm run build` succeeds.
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — feature blast
+      radius (4 local-delivery commits, `git diff fee7e6d~1 HEAD -- src/`) is
+      exactly quest generation (`QuestGenerator.ts`), completion
+      (`deliveryCompletion.ts`/`PlanetScene.ts`), schema (`schemas.ts`/`Quest.ts`/
+      `QuestManager.ts`/`IQuestService.ts`) + Task-4 journal nav
+      (`QuestJournalUI.ts`/`GameEngine.ts`). (Full-branch detect_changes reads
+      "critical" only from unrelated branch divergence — docs/plans/gitnexus
+      skills/banking/webp assets — not this feature.)
+- [x] full unit suite `npm test -- --run` green: 3082 passed, 3 skipped, 0 failed
+      (incl. the updated fixtures); `npm run lint` 0 errors; `npm run build`
+      succeeds (built in 3.73s).
 
 ### Task 6: Update documentation
 **Files:**
