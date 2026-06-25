@@ -6,7 +6,11 @@ import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
 import type { Station } from "@/domain/Station";
 import type { StarSystem } from "@/domain/StarSystem";
-import { buildRumorPanel, RUMOR_PANEL_HEADER } from "./rumorPanel";
+import {
+  buildRumorPanel,
+  RUMOR_PANEL_HEADER,
+  RUMOR_PANEL_MAX,
+} from "./rumorPanel";
 import { SceneType, NpcRole, ResourceType } from "@/types";
 import type { NewsEvent } from "@/types";
 import type {
@@ -733,7 +737,13 @@ export class InfoCenterScene extends GameScene {
     const PAD = 16;
     const HEADER_H = 24;
     const ROW_H = 22;
-    const data = buildRumorPanel(this.gameEngine?.galaxy ?? null);
+    // Partial observability: mask margins for routes touching systems the
+    // player hasn't explored/visited (`buildRumorPanel` consults `isSystemKnown`).
+    const data = buildRumorPanel(
+      this.gameEngine?.galaxy ?? null,
+      RUMOR_PANEL_MAX,
+      this.gameEngine?.player ?? null,
+    );
 
     const header = scaledText(`▸ ${RUMOR_PANEL_HEADER}`, 13, 0xffd166, {
       rawColor: true,

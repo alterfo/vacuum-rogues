@@ -78,19 +78,34 @@ export function resourceLabelRu(resource: ResourceType): string {
   return RESOURCE_RU[resource] ?? resource;
 }
 
+/** Masked margin copy when the route touches a system the player hasn't discovered. */
+export const RUMOR_MARGIN_MASKED = "маржа ~?%";
+
 /**
  * Russian one-liner for the news/Info Center feed:
  * "Везите <товар> из <A> в <B>: маржа ~N%". Uses the rumor's live
  * `lastMarginPct` so the headline stays current as the spread closes. System
  * names are resolved from the galaxy; unknown ids fall back to the raw id.
+ *
+ * Partial observability: pass `maskMargin = true` to hide the profit number
+ * («маржа ~?%») while keeping the route/location text — the InfoCenter masks the
+ * margin when a system the route depends on hasn't been explored/visited. The
+ * decision is made by the caller (presentation layer); this domain helper stays
+ * pure. Default `false` keeps every existing caller's output bit-identical.
  */
-export function describeRumor(rumor: RouteRumor, galaxy: Galaxy): string {
+export function describeRumor(
+  rumor: RouteRumor,
+  galaxy: Galaxy,
+  maskMargin = false,
+): string {
   const fromName =
     galaxy.systems.find((s) => s.id === rumor.fromSystemId)?.name ??
     rumor.fromSystemId;
   const toName =
     galaxy.systems.find((s) => s.id === rumor.toSystemId)?.name ??
     rumor.toSystemId;
-  const margin = Math.round(rumor.lastMarginPct);
-  return `Везите ${resourceLabelRu(rumor.resource)} из ${fromName} в ${toName}: маржа ~${margin}%`;
+  const margin = maskMargin
+    ? RUMOR_MARGIN_MASKED
+    : `маржа ~${Math.round(rumor.lastMarginPct)}%`;
+  return `Везите ${resourceLabelRu(rumor.resource)} из ${fromName} в ${toName}: ${margin}`;
 }

@@ -41,12 +41,12 @@ still show, but not the number).
 **Files:**
 - Modify: `src/presentation/InfoCenterScene.ts` / `src/presentation/rumorPanel.ts`
 
-- [ ] When rendering a route/rumor margin, show the number **only if every system the
+- [x] When rendering a route/rumor margin, show the number **only if every system the
       margin depends on is known**; otherwise hide the margin (e.g. «—» / omit it / "?"),
       keeping the rest of the row. Known systems are unchanged.
-- [ ] write tests: a rumor whose endpoint is unknown renders without a margin; one whose
+- [x] write tests: a rumor whose endpoint is unknown renders without a margin; one whose
       endpoints are all known renders the margin.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 3: Verify acceptance criteria
 **Files:**
