@@ -89,5 +89,5 @@ can't collapse the circle and leave a ship mouse-dead in combat. Detail in `play
 
 Historical playtest bugs and detailed conventions (re-entry spawn, NPC spawn states, route
 dashing, sun clearance, pause-finishes-day, font-scale ship pos, NPC purposeful behavior,
-ship movement model, NPC clickability invariant) live in `playtest-traps.md` — read it before
-touching those areas.
+ship movement model, NPC clickability invariant, smoothed auto-follow/chase steering) live in
+`playtest-traps.md` — read it before touching those areas.

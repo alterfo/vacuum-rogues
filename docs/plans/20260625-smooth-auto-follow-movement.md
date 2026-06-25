@@ -159,9 +159,15 @@ jitter doesn't re-plot at all.
 **Files:**
 - Modify: `src/presentation/flight/playtest-traps.md` (or `flight/CLAUDE.md`)
 
-- [ ] Note the smoothed chase steering: continuous turn-rate steering toward a
+- [x] Note the smoothed chase steering: continuous turn-rate steering toward a
       smoothed lead point, curved re-plot reserved for static destinations + star
       avoidance, re-aim hysteresis — so auto-follow/pursuit no longer stutters.
+      (Added the "Smoothed Auto-Follow / Chase Steering" section to
+      `src/presentation/flight/playtest-traps.md` — `smoothLeadPoint`/
+      `shouldReplotRoute` helpers + `NpcShipManager.steerTowardLead`'s three branches
+      [fresh-leg replot / star-avoid replot / direct nudge], `LEAD_SMOOTHER`/
+      `REPLOT_MIN_INTERVAL_MS` tuning, and the "don't re-plot every chase frame" trap;
+      added the pointer to `flight/CLAUDE.md`'s playtest-traps index line.)
 
 ## Technical Details
 - Pure-presentation change; `ShipPhysics` already turn-rate-limits, so the smooth

@@ -124,3 +124,47 @@ Completed `20260619-space-combat-maneuver-and-engage` (real-time-with-turns in-f
 - **Fire cadence = one shot per `GAME_BALANCE.combatFireIntervalMs` per ship** (both sides), driven by accumulator timers in `CombatModule.update`. Combat advances on the raw RAF delta (not time-scaled), and the timer resets to 0 on fire, so a multi-interval lag spike fires at most once that frame — acceptable at real frame rates. Guarded by `src/tests/flight/combatEngagement.test.ts`.
 - **Active pause overlays the real-time loop (`20260619-inflight-active-pause-combat`).** The fight is real-time *until* a shot lands on the player: `CombatModule.fireNpcShot` raises `onPlayerUnderAttack`, which the `CombatPauseController` debounces to the **first** hit per engagement and freezes the turn (`SpaceFlightScene.updateShip` early-returns and the `CombatModule`/`NpcShipManager` `isTurnRunning` deps fold in `!combatPause.paused`, so movement, the calendar, NPC AI and fire timers halt — planet/sun/comet cosmetic spin deliberately does NOT, see `20260620-planets-moons-rotate-during-pause`). It **re-pauses on selected-target-lost-with-survivors** (`removeCombatant` → `onTargetLost` → `loseTarget`). Because a pause can be raised mid-frame, `CombatModule.update` re-checks the freeze gate **before** `advancePlayerTimer` and `advanceNpcTimers` (and `advanceNpcTimers` re-checks per iteration) so no survivor fires on the pausing frame; `confirm()` leaves the pause *before* firing so a confirmed kill's target-lost re-pause isn't swallowed. The full controller/overlay/keybinding contract lives in `flight/CLAUDE.md` (active-pause section); guarded by `src/tests/combat/{combatPause,pauseFreezesTime,confirmAttack,pauseHooks,targetLostRepause}.test.ts` + `playtest-regression.spec.ts` #8.
 - **Deterministic combat E2E uses the `__DEBUG__`-guarded `NpcShipManager.e2eForceAggressorInRange(weaponRange)` seam** (returns null in production): it teleports NPC[0] just inside weapon range, sets fixed hull/damage so the staged fight reliably trades hull, and flags it hostile + aggressive. Reuse this seam for new combat E2E rather than poking RNG'd live NPCs. Used by `playtest-regression.spec.ts` dogfight #7.
+
+## Smoothed Auto-Follow / Chase Steering
+
+Completed `20260625-smooth-auto-follow-movement`. Auto-follow (the «Приблизиться»
+approach + in-fight auto-pursuit) used to look **jerky/twitchy**: every frame the ship
+**re-plotted a curved catmull-rom route** (`executeRouteTo`/`aimRoute`) at the moving
+target's lead point, and that lead point itself **jumped** frame-to-frame because the
+target's velocity is estimated from its wobbling rendered heading (`cos/sin(rotation) ×
+npcSpeed`), which `solveInterceptPoint` amplifies by the time-to-intercept. So the aim
+oscillated AND the ship kept snapping onto a freshly-built spline. The fix steers
+**continuously** toward a **smoothed** lead point via `ShipPhysics`' existing turn-rate
+limiter, and **reserves the curved re-plot for static destinations + star avoidance**.
+
+- **`smoothLeadPoint(previous, raw, {alpha, maxStepPx})` in `src/utils/flightGeometry.ts`
+  is the lead-point smoother** — an EMA step of `alpha` toward `raw`, then a hard
+  `maxStepPx` clamp on the per-frame move; adopts `raw` verbatim on the first frame (no
+  previous). Because `alpha ≤ 1` and the clamp only ever *shortens* the step, the smoothed
+  point **converges monotonically** toward a steadily-moving target (never overshoots).
+  `NpcShipManager` tunes `LEAD_SMOOTHER = { alpha: 0.25, maxStepPx: 6 }` — `maxStepPx` is
+  kept **≤ the 8px smoothness bound** (`SMOOTH_BOUND_PX`) the Task 1 characterization fails
+  on the raw lead (≈72px/frame).
+- **`shouldReplotRoute(state, freshLead, thresholdPx, nowMs, minIntervalMs)` is the re-aim
+  hysteresis** — it re-plots the curved route only when **BOTH** at least `minIntervalMs`
+  has elapsed since the last re-plot **AND** the fresh lead has drifted past `thresholdPx`
+  (the existing `shouldReaim` distance gate). Sub-threshold jitter therefore never re-plots;
+  a fast-manoeuvring target re-plots at most once per interval
+  (`REPLOT_MIN_INTERVAL_MS = 500`).
+- **`NpcShipManager.steerTowardLead` is the single chase-steering decision** (called from
+  `updateCombatPursuit` + the non-combat «Приблизиться» approach): smooth the lead, then —
+  (1) **fresh leg** (`!physics.isMoving`, stopped) → curved `replotChase` to re-arm the turn
+  and establish a star-avoiding path; (2) **direct lead-line crosses the star**
+  (`leadLineCrossesStar` → `avoidStarPath(...).length > 1`, using the new
+  `getStarAvoidRadius` dep) → throttled curved `replotChase` (hysteresis-gated so it doesn't
+  thrash); (3) **clear shot** → a direct `physics.setTarget(lead.x, lead.y)` heading nudge —
+  `ShipPhysics` turn-rate-limits it, so the motion stays smooth (no snap). The smoother
+  resets (`smoothedLead = null`) only on a **fresh chase leg** (target id change), so a new
+  chase never lags toward the previous target's last lead.
+- **Do NOT re-plot the spline every chase frame** "to keep aiming" — that is exactly the
+  stutter this replaced. The pre-combat «Перехват» switch case + the engage/in-range and
+  `followNpcId`/`approachNpcId` lifecycle are unchanged (when a fight starts/ends is
+  identical). Guarded by `src/tests/flight/chaseSteering*.test.ts` (smoother monotonic
+  convergence + per-frame aim ≤ `SMOOTH_BOUND_PX`, hysteresis blocks under-threshold, and
+  the real `updateCombatPursuit` keeps |Δheading| ≤ `rotationSpeed·dt` while closing to and
+  holding `WEAPON_RANGE`).
