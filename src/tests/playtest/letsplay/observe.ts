@@ -42,8 +42,13 @@ export type PlayerActionKind =
   | "repair" // restore hull at a repair-capable base
   | "wait"; // pass / advance a frame
 
-/** Canonical action order so two equal states yield identical `legalActions`. */
-const ACTION_ORDER: readonly PlayerActionKind[] = [
+/**
+ * Canonical action order so two equal states yield identical `legalActions`.
+ * Also the fixed **action vocabulary** a neural policy's output head indexes into
+ * (`NeuralPolicy` maps `scores[i]` → `ACTION_ORDER[i]`), so the ordering is a
+ * single source of truth shared by the legal-action surface and the net seam.
+ */
+export const ACTION_ORDER: readonly PlayerActionKind[] = [
   "move",
   "warp",
   "land",

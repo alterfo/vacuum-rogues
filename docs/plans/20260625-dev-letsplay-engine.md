@@ -115,13 +115,13 @@ supersedes).
 **Files:**
 - Create: `src/tests/playtest/letsplay/NeuralPolicy.ts` (+ test)
 
-- [ ] Add a `NeuralPolicy implements PlayerPolicy` that will load a trained ONNX player
+- [x] Add a `NeuralPolicy implements PlayerPolicy` that will load a trained ONNX player
       net via a **dev-only dynamic import** and map net output → legal `Action`; for now
       a documented stub that throws "not trained yet" unless a model path is provided,
       so the heuristic remains the default. (Training/export is Post-Completion.)
-- [ ] write tests: `NeuralPolicy` with no model is inert/falls back; the action mapping
+- [x] write tests: `NeuralPolicy` with no model is inert/falls back; the action mapping
       from a stubbed net output is legal.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 6: Verify acceptance criteria
 **Files:**
