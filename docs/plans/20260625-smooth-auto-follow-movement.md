@@ -143,10 +143,17 @@ jitter doesn't re-plot at all.
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only the chase
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — only the chase
       steering helpers + NpcShipManager/SpaceFlightScene affected.
-- [ ] full unit suite green; `npm run test:playtest` green; `npm run lint` clean;
+      (Tasks 1-3 diff touches exactly `src/utils/flightGeometry.ts`,
+      `src/presentation/flight/NpcShipManager.ts`,
+      `src/presentation/SpaceFlightScene.ts` + the three `chaseSteering*` tests +
+      this plan — no other symbols/processes affected; current working-tree
+      `detect_changes` reports only unrelated `AGENTS.md` edits.)
+- [x] full unit suite green; `npm run test:playtest` green; `npm run lint` clean;
       `npm run build` ok.
+      (unit: 326 files / 2736 tests pass; playtest: 4 files / 15 tests pass;
+      lint: 0 errors; `tsc && vite build` ok.)
 
 ### Task 5: Update documentation
 **Files:**
