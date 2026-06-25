@@ -115,11 +115,18 @@ neighbour with the cargo, and single-planet systems fall back to a different que
   quest journal) — verify it uses `targetPlanetId`
 - Create/Modify tests under `src/tests/`
 
-- [ ] Confirm the in-flight route / quest-journal destination for a local delivery
+- [x] Confirm the in-flight route / quest-journal destination for a local delivery
       points at the **neighbour** `targetPlanetId` (not the issuer), so the player
       can navigate there; wire it if it currently keys off the system only.
-- [ ] write/extend a test for the destination resolution.
-- [ ] run touched tests — green.
+      (Local delivery has only a COLLECT_ITEM objective — no VISIT objective — so
+      the active card now resolves `targetPlanetId` via `questDestination`/
+      `questRouteAction` and offers a "→ Лететь к цели" route to the neighbour
+      plus a "Куда" highlight. Cross-system deliveries keep routing via their own
+      VISIT_LOCATION objective. The route id flows through the existing
+      `onNavigateToObjective` → `SpaceFlightScene.navigateToQuestObjective` seam.)
+- [x] write/extend a test for the destination resolution.
+      (`src/tests/presentation/questJournalDeliveryNav.test.ts`.)
+- [x] run touched tests — green.
 
 ### Task 5: Verify acceptance criteria
 **Files:**

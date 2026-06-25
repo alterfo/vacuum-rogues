@@ -268,6 +268,20 @@ export class QuestJournalUI {
     typeText.eventMode = "none";
     card.addChild(typeText);
 
+    // A local courier run («Местный подряд») has only a COLLECT_ITEM objective —
+    // no VISIT objective to host the "→ Лететь к цели" button — yet its goods go
+    // to a concrete NEIGHBOUR planet (`targetPlanetId`). Resolve that destination
+    // so the cargo objective can offer a route to the neighbour. Cross-system
+    // deliveries already route via their own VISIT_LOCATION objective, so skip
+    // those (they keep the existing per-objective button).
+    const hasVisitObjective = quest.objectives.some(
+      (o) => o.type === "VISIT_LOCATION" || o.type === "VISIT_SYSTEM",
+    );
+    const courierDest = hasVisitObjective
+      ? null
+      : this.activeDestination(quest);
+    const courierNavId = courierDest ? this.routeNavId(courierDest) : null;
+
     // Objectives
     let objY = 35;
     for (const objective of quest.objectives) {
@@ -308,7 +322,9 @@ export class QuestJournalUI {
             ? objective.locationId
             : objective.type === "VISIT_SYSTEM" && objective.targetSystemId
               ? objective.targetSystemId
-              : null
+              : objective.type === "COLLECT_ITEM" && courierNavId
+                ? courierNavId
+                : null
           : null;
       if (navTargetId) {
         const navBtn = this.createNavigateButton(navTargetId);
@@ -363,6 +379,21 @@ export class QuestJournalUI {
         color: quest.type === QuestType.TEXT_ADVENTURE ? 0x66ffcc : 0xaaaaaa,
       });
     }
+    // Name the delivery NEIGHBOUR (a «Местный подряд» courier target) so the
+    // player sees WHERE the goods go — distinct from the issuer ("Выдан"). Only
+    // for the in-system courier case (cross-system deliveries already name their
+    // target system above, and route via their VISIT_LOCATION objective).
+    if (
+      courierDest &&
+      quest.targetPlanetId &&
+      quest.targetPlanetId !== quest.planetId
+    ) {
+      questHighlights.push({
+        label: "Куда",
+        value: this.resolveName(quest.targetPlanetId),
+        color: 0x66ffcc,
+      });
+    }
     if (questHighlights.length > 0) {
       const hTagSpacing = 150;
       let hx = 40;
@@ -397,6 +428,40 @@ export class QuestJournalUI {
     }
 
     return card;
+  }
+
+  /**
+   * Resolve where an ACTIVE contract sends the goods — the concrete
+   * `targetPlanetId` (a «Местный подряд» neighbour) within `targetSystemId`.
+   * Returns the {@link questDestination} descriptor, or null when no galaxy is
+   * wired (unit tests) or the quest names no concrete target planet — so the
+   * caller falls back to system-level / no route.
+   */
+  private activeDestination(quest: Quest): QuestDestination | null {
+    if (!this.galaxy || !quest.targetPlanetId || !quest.targetSystemId) {
+      return null;
+    }
+    return questDestination(
+      {
+        targetSystemId: quest.targetSystemId,
+        targetPlanetId: quest.targetPlanetId,
+      },
+      this.galaxy,
+      this.currentSystemId,
+    );
+  }
+
+  /**
+   * The id the route dispatch sends for a resolved destination: the planet id
+   * when same-system + concrete (in-system approach), else the system id
+   * (star-map warp) — mirrors {@link questRouteAction}, so the navigation seam
+   * (`SpaceFlightScene.navigateToQuestObjective`) can resolve it.
+   */
+  private routeNavId(dest: QuestDestination): string {
+    const action = questRouteAction(dest);
+    return action.kind === "approach-planet"
+      ? action.planetId
+      : action.systemId;
   }
 
   /**
