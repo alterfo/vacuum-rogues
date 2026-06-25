@@ -86,9 +86,13 @@ in-flight projectiles — honor the single `isPaused`/`isFrozen` gate.
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only CombatModule
-      (+ tests) affected.
-- [ ] full unit suite green; `npm run test:playtest` green; lint clean; build ok.
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — the two combat-pause
+      commits (4767fab, 7048f04) touch only `CombatModule.ts` + the new
+      `combatPauseFreeze.test.ts` (+ this plan doc); no other production symbol moves.
+      (The raw compare-vs-master flags critical risk only because the whole feature
+      branch has diverged far from master — unrelated to this change.)
+- [x] full unit suite green (2793 passed, 1 skipped); `npm run test:playtest` green
+      (63 passed, 1 skipped); lint clean (0 errors); build ok (`✓ built in 3.86s`).
 
 ### Task 4: Update documentation
 **Files:**
