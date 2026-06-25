@@ -67,14 +67,32 @@ reload resumes where you were.
 **Files:**
 - Modify: `src/presentation/flight/NpcShipManager.ts` (`updateCombatPursuit`), `ShipPhysics` if needed
 
-- [ ] Replace the "no steer inside range" with a **range-keeping** maneuver compatible with
+- [x] Replace the "no steer inside range" with a **range-keeping** maneuver compatible with
       arc-movement: steer **tangentially** to orbit at ≈weapon range (a circle-strafe), so
       the target stays inside `WEAPON_RANGE` and the ship never flies off — instead of
       overshoot→re-close. (Or allow a bounded combat slow-down if simpler; do NOT re-add
       free in-place pivot.)
-- [ ] write tests: an engaged ship keeps the target within `WEAPON_RANGE` over N ticks (no
+      (`NpcShipManager.steerCombatOrbit`: inside weapon range, steer toward a carrot
+      projected `COMBAT_ORBIT_CARROT`=2000px along a tangent+radial heading — radial pulls
+      back onto `COMBAT_ORBIT_RANGE`=0.6×240. The far carrot keeps ShipPhysics in cruise
+      (no decel/stop) so only the accurate, per-frame heading is consumed; plotted via
+      `setPath` to stay a non-final leg and hide the heading crosshair. The heading is NOT
+      smoothed — a turn-rate-limited smoother lags the live geometry and the ship
+      slingshots out; ShipPhysics still turn-rate-limits the hull rotation, so motion stays
+      smooth. Verified across stationary/drifting/fleeing/closing targets: maxDist ≤232px,
+      in-range 1.00.)
+- [x] write tests: an engaged ship keeps the target within `WEAPON_RANGE` over N ticks (no
       unbounded orbit); the player's weapon now has a target in range each cadence → fires.
-- [ ] run tests — Task-1 pursuit + fire repro now pass.
+      (`combatOrbit.test.ts` flipped from `it.fails` to `it`: post-entry maxDist ≤ WR×1.05
+      and in-range fraction ≥ 0.85 over 240 ticks — both green, so auto-fire's
+      `pickTargetInRange` has a target nearly every cadence.)
+- [x] run tests — Task-1 pursuit + fire repro now pass. (combatOrbit + chaseSteering +
+      combatPursuit all green; full flight/combat/presentation suite 514 green, lint+tsc
+      clean, real-engine playtest 67 green. `chaseSteering.steering.test.ts`: the
+      approach-smoothness aim-jump metric is now scoped to the pre-WR *approach* phase via a
+      pre-steer-distance guard — matching that test's own documented intent to exclude the
+      in-range hold — since the new in-range range-keeping deliberately snaps the steering
+      carrot; no assertion bound changed.)
 
 ### Task 3: Break off — route/flee overrides auto-pursuit
 **Files:**

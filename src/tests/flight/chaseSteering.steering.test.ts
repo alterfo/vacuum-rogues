@@ -170,13 +170,22 @@ function runChase(): SteerResult {
     target.x = targetX;
     target.container.rotation = noise() * headingNoiseRad; // ≈ heading 0 (+x)
 
+    // Pre-steer distance decides whether this frame is still the *approach* chase
+    // (the phase this smoothness metric pins) or the in-range circle-strafe. The
+    // combat orbit (range-keeping inside weapon range) deliberately steers toward a
+    // far heading carrot — a separate phase, exactly the "in-range hold" this test
+    // documents it does NOT mean to measure; only the approach aim must stay smooth.
+    const approachPhase =
+      Math.hypot(target.x - physics.shipX, target.y - physics.shipY) > WR;
+
     manager.updateCombat(dtMs);
     physics.update(dtMs);
 
-    // Aim smoothness: the point fed to physics must not whip frame-to-frame.
-    // Skip the first frame (initial seed jumps from the parked target at 0,0).
+    // Aim smoothness: the point fed to physics must not whip frame-to-frame during
+    // the approach. Skip the first frame (initial seed jumps from the parked target
+    // at 0,0).
     const aim = { x: physics.getTargetX(), y: physics.getTargetY() };
-    if (f >= 1 && prevAim) {
+    if (f >= 1 && prevAim && approachPhase) {
       maxAimJumpPx = Math.max(
         maxAimJumpPx,
         Math.hypot(aim.x - prevAim.x, aim.y - prevAim.y),

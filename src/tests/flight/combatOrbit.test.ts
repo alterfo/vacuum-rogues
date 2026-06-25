@@ -178,29 +178,20 @@ describe("combat pursuit holds the target in weapon range (orbit fix)", () => {
     expect(reachedRange).toBe(true);
   });
 
-  // RED today (Task 1 repro) — `it.fails` so the known-failing reproduction is
-  // committable past the pre-commit test gate AND raises a loud signal the moment
-  // Task 2's orbit/strafe fix lands (the assertion starts passing → `it.fails`
-  // turns red). Convert these to plain `it` in Task 2 once the fix is in.
-  it.fails(
-    "keeps the target inside WEAPON_RANGE once engaged (no overshoot/orbit out)",
-    () => {
-      const { maxDistAfterEntry } = runCombatOrbit();
-      // "no steer inside range" lets the arc-moving ship coast past the target and
-      // out the far side, well beyond WEAPON_RANGE. The orbit/strafe fix (Task 2)
-      // must keep it bounded at ≈weapon range.
-      expect(maxDistAfterEntry).toBeLessThanOrEqual(WR * 1.05);
-    },
-  );
+  // GREEN since Task 2 — the controlled orbit/strafe (`steerCombatOrbit`) holds the
+  // target inside WEAPON_RANGE continuously instead of the old "no steer inside
+  // range" that let the arc-moving ship coast through and oscillate out.
+  it("keeps the target inside WEAPON_RANGE once engaged (no overshoot/orbit out)", () => {
+    const { maxDistAfterEntry } = runCombatOrbit();
+    // The orbit/strafe fix keeps the ship bounded at ≈weapon range — it never
+    // coasts past the target and out the far side beyond WEAPON_RANGE.
+    expect(maxDistAfterEntry).toBeLessThanOrEqual(WR * 1.05);
+  });
 
-  it.fails(
-    "keeps a target in firing range nearly every frame (so auto-fire fires)",
-    () => {
-      const { inRangeFraction } = runCombatOrbit();
-      // The ship drops the target out of range for long stretches, so
-      // pickTargetInRange returns null and the player rarely fires. The fix keeps
-      // a target in range almost continuously.
-      expect(inRangeFraction).toBeGreaterThanOrEqual(0.85);
-    },
-  );
+  it("keeps a target in firing range nearly every frame (so auto-fire fires)", () => {
+    const { inRangeFraction } = runCombatOrbit();
+    // The strafe keeps a target in range almost continuously, so
+    // pickTargetInRange returns it each cadence and the player keeps firing.
+    expect(inRangeFraction).toBeGreaterThanOrEqual(0.85);
+  });
 });

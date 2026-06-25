@@ -237,6 +237,15 @@ export class NpcShipManager implements FlightModule {
   private readonly LOOT_TTL_MS = 60_000;
 
   private readonly WEAPON_RANGE = GAME_BALANCE.weaponRange;
+  // Combat strafe radius: while engaged, orbit the target at this standoff —
+  // comfortably inside WEAPON_RANGE — so auto-fire always has a target in range
+  // (the orbit fix). 0.6 × 240 = 144px.
+  private readonly COMBAT_ORBIT_RANGE = GAME_BALANCE.weaponRange * 0.6;
+  // The combat orbit steers toward a carrot projected this far ahead along the
+  // desired heading. It must exceed ShipPhysics' final-leg stopping distance so the
+  // ship never decelerates or stops mid-orbit (it would fall behind the target and
+  // slingshot out) — only the heading matters; the ship keeps cruising.
+  private readonly COMBAT_ORBIT_CARROT = 2000;
   private readonly SCANNER_RANGE = GAME_BALANCE.scannerRange;
   private readonly COMBAT_ESCAPE_RANGE = GAME_BALANCE.combatEscapeRange;
   private readonly SYSTEM_INNER_RADIUS = SYSTEM_GEOMETRY.innerRadius;
@@ -1621,9 +1630,16 @@ export class NpcShipManager implements FlightModule {
   /**
    * Real-time combat auto-track (Task 3): while a fight is engaged, keep the
    * player ship inside weapon range of the live combat target without a fresh
-   * "Ход". Re-aims toward the target's lead point whenever it drifts beyond
-   * weapon range (closing the gap), and holds position once inside range so the
-   * ship trades fire instead of ramming. Frozen by the active-pause.
+   * "Ход". Outside weapon range it re-closes toward the target's smoothed lead;
+   * inside range it circle-strafes at {@link COMBAT_ORBIT_RANGE}. Frozen by the
+   * active-pause.
+   *
+   * The old "no steer inside weapon range" hold is gone: ship movement is arc-only
+   * — the ship ALWAYS cruises forward and can't stop — so holding a dead heading
+   * let it coast straight through the target and out the far side, drop out of
+   * range, re-close, and oscillate unboundedly (the playtest orbit bug, which also
+   * starved auto-fire of an in-range target). A controlled tangential orbit keeps
+   * the target inside WEAPON_RANGE continuously, so auto-fire always has a hit.
    */
   private updateCombatPursuit(physics: ShipPhysics): void {
     if (this.deps.isPaused?.()) return; // active-pause: maneuvering frozen
@@ -1633,11 +1649,72 @@ export class NpcShipManager implements FlightModule {
     if (!sprite) return;
     const dx = sprite.x - physics.shipX;
     const dy = sprite.y - physics.shipY;
-    // Inside weapon range — hold station (keep firing), don't fly onto the target.
-    if (dx * dx + dy * dy <= this.WEAPON_RANGE * this.WEAPON_RANGE) return;
-    // Drifted out of range — re-close, steering continuously toward the target's
+    // Out of weapon range — re-close, steering continuously toward the target's
     // (smoothed) lead so the chase curves to where it's heading without stutter.
-    this.steerTowardLead(physics, sprite, targetId);
+    if (dx * dx + dy * dy > this.WEAPON_RANGE * this.WEAPON_RANGE) {
+      this.steerTowardLead(physics, sprite, targetId);
+      return;
+    }
+    // Inside weapon range — circle-strafe at COMBAT_ORBIT_RANGE so the target stays
+    // inside firing range continuously instead of coasting out of it.
+    this.steerCombatOrbit(physics, sprite);
+  }
+
+  /**
+   * Combat range-keeping (orbit/strafe): inside weapon range, circle the target at
+   * {@link COMBAT_ORBIT_RANGE} rather than holding a dead heading. The ship steers
+   * toward a carrot projected far along the desired orbit heading — a tangent
+   * (perpendicular to the target line, in the ship's current orbital sense) plus a
+   * radial pull back onto the strafe circle (outward when too close, inward when
+   * too far). Because the carrot is far ({@link COMBAT_ORBIT_CARROT}), ShipPhysics
+   * stays in its cruise phase and never decelerates/stops mid-orbit — only the
+   * heading is consumed, recomputed each frame, so the orbit tracks the live target
+   * accurately and holds it inside weapon range whether it's stationary, drifting,
+   * fleeing, or closing. Arc-movement-compatible; no in-place pivot.
+   *
+   * The heading is intentionally NOT smoothed: a turn-rate-limited smoother (as the
+   * approach uses) lags too far behind the live orbit geometry and the ship
+   * slingshots out — holding range needs the accurate instantaneous heading.
+   * ShipPhysics still turn-rate-limits the actual hull rotation, so the motion is
+   * smooth even though the steering carrot snaps. (The far carrot is plotted as a
+   * route via {@link ShipPhysics.setPath} so the redundant heading crosshair stays
+   * hidden during the fight.)
+   */
+  private steerCombatOrbit(physics: ShipPhysics, sprite: NpcShipSprite): void {
+    const toShipX = physics.shipX - sprite.x;
+    const toShipY = physics.shipY - sprite.y;
+    const dist = Math.hypot(toShipX, toShipY) || 1;
+    // Radial unit vector (target → ship) and the tangent in the ship's current
+    // orbital sense (so dropping into the orbit never demands a hard reversal).
+    const ux = toShipX / dist;
+    const uy = toShipY / dist;
+    const headDot =
+      Math.cos(physics.shipAngle) * -uy + Math.sin(physics.shipAngle) * ux;
+    const s = headDot >= 0 ? 1 : -1;
+    const tx = -uy * s;
+    const ty = ux * s;
+    // Radial correction: >0 pushes outward (too close), <0 pulls inward (too far).
+    const radial = (this.COMBAT_ORBIT_RANGE - dist) / this.COMBAT_ORBIT_RANGE;
+    let dirX = tx + ux * radial;
+    let dirY = ty + uy * radial;
+    const dlen = Math.hypot(dirX, dirY) || 1;
+    dirX /= dlen;
+    dirY /= dlen;
+    const carrot = {
+      x: physics.shipX + dirX * this.COMBAT_ORBIT_CARROT,
+      y: physics.shipY + dirY * this.COMBAT_ORBIT_CARROT,
+    };
+    this.lastAimX = carrot.x;
+    this.lastAimY = carrot.y;
+    // Plot as a >1-point route: keeps ShipPhysics on a non-final leg (full cruise,
+    // no deceleration/arc-cap) AND hides the heading crosshair while engaged.
+    physics.setPath([
+      carrot,
+      {
+        x: physics.shipX + dirX * this.COMBAT_ORBIT_CARROT * 2,
+        y: physics.shipY + dirY * this.COMBAT_ORBIT_CARROT * 2,
+      },
+    ]);
   }
 
   /**
