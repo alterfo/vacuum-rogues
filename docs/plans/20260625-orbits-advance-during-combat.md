@@ -58,15 +58,24 @@ pause** (pause = everything stops, correct).
 **Files:**
 - Modify: `src/presentation/SpaceFlightScene.ts`
 
-- [ ] Add a pure helper deciding the per-frame orbital-day increment from
+- [x] Add a pure helper deciding the per-frame orbital-day increment from
       `{inCombat, paused, dt, timeScale}` — advance during real-time combat (reuse
       the wait-turn day rate), hold while paused, leave the move/wait paths intact.
-- [ ] Feed it into `currentDay`/`waitDayAccum` (or a dedicated combat-day
+      (`src/presentation/flight/combatOrbitClock.ts` — `combatOrbitalDayIncrement`
+      + shared `MS_PER_ORBITAL_DAY`.)
+- [x] Feed it into `currentDay`/`waitDayAccum` (or a dedicated combat-day
       accumulator) so `getOrbitalDay` advances during a stationary fight; keep
-      orbital position a pure function of the day.
-- [ ] write tests: orbital day advances in real-time combat, holds while paused,
+      orbital position a pure function of the day. (Accrued into the existing
+      `waitDayAccum` — free during combat since the wait path is gated off there — so
+      `currentDay = gameDays + distance + waitDayAccum` rises with the calendar frozen.
+      Gated to the *stationary* branch so a moving combat pursuit, which already advances
+      orbits via the distance path, doesn't double-count.)
+- [x] write tests: orbital day advances in real-time combat, holds while paused,
       and normal move/wait turns are unchanged; the Task 1 repro now passes.
-- [ ] run tests — green (existing planet-orbit + pause tests stay green).
+      (`combatOrbitClock.test.ts` pure-helper unit + `orbitsDuringCombat.test.ts`
+      flipped to a green `it` with paused-holds / calendar-frozen / wait-unchanged cases.)
+- [x] run tests — green (existing planet-orbit + pause tests stay green — all 273
+      flight tests pass; line-count guard `< 1900` held at 1898).
 
 ### Task 3: Verify acceptance criteria
 **Files:**

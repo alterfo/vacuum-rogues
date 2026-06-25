@@ -26,6 +26,7 @@ import { NpcShipManager } from "./flight/NpcShipManager";
 import { CombatModule } from "./flight/CombatModule";
 import { isDowned } from "@/systems/combat/godMode";
 import { createCombatPauseUi } from "./flight/combatPauseUi";
+import { combatOrbitalDayIncrement } from "./flight/combatOrbitClock";
 import { PlanetManager } from "./flight/PlanetManager";
 import { FlightHud } from "./flight/FlightHud";
 import { CameraController } from "./flight/CameraController";
@@ -105,9 +106,11 @@ export class SpaceFlightScene extends GameScene {
 
   private distanceTraveled: number = 0;
   private readonly DISTANCE_PER_DAY: number = GAME_BALANCE.pixelsPerDay;
-  private waitDayAccum: number = 0; // wait-turn (US-070 #5): fractional day accrued while holding position
-  private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070)
-  // Fractional "day of turn" (gameDays + sub-day move/wait); feeds orbits + the HUD date read-out.
+  // Fractional day accrued while holding position — a wait turn (US-070 #5) OR a
+  // stationary real-time fight (combat advances orbits but not the calendar; see updateShip).
+  private waitDayAccum: number = 0;
+  private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070; = MS_PER_ORBITAL_DAY)
+  // Fractional "day of turn" (gameDays + sub-day move/wait/combat); feeds orbits + the HUD date read-out.
   private get currentDay(): number {
     const days = this.gameEngine?.galaxy?.gameDays ?? 0;
     const frac = this.distanceTraveled / this.DISTANCE_PER_DAY;
@@ -1279,15 +1282,11 @@ export class SpaceFlightScene extends GameScene {
       }
     }
 
-    // Turn-based time: only advance days when ship is moving
+    // Turn-based time: only advance days when ship is moving (every DISTANCE_PER_DAY px = 1 day).
     if (this.shipPhysics.isMoving && this.shipPhysics.currentSpeed > 0.01) {
       const dx = this.shipPhysics.shipX - prevX;
       const dy = this.shipPhysics.shipY - prevY;
-      const distanceMoved = Math.sqrt(dx * dx + dy * dy);
-
-      this.distanceTraveled += distanceMoved;
-
-      // Every DISTANCE_PER_DAY pixels = 1 game day
+      this.distanceTraveled += Math.sqrt(dx * dx + dy * dy);
       while (this.distanceTraveled >= this.DISTANCE_PER_DAY) {
         this.distanceTraveled -= this.DISTANCE_PER_DAY;
         if (this.gameEngine?.galaxy) {
@@ -1302,25 +1301,26 @@ export class SpaceFlightScene extends GameScene {
       }
     }
 
-    // "Wait" turn (US-070 #5): a course-less turn — the ship holds position while
-    // NPCs and the calendar keep advancing, until Pause. During an in-flight
-    // fight the ship is often stationary but must NOT burn calendar days, so the
-    // combat guard suppresses wait-time while a fight is on (combat advances in
-    // real time instead — see CombatModule.update).
+    // Stationary turn (US-070 #5): a wait turn advances the calendar; a real-time fight
+    // advances only the orbital day (orbits move, calendar frozen — see combatOrbitClock).
     if (
       this.isTurnRunning &&
       !this.shipPhysics.isMoving &&
       !this.npcManager.followNpcId &&
-      !this.pendingWarp &&
-      !this.combatModule?.isActive
+      !this.pendingWarp
     ) {
-      this.advanceWaitTime(deltaTime);
+      if (this.combatModule?.isActive)
+        this.waitDayAccum += combatOrbitalDayIncrement({
+          inCombat: true,
+          paused: this.combatPause.paused,
+          dt: deltaTime,
+          timeScale: this.shipPhysics?.timeScale ?? 1,
+        });
+      else this.advanceWaitTime(deltaTime);
     }
   }
 
-  /**
-   * Advance the calendar while the ship waits in place (a course-less turn).
-   */
+  /** Advance the calendar while the ship waits in place (a course-less turn). */
   private advanceWaitTime(deltaTime: number): void {
     // Clamp dt to one wait-day so a backgrounded tab's huge resume-frame can't
     // flush hundreds of days at once and outrun the deferred Pause (cf. ShipPhysics).
@@ -1625,7 +1625,7 @@ export class SpaceFlightScene extends GameScene {
   private endTurn(): void {
     this.isTurnRunning = false;
     this.pauseAtDayBoundary = false; // deferred pause consumed (or turn ended)
-    this.waitDayAccum = 0;
+    this.waitDayAccum = 0; // also drops any combat-orbit offset: orbits settle to gameDays
     this.distanceTraveled = 0;
     this.turnHintShown = false;
     this.updateInteractiveCursors(false);

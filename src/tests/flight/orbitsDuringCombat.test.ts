@@ -1,22 +1,26 @@
 /**
- * Task 1 — reproduce: planets stop orbiting during a real-time fight (RED).
+ * Regression — planets keep orbiting during a real-time fight
+ * (docs/plans/20260625-orbits-advance-during-combat.md).
  *
  * Orbital position is a pure function of `SpaceFlightScene.currentDay`
- * (`gameDays + distanceTraveled/DISTANCE_PER_DAY + waitDayAccum`), surfaced to the
- * planets through `getOrbitalDay: () => this.currentDay`. During an in-flight fight
- * the ship is stationary, so `distanceTraveled` never grows, and `advanceWaitTime`
- * — the only sub-day source for a *still* ship — is gated off while a fight is
- * active (the wait guard at the bottom of `updateShip` excludes
+ * (`gameDays + distanceTraveled/DISTANCE_PER_DAY + waitDayAccum + combatDayAccum`),
+ * surfaced to the planets through `getOrbitalDay: () => this.currentDay`. During an
+ * in-flight fight the ship is stationary, so `distanceTraveled` never grows, and
+ * `advanceWaitTime` — the only sub-day source for a *still* ship — is gated off while
+ * a fight is active (the wait guard at the bottom of `updateShip` excludes
  * `combatModule.isActive`). Fire is already decoupled from the calendar
- * (`CombatModule` runs in real time off `isPaused`), but orbit time is **not** — so
- * a real-time fight advances bullets while the planets freeze on their orbital path,
- * which looks broken.
+ * (`CombatModule` runs in real time off `isPaused`), but before this fix orbit time
+ * was **not** — so a real-time fight advanced bullets while the planets froze on
+ * their orbital path.
  *
- * The body asserts the CORRECT behaviour — `currentDay` (the orbit source) advances
- * across update frames while a fight is engaged and **not** paused. It currently
- * does NOT advance, so the assertion throws and `it.fails` passes — proof the orbits
- * freeze in combat. Task 2 adds a combat-time day source and flips this to a plain
- * `it` (green regression).
+ * Task 2 added a presentation-only combat-day accumulator (`combatDayAccum`, fed by
+ * the pure `combatOrbitalDayIncrement`) that advances the orbital day at the wait-turn
+ * rate during the real-time portion of a fight and holds while the active pause is up.
+ * This file pins that behaviour against a real `SpaceFlightScene`:
+ *   • the orbital day advances while a fight is engaged and NOT paused (was the Task-1
+ *     red repro, committed as `it.fails`; now a plain green `it`),
+ *   • it holds while the active pause is up (pause = everything frozen),
+ *   • the normal stationary wait-turn path is unchanged.
  *
  * Built the way `turnDateAdvances.test.ts` drives a real `SpaceFlightScene`: a bare
  * scene with just the fields `updateShip` touches set, only the WebGL-texture-bearing
@@ -63,11 +67,11 @@ function makeRenderer(): Renderer {
 /**
  * A bare `SpaceFlightScene` wired with just the fields `updateShip` touches, set up
  * for an in-flight fight: a **stationary** ship (so neither move-distance nor the
- * wait-turn path adds time on its own), `combatModule.isActive === true`, and a
+ * wait-turn path adds time on its own), a configurable `combatModule.isActive`, and a
  * **controllable** active-pause flag so a test can drive the real-time portion of
  * the fight (`paused === false`) and the active pause (`paused === true`).
  */
-function buildCombatScene() {
+function buildCombatScene(opts: { inCombat?: boolean } = {}) {
   const scene = new SpaceFlightScene(makeRenderer());
   const s = scene as unknown as Record<string, unknown>;
   const galaxy = { gameDays: 0 };
@@ -91,7 +95,7 @@ function buildCombatScene() {
     landingThreshold: () => 0,
   };
   s.npcManager = { followNpcId: null, refresh: vi.fn() };
-  s.combatModule = { isActive: true }; // a fight is engaged
+  s.combatModule = { isActive: opts.inCombat ?? true }; // a fight is engaged by default
   s.combatPause = combatPause;
   s.pendingWarp = null;
   s.gameEngine = {
@@ -112,22 +116,54 @@ function buildCombatScene() {
   return { s, galaxy, combatPause, updateShip, currentDay };
 }
 
-describe("planets keep orbiting during a real-time fight (Task 1 — repro)", () => {
-  it.fails(
-    "the orbital day advances while a fight is engaged and NOT paused",
-    () => {
-      const { updateShip, currentDay, combatPause } = buildCombatScene();
-      combatPause.paused = false; // real-time portion of the fight
+describe("planets keep orbiting during a real-time fight", () => {
+  it("the orbital day advances while a fight is engaged and NOT paused", () => {
+    const { updateShip, currentDay, combatPause } = buildCombatScene();
+    combatPause.paused = false; // real-time portion of the fight
 
-      const before = currentDay();
-      // Several real-time frames pass with the ship stationary in combat. A
-      // stationary fight still passes time, so the planets must keep orbiting —
-      // i.e. the orbital-day source must rise.
-      updateShip(300);
-      updateShip(300);
-      updateShip(300);
+    const before = currentDay();
+    // Several real-time frames pass with the ship stationary in combat. A
+    // stationary fight still passes time, so the planets must keep orbiting —
+    // i.e. the orbital-day source must rise.
+    updateShip(300);
+    updateShip(300);
+    updateShip(300);
 
-      expect(currentDay()).toBeGreaterThan(before);
-    },
-  );
+    expect(currentDay()).toBeGreaterThan(before);
+  });
+
+  it("the orbital day holds while the active pause is up (pause = everything frozen)", () => {
+    const { updateShip, currentDay, combatPause } = buildCombatScene();
+    combatPause.paused = true; // active pause raised
+
+    const before = currentDay();
+    updateShip(300);
+    updateShip(300);
+    updateShip(300);
+
+    expect(currentDay()).toBe(before); // frozen — no orbital progress while paused
+  });
+
+  it("does not advance the calendar (gameDays) during combat — presentation-only", () => {
+    const { updateShip, galaxy, combatPause } = buildCombatScene();
+    combatPause.paused = false;
+
+    // Enough real-time combat to cross a whole wait-day boundary (3 × 400 ms > 1000).
+    updateShip(400);
+    updateShip(400);
+    updateShip(400);
+
+    expect(galaxy.gameDays).toBe(0); // the real calendar/NPC sim stays frozen in combat
+  });
+
+  it("leaves the normal stationary wait-turn path unchanged (no fight engaged)", () => {
+    // combatModule inactive: the existing wait-time source must still advance the day.
+    const { updateShip, currentDay } = buildCombatScene({ inCombat: false });
+
+    const before = currentDay();
+    updateShip(300);
+    updateShip(300);
+
+    expect(currentDay()).toBeGreaterThan(before); // wait-turn day source intact
+  });
 });
