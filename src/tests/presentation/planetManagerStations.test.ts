@@ -97,6 +97,8 @@ vi.mock("@/presentation/textures", async () => {
 
 import {
   PlanetManager,
+  STATION_SPRITE_SIZE,
+  STATION_LABEL_Y,
   type PlanetManagerDeps,
   type StationMarker,
 } from "@/presentation/flight/PlanetManager";
@@ -281,6 +283,23 @@ describe("PlanetManager.createStations — sprite-or-diamond render", () => {
     ).toBe(1);
 
     assertMarkerWiring(manager, gameLayer);
+  });
+
+  it("places the name label clear of (below) the 80px sprite — no overlap", () => {
+    // Sprite path: the marker mounts the full 80px station sprite.
+    art.stationSpriteKey.mockReturnValue("station/trade_01");
+    art.tex.mockReturnValue({ __station: true });
+
+    const { manager } = makeHarness();
+    manager.initialize();
+
+    const marker = manager.stationMarkers[0] as StationMarker;
+    const labelY = (marker.label as unknown as { y: number }).y;
+
+    // The label is top-anchored; its top edge must sit at or below the sprite's
+    // bottom edge (half the 80px sprite = 40) so the name never draws over it.
+    expect(labelY).toBeGreaterThanOrEqual(STATION_SPRITE_SIZE / 2);
+    expect(labelY).toBe(STATION_LABEL_Y);
   });
 });
 

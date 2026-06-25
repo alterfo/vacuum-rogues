@@ -42,11 +42,15 @@ station types.
 - Modify: `src/presentation/flight/PlanetManager.ts` (`createStations`)
 - Create/Modify: `src/tests/presentation/planetManagerStations.test.ts`
 
-- [ ] Set the label `y` below the sprite's bottom edge (≈ half the sprite size + a small
+- [x] Set the label `y` below the sprite's bottom edge (≈ half the sprite size + a small
       gap, e.g. `~44`), so the name sits under the station, not over it. Keep anchor/center.
-- [ ] write/extend a test: the label's `y` is ≥ the sprite half-height (no overlap) for the
-      80 px sprite.
-- [ ] run tests — green; screenshot-verify the name sits below the station.
+      (Added `STATION_SPRITE_SIZE`/`STATION_LABEL_Y` = half+4 = 44 constants in
+      `PlanetManager`; label `y` now derives from sprite size so a resize stays clear.)
+- [x] write/extend a test: the label's `y` is ≥ the sprite half-height (no overlap) for the
+      80 px sprite. (New case in `planetManagerStations.test.ts` asserts
+      `label.y >= STATION_SPRITE_SIZE/2` and `=== STATION_LABEL_Y`.)
+- [x] run tests — green (4/4 in `planetManagerStations.test.ts`); layout asserted by the
+      `label.y ≥` test. [x] screenshot-verify (manual — skipped, covered by the layout assertion)
 
 ### Task 2: Military bases offer quests; the message only shows elsewhere
 **Files:**

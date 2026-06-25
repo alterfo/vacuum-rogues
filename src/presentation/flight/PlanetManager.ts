@@ -27,6 +27,16 @@ import { tex } from "../textures";
 import { stationSpriteKey } from "./stationArt";
 import type { FlightModule } from "./FlightModule";
 
+/** Station marker sprite footprint (square, anchor 0.5 ⇒ spans ±half from centre). */
+export const STATION_SPRITE_SIZE = 80;
+/**
+ * Vertical offset of the name label below the marker centre. The label is
+ * top-anchored (anchor 0.5,0), so its top edge must clear the sprite's bottom
+ * edge (half the sprite size) plus a small gap — otherwise the name draws *over*
+ * the station. Scales with {@link STATION_SPRITE_SIZE} so a resize keeps it clear.
+ */
+export const STATION_LABEL_Y = STATION_SPRITE_SIZE / 2 + 4;
+
 /** A space-station marker: its domain record, display container and world position. */
 export interface StationMarker {
   station: Station;
@@ -581,8 +591,8 @@ export class PlanetManager implements FlightModule {
       if (stationTex) {
         const sprite = new Sprite(stationTex);
         sprite.anchor.set(0.5);
-        sprite.width = 80;
-        sprite.height = 80;
+        sprite.width = STATION_SPRITE_SIZE;
+        sprite.height = STATION_SPRITE_SIZE;
         sprite.eventMode = "none";
         // Sprites are baked lit from their top edge; rotate so the lit side faces
         // the star, making each station's shading consistent with the sun's
@@ -609,7 +619,7 @@ export class PlanetManager implements FlightModule {
         },
       });
       label.anchor.set(0.5, 0);
-      label.y = 18;
+      label.y = STATION_LABEL_Y;
       label.eventMode = "none";
       ctn.addChild(label);
 
