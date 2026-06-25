@@ -58,10 +58,12 @@ player can decide before flying there.
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only PlanetManager
-      + the HUD tooltip affected.
-- [ ] full unit suite green; `npm run test:playtest` green; `npm run lint` clean;
-      `npm run build` ok.
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — scope verified via
+      the feature commit (a9ecfd1) `--stat`: only PlanetManager.ts, FlightHud.ts
+      (HUD tooltip), the new shared `util/planetTooltip.ts` content builder, and
+      SpaceFlightScene.ts wiring (+ the new test) — exactly the planned seam.
+- [x] full unit suite green (3059 passed); `npm run test:playtest` green (67
+      passed); `npm run lint` clean (0 errors); `npm run build` ok.
 
 ### Task 3: Update documentation
 **Files:**
