@@ -50,6 +50,18 @@ function wideGalaxy(): StarSystem[] {
   ];
 }
 
+/**
+ * A narrow galaxy: origin A with a *single* reachable target B. With only one
+ * destination, the legacy board provably re-rolls the same (type, target,
+ * cargo) combination across slots — i.e. it carries duplicate {@link questKey}s.
+ * This is the fixture that actually exercises within-board dedupe (the wide
+ * galaxy yields all-distinct keys even in the legacy path, so it cannot tell
+ * the dedupe code apart from a no-op).
+ */
+function narrowGalaxy(): StarSystem[] {
+  return [sys("A", "Альфа", ["B"]), sys("B", "Бета", ["A"])];
+}
+
 function baseOpts(over: Partial<BoardOptions> = {}): BoardOptions {
   return {
     systems: wideGalaxy(),
@@ -89,11 +101,56 @@ describe("quest board dedupe (Task 2)", () => {
   });
 
   it("dedupes within the board itself when excludeKeys is present (even empty)", () => {
-    // With a small reachable pool a legacy board can carry duplicate keys; once
-    // dedupe is opted into, every key on the board is distinct.
-    const board = generateQuestBoard(baseOpts({ count: 8, excludeKeys: [] }));
-    const keys = board.map(questKey);
-    expect(new Set(keys).size).toBe(keys.length);
+    // The wide galaxy yields all-distinct keys even legacy, so it cannot prove
+    // anything about within-board dedupe. Use the single-target narrow galaxy:
+    // the legacy board provably *repeats* a key (same type+target+cargo across
+    // slots), and the `excludeKeys: []` board must collapse those to distinct.
+    const legacy = generateQuestBoard(
+      baseOpts({ systems: narrowGalaxy(), count: 8 }),
+    );
+    const legacyKeys = legacy.map(questKey);
+    // Guard the fixture: this test is only meaningful if the legacy path
+    // genuinely carries duplicates (otherwise the assertion below is a no-op).
+    expect(new Set(legacyKeys).size).toBeLessThan(legacyKeys.length);
+
+    const deduped = generateQuestBoard(
+      baseOpts({ systems: narrowGalaxy(), count: 8, excludeKeys: [] }),
+    );
+    const dedupedKeys = deduped.map(questKey);
+    expect(new Set(dedupedKeys).size).toBe(dedupedKeys.length);
+  });
+
+  it("never leaves an orphaned chain part on the board when an earlier part is excluded", () => {
+    // Regression: `buildForSlot` advances the chain-part counter as it builds.
+    // If dedupe skips an excluded chain part without rolling the counter back,
+    // the next chain slot emits a *later* part (e.g. «часть 2/3») with no
+    // earlier part on the board — and the dropped quest is wrongly counted
+    // against the per-board chain cap.
+    const legacy = generateQuestBoard(baseOpts({ count: 8 }));
+    const part0 = legacy.find(
+      (q) => q.template.chainId && q.template.chainPart === 0,
+    );
+    expect(part0).toBeDefined();
+
+    const board = generateQuestBoard(
+      baseOpts({ count: 8, excludeKeys: [questKey(part0!)] }),
+    );
+
+    // Every chain part present must have all earlier parts of the same chain
+    // present too (the part set forms a gap-free prefix {0,1,…} per chainId).
+    const partsByChain = new Map<string, Set<number>>();
+    for (const q of board) {
+      if (!q.template.chainId) continue;
+      const parts = partsByChain.get(q.template.chainId) ?? new Set<number>();
+      parts.add(q.template.chainPart ?? -1);
+      partsByChain.set(q.template.chainId, parts);
+    }
+    for (const parts of partsByChain.values()) {
+      const max = Math.max(...parts);
+      for (let p = 0; p <= max; p++) {
+        expect(parts.has(p)).toBe(true);
+      }
+    }
   });
 
   it("is deterministic for a fixed seed and the same exclusions", () => {

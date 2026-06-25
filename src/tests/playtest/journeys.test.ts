@@ -3,6 +3,7 @@ import { RealEngineHarness } from "./realEngineHarness";
 import { SceneType, QuestType, ResourceType } from "@/types";
 import type { Reward } from "@/types";
 import type { QuestTemplate } from "@/core/ports/IQuestService";
+import { questKey } from "@/systems/quests/QuestGenerator";
 import { CombatModule } from "@/presentation/flight/CombatModule";
 import type { NpcShipSprite } from "@/presentation/NpcShipSprite";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
@@ -364,6 +365,39 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
       expect(deathReported).toBe(true);
       expect(harness.currentSceneType()).toBe(SceneType.GAME_OVER);
       module.destroy();
+      expect(harness.errors()).toEqual([]);
+    });
+  });
+
+  describe("Scenario: the job board does not re-offer a taken quest", () => {
+    it("an accepted board quest disappears from the next board (real wiring)", async () => {
+      // Given a fresh game and a planet in the player's current system to issue
+      // a board from.
+      await harness.newGame();
+      const player = harness.player()!;
+      const originSystem = harness
+        .galaxy()!
+        .systems.find((s) => s.id === player.currentSystemId)!;
+      const planetId = originSystem.planets[0]?.id;
+      expect(planetId).toBeDefined();
+
+      // When a board is fetched and its first quest accepted, then the board is
+      // re-fetched (same day/bucket, so the underlying board is deterministic).
+      const board1 = harness.engine.getQuestBoard(planetId!);
+      expect(board1.length).toBeGreaterThan(0);
+      const taken = board1[0];
+      const acceptedKey = questKey(taken);
+      const accepted = harness.engine.acceptBoardQuest(taken, planetId!);
+      expect(accepted).not.toBeNull();
+
+      const board2 = harness.engine.getQuestBoard(planetId!);
+
+      // Then the taken quest is gone — neither by its template id (the
+      // getQuestBoard `taken` post-filter) nor by its content key (the
+      // generator's `excludeKeys` dedupe) — proving the real wiring threads the
+      // active quest into both passes.
+      expect(board2.map((q) => q.template.id)).not.toContain(taken.template.id);
+      expect(board2.map((q) => questKey(q))).not.toContain(acceptedKey);
       expect(harness.errors()).toEqual([]);
     });
   });

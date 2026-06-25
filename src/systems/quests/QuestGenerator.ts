@@ -469,10 +469,19 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
   const cap = dedupe ? count * 8 + 32 : count;
   const out: GeneratedQuest[] = [];
   for (let i = 0; out.length < count && i < cap; i++) {
+    // `buildForSlot` advances `chainPartsOnBoard` for any chain quest it builds.
+    // When dedupe then skips that quest (its key is excluded or already placed),
+    // the counter must be rolled back — otherwise the next chain slot emits a
+    // *later* chain part with no earlier part on the board (an orphaned
+    // «часть 2/3»), and the `< 3` cap / finale logic counts a dropped quest.
+    const chainPartsBefore = chainPartsOnBoard;
     const q = buildForSlot(i);
     if (dedupe) {
       const k = questKey(q);
-      if (seen.has(k)) continue;
+      if (seen.has(k)) {
+        chainPartsOnBoard = chainPartsBefore;
+        continue;
+      }
       seen.add(k);
     }
     out.push(q);

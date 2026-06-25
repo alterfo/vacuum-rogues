@@ -99,6 +99,28 @@ ids-only (no retained template), so they continue to be deduped by **id** in the
 existing post-filter. All exclusions derive from already-persisted state (active
 log + completed-id set), so there is **no new save field, schema, or migration**.
 
+### Mechanics & known limitations
+- **Two passes, two jobs.** A pre-existing `taken` id-filter in `getQuestBoard`
+  removes any board entry whose template id is already active/pending/completed —
+  this is the actual repeat backstop within a board-refresh bucket (an accepted
+  quest keeps its generated template id, e.g. `gen_<planet>_<bucket>_<i>`). The
+  `excludeKeys` content-key dedupe runs *inside* `generateQuestBoard` and its main
+  added value is **back-filling** so the board stays full after a quest is taken,
+  rather than shrinking until the next bucket.
+- **Chain-part rollback.** `buildForSlot` advances the per-board chain counter as
+  it builds; the fill loop **rolls that counter back when a built quest is
+  skipped** (excluded/duplicate), so an excluded earlier chain part can never
+  leave a later part orphaned on the board (regression-tested in
+  `questBoardDedupe.test.ts`).
+- **BOUNTY key is content-only.** `acceptBoardQuest` rewrites a bounty's
+  `targetSystemId` to the bound pirate's current system (and a `DEFEAT_ENEMY`
+  objective carries no destination signature), so an accepted bounty's
+  `questKeyForQuest` may not match the generated `questKey` when the pirate is not
+  in the original target system. The id-filter still prevents the repeat; the only
+  effect is that such a bounty is not back-filled, so the board can show one fewer
+  entry. A stable bounty key would need a keyable ship-identity field on `Quest`
+  (a domain field + schema + migration) — deliberately out of scope here.
+
 ## Dependencies
 - `QuestManager`/`Quest`/`QuestObjective`/`Reward`/`failurePenalty` — exist (the base).
 - EPIC-006 (planet hub) — home of the job board and the owner info panel.
