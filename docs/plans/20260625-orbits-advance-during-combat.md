@@ -50,7 +50,7 @@ pause** (pause = everything stops, correct).
 **Files:**
 - Create: `src/tests/flight/orbitsDuringCombat.test.ts`
 
-- [ ] Drive the scene/update with a combat engaged and **not** paused over several
+- [x] Drive the scene/update with a combat engaged and **not** paused over several
       ticks; assert `getOrbitalDay`/`currentDay` currently does NOT advance (frozen)
       → RED.
 
