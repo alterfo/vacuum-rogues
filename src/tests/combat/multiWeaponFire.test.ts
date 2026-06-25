@@ -14,11 +14,19 @@ import { GAME_BALANCE } from "@/config/balance";
  * combatant within **that weapon's own range** ("в зоне поражения орудия").
  *
  * Before the change the loop fired only the single selected weapon at the single
- * selected target. Now each fitted weapon runs its own timer on the shared
- * {@link GAME_BALANCE.combatFireIntervalMs} cadence and picks the nearest
- * combatant inside its `range` (preferring the selected target when in range); a
- * weapon that reaches no combatant holds. Pure — no PixiJS render context, and no
- * `getPlayerShip` so NPC return fire is a no-op (the fight never pauses).
+ * selected target. Now each fitted weapon runs its own timer on its **own**
+ * per-weapon cadence (`weaponFireIntervalMs`, derived from `cooldownTurns`) and
+ * picks the nearest combatant inside its `range` (preferring the selected target
+ * when in range); a weapon that reaches no combatant holds. Pure — no PixiJS
+ * render context, and no `getPlayerShip` so NPC return fire is a no-op (the fight
+ * never pauses).
+ *
+ * Each case advances the clock by the **slowest** fitted weapon's interval. Since
+ * `update()` fires a given weapon at most once per call (its timer resets to 0,
+ * any leftover time is discarded), one such tick lands exactly one shot from
+ * every ready, in-range weapon — so the per-shot damage assertions below are
+ * unchanged by the per-weapon cadence; only the elapsed time scales with the
+ * weapon's `cooldownTurns` (scatter ×2, beam ×3).
  */
 
 const FIRE = GAME_BALANCE.combatFireIntervalMs;
@@ -69,7 +77,7 @@ describe("multi-weapon auto-fire (Task 1)", () => {
     module.addCombatant(far);
     module.selectTarget(far); // selected target is OUT of scatter's range
 
-    module.update(FIRE);
+    module.update(2 * FIRE); // scatter (cooldownTurns 2) is the slowest fitted weapon
 
     // Railgun reaches the selected (far) target → fires it (range preference).
     expect(far.npc.hullHP).toBe(100 - RAILGUN.damage);
@@ -83,7 +91,7 @@ describe("multi-weapon auto-fire (Task 1)", () => {
     const enemy = makeSprite("a", 250, 0); // beyond scatter's 180, still a combatant
     module.addCombatant(enemy);
 
-    module.update(FIRE);
+    module.update(2 * FIRE); // scatter cooldownTurns 2 → its interval; primed but out of range
     expect(enemy.npc.hullHP).toBe(100); // held — nothing in range
 
     // The enemy closes inside scatter range; the primed timer fires immediately.
@@ -97,7 +105,7 @@ describe("multi-weapon auto-fire (Task 1)", () => {
     const enemy = makeSprite("a", 100, 0); // inside both ranges (240 / 300)
     module.addCombatant(enemy);
 
-    module.update(FIRE);
+    module.update(3 * FIRE); // beam (cooldownTurns 3) is the slowest; both fire once
 
     expect(enemy.npc.hullHP).toBe(100 - PULSE.damage - BEAM.damage);
   });
@@ -109,7 +117,7 @@ describe("multi-weapon auto-fire (Task 1)", () => {
     const enemy = makeSprite("a", 280, 0); // outside pulse (240), inside beam (300)
     module.addCombatant(enemy);
 
-    module.update(FIRE);
+    module.update(3 * FIRE); // beam (cooldownTurns 3) is the slowest fitted weapon
 
     expect(enemy.npc.hullHP).toBe(100 - BEAM.damage); // beam only, pulse held
   });

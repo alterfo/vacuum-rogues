@@ -150,7 +150,10 @@ describe("CombatModule.confirmAttack (Task 3)", () => {
     // single persisted "active" weapon.
     module.confirmAttack(enemy, BEAM); // one deliberate beam shot
     const afterConfirm = enemy.npc.hullHP; // 100 - 30
-    module.update(FIRE); // a resumed interval — every fitted weapon fires
+    // A resumed interval long enough for the slowest fitted weapon (the beam,
+    // cooldownTurns 3) — every fitted weapon then fires once (each fires at most
+    // once per update() call, so the per-shot damage is unchanged by the cadence).
+    module.update(3 * FIRE);
     expect(enemy.npc.hullHP).toBe(afterConfirm - PULSE.damage - BEAM.damage);
   });
 

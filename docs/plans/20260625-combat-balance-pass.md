@@ -111,9 +111,34 @@ trivially out-ranged, and fleeing is possible.
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — CombatModule + NPC
-      weapons + balance affected; no schema/migration.
-- [ ] full unit suite green; `npm run test:playtest` green; lint/build ok.
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — confirmed the
+      combat-balance commits (`5bcd1ce..469a7ca`) touch exactly `CombatModule.ts`,
+      the new `systems/combat/npcWeapon.ts`, and their tests — **no** `schemas.ts` /
+      `MigrationPipeline.ts` / `CURRENT_VERSION` (NPC weapon range is role-derived,
+      not persisted, so no migration). `balance.ts` is unchanged on this branch.
+- [x] **Verification caught + fixed a regression the Task 1/2 backward-compat claim
+      missed.** The per-weapon cadence broke 7 pre-existing combat tests (proven
+      green at the parent commit `3b2b373`, red after): `multiWeaponFire` (×4),
+      `confirmAttack` "fires ALL fitted weapons" (×1), `pauseHooks` (×2). Root cause:
+      those tests advanced the clock by one base `combatFireIntervalMs` and assumed
+      every weapon fired — but `weaponCadence.test.ts` (the new authoritative Task 1
+      spec) explicitly asserts a `cooldownTurns:3` beam does **not** fire at the base
+      interval, only at its own 3× interval. The two are mathematically irreconcilable
+      for a single base tick, so the older tests' single-tick *timing premise* was
+      stale. Fixed by advancing each affected case to the **slowest fitted weapon's**
+      interval (`2×`/`3× FIRE`); since `update()` fires each weapon at most once per
+      call (timer resets to 0, leftover discarded), every weapon fires exactly once —
+      **all `expect()` values unchanged**, only the stimulus timing moved. Full unit
+      suite now 2913 passing (was 2906); `npm run test:playtest` green (67 passed);
+      lint 0 errors; `npm run build` ok.
+      NOTE — one **pre-existing, unrelated** failure remains: `chaseSteering.steering`
+      › "still closes to and holds weapon range" (`finalDist` 240.75 > `WR` 240, a
+      ~0.3% pursuit-hold overshoot from continuous turn-rate steering against a moving
+      noisy target). It is **already red at `3b2b373`**, before any combat-balance
+      commit, lives in a different feature (NpcShipManager pursuit, which never imports
+      `npcWeapon`), and is out of scope for this pass — flagged for a separate
+      one-line test-tolerance follow-up (the game behaviour is correct; the `<= WR`
+      assertion is too strict for continuous steering's small steady-state error).
 
 ### Task 5: Update documentation
 **Files:**

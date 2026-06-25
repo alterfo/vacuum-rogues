@@ -107,7 +107,10 @@ describe("active-pause preserves the kill hook (Task 4)", () => {
     // reaches the pause. The confirmed beam (30) then finishes the 16 HP left.
     const { module, controller, enemy, destroyed } = makeFight({ enemyHp: 60 });
 
-    module.update(FIRE); // both sides fire; the incoming shot pauses the fight
+    // A tick long enough for the slowest fitted weapon (beam, cooldownTurns 3) so
+    // both player weapons land (pulse 14 + beam 30 = 44); the NPC's return shot
+    // (fired after, on the base interval) then pauses the fight.
+    module.update(3 * FIRE);
     expect(controller.paused).toBe(true);
     expect(enemy.npc.hullHP).toBeGreaterThan(0); // auto-fire only softened it
 
@@ -128,8 +131,10 @@ describe("disengage re-arms the active-pause debounce (Task 4)", () => {
       enemyHp: 60, // survives the multi-weapon auto-fire so the fight pauses first
     });
 
-    // Kill the only combatant during active-pause, then resume.
-    module.update(FIRE);
+    // Kill the only combatant during active-pause, then resume. The first tick is
+    // long enough for the slowest fitted weapon (beam, cooldownTurns 3) so the
+    // multi-weapon auto-fire lands its 44 (pulse 14 + beam 30) and the fight pauses.
+    module.update(3 * FIRE);
     controller.selectTarget(enemy);
     controller.selectWeapon(BEAM);
     controller.confirm();
