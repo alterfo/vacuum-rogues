@@ -127,11 +127,16 @@ supersedes).
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only the letsplay engine
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — only the letsplay engine
       (under `src/tests/`) + the npm script affected; **no prod `src` module changed**.
-- [ ] full unit suite green; `npm run test:playtest` green; `npm run letsplay` runs a
-      clean session; lint clean; `npm run build` ok and **prod bundle unchanged**
-      (letsplay excluded).
+      Verified via `git diff --stat a45e26e..HEAD` (the letsplay commits): changes are
+      confined to `src/tests/playtest/letsplay/**`, `src/tests/architecture/letsplayDevOnly.test.ts`,
+      `package.json` (the `letsplay` script), `docs/`, and `.gitignore` — zero prod `src` modules.
+- [x] full unit suite green (2789 passed, 1 skipped / 331 files); `npm run test:playtest`
+      green (63 passed); `npm run letsplay` runs a clean session (7 passed); lint clean
+      (0 errors); `npm run build` ok and **prod bundle unchanged** — the letsplay engine
+      is excluded (grep of `dist/` finds no `HeuristicPolicy`/`NeuralPolicy`/`PlayerAgent`;
+      the lone `letsplay` string is an unrelated GLSL shader comment).
 
 ### Task 7: Update documentation
 **Files:**
