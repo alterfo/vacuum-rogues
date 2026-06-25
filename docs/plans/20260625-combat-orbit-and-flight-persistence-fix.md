@@ -150,10 +150,20 @@ reload resumes where you were.
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes` — NpcShipManager/SpaceFlightScene/ShipPhysics/GameEngine affected; no
+- [x] `detect_changes` — NpcShipManager/SpaceFlightScene/ShipPhysics/GameEngine affected; no
       schema/migration.
-- [ ] full unit suite green; `npm run test:playtest` green (a combat session: ship holds
+      (Fix-commit scope `git diff ed44ae4~1..HEAD -- src/**`: only
+      `NpcShipManager.ts` (+126), `SpaceFlightScene.ts` (+120), `GameEngine.ts` (+76), the new
+      `flight/flightTurnEnd.ts` helper, and four test files changed — 937 ins / 70 del.
+      ShipPhysics was *not needed* (the far orbit-carrot keeps it in cruise; it still
+      turn-rate-limits the hull unmodified). `schemas.ts` / `MigrationPipeline.ts` /
+      `types/index.ts` untouched — confirmed by an empty name-only diff — so **no schema or
+      migration change**, matching "flightShipPos already persists".)
+- [x] full unit suite green; `npm run test:playtest` green (a combat session: ship holds
       range, fires, can break off; reload mid-flight resumes position); lint/build ok.
+      (Full unit suite **3023 passed | 3 skipped** (354 files); real-engine playtest
+      **67 passed | 1 skipped**; `npm run lint` **0 errors** (48 pre-existing test-file `any`
+      warnings); `npm run build` **✓ built in 4.91s** with the TypeScript compile clean.)
 
 ### Task 6: Update documentation
 **Files:**
