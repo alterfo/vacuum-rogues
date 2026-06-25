@@ -90,12 +90,22 @@ trivially out-ranged, and fleeing is possible.
 - Modify: (verify; small tuning only) `balance.ts` / pursuit logic
 - Create: `src/tests/playtest/combatEscape.test.ts`
 
-- [ ] After the speed fix (economy plan), confirm a player can open `combatEscapeRange`
+- [x] After the speed fix (economy plan), confirm a player can open `combatEscapeRange`
       and disengage from a basic NPC; if pursuit still pins the player, tune pursuit
-      speed/leash so flee is possible but not trivial.
-- [ ] write a real-engine playtest: engage → flee → distance exceeds escape range →
-      combat ends.
-- [ ] run tests — green.
+      speed/leash so flee is possible but not trivial. (No tuning needed: the genuine
+      starter cruise `eq_engine_i` = 0.05 + 2×0.03 = **0.11** px/ms already out-runs a
+      basic NPC's `npcBasicSpeed` 0.08, so the gap opens past `combatEscapeRange`; an
+      interceptor's `npcSpeed` 0.2 still pins the starter, so flee stays upgrade-gated
+      — "possible but not trivial".)
+- [x] write a real-engine playtest: engage → flee → distance exceeds escape range →
+      combat ends. (`src/tests/playtest/combatEscape.test.ts`, 3 tests over the real
+      `RealEngineHarness`: the real loadout-derived cruise out-runs a basic NPC but not
+      an interceptor; a fresh ship engages a basic aggressor, flees, opens past
+      `combatEscapeRange` and the real `CombatModule` ends the fight while the ship
+      survives; the same flee against an interceptor never opens the gap and the fight
+      holds. NPC pursuit modelled as a conservative straight-line chase at the real
+      `npcCruiseSpeed`.)
+- [x] run tests — green. (The new escape playtest is green; type-check clean.)
 
 ### Task 4: Verify acceptance criteria
 **Files:**
