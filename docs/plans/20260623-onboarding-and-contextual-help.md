@@ -70,12 +70,12 @@ Related patterns:
 - Create: `src/systems/onboarding/onboardingState.ts`
 - Create: `src/tests/onboarding/onboardingState.test.ts`
 
-- [ ] Implement `hasSeen(key)`, `markSeen(key)`, `resetSeen()` over a `Storage`
+- [x] Implement `hasSeen(key)`, `markSeen(key)`, `resetSeen()` over a `Storage`
       (default `localStorage`, key `sr_help_seen` — a JSON string set), injectable
       so tests pass a fake storage. Guard against malformed/absent JSON.
-- [ ] write tests: unseen→false, mark→seen, persists across reads, reset clears,
+- [x] write tests: unseen→false, mark→seen, persists across reads, reset clears,
       corrupt JSON degrades to empty. (Red first.)
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 3: Reusable HelpPanel + «?» button + `mountSceneHelp` helper
 **Files:**
