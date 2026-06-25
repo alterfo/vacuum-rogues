@@ -69,7 +69,7 @@ player can decide before flying there.
 **Files:**
 - Modify: `src/presentation/flight/CLAUDE.md` or `playtest-traps.md`
 
-- [ ] Note that the planet hover tooltip surfaces the landing-denial reason
+- [x] Note that the planet hover tooltip surfaces the landing-denial reason
       (shared wording with the land-attempt via `landingDenialMessage`).
 
 ## Post-Completion

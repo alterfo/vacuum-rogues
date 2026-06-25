@@ -140,6 +140,15 @@ ship is always `eventMode="static"` with a finite hit-circle ≥ 28 world px;
 `eventMode`/`hitArea` inline), and a NaN/0 camera zoom is ignored so a transient bad transform
 can't collapse the circle and leave a ship mouse-dead in combat. Detail in `playtest-traps.md`.
 
+**The planet hover tooltip surfaces the landing-denial reason** (so an un-landable planet reads
+as occupied **before** a wasted trip). `PlanetManager` computes `landingDenial(planet)` in the
+hover handler (the same verdict the land-attempt uses) and threads the reason through
+`PlanetManagerDeps` → `FlightHud` → `buildPlanetTooltipLines` (`src/utils/planetTooltip.ts`),
+which appends a red line. The wording comes from the **shared** `landingDenialMessage(reason)`
+(`systems/galaxy/landingAccess.ts`) — single source, so the hover and land-attempt show the
+*same* text (Overmind / pirate-rep). The line is additive and absent when landing is allowed;
+presentation-only, no domain/schema/save change.
+
 Historical playtest bugs and detailed conventions (re-entry spawn, NPC spawn states, route
 dashing, sun clearance, pause-finishes-day, font-scale ship pos, NPC purposeful behavior,
 ship movement model, NPC clickability invariant, smoothed auto-follow/chase steering, combat
