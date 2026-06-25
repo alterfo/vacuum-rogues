@@ -148,9 +148,11 @@ neighbour with the cargo, and single-planet systems fall back to a different que
 **Files:**
 - Modify: quest/requirements docs if «Местный подряд» is documented.
 
-- [ ] Note the new rule: local contracts deliver to a different in-system planet
+- [x] Note the new rule: local contracts deliver to a different in-system planet
       (never the issuer), require landing there, and don't generate in single-planet
-      systems.
+      systems. (Updated the `docs/GLOSSARY.md` «Местный подряд» entry from the old
+      "buy-here / deliver-here" wording to the intra-system courier rule; the quest
+      EPICs don't document the contract, so no other doc needed changing.)
 
 ## Technical Details
 - `targetPlanetId` is an additive optional field → no save migration; legacy

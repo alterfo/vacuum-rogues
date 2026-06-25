@@ -27,7 +27,11 @@ English; the in-game terms are quoted in their original Russian.
 - **Атаковать / Сдаться / Бежать** — Attack / Surrender / Flee.
 - **Кошелёк или жизнь** — "your wallet or your life," the pirate **shakedown**
   (tribute demand).
-- **Местный подряд** — "Local contract," the buy-here / deliver-here delivery quest.
+- **Местный подряд** — "Local contract," an intra-system courier run (no
+  hyperjumps): buy the cargo on the issuer planet and deliver it to a **different
+  planet in the same system** — never the issuer. Completion requires actually
+  flying to and landing on that neighbour with the cargo. Single-planet systems
+  generate a text quest instead (no same-planet contract is ever emitted).
 - **Quest types:** Доставка (DELIVERY), Охота (BOUNTY), Дипломатия (DIPLOMACY),
   Разведка (recon), Эскорт, Цепочка курьеров (courier chain).
 - **Resources:** Топливо (FUEL), Металлы (METALS), Кристаллы (CRYSTALS), Органика
