@@ -99,8 +99,13 @@ fight would otherwise stall the orbits even though bullets fly in real time. The
 sharing `MS_PER_ORBITAL_DAY` with `MS_PER_WAIT_DAY`) advances the orbital day **only** during the
 real-time portion of the fight (`inCombat && !paused`) and returns 0 otherwise; it accrues into the
 existing `waitDayAccum` (free during combat — the wait path is gated off there) from the
-*stationary* combat branch only, so a moving combat pursuit doesn't double-count (it already advances
-orbits via the distance path). The **active pause** (`combatPause.paused`) holds it at 0, freezing
+*stationary* combat branch only. A **moving** combat orbit (`steerCombatOrbit` keeps the ship
+cruising) instead crosses the move-distance day boundary: while `combatModule.isActive` that loop
+routes each day into `waitDayAccum` too — **never** `advanceGalaxyDay` — so the real calendar / NPC
+sim stays frozen during the whole fight (else it would tick ~1 day/s and `refresh()` could despawn
+the live target) while planets keep orbiting. The combatOrbitClock path is gated to `!isMoving`, so
+the stationary and moving combat day-sources never double-count. The **active pause**
+(`combatPause.paused`) holds it at 0, freezing
 the orbits along with movement, NPC AI and fire. Position stays a pure function of `orbitalDay` (no
 per-planet motion state); only the day source gains a combat path — no data/schema/save impact.
 

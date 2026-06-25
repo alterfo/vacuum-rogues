@@ -575,7 +575,10 @@ export class SpaceFlightScene extends GameScene {
     // A lethal hit here fires GAME_OVER synchronously, destroying this scene
     // mid-frame; bail before driving the now-destroyed modules below.
     if (this.destroyed) return;
-    if (this.gameEngine && this.shipPhysics)
+    // Skip the live capture mid-hyperjump: performWarp already cleared the capture
+    // + set the new systemId, but the ship still sits at the old edge coords until
+    // the transition completes — re-capturing here would persist a stale position.
+    if (this.gameEngine && this.shipPhysics && !this.warpInProgress)
       recordAndMaybeAutosaveFlight(
         this.gameEngine,
         this.shipPhysics,
@@ -1185,9 +1188,8 @@ export class SpaceFlightScene extends GameScene {
       }
     }
 
-    // Proactive landing + mid-flight course-correction toward the (orbiting)
-    // planet target. PlanetManager owns the landing-range / lead / threshold
-    // math (Information Expert); the scene just lands or re-plots the route.
+    // Proactive landing + mid-flight re-aim toward the (orbiting) planet target;
+    // PlanetManager owns the landing-range/lead/threshold math (Information Expert).
     if (this.planetManager.routeTargetPlanetId && this.shipPhysics.isMoving) {
       const act = this.planetManager.updateRouteToTarget(
         this.shipPhysics.shipX,
@@ -1214,12 +1216,10 @@ export class SpaceFlightScene extends GameScene {
         return;
       }
 
-      // Pre-combat chase is owned by updateCombat: on arrival keep the turn
-      // running and let it re-route or engage rather than ending the turn here.
+      // Pre-combat chase is owned by updateCombat: on arrival let it re-route/engage.
       if (this.npcManager.followNpcId) return;
 
-      // If the route targeted a planet, land on arrival (the player set the
-      // planet as the destination, so landing is the expected outcome).
+      // If the route targeted a planet, land on arrival (the expected outcome).
       if (this.planetManager.routeTargetPlanetId) {
         const sprite = this.planetManager.planetSprites.find(
           (s) => s.planet.id === this.planetManager.routeTargetPlanetId,
@@ -1235,19 +1235,16 @@ export class SpaceFlightScene extends GameScene {
             void this.onLandOnPlanet(planet);
             return;
           }
-          // Not in range on a hard stop (rare — the mid-flight re-aim normally
-          // keeps the ship converging on the moving planet): just end the turn.
+          // Not in range on a hard stop (rare): just end the turn below.
         }
       }
 
-      // Arrived at an open-space destination → end the turn. endTurn() (not a
-      // bare flag) resets ALL turn state, incl. the F1 deferred-pause latch.
+      // Arrived at open space → endTurn() resets ALL turn state (incl. the F1 latch).
       this.clearPlannedRoute();
       this.endTurn();
     }
 
-    // Star-touch damage: inside the star radius StarRenderer burns the hull in
-    // rate-limited chunks; returns true when a fresh contact episode begins.
+    // Star-touch damage: StarRenderer burns the hull in rate-limited chunks; true on fresh contact.
     const startedBurning = this.starRenderer.updateSunContactDamage(
       deltaTime,
       this.shipPhysics.shipX,
@@ -1255,13 +1252,9 @@ export class SpaceFlightScene extends GameScene {
       this.isTurnRunning,
       this.shipPhysics?.timeScale ?? 1,
     );
-    if (startedBurning) {
-      this.hud.showMessage("☀ Корпус горит!", 0xff8800);
-    }
+    if (startedBurning) this.hud.showMessage("☀ Корпус горит!", 0xff8800);
 
-    // Safety auto-stop: if the hull drops below 30% mid-flight, halt the engines
-    // so the player can divert to the nearest planet and repair before pressing
-    // on. Latched so the warning fires once per descent below the threshold.
+    // Safety auto-stop: halt engines once below 30% hull (latched, once per descent below it).
     const ship = this.gameEngine?.player?.ship;
     if (ship && ship.maxHull > 0) {
       const hullFraction = ship.hullHP / ship.maxHull;
@@ -1288,6 +1281,14 @@ export class SpaceFlightScene extends GameScene {
       this.distanceTraveled += Math.sqrt(dx * dx + dy * dy);
       while (this.distanceTraveled >= this.DISTANCE_PER_DAY) {
         this.distanceTraveled -= this.DISTANCE_PER_DAY;
+        // Combat freezes the REAL calendar (NPC sim/markets) — see orbitsDuringCombat.
+        // The orbit moves the ship continuously, so route the moving fight's day into
+        // the orbital sub-day, not advanceGalaxyDay (which refresh()'s the sim and can
+        // despawn the live target — cf. the OVERMIND-core push-into-galaxy workaround).
+        if (this.combatModule?.isActive) {
+          this.waitDayAccum += 1;
+          continue;
+        }
         if (this.gameEngine?.galaxy) {
           this.gameEngine.advanceGalaxyDay();
           this.npcManager.refresh(); // NPCs may have arrived/departed this day
@@ -1300,8 +1301,7 @@ export class SpaceFlightScene extends GameScene {
       }
     }
 
-    // Stationary turn (US-070 #5): a wait turn advances the calendar; a real-time fight
-    // advances only the orbital day (orbits move, calendar frozen — see combatOrbitClock).
+    // Stationary turn (US-070 #5): a wait turn advances the calendar; a fight only the orbital day.
     if (
       this.isTurnRunning &&
       !this.shipPhysics.isMoving &&

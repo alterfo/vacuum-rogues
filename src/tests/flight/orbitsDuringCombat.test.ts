@@ -167,4 +167,38 @@ describe("planets keep orbiting during a real-time fight", () => {
 
     expect(currentDay()).toBeGreaterThan(before); // wait-turn day source intact
   });
+
+  it("a MOVING combat orbit freezes the real calendar yet still advances orbital time", () => {
+    // Regression (review fix): steerCombatOrbit keeps the ship cruising while
+    // engaged, so the distance day-advance path runs DURING combat. It must NOT
+    // tick the real calendar (advanceGalaxyDay → refresh() can despawn the live
+    // target), but planets must keep orbiting. The stationary-only sibling test
+    // above passes even with the bug present — only a moving orbit exposes it.
+    const { s, galaxy, currentDay, updateShip } = buildCombatScene();
+    const phys = s.shipPhysics as unknown as {
+      shipX: number;
+      isMoving: boolean;
+      currentSpeed: number;
+      update: (dt: number) => void;
+    };
+    phys.isMoving = true; // the orbit holds the ship in continuous cruise
+    phys.currentSpeed = 5;
+    // Each frame the ship advances 300px; 3 frames = 900px > pixelsPerDay (500),
+    // so the distance loop crosses a day boundary mid-fight.
+    phys.update = (): void => {
+      phys.shipX += 300;
+    };
+    const advanceSpy = (
+      s.gameEngine as unknown as { advanceGalaxyDay: ReturnType<typeof vi.fn> }
+    ).advanceGalaxyDay;
+
+    const before = currentDay();
+    updateShip(16);
+    updateShip(16);
+    updateShip(16);
+
+    expect(galaxy.gameDays).toBe(0); // real calendar frozen across the moving orbit
+    expect(advanceSpy).not.toHaveBeenCalled(); // and the NPC-sim day-tick never ran
+    expect(currentDay()).toBeGreaterThan(before); // orbital time still advances
+  });
 });
