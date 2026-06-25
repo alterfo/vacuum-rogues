@@ -57,6 +57,16 @@ it does **NOT** slow or stop because the target is off-axis. A target behind is 
   `currentSpeed` toward 0 when `|angleDiff| ≥ π/3` and scaled position by
   `cos(angleDiff)`, so an off-axis target made the ship stop and pivot). That read as
   twitchy/unnatural and is exactly what this replaced.
+- **Off-axis arrival cap (anti-orbit soft-lock) — keep it.** The cruise turn radius (≈19px)
+  is larger than `STOP_THRESHOLD` (8px), so a **close, off-axis** final destination sits
+  inside the turn circle and would be **orbited forever** — `isMoving` never clears, the
+  route-turn never completes (a soft-lock that stalls the calendar/combat/NPC AI gated on it).
+  On the final leg, when the heading error to the target exceeds `ARC_CAP_HEADING` (≈30°),
+  speed is capped to `rotationSpeed*distance*ARC_CAPTURE` (0.8) so `turnRadius ≤ 0.8·distance`
+  and the ship spirals in. The cap is **gated on the heading error** so an aligned straight-in
+  approach is left at full speed (precise arrival unchanged — do not drop the gate, or the
+  `maxSpeed:1.0` waypoint test that lands exactly on target regresses). Guarded by the
+  shipPhysics "close, off-axis destination is reached — never orbited forever" regression.
 - Preserved: final-leg deceleration (stop AT the destination), waypoint fly-through,
   sun-avoidance pathing, straight-line travel timing. Pure-physics change — no domain /
   schema / save impact. Guarded by `src/tests/shipPhysics.test.ts` (off-axis/behind target

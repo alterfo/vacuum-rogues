@@ -206,6 +206,47 @@ describe("ShipPhysics", () => {
       expect(minSpeedAcrossCorner).toBeGreaterThan(0.05); // flew through the waypoint
     });
 
+    it("a close, off-axis destination is reached — never orbited forever (soft-lock regression)", () => {
+      // Regression: at cruise the turn radius is ≈19px, larger than STOP_THRESHOLD
+      // (8px). A destination that lands close and off to the side sits inside that
+      // turn circle, so without the final-leg speed cap the ship circles it forever
+      // (isMoving never clears → the route-turn never completes → soft-lock). This
+      // failed on the pre-fix model (orbited for 200k frames). Covers both a bare
+      // setTarget and the real plotted-route path (single off-axis waypoint).
+      const perpendicularDistances = [10, 15, 20, 25];
+      for (const d of perpendicularDistances) {
+        // From rest, pointing +x, with the destination directly off to the side.
+        const fromRest = new ShipPhysics(0, 0, 0.1);
+        fromRest.shipAngle = 0;
+        fromRest.setTarget(0, d);
+        let i = 0;
+        for (; i < 5000 && fromRest.isMoving; i++) fromRest.update(16);
+        expect(fromRest.isMoving).toBe(false); // arrived, did not orbit
+        expect(fromRest.getDistanceToTarget()).toBeLessThanOrEqual(8);
+        expect(i).toBeLessThan(5000); // within a bounded number of frames
+
+        // Same geometry, but redirected mid-cruise (worst case for the turn radius).
+        const atCruise = new ShipPhysics(0, 0, 0.1);
+        atCruise.shipAngle = 0;
+        atCruise.currentSpeed = 0.1;
+        atCruise.isMoving = true;
+        atCruise.setTarget(0, d);
+        let j = 0;
+        for (; j < 5000 && atCruise.isMoving; j++) atCruise.update(16);
+        expect(atCruise.isMoving).toBe(false);
+        expect(atCruise.getDistanceToTarget()).toBeLessThanOrEqual(8);
+
+        // The real route path: a short off-axis route returns a single-waypoint path.
+        const viaPath = new ShipPhysics(0, 0, 0.1);
+        viaPath.shipAngle = 0;
+        viaPath.setPath([{ x: 0, y: d }]);
+        let k = 0;
+        for (; k < 5000 && viaPath.isMoving; k++) viaPath.update(16);
+        expect(viaPath.isMoving).toBe(false);
+        expect(viaPath.getDistanceToTarget()).toBeLessThanOrEqual(8);
+      }
+    });
+
     it("straight-line travel timing is unchanged (aligned target ⇒ full forward speed)", () => {
       const p = new ShipPhysics(0, 0, 0.1);
       p.setTarget(5000, 0); // dead ahead (aligned), far enough never to decelerate

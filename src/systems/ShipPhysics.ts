@@ -36,6 +36,16 @@ export class ShipPhysics {
   // Switch to the next queued waypoint once this close, so the ship rounds the
   // corner at speed instead of decelerating to a stop at each one.
   private readonly WAYPOINT_SWITCH: number = 48; // pixels
+  // Final-leg turn-radius capture factor: on the last leg, speed is capped so the
+  // turn radius (speed/rotationSpeed) stays ≤ ARC_CAPTURE × distance-to-target, so
+  // the ship can always curl into STOP_THRESHOLD instead of orbiting a close,
+  // off-axis destination forever. 0.8 spirals in promptly (see ShipPhysics tests).
+  private readonly ARC_CAPTURE: number = 0.8;
+  // The arrival cap only engages when the destination is more than this far off the
+  // current heading (radians, ≈30°). An aligned straight-in approach (heading error
+  // below this) is left at full speed, so precise full-speed arrivals are unchanged;
+  // the cap is reserved for the off-axis case that would otherwise orbit forever.
+  private readonly ARC_CAP_HEADING: number = Math.PI / 6;
 
   constructor(initialX: number, initialY: number, maxSpeed?: number) {
     this.shipX = initialX;
@@ -203,6 +213,16 @@ export class ShipPhysics {
     const stoppingDistance =
       (this.currentSpeed * this.currentSpeed) / (2 * this.deceleration);
 
+    // Heading error toward the target (normalized to [-π, π]). Computed up front so
+    // both the off-axis arrival cap and the turn below share it.
+    const targetAngle = Math.atan2(
+      this.targetY - this.shipY,
+      this.targetX - this.shipX,
+    );
+    let angleDiff = targetAngle - this.shipAngle;
+    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
     if (finalLeg && distance <= stoppingDistance && this.currentSpeed > 0) {
       // Deceleration phase (final approach) — eases over the last ~day's distance.
       this.currentSpeed = Math.max(
@@ -217,20 +237,28 @@ export class ShipPhysics {
       );
     }
 
+    // Off-axis arrival guarantee: when the final destination is well off the current
+    // heading (the ship is turning hard toward it), cap cruise speed so the
+    // achievable turn radius (currentSpeed / rotationSpeed) can curl into the
+    // destination. Without this, a close, off-axis target sits inside the cruise
+    // turn circle (≈19px, larger than STOP_THRESHOLD) and the ship orbits it forever
+    // — distance never drops to STOP_THRESHOLD, so isMoving stays true and the
+    // route-turn never completes (a soft-lock). Capping to
+    // rotationSpeed*distance*ARC_CAPTURE keeps turnRadius ≤ ARC_CAPTURE·distance, so
+    // the ship spirals in and stops. Gated on a meaningful heading error so an
+    // aligned straight-in approach is untouched (full-speed arrival preserved); a
+    // far target's cap is huge (no effect until the final ≈turn-radius), so the
+    // cruise turn radius and waypoint fly-through are unchanged.
+    if (finalLeg && Math.abs(angleDiff) > this.ARC_CAP_HEADING) {
+      const maxArcSpeed = this.rotationSpeed * distance * this.ARC_CAPTURE;
+      if (this.currentSpeed > maxArcSpeed) this.currentSpeed = maxArcSpeed;
+    }
+
     // Turn toward the target at a bounded rate, but only WHILE MOVING. Because
     // forward distance is currentSpeed*dt and the per-frame heading change is
     // capped at rotationSpeed*dt, the path curves with a minimum turn radius of
     // currentSpeed / rotationSpeed (≈19px at cruise) — an arc, never a pivot.
     if (this.currentSpeed > 0) {
-      const dx = this.targetX - this.shipX;
-      const dy = this.targetY - this.shipY;
-      const targetAngle = Math.atan2(dy, dx);
-
-      // Normalize angle difference to [-π, π]
-      let angleDiff = targetAngle - this.shipAngle;
-      while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-
       const maxRotation = this.rotationSpeed * dt;
       if (Math.abs(angleDiff) <= maxRotation) {
         this.shipAngle = targetAngle;
