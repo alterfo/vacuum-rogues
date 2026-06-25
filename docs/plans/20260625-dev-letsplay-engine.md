@@ -77,14 +77,14 @@ supersedes).
 - Create: `src/tests/playtest/letsplay/PlayerPolicy.ts` (interface), `HeuristicPolicy.ts`, `PlayerAgent.ts`
 - Create: `src/tests/playtest/letsplay/heuristicPolicy.test.ts`
 
-- [ ] Define `PlayerPolicy { decide(obs): Action }`; implement a goal-directed
+- [x] Define `PlayerPolicy { decide(obs): Action }`; implement a goal-directed
       `HeuristicPolicy` (survive → earn credits via trade/quests → explore; flee/repair
       at low hull) that only ever returns a **legal** action.
-- [ ] `PlayerAgent` runs observe→decide→apply→`tick` over the harness for a step budget,
+- [x] `PlayerAgent` runs observe→decide→apply→`tick` over the harness for a step budget,
       collecting a transcript + the harness error sink.
-- [ ] write tests: the policy returns legal, non-degenerate actions across sampled
+- [x] write tests: the policy returns legal, non-degenerate actions across sampled
       states; never throws; never picks an illegal action.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 3: Dev-only letsplay runner + bug-discovery report
 **Files:**
