@@ -120,8 +120,14 @@ the current board** should not be generated again as a fresh offer.
 **Files:**
 - Modify: `docs/` quest-system note
 
-- [ ] Note the board dedupe: `questKey` + exclusion of active/completed/on-board
+- [x] Note the board dedupe: `questKey` + exclusion of active/completed/on-board
       quests, derived from existing persisted state.
+      (`docs/requirements/epics/archived/EPIC-008-quest-generation-and-missions.md`
+      — new "Board dedupe (no repeats)" section documenting
+      `questKey`/`questKeyForQuest`, the opt-in `excludeKeys` back-fill, the
+      `GameEngine.getQuestBoard` active+pending-return wiring, id-based completed
+      dedupe, and "no new save field/schema/migration"; US-080 status line points
+      to it.)
 
 ## Technical Details
 - Prefer deriving exclusions from the already-persisted active+completed quest

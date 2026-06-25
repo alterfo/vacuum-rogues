@@ -30,7 +30,7 @@ stronger → take a harder one."
 
 | ID | Title | Status |
 |----|-------|--------|
-| US-080 | Planet job board: list of available quests with type/target/reward/deadline | In Progress (`JobBoardPanel` + PlanetScene «Задания» + `GameEngine.getQuestBoard/acceptBoardQuest`; needs live check) |
+| US-080 | Planet job board: list of available quests with type/target/reward/deadline | In Progress (`JobBoardPanel` + PlanetScene «Задания» + `GameEngine.getQuestBoard/acceptBoardQuest`; needs live check). Board **deduplicates** — see "Board dedupe (no repeats)" below. |
 | US-081 | Quest generator: deterministic from seed+day-bucket; tunable text ratio | **Done** (`QuestGenerator`, tests) |
 | US-082 | Galaxy reach: quest target is **another** system/planet, jump distance computed | **Done** (BFS `jumpDistance`, tests) |
 | US-083 | Reward balance: reward/penalty/deadline scale with distance (jumps) and route risk | **Done** (`economics`, tests) |
@@ -75,6 +75,29 @@ player out of the system**:
 **The 1-in-5 share** is our design knob (`QUEST_TEXT_RATIO`), not canon:
 text-quests are expensive in player attention, so they are rare and served as a
 reward for browsing the board, not as routine.
+
+## Board dedupe (no repeats)
+The board must not re-offer a quest the player is **already engaged with**
+(`docs/plans/20260625-quests-no-repeat.md`). `QuestGenerator` exposes a stable
+content key — `questKey(generated)` / `questKeyForQuest(quest)` — formed from the
+quest **type + target system + a destination signature derived from the
+objectives** (reward / quantity / slot id are deliberately excluded, so the key is
+stable across a board refresh and matches an already-accepted copy of the same
+quest).
+
+`generateQuestBoard(opts)` takes an opt-in `excludeKeys` set; any candidate whose
+`questKey` is in that set — or that was already placed on the board being built —
+is skipped, and the slot loop **back-fills from the remaining pool** so the board
+still reaches its target size. When `excludeKeys` is `undefined` the output is
+byte-identical to the legacy generator (every existing seeded/length test stays
+green); seeded determinism is preserved either way.
+
+`GameEngine.getQuestBoard` threads the exclusions in, mirroring the existing
+`completedQuestChains` wiring: it maps the player's **active + pending-return**
+quests through `questKeyForQuest` into `excludeKeys`. **Completed** quests are
+ids-only (no retained template), so they continue to be deduped by **id** in the
+existing post-filter. All exclusions derive from already-persisted state (active
+log + completed-id set), so there is **no new save field, schema, or migration**.
 
 ## Dependencies
 - `QuestManager`/`Quest`/`QuestObjective`/`Reward`/`failurePenalty` — exist (the base).
