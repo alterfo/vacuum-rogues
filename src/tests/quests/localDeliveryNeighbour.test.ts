@@ -59,6 +59,29 @@ describe("Местный подряд targets a neighbouring planet (≠ issuer)
     }
   });
 
+  it("only non-habitable neighbours → still picks one (not null, not the issuer)", () => {
+    // Issuer ISO_p1 is the sole habitable planet; the only neighbour ISO_p2 is
+    // non-habitable. pickTargetPlanet must fall back to that neighbour (candidates[0]),
+    // NOT return null — else the system would wrongly demote to a text quest.
+    const system = {
+      id: "ISO",
+      name: "Захолустье",
+      connections: [],
+      planets: [
+        { id: "ISO_p1", name: "Столица", isHabitable: true },
+        { id: "ISO_p2", name: "Луна", isHabitable: false },
+      ],
+    } as unknown as StarSystem;
+
+    const locals = boardFor(system).filter(
+      (q) => q.template.title === "Местный подряд",
+    );
+    expect(locals.length).toBeGreaterThan(0);
+    for (const local of locals) {
+      expect(local.targetPlanetId).toBe("ISO_p2");
+    }
+  });
+
   it("single-planet system → the slot is a text quest, not «Местный подряд»", () => {
     const single = {
       id: "ISO",

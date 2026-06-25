@@ -68,6 +68,13 @@ export type DeliveryEvaluation =
  * on THAT planet — landing anywhere else in the system (the issuer included) is
  * silently ignored. Legacy quests (null target planet) keep the system-level
  * behaviour, as do callers that don't thread the current planet id.
+ *
+ * The planet gate applies only to in-system courier runs — a delivery whose
+ * only objective is COLLECT_ITEM (no VISIT_LOCATION). A cross-system delivery
+ * also carries a concrete `targetPlanetId` (the planet of its VISIT_LOCATION
+ * objective), but it must stay system-level: landing on *any* planet in the
+ * target system completes it, exactly as before this field existed — otherwise
+ * arriving at the right system on the wrong planet would silently never complete.
  */
 export function evaluateDelivery(
   quest: DeliveryQuestLike,
@@ -78,7 +85,13 @@ export function evaluateDelivery(
   if (quest.type !== QuestType.DELIVERY) return { kind: "n/a" };
   if (quest.isCompleted || quest.isFailed) return { kind: "n/a" };
   if (quest.targetSystemId !== currentSystemId) return { kind: "n/a" };
+  // The specific-planet gate is for in-system courier runs only («Местный
+  // подряд»: a single COLLECT_ITEM objective, no VISIT_LOCATION). Cross-system
+  // deliveries carry a targetPlanetId too (their VISIT objective's planet) but
+  // stay system-level, so completion isn't silently blocked on the wrong planet.
+  const isCourier = !quest.objectives.some((o) => o.type === "VISIT_LOCATION");
   if (
+    isCourier &&
     quest.targetPlanetId != null &&
     currentPlanetId != null &&
     currentPlanetId !== quest.targetPlanetId

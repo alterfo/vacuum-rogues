@@ -160,5 +160,32 @@ describe("evaluateDelivery (pure on-landing completion helper)", () => {
       // No planet id threaded → the planet gate does not fire.
       expect(evaluateDelivery(quest, player, "SYS").kind).toBe("complete");
     });
+
+    it("cross-system delivery (has a VISIT_LOCATION objective) stays system-level despite a targetPlanetId", () => {
+      // A buildRoutineQuest DELIVERY carries a concrete targetPlanetId (its VISIT
+      // objective's planet) plus a COLLECT_ITEM. The planet gate must NOT fire —
+      // landing on ANY planet in the target system completes it (pre-feature
+      // behaviour); the gate is for COLLECT-only «Местный подряд» couriers only.
+      const quest = deliveryQuest({
+        targetPlanetId: "P_target",
+        objectives: [
+          collectObjective(),
+          {
+            id: "obj_visit",
+            description: "Доставить в систему",
+            type: "VISIT_LOCATION",
+            targetAmount: 1,
+            currentAmount: 0,
+            completed: false,
+            locationId: "P_target",
+          } as QuestObjective,
+        ],
+      });
+      const player = playerWith([{ type: "LUXURY", amount: 5 }]);
+      // Lands on a DIFFERENT planet in the right system → still completes.
+      expect(evaluateDelivery(quest, player, "SYS", "P_other").kind).toBe(
+        "complete",
+      );
+    });
   });
 });

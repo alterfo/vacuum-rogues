@@ -271,6 +271,69 @@ describe("Core-journey behaviour scenarios (real engine)", () => {
     });
   });
 
+  describe("Scenario: in-system «Местный подряд» courier targets a neighbour", () => {
+    it("completes on the target planet but NOT on the issuer planet in the same system", async () => {
+      // Guards the PlanetScene wiring seam: checkDeliveryQuestCompletion must
+      // thread this.planet.id so a courier (targetPlanetId, no VISIT objective)
+      // only completes on the named neighbour — landing back on the issuer planet
+      // (same system) must NOT pay. A dropped planet-id arg would silently revert
+      // to system-level completion and this would go red.
+      await harness.newGame();
+      const multi = systemsWithPlanets(harness).find(
+        (s) => s.planets.length >= 2,
+      );
+      expect(multi).toBeDefined();
+      const system = multi!;
+      const issuerPlanet = system.planets[0];
+      const neighbourPlanet = system.planets[1];
+      const player = harness.player()!;
+      player.inventory.resources.push({
+        type: ResourceType.LUXURY,
+        amount: 10,
+      });
+      player.currentSystemId = system.id;
+
+      const quest = harness.quests().acceptQuestFromTemplate(
+        {
+          ...deliveryTemplate(
+            "jq_courier",
+            system.id,
+            ResourceType.LUXURY,
+            5,
+            400,
+          ),
+          targetPlanetId: neighbourPlanet.id,
+        },
+        issuerPlanet.id,
+      );
+      expect(quest).not.toBeNull();
+      expect(quest!.targetPlanetId).toBe(neighbourPlanet.id);
+      const creditsBefore = harness.credits();
+
+      // Landing on the ISSUER planet (right system, wrong planet) → no completion.
+      await harness.goTo(SceneType.PLANET, { planet: issuerPlanet });
+      expect(
+        harness
+          .quests()
+          .getActiveQuests()
+          .map((q) => q.id),
+      ).toContain("jq_courier");
+      expect(harness.credits()).toBe(creditsBefore);
+
+      // Landing on the NEIGHBOUR planet with the cargo → completes and pays.
+      await harness.goTo(SceneType.PLANET, { planet: neighbourPlanet });
+      expect(
+        harness
+          .quests()
+          .getActiveQuests()
+          .map((q) => q.id),
+      ).not.toContain("jq_courier");
+      expect(harness.quests().getCompletedQuestIds()).toContain("jq_courier");
+      expect(harness.credits()).toBe(creditsBefore + 400);
+      expect(harness.errors()).toEqual([]);
+    });
+  });
+
   describe("Scenario: combat engages", () => {
     /** A real CombatModule wired to the booted engine's player loadout + ship. */
     function realCombat(
