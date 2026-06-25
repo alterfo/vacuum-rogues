@@ -144,8 +144,15 @@ trivially out-ranged, and fleeing is possible.
 **Files:**
 - Modify: `src/presentation/flight/CLAUDE.md` / `playtest-traps.md`
 
-- [ ] Document: per-weapon cadence (`cooldownTurns` now governs fire rate), NPC weapon
-      range/variety, and that escape is reachable post-speed-fix.
+- [x] Document: per-weapon cadence (`cooldownTurns` now governs fire rate), NPC weapon
+      range/variety, and that escape is reachable post-speed-fix. (Updated
+      `src/presentation/flight/CLAUDE.md` real-time-combat paragraph — replaced the stale
+      flat-`combatFireIntervalMs` per-ship sentence with per-weapon `weaponFireIntervalMs`
+      cadence + role-scaled `npcWeaponRange`; and `playtest-traps.md` "Combat Maneuver
+      Conventions" — rewrote the flat-cadence bullet for per-weapon `cooldownTurns` rate +
+      NPC role ranges (200/260/300/340) with the single-tick-test trap, and refreshed the
+      escape note for the basic (0.08) vs interceptor (0.2) `npcCruiseSpeed` split so flee
+      is reachable with the stock 0.11 starter cruise but interceptor-gated.)
 
 ## Post-Completion
 **Manual:** weapons feel distinct (slow-hard vs fast-light), enemies vary and can return

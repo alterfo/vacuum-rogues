@@ -31,9 +31,16 @@ OVERMIND-core boss and former scripted text-quest encounters. An aggressive NPC 
 surfaces a throttled HUD hint ("Нет оружия — установите его в ангаре") instead of silently
 no-opping. Once engaged, both sides **auto-pursue** to hold `WEAPON_RANGE`: the player ship
 auto-tracks the selected target and each aggressive NPC closes on the player (`NpcShipManager`
-pursuit, gated on `isInCombat()`, frozen by the active pause). Each engaged NPC fires at the player
-every `GAME_BALANCE.combatFireIntervalMs`, and the player's auto-selected weapon fires at the
-selected target on the same cadence (`CombatModule.update` drives the timers). A lethal shot calls
+pursuit, gated on `isInCombat()`, frozen by the active pause). **Fire is per-weapon, not a flat
+cadence:** the player fires **every** fitted weapon (`advancePlayerWeapons`), each on its own
+`weaponFireIntervalMs(weapon)` = `max(1, cooldownTurns) × GAME_BALANCE.combatFireIntervalMs` timer
+— so a slow `cooldownTurns:3` beam fires ~⅓ as often as a `cooldownTurns:1` pulse, making cadence a
+real tradeoff against damage (DPS = `damage ÷ interval`). Each engaged NPC fires from within **its
+own role-scaled reach** `npcWeaponRange(npc)` (`systems/combat/npcWeapon.ts`: TRADER 200 / PIRATE
+260 / RANGER 300 / PATROL 340, role-derived → **no schema/migration**), not the legacy flat
+`GAME_BALANCE.weaponRange` 240 — so a long-range player weapon (railgun 360) can no longer trivially
+out-range *every* foe (a PATROL's 340 keeps the edge bounded). `CombatModule.update` drives all
+these timers. A lethal shot calls
 `NpcShipManager`'s in-flight death path (loot drop + domain removal) via the `onNpcDestroyed`
 callback; the scene also completes any bound BOUNTY. Killing the OVERMIND core in flight wins the
 game (`handleInFlightDeath` → `showGameOutcomeScreen(true)`).
