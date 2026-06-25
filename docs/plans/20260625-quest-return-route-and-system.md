@@ -72,13 +72,13 @@ if it's elsewhere, then approach the target planet in-system).
 **Files:**
 - Modify: the quest journal UI + `src/presentation/SpaceFlightScene.ts` (route hook)
 
-- [ ] Add a plot-route button on actionable quest objectives; on click, run
+- [x] Add a plot-route button on actionable quest objectives; on click, run
       `questRouteAction` and dispatch to the existing flight route
       (`planRouteTo`/approach the planet) when same-system, or initiate the
       star-map warp toward `systemId` when not.
-- [ ] write tests: the button dispatches the correct route action per
+- [x] write tests: the button dispatches the correct route action per
       same/cross-system; disabled/hidden when the quest has no target.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 4: Verify acceptance criteria
 **Files:**

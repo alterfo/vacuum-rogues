@@ -8,6 +8,7 @@ import { QuestType } from "@/types";
 import { ScrollableList } from "@/presentation/ui/ScrollableList";
 import {
   questDestination,
+  questRouteAction,
   type QuestDestination,
   type QuestDestinationGalaxyLike,
 } from "@/systems/quests/questDestination";
@@ -578,7 +579,76 @@ export class QuestJournalUI {
       card.addChild(issuedTag);
     }
 
+    // «Проложить маршрут»: dispatch the pure route action onto the existing
+    // flight routing seam (in-system planet approach vs. star-map warp). Only
+    // shown when the destination resolves (galaxy wired + issuer planet found)
+    // and a navigate hook is present — otherwise there is no target to route to.
+    if (dest && this.onNavigateToObjective) {
+      const routeBtn = this.createPlotRouteButton(dest);
+      routeBtn.x = this.panelWidth - 175;
+      routeBtn.y = 26;
+      card.addChild(routeBtn);
+    }
+
     return card;
+  }
+
+  /**
+   * Build the «Проложить маршрут» (plot-route) button for a resolved
+   * destination. On click it runs {@link questRouteAction} and dispatches the
+   * chosen id to the existing `onNavigateToObjective` route hook:
+   * - `approach-planet` → the planet id (the flight scene plots an in-system
+   *   route to it);
+   * - `warp-to-system` → the system id (the flight scene opens the star-map
+   *   warp toward that system).
+   * Both reuse `SpaceFlightScene.navigateToQuestObjective` — no new navigation.
+   */
+  private createPlotRouteButton(dest: QuestDestination): Container {
+    const btn = new Container();
+    const width = 155;
+
+    const btnBg = new Graphics();
+    btnBg.rect(0, 0, width, 16);
+    btnBg.fill({ color: 0x00332b, alpha: 0.9 });
+    btnBg.stroke({ color: 0x66ffcc, width: 1 });
+    btn.addChild(btnBg);
+
+    const btnText = scaledText("⇒ Проложить маршрут", 10, 0x66ffcc, {
+      rawColor: true,
+    });
+    btnText.x = 5;
+    btnText.y = 2;
+    btnText.eventMode = "none";
+    btn.addChild(btnText);
+
+    btn.eventMode = "static";
+    btn.cursor = "pointer";
+
+    btn.on("pointerdown", (event) => {
+      event.stopPropagation(); // don't bubble to the stage route handler
+      if (!this.onNavigateToObjective) return;
+      const action = questRouteAction(dest);
+      const targetId =
+        action.kind === "approach-planet" ? action.planetId : action.systemId;
+      this.onNavigateToObjective(targetId);
+      this.onClose(); // close the journal after plotting
+    });
+
+    btn.on("pointerover", () => {
+      btnBg.clear();
+      btnBg.rect(0, 0, width, 16);
+      btnBg.fill({ color: 0x005a4c, alpha: 1.0 });
+      btnBg.stroke({ color: 0x66ffcc, width: 2 });
+    });
+
+    btn.on("pointerout", () => {
+      btnBg.clear();
+      btnBg.rect(0, 0, width, 16);
+      btnBg.fill({ color: 0x00332b, alpha: 0.9 });
+      btnBg.stroke({ color: 0x66ffcc, width: 1 });
+    });
+
+    return btn;
   }
 
   /**

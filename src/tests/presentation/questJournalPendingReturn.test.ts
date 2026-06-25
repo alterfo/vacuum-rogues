@@ -260,3 +260,183 @@ describe("QuestJournalUI pending-return section", () => {
     expect(rewardLine).toBeDefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Task 3: «Проложить маршрут» (plot-route) button on the pending-return card.
+// It dispatches the pure questRouteAction onto the existing navigate hook:
+// the system id for a cross-system target (star-map warp) and the planet id
+// for a same-system target (in-flight approach). It is hidden when there is
+// no resolvable target (no galaxy) or no navigate hook.
+// ---------------------------------------------------------------------------
+
+type ClickNode = {
+  text?: string;
+  eventMode?: string;
+  on?: { mock: { calls: unknown[][] } };
+  children?: ClickNode[];
+};
+
+function findNode(
+  node: ClickNode,
+  pred: (n: ClickNode) => boolean,
+): ClickNode | null {
+  if (pred(node)) return node;
+  for (const child of node.children ?? []) {
+    const found = findNode(child, pred);
+    if (found) return found;
+  }
+  return null;
+}
+
+function findPlotRouteButton(root: ClickNode): ClickNode | null {
+  return findNode(
+    root,
+    (n) =>
+      n.eventMode === "static" &&
+      (n.children ?? []).some(
+        (c) =>
+          typeof c.text === "string" && c.text.includes("Проложить маршрут"),
+      ),
+  );
+}
+
+function clickPointerdown(node: ClickNode): void {
+  const call = node.on!.mock.calls.find((c) => c[0] === "pointerdown");
+  expect(call).toBeDefined();
+  (call![1] as (e: { stopPropagation: () => void }) => void)({
+    stopPropagation: vi.fn(),
+  });
+}
+
+const galaxyHosting = (planetId: string) => ({
+  systems: [
+    {
+      id: "sys-home",
+      name: "Сириус",
+      planets: [{ id: planetId, name: "Альфа" }],
+    },
+  ],
+});
+
+describe("QuestJournalUI plot-route button (Task 3)", () => {
+  it("warps toward the issuer system when the player is in another system", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    const navigate = vi.fn();
+    const qs = makeQuestServiceWithPending([
+      makePendingReturnQuest({ planetId: "planet-alpha" }),
+    ]);
+    const ui = new QuestJournalUI(
+      qs,
+      1280,
+      720,
+      vi.fn(),
+      navigate,
+      0,
+      undefined,
+      undefined,
+      galaxyHosting("planet-alpha"),
+      "sys-elsewhere", // player is NOT in the issuer system
+    );
+
+    const btn = findPlotRouteButton(ui.container as unknown as ClickNode);
+    expect(btn).not.toBeNull();
+    clickPointerdown(btn!);
+
+    // Cross-system → dispatch the SYSTEM id (the scene opens the star-map warp).
+    expect(navigate).toHaveBeenCalledWith("sys-home");
+  });
+
+  it("approaches the issuer planet when the player is in the same system", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    const navigate = vi.fn();
+    const qs = makeQuestServiceWithPending([
+      makePendingReturnQuest({ planetId: "planet-alpha" }),
+    ]);
+    const ui = new QuestJournalUI(
+      qs,
+      1280,
+      720,
+      vi.fn(),
+      navigate,
+      0,
+      undefined,
+      undefined,
+      galaxyHosting("planet-alpha"),
+      "sys-home", // player IS in the issuer system
+    );
+
+    const btn = findPlotRouteButton(ui.container as unknown as ClickNode);
+    expect(btn).not.toBeNull();
+    clickPointerdown(btn!);
+
+    // Same-system → dispatch the PLANET id (the scene plots an in-flight route).
+    expect(navigate).toHaveBeenCalledWith("planet-alpha");
+  });
+
+  it("closes the journal after plotting the route", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    const onClose = vi.fn();
+    const qs = makeQuestServiceWithPending([
+      makePendingReturnQuest({ planetId: "planet-alpha" }),
+    ]);
+    const ui = new QuestJournalUI(
+      qs,
+      1280,
+      720,
+      onClose,
+      vi.fn(),
+      0,
+      undefined,
+      undefined,
+      galaxyHosting("planet-alpha"),
+      "sys-home",
+    );
+
+    const btn = findPlotRouteButton(ui.container as unknown as ClickNode);
+    clickPointerdown(btn!);
+
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("hides the plot-route button when no galaxy is wired (no resolvable target)", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    const qs = makeQuestServiceWithPending([
+      makePendingReturnQuest({ planetId: "planet-alpha" }),
+    ]);
+    // Galaxy omitted → returnDestination is null → no button.
+    const ui = new QuestJournalUI(qs, 1280, 720, vi.fn(), vi.fn());
+
+    const btn = findPlotRouteButton(ui.container as unknown as ClickNode);
+    expect(btn).toBeNull();
+    const texts = collectTexts(ui.container as unknown as TextNode);
+    expect(texts.some((t) => t.includes("Проложить маршрут"))).toBe(false);
+  });
+
+  it("hides the plot-route button when no navigate hook is supplied", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    const qs = makeQuestServiceWithPending([
+      makePendingReturnQuest({ planetId: "planet-alpha" }),
+    ]);
+    // onNavigateToObjective omitted (undefined) → nothing to dispatch to → no button.
+    const ui = new QuestJournalUI(
+      qs,
+      1280,
+      720,
+      vi.fn(),
+      undefined,
+      0,
+      undefined,
+      undefined,
+      galaxyHosting("planet-alpha"),
+      "sys-home",
+    );
+
+    const btn = findPlotRouteButton(ui.container as unknown as ClickNode);
+    expect(btn).toBeNull();
+  });
+});
