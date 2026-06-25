@@ -51,6 +51,25 @@ so their hit boxes overlapped and got mis-tapped. Each row is 40 px tall with «
 re-laying these out. Guarded by `src/tests/presentation/HangarPanel.test.ts` (asserts the gap
 exceeds the button height and a 16 px minimum).
 
+**Quest cards name the target system + plot a route** (`QuestJournalUI`,
+`docs/plans/20260625-quest-return-route-and-system.md`). The pure, Pixi/DOM-free
+resolver `questDestination(quest, galaxy, currentSystemId)` /
+`questRouteAction(dest)` (`src/systems/quests/questDestination.ts`, structural
+`*Like` inputs like `deliveryCompletion.ts`) turns a quest's
+`targetSystemId`/`targetPlanetId` into a `{ systemId, systemName, planetId,
+planetName, sameSystem }` descriptor and picks a route action —
+`approach-planet` only when `sameSystem` AND a concrete planet, else
+`warp-to-system`. A pending-return card resolves the **issuer planet's** system
+(`returnDestination`), appends « — система <name>» to «↩ Вернитесь в …» so the
+player knows *where* to fly, and (when a galaxy + nav hook are wired) hosts the
+«Проложить маршрут» button: on click it runs `questRouteAction` and dispatches
+the chosen id (planet id or system id) to the existing
+`onNavigateToObjective` → `SpaceFlightScene.navigateToQuestObjective` seam
+(in-system planet approach vs. star-map warp) — it **invents no navigation**.
+`FlightHud` feeds `gameEngine.galaxy` + `player.currentSystemId` into the journal
+ctor (both optional — the system suffix/button simply omit when absent). Pure
+helper + reuse of existing routing: no domain/schema/save change.
+
 Three most-hit PixiJS 8 traps:
 - **`eventMode='none'` on Text over clickable areas** — Text defaults to `'auto'` and blocks
   clicks underneath; set `'none'` on labels so clicks pass through.

@@ -98,8 +98,10 @@ if it's elsewhere, then approach the target planet in-system).
 **Files:**
 - Modify: `docs/` or a quest-system note
 
-- [ ] Note the quest-destination resolver + the plot-route button reusing the
+- [x] Note the quest-destination resolver + the plot-route button reusing the
       existing in-system route / star-map warp.
+      (`src/presentation/CLAUDE.md` — quest-card system name + «Проложить
+      маршрут» note next to the QuestJournalUI/HangarPanel presentation rules.)
 
 ## Technical Details
 - Pure resolver + reuse of existing routing seams; no new navigation logic, no
