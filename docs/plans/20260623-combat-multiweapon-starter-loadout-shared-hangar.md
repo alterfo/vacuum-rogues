@@ -125,10 +125,16 @@ Three equipment/combat polish items:
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only combat/loadout/
-      equipment-UI symbols affected.
-- [ ] full unit suite green (incl. the updated starter-gear expectation);
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — only combat/loadout/
+      equipment-UI symbols affected. (The plan's own increment touches exactly
+      `CombatModule.ts`, `GameEngine.starterLoadout`, the new shared `HangarPanel.ts`
+      + `MicromoduleApplyPanel.ts`, and `StationScene`/`EquipmentShopScene` + their
+      tests. The raw `compare` vs master reads "critical / 501 files" only because
+      this is a long-lived branch — that count is whole-branch divergence
+      (AGENTS.md, CLAUDE.md, planet-backdrop, station-sprite art), not this plan.)
+- [x] full unit suite green (incl. the updated starter-gear expectation);
       `npm run lint` clean; `npm run build` ok; `SpaceFlightScene.ts` < 1900.
+      (2704 unit tests pass; lint 0 errors; build OK; `SpaceFlightScene.ts` = 1898 lines.)
 
 ### Task 6: Update documentation
 **Files:**
