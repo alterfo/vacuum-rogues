@@ -15,6 +15,22 @@ import { logger } from "@/utils/logger";
 const LOW_HULL_FRACTION = 0.3;
 
 /**
+ * A weapon's real-time auto-fire interval in ms: its catalog `cooldownTurns`
+ * (1–3) scaled by the base per-turn interval
+ * {@link GAME_BALANCE.combatFireIntervalMs}. So a `cooldownTurns: 1` weapon keeps
+ * the old flat cadence, while a slow, high-damage weapon (`cooldownTurns: 3`)
+ * fires a third as often — cadence is now a real tradeoff against per-shot
+ * `damage` (the high-`damage` beam is *not* a free upgrade: its sustained DPS,
+ * `damage ÷ interval`, can be lower than a quick pulse's). `cooldownTurns` is
+ * clamped to ≥1 so a malformed 0 can't make a weapon fire every frame.
+ */
+export function weaponFireIntervalMs(weapon: {
+  readonly cooldownTurns: number;
+}): number {
+  return Math.max(1, weapon.cooldownTurns) * GAME_BALANCE.combatFireIntervalMs;
+}
+
+/**
  * Live state the combat module reads from the host scene without depending on
  * the concrete {@link SpaceFlightScene}. The authoritative ship physics stays in
  * the scene; the module reads it through this accessor (Low Coupling / DIP).
@@ -124,10 +140,11 @@ export class CombatModule implements FlightModule {
 
   /**
    * ms elapsed since each fitted weapon last fired, keyed by the weapon's index
-   * in {@link fittedWeapons}. Every weapon auto-fires on the shared
-   * {@link GAME_BALANCE.combatFireIntervalMs} cadence but tracks its own timer so
-   * a weapon held out of range (no combatant within its `range`) keeps its
-   * cadence independently of the others. Reset on engage / confirm / end.
+   * in {@link fittedWeapons}. Each weapon auto-fires on its **own**
+   * {@link weaponFireIntervalMs} cadence (derived from its `cooldownTurns`), and
+   * tracks its own timer so a weapon held out of range (no combatant within its
+   * `range`) keeps its cadence independently of the others. Reset on engage /
+   * confirm / end.
    */
   private readonly weaponFireTimers = new Map<number, number>();
 
@@ -404,10 +421,13 @@ export class CombatModule implements FlightModule {
    * Advance every fitted weapon's fire timer and, as each elapses, fire it at the
    * nearest combatant **within that weapon's own range** ("в зоне поражения
    * орудия"), preferring the {@link selectedTarget} when it is in range. A weapon
-   * with no combatant in range holds — its timer stays "ready" (clamped to the
+   * with no combatant in range holds — its timer stays "ready" (clamped to its
    * interval) so it fires the instant a target closes, rather than re-waiting a
    * full interval. Each weapon keeps its own timer (keyed by its index in
-   * {@link fittedWeapons}) so cadence is per-weapon on the shared interval.
+   * {@link fittedWeapons}) **and its own cadence**: the fire interval is derived
+   * per-weapon from `cooldownTurns` via {@link weaponFireIntervalMs}, so a slow,
+   * high-damage weapon fires less often than a quick one (cadence is a real
+   * tradeoff, not a flat rate).
    */
   private advancePlayerWeapons(deltaTime: number): void {
     // A downed ship (GOD mode, hull at the floor) can't auto-fire until repaired.
@@ -420,15 +440,16 @@ export class CombatModule implements FlightModule {
       // (mirrors the per-iteration re-check in advanceNpcTimers).
       if (this.isFrozen()) break;
       const weapon = weapons[i];
+      const interval = weaponFireIntervalMs(weapon);
       const t = (this.weaponFireTimers.get(i) ?? 0) + deltaTime;
-      if (t < GAME_BALANCE.combatFireIntervalMs) {
+      if (t < interval) {
         this.weaponFireTimers.set(i, t);
         continue;
       }
       const target = this.pickTargetInRange(weapon);
       if (!target) {
         // No combatant in this weapon's range — hold but stay primed.
-        this.weaponFireTimers.set(i, GAME_BALANCE.combatFireIntervalMs);
+        this.weaponFireTimers.set(i, interval);
         continue;
       }
       this.weaponFireTimers.set(i, 0);

@@ -52,13 +52,16 @@ trivially out-ranged, and fleeing is possible.
 - Modify: `src/presentation/flight/CombatModule.ts`
 - Create/Modify: `src/tests/flight/weaponCadence.test.ts`
 
-- [ ] Derive each weapon's fire interval from its `cooldownTurns` (× a base ms) instead
+- [x] Derive each weapon's fire interval from its `cooldownTurns` (× a base ms) instead
       of a single flat `combatFireIntervalMs`, in `advancePlayerWeapons` (per-weapon
       timer already exists). A slow, high-damage weapon now trades cadence for punch.
-- [ ] write tests: a `cooldownTurns=3` weapon fires ~⅓ as often as a `cooldownTurns=1`
+      (New exported pure helper `weaponFireIntervalMs(weapon)` = `max(1, cooldownTurns) ×
+      combatFireIntervalMs`; `cooldownTurns:1` keeps the old flat cadence so existing
+      combat tests stay green.)
+- [x] write tests: a `cooldownTurns=3` weapon fires ~⅓ as often as a `cooldownTurns=1`
       weapon over N ticks; DPS ordering reflects damage ÷ cadence (so the beam is a real
-      tradeoff, not a free upgrade).
-- [ ] run tests — green.
+      tradeoff, not a free upgrade). (`src/tests/flight/weaponCadence.test.ts`.)
+- [x] run tests — green.
 
 ### Task 2: Give NPCs real weapon range + variety
 **Files:**
