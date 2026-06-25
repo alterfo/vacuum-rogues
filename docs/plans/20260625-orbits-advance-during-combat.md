@@ -94,9 +94,13 @@ pause** (pause = everything stops, correct).
 **Files:**
 - Modify: `src/presentation/flight/CLAUDE.md` (the single sub-day clock section)
 
-- [ ] Note that the orbital day advances during real-time combat (planets keep
+- [x] Note that the orbital day advances during real-time combat (planets keep
       orbiting) but freezes during the active pause, alongside the existing
-      move-distance + wait-turn day sources.
+      move-distance + wait-turn day sources. (`src/presentation/flight/CLAUDE.md`
+      "Single sub-day clock" section now spells out the three sub-day sources —
+      move-distance + wait-turn + the real-time-combat path via
+      `combatOrbitalDayIncrement` — accrued into `waitDayAccum` from the stationary
+      branch, held at 0 by the active pause, position pure in `orbitalDay`.)
 
 ## Technical Details
 - Reuse the wait-turn day rate (`MS_PER_WAIT_DAY`) for the combat-time increment so

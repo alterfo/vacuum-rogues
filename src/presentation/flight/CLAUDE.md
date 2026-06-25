@@ -76,6 +76,18 @@ read-out, pushed in via `FlightHud.setDayProvider(() => this.currentDay)`.
 `FlightHud.updateDayCounter` renders it with `formatGameTimestamp` (date + HH:MM clock); with no
 provider wired it falls back to whole-day `galaxy.gameDays`. Do **not** re-derive the fractional
 day at a call site or render the HUD date straight from `gameDays` (that was the frozen-date bug).
+The day has **three** sub-day sources, all summed into `currentDay`: move-distance, the wait-turn
+accumulator, **and a real-time-combat path** so planets keep orbiting during a stationary fight.
+A fight freezes the calendar (and the move/wait paths are gated off while it runs), so a still
+fight would otherwise stall the orbits even though bullets fly in real time. The pure
+`combatOrbitalDayIncrement({inCombat, paused, dt, timeScale})` (`flight/combatOrbitClock.ts`,
+sharing `MS_PER_ORBITAL_DAY` with `MS_PER_WAIT_DAY`) advances the orbital day **only** during the
+real-time portion of the fight (`inCombat && !paused`) and returns 0 otherwise; it accrues into the
+existing `waitDayAccum` (free during combat — the wait path is gated off there) from the
+*stationary* combat branch only, so a moving combat pursuit doesn't double-count (it already advances
+orbits via the distance path). The **active pause** (`combatPause.paused`) holds it at 0, freezing
+the orbits along with movement, NPC AI and fire. Position stays a pure function of `orbitalDay` (no
+per-planet motion state); only the day source gains a combat path — no data/schema/save impact.
 
 Rules: a module never imports another — the scene mediates via callbacks + `*Deps` bundles;
 each `destroy()` must leave `gameLayer.children.length === 0`; dispose `BlurFilter`s in
