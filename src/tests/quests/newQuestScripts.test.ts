@@ -287,6 +287,20 @@ describe("Smuggling Run quest", () => {
     expect(vm.getParam("credits")).toBe(1700); // -300 bribes + 2000
   });
 
+  it("two dumps then a bribe lands the mid payout tier", () => {
+    const vm = new QuestVM(smugglingRunScript, 1);
+    vm.execute("dump"); // cargo 4
+    advanceAuto(vm);
+    vm.execute("dump"); // cargo 2
+    advanceAuto(vm);
+    vm.execute("bribe"); // -150
+    advanceAuto(vm); // arrival → payout (cargo 2 → pay_mid +1000) → success
+    expect(vm.isSuccess()).toBe(true);
+    expect(vm.currentLocation().id).toBe("quest_success");
+    expect(vm.getParam("cargo")).toBe(2);
+    expect(vm.getParam("credits")).toBe(850); // -150 bribe + 1000 mid payout
+  });
+
   it("result is deterministic for the same seed", () => {
     const vm1 = new QuestVM(smugglingRunScript, 42);
     const vm2 = new QuestVM(smugglingRunScript, 42);
@@ -475,7 +489,7 @@ describe("Sabotage Heist quest", () => {
     expect(vm.isSuccess()).toBe(true);
     expect(vm.getParam("loot")).toBe(2); // 3 - 1 partner cut
     expect(vm.getParam("rating")).toBe(110); // 100 + 10 honored
-    expect(vm.getParam("credits")).toBe(500); // -500 + 1000 (loot>=1 tier)
+    expect(vm.getParam("credits")).toBe(500); // -500 bribe + 1000 (pay_small fallthrough at loot 2)
   });
 
   it("partner betrayal on a bad roll loses the loot (failure)", () => {
@@ -655,6 +669,21 @@ describe("First Contact quest", () => {
     expect(vm.currentLocation().id).toBe("ending_cold_standoff");
     expect(vm.isSuccess()).toBe(false);
     expect(vm.getParam("rating")).toBe(95);
+  });
+
+  it("an alarming scan then holding aim hits the exact war threshold (trust -6)", () => {
+    const vm = new QuestVM(firstContactScript, 1);
+    vm.execute("scan");
+    vm.setParam("roll", 0); // alarmed
+    advanceAuto(vm); // scan_reaction → standoff (trust -4)
+    expect(vm.currentLocation().id).toBe("standoff");
+    expect(vm.getParam("trust")).toBe(-4);
+    vm.execute("hold_aim"); // -2 = -6 (exactly the trust <= -6 war threshold)
+    advanceAuto(vm); // hostility_gate → ending_war
+    expect(vm.currentLocation().id).toBe("ending_war");
+    expect(vm.isSuccess()).toBe(false);
+    expect(vm.getParam("trust")).toBe(-6);
+    expect(vm.getParam("rating")).toBe(70); // 100 - 30
   });
 
   it("result is deterministic for the same seed (scan path)", () => {

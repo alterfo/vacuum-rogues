@@ -34,19 +34,3 @@ const REGISTRY = new Map<string, QuestScript>(
 export function getQuestScript(id: string): QuestScript | undefined {
   return REGISTRY.get(id);
 }
-
-/** Deterministically returns 1-2 script IDs available on a planet (by hash of planetId). */
-export function getAvailableQuestScriptIds(planetId: string): string[] {
-  let hash = 0;
-  for (let i = 0; i < planetId.length; i++) {
-    hash = (hash * 31 + planetId.charCodeAt(i)) >>> 0;
-  }
-  const n = ALL_QUEST_SCRIPTS.length;
-  const idx1 = hash % n;
-  const idx2 = (hash >> 4) % n;
-  const ids = [ALL_QUEST_SCRIPTS[idx1].id];
-  if (idx2 !== idx1) {
-    ids.push(ALL_QUEST_SCRIPTS[idx2].id);
-  }
-  return ids;
-}

@@ -45,7 +45,10 @@ of each file documents its choice points and every ending.
    the idiom for a time/heat-pressure spine (see `plague-crisis`).
 2. **Register** it in `ALL_QUEST_SCRIPTS` (`../TextQuestRegistry.ts`) — the
    single wire-in point. That makes it resolvable via `getQuestScript(id)` and
-   eligible on the board through `getAvailableQuestScriptIds(planetId)`.
+   eligible for the board's TEXT_ADVENTURE slot, which `buildTextQuest`
+   (`../QuestGenerator.ts`) fills by picking uniformly at random from
+   `ALL_QUEST_SCRIPTS` and storing the chosen `script.id` as the quest's
+   `targetObjectId`.
 3. **Test** it in `../../../tests/quests/newQuestScripts.test.ts`: drive each
    choice path through `QuestVM` so every branch reaches a terminal stage,
    assert rewards/reputation fire on the correct branch, and assert no
