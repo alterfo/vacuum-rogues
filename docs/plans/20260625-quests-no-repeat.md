@@ -45,13 +45,24 @@ the current board** should not be generated again as a fresh offer.
 **Files:**
 - Create: `src/tests/quests/questNoRepeat.characterize.test.ts`
 
-- [ ] Reproduce the repeat as a red test: generate a board, mark one quest
+- [x] Reproduce the repeat as a red test: generate a board, mark one quest
       active/completed, regenerate, and show the same quest re-appears today.
-- [ ] Define `questKey(quest)` (kind + target system/planet + distinguishing
+      (`src/tests/quests/questNoRepeat.characterize.test.ts`; the `it.fails` case
+      pins the repeat — verified RED via a momentary `it()` flip, output
+      `DELIVERY|D|…` reappears.)
+- [x] Define `questKey(quest)` (kind + target system/planet + distinguishing
       payload, or a generated stable id) and decide the exclusion source — prefer
       deriving from the already-persisted **active + completed** quest sets (no new
       persisted field / no save migration) over a new "seen" store.
-- [ ] run — the characterization test is RED (repeat reproduced).
+      (`questKey` exported from `QuestGenerator.ts`: type + target system + a
+      destination signature from objectives — slot id / reward / quantity
+      excluded, so it is stable across board refresh and matches an accepted copy.
+      Decision: derive keys from the **active** quest set (full `Quest` objects)
+      + the **on-board** set; the completed set is ids-only (`Set<string>`), so
+      completed dedupe stays id-based — content-key dedupe for completed would
+      need a persisted "seen" set + migration, which the plan defers. No schema
+      change.)
+- [x] run — the characterization test is RED (repeat reproduced).
 
 ### Task 2: Dedupe generation against active/completed/on-board
 **Files:**

@@ -216,6 +216,43 @@ export function governorOfferLine(quest: GeneratedQuest): string {
   return `${speaker}: «${quest.template.description}»`;
 }
 
+/**
+ * A stable identity for "the same quest" across board re-generation
+ * ("задания не должны повторяться"). Two offers that send the player on the
+ * same job to the same destination share a key, *regardless* of the
+ * bucket-bearing board-slot id, the randomised reward/quantity, or the issuer —
+ * so an offer the player has already taken (active) or that is already placed on
+ * the board being built can be recognised and skipped.
+ *
+ * - Text-quests are keyed by their script (`targetObjectId`): the same script is
+ *   a repeat wherever it is posted.
+ * - Every other quest is keyed by type + target system + a destination signature
+ *   built from its objectives (planet/system targets and cargo kind), excluding
+ *   slot ids and randomised quantities. That makes the key identical on the next
+ *   board refresh and lets it match an already-accepted copy (whose objective
+ *   ids and reward differ, but whose destination signature does not).
+ *
+ * The objective signature uses only fields present on **both** a generated
+ * quest's template and a restored {@link Quest} (objective `type` + `locationId`
+ * + `targetSystemId` + `itemType`), so the same key can be computed for the
+ * player's active quests when threading exclusions into the board generator.
+ */
+export function questKey(quest: GeneratedQuest): string {
+  const t = quest.template;
+  if (t.type === QuestType.TEXT_ADVENTURE) {
+    return `TEXT|${t.targetObjectId ?? t.id}`;
+  }
+  const objSig = t.objectives
+    .map(
+      (o) =>
+        `${o.type}:${o.locationId ?? ""}:${o.targetSystemId ?? ""}:${o.itemType ?? ""}`,
+    )
+    .join(",");
+  const chain = t.chainId ? `${t.chainId}#${t.chainPart ?? ""}` : "";
+  const system = quest.targetSystemId || (t.targetSystemId ?? "");
+  return `${t.type}|${system}|${chain}|${objSig}`;
+}
+
 export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
   const {
     systems,
