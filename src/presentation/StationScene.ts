@@ -7,7 +7,9 @@ import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Station } from "@/domain/Station";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
-import { SceneType, StationType, type MicroModule } from "@/types";
+import { SceneType, StationType, QuestType, type MicroModule } from "@/types";
+import { JobBoardPanel } from "./JobBoardPanel";
+import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
 import { GearKind, gearById } from "@/systems/equipment/GearCatalog";
 import {
@@ -151,6 +153,9 @@ export class StationScene extends GameScene {
   /** The shared micromodule-apply modal, opened from the hangar's per-slot
    *  "[установить микромодуль]" control (same component the equipment shop uses). */
   private readonly micromoduleApplyPanel: MicromoduleApplyPanel;
+  /** The military-base quest board overlay (same panel planets use). Non-null
+   *  only while the «Задания» surface is open at a MILITARY_BASE. */
+  private jobBoardPanel: JobBoardPanel | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
@@ -194,6 +199,7 @@ export class StationScene extends GameScene {
 
   destroy(): void {
     this.hangarPanel.dispose();
+    this.closeJobBoard();
     if (this.toastTimeout) clearTimeout(this.toastTimeout);
     if (this.boundKeyDown) {
       window.removeEventListener("keydown", this.boundKeyDown);
@@ -579,7 +585,11 @@ export class StationScene extends GameScene {
         }
         break;
       case "quests":
-        this.showToast("Задания выдаются только на военных базах", 0xffcc44);
+        if (this.station?.type === StationType.MILITARY_BASE) {
+          this.openJobBoard();
+        } else {
+          this.showToast("Задания выдаются только на военных базах", 0xffcc44);
+        }
         break;
       case "rankPromotion":
         this.doRankPromotion();
@@ -596,6 +606,76 @@ export class StationScene extends GameScene {
       case "leave":
         await this.undock();
         break;
+    }
+  }
+
+  // ── military-base quest board ────────────────────────────────────────────────
+
+  /** Open the military-base job board — the same `JobBoardPanel` planets use,
+   *  keyed by the station id so each base keeps its own (deduped) board. */
+  private openJobBoard(): void {
+    if (!this.gameEngine || !this.station) return;
+    this.closeJobBoard();
+    const quests = this.gameEngine.getQuestBoard(this.station.id);
+    const { width, height } = this.renderer.app.screen;
+    const activeQuests = this.gameEngine.questManager.getActiveQuests();
+    const currentDay = this.gameEngine.galaxy?.gameDays ?? 0;
+    const acceptedIds = new Set<string>([
+      ...activeQuests.map((q) => q.id),
+      ...this.gameEngine.questManager.getCompletedQuestIds(),
+      // Pending-return quests are still "taken" — keep them off the board.
+      ...this.gameEngine.questManager.getPendingReturnQuests().map((q) => q.id),
+    ]);
+    this.jobBoardPanel = new JobBoardPanel(
+      quests,
+      width,
+      height,
+      {
+        onAccept: (q) => this.acceptJob(q),
+        onClose: () => this.closeJobBoard(),
+      },
+      activeQuests.length,
+      acceptedIds,
+      activeQuests,
+      currentDay,
+      this.gameEngine.player?.rank ?? 0,
+    );
+    this.renderer.uiLayer.addChild(this.jobBoardPanel.container);
+  }
+
+  private acceptJob(q: GeneratedQuest): void {
+    if (!this.gameEngine || !this.station) return;
+    const accepted = this.gameEngine.acceptBoardQuest(q, this.station.id);
+    if (!accepted) {
+      this.showToast("Не удалось принять задание", 0xffaa00);
+      return;
+    }
+    if (q.template.type === QuestType.TEXT_ADVENTURE) {
+      const scriptId = q.template.targetObjectId ?? q.template.id;
+      this.closeJobBoard();
+      this.gameEngine
+        .startTextQuest(
+          scriptId,
+          undefined,
+          SceneType.STATION,
+          { gameEngine: this.gameEngine, station: this.station },
+          accepted.id,
+        )
+        .catch((e) =>
+          logger.error("StationScene: text quest transition failed", e),
+        );
+      return;
+    }
+    this.showToast(`Задание принято: ${q.template.title}`, 0x00ff88);
+    this.openJobBoard(); // refresh — the accepted quest drops off the board
+  }
+
+  private closeJobBoard(): void {
+    const panel = this.jobBoardPanel;
+    this.jobBoardPanel = null;
+    if (panel) {
+      this.renderer?.uiLayer?.removeChild(panel.container);
+      panel.destroy();
     }
   }
 

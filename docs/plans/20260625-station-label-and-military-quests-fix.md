@@ -56,13 +56,20 @@ station types.
 **Files:**
 - Modify: `src/presentation/StationScene.ts` (the `"quests"` case), wiring to the job board / `QuestGenerator`
 
-- [ ] In the `"quests"` action, branch on `this.station.type`: at `MILITARY_BASE`, open a
+- [x] In the `"quests"` action, branch on `this.station.type`: at `MILITARY_BASE`, open a
       real quest offering (reuse the JobBoard / `generateQuestBoard` for the station,
       threading the dedupe exclusions); at any other type, show the "only at military
-      bases" toast. No more contradictory message at a military base.
-- [ ] write tests: at a military base the action opens the quest surface (not the toast);
-      at a non-military station it shows the toast.
-- [ ] run tests — green.
+      bases" toast. No more contradictory message at a military base. (StationScene
+      now mounts the shared `JobBoardPanel` keyed by `station.id`, reusing
+      `getQuestBoard`/`acceptBoardQuest` — same dedupe/text-quest path as PlanetScene;
+      cleaned up in `destroy()` via `closeJobBoard()`.)
+- [x] write tests: at a military base the action opens the quest surface (not the toast);
+      at a non-military station it shows the toast. (New `stationQuests.test.ts` drives
+      the real StationScene through a fake-pixi mock — asserts `jobBoardPanel` opens +
+      `getQuestBoard("base-1")` called at MILITARY_BASE; the wrong-place toast + no board
+      at REPAIR_DOCK.)
+- [x] run tests — green (2/2 in `stationQuests.test.ts`; station/hangar suites + the
+      real-engine `test:playtest` gate stay green; tsc + lint clean).
 
 ### Task 3: Crisp panel text (resolution) + bigger quest fonts
 **Files:**
