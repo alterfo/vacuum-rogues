@@ -56,14 +56,14 @@ Related patterns:
 - Create: `src/systems/onboarding/helpContent.ts`
 - Create: `src/tests/onboarding/helpContent.test.ts`
 
-- [ ] Define a `HelpKey` (scene keys + `welcome`, `quest-journal`, `combat`) and a
+- [x] Define a `HelpKey` (scene keys + `welcome`, `quest-journal`, `combat`) and a
       `HelpEntry` (`title`, `body: string[]`, optional `controls: string[]`), with
       a `HELP_CONTENT: Record<HelpKey, HelpEntry>` of concise Russian instructions
       for every reachable gameplay screen + the welcome/goal intro.
-- [ ] Add a `helpFor(key)` accessor.
-- [ ] write tests: every `HelpKey` has a non-empty title + ≥1 body line (no gaps);
+- [x] Add a `helpFor(key)` accessor.
+- [x] write tests: every `HelpKey` has a non-empty title + ≥1 body line (no gaps);
       `helpFor` returns the right entry; the welcome entry states the game's goal.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 2: "Seen" persistence (browser-level, injectable)
 **Files:**
