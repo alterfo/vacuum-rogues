@@ -77,11 +77,13 @@ jitter doesn't re-plot at all.
 **Files:**
 - Create: `src/tests/flight/chaseSteering.characterize.test.ts`
 
-- [ ] Add a test that simulates a chase against a steadily-moving target and shows
+- [x] Add a test that simulates a chase against a steadily-moving target and shows
       the current behaviour spikes — e.g. the aim point's per-frame jump exceeds a
       smoothness bound, and/or `executeRouteTo` is invoked more than once per
       second (route re-plot thrash). Capture the metric so Task 2/3 prove the fix.
-- [ ] run tests — confirm the characterization fails the target smoothness bound.
+      (`src/tests/flight/chaseSteering.characterize.test.ts`: baseline max aim jump
+      ≈72px vs `SMOOTH_BOUND_PX`=8, ≈15 route re-plots/sec vs 1/sec.)
+- [x] run tests — confirm the characterization fails the target smoothness bound.
 
 ### Task 2: Smoothed lead point + re-aim hysteresis (pure)
 **Files:**
