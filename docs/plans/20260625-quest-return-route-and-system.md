@@ -84,9 +84,15 @@ if it's elsewhere, then approach the target planet in-system).
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only the quest
-      destination helper + quest UI + the flight route hook affected.
-- [ ] full unit suite green; `npm run test:playtest` green; lint clean; build ok.
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — scoped to the
+      feature's 3 commits (the full branch carries unrelated prior work), the
+      change set is exactly the quest destination helper
+      (`src/systems/quests/questDestination.ts`), the quest UI
+      (`src/presentation/QuestJournalUI.ts`), and the flight route hook
+      (`src/presentation/flight/FlightHud.ts`, +2 lines), plus their tests.
+- [x] full unit suite green (335 files, 2820 passed / 1 skipped);
+      `npm run test:playtest` green (8 files, 63 passed / 1 skipped); lint clean
+      (0 errors); production build ok.
 
 ### Task 5: Update documentation
 **Files:**
