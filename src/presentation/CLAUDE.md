@@ -25,11 +25,25 @@ Each off-planet base resolves a per-type sprite via `stationSpriteKey(type, id)`
 `Sprite`; otherwise the marker falls back to the existing colour-coded diamond. Station
 art is **non-lazy/eager** (small transparent WebP, kept out of `LAZY_PREFIXES`) and
 resolved **synchronously** via `pickVariantKey` + `tex` (cache lookup) — no async/lazy
-load, and no save/schema impact (art is type+id-derived, like planet discs). The label, transparent circular
+load, and no save/schema impact (art is type+id-derived, like planet discs). The name label
+sits **below** the sprite, not over it: `STATION_LABEL_Y = STATION_SPRITE_SIZE / 2 + 4` (= 44
+for the 80 px sprite) derives the label `y` from the sprite size, so a resize keeps the name
+clear of the disc (`20260625-station-label-and-military-quests-fix`; pre-bump the sprite was
+40 px and a fixed `y=18` happened to clear it). The label, transparent circular
 hit-area + `onStationClick`, `zIndex` and `stationMarkers` bookkeeping are identical on
 both paths. The matching ComfyUI prompt category is `station` in
 `tools/comfyui/asset_prompts.json` (mirrors `ships`); the art lands in a separate commit
 and lights up the sprite path automatically via the Vite glob manifest.
+
+**Military bases offer quests; other station types show the wrong-place message**
+(`StationScene` `"quests"` case, `20260625-station-label-and-military-quests-fix`). The action
+branches on `this.station.type`: at `MILITARY_BASE` it opens the shared `JobBoardPanel` —
+the **same** board planets use, keyed by `station.id` so each base keeps its own deduped
+listing (`getQuestBoard`/`acceptBoardQuest`, threading the active/completed/pending-return
+exclusions; `TEXT_ADVENTURE` quests route to the text-quest scene). At any **other** station
+type it shows the «Задания выдаются только на военных базах» toast. Do **not** restore the old
+unconditional toast — it contradicted itself at an actual military base. The panel is torn down
+in `destroy()` via `closeJobBoard()`.
 
 **The slot-fitting hangar is one shared component** (`ui/HangarPanel.ts`,
 `docs/plans/20260623-combat-multiweapon-starter-loadout-shared-hangar.md`). It renders the

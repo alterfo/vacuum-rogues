@@ -114,8 +114,12 @@ station types.
 **Files:**
 - Modify: `src/presentation/CLAUDE.md` (station marker + station services note)
 
-- [ ] Note the label-below-sprite offset (scales with sprite size) and that military bases
-      offer quests (other stations show the wrong-place message).
+- [x] Note the label-below-sprite offset (scales with sprite size) and that military bases
+      offer quests (other stations show the wrong-place message). (Added to
+      `src/presentation/CLAUDE.md`: the station-marker section now documents
+      `STATION_LABEL_Y = STATION_SPRITE_SIZE / 2 + 4` placing the name below the disc, plus a
+      new paragraph on the `MILITARY_BASE` → shared `JobBoardPanel` branch vs. the
+      wrong-place toast at other station types.)
 
 ## Post-Completion
 **Manual:** at a station the name reads cleanly *below* the sprite; at a military base the
