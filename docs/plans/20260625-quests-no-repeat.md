@@ -99,12 +99,22 @@ the current board** should not be generated again as a fresh offer.
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only the generator
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — only the generator
       + its call site + tests affected; **confirm no schema/migration change** (or,
       if a persisted "seen" set was unavoidable, that `schemas.ts` +
       `MigrationPipeline.ts` + `CURRENT_VERSION` are updated — see CLAUDE.md).
-- [ ] full unit suite green (the locked quest tests stay green); `npm run
+      (The branch-wide compare is too broad to read — the branch carries many
+      unrelated commits — so scope was confirmed via the two quest-no-repeat
+      commits' diff (`97b3d1f`, `0e4dbb1`): only `QuestGenerator.ts` (generator) +
+      `GameEngine.ts` (call site) + `questBoardDedupe.test.ts` +
+      `questNoRepeat.characterize.test.ts` + this plan changed. `git diff
+      --name-only` against `schemas|migration|CURRENT_VERSION` matched **none** —
+      no schema/migration change, as the Task 1 decision intended.)
+- [x] full unit suite green (the locked quest tests stay green); `npm run
       test:playtest` green; lint clean; build ok.
+      (`npm test -- --run`: 337 files, 2833 passed / 1 skipped. `npm run
+      test:playtest`: 8 files, 63 passed / 1 skipped. `npm run lint`: 0 errors (48
+      pre-existing `any` warnings in unrelated test files). `npm run build`: ✓.)
 
 ### Task 4: Update documentation
 **Files:**
