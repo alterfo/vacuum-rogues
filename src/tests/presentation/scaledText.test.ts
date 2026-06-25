@@ -12,6 +12,7 @@ import {
   scaledText,
   readableFill,
   relativeLuminance,
+  devicePixelRatioOr,
   READABLE_FLOOR,
 } from "@/presentation/ui/scaledText";
 import { setFontScale, scaledFont } from "@/utils/fontScale";
@@ -46,6 +47,42 @@ describe("scaledText font size tracks S/M/L", () => {
     const large = scaledText("x", 20, 0xffffff).style.fontSize as number;
     expect(small).toBeLessThan(med);
     expect(med).toBeLessThan(large);
+  });
+});
+
+describe("scaledText renders at the device pixel ratio (crisp on HiDPI)", () => {
+  const ORIGINAL_DPR = window.devicePixelRatio;
+  afterEach(() => {
+    Object.defineProperty(window, "devicePixelRatio", {
+      value: ORIGINAL_DPR,
+      configurable: true,
+    });
+  });
+
+  function stubDpr(value: number): void {
+    Object.defineProperty(window, "devicePixelRatio", {
+      value,
+      configurable: true,
+    });
+  }
+
+  it("pins the Text resolution to window.devicePixelRatio", () => {
+    stubDpr(3);
+    expect(scaledText("x", 12, 0xffffff).resolution).toBe(3);
+    stubDpr(2);
+    expect(scaledText("x", 12, 0xffffff).resolution).toBe(2);
+  });
+
+  it("falls back to 1 when DPR is 0/undefined", () => {
+    stubDpr(0);
+    expect(scaledText("x", 12, 0xffffff).resolution).toBe(1);
+  });
+
+  it("devicePixelRatioOr reads the live DPR, else the fallback", () => {
+    stubDpr(2.5);
+    expect(devicePixelRatioOr(1)).toBe(2.5);
+    stubDpr(0);
+    expect(devicePixelRatioOr(7)).toBe(7);
   });
 });
 

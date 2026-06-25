@@ -78,18 +78,19 @@ function findText(panel: JobBoardPanel, pred: (t: Text) => boolean): Text {
 
 describe("JobBoardPanel routes text through scaledText", () => {
   it("scales the body description with the S/M/L setting", () => {
+    // Base bumped 10 → 13 (Task 3: bigger quest fonts) — still tracks S/M/L.
     setFontScale("S");
     const small = findText(buildPanel(), (t) => t.text === DESCRIPTION).style
       .fontSize as number;
-    const expectedS = scaledFont(10);
+    const expectedS = scaledFont(13);
     setFontScale("M");
     const med = findText(buildPanel(), (t) => t.text === DESCRIPTION).style
       .fontSize as number;
-    const expectedM = scaledFont(10);
+    const expectedM = scaledFont(13);
     setFontScale("L");
     const large = findText(buildPanel(), (t) => t.text === DESCRIPTION).style
       .fontSize as number;
-    const expectedL = scaledFont(10);
+    const expectedL = scaledFont(13);
 
     expect(small).toBe(expectedS);
     expect(med).toBe(expectedM);
@@ -110,6 +111,29 @@ describe("JobBoardPanel routes text through scaledText", () => {
     // The original dim values are no longer used verbatim.
     expect(desc.style.fill).not.toBe(0x889aaa);
     expect(issuer.style.fill).not.toBe(0x77aacc);
+  });
+
+  it("renders the body description at the bumped base (13, > old 11/10)", () => {
+    setFontScale("M");
+    const size = findText(buildPanel(), (t) => t.text === DESCRIPTION).style
+      .fontSize as number;
+    expect(size).toBe(scaledFont(13));
+    expect(size).toBeGreaterThan(scaledFont(11)); // bigger quest fonts (Task 3)
+  });
+
+  it("renders highlight tags at the bumped base (11, > old 9)", () => {
+    setFontScale("M");
+    const q = makeQuest();
+    (q as unknown as { highlights: unknown[] }).highlights = [
+      { label: "Система", value: "Альфа", color: 0x66ffcc },
+    ];
+    const panel = new JobBoardPanel([q], 800, 600, {
+      onAccept: () => {},
+      onClose: () => {},
+    });
+    const tag = findText(panel, (t) => t.text === "[Система: Альфа]");
+    expect(tag.style.fontSize).toBe(scaledFont(11));
+    expect(tag.style.fontSize as number).toBeGreaterThan(scaledFont(9));
   });
 
   it("passes semantic accent colors through verbatim", () => {

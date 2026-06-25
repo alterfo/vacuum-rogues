@@ -259,7 +259,7 @@ export class QuestJournalUI {
     // Quest type
     const typeText = scaledText(
       `[${TYPE_LABEL[quest.type] ?? quest.type}]`,
-      11,
+      13,
       0xb4b4b4,
       { rawColor: true },
     );
@@ -290,7 +290,7 @@ export class QuestJournalUI {
       const suffix = isReadyToDeliver ? " — ✓ сдать" : "";
       const objText = scaledText(
         `${completedOrReady ? "✓" : "○"} ${objective.description}: ${displayAmount}/${objective.targetAmount}${suffix}`,
-        11,
+        13,
         completedOrReady ? 0x00ff00 : 0xaaaaaa,
         { rawColor: true },
       );
@@ -331,7 +331,7 @@ export class QuestJournalUI {
     }
     const rewardText = scaledText(
       `Награда: ${parts.length ? parts.join(", ") : "—"}`,
-      11,
+      13,
       0xffcc66,
       { rawColor: true },
     );
@@ -368,7 +368,7 @@ export class QuestJournalUI {
       let hx = 40;
       for (const hl of questHighlights) {
         if (hx > this.panelWidth - 60) break;
-        const tagT = scaledText(`[${hl.label}: ${hl.value}]`, 9, hl.color, {
+        const tagT = scaledText(`[${hl.label}: ${hl.value}]`, 11, hl.color, {
           rawColor: true,
         });
         tagT.x = hx;
@@ -385,7 +385,7 @@ export class QuestJournalUI {
       if (remaining < 5) {
         const daysLabel = scaledText(
           `⚠ осталось ${remaining} дн.`,
-          11,
+          13,
           0xffaa00,
           { rawColor: true, fontWeight: "bold" },
         );
@@ -520,7 +520,7 @@ export class QuestJournalUI {
 
     const typeText = scaledText(
       `[${TYPE_LABEL[quest.type] ?? quest.type}]`,
-      11,
+      13,
       0xb4b4b4,
       { rawColor: true },
     );
@@ -556,7 +556,7 @@ export class QuestJournalUI {
     for (const it of r?.items ?? []) parts.push(`${it.amount}×${it.type}`);
     const rewardText = scaledText(
       `Награда: ${parts.length ? parts.join(", ") : "—"}`,
-      11,
+      13,
       0xffcc66,
       { rawColor: true },
     );
@@ -569,7 +569,7 @@ export class QuestJournalUI {
     if (quest.planetId && quest.planetId !== "unknown") {
       const issuedTag = scaledText(
         `[Выдан: ${this.resolveName(quest.planetId)}]`,
-        9,
+        11,
         0xffcc00,
         { rawColor: true },
       );
@@ -668,7 +668,7 @@ export class QuestJournalUI {
 
     let yOffset = startY + 22;
     for (const quest of quests) {
-      const row = scaledText(`✗ ${quest.title} — просрочено`, 11, 0xb4b4b4, {
+      const row = scaledText(`✗ ${quest.title} — просрочено`, 13, 0xb4b4b4, {
         rawColor: true,
       });
       row.x = 30;

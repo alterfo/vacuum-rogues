@@ -427,7 +427,7 @@ export class JobBoardPanel {
     // the old dim 0x889aaa blue-gray was sub-AA on the dark panel; the readability
     // floor lifts it to a legible level and it now tracks the S/M/L setting.
     if (t.description) {
-      const descText = scaledText(t.description, 10, 0x889aaa, {
+      const descText = scaledText(t.description, 13, 0x889aaa, {
         wordWrap: true,
         wordWrapWidth: W - 120,
       });
@@ -444,7 +444,7 @@ export class JobBoardPanel {
       let hx = 20;
       for (const hl of q.highlights) {
         if (hx > W - 100) break;
-        const tagT = scaledText(`[${hl.label}: ${hl.value}]`, 9, hl.color, {
+        const tagT = scaledText(`[${hl.label}: ${hl.value}]`, 11, hl.color, {
           rawColor: true,
         });
         tagT.eventMode = "none";
@@ -459,7 +459,7 @@ export class JobBoardPanel {
     const deadlineDays = t.deadline > 0 ? `  ⏱ ${t.deadline}д` : "";
     const jumpsText = q.jumps > 0 ? `  ⤴ ${q.jumps}` : "";
     const meta = `💰 ${t.reward.credits}${deadlineDays}${jumpsText}`;
-    const m = scaledText(meta, 11, 0xffe27a, { rawColor: true });
+    const m = scaledText(meta, 13, 0xffe27a, { rawColor: true });
     m.eventMode = "none";
     m.anchor.set(1, 0);
     m.x = W - 90;

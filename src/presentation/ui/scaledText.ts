@@ -89,6 +89,16 @@ export function readableFill(color: number): number {
   return READABLE_FLOOR;
 }
 
+/**
+ * The device pixel ratio, or `fallback` when `window`/DPR is unavailable
+ * (bare Node, Vitest without a DOM). Read through a `typeof` guard so it never
+ * throws a `ReferenceError` off the browser.
+ */
+export function devicePixelRatioOr(fallback: number): number {
+  if (typeof window === "undefined") return fallback;
+  return window.devicePixelRatio || fallback;
+}
+
 export interface ScaledTextOpts {
   fontFamily?: string;
   fontWeight?: TextStyleFontWeight;
@@ -123,6 +133,12 @@ export function scaledText(
   const fill = opts.rawColor ? color : readableFill(color);
   return new Text({
     text,
+    // High-DPI render: the renderer is `autoDensity`, but a `Text` left at the
+    // default 1× resolution is rasterised once then upscaled to the device pixel
+    // ratio → blurry on Retina/HiDPI. Pinning the resolution to the device pixel
+    // ratio rasterises at native density. One change sharpens every migrated
+    // panel. Degrades to 1 when `window`/DPR is absent (bare Node / Vitest).
+    resolution: devicePixelRatioOr(1),
     style: {
       fontFamily: opts.fontFamily ?? "Courier New",
       fontSize: scaledFont(basePx),
