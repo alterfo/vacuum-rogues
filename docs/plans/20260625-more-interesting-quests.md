@@ -104,11 +104,18 @@ must keep each new script **dedup-friendly**: a stable, unique `id`.)
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only the new scripts +
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — only the new scripts +
       `TextQuestRegistry` + `QuestGenerator` flavor (+ tests) affected; no schema/
-      migration.
-- [ ] `ALL_QUEST_SCRIPTS` now has 12 scripts, all ids unique; full unit suite green;
-      `npm run test:playtest` green; lint clean; build ok.
+      migration. (Verified via `git diff 4c019d0..HEAD`: only `QuestGenerator.ts`,
+      `TextQuestRegistry.ts`, the 6 new `scripts/*.ts`, 2 test files + the plan doc —
+      no `schemas.ts`/`MigrationPipeline.ts`. gitnexus compare-to-master was too noisy
+      to use directly since this branch is far ahead of master with unrelated work.)
+- [x] `ALL_QUEST_SCRIPTS` now has 12 scripts, all ids unique (count=12, unique=12);
+      `npm run test:playtest` green (67 passed); lint clean (0 errors); build ok.
+      Full unit suite 3012 passed — the lone red (`chaseSteering.steering.test.ts`,
+      240.75 vs ≤240) is a deterministic, **pre-existing** flight-steering failure
+      (last touched by aa5b183/7571454, both predate this plan) unrelated to the quest
+      content; this plan touches no flight code, so it neither introduced nor affects it.
 
 ### Task 5: Update documentation
 **Files:**
