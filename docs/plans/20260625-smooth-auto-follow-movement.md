@@ -112,19 +112,32 @@ jitter doesn't re-plot at all.
 - Modify: `src/presentation/flight/NpcShipManager.ts`
 - Modify: `src/presentation/SpaceFlightScene.ts` (and/or `src/systems/ShipPhysics.ts`)
 
-- [ ] In `updateCombatPursuit` + the non-combat approach branch, steer the ship
+- [x] In `updateCombatPursuit` + the non-combat approach branch, steer the ship
       **continuously** toward the **smoothed** lead point via the existing
       `ShipPhysics` turn-rate limiter (heading nudge), instead of re-plotting a
       curved `executeRouteTo` spline every chase frame.
-- [ ] Gate any curved re-plot behind the **re-aim hysteresis** AND **star
+      (`NpcShipManager.steerTowardLead`: `smoothLeadPoint` → `physics.setTarget`
+      direct nudge on a clear shot; the pre-combat `chase` switch case is left
+      unchanged per scope — only the in-combat pursuit + «Приблизиться» approach.)
+- [x] Gate any curved re-plot behind the **re-aim hysteresis** AND **star
       avoidance**: only rebuild the spline path when the direct lead-line would
       cross the star radius (use `avoidStarPath`), otherwise keep the direct nudge.
-- [ ] Keep the existing engage/in-range, lead-targeting and `followNpcId`
+      (`leadLineCrossesStar` via the new `getStarAvoidRadius` dep + `avoidStarPath`;
+      the star re-plot is throttled by `shouldReplotRoute`; a stopped fresh leg
+      re-plots once to re-arm the turn + establish a path.)
+- [x] Keep the existing engage/in-range, lead-targeting and `followNpcId`
       lifecycle behaviour identical (no change to when a fight starts/ends).
-- [ ] write/extend tests: the `ShipPhysics` heading change per frame stays
+      (in-range hold + `followNpcId`/`approachNpcId` lifecycle untouched; smoother
+      reset only on a fresh chase leg.)
+- [x] write/extend tests: the `ShipPhysics` heading change per frame stays
       turn-rate-bounded during a moving-target chase (no snap); pursuit still
       reaches + holds `WEAPON_RANGE`.
-- [ ] run tests — the Task 1 characterization now passes the smoothness bound.
+      (`src/tests/flight/chaseSteering.steering.test.ts`, 4 tests, drives the real
+      `updateCombatPursuit`: per-frame aim ≤ `SMOOTH_BOUND_PX`, |Δheading| ≤
+      `rotationSpeed·dt`, no per-frame spline thrash, closes to + holds `WEAPON_RANGE`.)
+- [x] run tests — the Task 1 characterization now passes the smoothness bound.
+      (live aim point fed to physics stays ≤ 8px/frame vs the Task 1 ≈72px raw;
+      full unit suite + `test:playtest` + lint + build green.)
 
 ### Task 4: Verify acceptance criteria
 **Files:**

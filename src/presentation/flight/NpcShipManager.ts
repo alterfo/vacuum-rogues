@@ -29,7 +29,13 @@ import { SeededRNG } from "@/utils/seededRNG";
 import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
 import { solveInterceptPoint } from "@/utils/intercept";
-import { shouldReaim } from "@/utils/flightGeometry";
+import {
+  shouldReaim,
+  smoothLeadPoint,
+  shouldReplotRoute,
+  avoidStarPath,
+  type Point,
+} from "@/utils/flightGeometry";
 import {
   SYSTEM_GEOMETRY,
   GAME_BALANCE,
@@ -117,6 +123,15 @@ export interface NpcShipManagerDeps {
   isCombatant?(sprite: NpcShipSprite): boolean;
   /** True while the active-pause is frozen — combat maneuvering halts (Task 3). */
   isPaused?(): boolean;
+  /**
+   * Star-avoidance radius (world px) used by smooth chase steering to decide when
+   * the straight lead-line would fly through the sun: while the shot is clear the
+   * heading is nudged directly; when the line crosses the star it falls back to
+   * the curved {@link executeRouteTo} avoidance spline (smooth-auto-follow Task 3).
+   * Optional: absent ⇒ no star fallback (lightweight test/host setups keep the
+   * direct nudge).
+   */
+  getStarAvoidRadius?(): number;
 }
 
 /**
@@ -183,6 +198,24 @@ export class NpcShipManager implements FlightModule {
   private lastAimY = 0;
   /** Lead-drift (world px) before a chase/approach re-plots its course. */
   private readonly REAIM_DRIFT_PX = 30;
+  // Smooth chase steering (smooth-auto-follow Task 3): the in-combat pursuit and
+  // the «Приблизиться» approach steer continuously toward a *smoothed* lead point
+  // via the ShipPhysics turn-rate limiter instead of re-plotting a curved spline
+  // every frame. The smoothed point and the id it tracks are reset when the chase
+  // target changes so a fresh leg never lags from the previous target's lead.
+  private smoothedLead: Point | null = null;
+  private steerTargetId: string | null = null;
+  /** Monotonic ms clock for the curved-re-plot hysteresis (advanced in updateCombat). */
+  private chaseClockMs = 0;
+  /** Last curved-route re-plot timestamp (ms on {@link chaseClockMs}). */
+  private lastReplotMs = -Infinity;
+  /**
+   * EMA + max-step smoothing for the noisy per-frame lead point (matches the
+   * Task 2 `chaseSteering.test` config: maxStepPx ≤ the 8px smoothness bound).
+   */
+  private readonly LEAD_SMOOTHER = { alpha: 0.25, maxStepPx: 6 } as const;
+  /** Min ms between curved star-avoidance re-plots (hysteresis throttle). */
+  private readonly REPLOT_MIN_INTERVAL_MS = 500;
 
   // Floating loot dropped by destroyed NPC ships (transient, presentation-only).
   // Public so the in-flight combat module (later tasks) and the gravity-tractor
@@ -1268,6 +1301,7 @@ export class NpcShipManager implements FlightModule {
     if (!sprite || !this.deps.getShipPhysics()) return;
     this.followNpcId = null; // approach only — not an attack
     this.approachNpcId = npc.id; // …but keep tracking it so the course corrects
+    this.steerTargetId = null; // fresh chase leg — reset the lead smoother
     this.deps.clearRouteTarget();
     const lead = this.npcLeadPoint(sprite);
     this.aimRoute(lead.x, lead.y);
@@ -1481,6 +1515,7 @@ export class NpcShipManager implements FlightModule {
     if (!sprite) return;
     this.followNpcId = null;
     this.approachNpcId = null;
+    this.steerTargetId = null; // fresh chase leg — reset the lead smoother
     // A player-initiated engagement makes the target an active aggressor so it
     // auto-closes on the player and holds weapon range (Task 3) instead of
     // orbiting its planet / drifting. Garrison + shakedown paths already flag it.
@@ -1495,9 +1530,12 @@ export class NpcShipManager implements FlightModule {
    * destroyed, the player drops below 30% hull, or the target is lost.
    * Decision logic delegated to FlightCombatResolver for testability.
    */
-  updateCombat(_deltaTime: number): void {
+  updateCombat(deltaTime: number): void {
     const physics = this.deps.getShipPhysics();
     if (!physics) return;
+    // Advance the chase clock that throttles curved star-avoidance re-plots
+    // (smooth-auto-follow Task 3 hysteresis).
+    this.chaseClockMs += deltaTime;
 
     // Real-time combat tracking (Task 3): while a fight is engaged, auto-track
     // the live combat target every frame — close to weapon range and hold it
@@ -1585,46 +1623,123 @@ export class NpcShipManager implements FlightModule {
     const dy = sprite.y - physics.shipY;
     // Inside weapon range — hold station (keep firing), don't fly onto the target.
     if (dx * dx + dy * dy <= this.WEAPON_RANGE * this.WEAPON_RANGE) return;
-    // Drifted out of range — re-close, leading the target so the chase curves to
-    // where it's heading. Throttle re-plots: re-aim on a fresh leg (stopped) or
-    // once the lead point drifts past the threshold (continuous correction).
-    const lead = this.npcLeadPoint(sprite);
-    if (
-      !physics.isMoving ||
-      shouldReaim(
-        { x: this.lastAimX, y: this.lastAimY },
-        lead,
-        this.REAIM_DRIFT_PX,
-      )
-    ) {
-      this.aimRoute(lead.x, lead.y);
-    }
+    // Drifted out of range — re-close, steering continuously toward the target's
+    // (smoothed) lead so the chase curves to where it's heading without stutter.
+    this.steerTowardLead(physics, sprite, targetId);
   }
 
   /**
    * "Приблизиться" tracking: while the ship is flying toward the approached NPC,
-   * re-plot the course at its fresh lead point once it drifts past the threshold
-   * so the ship corrects toward where the target is now, not where it was at the
-   * click. Clears the tracking when the ship arrives (stops) or the target is
-   * gone — without ever launching combat.
+   * steer continuously toward its (smoothed) lead point so the ship corrects
+   * toward where the target is now, not where it was at the click. Clears the
+   * tracking when the ship arrives (stops) or the target is gone — without ever
+   * launching combat.
    */
   private updateApproach(physics: ShipPhysics): void {
-    const sprite = this.npcSprites.find((s) => s.npc.id === this.approachNpcId);
-    if (!sprite || !physics.isMoving) {
+    const approachId = this.approachNpcId;
+    const sprite = this.npcSprites.find((s) => s.npc.id === approachId);
+    if (!approachId || !sprite || !physics.isMoving) {
       // Target lost, or the ship reached the (re-aimed) lead point and stopped.
       this.approachNpcId = null;
       return;
     }
-    const lead = this.npcLeadPoint(sprite);
-    if (
-      shouldReaim(
-        { x: this.lastAimX, y: this.lastAimY },
-        lead,
-        this.REAIM_DRIFT_PX,
-      )
-    ) {
-      this.aimRoute(lead.x, lead.y);
+    this.steerTowardLead(physics, sprite, approachId);
+  }
+
+  /**
+   * Smooth chase steering (smooth-auto-follow Task 3): nudge the ship's heading
+   * continuously toward a *smoothed* lead point via the ShipPhysics turn-rate
+   * limiter, instead of re-plotting a fresh curved spline every frame (the old
+   * `aimRoute`-per-drift loop, which whipped the aim around on a noisy
+   * target-velocity estimate and snapped the ship onto a new path each tick).
+   *
+   * The curved `executeRouteTo` spline is reserved for two cases: a *fresh leg*
+   * (the ship is stopped — re-arm the turn + establish a path), and *star
+   * avoidance* (the direct lead-line would cross the star, so the bow-around
+   * waypoints are correct there). The star re-plot is hysteresis-gated
+   * ({@link shouldReplotRoute}) so a fast-manoeuvring target re-plots at most once
+   * per interval; everything else is the direct heading nudge.
+   */
+  private steerTowardLead(
+    physics: ShipPhysics,
+    sprite: NpcShipSprite,
+    targetId: string,
+  ): void {
+    // A new chase target resets the smoother so a fresh leg never lags toward the
+    // previous target's last lead point.
+    if (targetId !== this.steerTargetId) {
+      this.steerTargetId = targetId;
+      this.smoothedLead = null;
     }
+    const raw = this.npcLeadPoint(sprite);
+    this.smoothedLead = smoothLeadPoint(
+      this.smoothedLead,
+      raw,
+      this.LEAD_SMOOTHER,
+    );
+    const lead = this.smoothedLead;
+
+    // Fresh leg (stopped): plot a curved route — re-arms the turn and establishes
+    // a star-avoiding path the continuous nudge then refines.
+    if (!physics.isMoving) {
+      this.replotChase(lead);
+      return;
+    }
+
+    // The direct lead-line would fly through the sun — fall back to the curved
+    // star-avoidance spline, throttled so it doesn't thrash the path every frame.
+    if (this.leadLineCrossesStar(physics, lead)) {
+      if (
+        shouldReplotRoute(
+          {
+            endpoint: { x: this.lastAimX, y: this.lastAimY },
+            lastReplotMs: this.lastReplotMs,
+          },
+          lead,
+          this.REAIM_DRIFT_PX,
+          this.chaseClockMs,
+          this.REPLOT_MIN_INTERVAL_MS,
+        )
+      ) {
+        this.replotChase(lead);
+      }
+      return;
+    }
+
+    // Clear shot: steer the heading directly toward the smoothed lead. ShipPhysics
+    // turn-rate-limits the heading change, so the motion stays smooth (no snap).
+    this.lastAimX = lead.x;
+    this.lastAimY = lead.y;
+    physics.setTarget(lead.x, lead.y);
+  }
+
+  /** Re-plot the curved route toward a lead point and stamp the re-plot clock. */
+  private replotChase(lead: Point): void {
+    this.lastReplotMs = this.chaseClockMs;
+    this.aimRoute(lead.x, lead.y);
+  }
+
+  /**
+   * Whether the straight line from the ship to `lead` would fly through the star:
+   * the avoidance path bows around it (gains intermediate waypoints) exactly when
+   * the direct segment is blocked. Absent star radius ⇒ no fallback (keep the
+   * direct nudge).
+   */
+  private leadLineCrossesStar(physics: ShipPhysics, lead: Point): boolean {
+    const radius = this.deps.getStarAvoidRadius?.();
+    if (radius == null) return false;
+    const center = this.deps.getStarCenter();
+    return (
+      avoidStarPath(
+        physics.shipX,
+        physics.shipY,
+        lead.x,
+        lead.y,
+        center.x,
+        center.y,
+        radius,
+      ).length > 1
+    );
   }
 
   private closeNpcContactPanel(): void {

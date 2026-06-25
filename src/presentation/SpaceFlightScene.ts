@@ -226,7 +226,6 @@ export class SpaceFlightScene extends GameScene {
       showMessage: (t, c) => this.hud.showMessage(t, c),
     });
     this.combatPause = createCombatPauseUi(this.renderer, this.combatModule);
-
     // NPC module: living-galaxy ships, contact panel, auto-follow combat, OVERMIND prompt.
     this.npcManager = new NpcShipManager(
       this.renderer,
@@ -256,6 +255,7 @@ export class SpaceFlightScene extends GameScene {
           this.combatModule.selectedTarget?.npc.id ?? null,
         isCombatant: (sprite) => this.combatModule.combatants.has(sprite),
         isPaused: () => this.combatPause.paused,
+        getStarAvoidRadius: () => this.starRenderer.avoidRadius,
       },
     );
 
