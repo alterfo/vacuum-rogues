@@ -52,8 +52,8 @@ still show, but not the number).
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes` — InfoCenter/rumorPanel + the predicate affected; no schema.
-- [ ] full unit suite green; `npm run test:playtest` green; lint/build ok.
+- [x] `detect_changes` — InfoCenter/rumorPanel + the predicate affected; no schema.
+- [x] full unit suite green; `npm run test:playtest` green; lint/build ok.
 
 ### Task 4: Update documentation
 **Files:**
