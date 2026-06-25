@@ -142,9 +142,11 @@ supersedes).
 **Files:**
 - Modify: `docs/` + `CLAUDE.md` (testing tiers / letsplay note)
 
-- [ ] Document the dev-only letsplay engine: `observe`→`PlayerPolicy`→`PlayerAgent`,
+- [x] Document the dev-only letsplay engine: `observe`→`PlayerPolicy`→`PlayerAgent`,
       `npm run letsplay`, the dev-only guard, and the pluggable neural policy seam
-      (trained later, never shipped to prod).
+      (trained later, never shipped to prod). Reference doc at
+      `docs/architecture/LETSPLAY_ENGINE.md` (full loop + run + neural seam) plus a
+      concise note in the CLAUDE.md testing-tiers section.
 
 ## Technical Details
 - Pure observation + policy; the agent drives the real engine only through the existing
