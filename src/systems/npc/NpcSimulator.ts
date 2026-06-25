@@ -232,11 +232,13 @@ const ROLE_LOADOUT: Record<NpcRole, string[]> = {
 export const NPC_TECH_BAND = { min: 1, max: 3 } as const;
 
 /**
- * Map NpcRole to a tech level used for CombatScene enemy initialization.
- * Determines weapon/shield strength of the spawned enemy. The four roles map to
- * a tight, homogeneous mid-tier spread within {@link NPC_TECH_BAND} (TRADER 1,
- * RANGER/PIRATE 2, PATROL 3) — never the rare apex tier — so the galaxy reads as
- * similarly teched and a fresh player is never outclassed by a *common* ship.
+ * Map NpcRole to a tech level documenting the galaxy's homogeneous tech spread.
+ * The four roles map to a tight, homogeneous mid-tier spread within
+ * {@link NPC_TECH_BAND} (TRADER 1, RANGER/PIRATE 2, PATROL 3) — never the rare
+ * apex tier — so the galaxy reads as similarly teched and a fresh player is never
+ * outclassed by a *common* ship. (Pure role→tech mapping; the live combat strength
+ * of a spawned NPC comes from `ROLE_STATS`, not this helper, since the legacy hex
+ * CombatScene was removed — combat is real-time in-flight only.)
  */
 export function npcRoleTechLevel(role: NpcRole): number {
   const map: Record<NpcRole, number> = {

@@ -1475,15 +1475,18 @@ export class NpcShipManager implements FlightModule {
    * Predicted intercept point for chasing an NPC: leads the target along its
    * current heading so the pursuit curves toward where it will be rather than
    * pointing at its present position (Task 5). NPC velocity is derived from its
-   * sprite heading (the hull faces its direction of travel) and the shared NPC
-   * cruise speed. Falls back to the NPC's current position when no lead solves.
+   * sprite heading (the hull faces its direction of travel) and the ship's own
+   * class cruise speed (`sprite.cruiseSpeed`) — basic ships drift slower than the
+   * interceptor tier, so the lead must not over-predict a slow trader's travel.
+   * Falls back to the NPC's current position when no lead solves.
    */
   private npcLeadPoint(sprite: NpcShipSprite): { x: number; y: number } {
     const physics = this.deps.getShipPhysics();
     if (!physics) return { x: sprite.x, y: sprite.y };
     const heading = sprite.container.rotation;
-    const vx = Math.cos(heading) * GAME_BALANCE.npcSpeed;
-    const vy = Math.sin(heading) * GAME_BALANCE.npcSpeed;
+    const v = sprite.cruiseSpeed;
+    const vx = Math.cos(heading) * v;
+    const vy = Math.sin(heading) * v;
     return solveInterceptPoint(
       physics.shipX,
       physics.shipY,

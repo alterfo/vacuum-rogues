@@ -100,4 +100,22 @@ describe("ship speed: starter vs NPC classes (Task 1)", () => {
     // interceptor → the deliberate exception (escape stays upgrade-gated)
     expect(ship.canOutrun(GAME_BALANCE.npcSpeed)).toBe(false);
   });
+
+  it("the apex engine finally out-runs the interceptor tier (long-climb payoff)", () => {
+    // The reward for the long climb to top tech: the rare apex engine
+    // (`eq_engine_v`) is the only one fast enough to escape an interceptor.
+    const apex = new ShipLoadout("hull_bastion");
+    apex.install("eq_engine_v");
+    const ship = cruise(apex.derivedStats().speed);
+    expect(ship.canOutrun(GAME_BALANCE.npcSpeed)).toBe(true);
+  });
+
+  it("the mid-tier engine still cannot out-run the interceptor tier", () => {
+    // A pre-apex engine (`eq_engine_iii`) at best ties the interceptor speed, so
+    // escaping an elite stays gated behind the apex engine, not the mid tier.
+    const mid = new ShipLoadout("hull_corvette");
+    mid.install("eq_engine_iii");
+    const ship = cruise(mid.derivedStats().speed);
+    expect(ship.canOutrun(GAME_BALANCE.npcSpeed)).toBe(false);
+  });
 });

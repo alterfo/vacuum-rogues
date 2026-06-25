@@ -17,7 +17,7 @@ import type { GameMode, ResourceType } from "@/types";
  *     are never randomly outclassed by a *common* ship from the start.
  *
  *  2. **Homogeneous galaxy tech.** Most of the galaxy runs similar mid-tech
- *     ({@link NpcSimulator.NPC_TECH_BAND} = tech 1–3, whole band below the rare
+ *     ({@link NPC_TECH_BAND} = tech 1–3, whole band below the rare
  *     threshold), so a common NPC never fields apex gear — uniform tech means
  *     you're not randomly outgunned wandering between systems.
  *
