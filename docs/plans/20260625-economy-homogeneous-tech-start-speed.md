@@ -136,18 +136,44 @@ Goal feel: **harder to win** (a long, earned climb to top tech) but **easier to 
 - Modify: `src/systems/equipment/GearCatalog.ts`, `src/config/balance.ts`, `src/systems/banking/BankingService.ts`
 - Create/Modify: `src/tests/balance/gearCurve.test.ts`
 
-- [ ] Remove the dominance inversions found in the sweep: the **Courier** (2500 cr,
+- [x] Remove the dominance inversions found in the sweep: the **Courier** (2500 cr,
       cargo 45) shouldn't be cheaper *and* roomier than the **Corvette** (3000, cargo
       30); the cheapest hull (**Scout**) shouldn't have the best HP-per-credit of the
       lineup. Re-price so each step up is a genuine upgrade for its role.
-- [ ] Tame the money-printers: the local-delivery margin (**3.5×**) vs worst-case buy
+      → Courier basePrice **2500 → 3000** (level with the corvette — no longer cheaper
+      *and* roomier; an equal-price role *choice*: hauler cargo/equip slots vs the
+      corvette's HP/2nd weapon). Scout HP **90 → 55** so the workhorse «Корвет»
+      (140 ÷ 3000 ≈ 0.047 HP/cr) is now the most HP-efficient hull, not the budget
+      scout (was 0.075). All four hull *prices* pinned by `hullTradeIn.test.ts`
+      (scout 1200 / corvette 3000 / warden 7000 / bastion 12000) and the locked
+      tech-band + 4×-median + steepest-top-step relationships are preserved (mid-hull
+      median stays 3000 ⇒ apex 12000 holds its ≥4× gap). Only Courier (free) re-priced;
+      HP fields read dynamically by the equipment tests. **No schema/migration**.
+- [x] Tame the money-printers: the local-delivery margin (**3.5×**) vs worst-case buy
       (**3.0×**) is structural free profit, and artifact drops (**40% × 1–3 × 1000 cr**)
       make combat a printer — narrow the delivery margin and/or drop rate; consider the
       generous savings yield (**~44%/yr**).
-- [ ] write tests: hull/weapon value is monotonic with price for its role (no strictly-
+      → `LOCAL_DELIVERY_REWARD_MARGIN` **3.5 → 3.1**: keeps the contract just-profitable
+      vs the hot-market ceiling (locked floor `> 3.0`, `localDeliveryProfit.test.ts`)
+      while shrinking the cold-market windfall — no longer a fat printer. It *cannot*
+      go ≤ 3.0 without making a buy-for contract a hidden loss (the locked design).
+      `ARTIFACT_DROP_CHANCE` **0.4 → 0.25**: expected artifact sell-value per Overmind
+      kill ~800 → ~500 cr (still funds upgrades, no longer prints). Savings yield left
+      as-is (high banking-test blast radius; soft "consider", not required). Both
+      consts read dynamically by prod + the combat-drop tests (0.1 < 0.25), so green.
+- [x] write tests: hull/weapon value is monotonic with price for its role (no strictly-
       dominated pricier item); delivery is not guaranteed-profit; combat reward is
       bounded.
-- [ ] run tests — green.
+      → `src/tests/balance/gearCurve.test.ts` (7): no hull strictly dominated by a
+      cheaper-or-equal hull; cheapest hull no longer the best HP/cr; courier not
+      cheaper-and-roomier than corvette; combat-hull HP ladder strictly rises with
+      price; no weapon dominated by a cheaper same-profile weapon; delivery margin
+      tight against worst-case buy (> 3.0, ≤ 10% headroom — guaranteed-not-a-loss is
+      a *locked* design, so the test asserts the tamed-printer bound instead);
+      expected per-kill artifact payout bounded (≤ 600 cr).
+- [x] run tests — green. (gearCurve 7 green; full unit suite 2862 green +1 skipped;
+      playtest gate 64 green +1 skipped; lint 0 errors; `tsc --noEmit` clean. No
+      existing test touched.)
 
 ### Task 5: Diversify star types (every sun is the same yellow)
 **Files:**

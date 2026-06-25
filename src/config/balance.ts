@@ -153,10 +153,17 @@ export const RESOURCE_BASE_PRICES: Record<ResourceType, number> = {
  * buy multiplier whose maximum is 1.0 (every faction's `buyMultiplier ≤ 1.0`).
  * So the realistic worst-case purchase cost is `basePrice × 3.0` per unit. At
  * 1.5 the contract was a *guaranteed loss* whenever the market sat above 1.5×
- * base. The margin must therefore exceed 3.0; 3.5 dominates the worst case with
- * ~17% headroom, so the payout always nets a profit no matter how hot the market.
+ * base. The margin must therefore exceed 3.0 (a contract you must buy *for*
+ * should never be a hidden loss — locked by `localDeliveryProfit.test.ts`).
+ *
+ * Oddity sweep (Task 4): narrowed 3.5 → 3.1 to tame the money-printer. At 3.5 the
+ * payout sat ~17% above the absolute worst case and ~3.5× a *cold* market (base
+ * price) — structural free profit. 3.1 keeps the contract just profitable against
+ * the hot-market ceiling (~3% headroom over `× 3.0`) while shrinking the cold-
+ * market windfall, so delivery is no longer a fat printer. It cannot go to/below
+ * 3.0 without making the contract a loss in a hot market (the locked floor).
  */
-export const LOCAL_DELIVERY_REWARD_MARGIN = 3.5;
+export const LOCAL_DELIVERY_REWARD_MARGIN = 3.1;
 
 /**
  * Tech level at and above which a piece of gear counts as the **rare, high-end
@@ -175,11 +182,16 @@ export const RARE_TECH_THRESHOLD = 6;
 
 /**
  * Probability that killing an Overmind enemy drops artifacts (per kill).
- * At 40% drop chance with 1–3 artifacts per drop, an active player fighting
- * 2–3 Overmind encounters per day accumulates ~1.5–3 artifacts/day — enough
- * to afford the first upgrade (2 artifacts) after ~1–2 combat sessions.
+ *
+ * Oddity sweep (Task 4): lowered 0.4 → 0.25 to tame combat as a money-printer.
+ * Artifacts double as a sellable good (`RESOURCE_BASE_PRICES.ARTIFACTS` = 1000 cr
+ * each), so at 40% × an average of 2 per drop a kill was worth ~800 cr in raw
+ * artifact value *on top of* gear loot. At 0.25 the expected payout is ~500 cr/kill
+ * — a meaningful reward that still funds upgrades (first upgrade = 2 artifacts) over
+ * a couple of combat sessions, without printing credits. Bounds locked by
+ * `gearCurve.test.ts`; the combat-drop tests read this constant, not a literal.
  */
-export const ARTIFACT_DROP_CHANCE = 0.4;
+export const ARTIFACT_DROP_CHANCE = 0.25;
 /** Minimum artifact count per Overmind-kill drop. */
 export const ARTIFACT_DROP_COUNT_MIN = 1;
 /** Maximum artifact count per Overmind-kill drop. */

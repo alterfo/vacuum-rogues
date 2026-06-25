@@ -140,7 +140,12 @@ const HULLS: HullSpec[] = [
     size: 8,
     basePrice: 1200,
     mass: 9,
-    hp: 90,
+    // Light fighter — fragile by design (oddity sweep, Task 4). The cheapest hull
+    // used to be the most HP-efficient of the lineup (90 HP ÷ 1200 = 0.075 HP/cr,
+    // beating every pricier hull) — a value inversion that punished spending up.
+    // Trimmed so the workhorse «Корвет» (140 ÷ 3000 ≈ 0.047) is now the best
+    // HP-per-credit and the scout is a genuinely weaker budget stepping-stone.
+    hp: 55,
     slots: 4,
     weaponSlots: 2,
     equipmentSlots: 2,
@@ -172,7 +177,14 @@ const HULLS: HullSpec[] = [
     hullClass: HullClass.TRANSPORT,
     techLevel: 3,
     size: 10,
-    basePrice: 2500,
+    // Priced level with the «Корвет» (oddity sweep, Task 4): the courier used to
+    // be *cheaper* (2500 < 3000) **and** roomier (cargo 45 > 30) than the corvette
+    // — a strict price+cargo advantage. At an equal 3000 it is now a genuine role
+    // *choice* against the corvette, not a dominant pick: more cargo + equipment
+    // slots (the hauler) traded against the corvette's HP + second weapon slot
+    // (the fighter). (Both stay in the locked tech-3/4 price band 2000–5000 and the
+    // mid-hull median stays 3000, so the apex «Бастион» 12000 holds its ≥4× gap.)
+    basePrice: 3000,
     mass: 12,
     hp: 120,
     slots: 5,
