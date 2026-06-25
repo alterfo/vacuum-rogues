@@ -9,6 +9,7 @@ import { SeededRNG } from "@/utils/seededRNG";
 import { SystemNameGenerator } from "@/utils/systemNameGenerator";
 import { PlanetGenerator } from "./PlanetGenerator";
 import { seedMarket } from "./galaxy/marketSeeding";
+import { pickStarType } from "./galaxy/starTypeDistribution";
 import { NpcSimulator } from "./npc/NpcSimulator";
 import { logger } from "@/utils/logger";
 import {
@@ -78,6 +79,12 @@ export class GalaxySimulator {
       const politicalSystem =
         politicalSystems[this.rng.nextInt(0, politicalSystems.length - 1)];
 
+      // Pick a varied star type from a per-system seed (mirrors PlanetGenerator)
+      // so the galaxy is no longer a field of identical yellow suns — and so we
+      // don't perturb the shared `this.rng` stream that downstream NPC/faction
+      // seeding depends on for determinism.
+      const starType = pickStarType(new SeededRNG(`${seed}_star_${i}`));
+
       // Generate planets for this system
       const planetGen = new PlanetGenerator(seed, `sys_${i}`);
       const planets = await planetGen.generate(systemNames[i]);
@@ -102,7 +109,7 @@ export class GalaxySimulator {
         `sys_${i}`,
         systemNames[i],
         coord,
-        "YELLOW_DWARF" as import("@/types").StarType,
+        starType,
         planets,
         faction,
         [],

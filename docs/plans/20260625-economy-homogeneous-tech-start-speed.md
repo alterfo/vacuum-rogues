@@ -180,13 +180,31 @@ Goal feel: **harder to win** (a long, earned climb to top tech) but **easier to 
 - Modify: `src/systems/GalaxySimulator.ts` (the hardcoded `"YELLOW_DWARF"` at ~L105)
 - Create/Modify: `src/tests/galaxy/starTypeVariety.test.ts`
 
-- [ ] Seed a **varied** star type per system (yellow/blue-giant/red-dwarf/white-dwarf/
+- [x] Seed a **varied** star type per system (yellow/blue-giant/red-dwarf/white-dwarf/
       neutron on a weighted distribution) instead of the universal `YELLOW_DWARF` —
       which lights up the existing-but-unused `star_maps/{blue_giant,red_dwarf,
       white_dwarf,neutron}_*` art (16 assets) and ends "every sun is identical".
-- [ ] write tests: a generated galaxy has a varied star-type distribution (not all
+      → New pure module `src/systems/galaxy/starTypeDistribution.ts`:
+      `STAR_TYPE_WEIGHTS` (yellow 40 / red 25 / blue-giant 15 / white-dwarf 12 /
+      neutron 8 — BLACK_HOLE excluded, no art), `pickStarType(rng)` (weighted,
+      deterministic), and `STAR_MAP_PREFIX` (single source of truth for the
+      `star_maps/<prefix>` mapping). `GalaxySimulator.generateGalaxy` now picks
+      `pickStarType(new SeededRNG(`${seed}_star_${i}`))` per system (per-system
+      seed mirrors `PlanetGenerator`, so the shared `this.rng` stream — and all
+      downstream NPC/faction determinism — is untouched). `StarRenderer` now
+      imports `STAR_MAP_PREFIX` instead of its own inline copy (DRY). **No
+      schema/migration** (star type is generation-derived; `StarSystemSchema`
+      already accepts every `StarType`).
+- [x] write tests: a generated galaxy has a varied star-type distribution (not all
       yellow); each type resolves to its star-map prefix.
-- [ ] run tests — green.
+      → `src/tests/galaxy/starTypeVariety.test.ts` (9): deterministic pick, never
+      a BLACK_HOLE, every art-backed type appears with yellow commonest, draws
+      track the weights, `STAR_MAP_PREFIX` covers each type / no BLACK_HOLE, and a
+      generated 40-system galaxy has >1 distinct star type (not all yellow), every
+      type art-backed, deterministic per seed.
+- [x] run tests — green. (new suite 9 green; galaxy+npc+fog+events 164 green; full
+      unit suite 2871 green +1 skipped; playtest gate 64 green +1 skipped; lint 0
+      errors; `tsc --noEmit` clean. No existing test touched.)
 
 ### Task 6: Verify acceptance criteria
 **Files:**

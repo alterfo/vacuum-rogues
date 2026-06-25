@@ -4,6 +4,7 @@ import type { Renderer } from "../Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import { StarType } from "@/types";
 import { SeededRNG } from "@/utils/seededRNG";
+import { STAR_MAP_PREFIX } from "@/systems/galaxy/starTypeDistribution";
 import {
   starAppearanceJitter,
   shiftTemperature,
@@ -348,14 +349,7 @@ export class StarRenderer implements FlightModule {
       (s) => s.id === systemId,
     );
     if (!system) return undefined;
-    const prefixes: Partial<Record<StarType, string>> = {
-      [StarType.RED_DWARF]: "red_dwarf",
-      [StarType.YELLOW_DWARF]: "yellow",
-      [StarType.BLUE_GIANT]: "blue_giant",
-      [StarType.WHITE_DWARF]: "white_dwarf",
-      [StarType.NEUTRON]: "neutron",
-    };
-    const prefix = prefixes[system.starType];
+    const prefix = STAR_MAP_PREFIX[system.starType];
     return prefix ? { systemId, prefix } : undefined;
   }
 
