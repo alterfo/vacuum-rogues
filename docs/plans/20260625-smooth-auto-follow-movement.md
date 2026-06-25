@@ -18,6 +18,14 @@ curved-spline re-plot for static destinations + star avoidance** — don't rebui
 the spline every chase frame. Add re-aim **hysteresis** so sub-threshold target
 jitter doesn't re-plot at all.
 
+**Scope note (as built):** Task 3 smooths the **in-combat auto-pursuit**
+(`updateCombatPursuit`) and the **non-combat «Приблизиться» approach**
+(`updateApproach`) only. The **pre-combat «Перехват» chase** (the `case "chase"`
+out-of-range close in `updateCombat`) is intentionally **left on the existing
+re-aim loop** in this pass — it is not wired to the smoothed `steerTowardLead`, so
+that approach leg is not (yet) made smooth. Treat «Перехват» smoothing as a
+follow-up.
+
 ## Context (from discovery)
 - **Chase entry points** (`src/presentation/flight/NpcShipManager.ts`):
   - `onAttackNpc` → out of range → `followNpcId = npc.id`; `aimRoute(lead)` with
@@ -178,6 +186,8 @@ jitter doesn't re-plot at all.
 *Manual — no checkboxes.*
 
 **Manual verification:**
-- «Приблизиться» to a moving NPC, «Перехват»/«Атаковать» a fleeing ship, and an
-  engaged dogfight all show smooth ship motion (no twitch/start-stop), while the
-  ship still closes to and holds weapon range and never flies through the star.
+- «Приблизиться» to a moving NPC and an engaged dogfight (in-combat auto-pursuit)
+  show smooth ship motion (no twitch/start-stop), while the ship still closes to
+  and holds weapon range and never flies through the star. (The pre-combat
+  «Перехват» close-in leg is **out of scope** for this pass — see the Overview
+  scope note — and may still read as jerky until a follow-up smooths it.)

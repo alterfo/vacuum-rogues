@@ -635,11 +635,14 @@ export function smoothLeadPoint(
 ): Point {
   if (!previous) return { x: raw.x, y: raw.y };
   const alpha = Math.max(0, Math.min(1, opts.alpha));
+  // Guard the clamp the same way as alpha: a negative cap would flip the step
+  // direction (k < 0 → move *away* from `raw`); clamp to 0 (freeze) instead.
+  const maxStepPx = Math.max(0, opts.maxStepPx);
   let dx = (raw.x - previous.x) * alpha;
   let dy = (raw.y - previous.y) * alpha;
   const step = Math.hypot(dx, dy);
-  if (step > opts.maxStepPx && step > 1e-9) {
-    const k = opts.maxStepPx / step;
+  if (step > maxStepPx && step > 1e-9) {
+    const k = maxStepPx / step;
     dx *= k;
     dy *= k;
   }

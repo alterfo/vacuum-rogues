@@ -205,6 +205,12 @@ export class NpcShipManager implements FlightModule {
   // target changes so a fresh leg never lags from the previous target's lead.
   private smoothedLead: Point | null = null;
   private steerTargetId: string | null = null;
+  // True while the chase is bowing around the star: the *first* frame the direct
+  // lead-line becomes blocked must re-plot the curved bypass immediately (a safety
+  // re-plot can't wait on the target-drift gate — the clear-shot nudge keeps
+  // `lastAim` glued to the lead, so that gate never trips on a steady-heading
+  // target). A sustained block then throttles refresh re-plots via shouldReplotRoute.
+  private steerStarAvoiding = false;
   /** Monotonic ms clock for the curved-re-plot hysteresis (advanced in updateCombat). */
   private chaseClockMs = 0;
   /** Last curved-route re-plot timestamp (ms on {@link chaseClockMs}). */
@@ -1670,6 +1676,7 @@ export class NpcShipManager implements FlightModule {
     if (targetId !== this.steerTargetId) {
       this.steerTargetId = targetId;
       this.smoothedLead = null;
+      this.steerStarAvoiding = false;
     }
     const raw = this.npcLeadPoint(sprite);
     this.smoothedLead = smoothLeadPoint(
@@ -1687,9 +1694,18 @@ export class NpcShipManager implements FlightModule {
     }
 
     // The direct lead-line would fly through the sun — fall back to the curved
-    // star-avoidance spline, throttled so it doesn't thrash the path every frame.
+    // star-avoidance spline. Re-plot the bypass the *instant* the path becomes
+    // blocked (the clear→blocked transition), because the safety re-plot must NOT
+    // be gated by the target-drift threshold: the clear-shot branch below keeps
+    // `lastAim` glued to the smoothed lead (≤ maxStepPx apart), so a steady-heading
+    // target never drifts far enough to trip shouldReaim and the ship would keep
+    // steering straight across the star. Once already avoiding, throttle refresh
+    // re-plots (BOTH the interval AND the drift) so a manoeuvring target can't
+    // thrash the spline every frame.
     if (this.leadLineCrossesStar(physics, lead)) {
+      const justBlocked = !this.steerStarAvoiding;
       if (
+        justBlocked ||
         shouldReplotRoute(
           {
             endpoint: { x: this.lastAimX, y: this.lastAimY },
@@ -1703,8 +1719,10 @@ export class NpcShipManager implements FlightModule {
       ) {
         this.replotChase(lead);
       }
+      this.steerStarAvoiding = true;
       return;
     }
+    this.steerStarAvoiding = false;
 
     // Clear shot: steer the heading directly toward the smoothed lead. ShipPhysics
     // turn-rate-limits the heading change, so the motion stays smooth (no snap).

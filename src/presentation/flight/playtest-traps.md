@@ -156,8 +156,12 @@ limiter, and **reserves the curved re-plot for static destinations + star avoida
   (1) **fresh leg** (`!physics.isMoving`, stopped) → curved `replotChase` to re-arm the turn
   and establish a star-avoiding path; (2) **direct lead-line crosses the star**
   (`leadLineCrossesStar` → `avoidStarPath(...).length > 1`, using the new
-  `getStarAvoidRadius` dep) → throttled curved `replotChase` (hysteresis-gated so it doesn't
-  thrash); (3) **clear shot** → a direct `physics.setTarget(lead.x, lead.y)` heading nudge —
+  `getStarAvoidRadius` dep) → curved `replotChase`, fired **immediately on the clear→blocked
+  transition** (`steerStarAvoiding` flag) and then throttled (`shouldReplotRoute`) for a
+  *sustained* block. The transition re-plot is **NOT** drift-gated on purpose: the clear-shot
+  branch keeps `lastAim` glued to the lead (≤ `maxStepPx`), so a steady-heading target never
+  drifts past the 30px gate — gating the safety re-plot on drift would leave the ship steering
+  straight at the star. (3) **clear shot** → a direct `physics.setTarget(lead.x, lead.y)` heading nudge —
   `ShipPhysics` turn-rate-limits it, so the motion stays smooth (no snap). The smoother
   resets (`smoothedLead = null`) only on a **fresh chase leg** (target id change), so a new
   chase never lags toward the previous target's last lead.
@@ -165,6 +169,7 @@ limiter, and **reserves the curved re-plot for static destinations + star avoida
   stutter this replaced. The pre-combat «Перехват» switch case + the engage/in-range and
   `followNpcId`/`approachNpcId` lifecycle are unchanged (when a fight starts/ends is
   identical). Guarded by `src/tests/flight/chaseSteering*.test.ts` (smoother monotonic
-  convergence + per-frame aim ≤ `SMOOTH_BOUND_PX`, hysteresis blocks under-threshold, and
-  the real `updateCombatPursuit` keeps |Δheading| ≤ `rotationSpeed·dt` while closing to and
-  holding `WEAPON_RANGE`).
+  convergence + per-frame aim ≤ `SMOOTH_BOUND_PX`, hysteresis blocks under-threshold, the
+  real `updateCombatPursuit` keeps |Δheading| ≤ `rotationSpeed·dt` while closing to and
+  holding `WEAPON_RANGE`, and the star bypass re-plots the instant the path becomes blocked
+  even against a non-drifting target).
