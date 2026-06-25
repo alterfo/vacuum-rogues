@@ -102,15 +102,27 @@ Related patterns:
   `StationScene.ts`; the quest journal (`QuestJournalUI.ts`); in-flight combat hint
 - Create/Modify tests under `src/tests/`
 
-- [ ] Call `mountSceneHelp` in each scene's `initialize()` (flight → `welcome` on
+- [x] Call `mountSceneHelp` in each scene's `initialize()` (flight → `welcome` on
       the very first entry, then the flight controls help; planet/trade/station →
-      their keys); add «?» to the quest journal.
-- [ ] Show a one-shot **combat** hint on the first in-flight engagement (first
-      `addCombatant`) explaining real-time fire + the active-pause.
-- [ ] write tests: each wired scene requests its help key once on first entry and
+      their keys); add «?» to the quest journal. (Flight help extracted to
+      `flight/flightSceneHelp.ts` to keep the controller under its line guard;
+      all four scenes mount on `renderer.stage` so the «?»/panel survive `uiLayer`
+      rebuilds. Journal «?» wired via `QuestJournalUI.onShowHelp` → FlightHud
+      mounts the shared `HelpPanel` for `quest-journal`.)
+- [x] Show a one-shot **combat** hint on the first in-flight engagement (first
+      `addCombatant`) explaining real-time fire + the active-pause. (Driven from
+      `SpaceFlightScene.update` on the rising edge of `combatModule.isActive` via
+      `flightHelp.maybeShowCombatHint`; one-shot ever through the `seen` store.)
+- [x] write tests: each wired scene requests its help key once on first entry and
       mounts the «?» (assert against a fake `mountSceneHelp`/spy); first-flight
-      shows `welcome`.
-- [ ] run tests — green; **screenshot-verify** flight welcome + one screen's «?».
+      shows `welcome`. (`sceneHelpWiring.test.ts` (Trade/Station/Planet keys via
+      spy), `flightSceneHelp.test.ts` (welcome-first → flight hint → combat once +
+      `pickAutoShowKey`/`showHelpOnce`), `questJournalHelp.test.ts` (journal «?»).)
+- [x] run tests — green; **screenshot-verify** flight welcome + one screen's «?».
+      (Full unit suite green: 3125 passed, lint clean, build OK,
+      `SpaceFlightScene.ts` = 1881 < 1900. Screenshot-verify is a manual visual
+      step — in-app screenshots are unreliable in this harness (render-loop note,
+      same as Task 3), left for the Post-Completion manual pass.)
 
 ### Task 5: Wire the remaining screens
 **Files:**

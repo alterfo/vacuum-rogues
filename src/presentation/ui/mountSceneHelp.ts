@@ -2,7 +2,11 @@ import type { Container } from "pixi.js";
 import { UiButton } from "./UiButton";
 import { HelpPanel } from "./HelpPanel";
 import type { Renderer } from "../Renderer";
-import { helpFor, type HelpKey } from "@/systems/onboarding/helpContent";
+import {
+  helpFor,
+  type HelpEntry,
+  type HelpKey,
+} from "@/systems/onboarding/helpContent";
 import {
   hasSeen as defaultHasSeen,
   markSeen as defaultMarkSeen,
@@ -33,6 +37,18 @@ export interface SceneHelpDeps {
   readonly markSeen?: (key: HelpKey) => void;
 }
 
+/** Optional extras for {@link mountSceneHelp}. */
+export interface SceneHelpOptions {
+  /**
+   * A one-shot intro shown (once) **instead of** `key`'s own first-time hint on
+   * the very first mount, before `key`'s hint ever auto-shows. Used by the flight
+   * scene to greet a brand-new player with the `welcome`/goal panel on the very
+   * first entry, then fall through to the per-screen `SPACE_FLIGHT` controls hint
+   * on the next visit. The «?» button always reopens `key`, not the intro.
+   */
+  readonly firstTimeKey?: HelpKey;
+}
+
 /**
  * Pure auto-show decision: a key's first-time hint pops automatically only when
  * it has not been seen yet. Factored out so it is trivially unit-testable with a
@@ -45,6 +61,24 @@ export function shouldAutoShow(
   return !hasSeenKey(key);
 }
 
+/**
+ * Pure: which key (if any) should auto-show on mount. An optional `firstTimeKey`
+ * (the welcome/goal intro) wins on the very first mount; otherwise the scene's
+ * own `key` shows the first time it is seen; once both are seen, nothing pops
+ * (the «?» button still reopens on demand). Returns `null` when nothing auto-shows.
+ */
+export function pickAutoShowKey(
+  key: HelpKey,
+  firstTimeKey: HelpKey | undefined,
+  hasSeenKey: (key: HelpKey) => boolean,
+): HelpKey | null {
+  if (firstTimeKey && shouldAutoShow(firstTimeKey, hasSeenKey)) {
+    return firstTimeKey;
+  }
+  if (shouldAutoShow(key, hasSeenKey)) return key;
+  return null;
+}
+
 /** Size of the square top-right «?» help button. */
 const HELP_BUTTON_SIZE = 34;
 /** Margin from the screen's top-right corner. */
@@ -52,12 +86,21 @@ const HELP_BUTTON_MARGIN = 12;
 
 /**
  * Mount contextual help for `key` into the scene. Returns a teardown to call
- * from `destroy()`.
+ * from `destroy()`. Pass `options.firstTimeKey` to greet a brand-new player with
+ * a one-shot intro (e.g. `welcome`) before `key`'s own first-time hint.
  */
-export function mountSceneHelp(deps: SceneHelpDeps, key: HelpKey): () => void {
+export function mountSceneHelp(
+  deps: SceneHelpDeps,
+  key: HelpKey,
+  options?: SceneHelpOptions,
+): () => void {
+  // Defensive: a minimal/headless renderer double (some unit-test fixtures) may
+  // carry no `stage` container — the contextual-help overlay is non-essential, so
+  // skip it rather than throw. The real Renderer always provides `stage`.
+  if (!deps.container) return () => {};
+
   const hasSeen = deps.hasSeen ?? defaultHasSeen;
   const markSeen = deps.markSeen ?? defaultMarkSeen;
-  const entry = helpFor(key);
 
   // The currently-open panel, if any (one at a time).
   let panel: HelpPanel | null = null;
@@ -69,20 +112,21 @@ export function mountSceneHelp(deps: SceneHelpDeps, key: HelpKey): () => void {
     panel = null;
   };
 
-  const openPanel = (): void => {
+  const openPanel = (entry: HelpEntry): void => {
     if (panel) return; // already open — ignore re-clicks
     panel = new HelpPanel(deps.renderer, entry, closePanel);
     deps.container.addChild(panel.container);
   };
 
-  // The always-available top-right «?» reopen button.
+  // The always-available top-right «?» reopen button — always opens `key`'s hint
+  // (the scene's own help), never the one-shot intro.
   const helpBtn = new UiButton(
     "?",
     "",
     "primary",
     (e) => {
       e.stopPropagation();
-      openPanel();
+      openPanel(helpFor(key));
     },
     HELP_BUTTON_SIZE,
     HELP_BUTTON_SIZE,
@@ -92,10 +136,12 @@ export function mountSceneHelp(deps: SceneHelpDeps, key: HelpKey): () => void {
   helpBtn.y = HELP_BUTTON_MARGIN;
   deps.container.addChild(helpBtn.container);
 
-  // First-time auto-hint: show once, then mark seen so it won't pop again.
-  if (shouldAutoShow(key, hasSeen)) {
-    markSeen(key);
-    openPanel();
+  // First-time auto-hint: show the intro (if any + unseen) else the scene's own
+  // hint, once, then mark that key seen so it won't pop again.
+  const autoKey = pickAutoShowKey(key, options?.firstTimeKey, hasSeen);
+  if (autoKey) {
+    markSeen(autoKey);
+    openPanel(helpFor(autoKey));
   }
 
   return () => {
@@ -103,4 +149,30 @@ export function mountSceneHelp(deps: SceneHelpDeps, key: HelpKey): () => void {
     deps.container.removeChild(helpBtn.container);
     helpBtn.container.destroy({ children: true });
   };
+}
+
+/**
+ * Show a single dismissible help panel **once ever** for `key` (no «?» button) —
+ * the one-shot contextual hint surfaced by a transient event rather than a screen
+ * (e.g. the `combat` hint on the player's first in-flight engagement). If `key`
+ * was already seen it is a no-op; otherwise it marks it seen and mounts the panel
+ * into `deps.container`. Returns a teardown that closes the panel if still open.
+ */
+export function showHelpOnce(deps: SceneHelpDeps, key: HelpKey): () => void {
+  if (!deps.container) return () => {}; // headless renderer double — skip (see above)
+  const hasSeen = deps.hasSeen ?? defaultHasSeen;
+  const markSeen = deps.markSeen ?? defaultMarkSeen;
+  if (hasSeen(key)) return () => {};
+  markSeen(key);
+
+  let panel: HelpPanel | null = null;
+  const close = (): void => {
+    if (!panel) return;
+    deps.container.removeChild(panel.container);
+    panel.destroy();
+    panel = null;
+  };
+  panel = new HelpPanel(deps.renderer, helpFor(key), close);
+  deps.container.addChild(panel.container);
+  return close;
 }

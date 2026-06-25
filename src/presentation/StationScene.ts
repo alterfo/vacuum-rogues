@@ -1,5 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
+import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { HangarPanel, explainInstallBlock } from "./ui/HangarPanel";
 import { MicromoduleApplyPanel } from "./ui/MicromoduleApplyPanel";
 import { GameScene } from "./GameScene";
@@ -128,6 +129,8 @@ export class StationScene extends GameScene {
   private gameEngine: GameEngine | null = null;
   private station: Station | null = null;
   private mainContainer: Container | null = null;
+  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
+  private helpTeardown: (() => void) | null = null;
   private view: View = "main";
   private shopListings: GearListing[] = [];
   private micromoduleListings: MicroModule[] = [];
@@ -197,12 +200,28 @@ export class StationScene extends GameScene {
       else if (this.view === "micromodules") this.scrollMicromodules(dir);
     });
 
+    this.mountHelp();
+
     logger.info(`StationScene: docked at ${this.station?.name}`);
+  }
+
+  /**
+   * Wire contextual help (first-time auto-hint + always-available «?» reopen),
+   * mounted on `renderer.stage` so it survives the per-view UI rebuilds.
+   */
+  private mountHelp(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = mountSceneHelp(
+      { renderer: this.renderer, container: this.renderer.stage },
+      "STATION",
+    );
   }
 
   update(_dt: number): void {}
 
   destroy(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = null;
     this.hangarPanel.dispose();
     this.closeJobBoard();
     if (this.toastTimeout) clearTimeout(this.toastTimeout);

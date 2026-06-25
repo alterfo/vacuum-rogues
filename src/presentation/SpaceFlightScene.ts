@@ -34,20 +34,13 @@ import { WarpEffectRenderer } from "./flight/WarpEffectRenderer";
 import { QuestCompletion } from "./flight/QuestCompletion";
 import { handleFlightKey } from "./flight/flightKeyHandler";
 import { wireFlightSystemMenu } from "./flight/flightSystemMenu";
+import { mountFlightSceneHelp, type FlightSceneHelp } from "./flight/flightSceneHelp"; // prettier-ignore
+import { disposeFiltersDeep } from "./flight/disposeFilters";
 import {
   endFlightTurn,
   recordAndMaybeAutosaveFlight,
   type FlightAutosaveState,
 } from "./flight/flightTurnEnd";
-
-/** Minimal structural view of a display object for recursive filter disposal. */
-interface FilterableNode {
-  filters?:
-    | ReadonlyArray<{ destroy?: () => void }>
-    | { destroy?: () => void }
-    | null;
-  children?: ReadonlyArray<unknown>;
-}
 
 /** Planet spiral-in hint: where to curve the approach when landing. */
 type LandingHint = { planetX: number; planetY: number; planetRadius: number };
@@ -89,6 +82,8 @@ export class SpaceFlightScene extends GameScene {
   // Latches the low-hull auto-stop so the warning fires once per descent.
   private lowHullStopped = false;
   private destroyed = false;
+
+  private flightHelp: FlightSceneHelp | null = null; // see flight/flightSceneHelp.ts
 
   // Turn control: the turn "runs" (ship flies, NPCs/planets move, combat) while true.
   private isTurnRunning = false;
@@ -555,6 +550,7 @@ export class SpaceFlightScene extends GameScene {
     ) {
       this.e2eSetBackgroundVisible(false);
     }
+    this.flightHelp = mountFlightSceneHelp(this.renderer);
 
     logger.info(
       "SpaceFlightScene initialized with camera controls: pan (Shift+click), zoom (wheel)",
@@ -575,6 +571,7 @@ export class SpaceFlightScene extends GameScene {
     // A lethal hit here fires GAME_OVER synchronously, destroying this scene
     // mid-frame; bail before driving the now-destroyed modules below.
     if (this.destroyed) return;
+    this.flightHelp?.maybeShowCombatHint(this.combatModule.isActive); // 1st-fight hint
     // Skip the live capture mid-hyperjump: performWarp already cleared the capture
     // + set the new systemId, but the ship still sits at the old edge coords until
     // the transition completes — re-capturing here would persist a stale position.
@@ -596,6 +593,8 @@ export class SpaceFlightScene extends GameScene {
 
   destroy(): void {
     this.destroyed = true;
+    this.flightHelp?.destroy(); // contextual help (first-time hint + «?» + combat hint)
+    this.flightHelp = null;
     // Remove all pointer event listeners
     if (this.boundPointerDown) {
       this.renderer.app.stage.off("pointerdown", this.boundPointerDown);
@@ -688,8 +687,7 @@ export class SpaceFlightScene extends GameScene {
     // Release GPU filter textures before the layer is cleared — clearGameLayer
     // destroys the display objects but not their BlurFilters (ship glow, etc.),
     // which would otherwise leak each teardown.
-    if (this.renderer.gameLayer)
-      this.disposeFiltersDeep(this.renderer.gameLayer);
+    if (this.renderer.gameLayer) disposeFiltersDeep(this.renderer.gameLayer);
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
 
@@ -707,7 +705,7 @@ export class SpaceFlightScene extends GameScene {
       this.renderer.stage.removeChild(this.skyContainer);
       // Dispose the nebula-cloud, pillar and swarm-mote BlurFilters before the
       // subtree is destroyed — destroy({children}) leaves their GPU textures.
-      this.disposeFiltersDeep(this.skyContainer);
+      disposeFiltersDeep(this.skyContainer);
       this.skyContainer.destroy({ children: true });
       this.skyContainer = null;
     }
@@ -724,21 +722,6 @@ export class SpaceFlightScene extends GameScene {
     this.distanceTraveled = 0;
     this.clearPlannedRoute(); // Clean up route line
     logger.info("SpaceFlightScene destroyed");
-  }
-
-  /**
-   * Recursively destroy every filter attached to a display-object subtree.
-   * PixiJS v8 `Container.destroy({children})` removes display objects but does NOT
-   * dispose their `filters` — each BlurFilter holds a GPU render texture that leaks
-   * on every scene teardown otherwise. Call this before tearing a layer down.
-   */
-  private disposeFiltersDeep(obj: FilterableNode): void {
-    const fs = obj.filters;
-    const arr = Array.isArray(fs) ? fs : fs ? [fs] : [];
-    for (const f of arr) f.destroy?.();
-    for (const child of obj.children ?? []) {
-      this.disposeFiltersDeep(child as FilterableNode);
-    }
   }
 
   private readonly DOCKING_RANGE = 55;

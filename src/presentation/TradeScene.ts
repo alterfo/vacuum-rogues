@@ -1,5 +1,6 @@
 import { Container, Graphics } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
+import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -25,6 +26,8 @@ export class TradeScene extends GameScene {
   private planet: Planet | null = null;
   private readonly tradeSystem = new TradeSystem();
   private mainContainer: Container | null = null;
+  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
+  private helpTeardown: (() => void) | null = null;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   /** Per-resource quantity selector state (persists across refresh). */
   private readonly tradeQty = new Map<ResourceType, number>();
@@ -59,12 +62,29 @@ export class TradeScene extends GameScene {
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.boundKeyDown);
 
+    this.mountHelp();
+
     logger.info(`TradeScene initialized at ${this.planet?.name ?? "unknown"}`);
+  }
+
+  /**
+   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
+   * Mounted on `renderer.stage` so it sits above the panel and survives the
+   * scene's `refresh()` UI rebuilds (which only touch `uiLayer`).
+   */
+  private mountHelp(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = mountSceneHelp(
+      { renderer: this.renderer, container: this.renderer.stage },
+      "TRADE",
+    );
   }
 
   update(_deltaTime: number): void {}
 
   destroy(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = null;
     if (this.boundKeyDown) {
       window.removeEventListener("keydown", this.boundKeyDown);
       this.boundKeyDown = null;

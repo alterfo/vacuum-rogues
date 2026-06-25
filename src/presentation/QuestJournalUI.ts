@@ -44,6 +44,10 @@ export class QuestJournalUI {
   // Owns a window-level wheel listener that destroy() must tear down.
   private activeList: ScrollableList<Quest> | null = null;
 
+  // Opens the contextual-help panel for the journal (the «?» button). Undefined
+  // in unit tests / when no help is wired — the «?» button is then omitted.
+  private readonly onShowHelp: (() => void) | undefined;
+
   constructor(
     questManager: IQuestService,
     screenWidth: number,
@@ -55,6 +59,7 @@ export class QuestJournalUI {
     cargoCarried?: (itemType: string) => number,
     galaxy?: QuestDestinationGalaxyLike,
     currentSystemId = "",
+    onShowHelp?: () => void,
   ) {
     this.questManager = questManager;
     this.onClose = onClose;
@@ -64,6 +69,7 @@ export class QuestJournalUI {
     this.cargoCarried = cargoCarried;
     this.galaxy = galaxy;
     this.currentSystemId = currentSystemId;
+    this.onShowHelp = onShowHelp;
     this.container = new Container();
 
     // Center panel on screen
@@ -122,6 +128,14 @@ export class QuestJournalUI {
     closeBtn.x = this.panelWidth - 30;
     closeBtn.y = 15;
     this.container.addChild(closeBtn);
+
+    // Contextual-help «?» button, left of the close button. Only when wired.
+    if (this.onShowHelp) {
+      const helpBtn = this.createHelpButton();
+      helpBtn.x = this.panelWidth - 58;
+      helpBtn.y = 15;
+      this.container.addChild(helpBtn);
+    }
 
     // Active quests section
     const activeQuests = this.questManager.getActiveQuests();
@@ -773,6 +787,38 @@ export class QuestJournalUI {
     completedText.y = startY + 30;
     completedText.eventMode = "none";
     this.container.addChild(completedText);
+  }
+
+  /**
+   * Create the contextual-help «?» button — opens the journal's help panel via
+   * the injected `onShowHelp` hook (FlightHud mounts the shared HelpPanel).
+   */
+  private createHelpButton(): Container {
+    const helpBtn = new Container();
+    helpBtn.eventMode = "static";
+    helpBtn.cursor = "pointer";
+
+    const bg = new Graphics();
+    bg.rect(0, 0, 20, 20);
+    bg.fill({ color: 0x004a5a, alpha: 0.9 });
+    bg.stroke({ color: 0x00ffee, width: 1 });
+    helpBtn.addChild(bg);
+
+    const label = scaledText("?", 14, 0x00ffee, {
+      rawColor: true,
+      fontWeight: "bold",
+    });
+    label.x = 6;
+    label.y = 2;
+    label.eventMode = "none";
+    helpBtn.addChild(label);
+
+    helpBtn.on("pointerdown", (event) => {
+      event.stopPropagation();
+      this.onShowHelp?.();
+    });
+
+    return helpBtn;
   }
 
   /**

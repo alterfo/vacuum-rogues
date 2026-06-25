@@ -6,6 +6,8 @@ import type { Planet } from "@/domain/Planet";
 import type { Faction } from "@/types/faction";
 import { SystemMiniMap } from "../SystemMiniMap";
 import { QuestJournalUI } from "../QuestJournalUI";
+import { HelpPanel } from "../ui/HelpPanel";
+import { helpFor } from "@/systems/onboarding/helpContent";
 import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
 import type { LandingDenialReason } from "@/systems/galaxy/landingAccess";
 import { formatGameDate, formatGameTimestamp } from "@/utils/gameCalendar";
@@ -94,6 +96,8 @@ export class FlightHud implements FlightModule {
 
   // Quest Journal UI (toggled by the [КВЕСТЫ] button / J key).
   private questJournalUI: QuestJournalUI | null = null;
+  // The journal's contextual-help panel (opened by its «?» button). One at a time.
+  private questHelpPanel: HelpPanel | null = null;
 
   // Transient on-screen feedback (toast) and its auto-clear timer.
   private toast: Text | null = null;
@@ -220,7 +224,8 @@ export class FlightHud implements FlightModule {
     for (const e of this.miniLogEntries) e.textObj.destroy();
     this.miniLogEntries = [];
     this.miniLogContainer = null;
-    // Quest journal.
+    // Quest journal (+ its help panel).
+    this.closeQuestJournalHelp();
     if (this.questJournalUI) {
       this.questJournalUI.destroy();
       this.questJournalUI = null;
@@ -502,6 +507,7 @@ export class FlightHud implements FlightModule {
 
   /** Close the quest journal immediately (Escape key handling). */
   closeQuestJournal(): void {
+    this.closeQuestJournalHelp();
     if (this.questJournalUI) {
       this.questJournalUI.destroy();
       this.questJournalUI = null;
@@ -515,6 +521,7 @@ export class FlightHud implements FlightModule {
    * stage pointerdown handler that is mid-dispatch over the panel's children.
    */
   closeModals(): void {
+    this.closeQuestJournalHelp();
     const journal = this.questJournalUI;
     this.questJournalUI = null;
     if (journal) queueMicrotask(() => journal.destroy());
@@ -1240,7 +1247,8 @@ export class FlightHud implements FlightModule {
   /** Toggle quest journal UI. */
   toggleQuestJournal(): void {
     if (this.questJournalUI) {
-      // Close journal
+      // Close journal (+ its help panel)
+      this.closeQuestJournalHelp();
       this.questJournalUI.destroy();
       this.questJournalUI = null;
       logger.info("Quest journal closed");
@@ -1266,11 +1274,34 @@ export class FlightHud implements FlightModule {
           },
           this.gameEngine.galaxy ?? undefined,
           this.gameEngine.player?.currentSystemId ?? "",
+          () => this.openQuestJournalHelp(),
         );
         this.uiLayer.addChild(this.questJournalUI.container);
         logger.info("Quest journal opened");
       }
     }
+  }
+
+  /**
+   * Open the quest journal's contextual-help panel (its «?» button). Mounts the
+   * shared {@link HelpPanel} above the journal on the UI layer; «Понятно»/«✕»
+   * close it. Idempotent — a second click while open is ignored.
+   */
+  private openQuestJournalHelp(): void {
+    if (this.questHelpPanel) return;
+    const panel = new HelpPanel(this.renderer, helpFor("quest-journal"), () =>
+      this.closeQuestJournalHelp(),
+    );
+    this.questHelpPanel = panel;
+    this.uiLayer.addChild(panel.container);
+  }
+
+  /** Tear down the journal help panel if open. */
+  private closeQuestJournalHelp(): void {
+    if (!this.questHelpPanel) return;
+    this.uiLayer.removeChild(this.questHelpPanel.container);
+    this.questHelpPanel.destroy();
+    this.questHelpPanel = null;
   }
 
   /**

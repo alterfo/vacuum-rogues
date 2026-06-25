@@ -26,6 +26,7 @@ import { pickVariantKey, panoramaTex, tex, loadTextureAsync } from "./textures";
 import { scaledFont } from "@/utils/fontScale";
 import { tintFromSeed } from "@/utils/instanceTint";
 import { UiButton, type ButtonAccent } from "./ui/UiButton";
+import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
 
 interface PlanetContext {
@@ -286,6 +287,8 @@ export class PlanetScene extends GameScene {
   private uiContainer: Container | null = null;
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
   private jobBoardPanel: JobBoardPanel | null = null;
+  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
+  private helpTeardown: (() => void) | null = null;
   /** Bribe paid this landing — gates are lifted for the duration of the visit. */
   private bribed = false;
   /** Set from `resumeTextQuest === false` in the init context: skips the one
@@ -353,6 +356,8 @@ export class PlanetScene extends GameScene {
     stage.on("pointermove", this.boundPanoramaMove);
     stage.on("pointerup", this.boundPanoramaUp);
     stage.on("pointerupoutside", this.boundPanoramaUp);
+
+    this.mountHelp();
 
     if (!tex(backdropKey)) {
       // Task 8: lazy-load the per-planet backdrop behind the US-076 loading
@@ -828,7 +833,22 @@ export class PlanetScene extends GameScene {
     this.renderer.uiLayer.addChild(modal);
   }
 
+  /**
+   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
+   * Mounted on `renderer.stage`, which the in-scene `clearUILayer()` rebuilds
+   * (e.g. the lazy backdrop swap-in) leave untouched, so it survives them.
+   */
+  private mountHelp(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = mountSceneHelp(
+      { renderer: this.renderer, container: this.renderer.stage },
+      "PLANET",
+    );
+  }
+
   destroy(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = null;
     if (this.toastTimeout) {
       clearTimeout(this.toastTimeout);
       this.toastTimeout = null;
