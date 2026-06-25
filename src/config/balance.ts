@@ -2,6 +2,42 @@ import { z } from "zod";
 import type { GameMode, ResourceType } from "@/types";
 
 /**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * BALANCE NOTE — Economy rebalance: homogeneous-but-expensive tech (2026-06).
+ * (`docs/plans/20260625-economy-homogeneous-tech-start-speed.md`)
+ *
+ * Design feel: **harder to win, easier to play.** Four linked levers, all pure
+ * config/catalog data (no persisted player fields ⇒ no save migration):
+ *
+ *  1. **Player ≥ basic-NPC speed.** A fresh starter ship (~0.11 px/ms with
+ *     `eq_engine_i`) can always out-run a *basic* NPC — ordinary traders/patrols
+ *     cruise at {@link GAME_BALANCE.npcBasicSpeed} (0.08), below the player. Only
+ *     rare **interceptor-class** craft (OVERMIND/PIRATE) run at the faster
+ *     {@link GAME_BALANCE.npcSpeed} (0.2); escaping one stays upgrade-gated. You
+ *     are never randomly outclassed by a *common* ship from the start.
+ *
+ *  2. **Homogeneous galaxy tech.** Most of the galaxy runs similar mid-tech
+ *     ({@link NpcSimulator.NPC_TECH_BAND} = tech 1–3, whole band below the rare
+ *     threshold), so a common NPC never fields apex gear — uniform tech means
+ *     you're not randomly outgunned wandering between systems.
+ *
+ *  3. **Rare, very expensive top tier.** The apex hull/engine/weapon sit at
+ *     tech ≥ {@link RARE_TECH_THRESHOLD} (6), priced ≥ 4× the mid tier and gated
+ *     to scarce high-end markets (a rare flag halves stock chance again in
+ *     {@link ShopGenerator}). Only the wealthiest field them.
+ *
+ *  4. **Longer top-tech climb.** Income (quests + tamed trade/combat printers,
+ *     see {@link LOCAL_DELIVERY_REWARD_MARGIN}/{@link ARTIFACT_DROP_CHANCE})
+ *     vs. the steep apex prices makes the top hull «Бастион» a ~210-day goal and
+ *     the hull+engine pair ~470 days — an order of magnitude beyond the old
+ *     ~2-week buy. See {@link QUEST_BASE_REWARD} / {@link modelledDaysToAfford}.
+ *
+ * Tests assert the *relationships* (player ≥ NPC speed, steep top step, low tech
+ * variance, longer days-to-top), not magnitudes, so these knobs stay tunable.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/**
  * Type-safe game balance constants.
  * Follows SRP: all balance numbers in one place, validated at startup.
  */

@@ -230,8 +230,17 @@ Goal feel: **harder to win** (a long, earned climb to top tech) but **easier to 
 **Files:**
 - Modify: `src/config/balance.ts` comment + a balance note
 
-- [ ] Document the new feel: player ≥ basic-NPC speed; homogeneous galaxy tech; rare,
+- [x] Document the new feel: player ≥ basic-NPC speed; homogeneous galaxy tech; rare,
       very expensive top tier; longer top-tech climb (harder to win, easier to play).
+      → Added a consolidated file-level BALANCE NOTE at the top of `src/config/balance.ts`
+      that ties the four levers together (player ≥ basic-NPC speed via `npcBasicSpeed`
+      < starter < `npcSpeed`; homogeneous `NPC_TECH_BAND` 1–3; rare apex tech ≥
+      `RARE_TECH_THRESHOLD` priced ≥4× & shop-gated; the ~210/~470-day top-tech climb),
+      cross-linking every knob via {@link}. The detailed per-constant comments
+      (progression curve on `QUEST_BASE_REWARD`, `RARE_TECH_THRESHOLD`, the two
+      `GAME_BALANCE` speed tiers, `LOCAL_DELIVERY_REWARD_MARGIN`/`ARTIFACT_DROP_CHANCE`)
+      were already written in Tasks 1–4; this is the single-glance summary. Comment-only
+      — `tsc --noEmit` + lint clean, no schema/test impact.
 
 ## Technical Details
 - Config/catalog-only (no persisted player fields) ⇒ no save migration. Tests assert
