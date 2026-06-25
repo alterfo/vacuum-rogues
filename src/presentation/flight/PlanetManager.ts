@@ -68,12 +68,17 @@ export interface PlanetManagerDeps {
    * route/turn bookkeeping.
    */
   getOrbitalDay(): number;
-  /** Rich planet hover tooltip (delegated to the scene's HUD). */
+  /**
+   * Rich planet hover tooltip (delegated to the scene's HUD). `landingDenial`
+   * is the live land-access verdict (Overmind / pirate-rep) so the tooltip can
+   * surface an un-landable planet on hover — `null` when landing is allowed.
+   */
   showPlanetTooltip(
     planet: Planet,
     faction: Faction,
     screenX: number,
     screenY: number,
+    landingDenial: LandingDenialReason | null,
   ): void;
   hideTooltip(): void;
   /** Cancel any NPC auto-follow target — picking a body cancels a chase. */
@@ -455,7 +460,14 @@ export class PlanetManager implements FlightModule {
 
       const systemFaction = currentSystem.ownerFaction;
       sprite.setTooltipHandlers(
-        (p, sx, sy) => this.deps.showPlanetTooltip(p, systemFaction, sx, sy),
+        (p, sx, sy) =>
+          this.deps.showPlanetTooltip(
+            p,
+            systemFaction,
+            sx,
+            sy,
+            this.landingDenial(p),
+          ),
         () => this.deps.hideTooltip(),
       );
 

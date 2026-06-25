@@ -7,6 +7,7 @@ import {
   FACTION_COLOR,
   FACTION_DISPLAY_NAME,
 } from "@/utils/planetTooltip";
+import { landingDenialMessage } from "@/systems/galaxy/landingAccess";
 
 // Minimal Market stub so Planet can be constructed without real infrastructure.
 const stubMarket = {
@@ -169,5 +170,51 @@ describe("buildPlanetTooltipLines", () => {
     });
     expect(seen).toContain(Faction.OVERMIND);
     expect(seen).not.toContain(Faction.BASTIONS);
+  });
+
+  it("appends no landing-denial line when landing is allowed (omitted/null)", () => {
+    const planet = makePlanet({ capturedBy: null });
+    const omitted = buildPlanetTooltipLines(
+      planet,
+      Faction.OUTLANDERS,
+      repAlways(0),
+    );
+    const explicitNull = buildPlanetTooltipLines(
+      planet,
+      Faction.OUTLANDERS,
+      repAlways(0),
+      null,
+    );
+    expect(omitted).toHaveLength(4);
+    expect(explicitNull).toHaveLength(4);
+    expect(
+      explicitNull.some((l) => l.text === landingDenialMessage("overmind")),
+    ).toBe(false);
+  });
+
+  it("appends the overmind denial line (red) using the shared wording", () => {
+    const planet = makePlanet({ capturedBy: null });
+    const lines = buildPlanetTooltipLines(
+      planet,
+      Faction.OUTLANDERS,
+      repAlways(0),
+      "overmind",
+    );
+    const denial = lines[lines.length - 1];
+    expect(denial.text).toBe(landingDenialMessage("overmind"));
+    expect(denial.color).toBe(0xff4444);
+  });
+
+  it("appends the pirate-rep denial line using the shared wording", () => {
+    const planet = makePlanet({ capturedBy: null });
+    const lines = buildPlanetTooltipLines(
+      planet,
+      Faction.OUTLANDERS,
+      repAlways(0),
+      "pirate-rep",
+    );
+    const denial = lines[lines.length - 1];
+    expect(denial.text).toBe(landingDenialMessage("pirate-rep"));
+    expect(denial.color).toBe(0xff4444);
   });
 });

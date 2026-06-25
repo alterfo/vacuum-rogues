@@ -7,6 +7,7 @@ import type { Faction } from "@/types/faction";
 import { SystemMiniMap } from "../SystemMiniMap";
 import { QuestJournalUI } from "../QuestJournalUI";
 import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
+import type { LandingDenialReason } from "@/systems/galaxy/landingAccess";
 import { formatGameDate, formatGameTimestamp } from "@/utils/gameCalendar";
 import {
   currentFontSizeKey,
@@ -1395,12 +1396,17 @@ export class FlightHud implements FlightModule {
     }, 300);
   }
 
-  /** Show an immediate rich planet tooltip (name, habitability, faction, capture). */
+  /**
+   * Show an immediate rich planet tooltip (name, habitability, faction, capture,
+   * and — when supplied — the land-access denial so an un-landable planet reads
+   * as occupied on hover, before any landing attempt).
+   */
   showPlanetTooltip(
     planet: Planet,
     systemFaction: Faction,
     screenX: number,
     screenY: number,
+    landingDenial: LandingDenialReason | null = null,
   ): void {
     this.hideTooltip();
 
@@ -1408,6 +1414,7 @@ export class FlightHud implements FlightModule {
       planet,
       systemFaction,
       (faction) => this.gameEngine?.player?.getReputation(faction) ?? 0,
+      landingDenial,
     );
 
     // Build container

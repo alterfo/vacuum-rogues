@@ -43,16 +43,16 @@ player can decide before flying there.
 - Modify: `src/presentation/flight/PlanetManager.ts`
 - Modify: the HUD tooltip renderer (the `showPlanetTooltip` implementation, e.g. `src/presentation/flight/FlightHud.ts`)
 
-- [ ] In the hover path, compute `landingDenial(planet)` and pass the resulting
+- [x] In the hover path, compute `landingDenial(planet)` and pass the resulting
       reason (or its `landingDenialMessage`) into the tooltip payload alongside the
       existing planet/faction info.
-- [ ] Render a clear, color-coded "occupied / cannot land" line in the tooltip
+- [x] Render a clear, color-coded "occupied / cannot land" line in the tooltip
       (e.g. red «Захвачена Доминаторами — посадка невозможна») using the SAME
       `landingDenialMessage(reason)` text the land-attempt uses.
-- [ ] write tests: tooltip content includes the denial line iff `landingDenial`
+- [x] write tests: tooltip content includes the denial line iff `landingDenial`
       is non-null (overmind + pirate-rep cases) and is absent when landing is
       allowed.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 2: Verify acceptance criteria
 **Files:**

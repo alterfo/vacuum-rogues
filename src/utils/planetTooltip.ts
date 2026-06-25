@@ -1,5 +1,9 @@
 import { Faction } from "@/types/faction";
 import type { Planet } from "@/domain/Planet";
+import {
+  landingDenialMessage,
+  type LandingDenialReason,
+} from "@/systems/galaxy/landingAccess";
 
 /** Display names for factions shown in planet tooltips. */
 export const FACTION_DISPLAY_NAME: Record<Faction, string> = {
@@ -54,15 +58,24 @@ export interface TooltipLine {
  *   3. controlling faction name — in faction colour
  *   4. player relation to that faction (Союзник / Нейтральный / Враждебный…)
  *   5. capture warning, in red, only when the planet is captured
+ *   6. landing-denial line, in red, only when `landingDenial` is supplied —
+ *      surfaced on hover so the player learns a planet is un-landable BEFORE
+ *      flying there. Reuses {@link landingDenialMessage} so the hover and the
+ *      land-attempt show the *same* wording (single source — no second copy).
  *
  * The controlling faction is the captor when the planet is captured, otherwise
  * the system's owning faction. Reputation is looked up against the controlling
  * faction so the relation line tracks who actually holds the planet.
+ *
+ * `landingDenial` is the live access verdict (Overmind / pirate-rep), computed
+ * by the caller from current galaxy/player state — `null`/omitted when landing
+ * is allowed, so the line is additive and absent on a landable planet.
  */
 export function buildPlanetTooltipLines(
   planet: Pick<Planet, "name" | "isHabitable" | "capturedBy">,
   systemFaction: Faction,
   getReputation: (faction: Faction) => number,
+  landingDenial?: LandingDenialReason | null,
 ): TooltipLine[] {
   const lines: TooltipLine[] = [];
 
@@ -96,6 +109,11 @@ export function buildPlanetTooltipLines(
     const captorName = FACTION_DISPLAY_NAME[captor] ?? planet.capturedBy;
     const verb = CAPTURE_FACTIONS.has(captor) ? "⚠ Захвачена" : "Контроль";
     lines.push({ text: `${verb}: ${captorName}`, color: 0xff4444 });
+  }
+
+  // 6. Landing-denial line (red) — same wording as the land-attempt path.
+  if (landingDenial) {
+    lines.push({ text: landingDenialMessage(landingDenial), color: 0xff4444 });
   }
 
   return lines;

@@ -377,8 +377,8 @@ export class SpaceFlightScene extends GameScene {
         }),
         isTurnRunning: () => this.isTurnRunning,
         getOrbitalDay: () => this.currentDay,
-        showPlanetTooltip: (planet, faction, sx, sy) =>
-          this.hud.showPlanetTooltip(planet, faction, sx, sy),
+        showPlanetTooltip: (planet, faction, sx, sy, landingDenial) =>
+          this.hud.showPlanetTooltip(planet, faction, sx, sy, landingDenial),
         hideTooltip: () => this.hud.hideTooltip(),
         clearFollow: () => {
           if (this.npcManager) this.npcManager.followNpcId = null;
