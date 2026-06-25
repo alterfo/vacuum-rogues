@@ -1,0 +1,34 @@
+name: Save Compatibility
+
+# Save-compatibility safety net (Vitest, fast ~2 s). Beta-testers have real,
+# progressed saves; every balance/schema/catalog change must keep an old save
+# loadable. This gate replays the frozen golden-save corpus (incl. genuinely
+# old versions) through validate → migrate → re-validate → engine load, and
+# asserts load-time loadout revalidation re-homes over-capacity gear instead of
+# bricking the save. A distinct, named CI signal so a save-breaking change fails
+# here — not in a beta-tester's browser.
+# See docs/plans/20260625-save-compatibility-safety-net.md.
+
+on:
+  pull_request:
+    branches: [master, main, develop]
+
+jobs:
+  save-compat:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run save-compatibility gate
+        run: npm run test:save-compat

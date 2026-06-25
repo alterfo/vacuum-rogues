@@ -13,6 +13,7 @@
     "test": "vitest",
     "test:run": "vitest --run",
     "test:playtest": "vitest --run src/tests/playtest",
+    "test:save-compat": "vitest --run src/tests/data/goldenSaveCompat.test.ts src/tests/core/loadoutRevalidateOnLoad.test.ts",
     "letsplay": "LETSPLAY_FULL=1 vitest --run src/tests/playtest/letsplay/letsplaySession.test.ts",
     "test:coverage": "vitest --run --coverage",
     "test:e2e": "playwright test",

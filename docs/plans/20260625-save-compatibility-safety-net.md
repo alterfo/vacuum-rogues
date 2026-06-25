@@ -81,9 +81,18 @@ fails if a change would brick old saves.
 **Files:**
 - Modify: `lefthook.yml` / CI workflow, `package.json`
 
-- [ ] Add the golden-save load-test (and optionally a short letsplay run that *plays* a
+- [x] Add the golden-save load-test (and optionally a short letsplay run that *plays* a
       migrated golden save) to the pre-push/CI gate, so a save-breaking change fails CI.
-- [ ] document how to add a golden save when a new persisted feature ships.
+      (New `npm run test:save-compat` runs `goldenSaveCompat.test.ts` +
+      `loadoutRevalidateOnLoad.test.ts` (~2 s, 19 tests); wired as a distinct
+      `save-compat` pre-push command in `lefthook.yml` and a dedicated CI workflow
+      `.github/workflows/save-compat.yml` (PR → master/main/develop) — a save-breaking
+      change now fails with a clear, named signal instead of buried in the full suite.)
+- [x] document how to add a golden save when a new persisted feature ships.
+      (`src/tests/data/goldenSaves/README.md`: the corpus + per-fixture rationale, the
+      `npm run test:save-compat` gate, when to add a save (any new *persisted* feature),
+      and the two add paths — `GEN_GOLDEN=1` regenerate for current-version fixtures vs.
+      hand-pin a lower-version fixture for the migration chain.)
 
 ### Task 4: Verify + docs
 **Files:**
