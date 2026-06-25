@@ -2,7 +2,8 @@
  * Combat orbital clock (pure, PixiJS-free).
  *
  * Planet orbital position is a pure function of `SpaceFlightScene.currentDay`
- * (`gameDays + distanceTraveled/DISTANCE_PER_DAY + waitDayAccum + combatDayAccum`).
+ * (`gameDays + distanceTraveled/DISTANCE_PER_DAY + waitDayAccum`); this frame's
+ * increment is accrued into `waitDayAccum` from the stationary-combat branch.
  * During a real-time in-flight fight the ship sits still, so neither the
  * move-distance source nor the wait-turn source (`advanceWaitTime`, gated off while
  * a fight is active) advances `currentDay` — and the planets freeze on their orbital
@@ -19,9 +20,9 @@
  */
 
 /**
- * ms of real time per orbital/wait day (день = секунда, US-070). Shared with
- * `SpaceFlightScene.MS_PER_WAIT_DAY` so combat orbit pacing matches a wait-turn from
- * a single source of truth.
+ * ms of real time per orbital/wait day (день = секунда, US-070). Must stay equal to
+ * `SpaceFlightScene.MS_PER_WAIT_DAY` (a separate literal there) so combat orbit pacing
+ * matches a wait-turn — keep the two in sync if either changes.
  */
 export const MS_PER_ORBITAL_DAY = 1000;
 

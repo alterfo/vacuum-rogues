@@ -109,7 +109,7 @@ export class SpaceFlightScene extends GameScene {
   // Fractional day accrued while holding position — a wait turn (US-070 #5) OR a
   // stationary real-time fight (combat advances orbits but not the calendar; see updateShip).
   private waitDayAccum: number = 0;
-  private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070; = MS_PER_ORBITAL_DAY)
+  private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070); must equal MS_PER_ORBITAL_DAY
   // Fractional "day of turn" (gameDays + sub-day move/wait/combat); feeds orbits + the HUD date read-out.
   private get currentDay(): number {
     const days = this.gameEngine?.galaxy?.gameDays ?? 0;

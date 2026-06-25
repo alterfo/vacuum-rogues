@@ -3,8 +3,8 @@
  * (docs/plans/20260625-orbits-advance-during-combat.md).
  *
  * Orbital position is a pure function of `SpaceFlightScene.currentDay`
- * (`gameDays + distanceTraveled/DISTANCE_PER_DAY + waitDayAccum + combatDayAccum`),
- * surfaced to the planets through `getOrbitalDay: () => this.currentDay`. During an
+ * (`gameDays + distanceTraveled/DISTANCE_PER_DAY + waitDayAccum`), surfaced to the
+ * planets through `getOrbitalDay: () => this.currentDay`. During an
  * in-flight fight the ship is stationary, so `distanceTraveled` never grows, and
  * `advanceWaitTime` — the only sub-day source for a *still* ship — is gated off while
  * a fight is active (the wait guard at the bottom of `updateShip` excludes
@@ -13,9 +13,10 @@
  * was **not** — so a real-time fight advanced bullets while the planets froze on
  * their orbital path.
  *
- * Task 2 added a presentation-only combat-day accumulator (`combatDayAccum`, fed by
- * the pure `combatOrbitalDayIncrement`) that advances the orbital day at the wait-turn
- * rate during the real-time portion of a fight and holds while the active pause is up.
+ * Task 2 feeds a presentation-only combat-day increment (the pure
+ * `combatOrbitalDayIncrement`) into the existing `waitDayAccum` accumulator, advancing
+ * the orbital day at the wait-turn rate during the real-time portion of a fight and
+ * holding while the active pause is up.
  * This file pins that behaviour against a real `SpaceFlightScene`:
  *   • the orbital day advances while a fight is engaged and NOT paused (was the Task-1
  *     red repro, committed as `it.fails`; now a plain green `it`),
