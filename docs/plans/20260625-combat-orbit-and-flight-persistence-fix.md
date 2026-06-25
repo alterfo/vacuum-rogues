@@ -169,8 +169,19 @@ reload resumes where you were.
 **Files:**
 - Modify: `src/presentation/flight/CLAUDE.md` / `playtest-traps.md`
 
-- [ ] Document: combat hold = orbit/strafe at range (arc-movement-compatible), route/flee
+- [x] Document: combat hold = orbit/strafe at range (arc-movement-compatible), route/flee
       overrides pursuit, and the in-flight position autosave (reload resumes in-system).
+      (`flight/CLAUDE.md`: augmented the auto-pursuit paragraph with the `steerCombatOrbit`
+      strafe-at-`COMBAT_ORBIT_RANGE` hold + the `breakOffCombatPursuit`/`pursuitSuspended`
+      route override, added a live-in-flight-position-persistence paragraph
+      (`recordLiveFlightPos`/`flushFlightAutosave`/`recordAndMaybeAutosaveFlight`, page-hide +
+      ~5 s throttle, no-op outside SPACE_FLIGHT), and listed the new topics in the
+      `playtest-traps.md` pointer. `playtest-traps.md`: a new "Combat Range-Keeping Orbit +
+      Break-off + Live-Position Autosave" section detailing the three-part cluster, the
+      far-carrot/tangent+radial orbit, the no-smoothing rationale, the self-clearing
+      `pursuitReplot`-gated break-off, and the system-tagged autosave seam — all symbol/test
+      names verified on-disk. Docs-only: no `src/**/*.ts` touched, no test snapshots these
+      files, lint/tsc unaffected.)
 
 ## Post-Completion
 **Manual:** in a fight, the ship strafes at range and fires back, and you can peel off to a

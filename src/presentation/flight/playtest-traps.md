@@ -173,3 +173,76 @@ limiter, and **reserves the curved re-plot for static destinations + star avoida
   real `updateCombatPursuit` keeps |Δheading| ≤ `rotationSpeed·dt` while closing to and
   holding `WEAPON_RANGE`, and the star bypass re-plots the instant the path becomes blocked
   even against a non-drifting target).
+
+## Combat Range-Keeping Orbit + Break-off + Live-Position Autosave
+
+Completed `20260625-combat-orbit-and-flight-persistence-fix`. A playtest caught a three-part
+in-flight cluster, all caused by the arc-movement model (`ShipPhysics` always cruises forward,
+never stops or pivots — see "Ship Movement Model" above) meeting the old combat hold:
+
+1. **The ship orbited a target endlessly and couldn't reach a planet.** `updateCombatPursuit`
+   used to "hold station" inside weapon range by issuing **no steering**. With arc-movement that
+   means *fly straight on the current heading* — so the always-cruising ship coasted through the
+   target and out the far side, dropped out of range, re-closed, and oscillated unboundedly,
+   hijacking movement.
+2. **The player rarely returned fire.** Because the ship sat at the range *boundary*, the target
+   kept dropping out of `pickTargetInRange`, so `advancePlayerWeapons` seldom had an in-range
+   target → almost no auto-fire.
+3. **A reload mid-flight respawned at the system edge.** Free flight has no scene transition, so
+   the transition-driven autosave never fired during flight and `flightShipPos` was set only at
+   discrete events — a reload restored the system-entry (edge) position, not where you were.
+
+**Combat hold is a controlled orbit/strafe at range — never "no steer", never an in-place pivot.**
+`NpcShipManager.steerCombatOrbit` (called from `updateCombatPursuit` when the target is **inside**
+`WEAPON_RANGE`; outside, it re-closes via `steerTowardLead`):
+- Steers toward a **carrot projected far** (`COMBAT_ORBIT_CARROT` = 2000 px) along a **tangent +
+  radial** heading: the tangent is perpendicular to the target line **in the ship's current
+  orbital sense** (so dropping into the orbit never demands a hard reversal); the radial pulls
+  back onto `COMBAT_ORBIT_RANGE` (0.6 × `GAME_BALANCE.weaponRange` = 144 px) — outward when too
+  close, inward when too far. This keeps the target inside `WEAPON_RANGE` continuously, so
+  auto-fire always has a hit.
+- The carrot is **far on purpose**: it keeps `ShipPhysics` in its cruise phase so it never
+  decelerates/stops mid-orbit — only the per-frame *heading* is consumed. It's plotted via
+  `physics.setPath([carrot, carrot×2])` as a **>1-point (non-final) leg** so the ship stays at
+  full cruise (no final-leg deceleration / arc-cap) **and** the redundant heading crosshair stays
+  hidden during the fight (the route counts as "on a route" — see the crosshair trap above).
+- **The orbit heading is intentionally NOT smoothed** (unlike the approach's `smoothLeadPoint`): a
+  turn-rate-limited smoother lags the live orbit geometry and the ship slingshots out. The carrot
+  snaps to the exact instantaneous heading each frame; `ShipPhysics` still turn-rate-limits the
+  actual hull rotation, so motion stays smooth. Do **not** route this through the lead smoother.
+
+**Route/flee overrides auto-pursuit (`breakOffCombatPursuit` / `pursuitSuspended`).** A player who
+plots a manual course while a fight is engaged must not stay pinned in the strafe orbit:
+- `breakOffCombatPursuit()` sets `pursuitSuspended = true`; while set, `updateCombatPursuit`
+  **yields navigation** (returns without steering) so the player's plotted course flies.
+- The override is **self-clearing**: it ends the instant the route completes (`physics.isMoving`
+  becomes false), so pursuit re-engages only if a hostile is still in range (and per the escape
+  rules). It is **re-armed on a fresh engagement / explicit retarget** (`launchCombatWithNpc`,
+  the `onNpcClick` retarget branch — `pursuitSuspended = false`) so choosing to fight again
+  cancels the break-off immediately, and reset in `destroy()`.
+- The scene's `executeRouteTo` calls `breakOffCombatPursuit()` when `combatModule.isActive`,
+  **gated by a `pursuitReplot` flag** so the pursuit's *own* star-avoidance re-plots (which route
+  through the same `executeRouteTo`) don't self-suspend the pursuit.
+- **Combat (auto-fire) keeps resolving throughout** — only the auto-*maneuvering* yields; the
+  fight ends per the normal escape/kill rules. Guarded by `src/tests/flight/combatBreakoff.test.ts`.
+
+**Live in-flight position persists across a reload (no schema change — `flightShipPos` already
+persists).** The seam is split engine ↔ scene:
+- `GameEngine.recordLiveFlightPos(x, y)` stores `liveFlightShipPos`; `saveGame` folds it into the
+  **system-tagged** `flightShipPos` **only while SPACE_FLIGHT is active**, and the `systemId` tag
+  gates the restore on load — so a capture can never leak into a non-flight or cross-system spawn.
+  `performWarp` clears `liveFlightShipPos` when the ship leaves the system.
+- `GameEngine.flushFlightAutosave()` awaits a `saveGame("auto")` but **no-ops outside
+  SPACE_FLIGHT** (a landed/menu save must not be clobbered with a stale flight capture). It is
+  wired to `beforeunload` + `visibilitychange`→hidden via `registerFlightHideAutosave()`
+  (registered **once** at engine init, guarded for non-browser/Vitest runtimes, detached in
+  `stop()`). `beforeunload` is best-effort (the async write may not finish), but
+  `visibilitychange`→hidden fires reliably on mobile/tab-backgrounding where it does complete.
+- The scene calls the pure `recordAndMaybeAutosaveFlight` (`flight/flightTurnEnd.ts`) **every
+  frame**: continuous live capture into the engine + a **~5 s throttled** periodic autosave that
+  fires **only when the ship actually moved** (so a crash/close that never fires `visibilitychange`
+  still resumes near the live position). Turn-end (`endFlightTurn`) already saves the settled
+  position; this fills the gap mid-turn and during a combat orbit (which moves the ship with no
+  turn-end). **Terminal scenes are unaffected** — the flush no-ops outside flight. Guarded by
+  `src/tests/core/flightReloadPosition.test.ts` + `src/tests/flight/flightTurnEnd.test.ts` +
+  the untouched `GameEngine.flight-position.test.ts` round-trip suite.

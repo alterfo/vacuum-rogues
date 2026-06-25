@@ -31,7 +31,15 @@ OVERMIND-core boss and former scripted text-quest encounters. An aggressive NPC 
 surfaces a throttled HUD hint ("Нет оружия — установите его в ангаре") instead of silently
 no-opping. Once engaged, both sides **auto-pursue** to hold `WEAPON_RANGE`: the player ship
 auto-tracks the selected target and each aggressive NPC closes on the player (`NpcShipManager`
-pursuit, gated on `isInCombat()`, frozen by the active pause). **Fire is per-weapon, not a flat
+pursuit, gated on `isInCombat()`, frozen by the active pause). **The in-range hold is a
+controlled orbit/strafe, not a stop** — `steerCombatOrbit` circle-strafes the target at
+`COMBAT_ORBIT_RANGE` (0.6 × weapon range), arc-movement-compatible, so the target stays inside
+`WEAPON_RANGE` continuously and auto-fire always has a hit (a dead-heading "no steer" hold let
+the always-cruising ship coast straight through and orbit unboundedly). A player who plots a
+manual route (to a planet or to flee) **overrides** the auto-pursuit via
+`breakOffCombatPursuit()` — `updateCombatPursuit` yields navigation while the route flies and
+re-engages only once it completes with a hostile still in range. Detail in `playtest-traps.md`.
+**Fire is per-weapon, not a flat
 cadence:** the player fires **every** fitted weapon (`advancePlayerWeapons`), each on its own
 `weaponFireIntervalMs(weapon)` = `max(1, cooldownTurns) × GAME_BALANCE.combatFireIntervalMs` timer
 — so a slow `cooldownTurns:3` beam fires ~⅓ as often as a `cooldownTurns:1` pulse, making cadence a
@@ -96,6 +104,18 @@ orbits via the distance path). The **active pause** (`combatPause.paused`) holds
 the orbits along with movement, NPC AI and fire. Position stays a pure function of `orbitalDay` (no
 per-planet motion state); only the day source gains a combat path — no data/schema/save impact.
 
+**Live in-flight position persists across a reload.** Free flight otherwise only autosaves at
+discrete turn-ends (and a combat orbit moves the ship with **no** turn-end), so a reload used to
+edge-spawn at the system entry. The scene calls `recordAndMaybeAutosaveFlight` (`flight/flightTurnEnd.ts`)
+every frame: it pushes the live ship position into `GameEngine.recordLiveFlightPos(x,y)` (which
+`saveGame` folds into the system-tagged `flightShipPos` **only** while SPACE_FLIGHT is active) and
+throttles a periodic `flushFlightAutosave` (~5 s, only when the ship actually moved). A page-hide
+flush (`beforeunload` + `visibilitychange`→hidden, registered once at engine init) saves on
+tab-close/backgrounding. `flushFlightAutosave` **no-ops outside SPACE_FLIGHT**, so terminal/menu
+scenes are never clobbered with a stale flight capture; `performWarp` clears `liveFlightShipPos`
+when the ship leaves the system so a capture can't leak into a cross-system spawn. No schema change
+(`flightShipPos` already persists). Detail in `playtest-traps.md`.
+
 Rules: a module never imports another — the scene mediates via callbacks + `*Deps` bundles;
 each `destroy()` must leave `gameLayer.children.length === 0`; dispose `BlurFilter`s in
 `destroy()`. **Line-count guard: `SpaceFlightScene.ts` < 1900 lines**
@@ -117,5 +137,6 @@ can't collapse the circle and leave a ship mouse-dead in combat. Detail in `play
 
 Historical playtest bugs and detailed conventions (re-entry spawn, NPC spawn states, route
 dashing, sun clearance, pause-finishes-day, font-scale ship pos, NPC purposeful behavior,
-ship movement model, NPC clickability invariant, smoothed auto-follow/chase steering) live in
+ship movement model, NPC clickability invariant, smoothed auto-follow/chase steering, combat
+range-keeping orbit / break-off / live-position autosave) live in
 `playtest-traps.md` — read it before touching those areas.
