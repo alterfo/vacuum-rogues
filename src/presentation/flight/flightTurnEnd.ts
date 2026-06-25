@@ -10,6 +10,50 @@ export interface FlightPositionSink {
   saveGame?: (slotId?: string) => Promise<void>;
 }
 
+/** Engine seam for the per-frame live capture + periodic in-flight autosave. */
+export interface FlightAutosaveSink {
+  recordLiveFlightPos(x: number, y: number): void;
+  flushFlightAutosave(): Promise<void>;
+}
+
+/** Scene-owned throttle state for {@link recordAndMaybeAutosaveFlight}. */
+export interface FlightAutosaveState {
+  accumMs: number;
+  lastPos: { x: number; y: number } | null;
+}
+
+const FLIGHT_AUTOSAVE_INTERVAL_MS = 5000;
+
+/**
+ * Track the live ship position into the engine every frame (so a page-hide
+ * flush / next save persists where the ship IS, not the system-entry edge) and
+ * throttle a periodic autosave (~5 s) when the ship has actually moved — so a
+ * crash/close that never fires `visibilitychange` still resumes near the live
+ * position. Turn-end already saves the settled position; this fills the gap
+ * mid-turn and during a combat orbit (which moves the ship with no turn-end).
+ * Mutates `state` in place.
+ */
+export function recordAndMaybeAutosaveFlight(
+  engine: FlightAutosaveSink,
+  physics: ShipPhysics,
+  state: FlightAutosaveState,
+  deltaTime: number,
+): void {
+  const { shipX, shipY } = physics;
+  engine.recordLiveFlightPos(shipX, shipY);
+  state.accumMs += deltaTime;
+  if (state.accumMs < FLIGHT_AUTOSAVE_INTERVAL_MS) return;
+  state.accumMs = 0;
+  const moved =
+    !state.lastPos ||
+    Math.hypot(shipX - state.lastPos.x, shipY - state.lastPos.y) > 1;
+  if (!moved) return;
+  state.lastPos = { x: shipX, y: shipY };
+  engine
+    .flushFlightAutosave()
+    .catch((e) => logger.error("Periodic flight autosave failed:", e));
+}
+
 /**
  * Finalize the ship at the end of a flight turn: settle it in place, then
  * persist its position so a browser reload resumes the ship where it stopped.

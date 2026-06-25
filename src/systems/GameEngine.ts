@@ -179,6 +179,9 @@ export class GameEngine {
   }
 
   private exceptionHandler: IExceptionHandler;
+  /** Retained page-hide autosave handlers so {@link stop} can detach them. */
+  private flightHideHandler: (() => void) | null = null;
+  private flightVisibilityHandler: (() => void) | null = null;
   private animationFrameId = 0;
   private lastTime = 0;
   private modalObjects: (Graphics | Text)[] = [];
@@ -270,6 +273,11 @@ export class GameEngine {
 
   async initialize(config: GameConfig): Promise<void> {
     try {
+      // Persist the live in-flight position when the tab is hidden/closed so a
+      // reload mid-flight resumes where the ship was (registered once, before the
+      // auto-load early-return below).
+      this.registerFlightHideAutosave();
+
       // Load settings from localStorage and validate
       const storedSettings = localStorage.getItem("sr_settings");
       if (storedSettings) {
@@ -516,6 +524,63 @@ export class GameEngine {
   forgetFlightPosition(): void {
     this.liveFlightShipPos = null;
     this.flightShipPos = null;
+  }
+
+  /**
+   * Continuously capture the live in-flight ship position. Called every frame
+   * from the flight scene so a later autosave (turn-end, periodic, or the
+   * page-hide flush below) persists where the ship actually IS — not the stale
+   * system-entry edge. Free flight is otherwise only persisted at discrete
+   * turn-ends; between them (and during a combat orbit, which moves the ship with
+   * no turn-end) nothing tracked the live position. `saveGame` folds
+   * `liveFlightShipPos` into the system-tagged `flightShipPos` solely while
+   * SPACE_FLIGHT is active, and the systemId tag guards the restore on load — so
+   * a capture here can never leak into a non-flight or cross-system spawn.
+   */
+  recordLiveFlightPos(x: number, y: number): void {
+    this.liveFlightShipPos = { x, y };
+  }
+
+  /**
+   * Persist the live in-flight position on page-hide
+   * (`visibilitychange`→hidden / `beforeunload`) so a reload mid-flight resumes
+   * the live position instead of edge-spawning. No-op outside flight: a
+   * landed/menu save must not be clobbered with a stale flight capture, and the
+   * field is only valid while SPACE_FLIGHT is the active scene (saveGame's own
+   * gate). Best-effort under `beforeunload` (the async write may not finish
+   * before unload), but `visibilitychange`→hidden fires reliably on mobile/tab
+   * backgrounding where the write does complete.
+   */
+  async flushFlightAutosave(): Promise<void> {
+    if (this.currentSceneType !== SceneType.SPACE_FLIGHT) return;
+    if (!this.galaxy || !this.player) return;
+    await this.saveGame("auto");
+  }
+
+  /**
+   * Register the one-time page-hide autosave listeners. Survives scene
+   * transitions (registered once at engine init), guarded for non-browser
+   * runtimes (bare Vitest constructs the engine without calling `initialize`).
+   * Handlers are retained so {@link stop} can detach them.
+   */
+  private registerFlightHideAutosave(): void {
+    if (typeof window === "undefined" || this.flightHideHandler) return;
+    const flush = (): void => {
+      void this.flushFlightAutosave().catch((e) =>
+        logger.error("Flight hide autosave failed:", e),
+      );
+    };
+    this.flightHideHandler = flush;
+    window.addEventListener("beforeunload", this.flightHideHandler);
+    if (typeof document !== "undefined") {
+      this.flightVisibilityHandler = (): void => {
+        if (document.visibilityState === "hidden") flush();
+      };
+      document.addEventListener(
+        "visibilitychange",
+        this.flightVisibilityHandler,
+      );
+    }
   }
 
   /**
@@ -1727,6 +1792,17 @@ export class GameEngine {
 
   stop(): void {
     cancelAnimationFrame(this.animationFrameId);
+    if (this.flightHideHandler && typeof window !== "undefined") {
+      window.removeEventListener("beforeunload", this.flightHideHandler);
+    }
+    if (this.flightVisibilityHandler && typeof document !== "undefined") {
+      document.removeEventListener(
+        "visibilitychange",
+        this.flightVisibilityHandler,
+      );
+    }
+    this.flightHideHandler = null;
+    this.flightVisibilityHandler = null;
     this.currentScene?.destroy();
     this.renderer?.destroy();
     this.audio.destroy();

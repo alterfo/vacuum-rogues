@@ -34,7 +34,11 @@ import { WarpEffectRenderer } from "./flight/WarpEffectRenderer";
 import { QuestCompletion } from "./flight/QuestCompletion";
 import { handleFlightKey } from "./flight/flightKeyHandler";
 import { wireFlightSystemMenu } from "./flight/flightSystemMenu";
-import { endFlightTurn } from "./flight/flightTurnEnd";
+import {
+  endFlightTurn,
+  recordAndMaybeAutosaveFlight,
+  type FlightAutosaveState,
+} from "./flight/flightTurnEnd";
 
 /** Minimal structural view of a display object for recursive filter disposal. */
 interface FilterableNode {
@@ -53,13 +57,10 @@ export class SpaceFlightScene extends GameScene {
   // Renders the player ship (hull/sprite, glow, heading crosshair, take-off arc)
   // and owns its display objects — extracted from this scene as a FlightModule.
   private playerShip!: PlayerShipRenderer;
-  // Screen-fixed deep-space backdrop (crisp far stars + twinkle), sits behind
-  // the world so panning never reveals an edge. Added to renderer.stage. The
-  // scene owns this container's lifecycle; SpaceBackgroundLayer populates it
-  // (nebulae, star fields, twinkle stars) but does not create/destroy it.
+  // Screen-fixed deep-space backdrop, behind the world (panning reveals no edge),
+  // on renderer.stage. Scene owns its lifecycle; SpaceBackgroundLayer populates it.
   private skyContainer: Container | null = null;
-  // Occasional foreground asteroids/comets drifting across the view (US-070 #1).
-  // Extracted to a FlightModule that owns the field's display objects + state.
+  // Foreground asteroids/comets drifting across the view (US-070 #1; FlightModule).
   private asteroidBelt!: AsteroidBelt;
   // Owns the deep-space backdrop, mid-ground parallax, foreground dust streaks
   // and edge vignette (extracted from this scene — FlightModule).
@@ -107,6 +108,9 @@ export class SpaceFlightScene extends GameScene {
   private readonly INPUT_GRACE_MS = 350;
 
   private distanceTraveled: number = 0;
+  // Throttle state for the per-frame live capture + periodic in-flight autosave
+  // (recordAndMaybeAutosaveFlight); the headline reload-resume persistence.
+  private flightAutosave: FlightAutosaveState = { accumMs: 0, lastPos: null };
   private readonly DISTANCE_PER_DAY: number = GAME_BALANCE.pixelsPerDay;
   // Fractional day accrued while holding position — a wait turn (US-070 #5) OR a
   // stationary real-time fight (combat advances orbits but not the calendar; see updateShip).
@@ -313,10 +317,8 @@ export class SpaceFlightScene extends GameScene {
       ? (lastPos?.y ??
         centerY - this.pendingWarp.exitVector.y * this.SYSTEM_INNER_RADIUS)
       : (lastPos?.y ?? centerY + entryVector.y * this.SYSTEM_BOUNDARY_RADIUS);
-    // Cruise speed (px/ms): the loadout's derivedStats().speed already folds in
-    // the best installed engine (dual-hull Task 5 removed the legacy
-    // ship.modules engine bonus). The ship.speed branch only covers the
-    // (transient) pre-loadout window.
+    // Cruise speed (px/ms): derivedStats().speed already folds in the best
+    // engine; the ship.speed branch only covers the transient pre-loadout window.
     const loadoutStats = this.gameEngine?.playerLoadout?.derivedStats();
     const ship = this.gameEngine?.player?.ship;
     const cruise = loadoutStats
@@ -573,6 +575,13 @@ export class SpaceFlightScene extends GameScene {
     // A lethal hit here fires GAME_OVER synchronously, destroying this scene
     // mid-frame; bail before driving the now-destroyed modules below.
     if (this.destroyed) return;
+    if (this.gameEngine && this.shipPhysics)
+      recordAndMaybeAutosaveFlight(
+        this.gameEngine,
+        this.shipPhysics,
+        this.flightAutosave,
+        deltaTime,
+      );
     this.camera.update();
     this.npcManager.update(deltaTime, this.bgElapsed);
     this.planetManager.update(deltaTime, this.bgElapsed);
@@ -681,10 +690,8 @@ export class SpaceFlightScene extends GameScene {
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
 
-    // Reset the camera transform we applied to gameLayer. clearGameLayer only
-    // removes children, not the scale/offset, so the next scene (PlanetScene,
-    // StarMapScene) would otherwise inherit this scene's zoom/pan and render
-    // scaled and shifted.
+    // Reset the camera transform on gameLayer: clearGameLayer removes children,
+    // not the scale/offset, so the next scene would inherit this zoom/pan.
     if (this.renderer.gameLayer) {
       this.renderer.gameLayer.scale.set(1);
       this.renderer.gameLayer.x = 0;
@@ -981,15 +988,12 @@ export class SpaceFlightScene extends GameScene {
   private onWheel(event: WheelEvent): void {
     event.preventDefault();
 
-    // Do not zoom while a blocking modal (quest journal, NPC contact, planet
-    // info panel, settings) is open. The journal's scrollable list owns the
-    // wheel via its own window listener; without this guard a wheel notch over
-    // the open journal both scrolls it AND zooms the camera underneath it.
+    // Do not zoom while a blocking modal is open: the journal's scrollable list
+    // owns the wheel, else a wheel notch both scrolls it AND zooms underneath.
     if (this.isBlockingModalOpen()) return;
 
-    // Do not zoom while a pan drag is in progress. Middle-button "auto-scroll"
-    // (and trackpad momentum) can emit wheel events during a pan; suppressing
-    // them here keeps panning from also zooming (bug: pan + unwanted zoom).
+    // Do not zoom during a pan drag: middle-button auto-scroll / trackpad momentum
+    // emit wheel events mid-pan, which would also zoom (bug: pan + unwanted zoom).
     if (this.panZoom.isPanning) return;
 
     this.camera.zoomAtClient(event.deltaY, event.clientX, event.clientY);
@@ -1042,10 +1046,8 @@ export class SpaceFlightScene extends GameScene {
         const dx = sprite.screenX - this.starRenderer.centerX;
         const dy = sprite.screenY - this.starRenderer.centerY;
         const len = Math.hypot(dx, dy) || 1;
-        // Take-off flourish (Task 5): fly a short outward arc from the planet
-        // edge to ~90px beyond, then hand off to autopilot. teleport() parks the
-        // physics at the arc's END so the manoeuvre is purely cosmetic (no
-        // game-days burned) — updateShip defers to updateTakeoff while it plays.
+        // Take-off flourish: fly a short outward arc, then hand off to autopilot.
+        // teleport() parks physics at the arc END so it's cosmetic (no days burned).
         const arc = takeoffArcPath(
           sprite.screenX,
           sprite.screenY,
@@ -1244,10 +1246,8 @@ export class SpaceFlightScene extends GameScene {
       this.endTurn();
     }
 
-    // Star-touch damage: while the ship is inside the star visual radius the
-    // StarRenderer burns the hull in discrete chunks (rate-limited so a graze
-    // does not drain it frame-by-frame). It returns true on the frame a fresh
-    // contact episode begins, so the toast fires once per episode.
+    // Star-touch damage: inside the star radius StarRenderer burns the hull in
+    // rate-limited chunks; returns true when a fresh contact episode begins.
     const startedBurning = this.starRenderer.updateSunContactDamage(
       deltaTime,
       this.shipPhysics.shipX,

@@ -123,13 +123,28 @@ reload resumes where you were.
 **Files:**
 - Modify: `src/presentation/SpaceFlightScene.ts` / `GameEngine` (autosave + `flightShipPos`)
 
-- [ ] Continuously update `flightShipPos` to the live ship position during flight, and
+- [x] Continuously update `flightShipPos` to the live ship position during flight, and
       **autosave the in-flight position** periodically and on page-hide (`visibilitychange`/
       `beforeunload`) — so a reload restores the live position (its `systemId` already gates
       restore) instead of edge-spawning. Don't autosave terminal scenes.
-- [ ] write tests: a mid-flight save captures the live position; reload restores it; a
+      (`GameEngine.recordLiveFlightPos(x,y)` sets `liveFlightShipPos` — which `saveGame`
+      already folds into the system-tagged `flightShipPos` while SPACE_FLIGHT is active;
+      `flushFlightAutosave()` awaits a save **only** while in flight, wired to
+      `beforeunload` + `visibilitychange`→hidden via `registerFlightHideAutosave()` in
+      `initialize` and detached in `stop()`. The flight scene calls the pure helper
+      `recordAndMaybeAutosaveFlight` (in `flight/flightTurnEnd.ts`) every frame — continuous
+      capture + a ~5 s throttled periodic autosave that only fires when the ship moved.
+      Terminal scenes are unaffected: `flushFlightAutosave` no-ops outside SPACE_FLIGHT.)
+- [x] write tests: a mid-flight save captures the live position; reload restores it; a
       landed/edge case still behaves as before. Task-1 persistence repro now passes.
-- [ ] run tests — green.
+      (`flightReloadPosition.test.ts` flipped both `it.fails` → `it`: continuous-capture +
+      page-hide-flush now persist the live position, and the page-hide flush stays inert
+      outside flight. Reload-restore + landed/edge cases remain covered by the untouched
+      `GameEngine.flight-position.test.ts` round-trip suite.)
+- [x] run tests — green. (flightReloadPosition + GameEngine.flight-position + flightTurnEnd
+      16 green; flight/presentation/core 838 green; real-engine playtest 67 green;
+      save-compat 22 green; lint 0 errors, tsc clean. `SpaceFlightScene.ts` kept ≤1899 lines
+      via comment-trim reclaim + extracting the per-frame logic into `flightTurnEnd.ts`.)
 
 ### Task 5: Verify acceptance criteria
 **Files:**

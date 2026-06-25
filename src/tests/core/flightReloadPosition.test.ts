@@ -84,13 +84,13 @@ vi.mock("pixi.js", () => ({
  * persists the *live* position — so a reload restores the stale system-entry
  * (edge) position instead of where the ship actually is.
  *
- * Task 4 adds a continuous live-position capture (`recordLiveFlightPos`) plus a
+ * Task 4 added a continuous live-position capture (`recordLiveFlightPos`) plus a
  * page-hide flush (`flushFlightAutosave`) so a reload resumes the live position.
- * These tests assert that capability and are RED until Task 4 wires it in. They
- * probe via casts so they compile cleanly (the methods don't exist yet) and fail
- * on the behaviour, not on tsc.
+ * These tests assert that capability and are GREEN now that Task 4 wired it in.
+ * They probe via casts (the seams are optional on the cast type) so the file
+ * stays decoupled from the engine surface.
  */
-describe("flight reload position — live in-flight persistence (Task 4 red)", () => {
+describe("flight reload position — live in-flight persistence (Task 4)", () => {
   let diDeps: GameEngineDIDependencies;
   let engine: GameEngine;
 
@@ -139,61 +139,54 @@ describe("flight reload position — live in-flight persistence (Task 4 red)", (
     await flush?.call(engine);
   }
 
-  // RED today (Task 1 repro) — `it.fails` so the known-failing reproduction is
-  // committable past the pre-commit test gate AND raises a loud signal the moment
-  // Task 4 wires `recordLiveFlightPos` / `flushFlightAutosave` (the assertion
-  // starts passing → `it.fails` turns red). Convert to plain `it` in Task 4.
-  it.fails(
-    "continuous capture: recordLiveFlightPos folds the live position into the next save",
-    async () => {
-      await seedGame("sys-1");
-      engine.currentSceneType = SceneType.SPACE_FLIGHT;
+  // GREEN since Task 4 wired `recordLiveFlightPos` / `flushFlightAutosave`
+  // (was a Task-1 `it.fails` reproduction; the seams now exist so the assertions
+  // pass and these run as plain `it`).
+  it("continuous capture: recordLiveFlightPos folds the live position into the next save", async () => {
+    await seedGame("sys-1");
+    engine.currentSceneType = SceneType.SPACE_FLIGHT;
 
-      // Ship enters at the edge; that becomes the last persisted position.
-      recordLive(40, 40);
-      await engine.saveGame("auto");
+    // Ship enters at the edge; that becomes the last persisted position.
+    recordLive(40, 40);
+    await engine.saveGame("auto");
 
-      // Player flies deep into the system — no route-turn ends, but the live
-      // position must keep tracking the ship.
-      recordLive(620, 410);
-      await engine.saveGame("auto");
+    // Player flies deep into the system — no route-turn ends, but the live
+    // position must keep tracking the ship.
+    recordLive(620, 410);
+    await engine.saveGame("auto");
 
-      const saved = await diDeps.saveService.read("auto");
-      expect(saved!.flightShipPos).toEqual({
-        x: 620,
-        y: 410,
-        systemId: "sys-1",
-      });
-    },
-  );
+    const saved = await diDeps.saveService.read("auto");
+    expect(saved!.flightShipPos).toEqual({
+      x: 620,
+      y: 410,
+      systemId: "sys-1",
+    });
+  });
 
-  it.fails(
-    "page-hide flush persists the live mid-flight position (reload resumes there, not the edge)",
-    async () => {
-      await seedGame("sys-1");
-      engine.currentSceneType = SceneType.SPACE_FLIGHT;
+  it("page-hide flush persists the live mid-flight position (reload resumes there, not the edge)", async () => {
+    await seedGame("sys-1");
+    engine.currentSceneType = SceneType.SPACE_FLIGHT;
 
-      // System entry autosave at the edge.
-      recordLive(40, 40);
-      await engine.saveGame("auto");
-      expect((await diDeps.saveService.read("auto"))!.flightShipPos).toEqual({
-        x: 40,
-        y: 40,
-        systemId: "sys-1",
-      });
+    // System entry autosave at the edge.
+    recordLive(40, 40);
+    await engine.saveGame("auto");
+    expect((await diDeps.saveService.read("auto"))!.flightShipPos).toEqual({
+      x: 40,
+      y: 40,
+      systemId: "sys-1",
+    });
 
-      // Fly into the system, then the tab is hidden / reloaded WITHOUT a turn-end.
-      recordLive(620, 410);
-      await flushOnHide();
+    // Fly into the system, then the tab is hidden / reloaded WITHOUT a turn-end.
+    recordLive(620, 410);
+    await flushOnHide();
 
-      const saved = await diDeps.saveService.read("auto");
-      expect(saved!.flightShipPos).toEqual({
-        x: 620,
-        y: 410,
-        systemId: "sys-1",
-      });
-    },
-  );
+    const saved = await diDeps.saveService.read("auto");
+    expect(saved!.flightShipPos).toEqual({
+      x: 620,
+      y: 410,
+      systemId: "sys-1",
+    });
+  });
 
   it("page-hide flush is inert outside flight (a landed/menu save is not overwritten)", async () => {
     await seedGame("sys-1");
