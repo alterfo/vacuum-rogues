@@ -25,6 +25,7 @@ import {
 import { shopRowAction } from "./equipment/shopRowAction";
 import { HangarPanel } from "./ui/HangarPanel";
 import { MicromoduleApplyPanel } from "./ui/MicromoduleApplyPanel";
+import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { EquipmentSystem } from "@/systems/EquipmentSystem";
 import type { SlotCategory } from "@/systems/equipment/GearCatalog";
 import {
@@ -142,6 +143,8 @@ export class EquipmentShopScene extends GameScene {
   private micromoduleApplyTarget: MicromoduleApplyTarget | null = null;
   private toast: Text | null = null;
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
+  private helpTeardown: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
@@ -164,14 +167,31 @@ export class EquipmentShopScene extends GameScene {
     window.addEventListener("keydown", this.boundKeyDown);
     this.detachWheel = attachWheelScroll((dir) => this.scroll(dir));
 
+    this.mountHelp();
+
     logger.info(
       `EquipmentShopScene: ${this.listings.length} items at ${this.planet?.name}`,
+    );
+  }
+
+  /**
+   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
+   * Mounted on `renderer.stage` so it sits above the panel and survives the
+   * scene's `render()` UI rebuilds.
+   */
+  private mountHelp(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = mountSceneHelp(
+      { renderer: this.renderer, container: this.renderer.stage },
+      "EQUIPMENT_SHOP",
     );
   }
 
   update(_deltaTime: number): void {}
 
   destroy(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = null;
     this.hangarPanel.dispose();
     if (this.toastTimeout) clearTimeout(this.toastTimeout);
     this.toastTimeout = null;

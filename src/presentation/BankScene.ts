@@ -7,6 +7,7 @@ import type { Station } from "@/domain/Station";
 import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
 import { scaledText } from "./ui/scaledText";
+import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { INTERNAL_ACCOUNTS, type AccountType } from "@/domain/banking/Ledger";
 import type { BankEvent } from "@/systems/banking/bus";
 import type { Unsubscribe } from "@/systems/banking/bus";
@@ -86,6 +87,8 @@ export class BankScene extends GameScene {
   /** Rolling live log of bus traffic since the screen opened (newest last). */
   private busLog: string[] = [];
   private busUnsub: Unsubscribe | null = null;
+  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
+  private helpTeardown: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
@@ -99,12 +102,28 @@ export class BankScene extends GameScene {
     this.busLog = [];
     this.subscribeBus();
     this.render();
+    this.mountHelp();
     logger.info("BankScene: open");
+  }
+
+  /**
+   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
+   * Mounted on `renderer.stage` so it sits above the panel and survives the
+   * scene's `render()` UI rebuilds.
+   */
+  private mountHelp(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = mountSceneHelp(
+      { renderer: this.renderer, container: this.renderer.stage },
+      "BANK",
+    );
   }
 
   update(_dt: number): void {}
 
   destroy(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = null;
     this.busUnsub?.();
     this.busUnsub = null;
     for (const t of this.toastTimers) clearTimeout(t);

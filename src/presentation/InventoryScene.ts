@@ -1,5 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { GameScene } from "./GameScene";
+import { mountSceneHelp } from "./ui/mountSceneHelp";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import { gearById, type Gear } from "@/systems/equipment/GearCatalog";
@@ -22,9 +23,24 @@ export class InventoryScene extends GameScene {
   private mainContainer: Container | null = null;
 
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
+  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
+  private helpTeardown: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
+  }
+
+  /**
+   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
+   * Mounted on `renderer.stage` so it sits above the panel and survives the
+   * scene's `render()` UI rebuilds.
+   */
+  private mountHelp(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = mountSceneHelp(
+      { renderer: this.renderer, container: this.renderer.stage },
+      "INVENTORY",
+    );
   }
 
   initialize(context?: { gameEngine: GameEngine }): void {
@@ -42,6 +58,8 @@ export class InventoryScene extends GameScene {
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.boundKeyDown);
 
+    this.mountHelp();
+
     logger.info("InventoryScene initialized");
   }
 
@@ -50,6 +68,8 @@ export class InventoryScene extends GameScene {
   }
 
   destroy(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = null;
     // Remove keyboard listener
     if (this.boundKeyDown) {
       window.removeEventListener("keydown", this.boundKeyDown);

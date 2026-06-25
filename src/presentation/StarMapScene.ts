@@ -1,4 +1,5 @@
 import { GameScene } from "./GameScene";
+import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { Graphics, Text, Container, BlurFilter } from "pixi.js";
 import type { Galaxy } from "@/domain/Galaxy";
 import type { StarSystem } from "@/domain/StarSystem";
@@ -54,6 +55,8 @@ export class StarMapScene extends GameScene {
   private boundMouseMove: ((e: MouseEvent) => void) | null = null;
   private boundMouseUp: ((e: MouseEvent) => void) | null = null;
   private messageTimers: ReturnType<typeof setTimeout>[] = [];
+  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
+  private helpTeardown: (() => void) | null = null;
 
   initialize(context?: object): void {
     // Ensure PixiJS events are active (previous scene may have disabled them)
@@ -106,7 +109,22 @@ export class StarMapScene extends GameScene {
       if (preSelected) this.showSystemInfo(preSelected);
     }
 
+    this.mountHelp();
+
     logger.info("StarMapScene initialized");
+  }
+
+  /**
+   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
+   * Mounted on `renderer.stage` so it sits above the map UI and survives the
+   * scene's `renderStarMap()` rebuilds (which only touch game/UI layers).
+   */
+  private mountHelp(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = mountSceneHelp(
+      { renderer: this.renderer, container: this.renderer.stage },
+      "STAR_MAP",
+    );
   }
 
   private initializeViewport(): void {
@@ -239,6 +257,8 @@ export class StarMapScene extends GameScene {
   }
 
   destroy(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = null;
     this.closeConfirmDialog();
     for (const t of this.messageTimers) clearTimeout(t);
     this.messageTimers = [];

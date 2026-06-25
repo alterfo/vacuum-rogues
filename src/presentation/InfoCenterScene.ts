@@ -1,5 +1,6 @@
 import { Container, Graphics } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
+import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -352,9 +353,24 @@ export class InfoCenterScene extends GameScene {
 
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private detachWheel: (() => void) | null = null;
+  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
+  private helpTeardown: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
+  }
+
+  /**
+   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
+   * Mounted on `renderer.stage` so it sits above the panel and survives the
+   * scene's `render()` UI rebuilds.
+   */
+  private mountHelp(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = mountSceneHelp(
+      { renderer: this.renderer, container: this.renderer.stage },
+      "INFO_CENTER",
+    );
   }
 
   // ── lifecycle ──────────────────────────────────────────────────────────────
@@ -400,11 +416,15 @@ export class InfoCenterScene extends GameScene {
     this.detachWheel = attachWheelScroll((dir) => {
       if (this.activeTab === "news") this.scrollNews(dir);
     });
+
+    this.mountHelp();
   }
 
   update(_dt: number): void {}
 
   destroy(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = null;
     if (this.boundKeyDown) {
       window.removeEventListener("keydown", this.boundKeyDown);
       this.boundKeyDown = null;

@@ -131,9 +131,15 @@ Related patterns:
   `TextQuestScene.ts`
 - Create/Modify tests under `src/tests/`
 
-- [ ] Wire `mountSceneHelp` into each remaining scene's `initialize()` with its key.
-- [ ] write tests: each scene requests its key once + mounts «?».
-- [ ] run tests — green.
+- [x] Wire `mountSceneHelp` into each remaining scene's `initialize()` with its key.
+      (StarMap→`STAR_MAP`, Bank→`BANK`, Government→`GOVERNMENT`,
+      EquipmentShop→`EQUIPMENT_SHOP`, InfoCenter→`INFO_CENTER`,
+      Inventory→`INVENTORY`, TextQuest→`TEXT_QUEST`; each via the shared
+      `mountHelp()` seam on `renderer.stage`, torn down in `destroy()`.)
+- [x] write tests: each scene requests its key once + mounts «?».
+      (`sceneHelpWiringRemaining.test.ts` — spy on `mountSceneHelp`, all 7 keys.)
+- [x] run tests — green. (47 onboarding tests + 619 presentation/banking + playtest
+      gate green; lint clean; build OK.)
 
 ### Task 6: Replay onboarding (settings reset)
 **Files:**

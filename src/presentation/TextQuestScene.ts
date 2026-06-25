@@ -1,5 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
+import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -46,9 +47,24 @@ export class TextQuestScene extends GameScene {
   private autoExecuteTimer: ReturnType<typeof setTimeout> | null = null;
   private successTimer: ReturnType<typeof setTimeout> | null = null;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
+  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
+  private helpTeardown: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
+  }
+
+  /**
+   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
+   * Mounted on `renderer.stage` so it sits above the panel and survives the
+   * scene's layout rebuilds.
+   */
+  private mountHelp(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = mountSceneHelp(
+      { renderer: this.renderer, container: this.renderer.stage },
+      "TEXT_QUEST",
+    );
   }
 
   initialize(context?: object): void {
@@ -63,6 +79,8 @@ export class TextQuestScene extends GameScene {
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
+
+    this.mountHelp();
 
     if (this.questScript) {
       this.vm = new QuestVM(this.questScript, this.vmSeed);
@@ -107,6 +125,8 @@ export class TextQuestScene extends GameScene {
   update(_dt: number): void {}
 
   destroy(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = null;
     if (this.boundKeyDown) {
       window.removeEventListener("keydown", this.boundKeyDown);
       this.boundKeyDown = null;

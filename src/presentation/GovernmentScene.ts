@@ -7,6 +7,7 @@ import type { StarSystem } from "@/domain/StarSystem";
 import { SceneType, QuestType } from "@/types";
 import { logger } from "@/utils/logger";
 import { JobBoardPanel } from "./JobBoardPanel";
+import { mountSceneHelp } from "./ui/mountSceneHelp";
 import {
   governorOfferLine,
   type GeneratedQuest,
@@ -102,6 +103,8 @@ export class GovernmentScene extends GameScene {
   private uiContainer: Container | null = null;
   private jobBoardPanel: JobBoardPanel | null = null;
   private toastTimers: ReturnType<typeof setTimeout>[] = [];
+  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
+  private helpTeardown: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
@@ -114,12 +117,28 @@ export class GovernmentScene extends GameScene {
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
     this.buildUI();
+    this.mountHelp();
     logger.info(`GovernmentScene: ${this.planet?.name ?? "unknown"}`);
+  }
+
+  /**
+   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
+   * Mounted on `renderer.stage` so it sits above the panel and survives the
+   * scene's UI rebuilds.
+   */
+  private mountHelp(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = mountSceneHelp(
+      { renderer: this.renderer, container: this.renderer.stage },
+      "GOVERNMENT",
+    );
   }
 
   update(_dt: number): void {}
 
   destroy(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = null;
     this.closeJobBoard();
     for (const t of this.toastTimers) clearTimeout(t);
     this.toastTimers = [];
