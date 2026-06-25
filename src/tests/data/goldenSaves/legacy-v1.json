@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "timestamp": 1700000000000,
+  "persistentDialogs": [],
+  "currentSceneType": "SPACE_FLIGHT",
+  "galaxy": {
+    "id": "galaxy-legacy-v1",
+    "gameDays": 42,
+    "systems": [
+      {
+        "id": "sys-1",
+        "name": "Гавань",
+        "coordinates": { "q": 0, "r": 0 },
+        "starType": "YELLOW_DWARF",
+        "explored": true,
+        "fogOfWar": false,
+        "planets": [],
+        "connections": ["sys-2"]
+      },
+      {
+        "id": "sys-2",
+        "name": "Рубеж",
+        "coordinates": { "q": 1, "r": 0 },
+        "starType": "RED_DWARF",
+        "explored": true,
+        "fogOfWar": false,
+        "planets": [],
+        "connections": ["sys-1"]
+      }
+    ],
+    "npcShips": [
+      {
+        "id": "npc-1",
+        "name": "Странник",
+        "race": "OUTLANDERS",
+        "faction": "OUTLANDERS",
+        "role": "TRADER",
+        "hullHP": 120,
+        "maxHull": 120,
+        "shields": 30,
+        "speed": 0.6,
+        "damage": 12,
+        "currentSystemId": "sys-1",
+        "state": "IDLE",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 8000,
+        "reputation": 5
+      }
+    ]
+  },
+  "player": {
+    "id": "player-1",
+    "name": "Ветеран",
+    "experience": 9000,
+    "level": 8,
+    "credits": 250000,
+    "reputation": { "OUTLANDERS": 30, "BASTIONS": 10 },
+    "questLog": {
+      "activeQuests": [
+        {
+          "id": "quest_delivery_ore",
+          "title": "Доставка руды",
+          "type": "DELIVERY",
+          "objectives": [
+            {
+              "id": "obj-1",
+              "description": "Доставить руду в систему Рубеж",
+              "type": "COLLECT_ITEM",
+              "targetAmount": 10,
+              "currentAmount": 4,
+              "completed": false
+            }
+          ],
+          "isCompleted": false,
+          "isFailed": false,
+          "planetId": "planet-1",
+          "issuedDay": 40,
+          "deadline": 0,
+          "failurePenalty": null
+        }
+      ],
+      "completedQuests": ["quest_bounty_old"]
+    },
+    "journal": { "entries": [] },
+    "currentSystemId": "sys-1",
+    "ship": {
+      "id": "Ranger-1",
+      "name": "Старый Рейнджер",
+      "hullHP": 100,
+      "maxHull": 100,
+      "shields": 50,
+      "maxShields": 50,
+      "energy": 100,
+      "maxEnergy": 100,
+      "speed": 1.0,
+      "evasion": 0.8,
+      "modules": [
+        {
+          "id": "wpn_pulse",
+          "category": "WEAPON",
+          "name": "Импульсный лазер",
+          "effect": { "type": "weapon", "value": 12 },
+          "level": 2
+        },
+        null,
+        null
+      ]
+    },
+    "inventory": {
+      "modules": [
+        {
+          "id": "wpn_railgun",
+          "category": "WEAPON",
+          "name": "Рельсотрон",
+          "effect": { "type": "weapon", "value": 18 },
+          "level": 3
+        }
+      ],
+      "resources": [
+        { "type": "FUEL", "amount": 40 },
+        { "type": "METALS", "amount": 12 }
+      ],
+      "cosmetics": []
+    }
+  }
+}

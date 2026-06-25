@@ -1,0 +1,2598 @@
+{
+  "galaxy": {
+    "gameDays": 0,
+    "newsFeed": [],
+    "questBoards": {},
+    "overmindSystems": [
+      "sys_2",
+      "sys_3"
+    ],
+    "pirateSystems": [
+      "sys_0"
+    ],
+    "overmindCoreSystemId": "sys_2",
+    "activeTradeBoomSystems": {},
+    "activeRumors": [],
+    "id": "galaxy_GOLDEN_EARLY",
+    "systems": [
+      {
+        "explored": false,
+        "fogOfWar": true,
+        "isFactionHome": false,
+        "homeFactionId": null,
+        "techLevel": 1,
+        "id": "sys_0",
+        "name": "Маяк",
+        "coordinates": {
+          "q": -35,
+          "r": -10
+        },
+        "starType": "YELLOW_DWARF",
+        "planets": [
+          {
+            "id": "planet_Маяк_0",
+            "name": "Лебедь",
+            "type": "VOLCANIC",
+            "orbitalRadius": 600,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.0279620380606502,
+                0.992679485771805,
+                1.085895520891063,
+                1.2104177379538306,
+                1.0730402497109026,
+                0.6660932883550412,
+                1.1415036575170234,
+                0.6474060863559135,
+                1.0915047662099824,
+                0.735765883475542
+              ],
+              "supplyVector": [
+                0.9783969631884246,
+                1.0719396943692119,
+                1.141583510581404,
+                0.6810746686712194,
+                0.8958271015901118,
+                1.4190487197400734,
+                0.9749396992847323,
+                1.3100491748524032,
+                1.1053187440382317,
+                1.2226635156132812
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": false,
+            "drones": 0,
+            "population": 0,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Маяк_1",
+            "name": "Ро",
+            "type": "TERRESTRIAL",
+            "orbitalRadius": 1050,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.055115507519804,
+                0.9192517288727685,
+                0.9309517861809581,
+                1.1788385543366893,
+                1.033940725121647,
+                0.7815181720885448,
+                1.0041232974734158,
+                0.8003687662840819,
+                0.9934319303371012,
+                0.635266858455725
+              ],
+              "supplyVector": [
+                1.0880321627948433,
+                0.9498531053774059,
+                0.9855009009130299,
+                0.8154639480456423,
+                0.8571093495702371,
+                1.2344690875615925,
+                0.8904602150898426,
+                1.47166212072729,
+                0.96585997431539,
+                1.62019589420275
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": true,
+            "drones": 0,
+            "population": 1667578,
+            "capturedBy": null
+          }
+        ],
+        "ownerFaction": "INDEPENDENT",
+        "connections": [
+          {
+            "fromSystemId": "sys_0",
+            "toSystemId": "sys_4",
+            "fuelCost": 3
+          },
+          {
+            "fromSystemId": "sys_0",
+            "toSystemId": "sys_2",
+            "fuelCost": 4
+          },
+          {
+            "fromSystemId": "sys_0",
+            "toSystemId": "sys_1",
+            "fuelCost": 4
+          }
+        ],
+        "stations": [
+          {
+            "id": "sys_0_station_0",
+            "name": "Торговый пост «Маяк»",
+            "type": "TRADE_POST",
+            "faction": "INDEPENDENT",
+            "orbitRadius": 1108,
+            "orbitAngle": 4.345032079425007
+          }
+        ],
+        "economyType": "INDUSTRIAL",
+        "politicalSystem": "DICTATORSHIP"
+      },
+      {
+        "explored": false,
+        "fogOfWar": true,
+        "isFactionHome": false,
+        "homeFactionId": null,
+        "techLevel": 1,
+        "id": "sys_1",
+        "name": "Альдебаран",
+        "coordinates": {
+          "q": 5,
+          "r": 7
+        },
+        "starType": "BLUE_GIANT",
+        "planets": [
+          {
+            "id": "planet_Альдебаран_0",
+            "name": "Персефона",
+            "type": "VOLCANIC",
+            "orbitalRadius": 600,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.0997249054955318,
+                0.9432904432993382,
+                1.0267467566765844,
+                1.4271908385446295,
+                1.0112269174540416,
+                0.6557773932022973,
+                1.0336959992535413,
+                0.7806995023926719,
+                1.1191221738001331,
+                0.7769907869258895
+              ],
+              "supplyVector": [
+                0.9854383082827552,
+                0.8596254808828234,
+                1.0095223592361435,
+                0.7672581081995024,
+                1.1392025054665282,
+                1.4485647696336466,
+                1.0266512406989932,
+                1.6139380265625993,
+                0.8508244063472375,
+                1.3555928164028694
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": false,
+            "drones": 0,
+            "population": 0,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Альдебаран_1",
+            "name": "Рея",
+            "type": "VOLCANIC",
+            "orbitalRadius": 1050,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.1411822442896664,
+                0.9823213502764702,
+                0.9319976869737729,
+                1.109910901139956,
+                0.9699704770231619,
+                0.6635214692284352,
+                1.0418424963951112,
+                0.6211074269074015,
+                1.125706947897561,
+                0.760986504482571
+              ],
+              "supplyVector": [
+                1.0873117491835729,
+                1.1423504640115425,
+                0.9802602583076805,
+                0.7108644029627053,
+                1.0037178229773418,
+                1.2855228756088763,
+                0.9981572044314816,
+                1.5046615477850926,
+                0.9776210902258753,
+                1.5521627861141627
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": false,
+            "drones": 0,
+            "population": 0,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Альдебаран_2",
+            "name": "Пирс",
+            "type": "TERRESTRIAL",
+            "orbitalRadius": 1500,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.0360505652613938,
+                1.020975833805278,
+                0.9964864796260371,
+                1.1257120749470777,
+                0.9107180429855362,
+                0.6155621274211444,
+                1.0446881098439917,
+                0.7709056287258862,
+                0.9861108633223921,
+                0.679601789265871
+              ],
+              "supplyVector": [
+                0.9685293617425486,
+                1.1293954381952063,
+                0.8871273685945198,
+                0.6917450651884651,
+                1.0146485943114385,
+                1.6354726217021902,
+                1.1356859770370646,
+                1.6171411523994592,
+                1.0250157868722454,
+                1.2409115610311605
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": true,
+            "drones": 0,
+            "population": 537100,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Альдебаран_3",
+            "name": "Феникс",
+            "type": "TERRESTRIAL",
+            "orbitalRadius": 1950,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.028156174812466,
+                0.8760998697485775,
+                1.1370009900070728,
+                1.200705730090849,
+                1.138702083635144,
+                0.7551882564811967,
+                1.0605963777052239,
+                0.6688041140185669,
+                0.9658257726579904,
+                0.6444219302386045
+              ],
+              "supplyVector": [
+                1.0085006945068016,
+                1.1188562349416316,
+                1.0926166313933208,
+                0.8536752232063848,
+                1.0085500354180112,
+                1.3960989477179413,
+                0.9320730672450735,
+                1.3810544742736965,
+                1.0223559489473701,
+                1.3535308674243944
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": true,
+            "drones": 0,
+            "population": 3848538,
+            "capturedBy": null
+          }
+        ],
+        "ownerFaction": "INDEPENDENT",
+        "connections": [
+          {
+            "fromSystemId": "sys_1",
+            "toSystemId": "sys_4",
+            "fuelCost": 2
+          },
+          {
+            "fromSystemId": "sys_1",
+            "toSystemId": "sys_5",
+            "fuelCost": 2
+          },
+          {
+            "fromSystemId": "sys_1",
+            "toSystemId": "sys_3",
+            "fuelCost": 4
+          }
+        ],
+        "stations": [
+          {
+            "id": "sys_1_station_0",
+            "name": "База «Альдебаран»",
+            "type": "MILITARY_BASE",
+            "faction": "INDEPENDENT",
+            "orbitRadius": 1629,
+            "orbitAngle": 0.46181412007781136
+          }
+        ],
+        "economyType": "INDUSTRIAL",
+        "politicalSystem": "DICTATORSHIP"
+      },
+      {
+        "explored": false,
+        "fogOfWar": true,
+        "isFactionHome": false,
+        "homeFactionId": null,
+        "techLevel": 1,
+        "id": "sys_2",
+        "name": "Персей",
+        "coordinates": {
+          "q": -38,
+          "r": 27
+        },
+        "starType": "WHITE_DWARF",
+        "planets": [
+          {
+            "id": "planet_Персей_0",
+            "name": "Геркулес",
+            "type": "INDUSTRIAL",
+            "orbitalRadius": 600,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "MIXED",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.0090824766084552,
+                0.8666808055248111,
+                1.0487093523377553,
+                0.8516205832827836,
+                1.042303340905346,
+                0.9740549566457047,
+                1.0996251109754667,
+                0.921046054828912,
+                0.9405151208397001,
+                0.9970877228304743
+              ],
+              "supplyVector": [
+                1.101620877464302,
+                0.9846839712932706,
+                0.9280844625551253,
+                0.963476345106028,
+                0.9448797421064228,
+                0.913018758338876,
+                1.098018740187399,
+                0.9752898759907112,
+                1.0814988197758795,
+                0.8941603464540094
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": true,
+            "drones": 0,
+            "population": 4881258,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Персей_1",
+            "name": "Аркан",
+            "type": "TERRESTRIAL",
+            "orbitalRadius": 1050,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "MIXED",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                0.882648981991224,
+                1.1468215169385076,
+                0.8754508491372689,
+                0.8658535799244419,
+                0.9640725292032584,
+                0.8650203444296494,
+                0.9882717616856098,
+                0.9156437621219083,
+                1.0389242818346247,
+                0.9771916417405009
+              ],
+              "supplyVector": [
+                0.9852327090688049,
+                1.123424452636391,
+                1.0080992781789972,
+                0.9489257885375991,
+                0.9933465126669034,
+                0.8865427011623979,
+                1.0709498334443197,
+                0.9052103182300925,
+                1.0249853512039409,
+                1.0610799737041816
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": true,
+            "drones": 0,
+            "population": 1360290,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Персей_2",
+            "name": "Альфард",
+            "type": "HABITAT",
+            "orbitalRadius": 1500,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "MIXED",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                0.9326144095277413,
+                0.9720066249370575,
+                1.1335014833370223,
+                0.9396938143298029,
+                1.0679388051619754,
+                0.9704414079664274,
+                0.951095337094739,
+                1.0186697099590674,
+                1.1402332001598552,
+                0.930787732778117
+              ],
+              "supplyVector": [
+                1.0939846521476284,
+                1.0916190668009222,
+                1.0530866770772263,
+                1.0120446905726568,
+                1.0127312920754776,
+                0.860771048720926,
+                0.8580987254623323,
+                1.020023660431616,
+                1.071183745819144,
+                0.8804393157595768
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": true,
+            "drones": 0,
+            "population": 3839406,
+            "capturedBy": null
+          }
+        ],
+        "ownerFaction": "INDEPENDENT",
+        "connections": [
+          {
+            "fromSystemId": "sys_2",
+            "toSystemId": "sys_4",
+            "fuelCost": 3
+          },
+          {
+            "fromSystemId": "sys_2",
+            "toSystemId": "sys_0",
+            "fuelCost": 4
+          },
+          {
+            "fromSystemId": "sys_2",
+            "toSystemId": "sys_1",
+            "fuelCost": 5
+          }
+        ],
+        "stations": [
+          {
+            "id": "sys_2_station_0",
+            "name": "База «Персей»",
+            "type": "MILITARY_BASE",
+            "faction": "INDEPENDENT",
+            "orbitRadius": 1525,
+            "orbitAngle": 2.8617814679102023
+          }
+        ],
+        "economyType": "MIXED",
+        "politicalSystem": "REPUBLIC"
+      },
+      {
+        "explored": false,
+        "fogOfWar": true,
+        "isFactionHome": false,
+        "homeFactionId": null,
+        "techLevel": 1,
+        "id": "sys_3",
+        "name": "Сириус",
+        "coordinates": {
+          "q": 38,
+          "r": -10
+        },
+        "starType": "RED_DWARF",
+        "planets": [
+          {
+            "id": "planet_Сириус_0",
+            "name": "Аркадия",
+            "type": "VOLCANIC",
+            "orbitalRadius": 600,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "MIXED",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.1206028740853071,
+                0.8803423147182912,
+                1.0527393489610404,
+                1.045794098265469,
+                1.1486632468178868,
+                0.9122703730594367,
+                0.9048659591237083,
+                0.9397122075082734,
+                0.9953688459470867,
+                0.9049986243946477
+              ],
+              "supplyVector": [
+                1.0702455669408664,
+                0.9942434575408696,
+                1.045303478022106,
+                0.9847837479319423,
+                1.0851572027662768,
+                1.0003193537937478,
+                0.9523642167681828,
+                0.9383415615418925,
+                1.0317555216141046,
+                1.0045066229999065
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": false,
+            "drones": 0,
+            "population": 0,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Сириус_1",
+            "name": "Артемида",
+            "type": "TERRESTRIAL",
+            "orbitalRadius": 1050,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "MIXED",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                0.961913170106709,
+                0.9394031207775697,
+                1.0038651610491798,
+                0.9479042609920725,
+                1.1351793222129345,
+                0.9351206294493749,
+                1.0686205897247418,
+                1.1399397334549577,
+                1.0444052614737303,
+                0.8580998330609872
+              ],
+              "supplyVector": [
+                0.894803617359139,
+                1.024268791032955,
+                1.03689467725344,
+                0.9964239692082628,
+                0.982599648181349,
+                0.8915396565571427,
+                1.0103982480010019,
+                0.8938252121210098,
+                0.8946968446252868,
+                1.0205227329861373
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": true,
+            "drones": 0,
+            "population": 1555893,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Сириус_2",
+            "name": "Ацубенс",
+            "type": "TERRESTRIAL",
+            "orbitalRadius": 1500,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "MIXED",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.0647676369175314,
+                1.1105606127763168,
+                0.9603733906056732,
+                1.0237625232432037,
+                1.0960037036333232,
+                0.9044509803177788,
+                1.0894264480331912,
+                1.0518442960921675,
+                1.0207492490997538,
+                1.0712945128092541
+              ],
+              "supplyVector": [
+                0.9751562769757584,
+                1.1020251088542863,
+                1.0946910615544767,
+                1.1286435467656701,
+                0.9635683983797207,
+                1.0442139574559406,
+                0.9992405858123674,
+                1.0761582360370086,
+                0.9342746566748247,
+                1.0024805592140182
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": true,
+            "drones": 0,
+            "population": 818689,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Сириус_3",
+            "name": "Олимп",
+            "type": "GAS_GIANT",
+            "orbitalRadius": 1950,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "MIXED",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.0831005357438699,
+                0.8516148971393704,
+                0.8846954765962437,
+                1.1251678582513704,
+                0.9207375789992511,
+                0.9080798988230526,
+                0.9611983829876408,
+                0.8575537679949775,
+                1.0233450496336445,
+                1.0253820176469162
+              ],
+              "supplyVector": [
+                0.953384354384616,
+                0.890665753884241,
+                1.0489342705812306,
+                0.8892993637593463,
+                1.1123457686509937,
+                0.8750320938648656,
+                0.9455502165481448,
+                1.041125669889152,
+                0.8784428875893354,
+                0.9507228406378999
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": false,
+            "drones": 0,
+            "population": 0,
+            "capturedBy": null
+          }
+        ],
+        "ownerFaction": "INDEPENDENT",
+        "connections": [
+          {
+            "fromSystemId": "sys_3",
+            "toSystemId": "sys_5",
+            "fuelCost": 3
+          },
+          {
+            "fromSystemId": "sys_3",
+            "toSystemId": "sys_1",
+            "fuelCost": 4
+          },
+          {
+            "fromSystemId": "sys_3",
+            "toSystemId": "sys_4",
+            "fuelCost": 6
+          }
+        ],
+        "stations": [
+          {
+            "id": "sys_3_station_0",
+            "name": "Верфь «Сириус»",
+            "type": "REPAIR_DOCK",
+            "faction": "INDEPENDENT",
+            "orbitRadius": 1454,
+            "orbitAngle": 5.261748815742593
+          }
+        ],
+        "economyType": "MIXED",
+        "politicalSystem": "DICTATORSHIP"
+      },
+      {
+        "explored": false,
+        "fogOfWar": true,
+        "isFactionHome": false,
+        "homeFactionId": null,
+        "techLevel": 1,
+        "id": "sys_4",
+        "name": "Центавр",
+        "coordinates": {
+          "q": -12,
+          "r": 13
+        },
+        "starType": "YELLOW_DWARF",
+        "planets": [
+          {
+            "id": "planet_Центавр_0",
+            "name": "Афина",
+            "type": "VOLCANIC",
+            "orbitalRadius": 600,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                0.9259267087327316,
+                1.0917048077331857,
+                0.9858853911748156,
+                1.2383588649961166,
+                1.1409289305331185,
+                0.6445464038825593,
+                1.0813341555418448,
+                0.601690418110229,
+                1.0809921069070696,
+                0.6492714361450634
+              ],
+              "supplyVector": [
+                1.147290466958657,
+                0.9853948670439422,
+                0.9161644706036896,
+                0.7235218727638801,
+                1.1149278593249619,
+                1.5739052440705044,
+                1.045248496509157,
+                1.232354631348114,
+                1.119532829290256,
+                1.4050906208742941
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": false,
+            "drones": 0,
+            "population": 0,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Центавр_1",
+            "name": "Неон",
+            "type": "TERRESTRIAL",
+            "orbitalRadius": 1050,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                0.9046760161872953,
+                0.9785384531365707,
+                1.088308336166665,
+                1.247211115807295,
+                1.091115983016789,
+                0.8016037618275731,
+                1.0938940060557798,
+                0.7947961832629516,
+                0.8983063929714262,
+                0.6559817007021046
+              ],
+              "supplyVector": [
+                1.0624747379682957,
+                1.0645491885952652,
+                0.9759733006125315,
+                0.7174682980403303,
+                0.8581455071689561,
+                1.4807715513410846,
+                1.1328957666410133,
+                1.397951299923339,
+                1.1376547118183225,
+                1.4409057994240098
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": true,
+            "drones": 0,
+            "population": 3801084,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Центавр_2",
+            "name": "Анклав",
+            "type": "TERRESTRIAL",
+            "orbitalRadius": 1500,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.0713984378613532,
+                1.0734042297350244,
+                0.948097154428251,
+                1.3077359964791686,
+                0.9438416228629648,
+                0.8033191439253278,
+                1.0752659353660419,
+                0.73870377616724,
+                0.970223177713342,
+                0.6054290334042162
+              ],
+              "supplyVector": [
+                1.007378898235038,
+                1.0697984072146938,
+                1.0660124225309118,
+                0.8152890309977988,
+                0.888229857571423,
+                1.5780248463020794,
+                1.0974265828961507,
+                1.3613503914925138,
+                1.0553243832895531,
+                1.3621241417380847
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": true,
+            "drones": 0,
+            "population": 3689768,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Центавр_3",
+            "name": "Рассвет",
+            "type": "TERRESTRIAL",
+            "orbitalRadius": 1950,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                0.9119256653357297,
+                0.9776258848141879,
+                1.1435207969509065,
+                1.147627478314098,
+                0.8528768970863894,
+                0.7464469409966841,
+                1.033141396730207,
+                0.786505924956873,
+                1.118805924593471,
+                0.7559861660399474
+              ],
+              "supplyVector": [
+                0.8982134501682594,
+                0.960896919388324,
+                0.8796856921399012,
+                0.7358875141407434,
+                0.8942840108182281,
+                1.5102112909911998,
+                0.8613097224850207,
+                1.3027665659652226,
+                0.9375579514540732,
+                1.6076166619147574
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": true,
+            "drones": 0,
+            "population": 3350437,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Центавр_4",
+            "name": "Оплот",
+            "type": "GAS_GIANT",
+            "orbitalRadius": 2500,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.0042360288323835,
+                0.8634576267329975,
+                1.0044020009227097,
+                1.3313719731778837,
+                0.8939991477876902,
+                0.6675001501361839,
+                1.1286403262289242,
+                0.6033171318122186,
+                1.1076021977700292,
+                0.6960929935425519
+              ],
+              "supplyVector": [
+                1.1471485597314313,
+                1.006356070865877,
+                0.8633296688087284,
+                0.6707409028178797,
+                0.857506967918016,
+                1.512808884394222,
+                1.1405840758467094,
+                1.3218289884139915,
+                0.9712278091581538,
+                1.5011593122367881
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": false,
+            "drones": 0,
+            "population": 0,
+            "capturedBy": null
+          }
+        ],
+        "ownerFaction": "INDEPENDENT",
+        "connections": [
+          {
+            "fromSystemId": "sys_4",
+            "toSystemId": "sys_1",
+            "fuelCost": 2
+          },
+          {
+            "fromSystemId": "sys_4",
+            "toSystemId": "sys_2",
+            "fuelCost": 3
+          },
+          {
+            "fromSystemId": "sys_4",
+            "toSystemId": "sys_0",
+            "fuelCost": 3
+          }
+        ],
+        "stations": [
+          {
+            "id": "sys_4_station_0",
+            "name": "Лаборатория «Центавр»",
+            "type": "RESEARCH_LAB",
+            "faction": "INDEPENDENT",
+            "orbitRadius": 1489,
+            "orbitAngle": 1.3785308563953984
+          }
+        ],
+        "economyType": "INDUSTRIAL",
+        "politicalSystem": "REPUBLIC"
+      },
+      {
+        "explored": false,
+        "fogOfWar": true,
+        "isFactionHome": false,
+        "homeFactionId": null,
+        "techLevel": 1,
+        "id": "sys_5",
+        "name": "Нептуния",
+        "coordinates": {
+          "q": 25,
+          "r": 14
+        },
+        "starType": "WHITE_DWARF",
+        "planets": [
+          {
+            "id": "planet_Нептуния_0",
+            "name": "Минерва",
+            "type": "VOLCANIC",
+            "orbitalRadius": 600,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.0122132748831063,
+                0.8608709100168198,
+                0.9111128276214003,
+                1.1472685506357811,
+                0.8859879929572344,
+                0.5980657141376287,
+                1.1497864056378604,
+                0.6112417558697052,
+                0.9703547123353928,
+                0.6734339261287823
+              ],
+              "supplyVector": [
+                0.9212170747108758,
+                1.136635123915039,
+                1.0472488538362086,
+                0.6769884882423166,
+                0.9880029772408306,
+                1.6238269837506647,
+                0.9586651818593964,
+                1.2563214620043124,
+                0.856168470531702,
+                1.4754377089973008
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": false,
+            "drones": 0,
+            "population": 0,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Нептуния_1",
+            "name": "Нирвана",
+            "type": "INDUSTRIAL",
+            "orbitalRadius": 1050,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.0643944912822918,
+                1.1075191067764536,
+                1.1105619167210534,
+                1.368286319782492,
+                0.9627309439238161,
+                0.6478518690471536,
+                1.0256643310422078,
+                0.7994752594991587,
+                1.1366105739492922,
+                0.6498667895537801
+              ],
+              "supplyVector": [
+                0.9792589251417666,
+                0.861644538026303,
+                1.029860203852877,
+                0.7236205271194472,
+                1.0354900561505929,
+                1.5909086996024209,
+                0.8869118528906256,
+                1.404110896833507,
+                1.0084546650061383,
+                1.533060674455815
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": true,
+            "drones": 0,
+            "population": 4225053,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Нептуния_2",
+            "name": "Бетельгейзе",
+            "type": "HABITAT",
+            "orbitalRadius": 1500,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                1.0532471580430864,
+                0.8521797076333314,
+                1.132206136197783,
+                1.1247079809289424,
+                0.969232943514362,
+                0.6663750336878,
+                1.0287281258497387,
+                0.6103989969124086,
+                0.9757742438232526,
+                0.6473985707433894
+              ],
+              "supplyVector": [
+                0.9301784916315228,
+                0.9083863666979596,
+                0.8856478763511404,
+                0.6710446339208059,
+                1.091210189042613,
+                1.401271975765537,
+                0.9337332166032866,
+                1.5545881032677635,
+                1.0057552378857508,
+                1.5411642919560629
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": true,
+            "drones": 0,
+            "population": 1591513,
+            "capturedBy": null
+          },
+          {
+            "id": "planet_Нептуния_3",
+            "name": "Кристалл",
+            "type": "GAS_GIANT",
+            "orbitalRadius": 1950,
+            "market": {
+              "priceMultipliers": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+              ],
+              "economyType": "INDUSTRIAL",
+              "availableResources": [
+                "FUEL",
+                "METALS",
+                "CRYSTALS",
+                "ORGANICS",
+                "ARTIFACTS",
+                "WEAPONS",
+                "MEDICINE",
+                "ELECTRONICS",
+                "LUXURY",
+                "DATA_CORES"
+              ],
+              "demandVector": [
+                0.933382637007162,
+                1.1382888735504821,
+                1.0725502045359463,
+                1.336611598150339,
+                0.9289885703241453,
+                0.744045587379951,
+                1.1082844113465398,
+                0.6164645476615987,
+                0.8742544458247721,
+                0.6807846305822022
+              ],
+              "supplyVector": [
+                0.999903100868687,
+                1.149541443050839,
+                0.8586412266129627,
+                0.6699844656619601,
+                0.9822581959888339,
+                1.2334011069698525,
+                0.9190152548486367,
+                1.239083404686036,
+                1.0839476364431904,
+                1.2407577934209257
+              ]
+            },
+            "inhabitants": [],
+            "availableQuests": [],
+            "isHabitable": false,
+            "drones": 0,
+            "population": 0,
+            "capturedBy": null
+          }
+        ],
+        "ownerFaction": "INDEPENDENT",
+        "connections": [
+          {
+            "fromSystemId": "sys_5",
+            "toSystemId": "sys_1",
+            "fuelCost": 2
+          },
+          {
+            "fromSystemId": "sys_5",
+            "toSystemId": "sys_3",
+            "fuelCost": 3
+          },
+          {
+            "fromSystemId": "sys_5",
+            "toSystemId": "sys_4",
+            "fuelCost": 4
+          }
+        ],
+        "stations": [
+          {
+            "id": "sys_5_station_0",
+            "name": "База «Нептуния»",
+            "type": "MILITARY_BASE",
+            "faction": "INDEPENDENT",
+            "orbitRadius": 1218,
+            "orbitAngle": 3.7784982042275357
+          }
+        ],
+        "economyType": "INDUSTRIAL",
+        "politicalSystem": "REPUBLIC"
+      }
+    ],
+    "overmind": {
+      "threatLevel": 1,
+      "controlledSystems": [],
+      "policy": null
+    },
+    "activeEvents": [],
+    "npcShips": [
+      {
+        "id": "npc_0",
+        "name": "Торговец Синдикат npc_0",
+        "race": "SYNDICATE",
+        "faction": "SYNDICATE",
+        "role": "TRADER",
+        "hullHP": 100,
+        "maxHull": 100,
+        "shields": 30,
+        "speed": 0.08,
+        "damage": 10,
+        "currentSystemId": "sys_4",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 588,
+        "reputation": 0,
+        "shieldPower": 1,
+        "loadoutSummary": [
+          "Двигатель ур.1",
+          "Топливный бак",
+          "Ремонтный дроид"
+        ],
+        "cargo": [
+          {
+            "goodId": "CRYSTALS",
+            "qty": 14
+          },
+          {
+            "goodId": "WEAPONS",
+            "qty": 7
+          }
+        ],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_1",
+        "name": "Рейнджер Парадокс npc_1",
+        "race": "PARADOXES",
+        "faction": "PARADOXES",
+        "role": "RANGER",
+        "hullHP": 120,
+        "maxHull": 120,
+        "shields": 60,
+        "speed": 0.1,
+        "damage": 25,
+        "currentSystemId": "sys_3",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 774,
+        "reputation": 0,
+        "shieldPower": 3,
+        "loadoutSummary": [
+          "Двигатель ур.3",
+          "Генератор поля",
+          "Сканер целей"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_2",
+        "name": "Патруль Парадокс npc_2",
+        "race": "PARADOXES",
+        "faction": "PARADOXES",
+        "role": "PATROL",
+        "hullHP": 140,
+        "maxHull": 140,
+        "shields": 70,
+        "speed": 0.1,
+        "damage": 28,
+        "currentSystemId": "sys_5",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 132,
+        "reputation": 0,
+        "shieldPower": 4,
+        "loadoutSummary": [
+          "Двигатель ур.3",
+          "Генератор поля",
+          "Балистическая пушка"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_3",
+        "name": "Рейнджер Окраинник npc_3",
+        "race": "OUTLANDERS",
+        "faction": "OUTLANDERS",
+        "role": "RANGER",
+        "hullHP": 120,
+        "maxHull": 120,
+        "shields": 60,
+        "speed": 0.1,
+        "damage": 25,
+        "currentSystemId": "sys_0",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 614,
+        "reputation": 0,
+        "shieldPower": 3,
+        "loadoutSummary": [
+          "Двигатель ур.3",
+          "Генератор поля",
+          "Сканер целей"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_4",
+        "name": "Патруль Окраинник npc_4",
+        "race": "OUTLANDERS",
+        "faction": "OUTLANDERS",
+        "role": "PATROL",
+        "hullHP": 140,
+        "maxHull": 140,
+        "shields": 70,
+        "speed": 0.1,
+        "damage": 28,
+        "currentSystemId": "sys_4",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 459,
+        "reputation": 0,
+        "shieldPower": 4,
+        "loadoutSummary": [
+          "Двигатель ур.3",
+          "Генератор поля",
+          "Балистическая пушка"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_5",
+        "name": "Пират Окраинник npc_5",
+        "race": "OUTLANDERS",
+        "faction": "OUTLANDERS",
+        "role": "PIRATE",
+        "hullHP": 110,
+        "maxHull": 110,
+        "shields": 40,
+        "speed": 0.12,
+        "damage": 30,
+        "currentSystemId": "sys_5",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 233,
+        "reputation": 0,
+        "shieldPower": 2,
+        "loadoutSummary": [
+          "Двигатель ур.2",
+          "Импульсная пушка",
+          "Радар"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_6",
+        "name": "Рейнджер Окраинник npc_6",
+        "race": "OUTLANDERS",
+        "faction": "OUTLANDERS",
+        "role": "RANGER",
+        "hullHP": 120,
+        "maxHull": 120,
+        "shields": 60,
+        "speed": 0.1,
+        "damage": 25,
+        "currentSystemId": "sys_5",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 174,
+        "reputation": 0,
+        "shieldPower": 3,
+        "loadoutSummary": [
+          "Двигатель ур.3",
+          "Генератор поля",
+          "Сканер целей"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_7",
+        "name": "Патруль Окраинник npc_7",
+        "race": "OUTLANDERS",
+        "faction": "OUTLANDERS",
+        "role": "PATROL",
+        "hullHP": 140,
+        "maxHull": 140,
+        "shields": 70,
+        "speed": 0.1,
+        "damage": 28,
+        "currentSystemId": "sys_2",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 733,
+        "reputation": 0,
+        "shieldPower": 4,
+        "loadoutSummary": [
+          "Двигатель ур.3",
+          "Генератор поля",
+          "Балистическая пушка"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_8",
+        "name": "Патруль Бастион npc_8",
+        "race": "BASTIONS",
+        "faction": "BASTIONS",
+        "role": "PATROL",
+        "hullHP": 140,
+        "maxHull": 140,
+        "shields": 70,
+        "speed": 0.1,
+        "damage": 28,
+        "currentSystemId": "sys_1",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 620,
+        "reputation": 0,
+        "shieldPower": 4,
+        "loadoutSummary": [
+          "Двигатель ур.3",
+          "Генератор поля",
+          "Балистическая пушка"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_9",
+        "name": "Пират Окраинник npc_9",
+        "race": "OUTLANDERS",
+        "faction": "OUTLANDERS",
+        "role": "PIRATE",
+        "hullHP": 110,
+        "maxHull": 110,
+        "shields": 40,
+        "speed": 0.12,
+        "damage": 30,
+        "currentSystemId": "sys_2",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 755,
+        "reputation": 0,
+        "shieldPower": 2,
+        "loadoutSummary": [
+          "Двигатель ур.2",
+          "Импульсная пушка",
+          "Радар"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_10",
+        "name": "Торговец Бастион npc_10",
+        "race": "BASTIONS",
+        "faction": "BASTIONS",
+        "role": "TRADER",
+        "hullHP": 100,
+        "maxHull": 100,
+        "shields": 30,
+        "speed": 0.08,
+        "damage": 10,
+        "currentSystemId": "sys_4",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 121,
+        "reputation": 0,
+        "shieldPower": 1,
+        "loadoutSummary": [
+          "Двигатель ур.1",
+          "Топливный бак",
+          "Ремонтный дроид"
+        ],
+        "cargo": [
+          {
+            "goodId": "ARTIFACTS",
+            "qty": 17
+          }
+        ],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_11",
+        "name": "Торговец Прогрессор npc_11",
+        "race": "PROGRESSORS",
+        "faction": "PROGRESSORS",
+        "role": "TRADER",
+        "hullHP": 100,
+        "maxHull": 100,
+        "shields": 30,
+        "speed": 0.08,
+        "damage": 10,
+        "currentSystemId": "sys_4",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 953,
+        "reputation": 0,
+        "shieldPower": 1,
+        "loadoutSummary": [
+          "Двигатель ур.1",
+          "Топливный бак",
+          "Ремонтный дроид"
+        ],
+        "cargo": [
+          {
+            "goodId": "DATA_CORES",
+            "qty": 19
+          },
+          {
+            "goodId": "LUXURY",
+            "qty": 17
+          },
+          {
+            "goodId": "ELECTRONICS",
+            "qty": 18
+          }
+        ],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_12",
+        "name": "Рейнджер Синдикат npc_12",
+        "race": "SYNDICATE",
+        "faction": "SYNDICATE",
+        "role": "RANGER",
+        "hullHP": 120,
+        "maxHull": 120,
+        "shields": 60,
+        "speed": 0.1,
+        "damage": 25,
+        "currentSystemId": "sys_5",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 234,
+        "reputation": 0,
+        "shieldPower": 3,
+        "loadoutSummary": [
+          "Двигатель ур.3",
+          "Генератор поля",
+          "Сканер целей"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_13",
+        "name": "Патруль Прогрессор npc_13",
+        "race": "PROGRESSORS",
+        "faction": "PROGRESSORS",
+        "role": "PATROL",
+        "hullHP": 140,
+        "maxHull": 140,
+        "shields": 70,
+        "speed": 0.1,
+        "damage": 28,
+        "currentSystemId": "sys_5",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 679,
+        "reputation": 0,
+        "shieldPower": 4,
+        "loadoutSummary": [
+          "Двигатель ур.3",
+          "Генератор поля",
+          "Балистическая пушка"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_14",
+        "name": "Пират Окраинник npc_14",
+        "race": "OUTLANDERS",
+        "faction": "OUTLANDERS",
+        "role": "PIRATE",
+        "hullHP": 110,
+        "maxHull": 110,
+        "shields": 40,
+        "speed": 0.12,
+        "damage": 30,
+        "currentSystemId": "sys_3",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 375,
+        "reputation": 0,
+        "shieldPower": 2,
+        "loadoutSummary": [
+          "Двигатель ур.2",
+          "Импульсная пушка",
+          "Радар"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_15",
+        "name": "Пират Окраинник npc_15",
+        "race": "OUTLANDERS",
+        "faction": "OUTLANDERS",
+        "role": "PIRATE",
+        "hullHP": 110,
+        "maxHull": 110,
+        "shields": 40,
+        "speed": 0.12,
+        "damage": 30,
+        "currentSystemId": "sys_5",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 638,
+        "reputation": 0,
+        "shieldPower": 2,
+        "loadoutSummary": [
+          "Двигатель ур.2",
+          "Импульсная пушка",
+          "Радар"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_16",
+        "name": "Торговец Парадокс npc_16",
+        "race": "PARADOXES",
+        "faction": "PARADOXES",
+        "role": "TRADER",
+        "hullHP": 100,
+        "maxHull": 100,
+        "shields": 30,
+        "speed": 0.08,
+        "damage": 10,
+        "currentSystemId": "sys_3",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 753,
+        "reputation": 0,
+        "shieldPower": 1,
+        "loadoutSummary": [
+          "Двигатель ур.1",
+          "Топливный бак",
+          "Ремонтный дроид"
+        ],
+        "cargo": [
+          {
+            "goodId": "ORGANICS",
+            "qty": 8
+          },
+          {
+            "goodId": "FUEL",
+            "qty": 19
+          },
+          {
+            "goodId": "MEDICINE",
+            "qty": 11
+          }
+        ],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_17",
+        "name": "Патруль Синдикат npc_17",
+        "race": "SYNDICATE",
+        "faction": "SYNDICATE",
+        "role": "PATROL",
+        "hullHP": 140,
+        "maxHull": 140,
+        "shields": 70,
+        "speed": 0.1,
+        "damage": 28,
+        "currentSystemId": "sys_2",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 857,
+        "reputation": 0,
+        "shieldPower": 4,
+        "loadoutSummary": [
+          "Двигатель ур.3",
+          "Генератор поля",
+          "Балистическая пушка"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_18",
+        "name": "Рейнджер Парадокс npc_18",
+        "race": "PARADOXES",
+        "faction": "PARADOXES",
+        "role": "RANGER",
+        "hullHP": 120,
+        "maxHull": 120,
+        "shields": 60,
+        "speed": 0.1,
+        "damage": 25,
+        "currentSystemId": "sys_2",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 911,
+        "reputation": 0,
+        "shieldPower": 3,
+        "loadoutSummary": [
+          "Двигатель ур.3",
+          "Генератор поля",
+          "Сканер целей"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_19",
+        "name": "Патруль Бастион npc_19",
+        "race": "BASTIONS",
+        "faction": "BASTIONS",
+        "role": "PATROL",
+        "hullHP": 140,
+        "maxHull": 140,
+        "shields": 70,
+        "speed": 0.1,
+        "damage": 28,
+        "currentSystemId": "sys_5",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 327,
+        "reputation": 0,
+        "shieldPower": 4,
+        "loadoutSummary": [
+          "Двигатель ур.3",
+          "Генератор поля",
+          "Балистическая пушка"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_20",
+        "name": "Пират Окраинник npc_20",
+        "race": "OUTLANDERS",
+        "faction": "OUTLANDERS",
+        "role": "PIRATE",
+        "hullHP": 110,
+        "maxHull": 110,
+        "shields": 40,
+        "speed": 0.12,
+        "damage": 30,
+        "currentSystemId": "sys_1",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 710,
+        "reputation": 0,
+        "shieldPower": 2,
+        "loadoutSummary": [
+          "Двигатель ур.2",
+          "Импульсная пушка",
+          "Радар"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_21",
+        "name": "Торговец Прогрессор npc_21",
+        "race": "PROGRESSORS",
+        "faction": "PROGRESSORS",
+        "role": "TRADER",
+        "hullHP": 100,
+        "maxHull": 100,
+        "shields": 30,
+        "speed": 0.08,
+        "damage": 10,
+        "currentSystemId": "sys_5",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 489,
+        "reputation": 0,
+        "shieldPower": 1,
+        "loadoutSummary": [
+          "Двигатель ур.1",
+          "Топливный бак",
+          "Ремонтный дроид"
+        ],
+        "cargo": [
+          {
+            "goodId": "FUEL",
+            "qty": 8
+          },
+          {
+            "goodId": "WEAPONS",
+            "qty": 14
+          },
+          {
+            "goodId": "ORGANICS",
+            "qty": 19
+          }
+        ],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_22",
+        "name": "Патруль Окраинник npc_22",
+        "race": "OUTLANDERS",
+        "faction": "OUTLANDERS",
+        "role": "PATROL",
+        "hullHP": 140,
+        "maxHull": 140,
+        "shields": 70,
+        "speed": 0.1,
+        "damage": 28,
+        "currentSystemId": "sys_2",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 432,
+        "reputation": 0,
+        "shieldPower": 4,
+        "loadoutSummary": [
+          "Двигатель ур.3",
+          "Генератор поля",
+          "Балистическая пушка"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      },
+      {
+        "id": "npc_23",
+        "name": "Рейнджер Синдикат npc_23",
+        "race": "SYNDICATE",
+        "faction": "SYNDICATE",
+        "role": "RANGER",
+        "hullHP": 120,
+        "maxHull": 120,
+        "shields": 60,
+        "speed": 0.1,
+        "damage": 25,
+        "currentSystemId": "sys_2",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 608,
+        "reputation": 0,
+        "shieldPower": 3,
+        "loadoutSummary": [
+          "Двигатель ур.3",
+          "Генератор поля",
+          "Сканер целей"
+        ],
+        "cargo": [],
+        "activeQuestTarget": null,
+        "worldX": null,
+        "worldY": null,
+        "hostile": false
+      }
+    ]
+  },
+  "player": {
+    "contrabandGoods": [],
+    "completedQuestChains": [],
+    "activeTextQuestState": null,
+    "newsBookmarks": [],
+    "killPoints": 0,
+    "rank": 0,
+    "visitedSystems": [],
+    "landedPlanetId": null,
+    "gameMode": "NORMAL",
+    "id": "player",
+    "name": "Captain",
+    "faction": "OUTLANDERS",
+    "experience": 0,
+    "level": 1,
+    "skillTree": {
+      "availablePoints": 0,
+      "branches": []
+    },
+    "reputation": {},
+    "questLog": {
+      "activeQuests": [],
+      "completedQuests": [],
+      "completedChainParts": {},
+      "pendingReturnQuests": []
+    },
+    "journal": {
+      "entries": []
+    },
+    "credits": 1000,
+    "ship": {
+      "id": "Ranger-1",
+      "name": "Ranger-1",
+      "hullHP": 130,
+      "maxHull": 130,
+      "shields": 50,
+      "maxShields": 50,
+      "energy": 100,
+      "maxEnergy": 100,
+      "speed": 0.9,
+      "evasion": 0.8,
+      "factionBaseline": "OUTLANDERS",
+      "hullClass": "CORVETTE"
+    },
+    "inventory": {
+      "modules": [],
+      "micromodules": [],
+      "resources": [],
+      "cosmetics": [],
+      "ownedGearIds": []
+    },
+    "currentSystemId": "sys_0"
+  },
+  "persistentDialogs": [],
+  "timestamp": 1782403271761,
+  "currentSceneType": "SPACE_FLIGHT",
+  "loadout": {
+    "hullId": "hull_corvette",
+    "hullMicromoduleIds": [],
+    "slotted": [
+      {
+        "gearId": "eq_engine_i"
+      },
+      {
+        "gearId": "eq_tank"
+      },
+      {
+        "gearId": "wpn_pulse"
+      },
+      {
+        "gearId": "grav_tractor_1"
+      }
+    ]
+  },
+  "banking": {
+    "businessDate": 0,
+    "lastEodDate": null,
+    "seq": 1,
+    "ledger": {
+      "accounts": [
+        {
+          "id": "gl:cash",
+          "type": "GL_INTERNAL",
+          "label": "Касса банка"
+        },
+        {
+          "id": "gl:interest_income",
+          "type": "GL_INTERNAL",
+          "label": "Процентный доход"
+        },
+        {
+          "id": "gl:interest_expense",
+          "type": "GL_INTERNAL",
+          "label": "Процентный расход"
+        },
+        {
+          "id": "gl:suspense",
+          "type": "GL_INTERNAL",
+          "label": "Промежуточный счёт"
+        },
+        {
+          "id": "gl:pnl",
+          "type": "GL_INTERNAL",
+          "label": "Прибыли и убытки"
+        },
+        {
+          "id": "cur:player",
+          "type": "CURRENT",
+          "label": "Текущий счёт",
+          "ownerId": "player"
+        }
+      ],
+      "entries": [
+        {
+          "id": "je:1",
+          "date": 0,
+          "reason": "Открытие счёта",
+          "postings": [
+            {
+              "accountId": "gl:cash",
+              "amount": -1000,
+              "valueDate": 0
+            },
+            {
+              "accountId": "cur:player",
+              "amount": 1000,
+              "valueDate": 0
+            }
+          ]
+        }
+      ]
+    },
+    "loanDefaults": []
+  },
+  "version": 27
+}

@@ -1,0 +1,163 @@
+{
+  "version": 23,
+  "timestamp": 1715000000000,
+  "persistentDialogs": [],
+  "currentSceneType": "SPACE_FLIGHT",
+  "loadout": {
+    "hullId": "hull_warden",
+    "hullMicromoduleId": "mm_amplifier_1",
+    "slotted": [
+      { "gearId": "eq_engine_iii", "upgrades": 0 },
+      { "gearId": "eq_tank", "upgrades": 0 },
+      { "gearId": "wpn_beam", "upgrades": 1 }
+    ]
+  },
+  "galaxy": {
+    "id": "galaxy-progressed-v23",
+    "gameDays": 210,
+    "systems": [
+      {
+        "id": "sys-1",
+        "name": "Цитадель",
+        "coordinates": { "q": 0, "r": 0 },
+        "starType": "BLUE_GIANT",
+        "explored": true,
+        "fogOfWar": false,
+        "economyType": "INDUSTRIAL",
+        "politicalSystem": "REPUBLIC",
+        "isFactionHome": true,
+        "homeFactionId": "BASTIONS",
+        "stations": [],
+        "techLevel": 5,
+        "planets": []
+      },
+      {
+        "id": "sys-2",
+        "name": "Окраина",
+        "coordinates": { "q": -1, "r": 1 },
+        "starType": "WHITE_DWARF",
+        "explored": true,
+        "fogOfWar": false,
+        "economyType": "AGRICULTURAL",
+        "politicalSystem": "DEMOCRACY",
+        "isFactionHome": false,
+        "homeFactionId": null,
+        "stations": [],
+        "techLevel": 3,
+        "planets": []
+      }
+    ],
+    "npcShips": [
+      {
+        "id": "npc-1",
+        "name": "Патруль Бастионов",
+        "race": "BASTIONS",
+        "faction": "BASTIONS",
+        "role": "PATROL",
+        "hullHP": 200,
+        "maxHull": 200,
+        "shields": 80,
+        "speed": 0.7,
+        "damage": 24,
+        "currentSystemId": "sys-1",
+        "state": "PATROLLING",
+        "goal": null,
+        "destinationSystemId": null,
+        "daysToArrival": 0,
+        "credits": 15000,
+        "reputation": 20,
+        "shieldPower": 80,
+        "loadoutSummary": ["wpn_beam"],
+        "cargo": [],
+        "activeQuestTarget": null
+      }
+    ],
+    "newsFeed": [],
+    "questBoards": {},
+    "overmindSystems": [],
+    "pirateSystems": [],
+    "overmindCoreSystemId": "sys-2",
+    "activeTradeBoomSystems": {}
+  },
+  "player": {
+    "id": "player-1",
+    "name": "Командор",
+    "experience": 120000,
+    "level": 22,
+    "credits": 1200000,
+    "reputation": { "BASTIONS": 75, "OUTLANDERS": 30, "SYNDICATE": -50 },
+    "questLog": {
+      "activeQuests": [
+        {
+          "id": "quest_defense_citadel",
+          "title": "Оборона Цитадели",
+          "type": "DEFENSE",
+          "objectives": [
+            {
+              "id": "obj-1",
+              "description": "Отразить три волны пиратов",
+              "type": "DEFEAT_ENEMY",
+              "targetAmount": 3,
+              "currentAmount": 1,
+              "completed": false
+            }
+          ],
+          "isCompleted": false,
+          "isFailed": false,
+          "isPendingReturn": false,
+          "planetId": "planet-citadel",
+          "issuedDay": 205,
+          "deadline": 0,
+          "failurePenalty": null,
+          "targetSystemId": "sys-1",
+          "targetObjectId": null,
+          "minReputation": 0,
+          "chainId": null,
+          "chainPart": -1,
+          "factionId": "BASTIONS"
+        }
+      ],
+      "completedQuests": ["quest_delivery_ore", "quest_bounty_pirate"],
+      "completedChainParts": {},
+      "pendingReturnQuests": []
+    },
+    "journal": { "entries": [] },
+    "currentSystemId": "sys-1",
+    "contrabandGoods": [],
+    "completedQuestChains": [],
+    "newsBookmarks": [],
+    "killPoints": 320,
+    "rank": 4,
+    "visitedSystems": ["sys-1", "sys-2"],
+    "ship": {
+      "id": "Ranger-1",
+      "name": "Защитник",
+      "hullHP": 220,
+      "maxHull": 220,
+      "shields": 120,
+      "maxShields": 120,
+      "energy": 140,
+      "maxEnergy": 140,
+      "speed": 1.1,
+      "evasion": 0.7,
+      "hullClass": "FRIGATE"
+    },
+    "inventory": {
+      "modules": [
+        {
+          "id": "shield_basic_1",
+          "category": "SHIELD",
+          "name": "Базовый щит",
+          "effect": { "type": "shield", "value": 20 },
+          "level": 1
+        }
+      ],
+      "micromodules": [],
+      "resources": [
+        { "type": "FUEL", "amount": 80 },
+        { "type": "CRYSTALS", "amount": 25 }
+      ],
+      "cosmetics": []
+    }
+  }
+}
