@@ -121,8 +121,10 @@ must keep each new script **dedup-friendly**: a stable, unique `id`.)
 **Files:**
 - Modify: `docs/` quest-system note (or a scripts README)
 
-- [ ] List the new scripts + the "add a branching quest = new `scripts/<id>.ts` +
+- [x] List the new scripts + the "add a branching quest = new `scripts/<id>.ts` +
       register in `ALL_QUEST_SCRIPTS` + a `QuestVM` branch test" recipe.
+      (`src/systems/quests/scripts/README.md`: catalogue table of all 12 scripts +
+      the 3-step add-a-quest recipe, co-located with the scripts.)
 
 ## Technical Details
 - Scripts are catalog data consumed by `QuestVM`; adding them needs no save
