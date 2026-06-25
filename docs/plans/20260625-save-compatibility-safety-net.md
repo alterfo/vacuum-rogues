@@ -98,9 +98,21 @@ fails if a change would brick old saves.
 **Files:**
 - Modify: `CLAUDE.md` (persistence section)
 
-- [ ] `detect_changes`; full suite + `test:playtest` green; lint/build ok.
-- [ ] Document the save-compat contract: persisted change ⇒ migration + a golden save;
+- [x] `detect_changes`; full suite + `test:playtest` green; lint/build ok.
+      (`detect_changes` low-risk, 0 affected processes — the only uncommitted change is
+      docs. Full unit suite 2891 passed (the single `chaseSteering.steering.test.ts`
+      borderline red is **pre-existing**: last touched at `aa5b183`/`7571454`, far below
+      the save-compat commits, and no save-compat commit touches flight steering — already
+      flagged in Task 1, untouched here per the don't-weaken-existing-tests rule).
+      `test:playtest` 64 passed / 1 skipped; `test:save-compat` 19 green; lint 0 errors;
+      `npm run build` ✓ in ~3.7 s.)
+- [x] Document the save-compat contract: persisted change ⇒ migration + a golden save;
       catalog change ⇒ load revalidation; generation change ⇒ new-games-only; the gate.
+      (New **"Save Compatibility: Never Brick a Beta-Tester's Progress"** section in
+      `CLAUDE.md` — classifies a change as persisted-field / catalog / generation and
+      names the matching rule + artifacts (`revalidateToCurrentHull`, the golden-save
+      corpus + README, `npm run test:save-compat`, the lefthook `save-compat` command, the
+      `save-compat.yml` CI workflow).)
 
 ## Technical Details
 - The galaxy/most state is already persisted, so generation/balance changes are
