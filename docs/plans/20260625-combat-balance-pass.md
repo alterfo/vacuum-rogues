@@ -65,7 +65,8 @@ trivially out-ranged, and fleeing is possible.
 
 ### Task 2: Give NPCs real weapon range + variety
 **Files:**
-- Modify: `NpcShipManager`/`NpcShipSprite` (assign a `WeaponSpec`/range per NPC), `CombatModule.advanceNpcTimers`
+- Create: `src/systems/combat/npcWeapon.ts` (pure role→range helper; range derived from the already-persisted `role`, no per-NPC `WeaponSpec` — `NpcShipManager`/`NpcShipSprite` left untouched)
+- Modify: `CombatModule.advanceNpcTimers` (gate NPC fire on the role range)
 - Create/Modify: `src/tests/flight/npcWeapons.test.ts`
 
 - [x] Give NPCs a per-ship weapon (range + damage from a small set scaled by role/tier)
