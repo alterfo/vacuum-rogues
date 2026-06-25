@@ -60,13 +60,14 @@ must keep each new script **dedup-friendly**: a stable, unique `id`.)
 - Modify: `src/systems/quests/TextQuestRegistry.ts`
 - Create/extend: `src/tests/quests/newQuestScripts.test.ts`
 
-- [ ] Author 3 branching `QuestScript`s with distinct themes, each with ≥2
+- [x] Author 3 branching `QuestScript`s with distinct themes, each with ≥2
       meaningful choice points and ≥2 outcomes (reward/penalty/reputation), stable
-      unique ids.
-- [ ] Register all 3 in `ALL_QUEST_SCRIPTS`.
-- [ ] write `QuestVM` tests per script: every branch reaches a terminal stage;
+      unique ids. (`derelict-salvage`, `smuggling-run`, `hostage-rescue`)
+- [x] Register all 3 in `ALL_QUEST_SCRIPTS`.
+- [x] write `QuestVM` tests per script: every branch reaches a terminal stage;
       rewards/rep apply on the correct branch; no unreachable stages; id unique.
-- [ ] run tests — green (existing `questScripts.test.ts` stays green).
+      (`src/tests/quests/newQuestScripts.test.ts`, 47 tests)
+- [x] run tests — green (existing `questScripts.test.ts` stays green: 147 total).
 
 ### Task 2: New scripts — sabotage/heist, first-contact, medical crisis
 **Files:**
