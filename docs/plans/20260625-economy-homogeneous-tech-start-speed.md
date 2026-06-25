@@ -210,9 +210,21 @@ Goal feel: **harder to win** (a long, earned climb to top tech) but **easier to 
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — balance/config + catalog
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — balance/config + catalog
       + NPC seeding affected; confirm **no schema/migration**.
-- [ ] full unit suite green; `npm run test:playtest` green; lint clean; build ok.
+      → Verified via `git diff --stat f8f0974^..HEAD` (the 5 plan commits): only
+      `src/config/balance.ts`, `GearCatalog.ts`, `ShopGenerator.ts`, `GalaxySimulator.ts`,
+      `NpcSimulator.ts`, `NpcShipSprite.ts`, `NpcShipManager.ts`, `StarRenderer.ts`, the
+      two new pure modules (`npcCruiseSpeed.ts`, `starTypeDistribution.ts`) and the six new
+      balance/galaxy test files were touched — **zero** `schemas.ts` / `MigrationPipeline.ts`
+      / `CURRENT_VERSION` changes (grep over the plan-commit file list returned nothing).
+      Config/catalog/generation-derived only, exactly as designed. (gitnexus
+      `detect_changes` against master spans the whole branch divergence — 1032 files — so the
+      commit-scoped git diff is the precise confirmation.)
+- [x] full unit suite green; `npm run test:playtest` green; lint clean; build ok.
+      → Unit: 2871 passed / 1 skipped. Playtest: 64 passed / 1 skipped. Lint: 0 errors
+      (48 pre-existing `no-explicit-any` warnings in test files). Build: `tsc + vite` ✓
+      built in 3.68s.
 
 ### Task 7: Update documentation
 **Files:**
