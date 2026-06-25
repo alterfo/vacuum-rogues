@@ -17,14 +17,15 @@ import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
   acquireUninstalledGear,
   ownedUninstalledGear,
-  installOwnedGear,
-  uninstallToOwned,
   gearFit,
   type GearFit,
   KIND_LABEL,
   KIND_COLOR,
 } from "@/systems/equipment/GearBridge";
 import { shopRowAction } from "./equipment/shopRowAction";
+import { HangarPanel } from "./ui/HangarPanel";
+import { MicromoduleApplyPanel } from "./ui/MicromoduleApplyPanel";
+import { EquipmentSystem } from "@/systems/EquipmentSystem";
 import type { SlotCategory } from "@/systems/equipment/GearCatalog";
 import {
   sellGearPrice,
@@ -46,7 +47,13 @@ interface ShopContext {
   planet?: Planet;
 }
 
-type ShopTab = "gear" | "hull";
+type ShopTab = "gear" | "hull" | "hangar";
+
+/** The fitted slot the micromodule-apply modal targets (shop hangar tab). */
+interface MicromoduleApplyTarget {
+  slotIndex: number;
+  gearId: string;
+}
 
 /** Derive tech level from planet type (higher-tech worlds carry rarer gear). */
 function techLevelForPlanet(type: PlanetType): number {
@@ -124,9 +131,22 @@ export class EquipmentShopScene extends GameScene {
   private readonly VISIBLE_ROWS = 7;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private detachWheel: (() => void) | null = null;
+  /** The shared slot-fitting hangar (same component StationScene mounts) — the
+   *  single fitting surface, shown on the АНГАР tab. */
+  private readonly hangarPanel: HangarPanel;
+  /** The shared micromodule-apply modal, opened from the hangar's per-slot
+   *  "[установить микромодуль]" control. */
+  private readonly micromoduleApplyPanel: MicromoduleApplyPanel;
+  /** Legacy-bag install path used by the hangar warehouse (engine/radar swaps). */
+  private readonly equipment = new EquipmentSystem();
+  private micromoduleApplyTarget: MicromoduleApplyTarget | null = null;
+  private toast: Text | null = null;
+  private toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
+    this.hangarPanel = new HangarPanel(renderer);
+    this.micromoduleApplyPanel = new MicromoduleApplyPanel(renderer);
   }
 
   initialize(context?: object): void {
@@ -152,6 +172,9 @@ export class EquipmentShopScene extends GameScene {
   update(_deltaTime: number): void {}
 
   destroy(): void {
+    this.hangarPanel.dispose();
+    if (this.toastTimeout) clearTimeout(this.toastTimeout);
+    this.toastTimeout = null;
     if (this.boundKeyDown) {
       window.removeEventListener("keydown", this.boundKeyDown);
       this.boundKeyDown = null;
@@ -170,6 +193,8 @@ export class EquipmentShopScene extends GameScene {
     this.holdContainer = null;
     this.holdPos = null;
     this.creditsText = null;
+    this.toast = null;
+    this.micromoduleApplyTarget = null;
     this.gameEngine = null;
     this.planet = null;
   }
@@ -190,6 +215,14 @@ export class EquipmentShopScene extends GameScene {
 
   private render(): void {
     if (!this.mainContainer) return;
+    // The АНГАР tab is the shared fitting surface: it fills the screen with the
+    // hangar board (its own backdrop + [Назад]), so it replaces the shop chrome
+    // rather than drawing under it — exactly how StationScene mounts the panel.
+    if (this.activeTab === "hangar") {
+      if (this.micromoduleApplyTarget) this.renderMicromoduleApplyPanel();
+      else this.renderHangar();
+      return;
+    }
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;
 
@@ -310,6 +343,7 @@ export class EquipmentShopScene extends GameScene {
     const tabs: { label: string; tab: ShopTab }[] = [
       { label: "[ СНАРЯЖЕНИЕ ]", tab: "gear" },
       { label: "[ КОРПУС ]", tab: "hull" },
+      { label: "[ АНГАР ]", tab: "hangar" },
     ];
     let tabX = x + 14;
     for (const { label, tab } of tabs) {
@@ -541,9 +575,11 @@ export class EquipmentShopScene extends GameScene {
     this.creditsText = null;
     // `holdContainer` was a child of the destroyed `mainContainer`, so it is now
     // destroyed too. Null it (and its layout) so `render()` re-creates and
-    // re-parents it instead of calling `renderHold()` on a dead container.
+    // re-parents it instead of calling `renderHold()` on a dead container. The
+    // toast lives on the container too, so null it for the same reason.
     this.holdContainer = null;
     this.holdPos = null;
+    this.toast = null;
     this.render();
   }
 
@@ -621,11 +657,11 @@ export class EquipmentShopScene extends GameScene {
       const canAfford = playerCredits >= listing.price;
       const alreadyOwned = ownedIds.has(gear.id);
       const isInstalled = installedIds.has(gear.id);
-      // Fit projection drives both the per-row fit hint and whether an owned
-      // item can be installed straight from the shop (canonical store + fits).
+      // Fit projection drives the per-row fit hint (informational). Fitting
+      // itself is no longer a shop-row action — the АНГАР tab is the single
+      // fitting surface (canon Task 4: one fitting surface, no duplicate
+      // controls), so an owned item reads "В трюме" here and is installed there.
       const fitResult = loadout ? gearFit(loadout, gear.id) : null;
-      const installable =
-        canonicalOwned.has(gear.id) && fitResult?.status === "fits";
 
       const replacing = this.installedOfSameClass(gear);
       const rowColor = isInstalled
@@ -717,7 +753,7 @@ export class EquipmentShopScene extends GameScene {
       const rowAction = shopRowAction({
         isInstalled,
         owned: alreadyOwned,
-        installable,
+        installable: false,
         canAfford,
       });
       const buyBtn = scaledText(rowAction.label, 12, rowAction.color, {
@@ -732,8 +768,7 @@ export class EquipmentShopScene extends GameScene {
         buyBtn.cursor = "pointer";
         buyBtn.on("pointerdown", (e) => {
           e.stopPropagation();
-          if (rowAction.action === "install") this.installHeldGear(gear.id);
-          else this.buyItem(listing);
+          this.buyItem(listing);
         });
         buyBtn.on("pointerover", () => {
           buyBtn.alpha = 0.7;
@@ -784,8 +819,10 @@ export class EquipmentShopScene extends GameScene {
   }
 
   /**
-   * Render a compact strip showing what's currently installed in the loadout.
-   * Gives the player at-a-glance comparison without leaving the shop.
+   * Render a compact, read-only strip showing what's currently installed in the
+   * loadout — at-a-glance comparison while shopping. Fitting/unfitting is the
+   * АНГАР tab's job (the single fitting surface), so this strip carries no
+   * controls (canon Task 4: no duplicate fitting controls).
    */
   private renderLoadoutStrip(x: number, y: number, w: number, h: number): void {
     if (!this.mainContainer || h < 24) return;
@@ -823,10 +860,10 @@ export class EquipmentShopScene extends GameScene {
     }
 
     let tx = x + 110;
-    ids.forEach((gearId, slotIndex) => {
+    for (const gearId of ids) {
       const gear = gearById(gearId);
-      if (!gear) return;
-      if (tx > x + w - 60) return; // prevent overflow off the strip
+      if (!gear) continue;
+      if (tx > x + w - 60) break; // prevent overflow off the strip
       const chip = scaledText(
         `[${gear.name} T${gear.techLevel}]`,
         10,
@@ -837,29 +874,8 @@ export class EquipmentShopScene extends GameScene {
       chip.x = tx;
       chip.y = y + 6;
       this.mainContainer!.addChild(chip);
-      tx += chip.width + 4;
-
-      // «Снять» returns the fitted gear to the ТРЮМ (owned-uninstalled store) via
-      // the canonical `uninstallToOwned` seam — the Верфь mirror of the hangar
-      // unequip, so a bought-and-fitted part can be pulled back off here too.
-      const off = scaledText("Снять", 10, 0xffaa44, { rawColor: true });
-      off.eventMode = "static";
-      off.cursor = "pointer";
-      off.x = tx;
-      off.y = y + 6;
-      off.on("pointerdown", (e) => {
-        e.stopPropagation();
-        this.uninstallFittedGear(slotIndex);
-      });
-      off.on("pointerover", () => {
-        off.alpha = 0.7;
-      });
-      off.on("pointerout", () => {
-        off.alpha = 1;
-      });
-      this.mainContainer!.addChild(off);
-      tx += off.width + 12;
-    });
+      tx += chip.width + 12;
+    }
   }
 
   /**
@@ -941,35 +957,90 @@ export class EquipmentShopScene extends GameScene {
     }
   }
 
-  /**
-   * Install an owned-uninstalled item straight from the shop (the actionable
-   * "[Установить]" control on an owned row). Routes through the canonical
-   * `installOwnedGear` seam — no bespoke install path — then fully rebuilds so
-   * the row flips to "Установлен", the УСТАНОВЛЕНО strip gains it, and the item
-   * leaves the ТРЮМ strip.
-   */
-  private installHeldGear(gearId: string): void {
-    const player = this.gameEngine?.player;
-    const loadout = this.gameEngine?.playerLoadout;
-    if (!player || !loadout) return;
-    if (!installOwnedGear(player, loadout, gearId)) return;
-    this.gameEngine?.audio.playSfx("buy").catch(() => {});
-    this.rebuild();
-  }
+  // ── shared hangar (АНГАР tab) ─────────────────────────────────────────────
 
   /**
-   * Uninstall a fitted item at the Верфь, returning it to the owned-uninstalled
-   * store (ТРЮМ) via the canonical `uninstallToOwned` seam — the planet-shop
-   * mirror of the hangar unequip. The slot index matches the УСТАНОВЛЕНО strip's
-   * iteration order (`loadout.installedGearIds()` aligns with `installedSlots()`).
+   * Mount the shared {@link HangarPanel} — the single fitting surface, identical
+   * to the station hangar. The scene wires in its canonical model (player +
+   * loadout) and the scene-owned concerns (toast, navigation, re-render); all
+   * install/unfit/sell mutations route through `ShipLoadout` + the shared gear
+   * helpers inside the panel, so fitting behaves the same wherever it is opened.
    */
-  private uninstallFittedGear(slotIndex: number): void {
+  private renderHangar(): void {
     const player = this.gameEngine?.player;
-    const loadout = this.gameEngine?.playerLoadout;
-    if (!player || !loadout) return;
-    if (!uninstallToOwned(player, loadout, slotIndex)) return;
-    this.gameEngine?.audio.playSfx("buy").catch(() => {});
-    this.rebuild();
+    if (!player || !this.mainContainer) return;
+    this.hangarPanel.render({
+      container: this.mainContainer,
+      player,
+      loadout: this.gameEngine?.playerLoadout ?? null,
+      bank: this.gameEngine?.bank ?? null,
+      equipment: this.equipment,
+      showToast: (msg, color) => this.showToast(msg, color),
+      addToastSlot: (px, py, pw, ph) => this.addToastSlot(px, py, pw, ph),
+      // The shop's render() appends (it doesn't clear), so a fit re-render must
+      // tear the screen down first — rebuild() destroys + recreates the
+      // container, then render() redraws the hangar (activeTab is still "hangar").
+      rerender: () => this.rebuild(),
+      back: () => {
+        this.activeTab = "gear";
+        this.rebuild();
+      },
+      openMicromoduleApply: (slotIndex, gearId) => {
+        this.micromoduleApplyTarget = { slotIndex, gearId };
+        this.rebuild();
+      },
+    });
+  }
+
+  /** The shared micromodule-apply modal, opened from the hangar's per-slot
+   *  "[установить микромодуль]" control (identical to the station flow). */
+  private renderMicromoduleApplyPanel(): void {
+    const player = this.gameEngine?.player;
+    const loadout = this.gameEngine?.playerLoadout ?? null;
+    const target = this.micromoduleApplyTarget;
+    if (!player || !loadout || !target || !this.mainContainer) {
+      this.micromoduleApplyTarget = null;
+      this.rebuild();
+      return;
+    }
+    this.micromoduleApplyPanel.render({
+      container: this.mainContainer,
+      player,
+      loadout,
+      target,
+      showToast: (msg, color) => this.showToast(msg, color),
+      onClose: () => {
+        this.micromoduleApplyTarget = null;
+        this.rebuild();
+      },
+    });
+  }
+
+  /** Flash a transient status message in the hangar's toast slot. */
+  private addToastSlot(px: number, py: number, pw: number, ph: number): void {
+    const toast = scaledText("", 13, 0x44ff88, {
+      rawColor: true,
+      fontFamily: "monospace",
+    });
+    toast.anchor.set(0.5, 1);
+    toast.x = px + pw / 2;
+    toast.y = py + ph - 40;
+    toast.alpha = 0;
+    toast.eventMode = "none";
+    this.toast = toast;
+    this.mainContainer!.addChild(toast);
+  }
+
+  private showToast(msg: string, color: number): void {
+    if (this.toastTimeout) clearTimeout(this.toastTimeout);
+    if (this.toast) {
+      this.toast.text = msg;
+      (this.toast.style as { fill: number }).fill = color;
+      this.toast.alpha = 1;
+      this.toastTimeout = setTimeout(() => {
+        if (this.toast) this.toast.alpha = 0;
+      }, 2500);
+    }
   }
 
   private sellHoldItem(gearId: string): void {
@@ -985,6 +1056,8 @@ export class EquipmentShopScene extends GameScene {
   }
 
   private scroll(dir: number): void {
+    // Only the gear list scrolls; the hull/hangar tabs ignore wheel/arrow input.
+    if (this.activeTab !== "gear") return;
     const maxScroll = Math.max(0, this.listings.length - this.VISIBLE_ROWS);
     this.scrollOffset = Math.max(
       0,
@@ -1038,6 +1111,16 @@ export class EquipmentShopScene extends GameScene {
   }
 
   private onKeyDown(e: KeyboardEvent): void {
+    // In the hangar tab, Escape steps back through the fitting surface (modal →
+    // hangar → shop) rather than leaving the shop outright.
+    if (this.activeTab === "hangar") {
+      if (e.key === "Escape") {
+        if (this.micromoduleApplyTarget) this.micromoduleApplyTarget = null;
+        else this.activeTab = "gear";
+        this.rebuild();
+      }
+      return;
+    }
     if (e.key === "Escape") this.goBack();
     if (e.key === "ArrowDown") this.scroll(1);
     if (e.key === "ArrowUp") this.scroll(-1);

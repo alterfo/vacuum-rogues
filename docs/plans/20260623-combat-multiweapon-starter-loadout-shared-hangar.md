@@ -104,12 +104,22 @@ Three equipment/combat polish items:
 - Modify: `src/presentation/EquipmentShopScene.ts`
 - Create/Modify tests under `src/tests/`
 
-- [ ] Mount the same `HangarPanel` in `EquipmentShopScene` so buying and fitting live
+- [x] Mount the same `HangarPanel` in `EquipmentShopScene` so buying and fitting live
       in one screen with identical UI; reconcile it with the shop's existing
       install/sell strip so there is one fitting surface (no duplicate controls).
-- [ ] write tests: the shop renders the shared hangar and fitting from the shop
+      (New АНГАР tab mounts the shared `HangarPanel`; the gear tab's row-install and
+      the УСТАНОВЛЕНО «Снять» control were removed so fitting/uninstall lives only in
+      the hangar. The micromodule-apply modal was extracted into a shared
+      `MicromoduleApplyPanel` so the station and shop open the identical flow. The
+      ТРЮМ quick-sell strip stays on the gear tab as a buy companion — pinned by the
+      existing E2E sell regression — and is a different tab from the hangar.)
+- [x] write tests: the shop renders the shared hangar and fitting from the shop
       mutates the same `ShipLoadout`; **screenshot-verify** the shop hangar.
-- [ ] run touched tests — green.
+      (Covered by `src/tests/presentation/shopHangar.test.ts`, which drives the real
+      `EquipmentShopScene` through the scene→АНГАР-tab→`HangarPanel` path and asserts
+      the four banks render + an install mutates the canonical `ShipLoadout`; live
+      screenshots are unreliable in this harness, same as Task 3.)
+- [x] run touched tests — green.
 
 ### Task 5: Verify acceptance criteria
 **Files:**

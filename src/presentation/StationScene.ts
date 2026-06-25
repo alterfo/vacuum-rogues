@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
 import { HangarPanel, explainInstallBlock } from "./ui/HangarPanel";
+import { MicromoduleApplyPanel } from "./ui/MicromoduleApplyPanel";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -17,7 +18,6 @@ import {
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
   slotToBagModule,
-  gearMicromoduleCategory,
   acquireUninstalledGear,
   KIND_LABEL,
   KIND_COLOR,
@@ -148,10 +148,14 @@ export class StationScene extends GameScene {
   /** The shared slot-fitting hangar, mounted into mainContainer when the hangar
    *  view is active (same component the equipment shop embeds). */
   private readonly hangarPanel: HangarPanel;
+  /** The shared micromodule-apply modal, opened from the hangar's per-slot
+   *  "[установить микромодуль]" control (same component the equipment shop uses). */
+  private readonly micromoduleApplyPanel: MicromoduleApplyPanel;
 
   constructor(renderer: Renderer) {
     super(renderer);
     this.hangarPanel = new HangarPanel(renderer);
+    this.micromoduleApplyPanel = new MicromoduleApplyPanel(renderer);
   }
 
   // ── lifecycle ──────────────────────────────────────────────────────────────
@@ -1392,153 +1396,30 @@ export class StationScene extends GameScene {
   }
 
   private renderMicromoduleApplyPanel(): void {
-    const sw = this.renderer.app.screen.width;
-    const sh = this.renderer.app.screen.height;
     const player = this.gameEngine?.player;
     const loadout = this.gameEngine?.playerLoadout ?? null;
     const target = this.micromoduleApplyTarget;
-    const targetGear = target ? gearById(target.gearId) : undefined;
-    if (!player || !loadout || !target || !targetGear) {
+    if (!player || !loadout || !target || !this.mainContainer) {
       this.micromoduleApplyTarget = null;
       this.view = "hangar";
       this.render();
       return;
     }
-
-    const bg = new Graphics();
-    bg.rect(0, 0, sw, sh).fill({ color: 0x000000, alpha: 0.9 });
-    bg.eventMode = "static";
-    this.mainContainer!.addChild(bg);
-
-    const PW = Math.min(520, sw - 60);
-    const PH = Math.min(480, sh - 80);
-    const PX = (sw - PW) / 2;
-    const PY = (sh - PH) / 2;
-
-    const panel = new Graphics();
-    panel.rect(PX, PY, PW, PH).fill({ color: 0x0a1018, alpha: 1 });
-    panel.rect(PX, PY, PW, PH).stroke({ color: 0x443322, width: 1 });
-    this.mainContainer!.addChild(panel);
-
-    const title = scaledText(
-      `Выбор микромодуля для: ${targetGear.name}`,
-      13,
-      0xffaa22,
-      { rawColor: true, fontFamily: "monospace" },
-    );
-    title.x = PX + 14;
-    title.y = PY + 12;
-    title.eventMode = "none";
-    this.mainContainer!.addChild(title);
-
-    // Micromodules in inventory matching the fitted item's category
-    const targetCategory = gearMicromoduleCategory(targetGear);
-    const matching = player.inventory.micromodules.filter(
-      (mm) => mm.targetCategory === targetCategory,
-    );
-
-    if (matching.length === 0) {
-      const none = scaledText(
-        "Нет подходящих микромодулей в инвентаре",
-        12,
-        0x445566,
-        { rawColor: true, fontFamily: "monospace" },
-      );
-      none.x = PX + 20;
-      none.y = PY + 60;
-      none.eventMode = "none";
-      this.mainContainer!.addChild(none);
-    } else {
-      const TIER_BONUS = ["", "+20%", "+12%", "+6%"] as const;
-      let rowY = PY + 52;
-      const ROW = 48;
-      for (const mm of matching) {
-        if (rowY + ROW > PY + PH - 50) break;
-
-        const rowBg = new Graphics();
-        rowBg.rect(PX + 14, rowY, PW - 28, ROW - 4).fill({ color: 0x0d1820 });
-        this.mainContainer!.addChild(rowBg);
-
-        const tierColor =
-          mm.bonusTier === 1
-            ? 0xffcc44
-            : mm.bonusTier === 2
-              ? 0x88ccff
-              : 0xb4b4b4;
-        const info = scaledText(
-          `${mm.name}  (${TIER_BONUS[mm.bonusTier]} ${mm.bonusType})`,
-          12,
-          tierColor,
-          { rawColor: true, fontFamily: "monospace" },
-        );
-        info.x = PX + 20;
-        info.y = rowY + 14;
-        info.eventMode = "none";
-        this.mainContainer!.addChild(info);
-
-        const applyBtn = scaledText("[Применить]", 12, 0x44ff88, {
-          rawColor: true,
-          fontFamily: "monospace",
-        });
-        applyBtn.anchor.set(1, 0.5);
-        applyBtn.x = PX + PW - 14;
-        applyBtn.y = rowY + ROW / 2 - 2;
-        applyBtn.eventMode = "static";
-        applyBtn.cursor = "pointer";
-        applyBtn.on("pointerdown", (e) => {
-          e.stopPropagation();
-          // Canonical apply (dual-hull Task 3): the micromodule lands on the
-          // exact fitted slot (by index, so the clicked copy is targeted with
-          // duplicate gear), consuming it from the inventory bag.
-          const applied = loadout.applyMicromoduleAt(target.slotIndex, mm.id);
-          if (applied) {
-            const idx = player.inventory.micromodules.indexOf(mm);
-            if (idx >= 0) player.inventory.micromodules.splice(idx, 1);
-            logger.info(
-              `Applied micromodule ${mm.id} to loadout gear ${target.gearId}`,
-            );
-            this.showToast(`Применён: ${mm.name}`, 0x44ff88);
-          } else {
-            this.showToast("Не удалось применить микромодуль", 0xff8844);
-          }
-          this.micromoduleApplyTarget = null;
-          this.view = "hangar";
-          this.render();
-        });
-        applyBtn.on("pointerover", () => {
-          applyBtn.alpha = 0.7;
-        });
-        applyBtn.on("pointerout", () => {
-          applyBtn.alpha = 1;
-        });
-        this.mainContainer!.addChild(applyBtn);
-
-        rowY += ROW;
-      }
-    }
-
-    const back = scaledText("[ ← Назад ]", 14, 0x88ccff, {
-      rawColor: true,
-      fontFamily: "monospace",
+    // The shared modal mutates the canonical loadout + owned micromodules; the
+    // scene supplies toast + the "back to hangar" close (same component the
+    // equipment shop mounts, so the apply flow is identical wherever it opens).
+    this.micromoduleApplyPanel.render({
+      container: this.mainContainer,
+      player,
+      loadout,
+      target,
+      showToast: (msg, color) => this.showToast(msg, color),
+      onClose: () => {
+        this.micromoduleApplyTarget = null;
+        this.view = "hangar";
+        this.render();
+      },
     });
-    back.anchor.set(0.5, 1);
-    back.x = PX + PW / 2;
-    back.y = PY + PH - 10;
-    back.eventMode = "static";
-    back.cursor = "pointer";
-    back.on("pointerdown", (e) => {
-      e.stopPropagation();
-      this.micromoduleApplyTarget = null;
-      this.view = "hangar";
-      this.render();
-    });
-    back.on("pointerover", () => {
-      back.alpha = 0.7;
-    });
-    back.on("pointerout", () => {
-      back.alpha = 1;
-    });
-    this.mainContainer!.addChild(back);
   }
 
   // ── research upgrade sub-view ─────────────────────────────────────────────
