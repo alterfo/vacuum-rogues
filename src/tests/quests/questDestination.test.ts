@@ -4,6 +4,10 @@ import {
   questRouteAction,
   type QuestDestinationGalaxyLike,
 } from "@/systems/quests/questDestination";
+import { Galaxy } from "@/domain/Galaxy";
+import type { StarSystem } from "@/domain/StarSystem";
+import type { Overmind } from "@/domain/Overmind";
+import type { GalacticEvent } from "@/domain/GalacticEvent";
 
 /** A two-system galaxy: "sol" (with planet "earth") and "alpha" (with "alphab"). */
 const galaxy: QuestDestinationGalaxyLike = {
@@ -117,5 +121,70 @@ describe("questRouteAction", () => {
       sameSystem: true,
     });
     expect(action).toEqual({ kind: "warp-to-system", systemId: "sol" });
+  });
+});
+
+/**
+ * Contract test (real domain): the id the «Проложить маршрут» button dispatches
+ * (`questRouteAction(...).systemId|planetId`) must be one the real navigation
+ * seam can resolve. `SpaceFlightScene.navigateToQuestObjective` ultimately calls
+ * `Galaxy.systemForLocation(id)` for any id not matching a current-system planet
+ * sprite, so this ties the resolver's OUTPUT to the seam's INPUT against a real
+ * Galaxy — the gap the mocked UI tests (which dispatch into a `vi.fn()`) leave
+ * open. If either half's id semantics drift, this goes red.
+ */
+describe("questRouteAction id resolves through real Galaxy.systemForLocation", () => {
+  function makeSystem(
+    id: string,
+    planets: Array<{ id: string; name: string }>,
+  ): StarSystem {
+    return {
+      id,
+      name: id,
+      planets,
+      connections: [],
+      explored: false,
+      fogOfWar: false,
+    } as unknown as StarSystem;
+  }
+
+  const realGalaxy = new Galaxy(
+    "g1",
+    [
+      makeSystem("sys_home", [{ id: "planet_home", name: "Дом" }]),
+      makeSystem("sys_far", [{ id: "planet_far", name: "Даль" }]),
+    ],
+    {} as Overmind,
+    [] as GalacticEvent[],
+    [],
+    [],
+    "",
+    [],
+  );
+
+  it("cross-system: the dispatched SYSTEM id resolves to the target system", () => {
+    const dest = questDestination(
+      { targetSystemId: "sys_far", targetPlanetId: "planet_far" },
+      realGalaxy,
+      "sys_home", // player elsewhere
+    );
+    const action = questRouteAction(dest);
+    expect(action.kind).toBe("warp-to-system");
+    const id =
+      action.kind === "warp-to-system" ? action.systemId : action.planetId;
+    expect(realGalaxy.systemForLocation(id)?.id).toBe("sys_far");
+  });
+
+  it("same-system: the dispatched PLANET id resolves to its hosting system", () => {
+    const dest = questDestination(
+      { targetSystemId: "sys_home", targetPlanetId: "planet_home" },
+      realGalaxy,
+      "sys_home", // player here
+    );
+    const action = questRouteAction(dest);
+    expect(action.kind).toBe("approach-planet");
+    const id =
+      action.kind === "approach-planet" ? action.planetId : action.systemId;
+    expect(realGalaxy.systemForLocation(id)?.id).toBe("sys_home");
   });
 });

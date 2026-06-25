@@ -438,5 +438,40 @@ describe("QuestJournalUI plot-route button (Task 3)", () => {
 
     const btn = findPlotRouteButton(ui.container as unknown as ClickNode);
     expect(btn).toBeNull();
+    // Belt-and-suspenders: the label text must not be drawn either (guards
+    // against a future regression that renders the button but leaves it inert,
+    // which `findPlotRouteButton`'s eventMode==="static" predicate would miss).
+    const texts = collectTexts(ui.container as unknown as TextNode);
+    expect(texts.some((t) => t.includes("Проложить маршрут"))).toBe(false);
+  });
+
+  it("omits the system suffix and the button when the issuer planet is not in the wired galaxy", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    const qs = makeQuestServiceWithPending([
+      makePendingReturnQuest({ planetId: "planet-ghost" }),
+    ]);
+    // Galaxy is wired but does NOT host the issuer planet → returnDestination is
+    // null, so neither the « — система …» suffix nor the route button render.
+    const ui = new QuestJournalUI(
+      qs,
+      1280,
+      720,
+      vi.fn(),
+      vi.fn(),
+      0,
+      undefined,
+      undefined,
+      galaxyHosting("planet-alpha"), // hosts a different planet
+      "sys-home",
+    );
+
+    const texts = collectTexts(ui.container as unknown as TextNode);
+    const returnPrompt = texts.find((t) => t.includes("Вернитесь"));
+    expect(returnPrompt).toBeDefined();
+    expect(returnPrompt).not.toContain("система");
+    expect(
+      findPlotRouteButton(ui.container as unknown as ClickNode),
+    ).toBeNull();
   });
 });

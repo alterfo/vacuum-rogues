@@ -38,9 +38,14 @@ if it's elsewhere, then approach the target planet in-system).
   `sameSystem` true iff `targetSystemId === currentSystemId`; the route-action
   decision returns "approach planet" when same-system, "warp toward system" when
   not (and handles a null `targetPlanetId`).
-- **Real-engine playtest:** clicking the button plots an in-flight route to the
-  planet when in-system, or initiates the star-map warp toward the target system
-  otherwise; no thrown/logged errors.
+- **UI content (mocked Pixi):** the pending-return card names the issuer system
+  and renders/omits the «Проложить маршрут» button per galaxy + nav-hook
+  presence; clicking it dispatches the planet id (same-system) or system id
+  (cross-system) to the nav hook.
+- **Contract (real domain):** the id `questRouteAction` dispatches resolves
+  through the real `Galaxy.systemForLocation` — the seam
+  `SpaceFlightScene.navigateToQuestObjective` actually consumes — so the button's
+  output stays navigable even though the UI tests dispatch into a spy.
 
 ## Implementation Steps
 
@@ -72,7 +77,8 @@ if it's elsewhere, then approach the target planet in-system).
 **Files:**
 - Modify: the quest journal UI + `src/presentation/SpaceFlightScene.ts` (route hook)
 
-- [x] Add a plot-route button on actionable quest objectives; on click, run
+- [x] Add a plot-route button on pending-return quest cards (the return-for-reward
+      case this plan targets); on click, run
       `questRouteAction` and dispatch to the existing flight route
       (`planRouteTo`/approach the planet) when same-system, or initiate the
       star-map warp toward `systemId` when not.
