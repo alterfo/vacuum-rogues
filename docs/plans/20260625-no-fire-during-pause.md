@@ -49,10 +49,18 @@ in-flight projectiles — honor the single `isPaused`/`isFrozen` gate.
 **Files:**
 - Create: `src/tests/flight/combatPauseFreeze.test.ts`
 
-- [ ] With a fitted player weapon + an NPC combatant and `isPaused()===true`, tick
+- [x] With a fitted player weapon + an NPC combatant and `isPaused()===true`, tick
       `update` several times; assert the test currently FAILS because a player
       weapon (and/or an in-flight projectile) still fires/advances while paused.
-- [ ] run — confirm RED (the escaping fire path is identified).
+- [x] run — confirm RED (the escaping fire path is identified).
+      Escaping path = **in-flight tracers**: `CombatModule.update` advances the HUD
+      tracers (`this.hud?.update(dt)`) at the *top* of the frame, before the
+      `isFrozen()` early-return, so a projectile launched the instant before the
+      pause keeps traveling (age 0 → 48 over three frozen frames). The player + NPC
+      fire loops are already gated. Captured RED with a plain `it`
+      ("expected 48 to be +0"), then wrapped the repro in `it.fails` so the
+      committed test honestly documents the bug while keeping the commit gate green
+      (Task 2 freezes the tracers and flips it back to a plain `it`).
 
 ### Task 2: Gate every fire + projectile path on `isFrozen()`
 **Files:**
