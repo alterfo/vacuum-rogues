@@ -134,9 +134,15 @@ Memory is **per-run** (resets each new game, like a human starting fresh).
 **Files:**
 - Modify: `docs/` + the letsplay note
 
-- [ ] Document the POMDP design: egocentric `observe`, the structured per-run
+- [x] Document the POMDP design: egocentric `observe`, the structured per-run
       `AgentMemory`, memory-derived features, the memory-using heuristic teacher, and
       that the net stays small because memory is structured state.
+      (Done: `docs/architecture/LETSPLAY_ENGINE.md` gains a "Partial observability +
+      structured memory (the POMDP design)" section covering egocentric `observe`,
+      `AgentMemory` + `updateMemory`, the 6-wide `memoryFeatures` block, and the
+      `MemoryHeuristicPolicy` BC teacher; the `observe`/`PlayerAgent` table rows and the
+      neural-policy seam were also corrected to the post-ONNX pure-TS MLP at
+      `FEATURE_LENGTH = 18`.)
 
 ## Technical Details
 - The agent is a POMDP solver with an **explicit belief state**: memory is structured +
