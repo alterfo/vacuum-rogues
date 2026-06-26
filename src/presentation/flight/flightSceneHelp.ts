@@ -42,7 +42,15 @@ export function mountFlightSceneHelp(renderer: Renderer): FlightSceneHelp {
       }
       if (combatHintArmed) return;
       combatHintArmed = true;
-      combatHintTeardown = showHelpOnce(
+      // Mount the one-shot combat hint exactly once and **never overwrite the
+      // live teardown**: the hint is shown on the first engagement only, but a
+      // later engagement re-enters here. `??=` keeps the original close-fn (and
+      // short-circuits the redundant `showHelpOnce`), so the still-open panel's
+      // teardown is preserved — otherwise the second call's no-op return (key
+      // already seen) would orphan panel A as a full-screen modal that leaks past
+      // `destroy()` onto `renderer.stage` (which the layer-clear net can't reach)
+      // and blocks input in the next scene.
+      combatHintTeardown ??= showHelpOnce(
         { renderer, container: renderer.stage },
         "combat",
       );

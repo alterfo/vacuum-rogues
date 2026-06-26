@@ -196,6 +196,26 @@ describe("mountFlightSceneHelp — first-flight welcome, then flight hint, then 
     expect(combatPanels).toBe(1);
     help.destroy();
   });
+
+  it("tears down a still-open combat hint even after a second engagement", () => {
+    // Regression: if the player leaves the one-shot combat panel open through the
+    // end of fight #1 and into fight #2, the second engagement's `showHelpOnce`
+    // returns a no-op (key already seen). Overwriting the live teardown with that
+    // no-op would orphan the open panel, leaking a full-screen modal past
+    // `destroy()`. The panel must be gone after teardown.
+    const stage = new Container();
+    const help = mountFlightSceneHelp(makeRenderer(stage));
+    const root = stage as unknown as FakeNode;
+
+    help.maybeShowCombatHint(true); // fight #1 — combat hint mounts (left open)
+    expect(countText(root, COMBAT)).toBe(1);
+
+    help.maybeShowCombatHint(false); // fight #1 ends
+    help.maybeShowCombatHint(true); // fight #2 — already seen, no re-show
+
+    help.destroy();
+    expect(countText(root, COMBAT)).toBe(0); // no orphaned combat panel
+  });
 });
 
 describe("showHelpOnce — a true one-shot hint", () => {
