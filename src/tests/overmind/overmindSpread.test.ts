@@ -201,35 +201,48 @@ describe("advanceOvermind", () => {
     expect(r.state.status).not.toBe("lost");
   });
 
-  it("wins when the core is broken (removed from Overmind control)", () => {
+  it("wins when the core is broken on a GENUINELY ENGAGED arc", () => {
     const galaxy = makeGalaxy(12, ["s5", "s6"], "s5");
-    const state = advanceOvermind(
+    // Engage the arc: establish the clock then advance past grace so it actually
+    // spreads at least once (lastSpreadDay >= 0). Only an engaged arc can be won —
+    // clearing a never-engaged dormant front is a spurious Victory (see below).
+    let state = advanceOvermind(
       initialOvermindSpreadState(),
       galaxy,
       0,
       FAST,
     ).state;
-    expect(state.status).toBe("dormant");
+    const spread = advanceOvermind(state, galaxy, 3, FAST); // past grace, on cadence
+    for (const id of spread.captured) galaxy.overmindSystems.push(id);
+    state = spread.state;
+    expect(state.lastSpreadDay).toBeGreaterThanOrEqual(0); // engaged
+    expect(state.status).toBe("advancing");
 
-    // Player destroys the core: it leaves Overmind control.
-    galaxy.overmindSystems = ["s6"];
-    const r = advanceOvermind(state, galaxy, 5, FAST);
+    // Player destroys the core: it leaves Overmind control. Advance on a
+    // non-cadence day so no re-capture masks the broken core.
+    galaxy.overmindSystems = galaxy.overmindSystems.filter((id) => id !== "s5");
+    const r = advanceOvermind(state, galaxy, 4, FAST);
     expect(r.state.status).toBe("won");
   });
 
-  it("wins when the Overmind is eradicated entirely after a real start", () => {
+  it("wins when a GENUINELY ENGAGED Overmind is eradicated entirely", () => {
     const galaxy = makeGalaxy(12, ["s5", "s6"]);
-    const state = advanceOvermind(
+    // Engage the arc (spread at least once past grace) before it can be won.
+    let state = advanceOvermind(
       initialOvermindSpreadState(),
       galaxy,
       0,
       FAST,
     ).state;
+    const spread = advanceOvermind(state, galaxy, 3, FAST);
+    for (const id of spread.captured) galaxy.overmindSystems.push(id);
+    state = spread.state;
+    expect(state.lastSpreadDay).toBeGreaterThanOrEqual(0); // engaged
     expect(state.peakThreat).toBeGreaterThan(0);
 
-    // Player clears the last Overmind system.
+    // Player clears every Overmind system. Advance on a non-cadence day.
     galaxy.overmindSystems = [];
-    const r = advanceOvermind(state, galaxy, 5, FAST);
+    const r = advanceOvermind(state, galaxy, 4, FAST);
     expect(r.state.status).toBe("won");
   });
 
@@ -237,6 +250,34 @@ describe("advanceOvermind", () => {
     const galaxy = makeGalaxy(12, [], "s5"); // core named but never controlled, empty front
     const r = advanceOvermind(initialOvermindSpreadState(), galaxy, 5, FAST);
     expect(r.state.status).not.toBe("won");
+  });
+
+  it("does NOT win when the never-engaged dormant front is cleared (spurious Victory regression)", () => {
+    // The bug: peakThreat captures the initial share (>0) on the first EOD even
+    // while still dormant in the grace window, so clearing the two isolated
+    // starting systems — an early player skirmish, an autonomous NPC convoy
+    // liberation, or a quest liberation — fired a spurious "ПОБЕДА!" before the
+    // arc ever became a real threat. An UN-ENGAGED arc (lastSpreadDay < 0) being
+    // cleared must NOT win.
+    const galaxy = makeGalaxy(30, ["s28", "s29"], "s28");
+    let state = advanceOvermind(
+      initialOvermindSpreadState(),
+      galaxy,
+      0,
+      FAST,
+    ).state;
+    expect(state.status).toBe("dormant");
+    expect(state.peakThreat).toBeGreaterThan(0); // the false "real start" signal
+    expect(state.lastSpreadDay).toBeLessThan(0); // never engaged
+
+    // The whole front (core included) is liberated while still dormant.
+    galaxy.overmindSystems = [];
+    // On the next day (still in grace) and even later (past grace, but the empty
+    // front can never spread, so it stays un-engaged) the arc must not win.
+    state = advanceOvermind(state, galaxy, 1, FAST).state;
+    expect(state.status).not.toBe("won");
+    state = advanceOvermind(state, galaxy, 5, FAST).state;
+    expect(state.status).not.toBe("won");
   });
 
   it("terminal states are sticky (won/lost never re-open)", () => {

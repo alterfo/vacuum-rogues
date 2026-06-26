@@ -133,8 +133,11 @@ function frontierSystems(galaxy: SpreadGalaxyView): string[] {
  *
  * - Initialises the arc clock on first call.
  * - Sticky once `won`/`lost`.
- * - **Win** when the core is broken (removed from Overmind control) or the
- *   Overmind is eradicated entirely (a started arc reduced to zero systems).
+ * - **Win** — only after the arc has GENUINELY ENGAGED (`lastSpreadDay >= 0`,
+ *   i.e. it actually spread at least once) — when the core is broken (removed
+ *   from Overmind control) or the Overmind is eradicated entirely (an *engaged*
+ *   arc reduced to zero systems). Clearing the never-engaged dormant starting
+ *   front is **not** a win (it fired a spurious Victory before the engagement gate).
  * - **Spread** on cadence past the grace period: captures `capturesPerTick`
  *   frontier systems, ranked deterministically by `hash(seed:day:id)`.
  * - **Status** is then re-derived from the post-capture share: `lost` past the
@@ -163,10 +166,24 @@ export function advanceOvermind(
   const overmindSet = new Set(galaxy.overmindSystems);
   const hadPresence = overmindSet.size > 0 || state.peakThreat > 0;
 
-  // --- Win: core broken, or the Overmind eradicated after a real start. ---
+  // The arc may declare victory only once it has GENUINELY ENGAGED — i.e. it has
+  // actually spread at least once past the grace period (`lastSpreadDay >= 0`).
+  // `peakThreat` is a false proxy for "the threat was real": it captures the
+  // *initial* Overmind share (e.g. 2/30 ≈ 0.067) on the very first EOD even while
+  // the status is still `dormant` during the grace window, so before this gate any
+  // clearance of the two isolated starting systems — an early player skirmish, an
+  // autonomous NPC convoy liberation, or a quest liberation — tripped
+  // `coreBroken`/`eradicated` and fired a spurious "ПОБЕДА!" the player never
+  // earned (the in-flight core-kill win goes through `showGameOutcomeScreen`
+  // directly, so it is unaffected). A never-engaged dormant front being cleared is
+  // not winning the endgame arc.
+  const engaged = state.lastSpreadDay >= 0;
+
+  // --- Win: core broken, or the Overmind eradicated, after a real engagement. ---
   const coreId = galaxy.overmindCoreSystemId;
-  const coreBroken = coreId !== "" && !overmindSet.has(coreId) && hadPresence;
-  const eradicated = overmindSet.size === 0 && state.peakThreat > 0;
+  const coreBroken =
+    engaged && coreId !== "" && !overmindSet.has(coreId) && hadPresence;
+  const eradicated = engaged && overmindSet.size === 0 && state.peakThreat > 0;
   if (coreBroken || eradicated) {
     next.threat = total === 0 ? 0 : overmindSet.size / total;
     next.peakThreat = Math.max(next.peakThreat, next.threat);
