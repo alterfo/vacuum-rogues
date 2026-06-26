@@ -60,7 +60,7 @@ lands.
       folds `{id,x,y,t,phase}` samples into `PanIntent`/`PinchIntent`/`TapIntent`; PixiJS/DOM-free,
       the touch sibling of the mouse-only `PanZoomController`, sharing its `DRAG_THRESHOLD`
       tap/drag boundary. Pinch `scale` is the **incremental** ratio about the finger midpoint,
-      so it composes into `CameraController.zoomAtClient`; tap reports the release point.)
+      so it composes into `CameraController.zoomByFactor`; tap reports the release point.)
 - [x] write tests over recorded pointer sequences (tap vs drag vs pinch disambiguation).
       (`src/tests/presentation/touchGestures.test.ts` — 17 tests: tap (drift/duration boundaries,
       no-timestamp), incremental pan deltas, pinch in/out + multiplicative compose, multi-touch

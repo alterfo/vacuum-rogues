@@ -19,8 +19,9 @@ PlanetScene — don't need it; for the in-flight restyle-in-place rule see `flig
 **Responsive layout + touch targets go through `ui/responsiveLayout.ts`** (mobile adaptation,
 `docs/plans/20260625-mobile-adaptation.md`). `layoutFor({width,height})` is the **pure**
 viewport classifier → `{mode: 'desktop'|'tablet'|'phone', uiScale, minTarget, touch}`, bucketed on
-the **shorter** side at the soft-gate's 768/1024 breakpoints — panels read it for reflow/scale
-instead of hard-coding their own. The touch *capability* gate is separate: `isTouchLayoutActive(env?)`
+the **shorter** side at the soft-gate's 768/1024 breakpoints — the intended single source for
+panel reflow/scale (though **no panel consumes `layoutFor`/`uiScale` yet** — only `touchHitArea`/
+`isTouchLayoutActive` are wired today; panel reflow is a deferred follow-up). The touch *capability* gate is separate: `isTouchLayoutActive(env?)`
 = touch layout **and** a coarse primary pointer, the **single source of truth** so a narrow desktop
 window never gets touch chrome. `touchHitArea(w, h, env?)` grows + re-centres a hit rect to
 `minTarget` (44 px) on a touch layout and returns exact `{0,0,w,h}` otherwise — already wired into

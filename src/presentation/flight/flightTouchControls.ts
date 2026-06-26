@@ -35,6 +35,8 @@ export interface TouchPointerEvent {
   readonly pointerType: string;
   /** Canvas-local screen coordinates (stage space). */
   readonly global: { readonly x: number; readonly y: number };
+  /** True for the first contact of a fresh interaction (no other finger down). */
+  readonly isPrimary?: boolean;
 }
 
 /**
@@ -64,6 +66,15 @@ export class FlightTouchController {
    */
   onDown(e: TouchPointerEvent): boolean {
     if (!this.handles(e)) return false;
+    // Self-heal: a fresh primary contact (no other finger down) means any pointer
+    // the interpreter still tracks is stale — left over from a lift we never saw.
+    // The browser fires `pointercancel` *instead of* `pointerup` when it hijacks a
+    // touch (system gesture, palm rejection, backgrounding), and PixiJS registers
+    // no `pointercancel` listener, so that finger never gets removed. Without this
+    // reset it would keep `isPinching` stuck true and make the scene void every
+    // later tap-to-route as a phantom pinch. Clearing on the next interaction's
+    // first contact pre-empts that before the tap is processed.
+    if (e.isPrimary) this.gestures.reset();
     this.feed(e, "down");
     return this.isPinching;
   }

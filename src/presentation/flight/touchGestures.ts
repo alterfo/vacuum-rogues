@@ -2,9 +2,12 @@
 // (`docs/plans/20260625-mobile-adaptation.md`, Phase 2).
 //
 // `TouchGestureInterpreter` folds a stream of pointer events (down/move/up/cancel)
-// into high-level **intents** — `pan`, `pinch`, `tap` — that Task 3 feeds into the
-// existing camera + route handlers (`CameraController.pan`/`zoomAtClient`,
-// tap-to-route). It is **pure logic**: no PixiJS, no DOM, no `window` — it only
+// into high-level **intents** — `pan`, `pinch`, `tap`. In the flight scene today
+// the wiring (`FlightTouchController`) consumes only the **pinch** intent, driving
+// `CameraController.zoomByFactor` about the finger midpoint; single-finger drags
+// and taps stay on the scene's existing route/target path (a touch already fires a
+// button-0 pointerdown/up there), so the `pan`/`tap` intents are computed but not
+// yet routed. It is **pure logic**: no PixiJS, no DOM, no `window` — it only
 // reasons over the `{id,x,y,t}` samples handed to it, so the whole disambiguation
 // (one-finger drag = pan, two-finger = pinch-zoom, quick stationary press = tap) is
 // unit-tested over recorded pointer sequences. It is the touch sibling of the
@@ -42,7 +45,7 @@ export interface PanIntent {
 /**
  * Two-finger pinch → multiply the zoom by `scale` about the screen-space `center`
  * (the midpoint between the fingers — the natural anchor to keep fixed under the
- * pinch, mirroring `CameraController.zoomAtClient`'s cursor anchor). `scale` is the
+ * pinch, as `CameraController.zoomByFactor` does about its anchor). `scale` is the
  * **incremental** ratio since the previous pinch sample (>1 = spread/zoom-in,
  * <1 = pinch/zoom-out), so it composes multiplicatively frame to frame.
  */

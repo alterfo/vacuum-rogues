@@ -21,6 +21,15 @@ import {
 function touch(id: number, x: number, y: number): TouchPointerEvent {
   return { pointerId: id, pointerType: "touch", global: { x, y } };
 }
+/** A fresh first-contact touch (PixiJS sets `isPrimary` on the first finger down). */
+function primaryTouch(id: number, x: number, y: number): TouchPointerEvent {
+  return {
+    pointerId: id,
+    pointerType: "touch",
+    global: { x, y },
+    isPrimary: true,
+  };
+}
 function mouse(id: number, x: number, y: number): TouchPointerEvent {
   return { pointerId: id, pointerType: "mouse", global: { x, y } };
 }
@@ -121,5 +130,41 @@ describe("FlightTouchController — two-finger pinch", () => {
     expect(ctrl.isPinching).toBe(true);
     ctrl.reset();
     expect(ctrl.isPinching).toBe(false);
+  });
+});
+
+describe("FlightTouchController — self-heal on a fresh primary contact", () => {
+  it("a finger leaked by an unseen lift/cancel does not stick a phantom pinch", () => {
+    // Regression: the browser fires `pointercancel` instead of `pointerup` when it
+    // hijacks a touch, and PixiJS registers no pointercancel listener — so a finger
+    // can leak into the interpreter map, leaving isPinching stuck true and voiding
+    // every later tap-to-route. Simulate the leak (a pinch whose lifts never
+    // arrive), then prove the next interaction's primary contact clears it and the
+    // tap is treated as a first finger (onDown ⇒ false, not a pinch).
+    const { ctrl } = build();
+    ctrl.onDown(primaryTouch(1, 100, 100));
+    ctrl.onDown(touch(2, 200, 100)); // 2nd finger (not primary) ⇒ pinch
+    expect(ctrl.isPinching).toBe(true);
+    // ...both lifts are lost (no onUp) — fingers leak into the interpreter.
+    expect(ctrl.isPinching).toBe(true);
+    // Next gesture begins with a primary contact → self-heal drops the stale state.
+    expect(ctrl.onDown(primaryTouch(3, 50, 50))).toBe(false);
+    expect(ctrl.isPinching).toBe(false);
+  });
+
+  it("does not reset a legitimate pinch (2nd finger is not primary)", () => {
+    const { ctrl } = build();
+    expect(ctrl.onDown(primaryTouch(1, 100, 100))).toBe(false);
+    expect(ctrl.onDown(touch(2, 200, 100))).toBe(true); // pinch survives
+    expect(ctrl.isPinching).toBe(true);
+  });
+
+  it("ignores isPrimary on a mouse pointer (desktop path untouched)", () => {
+    const { ctrl } = build();
+    ctrl.onDown(touch(1, 100, 100));
+    ctrl.onDown(touch(2, 200, 100));
+    // A mouse "primary" down must never touch the touch gesture state.
+    expect(ctrl.onDown({ ...mouse(3, 0, 0), isPrimary: true })).toBe(false);
+    expect(ctrl.isPinching).toBe(true);
   });
 });
