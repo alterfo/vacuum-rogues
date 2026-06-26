@@ -109,6 +109,33 @@ describe("AudioManager", () => {
     expect(ctxInstance.createBufferSource).toHaveBeenCalled();
   });
 
+  it("negative-caches a missing track so repeated playTrack does not re-fetch", async () => {
+    const fetchFn = vi.mocked(fetch);
+    const prevImpl = fetchFn.getMockImplementation();
+    // Every fetch for this track 404s (the common "no audio file yet" state).
+    fetchFn.mockImplementation(
+      async () =>
+        ({
+          ok: false,
+          arrayBuffer: async () => new ArrayBuffer(0),
+        }) as Response,
+    );
+    fetchFn.mockClear();
+
+    await mgr.playTrack("combat");
+    const afterFirst = fetchFn.mock.calls.length;
+    expect(afterFirst).toBeGreaterThan(0); // first attempt does fetch
+
+    // The per-frame music driver calls playTrack every tick; a missing file must
+    // not re-fetch (and re-warn) each time — the negative cache short-circuits it.
+    await mgr.playTrack("combat");
+    await mgr.playTrack("combat");
+    expect(fetchFn.mock.calls.length).toBe(afterFirst);
+
+    // Restore the shared global fetch mock for the remaining tests.
+    if (prevImpl) fetchFn.mockImplementation(prevImpl);
+  });
+
   it("gracefully handles missing audio files (fetch returns 404)", async () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: false,

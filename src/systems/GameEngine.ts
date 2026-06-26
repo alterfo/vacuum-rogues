@@ -2011,6 +2011,11 @@ export class GameEngine {
     this.flightShipPos = null;
     this.lastFlightShipPos = null;
     this.offeredEncounterIds.clear();
+    // Clear adaptive-audio state so a fresh game never inherits a stale combat
+    // hold or a still-armed low-hull alarm from the prior in-session game.
+    this.combatStateProvider = null;
+    this.music.reset();
+    this.hullAlarm.reset();
     const seed = `SR_${Date.now()}`;
     this.galaxy = await this.galaxyService.generate(seed, 30);
     logger.info(`Generated default game state with seed: ${seed}`);
@@ -2060,8 +2065,12 @@ export class GameEngine {
       ? ship.hullHP < ship.maxHull * MUSIC_TENSION_HULL_FRACTION
       : false;
     const coreId = this.galaxy?.overmindCoreSystemId;
-    const boss =
-      inCombat && !!coreId && this.player?.currentSystemId === coreId;
+    // Boss is keyed off *location* (fighting inside the OVERMIND core), not the
+    // transient `inCombat` flag: during the director's post-disengage hold window
+    // `inCombat` is false, so gating on it would flicker the held track from
+    // `combat_boss` back to plain `combat` mid-boss-fight. `boss` is only read by
+    // the director while combat is active/held, so it is inert otherwise.
+    const boss = !!coreId && this.player?.currentSystemId === coreId;
     this.music.apply(this.audio, {
       scene: this.currentSceneType,
       inCombat,

@@ -45,6 +45,13 @@ export class AudioManager {
   private currentSource: AudioBufferSourceNode | null = null;
   private currentGain: GainNode | null = null;
   private cache = new Map<string, AudioBuffer>();
+  /**
+   * URLs that have already failed to load (missing file / decode / network).
+   * Negative-cached so a per-frame caller (the music driver re-evaluates every
+   * frame) does not re-`fetch` + re-`logger.warn` a missing track every tick —
+   * the common state, since audio files are optional/user-supplied.
+   */
+  private failedUrls = new Set<string>();
   private muted = false;
   private musicVolume = 0.7;
   private sfxVolume = 1.0;
@@ -63,6 +70,8 @@ export class AudioManager {
   private async loadBuffer(url: string): Promise<AudioBuffer | null> {
     const cached = this.cache.get(url);
     if (cached) return cached;
+    // Already known-missing: skip the fetch + warn (per-frame callers).
+    if (this.failedUrls.has(url)) return null;
 
     const ctx = this.getContext();
     if (!ctx) return null;
@@ -71,6 +80,7 @@ export class AudioManager {
       const response = await fetch(url);
       if (!response.ok) {
         logger.warn(`AudioManager: audio not found at ${url}`);
+        this.failedUrls.add(url);
         return null;
       }
       const arrayBuffer = await response.arrayBuffer();
@@ -79,6 +89,7 @@ export class AudioManager {
       return audioBuffer;
     } catch {
       logger.warn(`AudioManager: failed to load ${url}`);
+      this.failedUrls.add(url);
       return null;
     }
   }
@@ -217,6 +228,7 @@ export class AudioManager {
     this.ctx = null;
     this.currentTrackKey = null;
     this.cache.clear();
+    this.failedUrls.clear();
   }
 
   private fadeOutCurrent(ctx: AudioContext | null): void {
