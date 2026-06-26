@@ -30,10 +30,17 @@ vi.mock("pixi.js", () => ({
     addChildAt: vi.fn(),
     removeChild: vi.fn(),
     children: [],
+    on: vi.fn(),
+    destroy: vi.fn(),
   })),
+  // Rectangle backs UiButton's explicit hitArea (used by the «?» help button the
+  // onboarding layer mounts on scene init).
+  Rectangle: vi.fn().mockImplementation(() => ({})),
   Graphics: vi.fn().mockImplementation(() => ({
+    clear: vi.fn().mockReturnThis(),
     fill: vi.fn().mockReturnThis(),
     rect: vi.fn().mockReturnThis(),
+    roundRect: vi.fn().mockReturnThis(),
     circle: vi.fn().mockReturnThis(),
     stroke: vi.fn().mockReturnThis(),
     poly: vi.fn().mockReturnThis(),

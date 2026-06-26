@@ -161,11 +161,24 @@ Related patterns:
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] Every reachable gameplay screen has help content (registry test) and is wired.
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only onboarding +
-      scene-wiring symbols affected.
-- [ ] full unit suite `npm test -- --run` green; `npm run lint` clean; `npm run
-      build` succeeds; `SpaceFlightScene.ts` < 1900 lines.
+- [x] Every reachable gameplay screen has help content (registry test) and is wired.
+      (`HELP_CONTENT` covers all 11 scene keys + `welcome`/`quest-journal`/`combat`,
+      gated by `helpContent.test.ts`; all 12 scenes + the quest journal mount
+      `mountSceneHelp` — confirmed by the onboarding diff.)
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — only onboarding +
+      scene-wiring symbols affected. (The literal branch-vs-master compare returns
+      `critical` because this long-running branch carries 503 prior commits of
+      unrelated feature work; the **onboarding-specific** diff `59c789c..HEAD`
+      touches only the onboarding modules — `helpContent`/`onboardingState`/
+      `HelpPanel`/`mountSceneHelp`/`flightSceneHelp` — plus the 12 wired scenes +
+      `QuestJournalUI`/`FlightHud` and their tests. No unrelated symbols.)
+- [x] full unit suite `npm test -- --run` green; `npm run lint` clean; `npm run
+      build` succeeds; `SpaceFlightScene.ts` < 1900 lines. (3134 passed / 3 skipped /
+      0 failed; lint 0 errors; build OK; `SpaceFlightScene.ts` = 1881. Completed the
+      incomplete pixi mock in `renderer-scenes.test.ts` — added `Graphics.clear`/
+      `roundRect`, a `Rectangle` ctor, and `Container.on`/`destroy` — since the
+      onboarding «?» `UiButton`/`HelpPanel` are now constructed on scene init; no
+      assertion weakened.)
 
 ### Task 8: Update documentation
 **Files:**
