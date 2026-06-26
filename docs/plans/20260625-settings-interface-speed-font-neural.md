@@ -129,10 +129,16 @@ this is the gate the (deferred) Overmind neural AI will sit behind.
 **Files:**
 - Modify: `src/presentation/CLAUDE.md` / `CLAUDE.md` (ONNX pipeline + settings)
 
-- [ ] Document the settings panel (speed/font/neural), the `neuralEnabled` localStorage
-      flag (default off), and that ONNX is now **lazy + gated** by it — onnxruntime is
-      not in the default boot path; the (future) Overmind neural AI sits behind this
-      toggle.
+- [x] Document the settings panel (speed/font/neural), the `neuralEnabled` localStorage
+      flag (default off), and that the neural toggle gates the policy — added a
+      **"Settings Interface (Speed / Font / Neural)"** subsection to root `CLAUDE.md`
+      (accessor + feature-flag gate + panel), a gate bullet to the **"Neural / AI
+      Pipeline"** section (`selectPlayerPolicy` reads the same flag), and a
+      `SettingsPanel` rule to `src/presentation/CLAUDE.md`. **Accuracy fix:** the
+      plan's original "lazy + gated ONNX" framing predates the runtime removal — the
+      docs reflect that onnxruntime is **fully removed** (not in the default boot path
+      because it's gone entirely), so the toggle is a plain feature flag gating the
+      pure-TS MLP policy; the (future) Overmind neural AI sits behind this toggle.
 
 ## Technical Details
 - Neural flag = `localStorage("neuralEnabled")`, default `false` ⇒ no save field, no

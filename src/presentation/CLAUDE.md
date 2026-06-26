@@ -135,6 +135,20 @@ intro), and `showHelpOnce(deps, "combat")` fires the one-shot combat hint on a t
 `resetSeen()` so every first-time hint shows again. The «?» sits top-right to avoid the bottom-right
 «Оставить issue» overlay.
 
+**Settings live in one ⚙ panel** (`ui/SettingsPanel.ts`,
+`docs/plans/20260625-settings-interface-speed-font-neural.md`). A self-contained component with
+three rows — **СКОРОСТЬ** (game speed), **ШРИФТ** (S/M/L font), **НЕЙРОСЕТЬ (ИИ)** (experimental
+on/off, default off) — opened by the ⚙ HUD button (replacing the old font-only stub) and closed via
+the existing `isSettingsPanelOpen` + `closeModals` Esc/outside-click wiring in `flightKeyHandler`
+(unchanged). Every control writes through the shared accessor `src/systems/settings/gameSettings.ts`
+(**no new save field** — speed → `GameEngine.gameSpeedMultiplier`, font → `fontScale.ts`, neural →
+`localStorage("neuralEnabled")`) and fans the live effect out via `SettingsPanelDeps` callbacks:
+`applySpeed` (HUD label + physics `timeScale`), `applyFont` (restyle in place, then
+`onRequestClose` — a font change rebuilds the whole HUD), `onNeuralToggle` (the policy gate, see root
+CLAUDE.md "Neural / AI Pipeline"). Build the font row **first** so its hit areas precede the others
+(the historical ⚙-panel "first font button" contract). Control actions are public
+(`selectFont`/`selectSpeed`/`toggleNeural`) so they're unit-testable without PixiJS pointer events.
+
 Three most-hit PixiJS 8 traps:
 - **`eventMode='none'` on Text over clickable areas** — Text defaults to `'auto'` and blocks
   clicks underneath; set `'none'` on labels so clicks pass through.
