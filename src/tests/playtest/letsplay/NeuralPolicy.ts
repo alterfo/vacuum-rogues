@@ -37,6 +37,8 @@ import {
 import type { Action, PlayerPolicy } from "./PlayerPolicy";
 import { HeuristicPolicy } from "./HeuristicPolicy";
 import { forward, loadWeights, type MlpWeights } from "./mlp";
+import type { AgentMemory } from "./AgentMemory";
+import { memoryFeatures, MEMORY_FEATURE_LENGTH } from "./memoryFeatures";
 
 /** Construction options for {@link NeuralPolicy}. */
 export interface NeuralPolicyOptions {
@@ -51,8 +53,17 @@ export interface NeuralPolicyOptions {
   readonly fallback?: PlayerPolicy;
 }
 
-/** Length of the {@link featurize} vector — the net's input width. */
-export const FEATURE_LENGTH = 12;
+/** Number of observation-derived features (the egocentric vitals/system block). */
+export const OBS_FEATURE_LENGTH = 12;
+
+/**
+ * Length of the {@link featurize} vector — the net's input width: the
+ * observation block ({@link OBS_FEATURE_LENGTH}) followed by the belief-derived
+ * memory block ({@link MEMORY_FEATURE_LENGTH}). **Growing either changes the MLP
+ * input width** — retrain + re-export the player net's weights JSON at the new
+ * width (Post-Completion; `load()` rejects a width mismatch).
+ */
+export const FEATURE_LENGTH = OBS_FEATURE_LENGTH + MEMORY_FEATURE_LENGTH;
 
 /** Clamp `n / denom` into `[0, 1]` — a saturating count/ratio normaliser. */
 function norm(n: number, denom: number): number {
@@ -62,13 +73,18 @@ function norm(n: number, denom: number): number {
 }
 
 /**
- * Project an {@link Observation} into a fixed-length numeric feature vector (the
- * net's input). Pure and deterministic — the same observation always yields the
- * exact same {@link FEATURE_LENGTH}-wide vector, every component already in
- * `[0, 1]` so it needs no further scaling. Player-less observations (menus)
- * encode as all-zero vitals.
+ * Project an {@link Observation} (and the agent's {@link AgentMemory} belief state)
+ * into a fixed-length numeric feature vector (the net's input): an
+ * {@link OBS_FEATURE_LENGTH}-wide egocentric block followed by the
+ * {@link MEMORY_FEATURE_LENGTH}-wide belief block ({@link memoryFeatures}). Pure
+ * and deterministic — the same `(obs, memory)` always yields the exact same
+ * {@link FEATURE_LENGTH}-wide vector, every component already in `[0, 1]` so it
+ * needs no further scaling. Player-less observations (menus) encode as all-zero
+ * vitals; with **no memory** the belief block degrades to its sane zero defaults
+ * (the agent "knows nothing yet"), so callers without a notebook still get a
+ * full-width vector.
  */
-export function featurize(obs: Observation): number[] {
+export function featurize(obs: Observation, memory?: AgentMemory): number[] {
   const p = obs.player;
   const sys = obs.system;
   const availableQuests =
@@ -89,6 +105,7 @@ export function featurize(obs: Observation): number[] {
     norm(availableQuests, 8),
     norm(obs.quests.length, 8),
     norm(obs.legalActions.length, ACTION_ORDER.length),
+    ...memoryFeatures(obs, memory),
   ];
 }
 

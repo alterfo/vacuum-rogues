@@ -86,13 +86,13 @@ Memory is **per-run** (resets each new game, like a human starting fresh).
 - Modify: `src/tests/playtest/letsplay/NeuralPolicy.ts` (featurize) or a new `features.ts`
 - Create: `src/tests/playtest/letsplay/memoryFeatures.test.ts`
 
-- [ ] Extend the feature vector (grow `FEATURE_LENGTH`) with belief signals: best known
+- [x] Extend the feature vector (grow `FEATURE_LENGTH`) with belief signals: best known
       buy→sell margin (+ direction), profit-if-sold-here for held cargo, cheapest known
       upgrade and the credit gap to afford it, route danger to the current goal, and
       goal progress.
-- [ ] write tests: each feature computes correctly from a fixture `AgentMemory`+`obs`;
+- [x] write tests: each feature computes correctly from a fixture `AgentMemory`+`obs`;
       vector length/normalisation stable; missing knowledge degrades to a sane default.
-- [ ] run tests — green (note the new width for MLP retraining).
+- [x] run tests — green (note the new width for MLP retraining).
 
 ### Task 4: Memory-using heuristic (the BC teacher)
 **Files:**
