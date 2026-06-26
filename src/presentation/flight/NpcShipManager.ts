@@ -384,9 +384,10 @@ export class NpcShipManager implements FlightModule {
     // Loot pulses and despawns on real elapsed time, regardless of whether the
     // turn is running (it must clear even after combat ends and the ship stops).
     this.updateLoot(deltaTime);
-    // A gravity tractor pulls nearby loot into the hold every frame — including
-    // after combat ends and the ship is parked, so a kill's drops are collected.
-    this.applyGravTractor();
+    // Floating drops are collected by flying near them (hands-on proximity), and
+    // a gravity tractor extends the reach — every frame, including after combat
+    // ends and the ship is parked, so a kill's drops are always collectible.
+    this.applyLootPickup();
 
     // The world runs while the turn is running (flying, or holding station in
     // combat) — not only while the ship is physically moving.
@@ -1273,46 +1274,63 @@ export class NpcShipManager implements FlightModule {
   }
 
   /**
-   * Gravity tractor auto-pickup: when the player's loadout has a tractor
-   * (`gravTractorRange > 0`), pull each floating loot item within that range
-   * into the hold. Cargo usage tracks the canonical model (sum of resource
-   * amounts vs `ship.cargoCapacity`, as in TradeSystem); a full hold logs a
-   * warning and skips — loot stays in space until space frees up or despawns.
+   * Loot auto-pickup (Task 6: "the yellow dot can't be collected" fix). A
+   * floating drop within the hands-on {@link GAME_BALANCE.lootPickupRadius} is
+   * collected **without** any gear; a fitted gravity tractor *extends* the reach
+   * (the effective radius is the max of the base radius and `gravTractorRange`),
+   * so the tractor is an upgrade rather than the only pickup path. Each item is
+   * collected at most once (removed in place — no double-collect). Cargo usage
+   * tracks the canonical loadout model (sum of resource amounts vs the loadout's
+   * cargo capacity); a full/over-capacity hold logs a warning and skips — loot
+   * stays in space until space frees up or it despawns (TTL is unaffected).
    * Module drops are salvaged into METALS; Overmind artifacts into ARTIFACTS.
    */
-  private applyGravTractor(): void {
+  private applyLootPickup(): void {
     if (this.spaceLoot.length === 0) return;
     const loadout = this.gameEngine?.playerLoadout;
     const player = this.gameEngine?.player;
     const physics = this.deps.getShipPhysics();
     if (!loadout || !player || !physics) return;
     const stats = loadout.derivedStats();
-    const range = stats.gravTractorRange;
+    const baseRadius = GAME_BALANCE.lootPickupRadius;
+    // Hands-on proximity always applies; a gravity tractor only ever widens it.
+    const range = Math.max(baseRadius, stats.gravTractorRange);
     if (range <= 0) return;
     const rangeSq = range * range;
+    const baseSq = baseRadius * baseRadius;
     // Hold size is the loadout's cargo (authoritative), not the legacy getter.
     const capacity = cargoCapacityOf(loadout);
     for (let i = this.spaceLoot.length - 1; i >= 0; i--) {
       const item = this.spaceLoot[i];
       const dx = item.x - physics.shipX;
       const dy = item.y - physics.shipY;
-      if (dx * dx + dy * dy > rangeSq) continue; // out of tractor reach
+      const distSq = dx * dx + dy * dy;
+      if (distSq > rangeSq) continue; // out of pickup reach
       const used = player.inventory.resources.reduce(
         (sum, r) => sum + r.amount,
         0,
       );
       if (used >= capacity) {
-        logger.warn("Гравитяга: трюм полон, добыча оставлена в космосе");
-        break; // hold won't free up this frame — stop pulling
+        logger.warn("Loot pickup: hold full, drop left in space");
+        break; // hold won't free up this frame — stop collecting
       }
       const type = item.artifactId
         ? ResourceType.ARTIFACTS
         : ResourceType.METALS;
       player.inventory.addResource(type, 1);
-      this.removeLootAt(i);
-      const label = item.artifactId ? "артефакт" : (item.moduleId ?? "модуль");
-      this.deps.showMessage(`Гравитяга подобрала: ${label}`, 0xffdd33);
-      logger.info(`Gravity tractor picked up loot ${item.id} (${type})`);
+      this.removeLootAt(i); // single collect — splice + dispose the dot (no leak)
+      const label = item.artifactId
+        ? t("flight.lootArtifact")
+        : (item.moduleId ?? t("flight.lootModule"));
+      // Hands-on grab vs. tractor pull get distinct flavour; both are localized.
+      const handsOn = distSq <= baseSq;
+      this.deps.showMessage(
+        handsOn
+          ? t("flight.lootPickup", { item: label })
+          : t("flight.lootTractor", { item: label }),
+        0xffdd33,
+      );
+      logger.info(`Picked up loot ${item.id} (${type})`);
     }
   }
 

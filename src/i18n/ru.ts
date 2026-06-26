@@ -266,6 +266,13 @@ export const ru: Dict = {
   "flight.salvageTrophy": "Трофей: +{amount} ₡",
   "flight.salvageReason": "Трофей с уничтоженного корабля",
 
+  // --- floating loot pickup (Task 6: collect drops by proximity) ------------
+  "flight.lootPickup": "Подобрано: {item}",
+  "flight.lootTractor": "Гравитяга подобрала: {item}",
+  "flight.lootArtifact": "артефакт",
+  "flight.lootModule": "модуль",
+  "flight.lootHoldFull": "Трюм полон — добыча оставлена в космосе",
+
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Управление:",
   "help.gotIt": "Понятно",

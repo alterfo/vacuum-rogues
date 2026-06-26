@@ -264,6 +264,13 @@ export const en: Dict = {
   "flight.salvageTrophy": "Salvage: +{amount} ₡",
   "flight.salvageReason": "Salvage from a destroyed ship",
 
+  // --- floating loot pickup (Task 6: collect drops by proximity) ------------
+  "flight.lootPickup": "Picked up: {item}",
+  "flight.lootTractor": "Gravity tractor collected: {item}",
+  "flight.lootArtifact": "artifact",
+  "flight.lootModule": "module",
+  "flight.lootHoldFull": "Hold full — loot left in space",
+
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Controls:",
   "help.gotIt": "Got it",

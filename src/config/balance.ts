@@ -363,6 +363,16 @@ export const GAME_BALANCE = {
    * of kills) without making any single kill feel stingy.
    */
   pirateSalvageDailyCap: 1500,
+  /**
+   * Hands-on loot pickup radius (world px): a floating drop within this distance
+   * of the ship is collected **without** a gravity tractor (Task 6: "yellow dot
+   * can't be collected" fix — fly over it to grab it). A fitted tractor still
+   * extends the reach to `gravTractorRange` (the radius is the *max* of the two),
+   * so the tractor remains an upgrade rather than the only pickup path. Kept
+   * below the smallest tractor (80) so the tractor is a meaningful range boost,
+   * and tight enough that loot must be flown near — not vacuumed from afar.
+   */
+  lootPickupRadius: 45,
   /** Star sprite radius (visual, not physics). */
   starRadius: 170,
   /** Gap (px) from planet surface to route endpoint — route preview stops at
