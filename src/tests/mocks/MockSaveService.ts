@@ -31,6 +31,7 @@ export class MockSaveService implements ISaveService {
       timestamp: state.timestamp,
       playerLevel: state.player.level,
       location: state.player.ship.name,
+      currentSceneType: state.currentSceneType,
     }));
   }
 

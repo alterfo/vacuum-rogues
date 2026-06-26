@@ -8,7 +8,7 @@ import { GameSystemException } from "@/exceptions/GameSystemException";
 import { validateSaveState } from "@/validation/schemas";
 import { logger } from "@/utils/logger";
 
-const MAX_SLOTS = 10;
+export const MAX_SLOTS = 10;
 
 export class SaveManager {
   private db: IndexedDBAdapter;
@@ -169,6 +169,7 @@ export class SaveManager {
               timestamp: value.timestamp,
               playerLevel: value.playerLevel,
               location: value.location,
+              currentSceneType: value.currentSceneType,
             });
             cursor.continue();
           } else {

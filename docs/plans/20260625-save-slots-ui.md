@@ -28,12 +28,12 @@ with named manual slots (create/overwrite/delete, timestamp + summary) and a cle
 **Files:**
 - Create: `src/systems/saves/saveSlots.ts` (+ test)
 
-- [ ] `listSlotRows(manager)` → ordered rows (name/date/summary/occupied); `saveToSlot`,
+- [x] `listSlotRows(manager)` → ordered rows (name/date/summary/occupied); `saveToSlot`,
       `deleteSlot`, `nextFreeSlot`; "latest meaningful" resolver for Continue (most recent
       non-terminal save).
-- [ ] write tests: rows reflect occupied/empty, ops mutate correctly, Continue picks the
+- [x] write tests: rows reflect occupied/empty, ops mutate correctly, Continue picks the
       right slot, MAX_SLOTS respected.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 2: Save/Load screen
 **Files:**

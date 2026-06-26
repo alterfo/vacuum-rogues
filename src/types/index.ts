@@ -594,6 +594,11 @@ export interface SaveSlotInfo {
   readonly timestamp: number;
   readonly playerLevel: number;
   readonly location: string;
+  /**
+   * Scene the save was taken in — listing metadata only (NOT part of the
+   * serialized save schema). Lets the Continue resolver skip terminal scenes.
+   */
+  readonly currentSceneType?: SceneType;
 }
 
 export interface ErrorResponse {
