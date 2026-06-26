@@ -30,6 +30,10 @@ export const ru: Dict = {
   "settings.language": "ЯЗЫК",
   "settings.on": "ВКЛ",
   "settings.off": "ВЫКЛ",
+  // Language autonyms — each shown in its own script regardless of the active
+  // language, so the values are intentionally identical in `ru.ts` and `en.ts`.
+  "lang.ru": "Русский",
+  "lang.en": "English",
 
   // --- shared labels -------------------------------------------------------
   "label.creditsLine": "Кредиты: {n}",

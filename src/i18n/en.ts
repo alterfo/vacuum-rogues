@@ -29,6 +29,10 @@ export const en: Dict = {
   "settings.language": "LANGUAGE",
   "settings.on": "ON",
   "settings.off": "OFF",
+  // Language autonyms — identical to `ru.ts` on purpose (each language's own name
+  // is shown in its own script regardless of the active UI language).
+  "lang.ru": "Русский",
+  "lang.en": "English",
 
   // --- shared labels -------------------------------------------------------
   "label.creditsLine": "Credits: {n}",

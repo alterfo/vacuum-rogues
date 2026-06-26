@@ -1,6 +1,6 @@
 import { Container, Graphics } from "pixi.js";
 import { scaledText } from "./scaledText";
-import { t } from "@/i18n/i18n";
+import { getLanguage, setLanguage, t, type Language } from "@/i18n/i18n";
 import {
   getFontKey,
   getSpeed,
@@ -16,7 +16,8 @@ import type { FontSizeKey } from "@/utils/fontScale";
 /**
  * The unified in-flight settings panel surfaced by the ⚙ HUD button
  * (`docs/plans/20260625-settings-interface-speed-font-neural.md`): one screen
- * with three controls — **СКОРОСТЬ** (game speed), **ШРИФТ** (S/M/L font), and a
+ * with four controls — **СКОРОСТЬ** (game speed), **ШРИФТ** (S/M/L font),
+ * **ЯЗЫК** (RU/EN language, `docs/plans/20260625-localization-i18n.md`), and a
  * **НЕЙРОСЕТЬ (ИИ)** on/off toggle (experimental, off by default).
  *
  * Each control writes through the shared {@link gameSettings} store (no new
@@ -34,8 +35,9 @@ import type { FontSizeKey } from "@/utils/fontScale";
  *
  * The component is self-contained (builds into {@link container}); the host only
  * mounts/tears down the container and positions it. The control actions are
- * public methods ({@link selectFont}/{@link selectSpeed}/{@link toggleNeural}) so
- * the behaviour is unit-testable without driving PixiJS pointer events.
+ * public methods ({@link selectFont}/{@link selectSpeed}/{@link selectLanguage}/
+ * {@link toggleNeural}) so the behaviour is unit-testable without driving PixiJS
+ * pointer events.
  */
 export interface SettingsPanelDeps {
   /** The game-speed sink (carries `gameSpeedMultiplier`) — the GameEngine satisfies it. */
@@ -46,6 +48,12 @@ export interface SettingsPanelDeps {
   applySpeed: (scale: number) => void;
   /** Apply a font change live: the scene restyles its text-bearing modules. */
   applyFont: () => void;
+  /**
+   * Apply a language change live: re-localize the HUD. The same in-place text
+   * restyle a font change uses re-reads `t(...)` at text-creation time, so the
+   * host satisfies this with that same path.
+   */
+  applyLanguage?: () => void;
   /** Fired when the neural flag flips (the gate hook; no heavy runtime — pure-TS MLP). */
   onNeuralToggle?: (on: boolean) => void;
   /**
@@ -59,7 +67,9 @@ export interface SettingsPanelDeps {
 
 /** Fixed panel geometry (the host positions the whole panel by these). */
 export const SETTINGS_PANEL_WIDTH = 220;
-export const SETTINGS_PANEL_HEIGHT = 250;
+// Four control rows (font / speed / language / neural) at a 66 px step from
+// PAD+30, plus the neural "experimental" hint beneath the last row.
+export const SETTINGS_PANEL_HEIGHT = 320;
 
 const PAD = 12;
 const ROW_W = SETTINGS_PANEL_WIDTH - PAD * 2;
@@ -81,6 +91,15 @@ const FONT_GLYPH_PX: Readonly<Record<FontSizeKey, number>> = {
   S: 12,
   M: 16,
   L: 20,
+};
+
+const LANGUAGES: readonly Language[] = ["ru", "en"];
+// Each button shows the language's own autonym (Русский / English) regardless of
+// the active language — the dictionary holds identical values for these keys, so
+// `t(...)` here keeps SettingsPanel free of inline Cyrillic literals.
+const LANGUAGE_LABEL_KEYS: Readonly<Record<Language, string>> = {
+  ru: "lang.ru",
+  en: "lang.en",
 };
 
 export class SettingsPanel {
@@ -122,6 +141,24 @@ export class SettingsPanel {
     setSpeed(this.deps.speedTarget, scale);
     this.deps.applySpeed(scale);
     this.render();
+  }
+
+  /**
+   * Pick a UI language: persist it (`localStorage("language")`), re-localize the
+   * HUD live, then ask the host to close — a language switch flips every label,
+   * so (like a font change) the panel rebuilds rather than showing a half-stale
+   * mix. Persists even when no live-apply hook is wired (the choice is restored
+   * on the next open).
+   */
+  selectLanguage(lang: Language): void {
+    setLanguage(lang);
+    this.deps.applyLanguage?.();
+    this.deps.onRequestClose?.();
+  }
+
+  /** The active UI language (reads the live i18n `localStorage` store). */
+  currentLanguage(): Language {
+    return getLanguage();
   }
 
   /** Flip the (experimental) neural-AI flag, notify the gate, re-render. */
@@ -170,9 +207,12 @@ export class SettingsPanel {
 
     // The font control is built FIRST so its hit areas precede the others — the
     // historical ⚙-panel "first font button" contract (playtest4 A) relies on it.
+    // The neural toggle is built LAST so it stays the final hit area (the
+    // "neural is the last cell" contract); the language row slots in before it.
     this.renderFontRow(content, PAD + 30);
     this.renderSpeedRow(content, PAD + 96);
-    this.renderNeuralRow(content, PAD + 162);
+    this.renderLanguageRow(content, PAD + 162);
+    this.renderNeuralRow(content, PAD + 228);
   }
 
   /** Section label above a control row. */
@@ -226,6 +266,29 @@ export class SettingsPanel {
         13,
         scale === current,
         () => this.selectSpeed(scale),
+      );
+    });
+  }
+
+  /** ЯЗЫК: the supported UI languages (РУС/ENG autonyms), the active one highlighted. */
+  private renderLanguageRow(parent: Container, y: number): void {
+    this.addSectionLabel(parent, t("settings.language"), y);
+    const rowY = y + 22;
+    const rowH = 30;
+    const active = this.currentLanguage();
+    const w = (ROW_W - BTN_GAP * (LANGUAGES.length - 1)) / LANGUAGES.length;
+    LANGUAGES.forEach((lang, i) => {
+      const x = PAD + i * (w + BTN_GAP);
+      this.addCellButton(
+        parent,
+        x,
+        rowY,
+        w,
+        rowH,
+        t(LANGUAGE_LABEL_KEYS[lang]),
+        13,
+        lang === active,
+        () => this.selectLanguage(lang),
       );
     });
   }

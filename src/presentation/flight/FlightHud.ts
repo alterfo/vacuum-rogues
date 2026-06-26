@@ -833,11 +833,12 @@ export class FlightHud implements FlightModule {
 
   /** Toggle the font-size mini-panel (S / M / L). */
   /**
-   * Toggle the unified settings panel (СКОРОСТЬ / ШРИФТ / НЕЙРОСЕТЬ). Each
-   * control writes through the shared `gameSettings` store; the live effects fan
-   * back through the {@link SettingsPanel} deps (DIP): a font pick restyles via
+   * Toggle the unified settings panel (СКОРОСТЬ / ШРИФТ / ЯЗЫК / НЕЙРОСЕТЬ). Each
+   * control writes through its shared store; the live effects fan back through
+   * the {@link SettingsPanel} deps (DIP): a font pick restyles via
    * {@link onFontScaleChange} (and closes the panel, since a font change rebuilds
-   * the HUD — playtest4 A), a speed pick goes through {@link selectGameSpeed}
+   * the HUD — playtest4 A), a language pick re-localizes through the same restyle
+   * path (and closes likewise), a speed pick goes through {@link selectGameSpeed}
    * (keeps the bottom-right speed button + physics in lock-step), and the neural
    * toggle flips the feature flag (Task 2 gate) with a confirming toast. The
    * panel container is tracked as {@link settingsPanel} so the existing
@@ -858,6 +859,10 @@ export class FlightHud implements FlightModule {
       speedSteps: GAME_BALANCE.gameSpeedMultipliers,
       applySpeed: (scale) => this.selectGameSpeed(scale),
       applyFont: () => this.onFontScaleChange?.(),
+      // A language switch re-localizes the HUD via the same in-place text restyle
+      // a font change uses — `refreshFontScale()` rebuilds the text nodes, which
+      // re-read `t(...)` at creation, so the new language is picked up.
+      applyLanguage: () => this.onFontScaleChange?.(),
       onNeuralToggle: (on) =>
         this.showMessage(
           on ? "Нейросеть ИИ включена (эксперимент)" : "Нейросеть ИИ выключена",

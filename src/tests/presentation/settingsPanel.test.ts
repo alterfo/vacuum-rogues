@@ -95,6 +95,7 @@ function makeDeps(overrides: Partial<SettingsPanelDeps> = {}): {
   store: ReturnType<typeof makeStore>;
   applySpeed: ReturnType<typeof vi.fn>;
   applyFont: ReturnType<typeof vi.fn>;
+  applyLanguage: ReturnType<typeof vi.fn>;
   onNeuralToggle: ReturnType<typeof vi.fn>;
   onRequestClose: ReturnType<typeof vi.fn>;
 } {
@@ -102,6 +103,7 @@ function makeDeps(overrides: Partial<SettingsPanelDeps> = {}): {
   const store = makeStore();
   const applySpeed = vi.fn();
   const applyFont = vi.fn();
+  const applyLanguage = vi.fn();
   const onNeuralToggle = vi.fn();
   const onRequestClose = vi.fn();
   const deps: SettingsPanelDeps = {
@@ -109,6 +111,7 @@ function makeDeps(overrides: Partial<SettingsPanelDeps> = {}): {
     speedSteps: [1, 2, 4],
     applySpeed,
     applyFont,
+    applyLanguage,
     onNeuralToggle,
     onRequestClose,
     store,
@@ -120,6 +123,7 @@ function makeDeps(overrides: Partial<SettingsPanelDeps> = {}): {
     store,
     applySpeed,
     applyFont,
+    applyLanguage,
     onNeuralToggle,
     onRequestClose,
   };
@@ -226,9 +230,50 @@ describe("SettingsPanel", () => {
     const { deps, store } = makeDeps();
     new SettingsPanel(deps);
     const handlers = graphicsPointerdownHandlers();
-    // Last of the 7 cell hit areas is the neural toggle.
+    // Last of the cell hit areas is the neural toggle (built last on purpose).
     handlers[handlers.length - 1]({ stopPropagation: vi.fn() });
     expect(store.data.get(NEURAL_ENABLED_KEY)).toBe("true");
+  });
+
+  it("surfaces a ЯЗЫК row with both language autonyms, active = RU by default", () => {
+    const { deps } = makeDeps();
+    const panel = new SettingsPanel(deps);
+    expect(panel.currentLanguage()).toBe("ru");
+    const texts = allTexts();
+    expect(texts).toContain("ЯЗЫК"); // settings.language (RU, the default)
+    // Both options are always shown in their own script (autonyms).
+    expect(texts).toContain("Русский");
+    expect(texts).toContain("English");
+  });
+
+  it("selectLanguage persists the choice, re-localizes live, then requests a close", () => {
+    const { deps, applyLanguage, onRequestClose } = makeDeps();
+    const panel = new SettingsPanel(deps);
+    panel.selectLanguage("en");
+    expect(localStorage.getItem("language")).toBe("en");
+    expect(panel.currentLanguage()).toBe("en");
+    expect(applyLanguage).toHaveBeenCalledTimes(1);
+    expect(onRequestClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("reflects the persisted language — the section label localizes to EN", () => {
+    localStorage.setItem("language", "en");
+    const { deps } = makeDeps();
+    const panel = new SettingsPanel(deps);
+    expect(panel.currentLanguage()).toBe("en");
+    // The whole panel now renders in English (settings.language EN value).
+    expect(allTexts()).toContain("LANGUAGE");
+  });
+
+  it("the language hit areas (after the speed cells) switch the language", () => {
+    const { deps } = makeDeps();
+    new SettingsPanel(deps);
+    const handlers = graphicsPointerdownHandlers();
+    // 3 font + 3 speed + 2 language + 1 neural = 9 cells.
+    expect(handlers.length).toBe(9);
+    // The 8th cell (index 7) is the second language button (EN).
+    handlers[7]({ stopPropagation: vi.fn() });
+    expect(localStorage.getItem("language")).toBe("en");
   });
 });
 

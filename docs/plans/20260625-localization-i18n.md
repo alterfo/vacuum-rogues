@@ -67,8 +67,19 @@ string.
 **Files:**
 - Modify: the settings panel; verification
 
-- [ ] Add a RU/EN selector to the settings interface (live switch + persist); full
-      suite + `test:playtest` green; lint/build ok.
+- [x] Add a RU/EN selector to the settings interface (live switch + persist); full
+      suite + `test:playtest` green; lint/build ok. (Added a fourth **ЯЗЫК** row to
+      `SettingsPanel` — public `selectLanguage(lang)` persists via i18n
+      `setLanguage` (`localStorage("language")`) and fans the live re-localize out
+      through the new `applyLanguage` dep, wired in `FlightHud` to the same
+      in-place `refreshFontScale` restyle a font change uses (text nodes re-read
+      `t(...)` at creation), then closes the panel — mirroring the font flow.
+      Autonym labels (Русский/English) route through identical `lang.ru`/`lang.en`
+      dictionary keys so `SettingsPanel` stays free of inline Cyrillic. Neural row
+      kept built last to preserve the "neural is the final hit area" contract;
+      panel height grown 250→320 for the extra row. Covered by new
+      `settingsPanel.test.ts` cases — full suite (3470) + `test:playtest` (240) +
+      lint + build all green.)
 
 ### Task 5: Documentation
 - [ ] Document the i18n recipe (new string ⇒ key + ru/en) and the parity guard.
