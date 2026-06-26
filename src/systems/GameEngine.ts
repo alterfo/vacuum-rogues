@@ -492,6 +492,13 @@ export class GameEngine {
       // including the one the player is sitting in — as "unknown" and the star
       // map renders "?" everywhere.
       this.player.markVisited(this.player.currentSystemId);
+      // Reveal the home system's immediate neighbours up-front (same call the
+      // star map makes on open). Without a known cluster the InfoCenter's
+      // both-endpoints-known margin rule hid EVERY cross-system rumor («~?%»)
+      // until the player happened to open the star map — a single known system
+      // can never anchor a route. Revealing neighbours now gives the trade-margin
+      // column real numbers for the local cluster from turn 1.
+      this.galaxy.revealSystemAndNeighbors(this.player.currentSystemId);
     }
 
     // Instantiate new scene with renderer via factory (OCP: new scenes added in factory)

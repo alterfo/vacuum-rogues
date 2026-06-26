@@ -128,11 +128,11 @@ bugs, unit test for pure logic), then fix until green, then verify.
 - Modify: `src/presentation/InfoCenterScene.ts` (only if the player/known set isn't threaded correctly)
 - Create: `src/tests/info/infocenterMarginVisibility.test.ts` (extend existing rumor tests)
 
-- [ ] write a **failing** test: a rumor/route whose endpoints are **known** (player has visited or the system is `explored`) must render the numeric margin, NOT «маржа ~?%»; a route touching an undiscovered system stays masked
-- [ ] reproduce the "all margins are «?»" case: assert that at game start the player's current system and its revealed neighbours are flagged known (`hasVisited`/`explored`) so their routes show numbers
-- [ ] fix the over-broad masking: if known-detection is wrong, correct it (ensure visiting/exploring flags the system); if detection is correct but the InfoCenter still hides everything because rumors target far systems, relax the InfoCenter rule to reveal the margin when the route is anchored in a known system (decide + document the exact rule in the test)
-- [ ] keep the news-feed `maskTradeNewsMargin` masking consistent with the panel rule (no leak / no over-mask)
-- [ ] run tests — must pass before next task
+- [x] write a **failing** test: a rumor/route whose endpoints are **known** (player has visited or the system is `explored`) must render the numeric margin, NOT «маржа ~?%»; a route touching an undiscovered system stays masked — `src/tests/info/infocenterMarginVisibility.test.ts` (real-engine playtest) boots a new game and asserts a home↔neighbour rumor shows a number while a rumor into an unexplored system stays masked
+- [x] reproduce the "all margins are «?»" case: assert that at game start the player's current system and its revealed neighbours are flagged known (`hasVisited`/`explored`) so their routes show numbers — RED confirmed: pre-fix only the home system was known (neighbours unrevealed until the star map was opened), so under the both-endpoints rule *every* cross-system rumor masked to «~?%»
+- [x] fix the over-broad masking: **known-detection was wrong** — `GameEngine`'s new-game block flagged only `systems[0].explored` and never revealed neighbours, leaving a single known system that can never anchor a cross-system route. Fix: call `galaxy.revealSystemAndNeighbors(currentSystemId)` at new-game time (the same call the star map makes on open) so the home cluster is known from turn 1. The masking **rule is unchanged** (both endpoints must be known; a route touching an undiscovered system stays masked) — documented in the test
+- [x] keep the news-feed `maskTradeNewsMargin` masking consistent with the panel rule (no leak / no over-mask) — same `isSystemKnown` predicate, unchanged, so the news feed benefits from the game-start reveal identically; the locked `infoCenterRumors.test.ts` (panel + news parity) stays green
+- [x] run tests — must pass before next task — new test GREEN (3/3); infoCenterRumors/systemKnown/fogOfWar/systemVisibility/chartedNames/questKnownSystems (57) + playtest journeys/invariants + GameEngine core (26) all green; tsc + eslint clean
 
 ### Task 4: Localize onboarding/contextual-help content (helpContent.ts)
 **Files:**
