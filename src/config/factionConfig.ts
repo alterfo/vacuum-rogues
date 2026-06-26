@@ -1,25 +1,10 @@
 import { FactionType } from "@/types";
 
-export const FACTION_TITLES: Record<FactionType, string> = {
-  [FactionType.OUTLANDERS]: "ОКРАИННИКИ",
-  [FactionType.BASTIONS]: "БАСТИОНЫ",
-  [FactionType.SYNDICATE]: "СИНДИКАТ",
-  [FactionType.PARADOXES]: "ПАРАДОКСЫ",
-  [FactionType.PROGRESSORS]: "ПРОГРЕССОРЫ",
-};
-
-export const FACTION_DESCRIPTIONS: Record<FactionType, string> = {
-  [FactionType.OUTLANDERS]:
-    "Колонисты окраин с надёжными кораблями и бонусом к торговле.",
-  [FactionType.BASTIONS]:
-    "Воинственная империя с тяжёлыми кораблями и мощным оружием.",
-  [FactionType.SYNDICATE]:
-    "Теневая организация контрабандистов с быстрыми кораблями.",
-  [FactionType.PARADOXES]:
-    "Загадочная раса с непредсказуемыми технологиями и уникальными модулями.",
-  [FactionType.PROGRESSORS]:
-    "Технологически развитая раса исследователей с передовыми системами.",
-};
+// Faction title / description / bonus copy now lives in the i18n catalogs
+// (`race.faction.*` keys in `src/i18n/{ru,en}.ts`) and is read through `t()` by
+// `RaceSelectionScene` — the single source of truth, so EN renders correctly. The
+// former `FACTION_TITLES`/`FACTION_DESCRIPTIONS`/`FACTION_BONUSES` maps were removed
+// to avoid a second, drift-prone copy of the same strings.
 
 // Faction colours moved to `src/presentation/ui/palette.ts` (the colorblind-safe
 // palette, accessibility pass). Read them through `factionColor(faction)`, which
@@ -44,14 +29,6 @@ export const FACTION_STATS: Record<
     speed: 1.2,
     evasion: 0.9,
   },
-};
-
-export const FACTION_BONUSES: Record<FactionType, string> = {
-  [FactionType.OUTLANDERS]: "✦ Надёжность: сниженная стоимость ремонта",
-  [FactionType.BASTIONS]: "✦ Военные: +20% урон оружия",
-  [FactionType.SYNDICATE]: "✦ Контрабанда: +30% прибыль от нелегальных товаров",
-  [FactionType.PARADOXES]: "✦ Непредсказуемость: случайные бонусы в бою",
-  [FactionType.PROGRESSORS]: "✦ Технологии: +15% эффективность оборудования",
 };
 
 export const FACTION_LABEL: Record<FactionType, string> = {

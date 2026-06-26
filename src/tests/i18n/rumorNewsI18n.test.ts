@@ -21,6 +21,7 @@ import {
   type RouteLike,
 } from "@/domain/RouteRumor";
 import { maskTradeNewsMargin } from "@/presentation/rumorPanel";
+import { t } from "@/i18n/i18n";
 import { ru } from "@/i18n/ru";
 import { en } from "@/i18n/en";
 import { ResourceType } from "@/types";
@@ -106,6 +107,31 @@ describe("rumor/news i18n", () => {
     expect(rumorMarginMasked()).toBe("маржа ~?%");
     setLang("en");
     expect(rumorMarginMasked()).toBe("margin ~?%");
+  });
+
+  it("the RumorDirector 'deal ended' line localizes (the exact t() call it emits)", () => {
+    // RumorDirector.updateRumors emits the expired line as
+    //   t("rumor.expired", { resource: resourceLabelRu(res), from, to })
+    // — pin that resolution in both tongues so the EN expired-news path is covered.
+    setLang("ru");
+    expect(
+      t("rumor.expired", {
+        resource: resourceLabelRu(ResourceType.METALS),
+        from: "Sol",
+        to: "Vega",
+      }),
+    ).toBe("Везти Металлы из Sol в Vega больше невыгодно — акция закончилась.");
+
+    setLang("en");
+    const enLine = t("rumor.expired", {
+      resource: resourceLabelRu(ResourceType.METALS),
+      from: "Sol",
+      to: "Vega",
+    });
+    expect(enLine).not.toMatch(/[А-Яа-я]/);
+    expect(enLine).toContain("Metals");
+    expect(enLine).toContain("Sol");
+    expect(enLine).toContain("Vega");
   });
 
   it("the news re-mask is language-robust (matches a margin baked in either tongue)", () => {
