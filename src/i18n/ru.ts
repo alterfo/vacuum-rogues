@@ -148,6 +148,45 @@ export const ru: Dict = {
   "menu.noSaves": "Нет доступных сохранений",
   "menu.loadError": "Ошибка загрузки. Начните новую игру.",
 
+  // --- new-game / faction selection ----------------------------------------
+  "race.title": "ВЫБЕРИТЕ ФРАКЦИЮ",
+  "race.back": "[ Назад ]",
+  "race.start": "НАЧАТЬ ИГРУ",
+  "race.difficulty": "СЛОЖНОСТЬ",
+  "race.mode.GOD.title": "Бог",
+  "race.mode.GOD.desc":
+    "Корабль не гибнет — при нуле прочности глохнут оружие и гиперпрыжок до ремонта",
+  "race.mode.NORMAL.title": "Средний",
+  "race.mode.NORMAL.desc": "Стандартная сложность",
+  "race.mode.HARD.title": "Сложный",
+  "race.mode.HARD.desc": "Больше пиратов и Сверхразума, крупнее гарнизоны",
+  "race.faction.OUTLANDERS.title": "ОКРАИННИКИ",
+  "race.faction.OUTLANDERS.desc":
+    "Колонисты окраин с надёжными кораблями и бонусом к торговле.",
+  "race.faction.OUTLANDERS.bonus": "✦ Надёжность: сниженная стоимость ремонта",
+  "race.faction.BASTIONS.title": "БАСТИОНЫ",
+  "race.faction.BASTIONS.desc":
+    "Воинственная империя с тяжёлыми кораблями и мощным оружием.",
+  "race.faction.BASTIONS.bonus": "✦ Военные: +20% урон оружия",
+  "race.faction.SYNDICATE.title": "СИНДИКАТ",
+  "race.faction.SYNDICATE.desc":
+    "Теневая организация контрабандистов с быстрыми кораблями.",
+  "race.faction.SYNDICATE.bonus":
+    "✦ Контрабанда: +30% прибыль от нелегальных товаров",
+  "race.faction.PARADOXES.title": "ПАРАДОКСЫ",
+  "race.faction.PARADOXES.desc":
+    "Загадочная раса с непредсказуемыми технологиями и уникальными модулями.",
+  "race.faction.PARADOXES.bonus": "✦ Непредсказуемость: случайные бонусы в бою",
+  "race.faction.PROGRESSORS.title": "ПРОГРЕССОРЫ",
+  "race.faction.PROGRESSORS.desc":
+    "Технологически развитая раса исследователей с передовыми системами.",
+  "race.faction.PROGRESSORS.bonus":
+    "✦ Технологии: +15% эффективность оборудования",
+  "race.stat.hull": "Корпус: {value}",
+  "race.stat.shields": "Щиты: {value}",
+  "race.stat.speed": "Скорость: {value}",
+  "race.stat.evasion": "Уворот: {value}",
+
   // --- trade / market ------------------------------------------------------
   "trade.title": "МАРКЕТ — {planet}",
   "trade.colResource": "Ресурс",

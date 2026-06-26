@@ -36,6 +36,7 @@ const MIGRATED_SCENES = [
   "src/presentation/ui/SettingsPanel.ts",
   "src/presentation/ui/HelpPanel.ts",
   "src/systems/onboarding/helpContent.ts",
+  "src/presentation/RaceSelectionScene.ts",
 ] as const;
 
 function read(rel: string): string {

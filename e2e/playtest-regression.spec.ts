@@ -1819,6 +1819,57 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('regression: English build — faction-selection screen renders no Russian (i18n Task 6)', async ({ page }) => {
+    await applyMockHeavySystems(page);
+    await page.goto('/');
+    await waitForEngine(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Switch the UI language to English BEFORE the scene renders (the scene reads
+    // `t()` live at render). The faction-selection screen was the explicitly
+    // user-reported still-Russian surface.
+    await page.evaluate(async () => {
+      localStorage.setItem('language', 'en');
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        transitionTo: (s: string, ctx?: object) => Promise<void>;
+      };
+      await engine.transitionTo('RACE_SELECTION', { gameEngine: engine });
+    });
+    await waitForScene(page, 'RaceSelectionScene');
+    await page.waitForTimeout(300);
+
+    // Collect every rendered Text under the scene's UI layer; assert the heading
+    // is English and NO label contains a Cyrillic character.
+    const texts = await page.evaluate(() => {
+      type Node = { text?: unknown; children?: Node[] };
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene as Record<string, unknown> | null;
+      if (!scene) return null;
+      const renderer = scene['renderer'] as { uiLayer: Node };
+      const out: string[] = [];
+      const walk = (n: Node): void => {
+        if (typeof n.text === 'string' && n.text.length > 0) out.push(n.text);
+        for (const c of n.children ?? []) walk(c);
+      };
+      walk(renderer.uiLayer);
+      return out;
+    });
+
+    await page.screenshot({ path: 'e2e/screenshots/race-selection-en.png' });
+
+    expect(texts).not.toBeNull();
+    expect(texts!).toContain('CHOOSE YOUR FACTION');
+    const cyrillic = texts!.filter((s) => /[А-Яа-яЁё]/.test(s));
+    expect(
+      cyrillic,
+      `Russian leaked into the English faction-selection screen:\n${cyrillic.join('\n')}`,
+    ).toEqual([]);
+
+    errorCollector.assertAndDetach();
+  });
+
   test('regression: Galactic Bank opens, a trade shows as a balanced posting (АБС Task 7)', async ({ page }) => {
     await setupNewGame(page);
     const errorCollector = new ErrorCollector(page);

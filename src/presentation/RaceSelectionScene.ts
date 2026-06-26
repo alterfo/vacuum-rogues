@@ -7,35 +7,18 @@ import type { GameMode } from "@/types";
 import { logger } from "@/utils/logger";
 import { pickVariant } from "./textures";
 import { factionColor } from "./ui/palette";
-import {
-  FACTION_TITLES,
-  FACTION_DESCRIPTIONS,
-  FACTION_STATS,
-  FACTION_BONUSES,
-} from "@/config/factionConfig";
+import { FACTION_STATS } from "@/config/factionConfig";
+import { t } from "@/i18n/i18n";
 
 /**
- * Difficulty modes offered on the new-game screen. Default is Средний (NORMAL),
- * reproducing today's behaviour; God floors hull + downs the ship until repair;
- * Hard adds hostiles. The chosen mode is passed into new-game player creation.
+ * Difficulty modes offered on the new-game screen, in display order. Default is
+ * Средний (NORMAL), reproducing today's behaviour; God floors hull + downs the
+ * ship until repair; Hard adds hostiles. The chosen mode is passed into new-game
+ * player creation. Their titles/descriptions are localized through
+ * `race.mode.<mode>.{title,desc}` keys (resolved at render so a language switch
+ * re-reads them).
  */
-const GAME_MODE_OPTIONS: { mode: GameMode; title: string; desc: string }[] = [
-  {
-    mode: "GOD",
-    title: "Бог",
-    desc: "Корабль не гибнет — при нуле прочности глохнут оружие и гиперпрыжок до ремонта",
-  },
-  {
-    mode: "NORMAL",
-    title: "Средний",
-    desc: "Стандартная сложность",
-  },
-  {
-    mode: "HARD",
-    title: "Сложный",
-    desc: "Больше пиратов и Сверхразума, крупнее гарнизоны",
-  },
-];
+const GAME_MODE_OPTIONS: readonly GameMode[] = ["GOD", "NORMAL", "HARD"];
 
 /**
  * Faction Selection Scene - allows player to choose their faction before starting the game
@@ -113,7 +96,7 @@ export class RaceSelectionScene extends GameScene {
 
     // Title
     const title = new Text({
-      text: "ВЫБЕРИТЕ ФРАКЦИЮ",
+      text: t("race.title"),
       style: {
         fontFamily: "Courier New",
         fontSize: 28,
@@ -160,7 +143,7 @@ export class RaceSelectionScene extends GameScene {
 
     // Back button (top-left)
     const backBtn = new Text({
-      text: "[ Назад ]",
+      text: t("race.back"),
       style: {
         fontFamily: "Courier New",
         fontSize: 16,
@@ -214,7 +197,7 @@ export class RaceSelectionScene extends GameScene {
 
     // Header
     const header = new Text({
-      text: "СЛОЖНОСТЬ",
+      text: t("race.difficulty"),
       style: {
         fontFamily: "Courier New",
         fontSize: 16,
@@ -246,9 +229,10 @@ export class RaceSelectionScene extends GameScene {
 
   /**
    * Render a single difficulty chip; the currently-selected mode is highlighted.
+   * Title/description are localized via the `race.mode.<mode>.*` keys.
    */
   private renderModeChip(
-    opt: { mode: GameMode; title: string; desc: string },
+    mode: GameMode,
     x: number,
     y: number,
     width: number,
@@ -260,7 +244,7 @@ export class RaceSelectionScene extends GameScene {
     chip.x = x;
     chip.y = y;
 
-    const isSelected = opt.mode === this.selectedMode;
+    const isSelected = mode === this.selectedMode;
     const bg = new Graphics();
     bg.rect(0, 0, width, height);
     bg.fill({ color: isSelected ? 0x1a3a4a : 0x0a1a2a, alpha: 0.95 });
@@ -273,7 +257,7 @@ export class RaceSelectionScene extends GameScene {
     chip.addChild(bg);
 
     const title = new Text({
-      text: opt.title,
+      text: t(`race.mode.${mode}.title`),
       style: {
         fontFamily: "Courier New",
         fontSize: 14,
@@ -287,7 +271,7 @@ export class RaceSelectionScene extends GameScene {
     chip.addChild(title);
 
     const desc = new Text({
-      text: opt.desc,
+      text: t(`race.mode.${mode}.desc`),
       style: {
         fontFamily: "Courier New",
         fontSize: 10,
@@ -303,7 +287,7 @@ export class RaceSelectionScene extends GameScene {
     chip.addChild(desc);
 
     bg.on("pointerdown", () => {
-      this.selectMode(opt.mode);
+      this.selectMode(mode);
     });
 
     bg.on("pointerover", () => {
@@ -383,7 +367,7 @@ export class RaceSelectionScene extends GameScene {
 
     // Faction name
     const factionName = new Text({
-      text: FACTION_TITLES[faction],
+      text: t(`race.faction.${faction}.title`),
       style: {
         fontFamily: "Courier New",
         fontSize: 16,
@@ -397,7 +381,7 @@ export class RaceSelectionScene extends GameScene {
     cardContainer.addChild(factionName);
 
     // Faction description
-    const description = FACTION_DESCRIPTIONS[faction];
+    const description = t(`race.faction.${faction}.desc`);
     const descText = new Text({
       text: description,
       style: {
@@ -416,7 +400,7 @@ export class RaceSelectionScene extends GameScene {
 
     // Unique bonus
     const bonusText = new Text({
-      text: FACTION_BONUSES[faction],
+      text: t(`race.faction.${faction}.bonus`),
       style: {
         fontFamily: "Courier New",
         fontSize: 11,
@@ -531,10 +515,10 @@ export class RaceSelectionScene extends GameScene {
   private getFactionStatsText(faction: FactionType): string {
     const stats = FACTION_STATS[faction];
     const lines = [
-      `Корпус: ${stats.hull}`,
-      `Щиты: ${stats.shields}`,
-      `Скорость: ${stats.speed.toFixed(1)}`,
-      `Уворот: ${stats.evasion.toFixed(1)}`,
+      t("race.stat.hull", { value: stats.hull }),
+      t("race.stat.shields", { value: stats.shields }),
+      t("race.stat.speed", { value: stats.speed.toFixed(1) }),
+      t("race.stat.evasion", { value: stats.evasion.toFixed(1) }),
     ];
     return lines.join("\n");
   }
@@ -572,7 +556,7 @@ export class RaceSelectionScene extends GameScene {
 
     // Button text
     const btnText = new Text({
-      text: "НАЧАТЬ ИГРУ",
+      text: t("race.start"),
       style: {
         fontFamily: "Courier New",
         fontSize: 20,
@@ -654,9 +638,9 @@ export class RaceSelectionScene extends GameScene {
    */
   e2eSelectMode(mode: string): void {
     if (!__DEBUG__) return;
-    const upper = mode.toUpperCase();
-    const valid = GAME_MODE_OPTIONS.some((o) => o.mode === upper);
-    this.selectMode(valid ? (upper as GameMode) : "NORMAL");
+    const upper = mode.toUpperCase() as GameMode;
+    const valid = GAME_MODE_OPTIONS.includes(upper);
+    this.selectMode(valid ? upper : "NORMAL");
   }
 
   /**

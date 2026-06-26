@@ -148,6 +148,43 @@ export const en: Dict = {
   "menu.noSaves": "No saved games available",
   "menu.loadError": "Load failed. Start a new game.",
 
+  // --- new-game / faction selection ----------------------------------------
+  "race.title": "CHOOSE YOUR FACTION",
+  "race.back": "[ Back ]",
+  "race.start": "START GAME",
+  "race.difficulty": "DIFFICULTY",
+  "race.mode.GOD.title": "God",
+  "race.mode.GOD.desc":
+    "The ship never dies — at zero hull, weapons and hyperjump stall until repaired",
+  "race.mode.NORMAL.title": "Normal",
+  "race.mode.NORMAL.desc": "Standard difficulty",
+  "race.mode.HARD.title": "Hard",
+  "race.mode.HARD.desc": "More pirates and Overmind, larger garrisons",
+  "race.faction.OUTLANDERS.title": "OUTLANDERS",
+  "race.faction.OUTLANDERS.desc":
+    "Frontier colonists with reliable ships and a trade bonus.",
+  "race.faction.OUTLANDERS.bonus": "✦ Reliability: reduced repair cost",
+  "race.faction.BASTIONS.title": "BASTIONS",
+  "race.faction.BASTIONS.desc":
+    "A militant empire with heavy ships and powerful weapons.",
+  "race.faction.BASTIONS.bonus": "✦ Military: +20% weapon damage",
+  "race.faction.SYNDICATE.title": "SYNDICATE",
+  "race.faction.SYNDICATE.desc":
+    "A shadowy smuggler organization with fast ships.",
+  "race.faction.SYNDICATE.bonus": "✦ Smuggling: +30% profit from illegal goods",
+  "race.faction.PARADOXES.title": "PARADOXES",
+  "race.faction.PARADOXES.desc":
+    "A mysterious race with unpredictable technology and unique modules.",
+  "race.faction.PARADOXES.bonus": "✦ Unpredictability: random combat bonuses",
+  "race.faction.PROGRESSORS.title": "PROGRESSORS",
+  "race.faction.PROGRESSORS.desc":
+    "A technologically advanced race of explorers with cutting-edge systems.",
+  "race.faction.PROGRESSORS.bonus": "✦ Technology: +15% equipment efficiency",
+  "race.stat.hull": "Hull: {value}",
+  "race.stat.shields": "Shields: {value}",
+  "race.stat.speed": "Speed: {value}",
+  "race.stat.evasion": "Evasion: {value}",
+
   // --- trade / market ------------------------------------------------------
   "trade.title": "MARKET — {planet}",
   "trade.colResource": "Resource",
