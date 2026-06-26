@@ -40,10 +40,10 @@ by an agent actually playing.
 **Files:**
 - Create: `src/tests/playtest/letsplay/ci.run.ts` (+ a `letsplay:ci` script)
 
-- [ ] Run K seeded sessions of N steps, aggregate via `evaluate`, exit non-zero on
+- [x] Run K seeded sessions of N steps, aggregate via `evaluate`, exit non-zero on
       failure with a readable report; bound runtime for the pre-push budget.
-- [ ] write a test: the runner flags a deliberately broken build and passes a healthy one.
-- [ ] run tests — green.
+- [x] write a test: the runner flags a deliberately broken build and passes a healthy one.
+- [x] run tests — green.
 
 ### Task 3: Wire into CI + thresholds
 **Files:**

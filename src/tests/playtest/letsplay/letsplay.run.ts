@@ -27,6 +27,7 @@ import { observe, type Observation } from "./observe";
 import { PlayerAgent, type AgentStep } from "./PlayerAgent";
 import type { PlayerPolicy } from "./PlayerPolicy";
 import { selectPlayerPolicy } from "./policyGate";
+import type { VitalsSample } from "./sessionMetrics";
 
 /** Knobs for a letsplay run; every field has a sane dev default. */
 export interface LetsplayOptions {
@@ -80,6 +81,13 @@ export interface SessionReport {
   errors: RecordedError[];
   /** Always-actionable-invariant breaches caught during the session. */
   violations: InvariantViolation[];
+  /**
+   * Per-checkpoint vitals time-series (one sample before each step plus a final
+   * resting sample) — the raw material the metrics layer folds into balance
+   * signals (credits/day, days-to-first-upgrade). Empty only if the player never
+   * existed (it always does after `newGame`).
+   */
+  samples: VitalsSample[];
 }
 
 /** The aggregate report across all sessions — what a run produces. */
@@ -140,20 +148,41 @@ export function checkInvariants(
   return out;
 }
 
-/** Sweep `engine` for invariant breaches at `step` of `session`. */
-function sweepInvariants(
+/** What one observe-checkpoint yields: invariant breaches + a vitals sample. */
+interface Checkpoint {
+  violations: InvariantViolation[];
+  sample: VitalsSample | null;
+}
+
+/**
+ * Observe `engine` **once** at `step` of `session` and derive both the invariant
+ * breaches and a vitals sample from that single projection — folding the
+ * always-actionable sweep and the balance-signal sampling into one observe so the
+ * two never disagree about the state they saw.
+ */
+function checkpoint(
   engine: GameEngine,
   session: number,
   step: number,
-): InvariantViolation[] {
+): Checkpoint {
   const obs = observe(engine);
-  return checkInvariants(obs).map((v) => ({
+  const violations = checkInvariants(obs).map((v) => ({
     session,
     step,
     scene: obs.scene,
     invariant: v.invariant,
     detail: v.detail,
   }));
+  const sample: VitalsSample | null = obs.player
+    ? {
+        step,
+        day: engine.galaxy?.gameDays ?? 0,
+        credits: obs.player.credits,
+        hull: obs.player.hull,
+        maxHull: obs.player.maxHull,
+      }
+    : null;
+  return { violations, sample };
 }
 
 /** Play one session of `steps` steps on a freshly-booted harness. */
@@ -169,15 +198,20 @@ async function playSession(
     const agent = new PlayerAgent(harness, makePolicy());
     const transcript: AgentStep[] = [];
     const violations: InvariantViolation[] = [];
+    const samples: VitalsSample[] = [];
 
     for (let step = 0; step < steps; step++) {
       // Check the state the agent is about to act in, then let it take one step.
-      violations.push(...sweepInvariants(harness.engine, index, step));
+      const cp = checkpoint(harness.engine, index, step);
+      violations.push(...cp.violations);
+      if (cp.sample) samples.push(cp.sample);
       const res = await agent.run(1);
       for (const s of res.steps) transcript.push({ ...s, index: step });
     }
-    // A final sweep on the resting state after the last applied action.
-    violations.push(...sweepInvariants(harness.engine, index, steps));
+    // A final sweep + sample on the resting state after the last applied action.
+    const final = checkpoint(harness.engine, index, steps);
+    violations.push(...final.violations);
+    if (final.sample) samples.push(final.sample);
 
     return {
       index,
@@ -187,6 +221,7 @@ async function playSession(
       transcript,
       errors: harness.errors(),
       violations,
+      samples,
     };
   } finally {
     harness.dispose();
