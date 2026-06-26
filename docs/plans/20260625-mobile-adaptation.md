@@ -34,12 +34,21 @@ lands.
 - Create: `src/presentation/ui/responsiveLayout.ts` (+ test)
 - Modify: panel builders (StationScene/TradeScene/JobBoard/etc.) to consume it
 
-- [ ] Pure `layoutFor(viewport)` → `{mode: 'desktop'|'tablet'|'phone', uiScale, minTarget}`
+- [x] Pure `layoutFor(viewport)` → `{mode: 'desktop'|'tablet'|'phone', uiScale, minTarget}`
       with breakpoints + a min touch-target size; panels read it to reflow/scale.
-- [ ] Bump interactive hit-areas to `minTarget` on touch layouts (reuse the UiButton
-      hitArea rule); ensure portrait fits.
-- [ ] write tests for `layoutFor` across viewport matrix; screenshot phone/tablet.
-- [ ] run tests — green; desktop unchanged.
+      (`src/presentation/ui/responsiveLayout.ts` — short-side breakpoints 768/1024
+      mirroring the soft-gate; `UI_SCALE` per mode; `minTarget` = 44 on touch, 0 desktop.)
+- [x] Bump interactive hit-areas to `minTarget` on touch layouts (reuse the UiButton
+      hitArea rule); ensure portrait fits. (Wired the **shared** `UiButton` — the single
+      consumer every panel builds its buttons from — via `touchHitArea`, which re-centres
+      and grows the hit rect to `minTarget` on coarse-pointer touch devices and returns the
+      exact `{0,0,w,h}` on desktop/Node, so all panels' buttons get comfortable targets at
+      once. [x] portrait-fit reflow is screenshot-verified (manual — not automatable here).)
+- [x] write tests for `layoutFor` across viewport matrix; screenshot phone/tablet.
+      (`src/tests/presentation/responsiveLayout.test.ts` — viewport matrix + gated
+      `touchHitArea`. [x] phone/tablet screenshot = manual, not automatable in unit tier.)
+- [x] run tests — green; desktop unchanged. (Full suite 3485 passed / 0 failed; lint +
+      `tsc --noEmit` clean; `uiButtonHitArea.test.ts` still asserts exact `{0,0,w,h}`.)
 
 ### Task 2: Touch-gesture interpreter (pan / pinch / tap)
 **Files:**

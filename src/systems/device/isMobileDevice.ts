@@ -38,7 +38,7 @@ export interface DeviceEnv {
 }
 
 /** Snapshot the live `window`/`navigator`, tolerating a runtime that lacks them. */
-function liveEnv(): DeviceEnv {
+export function liveEnv(): DeviceEnv {
   const win = typeof window !== "undefined" ? window : undefined;
   const nav = typeof navigator !== "undefined" ? navigator : undefined;
   return {
@@ -58,7 +58,7 @@ function liveEnv(): DeviceEnv {
  * `matchMedia` is unavailable (or throws) it degrades to a touch-capability
  * check via `maxTouchPoints`, and to `false` when nothing is knowable.
  */
-function hasCoarsePointer(env: DeviceEnv): boolean {
+export function hasCoarsePointer(env: DeviceEnv = liveEnv()): boolean {
   if (typeof env.matchMedia === "function") {
     try {
       return !!env.matchMedia("(pointer: coarse)").matches;

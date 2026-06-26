@@ -6,6 +6,7 @@ import {
   type FederatedPointerEvent,
 } from "pixi.js";
 import { scaledFont } from "@/utils/fontScale";
+import { touchHitArea } from "@/presentation/ui/responsiveLayout";
 
 export type ButtonAccent = "primary" | "danger" | "success" | "neutral";
 
@@ -94,7 +95,11 @@ export class UiButton {
     // a bare Container has no bounds of its own. Without an explicit hitArea
     // the button is mouse-dead (real-pointer regression, 2026-06-10 playtest —
     // Ход/pause, speed, gear and every planet-menu button were unclickable).
-    this.container.hitArea = new Rectangle(0, 0, btnW, btnH);
+    // On touch-primary devices the rectangle grows to a comfortable min target
+    // (re-centred on the visual button); on desktop/Node it is exactly
+    // {0,0,btnW,btnH} — byte-for-byte unchanged (see responsiveLayout).
+    const ha = touchHitArea(btnW, btnH);
+    this.container.hitArea = new Rectangle(ha.x, ha.y, ha.width, ha.height);
 
     this.container.on("pointerdown", (event: FederatedPointerEvent) => {
       event.stopPropagation();
