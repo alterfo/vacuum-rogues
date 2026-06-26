@@ -3,6 +3,7 @@ import { scaledText } from "./scaledText";
 import { UiButton } from "./UiButton";
 import type { Renderer } from "../Renderer";
 import type { HelpEntry } from "@/systems/onboarding/helpContent";
+import { t } from "@/i18n/i18n";
 
 /**
  * The reusable, dismissible onboarding / contextual-help panel
@@ -96,7 +97,7 @@ export class HelpPanel {
     }
 
     if (entry.controls && entry.controls.length > 0) {
-      const header = scaledText("Управление:", 12, 0x88aabb, {
+      const header = scaledText(t("help.controlsHeader"), 12, 0x88aabb, {
         rawColor: true,
         fontWeight: "bold",
       });
@@ -124,7 +125,7 @@ export class HelpPanel {
     // «Понятно» (primary) closes the panel; the «✕» in the corner does the same.
     const okBtn = new UiButton(
       "",
-      "Понятно",
+      t("help.gotIt"),
       "primary",
       (e) => {
         e.stopPropagation();

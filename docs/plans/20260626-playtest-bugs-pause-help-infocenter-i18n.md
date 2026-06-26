@@ -139,11 +139,11 @@ bugs, unit test for pure logic), then fix until green, then verify.
 - Modify: `src/systems/onboarding/helpContent.ts`, `src/i18n/ru.ts`, `src/i18n/en.ts`
 - Modify: `src/tests/i18n/migratedScenes.test.ts` (add onboarding keys)
 
-- [ ] move every `HELP_CONTENT` title/body/controls string into the `ru`/`en` catalogs under stable keys and have `helpFor(key)` resolve through `t()` (so the help panel re-reads on language change like other migrated scenes)
-- [ ] add English translations for all onboarding entries in `en.ts`
-- [ ] write tests: every onboarding key exists in both catalogs (parity) and `helpFor` returns the active-language string
-- [ ] verify the welcome/combat one-shot hints also resolve through `t()`
-- [ ] run tests — must pass before next task
+- [x] move every `HELP_CONTENT` title/body/controls string into the `ru`/`en` catalogs under stable keys and have `helpFor(key)` resolve through `t()` (so the help panel re-reads on language change like other migrated scenes) — `helpContent.ts` rebuilt: `HELP_SPEC` drives `help.<key>.{title,body{N},control{N}}` keys, each `HELP_CONTENT` entry is a live getter resolving through `t()`; object identity per key preserved (the locked `helpFor(key).toBe(HELP_CONTENT[key])` test stays green). Panel chrome «Управление:»/«Понятно» in `HelpPanel.ts` also routed through `t()` (`help.controlsHeader`/`help.gotIt`)
+- [x] add English translations for all onboarding entries in `en.ts` — every `help.*` key added to both `ru.ts` (verbatim) and `en.ts` (translated)
+- [x] write tests: every onboarding key exists in both catalogs (parity) and `helpFor` returns the active-language string — `src/tests/onboarding/helpContentI18n.test.ts` asserts key parity + RU-default + EN resolution + live re-read on switch
+- [x] verify the welcome/combat one-shot hints also resolve through `t()` — covered by the test (EN resolution + no-Cyrillic-leak assertion on the combat entry)
+- [x] run tests — must pass before next task — onboarding + i18n suites (12 files / 92 tests incl. the locked `helpContent.test.ts`, parity, migrated-scenes guard with `HelpPanel.ts` + `helpContent.ts` appended) green; tsc + eslint clean
 
 ### Task 5: Localize InfoCenter rumor + news generated text
 **Files:**

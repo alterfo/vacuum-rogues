@@ -167,4 +167,163 @@ export const en: Dict = {
   "comms.equipment": "Equipment:\n{items}",
   "comms.cargo": "Cargo: {cargo}",
   "comms.shielded": "Target is field-shielded —\nscan impossible",
+
+  // --- onboarding / contextual help (panel chrome) -------------------------
+  "help.controlsHeader": "Controls:",
+  "help.gotIt": "Got it",
+
+  // --- onboarding: welcome / goal intro ------------------------------------
+  "help.welcome.title": "Welcome, rogue!",
+  "help.welcome.body1":
+    "You are a free pilot in a living galaxy. Your goal — get rich and stop" +
+    " the Overmind threat: trade, take contracts, explore systems and" +
+    " reinforce your ship until you're ready to fight back.",
+  "help.welcome.body2":
+    "Start small: fly to the nearest planet, look around and take your first" +
+    " contract. The «?» button at the top right opens a hint for the current" +
+    " screen at any time.",
+
+  // --- onboarding: space flight --------------------------------------------
+  "help.SPACE_FLIGHT.title": "Space Flight",
+  "help.SPACE_FLIGHT.body1":
+    "You pilot your ship within a star system. Approach planets and stations" +
+    " to land, and other ships to engage in combat or hail them.",
+  "help.SPACE_FLIGHT.body2":
+    "To move to a neighbouring system, open the star map and make a" +
+    " hyperjump.",
+  "help.SPACE_FLIGHT.control1": "LMB on a point — fly there",
+  "help.SPACE_FLIGHT.control2":
+    "LMB on an object — interact (land / grapple / combat)",
+  "help.SPACE_FLIGHT.control3": "Star map — hyperjump between systems",
+
+  // --- onboarding: star map ------------------------------------------------
+  "help.STAR_MAP.title": "Star Map",
+  "help.STAR_MAP.body1":
+    "The galaxy map shows star systems and the links between them. Pick an" +
+    " available system and make a hyperjump to travel there.",
+  "help.STAR_MAP.body2":
+    "A jump consumes fuel and advances game time — watch your supplies and" +
+    " what's happening across the galaxy.",
+  "help.STAR_MAP.control1": "LMB on a system — select target",
+  "help.STAR_MAP.control2": "Jump — travel to the selected system",
+
+  // --- onboarding: planet --------------------------------------------------
+  "help.PLANET.title": "Planet",
+  "help.PLANET.body1":
+    "You are on a planet's surface. From here you can reach the local" +
+    " establishments: the market, shipyard, government, bank and information" +
+    " center.",
+  "help.PLANET.body2":
+    "Drop by the market for a good deal, the government for a contract, and" +
+    " the shipyard to upgrade your ship. Take off to return to space.",
+  "help.PLANET.control1": "Establishment buttons — enter",
+  "help.PLANET.control2": "Take off — return to flight",
+
+  // --- onboarding: trade ---------------------------------------------------
+  "help.TRADE.title": "Trade",
+  "help.TRADE.body1":
+    "Buy low, sell high. Prices vary from planet to planet — carry goods to" +
+    " where they're scarce and turn a profit.",
+  "help.TRADE.body2":
+    "Watch your cargo capacity and demand: rumors in the info center hint at" +
+    " where each good fetches a high price.",
+  "help.TRADE.control1": "Buy / Sell — close a deal",
+  "help.TRADE.control2": "Quantity — set the amount",
+
+  // --- onboarding: station -------------------------------------------------
+  "help.STATION.title": "Space Station",
+  "help.STATION.body1":
+    "At a station you can refuel, repair, refit your ship in the hangar and" +
+    " stock up on equipment.",
+  "help.STATION.body2":
+    "In the hangar, install weapons and modules by slot and watch the mass —" +
+    " an overloaded ship won't take off.",
+  "help.STATION.control1": "Hangar — outfit the ship",
+  "help.STATION.control2": "Services — fuel / repair",
+
+  // --- onboarding: shipyard / equipment ------------------------------------
+  "help.EQUIPMENT_SHOP.title": "Shipyard & Equipment",
+  "help.EQUIPMENT_SHOP.body1":
+    "Hulls, weapons, engines and modules are sold here. Buy what strengthens" +
+    " your ship and install it on the «Hangar» tab.",
+  "help.EQUIPMENT_SHOP.body2":
+    "Each hull has its own slots and mass capacity — the hint on an item" +
+    " shows whether it will fit.",
+  "help.EQUIPMENT_SHOP.control1": "Buy — purchase",
+  "help.EQUIPMENT_SHOP.control2": "Hangar — install what you bought",
+
+  // --- onboarding: government ----------------------------------------------
+  "help.GOVERNMENT.title": "Government",
+  "help.GOVERNMENT.body1":
+    "The local authorities hand out contracts and pay for services. Take a" +
+    " suitable contract, complete it and return for the reward.",
+  "help.GOVERNMENT.body2":
+    "Completing contracts raises your reputation with this faction and opens" +
+    " up new opportunities.",
+  "help.GOVERNMENT.control1": "Take quest — accept a contract",
+  "help.GOVERNMENT.control2": "Hand in — claim the reward",
+
+  // --- onboarding: information center ---------------------------------------
+  "help.INFO_CENTER.title": "Information Center",
+  "help.INFO_CENTER.body1":
+    "The galaxy's news hub: prices, rumors of lucrative deals, system intel" +
+    " and wanted notices. Use it to plan your route.",
+  "help.INFO_CENTER.body2":
+    "Price rumors hint at where to carry goods; system data helps you avoid" +
+    " flying into a hostile sector unprepared.",
+  "help.INFO_CENTER.control1": "Search — find information",
+  "help.INFO_CENTER.control2": "Rumors — learn about prices",
+
+  // --- onboarding: bank ----------------------------------------------------
+  "help.BANK.title": "Bank",
+  "help.BANK.body1":
+    "The bank holds savings at interest and grants loans against future" +
+    " profit. A deposit grows every day; a loan accrues interest.",
+  "help.BANK.body2":
+    "Don't miss loan payments: arrears raise the rate, and a default hits" +
+    " your reputation. Borrow wisely.",
+  "help.BANK.control1": "Deposit — put money in",
+  "help.BANK.control2": "Loan — borrow at interest",
+
+  // --- onboarding: inventory -----------------------------------------------
+  "help.INVENTORY.title": "Inventory & Equipment",
+  "help.INVENTORY.body1":
+    "Here is your cargo and ship equipment. Install modules by slot, move" +
+    " items in and out of the hold, and inspect artifacts.",
+  "help.INVENTORY.body2":
+    "Watch your slots and mass — your equipment governs combat power, speed" +
+    " and cargo capacity.",
+  "help.INVENTORY.control1": "Drag and drop — install / remove",
+  "help.INVENTORY.control2": "Slots — module banks",
+
+  // --- onboarding: text quest ----------------------------------------------
+  "help.TEXT_QUEST.title": "Text Adventure",
+  "help.TEXT_QUEST.body1":
+    "Before you is a story with choices. Read the text and pick an action —" +
+    " your decisions affect the outcome and the reward.",
+  "help.TEXT_QUEST.body2":
+    "Sometimes the outcome depends on your ship's stats or what's in your" +
+    " hold, so choose deliberately.",
+  "help.TEXT_QUEST.control1": "Pick an option — continue the story",
+
+  // --- onboarding: quest journal -------------------------------------------
+  "help.quest-journal.title": "Quest Journal",
+  "help.quest-journal.body1":
+    "Your active quests are gathered here: what to do, where to fly and the" +
+    " promised reward.",
+  "help.quest-journal.body2":
+    "Open a quest to see its objective and destination — then plot a route" +
+    " on the star map.",
+  "help.quest-journal.control1": "LMB on a quest — details",
+
+  // --- onboarding: combat --------------------------------------------------
+  "help.combat.title": "Real-Time Combat",
+  "help.combat.body1":
+    "Combat happens right in flight: your weapons fire automatically at the" +
+    " nearest enemy within range, and enemies return fire.",
+  "help.combat.body2":
+    "Maneuver to keep your distance and stay out of the line of fire. Active" +
+    " pause lets you take an aimed «Fire!» shot at the selected target.",
+  "help.combat.control1": "Movement — maneuver in combat",
+  "help.combat.control2": "«Fire!» — aimed shot on active pause",
 };
