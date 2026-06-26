@@ -121,10 +121,14 @@ Memory is **per-run** (resets each new game, like a human starting fresh).
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — only the letsplay engine
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — only the letsplay engine
       (under `src/tests/`) affected; dev-only guard still green; no prod/schema change.
-- [ ] full unit suite green; `npm run test:playtest` green; `npm run letsplay` runs a
+      (Verified: the plan's 5 commits touch only `src/tests/playtest/letsplay/` + this plan
+      doc; `letsplayDevOnly`/`noOnnxRuntime` guards green in the unit suite.)
+- [x] full unit suite green; `npm run test:playtest` green; `npm run letsplay` runs a
       clean memory-driven session; lint clean; build ok.
+      (Verified: unit 3250 passed/3 skipped; playtest 154 passed/1 skipped; letsplay 11
+      passed exit 0; lint 0 errors; build ✓.)
 
 ### Task 7: Update documentation
 **Files:**
