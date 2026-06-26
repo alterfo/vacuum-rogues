@@ -8,6 +8,7 @@ import { openFeedback } from "@/systems/feedback/openFeedback";
 import { resetSeen } from "@/systems/onboarding/onboardingState";
 import { pickVariant, pickVariantKey, tex, loadTextureAsync } from "./textures";
 import { t } from "@/i18n/i18n";
+import { reducedMotion } from "./ui/reducedMotion";
 
 interface StarParticle {
   x: number;
@@ -82,29 +83,37 @@ export class MainMenuScene extends GameScene {
     const h = this.renderer.app.screen.height;
     const time = performance.now();
 
+    // Accessibility: when reduced motion is active the menu backdrop is rendered
+    // but frozen — stars/ships/planets are still drawn + positioned, just not
+    // advanced, twinkled or spun (the decorative idle motion the preference targets).
+    const reduced = reducedMotion();
+
     // Animate stars with parallax and twinkling
     if (this.starGraphics) {
       this.starGraphics.clear();
       for (const s of this.starParticles) {
-        // Twinkling effect
-        const tw =
-          Math.sin(time * s.twinkleSpeed + s.twinkleOffset) * 0.3 + 0.7;
+        // Twinkling effect (held steady under reduced motion)
+        const tw = reduced
+          ? 1
+          : Math.sin(time * s.twinkleSpeed + s.twinkleOffset) * 0.3 + 0.7;
         this.starGraphics.fill({ color: s.color, alpha: s.alpha * tw });
         this.starGraphics.circle(s.x, s.y, s.size);
 
         // Parallax scrolling (slower for distant stars)
-        s.x += s.speed * s.layer * deltaTime * 0.01;
-        if (s.x > w + 10) {
-          s.x = -10;
-          s.y = Math.random() * h;
+        if (!reduced) {
+          s.x += s.speed * s.layer * deltaTime * 0.01;
+          if (s.x > w + 10) {
+            s.x = -10;
+            s.y = Math.random() * h;
+          }
         }
       }
     }
 
-    // Animate multiple ships
+    // Animate multiple ships (positioned every frame, only advanced when not reduced)
     if (w > 0 && h > 0) {
       for (const ship of this.demoShips) {
-        ship.angle += deltaTime * ship.speed;
+        if (!reduced) ship.angle += deltaTime * ship.speed;
         ship.container.x = w * 0.5 + Math.cos(ship.angle) * w * ship.radius;
         ship.container.y =
           h * 0.5 + Math.sin(ship.angle * 0.7) * h * ship.offsetY;
@@ -112,9 +121,11 @@ export class MainMenuScene extends GameScene {
       }
     }
 
-    // Slow planet rotation keeps the backdrop alive
-    for (const p of this.menuPlanets) {
-      p.node.rotation += p.spin * deltaTime;
+    // Slow planet rotation keeps the backdrop alive (frozen under reduced motion)
+    if (!reduced) {
+      for (const p of this.menuPlanets) {
+        p.node.rotation += p.spin * deltaTime;
+      }
     }
   }
 

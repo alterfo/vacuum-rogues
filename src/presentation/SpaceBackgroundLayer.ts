@@ -6,6 +6,7 @@ import { SeededRNG } from "@/utils/seededRNG";
 import type { FlightModule } from "./flight/FlightModule";
 import { pickVariant, pickVariantKey, loadTextureAsync } from "./textures";
 import { BACKGROUND_DIM } from "@/config/balance";
+import { reducedMotion } from "./ui/reducedMotion";
 
 interface DriftAsteroid {
   g: Graphics;
@@ -190,6 +191,18 @@ export class SpaceBackgroundLayer implements FlightModule {
   }
 
   update(_dt: number, bgElapsed: number): void {
+    // Accessibility: when reduced motion is active (player setting OR the OS-level
+    // `prefers-reduced-motion`), suppress every *idle/autonomous* animation —
+    // drifting asteroids/ships/dust, comets, the camera asteroid, and the nebula/
+    // swarm/twinkle "breathing" pulses — but keep the *camera-driven* parallax
+    // positioning so panning still reads coherently (it only moves when the player
+    // moves the view, which is not the decorative motion the preference targets).
+    if (reducedMotion()) {
+      this.updateStarField(); // camera-pan parallax of star layers (no idle motion)
+      this.positionNebulae(); // keep nebula clouds centred + parallaxed, but frozen
+      return;
+    }
+
     // Mid-ground parallax.
     this.updateDriftAsteroids(_dt);
     this.updateBgShips(_dt);
@@ -781,11 +794,15 @@ export class SpaceBackgroundLayer implements FlightModule {
     }
   }
 
-  /** Slow drift + gentle "breathing" pulse so the nebulae feel alive. */
-  private updateNebulae(bgElapsed: number): void {
-    // Nebulae live in skyContainer (screen-space) — they don't scale with gameLayer
-    // zoom, so depth remains consistent at any zoom level. Gentle parallax
-    // (NEBULA_DEPTH ≈ 0.04) is midway between far stars (0.02) and mid stars (0.08).
+  /**
+   * Camera-driven parallax positioning of the whole nebula container (no idle
+   * motion). Nebulae live in skyContainer (screen-space) — they don't scale with
+   * gameLayer zoom, so depth remains consistent at any zoom level. Gentle parallax
+   * (NEBULA_DEPTH ≈ 0.04) is midway between far stars (0.02) and mid stars (0.08).
+   * Extracted so reduced-motion can keep the clouds centred + parallaxed while
+   * freezing the drift/breathing animation (see `update`).
+   */
+  private positionNebulae(): void {
     const NEBULA_DEPTH = 0.04;
     if (this.nebulaeContainer) {
       const cam = this.getCamera();
@@ -794,6 +811,11 @@ export class SpaceBackgroundLayer implements FlightModule {
       this.nebulaeContainer.x = cx + cam.panX * NEBULA_DEPTH;
       this.nebulaeContainer.y = cy + cam.panY * NEBULA_DEPTH;
     }
+  }
+
+  /** Slow drift + gentle "breathing" pulse so the nebulae feel alive. */
+  private updateNebulae(bgElapsed: number): void {
+    this.positionNebulae();
 
     const DRIFT_X = 0.006;
     const DRIFT_Y = 0.004;

@@ -40,10 +40,16 @@ ships), and removes barriers for a chunk of players.
 **Files:**
 - Create: `src/presentation/ui/reducedMotion.ts` (+ test); modify parallax/particle/transition callers
 
-- [ ] `reducedMotion()` = setting OR `matchMedia('(prefers-reduced-motion: reduce)')`;
+- [x] `reducedMotion()` = setting OR `matchMedia('(prefers-reduced-motion: reduce)')`;
       callers damp/disable parallax, heavy particles, and screen transitions when true.
-- [ ] write tests: the flag resolves from setting + media; callers honour it.
-- [ ] run tests — green.
+      (`src/presentation/ui/reducedMotion.ts`; `SpaceBackgroundLayer.update` freezes idle
+      drift/comets/swarm-nebula-twinkle pulses while keeping camera-driven parallax;
+      `MainMenuScene.update` renders the backdrop but freezes star/ship/planet motion.
+      There are no animated screen-transition fades in the codebase to damp.)
+- [x] write tests: the flag resolves from setting + media; callers honour it.
+      (`reducedMotion.test.ts` — setting/media/OR + degrade paths; `spaceBackgroundLayer.test.ts`
+      — drift freezes under the flag, camera parallax still positions the nebula.)
+- [x] run tests — green.
 
 ### Task 3: Key remapping
 **Files:**

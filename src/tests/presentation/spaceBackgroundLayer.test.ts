@@ -71,6 +71,8 @@ interface BackgroundInternals {
   starLayers: unknown[];
   dimmer: Graphics | null;
   nebulaBackdropSprite: Sprite | null;
+  driftAsteroids: { x: number; y: number }[];
+  nebulaeContainer: Container | null;
 }
 
 describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
@@ -150,6 +152,49 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
     );
 
     layer.destroy();
+  });
+
+  it("honours reduced motion: idle parallax/particles freeze, camera parallax still positions", () => {
+    // Default (no reduced-motion preference): idle drift advances each tick.
+    localStorage.clear();
+    const moving = makeHarness();
+    moving.layer.initialize();
+    const movingInternal = moving.layer as unknown as BackgroundInternals;
+    const before = movingInternal.driftAsteroids.map((a) => ({
+      x: a.x,
+      y: a.y,
+    }));
+    moving.layer.update(1000, 1000);
+    const movedDelta = movingInternal.driftAsteroids.reduce(
+      (sum, a, i) =>
+        sum + Math.abs(a.x - before[i].x) + Math.abs(a.y - before[i].y),
+      0,
+    );
+    expect(movedDelta).toBeGreaterThan(0);
+    moving.layer.destroy();
+
+    // Reduced motion ON (player setting): the same idle drift is frozen.
+    localStorage.setItem("reducedMotion", "true");
+    const calm = makeHarness();
+    calm.layer.initialize();
+    const calmInternal = calm.layer as unknown as BackgroundInternals;
+    const frozenBefore = calmInternal.driftAsteroids.map((a) => ({
+      x: a.x,
+      y: a.y,
+    }));
+    calm.layer.update(1000, 1000);
+    calmInternal.driftAsteroids.forEach((a, i) => {
+      expect(a.x).toBe(frozenBefore[i].x);
+      expect(a.y).toBe(frozenBefore[i].y);
+    });
+    // Camera-driven parallax positioning still runs: the nebula container is
+    // centred (screen 800×600 → centre 400,300) rather than left at the origin.
+    expect(calmInternal.nebulaeContainer).not.toBeNull();
+    expect(calmInternal.nebulaeContainer!.x).toBeCloseTo(400);
+    expect(calmInternal.nebulaeContainer!.y).toBeCloseTo(300);
+    calm.layer.destroy();
+
+    localStorage.clear();
   });
 
   it("runs an update tick and tears down cleanly without throwing", () => {
