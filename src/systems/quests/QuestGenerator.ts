@@ -20,6 +20,10 @@ import {
   ELITE_QUEST_MIN_RANK,
   QUEST_BASE_REWARD,
   QUEST_REWARD_PER_JUMP,
+  QUEST_DEADLINE_BASE_DAYS,
+  QUEST_DEADLINE_PER_JUMP_DAYS,
+  QUEST_DEADLINE_BUFFER_MIN_DAYS,
+  QUEST_DEADLINE_BUFFER_MAX_DAYS,
   RESOURCE_BASE_PRICES,
   LOCAL_DELIVERY_REWARD_MARGIN,
 } from "@/config/balance";
@@ -391,8 +395,11 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
   const bucket = Math.floor(day / Math.max(1, refreshEveryDays));
   const boardSeed = `${seed}|board|${planetId}|${bucket}`;
 
-  // Hyperjump distance from the origin to every reachable system.
-  const jumpDist = jumpDistances(systems, originSystemId);
+  // Hyperjump distance from the origin to every reachable system. Use the
+  // UNDIRECTED warp metric so the advertised jump count matches the route the
+  // nav/star-map actually flies (warp follows an edge either way; ~25% of links
+  // are one-way) — never "1-2 advertised / 3-6 actual".
+  const jumpDist = jumpDistances(systems, originSystemId, { undirected: true });
   // Systems we can actually send the player to (anything but the origin).
   // Unexplored ("?") systems are excluded — a quest must never point the
   // player at a system they have not yet charted (Task 2). `explored` is a
@@ -574,7 +581,9 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
 
     if (targetSys) {
       const jumps =
-        jumpDistances(systems, originSystemId).get(targetAdjacentId) ?? 1;
+        jumpDistances(systems, originSystemId, { undirected: true }).get(
+          targetAdjacentId,
+        ) ?? 1;
       const { credits, experience, deadline } = economics(
         QuestType.DEFENSE,
         jumps,
@@ -687,9 +696,17 @@ function economics(
       rng.nextFloat(0.9, 1.2),
   );
   const experience = Math.round(credits * 0.4);
-  // Minimum 30 days for any jump quest; scales at 20 days/jump (≥45 for 2-hop).
-  const buffer = rng.nextInt(5, 10);
-  const deadline = jumps > 0 ? Math.max(30, jumps * 20 + buffer) : 0;
+  // Deadline = BASE + jumps × PER_JUMP + a small buffer, off the REAL (undirected)
+  // jump count — bounded but always enough to make the trip for that distance.
+  // 1-jump → 37-42 days, 2-jump → 53-58, 3-jump → 69-74 (see balance.ts).
+  const buffer = rng.nextInt(
+    QUEST_DEADLINE_BUFFER_MIN_DAYS,
+    QUEST_DEADLINE_BUFFER_MAX_DAYS,
+  );
+  const deadline =
+    jumps > 0
+      ? QUEST_DEADLINE_BASE_DAYS + jumps * QUEST_DEADLINE_PER_JUMP_DAYS + buffer
+      : 0;
   return { credits, experience, deadline };
 }
 

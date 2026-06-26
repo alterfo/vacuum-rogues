@@ -157,6 +157,27 @@ export function modelledDaysToAfford(
  */
 export const QUEST_REWARD_PER_JUMP = 220;
 
+/**
+ * Quest deadline budget (game days). A timed quest's deadline is
+ * `BASE + jumps × PER_JUMP` (+ a small random buffer), where `jumps` is the REAL
+ * number of hyperjumps the nav graph requires (the **undirected** warp distance —
+ * see {@link jumpDistances}). The base covers picking up + the in-system legs at
+ * each end; the per-jump term covers one hyperjump's travel. The form is BOUNDED
+ * (linear in jumps, so a near 1-hop job stays time-pressured) yet always ≥ a
+ * realistic round-trip budget for the advertised distance — fixing the
+ * "1-2 advertised / 3-6 actual, 30-day deadline impossible" expiry trap.
+ *
+ * The deadline is deliberately DECOUPLED from the reward (which scales via
+ * {@link QUEST_REWARD_PER_JUMP}); a longer deadline is never extra money.
+ * At these values a 1-jump job gets 37-42 days, a 2-jump 53-58, a 3-jump 69-74.
+ */
+export const QUEST_DEADLINE_BASE_DAYS = 16;
+export const QUEST_DEADLINE_PER_JUMP_DAYS = 16;
+
+/** Min/max of the small random slack added on top of the deadline budget. */
+export const QUEST_DEADLINE_BUFFER_MIN_DAYS = 5;
+export const QUEST_DEADLINE_BUFFER_MAX_DAYS = 10;
+
 /** Minimum rank required to see elite quests (minRank = 3 → Ас). */
 export const ELITE_QUEST_MIN_RANK = 3;
 

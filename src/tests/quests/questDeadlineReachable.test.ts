@@ -1,0 +1,170 @@
+/**
+ * Task 1 (late-game recoverability): quest deadlines must be achievable for the
+ * REAL jump route, using ONE distance metric that matches what the nav/star-map
+ * actually uses.
+ *
+ * Two guarantees:
+ *  1. The deadline scales as `BASE + jumps × PER_JUMP` (+ a small buffer): bounded
+ *     (a 1-hop job stays time-pressured) yet always ≥ a realistic travel budget
+ *     for N hyperjumps + in-system legs. It is NOT a flat floor and NOT unbounded.
+ *  2. The advertised jump count equals the **undirected** warp-graph distance the
+ *     nav uses — the star-map warps along an edge in EITHER direction
+ *     (`StarMapScene.handleSystemDoubleClick`), and ~25% of galaxy links are
+ *     one-way — so a directed-only metric mis-advertises ("1-2 advertised /
+ *     3-6 actual"). The generator must use the same undirected metric the player
+ *     actually travels.
+ */
+import { describe, it, expect } from "vitest";
+import type { StarSystem } from "@/domain/StarSystem";
+import { generateQuestBoard } from "@/systems/quests/QuestGenerator";
+import { jumpDistances } from "@/systems/galaxy/jumpDistance";
+import {
+  QUEST_DEADLINE_BASE_DAYS,
+  QUEST_DEADLINE_PER_JUMP_DAYS,
+  QUEST_DEADLINE_BUFFER_MIN_DAYS,
+  QUEST_DEADLINE_BUFFER_MAX_DAYS,
+} from "@/config/balance";
+
+/** Build a star system with the given DIRECTED outgoing connections. */
+function sys(id: string, toIds: string[]): StarSystem {
+  return {
+    id,
+    name: id,
+    explored: true,
+    connections: toIds.map((t) => ({
+      fromSystemId: id,
+      toSystemId: t,
+      fuelCost: 5,
+    })),
+    planets: [{ id: `${id}_p1`, isHabitable: true, name: `${id} I` }],
+  } as unknown as StarSystem;
+}
+
+describe("jumpDistances — undirected nav metric", () => {
+  it("undirected reaches a system across a one-way edge in EITHER direction", () => {
+    // O→A, A→T, T→O (one-way back into the origin). The nav lets the player warp
+    // O↔T directly (an edge T→O exists), so the real minimum is 1 hop.
+    const systems = [sys("O", ["A"]), sys("A", ["T"]), sys("T", ["O"])];
+    const directed = jumpDistances(systems, "O");
+    const undirected = jumpDistances(systems, "O", { undirected: true });
+    expect(directed.get("T")).toBe(2); // directed: O→A→T
+    expect(undirected.get("T")).toBe(1); // nav: O↔T directly (T→O edge)
+  });
+
+  it("undirected reaches a system reachable ONLY by an incoming one-way edge", () => {
+    // T→O only: directed BFS from O never reaches T; the nav still can (T→O).
+    const systems = [sys("O", []), sys("T", ["O"])];
+    expect(jumpDistances(systems, "O").has("T")).toBe(false);
+    expect(jumpDistances(systems, "O", { undirected: true }).get("T")).toBe(1);
+  });
+
+  it("defaults to the legacy directed behaviour (no options)", () => {
+    const systems = [sys("O", ["A"]), sys("A", ["B"]), sys("B", [])];
+    const d = jumpDistances(systems, "O");
+    expect(d.get("O")).toBe(0);
+    expect(d.get("A")).toBe(1);
+    expect(d.get("B")).toBe(2);
+  });
+});
+
+describe("QuestGenerator deadline is base + jumps × perJump (bounded)", () => {
+  // A symmetric chain so directed == undirected and jumps 1/2/3 all appear.
+  const systems = [
+    sys("A", ["B"]),
+    sys("B", ["A", "C"]),
+    sys("C", ["B", "D"]),
+    sys("D", ["C"]),
+  ];
+
+  it("every routine deadline equals BASE + jumps×PER_JUMP + buffer∈[MIN,MAX]", () => {
+    for (let s = 0; s < 6; s++) {
+      const board = generateQuestBoard({
+        systems,
+        originSystemId: "A",
+        planetId: "A_p1",
+        day: s * 7,
+        seed: `reach-${s}`,
+        count: 40,
+        textRatio: 0,
+        eliteRatio: 0,
+        chainRatio: 0,
+      });
+      const timed = board.filter((q) => q.template.deadline > 0);
+      expect(timed.length).toBeGreaterThan(0);
+      for (const q of timed) {
+        const budget =
+          QUEST_DEADLINE_BASE_DAYS + q.jumps * QUEST_DEADLINE_PER_JUMP_DAYS;
+        // ≥ a realistic travel budget for the real jump count...
+        expect(q.template.deadline).toBeGreaterThanOrEqual(
+          budget + QUEST_DEADLINE_BUFFER_MIN_DAYS,
+        );
+        // ...but bounded (linear in jumps, never an unbounded value).
+        expect(q.template.deadline).toBeLessThanOrEqual(
+          budget + QUEST_DEADLINE_BUFFER_MAX_DAYS,
+        );
+      }
+    }
+  });
+
+  it("deadline grows with distance (a 2-jump job gets strictly more time than a 1-jump)", () => {
+    const board = generateQuestBoard({
+      systems,
+      originSystemId: "A",
+      planetId: "A_p1",
+      day: 0,
+      seed: "reach-grow",
+      count: 60,
+      textRatio: 0,
+      eliteRatio: 0,
+      chainRatio: 0,
+    });
+    const oneJump = board.filter(
+      (q) => q.jumps === 1 && q.template.deadline > 0,
+    );
+    const twoJump = board.filter(
+      (q) => q.jumps === 2 && q.template.deadline > 0,
+    );
+    expect(oneJump.length).toBeGreaterThan(0);
+    expect(twoJump.length).toBeGreaterThan(0);
+    const maxOne = Math.max(...oneJump.map((q) => q.template.deadline));
+    const minTwo = Math.min(...twoJump.map((q) => q.template.deadline));
+    expect(minTwo).toBeGreaterThan(maxOne);
+  });
+});
+
+describe("QuestGenerator advertises the nav (undirected) jump distance", () => {
+  it("advertised jumps == undirected warp-graph distance for every routine quest", () => {
+    // O→A→T plus a one-way T→O so the nav reaches T in 1 hop while a directed
+    // metric would advertise 2. The advertised count must follow the nav.
+    const systems = [sys("O", ["A"]), sys("A", ["T"]), sys("T", ["O"])];
+    const navDist = jumpDistances(systems, "O", { undirected: true });
+
+    let sawDifferingTarget = false;
+    for (let s = 0; s < 8; s++) {
+      const board = generateQuestBoard({
+        systems,
+        originSystemId: "O",
+        planetId: "O_p1",
+        day: s * 5,
+        seed: `nav-${s}`,
+        count: 30,
+        textRatio: 0,
+        eliteRatio: 0,
+        chainRatio: 0,
+      });
+      for (const q of board) {
+        if (q.template.deadline <= 0) continue; // local/text quests carry no jump
+        const nav = navDist.get(q.targetSystemId);
+        expect(nav).toBeDefined();
+        // Advertised distance == the distance the nav actually uses.
+        expect(q.jumps).toBe(nav);
+        // A directed metric would have advertised 2 for T (O→A→T); the nav is 1.
+        if (q.targetSystemId === "T") {
+          sawDifferingTarget = true;
+          expect(q.jumps).toBe(1);
+        }
+      }
+    }
+    expect(sawDifferingTarget).toBe(true);
+  });
+});
