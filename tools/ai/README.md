@@ -1,7 +1,7 @@
 # `tools/ai` — player-policy training (behavioural cloning)
 
 The letsplay neural player (`NeuralPolicy`) is a **tiny pure-TS MLP**
-(`12 → 32 → 10`, ~746 weights) run by `src/tests/playtest/letsplay/mlp.ts`. There
+(`18 → 32 → 10`, ~938 weights) run by `src/tests/playtest/letsplay/mlp.ts`. There
 is no ONNX runtime — the net is just a small weights JSON. This directory is the
 **code side** of producing that JSON; the actual training run is a manual
 Post-Completion step.
@@ -34,7 +34,7 @@ writeBcDataset(rows); // → .letsplay/bc-dataset.jsonl
 ```
 
 The run is **deterministic by seed**: the same `seedPrefix` reproduces the same
-dataset. Each row is `{"features": number[12], "action": 0..9}`; the action index
+dataset. Each row is `{"features": number[18], "action": 0..9}`; the action index
 is into `ACTION_ORDER` (observe.ts) — the single source of truth shared by the
 legal-action surface, the net's output head, and `NUM_ACTIONS` in the trainer.
 
@@ -48,8 +48,9 @@ python3 tools/ai/train_player.py \
     --hidden 32 --epochs 200 --seed 0
 ```
 
-It fits `Linear(12,32) → ReLU → Linear(32,10)` with cross-entropy and exports the
-two Linear layers as JSON.
+It fits `Linear(18,32) → ReLU → Linear(32,10)` with cross-entropy and exports the
+two Linear layers as JSON. (`in_dim` is read from the dataset's feature width, so
+it tracks `FEATURE_LENGTH` automatically; only `NUM_ACTIONS` is pinned.)
 
 **Weight orientation** matches PyTorch `nn.Linear` and `mlp.ts`: each layer's `W`
 is `[outDim][inDim]`, `b` is `[outDim]` — no transpose. Only the Linear layers are
@@ -66,7 +67,7 @@ Exported shape:
 
 Drop the exported `*.weights.json` where `NeuralPolicy` loads it (dev-only) and
 construct `new NeuralPolicy({ weights })`. `load()` validates that the input width
-== `FEATURE_LENGTH` (12) and the output width == `ACTION_ORDER.length` (10), so a
+== `FEATURE_LENGTH` (18) and the output width == `ACTION_ORDER.length` (10), so a
 mis-sized export fails loudly.
 
 ## Contract / parity test
@@ -78,8 +79,8 @@ so a trained net is guaranteed to load and run identically to the reference:
   (a hand-computed `input → expected scores` triple) must be reproduced by
   `mlp.forward` within `1e-5`. If `forward`'s maths or the JSON orientation ever
   drift, this fails.
-- **Shape** — a `12 → 32 → 10` export loads via `loadWeights` with the widths
-  `NeuralPolicy` requires.
+- **Shape** — an `18 → 32 → 10` export (`FEATURE_LENGTH → 32 → ACTION_ORDER`)
+  loads via `loadWeights` with the widths `NeuralPolicy` requires.
 
 When you change `featurize`'s width or `ACTION_ORDER`, update `FEATURE_LENGTH`
 (NeuralPolicy.ts) and `NUM_ACTIONS` (train_player.py) together and regenerate the
