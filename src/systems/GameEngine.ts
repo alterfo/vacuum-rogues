@@ -28,6 +28,7 @@ import { TradeSystem } from "@/systems/TradeSystem";
 import { scanTradeRoutes } from "@/systems/trade/RouteScanner";
 import { updateRumors } from "@/systems/trade/RumorDirector";
 import { stepOwnershipTick } from "@/systems/galaxy/OvermindBalance";
+import { initialOvermindSpreadState } from "@/systems/overmind/overmindSpread";
 import { SeededRNG } from "@/utils/seededRNG";
 import type { Quest } from "@/domain/Quest";
 import {
@@ -1345,6 +1346,14 @@ export class GameEngine {
       // mirroring the visitedSystems / stations guards below.
       if (!Array.isArray(this.galaxy.activeRumors)) {
         this.galaxy.activeRumors = [];
+      }
+      // Overmind endgame-arc state: the v27→28 migration backfills it, but a save
+      // already at the current version that somehow lacks it (e.g. a synthetic
+      // object whose Zod `.default` was discarded) must not leave the EOD spread
+      // tick reading `undefined`. Default it dormant here, mirroring the guards
+      // above. See initialOvermindSpreadState / MigrationPipeline 27→28.
+      if (!this.galaxy.overmindArc) {
+        this.galaxy.overmindArc = initialOvermindSpreadState();
       }
       for (const npc of this.galaxy.npcShips ?? []) {
         Object.setPrototypeOf(npc, NpcShip.prototype);

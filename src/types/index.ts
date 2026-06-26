@@ -545,6 +545,38 @@ export interface OvermindAction {
   readonly targetSystemId: string;
 }
 
+/**
+ * Overmind endgame-arc status (the spread machine's small state machine;
+ * `src/systems/overmind/overmindSpread.ts`). dormant → advancing ⇄ contained →
+ * won|lost. Persisted on `Galaxy.overmindArc`.
+ */
+export type OvermindStatus =
+  | "dormant"
+  | "advancing"
+  | "contained"
+  | "won"
+  | "lost";
+
+/**
+ * Persisted Overmind endgame-arc state — the spread machine's clock + threat
+ * snapshot. Lives on `Galaxy.overmindArc`; the captured *set* is the separate,
+ * already-persisted `galaxy.overmindSystems`. Defined in the Types layer so the
+ * domain (`Galaxy`) and validation (`schemas.ts`) can reference it without an
+ * upward import from `systems/`.
+ */
+export interface OvermindSpreadState {
+  /** Business day the arc clock started (the Overmind's "day zero"). -1 until first advance. */
+  dayZero: number;
+  /** Last business day a spread tick actually advanced the front. -1 until first spread. */
+  lastSpreadDay: number;
+  /** Current arc status (derived each tick; persisted for the UI + end-conditions). */
+  status: OvermindStatus;
+  /** Snapshot Overmind share 0..1 after this tick (drives the threat indicator). */
+  threat: number;
+  /** High-water mark of the Overmind share — lets us detect "pushed back" → contained. */
+  peakThreat: number;
+}
+
 export interface ModelConfig {
   readonly modelId: string;
   readonly url: string;

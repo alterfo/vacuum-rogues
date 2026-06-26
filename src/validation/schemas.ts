@@ -443,6 +443,39 @@ export const SpaceLootItemSchema = z.object({
   spawnedAt: z.number(),
 });
 
+/** Overmind endgame-arc status enum (mirrors OvermindStatus in @/types). */
+export const OvermindStatusSchema = z.enum([
+  "dormant",
+  "advancing",
+  "contained",
+  "won",
+  "lost",
+]);
+
+/**
+ * Persisted Overmind endgame-arc state (mirrors OvermindSpreadState in @/types).
+ * The arc clock + threat snapshot the EOD spread tick advances; the captured set
+ * itself is the separate `overmindSystems`. Optional-on-input via the GalaxySchema
+ * `.default(...)` below so saves made before it existed validate, then get the
+ * dormant default backfilled by the v27→28 migration.
+ */
+export const OvermindSpreadStateSchema = z.object({
+  dayZero: z.number(),
+  lastSpreadDay: z.number(),
+  status: OvermindStatusSchema,
+  threat: z.number().min(0).max(1),
+  peakThreat: z.number().min(0).max(1),
+});
+
+/** The dormant default arc state (mirrors initialOvermindSpreadState()). */
+const DORMANT_OVERMIND_ARC = {
+  dayZero: -1,
+  lastSpreadDay: -1,
+  status: "dormant" as const,
+  threat: 0,
+  peakThreat: 0,
+};
+
 export const GalaxySchema = z.object({
   id: z.string(),
   gameDays: z.number().int().min(0),
@@ -453,6 +486,7 @@ export const GalaxySchema = z.object({
   overmindSystems: z.array(z.string()).default([]),
   pirateSystems: z.array(z.string()).default([]),
   overmindCoreSystemId: z.string().default(""),
+  overmindArc: OvermindSpreadStateSchema.default(DORMANT_OVERMIND_ARC),
   activeTradeBoomSystems: z.record(z.number().int().min(0)).default({}),
   activeRumors: z.array(RouteRumorSchema).default([]),
 });

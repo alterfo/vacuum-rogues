@@ -11,6 +11,13 @@
       "sys_1"
     ],
     "overmindCoreSystemId": "sys_5",
+    "overmindArc": {
+      "dayZero": -1,
+      "lastSpreadDay": -1,
+      "status": "dormant",
+      "threat": 0,
+      "peakThreat": 0
+    },
     "activeTradeBoomSystems": {},
     "activeRumors": [],
     "id": "galaxy_GOLDEN_LATE",
@@ -3688,7 +3695,7 @@
     "currentSystemId": "sys_2"
   },
   "persistentDialogs": [],
-  "timestamp": 1782403271764,
+  "timestamp": 1782458808165,
   "currentSceneType": "SPACE_FLIGHT",
   "loadout": {
     "hullId": "hull_warden",
@@ -3813,5 +3820,5 @@
     },
     "loanDefaults": []
   },
-  "version": 27
+  "version": 28
 }

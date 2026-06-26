@@ -44,10 +44,10 @@ neural-Overmind work a narrative home and gives players a reason to push.
 **Files:**
 - Modify: `src/types/index.ts`/`src/domain/**`, `src/validation/schemas.ts`, `src/data/MigrationPipeline.ts`
 
-- [ ] Add persisted Overmind-arc fields (captured set, threat level, day-zero) with a
+- [x] Add persisted Overmind-arc fields (captured set, threat level, day-zero) with a
       schema entry + a migration defaulting old saves (version bump per CLAUDE.md).
-- [ ] write tests: round-trips through save/load; old saves default safely.
-- [ ] run tests — green.
+- [x] write tests: round-trips through save/load; old saves default safely.
+- [x] run tests — green.
 
 ### Task 3: Daily spread + galaxy reactions in EOD
 **Files:**

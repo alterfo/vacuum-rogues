@@ -3,7 +3,7 @@ import type { Overmind } from "./Overmind";
 import type { GalacticEvent } from "./GalacticEvent";
 import type { NpcShip } from "./NpcShip";
 import type { RouteRumor } from "./RouteRumor";
-import type { NewsEvent } from "@/types";
+import type { NewsEvent, OvermindSpreadState } from "@/types";
 import { GameSystemException } from "@/exceptions/GameSystemException";
 import { logger } from "@/utils/logger";
 
@@ -28,6 +28,20 @@ export class Galaxy {
   pirateSystems: string[] = [];
   /** The core OVERMIND system; destroying it triggers the win condition. */
   overmindCoreSystemId: string = "";
+  /**
+   * Overmind endgame-arc clock + threat snapshot (the spread machine's persisted
+   * state; `src/systems/overmind/overmindSpread.ts`). The captured *set* is the
+   * separate `overmindSystems` above — this carries only the arc clock/threat/status
+   * the EOD spread tick advances. Initialised dormant; mirrors
+   * `initialOvermindSpreadState()`.
+   */
+  overmindArc: OvermindSpreadState = {
+    dayZero: -1,
+    lastSpreadDay: -1,
+    status: "dormant",
+    threat: 0,
+    peakThreat: 0,
+  };
   /**
    * Active TradeBoom events: maps systemId → day on which the boom expires.
    * While active, market prices in that system are reduced by 15%.

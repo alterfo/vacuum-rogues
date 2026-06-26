@@ -1,4 +1,5 @@
 import { hashStr } from "@/utils/hashStr";
+import type { OvermindSpreadState, OvermindStatus } from "@/types";
 
 /**
  * Overmind endgame-arc spread state machine (pure).
@@ -15,30 +16,11 @@ import { hashStr } from "@/utils/hashStr";
  * galaxy via `galaxy.addOvermindSystem` and persists `state`.
  */
 
-export type OvermindStatus =
-  /** Before the arc clock's grace period — the front is asleep. */
-  | "dormant"
-  /** The front is actively growing / capturing. */
-  | "advancing"
-  /** The player has pushed the front back below the contained line. */
-  | "contained"
-  /** The Overmind core is broken (player victory) — terminal. */
-  | "won"
-  /** The Overmind has consumed the galaxy (player defeat) — terminal. */
-  | "lost";
-
-export interface OvermindSpreadState {
-  /** Business day the arc clock started (the Overmind's "day zero"). -1 until first advance. */
-  dayZero: number;
-  /** Last business day a spread tick actually advanced the front. -1 until first spread. */
-  lastSpreadDay: number;
-  /** Current arc status (derived each tick; persisted for the UI + end-conditions). */
-  status: OvermindStatus;
-  /** Snapshot Overmind share 0..1 after this tick (drives the threat indicator). */
-  threat: number;
-  /** High-water mark of the Overmind share — lets us detect "pushed back" → contained. */
-  peakThreat: number;
-}
+// The persisted arc state + status enum are defined in the Types layer (`@/types`)
+// so the domain (`Galaxy`) and validation (`schemas.ts`) can reference them
+// without an upward import from `systems/`. Re-exported here under their canonical
+// names so the spread machine stays their conceptual home.
+export type { OvermindSpreadState, OvermindStatus };
 
 export interface OvermindSpreadConfig {
   /** No spread before `dayZero + graceDays` (the threat ramps in, not instantly). */

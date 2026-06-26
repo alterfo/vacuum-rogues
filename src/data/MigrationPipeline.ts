@@ -10,6 +10,7 @@ import {
 } from "@/systems/equipment/GearCatalog";
 import { legacyModuleToGearId } from "@/systems/equipment/GearBridge";
 import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
+import { initialOvermindSpreadState } from "@/systems/overmind/overmindSpread";
 import { logger } from "@/utils/logger";
 
 /** A legacy ShipModule as it appears in an un-rehydrated save (plain JSON). */
@@ -39,7 +40,7 @@ function isEquipmentClass(id: string, cls: EquipmentClass): boolean {
 }
 
 export class MigrationPipeline {
-  static readonly CURRENT_VERSION = 27;
+  static readonly CURRENT_VERSION = 28;
 
   static migrate(state: SaveState): SaveState {
     const fromVersion = state.version ?? 0;
@@ -582,6 +583,20 @@ export class MigrationPipeline {
       const player = state.player as unknown as { gameMode?: string };
       if (player && player.gameMode === undefined) {
         player.gameMode = "NORMAL";
+      }
+    },
+    // 27 -> 28: Overmind endgame-arc state. Old saves predate the spread
+    // machine's persisted clock/threat snapshot (`galaxy.overmindArc`); default
+    // it to the dormant initial state so the arc starts fresh from the next EOD.
+    // The already-persisted captured set (`galaxy.overmindSystems`) is untouched,
+    // so a progressed save keeps its Overmind front. Idempotent (skips when
+    // present). See `initialOvermindSpreadState`.
+    27: (state: SaveState) => {
+      const galaxy = state.galaxy as unknown as {
+        overmindArc?: unknown;
+      };
+      if (galaxy && !galaxy.overmindArc) {
+        galaxy.overmindArc = initialOvermindSpreadState();
       }
     },
   };
