@@ -34,11 +34,11 @@ neural-Overmind work a narrative home and gives players a reason to push.
 **Files:**
 - Create: `src/systems/overmind/overmindSpread.ts` (+ test)
 
-- [ ] Pure `advanceOvermind(state, galaxy, day)` → captures/contests systems on a cadence
+- [x] Pure `advanceOvermind(state, galaxy, day)` → captures/contests systems on a cadence
       with thresholds for "advancing/contained/won/lost"; deterministic by seed/day.
-- [ ] write tests: spread advances over days, the player retaking systems contains it,
+- [x] write tests: spread advances over days, the player retaking systems contains it,
       win/loss thresholds fire.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 2: Persisted arc state (schema + migration)
 **Files:**
