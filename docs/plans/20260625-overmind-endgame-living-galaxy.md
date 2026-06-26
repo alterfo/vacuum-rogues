@@ -63,10 +63,10 @@ neural-Overmind work a narrative home and gives players a reason to push.
 **Files:**
 - Modify: end-of-game flow (`showGameOutcomeScreen`), new-game (`RaceSelectionScene`/GameEngine)
 
-- [ ] Wire the won/lost thresholds to the outcome screens (honour terminal-scene
+- [x] Wire the won/lost thresholds to the outcome screens (honour terminal-scene
       autosave rules); add new-game+ carrying a chosen subset of progress.
-- [ ] write tests: thresholds route to the right screen; NG+ seeds correctly.
-- [ ] run tests — green.
+- [x] write tests: thresholds route to the right screen; NG+ seeds correctly.
+- [x] run tests — green.
 
 ### Task 5: Verify + balance + docs
 - [ ] full suite + `test:playtest` green; lint/build ok; tune spread pacing in

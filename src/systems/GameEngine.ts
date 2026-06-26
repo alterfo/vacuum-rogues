@@ -33,6 +33,10 @@ import {
   advanceOvermind,
   type OvermindSpreadConfig,
 } from "@/systems/overmind/overmindSpread";
+import {
+  newGamePlusCarry,
+  type NewGamePlusCarry,
+} from "@/systems/overmind/newGamePlus";
 import { SeededRNG } from "@/utils/seededRNG";
 import type { Quest } from "@/domain/Quest";
 import {
@@ -188,10 +192,22 @@ export class GameEngine {
   private lastTime = 0;
   private modalObjects: (Graphics | Text)[] = [];
   private loadingOverlayObjects: (Graphics | Text)[] = [];
-  private _gameOverShown = false;
+  /**
+   * One-shot guard for the Overmind endgame outcome overlay
+   * ({@link showGameOutcomeScreen}, win OR loss). Set by the overlay itself so
+   * the sticky `won`/`lost` arc status re-running each EOD — and the in-flight
+   * core-kill win path — only ever shows the outcome once.
+   */
+  private _outcomeShown = false;
   private _winScreenShown = false;
   /** One-shot guard so player death fires the game-over flow exactly once. */
   private _playerDeathShown = false;
+  /**
+   * Carry-over staged by {@link startNewGamePlus} for the next fresh game: the
+   * new-game creation path in {@link transitionTo} consumes it (once) to seed the
+   * fresh player's credits/rank/faction/difficulty. Null for a plain new game.
+   */
+  private pendingNewGamePlus: NewGamePlusCarry | null = null;
   /** Drops the active `credits` projection binding before re-binding a new player. */
   private bankProjectionUnsub: Unsubscribe | null = null;
   private readonly galaxyService: IGalaxyService;
@@ -378,22 +394,34 @@ export class GameEngine {
     const isGameStartScene =
       sceneType === SceneType.STAR_MAP || sceneType === SceneType.SPACE_FLIGHT;
     if (isGameStartScene && !this.player) {
-      // Get selected faction from context or default to OUTLANDERS
+      // New Game+ carry-over staged by startNewGamePlus (consumed once here): a
+      // capped credit slice + the won captain's rank/faction + a tougher mode.
+      // A plain new game leaves it null and every default below applies as before.
+      const ngPlus = this.pendingNewGamePlus;
+      this.pendingNewGamePlus = null;
+
+      // Get selected faction from context, the NG+ carry, or default to OUTLANDERS
       const selectedFaction =
         (context as { selectedFaction?: FactionType })?.selectedFaction ??
+        ngPlus?.factionType ??
         FactionType.OUTLANDERS;
 
       this.player = this.playerService.createPlayer({
         factionType: selectedFaction,
         captainName: "Captain",
-        startingMoney: 1000,
+        startingMoney: ngPlus?.credits ?? 1000,
       });
 
-      // Per-run difficulty mode chosen on the new-game screen (default NORMAL).
+      // NG+ carries the won captain's rank forward (veteran status persists).
+      if (ngPlus) this.player.rank = ngPlus.rank;
+
+      // Per-run difficulty mode chosen on the new-game screen (default NORMAL),
+      // or the one-notch-tougher mode the NG+ cycle escalates to.
       // Read here (not in createPlayer) so the field is set on the canonical
       // Player the engine owns; "downed" is derived from mode + hull, not stored.
       const selectedGameMode =
         (context as { selectedGameMode?: GameMode })?.selectedGameMode ??
+        ngPlus?.gameMode ??
         "NORMAL";
       this.player.setGameMode(selectedGameMode);
 
@@ -762,20 +790,24 @@ export class GameEngine {
     // business date via the machine's `lastSpreadDay` cadence.
     this.advanceOvermindArc();
 
-    // Loss condition: OVERMIND majority + past grace period + full-size galaxy.
-    if (
-      this.galaxy.isOvermindVictory(
-        GAME_BALANCE.OVERMIND_LOSS_GRACE_DAYS,
-        GAME_BALANCE.OVERMIND_LOSS_MIN_SYSTEMS,
-        this.galaxy.gameDays,
-      ) &&
-      !this._gameOverShown
-    ) {
-      logger.warn(
-        "OVERMIND controls majority of galaxy — triggering game over",
-      );
-      this._gameOverShown = true;
-      this.showGameOutcomeScreen(false);
+    // Endgame outcome (Task 4): the arc status machine is the single source of
+    // truth. `won` (core broken / Overmind eradicated) shows the victory screen;
+    // `lost` (front past the loss line, past grace, full-size galaxy) shows the
+    // defeat screen. The overlay is drawn over the current scene — NOT a terminal
+    // scene transition — so it never clobbers the autosave checkpoint the way an
+    // autosaving GAME_OVER scene would. Gated on `_outcomeShown` (and the overlay
+    // is itself idempotent) so the sticky won/lost status re-running each EOD —
+    // and the in-flight core-kill win path — only shows the screen once.
+    if (!this._outcomeShown) {
+      if (this.galaxy.overmindArc.status === "won") {
+        logger.info("OVERMIND arc won — showing victory screen");
+        this.showGameOutcomeScreen(true);
+      } else if (this.galaxy.overmindArc.status === "lost") {
+        logger.warn(
+          "OVERMIND arc lost — galaxy consumed, showing defeat screen",
+        );
+        this.showGameOutcomeScreen(false);
+      }
     }
 
     this.infoRegistryCache = null; // world advanced → registry is stale
@@ -1467,11 +1499,22 @@ export class GameEngine {
   }
 
   /**
-   * Show a full-screen win or loss overlay with a "Начать заново" button.
-   * Called when the player destroys the OVERMIND core (win) or OVERMIND
-   * captures more than half the galaxy (loss).
+   * Show a full-screen win or loss overlay with a "Начать заново" button (and,
+   * on a win, a "Новая игра+" button that carries a subset of progress into a
+   * tougher cycle). Called when the player destroys the OVERMIND core / the arc
+   * status reaches `won` (win) or the arc reaches `lost` (OVERMIND consumes the
+   * galaxy).
+   *
+   * Idempotent: the first call sets {@link _outcomeShown} and subsequent calls
+   * no-op, so the sticky `won`/`lost` arc status re-running each EOD — and the
+   * in-flight core-kill win path firing alongside the next EOD — only ever shows
+   * the screen once. The overlay is drawn over the current scene (no terminal
+   * scene transition), so it never triggers the autosave-clobber an autosaving
+   * GAME_OVER scene would.
    */
   showGameOutcomeScreen(win: boolean): void {
+    if (this._outcomeShown) return;
+    this._outcomeShown = true;
     if (!this.renderer) return;
     this.clearModal();
 
@@ -1526,41 +1569,101 @@ export class GameEngine {
     this.renderer.uiLayer.addChild(msgText);
     this.modalObjects.push(msgText);
 
-    const btnText = new Text({
-      text: "Начать заново",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 22,
-        fill: 0x00ff88,
-        fontWeight: "bold",
-      },
-    });
-    btnText.anchor.set(0.5);
-    btnText.x = width / 2;
-    btnText.y = height / 2 + 90;
-    btnText.eventMode = "static";
-    btnText.cursor = "pointer";
-    btnText.on("pointerdown", () => {
+    // A small helper to build a clickable text button (the outcome overlay's
+    // only interactive elements).
+    const makeButton = (
+      label: string,
+      y: number,
+      color: number,
+      onClick: () => void,
+    ): void => {
+      const btn = new Text({
+        text: label,
+        style: {
+          fontFamily: "Courier New",
+          fontSize: 22,
+          fill: color,
+          fontWeight: "bold",
+        },
+      });
+      btn.anchor.set(0.5);
+      btn.x = width / 2;
+      btn.y = y;
+      btn.eventMode = "static";
+      btn.cursor = "pointer";
+      btn.on("pointerdown", onClick);
+      btn.on("pointerover", () => {
+        btn.alpha = 0.7;
+      });
+      btn.on("pointerout", () => {
+        btn.alpha = 1;
+      });
+      this.renderer!.uiLayer.addChild(btn);
+      this.modalObjects.push(btn);
+    };
+
+    // «Начать заново» — a full reset (new galaxy, fresh captain) back to the menu.
+    const restart = (): void => {
       this.clearModal();
       this.generateDefaultGameState()
         .then(() =>
           this.transitionTo(SceneType.MAIN_MENU, { gameEngine: this }),
         )
         .catch((e) => logger.error("Transition after game outcome failed:", e));
-    });
-    btnText.on("pointerover", () => {
-      btnText.alpha = 0.7;
-    });
-    btnText.on("pointerout", () => {
-      btnText.alpha = 1;
-    });
-    this.renderer.uiLayer.addChild(btnText);
-    this.modalObjects.push(btnText);
+    };
+
+    if (win) {
+      // On a victory, offer New Game+ (carry a subset of progress into a tougher
+      // cycle) above the plain restart.
+      makeButton("Новая игра+", height / 2 + 70, 0x66ddff, () => {
+        this.clearModal();
+        this.startNewGamePlus().catch((e) =>
+          logger.error("New Game+ start failed:", e),
+        );
+      });
+      makeButton("Начать заново", height / 2 + 120, 0x00ff88, restart);
+    } else {
+      makeButton("Начать заново", height / 2 + 90, 0x00ff88, restart);
+    }
+  }
+
+  /**
+   * Start a New Game+ from the victory screen: a fresh galaxy on a tougher cycle
+   * that carries a *chosen subset* of the won captain's progress (a capped slice
+   * of credits, their rank + faction, and a one-notch-harder difficulty —
+   * {@link newGamePlusCarry}). The carry is captured BEFORE the reset and staged
+   * on {@link pendingNewGamePlus}; the new-game creation path in
+   * {@link transitionTo} consumes it once when the fresh player is built.
+   *
+   * No new persisted field: the carry maps onto values the new-game path already
+   * seeds (startingMoney/rank/faction/gameMode), so NG+ needs no schema/migration.
+   */
+  async startNewGamePlus(): Promise<void> {
+    const carry = this.player
+      ? newGamePlusCarry(
+          {
+            credits: this.player.credits,
+            rank: this.player.rank,
+            faction: this.player.faction,
+            gameMode: this.player.gameMode,
+          },
+          {
+            creditCarryFraction:
+              GAME_BALANCE.NEW_GAME_PLUS_CREDIT_CARRY_FRACTION,
+            creditCarryCap: GAME_BALANCE.NEW_GAME_PLUS_CREDIT_CARRY_CAP,
+          },
+        )
+      : null;
+    await this.generateDefaultGameState();
+    // Stage AFTER the reset (generateDefaultGameState nulls the player) so the
+    // fresh new-game build picks it up.
+    this.pendingNewGamePlus = carry;
+    await this.transitionTo(SceneType.SPACE_FLIGHT, { gameEngine: this });
   }
 
   /**
    * Player ship destroyed in flight combat → game over. Fires the death flow
-   * exactly once (idempotent guard mirroring `_gameOverShown`): a stray later
+   * exactly once (one-shot `_playerDeathShown` guard): a stray later
    * shot the same frame is a no-op. Crucially this does NOT touch the `"auto"`
    * takeoff autosave — that save is the checkpoint the GAME_OVER screen rolls
    * back to, so death must be non-destructive to it.
@@ -1806,7 +1909,7 @@ export class GameEngine {
   private async generateDefaultGameState(): Promise<void> {
     this.player = null;
     this.playerLoadout = null;
-    this._gameOverShown = false;
+    this._outcomeShown = false;
     this._winScreenShown = false;
     this._playerDeathShown = false;
     this.playerService.deletePlayer();

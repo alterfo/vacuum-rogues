@@ -403,6 +403,16 @@ export const GAME_BALANCE = {
   OVERMIND_SPREAD_CONTAINED_SHARE: 0.2,
   OVERMIND_SPREAD_MIN_SYSTEMS: 12,
   /**
+   * New-Game+ carry-over after winning the Overmind arc (`newGamePlus.ts`).
+   * Mirrors `DEFAULT_NEW_GAME_PLUS_CONFIG`; `GameEngine.startNewGamePlus` reads
+   * them so the carry is tunable in one place.
+   *
+   * - CREDIT_CARRY_FRACTION: fraction of the won game's credits carried forward.
+   * - CREDIT_CARRY_CAP: absolute cap on carried credits (a head-start, not a free win).
+   */
+  NEW_GAME_PLUS_CREDIT_CARRY_FRACTION: 0.5,
+  NEW_GAME_PLUS_CREDIT_CARRY_CAP: 50000,
+  /**
    * HP and shields multiplier applied to enemies in overmind/pirate-controlled
    * systems. Makes early-game players unable to liberate systems solo while
    * a fully geared player (bastion hull + plasma cannon) can win.
