@@ -105,8 +105,15 @@ lands.
 **Files:**
 - Modify: the soft-gate copy/threshold; verification
 
-- [ ] Soften the gate to "best on desktop, but playable" now that touch works; full
+- [x] Soften the gate to "best on desktop, but playable" now that touch works; full
       suite + `test:playtest` green; lint/build ok; desktop path unchanged.
+      (`#mobile-gate` copy in `src/index.html` reworded from "designed for desktop —
+      cramped on phone, come back from a computer" to "best on desktop, but already
+      playable on touch: tap routes/targets, pinch zooms, on-screen buttons replace the
+      hotkeys — you can fly right here". Pure static-HTML copy shown only when
+      `shouldShowMobileGate()` is true, so **desktop never sees it** and no TS logic
+      changed. Gates: full suite 3523 passed / 4 skipped, `test:playtest` 240 passed,
+      `npm run lint` 0 errors, `npm run build` clean.)
 
 ### Task 5: Documentation
 - [ ] Document the responsive helper + touch interpreter + on-screen controls, and the
