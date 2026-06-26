@@ -1,0 +1,149 @@
+/**
+ * Letsplay engine — behavioural-cloning (BC) dataset exporter (dev-only).
+ *
+ * The neural player ({@link NeuralPolicy}) is trained by **cloning a teacher**:
+ * run a known-good {@link PlayerPolicy} (the {@link HeuristicPolicy} today, the
+ * memory-using teacher later) on the *real* {@link GameEngine}, and at every step
+ * log the pair `(featurize(obs), actionIndex)` — the net's input vector and the
+ * teacher's chosen action as an index into {@link ACTION_ORDER}. That stream of
+ * `(features → label)` rows is a plain supervised-classification dataset: no
+ * environment in the training loop, just `tools/ai/train_player.py` fitting the
+ * tiny MLP to imitate the teacher, then exporting weights JSON for `mlp.ts`.
+ *
+ * {@link collectBcDataset} plays `K` sessions × `N` steps on a freshly-booted
+ * harness per session and returns the rows in memory; {@link bcDatasetToJsonl}
+ * serialises them to JSON-lines (one row per line) and {@link writeBcDataset}
+ * persists that to disk (gitignored `.letsplay/`, regenerated each run). The whole
+ * run is **deterministic by seed** — the same `seedPrefix` reproduces the same
+ * dataset — so a training run is repeatable.
+ *
+ * **Dev-only.** Lives under `src/tests/`, imported by no production module
+ * (enforced by `letsplayDevOnly.test.ts`); it is not a test file itself (no
+ * `vi.mock`), so its caller must have mocked PixiJS — exactly why the data-gen
+ * runs through vitest, like the letsplay runner.
+ */
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { RealEngineHarness } from "../realEngineHarness";
+import { observe } from "./observe";
+import { ACTION_ORDER } from "./observe";
+import { PlayerAgent } from "./PlayerAgent";
+import { HeuristicPolicy } from "./HeuristicPolicy";
+import type { PlayerPolicy } from "./PlayerPolicy";
+import { featurize } from "./NeuralPolicy";
+
+/**
+ * One supervised training example: the {@link featurize} feature vector the
+ * teacher saw and the {@link ACTION_ORDER} index of the action it took. A clean
+ * `(input, label)` pair for multi-class classification — no reward, no env.
+ */
+export interface BcRow {
+  /** `featurize(obs)` — the net input (FEATURE_LENGTH wide, every value in [0,1]). */
+  readonly features: number[];
+  /** `ACTION_ORDER.indexOf(action.kind)` — the supervised label (0-based). */
+  readonly action: number;
+}
+
+/** Knobs for a data-gen run; every field has a sane dev default. */
+export interface ExportBcOptions {
+  /** Number of sessions (fresh games) to play — `K`. */
+  sessions?: number;
+  /** Steps the teacher takes per session — `N`. */
+  steps?: number;
+  /** Seed prefix; each session uses `"<prefix>-<i>"` so runs are reproducible. */
+  seedPrefix?: string;
+  /** Teacher policy factory — a fresh policy per session. Defaults to the heuristic. */
+  policy?: () => PlayerPolicy;
+}
+
+/** Play one session of `steps` steps on a freshly-booted harness, logging rows. */
+async function collectSession(
+  seed: string,
+  steps: number,
+  makePolicy: () => PlayerPolicy,
+): Promise<BcRow[]> {
+  const harness = await RealEngineHarness.boot({ seed });
+  try {
+    await harness.newGame();
+    const agent = new PlayerAgent(harness, makePolicy());
+    const rows: BcRow[] = [];
+
+    for (let step = 0; step < steps; step++) {
+      // Snapshot the state the teacher is about to act in, then let the agent
+      // take exactly one step. `observe` is pure and nothing mutates between
+      // here and the agent's own `observe`, so the action it records is the
+      // teacher's choice *for this very observation* — the label for these
+      // features. (Re-using the agent keeps the real applier as the single
+      // source of truth for how an action advances the engine.)
+      const obs = observe(harness.engine);
+      const res = await agent.run(1);
+      const action = res.steps[0]?.action;
+      if (!action) continue;
+      const index = ACTION_ORDER.indexOf(action.kind);
+      if (index < 0) continue; // defensive: only log known vocabulary
+      rows.push({ features: featurize(obs), action: index });
+    }
+    return rows;
+  } finally {
+    harness.dispose();
+  }
+}
+
+/**
+ * Play `K` sessions × `N` steps with the teacher policy and return every logged
+ * `(features, action)` row — the BC dataset, in memory. Deterministic from the
+ * seed: same `seedPrefix` ⇒ same rows. Never throws on a play fault (a thrown
+ * applier error lands in the harness sink, not here); each session boots its own
+ * real engine so sessions are independent and reproducible.
+ */
+export async function collectBcDataset(
+  opts: ExportBcOptions = {},
+): Promise<BcRow[]> {
+  const sessions = opts.sessions ?? 3;
+  const steps = opts.steps ?? 40;
+  const seedPrefix = opts.seedPrefix ?? "BC";
+  const makePolicy = opts.policy ?? (() => new HeuristicPolicy());
+
+  const rows: BcRow[] = [];
+  for (let i = 0; i < sessions; i++) {
+    rows.push(
+      ...(await collectSession(`${seedPrefix}-${i}`, steps, makePolicy)),
+    );
+  }
+  return rows;
+}
+
+/**
+ * Serialise a BC dataset to **JSON-lines**: one compact JSON object per row,
+ * newline-separated (the format `tools/ai/train_player.py` reads). A trailing
+ * newline is included so the file is POSIX-clean and appends cleanly.
+ */
+export function bcDatasetToJsonl(rows: readonly BcRow[]): string {
+  return (
+    rows.map((r) => JSON.stringify(r)).join("\n") + (rows.length ? "\n" : "")
+  );
+}
+
+/** Where a written dataset lands. */
+export interface WrittenDataset {
+  /** Absolute/relative path to the JSONL file. */
+  path: string;
+  /** Number of rows written. */
+  rows: number;
+}
+
+/**
+ * Persist a BC dataset to `dir` (default `.letsplay/`, gitignored) as JSONL.
+ * Dev-only side-effect used by the data-gen driver; the in-suite test asserts on
+ * {@link collectBcDataset} / {@link bcDatasetToJsonl} in memory and does not write.
+ */
+export function writeBcDataset(
+  rows: readonly BcRow[],
+  dir = ".letsplay",
+  filename = "bc-dataset.jsonl",
+): WrittenDataset {
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, filename);
+  writeFileSync(path, bcDatasetToJsonl(rows), "utf8");
+  return { path, rows: rows.length };
+}

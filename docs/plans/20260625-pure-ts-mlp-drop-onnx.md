@@ -98,19 +98,19 @@ JSON** instead of ONNX, pinned by a **parity test**.
 > classifier → weights JSON. Uses the current `HeuristicPolicy` now; re-run later on the
 > memory-using teacher from `agent-memory`.
 
-- [ ] **Data-gen (TS):** a dev-only exporter that runs `PlayerAgent` + `HeuristicPolicy`
+- [x] **Data-gen (TS):** a dev-only exporter that runs `PlayerAgent` + `HeuristicPolicy`
       for K headless sessions and writes `(featurize(obs), actionIndex)` rows to JSONL
       (the BC dataset). Deterministic by seed.
-- [ ] **Train script (Python):** `tools/ai/train_player.py` loads the JSONL, trains the
+- [x] **Train script (Python):** `tools/ai/train_player.py` loads the JSONL, trains the
       tiny MLP as a multi-class classifier (cross-entropy, `featurize`-width → 10 actions),
       and **exports weights as JSON** matching `mlp.ts`'s `MlpWeights` shape.
-- [ ] **Contract test (TS):** a fixture `(weights.json, input) → expected scores` pins
+- [x] **Contract test (TS):** a fixture `(weights.json, input) → expected scores` pins
       that `mlp.forward` reproduces a reference net within `1e-5` (parity), and that the
       exported shape loads via `loadWeights`.
-- [ ] write tests: the exporter produces well-formed JSONL (right feature width, legal
+- [x] write tests: the exporter produces well-formed JSONL (right feature width, legal
       action indices); the weights contract/parity test passes against a checked-in tiny
       reference net.
-- [ ] run tests — green. (Generating real data + training + dropping the weights in is
+- [x] run tests — green. (Generating real data + training + dropping the weights in is
       Post-Completion.)
 
 ### Task 5: Verify acceptance criteria
