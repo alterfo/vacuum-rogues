@@ -85,37 +85,78 @@ export function setSpeed(target: SpeedTarget, value: number): void {
 }
 
 // ---------------------------------------------------------------------------
-// Neural-AI flag — localStorage("neuralEnabled"), default false
+// Feature flags — generalised on/off localStorage flags (neural is the first)
 // ---------------------------------------------------------------------------
 
 /**
- * True when the player has opted into the (experimental) neural AI. Defaults to
- * **false** — a fresh/never-set store, and any non-`"true"` value, read as off.
- * Degrades to `false` when storage is unavailable or unreadable.
+ * Known experimental feature flags. **Neural-AI is the first** — add future
+ * opt-in/experimental systems here so they share the same default-off,
+ * storage-degrading gate (`isFeatureEnabled` / `setFeatureEnabled`).
  */
-export function isNeuralEnabled(
+export type FeatureFlag = "neural";
+
+/** The `localStorage` key holding each feature flag's `"true"`/`"false"`. */
+export const FEATURE_FLAG_KEYS: Readonly<Record<FeatureFlag, string>> = {
+  neural: NEURAL_ENABLED_KEY,
+};
+
+/**
+ * True when an experimental {@link FeatureFlag} is enabled. Defaults to
+ * **false** — a fresh/never-set store, any non-`"true"` value, and an
+ * unavailable/unreadable store all read as off. Pure given an injected `store`.
+ */
+export function isFeatureEnabled(
+  flag: FeatureFlag,
   store: SettingsStore | undefined = liveStore(),
 ): boolean {
   if (!store) return false;
   try {
-    return store.getItem(NEURAL_ENABLED_KEY) === "true";
+    return store.getItem(FEATURE_FLAG_KEYS[flag]) === "true";
   } catch {
     return false;
   }
 }
 
 /**
- * Persist the neural-AI flag. No-op (best-effort) when storage is unavailable or
- * write-blocked.
+ * Persist a {@link FeatureFlag}. Best-effort no-op when storage is unavailable
+ * or write-blocked (a storage-disabled browser simply can't remember it).
  */
-export function setNeuralEnabled(
+export function setFeatureEnabled(
+  flag: FeatureFlag,
   on: boolean,
   store: SettingsStore | undefined = liveStore(),
 ): void {
   if (!store) return;
   try {
-    store.setItem(NEURAL_ENABLED_KEY, on ? "true" : "false");
+    store.setItem(FEATURE_FLAG_KEYS[flag], on ? "true" : "false");
   } catch {
-    // Best-effort: a storage-disabled browser simply can't remember the choice.
+    // Best-effort.
   }
+}
+
+// ---------------------------------------------------------------------------
+// Neural-AI flag — the first feature flag (localStorage("neuralEnabled"), off)
+// ---------------------------------------------------------------------------
+
+/**
+ * True when the player has opted into the (experimental) neural AI — the single
+ * gate consulted before any neural policy runs (off ⇒ the heuristic path, no MLP
+ * weights loaded). Defaults to **false**. Thin alias over
+ * `isFeatureEnabled("neural", …)`.
+ */
+export function isNeuralEnabled(
+  store: SettingsStore | undefined = liveStore(),
+): boolean {
+  return isFeatureEnabled("neural", store);
+}
+
+/**
+ * Persist the neural-AI flag. Best-effort no-op when storage is unavailable or
+ * write-blocked. Thin alias over `setFeatureEnabled("neural", …)`.
+ */
+export function setNeuralEnabled(
+  on: boolean,
+  store: SettingsStore | undefined = liveStore(),
+): void {
+  setFeatureEnabled("neural", on, store);
 }

@@ -75,14 +75,14 @@ this is the gate the (deferred) Overmind neural AI will sit behind.
 > to lazy-load; the toggle is a plain **feature flag** that enables/disables the neural
 > policy (and any future neural feature). Run `pure-ts-mlp-drop-onnx` **before** this plan.
 
-- [ ] Make `isNeuralEnabled()` (default **false**) the single gate consulted before any
+- [x] Make `isNeuralEnabled()` (default **false**) the single gate consulted before any
       neural policy runs — off ⇒ the rule-based/heuristic path is used and no MLP weights
       are loaded; on ⇒ the pure-TS MLP policy is active.
-- [ ] Generalise to a small `featureFlags` accessor so other experimental systems can be
+- [x] Generalise to a small `featureFlags` accessor so other experimental systems can be
       gated the same way (neural is the first flag).
-- [ ] write tests: default off ⇒ heuristic path, no weights loaded; on ⇒ neural policy
+- [x] write tests: default off ⇒ heuristic path, no weights loaded; on ⇒ neural policy
       selected; the flag round-trips through localStorage.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 3: Settings panel UI (Speed / Font / Neural)
 **Files:**

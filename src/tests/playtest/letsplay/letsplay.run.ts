@@ -2,7 +2,7 @@
  * Letsplay engine — the dev-only session runner + bug-discovery report.
  *
  * {@link runLetsplay} plays **K sessions of N steps** with a {@link PlayerPolicy}
- * (the {@link HeuristicPolicy} by default) on a freshly-booted, *real*
+ * (the neural-gated default — heuristic while the flag is off) on a freshly-booted, *real*
  * {@link GameEngine} per session (via {@link RealEngineHarness}), collecting a
  * transcript plus a **failure report** — every `logger.error` / thrown error the
  * harness sink caught **and** every always-actionable-invariant violation
@@ -25,8 +25,8 @@ import { SceneType } from "@/types";
 import { RealEngineHarness, type RecordedError } from "../realEngineHarness";
 import { observe, type Observation } from "./observe";
 import { PlayerAgent, type AgentStep } from "./PlayerAgent";
-import { HeuristicPolicy } from "./HeuristicPolicy";
 import type { PlayerPolicy } from "./PlayerPolicy";
+import { selectPlayerPolicy } from "./policyGate";
 
 /** Knobs for a letsplay run; every field has a sane dev default. */
 export interface LetsplayOptions {
@@ -36,7 +36,11 @@ export interface LetsplayOptions {
   steps?: number;
   /** Seed prefix; each session uses `"<prefix>-<i>"` so runs are reproducible. */
   seedPrefix?: string;
-  /** Policy factory — a fresh policy per session. Defaults to the heuristic. */
+  /**
+   * Policy factory — a fresh policy per session. Defaults to the neural feature
+   * gate ({@link selectPlayerPolicy}): off (the default flag) ⇒ the heuristic,
+   * on ⇒ the (inert-until-trained) neural policy.
+   */
   policy?: () => PlayerPolicy;
 }
 
@@ -221,7 +225,7 @@ export async function runLetsplay(
   const sessions = opts.sessions ?? 3;
   const steps = opts.steps ?? 40;
   const seedPrefix = opts.seedPrefix ?? "LETSPLAY";
-  const makePolicy = opts.policy ?? (() => new HeuristicPolicy());
+  const makePolicy = opts.policy ?? (() => selectPlayerPolicy());
 
   const sessionReports: SessionReport[] = [];
   for (let i = 0; i < sessions; i++) {
