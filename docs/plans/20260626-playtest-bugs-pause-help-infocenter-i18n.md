@@ -170,10 +170,10 @@ bugs, unit test for pure logic), then fix until green, then verify.
 **Files:**
 - Modify: `src/i18n/cyrillicLiterals.ts`, `src/tests/i18n/parity.test.ts` (or a new `noHardcodedCyrillic.test.ts`)
 
-- [ ] add a test that scans the agreed UI source set for Cyrillic string literals not sourced from the catalogs and fails with the offending file:line (allow-list logs/ids/comments)
-- [ ] seed the allow-list with any intentional exceptions discovered in Task 6 so the gate is green-on-clean
-- [ ] document the "add a string ⇒ add a key" rule in the i18n section of the relevant CLAUDE.md / README
-- [ ] run tests — must pass before next task
+- [x] add a test that scans the agreed UI source set for Cyrillic string literals not sourced from the catalogs and fails with the offending file:line (allow-list logs/ids/comments) — `src/tests/i18n/noHardcodedCyrillic.test.ts`: a per-file **ratchet** over `DEFAULT_SCAN_ROOTS` (src/presentation + src/systems + src/ai) using the shared `scanFiles` walker (moved into `src/i18n/cyrillicLiterals.ts` so a `src/tests/` consumer needn't cross into `tools/`; `extract.ts` re-exports it). Reds on any file EXCEEDING its baseline (or a previously-clean file gaining a literal), printing the offending `file:line`; comments + the dicts/tests are skipped by the scanner. Probe-verified RED on an injected literal, GREEN after revert
+- [x] seed the allow-list with any intentional exceptions discovered in Task 6 so the gate is green-on-clean — `src/tests/i18n/cyrillicBaseline.json` snapshots the current known backlog (67 files / 1521 literals) as the seeded allow-list; the gate is green-on-clean and deterministic (regen produces no diff). Regenerate after an intentional change with `UPDATE_CYRILLIC_BASELINE=1`. A symmetric guard also reds when a file drops BELOW baseline (you migrated literals → lock the win by regenerating), keeping the ratchet tight against backsliding
+- [x] document the "add a string ⇒ add a key" rule in the i18n section of the relevant CLAUDE.md / README — added the rule + the third gate to both `.claude/docs/adding-features.md` ("The three guards") and the root CLAUDE.md Internationalization section
+- [x] run tests — must pass before next task — i18n (parity/migratedScenes/raceSelection/rumorNews/noHardcodedCyrillic) + extract tool suites (7 files / 61 tests) green, tsc + eslint clean
 
 ### Task 8: Relocate settings to the main menu; remove the in-flight ⚙ panel
 **Files:**

@@ -58,12 +58,13 @@ The recipe — **new string ⇒ key + ru/en**:
 2. **Render through `t(...)`, not a literal.** Replace the inline Cyrillic string with `t("area.thing")` / `t("area.thing", { qty })`, routed through the scene's `scaledText(...)` choke point. A missing key falls back to the other language, then renders as the bare key (the UI never blanks).
 3. **Live re-localize.** Text nodes re-read `t(...)` at creation, so a language switch is applied by the same in-place restyle a font change uses (`FlightHud.refreshFontScale`); the settings panel's **ЯЗЫК** row (`SettingsPanel.selectLanguage`) persists + fans this out.
 
-The two guards (both run in `npm test`):
+The three guards (all run in `npm test`):
 
 - **Parity guard** (`src/tests/i18n/parity.test.ts`): fails the moment `ru` and `en` key sets diverge, or any value is empty — so you can't add a key to one dict only, or leave an EN value blank.
 - **Migrated-scenes guard** (`src/tests/i18n/migratedScenes.test.ts`): each file in its `MIGRATED_SCENES` list must contain **zero inline Cyrillic string literals** (comments are fine) **and** actually call `t(`. When you finish migrating a scene's literals, **append it to that list** so the gate enforces it (and prevents a re-added literal backsliding).
+- **No-new-hardcoded-Cyrillic ratchet** (`src/tests/i18n/noHardcodedCyrillic.test.ts`): the complement to the hard-zero guard above — a **per-file ratchet** over the whole UI source set (`src/presentation` / `src/systems` / `src/ai`) that fails on any **new** Cyrillic literal (file:line reported) without forcing the full backlog migrated at once. The current known backlog is the seeded allow-list `src/tests/i18n/cyrillicBaseline.json`. **Adding a player-facing string the right way (a `t(...)` key) never trips it** — so the rule is simply **add a string ⇒ add a key**. If you intentionally add a Cyrillic *data* literal (a content catalog: ship/captain name, lore prose) or migrate literals out (count drops), regenerate the baseline: `UPDATE_CYRILLIC_BASELINE=1 npm test -- --run src/tests/i18n/noHardcodedCyrillic.test.ts`.
 
-Migration backlog: `npx tsx tools/i18n/extract.ts [--list]` prints the remaining inline-Cyrillic-literal count per file under `src/presentation` / `src/systems` / `src/ai` (skipping the dicts + tests) — the shrinking tracker for incremental scene migration. Its pure scanner core is `src/i18n/cyrillicLiterals.ts` (`findCyrillicLiterals`), shared with the migrated-scenes guard.
+Migration backlog: `npx tsx tools/i18n/extract.ts [--list]` prints the remaining inline-Cyrillic-literal count per file under `src/presentation` / `src/systems` / `src/ai` (skipping the dicts + tests) — the shrinking tracker for incremental scene migration. Its scanner core (`findCyrillicLiterals` + the `scanFiles` walker) lives in `src/i18n/cyrillicLiterals.ts`, shared by the extract tool, the migrated-scenes guard, and the ratchet above.
 
 ## Consuming an Accessibility seam (palette / reduced-motion / key remap)
 

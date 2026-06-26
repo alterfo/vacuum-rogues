@@ -26,102 +26,32 @@
  *   npx tsx tools/i18n/extract.ts src/presentation # scan a specific root
  *   npx tsx tools/i18n/extract.ts --list           # list every hit (file:line)
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-// The pure scanner core lives in `src/` so the in-suite migrated-scenes guard
-// can share it (a `tools/` module can't be imported from `src/`, but this
-// `tools/` script importing `src/` is fine — tools are outside the build graph).
+// The scanner core (pure string walker + the `node:fs` file walker) lives in
+// `src/i18n/cyrillicLiterals.ts` so the in-suite guards (migrated-scenes +
+// `noHardcodedCyrillic` ratchet) share one implementation — a `tools/` module
+// can't be imported from `src/` (the build's `rootDir: src`), but this `tools/`
+// script importing `src/` is fine (tools are outside the build graph). This
+// file is now just the CLI front-end + a convenience re-export.
 import {
+  DEFAULT_SCAN_ROOTS,
   findCyrillicLiterals,
+  isExcluded,
+  scanFiles,
+  totalHits,
   type CyrillicHit,
+  type FileBacklog,
 } from "../../src/i18n/cyrillicLiterals";
 
-export { findCyrillicLiterals };
-export type { CyrillicHit };
-
-/**
- * Default roots to scan — the player-facing layers where UI strings live. Other
- * roots can be passed explicitly on the CLI.
- */
-export const DEFAULT_SCAN_ROOTS = [
-  "src/presentation",
-  "src/systems",
-  "src/ai",
-] as const;
-
-/** True for a path the scanner must skip (its own dicts / test files). */
-export function isExcluded(relPath: string): boolean {
-  const p = relPath.replace(/\\/g, "/");
-  return (
-    p.includes("/i18n/") ||
-    p.startsWith("i18n/") ||
-    p.endsWith(".test.ts") ||
-    p.endsWith(".d.ts")
-  );
-}
-
-/** Recursively collect `.ts` files under `dir` (absolute paths). */
-function collectTsFiles(dir: string): string[] {
-  const out: string[] = [];
-  let entries: string[];
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return out; // missing root → nothing to scan
-  }
-  for (const name of entries) {
-    const full = join(dir, name);
-    let st;
-    try {
-      st = statSync(full);
-    } catch {
-      continue;
-    }
-    if (st.isDirectory()) {
-      out.push(...collectTsFiles(full));
-    } else if (name.endsWith(".ts")) {
-      out.push(full);
-    }
-  }
-  return out;
-}
-
-/** One file's contribution to the backlog. */
-export interface FileBacklog {
-  /** Project-relative path. */
-  file: string;
-  /** Cyrillic literals found in it. */
-  hits: CyrillicHit[];
-}
-
-/**
- * Scan every `.ts` file under `roots` (resolved against `projectRoot`), skipping
- * excluded paths, and return per-file backlogs that have ≥1 hit, sorted by hit
- * count descending. Files are reported by their `projectRoot`-relative path.
- */
-export function scanFiles(
-  roots: readonly string[],
-  projectRoot: string,
-): FileBacklog[] {
-  const backlogs: FileBacklog[] = [];
-  for (const root of roots) {
-    const absRoot = resolve(projectRoot, root);
-    for (const abs of collectTsFiles(absRoot)) {
-      const rel = relative(projectRoot, abs).replace(/\\/g, "/");
-      if (isExcluded(rel)) continue;
-      const hits = findCyrillicLiterals(readFileSync(abs, "utf8"), rel);
-      if (hits.length > 0) backlogs.push({ file: rel, hits });
-    }
-  }
-  backlogs.sort((a, b) => b.hits.length - a.hits.length);
-  return backlogs;
-}
-
-/** Total number of Cyrillic literals across a backlog list. */
-export function totalHits(backlogs: FileBacklog[]): number {
-  return backlogs.reduce((sum, b) => sum + b.hits.length, 0);
-}
+export {
+  DEFAULT_SCAN_ROOTS,
+  findCyrillicLiterals,
+  isExcluded,
+  scanFiles,
+  totalHits,
+};
+export type { CyrillicHit, FileBacklog };
 
 function main(): void {
   const argv = process.argv.slice(2);
