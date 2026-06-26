@@ -235,6 +235,7 @@ export class SpaceFlightScene extends GameScene {
       showMessage: (t, c) => this.hud.showMessage(t, c),
     });
     this.combatPause = createCombatPauseUi(this.renderer, this.combatModule);
+    this.gameEngine?.setCombatStateProvider(() => this.combatModule.isActive); // adaptive combat music signal
     // NPC module: living-galaxy ships, contact panel, auto-follow combat, OVERMIND prompt.
     this.npcManager = new NpcShipManager(
       this.renderer,
@@ -271,7 +272,6 @@ export class SpaceFlightScene extends GameScene {
         getStarAvoidRadius: () => this.starRenderer.avoidRadius,
       },
     );
-
     // Auto-complete system-entry quests: EXPLORATION, DEFENSE (OVERMIND liberation), ESCORT.
     this.questCompletion.explorationBySystemEntry();
     this.questCompletion.defenseBySystemEntry();

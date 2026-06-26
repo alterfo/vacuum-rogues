@@ -39,11 +39,11 @@ machinery already exists, so this is mostly wiring + a couple of tracks.
 **Files:**
 - Modify: `SpaceFlightScene`/`CombatModule` hooks, `AudioManager` driver
 
-- [ ] Drive `desiredTrack` from the combat engage/end + scene-change signals → call
+- [x] Drive `desiredTrack` from the combat engage/end + scene-change signals → call
       `playTrack`; ensure end-of-fight returns to ambient.
-- [ ] write tests (with a fake AudioManager): engaging a fight switches the track, ending
+- [x] write tests (with a fake AudioManager): engaging a fight switches the track, ending
       restores it.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 3: Missing SFX cues + tracks
 **Files:**

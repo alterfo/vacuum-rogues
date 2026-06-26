@@ -78,6 +78,7 @@ import {
 import { getQuestScript } from "@/systems/quests/TextQuestRegistry";
 import type { QuestScript } from "@/systems/quests/QuestScript";
 import { AudioManager } from "@/systems/AudioManager";
+import { MusicDriver } from "@/systems/audio/musicDriver";
 import { BankBus, type Unsubscribe } from "@/systems/banking/bus";
 import { BankingService } from "@/systems/banking/BankingService";
 import { setupPlayerBanking, type BankAccess } from "@/systems/banking/economy";
@@ -105,6 +106,9 @@ export interface GameEngineDIDependencies {
 const BANK_FACTION_ID: FactionType = FactionType.BASTIONS;
 /** One-off reputation hit applied the moment a player loan crosses into default. */
 const BANK_DEFAULT_REPUTATION_PENALTY = 15;
+
+/** Hull fraction below which the adaptive music plays the low-hull tension cue. */
+const MUSIC_TENSION_HULL_FRACTION = 0.3;
 
 export class GameEngine {
   public currentScene: GameScene | null = null;
@@ -171,6 +175,15 @@ export class GameEngine {
   public readonly questNarrator: QuestNarrator;
   /** Audio subsystem: background music + SFX. */
   public readonly audio = new AudioManager();
+  /** Adaptive-music driver: maps scene + flight/combat state → background track. */
+  private readonly music = new MusicDriver();
+  /**
+   * Live "is the player in a fight?" signal the active scene plugs in (the flight
+   * scene registers `() => combatModule.isActive`). Polled each frame by the
+   * game loop to drive adaptive combat music; cleared on every scene transition
+   * so a non-flight scene reverts to ambient. See {@link setCombatStateProvider}.
+   */
+  private combatStateProvider: (() => boolean) | null = null;
   /** The АБС "универсальная шина": consumers dispatch banking commands here. */
   public readonly bankBus = new BankBus();
   /** The authoritative core-banking ledger + command handler on {@link bankBus}. */
@@ -391,6 +404,10 @@ export class GameEngine {
     this.currentSceneType = sceneType;
     localStorage.setItem("sr_currentScene", sceneType);
 
+    // Drop the previous scene's adaptive-music combat signal; the next flight
+    // scene re-registers it in initialize(), other scenes leave it null (ambient).
+    this.combatStateProvider = null;
+
     // Tear down current scene
     if (this.currentScene) {
       this.currentScene.destroy();
@@ -525,8 +542,10 @@ export class GameEngine {
     this.currentScene.initialize(finalContext);
     logger.info(`Transitioned to scene: ${sceneType}`);
 
-    // Play background music track matching the new scene.
-    this.playSceneTrack(sceneType);
+    // Play background music track matching the new scene. No flight state is
+    // passed here, so the director picks the scene's ambient track; the live
+    // flight loop drives combat/tension swaps from SpaceFlightScene.update.
+    this.updateMusic();
 
     // Auto-save on scene transition (only for gameplay scenes with valid state).
     // GAME_OVER is excluded: it is the terminal death screen, and the `"auto"`
@@ -2001,6 +2020,9 @@ export class GameEngine {
     try {
       this.currentScene?.update(deltaTime);
       // PixiJS renders automatically via app.ticker / RAF
+      // Adaptive music: poll the scene's live combat signal every frame so the
+      // director's combat hysteresis can revert to ambient once a fight ends.
+      this.updateMusic(this.combatStateProvider?.() ?? false);
     } catch (error) {
       this.handleError(error as Error);
     }
@@ -2008,41 +2030,42 @@ export class GameEngine {
     this.animationFrameId = requestAnimationFrame(this.gameLoop);
   };
 
-  /** Map a scene type to the appropriate background music track and start it. */
-  private playSceneTrack(sceneType: SceneType): void {
-    switch (sceneType) {
-      case SceneType.MAIN_MENU:
-      case SceneType.RACE_SELECTION:
-        this.audio.playTrack("menu_main").catch(() => {});
-        break;
-      case SceneType.STAR_MAP:
-        this.audio.playTrack("explore_calm").catch(() => {});
-        break;
-      case SceneType.SPACE_FLIGHT:
-        this.audio.playTrack("explore_calm").catch(() => {});
-        break;
-      case SceneType.PLANET:
-        this.audio.playTrack("planet_hub").catch(() => {});
-        break;
-      case SceneType.TRADE:
-        this.audio.playTrack("market").catch(() => {});
-        break;
-      case SceneType.EQUIPMENT_SHOP:
-      case SceneType.STATION:
-        this.audio.playTrack("equipment_shop").catch(() => {});
-        break;
-      case SceneType.GOVERNMENT:
-        this.audio.playTrack("governor_dialogue").catch(() => {});
-        break;
-      case SceneType.TEXT_QUEST:
-        this.audio.playTrack("text_quest").catch(() => {});
-        break;
-      case SceneType.INFO_CENTER:
-        this.audio.playTrack("explore_calm").catch(() => {});
-        break;
-      default:
-        break;
-    }
+  /**
+   * Register (or clear with `null`) the active scene's live "in combat?" signal.
+   * The flight scene plugs in `() => combatModule.isActive`; {@link transitionTo}
+   * clears it so a non-flight scene can't keep combat music playing.
+   */
+  setCombatStateProvider(provider: (() => boolean) | null): void {
+    this.combatStateProvider = provider;
+  }
+
+  /**
+   * Recompute and apply the background music track for the current scene + live
+   * combat state through the {@link MusicDriver} (the pure {@link MusicDirector}
+   * is the single source of truth for "which track fits now"). Called once on a
+   * scene transition (no `inCombat` ⇒ the scene's ambient track) and every frame
+   * from {@link GameEngine.gameLoop} with the registered combat-state signal — so
+   * a fight swaps to the combat / boss track and the director's combat hysteresis
+   * reverts to ambient once the window elapses. `lowHull` (the tension cue) is
+   * derived from the player ship; `boss` from fighting inside the OVERMIND-core
+   * system. `AudioManager.playTrack` is a no-op when the track is unchanged, so
+   * the per-frame calls are cheap.
+   */
+  updateMusic(inCombat = false): void {
+    const ship = this.player?.ship;
+    const lowHull = ship
+      ? ship.hullHP < ship.maxHull * MUSIC_TENSION_HULL_FRACTION
+      : false;
+    const coreId = this.galaxy?.overmindCoreSystemId;
+    const boss =
+      inCombat && !!coreId && this.player?.currentSystemId === coreId;
+    this.music.apply(this.audio, {
+      scene: this.currentSceneType,
+      inCombat,
+      lowHull,
+      boss,
+      now: typeof performance !== "undefined" ? performance.now() : Date.now(),
+    });
   }
 
   stop(): void {
@@ -2060,6 +2083,8 @@ export class GameEngine {
     this.flightVisibilityHandler = null;
     this.currentScene?.destroy();
     this.renderer?.destroy();
+    this.combatStateProvider = null;
+    this.music.reset();
     this.audio.destroy();
   }
 }
