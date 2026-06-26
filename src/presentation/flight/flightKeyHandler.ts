@@ -1,4 +1,9 @@
 import { logger } from "@/utils/logger";
+import {
+  resolveFlightAction,
+  currentKeymap,
+  type FlightKeymap,
+} from "@/presentation/input/keymap";
 
 /**
  * Everything the flight-scene key router needs to act on a keypress. The scene
@@ -51,23 +56,36 @@ export interface FlightKeyContext {
   clearPlannedRoute(): void;
   executeRouteTo(x: number, y: number): void;
   openInventory(): void;
+  /**
+   * The active action→key bindings used to resolve the event to an action.
+   * Optional so existing callers/tests that don't model remapping can omit it —
+   * the handler then reads the live `currentKeymap()` (the persisted player
+   * bindings, defaulting to the historical Escape/Space/j/i mapping). The
+   * keyboard behaviour is identical to the old hard-coded routing under the
+   * defaults; rebinding only changes which key fires which action.
+   */
+  keymap?: FlightKeymap;
 }
 
 /**
- * Route a flight-scene keydown:
- * - Escape closes the top open panel (combat pause → contact → journal → planet
- *   info → settings → system menu), else cancels a planned route.
- * - Space runs the planned turn (the keyboard equivalent of the confirming
- *   second click); guarded so a held key, a combat pause, an already-running
- *   turn, or an open contact/journal/planet-info/settings/system-menu panel
- *   can't fire `executeRouteTo`. No route → no-op + hint.
- * - j toggles the quest journal; i opens the inventory.
+ * Route a flight-scene keydown. The event is first resolved to a high-level
+ * action via the persisted keymap (`ctx.keymap ?? currentKeymap()`), so the keys
+ * below are the *defaults* — a player can rebind any of them:
+ * - `cancel` (Escape) closes the top open panel (combat pause → encounter →
+ *   contact → journal → planet info → settings → system menu), else cancels a
+ *   planned route.
+ * - `runTurn` (Space) runs the planned turn (the keyboard equivalent of the
+ *   confirming second click); guarded so a held key, a combat pause, an
+ *   already-running turn, or an open contact/journal/planet-info/settings/
+ *   system-menu panel can't fire `executeRouteTo`. No route → no-op + hint.
+ * - `journal` (j) toggles the quest journal; `inventory` (i) opens the inventory.
  */
 export function handleFlightKey(
   event: KeyboardEvent,
   ctx: FlightKeyContext,
 ): void {
-  if (event.key === "Escape") {
+  const action = resolveFlightAction(event, ctx.keymap ?? currentKeymap());
+  if (action === "cancel") {
     if (ctx.combatPause.paused) ctx.combatPause.resume();
     else if (ctx.npcManager.isEncounterPromptOpen)
       ctx.npcManager.closeEncounterPrompt?.();
@@ -83,7 +101,7 @@ export function handleFlightKey(
     }
     return;
   }
-  if (event.key === " " || event.code === "Space") {
+  if (action === "runTurn") {
     event.preventDefault(); // Space would otherwise scroll the page
     if (event.repeat || ctx.combatPause.paused || ctx.isTurnRunning) return;
     // Don't launch the turn behind an open modal — the contact panel, the
@@ -111,9 +129,9 @@ export function handleFlightKey(
     }
     return;
   }
-  if (event.key === "j" || event.key === "J") {
+  if (action === "journal") {
     if (!ctx.combatPause.paused) ctx.hud.toggleQuestJournal();
-  } else if (event.key === "i" || event.key === "I") {
+  } else if (action === "inventory") {
     if (!ctx.combatPause.paused) ctx.openInventory();
   }
 }

@@ -55,10 +55,21 @@ ships), and removes barriers for a chunk of players.
 **Files:**
 - Create: `src/presentation/input/keymap.ts` (+ test); modify `flightKeyHandler`
 
-- [ ] A persisted `keymap` (action→key) with rebind + conflict detection; `flightKeyHandler`
+- [x] A persisted `keymap` (action→key) with rebind + conflict detection; `flightKeyHandler`
       resolves actions through it (defaults unchanged).
-- [ ] write tests: rebind persists, conflicts rejected, defaults intact.
-- [ ] run tests — green.
+      (`src/presentation/input/keymap.ts`: `FlightAction` cancel/runTurn/journal/inventory →
+      key, `DEFAULT_KEYMAP` verbatim with the historical Escape/Space/j/i bindings; `rebind`
+      is pure with conflict detection — rejects binding a key another action holds (and an empty
+      key); persisted via `localStorage("keymap")` JSON, the same client-pref class as
+      `fontScale`/`paletteMode`/`reducedMotion` — no schema/save change. `flightKeyHandler`
+      resolves the event to an action via `resolveFlightAction(event, ctx.keymap ?? currentKeymap())`
+      and switches on it; the `keymap` ctx field is optional so existing callers/tests read the
+      live persisted map. Defaults resolve byte-for-byte like the old hard-coded routing.)
+- [x] write tests: rebind persists, conflicts rejected, defaults intact.
+      (`src/tests/presentation/keymap.test.ts` — 20 tests: defaults map Escape/Space(code)/j/J/i/I,
+      rebind onto a free key + input untouched, conflict rejection (case-insensitive), empty-key
+      rejection, injectable-store persistence round-trip + partial/corrupt-map degrade, helpers.)
+- [x] run tests — green. (keymap + flightKeyHandler + spaceRunsTurn = 47 passing; lint + tsc clean.)
 
 ### Task 4: Settings UI group + verify
 **Files:**
