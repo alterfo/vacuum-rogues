@@ -32,11 +32,11 @@ string.
 **Files:**
 - Create: `src/i18n/i18n.ts`, `src/i18n/ru.ts`, `src/i18n/en.ts`, `src/tests/i18n/i18n.test.ts`
 
-- [ ] `t(key, params?)` resolving against the active language dict with `{param}`
+- [x] `t(key, params?)` resolving against the active language dict with `{param}`
       interpolation and a safe fallback (other-lang → key); `setLanguage/getLanguage`
       over `localStorage("language")` (default `ru`).
-- [ ] write tests: lookup, interpolation, fallback, missing key, language switch.
-- [ ] run tests — green.
+- [x] write tests: lookup, interpolation, fallback, missing key, language switch.
+- [x] run tests — green.
 
 ### Task 2: Dictionary parity guard + extraction tooling
 **Files:**
