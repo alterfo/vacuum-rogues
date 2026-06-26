@@ -67,17 +67,30 @@ by an agent actually playing.
 > *oddities*, not just crashes — balance/logic cringe, missing images, and visual
 > sameness like the all-yellow suns.
 
-- [ ] **Balance invariants:** no gear item is strictly dominated by a cheaper one
+- [x] **Balance invariants:** no gear item is strictly dominated by a cheaper one
       (price-vs-value monotonic per role); no dead stat (e.g. `cooldownTurns` must affect
       fire cadence); the player can match/outrun a basic NPC; reachable escape range;
       delivery/combat rewards are bounded (not guaranteed-profit printers).
-- [ ] **Asset coverage:** every `pickVariant` prefix used in production resolves to ≥1
+      (`balanceInvariants.test.ts`: weapon/equipment no-dominance, `weaponFireIntervalMs`
+      strictly monotonic in `cooldownTurns` + distinct cadences across the real catalog,
+      best engine's real `ShipLoadout.derivedStats().speed` ≥ `npcSpeed` while the starter
+      stays below it (escape is upgrade-gated), delivery-margin + artifact-payout bounds.)
+- [x] **Asset coverage:** every `pickVariant` prefix used in production resolves to ≥1
       asset (no entity renders a missing/placeholder image); flag categories whose art
       exists but is *never referenced* (e.g. unused `star_maps`).
-- [ ] **Visual variety:** a generated galaxy yields varied star types (not all yellow);
+      (`assetCoverage.test.ts`: every prod (category, prefix) — planets/planet_maps/surfaces/
+      star_maps/ships/player_ships/portraits/nebula/station, mirrors typed against the live
+      enums so a new type without art fails — resolves; orphan-category sweep flags any art
+      folder with no render path, allowlisting the two genuinely-unwired families found:
+      `icons` + `stars` (legacy, superseded by equirect `star_maps`).)
+- [x] **Visual variety:** a generated galaxy yields varied star types (not all yellow);
       same-type planets/backdrops spread across variants rather than collapsing to one.
       (Purely-pixel checks stay manual via `window.__gameEngine` screenshots.)
-- [ ] write the assertions; wire them into `letsplay:ci`. run — green.
+      (`visualVariety.test.ts`: ≥3 distinct star types over seeded draws + no type >60%;
+      each prod art family ships ≥2 variants AND `pickVariantKey` spreads many ids across
+      them — guards both type-collapse and variant-collapse.)
+- [x] write the assertions; wire them into `letsplay:ci`. run — green. (Added
+      `src/tests/oddities` to the `letsplay:ci` script; gate green at 94 tests / ~2.5 s.)
 
 ### Task 5: Verify + docs
 - [ ] full suite + the new gate green; lint/build ok; document the oracle (what it
