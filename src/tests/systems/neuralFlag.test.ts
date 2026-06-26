@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import {
   isFeatureEnabled,
   setFeatureEnabled,
@@ -61,6 +61,16 @@ describe("featureFlags — generalised on/off flags (neural is the first)", () =
 });
 
 describe("policyGate — isNeuralEnabled is the single neural gate", () => {
+  // The "live flag" test below writes the real `localStorage` neuralEnabled key;
+  // clear it after each test so the flag can't leak into a later test/worker.
+  afterEach(() => {
+    try {
+      localStorage.removeItem(NEURAL_ENABLED_KEY);
+    } catch {
+      /* storage unavailable — nothing to clear */
+    }
+  });
+
   it("off (default) ⇒ the heuristic policy, no neural policy / weights touched", () => {
     const policy = selectPlayerPolicy({ enabled: false });
     expect(policy).toBeInstanceOf(HeuristicPolicy);

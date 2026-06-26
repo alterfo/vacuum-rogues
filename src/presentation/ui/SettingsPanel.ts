@@ -285,13 +285,13 @@ export class SettingsPanel {
     bg.eventMode = "none";
     parent.addChild(bg);
 
+    // No `rawColor`: the dim idle `LABEL_COLOR` must lift to the legible floor
+    // (like `addSectionLabel`); the active accent/on colors are already above
+    // the floor, so `readableFill` passes them through unchanged.
     const lbl = scaledText(
       label,
       labelPx,
       active ? activeLabelColor : LABEL_COLOR,
-      {
-        rawColor: true,
-      },
     );
     lbl.anchor.set(0.5);
     lbl.x = x + w / 2;

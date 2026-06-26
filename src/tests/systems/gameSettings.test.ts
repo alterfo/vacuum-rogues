@@ -119,4 +119,12 @@ describe("gameSettings — speed delegates to the engine store", () => {
     setSpeed(target, 99);
     expect(getSpeed(target)).toBe(GAME_BALANCE.gameSpeedDefault);
   });
+
+  it("setSpeed snaps the dangerous 0 / negative / NaN values to the default (never freezes the game)", () => {
+    for (const bad of [0, -1, Number.NaN]) {
+      const target: SpeedTarget = { gameSpeedMultiplier: 2 };
+      setSpeed(target, bad);
+      expect(getSpeed(target)).toBe(GAME_BALANCE.gameSpeedDefault);
+    }
+  });
 });

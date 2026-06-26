@@ -66,7 +66,7 @@ export class FlightHud implements FlightModule {
   private speedButton: UiButton | null = null;
   private speedIndex = 0;
 
-  // Gear button (⚙) + toggled font-size panel (bottom-left HUD).
+  // Gear button (⚙) + toggled settings panel (speed/font/neural; bottom-left HUD).
   private gearButton: UiButton | null = null;
   private settingsPanel: Container | null = null;
 
