@@ -5,6 +5,10 @@ import {
   PIRATE_FACTION_ID,
   type LandingDenialReason,
 } from "@/systems/galaxy/landingAccess";
+import {
+  DEFAULT_FACTION_PALETTE,
+  factionColor,
+} from "@/presentation/ui/palette";
 
 /** Display names for factions shown in planet tooltips. */
 export const FACTION_DISPLAY_NAME: Record<Faction, string> = {
@@ -17,16 +21,14 @@ export const FACTION_DISPLAY_NAME: Record<Faction, string> = {
   [Faction.OVERMIND]: "Овермайнд",
 };
 
-/** Banner / hull colour per faction (shared with ship sprites). */
-export const FACTION_COLOR: Record<Faction, number> = {
-  [Faction.OUTLANDERS]: 0xff6600,
-  [Faction.BASTIONS]: 0xcc0000,
-  [Faction.SYNDICATE]: 0x00ff00,
-  [Faction.PARADOXES]: 0x9900ff,
-  [Faction.PROGRESSORS]: 0x0066ff,
-  [Faction.INDEPENDENT]: 0x999999,
-  [Faction.OVERMIND]: 0xff33dd,
-};
+/**
+ * Banner / hull colour per faction — the **default-mode** palette, kept as an
+ * alias of the single source of truth so the tooltip never forks its own colour
+ * map. The live tooltip colour is resolved through {@link factionColor} (below),
+ * which honours the active colourblind palette mode; this export is the
+ * historical/default hues for tests and reference.
+ */
+export const FACTION_COLOR: Record<Faction, number> = DEFAULT_FACTION_PALETTE;
 
 /** Hostile factions that "capture" planets — flagged in red on the tooltip. */
 const CAPTURE_FACTIONS: ReadonlySet<Faction> = new Set([Faction.OVERMIND]);
@@ -128,10 +130,10 @@ export function buildPlanetTooltipLines(
       FACTION_DISPLAY_NAME[controllingFaction] ??
       OCCUPIER_DISPLAY_NAME[controllingFaction] ??
       controllingFaction,
+    // Resolve through the palette seam so the colourblind mode reaches the
+    // tooltip; pirates (a non-`Faction` occupier id) keep their dedicated hue.
     color:
-      FACTION_COLOR[controllingFaction] ??
-      OCCUPIER_COLOR[controllingFaction] ??
-      0x999999,
+      OCCUPIER_COLOR[controllingFaction] ?? factionColor(controllingFaction),
   });
 
   // 4. Player relation — only meaningful on inhabited planets.

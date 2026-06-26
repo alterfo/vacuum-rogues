@@ -26,6 +26,7 @@ import {
   moteScale,
 } from "./cometDustTail";
 import type { FlightModule } from "./FlightModule";
+import { reducedMotion } from "../ui/reducedMotion";
 
 /** Per-comet hard cap on simultaneously-live dust motes (FPS bound). A denser
  * stream needs a bigger pool; 96 stays well within the ParticleContainer/
@@ -126,6 +127,12 @@ export class AsteroidBelt implements FlightModule {
   }
 
   update(deltaTime: number, _bgElapsed: number): void {
+    // Accessibility: reduced motion (player setting OR OS `prefers-reduced-motion`)
+    // freezes the *autonomous* foreground motion — asteroid drift/spin and comet
+    // flybys (heavy dust-tail particles). The field's camera-driven parallax is
+    // the parent gameLayer's transform, so panning still reads; only the idle
+    // motion the preference targets stops. Mirrors `SpaceBackgroundLayer.update`.
+    if (reducedMotion()) return;
     this.updateAsteroids(deltaTime);
   }
 
