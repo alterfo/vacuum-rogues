@@ -34,11 +34,11 @@ loot + reward seams.
 **Files:**
 - Create: `src/systems/encounters/encounterGenerator.ts` (+ test)
 
-- [ ] `rollEncounter(system, seed, playerState)` → `Encounter | null` (derelict / anomaly
+- [x] `rollEncounter(system, seed, playerState)` → `Encounter | null` (derelict / anomaly
       / distress), weighted + scaled to danger/rep; deterministic by seed; rate-limited so
       it's a spice, not a flood.
-- [ ] write tests: weighting + scaling, rate limit, deterministic by seed.
-- [ ] run tests — green.
+- [x] write tests: weighting + scaling, rate limit, deterministic by seed.
+- [x] run tests — green.
 
 ### Task 2: Outcome resolver (pure)
 **Files:**
