@@ -19,13 +19,16 @@
  */
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType } from "@/types";
-import type { StarSystem } from "@/domain/StarSystem";
-import type { Planet } from "@/domain/Planet";
 import { logger } from "@/utils/logger";
 import { observe } from "./observe";
 import { selectPlayerPolicy } from "./policyGate";
 import { AutopilotController, type AutopilotDeps } from "./AutopilotController";
 import type { LiveSceneController } from "./LiveApplier";
+import {
+  currentSystem,
+  landedPlanet,
+  acceptBoardQuests,
+} from "./engineQueries";
 
 /** The `keydown` that toggles the autopilot (Backquote / `` ` `` — unused in flight). */
 export const AUTOPILOT_HOTKEY_CODE = "Backquote";
@@ -42,39 +45,6 @@ export interface AutopilotWindowHook {
   readonly engaged: boolean;
   /** The underlying controller (for advanced/manual driving). */
   readonly controller: AutopilotController;
-}
-
-/** Resolve the player's current star system from the live engine, if any. */
-function currentSystem(engine: GameEngine): StarSystem | null {
-  const player = engine.player;
-  const galaxy = engine.galaxy;
-  if (!player || !galaxy) return null;
-  return galaxy.systems.find((s) => s.id === player.currentSystemId) ?? null;
-}
-
-/** The planet the player is presently landed on, if resolvable. */
-function landedPlanet(engine: GameEngine): Planet | null {
-  const sys = currentSystem(engine);
-  const landedId = engine.player?.landedPlanetId;
-  if (!sys || !landedId) return null;
-  return sys.planets.find((p) => p.id === landedId) ?? null;
-}
-
-/**
- * Accept every registered, not-already-active contract offered on the landed
- * planet — the live mirror of {@link PlayerAgent}'s board-quest acceptance, so it
- * is a clean no-op (never a `logger.error`) when there is nothing new to take.
- */
-function acceptBoardQuests(engine: GameEngine): void {
-  const planet = landedPlanet(engine);
-  if (!planet) return;
-  const quests = engine.questManager;
-  const active = new Set(quests.getActiveQuests().map((q) => q.id));
-  for (const offered of planet.availableQuests) {
-    if (active.has(offered.id)) continue;
-    if (!quests.getQuestTemplate(offered.id)) continue; // not registered ⇒ skip
-    quests.acceptQuest(offered.id, planet.id);
-  }
 }
 
 /**

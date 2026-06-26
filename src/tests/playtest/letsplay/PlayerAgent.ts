@@ -20,14 +20,16 @@
  * a *real* engine fault (an integration break) is exactly what shows up there.
  * Dev-only: lives under `src/tests/`, imported by no production module.
  */
-import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType } from "@/types";
-import type { StarSystem } from "@/domain/StarSystem";
-import type { Planet } from "@/domain/Planet";
 import { RealEngineHarness, type RecordedError } from "../realEngineHarness";
 import { observe, type Observation } from "./observe";
 import type { Action, PlayerPolicy } from "./PlayerPolicy";
 import { type AgentMemory, createMemory, updateMemory } from "./AgentMemory";
+import {
+  currentSystem,
+  landedPlanet,
+  acceptBoardQuests,
+} from "./engineQueries";
 
 /** One recorded decision in a session transcript. */
 export interface AgentStep {
@@ -47,22 +49,6 @@ export interface AgentRunResult {
   readonly errors: RecordedError[];
   /** The scene the agent ended in. */
   readonly endScene: SceneType;
-}
-
-/** Resolve the player's current star system from the live engine, if any. */
-function currentSystem(engine: GameEngine): StarSystem | null {
-  const player = engine.player;
-  const galaxy = engine.galaxy;
-  if (!player || !galaxy) return null;
-  return galaxy.systems.find((s) => s.id === player.currentSystemId) ?? null;
-}
-
-/** The planet the player is presently landed on, if resolvable. */
-function landedPlanet(engine: GameEngine): Planet | null {
-  const sys = currentSystem(engine);
-  const landedId = engine.player?.landedPlanetId;
-  if (!sys || !landedId) return null;
-  return sys.planets.find((p) => p.id === landedId) ?? null;
 }
 
 /**
@@ -170,7 +156,7 @@ export class PlayerAgent {
       }
 
       case "take-quest": {
-        this.acceptBoardQuests(engine);
+        acceptBoardQuests(engine);
         this.harness.tick();
         return;
       }
@@ -199,24 +185,6 @@ export class PlayerAgent {
       default:
         this.harness.tick();
         return;
-    }
-  }
-
-  /**
-   * Accept every contract offered on the landed planet that is *registered* as a
-   * template and not already active. Guarding on the registered template + the
-   * active set keeps this a clean no-op (never a `logger.error`) when there is
-   * nothing new to take.
-   */
-  private acceptBoardQuests(engine: GameEngine): void {
-    const planet = landedPlanet(engine);
-    if (!planet) return;
-    const quests = engine.questManager;
-    const active = new Set(quests.getActiveQuests().map((q) => q.id));
-    for (const offered of planet.availableQuests) {
-      if (active.has(offered.id)) continue;
-      if (!quests.getQuestTemplate(offered.id)) continue; // not registered ⇒ skip
-      quests.acceptQuest(offered.id, planet.id);
     }
   }
 }
