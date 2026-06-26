@@ -27,6 +27,7 @@ import type { Planet } from "@/domain/Planet";
 import { RealEngineHarness, type RecordedError } from "../realEngineHarness";
 import { observe, type Observation } from "./observe";
 import type { Action, PlayerPolicy } from "./PlayerPolicy";
+import { type AgentMemory, createMemory, updateMemory } from "./AgentMemory";
 
 /** One recorded decision in a session transcript. */
 export interface AgentStep {
@@ -67,24 +68,51 @@ function landedPlanet(engine: GameEngine): Planet | null {
 /**
  * Drives the real engine as the player. Construct with a booted harness and a
  * policy, then `run(budget)`.
+ *
+ * The agent is a POMDP solver: it carries a **per-run** {@link AgentMemory} belief
+ * notebook (a human's memory of what it has *seen*), folds each egocentric
+ * observation into it **before** deciding, and hands `{obs, memory}` to its policy
+ * — so a memory-using policy can act on remembered prices/threats/offers while the
+ * memoryless heuristic simply ignores the notebook. The belief is created fresh
+ * per agent (so a new session = a new game = a clean slate) and is inspectable via
+ * {@link belief}; {@link reset} starts it over for an explicit re-run.
  */
 export class PlayerAgent {
+  /** Per-run belief state — folded from observations, never from omniscient state. */
+  private memory: AgentMemory = createMemory();
+
   constructor(
     private readonly harness: RealEngineHarness,
     private readonly policy: PlayerPolicy,
   ) {}
 
+  /** The agent's current belief notebook (inspectable for transcripts / tests). */
+  get belief(): AgentMemory {
+    return this.memory;
+  }
+
+  /** Start a fresh per-run notebook — a human starting the game over. */
+  reset(): void {
+    this.memory = createMemory();
+  }
+
   /**
-   * Play `budget` steps: observe → decide → apply → tick. Returns the transcript
-   * plus the harness error sink. Never throws — a thrown applier error is caught
-   * by the harness `tick` sink or recorded here as an `unhandled` failure, so the
-   * caller asserts on `result.errors` rather than a try/catch.
+   * Play `budget` steps: observe → **remember** → decide → apply → tick. Each step
+   * folds the egocentric observation into the per-run belief *before* the policy
+   * decides, then passes `{obs, memory}` to it, so decisions are memory-informed.
+   * Returns the transcript (each step's action carries the belief-driven `reason`)
+   * plus the harness error sink. Never throws — a thrown applier error is caught by
+   * the harness `tick` sink or recorded here as an `unhandled` failure, so the
+   * caller asserts on `result.errors` rather than a try/catch. The belief persists
+   * across calls (so the `run(1)`-per-step session driver keeps accumulating); call
+   * {@link reset} to start a new run.
    */
   async run(budget: number): Promise<AgentRunResult> {
     const steps: AgentStep[] = [];
     for (let index = 0; index < budget; index++) {
       const obs = observe(this.harness.engine);
-      const action = this.policy.decide(obs);
+      this.memory = updateMemory(this.memory, obs);
+      const action = this.policy.decide(obs, this.memory);
       steps.push({ index, scene: obs.scene, action });
       await this.apply(action, obs);
     }

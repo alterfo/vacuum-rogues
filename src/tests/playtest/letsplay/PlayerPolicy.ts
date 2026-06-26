@@ -17,6 +17,7 @@
  * applier does). Lives under `src/tests/` and is dev-only.
  */
 import type { Observation, PlayerActionKind } from "./observe";
+import type { AgentMemory } from "./AgentMemory";
 
 /**
  * A chosen player action: the {@link PlayerActionKind} plus optional hints the
@@ -42,6 +43,13 @@ export interface Action {
 export interface PlayerPolicy {
   /** Stable name for transcripts / reports (e.g. "heuristic", "neural"). */
   readonly name: string;
-  /** Choose one legal action for the observed state. Pure; never throws. */
-  decide(obs: Observation): Action;
+  /**
+   * Choose one legal action for the observed state, optionally informed by the
+   * agent's per-run belief state ({@link AgentMemory}). The {@link PlayerAgent}
+   * folds each observation into its notebook and passes it here every step, so a
+   * memory-using policy ({@link MemoryHeuristicPolicy}) reasons over what it has
+   * *seen*; a memoryless one (heuristic) simply ignores the argument. Pure; never
+   * throws.
+   */
+  decide(obs: Observation, memory?: AgentMemory): Action;
 }

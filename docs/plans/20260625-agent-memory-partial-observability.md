@@ -110,12 +110,12 @@ Memory is **per-run** (resets each new game, like a human starting fresh).
 **Files:**
 - Modify: `src/tests/playtest/letsplay/PlayerAgent.ts`, `letsplaySession.test.ts`
 
-- [ ] The agent owns an `AgentMemory`, `updateMemory(obs)` each step before `decide`,
+- [x] The agent owns an `AgentMemory`, `updateMemory(obs)` each step before `decide`,
       and passes `{obs, memory}` (or memory-features) to the policy; memory resets on a
       new run. Transcript records the belief-driven `reason`.
-- [ ] write tests: a session shows memory-informed decisions (a return-to-sell); memory
+- [x] write tests: a session shows memory-informed decisions (a return-to-sell); memory
       resets between runs; zero logged/thrown errors.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 6: Verify acceptance criteria
 **Files:**

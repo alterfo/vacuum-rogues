@@ -195,13 +195,16 @@ export class NeuralPolicy implements PlayerPolicy {
 
   /**
    * Choose one legal action. With a net loaded, runs `featurize → forward →
-   * mapNetOutputToAction` over the pure-TS MLP; otherwise inert — defers to the
+   * mapNetOutputToAction` over the pure-TS MLP — feeding the agent's
+   * {@link AgentMemory} belief block into {@link featurize} so the net sees the
+   * memory-derived features it was trained on; otherwise inert — defers to the
    * heuristic baseline (so the contract "never throws, always legal" holds even
-   * untrained). Synchronous: the MLP forward is a couple of CPU matmuls.
+   * untrained; the baseline is memoryless, so the notebook isn't forwarded to it).
+   * Synchronous: the MLP forward is a couple of CPU matmuls.
    */
-  decide(obs: Observation): Action {
+  decide(obs: Observation, memory?: AgentMemory): Action {
     if (this.weights) {
-      const scores = forward(this.weights, featurize(obs));
+      const scores = forward(this.weights, featurize(obs, memory));
       return mapNetOutputToAction(scores, obs);
     }
     return this.fallback.decide(obs);
