@@ -3,28 +3,32 @@
  *
  * `NeuralPolicy` is the "нейросеть думает за игрока" brain: the trained player
  * net that, once it exists, replaces {@link HeuristicPolicy} behind the identical
- * {@link PlayerPolicy} contract. The training + ONNX export is **Post-Completion**
- * (offline self-play on the RTX 4090), so today this is a documented stub that
- * keeps the heuristic as the default while pinning down the seam:
+ * {@link PlayerPolicy} contract. The training run is **Post-Completion** (offline
+ * self-play / behavioural cloning on the RTX 4090), so today this is a documented
+ * stub that keeps the heuristic as the default while pinning down the seam:
  *
  *  1. **`featurize(obs)`** — a pure, fixed-length numeric feature vector from the
  *     {@link Observation}, the net's input. Deterministic (same obs → same vector)
  *     and stable-width, so it doubles as the encoder for self-play training data.
- *  2. **`mapNetOutputToAction(scores, obs)`** — a pure mapping from the net's
+ *  2. **`forward(weights, feats)`** — the hand-written pure-TS MLP forward pass
+ *     ({@link forward} in `mlp.ts`): two tiny matmuls + ReLU, microseconds on the
+ *     CPU, no wasm runtime / worker / GPU. It replaces the former
+ *     `onnxruntime-web` inference session — the net is just a small weights JSON.
+ *  3. **`mapNetOutputToAction(scores, obs)`** — a pure mapping from the net's
  *     output head (one score per {@link ACTION_ORDER} slot) onto a **legal**
  *     {@link Action}: the highest-scoring action whose `kind` ∈ `obs.legalActions`,
  *     with `"wait"` (always legal) as the guaranteed floor. So even a net that
  *     argmaxes to an action the current scene can't perform yields a legal move —
  *     the policy can never hand the agent an illegal action.
- *  3. **`load()`** — pulls onnxruntime-web through a **dev-only dynamic
- *     `import()`** (never a static edge — `letsplayDevOnly.test.ts` bans
- *     `import … from "onnxruntime-web"` so the runtime is not added to the prod
- *     bundle) and creates the session. With **no `modelPath`** it throws
- *     "not trained yet", and `decide` stays inert, falling back to the heuristic.
+ *  4. **`load()`** — adopts and validates the trained {@link MlpWeights} JSON
+ *     (`loadWeights` + a feature/action-width check). With **no `weights`** it
+ *     throws "not trained yet", and `decide` stays inert, falling back to the
+ *     heuristic. There is no ONNX runtime and no dynamic `import()` any more.
  *
  * Dev-only: lives under `src/tests/`, imported by no production module.
  */
 import { GameSystemException } from "@/exceptions/GameSystemException";
+import { GameValidationException } from "@/exceptions/GameValidationException";
 import {
   ACTION_ORDER,
   type Observation,
@@ -32,40 +36,19 @@ import {
 } from "./observe";
 import type { Action, PlayerPolicy } from "./PlayerPolicy";
 import { HeuristicPolicy } from "./HeuristicPolicy";
-
-/**
- * Minimal structural shapes of the onnxruntime-web pieces the seam touches,
- * declared **locally** so there is no static `import … from "onnxruntime-web"`
- * edge (the guard test bans it). Only the dev-only dynamic `import()` in
- * {@link NeuralPolicy.load} ever pulls the real runtime.
- */
-interface OrtTensorLike {
-  readonly data: ArrayLike<number>;
-}
-interface OrtSessionLike {
-  run(feeds: Record<string, unknown>): Promise<Record<string, OrtTensorLike>>;
-}
-interface OrtTensorCtor {
-  new (type: string, data: Float32Array, dims: number[]): unknown;
-}
-interface OrtModuleLike {
-  InferenceSession: { create(path: string): Promise<OrtSessionLike> };
-  Tensor: OrtTensorCtor;
-}
+import { forward, loadWeights, type MlpWeights } from "./mlp";
 
 /** Construction options for {@link NeuralPolicy}. */
 export interface NeuralPolicyOptions {
   /**
-   * Path / URL to the exported ONNX player net. **Absent ⇒ inert**: `load()`
-   * throws "not trained yet" and `decide` falls back to {@link fallback}.
+   * The trained player net's weights — the parsed `*.weights.json`
+   * ({@link MlpWeights} JSON shape, validated by `loadWeights`). **Absent ⇒
+   * inert**: `load()` throws "not trained yet" and `decide` falls back to
+   * {@link fallback}. Drop the exported weights here (dev-only) once trained.
    */
-  readonly modelPath?: string;
+  readonly weights?: unknown;
   /** Decision used while no net is loaded. Defaults to a {@link HeuristicPolicy}. */
   readonly fallback?: PlayerPolicy;
-  /** Net input feed name (the exported graph's input). Defaults to `"obs"`. */
-  readonly inputName?: string;
-  /** Net output name (the action-score head). Defaults to `"scores"`. */
-  readonly outputName?: string;
 }
 
 /** Length of the {@link featurize} vector — the net's input width. */
@@ -130,84 +113,79 @@ export function mapNetOutputToAction(
 }
 
 /**
- * The neural player. Inert until a trained net is loaded — construct it, call
- * `await load()` (which throws "not trained yet" with no `modelPath`), then it
- * decides from the net; otherwise `decide` defers to the heuristic baseline so
- * the agent loop keeps running. Honours the {@link PlayerPolicy} contract today
- * (sync `decide`, never throws, always a legal action) via that fallback.
+ * The neural player. Inert until a trained net is loaded — construct it with the
+ * exported weights, call `await load()` (which throws "not trained yet" with no
+ * `weights`), then it decides by running the pure-TS MLP; otherwise `decide`
+ * defers to the heuristic baseline so the agent loop keeps running. Honours the
+ * {@link PlayerPolicy} contract today (sync `decide`, never throws, always a legal
+ * action) via that fallback — and, once loaded, via the strict load-time
+ * validation that the weights match `featurize` width / {@link ACTION_ORDER}.
  */
 export class NeuralPolicy implements PlayerPolicy {
   readonly name = "neural";
 
   private readonly fallback: PlayerPolicy;
-  private readonly inputName: string;
-  private readonly outputName: string;
-  private session: OrtSessionLike | null = null;
-  private ort: OrtModuleLike | null = null;
-  /** Scores from the most recent {@link think}, consumed by the next `decide`. */
-  private lastScores: number[] | null = null;
+  private weights: MlpWeights | null = null;
 
   constructor(private readonly options: NeuralPolicyOptions = {}) {
     this.fallback = options.fallback ?? new HeuristicPolicy();
-    this.inputName = options.inputName ?? "obs";
-    this.outputName = options.outputName ?? "scores";
   }
 
   /** True once a trained net has been loaded via {@link load}. */
   get isLoaded(): boolean {
-    return this.session !== null;
+    return this.weights !== null;
   }
 
   /**
-   * Load the trained player net through a **dev-only dynamic import** of
-   * onnxruntime-web. Throws a {@link GameSystemException} ("not trained yet")
-   * when no `modelPath` is configured — the export pipeline is Post-Completion,
-   * so until then the policy stays inert and {@link decide} falls back.
+   * Adopt the trained player net's weights. Validates the {@link MlpWeights}
+   * shape (`loadWeights`) and that the net matches this policy's I/O — the first
+   * layer takes a {@link FEATURE_LENGTH}-wide input and the output head has one
+   * score per {@link ACTION_ORDER} slot — so {@link decide}'s `forward` can never
+   * throw on a width mismatch. Throws a {@link GameSystemException} ("not trained
+   * yet") when no `weights` are configured (the export is Post-Completion, so
+   * until then the policy stays inert and {@link decide} falls back), or a
+   * {@link GameValidationException} when the weights are malformed / mis-sized.
    */
   async load(): Promise<void> {
-    const modelPath = this.options.modelPath;
-    if (!modelPath) {
+    const raw = this.options.weights;
+    if (raw === undefined || raw === null) {
       throw new GameSystemException(
         "LETSPLAY_NEURAL_NOT_TRAINED",
-        "NeuralPolicy.load: not trained yet — no model path configured. Train " +
-          "and export the player net offline (see plan Post-Completion) and " +
-          "pass { modelPath }; until then the HeuristicPolicy remains the default.",
+        "NeuralPolicy.load: not trained yet — no weights configured. Train and " +
+          "export the player net offline (see plan Post-Completion) and pass " +
+          "{ weights }; until then the HeuristicPolicy remains the default.",
       );
     }
-    // DEV-ONLY dynamic import: never a static edge, so the prod bundle never
-    // pulls onnxruntime-web (guarded by letsplayDevOnly.test.ts).
-    const ort = (await import("onnxruntime-web")) as unknown as OrtModuleLike;
-    this.session = await ort.InferenceSession.create(modelPath);
-    this.ort = ort;
+    const weights = loadWeights(raw);
+    const inDim = weights.layers[0].W[0]?.length ?? 0;
+    if (inDim !== FEATURE_LENGTH) {
+      throw new GameValidationException(
+        "LETSPLAY_NEURAL_INPUT_WIDTH",
+        `NeuralPolicy.load: net input width ${inDim} != featurize width ${FEATURE_LENGTH}`,
+        { inputWidth: inDim, expected: FEATURE_LENGTH },
+      );
+    }
+    const outDim = weights.layers[weights.layers.length - 1].W.length;
+    if (outDim !== ACTION_ORDER.length) {
+      throw new GameValidationException(
+        "LETSPLAY_NEURAL_OUTPUT_WIDTH",
+        `NeuralPolicy.load: net output width ${outDim} != action count ${ACTION_ORDER.length}`,
+        { outputWidth: outDim, expected: ACTION_ORDER.length },
+      );
+    }
+    this.weights = weights;
   }
 
   /**
-   * Run the loaded net for `obs`, caching the action-score vector the next
-   * {@link decide} will map. Async (ONNX inference); a no-op returning `null`
-   * when no net is loaded. Separated from the sync `decide` because ONNX
-   * inference is asynchronous — the agent loop primes with `think` then decides.
-   */
-  async think(obs: Observation): Promise<readonly number[] | null> {
-    if (!this.session || !this.ort) return null;
-    const feats = featurize(obs);
-    const input = new this.ort.Tensor("float32", Float32Array.from(feats), [
-      1,
-      feats.length,
-    ]);
-    const out = await this.session.run({ [this.inputName]: input });
-    const tensor = out[this.outputName] ?? Object.values(out)[0];
-    this.lastScores = tensor ? Array.from(tensor.data, Number) : null;
-    return this.lastScores;
-  }
-
-  /**
-   * Choose one legal action. With a net loaded and a primed score vector, maps
-   * the net output to a legal action; otherwise inert — defers to the heuristic
-   * baseline (so the contract "never throws, always legal" holds even untrained).
+   * Choose one legal action. With a net loaded, runs `featurize → forward →
+   * mapNetOutputToAction` over the pure-TS MLP; otherwise inert — defers to the
+   * heuristic baseline (so the contract "never throws, always legal" holds even
+   * untrained). Synchronous: the MLP forward is a couple of CPU matmuls.
    */
   decide(obs: Observation): Action {
-    if (this.isLoaded && this.lastScores) {
-      return mapNetOutputToAction(this.lastScores, obs);
+    if (this.weights) {
+      const scores = forward(this.weights, featurize(obs));
+      return mapNetOutputToAction(scores, obs);
     }
     return this.fallback.decide(obs);
   }

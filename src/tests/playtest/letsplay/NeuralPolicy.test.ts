@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { SceneType, FactionType } from "@/types";
 import { GameSystemException } from "@/exceptions/GameSystemException";
+import { GameValidationException } from "@/exceptions/GameValidationException";
 import {
   ACTION_ORDER,
   legalActionsForScene,
@@ -12,12 +13,28 @@ import {
 } from "./observe";
 import { HeuristicPolicy } from "./HeuristicPolicy";
 import type { Action } from "./PlayerPolicy";
+import type { MlpWeights } from "./mlp";
 import {
   NeuralPolicy,
   featurize,
   mapNetOutputToAction,
   FEATURE_LENGTH,
 } from "./NeuralPolicy";
+
+/**
+ * A tiny single-layer net (`FEATURE_LENGTH → ACTION_ORDER.length`) whose weight
+ * matrix is all-zero, so `forward` returns its bias vector verbatim regardless of
+ * the input. A one-hot bias on `kind` therefore makes the net argmax that action
+ * for *any* observation — a deterministic teacher for the loaded-net path.
+ */
+function netFavouring(kind: PlayerActionKind): MlpWeights {
+  const idx = ACTION_ORDER.indexOf(kind);
+  const W = ACTION_ORDER.map(() =>
+    Array.from({ length: FEATURE_LENGTH }, () => 0),
+  );
+  const b = ACTION_ORDER.map((_, i) => (i === idx ? 1 : 0));
+  return { layers: [{ W, b }] };
+}
 
 /**
  * Task 5 of the dev-only letsplay engine: the **neural-policy seam (stub)**.
@@ -205,18 +222,12 @@ describe("mapNetOutputToAction (net output → legal action)", () => {
 });
 
 describe("NeuralPolicy (inert stub until trained)", () => {
-  it("load() rejects with 'not trained yet' when no model path is given", async () => {
+  it("load() rejects with 'not trained yet' when no weights are given", async () => {
     const policy = new NeuralPolicy();
     expect(policy.isLoaded).toBe(false);
     await expect(policy.load()).rejects.toBeInstanceOf(GameSystemException);
     await expect(policy.load()).rejects.toThrow(/not trained yet/i);
     expect(policy.isLoaded).toBe(false);
-  });
-
-  it("think() is a no-op (null) while no net is loaded", async () => {
-    const policy = new NeuralPolicy();
-    const scores = await policy.think(SAMPLE_STATES[1]);
-    expect(scores).toBeNull();
   });
 
   it("decide() is inert — it falls back to the heuristic baseline", () => {
@@ -227,7 +238,7 @@ describe("NeuralPolicy (inert stub until trained)", () => {
     }
   });
 
-  it("decide() never throws and never returns an illegal action", () => {
+  it("decide() never throws and never returns an illegal action (untrained)", () => {
     const policy = new NeuralPolicy();
     for (const obs of SAMPLE_STATES) {
       let action!: Action;
@@ -245,5 +256,73 @@ describe("NeuralPolicy (inert stub until trained)", () => {
     const obs = makeObs(SceneType.SPACE_FLIGHT, { connections: 3 });
     expect(policy.decide(obs)).toEqual({ kind: "wait", reason: "stub" });
     expect(stub.decide).toHaveBeenCalledWith(obs);
+  });
+});
+
+describe("NeuralPolicy (loaded — runs the pure-TS MLP)", () => {
+  it("load() adopts valid weights and isLoaded becomes true", async () => {
+    const policy = new NeuralPolicy({ weights: netFavouring("land") });
+    expect(policy.isLoaded).toBe(false);
+    await policy.load();
+    expect(policy.isLoaded).toBe(true);
+  });
+
+  it("decide() runs the net → the highest-scoring legal action, tagged neural", async () => {
+    const policy = new NeuralPolicy({ weights: netFavouring("land") });
+    await policy.load();
+    const obs = makeObs(SceneType.SPACE_FLIGHT, {
+      planets: [planet("p1")],
+      connections: 2,
+    });
+    expect(obs.legalActions).toContain("land");
+    const action = policy.decide(obs);
+    expect(action.kind).toBe("land");
+    expect(action.reason).toBe("neural");
+  });
+
+  it("decide() still never returns an illegal action when the net's argmax is illegal", async () => {
+    // The net always argmaxes "land", which is NOT legal on a planet.
+    const policy = new NeuralPolicy({ weights: netFavouring("land") });
+    await policy.load();
+    for (const obs of SAMPLE_STATES) {
+      let action!: Action;
+      expect(() => (action = policy.decide(obs))).not.toThrow();
+      expect(obs.legalActions).toContain(action.kind);
+    }
+  });
+
+  it("decide() is deterministic — same obs ⇒ same action", async () => {
+    const policy = new NeuralPolicy({ weights: netFavouring("warp") });
+    await policy.load();
+    const obs = makeObs(SceneType.STAR_MAP, { connections: 4 });
+    expect(policy.decide(obs)).toEqual(policy.decide(obs));
+  });
+
+  it("load() rejects malformed weights with a validation error", async () => {
+    const policy = new NeuralPolicy({ weights: { layers: [] } });
+    await expect(policy.load()).rejects.toBeInstanceOf(GameValidationException);
+    expect(policy.isLoaded).toBe(false);
+  });
+
+  it("load() rejects a net whose input width != featurize width", async () => {
+    // A 10→10 net (wrong input width) must fail loudly at load, so decide's
+    // forward can never throw on a width mismatch.
+    const W = ACTION_ORDER.map(() => Array.from({ length: 10 }, () => 0));
+    const b = ACTION_ORDER.map(() => 0);
+    const policy = new NeuralPolicy({ weights: { layers: [{ W, b }] } });
+    await expect(policy.load()).rejects.toBeInstanceOf(GameValidationException);
+    await expect(policy.load()).rejects.toThrow(/input width/i);
+    expect(policy.isLoaded).toBe(false);
+  });
+
+  it("load() rejects a net whose output width != action count", async () => {
+    const W = Array.from({ length: 4 }, () =>
+      Array.from({ length: FEATURE_LENGTH }, () => 0),
+    );
+    const b = [0, 0, 0, 0];
+    const policy = new NeuralPolicy({ weights: { layers: [{ W, b }] } });
+    await expect(policy.load()).rejects.toBeInstanceOf(GameValidationException);
+    await expect(policy.load()).rejects.toThrow(/output width/i);
+    expect(policy.isLoaded).toBe(false);
   });
 });

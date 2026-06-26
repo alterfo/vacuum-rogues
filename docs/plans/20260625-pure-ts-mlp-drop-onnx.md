@@ -65,13 +65,13 @@ JSON** instead of ONNX, pinned by a **parity test**.
 **Files:**
 - Modify: `src/tests/playtest/letsplay/NeuralPolicy.ts`, `NeuralPolicy.test.ts`
 
-- [ ] Replace the ONNX-session path with `mlp.forward` over `loadWeights(modelJson)`:
+- [x] Replace the ONNX-session path with `mlp.forward` over `loadWeights(modelJson)`:
       `featurize(obs)` → `forward` → `mapNetOutputToAction`. No model/weights ⇒ inert,
       falls back to the heuristic (unchanged contract). Remove the dynamic
       `import("onnxruntime-web")` and the local ORT shims.
-- [ ] write/adjust tests: with weights, returns the mapped legal action; without,
+- [x] write/adjust tests: with weights, returns the mapped legal action; without,
       falls back; never throws.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 3: Remove onnxruntime-web + dead ONNX scaffolding
 **Files:**
