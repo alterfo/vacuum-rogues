@@ -93,8 +93,13 @@ by an agent actually playing.
       `src/tests/oddities` to the `letsplay:ci` script; gate green at 94 tests / ~2.5 s.)
 
 ### Task 5: Verify + docs
-- [ ] full suite + the new gate green; lint/build ok; document the oracle (what it
-      catches, how to triage a failure, how to rebaseline a band).
+- [x] full suite + the new gate green; lint/build ok; document the oracle (what it
+      catches, how to triage a failure, how to rebaseline a band). (Verified:
+      `npm run test:run` 3421 pass / 4 skip; `npm run letsplay:ci` 94 pass ~2.5 s;
+      `npm run lint` 0 errors; `npm run build` clean. Docs: `LETSPLAY_ENGINE.md`
+      Oracle section now covers all three layers — played-session metrics + the
+      Task-4 static oddity assertions (balance/asset/visual) — with a new
+      "Triaging a failure" workflow and the existing rebaselining procedure.)
 
 ## Post-Completion
 **Manual:** introduce a known soft-lock locally → the oracle fails the gate with a clear

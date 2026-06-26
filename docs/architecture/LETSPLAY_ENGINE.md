@@ -159,18 +159,45 @@ The agent doubles as a **CI oracle**: every push/PR (and pre-push) plays `K` see
 sessions × `N` steps on the real engine and **fails the build** on any crash, soft-lock,
 always-actionable-invariant breach, or out-of-band balance signal — the regressions that
 slip past the 2600-test unit suite but break the real loop
-(`docs/plans/20260625-letsplay-ci-oracle.md`).
+(`docs/plans/20260625-letsplay-ci-oracle.md`). Beside the *played* sessions, the same gate
+runs a set of **static oddity assertions** (`src/tests/oddities/`) that catch the
+non-crash *oddities* the standing rule (`feedback-letsplay-oddity-hunting`) demands —
+balance cringe (a dominated gear item, a dead stat), missing/placeholder art, and visual
+sameness like the all-yellow suns — over the real catalogs/manifest without booting an
+engine.
 
 | Layer | File | Role |
 |-------|------|------|
 | Session metrics | `sessionMetrics.ts` | Pure: folds one session's raw signals (errors, invariant breaches, the action transcript, an optional vitals series) into `SessionMetrics`, rolls `K` of them into the cross-session `RunMetrics`, and `evaluate(run, thresholds)` scores it → `{ ok, reasons }`. Hard faults (errors/soft-locks/vital invariants) default to a **zero** ceiling; balance bands are **optional** and skipped when omitted or value-less, so an unbaselined band never spuriously fails. |
 | CI verdict | `ci.run.ts` | `runLetsplayCi(opts)` plays the real sessions and `evaluate`s them; `evaluateLetsplayRun(report)` is the **pure** verdict over a (real *or* synthetic) report, so the gate's pass/fail logic is unit-testable without an engine. `formatCiResult` renders the verdict + every breach for triage. `DEFAULT_CI_THRESHOLDS` = hard-faults-zero. |
-| Entry point | `ci.run.test.ts` | `npm run letsplay:ci` (sets `LETSPLAY_CI=1`) plays the full gate; `LETSPLAY_CI_SESSIONS`/`LETSPLAY_CI_STEPS` override the `K`/`N` defaults (3×40). Determinism: each session is seeded `"LETSPLAY_CI-<i>"`, so a CI failure reproduces locally from the same seed. |
+| Oddity assertions | `src/tests/oddities/{balanceInvariants,assetCoverage,visualVariety}.test.ts` | Static, engine-free invariants run **in the same gate** (the script's second arg). **Balance:** no gear strictly dominated by a cheaper one; `cooldownTurns` is not a dead stat (cadence strictly monotonic, distinct cadences across the catalog); escape is reachable but upgrade-gated (best engine ≥ `npcSpeed`, starter below); delivery/artifact rewards bounded. **Asset coverage:** every production `pickVariant(category, prefix)` (planets/maps/surfaces/star_maps/ships/player_ships/portraits/nebula/station, mirrored against the live enums) resolves to ≥1 asset; no *orphan* art category (allowlist: `icons`, `stars`). **Visual variety:** ≥3 distinct star types with none >60%, and each art family ships ≥2 variants that `pickVariantKey` actually spreads ids across (guards type- and variant-collapse). Pure pixel checks stay manual via `window.__gameEngine` / autopilot. |
+| Entry point | `ci.run.test.ts` + `src/tests/oddities` | `npm run letsplay:ci` (sets `LETSPLAY_CI=1`) runs **both** the played-session gate and the static oddity assertions (94 tests, ~2.5 s); `LETSPLAY_CI_SESSIONS`/`LETSPLAY_CI_STEPS` override the played `K`/`N` defaults (3×40). Determinism: each session is seeded `"LETSPLAY_CI-<i>"`, so a CI failure reproduces locally from the same seed. |
 
 **Wired into CI** beside the playtest harness: the `letsplay-ci` **pre-push** command
 (`lefthook.yml`) and the **`letsplay-ci` CI workflow** (`.github/workflows/letsplay-ci.yml`,
 on push/PR to master/main/develop) both run `npm run letsplay:ci` — a distinct, named signal
 so a loop-breaking change fails here, not in a beta-tester's browser.
+
+**Triaging a failure.** The gate names *which* layer broke, so triage starts by reading the
+failing test name:
+
+1. **A `src/tests/oddities/*` test reds** ⇒ a static-catalog oddity, no engine involved.
+   The assertion message points at the offending datum: `balanceInvariants` names the
+   dominated gear / dead stat / unbounded reward; `assetCoverage` names the unresolved
+   `category/prefix` (missing art or a typo'd prefix) or the new orphan category; `visualVariety`
+   names the collapsed star type or art family. Fix the catalog/manifest, or — if the
+   change is *intentional* — update the invariant's allowlist/band **in the same change**
+   with a one-line reason. Re-run `npm run letsplay:ci`.
+2. **A played-session breach (`ci.run.test.ts`) reds** ⇒ the agent hit a real crash,
+   soft-lock, or invariant violation. The reason line carries the failing **seed**
+   (`"LETSPLAY_CI-<i>"`); reproduce deterministically by setting `LETSPLAY_CI_SESSIONS=1`
+   and seeding that single session, and read `formatCiResult`'s `GATE FAILURES:` block plus
+   the appended `formatLetsplayReport` transcript (each step's belief-driven `reason`) to
+   see what the agent did just before the fault. A soft-lock = a non-terminal scene that
+   offered only `wait`; an error = a logged/thrown exception in the harness sink.
+3. **A balance band reds** (once any band is baselined) ⇒ read the printed `balance:` line
+   against the band in `DEFAULT_CI_THRESHOLDS`, then either fix the regression or rebaseline
+   the band (next paragraph) if the move was a deliberate balance tune.
 
 **Thresholds & rebaselining (read before tuning a band).** The default gate is
 **hard-faults-zero + unscored balance bands** — and that is the *measured* baseline, not a
