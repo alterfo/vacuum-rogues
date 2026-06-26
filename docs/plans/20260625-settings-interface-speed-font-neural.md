@@ -58,12 +58,12 @@ this is the gate the (deferred) Overmind neural AI will sit behind.
 - Create: `src/systems/settings/gameSettings.ts`
 - Create: `src/tests/systems/gameSettings.test.ts`
 
-- [ ] A small accessor unifying the three: `getSpeed/setSpeed` (→ `PlayerSettings`/
+- [x] A small accessor unifying the three: `getSpeed/setSpeed` (→ `PlayerSettings`/
       engine), `getFontKey/setFontKey` (→ `fontScale.ts`), `isNeuralEnabled/
       setNeuralEnabled` (→ `localStorage("neuralEnabled")`, **default `false`**).
-- [ ] write tests: neural defaults to false; each setter persists + getter reads back;
+- [x] write tests: neural defaults to false; each setter persists + getter reads back;
       font delegates to `fontScale`, speed to the existing speed store.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 2: Neural feature flag (gates the neural policy; no heavy runtime)
 **Files:**
