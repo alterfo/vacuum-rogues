@@ -30,11 +30,11 @@ by an agent actually playing.
 **Files:**
 - Create: `src/tests/playtest/letsplay/sessionMetrics.ts` (+ test)
 
-- [ ] Aggregate a session into metrics: errors/soft-locks, invariant violations, and
+- [x] Aggregate a session into metrics: errors/soft-locks, invariant violations, and
       balance signals (credits/day, days-to-first-upgrade, survival). `evaluate(report,
       thresholds)` → pass/fail with reasons.
-- [ ] write tests: clean session passes; injected error/soft-lock/out-of-band metric fails.
-- [ ] run tests — green.
+- [x] write tests: clean session passes; injected error/soft-lock/out-of-band metric fails.
+- [x] run tests — green.
 
 ### Task 2: Deterministic multi-session CI runner
 **Files:**
