@@ -65,13 +65,13 @@ can't see — feeding the oddity-hunting workflow.
 **Files:**
 - Create: `src/tests/playtest/letsplay/AutopilotController.ts` (+ test)
 
-- [ ] A controller that, while engaged, periodically `observe(liveEngine)` →
+- [x] A controller that, while engaged, periodically `observe(liveEngine)` →
       `policy.decide` → `LiveApplier.apply`, paced so the human can follow; `start()`/
       `stop()`; **reclaim-on-input** (any human pointer/key press disengages); shows a
       small "AUTOPILOT" indicator.
-- [ ] write tests (fake scene + clock): ticks decide+apply on cadence; `stop()` halts;
+- [x] write tests (fake scene + clock): ticks decide+apply on cadence; `stop()` halts;
       a simulated human input disengages; never throws.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 3: Dev-only toggle / hook
 **Files:**
