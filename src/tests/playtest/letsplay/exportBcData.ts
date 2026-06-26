@@ -2,8 +2,9 @@
  * Letsplay engine — behavioural-cloning (BC) dataset exporter (dev-only).
  *
  * The neural player ({@link NeuralPolicy}) is trained by **cloning a teacher**:
- * run a known-good {@link PlayerPolicy} (the {@link HeuristicPolicy} today, the
- * memory-using teacher later) on the *real* {@link GameEngine}, and at every step
+ * run a known-good {@link PlayerPolicy} (the belief-using {@link
+ * MemoryHeuristicPolicy} — the default teacher, since the net's input now carries
+ * the memory block) on the *real* {@link GameEngine}, and at every step
  * log the pair `(featurize(obs, belief), actionIndex)` — the net's input vector
  * (including the agent's per-run belief block) and the teacher's chosen action as
  * an index into {@link ACTION_ORDER}. That stream of
@@ -29,7 +30,7 @@ import { RealEngineHarness } from "../realEngineHarness";
 import { observe } from "./observe";
 import { ACTION_ORDER } from "./observe";
 import { PlayerAgent } from "./PlayerAgent";
-import { HeuristicPolicy } from "./HeuristicPolicy";
+import { MemoryHeuristicPolicy } from "./MemoryHeuristicPolicy";
 import type { PlayerPolicy } from "./PlayerPolicy";
 import { featurize } from "./NeuralPolicy";
 
@@ -53,7 +54,12 @@ export interface ExportBcOptions {
   steps?: number;
   /** Seed prefix; each session uses `"<prefix>-<i>"` so runs are reproducible. */
   seedPrefix?: string;
-  /** Teacher policy factory — a fresh policy per session. Defaults to the heuristic. */
+  /**
+   * Teacher policy factory — a fresh policy per session. Defaults to the
+   * belief-using {@link MemoryHeuristicPolicy} so the cloned labels reason over
+   * the same memory block the features carry (a memoryless teacher would train
+   * the net to ignore those belief features).
+   */
   policy?: () => PlayerPolicy;
 }
 
@@ -108,7 +114,7 @@ export async function collectBcDataset(
   const sessions = opts.sessions ?? 3;
   const steps = opts.steps ?? 40;
   const seedPrefix = opts.seedPrefix ?? "BC";
-  const makePolicy = opts.policy ?? (() => new HeuristicPolicy());
+  const makePolicy = opts.policy ?? (() => new MemoryHeuristicPolicy());
 
   const rows: BcRow[] = [];
   for (let i = 0; i < sessions; i++) {
