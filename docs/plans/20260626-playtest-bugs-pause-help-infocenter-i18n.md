@@ -202,11 +202,11 @@ bugs, unit test for pure logic), then fix until green, then verify.
 - [x] run tests — must pass before next task — full `src/tests/quests/` (26 files / 294 tests), local-delivery callers (journeys/balanceInvariants/questJournal*/gearCurve, 41), and the playtest gate (260) all green; tsc + eslint (0 errors) clean
 
 ### Task 10: Verify acceptance criteria
-- [ ] verify all reported items are fixed: pause freezes movement+fire (Task 1), «?» clears the balance (Task 2), known routes show numeric margins (Task 3), English build shows no Russian incl. faction-selection (Tasks 4–7), settings live on the main menu with the in-flight ⚙ gone (Task 8), and no dead-end «Местный подряд» in single-habitable systems (Task 9)
-- [ ] run the full unit suite (`npm test -- --run`), the playtest gate (`npm run test:playtest`), and the i18n parity gate
-- [ ] run the E2E regression suite for the visual fixes (`npm run test:e2e:regression`)
-- [ ] run the linter — all issues fixed
-- [ ] confirm no domain/schema/save change slipped in (these are presentation/logic-only fixes); `npm run test:save-compat` stays green
+- [x] verify all reported items are fixed: pause freezes movement+fire (Task 1 — green via the dedicated `combatPauseFreezesLiveFight.test.ts` in the playtest gate), «?» clears the balance (Task 2 — E2E `planet-help-balance` green), known routes show numeric margins (Task 3), English build shows no Russian incl. faction-selection (Tasks 4–7 — E2E `race-selection-en` asserts «CHOOSE YOUR FACTION» + zero Cyrillic), settings live on the main menu with the in-flight ⚙ gone (Task 8), and no dead-end «Местный подряд» in single-habitable systems (Task 9)
+- [x] run the full unit suite (`npm test -- --run`), the playtest gate (`npm run test:playtest`), and the i18n parity gate — unit 426 files/3795 tests (4 skipped), playtest 26 files/260 tests, i18n 6 files/48 tests — all GREEN
+- [x] run the E2E regression suite for the visual fixes (`npm run test:e2e:regression`) — this plan's visual-fix specs pass (help-button-vs-balance, English faction-selection). One **pre-existing** failure ("an incoming attack auto-pauses… firing resumes / active-pause Task 3") was confirmed to **also fail on the pre-plan base commit `7589df2`** (a combat-onboarding-hint vs combat-pause-overlay z-order race that blocks the real fire-button click) — it is **not** a regression from this plan and is out of scope (bug 1's *freeze* contract is verified green separately). E2E needs `NO_PROXY=localhost,127.0.0.1` in this sandbox
+- [x] run the linter — all issues fixed — `npm run lint` 0 errors (44 pre-existing `@typescript-eslint/no-explicit-any` **warnings** in test files, untouched by this plan); `tsc --noEmit` clean
+- [x] confirm no domain/schema/save change slipped in (these are presentation/logic-only fixes); `npm run test:save-compat` stays green — the plan-range diff (`7589df2..HEAD`) touches **no** `src/types`/`src/validation/schemas.ts`/`MigrationPipeline.ts`; the only `src/domain` change is a new pure i18n helper `rumorMarginMasked()` in `RouteRumor.ts` (no field/schema change). Save-compat 2 files/22 tests GREEN
 
 ## Technical Details
 - The combat-pause freeze signal is the single `combatPause.paused` (`CombatModule.isFrozen`
