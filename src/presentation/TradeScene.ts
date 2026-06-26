@@ -432,7 +432,7 @@ export class TradeScene extends GameScene {
           }),
           color: 0x00ff88,
         };
-        this.gameEngine?.audio.playSfx("buy").catch(() => {});
+        this.gameEngine?.audio.playSfx(isBuy ? "buy" : "sell").catch(() => {});
         if (isBuy) {
           this.markContrabandIfIllegal(resource);
         } else {

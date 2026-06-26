@@ -49,10 +49,17 @@ machinery already exists, so this is mostly wiring + a couple of tracks.
 **Files:**
 - Modify: `AudioManager` (`TrackKey`/`SfxKey`), add audio assets
 
-- [ ] Add SFX hooks for low-hull warning, hyperjump, buy/sell, level-up/rank; add a
-      combat-music `TrackKey` (file dropped in `public/audio/`).
-- [ ] write tests: the cues fire at the right events (against the fake manager).
-- [ ] run tests — green.
+- [x] Add SFX hooks for low-hull warning, hyperjump, buy/sell, level-up/rank; add a
+      combat-music `TrackKey` (file dropped in `public/audio/`). Low-hull = the
+      edge-triggered `HullAlarm` (`src/systems/audio/sfxCues.ts`) wired into
+      `GameEngine.updateMusic` (fires `"alarm"` once per critical-hull episode);
+      hyperjump already fires `"warp"` in `SpaceFlightScene.performWarp`; buy/sell now
+      split into `"buy"`/`"sell"` in `TradeScene`; rank promotion fires `"rankup"` in
+      `StationScene.doRankPromotion`. New `SfxKey`s: `sell`/`alarm`/`rankup`; the
+      `combat`/`combat_boss` `TrackKey`s already exist (audio files are user-supplied).
+- [x] write tests: the cues fire at the right events (against the fake manager)
+      (`src/tests/audio/sfxCues.test.ts`).
+- [x] run tests — green.
 
 ### Task 4: Verify + docs
 - [ ] full suite + `test:playtest` green; lint/build ok; document the music director +

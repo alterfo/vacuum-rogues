@@ -814,6 +814,7 @@ export class StationScene extends GameScene {
     logger.info(
       `Player promoted to rank ${player.rank} (${newLabel}) at station ${this.station?.name}`,
     );
+    this.gameEngine?.audio.playSfx("rankup").catch(() => {});
     this.render();
     this.showToast(`Звание повышено: ${newLabel}! Поздравляем!`, 0xffaa44);
   }

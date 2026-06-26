@@ -79,6 +79,7 @@ import { getQuestScript } from "@/systems/quests/TextQuestRegistry";
 import type { QuestScript } from "@/systems/quests/QuestScript";
 import { AudioManager } from "@/systems/AudioManager";
 import { MusicDriver } from "@/systems/audio/musicDriver";
+import { HullAlarm } from "@/systems/audio/sfxCues";
 import { BankBus, type Unsubscribe } from "@/systems/banking/bus";
 import { BankingService } from "@/systems/banking/BankingService";
 import { setupPlayerBanking, type BankAccess } from "@/systems/banking/economy";
@@ -177,6 +178,8 @@ export class GameEngine {
   public readonly audio = new AudioManager();
   /** Adaptive-music driver: maps scene + flight/combat state → background track. */
   private readonly music = new MusicDriver();
+  /** Edge-triggered low-hull warning cue (fires once per critical-hull episode). */
+  private readonly hullAlarm = new HullAlarm();
   /**
    * Live "is the player in a fight?" signal the active scene plugs in (the flight
    * scene registers `() => combatModule.isActive`). Polled each frame by the
@@ -2066,6 +2069,10 @@ export class GameEngine {
       boss,
       now: typeof performance !== "undefined" ? performance.now() : Date.now(),
     });
+    // One-shot low-hull warning: the alarm folds the per-frame `lowHull` level
+    // into a single firing edge so it sounds once per critical-hull episode
+    // rather than every tick the hull stays low.
+    this.hullAlarm.update(this.audio, lowHull);
   }
 
   stop(): void {
@@ -2085,6 +2092,7 @@ export class GameEngine {
     this.renderer?.destroy();
     this.combatStateProvider = null;
     this.music.reset();
+    this.hullAlarm.reset();
     this.audio.destroy();
   }
 }

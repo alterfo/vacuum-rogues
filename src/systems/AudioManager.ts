@@ -22,9 +22,12 @@ export type TrackKey =
 export type SfxKey =
   | "warp"
   | "buy"
+  | "sell"
   | "hit"
   | "land"
   | "reward"
+  | "alarm"
+  | "rankup"
   | "ui_click"
   | "ui_hover"
   | "toast";
