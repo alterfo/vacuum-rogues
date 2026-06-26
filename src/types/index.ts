@@ -153,6 +153,7 @@ export enum SceneType {
   WIN_SCREEN = "WIN_SCREEN",
   GAME_OVER = "GAME_OVER",
   BANK = "BANK",
+  SAVE_LOAD = "SAVE_LOAD",
 }
 
 export enum StationType {

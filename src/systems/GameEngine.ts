@@ -1383,6 +1383,10 @@ export class GameEngine {
       SceneType.WIN_SCREEN,
       SceneType.INFO_CENTER,
       SceneType.BANK,
+      // The save/load screen is a menu overlay with no resumable game context;
+      // a save taken there (in-game pause autosave to "auto") must bounce to
+      // SPACE_FLIGHT on load, not re-open a blank slot list.
+      SceneType.SAVE_LOAD,
     ];
     const savedScene = save.currentSceneType ?? SceneType.SPACE_FLIGHT;
     // A save may name a scene that no longer exists — notably the removed hex

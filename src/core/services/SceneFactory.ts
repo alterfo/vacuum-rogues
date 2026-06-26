@@ -18,6 +18,7 @@ import { TextQuestScene } from "@/presentation/TextQuestScene";
 import { WinScene } from "@/presentation/WinScene";
 import { GameOverScene } from "@/presentation/GameOverScene";
 import { BankScene } from "@/presentation/BankScene";
+import { SaveLoadScene } from "@/presentation/SaveLoadScene";
 
 /**
  * Factory for creating scene instances.
@@ -59,6 +60,8 @@ export class SceneFactory implements ISceneFactory {
         return new GameOverScene(renderer);
       case SceneType.BANK:
         return new BankScene(renderer);
+      case SceneType.SAVE_LOAD:
+        return new SaveLoadScene(renderer);
       default:
         return null;
     }

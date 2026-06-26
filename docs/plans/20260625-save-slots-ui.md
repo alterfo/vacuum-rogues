@@ -39,10 +39,17 @@ with named manual slots (create/overwrite/delete, timestamp + summary) and a cle
 **Files:**
 - Create: `src/presentation/SaveLoadScene.ts` (+ register per `adding-features.md`), test
 
-- [ ] A screen listing slots with create/overwrite (confirm)/delete and load; reachable
+- [x] A screen listing slots with create/overwrite (confirm)/delete and load; reachable
       from the main menu + an in-game pause. Honour terminal-scene autosave rules.
-- [ ] write tests: the screen renders rows, each action calls the model; screenshot.
-- [ ] run tests — green.
+      (`SaveLoadScene` created + registered across `SceneType`/`SceneFactory`/
+      `contextDependentScenes`; two-step in-scene confirm for overwrite/delete; saving
+      builds the real state via `GameEngine.saveGame` + records the name via the model;
+      `SAVE_LOAD` added to `contextDependentScenes` so a pause-autosave bounces to flight.
+      Menu-entry/pause wiring lands in Task 3.)
+- [x] write tests: the screen renders rows, each action calls the model
+      (`src/tests/presentation/saveLoadScene.test.ts` — 7 tests). [x] screenshot (manual —
+      deferred to Task 3 once the screen is reachable from a menu entry).
+- [x] run tests — green.
 
 ### Task 3: Wire Continue + menu entries
 **Files:**
