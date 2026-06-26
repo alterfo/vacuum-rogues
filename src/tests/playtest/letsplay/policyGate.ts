@@ -50,5 +50,14 @@ export interface PolicyGateOptions {
 export function selectPlayerPolicy(opts: PolicyGateOptions = {}): PlayerPolicy {
   const enabled = opts.enabled ?? isNeuralEnabled();
   if (!enabled) return new HeuristicPolicy();
-  return new NeuralPolicy({ weights: opts.weights });
+  const policy = new NeuralPolicy({ weights: opts.weights });
+  if (opts.weights !== undefined) {
+    // Adopt the trained weights now so `decide` runs the net instead of the
+    // inert heuristic fallback. `load()`'s body is synchronous (no `await`), so
+    // the weights are adopted before this returns; a malformed-weights throw is
+    // swallowed to keep the gate's never-throws contract (decide then falls back
+    // to the heuristic). With no `weights` the policy stays inert as before.
+    void policy.load().catch(() => {});
+  }
+  return policy;
 }
