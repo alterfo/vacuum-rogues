@@ -1,5 +1,6 @@
 import { Container, Graphics } from "pixi.js";
 import { scaledText } from "./scaledText";
+import { t } from "@/i18n/i18n";
 import {
   getFontKey,
   getSpeed,
@@ -158,7 +159,7 @@ export class SettingsPanel {
     });
     content.addChild(bg);
 
-    const title = scaledText("НАСТРОЙКИ", 14, TITLE_COLOR, {
+    const title = scaledText(t("settings.title"), 14, TITLE_COLOR, {
       fontWeight: "bold",
     });
     title.anchor.set(0.5, 0);
@@ -185,7 +186,7 @@ export class SettingsPanel {
 
   /** ШРИФТ: three "A" glyphs (S/M/L), the active one highlighted. */
   private renderFontRow(parent: Container, y: number): void {
-    this.addSectionLabel(parent, "ШРИФТ", y);
+    this.addSectionLabel(parent, t("settings.font"), y);
     const rowY = y + 22;
     const rowH = 32;
     const active = getFontKey();
@@ -207,7 +208,7 @@ export class SettingsPanel {
 
   /** СКОРОСТЬ: the speed steps (1×/2×/4×), the active one highlighted. */
   private renderSpeedRow(parent: Container, y: number): void {
-    this.addSectionLabel(parent, "СКОРОСТЬ", y);
+    this.addSectionLabel(parent, t("settings.speed"), y);
     const rowY = y + 22;
     const rowH = 30;
     const current = getSpeed(this.deps.speedTarget);
@@ -231,7 +232,7 @@ export class SettingsPanel {
 
   /** НЕЙРОСЕТЬ (ИИ): a full-width ВКЛ/ВЫКЛ toggle + an "experimental" hint. */
   private renderNeuralRow(parent: Container, y: number): void {
-    this.addSectionLabel(parent, "НЕЙРОСЕТЬ (ИИ)", y);
+    this.addSectionLabel(parent, t("settings.neuralAi"), y);
     const rowY = y + 22;
     const rowH = 30;
     const on = this.isNeuralOn();
@@ -241,14 +242,14 @@ export class SettingsPanel {
       rowY,
       ROW_W,
       rowH,
-      on ? "ВКЛ" : "ВЫКЛ",
+      on ? t("settings.on") : t("settings.off"),
       14,
       on,
       () => this.toggleNeural(),
       on ? ON_COLOR : OFF_COLOR,
     );
 
-    const hint = scaledText("экспериментально", 10, HINT_COLOR);
+    const hint = scaledText(t("settings.experimental"), 10, HINT_COLOR);
     hint.anchor.set(0.5, 0);
     hint.x = SETTINGS_PANEL_WIDTH / 2;
     hint.y = rowY + rowH + 4;

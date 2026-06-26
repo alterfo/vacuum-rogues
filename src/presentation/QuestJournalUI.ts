@@ -3,7 +3,7 @@ import { scaledText } from "./ui/scaledText";
 import type { IQuestService } from "@/core/ports/IQuestService";
 import type { Quest } from "@/domain/Quest";
 import { logger } from "@/utils/logger";
-import { TYPE_LABEL } from "@/presentation/JobBoardPanel";
+import { questTypeLabel } from "@/presentation/JobBoardPanel";
 import { QuestType } from "@/types";
 import { ScrollableList } from "@/presentation/ui/ScrollableList";
 import {
@@ -272,7 +272,7 @@ export class QuestJournalUI {
 
     // Quest type
     const typeText = scaledText(
-      `[${TYPE_LABEL[quest.type] ?? quest.type}]`,
+      `[${questTypeLabel(quest.type)}]`,
       13,
       0xb4b4b4,
       { rawColor: true },
@@ -598,7 +598,7 @@ export class QuestJournalUI {
     card.addChild(titleText);
 
     const typeText = scaledText(
-      `[${TYPE_LABEL[quest.type] ?? quest.type}]`,
+      `[${questTypeLabel(quest.type)}]`,
       13,
       0xb4b4b4,
       { rawColor: true },

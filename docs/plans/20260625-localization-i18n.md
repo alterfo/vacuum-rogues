@@ -51,10 +51,17 @@ string.
 **Files:**
 - Modify: PlanetScene, StationScene, TradeScene, JobBoard, InfoCenterScene, GovernmentScene, NpcContactPanel (+ MainMenu/Settings)
 
-- [ ] Replace inline literals with `t(...)` keys (RU values verbatim, EN translated) in
-      the most-seen scenes; route through `scaledText`.
-- [ ] write/extend tests: migrated scenes render keys (not literals); parity holds.
-- [ ] run tests — green.
+- [x] Replace inline literals with `t(...)` keys (RU values verbatim, EN translated) in
+      the most-seen scenes; route through `scaledText`. (First incremental pass: MainMenuScene,
+      TradeScene, JobBoardPanel, NpcContactPanel, SettingsPanel fully migrated to `t(...)`;
+      shared key namespaces added — `resource.*`, `faction.*`/`factionType.*`, `role.*`,
+      `quest.type.*`, `comms.*`, `trade.*`, `jobBoard.*`, `menu.*`. Remaining scenes stay
+      tracked by `tools/i18n/extract.ts` for later passes.)
+- [x] write/extend tests: migrated scenes render keys (not literals); parity holds.
+      (`src/tests/i18n/migratedScenes.test.ts` asserts each migrated file has zero inline
+      Cyrillic literals via the shared `findCyrillicLiterals` core — extracted to
+      `src/i18n/cyrillicLiterals.ts` and re-exported by the scanner — and actually calls `t(`.)
+- [x] run tests — green.
 
 ### Task 4: Language selector in settings + verify
 **Files:**

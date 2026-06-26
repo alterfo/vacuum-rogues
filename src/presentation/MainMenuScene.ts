@@ -7,6 +7,7 @@ import { buildInfo } from "@/systems/feedback/buildInfo";
 import { openFeedback } from "@/systems/feedback/openFeedback";
 import { resetSeen } from "@/systems/onboarding/onboardingState";
 import { pickVariant, pickVariantKey, tex, loadTextureAsync } from "./textures";
+import { t } from "@/i18n/i18n";
 
 interface StarParticle {
   x: number;
@@ -314,7 +315,7 @@ export class MainMenuScene extends GameScene {
 
     // Title
     this.title = new Text({
-      text: "ВАКУУМНЫЕ ПРОЙДОХИ",
+      text: t("menu.title"),
       style: {
         fontFamily: "Courier New",
         fontSize: 38,
@@ -338,14 +339,7 @@ export class MainMenuScene extends GameScene {
 
     // One-paragraph premise, between the title and the buttons.
     this.intro = new Text({
-      text:
-        "Галактика на изломе: пробудились древние Предтечи, и их Сверхразум " +
-        "обращает систему за системой в безмолвный механический рой. Вы — " +
-        "вакуумный пройдоха: вольный пилот без флага и присяги, что живёт " +
-        "торговлей, контрактами и точным выстрелом. Лавируйте между фракциями, " +
-        "набивайте трюм и репутацию, решайте, кому помочь, а кого пощипать, — " +
-        "и, быть может, именно ваш потрёпанный корабль решит, устоит ли " +
-        "обитаемый космос.",
+      text: t("menu.intro"),
       style: {
         fontFamily: "Courier New",
         fontSize: 15,
@@ -407,13 +401,13 @@ export class MainMenuScene extends GameScene {
       return buttonText;
     };
 
-    const newGameBtn = createButton("Новая игра", 0, () =>
+    const newGameBtn = createButton(t("menu.newGame"), 0, () =>
       this.handleNewGame(),
     );
     this.buttonsContainer.addChild(newGameBtn);
 
     const continueBtn = createButton(
-      "Продолжить",
+      t("common.continue"),
       50,
       () => this.handleContinue(),
       20,
@@ -426,7 +420,7 @@ export class MainMenuScene extends GameScene {
     this.buttonsContainer.addChild(continueBtn);
 
     const feedbackBtn = createButton(
-      "Сообщить отзыв",
+      t("menu.feedback"),
       100,
       () => this.handleFeedback(),
       16,
@@ -437,7 +431,7 @@ export class MainMenuScene extends GameScene {
     // Replay the first-time onboarding hints (clears the browser-level "seen"
     // set so every screen's auto-hint shows again on next visit).
     const replayHelpBtn = createButton(
-      "Показать обучение заново",
+      t("menu.replayTutorial"),
       140,
       () => this.handleReplayOnboarding(),
       16,
@@ -474,7 +468,7 @@ export class MainMenuScene extends GameScene {
   private handleReplayOnboarding(): void {
     logger.info("Replaying onboarding — clearing seen help-hints");
     resetSeen();
-    this.showMessage("Обучение сброшено — подсказки появятся снова", 0x66ffcc);
+    this.showMessage(t("menu.tutorialReset"), 0x66ffcc);
   }
 
   private async handleNewGame(): Promise<void> {
@@ -495,7 +489,7 @@ export class MainMenuScene extends GameScene {
     logger.info("Continue selected");
     if (!this.gameEngine) {
       logger.error("GameEngine not available for Continue!");
-      this.showMessage("Ошибка: игровой движок недоступен");
+      this.showMessage(t("menu.engineUnavailable"));
       return;
     }
 
@@ -503,7 +497,7 @@ export class MainMenuScene extends GameScene {
       this.buttonsContainer.eventMode = "none";
       this.buttonsContainer.alpha = 0.5;
     }
-    this.gameEngine.showLoadingOverlay("Загрузка...");
+    this.gameEngine.showLoadingOverlay(t("menu.loading"));
 
     try {
       const loaded = await this.gameEngine.loadGame("auto");
@@ -514,7 +508,7 @@ export class MainMenuScene extends GameScene {
           this.buttonsContainer.eventMode = "auto";
           this.buttonsContainer.alpha = 1;
         }
-        this.showMessage("Нет доступных сохранений");
+        this.showMessage(t("menu.noSaves"));
       }
       // On success: transitionTo was called inside loadGame → scene destroyed with overlay
     } catch (error) {
@@ -524,7 +518,7 @@ export class MainMenuScene extends GameScene {
         this.buttonsContainer.eventMode = "auto";
         this.buttonsContainer.alpha = 1;
       }
-      this.showMessage("Ошибка загрузки. Начните новую игру.");
+      this.showMessage(t("menu.loadError"));
     }
   }
 

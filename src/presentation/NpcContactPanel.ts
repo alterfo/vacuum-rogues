@@ -9,16 +9,12 @@ import {
   type CommsOption,
 } from "@/systems/comms/commsOptions";
 import { bindModalKeys } from "./ui/bindModalKeys";
+import { t } from "@/i18n/i18n";
 
-/** Button label per context-driven comms option (universal hail window). */
-const OPTION_LABELS: Record<CommsOption, string> = {
-  trade: "Торговать",
-  hire: "Нанять",
-  ally: "Союз",
-  attack: "Атаковать",
-  "pay-tribute": "Откупиться",
-  flee: "Бежать",
-};
+/** Localized button label per context-driven comms option (live per language). */
+function optionLabel(opt: CommsOption): string {
+  return t(`comms.option.${opt}`);
+}
 
 /** Button colour per comms option. */
 const OPTION_COLORS: Record<CommsOption, number> = {
@@ -30,30 +26,20 @@ const OPTION_COLORS: Record<CommsOption, number> = {
   flee: 0x444466,
 };
 
-const FACTION_TYPE_LABELS: Record<FactionType, string> = {
-  [FactionType.OUTLANDERS]: "Окраинник",
-  [FactionType.BASTIONS]: "Бастион",
-  [FactionType.SYNDICATE]: "Синдикат",
-  [FactionType.PARADOXES]: "Парадокс",
-  [FactionType.PROGRESSORS]: "Прогрессор",
-};
+/** Localized faction (singular type) label, e.g. «Окраинник» / "Outlander". */
+function factionTypeLabel(race: FactionType): string {
+  return t(`factionType.${race}`);
+}
 
-const FACTION_LABELS: Record<Faction, string> = {
-  [Faction.OUTLANDERS]: "Окраинники",
-  [Faction.BASTIONS]: "Бастионы",
-  [Faction.SYNDICATE]: "Синдикат",
-  [Faction.PARADOXES]: "Парадоксы",
-  [Faction.PROGRESSORS]: "Прогрессоры",
-  [Faction.INDEPENDENT]: "Независимые",
-  [Faction.OVERMIND]: "Предтечи",
-};
+/** Localized alliance (plural) label, e.g. «Окраинники» / "Outlanders". */
+function factionLabel(faction: Faction): string {
+  return t(`faction.${faction}`);
+}
 
-const ROLE_LABELS: Record<NpcRole, string> = {
-  [NpcRole.RANGER]: "Рейнджер",
-  [NpcRole.TRADER]: "Торговец",
-  [NpcRole.PIRATE]: "Пират",
-  [NpcRole.PATROL]: "Патруль",
-};
+/** Localized NPC role label, e.g. «Рейнджер» / "Ranger". */
+function roleLabel(role: NpcRole): string {
+  return t(`role.${role}`);
+}
 
 export interface NpcContactCallbacks {
   onHail: () => void;
@@ -155,7 +141,7 @@ export class NpcContactPanel {
       this.context !== "pirate-shakedown" && this.context !== "overmind";
     if (showStanding) {
       out.push({
-        label: "Связаться",
+        label: t("comms.hail"),
         color: 0x004488,
         onClick: this.callbacks.onHail,
       });
@@ -166,7 +152,7 @@ export class NpcContactPanel {
       if (!onClick) continue;
       if (opt === "attack") hasAttack = true;
       out.push({
-        label: OPTION_LABELS[opt],
+        label: optionLabel(opt),
         color: OPTION_COLORS[opt],
         onClick,
       });
@@ -183,14 +169,14 @@ export class NpcContactPanel {
       this.context === "pirate-shakedown";
     if (hostileContact && !hasAttack) {
       out.push({
-        label: OPTION_LABELS.attack,
+        label: optionLabel("attack"),
         color: OPTION_COLORS.attack,
         onClick: this.callbacks.onAttack,
       });
     }
     if (showStanding) {
       out.push({
-        label: "Сканировать",
+        label: t("comms.scan"),
         color: 0x005544,
         onClick: () => this.onScan(npc),
       });
@@ -217,28 +203,31 @@ export class NpcContactPanel {
     const name = npc.name.length > 20 ? npc.name.slice(0, 19) + "…" : npc.name;
     this.addLabel(name, 12, 12, 14, 0x00ffff, true);
     this.addLabel(
-      `Фракция: ${FACTION_TYPE_LABELS[npc.race] ?? npc.race}`,
+      t("comms.factionLine", { name: factionTypeLabel(npc.race) }),
       12,
       40,
       12,
       0xcccccc,
     );
     this.addLabel(
-      `Альянс: ${FACTION_LABELS[npc.faction] ?? npc.faction}`,
+      t("comms.allianceLine", { name: factionLabel(npc.faction) }),
       12,
       60,
       12,
       0xcccccc,
     );
     this.addLabel(
-      `Роль: ${ROLE_LABELS[npc.role] ?? npc.role}`,
+      t("comms.roleLine", { name: roleLabel(npc.role) }),
       12,
       80,
       12,
       0xcccccc,
     );
     this.addLabel(
-      `Корпус: ${Math.round(npc.hullHP)} / ${Math.round(npc.maxHull)}`,
+      t("comms.hullLine", {
+        cur: Math.round(npc.hullHP),
+        max: Math.round(npc.maxHull),
+      }),
       12,
       100,
       12,
@@ -248,11 +237,29 @@ export class NpcContactPanel {
     if (this.inRange) {
       // Within radar range: detailed scan readout, then the context-driven action
       // set (US-070 #3 — more is known about a ship once it is on the scanner).
-      this.addLabel(`Щиты: ${Math.round(npc.shields)}`, 12, 120, 12, 0x66ccff);
-      this.addLabel(`Урон: ${Math.round(npc.damage)}`, 130, 120, 12, 0xffaa66);
-      this.addLabel(`Скорость: ${npc.speed.toFixed(2)}`, 12, 138, 12, 0xcccccc);
       this.addLabel(
-        `Кредиты: ${Math.round(npc.credits)}`,
+        t("comms.shieldsLine", { n: Math.round(npc.shields) }),
+        12,
+        120,
+        12,
+        0x66ccff,
+      );
+      this.addLabel(
+        t("comms.damageLine", { n: Math.round(npc.damage) }),
+        130,
+        120,
+        12,
+        0xffaa66,
+      );
+      this.addLabel(
+        t("comms.speedLine", { n: npc.speed.toFixed(2) }),
+        12,
+        138,
+        12,
+        0xcccccc,
+      );
+      this.addLabel(
+        t("label.creditsLine", { n: Math.round(npc.credits) }),
         130,
         138,
         12,
@@ -269,15 +276,21 @@ export class NpcContactPanel {
       // Beyond radar range (US-070 #3): no hail/trade — the ship can only close
       // the distance to firing range, after which the panel offers them. Attack
       // is still allowed (the ship auto-closes and opens fire).
-      this.addLabel("Цель вне зоны радара", 12, 128, 12, 0xffaa00);
+      this.addLabel(t("comms.outOfRange"), 12, 128, 12, 0xffaa00);
       this.addButton(
-        "Приблизиться",
+        t("comms.approach"),
         12,
         152,
         0x004488,
         this.callbacks.onApproach,
       );
-      this.addButton("Атаковать", 12, 188, 0x880000, this.callbacks.onAttack);
+      this.addButton(
+        t("comms.option.attack"),
+        12,
+        188,
+        0x880000,
+        this.callbacks.onAttack,
+      );
     }
 
     // Close via the corner "✕" (or by clicking outside the panel — handled by
@@ -395,16 +408,16 @@ export class NpcContactPanel {
     if (this.playerScanPower > npc.shieldPower) {
       const items = npc.loadoutSummary.length
         ? npc.loadoutSummary.join(", ")
-        : "Данные недоступны";
-      resultText = `Снаряжение:\n${items}`;
+        : t("comms.noData");
+      resultText = t("comms.equipment", { items });
       if (npc.cargo && npc.cargo.length > 0) {
         const cargoText = npc.cargo
           .map((c) => `${c.goodId} ×${c.qty}`)
           .join(", ");
-        resultText += `\nГруз: ${cargoText}`;
+        resultText += `\n${t("comms.cargo", { cargo: cargoText })}`;
       }
     } else {
-      resultText = "Цель защищена полем —\nсканирование невозможно";
+      resultText = t("comms.shielded");
     }
 
     const label = new Text({

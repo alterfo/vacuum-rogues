@@ -10,6 +10,7 @@ import { TradeSystem } from "@/systems/TradeSystem";
 import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
 import { logger } from "@/utils/logger";
 import { GAME_BALANCE } from "@/config/balance";
+import { t } from "@/i18n/i18n";
 
 interface TradeContext {
   gameEngine?: GameEngine;
@@ -33,18 +34,10 @@ export class TradeScene extends GameScene {
   private readonly tradeQty = new Map<ResourceType, number>();
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  private static readonly RESOURCE_NAMES: Record<string, string> = {
-    FUEL: "Топливо",
-    METALS: "Металлы",
-    CRYSTALS: "Кристаллы",
-    ORGANICS: "Органика",
-    ARTIFACTS: "Артефакты",
-    WEAPONS: "Оружие",
-    MEDICINE: "Медикаменты",
-    ELECTRONICS: "Электроника",
-    LUXURY: "Роскошь",
-    DATA_CORES: "Ядра данных",
-  };
+  /** Localized display name for a market good (falls back to the raw id). */
+  private resourceName(resource: ResourceType | string): string {
+    return t(`resource.${resource}`);
+  }
 
   constructor(renderer: Renderer) {
     super(renderer);
@@ -134,7 +127,7 @@ export class TradeScene extends GameScene {
     this.mainContainer.addChild(panel);
 
     this.addText(
-      `МАРКЕТ — ${this.planet.name}`,
+      t("trade.title", { planet: this.planet.name }),
       panelX + 20,
       panelY + 15,
       20,
@@ -142,7 +135,7 @@ export class TradeScene extends GameScene {
       true,
     );
     this.addText(
-      `Кредиты: ${this.gameEngine.player.credits}`,
+      t("label.creditsLine", { n: this.gameEngine.player.credits }),
       panelX + panelW - 240,
       panelY + 18,
       16,
@@ -152,11 +145,11 @@ export class TradeScene extends GameScene {
 
     // Column headers
     const top = panelY + 55;
-    this.addText("Ресурс", panelX + 20, top, 12, 0xaaaaaa);
-    this.addText("Покупка", panelX + 195, top, 12, 0xaaaaaa);
-    this.addText("Продажа", panelX + 280, top, 12, 0xaaaaaa);
-    this.addText("В трюме", panelX + 365, top, 12, 0xaaaaaa);
-    this.addText("Кол-во", panelX + 445, top, 12, 0xaaaaaa);
+    this.addText(t("trade.colResource"), panelX + 20, top, 12, 0xaaaaaa);
+    this.addText(t("trade.colBuy"), panelX + 195, top, 12, 0xaaaaaa);
+    this.addText(t("trade.colSell"), panelX + 280, top, 12, 0xaaaaaa);
+    this.addText(t("trade.colHold"), panelX + 365, top, 12, 0xaaaaaa);
+    this.addText(t("trade.colQty"), panelX + 445, top, 12, 0xaaaaaa);
 
     const player = this.gameEngine.player;
     const totalCargo = player.inventory.resources.reduce(
@@ -202,13 +195,7 @@ export class TradeScene extends GameScene {
       );
       this.tradeQty.set(resource, qty);
 
-      this.addText(
-        TradeScene.RESOURCE_NAMES[resource] ?? resource,
-        panelX + 20,
-        y,
-        13,
-        0xffffff,
-      );
+      this.addText(this.resourceName(resource), panelX + 20, y, 13, 0xffffff);
       this.addText(`${buyPrice}`, panelX + 195, y, 13, 0xffcc66);
       this.addText(`${sellPrice}`, panelX + 280, y, 13, 0x66ccff);
       this.addText(
@@ -232,7 +219,7 @@ export class TradeScene extends GameScene {
       // Buy button — disabled when cargo is full
       const canBuy = maxBuyQty > 0;
       const buyBtn = this.createButton(
-        "Купить",
+        t("common.buy"),
         panelX + 558,
         y - 4,
         80,
@@ -257,7 +244,7 @@ export class TradeScene extends GameScene {
       // Sell button — disabled when owned === 0
       const canSell = owned > 0;
       const sellBtn = this.createButton(
-        "Продать",
+        t("common.sell"),
         panelX + 648,
         y - 4,
         80,
@@ -288,7 +275,7 @@ export class TradeScene extends GameScene {
 
     // Close / leave button
     const closeBtn = this.createButton(
-      "Покинуть маркет",
+      t("trade.leave"),
       panelX + panelW - 200,
       panelY + panelH - 45,
       180,
@@ -302,7 +289,7 @@ export class TradeScene extends GameScene {
     this.mainContainer.addChild(closeBtn);
 
     this.addText(
-      "[Esc] — выход",
+      t("trade.escHint"),
       panelX + 20,
       panelY + panelH - 38,
       11,
@@ -391,7 +378,9 @@ export class TradeScene extends GameScene {
     maxBg.fill({ color: 0x1a1a44, alpha: 0.9 });
     maxBg.stroke({ color: 0x4444aa, width: 1 });
     maxBtn.addChild(maxBg);
-    const maxLbl = scaledText("М", 12, 0x8888ff, { rawColor: true });
+    const maxLbl = scaledText(t("trade.maxBtn"), 12, 0x8888ff, {
+      rawColor: true,
+    });
     maxLbl.anchor.set(0.5);
     maxLbl.x = 14;
     maxLbl.y = btnH / 2;
@@ -431,11 +420,16 @@ export class TradeScene extends GameScene {
         cargoCapacityOf(this.gameEngine.playerLoadout),
         this.gameEngine.bank,
       );
-      const name = TradeScene.RESOURCE_NAMES[resource] ?? resource;
+      const name = this.resourceName(resource);
       if (result.success) {
-        const verb = isBuy ? "Куплено" : "Продано";
+        const verb = isBuy ? t("trade.bought") : t("trade.sold");
         toast = {
-          message: `${verb}: ${qty}×${name} за ${result.finalPrice} кр.`,
+          message: t("trade.result", {
+            verb,
+            qty,
+            name,
+            price: result.finalPrice,
+          }),
           color: 0x00ff88,
         };
         this.gameEngine?.audio.playSfx("buy").catch(() => {});
@@ -452,7 +446,7 @@ export class TradeScene extends GameScene {
       }
     } catch (error) {
       logger.error("Trade failed:", error);
-      toast = { message: "Сделка не удалась", color: 0xff5555 };
+      toast = { message: t("trade.failed"), color: 0xff5555 };
     }
     // Rebuild the panel with updated prices/balances first, then show the
     // feedback toast on top of the fresh container so it isn't wiped.
@@ -463,11 +457,11 @@ export class TradeScene extends GameScene {
   private localizeMessage(message: string | undefined): string {
     switch (message) {
       case "Insufficient credits.":
-        return "Недостаточно кредитов";
+        return t("trade.insufficientCredits");
       case "Not enough resources to sell.":
-        return "Нечего продавать";
+        return t("trade.nothingToSell");
       default:
-        return message ?? "Сделка не удалась";
+        return message ?? t("trade.failed");
     }
   }
 

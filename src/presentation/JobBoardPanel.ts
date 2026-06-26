@@ -4,21 +4,21 @@ import { scaledText } from "./ui/scaledText";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import type { Quest } from "@/domain/Quest";
 import { QuestType } from "@/types";
+import { t } from "@/i18n/i18n";
 
 export interface JobBoardCallbacks {
   onAccept: (quest: GeneratedQuest) => void;
   onClose: () => void;
 }
 
-export const TYPE_LABEL: Record<QuestType, string> = {
-  [QuestType.DELIVERY]: "Доставка",
-  [QuestType.BOUNTY]: "Охота",
-  [QuestType.ESCORT]: "Эскорт",
-  [QuestType.DIPLOMACY]: "Дипломатия",
-  [QuestType.EXPLORATION]: "Разведка",
-  [QuestType.TEXT_ADVENTURE]: "✦ История",
-  [QuestType.DEFENSE]: "⚔ Оборона",
-};
+/**
+ * Localized board label for a quest type (e.g. «Доставка» / "Delivery"). Live-
+ * resolved per active language via the i18n layer, so callers must invoke it at
+ * render time rather than caching a module-load snapshot.
+ */
+export function questTypeLabel(type: QuestType): string {
+  return t(`quest.type.${type}`);
+}
 
 const TYPE_COLOR: Record<QuestType, number> = {
   [QuestType.DELIVERY]: 0x88ccff,
@@ -126,7 +126,7 @@ export class JobBoardPanel {
     this.container.addChild(bg);
 
     this.label(
-      "ДОСКА ЗАДАНИЙ",
+      t("jobBoard.title"),
       16,
       14,
       18,
@@ -140,7 +140,7 @@ export class JobBoardPanel {
     const atLimit = activeQuestCount >= MAX_ACTIVE_QUESTS;
     if (atLimit) {
       this.label(
-        `Максимум заданий: ${MAX_ACTIVE_QUESTS}/${MAX_ACTIVE_QUESTS}`,
+        t("jobBoard.maxQuests", { max: MAX_ACTIVE_QUESTS }),
         16,
         JobBoardPanel.HEAD - 16,
         11,
@@ -156,7 +156,7 @@ export class JobBoardPanel {
     // Active quests section with countdown
     if (activeQuests.length > 0) {
       this.label(
-        "АКТИВНЫЕ ЗАДАНИЯ",
+        t("jobBoard.activeQuests"),
         16,
         y + 6,
         13,
@@ -175,7 +175,7 @@ export class JobBoardPanel {
       divider.rect(10, y + 2, W - 20, 1).fill({ color: 0x334466, alpha: 0.9 });
       this.container.addChild(divider);
       this.label(
-        "ДОСТУПНЫЕ ЗАДАНИЯ",
+        t("jobBoard.availableQuests"),
         16,
         y + 8,
         13,
@@ -189,7 +189,7 @@ export class JobBoardPanel {
 
     if (quests.length === 0) {
       this.label(
-        "Свободных заданий нет.",
+        t("jobBoard.noQuests"),
         16,
         y + 8,
         14,
@@ -316,7 +316,7 @@ export class JobBoardPanel {
 
     // Footer hint: the old 0x668899 blue-gray was the dimmest text on the panel;
     // scaledText lifts it to the readability floor and scales it with the setting.
-    const hint = scaledText("колесо / стрелки", 10, 0x668899);
+    const hint = scaledText(t("jobBoard.scrollHint"), 10, 0x668899);
     hint.anchor.set(0.5);
     hint.x = W / 2;
     hint.y = barY + 10;
@@ -344,7 +344,7 @@ export class JobBoardPanel {
   ): void {
     const rowH = JobBoardPanel.ROW_H - 6;
     const color = TYPE_COLOR[q.type as QuestType] ?? 0xffffff;
-    const typeLabel = TYPE_LABEL[q.type as QuestType] ?? String(q.type);
+    const typeLabel = questTypeLabel(q.type as QuestType);
 
     const row = new Graphics();
     row.roundRect(10, y, W - 20, rowH, 5).fill({ color: 0x1a2a12, alpha: 0.9 });
@@ -361,18 +361,18 @@ export class JobBoardPanel {
     let countdownText: string;
     let countdownColor: number;
     if (q.deadline === 0) {
-      countdownText = "Без срока";
+      countdownText = t("jobBoard.noDeadline");
       countdownColor = 0xaaaaaa;
     } else {
       const remaining = q.getRemainingDays(currentDay);
       if (remaining === 0) {
-        countdownText = "ПРОСРОЧЕНО";
+        countdownText = t("jobBoard.expired");
         countdownColor = 0xff2222;
       } else if (remaining <= 2) {
-        countdownText = `⏱ ${remaining}д`;
+        countdownText = t("jobBoard.daysLeft", { days: remaining });
         countdownColor = 0xff8844;
       } else {
-        countdownText = `⏱ ${remaining}д`;
+        countdownText = t("jobBoard.daysLeft", { days: remaining });
         countdownColor = 0xffcc44;
       }
     }
@@ -398,8 +398,8 @@ export class JobBoardPanel {
     parent: Container = this.container,
   ): void {
     const rowH = JobBoardPanel.ROW_H_OFFER - 6;
-    const t = q.template;
-    const color = TYPE_COLOR[t.type] ?? 0xffffff;
+    const tpl = q.template;
+    const color = TYPE_COLOR[tpl.type] ?? 0xffffff;
 
     const row = new Graphics();
     row.roundRect(10, y, W - 20, rowH, 5).fill({ color: 0x0e2236, alpha: 0.9 });
@@ -408,11 +408,12 @@ export class JobBoardPanel {
     parent.addChild(row);
 
     // Type tag
-    const tag = TYPE_LABEL[t.type] ?? t.type;
+    const tag = questTypeLabel(tpl.type);
     this.label(tag, 20, y + 6, 11, color, false, parent, true);
 
     // Title (truncated)
-    const title = t.title.length > 36 ? t.title.slice(0, 35) + "…" : t.title;
+    const title =
+      tpl.title.length > 36 ? tpl.title.slice(0, 35) + "…" : tpl.title;
     this.label(title, 20, y + 20, 12, 0xffffff, true, parent);
 
     // Issuer line: who posted the job (e.g. "— Снабженец Маклай").
@@ -426,8 +427,8 @@ export class JobBoardPanel {
     // Description (full text, grey, small, wrapped). Routed through scaledText:
     // the old dim 0x889aaa blue-gray was sub-AA on the dark panel; the readability
     // floor lifts it to a legible level and it now tracks the S/M/L setting.
-    if (t.description) {
-      const descText = scaledText(t.description, 13, 0x889aaa, {
+    if (tpl.description) {
+      const descText = scaledText(tpl.description, 13, 0x889aaa, {
         wordWrap: true,
         wordWrapWidth: W - 120,
       });
@@ -456,9 +457,12 @@ export class JobBoardPanel {
     }
 
     // Reward / deadline / jumps on the right side of info area
-    const deadlineDays = t.deadline > 0 ? `  ⏱ ${t.deadline}д` : "";
+    const deadlineDays =
+      tpl.deadline > 0
+        ? `  ${t("jobBoard.daysLeft", { days: tpl.deadline })}`
+        : "";
     const jumpsText = q.jumps > 0 ? `  ⤴ ${q.jumps}` : "";
-    const meta = `💰 ${t.reward.credits}${deadlineDays}${jumpsText}`;
+    const meta = `💰 ${tpl.reward.credits}${deadlineDays}${jumpsText}`;
     const m = scaledText(meta, 13, 0xffe27a, { rawColor: true });
     m.eventMode = "none";
     m.anchor.set(1, 0);
@@ -513,12 +517,12 @@ export class JobBoardPanel {
 
     const isRankBlocked = requiredRank > 0 && !alreadyTaken && !canAccept;
     const btnLabel = alreadyTaken
-      ? "✓ Принято"
+      ? t("jobBoard.accepted")
       : canAccept
-        ? "Принять"
+        ? t("jobBoard.accept")
         : isRankBlocked
-          ? `Ранг ${requiredRank}+`
-          : "Занят";
+          ? t("jobBoard.requireRank", { rank: requiredRank })
+          : t("jobBoard.busy");
     const btnLbl = scaledText(
       btnLabel,
       11,
