@@ -54,12 +54,12 @@ can't see — feeding the oddity-hunting workflow.
 **Files:**
 - Create: `src/tests/playtest/letsplay/LiveApplier.ts` (+ test)
 
-- [ ] Map an `Action` onto live `SpaceFlightScene`/`GameEngine` calls (route to a
+- [x] Map an `Action` onto live `SpaceFlightScene`/`GameEngine` calls (route to a
       planet/station, land/dock, open trade + buy/sell, take a board quest, attack/flee,
       wait); skip an action that's illegal for the current scene.
-- [ ] write tests (mocked scene): each `Action` kind → the expected call; illegal action
+- [x] write tests (mocked scene): each `Action` kind → the expected call; illegal action
       is a safe no-op.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 2: Autopilot controller (observe→decide→apply on a timer)
 **Files:**
