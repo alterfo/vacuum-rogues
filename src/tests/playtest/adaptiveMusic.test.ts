@@ -65,4 +65,35 @@ describe("adaptive audio — updateMusic wiring", () => {
 
     expect(harness.errors()).toEqual([]);
   });
+
+  it("re-arms the low-hull alarm on load so a save loaded at critical hull still warns", async () => {
+    // Regression: loadGame must reset the HullAlarm (like new-game / teardown do),
+    // otherwise a stale `wasLow=true` from the prior in-session game suppresses the
+    // first warning edge when a critical-hull save is loaded (`low && !wasLow` stays
+    // false), and the player gets no audible low-hull cue on resume.
+    harness = await RealEngineHarness.boot({ seed: "AUDIO_LOAD_ALARM" });
+    await harness.newGame();
+
+    // Drop the live ship into the critical-hull band and tick the music once so the
+    // alarm arms (`wasLow` becomes true) — exactly the state a low-hull save records.
+    harness.player()!.ship.hullHP = 1;
+    harness.engine.updateMusic(false);
+
+    // Persist that low-hull state, then load it back in the same session.
+    await harness.engine.saveGame("slot-1");
+
+    // Spy AFTER the arming tick above so the pre-save alarm isn't what we assert on:
+    // the alarm must fire again *because the load re-armed it*, not from stale state.
+    const sfx = vi
+      .spyOn(harness.engine.audio, "playSfx")
+      .mockResolvedValue(undefined);
+
+    const loaded = await harness.engine.loadGame("slot-1");
+    expect(loaded).toBe(true);
+    // `applyLoadoutHullToShip` clamps but preserves the low hull, and loadGame's
+    // final transitionTo runs updateMusic — so with the alarm re-armed the rising
+    // edge fires once. Without the reset, `wasLow` stayed true and this is silent.
+    expect(sfx).toHaveBeenCalledWith("alarm");
+    expect(harness.errors()).toEqual([]);
+  });
 });

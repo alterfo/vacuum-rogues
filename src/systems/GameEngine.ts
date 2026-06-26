@@ -1286,6 +1286,18 @@ export class GameEngine {
     // game-over flow would never re-fire after the first death.
     this._playerDeathShown = false;
 
+    // Clear adaptive-audio state so a loaded save never inherits a stale combat
+    // hold or a still-armed low-hull alarm from the prior in-session game (Continue
+    // after death, or loading a slot from the in-flight menu). Symmetric with the
+    // new-game reset in generateDefaultGameState: without re-arming the alarm, a
+    // load into a critical-hull save while the previous game also ended low-hull
+    // would swallow the first warning edge (`low && !wasLow` stays false).
+    // `transitionTo` below also nulls combatStateProvider; clearing it here keeps
+    // the block self-documenting and matches the new-game path.
+    this.combatStateProvider = null;
+    this.music.reset();
+    this.hullAlarm.reset();
+
     // Saved state is plain JSON: restore class prototypes so domain methods
     // (galaxy.simulateDay, ship.repair, inventory.addItem) and `instanceof`
     // module checks work after "Continue". Field data is already correct.
