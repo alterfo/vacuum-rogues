@@ -13,7 +13,6 @@ import type { GameScene } from "@/presentation/GameScene";
 import { Renderer } from "@/presentation/Renderer";
 import { preloadTextures } from "@/presentation/textures";
 import { SaveManager } from "@/data/SaveManager";
-import { ONNXModelRegistry } from "@/ai/ONNXModelRegistry";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 import { GlobalExceptionHandler } from "@/exceptions/GlobalExceptionHandler";
 import { GameSystemException } from "@/exceptions/GameSystemException";
@@ -45,7 +44,6 @@ import type {
   ISaveService,
   IGalaxyService,
   IPlayerService,
-  IOnnxService,
   IExceptionHandler,
   IQuestService,
 } from "@/core/ports";
@@ -64,7 +62,7 @@ import { StarSystem } from "@/domain/StarSystem";
 import { Planet } from "@/domain/Planet";
 import { Market } from "@/domain/Market";
 import {
-  OnnxQuestNarrator,
+  TemplateQuestNarrator,
   type QuestNarrator,
 } from "@/ai/adapters/QuestNarrator";
 import { getQuestScript } from "@/systems/quests/TextQuestRegistry";
@@ -83,7 +81,6 @@ export interface GameEngineDIDependencies {
   saveService: ISaveService;
   galaxyService: IGalaxyService;
   playerService: IPlayerService;
-  onnxService: IOnnxService;
   exceptionHandler: IExceptionHandler;
   qualityProfile: AdaptiveQualityProfile;
   questService: IQuestService;
@@ -144,14 +141,13 @@ export class GameEngine {
   public playerDeathCallback?: () => void;
   public readonly saveManager: SaveManager;
   public readonly qualityProfile: AdaptiveQualityProfile;
-  public readonly onnxRegistry: ONNXModelRegistry;
   public readonly questManager: IQuestService;
   public renderer: Renderer | null = null;
   /** GearCatalog-based loadout driving derived ship stats (speed, shields, etc.). */
   public playerLoadout: ShipLoadout | null = null;
   /** Runtime engine for the active text quest (one at a time). */
   public readonly textQuestRuntime = new TextQuestRuntime();
-  /** Narrator for text quest node descriptions (ONNX with template fallback). */
+  /** Narrator for text quest node descriptions (pure template substitution). */
   public readonly questNarrator: QuestNarrator;
   /** Audio subsystem: background music + SFX. */
   public readonly audio = new AudioManager();
@@ -205,8 +201,6 @@ export class GameEngine {
       // DI mode: use injected services
       this.exceptionHandler = diDependencies.exceptionHandler;
       this.qualityProfile = diDependencies.qualityProfile;
-      this.onnxRegistry =
-        diDependencies.onnxService as unknown as ONNXModelRegistry;
       this.saveManager = diDependencies.saveService as SaveManager;
       this.galaxyService = diDependencies.galaxyService;
       this.playerService = diDependencies.playerService;
@@ -214,7 +208,6 @@ export class GameEngine {
     } else {
       // Legacy mode: direct instantiation (backward compatibility)
       this.qualityProfile = new AdaptiveQualityProfile();
-      this.onnxRegistry = new ONNXModelRegistry(this.qualityProfile);
       this.saveManager = new SaveManager();
       this.galaxyService = new GalaxyService();
       this.playerService = new PlayerService();
@@ -223,7 +216,7 @@ export class GameEngine {
     }
 
     this.sceneFactory = new SceneFactory();
-    this.questNarrator = new OnnxQuestNarrator(this.onnxRegistry);
+    this.questNarrator = new TemplateQuestNarrator();
 
     this.exceptionHandler.onCriticalError = (response) => {
       this.handleCriticalError(response);
@@ -1816,6 +1809,5 @@ export class GameEngine {
     this.currentScene?.destroy();
     this.renderer?.destroy();
     this.audio.destroy();
-    this.onnxRegistry.cleanup();
   }
 }

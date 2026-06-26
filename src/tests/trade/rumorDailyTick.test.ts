@@ -4,7 +4,6 @@ import {
   MockSaveService,
   MockGalaxyService,
   MockPlayerService,
-  MockOnnxService,
   MockExceptionHandler,
   MockQuestService,
 } from "@/tests/mocks";
@@ -110,7 +109,6 @@ function makeEngine(): GameEngine {
     saveService: new MockSaveService(),
     galaxyService: new MockGalaxyService(),
     playerService: new MockPlayerService(),
-    onnxService: new MockOnnxService(),
     exceptionHandler: new MockExceptionHandler(),
     qualityProfile: new AdaptiveQualityProfile(),
     questService: new MockQuestService(),

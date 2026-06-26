@@ -49,9 +49,6 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'src/index.html'),
-        // testing.html is a dev-only ONNX harness that lives outside the Vite
-        // root; it is intentionally excluded from the production build (use it
-        // via `npm run dev`).
       },
       // Obfuscation is OPT-IN (`OBFUSCATE=1 npm run build`), not on by default.
       // With `global: true` it processed the WHOLE bundle and corrupted Vite's

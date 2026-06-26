@@ -5,7 +5,6 @@ import {
   MockSaveService,
   MockGalaxyService,
   MockPlayerService,
-  MockOnnxService,
   MockExceptionHandler,
   MockQuestService,
 } from "@/tests/mocks";
@@ -146,7 +145,6 @@ describe("star-map round-trip leaves the simulation untouched (Task 3)", () => {
       saveService: new MockSaveService(),
       galaxyService: new MockGalaxyService(),
       playerService: new MockPlayerService(),
-      onnxService: new MockOnnxService(),
       exceptionHandler: new MockExceptionHandler(),
       qualityProfile: new AdaptiveQualityProfile(),
       questService: new MockQuestService(),

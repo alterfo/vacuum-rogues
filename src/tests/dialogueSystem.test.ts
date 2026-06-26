@@ -7,7 +7,6 @@ import {
   type DialogueAnchorNode,
 } from "@/systems/DialogueSystem";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
-import type { ONNXModelRegistry } from "@/ai/ONNXModelRegistry";
 import type { DialogueSession } from "@/domain/DialogueSession";
 import type { Player } from "@/domain/Player";
 import type { NPC } from "@/domain/NPC";
@@ -24,11 +23,10 @@ const anchorRegistry: DialogueAnchorRegistry = {
 };
 
 function makeSystem(): DialogueSystem {
-  const registry = null as unknown as ONNXModelRegistry;
   return new DialogueSystem(
     anchorRegistry,
-    new T5DialogueAdapter(registry),
-    new GRUEmotionAdapter(registry),
+    new T5DialogueAdapter(),
+    new GRUEmotionAdapter(),
     new AdaptiveQualityProfile(),
   );
 }

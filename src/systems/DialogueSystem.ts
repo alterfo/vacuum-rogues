@@ -4,7 +4,6 @@ import type { NPC } from "@/domain/NPC";
 import { DialogueSession } from "@/domain/DialogueSession";
 import { EmotionVector } from "@/domain/EmotionVector";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
-import { ONNXModelRegistry } from "@/ai/ONNXModelRegistry";
 import { logger } from "@/utils/logger";
 import { GameValidationException } from "@/exceptions/GameValidationException";
 
@@ -27,18 +26,15 @@ export interface DialogueAnchorNode {
 }
 
 export class T5DialogueAdapter {
-  constructor(_registry: ONNXModelRegistry) {}
-
   async generateResponse(prompt: string): Promise<string> {
-    // Placeholder: actual T5 inference would construct tensors and call registry.infer
+    // Placeholder: rule-based generation (no neural runtime). Real generative
+    // dialogue would run through a FallbackEngine-shaped adapter.
     logger.debug(`T5 generateResponse called with prompt: ${prompt}`);
     return `Generated response for: ${prompt}`;
   }
 }
 
 export class GRUEmotionAdapter {
-  constructor(_registry: ONNXModelRegistry) {}
-
   async infer(
     _context: unknown,
     _history: unknown[],

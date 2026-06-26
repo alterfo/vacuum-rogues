@@ -79,13 +79,13 @@ JSON** instead of ONNX, pinned by a **parity test**.
 - Modify: `src/systems/GameEngine.ts`, `src/systems/DialogueSystem.ts`, `package.json`
 - Create: `src/tests/architecture/noOnnxRuntime.test.ts`
 
-- [ ] Delete the ONNX registry/worker/cache/manifest/adapters; drop `onnxRegistry` from
+- [x] Delete the ONNX registry/worker/cache/manifest/adapters; drop `onnxRegistry` from
       `GameEngine`; re-point `DialogueSystem` at `FallbackEngine` directly (behaviour
       unchanged — it already ran on fallback). Remove `onnxruntime-web` from
       `package.json`.
-- [ ] write a guard test: no `src/**` imports `onnxruntime-web`; `FallbackEngine` is the
+- [x] write a guard test: no `src/**` imports `onnxruntime-web`; `FallbackEngine` is the
       dialogue/AI path.
-- [ ] run tests — green; `npm run build` ok (smaller bundle, no onnxruntime).
+- [x] run tests — green; `npm run build` ok (smaller bundle, no onnxruntime).
 
 ### Task 4: BC training pipeline — data-gen + train script + weights contract
 **Files:**

@@ -71,11 +71,6 @@ vi.mock("pixi.js", () => ({
   Rectangle: vi.fn(),
 }));
 
-vi.mock("onnxruntime-web", () => ({
-  Tensor: vi.fn(),
-  InferenceSession: { create: vi.fn() },
-}));
-
 import { TextQuestScene } from "@/presentation/TextQuestScene";
 import { PlanetScene } from "@/presentation/PlanetScene";
 import { customsScript } from "@/systems/quests/scripts/customs";

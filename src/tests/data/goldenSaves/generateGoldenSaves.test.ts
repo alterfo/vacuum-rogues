@@ -30,11 +30,7 @@ import { MigrationPipeline } from "@/data/MigrationPipeline";
 import { GalaxyService, PlayerService } from "@/core/services";
 import { QuestManagerAdapter } from "@/core/adapters";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
-import {
-  MockSaveService,
-  MockOnnxService,
-  MockExceptionHandler,
-} from "@/tests/mocks";
+import { MockSaveService, MockExceptionHandler } from "@/tests/mocks";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import {
   setupPlayerBanking,
@@ -79,7 +75,6 @@ function buildEngine(): {
     galaxyService: galaxy,
     playerService: players,
     questService: new QuestManagerAdapter(),
-    onnxService: new MockOnnxService(),
     exceptionHandler: new MockExceptionHandler(),
     qualityProfile: new AdaptiveQualityProfile(),
   };

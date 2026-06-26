@@ -50,13 +50,6 @@ vi.mock("pixi.js", () => ({
   })),
 }));
 
-// ── Also mock onnxruntime-web (loaded transitively via QuestNarrator) ─────────
-
-vi.mock("onnxruntime-web", () => ({
-  Tensor: vi.fn(),
-  InferenceSession: { create: vi.fn() },
-}));
-
 // ── Imports under test ────────────────────────────────────────────────────────
 
 import { TextQuestScene } from "@/presentation/TextQuestScene";

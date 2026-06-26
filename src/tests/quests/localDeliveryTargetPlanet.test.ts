@@ -10,7 +10,6 @@ import {
   MockSaveService,
   MockGalaxyService,
   MockPlayerService,
-  MockOnnxService,
   MockExceptionHandler,
 } from "@/tests/mocks";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
@@ -87,7 +86,6 @@ function makeEngine(): GameEngine {
     saveService: new MockSaveService(),
     galaxyService: new MockGalaxyService(),
     playerService: new MockPlayerService(),
-    onnxService: new MockOnnxService(),
     exceptionHandler: new MockExceptionHandler(),
     qualityProfile: new AdaptiveQualityProfile(),
     questService: new QuestManagerAdapter(),

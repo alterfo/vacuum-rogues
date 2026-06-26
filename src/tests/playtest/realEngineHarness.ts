@@ -22,11 +22,7 @@ import { GameEngine, GameEngineDIDependencies } from "@/systems/GameEngine";
 import { GalaxyService, PlayerService } from "@/core/services";
 import { QuestManagerAdapter } from "@/core/adapters";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
-import {
-  MockSaveService,
-  MockOnnxService,
-  MockExceptionHandler,
-} from "@/tests/mocks";
+import { MockSaveService, MockExceptionHandler } from "@/tests/mocks";
 import { Renderer } from "@/presentation/Renderer";
 import { SceneType, FactionType } from "@/types";
 import type { GameMode } from "@/types";
@@ -79,7 +75,6 @@ export class RealEngineHarness {
     const diDeps: GameEngineDIDependencies = {
       // I/O edges are stubbed (no IndexedDB, no ONNX model loading)…
       saveService: this.saveService,
-      onnxService: new MockOnnxService(),
       exceptionHandler: new MockExceptionHandler(),
       // …everything that carries game logic is REAL, so the wiring is genuine.
       galaxyService: this.galaxyService,

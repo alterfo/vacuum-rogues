@@ -1,6 +1,3 @@
-import type { ONNXModelRegistry } from "@/ai/ONNXModelRegistry";
-import { Tensor } from "onnxruntime-web";
-import { logger } from "@/utils/logger";
 import type { QuestScript } from "@/systems/quests/QuestScript";
 
 export interface NarratorContext {
@@ -108,87 +105,5 @@ export class TemplateQuestNarrator implements QuestNarrator {
     return fn
       ? fn(planetName)
       : `${planetName}. Вам предстоит: «${script.title}».`;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// OnnxQuestNarrator — inference via worker with auto-fallback
-// ---------------------------------------------------------------------------
-
-const DIALOGUE_MODEL_ID = "t5_dialogue";
-
-function buildPromptTensor(nodeTextKey: string, ctx: NarratorContext): Tensor {
-  const prompt = `role:${ctx.role} tone:${ctx.tone} system:${ctx.systemName} day:${ctx.daysSinceStart} node:${nodeTextKey}`;
-  const codes = new Float32Array(prompt.length);
-  for (let i = 0; i < prompt.length; i++) {
-    codes[i] = prompt.charCodeAt(i) / 127;
-  }
-  return new Tensor("float32", codes, [1, prompt.length]);
-}
-
-function tensorToText(tensor: Tensor): string {
-  const data = tensor.data as Float32Array;
-  return Array.from(data)
-    .map((v) => String.fromCharCode(Math.round(Math.abs(v) * 127)))
-    .join("")
-    .replace(/[^\x20-\x7EЀ-ӿ ]/g, "")
-    .trim();
-}
-
-export class OnnxQuestNarrator implements QuestNarrator {
-  private readonly fallback = new TemplateQuestNarrator();
-
-  constructor(private readonly registry: ONNXModelRegistry) {}
-
-  async narrate(
-    nodeTextKey: string,
-    context: NarratorContext,
-  ): Promise<string> {
-    try {
-      await this.registry.loadModel(DIALOGUE_MODEL_ID);
-      const inputTensor = buildPromptTensor(nodeTextKey, context);
-      const outputTensor = await this.registry.infer(
-        DIALOGUE_MODEL_ID,
-        inputTensor,
-      );
-      const text = tensorToText(outputTensor);
-      if (text.length > 20) {
-        return text;
-      }
-      // Garbage output — fall through to template
-    } catch (err) {
-      logger.warn(
-        "OnnxQuestNarrator: inference failed, using template fallback",
-        err,
-      );
-    }
-    return this.fallback.narrate(nodeTextKey, context);
-  }
-
-  async narrateQuestIntro(
-    script: QuestScript,
-    planetName: string,
-  ): Promise<string> {
-    try {
-      await this.registry.loadModel(DIALOGUE_MODEL_ID);
-      const prompt = `intro:${script.id} planet:${planetName} title:${script.title}`;
-      const codes = new Float32Array(prompt.length);
-      for (let i = 0; i < prompt.length; i++) {
-        codes[i] = prompt.charCodeAt(i) / 127;
-      }
-      const inputTensor = new Tensor("float32", codes, [1, prompt.length]);
-      const outputTensor = await this.registry.infer(
-        DIALOGUE_MODEL_ID,
-        inputTensor,
-      );
-      const text = tensorToText(outputTensor);
-      if (text.length > 20) return text;
-    } catch (err) {
-      logger.warn(
-        "OnnxQuestNarrator: intro inference failed, using fallback",
-        err,
-      );
-    }
-    return this.fallback.narrateQuestIntro(script, planetName);
   }
 }

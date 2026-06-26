@@ -1,6 +1,6 @@
 import { GameEngine } from './systems/GameEngine';
 import { DIContainer } from './core/DIContainer';
-import { SaveManagerAdapter, ONNXAdapter, ExceptionHandlerAdapter, QuestManagerAdapter } from './core/adapters';
+import { SaveManagerAdapter, ExceptionHandlerAdapter, QuestManagerAdapter } from './core/adapters';
 import { GalaxyService, PlayerService } from './core/services';
 import { AdaptiveQualityProfile } from './ai/AdaptiveQualityProfile';
 import { logger } from './utils/logger';
@@ -72,13 +72,12 @@ async function registerServiceWorker(): Promise<void> {
   }
 }
 
-function initializeDIContainer(qualityProfile: AdaptiveQualityProfile): DIContainer {
+function initializeDIContainer(): DIContainer {
   const container = DIContainer.getInstance();
 
   container.register('ISaveService', new SaveManagerAdapter());
   container.register('IGalaxyService', new GalaxyService());
   container.register('IPlayerService', new PlayerService());
-  container.register('IOnnxService', new ONNXAdapter(qualityProfile));
   container.register('IExceptionHandler', new ExceptionHandlerAdapter());
   container.register('IQuestService', new QuestManagerAdapter());
 
@@ -159,13 +158,12 @@ async function main(): Promise<void> {
 
   try {
     const qualityProfile = new AdaptiveQualityProfile();
-    const container = initializeDIContainer(qualityProfile);
+    const container = initializeDIContainer();
 
     const engine = new GameEngine({
       saveService: container.resolve('ISaveService'),
       galaxyService: container.resolve('IGalaxyService'),
       playerService: container.resolve('IPlayerService'),
-      onnxService: container.resolve('IOnnxService'),
       exceptionHandler: container.resolve('IExceptionHandler'),
       qualityProfile,
       questService: container.resolve('IQuestService'),

@@ -5,7 +5,6 @@ import {
   MockSaveService,
   MockGalaxyService,
   MockPlayerService,
-  MockOnnxService,
   MockExceptionHandler,
   MockQuestService,
 } from "@/tests/mocks";
@@ -100,7 +99,6 @@ describe("flight reload position — live in-flight persistence (Task 4)", () =>
       saveService: new MockSaveService(),
       galaxyService: new MockGalaxyService(),
       playerService: new MockPlayerService(),
-      onnxService: new MockOnnxService(),
       exceptionHandler: new MockExceptionHandler(),
       qualityProfile: new AdaptiveQualityProfile(),
       questService: new MockQuestService(),
