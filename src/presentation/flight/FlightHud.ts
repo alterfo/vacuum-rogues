@@ -149,6 +149,14 @@ export class FlightHud implements FlightModule {
    * NOT transition the scene itself (playtest4 A, DIP).
    */
   onFontScaleChange: (() => void) | null = null;
+  /**
+   * The colourblind ПАЛИТРА was changed in the ♿ panel. The scene re-applies the
+   * active palette to the live world (NPC ship hulls + radar dots) in place — the
+   * "palette does nothing" fix (playtest bug pass 2, Task 4) — without a scene
+   * rebuild, mirroring {@link onFontScaleChange} (DIP: the HUD never reaches into
+   * the world modules itself).
+   */
+  onPaletteChange: (() => void) | null = null;
   /** [I] inventory shortcut button was pressed. */
   onInventory: (() => void) | null = null;
   /**
@@ -919,6 +927,10 @@ export class FlightHud implements FlightModule {
     if (!this.accessibilityButton) return;
 
     const panel = new AccessibilityPanel({
+      // Re-apply the new palette to the live world at once (NPC hulls + radar) —
+      // the scene wires this; without it a palette change in flight "does
+      // nothing" until the next scene rebuild (playtest bug pass 2, Task 4).
+      onPaletteChange: () => this.onPaletteChange?.(),
       onRequestClose: () => this.closeAccessibilityPanel(),
     });
     this.accessibilityPanelComp = panel;

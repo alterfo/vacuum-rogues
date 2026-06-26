@@ -624,6 +624,17 @@ export class NpcShipManager implements FlightModule {
     }
   }
 
+  /**
+   * Re-apply the active colourblind palette to every live NPC ship (hull + radar
+   * dot). The scene wires this to the accessibility ПАЛИТРА control so a palette
+   * change made in flight recolours the existing ships at once (playtest bug pass
+   * 2, Task 4 — "the palette change does nothing"), instead of waiting for the
+   * next scene rebuild to pick the new hue up.
+   */
+  refreshFactionColors(): void {
+    for (const sprite of this.npcSprites) sprite.refreshPaletteColors();
+  }
+
   // ---------------------------------------------------------------------------
   // Queries the scene reads from
   // ---------------------------------------------------------------------------

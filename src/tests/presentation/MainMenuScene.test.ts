@@ -85,6 +85,9 @@ vi.mock("@/presentation/textures", () => ({
 import { Text } from "pixi.js";
 import { MainMenuScene } from "@/presentation/MainMenuScene";
 import { SettingsPanel } from "@/presentation/ui/SettingsPanel";
+import { AccessibilityPanel } from "@/presentation/ui/AccessibilityPanel";
+import { currentPaletteMode, factionColor } from "@/presentation/ui/palette";
+import { Faction } from "@/types/faction";
 import { t, getLanguage, setLanguage } from "@/i18n/i18n";
 import type { Renderer } from "@/presentation/Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -220,5 +223,69 @@ describe("MainMenuScene settings (Task 8 — relocated from the in-flight HUD)",
       (scene as unknown as { settingsPanel: SettingsPanel | null })
         .settingsPanel,
     ).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Playtest bug pass 2, Task 4: the accessibility controls (colourblind palette /
+// reduced-motion / key remap) now live in the general Settings overlay too — the
+// menu mounts an `AccessibilityPanel` beside the `SettingsPanel`. Before this,
+// the palette was only reachable from the in-flight ♿ button, so a player on the
+// menu could not set it: "the palette change does nothing". The palette persists
+// through the existing accessor and the faction hues render under it everywhere
+// `factionColor` is read (faction-select / flight).
+// ---------------------------------------------------------------------------
+
+describe("MainMenuScene accessibility in Settings (Task 4)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  type WithA11y = {
+    settingsPanel: SettingsPanel | null;
+    accessibilityPanel: AccessibilityPanel | null;
+  };
+
+  it("mounts an AccessibilityPanel alongside the SettingsPanel", () => {
+    const scene = new MainMenuScene(makeMockRenderer());
+    scene.initialize({ gameEngine: makeEngine() });
+
+    expect((scene as unknown as WithA11y).accessibilityPanel).toBeNull();
+
+    clickTextButton(t("menu.settings"));
+
+    const s = scene as unknown as WithA11y;
+    expect(s.settingsPanel).toBeInstanceOf(SettingsPanel);
+    expect(s.accessibilityPanel).toBeInstanceOf(AccessibilityPanel);
+  });
+
+  it("cycling the palette persists the mode and flows to factionColor", () => {
+    const scene = new MainMenuScene(makeMockRenderer());
+    scene.initialize({ gameEngine: makeEngine() });
+    clickTextButton(t("menu.settings"));
+
+    const accPanel = (scene as unknown as WithA11y).accessibilityPanel!;
+    expect(accPanel.currentPalette()).toBe("default");
+    const before = factionColor(Faction.SYNDICATE);
+
+    accPanel.cyclePalette(); // default → deuteranopia
+
+    expect(accPanel.currentPalette()).toBe("deuteranopia");
+    expect(currentPaletteMode()).toBe("deuteranopia");
+    // The colour seam now renders under the new palette — the "palette applies" fix.
+    expect(factionColor(Faction.SYNDICATE)).not.toBe(before);
+  });
+
+  it("closing the overlay tears down both the settings and accessibility panels", () => {
+    const scene = new MainMenuScene(makeMockRenderer());
+    scene.initialize({ gameEngine: makeEngine() });
+    clickTextButton(t("menu.settings"));
+    // Toggle shut.
+    clickTextButton(t("menu.settings"));
+
+    const s = scene as unknown as WithA11y;
+    expect(s.settingsPanel).toBeNull();
+    expect(s.accessibilityPanel).toBeNull();
   });
 });

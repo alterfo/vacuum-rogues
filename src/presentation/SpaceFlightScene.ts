@@ -190,7 +190,6 @@ export class SpaceFlightScene extends GameScene {
     this.pendingWarp = ctx?.pendingWarp ?? null;
     // Quest auto-completion driven by flight events (system entry / NPC kill).
     this.questCompletion = new QuestCompletion(this.gameEngine);
-
     // HUD module: buttons, day counter, mini-map, mini-log, toasts, tooltips. Built first so the NPC/planet deps (toast + tooltip) reach it; buttons fan back via the callbacks below.
     this.hud = new FlightHud(
       this.renderer,
@@ -205,9 +204,10 @@ export class SpaceFlightScene extends GameScene {
     this.hud.onMiniMapPan = (x, y) => this.camera.focusOnWorld(x, y);
     this.hud.onMiniMapReturn = () => this.camera.startReturn();
     this.hud.onFontScaleChange = () => this.onFontScaleChanged();
+    this.hud.onPaletteChange = () => this.npcManager?.refreshFactionColors();
     this.hud.onInventory = () => void this.openInventory();
     this.hud.onCancel = () =>
-      this.onKeyDown({ key: "Escape" } as KeyboardEvent); // touch «✕» = Esc
+      this.onKeyDown({ key: "Escape" } as KeyboardEvent);
     wireFlightSystemMenu(this.hud, this.gameEngine); // in-flight load/main-menu escape hatch (Task 2)
 
     this.combatModule = new CombatModule({

@@ -14,6 +14,11 @@ import {
   SETTINGS_PANEL_WIDTH,
   SETTINGS_PANEL_HEIGHT,
 } from "./ui/SettingsPanel";
+import {
+  AccessibilityPanel,
+  ACCESSIBILITY_PANEL_WIDTH,
+  ACCESSIBILITY_PANEL_HEIGHT,
+} from "./ui/AccessibilityPanel";
 import { GAME_BALANCE } from "@/config/balance";
 
 interface StarParticle {
@@ -67,6 +72,12 @@ export class MainMenuScene extends GameScene {
   // relocated here from the in-flight ⚙ HUD button).
   private settingsPanel: SettingsPanel | null = null;
   private settingsBackdrop: Graphics | null = null;
+  // The accessibility group (colourblind ПАЛИТРА / МЕНЬШЕ ДВИЖЕНИЯ / key remap)
+  // mounted beside the settings panel in the same overlay, so accessibility now
+  // lives in the general Settings rather than only the in-flight ♿ HUD button
+  // (`docs/plans/20260626-playtest-bugs-2-pause-victory-onboarding-accessibility.md`,
+  // Task 4). It reuses the existing browser-level accessors — no new save field.
+  private accessibilityPanel: AccessibilityPanel | null = null;
   // Bumped on every re-render/destroy so in-flight async texture mounts
   // (lazy nebula) for a stale render generation become no-ops (see CLAUDE.md
   // lazy-category pattern).
@@ -550,14 +561,36 @@ export class MainMenuScene extends GameScene {
         ),
       onRequestClose: () => this.closeSettings(),
     });
+
+    // The accessibility group (colourblind palette / reduced-motion / key remap)
+    // shares the overlay so accessibility lives in the general Settings (Task 4).
+    // The menu itself draws no faction colours, so there is nothing to live-restyle
+    // here: each control persists through its own browser-level accessor and the
+    // panel re-renders its own rows. The colourblind faction hues then render under
+    // the new palette on the faction-selection screen and in flight (both read
+    // `factionColor` live), and reduced motion is honoured per-frame by the menu's
+    // own `update`. The overlay stays open so the player can keep cycling.
+    const accPanel = new AccessibilityPanel({
+      onRequestClose: () => this.closeSettings(),
+    });
+
+    // Lay the two panels side by side, centred as a group.
+    const GAP = 16;
+    const groupW = SETTINGS_PANEL_WIDTH + GAP + ACCESSIBILITY_PANEL_WIDTH;
+    const left = Math.round((width - groupW) / 2);
     const c = panel.container;
-    c.x = Math.round((width - SETTINGS_PANEL_WIDTH) / 2);
+    c.x = left;
     c.y = Math.round((height - SETTINGS_PANEL_HEIGHT) / 2);
+    const a = accPanel.container;
+    a.x = left + SETTINGS_PANEL_WIDTH + GAP;
+    a.y = Math.round((height - ACCESSIBILITY_PANEL_HEIGHT) / 2);
 
     this.renderer.stage.addChild(backdrop);
     this.renderer.stage.addChild(c);
+    this.renderer.stage.addChild(a);
     this.settingsBackdrop = backdrop;
     this.settingsPanel = panel;
+    this.accessibilityPanel = accPanel;
   }
 
   /**
@@ -568,12 +601,18 @@ export class MainMenuScene extends GameScene {
    */
   private closeSettings(): void {
     const panel = this.settingsPanel;
+    const accPanel = this.accessibilityPanel;
     const backdrop = this.settingsBackdrop;
     this.settingsPanel = null;
+    this.accessibilityPanel = null;
     this.settingsBackdrop = null;
     if (panel)
       queueMicrotask(() => {
         if (!panel.container.destroyed) panel.destroy();
+      });
+    if (accPanel)
+      queueMicrotask(() => {
+        if (!accPanel.container.destroyed) accPanel.destroy();
       });
     if (backdrop)
       queueMicrotask(() => {

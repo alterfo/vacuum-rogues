@@ -68,8 +68,10 @@ export interface SystemBounds {
 export class NpcShipSprite {
   public readonly container: Container;
   public readonly npc: NpcShip;
-  /** Faction colour, exposed for the minimap radar dot. */
-  public readonly mapColor: number;
+  /** Faction colour, exposed for the minimap radar dot. Re-read on a palette
+   *  change via {@link refreshPaletteColors} so the colourblind swap reaches the
+   *  radar too (it is otherwise set once in the constructor). */
+  public mapColor: number;
   public x: number;
   public y: number;
 
@@ -521,6 +523,19 @@ export class NpcShipSprite {
    * (the player attacked it or one of its faction-mates).
    */
   refreshThreat(): void {
+    this.render();
+  }
+
+  /**
+   * Re-apply the active colourblind palette to this ship's hull + radar dot
+   * (accessibility pass / playtest bug pass 2 Task 4). The hull halo/arrow read
+   * {@link factionColor} live inside {@link render}, but {@link mapColor} is a
+   * one-shot constructor read; both are refreshed here so a ПАЛИТРА change made
+   * while the player is in flight recolours the *already-rendered* ships
+   * immediately (the "palette does nothing" fix), with no scene rebuild.
+   */
+  refreshPaletteColors(): void {
+    this.mapColor = factionColor(this.npc.faction);
     this.render();
   }
 
