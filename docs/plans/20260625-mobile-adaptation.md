@@ -54,10 +54,19 @@ lands.
 **Files:**
 - Create: `src/presentation/flight/touchGestures.ts` (+ test)
 
-- [ ] Pure interpreter: a stream of pointer events → `{pan, pinchZoom, tap(world)}`
+- [x] Pure interpreter: a stream of pointer events → `{pan, pinchZoom, tap(world)}`
       intents (one-finger drag = pan, two-finger = pinch-zoom, tap = select/route).
-- [ ] write tests over recorded pointer sequences (tap vs drag vs pinch disambiguation).
-- [ ] run tests — green.
+      (`src/presentation/flight/touchGestures.ts` — `TouchGestureInterpreter.handle(evt)`
+      folds `{id,x,y,t,phase}` samples into `PanIntent`/`PinchIntent`/`TapIntent`; PixiJS/DOM-free,
+      the touch sibling of the mouse-only `PanZoomController`, sharing its `DRAG_THRESHOLD`
+      tap/drag boundary. Pinch `scale` is the **incremental** ratio about the finger midpoint,
+      so it composes into `CameraController.zoomAtClient`; tap reports the release point.)
+- [x] write tests over recorded pointer sequences (tap vs drag vs pinch disambiguation).
+      (`src/tests/presentation/touchGestures.test.ts` — 17 tests: tap (drift/duration boundaries,
+      no-timestamp), incremental pan deltas, pinch in/out + multiplicative compose, multi-touch
+      cleanup (tap-suppressed-after-pinch, no-jump survivor pan), reset/cancel/unknown-id.)
+- [x] run tests — green. (17/17 pass; eslint + `tsc --noEmit` clean; additive file, no prod
+      importer yet so desktop path unchanged.)
 
 ### Task 3: On-screen flight/combat controls
 **Files:**
