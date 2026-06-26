@@ -42,10 +42,10 @@ string.
 **Files:**
 - Create: `tools/i18n/extract.ts` (find inline Cyrillic literals), `src/tests/i18n/parity.test.ts`
 
-- [ ] A scanner listing remaining inline Cyrillic literals (migration tracker); a parity
+- [x] A scanner listing remaining inline Cyrillic literals (migration tracker); a parity
       test asserting `ru` and `en` have identical key sets (no missing translations).
-- [ ] write tests: parity passes for the migrated set; the scanner reports the backlog.
-- [ ] run tests — green.
+- [x] write tests: parity passes for the migrated set; the scanner reports the backlog.
+- [x] run tests — green.
 
 ### Task 3: Migrate the high-traffic scenes
 **Files:**
