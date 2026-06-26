@@ -95,7 +95,18 @@ ships), and removes barriers for a chunk of players.
       tsc + prod build clean.)
 
 ### Task 5: Documentation
-- [ ] Document the palette, reduced-motion, and keymap seams + how new UI consumes them.
+- [x] Document the palette, reduced-motion, and keymap seams + how new UI consumes them.
+      (Root `CLAUDE.md` → new "Accessibility (Colorblind Palette / Reduced Motion / Key Remap)"
+      architecture section after Internationalization: the three pure `localStorage`-backed seams
+      (`ui/palette.ts` `factionColor`, `ui/reducedMotion.ts` `reducedMotion()`, `input/keymap.ts`
+      `resolveFlightAction`/`rebind`) + the sibling ♿ `AccessibilityPanel`, each with its
+      single-read-seam + "no save/schema change" + default-unchanged contracts and consumer list.
+      `src/presentation/CLAUDE.md` → "Accessibility lives in a sibling ♿ panel" rule block (why it
+      is separate from `SettingsPanel`, the shared Esc/outside-click wiring, consume-don't-re-derive
+      rules). `.claude/docs/adding-features.md` → "Consuming an Accessibility seam" recipe (faction
+      colour ⇒ `factionColor`; idle motion ⇒ gate on `reducedMotion()` per-frame; new flight
+      shortcut ⇒ a `FlightAction` + keymap, not a literal `event.key ===`; surface new controls in
+      `AccessibilityPanel` not `SettingsPanel`; per-seam test files). Cross-linked all three.)
 
 ## Post-Completion
 **Manual:** switch palette (factions stay distinguishable), enable reduced-motion (parallax

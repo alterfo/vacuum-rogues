@@ -168,6 +168,24 @@ and the **НЕЙРОСЕТЬ** row **last** (the "neural is the final hit area" 
 are public (`selectFont`/`selectSpeed`/`selectLanguage`/`toggleNeural`) so they're unit-testable
 without PixiJS pointer events.
 
+**Accessibility lives in a sibling ♿ panel** (`ui/AccessibilityPanel.ts`,
+`docs/plans/20260625-accessibility-pass.md`). The colorblind **ПАЛИТРА** / **МЕНЬШЕ ДВИЖЕНИЯ** /
+key-remap **УПРАВЛЕНИЕ** group is a **separate** panel from `SettingsPanel` on purpose — the ⚙
+panel's hit-area layout is pinned by locked tests, so the a11y group gets its own ♿ HUD surface
+mounted beside the ⚙ gear button (`FlightHud`); the two bottom-left panels share one anchor so only
+one is open, and the ♿ panel reuses the ⚙ panel's Esc-close / outside-click / Space-suppression
+wiring (`FlightHud.isSettingsPanelOpen`/`closeModals`, so `flightKeyHandler` is untouched). Each
+row writes through its own pure seam — palette → `ui/palette.ts` (`currentPaletteMode`/
+`setPaletteMode`), reduced-motion → `ui/reducedMotion.ts` (`isReducedMotionSet`/`setReducedMotion`),
+remap → `input/keymap.ts` (`rebind`+`setKeymap`, conflicts surfaced, Escape aborts) — each a
+browser-level `localStorage` pref, **no new save field**. Consume these seams, don't re-derive
+them: read faction colours through `factionColor(faction)` (never a raw colour map), gate idle/
+parallax/heavy-particle animation on `reducedMotion()`, and route a new flight shortcut through a
+`FlightAction` + `resolveFlightAction` (not a literal `event.key ===`). Control actions are public
+(`cyclePalette`/`toggleReducedMotion`/`beginRebind`/`captureRebind`/`resetKeymapToDefaults`) so the
+behaviour is unit-testable without PixiJS pointer events. See root CLAUDE.md "Accessibility" +
+`.claude/docs/adding-features.md` → "Consuming an Accessibility seam".
+
 **Dev-only autopilot watches the agent fly the *rendered* game** (`docs/plans/20260625-dev-autopilot.md`,
 `docs/architecture/LETSPLAY_ENGINE.md` → "Autopilot"). In `npm run dev` only, press `` ` ``
 (Backquote) or call `window.__autopilot.start()/.stop()/.toggle()` to hand the live ship to the
