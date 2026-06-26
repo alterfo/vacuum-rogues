@@ -63,6 +63,10 @@ describe("no gear is strictly dominated by a cheaper one (price-vs-value)", () =
         a.cooldownTurns < b.cooldownTurns
       );
     }
+    // Guard against a vacuous pass: if a catalog/enum refactor ever emptied the
+    // filter the loop body would never run and the oracle would silently stop
+    // checking. (Mirrors the asset test's PRODUCTION_PREFIXES length guard.)
+    expect(WEAPONS.length).toBeGreaterThan(1);
     for (const b of WEAPONS) {
       const dom = WEAPONS.find((a) => dominates(a, b));
       expect(
@@ -83,6 +87,7 @@ describe("no gear is strictly dominated by a cheaper one (price-vs-value)", () =
         a.potency > b.potency
       );
     }
+    expect(EQUIPMENT.length).toBeGreaterThan(1); // never a vacuous pass (see above)
     for (const b of EQUIPMENT) {
       const dom = EQUIPMENT.find((a) => dominates(a, b));
       expect(

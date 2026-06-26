@@ -251,4 +251,27 @@ describe("evaluate", () => {
     expect(res.ok).toBe(false);
     expect(res.reasons.join(" ")).toMatch(/upgrade rate/i);
   });
+
+  it("fails a zero-session run rather than passing vacuously", () => {
+    // A misconfigured gate (e.g. LETSPLAY_CI_SESSIONS=0) plays nothing; the empty
+    // aggregate trips no fault ceiling, so without this guard it would green.
+    const res = evaluate(aggregateRun([]));
+    expect(res.ok).toBe(false);
+    expect(res.reasons.join(" ")).toMatch(/no sessions/i);
+  });
+
+  it("accumulates every breach reason, not just the first", () => {
+    // An error AND a soft-lock AND an out-of-band band must all be reported, so a
+    // regression that early-returns after the first breach is caught.
+    const run = aggregateRun([
+      { ...clean, errors: 1, softLocks: 1, creditsPerDay: 99999 },
+    ]);
+    const res = evaluate(run, { creditsPerDayBand: { min: 100, max: 5000 } });
+    expect(res.ok).toBe(false);
+    const joined = res.reasons.join("\n");
+    expect(joined).toMatch(/error/i);
+    expect(joined).toMatch(/soft-lock/i);
+    expect(joined).toMatch(/printer|too high/i);
+    expect(res.reasons.length).toBe(3);
+  });
 });

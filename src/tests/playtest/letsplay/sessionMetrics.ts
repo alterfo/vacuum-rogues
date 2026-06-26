@@ -258,6 +258,11 @@ export function aggregateRun(sessions: readonly SessionMetrics[]): RunMetrics {
  * bands and survival are only scored when their threshold is supplied **and** the
  * run produced a value for them — so an unbaselined or sample-less band never
  * spuriously fails the gate. Returns one reason line per breach; `ok` ⇔ no breach.
+ *
+ * A run that played **zero sessions** always fails: an empty aggregate trips no
+ * fault ceiling and would otherwise pass vacuously, so a misconfigured gate (e.g.
+ * `LETSPLAY_CI_SESSIONS=0` or a non-numeric override) silently playing nothing
+ * must red the oracle rather than green it.
  */
 export function evaluate(
   run: RunMetrics,
@@ -268,6 +273,11 @@ export function evaluate(
   const maxSoftLocks = thresholds.maxSoftLocks ?? 0;
   const maxInvariantViolations = thresholds.maxInvariantViolations ?? 0;
   const minSurvivalRate = thresholds.minSurvivalRate ?? 0;
+
+  if (run.sessions <= 0)
+    reasons.push(
+      "no sessions played — the gate ran nothing (check K/N session config)",
+    );
 
   if (run.totalErrors > maxErrors)
     reasons.push(

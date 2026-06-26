@@ -166,6 +166,9 @@ npm run test:save-compat
 
 # Реал-движковый плейтест (pre-push гейт, ~3 с)
 npm run test:playtest
+
+# Letsplay-оракул (pre-push + CI гейт, ~2.5 с): агент играет K сессий + статические проверки oddity (баланс/ассеты/визуал)
+npm run letsplay:ci
 ```
 
 ## Обратная связь (бета-тест)

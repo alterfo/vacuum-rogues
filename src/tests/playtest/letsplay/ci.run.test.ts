@@ -211,6 +211,20 @@ describe("formatCiResult — readable gate report", () => {
     expect(text).toContain("errors 1");
     expect(text).toContain("boom");
   });
+
+  it("renders n/a for balance signals that produced no value (the real CI path)", () => {
+    // The real headless run never advances a galaxy day, so every passing CI run
+    // prints `credits/day=n/a days-to-upgrade=n/a` — the `num(null)` branch that
+    // actually ships. A bug here (NaN / null / throw) would surface only in CI.
+    const report = mkReport([mkSession({ transcript: [mkStep("land")] })]); // no samples
+    const { run, result } = evaluateLetsplayRun(report);
+    expect(run.avgCreditsPerDay).toBeNull();
+    expect(run.avgDaysToFirstUpgrade).toBeNull();
+    const text = formatCiResult({ report, run, result, ok: result.ok });
+    expect(text).toContain("credits/day=n/a");
+    expect(text).toContain("days-to-upgrade=n/a");
+    expect(text).not.toContain("NaN");
+  });
 });
 
 describe("runLetsplayCi — real engine, broken vs healthy build", () => {
@@ -242,6 +256,17 @@ describe("runLetsplayCi — real engine, broken vs healthy build", () => {
     expect(r.run.totalSoftLocks).toBeGreaterThan(0);
     expect(r.result.reasons.join("\n")).toContain("soft-locks");
   });
+
+  it("is deterministic — the same seed reproduces identical run metrics", async () => {
+    // The gate's core promise ("a CI failure reproduces locally from the same
+    // seed") is only real if a seeded run is reproducible. Re-run the same seed
+    // and assert the scored aggregate is byte-identical.
+    const opts = { sessions: 1, steps: 10, seedPrefix: "CI_DET" } as const;
+    const a = await runLetsplayCi(opts);
+    const b = await runLetsplayCi(opts);
+    expect(b.run).toEqual(a.run);
+    expect(b.ok).toBe(a.ok);
+  });
 });
 
 /**
@@ -251,10 +276,23 @@ describe("runLetsplayCi — real engine, broken vs healthy build", () => {
  * `LETSPLAY_CI_SESSIONS` / `LETSPLAY_CI_STEPS` override the K/N defaults.
  */
 const CI = !!process.env.LETSPLAY_CI;
+
+/**
+ * Parse a positive-integer K/N override, falling back to `fallback` for a
+ * missing, zero, negative, or non-numeric value — so a typo'd
+ * `LETSPLAY_CI_SESSIONS=0` (or `=abc`) can't silently run zero sessions and let
+ * the gate pass vacuously. (`evaluate` also reds a zero-session run as a
+ * backstop; this keeps the gate playing its real budget rather than failing.)
+ */
+function positiveIntEnv(raw: string | undefined, fallback: number): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+}
+
 describe.runIf(CI)("npm run letsplay:ci — full deterministic gate", () => {
   it("plays K sessions × N steps and passes every threshold", async () => {
-    const sessions = Number(process.env.LETSPLAY_CI_SESSIONS ?? 3);
-    const steps = Number(process.env.LETSPLAY_CI_STEPS ?? 40);
+    const sessions = positiveIntEnv(process.env.LETSPLAY_CI_SESSIONS, 3);
+    const steps = positiveIntEnv(process.env.LETSPLAY_CI_STEPS, 40);
 
     const r = await runLetsplayCi({
       sessions,
