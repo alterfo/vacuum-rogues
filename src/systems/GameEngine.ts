@@ -1919,6 +1919,11 @@ export class GameEngine {
     this._outcomeShown = false;
     this._winScreenShown = false;
     this._playerDeathShown = false;
+    // Clear any New Game+ carry that was staged but never consumed (e.g. a
+    // SPACE_FLIGHT transition that threw before the new-game branch nulled it).
+    // startNewGamePlus re-stages *after* this reset, so NG+ is unaffected; a
+    // plain «Новая игра» now never inherits a stale carry's credits/rank.
+    this.pendingNewGamePlus = null;
     this.playerService.deletePlayer();
     // Full reset for a fresh game: clear quests, the banking ledger and the
     // persisted/transient flight position so «Новая игра» never inherits the

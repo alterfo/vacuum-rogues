@@ -150,4 +150,43 @@ describe("Overmind endgame outcome routing + New Game+", () => {
 
     expect(harness.errors().map((e) => e.message)).toEqual([]);
   });
+
+  it("a plain new game does not inherit a staged-but-unconsumed NG+ carry", async () => {
+    harness = await RealEngineHarness.boot({
+      seed: "ARC_NGPLUS_LEAK",
+      systemCount: 24,
+    });
+    await harness.newGame();
+
+    // Simulate a New Game+ carry that startNewGamePlus staged but the
+    // SPACE_FLIGHT transition never consumed (e.g. it threw before the
+    // new-game branch nulled `pendingNewGamePlus`). The carry has enriched
+    // credits + a veteran rank that must NOT leak into a subsequent plain game.
+    const engineAny = harness.engine as unknown as {
+      pendingNewGamePlus: unknown;
+      generateDefaultGameState: () => Promise<void>;
+    };
+    engineAny.pendingNewGamePlus = {
+      credits: 50000,
+      rank: 5,
+      factionType: FactionType.OUTLANDERS,
+      gameMode: "HARD",
+    };
+
+    // A plain «Новая игра»: reset game state, then build a fresh player.
+    await engineAny.generateDefaultGameState();
+    await harness.engine.transitionTo(SceneType.SPACE_FLIGHT, {
+      gameEngine: harness.engine,
+      selectedFaction: FactionType.BASTIONS,
+      selectedGameMode: "NORMAL",
+    });
+
+    const fresh = harness.player()!;
+    // Defaults, not the leaked carry (credits 1000 / rank 0); the chosen
+    // faction wins over the stale carry's OUTLANDERS.
+    expect(fresh.credits).toBe(1000);
+    expect(fresh.rank ?? 0).toBe(0);
+    expect(fresh.faction).toBe(FactionType.BASTIONS);
+    expect(harness.errors().map((e) => e.message)).toEqual([]);
+  });
 });
