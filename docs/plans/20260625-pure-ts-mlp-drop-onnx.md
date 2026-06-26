@@ -117,11 +117,16 @@ JSON** instead of ONNX, pinned by a **parity test**.
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — `src/ai` removal +
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — `src/ai` removal +
       NeuralPolicy + GameEngine/DialogueSystem + the new MLP module affected; no
-      schema/migration.
-- [ ] full unit suite green; `npm run test:playtest` green; `npm run letsplay` runs;
-      lint clean; build ok and the bundle no longer contains onnxruntime.
+      schema/migration. (Scope confirmed by the targeted diff of the 4 plan commits
+      `b9e3ad2..HEAD`: src/ai + core/ports + mocks removed, NeuralPolicy/GameEngine/
+      DialogueSystem reframed, mlp.ts/exportBcData/weightsContract added; `schemas.ts`
+      and `MigrationPipeline.ts` untouched. The raw gitnexus `detect_changes` vs master
+      is whole-branch divergence noise on this long-lived feature branch.)
+- [x] full unit suite green (3160 passed, 3 skipped); `npm run test:playtest` green
+      (94 passed, 1 skipped); `npm run letsplay` runs (7 passed, exit 0); lint clean
+      (0 errors); build ok (8.1s) and the bundle no longer contains onnxruntime/.wasm.
 
 ### Task 6: Update documentation
 **Files:**
