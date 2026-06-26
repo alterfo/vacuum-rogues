@@ -255,6 +255,11 @@ export const en: Dict = {
   "landing.denial.pirateRep":
     "Planet captured by pirates — reputation required. Pay pirates off to raise it",
 
+  // --- player-driven liberation of a captured system -----------------------
+  "flight.liberationHint":
+    "System captured. Destroy every invader to liberate it",
+  "flight.systemLiberated": "System {name} liberated!",
+
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Controls:",
   "help.gotIt": "Got it",

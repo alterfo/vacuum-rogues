@@ -257,6 +257,11 @@ export const ru: Dict = {
   "landing.denial.pirateRep":
     "Планета захвачена пиратами — нужна репутация. Откупайтесь от пиратов, чтобы её поднять",
 
+  // --- player-driven liberation of a captured system -----------------------
+  "flight.liberationHint":
+    "Система захвачена. Уничтожьте всех захватчиков, чтобы освободить её",
+  "flight.systemLiberated": "Система {name} освобождена!",
+
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Управление:",
   "help.gotIt": "Понятно",

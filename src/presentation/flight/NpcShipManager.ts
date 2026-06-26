@@ -55,6 +55,7 @@ import { hashStr } from "@/utils/hashStr";
 import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
 import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
+import { t } from "@/i18n/i18n";
 import {
   commsContextFor,
   overmindGibberish,
@@ -358,6 +359,9 @@ export class NpcShipManager implements FlightModule {
     // and pursues the player (combat resolves in-flight, not via CombatScene).
     this.applyGarrisonAggro();
     logger.info(`Created ${this.npcSprites.length} NPC sprites`);
+    // Entering a captured system: surface the liberation counter-play so the
+    // player learns they can free it by destroying the garrison (Task 4).
+    this.maybeShowLiberationHint();
     // Spice the entry with a random exploration encounter (derelict/anomaly/
     // distress). Skipped when the OVERMIND-core prompt already owns the screen.
     this.maybeShowEntryEncounter();
@@ -1101,7 +1105,49 @@ export class NpcShipManager implements FlightModule {
     sprite.destroy();
     // Destroying the OVERMIND core in-flight is the win condition (the old hex
     // CombatScene victory called showGameOutcomeScreen(true) on the same kill).
-    if (wasOvermindCore) this.gameEngine?.showGameOutcomeScreen(true);
+    if (wasOvermindCore) {
+      this.gameEngine?.showGameOutcomeScreen(true);
+      return;
+    }
+    // Clearing the last hostile in a captured system frees it immediately
+    // (player-driven liberation, Task 4) — no-ops until the final defender dies.
+    this.maybeLiberateClearedSystem();
+  }
+
+  /**
+   * On entering a captured (hostile) system, tell the player they can free it by
+   * destroying its garrison — surfaces the liberation counter-play so it's
+   * discoverable. Presentation-only; a no-op for a faction-held system.
+   */
+  private maybeShowLiberationHint(): void {
+    const galaxy = this.gameEngine?.galaxy;
+    const systemId = this.gameEngine?.player?.currentSystemId;
+    if (!galaxy || !systemId) return;
+    if (typeof galaxy.isHostileSystem !== "function") return;
+    if (!galaxy.isHostileSystem(systemId)) return;
+    this.deps.showMessage(t("flight.liberationHint"), 0xffcc66);
+  }
+
+  /**
+   * After a kill, free the current system if it was captured and the player has
+   * now cleared its last hostile defender. The immediate, player-earned sibling
+   * of the NpcSimulator "clear and hold" auto-liberate — works for both pirate-
+   * and Overmind-captured systems via {@link GameEngine.liberateCurrentSystem}
+   * (which gates on the garrison being fully cleared, so this no-ops otherwise).
+   */
+  private maybeLiberateClearedSystem(): void {
+    const engine = this.gameEngine;
+    const galaxy = engine?.galaxy;
+    const systemId = engine?.player?.currentSystemId;
+    if (!engine || !galaxy || !systemId) return;
+    if (typeof engine.liberateCurrentSystem !== "function") return;
+    if (engine.liberateCurrentSystem()) {
+      const sys = galaxy.systems.find((s) => s.id === systemId);
+      this.deps.showMessage(
+        t("flight.systemLiberated", { name: sys?.name ?? systemId }),
+        0x66ff99,
+      );
+    }
   }
 
   /** Roll the per-kill loot count: 0, 1 or 2 (uniform thirds). */

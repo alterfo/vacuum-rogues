@@ -29,6 +29,7 @@ import { TradeSystem } from "@/systems/TradeSystem";
 import { scanTradeRoutes } from "@/systems/trade/RouteScanner";
 import { updateRumors } from "@/systems/trade/RumorDirector";
 import { stepOwnershipTick } from "@/systems/galaxy/OvermindBalance";
+import { canPlayerLiberate } from "@/systems/galaxy/liberation";
 import {
   initialOvermindSpreadState,
   advanceOvermind,
@@ -983,15 +984,31 @@ export class GameEngine {
   }
 
   /**
-   * Liberate the player's current system from OVERMIND or pirate control.
-   * Called on a player combat victory. Returns true if the system was hostile
-   * and has been freed; false when the current system is already faction-held.
+   * Whether the player can liberate their current system right now — it is a
+   * captured (Overmind/pirate) system whose hostile garrison has been cleared
+   * ({@link canPlayerLiberate}). The flight HUD reads this to surface the
+   * liberation action/hint; {@link liberateCurrentSystem} re-checks it.
+   */
+  canLiberateCurrentSystem(): boolean {
+    if (!this.galaxy || !this.player?.currentSystemId) return false;
+    return canPlayerLiberate(this.galaxy, this.player.currentSystemId);
+  }
+
+  /**
+   * Liberate the player's current system from OVERMIND or pirate control — the
+   * player-driven counter-play that makes the captured front reversible mid-game
+   * (works for **both** pirate- and Overmind-captured systems via
+   * {@link Galaxy.tryLiberate}). Gated on {@link canLiberateCurrentSystem}: only
+   * fires once the local hostile garrison is cleared (a real combat victory), so
+   * it can never auto-clear the map — each call frees at most the one system the
+   * player is in. Returns true when a system was actually freed.
    */
   liberateCurrentSystem(): boolean {
-    if (!this.galaxy || !this.player?.currentSystemId) return false;
-    const liberated = this.galaxy.tryLiberate(this.player.currentSystemId);
+    if (!this.canLiberateCurrentSystem()) return false;
+    const systemId = this.player!.currentSystemId;
+    const liberated = this.galaxy!.tryLiberate(systemId);
     if (liberated) {
-      logger.info(`Player liberated system ${this.player.currentSystemId}`);
+      logger.info(`Player liberated system ${systemId}`);
     }
     return liberated;
   }
