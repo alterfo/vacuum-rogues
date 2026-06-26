@@ -262,6 +262,10 @@ export const ru: Dict = {
     "Система захвачена. Уничтожьте всех захватчиков, чтобы освободить её",
   "flight.systemLiberated": "Система {name} освобождена!",
 
+  // --- combat salvage (Task 5: killing a credit-carrying NPC pays out) ------
+  "flight.salvageTrophy": "Трофей: +{amount} ₡",
+  "flight.salvageReason": "Трофей с уничтоженного корабля",
+
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Управление:",
   "help.gotIt": "Понятно",

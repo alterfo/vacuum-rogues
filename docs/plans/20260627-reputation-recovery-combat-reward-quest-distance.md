@@ -110,10 +110,10 @@ hint, not a rep sink. (b) **Full scope** including unblocking captured systems.
 
 ### Task 5: Pirate kills pay — salvage the NPC's credits (ledger) with an anti-farm cap
 **Files:** Modify `src/presentation/flight/NpcShipManager.ts`, `src/systems/banking/economy.ts` usage, `src/config/balance.ts`; Create `src/tests/combat/pirateSalvageCredits.test.ts`
-- [ ] failing test: killing a credit-carrying NPC awards a salvage payout via `adjustPlayerCredits` (balanced ledger transfer, whole credits) — never `player.credits +=`
-- [ ] credit a **fraction** of the NPC's credits (config) — **guard against farming**: a per-day or per-engagement salvage cap so respawning pirates can't be an infinite credit faucet; assert the cap holds over many kills
-- [ ] toast «Трофей: +N ₡»; verify ledger projection stays consistent (no validation error)
-- [ ] run tests — must pass before next task
+- [x] failing test: killing a credit-carrying NPC awards a salvage payout via `adjustPlayerCredits` (balanced ledger transfer, whole credits) — never `player.credits +=` — `pirateSalvageCredits.test.ts` drives `handleInFlightDeath` through a real `BankBus`/`BankingService` and asserts `player.credits` rises by the floored fraction, the ledger `totalBalance()` stays balanced (proves a double-entry transfer, not a `+=`), the projection mirrors `balanceOf(currentAccount)`, and the value is a whole credit `PlayerSchema` accepts
+- [x] credit a **fraction** of the NPC's credits (config) — **guard against farming**: a per-day salvage cap so respawning pirates can't be an infinite credit faucet; assert the cap holds over many kills — `GAME_BALANCE.pirateSalvageFraction = 0.5` of the wreck's cash; pure `pirateSalvageAmount(npcCredits, fraction, salvagedToday, dailyCap)` (`src/systems/combat/pirateSalvage.ts`) floors to whole credits and clamps to the remaining `pirateSalvageDailyCap = 1500`/galaxy-day budget; `NpcShipManager` tracks `salvageDay`/`salvagedToday` (per-session, no save state) and resets on a day change. Test farms 30 rich wrecks on day 0 → total == cap, then advances `gameDays` → budget re-arms
+- [x] toast «Трофей: +N ₡»; verify ledger projection stays consistent (no validation error) — `t("flight.salvageTrophy", { amount })` toast (ru/en lockstep) + the localized `t("flight.salvageReason")` ledger memo (routed through i18n keys, so the cyrillic ratchet stays at its baseline); test asserts the toast carries the awarded amount and the projection equals the GL balance
+- [x] run tests — must pass before next task — salvage suite (6) + i18n (parity/migrated/ratchet) + combat (220) + flight/banking/loot/npc (496) + playtest (269/271) + lint (0 errors) all green
 
 ### Task 6: Loot collectible by proximity (not tractor-only) — bounded
 **Files:** Modify `src/presentation/flight/NpcShipManager.ts`; Create `src/tests/combat/lootPickup.test.ts`

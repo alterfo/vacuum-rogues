@@ -260,6 +260,10 @@ export const en: Dict = {
     "System captured. Destroy every invader to liberate it",
   "flight.systemLiberated": "System {name} liberated!",
 
+  // --- combat salvage (Task 5: killing a credit-carrying NPC pays out) ------
+  "flight.salvageTrophy": "Salvage: +{amount} ₡",
+  "flight.salvageReason": "Salvage from a destroyed ship",
+
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Controls:",
   "help.gotIt": "Got it",

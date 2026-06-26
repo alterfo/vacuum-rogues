@@ -28,7 +28,12 @@ import {
   PIRATE_FACTION_ID,
   grantPirateTributeRep,
 } from "@/systems/galaxy/landingAccess";
-import { payTribute } from "@/systems/banking/economy";
+import {
+  payTribute,
+  adjustPlayerCredits,
+  GL_COUNTERPARTY,
+} from "@/systems/banking/economy";
+import { pirateSalvageAmount } from "@/systems/combat/pirateSalvage";
 import { SeededRNG } from "@/utils/seededRNG";
 import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
@@ -302,6 +307,13 @@ export class NpcShipManager implements FlightModule {
   private lootClockMs = 0;
   /** Loot lifetime before it despawns (60 s). */
   private readonly LOOT_TTL_MS = 60_000;
+
+  // Salvage anti-farm bookkeeping (Task 5): the galaxy day the running salvage
+  // total applies to, and the credits already salvaged that day. Per-session and
+  // presentation-only (no save state) — a respawning-pirate faucet is bounded to
+  // GAME_BALANCE.pirateSalvageDailyCap credits/day.
+  private salvageDay = -1;
+  private salvagedToday = 0;
 
   private readonly WEAPON_RANGE = GAME_BALANCE.weaponRange;
   // Combat strafe radius: while engaged, orbit the target at this standoff —
@@ -1109,9 +1121,52 @@ export class NpcShipManager implements FlightModule {
       this.gameEngine?.showGameOutcomeScreen(true);
       return;
     }
+    // Salvage the wreck's credits (Task 5) — a fraction of the NPC's cash routed
+    // through the ledger, bounded by the per-day anti-farm cap.
+    this.awardSalvageCredits(sprite.npc);
     // Clearing the last hostile in a captured system frees it immediately
     // (player-driven liberation, Task 4) — no-ops until the final defender dies.
     this.maybeLiberateClearedSystem();
+  }
+
+  /**
+   * Pay the player a salvage payout for destroying a credit-carrying NPC — a
+   * fraction of the wreck's cash, routed through the ledger via
+   * {@link adjustPlayerCredits} (a balanced NPC-plunder → player transfer, whole
+   * credits, never `player.credits +=`). A per-galaxy-day cap
+   * ({@link GAME_BALANCE.pirateSalvageDailyCap}) stops respawning pirates being
+   * an infinite credit faucet. No-ops on a wreck with no credits.
+   */
+  private awardSalvageCredits(npc: NpcShip): void {
+    const engine = this.gameEngine;
+    const player = engine?.player;
+    const galaxy = engine?.galaxy;
+    if (!engine || !player || !galaxy) return;
+    if (!npc.credits || npc.credits <= 0) return;
+    const day = galaxy.gameDays ?? 0;
+    if (day !== this.salvageDay) {
+      this.salvageDay = day;
+      this.salvagedToday = 0;
+    }
+    const award = pirateSalvageAmount(
+      npc.credits,
+      GAME_BALANCE.pirateSalvageFraction,
+      this.salvagedToday,
+      GAME_BALANCE.pirateSalvageDailyCap,
+    );
+    if (award <= 0) return;
+    this.salvagedToday += award;
+    adjustPlayerCredits(
+      engine.bank,
+      player,
+      award,
+      GL_COUNTERPARTY.PLUNDER,
+      t("flight.salvageReason"),
+    );
+    this.deps.showMessage(
+      t("flight.salvageTrophy", { amount: award }),
+      0xffdd33,
+    );
   }
 
   /**

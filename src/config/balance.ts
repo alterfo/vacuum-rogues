@@ -350,6 +350,19 @@ export const GAME_BALANCE = {
    * constant so escape distance can be balanced independently of detection range.
    */
   combatEscapeRange: 1200,
+  /**
+   * Fraction of a destroyed NPC's credits the player salvages from the wreck
+   * (Task 5: "killing pirates pays nothing" fix). Half the wreck's cash — a
+   * meaningful reward for fighting, while the rest is "lost in the wreckage".
+   */
+  pirateSalvageFraction: 0.5,
+  /**
+   * Anti-farm cap: max salvage credits the player can collect **per galaxy day**.
+   * Pirates respawn via garrisons, so an uncapped salvage would be an infinite
+   * credit faucet; this bounds combat income to a sane credits/day (a handful
+   * of kills) without making any single kill feel stingy.
+   */
+  pirateSalvageDailyCap: 1500,
   /** Star sprite radius (visual, not physics). */
   starRadius: 170,
   /** Gap (px) from planet surface to route endpoint — route preview stops at
