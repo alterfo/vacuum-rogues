@@ -29,11 +29,11 @@ machinery already exists, so this is mostly wiring + a couple of tracks.
 **Files:**
 - Create: `src/systems/audio/musicDirector.ts` (+ test)
 
-- [ ] `desiredTrack(ctx)` mapping `{inCombat, scene, lowHull}` → a `TrackKey`, with a
+- [x] `desiredTrack(ctx)` mapping `{inCombat, scene, lowHull}` → a `TrackKey`, with a
       short hysteresis so combat start/stop doesn't thrash the crossfade.
-- [ ] write tests: ambient↔combat transitions fire once on real changes; brief flaps
+- [x] write tests: ambient↔combat transitions fire once on real changes; brief flaps
       debounce; scene tracks (planet/station) selected correctly.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 2: Wire the director to combat + scene events
 **Files:**
