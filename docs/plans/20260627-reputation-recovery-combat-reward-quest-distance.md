@@ -89,10 +89,10 @@ hint, not a rep sink. (b) **Full scope** including unblocking captured systems.
 
 ### Task 2: Quest completion grants faction reputation (recovery loop) — capped
 **Files:** Modify `src/systems/QuestManager.ts`, `src/config/balance.ts`; Create `src/tests/quests/questReputationReward.test.ts`
-- [ ] failing test: completing a quest calls `adjustReputation(factionId, +reward)` (mirror of the expiry penalty, opposite sign), keyed by the **same** `factionId` the board/landing gate read
-- [ ] grant a **modest** +rep on success (config constant) so honest play climbs out of −50 over several quests — **not** in one (guard: small amount + the existing rep clamp; assert it can't overshoot)
-- [ ] verify the expiry-penalty path is unchanged (failures still cost rep)
-- [ ] run tests — must pass before next task
+- [x] failing test: completing a quest calls `adjustReputation(factionId, +reward)` (mirror of the expiry penalty, opposite sign), keyed by the **same** `factionId` the board/landing gate read — `questReputationReward.test.ts` asserts `forceCompleteQuest`/`claimReturnReward` raise rep on `quest.factionId || quest.planetId` (the exact key `applyFailurePenalty` subtracts from)
+- [x] grant a **modest** +rep on success (config constant) so honest play climbs out of −50 over several quests — **not** in one (guard: small amount + the existing rep clamp; assert it can't overshoot) — `QUEST_REPUTATION_REWARD = 5` granted in the shared `grantReward`; test asserts `0 < reward < 50`, a single completion from −50 stays negative (−45), and a completion from 99 clamps to 100 (no overshoot)
+- [x] verify the expiry-penalty path is unchanged (failures still cost rep) — test asserts an expired quest still drops rep by `reputationLoss` (−10 → −25), no reward fired; full unit suite 3825 passed / 4 skipped
+- [x] run tests — must pass before next task — quest suite + playtest + full unit suite + lint (0 errors) all green
 
 ### Task 3: Pirate-rep recovery — regain access to pirate-captured systems
 **Files:** Modify `src/systems/comms/commsOptions.ts` (tribute), `src/systems/galaxy/landingAccess.ts`, `src/config/balance.ts`, ru/en; Create `src/tests/galaxy/pirateRepRecovery.test.ts`

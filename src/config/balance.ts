@@ -178,6 +178,16 @@ export const QUEST_DEADLINE_PER_JUMP_DAYS = 16;
 export const QUEST_DEADLINE_BUFFER_MIN_DAYS = 5;
 export const QUEST_DEADLINE_BUFFER_MAX_DAYS = 10;
 
+/**
+ * Faction reputation granted on quest SUCCESS — the recovery loop that mirrors
+ * the expiry penalty (which only ever subtracts). Keyed by the same `factionId`
+ * the board/landing gate read, so honest play visibly raises standing. Kept
+ * DELIBERATELY MODEST: at +5 a −50 player needs ~10 successful quests to climb
+ * back to 0, so recovery is earned over several quests, never in one — and the
+ * [-100,100] rep clamp in {@link Player.adjustReputation} prevents overshoot.
+ */
+export const QUEST_REPUTATION_REWARD = 5;
+
 /** Minimum rank required to see elite quests (minRank = 3 → Ас). */
 export const ELITE_QUEST_MIN_RANK = 3;
 

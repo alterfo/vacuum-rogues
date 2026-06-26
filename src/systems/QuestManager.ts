@@ -7,6 +7,7 @@ import {
   GL_COUNTERPARTY,
   type BankAccess,
 } from "@/systems/banking/economy";
+import { QUEST_REPUTATION_REWARD } from "@/config/balance";
 
 /**
  * Quest template for creating new quests
@@ -212,6 +213,19 @@ export class QuestManager {
       `Награда: ${quest.title}`,
     );
     player.experience += quest.reward.experience;
+
+    // Faction reputation recovery loop (Task 2): success raises standing with
+    // the SAME faction key the expiry penalty subtracts from (factionId, falling
+    // back to planetId — see applyFailurePenalty), so honest play visibly climbs
+    // out of a decayed −50. Modest + clamped in adjustReputation, so it takes
+    // several quests to recover and never overshoots.
+    const repKey = quest.factionId || quest.planetId;
+    if (repKey) {
+      player.adjustReputation(repKey, QUEST_REPUTATION_REWARD);
+      logger.info(
+        `Reputation reward: +${QUEST_REPUTATION_REWARD} on ${repKey} (now ${player.getReputation(repKey)})`,
+      );
+    }
 
     for (const item of quest.reward.items) {
       const existing = player.inventory.resources.find(

@@ -19,11 +19,19 @@ function sys(id: string, name: string, toIds: string[]): StarSystem {
 }
 
 function playerStub(): Player {
+  const reputation: Record<string, number> = {};
   return {
     credits: 0,
     experience: 0,
     inventory: { resources: [] },
-    reputation: {},
+    reputation,
+    getReputation: (id: string) => reputation[id] ?? 0,
+    adjustReputation: (id: string, delta: number) => {
+      reputation[id] = Math.max(
+        -100,
+        Math.min(100, (reputation[id] ?? 0) + delta),
+      );
+    },
   } as unknown as Player;
 }
 
