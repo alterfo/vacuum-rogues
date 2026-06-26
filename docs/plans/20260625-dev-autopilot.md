@@ -87,9 +87,9 @@ can't see — feeding the oddity-hunting workflow.
 **Files:**
 - Modify/Extend: `src/tests/architecture/letsplayDevOnly.test.ts`
 
-- [ ] Extend the guard: no production module imports the autopilot/agent core; `npm run
+- [x] Extend the guard: no production module imports the autopilot/agent core; `npm run
       build` produces an unchanged prod bundle (autopilot excluded).
-- [ ] full suite + `test:playtest` green; lint clean; build ok.
+- [x] full suite + `test:playtest` green; lint clean; build ok.
 
 ### Task 5: Documentation
 **Files:**

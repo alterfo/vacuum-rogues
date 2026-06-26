@@ -25,11 +25,27 @@ import { dirname, join, relative, resolve, sep } from "node:path";
  *     (The `staticSpecifiers` helper extracts only static specifiers by design;
  *     the dynamic-`import()` assertion below pins that helper contract, not a
  *     permission to use a dynamic ONNX import.)
+ *
+ * The dev-only **autopilot** (Task 4 of `docs/plans/20260625-dev-autopilot.md`)
+ * reuses that same one-way street: its live applier + controller + hook all live
+ * under the letsplay dir, so guard (1) already keeps any *static* prod import out.
+ * Two extra guards lock the autopilot's wiring, which has the only sanctioned
+ * production reference into the dev engine:
+ *  3. **The prod seam (`src/dev/devAutopilot.ts`) imports nothing from the dev
+ *     engine** — static *or* dynamic. It is a pure injectable gate (the engine
+ *     loader is passed in), so it can never pull the dev engine into the graph.
+ *  4. **The single dynamic `import()` into the letsplay dir is `main.ts`-only and
+ *     `import.meta.env.DEV`-gated**, so Vite/Rollup dead-code-eliminate the dev
+ *     chunk from the prod bundle entirely.
  */
 
 const SRC_ROOT = resolve(__dirname, "..", "..");
 const TESTS_DIR = join(SRC_ROOT, "tests");
 const LETSPLAY_DIR = join(SRC_ROOT, "tests", "playtest", "letsplay");
+/** The one production seam that wires the dev autopilot in (Task 4). */
+const DEV_AUTOPILOT = join(SRC_ROOT, "dev", "devAutopilot.ts");
+/** The only module allowed a (DEV-gated) dynamic import into the dev engine. */
+const MAIN_TS = join(SRC_ROOT, "main.ts");
 
 /** Recursively collect every `.ts` file under `dir`, skipping `.d.ts`. */
 function collectTsFiles(dir: string): string[] {
@@ -72,6 +88,27 @@ function staticSpecifiers(source: string): string[] {
   return specs;
 }
 
+/**
+ * Extract the *dynamic* `import("x")` specifiers from a file (the complement of
+ * {@link staticSpecifiers}). The dev autopilot's only sanctioned production
+ * reference into the dev engine is one such dynamic import in `main.ts`, written
+ * inside an `import.meta.env.DEV` block so Vite/Rollup drop the dev chunk from the
+ * prod bundle. This helper lets the guards below reason about that one edge.
+ */
+function dynamicSpecifiers(source: string): string[] {
+  const specs: string[] = [];
+  const re = /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source)) !== null) specs.push(m[1]);
+  return specs;
+}
+
+/** True if `spec` (resolved from `fromFile`) lands inside the letsplay dir. */
+function resolvesIntoLetsplay(fromFile: string, spec: string): boolean {
+  const resolved = resolveSpecifier(fromFile, spec);
+  return resolved !== null && (resolved + sep).startsWith(LETSPLAY_DIR + sep);
+}
+
 /** Resolve a specifier to an absolute path, or null for a bare package import. */
 function resolveSpecifier(fromFile: string, spec: string): string | null {
   if (spec.startsWith("@/")) return join(SRC_ROOT, spec.slice(2));
@@ -87,8 +124,7 @@ describe("letsplay engine is dev-only (never in prod)", () => {
     for (const file of productionTsFiles()) {
       const source = readFileSync(file, "utf8");
       for (const spec of staticSpecifiers(source)) {
-        const resolved = resolveSpecifier(file, spec);
-        if (resolved && (resolved + sep).startsWith(LETSPLAY_DIR + sep)) {
+        if (resolvesIntoLetsplay(file, spec)) {
           offenders.push(`${relative(SRC_ROOT, file)} imports "${spec}"`);
         }
       }
@@ -97,6 +133,64 @@ describe("letsplay engine is dev-only (never in prod)", () => {
       offenders,
       `Production modules must never import the letsplay engine ` +
         `(it would pull it into the prod bundle):\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("the dev autopilot prod seam imports nothing from the engine (static or dynamic)", () => {
+    // `src/dev/devAutopilot.ts` is the lone *production* module that wires the
+    // dev-only autopilot in. It must stay a pure injectable gate: it takes the
+    // engine `load`er as a parameter and contains NO import literal — static or
+    // dynamic — of the dev engine, so it can never pull the autopilot (and with
+    // it the agent core) into the prod graph itself. The real `import(...)` loader
+    // lives at the DEV-gated `main.ts` call site (guarded below).
+    const source = readFileSync(DEV_AUTOPILOT, "utf8");
+    const offenders: string[] = [];
+    for (const spec of [
+      ...staticSpecifiers(source),
+      ...dynamicSpecifiers(source),
+    ]) {
+      if (resolvesIntoLetsplay(DEV_AUTOPILOT, spec)) {
+        offenders.push(`devAutopilot.ts imports "${spec}"`);
+      }
+    }
+    expect(
+      offenders,
+      `The autopilot prod seam must never reference the dev engine directly ` +
+        `(pass the loader in instead):\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("the only production dynamic import of the engine is main.ts, DEV-gated", () => {
+    // The autopilot's sole sanctioned production reference into the dev engine is
+    // a dynamic `import('./tests/playtest/letsplay/installAutopilotHook')`. It is
+    // allowed ONLY in `main.ts` and ONLY when preceded by an `import.meta.env.DEV`
+    // gate — that is what lets Vite/Rollup dead-code-eliminate the dev chunk so
+    // the prod bundle stays autopilot-free.
+    const offenders: string[] = [];
+    for (const file of productionTsFiles()) {
+      const source = readFileSync(file, "utf8");
+      const re = /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(source)) !== null) {
+        if (!resolvesIntoLetsplay(file, m[1])) continue;
+        const rel = relative(SRC_ROOT, file);
+        if (file !== MAIN_TS) {
+          offenders.push(
+            `${rel} dynamically imports the dev engine ` +
+              `(only main.ts may, DEV-gated)`,
+          );
+        } else if (source.lastIndexOf("import.meta.env.DEV", m.index) === -1) {
+          offenders.push(
+            `${rel} dynamic-imports the dev engine without a preceding ` +
+              `import.meta.env.DEV gate (would ship in the prod bundle)`,
+          );
+        }
+      }
+    }
+    expect(
+      offenders,
+      `Dev-engine dynamic imports must be main.ts-only and DEV-gated:\n` +
+        offenders.join("\n"),
     ).toEqual([]);
   });
 
@@ -145,8 +239,24 @@ describe("letsplay engine is dev-only (never in prod)", () => {
     ).toEqual([]);
   });
 
+  it("dynamicSpecifiers extracts import() targets but ignores static imports", () => {
+    // Pins the complement helper the autopilot guards rely on: a dynamic
+    // `import("x")` is captured, while a static `import ... from "x"` is not.
+    expect(
+      dynamicSpecifiers(
+        `() => import('./tests/playtest/letsplay/installAutopilotHook')`,
+      ),
+    ).toEqual(["./tests/playtest/letsplay/installAutopilotHook"]);
+    expect(
+      dynamicSpecifiers(`const ort = await import("onnxruntime-web");`),
+    ).toEqual(["onnxruntime-web"]);
+    expect(dynamicSpecifiers(`import { x } from "./static-only";`)).toEqual([]);
+  });
+
   it("the letsplay engine dir exists and contains the engine modules", () => {
     // Sanity: the scan above is only meaningful if the dir is actually present.
+    // Includes the dev-autopilot modules (Task 4) so the guard provably covers
+    // the live applier, controller, and hook — not just the original agent core.
     const names = readdirSync(LETSPLAY_DIR);
     expect(names).toEqual(
       expect.arrayContaining([
@@ -154,6 +264,9 @@ describe("letsplay engine is dev-only (never in prod)", () => {
         "PlayerPolicy.ts",
         "HeuristicPolicy.ts",
         "PlayerAgent.ts",
+        "LiveApplier.ts",
+        "AutopilotController.ts",
+        "installAutopilotHook.ts",
       ]),
     );
   });
