@@ -168,4 +168,82 @@ describe("Active pause freezes NPC ship movement (Task 1)", () => {
 
     manager.destroy();
   });
+
+  it("freezes NPC-vs-NPC crossfire while paused (no damage, no backed-up volley on unpause)", () => {
+    const physics = new ShipPhysics(0, 0, 0.3);
+    let paused = false;
+
+    // Two mutually-hostile sprites (Overmind drone vs pirate) — the crossfire the
+    // active pause must also freeze. The Overmind id is NOT `overmind_core`, so it
+    // is a real crossfire participant (the core is excluded as the player's duel).
+    const drone = makeNpc("ovm_drone", NpcRole.PATROL, Faction.OVERMIND);
+    const pirate = makeNpc("prt_1", NpcRole.PIRATE, Faction.INDEPENDENT);
+    const galaxy = {
+      npcShips: [drone, pirate],
+      isHostileSystem: () => false,
+    } as unknown as Galaxy;
+    const gameEngine = {
+      galaxy,
+      player: { currentSystemId: "sys_a" },
+    } as unknown as GameEngine;
+
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => physics,
+      getPlanetSprites: () => [],
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => true,
+      showMessage: () => {},
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: () => {},
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+      startInFlightCombat: () => {},
+      isInCombat: () => false,
+      selectCombatTarget: () => {},
+      getCombatTargetId: () => null,
+      isCombatant: () => false,
+      isPaused: () => paused,
+    };
+
+    const manager = new NpcShipManager(
+      renderer(),
+      gameEngine,
+      new Container(),
+      new Container(),
+      deps,
+    );
+    manager.initialize();
+
+    const sprites = (manager as unknown as { npcSprites: NpcShipSprite[] })
+      .npcSprites;
+    // Place both well inside weapon range so the hostility matrix engages them.
+    (sprites[0] as unknown as { x: number; y: number }).x = 400;
+    (sprites[0] as unknown as { x: number; y: number }).y = 300;
+    (sprites[1] as unknown as { x: number; y: number }).x = 420;
+    (sprites[1] as unknown as { x: number; y: number }).y = 300;
+
+    const mgr = manager as unknown as {
+      resolveNpcVsNpcCombat(dt: number): void;
+      npcCrossfireTimer: number;
+    };
+    const hull0 = drone.hullHP;
+
+    // FREEZE: paused — many fire intervals pass but crossfire deals no damage and
+    // the fire timer must NOT accrue (else unpause would fire an instant volley).
+    paused = true;
+    mgr.resolveNpcVsNpcCombat(GAME_BALANCE.combatFireIntervalMs * 3);
+    expect(drone.hullHP).toBe(hull0);
+    expect(pirate.hullHP).toBe(hull0);
+    expect(mgr.npcCrossfireTimer).toBe(0);
+
+    // CONTROL: unpause — one fire interval now lands mutual crossfire damage,
+    // proving the freeze above is a real gate (and the setup can actually fire).
+    paused = false;
+    mgr.resolveNpcVsNpcCombat(GAME_BALANCE.combatFireIntervalMs);
+    expect(drone.hullHP).toBeLessThan(hull0);
+    expect(pirate.hullHP).toBeLessThan(hull0);
+
+    manager.destroy();
+  });
 });

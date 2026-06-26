@@ -494,6 +494,13 @@ export class NpcShipManager implements FlightModule {
    * separate garrison-aggro path above.
    */
   private resolveNpcVsNpcCombat(deltaTime: number): void {
+    // The active pause freezes the WHOLE fight — NPC-vs-NPC crossfire too, not
+    // just the player ship and the per-frame movement step above. Honour the
+    // single `combatPause.paused` signal directly (the same gate the movement
+    // advance uses) rather than depending on the scene folding pause into
+    // `isTurnRunning`, and bail BEFORE accruing the fire timer so unpause can't
+    // unleash a backed-up volley (the timer holds its pre-pause value).
+    if (this.deps.isPaused?.()) return;
     this.npcCrossfireTimer += deltaTime;
     if (this.npcCrossfireTimer < GAME_BALANCE.combatFireIntervalMs) return;
     this.npcCrossfireTimer = 0;
