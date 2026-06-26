@@ -11,12 +11,8 @@ import { helpFor } from "@/systems/onboarding/helpContent";
 import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
 import type { LandingDenialReason } from "@/systems/galaxy/landingAccess";
 import { formatGameDate, formatGameTimestamp } from "@/utils/gameCalendar";
-import {
-  currentFontSizeKey,
-  scaledFont,
-  setFontScale,
-  type FontSizeKey,
-} from "@/utils/fontScale";
+import { scaledFont } from "@/utils/fontScale";
+import { SettingsPanel, SETTINGS_PANEL_HEIGHT } from "../ui/SettingsPanel";
 import { GAME_BALANCE } from "@/config/balance";
 import { logger } from "@/utils/logger";
 import type { FlightModule } from "./FlightModule";
@@ -367,7 +363,10 @@ export class FlightHud implements FlightModule {
       this.gearButton.y = h - 162;
     }
     if (this.settingsPanel && this.gearButton) {
-      this.settingsPanel.y = this.gearButton.y - 48;
+      this.settingsPanel.y = Math.max(
+        8,
+        this.gearButton.y - SETTINGS_PANEL_HEIGHT - 4,
+      );
     }
 
     if (this.miniLogContainer) {
@@ -833,6 +832,17 @@ export class FlightHud implements FlightModule {
   }
 
   /** Toggle the font-size mini-panel (S / M / L). */
+  /**
+   * Toggle the unified settings panel (СКОРОСТЬ / ШРИФТ / НЕЙРОСЕТЬ). Each
+   * control writes through the shared `gameSettings` store; the live effects fan
+   * back through the {@link SettingsPanel} deps (DIP): a font pick restyles via
+   * {@link onFontScaleChange} (and closes the panel, since a font change rebuilds
+   * the HUD — playtest4 A), a speed pick goes through {@link selectGameSpeed}
+   * (keeps the bottom-right speed button + physics in lock-step), and the neural
+   * toggle flips the feature flag (Task 2 gate) with a confirming toast. The
+   * panel container is tracked as {@link settingsPanel} so the existing
+   * teardown / Esc-close / outside-click wiring is unchanged.
+   */
   private toggleSettingsPanel(): void {
     if (this.settingsPanel) {
       this.settingsPanel.destroy({ children: true });
@@ -840,87 +850,44 @@ export class FlightHud implements FlightModule {
       return;
     }
     if (!this.gearButton) return;
-    const panel = new Container();
-    panel.eventMode = "static";
-    panel.on("pointerdown", (e) => e.stopPropagation());
-    const panelW = 120;
-    const panelH = 44;
-    const panelX = this.gearButton.x;
-    const panelY = this.gearButton.y - panelH - 4;
 
-    const bg = new Graphics();
-    bg.roundRect(0, 0, panelW, panelH, 4).fill({
-      color: 0x0a1520,
-      alpha: 0.92,
-    });
-    bg.roundRect(0, 0, panelW, panelH, 4).stroke({ color: 0x334455, width: 1 });
-    panel.addChild(bg);
-
-    const active = currentFontSizeKey();
-    const sizes: FontSizeKey[] = ["S", "M", "L"];
-    const labels = ["A", "A", "A"];
-    const btnFontSizes = [scaledFont(14), scaledFont(18), scaledFont(22)];
-
-    sizes.forEach((key, i) => {
-      const isActive = key === active;
-      const btnX = 8 + i * 36;
-      const btnY = 6;
-      const btnW = 30;
-      const btnH = 32;
-
-      const btnBg = new Graphics();
-      btnBg.roundRect(btnX, btnY, btnW, btnH, 3).fill({
-        color: isActive ? 0x1a3048 : 0x0e1e2c,
-        alpha: 1,
-      });
-      if (isActive) {
-        btnBg.roundRect(btnX, btnY, btnW, btnH, 3).stroke({
-          color: 0x00ccff,
-          width: 1,
-        });
-      }
-      btnBg.eventMode = "none";
-      panel.addChild(btnBg);
-
-      const lbl = new Text({
-        text: labels[i],
-        style: {
-          fontFamily: "Courier New",
-          fontSize: btnFontSizes[i],
-          fill: isActive ? 0x00ccff : 0x88aacc,
-        },
-      });
-      lbl.anchor.set(0.5);
-      lbl.x = btnX + btnW / 2;
-      lbl.y = btnY + btnH / 2;
-      lbl.eventMode = "none";
-      panel.addChild(lbl);
-
-      const hit = new Graphics();
-      hit
-        .roundRect(btnX, btnY, btnW, btnH, 3)
-        .fill({ color: 0xffffff, alpha: 0.001 });
-      hit.eventMode = "static";
-      hit.cursor = "pointer";
-      hit.on("pointerdown", (event) => {
-        event.stopPropagation();
-        setFontScale(key);
+    const panel = new SettingsPanel({
+      speedTarget: this.gameEngine ?? {
+        gameSpeedMultiplier: GAME_BALANCE.gameSpeedDefault,
+      },
+      speedSteps: GAME_BALANCE.gameSpeedMultipliers,
+      applySpeed: (scale) => this.selectGameSpeed(scale),
+      applyFont: () => this.onFontScaleChange?.(),
+      onNeuralToggle: (on) =>
+        this.showMessage(
+          on ? "Нейросеть ИИ включена (эксперимент)" : "Нейросеть ИИ выключена",
+          on ? 0x00ccff : 0x99a8ba,
+        ),
+      onRequestClose: () => {
         if (this.settingsPanel) {
           this.settingsPanel.destroy({ children: true });
           this.settingsPanel = null;
         }
-        // Fan the change out to the scene, which restyles the text-bearing
-        // modules in place (no scene re-init, so the world doesn't flicker). The
-        // HUD never transitions the scene itself (playtest4 A, DIP).
-        this.onFontScaleChange?.();
-      });
-      panel.addChild(hit);
+      },
     });
+    const c = panel.container;
+    c.x = this.gearButton.x;
+    c.y = Math.max(8, this.gearButton.y - SETTINGS_PANEL_HEIGHT - 4);
+    this.uiLayer.addChild(c);
+    this.settingsPanel = c;
+  }
 
-    panel.x = panelX;
-    panel.y = panelY;
-    this.uiLayer.addChild(panel);
-    this.settingsPanel = panel;
+  /**
+   * Apply a game speed chosen in the settings panel: keep the bottom-right speed
+   * button's cycle index in sync with the picked step (so the next cycle-tap
+   * advances from the right place) and route through {@link applyGameSpeed} (HUD
+   * label + durable engine store + physics via {@link onSpeedCycle}).
+   */
+  private selectGameSpeed(scale: number): void {
+    const steps = GAME_BALANCE.gameSpeedMultipliers;
+    const idx = steps.findIndex((s) => s === scale);
+    if (idx >= 0) this.speedIndex = idx;
+    this.applyGameSpeed(scale);
   }
 
   /**

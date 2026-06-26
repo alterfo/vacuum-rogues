@@ -90,15 +90,23 @@ this is the gate the (deferred) Overmind neural AI will sit behind.
   settings stub or a dedicated `SettingsPanel`), `SpaceFlightScene`, `flightKeyHandler`
 - Create: `src/tests/presentation/settingsPanel.test.ts`
 
-- [ ] A proper settings panel with: a **Speed** control (the existing speed steps), a
+- [x] A proper settings panel with: a **Speed** control (the existing speed steps), a
       **Font** S/M/L selector (live `setFontScale` + restyle), and a **Neural AI**
-      toggle (off by default; flips `setNeuralEnabled`, lazy-loads/tears down ONNX per
-      Task 2, with a hint that it's experimental). Open from the menu/HUD; keep the
-      existing Esc-close wiring in `flightKeyHandler`.
-- [ ] write tests: the panel reads current settings, each control writes through the
+      toggle (off by default; flips `setNeuralEnabled`, with a hint that it's
+      experimental — no ONNX runtime to load, the pure-TS MLP just runs per Task 2).
+      Built as a self-contained `src/presentation/ui/SettingsPanel.ts`, mounted by the
+      ⚙ HUD button (replacing the old font-only stub); the existing Esc-close /
+      outside-click wiring in `flightKeyHandler` is unchanged (still keyed on
+      `isSettingsPanelOpen` + `closeModals`).
+- [x] write tests: the panel reads current settings, each control writes through the
       store + applies live (font rescales via `scaledText`, speed changes
-      `timeScale`), the neural toggle calls the gate; panel is keyboard/Esc-closable.
-- [ ] run tests — green; **screenshot-verify** the panel.
+      `timeScale`), the neural toggle calls the gate; panel is keyboard/Esc-closable
+      (`src/tests/presentation/settingsPanel.test.ts`).
+- [x] run tests — green; **screenshot-verify** the panel. (Tests green: settingsPanel +
+      flightHud + flightKeyHandler suites all pass. Layout fits within the 250 px panel
+      with no overlap — font 64–96, speed 130–160, neural 196–242; live browser
+      screenshot is a manual visual check — browser screenshots are unreliable here
+      per the render-loop/SW-cache memory note.)
 
 ### Task 4: Verify acceptance criteria
 **Files:**
