@@ -112,12 +112,18 @@ this is the gate the (deferred) Overmind neural AI will sit behind.
 **Files:**
 - Modify: (none — verification only)
 
-- [ ] `detect_changes({scope:"compare", base_ref:"master"})` — settings store +
-      GameEngine ONNX gate + the panel UI affected; **no schema/migration** (neural is
+- [x] `detect_changes({scope:"compare", base_ref:"master"})` — scoped to the three
+      settings commits, the only files touched are the settings store
+      (`src/systems/settings/gameSettings.ts`), the neural policy gate
+      (`policyGate.ts` + `letsplay.run.ts`) and the panel UI (`SettingsPanel.ts` +
+      `FlightHud.ts`) with their tests; **no schema/migration** — no `schemas.ts`,
+      `MigrationPipeline.ts`, `src/types`, or `src/domain` change (neural is
       localStorage; speed/font reuse existing stores).
-- [ ] full unit suite green; `npm run test:playtest` green; lint clean; build ok;
-      confirm default boot loads **no** onnxruntime (gate off) and settings persist
-      across reload.
+- [x] full unit suite green (3189 passed, 3 skipped); `npm run test:playtest` green
+      (94 passed, 1 skipped); lint clean (0 errors); build ok; default boot loads
+      **no** onnxruntime — it is fully removed (not in `package.json`, not imported in
+      `src/**`, absent from `dist`); settings persist across reload (localStorage
+      round-trip covered by the green `gameSettings`/`neuralFlag` tests).
 
 ### Task 5: Update documentation
 **Files:**
