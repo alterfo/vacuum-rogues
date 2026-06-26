@@ -54,6 +54,21 @@ import {
   commsContextFor,
   overmindGibberish,
 } from "@/systems/comms/commsOptions";
+import {
+  rollEncounter,
+  type Encounter,
+  type EncounterType,
+} from "@/systems/encounters/encounterGenerator";
+import {
+  resolveEncounter,
+  type EncounterChoice,
+  type EncounterOutcome,
+} from "@/systems/encounters/encounterOutcome";
+import {
+  applyEncounterOutcome,
+  encounterPlayerStateFor,
+  encounterSystemView,
+} from "@/systems/encounters/encounterFlight";
 import type { FlightModule } from "./FlightModule";
 
 /**
@@ -72,6 +87,48 @@ const DEFAULT_LOOT_MODULES = [
  * (see {@link NpcShipManager.handleInFlightDeath}).
  */
 const OVERMIND_CORE_ID = "overmind_core";
+
+/** Per-type copy + accent for the exploration-encounter prompt (Task 3). */
+const ENCOUNTER_PROMPT_COPY: Record<
+  EncounterType,
+  { title: string; desc: string; engageLabel: string; color: number }
+> = {
+  derelict: {
+    title: "ОБЛОМОК КОРАБЛЯ",
+    desc: "Дрейфующий корпус судна.\nПристыковаться и обыскать его?",
+    engageLabel: "[ Обыскать ]",
+    color: 0xffaa33,
+  },
+  anomaly: {
+    title: "АНОМАЛИЯ",
+    desc: "Странное пространственное возмущение.\nПросканировать его?",
+    engageLabel: "[ Сканировать ]",
+    color: 0x33ddff,
+  },
+  distress: {
+    title: "СИГНАЛ SOS",
+    desc: "Кто-то зовёт на помощь.\nОткликнуться на сигнал бедствия?",
+    engageLabel: "[ Откликнуться ]",
+    color: 0x66ff88,
+  },
+};
+
+/** Toast colour for a resolved encounter: good green, bad red, neutral grey. */
+function encounterOutcomeColor(kind: EncounterOutcome["kind"]): number {
+  switch (kind) {
+    case "salvage":
+    case "bonus":
+    case "rescue":
+      return 0x66ff88;
+    case "trap":
+    case "ambush":
+    case "hazard":
+      return 0xff5555;
+    case "ignored":
+    default:
+      return 0xaaaaaa;
+  }
+}
 
 /**
  * Live state the manager reads from (or pushes back to) the host scene without
@@ -167,6 +224,12 @@ export class NpcShipManager implements FlightModule {
   private npcContactPanel: NpcContactPanel | null = null;
   private contactNpcId: string | null = null;
   private overmindOverlay: Container | null = null;
+  // Exploration-encounter prompt overlay (derelict/anomaly/distress) + the
+  // encounter it is presenting; transient, ephemeral (no save state).
+  private encounterOverlay: Container | null = null;
+  private activeEncounter: Encounter | null = null;
+  // Bumps the per-entry encounter seed so a re-roll within a system varies.
+  private encounterRollCount = 0;
   // Last camera zoom fanned out by the scene (updateHitAreas). Applied to
   // newly spawned sprites too — otherwise a ship arriving while the player is
   // zoomed out keeps its default 40-world-px hit circle (~10 screen px at
@@ -292,6 +355,9 @@ export class NpcShipManager implements FlightModule {
     // and pursues the player (combat resolves in-flight, not via CombatScene).
     this.applyGarrisonAggro();
     logger.info(`Created ${this.npcSprites.length} NPC sprites`);
+    // Spice the entry with a random exploration encounter (derelict/anomaly/
+    // distress). Skipped when the OVERMIND-core prompt already owns the screen.
+    this.maybeShowEntryEncounter();
   }
 
   /** Advance NPC movement only while the world is running (turn-based). */
@@ -514,6 +580,13 @@ export class NpcShipManager implements FlightModule {
       }
       this.overmindOverlay = null;
     }
+    if (this.encounterOverlay) {
+      if (!this.encounterOverlay.destroyed) {
+        this.encounterOverlay.destroy({ children: true });
+      }
+      this.encounterOverlay = null;
+      this.activeEncounter = null;
+    }
   }
 
   /**
@@ -529,6 +602,16 @@ export class NpcShipManager implements FlightModule {
       this.overmindOverlay.destroy({ children: true });
       this.overmindOverlay = null;
       this.showOvermindCorePrompt();
+    }
+    // Rebuild the open encounter prompt at the new size (it holds scaledFont text).
+    if (this.activeEncounter && this.encounterOverlay) {
+      const enc = this.activeEncounter;
+      if (!this.encounterOverlay.destroyed) {
+        this.encounterOverlay.destroy({ children: true });
+      }
+      this.encounterOverlay = null;
+      this.activeEncounter = null;
+      this.showEncounterPrompt(enc);
     }
   }
 
@@ -596,7 +679,16 @@ export class NpcShipManager implements FlightModule {
 
   /** True while a panel the manager owns should swallow outside-clicks. */
   hasOpenModal(): boolean {
-    return this.npcContactPanel !== null || this.overmindOverlay !== null;
+    return (
+      this.npcContactPanel !== null ||
+      this.overmindOverlay !== null ||
+      this.encounterOverlay !== null
+    );
+  }
+
+  /** True while the exploration-encounter prompt is open (Escape close-chain). */
+  get isEncounterPromptOpen(): boolean {
+    return this.encounterOverlay !== null;
   }
 
   /** True while the NPC contact panel is open (for the Escape close-chain). */
@@ -621,6 +713,7 @@ export class NpcShipManager implements FlightModule {
         if (!ov.destroyed) ov.destroy({ children: true });
       });
     }
+    this.closeEncounterPrompt();
   }
 
   /**
@@ -1936,6 +2029,251 @@ export class NpcShipManager implements FlightModule {
     this.deps.startInFlightCombat?.(sprite);
     this.deps.selectCombatTarget?.(sprite);
     this.deps.showMessage("Ядро OVERMIND вступает в бой!", 0xff2200);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Exploration encounters (derelict / anomaly / distress) — Task 3 wiring
+  // ---------------------------------------------------------------------------
+
+  /** True while the manager is engaged in an in-flight fight (test/Escape seam). */
+  get inCombat(): boolean {
+    return this.deps.isInCombat?.() ?? false;
+  }
+
+  /**
+   * Roll a random exploration encounter for this system entry and, if one fires,
+   * present its choice prompt. No-op when an OVERMIND-core or encounter overlay
+   * already owns the screen, or before the galaxy/player are wired.
+   */
+  private maybeShowEntryEncounter(): void {
+    if (this.overmindOverlay || this.encounterOverlay) return;
+    const encounter = this.rollEntryEncounter();
+    if (encounter) this.showEncounterPrompt(encounter);
+  }
+
+  /**
+   * Pure roll seeded by (system, day, roll-count): a given entry is
+   * deterministic/replay-stable, yet a re-entry on a later day differs. Reads the
+   * live galaxy danger + player progression. Returns null when nothing fires.
+   */
+  private rollEntryEncounter(): Encounter | null {
+    const galaxy = this.gameEngine?.galaxy;
+    const player = this.gameEngine?.player;
+    if (!galaxy || !player) return null;
+    // Defensive: a lightweight host/test galaxy/player may not implement the
+    // danger/rep surface the pure helpers read — skip the roll rather than throw.
+    if (
+      typeof galaxy.isOvermindSystem !== "function" ||
+      typeof player.getReputation !== "function"
+    ) {
+      return null;
+    }
+    const systemId = player.currentSystemId;
+    const seed = `${systemId}:${galaxy.gameDays}:${this.encounterRollCount++}`;
+    return rollEncounter(
+      encounterSystemView(galaxy, systemId),
+      seed,
+      encounterPlayerStateFor(player),
+    );
+  }
+
+  /**
+   * Resolve the player's response to a presented encounter and apply it through
+   * the existing seams: credits/cargo/rep via {@link applyEncounterOutcome}, and
+   * a trap/ambush's combat by spawning a hostile into the in-flight CombatModule.
+   * `rng` is injectable so a test can drive a specific branch. Returns the outcome.
+   */
+  applyEncounterChoice(
+    encounter: Encounter,
+    choice: EncounterChoice,
+    rng?: () => number,
+  ): EncounterOutcome {
+    const outcome = rng
+      ? resolveEncounter(encounter, choice, rng)
+      : resolveEncounter(encounter, choice);
+    const player = this.gameEngine?.player;
+    const galaxy = this.gameEngine?.galaxy;
+    if (player && galaxy) {
+      applyEncounterOutcome(
+        { bank: this.gameEngine?.bank, player, galaxy },
+        encounter,
+        outcome,
+      );
+    }
+    if (outcome.startCombat) this.spawnEncounterAmbush(encounter);
+    this.deps.showMessage(
+      this.encounterOutcomeMessage(outcome),
+      encounterOutcomeColor(outcome.kind),
+    );
+    return outcome;
+  }
+
+  /** Russian toast for a resolved outcome (the resolver's `message` is English). */
+  private encounterOutcomeMessage(outcome: EncounterOutcome): string {
+    const credits = outcome.credits ?? 0;
+    switch (outcome.kind) {
+      case "salvage":
+        return `Обломок обчищен: +${credits} кр.`;
+      case "trap":
+        return "Это была ловушка — враги открывают огонь!";
+      case "bonus":
+        return `Аномалия просканирована: +${credits} кр.`;
+      case "hazard":
+        return `Аномалия повредила системы: ${credits} кр.`;
+      case "rescue":
+        return `Экипаж спасён: +${credits} кр. и доброе имя.`;
+      case "ambush":
+        return "Сигнал SOS оказался засадой!";
+      case "ignored":
+      default:
+        return "Вы уходите, не вмешиваясь.";
+    }
+  }
+
+  /**
+   * Spawn the hostile a trap/ambush spills into and open in-flight combat with
+   * it (mirrors {@link spawnOvermindCoreCombatant} but a plain pirate). Registered
+   * in the domain galaxy so a day-boundary refresh can't despawn it mid-fight.
+   */
+  private spawnEncounterAmbush(encounter: Encounter): void {
+    const systemId = this.gameEngine?.player?.currentSystemId ?? "";
+    const id = `enc-ambush:${encounter.id}`;
+    if (this.npcSprites.some((s) => s.npc.id === id)) return;
+    const rng = new SeededRNG(id);
+    const foe = this.npcSimulator.spawnPirateInSystem(rng, id, systemId);
+    foe.name = encounter.type === "distress" ? "Засада" : "Ловушка";
+    foe.markHostile();
+    const galaxy = this.gameEngine?.galaxy;
+    if (galaxy) galaxy.npcShips.push(foe);
+    this.addNpcSprite(foe, true);
+    const sprite = this.npcSprites.find((s) => s.npc.id === id);
+    if (!sprite) return;
+    sprite.setAggressive(true);
+    this.deps.startInFlightCombat?.(sprite);
+    this.deps.selectCombatTarget?.(sprite);
+  }
+
+  /** Tear down the encounter prompt overlay (idempotent). */
+  closeEncounterPrompt(): void {
+    if (!this.encounterOverlay) return;
+    const ov = this.encounterOverlay;
+    this.encounterOverlay = null;
+    this.activeEncounter = null;
+    // Guard: a scene transition's clearUILayer() may already have destroyed it.
+    queueMicrotask(() => {
+      if (!ov.destroyed) ov.destroy({ children: true });
+    });
+  }
+
+  /**
+   * Present the two-choice prompt for a rolled encounter (engage / leave). A
+   * lightweight overlay reusing the OVERMIND-core prompt's layout — engaging runs
+   * {@link applyEncounterChoice}; leaving resolves it as the neutral `ignored`.
+   */
+  showEncounterPrompt(encounter: Encounter): void {
+    if (!this.gameEngine) return;
+    this.closeEncounterPrompt();
+    this.activeEncounter = encounter;
+    const copy = ENCOUNTER_PROMPT_COPY[encounter.type];
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+
+    const overlay = new Container();
+    this.encounterOverlay = overlay;
+    const bg = new Graphics();
+    bg.roundRect(width / 2 - 240, height / 2 - 110, 480, 220, 6).fill({
+      color: 0x000000,
+      alpha: 0.85,
+    });
+    // Swallow clicks on the panel so they don't bubble to the route handler.
+    bg.eventMode = "static";
+    bg.on("pointerdown", (e) => e.stopPropagation());
+
+    const border = new Graphics();
+    border
+      .roundRect(width / 2 - 240, height / 2 - 110, 480, 220, 6)
+      .stroke({ width: 2, color: copy.color });
+
+    const title = new Text({
+      text: copy.title,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(20),
+        fill: copy.color,
+        fontWeight: "bold",
+      },
+    });
+    title.anchor.set(0.5);
+    title.x = width / 2;
+    title.y = height / 2 - 80;
+    title.eventMode = "none";
+
+    const desc = new Text({
+      text: copy.desc,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(14),
+        fill: 0xcccccc,
+        align: "center",
+      },
+    });
+    desc.anchor.set(0.5);
+    desc.x = width / 2;
+    desc.y = height / 2 - 30;
+    desc.eventMode = "none";
+
+    const engageBtn = this.buildEncounterButton(
+      copy.engageLabel,
+      copy.color,
+      () => {
+        this.closeEncounterPrompt();
+        this.applyEncounterChoice(encounter, "engage");
+      },
+    );
+    engageBtn.x = width / 2 - 200;
+    engageBtn.y = height / 2 + 40;
+
+    const leaveBtn = this.buildEncounterButton("[ Уйти ]", 0x4488ff, () => {
+      this.closeEncounterPrompt();
+      this.applyEncounterChoice(encounter, "ignore");
+    });
+    leaveBtn.x = width / 2 + 20;
+    leaveBtn.y = height / 2 + 40;
+
+    overlay.addChild(bg, border, title, desc, engageBtn, leaveBtn);
+    this.uiLayer.addChild(overlay);
+  }
+
+  /** Build one labelled prompt button wired to `onPress` (stops propagation). */
+  private buildEncounterButton(
+    label: string,
+    color: number,
+    onPress: () => void,
+  ): Container {
+    const btn = new Container();
+    const g = new Graphics();
+    g.roundRect(0, 0, 180, 36, 4)
+      .fill({ color: 0x111820 })
+      .stroke({ width: 1, color });
+    const text = new Text({
+      text: label,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(14),
+        fill: color,
+      },
+    });
+    text.x = 8;
+    text.y = 9;
+    text.eventMode = "none";
+    btn.addChild(g, text);
+    btn.eventMode = "static";
+    btn.cursor = "pointer";
+    btn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      onPress();
+    });
+    return btn;
   }
 
   /** Show a prompt when entering the OVERMIND core system so the player can fight the final encounter. */

@@ -53,11 +53,11 @@ loot + reward seams.
 **Files:**
 - Modify: `SpaceFlightScene`/`NpcShipManager`; a small encounter prompt (reuse contact panel)
 
-- [ ] On system entry/flight tick, `rollEncounter`; present a small choice prompt; apply
+- [x] On system entry/flight tick, `rollEncounter`; present a small choice prompt; apply
       `resolve` via banking/cargo/rep seams; route `startCombat` through `CombatModule`.
-- [ ] write tests (real-engine playtest): an encounter fires, a choice applies the payoff,
+- [x] write tests (real-engine playtest): an encounter fires, a choice applies the payoff,
       an ambush starts a fight; zero logged errors.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 4: Verify + balance + docs
 - [ ] full suite + `test:playtest` green; lint/build ok; tune rates/payoffs in `balance.ts`;
