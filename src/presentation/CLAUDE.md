@@ -16,6 +16,19 @@ PlanetInfoPanel, NpcContactPanel, DialogueScene, WinScene, MainMenuScene, System
 (Flight modules that already read `scaledFont` — FlightHud, PlanetManager, DamageNumbers, UiButton,
 PlanetScene — don't need it; for the in-flight restyle-in-place rule see `flight/playtest-traps.md`.)
 
+**Responsive layout + touch targets go through `ui/responsiveLayout.ts`** (mobile adaptation,
+`docs/plans/20260625-mobile-adaptation.md`). `layoutFor({width,height})` is the **pure**
+viewport classifier → `{mode: 'desktop'|'tablet'|'phone', uiScale, minTarget, touch}`, bucketed on
+the **shorter** side at the soft-gate's 768/1024 breakpoints — panels read it for reflow/scale
+instead of hard-coding their own. The touch *capability* gate is separate: `isTouchLayoutActive(env?)`
+= touch layout **and** a coarse primary pointer, the **single source of truth** so a narrow desktop
+window never gets touch chrome. `touchHitArea(w, h, env?)` grows + re-centres a hit rect to
+`minTarget` (44 px) on a touch layout and returns exact `{0,0,w,h}` otherwise — already wired into
+the **shared** `UiButton`, so every panel's buttons get comfortable targets at once with **no desktop
+change** (the `uiButtonHitArea.test.ts` exact-bounds contract still holds on desktop/Node). The
+on-screen flight touch controls (pinch-zoom + «✕» cancel) read the same `isTouchLayoutActive` gate —
+see `flight/CLAUDE.md`.
+
 **Station markers render sprite-or-diamond** (`flight/PlanetManager.createStations`).
 Each off-planet base resolves a per-type sprite via `stationSpriteKey(type, id)`
 (`flight/stationArt.ts`): `STATION_TEXTURE_PREFIX` maps every `StationType` to an

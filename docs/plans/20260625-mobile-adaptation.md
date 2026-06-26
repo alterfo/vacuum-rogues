@@ -116,8 +116,15 @@ lands.
       `npm run lint` 0 errors, `npm run build` clean.)
 
 ### Task 5: Documentation
-- [ ] Document the responsive helper + touch interpreter + on-screen controls, and the
-      desktop-untouched guarantee.
+- [x] Document the responsive helper + touch interpreter + on-screen controls, and the
+      desktop-untouched guarantee. (Added a canonical **"### Mobile Adaptation (Responsive
+      Layout + Touch Controls)"** section to root `CLAUDE.md` (after Soft Mobile Gate) covering
+      `responsiveLayout.ts` / `touchGestures.ts` / `flightTouchControls.ts` + the FlightHud «✕»
+      button and the byte-for-byte-unchanged-desktop guarantee; plus area-focused notes in
+      `src/presentation/CLAUDE.md` (responsive layout + `touchHitArea`/`UiButton`/
+      `isTouchLayoutActive` single gate) and `src/presentation/flight/CLAUDE.md` (touch flight
+      controls, "don't re-implement the route guards in the touch controller"). Docs-only — no
+      code/test impact; doc text verified against the actual sources.)
 
 ## Post-Completion
 **Manual:** play a full loop on a real phone (portrait + landscape) and a tablet — flight,

@@ -22,6 +22,21 @@ contact/quest-journal/planet-info/settings panel is open (mirrors the mouse-clic
 builds `ctx` from live scene members; the extraction keeps the controller under the 1900-line
 guard. Unit-tested standalone in `flightKeyHandler.test.ts`).
 
+**Touch flight controls are additive and gated — the mouse path is byte-for-byte unchanged**
+(`docs/plans/20260625-mobile-adaptation.md` Phase 2). The pure `touchGestures.ts`
+(`TouchGestureInterpreter`, the touch sibling of the mouse-only `PanZoomController`, sharing its
+`DRAG_THRESHOLD`) folds a pointer stream into pan/pinch/tap intents; `flightTouchControls.ts`
+(`FlightTouchController`) is the narrow scene seam that forwards only **touch** pointers and only on
+a real touch layout (`isTouchLayoutActive()` from `ui/responsiveLayout.ts`). One-finger taps stay on
+the **existing** route/target path (a touch already fires a `button:0` pointerdown/up — tap-to-route
+and tap-to-target need no new code); the *second* finger flips into pinch mode (the scene drops the
+planned route) and pinch moves drive `CameraController.zoomByFactor(scale, anchorX, anchorY)` about
+the finger midpoint. The keyboard-only **Esc/cancel** gets a touch-only «✕» `UiButton` in
+`FlightHud` (built only when `isTouchLayoutActive()`) that runs the *exact* Esc action
+(`SpaceFlightScene.onKeyDown({key:"Escape"})`). Mouse events and non-touch layouts early-return in
+every controller method (`pointerType !== "touch"` ⇒ no-op), so the desktop path is untouched. Do
+**not** re-implement the route guards in the touch controller — it only ever adds pinch-zoom.
+
 In-flight combat is **real-time only** — there is no hex combat scene. The legacy `CombatScene`
 (and `SceneType.COMBAT`) was deleted; **every** fight resolves in-flight, including the
 OVERMIND-core boss and former scripted text-quest encounters. An aggressive NPC closing inside
