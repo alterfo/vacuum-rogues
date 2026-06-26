@@ -49,10 +49,15 @@ by an agent actually playing.
 **Files:**
 - Modify: `lefthook.yml` / CI workflow, `package.json`
 
-- [ ] Add `letsplay:ci` to the pre-push/CI gate (after `test:playtest`); set initial
+- [x] Add `letsplay:ci` to the pre-push/CI gate (after `test:playtest`); set initial
       thresholds with headroom; document how to update bands when balance intentionally
-      changes.
-- [ ] verify the gate runs in CI and is reproducible.
+      changes. (`lefthook.yml` `letsplay-ci` pre-push command after `playtest`;
+      `.github/workflows/letsplay-ci.yml` CI workflow; thresholds = hard-faults-zero +
+      measured-empty balance bands left unscored — rebaseline procedure documented in
+      `DEFAULT_CI_THRESHOLDS` + `LETSPLAY_ENGINE.md`.)
+- [x] verify the gate runs in CI and is reproducible. (Verified locally:
+      `npm run letsplay:ci` passes, runs in ~2 s; same seed → identical metrics across
+      repeated runs. GitHub CI execution observable on push — workflow wired.)
 
 ### Task 4: Automated oddity / asset / visual-sameness assertions
 **Files:**

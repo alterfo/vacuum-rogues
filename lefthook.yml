@@ -36,6 +36,15 @@ pre-push:
     # (which mock the seams) can't catch. See docs/plans/20260623-real-engine-playtest-harness.md.
     playtest:
       run: npm run test:playtest
+    # Letsplay CI oracle (Vitest, fast ~2–3 s): an agent *plays the real game*
+    # for K seeded sessions × N steps and the run fails on any crash, soft-lock,
+    # always-actionable-invariant breach, or out-of-band balance signal. Catches
+    # regressions that pass the unit suite but break the real loop (combat not
+    # firing, a stranded player, a profit printer). Deterministic — a failure
+    # reproduces locally from the printed seed. Slots beside test:playtest.
+    # See docs/plans/20260625-letsplay-ci-oracle.md.
+    letsplay-ci:
+      run: npm run letsplay:ci
     # Save-compatibility safety net (Vitest, fast ~2 s): replays the frozen
     # golden-save corpus (incl. genuinely old versions) through validate →
     # migrate → re-validate → engine load, and asserts load-time loadout

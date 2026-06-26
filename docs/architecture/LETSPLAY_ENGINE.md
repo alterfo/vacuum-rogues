@@ -153,6 +153,43 @@ the same belief block the teacher used), the heuristic stays the default everywh
 and nothing reaches the prod bundle. Parity between the PyTorch export and the pure-TS
 forward pass is pinned by `weightsContract.test.ts` (within `1e-5`).
 
+## Oracle — the CI regression + balance gate (`letsplay:ci`)
+
+The agent doubles as a **CI oracle**: every push/PR (and pre-push) plays `K` seeded
+sessions × `N` steps on the real engine and **fails the build** on any crash, soft-lock,
+always-actionable-invariant breach, or out-of-band balance signal — the regressions that
+slip past the 2600-test unit suite but break the real loop
+(`docs/plans/20260625-letsplay-ci-oracle.md`).
+
+| Layer | File | Role |
+|-------|------|------|
+| Session metrics | `sessionMetrics.ts` | Pure: folds one session's raw signals (errors, invariant breaches, the action transcript, an optional vitals series) into `SessionMetrics`, rolls `K` of them into the cross-session `RunMetrics`, and `evaluate(run, thresholds)` scores it → `{ ok, reasons }`. Hard faults (errors/soft-locks/vital invariants) default to a **zero** ceiling; balance bands are **optional** and skipped when omitted or value-less, so an unbaselined band never spuriously fails. |
+| CI verdict | `ci.run.ts` | `runLetsplayCi(opts)` plays the real sessions and `evaluate`s them; `evaluateLetsplayRun(report)` is the **pure** verdict over a (real *or* synthetic) report, so the gate's pass/fail logic is unit-testable without an engine. `formatCiResult` renders the verdict + every breach for triage. `DEFAULT_CI_THRESHOLDS` = hard-faults-zero. |
+| Entry point | `ci.run.test.ts` | `npm run letsplay:ci` (sets `LETSPLAY_CI=1`) plays the full gate; `LETSPLAY_CI_SESSIONS`/`LETSPLAY_CI_STEPS` override the `K`/`N` defaults (3×40). Determinism: each session is seeded `"LETSPLAY_CI-<i>"`, so a CI failure reproduces locally from the same seed. |
+
+**Wired into CI** beside the playtest harness: the `letsplay-ci` **pre-push** command
+(`lefthook.yml`) and the **`letsplay-ci` CI workflow** (`.github/workflows/letsplay-ci.yml`,
+on push/PR to master/main/develop) both run `npm run letsplay:ci` — a distinct, named signal
+so a loop-breaking change fails here, not in a beta-tester's browser.
+
+**Thresholds & rebaselining (read before tuning a band).** The default gate is
+**hard-faults-zero + unscored balance bands** — and that is the *measured* baseline, not a
+TODO. At the bounded headless budget the galaxy day never advances during flight
+(`VitalsSample.day = galaxy.gameDays` stays 0 ⇒ `creditsPerDay` is `null`) and the dumb
+heuristic never upgrades a hull (`daysToFirstUpgrade` is `null`); survival is a flat 100%. So
+credits/day, days-to-upgrade, survival, and upgrade-rate **produce no value** to score, and
+scoring a band around a never-produced value is a no-op. To rebaseline once a richer policy
+or a larger budget makes a signal real:
+
+1. Run `npm run letsplay:ci` (optionally bump `LETSPLAY_CI_SESSIONS`/`LETSPLAY_CI_STEPS`) and
+   read the printed `balance:` line.
+2. Set the band to the observed mean ± **generous headroom** in `DEFAULT_CI_THRESHOLDS`
+   (`creditsPerDayBand: { min, max }`, `maxAvgDaysToFirstUpgrade`, `minSurvivalRate`,
+   `minUpgradeRate`).
+3. When a **deliberate** balance tune (a `balance.ts` change) moves the baseline, re-measure
+   and widen/shift the band **in the same change** — the new economics should be the intended
+   band, never a surprise red. Never tighten a band to chase a single-seed outlier.
+
 ## Autopilot — watch the agent play the *live, rendered* game (dev-only)
 
 Where the headless harness above plays the engine as fast as a test loop can drive it, the

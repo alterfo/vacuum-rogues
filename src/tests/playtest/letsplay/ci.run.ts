@@ -41,13 +41,31 @@ import {
 } from "./sessionMetrics";
 
 /**
- * Default CI bands. Hard faults are gated at a hard **zero** (a crash, a stranded
- * player, or a corrupt vital is never acceptable). The balance bands
- * (credits/day, days-to-upgrade, survival, upgrade-rate) are deliberately left
- * **unscored** here — they are baselined with headroom in Task 3 once the
- * heuristic agent's real distribution is measured. Until then an unbaselined band
- * must never spuriously fail the gate, which is exactly how the metrics layer
- * treats an omitted threshold.
+ * Default CI bands — the gate the pre-push `letsplay-ci` command and the
+ * `letsplay-ci` CI workflow score against. Hard faults are gated at a hard
+ * **zero** (a crash, a stranded player, or a corrupt vital is never acceptable);
+ * these are strict by design and need no headroom.
+ *
+ * The **balance bands** (credits/day, days-to-upgrade, survival, upgrade-rate)
+ * are deliberately left **unscored**. Task 3 measured the heuristic agent's real
+ * distribution at the bounded headless budget (`letsplay:ci`, default 3×40, also
+ * verified at 4×150) and found that **none of them produce a value**: the galaxy
+ * day never advances during headless flight (`VitalsSample.day = galaxy.gameDays`
+ * stays 0, so `creditsPerDay` is `null`) and the dumb heuristic never upgrades a
+ * hull (`daysToFirstUpgrade` is `null`); survival is a flat 100%. Scoring a band
+ * around a never-produced value is a no-op, and the metrics layer already skips an
+ * omitted/`null`-valued band rather than spuriously failing — so the honest
+ * baseline is hard-faults-zero + unscored balance.
+ *
+ * **Rebaselining a band (when balance intentionally changes):** once a richer
+ * policy or a larger step/day budget makes a signal produce values, run
+ * `npm run letsplay:ci` (optionally bump `LETSPLAY_CI_SESSIONS`/`LETSPLAY_CI_STEPS`),
+ * read the printed `balance:` line ({@link formatCiResult}), and set the band to
+ * the observed mean ± generous headroom — e.g. `creditsPerDayBand: { min, max }`
+ * or `maxAvgDaysToFirstUpgrade` / `minSurvivalRate` / `minUpgradeRate`. When a
+ * deliberate balance tune moves the baseline, re-measure and widen/shift the band
+ * in the **same** change so the new economics is the intended band, not a
+ * surprise red. Never tighten a band to chase noise from a single seed.
  */
 export const DEFAULT_CI_THRESHOLDS: MetricsThresholds = {
   maxErrors: 0,

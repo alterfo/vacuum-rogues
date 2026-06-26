@@ -1,0 +1,37 @@
+name: Letsplay Oracle
+
+# Letsplay CI oracle (Vitest, fast ~2-3 s). An agent *plays the real game* —
+# K seeded sessions x N steps on the real GameEngine — and the run fails on any
+# crash, soft-lock, always-actionable-invariant breach, or out-of-band balance
+# signal. This catches regressions that pass the 2600-test unit suite but break
+# the real loop (combat not firing, a stranded player, a profit printer), the
+# exact gap a unit test that mocks the seam cannot see. Deterministic: each
+# session is seeded "LETSPLAY_CI-<i>", so a CI failure reproduces locally from
+# the same seed. A distinct, named CI signal beside the playtest harness.
+# See docs/plans/20260625-letsplay-ci-oracle.md.
+
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main, develop]
+
+jobs:
+  letsplay-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run letsplay CI oracle
+        run: npm run letsplay:ci
