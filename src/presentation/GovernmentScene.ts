@@ -8,6 +8,8 @@ import { SceneType, QuestType } from "@/types";
 import { logger } from "@/utils/logger";
 import { JobBoardPanel } from "./JobBoardPanel";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
+import { factionColor as resolveFactionColor } from "./ui/palette";
+import { Faction } from "@/types/faction";
 import {
   governorOfferLine,
   type GeneratedQuest,
@@ -63,16 +65,6 @@ const FACTION_RU: Record<string, string> = {
   PROGRESSORS: "Прогрессоры",
   INDEPENDENT: "Независимая",
   OVERMIND: "Сверхразум",
-};
-
-const FACTION_COLOR: Record<string, number> = {
-  OUTLANDERS: 0xff6600,
-  BASTIONS: 0xcc2222,
-  SYNDICATE: 0x22cc22,
-  PARADOXES: 0xaa22cc,
-  PROGRESSORS: 0x2266ff,
-  INDEPENDENT: 0x999999,
-  OVERMIND: 0xff22cc,
 };
 
 const ECONOMY_RU: Record<string, string> = {
@@ -164,7 +156,7 @@ export class GovernmentScene extends GameScene {
     const system = this.findSystem();
     const faction = system?.ownerFaction ?? "INDEPENDENT";
     const factionName = FACTION_RU[faction] ?? faction;
-    const factionColor = FACTION_COLOR[faction] ?? 0x999999;
+    const factionColor = resolveFactionColor(faction as Faction);
     const economyLabel = ECONOMY_RU[system?.economyType ?? ""] ?? "—";
     const politicalLabel = POLITICAL_RU[system?.politicalSystem ?? ""] ?? "—";
     const population = this.planet

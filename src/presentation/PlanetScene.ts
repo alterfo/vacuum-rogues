@@ -26,6 +26,8 @@ import { pickVariantKey, panoramaTex, tex, loadTextureAsync } from "./textures";
 import { scaledFont } from "@/utils/fontScale";
 import { tintFromSeed } from "@/utils/instanceTint";
 import { UiButton, type ButtonAccent } from "./ui/UiButton";
+import { factionColor as resolveFactionColor } from "./ui/palette";
+import { Faction } from "@/types/faction";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
 
@@ -150,16 +152,6 @@ const FACTION_RU: Record<string, string> = {
   PROGRESSORS: "Прогрессоры",
   INDEPENDENT: "Независимая",
   OVERMIND: "Сверхразум",
-};
-
-const FACTION_COLOR: Record<string, number> = {
-  OUTLANDERS: 0xff6600,
-  BASTIONS: 0xcc2222,
-  SYNDICATE: 0x22cc22,
-  PARADOXES: 0xaa22cc,
-  PROGRESSORS: 0x2266ff,
-  INDEPENDENT: 0x999999,
-  OVERMIND: 0xff22cc,
 };
 
 const FACTION_PANORAMA: Record<string, string> = {
@@ -889,7 +881,7 @@ export class PlanetScene extends GameScene {
     );
     const faction = system?.ownerFaction ?? "INDEPENDENT";
     const factionName = FACTION_RU[faction] ?? faction;
-    const factionColor = FACTION_COLOR[faction] ?? 0x999999;
+    const factionColor = resolveFactionColor(faction as Faction);
 
     // Panoramic background: per-planet generated surface (surfaces/<biome>_NN)
     // when available, else the shared type/faction panorama. Lazy-loaded.
@@ -1283,7 +1275,7 @@ export class PlanetScene extends GameScene {
 
     const faction = system?.ownerFaction ?? "INDEPENDENT";
     const factionName = FACTION_RU[faction] ?? faction;
-    const factionColor = FACTION_COLOR[faction] ?? 0x999999;
+    const factionColor = resolveFactionColor(faction as Faction);
 
     const rep = this.gameEngine.player?.reputation[faction] ?? 0;
     const repLabel = getRepLabel(rep);
