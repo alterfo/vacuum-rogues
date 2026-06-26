@@ -137,6 +137,16 @@ export class GameEngine {
   // FlightHud.restoreGameSpeed() on every HUD (re)build. Deliberately NOT in
   // SaveState/schemas.ts (transient cross-scene state, like lastFlightShipPos).
   public gameSpeedMultiplier = 1;
+  // Transient: ids of exploration encounters already OFFERED this session. The
+  // roll is deterministic by (system, day), and the flight scene re-rolls on
+  // EVERY entry (land→take-off, star-map round trip, in-session reload) without
+  // advancing the day — so without this guard the identical encounter re-fires
+  // and a good salvage could be re-claimed for free credits/cargo. Each
+  // `enc:<sys>:<sys>:<day>` id is offered at most once per session. Deliberately
+  // NOT in SaveState/schemas.ts (ephemeral cross-scene state, like
+  // liveFlightShipPos — the plan's "no save change" choice); cleared on «Новая
+  // игра» so a fresh game never inherits the prior game's offers.
+  public readonly offeredEncounterIds = new Set<string>();
   /** Called when a quest expires mid-session so the HUD can show a toast. */
   public questExpiryCallback?: (message: string) => void;
   /** Called when a quest moves to pending-return state so the HUD can show a toast. */
@@ -1958,6 +1968,7 @@ export class GameEngine {
     this.bankingService.resetLedger();
     this.flightShipPos = null;
     this.lastFlightShipPos = null;
+    this.offeredEncounterIds.clear();
     const seed = `SR_${Date.now()}`;
     this.galaxy = await this.galaxyService.generate(seed, 30);
     logger.info(`Generated default game state with seed: ${seed}`);

@@ -2051,7 +2051,18 @@ export class NpcShipManager implements FlightModule {
     // space is exactly where encounters fire most often).
     if (this.inCombat || this.overmindOverlay || this.encounterOverlay) return;
     const encounter = this.rollEntryEncounter();
-    if (encounter) this.showEncounterPrompt(encounter);
+    if (!encounter) return;
+    // The roll is deterministic by (system, day) and initialize() runs on every
+    // entry into a fresh flight scene (land→take-off, star-map round trip,
+    // in-session reload) WITHOUT advancing the day. Offer each (system, day)
+    // encounter at most once per session, else the identical encounter re-fires
+    // and a good salvage is re-claimable for free credits/cargo.
+    const offered = this.gameEngine?.offeredEncounterIds;
+    if (offered) {
+      if (offered.has(encounter.id)) return;
+      offered.add(encounter.id);
+    }
+    this.showEncounterPrompt(encounter);
   }
 
   /**

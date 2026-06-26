@@ -6,6 +6,12 @@ import type { NpcShipManagerDeps } from "@/presentation/flight/NpcShipManager";
 import { CombatModule } from "@/presentation/flight/CombatModule";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import type { Encounter, EncounterType } from "@/systems/encounters/encounterGenerator"; // prettier-ignore
+import { rollEncounter } from "@/systems/encounters/encounterGenerator";
+import {
+  encounterSystemView,
+  encounterPlayerStateFor,
+} from "@/systems/encounters/encounterFlight";
+import { ENCOUNTER_CONFIG } from "@/config/balance";
 
 /**
  * Task 3 (exploration-encounters): the pure generator/resolver wired into the
@@ -165,6 +171,46 @@ describe("Exploration encounters over the real engine (Task 3)", () => {
     expect(outcome.kind).toBe("ignored");
     expect(player.credits).toBe(before);
     expect(combat.isActive).toBe(false);
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("does not re-offer the same entry encounter on a same-day re-entry", () => {
+    const engine = harness.engine;
+    const player = harness.player()!;
+    const galaxy = engine.galaxy!;
+    const systemId = player.currentSystemId;
+
+    // Find a (system, day) the deterministic roll actually fires on, so the test
+    // exercises the dedupe guard rather than a roll that happened to miss.
+    let firingDay = -1;
+    for (let day = 0; day < 500; day++) {
+      const enc = rollEncounter(
+        encounterSystemView(galaxy, systemId),
+        `${systemId}:${day}`,
+        encounterPlayerStateFor(player),
+        ENCOUNTER_CONFIG,
+      );
+      if (enc) {
+        firingDay = day;
+        break;
+      }
+    }
+    expect(firingDay).toBeGreaterThanOrEqual(0);
+    galaxy.gameDays = firingDay;
+
+    const { mgr } = buildManager();
+    mgr.initialize();
+    expect(mgr.isEncounterPromptOpen).toBe(true); // fires on first entry
+
+    // Player leaves the prompt; a re-entry into the SAME system on the SAME day
+    // (land→take-off / star-map round trip / in-session reload) must NOT re-offer
+    // the identical encounter — otherwise a good salvage is a repeatable faucet.
+    mgr.closeEncounterPrompt();
+    expect(mgr.isEncounterPromptOpen).toBe(false);
+
+    mgr.initialize();
+    expect(mgr.isEncounterPromptOpen).toBe(false); // deduped this session
+
     expect(harness.errors()).toEqual([]);
   });
 
