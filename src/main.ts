@@ -8,6 +8,7 @@ import { GameConfig } from './config/balance';
 import { gatherDiagnostics } from './systems/feedback/gatherDiagnostics';
 import { openFeedback } from './systems/feedback/openFeedback';
 import { shouldShowMobileGate, markDismissed } from './systems/device/mobileGateState';
+import { attachDevAutopilot } from './dev/devAutopilot';
 
 declare const __DEBUG__: boolean;
 
@@ -181,6 +182,19 @@ async function main(): Promise<void> {
     // Expose engine to window for E2E testing (dev/test mode only)
     if (typeof __DEBUG__ !== 'undefined' && __DEBUG__) {
       (window as unknown as Record<string, GameEngine>).__gameEngine = engine;
+    }
+
+    // Dev-only autopilot: hand the live ship to the agent and watch it play the
+    // real game (window.__autopilot / Backquote hotkey). The dynamic import literal
+    // is written inside `if (import.meta.env.DEV)` so Vite/Rollup drops the dev-only
+    // chunk from the prod bundle entirely; attachDevAutopilot is the runtime gate.
+    if (import.meta.env.DEV) {
+      attachDevAutopilot(
+        import.meta.env.DEV,
+        engine,
+        () => import('./tests/playtest/letsplay/installAutopilotHook'),
+        (err) => logger.warn('Dev autopilot hook unavailable:', err),
+      );
     }
   } catch (error) {
     logger.error('Failed to initialize game:', error);

@@ -77,11 +77,11 @@ can't see — feeding the oddity-hunting workflow.
 **Files:**
 - Modify: `src/main.ts` or a `src/dev/` entry, gated by `import.meta.env.DEV`
 
-- [ ] Wire a **dev-only** way to toggle autopilot: a `__DEBUG__`-gated hotkey and/or a
+- [x] Wire a **dev-only** way to toggle autopilot: a `__DEBUG__`-gated hotkey and/or a
       `window.__autopilot.start()/stop()` hook attached only in DEV; it instantiates the
       controller over the live scene with the default (heuristic) policy.
-- [ ] write a test: in a non-DEV build the hook/toggle is absent.
-- [ ] run tests — green.
+- [x] write a test: in a non-DEV build the hook/toggle is absent.
+- [x] run tests — green.
 
 ### Task 4: Enforce dev-only + verify
 **Files:**
