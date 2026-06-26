@@ -149,10 +149,10 @@ bugs, unit test for pure logic), then fix until green, then verify.
 **Files:**
 - Modify: `src/systems/info/rumorPanel.ts`, `src/systems/trade/*` (rumor lifecycle / `describeRumor`), `src/presentation/InfoCenterScene.ts` (`buildNews`), `src/i18n/ru.ts`, `src/i18n/en.ts`
 
-- [ ] route the rumor/news **text generators** (`describeRumor`, news descriptions, route/commodity labels) through `t()` with interpolated params (system names, commodity, percent) instead of hardcoded Russian
-- [ ] add the corresponding `ru`/`en` keys with `{param}` placeholders (parity-safe)
-- [ ] write tests: a rumor/news line renders in English under `language=en` and in Russian under `ru`, with params filled correctly
-- [ ] run tests — must pass before next task
+- [x] route the rumor/news **text generators** through `t()` with interpolated params: `describeRumor`/`resourceLabelRu`/`rumorMarginMasked` (`RouteRumor.ts`), the "deal ended" line (`RumorDirector.ts`), the rumor-panel header/empty (`rumorPanel.ts` → `rumorPanelHeader()`/`rumorPanelEmpty()`), and the whole `InfoCenterScene.buildNews` feed (type tags, pirate/market/trader/patrol/lore lines, distance/delta fragments) — system names, commodity and percent now ride as `{param}`s, no hardcoded Russian left in these generators
+- [x] add the corresponding `ru`/`en` keys with `{param}` placeholders (parity-safe): `rumor.*` (panelHeader/panelEmpty/line/margin/marginMasked/expired) + `news.*` (12 type tags + fallbackDesc/dist*/pirateAlert/delta*/marketBest/traders/patrol/lore1-7/loreTag) in both catalogs
+- [x] write tests (`src/tests/i18n/rumorNewsI18n.test.ts`): `describeRumor`/`resourceLabelRu`/`rumorMarginMasked` render RU by default and EN under `language=en` with params filled; the news re-mask regex stays language-robust (a margin baked in either tongue is re-maskable); all new `rumor.*`/`news.*` keys exist in both catalogs (parity). RU default keeps every locked rumor/InfoCenter test byte-identical
+- [x] run tests — must pass before next task — i18n+trade+infoCenterRumors+info (188) green, playtest gate (260) green, tsc + eslint clean
 
 ### Task 6: Full audit — migrate remaining hardcoded-Russian UI surfaces
 **Files:**

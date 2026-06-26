@@ -68,6 +68,48 @@ export const ru: Dict = {
   "resource.LUXURY": "Роскошь",
   "resource.DATA_CORES": "Ядра данных",
 
+  // --- trade-route rumors (Info Center "Торговые возможности" band) ---------
+  "rumor.panelHeader": "ТОРГОВЫЕ ВОЗМОЖНОСТИ",
+  "rumor.panelEmpty": "Активных торговых маршрутов нет",
+  "rumor.line": "Везите {resource} из {from} в {to}: {margin}",
+  "rumor.margin": "маржа ~{pct}%",
+  "rumor.marginMasked": "маржа ~?%",
+  "rumor.expired":
+    "Везти {resource} из {from} в {to} больше невыгодно — акция закончилась.",
+
+  // --- Info Center news feed -----------------------------------------------
+  "news.type.NPC_QUEST_COMPLETE": "[РЕЙНДЖЕР]",
+  "news.type.PIRATE_ATTACK": "[АТАКА]",
+  "news.type.MARKET_SHIFT": "[РЫНОК]",
+  "news.type.OVERMIND_EXPANSION": "[УГРОЗА]",
+  "news.type.PIRATE_SURGE": "[ПИРАТЫ]",
+  "news.type.TRADE_BOOM": "[ТОРГОВЛЯ]",
+  "news.type.PLAGUE": "[ЭПИДЕМИЯ]",
+  "news.type.DISCOVERY": "[ОТКРЫТИЕ]",
+  "news.type.SYSTEM_LIBERATED": "[ОСВОБОЖДЕНИЕ]",
+  "news.type.SYSTEM_CAPTURED": "[ЗАХВАТ]",
+  "news.type.LIBERATION_CAMPAIGN": "[ПОХОД]",
+  "news.type.TRADE_OPPORTUNITY": "[МАРШРУТ]",
+  "news.fallbackDesc": "{label} в системе {system}",
+  "news.distCurrentSystem": "текущая система",
+  "news.distHere": "здесь",
+  "news.distJumps": "{n} пр.",
+  "news.pirateAlert": '[ТРЕВОГА] Пираты в системе "{system}" ({dist})',
+  "news.deltaDown": " ▼{pct}% vs здесь",
+  "news.deltaUp": " ▲{pct}% vs здесь",
+  "news.marketBest":
+    '[РЫНОК] {resource}: лучшая цена "{system}" — {price} ₡{delta} ({dist})',
+  "news.traders": '[ТРАФИК] Торговцы активны в системе "{system}"',
+  "news.patrol": '[ПАТРУЛЬ] Флот охраны обнаружен в системе "{system}"',
+  "news.loreTag": "[НОВОСТИ] {text}",
+  "news.lore1": "Совет Независимых обсуждает нейтральный договор с Бастионом",
+  "news.lore2": "Прогрессоры объявили о новой серии кораблей класса «Омега»",
+  "news.lore3": "Окраинники расширяют торговые маршруты в южный сектор",
+  "news.lore4": "Синдикат отрицает атаки на транспортные конвои",
+  "news.lore5": "Бастион увеличил военное производство на 40%",
+  "news.lore6": "Парадоксы зафиксированы вблизи запретной зоны R-17",
+  "news.lore7": "Рейнджеры сообщают об аномальной активности в туманности",
+
   // --- factions (singular type) / alliances (plural) / NPC roles -----------
   "factionType.OUTLANDERS": "Окраинник",
   "factionType.BASTIONS": "Бастион",

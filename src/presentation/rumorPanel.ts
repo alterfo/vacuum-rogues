@@ -1,14 +1,21 @@
 import type { Galaxy } from "@/domain/Galaxy";
 import type { Player } from "@/domain/Player";
-import { describeRumor, RUMOR_MARGIN_MASKED } from "@/domain/RouteRumor";
+import { describeRumor, rumorMarginMasked } from "@/domain/RouteRumor";
+import { t } from "@/i18n/i18n";
 import { isSystemKnown } from "@/systems/galaxy/systemKnown";
 
 // ── Trade-route rumors panel (pure projection, no PixiJS) ─────────────────────
 
 /** Most-profitable rumors shown in the news tab's "Торговые возможности" band. */
 export const RUMOR_PANEL_MAX = 4;
-export const RUMOR_PANEL_HEADER = "ТОРГОВЫЕ ВОЗМОЖНОСТИ";
-export const RUMOR_PANEL_EMPTY = "Активных торговых маршрутов нет";
+/** Localized header for the rumor band ("ТОРГОВЫЕ ВОЗМОЖНОСТИ" by default). */
+export function rumorPanelHeader(): string {
+  return t("rumor.panelHeader");
+}
+/** Localized empty-state copy when there are no active rumors. */
+export function rumorPanelEmpty(): string {
+  return t("rumor.panelEmpty");
+}
 
 export interface RumorPanelLine {
   id: string;
@@ -43,9 +50,9 @@ export function buildRumorPanel(
   max = RUMOR_PANEL_MAX,
   player: Player | null = null,
 ): RumorPanelData {
-  if (!galaxy) return { lines: [], emptyText: RUMOR_PANEL_EMPTY };
+  if (!galaxy) return { lines: [], emptyText: rumorPanelEmpty() };
   const rumors = galaxy.getActiveRumors().slice(0, max);
-  if (rumors.length === 0) return { lines: [], emptyText: RUMOR_PANEL_EMPTY };
+  if (rumors.length === 0) return { lines: [], emptyText: rumorPanelEmpty() };
   return {
     lines: rumors.map((r) => {
       const knownRoute =
@@ -58,8 +65,13 @@ export function buildRumorPanel(
   };
 }
 
-/** A baked margin number in a news/rumor string, e.g. "маржа ~70%". */
-const NEWS_MARGIN_RE = /маржа ~\d+%/;
+/**
+ * A baked margin number in a news/rumor string, e.g. "маржа ~70%" / "margin
+ * ~70%". Matches either language so a description baked under one language is
+ * still re-maskable when rendered (the leading word is the localized prefix of
+ * `rumor.margin`).
+ */
+const NEWS_MARGIN_RE = /(?:маржа|margin) ~\d+%/;
 
 /** Structural shape of the `TRADE_OPPORTUNITY` news event fields masking consults. */
 export interface TradeNewsLike {
@@ -95,5 +107,5 @@ export function maskTradeNewsMargin(
   const known =
     isSystemKnown(player, galaxy, event.fromSystemId) &&
     isSystemKnown(player, galaxy, event.toSystemId);
-  return known ? desc : desc.replace(NEWS_MARGIN_RE, RUMOR_MARGIN_MASKED);
+  return known ? desc : desc.replace(NEWS_MARGIN_RE, rumorMarginMasked());
 }

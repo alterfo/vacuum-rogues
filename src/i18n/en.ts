@@ -67,6 +67,49 @@ export const en: Dict = {
   "resource.LUXURY": "Luxury",
   "resource.DATA_CORES": "Data Cores",
 
+  // --- trade-route rumors (Info Center "Trade Opportunities" band) ----------
+  "rumor.panelHeader": "TRADE OPPORTUNITIES",
+  "rumor.panelEmpty": "No active trade routes",
+  "rumor.line": "Ship {resource} from {from} to {to}: {margin}",
+  "rumor.margin": "margin ~{pct}%",
+  "rumor.marginMasked": "margin ~?%",
+  "rumor.expired":
+    "Shipping {resource} from {from} to {to} no longer pays — the deal has ended.",
+
+  // --- Info Center news feed -----------------------------------------------
+  "news.type.NPC_QUEST_COMPLETE": "[RANGER]",
+  "news.type.PIRATE_ATTACK": "[ATTACK]",
+  "news.type.MARKET_SHIFT": "[MARKET]",
+  "news.type.OVERMIND_EXPANSION": "[THREAT]",
+  "news.type.PIRATE_SURGE": "[PIRATES]",
+  "news.type.TRADE_BOOM": "[TRADE]",
+  "news.type.PLAGUE": "[PLAGUE]",
+  "news.type.DISCOVERY": "[DISCOVERY]",
+  "news.type.SYSTEM_LIBERATED": "[LIBERATED]",
+  "news.type.SYSTEM_CAPTURED": "[CAPTURED]",
+  "news.type.LIBERATION_CAMPAIGN": "[CAMPAIGN]",
+  "news.type.TRADE_OPPORTUNITY": "[ROUTE]",
+  "news.fallbackDesc": "{label} in system {system}",
+  "news.distCurrentSystem": "current system",
+  "news.distHere": "here",
+  "news.distJumps": "{n} jmp",
+  "news.pirateAlert": '[ALERT] Pirates in system "{system}" ({dist})',
+  "news.deltaDown": " ▼{pct}% vs here",
+  "news.deltaUp": " ▲{pct}% vs here",
+  "news.marketBest":
+    '[MARKET] {resource}: best price "{system}" — {price} ₡{delta} ({dist})',
+  "news.traders": '[TRAFFIC] Traders active in system "{system}"',
+  "news.patrol": '[PATROL] Escort fleet detected in system "{system}"',
+  "news.loreTag": "[NEWS] {text}",
+  "news.lore1":
+    "The Independents' Council debates a neutrality pact with the Bastion",
+  "news.lore2": "The Progressors announce a new «Omega»-class line of ships",
+  "news.lore3": "The Outlanders expand trade routes into the southern sector",
+  "news.lore4": "The Syndicate denies attacks on transport convoys",
+  "news.lore5": "The Bastion raised military production by 40%",
+  "news.lore6": "Paradoxes detected near the forbidden zone R-17",
+  "news.lore7": "Rangers report anomalous activity in the nebula",
+
   // --- factions (singular type) / alliances (plural) / NPC roles -----------
   "factionType.OUTLANDERS": "Outlander",
   "factionType.BASTIONS": "Bastion",

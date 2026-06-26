@@ -6,6 +6,7 @@ import {
   rumorId,
   type RouteRumor,
 } from "@/domain/RouteRumor";
+import { t } from "@/i18n/i18n";
 import type { RouteCandidate } from "@/systems/trade/RouteScanner";
 
 /**
@@ -120,7 +121,11 @@ export function updateRumors(
       type: "MARKET_SHIFT",
       systemId: rumor.toSystemId,
       day,
-      description: `Везти ${resourceLabelRu(rumor.resource)} из ${from} в ${to} больше невыгодно — акция закончилась.`,
+      description: t("rumor.expired", {
+        resource: resourceLabelRu(rumor.resource),
+        from,
+        to,
+      }),
     });
   }
   for (const rumor of opened) {

@@ -10,9 +10,11 @@ import type { StarSystem } from "@/domain/StarSystem";
 import {
   buildRumorPanel,
   maskTradeNewsMargin,
-  RUMOR_PANEL_HEADER,
+  rumorPanelHeader,
   RUMOR_PANEL_MAX,
 } from "./rumorPanel";
+import { resourceLabelRu } from "@/domain/RouteRumor";
+import { t } from "@/i18n/i18n";
 import { SceneType, NpcRole, ResourceType } from "@/types";
 import type { NewsEvent } from "@/types";
 import type {
@@ -42,20 +44,10 @@ interface InfoContext {
 
 // ── Localisation ────────────────────────────────────────────────────────────
 
-const NEWS_TYPE_LABEL: Record<NewsEvent["type"], string> = {
-  NPC_QUEST_COMPLETE: "[РЕЙНДЖЕР]",
-  PIRATE_ATTACK: "[АТАКА]",
-  MARKET_SHIFT: "[РЫНОК]",
-  OVERMIND_EXPANSION: "[УГРОЗА]",
-  PIRATE_SURGE: "[ПИРАТЫ]",
-  TRADE_BOOM: "[ТОРГОВЛЯ]",
-  PLAGUE: "[ЭПИДЕМИЯ]",
-  DISCOVERY: "[ОТКРЫТИЕ]",
-  SYSTEM_LIBERATED: "[ОСВОБОЖДЕНИЕ]",
-  SYSTEM_CAPTURED: "[ЗАХВАТ]",
-  LIBERATION_CAMPAIGN: "[ПОХОД]",
-  TRADE_OPPORTUNITY: "[МАРШРУТ]",
-};
+/** Localized bracket tag for a news event type (e.g. "[МАРШРУТ]" / "[ROUTE]"). */
+function newsTypeLabel(type: NewsEvent["type"]): string {
+  return t(`news.type.${type}`);
+}
 
 const NEWS_TYPE_COLOR: Record<NewsEvent["type"], number> = {
   NPC_QUEST_COMPLETE: 0x88ddaa,
@@ -125,12 +117,12 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
   const feedEvents = [...galaxy.newsFeed].reverse().slice(0, 20);
   for (const event of feedEvents) {
     const sysName = systemMap.get(event.systemId)?.name ?? event.systemId;
-    const label = NEWS_TYPE_LABEL[event.type] ?? "[СОБЫТИЕ]";
+    const label = newsTypeLabel(event.type);
     const color = NEWS_TYPE_COLOR[event.type] ?? 0xaaaaaa;
     // Partial observability: re-mask a trade-rumor margin baked into the feed for
     // a route the player hasn't discovered (mirrors the rumor panel above).
     const desc = maskTradeNewsMargin(
-      event.description || `${label} в системе ${sysName}`,
+      event.description || t("news.fallbackDesc", { label, system: sysName }),
       event,
       galaxy,
       gameEngine.player ?? null,
@@ -151,8 +143,11 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
     });
     for (const p of pirates.slice(0, 4)) {
       const sysName = systemMap.get(p.systemId)?.name ?? p.systemId;
-      const dist = p.jumps === 0 ? "текущая система" : `${p.jumps} пр.`;
-      const text = `[ТРЕВОГА] Пираты в системе "${sysName}" (${dist})`;
+      const dist =
+        p.jumps === 0
+          ? t("news.distCurrentSystem")
+          : t("news.distJumps", { n: p.jumps });
+      const text = t("news.pirateAlert", { system: sysName, dist });
       items.push({
         day,
         text,
@@ -168,18 +163,6 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
       ResourceType.ELECTRONICS,
       ResourceType.CRYSTALS,
     ];
-    const RESOURCE_RU: Record<ResourceType, string> = {
-      [ResourceType.FUEL]: "Топливо",
-      [ResourceType.METALS]: "Металлы",
-      [ResourceType.CRYSTALS]: "Кристаллы",
-      [ResourceType.ORGANICS]: "Органика",
-      [ResourceType.ARTIFACTS]: "Артефакты",
-      [ResourceType.WEAPONS]: "Оружие (груз)",
-      [ResourceType.MEDICINE]: "Медикаменты",
-      [ResourceType.ELECTRONICS]: "Электроника",
-      [ResourceType.LUXURY]: "Роскошь",
-      [ResourceType.DATA_CORES]: "Ядра данных",
-    };
     for (const res of hotResources) {
       const hit = registry.findResource({
         resource: res,
@@ -189,7 +172,10 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
       })[0];
       if (!hit) continue;
       const sysName = systemMap.get(hit.systemId)?.name ?? hit.systemId;
-      const dist = hit.jumps === 0 ? "здесь" : `${hit.jumps} пр.`;
+      const dist =
+        hit.jumps === 0
+          ? t("news.distHere")
+          : t("news.distJumps", { n: hit.jumps });
 
       // Price delta vs current system
       let deltaStr = "";
@@ -205,12 +191,18 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
           const pct = Math.round(
             ((hit.price - localHit.price) / localHit.price) * 100,
           );
-          if (pct < 0) deltaStr = ` ▼${Math.abs(pct)}% vs здесь`;
-          else if (pct > 0) deltaStr = ` ▲${pct}% vs здесь`;
+          if (pct < 0) deltaStr = t("news.deltaDown", { pct: Math.abs(pct) });
+          else if (pct > 0) deltaStr = t("news.deltaUp", { pct });
         }
       }
 
-      const text = `[РЫНОК] ${RESOURCE_RU[res]}: лучшая цена "${sysName}" — ${hit.price} ₡${deltaStr} (${dist})`;
+      const text = t("news.marketBest", {
+        resource: resourceLabelRu(res),
+        system: sysName,
+        price: hit.price,
+        delta: deltaStr,
+        dist,
+      });
       items.push({
         day: day - (hit.systemId.charCodeAt(0) % 3),
         text,
@@ -227,7 +219,7 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
     if (traders.length > 0) {
       const sysName =
         systemMap.get(traders[0].systemId)?.name ?? traders[0].systemId;
-      const text = `[ТРАФИК] Торговцы активны в системе "${sysName}"`;
+      const text = t("news.traders", { system: sysName });
       items.push({
         day,
         text,
@@ -244,7 +236,7 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
     if (patrols.length > 0) {
       const sysName =
         systemMap.get(patrols[0].systemId)?.name ?? patrols[0].systemId;
-      const text = `[ПАТРУЛЬ] Флот охраны обнаружен в системе "${sysName}"`;
+      const text = t("news.patrol", { system: sysName });
       items.push({
         day,
         text,
@@ -255,16 +247,16 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
   }
 
   const lore: [number, string][] = [
-    [day - 1, "Совет Независимых обсуждает нейтральный договор с Бастионом"],
-    [day - 2, "Прогрессоры объявили о новой серии кораблей класса «Омега»"],
-    [day - 3, "Окраинники расширяют торговые маршруты в южный сектор"],
-    [day - 4, "Синдикат отрицает атаки на транспортные конвои"],
-    [day - 5, "Бастион увеличил военное производство на 40%"],
-    [day - 6, "Парадоксы зафиксированы вблизи запретной зоны R-17"],
-    [day - 7, "Рейнджеры сообщают об аномальной активности в туманности"],
+    [day - 1, t("news.lore1")],
+    [day - 2, t("news.lore2")],
+    [day - 3, t("news.lore3")],
+    [day - 4, t("news.lore4")],
+    [day - 5, t("news.lore5")],
+    [day - 6, t("news.lore6")],
+    [day - 7, t("news.lore7")],
   ];
   for (const [d, loreText] of lore) {
-    const text = `[НОВОСТИ] ${loreText}`;
+    const text = t("news.loreTag", { text: loreText });
     items.push({
       day: d,
       text,
@@ -773,7 +765,7 @@ export class InfoCenterScene extends GameScene {
       this.gameEngine?.player ?? null,
     );
 
-    const header = scaledText(`▸ ${RUMOR_PANEL_HEADER}`, 13, 0xffd166, {
+    const header = scaledText(`▸ ${rumorPanelHeader()}`, 13, 0xffd166, {
       rawColor: true,
       fontFamily: "monospace",
       fontWeight: "bold",
