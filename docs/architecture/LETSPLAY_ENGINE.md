@@ -152,3 +152,53 @@ When a trained net exists, drop its `*.weights.json` where `NeuralPolicy` loads 
 the same belief block the teacher used), the heuristic stays the default everywhere else,
 and nothing reaches the prod bundle. Parity between the PyTorch export and the pure-TS
 forward pass is pinned by `weightsContract.test.ts` (within `1e-5`).
+
+## Autopilot — watch the agent play the *live, rendered* game (dev-only)
+
+Where the headless harness above plays the engine as fast as a test loop can drive it, the
+**autopilot** hands the *live* player ship to the same agent brain and lets the normal render
+loop show it **playing the real, rendered game in real time** — the best way to eyeball visual
+oddities (all-yellow suns, missing art, sameness) the headless agent can't see
+(`docs/plans/20260625-dev-autopilot.md`). It reuses the agent core unchanged
+(`observe → policy.decide → apply`); only the *live applier* + the dev toggle are new, and
+**both stay dev-only** (under `src/tests/`, never in the prod bundle).
+
+### Toggling it (dev build only)
+
+In `npm run dev`, once the game is in flight:
+
+- Press **`` ` ``** (Backquote — `AUTOPILOT_HOTKEY_CODE`) to engage/disengage, **or**
+- Call `window.__autopilot.start()` / `.stop()` / `.toggle()` from the devtools console
+  (`window.__autopilot.engaged` reports state; `.controller` is the underlying
+  `AutopilotController` for advanced driving).
+
+A small fixed **"● АВТОПИЛОТ"** pill appears top-centre while engaged. **Reclaim-on-input:**
+the **first** genuine human pointer/key/wheel/touch disengages it instantly and hands control
+back — the autopilot drives the scene through a port (never synthesised DOM events), so only a
+real human event reaches the reclaim listener.
+
+### How it is wired (and why prod is untouched)
+
+| Piece | File | Role |
+|-------|------|------|
+| `applyLiveAction(action, obs, controller)` | `LiveApplier.ts` | Pure dispatcher: maps an `Action` onto a `LiveSceneController` verb (route/land/dock/warp/open-trade/take-quest/attack/flee/repair/tick). Illegal-for-the-scene actions are a **safe no-op**; the scene-aware two-step verbs (`move`/`trade`/`warp`) resolve exactly as the headless `PlayerAgent` applier does. Never imports PixiJS — unit-tested against a spy controller. |
+| `AutopilotController` | `AutopilotController.ts` | The live loop: while engaged it `observe → updateMemory → policy.decide → applyLiveAction` once per tick (default `DEFAULT_AUTOPILOT_TICK_MS = 800`, slow enough to follow). Pure logic over injectable ports (scheduler, human-input source, indicator), carries a fresh per-engagement `AgentMemory` for policy parity, and **never throws** (tick faults route to `onError`). `start`/`stop` are idempotent; `stop` is the single reclaim path. |
+| `installAutopilotHook(engine)` | `installAutopilotHook.ts` | Dev-only install: builds the concrete `LiveSceneController` over the real `GameEngine` (same `transitionTo` wiring the headless agent uses), constructs the controller with `() => observe(engine)` + the **feature-gated** policy (`selectPlayerPolicy()` — heuristic by default, `NeuralPolicy` when the neural toggle is on), publishes `window.__autopilot`, and binds the Backquote hotkey. |
+| `attachDevAutopilot(isDev, engine, load, onError)` | `src/dev/devAutopilot.ts` | The **one production seam**. Returns immediately when `!isDev` (the test-observable contract that a non-DEV build attaches nothing); when DEV, it dynamically `load`s the hook and installs it. Deliberately injectable — it contains **no** `@/tests/...` import literal, so it can never pull the dev engine into the prod graph itself. |
+
+The live applier mirrors the headless one, including its no-ops: verbs without a live executor
+yet (`executeTrade`, `attack`/`flee`, `repair`) degrade to a safe no-op exactly as the headless
+applier does, and `tick` is a no-op because the live rAF loop already advances frames between
+decisions.
+
+**Dev-only is enforced, not just convention.** The call site in `main.ts` writes the real
+loader `() => import('./tests/playtest/letsplay/installAutopilotHook')` inside an
+`if (import.meta.env.DEV)` block, which Vite/Rollup dead-code-eliminates in production, so the
+dev chunk is **never emitted**. `letsplayDevOnly.test.ts` extends its guard to the autopilot:
+no production module statically imports the dev engine; the `devAutopilot.ts` seam references
+nothing from the dev engine (static or dynamic) except the one sanctioned DEV-gated dynamic
+import; and the `npm run build` prod bundle is autopilot-free. No domain/schema/save change.
+
+**Same toggle, smarter later.** The autopilot reads the policy through the identical
+`selectPlayerPolicy()` gate the headless agent does, so when the trained `NeuralPolicy` lands
+it flies the live ship through the same hook with zero wiring changes.

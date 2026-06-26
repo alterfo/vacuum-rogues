@@ -95,7 +95,7 @@ can't see — feeding the oddity-hunting workflow.
 **Files:**
 - Modify: `docs/` + `src/presentation/CLAUDE.md`
 
-- [ ] Document the dev autopilot: how to toggle it (DEV hotkey / `window.__autopilot`),
+- [x] Document the dev autopilot: how to toggle it (DEV hotkey / `window.__autopilot`),
       that it reuses the agent core + reclaim-on-input, is dev-only/guarded, and is the
       preferred way to *watch* for visual oddities.
 

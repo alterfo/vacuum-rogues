@@ -149,6 +149,19 @@ CLAUDE.md "Neural / AI Pipeline"). Build the font row **first** so its hit areas
 (the historical ⚙-panel "first font button" contract). Control actions are public
 (`selectFont`/`selectSpeed`/`toggleNeural`) so they're unit-testable without PixiJS pointer events.
 
+**Dev-only autopilot watches the agent fly the *rendered* game** (`docs/plans/20260625-dev-autopilot.md`,
+`docs/architecture/LETSPLAY_ENGINE.md` → "Autopilot"). In `npm run dev` only, press `` ` ``
+(Backquote) or call `window.__autopilot.start()/.stop()/.toggle()` to hand the live ship to the
+letsplay agent: it runs the same `observe → policy.decide → applyLiveAction` loop over the live
+`SpaceFlightScene`/`GameEngine` (default 800 ms/tick) and shows a top-centre «● АВТОПИЛОТ» pill.
+**Reclaim-on-input** — the first real pointer/key/wheel/touch disengages it (the autopilot drives
+scenes through a port, never synthesised DOM events). It's the **preferred way to eyeball visual
+oddities live** (suns/missing art/sameness) the headless agent can't see. **Dev-only is guarded:**
+the brain + live applier live wholly under `src/tests/` (`LiveApplier`/`AutopilotController`/
+`installAutopilotHook`); the lone prod seam is `src/dev/devAutopilot.ts`, attached via a
+DEV-gated dynamic `import()` in `main.ts` that Vite drops from the prod bundle
+(`letsplayDevOnly.test.ts` enforces it). No domain/schema/save change.
+
 Three most-hit PixiJS 8 traps:
 - **`eventMode='none'` on Text over clickable areas** — Text defaults to `'auto'` and blocks
   clicks underneath; set `'none'` on labels so clicks pass through.
