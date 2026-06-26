@@ -760,12 +760,18 @@ export class GameEngine {
         }
       }
 
-      // Floor: the balance tick always maintains a minimum cosmic overmind
-      // presence (OVERMIND_FLOOR_MIN). Only direct player combat (Task 4) can
-      // reduce below this; natural balance cannot wipe the overmind entirely.
-      // Check overmindSystems only — pirates filling the hostile quota must not
-      // mask an overmind wipe-out that bypasses the loss-condition tracker.
+      // Floor: the balance tick maintains a minimum cosmic overmind presence
+      // (OVERMIND_FLOOR_MIN) ONLY while the endgame arc has never engaged
+      // (peakThreat === 0 — i.e. before the first arc spread tick). Once the arc
+      // owns the front (peakThreat > 0), the arc is the sole authority on the
+      // Overmind front (the same rationale as `freezeOvermind` above), so the
+      // legacy floor must NOT resurrect a front the player has pushed below it —
+      // otherwise it would (a) silently undo the player's containment progress on
+      // every 5-day churn and (b) snatch the eradication win by reseeding before
+      // the arc sees the empty front. Check overmindSystems only — pirates
+      // filling the hostile quota must not mask an overmind wipe-out.
       if (
+        this.galaxy.overmindArc.peakThreat === 0 &&
         this.galaxy.overmindSystems.length < GAME_BALANCE.OVERMIND_FLOOR_MIN
       ) {
         const hostile = new Set([
@@ -830,7 +836,14 @@ export class GameEngine {
     this.bankBus.dispatch({ kind: "RunEndOfDay" });
 
     // Win condition: rank >= VETERAN (2) + 3+ factions with rep > 50.
-    if (this.checkWinCondition() && !this._winScreenShown) {
+    // Suppressed once an Overmind-arc outcome overlay has shown this run, so a
+    // rank-WIN_SCREEN scene transition can't clobber the arc's win/loss overlay
+    // (notably showing a victory over an arc-loss) if both fire the same EOD.
+    if (
+      this.checkWinCondition() &&
+      !this._winScreenShown &&
+      !this._outcomeShown
+    ) {
       this._winScreenShown = true;
       this.transitionTo(SceneType.WIN_SCREEN, { gameEngine: this }).catch((e) =>
         logger.error("Win screen transition failed:", e),
@@ -1522,6 +1535,18 @@ export class GameEngine {
   showGameOutcomeScreen(win: boolean): void {
     if (this._outcomeShown) return;
     this._outcomeShown = true;
+    // Persist a win into the arc state so it survives a flight-autosave / reload:
+    // liberate the (now-destroyed) core system so the boss prompt won't re-trigger
+    // on re-entry, and flip the arc status to the sticky `won` so a later EOD can't
+    // drift an already-won galaxy to `lost`. Idempotent — the EOD-driven win path
+    // (coreBroken/eradicated) already has both done; the in-flight core-kill path
+    // (NpcShipManager.handleInFlightDeath) relies on this to persist its victory.
+    if (win && this.galaxy) {
+      if (this.galaxy.overmindCoreSystemId) {
+        this.galaxy.tryLiberate(this.galaxy.overmindCoreSystemId);
+      }
+      this.galaxy.overmindArc.status = "won";
+    }
     if (!this.renderer) return;
     this.clearModal();
 
