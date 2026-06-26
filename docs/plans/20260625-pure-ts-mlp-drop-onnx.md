@@ -54,12 +54,12 @@ JSON** instead of ONNX, pinned by a **parity test**.
 - Create: `src/tests/playtest/letsplay/mlp.ts`
 - Create: `src/tests/playtest/letsplay/mlp.test.ts`
 
-- [ ] `MlpWeights` (layers of `{W, b}`) + `forward(weights, input: number[]) → number[]`
+- [x] `MlpWeights` (layers of `{W, b}`) + `forward(weights, input: number[]) → number[]`
       (dense + ReLU on hidden layers, linear output) + `loadWeights(json)` with dim
       validation. Pure, dependency-free.
-- [ ] write tests: forward matches a hand-computed 2-layer reference within `1e-5`;
+- [x] write tests: forward matches a hand-computed 2-layer reference within `1e-5`;
       `loadWeights` rejects mismatched dims; handles the `12→32→10` shape.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 2: Reframe NeuralPolicy onto the pure-TS MLP
 **Files:**
