@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { GameMode, ResourceType } from "@/types";
+import type { EncounterConfig } from "@/systems/encounters/encounterGenerator";
+import type { EncounterOutcomeConfig } from "@/systems/encounters/encounterOutcome";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -450,6 +452,59 @@ export const GAME_BALANCE = {
   rumorNpcMarginScale: 0.02,
   /** Hard cap on a trader's per-departure rumor-reaction probability. */
   rumorNpcMaxChance: 0.6,
+} as const;
+
+/**
+ * Exploration-encounter occurrence tuning — the single live source of truth for
+ * how often derelict/anomaly/distress encounters fire and how they scale
+ * (`docs/plans/20260625-exploration-encounters.md`). The live wiring
+ * (`NpcShipManager.rollEntryEncounter`) passes this to the pure `rollEncounter`;
+ * it **mirrors** `DEFAULT_ENCOUNTER_CONFIG` in `encounterGenerator.ts` (the
+ * module's standalone default for tests/callers), with a parity test keeping the
+ * two in lockstep. Tune the live rates/weights here, not at the call site.
+ *
+ * - baseChance/maxChance: per-entry encounter probability floor → danger ceiling.
+ * - minGap: rate limit (no encounter within N entries of the last) — "spice, not a flood".
+ * - dangerChanceBoost: extra chance per unit system danger.
+ * - weights: relative derelict/anomaly/distress odds at safe (danger 0) space.
+ * - distressDangerWeight: extra distress (ambush-bait) weight per unit danger.
+ * - rewardDangerMult / rewardLevelMult: reward-scale lift per unit danger / level.
+ */
+export const ENCOUNTER_CONFIG: EncounterConfig = {
+  baseChance: 0.15,
+  minGap: 4,
+  dangerChanceBoost: 0.25,
+  maxChance: 0.6,
+  weights: { derelict: 5, anomaly: 4, distress: 3 },
+  distressDangerWeight: 6,
+  rewardDangerMult: 1.5,
+  rewardLevelMult: 0.1,
+} as const;
+
+/**
+ * Exploration-encounter payoff tuning — the single live source of truth for what
+ * engaging an encounter is worth and how likely it turns bad (trap/hazard/ambush)
+ * (`docs/plans/20260625-exploration-encounters.md`). The live wiring
+ * (`NpcShipManager.applyEncounterChoice`) passes this to the pure
+ * `resolveEncounter`; it **mirrors** `DEFAULT_ENCOUNTER_OUTCOME_CONFIG` in
+ * `encounterOutcome.ts`, kept in lockstep by the same parity test. Credits are
+ * pre-`rewardScale` bases; bad-outcome odds rise with the encounter's danger.
+ *
+ * - *BaseCredits / *BaseCargo / distressRepGain: good-outcome payoffs.
+ * - anomalyHazardCredits: the (negative) repair cost of an anomaly hazard.
+ * - badChanceFloor/maxBadChance: bad-outcome probability floor → ceiling.
+ * - dangerBadMult: extra bad-outcome chance per unit encounter danger.
+ */
+export const ENCOUNTER_OUTCOME_CONFIG: EncounterOutcomeConfig = {
+  derelictBaseCredits: 400,
+  derelictBaseCargo: 3,
+  anomalyBaseCredits: 300,
+  anomalyHazardCredits: 250,
+  distressBaseCredits: 500,
+  distressRepGain: 5,
+  badChanceFloor: 0.1,
+  dangerBadMult: 0.6,
+  maxBadChance: 0.75,
 } as const;
 
 /**

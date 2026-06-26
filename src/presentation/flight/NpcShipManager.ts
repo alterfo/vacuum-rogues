@@ -41,6 +41,8 @@ import {
   SYSTEM_GEOMETRY,
   GAME_BALANCE,
   ARTIFACT_DROP_CHANCE,
+  ENCOUNTER_CONFIG,
+  ENCOUNTER_OUTCOME_CONFIG,
 } from "@/config/balance";
 import { SceneType, NpcRole, QuestType, ResourceType } from "@/types";
 import type { SpaceLootItem } from "@/types";
@@ -2074,6 +2076,7 @@ export class NpcShipManager implements FlightModule {
       encounterSystemView(galaxy, systemId),
       seed,
       encounterPlayerStateFor(player),
+      ENCOUNTER_CONFIG,
     );
   }
 
@@ -2088,9 +2091,14 @@ export class NpcShipManager implements FlightModule {
     choice: EncounterChoice,
     rng?: () => number,
   ): EncounterOutcome {
-    const outcome = rng
-      ? resolveEncounter(encounter, choice, rng)
-      : resolveEncounter(encounter, choice);
+    // `rng` undefined ⇒ resolveEncounter falls back to its deterministic default
+    // (seeded off encounter.id); the balance config is always supplied.
+    const outcome = resolveEncounter(
+      encounter,
+      choice,
+      rng,
+      ENCOUNTER_OUTCOME_CONFIG,
+    );
     const player = this.gameEngine?.player;
     const galaxy = this.gameEngine?.galaxy;
     if (player && galaxy) {

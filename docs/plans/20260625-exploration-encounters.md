@@ -60,8 +60,12 @@ loot + reward seams.
 - [x] run tests — green.
 
 ### Task 4: Verify + balance + docs
-- [ ] full suite + `test:playtest` green; lint/build ok; tune rates/payoffs in `balance.ts`;
+- [x] full suite + `test:playtest` green; lint/build ok; tune rates/payoffs in `balance.ts`;
       document the encounter generator + outcome seams.
+      (full suite 3616✓, test:playtest 253✓, letsplay:ci 96✓, lint 0 errors, build ok;
+      `ENCOUNTER_CONFIG`/`ENCOUNTER_OUTCOME_CONFIG` are the live tuning source in `balance.ts`,
+      passed by `NpcShipManager`, mirrored to the modules' `DEFAULT_*` with a parity test;
+      seams documented in `src/presentation/flight/CLAUDE.md`.)
 
 ## Post-Completion
 **Manual:** fly around — derelicts/anomalies/distress calls appear at a tasteful rate; choices

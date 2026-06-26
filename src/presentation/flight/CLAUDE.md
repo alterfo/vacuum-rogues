@@ -37,6 +37,25 @@ the finger midpoint. The keyboard-only **Esc/cancel** gets a touch-only «✕» 
 every controller method (`pointerType !== "touch"` ⇒ no-op), so the desktop path is untouched. Do
 **not** re-implement the route guards in the touch controller — it only ever adds pinch-zoom.
 
+**Exploration encounters are two pure functions + a thin flight bridge**
+(`src/systems/encounters/`, `docs/plans/20260625-exploration-encounters.md`). On system entry
+`NpcShipManager.maybeShowEntryEncounter` rolls one — `rollEncounter(system, seed, playerState,
+ENCOUNTER_CONFIG)` (`encounterGenerator.ts`) is **pure** and **deterministic by `(systemId, seed)`**:
+past the `minGap` rate limit ("spice, not a flood") a weighted, danger/level-scaled
+derelict/anomaly/distress `Encounter` (else `null`). The system `danger` 0..1 comes from
+`encounterSystemView` (`encounterFlight.ts`: Overmind-held = 1, pirate-held = 0.6, else 0); the
+player projection from `encounterPlayerStateFor` (level + pirate rep). The scene then shows a
+two-choice prompt; the player's pick runs `resolveEncounter(encounter, choice, rng?,
+ENCOUNTER_OUTCOME_CONFIG)` (`encounterOutcome.ts`, pure, `rng` defaults to a deterministic PRNG
+seeded off `encounter.id`) → `{credits?, cargo?, reputationDelta?, startCombat?, message}`. The
+**non-combat** payoff is applied by `applyEncounterOutcome` through the **existing** seams only —
+banking `adjustPlayerCredits`, `Inventory.addResource`, `Player.adjustReputation` (**no new economy
+plumbing**); a `startCombat` trap/ambush spawns a hostile into the in-flight `CombatModule`
+(`spawnEncounterAmbush`). The overlay is **transient/ephemeral — no save state**. **Tune live
+rates/payoffs in `balance.ts` (`ENCOUNTER_CONFIG` / `ENCOUNTER_OUTCOME_CONFIG`)**, the single source
+of truth `NpcShipManager` passes in; each mirrors the module's standalone `DEFAULT_*` default, kept
+in lockstep by `encounterBalanceParity.test.ts`. Don't re-derive rates at the call site.
+
 In-flight combat is **real-time only** — there is no hex combat scene. The legacy `CombatScene`
 (and `SceneType.COMBAT`) was deleted; **every** fight resolves in-flight, including the
 OVERMIND-core boss and former scripted text-quest encounters. An aggressive NPC closing inside
