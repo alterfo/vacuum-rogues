@@ -80,9 +80,29 @@ export function pickAutoShowKey(
 }
 
 /** Size of the square top-right «?» help button. */
-const HELP_BUTTON_SIZE = 34;
+export const HELP_BUTTON_SIZE = 34;
 /** Margin from the screen's top-right corner. */
-const HELP_BUTTON_MARGIN = 12;
+export const HELP_BUTTON_MARGIN = 12;
+
+/**
+ * The reserved top-right rectangle the «?» help button occupies, for a given
+ * screen width. The single source of truth for the corner zone other top-right
+ * HUD elements (e.g. the planet-screen credit balance) must avoid — so a fix to
+ * the button placement keeps every consumer's no-overlap layout in lockstep.
+ */
+export function helpButtonRect(screenWidth: number): {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+} {
+  return {
+    x: screenWidth - HELP_BUTTON_SIZE - HELP_BUTTON_MARGIN,
+    y: HELP_BUTTON_MARGIN,
+    w: HELP_BUTTON_SIZE,
+    h: HELP_BUTTON_SIZE,
+  };
+}
 
 /**
  * Mount contextual help for `key` into the scene. Returns a teardown to call
@@ -131,9 +151,9 @@ export function mountSceneHelp(
     HELP_BUTTON_SIZE,
     HELP_BUTTON_SIZE,
   );
-  const sw = deps.renderer.app.screen.width;
-  helpBtn.x = sw - HELP_BUTTON_SIZE - HELP_BUTTON_MARGIN;
-  helpBtn.y = HELP_BUTTON_MARGIN;
+  const reserved = helpButtonRect(deps.renderer.app.screen.width);
+  helpBtn.x = reserved.x;
+  helpBtn.y = reserved.y;
   deps.container.addChild(helpBtn.container);
 
   // First-time auto-hint: show the intro (if any + unseen) else the scene's own

@@ -116,11 +116,11 @@ bugs, unit test for pure logic), then fix until green, then verify.
 - Create: `e2e/` screenshot assertion in `playtest-regression.spec.ts`
 - Create/Modify: `src/tests/presentation/helpButtonLayout.test.ts`
 
-- [ ] write a **failing** layout unit test: the «?» button rect (`sw-34-12, 12, 34×34`) and the planet-screen balance read-out rect must not intersect
-- [ ] fix by relocating the colliding element — prefer nudging the balance read-out clear of the reserved top-right «?» zone (or expose an optional offset on `mountSceneHelp` and apply it where the balance lives), keeping the «?» reachable and clear of the bottom-right «Оставить issue» overlay
-- [ ] add an E2E screenshot of the planet screen and visually confirm the «?» no longer overlaps the balance (green text test is NOT sufficient for a visual bug)
-- [ ] verify the «?» still opens the help panel and the auto-show-once behaviour is intact
-- [ ] run tests — must pass before next task
+- [x] write a **failing** layout unit test: the «?» button rect (`sw-34-12, 12, 34×34`) and the planet-screen balance read-out rect must not intersect — `src/tests/presentation/helpButtonLayout.test.ts` sweeps screen widths × text widths × font heights against `helpButtonRect`/`creditsHudAnchor`
+- [x] fix by relocating the colliding element — exposed the reserved «?» rect as the single source of truth `helpButtonRect(screenWidth)` in `mountSceneHelp.ts`; the planet credit read-out now anchors via the pure `creditsHudAnchor(w)` (right edge parked 10 px left of the reserved corner zone, same top line), so it stays clear of the «?» and of the bottom-right «Оставить issue» overlay
+- [x] add an E2E screenshot of the planet screen and visually confirm the «?» no longer overlaps the balance — `e2e/playtest-regression.spec.ts` lands on a planet, screenshots `e2e/screenshots/planet-help-balance.png`, and asserts the rendered global bounds of the «?» button and the top «₡» read-out don't intersect (cropped screenshot confirms «1 000 ₡» sits clearly left of the «?»)
+- [x] verify the «?» still opens the help panel and the auto-show-once behaviour is intact — covered by the unchanged `mountSceneHelp.test.ts` (button placement only refactored through `helpButtonRect`, identical x/y); all 53 onboarding tests green
+- [x] run tests — must pass before next task — helpButtonLayout + planetScene unit suites + onboarding green, E2E green, tsc + eslint clean
 
 ### Task 3: InfoCenter shows the real margin for known routes (masking not over-broad)
 **Files:**

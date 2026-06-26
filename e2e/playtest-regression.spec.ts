@@ -1717,6 +1717,108 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('regression: planet-screen «?» help button never covers the credit balance', async ({ page }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    // Suppress the one-shot auto-help panel so the screenshot shows a clean
+    // planet screen (the «?» button + balance are what we assert on).
+    await page.evaluate(() => {
+      localStorage.setItem(
+        'sr_help_seen',
+        JSON.stringify(['PLANET', 'welcome', 'SPACE_FLIGHT']),
+      );
+    });
+
+    // Land on a planet via engine navigation (the same seam the bank/trade
+    // regressions use). Any planet shows the top-right credit-balance HUD.
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        transitionTo: (s: string, ctx?: object) => Promise<void>;
+        galaxy: { systems: { planets: unknown[] }[] } | null;
+      };
+      const planet = engine.galaxy?.systems?.flatMap((s) => s.planets)?.[0];
+      await engine.transitionTo('PLANET', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'PlanetScene');
+    // Let the (possibly lazy) backdrop swap-in settle so the final UI is mounted.
+    await page.waitForTimeout(600);
+
+    // Read the rendered global bounds of the «?» help button (the only stage
+    // child that is neither the game nor UI layer) and the top-most credit
+    // read-out (a top-right Text containing «₡»), then assert they don't overlap.
+    const rects = await page.evaluate(() => {
+      type Bounds = {
+        x?: number;
+        y?: number;
+        width?: number;
+        height?: number;
+        minX: number;
+        minY: number;
+        maxX: number;
+        maxY: number;
+      };
+      type Node = {
+        text?: unknown;
+        children?: Node[];
+        getBounds: () => Bounds;
+      };
+      const boundsOf = (n: Node) => {
+        const b = n.getBounds();
+        return {
+          x: typeof b.x === 'number' ? b.x : b.minX,
+          y: typeof b.y === 'number' ? b.y : b.minY,
+          w: typeof b.width === 'number' ? b.width : b.maxX - b.minX,
+          h: typeof b.height === 'number' ? b.height : b.maxY - b.minY,
+        };
+      };
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene as Record<string, unknown> | null;
+      if (!scene) return null;
+      const renderer = scene['renderer'] as {
+        stage: { children: Node[] };
+        gameLayer: Node;
+        uiLayer: Node;
+      };
+      const { stage, gameLayer, uiLayer } = renderer;
+      const helpContainer = stage.children.find(
+        (c) => c !== gameLayer && c !== uiLayer,
+      );
+      if (!helpContainer) return null;
+
+      const credits: ReturnType<typeof boundsOf>[] = [];
+      const walk = (n: Node): void => {
+        if (typeof n.text === 'string' && n.text.includes('₡')) {
+          credits.push(boundsOf(n));
+        }
+        for (const c of n.children ?? []) walk(c);
+      };
+      walk(uiLayer);
+      if (credits.length === 0) return null;
+      // The top-right balance read-out is the highest «₡» text on screen.
+      credits.sort((a, b) => a.y - b.y);
+      return { help: boundsOf(helpContainer), balance: credits[0] };
+    });
+
+    await page.screenshot({ path: 'e2e/screenshots/planet-help-balance.png' });
+
+    expect(rects).not.toBeNull();
+    const { help, balance } = rects!;
+    const intersect =
+      help.x < balance.x + balance.w &&
+      help.x + help.w > balance.x &&
+      help.y < balance.y + balance.h &&
+      help.y + help.h > balance.y;
+    expect(
+      intersect,
+      `«?» ${JSON.stringify(help)} overlaps balance ${JSON.stringify(balance)}`,
+    ).toBe(false);
+
+    errorCollector.assertAndDetach();
+  });
+
   test('regression: Galactic Bank opens, a trade shows as a balanced posting (АБС Task 7)', async ({ page }) => {
     await setupNewGame(page);
     const errorCollector = new ErrorCollector(page);

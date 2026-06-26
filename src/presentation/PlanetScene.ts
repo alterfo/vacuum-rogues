@@ -28,7 +28,7 @@ import { tintFromSeed } from "@/utils/instanceTint";
 import { UiButton, type ButtonAccent } from "./ui/UiButton";
 import { factionColor as resolveFactionColor } from "./ui/palette";
 import { Faction } from "@/types/faction";
-import { mountSceneHelp } from "./ui/mountSceneHelp";
+import { mountSceneHelp, helpButtonRect } from "./ui/mountSceneHelp";
 import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
 
 interface PlanetContext {
@@ -192,6 +192,23 @@ export function computePlanetMenuLayout(
     Math.floor(btnStep),
   );
   return { btnStartY, btnStep, btnH };
+}
+
+/**
+ * Right-top anchor (the read-out's right edge) for the top-right credit-balance
+ * HUD, nudged clear of the reserved «?» help-button zone so the two never
+ * overlap (playtest bug — the «?» sat on top of the balance). The balance is
+ * right-anchored and stays on the top line, parked just left of the reserved
+ * corner square. Pure + exported so the no-overlap invariant is unit-testable
+ * against `helpButtonRect` without a renderer.
+ */
+export function creditsHudAnchor(screenWidth: number): {
+  x: number;
+  y: number;
+} {
+  const reserved = helpButtonRect(screenWidth);
+  const GAP = 10;
+  return { x: reserved.x - GAP, y: 16 };
 }
 
 /** Ultimate panorama fallback (Task 8) when no other key resolves. */
@@ -1028,9 +1045,10 @@ export class PlanetScene extends GameScene {
           fontWeight: "bold",
         },
       });
+      const creditsAnchor = creditsHudAnchor(w);
       creditsHud.anchor.set(1, 0);
-      creditsHud.x = w - 16;
-      creditsHud.y = 16;
+      creditsHud.x = creditsAnchor.x;
+      creditsHud.y = creditsAnchor.y;
       creditsHud.eventMode = "none";
       ui.addChild(creditsHud);
     }
