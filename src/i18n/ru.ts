@@ -140,6 +140,7 @@ export const ru: Dict = {
     "обитаемый космос.",
   "menu.newGame": "Новая игра",
   "menu.saves": "Сохранения",
+  "menu.settings": "Настройки",
   "menu.feedback": "Сообщить отзыв",
   "menu.replayTutorial": "Показать обучение заново",
   "menu.tutorialReset": "Обучение сброшено — подсказки появятся снова",

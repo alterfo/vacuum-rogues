@@ -9,6 +9,12 @@ import { resetSeen } from "@/systems/onboarding/onboardingState";
 import { pickVariant, pickVariantKey, tex, loadTextureAsync } from "./textures";
 import { t } from "@/i18n/i18n";
 import { reducedMotion } from "./ui/reducedMotion";
+import {
+  SettingsPanel,
+  SETTINGS_PANEL_WIDTH,
+  SETTINGS_PANEL_HEIGHT,
+} from "./ui/SettingsPanel";
+import { GAME_BALANCE } from "@/config/balance";
 
 interface StarParticle {
   x: number;
@@ -53,6 +59,14 @@ export class MainMenuScene extends GameScene {
   private demoShips: DemoShip[] = [];
   private menuPlanets: MenuPlanet[] = [];
   private saveAvailable = false;
+  // The shared settings panel (speed / font / language / neural), opened from the
+  // «Настройки» menu button. Mounted on `renderer.stage` (above the UI layer) with
+  // a dimmed backdrop so it survives the menu's `clearUILayer` re-renders; closed
+  // on its own control, an outside click, or scene teardown
+  // (`docs/plans/20260626-playtest-bugs-pause-help-infocenter-i18n.md`, Task 8 —
+  // relocated here from the in-flight ⚙ HUD button).
+  private settingsPanel: SettingsPanel | null = null;
+  private settingsBackdrop: Graphics | null = null;
   // Bumped on every re-render/destroy so in-flight async texture mounts
   // (lazy nebula) for a stale render generation become no-ops (see CLAUDE.md
   // lazy-category pattern).
@@ -140,6 +154,7 @@ export class MainMenuScene extends GameScene {
 
   destroy(): void {
     this.renderGen++; // invalidate any in-flight async texture mounts
+    this.closeSettings(); // settings overlay lives on renderer.stage, not the cleared layers
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
@@ -172,6 +187,12 @@ export class MainMenuScene extends GameScene {
       logger.warn("MainMenuScene: canvas size is zero, deferring render");
       return;
     }
+
+    // A re-render rebuilds the whole UI layer; close any open settings overlay
+    // first so a stale panel/backdrop (e.g. after a language pick re-renders the
+    // menu, or a window resize) can't linger over the fresh menu. The panel lives
+    // on `renderer.stage`, not the UI layer, so it would otherwise survive.
+    this.closeSettings();
 
     this.renderGen++; // invalidate async mounts from the previous render
     this.renderer.clearGameLayer();
@@ -442,9 +463,22 @@ export class MainMenuScene extends GameScene {
     );
     this.buttonsContainer.addChild(savesBtn);
 
+    // Settings (speed / font / language / neural) — relocated from the in-flight
+    // ⚙ HUD button (Task 8). Reachable here so the player can change speed/font/
+    // language/neural before a run; the choices persist via `gameSettings` and
+    // apply on «Продолжить».
+    const settingsBtn = createButton(
+      t("menu.settings"),
+      135,
+      () => this.toggleSettings(),
+      18,
+      0x88ddff,
+    );
+    this.buttonsContainer.addChild(settingsBtn);
+
     const feedbackBtn = createButton(
       t("menu.feedback"),
-      140,
+      175,
       () => this.handleFeedback(),
       16,
       0x66ccff,
@@ -455,7 +489,7 @@ export class MainMenuScene extends GameScene {
     // set so every screen's auto-hint shows again on next visit).
     const replayHelpBtn = createButton(
       t("menu.replayTutorial"),
-      180,
+      215,
       () => this.handleReplayOnboarding(),
       16,
       0x66ccff,
@@ -463,6 +497,88 @@ export class MainMenuScene extends GameScene {
     this.buttonsContainer.addChild(replayHelpBtn);
 
     this.renderer.uiLayer.addChild(this.buttonsContainer);
+  }
+
+  /**
+   * Toggle the shared settings overlay (speed / font / language / neural). The
+   * panel is the SAME `SettingsPanel` the in-flight HUD used before Task 8 moved
+   * it here — every control writes through `gameSettings` (no new save field), so
+   * a speed/font/language/neural choice persists and applies on «Продолжить».
+   */
+  private toggleSettings(): void {
+    if (this.settingsPanel) {
+      this.closeSettings();
+      return;
+    }
+    this.openSettings();
+  }
+
+  /**
+   * Mount the settings panel centred over a dimmed, click-to-close backdrop on
+   * `renderer.stage` (above the UI layer, so a menu re-render can't clobber it).
+   * A font/language pick re-renders the menu in place (live re-localize) then
+   * closes; speed/neural re-render only the panel. Speed writes onto the engine's
+   * `gameSpeedMultiplier` so the choice survives into flight.
+   */
+  private openSettings(): void {
+    const width = this.renderer.app.screen.width;
+    const height = this.renderer.app.screen.height;
+
+    // Dimmed full-screen backdrop — clicking outside the panel closes it.
+    const backdrop = new Graphics();
+    backdrop.rect(0, 0, width, height).fill({ color: 0x000000, alpha: 0.5 });
+    backdrop.eventMode = "static";
+    backdrop.cursor = "default";
+    backdrop.on("pointerdown", () => this.closeSettings());
+
+    const panel = new SettingsPanel({
+      speedTarget: this.gameEngine ?? {
+        gameSpeedMultiplier: GAME_BALANCE.gameSpeedDefault,
+      },
+      speedSteps: GAME_BALANCE.gameSpeedMultipliers,
+      // No live HUD/physics in the menu — the choice is persisted on the engine
+      // store and applied when the player enters flight.
+      applySpeed: () => {},
+      // A font/language change re-renders the menu so its labels pick up the new
+      // size/language immediately (the menu's own live re-localize).
+      applyFont: () => this.renderMainMenu(),
+      applyLanguage: () => this.renderMainMenu(),
+      onNeuralToggle: (on) =>
+        this.showMessage(
+          on ? t("settings.neuralOn") : t("settings.neuralOff"),
+          on ? 0x00ccff : 0x99a8ba,
+        ),
+      onRequestClose: () => this.closeSettings(),
+    });
+    const c = panel.container;
+    c.x = Math.round((width - SETTINGS_PANEL_WIDTH) / 2);
+    c.y = Math.round((height - SETTINGS_PANEL_HEIGHT) / 2);
+
+    this.renderer.stage.addChild(backdrop);
+    this.renderer.stage.addChild(c);
+    this.settingsBackdrop = backdrop;
+    this.settingsPanel = panel;
+  }
+
+  /**
+   * Tear down the settings overlay (panel + backdrop) if open. Refs are nulled
+   * synchronously; the actual destroys are deferred to a microtask (guarded
+   * against double-destroy) because this can fire from a pointerdown mid-dispatch
+   * over the panel's own hit area / the backdrop (mirrors `FlightHud.closeModals`).
+   */
+  private closeSettings(): void {
+    const panel = this.settingsPanel;
+    const backdrop = this.settingsBackdrop;
+    this.settingsPanel = null;
+    this.settingsBackdrop = null;
+    if (panel)
+      queueMicrotask(() => {
+        if (!panel.container.destroyed) panel.destroy();
+      });
+    if (backdrop)
+      queueMicrotask(() => {
+        if (!backdrop.destroyed) backdrop.destroy();
+      });
   }
 
   /**
@@ -596,8 +712,8 @@ export class MainMenuScene extends GameScene {
     const buttonsY = this.buttonsContainer
       ? this.buttonsContainer.y
       : height / 2;
-    // Below the button stack (the lowest button sits at relative y≈180).
-    msgText.y = buttonsY + 215;
+    // Below the button stack (the lowest button sits at relative y≈215).
+    msgText.y = buttonsY + 255;
     this.renderer.uiLayer.addChild(msgText);
     this.currentMsgText = msgText;
 

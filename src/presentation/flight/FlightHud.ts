@@ -13,8 +13,6 @@ import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
 import type { LandingDenialReason } from "@/systems/galaxy/landingAccess";
 import { formatGameDate, formatGameTimestamp } from "@/utils/gameCalendar";
 import { scaledFont } from "@/utils/fontScale";
-import { t } from "@/i18n/i18n";
-import { SettingsPanel, SETTINGS_PANEL_HEIGHT } from "../ui/SettingsPanel";
 import {
   AccessibilityPanel,
   ACCESSIBILITY_PANEL_HEIGHT,
@@ -29,9 +27,11 @@ const CANCEL_BTN_GAP = 8;
 
 /**
  * Owns the in-flight HUD: the static instruction/date text, the quest-journal and
- * star-map buttons, the Play/Pause + speed + settings buttons, the system
- * mini-map, the bottom-left mini-log, transient toasts and hover tooltips.
- * Extracted from {@link SpaceFlightScene} as a {@link FlightModule}.
+ * star-map buttons, the Play/Pause + speed buttons, the ♿ accessibility button,
+ * the system mini-map, the bottom-left mini-log, transient toasts and hover
+ * tooltips. Extracted from {@link SpaceFlightScene} as a {@link FlightModule}.
+ * (The former ⚙ settings panel — speed/font/language/neural — moved to the main
+ * menu in Task 8; only the ♿ a11y quick-toggle remains a bottom-left HUD panel.)
  *
  * The scene stays the Controller / Information Expert: button presses fan out
  * through the public callbacks ({@link onPlayPause}, {@link onSpeedCycle},
@@ -41,8 +41,7 @@ const CANCEL_BTN_GAP = 8;
  * {@link setTurnRunning}; the day counter reads straight from the injected
  * {@link GameEngine}, so no `setDayCount` push is needed, and game speed is the
  * HUD's own concern (it owns the index + label) pushed *out* via
- * {@link onSpeedCycle} — the plan's `setGameSpeed`/`onGearOpen` were unnecessary
- * (the gear opens the HUD-owned font panel directly).
+ * {@link onSpeedCycle}.
  *
  * The mini-map *object* lives here (created/destroyed with the rest of the HUD),
  * but its per-frame refresh stays in the scene — it reads route + camera + world
@@ -80,15 +79,12 @@ export class FlightHud implements FlightModule {
   private speedButton: UiButton | null = null;
   private speedIndex = 0;
 
-  // Gear button (⚙) + toggled settings panel (speed/font/neural; bottom-left HUD).
-  private gearButton: UiButton | null = null;
-  private settingsPanel: Container | null = null;
-
   // Accessibility button (♿) + toggled accessibility panel (palette /
-  // reduced-motion / key remap; sits beside the ⚙ gear button). A separate
-  // surface from the settings panel — the latter's hit-area layout is pinned by
-  // locked tests, so the a11y group lives in its own panel
-  // (`docs/plans/20260625-accessibility-pass.md`, Task 4).
+  // reduced-motion / key remap; bottom-left HUD). The former ⚙ settings panel
+  // (speed/font/language/neural) moved to the main menu — see MainMenuScene —
+  // so this in-the-moment a11y aid is the only bottom-left HUD panel now
+  // (`docs/plans/20260625-accessibility-pass.md`, Task 4;
+  // `docs/plans/20260626-playtest-bugs-pause-help-infocenter-i18n.md`, Task 8).
   private accessibilityButton: UiButton | null = null;
   private accessibilityPanel: Container | null = null;
   private accessibilityPanelComp: AccessibilityPanel | null = null;
@@ -232,11 +228,6 @@ export class FlightHud implements FlightModule {
     this.cancelButton = null;
     this.speedButton = null;
     this.speedIndex = 0;
-    this.gearButton = null;
-    if (this.settingsPanel) {
-      this.settingsPanel.destroy({ children: true });
-      this.settingsPanel = null;
-    }
     this.accessibilityButton = null;
     this.closeAccessibilityPanel();
     this.closeSystemMenu();
@@ -303,21 +294,13 @@ export class FlightHud implements FlightModule {
    * help overlay) alone — they read {@link scaledFont} when next opened.
    */
   private teardownUI(): void {
-    if (this.settingsPanel) {
-      this.settingsPanel.destroy({ children: true });
-      this.settingsPanel = null;
-    }
     this.closeAccessibilityPanel();
     this.closeSystemMenu();
-    // Speed + gear buttons mount on the UI layer directly (not uiContainer), so
+    // Speed + a11y buttons mount on the UI layer directly (not uiContainer), so
     // destroy their containers explicitly. UiButton has no destroy() of its own.
     if (this.speedButton) {
       this.speedButton.container.destroy({ children: true });
       this.speedButton = null;
-    }
-    if (this.gearButton) {
-      this.gearButton.container.destroy({ children: true });
-      this.gearButton = null;
     }
     if (this.accessibilityButton) {
       this.accessibilityButton.container.destroy({ children: true });
@@ -409,17 +392,8 @@ export class FlightHud implements FlightModule {
       this.speedButton.y = h - 248;
     }
 
-    if (this.gearButton) {
-      this.gearButton.y = h - 162;
-    }
-    if (this.accessibilityButton && this.gearButton) {
-      this.accessibilityButton.y = this.gearButton.y;
-    }
-    if (this.settingsPanel && this.gearButton) {
-      this.settingsPanel.y = Math.max(
-        8,
-        this.gearButton.y - SETTINGS_PANEL_HEIGHT - 4,
-      );
+    if (this.accessibilityButton) {
+      this.accessibilityButton.y = h - 162;
     }
     if (this.accessibilityPanel && this.accessibilityButton) {
       this.accessibilityPanel.y = Math.max(
@@ -446,12 +420,14 @@ export class FlightHud implements FlightModule {
   // ---------------------------------------------------------------------------
 
   /**
-   * True while a bottom-left ⚙/♿ panel (settings or accessibility) is open. The
-   * flight key router treats both alike — Esc closes (via {@link closeModals})
-   * and Space is suppressed behind either — so they share this one query.
+   * True while the bottom-left ♿ accessibility panel is open. The former ⚙
+   * settings panel moved to the main menu (see MainMenuScene), so this now
+   * tracks only the accessibility panel — the query name is retained because
+   * the flight key router + locked tests key on it. Esc closes it (via
+   * {@link closeModals}) and Space is suppressed behind it.
    */
   isSettingsPanelOpen(): boolean {
-    return this.settingsPanel !== null || this.accessibilityPanel !== null;
+    return this.accessibilityPanel !== null;
   }
 
   /** True while the in-flight system menu is open. */
@@ -587,15 +563,6 @@ export class FlightHud implements FlightModule {
     const journal = this.questJournalUI;
     this.questJournalUI = null;
     if (journal) queueMicrotask(() => journal.destroy());
-    if (this.settingsPanel) {
-      const sp = this.settingsPanel;
-      this.settingsPanel = null;
-      // Guard: a scene transition may run clearUILayer() (which destroys this
-      // panel) before the microtask fires — destroying it twice throws.
-      queueMicrotask(() => {
-        if (!sp.destroyed) sp.destroy({ children: true });
-      });
-    }
     if (this.accessibilityPanel) {
       const ap = this.accessibilityPanel;
       const comp = this.accessibilityPanelComp;
@@ -907,27 +874,12 @@ export class FlightHud implements FlightModule {
     this.uiLayer.addChild(speedBtn.container);
     this.speedButton = speedBtn;
 
-    // Gear button (⚙) — bottom-left, above mini-log — opens font-size panel.
-    const GEAR_BTN_W = 36;
-    const GEAR_BTN_H = 32;
-    const gearBtn = new UiButton(
-      "⚙",
-      "",
-      "neutral",
-      (event) => {
-        event.stopPropagation();
-        this.toggleSettingsPanel();
-      },
-      GEAR_BTN_W,
-      GEAR_BTN_H,
-    );
-    gearBtn.x = 20;
-    gearBtn.y = this.renderer.app.screen.height - 130 - GEAR_BTN_H;
-    this.uiLayer.addChild(gearBtn.container);
-    this.gearButton = gearBtn;
-
-    // Accessibility button (♿) — beside the ⚙ gear — opens the palette /
-    // reduced-motion / key-remap panel (accessibility pass, Task 4).
+    // Accessibility button (♿) — bottom-left, above the mini-log — opens the
+    // palette / reduced-motion / key-remap panel (accessibility pass, Task 4).
+    // The former ⚙ settings panel moved to the main menu (Task 8), so the ♿
+    // button now sits where the ⚙ gear used to be.
+    const ACC_BTN_W = 36;
+    const ACC_BTN_H = 32;
     const accBtn = new UiButton(
       "♿",
       "",
@@ -936,11 +888,11 @@ export class FlightHud implements FlightModule {
         event.stopPropagation();
         this.toggleAccessibilityPanel();
       },
-      GEAR_BTN_W,
-      GEAR_BTN_H,
+      ACC_BTN_W,
+      ACC_BTN_H,
     );
-    accBtn.x = 20 + GEAR_BTN_W + 8;
-    accBtn.y = gearBtn.y;
+    accBtn.x = 20;
+    accBtn.y = this.renderer.app.screen.height - 130 - ACC_BTN_H;
     this.uiLayer.addChild(accBtn.container);
     this.accessibilityButton = accBtn;
 
@@ -949,69 +901,15 @@ export class FlightHud implements FlightModule {
     this.restoreGameSpeed();
   }
 
-  /** Toggle the font-size mini-panel (S / M / L). */
-  /**
-   * Toggle the unified settings panel (СКОРОСТЬ / ШРИФТ / ЯЗЫК / НЕЙРОСЕТЬ). Each
-   * control writes through its shared store; the live effects fan back through
-   * the {@link SettingsPanel} deps (DIP): a font pick restyles via
-   * {@link onFontScaleChange} (and closes the panel, since a font change rebuilds
-   * the HUD — playtest4 A), a language pick re-localizes through the same restyle
-   * path (and closes likewise), a speed pick goes through {@link selectGameSpeed}
-   * (keeps the bottom-right speed button + physics in lock-step), and the neural
-   * toggle flips the feature flag (Task 2 gate) with a confirming toast. The
-   * panel container is tracked as {@link settingsPanel} so the existing
-   * teardown / Esc-close / outside-click wiring is unchanged.
-   */
-  private toggleSettingsPanel(): void {
-    if (this.settingsPanel) {
-      this.settingsPanel.destroy({ children: true });
-      this.settingsPanel = null;
-      return;
-    }
-    if (!this.gearButton) return;
-    // The two ⚙/♿ panels share the same bottom-left anchor — only one open.
-    this.closeAccessibilityPanel();
-
-    const panel = new SettingsPanel({
-      speedTarget: this.gameEngine ?? {
-        gameSpeedMultiplier: GAME_BALANCE.gameSpeedDefault,
-      },
-      speedSteps: GAME_BALANCE.gameSpeedMultipliers,
-      applySpeed: (scale) => this.selectGameSpeed(scale),
-      applyFont: () => this.onFontScaleChange?.(),
-      // A language switch re-localizes through the same in-place restyle a font
-      // change uses — `refreshFontScale()` rebuilds the text nodes, and any node
-      // that resolves through `t(...)` picks up the new language on rebuild. HUD
-      // labels not yet migrated stay until their own pass; the pref persists so
-      // newly-opened (migrated) scenes render in the chosen language.
-      applyLanguage: () => this.onFontScaleChange?.(),
-      onNeuralToggle: (on) =>
-        this.showMessage(
-          on ? t("settings.neuralOn") : t("settings.neuralOff"),
-          on ? 0x00ccff : 0x99a8ba,
-        ),
-      onRequestClose: () => {
-        if (this.settingsPanel) {
-          this.settingsPanel.destroy({ children: true });
-          this.settingsPanel = null;
-        }
-      },
-    });
-    const c = panel.container;
-    c.x = this.gearButton.x;
-    c.y = Math.max(8, this.gearButton.y - SETTINGS_PANEL_HEIGHT - 4);
-    this.uiLayer.addChild(c);
-    this.settingsPanel = c;
-  }
-
   /**
    * Toggle the Accessibility panel (palette / reduced-motion / key remap,
-   * accessibility pass Task 4). A sibling of {@link toggleSettingsPanel}: a
-   * separate surface from the ⚙ settings panel (whose hit-area layout is locked
-   * by tests), tracked as {@link accessibilityPanel} so the Esc-close /
-   * outside-click wiring (via {@link isSettingsPanelOpen}/{@link closeModals})
-   * covers it too. Every control writes through its own browser-level pref
-   * (palette/reduced-motion/keymap `localStorage`) — no new save field.
+   * accessibility pass Task 4). Tracked as {@link accessibilityPanel} so the
+   * Esc-close / outside-click wiring (via {@link isSettingsPanelOpen}/
+   * {@link closeModals}) covers it. Every control writes through its own
+   * browser-level pref (palette/reduced-motion/keymap `localStorage`) — no new
+   * save field. (The former ⚙ settings panel that shared this bottom-left
+   * anchor moved to the main menu — see MainMenuScene — so this is now the only
+   * bottom-left HUD panel.)
    */
   private toggleAccessibilityPanel(): void {
     if (this.accessibilityPanel) {
@@ -1019,11 +917,6 @@ export class FlightHud implements FlightModule {
       return;
     }
     if (!this.accessibilityButton) return;
-    // The two ⚙/♿ panels share the same bottom-left anchor — only one open.
-    if (this.settingsPanel) {
-      this.settingsPanel.destroy({ children: true });
-      this.settingsPanel = null;
-    }
 
     const panel = new AccessibilityPanel({
       onRequestClose: () => this.closeAccessibilityPanel(),
@@ -1051,19 +944,6 @@ export class FlightHud implements FlightModule {
       this.accessibilityPanel.destroy({ children: true });
       this.accessibilityPanel = null;
     }
-  }
-
-  /**
-   * Apply a game speed chosen in the settings panel: keep the bottom-right speed
-   * button's cycle index in sync with the picked step (so the next cycle-tap
-   * advances from the right place) and route through {@link applyGameSpeed} (HUD
-   * label + durable engine store + physics via {@link onSpeedCycle}).
-   */
-  private selectGameSpeed(scale: number): void {
-    const steps = GAME_BALANCE.gameSpeedMultipliers;
-    const idx = steps.findIndex((s) => s === scale);
-    if (idx >= 0) this.speedIndex = idx;
-    this.applyGameSpeed(scale);
   }
 
   /**

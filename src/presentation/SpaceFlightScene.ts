@@ -1655,7 +1655,7 @@ export class SpaceFlightScene extends GameScene {
   /** Close any open blocking modal (NPC contact / quest journal / planet panel). */
   private closeBlockingModals(): void {
     this.npcManager.closeModals();
-    this.hud.closeModals(); // quest journal + settings panel (deferred destroy)
+    this.hud.closeModals(); // quest journal + ♿ accessibility panel (deferred destroy)
     this.planetManager.closeInfoPanel();
   }
 

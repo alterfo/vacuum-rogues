@@ -110,7 +110,7 @@ vi.mock("@/presentation/QuestJournalUI", () => ({
   })),
 }));
 
-import { Graphics, Text } from "pixi.js";
+import { Text } from "pixi.js";
 import { FlightHud } from "@/presentation/flight/FlightHud";
 import { UiButton } from "@/presentation/ui/UiButton";
 import type { Renderer } from "@/presentation/Renderer";
@@ -324,66 +324,42 @@ describe("FlightHud game-speed persistence (playtest3 F3)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Playtest4 finding A: changing the font size (S/M/L in the ⚙ panel) re-inited
-// SPACE_FLIGHT *from the HUD* with no context, which edge-spawned the ship. The
-// HUD must no longer transition the scene itself — it just persists the size,
-// closes the panel and fans the change out via onFontScaleChange (DIP). The
-// scene now restyles the text-bearing modules in place via refreshFontScale()
-// (no re-init) — see fontScaleRestyle.test.ts; this test only pins the HUD's
-// contract that it never transitions the scene on a font change.
+// Task 8 (20260626 playtest pass): the in-flight ⚙ settings panel (speed / font
+// / language / neural) was removed from the HUD and relocated to the main menu
+// (`MainMenuScene`). The old playtest4-A "font-scale button doesn't re-init the
+// scene" contract moved with it — the HUD no longer mounts a ⚙ gear button or a
+// `toggleSettingsPanel`. The scene's own in-place restyle path (refreshFontScale
+// / onFontScaleChanged) is unchanged and still covered by fontScaleRestyle.test.ts
+// + spaceFlightSpawn.test.ts. The ♿ accessibility quick-toggle stays in flight.
 // ---------------------------------------------------------------------------
 
-/** Collect the font-button pointerdown handlers created while the panel is open. */
-function fontButtonHandlers(): Array<
-  (e: { stopPropagation: () => void }) => void
-> {
-  return vi
-    .mocked(Graphics)
-    .mock.results.map((r) => r.value as { on?: ReturnType<typeof vi.fn> })
-    .flatMap((g) =>
-      (g.on?.mock.calls ?? [])
-        .filter((c: unknown[]) => c[0] === "pointerdown")
-        .map(
-          (c: unknown[]) =>
-            c[1] as (e: { stopPropagation: () => void }) => void,
-        ),
-    );
-}
-
-describe("FlightHud font-scale button (playtest4 A)", () => {
+describe("FlightHud settings panel relocated to the main menu (Task 8)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    localStorage.clear();
   });
 
-  it("persists the size + fires onFontScaleChange, never transitioning the scene itself", () => {
+  it("does not mount a ⚙ gear button (settings moved to the main menu)", () => {
     const m = makeMockRenderer();
-    const engine = makeGameEngine();
-    const transitionTo = vi.fn();
-    (engine as unknown as { transitionTo: typeof transitionTo }).transitionTo =
-      transitionTo;
-    const hud = new FlightHud(m.renderer, engine, m.renderer.uiLayer);
-    const onFontScaleChange = vi.fn();
-    hud.onFontScaleChange = onFontScaleChange;
+    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
     hud.initialize();
+    const icons = vi.mocked(UiButton).mock.calls.map((c) => c[0]);
+    expect(icons).not.toContain("⚙");
+  });
 
-    // Drop the Graphics created during initialize() (incl. the real minimap's)
-    // so fontButtonHandlers() only sees the font panel's hit graphics.
-    vi.mocked(Graphics).mockClear();
+  it("still mounts the ♿ accessibility button (the in-the-moment a11y aid stays)", () => {
+    const m = makeMockRenderer();
+    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
+    hud.initialize();
+    const icons = vi.mocked(UiButton).mock.calls.map((c) => c[0]);
+    expect(icons).toContain("♿");
+  });
 
-    // Open the font-size mini-panel and click the first ("S") font button.
-    (hud as unknown as { toggleSettingsPanel(): void }).toggleSettingsPanel();
-    expect(hud.isSettingsPanelOpen()).toBe(true);
-    const handlers = fontButtonHandlers();
-    expect(handlers.length).toBeGreaterThan(0);
-    handlers[0]({ stopPropagation: vi.fn() });
-
-    // Size is persisted, the panel closes, the change fans out via the callback,
-    // and the HUD does NOT reach for transitionTo itself.
-    expect(localStorage.getItem("fontScale")).toBe("S");
-    expect(hud.isSettingsPanelOpen()).toBe(false);
-    expect(onFontScaleChange).toHaveBeenCalledTimes(1);
-    expect(transitionTo).not.toHaveBeenCalled();
+  it("exposes no toggleSettingsPanel method", () => {
+    const m = makeMockRenderer();
+    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
+    expect(
+      (hud as unknown as { toggleSettingsPanel?: unknown }).toggleSettingsPanel,
+    ).toBeUndefined();
   });
 });
 

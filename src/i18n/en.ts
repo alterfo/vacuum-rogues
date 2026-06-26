@@ -140,6 +140,7 @@ export const en: Dict = {
     "one that decides whether inhabited space will hold.",
   "menu.newGame": "New Game",
   "menu.saves": "Saved Games",
+  "menu.settings": "Settings",
   "menu.feedback": "Send Feedback",
   "menu.replayTutorial": "Replay Tutorial",
   "menu.tutorialReset": "Tutorial reset — hints will show again",

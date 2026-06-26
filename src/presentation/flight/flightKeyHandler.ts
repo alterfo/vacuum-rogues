@@ -38,6 +38,13 @@ export interface FlightKeyContext {
     isQuestJournalOpen(): boolean;
     closeQuestJournal(): void;
     toggleQuestJournal(): void;
+    /**
+     * True while the bottom-left ♿ accessibility panel is open. (The name is
+     * retained from when this also covered the ⚙ settings panel, which moved to
+     * the main menu in the 20260626 playtest pass; only the accessibility panel
+     * remains in flight.) Optional so callers/tests that don't model it can omit
+     * it. Esc closes it via {@link closeModals}; Space is suppressed behind it.
+     */
     isSettingsPanelOpen?(): boolean;
     closeModals?(): void;
     /**
@@ -72,11 +79,11 @@ export interface FlightKeyContext {
  * action via the persisted keymap (`ctx.keymap ?? currentKeymap()`), so the keys
  * below are the *defaults* — a player can rebind any of them:
  * - `cancel` (Escape) closes the top open panel (combat pause → encounter →
- *   contact → journal → planet info → settings → system menu), else cancels a
- *   planned route.
+ *   contact → journal → planet info → ♿ accessibility → system menu), else
+ *   cancels a planned route.
  * - `runTurn` (Space) runs the planned turn (the keyboard equivalent of the
  *   confirming second click); guarded so a held key, a combat pause, an
- *   already-running turn, or an open contact/journal/planet-info/settings/
+ *   already-running turn, or an open contact/journal/planet-info/accessibility/
  *   system-menu panel can't fire `executeRouteTo`. No route → no-op + hint.
  * - `journal` (j) toggles the quest journal; `inventory` (i) opens the inventory.
  */
