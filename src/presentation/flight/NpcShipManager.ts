@@ -230,8 +230,6 @@ export class NpcShipManager implements FlightModule {
   // encounter it is presenting; transient, ephemeral (no save state).
   private encounterOverlay: Container | null = null;
   private activeEncounter: Encounter | null = null;
-  // Bumps the per-entry encounter seed so a re-roll within a system varies.
-  private encounterRollCount = 0;
   // Last camera zoom fanned out by the scene (updateHitAreas). Applied to
   // newly spawned sprites too — otherwise a ship arriving while the player is
   // zoomed out keeps its default 40-world-px hit circle (~10 screen px at
@@ -2048,15 +2046,18 @@ export class NpcShipManager implements FlightModule {
    * already owns the screen, or before the galaxy/player are wired.
    */
   private maybeShowEntryEncounter(): void {
-    if (this.overmindOverlay || this.encounterOverlay) return;
+    // Don't pop a "dock the derelict?" modal while a fight is already underway
+    // (a hostile system turns its garrison aggressive on entry, and hostile
+    // space is exactly where encounters fire most often).
+    if (this.inCombat || this.overmindOverlay || this.encounterOverlay) return;
     const encounter = this.rollEntryEncounter();
     if (encounter) this.showEncounterPrompt(encounter);
   }
 
   /**
-   * Pure roll seeded by (system, day, roll-count): a given entry is
-   * deterministic/replay-stable, yet a re-entry on a later day differs. Reads the
-   * live galaxy danger + player progression. Returns null when nothing fires.
+   * Pure roll seeded by (system, day): a given entry is deterministic/replay-
+   * stable, yet a re-entry on a later day differs. Reads the live galaxy danger +
+   * player progression. Returns null when nothing fires.
    */
   private rollEntryEncounter(): Encounter | null {
     const galaxy = this.gameEngine?.galaxy;
@@ -2071,7 +2072,7 @@ export class NpcShipManager implements FlightModule {
       return null;
     }
     const systemId = player.currentSystemId;
-    const seed = `${systemId}:${galaxy.gameDays}:${this.encounterRollCount++}`;
+    const seed = `${systemId}:${galaxy.gameDays}`;
     return rollEncounter(
       encounterSystemView(galaxy, systemId),
       seed,
@@ -2103,7 +2104,12 @@ export class NpcShipManager implements FlightModule {
     const galaxy = this.gameEngine?.galaxy;
     if (player && galaxy) {
       applyEncounterOutcome(
-        { bank: this.gameEngine?.bank, player, galaxy },
+        {
+          bank: this.gameEngine?.bank,
+          player,
+          galaxy,
+          loadout: this.gameEngine?.playerLoadout,
+        },
         encounter,
         outcome,
       );

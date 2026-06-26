@@ -11,9 +11,12 @@ import { hashStr } from "@/utils/hashStr";
  * Pure: no GameEngine/PixiJS/DOM coupling, no `Math.random`. Occurrence is
  * **deterministic by `(systemId, seed)`** (folded through `hashStr`) so the same
  * entry always rolls the same encounter — unit-testable, replay-stable. The
- * caller (the flight scene / NPC manager) supplies the per-entry `seed`, applies
- * the rate limit via `playerState.stepsSinceLastEncounter`, and routes the
- * resulting `Encounter` into a choice prompt + the outcome resolver (Task 2).
+ * caller (the flight scene / NPC manager) supplies the per-entry `seed` and
+ * routes the resulting `Encounter` into a choice prompt + the outcome resolver
+ * (Task 2). The current caller rolls **once per system entry**, so the per-entry
+ * occurrence probability (`baseChance`..`maxChance`) is its flood-control; the
+ * `playerState.stepsSinceLastEncounter` / `config.minGap` pair is the optional
+ * extra gap guard for a caller that rolls on a finer cadence (per flight tick).
  *
  * The companion resolver (`encounterOutcome.ts`) reads the `danger` / `rewardScale`
  * this generator stamps on the encounter to weight trap/ambush odds and payoffs.
@@ -47,10 +50,11 @@ export interface EncounterPlayerState {
   /** Pirate-faction reputation; a hostile rep nudges the danger up. Defaults to 0. */
   pirateRep?: number;
   /**
-   * Steps (flight ticks / day rolls) since the last encounter fired — the rate
-   * limit. Below `config.minGap` no encounter rolls ("spice, not a flood").
-   * A fresh caller that does not track it (undefined) is treated as "long ago"
-   * so the first roll is eligible.
+   * Steps (flight ticks / day rolls) since the last encounter fired — the
+   * optional finer-cadence gap guard. Below `config.minGap` no encounter rolls.
+   * The entry-based caller leaves this **undefined** (it rolls once per system
+   * entry and relies on the occurrence probability for "spice, not a flood");
+   * undefined is treated as "long ago" so such a roll is always eligible.
    */
   stepsSinceLastEncounter?: number;
 }
@@ -76,7 +80,12 @@ export interface Encounter {
 export interface EncounterConfig {
   /** Probability an eligible roll yields an encounter at zero system danger. */
   baseChance: number;
-  /** Encounters can't fire within this many steps of the last one (rate limit). */
+  /**
+   * Optional finer-cadence gap: encounters can't fire within this many steps of
+   * the last one, but only for a caller that tracks `stepsSinceLastEncounter`.
+   * The entry-based caller leaves that undefined, so this gate is inert there
+   * (per-entry occurrence probability is its flood-control instead).
+   */
   minGap: number;
   /** Extra chance per unit system danger (`chance += danger × dangerChanceBoost`). */
   dangerChanceBoost: number;

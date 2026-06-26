@@ -160,4 +160,69 @@ describe("applyEncounterOutcome", () => {
     expect(player.credits).toBe(1000);
     expect(player.inventory.resources).toEqual([]);
   });
+
+  it("clamps a hazard cost to available credits (never goes negative)", () => {
+    // Charge bigger than the balance would brick the save (credits is min(0)).
+    const player = fakePlayer(1, 100);
+    const outcome: EncounterOutcome = {
+      kind: "hazard",
+      credits: -250,
+      message: "",
+    };
+    applyEncounterOutcome({ bank: null, player, galaxy }, enc, outcome);
+    expect(player.credits).toBe(0);
+  });
+
+  it("a hazard on a broke player leaves credits at zero", () => {
+    const player = fakePlayer(1, 0);
+    const outcome: EncounterOutcome = {
+      kind: "hazard",
+      credits: -250,
+      message: "",
+    };
+    applyEncounterOutcome({ bank: null, player, galaxy }, enc, outcome);
+    expect(player.credits).toBe(0);
+  });
+
+  it("clamps looted cargo to the remaining hold capacity", () => {
+    const player = fakePlayer(1, 1000);
+    player.inventory.addResource(ResourceType.METALS, 4);
+    const loadout = {
+      derivedStats: () => ({ cargo: 5 }),
+    } as unknown as Parameters<typeof applyEncounterOutcome>[0]["loadout"];
+    const outcome: EncounterOutcome = {
+      kind: "salvage",
+      credits: 0,
+      cargo: [{ type: ResourceType.ELECTRONICS, amount: 3 }],
+      message: "",
+    };
+    applyEncounterOutcome(
+      { bank: null, player, galaxy, loadout },
+      enc,
+      outcome,
+    );
+    // Only 1 unit of the 3 fits (4 used of 5), so the hold tops out at capacity.
+    const total = player.inventory.resources.reduce((s, r) => s + r.amount, 0);
+    expect(total).toBe(5);
+    expect(
+      player.inventory.resources.find(
+        (r) => r.type === ResourceType.ELECTRONICS,
+      )?.amount,
+    ).toBe(1);
+  });
+
+  it("with no loadout supplied, cargo is added unclamped (legacy/test path)", () => {
+    const player = fakePlayer(1, 1000);
+    const outcome: EncounterOutcome = {
+      kind: "salvage",
+      credits: 0,
+      cargo: [{ type: ResourceType.METALS, amount: 9 }],
+      message: "",
+    };
+    applyEncounterOutcome({ bank: null, player, galaxy }, enc, outcome);
+    expect(
+      player.inventory.resources.find((r) => r.type === ResourceType.METALS)
+        ?.amount,
+    ).toBe(9);
+  });
 });

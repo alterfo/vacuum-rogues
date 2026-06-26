@@ -43,7 +43,7 @@ npm run letsplay:ci         # Letsplay CI oracle (pre-push + CI gate, ~2.5 s): K
 | Layer | Directory | Responsibility |
 |-------|-----------|----------------|
 | Presentation | `src/presentation/` | PixiJS scenes, sprites, rendering, player input |
-| Systems | `src/systems/` | GameEngine, AudioManager, trade, dialogue, galaxy generation; sub-modules: `equipment/`, `npc/`, `quests/`, `info/`, `combat/`, `galaxy/`, `trade/` (route scanner + rumor lifecycle), `onboarding/` (contextual-help content registry + browser-level "seen" persistence) |
+| Systems | `src/systems/` | GameEngine, AudioManager, trade, dialogue, galaxy generation; sub-modules: `equipment/`, `npc/`, `quests/`, `info/`, `combat/`, `galaxy/`, `trade/` (route scanner + rumor lifecycle), `onboarding/` (contextual-help content registry + browser-level "seen" persistence), `encounters/` (pure exploration-encounter generator + outcome resolver + flight-wiring bridge — derelict/anomaly/distress, ephemeral/no save state; tune in `balance.ts` `ENCOUNTER_CONFIG`/`ENCOUNTER_OUTCOME_CONFIG`) |
 | Domain | `src/domain/` | Pure entities (Player, Galaxy, StarSystem) — no PixiJS/ONNX/DOM deps |
 | AI/Infrastructure | `src/ai/`, `src/data/` | Rule-based `FallbackEngine` (+ adaptive quality profile, template narrator), IndexedDB, save management. Neural policies are tiny pure-TS MLPs (`src/tests/playtest/letsplay/mlp.ts`) — no ONNX runtime |
 | Types/Config | `src/types/`, `src/config/` | Shared types, enums, balance constants; `FactionType` replaces old `RaceType` |

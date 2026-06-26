@@ -21,6 +21,13 @@ export interface FlightKeyContext {
      * omit it, in which case the guard falls back to `isContactPanelOpen`.
      */
     hasOpenModal?(): boolean;
+    /**
+     * True while the exploration-encounter choice prompt is open; `close` walks
+     * away from it (the neutral "leave" — no payoff, no fight). Optional so
+     * callers/tests that don't model encounters can omit them.
+     */
+    isEncounterPromptOpen?: boolean;
+    closeEncounterPrompt?(): void;
   };
   hud: {
     isQuestJournalOpen(): boolean;
@@ -62,6 +69,8 @@ export function handleFlightKey(
 ): void {
   if (event.key === "Escape") {
     if (ctx.combatPause.paused) ctx.combatPause.resume();
+    else if (ctx.npcManager.isEncounterPromptOpen)
+      ctx.npcManager.closeEncounterPrompt?.();
     else if (ctx.npcManager.isContactPanelOpen)
       ctx.npcManager.closeContactPanel();
     else if (ctx.hud.isQuestJournalOpen()) ctx.hud.closeQuestJournal();

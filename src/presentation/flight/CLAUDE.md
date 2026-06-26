@@ -39,10 +39,13 @@ every controller method (`pointerType !== "touch"` ⇒ no-op), so the desktop pa
 
 **Exploration encounters are two pure functions + a thin flight bridge**
 (`src/systems/encounters/`, `docs/plans/20260625-exploration-encounters.md`). On system entry
-`NpcShipManager.maybeShowEntryEncounter` rolls one — `rollEncounter(system, seed, playerState,
-ENCOUNTER_CONFIG)` (`encounterGenerator.ts`) is **pure** and **deterministic by `(systemId, seed)`**:
-past the `minGap` rate limit ("spice, not a flood") a weighted, danger/level-scaled
-derelict/anomaly/distress `Encounter` (else `null`). The system `danger` 0..1 comes from
+`NpcShipManager.maybeShowEntryEncounter` rolls one (skipped while a fight is already active) —
+`rollEncounter(system, seed, playerState, ENCOUNTER_CONFIG)` (`encounterGenerator.ts`) is **pure**
+and **deterministic by `(systemId, seed)`**: a weighted, danger/level-scaled
+derelict/anomaly/distress `Encounter` (else `null`). The roll fires **once per system entry**, so
+its per-entry occurrence probability (`baseChance`..`maxChance`) is the "spice, not a flood"
+flood-control; `minGap`/`stepsSinceLastEncounter` is an optional extra gap guard the entry-based
+caller leaves inert (it's for a finer per-tick cadence). The system `danger` 0..1 comes from
 `encounterSystemView` (`encounterFlight.ts`: Overmind-held = 1, pirate-held = 0.6, else 0); the
 player projection from `encounterPlayerStateFor` (level + pirate rep). The scene then shows a
 two-choice prompt; the player's pick runs `resolveEncounter(encounter, choice, rng?,

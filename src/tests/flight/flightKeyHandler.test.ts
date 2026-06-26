@@ -22,6 +22,8 @@ type Ctx = FlightKeyContext & {
     isContactPanelOpen: boolean;
     closeContactPanel: ReturnType<typeof vi.fn>;
     hasOpenModal?: ReturnType<typeof vi.fn>;
+    isEncounterPromptOpen?: boolean;
+    closeEncounterPrompt?: ReturnType<typeof vi.fn>;
   };
   hud: {
     isQuestJournalOpen: ReturnType<typeof vi.fn>;
@@ -45,7 +47,12 @@ type Ctx = FlightKeyContext & {
 function makeCtx(overrides: Partial<Ctx> = {}): Ctx {
   return {
     combatPause: { paused: false, resume: vi.fn() },
-    npcManager: { isContactPanelOpen: false, closeContactPanel: vi.fn() },
+    npcManager: {
+      isContactPanelOpen: false,
+      closeContactPanel: vi.fn(),
+      isEncounterPromptOpen: false,
+      closeEncounterPrompt: vi.fn(),
+    },
     hud: {
       isQuestJournalOpen: vi.fn().mockReturnValue(false),
       closeQuestJournal: vi.fn(),
@@ -90,6 +97,30 @@ describe("handleFlightKey — Esc priority chain", () => {
     expect(ctx.hud.closeQuestJournal).not.toHaveBeenCalled();
     expect(ctx.planetManager.closeInfoPanel).not.toHaveBeenCalled();
     expect(ctx.clearPlannedRoute).not.toHaveBeenCalled();
+  });
+
+  it("dismisses the encounter prompt ahead of contact panel / journal / route", () => {
+    ctx.npcManager.isEncounterPromptOpen = true;
+    ctx.npcManager.isContactPanelOpen = true;
+    ctx.hud.isQuestJournalOpen.mockReturnValue(true);
+    ctx.plannedRoute = { x: 1, y: 2 };
+
+    handleFlightKey(esc(), ctx);
+
+    expect(ctx.npcManager.closeEncounterPrompt).toHaveBeenCalledTimes(1);
+    expect(ctx.npcManager.closeContactPanel).not.toHaveBeenCalled();
+    expect(ctx.hud.closeQuestJournal).not.toHaveBeenCalled();
+    expect(ctx.clearPlannedRoute).not.toHaveBeenCalled();
+  });
+
+  it("resumes a combat pause ahead of the encounter prompt", () => {
+    ctx.combatPause.paused = true;
+    ctx.npcManager.isEncounterPromptOpen = true;
+
+    handleFlightKey(esc(), ctx);
+
+    expect(ctx.combatPause.resume).toHaveBeenCalledTimes(1);
+    expect(ctx.npcManager.closeEncounterPrompt).not.toHaveBeenCalled();
   });
 
   it("closes the contact panel ahead of journal / planet info / route", () => {

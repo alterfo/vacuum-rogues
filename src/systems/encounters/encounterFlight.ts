@@ -1,10 +1,12 @@
 import type { Player } from "@/domain/Player";
+import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { Faction } from "@/types/faction";
 import {
   adjustPlayerCredits,
   GL_COUNTERPARTY,
   type BankAccess,
 } from "@/systems/banking/economy";
+import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
 import { PIRATE_FACTION_ID } from "@/systems/galaxy/landingAccess";
 import type { Encounter, EncounterSystemView, EncounterPlayerState } from "./encounterGenerator"; // prettier-ignore
 import type { EncounterOutcome } from "./encounterOutcome";
@@ -89,6 +91,12 @@ export interface EncounterApplyDeps {
   bank: BankAccess | null | undefined;
   player: Player;
   galaxy: EncounterGalaxyView;
+  /**
+   * The player's loadout — its `cargo` stat caps the hold, so salvage/bonus
+   * cargo is clamped to the remaining capacity (mirroring trade + the gravity
+   * tractor). Optional: a bare caller/test without a loadout skips the clamp.
+   */
+  loadout?: ShipLoadout | null;
 }
 
 /**
@@ -103,23 +111,47 @@ export function applyEncounterOutcome(
   encounter: Encounter,
   outcome: EncounterOutcome,
 ): void {
-  const { bank, player, galaxy } = deps;
+  const { bank, player, galaxy, loadout } = deps;
 
   if (outcome.credits) {
-    const counterparty =
-      outcome.credits >= 0 ? GL_COUNTERPARTY.REWARDS : GL_COUNTERPARTY.SERVICES;
-    adjustPlayerCredits(
-      bank,
-      player,
-      outcome.credits,
-      counterparty,
-      `Исход встречи (${outcome.kind})`,
-    );
+    // Never overdraw the player into a negative balance: `PlayerSchema.credits`
+    // is `int().min(0)`, so a hazard repair cost bigger than the balance would
+    // brick the save on reload. Clamp the charge to what the player actually has
+    // (the same guard quests use for fines / tribute).
+    const delta =
+      outcome.credits < 0
+        ? -Math.min(-outcome.credits, Math.max(0, player.credits))
+        : outcome.credits;
+    if (delta !== 0) {
+      const counterparty =
+        delta >= 0 ? GL_COUNTERPARTY.REWARDS : GL_COUNTERPARTY.SERVICES;
+      adjustPlayerCredits(
+        bank,
+        player,
+        delta,
+        counterparty,
+        `Исход встречи (${outcome.kind})`,
+      );
+    }
   }
 
+  // Cargo respects the hold: clamp the total added to the remaining capacity
+  // (when a loadout is supplied) so an encounter can't overflow the hold — the
+  // same gate trade and the gravity tractor enforce.
+  let freeHold =
+    loadout != null
+      ? Math.max(
+          0,
+          cargoCapacityOf(loadout) -
+            player.inventory.resources.reduce((sum, r) => sum + r.amount, 0),
+        )
+      : Number.POSITIVE_INFINITY;
   for (const stack of outcome.cargo ?? []) {
-    if (stack.amount > 0)
-      player.inventory.addResource(stack.type, stack.amount);
+    if (stack.amount <= 0) continue;
+    const add = Math.min(stack.amount, freeHold);
+    if (add <= 0) break;
+    player.inventory.addResource(stack.type, add);
+    freeHold -= add;
   }
 
   if (outcome.reputationDelta) {
