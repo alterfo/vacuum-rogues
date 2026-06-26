@@ -59,10 +59,17 @@ describe("Местный подряд targets a neighbouring planet (≠ issuer)
     }
   });
 
-  it("only non-habitable neighbours → still picks one (not null, not the issuer)", () => {
-    // Issuer ISO_p1 is the sole habitable planet; the only neighbour ISO_p2 is
-    // non-habitable. pickTargetPlanet must fall back to that neighbour (candidates[0]),
-    // NOT return null — else the system would wrongly demote to a text quest.
+  it("only non-habitable neighbours → demotes to a text quest (no dead-end barren delivery) [Task 9]", () => {
+    // Issuer ISO_p1 is the sole habitable planet; the only neighbour ISO_p2 is a
+    // barren moon. Task 9 (no dead-end «Местный подряд»): the local delivery must
+    // NOT target an uninhabited world — with no *habitable* neighbour the slot
+    // demotes to a text quest instead.
+    //
+    // NOTE: this assertion was intentionally INVERTED by Task 9
+    // (docs/plans/20260626-playtest-bugs-...). The earlier version expected the
+    // contract to fall back to the barren neighbour ISO_p2 — that "deliver to a
+    // dead-end rock" behaviour is the bug being fixed, so the destination picker
+    // and the eligibility guard now both require a habitable neighbour.
     const system = {
       id: "ISO",
       name: "Захолустье",
@@ -73,12 +80,13 @@ describe("Местный подряд targets a neighbouring planet (≠ issuer)
       ],
     } as unknown as StarSystem;
 
-    const locals = boardFor(system).filter(
-      (q) => q.template.title === "Местный подряд",
-    );
-    expect(locals.length).toBeGreaterThan(0);
-    for (const local of locals) {
-      expect(local.targetPlanetId).toBe("ISO_p2");
+    const board = boardFor(system);
+    expect(
+      board.find((q) => q.template.title === "Местный подряд"),
+    ).toBeUndefined();
+    expect(board.length).toBeGreaterThan(0);
+    for (const q of board) {
+      expect(q.template.type).toBe(QuestType.TEXT_ADVENTURE);
     }
   });
 

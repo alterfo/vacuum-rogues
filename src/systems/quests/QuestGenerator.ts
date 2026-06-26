@@ -433,12 +433,17 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     const isText = rng.next() < textRatio;
 
     if (isText || reachable.length === 0) {
-      // A «Местный подряд» local delivery now goes to a *different* planet in the
-      // same system, so it needs a real neighbour. A KNOWN single-planet origin
-      // has none — emit a text quest instead of a degenerate same-planet contract.
+      // A «Местный подряд» local delivery now goes to a *different* HABITABLE
+      // planet in the same system, so it needs a real habitable neighbour. A
+      // KNOWN origin without a second inhabited world (single-planet, or one
+      // habitable planet + only barren ones) has nowhere meaningful to deliver —
+      // emit a text quest instead of a dead-end contract to an uninhabited rock.
+      // The guard uses the SAME predicate as the destination picker
+      // (`pickTargetPlanet(..., habitableOnly=true)`) so the two always agree.
       // An unknown origin (null, only in tests) keeps the legacy local delivery
       // with a system-level (null target planet) completion.
-      const originHasNeighbour = !origin || origin.planets.length >= 2;
+      const originHasNeighbour =
+        !origin || pickTargetPlanet(origin, planetId, true) !== null;
       return applyPrefix(
         isText || !originHasNeighbour
           ? buildTextQuest(rng, planetId, bucket, i, day, origin)
@@ -630,15 +635,23 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
  * `excludeId` (the issuer planet) is skipped so an in-system courier run targets a
  * genuine *neighbour* — a different habitable planet if one exists, else any other
  * planet, else null (no neighbour ⇒ caller falls back to a non-delivery quest).
+ *
+ * `habitableOnly` (local delivery): restrict candidates to *habitable* planets, so
+ * a «Местный подряд» never delivers to a barren/uninhabited dead-end. With it set,
+ * a system whose only neighbour is barren returns null and the caller demotes the
+ * slot to a text quest — the destination picker and the eligibility guard share
+ * this exact predicate so they always agree.
  */
 function pickTargetPlanet(
   system: StarSystem | null,
   excludeId: string | null = null,
+  habitableOnly = false,
 ): string | null {
   if (!system || system.planets.length === 0) return null;
-  const candidates = excludeId
+  let candidates = excludeId
     ? system.planets.filter((p) => p.id !== excludeId)
     : system.planets;
+  if (habitableOnly) candidates = candidates.filter((p) => p.isHabitable);
   if (candidates.length === 0) return null;
   const habitable = candidates.find((p) => p.isHabitable);
   return (habitable ?? candidates[0]).id;
@@ -1061,11 +1074,14 @@ function buildLocalDelivery(
   const id = slotId(planetId, bucket, i);
   const issuer = pickIssuer(rng, QuestType.DELIVERY);
   const cargo = pickCargo(rng);
-  // Target a genuine *neighbour* — a different planet in the same system than the
-  // issuing planet — so the contract is a real courier run, not "buy here, deliver
-  // here". `excludeId = planetId` (the issuer) is skipped; null only when origin is
-  // unknown (tests), where completion stays system-level.
-  const targetPlanetId = pickTargetPlanet(origin, planetId);
+  // Target a genuine *habitable* neighbour — a different inhabited planet in the
+  // same system than the issuing planet — so the contract is a real courier run,
+  // not "buy here, deliver here" and never a dead-end to a barren world.
+  // `excludeId = planetId` (the issuer) is skipped and `habitableOnly` keeps the
+  // destination inhabited; null only when origin is unknown (tests), where
+  // completion stays system-level. The slot is only reached when the matching
+  // guard already confirmed such a habitable neighbour exists.
+  const targetPlanetId = pickTargetPlanet(origin, planetId, true);
   // Always resolve to a real SYSTEM id. When `origin` is unknown we must fall
   // back to `originSystemId` (the board's system id) — never `planetId`, which
   // is a planet id and would make `checkDeliveryQuestCompletion` never match.

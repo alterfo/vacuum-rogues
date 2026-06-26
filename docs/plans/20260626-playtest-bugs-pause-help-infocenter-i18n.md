@@ -194,12 +194,12 @@ bugs, unit test for pure logic), then fix until green, then verify.
 - Modify: `src/systems/quests/QuestGenerator.ts` (the `originHasNeighbour` guard at `:441` and `pickTargetPlanet` at `:634` — local-delivery must require a habitable neighbour)
 - Modify/Create: `src/tests/quests/localDeliveryQuest.test.ts`
 
-- [ ] write a **failing** test: a board in a system with exactly one habitable planet (plus ≥1 barren planet) must **not** emit a «Местный подряд» (it falls back to a text quest); only a system with **≥2 habitable** planets may
-- [ ] write a **failing** test: when a local delivery IS generated, its destination planet is always habitable and ≠ the issuer planet (never a barren/uninhabited world)
-- [ ] fix the guard so `originHasNeighbour` counts **habitable** planets (a real delivery destination ≠ issuer exists), matching the picker
-- [ ] fix the destination selection so local delivery targets only a **habitable** neighbour (a dedicated picker or a `habitableOnly` flag on `pickTargetPlanet`) — without changing `pickTargetPlanet`'s behaviour for its other callers (check blast radius first)
-- [ ] verify the existing local-delivery tests still pass (their fixtures must use ≥2 habitable planets); if one reds, re-diagnose rather than weaken it
-- [ ] run tests — must pass before next task
+- [x] write a **failing** test: a board in a system with exactly one habitable planet (plus ≥1 barren planet) must **not** emit a «Местный подряд» (it falls back to a text quest); only a system with **≥2 habitable** planets may — `localDeliveryQuest.test.ts` adds the single-habitable-+-barren (no local delivery, all slots TEXT_ADVENTURE) and ≥2-habitable (emits) cases; the single-habitable case was RED pre-fix
+- [x] write a **failing** test: when a local delivery IS generated, its destination planet is always habitable and ≠ the issuer planet (never a barren/uninhabited world) — `localDeliveryQuest.test.ts` asserts the destination is in the habitable set, ≠ issuer, ≠ the barren moon
+- [x] fix the guard so `originHasNeighbour` counts **habitable** planets (a real delivery destination ≠ issuer exists), matching the picker — `originHasNeighbour = !origin || pickTargetPlanet(origin, planetId, true) !== null` (`QuestGenerator.ts:441`), the **same predicate** the picker uses so guard + picker always agree
+- [x] fix the destination selection so local delivery targets only a **habitable** neighbour — added a `habitableOnly` flag to `pickTargetPlanet` (default `false`, so the 4 other callers — defense/routine/chain/finale — are byte-for-byte unchanged); `buildLocalDelivery` passes `true`
+- [x] verify the existing local-delivery tests still pass (their fixtures must use ≥2 habitable planets); if one reds, re-diagnose rather than weaken it — all green EXCEPT `localDeliveryNeighbour.test.ts` test #2, which **deliberately encoded the dead-end behaviour being fixed** (delivering to a barren moon). Re-diagnosed: it asserted the bug, so its assertion was intentionally **inverted** to the corrected behaviour (demotes to a text quest), documented in-test as a Task 9 change — not a weakening
+- [x] run tests — must pass before next task — full `src/tests/quests/` (26 files / 294 tests), local-delivery callers (journeys/balanceInvariants/questJournal*/gearCurve, 41), and the playtest gate (260) all green; tsc + eslint (0 errors) clean
 
 ### Task 10: Verify acceptance criteria
 - [ ] verify all reported items are fixed: pause freezes movement+fire (Task 1), «?» clears the balance (Task 2), known routes show numeric margins (Task 3), English build shows no Russian incl. faction-selection (Tasks 4–7), settings live on the main menu with the in-flight ⚙ gone (Task 8), and no dead-end «Местный подряд» in single-habitable systems (Task 9)
