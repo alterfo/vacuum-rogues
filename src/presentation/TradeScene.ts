@@ -460,6 +460,8 @@ export class TradeScene extends GameScene {
         return t("trade.insufficientCredits");
       case "Not enough resources to sell.":
         return t("trade.nothingToSell");
+      case "Not enough cargo space.":
+        return t("trade.cargoFull");
       default:
         return message ?? t("trade.failed");
     }

@@ -102,6 +102,7 @@ export const en: Dict = {
   "trade.result": "{verb}: {qty}×{name} for {price} cr.",
   "trade.insufficientCredits": "Insufficient credits",
   "trade.nothingToSell": "Nothing to sell",
+  "trade.cargoFull": "Not enough cargo space",
   "trade.failed": "Trade failed",
 
   // --- job board / quest types ---------------------------------------------

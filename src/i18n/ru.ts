@@ -103,6 +103,7 @@ export const ru: Dict = {
   "trade.result": "{verb}: {qty}×{name} за {price} кр.",
   "trade.insufficientCredits": "Недостаточно кредитов",
   "trade.nothingToSell": "Нечего продавать",
+  "trade.cargoFull": "Недостаточно места в трюме",
   "trade.failed": "Сделка не удалась",
 
   // --- job board / quest types ---------------------------------------------
