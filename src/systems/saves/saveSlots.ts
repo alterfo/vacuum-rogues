@@ -220,8 +220,12 @@ export function isTerminalScene(scene: SceneType | undefined): boolean {
 export async function latestMeaningfulSlot(
   manager: SlotManagerLike,
 ): Promise<string | null> {
+  // Only the visible slot universe (auto + the manual grid) is a Continue
+  // candidate — never the hidden `_emergency` recovery dump or any other slot
+  // the player can't see/manage.
+  const known = new Set(allSlotIds());
   const candidates = (await manager.listSlots()).filter(
-    (s) => !isTerminalScene(s.currentSceneType),
+    (s) => known.has(s.slotId) && !isTerminalScene(s.currentSceneType),
   );
   if (candidates.length === 0) return null;
   let best = candidates[0];

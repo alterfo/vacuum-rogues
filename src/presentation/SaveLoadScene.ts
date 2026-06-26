@@ -275,6 +275,10 @@ export class SaveLoadScene extends GameScene {
       this.messageText.x = width / 2;
       this.messageText.y = height - 16;
       this.renderer.uiLayer.addChild(this.messageText);
+      // One-shot: the banner stays drawn until the next action re-renders the
+      // screen, then clears — so a stale "Сохранено" doesn't linger over an
+      // unrelated later interaction (e.g. a delete confirm).
+      this.flashMessage = null;
     }
   }
 
@@ -287,8 +291,15 @@ export class SaveLoadScene extends GameScene {
     bg.stroke({ color: row.isAuto ? 0x335577 : 0x223344, width: 1 });
     node.addChild(bg);
 
+    // Cap the displayed name so a long player-entered name can't overflow the
+    // row and overlap the right-aligned action buttons.
+    const MAX_NAME_CHARS = 28;
+    const displayName =
+      row.name.length > MAX_NAME_CHARS
+        ? `${row.name.slice(0, MAX_NAME_CHARS - 1)}…`
+        : row.name;
     const nameText = new Text({
-      text: row.name,
+      text: displayName,
       style: {
         fontFamily: "Courier New",
         fontSize: 16,

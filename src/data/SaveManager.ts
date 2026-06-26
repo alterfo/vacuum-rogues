@@ -10,6 +10,14 @@ import { logger } from "@/utils/logger";
 
 export const MAX_SLOTS = 10;
 
+/**
+ * Hidden recovery slot written on a critical error ({@link
+ * GameEngine.handleCriticalError}). It is invisible to the save/load UI and must
+ * NOT count against the player-facing {@link MAX_SLOTS} cap, or the user's full
+ * grid (auto + the manual slots) would lose a slot to it.
+ */
+export const EMERGENCY_SLOT_ID = "_emergency";
+
 export class SaveManager {
   private db: IndexedDBAdapter;
   private serializer: SaveStateSerializer;
@@ -29,7 +37,14 @@ export class SaveManager {
     }
 
     const slots = await this.listSlots();
-    if (slots.length >= MAX_SLOTS && !slots.find((s) => s.slotId === slotId)) {
+    // The hidden emergency slot is uncapped (and never blocks the user's grid):
+    // count only player-facing slots against the cap.
+    const cappedSlots = slots.filter((s) => s.slotId !== EMERGENCY_SLOT_ID);
+    if (
+      slotId !== EMERGENCY_SLOT_ID &&
+      cappedSlots.length >= MAX_SLOTS &&
+      !cappedSlots.find((s) => s.slotId === slotId)
+    ) {
       throw new GameValidationException(
         "SAVE_SLOTS_FULL",
         `Maximum ${MAX_SLOTS} save slots reached. Please overwrite an existing slot.`,

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SaveState } from "@/domain/SaveState";
 import type { SaveSlotInfo } from "@/types";
 import { SceneType } from "@/types";
@@ -17,6 +17,7 @@ import {
   latestMeaningfulSlot,
   isTerminalScene,
   getSlotName,
+  setSlotName,
   type SlotManagerLike,
 } from "@/systems/saves/saveSlots";
 
@@ -266,5 +267,80 @@ describe("saveSlots — Continue resolver", () => {
       currentSceneType: SceneType.WIN_SCREEN,
     });
     expect(await latestMeaningfulSlot(m)).toBeNull();
+  });
+
+  it("ignores hidden/unknown slots (e.g. the _emergency dump) even if newest", async () => {
+    const m = new FakeSlotManager();
+    m.setRow({
+      slotId: AUTO_SLOT_ID,
+      timestamp: 100,
+      playerLevel: 1,
+      location: "A",
+      currentSceneType: SceneType.SPACE_FLIGHT,
+    });
+    // A hidden recovery dump with the newest timestamp must NOT be resumed.
+    m.setRow({
+      slotId: "_emergency",
+      timestamp: 999,
+      playerLevel: 9,
+      location: "Crash",
+      currentSceneType: SceneType.SPACE_FLIGHT,
+    });
+    // An unrecognised slot id is likewise not a Continue candidate.
+    m.setRow({
+      slotId: "slot-99",
+      timestamp: 998,
+      playerLevel: 8,
+      location: "Bogus",
+      currentSceneType: SceneType.SPACE_FLIGHT,
+    });
+    expect(await latestMeaningfulSlot(m)).toBe(AUTO_SLOT_ID);
+  });
+
+  it("returns null when only hidden slots exist", async () => {
+    const m = new FakeSlotManager();
+    m.setRow({
+      slotId: "_emergency",
+      timestamp: 999,
+      playerLevel: 9,
+      location: "Crash",
+      currentSceneType: SceneType.SPACE_FLIGHT,
+    });
+    expect(await latestMeaningfulSlot(m)).toBeNull();
+  });
+});
+
+describe("saveSlots — name store degradation", () => {
+  it("setSlotName with an empty/whitespace name clears the custom name", async () => {
+    const m = new FakeSlotManager();
+    setSlotName("slot-1", "Перед боссом");
+    expect(getSlotName("slot-1")).toBe("Перед боссом");
+
+    setSlotName("slot-1", "   ");
+    expect(getSlotName("slot-1")).toBeNull();
+    m.setRow({ slotId: "slot-1", timestamp: 1, playerLevel: 1, location: "X" });
+    const rows = await listSlotRows(m);
+    expect(rows.find((r) => r.slotId === "slot-1")!.name).toBe("Слот 1");
+  });
+
+  it("getSlotName degrades to null on corrupt or non-object stored JSON", () => {
+    localStorage.setItem("sr_save_names", "{not valid json");
+    expect(getSlotName("slot-1")).toBeNull();
+
+    localStorage.setItem("sr_save_names", "5"); // valid JSON, not an object
+    expect(getSlotName("slot-1")).toBeNull();
+  });
+
+  it("setSlotName does not throw when storage rejects the write", () => {
+    const spy = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("quota exceeded");
+      });
+    try {
+      expect(() => setSlotName("slot-1", "Имя")).not.toThrow();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

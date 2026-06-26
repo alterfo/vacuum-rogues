@@ -172,4 +172,64 @@ describe("SaveLoadScene — actions delegate to the model/engine", () => {
       expect.objectContaining({ gameEngine: expect.anything() }),
     );
   });
+
+  it("confirmPending carries out an armed overwrite (re-prompts the name + saves)", async () => {
+    const { scene, manager, saveGame } = makeScene({ withGame: true });
+    manager.setRow({
+      slotId: "slot-2",
+      timestamp: 1000,
+      playerLevel: 2,
+      location: "Корвет",
+      currentSceneType: SceneType.SPACE_FLIGHT,
+    });
+    await scene.refresh();
+    const prompt = vi.spyOn(window, "prompt").mockReturnValue("Новое имя");
+
+    scene.requestConfirm("slot-2", "overwrite");
+    await scene.confirmPending();
+
+    expect(prompt).toHaveBeenCalled();
+    expect(saveGame).toHaveBeenCalledWith("slot-2");
+    expect(getSlotName("slot-2")).toBe("Новое имя");
+  });
+
+  it("createSave prompts for a name and writes the empty slot", async () => {
+    const { scene, saveGame } = makeScene({ withGame: true });
+    vi.spyOn(window, "prompt").mockReturnValue("Свежий старт");
+
+    await scene.createSave("slot-5");
+
+    expect(saveGame).toHaveBeenCalledWith("slot-5");
+    expect(getSlotName("slot-5")).toBe("Свежий старт");
+  });
+
+  it("createSave keeps the default name when the prompt is cancelled", async () => {
+    const { scene, saveGame } = makeScene({ withGame: true });
+    vi.spyOn(window, "prompt").mockReturnValue(null);
+
+    await scene.createSave("slot-6");
+
+    expect(saveGame).toHaveBeenCalledWith("slot-6");
+    expect(getSlotName("slot-6")).toBeNull();
+  });
+
+  it("loadSlot surfaces a not-found result without throwing", async () => {
+    const { scene, loadGame } = makeScene();
+    loadGame.mockResolvedValueOnce(false);
+    await expect(scene.loadSlot("slot-1")).resolves.toBeUndefined();
+    expect(loadGame).toHaveBeenCalledWith("slot-1");
+  });
+
+  it("swallows engine errors in load/save/delete (no throw to the caller)", async () => {
+    const { scene, manager, saveGame, loadGame } = makeScene({
+      withGame: true,
+    });
+    loadGame.mockRejectedValueOnce(new Error("load boom"));
+    saveGame.mockRejectedValueOnce(new Error("save boom"));
+    manager.deleteSlot.mockRejectedValueOnce(new Error("delete boom"));
+
+    await expect(scene.loadSlot("slot-1")).resolves.toBeUndefined();
+    await expect(scene.saveSlot("slot-1", "x")).resolves.toBeUndefined();
+    await expect(scene.removeSlot("slot-1")).resolves.toBeUndefined();
+  });
 });

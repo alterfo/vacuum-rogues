@@ -12,7 +12,7 @@ import type { FlightShipPos } from "@/domain/SaveState";
 import type { GameScene } from "@/presentation/GameScene";
 import { Renderer } from "@/presentation/Renderer";
 import { preloadTextures } from "@/presentation/textures";
-import { SaveManager } from "@/data/SaveManager";
+import { SaveManager, EMERGENCY_SLOT_ID } from "@/data/SaveManager";
 import { latestMeaningfulSlot } from "@/systems/saves/saveSlots";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 import { GlobalExceptionHandler } from "@/exceptions/GlobalExceptionHandler";
@@ -1790,9 +1790,9 @@ export class GameEngine {
   }
 
   private handleCriticalError(response: { message: string }): void {
-    // Emergency auto-save to _emergency slot
+    // Emergency auto-save to the hidden recovery slot.
     if (this.galaxy && this.player) {
-      this.saveGame("_emergency").catch((e) => {
+      this.saveGame(EMERGENCY_SLOT_ID).catch((e) => {
         logger.error("Emergency auto-save failed:", e);
       });
     }
