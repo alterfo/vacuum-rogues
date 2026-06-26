@@ -16,6 +16,30 @@ type EngineHandle = {
 
 async function setupNewGame(page: Page): Promise<void> {
   await applyMockHeavySystems(page);
+  // Mark the one-time onboarding intros as already seen BEFORE the page loads, so
+  // the auto-shown welcome/scene HelpPanel (a full-screen modal backdrop mounted
+  // on the stage) never pops over the live scene. A real player dismisses that
+  // intro before doing anything; without this seed its backdrop swallows every
+  // REAL mouse click in flight, mouse-deadening the HUD/combat-pause buttons the
+  // real-pointer regressions exist to guard (same suppression the planet-«?» test
+  // applies locally, here applied pre-load so it also covers in-flight tests).
+  await page.addInitScript(() => {
+    try {
+      // Every onboarding HelpKey (helpContent.ts) — including the one-shot
+      // 'combat' hint that fires on first in-flight engagement and the
+      // per-scene keys — so no auto-help backdrop ever covers a live scene.
+      localStorage.setItem(
+        'sr_help_seen',
+        JSON.stringify([
+          'welcome', 'RACE_SELECTION', 'SPACE_FLIGHT', 'STAR_MAP', 'PLANET',
+          'TRADE', 'STATION', 'EQUIPMENT_SHOP', 'GOVERNMENT', 'INFO_CENTER',
+          'BANK', 'INVENTORY', 'TEXT_QUEST', 'quest-journal', 'combat',
+        ]),
+      );
+    } catch {
+      /* storage unavailable — onboarding degrades to "nothing seen" */
+    }
+  });
   await page.goto('/');
   await waitForEngine(page);
   await page.evaluate(async () => {
