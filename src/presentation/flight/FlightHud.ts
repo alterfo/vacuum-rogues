@@ -12,6 +12,7 @@ import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
 import type { LandingDenialReason } from "@/systems/galaxy/landingAccess";
 import { formatGameDate, formatGameTimestamp } from "@/utils/gameCalendar";
 import { scaledFont } from "@/utils/fontScale";
+import { t } from "@/i18n/i18n";
 import { SettingsPanel, SETTINGS_PANEL_HEIGHT } from "../ui/SettingsPanel";
 import { GAME_BALANCE } from "@/config/balance";
 import { logger } from "@/utils/logger";
@@ -859,13 +860,15 @@ export class FlightHud implements FlightModule {
       speedSteps: GAME_BALANCE.gameSpeedMultipliers,
       applySpeed: (scale) => this.selectGameSpeed(scale),
       applyFont: () => this.onFontScaleChange?.(),
-      // A language switch re-localizes the HUD via the same in-place text restyle
-      // a font change uses — `refreshFontScale()` rebuilds the text nodes, which
-      // re-read `t(...)` at creation, so the new language is picked up.
+      // A language switch re-localizes through the same in-place restyle a font
+      // change uses — `refreshFontScale()` rebuilds the text nodes, and any node
+      // that resolves through `t(...)` picks up the new language on rebuild. HUD
+      // labels not yet migrated stay until their own pass; the pref persists so
+      // newly-opened (migrated) scenes render in the chosen language.
       applyLanguage: () => this.onFontScaleChange?.(),
       onNeuralToggle: (on) =>
         this.showMessage(
-          on ? "Нейросеть ИИ включена (эксперимент)" : "Нейросеть ИИ выключена",
+          on ? t("settings.neuralOn") : t("settings.neuralOff"),
           on ? 0x00ccff : 0x99a8ba,
         ),
       onRequestClose: () => {

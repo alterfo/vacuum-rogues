@@ -52,6 +52,29 @@ describe("i18n dictionary parity (ru ⇄ en)", () => {
     expect(Object.keys(en).length).toBe(Object.keys(ru).length);
   });
 
+  it("each key's {param} placeholders are identical across ru and en", () => {
+    // A renamed/dropped placeholder in one language (e.g. ru has `{price}` but en
+    // typos it `{prise}`) passes the key-set + non-empty guards yet renders an
+    // un-interpolated `{price}` at runtime in that language. Guard the token sets.
+    const tokens = (s: string): string =>
+      [...s.matchAll(/\{(\w+)\}/g)]
+        .map((m) => m[1])
+        .sort()
+        .join(",");
+    const mismatches: string[] = [];
+    for (const key of Object.keys(ru)) {
+      const ruTokens = tokens(ru[key]);
+      const enTokens = tokens(en[key] ?? "");
+      if (ruTokens !== enTokens) {
+        mismatches.push(`${key}: ru={${ruTokens}} en={${enTokens}}`);
+      }
+    }
+    expect(
+      mismatches,
+      `{param} placeholders diverge between ru/en:\n${mismatches.join("\n")}`,
+    ).toEqual([]);
+  });
+
   it("EN values differ from RU for at least the visibly-translated keys", () => {
     // A migrated key like `settings.title` should NOT be left as the RU value
     // in en.ts (the most common parity-passing-but-untranslated mistake).

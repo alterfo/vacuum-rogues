@@ -136,18 +136,23 @@ intro), and `showHelpOnce(deps, "combat")` fires the one-shot combat hint on a t
 «Оставить issue» overlay.
 
 **Settings live in one ⚙ panel** (`ui/SettingsPanel.ts`,
-`docs/plans/20260625-settings-interface-speed-font-neural.md`). A self-contained component with
-three rows — **СКОРОСТЬ** (game speed), **ШРИФТ** (S/M/L font), **НЕЙРОСЕТЬ (ИИ)** (experimental
-on/off, default off) — opened by the ⚙ HUD button (replacing the old font-only stub) and closed via
-the existing `isSettingsPanelOpen` + `closeModals` Esc/outside-click wiring in `flightKeyHandler`
-(unchanged). Every control writes through the shared accessor `src/systems/settings/gameSettings.ts`
-(**no new save field** — speed → `GameEngine.gameSpeedMultiplier`, font → `fontScale.ts`, neural →
-`localStorage("neuralEnabled")`) and fans the live effect out via `SettingsPanelDeps` callbacks:
-`applySpeed` (HUD label + physics `timeScale`), `applyFont` (restyle in place, then
-`onRequestClose` — a font change rebuilds the whole HUD), `onNeuralToggle` (the policy gate, see root
-CLAUDE.md "Neural / AI Pipeline"). Build the font row **first** so its hit areas precede the others
-(the historical ⚙-panel "first font button" contract). Control actions are public
-(`selectFont`/`selectSpeed`/`toggleNeural`) so they're unit-testable without PixiJS pointer events.
+`docs/plans/20260625-settings-interface-speed-font-neural.md` +
+`docs/plans/20260625-localization-i18n.md`). A self-contained component with
+four rows — **СКОРОСТЬ** (game speed), **ШРИФТ** (S/M/L font), **ЯЗЫК** (RU/EN language) and
+**НЕЙРОСЕТЬ (ИИ)** (experimental on/off, default off) — opened by the ⚙ HUD button (replacing the
+old font-only stub) and closed via the existing `isSettingsPanelOpen` + `closeModals`
+Esc/outside-click wiring in `flightKeyHandler` (unchanged). Every control writes through the shared
+accessor `src/systems/settings/gameSettings.ts` (**no new save field** — speed →
+`GameEngine.gameSpeedMultiplier`, font → `fontScale.ts`, neural → `localStorage("neuralEnabled")`;
+language goes through i18n `setLanguage` → `localStorage("language")`) and fans the live effect out
+via `SettingsPanelDeps` callbacks: `applySpeed` (HUD label + physics `timeScale`), `applyFont`
+(restyle in place, then `onRequestClose` — a font change rebuilds the whole HUD), `applyLanguage`
+(the same in-place restyle a font change uses, so text nodes re-read `t(...)`; then close),
+`onNeuralToggle` (the policy gate, see root CLAUDE.md "Neural / AI Pipeline"). Build the font row
+**first** so its hit areas precede the others (the historical ⚙-panel "first font button" contract)
+and the **НЕЙРОСЕТЬ** row **last** (the "neural is the final hit area" contract). Control actions
+are public (`selectFont`/`selectSpeed`/`selectLanguage`/`toggleNeural`) so they're unit-testable
+without PixiJS pointer events.
 
 **Dev-only autopilot watches the agent fly the *rendered* game** (`docs/plans/20260625-dev-autopilot.md`,
 `docs/architecture/LETSPLAY_ENGINE.md` → "Autopilot"). In `npm run dev` only, press `` ` ``

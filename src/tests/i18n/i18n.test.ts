@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   t,
   translate,
@@ -23,6 +23,30 @@ function fakeStore(initial: Record<string, string> = {}): I18nStore & {
     },
   };
 }
+
+// Several tests mutate the shared `DICTS` and the live `localStorage`-backed
+// language. A centralized reset (not just each test's `finally`) keeps the suite
+// order-independent: a leaked `__test.*` key or a stuck language can't poison a
+// later test.
+beforeEach(() => {
+  try {
+    localStorage.clear();
+  } catch {
+    /* runtime without localStorage */
+  }
+});
+afterEach(() => {
+  for (const dict of [DICTS.ru, DICTS.en]) {
+    for (const k of Object.keys(dict)) {
+      if (k.startsWith("__test.")) delete dict[k];
+    }
+  }
+  try {
+    localStorage.clear();
+  } catch {
+    /* runtime without localStorage */
+  }
+});
 
 describe("translate — pure key resolver", () => {
   it("looks a key up in the requested language", () => {
