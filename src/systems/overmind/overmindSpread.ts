@@ -91,26 +91,41 @@ export function initialOvermindSpreadState(): OvermindSpreadState {
 }
 
 /**
- * Faction (non-Overmind) systems that border at least one Overmind system —
- * the set the front can grow into. Directed from the candidate's connections,
- * matching `stepOwnershipTick` (galaxy warp links are stored bidirectionally).
+ * Non-Overmind systems that border at least one Overmind system — the set the
+ * front can grow into. The warp graph is treated as **undirected**: a system is
+ * frontier if it links *to* an Overmind system **or** an Overmind system links
+ * *to it*. This matters because galaxy warp links are **not** all stored
+ * bidirectionally (`ensureConnectivity` bridges components with one-way edges —
+ * empirically ~25% of links are asymmetric). A purely directed
+ * candidate→Overmind scan misses every system the Overmind cluster reaches by a
+ * one-way *outgoing* edge, which silently boxes the front in and stalls the arc
+ * for dozens of days (the captured cluster looks "surrounded" when it isn't).
  */
 function frontierSystems(galaxy: SpreadGalaxyView): string[] {
   const overmindSet = new Set(galaxy.overmindSystems);
   if (overmindSet.size === 0) return [];
-  const frontier: string[] = [];
-  const seen = new Set<string>();
+  const known = new Set(galaxy.systems.map((s) => s.id));
+  const frontier = new Set<string>();
   for (const sys of galaxy.systems) {
-    if (overmindSet.has(sys.id) || seen.has(sys.id)) continue;
-    for (const conn of sys.connections) {
-      if (overmindSet.has(conn.toSystemId)) {
-        seen.add(sys.id);
-        frontier.push(sys.id);
-        break;
+    if (overmindSet.has(sys.id)) {
+      // Outgoing edges: Overmind → faction (one-way bridges live here).
+      for (const conn of sys.connections) {
+        if (!overmindSet.has(conn.toSystemId) && known.has(conn.toSystemId)) {
+          frontier.add(conn.toSystemId);
+        }
+      }
+    } else {
+      // Incoming edges: faction → Overmind.
+      for (const conn of sys.connections) {
+        if (overmindSet.has(conn.toSystemId)) {
+          frontier.add(sys.id);
+          break;
+        }
       }
     }
   }
-  return frontier;
+  // Stable, systems-order listing (the caller re-ranks deterministically anyway).
+  return galaxy.systems.filter((s) => frontier.has(s.id)).map((s) => s.id);
 }
 
 /**

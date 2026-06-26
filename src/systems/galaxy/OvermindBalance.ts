@@ -19,6 +19,17 @@ export interface OwnershipBalanceConfig {
    * increased proportionally to (hostileShare × feedbackStrength).
    */
   feedbackStrength: number;
+  /**
+   * When set, the equilibrium leaves the **Overmind** front entirely alone —
+   * no faction system is captured *as Overmind* and no Overmind system is
+   * recaptured/liberated (pirates still churn normally). The endgame-arc spread
+   * machine (`advanceOvermind`) is the sole authority on the Overmind front once
+   * the arc owns it; without this the equilibrium's negative feedback (a hard
+   * ~25% share ceiling) both **caps the arc below its loss line** and can
+   * **liberate the Overmind core**, handing the player a spurious "core broken"
+   * win. Defaults to `false` so the pre-arc / pure-function behaviour is intact.
+   */
+  freezeOvermind?: boolean;
 }
 
 export interface BalanceResult {
@@ -61,6 +72,7 @@ export function stepOwnershipTick(
     config.pRecaptureBase * (1 + hostileShare * config.feedbackStrength),
   );
 
+  const freezeOvermind = config.freezeOvermind ?? false;
   const toCapture: { id: string; asOvermind: boolean }[] = [];
   const toLiberate: string[] = [];
 
@@ -75,14 +87,20 @@ export function stepOwnershipTick(
         if (overmindSet.has(conn.toSystemId)) hasOvermindNeighbor = true;
         if (pirateSet.has(conn.toSystemId)) hasPirateNeighbor = true;
       }
-      const isBorderFaction = hasOvermindNeighbor || hasPirateNeighbor;
+      // When the arc owns the Overmind front, the equilibrium grows pirates only:
+      // an Overmind-only border is left for `advanceOvermind` to expand.
+      const canCaptureAsOvermind = hasOvermindNeighbor && !freezeOvermind;
+      const isBorderFaction = canCaptureAsOvermind || hasPirateNeighbor;
       if (isBorderFaction && rng.next() < effectivePCapture) {
         // Capture by whichever hostile neighbour exists (overmind takes priority;
         // if only pirate neighbours → becomes pirate).
-        toCapture.push({ id: sys.id, asOvermind: hasOvermindNeighbor });
+        toCapture.push({ id: sys.id, asOvermind: canCaptureAsOvermind });
       }
     } else {
-      // Hostile system: can be recaptured if it borders at least one faction system.
+      // Hostile system: can be recaptured if it borders at least one faction
+      // system — unless it's an Overmind system the arc has frozen (the arc +
+      // player are the only forces that shrink the Overmind front).
+      if (freezeOvermind && overmindSet.has(sys.id)) continue;
       let hasFactionNeighbor = false;
       for (const conn of sys.connections) {
         if (

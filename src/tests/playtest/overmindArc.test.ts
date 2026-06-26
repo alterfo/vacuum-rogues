@@ -181,4 +181,47 @@ describe("Overmind endgame-arc spread (EOD drive)", () => {
     expect(galaxy.overmindArc.status).toBe("contained");
     expect(harness.errors().map((e) => e.message)).toEqual([]);
   });
+
+  it("loses the galaxy when the Overmind is ignored — and never wins spuriously", async () => {
+    // Regression for two pacing bugs the equilibrium tick caused on its 5-day
+    // cadence: (1) it liberated the Overmind core, firing a spurious "won", and
+    // (2) its ~25% feedback ceiling capped the arc below the loss line, so an
+    // ignored Overmind oscillated forever and "lost" was unreachable. With the
+    // arc owning the front (freezeOvermind) and the undirected frontier, doing
+    // nothing must monotonically advance to a real defeat.
+    harness = await RealEngineHarness.boot({
+      seed: "ARC_IGNORE_LOSES",
+      systemCount: 24,
+    });
+    await harness.newGame();
+    const galaxy = harness.galaxy()!;
+    const startOvermind = galaxy.overmindSystems.length;
+
+    // Advance EOD days with NO player intervention. The arc should reach "lost"
+    // well within this budget (empirically ~day 31 for a 24-system galaxy).
+    let reachedLost = false;
+    let everWon = false;
+    let prevCount = startOvermind;
+    let sawGrowth = false;
+    for (let d = 0; d < 60 && !reachedLost; d++) {
+      harness.engine.advanceGalaxyDay();
+      const status = galaxy.overmindArc.status;
+      if (galaxy.overmindSystems.length > prevCount) sawGrowth = true;
+      prevCount = galaxy.overmindSystems.length;
+      if (status === "won") everWon = true;
+      if (status === "lost") reachedLost = true;
+    }
+
+    // The front genuinely advanced (no 40-day plateau), the Overmind never
+    // spuriously "won" via the background equilibrium freeing the core, and the
+    // galaxy was ultimately consumed.
+    expect(sawGrowth).toBe(true);
+    expect(galaxy.overmindSystems.length).toBeGreaterThan(startOvermind);
+    expect(everWon).toBe(false);
+    expect(reachedLost).toBe(true);
+    expect(galaxy.overmindArc.status).toBe("lost");
+    // The core is still held by the Overmind on a loss (never auto-liberated).
+    expect(galaxy.isOvermindSystem(galaxy.overmindCoreSystemId)).toBe(true);
+    expect(harness.errors().map((e) => e.message)).toEqual([]);
+  });
 });

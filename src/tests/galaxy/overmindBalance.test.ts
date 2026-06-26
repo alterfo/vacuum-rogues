@@ -288,4 +288,72 @@ describe("stepOwnershipTick", () => {
     expect(result.overmindSystems).toHaveLength(0);
     expect(result.pirateSystems).toHaveLength(0);
   });
+
+  // --- freezeOvermind: the endgame arc owns the Overmind front ---
+
+  it("freezeOvermind never liberates an Overmind system (protects the core)", () => {
+    // 3-system chain: s0(faction) – s1(overmind, the 'core') – s2(faction).
+    // Without freeze, s1 borders faction systems and (at this high effective
+    // pRecapture) would be liberated — the exact spurious-win path the equilibrium
+    // tick caused on its 5-day cadence. With freeze, s1 is skipped entirely (no
+    // recapture roll consumed) so it stays Overmind.
+    const systems = chain(3);
+    const result = stepOwnershipTick(
+      systems,
+      ["s1"],
+      [],
+      // Only s0 and s2 (faction borders) roll; s1 is skipped. Rolls miss capture.
+      mockRng([0.99, 0.99]),
+      { ...BASE_CFG, freezeOvermind: true },
+    );
+    expect(result.overmindSystems).toEqual(["s1"]);
+    expect(result.pirateSystems).toHaveLength(0);
+  });
+
+  it("freezeOvermind does not grow the Overmind front (an Overmind-only border is left for the arc)", () => {
+    // 3-system chain: s0(overmind) – s1(faction) – s2(faction). s1 borders only an
+    // Overmind system, so under freeze it is NOT a capture target and rolls no dice.
+    const systems = chain(3);
+    const result = stepOwnershipTick(
+      systems,
+      ["s0"],
+      [],
+      // s0 is the only hostile system with a faction neighbour → one recapture roll,
+      // which freeze skips. No other rolls are consumed (an empty RNG proves it).
+      mockRng([]),
+      { ...BASE_CFG, freezeOvermind: true },
+    );
+    expect(result.overmindSystems).toEqual(["s0"]);
+    expect(result.pirateSystems).toHaveLength(0);
+  });
+
+  it("freezeOvermind still churns pirates (capture + recapture) and can capture as pirate at a mixed border", () => {
+    // 5 systems: s0(overmind) – s1(faction) – s2(faction); s1 also connects to
+    // s4(pirate); s3(faction). The mixed border s1 (overmind + pirate neighbour)
+    // is captured AS PIRATE under freeze (overmind capture suppressed), and the
+    // pirate s4 can still be recaptured.
+    const systems = [
+      { id: "s0", connections: [{ toSystemId: "s1" }] },
+      { id: "s1", connections: [{ toSystemId: "s0" }, { toSystemId: "s4" }] },
+      { id: "s2", connections: [{ toSystemId: "s1" }] },
+      { id: "s3", connections: [{ toSystemId: "s1" }] },
+      { id: "s4", connections: [{ toSystemId: "s1" }] },
+    ];
+    // hostile = {s0, s4} = 2/5 = 40% share
+    // effectivePCapture  = 0.5 * (1 - 0.4*2) = 0.10
+    // effectivePRecapture = min(1, 0.5 * (1 + 0.4*2)) = 0.90
+    // Roll order under freeze: s0 (overmind) SKIPPED; s1 (faction, pirate border)
+    // capture roll 0.05 < 0.10 → captured as pirate; s2/s3 no hostile→pirate border;
+    // s4 (pirate, faction border) recapture roll 0.10 < 0.90 → liberated.
+    const result = stepOwnershipTick(
+      systems,
+      ["s0"],
+      ["s4"],
+      mockRng([0.05, 0.1]),
+      { ...BASE_CFG, freezeOvermind: true },
+    );
+    expect(result.pirateSystems).toContain("s1");
+    expect(result.overmindSystems).toEqual(["s0"]); // never grew or shrank
+    expect(result.pirateSystems).not.toContain("s4"); // pirate liberated
+  });
 });

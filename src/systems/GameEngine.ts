@@ -706,6 +706,13 @@ export class GameEngine {
         pCapture: GAME_BALANCE.OVERMIND_CAPTURE_PROB,
         pRecaptureBase: GAME_BALANCE.OVERMIND_RECAPTURE_BASE_PROB,
         feedbackStrength: GAME_BALANCE.OVERMIND_FEEDBACK_STRENGTH,
+        // The endgame-arc spread (`advanceOvermindArc`, run every EOD) is the sole
+        // authority on the Overmind front whenever the Overmind holds territory:
+        // the equilibrium then only churns PIRATES. This stops the equilibrium's
+        // ~25% feedback ceiling from (a) capping the arc below its loss line —
+        // making the "galaxy consumed" defeat unreachable — and (b) liberating the
+        // Overmind core, which would fire a spurious "core broken" victory.
+        freezeOvermind: this.galaxy.overmindSystems.length > 0,
       };
       const nodes = this.galaxy.systems.map((s) => ({
         id: s.id,

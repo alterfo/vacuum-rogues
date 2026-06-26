@@ -120,6 +120,32 @@ describe("advanceOvermind", () => {
     expect(r6.captured).toHaveLength(1);
   });
 
+  it("captures across a ONE-WAY overmind→faction edge (undirected frontier)", () => {
+    // Galaxy warp links are not all bidirectional: `ensureConnectivity` bridges
+    // components with one-way edges. Here the only link out of the Overmind
+    // cluster is the one-way s0(overmind) → s1(faction); s1 has NO edge back.
+    // A directed faction→overmind scan would see an empty frontier and the arc
+    // would stall forever; the undirected frontier must still capture s1.
+    const galaxy: SpreadGalaxyView & { overmindSystems: string[] } = {
+      id: "seed-oneway",
+      systems: [
+        { id: "s0", connections: [{ toSystemId: "s1" }] }, // overmind, one-way out
+        { id: "s1", connections: [{ toSystemId: "s2" }] }, // faction, no edge back to s0
+        { id: "s2", connections: [{ toSystemId: "s1" }] }, // faction
+      ],
+      overmindSystems: ["s0"],
+      overmindCoreSystemId: "",
+    };
+    const state = advanceOvermind(
+      initialOvermindSpreadState(),
+      galaxy,
+      0,
+      FAST,
+    ).state;
+    const r = advanceOvermind(state, galaxy, 3, FAST); // past grace, on cadence
+    expect(r.captured).toEqual(["s1"]);
+  });
+
   it("the player retaking systems contains the arc", () => {
     // 10-system chain seeded so the front can peak above the contained line
     // without crossing the loss line after a capture.

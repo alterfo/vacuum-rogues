@@ -69,8 +69,20 @@ neural-Overmind work a narrative home and gives players a reason to push.
 - [x] run tests — green.
 
 ### Task 5: Verify + balance + docs
-- [ ] full suite + `test:playtest` green; lint/build ok; tune spread pacing in
+- [x] full suite + `test:playtest` green; lint/build ok; tune spread pacing in
       `balance.ts`; document the arc + the spread machine.
+      - Full suite 3568 passed / playtest 247 passed / lint 0 errors / build ok.
+      - **Balance verified (the substantive "tuning"):** an empirical pacing probe
+        found the arc never played out — two bugs the equilibrium tick caused: it
+        liberated the core (spurious "won" on day 5) and its ~25% feedback ceiling
+        made the loss unreachable (ignored Overmind oscillated 18-25% forever).
+        Fixed via `freezeOvermind` (the arc owns the front; equilibrium churns
+        pirates only) + an **undirected** `frontierSystems` (~25% of warp links are
+        one-way and boxed the front in). The existing `OVERMIND_SPREAD_*` constants
+        are confirmed good post-fix: an ignored Overmind now loses in ~31 days
+        (24-system) / ~55 days (40-system) at a steady 1 system/3 days.
+      - Docs: root `CLAUDE.md` "Overmind Endgame Arc" section + the equilibrium
+        `freezeOvermind` note in `src/systems/galaxy/CLAUDE.md`.
 
 ## Post-Completion
 **Manual:** a full run where ignoring the Overmind visibly loses ground and acting
