@@ -69,8 +69,11 @@ with named manual slots (create/overwrite/delete, timestamp + summary) and a cle
       254 passed.)
 
 ### Task 4: Verify + docs
-- [ ] full suite + `test:playtest` green; lint/build ok; document the slots UI + the
-      Continue resolver.
+- [x] full suite + `test:playtest` green; lint/build ok; document the slots UI + the
+      Continue resolver. (Full unit suite 3651 passed / 4 skipped; `test:playtest` 254
+      passed / 2 skipped; `npm run lint` 0 errors; `npm run build` ✓. Documented the slots
+      UI + the `latestMeaningfulSlot` Continue resolver in CLAUDE.md → Architecture →
+      "Save Slots UI".)
 
 ## Post-Completion
 **Manual:** create several named saves, reload, delete one, Continue picks the latest —
