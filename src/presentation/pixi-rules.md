@@ -113,7 +113,7 @@ await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, { gameEngine: this.ga
 
 ## Scene Lifecycle
 - `destroy()` must clean up ALL DisplayObjects, intervals, and null out references. Partial cleanup causes memory leaks.
-- Scenes cannot access IndexedDB or ONNX directly — route through GameEngine → SaveManager / ONNXModelRegistry.
+- Scenes cannot access IndexedDB directly — route through GameEngine → SaveManager. There is no ONNX runtime: AI is the rule-based `FallbackEngine`, and neural policies are tiny pure-TS MLPs confined to the dev-only letsplay engine (`src/tests/playtest/letsplay/`).
 
 ## Planet Backdrop Conventions
 

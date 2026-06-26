@@ -132,7 +132,7 @@ JSON** instead of ONNX, pinned by a **parity test**.
 **Files:**
 - Modify: `CLAUDE.md` (ONNX pipeline section), `src/presentation/` notes
 
-- [ ] Replace the "ONNX in a worker" guidance: neural policies are tiny pure-TS MLPs
+- [x] Replace the "ONNX in a worker" guidance: neural policies are tiny pure-TS MLPs
       (weights-JSON + `mlp.forward`); `onnxruntime-web` is removed; `FallbackEngine` is
       the canonical rule engine; a real runtime returns only if a net ever needs one.
 

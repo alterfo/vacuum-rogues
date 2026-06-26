@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Galactic Horizon: Neural Onslaught** — browser-based space RPG/strategy game with local ONNX models for dialogue generation and tactical AI. Built with TypeScript, PixiJS 8, and onnxruntime-web.
+**Galactic Horizon: Neural Onslaught** — browser-based space RPG/strategy game with tiny **pure-TS neural policies** (and a rule-based `FallbackEngine`) for tactical AI and dialogue. Built with TypeScript and PixiJS 8. (`onnxruntime-web` was removed — see "Neural / AI Pipeline" below.)
 
 ## Build & Development Commands
 
@@ -44,7 +44,7 @@ npm run letsplay            # Dev-only letsplay bug-finder — an agent plays th
 | Presentation | `src/presentation/` | PixiJS scenes, sprites, rendering, player input |
 | Systems | `src/systems/` | GameEngine, AudioManager, trade, dialogue, galaxy generation; sub-modules: `equipment/`, `npc/`, `quests/`, `info/`, `combat/`, `galaxy/`, `trade/` (route scanner + rumor lifecycle), `onboarding/` (contextual-help content registry + browser-level "seen" persistence) |
 | Domain | `src/domain/` | Pure entities (Player, Galaxy, StarSystem) — no PixiJS/ONNX/DOM deps |
-| AI/Infrastructure | `src/ai/`, `src/data/` | ONNX inference, Web Workers, IndexedDB, save management |
+| AI/Infrastructure | `src/ai/`, `src/data/` | Rule-based `FallbackEngine` (+ adaptive quality profile, template narrator), IndexedDB, save management. Neural policies are tiny pure-TS MLPs (`src/tests/playtest/letsplay/mlp.ts`) — no ONNX runtime |
 | Types/Config | `src/types/`, `src/config/` | Shared types, enums, balance constants; `FactionType` replaces old `RaceType` |
 
 ### Key Entry Points
@@ -61,9 +61,13 @@ A **soft, dismissible** boot notice for phone-class visitors (`docs/plans/202606
 - **Persistence** (`src/systems/device/mobileGateState.ts`): browser-level `localStorage` flag `sr_mobile_ack` (same kind as `sr_settings`/`sr_help_seen` — **no save-schema/migration change**). `wasDismissed()`/`markDismissed()` + the pure decision `shouldShowMobileGate(env?, store?)` = `isMobileDevice() && !wasDismissed()`; both injectable and degrade to "not dismissed"/no-op when storage is unavailable.
 - **Overlay + wiring**: the hidden `#mobile-gate` HTML/CSS overlay lives in `src/index.html` (themed like the boot loader); `maybeShowMobileGate()` in `main.ts` reveals it when `shouldShowMobileGate()` is true and «Всё равно продолжить» hides it + `markDismissed()` (so it won't nag on the next load).
 
-### ONNX/AI Pipeline
+### Neural / AI Pipeline (pure-TS, no ONNX runtime)
 
-Models load lazily → cached in IndexedDB → inference runs in Web Workers only. Never call `ort.InferenceSession.run()` on main thread — use `ONNXModelRegistry.infer()`.
+The only neural nets this game needs are **tiny feature-vector MLPs** (e.g. the letsplay player policy, `12→32→10` ≈ 746 weights ≈ 704 MACs). They run through a **hand-written pure-TS forward pass** (`src/tests/playtest/letsplay/mlp.ts` — matmul + ReLU + argmax) over **weights shipped as a small JSON array (~3 KB)**, inline on the CPU in microseconds — **no worker, no WebGPU, no wasm**. `onnxruntime-web` was dropped (`docs/plans/20260625-pure-ts-mlp-drop-onnx.md`); a dependency guard (`src/tests/architecture/noOnnxRuntime.test.ts`) keeps every `onnxruntime*` import out of `src/**` and the dead ONNX scaffolding (registry/worker/cache/manifest/adapters/port) deleted.
+
+- **`FallbackEngine` (`src/ai/FallbackEngine.ts`) is the canonical rule-based engine** for dialogue / tactical AI — pure templates, no model. `DialogueSystem` and the template `QuestNarrator` (`src/ai/adapters/QuestNarrator.ts`) run on it; the old `T5DialogueAdapter`/`GRUEmotionAdapter` are now rule-based placeholders.
+- **`NeuralPolicy`** (`src/tests/playtest/letsplay/NeuralPolicy.ts`, dev-only) keeps its runtime-agnostic `featurize → forward → mapNetOutputToAction` seam: with a trained `*.weights.json` it returns the argmax legal action; with none it's inert and falls back to the `HeuristicPolicy` (unchanged contract). Training stays in PyTorch on the 4090 (`tools/ai/train_player.py`) and **exports weights as JSON** (not ONNX), pinned by a parity test (`weightsContract.test.ts`, within `1e-5`).
+- **If a net ever genuinely needs a runtime** (a conv/transformer), swap `forward` back to one *then* — not before. At MLP scale, GPU/worker dispatch overhead ≫ the compute.
 
 ### Texture Loading
 
@@ -143,7 +147,7 @@ Choosing the wrong tier is how bugs pass 2630 green unit tests yet break the rea
 
 `src/tests/playtest/letsplay/` is an **agent that plays the game as the player** on the *real* `GameEngine` (built on `RealEngineHarness`) for automated bug discovery between feature batches (`docs/architecture/LETSPLAY_ENGINE.md`, `docs/plans/20260625-dev-letsplay-engine.md`). The loop is `observe → decide → apply → tick`: `observe(engine)` projects the live engine into a pure `Observation` (scene, vitals, nearby planets/stations/NPCs, active quests, and the **set of legal actions** for the scene); a pluggable `PlayerPolicy.decide(obs) → Action` chooses a **legal** action (the `HeuristicPolicy` ranks `survive → earn → explore`); `PlayerAgent` applies it onto the real engine through the harness. `npm run letsplay` plays K sessions × N steps via vitest (dev-only, like `test:playtest`) and exits non-zero on any harness-sink error or always-actionable-invariant breach. The action vocabulary order (`ACTION_ORDER` in `observe.ts`, `wait` always legal) is the single source of truth shared by the legal-action surface and the future net's output head.
 
-- **Dev-only is enforced, not just convention.** The engine lives wholly under `src/tests/` (never in `main.ts`'s prod-bundle graph); `src/tests/architecture/letsplayDevOnly.test.ts` asserts **no production module imports it** and that it **never statically imports `onnxruntime-web`**. The pluggable `NeuralPolicy` ("нейросеть думает за игрока") is a stub today — when trained (Post-Completion, offline self-play) it loads ONNX via a **dev-only dynamic `import()`**, so the runtime is never added to a bundleable edge and the prod build is unaffected.
+- **Dev-only is enforced, not just convention.** The engine lives wholly under `src/tests/` (never in `main.ts`'s prod-bundle graph); `src/tests/architecture/letsplayDevOnly.test.ts` asserts **no production module imports it**, and `src/tests/architecture/noOnnxRuntime.test.ts` asserts **no `src/**` module imports `onnxruntime-web`** at all. The pluggable `NeuralPolicy` ("нейросеть думает за игрока") runs a **tiny pure-TS MLP** (`mlp.forward` over a small weights JSON) — no neural runtime, no dynamic `import()`. Until a `*.weights.json` is trained (Post-Completion, offline) and dropped in, it's inert and the agent falls back to the `HeuristicPolicy`, so the prod build is unaffected either way.
 
 ## Equipment System: ShipLoadout is Canonical
 
