@@ -447,7 +447,16 @@ export class NpcShipManager implements FlightModule {
       if (anchorPlanet) {
         sprite.updateAnchorPosition(anchorPlanet.screenX, anchorPlanet.screenY);
       }
-      sprite.update(deltaTime * timeScale);
+      // The active pause (FTL-style) freezes the WHOLE fight, not just the
+      // player ship: skip the per-frame movement advance so enemy ships stop
+      // pursuing/circling while the overlay is up. Honour the single
+      // `combatPause.paused` freeze signal directly (the same `isPaused` gate
+      // `updateCombatPursuit` uses for the player orbit) rather than depending
+      // on the scene folding pause into `isTurnRunning`. Hit-area/depth
+      // bookkeeping below stays harmless while frozen.
+      if (!this.deps.isPaused?.()) {
+        sprite.update(deltaTime * timeScale);
+      }
       if (sprite.isGone()) {
         this.npcAnchorPlanet.delete(sprite);
         sprite.destroy();
