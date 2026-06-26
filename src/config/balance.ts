@@ -384,6 +384,25 @@ export const GAME_BALANCE = {
    */
   OVERMIND_WARNING_THRESHOLD: 0.35,
   /**
+   * Overmind endgame-arc spread tuning (the escalating front driven each EOD by
+   * `advanceOvermind`, `src/systems/overmind/overmindSpread.ts`). These mirror
+   * `DEFAULT_OVERMIND_SPREAD_CONFIG`; the EOD drive reads them from here so the
+   * arc pacing is tunable in one place (the balance pass tunes these values).
+   *
+   * - GRACE_DAYS: no spread for the first N days past the arc's day-zero.
+   * - INTERVAL_DAYS: a spread tick only captures every N days.
+   * - CAPTURES_PER_TICK: frontier systems consumed per spread tick.
+   * - LOSS_SHARE: Overmind share at/above which (past grace, big enough) the arc is lost.
+   * - CONTAINED_SHARE: once the share peaked above this and is pushed back to/below it, the arc is contained.
+   * - MIN_SYSTEMS: loss is suppressed on tiny/legacy maps below this system count.
+   */
+  OVERMIND_SPREAD_GRACE_DAYS: 3,
+  OVERMIND_SPREAD_INTERVAL_DAYS: 3,
+  OVERMIND_SPREAD_CAPTURES_PER_TICK: 1,
+  OVERMIND_SPREAD_LOSS_SHARE: 0.5,
+  OVERMIND_SPREAD_CONTAINED_SHARE: 0.2,
+  OVERMIND_SPREAD_MIN_SYSTEMS: 12,
+  /**
    * HP and shields multiplier applied to enemies in overmind/pirate-controlled
    * systems. Makes early-game players unable to liberate systems solo while
    * a fully geared player (bastion hull + plasma cannon) can win.

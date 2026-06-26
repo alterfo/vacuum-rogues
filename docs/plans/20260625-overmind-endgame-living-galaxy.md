@@ -53,11 +53,11 @@ neural-Overmind work a narrative home and gives players a reason to push.
 **Files:**
 - Modify: `src/systems/GameEngine.ts` (`advanceGalaxyDay`), `NpcSimulator`
 
-- [ ] Drive `advanceOvermind` in the EOD batch; reflect captures in landing gating +
+- [x] Drive `advanceOvermind` in the EOD batch; reflect captures in landing gating +
       garrisons + a visible threat indicator; idempotent per business date.
-- [ ] write tests (real-engine playtest): days advance the front; retaking contains it;
+- [x] write tests (real-engine playtest): days advance the front; retaking contains it;
       zero logged errors.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 4: Win / loss / new-game+ arc
 **Files:**

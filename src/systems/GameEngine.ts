@@ -28,7 +28,11 @@ import { TradeSystem } from "@/systems/TradeSystem";
 import { scanTradeRoutes } from "@/systems/trade/RouteScanner";
 import { updateRumors } from "@/systems/trade/RumorDirector";
 import { stepOwnershipTick } from "@/systems/galaxy/OvermindBalance";
-import { initialOvermindSpreadState } from "@/systems/overmind/overmindSpread";
+import {
+  initialOvermindSpreadState,
+  advanceOvermind,
+  type OvermindSpreadConfig,
+} from "@/systems/overmind/overmindSpread";
 import { SeededRNG } from "@/utils/seededRNG";
 import type { Quest } from "@/domain/Quest";
 import {
@@ -750,6 +754,14 @@ export class GameEngine {
       }
     }
 
+    // Overmind endgame-arc spread: the escalating front. Runs every EOD (the
+    // equilibrium tick above is a 5-day churn floor; this is the deliberate,
+    // monotone advance that grows unless the player pushes it back). Captures
+    // feed `overmindSystems`, which the landing gate, NpcSimulator garrisons and
+    // the star-map threat indicator all key off automatically. Idempotent per
+    // business date via the machine's `lastSpreadDay` cadence.
+    this.advanceOvermindArc();
+
     // Loss condition: OVERMIND majority + past grace period + full-size galaxy.
     if (
       this.galaxy.isOvermindVictory(
@@ -784,6 +796,66 @@ export class GameEngine {
       this.transitionTo(SceneType.WIN_SCREEN, { gameEngine: this }).catch((e) =>
         logger.error("Win screen transition failed:", e),
       );
+    }
+  }
+
+  /**
+   * Drive the Overmind endgame-arc spread machine one EOD tick.
+   *
+   * Pure decision (`advanceOvermind`) over a read-only galaxy view → newly
+   * captured frontier ids + the next arc state. The captures are applied to the
+   * live galaxy (`addOvermindSystem`, which the landing gate / garrisons / threat
+   * indicator all derive from) and announced as OVERMIND_EXPANSION news; the arc
+   * clock/threat/status snapshot is persisted on `galaxy.overmindArc`.
+   *
+   * Idempotent per business date: the machine's `lastSpreadDay` cadence blocks a
+   * second capture on the same day, status re-derivation is a pure read, and
+   * `peakThreat`/`dayZero` are monotone — so a re-run for the same day is a no-op.
+   */
+  private advanceOvermindArc(): void {
+    if (!this.galaxy) return;
+    const galaxy = this.galaxy;
+    const day = galaxy.gameDays;
+
+    const config: OvermindSpreadConfig = {
+      graceDays: GAME_BALANCE.OVERMIND_SPREAD_GRACE_DAYS,
+      spreadIntervalDays: GAME_BALANCE.OVERMIND_SPREAD_INTERVAL_DAYS,
+      capturesPerTick: GAME_BALANCE.OVERMIND_SPREAD_CAPTURES_PER_TICK,
+      lossShare: GAME_BALANCE.OVERMIND_SPREAD_LOSS_SHARE,
+      containedShare: GAME_BALANCE.OVERMIND_SPREAD_CONTAINED_SHARE,
+      minSystemsForLoss: GAME_BALANCE.OVERMIND_SPREAD_MIN_SYSTEMS,
+    };
+
+    const prevStatus = galaxy.overmindArc.status;
+    // The real Galaxy/StarSystem structurally satisfy the spread machine's
+    // minimal read-only view (id + connections + the overmind sets).
+    const { state, captured } = advanceOvermind(
+      galaxy.overmindArc,
+      {
+        id: galaxy.id,
+        systems: galaxy.systems,
+        overmindSystems: galaxy.overmindSystems,
+        overmindCoreSystemId: galaxy.overmindCoreSystemId,
+      },
+      day,
+      config,
+    );
+
+    for (const id of captured) {
+      galaxy.addOvermindSystem(id);
+      const sys = galaxy.systems.find((s) => s.id === id);
+      galaxy.addNewsEvent({
+        type: "OVERMIND_EXPANSION",
+        systemId: id,
+        day,
+        description: `OVERMIND поглотил систему ${sys?.name ?? id}`,
+      });
+      logger.info(`OVERMIND arc captured: ${sys?.name ?? id} (${id})`);
+    }
+
+    galaxy.overmindArc = state;
+    if (state.status !== prevStatus) {
+      logger.info(`OVERMIND arc status: ${prevStatus} → ${state.status}`);
     }
   }
 
