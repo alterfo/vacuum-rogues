@@ -55,10 +55,18 @@ with named manual slots (create/overwrite/delete, timestamp + summary) and a cle
 **Files:**
 - Modify: MainMenuScene / pause menu, `GameEngine.loadGame`
 
-- [ ] "Continue" uses the latest-meaningful resolver; add Save/Load menu entries; keep
-      autosave-to-`auto` intact.
-- [ ] write tests: Continue loads the right slot; menu routes to the screen.
-- [ ] run tests — green.
+- [x] "Continue" uses the latest-meaningful resolver; add Save/Load menu entries; keep
+      autosave-to-`auto` intact. (`GameEngine.continueGame()` resolves
+      `latestMeaningfulSlot` across all slots then `loadGame`s it — autosave still always
+      writes `"auto"`; `MainMenuScene.handleContinue` calls it instead of `loadGame("auto")`.
+      Main-menu «Сохранения» button → `SAVE_LOAD` returnTo MAIN_MENU; in-flight system menu
+      gains a «Сохранения» entry → `SAVE_LOAD` returnTo SPACE_FLIGHT via `flightSystemMenu`.
+      New i18n key `menu.saves` in ru/en.)
+- [x] write tests: Continue loads the right slot; menu routes to the screen.
+      (`gameEngineContinue.test.ts` — 4; `mainMenuSaveLoad.test.ts` — 2;
+      `inFlightMenuSaveLoad.test.ts` — 2.)
+- [x] run tests — green. (new + affected suites pass; tsc/eslint clean; `test:playtest`
+      254 passed.)
 
 ### Task 4: Verify + docs
 - [ ] full suite + `test:playtest` green; lint/build ok; document the slots UI + the

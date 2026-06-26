@@ -13,6 +13,7 @@ import type { GameScene } from "@/presentation/GameScene";
 import { Renderer } from "@/presentation/Renderer";
 import { preloadTextures } from "@/presentation/textures";
 import { SaveManager } from "@/data/SaveManager";
+import { latestMeaningfulSlot } from "@/systems/saves/saveSlots";
 import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 import { GlobalExceptionHandler } from "@/exceptions/GlobalExceptionHandler";
 import { GameSystemException } from "@/exceptions/GameSystemException";
@@ -1429,6 +1430,21 @@ export class GameEngine {
         : { gameEngine: this },
     );
     return true;
+  }
+
+  /**
+   * Resume the most recent *meaningful* save — the "Continue" entry point. It
+   * resolves the latest non-terminal save across **all** slots (auto + the
+   * manual grid) via {@link latestMeaningfulSlot} and loads it, so a player who
+   * took a manual save more recently than the autosave (or whose autosave landed
+   * on a win/lose screen) resumes the right one. Returns `false` when nothing
+   * meaningful exists to load. The autosave path is untouched — it still always
+   * writes to the `"auto"` slot; this only changes which slot Continue *reads*.
+   */
+  async continueGame(): Promise<boolean> {
+    const slotId = await latestMeaningfulSlot(this.saveManager);
+    if (!slotId) return false;
+    return this.loadGame(slotId);
   }
 
   /**

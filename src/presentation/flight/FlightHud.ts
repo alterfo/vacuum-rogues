@@ -153,6 +153,13 @@ export class FlightHud implements FlightModule {
    * confirms then loads the `"auto"` slot (the dead-end recovery path).
    */
   onLoadSave: (() => void) | null = null;
+  /**
+   * «Сохранения» pressed in the in-flight system menu — opens the full
+   * save/load screen (named manual slots: save / overwrite / delete / load).
+   * The scene transitions to {@link SceneType.SAVE_LOAD} with `returnTo`
+   * SPACE_FLIGHT so closing the screen drops the player back into flight.
+   */
+  onOpenSaveLoad: (() => void) | null = null;
   /** «В главное меню» pressed in the in-flight system menu. */
   onMainMenu: (() => void) | null = null;
   /**
@@ -966,13 +973,14 @@ export class FlightHud implements FlightModule {
     const GAP = 10;
     const HINT_H = 18;
     const panelW = 300;
-    // Продолжить · Загрузить · Сообщить отзыв · В главное меню (4 buttons, 3 gaps).
-    // The disabled «Загрузить» variant adds a one-line "no save" hint beneath it.
+    // Продолжить · Сохранения · Загрузить · Сообщить отзыв · В главное меню
+    // (5 buttons, 4 gaps). The disabled «Загрузить» variant adds a one-line
+    // "no save" hint beneath it.
     const panelH =
       PAD +
       TITLE_H +
-      4 * BTN_H +
-      3 * GAP +
+      5 * BTN_H +
+      4 * GAP +
       PAD +
       (this.loadSaveEnabled ? 0 : HINT_H);
     const btnW = panelW - PAD * 2;
@@ -1023,6 +1031,26 @@ export class FlightHud implements FlightModule {
     resumeBtn.x = PAD;
     resumeBtn.y = btnY;
     panel.addChild(resumeBtn.container);
+    btnY += BTN_H + GAP;
+
+    // «Сохранения» — open the full save/load screen (named manual slots:
+    // save / overwrite / delete / load). Always available (you can always save
+    // a live game), unlike the autosave-only «Загрузить сохранение» below.
+    const savesBtn = new UiButton(
+      "",
+      "Сохранения",
+      "primary",
+      (event) => {
+        event.stopPropagation();
+        this.gameEngine?.audio?.playUiClick();
+        this.onOpenSaveLoad?.();
+      },
+      btnW,
+      BTN_H,
+    );
+    savesBtn.x = PAD;
+    savesBtn.y = btnY;
+    panel.addChild(savesBtn.container);
     btnY += BTN_H + GAP;
 
     if (this.loadSaveEnabled) {

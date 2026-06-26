@@ -56,6 +56,20 @@ export function wireFlightSystemMenu(
           hud.showMessage("Не удалось загрузить сохранение", 0xff4444);
         });
     });
+  // «Сохранения» opens the full save/load screen (named manual slots — save /
+  // overwrite / delete / load). `returnTo: SPACE_FLIGHT` drops the player back
+  // into flight when they close it; transitionTo tears down this scene + HUD on
+  // its own, so this is fire-and-forget like «В главное меню».
+  hud.onOpenSaveLoad = () =>
+    void gameEngine
+      ?.transitionTo(SceneType.SAVE_LOAD, {
+        gameEngine,
+        returnTo: SceneType.SPACE_FLIGHT,
+      })
+      ?.catch(() => {
+        hud.showMessage("Не удалось открыть сохранения", 0xff4444);
+      });
+
   // MAIN_MENU is NOT in transitionTo's gameEngine auto-inject list, so the
   // context must be passed explicitly — otherwise MainMenuScene boots with a
   // null engine and both «Новая игра»/«Продолжить» are dead.

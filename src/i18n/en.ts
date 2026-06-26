@@ -79,6 +79,7 @@ export const en: Dict = {
     "whom to help and whom to fleece — and perhaps your battered ship is the " +
     "one that decides whether inhabited space will hold.",
   "menu.newGame": "New Game",
+  "menu.saves": "Saved Games",
   "menu.feedback": "Send Feedback",
   "menu.replayTutorial": "Replay Tutorial",
   "menu.tutorialReset": "Tutorial reset — hints will show again",

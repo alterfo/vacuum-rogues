@@ -419,9 +419,21 @@ export class MainMenuScene extends GameScene {
     }
     this.buttonsContainer.addChild(continueBtn);
 
+    // Save/Load screen — full slot management (load any slot, name/overwrite,
+    // delete). From the menu there is no live game, so it opens read-only-ish
+    // (load + delete of existing saves); `returnTo` brings the player back here.
+    const savesBtn = createButton(
+      t("menu.saves"),
+      95,
+      () => this.handleSaveLoad(),
+      18,
+      0x88ddff,
+    );
+    this.buttonsContainer.addChild(savesBtn);
+
     const feedbackBtn = createButton(
       t("menu.feedback"),
-      100,
+      140,
       () => this.handleFeedback(),
       16,
       0x66ccff,
@@ -432,7 +444,7 @@ export class MainMenuScene extends GameScene {
     // set so every screen's auto-hint shows again on next visit).
     const replayHelpBtn = createButton(
       t("menu.replayTutorial"),
-      140,
+      180,
       () => this.handleReplayOnboarding(),
       16,
       0x66ccff,
@@ -440,6 +452,24 @@ export class MainMenuScene extends GameScene {
     this.buttonsContainer.addChild(replayHelpBtn);
 
     this.renderer.uiLayer.addChild(this.buttonsContainer);
+  }
+
+  /**
+   * Open the save/load screen, returning to the main menu when it closes. From
+   * the menu there is no live game (player/galaxy are null until a load), so the
+   * screen offers load/delete of existing saves rather than new manual saves —
+   * the in-flight system-menu entry is where the player creates named saves.
+   */
+  private handleSaveLoad(): void {
+    if (!this.gameEngine) {
+      logger.error("GameEngine not available for Save/Load!");
+      this.showMessage(t("menu.engineUnavailable"));
+      return;
+    }
+    void this.gameEngine.transitionTo(SceneType.SAVE_LOAD, {
+      gameEngine: this.gameEngine,
+      returnTo: SceneType.MAIN_MENU,
+    });
   }
 
   /**
@@ -500,7 +530,10 @@ export class MainMenuScene extends GameScene {
     this.gameEngine.showLoadingOverlay(t("menu.loading"));
 
     try {
-      const loaded = await this.gameEngine.loadGame("auto");
+      // Continue resumes the latest *meaningful* save across all slots (auto +
+      // the manual grid), not just the `"auto"` autosave — so a more recent
+      // named save (or one taken after the autosave hit a win/lose screen) wins.
+      const loaded = await this.gameEngine.continueGame();
       if (!loaded) {
         logger.warn("No save found for continue");
         this.gameEngine?.hideLoadingOverlay();
@@ -552,8 +585,8 @@ export class MainMenuScene extends GameScene {
     const buttonsY = this.buttonsContainer
       ? this.buttonsContainer.y
       : height / 2;
-    // Below the button stack (the lowest button sits at relative y≈140).
-    msgText.y = buttonsY + 180;
+    // Below the button stack (the lowest button sits at relative y≈180).
+    msgText.y = buttonsY + 215;
     this.renderer.uiLayer.addChild(msgText);
     this.currentMsgText = msgText;
 
