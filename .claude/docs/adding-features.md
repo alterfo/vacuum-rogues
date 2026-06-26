@@ -48,6 +48,23 @@ Read it through a `typeof __NAME__ !== "undefined"` guard (see `src/systems/feed
 2. Update Zod schema in `src/validation/schemas.ts`
 3. Add migration in `src/data/MigrationPipeline.ts` if needed
 
+## New UI String (i18n / localization)
+
+UI text is **key-based** (`docs/plans/20260625-localization-i18n.md`). Every player-facing string resolves through `t(key, params?)` from `src/i18n/i18n.ts` against the active language, so it can be shown in RU **or** EN. The two dictionaries — `src/i18n/ru.ts` (default; verbatim in-game RU) and `src/i18n/en.ts` (English) — are kept in **lockstep**: a key MUST exist in both. `language` is a browser-level `localStorage` pref (`getLanguage`/`setLanguage`, default `ru`), the same class as `fontScale`/`neuralEnabled` — **no save/schema/migration change**.
+
+The recipe — **new string ⇒ key + ru/en**:
+
+1. **Add the key to BOTH dictionaries.** Pick a namespaced key `area.thing` (e.g. `trade.title`, `comms.hullLine`). Put the **verbatim** Russian in `ru.ts` and the English translation in `en.ts`. For dynamic values use `{param}` placeholders (e.g. `"trade.result": "{verb}: {qty}×{name} за {price} кр."`) — `t` interpolates from the `params` object. (Autonyms like Русский/English are intentionally identical in both dicts.)
+2. **Render through `t(...)`, not a literal.** Replace the inline Cyrillic string with `t("area.thing")` / `t("area.thing", { qty })`, routed through the scene's `scaledText(...)` choke point. A missing key falls back to the other language, then renders as the bare key (the UI never blanks).
+3. **Live re-localize.** Text nodes re-read `t(...)` at creation, so a language switch is applied by the same in-place restyle a font change uses (`FlightHud.refreshFontScale`); the settings panel's **ЯЗЫК** row (`SettingsPanel.selectLanguage`) persists + fans this out.
+
+The two guards (both run in `npm test`):
+
+- **Parity guard** (`src/tests/i18n/parity.test.ts`): fails the moment `ru` and `en` key sets diverge, or any value is empty — so you can't add a key to one dict only, or leave an EN value blank.
+- **Migrated-scenes guard** (`src/tests/i18n/migratedScenes.test.ts`): each file in its `MIGRATED_SCENES` list must contain **zero inline Cyrillic string literals** (comments are fine) **and** actually call `t(`. When you finish migrating a scene's literals, **append it to that list** so the gate enforces it (and prevents a re-added literal backsliding).
+
+Migration backlog: `npx tsx tools/i18n/extract.ts [--list]` prints the remaining inline-Cyrillic-literal count per file under `src/presentation` / `src/systems` / `src/ai` (skipping the dicts + tests) — the shrinking tracker for incremental scene migration. Its pure scanner core is `src/i18n/cyrillicLiterals.ts` (`findCyrillicLiterals`), shared with the migrated-scenes guard.
+
 # Plan Format (Ralphex)
 
 All implementation plans in `docs/plans/` **must** use ralphex-compatible format — the plan runner rejects files that deviate.

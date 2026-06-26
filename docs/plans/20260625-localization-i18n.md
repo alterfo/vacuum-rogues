@@ -82,7 +82,19 @@ string.
       lint + build all green.)
 
 ### Task 5: Documentation
-- [ ] Document the i18n recipe (new string ⇒ key + ru/en) and the parity guard.
+- [x] Document the i18n recipe (new string ⇒ key + ru/en) and the parity guard.
+      (Added a "New UI String (i18n / localization)" recipe section to
+      `.claude/docs/adding-features.md` — the canonical feature-adding guide,
+      `@`-included into CLAUDE.md — covering: add the key to BOTH `ru.ts`/`en.ts`,
+      namespacing + `{param}` interpolation, render through `t(...)` via
+      `scaledText`, live re-localize, the **parity guard**
+      (`src/tests/i18n/parity.test.ts`) + **migrated-scenes guard**
+      (`src/tests/i18n/migratedScenes.test.ts`, append-to-`MIGRATED_SCENES`), and
+      the `tools/i18n/extract.ts` backlog tracker. Added a matching
+      "Internationalization (i18n)" Architecture subsection to CLAUDE.md and
+      refreshed the stale "Settings Interface (Speed / Font / Neural)" header →
+      "(Speed / Font / Neural / Language)" with the `selectLanguage`/`applyLanguage`
+      wiring. All 28 i18n tests green; scanner + extract tool verified.)
 
 ## Post-Completion
 **Manual:** switch to EN — migrated screens read English; RU unchanged; remaining
