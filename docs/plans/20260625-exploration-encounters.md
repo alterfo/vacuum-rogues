@@ -44,10 +44,10 @@ loot + reward seams.
 **Files:**
 - Create: `src/systems/encounters/encounterOutcome.ts` (+ test)
 
-- [ ] `resolve(encounter, choice, rng)` → `{credits?, cargo?, repΔ?, startCombat?, message}`
+- [x] `resolve(encounter, choice, rng)` → `{credits?, cargo?, repΔ?, startCombat?, message}`
       (salvage success/trap, anomaly bonus/hazard, rescue/ambush).
-- [ ] write tests: each branch yields the right payoff; trap/ambush triggers combat.
-- [ ] run tests — green.
+- [x] write tests: each branch yields the right payoff; trap/ambush triggers combat.
+- [x] run tests — green.
 
 ### Task 3: Wire into flight (prompt + payoff)
 **Files:**
