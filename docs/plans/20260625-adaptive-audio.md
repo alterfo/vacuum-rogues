@@ -62,8 +62,10 @@ machinery already exists, so this is mostly wiring + a couple of tracks.
 - [x] run tests — green.
 
 ### Task 4: Verify + docs
-- [ ] full suite + `test:playtest` green; lint/build ok; document the music director +
-      the new track/SFX keys.
+- [x] full suite + `test:playtest` green; lint/build ok; document the music director +
+      the new track/SFX keys. (Full unit suite 3684 passed / 4 skipped; `test:playtest`
+      254 passed / 2 skipped; lint 0 errors; `npm run build` ok. Music director + new
+      `TrackKey`/`SfxKey` keys documented in CLAUDE.md → "Adaptive Audio" section.)
 
 ## Post-Completion
 **Manual:** enter a fight → tense track cross-fades in; win → ambient returns; the new
