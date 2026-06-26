@@ -178,7 +178,11 @@ export class TouchGestureInterpreter {
     const dist = Math.hypot(a.x - b.x, a.y - b.y);
     const centerX = (a.x + b.x) / 2;
     const centerY = (a.y + b.y) / 2;
-    if (this.prevPinchDist === null || this.prevPinchDist === 0) {
+    // Re-baseline (no intent) when either distance is zero: a zero *previous*
+    // distance can't be a divisor, and a zero *current* distance (fingers
+    // momentarily coincident — e.g. crossing mid-pinch) would yield `scale = 0`,
+    // which `zoomByFactor` clamps to MIN_ZOOM — a jarring, sticky snap-to-min.
+    if (this.prevPinchDist === null || this.prevPinchDist === 0 || dist === 0) {
       this.prevPinchDist = dist;
       return [];
     }

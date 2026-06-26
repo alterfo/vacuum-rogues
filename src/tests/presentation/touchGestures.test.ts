@@ -151,6 +151,24 @@ describe("TouchGestureInterpreter — pinch (two fingers)", () => {
     expect(a[0].scale * b[0].scale).toBeCloseTo(4, 5);
   });
 
+  it("does NOT emit a scale-0 pinch when the two fingers coincide", () => {
+    // Fingers crossing mid-pinch (dist → 0) must not yield scale 0, which
+    // CameraController.zoomByFactor clamps to MIN_ZOOM — a jarring, sticky
+    // snap-to-min. The interpreter re-baselines silently and resumes after.
+    const gi = new TouchGestureInterpreter();
+    gi.handle({ phase: "down", id: 1, x: 0, y: 0 });
+    gi.handle({ phase: "down", id: 2, x: 200, y: 0 }); // dist 200
+    const collide = pinches(gi.handle({ phase: "move", id: 2, x: 0, y: 0 })); // dist 0
+    expect(collide).toHaveLength(0); // no scale-0 emission
+    // Spreading back out re-baselines (one frame) then resumes a normal, finite
+    // pinch — no NaN/Infinity, no MIN_ZOOM snap.
+    gi.handle({ phase: "move", id: 2, x: 100, y: 0 }); // dist 100 → re-baseline
+    const apart = pinches(gi.handle({ phase: "move", id: 2, x: 300, y: 0 })); // dist 300
+    expect(apart).toHaveLength(1);
+    expect(Number.isFinite(apart[0].scale)).toBe(true);
+    expect(apart[0].scale).toBeCloseTo(3, 5); // 300 / 100
+  });
+
   it("emits no pan or tap during a pinch", () => {
     const gi = new TouchGestureInterpreter();
     const out: GestureIntent[] = [];
