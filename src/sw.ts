@@ -1,9 +1,22 @@
 /// <reference lib="WebWorker" />
 
-// eslint-disable-next-line no-restricted-globals
-const BUILD_VERSION = (globalThis as unknown as { __BUILD_VERSION__?: string }).__BUILD_VERSION__ ?? 'dev';
-const CACHE_NAME = `vacuum-rogues-v${BUILD_VERSION}`;
-const MODEL_CACHE_NAME = `vacuum-rogues-models-v${BUILD_VERSION}`;
+import { buildCacheNames } from './systems/sw/cacheNames';
+
+declare const __BUILD_VERSION__: string;
+declare const __BUILD_SHA__: string;
+
+// Read the Vite-inlined build identity as BARE identifiers so `define` actually
+// substitutes them (a `globalThis.__BUILD_VERSION__` *member* access is NOT
+// replaced — that bug froze the version at 'dev' and the cache never busted).
+// `typeof` keeps it safe when a build serves the SW without the defines.
+const BUILD_VERSION = typeof __BUILD_VERSION__ !== 'undefined' ? __BUILD_VERSION__ : 'dev';
+const BUILD_SHA = typeof __BUILD_SHA__ !== 'undefined' ? __BUILD_SHA__ : 'dev';
+// Key the cache on version + SHA so every deploy gets a fresh name and `activate`
+// purges the previous build's stale cache (no more stale-bundle serving).
+const { cache: CACHE_NAME, modelCache: MODEL_CACHE_NAME } = buildCacheNames(
+  BUILD_VERSION,
+  BUILD_SHA,
+);
 
 const CORE_ASSETS = [
   '/',
