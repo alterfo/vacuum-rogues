@@ -184,8 +184,12 @@ Related patterns:
 **Files:**
 - Modify: `src/presentation/CLAUDE.md`
 
-- [ ] Document the onboarding pattern: `helpContent` registry + `onboardingState`
+- [x] Document the onboarding pattern: `helpContent` registry + `onboardingState`
       persistence + `mountSceneHelp` one-line wiring, so new scenes add a help key.
+      (Added the «Contextual help is one-line per scene» section to
+      `src/presentation/CLAUDE.md` — the three pure pieces, the one-line
+      `mountSceneHelp` opt-in, the add-a-scene recipe, and the `firstTimeKey`/
+      `showHelpOnce`/`resetSeen` surfaces.)
 
 ## Technical Details
 - "Seen" is browser-level localStorage (`sr_help_seen`) — independent of game

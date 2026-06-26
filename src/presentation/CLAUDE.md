@@ -109,6 +109,32 @@ can't leak the number the panel above it hides (and the margin re-appears once t
 is explored). Presentation/visibility only — the rumor data is unchanged, so no
 domain/schema/save change.
 
+**Contextual help is one-line per scene** (`ui/mountSceneHelp.ts`,
+`docs/plans/20260623-onboarding-and-contextual-help.md`). Onboarding is three pure pieces +
+one wiring call: the **content registry** `src/systems/onboarding/helpContent.ts` (`HELP_CONTENT:
+Record<HelpKey, HelpEntry>` — concise Russian `title`/`body[]`/`controls?` for every reachable
+screen plus the `welcome`/`quest-journal`/`combat` in-flight surfaces; `HelpKey` reuses the
+`SceneType` string values so a scene passes its own type; read via `helpFor(key)`), the **"seen"
+persistence** `src/systems/onboarding/onboardingState.ts` (`hasSeen`/`markSeen`/`resetSeen` over
+browser-level `localStorage` key `sr_help_seen` — same class as `sr_settings`/`sr_mobile_ack`, so
+**no save-schema/migration change** and it survives «Новая игра»; injectable + degrades to "nothing
+seen" on absent/corrupt JSON), and the wiring helper `mountSceneHelp(deps, key, options?)`. A scene
+opts in with **one line** in `initialize()` —
+`this.helpTeardown = mountSceneHelp({ renderer, container: renderer.stage }, "PLANET")` — and calls
+the returned teardown in `destroy()`. On mount it (1) auto-shows the panel **once** the first time
+the key is seen (then `markSeen`s it so it never nags again) and (2) always mounts the top-right
+«?» `UiButton` that reopens that key's `HelpPanel` on demand. Mount on **`renderer.stage`** (not a
+per-frame-rebuilt `uiLayer`) so the «?»/panel survive layer rebuilds. The auto-show decision is the
+pure, unit-tested `pickAutoShowKey(key, firstTimeKey, hasSeen)` / `shouldAutoShow` — no
+renderer/DOM. **To add a new scene to onboarding:** add its `HelpKey` + `HELP_CONTENT` entry, then
+the single `mountSceneHelp` line — nothing else. Two non-scene surfaces: pass
+`options.firstTimeKey: "welcome"` to greet a brand-new player with the goal intro on the very first
+flight before the per-screen hint (the flight scene; «?» still reopens the scene key, not the
+intro), and `showHelpOnce(deps, "combat")` fires the one-shot combat hint on a transient event
+(first in-flight engagement) with no «?» button. «Показать обучение заново» (Main Menu) calls
+`resetSeen()` so every first-time hint shows again. The «?» sits top-right to avoid the bottom-right
+«Оставить issue» overlay.
+
 Three most-hit PixiJS 8 traps:
 - **`eventMode='none'` on Text over clickable areas** — Text defaults to `'auto'` and blocks
   clicks underneath; set `'none'` on labels so clicks pass through.
