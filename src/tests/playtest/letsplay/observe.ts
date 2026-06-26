@@ -9,6 +9,15 @@
  * this snapshot, a {@link PlayerPolicy} chooses one of `legalActions`, and the
  * action is applied back onto the engine through the harness.
  *
+ * **Partial observability (egocentric).** The snapshot is restricted to what the
+ * player could actually perceive *right now*: their own vitals/cargo/credits,
+ * the current system (its planets/stations/connections and the ships present in
+ * it), and — only when the player is landed — that one planet's market prices.
+ * An *unvisited* planet's market is never leaked: prices live on
+ * {@link CurrentPlanetSnapshot} (the landed planet), so the agent must *go there*
+ * to learn them. This is what lets the agent's memory be an honest belief state
+ * built solely from things it has seen.
+ *
  * Everything here is a *read*: `observe` mutates nothing and never throws on a
  * partially-initialised engine (e.g. the main menu before a game starts), so it
  * is safe to call on every step. It lives under `src/tests/` and is **dev-only**
@@ -24,6 +33,16 @@ import type {
 } from "@/types";
 import { npcsPresentInSystem } from "@/systems/npc/NpcSimulator";
 import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
+import { TradeSystem } from "@/systems/TradeSystem";
+import type { Planet } from "@/domain/Planet";
+import type { Player } from "@/domain/Player";
+
+/**
+ * Pricing is stateless (base prices + a heuristic regressor), so a single
+ * shared instance is reused for every egocentric market read. It is never
+ * mutated by {@link observe}, keeping the projection a pure read.
+ */
+const TRADE = new TradeSystem();
 
 /**
  * The vocabulary of player actions the agent can take. A superset across all
@@ -109,11 +128,31 @@ export interface QuestSnapshot {
   targetSystemId: string | null;
 }
 
+/**
+ * One tradeable good's prices at the player's current location. Egocentric: a
+ * good's `buy`/`sell` is only knowable by *being at* the planet that trades it,
+ * so these appear on {@link CurrentPlanetSnapshot} (the landed planet) and
+ * nowhere else — unvisited planets expose no prices.
+ */
+export interface MarketGoodSnapshot {
+  resource: ResourceType;
+  /** Price to buy one unit here. */
+  buy: number;
+  /** Price to sell one unit here (always strictly below `buy` on this planet). */
+  sell: number;
+}
+
 /** The planet the player is currently landed on (PLANET scene). */
 export interface CurrentPlanetSnapshot {
   id: string;
   name: string;
   availableQuests: number;
+  /**
+   * The goods + prices visible *because the player is landed here*. The only
+   * place market prices appear in the snapshot — this is the perception the
+   * agent's price-book memory is fed from.
+   */
+  market: MarketGoodSnapshot[];
 }
 
 /** A pure, serialisable snapshot of the engine state the agent reasons over. */
@@ -216,6 +255,23 @@ export function legalActionsForScene(
   }
 
   return ACTION_ORDER.filter((a) => set.has(a));
+}
+
+/**
+ * Egocentric market read: the buy/sell price for every good the *landed* planet
+ * trades, priced for this player. Only ever called for the planet the player is
+ * standing on, so an unvisited planet's prices are never produced. Order follows
+ * the market's `availableResources` so two reads of one state are deep-equal.
+ */
+function marketSnapshotFor(
+  planet: Planet,
+  player: Player,
+): MarketGoodSnapshot[] {
+  return planet.market.availableResources.map((resource) => ({
+    resource,
+    buy: TRADE.getBuyPrice(planet, resource, player),
+    sell: TRADE.getSellPrice(planet, resource, player),
+  }));
 }
 
 /**
@@ -325,6 +381,7 @@ export function observe(engine: GameEngine): Observation {
         id: landed.id,
         name: landed.name,
         availableQuests: landed.availableQuests.length,
+        market: marketSnapshotFor(landed, player),
       }
     : null;
 

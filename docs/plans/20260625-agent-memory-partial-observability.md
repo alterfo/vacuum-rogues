@@ -60,13 +60,13 @@ Memory is **per-run** (resets each new game, like a human starting fresh).
 **Files:**
 - Modify: `src/tests/playtest/letsplay/observe.ts`, `observe.test.ts`
 
-- [ ] Restrict `observe()` to what the player can currently perceive: this planet's
+- [x] Restrict `observe()` to what the player can currently perceive: this planet's
       market, this system's visible ships/threats, own cargo/credits, and only
       *discovered* map nodes — drop any galaxy-wide / unvisited-planet data from the
       snapshot.
-- [ ] write tests: an unvisited planet's prices / an unseen system's threats are absent;
+- [x] write tests: an unvisited planet's prices / an unseen system's threats are absent;
       the current location's data is present.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 2: Structured belief state (AgentMemory) + update
 **Files:**

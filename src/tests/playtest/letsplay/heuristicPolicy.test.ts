@@ -89,7 +89,12 @@ function makeObs(scene: SceneType, opts: ObsOpts = {}): Observation {
 
   const currentPlanet =
     scene === SceneType.PLANET && opts.landedQuests != null
-      ? { id: "p-landed", name: "Земля", availableQuests: opts.landedQuests }
+      ? {
+          id: "p-landed",
+          name: "Земля",
+          availableQuests: opts.landedQuests,
+          market: [],
+        }
       : null;
 
   const legalActions = legalActionsForScene(scene, {

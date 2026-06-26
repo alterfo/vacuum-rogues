@@ -204,4 +204,72 @@ describe("observe(engine) over the real harness", () => {
     expect(obs.legalActions).not.toContain("attack");
     expect(harness.errors()).toEqual([]);
   });
+
+  it("is egocentric: only the landed planet exposes a market; no prices in space", async () => {
+    await harness.newGame();
+
+    // In flight, before landing: nothing is "landed", so no market is visible
+    // anywhere — not on the current system's planets either.
+    const flightObs = observe(harness.engine);
+    expect(flightObs.currentPlanet).toBeNull();
+    for (const p of flightObs.system!.planets) {
+      // The system view is name-only; prices are never leaked from orbit.
+      expect(p).not.toHaveProperty("market");
+      expect(p).not.toHaveProperty("buy");
+      expect(p).not.toHaveProperty("sell");
+    }
+  });
+
+  it("landing reveals only THIS planet's market; unvisited planets stay price-free", async () => {
+    await harness.newGame();
+    const sys = harness
+      .galaxy()!
+      .systems.find((s) =>
+        s.planets.some((p) => p.market.availableResources.length > 0),
+      )!;
+    const planet = sys.planets.find(
+      (p) => p.market.availableResources.length > 0,
+    )!;
+    harness.player()!.currentSystemId = sys.id;
+
+    await harness.goTo(SceneType.PLANET, { planet });
+    const obs = observe(harness.engine);
+
+    // The landed planet's market is now perceivable.
+    expect(obs.currentPlanet).not.toBeNull();
+    expect(obs.currentPlanet!.id).toBe(planet.id);
+    const market = obs.currentPlanet!.market;
+    expect(market.length).toBeGreaterThan(0);
+    for (const good of market) {
+      expect(good.buy).toBeGreaterThan(0);
+      expect(good.sell).toBeGreaterThan(0);
+      // Same-planet spread invariant: you can never instantly resell at a profit.
+      expect(good.sell).toBeLessThan(good.buy);
+    }
+
+    // The *other* (unvisited) planets in the same system still carry no prices —
+    // the player would have to fly there to learn them.
+    for (const p of obs.system!.planets) {
+      expect(p).not.toHaveProperty("market");
+    }
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("the landed-planet market is deterministic across two reads of one state", async () => {
+    await harness.newGame();
+    const sys = harness
+      .galaxy()!
+      .systems.find((s) =>
+        s.planets.some((p) => p.market.availableResources.length > 0),
+      )!;
+    const planet = sys.planets.find(
+      (p) => p.market.availableResources.length > 0,
+    )!;
+    harness.player()!.currentSystemId = sys.id;
+    await harness.goTo(SceneType.PLANET, { planet });
+
+    expect(observe(harness.engine).currentPlanet!.market).toEqual(
+      observe(harness.engine).currentPlanet!.market,
+    );
+  });
 });
