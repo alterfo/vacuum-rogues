@@ -12,7 +12,7 @@
 | **Presentation** | `src/presentation/` | PixiJS: сцены, спрайты, рендер, ввод игрока |
 | **Systems** | `src/systems/` | Игровые системы: бой, торговля, диалоги, генерация галактики |
 | **Domain** | `src/domain/` | Чистые сущности: `Player`, `Galaxy`, `StarSystem`, `Inventory` — без зависимостей от PixiJS/ONNX/DOM |
-| **AI / Infrastructure** | `src/ai/`, `src/data/` | ONNX-инференс, Web Workers, IndexedDB, сохранения |
+| **AI / Infrastructure** | `src/ai/`, `src/data/` | Правиловый `FallbackEngine`, чистый-TS MLP (без ONNX-рантайма), IndexedDB, сохранения |
 | **Types / Config** | `src/types/`, `src/config/` | Единые типы, enum, константы баланса |
 
 ---
@@ -202,14 +202,15 @@ GameEngine.transitionTo(SceneType.X)
 
 ---
 
-## 7. ONNX / AI
+## 7. Нейросети / AI (чистый TS, без ONNX-рантайма)
 
-- **Реестр моделей** → `src/ai/ONNXModelRegistry.ts`
-- **Воркер** → `src/ai/inference.worker.ts`
-- **Адаптеры** → `src/ai/adapters/` (T5, PPO, VAE, GRU, Overmind)
-- **Кэш** → `src/ai/IndexedDBCache.ts`
+`onnxruntime-web` удалён (см. `docs/plans/20260625-pure-ts-mlp-drop-onnx.md`).
 
-Модели загружаются лениво по первому запросу, кэшируются в IndexedDB. Инференс — только через Web Worker.
+- **Правиловый движок** → `src/ai/FallbackEngine.ts` — канонический путь для диалогов и тактического ИИ (чистые шаблоны, без модели).
+- **Нейрополитики** → крошечные feature-vector MLP (`src/tests/playtest/letsplay/mlp.ts`): `forward` = matmul + ReLU + argmax над весами из небольшого JSON. Используется dev-only политикой `NeuralPolicy` (с весами — argmax легального действия, без — откат к `HeuristicPolicy`).
+- **Тренировка** → PyTorch на 4090 (`tools/ai/train_player.py`), экспорт весов в JSON; паритет пинится тестом `weightsContract.test.ts` (в пределах `1e-5`).
+
+Никакого воркера/WebGPU/wasm: MLP такого размера считается inline на CPU за микросекунды. Реальный рантайм вернётся, только если сети действительно понадобится conv/transformer.
 
 ---
 
@@ -240,7 +241,7 @@ GameEngine.transitionTo(SceneType.X)
    - **Architecture / REASONS Canvas** — для проектирования подсистем
    - **User Story Implementation** — для кодирования фичи
    - **Bug Fix / Regression** — для исправления багов
-   - **ONNX Model Adapter** — для интеграции моделей
+   - **Neural Policy (pure-TS MLP)** — для тренировки/интеграции нейрополитики (см. §7)
    - **E2E Test Scenario** — для тестов
 
 2. Пройди **Pre-Prompt Checklist** из AI Prompt Guide перед отправкой запроса.

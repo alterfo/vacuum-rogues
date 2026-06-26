@@ -2,7 +2,7 @@
   "name": "vacuum-rogues",
   "version": "0.1.0",
   "type": "module",
-  "description": "Browser-based open-world space RPG/strategy with local ONNX models for dialogue and tactical AI.",
+  "description": "Browser-based open-world space RPG/strategy with tiny pure-TS neural policies and a rule-based fallback engine for dialogue and tactical AI.",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

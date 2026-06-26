@@ -16,11 +16,15 @@ import { dirname, join, relative, resolve, sep } from "node:path";
  *     assert none of them statically imports anything resolving into the
  *     letsplay engine dir. If this stays green, `npm run build` can never pull
  *     the engine into the prod bundle.
- *  2. **The engine does not statically import `onnxruntime-web`.** The future
- *     neural policy (Task 5) loads ONNX via a **dev-only dynamic `import()`** so
- *     the runtime is never added to a static (and hence bundleable) import edge.
- *     A static `import ... from "onnxruntime-web"` would defeat that, so we ban
- *     it here. Dynamic `import("onnxruntime-web")` is allowed.
+ *  2. **The engine does not statically import `onnxruntime-web`.** This started
+ *     as a bundle guard (a static import would add a bundleable edge). Since the
+ *     pure-TS MLP drop (`docs/plans/20260625-pure-ts-mlp-drop-onnx.md`) the ONNX
+ *     runtime is gone entirely, and `noOnnxRuntime.test.ts` is now the authority
+ *     banning **every** `onnxruntime*` import across `src/**` — static *and*
+ *     dynamic. This guard stays as the narrower belt over the letsplay dir.
+ *     (The `staticSpecifiers` helper extracts only static specifiers by design;
+ *     the dynamic-`import()` assertion below pins that helper contract, not a
+ *     permission to use a dynamic ONNX import.)
  */
 
 const SRC_ROOT = resolve(__dirname, "..", "..");

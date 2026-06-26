@@ -1,7 +1,8 @@
 # Вакуумные Пройдохи
 
 **Вакуумные Пройдохи** — браузерная космическая RPG/стратегия с открытым миром,
-локальными ONNX-моделями для генерации диалогов и тактического ИИ.
+крошечными нейрополитиками на чистом TypeScript (MLP) и правиловым движком
+`FallbackEngine` для диалогов и тактического ИИ.
 
 ## Быстрый старт
 
@@ -39,9 +40,8 @@ npm run lint
 - **TypeScript 5.4+** — строгая типизация
 - **Vite 5.2+** — сборка и dev-сервер
 - **PixiJS 8.0+** — рендеринг (WebGL / Canvas2D)
-- **onnxruntime-web 1.17+** — локальный ONNX-инференс
-- **IndexedDB** — кэширование моделей и сохранений
-- **Web Workers** — параллельный инференс
+- **Чистый TS MLP** (`src/tests/playtest/letsplay/mlp.ts`) — крошечные нейрополитики без рантайма нейросети
+- **IndexedDB** — сохранения
 
 ### Ключевые компоненты
 
@@ -54,8 +54,7 @@ src/
     StarMapScene.ts     — Звёздная карта
     MainMenuScene.ts    — Главное меню
   ai/
-    ONNXModelRegistry.ts — Регистрация и загрузка ONNX-моделей
-    inference.worker.ts  — Web Worker для инференса
+    FallbackEngine.ts    — Правиловый движок диалогов / тактического ИИ
   data/
     SaveManager.ts       — Управление сохранениями
 ```
@@ -105,7 +104,7 @@ galactic-horizon/
 ├── .github/workflows/ci-cd.yml   # CI/CD pipeline
 ├── dist/                         # Production build
 ├── src/
-│   ├── ai/                       # ONNX-инфраструктура
+│   ├── ai/                       # Правиловый FallbackEngine (диалоги / ИИ)
 │   ├── config/                   # Конфигурация
 │   ├── data/                     # Персистентность
 │   ├── domain/                   # Доменные сущности
@@ -136,11 +135,17 @@ galactic-horizon/
 3. Добавить `case` в `src/core/services/SceneFactory.ts`
 4. Добавить `SceneType` в `src/types/index.ts`
 
-### Интеграция ONNX-модели
+### Тренировка нейрополитики игрока
 
-1. Добавить конфигурацию в `src/ai/ModelManifest.ts`
-2. Создать адаптер (напр., `T5DialogueAdapter`)
-3. Использовать через `ONNXModelRegistry`
+Нейрополитики — крошечные MLP на чистом TypeScript (без ONNX-рантайма). Пайплайн
+behavioural cloning:
+
+1. Сгенерировать датасет: `src/tests/playtest/letsplay/exportBcData.ts`
+2. Обучить и экспортировать веса в JSON: `tools/ai/train_player.py` (см. `tools/ai/README.md`)
+3. Положить `*.weights.json` туда, где их грузит `NeuralPolicy` (dev-only); паритет
+   пинится тестом `weightsContract.test.ts`
+
+Для диалогов / тактического ИИ используется правиловый `FallbackEngine` (`src/ai/FallbackEngine.ts`) — без файла модели.
 
 ### Тестирование
 

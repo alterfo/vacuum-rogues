@@ -23,11 +23,16 @@
 - **Compress to WebP before committing.** `src/assets/**` ships as WebP (raw PNG/JPG would re-bloat the repo — it dropped ~581 MB → ~32 MB). After dropping new art run `npx tsx tools/optimize-assets.ts --category <name>` (lossy q80 for photoreal, lossless for `ui`/`icons`); it converts in place and removes the original. Since the manifest keys by extension-less path, `texture("<category>/<name>")` is unchanged. If you add new keys, refresh `src/tests/assets/manifestKeys.snapshot.json` (the key-parity baseline). See `tools/README.md`.
 - **Generating art:** the game's own asset pipeline is `tools/comfyui/` (distinct from the audio-reactive ComfyUI). Add a category to `tools/comfyui/asset_prompts.json` (`template` + `axes` + `variants`), then `python3 tools/comfyui/generate_assets.py --category <name> --ckpt <sdxl>.safetensors --clean` on the ComfyUI host (RTX 4090, `oleg@192.168.88.193`) emits `<category>/<name>_NN`; rsync into `src/assets/<category>/`. `--list` previews without generating. **Pass `--ckpt` explicitly** — the default picks the first checkpoint (a Flux model incompatible with `CheckpointLoaderSimple`); use an SDXL model (e.g. `realvisxl_v5.safetensors`). Operational gotchas live in memory `feedback-comfyui-headless-generation`.
 
-## New ONNX Model
-1. Add config to `src/ai/ModelManifest.ts`
-2. Create adapter in `src/ai/adapters/` with `preprocessInput()`, `postprocessOutput()`, `infer()`
-3. Implement fallback in `src/ai/FallbackEngine.ts`
-4. Add test in `src/tests/`
+## New / Retrained Neural Policy (pure-TS MLP — no ONNX runtime)
+
+There is no ONNX runtime (`onnxruntime-web` was removed — see `docs/plans/20260625-pure-ts-mlp-drop-onnx.md`). The only neural net is the dev-only letsplay player policy (`src/tests/playtest/letsplay/`), a tiny feature-vector MLP run through a hand-written pure-TS forward pass (`mlp.ts`) over weights shipped as a small JSON array. To change/retrain it:
+
+1. Adjust `featurize` width / `ACTION_ORDER` if the I/O changed — keep `FEATURE_LENGTH` in `NeuralPolicy.ts` and `NUM_ACTIONS` in `tools/ai/train_player.py` in lockstep.
+2. Generate a behavioural-cloning dataset with `src/tests/playtest/letsplay/exportBcData.ts`.
+3. Train + export weights JSON via `tools/ai/train_player.py` (see `tools/ai/README.md`).
+4. Drop the `*.weights.json` where `NeuralPolicy` loads it (dev-only); parity is pinned by `weightsContract.test.ts` (within `1e-5`).
+
+For dialogue / tactical AI use the rule-based `FallbackEngine` (`src/ai/FallbackEngine.ts`) — no model file involved. If a net ever genuinely needs a runtime (a conv/transformer), swap `mlp.forward` back to one *then*, not before.
 
 ## New Build Define
 Vite `define` globals live in `vite.config.ts` (`__DEBUG__`, `__BUILD_VERSION__`, `__BUILD_SHA__` — the last two stamp the beta-feedback diagnostics). A new define needs **both**:

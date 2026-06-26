@@ -52,8 +52,8 @@ export default defineConfig(({ mode }) => ({
       },
       // Obfuscation is OPT-IN (`OBFUSCATE=1 npm run build`), not on by default.
       // With `global: true` it processed the WHOLE bundle and corrupted Vite's
-      // dynamic-import URL placeholders — onnxruntime's `browserAll-<hash>.js`
-      // came out as `browserAll-!~{003}~.js` → 404 → game init crash. It also
+      // dynamic-import URL placeholders — a hashed chunk like `chunk-<hash>.js`
+      // came out as `chunk-!~{003}~.js` → 404 → game init crash. It also
       // broke PixiJS enum init (the DXT1 crash). A plain `npm run build` (what we
       // use for testing) now ships a clean, working bundle. When you DO obfuscate
       // for a release, it runs per-module (`global: false`) and skips vendor
@@ -91,8 +91,10 @@ export default defineConfig(({ mode }) => ({
     __BUILD_VERSION__: JSON.stringify(resolveBuildVersion()),
     __BUILD_SHA__: JSON.stringify(resolveBuildSha()),
   },
-  // NOTE: do NOT add `assetsInclude: ['**/*.worker.ts']` — it forces Vite to
+  // NOTE: there are currently no production Web Workers (the ONNX inference
+  // worker was removed — see docs/plans/20260625-pure-ts-mlp-drop-onnx.md). If
+  // one is ever reintroduced, load it via a `?worker` import (Vite compiles it)
+  // and do NOT add `assetsInclude: ['**/*.worker.ts']` — that forces Vite to
   // treat the worker as a static asset and inline its RAW TypeScript (served as
-  // video/mp2t), which breaks the prod build. Workers are loaded via the
-  // `?worker` import in ONNXModelRegistry, so Vite compiles them properly.
+  // video/mp2t), which breaks the prod build.
 }));
