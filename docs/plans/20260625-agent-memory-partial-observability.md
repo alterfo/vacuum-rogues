@@ -72,14 +72,14 @@ Memory is **per-run** (resets each new game, like a human starting fresh).
 **Files:**
 - Create: `src/tests/playtest/letsplay/AgentMemory.ts`, `AgentMemory.test.ts`
 
-- [ ] `AgentMemory` = `{ priceBook: Map<planet, Map<good, {price, seenAt}>>,
+- [x] `AgentMemory` = `{ priceBook: Map<planet, Map<good, {price, seenAt}>>,
       inventoryLots: {good, qty, buyPrice}[], threatMap: Map<system, danger>,
       knownOffers: {item, price, location}[] }` + `updateMemory(mem, obs)` (pure; folds
       one egocentric observation in; records buy-price on a buy; never stores unseen
       facts). Per-run (fresh per game).
-- [ ] write tests: visiting a market records its prices; a buy records its lot+price; a
+- [x] write tests: visiting a market records its prices; a buy records its lot+price; a
       threat encounter marks the system; re-seeing updates `seenAt`.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 3: Memory-derived features
 **Files:**
