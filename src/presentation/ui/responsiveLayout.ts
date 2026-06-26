@@ -85,6 +85,18 @@ export function liveViewport(env: DeviceEnv = liveEnv()): Viewport {
   return { width: env.innerWidth ?? 0, height: env.innerHeight ?? 0 };
 }
 
+/**
+ * True when comfortable touch controls should be active: the viewport is a
+ * touch layout (tablet/phone) **and** the device has a coarse primary pointer.
+ * This is the single gate shared by {@link touchHitArea} (fat hit rects) and the
+ * on-screen flight controls (Phase 2) — so a narrow *desktop* window is never
+ * given touch chrome (the desktop path stays byte-for-byte unchanged). `env` is
+ * injectable for tests; it defaults to the live `window`/`navigator`.
+ */
+export function isTouchLayoutActive(env: DeviceEnv = liveEnv()): boolean {
+  return layoutFor(liveViewport(env)).touch && hasCoarsePointer(env);
+}
+
 /** An axis-aligned hit rectangle (PixiJS `Rectangle`-shaped, but plain data). */
 export interface HitArea {
   readonly x: number;
@@ -110,10 +122,10 @@ export function touchHitArea(
   h: number,
   env: DeviceEnv = liveEnv(),
 ): HitArea {
-  const layout = layoutFor(liveViewport(env));
-  if (!layout.touch || !hasCoarsePointer(env)) {
+  if (!isTouchLayoutActive(env)) {
     return { x: 0, y: 0, width: w, height: h };
   }
+  const layout = layoutFor(liveViewport(env));
   const tw = Math.max(w, layout.minTarget);
   const th = Math.max(h, layout.minTarget);
   return { x: (w - tw) / 2, y: (h - th) / 2, width: tw, height: th };

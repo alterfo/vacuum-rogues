@@ -268,3 +268,40 @@ describe("CameraController (extracted from SpaceFlightScene)", () => {
     expect(camera.panY).toBe(125);
   });
 });
+
+describe("CameraController zoomByFactor (touch pinch — mobile Task 3)", () => {
+  const W = 800;
+  const H = 600;
+
+  it("multiplies the zoom by the incremental pinch factor", () => {
+    const { cam } = makeCamera(W, H);
+    expect(cam.zoom).toBe(1);
+    cam.zoomByFactor(1.5, 400, 300);
+    expect(cam.zoom).toBeCloseTo(1.5, 5);
+    cam.zoomByFactor(1.2, 400, 300);
+    expect(cam.zoom).toBeCloseTo(1.8, 5); // composes multiplicatively
+  });
+
+  it("clamps to MAX_ZOOM on a big spread", () => {
+    const { cam } = makeCamera(W, H);
+    cam.zoomByFactor(10, 400, 300);
+    expect(cam.zoom).toBe(cam.MAX_ZOOM);
+  });
+
+  it("clamps to MIN_ZOOM on a big pinch-in", () => {
+    const { cam } = makeCamera(W, H);
+    cam.zoomByFactor(0.001, 400, 300);
+    expect(cam.zoom).toBe(cam.MIN_ZOOM);
+  });
+
+  it("keeps the world point under the anchor fixed (zoom toward the fingers)", () => {
+    const { cam } = makeCamera(W, H);
+    const anchorX = 420;
+    const anchorY = 280;
+    const before = cam.screenToWorld(anchorX, anchorY);
+    cam.zoomByFactor(1.6, anchorX, anchorY);
+    const after = cam.screenToWorld(anchorX, anchorY);
+    expect(after.x).toBeCloseTo(before.x, 4);
+    expect(after.y).toBeCloseTo(before.y, 4);
+  });
+});

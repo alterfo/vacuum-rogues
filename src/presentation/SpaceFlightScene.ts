@@ -30,6 +30,8 @@ import { combatOrbitalDayIncrement } from "./flight/combatOrbitClock";
 import { PlanetManager } from "./flight/PlanetManager";
 import { FlightHud } from "./flight/FlightHud";
 import { CameraController } from "./flight/CameraController";
+import { FlightTouchController } from "./flight/flightTouchControls";
+import { isTouchLayoutActive } from "./ui/responsiveLayout";
 import { WarpEffectRenderer } from "./flight/WarpEffectRenderer";
 import { QuestCompletion } from "./flight/QuestCompletion";
 import { handleFlightKey } from "./flight/flightKeyHandler";
@@ -151,6 +153,7 @@ export class SpaceFlightScene extends GameScene {
   // recognised here via PanZoomController and forwarded as deltas / wheel events.
   private camera!: CameraController;
   private readonly panZoom = new PanZoomController();
+  private touchControls!: FlightTouchController; // touch pinch-zoom seam (mobile Task 3)
   private boundWheel: ((event: WheelEvent) => void) | null = null;
   // Suppresses Chrome's middle-button "auto-scroll" (which otherwise fires
   // wheel/scroll events and zooms the camera while the player pans).
@@ -203,6 +206,8 @@ export class SpaceFlightScene extends GameScene {
     this.hud.onMiniMapReturn = () => this.camera.startReturn();
     this.hud.onFontScaleChange = () => this.onFontScaleChanged();
     this.hud.onInventory = () => void this.openInventory();
+    this.hud.onCancel = () =>
+      this.onKeyDown({ key: "Escape" } as KeyboardEvent); // touch «✕» = Esc
     wireFlightSystemMenu(this.hud, this.gameEngine); // in-flight load/main-menu escape hatch (Task 2)
 
     this.combatModule = new CombatModule({
@@ -415,6 +420,11 @@ export class SpaceFlightScene extends GameScene {
         this.camera.panY,
       );
     };
+
+    this.touchControls = new FlightTouchController(
+      this.camera,
+      isTouchLayoutActive, // touch pinch → camera zoom (mobile Task 3); inert off-touch
+    );
 
     // Warp-exit flourish (flash/rings) shown when dropping out of hyperspace.
     this.warpFx = new WarpEffectRenderer(this.renderer.gameLayer);
@@ -837,6 +847,11 @@ export class SpaceFlightScene extends GameScene {
   private onPointerDown(event: FederatedPointerEvent): void {
     if (!this.shipPhysics) return;
 
+    if (this.touchControls.onDown(event)) {
+      this.clearPlannedRoute(); // touch pinch (2nd finger) voids the route + owns the gesture (mobile Task 3)
+      return;
+    }
+
     logger.debug(
       `🖱️ POINTER DOWN: button=${event.button}, shift=${event.shiftKey}, global=(${event.global.x.toFixed(0)}, ${event.global.y.toFixed(0)})`,
     );
@@ -948,11 +963,13 @@ export class SpaceFlightScene extends GameScene {
   }
 
   private onPointerMove(event: FederatedPointerEvent): void {
+    if (this.touchControls.onMove(event)) return; // touch pinch consumes 2-finger moves
     const panDelta = this.panZoom.onMove(event.global.x, event.global.y);
     if (panDelta) this.camera.pan(panDelta.dx, panDelta.dy);
   }
 
-  private onPointerUp(): void {
+  private onPointerUp(event?: FederatedPointerEvent): void {
+    if (event) this.touchControls.onUp(event); // clear touch finger bookkeeping
     if (this.panZoom.isPanning) {
       logger.info("❌ Pan mode deactivated");
       setCanvasCursor(this.renderer.app, "default"); // release pan cursor

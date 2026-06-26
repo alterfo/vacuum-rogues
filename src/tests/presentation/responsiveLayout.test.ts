@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   layoutFor,
   touchHitArea,
+  isTouchLayoutActive,
   liveViewport,
   PHONE_MAX_SHORT_SIDE_PX,
   TABLET_MAX_SHORT_SIDE_PX,
@@ -133,5 +134,34 @@ describe("liveViewport", () => {
       height: 844,
     });
     expect(liveViewport({})).toEqual({ width: 0, height: 0 });
+  });
+});
+
+describe("isTouchLayoutActive — the shared touch-controls gate", () => {
+  it("is true for a coarse-pointer phone or tablet viewport", () => {
+    expect(isTouchLayoutActive(env({ coarse: true, w: 390, h: 844 }))).toBe(
+      true,
+    );
+    expect(isTouchLayoutActive(env({ coarse: true, w: 768, h: 1024 }))).toBe(
+      true,
+    );
+  });
+
+  it("is false on a desktop-sized viewport even with a coarse pointer", () => {
+    expect(isTouchLayoutActive(env({ coarse: true, w: 1920, h: 1080 }))).toBe(
+      false,
+    );
+  });
+
+  it("is false on a small viewport with a fine pointer (narrow desktop window)", () => {
+    // A laptop window dragged narrow must NOT get touch chrome — the desktop
+    // path stays unchanged unless the pointer is actually coarse.
+    expect(isTouchLayoutActive(env({ coarse: false, w: 390, h: 844 }))).toBe(
+      false,
+    );
+  });
+
+  it("degrades to false when viewport dimensions are unknown", () => {
+    expect(isTouchLayoutActive(env({ coarse: true }))).toBe(false);
   });
 });

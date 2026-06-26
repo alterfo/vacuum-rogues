@@ -1,5 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { UiButton } from "../ui/UiButton";
+import { isTouchLayoutActive } from "../ui/responsiveLayout";
 import type { Renderer } from "../Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { Planet } from "@/domain/Planet";
@@ -17,6 +18,10 @@ import { SettingsPanel, SETTINGS_PANEL_HEIGHT } from "../ui/SettingsPanel";
 import { GAME_BALANCE } from "@/config/balance";
 import { logger } from "@/utils/logger";
 import type { FlightModule } from "./FlightModule";
+
+/** Touch «✕» cancel button width (px) and the gap to the left of Play. */
+const CANCEL_BTN_W = 56;
+const CANCEL_BTN_GAP = 8;
 
 /**
  * Owns the in-flight HUD: the static instruction/date text, the quest-journal and
@@ -60,6 +65,10 @@ export class FlightHud implements FlightModule {
 
   // Play / Pause turn control (bottom-centre).
   private playPauseButton: UiButton | null = null;
+  // Touch-only cancel/«✕» button (left of Play) — the on-screen equivalent of the
+  // Esc key, only built on a touch layout (`docs/plans/20260625-mobile-adaptation.md`
+  // Task 3). Null on desktop, so the desktop HUD is byte-for-byte unchanged.
+  private cancelButton: UiButton | null = null;
   // Latest turn state pushed by the scene; drives the Play/Pause label.
   private turnRunning = false;
 
@@ -134,6 +143,12 @@ export class FlightHud implements FlightModule {
   /** [I] inventory shortcut button was pressed. */
   onInventory: (() => void) | null = null;
   /**
+   * Touch «✕» cancel button pressed — the on-screen equivalent of the Esc key.
+   * The scene wires it to the *same* action Escape runs (close the top open
+   * surface, else cancel a planned route). Only built on a touch layout.
+   */
+  onCancel: (() => void) | null = null;
+  /**
    * «Загрузить сохранение» pressed in the in-flight system menu. The scene
    * confirms then loads the `"auto"` slot (the dead-end recovery path).
    */
@@ -194,6 +209,7 @@ export class FlightHud implements FlightModule {
     // Buttons live on uiContainer (torn down by clearUILayer); drop the refs.
     this.backButton = null;
     this.playPauseButton = null;
+    this.cancelButton = null;
     this.speedButton = null;
     this.speedIndex = 0;
     this.gearButton = null;
@@ -297,6 +313,7 @@ export class FlightHud implements FlightModule {
     // These live on the now-destroyed uiContainer — drop the dangling refs.
     this.backButton = null;
     this.playPauseButton = null;
+    this.cancelButton = null;
     this.cameraDebugText = null;
     this.dayCounterText = null;
   }
@@ -350,6 +367,11 @@ export class FlightHud implements FlightModule {
     if (this.playPauseButton) {
       this.playPauseButton.x = w / 2 - 70;
       this.playPauseButton.y = h - 54;
+    }
+    if (this.cancelButton && this.playPauseButton) {
+      this.cancelButton.x =
+        this.playPauseButton.x - CANCEL_BTN_W - CANCEL_BTN_GAP;
+      this.cancelButton.y = this.playPauseButton.y;
     }
     this.systemMiniMap?.reposition(w, h);
     // After the radar settles, re-derive the camera hint from its bounds.
@@ -763,6 +785,29 @@ export class FlightHud implements FlightModule {
     playBtn.container.cursor = "pointer";
     this.uiContainer.addChild(playBtn.container);
     this.playPauseButton = playBtn;
+
+    // Touch «✕» cancel button — only on a touch layout (the Esc key's on-screen
+    // twin). Placed just left of Play; the scene fans it through onCancel to the
+    // same action Escape runs. Lives on uiContainer so teardown destroys it too.
+    if (isTouchLayoutActive()) {
+      const cancelBtn = new UiButton(
+        "",
+        "✕",
+        "danger",
+        (event) => {
+          event.stopPropagation();
+          this.gameEngine?.audio?.playUiClick();
+          this.onCancel?.();
+        },
+        CANCEL_BTN_W,
+        PLAY_BTN_H,
+      );
+      cancelBtn.x = playBtn.x - CANCEL_BTN_W - CANCEL_BTN_GAP;
+      cancelBtn.y = playBtn.y;
+      cancelBtn.container.cursor = "pointer";
+      this.uiContainer.addChild(cancelBtn.container);
+      this.cancelButton = cancelBtn;
+    }
 
     this.uiLayer.addChild(this.uiContainer);
 

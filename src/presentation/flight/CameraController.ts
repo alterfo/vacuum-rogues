@@ -118,6 +118,27 @@ export class CameraController {
     );
   }
 
+  /**
+   * Pinch zoom: multiply the zoom by `scale` about a **canvas-local** screen
+   * anchor (the touch midpoint, already in screen px — no client→canvas rect
+   * conversion, unlike {@link zoomAtClient} which reads a window-level wheel
+   * event). The world point under the anchor stays fixed, so a two-finger pinch
+   * zooms toward where the fingers are. Composes multiplicatively frame-to-frame
+   * (`scale` is the incremental ratio from `TouchGestureInterpreter`).
+   */
+  zoomByFactor(scale: number, anchorX: number, anchorY: number): void {
+    const clampedZoom = Math.max(
+      this.MIN_ZOOM,
+      Math.min(this.MAX_ZOOM, this.cameraZoom * scale),
+    );
+    const worldAnchorX = (anchorX - this.cameraPanX) / this.cameraZoom;
+    const worldAnchorY = (anchorY - this.cameraPanY) / this.cameraZoom;
+    this.cameraZoom = clampedZoom;
+    this.cameraPanX = anchorX - worldAnchorX * this.cameraZoom;
+    this.cameraPanY = anchorY - worldAnchorY * this.cameraZoom;
+    this.applyTransform();
+  }
+
   /** E2E helper: clamp + set the zoom directly. */
   setZoom(zoom: number): void {
     this.cameraZoom = Math.max(this.MIN_ZOOM, Math.min(this.MAX_ZOOM, zoom));
