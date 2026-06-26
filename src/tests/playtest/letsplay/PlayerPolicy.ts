@@ -6,9 +6,12 @@
  * seam is deliberately tiny — `decide(obs) → Action` — so two very different
  * brains satisfy it interchangeably:
  *
- *  - {@link HeuristicPolicy} — the rule-based baseline that ships now.
- *  - `NeuralPolicy` — the "нейросеть думает за игрока" net, wired later behind a
- *    **dev-only** dynamic ONNX import (Task 5).
+ *  - {@link HeuristicPolicy} — the memoryless rule-based baseline that ships now.
+ *  - `MemoryHeuristicPolicy` — the belief-using teacher: reasons over the agent's
+ *    per-run `AgentMemory` (the behavioural-cloning teacher for the net).
+ *  - `NeuralPolicy` — the "нейросеть думает за игрока" net: a tiny pure-TS MLP
+ *    over a weights JSON (no ONNX runtime, no dynamic `import()`), inert until
+ *    trained weights are dropped in.
  *
  * The single hard contract every policy must honour: **`decide` returns an action
  * whose `kind` is in `obs.legalActions`** (never an illegal action for the

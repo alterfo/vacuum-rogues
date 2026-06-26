@@ -2,8 +2,8 @@
  * Letsplay engine — a hand-written, dependency-free multi-layer perceptron.
  *
  * The only nets this game needs (the letsplay player policy, and later the
- * Overmind) are **tiny feature-vector MLPs** — e.g. `12→32→10` ≈ 746 weights,
- * ~704 multiply-adds per inference. That is microseconds on the CPU and runs
+ * Overmind) are **tiny feature-vector MLPs** — e.g. `18→32→10` ≈ 938 weights,
+ * ~896 multiply-adds per inference. That is microseconds on the CPU and runs
  * inline, so it needs no wasm runtime, Web Worker, or GPU dispatch. This module
  * is the whole inference path: a dense forward pass (matmul + ReLU on the hidden
  * layers, a linear output head) over weights shipped as a small JSON array

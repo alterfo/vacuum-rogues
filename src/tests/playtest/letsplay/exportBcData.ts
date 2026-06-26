@@ -4,8 +4,9 @@
  * The neural player ({@link NeuralPolicy}) is trained by **cloning a teacher**:
  * run a known-good {@link PlayerPolicy} (the {@link HeuristicPolicy} today, the
  * memory-using teacher later) on the *real* {@link GameEngine}, and at every step
- * log the pair `(featurize(obs), actionIndex)` — the net's input vector and the
- * teacher's chosen action as an index into {@link ACTION_ORDER}. That stream of
+ * log the pair `(featurize(obs, belief), actionIndex)` — the net's input vector
+ * (including the agent's per-run belief block) and the teacher's chosen action as
+ * an index into {@link ACTION_ORDER}. That stream of
  * `(features → label)` rows is a plain supervised-classification dataset: no
  * environment in the training loop, just `tools/ai/train_player.py` fitting the
  * tiny MLP to imitate the teacher, then exporting weights JSON for `mlp.ts`.
@@ -81,7 +82,12 @@ async function collectSession(
       if (!action) continue;
       const index = ACTION_ORDER.indexOf(action.kind);
       if (index < 0) continue; // defensive: only log known vocabulary
-      rows.push({ features: featurize(obs), action: index });
+      // Featurize with the agent's belief *as the teacher saw it* this step:
+      // `run(1)` folds this same observation into the notebook before the teacher
+      // decides, so `agent.belief` is exactly the memory block behind the label.
+      // (Featurizing without it would record an all-zero belief block and train
+      // the net to ignore the memory features this plan added.)
+      rows.push({ features: featurize(obs, agent.belief), action: index });
     }
     return rows;
   } finally {

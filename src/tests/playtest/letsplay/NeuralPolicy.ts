@@ -1,14 +1,16 @@
 /**
- * Letsplay engine — the neural-policy seam (dev-only **stub**).
+ * Letsplay engine — the neural-policy seam (dev-only).
  *
  * `NeuralPolicy` is the "нейросеть думает за игрока" brain: the trained player
  * net that, once it exists, replaces {@link HeuristicPolicy} behind the identical
  * {@link PlayerPolicy} contract. The training run is **Post-Completion** (offline
- * self-play / behavioural cloning on the RTX 4090), so today this is a documented
- * stub that keeps the heuristic as the default while pinning down the seam:
+ * self-play / behavioural cloning on the RTX 4090), so until a `*.weights.json`
+ * is dropped in the policy stays inert (the heuristic is the default); the seam
+ * is fully pinned down meanwhile:
  *
- *  1. **`featurize(obs)`** — a pure, fixed-length numeric feature vector from the
- *     {@link Observation}, the net's input. Deterministic (same obs → same vector)
+ *  1. **`featurize(obs, memory?)`** — a pure, fixed-length numeric feature vector
+ *     from the {@link Observation} plus the agent's {@link AgentMemory} belief
+ *     block, the net's input. Deterministic (same `(obs, memory)` → same vector)
  *     and stable-width, so it doubles as the encoder for self-play training data.
  *  2. **`forward(weights, feats)`** — the hand-written pure-TS MLP forward pass
  *     ({@link forward} in `mlp.ts`): two tiny matmuls + ReLU, microseconds on the

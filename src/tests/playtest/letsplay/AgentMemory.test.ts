@@ -248,6 +248,101 @@ describe("updateMemory — inventory lots", () => {
     );
     expect(mem.inventoryLots).toEqual([]);
   });
+
+  it("a sell drains across multiple lots of different prices, oldest first", () => {
+    const P2_MARKET: MarketGoodSnapshot[] = [
+      { resource: ResourceType.METALS, buy: 120, sell: 90 },
+    ];
+    let mem = createMemory();
+    // Buy 3 @ 100 at p1 (see the market, then cargo grows by 3).
+    mem = updateMemory(
+      mem,
+      obs({
+        scene: SceneType.PLANET,
+        currentPlanet: landed("p1", METALS_MARKET),
+      }),
+    );
+    mem = updateMemory(
+      mem,
+      obs({
+        scene: SceneType.PLANET,
+        currentPlanet: landed("p1", METALS_MARKET),
+        player: playerFixture({
+          cargo: [{ type: ResourceType.METALS, amount: 3 }],
+          cargoUsed: 3,
+        }),
+      }),
+    );
+    // Fly to p2 (cargo unchanged ⇒ no spurious lot), then buy 2 more @ 120.
+    mem = updateMemory(
+      mem,
+      obs({
+        scene: SceneType.PLANET,
+        currentPlanet: landed("p2", P2_MARKET),
+        player: playerFixture({
+          cargo: [{ type: ResourceType.METALS, amount: 3 }],
+          cargoUsed: 3,
+        }),
+      }),
+    );
+    mem = updateMemory(
+      mem,
+      obs({
+        scene: SceneType.PLANET,
+        currentPlanet: landed("p2", P2_MARKET),
+        player: playerFixture({
+          cargo: [{ type: ResourceType.METALS, amount: 5 }],
+          cargoUsed: 5,
+        }),
+      }),
+    );
+    expect(mem.inventoryLots).toEqual([
+      { good: ResourceType.METALS, qty: 3, buyPrice: 100 },
+      { good: ResourceType.METALS, qty: 2, buyPrice: 120 },
+    ]);
+
+    // Sell 4 — drains the whole oldest lot (3 @ 100) then 1 of the next (1 @ 120).
+    mem = updateMemory(
+      mem,
+      obs({
+        player: playerFixture({
+          cargo: [{ type: ResourceType.METALS, amount: 1 }],
+          cargoUsed: 1,
+        }),
+      }),
+    );
+    expect(mem.inventoryLots).toEqual([
+      { good: ResourceType.METALS, qty: 1, buyPrice: 120 },
+    ]);
+  });
+
+  it("over-selling more than is held drains to empty (never a negative lot)", () => {
+    let mem = createMemory();
+    mem = updateMemory(
+      mem,
+      obs({
+        scene: SceneType.PLANET,
+        currentPlanet: landed("p1", METALS_MARKET),
+      }),
+    );
+    mem = updateMemory(
+      mem,
+      obs({
+        scene: SceneType.PLANET,
+        currentPlanet: landed("p1", METALS_MARKET),
+        player: playerFixture({
+          cargo: [{ type: ResourceType.METALS, amount: 2 }],
+          cargoUsed: 2,
+        }),
+      }),
+    );
+    // Cargo desync: drop straight to 0 (more than the lots could supply step-wise).
+    mem = updateMemory(
+      mem,
+      obs({ player: playerFixture({ cargo: [], cargoUsed: 0 }) }),
+    );
+    expect(mem.inventoryLots).toEqual([]);
+  });
 });
 
 describe("updateMemory — threat map", () => {

@@ -300,6 +300,25 @@ describe("memoryFeatures (the belief vector)", () => {
     const v = memoryFeatures(obs(), mem);
     expect(v[4]).toBe(1); // 8 / DANGER_SCALE(8) ⇒ saturated
   });
+
+  it("wires best-margin into slot 0 and profit-here into slot 2 (no slot swap)", () => {
+    const mem = twoPlanetBook(); // METALS: buy@p1 100, sell@p2 160
+    mem.inventoryLots = [{ good: ResourceType.METALS, qty: 5, buyPrice: 100 }];
+    const v = memoryFeatures(
+      obs({
+        scene: SceneType.PLANET,
+        currentPlanet: landed("p2", [
+          { resource: ResourceType.METALS, buy: 200, sell: 160 },
+        ]),
+      }),
+      mem,
+    );
+    // slot 0 = best margin fraction (160-100)/160 = 0.375; distinct from slot 2 so
+    // a swap of the two would fail this assertion.
+    expect(v[0]).toBeCloseTo(0.375);
+    // slot 2 = profitIfSoldHere / CREDIT_SCALE = (160-100)*5 / 10000 = 0.03.
+    expect(v[2]).toBeCloseTo(0.03);
+  });
 });
 
 describe("featurize (observation + memory blocks)", () => {
@@ -329,5 +348,15 @@ describe("featurize (observation + memory blocks)", () => {
     const mem = twoPlanetBook();
     const o = obs({ scene: SceneType.PLANET, currentPlanet: landed("p1", []) });
     expect(featurize(o, mem)).toEqual(featurize(o, mem));
+  });
+
+  it("pins the concrete feature widths (lockstep with the trained weights JSON)", () => {
+    // These literals are a contract: the trained `*.weights.json` input width and
+    // `tools/ai/train_player.py`'s NUM_ACTIONS must match. Changing a width here is
+    // a deliberate act that forces a retrain + re-export — so pin the numbers, not
+    // just their sum (which is tautological).
+    expect(OBS_FEATURE_LENGTH).toBe(12);
+    expect(MEMORY_FEATURE_LENGTH).toBe(6);
+    expect(FEATURE_LENGTH).toBe(18);
   });
 });
