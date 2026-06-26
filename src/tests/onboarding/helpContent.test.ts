@@ -7,6 +7,7 @@ import {
 
 /** Every reachable gameplay screen + the intro/hints must have content. */
 const ALL_KEYS: HelpKey[] = [
+  "RACE_SELECTION",
   "SPACE_FLIGHT",
   "STAR_MAP",
   "PLANET",

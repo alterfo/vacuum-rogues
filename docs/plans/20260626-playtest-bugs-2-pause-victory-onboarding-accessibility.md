@@ -102,10 +102,10 @@ wiring/interaction, unit for pure logic, E2E for visual), fix to green, then ver
 - Modify: `src/systems/onboarding/helpContent.ts` (`HelpKey` + `HELP_SPEC` entry for `RACE_SELECTION`), `src/i18n/ru.ts`, `src/i18n/en.ts` (the help title/body keys), `src/presentation/RaceSelectionScene.ts` (mount + teardown)
 - Modify: `src/tests/...onboarding/help-content tests` + parity
 
-- [ ] add a `RACE_SELECTION` `HelpKey` + `HELP_SPEC` entry and its ru/en content keys (concise: pick a faction + difficulty mode → start a new run); resolve through `helpI18nKeys` like the other migrated scenes
-- [ ] wire `this.helpTeardown = mountSceneHelp({ renderer, container: renderer.stage }, "RACE_SELECTION")` in `RaceSelectionScene.initialize()` and call it in `destroy()`
-- [ ] write tests: the `RACE_SELECTION` key exists in both catalogs (parity) and `helpFor("RACE_SELECTION")` returns the active-language entry; the scene mounts/tears down the help without leaking
-- [ ] run tests — must pass before next task
+- [x] add a `RACE_SELECTION` `HelpKey` + `HELP_SPEC` entry and its ru/en content keys (concise: pick a faction + difficulty mode → start a new run); resolve through `helpI18nKeys` like the other migrated scenes — `HelpKey`/`HELP_SPEC` (body 2 / controls 2) in `helpContent.ts`; `help.RACE_SELECTION.{title,body1,body2,control1,control2}` in ru.ts + en.ts (parity-locked)
+- [x] wire `this.helpTeardown = mountSceneHelp({ renderer, container: renderer.stage }, "RACE_SELECTION")` in `RaceSelectionScene.initialize()` and call it in `destroy()` — added the private `mountHelp()` seam (mounts on `renderer.stage` so the «?»/panel survive `refresh()` rebuilds) + teardown in `destroy()`
+- [x] write tests: the `RACE_SELECTION` key exists in both catalogs (parity) and `helpFor("RACE_SELECTION")` returns the active-language entry; the scene mounts/tears down the help without leaking — parity auto-covered by `helpContentI18n.test.ts` (derives keys from `HELP_SPEC`); added `RACE_SELECTION` to `helpContent.test.ts` ALL_KEYS; new `raceSelectionHelp.test.ts` asserts mount-on-stage + teardown-on-destroy
+- [x] run tests — must pass before next task (onboarding suite 61 passed; i18n parity/migrated/ratchet green; eslint clean)
 
 ### Task 4: Merge accessibility controls into the general Settings panel (and make the palette apply)
 **Files:**

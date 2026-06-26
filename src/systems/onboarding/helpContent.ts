@@ -19,6 +19,7 @@ import { t } from "@/i18n/i18n";
  * are not their own scene.
  */
 export type HelpKey =
+  | "RACE_SELECTION"
   | "SPACE_FLIGHT"
   | "STAR_MAP"
   | "PLANET"
@@ -53,6 +54,7 @@ export interface HelpEntry {
  */
 export const HELP_SPEC: Record<HelpKey, { body: number; controls: number }> = {
   welcome: { body: 2, controls: 0 },
+  RACE_SELECTION: { body: 2, controls: 2 },
   SPACE_FLIGHT: { body: 2, controls: 3 },
   STAR_MAP: { body: 2, controls: 2 },
   PLANET: { body: 2, controls: 2 },

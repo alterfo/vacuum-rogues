@@ -264,6 +264,18 @@ export const en: Dict = {
     " contract. The «?» button at the top right opens a hint for the current" +
     " screen at any time.",
 
+  // --- onboarding: faction selection / new game ----------------------------
+  "help.RACE_SELECTION.title": "New Game",
+  "help.RACE_SELECTION.body1":
+    "Choose a faction and a difficulty mode before starting a new run. Your" +
+    " faction sets your starting bonuses, ship stats and standing with" +
+    " others.",
+  "help.RACE_SELECTION.body2":
+    "Difficulty (God / Normal / Hard) decides how punishing the galaxy is." +
+    " Make your picks, then hit «Start Game».",
+  "help.RACE_SELECTION.control1": "Click a card — pick a faction",
+  "help.RACE_SELECTION.control2": "Difficulty, then «Start Game» — begin",
+
   // --- onboarding: space flight --------------------------------------------
   "help.SPACE_FLIGHT.title": "Space Flight",
   "help.SPACE_FLIGHT.body1":

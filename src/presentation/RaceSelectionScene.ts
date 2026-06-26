@@ -1,5 +1,6 @@
 import { Container, Graphics, Text, Sprite } from "pixi.js";
 import { GameScene } from "./GameScene";
+import { mountSceneHelp } from "./ui/mountSceneHelp";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import { FactionType, SceneType } from "@/types";
@@ -29,9 +30,24 @@ export class RaceSelectionScene extends GameScene {
   private selectedFaction: FactionType = FactionType.OUTLANDERS;
   private selectedMode: GameMode = "NORMAL";
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
+  /** Teardown for the contextual-help layer (first-time hint + «?» button). */
+  private helpTeardown: (() => void) | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
+  }
+
+  /**
+   * Wire contextual help (first-time auto-hint + always-available «?» reopen).
+   * Mounted on `renderer.stage` so the «?»/panel survive the scene's own
+   * `refresh()` UI rebuilds (which recreate `mainContainer`).
+   */
+  private mountHelp(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = mountSceneHelp(
+      { renderer: this.renderer, container: this.renderer.stage },
+      "RACE_SELECTION",
+    );
   }
 
   initialize(context?: { gameEngine: GameEngine }): void {
@@ -50,6 +66,8 @@ export class RaceSelectionScene extends GameScene {
     };
     window.addEventListener("keydown", this.boundKeyDown);
 
+    this.mountHelp();
+
     logger.info("RaceSelectionScene initialized");
   }
 
@@ -58,6 +76,8 @@ export class RaceSelectionScene extends GameScene {
   }
 
   destroy(): void {
+    this.helpTeardown?.();
+    this.helpTeardown = null;
     if (this.boundKeyDown) {
       window.removeEventListener("keydown", this.boundKeyDown);
       this.boundKeyDown = null;
