@@ -98,13 +98,13 @@ Memory is **per-run** (resets each new game, like a human starting fresh).
 **Files:**
 - Modify/Create: `src/tests/playtest/letsplay/MemoryHeuristicPolicy.ts` (+ test)
 
-- [ ] A `PlayerPolicy` that uses the belief state for human-like, multi-step play: buy
+- [x] A `PlayerPolicy` that uses the belief state for human-like, multi-step play: buy
       low + remember, sell where the known margin is best, save toward a known upgrade,
       avoid known-dangerous systems, sequence goals (earn → shields → proceed). Returns
       only legal actions (applier resolves the concrete target from memory).
-- [ ] write tests: in the scripted A/B/C scenario it buys@A, sells@B, routes around C,
+- [x] write tests: in the scripted A/B/C scenario it buys@A, sells@B, routes around C,
       and defers an unaffordable upgrade until it has saved.
-- [ ] run tests — green.
+- [x] run tests — green.
 
 ### Task 5: Carry memory through PlayerAgent
 **Files:**
