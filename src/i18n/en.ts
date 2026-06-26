@@ -249,6 +249,12 @@ export const en: Dict = {
   "comms.cargo": "Cargo: {cargo}",
   "comms.shielded": "Target is field-shielded —\nscan impossible",
 
+  // --- captured-system landing denial (with recovery hint) -----------------
+  "landing.denial.overmind":
+    "System under Overmind control — landing impossible",
+  "landing.denial.pirateRep":
+    "Planet captured by pirates — reputation required. Pay pirates off to raise it",
+
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Controls:",
   "help.gotIt": "Got it",

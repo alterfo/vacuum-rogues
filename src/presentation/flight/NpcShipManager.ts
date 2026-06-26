@@ -24,7 +24,10 @@ import {
   overmindCombatTargets,
   type RangedNpc,
 } from "@/systems/npc/factionHostility";
-import { PIRATE_FACTION_ID } from "@/systems/galaxy/landingAccess";
+import {
+  PIRATE_FACTION_ID,
+  grantPirateTributeRep,
+} from "@/systems/galaxy/landingAccess";
 import { payTribute } from "@/systems/banking/economy";
 import { SeededRNG } from "@/utils/seededRNG";
 import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
@@ -1369,6 +1372,11 @@ export class NpcShipManager implements FlightModule {
    * player → pirate transfer — never a direct credit write) and the pirate
    * disengages, leaving the player alone this encounter. The tribute is a pure
    * function of the player's purse ({@link shakedownTribute}).
+   *
+   * Buying off a shakedown is also the **repeatable recovery path** for pirate
+   * standing: it grants a small, capped +pirate-rep ({@link grantPirateTributeRep}),
+   * so a player whose pirate rep fell to −50 can climb back to landable on
+   * pirate-captured systems over several (costly) payoffs.
    */
   private onPayTribute(npc: NpcShip): void {
     const player = this.gameEngine?.player;
@@ -1382,9 +1390,10 @@ export class NpcShipManager implements FlightModule {
       tribute,
       `Откуп пирату «${npc.name}»`,
     );
+    grantPirateTributeRep(player);
     this.disengagePirate(npc);
     this.deps.showMessage(
-      `Откуп ${tribute} кр. — ${npc.name} отступает.`,
+      `Откуп ${tribute} кр. — ${npc.name} отступает. Репутация у пиратов растёт.`,
       0xffee88,
     );
   }

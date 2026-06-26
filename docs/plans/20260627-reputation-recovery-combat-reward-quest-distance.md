@@ -96,10 +96,10 @@ hint, not a rep sink. (b) **Full scope** including unblocking captured systems.
 
 ### Task 3: Pirate-rep recovery — regain access to pirate-captured systems
 **Files:** Modify `src/systems/comms/commsOptions.ts` (tribute), `src/systems/galaxy/landingAccess.ts`, `src/config/balance.ts`, ru/en; Create `src/tests/galaxy/pirateRepRecovery.test.ts`
-- [ ] failing test: there is **at least one** repeatable way to *raise* pirate reputation toward `GOOD_PIRATE_REP_THRESHOLD` (e.g. «Откупиться» grants a small +pirate-rep, or an anti-pirate/escort action does) — today only decreases/none-up exist
-- [ ] implement the chosen recovery (smallest viable: tribute grants a capped +pirate-rep, OR a dedicated action), so a −50 pirate-rep player can climb back to landable — **guard: per-interaction cap + credit cost stays meaningful** (no free/farmed rep)
-- [ ] surface it in the denial/tooltip text (the player learns *how* to regain access), localized ru/en
-- [ ] run tests — must pass before next task
+- [x] failing test: there is **at least one** repeatable way to *raise* pirate reputation toward `GOOD_PIRATE_REP_THRESHOLD` (e.g. «Откупиться» grants a small +pirate-rep, or an anti-pirate/escort action does) — today only decreases/none-up exist — `pirateRepRecovery.test.ts` asserts `grantPirateTributeRep` raises pirate rep by the fixed gain and a `−50` player climbs back to landable over repeated payoffs
+- [x] implement the chosen recovery (smallest viable: tribute grants a capped +pirate-rep, OR a dedicated action), so a −50 pirate-rep player can climb back to landable — **guard: per-interaction cap + credit cost stays meaningful** (no free/farmed rep) — `«Откупиться»` (`onPayTribute`) now calls `grantPirateTributeRep` (+`PIRATE_TRIBUTE_REP_GAIN = 3`, well below `GOOD_PIRATE_REP_THRESHOLD = 30`, clamp-bounded so no overshoot); the `shakedownTribute` credit cost is unchanged (rep is bought, not free); test asserts a single payoff is NOT enough and the +100 clamp never overshoots
+- [x] surface it in the denial/tooltip text (the player learns *how* to regain access), localized ru/en — `landingDenialMessage` now routes through i18n keys `landing.denial.overmind`/`landing.denial.pirateRep` (ru/en lockstep); the pirate-rep line carries the «Откупайтесь от пиратов, чтобы её поднять» recovery hint; cyrillic baseline regenerated (landingAccess literals migrated to keys)
+- [x] run tests — must pass before next task — pirate-rep recovery + landingAccess + planetTooltip + full i18n suite + playtest (265) + full unit suite (3832 passed / 4 skipped) + lint (0 errors) all green
 
 ### Task 4: Make liberating a captured system discoverable + working for pirate systems
 **Files:** Modify `src/systems/GameEngine.ts` (`liberateCurrentSystem`/`tryLiberate`), `src/systems/galaxy/*` (galaxy liberate), `src/presentation/flight/*` (surface the action), tests

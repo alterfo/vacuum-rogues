@@ -1,7 +1,11 @@
 import type { Planet } from "@/domain/Planet";
 import type { Player } from "@/domain/Player";
-import { GOOD_PIRATE_REP_THRESHOLD } from "@/config/balance";
+import {
+  GOOD_PIRATE_REP_THRESHOLD,
+  PIRATE_TRIBUTE_REP_GAIN,
+} from "@/config/balance";
 import { Faction } from "@/types/faction";
+import { t } from "@/i18n/i18n";
 
 /**
  * Reputation / captured-planet faction id for pirates. Pirates are an NPC role
@@ -58,14 +62,33 @@ export function canLandOnPlanet(
 }
 
 /**
- * Player-facing reason a captured-system landing was refused. Pure mapping so the
- * message text is unit-testable independently of the PixiJS HUD that shows it.
+ * Player-facing reason a captured-system landing was refused. Resolves through
+ * i18n (ru/en lockstep) so the wording localizes; the `pirate-rep` line carries
+ * the **recovery hint** (buy off pirates to raise standing) so a blocked player
+ * learns *how* to regain access rather than hitting a dead-end.
  */
 export function landingDenialMessage(reason: LandingDenialReason): string {
   switch (reason) {
     case "overmind":
-      return "Система под контролем Овермайнда — посадка невозможна";
+      return t("landing.denial.overmind");
     case "pirate-rep":
-      return "Планета захвачена пиратами — нужна репутация у пиратов";
+      return t("landing.denial.pirateRep");
   }
+}
+
+/**
+ * Apply the pirate-reputation recovery for buying off a shakedown
+ * («Откупиться»). Bumps the player's pirate standing by the fixed, capped
+ * {@link PIRATE_TRIBUTE_REP_GAIN} (the [-100,100] clamp in `adjustReputation`
+ * keeps it from overshooting) and returns the new pirate rep so callers can
+ * surface it. This is the **repeatable, credit-costed** path back toward
+ * {@link GOOD_PIRATE_REP_THRESHOLD} (landable on pirate-captured systems) — the
+ * inverse of the gate above. Pure over a minimal player view so it is unit-
+ * testable without the PixiJS comms panel that triggers it.
+ */
+export function grantPirateTributeRep(
+  player: Pick<Player, "getReputation" | "adjustReputation">,
+): number {
+  player.adjustReputation(PIRATE_FACTION_ID, PIRATE_TRIBUTE_REP_GAIN);
+  return player.getReputation(PIRATE_FACTION_ID);
 }

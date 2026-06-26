@@ -251,6 +251,12 @@ export const ru: Dict = {
   "comms.cargo": "Груз: {cargo}",
   "comms.shielded": "Цель защищена полем —\nсканирование невозможно",
 
+  // --- captured-system landing denial (with recovery hint) -----------------
+  "landing.denial.overmind":
+    "Система под контролем Овермайнда — посадка невозможна",
+  "landing.denial.pirateRep":
+    "Планета захвачена пиратами — нужна репутация. Откупайтесь от пиратов, чтобы её поднять",
+
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Управление:",
   "help.gotIt": "Понятно",

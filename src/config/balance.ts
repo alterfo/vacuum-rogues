@@ -549,6 +549,18 @@ export const ENCOUNTER_OUTCOME_CONFIG: EncounterOutcomeConfig = {
 export const GOOD_PIRATE_REP_THRESHOLD = 30;
 
 /**
+ * Pirate reputation gained each time the player buys off a shakedown
+ * («Откупиться»). Paying tribute is the **repeatable recovery path** back toward
+ * {@link GOOD_PIRATE_REP_THRESHOLD} (and thus landing access on pirate-captured
+ * systems): a small, fixed per-interaction bump so a deeply-negative (−50) player
+ * climbs back to landable only over **several** costly payoffs — never in one.
+ * The per-interaction cap is the fixed gain itself (no scaling, no farming), and
+ * the credit cost (`shakedownTribute`) stays meaningful — the standing is *bought*,
+ * not free. Kept well below the threshold so a single payoff can't one-shot it.
+ */
+export const PIRATE_TRIBUTE_REP_GAIN = 3;
+
+/**
  * Readability dimmer strength for the flight-scene sky (F2, 2026-06-10
  * letsplay): alpha of the full-screen black overlay mounted above the nebula
  * backdrop/clouds/star fields so the game layer (planets, ship, routes, NPCs)

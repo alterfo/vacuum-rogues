@@ -49,7 +49,6 @@
   "src/systems/equipment/micromoduleShop.ts": 1,
   "src/systems/equipment/sellGear.ts": 1,
   "src/systems/equipment/sellHull.ts": 2,
-  "src/systems/galaxy/landingAccess.ts": 2,
   "src/systems/npc/NpcSimulator.ts": 27,
   "src/systems/quests/QuestGenerator.ts": 234,
   "src/systems/quests/TextQuestRuntime.ts": 6,
