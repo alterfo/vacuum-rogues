@@ -6,10 +6,10 @@ import { FactionType, SceneType } from "@/types";
 import type { GameMode } from "@/types";
 import { logger } from "@/utils/logger";
 import { pickVariant } from "./textures";
+import { factionColor } from "./ui/palette";
 import {
   FACTION_TITLES,
   FACTION_DESCRIPTIONS,
-  FACTION_COLORS,
   FACTION_STATS,
   FACTION_BONUSES,
 } from "@/config/factionConfig";
@@ -356,7 +356,7 @@ export class RaceSelectionScene extends GameScene {
     cardBg.rect(0, 0, width, height);
     cardBg.fill({ color: isSelected ? 0x1a3a4a : 0x0a1a2a, alpha: 0.95 });
     cardBg.stroke({
-      color: isSelected ? FACTION_COLORS[faction] : 0x444444,
+      color: isSelected ? factionColor(faction) : 0x444444,
       width: isSelected ? 3 : 2,
     });
     cardBg.eventMode = "static";
@@ -387,7 +387,7 @@ export class RaceSelectionScene extends GameScene {
       style: {
         fontFamily: "Courier New",
         fontSize: 16,
-        fill: isSelected ? FACTION_COLORS[faction] : 0xffffff,
+        fill: isSelected ? factionColor(faction) : 0xffffff,
         fontWeight: "bold",
       },
     });
@@ -457,7 +457,7 @@ export class RaceSelectionScene extends GameScene {
         cardBg.clear();
         cardBg.rect(0, 0, width, height);
         cardBg.fill({ color: 0x152535, alpha: 0.98 });
-        cardBg.stroke({ color: FACTION_COLORS[faction], width: 2 });
+        cardBg.stroke({ color: factionColor(faction), width: 2 });
       }
     });
 
@@ -487,7 +487,7 @@ export class RaceSelectionScene extends GameScene {
     w: number,
     h: number,
   ): void {
-    const color = FACTION_COLORS[faction];
+    const color = factionColor(faction);
 
     // Backing plate (also shows through if the art has transparency).
     const plate = new Graphics();

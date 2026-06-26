@@ -21,13 +21,9 @@ export const FACTION_DESCRIPTIONS: Record<FactionType, string> = {
     "Технологически развитая раса исследователей с передовыми системами.",
 };
 
-export const FACTION_COLORS: Record<FactionType, number> = {
-  [FactionType.OUTLANDERS]: 0xff6600,
-  [FactionType.BASTIONS]: 0xcc0000,
-  [FactionType.SYNDICATE]: 0x00ff00,
-  [FactionType.PARADOXES]: 0x9900ff,
-  [FactionType.PROGRESSORS]: 0x0066ff,
-};
+// Faction colours moved to `src/presentation/ui/palette.ts` (the colorblind-safe
+// palette, accessibility pass). Read them through `factionColor(faction)`, which
+// renders the historical hues in the default mode and remaps for dichromat modes.
 
 export const FACTION_STATS: Record<
   FactionType,

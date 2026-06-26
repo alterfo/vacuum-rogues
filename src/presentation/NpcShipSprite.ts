@@ -2,7 +2,7 @@ import { Container, Graphics, Sprite, Circle } from "pixi.js";
 import type { FederatedPointerEvent } from "pixi.js";
 import type { NpcShip } from "@/domain/NpcShip";
 import { NpcRole } from "@/types";
-import { Faction } from "@/types/faction";
+import { factionColor } from "./ui/palette";
 import { pickVariant } from "./textures";
 import { GAME_BALANCE } from "@/config/balance";
 import { npcCruiseSpeed } from "./flight/npcCruiseSpeed";
@@ -30,16 +30,8 @@ const SHIP_SPRITE_ROTATION = Math.PI / 2;
 const HIT_RADIUS_PX = 40;
 const MIN_HIT_RADIUS_PX = 28;
 
-/** Hull colour by faction. */
-const FACTION_COLORS: Record<Faction, number> = {
-  [Faction.OUTLANDERS]: 0xff6600,
-  [Faction.BASTIONS]: 0xcc0000,
-  [Faction.SYNDICATE]: 0x00ff00,
-  [Faction.PARADOXES]: 0x9900ff,
-  [Faction.PROGRESSORS]: 0x0066ff,
-  [Faction.INDEPENDENT]: 0x999999,
-  [Faction.OVERMIND]: 0xff33dd,
-};
+// Hull colour by faction now reads through the colorblind-safe palette
+// (`ui/palette.ts` → `factionColor`); the default mode renders the same hues.
 
 /** Intent indicator colour by role (hostile / trade / neutral). */
 const INTENT_COLORS: Record<NpcRole, number> = {
@@ -148,7 +140,7 @@ export class NpcShipSprite {
   constructor(npc: NpcShip, x: number, y: number, bounds: SystemBounds) {
     this.npc = npc;
     this.speed = npcCruiseSpeed(npc);
-    this.mapColor = FACTION_COLORS[npc.faction] ?? 0x999999;
+    this.mapColor = factionColor(npc.faction);
     this.x = x;
     this.y = y;
     this.bounds = bounds;
@@ -490,7 +482,7 @@ export class NpcShipSprite {
   }
 
   private render(): void {
-    const hull = FACTION_COLORS[this.npc.faction] ?? 0x999999;
+    const hull = factionColor(this.npc.faction);
     const intent = INTENT_COLORS[this.npc.role] ?? 0xffffff;
     const g = this.graphics;
     g.clear();

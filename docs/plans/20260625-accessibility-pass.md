@@ -30,10 +30,11 @@ ships), and removes barriers for a chunk of players.
 **Files:**
 - Create: `src/presentation/ui/palette.ts` (+ test); modify color consumers (`FACTION_COLOR` etc.)
 
-- [ ] A palette mode (`default` | `deuteranopia` | `protanopia` | `tritanopia`) mapping
+- [x] A palette mode (`default` | `deuteranopia` | `protanopia` | `tritanopia`) mapping
       semantic colors to distinguishable hues; UI reads colors through it.
-- [ ] write tests: each mode yields distinguishable, total mappings; default unchanged.
-- [ ] run tests — green; screenshot a mode.
+- [x] write tests: each mode yields distinguishable, total mappings; default unchanged.
+- [x] run tests — green; screenshot a mode (manual visual step — skipped in headless; the
+      colourblind modes are validated by the distinct/total/default-unchanged unit assertions).
 
 ### Task 2: Reduced-motion
 **Files:**
