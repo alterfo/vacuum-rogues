@@ -57,6 +57,15 @@ export interface SettingsPanelDeps {
   /** Fired when the neural flag flips (the gate hook; no heavy runtime — pure-TS MLP). */
   onNeuralToggle?: (on: boolean) => void;
   /**
+   * Show the experimental НЕЙРОСЕТЬ (ИИ) row. Defaults to `import.meta.env.DEV`,
+   * so it is **hidden in prod**: the only consumers of the neural flag (the dev
+   * autopilot + letsplay) are dev-only (`main.ts` gates the autopilot on
+   * `import.meta.env.DEV`), so a prod toggle would be inert — a dead switch.
+   * Injectable so a test can exercise the prod (hidden) path under Vitest (where
+   * `import.meta.env.DEV` is `true`).
+   */
+  showNeural?: boolean;
+  /**
    * Ask the host to close the panel. Called after a font pick (a font change
    * rebuilds the HUD, so the panel can't stay meaningfully open).
    */
@@ -67,9 +76,16 @@ export interface SettingsPanelDeps {
 
 /** Fixed panel geometry (the host positions the whole panel by these). */
 export const SETTINGS_PANEL_WIDTH = 220;
-// Four control rows (font / speed / language / neural) at a 66 px step from
-// PAD+30, plus the neural "experimental" hint beneath the last row.
-export const SETTINGS_PANEL_HEIGHT = 320;
+// Full = four control rows (font / speed / language / neural) at a 66 px step
+// from PAD+30, plus the neural "experimental" hint beneath the last row. Compact
+// drops the dev-only neural row (prod), ending after the language row.
+export const SETTINGS_PANEL_HEIGHT_FULL = 320;
+export const SETTINGS_PANEL_HEIGHT_COMPACT = 248;
+// The host reads this to position/centre the panel; build-conditional so prod
+// (no neural row) is sized tightly and dev/test (neural shown) stays full.
+export const SETTINGS_PANEL_HEIGHT = import.meta.env.DEV
+  ? SETTINGS_PANEL_HEIGHT_FULL
+  : SETTINGS_PANEL_HEIGHT_COMPACT;
 
 const PAD = 12;
 const ROW_W = SETTINGS_PANEL_WIDTH - PAD * 2;
@@ -106,8 +122,11 @@ export class SettingsPanel {
   /** The mounted panel container (stable across re-renders). */
   readonly container: Container;
   private content: Container | null = null;
+  /** Whether to build the experimental НЕЙРОСЕТЬ row (dev-only; hidden in prod). */
+  private readonly showNeural: boolean;
 
   constructor(private readonly deps: SettingsPanelDeps) {
+    this.showNeural = deps.showNeural ?? import.meta.env.DEV;
     this.container = new Container();
     this.container.eventMode = "static";
     // Swallow clicks so the scene's outside-click handler doesn't close the
@@ -185,12 +204,15 @@ export class SettingsPanel {
     this.content = content;
     this.container.addChild(content);
 
+    const panelH = this.showNeural
+      ? SETTINGS_PANEL_HEIGHT_FULL
+      : SETTINGS_PANEL_HEIGHT_COMPACT;
     const bg = new Graphics();
-    bg.roundRect(0, 0, SETTINGS_PANEL_WIDTH, SETTINGS_PANEL_HEIGHT, 6).fill({
+    bg.roundRect(0, 0, SETTINGS_PANEL_WIDTH, panelH, 6).fill({
       color: 0x0a1520,
       alpha: 0.94,
     });
-    bg.roundRect(0, 0, SETTINGS_PANEL_WIDTH, SETTINGS_PANEL_HEIGHT, 6).stroke({
+    bg.roundRect(0, 0, SETTINGS_PANEL_WIDTH, panelH, 6).stroke({
       color: 0x334455,
       width: 1,
     });
@@ -212,7 +234,9 @@ export class SettingsPanel {
     this.renderFontRow(content, PAD + 30);
     this.renderSpeedRow(content, PAD + 96);
     this.renderLanguageRow(content, PAD + 162);
-    this.renderNeuralRow(content, PAD + 228);
+    // The neural toggle is dev-only — its consumers (autopilot/letsplay) are
+    // dev-only, so in prod it would be a dead switch. Hidden when !showNeural.
+    if (this.showNeural) this.renderNeuralRow(content, PAD + 228);
   }
 
   /** Section label above a control row. */

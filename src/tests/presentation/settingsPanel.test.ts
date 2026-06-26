@@ -275,6 +275,22 @@ describe("SettingsPanel", () => {
     handlers[7]({ stopPropagation: vi.fn() });
     expect(localStorage.getItem("language")).toBe("en");
   });
+
+  it("hides the НЕЙРОСЕТЬ row in prod (showNeural=false) — no dead toggle", () => {
+    // In prod the autopilot/letsplay (the only neural-flag consumers) don't
+    // exist, so the toggle would be inert; the row is gated out entirely.
+    const { deps } = makeDeps({ showNeural: false });
+    new SettingsPanel(deps);
+    const texts = allTexts();
+    expect(texts).not.toContain("НЕЙРОСЕТЬ (ИИ)");
+    expect(texts).not.toContain("ВЫКЛ");
+    // The other three controls still render…
+    expect(texts).toContain("ШРИФТ");
+    expect(texts).toContain("СКОРОСТЬ");
+    expect(texts).toContain("ЯЗЫК");
+    // …and only their 8 cells remain (3 font + 3 speed + 2 language, no neural).
+    expect(graphicsPointerdownHandlers().length).toBe(8);
+  });
 });
 
 describe("SettingsPanel Esc-close wiring (flightKeyHandler)", () => {
