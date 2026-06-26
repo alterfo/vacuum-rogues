@@ -15,6 +15,10 @@ import { formatGameDate, formatGameTimestamp } from "@/utils/gameCalendar";
 import { scaledFont } from "@/utils/fontScale";
 import { t } from "@/i18n/i18n";
 import { SettingsPanel, SETTINGS_PANEL_HEIGHT } from "../ui/SettingsPanel";
+import {
+  AccessibilityPanel,
+  ACCESSIBILITY_PANEL_HEIGHT,
+} from "../ui/AccessibilityPanel";
 import { GAME_BALANCE } from "@/config/balance";
 import { logger } from "@/utils/logger";
 import type { FlightModule } from "./FlightModule";
@@ -79,6 +83,15 @@ export class FlightHud implements FlightModule {
   // Gear button (⚙) + toggled settings panel (speed/font/neural; bottom-left HUD).
   private gearButton: UiButton | null = null;
   private settingsPanel: Container | null = null;
+
+  // Accessibility button (♿) + toggled accessibility panel (palette /
+  // reduced-motion / key remap; sits beside the ⚙ gear button). A separate
+  // surface from the settings panel — the latter's hit-area layout is pinned by
+  // locked tests, so the a11y group lives in its own panel
+  // (`docs/plans/20260625-accessibility-pass.md`, Task 4).
+  private accessibilityButton: UiButton | null = null;
+  private accessibilityPanel: Container | null = null;
+  private accessibilityPanelComp: AccessibilityPanel | null = null;
 
   // In-flight system menu (top-left [МЕНЮ] button) + its toggled panel. Always
   // reachable so the player can load a save or quit from any dead-end — a
@@ -224,6 +237,8 @@ export class FlightHud implements FlightModule {
       this.settingsPanel.destroy({ children: true });
       this.settingsPanel = null;
     }
+    this.accessibilityButton = null;
+    this.closeAccessibilityPanel();
     this.closeSystemMenu();
     if (this.helpOverlay) {
       this.helpOverlay.destroy({ children: true });
@@ -292,6 +307,7 @@ export class FlightHud implements FlightModule {
       this.settingsPanel.destroy({ children: true });
       this.settingsPanel = null;
     }
+    this.closeAccessibilityPanel();
     this.closeSystemMenu();
     // Speed + gear buttons mount on the UI layer directly (not uiContainer), so
     // destroy their containers explicitly. UiButton has no destroy() of its own.
@@ -302,6 +318,10 @@ export class FlightHud implements FlightModule {
     if (this.gearButton) {
       this.gearButton.container.destroy({ children: true });
       this.gearButton = null;
+    }
+    if (this.accessibilityButton) {
+      this.accessibilityButton.container.destroy({ children: true });
+      this.accessibilityButton = null;
     }
     // Mini-log entries are children of miniLogContainer → destroyed with it.
     this.miniLogEntries = [];
@@ -392,10 +412,19 @@ export class FlightHud implements FlightModule {
     if (this.gearButton) {
       this.gearButton.y = h - 162;
     }
+    if (this.accessibilityButton && this.gearButton) {
+      this.accessibilityButton.y = this.gearButton.y;
+    }
     if (this.settingsPanel && this.gearButton) {
       this.settingsPanel.y = Math.max(
         8,
         this.gearButton.y - SETTINGS_PANEL_HEIGHT - 4,
+      );
+    }
+    if (this.accessibilityPanel && this.accessibilityButton) {
+      this.accessibilityPanel.y = Math.max(
+        8,
+        this.accessibilityButton.y - ACCESSIBILITY_PANEL_HEIGHT - 4,
       );
     }
 
@@ -416,9 +445,13 @@ export class FlightHud implements FlightModule {
   // Modal / journal queries the scene mediates outside-clicks through
   // ---------------------------------------------------------------------------
 
-  /** True while the font-size settings panel is open. */
+  /**
+   * True while a bottom-left ⚙/♿ panel (settings or accessibility) is open. The
+   * flight key router treats both alike — Esc closes (via {@link closeModals})
+   * and Space is suppressed behind either — so they share this one query.
+   */
   isSettingsPanelOpen(): boolean {
-    return this.settingsPanel !== null;
+    return this.settingsPanel !== null || this.accessibilityPanel !== null;
   }
 
   /** True while the in-flight system menu is open. */
@@ -561,6 +594,20 @@ export class FlightHud implements FlightModule {
       // panel) before the microtask fires — destroying it twice throws.
       queueMicrotask(() => {
         if (!sp.destroyed) sp.destroy({ children: true });
+      });
+    }
+    if (this.accessibilityPanel) {
+      const ap = this.accessibilityPanel;
+      const comp = this.accessibilityPanelComp;
+      this.accessibilityPanel = null;
+      this.accessibilityPanelComp = null;
+      // Same deferred-destroy guard as the settings panel; the component
+      // teardown also disposes any in-progress rebind key capture.
+      queueMicrotask(() => {
+        if (!ap.destroyed) {
+          if (comp) comp.destroy();
+          else ap.destroy({ children: true });
+        }
       });
     }
     if (this.systemMenuPanel) {
@@ -879,6 +926,24 @@ export class FlightHud implements FlightModule {
     this.uiLayer.addChild(gearBtn.container);
     this.gearButton = gearBtn;
 
+    // Accessibility button (♿) — beside the ⚙ gear — opens the palette /
+    // reduced-motion / key-remap panel (accessibility pass, Task 4).
+    const accBtn = new UiButton(
+      "♿",
+      "",
+      "neutral",
+      (event) => {
+        event.stopPropagation();
+        this.toggleAccessibilityPanel();
+      },
+      GEAR_BTN_W,
+      GEAR_BTN_H,
+    );
+    accBtn.x = 20 + GEAR_BTN_W + 8;
+    accBtn.y = gearBtn.y;
+    this.uiLayer.addChild(accBtn.container);
+    this.accessibilityButton = accBtn;
+
     // Adopt the game-speed the player chose before this (re)build so it survives
     // a land/take-off or star-map round-trip instead of resetting to 1× (F3).
     this.restoreGameSpeed();
@@ -904,6 +969,8 @@ export class FlightHud implements FlightModule {
       return;
     }
     if (!this.gearButton) return;
+    // The two ⚙/♿ panels share the same bottom-left anchor — only one open.
+    this.closeAccessibilityPanel();
 
     const panel = new SettingsPanel({
       speedTarget: this.gameEngine ?? {
@@ -935,6 +1002,55 @@ export class FlightHud implements FlightModule {
     c.y = Math.max(8, this.gearButton.y - SETTINGS_PANEL_HEIGHT - 4);
     this.uiLayer.addChild(c);
     this.settingsPanel = c;
+  }
+
+  /**
+   * Toggle the Accessibility panel (palette / reduced-motion / key remap,
+   * accessibility pass Task 4). A sibling of {@link toggleSettingsPanel}: a
+   * separate surface from the ⚙ settings panel (whose hit-area layout is locked
+   * by tests), tracked as {@link accessibilityPanel} so the Esc-close /
+   * outside-click wiring (via {@link isSettingsPanelOpen}/{@link closeModals})
+   * covers it too. Every control writes through its own browser-level pref
+   * (palette/reduced-motion/keymap `localStorage`) — no new save field.
+   */
+  private toggleAccessibilityPanel(): void {
+    if (this.accessibilityPanel) {
+      this.closeAccessibilityPanel();
+      return;
+    }
+    if (!this.accessibilityButton) return;
+    // The two ⚙/♿ panels share the same bottom-left anchor — only one open.
+    if (this.settingsPanel) {
+      this.settingsPanel.destroy({ children: true });
+      this.settingsPanel = null;
+    }
+
+    const panel = new AccessibilityPanel({
+      onRequestClose: () => this.closeAccessibilityPanel(),
+    });
+    this.accessibilityPanelComp = panel;
+    const c = panel.container;
+    c.x = this.accessibilityButton.x;
+    c.y = Math.max(
+      8,
+      this.accessibilityButton.y - ACCESSIBILITY_PANEL_HEIGHT - 4,
+    );
+    this.uiLayer.addChild(c);
+    this.accessibilityPanel = c;
+  }
+
+  /** Tear down the accessibility panel if open (idempotent). */
+  private closeAccessibilityPanel(): void {
+    if (this.accessibilityPanelComp) {
+      this.accessibilityPanelComp.destroy();
+      this.accessibilityPanelComp = null;
+      this.accessibilityPanel = null;
+      return;
+    }
+    if (this.accessibilityPanel) {
+      this.accessibilityPanel.destroy({ children: true });
+      this.accessibilityPanel = null;
+    }
   }
 
   /**

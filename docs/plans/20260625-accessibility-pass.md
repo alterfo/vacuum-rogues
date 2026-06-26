@@ -75,8 +75,24 @@ ships), and removes barriers for a chunk of players.
 **Files:**
 - Modify: the settings panel; verification
 
-- [ ] Add an Accessibility group (palette / reduced-motion / remap) to settings; full
+- [x] Add an Accessibility group (palette / reduced-motion / remap) to settings; full
       suite + `test:playtest` green; lint/build ok.
+      (New `src/presentation/ui/AccessibilityPanel.ts` — a **separate** panel from
+      `SettingsPanel` because the latter's hit-area layout is pinned by locked tests, so
+      the a11y group lives in its own ♿ HUD surface mounted beside the ⚙ gear button
+      (`FlightHud`): **ПАЛИТРА** cycle button (`currentPaletteMode`/`setPaletteMode`),
+      **МЕНЬШЕ ДВИЖЕНИЯ** ВКЛ/ВЫКЛ toggle (`isReducedMotionSet`/`setReducedMotion`), and
+      **УПРАВЛЕНИЕ** per-action key-remap rows (`beginRebind`→capture→`rebind`+`setKeymap`,
+      conflicts surfaced, Escape aborts) + «Сбросить клавиши». Each writes through its
+      own browser-level `localStorage` pref — no new save field. The panel shares the
+      ⚙ panel's Esc-close/outside-click/Space-suppression wiring via
+      `FlightHud.isSettingsPanelOpen`/`closeModals` (so `flightKeyHandler` is untouched).
+      i18n keys `a11y.*`/`palette.*`/`action.*` added to ru/en in lockstep. Tests:
+      `src/tests/presentation/accessibilityPanel.test.ts` (10 cases — defaults, palette
+      cycle+persist, reduced-motion toggle, rebind onto free key, conflict rejection,
+      Escape-abort, reset, hit-area driven cycle/toggle/close, persisted reflection,
+      destroy disposes capture). Full suite 3743 + playtest 257 green; lint 0 errors;
+      tsc + prod build clean.)
 
 ### Task 5: Documentation
 - [ ] Document the palette, reduced-motion, and keymap seams + how new UI consumes them.

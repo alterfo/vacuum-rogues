@@ -35,6 +35,23 @@ export const en: Dict = {
   "lang.ru": "Русский",
   "lang.en": "English",
 
+  // --- accessibility panel (palette / reduced-motion / key remap) ----------
+  "a11y.title": "ACCESSIBILITY",
+  "a11y.palette": "PALETTE",
+  "a11y.reducedMotion": "REDUCED MOTION",
+  "a11y.controls": "CONTROLS",
+  "a11y.reset": "Reset keys",
+  "a11y.pressKey": "press a key…",
+  "a11y.keyTaken": "key in use",
+  "palette.default": "Default",
+  "palette.deuteranopia": "Deuteranopia",
+  "palette.protanopia": "Protanopia",
+  "palette.tritanopia": "Tritanopia",
+  "action.cancel": "Cancel",
+  "action.runTurn": "Run turn",
+  "action.journal": "Journal",
+  "action.inventory": "Inventory",
+
   // --- shared labels -------------------------------------------------------
   "label.creditsLine": "Credits: {n}",
 
