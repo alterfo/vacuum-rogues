@@ -80,10 +80,10 @@ screenshots in v1 unless the text transcript proves insufficient.
 - Create: tools/ai/llmClient.ts (or src/tests/playtest/letsplay/llmClient.ts)
 - Create: <same>.test.ts
 
-- [ ] Define a minimal `LlmClient` interface (`complete(messages, opts) → text`/JSON) and a real Anthropic-SDK implementation (model + key from env, configurable model id), plus a `FakeLlmClient` returning canned responses for tests.
-- [ ] Guard for a missing API key (degrade to a clear error only when actually invoked live; never at import).
-- [ ] Write tests: the fake client drives the interface; the real client builds the request shape correctly (mocked transport) — no live call in tests.
-- [ ] Run tests — must pass before Task 3.
+- [x] Define a minimal `LlmClient` interface (`complete(messages, opts) → text`/JSON) and a real Anthropic-SDK implementation (model + key from env, configurable model id), plus a `FakeLlmClient` returning canned responses for tests.
+- [x] Guard for a missing API key (degrade to a clear error only when actually invoked live; never at import).
+- [x] Write tests: the fake client drives the interface; the real client builds the request shape correctly (mocked transport) — no live call in tests.
+- [x] Run tests — must pass before Task 3.
 
 ### Task 3: LLM oddity-judge over transcripts
 **Files:**
