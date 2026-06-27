@@ -101,10 +101,10 @@ screenshots in v1 unless the text transcript proves insufficient.
 - Create: tools/ai/scenarioGen.test.ts
 - Modify: src/tests/playtest/letsplay/PlayerPolicy.ts or a goal-bias shim (consume a scenario goal)
 
-- [ ] A generator that asks the LLM for N diverse play scenarios and parses them into machine-readable configs `{name, seed?, goal, maxDays}` (goal ∈ a fixed enum the agent understands, e.g. `go-broke`/`max-rep`/`ignore-overmind`/`hoard`/`free-explore`).
-- [ ] A thin goal-bias seam so the agent can execute a scenario (bias the policy / pick the seed); keep the default free-play unchanged.
-- [ ] Write tests against `FakeLlmClient`: a canned LLM reply parses into valid scenario configs; an unknown goal is dropped, not crashed; the goal-bias seam steers the agent measurably in a short run.
-- [ ] Run tests — must pass before Task 5.
+- [x] A generator that asks the LLM for N diverse play scenarios and parses them into machine-readable configs `{name, seed?, goal, maxDays}` (goal ∈ a fixed enum the agent understands, e.g. `go-broke`/`max-rep`/`ignore-overmind`/`hoard`/`free-explore`).
+- [x] A thin goal-bias seam so the agent can execute a scenario (bias the policy / pick the seed); keep the default free-play unchanged.
+- [x] Write tests against `FakeLlmClient`: a canned LLM reply parses into valid scenario configs; an unknown goal is dropped, not crashed; the goal-bias seam steers the agent measurably in a short run.
+- [x] Run tests — must pass before Task 5.
 
 ### Task 5: `letsplay:judge` offline runner (NOT a gate)
 **Files:**
