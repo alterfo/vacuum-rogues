@@ -1507,12 +1507,18 @@ export class NpcShipManager implements FlightModule {
       player,
       npc,
       tribute,
-      `Откуп пирату «${npc.name}»`,
+      t("flight.tributeReason", { name: npc.name }),
     );
-    grantPirateTributeRep(player);
+    // Pirate standing is *bought*, not free: only a real (non-zero) payoff
+    // raises rep, so a penniless player (tribute === 0) can't farm +rep for
+    // nothing. The pirate still disengages either way.
+    const gainedRep = tribute > 0;
+    if (gainedRep) grantPirateTributeRep(player);
     this.disengagePirate(npc);
     this.deps.showMessage(
-      `Откуп ${tribute} кр. — ${npc.name} отступает. Репутация у пиратов растёт.`,
+      gainedRep
+        ? t("flight.tributePaidRep", { amount: tribute, name: npc.name })
+        : t("flight.tributePaid", { amount: tribute, name: npc.name }),
       0xffee88,
     );
   }

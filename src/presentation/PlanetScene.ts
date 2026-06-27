@@ -19,7 +19,6 @@ import {
   GL_COUNTERPARTY,
 } from "@/systems/banking/economy";
 import {
-  PIRATE_FACTION_ID,
   payCustomsFine,
   standingRecoveryHint,
 } from "@/systems/galaxy/landingAccess";
@@ -1268,11 +1267,12 @@ export class PlanetScene extends GameScene {
       y += btnStep;
       // Recovery hint: the bribe is one-time access, so tell the player how to
       // durably raise standing (no dead-end). Pirate-held → the pirate-rep
-      // payoff path; otherwise → faction quests. `capturedBy` carries the
-      // pirate/overmind id as a string (mirrors `canLandOnPlanet`).
-      const isPirateControlled =
-        ((this.planet.capturedBy as unknown as string | null) ?? null) ===
-        PIRATE_FACTION_ID;
+      // payoff path; otherwise → faction quests. Capture is tracked per-*system*
+      // on the galaxy (`planet.capturedBy` is never written in production), so
+      // the captor is resolved the same way the hover tooltip / landing gate do.
+      const isPirateControlled = !!(
+        system && this.gameEngine?.galaxy?.isPirateSystem?.(system.id)
+      );
       const hint = new Text({
         text: standingRecoveryHint(isPirateControlled),
         style: {

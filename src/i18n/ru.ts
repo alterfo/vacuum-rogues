@@ -269,6 +269,12 @@ export const ru: Dict = {
     "Система захвачена. Уничтожьте всех захватчиков, чтобы освободить её",
   "flight.systemLiberated": "Система {name} освобождена!",
 
+  // --- pirate shakedown tribute («Откупиться») ------------------------------
+  "flight.tributeReason": "Откуп пирату «{name}»",
+  "flight.tributePaid": "Откуп {amount} кр. — {name} отступает.",
+  "flight.tributePaidRep":
+    "Откуп {amount} кр. — {name} отступает. Репутация у пиратов растёт.",
+
   // --- combat salvage (Task 5: killing a credit-carrying NPC pays out) ------
   "flight.salvageTrophy": "Трофей: +{amount} ₡",
   "flight.salvageReason": "Трофей с уничтоженного корабля",
@@ -278,7 +284,6 @@ export const ru: Dict = {
   "flight.lootTractor": "Гравитяга подобрала: {item}",
   "flight.lootArtifact": "артефакт",
   "flight.lootModule": "модуль",
-  "flight.lootHoldFull": "Трюм полон — добыча оставлена в космосе",
 
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Управление:",

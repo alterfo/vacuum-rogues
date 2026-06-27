@@ -81,11 +81,6 @@ export const SETTINGS_PANEL_WIDTH = 220;
 // drops the dev-only neural row (prod), ending after the language row.
 export const SETTINGS_PANEL_HEIGHT_FULL = 320;
 export const SETTINGS_PANEL_HEIGHT_COMPACT = 248;
-// The host reads this to position/centre the panel; build-conditional so prod
-// (no neural row) is sized tightly and dev/test (neural shown) stays full.
-export const SETTINGS_PANEL_HEIGHT = import.meta.env.DEV
-  ? SETTINGS_PANEL_HEIGHT_FULL
-  : SETTINGS_PANEL_HEIGHT_COMPACT;
 
 const PAD = 12;
 const ROW_W = SETTINGS_PANEL_WIDTH - PAD * 2;
@@ -124,6 +119,17 @@ export class SettingsPanel {
   private content: Container | null = null;
   /** Whether to build the experimental НЕЙРОСЕТЬ row (dev-only; hidden in prod). */
   private readonly showNeural: boolean;
+
+  /**
+   * The panel's drawn height — the single source of truth for both the
+   * background ({@link render}) and the host's centring, so the two can't
+   * desync when the dev-only neural row is hidden (compact) vs shown (full).
+   */
+  get heightPx(): number {
+    return this.showNeural
+      ? SETTINGS_PANEL_HEIGHT_FULL
+      : SETTINGS_PANEL_HEIGHT_COMPACT;
+  }
 
   constructor(private readonly deps: SettingsPanelDeps) {
     this.showNeural = deps.showNeural ?? import.meta.env.DEV;
@@ -204,9 +210,7 @@ export class SettingsPanel {
     this.content = content;
     this.container.addChild(content);
 
-    const panelH = this.showNeural
-      ? SETTINGS_PANEL_HEIGHT_FULL
-      : SETTINGS_PANEL_HEIGHT_COMPACT;
+    const panelH = this.heightPx;
     const bg = new Graphics();
     bg.roundRect(0, 0, SETTINGS_PANEL_WIDTH, panelH, 6).fill({
       color: 0x0a1520,

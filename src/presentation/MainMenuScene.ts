@@ -9,11 +9,7 @@ import { resetSeen } from "@/systems/onboarding/onboardingState";
 import { pickVariant, pickVariantKey, tex, loadTextureAsync } from "./textures";
 import { t } from "@/i18n/i18n";
 import { reducedMotion } from "./ui/reducedMotion";
-import {
-  SettingsPanel,
-  SETTINGS_PANEL_WIDTH,
-  SETTINGS_PANEL_HEIGHT,
-} from "./ui/SettingsPanel";
+import { SettingsPanel, SETTINGS_PANEL_WIDTH } from "./ui/SettingsPanel";
 import {
   AccessibilityPanel,
   ACCESSIBILITY_PANEL_WIDTH,
@@ -580,7 +576,7 @@ export class MainMenuScene extends GameScene {
     const left = Math.round((width - groupW) / 2);
     const c = panel.container;
     c.x = left;
-    c.y = Math.round((height - SETTINGS_PANEL_HEIGHT) / 2);
+    c.y = Math.round((height - panel.heightPx) / 2);
     const a = accPanel.container;
     a.x = left + SETTINGS_PANEL_WIDTH + GAP;
     a.y = Math.round((height - ACCESSIBILITY_PANEL_HEIGHT) / 2);

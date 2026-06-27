@@ -986,8 +986,9 @@ export class GameEngine {
   /**
    * Whether the player can liberate their current system right now — it is a
    * captured (Overmind/pirate) system whose hostile garrison has been cleared
-   * ({@link canPlayerLiberate}). The flight HUD reads this to surface the
-   * liberation action/hint; {@link liberateCurrentSystem} re-checks it.
+   * ({@link canPlayerLiberate}). The public predicate behind
+   * {@link liberateCurrentSystem} (which re-checks it before acting); also
+   * exercised directly by the player-liberation playtests.
    */
   canLiberateCurrentSystem(): boolean {
     if (!this.galaxy || !this.player?.currentSystemId) return false;

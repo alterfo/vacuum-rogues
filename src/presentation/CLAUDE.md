@@ -164,9 +164,14 @@ via `SettingsPanelDeps` callbacks: `applySpeed` (HUD label + physics `timeScale`
 (the same in-place restyle a font change uses, so text nodes re-read `t(...)`; then close),
 `onNeuralToggle` (the policy gate, see root CLAUDE.md "Neural / AI Pipeline"). Build the font row
 **first** so its hit areas precede the others (the historical ⚙-panel "first font button" contract)
-and the **НЕЙРОСЕТЬ** row **last** (the "neural is the final hit area" contract). Control actions
-are public (`selectFont`/`selectSpeed`/`selectLanguage`/`toggleNeural`) so they're unit-testable
-without PixiJS pointer events.
+and the **НЕЙРОСЕТЬ** row **last** (the "neural is the final hit area" contract). The neural row is
+**dev-only** — `showNeural` defaults to `import.meta.env.DEV`, so prod hides it entirely (its only
+consumers, autopilot/letsplay, are dev-only, so a prod toggle would be a dead switch); the panel's
+drawn height drops `SETTINGS_PANEL_HEIGHT_FULL`→`_COMPACT` accordingly, read by the host through the
+single `SettingsPanel.heightPx` getter (not a separate build-time constant) so the background and the
+centring can't desync. Control actions are public
+(`selectFont`/`selectSpeed`/`selectLanguage`/`toggleNeural`) so they're unit-testable without PixiJS
+pointer events.
 
 **Accessibility lives in a sibling ♿ panel** (`ui/AccessibilityPanel.ts`,
 `docs/plans/20260625-accessibility-pass.md`). The colorblind **ПАЛИТРА** / **МЕНЬШЕ ДВИЖЕНИЯ** /

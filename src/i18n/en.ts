@@ -267,6 +267,12 @@ export const en: Dict = {
     "System captured. Destroy every invader to liberate it",
   "flight.systemLiberated": "System {name} liberated!",
 
+  // --- pirate shakedown tribute («Откупиться») ------------------------------
+  "flight.tributeReason": "Tribute to pirate «{name}»",
+  "flight.tributePaid": "Paid {amount} cr. — {name} backs off.",
+  "flight.tributePaidRep":
+    "Paid {amount} cr. — {name} backs off. Pirate standing rises.",
+
   // --- combat salvage (Task 5: killing a credit-carrying NPC pays out) ------
   "flight.salvageTrophy": "Salvage: +{amount} ₡",
   "flight.salvageReason": "Salvage from a destroyed ship",
@@ -276,7 +282,6 @@ export const en: Dict = {
   "flight.lootTractor": "Gravity tractor collected: {item}",
   "flight.lootArtifact": "artifact",
   "flight.lootModule": "module",
-  "flight.lootHoldFull": "Hold full — loot left in space",
 
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Controls:",
