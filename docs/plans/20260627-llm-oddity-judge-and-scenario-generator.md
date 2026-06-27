@@ -90,10 +90,10 @@ screenshots in v1 unless the text transcript proves insufficient.
 - Create: tools/ai/oddityJudge.ts
 - Create: tools/ai/oddityJudge.test.ts
 
-- [ ] Assemble a judge prompt from a `SessionTranscript` + an explicit oddity rubric (the beta classes: unrewarded combat, rep dead-end / no recovery feedback, uncollectable loot, quest unreachable-for-deadline, stuck progression, no-feedback events).
-- [ ] Parse the model reply into a structured `OddityReport` (list of `{title, severity, evidence: step indices, rationale}`); robust to a malformed reply (degrade to "no structured findings" + raw text, never throw).
-- [ ] Write tests against `FakeLlmClient`: a transcript with a planted oddity yields a parsed report flagging it; a clean transcript yields none; a malformed reply degrades safely.
-- [ ] Run tests — must pass before Task 4.
+- [x] Assemble a judge prompt from a `SessionTranscript` + an explicit oddity rubric (the beta classes: unrewarded combat, rep dead-end / no recovery feedback, uncollectable loot, quest unreachable-for-deadline, stuck progression, no-feedback events).
+- [x] Parse the model reply into a structured `OddityReport` (list of `{title, severity, evidence: step indices, rationale}`); robust to a malformed reply (degrade to "no structured findings" + raw text, never throw).
+- [x] Write tests against `FakeLlmClient`: a transcript with a planted oddity yields a parsed report flagging it; a clean transcript yields none; a malformed reply degrades safely.
+- [x] Run tests — must pass before Task 4.
 
 ### Task 4: LLM scenario generator
 **Files:**
