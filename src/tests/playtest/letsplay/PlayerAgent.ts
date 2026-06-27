@@ -114,13 +114,17 @@ export class PlayerAgent {
     const engine = this.harness.engine;
     switch (action.kind) {
       case "wait":
-        this.harness.tick();
+        // A real wait turn so a galaxy DAY actually passes (markets / NPC sim /
+        // quests / Overmind all advance) — the agent's biggest gap was never
+        // advancing time. Degrades to a plain frame outside flight.
+        this.waitOneDay();
         return;
 
       case "move": {
-        // In flight "move" is a frame of flying; on a sub-screen it backs out
-        // toward the flight scene (the universal "leave this panel").
-        if (obs.scene === SceneType.SPACE_FLIGHT) this.harness.tick();
+        // In flight "move" flies a REAL route across the system (so the ship
+        // traverses space and the calendar advances, pixelsPerDay px = 1 day); on
+        // a sub-screen it backs out toward flight (the universal "leave this panel").
+        if (obs.scene === SceneType.SPACE_FLIGHT) this.flyForward();
         else await this.harness.goTo(SceneType.SPACE_FLIGHT);
         return;
       }
@@ -185,6 +189,91 @@ export class PlayerAgent {
       default:
         this.harness.tick();
         return;
+    }
+  }
+
+  /**
+   * Run a real course-less **wait turn** over the live flight scene so one galaxy
+   * DAY passes — the headless equivalent of pressing «ХОД» with no plotted route.
+   * `onPlayPause` starts the wait (`isTurnRunning`, ship stationary), a tick of
+   * `MS_PER_WAIT_DAY` (1000 ms) crosses exactly one day boundary
+   * (`advanceWaitTime` → `advanceGalaxyDay`), then `endTurn` returns to a decision
+   * point. Outside flight (or with no turn seam — e.g. a partial test stub) it
+   * degrades to a plain frame so the loop is always safe. Private scene methods are
+   * reached by a structural cast, the same pattern the warp applier uses.
+   */
+  private waitOneDay(): void {
+    const engine = this.harness.engine;
+    const scene = this.harness.currentScene() as unknown as {
+      onPlayPause?(): void;
+      endTurn?(): void;
+      isTurnRunning?: boolean;
+    } | null;
+    if (
+      engine.currentSceneType !== SceneType.SPACE_FLIGHT ||
+      typeof scene?.onPlayPause !== "function"
+    ) {
+      this.harness.tick();
+      return;
+    }
+    const day0 = engine.galaxy?.gameDays ?? 0;
+    if (!scene.isTurnRunning) scene.onPlayPause(); // start the course-less wait
+    // One wait-day is MS_PER_WAIT_DAY (1000 ms); a few large ticks cross it.
+    for (let i = 0; i < 4 && (engine.galaxy?.gameDays ?? 0) === day0; i++) {
+      this.harness.tick(1000);
+    }
+    if (scene.isTurnRunning && typeof scene.endTurn === "function") {
+      scene.endTurn();
+    }
+  }
+
+  /**
+   * Fly a REAL route across the system so the ship traverses space and the
+   * calendar advances (every `pixelsPerDay` px = 1 day). Plots a course toward the
+   * star (a safe interior point), stopping a ring short so it never flies into the
+   * sun, then ticks the turn until a day passes or the ship arrives. Degrades to a
+   * {@link waitOneDay} if the route seam is unavailable, so time still advances.
+   */
+  private flyForward(): void {
+    const engine = this.harness.engine;
+    const scene = this.harness.currentScene() as unknown as {
+      executeRouteTo?(x: number, y: number): void;
+      shipPhysics?: { shipX: number; shipY: number; isMoving: boolean } | null;
+      starRenderer?: { centerX: number; centerY: number };
+    } | null;
+    const physics = scene?.shipPhysics;
+    if (
+      typeof scene?.executeRouteTo !== "function" ||
+      !physics ||
+      !scene.starRenderer
+    ) {
+      this.waitOneDay();
+      return;
+    }
+    const cx = scene.starRenderer.centerX;
+    const cy = scene.starRenderer.centerY;
+    const dx = cx - physics.shipX;
+    const dy = cy - physics.shipY;
+    const dist = Math.hypot(dx, dy) || 1;
+    const SAFE = 240; // stay clear of the star's contact-damage radius
+    let tx: number;
+    let ty: number;
+    if (dist > SAFE + 80) {
+      const f = (dist - SAFE) / dist; // stop a ring short of the star
+      tx = physics.shipX + dx * f;
+      ty = physics.shipY + dy * f;
+    } else {
+      // Already near the centre — head outward for a long traverse instead.
+      tx = physics.shipX - (dx / dist) * 700;
+      ty = physics.shipY - (dy / dist) * 700;
+    }
+    const day0 = engine.galaxy?.gameDays ?? 0;
+    scene.executeRouteTo(tx, ty);
+    // Run the turn: tick until a day passes or the ship reaches the waypoint.
+    for (let i = 0; i < 800; i++) {
+      this.harness.tick();
+      if ((engine.galaxy?.gameDays ?? 0) > day0) break;
+      if (!physics.isMoving) break;
     }
   }
 }
