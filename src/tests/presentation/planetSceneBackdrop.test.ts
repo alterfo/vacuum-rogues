@@ -87,7 +87,11 @@ vi.mock("@/presentation/textures", () => ({
   loadTextureAsync: vi.fn(() => Promise.resolve(undefined)),
 }));
 
-import { PlanetScene, clampPanoramaX } from "@/presentation/PlanetScene";
+import {
+  PlanetScene,
+  clampPanoramaX,
+  PLANET_BACKDROP_OVERLAY_ALPHA,
+} from "@/presentation/PlanetScene";
 import type { Renderer } from "@/presentation/Renderer";
 
 interface MockLayer {
@@ -220,6 +224,14 @@ describe("PlanetScene backdrop — flat-sprite light parallax (playtest3 F5)", (
     // Drifted toward the target, but not snapped past it (eased).
     expect(sprite.x).toBeLessThan(startX);
     expect(sprite.x).toBeGreaterThanOrEqual(fields.panoramaTargetX as number);
+  });
+
+  it("dims the backdrop only lightly so the planet art reads through", () => {
+    // Regression (playtest 2026-06-27 #1): the dim overlay behind the planet
+    // menu was alpha 0.55 and buried a nice planet background. It must stay
+    // light — the menu's own per-row dark panels carry text contrast.
+    expect(PLANET_BACKDROP_OVERLAY_ALPHA).toBeLessThanOrEqual(0.4);
+    expect(PLANET_BACKDROP_OVERLAY_ALPHA).toBeGreaterThan(0); // still takes the edge off
   });
 
   it("leaves both layers empty after destroy (no leaked backdrop)", () => {

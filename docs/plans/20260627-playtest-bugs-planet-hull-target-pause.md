@@ -56,10 +56,10 @@ existing canonical source (hull via `ShipLoadout`/`derivedStats`; turn via
 - Modify: src/presentation/PlanetScene.ts
 - Create/Modify: src/tests/presentation/planetBackdrop.test.ts (if an alpha constant is extracted)
 
-- [ ] Lower the dim-overlay alpha behind the planet menu (or remove the overlay) so the planet background art shows through, keeping menu text legible (lift to a legible floor only where needed).
-- [ ] If practical, extract the overlay alpha to a named constant so it is assertable.
-- [ ] Write a test asserting the backdrop alpha is at/below the new (lighter) threshold (if extracted); otherwise rely on the screenshot check in Task 5.
-- [ ] Run tests — must pass before Task 2.
+- [x] Lower the dim-overlay alpha behind the planet menu (or remove the overlay) so the planet background art shows through, keeping menu text legible (lift to a legible floor only where needed). (0.55 → 0.28; menu's per-row dark panels carry text contrast)
+- [x] If practical, extract the overlay alpha to a named constant so it is assertable. (`PLANET_BACKDROP_OVERLAY_ALPHA`, exported)
+- [x] Write a test asserting the backdrop alpha is at/below the new (lighter) threshold (if extracted); otherwise rely on the screenshot check in Task 5. (added to `planetSceneBackdrop.test.ts`)
+- [x] Run tests — must pass before Task 2.
 
 ### Task 2: Single hull source of truth (fix 71% vs "perfect")
 **Files:**

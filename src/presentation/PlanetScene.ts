@@ -133,6 +133,14 @@ const BRIBE_COST = 500;
 const PLANET_VISUAL_RADIUS = 196;
 
 /**
+ * Alpha of the full-screen dim layer drawn over the planet backdrop art so the
+ * menu/UI stays readable. Kept deliberately light (was 0.55, which buried a nice
+ * planet background) — the menu's own per-row dark panels carry the contrast for
+ * text legibility, so this only needs to take the edge off a bright sky.
+ */
+export const PLANET_BACKDROP_OVERLAY_ALPHA = 0.28;
+
+/**
  * Star-map purchase tiers (Task 3): buying a tier reveals every system within
  * `hops` warp jumps of the current system. Pricing climbs faster than reach so
  * deep reveals stay a meaningful credit sink.
@@ -946,10 +954,11 @@ export class PlanetScene extends GameScene {
       this.renderer.gameLayer.addChild(bg);
     }
 
-    // Dark overlay so UI is readable over any background image
+    // Light dim overlay so UI is readable over any background image without
+    // burying the planet backdrop art (see PLANET_BACKDROP_OVERLAY_ALPHA).
     const overlay = new Graphics();
     overlay.rect(0, 0, w, h);
-    overlay.fill({ color: 0x000011, alpha: 0.55 });
+    overlay.fill({ color: 0x000011, alpha: PLANET_BACKDROP_OVERLAY_ALPHA });
     overlay.eventMode = "none";
     this.renderer.gameLayer.addChild(overlay);
 
