@@ -123,11 +123,11 @@ screenshots in v1 unless the text transcript proves insufficient.
 - Create: src/tests/fixtures/oddities/ (captured pre-fix screenshots / transcripts)
 - Create: tools/ai/visionJudge.test.ts
 
-- [ ] Promote the screenshot/vision judge from optional to real: a Claude **vision** call over captured frames + the transcript — text-only judging cannot see visual oddities.
-- [ ] **User-requested self-test:** feed a PRE-FIX fixture of the bugs ralphex is fixing now — quest-card TEXT OVERFLOW + MISSING ship-death explosion — and assert the vision judge flags them. These are VISUAL, so they validate the vision path specifically; the text judge (Tasks 1-3) provably cannot catch them — that asymmetry is exactly what this check proves.
-- [ ] Capture the fixtures from the pre-fix state (a saved screenshot/transcript, or a temporary fixture-gen revert) so the check is reproducible after the live bugs are gone.
-- [ ] Write tests against a `FakeLlmClient` returning a canned vision verdict so the validation logic is deterministic; the live vision call runs only in the offline runner.
-- [ ] Run tests — must pass before Task 7.
+- [x] Promote the screenshot/vision judge from optional to real: a Claude **vision** call over captured frames + the transcript — text-only judging cannot see visual oddities. (`tools/ai/visionJudge.ts`: `judgeFrames` attaches frames via the LlmClient seam's new `opts.images`, folded into the user turn by `toAnthropicMessages`; `VISION_ODDITY_RUBRIC` enumerates the visual classes; reuses `parseOddityReport`.)
+- [x] **User-requested self-test:** feed a PRE-FIX fixture of the bugs ralphex is fixing now — quest-card TEXT OVERFLOW + MISSING ship-death explosion — and assert the vision judge flags them. These are VISUAL, so they validate the vision path specifically; the text judge (Tasks 1-3) provably cannot catch them — that asymmetry is exactly what this check proves. (`visionJudge.test.ts` "self-test" + "text-vs-vision asymmetry" suites: text judge attaches no image and finds nothing; vision judge attaches the frame and `detectKnownBugs` flags both fixtures.)
+- [x] Capture the fixtures from the pre-fix state (a saved screenshot/transcript, or a temporary fixture-gen revert) so the check is reproducible after the live bugs are gone. (`src/tests/fixtures/oddities/`: committed transcripts + `frames/*.png.b64` + `ExpectedVisualBug` oracle; frames are documented PLACEHOLDERS — the deterministic check is fully reproducible, and README.md gives the drop-in path for a real pre-fix screenshot for the live call.)
+- [x] Write tests against a `FakeLlmClient` returning a canned vision verdict so the validation logic is deterministic; the live vision call runs only in the offline runner. (`visionJudge.test.ts`, 16 tests, no key/network; the live model call only happens inside `judgeFrames` when wired to a real client.)
+- [x] Run tests — must pass before Task 7. (tools/ai 69 passed/1 skipped; dev-only guard green; `tsc --noEmit` + `npm run lint` clean.)
 
 ### Task 7: Verify acceptance + document
 **Files:**

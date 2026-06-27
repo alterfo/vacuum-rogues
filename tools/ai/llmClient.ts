@@ -25,6 +25,12 @@
  * provider-agnostic {@link LlmRequest} and hands it to the transport. The
  * default transport is the SDK call; tests inject a fake transport and assert
  * the exact request shape. This keeps every test free, fast, and deterministic.
+ *
+ * The same one seam also carries the **vision** judge (`tools/ai/visionJudge.ts`):
+ * pass {@link LlmCompleteOptions.images} and the live transport folds them into
+ * the last user turn as Anthropic image content blocks ({@link toAnthropicMessages}).
+ * A text-only completion (no `images`) is byte-for-byte unchanged, so the fake
+ * client and every text-judge test keep working without modification.
  */
 import { GameSystemException } from "../../src/exceptions/GameSystemException";
 
@@ -32,6 +38,18 @@ import { GameSystemException } from "../../src/exceptions/GameSystemException";
 export interface LlmMessage {
   role: "user" | "assistant";
   content: string;
+}
+
+/**
+ * A base64-encoded image attached to a completion (for the vision judge). It is
+ * folded into the last user turn as an Anthropic image content block by the live
+ * transport; the text judge simply never sets it.
+ */
+export interface LlmImage {
+  /** The image MIME type, e.g. `"image/png"` or `"image/jpeg"`. */
+  mediaType: string;
+  /** The base64-encoded image bytes — no `data:` URI prefix, no newlines. */
+  dataBase64: string;
 }
 
 /** Per-call overrides for {@link LlmClient.complete}. */
@@ -42,6 +60,8 @@ export interface LlmCompleteOptions {
   maxTokens?: number;
   /** System prompt (the rubric / role), folded into the request top-level. */
   system?: string;
+  /** Images to attach to the last user turn (vision judge); omit for text-only. */
+  images?: LlmImage[];
 }
 
 /** The minimal port every judge/scenario module talks to. */
@@ -56,6 +76,8 @@ export interface LlmRequest {
   maxTokens: number;
   system?: string;
   messages: LlmMessage[];
+  /** Vision frames to attach to the last user message (omitted for text-only). */
+  images?: LlmImage[];
 }
 
 /**
@@ -75,6 +97,49 @@ export const DEFAULT_MAX_TOKENS = 4096;
 // bundler never tries to statically resolve it — the import only ever runs in
 // the live default transport, which dev tooling exercises with a real key.
 const ANTHROPIC_SDK_MODULE = "@anthropic-ai/sdk";
+
+/**
+ * Build the Anthropic `messages` payload from a request. Text-only requests pass
+ * through verbatim (so the text judge's wire shape is unchanged); when `images`
+ * are present they are folded into the **last user turn** as base64 image content
+ * blocks placed before its text, matching the Anthropic vision shape. Pure.
+ */
+export function toAnthropicMessages(req: LlmRequest): unknown[] {
+  const images = req.images ?? [];
+  if (images.length === 0) return req.messages;
+
+  const imageBlocks = images.map((img) => ({
+    type: "image",
+    source: {
+      type: "base64",
+      media_type: img.mediaType,
+      data: img.dataBase64,
+    },
+  }));
+
+  const out: { role: string; content: unknown }[] = req.messages.map((m) => ({
+    role: m.role,
+    content: m.content as unknown,
+  }));
+  let lastUser = -1;
+  for (let i = out.length - 1; i >= 0; i--) {
+    if (out[i].role === "user") {
+      lastUser = i;
+      break;
+    }
+  }
+  if (lastUser === -1) {
+    // No user turn to attach to — add one carrying just the frames.
+    out.push({ role: "user", content: imageBlocks });
+  } else {
+    const text = out[lastUser].content as string;
+    out[lastUser] = {
+      role: "user",
+      content: [...imageBlocks, { type: "text", text }],
+    };
+  }
+  return out;
+}
 
 /** Concatenate the text blocks of an Anthropic Messages response. */
 function extractText(resp: unknown): string {
@@ -117,7 +182,7 @@ export const defaultAnthropicTransport: LlmTransport = async (req, apiKey) => {
     model: req.model,
     max_tokens: req.maxTokens,
     ...(req.system ? { system: req.system } : {}),
-    messages: req.messages,
+    messages: toAnthropicMessages(req),
   });
   return extractText(resp);
 };
@@ -160,6 +225,7 @@ export class AnthropicLlmClient implements LlmClient {
       model: opts.model ?? this.model,
       maxTokens: opts.maxTokens ?? this.maxTokens,
       ...(opts.system ? { system: opts.system } : {}),
+      ...(opts.images && opts.images.length > 0 ? { images: opts.images } : {}),
       messages,
     };
     return this.transport(req, this.apiKey);
