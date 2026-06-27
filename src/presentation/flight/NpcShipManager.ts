@@ -560,8 +560,12 @@ export class NpcShipManager implements FlightModule {
       if (attacker.npc.hullHP <= 0) killed.add(attacker);
     }
     // Resolve kills after the round so the loot/removal splice never disturbs the
-    // engagement iteration.
-    for (const sprite of killed) this.handleInFlightDeath(sprite);
+    // engagement iteration. These are NPC-vs-NPC kills, not the player's, so they
+    // drop loot + remove the ship but pay NO salvage and grant NO liberation
+    // (killedByPlayer = false) — those rewards are earned by the player's own shots.
+    for (const sprite of killed) {
+      this.handleInFlightDeath(sprite, Math.random, false);
+    }
   }
 
   /**
@@ -1104,6 +1108,7 @@ export class NpcShipManager implements FlightModule {
   handleInFlightDeath(
     sprite: NpcShipSprite,
     rng: () => number = Math.random,
+    killedByPlayer = true,
   ): void {
     const wasOvermindCore = sprite.npc.id === OVERMIND_CORE_ID;
     this.spawnLootForNpc(sprite.npc, sprite.x, sprite.y, rng);
@@ -1122,12 +1127,21 @@ export class NpcShipManager implements FlightModule {
       this.gameEngine?.showGameOutcomeScreen(true);
       return;
     }
-    // Salvage the wreck's credits (Task 5) — a fraction of the NPC's cash routed
-    // through the ledger, bounded by the per-day anti-farm cap.
-    this.awardSalvageCredits(sprite.npc);
-    // Clearing the last hostile in a captured system frees it immediately
-    // (player-driven liberation, Task 4) — no-ops until the final defender dies.
-    this.maybeLiberateClearedSystem();
+    // Salvage + liberation are PLAYER-earned rewards, so only a kill the player
+    // actually made pays out. NPC-vs-NPC crossfire (resolveNpcVsNpcCombat) routes
+    // through this same death path for the loot drop + domain removal, but must
+    // NOT hand the spectating player free salvage credits (an Overmind fleet
+    // farming strayed pirates beside the player would otherwise fill the daily
+    // cap passively) or a free liberation it never fought for (NpcSimulator's own
+    // "clear and hold" path still auto-liberates genuinely NPC-cleared systems).
+    if (killedByPlayer) {
+      // Salvage the wreck's credits (Task 5) — a fraction of the NPC's cash routed
+      // through the ledger, bounded by the per-day anti-farm cap.
+      this.awardSalvageCredits(sprite.npc);
+      // Clearing the last hostile in a captured system frees it immediately
+      // (player-driven liberation, Task 4) — no-ops until the final defender dies.
+      this.maybeLiberateClearedSystem();
+    }
   }
 
   /**

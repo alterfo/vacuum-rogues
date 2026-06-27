@@ -159,6 +159,19 @@ describe("salvage through handleInFlightDeath — ledger payout, not direct muta
     manager.destroy();
   });
 
+  it("pays NO salvage for an NPC-vs-NPC crossfire kill (killedByPlayer=false)", () => {
+    // An Overmind fleet farming strayed pirates beside a parked player routes
+    // each kill through the same death path (loot drop + removal), but must not
+    // hand the spectating player free credits — only the player's own shots pay.
+    const { manager, player, messages } = makeHarness(1000);
+    const before = player.credits;
+    const sprite = spawnPirateSprite(manager, "pirate_crossfire", 1000);
+    manager.handleInFlightDeath(sprite, () => 0.99, false);
+    expect(player.credits).toBe(before);
+    expect(messages.some((m) => m.includes("Трофей"))).toBe(false);
+    manager.destroy();
+  });
+
   it("does not pay for a wreck with no credits", () => {
     const { manager, player } = makeHarness(1000);
     const before = player.credits;
