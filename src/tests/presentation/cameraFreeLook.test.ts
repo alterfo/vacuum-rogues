@@ -92,4 +92,39 @@ describe("CameraController free-look while moving", () => {
     cam.update();
     expect(cam.panX).not.toBe(panned); // lerps back toward the ship
   });
+
+  // Playtest report (2026-06-27, Issue 2): looking around via the minimap while
+  // the ship was moving snapped straight back — focusOnWorld (the radar
+  // drag-to-pan) did not suspend the motion-follow the way a manual pan does.
+  it("does NOT snap back after a minimap-drag focus while moving (free-look)", () => {
+    cam.update(); // prevMoving → true, follow engaged
+    cam.focusOnWorld(900, 100); // player drags the radar to look elsewhere
+    const focused = { x: cam.panX, y: cam.panY };
+
+    // Several frames pass with the ship still flying.
+    cam.update();
+    cam.update();
+    cam.update();
+
+    // The view stays where the radar drag put it — the follow is suspended.
+    expect(cam.panX).toBe(focused.x);
+    expect(cam.panY).toBe(focused.y);
+  });
+
+  it("re-engages the follow after a minimap focus on the next fresh flight leg", () => {
+    cam.update();
+    cam.focusOnWorld(900, 100); // minimap free-look suspends follow
+    const focused = cam.panX;
+    cam.update();
+    expect(cam.panX).toBe(focused); // still suspended
+
+    (ship as { isMoving: boolean }).isMoving = false;
+    (ship as { currentSpeed: number }).currentSpeed = 0;
+    cam.update(); // prevMoving → false
+    (ship as { isMoving: boolean }).isMoving = true;
+    (ship as { currentSpeed: number }).currentSpeed = 2;
+    cam.update(); // standstill → moving re-engages the follow
+
+    expect(cam.panX).not.toBe(focused);
+  });
 });

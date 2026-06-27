@@ -187,8 +187,15 @@ export class CameraController {
   /**
    * Centre the main view on a world point — used by the radar drag-to-pan. The
    * residual camera lead is cleared so the view doesn't snap back while idle.
+   *
+   * Like a manual {@link pan}, this is the player taking control of the view, so
+   * it **suspends the motion-follow** — otherwise looking around via the minimap
+   * while the ship is flying snapped straight back to the ship every frame
+   * (playtest 2026-06-27). The follow re-engages on the next fresh flight leg or
+   * an explicit ⊙ return-to-ship ({@link startReturn}).
    */
   focusOnWorld(worldX: number, worldY: number): void {
+    this.followSuspended = true;
     const cx = this.renderer.app.screen.width / 2;
     const cy = this.renderer.app.screen.height / 2;
     this.camLeadX = 0;
