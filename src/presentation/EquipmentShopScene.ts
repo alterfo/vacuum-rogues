@@ -411,10 +411,17 @@ export class EquipmentShopScene extends GameScene {
     );
 
     const currentClass = player?.ship.hullClass ?? "CORVETTE";
-    // Hold size comes from the canonical loadout (single source of truth).
-    const cargo = this.gameEngine?.playerLoadout?.derivedStats().cargo ?? "—";
+    // Hold size + max hull come from the canonical loadout (single source of truth).
+    const derived = this.gameEngine?.playerLoadout?.derivedStats();
+    const cargo = derived?.cargo ?? "—";
+    // Show current/max hull (not just max) so a damaged hull reads correctly.
+    const maxHull = derived?.maxHull ?? player?.ship.maxHull;
+    const hp =
+      player && maxHull !== undefined
+        ? `${player.ship.hullHP}/${maxHull}`
+        : "—";
     const infoText = scaledText(
-      `Текущий корпус: ${currentClass}  HP: ${player?.ship.maxHull ?? "—"}  Трюм: ${cargo}`,
+      `Текущий корпус: ${currentClass}  HP: ${hp}  Трюм: ${cargo}`,
       12,
       0x8899aa,
       { rawColor: true },

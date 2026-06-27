@@ -67,10 +67,10 @@ existing canonical source (hull via `ShipLoadout`/`derivedStats`; turn via
 - Modify: src/presentation/EquipmentShopScene.ts (correct the `HP:` label)
 - Create: src/tests/presentation/hullRepairConsistency.test.ts
 
-- [ ] Make the planet hull-% display and the repair "missing/perfect" check read the **same** canonical hull values (the `ShipLoadout`/`derivedStats` `maxHull` per the equipment rules), so a 71% hull never reports "perfect".
-- [ ] Fix `EquipmentShopScene:417` to show `hullHP/maxHull` (current/max), not just `maxHull`.
-- [ ] Write tests: at 71% hull the repair path reports a positive `missing` (repairable) and the display % matches the repair's view; at full hull it reports "perfect".
-- [ ] Run tests — must pass before Task 3.
+- [x] Make the planet hull-% display and the repair "missing/perfect" check read the **same** canonical hull values (the `ShipLoadout`/`derivedStats` `maxHull` per the equipment rules), so a 71% hull never reports "perfect". (new pure `hullStatus(hullHP, shipMaxHull, loadoutMaxHull?)` helper prefers the loadout-derived max; display + `openGarage` both route through it, and `openGarage` first `applyLoadoutHullToShip`-syncs the live ship so `repair()` fills to the canonical max)
+- [x] Fix `EquipmentShopScene:417` to show `hullHP/maxHull` (current/max), not just `maxHull`. (now `HP: ${hullHP}/${maxHull}` using `derivedStats().maxHull`)
+- [x] Write tests: at 71% hull the repair path reports a positive `missing` (repairable) and the display % matches the repair's view; at full hull it reports "perfect". (`src/tests/presentation/hullRepairConsistency.test.ts` — 6 tests incl. a real ShipLoadout + defense micromodule desync→sync flow)
+- [x] Run tests — must pass before Task 3. (hullRepairConsistency 6/6, equipment suite 260/260, tsc + eslint clean)
 
 ### Task 3: "Цель потеряна" ends the turn
 **Files:**

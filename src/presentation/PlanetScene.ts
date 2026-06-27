@@ -34,6 +34,8 @@ import { factionColor as resolveFactionColor } from "./ui/palette";
 import { Faction } from "@/types/faction";
 import { mountSceneHelp, helpButtonRect } from "./ui/mountSceneHelp";
 import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
+import { applyLoadoutHullToShip } from "@/systems/equipment/GearBridge";
+import { hullStatus } from "@/systems/equipment/hullStatus";
 
 interface PlanetContext {
   gameEngine?: GameEngine;
@@ -1098,7 +1100,13 @@ export class PlanetScene extends GameScene {
     // Hangar stat bar: hull / fuel in compact line (credits shown in top-right HUD).
     if (this.gameEngine?.player) {
       const ship = this.gameEngine.player.ship;
-      const hullPct = Math.round((ship.hullHP / ship.maxHull) * 100);
+      // Hull % reads the canonical loadout-derived max (single source of truth),
+      // so it agrees with the Верфь repair check below (see hullStatus).
+      const hullPct = hullStatus(
+        ship.hullHP,
+        ship.maxHull,
+        this.gameEngine.playerLoadout?.derivedStats().maxHull,
+      ).percent;
       const fuelPct = Math.round(
         (ship.energy / Math.max(1, ship.maxEnergy)) * 100,
       );
@@ -1525,13 +1533,23 @@ export class PlanetScene extends GameScene {
   private openGarage(): void {
     if (!this.gameEngine?.player) return;
     const ship = this.gameEngine.player.ship;
-    const missing = ship.maxHull - ship.hullHP;
+    // Single source of truth: refresh the live hull projection from the canonical
+    // loadout before checking/repairing — a stale `ship.maxHull` once reported
+    // «идеальное состояние» while the display showed 71% (2026-06-27).
+    const loadout = this.gameEngine.playerLoadout;
+    if (loadout) applyLoadoutHullToShip(ship, loadout);
+    const status = hullStatus(
+      ship.hullHP,
+      ship.maxHull,
+      loadout?.derivedStats().maxHull,
+    );
 
-    if (missing <= 0) {
+    if (status.isPerfect) {
       this.showMessage("Корпус уже в идеальном состоянии", 0x00ff88);
       return;
     }
 
+    const missing = status.missing;
     const cost = Math.ceil(missing * 2);
     if (this.gameEngine.player.credits < cost) {
       this.showMessage(
