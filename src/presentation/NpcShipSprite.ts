@@ -138,6 +138,15 @@ export class NpcShipSprite {
   /** +1 / -1: which way this aggressor circles the player (seeded per ship id
    *  so foes don't all orbit the same direction). Set in the constructor. */
   private aggressorOrbitDir: 1 | -1 = 1;
+  /**
+   * NPC-vs-NPC engagement target (a hostile NPC's world position), set each frame
+   * by {@link NpcShipManager} so this ship closes on + strafes another NPC rather
+   * than wandering — a visible cross-faction fight (e.g. a pirate intruder vs the
+   * Overmind garrison). Null when it has no NPC quarry; **lower priority** than
+   * the player chase, so a player-aggressor ignores it.
+   */
+  private npcCombatX: number | null = null;
+  private npcCombatY: number | null = null;
 
   constructor(npc: NpcShip, x: number, y: number, bounds: SystemBounds) {
     this.npc = npc;
@@ -303,30 +312,26 @@ export class NpcShipSprite {
       this.pursuitX !== null &&
       this.pursuitY !== null
     ) {
-      const range = Math.hypot(this.pursuitX - this.x, this.pursuitY - this.y);
-      const decision = decideManeuver({
-        range,
-        weaponRange: GAME_BALANCE.weaponRange,
-        selfSpeed: this.speed,
-        targetSpeed: this.pursuitTargetSpeed,
-        selfX: this.x,
-        selfY: this.y,
-        targetX: this.pursuitX,
-        targetY: this.pursuitY,
-        hullRatio:
-          this.npc.maxHull > 0 ? this.npc.hullHP / this.npc.maxHull : 1,
-        orbitDir: this.aggressorOrbitDir,
-      });
-      // While closing, don't jitter when essentially on top of the target;
-      // orbiting/breaking off always move (they steer sideways/away, not onto it).
-      if (decision.mode !== ManeuverMode.CLOSE || range > 6) {
-        const step = this.speed * deltaTime;
-        this.x += Math.cos(decision.heading) * step;
-        this.y += Math.sin(decision.heading) * step;
-        this.container.rotation = decision.heading;
-        this.container.x = this.x;
-        this.container.y = this.y;
-      }
+      this.maneuverToward(
+        this.pursuitX,
+        this.pursuitY,
+        this.pursuitTargetSpeed,
+        deltaTime,
+      );
+      return;
+    }
+
+    // NPC-vs-NPC engagement (manager-driven, LOWER priority than the player chase
+    // above): a ship that is NOT hunting the player closes on + strafes a hostile
+    // NPC so the two visibly fight rather than drifting past — e.g. a pirate
+    // intruder vs the Overmind garrison in a captured system.
+    if (
+      !this.aggressive &&
+      !this.departing &&
+      this.npcCombatX !== null &&
+      this.npcCombatY !== null
+    ) {
+      this.maneuverToward(this.npcCombatX, this.npcCombatY, 0, deltaTime);
       return;
     }
 
@@ -460,6 +465,58 @@ export class NpcShipSprite {
     this.pursuitX = x;
     this.pursuitY = y;
     this.pursuitTargetSpeed = targetSpeed;
+  }
+
+  /**
+   * Set/clear the NPC-vs-NPC engagement target (a hostile NPC's world position),
+   * refreshed each frame by {@link NpcShipManager}. Ignored while this ship is a
+   * player-aggressor — the player chase ({@link aggressive}) takes priority.
+   */
+  setNpcCombatTarget(x: number, y: number): void {
+    this.npcCombatX = x;
+    this.npcCombatY = y;
+  }
+  clearNpcCombatTarget(): void {
+    this.npcCombatX = null;
+    this.npcCombatY = null;
+  }
+
+  /**
+   * Close on + strafe a world point with the shared combat maneuver model
+   * ({@link decideManeuver}: CLOSE to weapon range, then ORBIT; BREAK_OFF when
+   * over-matched/badly hurt). Shared by the player chase and the NPC-vs-NPC
+   * engagement so both move identically. `targetSpeed` feeds the over-matched
+   * break-off check (a stationary quarry is never treated as out-running).
+   */
+  private maneuverToward(
+    targetX: number,
+    targetY: number,
+    targetSpeed: number,
+    deltaTime: number,
+  ): void {
+    const range = Math.hypot(targetX - this.x, targetY - this.y);
+    const decision = decideManeuver({
+      range,
+      weaponRange: GAME_BALANCE.weaponRange,
+      selfSpeed: this.speed,
+      targetSpeed,
+      selfX: this.x,
+      selfY: this.y,
+      targetX,
+      targetY,
+      hullRatio: this.npc.maxHull > 0 ? this.npc.hullHP / this.npc.maxHull : 1,
+      orbitDir: this.aggressorOrbitDir,
+    });
+    // While closing, don't jitter when essentially on top of the target;
+    // orbiting/breaking off always move (they steer sideways/away, not onto it).
+    if (decision.mode !== ManeuverMode.CLOSE || range > 6) {
+      const step = this.speed * deltaTime;
+      this.x += Math.cos(decision.heading) * step;
+      this.y += Math.sin(decision.heading) * step;
+      this.container.rotation = decision.heading;
+      this.container.x = this.x;
+      this.container.y = this.y;
+    }
   }
 
   /** Orbit a fixed point (a planet) instead of wandering the whole band. */

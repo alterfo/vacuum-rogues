@@ -20,6 +20,7 @@ import {
 import {
   isHostile,
   factionKindOf,
+  mutuallyHostile,
   overmindCombatTargets,
   type RangedNpc,
 } from "@/systems/npc/factionHostility";
@@ -462,6 +463,18 @@ export class NpcShipManager implements FlightModule {
           }
         }
       }
+      // NPC-vs-NPC engagement: a ship NOT hunting the player closes on its
+      // nearest hostile NPC so cross-faction foes visibly fight instead of
+      // coexisting — e.g. a pirate intruder caught in an Overmind-held system
+      // engages the garrison rather than drifting past it. Player-aggressors keep
+      // chasing the player (their NPC target is cleared so it never competes).
+      if (sprite.aggressive) {
+        sprite.clearNpcCombatTarget();
+      } else {
+        const enemy = this.nearestNpcEnemy(sprite);
+        if (enemy) sprite.setNpcCombatTarget(enemy.x, enemy.y);
+        else sprite.clearNpcCombatTarget();
+      }
       // Keep the orbit center aligned with the planet's current orbital position.
       const anchorPlanet = this.npcAnchorPlanet.get(sprite);
       if (anchorPlanet) {
@@ -496,6 +509,39 @@ export class NpcShipManager implements FlightModule {
     // Overmind's indiscriminate aggression playing out against a strayed pirate /
     // liberating ranger), independent of the player.
     this.resolveNpcVsNpcCombat(deltaTime);
+  }
+
+  /**
+   * The nearest live NPC sprite this one is mutually hostile to AND within
+   * engagement (scanner) range — the steering target that makes hostile factions
+   * actively fight in-flight instead of drifting past each other. Scoped to
+   * engagements INVOLVING the Overmind (the only pair {@link resolveNpcVsNpcCombat}
+   * resolves damage for), so a steered pair always actually trades fire rather
+   * than orbiting silently; the OVERMIND core (the player's duel target) is
+   * excluded on both sides. Pure read over the live sprites (no RNG/I/O).
+   */
+  private nearestNpcEnemy(sprite: NpcShipSprite): NpcShipSprite | null {
+    if (sprite.npc.id === OVERMIND_CORE_ID) return null;
+    const selfKind = factionKindOf(sprite.npc);
+    let best: NpcShipSprite | null = null;
+    let bestD2 = this.SCANNER_RANGE * this.SCANNER_RANGE;
+    for (const other of this.npcSprites) {
+      if (other === sprite || other.isGone()) continue;
+      if (other.npc.id === OVERMIND_CORE_ID) continue;
+      const otherKind = factionKindOf(other.npc);
+      // Only Overmind-involving pairs have a damage path — don't steer two ships
+      // into a silent non-fight.
+      if (selfKind !== "overmind" && otherKind !== "overmind") continue;
+      if (!mutuallyHostile(selfKind, otherKind, { pirateRep: 0 })) continue;
+      const dx = other.x - sprite.x;
+      const dy = other.y - sprite.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        best = other;
+      }
+    }
+    return best;
   }
 
   /**

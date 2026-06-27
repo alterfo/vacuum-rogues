@@ -70,10 +70,14 @@ each code change, full unit + playtest gates green.
      behaviour: a stray pirate in an Overmind system is NOT aggroed; a pirate in a
      pirate-held system IS. The cruise-speed/aggro coupling comment in
      `npcCruiseSpeed.ts` was de-coupled accordingly.
-   - **Still open (separate, not done):** even when hostile, wandering NPCs don't
-     steer *toward* each other, so two enemies can drift past without a visible
-     fight unless they're already within weapon range. Active enemy-seeking is a
-     larger behavioural change, left for a live-verified follow-up.
+   - **Enemy-seeking** ✅ **also FIXED.** A ship that is NOT hunting the player now
+     actively closes on its nearest mutually-hostile NPC within scanner range (the
+     new `NpcShipManager.nearestNpcEnemy` → `NpcShipSprite.setNpcCombatTarget`,
+     using the shared `maneuverToward` strafe model), so a pirate intruder visibly
+     engages the Overmind garrison instead of drifting past. Scoped to
+     Overmind-involving pairs (the ones `resolveNpcVsNpcCombat` actually resolves
+     damage for) so a steered pair always trades fire; player-aggro takes priority.
+     Regression: `src/tests/flight/npcVsNpcSeeking.test.ts`.
 
 ## Resolved — was the stale bundle
 - **Гравитяга (grav tractor) "doesn't work"** — ✅ **WORKS on fresh code (Incognito, 2026-06-27).**

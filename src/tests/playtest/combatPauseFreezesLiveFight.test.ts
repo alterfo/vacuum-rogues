@@ -62,6 +62,10 @@ function makeDriftingHostile(id: string, x: number, y: number): NpcShipSprite {
     isGone: () => false,
     isAnchored: () => false,
     updateHitArea: () => {},
+    // NPC-vs-NPC engagement seam (manager calls these each frame) — no-ops here;
+    // this stub drives its own drift in update() above.
+    setNpcCombatTarget: () => {},
+    clearNpcCombatTarget: () => {},
   };
   return sprite as unknown as NpcShipSprite;
 }
