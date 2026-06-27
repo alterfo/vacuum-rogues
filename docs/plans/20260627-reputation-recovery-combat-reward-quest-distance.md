@@ -136,9 +136,9 @@ hint, not a rep sink. (b) **Full scope** including unblocking captured systems.
 - [x] run tests — must pass before next task — new `lateGameRecoverability` (7) + letsplay:ci oracle (103, includes the oddities dir) + lint (0) + full typecheck all green
 
 ### Task 9: Verify acceptance criteria
-- [ ] verify the reporter's loop is fixed end-to-end: faction quests raise rep; pirate-rep/liberate regains captured access; deadlines reachable; pirate kills pay + drop collectible; bribe explains the path up — **and** no new oddity (Task 8 green)
-- [ ] run full unit suite (`npm test -- --run`), playtest (`npm run test:playtest`), letsplay oracle (`npm run letsplay:ci`), linter
-- [ ] confirm no domain/schema/save change; `npm run test:save-compat` stays green (the reporter's progressed/captured save loads and is now recoverable)
+- [x] verify the reporter's loop is fixed end-to-end: faction quests raise rep; pirate-rep/liberate regains captured access; deadlines reachable; pirate kills pay + drop collectible; bribe explains the path up — **and** no new oddity (Task 8 green) — every piece is backed by a green regression: rep recovery (`questReputationReward.test.ts`), pirate-rep + liberate access (`pirateRepRecovery.test.ts` + unit/playtest `playerLiberate.test.ts`), reachable deadlines (`questDeadlineReachable.test.ts`), pirate kills pay + collectible drop (`pirateSalvageCredits.test.ts` + `lootPickup.test.ts`), bribe-path hint (`bribeAccess.test.ts`), no-new-oddity equilibrium (`lateGameRecoverability.test.ts`)
+- [x] run full unit suite (`npm test -- --run`), playtest (`npm run test:playtest`), letsplay oracle (`npm run letsplay:ci`), linter — unit 3869 passed / 4 skipped; playtest 269 passed / 2 skipped; letsplay:ci oracle 103 passed; lint 0 errors (44 pre-existing test-file `any` warnings)
+- [x] confirm no domain/schema/save change; `npm run test:save-compat` stays green (the reporter's progressed/captured save loads and is now recoverable) — this plan's commits (`68053d2..HEAD`) touch **zero** `schemas.ts`/`MigrationPipeline.ts`/`types/index.ts`/`domain/**` files (no `CURRENT_VERSION` bump); changes are balance/i18n/presentation/systems/tests only; `save-compat` 22 passed
 
 ## Technical Details
 - One distance metric (`jumpDistances`, the warp graph) for both the quest's advertised distance and
