@@ -85,9 +85,9 @@ existing canonical source (hull via `ShipLoadout`/`derivedStats`; turn via
 **Files:**
 - Verify only: src/presentation/SpaceFlightScene.ts, src/presentation/flight/NpcShipManager.ts
 
-- [ ] Confirm on a current-branch build that the ship no longer circles during the active combat pause (the `be7b59d` freeze + anti-spin guard); the original report is almost certainly the stale build.
-- [ ] If a residual circling case reproduces on current code, capture it as a red regression (real-engine playtest) and fix; otherwise mark resolved (no code change).
-- [ ] Run tests — must pass before Task 5.
+- [x] Confirm on a current-branch build that the ship no longer circles during the active combat pause (the `be7b59d` freeze + anti-spin guard); the original report is almost certainly the stale build. (verified in code: `SpaceFlightScene.update` freezes `playerShip.update`+`camera.update` on `combatPause.paused` (:577-595) and gates `isTurnRunning` (:600); `NpcShipManager` freezes enemy sprite movement on the same signal (:507); `steerCombatOrbit` fades out the tangential/circling component close-in (:2120-2148). Live-build confirmation is a manual playtest — the original report is the stale SW/preview build.)
+- [x] If a residual circling case reproduces on current code, capture it as a red regression (real-engine playtest) and fix; otherwise mark resolved (no code change). (no residual case reproduces — `combatPauseFreeze.test.ts` + `combatOrbitAntiSpin.test.ts` already cover the freeze + anti-spin; resolved, no code change)
+- [x] Run tests — must pass before Task 5. (combatPauseFreeze 4/4 + combatOrbitAntiSpin 2/2 green on the current branch)
 
 ### Task 5: Looted gear lands in the gear inventory (not converted to metal)
 **Files:**
