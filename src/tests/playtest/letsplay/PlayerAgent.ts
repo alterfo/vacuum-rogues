@@ -31,6 +31,36 @@ import {
   acceptBoardQuests,
 } from "./engineQueries";
 
+/**
+ * A compact, egocentric vitals snapshot taken at one step — the player's own
+ * scoreboard the LLM judge reasons over. Built solely from what the player can
+ * perceive of *itself* (vitals + its own reputation sheet, kill points, and quest
+ * journal), never from omniscient world state. All scalars so it serialises flat.
+ */
+export interface StepVitals {
+  /** Spendable credits (the current-account GL projection). */
+  credits: number;
+  /** Current hull HP. */
+  hull: number;
+  /** Max hull HP (a rise flags a ship upgrade). */
+  maxHull: number;
+  /** Reactor energy / warp fuel. */
+  fuel: number;
+  /** Cargo units currently held. */
+  cargoUsed: number;
+  /**
+   * Lowest faction standing the player holds (0 when no faction interacted) —
+   * the signal-rich number for the "rep fell to −50 with no way back" oddity.
+   */
+  reputationMin: number;
+  /** Cumulative combat kill points (resets on rank promotion). */
+  killPoints: number;
+  /** Number of active quests the player is carrying. */
+  questsActive: number;
+  /** Number of quests the player has completed so far. */
+  questsCompleted: number;
+}
+
 /** One recorded decision in a session transcript. */
 export interface AgentStep {
   /** Zero-based step index. */
@@ -39,6 +69,16 @@ export interface AgentStep {
   readonly scene: SceneType;
   /** The action the policy chose. */
   readonly action: Action;
+  /** Galaxy business day when the decision was made (egocentric, pre-apply). */
+  readonly day?: number;
+  /** Player vitals snapshot BEFORE the action was applied (egocentric). */
+  readonly vitals?: StepVitals;
+  /**
+   * Harness error-sink messages that newly surfaced *while applying this step* —
+   * the notable-log evidence the judge keys off. Omitted/absent when none fired
+   * (a clean step), so a clean session carries no log noise.
+   */
+  readonly notableLogs?: string[];
 }
 
 /** The outcome of an agent run — the transcript plus any failures surfaced. */
@@ -49,6 +89,14 @@ export interface AgentRunResult {
   readonly errors: RecordedError[];
   /** The scene the agent ended in. */
   readonly endScene: SceneType;
+  /** Galaxy business day on the resting state after the last applied action. */
+  readonly finalDay?: number;
+  /**
+   * Vitals snapshot of the resting state AFTER the last applied action — the
+   * "after" reference the transcript builder diffs the final step against and the
+   * closing point of every curve. Absent only when there was no player.
+   */
+  readonly finalVitals?: StepVitals;
 }
 
 /**
@@ -94,18 +142,66 @@ export class PlayerAgent {
    * {@link reset} to start a new run.
    */
   async run(budget: number): Promise<AgentRunResult> {
+    const engine = this.harness.engine;
     const steps: AgentStep[] = [];
     for (let index = 0; index < budget; index++) {
-      const obs = observe(this.harness.engine);
+      const obs = observe(engine);
       this.memory = updateMemory(this.memory, obs);
       const action = this.policy.decide(obs, this.memory);
-      steps.push({ index, scene: obs.scene, action });
+      // Egocentric per-step record: the day + vitals the player perceives *now*,
+      // plus any harness-sink error that fires while this action is applied.
+      const day = engine.galaxy?.gameDays ?? 0;
+      const vitals = this.snapVitals(obs);
+      const logsBefore = this.harness.errors().length;
       await this.apply(action, obs);
+      const notableLogs = this.harness
+        .errors()
+        .slice(logsBefore)
+        .map((e) => `[${e.source}] ${e.message}`);
+      steps.push({
+        index,
+        scene: obs.scene,
+        action,
+        day,
+        ...(vitals ? { vitals } : {}),
+        ...(notableLogs.length ? { notableLogs } : {}),
+      });
     }
+    // A resting snapshot after the last applied action — the "after" reference the
+    // transcript diffs the final step against and the closing point of the curves.
+    const finalVitals = this.snapVitals(observe(engine));
     return {
       steps,
       errors: this.harness.errors(),
-      endScene: this.harness.engine.currentSceneType,
+      endScene: engine.currentSceneType,
+      finalDay: engine.galaxy?.gameDays ?? 0,
+      ...(finalVitals ? { finalVitals } : {}),
+    };
+  }
+
+  /**
+   * Project the player's own scoreboard into a {@link StepVitals}. Egocentric: it
+   * reads the already-observed vitals plus the player's *own* reputation sheet,
+   * kill points and quest journal — never omniscient world state. Returns `null`
+   * when there is no player (a pre-game menu), so the step simply carries no vitals.
+   */
+  private snapVitals(obs: Observation): StepVitals | null {
+    const engine = this.harness.engine;
+    const player = engine.player;
+    if (!obs.player || !player) return null;
+    const repValues = Object.values(
+      player.reputation as Record<string, number>,
+    );
+    return {
+      credits: obs.player.credits,
+      hull: obs.player.hull,
+      maxHull: obs.player.maxHull,
+      fuel: obs.player.fuel,
+      cargoUsed: obs.player.cargoUsed,
+      reputationMin: repValues.length ? Math.min(...repValues) : 0,
+      killPoints: player.killPoints,
+      questsActive: engine.questManager.getActiveQuests().length,
+      questsCompleted: engine.questManager.getCompletedQuestIds().length,
     };
   }
 

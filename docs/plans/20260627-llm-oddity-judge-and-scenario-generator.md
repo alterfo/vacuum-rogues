@@ -70,10 +70,10 @@ screenshots in v1 unless the text transcript proves insufficient.
 - Create: src/tests/playtest/letsplay/transcript.test.ts
 - Modify: src/tests/playtest/letsplay/PlayerAgent.ts (emit the richer record)
 
-- [ ] Define a structured, serialisable `SessionTranscript` (seed, per-step `{day, scene, action, vitalsDelta, notableLogs}`, plus a compact session summary: days elapsed, credits curve, rep curve, kills, deaths, quests taken/completed) built purely from the existing run data + the harness log sink.
-- [ ] Build it from an `AgentRunResult` + observation/log stream without omniscient state (egocentric, like `observe`).
-- [ ] Write tests: a scripted session produces a transcript with the expected step records + summary; serialises to stable JSON.
-- [ ] Run tests — must pass before Task 2.
+- [x] Define a structured, serialisable `SessionTranscript` (seed, per-step `{day, scene, action, vitalsDelta, notableLogs}`, plus a compact session summary: days elapsed, credits curve, rep curve, kills, deaths, quests taken/completed) built purely from the existing run data + the harness log sink.
+- [x] Build it from an `AgentRunResult` + observation/log stream without omniscient state (egocentric, like `observe`).
+- [x] Write tests: a scripted session produces a transcript with the expected step records + summary; serialises to stable JSON.
+- [x] Run tests — must pass before Task 2.
 
 ### Task 2: Injectable LLM client port
 **Files:**
