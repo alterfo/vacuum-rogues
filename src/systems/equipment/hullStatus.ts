@@ -38,7 +38,11 @@ export function hullStatus(
   const missing = maxHull - hullHP;
   return {
     maxHull,
-    percent: Math.round((hullHP / maxHull) * 100),
+    // Clamp to the documented 0..100 range: the live `hullHP` can briefly exceed
+    // the canonical max while a buffing hull micromodule is removed before the
+    // live ship is re-synced, which would otherwise push the percent past 100
+    // and crash a `repeat(10 - pct/10)` bar renderer with a negative count.
+    percent: Math.max(0, Math.min(100, Math.round((hullHP / maxHull) * 100))),
     missing,
     isPerfect: missing <= 0,
   };

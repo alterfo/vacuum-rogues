@@ -61,6 +61,19 @@ describe("hullStatus — display % and repair check agree on one canonical max",
     const status = hullStatus(0, 0, 0);
     expect(Number.isFinite(status.percent)).toBe(true);
   });
+
+  it("clamps percent to 0..100 when hullHP exceeds the canonical max", () => {
+    // Reachable when a buffing hull micromodule is removed after the live ship
+    // was synced/repaired to the higher max (hullHP 140 vs a now-100 canonical
+    // max). An unclamped percent of 140 crashes the planet hull-bar renderer
+    // (`"░".repeat(10 - 14)` ⇒ RangeError); the helper must cap it at 100.
+    const status = hullStatus(140, 140, 100);
+    expect(status.percent).toBe(100);
+    expect(status.percent).toBeLessThanOrEqual(100);
+    expect(status.percent).toBeGreaterThanOrEqual(0);
+    // It is "perfect" (over-full ⇒ nothing to repair), not negative-missing noise.
+    expect(status.isPerfect).toBe(true);
+  });
 });
 
 describe("repair flow — a defense micromodule's derived max reaches the live ship", () => {

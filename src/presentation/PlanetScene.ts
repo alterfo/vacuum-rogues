@@ -1110,9 +1110,10 @@ export class PlanetScene extends GameScene {
       const fuelPct = Math.round(
         (ship.energy / Math.max(1, ship.maxEnergy)) * 100,
       );
-      const bars = (pct: number): string =>
-        "█".repeat(Math.round(pct / 10)) +
-        "░".repeat(10 - Math.round(pct / 10));
+      const bars = (pct: number): string => {
+        const filled = Math.max(0, Math.min(10, Math.round(pct / 10)));
+        return "█".repeat(filled) + "░".repeat(10 - filled);
+      };
       const statLine = new Text({
         text: `Корпус: ${bars(hullPct)} ${hullPct}%   Топливо: ${bars(fuelPct)} ${fuelPct}%`,
         style: {
