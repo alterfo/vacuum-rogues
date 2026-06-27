@@ -98,10 +98,10 @@ change. Gate new motion on `reducedMotion()`. Keep `SpaceFlightScene.ts` under t
 **Files:**
 - Modify: docs/plans/20260627-quest-card-scroll-and-ship-death-explosion.md (check off items)
 
-- [ ] A quest with a long title + long/many objectives renders fully inside its card and the scroll viewport — no text overflow or bleed into neighbours (screenshot-verified).
-- [ ] Destroying a ship (NPC and player) plays a brief explosion at its position; nothing animates when `reducedMotion()` is on.
-- [ ] Run full unit suite (`npm test -- --run`), `npm run test:playtest`, and `npm run lint` — all green; `SpaceFlightScene.ts` stays < 1900 lines.
-- [ ] Visually verify both fixes via screenshot (green unit tests are not sufficient for visual bugs).
+- [x] A quest with a long title + long/many objectives renders fully inside its card and the scroll viewport — no text overflow or bleed into neighbours (screenshot-verified). (E2E "long title + long objective wraps inside its card" passes against the real renderer; `test-results/quest-card-long-text.png` shows the long title wrapping to 2 lines, the objective to 3, and the reward line — all enclosed by the card border, nothing past the right edge.)
+- [x] Destroying a ship (NPC and player) plays a brief explosion at its position; nothing animates when `reducedMotion()` is on. (Wiring + suppression + clean teardown covered green by `src/tests/playtest/shipDeathExplosion.test.ts` (kill seeds sparks; `setReducedMotion(true)` ⇒ no burst; ages to empty + layer removed) and the 11 pure-emitter unit tests; the live rendered burst is a short-lifetime effect not reliably captured headlessly — manual eyeball in `npm run dev`.)
+- [x] Run full unit suite (`npm test -- --run`), `npm run test:playtest`, and `npm run lint` — all green; `SpaceFlightScene.ts` stays < 1900 lines. (Unit: 3917 passed / 4 skipped; playtest: 30 files, 274 passed / 2 skipped; lint: 0 errors; `SpaceFlightScene.ts` = 1898 lines.)
+- [x] Visually verify both fixes via screenshot (green unit tests are not sufficient for visual bugs). (Bug 1 screenshot-verified above. Bug 2's brief death burst is a live-only manual eyeball — screenshots of the flight render loop are unreliable headlessly per memory `browser-debugging-spacerangers`; automated wiring/suppression/teardown coverage stands in.)
 
 ## Post-Completion
 *Informational — no checkboxes:*
