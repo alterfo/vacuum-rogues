@@ -98,6 +98,23 @@ describe("Ship-death explosion wiring over the real engine (Task 3)", () => {
     expect(harness.errors()).toEqual([]);
   });
 
+  it("a kill fires the one-shot explosion SFX", () => {
+    const scene = harness.currentScene() as unknown as FlightPrivates;
+    const { npcManager } = scene;
+    const sfx = vi
+      .spyOn(harness.engine.audio, "playSfx")
+      .mockResolvedValue(undefined);
+
+    const enemy = makeHostile("boom-foe", 350, 280);
+    (npcManager as unknown as { npcSprites: NpcShipSprite[] }).npcSprites.push(
+      enemy,
+    );
+    npcManager.handleInFlightDeath(enemy, () => 0, false);
+
+    expect(sfx).toHaveBeenCalledWith("explosion");
+    expect(harness.errors()).toEqual([]);
+  });
+
   it("seeds NO burst when reduced motion is enabled", () => {
     setReducedMotion(true);
     const scene = harness.currentScene() as unknown as FlightPrivates;

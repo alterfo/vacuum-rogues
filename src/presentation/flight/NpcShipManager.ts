@@ -367,7 +367,10 @@ export class NpcShipManager implements FlightModule {
   /** Create NPC ship sprites for every NPC currently present in this system. */
   initialize(): void {
     // Build the ship-death blast renderer first (before the no-galaxy early
-    // return) so update()/destroy()/spawn always have it on a live scene.
+    // return) so update()/destroy()/spawn always have it on a live scene. Tear
+    // down any prior renderer first so a re-init without an intervening
+    // destroy() can't orphan its particle layer on gameLayer.
+    this.deathFx?.destroy();
     this.deathFx = new ShipDeathFxRenderer(this.gameLayer);
     const galaxy = this.gameEngine?.galaxy;
     const systemId = this.gameEngine?.player?.currentSystemId;
@@ -1221,11 +1224,19 @@ export class NpcShipManager implements FlightModule {
   }
 
   /**
-   * The player's own ship was destroyed in flight: blast it at the ship's world
-   * position (+ the one-shot SFX), then trigger the GAME_OVER death. Routed here
-   * (from the scene's `onPlayerDestroyed` callback) so the player explodes through
-   * the same FX renderer NPC kills use, without growing the scene controller. The
-   * burst is gated on reducedMotion() inside the renderer.
+   * The player's own ship was destroyed in flight: play the one-shot death SFX
+   * and trigger the GAME_OVER death. Routed here (from the scene's
+   * `onPlayerDestroyed` callback) so the player death reuses the same FX/SFX seam
+   * NPC kills use, without growing the scene controller.
+   *
+   * NOTE: the visual blast is seeded for parity with NPC kills but is NOT visible
+   * today — `triggerPlayerDeath()` synchronously transitions to GAME_OVER, which
+   * tears this scene (and the FX renderer) down the same frame the burst is
+   * seeded, before any frame can render it. So the SFX is the player's death
+   * feedback. Showing the blast would need the GAME_OVER transition deferred AND
+   * the scene frozen for the animation (to avoid a brief "dead but interactive"
+   * window) — a deferred follow-up, not done here. The burst is gated on
+   * reducedMotion() inside the renderer.
    */
   handlePlayerDeath(): void {
     const physics = this.deps.getShipPhysics();

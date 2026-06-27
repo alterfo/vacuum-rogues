@@ -46,9 +46,9 @@ export class ShipDeathFxRenderer {
   private layer: ParticleContainer | null = null;
   private readonly particles: Particle[] = [];
 
-  constructor(gameLayer: Container, rng: () => number = Math.random) {
+  constructor(gameLayer: Container) {
     this.gameLayer = gameLayer;
-    this.fx = new ShipDeathFx(MAX_EXPLOSION_PARTICLES, EXPLOSION_BURST, rng);
+    this.fx = new ShipDeathFx(MAX_EXPLOSION_PARTICLES, EXPLOSION_BURST);
     this.build();
   }
 
