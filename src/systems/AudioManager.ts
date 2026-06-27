@@ -27,6 +27,7 @@ export type SfxKey =
   | "land"
   | "reward"
   | "alarm"
+  | "explosion"
   | "rankup"
   | "ui_click"
   | "ui_hover"

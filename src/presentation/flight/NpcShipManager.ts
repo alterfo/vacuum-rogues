@@ -81,6 +81,7 @@ import {
   encounterSystemView,
 } from "@/systems/encounters/encounterFlight";
 import type { FlightModule } from "./FlightModule";
+import { ShipDeathFxRenderer } from "./shipDeathFxRenderer";
 
 /**
  * Fallback module ids for loot dropped by an NPC with no scanned loadout, so a
@@ -308,6 +309,12 @@ export class NpcShipManager implements FlightModule {
   /** Loot lifetime before it despawns (60 s). */
   private readonly LOOT_TTL_MS = 60_000;
 
+  // Ship-death explosion FX (pure emitter + pooled particle renderer). Built in
+  // initialize() — after the scene's clearGameLayer — so its particle layer
+  // survives, advanced each frame (real elapsed time, like loot) and torn down in
+  // destroy(). A burst is gated on reducedMotion() inside the renderer.
+  private deathFx: ShipDeathFxRenderer | null = null;
+
   private readonly WEAPON_RANGE = GAME_BALANCE.weaponRange;
   // Combat strafe radius: while engaged, orbit the target at this standoff —
   // comfortably inside WEAPON_RANGE — so auto-fire always has a target in range
@@ -359,6 +366,9 @@ export class NpcShipManager implements FlightModule {
 
   /** Create NPC ship sprites for every NPC currently present in this system. */
   initialize(): void {
+    // Build the ship-death blast renderer first (before the no-galaxy early
+    // return) so update()/destroy()/spawn always have it on a live scene.
+    this.deathFx = new ShipDeathFxRenderer(this.gameLayer);
     const galaxy = this.gameEngine?.galaxy;
     const systemId = this.gameEngine?.player?.currentSystemId;
     if (!galaxy || !systemId) return;
@@ -389,6 +399,10 @@ export class NpcShipManager implements FlightModule {
     // a gravity tractor extends the reach — every frame, including after combat
     // ends and the ship is parked, so a kill's drops are always collectible.
     this.applyLootPickup();
+
+    // Death blast ages on real elapsed time too (like loot), so a kill's
+    // explosion keeps expanding + fading even after the ship stops / combat ends.
+    this.deathFx?.update(deltaTime);
 
     // The world runs while the turn is running (flying, or holding station in
     // combat) — not only while the ship is physically moving.
@@ -655,6 +669,8 @@ export class NpcShipManager implements FlightModule {
     }
     this.lootGraphics.clear();
     this.spaceLoot.length = 0;
+    this.deathFx?.destroy(); // removes + destroys its particle layer
+    this.deathFx = null;
     this.closeNpcContactPanel();
     this.followNpcId = null;
     this.approachNpcId = null;
@@ -1165,6 +1181,12 @@ export class NpcShipManager implements FlightModule {
     killedByPlayer = true,
   ): void {
     const wasOvermindCore = sprite.npc.id === OVERMIND_CORE_ID;
+    // Punch the kill with a brief explosion at the wreck (gated on reduced motion
+    // inside the renderer) + a one-shot SFX — captured before the sprite is torn
+    // down. Fires for EVERY death (player kill, crossfire, the core) so any ship
+    // blowing up reads + sounds the same.
+    this.deathFx?.spawn(sprite.x, sprite.y);
+    void this.gameEngine?.audio?.playSfx("explosion")?.catch(() => {});
     this.spawnLootForNpc(sprite.npc, sprite.x, sprite.y, rng);
     const galaxy = this.gameEngine?.galaxy;
     if (galaxy) this.npcSimulator.removeNpc(galaxy, sprite.npc.id);
@@ -1196,6 +1218,20 @@ export class NpcShipManager implements FlightModule {
       // (player-driven liberation, Task 4) — no-ops until the final defender dies.
       this.maybeLiberateClearedSystem();
     }
+  }
+
+  /**
+   * The player's own ship was destroyed in flight: blast it at the ship's world
+   * position (+ the one-shot SFX), then trigger the GAME_OVER death. Routed here
+   * (from the scene's `onPlayerDestroyed` callback) so the player explodes through
+   * the same FX renderer NPC kills use, without growing the scene controller. The
+   * burst is gated on reducedMotion() inside the renderer.
+   */
+  handlePlayerDeath(): void {
+    const physics = this.deps.getShipPhysics();
+    if (physics) this.deathFx?.spawn(physics.shipX, physics.shipY);
+    void this.gameEngine?.audio?.playSfx("explosion")?.catch(() => {});
+    this.gameEngine?.triggerPlayerDeath();
   }
 
   /**
