@@ -71,6 +71,7 @@ export const ru: Dict = {
   // --- trade-route rumors (Info Center "Торговые возможности" band) ---------
   "rumor.panelHeader": "ТОРГОВЫЕ ВОЗМОЖНОСТИ",
   "rumor.panelEmpty": "Активных торговых маршрутов нет",
+  "rumor.panelNoIntel": "Нет данных — разведайте новые системы",
   "rumor.line": "Везите {resource} из {from} в {to}: {margin}",
   "rumor.margin": "маржа ~{pct}%",
   "rumor.marginMasked": "маржа ~?%",

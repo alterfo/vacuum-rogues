@@ -70,6 +70,7 @@ export const en: Dict = {
   // --- trade-route rumors (Info Center "Trade Opportunities" band) ----------
   "rumor.panelHeader": "TRADE OPPORTUNITIES",
   "rumor.panelEmpty": "No active trade routes",
+  "rumor.panelNoIntel": "No intel yet — scout new systems",
   "rumor.line": "Ship {resource} from {from} to {to}: {margin}",
   "rumor.margin": "margin ~{pct}%",
   "rumor.marginMasked": "margin ~?%",

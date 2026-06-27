@@ -10,9 +10,11 @@ import type { StarSystem } from "@/domain/StarSystem";
 import {
   buildRumorPanel,
   maskTradeNewsMargin,
+  feedEventVisible,
   rumorPanelHeader,
   RUMOR_PANEL_MAX,
 } from "./rumorPanel";
+import { isSystemKnown } from "@/systems/galaxy/systemKnown";
 import { resourceLabelRu } from "@/domain/RouteRumor";
 import { t } from "@/i18n/i18n";
 import { SceneType, NpcRole, ResourceType } from "@/types";
@@ -111,10 +113,18 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
   );
   const originId =
     gameEngine.player?.currentSystemId ?? galaxy.systems[0]?.id ?? "";
+  const player = gameEngine.player ?? null;
+  // Partial observability: the feed never names a system the player hasn't
+  // scouted (explored/visited). A null player (headless) keeps everything.
+  const known = (id: string): boolean =>
+    player == null || isSystemKnown(player, galaxy, id);
 
   const items: NewsItem[] = [];
 
-  const feedEvents = [...galaxy.newsFeed].reverse().slice(0, 20);
+  const feedEvents = [...galaxy.newsFeed]
+    .reverse()
+    .filter((event) => feedEventVisible(event, galaxy, player))
+    .slice(0, 20);
   for (const event of feedEvents) {
     const sysName = systemMap.get(event.systemId)?.name ?? event.systemId;
     const label = newsTypeLabel(event.type);
@@ -142,6 +152,7 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
       maxJumps: 3,
     });
     for (const p of pirates.slice(0, 4)) {
+      if (!known(p.systemId)) continue;
       const sysName = systemMap.get(p.systemId)?.name ?? p.systemId;
       const dist =
         p.jumps === 0
@@ -171,6 +182,7 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
         limit: 1,
       })[0];
       if (!hit) continue;
+      if (!known(hit.systemId)) continue;
       const sysName = systemMap.get(hit.systemId)?.name ?? hit.systemId;
       const dist =
         hit.jumps === 0
@@ -216,9 +228,10 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
       role: NpcRole.TRADER,
       maxJumps: 2,
     });
-    if (traders.length > 0) {
+    const visibleTrader = traders.find((tr) => known(tr.systemId));
+    if (visibleTrader) {
       const sysName =
-        systemMap.get(traders[0].systemId)?.name ?? traders[0].systemId;
+        systemMap.get(visibleTrader.systemId)?.name ?? visibleTrader.systemId;
       const text = t("news.traders", { system: sysName });
       items.push({
         day,
@@ -233,9 +246,10 @@ function buildNews(gameEngine: GameEngine): NewsItem[] {
       role: NpcRole.PATROL,
       maxJumps: 2,
     });
-    if (patrols.length > 0) {
+    const visiblePatrol = patrols.find((pt) => known(pt.systemId));
+    if (visiblePatrol) {
       const sysName =
-        systemMap.get(patrols[0].systemId)?.name ?? patrols[0].systemId;
+        systemMap.get(visiblePatrol.systemId)?.name ?? visiblePatrol.systemId;
       const text = t("news.patrol", { system: sysName });
       items.push({
         day,
@@ -757,12 +771,14 @@ export class InfoCenterScene extends GameScene {
     const PAD = 16;
     const HEADER_H = 24;
     const ROW_H = 22;
-    // Partial observability: mask margins for routes touching systems the
-    // player hasn't explored/visited (`buildRumorPanel` consults `isSystemKnown`).
+    // Partial observability: HIDE routes touching systems the player hasn't
+    // explored/visited entirely (not just margin-masked) — the feed never names
+    // an unscouted system (`buildRumorPanel(..., hideUnknown=true)`).
     const data = buildRumorPanel(
       this.gameEngine?.galaxy ?? null,
       RUMOR_PANEL_MAX,
       this.gameEngine?.player ?? null,
+      true,
     );
 
     const header = scaledText(`▸ ${rumorPanelHeader()}`, 13, 0xffd166, {

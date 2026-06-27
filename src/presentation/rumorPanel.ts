@@ -16,6 +16,14 @@ export function rumorPanelHeader(): string {
 export function rumorPanelEmpty(): string {
   return t("rumor.panelEmpty");
 }
+/**
+ * Localized empty-state copy for the `hideUnknown` path: the panel is filtered to
+ * scouted space and there is no trade intel for a known route yet ("scout new
+ * systems"). Distinct from {@link rumorPanelEmpty} ("no active routes at all").
+ */
+export function rumorPanelNoIntel(): string {
+  return t("rumor.panelNoIntel");
+}
 
 export interface RumorPanelLine {
   id: string;
@@ -44,15 +52,38 @@ export interface RumorPanelData {
  * text still renders, so the player can't read the profit of a route into a
  * system they've never seen. With no `player` (legacy callers/tests) nothing is
  * masked, preserving the prior behaviour.
+ *
+ * `hideUnknown` (the playtest "hide unexplored systems entirely" follow-up):
+ * when true (and a `player` is supplied) a route touching an undiscovered system
+ * is **dropped from the list** rather than margin-masked — so the feed never
+ * names a system the player has not scouted. When everything is filtered out the
+ * empty-state becomes {@link rumorPanelNoIntel} ("scout new systems") instead of
+ * the generic "no active routes". Default `false` preserves the legacy
+ * margin-masking behaviour (and every existing caller/test).
  */
 export function buildRumorPanel(
   galaxy: Galaxy | null,
   max = RUMOR_PANEL_MAX,
   player: Player | null = null,
+  hideUnknown = false,
 ): RumorPanelData {
   if (!galaxy) return { lines: [], emptyText: rumorPanelEmpty() };
-  const rumors = galaxy.getActiveRumors().slice(0, max);
-  if (rumors.length === 0) return { lines: [], emptyText: rumorPanelEmpty() };
+  let rumors = galaxy.getActiveRumors();
+  const filtering = hideUnknown && player != null;
+  if (filtering) {
+    rumors = rumors.filter(
+      (r) =>
+        isSystemKnown(player, galaxy, r.fromSystemId) &&
+        isSystemKnown(player, galaxy, r.toSystemId),
+    );
+  }
+  rumors = rumors.slice(0, max);
+  if (rumors.length === 0) {
+    return {
+      lines: [],
+      emptyText: filtering ? rumorPanelNoIntel() : rumorPanelEmpty(),
+    };
+  }
   return {
     lines: rumors.map((r) => {
       const knownRoute =
@@ -78,6 +109,40 @@ export interface TradeNewsLike {
   type: string;
   fromSystemId?: string;
   toSystemId?: string;
+}
+
+/** Structural shape of a news-feed event the visibility filter reads. */
+export interface NewsEventLike {
+  type: string;
+  systemId: string;
+  fromSystemId?: string;
+  toSystemId?: string;
+}
+
+/**
+ * Partial observability for the InfoCenter **news feed**: whether an event may be
+ * shown given what the player has scouted (the playtest "hide unexplored systems
+ * entirely" follow-up). A `TRADE_OPPORTUNITY` route requires **both** endpoints
+ * known; every other event requires its single `systemId` known — so the feed
+ * never names a system the player has never seen. With no `player`
+ * (legacy/headless) everything is visible, and a malformed trade event missing an
+ * endpoint id falls through to visible (don't hide on bad data). Pure — keyed off
+ * the shared `isSystemKnown` predicate so the rule is never re-derived.
+ */
+export function feedEventVisible(
+  event: NewsEventLike,
+  galaxy: Galaxy,
+  player: Player | null,
+): boolean {
+  if (player == null) return true;
+  if (event.type === "TRADE_OPPORTUNITY") {
+    if (!event.fromSystemId || !event.toSystemId) return true;
+    return (
+      isSystemKnown(player, galaxy, event.fromSystemId) &&
+      isSystemKnown(player, galaxy, event.toSystemId)
+    );
+  }
+  return isSystemKnown(player, galaxy, event.systemId);
 }
 
 /**
