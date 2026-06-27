@@ -18,6 +18,11 @@ import {
   adjustPlayerCredits,
   GL_COUNTERPARTY,
 } from "@/systems/banking/economy";
+import {
+  PIRATE_FACTION_ID,
+  payCustomsFine,
+  standingRecoveryHint,
+} from "@/systems/galaxy/landingAccess";
 import { QuestType } from "@/types";
 import type { ResourceType } from "@/types";
 import { evaluateDelivery } from "@/systems/quests/deliveryCompletion";
@@ -760,36 +765,21 @@ export class PlanetScene extends GameScene {
 
     const player = this.gameEngine!.player!;
 
-    makeBtn(
-      `Заплатить штраф (${penalty} ₡) — репутация -20`,
-      110,
-      0x660000,
-      () => {
-        if (player.credits < penalty) {
-          this.showMessage(
-            `Недостаточно кредитов (нужно ${penalty} ₡)`,
-            0xff5544,
-          );
-          return;
-        }
-        adjustPlayerCredits(
-          this.gameEngine?.bank,
-          player,
-          -penalty,
-          GL_COUNTERPARTY.FINES,
-          "Таможенный штраф",
-        );
-        player.adjustReputation(faction, -20);
-        logger.info(
-          `Customs fine paid: ${penalty} cr, rep -20 with ${faction}`,
-        );
-        modal.destroy({ children: true });
+    makeBtn(`Заплатить штраф (${penalty} ₡)`, 110, 0x660000, () => {
+      // Pay the fine for one-time clearance — a meaningful credit cost, but no
+      // reputation hit (the old −20 was a recovery dead-end). `false` ⇒ can't
+      // afford it, so leave the modal up.
+      if (!payCustomsFine(this.gameEngine?.bank, player, penalty)) {
         this.showMessage(
-          `Штраф уплачен: −${penalty} ₡, репутация −20`,
-          0xff8844,
+          `Недостаточно кредитов (нужно ${penalty} ₡)`,
+          0xff5544,
         );
-      },
-    );
+        return;
+      }
+      logger.info(`Customs fine paid: ${penalty} cr (faction ${faction})`);
+      modal.destroy({ children: true });
+      this.showMessage(`Штраф уплачен: −${penalty} ₡`, 0xff8844);
+    });
 
     makeBtn(
       `Дать взятку (${bribeCost} ₡) — без потери репутации`,
@@ -1275,6 +1265,30 @@ export class PlanetScene extends GameScene {
         y,
         false,
       );
+      y += btnStep;
+      // Recovery hint: the bribe is one-time access, so tell the player how to
+      // durably raise standing (no dead-end). Pirate-held → the pirate-rep
+      // payoff path; otherwise → faction quests. `capturedBy` carries the
+      // pirate/overmind id as a string (mirrors `canLandOnPlanet`).
+      const isPirateControlled =
+        ((this.planet.capturedBy as unknown as string | null) ?? null) ===
+        PIRATE_FACTION_ID;
+      const hint = new Text({
+        text: standingRecoveryHint(isPirateControlled),
+        style: {
+          fontFamily: "Courier New",
+          fontSize: scaledFont(11),
+          fill: 0xffcc66,
+          align: "center",
+          wordWrap: true,
+          wordWrapWidth: btnW + 60,
+        },
+      });
+      hint.anchor.set(0.5, 0);
+      hint.x = w / 2;
+      hint.y = y;
+      hint.eventMode = "none";
+      ui.addChild(hint);
     }
 
     this.renderer.uiLayer.addChild(ui);

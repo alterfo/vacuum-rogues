@@ -255,6 +255,13 @@ export const en: Dict = {
   "landing.denial.pirateRep":
     "Planet captured by pirates — reputation required. Pay pirates off to raise it",
 
+  // --- customs fine + standing-recovery hint (Task 7: no rep dead-end) ------
+  "customs.fineReason": "Customs fine",
+  "standing.recovery.faction":
+    "Tip: complete faction quests to raise your standing",
+  "standing.recovery.pirate":
+    "Tip: pay pirates off to raise standing and regain access",
+
   // --- player-driven liberation of a captured system -----------------------
   "flight.liberationHint":
     "System captured. Destroy every invader to liberate it",

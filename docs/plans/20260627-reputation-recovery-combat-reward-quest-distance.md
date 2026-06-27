@@ -123,9 +123,9 @@ hint, not a rep sink. (b) **Full scope** including unblocking captured systems.
 
 ### Task 7: Customs bribe = one-time access + a "how to raise standing" hint (no rep dead-end)
 **Files:** Modify `src/presentation/PlanetScene.ts`, `src/systems/galaxy/landingAccess.ts`, ru/en; Create `src/tests/presentation/bribeAccess.test.ts`
-- [ ] failing test: paying the customs fee grants the one-time access **without** dropping reputation further (remove the −20 dead-end) — **guard: the credit cost stays meaningful** so smuggling/bribing isn't consequence-free
-- [ ] surface the recovery hint on low standing / denial ("выполняйте задания фракции"; for pirate systems, the pirate-rep path from Task 3), localized
-- [ ] run tests — must pass before next task
+- [x] failing test: paying the customs fee grants the one-time access **without** dropping reputation further (remove the −20 dead-end) — **guard: the credit cost stays meaningful** so smuggling/bribing isn't consequence-free — `bribeAccess.test.ts` drives the new pure `payCustomsFine(bank, player, penalty)` through a real `BankBus`/`BankingService` and asserts credits drop by the (meaningful) penalty, reputation is **untouched** (the old `adjustReputation(faction,-20)` is gone), a −50 player stays exactly −50 after paying, and the projected balance stays a whole credit `PlayerSchema` accepts; an unaffordable fine is a no-op (no charge, no rep change)
+- [x] surface the recovery hint on low standing / denial ("выполняйте задания фракции"; for pirate systems, the pirate-rep path from Task 3), localized — new pure `standingRecoveryHint(isPirateControlled)` resolves i18n keys `standing.recovery.faction` / `standing.recovery.pirate` (ru/en lockstep); PlanetScene shows it under the hostile-faction «Взятка» button (pirate-held planets via `planet.capturedBy === PIRATE_FACTION_ID` → the pirate payoff path, else faction quests). Customs ledger memo moved to `t("customs.fineReason")`; cyrillic baseline regenerated (PlanetScene 83→82, the «Таможенный штраф» literal migrated to a key)
+- [x] run tests — must pass before next task — `bribeAccess` (6) + i18n suite (parity/migrated/ratchet) + galaxy + presentation (812) + playtest (269/271) + full unit suite (3862 passed / 4 skipped) + lint (0 errors) + typecheck all green
 
 ### Task 8: Long-horizon balance/oddity guard (covers the oracle's day-blind spot)
 **Files:** Create `src/tests/oddities/lateGameRecoverability.test.ts` (and/or extend `src/tests/oddities/balanceInvariants.test.ts`)

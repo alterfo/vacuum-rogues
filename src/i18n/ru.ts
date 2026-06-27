@@ -257,6 +257,13 @@ export const ru: Dict = {
   "landing.denial.pirateRep":
     "Планета захвачена пиратами — нужна репутация. Откупайтесь от пиратов, чтобы её поднять",
 
+  // --- customs fine + standing-recovery hint (Task 7: no rep dead-end) ------
+  "customs.fineReason": "Таможенный штраф",
+  "standing.recovery.faction":
+    "Совет: выполняйте задания фракции, чтобы поднять репутацию",
+  "standing.recovery.pirate":
+    "Совет: откупайтесь от пиратов, чтобы поднять репутацию и вернуть доступ",
+
   // --- player-driven liberation of a captured system -----------------------
   "flight.liberationHint":
     "Система захвачена. Уничтожьте всех захватчиков, чтобы освободить её",
