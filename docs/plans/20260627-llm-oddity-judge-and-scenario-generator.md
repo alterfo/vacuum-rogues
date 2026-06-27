@@ -112,10 +112,10 @@ screenshots in v1 unless the text transcript proves insufficient.
 - Modify: package.json (`letsplay:judge` script)
 - Modify: src/tests/architecture/letsplayDevOnly.test.ts (assert the new modules stay out of the prod graph)
 
-- [ ] Wire an offline runner: play K sessions (optionally scenario-driven) → transcripts → judge → write a consolidated oddity report to `.letsplay/oddity-report.*` (gitignored).
-- [ ] `npm run letsplay:judge` runs it with a real key; with no key it prints a clear "set ANTHROPIC_API_KEY" and exits non-zero — and is **explicitly not** added to `lefthook.yml` pre-push or any CI gate.
-- [ ] Write tests: the runner wired to `FakeLlmClient` produces a report end-to-end deterministically; dev-only guard passes (no prod module imports any of this).
-- [ ] Run tests — must pass before Task 6.
+- [x] Wire an offline runner: play K sessions (optionally scenario-driven) → transcripts → judge → write a consolidated oddity report to `.letsplay/oddity-report.*` (gitignored).
+- [x] `npm run letsplay:judge` runs it with a real key; with no key it prints a clear "set ANTHROPIC_API_KEY" and exits non-zero — and is **explicitly not** added to `lefthook.yml` pre-push or any CI gate.
+- [x] Write tests: the runner wired to `FakeLlmClient` produces a report end-to-end deterministically; dev-only guard passes (no prod module imports any of this).
+- [x] Run tests — must pass before Task 6.
 
 ### Task 6: Validate the judge reproduces a known shipped bug (vision path)
 **Files:**

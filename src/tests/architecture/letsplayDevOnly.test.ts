@@ -46,6 +46,8 @@ const LETSPLAY_DIR = join(SRC_ROOT, "tests", "playtest", "letsplay");
 const DEV_AUTOPILOT = join(SRC_ROOT, "dev", "devAutopilot.ts");
 /** The only module allowed a (DEV-gated) dynamic import into the dev engine. */
 const MAIN_TS = join(SRC_ROOT, "main.ts");
+/** The offline LLM oddity-judge / scenario-generator tooling (dev-only, `tools/`). */
+const TOOLS_AI_DIR = resolve(SRC_ROOT, "..", "tools", "ai");
 
 /** Recursively collect every `.ts` file under `dir`, skipping `.d.ts`. */
 function collectTsFiles(dir: string): string[] {
@@ -109,6 +111,12 @@ function resolvesIntoLetsplay(fromFile: string, spec: string): boolean {
   return resolved !== null && (resolved + sep).startsWith(LETSPLAY_DIR + sep);
 }
 
+/** True if `spec` (resolved from `fromFile`) lands inside the `tools/ai` dir. */
+function resolvesIntoToolsAi(fromFile: string, spec: string): boolean {
+  const resolved = resolveSpecifier(fromFile, spec);
+  return resolved !== null && (resolved + sep).startsWith(TOOLS_AI_DIR + sep);
+}
+
 /** Resolve a specifier to an absolute path, or null for a bare package import. */
 function resolveSpecifier(fromFile: string, spec: string): string | null {
   if (spec.startsWith("@/")) return join(SRC_ROOT, spec.slice(2));
@@ -133,6 +141,31 @@ describe("letsplay engine is dev-only (never in prod)", () => {
       offenders,
       `Production modules must never import the letsplay engine ` +
         `(it would pull it into the prod bundle):\n${offenders.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("no production module imports the offline LLM judge tooling (tools/ai)", () => {
+    // The Task 5 oddity-judge / scenario-generator / LLM-client + runner live in
+    // `tools/ai/` (with the Anthropic SDK behind a lazy dynamic import). They are a
+    // slow, paid, dev-only deep sweep — never a gate and never bundled. A prod
+    // module importing any of them (static OR dynamic, by relative path) would pull
+    // the judge — and potentially the SDK — into `npm run build`. Lock it shut.
+    const offenders: string[] = [];
+    for (const file of productionTsFiles()) {
+      const source = readFileSync(file, "utf8");
+      for (const spec of [
+        ...staticSpecifiers(source),
+        ...dynamicSpecifiers(source),
+      ]) {
+        if (resolvesIntoToolsAi(file, spec)) {
+          offenders.push(`${relative(SRC_ROOT, file)} imports "${spec}"`);
+        }
+      }
+    }
+    expect(
+      offenders,
+      `Production modules must never import the offline LLM judge tooling ` +
+        `(tools/ai) — it is a dev-only paid deep sweep, not a bundled gate:\n${offenders.join("\n")}`,
     ).toEqual([]);
   });
 
