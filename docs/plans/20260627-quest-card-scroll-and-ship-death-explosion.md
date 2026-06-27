@@ -76,10 +76,10 @@ change. Gate new motion on `reducedMotion()`. Keep `SpaceFlightScene.ts` under t
 - Create: src/presentation/flight/shipDeathFx.ts
 - Create: src/tests/flight/shipDeathFx.test.ts
 
-- [ ] Create a PixiJS-free `ShipDeathFx` emitter mirroring `CometDustTail`: a fixed-size mote pool with a hard live-count bound; `spawn(x, y)` seeds an outward burst (radial velocities + brief lifetime), `update(dt)` advances + expires motes; pure, deterministic, no DOM/PixiJS.
-- [ ] Expose the live mote list (position/alpha/size by remaining lifetime) for a renderer to mirror, and an `isActive()`/`reset()` for teardown.
-- [ ] Write tests (like `cometTailShape.test.ts`): a spawn seeds N motes, they expand + fade over their lifetime, the pool never exceeds its bound under repeated spawns, and motes expire to empty.
-- [ ] Run tests — must pass before Task 3.
+- [x] Create a PixiJS-free `ShipDeathFx` emitter mirroring `CometDustTail`: a fixed-size mote pool with a hard live-count bound; `spawn(x, y)` seeds an outward burst (radial velocities + brief lifetime), `update(dt)` advances + expires motes; pure, deterministic, no DOM/PixiJS. (`src/presentation/flight/shipDeathFx.ts` — even radial fan + jitter, `SPEED/LIFE/SIZE` bands, `max`/`burst` bound.)
+- [x] Expose the live mote list (position/alpha/size by remaining lifetime) for a renderer to mirror, and an `isActive()`/`reset()` for teardown. (`slots` getter + `count`; `explosionMoteAlpha`/`explosionMoteScale`/`explosionMoteLifeFraction` shading helpers; `isActive()`/`reset()`.)
+- [x] Write tests (like `cometTailShape.test.ts`): a spawn seeds N motes, they expand + fade over their lifetime, the pool never exceeds its bound under repeated spawns, and motes expire to empty. (`src/tests/flight/shipDeathFx.test.ts` — 11 tests: burst count, radial fan, expand+fade, bounded under repeat, crowded-pool partial seed, expire-to-empty, reset, clamp + shading helpers.)
+- [x] Run tests — must pass before Task 3. (11 tests green; eslint clean.)
 
 ### Task 3: Render the explosion + wire it to ship destruction
 **Files:**
