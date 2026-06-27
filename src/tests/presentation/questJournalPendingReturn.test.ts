@@ -243,6 +243,60 @@ describe("QuestJournalUI pending-return section", () => {
     expect(returnPrompt).not.toContain("система");
   });
 
+  it("grows the card box for a long title (no overflow) but keeps a short card at the historical 80 px", async () => {
+    const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
+
+    // The pending-return card draws its bg via Graphics.fill({color: 0x1a1500}).
+    // Find that node and read the height arg of its rect(20, 0, width, height).
+    type GfxNode = {
+      rect?: { mock: { calls: unknown[][] } };
+      fill?: { mock: { calls: unknown[][] } };
+      children?: GfxNode[];
+    };
+    const pendingCardHeight = (root: GfxNode): number | null => {
+      const isPendingBg = root.fill?.mock?.calls?.some(
+        (c) => (c[0] as { color?: number } | undefined)?.color === 0x1a1500,
+      );
+      if (isPendingBg && root.rect) {
+        return root.rect.mock.calls[0]?.[3] as number;
+      }
+      for (const child of root.children ?? []) {
+        const h = pendingCardHeight(child);
+        if (h != null) return h;
+      }
+      return null;
+    };
+
+    const shortUi = new QuestJournalUI(
+      makeQuestServiceWithPending([makePendingReturnQuest({ title: "Охота" })]),
+      1280,
+      720,
+      vi.fn(),
+    );
+    const shortHeight = pendingCardHeight(
+      shortUi.container as unknown as GfxNode,
+    );
+
+    const longTitle =
+      "Чрезвычайно длинное название задания, которое непременно " +
+      "перенесётся на несколько строк и не должно вылезать за край карточки";
+    const longUi = new QuestJournalUI(
+      makeQuestServiceWithPending([
+        makePendingReturnQuest({ title: longTitle }),
+      ]),
+      1280,
+      720,
+      vi.fn(),
+    );
+    const longHeight = pendingCardHeight(
+      longUi.container as unknown as GfxNode,
+    );
+
+    expect(shortHeight).toBe(80); // historical compact box unchanged
+    expect(longHeight).not.toBeNull();
+    expect(longHeight!).toBeGreaterThan(80); // grew to fit the wrapped title
+  });
+
   it("shows reward summary in pending-return card", async () => {
     const { QuestJournalUI } = await import("@/presentation/QuestJournalUI");
 

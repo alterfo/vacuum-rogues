@@ -3,6 +3,8 @@ import { scaledText } from "./ui/scaledText";
 import { scaledFont } from "@/utils/fontScale";
 import {
   layoutQuestCard,
+  estimateWrappedLines,
+  lineStepFor,
   MIN_CARD_HEIGHT,
   type QuestCardMetrics,
 } from "./ui/questCardLayout";
@@ -18,6 +20,18 @@ import {
   type QuestDestination,
   type QuestDestinationGalaxyLike,
 } from "@/systems/quests/questDestination";
+
+// Pending-return ("ВЫПОЛНЕНО — ЗАБРАТЬ НАГРАДУ") card vertical metrics. Chosen so a
+// short card (1-line title + 1-line return + reward) computes to exactly the
+// historical 80 px box (8 + line + 4 + line + 2 + line + 12 = 80 at the M font),
+// while a long title / long issuer-system name wraps + grows the box instead of
+// bleeding off the right edge (the same overflow the active card fixed).
+const PENDING_TOP_PAD = 8;
+const PENDING_TITLE_GAP = 4;
+const PENDING_RETURN_GAP = 2;
+const PENDING_BOTTOM_PAD = 12;
+const PENDING_MIN_CARD_HEIGHT = 80;
+const PENDING_CARD_GAP = 10;
 
 /**
  * Quest Journal UI - displays active and completed quests with progress
@@ -639,15 +653,69 @@ export class QuestJournalUI {
     sectionTitle.eventMode = "none";
     this.container.addChild(sectionTitle);
 
-    const cardStep = 90;
     let yOffset = startY + 30;
     for (const quest of quests) {
       const card = this.createPendingReturnCard(quest, yOffset);
       this.container.addChild(card);
-      yOffset += cardStep;
+      // Step by each card's own wrapped height (variable) + a gap — a short card
+      // keeps the historical 90 px step, a tall card pushes the next one down.
+      yOffset += this.pendingCardLayout(quest).boxHeight + PENDING_CARD_GAP;
     }
 
     return yOffset;
+  }
+
+  /** The "↩ Вернитесь в <planet> — система <system>" return prompt for a card. */
+  private pendingReturnLine(
+    quest: Quest,
+    dest: QuestDestination | null,
+  ): string {
+    const issuerPlanetId =
+      quest.planetId && quest.planetId !== "unknown"
+        ? this.resolveName(quest.planetId)
+        : "?";
+    const systemSuffix = dest ? ` — система ${dest.systemName}` : "";
+    return `↩ Вернитесь в ${issuerPlanetId}${systemSuffix}`;
+  }
+
+  /**
+   * Lay a pending-return card out top-down from its wrapped content so the
+   * renderer and the section's per-card step never disagree about its height —
+   * a long title or a long issuer-system name wraps and grows the box instead of
+   * spilling past the card's edge. `dest`/`returnLine` are resolved here once so
+   * the renderer reuses them (the route button + return prompt).
+   */
+  private pendingCardLayout(quest: Quest): {
+    boxHeight: number;
+    titleY: number;
+    returnY: number;
+    rewardY: number;
+    returnLine: string;
+    dest: QuestDestination | null;
+  } {
+    const m = this.cardMetrics();
+    const line = lineStepFor(m.fontSizePx);
+    const dest = this.returnDestination(quest);
+    const returnLine = this.pendingReturnLine(quest, dest);
+
+    const titleY = PENDING_TOP_PAD;
+    const titleLines = estimateWrappedLines(
+      quest.title,
+      m.bodyWrapWidth,
+      m.fontSizePx,
+    );
+    const returnY = titleY + titleLines * line + PENDING_TITLE_GAP;
+    const returnLines = estimateWrappedLines(
+      returnLine,
+      m.bodyWrapWidth,
+      m.fontSizePx,
+    );
+    const rewardY = returnY + returnLines * line + PENDING_RETURN_GAP;
+    const boxHeight = Math.max(
+      PENDING_MIN_CARD_HEIGHT,
+      rewardY + line + PENDING_BOTTOM_PAD,
+    );
+    return { boxHeight, titleY, returnY, rewardY, returnLine, dest };
   }
 
   /**
@@ -679,19 +747,28 @@ export class QuestJournalUI {
     const card = new Container();
     card.y = yPos;
 
+    const metrics = this.cardMetrics();
+    const layout = this.pendingCardLayout(quest);
+    const { dest } = layout;
+
     const bg = new Graphics();
-    bg.rect(20, 0, this.panelWidth - 40, 80);
+    bg.rect(20, 0, this.panelWidth - 40, layout.boxHeight);
     bg.fill({ color: 0x1a1500, alpha: 0.9 });
     bg.stroke({ color: 0xffcc00, width: 1 });
     bg.eventMode = "none";
     card.addChild(bg);
 
+    // Title wraps (+ breaks long tokens) at the body width so it clears the
+    // right-column type label / route button instead of running off the card.
     const titleText = scaledText(quest.title, 13, 0xffff88, {
       rawColor: true,
       fontWeight: "bold",
+      wordWrap: true,
+      wordWrapWidth: metrics.bodyWrapWidth,
+      breakWords: true,
     });
     titleText.x = 30;
-    titleText.y = 8;
+    titleText.y = layout.titleY;
     titleText.eventMode = "none";
     card.addChild(titleText);
 
@@ -702,26 +779,22 @@ export class QuestJournalUI {
       { rawColor: true },
     );
     typeText.x = this.panelWidth - 120;
-    typeText.y = 8;
+    typeText.y = layout.titleY;
     typeText.eventMode = "none";
     card.addChild(typeText);
 
     // Return-to-issuer prompt in yellow — name the system the issuer planet
-    // sits in (so the player knows WHERE to fly, not just which planet).
-    const issuerPlanetId =
-      quest.planetId && quest.planetId !== "unknown"
-        ? this.resolveName(quest.planetId)
-        : "?";
-    const dest = this.returnDestination(quest);
-    const systemSuffix = dest ? ` — система ${dest.systemName}` : "";
-    const returnText = scaledText(
-      `↩ Вернитесь в ${issuerPlanetId}${systemSuffix}`,
-      12,
-      0xffcc00,
-      { rawColor: true, fontWeight: "bold" },
-    );
+    // sits in (so the player knows WHERE to fly, not just which planet). Wrapped
+    // so a long planet/system name stacks instead of bleeding off the card.
+    const returnText = scaledText(layout.returnLine, 12, 0xffcc00, {
+      rawColor: true,
+      fontWeight: "bold",
+      wordWrap: true,
+      wordWrapWidth: metrics.bodyWrapWidth,
+      breakWords: true,
+    });
     returnText.x = 30;
-    returnText.y = 30;
+    returnText.y = layout.returnY;
     returnText.eventMode = "none";
     card.addChild(returnText);
 
@@ -738,7 +811,7 @@ export class QuestJournalUI {
       { rawColor: true },
     );
     rewardText.x = 30;
-    rewardText.y = 50;
+    rewardText.y = layout.rewardY;
     rewardText.eventMode = "none";
     card.addChild(rewardText);
 
@@ -751,7 +824,7 @@ export class QuestJournalUI {
         { rawColor: true },
       );
       issuedTag.x = this.panelWidth - 200;
-      issuedTag.y = 50;
+      issuedTag.y = layout.rewardY;
       issuedTag.eventMode = "none";
       card.addChild(issuedTag);
     }
@@ -763,7 +836,7 @@ export class QuestJournalUI {
     if (dest && this.onNavigateToObjective) {
       const routeBtn = this.createPlotRouteButton(dest);
       routeBtn.x = this.panelWidth - 175;
-      routeBtn.y = 26;
+      routeBtn.y = layout.titleY + 18;
       card.addChild(routeBtn);
     }
 
