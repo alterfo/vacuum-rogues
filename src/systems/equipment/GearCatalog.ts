@@ -705,6 +705,31 @@ export function gearById(id: string): Gear | undefined {
   return GEAR_CATALOG.find((g) => g.id === id);
 }
 
+/** Lazily-built display-name → gear-id index (first id wins on a collision). */
+let GEAR_ID_BY_NAME: Map<string, string> | undefined;
+
+/**
+ * Resolve a loot/drop token to a catalog gear id, or `undefined` when it is not
+ * recognisable gear (e.g. the junk-salvage fallbacks `salvaged_plating` /
+ * `scrap_thruster`, intentionally non-gear so they salvage to metal).
+ *
+ * Accepts either a catalog gear **id** (a real drop like `eq_tank` /
+ * `grav_tractor_1`) or a gear **display name** (NPC `loadoutSummary` entries are
+ * human-readable names like «Топливный бак»). This lets combat loot land the
+ * actual gear in the player's inventory instead of being salvaged to metal.
+ */
+export function gearIdForToken(token: string): string | undefined {
+  if (!token) return undefined;
+  if (gearById(token)) return token; // already a catalog id
+  if (!GEAR_ID_BY_NAME) {
+    GEAR_ID_BY_NAME = new Map();
+    for (const g of GEAR_CATALOG) {
+      if (!GEAR_ID_BY_NAME.has(g.name)) GEAR_ID_BY_NAME.set(g.name, g.id);
+    }
+  }
+  return GEAR_ID_BY_NAME.get(token);
+}
+
 /**
  * Whether a piece of gear is the **rare, high-end top tier** — the apex
  * hull/engine/weapon a long credit climb earns. True when the item carries the

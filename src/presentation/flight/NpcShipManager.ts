@@ -59,7 +59,11 @@ import { pickNpcDestination, type NpcBehaviorCtx } from "./npcBehavior";
 import { hashStr } from "@/utils/hashStr";
 import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
-import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
+import {
+  cargoCapacityOf,
+  acquireUninstalledGear,
+} from "@/systems/equipment/GearBridge";
+import { gearById, gearIdForToken } from "@/systems/equipment/GearCatalog";
 import { t } from "@/i18n/i18n";
 import {
   commsContextFor,
@@ -1398,11 +1402,18 @@ export class NpcShipManager implements FlightModule {
    * collected **without** any gear; a fitted gravity tractor *extends* the reach
    * (the effective radius is the max of the base radius and `gravTractorRange`),
    * so the tractor is an upgrade rather than the only pickup path. Each item is
-   * collected at most once (removed in place — no double-collect). Cargo usage
-   * tracks the canonical loadout model (sum of resource amounts vs the loadout's
-   * cargo capacity); a full/over-capacity hold logs a warning and skips — loot
-   * stays in space until space frees up or it despawns (TTL is unaffected).
-   * Module drops are salvaged into METALS; Overmind artifacts into ARTIFACTS.
+   * collected at most once (removed in place — no double-collect).
+   *
+   * A drop whose `moduleId` resolves to **real catalog gear** ({@link
+   * gearIdForToken}: a fitted-gear drop like `eq_tank`/`grav_tractor_1`, or an
+   * NPC `loadoutSummary` display name like «Топливный бак») lands in the player's
+   * **gear inventory** (`ownedGearIds` via {@link acquireUninstalledGear}), not
+   * salvaged to metal — it shows up in the hangar СКЛАД. Gear is **not** resource
+   * cargo, so it bypasses the resource-hold capacity gate (`ownedGearIds` has no
+   * hard cap). Non-gear salvage **is** resource cargo: Overmind artifacts →
+   * ARTIFACTS, everything else (junk-salvage fallbacks) → METALS, and these honour
+   * the loadout cargo capacity — a full hold leaves them in space (logs a warning)
+   * but still collects gear later in the list.
    */
   private applyLootPickup(): void {
     if (this.spaceLoot.length === 0) return;
@@ -1425,13 +1436,35 @@ export class NpcShipManager implements FlightModule {
       const dy = item.y - physics.shipY;
       const distSq = dx * dx + dy * dy;
       if (distSq > rangeSq) continue; // out of pickup reach
+      // Hands-on grab vs. tractor pull get distinct flavour; both are localized.
+      const handsOn = distSq <= baseSq;
+
+      // Real gear → the gear inventory (not metal). No resource-hold gate: gear
+      // isn't resource cargo and `ownedGearIds` is uncapped, so it's never
+      // dropped on the floor for a full *resource* hold.
+      const gearId = item.moduleId ? gearIdForToken(item.moduleId) : undefined;
+      if (gearId) {
+        acquireUninstalledGear(player, gearId);
+        this.removeLootAt(i); // single collect — splice + dispose the dot
+        const label = gearById(gearId)?.name ?? gearId;
+        this.deps.showMessage(
+          handsOn
+            ? t("flight.lootPickup", { item: label })
+            : t("flight.lootTractor", { item: label }),
+          0xffdd33,
+        );
+        logger.info(`Picked up gear loot ${item.id} (${gearId})`);
+        continue;
+      }
+
+      // Non-gear salvage is resource cargo → honour the hold capacity.
       const used = player.inventory.resources.reduce(
         (sum, r) => sum + r.amount,
         0,
       );
       if (used >= capacity) {
         logger.warn("Loot pickup: hold full, drop left in space");
-        break; // hold won't free up this frame — stop collecting
+        continue; // hold won't free up this frame — skip, but keep collecting gear
       }
       const type = item.artifactId
         ? ResourceType.ARTIFACTS
@@ -1441,8 +1474,6 @@ export class NpcShipManager implements FlightModule {
       const label = item.artifactId
         ? t("flight.lootArtifact")
         : (item.moduleId ?? t("flight.lootModule"));
-      // Hands-on grab vs. tractor pull get distinct flavour; both are localized.
-      const handsOn = distSq <= baseSq;
       this.deps.showMessage(
         handsOn
           ? t("flight.lootPickup", { item: label })

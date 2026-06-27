@@ -94,10 +94,10 @@ existing canonical source (hull via `ShipLoadout`/`derivedStats`; turn via
 - Modify: src/presentation/flight/NpcShipManager.ts (applyLootPickup)
 - Create: src/tests/combat/lootGearToInventory.test.ts
 
-- [ ] In `applyLootPickup` (`:1389-1392`) a loot item with a real `moduleId` (a fitted-gear drop like `eq_tank`/`grav_tractor_1`) must be added to the **gear inventory** (`acquireUninstalledGear` → `ownedGearIds`, or the `inventory.modules` bag via `slotToBagModule`), NOT silently turned into `addResource(METALS, 1)`. Keep the resource/artifact path for non-gear drops.
-- [ ] Respect a real capacity limit appropriate to gear (don't drop gear on the floor because the *resource* hold is full — gear isn't resource cargo); leave the drop in space only if genuinely unstorable.
-- [ ] Write a test: killing an NPC that drops gear, then picking it up, leaves that gear id in the player's gear inventory (visible in the hangar ТРЮМ), and a resource drop still adds a resource.
-- [ ] Run tests — must pass before Task 6.
+- [x] In `applyLootPickup` (`:1389-1392`) a loot item with a real `moduleId` (a fitted-gear drop like `eq_tank`/`grav_tractor_1`) must be added to the **gear inventory** (`acquireUninstalledGear` → `ownedGearIds`, or the `inventory.modules` bag via `slotToBagModule`), NOT silently turned into `addResource(METALS, 1)`. Keep the resource/artifact path for non-gear drops. (new pure `gearIdForToken` in `GearCatalog` resolves a drop token by gear **id** *or* `loadoutSummary` display name; `applyLootPickup` routes a resolved drop to `ownedGearIds` via `acquireUninstalledGear` and shows the gear's proper name; artifacts→ARTIFACTS, junk→METALS unchanged)
+- [x] Respect a real capacity limit appropriate to gear (don't drop gear on the floor because the *resource* hold is full — gear isn't resource cargo); leave the drop in space only if genuinely unstorable. (gear bypasses the resource-hold gate — `ownedGearIds` is uncapped, so it's always stored; the full-hold guard changed `break`→`continue` so it skips only the unstorable *resource* item while still collecting gear later in the list)
+- [x] Write a test: killing an NPC that drops gear, then picking it up, leaves that gear id in the player's gear inventory (visible in the hangar ТРЮМ), and a resource drop still adds a resource. (`src/tests/combat/lootGearToInventory.test.ts` — 4 tests: gear by id, gear by display name, junk→METALS, gear bypasses a full resource hold; asserts `ownedUninstalledGear` shows it in the hangar СКЛАД)
+- [x] Run tests — must pass before Task 6. (lootGearToInventory 4/4, lootPickup 6/6, full combat suite 201/201, equipment 263/263, Cyrillic ratchet green; tsc + eslint clean)
 
 ### Task 6: Verify acceptance criteria
 **Files:**
