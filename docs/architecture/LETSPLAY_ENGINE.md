@@ -266,3 +266,58 @@ import; and the `npm run build` prod bundle is autopilot-free. No domain/schema/
 **Same toggle, smarter later.** The autopilot reads the policy through the identical
 `selectPlayerPolicy()` gate the headless agent does, so when the trained `NeuralPolicy` lands
 it flies the live ship through the same hook with zero wiring changes.
+
+## Offline LLM oddity-judge + scenario-generator (deep sweep — manual/nightly, paid)
+
+The fast oracle above (`letsplay:ci`) catches the *deterministic* oddities — crashes, soft-locks,
+strictly-dominated gear, missing art. It cannot catch the open-ended **semantic** ones: the
+2026-06-25 beta classes like "killed a pirate with 1000 cr and got nothing", "rep fell to −50
+with no way back", "quest target 6 jumps away but the deadline is 30 days", stuck progression
+with zero feedback. No hand-written invariant can encode "is this *absurd / unfair / a
+dead-end*?". The offline LLM layer (`tools/ai/`, `docs/plans/20260627-llm-oddity-judge-and-scenario-generator.md`)
+adds exactly that judgment by **running an LLM off the push hot-path** — it is **never a gate**
+(LLM calls are slow, paid, and non-deterministic, which would make a gate flaky and expensive).
+
+The pipeline is `play → transcript → judge → report`, plus a generator that widens what gets
+played:
+
+| Piece | File | Role |
+|-------|------|------|
+| Judge-ready transcript | `src/tests/playtest/letsplay/transcript.ts` | Pure: folds an `AgentRunResult` + the harness log sink into a serialisable `SessionTranscript` — per-step `{day, scene, action, vitalsDelta, notableLogs}` + a compact session summary (days elapsed, credits/rep curves, kills, deaths, quests taken/completed). Built **egocentrically** (like `observe`), so it carries only what the player could perceive. |
+| LLM client port | `tools/ai/llmClient.ts` | The injectable boundary. `LlmClient.complete(messages, opts) → text` with a real `AnthropicLlmClient` (model + key from env, `opts.images` for the vision path) and a `FakeLlmClient` returning canned replies. The Anthropic SDK sits behind a **lazy dynamic import**, and a missing key degrades to a clear thrown error **only when invoked live** — never at import. Every test drives the fake, so the transcript builder, prompt assembly, and report parser are all deterministic and free. |
+| Oddity judge | `tools/ai/oddityJudge.ts` | Assembles a judge prompt from a `SessionTranscript` + the explicit `ODDITY_RUBRIC` (the beta classes), then `parseOddityReport` turns the reply into a structured `OddityReport` (`{title, severity, evidence: step indices, rationale}`). Robust to a malformed reply — degrades to "no structured findings" + raw text, **never throws**. |
+| Vision judge | `tools/ai/visionJudge.ts` | The visual sibling: `judgeFrames` attaches captured frames via `opts.images` and judges against `VISION_ODDITY_RUBRIC` (text overflow, missing art, sameness, a missing death explosion) — the classes the text transcript provably cannot see. Reuses `parseOddityReport`. `src/tests/fixtures/oddities/` holds committed pre-fix fixtures so the validation reproduces after the live bugs are gone. |
+| Scenario generator | `tools/ai/scenarioGen.ts` | Asks the LLM for N diverse play scenarios and parses them into machine-readable configs `{name, seed?, goal, maxDays}` (`goal` ∈ a fixed enum: `go-broke`/`max-rep`/`ignore-overmind`/`hoard`/`free-explore`). An unknown goal is **dropped, not crashed**. The thin `GoalBiasedPolicy` (`src/tests/playtest/letsplay/goalBias.ts`) steers the agent to act out a goal; the default free-play policy is unchanged. |
+| Offline runner | `tools/ai/runJudge.ts` + `judge.run.test.ts` | `runJudge({client, play, sessions, steps})` plays `K` sessions (optionally scenario-driven), judges each transcript, and consolidates the verdicts; `writeJudgeReport` writes `.letsplay/oddity-report.*` (gitignored). The engine-bound `makeLivePlay` boots the real `GameEngine` per spec. |
+
+**Running it.** `npm run letsplay:judge` (sets `LETSPLAY_JUDGE=1`) plays `K`×`N` and judges live
+with the real Anthropic client, writing the report. **With no `ANTHROPIC_API_KEY` it logs a
+clear "set ANTHROPIC_API_KEY" and exits non-zero.** The same `judge.run.test.ts` file carries an
+**always-on** check that plays a short real session and judges it through the `FakeLlmClient` — so
+the wiring is exercised on every `npm test` with **no key and no live call**, while the live deep
+sweep stays opt-in. `LETSPLAY_JUDGE_SESSIONS`/`LETSPLAY_JUDGE_STEPS`/`LETSPLAY_JUDGE_MODEL`/
+`LETSPLAY_JUDGE_SCENARIOS` override the defaults.
+
+**Dev-only is enforced, not just convention.** All of `tools/ai/` lives outside the `src/` build
+root (the `tsc` rooted at `src/` forbids a `src/` file importing out-of-root `tools/ai/*`), and
+`letsplayDevOnly.test.ts` extends its guard with a dedicated check: **no production module imports
+the offline LLM judge tooling — static *or* dynamic** — so neither the judge nor the Anthropic SDK
+can ever reach `npm run build`. The judge runner appears in **no** `lefthook.yml` pre-push command
+and **no** CI workflow; the cheap deterministic `letsplay:ci` gate is untouched. No
+domain/schema/save change.
+
+### The three-tier oddity-finding model
+
+The three layers compose into a cost/coverage ladder — cheap-and-deterministic runs on every
+push, paid-and-semantic runs on demand:
+
+| Tier | What | When | Catches | Cost |
+|------|------|------|---------|------|
+| **1. Fast deterministic gate** | `npm run test:playtest` + `npm run letsplay:ci` (played sessions + `src/tests/oddities/` static invariants) | **Every push** (pre-push `lefthook.yml` + CI) | crashes, soft-locks, always-actionable-invariant breaches, dominated gear, dead stats, missing/placeholder art, visual sameness | free, deterministic, ~5 s |
+| **2. Playwright E2E** | `npm run test:e2e` (`playtest-regression.spec.ts`) | **Targeted** (CI + manual), per visual/interaction bug | real rendering + pointer interaction the headless harness can't see (layout, hit geometry, what's actually drawn) | cheap, deterministic, seconds |
+| **3. Offline LLM judge + scenario-gen** | `npm run letsplay:judge` (transcript → Claude judge → report; scenario-gen widens coverage; vision judge over frames) | **Deep sweep — manual / nightly** (never a gate) | open-ended *semantic* oddities — absurd/unfair/dead-end/no-feedback play, plus visual oddities via the vision path | **paid, non-deterministic** (needs `ANTHROPIC_API_KEY`) |
+
+The lower a tier sits, the more it runs and the cheaper it is; the higher a tier sits, the deeper
+its judgment and the more it costs. Tiers 1–2 are the regression safety net; tier 3 is the
+exploratory oddity hunter that feeds new bug classes *back down* into tier-1 invariants once a
+pattern is understood.

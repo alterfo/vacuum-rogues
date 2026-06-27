@@ -134,9 +134,9 @@ screenshots in v1 unless the text transcript proves insufficient.
 - Modify: docs/architecture/LETSPLAY_ENGINE.md
 - Modify: tools/ai/README.md
 
-- [ ] Full unit suite + `npm run test:playtest` + lint green; `npm run letsplay:judge` (fake-client path) produces a report.
-- [ ] Confirm nothing here touches the prod bundle or the pre-push/CI gates (cost + determinism), and the cheap deterministic gate is unchanged.
-- [ ] Document the three-tier model: fast deterministic gate (every push) → Playwright E2E (visual, targeted) → offline LLM judge + scenario-gen (deep sweep, manual/nightly, paid).
+- [x] Full unit suite + `npm run test:playtest` + lint green; `npm run letsplay:judge` (fake-client path) produces a report. (Full unit suite 4034 passed / 5 skipped; `test:playtest` 293 passed / 2 skipped; lint 0 errors. The fake-client `letsplay:judge` report is proven by the always-on `judge.run.test.ts` "plays a real short session and judges it into a report (no live LLM)" — runs on every `npm test`. Pre-existing cyrillic-baseline drift on `GearCatalog.ts` (count dropped 51→50, an improvement from an earlier committed bugfix) was locked by lowering its baseline entry — surgical, avoiding the foreign uncommitted `StationScene.ts`.)
+- [x] Confirm nothing here touches the prod bundle or the pre-push/CI gates (cost + determinism), and the cheap deterministic gate is unchanged. (`letsplayDevOnly.test.ts` has a dedicated check "no production module imports the offline LLM judge tooling (tools/ai)" — static *and* dynamic — green. `grep` confirms no `lefthook.yml` command or `.github/workflows/*` references `letsplay:judge`/`runJudge`/`LETSPLAY_JUDGE`; the `letsplay:ci` deterministic gate is still wired in both `lefthook.yml` and `.github/workflows/letsplay-ci.yml`, unchanged.)
+- [x] Document the three-tier model: fast deterministic gate (every push) → Playwright E2E (visual, targeted) → offline LLM judge + scenario-gen (deep sweep, manual/nightly, paid). (`docs/architecture/LETSPLAY_ENGINE.md` → new "Offline LLM oddity-judge + scenario-generator" section + a "three-tier oddity-finding model" table; `tools/ai/README.md` → new "Offline LLM oddity-judge" section with the pipeline, run recipe, and dev-only/never-bundled note.)
 
 ## Post-Completion
 *Informational — no checkboxes:*
