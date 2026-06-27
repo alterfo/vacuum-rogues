@@ -308,13 +308,6 @@ export class NpcShipManager implements FlightModule {
   /** Loot lifetime before it despawns (60 s). */
   private readonly LOOT_TTL_MS = 60_000;
 
-  // Salvage anti-farm bookkeeping (Task 5): the galaxy day the running salvage
-  // total applies to, and the credits already salvaged that day. Per-session and
-  // presentation-only (no save state) — a respawning-pirate faucet is bounded to
-  // GAME_BALANCE.pirateSalvageDailyCap credits/day.
-  private salvageDay = -1;
-  private salvagedToday = 0;
-
   private readonly WEAPON_RANGE = GAME_BALANCE.weaponRange;
   // Combat strafe radius: while engaged, orbit the target at this standoff —
   // comfortably inside WEAPON_RANGE — so auto-fire always has a target in range
@@ -1158,19 +1151,23 @@ export class NpcShipManager implements FlightModule {
     const galaxy = engine?.galaxy;
     if (!engine || !player || !galaxy) return;
     if (!npc.credits || npc.credits <= 0) return;
+    // The per-day cap bookkeeping lives on the long-lived GameEngine (not this
+    // per-scene manager, rebuilt on every warp / land→take-off) so the cap can't
+    // be reset back to the full budget by leaving and re-entering a system within
+    // the same galaxy day.
     const day = galaxy.gameDays ?? 0;
-    if (day !== this.salvageDay) {
-      this.salvageDay = day;
-      this.salvagedToday = 0;
+    if (day !== engine.salvageDay) {
+      engine.salvageDay = day;
+      engine.salvagedToday = 0;
     }
     const award = pirateSalvageAmount(
       npc.credits,
       GAME_BALANCE.pirateSalvageFraction,
-      this.salvagedToday,
+      engine.salvagedToday ?? 0,
       GAME_BALANCE.pirateSalvageDailyCap,
     );
     if (award <= 0) return;
-    this.salvagedToday += award;
+    engine.salvagedToday = (engine.salvagedToday ?? 0) + award;
     adjustPlayerCredits(
       engine.bank,
       player,

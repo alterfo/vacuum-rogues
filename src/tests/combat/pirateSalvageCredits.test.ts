@@ -55,6 +55,8 @@ function makeHarness(startingMoney = 1000): {
   service: BankingService;
   galaxy: { npcShips: unknown[]; id: string; gameDays: number };
   messages: string[];
+  renderer: Renderer;
+  deps: NpcShipManagerDeps;
 } {
   const stage = new Container();
   const uiLayer = new Container();
@@ -110,7 +112,7 @@ function makeHarness(startingMoney = 1000): {
     deps,
   );
   manager.initialize();
-  return { manager, engine, player, service, galaxy, messages };
+  return { manager, engine, player, service, galaxy, messages, renderer, deps };
 }
 
 /** Spawn a real in-flight sprite, then re-tag it as an ordinary credit-carrying
@@ -201,5 +203,47 @@ describe("salvage through handleInFlightDeath — ledger payout, not direct muta
 
     void engine;
     manager.destroy();
+  });
+
+  it("cap survives a scene rebuild (warp / land→take-off) — not a per-system faucet", () => {
+    // The per-day cap bookkeeping must live on the long-lived engine, not the
+    // per-scene manager: warping or landing destroys the manager and builds a
+    // fresh one. If the cap reset with it, a farmer would cap out, warp/land, and
+    // farm the full budget again the same galaxy day.
+    const { manager, engine, player, galaxy, renderer, deps } = makeHarness(0);
+    const cap = GAME_BALANCE.pirateSalvageDailyCap;
+
+    // Fill the day's budget on the first scene's manager.
+    for (let i = 0; i < 30; i++) {
+      const sprite = spawnPirateSprite(manager, `pirate_a_${i}`, 1000);
+      manager.handleInFlightDeath(sprite, () => 0.99);
+    }
+    expect(player.credits).toBe(cap);
+    manager.destroy();
+
+    // Simulate a warp / land→take-off: a brand-new manager on the SAME engine,
+    // same galaxy day. The cap is already met, so this scene pays nothing more.
+    const manager2 = new NpcShipManager(
+      renderer,
+      engine,
+      (renderer as unknown as { gameLayer: Container }).gameLayer,
+      (renderer as unknown as { uiLayer: Container }).uiLayer,
+      deps,
+    );
+    manager2.initialize();
+    const after = player.credits;
+    const sprite = spawnPirateSprite(manager2, "pirate_b", 1000);
+    manager2.handleInFlightDeath(sprite, () => 0.99);
+    expect(player.credits).toBe(after); // still capped — no per-system reset
+
+    // A new galaxy day re-arms the budget even on the rebuilt manager.
+    galaxy.gameDays = 1;
+    const sprite2 = spawnPirateSprite(manager2, "pirate_b_d1", 1000);
+    manager2.handleInFlightDeath(sprite2, () => 0.99);
+    expect(player.credits).toBe(
+      cap + Math.floor(1000 * GAME_BALANCE.pirateSalvageFraction),
+    );
+
+    manager2.destroy();
   });
 });

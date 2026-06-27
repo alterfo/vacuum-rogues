@@ -154,6 +154,17 @@ export class GameEngine {
   // liveFlightShipPos — the plan's "no save change" choice); cleared on «Новая
   // игра» so a fresh game never inherits the prior game's offers.
   public readonly offeredEncounterIds = new Set<string>();
+  // Transient salvage anti-farm bookkeeping (Task 5, late-game recoverability):
+  // the galaxy day the running salvage total applies to, and credits already
+  // salvaged that day. Held HERE — not on the per-scene NpcShipManager, rebuilt
+  // on every SPACE_FLIGHT re-init (warp / land→take-off / star-map round-trip) —
+  // so the per-galaxy-day cap (GAME_BALANCE.pirateSalvageDailyCap) survives a
+  // scene rebuild instead of re-arming the full budget on every system entry
+  // (the same cross-scene-reset class as offeredEncounterIds above; a per-scene
+  // counter made the cap a per-system-visit faucet). Deliberately NOT in
+  // SaveState/schemas.ts (ephemeral cross-scene state); reset on «Новая игра».
+  public salvageDay = -1;
+  public salvagedToday = 0;
   /** Called when a quest expires mid-session so the HUD can show a toast. */
   public questExpiryCallback?: (message: string) => void;
   /** Called when a quest moves to pending-return state so the HUD can show a toast. */
@@ -2048,6 +2059,8 @@ export class GameEngine {
     this.flightShipPos = null;
     this.lastFlightShipPos = null;
     this.offeredEncounterIds.clear();
+    this.salvageDay = -1;
+    this.salvagedToday = 0;
     // Clear adaptive-audio state so a fresh game never inherits a stale combat
     // hold or a still-armed low-hull alarm from the prior in-session game.
     this.combatStateProvider = null;
