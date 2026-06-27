@@ -77,9 +77,9 @@ existing canonical source (hull via `ShipLoadout`/`derivedStats`; turn via
 - Modify: src/presentation/flight/NpcShipManager.ts (updateCombat case "lost")
 - Create/Modify: src/tests/combat/targetLostEndsTurn.test.ts
 
-- [ ] In the `"lost"` case, call `this.deps.endTurn()` (in addition to the message + clearing `followNpcId`) so losing a chase target stops the running turn — mirroring the shakedown-hail freeze.
-- [ ] Write a test: a chase whose target becomes unreachable/destroyed drives `updateCombat` to the `"lost"` branch and invokes `endTurn` exactly once (turn no longer running).
-- [ ] Run tests — must pass before Task 4.
+- [x] In the `"lost"` case, call `this.deps.endTurn()` (in addition to the message + clearing `followNpcId`) so losing a chase target stops the running turn — mirroring the shakedown-hail freeze. (added after clearing `followNpcId` in `updateCombat`)
+- [x] Write a test: a chase whose target becomes unreachable/destroyed drives `updateCombat` to the `"lost"` branch and invokes `endTurn` exactly once (turn no longer running). (`src/tests/combat/targetLostEndsTurn.test.ts` — lost ⇒ endTurn once + cleared follow id; a live chase ⇒ no endTurn)
+- [x] Run tests — must pass before Task 4. (targetLostEndsTurn 2/2, npcShipManager 15/15, flightCombatResolver + targetLostRepause green; tsc + eslint clean)
 
 ### Task 4: Verify pause-circle is resolved (no new code unless reproduced)
 **Files:**

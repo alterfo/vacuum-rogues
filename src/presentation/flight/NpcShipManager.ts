@@ -1978,6 +1978,10 @@ export class NpcShipManager implements FlightModule {
       case "lost":
         this.deps.showMessage("Цель потеряна", 0xffaa00);
         this.followNpcId = null;
+        // Losing the chase target stops the running turn — otherwise the calendar
+        // keeps advancing on a chase with nothing left to pursue (mirrors the
+        // shakedown-hail freeze in openShakedownHail).
+        this.deps.endTurn();
         return;
       case "chase": {
         // Re-aim at a fresh lead point so the chase curves to lead a crossing
