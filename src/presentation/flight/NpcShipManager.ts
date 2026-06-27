@@ -5,7 +5,6 @@ import type { ShipPhysics } from "@/systems/ShipPhysics";
 import type { PlanetSprite } from "../PlanetSprite";
 import { NpcShipSprite } from "../NpcShipSprite";
 import type { SystemBounds } from "../NpcShipSprite";
-import { isInterceptorClass } from "./npcCruiseSpeed";
 import { NpcContactPanel } from "../NpcContactPanel";
 import type { NpcShip } from "@/domain/NpcShip";
 import { npcsPresentInSystem, NpcSimulator } from "@/systems/npc/NpcSimulator";
@@ -313,6 +312,14 @@ export class NpcShipManager implements FlightModule {
   // comfortably inside WEAPON_RANGE — so auto-fire always has a target in range
   // (the orbit fix). 0.6 × 240 = 144px.
   private readonly COMBAT_ORBIT_RANGE = GAME_BALANCE.weaponRange * 0.6;
+  // Anti-spin floor (playtest 2026-06-27): well inside the orbit radius the
+  // tangential (circling) steering component is faded out so a target nearly on
+  // top of the ship makes it back STRAIGHT out to range instead of spiralling
+  // tightly (several full turns/sec → "ship spins on its axis + camera circles").
+  // The tangent fades fully back in by this distance, so the steady orbit at
+  // COMBAT_ORBIT_RANGE is unchanged. 0.5 × 144 = 72px.
+  private readonly COMBAT_ORBIT_MIN_RANGE =
+    GAME_BALANCE.weaponRange * 0.6 * 0.5;
   // The combat orbit steers toward a carrot projected this far ahead along the
   // desired heading. It must exceed ShipPhysics' final-leg stopping distance so the
   // ship never decelerates or stops mid-orbit (it would fall behind the target and
@@ -981,30 +988,38 @@ export class NpcShipManager implements FlightModule {
    * flag is cleared when the system is not hostile. Combat is NOT escalated to
    * CombatScene here — it resolves in-flight via the combat module (Tasks 11–14).
    */
-  checkGarrisonAggro(_playerSystemId: string, isHostileSystem: boolean): void {
+  checkGarrisonAggro(playerSystemId: string, isHostileSystem: boolean): void {
+    // The system's CONTROLLING faction decides which garrison defends it: an
+    // Overmind-held system is defended by the Overmind, a pirate-held system by
+    // pirates. The two are mutual enemies (faction-hostility matrix), so they must
+    // NOT both aggro the player in the same system — a stray pirate passing through
+    // an Overmind-captured system is an INTRUDER the Overmind fights (cross-faction
+    // combat), never an ally ganging up on the player. That mixed aggro is what
+    // made pirates + Overmind look allied (playtest 2026-06-27, Issue 6).
+    const pirateControlled =
+      this.gameEngine?.galaxy?.isPirateSystem?.(playerSystemId) ?? false;
     for (const sprite of this.npcSprites) {
       const npc = sprite.npc;
-      // Interceptor-class ships (OVERMIND/PIRATE) are exactly the garrison
-      // aggressors — and exactly the ships fast enough that the starter can't
-      // out-run them (see npcCruiseSpeed): one predicate, no drift.
-      const isGarrison = isInterceptorClass(npc);
+      const kind = factionKindOf(npc);
       // The Overmind is indiscriminately hostile to the player (faction-hostility
-      // matrix — the single source of truth). A live Overmind craft spawns hostile
-      // and besieges neutral border systems *before* they fall, so it must hunt the
-      // player wherever it is present — not only inside an already-captured
-      // (hostile-flagged) system. Gated on isAggressive() so a passive Overmind
-      // (e.g. a non-hostile test stub) stays in orbit. Other garrison ships
-      // (pirates) keep their captured-system gate: they only break orbit to chase
-      // the player while it sits inside a hostile system.
-      const overmindHunts =
-        factionKindOf(npc) === "overmind" &&
-        npc.isAggressive() &&
-        isHostile("overmind", "player", { pirateRep: 0 });
-      // An active in-flight combatant keeps pursuing regardless of the
-      // captured-system gate (Task 3): a pirate you engaged in a now-neutral
-      // system must not have its aggression cleared out from under the fight.
+      // matrix). A live Overmind craft spawns hostile and besieges neutral border
+      // systems *before* they fall, so it hunts the player wherever it is present
+      // (gated on isAggressive() so a passive stub stays in orbit), AND it defends
+      // any hostile (captured/besieged) system it garrisons.
+      const overmindAggro =
+        kind === "overmind" &&
+        (isHostileSystem ||
+          (npc.isAggressive() &&
+            isHostile("overmind", "player", { pirateRep: 0 })));
+      // Pirates defend ONLY their own turf: a pirate aggros the player in a
+      // pirate-CONTROLLED system, never in an Overmind system (where it is the
+      // Overmind's prey, not its ally).
+      const pirateAggro = kind === "pirate" && pirateControlled;
+      // An active in-flight combatant keeps pursuing regardless of the gate (Task
+      // 3): a foe you engaged in a now-neutral system must not have its aggression
+      // cleared out from under the fight.
       const engaged = this.deps.isCombatant?.(sprite) ?? false;
-      const aggro = overmindHunts || (isHostileSystem && isGarrison) || engaged;
+      const aggro = overmindAggro || pirateAggro || engaged;
       sprite.setAggressive(aggro);
       // Drop the orbit-planet anchor so the aggressor isn't re-anchored each
       // frame (setAggressive already cleared the sprite's own anchor fields).
@@ -1983,11 +1998,21 @@ export class NpcShipManager implements FlightModule {
   private steerCombatOrbit(physics: ShipPhysics, sprite: NpcShipSprite): void {
     const toShipX = physics.shipX - sprite.x;
     const toShipY = physics.shipY - sprite.y;
-    const dist = Math.hypot(toShipX, toShipY) || 1;
-    // Radial unit vector (target → ship) and the tangent in the ship's current
-    // orbital sense (so dropping into the orbit never demands a hard reversal).
-    const ux = toShipX / dist;
-    const uy = toShipY / dist;
+    const dist = Math.hypot(toShipX, toShipY);
+    // Radial unit vector (target → ship). When the target sits (almost) exactly
+    // on the ship the direction is undefined — fall back to the ship's current
+    // facing so it backs out deterministically instead of pivoting in place.
+    let ux: number;
+    let uy: number;
+    if (dist < 1e-3) {
+      ux = Math.cos(physics.shipAngle);
+      uy = Math.sin(physics.shipAngle);
+    } else {
+      ux = toShipX / dist;
+      uy = toShipY / dist;
+    }
+    // Tangent in the ship's current orbital sense (so dropping into the orbit
+    // never demands a hard reversal).
     const headDot =
       Math.cos(physics.shipAngle) * -uy + Math.sin(physics.shipAngle) * ux;
     const s = headDot >= 0 ? 1 : -1;
@@ -1995,8 +2020,17 @@ export class NpcShipManager implements FlightModule {
     const ty = ux * s;
     // Radial correction: >0 pushes outward (too close), <0 pulls inward (too far).
     const radial = (this.COMBAT_ORBIT_RANGE - dist) / this.COMBAT_ORBIT_RANGE;
-    let dirX = tx + ux * radial;
-    let dirY = ty + uy * radial;
+    // Anti-spin guard (playtest 2026-06-27): fade OUT the tangential (circling)
+    // component when well inside the orbit radius so a target nearly on top of
+    // the ship makes it back STRAIGHT out (radial-dominated) instead of
+    // spiralling through many tight, fast revolutions — which wound the hull
+    // round and round and made the auto-follow camera circle. The radial push is
+    // always strong this close (radial ≥ 0.5), so the steer direction never
+    // collapses to zero; the tangent is fully restored by COMBAT_ORBIT_MIN_RANGE,
+    // leaving the steady orbit at COMBAT_ORBIT_RANGE untouched.
+    const tanWeight = Math.min(1, dist / this.COMBAT_ORBIT_MIN_RANGE);
+    let dirX = tx * tanWeight + ux * radial;
+    let dirY = ty * tanWeight + uy * radial;
     const dlen = Math.hypot(dirX, dirY) || 1;
     dirX /= dlen;
     dirY /= dlen;

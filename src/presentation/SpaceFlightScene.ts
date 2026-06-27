@@ -574,8 +574,8 @@ export class SpaceFlightScene extends GameScene {
     this.starRenderer.update(deltaTime, this.bgElapsed);
     this.warpFx.update(deltaTime);
     this.updateShip(deltaTime);
-    // Sync the ship sprite to physics (or walk the take-off arc) + redraw FX.
-    this.playerShip.update(deltaTime, this.bgElapsed);
+    const frozen = this.combatPause.paused; // freeze ship-sync + camera too (2026-06-27 #1)
+    if (!frozen) this.playerShip.update(deltaTime, this.bgElapsed);
     this.npcManager.updateCombat(deltaTime);
     this.combatModule.update(deltaTime, this.bgElapsed);
     // A lethal hit here fires GAME_OVER synchronously, destroying this scene
@@ -592,7 +592,7 @@ export class SpaceFlightScene extends GameScene {
         this.flightAutosave,
         deltaTime,
       );
-    this.camera.update();
+    if (!frozen) this.camera.update();
     this.npcManager.update(deltaTime, this.bgElapsed);
     this.planetManager.update(deltaTime, this.bgElapsed);
     this.updateSystemMiniMap();

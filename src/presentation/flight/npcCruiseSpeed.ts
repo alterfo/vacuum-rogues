@@ -8,9 +8,11 @@ import { GAME_BALANCE } from "@/config/balance";
  * These cruise + pursue at the fast {@link GAME_BALANCE.npcSpeed}; every other
  * (basic) ship uses the slower {@link GAME_BALANCE.npcBasicSpeed}.
  *
- * This is the **same predicate** the garrison-aggro gate uses to decide which
- * sprites turn hostile and chase the player, so the two never drift apart: the
- * ships that hunt you are exactly the ones the starter can't out-run.
+ * These are the ships fast enough that a fresh starter can't out-run them. Note
+ * the garrison-aggro gate (`NpcShipManager.checkGarrisonAggro`) is now
+ * faction-MATCHED to the system's controller (Overmind craft defend hostile
+ * systems; pirates defend only pirate-held ones), so it no longer keys off this
+ * interceptor predicate — the two are deliberately decoupled.
  */
 export function isInterceptorClass(npc: NpcShip): boolean {
   return npc.faction === Faction.OVERMIND || npc.role === NpcRole.PIRATE;
