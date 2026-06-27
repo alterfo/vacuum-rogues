@@ -709,14 +709,34 @@ export function gearById(id: string): Gear | undefined {
 let GEAR_ID_BY_NAME: Map<string, string> | undefined;
 
 /**
+ * Aliases for the **legacy NPC `loadoutSummary` display strings** (`ROLE_LOADOUT`
+ * in `NpcSimulator`) that don't match a catalog gear name verbatim. These are the
+ * human-readable labels shown by the contact scan — kept stable for the scan UI —
+ * so combat loot drops carrying them still resolve to the right catalog gear
+ * instead of falling through to metal salvage. Engine tiers map ур.1/2/3 →
+ * Тип-I/III/V (the only three engine tiers). Keep every `ROLE_LOADOUT` token
+ * resolvable (guarded by `lootTokenResolution.test.ts`).
+ */
+const LOADOUT_NAME_ALIASES: Record<string, string> = {
+  "Двигатель ур.1": "eq_engine_i",
+  "Двигатель ур.2": "eq_engine_iii",
+  "Двигатель ур.3": "eq_engine_v",
+  "Импульсная пушка": "wpn_pulse",
+  "Балистическая пушка": "wpn_scatter",
+  Радар: "eq_radar",
+};
+
+/**
  * Resolve a loot/drop token to a catalog gear id, or `undefined` when it is not
  * recognisable gear (e.g. the junk-salvage fallbacks `salvaged_plating` /
  * `scrap_thruster`, intentionally non-gear so they salvage to metal).
  *
- * Accepts either a catalog gear **id** (a real drop like `eq_tank` /
- * `grav_tractor_1`) or a gear **display name** (NPC `loadoutSummary` entries are
- * human-readable names like «Топливный бак»). This lets combat loot land the
- * actual gear in the player's inventory instead of being salvaged to metal.
+ * Accepts a catalog gear **id** (a real drop like `eq_tank` / `grav_tractor_1`),
+ * a gear **display name** (NPC `loadoutSummary` entries are human-readable names
+ * like «Топливный бак»), or a legacy `ROLE_LOADOUT` label that diverges from the
+ * catalog name ({@link LOADOUT_NAME_ALIASES}, e.g. «Импульсная пушка» → the
+ * pulse laser). This lets combat loot land the actual gear in the player's
+ * inventory instead of being salvaged to metal.
  */
 export function gearIdForToken(token: string): string | undefined {
   if (!token) return undefined;
@@ -727,7 +747,7 @@ export function gearIdForToken(token: string): string | undefined {
       if (!GEAR_ID_BY_NAME.has(g.name)) GEAR_ID_BY_NAME.set(g.name, g.id);
     }
   }
-  return GEAR_ID_BY_NAME.get(token);
+  return GEAR_ID_BY_NAME.get(token) ?? LOADOUT_NAME_ALIASES[token];
 }
 
 /**

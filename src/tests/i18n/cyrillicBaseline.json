@@ -44,7 +44,7 @@
   "src/systems/comms/commsOptions.ts": 4,
   "src/systems/encounters/encounterFlight.ts": 1,
   "src/systems/equipment/GearBridge.ts": 10,
-  "src/systems/equipment/GearCatalog.ts": 45,
+  "src/systems/equipment/GearCatalog.ts": 51,
   "src/systems/equipment/ShipLoadout.ts": 3,
   "src/systems/equipment/micromoduleShop.ts": 1,
   "src/systems/equipment/sellGear.ts": 1,

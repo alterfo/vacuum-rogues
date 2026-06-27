@@ -212,7 +212,7 @@ const ROLE_STATS: Record<
 };
 
 /** Representative equipment loadout names for each role (shown via scan). */
-const ROLE_LOADOUT: Record<NpcRole, string[]> = {
+export const ROLE_LOADOUT: Record<NpcRole, string[]> = {
   [NpcRole.RANGER]: ["Двигатель ур.3", "Генератор поля", "Сканер целей"],
   [NpcRole.TRADER]: ["Двигатель ур.1", "Топливный бак", "Ремонтный дроид"],
   [NpcRole.PIRATE]: ["Двигатель ур.2", "Импульсная пушка", "Радар"],
