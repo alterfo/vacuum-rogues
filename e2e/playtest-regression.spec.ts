@@ -1118,6 +1118,146 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('smoke: a quest with a long title + long objective wraps inside its card (no overflow)', async ({ page }) => {
+    // Plan 20260627 Task 1: quest-card text used to carry no wordWrapWidth, so a
+    // long title / long objective ran off the card's right edge and a tall card
+    // bled into the next. The card now word-wraps and its box height tracks the
+    // wrapped content. Seed one quest with a deliberately long title + long
+    // objective, open the journal, and assert every Text node in the card stays
+    // within the card box (right edge AND bottom) — i.e. nothing overflows.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    const longTitle =
+      'Доставить крупную партию редких медикаментов на дальнюю орбитальную станцию системы Эпсилон';
+    const longObjective =
+      'Загрузить и доставить тридцать единиц редких медикаментов на удалённую орбитальную станцию в соседней системе';
+
+    await page.evaluate(
+      ({ longTitle, longObjective }) => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          questManager: {
+            acceptQuestFromTemplate: (
+              t: unknown,
+              p?: string,
+              d?: number,
+              f?: string,
+            ) => unknown;
+          };
+        };
+        engine.questManager.acceptQuestFromTemplate(
+          {
+            id: 'e2e-long-card',
+            title: longTitle,
+            description: 'long card test',
+            type: 'EXPLORATION',
+            objectives: [
+              {
+                id: 'e2e-long-card-o',
+                description: longObjective,
+                type: 'VISIT_SYSTEM',
+                targetAmount: 1,
+                targetSystemId: 'sys-x',
+              },
+            ],
+            reward: { credits: 500, experience: 100, items: [] },
+            dialogueAnchors: [],
+            deadline: 0,
+            failurePenalty: null,
+          },
+          'unknown',
+          0,
+          '',
+        );
+      },
+      { longTitle, longObjective },
+    );
+
+    // Open the journal via the HUD.
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const hud = engine.currentScene?.['hud'] as
+        | { toggleQuestJournal: () => void }
+        | undefined;
+      hud?.toggleQuestJournal();
+    });
+
+    // Probe the rendered card: find the card holding the long title, read its
+    // background box height, and every Text node's local right/bottom edge.
+    const overflow = await page.evaluate(
+      ({ longTitle }) => {
+        type Node = {
+          text?: unknown;
+          x?: number;
+          y?: number;
+          width?: number;
+          height?: number;
+          children?: Node[];
+        };
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+        };
+        const hud = engine.currentScene?.['hud'] as
+          | { questJournalUI: { container: Node } | null }
+          | undefined;
+        const root = hud?.questJournalUI?.container;
+        if (!root) return null;
+
+        const hasText = (n: Node, needle: string): boolean => {
+          if (typeof n.text === 'string' && n.text.includes(needle)) return true;
+          return (n.children ?? []).some((c) => hasText(c, needle));
+        };
+        // The card is a direct child container of the journal root that contains
+        // the long title text somewhere in its subtree.
+        const card = (root.children ?? []).find(
+          (c) => (c.children?.length ?? 0) > 1 && hasText(c, longTitle.slice(0, 12)),
+        );
+        if (!card) return null;
+
+        // The card background Graphics is the first child; its height is the box.
+        const boxHeight = card.children?.[0]?.height ?? 0;
+
+        // Inner right edge of the box: bg rect is (20, 0, panelWidth-40, h) and
+        // panelWidth is 600 → right edge at x=580 in card-local coords.
+        const innerRight = 580;
+        let maxRight = 0;
+        let maxBottom = 0;
+        const texts: string[] = [];
+        const walk = (n: Node): void => {
+          if (typeof n.text === 'string' && n.text) {
+            texts.push(n.text);
+            const right = (n.x ?? 0) + (n.width ?? 0);
+            const bottom = (n.y ?? 0) + (n.height ?? 0);
+            if (right > maxRight) maxRight = right;
+            if (bottom > maxBottom) maxBottom = bottom;
+          }
+          for (const c of n.children ?? []) walk(c);
+        };
+        walk(card);
+
+        return { boxHeight, innerRight, maxRight, maxBottom, texts };
+      },
+      { longTitle },
+    );
+
+    expect(overflow).not.toBeNull();
+    // The long title + long objective actually rendered into the card.
+    expect(overflow!.texts.some((t) => t.includes(longTitle.slice(0, 12)))).toBe(
+      true,
+    );
+    // No Text node spills past the card's right edge (a few px tolerance for the
+    // text resolution rounding).
+    expect(overflow!.maxRight).toBeLessThanOrEqual(overflow!.innerRight + 4);
+    // The box grew to contain all the wrapped text — nothing bleeds out the bottom.
+    expect(overflow!.boxHeight).toBeGreaterThan(0);
+    expect(overflow!.maxBottom).toBeLessThanOrEqual(overflow!.boxHeight + 4);
+
+    await page.screenshot({ path: 'test-results/quest-card-long-text.png' });
+    errorCollector.assertAndDetach();
+  });
+
   test('smoke: take-off after the equipment shop parks beside the planet, not at the system edge (playtest3 F4)', async ({ page }) => {
     // F4: land → equipment shop → return → "Взлёт". The take-off must spawn the
     // ship beside the planet it left, not fling it to the distant system edge.

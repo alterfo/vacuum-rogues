@@ -1,5 +1,11 @@
 import { Container, Graphics } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
+import { scaledFont } from "@/utils/fontScale";
+import {
+  layoutQuestCard,
+  MIN_CARD_HEIGHT,
+  type QuestCardMetrics,
+} from "./ui/questCardLayout";
 import type { IQuestService } from "@/core/ports/IQuestService";
 import type { Quest } from "@/domain/Quest";
 import { logger } from "@/utils/logger";
@@ -200,7 +206,17 @@ export class QuestJournalUI {
     sectionTitle.eventMode = "none";
     this.container.addChild(sectionTitle);
 
-    const cardStep = 140;
+    // Card height now TRACKS each card's wrapped content (a long title / a long
+    // objective / many objectives no longer overflow a fixed 130 px box). The
+    // `ScrollableList` viewport wants ONE row height, so use the tallest card's
+    // height + a gap as the uniform step — short cards keep the historical 130 px
+    // box (their own snug height is drawn per-card; the step just spaces them).
+    const CARD_GAP = 10;
+    const maxBoxHeight = quests.reduce(
+      (max, q) => Math.max(max, this.cardBoxHeight(q)),
+      MIN_CARD_HEIGHT,
+    );
+    const cardStep = maxBoxHeight + CARD_GAP;
     const cardsTop = startY + 30;
     // How many cards fit in the space the active section is allotted. Matches the
     // old `maxVisible` formula so the layout below the section is unchanged.
@@ -243,45 +259,33 @@ export class QuestJournalUI {
     return cardsTop + viewportHeight;
   }
 
+  /** Geometry inputs for a quest card — one source for sizing AND rendering. */
+  private cardMetrics(): QuestCardMetrics {
+    return {
+      fontSizePx: scaledFont(13),
+      // Title wraps before the right-aligned [type] label.
+      titleWrapWidth: this.panelWidth - 160,
+      // Objective + reward body text wraps clear of the right-side nav/deadline.
+      bodyWrapWidth: this.panelWidth - 220,
+    };
+  }
+
   /**
-   * Create a card displaying quest information
+   * Build the card's text content ONCE so the height math (`cardBoxHeight`) and
+   * the renderer (`createQuestCard`) can never disagree about how many lines a
+   * card holds. Returns the per-objective display lines (+ their nav targets),
+   * the reward summary line and the highlight tags.
    */
-  private createQuestCard(quest: Quest, yPos: number): Container {
-    const card = new Container();
-    card.y = yPos;
-
-    // Card background — non-interactive so clicks fall through to the backdrop.
-    const bg = new Graphics();
-    bg.rect(20, 0, this.panelWidth - 40, 130);
-    bg.fill({ color: 0x16213e, alpha: 0.8 });
-    bg.stroke({ color: quest.isCompleted ? 0x00ff00 : 0xb4b4b4, width: 1 });
-    bg.eventMode = "none";
-    card.addChild(bg);
-
-    // Quest title
-    const titleText = scaledText(
-      quest.title,
-      13,
-      quest.isCompleted ? 0x00ff00 : 0xffffff,
-      { rawColor: true, fontWeight: "bold" },
-    );
-    titleText.x = 30;
-    titleText.y = 10;
-    titleText.eventMode = "none";
-    card.addChild(titleText);
-
-    // Quest type
-    const typeText = scaledText(
-      `[${questTypeLabel(quest.type)}]`,
-      13,
-      0xb4b4b4,
-      { rawColor: true },
-    );
-    typeText.x = this.panelWidth - 120;
-    typeText.y = 10;
-    typeText.eventMode = "none";
-    card.addChild(typeText);
-
+  private buildCardContent(quest: Quest): {
+    objectives: Array<{
+      text: string;
+      completedOrReady: boolean;
+      navTargetId: string | null;
+    }>;
+    rewardLine: string;
+    highlights: Array<{ label: string; value: string; color: number }>;
+    courierDest: QuestDestination | null;
+  } {
     // A local courier run («Местный подряд») has only a COLLECT_ITEM objective —
     // no VISIT objective to host the "→ Лететь к цели" button — yet its goods go
     // to a concrete NEIGHBOUR planet (`targetPlanetId`). Resolve that destination
@@ -296,9 +300,7 @@ export class QuestJournalUI {
       : this.activeDestination(quest);
     const courierNavId = courierDest ? this.routeNavId(courierDest) : null;
 
-    // Objectives
-    let objY = 35;
-    for (const objective of quest.objectives) {
+    const objectives = quest.objectives.map((objective) => {
       // For COLLECT_ITEM objectives use live cargo count from the resolver
       // (production never emits COLLECT_ITEM progress events, so currentAmount
       // stays frozen at 0 without this).
@@ -316,18 +318,9 @@ export class QuestJournalUI {
       }
       const completedOrReady = objective.completed || isReadyToDeliver;
       const suffix = isReadyToDeliver ? " — ✓ сдать" : "";
-      const objText = scaledText(
-        `${completedOrReady ? "✓" : "○"} ${objective.description}: ${displayAmount}/${objective.targetAmount}${suffix}`,
-        13,
-        completedOrReady ? 0x00ff00 : 0xaaaaaa,
-        { rawColor: true },
-      );
-      objText.x = 40;
-      objText.y = objY;
-      objText.eventMode = "none";
-      card.addChild(objText);
+      const text = `${completedOrReady ? "✓" : "○"} ${objective.description}: ${displayAmount}/${objective.targetAmount}${suffix}`;
 
-      // Add "Navigate" button for VISIT_LOCATION and VISIT_SYSTEM objectives
+      // Navigate target for VISIT_LOCATION / VISIT_SYSTEM / courier COLLECT_ITEM.
       const navTargetId =
         !objective.completed && this.onNavigateToObjective
           ? objective.type === "VISIT_LOCATION" &&
@@ -340,17 +333,10 @@ export class QuestJournalUI {
                 ? courierNavId
                 : null
           : null;
-      if (navTargetId) {
-        const navBtn = this.createNavigateButton(navTargetId);
-        navBtn.x = this.panelWidth - 170;
-        navBtn.y = objY - 2;
-        card.addChild(navBtn);
-      }
+      return { text, completedOrReady, navTargetId };
+    });
 
-      objY += 18;
-    }
-
-    // Reward summary — more journal detail (credits / xp / items / reputation).
+    // Reward summary — credits / xp / items / reputation.
     const r = quest.reward;
     const parts: string[] = [];
     if (r?.credits) parts.push(`${r.credits} кр`);
@@ -359,25 +345,13 @@ export class QuestJournalUI {
     if (r?.reputationDelta) {
       parts.push(`${r.reputationDelta > 0 ? "+" : ""}${r.reputationDelta} реп`);
     }
-    const rewardText = scaledText(
-      `Награда: ${parts.length ? parts.join(", ") : "—"}`,
-      13,
-      0xffcc66,
-      { rawColor: true },
-    );
-    rewardText.x = 40;
-    rewardText.y = objY + 2;
-    rewardText.eventMode = "none";
-    card.addChild(rewardText);
+    const rewardLine = `Награда: ${parts.length ? parts.join(", ") : "—"}`;
 
     // Highlights row: derive from available Quest fields (system, issuer planet).
-    const questHighlights: Array<{
-      label: string;
-      value: string;
-      color: number;
-    }> = [];
+    const highlights: Array<{ label: string; value: string; color: number }> =
+      [];
     if (quest.targetSystemId) {
-      questHighlights.push({
+      highlights.push({
         label: "Система",
         value: this.resolveName(quest.targetSystemId),
         color: 0x66ffcc,
@@ -387,7 +361,7 @@ export class QuestJournalUI {
       // For text-adventure quests the issuer planet IS the completion planet.
       const planetLabel =
         quest.type === QuestType.TEXT_ADVENTURE ? "Планета" : "Выдан";
-      questHighlights.push({
+      highlights.push({
         label: planetLabel,
         value: this.resolveName(quest.planetId),
         color: quest.type === QuestType.TEXT_ADVENTURE ? 0x66ffcc : 0xaaaaaa,
@@ -402,22 +376,143 @@ export class QuestJournalUI {
       quest.targetPlanetId &&
       quest.targetPlanetId !== quest.planetId
     ) {
-      questHighlights.push({
+      highlights.push({
         label: "Куда",
         value: this.resolveName(quest.targetPlanetId),
         color: 0x66ffcc,
       });
     }
-    if (questHighlights.length > 0) {
+
+    return { objectives, rewardLine, highlights, courierDest };
+  }
+
+  /**
+   * The drawn box height for a card — the wrapped-content height (so a long
+   * title / objective / many objectives never overflow), clamped to the
+   * historical {@link MIN_CARD_HEIGHT} so short cards look unchanged.
+   */
+  private cardBoxHeight(quest: Quest): number {
+    const content = this.buildCardContent(quest);
+    const layout = layoutQuestCard(
+      {
+        title: quest.title,
+        objectives: content.objectives.map((o) => o.text),
+        rewardLine: content.rewardLine,
+        hasHighlights: content.highlights.length > 0,
+      },
+      this.cardMetrics(),
+    );
+    return Math.max(MIN_CARD_HEIGHT, layout.contentHeight);
+  }
+
+  /**
+   * Create a card displaying quest information. Text is word-wrapped at the
+   * card's inner width and laid out top-down by {@link layoutQuestCard}, so a
+   * long title, a long objective description or many objectives wrap + push the
+   * box taller instead of spilling past the card's right/bottom edge.
+   */
+  private createQuestCard(quest: Quest, yPos: number): Container {
+    const card = new Container();
+    card.y = yPos;
+
+    const metrics = this.cardMetrics();
+    const content = this.buildCardContent(quest);
+    const layout = layoutQuestCard(
+      {
+        title: quest.title,
+        objectives: content.objectives.map((o) => o.text),
+        rewardLine: content.rewardLine,
+        hasHighlights: content.highlights.length > 0,
+      },
+      metrics,
+    );
+    const boxHeight = Math.max(MIN_CARD_HEIGHT, layout.contentHeight);
+
+    // Card background — non-interactive so clicks fall through to the backdrop.
+    const bg = new Graphics();
+    bg.rect(20, 0, this.panelWidth - 40, boxHeight);
+    bg.fill({ color: 0x16213e, alpha: 0.8 });
+    bg.stroke({ color: quest.isCompleted ? 0x00ff00 : 0xb4b4b4, width: 1 });
+    bg.eventMode = "none";
+    card.addChild(bg);
+
+    // Quest title (wrapped so a long title stacks instead of running off-card).
+    const titleText = scaledText(
+      quest.title,
+      13,
+      quest.isCompleted ? 0x00ff00 : 0xffffff,
+      {
+        rawColor: true,
+        fontWeight: "bold",
+        wordWrap: true,
+        wordWrapWidth: metrics.titleWrapWidth,
+      },
+    );
+    titleText.x = 30;
+    titleText.y = layout.titleY;
+    titleText.eventMode = "none";
+    card.addChild(titleText);
+
+    // Quest type
+    const typeText = scaledText(
+      `[${questTypeLabel(quest.type)}]`,
+      13,
+      0xb4b4b4,
+      { rawColor: true },
+    );
+    typeText.x = this.panelWidth - 120;
+    typeText.y = layout.titleY;
+    typeText.eventMode = "none";
+    card.addChild(typeText);
+
+    // Objectives (each wrapped + positioned by the pure layout).
+    content.objectives.forEach((objective, i) => {
+      const objY = layout.objectiveYs[i];
+      const objText = scaledText(
+        objective.text,
+        13,
+        objective.completedOrReady ? 0x00ff00 : 0xaaaaaa,
+        {
+          rawColor: true,
+          wordWrap: true,
+          wordWrapWidth: metrics.bodyWrapWidth,
+        },
+      );
+      objText.x = 40;
+      objText.y = objY;
+      objText.eventMode = "none";
+      card.addChild(objText);
+
+      if (objective.navTargetId) {
+        const navBtn = this.createNavigateButton(objective.navTargetId);
+        navBtn.x = this.panelWidth - 170;
+        navBtn.y = objY - 2;
+        card.addChild(navBtn);
+      }
+    });
+
+    // Reward summary line (wrapped to stay clear of the deadline warning).
+    const rewardText = scaledText(content.rewardLine, 13, 0xffcc66, {
+      rawColor: true,
+      wordWrap: true,
+      wordWrapWidth: metrics.bodyWrapWidth,
+    });
+    rewardText.x = 40;
+    rewardText.y = layout.rewardY;
+    rewardText.eventMode = "none";
+    card.addChild(rewardText);
+
+    // Highlights row.
+    if (content.highlights.length > 0) {
       const hTagSpacing = 150;
       let hx = 40;
-      for (const hl of questHighlights) {
+      for (const hl of content.highlights) {
         if (hx > this.panelWidth - 60) break;
         const tagT = scaledText(`[${hl.label}: ${hl.value}]`, 11, hl.color, {
           rawColor: true,
         });
         tagT.x = hx;
-        tagT.y = objY + 20;
+        tagT.y = layout.highlightsY;
         tagT.eventMode = "none";
         card.addChild(tagT);
         hx += hTagSpacing;
@@ -435,7 +530,7 @@ export class QuestJournalUI {
           { rawColor: true, fontWeight: "bold" },
         );
         daysLabel.x = this.panelWidth - 180;
-        daysLabel.y = objY + 2;
+        daysLabel.y = layout.rewardY;
         daysLabel.eventMode = "none";
         card.addChild(daysLabel);
       }
