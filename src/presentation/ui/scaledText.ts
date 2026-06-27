@@ -106,6 +106,13 @@ export interface ScaledTextOpts {
   align?: TextStyleAlign;
   wordWrap?: boolean;
   wordWrapWidth?: number;
+  /**
+   * Break mid-word when a single token is wider than `wordWrapWidth`. PixiJS
+   * defaults to `false` (wrap on whitespace only), which lets one long unbroken
+   * token spill past the wrap edge; pass `true` where the wrap width is a hard
+   * boundary (e.g. a fixed-width card) so an overlong token can't overflow.
+   */
+  breakWords?: boolean;
   lineHeight?: number;
   letterSpacing?: number;
   /**
@@ -150,6 +157,7 @@ export function scaledText(
       ...(opts.wordWrapWidth !== undefined
         ? { wordWrapWidth: opts.wordWrapWidth }
         : {}),
+      ...(opts.breakWords !== undefined ? { breakWords: opts.breakWords } : {}),
       ...(opts.lineHeight !== undefined ? { lineHeight: opts.lineHeight } : {}),
       ...(opts.letterSpacing !== undefined
         ? { letterSpacing: opts.letterSpacing }

@@ -446,6 +446,7 @@ export class QuestJournalUI {
         fontWeight: "bold",
         wordWrap: true,
         wordWrapWidth: metrics.titleWrapWidth,
+        breakWords: true,
       },
     );
     titleText.x = 30;
@@ -476,6 +477,7 @@ export class QuestJournalUI {
           rawColor: true,
           wordWrap: true,
           wordWrapWidth: metrics.bodyWrapWidth,
+          breakWords: true,
         },
       );
       objText.x = 40;
@@ -496,6 +498,7 @@ export class QuestJournalUI {
       rawColor: true,
       wordWrap: true,
       wordWrapWidth: metrics.bodyWrapWidth,
+      breakWords: true,
     });
     rewardText.x = 40;
     rewardText.y = layout.rewardY;
