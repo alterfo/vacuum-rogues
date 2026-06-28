@@ -56,9 +56,31 @@ Keep per-scene line guards intact.
 - Modify: docs/plans/20260627-screen-consistency-onboarding.md (record the audit findings as ➕ fix tasks)
 - Create: src/tests/presentation/shipyardParity.test.ts
 
-- [ ] Enumerate, per screen, the player-facing capabilities (planet `EquipmentShopScene` tabs vs each `StationType`'s `StationScene` services) and mark each as shared-component / forked / planet-only / station-only; capture the concrete divergences (and which are legitimate specialization vs. real inconsistencies) in this plan as ➕ tasks.
-- [ ] Write a unit test asserting the planet Верфь АНГАР tab and the station hangar service both construct the shared `HangarPanel` and expose identical fit/unfit/install actions (locks the already-shared surface so it can't drift).
-- [ ] Run tests — must pass before Task 2.
+- [x] Enumerate, per screen, the player-facing capabilities (planet `EquipmentShopScene` tabs vs each `StationType`'s `StationScene` services) and mark each as shared-component / forked / planet-only / station-only; capture the concrete divergences (and which are legitimate specialization vs. real inconsistencies) in this plan as ➕ tasks.
+- [x] Write a unit test asserting the planet Верфь АНГАР tab and the station hangar service both construct the shared `HangarPanel` and expose identical fit/unfit/install actions (locks the already-shared surface so it can't drift).
+- [x] Run tests — must pass before Task 2.
+
+**Audit findings (Task 1) — capability matrix.** Per-type `StationScene` services:
+TRADE_POST `{shop, hangar, infoCenter, bank, repair, refuel}`, REPAIR_DOCK
+`{hangar, repair, refuel}`, MILITARY_BASE `{quests, rankPromotion, infoCenter, bank,
+repair, refuel}`, RESEARCH_LAB `{shop, research, infoCenter, refuel}`, CRAFT_CENTER
+`{micromodules, hangar, repair, refuel}` (all + `leave`). Planet `EquipmentShopScene`
+tabs: `gear` (buy), `hull` (buy + trade-in), `hangar` (fit).
+
+| Capability | Planet Верфь | Station | Verdict |
+|---|---|---|---|
+| Fit/unfit gear (hangar) | АНГАР tab → `HangarPanel` | hangar svc → `HangarPanel` | **SHARED ✅** locked by `shipyardParity.test.ts` |
+| Apply micromodule chip | hangar → `MicromoduleApplyPanel` | hangar → `MicromoduleApplyPanel` | **SHARED ✅** (verify in Task 2) |
+| Buy gear | gear tab `buyItem` → warehouse only | shop svc `buyItem` → **auto-installs** (+ gear trade-in modal) | **FORKED ⚠** → ➕A |
+| Buy micromodules | — (tray: «купите в Центре крафта») | CRAFT_CENTER `micromodules` → `micromoduleShop` | station-only — *legitimate* (verify shared seam, Task 2) |
+| Buy hull + trade-in | hull tab → `sellHull` | — | planet-only — *legitimate specialization* |
+| Repair / Refuel | — | per-type, `REPAIR_DISCOUNT` | station-only — *legitimate* |
+| Quests (job board) | planet board | MILITARY_BASE → `JobBoardPanel` (shared) | shared component, type-gated — *legitimate* |
+| InfoCenter / Bank / Research / Rank | — | per-type | station-only — *legitimate* |
+
+Real inconsistency found → resolved in Task 4 (➕A below). All other planet-only /
+station-only rows are intentional per-type specialization (Post-Completion note) and
+are left intact.
 
 ### Task 2: Micromodule fit + buy parity across shipyard surfaces
 **Files:**
@@ -87,7 +109,8 @@ Keep per-scene line guards intact.
 - Modify/Create: the matching parity tests
 
 - [ ] Fix each real inconsistency surfaced in Task 1 so a shared capability behaves identically regardless of entry point (e.g., install-block messaging via `explainInstallBlock`/`gearFit`, trade-in via `sellHull`, tab labels/order, action wording), routing through shared helpers.
-- [ ] Leave legitimate per-type specialization intact (don't add repair to a planet shop or hull-sales to a repair dock unless that was an identified inconsistency).
+- [ ] ➕A **Buy-gear behavioral fork** (Task 1 audit): the same «buy this gear» action behaves differently by entry point — planet `EquipmentShopScene.buyItem` always banks the purchase to the warehouse (`acquireUninstalledGear`; documented SR-canon «the shop never auto-installs, fitting is a separate hangar action»), whereas station `StationScene.buyItem` **auto-installs** into a free slot (`equipment.installGear`, re-homing the displaced engine/radar) and additionally offers a gear trade-in modal (`buyItemWithTradeIn`) the planet gear tab lacks. Align the station gear-buy to the canonical no-auto-install warehouse path (check `shipyardInstall.test.ts` first — if it pins the auto-install, that's a root-cause signal to reconcile, not a test to weaken), so a purchase lands in the same place regardless of where it was bought; reconcile or scope the gear trade-in. Lock with a parity test.
+- [ ] Leave legitimate per-type specialization intact (don't add repair to a planet shop or hull-sales to a repair dock unless that was an identified inconsistency) — hull market+trade-in stays planet-only, micromodule purchase stays CRAFT_CENTER-only, repair/refuel/bank/infocenter/research/rank stay station-type-gated.
 - [ ] Write tests locking each fixed divergence.
 - [ ] Run tests — must pass before Task 5.
 
