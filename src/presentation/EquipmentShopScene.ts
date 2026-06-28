@@ -219,6 +219,16 @@ export class EquipmentShopScene extends GameScene {
     this.planet = null;
   }
 
+  /**
+   * Open the АНГАР (shared {@link HangarPanel}) tab — navigation hook for E2E,
+   * mirroring {@link StationScene.e2eOpenHangar} so a visual-parity test can show
+   * the identical fitting surface from either entry point. Not the interaction.
+   */
+  e2eOpenHangar(): void {
+    this.activeTab = "hangar";
+    this.render();
+  }
+
   private buildShopInventory(): void {
     if (!this.gameEngine?.galaxy || !this.planet) return;
     const system = this.gameEngine.galaxy.systems.find(

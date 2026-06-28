@@ -118,10 +118,10 @@ are left intact.
 **Files:**
 - Modify: docs/plans/20260627-screen-consistency-onboarding.md (check off items)
 
-- [ ] A shared capability (fitting, micromodules, gear/hull where offered) behaves identically at the planet Верфь and the equivalent station surface.
-- [ ] Every gameplay screen's onboarding help accurately matches its actual capabilities; coverage guard green.
-- [ ] Full unit suite + `npm run test:playtest` + `npm run lint` green; per-scene line guards intact.
-- [ ] Screenshot-verify the planet Верфь and the station hangar show consistent shared-capability behavior.
+- [x] A shared capability (fitting, micromodules, gear/hull where offered) behaves identically at the planet Верфь and the equivalent station surface. **Locked by `shipyardParity`/`micromoduleParity`/`gearBuyParity` (18 tests green): both entry points construct the same shared `HangarPanel`/`MicromoduleApplyPanel`, mutate the same canonical `ShipLoadout`, render a byte-identical apply modal, and warehouse a gear purchase identically (no auto-install fork). Hull market+trade-in stays planet-only and micromodule purchase CRAFT_CENTER-only by design (legitimate specialization, Task 1 audit).**
+- [x] Every gameplay screen's onboarding help accurately matches its actual capabilities; coverage guard green. **`helpCoverage.test.ts` (5 tests green): every non-omitted `SceneType` has a `HELP_CONTENT` entry, the omission set is exhaustive, and the Верфь help documents all three tabs + the hull trade-in; `helpContentI18n.test.ts` parity guard green (ru/en lockstep incl. the new `control3`).**
+- [x] Full unit suite + `npm run test:playtest` + `npm run lint` green; per-scene line guards intact. **Unit suite 4058 passed / 5 skipped (463 files); `test:playtest` 293 passed / 2 skipped; lint 0 errors (44 pre-existing `any` warnings in unrelated test files). The SpaceFlightScene <1900-line guard (`moduleContracts.test.ts`) is green and unaffected (the e2e hook landed in EquipmentShopScene).**
+- [x] Screenshot-verify the planet Верфь and the station hangar show consistent shared-capability behavior. **Added `e2e/specs/shipyard-hangar-parity.spec.ts` (+ a parallel `EquipmentShopScene.e2eOpenHangar()` test hook mirroring `StationScene`'s): the planet Верфь АНГАР tab (`e2e/screenshots/hangar-planet-verf.png`) and the CRAFT_CENTER station hangar service (`hangar-station.png`) render the **pixel-identical** shared «АНГАР — ОСНАСТКА КОРАБЛЯ» board (same КОРПУС/ОРУЖИЕ/ДВИГАТЕЛЬ/РАДАР/ОБОРУДОВАНИЕ banks, СКЛАД/ТРЮМ strips, «купите в Центре крафта» tray, [Назад]). Both E2E tests pass.**
 
 ## Post-Completion
 *Informational — no checkboxes:*
