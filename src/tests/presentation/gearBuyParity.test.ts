@@ -364,6 +364,38 @@ describe("Gear-buy parity — planet Верфь ⇄ in-space station shop (➕A)
     scene.destroy();
   });
 
+  it("the planet gear tab also excludes hulls (hulls are bought via the КОРПУС tab)", () => {
+    const engine = makeEngine(new ShipLoadout("hull_scout"));
+    const scene = new EquipmentShopScene(renderer);
+    scene.initialize({ gameEngine: engine, planet });
+
+    // Seed the planet listings with a hull alongside gear. The gear-tab rows must
+    // hide the hull — buying it there would warehouse an un-fittable hull (the
+    // hangar has no hull bank), the same credit-loss trap the station filters out.
+    // The full `this.listings` (with the hull) still feeds the КОРПУС hull tab.
+    const hullListing: GearListing = {
+      systemId: "sys1",
+      planetId: "p1",
+      gear: gearById("hull_scout")!,
+      price: 1000,
+    };
+    expect(hullListing.gear.kind).toBe(GearKind.HULL);
+    const inner = scene as unknown as {
+      listings: GearListing[];
+      gearListings: () => GearListing[];
+    };
+    inner.listings = [weaponListing(), hullListing];
+
+    const gearRows = inner.gearListings();
+    expect(gearRows.every((l) => l.gear.kind !== GearKind.HULL)).toBe(true);
+    expect(gearRows).toEqual([weaponListing()]);
+    // The hull survives in the full list so the КОРПУС tab can still sell it.
+    expect(inner.listings.some((l) => l.gear.kind === GearKind.HULL)).toBe(
+      true,
+    );
+    scene.destroy();
+  });
+
   it("the forked station gear trade-in path is gone (no scene-local swap surface)", () => {
     // The auto-install + gear trade-in modal was the divergence; aligning to the
     // canonical warehouse buy removes both. No `buyItemWithTradeIn` /

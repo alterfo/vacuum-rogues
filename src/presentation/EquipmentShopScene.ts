@@ -243,6 +243,16 @@ export class EquipmentShopScene extends GameScene {
     });
   }
 
+  // Gear-tab rows exclude hulls: hulls are bought via the КОРПУС tab's trade-in
+  // install path. A hull bought from the gear tab would land in the warehouse via
+  // `buyItem` → `acquireUninstalledGear`, where it can never be fitted (the hangar
+  // has no hull bank) — a credit-loss trap. The station shop excludes hulls for the
+  // same reason; this keeps the two gear-buy surfaces consistent. The full
+  // `this.listings` (with hulls) still feeds the КОРПУС tab (`renderHullPanel`).
+  private gearListings(): GearListing[] {
+    return this.listings.filter((l) => l.gear.kind !== GearKind.HULL);
+  }
+
   private render(): void {
     if (!this.mainContainer) return;
     // The АНГАР tab is the shared fitting surface: it fills the screen with the
@@ -687,8 +697,9 @@ export class EquipmentShopScene extends GameScene {
     ]);
     const installedIds = this.installedGearIds();
 
-    for (let i = 0; i < this.listings.length; i++) {
-      const listing = this.listings[i];
+    const gearListings = this.gearListings();
+    for (let i = 0; i < gearListings.length; i++) {
+      const listing = gearListings[i];
       const gear = listing.gear;
       const rowY = startY + i * this.ROW_H - this.scrollOffset * this.ROW_H;
       const canAfford = playerCredits >= listing.price;
@@ -1096,7 +1107,10 @@ export class EquipmentShopScene extends GameScene {
   private scroll(dir: number): void {
     // Only the gear list scrolls; the hull/hangar tabs ignore wheel/arrow input.
     if (this.activeTab !== "gear") return;
-    const maxScroll = Math.max(0, this.listings.length - this.VISIBLE_ROWS);
+    const maxScroll = Math.max(
+      0,
+      this.gearListings().length - this.VISIBLE_ROWS,
+    );
     this.scrollOffset = Math.max(
       0,
       Math.min(maxScroll, this.scrollOffset + dir),
