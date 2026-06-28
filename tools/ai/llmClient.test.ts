@@ -9,6 +9,7 @@ import { describe, it, expect } from "vitest";
 import {
   AnthropicLlmClient,
   FakeLlmClient,
+  extractText,
   DEFAULT_JUDGE_MODEL,
   DEFAULT_MAX_TOKENS,
   type LlmRequest,
@@ -91,6 +92,41 @@ describe("AnthropicLlmClient (injected transport — no live call)", () => {
     expect(captured?.model).toBe(DEFAULT_JUDGE_MODEL);
     expect(captured?.maxTokens).toBe(DEFAULT_MAX_TOKENS);
     expect(captured?.system).toBeUndefined();
+  });
+});
+
+describe("extractText (live-transport reply decoding)", () => {
+  it("concatenates the text of every text block in order", () => {
+    const resp = {
+      content: [
+        { type: "text", text: "Hello " },
+        { type: "text", text: "world" },
+      ],
+    };
+    expect(extractText(resp)).toBe("Hello world");
+  });
+
+  it("skips non-text blocks (e.g. tool_use) and blocks with a non-string text", () => {
+    const resp = {
+      content: [
+        { type: "text", text: "keep" },
+        { type: "tool_use", id: "t1", name: "x", input: {} },
+        { type: "text", text: 42 }, // malformed text → skipped
+        { type: "text", text: "-tail" },
+      ],
+    };
+    expect(extractText(resp)).toBe("keep-tail");
+  });
+
+  it("returns an empty string when content is missing, not an array, null, or undefined", () => {
+    expect(extractText({})).toBe("");
+    expect(extractText({ content: "not-an-array" })).toBe("");
+    expect(extractText(null)).toBe("");
+    expect(extractText(undefined)).toBe("");
+  });
+
+  it("returns an empty string for an empty content array (e.g. a refusal / max_tokens cutoff)", () => {
+    expect(extractText({ content: [] })).toBe("");
   });
 });
 

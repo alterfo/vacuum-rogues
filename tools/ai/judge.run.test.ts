@@ -52,6 +52,12 @@ vi.mock("pixi.js", async () => {
   return stub.makePixiStub();
 });
 
+/** Parse a positive-integer env var, falling back to `fallback` on absent/NaN/≤0. */
+function posIntEnv(raw: string | undefined, fallback: number): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : fallback;
+}
+
 /**
  * The engine-bound {@link PlayFn}: boot + play each spec on a fresh real harness
  * and fold it into a judge-ready transcript. A scenario spec wraps the base policy
@@ -130,8 +136,11 @@ describe.runIf(JUDGE)("npm run letsplay:judge — live LLM deep sweep", () => {
       throw new GameSystemException("LLM_NO_API_KEY", msg);
     }
 
-    const sessions = Number(process.env.LETSPLAY_JUDGE_SESSIONS ?? 3);
-    const steps = Number(process.env.LETSPLAY_JUDGE_STEPS ?? 40);
+    // A malformed env var (`=foo`/`=""`) must not silently become NaN → a
+    // zero-session run that fails with a confusing "0 sessions" instead of a
+    // clear cause; fall back to the default for any non-positive/NaN value.
+    const sessions = posIntEnv(process.env.LETSPLAY_JUDGE_SESSIONS, 3);
+    const steps = posIntEnv(process.env.LETSPLAY_JUDGE_STEPS, 40);
     const useScenarios = process.env.LETSPLAY_JUDGE_SCENARIOS === "1";
     const model = process.env.LETSPLAY_JUDGE_MODEL;
 

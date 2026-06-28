@@ -142,7 +142,7 @@ export function toAnthropicMessages(req: LlmRequest): unknown[] {
 }
 
 /** Concatenate the text blocks of an Anthropic Messages response. */
-function extractText(resp: unknown): string {
+export function extractText(resp: unknown): string {
   const blocks = (resp as { content?: unknown })?.content;
   if (!Array.isArray(blocks)) return "";
   return blocks

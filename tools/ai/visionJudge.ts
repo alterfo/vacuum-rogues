@@ -23,9 +23,12 @@
  *  - {@link judgeFrames} — the async glue: prompt → `client.complete({images})`
  *    → {@link parseOddityReport}.
  *
- * The **live vision call runs only in the offline runner** (a real key, a real
- * model). Tests inject a {@link FakeLlmClient} returning a canned vision verdict,
- * so the validation logic is deterministic and free.
+ * The **live vision call only happens when {@link judgeFrames} is wired to a real
+ * client** (a real key, a real model). It is **not yet called by the offline
+ * `letsplay:judge` runner** — that runner judges *text* transcripts only; folding
+ * frame capture into it is a deferred follow-up (the plan's "Optional v2"). Tests
+ * inject a {@link FakeLlmClient} returning a canned vision verdict, so the
+ * validation logic is deterministic and free.
  *
  * **Dev-only.** Lives under `tools/`, imported by no production module (enforced
  * by `letsplayDevOnly.test.ts`'s `tools/ai` prod-graph guard).

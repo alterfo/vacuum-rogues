@@ -24,6 +24,7 @@
  */
 import type { LlmClient, LlmMessage } from "./llmClient";
 import { DEFAULT_JUDGE_MODEL } from "./llmClient";
+import { extractJson } from "./extractJson";
 import type { SessionTranscript } from "../../src/tests/playtest/letsplay/transcript";
 import { serializeTranscript } from "../../src/tests/playtest/letsplay/transcript";
 
@@ -153,43 +154,6 @@ function coerceFinding(raw: unknown): OddityFinding | null {
     evidence: coerceEvidence(obj.evidence),
     rationale,
   };
-}
-
-/**
- * Pull the first parseable JSON value out of a possibly-noisy reply. The model
- * may wrap JSON in a ```json fence or surround it with prose, so try, in order:
- * the whole string, a fenced block, then the widest `{…}`/`[…]` slice. Returns
- * the parsed value or `undefined` — never throws.
- */
-function extractJson(text: string): unknown {
-  const candidates: string[] = [];
-  const trimmed = text.trim();
-  if (trimmed) candidates.push(trimmed);
-
-  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence?.[1]) candidates.push(fence[1].trim());
-
-  const objSlice = sliceBetween(text, "{", "}");
-  if (objSlice) candidates.push(objSlice);
-  const arrSlice = sliceBetween(text, "[", "]");
-  if (arrSlice) candidates.push(arrSlice);
-
-  for (const candidate of candidates) {
-    try {
-      return JSON.parse(candidate);
-    } catch {
-      // Try the next candidate.
-    }
-  }
-  return undefined;
-}
-
-/** The substring from the first `open` to the last `close` (inclusive), or null. */
-function sliceBetween(text: string, open: string, close: string): string | null {
-  const start = text.indexOf(open);
-  const end = text.lastIndexOf(close);
-  if (start === -1 || end === -1 || end <= start) return null;
-  return text.slice(start, end + 1);
 }
 
 /**
