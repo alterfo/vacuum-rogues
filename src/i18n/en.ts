@@ -372,13 +372,15 @@ export const en: Dict = {
   // --- onboarding: shipyard / equipment ------------------------------------
   "help.EQUIPMENT_SHOP.title": "Shipyard & Equipment",
   "help.EQUIPMENT_SHOP.body1":
-    "Hulls, weapons, engines and modules are sold here. Buy what strengthens" +
-    " your ship and install it on the «Hangar» tab.",
+    "Three tabs here: «Gear» — weapons, engines and modules; «Hull» — new" +
+    " hulls with the old one traded in; «Hangar» — fit what you bought.",
   "help.EQUIPMENT_SHOP.body2":
-    "Each hull has its own slots and mass capacity — the hint on an item" +
-    " shows whether it will fit.",
-  "help.EQUIPMENT_SHOP.control1": "Buy — purchase",
-  "help.EQUIPMENT_SHOP.control2": "Hangar — install what you bought",
+    "Purchases go to the warehouse — then slot them in on the «Hangar» tab," +
+    " watching the mass: each hull has its own slots and capacity.",
+  "help.EQUIPMENT_SHOP.control1": "Gear — buy weapons and modules",
+  "help.EQUIPMENT_SHOP.control2":
+    "Hull — swap your hull, trading in the old one",
+  "help.EQUIPMENT_SHOP.control3": "Hangar — install what you bought",
 
   // --- onboarding: government ----------------------------------------------
   "help.GOVERNMENT.title": "Government",

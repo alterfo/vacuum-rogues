@@ -60,7 +60,7 @@ export const HELP_SPEC: Record<HelpKey, { body: number; controls: number }> = {
   PLANET: { body: 2, controls: 2 },
   TRADE: { body: 2, controls: 2 },
   STATION: { body: 2, controls: 2 },
-  EQUIPMENT_SHOP: { body: 2, controls: 2 },
+  EQUIPMENT_SHOP: { body: 2, controls: 3 },
   GOVERNMENT: { body: 2, controls: 2 },
   INFO_CENTER: { body: 2, controls: 2 },
   BANK: { body: 2, controls: 2 },
