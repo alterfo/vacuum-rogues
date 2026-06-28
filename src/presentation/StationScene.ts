@@ -12,6 +12,7 @@ import { SceneType, StationType, QuestType, type MicroModule } from "@/types";
 import { JobBoardPanel } from "./JobBoardPanel";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
+import { GearKind } from "@/systems/equipment/GearCatalog";
 import {
   micromoduleShopCatalog,
   micromodulePrice,
@@ -282,6 +283,11 @@ export class StationScene extends GameScene {
         : systemTechLevel;
     const priceFactor = station.type === StationType.RESEARCH_LAB ? 1.1 : 1.0;
 
+    // Hull market + trade-in is planet-only specialization (Task 1 audit). The
+    // in-space shop has no hull tab and `buyItem` warehouses every purchase, so a
+    // hull listed here would land in the owned-uninstalled store where it can
+    // never be fitted (the hangar has no hull bank). Exclude hulls so a station
+    // shop only ever sells gear it can actually fit.
     this.shopListings = generateShop({
       systemId: station.id,
       planetId: station.id,
@@ -289,7 +295,7 @@ export class StationScene extends GameScene {
       day: galaxy.gameDays,
       priceFactor,
       maxTechLevel,
-    });
+    }).filter((l) => l.gear.kind !== GearKind.HULL);
   }
 
   // ── rendering ─────────────────────────────────────────────────────────────
@@ -933,12 +939,15 @@ export class StationScene extends GameScene {
     this.mainContainer!.addChild(mask);
     this.mainContainer!.addChild(listContainer);
 
-    // "Owned" = in the bag OR installed in the canonical loadout. Since a
-    // purchase now installs straight into the loadout (dual-hull Task 3), the
-    // bag alone misses installed gear — without the loadout ids the shop would
-    // keep offering [Купить] for an item already fitted, letting the player
-    // re-buy duplicates. Mirrors EquipmentShopScene's installed-id guard.
+    // "Owned" = in the canonical owned-uninstalled warehouse OR the legacy bag
+    // OR installed in the loadout. A purchase warehouses into `ownedGearIds`
+    // (screen-consistency Task 4, never auto-installs), so the warehouse set must
+    // be included — otherwise the shop keeps offering [Купить] for an item just
+    // bought, letting the player re-buy duplicates. Mirrors EquipmentShopScene's
+    // owned set (canonical warehouse ∪ bag ∪ installed) so the badge reads the
+    // same at both entry points.
     const ownedIds = [
+      ...(this.gameEngine?.player?.inventory.ownedGearIds ?? []),
       ...(this.gameEngine?.player?.inventory.modules.map((m) => m.id) ?? []),
       ...(this.gameEngine?.playerLoadout?.installedGearIds() ?? []),
     ];

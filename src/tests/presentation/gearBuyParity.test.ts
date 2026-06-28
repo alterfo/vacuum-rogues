@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { ownedUninstalledGear } from "@/systems/equipment/GearBridge";
-import { gearById } from "@/systems/equipment/GearCatalog";
+import { gearById, GearKind } from "@/systems/equipment/GearCatalog";
+import { generateShop } from "@/systems/equipment/ShopGenerator";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import type { Renderer } from "@/presentation/Renderer";
 import { PlanetType, StationType } from "@/types";
@@ -263,6 +264,104 @@ describe("Gear-buy parity — planet Верфь ⇄ in-space station shop (➕A)
 
     planetScene.destroy();
     stationScene.destroy();
+  });
+
+  it("buying with insufficient credits is a no-op at both entry points (no charge, no gear)", () => {
+    for (const make of [
+      () => {
+        const scene = new EquipmentShopScene(renderer);
+        const loadout = new ShipLoadout("hull_scout");
+        const engine = makeEngine(loadout, makePlayer(50)); // < price 200
+        scene.initialize({ gameEngine: engine, planet });
+        return { scene, engine, loadout };
+      },
+      () => {
+        const scene = new StationScene(renderer);
+        const loadout = new ShipLoadout("hull_scout");
+        const engine = makeEngine(loadout, makePlayer(50));
+        scene.initialize({ gameEngine: engine, station: tradeStation });
+        return { scene, engine, loadout };
+      },
+    ]) {
+      const { scene, engine, loadout } = make();
+      (scene as unknown as { buyItem: (l: GearListing) => void }).buyItem(
+        weaponListing(200),
+      );
+      expect(engine.player!.credits).toBe(50); // not charged
+      expect(ownedUninstalledGear(engine.player!, loadout)).toEqual([]); // nothing acquired
+      scene.destroy();
+    }
+  });
+
+  it("a warehoused purchase reads as owned at the station shop (no re-buy), matching the planet", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const engine = makeEngine(loadout);
+    const scene = new StationScene(renderer);
+    scene.initialize({ gameEngine: engine, station: tradeStation });
+
+    // Pin a single-row deterministic shop so the assertion targets that row.
+    (scene as unknown as { shopListings: GearListing[] }).shopListings = [
+      weaponListing(),
+    ];
+    (scene as unknown as { buyItem: (l: GearListing) => void }).buyItem(
+      weaponListing(),
+    );
+
+    // Re-render the shop view and inspect the row's buy label: the just-bought
+    // item must read "Есть" (owned), never "[Купить]" — otherwise the station
+    // would let the player re-buy a duplicate the planet already blocks.
+    (scene as unknown as { view: string }).view = "shop";
+    created.length = 0;
+    (scene as unknown as { render: () => void }).render();
+    const labels = created.map((n) => n.text);
+    expect(labels).toContain("Есть");
+    expect(labels).not.toContain("[Купить]");
+    scene.destroy();
+  });
+
+  it("the in-space station shop never lists hulls (hull sales are planet-only)", () => {
+    const engine = makeEngine(new ShipLoadout("hull_scout"));
+    // Place the station in a high-tech system so the shop reaches hull tech and
+    // the hull filter is actually exercised (at tech 1 no hull stocks anyway).
+    (
+      engine as unknown as {
+        galaxy: {
+          id: string;
+          gameDays: number;
+          systems: Array<{
+            id: string;
+            techLevel: number;
+            stations: unknown[];
+          }>;
+        };
+      }
+    ).galaxy = {
+      id: "g1",
+      gameDays: 0,
+      systems: [{ id: "sys1", techLevel: 8, stations: [tradeStation] }],
+    };
+    const scene = new StationScene(renderer);
+    scene.initialize({ gameEngine: engine, station: tradeStation });
+
+    // The unfiltered catalog at the same seed/day/planet/tech-cap the scene uses
+    // (TRADE_POST ⇒ maxTechLevel = systemTechLevel = 8) stocks at least one hull;
+    // the scene's shop must equal that set with every hull stripped — so a
+    // buyItem (which only warehouses) can never strand an un-fittable hull.
+    const raw = generateShop({
+      systemId: tradeStation.id,
+      planetId: tradeStation.id,
+      seed: "g1",
+      day: 0,
+      priceFactor: 1.0,
+      maxTechLevel: 8,
+    });
+    expect(raw.some((l) => l.gear.kind === GearKind.HULL)).toBe(true);
+
+    const listings = (scene as unknown as { shopListings: GearListing[] })
+      .shopListings;
+    expect(listings.every((l) => l.gear.kind !== GearKind.HULL)).toBe(true);
+    expect(listings).toEqual(raw.filter((l) => l.gear.kind !== GearKind.HULL));
+    scene.destroy();
   });
 
   it("the forked station gear trade-in path is gone (no scene-local swap surface)", () => {
