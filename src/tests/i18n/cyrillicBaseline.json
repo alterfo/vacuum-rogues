@@ -14,7 +14,7 @@
   "src/presentation/SaveLoadScene.ts": 16,
   "src/presentation/SpaceFlightScene.ts": 7,
   "src/presentation/StarMapScene.ts": 34,
-  "src/presentation/StationScene.ts": 72,
+  "src/presentation/StationScene.ts": 61,
   "src/presentation/SystemMiniMap.ts": 1,
   "src/presentation/TextQuestScene.ts": 18,
   "src/presentation/WinScene.ts": 13,

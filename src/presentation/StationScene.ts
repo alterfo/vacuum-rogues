@@ -12,7 +12,6 @@ import { SceneType, StationType, QuestType, type MicroModule } from "@/types";
 import { JobBoardPanel } from "./JobBoardPanel";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
-import { GearKind, gearById } from "@/systems/equipment/GearCatalog";
 import {
   micromoduleShopCatalog,
   micromodulePrice,
@@ -20,11 +19,9 @@ import {
 } from "@/systems/equipment/micromoduleShop";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
-  slotToBagModule,
   acquireUninstalledGear,
   KIND_LABEL,
   KIND_COLOR,
-  applyLoadoutHullToShip,
 } from "@/systems/equipment/GearBridge";
 import {
   adjustPlayerCredits,
@@ -1016,7 +1013,7 @@ export class StationScene extends GameScene {
         buyBtn.cursor = "pointer";
         buyBtn.on("pointerdown", (e) => {
           e.stopPropagation();
-          this.buyItemWithTradeIn(listing);
+          this.buyItem(listing);
         });
         buyBtn.on("pointerover", () => {
           buyBtn.alpha = 0.7;
@@ -1064,257 +1061,17 @@ export class StationScene extends GameScene {
       GL_COUNTERPARTY.EQUIPMENT,
       `Покупка: ${listing.gear.name}`,
     );
-    // Canonical path (dual-hull Task 3): a purchase lands directly in the
-    // loadout when a slot is free; the legacy inventory bag is only a fallback
-    // for a full (or absent) loadout until it is retired in Task 5.
-    const loadout = this.gameEngine?.playerLoadout ?? null;
-    // An engine/radar buy replaces the fitted single-slot part; capture it first
-    // so the swapped-out part is re-stocked, not destroyed.
-    const displaced = loadout ? loadout.displacedBy(listing.gear.id) : null;
-    const installed = loadout
-      ? this.equipment.installGear(loadout, listing.gear.id)
-      : false;
-    if (!installed) {
-      // No free slot: park the purchase in the canonical owned-uninstalled
-      // store (shown in the hangar ТРЮМ, sellable from there).
-      acquireUninstalledGear(player, listing.gear.id);
-    } else if (displaced) {
-      acquireUninstalledGear(player, displaced);
-    }
-    this.showToast(
-      installed
-        ? `Установлено: ${listing.gear.name}`
-        : `Куплено: ${listing.gear.name}`,
-      0x44ff88,
-    );
+    // SR-canon (screen-consistency Task 4): a purchase ALWAYS lands in the
+    // warehouse — the canonical owned-uninstalled store (shown in the hangar
+    // ТРЮМ, sellable from there) — identical to the planet Верфь gear tab. The
+    // shop never auto-installs; fitting is a separate hangar action, so the same
+    // «buy this gear» action lands in the same place regardless of where it was
+    // bought (planet vs. station). Spares the current hull can't yet hold are
+    // stocked and fitted later (by category + mass) in the hangar.
+    acquireUninstalledGear(player, listing.gear.id);
+    this.gameEngine?.audio.playSfx("buy").catch(() => {});
+    this.showToast(`Куплено: ${listing.gear.name}`, 0x44ff88);
     this.render();
-  }
-
-  private buyItemWithTradeIn(listing: GearListing): void {
-    const loadout = this.gameEngine?.playerLoadout;
-    const player = this.gameEngine?.player;
-    if (!player || !loadout) {
-      this.buyItem(listing);
-      return;
-    }
-
-    let currentId: string | null = null;
-    if (
-      listing.gear.kind === GearKind.HULL &&
-      loadout.hull.id !== listing.gear.id
-    ) {
-      currentId = loadout.hull.id;
-    } else if (listing.gear.kind === GearKind.WEAPON) {
-      currentId =
-        loadout
-          .installedGearIds()
-          .find(
-            (id) =>
-              gearById(id)?.kind === GearKind.WEAPON && id !== listing.gear.id,
-          ) ?? null;
-    }
-
-    if (!currentId) {
-      this.buyItem(listing);
-      return;
-    }
-
-    const currentGear = gearById(currentId);
-    if (!currentGear) {
-      this.buyItem(listing);
-      return;
-    }
-
-    const tradeIn = Math.floor(currentGear.basePrice * 0.4);
-    const delta = listing.price - tradeIn;
-    this.showTradeInModal(listing, currentId, currentGear.name, tradeIn, delta);
-  }
-
-  private showTradeInModal(
-    listing: GearListing,
-    currentId: string,
-    currentName: string,
-    tradeIn: number,
-    delta: number,
-  ): void {
-    const sw = this.renderer.app.screen.width;
-    const sh = this.renderer.app.screen.height;
-    const player = this.gameEngine?.player;
-    if (!player) return;
-
-    const overlay = new Container();
-    const shade = new Graphics();
-    shade.rect(0, 0, sw, sh).fill({ color: 0x000000, alpha: 0.75 });
-    shade.eventMode = "static";
-    overlay.addChild(shade);
-
-    const PW = Math.min(480, sw - 60);
-    const PH = 220;
-    const PX = (sw - PW) / 2;
-    const PY = (sh - PH) / 2;
-
-    const panel = new Graphics();
-    panel.rect(PX, PY, PW, PH).fill({ color: 0x080c18, alpha: 1 });
-    panel.rect(PX, PY, PW, PH).stroke({ color: 0x445566, width: 1 });
-    overlay.addChild(panel);
-
-    const addText = (
-      text: string,
-      y: number,
-      color: number,
-      size = 13,
-    ): void => {
-      const t = scaledText(text, size, color, {
-        rawColor: true,
-        fontFamily: "monospace",
-      });
-      t.anchor.set(0.5, 0);
-      t.x = PX + PW / 2;
-      t.y = PY + y;
-      t.eventMode = "none";
-      overlay.addChild(t);
-    };
-
-    addText("[ ЗАМЕНА СНАРЯЖЕНИЯ ]", 14, 0x44ddff, 15);
-    addText(`Сдать: ${currentName}  →  +${tradeIn} ₡`, 50, 0xaaaaaa);
-    addText(
-      `Новый: ${listing.gear.name}  →  −${listing.price} ₡`,
-      70,
-      0xddeeff,
-    );
-
-    const canSwap = player.credits >= Math.max(0, delta);
-    const swapLabel =
-      delta > 0
-        ? `Заменить (доплатить ${delta} ₡)`
-        : `Заменить (получить ${-delta} ₡)`;
-    const swapColor = canSwap ? 0x003311 : 0x331100;
-    const swapTextColor = canSwap ? 0x44ff88 : 0x886644;
-
-    const makeBtn = (
-      label: string,
-      yOff: number,
-      bgColor: number,
-      textColor: number,
-      onClick: () => void,
-      enabled = true,
-    ): void => {
-      const BW = PW - 60;
-      const btn = new Container();
-      btn.x = PX + 30;
-      btn.y = PY + yOff;
-      btn.eventMode = enabled ? "static" : "none";
-      btn.cursor = "pointer";
-
-      const bg = new Graphics();
-      bg.rect(0, 0, BW, 34).fill({ color: bgColor, alpha: 0.9 });
-      bg.rect(0, 0, BW, 34).stroke({ color: 0x556677, width: 1 });
-      btn.addChild(bg);
-
-      const lbl = scaledText(label, 13, textColor, {
-        rawColor: true,
-        fontFamily: "monospace",
-      });
-      lbl.anchor.set(0.5, 0.5);
-      lbl.x = BW / 2;
-      lbl.y = 17;
-      lbl.eventMode = "none";
-      btn.addChild(lbl);
-
-      btn.on("pointerdown", (e) => {
-        e.stopPropagation();
-        onClick();
-      });
-      btn.on("pointerover", () => {
-        bg.alpha = 1;
-      });
-      btn.on("pointerout", () => {
-        bg.alpha = 0.9;
-      });
-      overlay.addChild(btn);
-    };
-
-    makeBtn(
-      swapLabel,
-      105,
-      swapColor,
-      swapTextColor,
-      () => {
-        const loadout = this.gameEngine?.playerLoadout;
-        if (!loadout) return;
-        // A weapon swap removes the traded-in weapon then installs the new one;
-        // the mass budget can reject a heavier replacement even though the slot
-        // is free. Verify it fits *before* charging/removing, otherwise the
-        // player would be billed and lose the old weapon for nothing.
-        if (listing.gear.kind !== GearKind.HULL) {
-          const stats = loadout.derivedStats();
-          const oldMass = gearById(currentId)?.mass ?? 0;
-          if (
-            stats.massUsed - oldMass + listing.gear.mass >
-            stats.massCapacity
-          ) {
-            this.mainContainer!.removeChild(overlay);
-            overlay.destroy({ children: true });
-            this.showToast(
-              `Перегруз: ${listing.gear.name} не помещается`,
-              0xff6644,
-            );
-            return;
-          }
-        }
-        const cost = Math.max(0, delta);
-        const refund = Math.max(0, -delta);
-        // Net signed change is `refund - cost` (== -delta): a positive delta
-        // charges the upgrade, a negative one refunds a downgrade.
-        adjustPlayerCredits(
-          this.gameEngine?.bank,
-          player,
-          refund - cost,
-          GL_COUNTERPARTY.EQUIPMENT,
-          `Замена: ${listing.gear.name}`,
-        );
-        if (listing.gear.kind === GearKind.HULL) {
-          // Gear that no longer fits a smaller hull returns to the inventory bag
-          // rather than being destroyed; slotToBagModule preserves each dropped
-          // slot's micromodule + artifact-upgrade count (lossless re-bag).
-          const dropped = loadout.swapHull(listing.gear.id);
-          for (const slot of dropped) {
-            const g = gearById(slot.gearId);
-            if (g) player.inventory.addItem(slotToBagModule(g, slot));
-          }
-          // Project the new hull's HP pool + class label onto the live ship from
-          // the canonical loadout so combat/repair reflect it immediately.
-          applyLoadoutHullToShip(player.ship, loadout);
-        } else {
-          loadout.remove(currentId);
-          loadout.install(listing.gear.id);
-        }
-        this.mainContainer!.removeChild(overlay);
-        overlay.destroy({ children: true });
-        this.showToast(`Установлено: ${listing.gear.name}`, 0x44ff88);
-        this.render();
-      },
-      canSwap,
-    );
-
-    makeBtn(
-      `Купить в запас (${listing.price} ₡)`,
-      148,
-      0x111822,
-      0x88ccff,
-      () => {
-        this.mainContainer!.removeChild(overlay);
-        overlay.destroy({ children: true });
-        this.buyItem(listing);
-      },
-    );
-
-    makeBtn("Отмена", 185, 0x0a0a0a, 0xb4b4b4, () => {
-      this.mainContainer!.removeChild(overlay);
-      overlay.destroy({ children: true });
-    });
-
-    this.mainContainer!.addChild(overlay);
   }
 
   // ── micromodule shop sub-view ──────────────────────────────────────────────
