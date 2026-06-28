@@ -87,10 +87,10 @@ are left intact.
 - Modify: src/presentation/EquipmentShopScene.ts and/or src/presentation/StationScene.ts (route through shared seams)
 - Create/Modify: src/tests/presentation/micromoduleParity.test.ts
 
-- [ ] Ensure every surface that fits micromodules uses the shared `MicromoduleApplyPanel`, and every surface that sells them uses `micromoduleShop` — aligning any forked behavior so the flow is identical wherever it appears.
-- [ ] If a Верфь is meant to offer micromodule purchase consistently (not only the science station), route it through `micromoduleShop` (no new purchase path).
-- [ ] Write tests asserting the shared seams are used identically at both entry points (no forked catalog/price/fit logic).
-- [ ] Run tests — must pass before Task 3.
+- [x] Ensure every surface that fits micromodules uses the shared `MicromoduleApplyPanel`, and every surface that sells them uses `micromoduleShop` — aligning any forked behavior so the flow is identical wherever it appears. (Already true: both `EquipmentShopScene.renderMicromoduleApplyPanel` and `StationScene.renderMicromoduleApplyPanel` mount the shared `MicromoduleApplyPanel` with an identical context shape; the only purchase surface, `StationScene` CRAFT_CENTER, uses `micromoduleShopCatalog`/`micromodulePrice`/`buyMicromodule`. Locked by the new parity test.)
+- [x] If a Верфь is meant to offer micromodule purchase consistently (not only the science station), route it through `micromoduleShop` (no new purchase path). Design call (per Task 1 audit): micromodule purchase stays CRAFT_CENTER-only — the planet hangar tray steers buyers to a «Центр крафта», and there is **no** scene-local micromodule purchase path on the planet (`renderMicromoduleShop` exists only on `StationScene`). No new purchase path added; the existing one routes through `micromoduleShop`.
+- [x] Write tests asserting the shared seams are used identically at both entry points (no forked catalog/price/fit logic). — `src/tests/presentation/micromoduleParity.test.ts`: both entry points mount the same `MicromoduleApplyPanel` instance with the canonical model + render a byte-identical modal; the station shop stocks `micromoduleShopCatalog()`, shows `micromodulePrice()`, and buys via `buyMicromodule`; the planet exposes no forked purchase path.
+- [x] Run tests — must pass before Task 3. (6/6 green; `shipyardParity` + `HangarPanel` still green; lint clean.)
 
 ### Task 3: Onboarding help accuracy + coverage
 **Files:**
