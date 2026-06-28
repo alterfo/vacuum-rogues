@@ -87,6 +87,7 @@ vi.mock("@/presentation/textures", () => ({
   loadTextureAsync: vi.fn(() => Promise.resolve(undefined)),
 }));
 
+import { Graphics } from "pixi.js";
 import {
   PlanetScene,
   clampPanoramaX,
@@ -232,6 +233,33 @@ describe("PlanetScene backdrop — flat-sprite light parallax (playtest3 F5)", (
     // light — the menu's own per-row dark panels carry text contrast.
     expect(PLANET_BACKDROP_OVERLAY_ALPHA).toBeLessThanOrEqual(0.4);
     expect(PLANET_BACKDROP_OVERLAY_ALPHA).toBeGreaterThan(0); // still takes the edge off
+  });
+
+  it("applies the lighter overlay alpha to the actual backdrop fill", () => {
+    // The value assertion above guards the constant; this guards the wiring — a
+    // regression that hardcodes a darker alpha back into the overlay fill (while
+    // leaving the constant light) would re-bury the planet art undetected.
+    const { scene } = makeScene();
+    callCreateUI(scene);
+
+    // Every Graphics built by createUI records its fill() call args; the dim
+    // backdrop overlay is the one filled at PLANET_BACKDROP_OVERLAY_ALPHA.
+    const GraphicsMock = Graphics as unknown as {
+      mock: {
+        results: Array<{ value: { fill: { mock: { calls: unknown[][] } } } }>;
+      };
+    };
+    const allFillArgs = GraphicsMock.mock.results.flatMap((r) =>
+      r.value.fill.mock.calls.map((c) => c[0]),
+    );
+    expect(
+      allFillArgs.some(
+        (a) =>
+          a != null &&
+          typeof a === "object" &&
+          (a as { alpha?: number }).alpha === PLANET_BACKDROP_OVERLAY_ALPHA,
+      ),
+    ).toBe(true);
   });
 
   it("leaves both layers empty after destroy (no leaked backdrop)", () => {

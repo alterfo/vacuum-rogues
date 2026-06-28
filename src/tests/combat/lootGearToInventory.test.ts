@@ -204,4 +204,38 @@ describe("Looted gear lands in the gear inventory (Task 5)", () => {
     expect(metals?.amount).toBe(capacity);
     manager.destroy();
   });
+
+  it("a full hold skips a junk drop but still collects a gear drop later in the list", () => {
+    // Guards the `break`→`continue` fix: the pickup loop walks back-to-front, so
+    // the junk drop (spawned last → higher index) is processed first. When the
+    // resource hold is full it must be *skipped* — and the gear drop spawned
+    // first (lower index, processed after) must STILL be collected. A revert to
+    // `break` would exit the loop on the full hold and strand the gear.
+    const { manager, player, inventory, capacity } = makeManager({
+      fillHoldToCapacity: true,
+    });
+    const r = GAME_BALANCE.lootPickupRadius;
+    manager.spawnLootForNpc(makeNpc("g", ["eq_tank"]), r - 5, 0, oneItemRng());
+    manager.spawnLootForNpc(
+      makeNpc("j", ["salvaged_plating"]),
+      r - 5,
+      0,
+      oneItemRng(),
+    );
+    expect(manager.spaceLoot.length).toBe(2);
+
+    manager.update(16, 0);
+
+    // The gear is collected despite a full hold and a junk drop ahead of it.
+    expect(player.inventory.ownedGearIds).toContain("eq_tank");
+    // The junk resource is left in space (hold full), not salvaged.
+    expect(manager.spaceLoot.length).toBe(1);
+    expect(manager.spaceLoot[0].moduleId).toBe("salvaged_plating");
+    // Resource hold unchanged — the junk never added a metal unit.
+    const metals = inventory.resources.find(
+      (m) => m.type === ResourceType.METALS,
+    );
+    expect(metals?.amount).toBe(capacity);
+    manager.destroy();
+  });
 });

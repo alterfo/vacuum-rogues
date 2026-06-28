@@ -729,7 +729,8 @@ const LOADOUT_NAME_ALIASES: Record<string, string> = {
 /**
  * Resolve a loot/drop token to a catalog gear id, or `undefined` when it is not
  * recognisable gear (e.g. the junk-salvage fallbacks `salvaged_plating` /
- * `scrap_thruster`, intentionally non-gear so they salvage to metal).
+ * `spare_capacitor` / `scrap_thruster` in `DEFAULT_LOOT_MODULES`, intentionally
+ * non-gear so they salvage to metal).
  *
  * Accepts a catalog gear **id** (a real drop like `eq_tank` / `grav_tractor_1`),
  * a gear **display name** (NPC `loadoutSummary` entries are human-readable names
