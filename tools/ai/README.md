@@ -121,6 +121,15 @@ transcript.ts          oddityJudge.ts / visionJudge.ts      runJudge.ts
 
 ## Running it
 
+The Anthropic SDK is an **optional dev-only install** — kept out of `package.json` so
+importing the judge and running every test stays free without it. Install it once
+before the first live run (running live without it degrades to a clear "install
+`@anthropic-ai/sdk`" error, never an opaque module-not-found crash):
+
+```bash
+npm i -D @anthropic-ai/sdk      # one-time, only needed for the live deep sweep
+```
+
 ```bash
 npm run letsplay:judge          # plays K sessions, judges live, writes .letsplay/oddity-report.*
 ANTHROPIC_API_KEY=sk-...  npm run letsplay:judge   # needs a real key

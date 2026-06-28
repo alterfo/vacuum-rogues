@@ -171,11 +171,25 @@ export const defaultAnthropicTransport: LlmTransport = async (req, apiKey) => {
     );
   }
   // Dynamic import keeps the SDK out of the import graph (and optional to install).
-  const mod = (await import(/* @vite-ignore */ ANTHROPIC_SDK_MODULE)) as {
+  // The SDK is deliberately NOT a package.json dependency — importing this module
+  // and running every test stays free without it. So when the live path is actually
+  // invoked without it installed, degrade to a clear, actionable error (matching the
+  // missing-key guard above) rather than an opaque `ERR_MODULE_NOT_FOUND`.
+  type AnthropicModule = {
     default: new (opts: { apiKey: string }) => {
       messages: { create(args: Record<string, unknown>): Promise<unknown> };
     };
   };
+  let mod: AnthropicModule;
+  try {
+    mod = (await import(/* @vite-ignore */ ANTHROPIC_SDK_MODULE)) as AnthropicModule;
+  } catch {
+    throw new GameSystemException(
+      "LLM_SDK_MISSING",
+      `The Anthropic SDK (${ANTHROPIC_SDK_MODULE}) is not installed — run ` +
+        `\`npm i -D ${ANTHROPIC_SDK_MODULE}\` to run the offline LLM judge live.`,
+    );
+  }
   const Anthropic = mod.default;
   const client = new Anthropic({ apiKey });
   const resp = await client.messages.create({
