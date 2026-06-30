@@ -32,10 +32,10 @@ All changes are pure refactors: zero runtime-behaviour change, zero save-schema 
 - Delete: `src/ecs/Component.ts`, `src/ecs/Entity.ts`, `src/ecs/ECSWorld.ts`
 - Delete: `src/tests/ecs.test.ts`
 
-- [ ] Confirm nothing in `src/` (outside tests) imports from `src/ecs/` — run `grep -r "from.*['\"].*ecs" src/ --include="*.ts" -l | grep -v tests`; expect empty output
-- [ ] Delete `src/ecs/Component.ts`, `src/ecs/Entity.ts`, `src/ecs/ECSWorld.ts`
-- [ ] Delete `src/tests/ecs.test.ts` (its sole purpose was testing the now-deleted code)
-- [ ] `npm test -- --run && npm run lint && npx tsc --noEmit` — all green
+- [x] Confirm nothing in `src/` (outside tests) imports from `src/ecs/` — run `grep -r "from.*['\"].*ecs" src/ --include="*.ts" -l | grep -v tests`; expect empty output
+- [x] Delete `src/ecs/Component.ts`, `src/ecs/Entity.ts`, `src/ecs/ECSWorld.ts`
+- [x] Delete `src/tests/ecs.test.ts` (its sole purpose was testing the now-deleted code)
+- [x] `npm test -- --run && npm run lint && npx tsc --noEmit` — all green
 
 ### Task 2: Decouple BankScene from the concrete GameEngine type (Cycle 1)
 
