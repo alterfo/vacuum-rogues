@@ -452,8 +452,8 @@ export const GAME_BALANCE = {
    * - CONTAINED_SHARE: once the share peaked above this and is pushed back to/below it, the arc is contained.
    * - MIN_SYSTEMS: loss is suppressed on tiny/legacy maps below this system count.
    */
-  OVERMIND_SPREAD_GRACE_DAYS: 3,
-  OVERMIND_SPREAD_INTERVAL_DAYS: 3,
+  OVERMIND_SPREAD_GRACE_DAYS: 6,
+  OVERMIND_SPREAD_INTERVAL_DAYS: 5,
   OVERMIND_SPREAD_CAPTURES_PER_TICK: 1,
   OVERMIND_SPREAD_LOSS_SHARE: 0.5,
   OVERMIND_SPREAD_CONTAINED_SHARE: 0.2,
