@@ -54,10 +54,10 @@ All changes are pure refactors: zero runtime-behaviour change, zero save-schema 
 **Files:**
 - Modify: `src/systems/banking/economy.ts`
 
-- [ ] Read lines around `import type { BankingService }` in `economy.ts` (line 5); identify every use of `BankingService` type in that file
-- [ ] If used only as a narrow seam (a couple of methods), replace the `import type { BankingService }` with a local inline interface (e.g. `BankLike`) covering only those members — no change to `BankingService.ts`
-- [ ] Confirm `BankingService` still satisfies the narrowed type structurally (`npx tsc --noEmit`)
-- [ ] `npm test -- --run && npm run lint` — all green
+- [x] Read lines around `import type { BankingService }` in `economy.ts` (line 5); identify every use of `BankingService` type in that file
+- [x] If used only as a narrow seam (a couple of methods), replace the `import type { BankingService }` with a local inline interface (e.g. `BankLike`) covering only those members — no change to `BankingService.ts`
+- [x] Confirm `BankingService` still satisfies the narrowed type structurally (`npx tsc --noEmit`)
+- [x] `npm test -- --run && npm run lint` — all green
 
 ### Task 4: Re-index and verify cycle reduction
 

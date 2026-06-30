@@ -2,7 +2,12 @@ import type { Player } from "@/domain/Player";
 import { AccountType, INTERNAL_ACCOUNTS } from "@/domain/banking/Ledger";
 import { logger } from "@/utils/logger";
 import type { BankBus, Unsubscribe } from "./bus";
-import type { BankingService } from "./BankingService";
+
+/** Narrow seam covering the BankingService members economy.ts actually uses. */
+interface BankLike {
+  getLedger(): { hasAccount(id: string): boolean };
+  balanceOf(accountId: string): number;
+}
 
 /**
  * The minimum a consumer site needs to move money through the АБС: the bus it
@@ -14,7 +19,7 @@ import type { BankingService } from "./BankingService";
  */
 export interface BankAccess {
   readonly bus: BankBus;
-  readonly service: BankingService;
+  readonly service: BankLike;
 }
 
 /**
@@ -326,7 +331,7 @@ export function bindCreditsProjection(
  */
 export function openPlayerCurrentAccount(
   bus: BankBus,
-  service: BankingService,
+  service: BankLike,
   player: Player,
 ): void {
   const accountId = player.currentAccountId;
@@ -355,7 +360,7 @@ export function openPlayerCurrentAccount(
  */
 export function setupPlayerBanking(
   bus: BankBus,
-  service: BankingService,
+  service: BankLike,
   player: Player,
 ): Unsubscribe {
   const unsubscribe = bindCreditsProjection(bus, player);
