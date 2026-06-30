@@ -1,4 +1,6 @@
 ---
+> Superseded by docs/plans/20260630-architecture-hygiene.md Tasks 2–4
+
 # Break Hub Import Cycles (Graph Hygiene)
 
 ## Overview
