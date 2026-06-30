@@ -2084,6 +2084,7 @@ export class NpcShipManager implements FlightModule {
    */
   private updateCombatPursuit(physics: ShipPhysics): void {
     if (this.deps.isPaused?.()) return; // active-pause: maneuvering frozen
+    if (!this.deps.isTurnRunning()) return; // orbit is turn-gated: Space ends the turn → orbit stops
     // Player break-off (Task 3): a manually plotted route (to a planet / to flee)
     // takes over navigation — yield the auto-pursuit while the player's course is
     // flying so the ship is never pinned in its strafe orbit. The override ends the

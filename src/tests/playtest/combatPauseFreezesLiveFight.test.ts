@@ -69,6 +69,7 @@ function makeDriftingHostile(id: string, x: number, y: number): NpcShipSprite {
     },
     setNpcCombatTarget: () => {},
     clearNpcCombatTarget: () => {},
+    setPursuitTarget: () => {},
   };
   return sprite as unknown as NpcShipSprite;
 }
@@ -259,6 +260,53 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
     // The stale route must be cleared so pressing Space after "Огонь" doesn't
     // re-execute a route to the old destination instead of staying in combat.
     expect(scene.plannedRoute).toBeNull();
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("stops orbiting when the player ends the turn mid-combat (Space = pause)", () => {
+    expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
+    const scene = harness.currentScene() as unknown as FlightPrivates;
+    const { shipPhysics: physics, npcManager, combatPause } = scene;
+
+    // Place enemy at exactly WEAPON_RANGE so the ship orbit keeps it in range.
+    const WEAPON_RANGE = 240;
+    const enemy = makeDriftingHostile(
+      "orbit-pause-foe",
+      physics.shipX + WEAPON_RANGE,
+      physics.shipY,
+    );
+    (npcManager as unknown as { npcSprites: NpcShipSprite[] }).npcSprites.push(
+      enemy,
+    );
+    scene.isTurnRunning = true;
+
+    (
+      npcManager as unknown as {
+        launchCombatWithNpc(n: NpcShipSprite["npc"]): void;
+      }
+    ).launchCombatWithNpc(enemy.npc);
+
+    expect(combatPause.paused).toBe(true);
+
+    // Lift the pause — the player pressed "Огонь" and combat is now live.
+    (combatPause as unknown as { resume(): void }).resume();
+    expect(combatPause.paused).toBe(false);
+
+    // Tick a few frames: the orbit should steer the ship toward the carrot.
+    for (let i = 0; i < 3; i++) harness.tick(50);
+
+    // Player presses Space — ends the turn: stop the ship and clear isTurnRunning.
+    // endTurn() does both; we mirror that here so physics doesn't coast.
+    physics.stop();
+    scene.isTurnRunning = false;
+
+    const posAfterPause = { x: physics.shipX, y: physics.shipY };
+
+    // Several more frames: the orbit must NOT restart; ship holds position.
+    for (let i = 0; i < 5; i++) harness.tick(50);
+
+    expect(physics.shipX).toBe(posAfterPause.x);
+    expect(physics.shipY).toBe(posAfterPause.y);
     expect(harness.errors()).toEqual([]);
   });
 });
