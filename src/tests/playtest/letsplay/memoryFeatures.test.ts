@@ -355,8 +355,8 @@ describe("featurize (observation + memory blocks)", () => {
     // `tools/ai/train_player.py`'s NUM_ACTIONS must match. Changing a width here is
     // a deliberate act that forces a retrain + re-export — so pin the numbers, not
     // just their sum (which is tautological).
-    expect(OBS_FEATURE_LENGTH).toBe(12);
+    expect(OBS_FEATURE_LENGTH).toBe(15);
     expect(MEMORY_FEATURE_LENGTH).toBe(6);
-    expect(FEATURE_LENGTH).toBe(18);
+    expect(FEATURE_LENGTH).toBe(21);
   });
 });

@@ -13,6 +13,9 @@
 import type { GameEngine } from "@/systems/GameEngine";
 import type { StarSystem } from "@/domain/StarSystem";
 import type { Planet } from "@/domain/Planet";
+import type { ResourceType } from "@/types";
+import { TradeSystem } from "@/systems/TradeSystem";
+import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
 
 /** Resolve the player's current star system from the live engine, if any. */
 export function currentSystem(engine: GameEngine): StarSystem | null {
@@ -45,5 +48,62 @@ export function acceptBoardQuests(engine: GameEngine): void {
     if (active.has(offered.id)) continue;
     if (!quests.getQuestTemplate(offered.id)) continue; // not registered ⇒ skip
     quests.acceptQuest(offered.id, planet.id);
+  }
+}
+
+/**
+ * Execute simple market trades at `planet` via the real {@link TradeSystem} seam:
+ * sell all held cargo at any price, then spend available credits on the cheapest
+ * available good. Uses the same `executeTrade` path the {@link TradeScene} UI
+ * uses — credits and cargo change, the bank ledger is posted. Dev-only helper.
+ */
+export function executeTradeOnPlanet(engine: GameEngine, planet: Planet): void {
+  const player = engine.player;
+  if (!player) return;
+  const ts = new TradeSystem();
+  const capacity = cargoCapacityOf(engine.playerLoadout);
+
+  // Sell every held good (clone list so mutations don't affect iteration)
+  for (const cargo of [...player.inventory.resources]) {
+    if (cargo.amount <= 0) continue;
+    ts.executeTrade(
+      player,
+      planet,
+      cargo.type,
+      cargo.amount,
+      false,
+      capacity,
+      engine.bank,
+    );
+  }
+
+  // Buy as many units of the cheapest available good as credits + hold allow
+  const resources = planet.market?.availableResources ?? [];
+  if (resources.length === 0) return;
+  const holdUsed = player.inventory.resources.reduce((s, r) => s + r.amount, 0);
+  const holdFree = Math.max(0, capacity - holdUsed);
+  if (holdFree === 0) return;
+
+  let cheapestResource: ResourceType | null = null;
+  let cheapestPrice = Infinity;
+  for (const res of resources) {
+    const price = ts.getBuyPrice(planet, res, player);
+    if (price > 0 && price < cheapestPrice) {
+      cheapestPrice = price;
+      cheapestResource = res;
+    }
+  }
+  if (!cheapestResource || player.credits < cheapestPrice) return;
+  const qty = Math.min(Math.floor(player.credits / cheapestPrice), holdFree);
+  if (qty > 0) {
+    ts.executeTrade(
+      player,
+      planet,
+      cheapestResource,
+      qty,
+      true,
+      capacity,
+      engine.bank,
+    );
   }
 }

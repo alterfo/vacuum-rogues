@@ -31,6 +31,7 @@
  */
 import { GameSystemException } from "@/exceptions/GameSystemException";
 import { GameValidationException } from "@/exceptions/GameValidationException";
+import { SceneType } from "@/types";
 import {
   ACTION_ORDER,
   type Observation,
@@ -56,7 +57,7 @@ export interface NeuralPolicyOptions {
 }
 
 /** Number of observation-derived features (the egocentric vitals/system block). */
-export const OBS_FEATURE_LENGTH = 12;
+export const OBS_FEATURE_LENGTH = 15;
 
 /**
  * Length of the {@link featurize} vector — the net's input width: the
@@ -76,8 +77,9 @@ function norm(n: number, denom: number): number {
 
 /**
  * Project an {@link Observation} (and the agent's {@link AgentMemory} belief state)
- * into a fixed-length numeric feature vector (the net's input): an
- * {@link OBS_FEATURE_LENGTH}-wide egocentric block followed by the
+ * into a fixed-length numeric feature vector (the net's input): a
+ * {@link OBS_FEATURE_LENGTH}-wide egocentric block (12 vitals/system features +
+ * 3 scene-type one-hot bits: SPACE_FLIGHT / PLANET / STAR_MAP) followed by the
  * {@link MEMORY_FEATURE_LENGTH}-wide belief block ({@link memoryFeatures}). Pure
  * and deterministic — the same `(obs, memory)` always yields the exact same
  * {@link FEATURE_LENGTH}-wide vector, every component already in `[0, 1]` so it
@@ -107,6 +109,12 @@ export function featurize(obs: Observation, memory?: AgentMemory): number[] {
     norm(availableQuests, 8),
     norm(obs.quests.length, 8),
     norm(obs.legalActions.length, ACTION_ORDER.length),
+    // Scene-type one-hot bits (indices 12–14): help the net discriminate which
+    // actions are meaningful in the current scene without memorising the legal-
+    // action mask alone.
+    obs.scene === SceneType.SPACE_FLIGHT ? 1 : 0,
+    obs.scene === SceneType.PLANET ? 1 : 0,
+    obs.scene === SceneType.STAR_MAP ? 1 : 0,
     ...memoryFeatures(obs, memory),
   ];
 }

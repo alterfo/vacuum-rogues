@@ -29,6 +29,7 @@ import {
   currentSystem,
   landedPlanet,
   acceptBoardQuests,
+  executeTradeOnPlanet,
 } from "./engineQueries";
 
 /**
@@ -245,13 +246,24 @@ export class PlayerAgent {
       }
 
       case "trade": {
-        // The market opens off a planet; from inside the market there is no
-        // executor yet, so a tick keeps the loop safe.
         const planet =
           landedPlanet(engine) ?? currentSystem(engine)?.planets[0];
-        if (obs.scene === SceneType.PLANET && planet)
+        if (!planet) {
+          this.harness.tick();
+          return;
+        }
+        if (obs.scene === SceneType.TRADE) {
+          // Execute the actual market trade, then return to the planet lobby.
+          executeTradeOnPlanet(engine, planet);
+          await this.harness.goTo(SceneType.PLANET, { planet });
+          return;
+        }
+        if (obs.scene === SceneType.PLANET) {
           await this.harness.goTo(SceneType.TRADE, { planet });
-        else this.harness.tick();
+          return;
+        }
+        // From flight or elsewhere, navigate to the planet first.
+        await this.harness.goTo(SceneType.PLANET, { planet });
         return;
       }
 
