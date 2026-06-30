@@ -34,6 +34,25 @@ BEFORE reading any source files, orient with the `vacuum` MCP server (one tool c
 
 This orientation step keeps per-task context small and prevents missing one of the lockstep files. After it, proceed with the task exactly as described below.
 
+STANDING RULES FOR THIS PROJECT (enforce on every iteration without exception):
+
+1. BLAST RADIUS FIRST. Before editing any function, class, or method call `gitnexus impact({target:"SymbolName",direction:"upstream"})` and report the direct callers. Skip only for brand-new files with no callers yet.
+
+2. NEVER TOUCH EXISTING TEST ASSERTIONS. The test suite is known-good. You may add new tests and new test files, but never weaken, delete, or change the meaning of an existing `expect(...)` assertion. If a change makes an existing test red, that is a root-cause signal — diagnose and fix the code, not the test.
+
+3. VALIDATE WITH: `npm test -- --run` (unit, ~15 s), `npm run lint`, `npx tsc --noEmit`. Do NOT use bare `npm test` (that opens watch mode). All three must be green before marking a task done.
+
+4. LOCKSTEP EDITS — never do one without the others:
+   - New domain field (src/types/ or src/domain/)  →  src/validation/schemas.ts  +  src/data/MigrationPipeline.ts (if old saves need defaulting)
+   - New UI string (player-facing text)  →  add key to BOTH src/i18n/ru.ts AND src/i18n/en.ts; render through t("key") — never an inline Cyrillic literal
+   - New scene  →  SceneType enum, SceneFactory case, contextDependentScenes if needed
+
+5. COMMIT HYGIENE. Commit message subject ≤ 100 characters (commitlint enforces this). Never pass --no-verify. If a pre-commit hook fails, fix the underlying issue.
+
+6. SpaceFlightScene.ts LINE GUARD. After any edit to src/presentation/SpaceFlightScene.ts run `wc -l src/presentation/SpaceFlightScene.ts` — must be ≤ 1898. If over, extract to a helper before committing.
+
+7. NO DIRECT CREDIT MUTATION. Credits move through economy.ts helpers (adjustPlayerCredits / payTribute / transfer) — never `player.credits +=`.
+
 Read the plan file at {{PLAN_FILE}}. Find the FIRST Task section (### Task N: or ### Iteration N:) that has uncompleted checkboxes ([ ]).
 
 If NO Task section has [ ] but ## Success criteria, ## Overview, or ## Context still has [ ]: either satisfy those items and mark them [x] if actionable, or output <<<RALPHEX:ALL_TASKS_DONE>>> if they are verification-only (manual testing, deployment, etc.) — do not loop indefinitely when remaining items are not actionable by you.

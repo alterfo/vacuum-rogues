@@ -1,0 +1,161 @@
+# Project-level make_plan override for SpaceRangers (Вакуумные Пройдохи).
+#
+# WHY: The default make_plan prompt does not know the project's test commands,
+# lockstep rules, or plan format constraints. This override adds a PROJECT RULES
+# section that is prepended before the verbatim default body so generated plans
+# contain the correct validate steps, lockstep reminders, and commit rules
+# out of the box.
+#
+# KEEP IN SYNC with ~/.config/ralphex/prompts/make_plan.txt (the user-level default).
+
+PROJECT RULES (bake these into every plan you create):
+
+Test / validate commands for this project:
+  - Unit tests:  npm test -- --run        (~15 s, no watch mode)
+  - Lint:        npm run lint
+  - Types:       npx tsc --noEmit
+  - Playtest:    npm run test:playtest    (real-engine integration, ~3 s, pre-push gate)
+  - Save compat: npm run test:save-compat (~2 s, run after any schema/migration change)
+  Each task that touches code MUST end with all three of the first group green.
+
+Lockstep reminders to include in the relevant task checklist items:
+  - Domain field added/changed  →  schemas.ts + MigrationPipeline.ts
+  - New UI string               →  both src/i18n/ru.ts AND src/i18n/en.ts; never inline Cyrillic
+  - New scene                   →  SceneType, SceneFactory, contextDependentScenes
+  - New audio track/SFX         →  TrackKey/SfxKey enum in AudioManager.ts
+
+Standing rules to embed in ## Development Approach:
+  - Never modify existing test assertions (suite is known-good; red test = fix the code)
+  - Blast radius check (gitnexus impact) before editing any existing symbol
+  - Commit subject ≤ 100 chars; never --no-verify
+  - SpaceFlightScene.ts: wc -l ≤ 1898 after every edit
+
+# ---- verbatim default body below ----
+
+You are helping create an implementation plan for: {{PLAN_DESCRIPTION}}
+
+Progress log: {{PROGRESS_FILE}} (contains previous Q&A from this session)
+
+IMPORTANT: Read the progress file first to see any questions you already asked and answers provided. Do not repeat questions.
+
+## Step 0: Check for Existing Plan
+
+FIRST, check if a plan file already exists in {{PLANS_DIR}}/ matching this request.
+If a plan file for this feature already exists:
+- Output <<<RALPHEX:PLAN_READY>>> immediately
+- Do NOT modify the existing plan
+- STOP - do not output anything else
+
+## Step 1: Read Progress File
+
+Read {{PROGRESS_FILE}} to understand:
+- What questions you have already asked
+- What answers the user provided
+- Any exploration notes from previous iterations
+
+## Step 2: Explore the Codebase
+
+If this is your first iteration (no Q&A in progress file):
+- Search for relevant files and patterns
+- Understand the project structure using vacuum MCP (find_symbol, get_architecture, get_scene_info)
+- Identify existing conventions and patterns
+- Find related code that will inform the implementation
+
+## Step 3: Ask Clarifying Questions (if needed)
+
+If you need user input to create a good plan, emit a QUESTION signal:
+
+<<<RALPHEX:QUESTION>>>
+{"question": "Your question here?", "options": ["Option 1", "Option 2", "Option 3"]}
+<<<RALPHEX:END>>>
+
+Rules for questions:
+- Ask ONE question at a time
+- Provide 2-4 concrete options (not vague like "other")
+- Only ask if you genuinely need clarification
+- Do not ask about implementation details you can decide yourself
+- Focus on architectural choices, feature scope, and user preferences
+
+After emitting QUESTION, STOP immediately. Do not continue. The loop will collect the answer and run another iteration.
+
+## Step 3.5: Present Draft for Review
+
+When you have enough information to create a plan, present it as a draft for user review BEFORE writing to disk.
+
+Emit the plan draft:
+
+<<<RALPHEX:PLAN_DRAFT>>>
+---
+# <Title>
+
+## Overview
+<Brief description of what will be implemented>
+
+## Context
+- Files involved: <list relevant files>
+- Related patterns: <existing patterns to follow>
+- Dependencies: <external dependencies if any>
+
+## Development Approach
+- **Testing approach**: Regular (code first, then tests)
+- Complete each task fully before moving to the next; never modify existing test assertions
+- Blast radius check (gitnexus impact) before editing any existing symbol
+- **CRITICAL: every task MUST include new/updated tests**
+- **CRITICAL: all three gates (npm test -- --run, npm run lint, npx tsc --noEmit) must pass before starting next task**
+
+## Implementation Steps
+
+### Task 1: <Title>
+
+**Files:**
+- Modify: `path/to/file.ts`
+
+- [ ] implementation step
+- [ ] write/update tests
+- [ ] npm test -- --run && npm run lint && npx tsc --noEmit — must be green
+
+### Task N: Verify acceptance criteria
+
+- [ ] npm test -- --run — full unit suite green
+- [ ] npm run lint — clean
+- [ ] npx tsc --noEmit — clean
+- [ ] npm run test:playtest — real-engine gate green (if systems/scenes changed)
+<<<RALPHEX:END>>>
+
+CRITICAL: After emitting PLAN_DRAFT, STOP immediately. Do not continue. Do not write the plan file yet.
+
+The loop will:
+1. Display the draft to the user with terminal rendering
+2. Ask the user to Accept, Revise, Interactive review (open in $EDITOR), or Reject
+3. Run another iteration with the user's decision
+
+Handling user responses:
+
+If user ACCEPTS (progress file contains "DRAFT REVIEW: accept"):
+- Proceed to Step 4 to write the plan file to disk
+- Then emit PLAN_READY
+
+If user requests REVISION (progress file contains "DRAFT REVIEW: revise" and "FEEDBACK:"):
+- Read the feedback from the progress file
+- Feedback may be free-form text or a unified diff — apply the requested modifications
+- Emit a new PLAN_DRAFT with the updated plan
+- STOP and wait for next review
+
+If user REJECTS (progress file contains "DRAFT REVIEW: reject"):
+- Output exactly: <<<RALPHEX:TASK_FAILED>>>
+- STOP immediately
+
+## Step 4: Write Plan File (after draft accepted)
+
+Write the accepted plan to disk at {{PLANS_DIR}}/YYYYMMDD-<slug>.md.
+The plan MUST start with exactly `---` on the first line (ralphex parser requirement).
+After writing, emit:
+<<<RALPHEX:PLAN_READY>>>
+STOP IMMEDIATELY after this signal.
+
+CRITICAL RULES:
+- Do NOT use natural language questions — only use <<<RALPHEX:QUESTION>>> signal format
+- Do NOT translate the `### Task N:` and `### Iteration N:` section headers — they are structural tokens
+- The PLAN_READY signal means "plan is complete, session is done"
+
+OUTPUT FORMAT: No markdown formatting in response text. Plain text and - lists are fine. The plan FILE should use markdown.
