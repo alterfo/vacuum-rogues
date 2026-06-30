@@ -90,11 +90,12 @@ these timers. A lethal shot calls
 callback; the scene also completes any bound BOUNTY. Killing the OVERMIND core in flight wins the
 game (`handleInFlightDeath` → `showGameOutcomeScreen(true)`).
 
-**Fire is real-time, gated on the active pause — not the route-turn.** `CombatModule.update` ticks
-its fire timers whenever it is **not paused** (its `isPaused` dep = `combatPause.paused`), so once
-combat is engaged both the player's weapon and NPC return fire keep firing whether or not a
-route-"Ход" is running — that decoupling is what makes NPCs shoot back. Ship movement and the
-calendar stay turn-gated (the navigation half of the Space-Rangers model). When the module's
+**Fire is gated on both the active pause AND the running turn.** `CombatModule.update` ticks its
+fire timers whenever it is **not frozen** (`isFrozen()` = `isPaused()` = `combatPause.paused ||
+!isTurnRunning`). Both player weapons and NPC return fire halt when the overlay is up **or** when
+the player ends the turn via Space — pressing Space is a true combat pause: no shots land on either
+side until the player starts the next turn. Ship movement and the calendar are also turn-gated (the
+full Space-Rangers model). When the module's
 `endCombat` fires (last combatant gone), `onCombatEnded` calls `SpaceFlightScene.endTurn()` so a
 resolved fight never leaves `isTurnRunning` stuck true.
 

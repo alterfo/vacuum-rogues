@@ -202,7 +202,7 @@ export class SpaceFlightScene extends GameScene {
 
     this.combatModule = new CombatModule({
       getShipPhysics: () => this.shipPhysics,
-      isPaused: () => this.combatPause.paused,
+      isPaused: () => this.combatPause.paused || !this.isTurnRunning,
       getPlayerLoadout: () => this.gameEngine?.playerLoadout ?? null,
       getUiLayer: () => this.renderer.uiLayer,
       getGameLayer: () => this.renderer.gameLayer,

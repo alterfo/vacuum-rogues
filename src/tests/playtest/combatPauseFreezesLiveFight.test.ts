@@ -309,4 +309,53 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
     expect(physics.shipY).toBe(posAfterPause.y);
     expect(harness.errors()).toEqual([]);
   });
+
+  it("freezes all fire when the player ends the turn mid-combat (Space = no shots)", () => {
+    expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
+    const scene = harness.currentScene() as unknown as FlightPrivates;
+    const {
+      shipPhysics: physics,
+      npcManager,
+      combatModule,
+      combatPause,
+    } = scene;
+
+    // Place enemy inside weapon range so fire would normally proceed.
+    const enemy = makeDriftingHostile(
+      "fire-pause-foe",
+      physics.shipX + 100,
+      physics.shipY,
+    );
+    (npcManager as unknown as { npcSprites: NpcShipSprite[] }).npcSprites.push(
+      enemy,
+    );
+    scene.isTurnRunning = true;
+
+    (
+      npcManager as unknown as {
+        launchCombatWithNpc(n: NpcShipSprite["npc"]): void;
+      }
+    ).launchCombatWithNpc(enemy.npc);
+
+    expect(combatPause.paused).toBe(true);
+
+    // Lift the overlay — combat is now live.
+    (combatPause as unknown as { resume(): void }).resume();
+    expect(combatPause.paused).toBe(false);
+
+    const enemyHull0 = enemy.npc.hullHP;
+    const playerHull0 = harness.player()!.ship.hullHP;
+
+    // Player presses Space — ends the turn.
+    physics.stop();
+    scene.isTurnRunning = false;
+
+    // Several fire-interval-long frames: no shots must land on either side.
+    for (let i = 0; i < 5; i++) harness.tick(FIRE);
+
+    expect(enemy.npc.hullHP).toBe(enemyHull0); // player didn't fire
+    expect(harness.player()!.ship.hullHP).toBe(playerHull0); // NPC didn't fire
+    expect(combatModule.isActive).toBe(true); // combat still engaged
+    expect(harness.errors()).toEqual([]);
+  });
 });
