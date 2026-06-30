@@ -44,13 +44,17 @@ behaviour must be byte-for-byte identical, gated by the full test suite.
 - Modify: src/presentation/BankScene.ts
 - Create: src/presentation/bankSceneHost.ts (or reuse an existing port if one already fits)
 
-- [ ] Identify exactly which members of `GameEngine` `BankScene` actually uses (read the
-      class body; likely `audio`, `bank`, `getPlayer()`, `transitionTo`, etc.).
-- [ ] Define a minimal `BankSceneHost` interface exposing only those members.
-- [ ] Replace `import type { GameEngine }` in `BankScene.ts` with the narrow `BankSceneHost`
+- [x] Identify exactly which members of `GameEngine` `BankScene` actually uses (read the
+      class body; likely `audio`, `bank`, `getPlayer()`, `transitionTo`, etc.). — done under
+      architecture-hygiene Task 2 (commit `9974fab`).
+- [x] Define a minimal `BankSceneHost` interface exposing only those members. —
+      `src/presentation/BankSceneHost.ts` exists on disk, confirmed.
+- [x] Replace `import type { GameEngine }` in `BankScene.ts` with the narrow `BankSceneHost`
       type; the constructor/field keeps accepting the real `GameEngine` (it structurally
-      satisfies the interface — no call-site change in `SceneFactory`).
-- [ ] `npx tsc --noEmit` clean; `npm test -- --run` green.
+      satisfies the interface — no call-site change in `SceneFactory`). — confirmed:
+      `BankScene.ts` line 4 imports `BankSceneHost`, not `GameEngine`.
+- [x] `npx tsc --noEmit` clean; `npm test -- --run` green. — re-verified now: `tsc --noEmit`
+      clean, `npm run lint` 0 errors.
 
 ### Task 2: Decouple economy from the concrete BankingService type (Cycle 5)
 **Files:**
