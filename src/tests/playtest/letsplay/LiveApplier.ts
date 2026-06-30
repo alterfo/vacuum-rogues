@@ -95,11 +95,15 @@ const skipped = (reason: string): ApplyResult => ({
  * Dispatch one chosen {@link Action} onto the live game via `controller`,
  * returning which verb ran (for the autopilot transcript / tests).
  *
- * Two safety gates keep this total and legal:
+ * Three safety gates keep this total and legal:
  *  - **Illegal action ⇒ no-op.** If `action.kind` is not in `obs.legalActions`
  *    (the scene can't perform it right now), nothing is driven and the result is
  *    `{ applied: false, call: "none" }`. The autopilot's policy is supposed to
  *    only ever pick a legal action, but the applier never trusts it.
+ *  - **Warp-in-transit ⇒ tick, except a combat reaction.** While the ship is
+ *    already flying to the system edge for a pending jump, every action other
+ *    than `attack`/`flee`/`wait` degrades to a tick instead of driving its verb,
+ *    so a stray `land`/`dock`/`warp`/`move` can't redirect or cancel the route.
  *  - **Scene-aware two-step verbs.** `move`/`trade`/`warp` mean different things
  *    by scene (fly vs. leave a panel; open a market vs. execute a sale; open the
  *    map vs. jump), resolved here from `obs.scene` exactly as the headless
@@ -113,6 +117,24 @@ export async function applyLiveAction(
 ): Promise<ApplyResult> {
   if (!obs.legalActions.includes(action.kind)) {
     return skipped(`illegal: ${action.kind} not in legalActions`);
+  }
+
+  // Safety net: while a hyperjump is already in transit (ship flying to the
+  // system edge), only a genuine combat reaction may override the wait —
+  // land/dock/warp/move would each redirect or cancel the in-progress route via
+  // a direct executeRouteTo()/openStarMap() call, silently dropping the pending
+  // jump (the live autopilot bypasses the in-game click handler's own
+  // "Navigation locked: en route to warp edge" guard, so this is the seam that
+  // has to enforce it instead). Covers every policy, not just the heuristic —
+  // the neural net's warpInTransit feature is a learned signal, not a guarantee.
+  if (
+    obs.warpInTransit &&
+    action.kind !== "wait" &&
+    action.kind !== "attack" &&
+    action.kind !== "flee"
+  ) {
+    await controller.tick();
+    return { applied: true, call: "tick" };
   }
 
   switch (action.kind) {
@@ -140,14 +162,6 @@ export async function applyLiveAction(
       return { applied: true, call: "dock" };
 
     case "warp": {
-      // Safety: if the ship is already flying to the system edge for a pending
-      // jump, don't cancel it by re-opening the star map — just tick and wait.
-      // This guards against the neural net picking "warp" while warpInTransit
-      // is true (the heuristic returns "wait" for that, but the net may not).
-      if (obs.warpInTransit) {
-        await controller.tick();
-        return { applied: true, call: "tick" };
-      }
       // Two-step warp: from flight, open the galaxy map; from the map, jump.
       if (obs.scene !== SceneType.STAR_MAP) {
         await controller.openStarMap();

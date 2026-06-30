@@ -133,8 +133,11 @@ export function decideWithMemory(obs: Observation, mem: AgentMemory): Action {
   const avoidDanger = danger > 0 && hull < BATTLE_READY_HULL_FRACTION;
 
   // 2) If a hyperjump is already in transit (ship flying to system edge), wait —
-  // opening StarMap would cancel the pending warp. Highest priority after survive.
-  if (obs.warpInTransit) {
+  // opening StarMap would cancel the pending warp. Highest priority after survive,
+  // EXCEPT a genuinely engaged hostile still needs its combat reaction (the
+  // survive candidates pushed above) rather than being discarded for "wait":
+  // attack/flee don't touch the planned route, so they can't disturb the warp.
+  if (obs.warpInTransit && obs.hostiles.length === 0) {
     return { kind: "wait", reason: "mem:warp-in-transit" };
   }
 

@@ -118,6 +118,34 @@ describe("applyLiveAction — legal actions drive the expected controller verb",
     expect(calls).toEqual(["tick"]);
   });
 
+  it.each<Action["kind"]>(["land", "dock", "move"])(
+    "%s while warpInTransit=true calls tick instead (would otherwise redirect/cancel the route)",
+    async (kind) => {
+      const { controller, calls } = makeController();
+      const obs: Observation = {
+        ...makeObs(SceneType.SPACE_FLIGHT),
+        warpInTransit: true,
+      };
+      const result = await applyLiveAction(act(kind), obs, controller);
+      expect(result.call).toBe("tick");
+      expect(calls).toEqual(["tick"]);
+    },
+  );
+
+  it.each<Action["kind"]>(["attack", "flee"])(
+    "%s while warpInTransit=true still drives its own verb (combat reaction overrides warp-wait)",
+    async (kind) => {
+      const { controller, calls } = makeController();
+      const obs: Observation = {
+        ...makeObs(SceneType.SPACE_FLIGHT),
+        warpInTransit: true,
+      };
+      const result = await applyLiveAction(act(kind), obs, controller);
+      expect(result.call).toBe(kind);
+      expect(calls).toEqual([kind]);
+    },
+  );
+
   it("forwards the action targetId to the controller verb", async () => {
     const land = vi.fn();
     const { controller } = makeController();

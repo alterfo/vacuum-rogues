@@ -322,6 +322,27 @@ describe("decideWithMemory (pure)", () => {
       );
       expect(action.kind).toBe("repair");
     });
+
+    it("a hostile mid-warp-transit ⇒ still attacks (survive beats warp-wait)", () => {
+      const action = decideWithMemory(
+        {
+          ...obs({ hostiles: [hostile("rx")], player: { hullFraction: 0.9 } }),
+          warpInTransit: true,
+        },
+        abBook(),
+      );
+      expect(action.kind).toBe("attack");
+      expect(action.targetId).toBe("rx");
+    });
+
+    it("no hostile mid-warp-transit ⇒ waits (warp-wait still wins with nothing to survive)", () => {
+      const action = decideWithMemory(
+        { ...obs({ player: { hullFraction: 0.1 } }), warpInTransit: true },
+        abBook(),
+      );
+      expect(action.kind).toBe("wait");
+      expect(action.reason).toBe("mem:warp-in-transit");
+    });
   });
 
   it("never returns an illegal action across a battery of states", () => {
