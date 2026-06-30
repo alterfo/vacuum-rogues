@@ -326,6 +326,20 @@ describe("memoryFeatures (the belief vector)", () => {
     expect(memoryFeatures(obs(), noLots)[6]).toBe(0);
   });
 
+  it("sets slot 6 to 1 when holding cargo but NO sell planet is known yet (early-game cycle-breaker)", () => {
+    // Only one planet recorded in the price book ⇒ bestKnownMargin can't find a
+    // cross-planet pair, so best.sellPlanet stays null. The BC teacher
+    // (MemoryHeuristicPolicy's holdingForOtherSystem) still treats this as
+    // "go warp to find a sell destination" — slot 6 must agree, or the net is
+    // trained against the very feature meant to explain that "warp" label.
+    const mem = createMemory();
+    mem.priceBook.set("p1", new Map([[ResourceType.METALS, rec(100, 80)]]));
+    mem.inventoryLots = [{ good: ResourceType.METALS, qty: 3, buyPrice: 100 }];
+
+    expect(bestKnownMargin(mem).sellPlanet).toBeNull();
+    expect(memoryFeatures(obs(), mem)[6]).toBe(1);
+  });
+
   it("wires best-margin into slot 0 and profit-here into slot 2 (no slot swap)", () => {
     const mem = twoPlanetBook(); // METALS: buy@p1 100, sell@p2 160
     mem.inventoryLots = [{ good: ResourceType.METALS, qty: 5, buyPrice: 100 }];

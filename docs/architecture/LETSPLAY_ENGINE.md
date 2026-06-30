@@ -71,7 +71,7 @@ starting over), and `PlayerAgent.reset()` re-creates it for an explicit re-run.
 
 **3. Memory-derived features (`memoryFeatures.ts`).** The net never reads the raw notebook
 — it reads a short *featurised summary*. `memoryFeatures(obs, mem)` is a pure,
-`[0,1]`-normalised, `MEMORY_FEATURE_LENGTH = 6`-wide block, each component answering a
+`[0,1]`-normalised, `MEMORY_FEATURE_LENGTH = 7`-wide block, each component answering a
 human, multi-step question the memoryless features can't:
 
 1. **best known margin** — the best buy→sell arbitrage across the price book (`fraction`);
@@ -79,12 +79,15 @@ human, multi-step question the memoryless features can't:
 3. **profit-if-sold-here** — value of held lots at this market vs. what I paid (FIFO);
 4. **cheapest-upgrade gap** — credits still needed for the cheapest known offer;
 5. **route danger to goal** — remembered hostility of the system I'm heading toward;
-6. **goal progress** — how far my credits have saved toward that upgrade.
+6. **goal progress** — how far my credits have saved toward that upgrade;
+7. **holding-for-other-system** — am I carrying cargo whose best-known sell planet is in a
+   *different* system right now? (the signal that motivates warping to go sell it).
 
 An empty notebook (fresh run, or `featurize(obs)` called with no memory) degrades **every**
 signal to its sane `0` default. `featurize` (`NeuralPolicy.ts`) appends this block after
-the `OBS_FEATURE_LENGTH = 12` egocentric block, so the net input is
-`FEATURE_LENGTH = 12 + 6 = 18` wide — **growing either block widens the MLP input and
+the `OBS_FEATURE_LENGTH = 16` egocentric block (which includes a `warpInTransit` signal so
+the policy can wait out a pending hyperjump instead of cancelling it), so the net input is
+`FEATURE_LENGTH = 16 + 7 = 23` wide — **growing either block widens the MLP input and
 requires retraining** (`weightsContract.test.ts` pins the contract).
 
 **4. The memory-using heuristic — the BC teacher (`MemoryHeuristicPolicy.ts`).** A
@@ -134,7 +137,7 @@ self-play on the RTX 4090), so until a `*.weights.json` is dropped in the policy
 **inert** and falls back to the `HeuristicPolicy`. The seam:
 
 1. **`featurize(obs, memory?)`** — a pure, `FEATURE_LENGTH`-wide numeric vector: the
-   `OBS_FEATURE_LENGTH = 12` egocentric block followed by the `MEMORY_FEATURE_LENGTH = 6`
+   `OBS_FEATURE_LENGTH = 16` egocentric block followed by the `MEMORY_FEATURE_LENGTH = 7`
    belief block (`memoryFeatures` above). Deterministic, every component in `[0,1]`, so it
    doubles as the training encoder. With **no** `memory` the belief block degrades to zeros.
 2. **`mapNetOutputToAction(scores, obs)`** — maps the net's output head (one score per
@@ -144,7 +147,7 @@ self-play on the RTX 4090), so until a `*.weights.json` is dropped in the policy
 3. **`load()` / `decide(obs, memory?)`** — with trained weights, `decide` runs
    `featurize(obs, memory) → forward → mapNetOutputToAction`, threading the agent-owned
    `AgentMemory` belief block in so the net sees the memory-derived features it was trained
-   on. `load` validates the net's input width equals `FEATURE_LENGTH` (`18`); a width
+   on. `load` validates the net's input width equals `FEATURE_LENGTH` (`23`); a width
    mismatch throws rather than silently mispredicting. With no weights it stays inert.
 
 When a trained net exists, drop its `*.weights.json` where `NeuralPolicy` loads it

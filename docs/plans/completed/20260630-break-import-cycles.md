@@ -1,5 +1,5 @@
 ---
-> Superseded by docs/plans/20260630-architecture-hygiene.md Tasks 2–4
+> Superseded by docs/plans/completed/20260630-architecture-hygiene.md Tasks 2–4
 
 # Break Hub Import Cycles (Graph Hygiene)
 
@@ -33,8 +33,9 @@ behaviour must be byte-for-byte identical, gated by the full test suite.
   a new narrow interface; no logic moves.
 - TDD/regression order: run `npm test -- --run` before and after; the suite must stay green
   with **zero** new failures (standing rule: never modify existing test assertions).
-- Verify the graph with `node .gitnexus/run.cjs analyze` then `gitnexus check` — cycle count
-  must drop from 5 to 3, and the 3 remaining must be exactly cycles 2–4.
+- Verify the graph with `node .gitnexus/run.cjs analyze` then `gitnexus check` — the two
+  real value-level cycles (Cycle 1, Cycle 5) must be broken; any cycles left must be
+  `import type`-only (see "Accepted type cycles" below for the final, verified count).
 - Each task is independently committable; keep one concern per commit.
 
 ## Implementation Steps
@@ -105,6 +106,13 @@ Per the architecture-hygiene plan's Task 4 finding (clean full re-index), the re
 - **DialogueScene→GameEngine (systemic)**: one instance of the broader pattern where 24
   scenes use `import type { GameEngine }` — left for a later, larger pass (not this plan's
   scope; see root CLAUDE.md "Blast Radius Analysis" and the hub-file follow-up note above).
+- **i18n en.ts↔i18n.ts**: natural mutual type recursion (the EN dictionary is typed against
+  a shape `i18n.ts` also imports for the active-dict resolver) — pre-existing, unrelated to
+  this plan, `import type` only.
+
+Verified via a fresh `gitnexus check` re-index: exactly these 5 cycles remain, all
+`import type`-only on at least one edge — none involve `BankScene`, `BankingService`, or
+`economy.ts`.
 
 Both real value-level cycles this plan targeted (Cycle 1 BankScene→GameEngine, Cycle 5
 BankingService↔economy) are broken. This plan's work is complete.

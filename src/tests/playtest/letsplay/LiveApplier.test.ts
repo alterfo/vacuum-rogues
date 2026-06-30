@@ -107,6 +107,17 @@ describe("applyLiveAction — legal actions drive the expected controller verb",
     expect(calls).toEqual([expectedCall]);
   });
 
+  it("warp while warpInTransit=true calls tick (not openStarMap)", async () => {
+    const { controller, calls } = makeController();
+    const obs: Observation = {
+      ...makeObs(SceneType.SPACE_FLIGHT),
+      warpInTransit: true,
+    };
+    const result = await applyLiveAction(act("warp"), obs, controller);
+    expect(result.call).toBe("tick");
+    expect(calls).toEqual(["tick"]);
+  });
+
   it("forwards the action targetId to the controller verb", async () => {
     const land = vi.fn();
     const { controller } = makeController();

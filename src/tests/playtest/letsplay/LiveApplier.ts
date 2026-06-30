@@ -140,6 +140,14 @@ export async function applyLiveAction(
       return { applied: true, call: "dock" };
 
     case "warp": {
+      // Safety: if the ship is already flying to the system edge for a pending
+      // jump, don't cancel it by re-opening the star map — just tick and wait.
+      // This guards against the neural net picking "warp" while warpInTransit
+      // is true (the heuristic returns "wait" for that, but the net may not).
+      if (obs.warpInTransit) {
+        await controller.tick();
+        return { applied: true, call: "tick" };
+      }
       // Two-step warp: from flight, open the galaxy map; from the map, jump.
       if (obs.scene !== SceneType.STAR_MAP) {
         await controller.openStarMap();

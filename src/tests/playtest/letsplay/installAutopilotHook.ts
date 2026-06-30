@@ -235,13 +235,10 @@ export function installAutopilotHook(
     observe: () => observe(engine),
     // The neural feature gate picks the brain: heuristic by default (flag off),
     // the trained NeuralPolicy (fed the exported weights) when the settings
-    // toggle is on — same seam, smarter.
-    // Live autopilot always runs the trained net when weights are available
-    // (bypasses the НЕЙРОСЕТЬ settings toggle which defaults to off).
-    policy: selectPlayerPolicy({
-      weights: playerWeights,
-      enabled: playerWeights != null,
-    }),
+    // toggle is on — same seam, smarter. `enabled` is omitted so it reads the
+    // live isNeuralEnabled() flag, the same source of truth the settings panel
+    // writes (see policyGate.ts) — do not force it on here.
+    policy: selectPlayerPolicy({ weights: playerWeights }),
     controller: createLiveSceneController(engine),
     onError: (err) => logger.warn("Autopilot tick fault (continuing):", err),
     ...overrides,

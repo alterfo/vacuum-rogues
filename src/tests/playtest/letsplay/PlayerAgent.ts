@@ -115,6 +115,8 @@ export interface AgentRunResult {
 export class PlayerAgent {
   /** Per-run belief state — folded from observations, never from omniscient state. */
   private memory: AgentMemory = createMemory();
+  /** The system id the agent was in on the previous step — used to prefer unvisited warp targets. */
+  private lastSystemId: string | null = null;
 
   constructor(
     private readonly harness: RealEngineHarness,
@@ -129,6 +131,7 @@ export class PlayerAgent {
   /** Start a fresh per-run notebook — a human starting the game over. */
   reset(): void {
     this.memory = createMemory();
+    this.lastSystemId = null;
   }
 
   /**
@@ -214,7 +217,10 @@ export class PlayerAgent {
         // A real wait turn so a galaxy DAY actually passes (markets / NPC sim /
         // quests / Overmind all advance) — the agent's biggest gap was never
         // advancing time. Degrades to a plain frame outside flight.
-        this.waitOneDay();
+        // When warpInTransit: the ship is already flying to the edge — drive it
+        // to completion instead of starting a course-less day-wait that stalls it.
+        if (obs.warpInTransit) await this.completeWarp();
+        else this.waitOneDay();
         return;
 
       case "move": {
@@ -276,40 +282,138 @@ export class PlayerAgent {
       case "warp": {
         // Two-step real warp: open the galaxy map, then jump to a neighbour.
         if (obs.scene !== SceneType.STAR_MAP) {
-          await this.harness.goTo(SceneType.STAR_MAP);
+          if (obs.warpInTransit) {
+            // A pending warp is already in-flight — drive it to completion rather
+            // than canceling it by re-opening the star map.
+            await this.completeWarp();
+          } else {
+            await this.harness.goTo(SceneType.STAR_MAP);
+          }
           return;
         }
-        const target = currentSystem(engine)?.connections[0]?.toSystemId;
+        const sys = currentSystem(engine);
+        const connections = sys?.connections ?? [];
+        // Prefer a system other than the one we just came from — avoids ping-pong
+        // between two adjacent systems (connections[0] in B is usually back to A).
+        const target = (
+          connections.find((c) => c.toSystemId !== this.lastSystemId) ??
+          connections[0]
+        )?.toSystemId;
+        this.lastSystemId = sys?.id ?? null;
         const scene = this.harness.currentScene() as {
           performWarpJumpTo?: (id: string) => Promise<void>;
         } | null;
         if (target && typeof scene?.performWarpJumpTo === "function") {
           const startSys = engine.player?.currentSystemId;
           await scene.performWarpJumpTo(target);
-          // performWarpJumpTo transitions to SPACE_FLIGHT with a pendingWarp.
-          // The jump only fires when the ship reaches the system edge (via
-          // SpaceFlightScene.update → performWarp → transitionTo new system).
-          // Without ticking, the next agent decision re-opens StarMap and cancels
-          // the pending warp. Tick until the system actually changes.
-          for (let i = 0; i < 2000; i++) {
-            this.harness.tick(50);
-            await Promise.resolve(); // yield so async performWarp() can settle
-            if (engine.player?.currentSystemId !== startSys) break;
+          if (engine.currentSceneType === SceneType.SPACE_FLIGHT) {
+            // performWarpJumpTo transitions to SPACE_FLIGHT with a plannedRoute to
+            // the system edge, but the ship does NOT start moving until the player
+            // presses "Ход". completeWarp() kicks off the route and ticks until the
+            // system changes (the warp fires on reaching the boundary).
+            await this.completeWarp(startSys);
+          } else {
+            // Warp rejected (e.g. insufficient fuel) — go back to flight so the
+            // agent can make a different decision (land to refuel, wait, etc.).
+            await this.harness.goTo(SceneType.SPACE_FLIGHT);
           }
         } else {
-          this.harness.tick();
+          // No reachable connection — leave the star map.
+          await this.harness.goTo(SceneType.SPACE_FLIGHT);
         }
         return;
       }
 
-      // Combat + repair are owned by their own modules (CombatModule / station
-      // UI); at the agent level they degrade to a safe frame advance.
+      // Combat: advance a full day with the turn running so NpcShipManager's
+      // `updateCombat` fires, hostile NPCs close on the stationary ship, and
+      // `startInFlightCombat` auto-initiates once they're in weapon range.
+      // A single day (4 × 1000 ms) is enough for the starter weapon to defeat
+      // a typical NPC (~26 shots × 25 dmg). waitOneDay() un-pauses on each tick
+      // so weapons actually fire and the fight resolves rather than freezing.
+      // Flee and repair degrade to a tick.
       case "attack":
+        this.waitOneDay();
+        return;
+
       case "flee":
       case "repair":
       default:
         this.harness.tick();
         return;
+    }
+  }
+
+  /**
+   * Drive a **pending hyperjump** to completion in the headless engine.
+   *
+   * After `performWarpJumpTo` the new `SpaceFlightScene` initialises with a
+   * `plannedRoute` to the system edge, but the ship does NOT start moving —
+   * the player must press «Ход» (US-070 #11). This calls `onPlayPause()` to
+   * kick off that route, then ticks 50 ms at a time until the system changes
+   * (the warp fires) or the budget is exhausted.
+   *
+   * Physics limits: `ShipPhysics.update` caps `dt` at 100 ms; max speed is
+   * 0.1 px/ms, so each `tick(50)` moves the ship 5 px. The ship spawns at
+   * `innerRadius` (600 px) from the star centre opposite the exit vector, and
+   * the jump fires at `boundaryRadius` (2800 px) from centre — a max journey
+   * of ~3400 px ≈ 680 ticks. The 2000-tick ceiling is a generous safety net.
+   *
+   * **Stale vs. active combat pause:** `onCombatEnded` calls `combatPause.reset()`
+   * (which does NOT clear `_paused`) so after a resolved fight the pause flag is
+   * stuck true. We clear it ONLY when `combatModule.isActive=false` (the fight
+   * is over) — this is the *stale* case. If `isActive=true` (live fight), we
+   * leave the pause alone: while paused, `npcManager.updateCombat` is also frozen
+   * so NPCs can't fire — the ship stops safely, the loop times out, and the agent
+   * retries on the next step without taking combat damage.
+   */
+  private async completeWarp(startSys?: string): Promise<void> {
+    const engine = this.harness.engine;
+    const sys0 = startSys ?? engine.player?.currentSystemId;
+    const flightScene = this.harness.currentScene() as unknown as {
+      onPlayPause?(): void;
+      endTurn?(): void;
+      isTurnRunning?: boolean;
+      combatPause?: { paused?: boolean; resume?(): void } | null;
+      combatModule?: { isActive?: boolean } | null;
+    } | null;
+
+    // Clear ONLY a stale pause (combat ended but pause flag wasn't cleared).
+    // An active-combat pause (isActive=true) is left alone — ship stays frozen,
+    // NPCs can't fire, player is safe while blocked by combat.
+    const isActiveCombat = flightScene?.combatModule?.isActive === true;
+    if (
+      flightScene?.combatPause?.paused &&
+      !isActiveCombat &&
+      typeof flightScene.combatPause.resume === "function"
+    ) {
+      flightScene.combatPause.resume();
+    }
+    if (
+      flightScene?.isTurnRunning &&
+      typeof flightScene.endTurn === "function"
+    ) {
+      flightScene.endTurn();
+    }
+    if (
+      !flightScene?.isTurnRunning &&
+      typeof flightScene?.onPlayPause === "function"
+    ) {
+      flightScene.onPlayPause();
+    }
+
+    for (let i = 0; i < 2000; i++) {
+      this.harness.tick(50);
+      await Promise.resolve(); // yield so async performWarp() can settle
+      if (engine.player?.currentSystemId !== sys0) break;
+      // If the turn ended mid-flight (ship stopped without reaching the edge) and
+      // no active combat blocks it, restart the route.
+      if (
+        !flightScene?.isTurnRunning &&
+        !flightScene?.combatPause?.paused &&
+        typeof flightScene?.onPlayPause === "function"
+      ) {
+        flightScene.onPlayPause();
+      }
     }
   }
 
@@ -322,6 +426,12 @@ export class PlayerAgent {
    * point. Outside flight (or with no turn seam — e.g. a partial test stub) it
    * degrades to a plain frame so the loop is always safe. Private scene methods are
    * reached by a structural cast, the same pattern the warp applier uses.
+   *
+   * Combat handling: if an NPC engages mid-wait, the combat-pause controller freezes
+   * everything (no weapons fire on either side). This method clears the pause before
+   * each tick so the fight actually resolves — both player and NPC fire for the tick
+   * window, and the engagement ends naturally via `onCombatEnded`. Without this the
+   * headless engine would sit frozen indefinitely and no day would ever advance.
    */
   private waitOneDay(): void {
     const engine = this.harness.engine;
@@ -329,6 +439,7 @@ export class PlayerAgent {
       onPlayPause?(): void;
       endTurn?(): void;
       isTurnRunning?: boolean;
+      combatPause?: { paused?: boolean; resume?(): void } | null;
     } | null;
     if (
       engine.currentSceneType !== SceneType.SPACE_FLIGHT ||
@@ -341,6 +452,13 @@ export class PlayerAgent {
     if (!scene.isTurnRunning) scene.onPlayPause(); // start the course-less wait
     // One wait-day is MS_PER_WAIT_DAY (1000 ms); a few large ticks cross it.
     for (let i = 0; i < 4 && (engine.galaxy?.gameDays ?? 0) === day0; i++) {
+      // Un-pause before each tick so weapons fire (combat resolves rather than freezing).
+      if (
+        scene.combatPause?.paused &&
+        typeof scene.combatPause.resume === "function"
+      ) {
+        scene.combatPause.resume();
+      }
       this.harness.tick(1000);
     }
     if (scene.isTurnRunning && typeof scene.endTurn === "function") {

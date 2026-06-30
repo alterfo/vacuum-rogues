@@ -79,7 +79,8 @@ function norm(n: number, denom: number): number {
  * Project an {@link Observation} (and the agent's {@link AgentMemory} belief state)
  * into a fixed-length numeric feature vector (the net's input): a
  * {@link OBS_FEATURE_LENGTH}-wide egocentric block (12 vitals/system features +
- * 3 scene-type one-hot bits: SPACE_FLIGHT / PLANET / STAR_MAP) followed by the
+ * 3 scene-type one-hot bits: SPACE_FLIGHT / PLANET / STAR_MAP + 1 warp-in-transit
+ * bit) followed by the
  * {@link MEMORY_FEATURE_LENGTH}-wide belief block ({@link memoryFeatures}). Pure
  * and deterministic — the same `(obs, memory)` always yields the exact same
  * {@link FEATURE_LENGTH}-wide vector, every component already in `[0, 1]` so it

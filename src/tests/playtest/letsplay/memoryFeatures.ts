@@ -179,15 +179,18 @@ export function memoryFeatures(
   const goalProgress =
     cheapest && cheapest.price > 0 ? clamp01(credits / cheapest.price) : 0;
 
-  // 1 if holding cargo whose best sell planet is NOT in the current system — the
-  // key signal that tells the net "warp to find the sell destination".
+  // 1 if holding cargo whose best sell planet is NOT in the current system, OR no
+  // sell planet is known at all — the same "go warp to find a sell destination"
+  // signal the BC teacher acts on (MemoryHeuristicPolicy's holdingForOtherSystem),
+  // including its early-game cycle-breaker case (sellPlanet === null). Keeping
+  // these two conditions in lockstep matters: the net is trained on this feature
+  // explaining the teacher's "warp" label, so a mismatch here trains against the
+  // very signal meant to justify the label.
   const sellInSystem =
     best.sellPlanet !== null &&
     (obs.system?.planets.some((p) => p.id === best.sellPlanet) ?? false);
   const holdingForOtherSystem =
-    mem.inventoryLots.length > 0 && best.sellPlanet !== null && !sellInSystem
-      ? 1
-      : 0;
+    mem.inventoryLots.length > 0 && !sellInSystem ? 1 : 0;
 
   return [
     best.fraction, // best known cross-planet margin (profit fraction)
