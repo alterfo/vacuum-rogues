@@ -44,9 +44,16 @@ npm run letsplay:ci         # Letsplay CI oracle (pre-push + CI gate, ~2.5 s): K
 |-------|-----------|----------------|
 | Presentation | `src/presentation/` | PixiJS scenes, sprites, rendering, player input |
 | Systems | `src/systems/` | GameEngine, AudioManager, trade, dialogue, galaxy generation; sub-modules: `equipment/`, `npc/`, `quests/`, `info/`, `combat/`, `galaxy/`, `trade/` (route scanner + rumor lifecycle), `onboarding/` (contextual-help content registry + browser-level "seen" persistence), `encounters/` (pure exploration-encounter generator + outcome resolver + flight-wiring bridge — derelict/anomaly/distress, ephemeral/no save state; tune in `balance.ts` `ENCOUNTER_CONFIG`/`ENCOUNTER_OUTCOME_CONFIG`) |
-| Domain | `src/domain/` | Pure entities (Player, Galaxy, StarSystem) — no PixiJS/ONNX/DOM deps |
-| AI/Infrastructure | `src/ai/`, `src/data/` | Rule-based `FallbackEngine` (+ adaptive quality profile, template narrator), IndexedDB, save management. Neural policies are tiny pure-TS MLPs (`src/tests/playtest/letsplay/mlp.ts`) — no ONNX runtime |
+| Core / Ports | `src/core/ports/`, `src/core/adapters/`, `src/core/services/`, `src/core/DIContainer.ts` | Narrow port interfaces (`ISaveService`, `IGalaxyService`, `IPlayerService`, `IExceptionHandler`, `IQualityProfile`, `ISceneFactory`, `IQuestService`); concrete adapters; `SceneFactory.ts` maps `SceneType` to scene instances; `DIContainer` wires ports to implementations. Presentation and Systems depend on it; it may depend on Domain |
+| Domain | `src/domain/` | Pure entities (Player, Galaxy, StarSystem) — no PixiJS/DOM deps |
+| AI/Infrastructure | `src/ai/`, `src/data/` | Rule-based `FallbackEngine` (+ adaptive quality profile, template narrator), IndexedDB, save management. Neural policies are tiny pure-TS MLPs (`src/tests/playtest/letsplay/mlp.ts`) run through a hand-written pure-TS forward pass — no external runtime |
 | Types/Config | `src/types/`, `src/config/` | Shared types, enums, balance constants; `FactionType` replaces old `RaceType` |
+
+**Cross-cutting modules** (not a strict layer — used by any layer):
+- `src/i18n/` — key-based translation (`t(key, params?)`), RU/EN dictionaries, `language` pref
+- `src/utils/` — pure utility functions (font scale, logger, etc.)
+- `src/validation/` — Zod save-state schemas (`SaveStateSchema`, `GalaxySchema`, etc.)
+- `src/exceptions/` — typed exception classes (`GameBusinessException`, `GameSystemException`, etc.)
 
 ### Key Entry Points
 

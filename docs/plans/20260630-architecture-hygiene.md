@@ -104,10 +104,10 @@ All changes are pure refactors: zero runtime-behaviour change, zero save-schema 
 **Files:**
 - Modify: `CLAUDE.md`
 
-- [ ] Add `src/core/` to the Layer Structure table in CLAUDE.md: between Systems and Domain — `src/core/ports/` defines narrow interfaces (ISaveService, IGalaxyService, IPlayerService, IExceptionHandler, IQualityProfile, ISceneFactory, IQuestService), `src/core/adapters/` provides concrete adapters, `src/core/services/SceneFactory.ts` maps SceneType to scene instances; may depend on Systems and Domain; Presentation and Systems may depend on it
-- [ ] Add `src/i18n/`, `src/utils/`, `src/validation/`, `src/exceptions/` as documented cross-cutting modules (not a strict layer, used by any layer)
-- [ ] Remove the stale `onnxruntime-web` / ONNX references from the AI/Infrastructure layer description (ONNX was removed — see pure-TS MLP plan)
-- [ ] `npm test -- --run` — green (no code change, documentation only)
+- [x] Add `src/core/` to the Layer Structure table in CLAUDE.md: between Systems and Domain — `src/core/ports/` defines narrow interfaces (ISaveService, IGalaxyService, IPlayerService, IExceptionHandler, IQualityProfile, ISceneFactory, IQuestService), `src/core/adapters/` provides concrete adapters, `src/core/services/SceneFactory.ts` maps SceneType to scene instances; may depend on Systems and Domain; Presentation and Systems may depend on it
+- [x] Add `src/i18n/`, `src/utils/`, `src/validation/`, `src/exceptions/` as documented cross-cutting modules (not a strict layer, used by any layer)
+- [x] Remove the stale `onnxruntime-web` / ONNX references from the AI/Infrastructure layer description (ONNX was removed — see pure-TS MLP plan)
+- [x] `npm test -- --run` — green (no code change, documentation only)
 
 ### Task 8: Verify acceptance criteria
 
