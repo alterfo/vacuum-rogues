@@ -71,16 +71,20 @@ export function createLiveSceneController(
       // A pending warp plots the route but does NOT start movement — the player
       // must press Ход (Space / run-turn) to fly to the system edge. The live rAF
       // loop does not do this automatically. Drive it manually each tick.
+      // Guard: only start once — calling executeRouteTo while already moving
+      // resets the path each tick and causes the ship to jerk visibly.
       const scene = engine.currentScene as {
         pendingWarp?: unknown;
         plannedRoute?: { x: number; y: number } | null;
         executeRouteTo?: (x: number, y: number) => void;
+        shipPhysics?: { isMoving: boolean } | null;
       } | null;
       if (
         engine.currentSceneType === SceneType.SPACE_FLIGHT &&
         scene?.pendingWarp != null &&
         scene.plannedRoute != null &&
-        typeof scene.executeRouteTo === "function"
+        typeof scene.executeRouteTo === "function" &&
+        !scene.shipPhysics?.isMoving
       ) {
         scene.executeRouteTo(scene.plannedRoute.x, scene.plannedRoute.y);
       }
@@ -148,6 +152,22 @@ export function createLiveSceneController(
       if (station) await goTo(SceneType.STATION, { station });
     },
     async openStarMap() {
+      // Save ship position before leaving — identical to returnToStarMap() in
+      // SpaceFlightScene. Without this, the warp re-entry to SPACE_FLIGHT places
+      // the ship at center ± exitVector×innerRadius (right at the sun boundary)
+      // instead of where it actually was.
+      const flightScene = engine.currentScene as {
+        shipPhysics?: { shipX: number; shipY: number } | null;
+      } | null;
+      if (
+        engine.currentSceneType === SceneType.SPACE_FLIGHT &&
+        flightScene?.shipPhysics
+      ) {
+        engine.lastFlightShipPos = {
+          x: flightScene.shipPhysics.shipX,
+          y: flightScene.shipPhysics.shipY,
+        };
+      }
       await goTo(SceneType.STAR_MAP);
     },
     async warp(systemId) {
