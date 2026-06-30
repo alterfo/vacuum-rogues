@@ -213,6 +213,7 @@ export const en: Dict = {
   "quest.type.EXPLORATION": "Recon",
   "quest.type.TEXT_ADVENTURE": "✦ Story",
   "quest.type.DEFENSE": "⚔ Defense",
+  "journal.questCompleted": "✓ Quest #{questId} completed",
   "jobBoard.title": "JOB BOARD",
   "jobBoard.maxQuests": "Max quests: {max}/{max}",
   "jobBoard.activeQuests": "ACTIVE QUESTS",

@@ -215,6 +215,7 @@ export const ru: Dict = {
   "quest.type.EXPLORATION": "Разведка",
   "quest.type.TEXT_ADVENTURE": "✦ История",
   "quest.type.DEFENSE": "⚔ Оборона",
+  "journal.questCompleted": "✓ Квест #{questId} завершён",
   "jobBoard.title": "ДОСКА ЗАДАНИЙ",
   "jobBoard.maxQuests": "Максимум заданий: {max}/{max}",
   "jobBoard.activeQuests": "АКТИВНЫЕ ЗАДАНИЯ",

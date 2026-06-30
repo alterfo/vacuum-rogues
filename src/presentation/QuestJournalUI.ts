@@ -1,4 +1,5 @@
 import { Container, Graphics } from "pixi.js";
+import { t } from "@/i18n/i18n";
 import { scaledText } from "./ui/scaledText";
 import { scaledFont } from "@/utils/fontScale";
 import {
@@ -947,17 +948,76 @@ export class QuestJournalUI {
     sectionTitle.eventMode = "none";
     this.container.addChild(sectionTitle);
 
-    // Show count instead of full list to save space
-    const completedText = scaledText(
-      "Вы завершили несколько квестов!\nПродолжайте исследовать галактику.",
-      12,
-      0xb4b4b4,
-      { rawColor: true },
+    // For large numbers of completed quests, show a scrollable list
+    // instead of just a count message
+    const CARD_HEIGHT = 60;
+    const CARD_GAP = 10;
+    const availableHeight = this.panelHeight - startY - 30;
+    const fitCount = Math.max(
+      1,
+      Math.floor(availableHeight / (CARD_HEIGHT + CARD_GAP)),
     );
-    completedText.x = 20;
-    completedText.y = startY + 30;
-    completedText.eventMode = "none";
-    this.container.addChild(completedText);
+
+    if (questIds.length <= fitCount) {
+      // Show all completed quests if they fit
+      let yOffset = startY + 30;
+      for (const questId of questIds) {
+        const row = scaledText(
+          t("journal.questCompleted", { questId }),
+          13,
+          0xb4b4b4,
+          {
+            rawColor: true,
+          },
+        );
+        row.x = 30;
+        row.y = yOffset;
+        row.eventMode = "none";
+        this.container.addChild(row);
+        yOffset += CARD_HEIGHT + CARD_GAP;
+      }
+    } else {
+      // Show scrollable list for many completed quests
+      const cardsTop = startY + 30;
+      const viewportHeight = fitCount * (CARD_HEIGHT + CARD_GAP);
+
+      // Create a scrollable container for completed quests
+      const completedList = new ScrollableList<string>({
+        x: 0,
+        y: cardsTop,
+        width: this.panelWidth,
+        height: viewportHeight,
+        itemHeight: CARD_HEIGHT + CARD_GAP,
+        items: questIds,
+        renderItem: (questId) => {
+          const card = new Container();
+          card.y = 0;
+          const bg = new Graphics();
+          bg.rect(20, 0, this.panelWidth - 40, CARD_HEIGHT);
+          bg.fill({ color: 0x0a1a0a, alpha: 0.8 });
+          bg.stroke({ color: 0x00ff00, width: 1, alpha: 0.3 });
+          bg.eventMode = "none";
+          card.addChild(bg);
+
+          const row = scaledText(
+            t("journal.questCompleted", { questId }),
+            13,
+            0xb4b4b4,
+            {
+              rawColor: true,
+            },
+          );
+          row.x = 30;
+          row.y = 15;
+          row.eventMode = "none";
+          card.addChild(row);
+
+          return card;
+        },
+        enableDrag: false,
+      });
+      this.container.addChild(completedList.container);
+    }
   }
 
   /**
