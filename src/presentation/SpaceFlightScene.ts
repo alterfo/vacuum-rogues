@@ -234,7 +234,11 @@ export class SpaceFlightScene extends GameScene {
       onTargetLost: (npc) => this.combatPause.loseTarget(npc), // re-pause on lost target
       showMessage: (t, c) => this.hud.showMessage(t, c),
     });
-    this.combatPause = createCombatPauseUi(this.renderer, this.combatModule);
+    this.combatPause = createCombatPauseUi(
+      this.renderer,
+      this.combatModule,
+      () => this.shipPhysics?.stop(),
+    );
     this.gameEngine?.setCombatStateProvider(() => this.combatModule.isActive); // adaptive combat music signal
     // NPC module: living-galaxy ships, contact panel, auto-follow combat, OVERMIND prompt.
     this.npcManager = new NpcShipManager(
@@ -410,6 +414,7 @@ export class SpaceFlightScene extends GameScene {
         y: this.starRenderer.centerY,
       }),
       boundaryRadius: this.SYSTEM_BOUNDARY_RADIUS,
+      isInCombat: () => this.combatModule?.isActive ?? false,
     });
     this.camera.onTransform = (zoom) => {
       // Keep NPC hit areas a fixed screen size regardless of zoom level.
@@ -581,7 +586,7 @@ export class SpaceFlightScene extends GameScene {
     this.updateShip(deltaTime);
     const frozen = this.combatPause.paused; // freeze ship-sync + camera too (2026-06-27 #1)
     if (!frozen) this.playerShip.update(deltaTime, this.bgElapsed);
-    this.npcManager.updateCombat(deltaTime);
+    if (!frozen) this.npcManager.updateCombat(deltaTime);
     this.combatModule.update(deltaTime, this.bgElapsed);
     // A lethal hit here fires GAME_OVER synchronously, destroying this scene
     // mid-frame; bail before driving the now-destroyed modules below.

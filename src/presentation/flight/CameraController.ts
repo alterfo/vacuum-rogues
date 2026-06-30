@@ -13,6 +13,13 @@ export interface CameraControllerDeps {
    * screen-fixed, so panning can never expose its edge.
    */
   boundaryRadius: number;
+  /**
+   * True when the player is in active combat. During combat, the camera follows
+   * the ship's position but ignores heading-based look-ahead, so circling
+   * maneuvers don't swing the view around (the ship rotates to track the target
+   * but the camera stays centered on the ship's position).
+   */
+  isInCombat?(): boolean;
 }
 
 /**
@@ -260,6 +267,10 @@ export class CameraController {
    * Pan the camera so a point *ahead* of the ship (along its heading, scaled by
    * speed) sits at screen centre — the ship rides toward the back of the view
    * and the player can see what's coming. The lead is smoothed each frame.
+   *
+   * During combat, the look-ahead is disabled: the ship rotates to track
+   * circling targets, but the camera stays centered on the ship's position
+   * (otherwise the view would swing around as the ship turns).
    */
   private focusWithLead(): void {
     const ship = this.deps.getShipPhysics();
@@ -267,17 +278,28 @@ export class CameraController {
     const cx = this.renderer.app.screen.width / 2;
     const cy = this.renderer.app.screen.height / 2;
 
-    // Desired lead (world units) in the heading direction, up to ~34% of a
-    // half-screen ahead at full speed. Zero when stopped → ship recenters.
-    const maxLeadWorld = (cx * 0.34) / this.cameraZoom;
-    const f = Math.min(1, ship.getSpeedFraction() * 1.4);
-    const desired = maxLeadWorld * f;
-    const desiredX = Math.cos(ship.shipAngle) * desired;
-    const desiredY = Math.sin(ship.shipAngle) * desired;
+    // Combat: disable heading-based lead so circling maneuvers don't swing
+    // the camera. The ship still rotates to track the target, but the view
+    // stays centered on the ship's position.
+    const inCombat = this.deps.isInCombat?.() ?? false;
 
-    // Smooth toward the desired lead (and toward 0 when slowing/stopped).
-    this.camLeadX += (desiredX - this.camLeadX) * 0.06;
-    this.camLeadY += (desiredY - this.camLeadY) * 0.06;
+    if (inCombat) {
+      // Fade out the lead smoothly when combat starts
+      this.camLeadX += (0 - this.camLeadX) * 0.06;
+      this.camLeadY += (0 - this.camLeadY) * 0.06;
+    } else {
+      // Desired lead (world units) in the heading direction, up to ~34% of a
+      // half-screen ahead at full speed. Zero when stopped → ship recenters.
+      const maxLeadWorld = (cx * 0.34) / this.cameraZoom;
+      const f = Math.min(1, ship.getSpeedFraction() * 1.4);
+      const desired = maxLeadWorld * f;
+      const desiredX = Math.cos(ship.shipAngle) * desired;
+      const desiredY = Math.sin(ship.shipAngle) * desired;
+
+      // Smooth toward the desired lead (and toward 0 when slowing/stopped).
+      this.camLeadX += (desiredX - this.camLeadX) * 0.06;
+      this.camLeadY += (desiredY - this.camLeadY) * 0.06;
+    }
 
     const focusX = ship.shipX + this.camLeadX;
     const focusY = ship.shipY + this.camLeadY;

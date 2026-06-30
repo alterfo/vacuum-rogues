@@ -31,6 +31,7 @@ function makeCamera(ship: ShipPhysics): CameraController {
     getShipPhysics: () => ship,
     getStarCenter: () => ({ x: 640, y: 360 }),
     boundaryRadius: 1_000_000, // huge → clampPan never interferes
+    isInCombat: () => false,
   });
 }
 
@@ -126,5 +127,39 @@ describe("CameraController free-look while moving", () => {
     cam.update(); // standstill → moving re-engages the follow
 
     expect(cam.panX).not.toBe(focused);
+  });
+
+  it("disables look-ahead during combat so circling maneuvers don't swing the camera", () => {
+    // Ship rotating in combat (circling target) — the heading changes but the
+    // camera should stay centered on the ship's position, not follow the heading.
+    const combatShip = makeShip({
+      shipX: 500,
+      shipY: 500,
+      shipAngle: 0,
+      isMoving: true,
+      currentSpeed: 0.5,
+      getSpeedFraction: () => 0.5,
+    });
+    const combatCam = makeCamera(combatShip);
+
+    // Override isInCombat to simulate combat
+    (
+      combatCam as unknown as { deps: { isInCombat: () => boolean } }
+    ).deps.isInCombat = () => true;
+
+    combatCam.update();
+    const leadX = (combatCam as unknown as { camLeadX: number }).camLeadX;
+    const leadY = (combatCam as unknown as { camLeadY: number }).camLeadY;
+
+    // Ship rotates 90° (circling target)
+    (combatShip as { shipAngle: number }).shipAngle = Math.PI / 2;
+
+    combatCam.update();
+    const newLeadX = (combatCam as unknown as { camLeadX: number }).camLeadX;
+    const newLeadY = (combatCam as unknown as { camLeadY: number }).camLeadY;
+
+    // During combat, the lead should fade toward zero, not follow the heading
+    expect(Math.abs(newLeadX)).toBeLessThanOrEqual(Math.abs(leadX));
+    expect(Math.abs(newLeadY)).toBeLessThanOrEqual(Math.abs(leadY));
   });
 });

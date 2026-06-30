@@ -133,7 +133,11 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
     expect(combatPause.requestPause("incoming-attack")).toBe(true);
     expect(combatPause.paused).toBe(true);
 
-    const shipFrozen = { x: physics.shipX, y: physics.shipY };
+    const shipFrozen = {
+      x: physics.shipX,
+      y: physics.shipY,
+      angle: physics.shipAngle,
+    };
     const enemyFrozen = { x: enemy.x, y: enemy.y };
     const playerHull0 = harness.player()!.ship.hullHP;
     const enemyHull0 = enemy.npc.hullHP;
@@ -145,6 +149,7 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
 
     expect(physics.shipX).toBe(shipFrozen.x); // ship movement frozen
     expect(physics.shipY).toBe(shipFrozen.y);
+    expect(physics.shipAngle).toBe(shipFrozen.angle); // ship rotation frozen (no steering)
     expect(enemy.x).toBe(enemyFrozen.x); // NPC movement frozen
     expect(enemy.y).toBe(enemyFrozen.y);
     expect(harness.player()!.ship.hullHP).toBe(playerHull0); // no NPC shot landed

@@ -39,6 +39,7 @@ function makeCamera(
     getShipPhysics: () => null,
     getStarCenter: () => ({ x: centerX, y: centerY }),
     boundaryRadius: BOUNDARY,
+    isInCombat: () => false,
   };
   return { cam: new CameraController(renderer, deps), centerX, centerY };
 }
@@ -164,6 +165,7 @@ function makeHarness(
     getShipPhysics: () => shipRef.current,
     getStarCenter: () => ({ x: 400, y: 300 }),
     boundaryRadius,
+    isInCombat: () => false,
   });
   return { camera, gameLayer, shipRef };
 }

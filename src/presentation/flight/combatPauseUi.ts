@@ -38,6 +38,7 @@ interface PauseUiRenderer {
 export function createCombatPauseUi(
   renderer?: PauseUiRenderer,
   combat?: CombatModule,
+  onStopShip?: () => void, // Stop the ship when pause starts (prevent orbit drift)
 ): FlightPauseController {
   if (!renderer || !combat) return new CombatPauseController();
 
@@ -47,6 +48,7 @@ export function createCombatPauseUi(
 
   const controller: FlightPauseController = new CombatPauseController({
     onPause: (reason) => {
+      onStopShip?.(); // Stop ship movement immediately (prevent orbit drift during pause)
       if (ref.overlay) openOverlay(ref.overlay, controller, combat, reason);
     },
     onResume: () => ref.overlay?.close(),
