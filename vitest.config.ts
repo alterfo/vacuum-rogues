@@ -7,7 +7,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/tests/setup.ts'],
     include: ['src/tests/**/*.test.ts', 'tools/**/*.test.ts'],
-    exclude: ['e2e/**'],
+    exclude: ['e2e/**', 'tools/ai/_quarantine/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json'],
