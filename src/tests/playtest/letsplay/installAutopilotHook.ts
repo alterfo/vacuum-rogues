@@ -72,11 +72,58 @@ export function createLiveSceneController(
     async leaveToFlight() {
       await goTo(SceneType.SPACE_FLIGHT);
     },
-    async land(planetId) {
+    land(planetId) {
+      // In a live flight scene, physically route the ship to the planet so it
+      // actually flies there instead of teleporting (as the headless harness does).
+      // We access the private planetManager/executeRouteTo via a structural cast —
+      // acceptable here because this module is dev-only and `private` is TS-only.
+      const scene = engine.currentScene as {
+        planetManager?: {
+          planetSprites: Array<{
+            planet: { id: string };
+            screenX: number;
+            screenY: number;
+            displayRadius: number;
+          }>;
+          routeTargetPlanetId: string | null;
+        };
+        executeRouteTo?: (
+          x: number,
+          y: number,
+          landing?: { planetX: number; planetY: number; planetRadius: number },
+        ) => void;
+        shipPhysics?: unknown;
+      } | null;
+
+      const pm = scene?.planetManager;
+      if (
+        pm &&
+        typeof scene?.executeRouteTo === "function" &&
+        scene.shipPhysics
+      ) {
+        const sprite =
+          pm.planetSprites.find((s) => s.planet.id === planetId) ??
+          pm.planetSprites[0];
+        if (sprite) {
+          const alreadyEnRoute =
+            pm.routeTargetPlanetId === sprite.planet.id &&
+            (scene.shipPhysics as { isMoving?: boolean }).isMoving;
+          if (!alreadyEnRoute) {
+            pm.routeTargetPlanetId = sprite.planet.id;
+            scene.executeRouteTo(sprite.screenX, sprite.screenY, {
+              planetX: sprite.screenX,
+              planetY: sprite.screenY,
+              planetRadius: sprite.displayRadius,
+            });
+          }
+          return; // ship is flying (or just started); auto-land fires via SpaceFlightScene.update()
+        }
+      }
+      // Fallback for headless / non-flight scenes: direct scene transition.
       const sys = currentSystem(engine);
       const planet =
         sys?.planets.find((p) => p.id === planetId) ?? sys?.planets[0];
-      if (planet) await goTo(SceneType.PLANET, { planet });
+      if (planet) void goTo(SceneType.PLANET, { planet });
     },
     async dock(stationId) {
       const sys = currentSystem(engine);

@@ -356,7 +356,7 @@ describe("featurize (observation + memory blocks)", () => {
     // a deliberate act that forces a retrain + re-export — so pin the numbers, not
     // just their sum (which is tautological).
     expect(OBS_FEATURE_LENGTH).toBe(15);
-    expect(MEMORY_FEATURE_LENGTH).toBe(6);
-    expect(FEATURE_LENGTH).toBe(21);
+    expect(MEMORY_FEATURE_LENGTH).toBe(7);
+    expect(FEATURE_LENGTH).toBe(22);
   });
 });

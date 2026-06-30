@@ -30,7 +30,7 @@ import type { AgentMemory, KnownOffer } from "./AgentMemory";
 import { createMemory } from "./AgentMemory";
 
 /** Number of belief-derived features appended after the observation features. */
-export const MEMORY_FEATURE_LENGTH = 6;
+export const MEMORY_FEATURE_LENGTH = 7;
 
 /**
  * A "meaningful sum" of credits — the scale a realisable profit / shortfall is
@@ -179,6 +179,16 @@ export function memoryFeatures(
   const goalProgress =
     cheapest && cheapest.price > 0 ? clamp01(credits / cheapest.price) : 0;
 
+  // 1 if holding cargo whose best sell planet is NOT in the current system — the
+  // key signal that tells the net "warp to find the sell destination".
+  const sellInSystem =
+    best.sellPlanet !== null &&
+    (obs.system?.planets.some((p) => p.id === best.sellPlanet) ?? false);
+  const holdingForOtherSystem =
+    mem.inventoryLots.length > 0 && best.sellPlanet !== null && !sellInSystem
+      ? 1
+      : 0;
+
   return [
     best.fraction, // best known cross-planet margin (profit fraction)
     atBuyPlanet, // direction — standing on the best-margin buy planet now
@@ -186,5 +196,6 @@ export function memoryFeatures(
     gapFraction, // credit gap to the cheapest known upgrade
     clamp01(routeDangerToGoal(obs, mem) / DANGER_SCALE), // remembered danger of the goal system
     goalProgress, // saving progress toward that upgrade
+    holdingForOtherSystem, // holding cargo for a sell planet in another system → warp
   ];
 }

@@ -186,6 +186,15 @@ export function decideWithMemory(obs: Observation, mem: AgentMemory): Action {
         else if (stationInSystem(obs, offer.location))
           push("dock", "go-upgrade", offer.location);
       }
+      // Warp to find the sell destination when holding cargo for another system.
+      // This generates warp labels in the default teacher (not just free-explore).
+      const holdingForOtherSystem =
+        best.good != null &&
+        heldQty(mem, best.good) > 0 &&
+        !planetInSystem(obs, best.sellPlanet);
+      if (holdingForOtherSystem && !avoidDanger) {
+        push("warp", "find-sell-destination");
+      }
       // Generic earn — head to local commerce.
       push("land", "earn", earnPlanetId(obs));
       push("dock", "earn", obs.system?.stations[0]?.id);
