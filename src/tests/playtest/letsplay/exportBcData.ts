@@ -111,8 +111,8 @@ async function collectSession(
 export async function collectBcDataset(
   opts: ExportBcOptions = {},
 ): Promise<BcRow[]> {
-  const sessions = opts.sessions ?? 3;
-  const steps = opts.steps ?? 40;
+  const sessions = opts.sessions ?? 20;
+  const steps = opts.steps ?? 200;
   const seedPrefix = opts.seedPrefix ?? "BC";
   const makePolicy = opts.policy ?? (() => new MemoryHeuristicPolicy());
 
