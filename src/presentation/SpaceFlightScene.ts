@@ -499,6 +499,11 @@ export class SpaceFlightScene extends GameScene {
       this.warpFx.play(this.shipPhysics.shipX, this.shipPhysics.shipY);
     }
 
+    this.hud.miniMap?.updateSystemName(
+      this.gameEngine?.galaxy?.systems.find(
+        (s) => s.id === this.gameEngine?.player?.currentSystemId,
+      )?.name,
+    );
     // Enable interactivity on stage for continuous pointer tracking.
     this.boundPointerDown = this.onPointerDown.bind(this);
     this.boundPointerMove = this.onPointerMove.bind(this);

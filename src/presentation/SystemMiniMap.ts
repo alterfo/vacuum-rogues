@@ -35,6 +35,9 @@ export class SystemMiniMap {
   // Screen dimensions kept for visibility calculation
   private screenW = 0;
   private screenH = 0;
+  // System name label (updated on entry)
+  private systemNameLabel: Text | null = null;
+  private currentSystemName: string = "СИСТЕМА";
 
   constructor(screenWidth: number, screenHeight: number) {
     this.container = new Container();
@@ -204,6 +207,17 @@ export class SystemMiniMap {
   }
 
   /**
+   * Update the system name displayed on the minimap
+   */
+  updateSystemName(systemName?: string): void {
+    if (systemName === undefined) return;
+    this.currentSystemName = systemName;
+    if (this.systemNameLabel) {
+      this.systemNameLabel.text = systemName;
+    }
+  }
+
+  /**
    * Draw the frame + title on top of everything (never clipped).
    */
   private drawFrame(): void {
@@ -212,7 +226,7 @@ export class SystemMiniMap {
     frame.stroke({ color: 0x00ffff, width: 3 });
 
     const title = new Text({
-      text: "СИСТЕМА",
+      text: this.currentSystemName,
       style: {
         fontFamily: "Courier New",
         fontSize: 10,
@@ -222,6 +236,7 @@ export class SystemMiniMap {
     });
     title.x = 5;
     title.y = 5;
+    this.systemNameLabel = title;
     frame.addChild(title);
 
     this.container.addChild(frame);
