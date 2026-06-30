@@ -15,7 +15,9 @@ import { RealEngineHarness } from "../realEngineHarness";
 import { PlayerAgent } from "./PlayerAgent";
 import type { PlayerPolicy, Action } from "./PlayerPolicy";
 import type { Observation } from "./observe";
-import { SceneType } from "@/types";
+import { SceneType, NpcRole, NpcState, FactionType } from "@/types";
+import { Faction } from "@/types/faction";
+import { NpcShip } from "@/domain/NpcShip";
 
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
@@ -160,6 +162,65 @@ describe("letsplay agent — warpInTransit safety net covers every action (Playe
     // flyForward() would have picked toward/away from the star.
     expect(flightScene.plannedRoute).toEqual(edge);
     expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
+    expect(harness.errors()).toEqual([]);
+  });
+
+  // "attack" is deliberately excluded from the blanket guard above (a genuine
+  // combat reaction must be allowed to run) — but unlike `flee` (a harmless
+  // tick), its own case handler used to call waitOneDay(), whose trailing
+  // endTurn() halts the ship in place regardless of why combat was legal.
+  // With a hostile present (the only way "attack" is legal) that halt fired
+  // on every "attack" step, silently stalling the pending warp for any
+  // memoryless policy that keeps picking "attack" while a hostile sticks
+  // around. The injected hostile is placed far outside weapon/scan range so
+  // it can never itself engage combat during this single step; the galaxy
+  // can still seed unrelated hostiles (e.g. an Overmind garrison) in the
+  // start system that legitimately engage and pause the route — that is
+  // completeWarp()'s own, already-tested, combat-pause behaviour, so the
+  // assertion below treats a genuinely active fight as an accepted outcome
+  // and only rules out the dispatch bug's specific signature: halted
+  // (isTurnRunning false) with no active combat to justify it.
+  it("an `attack` action mid-warp-transit drives the warp forward instead of halting it", async () => {
+    await startWarpInTransit();
+    const origin = harness.engine.player!.currentSystemId;
+
+    harness.galaxy()!.npcShips.push(
+      new NpcShip({
+        id: "letsplay-test-hostile",
+        name: "letsplay-test-hostile",
+        race: FactionType.OUTLANDERS,
+        faction: Faction.OUTLANDERS,
+        role: NpcRole.PIRATE,
+        hullHP: 50,
+        maxHull: 50,
+        shields: 0,
+        speed: 0,
+        damage: 0,
+        currentSystemId: origin,
+        state: NpcState.PATROLLING,
+        goal: null,
+        destinationSystemId: null,
+        daysToArrival: 0,
+        credits: 0,
+        reputation: 0,
+        hostile: true,
+        worldX: 50000,
+        worldY: 50000,
+      }),
+    );
+
+    const agent = new PlayerAgent(harness, scripted("attack"));
+    await agent.run(1);
+
+    const flightScene = harness.currentScene() as unknown as {
+      isTurnRunning?: boolean;
+      combatModule?: { isActive?: boolean } | null;
+    } | null;
+    const warpCompleted = harness.engine.player?.currentSystemId !== origin;
+    const stillDriving = flightScene?.isTurnRunning === true;
+    const legitimatelyBlocked = flightScene?.combatModule?.isActive === true;
+
+    expect(warpCompleted || stillDriving || legitimatelyBlocked).toBe(true);
     expect(harness.errors()).toEqual([]);
   });
 });

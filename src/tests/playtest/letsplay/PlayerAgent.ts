@@ -345,8 +345,17 @@ export class PlayerAgent {
       // a typical NPC (~26 shots × 25 dmg). waitOneDay() un-pauses on each tick
       // so weapons actually fire and the fight resolves rather than freezing.
       // Flee and repair degrade to a tick.
+      // While warpInTransit, waitOneDay()'s trailing endTurn() would halt the
+      // ship short of the edge exactly like the actions the blanket guard
+      // above already redirects (the route survives, but the turn — and so
+      // the ship's motion — stops, with no way back in for a memoryless
+      // policy that keeps picking "attack" while the hostile stays around).
+      // Drive the warp forward instead: the turn is already running, so
+      // real-time combat keeps auto-resolving via completeWarp()'s own
+      // combat-pause handling.
       case "attack":
-        this.waitOneDay();
+        if (obs.warpInTransit) await this.completeWarp();
+        else this.waitOneDay();
         return;
 
       case "flee":
