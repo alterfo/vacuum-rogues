@@ -194,12 +194,21 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(engine.transitionTo).not.toHaveBeenCalled();
   });
 
-  it("openTrade() transitions to TRADE with a planet", async () => {
-    const engine = mockEngine();
+  it("openTrade() executes trade directly and transitions to SPACE_FLIGHT", async () => {
+    // Mock engine must include player.inventory so executeTradeOnPlanet can
+    // iterate cargo before transitioning (no TRADE scene — that caused the cycle).
+    const engine = mockEngine({
+      player: {
+        currentSystemId: "sys1",
+        landedPlanetId: null,
+        inventory: { resources: [] },
+      },
+      playerLoadout: null,
+    });
     await createLiveSceneController(engine).openTrade();
     expect(engine.transitionTo).toHaveBeenCalledWith(
-      SceneType.TRADE,
-      expect.objectContaining({ planet: { id: "p1", availableQuests: [] } }),
+      SceneType.SPACE_FLIGHT,
+      expect.objectContaining({ gameEngine: engine }),
     );
   });
 

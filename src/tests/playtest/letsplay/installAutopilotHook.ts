@@ -32,6 +32,7 @@ import {
   currentSystem,
   landedPlanet,
   acceptBoardQuests,
+  executeTradeOnPlanet,
 } from "./engineQueries";
 
 /** The `keydown` that toggles the autopilot (Backquote / `` ` `` — unused in flight). */
@@ -150,7 +151,15 @@ export function createLiveSceneController(
         landedPlanet(engine) ??
         sys?.planets.find((p) => p.id === planetId) ??
         sys?.planets[0];
-      if (planet) await goTo(SceneType.TRADE, { planet });
+      if (planet) {
+        // Execute buy/sell directly via the real TradeSystem seam.
+        // Opening the TRADE scene causes PLANET→TRADE→FLIGHT→PLANET loop:
+        // the teacher always picks move="leave-market" in TRADE without buying,
+        // so no cargo is ever acquired and holdingForOtherSystem stays 0.
+        executeTradeOnPlanet(engine, planet);
+      }
+      // Take off after trading; the next FLIGHT tick decides warp/land/etc.
+      await goTo(SceneType.SPACE_FLIGHT);
     },
     executeTrade() {
       // No live market executor yet — safe no-op (mirrors the headless applier).
