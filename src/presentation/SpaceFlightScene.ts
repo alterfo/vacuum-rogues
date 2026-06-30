@@ -267,6 +267,8 @@ export class SpaceFlightScene extends GameScene {
         },
         endTurn: () => this.endTurn(),
         startInFlightCombat: (sprite) => this.combatModule.addCombatant(sprite),
+        onPlayerEngagesCombat: () =>
+          this.combatPause.requestPause("incoming-attack"),
         isInCombat: () => this.combatModule.isActive,
         selectCombatTarget: (s) => this.combatModule.selectTarget(s),
         getCombatTargetId: () =>
@@ -1545,21 +1547,12 @@ export class SpaceFlightScene extends GameScene {
     }
     if (this.npcManager) this.npcManager.followNpcId = null;
     this.routePath = [];
-
-    // ?.: clearPlannedRoute runs from destroy(), which may fire before the
-    // scene finished initializing (and constructing the route renderer).
     this.routeRenderer?.clearRoute();
   }
 
-  /**
-   * Refresh the system mini-map each frame (planet positions, ship, NPC dots,
-   * route + camera viewport). Planet orbital motion itself is owned by
-   * PlanetManager.update(); this only reads its sprites for the radar.
-   */
+  /** Refresh mini-map each frame; PlanetManager.update() owns the orbital motion. */
   private updateSystemMiniMap(): void {
-    // Always update mini-map (even when paused, for visual feedback). The radar
-    // object lives in the HUD; the per-frame refresh stays here (it reads route +
-    // camera + world state owned by the scene).
+    // Always update even when paused — gives visual feedback during the pause overlay.
     const miniMap = this.hud.miniMap;
     if (miniMap && this.shipPhysics) {
       const npcDots = this.npcManager.getNpcDots();

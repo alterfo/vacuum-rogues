@@ -64,6 +64,9 @@ function makeDriftingHostile(id: string, x: number, y: number): NpcShipSprite {
     updateHitArea: () => {},
     // NPC-vs-NPC engagement seam (manager calls these each frame) — no-ops here;
     // this stub drives its own drift in update() above.
+    setAggressive: (v: boolean) => {
+      sprite.aggressive = v;
+    },
     setNpcCombatTarget: () => {},
     clearNpcCombatTarget: () => {},
   };
@@ -155,6 +158,46 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
     expect(harness.player()!.ship.hullHP).toBe(playerHull0); // no NPC shot landed
     expect(enemy.npc.hullHP).toBe(enemyHull0); // no player shot landed
     expect(combatPause.paused).toBe(true); // still paused through the window
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("pauses immediately when the player initiates attack (no orbit before dialog)", () => {
+    expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
+    const scene = harness.currentScene() as unknown as FlightPrivates;
+    const { shipPhysics: physics, npcManager, combatPause } = scene;
+    expect(physics).toBeTruthy();
+
+    // Place the enemy inside weapon range so launchCombatWithNpc fires immediately.
+    const enemy = makeDriftingHostile(
+      "instant-pause-foe",
+      physics.shipX + 100,
+      physics.shipY,
+    );
+    (npcManager as unknown as { npcSprites: NpcShipSprite[] }).npcSprites.push(
+      enemy,
+    );
+    scene.isTurnRunning = true;
+    physics.setTarget(physics.shipX + 5000, physics.shipY); // ship was moving
+
+    const shipBefore = { x: physics.shipX, y: physics.shipY };
+
+    // Player initiates attack (the "Атаковать" button path).
+    (
+      npcManager as unknown as {
+        launchCombatWithNpc(n: NpcShipSprite["npc"]): void;
+      }
+    ).launchCombatWithNpc(enemy.npc);
+
+    // Pause must be live immediately — BEFORE any NPC shot lands.
+    expect(combatPause.paused).toBe(true);
+
+    // Ship must be stopped: onStopShip is called from onPause during engagement.
+    expect(physics.isMoving).toBe(false);
+
+    // Several frames while the overlay is up: ship stays frozen.
+    for (let i = 0; i < 5; i++) harness.tick(FIRE);
+    expect(physics.shipX).toBe(shipBefore.x);
+    expect(physics.shipY).toBe(shipBefore.y);
     expect(harness.errors()).toEqual([]);
   });
 });

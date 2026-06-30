@@ -179,6 +179,12 @@ export interface NpcShipManagerDeps {
    * lightweight test/host setups without combat still satisfy the contract.
    */
   startInFlightCombat?(sprite: NpcShipSprite): void;
+  /**
+   * Called when the *player* deliberately initiates combat (vs. NPC aggro). The
+   * scene uses this to raise the active-pause immediately so the weapon-choice
+   * overlay appears before any orbital maneuvering, not after the first NPC shot.
+   */
+  onPlayerEngagesCombat?(sprite: NpcShipSprite): void;
   /** True while in-flight combat is resolving (clicking an NPC retargets it). */
   isInCombat?(): boolean;
   /** Set the in-flight combat target to a clicked enemy sprite (Task 13). */
@@ -1959,6 +1965,7 @@ export class NpcShipManager implements FlightModule {
     sprite.setAggressive(true);
     this.deps.startInFlightCombat?.(sprite);
     this.deps.selectCombatTarget?.(sprite);
+    this.deps.onPlayerEngagesCombat?.(sprite); // pause immediately — no orbit before dialog
   }
 
   /**
