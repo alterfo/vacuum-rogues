@@ -104,7 +104,7 @@ player. `CombatModule.fireNpcShot` raises `onPlayerUnderAttack`; the `CombatPaus
 debounces it to the first hit per engagement and *freezes the turn* — `SpaceFlightScene.updateShip`
 early-returns and `isTurnRunning` is gated on `!combatPause.paused`, so movement, the calendar,
 NPC AI and fire timers all halt. **The freeze gate (`CombatModule.isFrozen()` =
-`isPaused()` = `combatPause.paused`) halts the *whole* fight, not just new NPC shots:** the
+`isPaused()` = `combatPause.paused || !isTurnRunning`) halts the *whole* fight, not just new NPC shots:** the
 **player multi-weapon loop** (`advancePlayerWeapons`) and the **NPC loop** (`advanceNpcTimers`)
 both sit behind `update`'s `if (this.isFrozen()) return;` early-return **and** re-check
 `if (this.isFrozen()) break;` per iteration (so a shot that raises the pause mid-frame can't let a
@@ -112,7 +112,11 @@ later weapon/NPC volley through on the pausing frame), and **in-flight projectil
 too — `update` advances the HUD tracers (`this.hud?.update(dt)`) only when `!this.isFrozen()`, so a
 shot launched the instant before the pause stops mid-flight (no travel, no impact) and resumes only
 on unpause. Do **not** add a second pause concept — every fire + projectile path honours this one
-gate (regression: `combatPauseFreeze.test.ts`). The `CombatPauseOverlay` lets the player pick a target + weapon;
+gate (regression: `combatPauseFreeze.test.ts`). **To add a new freeze condition, fold it into
+the `isPaused` dep closure in `SpaceFlightScene` (line ~205), never into `isFrozen()` itself** —
+`isFrozen()` short-circuits: when `isPaused` is wired it is the ONLY thing checked; `isTurnRunning`
+dep is ignored. The `combatModule.isActive` guard is redundant in `isPaused` because `update()`
+early-returns on `!isActive` before any fire code runs anyway. The `CombatPauseOverlay` lets the player pick a target + weapon;
 **Огонь!** fires one shot (`CombatModule.confirmAttack`) and resumes, **Продолжить** (or `Escape`)
 resumes without firing. The controller also **re-pauses when the selected auto-fire target is
 lost** — killed or out of range *while a survivor remains*: `CombatModule.removeCombatant` raises
