@@ -4,6 +4,7 @@ import {
   ContactPanelManager,
   type ContactPanelDeps,
 } from "@/presentation/flight/ContactPanelManager";
+import { NpcContactPanel } from "@/presentation/NpcContactPanel";
 import type { NpcShip } from "@/domain/NpcShip";
 import { NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
@@ -97,5 +98,19 @@ describe("ContactPanelManager", () => {
   it("close() with nothing open is a no-op", () => {
     expect(() => mgr.close()).not.toThrow();
     expect(mgr.isOpen).toBe(false);
+  });
+
+  it("close() calls panel.destroy() via deferred queueMicrotask", async () => {
+    const destroySpy = vi.fn();
+    vi.mocked(NpcContactPanel).mockImplementationOnce(
+      () => ({ container: new Container(), destroy: destroySpy }) as never,
+    );
+    mgr.open(makeNpc(), noopCallbacks, true, 0);
+    mgr.close();
+    // destroy is deferred — must not be called synchronously
+    expect(destroySpy).not.toHaveBeenCalled();
+    // flush the microtask queue
+    await Promise.resolve();
+    expect(destroySpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -238,6 +238,34 @@ describe("LootDropHandler", () => {
       handler.destroy();
     });
 
+    it("collects an Overmind artifact drop as ResourceType.ARTIFACTS (not METALS)", () => {
+      const { handler } = makeHandler();
+      const r = GAME_BALANCE.lootPickupRadius;
+      // count roll 0.5 → 1 item; artifact roll 0.1 < 0.4 → artifact
+      handler.spawn(
+        makeNpc("ov", { faction: Faction.OVERMIND }),
+        r - 5,
+        0,
+        seqRng([0.5, 0.1]),
+      );
+      expect(handler.spaceLoot[0].artifactId).toBe("ARTIFACTS");
+
+      const { deps, inventory } = makeDeps({ shipX: 0, shipY: 0 });
+      handler.update(16);
+      handler.collectIfInRange(deps);
+
+      expect(handler.spaceLoot.length).toBe(0);
+      const artifacts = inventory.resources.find(
+        (r) => r.type === ResourceType.ARTIFACTS,
+      );
+      expect(artifacts?.amount).toBe(1);
+      const metals = inventory.resources.find(
+        (r) => r.type === ResourceType.METALS,
+      );
+      expect(metals).toBeUndefined();
+      handler.destroy();
+    });
+
     it("cleans up the glowing dot graphic on pickup (no Graphics leak)", () => {
       const { handler, gameLayer } = makeHandler();
       const r = GAME_BALANCE.lootPickupRadius;

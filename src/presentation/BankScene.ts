@@ -9,8 +9,7 @@ import { logger } from "@/utils/logger";
 import { scaledText } from "./ui/scaledText";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { INTERNAL_ACCOUNTS, type AccountType } from "@/domain/banking/Ledger";
-import type { BankEvent } from "@/systems/banking/bus";
-import type { Unsubscribe } from "@/systems/banking/bus";
+import type { BankEvent, Unsubscribe } from "@/systems/banking/bus";
 import {
   GL_COUNTERPARTY,
   adjustPlayerCredits,

@@ -6,6 +6,10 @@ modules implementing `FlightModule` (`initialize()` / `update(dt, bgElapsed)` / 
 Modules: SpaceBackgroundLayer, StarRenderer, AsteroidBelt, OrbitRenderer, PlayerShipRenderer,
 NpcShipManager, PlanetManager, CombatModule, FlightHud. Helpers (not FlightModules):
 RouteRenderer, WarpEffectRenderer, CameraController, QuestCompletion, CombatHud, DamageNumbers,
+ContactPanelManager (owns the NPC contact-panel lifecycle: one open panel at a time, deferred
+teardown so PixiJS event dispatch is never interrupted mid-frame — extracted from NpcShipManager),
+LootDropHandler (owns floating space loot: spawn, TTL despawn, pulse animation, proximity
+pickup into gear inventory or resource hold — extracted from NpcShipManager),
 combatPause (pure active-pause state machine — PixiJS-free, unit-tested standalone),
 cometDustTail (pure dust-tail particle emitter for flyby comets — PixiJS-free, owns a fixed-size
 mote pool with a hard live-count bound; `AsteroidBelt` mirrors each pool slot 1:1 onto a pooled

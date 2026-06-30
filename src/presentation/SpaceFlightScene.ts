@@ -1658,17 +1658,21 @@ export class SpaceFlightScene extends GameScene {
     this.planetManager.closeInfoPanel();
   }
 
+  // Remember the ship's position before leaving so a hyperjump or a later
+  // return starts from here rather than the system-entry edge (US-070 #1).
+  private saveShipPosition(): void {
+    if (this.gameEngine && this.shipPhysics) {
+      this.gameEngine.lastFlightShipPos = {
+        x: this.shipPhysics.shipX,
+        y: this.shipPhysics.shipY,
+      };
+    }
+  }
+
   private async returnToStarMap(): Promise<void> {
     logger.info("Returning to star map");
     if (this.gameEngine) {
-      // Remember where the ship is so a hyperjump can start from here rather
-      // than teleporting the ship next to the sun (US-070 #1).
-      if (this.shipPhysics) {
-        this.gameEngine.lastFlightShipPos = {
-          x: this.shipPhysics.shipX,
-          y: this.shipPhysics.shipY,
-        };
-      }
+      this.saveShipPosition();
       await this.gameEngine.transitionTo(SceneType.STAR_MAP);
     }
   }
@@ -1695,11 +1699,7 @@ export class SpaceFlightScene extends GameScene {
   private async openInventory(): Promise<void> {
     if (!this.gameEngine) return;
     logger.info("Opening inventory");
-    if (this.shipPhysics)
-      this.gameEngine.lastFlightShipPos = {
-        x: this.shipPhysics.shipX,
-        y: this.shipPhysics.shipY,
-      };
+    this.saveShipPosition();
     await this.gameEngine.transitionTo(SceneType.INVENTORY, {
       gameEngine: this.gameEngine,
     });
@@ -1722,14 +1722,7 @@ export class SpaceFlightScene extends GameScene {
     // pre-selected on that system so the player can plot the warp route there.
     const target = this.gameEngine?.galaxy?.systemForLocation(locationId);
     if (target && this.gameEngine) {
-      // Save current ship position before leaving (same as returnToStarMap does),
-      // otherwise the ship spawns back at the system-entry edge on return.
-      if (this.shipPhysics) {
-        this.gameEngine.lastFlightShipPos = {
-          x: this.shipPhysics.shipX,
-          y: this.shipPhysics.shipY,
-        };
-      }
+      this.saveShipPosition();
       void this.gameEngine.transitionTo(SceneType.STAR_MAP, {
         gameEngine: this.gameEngine,
         pendingSelectedSystemId: target.id,

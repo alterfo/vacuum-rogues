@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **SpaceRangersOnline** (13787 symbols, 45406 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **vacuum-rogues** (13877 symbols, 45652 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -25,10 +25,10 @@ This project is indexed by GitNexus as **SpaceRangersOnline** (13787 symbols, 45
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/SpaceRangersOnline/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/SpaceRangersOnline/clusters` | All functional areas |
-| `gitnexus://repo/SpaceRangersOnline/processes` | All execution flows |
-| `gitnexus://repo/SpaceRangersOnline/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/vacuum-rogues/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/vacuum-rogues/clusters` | All functional areas |
+| `gitnexus://repo/vacuum-rogues/processes` | All execution flows |
+| `gitnexus://repo/vacuum-rogues/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

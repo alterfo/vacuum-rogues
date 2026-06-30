@@ -85,11 +85,8 @@ export class LootDropHandler {
    * despawn items older than {@link LOOT_TTL_MS}. Runs every frame.
    */
   update(deltaTime: number): void {
-    if (this.spaceLoot.length === 0) {
-      this.lootClockMs += deltaTime;
-      return;
-    }
     this.lootClockMs += deltaTime;
+    if (this.spaceLoot.length === 0) return;
     const pulse =
       0.6 +
       0.4 * (0.5 + 0.5 * Math.sin((this.lootClockMs / 1000) * Math.PI * 2));
