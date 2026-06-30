@@ -998,7 +998,7 @@ export class SpaceFlightScene extends GameScene {
 
     // Do not zoom while a blocking modal is open: the journal's scrollable list
     // owns the wheel, else a wheel notch both scrolls it AND zooms underneath.
-    if (this.isBlockingModalOpen()) return;
+    if (this.isBlockingModalOpen() && !this.planetManager.hasInfoPanel) return;
 
     // Do not zoom during a pan drag: middle-button auto-scroll / trackpad momentum
     // emit wheel events mid-pan, which would also zoom (bug: pan + unwanted zoom).
