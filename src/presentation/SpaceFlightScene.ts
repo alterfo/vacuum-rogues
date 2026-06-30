@@ -1722,6 +1722,14 @@ export class SpaceFlightScene extends GameScene {
     // pre-selected on that system so the player can plot the warp route there.
     const target = this.gameEngine?.galaxy?.systemForLocation(locationId);
     if (target && this.gameEngine) {
+      // Save current ship position before leaving (same as returnToStarMap does),
+      // otherwise the ship spawns back at the system-entry edge on return.
+      if (this.shipPhysics) {
+        this.gameEngine.lastFlightShipPos = {
+          x: this.shipPhysics.shipX,
+          y: this.shipPhysics.shipY,
+        };
+      }
       void this.gameEngine.transitionTo(SceneType.STAR_MAP, {
         gameEngine: this.gameEngine,
         pendingSelectedSystemId: target.id,
