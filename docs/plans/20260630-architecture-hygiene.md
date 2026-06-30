@@ -76,13 +76,13 @@ All changes are pure refactors: zero runtime-behaviour change, zero save-schema 
 - Modify: `src/presentation/flight/NpcShipManager.ts`
 - Create: `src/tests/presentation/contactPanelManager.test.ts`
 
-- [ ] Read `NpcShipManager.ts` lines 1511–1640 (the `closeNpcContactPanel` / contact-panel open/close cluster) and identify all state and methods that belong to contact-panel management (`npcContactPanel` field, open/close/hasOpenModal methods, the `NpcContactPanel` import)
-- [ ] Create `src/presentation/flight/ContactPanelManager.ts` — class with: `open(npc, deps)`, `close()`, `hasOpenModal(): boolean`, `closeModals()`; owns the `NpcContactPanel` instance; accepts a narrow `ContactPanelDeps` interface (renderer, gameEngine seam, i18n, callbacks) — no import of concrete `NpcShipManager`
-- [ ] In `NpcShipManager` replace the inline contact-panel state/logic with a `private panels: ContactPanelManager` field; forward all call sites (`this.closeNpcContactPanel()` → `this.panels.close()` etc.)
-- [ ] Write `src/tests/presentation/contactPanelManager.test.ts` — unit tests for open/close lifecycle and `hasOpenModal` state transitions (mock the NpcContactPanel constructor)
-- [ ] Verify existing tests still pass: `npm test -- --run` — no regressions in `npcShipManager.test.ts`, `npcShipClickable.test.ts`
-- [ ] `npm run lint && npx tsc --noEmit` — clean
-- [ ] Run `wc -l src/presentation/flight/NpcShipManager.ts` — line count must have decreased; record new count
+- [x] Read `NpcShipManager.ts` lines 1511–1640 (the `closeNpcContactPanel` / contact-panel open/close cluster) and identify all state and methods that belong to contact-panel management (`npcContactPanel` field, open/close/hasOpenModal methods, the `NpcContactPanel` import)
+- [x] Create `src/presentation/flight/ContactPanelManager.ts` — class with: `open(npc, deps)`, `close()`, `hasOpenModal(): boolean`, `closeModals()`; owns the `NpcContactPanel` instance; accepts a narrow `ContactPanelDeps` interface (renderer, gameEngine seam, i18n, callbacks) — no import of concrete `NpcShipManager`
+- [x] In `NpcShipManager` replace the inline contact-panel state/logic with a `private panels: ContactPanelManager` field; forward all call sites (`this.closeNpcContactPanel()` → `this.panels.close()` etc.)
+- [x] Write `src/tests/presentation/contactPanelManager.test.ts` — unit tests for open/close lifecycle and `hasOpenModal` state transitions (mock the NpcContactPanel constructor)
+- [x] Verify existing tests still pass: `npm test -- --run` — no regressions in `npcShipManager.test.ts`, `npcShipClickable.test.ts`
+- [x] `npm run lint && npx tsc --noEmit` — clean
+- [x] Run `wc -l src/presentation/flight/NpcShipManager.ts` — line count must have decreased; record new count (2749, down from 2759)
 
 ### Task 6: Extract LootDropHandler from NpcShipManager
 

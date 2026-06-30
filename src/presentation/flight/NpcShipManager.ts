@@ -5,7 +5,7 @@ import type { ShipPhysics } from "@/systems/ShipPhysics";
 import type { PlanetSprite } from "../PlanetSprite";
 import { NpcShipSprite } from "../NpcShipSprite";
 import type { SystemBounds } from "../NpcShipSprite";
-import { NpcContactPanel } from "../NpcContactPanel";
+import { ContactPanelManager } from "./ContactPanelManager";
 import type { NpcShip } from "@/domain/NpcShip";
 import { npcsPresentInSystem, NpcSimulator } from "@/systems/npc/NpcSimulator";
 import {
@@ -243,8 +243,12 @@ export class NpcShipManager implements FlightModule {
   // Maps each non-pirate NPC sprite to the planet sprite it orbits so the
   // anchor can be refreshed each frame as planets drift along their orbits.
   private npcAnchorPlanet = new Map<NpcShipSprite, PlanetSprite>();
-  private npcContactPanel: NpcContactPanel | null = null;
-  private contactNpcId: string | null = null;
+  private readonly panels: ContactPanelManager;
+  // Forwarding getter so tests that inspect internal state via type-cast can
+  // still read the open panel's NPC id (state now lives in ContactPanelManager).
+  private get contactNpcId(): string | null {
+    return this.panels.openNpcId;
+  }
   private overmindOverlay: Container | null = null;
   // Exploration-encounter prompt overlay (derelict/anomaly/distress) + the
   // encounter it is presenting; transient, ephemeral (no save state).
@@ -368,6 +372,13 @@ export class NpcShipManager implements FlightModule {
     this.gameLayer = gameLayer;
     this.uiLayer = uiLayer;
     this.deps = deps;
+    this.panels = new ContactPanelManager({
+      uiLayer,
+      getScreenSize: () => ({
+        width: renderer.app.screen.width,
+        height: renderer.app.screen.height,
+      }),
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -684,7 +695,7 @@ export class NpcShipManager implements FlightModule {
     this.spaceLoot.length = 0;
     this.deathFx?.destroy(); // removes + destroys its particle layer
     this.deathFx = null;
-    this.closeNpcContactPanel();
+    this.panels.close();
     this.followNpcId = null;
     this.approachNpcId = null;
     this.pursuitSuspended = false;
@@ -806,7 +817,7 @@ export class NpcShipManager implements FlightModule {
   /** True while a panel the manager owns should swallow outside-clicks. */
   hasOpenModal(): boolean {
     return (
-      this.npcContactPanel !== null ||
+      this.panels.hasOpenModal() ||
       this.overmindOverlay !== null ||
       this.encounterOverlay !== null
     );
@@ -819,17 +830,17 @@ export class NpcShipManager implements FlightModule {
 
   /** True while the NPC contact panel is open (for the Escape close-chain). */
   get isContactPanelOpen(): boolean {
-    return this.npcContactPanel !== null;
+    return this.panels.isOpen;
   }
 
   /** Close just the NPC contact panel (Escape handler / scene). */
   closeContactPanel(): void {
-    this.closeNpcContactPanel();
+    this.panels.close();
   }
 
   /** Close the NPC contact panel and the OVERMIND-core overlay (if open). */
   closeModals(): void {
-    this.closeNpcContactPanel();
+    this.panels.close();
     if (this.overmindOverlay) {
       const ov = this.overmindOverlay;
       this.overmindOverlay = null;
@@ -1032,7 +1043,7 @@ export class NpcShipManager implements FlightModule {
 
     // Close the contact panel if its NPC has left the system.
     if (this.contactNpcId && !presentIds.has(this.contactNpcId)) {
-      this.closeNpcContactPanel();
+      this.panels.close();
     }
 
     // Re-evaluate garrison aggression: a freshly arrived garrison ship (or a
@@ -1508,8 +1519,6 @@ export class NpcShipManager implements FlightModule {
     }
     if (this.deps.isTurnRunning()) return;
 
-    this.closeNpcContactPanel();
-    this.contactNpcId = npc.id;
     // Hailing/trading and the detailed readout are offered within radar/scanner
     // range; beyond it the panel only offers "Приблизиться" to close the gap
     // (US-070 #3). The gate is the scanner range, not the (much shorter) firing
@@ -1523,23 +1532,20 @@ export class NpcShipManager implements FlightModule {
         this.SCANNER_RANGE;
     const scanPower =
       this.gameEngine?.playerLoadout?.derivedStats().scanPower ?? 0;
-    this.npcContactPanel = new NpcContactPanel(
+    this.panels.open(
       npc,
-      this.renderer.app.screen.width,
-      this.renderer.app.screen.height,
       {
         onHail: () => this.onHailNpc(npc),
         onTrade: () => this.onTradeNpc(npc),
         onAttack: () => this.onAttackNpc(npc),
         onApproach: () => this.onApproachNpc(npc),
-        onClose: () => this.closeNpcContactPanel(),
+        onClose: () => this.panels.close(),
         onHire: () => this.offerHireContract(npc, "hire"),
         onAlly: () => this.offerHireContract(npc, "ally"),
       },
       inRange,
       scanPower,
     );
-    this.uiLayer.addChild(this.npcContactPanel.container);
 
     // Hailing an Overmind ("Предтечи") craft is futile: it answers with nonsense
     // and the panel surfaces no actionable options (commsOptionsFor → []). Emit a
@@ -1617,20 +1623,16 @@ export class NpcShipManager implements FlightModule {
    */
   private openShakedownHail(npc: NpcShip): void {
     this.deps.endTurn(); // freeze flight so the hail can't be flown past
-    this.closeNpcContactPanel();
-    this.contactNpcId = npc.id;
     const scanPower =
       this.gameEngine?.playerLoadout?.derivedStats().scanPower ?? 0;
-    this.npcContactPanel = new NpcContactPanel(
+    this.panels.open(
       npc,
-      this.renderer.app.screen.width,
-      this.renderer.app.screen.height,
       {
         onHail: () => this.onHailNpc(npc),
         onTrade: () => this.onTradeNpc(npc),
         onAttack: () => this.onAttackNpc(npc),
         onApproach: () => this.onApproachNpc(npc),
-        onClose: () => this.closeNpcContactPanel(),
+        onClose: () => this.panels.close(),
         onPayTribute: () => this.onPayTribute(npc),
         onFlee: () => this.onFleeShakedown(npc),
       },
@@ -1638,7 +1640,6 @@ export class NpcShipManager implements FlightModule {
       scanPower,
       "pirate-shakedown",
     );
-    this.uiLayer.addChild(this.npcContactPanel.container);
     this.deps.showMessage(`${npc.name}: «Кошелёк или жизнь!»`, 0xff5555);
   }
 
@@ -1655,7 +1656,7 @@ export class NpcShipManager implements FlightModule {
    */
   private onPayTribute(npc: NpcShip): void {
     const player = this.gameEngine?.player;
-    this.closeNpcContactPanel();
+    this.panels.close();
     if (!player) return;
     const tribute = shakedownTribute(player.credits);
     payTribute(
@@ -1686,7 +1687,7 @@ export class NpcShipManager implements FlightModule {
    * failure → the pirate runs you down and opens fire.
    */
   private onFleeShakedown(npc: NpcShip): void {
-    this.closeNpcContactPanel();
+    this.panels.close();
     const physics = this.deps.getShipPhysics();
     const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
     const playerSpeed = physics?.getMaxSpeed() ?? 0;
@@ -1736,7 +1737,7 @@ export class NpcShipManager implements FlightModule {
    */
   private onApproachNpc(npc: NpcShip): void {
     const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
-    this.closeNpcContactPanel();
+    this.panels.close();
     if (!sprite || !this.deps.getShipPhysics()) return;
     this.followNpcId = null; // approach only — not an attack
     this.approachNpcId = npc.id; // …but keep tracking it so the course corrects
@@ -1760,7 +1761,7 @@ export class NpcShipManager implements FlightModule {
 
   /** "Связаться": if player has an active TEXT_ADVENTURE quest, launch it; otherwise show greeting. */
   private onHailNpc(npc: NpcShip): void {
-    this.closeNpcContactPanel();
+    this.panels.close();
 
     const activeQuests = this.gameEngine?.questManager.getActiveQuests() ?? [];
     const textAdventureQuest = activeQuests.find(
@@ -1810,7 +1811,7 @@ export class NpcShipManager implements FlightModule {
    * the fee.
    */
   private offerHireContract(npc: NpcShip, mode: "hire" | "ally"): void {
-    this.closeNpcContactPanel();
+    this.panels.close();
     const target = this.nearestHostileNpc(npc.id);
     if (!target) {
       this.deps.showMessage(
@@ -1880,7 +1881,7 @@ export class NpcShipManager implements FlightModule {
     // that already spawned hostile.
     this.escalateHostility(npc);
     const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
-    this.closeNpcContactPanel();
+    this.panels.close();
     const physics = this.deps.getShipPhysics();
     if (!sprite || !physics) return;
 
@@ -2311,17 +2312,6 @@ export class NpcShipManager implements FlightModule {
         radius,
       ).length > 1
     );
-  }
-
-  private closeNpcContactPanel(): void {
-    const panel = this.npcContactPanel;
-    this.npcContactPanel = null;
-    this.contactNpcId = null;
-    // Defer the actual teardown out of the current pointer-event dispatch.
-    // Destroying the display object that PixiJS's event boundary is mid-dispatch
-    // on corrupts hit-testing and leaves other sprites unclickable (bug: after
-    // contacting/attacking one NPC, other ships stopped responding to clicks).
-    if (panel) queueMicrotask(() => panel.destroy());
   }
 
   // ---------------------------------------------------------------------------
