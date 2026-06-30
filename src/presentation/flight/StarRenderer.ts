@@ -526,12 +526,15 @@ export class StarRenderer implements FlightModule {
 
     if (this.sunSphere) {
       // Roll the surface — the hemisphere mesh gives real spherical foreshortening.
-      this.sunSphere.advance(0.00012 * deltaTime);
+      // Reduced 4× slower (playtest4: "волчок а не звезда"): 0.00012 → 0.00003
+      this.sunSphere.advance(0.00003 * deltaTime);
     } else if (this.starTiling) {
       // Fallback: scroll the map horizontally.
-      this.starTiling.tilePosition.x -= 0.012 * deltaTime;
+      // Reduced 4× slower: 0.012 → 0.003
+      this.starTiling.tilePosition.x -= 0.003 * deltaTime;
     } else if (this.starSurface) {
-      this.starSurface.rotation += 0.00004 * deltaTime;
+      // Reduced 4× slower: 0.00004 → 0.00001
+      this.starSurface.rotation += 0.00001 * deltaTime;
     }
   }
 }
