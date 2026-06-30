@@ -1,7 +1,7 @@
 import { Container, Graphics, Rectangle, Text } from "pixi.js";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
-import type { GameEngine } from "@/systems/GameEngine";
+import type { BankSceneHost } from "./BankSceneHost";
 import type { Planet } from "@/domain/Planet";
 import type { Station } from "@/domain/Station";
 import { SceneType } from "@/types";
@@ -41,7 +41,7 @@ import {
 } from "./bankSceneView";
 
 interface BankContext {
-  gameEngine?: GameEngine;
+  gameEngine?: BankSceneHost;
   /** Where the player came from — Bank returns here on "Назад". */
   planet?: Planet;
   station?: Station;
@@ -79,7 +79,7 @@ const HEADER = 0x88ccff;
  * scene just maps those rows to `Text`/`Graphics`.
  */
 export class BankScene extends GameScene {
-  private gameEngine: GameEngine | null = null;
+  private gameEngine: BankSceneHost | null = null;
   private planet: Planet | null = null;
   private station: Station | null = null;
   private uiContainer: Container | null = null;

@@ -43,11 +43,11 @@ All changes are pure refactors: zero runtime-behaviour change, zero save-schema 
 - Create: `src/presentation/BankSceneHost.ts`
 - Modify: `src/presentation/BankScene.ts`
 
-- [ ] Read `src/presentation/BankScene.ts` and list every member of `GameEngine` it accesses (audit all `this.gameEngine.` call sites)
-- [ ] Create `src/presentation/BankSceneHost.ts` — a minimal interface exposing only those members (e.g. `audio`, `bank`, `getPlayer()`, `transitionTo()`); no imports from `GameEngine`
-- [ ] In `BankScene.ts` replace `import type { GameEngine }` with `import type { BankSceneHost }` and update the constructor/field type — no call-site change in `SceneFactory.ts` needed (real `GameEngine` structurally satisfies the interface)
-- [ ] `npx tsc --noEmit` clean — confirms structural compatibility
-- [ ] `npm test -- --run && npm run lint` — all green
+- [x] Read `src/presentation/BankScene.ts` and list every member of `GameEngine` it accesses (audit all `this.gameEngine.` call sites)
+- [x] Create `src/presentation/BankSceneHost.ts` — a minimal interface exposing only those members (e.g. `audio`, `bank`, `getPlayer()`, `transitionTo()`); no imports from `GameEngine`
+- [x] In `BankScene.ts` replace `import type { GameEngine }` with `import type { BankSceneHost }` and update the constructor/field type — no call-site change in `SceneFactory.ts` needed (real `GameEngine` structurally satisfies the interface)
+- [x] `npx tsc --noEmit` clean — confirms structural compatibility
+- [x] `npm test -- --run && npm run lint` — all green
 
 ### Task 3: Decouple economy.ts from the concrete BankingService type (Cycle 5)
 
