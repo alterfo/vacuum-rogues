@@ -258,7 +258,7 @@ export class SpaceFlightScene extends GameScene {
         endTurn: () => this.endTurn(),
         startInFlightCombat: (sprite) => this.combatModule.addCombatant(sprite),
         onPlayerEngagesCombat: () => {
-          // Start the turn — orbit is not gated on isTurnRunning, so it needs a valid turn context.
+          this.clearPlannedRoute(); // combat takes over navigation; stale route would re-execute on Space
           if (!this.isTurnRunning) {
             this.isTurnRunning = true;
             this.updateInteractiveCursors(true);

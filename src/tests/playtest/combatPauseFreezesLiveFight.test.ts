@@ -79,6 +79,7 @@ interface FlightPrivates {
   combatModule: CombatModule;
   combatPause: CombatPauseController<unknown, unknown>;
   isTurnRunning: boolean;
+  plannedRoute: { x: number; y: number } | null;
 }
 
 describe("Active pause freezes the live fight over the real engine (Task 1)", () => {
@@ -228,6 +229,36 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
     // once "Огонь" lifts the pause — without this the ship orbits with no ход.
     expect(combatPause.paused).toBe(true);
     expect(scene.isTurnRunning).toBe(true);
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("clears a pre-existing planned route when the player engages combat (no stale route)", () => {
+    expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
+    const scene = harness.currentScene() as unknown as FlightPrivates;
+    const { shipPhysics: physics, npcManager } = scene;
+
+    const enemy = makeDriftingHostile(
+      "route-clear-foe",
+      physics.shipX + 100,
+      physics.shipY,
+    );
+    (npcManager as unknown as { npcSprites: NpcShipSprite[] }).npcSprites.push(
+      enemy,
+    );
+
+    // Pre-existing route to some planet — simulates the player had clicked a
+    // destination before switching to "Атаковать".
+    scene.plannedRoute = { x: 9999, y: 8888 };
+
+    (
+      npcManager as unknown as {
+        launchCombatWithNpc(n: NpcShipSprite["npc"]): void;
+      }
+    ).launchCombatWithNpc(enemy.npc);
+
+    // The stale route must be cleared so pressing Space after "Огонь" doesn't
+    // re-execute a route to the old destination instead of staying in combat.
+    expect(scene.plannedRoute).toBeNull();
     expect(harness.errors()).toEqual([]);
   });
 });
