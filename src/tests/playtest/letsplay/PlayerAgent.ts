@@ -212,6 +212,24 @@ export class PlayerAgent {
   /** Map one abstract action onto a real engine effect through the harness. */
   private async apply(action: Action, obs: Observation): Promise<void> {
     const engine = this.harness.engine;
+
+    // Safety net: while a hyperjump is already in transit (ship flying to the
+    // system edge), only a genuine combat reaction may override the wait —
+    // land/dock/move/trade/etc. would each redirect the route or tear down the
+    // scene via `goTo` (destroying SpaceFlightScene's private `pendingWarp`,
+    // silently dropping the pending jump). Drive the warp to completion instead.
+    // Mirrors LiveApplier's identical dispatch-layer gate so every policy (not
+    // just the ones that happen to self-censor) is covered here too.
+    if (
+      obs.warpInTransit &&
+      action.kind !== "wait" &&
+      action.kind !== "attack" &&
+      action.kind !== "flee"
+    ) {
+      await this.completeWarp();
+      return;
+    }
+
     switch (action.kind) {
       case "wait":
         // A real wait turn so a galaxy DAY actually passes (markets / NPC sim /
@@ -281,14 +299,10 @@ export class PlayerAgent {
 
       case "warp": {
         // Two-step real warp: open the galaxy map, then jump to a neighbour.
+        // (warpInTransit is handled by the blanket guard above — it's never
+        // true here, since warpInTransit only fires in SPACE_FLIGHT.)
         if (obs.scene !== SceneType.STAR_MAP) {
-          if (obs.warpInTransit) {
-            // A pending warp is already in-flight — drive it to completion rather
-            // than canceling it by re-opening the star map.
-            await this.completeWarp();
-          } else {
-            await this.harness.goTo(SceneType.STAR_MAP);
-          }
+          await this.harness.goTo(SceneType.STAR_MAP);
           return;
         }
         const sys = currentSystem(engine);
