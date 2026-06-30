@@ -176,7 +176,7 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
     (npcManager as unknown as { npcSprites: NpcShipSprite[] }).npcSprites.push(
       enemy,
     );
-    scene.isTurnRunning = true;
+    scene.isTurnRunning = true; // covers the "turn was running" case
     physics.setTarget(physics.shipX + 5000, physics.shipY); // ship was moving
 
     const shipBefore = { x: physics.shipX, y: physics.shipY };
@@ -198,6 +198,36 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
     for (let i = 0; i < 5; i++) harness.tick(FIRE);
     expect(physics.shipX).toBe(shipBefore.x);
     expect(physics.shipY).toBe(shipBefore.y);
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("starts the turn when the player initiates attack with no running turn (кружение не в момент хода)", () => {
+    expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
+    const scene = harness.currentScene() as unknown as FlightPrivates;
+    const { shipPhysics: physics, npcManager, combatPause } = scene;
+
+    const enemy = makeDriftingHostile(
+      "no-turn-foe",
+      physics.shipX + 100,
+      physics.shipY,
+    );
+    (npcManager as unknown as { npcSprites: NpcShipSprite[] }).npcSprites.push(
+      enemy,
+    );
+
+    // Precondition: turn is NOT running (the scenario the bug manifests in).
+    scene.isTurnRunning = false;
+
+    (
+      npcManager as unknown as {
+        launchCombatWithNpc(n: NpcShipSprite["npc"]): void;
+      }
+    ).launchCombatWithNpc(enemy.npc);
+
+    // Pause must fire AND the turn must be started so orbit has a valid context
+    // once "Огонь" lifts the pause — without this the ship orbits with no ход.
+    expect(combatPause.paused).toBe(true);
+    expect(scene.isTurnRunning).toBe(true);
     expect(harness.errors()).toEqual([]);
   });
 });

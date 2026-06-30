@@ -49,20 +49,12 @@ type LandingHint = { planetX: number; planetY: number; planetRadius: number };
 
 export class SpaceFlightScene extends GameScene {
   private gameEngine: GameEngine | null = null;
-  // Renders the player ship (hull/sprite, glow, heading crosshair, take-off arc)
-  // and owns its display objects — extracted from this scene as a FlightModule.
   private playerShip!: PlayerShipRenderer;
-  // Screen-fixed deep-space backdrop, behind the world (panning reveals no edge),
-  // on renderer.stage. Scene owns its lifecycle; SpaceBackgroundLayer populates it.
+  // Screen-fixed, behind the world on renderer.stage; SpaceBackgroundLayer populates it.
   private skyContainer: Container | null = null;
-  // Foreground asteroids/comets drifting across the view (US-070 #1; FlightModule).
   private asteroidBelt!: AsteroidBelt;
-  // Owns the deep-space backdrop, mid-ground parallax, foreground dust streaks
-  // and edge vignette (extracted from this scene — FlightModule).
   private background: SpaceBackgroundLayer | null = null;
-  // Warp-exit flourish (flash/rings/glow) — owns its transient effect container.
   private warpFx!: WarpEffectRenderer;
-  // Auto-completes exploration/defense/bounty quests triggered by flight events.
   private questCompletion!: QuestCompletion;
   private bgElapsed = 0; // Animation clock for background (ms)
   private shipPhysics: ShipPhysics | null = null;
@@ -76,9 +68,7 @@ export class SpaceFlightScene extends GameScene {
   // Draws the static orbit circles and the system-boundary ring (a FlightModule).
   private orbitRenderer!: OrbitRenderer;
 
-  // Living-galaxy NPC ships (Feature 8): lifecycle, contact panel, combat, OVERMIND.
   private npcManager!: NpcShipManager;
-  // In-flight combat (Tasks 11–14): scene reads `isActive` to retarget on a click.
   private combatModule!: CombatModule;
   private combatPause = createCombatPauseUi(); // active-pause; rewired in initialize()
   // Latches the low-hull auto-stop so the warning fires once per descent.
@@ -267,8 +257,14 @@ export class SpaceFlightScene extends GameScene {
         },
         endTurn: () => this.endTurn(),
         startInFlightCombat: (sprite) => this.combatModule.addCombatant(sprite),
-        onPlayerEngagesCombat: () =>
-          this.combatPause.requestPause("incoming-attack"),
+        onPlayerEngagesCombat: () => {
+          // Start the turn — orbit is not gated on isTurnRunning, so it needs a valid turn context.
+          if (!this.isTurnRunning) {
+            this.isTurnRunning = true;
+            this.updateInteractiveCursors(true);
+          }
+          this.combatPause.requestPause("incoming-attack");
+        },
         isInCombat: () => this.combatModule.isActive,
         selectCombatTarget: (s) => this.combatModule.selectTarget(s),
         getCombatTargetId: () =>
