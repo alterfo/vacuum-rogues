@@ -48,23 +48,17 @@ import {
 import {
   SYSTEM_GEOMETRY,
   GAME_BALANCE,
-  ARTIFACT_DROP_CHANCE,
   ENCOUNTER_CONFIG,
   ENCOUNTER_OUTCOME_CONFIG,
 } from "@/config/balance";
-import { SceneType, NpcRole, QuestType, ResourceType } from "@/types";
+import { SceneType, NpcRole, QuestType } from "@/types";
 import type { SpaceLootItem } from "@/types";
-import { Faction } from "@/types/faction";
 import { pickNpcDestination, type NpcBehaviorCtx } from "./npcBehavior";
 import { hashStr } from "@/utils/hashStr";
 import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
-import {
-  cargoCapacityOf,
-  acquireUninstalledGear,
-} from "@/systems/equipment/GearBridge";
-import { gearById, gearIdForToken } from "@/systems/equipment/GearCatalog";
 import { t } from "@/i18n/i18n";
+import { LootDropHandler } from "./LootDropHandler";
 import {
   commsContextFor,
   overmindGibberish,
@@ -86,16 +80,6 @@ import {
 } from "@/systems/encounters/encounterFlight";
 import type { FlightModule } from "./FlightModule";
 import { ShipDeathFxRenderer } from "./shipDeathFxRenderer";
-
-/**
- * Fallback module ids for loot dropped by an NPC with no scanned loadout, so a
- * kill always yields something recognisable to salvage.
- */
-const DEFAULT_LOOT_MODULES = [
-  "salvaged_plating",
-  "spare_capacitor",
-  "scrap_thruster",
-];
 
 /**
  * Galaxy/combatant id of the synthetic OVERMIND-core final boss. Killing the
@@ -311,17 +295,20 @@ export class NpcShipManager implements FlightModule {
   /** Min ms between curved star-avoidance re-plots (hysteresis throttle). */
   private readonly REPLOT_MIN_INTERVAL_MS = 500;
 
-  // Floating loot dropped by destroyed NPC ships (transient, presentation-only).
-  // Public so the in-flight combat module (later tasks) and the gravity-tractor
-  // pickup can read/mutate it; despawned after LOOT_TTL_MS by updateLoot().
-  readonly spaceLoot: SpaceLootItem[] = [];
-  // Per-loot glowing dot, keyed by loot id (yellow modules / cyan artifacts).
-  private readonly lootGraphics = new Map<string, Graphics>();
-  // Monotonic elapsed-ms clock driving loot lifetime + pulse (advanced in update,
-  // independent of game time-scale so despawn tracks real elapsed time).
-  private lootClockMs = 0;
-  /** Loot lifetime before it despawns (60 s). */
-  private readonly LOOT_TTL_MS = 60_000;
+  // Floating loot handler (spawn / TTL despawn / pickup). Owns spaceLoot,
+  // lootGraphics, and lootClockMs; extracted from this class so loot logic is
+  // independently testable. Initialised in the constructor (needs gameLayer).
+  private readonly loot: LootDropHandler;
+  /** Floating drops currently live in this system — forwarded from LootDropHandler. */
+  get spaceLoot(): SpaceLootItem[] {
+    return this.loot.spaceLoot;
+  }
+  // Forwarding accessor so the existing test cast
+  // `(manager as { lootGraphics: Map<...> }).lootGraphics.size` keeps working
+  // without touching any test assertion.
+  get lootGraphics() {
+    return this.loot.lootGraphics;
+  }
 
   // Ship-death explosion FX (pure emitter + pooled particle renderer). Built in
   // initialize() — after the scene's clearGameLayer — so its particle layer
@@ -379,6 +366,7 @@ export class NpcShipManager implements FlightModule {
         height: renderer.app.screen.height,
       }),
     });
+    this.loot = new LootDropHandler(gameLayer);
   }
 
   // ---------------------------------------------------------------------------
@@ -418,11 +406,19 @@ export class NpcShipManager implements FlightModule {
   update(deltaTime: number, _bgElapsed: number): void {
     // Loot pulses and despawns on real elapsed time, regardless of whether the
     // turn is running (it must clear even after combat ends and the ship stops).
-    this.updateLoot(deltaTime);
+    this.loot.update(deltaTime);
     // Floating drops are collected by flying near them (hands-on proximity), and
     // a gravity tractor extends the reach — every frame, including after combat
     // ends and the ship is parked, so a kill's drops are always collectible.
-    this.applyLootPickup();
+    this.loot.collectIfInRange({
+      getPlayer: () => this.gameEngine?.player ?? null,
+      getLoadout: () => this.gameEngine?.playerLoadout ?? null,
+      getShipPosition: () => {
+        const p = this.deps.getShipPhysics();
+        return p ? { x: p.shipX, y: p.shipY } : null;
+      },
+      showMessage: (text, color) => this.deps.showMessage(text, color),
+    });
 
     // Death blast ages on real elapsed time too (like loot), so a kill's
     // explosion keeps expanding + fading even after the ship stops / combat ends.
@@ -687,12 +683,7 @@ export class NpcShipManager implements FlightModule {
     }
     this.npcSprites = [];
     this.npcAnchorPlanet.clear();
-    for (const g of this.lootGraphics.values()) {
-      if (g.parent) g.parent.removeChild(g);
-      if (!g.destroyed) g.destroy();
-    }
-    this.lootGraphics.clear();
-    this.spaceLoot.length = 0;
+    this.loot.destroy();
     this.deathFx?.destroy(); // removes + destroys its particle layer
     this.deathFx = null;
     this.panels.close();
@@ -1157,12 +1148,9 @@ export class NpcShipManager implements FlightModule {
   // ---------------------------------------------------------------------------
 
   /**
-   * Spawn 0–2 floating loot items at a destroyed NPC's world position. Overmind
-   * ships drop Overmind artifacts (40% per item, otherwise a salvaged module);
-   * everyone else drops a random module from their scanned loadout. Called by
-   * the in-flight combat death path (later tasks) when an NPC ship is destroyed.
-   * `rng` is injectable so combat resolution / tests can drive the roll
-   * deterministically (defaults to `Math.random`).
+   * Spawn 0–2 floating loot items at a destroyed NPC's world position. Delegates
+   * to {@link LootDropHandler.spawn} — see that method for the full contract.
+   * `rng` is injectable so tests can drive the roll deterministically.
    */
   spawnLootForNpc(
     npc: NpcShip,
@@ -1170,27 +1158,7 @@ export class NpcShipManager implements FlightModule {
     worldY: number,
     rng: () => number = Math.random,
   ): void {
-    const isOvermind = npc.faction === Faction.OVERMIND;
-    const count = this.rollLootCount(rng);
-    for (let i = 0; i < count; i++) {
-      let moduleId: string | undefined;
-      let artifactId: string | undefined;
-      if (isOvermind && rng() < ARTIFACT_DROP_CHANCE) {
-        artifactId = "ARTIFACTS";
-      } else {
-        moduleId = this.pickModuleId(npc, rng);
-      }
-      const item: SpaceLootItem = {
-        id: `loot_${npc.id}_${Math.floor(this.lootClockMs)}_${i}`,
-        moduleId,
-        artifactId,
-        x: worldX,
-        y: worldY,
-        spawnedAt: this.lootClockMs,
-      };
-      this.spaceLoot.push(item);
-      this.mountLootSprite(item);
-    }
+    this.loot.spawn(npc, worldX, worldY, rng);
   }
 
   /**
@@ -1343,161 +1311,6 @@ export class NpcShipManager implements FlightModule {
         t("flight.systemLiberated", { name: sys?.name ?? systemId }),
         0x66ff99,
       );
-    }
-  }
-
-  /** Roll the per-kill loot count: 0, 1 or 2 (uniform thirds). */
-  private rollLootCount(rng: () => number): number {
-    const r = rng();
-    if (r < 1 / 3) return 0;
-    if (r < 2 / 3) return 1;
-    return 2;
-  }
-
-  /** Pick a module id for a non-artifact drop: a scanned loadout item, else a
-   *  generic salvage id when the NPC has no visible loadout. */
-  private pickModuleId(npc: NpcShip, rng: () => number): string {
-    const pool =
-      npc.loadoutSummary.length > 0 ? npc.loadoutSummary : DEFAULT_LOOT_MODULES;
-    return pool[Math.floor(rng() * pool.length) % pool.length];
-  }
-
-  /** Mount a small glowing dot for a loot item (yellow module / cyan artifact). */
-  private mountLootSprite(item: SpaceLootItem): void {
-    const color = item.artifactId ? 0x33ffff : 0xffdd33;
-    const g = new Graphics();
-    g.circle(0, 0, 10).fill({ color, alpha: 0.22 });
-    g.circle(0, 0, 5).fill({ color, alpha: 0.95 });
-    g.x = item.x;
-    g.y = item.y;
-    g.zIndex = 90; // above planet discs (50), below NPC hulls (100)
-    g.eventMode = "none";
-    this.gameLayer.addChild(g);
-    this.lootGraphics.set(item.id, g);
-  }
-
-  /**
-   * Advance the loot clock, pulse each dot's alpha (0.6 → 1.0 → 0.6 at ~1 Hz)
-   * and despawn items older than {@link LOOT_TTL_MS}. Runs every frame.
-   */
-  private updateLoot(deltaTime: number): void {
-    if (this.spaceLoot.length === 0) {
-      this.lootClockMs += deltaTime;
-      return;
-    }
-    this.lootClockMs += deltaTime;
-    const pulse =
-      0.6 +
-      0.4 * (0.5 + 0.5 * Math.sin((this.lootClockMs / 1000) * Math.PI * 2));
-    for (let i = this.spaceLoot.length - 1; i >= 0; i--) {
-      const item = this.spaceLoot[i];
-      if (this.lootClockMs - item.spawnedAt > this.LOOT_TTL_MS) {
-        this.removeLootAt(i);
-        continue;
-      }
-      const g = this.lootGraphics.get(item.id);
-      if (g) g.alpha = pulse;
-    }
-  }
-
-  /** Remove the loot item at `index` and dispose its glowing dot. */
-  private removeLootAt(index: number): void {
-    const item = this.spaceLoot[index];
-    if (!item) return;
-    const g = this.lootGraphics.get(item.id);
-    if (g) {
-      if (g.parent) g.parent.removeChild(g);
-      if (!g.destroyed) g.destroy();
-      this.lootGraphics.delete(item.id);
-    }
-    this.spaceLoot.splice(index, 1);
-  }
-
-  /**
-   * Loot auto-pickup (Task 6: "the yellow dot can't be collected" fix). A
-   * floating drop within the hands-on {@link GAME_BALANCE.lootPickupRadius} is
-   * collected **without** any gear; a fitted gravity tractor *extends* the reach
-   * (the effective radius is the max of the base radius and `gravTractorRange`),
-   * so the tractor is an upgrade rather than the only pickup path. Each item is
-   * collected at most once (removed in place — no double-collect).
-   *
-   * A drop whose `moduleId` resolves to **real catalog gear** ({@link
-   * gearIdForToken}: a fitted-gear drop like `eq_tank`/`grav_tractor_1`, or an
-   * NPC `loadoutSummary` display name like «Топливный бак») lands in the player's
-   * **gear inventory** (`ownedGearIds` via {@link acquireUninstalledGear}), not
-   * salvaged to metal — it shows up in the hangar СКЛАД. Gear is **not** resource
-   * cargo, so it bypasses the resource-hold capacity gate (`ownedGearIds` has no
-   * hard cap). Non-gear salvage **is** resource cargo: Overmind artifacts →
-   * ARTIFACTS, everything else (junk-salvage fallbacks) → METALS, and these honour
-   * the loadout cargo capacity — a full hold leaves them in space (logs a warning)
-   * but still collects gear later in the list.
-   */
-  private applyLootPickup(): void {
-    if (this.spaceLoot.length === 0) return;
-    const loadout = this.gameEngine?.playerLoadout;
-    const player = this.gameEngine?.player;
-    const physics = this.deps.getShipPhysics();
-    if (!loadout || !player || !physics) return;
-    const stats = loadout.derivedStats();
-    const baseRadius = GAME_BALANCE.lootPickupRadius;
-    // Hands-on proximity always applies; a gravity tractor only ever widens it.
-    const range = Math.max(baseRadius, stats.gravTractorRange);
-    if (range <= 0) return;
-    const rangeSq = range * range;
-    const baseSq = baseRadius * baseRadius;
-    // Hold size is the loadout's cargo (authoritative), not the legacy getter.
-    const capacity = cargoCapacityOf(loadout);
-    for (let i = this.spaceLoot.length - 1; i >= 0; i--) {
-      const item = this.spaceLoot[i];
-      const dx = item.x - physics.shipX;
-      const dy = item.y - physics.shipY;
-      const distSq = dx * dx + dy * dy;
-      if (distSq > rangeSq) continue; // out of pickup reach
-      // Hands-on grab vs. tractor pull get distinct flavour; both are localized.
-      const handsOn = distSq <= baseSq;
-
-      // Real gear → the gear inventory (not metal). No resource-hold gate: gear
-      // isn't resource cargo and `ownedGearIds` is uncapped, so it's never
-      // dropped on the floor for a full *resource* hold.
-      const gearId = item.moduleId ? gearIdForToken(item.moduleId) : undefined;
-      if (gearId) {
-        acquireUninstalledGear(player, gearId);
-        this.removeLootAt(i); // single collect — splice + dispose the dot
-        const label = gearById(gearId)?.name ?? gearId;
-        this.deps.showMessage(
-          handsOn
-            ? t("flight.lootPickup", { item: label })
-            : t("flight.lootTractor", { item: label }),
-          0xffdd33,
-        );
-        logger.info(`Picked up gear loot ${item.id} (${gearId})`);
-        continue;
-      }
-
-      // Non-gear salvage is resource cargo → honour the hold capacity.
-      const used = player.inventory.resources.reduce(
-        (sum, r) => sum + r.amount,
-        0,
-      );
-      if (used >= capacity) {
-        logger.warn("Loot pickup: hold full, drop left in space");
-        continue; // hold won't free up this frame — skip, but keep collecting gear
-      }
-      const type = item.artifactId
-        ? ResourceType.ARTIFACTS
-        : ResourceType.METALS;
-      player.inventory.addResource(type, 1);
-      this.removeLootAt(i); // single collect — splice + dispose the dot (no leak)
-      const label = item.artifactId
-        ? t("flight.lootArtifact")
-        : (item.moduleId ?? t("flight.lootModule"));
-      this.deps.showMessage(
-        handsOn
-          ? t("flight.lootPickup", { item: label })
-          : t("flight.lootTractor", { item: label }),
-        0xffdd33,
-      );
-      logger.info(`Picked up loot ${item.id} (${type})`);
     }
   }
 
