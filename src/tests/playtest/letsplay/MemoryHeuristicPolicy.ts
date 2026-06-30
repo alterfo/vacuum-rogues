@@ -132,7 +132,13 @@ export function decideWithMemory(obs: Observation, mem: AgentMemory): Action {
   // Heading into a remembered-dangerous goal while not battle-ready ⇒ hold back.
   const avoidDanger = danger > 0 && hull < BATTLE_READY_HULL_FRACTION;
 
-  // 2) Memory-driven trade + goal sequencing, by scene.
+  // 2) If a hyperjump is already in transit (ship flying to system edge), wait —
+  // opening StarMap would cancel the pending warp. Highest priority after survive.
+  if (obs.warpInTransit) {
+    return { kind: "wait", reason: "mem:warp-in-transit" };
+  }
+
+  // 3) Memory-driven trade + goal sequencing, by scene.
   switch (obs.scene) {
     case SceneType.PLANET: {
       const landedId = obs.currentPlanet?.id ?? null;
@@ -158,7 +164,10 @@ export function decideWithMemory(obs: Observation, mem: AgentMemory): Action {
       // Earn — take offered work, else inspect the market, else take off.
       if ((obs.currentPlanet?.availableQuests ?? 0) > 0)
         push("take-quest", "take-work");
-      push("trade", "inspect-market");
+      // Skip market re-visit when already holding cargo: would sell at a loss
+      // (same-planet sell < buy) and keeps the agent stuck on one planet.
+      // Instead fall through to take-off so the agent warps to the sell planet.
+      if (mem.inventoryLots.length === 0) push("trade", "inspect-market");
       push("move", "take-off");
       break;
     }
@@ -186,17 +195,37 @@ export function decideWithMemory(obs: Observation, mem: AgentMemory): Action {
         else if (stationInSystem(obs, offer.location))
           push("dock", "go-upgrade", offer.location);
       }
-      // Warp to find the sell destination when holding cargo for another system.
-      // This generates warp labels in the default teacher (not just free-explore).
+      // Warp to find the sell destination when:
+      //  - holding cargo AND best sell planet not in this system, OR
+      //  - holding cargo AND no sell planet known (priceBook only covers this system)
+      // Both cases need exploration; the second is the early-game cycle-breaker.
       const holdingForOtherSystem =
-        best.good != null &&
-        heldQty(mem, best.good) > 0 &&
-        !planetInSystem(obs, best.sellPlanet);
+        mem.inventoryLots.length > 0 &&
+        (best.sellPlanet === null || !planetInSystem(obs, best.sellPlanet));
       if (holdingForOtherSystem && !avoidDanger) {
         push("warp", "find-sell-destination");
       }
       // Generic earn — head to local commerce.
-      push("land", "earn", earnPlanetId(obs));
+      // Early exploration: if the nearest earn planet was already visited this
+      // session (it's in the price book) but there's still no cross-system margin,
+      // warp to explore a NEW system BEFORE landing on the same planet again.
+      // This breaks the "visit same planet forever" cycle: the warp fires only
+      // after the first visit; a fresh system resets alreadyVisited=false so the
+      // agent lands on the new planet first. Positioned before land "earn" so
+      // warp wins over the repeated same-planet land when the condition is met.
+      const earnPlanet = earnPlanetId(obs);
+      const alreadyVisited =
+        earnPlanet !== undefined && mem.priceBook.has(earnPlanet);
+      if (
+        alreadyVisited &&
+        best.fraction === 0 &&
+        !avoidDanger &&
+        mem.inventoryLots.length === 0 &&
+        !offer
+      ) {
+        push("warp", "early-explore");
+      }
+      push("land", "earn", earnPlanet);
       push("dock", "earn", obs.system?.stations[0]?.id);
       // Explore — but don't warp deeper into a remembered threat while hurt.
       if (avoidDanger) {
@@ -221,7 +250,11 @@ export function decideWithMemory(obs: Observation, mem: AgentMemory): Action {
       break;
     }
     case SceneType.TRADE: {
-      // The market's buy/sell executor lives off-screen; back out to flight.
+      // Execute the actual trade (headless: executeTradeOnPlanet; live: no-op via
+      // openTrade which already ran inline). Without this push the headless two-step
+      // (PLANET→TRADE→execute) never completes: the agent opens TRADE then
+      // immediately leaves without buying/selling, so cargo stays at 0 forever.
+      push("trade", "do-trade");
       push("move", "leave-market");
       break;
     }

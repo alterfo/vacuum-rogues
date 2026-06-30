@@ -168,6 +168,14 @@ export interface Observation {
   hostiles: NpcSnapshot[];
   quests: QuestSnapshot[];
   legalActions: PlayerActionKind[];
+  /**
+   * True when the ship is mid-transit to the system edge (a pending hyperjump was
+   * initiated and SpaceFlightScene is flying the ship out). The policy should push
+   * `wait` or `move` instead of re-opening StarMap, which would cancel the warp.
+   * Optional so test fixtures that build `Observation` objects without it still
+   * type-check; absent is treated as `false` everywhere.
+   */
+  warpInTransit?: boolean;
 }
 
 /** Flags describing the current location, fed to {@link legalActionsForScene}. */
@@ -302,6 +310,7 @@ export function observe(engine: GameEngine): Observation {
         connectionCount: 0,
         availableQuestCount: 0,
       }),
+      warpInTransit: false,
     };
   }
 
@@ -405,6 +414,13 @@ export function observe(engine: GameEngine): Observation {
     availableQuestCount,
   });
 
+  // Detect a pending hyperjump: the ship is flying to the system edge and a warp
+  // will fire when it arrives. Exposing this lets the policy push `wait` instead of
+  // re-opening StarMap (which would destroy SpaceFlightScene and cancel the warp).
+  const flightScene = engine.currentScene as { pendingWarp?: unknown } | null;
+  const warpInTransit =
+    scene === SceneType.SPACE_FLIGHT && flightScene?.pendingWarp != null;
+
   return {
     scene,
     hasPlayer: true,
@@ -415,5 +431,6 @@ export function observe(engine: GameEngine): Observation {
     hostiles,
     quests,
     legalActions,
+    warpInTransit,
   };
 }

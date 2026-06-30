@@ -397,6 +397,30 @@ describe("MemoryHeuristicPolicy (stateful adapter)", () => {
     expect(action.reason).toContain("go-buy");
   });
 
+  it("warps to find a sell destination when holding cargo for another system", () => {
+    // abBook: buy@A, sell@B; current system is sysA (no B planet) → must warp
+    const mem = abBook();
+    mem.inventoryLots = [{ good: M, qty: 5, buyPrice: 100 }];
+    const action = decideWithMemory(
+      obs({ connections: 2 }), // connections > 0 makes warp legal
+      mem,
+    );
+    expect(action.kind).toBe("warp");
+    expect(action.reason).toContain("find-sell-destination");
+  });
+
+  it("does NOT warp to sell destination when the route is remembered as dangerous", () => {
+    const mem = abBook();
+    mem.inventoryLots = [{ good: M, qty: 5, buyPrice: 100 }];
+    mem.threatMap.set("sysA", 4); // current system remembered as dangerous
+    const action = decideWithMemory(
+      obs({ connections: 2, player: { hullFraction: 0.5 } }), // hurt + warp legal
+      mem,
+    );
+    // avoidDanger (danger > 0 && hull < BATTLE_READY_HULL_FRACTION) suppresses warp
+    expect(action.kind).not.toBe("warp");
+  });
+
   it("decide(obs, memory) uses the supplied notebook without double-folding", () => {
     const policy = new MemoryHeuristicPolicy();
     const mem = abBook();

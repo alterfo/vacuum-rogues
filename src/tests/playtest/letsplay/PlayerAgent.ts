@@ -283,9 +283,22 @@ export class PlayerAgent {
         const scene = this.harness.currentScene() as {
           performWarpJumpTo?: (id: string) => Promise<void>;
         } | null;
-        if (target && typeof scene?.performWarpJumpTo === "function")
+        if (target && typeof scene?.performWarpJumpTo === "function") {
+          const startSys = engine.player?.currentSystemId;
           await scene.performWarpJumpTo(target);
-        else this.harness.tick();
+          // performWarpJumpTo transitions to SPACE_FLIGHT with a pendingWarp.
+          // The jump only fires when the ship reaches the system edge (via
+          // SpaceFlightScene.update → performWarp → transitionTo new system).
+          // Without ticking, the next agent decision re-opens StarMap and cancels
+          // the pending warp. Tick until the system actually changes.
+          for (let i = 0; i < 2000; i++) {
+            this.harness.tick(50);
+            await Promise.resolve(); // yield so async performWarp() can settle
+            if (engine.player?.currentSystemId !== startSys) break;
+          }
+        } else {
+          this.harness.tick();
+        }
         return;
       }
 

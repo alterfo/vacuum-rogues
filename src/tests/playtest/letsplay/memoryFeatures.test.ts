@@ -301,6 +301,31 @@ describe("memoryFeatures (the belief vector)", () => {
     expect(v[4]).toBe(1); // 8 / DANGER_SCALE(8) ⇒ saturated
   });
 
+  it("sets slot 6 to 1 when holding cargo whose sell planet is in another system", () => {
+    // twoPlanetBook: buy@p1 (100), sell@p2 (160); default system has no planets
+    const mem = twoPlanetBook();
+    mem.inventoryLots = [{ good: ResourceType.METALS, qty: 3, buyPrice: 100 }];
+
+    // Sell planet (p2) is not in the current system → holdingForOtherSystem = 1
+    expect(memoryFeatures(obs(), mem)[6]).toBe(1);
+
+    // When the sell planet IS present in the current system → 0
+    const inSystem = obs({
+      system: {
+        id: "sysA",
+        name: "A",
+        planets: [{ id: "p2", name: "p2", availableQuests: 0 }],
+        stations: [],
+        connections: 2,
+      },
+    });
+    expect(memoryFeatures(inSystem, mem)[6]).toBe(0);
+
+    // No inventory lots → 0 even though sell planet is elsewhere
+    const noLots = twoPlanetBook();
+    expect(memoryFeatures(obs(), noLots)[6]).toBe(0);
+  });
+
   it("wires best-margin into slot 0 and profit-here into slot 2 (no slot swap)", () => {
     const mem = twoPlanetBook(); // METALS: buy@p1 100, sell@p2 160
     mem.inventoryLots = [{ good: ResourceType.METALS, qty: 5, buyPrice: 100 }];
@@ -355,8 +380,8 @@ describe("featurize (observation + memory blocks)", () => {
     // `tools/ai/train_player.py`'s NUM_ACTIONS must match. Changing a width here is
     // a deliberate act that forces a retrain + re-export — so pin the numbers, not
     // just their sum (which is tautological).
-    expect(OBS_FEATURE_LENGTH).toBe(15);
+    expect(OBS_FEATURE_LENGTH).toBe(16);
     expect(MEMORY_FEATURE_LENGTH).toBe(7);
-    expect(FEATURE_LENGTH).toBe(22);
+    expect(FEATURE_LENGTH).toBe(23);
   });
 });

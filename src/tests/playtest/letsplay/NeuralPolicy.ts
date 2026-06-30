@@ -57,7 +57,7 @@ export interface NeuralPolicyOptions {
 }
 
 /** Number of observation-derived features (the egocentric vitals/system block). */
-export const OBS_FEATURE_LENGTH = 15;
+export const OBS_FEATURE_LENGTH = 16;
 
 /**
  * Length of the {@link featurize} vector — the net's input width: the
@@ -115,6 +115,11 @@ export function featurize(obs: Observation, memory?: AgentMemory): number[] {
     obs.scene === SceneType.SPACE_FLIGHT ? 1 : 0,
     obs.scene === SceneType.PLANET ? 1 : 0,
     obs.scene === SceneType.STAR_MAP ? 1 : 0,
+    // Warp-in-transit signal: 1 while the ship is flying to the system edge for a
+    // pending hyperjump. The policy should wait rather than re-opening StarMap
+    // (which cancels the warp). Lives in the observation block because it comes
+    // from the live SpaceFlightScene state, not the agent's belief notebook.
+    obs.warpInTransit ? 1 : 0,
     ...memoryFeatures(obs, memory),
   ];
 }

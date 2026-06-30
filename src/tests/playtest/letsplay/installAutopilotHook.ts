@@ -68,7 +68,22 @@ export function createLiveSceneController(
 
   return {
     tick() {
-      // The live render loop advances frames between ticks; nothing to force.
+      // A pending warp plots the route but does NOT start movement — the player
+      // must press Ход (Space / run-turn) to fly to the system edge. The live rAF
+      // loop does not do this automatically. Drive it manually each tick.
+      const scene = engine.currentScene as {
+        pendingWarp?: unknown;
+        plannedRoute?: { x: number; y: number } | null;
+        executeRouteTo?: (x: number, y: number) => void;
+      } | null;
+      if (
+        engine.currentSceneType === SceneType.SPACE_FLIGHT &&
+        scene?.pendingWarp != null &&
+        scene.plannedRoute != null &&
+        typeof scene.executeRouteTo === "function"
+      ) {
+        scene.executeRouteTo(scene.plannedRoute.x, scene.plannedRoute.y);
+      }
     },
     async leaveToFlight() {
       await goTo(SceneType.SPACE_FLIGHT);
@@ -201,7 +216,12 @@ export function installAutopilotHook(
     // The neural feature gate picks the brain: heuristic by default (flag off),
     // the trained NeuralPolicy (fed the exported weights) when the settings
     // toggle is on — same seam, smarter.
-    policy: selectPlayerPolicy({ weights: playerWeights }),
+    // Live autopilot always runs the trained net when weights are available
+    // (bypasses the НЕЙРОСЕТЬ settings toggle which defaults to off).
+    policy: selectPlayerPolicy({
+      weights: playerWeights,
+      enabled: playerWeights != null,
+    }),
     controller: createLiveSceneController(engine),
     onError: (err) => logger.warn("Autopilot tick fault (continuing):", err),
     ...overrides,
