@@ -405,7 +405,6 @@ export class PlayerAgent {
       // A single day (4 × 1000 ms) is enough for the starter weapon to defeat
       // a typical NPC (~26 shots × 25 dmg). waitOneDay() un-pauses on each tick
       // so weapons actually fire and the fight resolves rather than freezing.
-      // Flee and repair degrade to a tick.
       // While warpInTransit, waitOneDay()'s trailing endTurn() would halt the
       // ship short of the edge exactly like the actions the blanket guard
       // above already redirects (the route survives, but the turn — and so
@@ -419,7 +418,22 @@ export class PlayerAgent {
         else this.waitOneDay();
         return;
 
-      case "flee":
+      // Flee: escape by navigating to the star map and warping to another system.
+      // If no connections exist (trapped with no exit), fight it out via waitOneDay.
+      // The two-step sequence (flee → STAR_MAP; next step `warp` completes the jump)
+      // mirrors the warp action's own two-step flow, so the policy naturally picks
+      // `warp` on the next observe from STAR_MAP to finish the escape.
+      case "flee": {
+        const fleeSys = currentSystem(engine);
+        const fleeConns = fleeSys?.connections ?? [];
+        if (fleeConns.length === 0) {
+          this.waitOneDay();
+          return;
+        }
+        await this.harness.goTo(SceneType.STAR_MAP);
+        return;
+      }
+
       case "repair":
       default:
         this.harness.tick();
@@ -524,6 +538,7 @@ export class PlayerAgent {
       endTurn?(): void;
       isTurnRunning?: boolean;
       combatPause?: { paused?: boolean; resume?(): void } | null;
+      combatModule?: { isActive?: boolean } | null;
     } | null;
     if (
       engine.currentSceneType !== SceneType.SPACE_FLIGHT ||
@@ -534,8 +549,13 @@ export class PlayerAgent {
     }
     const day0 = engine.galaxy?.gameDays ?? 0;
     if (!scene.isTurnRunning) scene.onPlayPause(); // start the course-less wait
-    // One wait-day is MS_PER_WAIT_DAY (1000 ms); a few large ticks cross it.
-    for (let i = 0; i < 4 && (engine.galaxy?.gameDays ?? 0) === day0; i++) {
+    // Tick budget: 4 × 1000 ms covers the combatFireIntervalMs (2500 ms).
+    // Exit early only when a day has passed AND combat is NOT active — the
+    // non-combat "wait one day" case. When combat is active (NPC initiated in
+    // npcManager.update, which runs AFTER updateShip/advanceWaitTime in the
+    // same frame), continue ticking so fire timers accumulate past 2500 ms even
+    // though the day already advanced in the first tick.
+    for (let i = 0; i < 4; i++) {
       // Un-pause before each tick so weapons fire (combat resolves rather than freezing).
       if (
         scene.combatPause?.paused &&
@@ -544,6 +564,10 @@ export class PlayerAgent {
         scene.combatPause.resume();
       }
       this.harness.tick(1000);
+      // Stop once a day has passed AND we are not in an active fight.
+      const dayAdvanced = (engine.galaxy?.gameDays ?? 0) > day0;
+      const inCombat = scene.combatModule?.isActive === true;
+      if (dayAdvanced && !inCombat) break;
     }
     if (scene.isTurnRunning && typeof scene.endTurn === "function") {
       scene.endTurn();

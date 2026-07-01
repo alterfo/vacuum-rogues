@@ -793,6 +793,21 @@ export class NpcShipManager implements FlightModule {
     return sprite;
   }
 
+  /**
+   * E2E seam: directly register the first NPC sprite as a combatant, bypassing the
+   * normal aggression-propagation cycle. Call this immediately after
+   * {@link e2eForceAggressorInRange} when the test needs `combatModule.isActive`
+   * before any tick fires — without this, the first `advanceGalaxyDay` →
+   * `refresh` → `checkGarrisonAggro` cycle clears the forced aggressive flag before
+   * `npcManager.update` can call `startInFlightCombat`. Guarded by `__DEBUG__`.
+   */
+  e2eEngageCombat(): void {
+    if (!__DEBUG__) return;
+    const sprite = this.npcSprites[0];
+    if (!sprite) return;
+    this.deps.startInFlightCombat?.(sprite);
+  }
+
   /** Mini-map radar dots: world position + faction colour per NPC. */
   getNpcDots(): { x: number; y: number; color: number }[] {
     return this.npcSprites.map((s) => ({ x: s.x, y: s.y, color: s.mapColor }));

@@ -77,8 +77,8 @@ constants at call sites.
 - Modify: src/tests/playtest/letsplay/PlayerAgent.ts
 - Create: src/tests/playtest/letsplay/combat.test.ts
 
-- [ ] `attack` engages the in-range hostile through the real `CombatModule` (add combatant / confirm fire), `flee` plots a real break-off route (the existing `breakOffCombatPursuit` path).
-- [ ] Regression: against a seeded hostile the agent actually exchanges fire (NPC or player hull changes) and can disengage, zero errors.
+- [x] `attack` engages the in-range hostile through the real `CombatModule` (add combatant / confirm fire), `flee` plots a real break-off route (the existing `breakOffCombatPursuit` path).
+- [x] Regression: against a seeded hostile the agent actually exchanges fire (NPC or player hull changes) and can disengage, zero errors.
 
 ### Task 4: Repair + quest-completion executors
 **Files:**
