@@ -87,12 +87,12 @@ Order chosen: extract the four sub-systems (most self-contained), then decouple 
 - [x] run `npm test -- --run src/tests/flight/ src/tests/combat/` — all green (esp. `combatOrbit`, `combatOrbitAntiSpin`, `combatBreakoff`, `combatEngagement`, `combatEscape`, `chaseSteering.*`, `targetLostEndsTurn`); full suite 4265 passed (only the pre-existing, out-of-scope `SpaceFlightScene.ts` 1900-line guard stays red, untouched by this task); `tsc --noEmit` + `lint` clean; Cyrillic ratchet baseline regenerated (`UPDATE_CYRILLIC_BASELINE=1`): NpcShipManager 26→25, CombatPursuitController +1 = conserved
 
 ### Task 3: Extract `EncounterController` (exploration encounters + own overlay)
-- [ ] `gitnexus impact` on `maybeShowEntryEncounter`, `applyEncounterChoice`, `showEncounterPrompt`
-- [ ] create `src/presentation/flight/EncounterController.ts`; move `activeEncounter`/`encounterOverlay` state + methods: `maybeShowEntryEncounter`, `rollEntryEncounter`, `applyEncounterChoice`, `encounterOutcomeMessage`, `spawnEncounterAmbush`, `closeEncounterPrompt`, `showEncounterPrompt`, `buildEncounterButton` (+ module consts `ENCOUNTER_PROMPT_COPY`, `encounterOutcomeColor`)
-- [ ] keep `NpcShipManager.isEncounterPromptOpen`/`closeEncounterPrompt`/`applyEncounterChoice` as forwarders (flightKeyHandler Escape-chain + SpaceFlightScene depend on these)
-- [ ] the encounter overlay stays raw-PixiJS **within this presentation-layer controller** (no port needed — it is already in `presentation/`); consolidate its overlay building here
-- [ ] write `src/tests/presentation/encounterController.test.ts` (deterministic roll by (system, day), choice outcomes, prompt open/close)
-- [ ] run `npm test -- --run src/tests/playtest/encounters.test.ts src/tests/encounters/` — green
+- [x] `gitnexus impact` on `maybeShowEntryEncounter`, `applyEncounterChoice`, `showEncounterPrompt`
+- [x] create `src/presentation/flight/EncounterController.ts`; move `activeEncounter`/`encounterOverlay` state + methods: `maybeShowEntryEncounter`, `rollEntryEncounter`, `applyEncounterChoice`, `encounterOutcomeMessage`, `spawnEncounterAmbush`, `closeEncounterPrompt`, `showEncounterPrompt`, `buildEncounterButton` (+ module consts `ENCOUNTER_PROMPT_COPY`, `encounterOutcomeColor`)
+- [x] keep `NpcShipManager.isEncounterPromptOpen`/`closeEncounterPrompt`/`applyEncounterChoice` as forwarders (flightKeyHandler Escape-chain + SpaceFlightScene depend on these); `showEncounterPrompt` also kept as a forwarder — it's exercised directly by the existing `playtest/encounters.test.ts`
+- [x] the encounter overlay stays raw-PixiJS **within this presentation-layer controller** (no port needed — it is already in `presentation/`); consolidated its overlay building here
+- [x] write `src/tests/presentation/encounterController.test.ts` (deterministic roll by (system, day), choice outcomes, prompt open/close) — 12 tests
+- [x] run `npm test -- --run src/tests/playtest/encounters.test.ts src/tests/encounters/` — green (also ran the full `presentation/`, `flight/`, `combat/`, `npc/`, `core/` suites: 1566 passed; only the pre-existing, out-of-scope `moduleContracts` SpaceFlightScene <1900 guard stays red @1913 lines, untouched by this task; `tsc --noEmit` + `lint` clean; NpcShipManager.ts 1754→1479 lines)
 
 ### Task 4: Extract `OvermindBossController` (OVERMIND-core prompt + combatant)
 - [ ] `gitnexus impact` on `showOvermindCorePrompt`, `spawnOvermindCoreCombatant`
