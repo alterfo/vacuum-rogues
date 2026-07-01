@@ -1,4 +1,4 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container } from "pixi.js";
 import type { Renderer } from "../Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
@@ -9,6 +9,7 @@ import { ContactPanelManager } from "./ContactPanelManager";
 import { NpcInteractionController } from "./NpcInteractionController";
 import { CombatPursuitController } from "./CombatPursuitController";
 import { EncounterController } from "./EncounterController";
+import { OvermindBossController } from "./OvermindBossController";
 import type { NpcShip } from "@/domain/NpcShip";
 import { npcsPresentInSystem, NpcSimulator } from "@/systems/npc/NpcSimulator";
 import { isHostile, factionKindOf } from "@/systems/npc/factionHostility";
@@ -17,14 +18,12 @@ import {
   GL_COUNTERPARTY,
 } from "@/systems/banking/economy";
 import { pirateSalvageAmount } from "@/systems/combat/pirateSalvage";
-import { SeededRNG } from "@/utils/seededRNG";
 import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
 import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
 import { NpcRole } from "@/types";
 import type { SpaceLootItem } from "@/types";
 import { pickNpcDestination, type NpcBehaviorCtx } from "./npcBehavior";
 import { hashStr } from "@/utils/hashStr";
-import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
 import { t } from "@/i18n/i18n";
 import { LootDropHandler } from "./LootDropHandler";
@@ -126,10 +125,8 @@ export interface NpcShipManagerDeps {
  * live together).
  */
 export class NpcShipManager implements FlightModule {
-  private readonly renderer: Renderer;
   private readonly gameEngine: GameEngine | null;
   private readonly gameLayer: Container;
-  private readonly uiLayer: Container;
   private readonly deps: NpcShipManagerDeps;
 
   private readonly npcSimulator = new NpcSimulator();
@@ -158,13 +155,17 @@ export class NpcShipManager implements FlightModule {
   private get contactNpcId(): string | null {
     return this.panels.openNpcId;
   }
-  private overmindOverlay: Container | null = null;
   // Owns the exploration-encounter cluster (derelict/anomaly/distress prompt +
   // outcome resolution); transient, ephemeral (no save state). Constructed in
   // the ctor with a deps bundle over this manager; the moved methods below
   // forward 1:1 so the manager's tested surface (isEncounterPromptOpen/
   // closeEncounterPrompt/showEncounterPrompt/applyEncounterChoice) is unchanged.
   private readonly encounters: EncounterController;
+  // Owns the OVERMIND-core final-boss prompt + combatant spawn. Constructed in
+  // the ctor with a deps bundle over this manager; the moved methods below
+  // forward 1:1 so the manager's tested surface (showOvermindCorePrompt) is
+  // unchanged.
+  private readonly overmind: OvermindBossController;
   // Last camera zoom fanned out by the scene (updateHitAreas). Applied to
   // newly spawned sprites too — otherwise a ship arriving while the player is
   // zoomed out keeps its default 40-world-px hit circle (~10 screen px at
@@ -236,10 +237,8 @@ export class NpcShipManager implements FlightModule {
     uiLayer: Container,
     deps: NpcShipManagerDeps,
   ) {
-    this.renderer = renderer;
     this.gameEngine = gameEngine;
     this.gameLayer = gameLayer;
-    this.uiLayer = uiLayer;
     this.deps = deps;
     this.panels = new ContactPanelManager({
       uiLayer,
@@ -298,10 +297,23 @@ export class NpcShipManager implements FlightModule {
       flight: deps,
       getGameEngine: () => this.gameEngine,
       getNpcSprites: () => this.npcSprites,
-      isOvermindPromptOpen: () => this.overmindOverlay !== null,
+      isOvermindPromptOpen: () => this.overmind.isOpen,
       addNpcSprite: (npc, entry) => this.addNpcSprite(npc, entry),
       spawnPirateInSystem: (rng, id, systemId) =>
         this.npcSimulator.spawnPirateInSystem(rng, id, systemId),
+    });
+    this.overmind = new OvermindBossController({
+      uiLayer,
+      getScreenSize: () => ({
+        width: renderer.app.screen.width,
+        height: renderer.app.screen.height,
+      }),
+      flight: deps,
+      getGameEngine: () => this.gameEngine,
+      getNpcSprites: () => this.npcSprites,
+      addNpcSprite: (npc, entry) => this.addNpcSprite(npc, entry),
+      spawnOvermindInSystem: (rng, id, systemId) =>
+        this.npcSimulator.spawnOvermindInSystem(rng, id, systemId),
     });
   }
 
@@ -533,12 +545,7 @@ export class NpcShipManager implements FlightModule {
     this.panels.close();
     this.pursuit.reset();
     this.shakedownEvaluated.clear();
-    if (this.overmindOverlay) {
-      if (!this.overmindOverlay.destroyed) {
-        this.overmindOverlay.destroy({ children: true });
-      }
-      this.overmindOverlay = null;
-    }
+    this.overmind.destroy();
     this.encounters.destroy();
   }
 
@@ -551,11 +558,7 @@ export class NpcShipManager implements FlightModule {
    * shared scaledText helper in a later task.)
    */
   refreshFontScale(): void {
-    if (this.overmindOverlay && !this.overmindOverlay.destroyed) {
-      this.overmindOverlay.destroy({ children: true });
-      this.overmindOverlay = null;
-      this.showOvermindCorePrompt();
-    }
+    this.overmind.refreshFontScale();
     // Rebuild the open encounter prompt at the new size (it holds scaledFont text).
     this.encounters.refreshFontScale();
   }
@@ -655,7 +658,7 @@ export class NpcShipManager implements FlightModule {
   hasOpenModal(): boolean {
     return (
       this.panels.hasOpenModal() ||
-      this.overmindOverlay !== null ||
+      this.overmind.isOpen ||
       this.encounters.isOpen
     );
   }
@@ -678,15 +681,7 @@ export class NpcShipManager implements FlightModule {
   /** Close the NPC contact panel and the OVERMIND-core overlay (if open). */
   closeModals(): void {
     this.panels.close();
-    if (this.overmindOverlay) {
-      const ov = this.overmindOverlay;
-      this.overmindOverlay = null;
-      // Guard: a scene transition may run clearUILayer() (which destroys this
-      // overlay) before the microtask fires — destroying it twice throws.
-      queueMicrotask(() => {
-        if (!ov.destroyed) ov.destroy({ children: true });
-      });
-    }
+    this.overmind.close();
     this.closeEncounterPrompt();
   }
 
@@ -1266,55 +1261,6 @@ export class NpcShipManager implements FlightModule {
   }
 
   // ---------------------------------------------------------------------------
-  // OVERMIND core final-encounter prompt
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Spawn the OVERMIND-core final boss as a real in-flight combatant — real-time
-   * combat only, no hex CombatScene. The core enters as a hostile OVERMIND craft
-   * that auto-closes on the player (aggressor maneuver, Task 3) and is selected
-   * as the player's auto-fire target; killing it in-flight wins the game
-   * ({@link handleInFlightDeath}). Idempotent: a second prompt-attack while the
-   * core is already engaged is a no-op.
-   */
-  private spawnOvermindCoreCombatant(): void {
-    if (this.npcSprites.some((s) => s.npc.id === OVERMIND_CORE_ID)) return;
-    const systemId = this.gameEngine?.player?.currentSystemId ?? "";
-    const rng = new SeededRNG(`overmind-core:${systemId}`);
-    const core = this.npcSimulator.spawnOvermindInSystem(
-      rng,
-      OVERMIND_CORE_ID,
-      systemId,
-    );
-    // Boss stats: far tougher than a patrol Доминатор. Real-time combat does NOT
-    // model shields (firePlayerShot/fireNpcShot only touch hullHP), so fold the
-    // old hex encounter's 150-shield layer into the hull — 300 hull + 150 shields
-    // = 450 effective HP — to preserve the boss's intended toughness. Damage 45 as
-    // before.
-    core.name = "Ядро OVERMIND";
-    core.hullHP = 450;
-    core.maxHull = 450;
-    core.damage = 45;
-    core.markHostile();
-
-    // Register the boss in the domain galaxy like every other in-system spawn
-    // (garrison/capture-fleet callers push too): a day boundary during the fight
-    // calls advanceGalaxyDay() → refresh(), which begins-departure on any sprite
-    // absent from galaxy.npcShips. Without this the core flies out and the win
-    // becomes unreachable; handleInFlightDeath's removeNpc would also no-op.
-    const galaxy = this.gameEngine?.galaxy;
-    if (galaxy) galaxy.npcShips.push(core);
-
-    this.addNpcSprite(core, true); // enter from the boundary and fly in
-    const sprite = this.npcSprites.find((s) => s.npc.id === OVERMIND_CORE_ID);
-    if (!sprite) return;
-    sprite.setAggressive(true); // pursue the player to weapon range
-    this.deps.startInFlightCombat?.(sprite);
-    this.deps.selectCombatTarget?.(sprite);
-    this.deps.showMessage("Ядро OVERMIND вступает в бой!", 0xff2200);
-  }
-
-  // ---------------------------------------------------------------------------
   // Exploration encounters (derelict / anomaly / distress) — Task 3 wiring
   // ---------------------------------------------------------------------------
 
@@ -1355,6 +1301,15 @@ export class NpcShipManager implements FlightModule {
   }
 
   /**
+   * Spawn the OVERMIND-core final boss as a real in-flight combatant. Forwards
+   * to {@link OvermindBossController} (Task 4) — not private: exercised
+   * directly, via type-cast, by `combat/overmindCoreInflight.test.ts`.
+   */
+  spawnOvermindCoreCombatant(): void {
+    this.overmind.spawnOvermindCoreCombatant();
+  }
+
+  /**
    * Present the two-choice prompt for a rolled encounter (engage / leave).
    * Forwards to {@link EncounterController} — public: exercised directly by
    * `encounters.test.ts`.
@@ -1363,117 +1318,12 @@ export class NpcShipManager implements FlightModule {
     this.encounters.showEncounterPrompt(encounter);
   }
 
-  /** Show a prompt when entering the OVERMIND core system so the player can fight the final encounter. */
+  /**
+   * Show a prompt when entering the OVERMIND core system so the player can
+   * fight the final encounter. Forwards to {@link OvermindBossController}
+   * (Task 4) — public: called by `SpaceFlightScene`.
+   */
   showOvermindCorePrompt(): void {
-    if (!this.gameEngine) return;
-    const width = this.renderer.app.screen.width;
-    const height = this.renderer.app.screen.height;
-
-    const overlay = new Container();
-    this.overmindOverlay = overlay;
-    const bg = new Graphics();
-    bg.roundRect(width / 2 - 240, height / 2 - 110, 480, 220, 6).fill({
-      color: 0x000000,
-      alpha: 0.85,
-    });
-    // Swallow clicks on the modal panel so they do not bubble to the stage
-    // route-planning handler behind it (playtest3 F6 audit, CLAUDE.md Rule 2).
-    bg.eventMode = "static";
-    bg.on("pointerdown", (e) => e.stopPropagation());
-
-    const border = new Graphics();
-    border
-      .roundRect(width / 2 - 240, height / 2 - 110, 480, 220, 6)
-      .stroke({ width: 2, color: 0xff2200 });
-
-    const title = new Text({
-      text: "ЯДРО OVERMIND",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(20),
-        fill: 0xff2200,
-        fontWeight: "bold",
-      },
-    });
-    title.anchor.set(0.5);
-    title.x = width / 2;
-    title.y = height / 2 - 80;
-    title.eventMode = "none";
-
-    const desc = new Text({
-      text: "Вы вошли в систему ядра OVERMIND.\nУничтожьте его, чтобы спасти галактику.",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(14),
-        fill: 0xcccccc,
-        align: "center",
-      },
-    });
-    desc.anchor.set(0.5);
-    desc.x = width / 2;
-    desc.y = height / 2 - 30;
-    desc.eventMode = "none";
-
-    const attackBtn = new Container();
-    const attackBg = new Graphics();
-    attackBg
-      .roundRect(0, 0, 180, 36, 4)
-      .fill({ color: 0x330000 })
-      .stroke({ width: 1, color: 0xff2200 });
-    const attackLabel = new Text({
-      text: "[ Атаковать ядро ]",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(14),
-        fill: 0xff4444,
-      },
-    });
-    attackLabel.x = 8;
-    attackLabel.y = 9;
-    attackLabel.eventMode = "none";
-    attackBtn.addChild(attackBg, attackLabel);
-    attackBtn.x = width / 2 - 200;
-    attackBtn.y = height / 2 + 40;
-    attackBtn.eventMode = "static";
-    attackBtn.cursor = "pointer";
-    attackBtn.on("pointerdown", (e) => {
-      e.stopPropagation();
-      this.overmindOverlay = null;
-      queueMicrotask(() => overlay.destroy({ children: true }));
-      // Real-time only: the core fights in-flight via the CombatModule (no hex
-      // CombatScene hop). Killing it wins the game (handleInFlightDeath).
-      this.spawnOvermindCoreCombatant();
-    });
-
-    const retreatBtn = new Container();
-    const retreatBg = new Graphics();
-    retreatBg
-      .roundRect(0, 0, 180, 36, 4)
-      .fill({ color: 0x0d1b2a })
-      .stroke({ width: 1, color: 0x4488ff });
-    const retreatLabel = new Text({
-      text: "[ Отступить ]",
-      style: {
-        fontFamily: "Courier New",
-        fontSize: scaledFont(14),
-        fill: 0x4488ff,
-      },
-    });
-    retreatLabel.x = 8;
-    retreatLabel.y = 9;
-    retreatLabel.eventMode = "none";
-    retreatBtn.addChild(retreatBg, retreatLabel);
-    retreatBtn.x = width / 2 + 20;
-    retreatBtn.y = height / 2 + 40;
-    retreatBtn.eventMode = "static";
-    retreatBtn.cursor = "pointer";
-    retreatBtn.on("pointerdown", (e) => {
-      e.stopPropagation();
-      this.overmindOverlay = null;
-      queueMicrotask(() => overlay.destroy({ children: true }));
-    });
-
-    overlay.addChild(bg, border, title, desc, attackBtn, retreatBtn);
-    this.uiLayer.addChild(overlay);
+    this.overmind.showOvermindCorePrompt();
   }
 }

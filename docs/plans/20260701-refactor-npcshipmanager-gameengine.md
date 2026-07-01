@@ -95,11 +95,11 @@ Order chosen: extract the four sub-systems (most self-contained), then decouple 
 - [x] run `npm test -- --run src/tests/playtest/encounters.test.ts src/tests/encounters/` — green (also ran the full `presentation/`, `flight/`, `combat/`, `npc/`, `core/` suites: 1566 passed; only the pre-existing, out-of-scope `moduleContracts` SpaceFlightScene <1900 guard stays red @1913 lines, untouched by this task; `tsc --noEmit` + `lint` clean; NpcShipManager.ts 1754→1479 lines)
 
 ### Task 4: Extract `OvermindBossController` (OVERMIND-core prompt + combatant)
-- [ ] `gitnexus impact` on `showOvermindCorePrompt`, `spawnOvermindCoreCombatant`
-- [ ] create `src/presentation/flight/OvermindBossController.ts`; move `overmindOverlay` state + `spawnOvermindCoreCombatant`, `showOvermindCorePrompt` (+ `OVERMIND_CORE_ID` usage)
-- [ ] keep `NpcShipManager.showOvermindCorePrompt` as a forwarder (SpaceFlightScene calls it)
-- [ ] write `src/tests/presentation/overmindBossController.test.ts` (prompt renders, combatant spawns, boss win/loss dispatch)
-- [ ] run `npm test -- --run src/tests/presentation/overmindCombat.test.ts src/tests/combat/overmindCoreInflight.test.ts` — green
+- [x] `gitnexus impact` on `showOvermindCorePrompt`, `spawnOvermindCoreCombatant` — both LOW risk (SpaceFlightScene.initialize/onFontScaleChanged the only external callers; `spawnOvermindCoreCombatant` had 3 candidates — the manager one is LOW/4 impacted)
+- [x] create `src/presentation/flight/OvermindBossController.ts`; move `overmindOverlay` state + `spawnOvermindCoreCombatant`, `showOvermindCorePrompt` (+ `OVERMIND_CORE_ID` usage, imported from `NpcShipManager` — same cross-module import `CombatPursuitController` already uses)
+- [x] keep `NpcShipManager.showOvermindCorePrompt` as a forwarder (SpaceFlightScene calls it); also kept `spawnOvermindCoreCombatant` as a non-private forwarder — it's exercised directly via type-cast by the existing `overmindCoreInflight.test.ts` (same precedent as Task 1/2's tested-via-cast entry points); `destroy()`/`refreshFontScale()`/`hasOpenModal()`/`closeModals()` now delegate to the controller's `destroy()`/`refreshFontScale()`/`isOpen`/`close()`. Removing the last read of the `renderer`/`uiLayer` fields (their only use was building the overlay) also removed those two now-dead-write private fields (`noUnusedLocals`)
+- [x] write `src/tests/presentation/overmindBossController.test.ts` (prompt renders, combatant spawns, boss win/loss dispatch) — 9 tests
+- [x] run `npm test -- --run src/tests/presentation/overmindCombat.test.ts src/tests/combat/overmindCoreInflight.test.ts` — green (19 tests); full suite 4286 passed (only the pre-existing, out-of-scope `moduleContracts` SpaceFlightScene <1900 guard stays red @1913 lines, untouched by this task); `tsc --noEmit` + `lint` clean; Cyrillic ratchet baseline regenerated (`UPDATE_CYRILLIC_BASELINE=1`): NpcShipManager 25→0 (removed), EncounterController +19 (was missing from the baseline, now captured), OvermindBossController +6
 
 ### Task 5: Decouple transient anti-farm state into `FlightSessionState`
 - [ ] confirm via grep that `offeredEncounterIds`/`salvageDay`/`salvagedToday` have no external readers beyond GameEngine + NpcShipManager (verified in discovery — re-confirm before edit)
