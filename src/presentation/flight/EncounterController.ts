@@ -151,11 +151,19 @@ export class EncounterController {
     // entry into a fresh flight scene (land→take-off, star-map round trip,
     // in-session reload) WITHOUT advancing the day. Offer each (system, day)
     // encounter at most once per session, else the identical encounter re-fires
-    // and a good salvage is re-claimable for free credits/cargo.
-    const offered = this.deps.getGameEngine()?.offeredEncounterIds;
-    if (offered) {
-      if (offered.has(encounter.id)) return;
-      offered.add(encounter.id);
+    // and a good salvage is re-claimable for free credits/cargo. Prefer the
+    // shared FlightSessionState (Task 5); fall back to the GameEngine
+    // accessor for fake/host setups that don't wire it.
+    const session = this.deps.flight.sessionState;
+    if (session) {
+      if (session.hasOfferedEncounter(encounter.id)) return;
+      session.markEncounterOffered(encounter.id);
+    } else {
+      const offered = this.deps.getGameEngine()?.offeredEncounterIds;
+      if (offered) {
+        if (offered.has(encounter.id)) return;
+        offered.add(encounter.id);
+      }
     }
     this.showEncounterPrompt(encounter);
   }

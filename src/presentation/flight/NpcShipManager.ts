@@ -34,6 +34,7 @@ import type {
 } from "@/systems/encounters/encounterOutcome";
 import type { FlightModule } from "./FlightModule";
 import { ShipDeathFxRenderer } from "./shipDeathFxRenderer";
+import type { FlightSessionState } from "@/systems/FlightSessionState";
 
 /**
  * Galaxy/combatant id of the synthetic OVERMIND-core final boss. Killing the
@@ -108,6 +109,13 @@ export interface NpcShipManagerDeps {
    * direct nudge).
    */
   getStarAvoidRadius?(): number;
+  /**
+   * Shared anti-farm bookkeeping (offered encounters, per-day salvage cap —
+   * plan Task 5). Optional and additive so existing fake deps bundles keep
+   * compiling; when absent, callers fall back to the `GameEngine` accessors
+   * of the same name.
+   */
+  sessionState?: FlightSessionState;
 }
 
 /**
@@ -1089,23 +1097,36 @@ export class NpcShipManager implements FlightModule {
     const galaxy = engine?.galaxy;
     if (!engine || !player || !galaxy) return;
     if (!npc.credits || npc.credits <= 0) return;
-    // The per-day cap bookkeeping lives on the long-lived GameEngine (not this
-    // per-scene manager, rebuilt on every warp / land→take-off) so the cap can't
-    // be reset back to the full budget by leaving and re-entering a system within
-    // the same galaxy day.
+    // The per-day cap bookkeeping lives on the long-lived GameEngine's shared
+    // FlightSessionState (not this per-scene manager, rebuilt on every warp /
+    // land→take-off) so the cap can't be reset back to the full budget by
+    // leaving and re-entering a system within the same galaxy day. Prefer the
+    // deps-provided session state (Task 5); fall back to the GameEngine
+    // accessors for fake/host setups that don't wire it.
+    const session = this.deps.sessionState;
     const day = galaxy.gameDays ?? 0;
-    if (day !== engine.salvageDay) {
-      engine.salvageDay = day;
-      engine.salvagedToday = 0;
+    let salvagedToday: number;
+    if (session) {
+      salvagedToday = session.salvagedTodayFor(day);
+    } else {
+      if (day !== engine.salvageDay) {
+        engine.salvageDay = day;
+        engine.salvagedToday = 0;
+      }
+      salvagedToday = engine.salvagedToday ?? 0;
     }
     const award = pirateSalvageAmount(
       npc.credits,
       GAME_BALANCE.pirateSalvageFraction,
-      engine.salvagedToday ?? 0,
+      salvagedToday,
       GAME_BALANCE.pirateSalvageDailyCap,
     );
     if (award <= 0) return;
-    engine.salvagedToday = (engine.salvagedToday ?? 0) + award;
+    if (session) {
+      session.recordSalvage(award);
+    } else {
+      engine.salvagedToday = (engine.salvagedToday ?? 0) + award;
+    }
     adjustPlayerCredits(
       engine.bank,
       player,

@@ -279,6 +279,7 @@ export class SpaceFlightScene extends GameScene {
         isCombatant: (sprite) => this.combatModule.combatants.has(sprite),
         isPaused: () => this.combatPause.paused,
         getStarAvoidRadius: () => this.starRenderer.avoidRadius,
+        sessionState: this.gameEngine?.sessionState,
       },
     );
     // Auto-complete system-entry quests: EXPLORATION, DEFENSE (OVERMIND liberation), ESCORT.

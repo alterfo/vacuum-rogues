@@ -20,6 +20,7 @@ import { GameSystemException } from "@/exceptions/GameSystemException";
 import { GameValidationException } from "@/exceptions/GameValidationException";
 import { logger } from "@/utils/logger";
 import { GAME_BALANCE, additionalHostileSeeds } from "@/config/balance";
+import { FlightSessionState } from "@/systems/FlightSessionState";
 import { Graphics, Text } from "pixi.js";
 import { validatePlayerSettings } from "@/validation/schemas";
 import { Player } from "@/domain/Player";
@@ -144,27 +145,34 @@ export class GameEngine {
   // FlightHud.restoreGameSpeed() on every HUD (re)build. Deliberately NOT in
   // SaveState/schemas.ts (transient cross-scene state, like lastFlightShipPos).
   public gameSpeedMultiplier = 1;
-  // Transient: ids of exploration encounters already OFFERED this session. The
-  // roll is deterministic by (system, day), and the flight scene re-rolls on
-  // EVERY entry (land→take-off, star-map round trip, in-session reload) without
-  // advancing the day — so without this guard the identical encounter re-fires
-  // and a good salvage could be re-claimed for free credits/cargo. Each
-  // `enc:<sys>:<sys>:<day>` id is offered at most once per session. Deliberately
-  // NOT in SaveState/schemas.ts (ephemeral cross-scene state, like
-  // liveFlightShipPos — the plan's "no save change" choice); cleared on «Новая
-  // игра» so a fresh game never inherits the prior game's offers.
-  public readonly offeredEncounterIds = new Set<string>();
-  // Transient salvage anti-farm bookkeeping (Task 5, late-game recoverability):
-  // the galaxy day the running salvage total applies to, and credits already
-  // salvaged that day. Held HERE — not on the per-scene NpcShipManager, rebuilt
-  // on every SPACE_FLIGHT re-init (warp / land→take-off / star-map round-trip) —
-  // so the per-galaxy-day cap (GAME_BALANCE.pirateSalvageDailyCap) survives a
-  // scene rebuild instead of re-arming the full budget on every system entry
-  // (the same cross-scene-reset class as offeredEncounterIds above; a per-scene
-  // counter made the cap a per-system-visit faucet). Deliberately NOT in
-  // SaveState/schemas.ts (ephemeral cross-scene state); reset on «Новая игра».
-  public salvageDay = -1;
-  public salvagedToday = 0;
+  // Transient anti-farm bookkeeping shared with NpcShipManager — see
+  // {@link FlightSessionState}. Held HERE (not the per-scene NpcShipManager,
+  // rebuilt on every SPACE_FLIGHT re-init) so the exploration-encounter
+  // once-per-session offer and the per-galaxy-day salvage cap survive a scene
+  // rebuild (warp / land→take-off / star-map round-trip) instead of
+  // re-arming on every system entry. Deliberately NOT in SaveState/schemas.ts
+  // (ephemeral cross-scene state, like liveFlightShipPos); reset on «Новая
+  // игра» via {@link FlightSessionState.resetForNewSession}.
+  public readonly sessionState = new FlightSessionState();
+
+  /** @deprecated thin compat accessor — read/write {@link sessionState} directly. */
+  public get offeredEncounterIds(): Set<string> {
+    return this.sessionState.offeredEncounterIds;
+  }
+  /** @deprecated thin compat accessor — read/write {@link sessionState} directly. */
+  public get salvageDay(): number {
+    return this.sessionState.salvageDay;
+  }
+  public set salvageDay(day: number) {
+    this.sessionState.salvageDay = day;
+  }
+  /** @deprecated thin compat accessor — read/write {@link sessionState} directly. */
+  public get salvagedToday(): number {
+    return this.sessionState.salvagedToday;
+  }
+  public set salvagedToday(amount: number) {
+    this.sessionState.salvagedToday = amount;
+  }
   /** Called when a quest expires mid-session so the HUD can show a toast. */
   public questExpiryCallback?: (message: string) => void;
   /** Called when a quest moves to pending-return state so the HUD can show a toast. */
@@ -2058,9 +2066,7 @@ export class GameEngine {
     this.bankingService.resetLedger();
     this.flightShipPos = null;
     this.lastFlightShipPos = null;
-    this.offeredEncounterIds.clear();
-    this.salvageDay = -1;
-    this.salvagedToday = 0;
+    this.sessionState.resetForNewSession();
     // Clear adaptive-audio state so a fresh game never inherits a stale combat
     // hold or a still-armed low-hull alarm from the prior in-session game.
     this.combatStateProvider = null;
