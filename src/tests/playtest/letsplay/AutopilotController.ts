@@ -125,6 +125,16 @@ const defaultScheduler: AutopilotScheduler = {
  * `ignoreKey` (e.g. the oddity-flag hotkey) is excluded so flagging never stops
  * the autopilot.
  */
+/** Bare modifier keys should never disengage the autopilot (Shift alone != Shift+F). */
+const MODIFIER_ONLY_KEYS = new Set([
+  "Shift",
+  "Control",
+  "Alt",
+  "Meta",
+  "CapsLock",
+  "NumLock",
+]);
+
 function makeDefaultInputSource(
   ignoreKey?: (e: KeyboardEvent) => boolean,
 ): HumanInputSource {
@@ -132,7 +142,11 @@ function makeDefaultInputSource(
     if (typeof window === "undefined") return () => {};
     const events = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
     const handler = (e: Event): void => {
-      if (e.type === "keydown" && ignoreKey?.(e as KeyboardEvent)) return;
+      if (e.type === "keydown") {
+        const ke = e as KeyboardEvent;
+        if (MODIFIER_ONLY_KEYS.has(ke.key)) return; // Shift alone ≠ Shift+F
+        if (ignoreKey?.(ke)) return;
+      }
       onInput();
     };
     for (const e of events)

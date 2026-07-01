@@ -91,8 +91,11 @@ function stationInSystem(obs: Observation, stationId: string | null): boolean {
 /** The in-system planet the agent prefers to head to for generic earning. */
 function earnPlanetId(obs: Observation): string | undefined {
   const planets = obs.system?.planets ?? [];
-  const withWork = planets.find((p) => p.availableQuests > 0);
-  return (withWork ?? planets[0])?.id;
+  // Only consider habitable planets — uninhabited planets have no market, so
+  // landing there provides no value and creates an early-explore warp cycle.
+  const habitable = planets.filter((p) => p.isHabitable !== false);
+  const withWork = habitable.find((p) => p.availableQuests > 0);
+  return (withWork ?? habitable[0])?.id;
 }
 
 // --- CJM (Customer Journey Map) teacher behaviors -------------------------
@@ -552,8 +555,12 @@ export function decideWithMemory(
       // agent lands on the new planet first. Positioned before land "earn" so
       // warp wins over the repeated same-planet land when the condition is met.
       const earnPlanet = earnPlanetId(obs);
+      // An uninhabited visit stores an empty goods map — require at least one
+      // known good so the "already explored" signal is only true after a real
+      // market visit (prevents the warp-cycle on all-uninhabited systems).
       const alreadyVisited =
-        earnPlanet !== undefined && mem.priceBook.has(earnPlanet);
+        earnPlanet !== undefined &&
+        (mem.priceBook.get(earnPlanet)?.size ?? 0) > 0;
       if (
         alreadyVisited &&
         best.fraction === 0 &&
@@ -563,7 +570,9 @@ export function decideWithMemory(
       ) {
         push("warp", "early-explore");
       }
-      push("land", "earn", earnPlanet);
+      if (earnPlanet !== undefined) {
+        push("land", "earn", earnPlanet);
+      }
       push("dock", "earn", obs.system?.stations[0]?.id);
       // Explore — but don't warp deeper into a remembered threat while hurt.
       if (avoidDanger) {

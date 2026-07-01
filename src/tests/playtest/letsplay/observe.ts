@@ -135,7 +135,12 @@ export interface PlayerSnapshot {
 export interface SystemSnapshot {
   id: string;
   name: string;
-  planets: { id: string; name: string; availableQuests: number }[];
+  planets: {
+    id: string;
+    name: string;
+    availableQuests: number;
+    isHabitable?: boolean;
+  }[];
   stations: { id: string; name: string; type: StationType }[];
   /** Number of warp paths leading out of this system. */
   connections: number;
@@ -474,6 +479,7 @@ export function observe(engine: GameEngine): Observation {
           id: p.id,
           name: p.name,
           availableQuests: p.availableQuests.length,
+          isHabitable: p.isHabitable,
         })),
         stations: system.stations.map((st) => ({
           id: st.id,

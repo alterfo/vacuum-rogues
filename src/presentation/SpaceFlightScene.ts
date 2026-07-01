@@ -258,12 +258,19 @@ export class SpaceFlightScene extends GameScene {
         endTurn: () => this.endTurn(),
         startInFlightCombat: (sprite) => this.combatModule.addCombatant(sprite),
         onPlayerEngagesCombat: () => {
-          this.clearPlannedRoute(); // combat takes over navigation; stale route would re-execute on Space
+          // Route is preserved through combat.
+          // If the ship is flying, defer the stop to the current day boundary
+          // so the route isn't aborted mid-day; if stationary, the first hit
+          // via onPlayerUnderAttack will open the active-pause overlay anyway.
           if (!this.isTurnRunning) {
             this.isTurnRunning = true;
             this.updateInteractiveCursors(true);
           }
-          this.combatPause.requestPause("incoming-attack");
+          if (!this.shipPhysics?.isMoving) {
+            this.combatPause.requestPause("incoming-attack");
+          } else {
+            this.pauseAtDayBoundary = true;
+          }
         },
         isInCombat: () => this.combatModule.isActive,
         selectCombatTarget: (s) => this.combatModule.selectTarget(s),
@@ -1295,6 +1302,13 @@ export class SpaceFlightScene extends GameScene {
         // despawn the live target — cf. the OVERMIND-core push-into-galaxy workaround).
         if (this.combatModule?.isActive) {
           this.waitDayAccum += 1;
+          // Deferred-pause requested while flying during combat: stop at this
+          // day boundary (same mechanic as normal Space pause, but combat-safe —
+          // endTurn sets isTurnRunning=false which also freezes the combat module).
+          if (this.pauseAtDayBoundary) {
+            this.endTurn();
+            break;
+          }
           continue;
         }
         if (this.gameEngine?.galaxy) {

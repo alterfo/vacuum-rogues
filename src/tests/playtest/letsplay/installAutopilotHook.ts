@@ -34,6 +34,7 @@ import {
   landedPlanet,
   acceptBoardQuests,
   executeTradeOnPlanet,
+  pickWarpTarget,
 } from "./engineQueries";
 
 /** The `keydown` that toggles the autopilot (Backquote / `` ` `` — unused in flight). */
@@ -95,6 +96,10 @@ export function createLiveSceneController(
 ): LiveSceneController {
   const goTo = (scene: SceneType, context: object = {}): Promise<void> =>
     engine.transitionTo(scene, { gameEngine: engine, ...context });
+
+  // Anti-ping-pong warp tracking — mirrors PlayerAgent.lastSystemId/visitedSystemIds.
+  let lastSystemId: string | null = null;
+  const visitedSystemIds = new Set<string>();
 
   return {
     tick() {
@@ -201,8 +206,24 @@ export function createLiveSceneController(
       await goTo(SceneType.STAR_MAP);
     },
     async warp(systemId) {
+      const sys = currentSystem(engine);
+      const prevId = sys?.id ?? null;
+      const connections = sys?.connections ?? [];
+      // When all local connections are already visited (dead-end pocket or
+      // fully-explored galaxy) reset the visited set so exploration restarts
+      // rather than cycling inside the pocket indefinitely.
+      if (
+        connections.length > 0 &&
+        connections.every((c) => visitedSystemIds.has(c.toSystemId))
+      ) {
+        visitedSystemIds.clear();
+      }
+      // Prefers unvisited systems, then avoids the system we just came from,
+      // then falls back to connections[0] — prevents ping-pong.
       const target =
-        systemId ?? currentSystem(engine)?.connections[0]?.toSystemId;
+        systemId ?? pickWarpTarget(connections, lastSystemId, visitedSystemIds);
+      if (prevId) visitedSystemIds.add(prevId);
+      lastSystemId = prevId;
       const scene = engine.currentScene as {
         performWarpJumpTo?: (id: string) => Promise<void>;
       } | null;

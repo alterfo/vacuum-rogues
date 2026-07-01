@@ -80,6 +80,7 @@ interface FlightPrivates {
   combatModule: CombatModule;
   combatPause: CombatPauseController<unknown, unknown>;
   isTurnRunning: boolean;
+  pauseAtDayBoundary: boolean;
   plannedRoute: { x: number; y: number } | null;
 }
 
@@ -163,7 +164,7 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
     expect(harness.errors()).toEqual([]);
   });
 
-  it("pauses immediately when the player initiates attack (no orbit before dialog)", () => {
+  it("defers pause to day boundary when the player initiates attack while flying", () => {
     expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
     const scene = harness.currentScene() as unknown as FlightPrivates;
     const { shipPhysics: physics, npcManager, combatPause } = scene;
@@ -181,8 +182,6 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
     scene.isTurnRunning = true; // covers the "turn was running" case
     physics.setTarget(physics.shipX + 5000, physics.shipY); // ship was moving
 
-    const shipBefore = { x: physics.shipX, y: physics.shipY };
-
     // Player initiates attack (the "Атаковать" button path).
     (
       npcManager as unknown as {
@@ -190,16 +189,10 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
       }
     ).launchCombatWithNpc(enemy.npc);
 
-    // Pause must be live immediately — BEFORE any NPC shot lands.
-    expect(combatPause.paused).toBe(true);
-
-    // Ship must be stopped: onStopShip is called from onPause during engagement.
-    expect(physics.isMoving).toBe(false);
-
-    // Several frames while the overlay is up: ship stays frozen.
-    for (let i = 0; i < 5; i++) harness.tick(FIRE);
-    expect(physics.shipX).toBe(shipBefore.x);
-    expect(physics.shipY).toBe(shipBefore.y);
+    // Ship is flying — should NOT pause immediately; deferred to day boundary.
+    expect(combatPause.paused).toBe(false);
+    expect(physics.isMoving).toBe(true);
+    expect(scene.pauseAtDayBoundary).toBe(true);
     expect(harness.errors()).toEqual([]);
   });
 
@@ -257,9 +250,9 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
       }
     ).launchCombatWithNpc(enemy.npc);
 
-    // The stale route must be cleared so pressing Space after "Огонь" doesn't
-    // re-execute a route to the old destination instead of staying in combat.
-    expect(scene.plannedRoute).toBeNull();
+    // Route is preserved through combat — the combat pause freezes the ship,
+    // and the player can resume the route by pressing Space after combat ends.
+    expect(scene.plannedRoute).toEqual({ x: 9999, y: 8888 });
     expect(harness.errors()).toEqual([]);
   });
 
