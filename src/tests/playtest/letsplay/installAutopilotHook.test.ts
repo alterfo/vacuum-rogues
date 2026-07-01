@@ -41,6 +41,7 @@ describe("installAutopilotHook — window hook + hotkey", () => {
 
   beforeEach(() => {
     clearWindowHook();
+    localStorage.clear();
     keydownHandlers.length = 0;
     // Capture listeners instead of really binding them, so installs don't leak
     // across tests and we can invoke the hotkey handler directly.
@@ -61,6 +62,7 @@ describe("installAutopilotHook — window hook + hotkey", () => {
   afterEach(() => {
     restoreAdd();
     clearWindowHook();
+    localStorage.clear();
   });
 
   it("publishes window.__autopilot with start/stop/toggle/engaged", () => {

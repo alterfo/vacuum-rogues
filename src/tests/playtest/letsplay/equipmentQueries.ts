@@ -13,8 +13,7 @@
  * Dev-only: lives under `src/tests/`, imported by no production module.
  */
 import type { GameEngine } from "@/systems/GameEngine";
-import type { Station } from "@/domain/Station";
-import { StationType, type MicroModule } from "@/types";
+import type { MicroModule } from "@/types";
 import { GearKind, type HullSpec } from "@/systems/equipment/GearCatalog";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
@@ -110,27 +109,6 @@ export function cheapestMicromodule(engine: GameEngine): MicroModule | null {
     best = mm;
   }
   return best;
-}
-
-/** The first station in the player's current system, `null` if there is none. */
-export function nearestStationWithShop(engine: GameEngine): Station | null {
-  return currentSystem(engine)?.stations[0] ?? null;
-}
-
-/**
- * The nearest in-system station fielding bank access — TRADE_POST/MILITARY_BASE,
- * mirroring `observeHelpers.hasBankAccess`'s off-planet station list. `null` if none.
- */
-export function nearestStationWithBank(engine: GameEngine): Station | null {
-  const sys = currentSystem(engine);
-  if (!sys) return null;
-  return (
-    sys.stations.find(
-      (s) =>
-        s.type === StationType.TRADE_POST ||
-        s.type === StationType.MILITARY_BASE,
-    ) ?? null
-  );
 }
 
 /**

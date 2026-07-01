@@ -91,6 +91,25 @@ describe("letsplay new-action executors (Task 3)", () => {
     expect(harness.errors()).toHaveLength(0);
   });
 
+  it("executeBuyBestGear is a safe no-op when nothing in-system is affordable", () => {
+    const player = harness.engine.player!;
+    adjustPlayerCredits(
+      harness.engine.bank,
+      player,
+      -player.credits,
+      GL_COUNTERPARTY.EQUIPMENT,
+      "drain for test",
+    );
+    expect(bestAffordableGear(harness.engine)).toBeNull();
+    const ownedBefore = player.inventory.ownedGearIds.length;
+
+    executeBuyBestGear(harness.engine);
+
+    expect(player.inventory.ownedGearIds.length).toBe(ownedBefore);
+    expect(player.credits).toBe(0);
+    expect(harness.errors()).toHaveLength(0);
+  });
+
   it("executeUpgradeHull trades in the fitted hull for the priciest affordable one", () => {
     const loadout = harness.engine.playerLoadout!;
     const oldHullId = loadout.hull.id;
@@ -101,6 +120,26 @@ describe("letsplay new-action executors (Task 3)", () => {
 
     expect(loadout.hull.id).toBe(listing!.gear.id);
     expect(loadout.hull.id).not.toBe(oldHullId);
+    expect(harness.errors()).toHaveLength(0);
+  });
+
+  it("executeUpgradeHull is a safe no-op when nothing in-system is affordable", () => {
+    const player = harness.engine.player!;
+    const loadout = harness.engine.playerLoadout!;
+    const oldHullId = loadout.hull.id;
+    adjustPlayerCredits(
+      harness.engine.bank,
+      player,
+      -player.credits,
+      GL_COUNTERPARTY.EQUIPMENT,
+      "drain for test",
+    );
+    expect(bestAffordableHull(harness.engine)).toBeNull();
+
+    executeUpgradeHull(harness.engine);
+
+    expect(loadout.hull.id).toBe(oldHullId);
+    expect(player.credits).toBe(0);
     expect(harness.errors()).toHaveLength(0);
   });
 
@@ -116,6 +155,25 @@ describe("letsplay new-action executors (Task 3)", () => {
       true,
     );
     expect(player.inventory.micromodules.length).toBe(before + 1);
+    expect(harness.errors()).toHaveLength(0);
+  });
+
+  it("executeBuyBestModule is a safe no-op when no module is affordable", () => {
+    const player = harness.engine.player!;
+    adjustPlayerCredits(
+      harness.engine.bank,
+      player,
+      -player.credits,
+      GL_COUNTERPARTY.EQUIPMENT,
+      "drain for test",
+    );
+    expect(cheapestMicromodule(harness.engine)).toBeNull();
+    const before = player.inventory.micromodules.length;
+
+    executeBuyBestModule(harness.engine);
+
+    expect(player.inventory.micromodules.length).toBe(before);
+    expect(player.credits).toBe(0);
     expect(harness.errors()).toHaveLength(0);
   });
 
