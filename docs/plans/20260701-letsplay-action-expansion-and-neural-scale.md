@@ -455,13 +455,15 @@ scp oleg@192.168.88.193:/tmp/player.weights.json \
 
 Expected training time: < 60 seconds on RTX 4090 for 100K rows × 500 epochs. Target: val accuracy > 80% (with 16 actions and ambiguous states, perfect accuracy is impossible).
 
-- [ ] SCP `train_player.py` and `train.jsonl` to `oleg@192.168.88.193`
-- [ ] Run training with the command above; capture stdout to `tools/ai/dataset/training_log.txt`
-- [ ] Verify training converges (val accuracy climbing, no NaN loss); if not, reduce LR or check dataset
-- [ ] SCP the output `player.weights.json` into `src/tests/playtest/letsplay/weights/`
-- [ ] Re-enable `shippedWeights.test.ts`: update `FEATURE_LENGTH` assertion to `50`, `NUM_ACTIONS` to `16`
-- [ ] Run `npm run test:playtest -- --run` — `weightsContract.test.ts` and `shippedWeights.test.ts` must both pass
-- [ ] Run live autopilot in browser (`` ` ``) and record 2-minute GIF of the neural agent playing; verify it exhibits multiple distinct behaviors (not just warping in circles)
+- [x] SCP `train_player.py` and `train.jsonl` to `oleg@192.168.88.193`
+- [x] Run training with the command above; capture stdout to `tools/ai/dataset/training_log.txt`
+- [x] Verify training converges (val accuracy climbing, no NaN loss); if not, reduce LR or check dataset (converged: `val_acc` 0.351→0.997, `val_loss` 2.42→0.0047, early-stopped at epoch 409/500, no NaN — see deviation note)
+- [x] SCP the output `player.weights.json` into `src/tests/playtest/letsplay/weights/`
+- [x] Re-enable `shippedWeights.test.ts`: update `FEATURE_LENGTH` assertion to `50`, `NUM_ACTIONS` to `16` (both already read dynamically from `NeuralPolicy.FEATURE_LENGTH`/`observe.ACTION_ORDER.length` since Task 5/2 — no literal to change; un-skipped the `describe` block and fixed the layer-count assertion from `2` to `3` for the new 3-layer 50→256→128→16 architecture)
+- [x] Run `npm run test:playtest -- --run` — `weightsContract.test.ts` and `shippedWeights.test.ts` must both pass (428 passed, 4 skipped — the 4 are pre-existing env-gated runners unrelated to this task; both target files fully green: `weightsContract.test.ts` 4/4, `shippedWeights.test.ts` 2/2)
+- [x] Run live autopilot in browser (`` ` ``) and record 2-minute GIF of the neural agent playing; verify it exhibits multiple distinct behaviors (not just warping in circles) — manual test (skipped - not automatable; this sandboxed CLI environment has no browser/render loop, per memory `browser-debugging-spacerangers`; left for a manual dev-machine pass)
+
+**Deviation note:** trained on the ComfyUI host's existing `torch` install (`/home/oleg/ComfyUI/venv`, torch 2.6.0+cu124, CUDA available) rather than a bare `python`/`pip install torch` — no system-wide `torch` was present, and reusing the already-provisioned venv avoided mutating shared host state. Training took well under a minute (409 epochs on 9,600 rows). Val accuracy reached 99.7%, but per Task 9's documented finding this reflects the dataset's 8/16 dead action heads (`dock`/`take-quest`/`repair`/`buy-gear`/`upgrade-hull`/`buy-module`/`take-loan`/`repay-loan` never appear as labels — see [[project-letsplay-flee-noop-deadhead]]), not full 16-action mastery: the net only ever had to discriminate among the 8 action kinds the teacher actually emitted, so the very high accuracy is expected and does **not** indicate a 99.7%-competent full-repertoire policy. The shipped net faithfully reproduces the teacher's real (narrower) behavior — Post-Completion's iteration guidance (extend dataset, fix the headless disengage executor) remains the path to a fuller-repertoire net; not attempted here per this task's scope (training + shipping what Task 9 produced).
 
 ---
 

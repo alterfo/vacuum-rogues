@@ -17,12 +17,10 @@ import { NeuralPolicy, FEATURE_LENGTH } from "./NeuralPolicy";
 import { ACTION_ORDER } from "./observe";
 import playerWeights from "./weights/player.weights.json";
 
-// Skipped: the shipped net was trained against the old 10-action ACTION_ORDER.
-// Task 2 (20260701 action-expansion plan) widened it to 16 actions, so the
-// checked-in weights' output width no longer matches — expected until Task 10
-// retrains and re-exports against the new vocabulary (+ Task 5's wider
-// featurize). Re-enable per that task's checklist.
-describe.skip("shipped player.weights.json", () => {
+// Retrained + re-exported in Task 10 (20260701 action-expansion plan) against
+// the widened 50-feature / 16-action vocabulary (architecture 50->256->128->16,
+// trained on tools/ai/dataset/train.jsonl via tools/ai/train_player.py).
+describe("shipped player.weights.json", () => {
   it("loads through NeuralPolicy at the current FEATURE_LENGTH / ACTION_ORDER", async () => {
     const policy = new NeuralPolicy({ weights: playerWeights });
     expect(policy.isLoaded).toBe(false);
@@ -30,11 +28,11 @@ describe.skip("shipped player.weights.json", () => {
     expect(policy.isLoaded).toBe(true);
   });
 
-  it("has the expected layer shapes (FEATURE_LENGTH -> hidden -> ACTION_ORDER)", () => {
+  it("has the expected layer shapes (FEATURE_LENGTH -> hidden... -> ACTION_ORDER)", () => {
     const layers = (
       playerWeights as { layers: { W: number[][]; b: number[] }[] }
     ).layers;
-    expect(layers.length).toBe(2);
+    expect(layers.length).toBe(3);
     // first layer consumes a FEATURE_LENGTH-wide input ([outDim][inDim])
     expect(layers[0].W[0].length).toBe(FEATURE_LENGTH);
     // output head has one score per action slot
