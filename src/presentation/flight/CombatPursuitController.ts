@@ -19,6 +19,7 @@ import {
   type Point,
 } from "@/utils/flightGeometry";
 import { GAME_BALANCE } from "@/config/balance";
+import { NpcRole } from "@/types";
 
 /**
  * Everything the pursuit controller reads from (or pushes back to) the owning
@@ -54,6 +55,20 @@ export interface CombatPursuitDeps {
     rng: () => number,
     killedByPlayer: boolean,
   ): void;
+  /**
+   * Good-pirate-rep exemption gate (Task 1's NpcInteractionController) — a
+   * pirate at/above the good-rep threshold breaks off instead of shaking the
+   * player down. Optional/additive: absent ⇒ treated as false (no exemption),
+   * matching the pre-Task-6 manager behaviour for lightweight test setups
+   * that never construct the interaction cluster's real rep chain.
+   */
+  playerIsGoodWithPirates?(): boolean;
+  /** Deterministic per-encounter "кошелёк или жизнь" shakedown roll (Task 1). */
+  rollShakedown?(npc: NpcShip): boolean;
+  /** Open the pirate-shakedown comms window and halt flight (Task 1). */
+  openShakedownHail?(npc: NpcShip): void;
+  /** Drop a sprite's orbit-planet anchor (it just broke off/disengaged). */
+  clearNpcAnchor?(sprite: NpcShipSprite): void;
 }
 
 /**
@@ -130,6 +145,13 @@ export class CombatPursuitController {
   // to fight again).
   pursuitSuspended = false;
 
+  // Pirate ids already rolled for a "кошелёк или жизнь" shakedown this
+  // encounter, so a passing pirate demands tribute at most once (the roll is
+  // deterministic and must not re-fire every frame it sits inside scanner
+  // range). Moved from NpcShipManager (Task 6) alongside the aggressor tick
+  // that consumes it.
+  private readonly shakedownEvaluated = new Set<string>();
+
   private readonly WEAPON_RANGE: number;
   private readonly SCANNER_RANGE: number;
   // Combat strafe radius: while engaged, orbit the target at this standoff —
@@ -160,6 +182,75 @@ export class CombatPursuitController {
     this.followNpcId = null;
     this.approachNpcId = null;
     this.pursuitSuspended = false;
+    this.shakedownEvaluated.clear();
+  }
+
+  /**
+   * Per-frame garrison/pirate aggressor tick (Task 6 — extracted from
+   * {@link NpcShipManager.update}'s per-sprite loop): the good-pirate-rep
+   * breakoff, the pirate shakedown roll/hail, the out-run escape breakoff,
+   * and (else) the pursuit-target refresh + in-weapon-range combat launch.
+   * Called once per aggressive sprite while the turn is running; the caller
+   * must halt the rest of its per-frame sprite loop when this returns `true`
+   * (a shakedown hail just opened and froze the turn, mirroring the original
+   * inline `return` in `update()`).
+   */
+  tickAggressor(sprite: NpcShipSprite, physics: ShipPhysics): boolean {
+    // Good pirate rep buys peace — UNLESS the fight is already joined (you
+    // attacked it / it's an active combatant), in which case it keeps
+    // pursuing instead of breaking off mid-engagement.
+    if (
+      sprite.npc.role === NpcRole.PIRATE &&
+      (this.deps.playerIsGoodWithPirates?.() ?? false) &&
+      !(this.deps.flight.isCombatant?.(sprite) ?? false)
+    ) {
+      sprite.setAggressive(false);
+      this.deps.clearNpcAnchor?.(sprite);
+      return false;
+    }
+
+    const dx = sprite.x - physics.shipX;
+    const dy = sprite.y - physics.shipY;
+    const distSq = dx * dx + dy * dy;
+
+    // "Кошелёк или жизнь": a hostile pirate that closes to talking (scanner)
+    // range may open a shakedown hail BEFORE weapon range instead of
+    // attacking outright. Rolled once per pirate, deterministically. A
+    // positive roll halts the frame (the hail interrupts the player).
+    if (
+      sprite.npc.role === NpcRole.PIRATE &&
+      !this.shakedownEvaluated.has(sprite.npc.id) &&
+      distSq <= this.SCANNER_RANGE * this.SCANNER_RANGE
+    ) {
+      this.shakedownEvaluated.add(sprite.npc.id);
+      if (this.deps.rollShakedown?.(sprite.npc) ?? false) {
+        this.deps.openShakedownHail?.(sprite.npc);
+        return true;
+      }
+    }
+
+    // Escape: a faster player who has opened beyond the escape range breaks
+    // the chase — the out-run aggressor gives up pursuit this encounter
+    // (engaged combatants are pruned at the same range by CombatModule). A
+    // parked/slower player never out-runs it, so the aggressor keeps closing.
+    if (
+      distSq >
+        GAME_BALANCE.combatEscapeRange * GAME_BALANCE.combatEscapeRange &&
+      physics.canOutrun(sprite.cruiseSpeed)
+    ) {
+      sprite.setAggressive(false);
+      this.deps.clearNpcAnchor?.(sprite);
+    } else {
+      sprite.setPursuitTarget(
+        physics.shipX,
+        physics.shipY,
+        physics.currentSpeed,
+      );
+      if (distSq <= this.WEAPON_RANGE * this.WEAPON_RANGE) {
+        this.deps.flight.startInFlightCombat?.(sprite);
+      }
+    }
+    return false;
   }
 
   /**

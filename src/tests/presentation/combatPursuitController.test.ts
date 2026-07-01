@@ -530,3 +530,232 @@ describe("CombatPursuitController.resolveNpcVsNpcCombat", () => {
     expect(h.deaths[0].sprite.npc.id).toBe("pir4");
   });
 });
+
+// --- tickAggressor (Task 6: per-frame garrison/pirate aggressor loop) -------
+
+/** Fake sprite carrying the extra members `tickAggressor` reads/writes. */
+interface FakeAggressorSprite extends FakeSprite {
+  cruiseSpeed: number;
+  pursuitTargets: { x: number; y: number; speed: number }[];
+  setPursuitTarget(x: number, y: number, speed: number): void;
+}
+
+function makeAggressorSprite(
+  npc: NpcShip,
+  x: number,
+  y: number,
+  cruiseSpeed: number = GAME_BALANCE.npcSpeed,
+): FakeAggressorSprite {
+  const pursuitTargets: FakeAggressorSprite["pursuitTargets"] = [];
+  return {
+    npc,
+    x,
+    y,
+    aggressive: true,
+    cruiseSpeed,
+    pursuitTargets,
+    setAggressive(v) {
+      this.aggressive = v;
+    },
+    setPursuitTarget(px, py, speed) {
+      pursuitTargets.push({ x: px, y: py, speed });
+    },
+    isGone: () => false,
+  };
+}
+
+/** Parked player physics at the origin (not moving) — position-only checks. */
+function parkedPlayerPhysics(maxSpeed: number): ShipPhysics {
+  return new ShipPhysics(0, 0, maxSpeed);
+}
+
+/**
+ * A player physics body actively cruising fast enough to out-run `pursuerSpeed`
+ * (`canOutrun` requires `isMoving`) — ticked just enough to clear the speed
+ * threshold, not far enough to matter for the caller's own distance math.
+ */
+function fastMovingPlayerPhysics(maxSpeed: number): ShipPhysics {
+  const p = new ShipPhysics(0, 0, maxSpeed);
+  p.setTarget(1_000_000, 0);
+  for (let i = 0; i < 15; i++) p.update(50);
+  return p;
+}
+
+function makeAggressorHarness(
+  opts: {
+    goodWithPirates?: boolean;
+    isCombatant?: boolean;
+    shakedownRoll?: boolean;
+  } = {},
+): {
+  ctrl: CombatPursuitController;
+  hailedNpcs: NpcShip[];
+  clearedAnchors: FakeAggressorSprite[];
+  combatStarted: FakeAggressorSprite[];
+} {
+  const hailedNpcs: NpcShip[] = [];
+  const clearedAnchors: FakeAggressorSprite[] = [];
+  const combatStarted: FakeAggressorSprite[] = [];
+
+  const flight: NpcShipManagerDeps = {
+    getShipPhysics: () => null,
+    getPlanetSprites: () => [],
+    getStarCenter: () => ({ x: 100000, y: 100000 }),
+    isTurnRunning: () => true,
+    showMessage: () => {},
+    showTooltip: () => {},
+    hideTooltip: () => {},
+    executeRouteTo: () => {},
+    clearRouteTarget: () => {},
+    endTurn: () => {},
+    startInFlightCombat: (sprite) =>
+      combatStarted.push(sprite as unknown as FakeAggressorSprite),
+    isCombatant: () => opts.isCombatant ?? false,
+  };
+
+  const deps: CombatPursuitDeps = {
+    flight,
+    getGameEngine: () => null,
+    getNpcSprites: () => [],
+    npcLeadPoint: (sprite) => ({ x: sprite.x, y: sprite.y }),
+    aimRoute: () => {},
+    scannerRange: GAME_BALANCE.scannerRange,
+    weaponRange: WR,
+    handleInFlightDeath: () => {},
+    playerIsGoodWithPirates: () => opts.goodWithPirates ?? false,
+    rollShakedown: () => opts.shakedownRoll ?? false,
+    openShakedownHail: (npc) => hailedNpcs.push(npc),
+    clearNpcAnchor: (sprite) =>
+      clearedAnchors.push(sprite as unknown as FakeAggressorSprite),
+  };
+
+  return {
+    ctrl: new CombatPursuitController(deps),
+    hailedNpcs,
+    clearedAnchors,
+    combatStarted,
+  };
+}
+
+describe("CombatPursuitController.tickAggressor", () => {
+  it("breaks off a pirate the player has good reputation with (not yet a combatant)", () => {
+    const npc = makeNpc("goodrep1", { role: NpcRole.PIRATE });
+    const sprite = makeAggressorSprite(npc, WR - 10, 0);
+    const h = makeAggressorHarness({
+      goodWithPirates: true,
+      isCombatant: false,
+    });
+    const physics = parkedPlayerPhysics(0.5);
+
+    const halted = h.ctrl.tickAggressor(
+      sprite as unknown as NpcShipSprite,
+      physics,
+    );
+
+    expect(halted).toBe(false);
+    expect(sprite.aggressive).toBe(false);
+    expect(h.clearedAnchors).toEqual([sprite]);
+    expect(h.combatStarted).toEqual([]);
+    expect(h.hailedNpcs).toEqual([]);
+  });
+
+  it("keeps pursuing a good-rep pirate that is already an active combatant", () => {
+    const npc = makeNpc("goodrep2", { role: NpcRole.PIRATE });
+    const sprite = makeAggressorSprite(npc, WR - 10, 0);
+    const h = makeAggressorHarness({
+      goodWithPirates: true,
+      isCombatant: true,
+    });
+    const physics = parkedPlayerPhysics(0.5);
+
+    h.ctrl.tickAggressor(sprite as unknown as NpcShipSprite, physics);
+
+    expect(sprite.aggressive).toBe(true);
+    expect(h.clearedAnchors).toEqual([]);
+    expect(h.combatStarted).toEqual([sprite]); // in weapon range → engages instead
+  });
+
+  it("opens a shakedown hail and halts the frame on a positive roll", () => {
+    const npc = makeNpc("shake1", { role: NpcRole.PIRATE });
+    const sprite = makeAggressorSprite(npc, GAME_BALANCE.scannerRange - 10, 0);
+    const h = makeAggressorHarness({ shakedownRoll: true });
+    const physics = parkedPlayerPhysics(0.5);
+
+    const halted = h.ctrl.tickAggressor(
+      sprite as unknown as NpcShipSprite,
+      physics,
+    );
+
+    expect(halted).toBe(true);
+    expect(h.hailedNpcs).toEqual([npc]);
+    expect(h.combatStarted).toEqual([]); // halted before the pursuit/launch step
+  });
+
+  it("evaluates the shakedown roll at most once per pirate per encounter", () => {
+    const npc = makeNpc("shake2", { role: NpcRole.PIRATE });
+    const sprite = makeAggressorSprite(npc, GAME_BALANCE.scannerRange - 10, 0);
+    const h = makeAggressorHarness({ shakedownRoll: false });
+    const physics = parkedPlayerPhysics(0.5);
+
+    h.ctrl.tickAggressor(sprite as unknown as NpcShipSprite, physics);
+    h.ctrl.tickAggressor(sprite as unknown as NpcShipSprite, physics);
+
+    // Already-evaluated pirates never re-roll — a second positive roll would
+    // still not re-fire (guarded below by never flipping shakedownRoll true).
+    expect(h.hailedNpcs).toEqual([]);
+  });
+
+  it("breaks off pursuit once the player has out-run the aggressor beyond the escape range", () => {
+    const npc = makeNpc("outrun1", { role: NpcRole.TRADER });
+    const physics = fastMovingPlayerPhysics(0.5); // fast player — out-runs the NPC
+    expect(physics.canOutrun(0.05)).toBe(true);
+    const escapeDist = GAME_BALANCE.combatEscapeRange + 50;
+    // Position relative to the physics body's actual (post-acceleration) spot so
+    // the escape-range math is exact regardless of how far it cruised getting there.
+    const sprite = makeAggressorSprite(
+      npc,
+      physics.shipX + escapeDist,
+      physics.shipY,
+      0.05, // slow NPC cruise — well under the player's cruise speed
+    );
+    const h = makeAggressorHarness();
+
+    const halted = h.ctrl.tickAggressor(
+      sprite as unknown as NpcShipSprite,
+      physics,
+    );
+
+    expect(halted).toBe(false);
+    expect(sprite.aggressive).toBe(false);
+    expect(h.clearedAnchors).toEqual([sprite]);
+    expect(sprite.pursuitTargets).toEqual([]);
+  });
+
+  it("refreshes the pursuit target and engages once inside weapon range", () => {
+    const npc = makeNpc("pursue1", { role: NpcRole.TRADER });
+    const sprite = makeAggressorSprite(npc, WR - 10, 0);
+    const h = makeAggressorHarness();
+    const physics = parkedPlayerPhysics(0.5);
+
+    const halted = h.ctrl.tickAggressor(
+      sprite as unknown as NpcShipSprite,
+      physics,
+    );
+
+    expect(halted).toBe(false);
+    expect(sprite.pursuitTargets.length).toBe(1);
+    expect(h.combatStarted).toEqual([sprite]);
+  });
+
+  it("refreshes the pursuit target without engaging while still out of weapon range", () => {
+    const npc = makeNpc("pursue2", { role: NpcRole.TRADER });
+    const sprite = makeAggressorSprite(npc, WR + 100, 0);
+    const h = makeAggressorHarness();
+    const physics = parkedPlayerPhysics(0.5);
+
+    h.ctrl.tickAggressor(sprite as unknown as NpcShipSprite, physics);
+
+    expect(sprite.pursuitTargets.length).toBe(1);
+    expect(h.combatStarted).toEqual([]);
+  });
+});

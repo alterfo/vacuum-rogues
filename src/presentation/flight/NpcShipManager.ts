@@ -205,11 +205,6 @@ export class NpcShipManager implements FlightModule {
     return this.pursuit.npcCrossfireTimer;
   }
 
-  // Pirate ids already rolled for a "кошелёк или жизнь" shakedown this encounter,
-  // so a passing pirate demands tribute at most once (the roll is deterministic
-  // and must not re-fire every frame it sits inside scanner range).
-  private readonly shakedownEvaluated = new Set<string>();
-
   // Floating loot handler (spawn / TTL despawn / pickup). Owns spaceLoot,
   // lootGraphics, and lootClockMs; extracted from this class so loot logic is
   // independently testable. Initialised in the constructor (needs gameLayer).
@@ -233,7 +228,6 @@ export class NpcShipManager implements FlightModule {
 
   private readonly WEAPON_RANGE = GAME_BALANCE.weaponRange;
   private readonly SCANNER_RANGE = GAME_BALANCE.scannerRange;
-  private readonly COMBAT_ESCAPE_RANGE = GAME_BALANCE.combatEscapeRange;
   private readonly SYSTEM_INNER_RADIUS = SYSTEM_GEOMETRY.innerRadius;
   private readonly SYSTEM_OUTER_RADIUS = SYSTEM_GEOMETRY.outerRadius;
   private readonly SYSTEM_BOUNDARY_RADIUS = SYSTEM_GEOMETRY.boundaryRadius;
@@ -265,6 +259,12 @@ export class NpcShipManager implements FlightModule {
       weaponRange: this.WEAPON_RANGE,
       handleInFlightDeath: (sprite, rng, killedByPlayer) =>
         this.handleInFlightDeath(sprite, rng, killedByPlayer),
+      playerIsGoodWithPirates: () => this.interaction.playerIsGoodWithPirates(),
+      rollShakedown: (npc) => this.interaction.rollShakedown(npc),
+      openShakedownHail: (npc) => this.interaction.openShakedownHail(npc),
+      clearNpcAnchor: (sprite) => {
+        this.npcAnchorPlanet.delete(sprite);
+      },
     });
     this.interaction = new NpcInteractionController({
       flight: deps,
@@ -388,70 +388,18 @@ export class NpcShipManager implements FlightModule {
     const timeScale = physics?.timeScale ?? 1;
     for (let i = this.npcSprites.length - 1; i >= 0; i--) {
       const sprite = this.npcSprites[i];
-      // Garrison aggressors maneuver against the player ship: refresh their live
-      // pursuit target (position + the player's CURRENT speed, which drives the
-      // over-matched break-off check — a parked player isn't fleeing, so the
-      // aggressor closes in) before advancing them, then open in-flight combat
-      // once they close to attack range (no CombatScene hop — the scene's
-      // CombatModule resolves the fight; Tasks 11–14).
-      if (sprite.aggressive && physics) {
-        // Good pirate reputation leaves the player alone (no attack, no ransom):
-        // an aggressive pirate breaks off pursuit before it can shake the player
-        // down or open fire. The good-rep exemption lives in the factionHostility
-        // matrix (single source of truth); reactive aggression after the player
-        // attacks first is handled elsewhere (markHostile), not gated here.
-        if (
-          sprite.npc.role === NpcRole.PIRATE &&
-          this.playerIsGoodWithPirates() &&
-          !(this.deps.isCombatant?.(sprite) ?? false)
-        ) {
-          // Good pirate rep buys peace — UNLESS the fight is already joined (you
-          // attacked it / it's an active combatant), in which case it keeps
-          // pursuing instead of breaking off mid-engagement.
-          sprite.setAggressive(false);
-          this.npcAnchorPlanet.delete(sprite);
-        } else {
-          const dx = sprite.x - physics.shipX;
-          const dy = sprite.y - physics.shipY;
-          const distSq = dx * dx + dy * dy;
-          // "Кошелёк или жизнь" (Task 2): a hostile pirate that closes to talking
-          // (scanner) range may open a shakedown hail BEFORE weapon range instead
-          // of attacking outright. Rolled once per pirate, deterministically. A
-          // positive roll opens the contact panel in pirate-shakedown context and
-          // halts flight so the demand interrupts the player.
-          if (
-            sprite.npc.role === NpcRole.PIRATE &&
-            !this.shakedownEvaluated.has(sprite.npc.id) &&
-            distSq <= this.SCANNER_RANGE * this.SCANNER_RANGE
-          ) {
-            this.shakedownEvaluated.add(sprite.npc.id);
-            if (this.rollShakedown(sprite.npc)) {
-              this.openShakedownHail(sprite.npc);
-              return; // turn halted by the hail — stop advancing NPCs this frame
-            }
-          }
-          // Escape (Task 3): a faster player who has opened beyond the escape range
-          // breaks the chase — the out-run aggressor gives up pursuit this
-          // encounter (engaged combatants are pruned at the same range by
-          // CombatModule). A parked/slower player never out-runs it, so the
-          // aggressor keeps closing.
-          if (
-            distSq > this.COMBAT_ESCAPE_RANGE * this.COMBAT_ESCAPE_RANGE &&
-            physics.canOutrun(sprite.cruiseSpeed)
-          ) {
-            sprite.setAggressive(false);
-            this.npcAnchorPlanet.delete(sprite);
-          } else {
-            sprite.setPursuitTarget(
-              physics.shipX,
-              physics.shipY,
-              physics.currentSpeed,
-            );
-            if (distSq <= this.WEAPON_RANGE * this.WEAPON_RANGE) {
-              this.deps.startInFlightCombat?.(sprite);
-            }
-          }
-        }
+      // Garrison aggressors maneuver against the player ship: the good-rep
+      // breakoff, the pirate shakedown roll/hail, the out-run escape breakoff,
+      // and the pursuit-target refresh + in-range combat launch are all one
+      // per-frame tick on CombatPursuitController (Task 6). A positive
+      // shakedown roll halts the whole frame's sprite loop (the hail
+      // interrupts the player), mirroring the pre-extraction inline `return`.
+      if (
+        sprite.aggressive &&
+        physics &&
+        this.pursuit.tickAggressor(sprite, physics)
+      ) {
+        return;
       }
       // NPC-vs-NPC engagement: a ship NOT hunting the player closes on its
       // nearest hostile NPC so cross-faction foes visibly fight instead of
@@ -552,7 +500,6 @@ export class NpcShipManager implements FlightModule {
     this.deathFx = null;
     this.panels.close();
     this.pursuit.reset();
-    this.shakedownEvaluated.clear();
     this.overmind.destroy();
     this.encounters.destroy();
   }
@@ -1181,29 +1128,16 @@ export class NpcShipManager implements FlightModule {
   // ---------------------------------------------------------------------------
 
   // The player-vs-NPC contact-panel action cluster now lives in
-  // NpcInteractionController (constructed in the ctor). The methods below are
-  // 1:1 forwarders retained for the manager's internal callers (click wiring +
-  // per-frame shakedown/pursuit) and the existing type-cast tests
+  // NpcInteractionController (constructed in the ctor). The good-pirate-rep/
+  // shakedown-roll/hail forwarders moved on to CombatPursuitController.tickAggressor
+  // (Task 6), wired directly to `this.interaction` in the ctor. The methods
+  // below are the remaining 1:1 forwarders retained for the manager's
+  // internal click wiring and the existing type-cast tests
   // (onNpcClick/onPayTribute/onFleeShakedown/onAttackNpc). No behaviour change.
 
   /** Open the contact panel for a clicked NPC ship. */
   private onNpcClick(npc: NpcShip): void {
     this.interaction.onNpcClick(npc);
-  }
-
-  /** Good-pirate-rep exemption gate (per-frame aggressor breakoff). */
-  private playerIsGoodWithPirates(): boolean {
-    return this.interaction.playerIsGoodWithPirates();
-  }
-
-  /** Deterministic per-encounter "кошелёк или жизнь" shakedown roll. */
-  private rollShakedown(npc: NpcShip): boolean {
-    return this.interaction.rollShakedown(npc);
-  }
-
-  /** Open the pirate-shakedown comms window and halt flight. */
-  private openShakedownHail(npc: NpcShip): void {
-    this.interaction.openShakedownHail(npc);
   }
 
   /**
