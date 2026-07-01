@@ -370,8 +370,16 @@ function decideExplorer(
   legal: Set<PlayerActionKind>,
 ): Action | null {
   const credits = obs.player?.credits ?? 0;
-  if (credits < EXPLORER_LOW_CREDITS && legal.has("land")) {
-    return cjmAction("explorer", "land", "earn-first", earnPlanetId(obs));
+  const earnPlanet = earnPlanetId(obs);
+  // Only land when there is a habitable planet to land on — landing on an
+  // uninhabited planet (earnPlanet === undefined) has no market and causes a
+  // spin-land-takeoff loop that also disconnects the live autopilot.
+  if (
+    credits < EXPLORER_LOW_CREDITS &&
+    legal.has("land") &&
+    earnPlanet !== undefined
+  ) {
+    return cjmAction("explorer", "land", "earn-first", earnPlanet);
   }
   if (legal.has("warp")) {
     return cjmAction("explorer", "warp", "roam");

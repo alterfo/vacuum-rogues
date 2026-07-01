@@ -262,8 +262,9 @@ export class PlayerAgent {
 
       case "land": {
         const sys = currentSystem(engine);
-        const planet =
-          sys?.planets.find((p) => p.id === action.targetId) ?? sys?.planets[0];
+        // Only land on the exact targeted planet — never fall back to planets[0]
+        // which may be uninhabited (no market, creates a spin-land-takeoff loop).
+        const planet = sys?.planets.find((p) => p.id === action.targetId);
         if (planet) await this.harness.goTo(SceneType.PLANET, { planet });
         else this.harness.tick();
         return;

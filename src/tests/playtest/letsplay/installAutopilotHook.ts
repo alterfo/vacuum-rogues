@@ -165,15 +165,25 @@ export function createLiveSceneController(
         shipPhysics?: unknown;
       } | null;
 
+      // Resolve to a habitable planet: exact target if specified, else the first
+      // habitable planet in the system. Never fall back to an uninhabited planet
+      // (no market = instant take-off loop and live-autopilot disconnect).
+      const sys = currentSystem(engine);
+      const allPlanets = sys?.planets ?? [];
+      const resolved = planetId
+        ? allPlanets.find((p) => p.id === planetId)
+        : allPlanets.find((p) => p.isHabitable !== false);
+      if (!resolved) return;
+
       const pm = scene?.planetManager;
       if (
         pm &&
         typeof scene?.executeRouteTo === "function" &&
         scene.shipPhysics
       ) {
-        const sprite =
-          pm.planetSprites.find((s) => s.planet.id === planetId) ??
-          pm.planetSprites[0];
+        const sprite = pm.planetSprites.find(
+          (s) => s.planet.id === resolved.id,
+        );
         if (sprite) {
           const alreadyEnRoute =
             pm.routeTargetPlanetId === sprite.planet.id &&
@@ -189,11 +199,8 @@ export function createLiveSceneController(
           return; // ship is flying (or just started); auto-land fires via SpaceFlightScene.update()
         }
       }
-      // Fallback for headless / non-flight scenes: direct scene transition.
-      const sys = currentSystem(engine);
-      const planet =
-        sys?.planets.find((p) => p.id === planetId) ?? sys?.planets[0];
-      if (planet) void goTo(SceneType.PLANET, { planet });
+      // Headless fallback: direct scene transition to the resolved planet.
+      void goTo(SceneType.PLANET, { planet: resolved });
     },
     async dock(stationId) {
       const sys = currentSystem(engine);

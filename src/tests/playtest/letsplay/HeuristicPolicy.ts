@@ -106,7 +106,7 @@ export class HeuristicPolicy implements PlayerPolicy {
         const planets = obs.system?.planets ?? [];
         const habitable = planets.filter((p) => p.isHabitable !== false);
         const withWork = habitable.find((p) => p.availableQuests > 0);
-        return (withWork ?? habitable[0] ?? planets[0])?.id;
+        return (withWork ?? habitable[0])?.id; // never fall back to uninhabited
       }
       case "dock":
         return obs.system?.stations[0]?.id;
