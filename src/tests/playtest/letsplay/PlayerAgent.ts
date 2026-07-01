@@ -29,10 +29,11 @@ import {
   currentSystem,
   landedPlanet,
   acceptBoardQuests,
-  executeTradeOnPlanet,
+  executeMemoryAwareTrade,
   executeSellAll,
   pickWarpTarget,
 } from "./engineQueries";
+import { bestKnownMargin } from "./memoryFeatures";
 import {
   executeBuyBestGear,
   executeUpgradeHull,
@@ -286,7 +287,14 @@ export class PlayerAgent {
         }
         if (obs.scene === SceneType.TRADE) {
           // Execute the actual market trade, then return to the planet lobby.
-          executeTradeOnPlanet(engine, planet);
+          // Pass the best-known cross-planet margin good from the agent's belief
+          // so the trade executor buys the good with a known sell destination
+          // rather than the locally-cheapest good regardless of resale value.
+          executeMemoryAwareTrade(
+            engine,
+            planet,
+            bestKnownMargin(this.memory).good,
+          );
           await this.harness.goTo(SceneType.PLANET, { planet });
           return;
         }

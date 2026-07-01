@@ -115,6 +115,25 @@ export function executeSellAll(engine: GameEngine, planet: Planet): void {
  * uses — credits and cargo change, the bank ledger is posted. Dev-only helper.
  */
 export function executeTradeOnPlanet(engine: GameEngine, planet: Planet): void {
+  executeMemoryAwareTrade(engine, planet, null);
+}
+
+/**
+ * Memory-aware trade executor: sell all held cargo then buy `preferredGood` (when
+ * the planet stocks it and credits allow). Falls back to the cheapest available
+ * good when `preferredGood` is `null` or not stocked here (price discovery mode).
+ *
+ * Separating the BUY target from the blind-cheapest fallback lets the
+ * {@link PlayerAgent} hand in the best cross-planet margin good known from its
+ * belief state, so the agent buys for a route it already has a sell destination
+ * for — rather than buying whatever is cheapest regardless of where it can be
+ * sold. Both paths use the same `executeTrade` seam as {@link TradeScene}.
+ */
+export function executeMemoryAwareTrade(
+  engine: GameEngine,
+  planet: Planet,
+  preferredGood: ResourceType | null,
+): void {
   const player = engine.player;
   if (!player) return;
   const ts = new TradeSystem();
@@ -122,13 +141,33 @@ export function executeTradeOnPlanet(engine: GameEngine, planet: Planet): void {
 
   sellAllCargo(ts, engine, planet);
 
-  // Buy as many units of the cheapest available good as credits + hold allow
   const resources = planet.market?.availableResources ?? [];
   if (resources.length === 0) return;
   const holdUsed = player.inventory.resources.reduce((s, r) => s + r.amount, 0);
   const holdFree = Math.max(0, capacity - holdUsed);
   if (holdFree === 0) return;
 
+  // Try the preferred good first; only if it is stocked and affordable here.
+  if (preferredGood !== null && resources.includes(preferredGood)) {
+    const price = ts.getBuyPrice(planet, preferredGood, player);
+    if (price > 0 && player.credits >= price) {
+      const qty = Math.min(Math.floor(player.credits / price), holdFree);
+      if (qty > 0) {
+        ts.executeTrade(
+          player,
+          planet,
+          preferredGood,
+          qty,
+          true,
+          capacity,
+          engine.bank,
+        );
+      }
+      return;
+    }
+  }
+
+  // Fallback: buy as many units of the cheapest available good as credits + hold allow.
   let cheapestResource: ResourceType | null = null;
   let cheapestPrice = Infinity;
   for (const res of resources) {

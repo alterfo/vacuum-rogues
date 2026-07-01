@@ -68,9 +68,9 @@ constants at call sites.
 - Modify: src/tests/playtest/letsplay/engineQueries.ts
 - Create: src/tests/playtest/letsplay/trade.test.ts
 
-- [ ] `trade` executes a real buy/sell through the engine's market path (the same seam `TradeScene` uses), driven by the policy's belief (buy under-priced goods with hold/credits, sell held lots where the known margin is best).
-- [ ] Update `AgentMemory` `inventoryLots`/`priceBook` from the *executed* trade (folded via `updateMemory`), not omniscient state.
-- [ ] Regression: a buy-then-sell round trip changes credits + cargo as expected, zero errors.
+- [x] `executeMemoryAwareTrade(engine, planet, preferredGood)` added to `engineQueries.ts`: sells all cargo then buys `preferredGood` (when stocked + affordable), falls back to cheapest good for price discovery. `executeTradeOnPlanet` is now a thin wrapper over `executeMemoryAwareTrade(…, null)`.
+- [x] `PlayerAgent.apply()` `trade` case uses `executeMemoryAwareTrade(…, bestKnownMargin(this.memory).good)` so the agent buys the cross-planet margin good it has a known sell destination for.
+- [x] Regression: `trade.test.ts` — 5 tests: safe no-op paths, cheapest-fallback, preferred-good branch, TRADE-scene context. All green; `AgentMemory` picks up new cargo via `updateMemory` on the next step's observation fold.
 
 ### Task 3: Combat executor (attack / flee actually engage)
 **Files:**
@@ -99,6 +99,18 @@ constants at call sites.
 - [ ] Bias toward exercising under-covered actions over a session so coverage is broad (visits multiple systems / stations / quests across the budget).
 - [ ] Regression: over a session the agent visits ≥N distinct systems and reaches station/quest/combat states.
 
+### Task 5b: CJM teacher expansion — fill all 16 action heads
+**Files:**
+- Modify: src/tests/playtest/letsplay/MemoryHeuristicPolicy.ts
+- Modify: src/tests/playtest/letsplay/memoryHeuristicPolicy.test.ts
+
+New CJM scenarios the current 7 (A–G) don't explicitly cover:
+
+- [ ] **CJM-H Station specialist**: dock at station → repair hull → buy gear (if affordable) → leave. Fires when hull < 0.5 AND a station is in-system. Generates `dock`/`repair`/`buy-gear` in the BC data; these are currently dead because the PLANET path is always chosen over docking.
+- [ ] **CJM-I Broke deadlock recovery**: when credits < 100 AND hull < 0.3 AND no active quests, log an `invariant` breach ("broke+hurt with no path forward") via `logger.warn` and push `take-loan` (if legal at STATION/BANK) else `warp` to escape the garrison. Surfaces the "no money no repair" deadlock as a detectable oddity rather than an infinite no-op loop.
+- [ ] **CJM-J Quest completer**: for each active delivery quest, route toward the target system proactively (warp even if no hostile present), then dock/land at the delivery target. Generates `take-quest`/`warp`/`dock`/`land` specifically in the delivery context — richer quest coverage than CJM-D's simple "has delivery → warp".
+- [ ] Regression: run 3 sessions with a `MemoryHeuristicPolicy` and assert each of the 16 actions appears ≥1 time in the transcript. No session completes with < 14/16 heads covered.
+
 ### Task 6: Oddity assertions over the now-reachable game
 **Files:**
 - Create: src/tests/oddities/economyInvariants.test.ts
@@ -110,14 +122,43 @@ constants at call sites.
 - [ ] New oddity invariants over the states the agent now reaches (no negative credits, no stuck hull, combat resolves, prices sane, quests claimable) — the "catch all странности" deliverable.
 - [ ] `npm run letsplay:ci` gates on the new bands (hard faults at zero; bands scored).
 
-### Task 7: Enrich featurize to break the land/trade aliasing
+### Task 7: Enrich featurize — OBS 30→42, MEMORY 20→30, total 72
 **Files:**
-- Modify: src/tests/playtest/letsplay/observe.ts (or memoryFeatures.ts) — the feature block
-- Modify: src/tests/playtest/letsplay/NeuralPolicy.ts (`FEATURE_LENGTH`)
+- Modify: src/tests/playtest/letsplay/NeuralPolicy.ts (`OBS_FEATURE_LENGTH`, `featurize`)
+- Modify: src/tests/playtest/letsplay/memoryFeatures.ts (`MEMORY_FEATURE_LENGTH`, `memoryFeatures`)
 - Modify: tools/ai/train_player.py (`NUM_FEATURES`)
 
-- [ ] Add the disambiguating signals (e.g. "already traded here this visit", market-known vs price, inventory-vs-hold) so equal-looking states stop carrying both `trade` and `move` labels.
-- [ ] Bump `FEATURE_LENGTH`/`NUM_FEATURES` in lockstep; `weightsContract.test.ts` still pins the contract.
+New **obs features** (+12, indices 30-41):
+- `reputationBastions` clamped to [0,1] (already on `PlayerSnapshot`, not yet featurized)
+- `reputationSyndicate` clamped to [0,1]
+- `bestHullPrice` norm (0 if none visible)
+- `cargoFull` binary (cargoUsed >= cargoCapacity)
+- `hasRepairStation` binary (any STATION with repair in system)
+- `hasEquipmentShop` binary (EQUIPMENT_SHOP in system or station with shop)
+- `daysSurvived` norm by 200 (early vs. late game)
+- `overmindSystemFraction` norm — share of galaxy that's Overmind (same as `overmindShare` but explicit)
+- `questsWithDelivery` norm — fraction of active quests that have a target system
+- `hostileFractionByFaction` — fraction of in-system ships that are hostile (not just count)
+- `atStation` binary — player is currently docked at a station
+- `loanAffordable` binary — can afford a repay (credits ≥ loan balance)
+
+New **memory features** (+10, indices 20-29):
+- `hasKnownTradeRoute` binary (bestKnownMargin.good != null)
+- `creditGrowthLastN` — credits delta vs. last checkpoint, clamped (progress signal)
+- `consecutiveCombatSteps` norm — how many recent steps were in combat
+- `totalCreditsEarned` norm — lifetime credits earned this session
+- `cargoTypesDiversityScore` — fraction of hold used by ≥2 distinct types
+- `lastCombatSurvived` binary — survived a combat encounter this session
+- `stationVisitedThisSystem` binary — already visited a station in current system
+- `questsCompletedThisSession` norm — rewarded quest count
+- `loanOverdue` binary — loan is in arrears / missed payments > 0
+- `overmindFrontDistance` norm — estimated steps to nearest overmind system (0 if none known)
+
+- [ ] Add the 12 new obs features to `featurize`; bump `OBS_FEATURE_LENGTH` from 30 to 42.
+- [ ] Add the 10 new memory features to `memoryFeatures`; bump `MEMORY_FEATURE_LENGTH` from 20 to 30; total `FEATURE_LENGTH` = 72.
+- [ ] Update `tools/ai/train_player.py` `NUM_FEATURES = 72`.
+- [ ] Add necessary tracking to `AgentMemory` for any new memory signals (e.g. `consecutiveCombatSteps`, `totalCreditsEarned`).
+- [ ] `weightsContract.test.ts` updated; `shippedWeights.test.ts` skips (old 50-wide weights no longer valid).
 
 ### Task 8: Regenerate dataset, retrain, re-export weights (offline/Python)
 **Files:**
@@ -125,9 +166,11 @@ constants at call sites.
 - Modify: src/tests/playtest/letsplay/weights/player.weights.json (re-exported)
 - Reference: tools/ai/README.md, tools/ai/train_player.py
 
-- [ ] Regenerate the BC dataset from the now-full-repertoire teacher (`GEN_BC=1` gen → `.letsplay/bc-dataset.jsonl`).
-- [ ] Train + export with `python3 tools/ai/train_player.py`; drop the new `player.weights.json`.
-- [ ] `weightsContract.test.ts` (within 1e-5) + `shippedWeights.test.ts` (loads at current `FEATURE_LENGTH`) green; net measurably plays the fuller repertoire in autopilot.
+- [ ] Regenerate the BC dataset from the now-full-repertoire teacher: `GEN_BC=1 npm run letsplay` → `.letsplay/bc-dataset.jsonl`. Target ≥ 50k steps across ≥ 30 sessions (enough for a well-covering 16-class dataset).
+- [ ] Train on RTX 4090 with `python3 tools/ai/train_player.py`. Suggested arch: `72→512→512→256→16` (3 hidden layers, ~660k params, ReLU). Epoch budget 500, early stop on val acc, dropout 0.2.
+- [ ] Export as JSON weights, drop the new `player.weights.json`.
+- [ ] `weightsContract.test.ts` (within 1e-5) + `shippedWeights.test.ts` (loads at new `FEATURE_LENGTH = 72`) green.
+- [ ] Run `npm run letsplay` with neural flag on; assert the net picks all 16 action kinds at least once across 5 sessions.
 
 ### Task 9: Verify end-to-end + update docs/memory
 **Files:**
