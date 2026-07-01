@@ -14,6 +14,7 @@ import { GameValidationException } from "@/exceptions/GameValidationException";
 import { logger } from "@/utils/logger";
 import { additionalHostileSeeds } from "@/config/balance";
 import { FlightSessionState } from "@/systems/FlightSessionState";
+import { FlightPositionTracker } from "@/systems/FlightPositionTracker";
 import { DayTickController } from "@/systems/DayTickController";
 import { EndgameController } from "@/systems/EndgameController";
 import { validatePlayerSettings } from "@/validation/schemas";
@@ -104,26 +105,61 @@ export class GameEngine {
   public currentSceneType: SceneType = SceneType.MAIN_MENU;
   public galaxy: Galaxy | null = null;
   public player: Player | null = null;
-  // Transient: the ship's world position in the system when the player last left
-  // flight for the star map, so a hyperjump can start from where the ship was
-  // (not teleport it next to the sun). Cleared once consumed.
-  public lastFlightShipPos: { x: number; y: number } | null = null;
-  // Live in-flight ship position captured on each turn-end during FREE flight (no
-  // scene exit), so the headline reload case — warp/take-off in, fly around, reload
-  // — resumes where the ship stopped instead of edge-spawning. Distinct from
-  // lastFlightShipPos: it is NOT read by the entry-spawn path (so it can never leak
-  // into a warp/take-off spawn) and is cleared when the ship leaves the system
-  // (performWarp). saveGame folds it into flightShipPos only while SPACE_FLIGHT is
-  // the active scene; the systemId tag still guards the restore on load.
-  public liveFlightShipPos: { x: number; y: number } | null = null;
-  // Sticky, system-tagged copy of the last in-flight ship position, PERSISTED in
-  // the save (unlike lastFlightShipPos) so a browser reload resumes the ship
-  // where it was instead of edge-spawning. Refreshed from lastFlightShipPos
-  // whenever that is set (always a live flight position written by the flight
-  // scene); kept across a later non-flight autosave so the last good position is
-  // not lost. The systemId guards the restore — applied only when the loaded
-  // system matches (else the ship falls back to the default edge spawn).
-  private flightShipPos: FlightShipPos | null = null;
+  /**
+   * Flight-position persistence cluster — {@link FlightPositionTracker}. Owns
+   * `lastFlightShipPos`/`liveFlightShipPos`/the persisted `flightShipPos` +
+   * the page-hide autosave plumbing (see that class for the full rationale).
+   */
+  private readonly flightPositions: FlightPositionTracker =
+    new FlightPositionTracker({
+      isSpaceFlightActive: () =>
+        this.currentSceneType === SceneType.SPACE_FLIGHT,
+      hasActiveGame: () => !!this.galaxy && !!this.player,
+      saveGame: (slotId) => this.saveGame(slotId),
+    });
+  /**
+   * Transient: the ship's world position in the system when the player last left
+   * flight for the star map, so a hyperjump can start from where the ship was
+   * (not teleport it next to the sun). Cleared once consumed.
+   * @deprecated thin compat accessor — read/write {@link flightPositions} directly.
+   */
+  public get lastFlightShipPos(): { x: number; y: number } | null {
+    return this.flightPositions.lastFlightShipPos;
+  }
+  public set lastFlightShipPos(pos: { x: number; y: number } | null) {
+    this.flightPositions.lastFlightShipPos = pos;
+  }
+  /**
+   * Live in-flight ship position captured on each turn-end during FREE flight (no
+   * scene exit), so the headline reload case — warp/take-off in, fly around, reload
+   * — resumes where the ship stopped instead of edge-spawning. Distinct from
+   * lastFlightShipPos: it is NOT read by the entry-spawn path (so it can never leak
+   * into a warp/take-off spawn) and is cleared when the ship leaves the system
+   * (performWarp). saveGame folds it into flightShipPos only while SPACE_FLIGHT is
+   * the active scene; the systemId tag still guards the restore on load.
+   * @deprecated thin compat accessor — read/write {@link flightPositions} directly.
+   */
+  public get liveFlightShipPos(): { x: number; y: number } | null {
+    return this.flightPositions.liveFlightShipPos;
+  }
+  public set liveFlightShipPos(pos: { x: number; y: number } | null) {
+    this.flightPositions.liveFlightShipPos = pos;
+  }
+  /**
+   * Sticky, system-tagged copy of the last in-flight ship position, persisted
+   * in the save. Non-private (unlike `pendingNewGamePlus`) — this accessor has
+   * no in-class caller (every internal read/write now goes through
+   * `flightPositions` directly), and a private accessor with no in-class
+   * caller trips `noUnusedLocals`.
+   * @deprecated thin compat accessor — an existing test pokes this field via
+   * cast; read/write {@link flightPositions} directly in new code.
+   */
+  get flightShipPos(): FlightShipPos | null {
+    return this.flightPositions.persistedFlightShipPos;
+  }
+  set flightShipPos(pos: FlightShipPos | null) {
+    this.flightPositions.persistedFlightShipPos = pos;
+  }
   // Player's chosen in-flight game-speed multiplier (1×/2×/4×). Held here — not on
   // the per-scene FlightHud/ShipPhysics, both rebuilt on every SPACE_FLIGHT
   // re-init — so the speed survives a land/take-off or star-map round-trip
@@ -218,9 +254,6 @@ export class GameEngine {
   }
 
   private exceptionHandler: IExceptionHandler;
-  /** Retained page-hide autosave handlers so {@link stop} can detach them. */
-  private flightHideHandler: (() => void) | null = null;
-  private flightVisibilityHandler: (() => void) | null = null;
   private animationFrameId = 0;
   private lastTime = 0;
   /** Renderer-backed in production; a headless no-op when not injected (tests, legacy DI sites). */
@@ -289,7 +322,7 @@ export class GameEngine {
       music: this.music,
       hullAlarm: this.hullAlarm,
       clearFlightPositions: () => {
-        this.flightShipPos = null;
+        this.flightPositions.persistedFlightShipPos = null;
         this.lastFlightShipPos = null;
       },
       clearCombatStateProvider: () => {
@@ -647,76 +680,41 @@ export class GameEngine {
 
   /**
    * Invalidate the ship's captured free-flight position. Called when the ship
-   * lands (it is parked on a planet, not at a free-flight position). Drops BOTH
-   * the live turn-end capture (`liveFlightShipPos`) AND the sticky persisted
-   * position (`flightShipPos`): the latter is otherwise only ever overwritten
-   * (never cleared) by `saveGame`, so without this a take-off autosave would
-   * re-persist the stale pre-landing position and the next reload would teleport
-   * the ship there. The ship re-establishes `flightShipPos` on its first
-   * post-takeoff turn-end. (System exit clears `liveFlightShipPos` in
-   * `performWarp`; the load-time systemId guard covers the cross-system case —
-   * landing is the same-system case that guard cannot catch.)
+   * lands (it is parked on a planet, not at a free-flight position).
+   * @deprecated thin compat forwarder — call {@link flightPositions} directly.
    */
   forgetFlightPosition(): void {
-    this.liveFlightShipPos = null;
-    this.flightShipPos = null;
+    this.flightPositions.forgetFlightPosition();
   }
 
   /**
    * Continuously capture the live in-flight ship position. Called every frame
    * from the flight scene so a later autosave (turn-end, periodic, or the
-   * page-hide flush below) persists where the ship actually IS — not the stale
-   * system-entry edge. Free flight is otherwise only persisted at discrete
-   * turn-ends; between them (and during a combat orbit, which moves the ship with
-   * no turn-end) nothing tracked the live position. `saveGame` folds
-   * `liveFlightShipPos` into the system-tagged `flightShipPos` solely while
-   * SPACE_FLIGHT is active, and the systemId tag guards the restore on load — so
-   * a capture here can never leak into a non-flight or cross-system spawn.
+   * page-hide flush) persists where the ship actually IS — not the stale
+   * system-entry edge.
+   * @deprecated thin compat forwarder — call {@link flightPositions} directly.
    */
   recordLiveFlightPos(x: number, y: number): void {
-    this.liveFlightShipPos = { x, y };
+    this.flightPositions.recordLiveFlightPos(x, y);
   }
 
   /**
    * Persist the live in-flight position on page-hide
    * (`visibilitychange`→hidden / `beforeunload`) so a reload mid-flight resumes
-   * the live position instead of edge-spawning. No-op outside flight: a
-   * landed/menu save must not be clobbered with a stale flight capture, and the
-   * field is only valid while SPACE_FLIGHT is the active scene (saveGame's own
-   * gate). Best-effort under `beforeunload` (the async write may not finish
-   * before unload), but `visibilitychange`→hidden fires reliably on mobile/tab
-   * backgrounding where the write does complete.
+   * the live position instead of edge-spawning.
+   * @deprecated thin compat forwarder — call {@link flightPositions} directly.
    */
   async flushFlightAutosave(): Promise<void> {
-    if (this.currentSceneType !== SceneType.SPACE_FLIGHT) return;
-    if (!this.galaxy || !this.player) return;
-    await this.saveGame("auto");
+    await this.flightPositions.flushFlightAutosave();
   }
 
   /**
    * Register the one-time page-hide autosave listeners. Survives scene
    * transitions (registered once at engine init), guarded for non-browser
    * runtimes (bare Vitest constructs the engine without calling `initialize`).
-   * Handlers are retained so {@link stop} can detach them.
    */
   private registerFlightHideAutosave(): void {
-    if (typeof window === "undefined" || this.flightHideHandler) return;
-    const flush = (): void => {
-      void this.flushFlightAutosave().catch((e) =>
-        logger.error("Flight hide autosave failed:", e),
-      );
-    };
-    this.flightHideHandler = flush;
-    window.addEventListener("beforeunload", this.flightHideHandler);
-    if (typeof document !== "undefined") {
-      this.flightVisibilityHandler = (): void => {
-        if (document.visibilityState === "hidden") flush();
-      };
-      document.addEventListener(
-        "visibilitychange",
-        this.flightVisibilityHandler,
-      );
-    }
+    this.flightPositions.registerFlightHideAutosave();
   }
 
   /**
@@ -1023,24 +1021,11 @@ export class GameEngine {
     questLog.pendingReturnQuests = this.questManager.getPendingReturnQuests();
 
     // Refresh the persisted flight position from the live one whenever the flight
-    // scene has set it. lastFlightShipPos is written right before a scene exit
-    // (star map / inventory / combat) and consumed to null on the next flight
-    // entry; liveFlightShipPos is the free-flight turn-end capture (only valid
-    // while SPACE_FLIGHT is the active scene). Kept sticky — a later non-flight
-    // autosave must not clear the last good position. The systemId guards the
-    // restore on load. See loadGame.
-    const livePos =
-      this.lastFlightShipPos ??
-      (this.currentSceneType === SceneType.SPACE_FLIGHT
-        ? this.liveFlightShipPos
-        : null);
-    if (livePos && this.player.currentSystemId) {
-      this.flightShipPos = {
-        x: livePos.x,
-        y: livePos.y,
-        systemId: this.player.currentSystemId,
-      };
-    }
+    // scene has set it (see FlightPositionTracker.captureForSave). The systemId
+    // guards the restore on load. See loadGame.
+    const flightShipPos = this.flightPositions.captureForSave(
+      this.player.currentSystemId,
+    );
 
     const { SaveState } = await import("@/domain/SaveState");
     const state = new SaveState(
@@ -1054,7 +1039,7 @@ export class GameEngine {
       // Persist the АБС book of record (accounts + journal + EOD cursors) so the
       // ledger reloads verbatim instead of being re-seeded from `player.credits`.
       this.bankingService.toSnapshot(),
-      this.flightShipPos ?? undefined,
+      flightShipPos,
     );
 
     await this.saveManager.write(slotId, state);
@@ -1245,7 +1230,7 @@ export class GameEngine {
     // that planet via applyReentrySpawn, NOT teleport to a possibly-stale flight
     // position (landing does not refresh `flightShipPos`), so suppress the resume
     // in that case and let the landed-planet spawn win.
-    this.flightShipPos = save.flightShipPos ?? null;
+    this.flightPositions.persistedFlightShipPos = save.flightShipPos ?? null;
     const resumePos =
       sceneType === SceneType.SPACE_FLIGHT &&
       !this.player.landedPlanetId &&
@@ -1574,17 +1559,7 @@ export class GameEngine {
 
   stop(): void {
     cancelAnimationFrame(this.animationFrameId);
-    if (this.flightHideHandler && typeof window !== "undefined") {
-      window.removeEventListener("beforeunload", this.flightHideHandler);
-    }
-    if (this.flightVisibilityHandler && typeof document !== "undefined") {
-      document.removeEventListener(
-        "visibilitychange",
-        this.flightVisibilityHandler,
-      );
-    }
-    this.flightHideHandler = null;
-    this.flightVisibilityHandler = null;
+    this.flightPositions.unregisterFlightHideAutosave();
     this.currentScene?.destroy();
     this.renderer?.destroy();
     this.combatStateProvider = null;
