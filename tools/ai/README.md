@@ -1,10 +1,15 @@
 # `tools/ai` — player-policy training (behavioural cloning)
 
-The letsplay neural player (`NeuralPolicy`) is a **tiny pure-TS MLP**
-(`18 → 32 → 10`, ~938 weights) run by `src/tests/playtest/letsplay/mlp.ts`. There
-is no ONNX runtime — the net is just a small weights JSON. This directory is the
-**code side** of producing that JSON; the actual training run is a manual
-Post-Completion step.
+The letsplay neural player (`NeuralPolicy`) is a **tiny pure-TS MLP** run by
+`src/tests/playtest/letsplay/mlp.ts`. There is no ONNX runtime — the net is just
+a small weights JSON. This directory is the **code side** of producing that
+JSON; the actual training run is a manual Post-Completion step.
+
+The current target architecture (for the RTX 4090 retrain) is **50 → 256 → 128
+→ 16** (≈51K params: `FEATURE_LENGTH` = 30 observation + 20 memory features,
+`ACTION_ORDER.length` = 16). The reference/parity-test net (`fixtures/*.weights.json`
+in `weightsContract.test.ts`) stays small (`18 → 32 → 10`) — it pins the
+*format*, not the shipped architecture.
 
 ## Pipeline
 
@@ -34,40 +39,96 @@ writeBcDataset(rows); // → .letsplay/bc-dataset.jsonl
 ```
 
 The run is **deterministic by seed**: the same `seedPrefix` reproduces the same
-dataset. Each row is `{"features": number[18], "action": 0..9}`; the action index
-is into `ACTION_ORDER` (observe.ts) — the single source of truth shared by the
-legal-action surface, the net's output head, and `NUM_ACTIONS` in the trainer.
+dataset. Each row is `{"features": number[50], "action": 0..15}`; the action
+index is into `ACTION_ORDER` (observe.ts) — the single source of truth shared by
+the legal-action surface, the net's output head, and `NUM_ACTIONS` in the trainer.
 
 ## 2. Train + export (Python)
 
+`train_player.py` supports an arbitrary number of hidden layers, mini-batch
+training via `DataLoader`, an optional train/val split with early stopping, a
+cosine-annealing LR schedule, and `cuda`/`mps`/`cpu` auto-detection.
+
+Small local run (single hidden layer, full-batch, no validation — matches the
+old default behaviour):
+
 ```bash
-pip install torch          # train on the RTX 4090
+pip install torch
 python3 tools/ai/train_player.py \
     --data .letsplay/bc-dataset.jsonl \
     --out  src/tests/playtest/letsplay/weights/player.weights.json \
     --hidden 32 --epochs 200 --seed 0
 ```
 
-It fits `Linear(18,32) → ReLU → Linear(32,10)` with cross-entropy and exports the
-two Linear layers as JSON. (`in_dim` is read from the dataset's feature width, so
-it tracks `FEATURE_LENGTH` automatically; only `NUM_ACTIONS` is pinned.)
+The RTX 4090 target architecture (**50 → 256 → 128 → 16**, ≈51K params), run
+over SSH on `oleg@192.168.88.193`:
+
+```bash
+scp tools/ai/train_player.py oleg@192.168.88.193:/tmp/
+scp tools/ai/dataset/train.jsonl oleg@192.168.88.193:/tmp/
+ssh oleg@192.168.88.193 "cd /tmp && python train_player.py \
+  --data train.jsonl \
+  --hidden 256 128 \
+  --dropout 0.15 \
+  --epochs 500 \
+  --batch 512 \
+  --lr 3e-4 \
+  --val-split 0.2 \
+  --patience 30 \
+  --device cuda \
+  --out player.weights.json"
+scp oleg@192.168.88.193:/tmp/player.weights.json \
+  src/tests/playtest/letsplay/weights/player.weights.json
+```
+
+CLI reference:
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--data` | required | JSONL BC dataset path |
+| `--out` | required | output weights JSON path |
+| `--hidden` | `32` | hidden layer widths, e.g. `--hidden 256 128` for N layers |
+| `--dropout` | `0.0` | dropout after each hidden ReLU (omitted from the net entirely when `0`) |
+| `--epochs` | `200` | max epochs (early stopping can end it sooner) |
+| `--batch` | `512` | mini-batch size (a batch larger than the dataset just becomes full-batch) |
+| `--lr` | `1e-2` | Adam learning rate, cosine-annealed over `--epochs` |
+| `--val-split` | `0.0` | fraction held out for validation/early-stopping (`0` = train-only, no early stop) |
+| `--patience` | `30` | epochs of no val-loss improvement before stopping early |
+| `--device` | `auto` | `auto`\|`cuda`\|`mps`\|`cpu` — `auto` and any unavailable explicit choice fall back down the cuda → mps → cpu chain |
+| `--num-workers` | `0` | `DataLoader` worker processes (dataset fits in RAM, so `0` is fine) |
+| `--seed` | `0` | seeds `torch`, the train/val split, and shuffling |
+
+`in_dim` is always read from the dataset's feature width (tracks `FEATURE_LENGTH`
+automatically); only `NUM_ACTIONS` is a pinned constant in the script.
 
 **Weight orientation** matches PyTorch `nn.Linear` and `mlp.ts`: each layer's `W`
-is `[outDim][inDim]`, `b` is `[outDim]` — no transpose. Only the Linear layers are
-exported (in order); `mlp.ts` re-applies ReLU between layers and leaves the last
-layer linear, so the JSON carries **no activation metadata**.
+is `[outDim][inDim]`, `b` is `[outDim]` — no transpose. Only `nn.Linear` layers
+are exported (in order); `nn.ReLU`/`nn.Dropout` carry no parameters and are
+skipped — `mlp.ts` re-applies ReLU between layers and leaves the last layer
+linear, so the JSON carries **no activation metadata** regardless of how many
+hidden layers or how much dropout the training run used.
 
-Exported shape:
+Exported shape (one entry per `nn.Linear`, so a 3-hidden-layer net exports 4):
 
 ```json
 { "layers": [ { "W": [[...]], "b": [...] }, { "W": [[...]], "b": [...] } ] }
+```
+
+### Smoke test
+
+`tools/ai/test_train.sh` generates a tiny random 50-feature/16-action dataset
+and runs 3 epochs end-to-end (mini-batch + dropout + val-split + early-stopping
+config all exercised) to catch a pipeline crash before spending a real 4090 run:
+
+```bash
+tools/ai/test_train.sh
 ```
 
 ## 3. Load it (TS)
 
 Drop the exported `*.weights.json` where `NeuralPolicy` loads it (dev-only) and
 construct `new NeuralPolicy({ weights })`. `load()` validates that the input width
-== `FEATURE_LENGTH` (18) and the output width == `ACTION_ORDER.length` (10), so a
+== `FEATURE_LENGTH` (50) and the output width == `ACTION_ORDER.length` (16), so a
 mis-sized export fails loudly.
 
 ## Contract / parity test
@@ -76,11 +137,14 @@ mis-sized export fails loudly.
 so a trained net is guaranteed to load and run identically to the reference:
 
 - **Parity** — `fixtures/reference.weights.json` + `fixtures/reference.io.json`
-  (a hand-computed `input → expected scores` triple) must be reproduced by
-  `mlp.forward` within `1e-5`. If `forward`'s maths or the JSON orientation ever
-  drift, this fails.
-- **Shape** — an `18 → 32 → 10` export (`FEATURE_LENGTH → 32 → ACTION_ORDER`)
-  loads via `loadWeights` with the widths `NeuralPolicy` requires.
+  (a hand-computed `input → expected scores` triple, a small fixed `18 → 32 → 10`
+  net) must be reproduced by `mlp.forward` within `1e-5`. If `forward`'s maths or
+  the JSON orientation ever drift, this fails. This fixture is intentionally
+  **not** resized when the real architecture changes — it only pins the
+  interchange format, not the shipped shape.
+- **Shape** — a `FEATURE_LENGTH → 32 → ACTION_ORDER` export loads via
+  `loadWeights` with the widths `NeuralPolicy` requires (`FEATURE_LENGTH` = 50,
+  `ACTION_ORDER.length` = 16).
 
 When you change `featurize`'s width or `ACTION_ORDER`, update `FEATURE_LENGTH`
 (NeuralPolicy.ts) and `NUM_ACTIONS` (train_player.py) together and regenerate the

@@ -378,15 +378,17 @@ Training config:
 
 Export format stays identical (`{"layers": [...]}` — only `nn.Linear` layers, no dropout in export).
 
-- [ ] Refactor `build_model()` to accept `hidden: list[int]` (e.g. `[256, 128]`) and `dropout: float`; build `nn.Sequential` dynamically with N hidden layers + dropout
-- [ ] Add mini-batch DataLoader with `batch_size` arg; switch from full-batch Adam to mini-batch
-- [ ] Add 80/20 val split; track val loss; implement early stopping with patience param
-- [ ] Add cosine annealing LR scheduler
-- [ ] Add `--device cuda|mps|cpu` arg with auto-detection fallback
-- [ ] Export: iterate only `nn.Linear` layers; skip `nn.ReLU`, `nn.Dropout` (they are implicit in `mlp.ts`)
-- [ ] Update `NUM_ACTIONS = 16` and `in_dim` read from first data row (not hardcoded)
-- [ ] Write a smoke test in `tools/ai/test_train.sh` that generates 200 random training rows and runs 3 epochs to verify the pipeline doesn't crash
-- [ ] Update `tools/ai/README.md` with new CLI, architecture, and SSH training instructions for 4090
+- [x] Refactor `build_model()` to accept `hidden: list[int]` (e.g. `[256, 128]`) and `dropout: float`; build `nn.Sequential` dynamically with N hidden layers + dropout
+- [x] Add mini-batch DataLoader with `batch_size` arg; switch from full-batch Adam to mini-batch
+- [x] Add 80/20 val split; track val loss; implement early stopping with patience param
+- [x] Add cosine annealing LR scheduler
+- [x] Add `--device cuda|mps|cpu` arg with auto-detection fallback
+- [x] Export: iterate only `nn.Linear` layers; skip `nn.ReLU`, `nn.Dropout` (they are implicit in `mlp.ts`)
+- [x] Update `NUM_ACTIONS = 16` and `in_dim` read from first data row (not hardcoded)
+- [x] Write a smoke test in `tools/ai/test_train.sh` that generates 200 random training rows and runs 3 epochs to verify the pipeline doesn't crash
+- [x] Update `tools/ai/README.md` with new CLI, architecture, and SSH training instructions for 4090
+
+**Implementation notes for Task 9+:** `--val-split` and `--device` both default to backward-compatible values (`0.0` = train-only/no early-stop, `auto` = cuda→mps→cpu chain) so the old single-hidden-layer/full-batch invocation from Task 1-7's docs still runs unchanged; the 4090 config (`--hidden 256 128 --dropout 0.15 --val-split 0.2 --device cuda`, etc.) is opt-in via explicit flags, matching the plan's Task 10 SSH command verbatim. `resolve_device` degrades an explicit `--device cuda`/`--device mps` request to the next backend down the chain (with a stderr warning) rather than crashing, so the identical script runs on both a dev laptop (smoke test) and the RTX 4090. Verified locally: `tools/ai/test_train.sh` passes on this Mac (device auto-resolves to `mps`), and a manual run with `--hidden 32` and no new flags reproduces the old single-hidden-layer 2-Linear-layer export.
 
 ---
 
