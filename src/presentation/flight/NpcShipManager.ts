@@ -801,9 +801,12 @@ export class NpcShipManager implements FlightModule {
    * `refresh` → `checkGarrisonAggro` cycle clears the forced aggressive flag before
    * `npcManager.update` can call `startInFlightCombat`. Guarded by `__DEBUG__`.
    */
-  e2eEngageCombat(): void {
+  e2eEngageCombat(targetId?: string): void {
     if (!__DEBUG__) return;
-    const sprite = this.npcSprites[0];
+    const sprite = targetId
+      ? (this.npcSprites.find((s) => s.npc.id === targetId) ??
+        this.npcSprites[0])
+      : this.npcSprites[0];
     if (!sprite) return;
     this.deps.startInFlightCombat?.(sprite);
   }

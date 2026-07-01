@@ -105,6 +105,19 @@ export function createLiveSceneController(
 
   return {
     tick() {
+      // Auto-dismiss any open encounter overlay (SOS / wreckage / anomaly scan)
+      // so the autopilot keeps flying without a human pointer click. A click on
+      // the overlay's dismiss button fires a native `pointerdown` that bubbles to
+      // `window`, triggering reclaim-on-input → stop(). Driving the close
+      // programmatically via closeModals() bypasses that race entirely.
+      const sceneForModal = engine.currentScene as {
+        npcManager?: { hasOpenModal?: () => boolean; closeModals?: () => void };
+      } | null;
+      if (sceneForModal?.npcManager?.hasOpenModal?.()) {
+        sceneForModal.npcManager.closeModals?.();
+        return;
+      }
+
       // A pending warp plots the route but does NOT start movement — the player
       // must press Ход (Space / run-turn) to fly to the system edge. The live rAF
       // loop does not do this automatically. Drive it manually each tick.
@@ -255,11 +268,26 @@ export function createLiveSceneController(
     takeQuest() {
       acceptBoardQuests(engine);
     },
-    attack() {
-      // Combat is owned by CombatModule; the autopilot degrades to a no-op here.
+    attack(targetId) {
+      // Engage the nearest (or named) hostile via the real CombatModule seam.
+      // e2eEngageCombat is __DEBUG__-gated in NpcShipManager so it never runs
+      // in a production build.
+      const nm = (
+        engine.currentScene as {
+          npcManager?: { e2eEngageCombat?: (id?: string) => void };
+        } | null
+      )?.npcManager;
+      nm?.e2eEngageCombat?.(targetId);
     },
     flee() {
-      // No disengage verb at this level — a safe no-op.
+      // Break off combat pursuit — mirrors the player plotting a manual flee
+      // route, which calls breakOffCombatPursuit() in SpaceFlightScene.
+      const nm = (
+        engine.currentScene as {
+          npcManager?: { breakOffCombatPursuit?: () => void };
+        } | null
+      )?.npcManager;
+      nm?.breakOffCombatPursuit?.();
     },
     repair() {
       // Repair is owned by the station UI — a safe no-op.

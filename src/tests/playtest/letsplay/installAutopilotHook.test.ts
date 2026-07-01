@@ -276,4 +276,64 @@ describe("createLiveSceneController — verb → live engine call", () => {
     await c.repair();
     expect(engine.transitionTo).not.toHaveBeenCalled();
   });
+
+  it("tick() calls closeModals() when npcManager.hasOpenModal() is true", () => {
+    const closeModals = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { hasOpenModal: () => true, closeModals },
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(closeModals).toHaveBeenCalledTimes(1);
+  });
+
+  it("tick() does not call closeModals() when no modal is open", () => {
+    const closeModals = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { hasOpenModal: () => false, closeModals },
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(closeModals).not.toHaveBeenCalled();
+  });
+
+  it("attack(targetId) delegates to npcManager.e2eEngageCombat(targetId)", () => {
+    const e2eEngageCombat = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { e2eEngageCombat },
+      },
+    });
+    createLiveSceneController(engine).attack("npc-42");
+    expect(e2eEngageCombat).toHaveBeenCalledWith("npc-42");
+  });
+
+  it("attack() without targetId passes undefined to e2eEngageCombat", () => {
+    const e2eEngageCombat = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { e2eEngageCombat },
+      },
+    });
+    createLiveSceneController(engine).attack();
+    expect(e2eEngageCombat).toHaveBeenCalledWith(undefined);
+  });
+
+  it("flee() calls npcManager.breakOffCombatPursuit()", () => {
+    const breakOffCombatPursuit = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { breakOffCombatPursuit },
+      },
+    });
+    createLiveSceneController(engine).flee();
+    expect(breakOffCombatPursuit).toHaveBeenCalledTimes(1);
+  });
 });
