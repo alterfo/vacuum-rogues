@@ -42,6 +42,12 @@ function makeController(): {
     attack: rec("attack"),
     flee: rec("flee"),
     repair: rec("repair"),
+    buyGear: rec("buyGear"),
+    upgradeHull: rec("upgradeHull"),
+    buyModule: rec("buyModule"),
+    takeLoan: rec("takeLoan"),
+    repayLoan: rec("repayLoan"),
+    sellCargo: rec("sellCargo"),
   };
   return { controller, calls };
 }
@@ -98,6 +104,10 @@ describe("applyLiveAction — legal actions drive the expected controller verb",
     [SceneType.TRADE, "trade", "executeTrade"], // in the market, trade buys/sells
     [SceneType.STATION, "repair", "repair"],
     [SceneType.STATION, "move", "leaveToFlight"],
+    [SceneType.STATION, "buy-gear", "buyGear"], // station is a shortcut to the shop
+    [SceneType.STATION, "upgrade-hull", "upgradeHull"],
+    [SceneType.STATION, "take-loan", "takeLoan"], // no active loan by default
+    [SceneType.BANK, "take-loan", "takeLoan"],
   ])("scene %s + %s → %s", async (scene, kind, expectedCall) => {
     const { controller, calls } = makeController();
     const result = await applyLiveAction(act(kind), makeObs(scene), controller);
@@ -106,6 +116,65 @@ describe("applyLiveAction — legal actions drive the expected controller verb",
     expect(result.call).toBe(expectedCall);
     expect(calls).toEqual([expectedCall]);
   });
+
+  it("buy-module at STATION is legal with a CRAFT_CENTER and enough credits", async () => {
+    const { controller, calls } = makeController();
+    const obs = makeObs(SceneType.STATION, {
+      hasCraftCenter: true,
+      credits: 1000,
+    });
+    expect(obs.legalActions).toContain("buy-module");
+
+    const result = await applyLiveAction(act("buy-module"), obs, controller);
+    expect(result.call).toBe("buyModule");
+    expect(calls).toEqual(["buyModule"]);
+  });
+
+  it("repay-loan replaces take-loan at STATION/BANK once a loan is active", async () => {
+    const { controller, calls } = makeController();
+    const obs = makeObs(SceneType.BANK, { activeLoans: true });
+    expect(obs.legalActions).not.toContain("take-loan");
+    expect(obs.legalActions).toContain("repay-loan");
+
+    const result = await applyLiveAction(act("repay-loan"), obs, controller);
+    expect(result.call).toBe("repayLoan");
+    expect(calls).toEqual(["repayLoan"]);
+  });
+
+  it("buy-gear/upgrade-hull at EQUIPMENT_SHOP are legal only when affordable", async () => {
+    const { controller, calls } = makeController();
+    const obs = makeObs(SceneType.EQUIPMENT_SHOP, {
+      credits: 5000,
+      cheapestGearPrice: 2000,
+      bestHullPrice: 4000,
+    });
+    expect(obs.legalActions).toContain("buy-gear");
+    expect(obs.legalActions).toContain("upgrade-hull");
+
+    const gearResult = await applyLiveAction(act("buy-gear"), obs, controller);
+    expect(gearResult.call).toBe("buyGear");
+
+    const hullResult = await applyLiveAction(
+      act("upgrade-hull"),
+      obs,
+      controller,
+    );
+    expect(hullResult.call).toBe("upgradeHull");
+    expect(calls).toEqual(["buyGear", "upgradeHull"]);
+  });
+
+  it.each<SceneType>([SceneType.PLANET, SceneType.TRADE])(
+    "sell-cargo at %s is legal only when cargo is held",
+    async (scene) => {
+      const { controller, calls } = makeController();
+      const obs = makeObs(scene, { cargoUsed: 3 });
+      expect(obs.legalActions).toContain("sell-cargo");
+
+      const result = await applyLiveAction(act("sell-cargo"), obs, controller);
+      expect(result.call).toBe("sellCargo");
+      expect(calls).toEqual(["sellCargo"]);
+    },
+  );
 
   it("warp while warpInTransit=true calls tick (not openStarMap)", async () => {
     const { controller, calls } = makeController();
@@ -207,6 +276,8 @@ describe("applyLiveAction — illegal actions are a safe no-op", () => {
       SceneType.TRADE,
       SceneType.STATION,
       SceneType.STAR_MAP,
+      SceneType.EQUIPMENT_SHOP,
+      SceneType.BANK,
     ];
     const kinds: Action["kind"][] = [
       "move",
@@ -219,6 +290,12 @@ describe("applyLiveAction — illegal actions are a safe no-op", () => {
       "flee",
       "repair",
       "wait",
+      "buy-gear",
+      "upgrade-hull",
+      "buy-module",
+      "take-loan",
+      "repay-loan",
+      "sell-cargo",
     ];
     for (const scene of scenes) {
       const obs = makeObs(scene);

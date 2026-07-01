@@ -17,7 +17,12 @@ import { NeuralPolicy, FEATURE_LENGTH } from "./NeuralPolicy";
 import { ACTION_ORDER } from "./observe";
 import playerWeights from "./weights/player.weights.json";
 
-describe("shipped player.weights.json", () => {
+// Skipped: the shipped net was trained against the old 10-action ACTION_ORDER.
+// Task 2 (20260701 action-expansion plan) widened it to 16 actions, so the
+// checked-in weights' output width no longer matches — expected until Task 10
+// retrains and re-exports against the new vocabulary (+ Task 5's wider
+// featurize). Re-enable per that task's checklist.
+describe.skip("shipped player.weights.json", () => {
   it("loads through NeuralPolicy at the current FEATURE_LENGTH / ACTION_ORDER", async () => {
     const policy = new NeuralPolicy({ weights: playerWeights });
     expect(policy.isLoaded).toBe(false);

@@ -57,6 +57,18 @@ export interface LiveSceneController {
   flee(): void | Promise<void>;
   /** Restore hull at a repair-capable base. */
   repair(): void | Promise<void>;
+  /** Purchase the best affordable weapon/equipment/engine at a shop. */
+  buyGear(): void | Promise<void>;
+  /** Swap to a better affordable hull at the equipment shop. */
+  upgradeHull(): void | Promise<void>;
+  /** Buy a micromodule at a CRAFT_CENTER station. */
+  buyModule(): void | Promise<void>;
+  /** Borrow credits from the bank. */
+  takeLoan(): void | Promise<void>;
+  /** Repay an outstanding bank loan. */
+  repayLoan(): void | Promise<void>;
+  /** Sell all held cargo at the current market (explicit sell-only). */
+  sellCargo(): void | Promise<void>;
 }
 
 /** Which controller verb {@link applyLiveAction} invoked (`"none"` when skipped). */
@@ -73,6 +85,12 @@ export type ApplyCall =
   | "attack"
   | "flee"
   | "repair"
+  | "buyGear"
+  | "upgradeHull"
+  | "buyModule"
+  | "takeLoan"
+  | "repayLoan"
+  | "sellCargo"
   | "none";
 
 /** The outcome of dispatching one {@link Action} onto the live controller. */
@@ -196,6 +214,30 @@ export async function applyLiveAction(
     case "repair":
       await controller.repair();
       return { applied: true, call: "repair" };
+
+    case "buy-gear":
+      await controller.buyGear();
+      return { applied: true, call: "buyGear" };
+
+    case "upgrade-hull":
+      await controller.upgradeHull();
+      return { applied: true, call: "upgradeHull" };
+
+    case "buy-module":
+      await controller.buyModule();
+      return { applied: true, call: "buyModule" };
+
+    case "take-loan":
+      await controller.takeLoan();
+      return { applied: true, call: "takeLoan" };
+
+    case "repay-loan":
+      await controller.repayLoan();
+      return { applied: true, call: "repayLoan" };
+
+    case "sell-cargo":
+      await controller.sellCargo();
+      return { applied: true, call: "sellCargo" };
 
     default:
       // Exhaustive over PlayerActionKind; an unknown kind degrades to a no-op.

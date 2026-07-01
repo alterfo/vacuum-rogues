@@ -63,13 +63,21 @@ export type PlayerActionKind =
   | "attack" // fire on a hostile in range
   | "flee" // disengage from a hostile
   | "repair" // restore hull at a repair-capable base
-  | "wait"; // pass / advance a frame
+  | "wait" // pass / advance a frame
+  | "buy-gear" // purchase a weapon/equipment/engine at a shop
+  | "upgrade-hull" // swap to a better hull at the equipment shop
+  | "buy-module" // buy a micromodule at a CRAFT_CENTER station
+  | "take-loan" // borrow credits from the bank
+  | "repay-loan" // repay an outstanding loan
+  | "sell-cargo"; // explicit sell-only action (vs. trade, which also buys)
 
 /**
  * Canonical action order so two equal states yield identical `legalActions`.
  * Also the fixed **action vocabulary** a neural policy's output head indexes into
  * (`NeuralPolicy` maps `scores[i]` → `ACTION_ORDER[i]`), so the ordering is a
  * single source of truth shared by the legal-action surface and the net seam.
+ * The original 10-action order is preserved verbatim (several tests pin its
+ * exact sequence) — the 6 new actions are appended, not interleaved.
  */
 export const ACTION_ORDER: readonly PlayerActionKind[] = [
   "move",
@@ -82,7 +90,16 @@ export const ACTION_ORDER: readonly PlayerActionKind[] = [
   "flee",
   "repair",
   "wait",
+  "buy-gear",
+  "upgrade-hull",
+  "buy-module",
+  "take-loan",
+  "repay-loan",
+  "sell-cargo",
 ];
+
+/** Minimum credits on hand for `buy-module` to be legal at a CRAFT_CENTER station. */
+const BUY_MODULE_MIN_CREDITS = 800;
 
 /** Player vitals + cargo + world position. */
 export interface PlayerSnapshot {
@@ -217,6 +234,18 @@ export interface LegalActionContext {
   connectionCount: number;
   /** Contracts offered at the current location (the landed planet). */
   availableQuestCount: number;
+  /** Player's current credit balance — gates shop/loan affordability. Defaults to 0. */
+  credits?: number;
+  /** Cargo units currently held — gates the explicit `sell-cargo` action. Defaults to 0. */
+  cargoUsed?: number;
+  /** The current system fields a CRAFT_CENTER station. Defaults to false. */
+  hasCraftCenter?: boolean;
+  /** The player currently owes an outstanding bank loan. Defaults to false. */
+  activeLoans?: boolean;
+  /** Cheapest non-hull gear price in the current system's shops, null/undefined if none. */
+  cheapestGearPrice?: number | null;
+  /** Cheapest hull price in the current system's (planet) shops, null/undefined if none. */
+  bestHullPrice?: number | null;
 }
 
 /**
@@ -255,19 +284,53 @@ export function legalActionsForScene(
       set.add("move");
       set.add("wait");
       if (ctx.availableQuestCount > 0) set.add("take-quest");
+      if ((ctx.cargoUsed ?? 0) > 0) set.add("sell-cargo");
       break;
     }
     case SceneType.TRADE: {
       set.add("trade");
       set.add("move");
       set.add("wait");
+      if ((ctx.cargoUsed ?? 0) > 0) set.add("sell-cargo");
       break;
     }
     case SceneType.STATION: {
-      // Off-planet bases repair/refit; leaving returns to flight.
+      // Off-planet bases repair/refit; leaving returns to flight. Also the
+      // shortcut hub that routes to the equipment shop / bank sub-screens.
       set.add("repair");
       set.add("move");
       set.add("wait");
+      set.add("buy-gear");
+      set.add("upgrade-hull");
+      if (ctx.hasCraftCenter && (ctx.credits ?? 0) >= BUY_MODULE_MIN_CREDITS) {
+        set.add("buy-module");
+      }
+      if (ctx.activeLoans) set.add("repay-loan");
+      else set.add("take-loan");
+      break;
+    }
+    case SceneType.EQUIPMENT_SHOP: {
+      set.add("move");
+      set.add("wait");
+      if (
+        ctx.cheapestGearPrice != null &&
+        (ctx.credits ?? 0) >= ctx.cheapestGearPrice
+      ) {
+        set.add("buy-gear");
+      }
+      if (
+        ctx.bestHullPrice != null &&
+        (ctx.credits ?? 0) >= ctx.bestHullPrice
+      ) {
+        set.add("upgrade-hull");
+      }
+      break;
+    }
+    case SceneType.BANK: {
+      set.add("move");
+      set.add("wait");
+      if (ctx.activeLoans) set.add("repay-loan");
+      else set.add("take-loan");
       break;
     }
     case SceneType.STAR_MAP: {
@@ -284,8 +347,8 @@ export function legalActionsForScene(
       break;
     }
     default: {
-      // Dialogue / inventory / equipment / government / info / text-quest / bank:
-      // sub-screens the agent can read and back out of.
+      // Dialogue / inventory / government / info / text-quest: sub-screens the
+      // agent can read and back out of.
       set.add("move");
       set.add("wait");
       break;
@@ -444,24 +507,10 @@ export function observe(engine: GameEngine): Observation {
         )
       : 0);
 
-  const legalActions = legalActionsForScene(scene, {
-    hasPlayer: true,
-    planetCount: systemSnapshot?.planets.length ?? 0,
-    stationCount: systemSnapshot?.stations.length ?? 0,
-    hostileCount: hostiles.length,
-    connectionCount: systemSnapshot?.connections ?? 0,
-    availableQuestCount,
-  });
-
-  // Detect a pending hyperjump: the ship is flying to the system edge and a warp
-  // will fire when it arrives. Exposing this lets the policy push `wait` instead of
-  // re-opening StarMap (which would destroy SpaceFlightScene and cancel the warp).
-  const flightScene = engine.currentScene as { pendingWarp?: unknown } | null;
-  const warpInTransit =
-    scene === SceneType.SPACE_FLIGHT && flightScene?.pendingWarp != null;
-
   // Bank / equipment / Overmind / quest-delivery signals (Task 1). All derived
   // from the current system + real engine state, guarded for a systemless state.
+  // Computed before `legalActions` below, which gates the shop/loan/sell-cargo
+  // actions on several of these signals.
   const hasCraftCenter = system
     ? hasStationOfType(system.stations, StationType.CRAFT_CENTER)
     : false;
@@ -493,6 +542,28 @@ export function observe(engine: GameEngine): Observation {
         },
       })
     : { cheapestGearPrice: null, bestHullPrice: null };
+
+  const legalActions = legalActionsForScene(scene, {
+    hasPlayer: true,
+    planetCount: systemSnapshot?.planets.length ?? 0,
+    stationCount: systemSnapshot?.stations.length ?? 0,
+    hostileCount: hostiles.length,
+    connectionCount: systemSnapshot?.connections ?? 0,
+    availableQuestCount,
+    credits: player.credits,
+    cargoUsed,
+    hasCraftCenter,
+    activeLoans: loanStatus.active,
+    cheapestGearPrice,
+    bestHullPrice,
+  });
+
+  // Detect a pending hyperjump: the ship is flying to the system edge and a warp
+  // will fire when it arrives. Exposing this lets the policy push `wait` instead of
+  // re-opening StarMap (which would destroy SpaceFlightScene and cancel the warp).
+  const flightScene = engine.currentScene as { pendingWarp?: unknown } | null;
+  const warpInTransit =
+    scene === SceneType.SPACE_FLIGHT && flightScene?.pendingWarp != null;
 
   return {
     scene,

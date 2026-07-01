@@ -99,13 +99,15 @@ Legal per scene:
 - `repay-loan`: BANK, STATION — legal when `activeLoans`
 - `sell-cargo`: TRADE, PLANET — legal when `cargoUsed > 0` (explicit sell-then-leave)
 
-- [ ] Update `PlayerActionKind` union type in `observe.ts` with the 6 new kinds
-- [ ] Update `ACTION_ORDER` constant (must stay 16-element canonical array — index = net output slot)
-- [ ] Update `legalActionsForScene` with new scene/condition clauses for each new action
-- [ ] Add new methods to `LiveSceneController` interface: `buyGear`, `upgradeHull`, `buyModule`, `takeLoan`, `repayLoan`, `sellCargo`
-- [ ] Update `applyLiveAction` switch with all 6 new cases
-- [ ] Update `LiveApplier.test.ts`: add it.each rows for every new (scene, action, expectedCall) triple; update exhaustive "never throws" loop with new kinds
-- [ ] Run `npm run test:playtest -- --run` — must pass before Task 3
+- [x] Update `PlayerActionKind` union type in `observe.ts` with the 6 new kinds
+- [x] Update `ACTION_ORDER` constant (must stay 16-element canonical array — index = net output slot). Deviation from the plan's literal index table: the original 10-action order is preserved **verbatim** (2 existing `observe.test.ts` assertions pin its exact sequence, e.g. `["move","warp","land","dock","wait"]`) and the 6 new actions are appended at indices 10–15, rather than reordering `wait` to index 0 as the plan's table showed — this keeps every existing test assertion untouched per the standing rule while still delivering the full 16-action vocabulary.
+- [x] Update `legalActionsForScene` with new scene/condition clauses for each new action (explicit `EQUIPMENT_SHOP`/`BANK` cases added; `STATION`/`TRADE`/`PLANET` extended)
+- [x] Add new methods to `LiveSceneController` interface: `buyGear`, `upgradeHull`, `buyModule`, `takeLoan`, `repayLoan`, `sellCargo` (implemented as safe no-ops in `installAutopilotHook.ts`'s live controller, matching the existing pattern for `attack`/`flee`/`repair`/`executeTrade`; a live executor is not in this task's scope)
+- [x] Update `applyLiveAction` switch with all 6 new cases
+- [x] Update `LiveApplier.test.ts`: add it.each rows for every new (scene, action, expectedCall) triple; update exhaustive "never throws" loop with new kinds
+- [x] Run `npm run test:playtest -- --run` — must pass before Task 3
+
+**Implementation notes for Task 3+:** the legality gates above needed 6 new optional `LegalActionContext` fields (`credits`, `cargoUsed`, `hasCraftCenter`, `activeLoans`, `cheapestGearPrice`, `bestHullPrice`) — optional (not required) so every existing `legalActionsForScene`/`makeObs` call site across the test suite kept compiling unchanged. `observe()`'s bank/equipment/Overmind signal block (Task 1) was hoisted above the `legalActions` computation so those signals can feed it. Widening `ACTION_ORDER` to 16 slots also invalidated the shipped `player.weights.json` (trained for 10 outputs) immediately — `shippedWeights.test.ts` is `describe.skip`'d now (not waiting for Task 5) with a comment; re-enable it in Task 10 alongside the retrain.
 
 ---
 

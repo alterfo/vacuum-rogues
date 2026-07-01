@@ -211,6 +211,25 @@ export function createLiveSceneController(
     repair() {
       // Repair is owned by the station UI — a safe no-op.
     },
+    buyGear() {
+      // No live executor yet — safe no-op (mirrors the headless applier pattern
+      // for verbs not yet wired to the rendered scene).
+    },
+    upgradeHull() {
+      // No live executor yet — safe no-op.
+    },
+    buyModule() {
+      // No live executor yet — safe no-op.
+    },
+    takeLoan() {
+      // No live executor yet — safe no-op.
+    },
+    repayLoan() {
+      // No live executor yet — safe no-op.
+    },
+    sellCargo() {
+      // No live executor yet — safe no-op.
+    },
   };
 }
 
