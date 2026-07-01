@@ -27,10 +27,15 @@ loop**.
 
 ## 1. Generate the dataset (TS)
 
-`src/tests/playtest/letsplay/exportBcData.ts` runs the teacher on the real
-`GameEngine` and logs `(featurize(obs), actionIndex)` rows. It is dev-only and
-runs through vitest (it needs the pixi stub + `@/` alias). To dump a dataset to
-the gitignored `.letsplay/`:
+`src/tests/playtest/letsplay/exportBcData.ts` runs the teacher
+(`MemoryHeuristicPolicy`) on the real `GameEngine` and logs
+`(featurize(obs, belief), actionIndex)` rows. It is dev-only and runs through
+vitest (it needs the pixi stub + `@/` alias) — real PixiJS + the Vite-only
+`import.meta.glob` asset manifest do not load under a bare `tsx`/node run, so
+every engine-bound driver here is an env-gated Vitest runner (same shape as
+`letsplay:ci`/`letsplay:judge`), not a raw script.
+
+**Ad hoc** (any mix, in a scratch script/test):
 
 ```ts
 import { collectBcDataset, writeBcDataset } from "./exportBcData";
@@ -38,10 +43,66 @@ const rows = await collectBcDataset({ sessions: 50, steps: 200, seedPrefix: "BC"
 writeBcDataset(rows); // → .letsplay/bc-dataset.jsonl
 ```
 
-The run is **deterministic by seed**: the same `seedPrefix` reproduces the same
-dataset. Each row is `{"features": number[50], "action": 0..15}`; the action
-index is into `ACTION_ORDER` (observe.ts) — the single source of truth shared by
-the legal-action surface, the net's output head, and `NUM_ACTIONS` in the trainer.
+**The Task 9 stratified CJM mix** (`npm run dataset:export`,
+`scenarioMixExport.run.test.ts`) plays `DEFAULT_SCENARIO_MIX` — every CJM goal
+(`trade-magnate`/`gear-grinder`/`bounty-hunter`/`quest-runner`/
+`overmind-slayer`/`pirate`/`explorer` + unbiased base play) so the dataset
+labels the net on the full repertoire, not just trade/navigate/fight — and
+writes `tools/ai/dataset/train.jsonl` (gitignored):
+
+```bash
+npm run dataset:export                       # full mix: ~200 sessions × 500 steps
+LETSPLAY_EXPORT_MIX_SESSIONS_SCALE=0.5 \
+  LETSPLAY_EXPORT_MIX_STEPS=200 \
+  npm run dataset:export                     # a faster local/smoke-scale run
+```
+
+| Env var | Default | Meaning |
+|---------|---------|---------|
+| `LETSPLAY_EXPORT_MIX_SESSIONS_SCALE` | `1` | multiplies every stratum's session count (rounded, floored at 1) |
+| `LETSPLAY_EXPORT_MIX_STEPS` | each stratum's own (`500`) | overrides every stratum's steps uniformly |
+| `LETSPLAY_EXPORT_MIX_OUTPUT` | `tools/ai/dataset/train.jsonl` | output JSONL path |
+| `LETSPLAY_EXPORT_MIX_SEED_PREFIX` | `"BC"` | seed prefix (deterministic — same prefix ⇒ same dataset) |
+
+Per-goal cost varies a lot (measured on an M-series laptop): warp-heavy goals
+like `explorer`/`overmind-slayer`/`quest-runner` run ~45 ms/row (multi-day
+travel simulation per step), `trade-magnate`/`gear-grinder` ~24 ms/row,
+`bounty-hunter` ~4 ms/row, `pirate`/base (goal-less) <1 ms/row — so the full
+200×500 mix (~100K rows) takes on the order of **30-40 minutes**; scale down
+with the env vars above for a quick local check.
+
+After generating, sanity-check the file before training (no torch/numpy
+needed):
+
+```bash
+python3 tools/ai/dataset/validate_dataset.py tools/ai/dataset/train.jsonl
+```
+
+It prints the row count, feature width, an action-index histogram (flags a
+zero-row/dead action head), and per-feature-column mean/std/min/max (flags NaNs
+and constant/dead columns) — catch a broken export before spending a training run
+on it.
+
+Every row is `{"features": number[50], "action": 0..15}`; the action index is
+into `ACTION_ORDER` (observe.ts) — the single source of truth shared by the
+legal-action surface, the net's output head, and `NUM_ACTIONS` in the trainer.
+
+**Known limitation — dead action heads.** A generated run (any scale tried so
+far, including a 2-session × 2000-step per-goal diagnostic) shows `dock` /
+`take-quest` / `repair` and all 6 new economy actions (`buy-gear` /
+`upgrade-hull` / `buy-module` / `take-loan` / `repay-loan`) as **dead heads**
+(zero rows). Root cause: the headless applier's `flee`/`repair` are a no-op
+tick (`PlayerAgent.ts` — real navigate-away/repair-dock execution doesn't exist
+headlessly), so once the teacher engages a heavily-garrisoned Overmind system
+it can neither win nor escape — hull oscillates around the ~50% engage
+threshold and the session spends effectively its whole step budget cycling
+`attack`/`flee`, never reaching a station/bank/quest/gear action. See
+`docs/architecture/LETSPLAY_ENGINE.md` → "Known Traps" for the full writeup.
+This is a real teacher/applier limitation, not an export bug — `train.jsonl`
+faithfully logs what the teacher actually does. Before spending a real 4090
+training run (Task 10) on the shipped dataset, either give the headless
+applier a genuine disengage executor or otherwise confirm the affected action
+heads get non-zero coverage.
 
 ## 2. Train + export (Python)
 

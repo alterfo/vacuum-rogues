@@ -1,7 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 import { ACTION_ORDER } from "./observe";
 import { FEATURE_LENGTH } from "./NeuralPolicy";
-import { collectBcDataset, bcDatasetToJsonl, type BcRow } from "./exportBcData";
+import {
+  collectBcDataset,
+  collectScenarioMixDataset,
+  scaleScenarioMix,
+  DEFAULT_SCENARIO_MIX,
+  bcDatasetToJsonl,
+  type BcRow,
+  type ScenarioMixEntry,
+} from "./exportBcData";
 
 /**
  * Task 4 of the pure-TS MLP plan: the **behavioural-cloning data-gen** exporter.
@@ -69,6 +77,55 @@ describe("collectBcDataset (BC data-gen)", () => {
       seedPrefix: "BC_TEST_K",
     });
     expect(rows).toHaveLength(10);
+  }, 60_000);
+});
+
+describe("scaleScenarioMix (pure mix scaling)", () => {
+  it("scales sessions by the factor, rounding and flooring at 1", () => {
+    const mix: ScenarioMixEntry[] = [
+      { goal: "explorer", sessions: 20, steps: 500 },
+      { goal: null, sessions: 3, steps: 500 },
+    ];
+    const scaled = scaleScenarioMix(mix, { sessionsFactor: 0.1 });
+    expect(scaled).toEqual([
+      { goal: "explorer", sessions: 2, steps: 500 },
+      { goal: null, sessions: 1, steps: 500 }, // 3*0.1=0.3 rounds to 0, floored to 1
+    ]);
+  });
+
+  it("overrides steps uniformly when given, leaving goal/sessions alone", () => {
+    const mix: ScenarioMixEntry[] = [
+      { goal: "pirate", sessions: 5, steps: 500 },
+    ];
+    const scaled = scaleScenarioMix(mix, { steps: 50 });
+    expect(scaled).toEqual([{ goal: "pirate", sessions: 5, steps: 50 }]);
+  });
+
+  it("defaults to an untouched copy when no options are given", () => {
+    expect(scaleScenarioMix(DEFAULT_SCENARIO_MIX)).toEqual(
+      DEFAULT_SCENARIO_MIX,
+    );
+  });
+});
+
+describe("collectScenarioMixDataset (stratified CJM mix)", () => {
+  it("plays every stratum and concatenates rows in mix order (K sessions × N steps each)", async () => {
+    const mix: ScenarioMixEntry[] = [
+      { goal: "bounty-hunter", sessions: 1, steps: 4 },
+      { goal: null, sessions: 1, steps: 3 },
+    ];
+    const rows = await collectScenarioMixDataset(mix, "BC_MIX_TEST");
+    expect(rows).toHaveLength(7);
+    for (const row of rows) expectWellFormed(row);
+  }, 60_000);
+
+  it("is deterministic by seed prefix — same prefix ⇒ identical dataset", async () => {
+    const mix: ScenarioMixEntry[] = [
+      { goal: "explorer", sessions: 1, steps: 4 },
+    ];
+    const a = await collectScenarioMixDataset(mix, "BC_MIX_DET");
+    const b = await collectScenarioMixDataset(mix, "BC_MIX_DET");
+    expect(a).toEqual(b);
   }, 60_000);
 });
 

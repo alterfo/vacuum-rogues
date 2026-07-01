@@ -33,6 +33,7 @@ import { PlayerAgent } from "./PlayerAgent";
 import { MemoryHeuristicPolicy } from "./MemoryHeuristicPolicy";
 import type { PlayerPolicy } from "./PlayerPolicy";
 import { featurize } from "./NeuralPolicy";
+import type { ScenarioGoal } from "./goalBias";
 
 /**
  * One supervised training example: the {@link featurize} feature vector the
@@ -120,6 +121,89 @@ export async function collectBcDataset(
   for (let i = 0; i < sessions; i++) {
     rows.push(
       ...(await collectSession(`${seedPrefix}-${i}`, steps, makePolicy)),
+    );
+  }
+  return rows;
+}
+
+/**
+ * One stratum of a {@link collectScenarioMixDataset} run: `sessions` fresh games
+ * of `steps` steps each, played by {@link MemoryHeuristicPolicy} biased toward
+ * `goal` (or the goal-less base sequencing when `goal` is `null`).
+ */
+export interface ScenarioMixEntry {
+  readonly goal: ScenarioGoal | null;
+  readonly sessions: number;
+  readonly steps: number;
+}
+
+/**
+ * The Task 9 stratified mix (`docs/plans/20260701-letsplay-action-expansion-and-neural-scale.md`):
+ * ~100K rows spanning every CJM so the dataset labels the net on the full
+ * repertoire (trading + banking, equipment/hull upgrades, combat/loot, quest
+ * delivery, Overmind engagement, piracy, exploration) plus unbiased base play.
+ */
+export const DEFAULT_SCENARIO_MIX: readonly ScenarioMixEntry[] = [
+  { goal: "trade-magnate", sessions: 30, steps: 500 },
+  { goal: "gear-grinder", sessions: 30, steps: 500 },
+  { goal: "bounty-hunter", sessions: 30, steps: 500 },
+  { goal: "quest-runner", sessions: 20, steps: 500 },
+  { goal: "overmind-slayer", sessions: 20, steps: 500 },
+  { goal: "pirate", sessions: 20, steps: 500 },
+  { goal: "explorer", sessions: 20, steps: 500 },
+  { goal: null, sessions: 30, steps: 500 },
+];
+
+/**
+ * Play every {@link ScenarioMixEntry} in `mix` and concatenate the rows into one
+ * dataset — each stratum gets its own {@link MemoryHeuristicPolicy} (biased toward
+ * its `goal`, or goal-less) and its own seed sub-range (`"<seedPrefix>-<goal
+ * or 'base'>-<i>"`) so the whole mix stays deterministic and reproducible while
+ * every stratum's sessions are independent of every other stratum's.
+ */
+/**
+ * Options for {@link scaleScenarioMix}: dial a mix (typically {@link
+ * DEFAULT_SCENARIO_MIX}) up or down without hand-editing every stratum.
+ */
+export interface ScaleMixOptions {
+  /** Multiplies every stratum's `sessions` (rounded, floored at 1). Default `1`. */
+  sessionsFactor?: number;
+  /** Overrides every stratum's `steps` uniformly, if set. */
+  steps?: number;
+}
+
+/**
+ * Pure transform over a {@link ScenarioMixEntry} list — scales session counts
+ * (e.g. for a fast local smoke run of the Task 9 mix) and/or overrides the
+ * per-session step count, leaving `goal` untouched. Never returns a
+ * zero-session stratum (floors at 1) so every goal still contributes rows.
+ */
+export function scaleScenarioMix(
+  mix: readonly ScenarioMixEntry[],
+  opts: ScaleMixOptions = {},
+): ScenarioMixEntry[] {
+  const sessionsFactor = opts.sessionsFactor ?? 1;
+  return mix.map((entry) => ({
+    goal: entry.goal,
+    sessions: Math.max(1, Math.round(entry.sessions * sessionsFactor)),
+    steps: opts.steps ?? entry.steps,
+  }));
+}
+
+export async function collectScenarioMixDataset(
+  mix: readonly ScenarioMixEntry[],
+  seedPrefix = "BC",
+): Promise<BcRow[]> {
+  const rows: BcRow[] = [];
+  for (const entry of mix) {
+    rows.push(
+      ...(await collectBcDataset({
+        sessions: entry.sessions,
+        steps: entry.steps,
+        seedPrefix: `${seedPrefix}-${entry.goal ?? "base"}`,
+        policy: () =>
+          new MemoryHeuristicPolicy(undefined, entry.goal ?? undefined),
+      })),
     );
   }
   return rows;

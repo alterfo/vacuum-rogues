@@ -376,3 +376,26 @@ naming, so the next sweep doesn't have to rediscover them from scratch.
   `HeuristicPolicy`'s behaviour; the richer `MemoryHeuristicPolicy` (optionally goal-biased via a
   CJM) is the teacher that actually trades/explores/fights, and is what dataset generation
   (Task 9) uses.
+- **Headless `flee`/`repair` no-op ⇒ an unwinnable fight can never be disengaged, starving every
+  non-combat CJM of rows (Task 9 dataset-generation finding, NOT fixed — flagged for follow-up).**
+  `PlayerAgent.apply`'s `case "attack"` advances a full day so `NpcShipManager` can actually
+  resolve the fight, but `case "flee"`/`case "repair"` intentionally "degrade to a tick" (no real
+  navigate-away or repair-dock executor exists headlessly) — by design, since headless combat
+  was expected to resolve within about a day against "a typical NPC". Against a heavily-garrisoned
+  Overmind system (`garrison_ov_*`, observed spawning 6–10 hostile ships), the starter ship can
+  neither win nor actually flee: hull dips just under the ~50% engage threshold (→ `flee`, a
+  no-op tick), drifts back above it with no further damage taken (→ `attack` resumes), forever.
+  Verified reproducible: two independent 2-session × 2000-step diagnostics (`gear-grinder`,
+  `trade-magnate`) each spent >99% of all steps oscillating `attack`/`flee` after the first warp,
+  never reaching a station/bank/quest/gear action; the same pattern shows up in the Task 9
+  `train.jsonl` export, where `dock`/`take-quest`/`repair` and all 6 new economy actions
+  (`buy-gear`/`upgrade-hull`/`buy-module`/`take-loan`/`repay-loan`) are **dead heads** (zero rows)
+  across the whole scaled dataset. This is a real limitation in the Task 3 headless-applier design
+  + the base survive sequencing's naive hull-fraction attack/flee gate (predates Task 9), not a
+  bug in the dataset exporter itself — logging what the teacher actually does is Task 9's job, and
+  this is what it actually does. **Not fixed here** (redesigning `flee`/combat-avoidance touches
+  well-tested Task 3/4 code with a large blast radius, out of Task 9's scope). Before relying on
+  the shipped `train.jsonl` for real training (Task 10), either regenerate at a much larger scale
+  hoping for seeds that avoid early heavy garrisons, or — better — give the headless applier a
+  real "disengage" executor (e.g. warp away when a fight is unwinnable) so `flee` stops being a
+  no-op.
