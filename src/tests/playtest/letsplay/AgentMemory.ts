@@ -78,6 +78,10 @@ export interface AgentMemory {
   lastCargo: Map<ResourceType, number>;
   /** Internal: monotonic step counter; stamps `seenAt` so re-seeing advances it. */
   step: number;
+  /** systemIds the run has actually been in (the current system, each step). */
+  visitedSystemIds: Set<string>;
+  /** The player's known outstanding loan, or absent when none is carried. */
+  loanState?: { balance: number; missedPayments: number };
 }
 
 /** A fresh, empty notebook — call once per run (a human starting over). */
@@ -89,6 +93,8 @@ export function createMemory(): AgentMemory {
     knownOffers: [],
     lastCargo: new Map(),
     step: 0,
+    visitedSystemIds: new Set(),
+    loanState: undefined,
   };
 }
 
@@ -158,6 +164,8 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       knownOffers,
       lastCargo: mem.lastCargo,
       step,
+      visitedSystemIds: new Set(mem.visitedSystemIds),
+      loanState: mem.loanState,
     };
   }
 
@@ -200,6 +208,18 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     }
   }
 
+  // 4) Visited systems — the current system, accumulated across the run.
+  const visitedSystemIds = new Set(mem.visitedSystemIds);
+  if (obs.system) visitedSystemIds.add(obs.system.id);
+
+  // 5) Loan state — only what the observation says right now; no loan ⇒ absent.
+  const loanState = obs.activeLoans
+    ? {
+        balance: obs.loanBalance ?? 0,
+        missedPayments: obs.loanMissedPayments ?? 0,
+      }
+    : undefined;
+
   return {
     priceBook,
     inventoryLots,
@@ -207,5 +227,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     knownOffers,
     lastCargo: cargoNow,
     step,
+    visitedSystemIds,
+    loanState,
   };
 }

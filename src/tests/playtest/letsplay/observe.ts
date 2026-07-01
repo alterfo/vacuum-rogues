@@ -24,18 +24,22 @@
  * — no production module imports it (enforced by `letsplayDevOnly.test.ts`).
  */
 import type { GameEngine } from "@/systems/GameEngine";
-import { SceneType } from "@/types";
-import type {
-  ResourceType,
-  QuestType,
-  FactionType,
-  StationType,
-} from "@/types";
+import { SceneType, StationType } from "@/types";
+import type { ResourceType, QuestType, FactionType } from "@/types";
 import { npcsPresentInSystem } from "@/systems/npc/NpcSimulator";
 import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
 import { TradeSystem } from "@/systems/TradeSystem";
 import type { Planet } from "@/domain/Planet";
 import type { Player } from "@/domain/Player";
+import {
+  hasStationOfType,
+  hasBankAccess,
+  isNearOvermindCore,
+  overmindShareOf,
+  isQuestDeliveryHere,
+  loanStatusOf,
+  systemShopPrices,
+} from "./observeHelpers";
 
 /**
  * Pricing is stateless (base prices + a heuristic regressor), so a single
@@ -176,6 +180,32 @@ export interface Observation {
    * type-check; absent is treated as `false` everywhere.
    */
   warpInTransit?: boolean;
+  /** A bank is reachable from the current location (any planet, or a TRADE_POST/MILITARY_BASE station). */
+  hasBank?: boolean;
+  /** The current system fields a CRAFT_CENTER station (micromodule shop). */
+  hasCraftCenter?: boolean;
+  /** The current system fields a REPAIR_DOCK station. */
+  hasRepairDock?: boolean;
+  /** Fraction (0..1) of the galaxy's systems currently Overmind-controlled. */
+  overmindShare?: number;
+  /** The current system is (or is one warp hop from) the Overmind core system. */
+  nearOvermindCore?: boolean;
+  /** A carried quest's delivery system is the player's current system. */
+  questDeliveryHere?: boolean;
+  /** The player currently owes an outstanding bank loan. */
+  activeLoans?: boolean;
+  /** Outstanding loan balance, present only alongside `activeLoans: true`. */
+  loanBalance?: number;
+  /** Consecutive missed loan payments, present only alongside `activeLoans: true`. */
+  loanMissedPayments?: number;
+  /**
+   * Cheapest non-hull gear price in the CURRENT system's shops (every planet
+   * fields one), `null` when the system has no shop at all. Egocentric like the
+   * market: an unvisited system's shop is never priced.
+   */
+  cheapestGearPrice?: number | null;
+  /** Cheapest hull price in the CURRENT system's (planet-only) shops, `null` if none. */
+  bestHullPrice?: number | null;
 }
 
 /** Flags describing the current location, fed to {@link legalActionsForScene}. */
@@ -311,6 +341,15 @@ export function observe(engine: GameEngine): Observation {
         availableQuestCount: 0,
       }),
       warpInTransit: false,
+      hasBank: false,
+      hasCraftCenter: false,
+      hasRepairDock: false,
+      overmindShare: 0,
+      nearOvermindCore: false,
+      questDeliveryHere: false,
+      activeLoans: false,
+      cheapestGearPrice: null,
+      bestHullPrice: null,
     };
   }
 
@@ -421,6 +460,40 @@ export function observe(engine: GameEngine): Observation {
   const warpInTransit =
     scene === SceneType.SPACE_FLIGHT && flightScene?.pendingWarp != null;
 
+  // Bank / equipment / Overmind / quest-delivery signals (Task 1). All derived
+  // from the current system + real engine state, guarded for a systemless state.
+  const hasCraftCenter = system
+    ? hasStationOfType(system.stations, StationType.CRAFT_CENTER)
+    : false;
+  const hasRepairDock = system
+    ? hasStationOfType(system.stations, StationType.REPAIR_DOCK)
+    : false;
+  const hasBank = system
+    ? hasBankAccess(currentPlanet != null, system.stations)
+    : false;
+  const overmindShare = overmindShareOf(
+    galaxy.overmindSystems.length,
+    galaxy.systems.length,
+  );
+  const nearOvermindCore = isNearOvermindCore(
+    system,
+    galaxy.overmindCoreSystemId,
+  );
+  const questDeliveryHere = isQuestDeliveryHere(quests, player.currentSystemId);
+  const loanStatus = loanStatusOf(engine.bankingService, player.id);
+  const { cheapestGearPrice, bestHullPrice } = system
+    ? systemShopPrices({
+        seed: galaxy.id,
+        day: galaxy.gameDays,
+        system: {
+          id: system.id,
+          techLevel: system.techLevel,
+          planets: system.planets,
+          stations: system.stations,
+        },
+      })
+    : { cheapestGearPrice: null, bestHullPrice: null };
+
   return {
     scene,
     hasPlayer: true,
@@ -432,5 +505,18 @@ export function observe(engine: GameEngine): Observation {
     quests,
     legalActions,
     warpInTransit,
+    hasBank,
+    hasCraftCenter,
+    hasRepairDock,
+    overmindShare,
+    nearOvermindCore,
+    questDeliveryHere,
+    activeLoans: loanStatus.active,
+    loanBalance: loanStatus.active ? loanStatus.balance : undefined,
+    loanMissedPayments: loanStatus.active
+      ? loanStatus.missedPayments
+      : undefined,
+    cheapestGearPrice,
+    bestHullPrice,
   };
 }

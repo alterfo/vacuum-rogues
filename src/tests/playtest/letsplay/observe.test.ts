@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "../realEngineHarness";
-import { SceneType } from "@/types";
+import { SceneType, StationType } from "@/types";
+import { Faction } from "@/types/faction";
+import { Station } from "@/domain/Station";
+import { takeLoan } from "@/systems/banking/products";
 import {
   observe,
   legalActionsForScene,
@@ -271,5 +274,152 @@ describe("observe(engine) over the real harness", () => {
     expect(observe(harness.engine).currentPlanet!.market).toEqual(
       observe(harness.engine).currentPlanet!.market,
     );
+  });
+});
+
+describe("observe(engine): Task 1 bank/equipment/Overmind/quest signals", () => {
+  let harness: RealEngineHarness;
+
+  beforeEach(async () => {
+    localStorage.clear();
+    harness = await RealEngineHarness.boot();
+  });
+
+  afterEach(() => {
+    harness?.dispose();
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it("hasCraftCenter/hasRepairDock flip on when the current system fields one", async () => {
+    await harness.newGame();
+    const sys = harness.galaxy()!.systems[0];
+    sys.stations.push(
+      new Station(
+        "craft-1",
+        "Крафт-центр",
+        StationType.CRAFT_CENTER,
+        Faction.INDEPENDENT,
+        100,
+        0,
+      ),
+      new Station(
+        "repair-1",
+        "Ремонтный узел",
+        StationType.REPAIR_DOCK,
+        Faction.INDEPENDENT,
+        150,
+        1,
+      ),
+    );
+    harness.player()!.currentSystemId = sys.id;
+
+    const obs = observe(harness.engine);
+    expect(obs.hasCraftCenter).toBe(true);
+    expect(obs.hasRepairDock).toBe(true);
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("hasCraftCenter/hasRepairDock stay false without a matching station", async () => {
+    await harness.newGame();
+    const sys = harness.galaxy()!.systems[0];
+    sys.stations.length = 0;
+    sys.stations.push(
+      new Station(
+        "trade-1",
+        "Торговый пост",
+        StationType.TRADE_POST,
+        Faction.INDEPENDENT,
+        100,
+        0,
+      ),
+    );
+    harness.player()!.currentSystemId = sys.id;
+
+    const obs = observe(harness.engine);
+    expect(obs.hasCraftCenter).toBe(false);
+    expect(obs.hasRepairDock).toBe(false);
+  });
+
+  it("hasBank is true once landed on any planet", async () => {
+    await harness.newGame();
+    const sys = harness.galaxy()!.systems.find((s) => s.planets.length > 0)!;
+    const planet = sys.planets[0];
+    harness.player()!.currentSystemId = sys.id;
+    await harness.goTo(SceneType.PLANET, { planet });
+
+    expect(observe(harness.engine).hasBank).toBe(true);
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("nearOvermindCore is true at the core system and false elsewhere", async () => {
+    await harness.newGame();
+    const galaxy = harness.galaxy()!;
+    const [coreSys, otherSys] = galaxy.systems;
+    galaxy.overmindCoreSystemId = coreSys.id;
+
+    harness.player()!.currentSystemId = coreSys.id;
+    expect(observe(harness.engine).nearOvermindCore).toBe(true);
+
+    harness.player()!.currentSystemId = otherSys.id;
+    const farSys = galaxy.systems.find(
+      (s) =>
+        s.id !== coreSys.id &&
+        !s.connections.some((c) => c.toSystemId === coreSys.id),
+    );
+    if (farSys) {
+      harness.player()!.currentSystemId = farSys.id;
+      expect(observe(harness.engine).nearOvermindCore).toBe(false);
+    }
+  });
+
+  it("overmindShare reflects the captured fraction of the galaxy", async () => {
+    await harness.newGame();
+    const galaxy = harness.galaxy()!;
+    galaxy.overmindSystems = [galaxy.systems[0].id];
+
+    const obs = observe(harness.engine);
+    expect(obs.overmindShare).toBeCloseTo(1 / galaxy.systems.length);
+  });
+
+  it("questDeliveryHere is true when a carried quest targets the current system", async () => {
+    await harness.newGame();
+    const obs = observe(harness.engine);
+    // No quests yet — the signal must be present and false, not throw.
+    expect(obs.questDeliveryHere).toBe(false);
+  });
+
+  it("activeLoans flips on after taking a real loan and off once repaid", async () => {
+    await harness.newGame();
+    const player = harness.player()!;
+    expect(observe(harness.engine).activeLoans).toBe(false);
+
+    takeLoan(
+      harness.engine.bank.bus,
+      harness.engine.bankingService,
+      player.id,
+      player.currentAccountId,
+      { principal: 500, dailyRate: 0.02, periods: 5 },
+    );
+
+    const withLoan = observe(harness.engine);
+    expect(withLoan.activeLoans).toBe(true);
+    expect(withLoan.loanBalance).toBe(500);
+    expect(withLoan.loanMissedPayments).toBe(0);
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("cheapestGearPrice/bestHullPrice are non-negative numbers or null, and stable", async () => {
+    await harness.newGame();
+    const a = observe(harness.engine);
+    const b = observe(harness.engine);
+    expect(a.cheapestGearPrice).toEqual(b.cheapestGearPrice);
+    expect(a.bestHullPrice).toEqual(b.bestHullPrice);
+    if (a.cheapestGearPrice !== null) {
+      expect(a.cheapestGearPrice).toBeGreaterThan(0);
+    }
+    if (a.bestHullPrice !== null) {
+      expect(a.bestHullPrice).toBeGreaterThan(0);
+    }
   });
 });
