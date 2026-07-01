@@ -57,7 +57,7 @@ export interface NeuralPolicyOptions {
 }
 
 /** Number of observation-derived features (the egocentric vitals/system block). */
-export const OBS_FEATURE_LENGTH = 16;
+export const OBS_FEATURE_LENGTH = 30;
 
 /**
  * Length of the {@link featurize} vector — the net's input width: the
@@ -79,8 +79,8 @@ function norm(n: number, denom: number): number {
  * Project an {@link Observation} (and the agent's {@link AgentMemory} belief state)
  * into a fixed-length numeric feature vector (the net's input): a
  * {@link OBS_FEATURE_LENGTH}-wide egocentric block (12 vitals/system features +
- * 3 scene-type one-hot bits: SPACE_FLIGHT / PLANET / STAR_MAP + 1 warp-in-transit
- * bit) followed by the
+ * 9 scene-type one-hot bits + 1 warp-in-transit bit + 8 Task-5 bank/equipment/
+ * Overmind/quest-delivery signals) followed by the
  * {@link MEMORY_FEATURE_LENGTH}-wide belief block ({@link memoryFeatures}). Pure
  * and deterministic — the same `(obs, memory)` always yields the exact same
  * {@link FEATURE_LENGTH}-wide vector, every component already in `[0, 1]` so it
@@ -110,17 +110,33 @@ export function featurize(obs: Observation, memory?: AgentMemory): number[] {
     norm(availableQuests, 8),
     norm(obs.quests.length, 8),
     norm(obs.legalActions.length, ACTION_ORDER.length),
-    // Scene-type one-hot bits (indices 12–14): help the net discriminate which
+    // Scene-type one-hot bits (indices 12–20): help the net discriminate which
     // actions are meaningful in the current scene without memorising the legal-
-    // action mask alone.
+    // action mask alone. Covers every scene the Task 2 action vocabulary acts in.
     obs.scene === SceneType.SPACE_FLIGHT ? 1 : 0,
     obs.scene === SceneType.PLANET ? 1 : 0,
     obs.scene === SceneType.STAR_MAP ? 1 : 0,
+    obs.scene === SceneType.STATION ? 1 : 0,
+    obs.scene === SceneType.EQUIPMENT_SHOP ? 1 : 0,
+    obs.scene === SceneType.BANK ? 1 : 0,
+    obs.scene === SceneType.TRADE ? 1 : 0,
+    obs.scene === SceneType.TEXT_QUEST ? 1 : 0,
+    obs.scene === SceneType.GAME_OVER ? 1 : 0,
     // Warp-in-transit signal: 1 while the ship is flying to the system edge for a
     // pending hyperjump. The policy should wait rather than re-opening StarMap
     // (which cancels the warp). Lives in the observation block because it comes
     // from the live SpaceFlightScene state, not the agent's belief notebook.
     obs.warpInTransit ? 1 : 0,
+    // Task 5 bank/equipment/Overmind/quest-delivery block (indices 22–29) — the
+    // Task 1 observation signals, each already egocentric + null-safe on `obs`.
+    obs.hasCraftCenter ? 1 : 0,
+    obs.hasBank ? 1 : 0,
+    obs.activeLoans ? 1 : 0,
+    obs.questDeliveryHere ? 1 : 0,
+    obs.overmindShare ?? 0,
+    obs.nearOvermindCore ? 1 : 0,
+    norm(obs.cheapestGearPrice ?? 0, 10_000),
+    norm(obs.questsCompleted ?? 0, 20),
     ...memoryFeatures(obs, memory),
   ];
 }

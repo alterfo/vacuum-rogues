@@ -24,8 +24,8 @@
  * — no production module imports it (enforced by `letsplayDevOnly.test.ts`).
  */
 import type { GameEngine } from "@/systems/GameEngine";
-import { SceneType, StationType } from "@/types";
-import type { ResourceType, QuestType, FactionType } from "@/types";
+import { SceneType, StationType, FactionType } from "@/types";
+import type { ResourceType, QuestType } from "@/types";
 import { npcsPresentInSystem } from "@/systems/npc/NpcSimulator";
 import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
 import { TradeSystem } from "@/systems/TradeSystem";
@@ -120,6 +120,15 @@ export interface PlayerSnapshot {
   systemId: string;
   /** Live/last in-flight ship position, when one is known. */
   position: { x: number; y: number } | null;
+  /**
+   * Reputation with the lawful/banking faction (BASTIONS), [-100,100]. Feeds
+   * the Task 5 feature vector as a "military/ranger zone" standing proxy — the
+   * game has no literal Ranger faction (see CJM-F's pirate policy, which
+   * substitutes the same faction for the identical reason).
+   */
+  reputationBastions?: number;
+  /** Reputation with the black-market faction (SYNDICATE), [-100,100] — the "pirate/outlaw" standing proxy. */
+  reputationSyndicate?: number;
 }
 
 /** The player's current star system + what's reachable from it. */
@@ -223,6 +232,15 @@ export interface Observation {
   cheapestGearPrice?: number | null;
   /** Cheapest hull price in the CURRENT system's (planet-only) shops, `null` if none. */
   bestHullPrice?: number | null;
+  /**
+   * The galaxy's current business day (`galaxy.gameDays`). Lets
+   * {@link updateMemory} detect a day-boundary transition purely from folded
+   * observations (no memory field otherwise carries calendar time) — feeds the
+   * Task 5 `daysWithoutCreditGain` / `overmindDaysSeen` belief tracking.
+   */
+  gameDay?: number;
+  /** Total quests completed so far this run (`questManager.getCompletedQuestIds().length`). */
+  questsCompleted?: number;
 }
 
 /** Flags describing the current location, fed to {@link legalActionsForScene}. */
@@ -413,6 +431,8 @@ export function observe(engine: GameEngine): Observation {
       activeLoans: false,
       cheapestGearPrice: null,
       bestHullPrice: null,
+      gameDay: 0,
+      questsCompleted: 0,
     };
   }
 
@@ -439,6 +459,8 @@ export function observe(engine: GameEngine): Observation {
     cargoCapacity,
     systemId: player.currentSystemId,
     position: flightPos ? { x: flightPos.x, y: flightPos.y } : null,
+    reputationBastions: player.getReputation(FactionType.BASTIONS),
+    reputationSyndicate: player.getReputation(FactionType.SYNDICATE),
   };
 
   const system =
@@ -589,5 +611,7 @@ export function observe(engine: GameEngine): Observation {
       : undefined,
     cheapestGearPrice,
     bestHullPrice,
+    gameDay: galaxy.gameDays,
+    questsCompleted: engine.questManager.getCompletedQuestIds().length,
   };
 }

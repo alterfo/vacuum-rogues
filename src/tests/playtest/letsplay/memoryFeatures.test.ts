@@ -393,9 +393,11 @@ describe("featurize (observation + memory blocks)", () => {
     // These literals are a contract: the trained `*.weights.json` input width and
     // `tools/ai/train_player.py`'s NUM_ACTIONS must match. Changing a width here is
     // a deliberate act that forces a retrain + re-export — so pin the numbers, not
-    // just their sum (which is tautological).
-    expect(OBS_FEATURE_LENGTH).toBe(16);
-    expect(MEMORY_FEATURE_LENGTH).toBe(7);
-    expect(FEATURE_LENGTH).toBe(23);
+    // just their sum (which is tautological). Bumped 16/7/23 → 30/20/50 by the
+    // Task 5 widening (20260701-letsplay-action-expansion-and-neural-scale.md) —
+    // deliberately updated in lockstep with that widening, not a weakened pin.
+    expect(OBS_FEATURE_LENGTH).toBe(30);
+    expect(MEMORY_FEATURE_LENGTH).toBe(20);
+    expect(FEATURE_LENGTH).toBe(50);
   });
 });

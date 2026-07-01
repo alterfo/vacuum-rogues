@@ -287,12 +287,14 @@ Widen the feature vector exactly once. After this task all weight files are inva
 
 **`FEATURE_LENGTH = 30 + 20 = 50`**
 
-- [ ] Set `OBS_FEATURE_LENGTH = 30` in `NeuralPolicy.ts`; update `featurize()` with new 30-feature block (null-safe for every new field)
-- [ ] Set `MEMORY_FEATURE_LENGTH = 20` in `memoryFeatures.ts`; update `featurizeMemory()` with new 20-feature block
-- [ ] Add tracking state to `AgentMemory` needed for new features: `daysWithoutCreditGain`, `creditYesterday`, `overmindDaysSeen`; update `updateMemory()`
-- [ ] Update `weightsContract.test.ts`: assert `FEATURE_LENGTH === 50` and `ACTION_ORDER.length === 16`; temporarily mark `shippedWeights.test.ts` as skipped with `.todo` (weights will be invalid until Task 9)
-- [ ] Write `src/tests/playtest/letsplay/featurize.test.ts`: for each new feature slot, assert value is in `[0,1]`, never NaN, correct for a mock observation; assert total length === 50
-- [ ] Run `npm run test:playtest -- --run` — must pass (shippedWeights skipped is fine) before Task 6
+- [x] Set `OBS_FEATURE_LENGTH = 30` in `NeuralPolicy.ts`; update `featurize()` with new 30-feature block (null-safe for every new field)
+- [x] Set `MEMORY_FEATURE_LENGTH = 20` in `memoryFeatures.ts`; update `featurizeMemory()` with new 20-feature block
+- [x] Add tracking state to `AgentMemory` needed for new features: `daysWithoutCreditGain`, `creditYesterday`, `overmindDaysSeen`; update `updateMemory()`
+- [x] Update `weightsContract.test.ts`: assert `FEATURE_LENGTH === 50` and `ACTION_ORDER.length === 16`; temporarily mark `shippedWeights.test.ts` as skipped with `.todo` (weights will be invalid until Task 9)
+- [x] Write `src/tests/playtest/letsplay/featurize.test.ts`: for each new feature slot, assert value is in `[0,1]`, never NaN, correct for a mock observation; assert total length === 50
+- [x] Run `npm run test:playtest -- --run` — must pass (shippedWeights skipped is fine) before Task 6
+
+**Implementation notes for Task 6+:** the plan's feature table needed 4 signals not yet on `Observation`/`PlayerSnapshot` — `gameDay` (galaxy.gameDays, so the pure `AgentMemory` fold can detect day-boundary transitions for `daysWithoutCreditGain`/`overmindDaysSeen` without an engine handle), `questsCompleted` (`questManager.getCompletedQuestIds().length`), and `reputationBastions`/`reputationSyndicate` (the game has no literal Ranger/Pirate faction — reused BASTIONS/SYNDICATE as the closest analogues, the same substitution Task 4's CJM-F already made for an identical reason). All four are optional additions to `observe.ts`/`PlayerSnapshot`, so every existing fixture across the suite kept compiling unchanged — a deliberate, minimal deviation from Task 5's stated file list, mirroring the precedent Tasks 2-4 set. `equipQuality`/`repRangerFraction`/`repPirateFraction` are computed from `AgentMemory` (new `lastMaxHull`/`lastReputationBastions`/`lastReputationSyndicate` fields, mirrored from `obs.player` every fold, same pattern as `loanState`) rather than reading `obs.player` directly inside `memoryFeatures` — reading `obs.player` there would have broken the existing `memoryFeatures.test.ts`/`featurize.test.ts` "a fresh notebook zeroes the whole memory block" contract, since the test's default player fixture has non-zero `maxHull`/`credits` regardless of memory state. `visitedSystemFraction`'s "total reachable" denominator uses a local `TOTAL_SYSTEMS_SCALE = 30` constant (mirrors `GAME_BALANCE.DEFAULT_SYSTEM_COUNT`) rather than a new cross-layer import, matching the existing `CREDIT_SCALE`/`DANGER_SCALE` local-constant pattern. `nearestThreat` is the worst danger remembered anywhere in the threat map (not literal graph adjacency — `Observation` doesn't expose neighbouring-system ids to the pure decide layer). Two existing width-pin assertions (`memoryFeatures.test.ts`'s "pins the concrete feature widths" test, hardcoding `16`/`7`/`23`) were deliberately updated to `30`/`20`/`50` — this is the exact, designated widening those literals' own comment calls out ("changing a width here is a deliberate act... so pin the numbers"), not a weakened behavioural assertion.
 
 ---
 

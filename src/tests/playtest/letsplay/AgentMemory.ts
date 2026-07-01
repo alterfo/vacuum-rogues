@@ -98,6 +98,24 @@ export interface AgentMemory {
   deadlockDetected: boolean;
   /** Currently-carried quests with a known delivery system, mirrored from the observation. */
   activeQuestDelivery: ActiveQuestDelivery[];
+  /** Credits as of the most recent day-boundary fold (the "yesterday" baseline for stagnation detection). */
+  creditYesterday: number;
+  /** Consecutive day-boundaries where credits did not exceed {@link creditYesterday} — the stagnation signal. */
+  daysWithoutCreditGain: number;
+  /** Count of day-boundaries folded while `overmindShare > 0` — a duration proxy for Overmind pressure. */
+  overmindDaysSeen: number;
+  /** Internal: the last `obs.gameDay` folded, used to detect a day-boundary transition. `-1` = no day seen yet. */
+  lastDaySeen: number;
+  /**
+   * Remembered latest `reputationBastions`/`reputationSyndicate`/`maxHull`
+   * readings, mirrored straight from the observation on every fold (same
+   * pattern as {@link loanState}) — kept on the belief state rather than read
+   * from `obs.player` directly at feature time so an empty/fresh notebook
+   * still degrades every memory-block feature to a sane `0` default.
+   */
+  lastReputationBastions: number;
+  lastReputationSyndicate: number;
+  lastMaxHull: number;
 }
 
 /**
@@ -131,6 +149,13 @@ export function createMemory(): AgentMemory {
     loanState: undefined,
     deadlockDetected: false,
     activeQuestDelivery: [],
+    creditYesterday: 0,
+    daysWithoutCreditGain: 0,
+    overmindDaysSeen: 0,
+    lastDaySeen: -1,
+    lastReputationBastions: 0,
+    lastReputationSyndicate: 0,
+    lastMaxHull: 0,
   };
 }
 
@@ -204,6 +229,13 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       loanState: mem.loanState,
       deadlockDetected: mem.deadlockDetected,
       activeQuestDelivery: mem.activeQuestDelivery.map((d) => ({ ...d })),
+      creditYesterday: mem.creditYesterday,
+      daysWithoutCreditGain: mem.daysWithoutCreditGain,
+      overmindDaysSeen: mem.overmindDaysSeen,
+      lastDaySeen: mem.lastDaySeen,
+      lastReputationBastions: mem.lastReputationBastions,
+      lastReputationSyndicate: mem.lastReputationSyndicate,
+      lastMaxHull: mem.lastMaxHull,
     };
   }
 
@@ -267,6 +299,25 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     )
     .map((q) => ({ questId: q.id, targetSystemId: q.targetSystemId }));
 
+  // 7) Day-boundary bookkeeping — `obs.gameDay` is the only clock the pure
+  // belief state can see. On a genuine day transition (day advanced beyond
+  // the last one folded), roll the stagnation counter against the credits
+  // banked "yesterday" and tally an Overmind-pressure day; same-day / unknown
+  // (`gameDay` absent) folds leave all four untouched.
+  let creditYesterday = mem.creditYesterday;
+  let daysWithoutCreditGain = mem.daysWithoutCreditGain;
+  let overmindDaysSeen = mem.overmindDaysSeen;
+  let lastDaySeen = mem.lastDaySeen;
+  if (obs.gameDay !== undefined && obs.gameDay > mem.lastDaySeen) {
+    daysWithoutCreditGain =
+      obs.player.credits > mem.creditYesterday
+        ? 0
+        : mem.daysWithoutCreditGain + 1;
+    creditYesterday = obs.player.credits;
+    if ((obs.overmindShare ?? 0) > 0) overmindDaysSeen += 1;
+    lastDaySeen = obs.gameDay;
+  }
+
   const next: AgentMemory = {
     priceBook,
     inventoryLots,
@@ -278,9 +329,16 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     loanState,
     deadlockDetected: mem.deadlockDetected,
     activeQuestDelivery,
+    creditYesterday,
+    daysWithoutCreditGain,
+    overmindDaysSeen,
+    lastDaySeen,
+    lastReputationBastions: obs.player.reputationBastions ?? 0,
+    lastReputationSyndicate: obs.player.reputationSyndicate ?? 0,
+    lastMaxHull: obs.player.maxHull,
   };
 
-  // 7) Deadlock — sticky once true; logged exactly once per run at the transition.
+  // 8) Deadlock — sticky once true; logged exactly once per run at the transition.
   if (!mem.deadlockDetected && detectDeadlock(obs, next)) {
     logger.warn(
       `[DEADLOCK] step=${step} credits=${obs.player.credits} hull=${obs.player.hullFraction} system=${obs.system?.id ?? "?"}`,

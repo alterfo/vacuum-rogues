@@ -32,6 +32,11 @@ function fixture<T>(name: string): T {
 }
 
 describe("weights contract — exported JSON ↔ mlp.forward parity", () => {
+  it("Task 5/2: the net I/O contract is 50 features in, 16 actions out", () => {
+    expect(FEATURE_LENGTH).toBe(50);
+    expect(ACTION_ORDER.length).toBe(16);
+  });
+
   it("reproduces the reference net's scores within 1e-5 (parity)", () => {
     const rawWeights = fixture<unknown>("reference.weights.json");
     const io = fixture<{ input: number[]; expected: number[] }>(
