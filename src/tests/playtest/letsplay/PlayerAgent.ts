@@ -31,6 +31,7 @@ import {
   acceptBoardQuests,
   executeTradeOnPlanet,
   executeSellAll,
+  pickWarpTarget,
 } from "./engineQueries";
 import {
   executeBuyBestGear,
@@ -314,12 +315,11 @@ export class PlayerAgent {
         }
         const sys = currentSystem(engine);
         const connections = sys?.connections ?? [];
-        // Prefer a system other than the one we just came from — avoids ping-pong
-        // between two adjacent systems (connections[0] in B is usually back to A).
-        const target = (
-          connections.find((c) => c.toSystemId !== this.lastSystemId) ??
-          connections[0]
-        )?.toSystemId;
+        const target = pickWarpTarget(
+          connections,
+          this.lastSystemId,
+          this.memory.visitedSystemIds,
+        );
         this.lastSystemId = sys?.id ?? null;
         const scene = this.harness.currentScene() as {
           performWarpJumpTo?: (id: string) => Promise<void>;

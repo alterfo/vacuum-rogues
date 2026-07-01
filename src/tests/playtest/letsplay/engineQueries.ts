@@ -34,6 +34,27 @@ export function landedPlanet(engine: GameEngine): Planet | null {
 }
 
 /**
+ * Pick a `warp` destination from `connections` — "direction of the unknown"
+ * (CJM-G explorer's spec, but applied to every warp since target selection is
+ * centralized here rather than per-CJM): prefer a system not yet in
+ * `visited`, then fall back to anything other than `lastSystemId` (avoids
+ * ping-ponging between two adjacent systems), then the first connection.
+ * Pure — no engine access — so it's cheaply unit-testable against a mock
+ * connections list.
+ */
+export function pickWarpTarget(
+  connections: readonly { toSystemId: string }[],
+  lastSystemId: string | null,
+  visited: ReadonlySet<string>,
+): string | undefined {
+  return (
+    connections.find((c) => !visited.has(c.toSystemId)) ??
+    connections.find((c) => c.toSystemId !== lastSystemId) ??
+    connections[0]
+  )?.toSystemId;
+}
+
+/**
  * Accept every contract offered on the landed planet that is *registered* as a
  * template and not already active. Guarding on the registered template + the
  * active set keeps this a clean no-op (never a `logger.error`) when there is

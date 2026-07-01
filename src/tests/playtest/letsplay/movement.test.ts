@@ -18,6 +18,7 @@ import type { Observation } from "./observe";
 import { SceneType, NpcRole, NpcState, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 import { NpcShip } from "@/domain/NpcShip";
+import { pickWarpTarget } from "./engineQueries";
 
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
@@ -222,5 +223,41 @@ describe("letsplay agent — warpInTransit safety net covers every action (Playe
 
     expect(warpCompleted || stillDriving || legitimatelyBlocked).toBe(true);
     expect(harness.errors()).toEqual([]);
+  });
+});
+
+// CJM-G explorer's spec ("prefer systems not yet in visitedSystemIds →
+// direction of the unknown") is implemented centrally in PlayerAgent's warp
+// case via this pure helper, so it applies to every warp decision rather than
+// being re-derived per CJM.
+describe("pickWarpTarget — prefers the unvisited direction over the merely-not-last one", () => {
+  it("picks a system not yet visited even when it isn't the last hop", () => {
+    // At B, having come from A, with a third neighbour C already visited on
+    // an earlier loop and a fresh D never seen — only visited-preference (not
+    // last-hop-avoidance alone) picks D here, since C already clears the
+    // "!== lastSystemId" bar.
+    const connections = [
+      { toSystemId: "C" },
+      { toSystemId: "D" },
+      { toSystemId: "A" },
+    ];
+    const target = pickWarpTarget(connections, "A", new Set(["A", "B", "C"]));
+    expect(target).toBe("D");
+  });
+
+  it("falls back to avoiding the last hop when every connection is already visited", () => {
+    const connections = [{ toSystemId: "A" }, { toSystemId: "C" }];
+    const target = pickWarpTarget(connections, "A", new Set(["A", "B", "C"]));
+    expect(target).toBe("C");
+  });
+
+  it("falls back to the first connection when there is nowhere else to go", () => {
+    const connections = [{ toSystemId: "A" }];
+    const target = pickWarpTarget(connections, "A", new Set(["A", "B"]));
+    expect(target).toBe("A");
+  });
+
+  it("returns undefined for a dead-end system with no connections", () => {
+    expect(pickWarpTarget([], "A", new Set())).toBeUndefined();
   });
 });
