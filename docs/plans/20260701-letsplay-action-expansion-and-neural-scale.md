@@ -131,15 +131,17 @@ Multi-step applier pattern (mirrors existing `trade` action):
 - `repay-loan` in BANK → `executeRepayLoan(engine)` (pay as much as current credits allow)
 - `sell-cargo` in TRADE → `executeSellAll(engine)` → `harness.goTo(PLANET)` — sell all held cargo at current prices
 
-- [ ] Create `equipmentQueries.ts`: `bestAffordableGear(engine): GearSpec | null`, `bestAffordableHull(engine): HullSpec | null`, `cheapestMicromodule(engine): MicromoduleSpec | null`, `nearestStationWithShop(engine): Station | null`, `nearestStationWithBank(engine): Station | null`
-- [ ] Create `bankingQueries.ts`: `playerLoanBalance(engine): number`, `canTakeLoan(engine): boolean`, `standardLoanTerms(engine): LoanTerms | null`
-- [ ] Implement `executeBuyBestGear(engine)`: read shop via ShopGenerator (or engine equivalent), call `acquireUninstalledGear` + `adjustPlayerCredits` — fail gracefully with `harness.tick()` if no affordable item
-- [ ] Implement `executeBuyBestModule(engine)`: call `buyMicromodule()` from `micromoduleShop.ts` for the cheapest available module the player can afford
-- [ ] Implement `executeTakeLoan(engine)` and `executeRepayLoan(engine)` via the BankingService/bus seam
-- [ ] Implement `executeSellAll(engine)`: sell everything in cargo via `executeTradeOnPlanet` sell path
-- [ ] Add all 6 cases to `PlayerAgent.apply()` switch
-- [ ] Write integration tests in a new `src/tests/playtest/letsplay/newActions.test.ts` using `RealEngineHarness`: boot → newGame → navigate to an equipment shop → `apply("buy-gear")` → verify player owns a new item and credits reduced; similar for `take-loan`, `buy-module`
-- [ ] Run `npm run test:playtest -- --run` — must pass before Task 4
+- [x] Create `equipmentQueries.ts`: `bestAffordableGear(engine): GearSpec | null`, `bestAffordableHull(engine): HullSpec | null`, `cheapestMicromodule(engine): MicromoduleSpec | null`, `nearestStationWithShop(engine): Station | null`, `nearestStationWithBank(engine): Station | null`
+- [x] Create `bankingQueries.ts`: `playerLoanBalance(engine): number`, `canTakeLoan(engine): boolean`, `standardLoanTerms(engine): LoanTerms | null`
+- [x] Implement `executeBuyBestGear(engine)`: read shop via ShopGenerator (or engine equivalent), call `acquireUninstalledGear` + `adjustPlayerCredits` — fail gracefully with `harness.tick()` if no affordable item
+- [x] Implement `executeBuyBestModule(engine)`: call `buyMicromodule()` from `micromoduleShop.ts` for the cheapest available module the player can afford
+- [x] Implement `executeTakeLoan(engine)` and `executeRepayLoan(engine)` via the BankingService/bus seam
+- [x] Implement `executeSellAll(engine)`: sell everything in cargo via `executeTradeOnPlanet` sell path
+- [x] Add all 6 cases to `PlayerAgent.apply()` switch
+- [x] Write integration tests in a new `src/tests/playtest/letsplay/newActions.test.ts` using `RealEngineHarness`: boot → newGame → navigate to an equipment shop → `apply("buy-gear")` → verify player owns a new item and credits reduced; similar for `take-loan`, `buy-module`
+- [x] Run `npm run test:playtest -- --run` — must pass before Task 4
+
+**Implementation notes for Task 4+:** the illustrative multi-step navigation table above assumed a live `EQUIPMENT_SHOP` reachable from `STATION` and a `BANK` reachable via `harness.goTo(BANK)` from mid-shop context — neither holds against the real scene graph: `EquipmentShopScene`'s `ShopContext` only ever accepts a `planet` (it's the planet Верфь tab; `SceneFactory`/`PlanetScene` never pass a `station`), and `StationScene` has its own in-scene `"shop"`/`"hangar"`/`"bank"` *views* rather than child-scene transitions. Since `legalActionsForScene` (Task 2) already only offers `buy-gear`/`upgrade-hull`/`buy-module`/`take-loan`/`repay-loan` from a scene that's already "at the right place" (`STATION`/`EQUIPMENT_SHOP`/`BANK`), the appliers execute the real domain effect **directly in place** (bypassing shop/bank UI exactly as the existing `trade` case bypasses `TradeScene`'s buttons) and then `tick()` — no extra scene navigation needed. `sell-cargo` keeps the plan's `TRADE → goTo(PLANET)` step since that one *is* real. `nearestStationWithShop`/`nearestStationWithBank` are implemented per the checklist for completeness/future live-wiring use but are not called by the headless applier today (buy-gear/upgrade-hull/buy-module/take-loan/repay-loan are only ever legal already-docked). `executeSellAll` lives in `engineQueries.ts` (not a new file) since it shares `executeTradeOnPlanet`'s sell-loop — extracted into a private `sellAllCargo` helper both now call, avoiding duplicating the `TradeSystem` loop.
 
 ---
 

@@ -52,18 +52,18 @@ export function acceptBoardQuests(engine: GameEngine): void {
 }
 
 /**
- * Execute simple market trades at `planet` via the real {@link TradeSystem} seam:
- * sell all held cargo at any price, then spend available credits on the cheapest
- * available good. Uses the same `executeTrade` path the {@link TradeScene} UI
- * uses — credits and cargo change, the bank ledger is posted. Dev-only helper.
+ * Sell every unit of cargo `player` holds at `planet`'s market (clones the list
+ * so mutations don't affect iteration) via the real {@link TradeSystem} seam.
+ * Shared by {@link executeTradeOnPlanet} and {@link executeSellAll}.
  */
-export function executeTradeOnPlanet(engine: GameEngine, planet: Planet): void {
+function sellAllCargo(
+  ts: TradeSystem,
+  engine: GameEngine,
+  planet: Planet,
+): void {
   const player = engine.player;
   if (!player) return;
-  const ts = new TradeSystem();
   const capacity = cargoCapacityOf(engine.playerLoadout);
-
-  // Sell every held good (clone list so mutations don't affect iteration)
   for (const cargo of [...player.inventory.resources]) {
     if (cargo.amount <= 0) continue;
     ts.executeTrade(
@@ -76,6 +76,30 @@ export function executeTradeOnPlanet(engine: GameEngine, planet: Planet): void {
       engine.bank,
     );
   }
+}
+
+/**
+ * Sell every unit of cargo the player holds at `planet`'s market — the explicit
+ * sell-only counterpart to {@link executeTradeOnPlanet} (which also buys), backing
+ * the `sell-cargo` action so "sell what I'm carrying" never accidentally re-buys.
+ */
+export function executeSellAll(engine: GameEngine, planet: Planet): void {
+  sellAllCargo(new TradeSystem(), engine, planet);
+}
+
+/**
+ * Execute simple market trades at `planet` via the real {@link TradeSystem} seam:
+ * sell all held cargo at any price, then spend available credits on the cheapest
+ * available good. Uses the same `executeTrade` path the {@link TradeScene} UI
+ * uses — credits and cargo change, the bank ledger is posted. Dev-only helper.
+ */
+export function executeTradeOnPlanet(engine: GameEngine, planet: Planet): void {
+  const player = engine.player;
+  if (!player) return;
+  const ts = new TradeSystem();
+  const capacity = cargoCapacityOf(engine.playerLoadout);
+
+  sellAllCargo(ts, engine, planet);
 
   // Buy as many units of the cheapest available good as credits + hold allow
   const resources = planet.market?.availableResources ?? [];

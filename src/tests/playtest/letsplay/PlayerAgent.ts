@@ -30,7 +30,14 @@ import {
   landedPlanet,
   acceptBoardQuests,
   executeTradeOnPlanet,
+  executeSellAll,
 } from "./engineQueries";
+import {
+  executeBuyBestGear,
+  executeUpgradeHull,
+  executeBuyBestModule,
+} from "./equipmentQueries";
+import { executeTakeLoan, executeRepayLoan } from "./bankingQueries";
 
 /**
  * A compact, egocentric vitals snapshot taken at one step — the player's own
@@ -334,6 +341,49 @@ export class PlayerAgent {
         } else {
           // No reachable connection — leave the star map.
           await this.harness.goTo(SceneType.SPACE_FLIGHT);
+        }
+        return;
+      }
+
+      // Economic actions execute their real domain effect directly (bypassing
+      // the shop/bank UI, exactly as `trade` bypasses TradeScene's buttons) and
+      // stay put — `legalActionsForScene` only ever offers them from a scene
+      // already at the right place (STATION/EQUIPMENT_SHOP/BANK), so no extra
+      // navigation is needed. Each executor is a safe no-op when nothing is
+      // affordable/owed, so a "wrong" scene can never throw.
+      case "buy-gear":
+        executeBuyBestGear(engine);
+        this.harness.tick();
+        return;
+
+      case "upgrade-hull":
+        executeUpgradeHull(engine);
+        this.harness.tick();
+        return;
+
+      case "buy-module":
+        executeBuyBestModule(engine);
+        this.harness.tick();
+        return;
+
+      case "take-loan":
+        executeTakeLoan(engine);
+        this.harness.tick();
+        return;
+
+      case "repay-loan":
+        executeRepayLoan(engine);
+        this.harness.tick();
+        return;
+
+      case "sell-cargo": {
+        const planet =
+          landedPlanet(engine) ?? currentSystem(engine)?.planets[0];
+        if (planet) executeSellAll(engine, planet);
+        if (planet && obs.scene === SceneType.TRADE) {
+          await this.harness.goTo(SceneType.PLANET, { planet });
+        } else {
+          this.harness.tick();
         }
         return;
       }
