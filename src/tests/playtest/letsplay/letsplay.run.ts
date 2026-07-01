@@ -26,7 +26,7 @@ import { RealEngineHarness, type RecordedError } from "../realEngineHarness";
 import { observe, type Observation } from "./observe";
 import { PlayerAgent, type AgentStep } from "./PlayerAgent";
 import type { PlayerPolicy } from "./PlayerPolicy";
-import { selectPlayerPolicy } from "./policyGate";
+import { MemoryHeuristicPolicy } from "./MemoryHeuristicPolicy";
 import type { VitalsSample } from "./sessionMetrics";
 
 /** Knobs for a letsplay run; every field has a sane dev default. */
@@ -260,7 +260,12 @@ export async function runLetsplay(
   const sessions = opts.sessions ?? 3;
   const steps = opts.steps ?? 40;
   const seedPrefix = opts.seedPrefix ?? "LETSPLAY";
-  const makePolicy = opts.policy ?? (() => selectPlayerPolicy());
+  // MemoryHeuristicPolicy is the BC teacher — it has the buy-low/sell-high
+  // trade loop, cross-planet routing, and "early-explore" warp trigger that
+  // prevents the session from looping on one planet forever. The gate policy
+  // (selectPlayerPolicy → HeuristicPolicy when off) lacks memory, so the
+  // agent gets stuck in PLANET → SPACE_FLIGHT cycles with no exploration.
+  const makePolicy = opts.policy ?? (() => new MemoryHeuristicPolicy());
 
   const sessionReports: SessionReport[] = [];
   for (let i = 0; i < sessions; i++) {

@@ -101,10 +101,12 @@ export class HeuristicPolicy implements PlayerPolicy {
   ): string | undefined {
     switch (kind) {
       case "land": {
-        // Prefer a planet that is offering work.
+        // Prefer a planet that is offering work, among habitable ones only —
+        // uninhabited planets have no market and create a spin-land-takeoff loop.
         const planets = obs.system?.planets ?? [];
-        const withWork = planets.find((p) => p.availableQuests > 0);
-        return (withWork ?? planets[0])?.id;
+        const habitable = planets.filter((p) => p.isHabitable !== false);
+        const withWork = habitable.find((p) => p.availableQuests > 0);
+        return (withWork ?? habitable[0] ?? planets[0])?.id;
       }
       case "dock":
         return obs.system?.stations[0]?.id;

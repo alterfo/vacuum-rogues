@@ -22,6 +22,8 @@ import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
 import { observe } from "./observe";
 import { selectPlayerPolicy } from "./policyGate";
+import { MemoryHeuristicPolicy } from "./MemoryHeuristicPolicy";
+import { isNeuralEnabled } from "@/systems/settings/gameSettings";
 // Trained player net (behavioural-cloned from the MemoryHeuristicPolicy teacher,
 // `tools/ai/train_player.py`). Dev-only JSON, passed to the gate so the live
 // autopilot runs the net when НЕЙРОСЕТЬ is on; the gate ignores it when off.
@@ -303,12 +305,15 @@ export function installAutopilotHook(
 
   const controller = new AutopilotController({
     observe: () => observe(engine),
-    // The neural feature gate picks the brain: heuristic by default (flag off),
-    // the trained NeuralPolicy (fed the exported weights) when the settings
-    // toggle is on — same seam, smarter. `enabled` is omitted so it reads the
-    // live isNeuralEnabled() flag, the same source of truth the settings panel
-    // writes (see policyGate.ts) — do not force it on here.
-    policy: selectPlayerPolicy({ weights: playerWeights }),
+    // When the neural toggle is off (default), use MemoryHeuristicPolicy — the
+    // BC teacher that carries a per-engagement belief, executes buy-low/sell-high
+    // routes, and warps to explore new systems. The stateless HeuristicPolicy
+    // (selectPlayerPolicy's off-default) has no loop-prevention and gets stuck
+    // in a PLANET → SPACE_FLIGHT spin forever. When neural is on, use the
+    // trained NeuralPolicy via the gate (same source-of-truth as the settings panel).
+    policy: isNeuralEnabled()
+      ? selectPlayerPolicy({ weights: playerWeights })
+      : new MemoryHeuristicPolicy(),
     controller: createLiveSceneController(engine),
     onError: (err) => logger.warn("Autopilot tick fault (continuing):", err),
     // The Shift+F oddity-flag hotkey (below) must never disengage the autopilot.
