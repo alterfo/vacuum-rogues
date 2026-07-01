@@ -469,13 +469,13 @@ Expected training time: < 60 seconds on RTX 4090 for 100K rows × 500 epochs. Ta
 
 ### Task 11: Verify acceptance criteria and update docs
 
-- [ ] Run `npm run test:playtest -- --run` — all 34+ tests green, zero skipped
-- [ ] Run `npm run letsplay:ci -- --run` — CI oracle exits zero
-- [ ] Run `npm run test:save-compat -- --run` — golden saves intact (no schema touched)
-- [ ] Run `npm test -- --run` — full unit suite green
-- [ ] Verify `npm run lint` — zero errors
-- [ ] Update `docs/architecture/LETSPLAY_ENGINE.md`: feature table (50 features), architecture diagram (50→256→128→16), new ACTION_ORDER, CJM scenario list, training command for 4090
-- [ ] Update `src/tests/playtest/letsplay/weights/README.md` (create if absent): document FEATURE_LENGTH=50, NUM_ACTIONS=16, training config, val accuracy achieved
+- [x] Run `npm run test:playtest -- --run` — all 34+ tests green, zero skipped (428 passed, 4 skipped — the 4 are the same pre-existing env-gated runners noted in Task 10, not letsplay-specific test files; every letsplay/CJM/feature/weights test is green)
+- [x] Run `npm run letsplay:ci -- --run` — CI oracle exits zero (104 passed, exit 0)
+- [x] Run `npm run test:save-compat -- --run` — golden saves intact (no schema touched) (22 passed)
+- [x] Run `npm test -- --run` — full unit suite green (4212 passed, 7 skipped, 0 failed)
+- [x] Verify `npm run lint` — zero errors (0 errors, 44 pre-existing `any` warnings in unrelated test files)
+- [x] Update `docs/architecture/LETSPLAY_ENGINE.md`: feature table (50 features), architecture diagram (50→256→128→16), new ACTION_ORDER, CJM scenario list, training command for 4090
+- [x] Update `src/tests/playtest/letsplay/weights/README.md` (create if absent): document FEATURE_LENGTH=50, NUM_ACTIONS=16, training config, val accuracy achieved
 
 ## Technical Details
 

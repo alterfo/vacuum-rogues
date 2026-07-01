@@ -35,11 +35,15 @@ only PixiJS, advances frames deterministically, records logged/thrown errors in 
 | `HeuristicPolicy` | `HeuristicPolicy.ts` | The rule-based baseline: ranks candidates by **survive → earn → explore** (hostile + healthy hull ⇒ `attack`; low hull ⇒ `flee`/`repair`/`dock`; on a planet ⇒ `take-quest`/`trade`; idle ⇒ `warp`/`move`), then returns the first candidate the scene permits. Stateless, so one instance is shareable. |
 | `PlayerAgent` | `PlayerAgent.ts` | Drives the loop and **owns the per-run belief**: each step it `observe`s, folds the egocentric snapshot into its `AgentMemory` with `updateMemory` **before** deciding, hands `{obs, memory}` to the policy, then **applies** the chosen `Action` onto the real engine through the harness (`land`/`dock`/`trade`/`move` → genuine `transitionTo`; `warp` → star map then `performWarpJumpTo`; `take-quest` → accept registered board contracts; combat/`repair` degrade to a safe `tick`). Collects a transcript (each step's `reason` is belief-driven) + the harness error sink; `reset()` starts a fresh notebook per run; never throws. |
 
-**Action vocabulary** (`PlayerActionKind`, ordered by `ACTION_ORDER` in `observe.ts`):
+**Action vocabulary** (`PlayerActionKind`, ordered by `ACTION_ORDER` in `observe.ts`,
+**16 actions** as of the 20260701 action-expansion plan):
 `move`, `warp`, `land`, `dock`, `trade`, `take-quest`, `attack`, `flee`, `repair`,
-`wait`. The fixed order is a single source of truth shared by the legal-action surface
-and the neural net's output head (`scores[i] → ACTION_ORDER[i]`). `wait` is legal in
-every scene, so a policy always has a legal fallback and can never be stranded.
+`wait` (the original 10, index 0-9, preserved verbatim — several tests pin this exact
+sequence), then `buy-gear`, `upgrade-hull`, `buy-module`, `take-loan`, `repay-loan`,
+`sell-cargo` (the 6 economy actions appended at index 10-15). The fixed order is a
+single source of truth shared by the legal-action surface and the neural net's output
+head (`scores[i] → ACTION_ORDER[i]`). `wait` is legal in every scene, so a policy
+always has a legal fallback and can never be stranded.
 
 ## Partial observability + structured memory (the POMDP design)
 
@@ -65,14 +69,19 @@ not contain:
 | `inventoryLots` | held cargo tagged with the **price each unit was bought at** (FIFO; loot ⇒ `buyPrice 0`), so sell-for-profit is computable | diffing cargo step-over-step (a rise ⇒ buy lot at the observed price; a fall ⇒ FIFO drain) |
 | `threatMap` | `systemId → worst hostile presence ever seen there`, so a route can plan *around* danger | the current system's visible hostiles |
 | `knownOffers` | upgrade/equipment offers + where seen (carried but unpopulated until `observe` surfaces shop offers — never invented) | (future) shop observation |
+| `visitedSystemIds` | the set of systems the agent has actually been in, feeding `explorer`'s "prefer the unknown" bias and `visitedSystemFraction` | every `observe()` fold of the current system |
+| `loanState` | `{ balance, missedPayments }` for an outstanding player loan, or absent | bank/loan signals surfaced on `Observation` |
+| `deadlockDetected` | sticky one-shot flag so the deadlock detector (below) logs only once per run | `detectDeadlock(obs, memory)` |
+| `activeQuestDelivery` | `{ questId, targetSystemId }[]` for quests currently carried, driving CJM-D's routing | active-quest signals on `Observation` |
 
 It is **per-run**: `createMemory()` starts a fresh notebook each new game (a human
 starting over), and `PlayerAgent.reset()` re-creates it for an explicit re-run.
 
 **3. Memory-derived features (`memoryFeatures.ts`).** The net never reads the raw notebook
 — it reads a short *featurised summary*. `memoryFeatures(obs, mem)` is a pure,
-`[0,1]`-normalised, `MEMORY_FEATURE_LENGTH = 7`-wide block, each component answering a
-human, multi-step question the memoryless features can't:
+`[0,1]`-normalised, **`MEMORY_FEATURE_LENGTH = 20`-wide** block (widened from 7 in the
+20260701 action-expansion plan), each component answering a human, multi-step question the
+memoryless features can't:
 
 1. **best known margin** — the best buy→sell arbitrage across the price book (`fraction`);
 2. **direction** — am I standing on that best-margin *buy* planet right now? (`0/1`);
@@ -81,14 +90,34 @@ human, multi-step question the memoryless features can't:
 5. **route danger to goal** — remembered hostility of the system I'm heading toward;
 6. **goal progress** — how far my credits have saved toward that upgrade;
 7. **holding-for-other-system** — am I carrying cargo whose best-known sell planet is in a
-   *different* system right now? (the signal that motivates warping to go sell it).
+   *different* system right now? (the signal that motivates warping to go sell it);
+8. **loan balance** — outstanding loan balance, normalised;
+9. **debt pressure** — missed loan payments, normalised;
+10. **deadlock detected** — the sticky deadlock flag (`0/1`);
+11. **visited-system fraction** — how much of the (approximated) galaxy the run has seen;
+12. **quest-delivery progress** — fraction of carried quests with a known delivery system;
+13. **nearest threat** — the worst danger remembered in the threat map;
+14. **cargo value** — estimated sell value of everything currently held;
+15. **days without progress** — the stagnation signal that feeds the deadlock detector;
+16. **ranger-faction reputation fraction** — `reputationBastions` (Rangers' closest observable
+    analogue) remapped to `[0,1]`;
+17. **pirate-faction reputation fraction** — `reputationSyndicate` (Pirates' closest observable
+    analogue) remapped to `[0,1]`;
+18. **Overmind days-pressure** — how long the spread has been running, normalised;
+19. **equip quality** — a rough loadout-value signal derived from `AgentMemory`, not read
+    directly off `obs.player` (keeps the "empty notebook zeroes the whole block" contract);
+20. **(reserved, zero-padded)** — headroom for a future signal without another width bump.
 
 An empty notebook (fresh run, or `featurize(obs)` called with no memory) degrades **every**
-signal to its sane `0` default. `featurize` (`NeuralPolicy.ts`) appends this block after
-the `OBS_FEATURE_LENGTH = 16` egocentric block (which includes a `warpInTransit` signal so
-the policy can wait out a pending hyperjump instead of cancelling it), so the net input is
-`FEATURE_LENGTH = 16 + 7 = 23` wide — **growing either block widens the MLP input and
-requires retraining** (`weightsContract.test.ts` pins the contract).
+signal to its sane `0` default. `featurize` (`NeuralPolicy.ts`) appends this block after the
+**`OBS_FEATURE_LENGTH = 30`** egocentric block (widened from 16 — the observation block now
+also carries bank/equipment/Overmind/quest-delivery signals: `hasCraftCenter`, `hasBank`,
+`activeLoans`, `questDeliveryHere`, `overmindShare`, `nearOvermindCore`,
+`cheapestGearFraction`, `questsCompleted`, plus a `warpInTransit` signal so the policy can
+wait out a pending hyperjump instead of cancelling it), so the net input is
+**`FEATURE_LENGTH = 30 + 20 = 50`** wide — **growing either block widens the MLP input and
+requires retraining** (`weightsContract.test.ts` pins the contract; both blocks are frozen
+again after the 20260701 widening until a future plan explicitly reopens them).
 
 **4. The memory-using heuristic — the BC teacher (`MemoryHeuristicPolicy.ts`).** A
 `PlayerPolicy` that reasons over the belief for human-like, goal-sequenced play where the
@@ -99,8 +128,39 @@ upgrade** (defer an unaffordable offer, then route to it once affordable), and *
 known-dangerous systems** (don't warp deeper into a remembered threat while not
 battle-ready). Its core `decideWithMemory(obs, mem)` is **pure** and always returns a legal
 action (`wait` floor), which is what makes it a clean behavioural-cloning teacher: it
-generates the dataset the pure-TS MLP trains on (offline, Post-Completion) at the new
-feature width.
+generates the dataset the pure-TS MLP trains on (offline) at the current feature width.
+
+### CJM (Customer Journey Map) scenarios
+
+The 20260701 action-expansion plan gave the teacher seven named, goal-conditioned decision
+branches (`decideTradeMagnate`/`decideGearGrinder`/`decideBountyHunter`/`decideQuestRunner`/
+`decideOvermindSlayer`/`decidePirate`/`decideExplorer` in `MemoryHeuristicPolicy.ts`) — each a
+self-consistent playstyle so the training dataset carries labeled examples of behavior the
+base survive→earn→explore sequencing never produces on its own (banking, equipment shopping,
+proactive Overmind engagement, quest delivery routing). A CJM's branch gets **first refusal**
+in `decideWithMemory` (right after the warp-in-transit check, before the goal-less scene
+switch) — a legal CJM preference wins outright; a `null` return falls through unchanged to
+the base sequencing. Goal conditioning is **not** part of the net's input (see "Feature vector
+design principle" below) — the CJMs exist to diversify the *training labels*, not to give the
+runtime policy a goal signal.
+
+| Goal (`ScenarioGoal`) | CJM | Core behavior |
+|---|---|---|
+| `"trade-magnate"` | A — Trade magnate | Route to the best-known sell planet with cargo in hand; take a loan to bulk-buy only when `estimatedProfit > loanCost × 1.5`; repay immediately after a profitable sell. |
+| `"gear-grinder"` | B — Gear grinder | Priority hull → weapon → engine → micromodules; routes to the equipment shop once credits clear a buffer over `cheapestGearPrice`/`bestHullPrice`; otherwise trades/quests to accumulate. |
+| `"bounty-hunter"` | C — Combat hunter | Attacks hostiles above 50% hull, flees to repair below 30-50%, sells looted cargo after a kill (gated on `profitIfSoldHere > 0` so it never instant-sells cargo it just bought at a loss — the Task 6 credit-drain fix), warps toward danger when the local system is clear. |
+| `"quest-runner"` | D — Quest runner | Always takes available contracts; routes carried quests to their delivery system via `questDeliveryHere`/`activeQuestDelivery`; re-stocks quests immediately after completing one. |
+| `"overmind-slayer"` | E — Overmind slayer | Once `overmindShare > 0.1`, biases toward the core (`nearOvermindCore`/`overmindShare` signals — no real BFS routing, since the pure decide core has no pathfinding access); attacks at/near the core; flees+repairs first if hull < 40% that close. |
+| `"pirate"` | F — Pirate | Hunts non-hostile traders, sells loot planetside, flees patrol/ranger-role ships, avoids the lawful faction (`FactionType.BASTIONS`, the closest observable proxy for "ranger zone" since NPC role isn't on `NpcSnapshot`). |
+| `"explorer"` | G — Explorer (supersedes `"free-explore"`'s semantics for CJM purposes; `"free-explore"` itself is still a valid, separate LLM-scenario-gen goal) | Warps toward systems outside `AgentMemory.visitedSystemIds`; lands for quests when credits run low, then resumes exploring. |
+
+**Deadlock detector** (`detectDeadlock(obs, memory)`, lives in `AgentMemory.ts` to avoid a
+circular import with `MemoryHeuristicPolicy.ts`): a narrow compound condition — hull ≤ 10%,
+credits < 100, no quests, a hostile present, and an outstanding loan — forces `wait` and logs
+`[DEADLOCK] step=N credits=X hull=Y system=Z` via `logger.warn()` **once** per run
+(`AgentMemory.deadlockDetected` sticky flag). It sits at the very top of `decideWithMemory`,
+ahead of survive/goal dispatch, so it can override even an attack/flee that would otherwise be
+legal in that narrow "nothing good to do" edge case.
 
 ## Running it: `npm run letsplay`
 
@@ -137,24 +197,59 @@ self-play on the RTX 4090), so until a `*.weights.json` is dropped in the policy
 **inert** and falls back to the `HeuristicPolicy`. The seam:
 
 1. **`featurize(obs, memory?)`** — a pure, `FEATURE_LENGTH`-wide numeric vector: the
-   `OBS_FEATURE_LENGTH = 16` egocentric block followed by the `MEMORY_FEATURE_LENGTH = 7`
+   `OBS_FEATURE_LENGTH = 30` egocentric block followed by the `MEMORY_FEATURE_LENGTH = 20`
    belief block (`memoryFeatures` above). Deterministic, every component in `[0,1]`, so it
    doubles as the training encoder. With **no** `memory` the belief block degrades to zeros.
 2. **`mapNetOutputToAction(scores, obs)`** — maps the net's output head (one score per
-   `ACTION_ORDER` slot) to the highest-scoring action whose `kind` ∈ `obs.legalActions`,
-   with `wait` as the guaranteed floor — so even a net that argmaxes to an illegal action
-   yields a legal move.
+   `ACTION_ORDER` slot, 16 slots) to the highest-scoring action whose `kind` ∈
+   `obs.legalActions`, with `wait` as the guaranteed floor — so even a net that argmaxes to an
+   illegal action yields a legal move.
 3. **`load()` / `decide(obs, memory?)`** — with trained weights, `decide` runs
    `featurize(obs, memory) → forward → mapNetOutputToAction`, threading the agent-owned
    `AgentMemory` belief block in so the net sees the memory-derived features it was trained
-   on. `load` validates the net's input width equals `FEATURE_LENGTH` (`23`); a width
-   mismatch throws rather than silently mispredicting. With no weights it stays inert.
+   on. `load` validates the net's input width equals `FEATURE_LENGTH` (`50`) and its output
+   width equals `ACTION_ORDER.length` (`16`); a width mismatch throws rather than silently
+   mispredicting. With no weights it stays inert.
 
 When a trained net exists, drop its `*.weights.json` where `NeuralPolicy` loads it
 (dev-only) and pass the policy to `runLetsplay` — the agent then "thinks" with the net (over
 the same belief block the teacher used), the heuristic stays the default everywhere else,
 and nothing reaches the prod bundle. Parity between the PyTorch export and the pure-TS
 forward pass is pinned by `weightsContract.test.ts` (within `1e-5`).
+
+### Shipped architecture: 50 → 256 → 128 → 16
+
+The current `weights/player.weights.json` (`src/tests/playtest/letsplay/weights/`, see its
+sibling `README.md` for full training details) is a 3-`nn.Linear`-layer net sized for the RTX
+4090:
+
+```
+input (50)  →  Linear(50, 256) + ReLU + Dropout(0.15)
+            →  Linear(256, 128) + ReLU + Dropout(0.15)
+            →  Linear(128, 16)                              → output logits (ACTION_ORDER)
+```
+
+≈51,328 parameters. Dropout is training-only — the exported JSON carries only the three
+`nn.Linear` weight/bias pairs, since `mlp.ts`'s forward pass applies ReLU between every layer
+except the last and has no dropout concept at inference. Trained via `tools/ai/train_player.py`
+(N-layer/mini-batch/early-stopping support added Task 8) over SSH on the game's ComfyUI host:
+
+```bash
+scp tools/ai/train_player.py oleg@192.168.88.193:/tmp/
+scp tools/ai/dataset/train.jsonl oleg@192.168.88.193:/tmp/
+ssh oleg@192.168.88.193 "cd /tmp && python train_player.py \
+  --data train.jsonl --hidden 256 128 --dropout 0.15 --epochs 500 --batch 512 \
+  --lr 3e-4 --val-split 0.2 --patience 30 --device cuda --out player.weights.json"
+scp oleg@192.168.88.193:/tmp/player.weights.json \
+  src/tests/playtest/letsplay/weights/player.weights.json
+```
+
+Converged in 409/500 epochs (early-stopped), val accuracy 0.351 → 0.997, val loss 2.42 →
+0.0047, no NaN. **That 99.7% figure reflects the training dataset's dead action heads, not a
+99.7%-competent full-16-action policy** — see "Known Traps" below (`train.jsonl` only ever
+labeled 8 of the 16 actions, so the net only had to discriminate among those 8). The shipped
+net faithfully reproduces the teacher's real, narrower behavior; a fuller-repertoire net needs
+the dataset fix described there first.
 
 ## Oracle — the CI regression + balance gate (`letsplay:ci`)
 
