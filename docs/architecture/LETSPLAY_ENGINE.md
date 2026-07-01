@@ -324,3 +324,55 @@ The lower a tier sits, the more it runs and the cheaper it is; the higher a tier
 its judgment and the more it costs. Tiers 1–2 are the regression safety net; tier 3 is the
 exploratory oddity hunter that feeds new bug classes *back down* into tier-1 invariants once a
 pattern is understood.
+
+## Known Traps
+
+Oddities found by playing the agent (headless or live) that were subtle enough to be worth
+naming, so the next sweep doesn't have to rediscover them from scratch.
+
+- **Warp stall on a stale/active combat pause.** `completeWarp()` in `PlayerAgent.ts` must
+  distinguish a *stale* `combatPause.paused` (a fight already ended but `onCombatEnded` doesn't
+  clear the flag) from a *live* one (`combatModule.isActive === true`) — clearing only the
+  former. Clearing an active-combat pause would let the ship "warp through" a fight instead of
+  resolving it; leaving a stale one paused would freeze the ship forever with nothing able to
+  un-pause it. Fixed and guarded by the `isActiveCombat` branch (see the method's doc comment
+  for the full reasoning); re-verified in the Task 6 sweep with a `bounty-hunter`-goal session
+  (1206 real `attack` decisions across 8 sessions, zero stalls).
+- **`waitOneDay()` freezing when an NPC engages mid-wait.** A combat pause during a course-less
+  wait turn used to freeze the headless engine indefinitely (no day ever advances, no shots ever
+  fire on either side). Fixed by resuming `combatPause` before each tick inside the wait loop, so
+  the engagement actually resolves instead of sitting paused. Re-verified in the Task 6 sweep.
+- **Ping-pong between two adjacent systems.** A memoryless `warp` target picker tends to pick
+  `connections[0]`, which in the destination system is usually the link straight back to where
+  the ship came from — an A→B→A→B loop. `PlayerAgent`'s warp applier tracks `lastSystemId` and
+  prefers a connection that isn't it. Re-verified in the Task 6 sweep: an 8-session ×
+  200-step `explorer`-goal run (1600 consecutive `warp` decisions, so the case that would show a
+  ping-pong the most) produced zero A-B-A-B patterns.
+- **CJM-C bounty-hunter's naive "sell whenever cargo > 0" drained a fresh run to near-zero
+  credits (Task 6 finding, fixed).** The base memory-driven sequencing opportunistically buys
+  low (`push("trade", "buy-low:...")`) even under a combat-focused goal, since a CJM branch only
+  gets "first refusal" and otherwise defers to that base sequencing. Once `decideBountyHunter`
+  saw `cargoUsed > 0` on the very next decision it fired `sell-cargo` unconditionally — including
+  cargo just bought at the *same* planet, which sells back at a guaranteed loss (a planet's
+  `sell` price is always strictly below its `buy` price). The result was a perpetual
+  buy-then-instant-sell cycle burning the buy/sell spread every round: a real-engine session
+  went from 1000 → 34 credits over 200 steps without a single `attack`, defeating the entire
+  point of the "combat hunter" CJM (and silently starving Task 9's dataset of combat-labeled
+  rows for that scenario slice). Fixed by gating the CJM's `sell-cargo` trigger on
+  `profitIfSoldHere(obs, mem) <= 0` *only when* the memory has a tracked lot bought here
+  (`mem.inventoryLots.length > 0`) — untracked cargo (loot, `buyPrice: 0`, no matching lot) still
+  sells unconditionally, since it has nothing to lose. Regression: `cjm.test.ts` → "does not
+  instant-sell cargo just bought here at a loss" / "still sells looted cargo bought elsewhere
+  once a lot is profitable here". Post-fix the same scenario produced 1206 `attack` decisions
+  across 8 sessions and zero pointless buy/sell cycling.
+- **The default `HeuristicPolicy` never advances a galaxy day or leaves the starting planet at
+  the headless budget — this is expected, not a bug.** It always ranks `land` above `dock`/`warp`
+  in `SPACE_FLIGHT` and never emits `trade` while already inside the `TRADE` scene (its own
+  design comment: "No buy/sell executor yet — leave the market rather than spin in it"), so a
+  bare `npm run letsplay` session cycles `land → trade(open) → move(leave) → land` on the same
+  planet with flat credits and `day = 0` for the whole run. This is the documented,
+  already-rebaselined behaviour behind `letsplay:ci`'s **hard-faults-zero + unscored balance
+  bands** default (see the Oracle section above) — do **not** "fix" it by changing
+  `HeuristicPolicy`'s behaviour; the richer `MemoryHeuristicPolicy` (optionally goal-biased via a
+  CJM) is the teacher that actually trades/explores/fights, and is what dataset generation
+  (Task 9) uses.

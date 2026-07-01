@@ -234,7 +234,15 @@ function decideBountyHunter(
     return null; // critically hurt — defer to the base survive branch
   }
   const cargoUsed = obs.player?.cargoUsed ?? 0;
-  if (cargoUsed > 0 && legal.has("sell-cargo")) {
+  // A tracked lot bought at THIS planet's own price nets <= 0 sold right back
+  // here (sell is always strictly below buy on one planet) — that is a known
+  // loss, not loot to unload. Untracked cargo (no lots — the loot case, where
+  // updateMemory never saw a market buy) still fires unconditionally below.
+  const knownLossHere =
+    mem.inventoryLots.length > 0 &&
+    obs.currentPlanet != null &&
+    profitIfSoldHere(obs, mem) <= 0;
+  if (cargoUsed > 0 && legal.has("sell-cargo") && !knownLossHere) {
     return cjmAction("bounty-hunter", "sell-cargo", "sell-loot");
   }
   if (mostDangerousKnownSystem(mem) && legal.has("warp")) {

@@ -351,6 +351,48 @@ describe("CJM-C bounty-hunter", () => {
     expect(action.kind).toBe("sell-cargo");
   });
 
+  it("does not instant-sell cargo just bought here at a loss (regression: buy/sell drain loop)", () => {
+    // A lot bought at THIS planet's own buy price, checked against this same
+    // planet's sell price, nets <= 0 (sell is always strictly below buy on one
+    // planet) — selling it right back here is a guaranteed loss, not looted
+    // profit. Blindly firing "sell-cargo" here (as opposed to holding the cargo
+    // for a better market) drained a fresh 1000-credit run to ~34 credits over
+    // 200 real-engine steps in oddity-hunting (Task 6) — the base sequencing's
+    // own "take-off, don't inspect-market with cargo in hand" candidate is the
+    // correct move once cargo is held, not an immediate same-spot dump.
+    const mem = createMemory();
+    mem.inventoryLots = [{ good: M, qty: 5, buyPrice: 100 }];
+    const here = obs({
+      scene: SceneType.PLANET,
+      player: { cargoUsed: 5 },
+      currentPlanet: {
+        id: "p1",
+        name: "p1",
+        availableQuests: 0,
+        market: [{ resource: M, buy: 100, sell: 90 }],
+      },
+    });
+    const action = decideWithMemory(here, mem, "bounty-hunter");
+    expect(action.kind).not.toBe("sell-cargo");
+  });
+
+  it("still sells looted cargo bought elsewhere once a lot is profitable here", () => {
+    const mem = createMemory();
+    mem.inventoryLots = [{ good: M, qty: 5, buyPrice: 0 }]; // loot (no market cost)
+    const here = obs({
+      scene: SceneType.PLANET,
+      player: { cargoUsed: 5 },
+      currentPlanet: {
+        id: "p1",
+        name: "p1",
+        availableQuests: 0,
+        market: [{ resource: M, buy: 100, sell: 90 }],
+      },
+    });
+    const action = decideWithMemory(here, mem, "bounty-hunter");
+    expect(action.kind).toBe("sell-cargo");
+  });
+
   it("hunts the most dangerous remembered system when nothing local to fight", () => {
     const mem = createMemory();
     mem.threatMap.set("sysC", 5);
