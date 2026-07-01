@@ -15,7 +15,15 @@ import type { StarSystem } from "@/domain/StarSystem";
 import type { Planet } from "@/domain/Planet";
 import type { ResourceType } from "@/types";
 import { TradeSystem } from "@/systems/TradeSystem";
-import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
+import {
+  cargoCapacityOf,
+  applyLoadoutHullToShip,
+} from "@/systems/equipment/GearBridge";
+import { hullStatus } from "@/systems/equipment/hullStatus";
+import {
+  adjustPlayerCredits,
+  GL_COUNTERPARTY,
+} from "@/systems/banking/economy";
 
 /** Resolve the player's current star system from the live engine, if any. */
 export function currentSystem(engine: GameEngine): StarSystem | null {
@@ -190,4 +198,35 @@ export function executeMemoryAwareTrade(
       engine.bank,
     );
   }
+}
+
+/**
+ * Restore the player's hull at the cheapest available rate (planet-Верфь pricing:
+ * 2 cr/HP). Mirrors `PlanetScene.doHullRepair` without the UI: syncs the loadout
+ * max, checks affordability, deducts credits via the banking bus, then calls
+ * `ship.repair()`. Safe no-op when hull is already perfect or credits are
+ * insufficient. Dev-only helper — shared by `PlayerAgent.repair` and tests.
+ */
+export function executeRepair(engine: GameEngine): void {
+  const player = engine.player;
+  if (!player) return;
+  const ship = player.ship;
+  const loadout = engine.playerLoadout;
+  if (loadout) applyLoadoutHullToShip(ship, loadout);
+  const status = hullStatus(
+    ship.hullHP,
+    ship.maxHull,
+    loadout?.derivedStats().maxHull,
+  );
+  if (status.isPerfect) return;
+  const cost = Math.ceil(status.missing * 2);
+  if (player.credits < cost) return;
+  adjustPlayerCredits(
+    engine.bank,
+    player,
+    -cost,
+    GL_COUNTERPARTY.SERVICES,
+    "Ремонт корпуса",
+  );
+  ship.repair();
 }

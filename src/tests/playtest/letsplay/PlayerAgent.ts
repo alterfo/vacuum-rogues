@@ -31,6 +31,7 @@ import {
   acceptBoardQuests,
   executeMemoryAwareTrade,
   executeSellAll,
+  executeRepair,
   pickWarpTarget,
 } from "./engineQueries";
 import { bestKnownMargin } from "./memoryFeatures";
@@ -435,6 +436,10 @@ export class PlayerAgent {
       }
 
       case "repair":
+        executeRepair(engine);
+        this.harness.tick();
+        return;
+
       default:
         this.harness.tick();
         return;

@@ -86,8 +86,8 @@ constants at call sites.
 - Modify: src/tests/playtest/letsplay/engineQueries.ts
 - Create: src/tests/playtest/letsplay/repairQuest.test.ts
 
-- [ ] `repair` restores hull at a repair-capable base via the real station path (credits spent, hull up).
-- [ ] `take-quest` + completion: the agent can accept a board quest and satisfy a return/delivery objective through the real `QuestManager`, claiming the reward.
+- [x] `repair` restores hull at a repair-capable base via the real station path (credits spent, hull up).
+- [x] `take-quest` + completion: the agent can accept a board quest and satisfy a return/delivery objective through the real `QuestManager`, claiming the reward.
 
 ### Task 5: Exploration policy — traverse the galaxy, don't loop
 **Files:**
