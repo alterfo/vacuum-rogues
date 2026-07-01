@@ -12,9 +12,10 @@ import { GlobalExceptionHandler } from "@/exceptions/GlobalExceptionHandler";
 import { GameSystemException } from "@/exceptions/GameSystemException";
 import { GameValidationException } from "@/exceptions/GameValidationException";
 import { logger } from "@/utils/logger";
-import { GAME_BALANCE, additionalHostileSeeds } from "@/config/balance";
+import { additionalHostileSeeds } from "@/config/balance";
 import { FlightSessionState } from "@/systems/FlightSessionState";
 import { DayTickController } from "@/systems/DayTickController";
+import { EndgameController } from "@/systems/EndgameController";
 import { validatePlayerSettings } from "@/validation/schemas";
 import { Player } from "@/domain/Player";
 import { NpcSimulator } from "@/systems/npc/NpcSimulator";
@@ -22,10 +23,7 @@ import { GalaxySimulator } from "@/systems/GalaxySimulator";
 import { TradeSystem } from "@/systems/TradeSystem";
 import { canPlayerLiberate } from "@/systems/galaxy/liberation";
 import { initialOvermindSpreadState } from "@/systems/overmind/overmindSpread";
-import {
-  newGamePlusCarry,
-  type NewGamePlusCarry,
-} from "@/systems/overmind/newGamePlus";
+import type { NewGamePlusCarry } from "@/systems/overmind/newGamePlus";
 import type { Quest } from "@/domain/Quest";
 import {
   generateQuestBoard,
@@ -228,21 +226,17 @@ export class GameEngine {
   /** Renderer-backed in production; a headless no-op when not injected (tests, legacy DI sites). */
   private readonly overlay: IOverlayPresenter;
   /**
-   * One-shot guard for the Overmind endgame outcome overlay
-   * ({@link showGameOutcomeScreen}, win OR loss). Set by the overlay itself so
-   * the sticky `won`/`lost` arc status re-running each EOD — and the in-flight
-   * core-kill win path — only ever shows the outcome once.
-   */
-  private _outcomeShown = false;
-  private _winScreenShown = false;
-  /** One-shot guard so player death fires the game-over flow exactly once. */
-  private _playerDeathShown = false;
-  /**
    * Carry-over staged by {@link startNewGamePlus} for the next fresh game: the
    * new-game creation path in {@link transitionTo} consumes it (once) to seed the
    * fresh player's credits/rank/faction/difficulty. Null for a plain new game.
+   * @deprecated thin compat accessor — the guard lives on {@link EndgameController}.
    */
-  private pendingNewGamePlus: NewGamePlusCarry | null = null;
+  private get pendingNewGamePlus(): NewGamePlusCarry | null {
+    return this.endgame.pendingNewGamePlus;
+  }
+  private set pendingNewGamePlus(carry: NewGamePlusCarry | null) {
+    this.endgame.pendingNewGamePlus = carry;
+  }
   /** Drops the active `credits` projection binding before re-binding a new player. */
   private bankProjectionUnsub: Unsubscribe | null = null;
   private readonly galaxyService: IGalaxyService;
@@ -251,6 +245,7 @@ export class GameEngine {
   private readonly npcSimulator = new NpcSimulator();
   private readonly galaxySimulator = new GalaxySimulator();
   private readonly tradeSystem = new TradeSystem();
+  private readonly endgame: EndgameController;
   private readonly dayTick: DayTickController;
 
   constructor(diDependencies?: GameEngineDIDependencies) {
@@ -274,6 +269,45 @@ export class GameEngine {
     this.overlay =
       diDependencies?.overlayPresenter ?? new NoOpOverlayPresenter();
 
+    this.endgame = new EndgameController({
+      getPlayer: () => this.player,
+      setPlayer: (player) => {
+        this.player = player;
+      },
+      setPlayerLoadout: (loadout) => {
+        this.playerLoadout = loadout;
+      },
+      getGalaxy: () => this.galaxy,
+      setGalaxy: (galaxy) => {
+        this.galaxy = galaxy;
+      },
+      galaxyService: this.galaxyService,
+      playerService: this.playerService,
+      questManager: this.questManager,
+      bankingService: this.bankingService,
+      sessionState: this.sessionState,
+      music: this.music,
+      hullAlarm: this.hullAlarm,
+      clearFlightPositions: () => {
+        this.flightShipPos = null;
+        this.lastFlightShipPos = null;
+      },
+      clearCombatStateProvider: () => {
+        this.combatStateProvider = null;
+      },
+      overlay: this.overlay,
+      hasRenderer: () => !!this.renderer,
+      getPlayerDeathCallback: () => this.playerDeathCallback,
+      transitionToMainMenu: () =>
+        this.transitionTo(SceneType.MAIN_MENU, { gameEngine: this }),
+      transitionToSpaceFlight: () =>
+        this.transitionTo(SceneType.SPACE_FLIGHT, { gameEngine: this }),
+      transitionToGameOver: () =>
+        this.transitionTo(SceneType.GAME_OVER, { gameEngine: this }),
+      transitionToRaceSelection: () =>
+        this.transitionTo(SceneType.RACE_SELECTION, { gameEngine: this }),
+    });
+
     this.dayTick = new DayTickController({
       getGalaxy: () => this.galaxy,
       getPlayer: () => this.player,
@@ -284,12 +318,10 @@ export class GameEngine {
       bankBus: this.bankBus,
       checkWinCondition: () => this.checkWinCondition(),
       checkExpiredQuests: () => this.checkExpiredQuests(),
-      isOutcomeShown: () => this._outcomeShown,
+      isOutcomeShown: () => this.endgame.isOutcomeShown(),
       showGameOutcomeScreen: (win) => this.showGameOutcomeScreen(win),
-      isWinScreenShown: () => this._winScreenShown,
-      markWinScreenShown: () => {
-        this._winScreenShown = true;
-      },
+      isWinScreenShown: () => this.endgame.isWinScreenShown(),
+      markWinScreenShown: () => this.endgame.markWinScreenShown(),
       transitionToWinScreen: () => {
         this.transitionTo(SceneType.WIN_SCREEN, { gameEngine: this }).catch(
           (e) => logger.error("Win screen transition failed:", e),
@@ -703,14 +735,7 @@ export class GameEngine {
    * rank >= 2 ("Ветеран") AND reputation > 50 with at least 3 factions.
    */
   checkWinCondition(): boolean {
-    if (!this.player) return false;
-    const VETERAN_RANK = 2;
-    if ((this.player.rank ?? 0) < VETERAN_RANK) return false;
-    const factions = Object.values(FactionType);
-    const allied = factions.filter(
-      (f) => (this.player!.reputation[f] ?? 0) > 50,
-    );
-    return allied.length >= 3;
+    return this.endgame.checkWinCondition();
   }
 
   /**
@@ -1055,7 +1080,7 @@ export class GameEngine {
     // Loading a checkpoint (e.g. the takeoff autosave after a death) re-arms the
     // one-shot death guard, so the restored player can die again — otherwise the
     // game-over flow would never re-fire after the first death.
-    this._playerDeathShown = false;
+    this.endgame.resetPlayerDeathGuard();
 
     // Clear adaptive-audio state so a loaded save never inherits a stale combat
     // hold or a still-armed low-hull alarm from the prior in-session game (Continue
@@ -1355,127 +1380,37 @@ export class GameEngine {
 
   /**
    * Show a full-screen win or loss overlay with a "Начать заново" button (and,
-   * on a win, a "Новая игра+" button that carries a subset of progress into a
-   * tougher cycle). Called when the player destroys the OVERMIND core / the arc
-   * status reaches `won` (win) or the arc reaches `lost` (OVERMIND consumes the
-   * galaxy).
-   *
-   * Idempotent: the first call sets {@link _outcomeShown} and subsequent calls
-   * no-op, so the sticky `won`/`lost` arc status re-running each EOD — and the
-   * in-flight core-kill win path firing alongside the next EOD — only ever shows
-   * the screen once. The overlay is drawn over the current scene (no terminal
-   * scene transition), so it never triggers the autosave-clobber an autosaving
-   * GAME_OVER scene would.
+   * on a win, a "Новая игра+" button). Delegates to {@link EndgameController} —
+   * see there for the idempotent-guard and arc-persistence rationale.
    */
   showGameOutcomeScreen(win: boolean): void {
-    if (this._outcomeShown) return;
-    this._outcomeShown = true;
-    // Persist a win into the arc state so it survives a flight-autosave / reload:
-    // liberate the (now-destroyed) core system so the boss prompt won't re-trigger
-    // on re-entry, and flip the arc status to the sticky `won` so a later EOD can't
-    // drift an already-won galaxy to `lost`. Idempotent — the EOD-driven win path
-    // (coreBroken/eradicated) already has both done; the in-flight core-kill path
-    // (NpcShipManager.handleInFlightDeath) relies on this to persist its victory.
-    if (win && this.galaxy) {
-      if (this.galaxy.overmindCoreSystemId) {
-        this.galaxy.tryLiberate(this.galaxy.overmindCoreSystemId);
-      }
-      this.galaxy.overmindArc.status = "won";
-    }
-
-    this.overlay.showGameOutcome(win, {
-      // «Начать заново» — a full reset (new galaxy, fresh captain) back to the menu.
-      onRestart: () => {
-        this.generateDefaultGameState()
-          .then(() =>
-            this.transitionTo(SceneType.MAIN_MENU, { gameEngine: this }),
-          )
-          .catch((e) =>
-            logger.error("Transition after game outcome failed:", e),
-          );
-      },
-      // On a victory, offer New Game+ (carry a subset of progress into a tougher
-      // cycle) above the plain restart.
-      onNewGamePlus: win
-        ? () => {
-            this.startNewGamePlus().catch((e) =>
-              logger.error("New Game+ start failed:", e),
-            );
-          }
-        : undefined,
-    });
+    this.endgame.showGameOutcomeScreen(win);
   }
 
   /**
-   * Start a New Game+ from the victory screen: a fresh galaxy on a tougher cycle
-   * that carries a *chosen subset* of the won captain's progress (a capped slice
-   * of credits, their rank + faction, and a one-notch-harder difficulty —
-   * {@link newGamePlusCarry}). The carry is captured BEFORE the reset and staged
-   * on {@link pendingNewGamePlus}; the new-game creation path in
-   * {@link transitionTo} consumes it once when the fresh player is built.
-   *
-   * No new persisted field: the carry maps onto values the new-game path already
-   * seeds (startingMoney/rank/faction/gameMode), so NG+ needs no schema/migration.
+   * Start a New Game+ from the victory screen. Delegates to
+   * {@link EndgameController} — see there for the carry-over rationale.
    */
   async startNewGamePlus(): Promise<void> {
-    const carry = this.player
-      ? newGamePlusCarry(
-          {
-            credits: this.player.credits,
-            rank: this.player.rank,
-            faction: this.player.faction,
-            gameMode: this.player.gameMode,
-          },
-          {
-            creditCarryFraction:
-              GAME_BALANCE.NEW_GAME_PLUS_CREDIT_CARRY_FRACTION,
-            creditCarryCap: GAME_BALANCE.NEW_GAME_PLUS_CREDIT_CARRY_CAP,
-          },
-        )
-      : null;
-    await this.generateDefaultGameState();
-    // Stage AFTER the reset (generateDefaultGameState nulls the player) so the
-    // fresh new-game build picks it up.
-    this.pendingNewGamePlus = carry;
-    await this.transitionTo(SceneType.SPACE_FLIGHT, { gameEngine: this });
+    await this.endgame.startNewGamePlus();
   }
 
   /**
-   * Player ship destroyed in flight combat → game over. Fires the death flow
-   * exactly once (one-shot `_playerDeathShown` guard): a stray later
-   * shot the same frame is a no-op. Crucially this does NOT touch the `"auto"`
-   * takeoff autosave — that save is the checkpoint the GAME_OVER screen rolls
-   * back to, so death must be non-destructive to it.
-   *
-   * Production drives the terminal {@link SceneType.GAME_OVER} transition here.
-   * The transition is renderer-guarded so the headless death-detection tests
-   * (no renderer) still exercise the idempotent guard + {@link playerDeathCallback}
-   * seam without `transitionTo` throwing.
+   * Player ship destroyed in flight combat → game over. Delegates to
+   * {@link EndgameController} — see there for the idempotent-guard and
+   * autosave-non-destructiveness rationale.
    */
   triggerPlayerDeath(): void {
-    if (this._playerDeathShown) return;
-    this._playerDeathShown = true;
-    logger.warn("Player ship destroyed — triggering game over");
-    this.playerDeathCallback?.();
-    if (this.renderer) {
-      this.transitionTo(SceneType.GAME_OVER, { gameEngine: this }).catch((e) =>
-        logger.error("Game-over transition failed:", e),
-      );
-    }
+    this.endgame.triggerPlayerDeath();
   }
 
   /**
    * «Начать заново» from the GAME_OVER screen: start a completely fresh game.
-   * Mirrors the new-game modal path — it MUST reset game state
-   * (`generateDefaultGameState`: null the player, regenerate the galaxy, clear the
-   * win/death guards) BEFORE entering race selection. Without the reset the dead
-   * player survives, so the SPACE_FLIGHT new-game guard (`!this.player`, see
-   * {@link transitionTo}) never fires and race-selection would drop the player back
-   * into the old galaxy with the destroyed ship instead of a fresh start.
+   * Delegates to {@link EndgameController} — see there for why the full reset
+   * must happen before race selection.
    */
   async restartNewGame(): Promise<void> {
-    await this.generateDefaultGameState();
-    await this.transitionTo(SceneType.RACE_SELECTION, { gameEngine: this });
+    await this.endgame.restartNewGame();
   }
 
   handleError(error: Error): void {
@@ -1569,35 +1504,9 @@ export class GameEngine {
     for (const id of extra.pirate) this.galaxy.addPirateSystem(id);
   }
 
+  /** Delegates to {@link EndgameController} — see there for the full reset list. */
   private async generateDefaultGameState(): Promise<void> {
-    this.player = null;
-    this.playerLoadout = null;
-    this._outcomeShown = false;
-    this._winScreenShown = false;
-    this._playerDeathShown = false;
-    // Clear any New Game+ carry that was staged but never consumed (e.g. a
-    // SPACE_FLIGHT transition that threw before the new-game branch nulled it).
-    // startNewGamePlus re-stages *after* this reset, so NG+ is unaffected; a
-    // plain «Новая игра» now never inherits a stale carry's credits/rank.
-    this.pendingNewGamePlus = null;
-    this.playerService.deletePlayer();
-    // Full reset for a fresh game: clear quests, the banking ledger and the
-    // persisted/transient flight position so «Новая игра» never inherits the
-    // prior in-session game's quests, credits or ship location (playtest
-    // 2026-06-23). The new player's account is re-seeded when it's created.
-    this.questManager.restoreState([], []);
-    this.bankingService.resetLedger();
-    this.flightShipPos = null;
-    this.lastFlightShipPos = null;
-    this.sessionState.resetForNewSession();
-    // Clear adaptive-audio state so a fresh game never inherits a stale combat
-    // hold or a still-armed low-hull alarm from the prior in-session game.
-    this.combatStateProvider = null;
-    this.music.reset();
-    this.hullAlarm.reset();
-    const seed = `SR_${Date.now()}`;
-    this.galaxy = await this.galaxyService.generate(seed, 30);
-    logger.info(`Generated default game state with seed: ${seed}`);
+    await this.endgame.generateDefaultGameState();
   }
 
   private gameLoop = (time: number): void => {
