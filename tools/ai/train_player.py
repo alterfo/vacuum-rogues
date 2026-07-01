@@ -54,8 +54,8 @@ import sys
 from pathlib import Path
 
 # Must match ACTION_ORDER in src/tests/playtest/letsplay/observe.ts — the net's
-# output head has one score per action slot: move, warp, land, dock, wait,
-# trade, take-quest, attack, flee, repair, buy-gear, upgrade-hull, buy-module,
+# output head has one score per action slot: move, warp, land, dock, trade,
+# take-quest, attack, flee, repair, wait, buy-gear, upgrade-hull, buy-module,
 # take-loan, repay-loan, sell-cargo.
 NUM_ACTIONS = 16
 

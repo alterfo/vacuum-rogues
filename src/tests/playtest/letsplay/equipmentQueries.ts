@@ -1,21 +1,20 @@
 /**
  * Letsplay engine — equipment-shop query + purchase helpers (dev-only).
  *
- * The pure finders scan the player's current system with the same deterministic
- * `generateShop` call `observeHelpers.systemShopPrices` uses for the
- * `cheapestGearPrice`/`bestHullPrice` observation signals, so "what's affordable"
- * (what gates the `buy-gear`/`upgrade-hull` legal actions) and "what the applier
- * actually buys" can never diverge. The executors move real credits + gear
- * through the canonical `GearBridge`/`sellHull`/`micromoduleShop` seams (never a
- * direct field mutation), bypassing the shop UI exactly as `executeTradeOnPlanet`
- * (`engineQueries.ts`) bypasses `TradeScene`.
+ * The pure finders scan the player's current system via the shared
+ * {@link generateSystemListings} (`observeHelpers.ts`) — the same call backing
+ * the `cheapestGearPrice`/`bestHullPrice` observation signals, so "what's
+ * affordable" (what gates the `buy-gear`/`upgrade-hull` legal actions) and "what
+ * the applier actually buys" can never diverge. The executors move real credits
+ * + gear through the canonical `GearBridge`/`sellHull`/`micromoduleShop` seams
+ * (never a direct field mutation), bypassing the shop UI exactly as
+ * `executeTradeOnPlanet` (`engineQueries.ts`) bypasses `TradeScene`.
  *
  * Dev-only: lives under `src/tests/`, imported by no production module.
  */
 import type { GameEngine } from "@/systems/GameEngine";
 import type { MicroModule } from "@/types";
 import { GearKind, type HullSpec } from "@/systems/equipment/GearCatalog";
-import { generateShop } from "@/systems/equipment/ShopGenerator";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import {
   micromoduleShopCatalog,
@@ -30,41 +29,21 @@ import {
   GL_COUNTERPARTY,
 } from "@/systems/banking/economy";
 import { currentSystem } from "./engineQueries";
+import { generateSystemListings } from "./observeHelpers";
 
 /**
- * Every gear listing stocked in the player's current system: planets stock the
- * full catalog (incl. hulls); off-planet stations exclude hulls — the identical
- * generation rule {@link systemShopPrices} in `observeHelpers.ts` uses, so the two
- * never price the world differently. Empty with no system/galaxy.
+ * Every gear listing stocked in the player's current system, via the shared
+ * {@link generateSystemListings}. Empty with no system/galaxy.
  */
 function systemListings(engine: GameEngine): GearListing[] {
   const sys = currentSystem(engine);
   const galaxy = engine.galaxy;
   if (!sys || !galaxy) return [];
-  const listings: GearListing[] = [];
-  for (const planet of sys.planets) {
-    listings.push(
-      ...generateShop({
-        systemId: sys.id,
-        planetId: planet.id,
-        seed: galaxy.id,
-        day: galaxy.gameDays,
-        maxTechLevel: sys.techLevel,
-      }),
-    );
-  }
-  for (const station of sys.stations) {
-    listings.push(
-      ...generateShop({
-        systemId: sys.id,
-        planetId: station.id,
-        seed: galaxy.id,
-        day: galaxy.gameDays,
-        maxTechLevel: sys.techLevel,
-      }).filter((l) => l.gear.kind !== GearKind.HULL),
-    );
-  }
-  return listings;
+  return generateSystemListings({
+    seed: galaxy.id,
+    day: galaxy.gameDays,
+    system: sys,
+  });
 }
 
 /**

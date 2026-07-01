@@ -377,8 +377,11 @@ export class PlayerAgent {
         return;
 
       case "sell-cargo": {
-        const planet =
-          landedPlanet(engine) ?? currentSystem(engine)?.planets[0];
+        // `legalActionsForScene` only offers this from PLANET/TRADE, both of
+        // which imply the player is landed — so this is a true no-op guard,
+        // not a "pick any planet" fallback (selling at an unvisited planet's
+        // market would silently misprice the trade).
+        const planet = landedPlanet(engine);
         if (planet) executeSellAll(engine, planet);
         if (planet && obs.scene === SceneType.TRADE) {
           await this.harness.goTo(SceneType.PLANET, { planet });

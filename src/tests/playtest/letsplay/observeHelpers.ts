@@ -124,18 +124,16 @@ function cheapestOf(
 }
 
 /**
- * Cheapest non-hull gear price and cheapest hull price available in the
- * CURRENT system's shops — every planet fields a gear shop; hull trade-ins are
- * planet-only (mirrors `EquipmentShopScene`, which excludes hulls from station
- * shops). Deterministic (the same seeded {@link generateShop} the real shop
- * scenes use). Restricted to the current system only, same as the market: an
- * unvisited system's shop is never priced. `null` when the system fields no
- * shop at all (no planets, no stations).
+ * Every gear listing stocked across `ctx.system`'s shops: planets stock the
+ * full catalog (incl. hulls); off-planet stations exclude hulls (mirrors
+ * `EquipmentShopScene`, which excludes hulls from station shops). Deterministic
+ * (the same seeded {@link generateShop} the real shop scenes use). The single
+ * source of truth for "what's for sale in this system" — shared by
+ * {@link systemShopPrices} (affordability signals) and `equipmentQueries.ts`
+ * (what the applier actually buys) so the two can never price the world
+ * differently.
  */
-export function systemShopPrices(ctx: ShopPriceContext): {
-  cheapestGearPrice: number | null;
-  bestHullPrice: number | null;
-} {
+export function generateSystemListings(ctx: ShopPriceContext): GearListing[] {
   const listings: GearListing[] = [];
   for (const planet of ctx.system.planets) {
     listings.push(
@@ -159,6 +157,20 @@ export function systemShopPrices(ctx: ShopPriceContext): {
       }).filter((l) => l.gear.kind !== GearKind.HULL),
     );
   }
+  return listings;
+}
+
+/**
+ * Cheapest non-hull gear price and cheapest hull price available in the
+ * CURRENT system's shops. Restricted to the current system only, same as the
+ * market: an unvisited system's shop is never priced. `null` when the system
+ * fields no shop at all (no planets, no stations).
+ */
+export function systemShopPrices(ctx: ShopPriceContext): {
+  cheapestGearPrice: number | null;
+  bestHullPrice: number | null;
+} {
+  const listings = generateSystemListings(ctx);
   return {
     cheapestGearPrice: cheapestOf(listings, false),
     bestHullPrice: cheapestOf(listings, true),

@@ -155,13 +155,6 @@ export const DEFAULT_SCENARIO_MIX: readonly ScenarioMixEntry[] = [
 ];
 
 /**
- * Play every {@link ScenarioMixEntry} in `mix` and concatenate the rows into one
- * dataset — each stratum gets its own {@link MemoryHeuristicPolicy} (biased toward
- * its `goal`, or goal-less) and its own seed sub-range (`"<seedPrefix>-<goal
- * or 'base'>-<i>"`) so the whole mix stays deterministic and reproducible while
- * every stratum's sessions are independent of every other stratum's.
- */
-/**
  * Options for {@link scaleScenarioMix}: dial a mix (typically {@link
  * DEFAULT_SCENARIO_MIX}) up or down without hand-editing every stratum.
  */
@@ -190,6 +183,13 @@ export function scaleScenarioMix(
   }));
 }
 
+/**
+ * Play every {@link ScenarioMixEntry} in `mix` and concatenate the rows into one
+ * dataset — each stratum gets its own {@link MemoryHeuristicPolicy} (biased toward
+ * its `goal`, or goal-less) and its own seed sub-range (`"<seedPrefix>-<goal
+ * or 'base'>-<i>"`) so the whole mix stays deterministic and reproducible while
+ * every stratum's sessions are independent of every other stratum's.
+ */
 export async function collectScenarioMixDataset(
   mix: readonly ScenarioMixEntry[],
   seedPrefix = "BC",
