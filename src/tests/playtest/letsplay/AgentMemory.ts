@@ -27,6 +27,7 @@
  */
 import type { ResourceType } from "@/types";
 import type { Observation } from "./observe";
+import { logger } from "@/utils/logger";
 
 /** One good's last-seen prices at a planet, stamped with when it was seen. */
 export interface PriceRecord {
@@ -60,6 +61,17 @@ export interface KnownOffer {
   location: string;
 }
 
+/** One carried quest's known delivery target, mirrored from the observation. */
+export interface ActiveQuestDelivery {
+  questId: string;
+  targetSystemId: string;
+}
+
+/** Hull fraction at/below which the deadlock detector's hull condition holds. */
+export const DEADLOCK_HULL_FRACTION = 0.1;
+/** Credit balance below which the deadlock detector's credit condition holds. */
+export const DEADLOCK_MIN_CREDITS = 100;
+
 /**
  * The agent's per-run belief state. The four head fields mirror the plan's
  * notebook; `lastCargo`/`step` are internal bookkeeping {@link updateMemory} uses
@@ -82,6 +94,28 @@ export interface AgentMemory {
   visitedSystemIds: Set<string>;
   /** The player's known outstanding loan, or absent when none is carried. */
   loanState?: { balance: number; missedPayments: number };
+  /** Sticky once true — the compound worst-case state was seen this run (logged once). */
+  deadlockDetected: boolean;
+  /** Currently-carried quests with a known delivery system, mirrored from the observation. */
+  activeQuestDelivery: ActiveQuestDelivery[];
+}
+
+/**
+ * The compound "nothing good to do" state: hull critically low, broke, no quest
+ * to fall back on, a hostile present, and an outstanding loan on top. Pure —
+ * evaluated fresh every fold/decide rather than only read from the sticky flag,
+ * so it is testable in isolation without pre-populating {@link AgentMemory}.
+ */
+export function detectDeadlock(obs: Observation, mem: AgentMemory): boolean {
+  const hull = obs.player?.hullFraction ?? 1;
+  const credits = obs.player?.credits ?? 0;
+  return (
+    hull <= DEADLOCK_HULL_FRACTION &&
+    credits < DEADLOCK_MIN_CREDITS &&
+    obs.quests.length === 0 &&
+    obs.hostiles.length > 0 &&
+    mem.loanState !== undefined
+  );
 }
 
 /** A fresh, empty notebook — call once per run (a human starting over). */
@@ -95,6 +129,8 @@ export function createMemory(): AgentMemory {
     step: 0,
     visitedSystemIds: new Set(),
     loanState: undefined,
+    deadlockDetected: false,
+    activeQuestDelivery: [],
   };
 }
 
@@ -166,6 +202,8 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       step,
       visitedSystemIds: new Set(mem.visitedSystemIds),
       loanState: mem.loanState,
+      deadlockDetected: mem.deadlockDetected,
+      activeQuestDelivery: mem.activeQuestDelivery.map((d) => ({ ...d })),
     };
   }
 
@@ -220,7 +258,16 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       }
     : undefined;
 
-  return {
+  // 6) Active quest deliveries — carried quests with a known delivery system,
+  // mirrored straight from the observation (not accumulated: a completed/dropped
+  // quest simply falls out on the next fold).
+  const activeQuestDelivery: ActiveQuestDelivery[] = obs.quests
+    .filter(
+      (q): q is typeof q & { targetSystemId: string } => !!q.targetSystemId,
+    )
+    .map((q) => ({ questId: q.id, targetSystemId: q.targetSystemId }));
+
+  const next: AgentMemory = {
     priceBook,
     inventoryLots,
     threatMap,
@@ -229,5 +276,17 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     step,
     visitedSystemIds,
     loanState,
+    deadlockDetected: mem.deadlockDetected,
+    activeQuestDelivery,
   };
+
+  // 7) Deadlock — sticky once true; logged exactly once per run at the transition.
+  if (!mem.deadlockDetected && detectDeadlock(obs, next)) {
+    logger.warn(
+      `[DEADLOCK] step=${step} credits=${obs.player.credits} hull=${obs.player.hullFraction} system=${obs.system?.id ?? "?"}`,
+    );
+    next.deadlockDetected = true;
+  }
+
+  return next;
 }

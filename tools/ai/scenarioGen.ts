@@ -64,6 +64,13 @@ Each scenario must pick exactly ONE goal from this FIXED set — use the exact s
 - ignore-overmind: refuse to engage the Overmind endgame — trade and settle locally for many days while the threat spreads. Exercise the "galaxy consumed" loss path.
 - hoard: stockpile a single good — buy and hold at every market. Exercise the cargo / capacity edge.
 - free-explore: just roam — jump to new systems before doing anything local. Exercise breadth of the galaxy.
+- trade-magnate: trade for margin, borrowing to fund a bulk buy and repaying promptly after a profitable sale. Exercise the banking + trade loop together.
+- gear-grinder: save toward and buy hull/weapon/engine/module upgrades before anything else. Exercise the equipment shop and craft-center paths.
+- bounty-hunter: hunt hostiles, loot the kills, sell the loot, repair between fights. Exercise real-time combat + loot economy.
+- quest-runner: always carry contracts and route to deliver them. Exercise the quest-delivery flow.
+- overmind-slayer: push toward and engage the Overmind core once it has spread. Exercise the endgame arc.
+- pirate: raid non-lawful targets, fence loot, avoid lawful factions. Exercise reputation-sensitive combat.
+- explorer: roam unvisited systems, belief-aware, banking work locally when credits run low. Exercise galaxy breadth with memory.
 
 Prefer a SPREAD of goals (do not return five of the same). Vary maxDays so some runs are short and some long.
 
@@ -72,7 +79,7 @@ Reply with STRICT JSON and nothing else, in exactly this shape:
   "scenarios": [
     {
       "name": "<short label>",
-      "goal": "go-broke" | "max-rep" | "ignore-overmind" | "hoard" | "free-explore",
+      "goal": "go-broke" | "max-rep" | "ignore-overmind" | "hoard" | "free-explore" | "trade-magnate" | "gear-grinder" | "bounty-hunter" | "quest-runner" | "overmind-slayer" | "pirate" | "explorer",
       "maxDays": <positive integer>,
       "seed": "<optional reproducibility seed string>"
     }

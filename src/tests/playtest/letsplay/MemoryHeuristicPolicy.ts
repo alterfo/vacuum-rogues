@@ -30,12 +30,18 @@
  * that folds each observation into a per-run notebook so it is also a drop-in
  * {@link PlayerPolicy} for the agent loop. Lives under `src/tests/` and is dev-only.
  */
-import { SceneType } from "@/types";
+import { FactionType, SceneType } from "@/types";
 import type { ResourceType } from "@/types";
 import type { Observation, PlayerActionKind } from "./observe";
 import type { Action, PlayerPolicy } from "./PlayerPolicy";
 import { LOW_HULL_FRACTION } from "./HeuristicPolicy";
-import { type AgentMemory, createMemory, updateMemory } from "./AgentMemory";
+import {
+  type AgentMemory,
+  createMemory,
+  detectDeadlock,
+  updateMemory,
+} from "./AgentMemory";
+import type { ScenarioGoal } from "./goalBias";
 import {
   bestKnownMargin,
   cheapestKnownOffer,
@@ -89,15 +95,329 @@ function earnPlanetId(obs: Observation): string | undefined {
   return (withWork ?? planets[0])?.id;
 }
 
+// --- CJM (Customer Journey Map) teacher behaviors -------------------------
+//
+// Each `decideXxx` below is a self-contained, goal-specific bias: given the
+// `legal` set for the current scene, it either returns one legal, fully
+// resolved `Action` (its own priority fired and is currently permitted) or
+// `null` (defer — the goal has nothing to add here, fall through to the
+// scene's ordinary `decideWithMemory` sequencing below, which already covers
+// generic trade/earn/explore/survive). None of these ever invents an illegal
+// action: every branch checks `legal.has(...)` before returning.
+
+/** Build a goal-branch `Action`, tagging the reason `mem:cjm:<goal>:<detail>`. */
+function cjmAction(
+  goal: ScenarioGoal,
+  kind: PlayerActionKind,
+  detail: string,
+  targetId?: string,
+): Action {
+  return { kind, targetId, reason: `mem:cjm:${goal}:${detail}` };
+}
+
+/** CJM-A buffer: only borrow when the known margin clears loan cost by this factor. */
+const TRADE_MAGNATE_LOAN_PROFIT_MULTIPLIER = 1.5;
+/** CJM-A: a flat estimate of what a standard loan costs to service (no live loan-terms read at decide-time). */
+const TRADE_MAGNATE_LOAN_COST_ESTIMATE = 500;
+
+/**
+ * CJM-A Trade magnate: clear an outstanding loan immediately once credits are
+ * on hand, and borrow to fund a bulk buy only when the best known cross-planet
+ * margin (scaled by the full hold) comfortably clears the loan's cost. All
+ * other trading (buy-low / sell-high / route-to-sell) is already the base
+ * policy's job, so this defers (`null`) whenever neither condition fires.
+ */
+function decideTradeMagnate(
+  obs: Observation,
+  mem: AgentMemory,
+  legal: Set<PlayerActionKind>,
+): Action | null {
+  const credits = obs.player?.credits ?? 0;
+  if (mem.loanState && credits > 0 && legal.has("repay-loan")) {
+    return cjmAction("trade-magnate", "repay-loan", "repay");
+  }
+  const best = bestKnownMargin(mem);
+  const cargoCap = obs.player?.cargoCapacity ?? 0;
+  const estimatedProfit = best.margin * cargoCap;
+  if (
+    !mem.loanState &&
+    best.good != null &&
+    estimatedProfit >
+      TRADE_MAGNATE_LOAN_COST_ESTIMATE * TRADE_MAGNATE_LOAN_PROFIT_MULTIPLIER &&
+    legal.has("take-loan")
+  ) {
+    return cjmAction("trade-magnate", "take-loan", "loan-for-margin");
+  }
+  return null;
+}
+
+/** CJM-B buffers: route to shop only once credits clear the price by this margin. */
+const GEAR_GRINDER_HULL_BUFFER = 1.1;
+const GEAR_GRINDER_GEAR_BUFFER = 1.2;
+
+/**
+ * CJM-B Gear grinder: hull upgrade first, then generic gear, then a
+ * craft-center module — each gated on an affordability buffer so the agent
+ * doesn't spend down to zero the instant it can technically afford something.
+ * Defers to the base policy's trade/earn logic to accumulate credits otherwise.
+ */
+function decideGearGrinder(
+  obs: Observation,
+  _mem: AgentMemory,
+  legal: Set<PlayerActionKind>,
+): Action | null {
+  const credits = obs.player?.credits ?? 0;
+  const bestHullPrice = obs.bestHullPrice ?? null;
+  const cheapestGearPrice = obs.cheapestGearPrice ?? null;
+  if (
+    bestHullPrice != null &&
+    credits >= bestHullPrice * GEAR_GRINDER_HULL_BUFFER &&
+    legal.has("upgrade-hull")
+  ) {
+    return cjmAction("gear-grinder", "upgrade-hull", "hull-upgrade");
+  }
+  if (
+    cheapestGearPrice != null &&
+    credits >= cheapestGearPrice * GEAR_GRINDER_GEAR_BUFFER &&
+    legal.has("buy-gear")
+  ) {
+    return cjmAction("gear-grinder", "buy-gear", "best-gear");
+  }
+  if (obs.hasCraftCenter && legal.has("buy-module")) {
+    return cjmAction("gear-grinder", "buy-module", "micromodule");
+  }
+  return null;
+}
+
+/** CJM-C: below this hull fraction a fight is engaged in full; above, disengage. */
+const BOUNTY_HUNTER_ENGAGE_HULL_FRACTION = 0.5;
+/** CJM-C: below this hull fraction the base survive branch (repair/dock) takes over. */
+const BOUNTY_HUNTER_RETREAT_FLOOR_FRACTION = 0.3;
+
+/** The remembered-dangerous system with the worst known threat, or `null` if none seen. */
+function mostDangerousKnownSystem(mem: AgentMemory): string | null {
+  let worst: string | null = null;
+  let worstDanger = 0;
+  for (const [systemId, danger] of mem.threatMap) {
+    if (danger > worstDanger) {
+      worstDanger = danger;
+      worst = systemId;
+    }
+  }
+  return worst;
+}
+
+/**
+ * CJM-C Combat hunter: engage a present hostile while healthy, disengage to
+ * repair in the 30–50% hull band, and — with nothing local to fight — head
+ * toward the most dangerous system it remembers. A critically low hull (<30%)
+ * defers to the base survive branch's flee/repair/dock sequencing.
+ */
+function decideBountyHunter(
+  obs: Observation,
+  mem: AgentMemory,
+  legal: Set<PlayerActionKind>,
+): Action | null {
+  const hull = obs.player?.hullFraction ?? 1;
+  if (obs.hostiles.length > 0) {
+    const tid = obs.hostiles[0]?.id;
+    if (hull > BOUNTY_HUNTER_ENGAGE_HULL_FRACTION && legal.has("attack")) {
+      return cjmAction("bounty-hunter", "attack", "engage", tid);
+    }
+    if (
+      hull <= BOUNTY_HUNTER_ENGAGE_HULL_FRACTION &&
+      hull >= BOUNTY_HUNTER_RETREAT_FLOOR_FRACTION &&
+      legal.has("flee")
+    ) {
+      return cjmAction("bounty-hunter", "flee", "disengage-to-repair", tid);
+    }
+    return null; // critically hurt — defer to the base survive branch
+  }
+  const cargoUsed = obs.player?.cargoUsed ?? 0;
+  if (cargoUsed > 0 && legal.has("sell-cargo")) {
+    return cjmAction("bounty-hunter", "sell-cargo", "sell-loot");
+  }
+  if (mostDangerousKnownSystem(mem) && legal.has("warp")) {
+    return cjmAction("bounty-hunter", "warp", "hunt-danger");
+  }
+  return null;
+}
+
+/**
+ * CJM-D Quest runner: always bank an offered contract first; with a delivery
+ * target known and not already there, warp to close the distance. Landing at
+ * the delivery system itself is left to the base policy's land/dock sequencing.
+ */
+function decideQuestRunner(
+  obs: Observation,
+  mem: AgentMemory,
+  legal: Set<PlayerActionKind>,
+): Action | null {
+  if (legal.has("take-quest")) {
+    return cjmAction("quest-runner", "take-quest", "accept");
+  }
+  if (obs.questDeliveryHere) return null; // let the base policy land/dock here
+  const hasDelivery =
+    mem.activeQuestDelivery.length > 0 ||
+    obs.quests.some((q) => q.targetSystemId);
+  if (hasDelivery && legal.has("warp")) {
+    return cjmAction("quest-runner", "warp", "deliver");
+  }
+  return null;
+}
+
+/** CJM-E: below this hull fraction near the core, retreat instead of pressing on. */
+const OVERMIND_SLAYER_RETREAT_HULL_FRACTION = 0.4;
+/** CJM-E: minimum remembered Overmind share before the goal starts pushing toward it. */
+const OVERMIND_SLAYER_ENGAGE_SHARE = 0.1;
+
+/**
+ * CJM-E Overmind slayer: retreat when hurt near the core, attack any hostile
+ * at/adjacent to the core (Overmind ships), and otherwise push toward the
+ * front once the Overmind holds a meaningful galaxy share.
+ */
+function decideOvermindSlayer(
+  obs: Observation,
+  _mem: AgentMemory,
+  legal: Set<PlayerActionKind>,
+): Action | null {
+  const hull = obs.player?.hullFraction ?? 1;
+  if (obs.nearOvermindCore && hull < OVERMIND_SLAYER_RETREAT_HULL_FRACTION) {
+    if (legal.has("flee"))
+      return cjmAction(
+        "overmind-slayer",
+        "flee",
+        "retreat",
+        obs.hostiles[0]?.id,
+      );
+    if (legal.has("repair"))
+      return cjmAction("overmind-slayer", "repair", "retreat");
+    return null;
+  }
+  if (obs.nearOvermindCore && obs.hostiles.length > 0 && legal.has("attack")) {
+    return cjmAction(
+      "overmind-slayer",
+      "attack",
+      "core-assault",
+      obs.hostiles[0]?.id,
+    );
+  }
+  if (
+    (obs.overmindShare ?? 0) > OVERMIND_SLAYER_ENGAGE_SHARE &&
+    !obs.nearOvermindCore &&
+    legal.has("warp")
+  ) {
+    return cjmAction("overmind-slayer", "warp", "advance");
+  }
+  return null;
+}
+
+/** CJM-F: above this hull fraction, raid a present hostile. */
+const PIRATE_ATTACK_HULL_FRACTION = 0.5;
+
+/**
+ * CJM-F Pirate: avoid the lawful/bank faction (the closest observable proxy
+ * for "military/ranger zones" — no NPC role is exposed on {@link Observation},
+ * only `faction`), otherwise raid while healthy and fence loot once clear.
+ */
+function decidePirate(
+  obs: Observation,
+  _mem: AgentMemory,
+  legal: Set<PlayerActionKind>,
+): Action | null {
+  const hull = obs.player?.hullFraction ?? 1;
+  const lawfulHostile = obs.hostiles.find(
+    (n) => n.faction === FactionType.BASTIONS,
+  );
+  if (lawfulHostile && legal.has("flee")) {
+    return cjmAction("pirate", "flee", "avoid-law", lawfulHostile.id);
+  }
+  if (
+    obs.hostiles.length > 0 &&
+    hull > PIRATE_ATTACK_HULL_FRACTION &&
+    legal.has("attack")
+  ) {
+    return cjmAction("pirate", "attack", "raid", obs.hostiles[0]?.id);
+  }
+  const cargoUsed = obs.player?.cargoUsed ?? 0;
+  if (cargoUsed > 0 && legal.has("sell-cargo")) {
+    return cjmAction("pirate", "sell-cargo", "fence-loot");
+  }
+  return null;
+}
+
+/** CJM-G: below this credit balance, land to earn before resuming exploration. */
+const EXPLORER_LOW_CREDITS = 200;
+
+/**
+ * CJM-G Explorer: keep warping while solvent; when credits run low, land at
+ * the local planet most likely to offer work first, then resume roaming.
+ */
+function decideExplorer(
+  obs: Observation,
+  _mem: AgentMemory,
+  legal: Set<PlayerActionKind>,
+): Action | null {
+  const credits = obs.player?.credits ?? 0;
+  if (credits < EXPLORER_LOW_CREDITS && legal.has("land")) {
+    return cjmAction("explorer", "land", "earn-first", earnPlanetId(obs));
+  }
+  if (legal.has("warp")) {
+    return cjmAction("explorer", "warp", "roam");
+  }
+  return null;
+}
+
+/** Dispatch a {@link ScenarioGoal} to its CJM branch; unhandled goals defer (`null`). */
+function decideForGoal(
+  goal: ScenarioGoal,
+  obs: Observation,
+  mem: AgentMemory,
+  legal: Set<PlayerActionKind>,
+): Action | null {
+  switch (goal) {
+    case "trade-magnate":
+      return decideTradeMagnate(obs, mem, legal);
+    case "gear-grinder":
+      return decideGearGrinder(obs, mem, legal);
+    case "bounty-hunter":
+      return decideBountyHunter(obs, mem, legal);
+    case "quest-runner":
+      return decideQuestRunner(obs, mem, legal);
+    case "overmind-slayer":
+      return decideOvermindSlayer(obs, mem, legal);
+    case "pirate":
+      return decidePirate(obs, mem, legal);
+    case "explorer":
+      return decideExplorer(obs, mem, legal);
+    default:
+      // The older GoalBiasedPolicy-only goals (go-broke/max-rep/ignore-overmind/
+      // hoard/free-explore) have no MemoryHeuristicPolicy-level CJM bias.
+      return null;
+  }
+}
+
 /**
  * The pure decision core: choose one legal {@link Action} for `obs` given the
- * `mem` belief state. Builds a survive→trade→earn→explore ranked candidate list
- * (memory-aware) and returns the first candidate the current scene legally
- * permits, with `"wait"` as the guaranteed floor. Never mutates either argument
- * and never throws — the same `(obs, mem)` always yields the same action.
+ * `mem` belief state. A compound worst-case deadlock forces `wait` outright
+ * (wired ahead of every goal and the base sequencing below); otherwise, with a
+ * `goal`, its CJM branch gets first refusal before falling through to the
+ * goal-less survive→trade→earn→explore ranked candidate list (memory-aware),
+ * returning the first candidate the current scene legally permits, with
+ * `"wait"` as the guaranteed floor. Never mutates either argument and never
+ * throws — the same `(obs, mem, goal)` always yields the same action.
  */
-export function decideWithMemory(obs: Observation, mem: AgentMemory): Action {
+export function decideWithMemory(
+  obs: Observation,
+  mem: AgentMemory,
+  goal?: ScenarioGoal,
+): Action {
   const legal = new Set(obs.legalActions);
+
+  if (detectDeadlock(obs, mem)) {
+    return { kind: "wait", reason: "mem:deadlock" };
+  }
+
   const candidates: Candidate[] = [];
   const push = (kind: PlayerActionKind, reason: string, targetId?: string) =>
     candidates.push({ kind, targetId, reason });
@@ -139,6 +459,13 @@ export function decideWithMemory(obs: Observation, mem: AgentMemory): Action {
   // attack/flee don't touch the planned route, so they can't disturb the warp.
   if (obs.warpInTransit && obs.hostiles.length === 0) {
     return { kind: "wait", reason: "mem:warp-in-transit" };
+  }
+
+  // 2.5) A goal's CJM branch gets first refusal — a legal preference here wins
+  // outright; no preference (null) falls through to the goal-less sequencing.
+  if (goal) {
+    const goalAction = decideForGoal(goal, obs, mem, legal);
+    if (goalAction) return goalAction;
   }
 
   // 3) Memory-driven trade + goal sequencing, by scene.
@@ -295,7 +622,15 @@ export class MemoryHeuristicPolicy implements PlayerPolicy {
 
   private memory: AgentMemory;
 
-  constructor(memory?: AgentMemory) {
+  /**
+   * @param memory Pre-seeded notebook (defaults to a fresh one).
+   * @param goal Optional CJM bias (Task 4) — when set, that goal's branch gets
+   *   first refusal every decide before the goal-less sequencing runs.
+   */
+  constructor(
+    memory?: AgentMemory,
+    private readonly goal?: ScenarioGoal,
+  ) {
     this.memory = memory ?? createMemory();
   }
 
@@ -317,8 +652,8 @@ export class MemoryHeuristicPolicy implements PlayerPolicy {
    * step. Pure-cored, never throws, always returns a legal action.
    */
   decide(obs: Observation, memory?: AgentMemory): Action {
-    if (memory) return decideWithMemory(obs, memory);
+    if (memory) return decideWithMemory(obs, memory, this.goal);
     this.memory = updateMemory(this.memory, obs);
-    return decideWithMemory(obs, this.memory);
+    return decideWithMemory(obs, this.memory, this.goal);
   }
 }

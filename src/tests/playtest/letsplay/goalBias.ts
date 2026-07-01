@@ -29,7 +29,14 @@ export type ScenarioGoal =
   | "max-rep" // court the factions — take their work, disengage rather than fight
   | "ignore-overmind" // stay out of the war — trade/settle locally, slip away from fights
   | "hoard" // stockpile — buy and hold a good at every market
-  | "free-explore"; // roam — jump to new systems before anything else
+  | "free-explore" // roam — jump to new systems before anything else
+  | "trade-magnate" // CJM-A: trade for margin, borrow/repay to bulk-buy (MemoryHeuristicPolicy)
+  | "gear-grinder" // CJM-B: save toward + buy hull/gear/module upgrades (MemoryHeuristicPolicy)
+  | "bounty-hunter" // CJM-C: hunt hostiles, loot, sell, repair between fights (MemoryHeuristicPolicy)
+  | "quest-runner" // CJM-D: always carry + deliver contracts (MemoryHeuristicPolicy)
+  | "overmind-slayer" // CJM-E: push toward and engage the Overmind core (MemoryHeuristicPolicy)
+  | "pirate" // CJM-F: raid, avoid lawful factions, fence loot (MemoryHeuristicPolicy)
+  | "explorer"; // CJM-G: roam unvisited systems, belief-aware (MemoryHeuristicPolicy)
 
 /** The canonical goal vocabulary (the scenario parser drops anything not in here). */
 export const SCENARIO_GOALS: readonly ScenarioGoal[] = [
@@ -38,6 +45,13 @@ export const SCENARIO_GOALS: readonly ScenarioGoal[] = [
   "ignore-overmind",
   "hoard",
   "free-explore",
+  "trade-magnate",
+  "gear-grinder",
+  "bounty-hunter",
+  "quest-runner",
+  "overmind-slayer",
+  "pirate",
+  "explorer",
 ];
 
 /** Narrow an arbitrary value to a known {@link ScenarioGoal}. */
@@ -65,6 +79,20 @@ const GOAL_PREFER: Record<ScenarioGoal, readonly PlayerActionKind[]> = {
   hoard: ["trade"],
   // Roam: jump to a new system before doing anything local.
   "free-explore": ["warp", "move"],
+  // CJM-A: trade for margin, clear debt after a sale, borrow to fund a bulk buy.
+  "trade-magnate": ["repay-loan", "trade", "take-loan"],
+  // CJM-B: save toward hull/gear/module upgrades over generic earning.
+  "gear-grinder": ["upgrade-hull", "buy-gear", "buy-module"],
+  // CJM-C: hunt hostiles, fence loot, repair between fights.
+  "bounty-hunter": ["attack", "sell-cargo", "repair"],
+  // CJM-D: always carry + deliver contracts first.
+  "quest-runner": ["take-quest", "land"],
+  // CJM-E: push toward and engage the Overmind core.
+  "overmind-slayer": ["attack", "warp"],
+  // CJM-F: raid, fence loot, disengage rather than repair (pirates run, not dock).
+  pirate: ["attack", "sell-cargo", "flee"],
+  // CJM-G: belief-aware roaming — same action-kind preference as free-explore.
+  explorer: ["warp", "move"],
 };
 
 /**
