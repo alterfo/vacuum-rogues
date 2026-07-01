@@ -6,17 +6,9 @@ import type { PlanetSprite } from "../PlanetSprite";
 import { NpcShipSprite } from "../NpcShipSprite";
 import type { SystemBounds } from "../NpcShipSprite";
 import { ContactPanelManager } from "./ContactPanelManager";
+import { NpcInteractionController } from "./NpcInteractionController";
 import type { NpcShip } from "@/domain/NpcShip";
 import { npcsPresentInSystem, NpcSimulator } from "@/systems/npc/NpcSimulator";
-import {
-  wantsToShakedownPlayer,
-  shipCombatStrength,
-  shakedownTribute,
-  attemptFlee,
-  acceptsHire,
-  hireFee,
-  hireGoal,
-} from "@/systems/npc/NpcBrain";
 import {
   isHostile,
   factionKindOf,
@@ -25,11 +17,6 @@ import {
   type RangedNpc,
 } from "@/systems/npc/factionHostility";
 import {
-  PIRATE_FACTION_ID,
-  grantPirateTributeRep,
-} from "@/systems/galaxy/landingAccess";
-import {
-  payTribute,
   adjustPlayerCredits,
   GL_COUNTERPARTY,
 } from "@/systems/banking/economy";
@@ -37,7 +24,6 @@ import { pirateSalvageAmount } from "@/systems/combat/pirateSalvage";
 import { SeededRNG } from "@/utils/seededRNG";
 import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
 import { FlightCombatResolver } from "@/systems/FlightCombatResolver";
-import { solveInterceptPoint } from "@/utils/intercept";
 import {
   shouldReaim,
   smoothLeadPoint,
@@ -51,7 +37,7 @@ import {
   ENCOUNTER_CONFIG,
   ENCOUNTER_OUTCOME_CONFIG,
 } from "@/config/balance";
-import { SceneType, NpcRole, QuestType } from "@/types";
+import { NpcRole } from "@/types";
 import type { SpaceLootItem } from "@/types";
 import { pickNpcDestination, type NpcBehaviorCtx } from "./npcBehavior";
 import { hashStr } from "@/utils/hashStr";
@@ -59,10 +45,6 @@ import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
 import { t } from "@/i18n/i18n";
 import { LootDropHandler } from "./LootDropHandler";
-import {
-  commsContextFor,
-  overmindGibberish,
-} from "@/systems/comms/commsOptions";
 import {
   rollEncounter,
   type Encounter,
@@ -228,6 +210,12 @@ export class NpcShipManager implements FlightModule {
   // anchor can be refreshed each frame as planets drift along their orbits.
   private npcAnchorPlanet = new Map<NpcShipSprite, PlanetSprite>();
   private readonly panels: ContactPanelManager;
+  // Owns the player-vs-NPC contact-panel action cluster (hail/trade/attack/
+  // approach/hire + the pirate shakedown flow). Constructed in the ctor with a
+  // deps bundle over this manager; the moved methods below forward 1:1 so the
+  // manager's tested surface (onNpcClick/onPayTribute/onFleeShakedown/onAttackNpc)
+  // is unchanged — mirrors the ContactPanelManager/LootDropHandler delegation.
+  private readonly interaction: NpcInteractionController;
   // Forwarding getter so tests that inspect internal state via type-cast can
   // still read the open panel's NPC id (state now lives in ContactPanelManager).
   private get contactNpcId(): string | null {
@@ -365,6 +353,35 @@ export class NpcShipManager implements FlightModule {
         width: renderer.app.screen.width,
         height: renderer.app.screen.height,
       }),
+    });
+    this.interaction = new NpcInteractionController({
+      flight: deps,
+      panels: this.panels,
+      getGameEngine: () => this.gameEngine,
+      getNpcSprites: () => this.npcSprites,
+      scannerRange: this.SCANNER_RANGE,
+      weaponRange: this.WEAPON_RANGE,
+      escalateHostility: (npc) => this.escalateHostility(npc),
+      launchCombatWithNpc: (npc) => this.launchCombatWithNpc(npc),
+      setFollowNpcId: (id) => {
+        this.followNpcId = id;
+      },
+      setApproachNpcId: (id) => {
+        this.approachNpcId = id;
+      },
+      setSteerTargetId: (id) => {
+        this.steerTargetId = id;
+      },
+      setPursuitSuspended: (v) => {
+        this.pursuitSuspended = v;
+      },
+      setLastAim: (x, y) => {
+        this.lastAimX = x;
+        this.lastAimY = y;
+      },
+      clearNpcAnchor: (sprite) => {
+        this.npcAnchorPlanet.delete(sprite);
+      },
     });
     this.loot = new LootDropHandler(gameLayer);
   }
@@ -1336,428 +1353,63 @@ export class NpcShipManager implements FlightModule {
   // Contact panel + actions
   // ---------------------------------------------------------------------------
 
+  // The player-vs-NPC contact-panel action cluster now lives in
+  // NpcInteractionController (constructed in the ctor). The methods below are
+  // 1:1 forwarders retained for the manager's internal callers (click wiring +
+  // per-frame shakedown/pursuit) and the existing type-cast tests
+  // (onNpcClick/onPayTribute/onFleeShakedown/onAttackNpc). No behaviour change.
+
   /** Open the contact panel for a clicked NPC ship. */
   private onNpcClick(npc: NpcShip): void {
-    // During an in-flight fight a click on an enemy ship retargets the combat
-    // module instead of opening the contact panel (Task 13).
-    if (this.deps.isInCombat?.()) {
-      const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
-      if (sprite) this.deps.selectCombatTarget?.(sprite);
-      // Clicking an enemy mid-fight is an explicit "engage this one" — drop any
-      // break-off so the auto-pursuit resumes toward the (re)selected target.
-      this.pursuitSuspended = false;
-      return;
-    }
-    if (this.deps.isTurnRunning()) return;
-
-    // Hailing/trading and the detailed readout are offered within radar/scanner
-    // range; beyond it the panel only offers "Приблизиться" to close the gap
-    // (US-070 #3). The gate is the scanner range, not the (much shorter) firing
-    // range — you can talk and trade well before you are in weapons reach.
-    const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
-    const physics = this.deps.getShipPhysics();
-    const inRange =
-      !!sprite &&
-      !!physics &&
-      Math.hypot(sprite.x - physics.shipX, sprite.y - physics.shipY) <=
-        this.SCANNER_RANGE;
-    const scanPower =
-      this.gameEngine?.playerLoadout?.derivedStats().scanPower ?? 0;
-    this.panels.open(
-      npc,
-      {
-        onHail: () => this.onHailNpc(npc),
-        onTrade: () => this.onTradeNpc(npc),
-        onAttack: () => this.onAttackNpc(npc),
-        onApproach: () => this.onApproachNpc(npc),
-        onClose: () => this.panels.close(),
-        onHire: () => this.offerHireContract(npc, "hire"),
-        onAlly: () => this.offerHireContract(npc, "ally"),
-      },
-      inRange,
-      scanPower,
-    );
-
-    // Hailing an Overmind ("Предтечи") craft is futile: it answers with nonsense
-    // and the panel surfaces no actionable options (commsOptionsFor → []). Emit a
-    // gibberish transmission so the dead-end reads as alien static, not a bug.
-    if (inRange && commsContextFor(npc) === "overmind") {
-      const day = this.gameEngine?.galaxy?.gameDays ?? 0;
-      const line = overmindGibberish(
-        new SeededRNG(`overmind:${npc.id}:${day}`),
-      );
-      this.deps.showMessage(`${npc.name}: «${line}»`, 0xaa66ff);
-    }
+    this.interaction.onNpcClick(npc);
   }
 
-  /**
-   * The player's current combat strength (hull + shields + weapon damage), used
-   * to gauge how a passing pirate sizes the player up before a shakedown. Reads
-   * the live ship pools + the loadout's derived weapon damage; 0 when no ship.
-   */
-  private playerCombatStrength(): number {
-    const ship = this.gameEngine?.player?.ship;
-    if (!ship) return 0;
-    const damage =
-      this.gameEngine?.playerLoadout?.derivedStats().weaponDamage ?? 0;
-    return shipCombatStrength({
-      hullHP: ship.hullHP,
-      shields: ship.shields,
-      damage,
-    });
-  }
-
-  /**
-   * The player's current reputation with the pirate faction. A player at/above
-   * the good-pirate-rep threshold is left alone by pirates (no attack, no ransom)
-   * — see {@link playerIsGoodWithPirates} and {@link rollShakedown}. Optional
-   * chaining tolerates a mock player without the method (treated as rep 0).
-   */
-  private playerPirateRep(): number {
-    return this.gameEngine?.player?.getReputation?.(PIRATE_FACTION_ID) ?? 0;
-  }
-
-  /**
-   * Whether the player has good enough pirate reputation to be left alone: the
-   * {@link isHostile} matrix (single source of truth) reports a pirate as
-   * non-hostile to the player. Drives the in-flight attack exemption.
-   */
+  /** Good-pirate-rep exemption gate (per-frame aggressor breakoff). */
   private playerIsGoodWithPirates(): boolean {
-    return !isHostile("pirate", "player", {
-      pirateRep: this.playerPirateRep(),
-    });
+    return this.interaction.playerIsGoodWithPirates();
   }
 
-  /**
-   * Roll the pure {@link wantsToShakedownPlayer} decision for a pirate, seeded
-   * deterministically by ship id + galaxy day so the outcome is stable for the
-   * encounter (and reproducible in tests / replays). A player with good pirate
-   * reputation is exempt — the decision short-circuits to `false`.
-   */
+  /** Deterministic per-encounter "кошелёк или жизнь" shakedown roll. */
   private rollShakedown(npc: NpcShip): boolean {
-    const day = this.gameEngine?.galaxy?.gameDays ?? 0;
-    const rng = new SeededRNG(`shakedown:${npc.id}:${day}`);
-    return wantsToShakedownPlayer(
-      npc,
-      this.playerCombatStrength(),
-      this.playerPirateRep(),
-      rng,
-    );
+    return this.interaction.rollShakedown(npc);
   }
 
-  /**
-   * Open the universal comms window in pirate-shakedown context ("Кошелёк или
-   * жизнь!") and halt flight so the demand interrupts the player. The panel
-   * surfaces the three responses: Откупиться (pay tribute → the pirate
-   * disengages), Атаковать (refuse → fight), and Бежать (flee → escape-by-speed
-   * roll). Pay/flee are resolved here (Task 3); attack reuses {@link onAttackNpc}.
-   */
+  /** Open the pirate-shakedown comms window and halt flight. */
   private openShakedownHail(npc: NpcShip): void {
-    this.deps.endTurn(); // freeze flight so the hail can't be flown past
-    const scanPower =
-      this.gameEngine?.playerLoadout?.derivedStats().scanPower ?? 0;
-    this.panels.open(
-      npc,
-      {
-        onHail: () => this.onHailNpc(npc),
-        onTrade: () => this.onTradeNpc(npc),
-        onAttack: () => this.onAttackNpc(npc),
-        onApproach: () => this.onApproachNpc(npc),
-        onClose: () => this.panels.close(),
-        onPayTribute: () => this.onPayTribute(npc),
-        onFlee: () => this.onFleeShakedown(npc),
-      },
-      true, // the pirate has closed to talking distance — full readout + options
-      scanPower,
-      "pirate-shakedown",
-    );
-    this.deps.showMessage(`${npc.name}: «Кошелёк или жизнь!»`, 0xff5555);
+    this.interaction.openShakedownHail(npc);
   }
 
   /**
-   * "Откупиться": pay the pirate's tribute through the bank bus (a balanced
-   * player → pirate transfer — never a direct credit write) and the pirate
-   * disengages, leaving the player alone this encounter. The tribute is a pure
-   * function of the player's purse ({@link shakedownTribute}).
-   *
-   * Buying off a shakedown is also the **repeatable recovery path** for pirate
-   * standing: it grants a small, capped +pirate-rep ({@link grantPirateTributeRep}),
-   * so a player whose pirate rep fell to −50 can climb back to landable on
-   * pirate-captured systems over several (costly) payoffs.
+   * "Откупиться": pay the pirate's tribute through the bank bus. Public so the
+   * existing `(manager as { onPayTribute }).onPayTribute(...)` tests keep working
+   * now that the panel callbacks live in NpcInteractionController.
    */
-  private onPayTribute(npc: NpcShip): void {
-    const player = this.gameEngine?.player;
-    this.panels.close();
-    if (!player) return;
-    const tribute = shakedownTribute(player.credits);
-    payTribute(
-      this.gameEngine?.bank,
-      player,
-      npc,
-      tribute,
-      t("flight.tributeReason", { name: npc.name }),
-    );
-    // Pirate standing is *bought*, not free: only a real (non-zero) payoff
-    // raises rep, so a penniless player (tribute === 0) can't farm +rep for
-    // nothing. The pirate still disengages either way.
-    const gainedRep = tribute > 0;
-    if (gainedRep) grantPirateTributeRep(player);
-    this.disengagePirate(npc);
-    this.deps.showMessage(
-      gainedRep
-        ? t("flight.tributePaidRep", { amount: tribute, name: npc.name })
-        : t("flight.tributePaid", { amount: tribute, name: npc.name }),
-      0xffee88,
-    );
+  onPayTribute(npc: NpcShip): void {
+    this.interaction.onPayTribute(npc);
   }
 
-  /**
-   * "Бежать": attempt to out-run the pirate. The escape is a pure
-   * {@link attemptFlee} roll on the player's vs the pirate's speed, seeded
-   * deterministically by ship id + galaxy day. Success → the pirate breaks off;
-   * failure → the pirate runs you down and opens fire.
-   */
-  private onFleeShakedown(npc: NpcShip): void {
-    this.panels.close();
-    const physics = this.deps.getShipPhysics();
-    const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
-    const playerSpeed = physics?.getMaxSpeed() ?? 0;
-    const day = this.gameEngine?.galaxy?.gameDays ?? 0;
-    const escaped = attemptFlee(
-      playerSpeed,
-      npc.speed,
-      new SeededRNG(`flee:${npc.id}:${day}`),
-    );
-    if (escaped) {
-      this.disengagePirate(npc);
-      this.deps.showMessage(`Вы оторвались от ${npc.name}!`, 0x88ff88);
-      return;
-    }
-    // Caught — the pirate runs you down and opens fire. Engage in-flight combat
-    // AND resume the turn that openShakedownHail froze via endTurn(): CombatModule
-    // .update is gated on isTurnRunning, so without re-arming it the fight would sit
-    // dormant (no NPC fire, no active-pause overlay) until the player manually
-    // pressed Play. Closing on the pirate through executeRouteTo re-arms the turn
-    // and tracks the (moving) mark — the same path the "refuse → Атаковать" button
-    // uses when the target is out of weapon range.
-    this.deps.showMessage(`Уйти не удалось — ${npc.name} атакует!`, 0xff5555);
-    if (sprite) {
-      this.followNpcId = npc.id;
-      this.deps.startInFlightCombat?.(sprite);
-      this.deps.selectCombatTarget?.(sprite);
-      this.deps.executeRouteTo(sprite.x, sprite.y);
-    }
+  /** "Бежать": attempt to out-run the shaking-down pirate (public for tests). */
+  onFleeShakedown(npc: NpcShip): void {
+    this.interaction.onFleeShakedown(npc);
   }
 
-  /**
-   * A pirate breaks off its shakedown (paid off or out-run): drop its pursuit
-   * aggression and orbit anchor so it stops chasing the player this encounter.
-   */
-  private disengagePirate(npc: NpcShip): void {
-    const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
-    if (!sprite) return;
-    sprite.setAggressive(false);
-    this.npcAnchorPlanet.delete(sprite);
-  }
-
-  /**
-   * "Приблизиться": plot a course that LEADS the moving target so the ship
-   * closes to firing range aiming where it will be, not where it is, without
-   * opening fire (US-070 #2; lead added playtest4 C). The player can then
-   * re-open the panel to hail/trade or attack.
-   */
-  private onApproachNpc(npc: NpcShip): void {
-    const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
-    this.panels.close();
-    if (!sprite || !this.deps.getShipPhysics()) return;
-    this.followNpcId = null; // approach only — not an attack
-    this.approachNpcId = npc.id; // …but keep tracking it so the course corrects
-    this.steerTargetId = null; // fresh chase leg — reset the lead smoother
-    this.deps.clearRouteTarget();
-    const lead = this.npcLeadPoint(sprite);
-    this.aimRoute(lead.x, lead.y);
-    this.deps.showMessage(`Сближение: ${npc.name}`, 0x88ccff);
-  }
-
-  /**
-   * Plot a route to (x,y) and remember it as the live destination so a moving
-   * target can be re-aimed against the true endpoint (the immediate waypoint
-   * ShipPhysics exposes may be a sun-avoidance bend, not the destination).
-   */
+  /** Plot a route to (x,y), remembering it as the live re-aim destination. */
   private aimRoute(x: number, y: number): void {
-    this.lastAimX = x;
-    this.lastAimY = y;
-    this.deps.executeRouteTo(x, y);
-  }
-
-  /** "Связаться": if player has an active TEXT_ADVENTURE quest, launch it; otherwise show greeting. */
-  private onHailNpc(npc: NpcShip): void {
-    this.panels.close();
-
-    const activeQuests = this.gameEngine?.questManager.getActiveQuests() ?? [];
-    const textAdventureQuest = activeQuests.find(
-      (q) => q.type === QuestType.TEXT_ADVENTURE,
-    );
-
-    if (textAdventureQuest && this.gameEngine) {
-      const scriptId =
-        textAdventureQuest.targetObjectId ?? textAdventureQuest.id;
-      void this.gameEngine.startTextQuest(
-        scriptId,
-        undefined,
-        SceneType.SPACE_FLIGHT,
-        { gameEngine: this.gameEngine },
-        textAdventureQuest.id,
-      );
-      return;
-    }
-
-    const lines = [
-      "Приветствую, рейнджер. Чистого космоса.",
-      "Не мешай — у меня груз по расписанию.",
-      "Держись подальше, если не ищешь неприятностей.",
-      "Слыхал о возмущениях у рубежа? Будь начеку.",
-    ];
-    const line = lines[Math.floor(Math.random() * lines.length)];
-    this.deps.showMessage(`${npc.name}: «${line}»`, 0x88ccff);
-  }
-
-  /** "Торговать": trade-with-ships is not implemented yet — be honest. */
-  private onTradeNpc(npc: NpcShip): void {
-    this.deps.showMessage(
-      `Торговля с ${npc.name} пока недоступна в полёте.`,
-      0xffaa00,
-    );
+    this.interaction.aimRoute(x, y);
   }
 
   /**
-   * "Нанять" / "Союз": offer the hailed ship credits to turn on the player's
-   * current threat. Both reduce to a merc contract against the nearest ship that
-   * is openly hostile to the player (the target you actually need help with) —
-   * they differ only in framing. The player pays the ship's {@link hireFee}
-   * asking price; an accepted contract pays through the bank bus (a balanced
-   * player → NPC transfer, never a direct credit write) and {@link hireGoal}
-   * retargets the hired ship to hunt the mark. Declined when no hostile target is
-   * present, the ship won't attack its own faction, or the player can't afford
-   * the fee.
+   * "Атаковать": engage now if in weapon range, else auto-follow to intercept.
+   * Public so the existing overmindCombat/npcHostility type-cast tests keep
+   * working now that the panel callbacks live in NpcInteractionController.
    */
-  private offerHireContract(npc: NpcShip, mode: "hire" | "ally"): void {
-    this.panels.close();
-    const target = this.nearestHostileNpc(npc.id);
-    if (!target) {
-      this.deps.showMessage(
-        "Рядом нет враждебных целей для контракта.",
-        0xffaa00,
-      );
-      return;
-    }
-    // acceptsHire still gates the meaningful declines (won't betray its own
-    // faction / itself / won't take the coin while hostile to the player). The
-    // price branch is always satisfied here since the offer equals the fee.
-    if (!acceptsHire(npc, hireFee(target), target)) {
-      this.deps.showMessage(`${npc.name}: «Своих не трогаю.»`, 0xffaa00);
-      return;
-    }
-    // Known Limitation #1 (plan 20260619-universal-comms-and-pirate-encounters):
-    // the simulator has no NPC-vs-NPC engagement path yet, so a hire/ally contract
-    // cannot actually be delivered. Do NOT debit the player (via payHire) for an
-    // effect that will not occur — the previous code charged the full fee for an
-    // inert contract, a money-loss bug. Payment is deferred until the merc can
-    // really engage the mark. The hunt goal is still recorded for that future
-    // path (harmless if the daily tick later recomputes it).
-    //
-    // NOTE: do NOT stash the mark in `npc.activeQuestTarget` — that field is a
-    // *system* id consumed by NpcSimulator's RANGER questing (completion compares
-    // it to `currentSystemId`; a ranger only accepts a new quest while it is null,
-    // and it persists via the save schema). Writing a *ship* id here permanently
-    // wedges a hired ranger out of questing. `npc.goal = hireGoal(target)` already
-    // records the contract for any future NPC-vs-NPC engagement.
-    npc.goal = hireGoal(target);
-    const verb = mode === "ally" ? "готов вступить в бой" : "берёт контракт";
-    this.deps.showMessage(
-      `${npc.name} ${verb} против ${target.name} — бой между кораблями пока не поддержан, плата не взята.`,
-      0xffcc44,
-    );
+  onAttackNpc(npc: NpcShip): void {
+    this.interaction.onAttackNpc(npc);
   }
 
-  /**
-   * The nearest NPC openly hostile to the player (excluding `excludeId`), by
-   * world distance to the player ship — the threat a hired/allied ship is paid to
-   * deal with. Null when no hostile ship is present or the player ship is absent.
-   */
-  private nearestHostileNpc(excludeId: string): NpcShip | null {
-    const physics = this.deps.getShipPhysics();
-    if (!physics) return null;
-    let best: NpcShip | null = null;
-    let bestDist = Infinity;
-    for (const sprite of this.npcSprites) {
-      if (sprite.npc.id === excludeId || !sprite.npc.isAggressive()) continue;
-      const d = Math.hypot(sprite.x - physics.shipX, sprite.y - physics.shipY);
-      if (d < bestDist) {
-        bestDist = d;
-        best = sprite.npc;
-      }
-    }
-    return best;
-  }
-
-  /**
-   * "Атаковать": if already within weapon range, engage real-time in-flight
-   * combat immediately. Otherwise, close the panel and set the ship to
-   * auto-follow (intercept) the target — updateCombat() engages once in range.
-   */
-  private onAttackNpc(npc: NpcShip): void {
-    // Declaring an attack turns the target — and every same-faction ship in the
-    // player's system — openly hostile (Task 14). No-op for garrison/pirate ships
-    // that already spawned hostile.
-    this.escalateHostility(npc);
-    const sprite = this.npcSprites.find((s) => s.npc.id === npc.id);
-    this.panels.close();
-    const physics = this.deps.getShipPhysics();
-    if (!sprite || !physics) return;
-
-    const dist = Math.hypot(sprite.x - physics.shipX, sprite.y - physics.shipY);
-
-    if (dist <= this.WEAPON_RANGE) {
-      this.launchCombatWithNpc(npc);
-      return;
-    }
-
-    // Not yet in range — auto-follow to close the gap, aiming at a lead point
-    // so the intercept curves to where the target is heading (Task 5).
-    this.followNpcId = npc.id;
-    this.approachNpcId = null; // attack supersedes a non-combat approach
-    this.deps.clearRouteTarget();
-    const lead = this.npcLeadPoint(sprite);
-    this.aimRoute(lead.x, lead.y);
-    this.deps.showMessage(`Перехват: ${npc.name}`, 0xff5555);
-  }
-
-  /**
-   * Predicted intercept point for chasing an NPC: leads the target along its
-   * current heading so the pursuit curves toward where it will be rather than
-   * pointing at its present position (Task 5). NPC velocity is derived from its
-   * sprite heading (the hull faces its direction of travel) and the ship's own
-   * class cruise speed (`sprite.cruiseSpeed`) — basic ships drift slower than the
-   * interceptor tier, so the lead must not over-predict a slow trader's travel.
-   * Falls back to the NPC's current position when no lead solves.
-   */
+  /** Predicted intercept lead point for chasing a moving NPC. */
   private npcLeadPoint(sprite: NpcShipSprite): { x: number; y: number } {
-    const physics = this.deps.getShipPhysics();
-    if (!physics) return { x: sprite.x, y: sprite.y };
-    const heading = sprite.container.rotation;
-    const v = sprite.cruiseSpeed;
-    const vx = Math.cos(heading) * v;
-    const vy = Math.sin(heading) * v;
-    return solveInterceptPoint(
-      physics.shipX,
-      physics.shipY,
-      physics.getMaxSpeed(),
-      sprite.x,
-      sprite.y,
-      vx,
-      vy,
-    );
+    return this.interaction.npcLeadPoint(sprite);
   }
 
   /**
