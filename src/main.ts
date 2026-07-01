@@ -3,6 +3,7 @@ import { DIContainer } from './core/DIContainer';
 import { SaveManagerAdapter, ExceptionHandlerAdapter, QuestManagerAdapter } from './core/adapters';
 import { GalaxyService, PlayerService } from './core/services';
 import { AdaptiveQualityProfile } from './ai/AdaptiveQualityProfile';
+import { OverlayPresenter } from './presentation/OverlayPresenter';
 import { logger } from './utils/logger';
 import { GameConfig } from './config/balance';
 import { gatherDiagnostics } from './systems/feedback/gatherDiagnostics';
@@ -161,6 +162,14 @@ async function main(): Promise<void> {
     const qualityProfile = new AdaptiveQualityProfile();
     const container = initializeDIContainer();
 
+    // The presenter is constructed before the engine exists (renderer isn't built
+    // until engine.initialize() runs), so it reads the renderer back through this
+    // ref cell rather than holding a reference up front.
+    const engineRef: { current: GameEngine | null } = { current: null };
+    const overlayPresenter = new OverlayPresenter(
+      () => engineRef.current?.renderer ?? null,
+    );
+
     const engine = new GameEngine({
       saveService: container.resolve('ISaveService'),
       galaxyService: container.resolve('IGalaxyService'),
@@ -168,7 +177,9 @@ async function main(): Promise<void> {
       exceptionHandler: container.resolve('IExceptionHandler'),
       qualityProfile,
       questService: container.resolve('IQuestService'),
+      overlayPresenter,
     });
+    engineRef.current = engine;
 
     await engine.initialize({
       seed: 'NEURAL_ONSLAUGHT',

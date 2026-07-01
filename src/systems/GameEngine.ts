@@ -21,7 +21,6 @@ import { GameValidationException } from "@/exceptions/GameValidationException";
 import { logger } from "@/utils/logger";
 import { GAME_BALANCE, additionalHostileSeeds } from "@/config/balance";
 import { FlightSessionState } from "@/systems/FlightSessionState";
-import { Graphics, Text } from "pixi.js";
 import { validatePlayerSettings } from "@/validation/schemas";
 import { Player } from "@/domain/Player";
 import { NpcSimulator } from "@/systems/npc/NpcSimulator";
@@ -58,6 +57,7 @@ import type {
   IPlayerService,
   IExceptionHandler,
   IQuestService,
+  IOverlayPresenter,
 } from "@/core/ports";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import {
@@ -68,7 +68,7 @@ import { gearById } from "@/systems/equipment/GearCatalog";
 import type { Faction } from "@/types/faction";
 import { NpcShip } from "@/domain/NpcShip";
 import { GalaxyService, PlayerService, SceneFactory } from "@/core/services";
-import { QuestManagerAdapter } from "@/core/adapters";
+import { QuestManagerAdapter, NoOpOverlayPresenter } from "@/core/adapters";
 import { TextQuestRuntime } from "@/systems/quests/TextQuestRuntime";
 import { StarSystem } from "@/domain/StarSystem";
 import { Planet } from "@/domain/Planet";
@@ -98,6 +98,8 @@ export interface GameEngineDIDependencies {
   exceptionHandler: IExceptionHandler;
   qualityProfile: AdaptiveQualityProfile;
   questService: IQuestService;
+  /** Optional — falls back to a headless no-op so existing DI sites keep compiling. */
+  overlayPresenter?: IOverlayPresenter;
 }
 
 /**
@@ -237,8 +239,8 @@ export class GameEngine {
   private flightVisibilityHandler: (() => void) | null = null;
   private animationFrameId = 0;
   private lastTime = 0;
-  private modalObjects: (Graphics | Text)[] = [];
-  private loadingOverlayObjects: (Graphics | Text)[] = [];
+  /** Renderer-backed in production; a headless no-op when not injected (tests, legacy DI sites). */
+  private readonly overlay: IOverlayPresenter;
   /**
    * One-shot guard for the Overmind endgame outcome overlay
    * ({@link showGameOutcomeScreen}, win OR loss). Set by the overlay itself so
@@ -282,6 +284,8 @@ export class GameEngine {
       this.exceptionHandler = GlobalExceptionHandler.getInstance();
       this.questManager = new QuestManagerAdapter();
     }
+    this.overlay =
+      diDependencies?.overlayPresenter ?? new NoOpOverlayPresenter();
 
     this.sceneFactory = new SceneFactory();
     this.questNarrator = new TemplateQuestNarrator();
@@ -1655,116 +1659,28 @@ export class GameEngine {
       }
       this.galaxy.overmindArc.status = "won";
     }
-    if (!this.renderer) return;
-    this.clearModal();
 
-    const width = this.renderer.app.screen.width;
-    const height = this.renderer.app.screen.height;
-
-    const overlay = new Graphics();
-    overlay.fill({ color: 0x000000, alpha: 0.9 });
-    overlay.rect(0, 0, width, height);
-    overlay.eventMode = "static";
-    this.renderer.uiLayer.addChild(overlay);
-    this.modalObjects.push(overlay);
-
-    const titleColor = win ? 0xffdd44 : 0xff4444;
-    const titleStr = win ? "ПОБЕДА!" : "КОНЕЦ ИГРЫ";
-
-    const titleText = new Text({
-      text: titleStr,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 36,
-        fill: titleColor,
-        fontWeight: "bold",
+    this.overlay.showGameOutcome(win, {
+      // «Начать заново» — a full reset (new galaxy, fresh captain) back to the menu.
+      onRestart: () => {
+        this.generateDefaultGameState()
+          .then(() =>
+            this.transitionTo(SceneType.MAIN_MENU, { gameEngine: this }),
+          )
+          .catch((e) =>
+            logger.error("Transition after game outcome failed:", e),
+          );
       },
-    });
-    titleText.anchor.set(0.5);
-    titleText.x = width / 2;
-    titleText.y = height / 2 - 80;
-    titleText.eventMode = "none";
-    this.renderer.uiLayer.addChild(titleText);
-    this.modalObjects.push(titleText);
-
-    const msg = win
-      ? "Ветеран-Дипломат.\nГалактика под вашей защитой!"
-      : "Галактика пала.\nOVERMIND установил контроль над большинством систем.";
-
-    const msgText = new Text({
-      text: msg,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 18,
-        fill: 0xcccccc,
-        align: "center",
-        wordWrap: true,
-        wordWrapWidth: width * 0.65,
-      },
-    });
-    msgText.anchor.set(0.5);
-    msgText.x = width / 2;
-    msgText.y = height / 2;
-    msgText.eventMode = "none";
-    this.renderer.uiLayer.addChild(msgText);
-    this.modalObjects.push(msgText);
-
-    // A small helper to build a clickable text button (the outcome overlay's
-    // only interactive elements).
-    const makeButton = (
-      label: string,
-      y: number,
-      color: number,
-      onClick: () => void,
-    ): void => {
-      const btn = new Text({
-        text: label,
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 22,
-          fill: color,
-          fontWeight: "bold",
-        },
-      });
-      btn.anchor.set(0.5);
-      btn.x = width / 2;
-      btn.y = y;
-      btn.eventMode = "static";
-      btn.cursor = "pointer";
-      btn.on("pointerdown", onClick);
-      btn.on("pointerover", () => {
-        btn.alpha = 0.7;
-      });
-      btn.on("pointerout", () => {
-        btn.alpha = 1;
-      });
-      this.renderer!.uiLayer.addChild(btn);
-      this.modalObjects.push(btn);
-    };
-
-    // «Начать заново» — a full reset (new galaxy, fresh captain) back to the menu.
-    const restart = (): void => {
-      this.clearModal();
-      this.generateDefaultGameState()
-        .then(() =>
-          this.transitionTo(SceneType.MAIN_MENU, { gameEngine: this }),
-        )
-        .catch((e) => logger.error("Transition after game outcome failed:", e));
-    };
-
-    if (win) {
       // On a victory, offer New Game+ (carry a subset of progress into a tougher
       // cycle) above the plain restart.
-      makeButton("Новая игра+", height / 2 + 70, 0x66ddff, () => {
-        this.clearModal();
-        this.startNewGamePlus().catch((e) =>
-          logger.error("New Game+ start failed:", e),
-        );
-      });
-      makeButton("Начать заново", height / 2 + 120, 0x00ff88, restart);
-    } else {
-      makeButton("Начать заново", height / 2 + 90, 0x00ff88, restart);
-    }
+      onNewGamePlus: win
+        ? () => {
+            this.startNewGamePlus().catch((e) =>
+              logger.error("New Game+ start failed:", e),
+            );
+          }
+        : undefined,
+    });
   }
 
   /**
@@ -1851,20 +1767,16 @@ export class GameEngine {
       error.errorCode === "SAVE_VALIDATION_FAILED"
     ) {
       // Show modal overlay with "Новая игра" button
-      this.showErrorModal(
+      this.overlay.showError(
         `Ошибка сохранения: ${error.errorMessage}. Нажмите "Новая игра" для начала новой игры.`,
-        false,
-        true, // isNewGameButton = true
+        () => this.newGameFromErrorModal(),
       );
       return;
     }
 
-    if (!response.recoverable) {
-      // Show fatal error modal and offer return to main menu
-      this.showErrorModal(response.message, true);
-    } else {
-      this.showErrorModal(response.message, false);
-    }
+    // Fatal vs. recoverable both render the same modal (no "Новая игра" button);
+    // only the log line above distinguishes them.
+    this.overlay.showError(response.message);
   }
 
   private handleCriticalError(response: { message: string }): void {
@@ -1874,139 +1786,27 @@ export class GameEngine {
         logger.error("Emergency auto-save failed:", e);
       });
     }
-    this.showErrorModal(response.message, true);
+    this.overlay.showError(response.message);
   }
 
-  private showErrorModal(
-    message: string,
-    _isFatal: boolean,
-    isNewGameButton = false,
-  ): void {
-    if (!this.renderer) return;
-
-    // Clear any existing modal
-    this.clearModal();
-
-    const width = this.renderer.app.screen.width;
-    const height = this.renderer.app.screen.height;
-
-    // Semi-transparent overlay
-    const overlay = new Graphics();
-    overlay.fill({ color: 0x000000, alpha: 0.85 });
-    overlay.rect(0, 0, width, height);
-    overlay.eventMode = "static";
-    this.renderer.uiLayer.addChild(overlay);
-    this.modalObjects.push(overlay);
-
-    // Error message text
-    const msgText = new Text({
-      text: message,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 16,
-        fill: 0xff4444,
-        align: "center",
-        wordWrap: true,
-        wordWrapWidth: width * 0.8,
-      },
-    });
-    msgText.anchor.set(0.5);
-    msgText.x = width / 2;
-    msgText.y = height / 2 - 40;
-    this.renderer.uiLayer.addChild(msgText);
-    this.modalObjects.push(msgText);
-
-    if (isNewGameButton) {
-      const btnText = new Text({
-        text: "Новая игра",
-        style: {
-          fontFamily: "Courier New",
-          fontSize: 20,
-          fill: 0x00ff00,
-          fontWeight: "bold",
-        },
+  /** "Новая игра" click on the save-validation error modal. */
+  private newGameFromErrorModal(): void {
+    this.generateDefaultGameState()
+      .then(() => this.transitionTo(SceneType.STAR_MAP))
+      .catch((e) => {
+        logger.error("New game from modal failed:", e);
+        this.overlay.showError(
+          "Не удалось начать новую игру. Обновите страницу.",
+        );
       });
-      btnText.anchor.set(0.5);
-      btnText.x = width / 2;
-      btnText.y = height / 2 + 40;
-      btnText.eventMode = "static";
-      btnText.cursor = "pointer";
-
-      btnText.on("pointerdown", async () => {
-        this.clearModal();
-        try {
-          await this.generateDefaultGameState();
-          await this.transitionTo(SceneType.STAR_MAP);
-        } catch (e) {
-          logger.error("New game from modal failed:", e);
-          this.showErrorModal(
-            "Не удалось начать новую игру. Обновите страницу.",
-            false,
-          );
-        }
-      });
-
-      btnText.on("pointerover", () => {
-        btnText.alpha = 0.7;
-      });
-      btnText.on("pointerout", () => {
-        btnText.alpha = 1;
-      });
-
-      this.renderer.uiLayer.addChild(btnText);
-      this.modalObjects.push(btnText);
-    }
-  }
-
-  private clearModal(): void {
-    if (!this.renderer) return;
-    for (const obj of this.modalObjects) {
-      if (obj.parent) {
-        this.renderer.uiLayer.removeChild(obj);
-      }
-      obj.destroy();
-    }
-    this.modalObjects = [];
   }
 
   showLoadingOverlay(label: string): void {
-    if (!this.renderer) return;
-    this.hideLoadingOverlay();
-
-    const width = this.renderer.app.screen.width;
-    const height = this.renderer.app.screen.height;
-
-    const overlay = new Graphics();
-    overlay.fill({ color: 0x000000, alpha: 0.75 });
-    overlay.rect(0, 0, width, height);
-    overlay.eventMode = "static";
-    this.renderer.uiLayer.addChild(overlay);
-    this.loadingOverlayObjects.push(overlay);
-
-    const labelText = new Text({
-      text: label,
-      style: {
-        fontFamily: "Courier New",
-        fontSize: 18,
-        fill: 0x00ffff,
-      },
-    });
-    labelText.anchor.set(0.5);
-    labelText.x = width / 2;
-    labelText.y = height / 2;
-    labelText.eventMode = "none";
-    this.renderer.uiLayer.addChild(labelText);
-    this.loadingOverlayObjects.push(labelText);
+    this.overlay.showLoading(label);
   }
 
   hideLoadingOverlay(): void {
-    for (const obj of this.loadingOverlayObjects) {
-      if (obj.parent) {
-        obj.parent.removeChild(obj);
-      }
-      obj.destroy();
-    }
-    this.loadingOverlayObjects = [];
+    this.overlay.hideLoading();
   }
 
   /**

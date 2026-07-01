@@ -9,3 +9,4 @@ export type {
   QuestProgressEvent,
   QuestTemplate,
 } from "./IQuestService";
+export type { IOverlayPresenter } from "./IOverlayPresenter";
