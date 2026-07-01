@@ -119,6 +119,39 @@ describe("installAutopilotHook — window hook + hotkey", () => {
     expect(second).toBe(first);
     expect(keydownHandlers).toHaveLength(1); // no new hotkey listener
   });
+
+  it("exposes flag() and exportFlags() on the window hook (Task 7)", () => {
+    const hook = installAutopilotHook({} as GameEngine, quietDeps);
+    expect(typeof hook.flag).toBe("function");
+    expect(typeof hook.exportFlags).toBe("function");
+    expect(() => hook.flag("note")).not.toThrow();
+    expect(typeof hook.exportFlags()).toBe("string");
+  });
+
+  it("engaged + Shift+F flags without toggling the autopilot off", () => {
+    const hook = installAutopilotHook({} as GameEngine, quietDeps);
+    const flagSpy = vi.spyOn(hook.controller, "flag");
+    hook.start();
+    const onKey = keydownHandlers[0];
+
+    onKey({ shiftKey: true, key: "F" } as KeyboardEvent);
+    expect(flagSpy).toHaveBeenCalledTimes(1);
+    expect(hook.engaged).toBe(true); // still engaged — Shift+F never reclaims
+
+    onKey({ shiftKey: true, key: "f" } as KeyboardEvent); // case-insensitive
+    expect(flagSpy).toHaveBeenCalledTimes(2);
+    expect(hook.engaged).toBe(true);
+  });
+
+  it("Shift+F while disengaged neither flags nor toggles", () => {
+    const hook = installAutopilotHook({} as GameEngine, quietDeps);
+    const flagSpy = vi.spyOn(hook.controller, "flag");
+    const onKey = keydownHandlers[0];
+
+    onKey({ shiftKey: true, key: "F" } as KeyboardEvent);
+    expect(flagSpy).not.toHaveBeenCalled();
+    expect(hook.engaged).toBe(false);
+  });
 });
 
 describe("createLiveSceneController — verb → live engine call", () => {

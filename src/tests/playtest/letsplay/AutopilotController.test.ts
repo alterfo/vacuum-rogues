@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { SceneType } from "@/types";
 import {
   AutopilotController,
@@ -10,6 +10,7 @@ import {
 import type { ApplyCall, LiveSceneController } from "./LiveApplier";
 import { legalActionsForScene, type Observation } from "./observe";
 import type { Action, PlayerPolicy } from "./PlayerPolicy";
+import { readFlags, clearFlags } from "./oddityFlags";
 
 /**
  * Task 2 of the dev-only autopilot: the controller (observe → decide → apply on a
@@ -433,6 +434,146 @@ describe("AutopilotController — robustness (never throws)", () => {
     // Once the in-flight apply settles, a fresh tick proceeds.
     await ap.tickOnce();
     expect(decide).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("AutopilotController — flag() (live oddity flagging, Task 7)", () => {
+  afterEach(() => {
+    clearFlags();
+  });
+
+  it("is a no-op before the first tick — nothing observed yet", () => {
+    const sch = makeFakeScheduler();
+    const { controller } = makeController();
+    const ap = new AutopilotController({
+      observe: flightObs,
+      policy: fixedPolicy({ kind: "wait" }),
+      controller,
+      scheduler: sch.scheduler,
+      indicator: noopIndicator(),
+    });
+
+    ap.start();
+    expect(() => ap.flag("too early")).not.toThrow();
+    expect(readFlags()).toEqual([]);
+  });
+
+  it("records the most recently observed step/scene/action after a tick", async () => {
+    const sch = makeFakeScheduler();
+    const { controller } = makeController();
+    const ap = new AutopilotController({
+      observe: flightObs,
+      policy: fixedPolicy({ kind: "wait" }),
+      controller,
+      scheduler: sch.scheduler,
+      indicator: noopIndicator(),
+    });
+
+    ap.start();
+    await ap.tickOnce();
+    ap.flag("странный манёвр");
+
+    const flags = readFlags();
+    expect(flags).toHaveLength(1);
+    expect(flags[0]).toMatchObject({
+      step: 1,
+      scene: SceneType.SPACE_FLIGHT,
+      lastAction: { kind: "wait" },
+      note: "странный манёвр",
+    });
+  });
+
+  it("a fresh start() resets the step counter a flag is recorded at", async () => {
+    const sch = makeFakeScheduler();
+    const { controller } = makeController();
+    const ap = new AutopilotController({
+      observe: flightObs,
+      policy: fixedPolicy({ kind: "wait" }),
+      controller,
+      scheduler: sch.scheduler,
+      indicator: noopIndicator(),
+    });
+
+    ap.start();
+    await ap.tickOnce();
+    await ap.tickOnce();
+    ap.stop();
+
+    ap.start(); // fresh engagement — step counter restarts at 0
+    await ap.tickOnce();
+    ap.flag();
+
+    expect(readFlags()[0].step).toBe(1);
+  });
+
+  it("never throws when the underlying store write fails (flagOddity is itself storage-guarded)", async () => {
+    const original = localStorage.setItem;
+    localStorage.setItem = () => {
+      throw new Error("quota exceeded");
+    };
+    const onError = vi.fn();
+    const sch = makeFakeScheduler();
+    const { controller } = makeController();
+    const ap = new AutopilotController({
+      observe: flightObs,
+      policy: fixedPolicy({ kind: "wait" }),
+      controller,
+      scheduler: sch.scheduler,
+      indicator: noopIndicator(),
+      onError,
+    });
+
+    ap.start();
+    await ap.tickOnce();
+    try {
+      expect(() => ap.flag()).not.toThrow();
+      // The write failure is swallowed inside flagOddity itself (best-effort
+      // storage), so it never reaches AutopilotController's onError sink.
+      expect(onError).not.toHaveBeenCalled();
+    } finally {
+      localStorage.setItem = original;
+    }
+  });
+});
+
+describe("AutopilotController — ignoreReclaimKey (Shift+F must not reclaim)", () => {
+  it("a keydown matching ignoreReclaimKey does not disengage the autopilot", () => {
+    // Exercise the real default input source (no onHumanInput override) by
+    // temporarily capturing window's keydown listener.
+    const handlers: ((e: KeyboardEvent) => void)[] = [];
+    const spy = vi.spyOn(window, "addEventListener").mockImplementation(((
+      type: string,
+      handler: unknown,
+    ) => {
+      if (type === "keydown")
+        handlers.push(handler as (e: KeyboardEvent) => void);
+    }) as typeof window.addEventListener);
+
+    const sch = makeFakeScheduler();
+    const { controller } = makeController();
+    const ap = new AutopilotController({
+      observe: flightObs,
+      policy: fixedPolicy({ kind: "wait" }),
+      controller,
+      scheduler: sch.scheduler,
+      indicator: noopIndicator(),
+      ignoreReclaimKey: (e) => e.shiftKey && e.key === "F",
+    });
+
+    try {
+      ap.start();
+      expect(ap.isEngaged).toBe(true);
+
+      for (const h of handlers)
+        h({ type: "keydown", shiftKey: true, key: "F" } as KeyboardEvent);
+      expect(ap.isEngaged).toBe(true); // ignored — still engaged
+
+      for (const h of handlers)
+        h({ type: "keydown", key: "x" } as KeyboardEvent);
+      expect(ap.isEngaged).toBe(false); // a genuine keydown still reclaims
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

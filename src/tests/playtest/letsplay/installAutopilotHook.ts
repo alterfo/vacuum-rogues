@@ -28,6 +28,7 @@ import { selectPlayerPolicy } from "./policyGate";
 import playerWeights from "./weights/player.weights.json";
 import { AutopilotController, type AutopilotDeps } from "./AutopilotController";
 import type { LiveSceneController } from "./LiveApplier";
+import { exportFlags } from "./oddityFlags";
 import {
   currentSystem,
   landedPlanet,
@@ -37,6 +38,31 @@ import {
 
 /** The `keydown` that toggles the autopilot (Backquote / `` ` `` — unused in flight). */
 export const AUTOPILOT_HOTKEY_CODE = "Backquote";
+
+/** Whether a `keydown` is the silent oddity-flag hotkey (Shift+F). */
+function isOddityFlagKey(e: KeyboardEvent): boolean {
+  return e.shiftKey && e.key.toLowerCase() === "f";
+}
+
+/** How long the indicator flashes "flagged" after `Shift+F` (ms). */
+const FLAG_FLASH_MS = 1000;
+
+/**
+ * Briefly swap the "● АВТОПИЛОТ" pill's text to "⚑ ОТМЕЧЕНО" as visual
+ * confirmation that `Shift+F` recorded a flag, then restore it. A no-op
+ * without a `document` or before the indicator has ever been shown (its
+ * element is created lazily by `domIndicator()` in `AutopilotController.ts`).
+ */
+function flashFlaggedIndicator(): void {
+  if (typeof document === "undefined") return;
+  const el = document.getElementById("autopilot-indicator");
+  if (!el) return;
+  const original = el.textContent;
+  el.textContent = "⚑ ОТМЕЧЕНО";
+  setTimeout(() => {
+    el.textContent = original;
+  }, FLAG_FLASH_MS);
+}
 
 /** The dev-only window hook published at `window.__autopilot`. */
 export interface AutopilotWindowHook {
@@ -50,6 +76,10 @@ export interface AutopilotWindowHook {
   readonly engaged: boolean;
   /** The underlying controller (for advanced/manual driving). */
   readonly controller: AutopilotController;
+  /** Flag the current moment as an oddity for later review (see `oddityFlags.ts`). */
+  flag(note?: string): void;
+  /** All flagged oddities so far, serialized as JSON (copy-paste from the console). */
+  exportFlags(): string;
 }
 
 /**
@@ -260,6 +290,8 @@ export function installAutopilotHook(
     policy: selectPlayerPolicy({ weights: playerWeights }),
     controller: createLiveSceneController(engine),
     onError: (err) => logger.warn("Autopilot tick fault (continuing):", err),
+    // The Shift+F oddity-flag hotkey (below) must never disengage the autopilot.
+    ignoreReclaimKey: isOddityFlagKey,
     ...overrides,
   });
 
@@ -272,6 +304,8 @@ export function installAutopilotHook(
       return controller.isEngaged;
     },
     controller,
+    flag: (note?: string) => controller.flag(note),
+    exportFlags: () => exportFlags(),
   };
 
   if (win) {
@@ -281,6 +315,11 @@ export function installAutopilotHook(
     // order — pressing the hotkey to disengage resolves to a clean stop, not a
     // stop-then-restart race with reclaim.
     window.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (hook.engaged && isOddityFlagKey(e)) {
+        hook.flag();
+        flashFlaggedIndicator();
+        return;
+      }
       if (e.code !== AUTOPILOT_HOTKEY_CODE) return;
       hook.toggle();
     });

@@ -31,8 +31,9 @@
  */
 import { applyLiveAction, type LiveSceneController } from "./LiveApplier";
 import type { Observation } from "./observe";
-import type { PlayerPolicy } from "./PlayerPolicy";
+import type { Action, PlayerPolicy } from "./PlayerPolicy";
 import { type AgentMemory, createMemory, updateMemory } from "./AgentMemory";
+import { flagOddity } from "./oddityFlags";
 
 /** Default tick cadence — slow enough that a human can follow each decision. */
 export const DEFAULT_AUTOPILOT_TICK_MS = 800;
@@ -72,6 +73,13 @@ export interface AutopilotDeps {
   readonly scheduler?: AutopilotScheduler;
   /** Human-input subscription; defaults to live `window` pointer/key listeners. */
   readonly onHumanInput?: HumanInputSource;
+  /**
+   * When the default input source is in use, a `keydown` matching this
+   * predicate is excluded from reclaim-on-input (e.g. the silent `Shift+F`
+   * oddity-flag hotkey should never disengage the autopilot). Ignored when
+   * `onHumanInput` is supplied.
+   */
+  readonly ignoreReclaimKey?: (e: KeyboardEvent) => boolean;
   /** "AUTOPILOT" overlay; defaults to a DOM badge (no-op without a `document`). */
   readonly indicator?: AutopilotIndicator;
   /** Tick cadence (ms); defaults to {@link DEFAULT_AUTOPILOT_TICK_MS}. */
@@ -113,18 +121,27 @@ const defaultScheduler: AutopilotScheduler = {
 /**
  * Live `window` input source — the first pointer/key/wheel/touch disengages the
  * autopilot. Degrades to a no-op without a `window` (e.g. under Vitest), so it is
- * safe as a default the controller resolves lazily.
+ * safe as a default the controller resolves lazily. A `keydown` matching
+ * `ignoreKey` (e.g. the oddity-flag hotkey) is excluded so flagging never stops
+ * the autopilot.
  */
-const defaultInputSource: HumanInputSource = (onInput) => {
-  if (typeof window === "undefined") return () => {};
-  const events = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
-  const handler = (): void => onInput();
-  for (const e of events)
-    window.addEventListener(e, handler, { passive: true });
-  return () => {
-    for (const e of events) window.removeEventListener(e, handler);
+function makeDefaultInputSource(
+  ignoreKey?: (e: KeyboardEvent) => boolean,
+): HumanInputSource {
+  return (onInput) => {
+    if (typeof window === "undefined") return () => {};
+    const events = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+    const handler = (e: Event): void => {
+      if (e.type === "keydown" && ignoreKey?.(e as KeyboardEvent)) return;
+      onInput();
+    };
+    for (const e of events)
+      window.addEventListener(e, handler, { passive: true });
+    return () => {
+      for (const e of events) window.removeEventListener(e, handler);
+    };
   };
-};
+}
 
 /** A no-op indicator — used when no `document` is available (tests / Node). */
 const noopIndicator: AutopilotIndicator = { show() {}, hide() {} };
@@ -184,6 +201,11 @@ export class AutopilotController {
   private cancelInput: (() => void) | null = null;
   /** Fresh per engagement — a human handing the ship over starts a clean belief. */
   private memory: AgentMemory = createMemory();
+  /** Ticks completed since the last `start()` — the `step` a flag is recorded at. */
+  private step = 0;
+  /** The most recent `observe()`/decision, kept for `flag()` (null before the first tick). */
+  private lastObs: Observation | null = null;
+  private lastAction: Action | null = null;
 
   private readonly observeFn: () => Observation;
   private readonly policy: PlayerPolicy;
@@ -199,7 +221,8 @@ export class AutopilotController {
     this.policy = deps.policy;
     this.controller = deps.controller;
     this.scheduler = deps.scheduler ?? defaultScheduler;
-    this.inputSource = deps.onHumanInput ?? defaultInputSource;
+    this.inputSource =
+      deps.onHumanInput ?? makeDefaultInputSource(deps.ignoreReclaimKey);
     this.indicator = deps.indicator ?? domIndicator();
     this.intervalMs = deps.tickIntervalMs ?? DEFAULT_AUTOPILOT_TICK_MS;
     this.onError = deps.onError ?? (() => {});
@@ -219,6 +242,9 @@ export class AutopilotController {
     this.engaged = true;
     this.busy = false;
     this.memory = createMemory();
+    this.step = 0;
+    this.lastObs = null;
+    this.lastAction = null;
     guard(() => this.indicator.show(), this.onError);
     this.cancelInput = guardReturn(
       () => this.inputSource(() => this.stop()),
@@ -263,11 +289,28 @@ export class AutopilotController {
       const obs = this.observeFn();
       this.memory = updateMemory(this.memory, obs);
       const action = this.policy.decide(obs, this.memory);
+      this.lastObs = obs;
+      this.lastAction = action;
+      this.step += 1;
       await applyLiveAction(action, obs, this.controller);
     } catch (err) {
       this.onError(err);
     } finally {
       this.busy = false;
     }
+  }
+
+  /**
+   * Record an oddity flag for the most recently observed/decided step (see
+   * {@link flagOddity}). A no-op before the first tick (nothing observed yet)
+   * — never throws, so a human calling this from the console can't crash the
+   * autopilot.
+   */
+  flag(note?: string): void {
+    if (!this.lastObs) return;
+    guard(
+      () => flagOddity(this.lastObs!, this.step, this.lastAction, note),
+      this.onError,
+    );
   }
 }
