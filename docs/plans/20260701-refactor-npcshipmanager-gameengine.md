@@ -118,12 +118,12 @@ Order chosen: extract the four sub-systems (most self-contained), then decouple 
 - [x] run `npm test -- --run src/tests/flight/ src/tests/combat/ src/tests/presentation/ src/tests/playtest/` — all green (1718 passed, 4 skipped; only the pre-existing out-of-scope `moduleContracts` guard red); `tsc --noEmit` + `lint` clean; `gitnexus detect_changes({scope:"unstaged"})` confirmed low risk, scope confined to `NpcShipManager.ts` (+ new `CombatPursuitController`/test additions)
 
 ### Task 7: Phase 1 gate
-- [ ] `npm test -- --run` (full unit suite) — green
-- [ ] `npm run lint` — clean
-- [ ] `npm run test:playtest` — green
-- [ ] `npm run test:e2e:regression` — green (no flight rendering/interaction regression)
-- [ ] `gitnexus detect_changes({scope:"compare", base_ref:"master"})` — confirm only NpcShipManager + new units + SpaceFlightScene deps closure changed
-- [ ] confirm `NpcShipManager.ts` line count materially reduced and `SpaceFlightScene.ts` still < 1900 lines
+- [x] `npm test -- --run` (full unit suite) — green: 480 files / 4297 passed, 7 skipped
+- [x] `npm run lint` — clean (0 errors, only pre-existing `no-explicit-any` warnings)
+- [x] `npm run test:playtest` — green: 42 files / 450 passed, 4 skipped
+- [x] `npm run test:e2e:regression` — 18 passed, 1 pre-existing failure + 10 cascaded skips (the spec's `describe.serial` block aborts remaining tests after a failure). The failing test (`playtest4 A`, font-size keeps ship in place) references `hud.gearButton`/`hud.settingsPanel`, which commit f30b192 ("relocate settings panel from in-flight HUD to the main menu", 2026-06-26) removed from `FlightHud` — an ancestor commit shared by master and this branch, predating Phase 1. Reproduced identically with all Phase-1 uncommitted diffs stashed (pure Task-6 HEAD), confirming it is unrelated to this refactor and out of scope (test authored against a UI surface removed by an unrelated earlier plan) — not touched, per the never-modify-existing-tests rule
+- [x] `gitnexus detect_changes({scope:"compare", base_ref:"master"})` — the branch is 48 commits ahead of master (accumulates several earlier plans), so a raw compare-to-master is not a useful scope signal; instead diffed Phase 1's own commit range (`0e568b8~1..313a1d6`, Tasks 1-6): touches only `NpcShipManager.ts`, the four new controllers, `FlightSessionState.ts`, `GameEngine.ts` (thin delegation, +54/-? lines), `SpaceFlightScene.ts` (+1 line deps-closure wiring), the Cyrillic baseline, and new test files — matches the plan's intended scope exactly
+- [x] confirm `NpcShipManager.ts` line count materially reduced and `SpaceFlightScene.ts` still < 1900 lines — `NpcShipManager.ts` 2580→1284 lines; `SpaceFlightScene.ts` 1880 lines (< 1898 guard)
 
 ---
 
