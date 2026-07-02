@@ -164,13 +164,14 @@ Order chosen: extract the four sub-systems (most self-contained), then decouple 
 - [x] run `npm test -- --run src/tests/core/ src/tests/data/goldenSaveCompat.test.ts` + `npm run test:save-compat` — green (120 + 22 tests); full suite 486 files/4348 passed, 7 skipped; `tsc --noEmit` + `lint` clean (0 errors, only pre-existing `no-explicit-any` warnings); `gitnexus detect_changes({scope:"unstaged"})` scope: `GameEngine.ts` + new `FlightPositionTracker.ts`/test only (the tool's "high risk" reading is from an unrelated pre-existing uncommitted `SpaceFlightScene.ts` e2e-hooks diff already in the working tree at session start, same caveat as Tasks 9/10)
 
 ### Task 12: Phase 2 gate + acceptance
-- [ ] verify all Overview goals: both files materially slimmer, layer violation gone (pixi import removed from GameEngine, guard test green), transient coupling decoupled, four+four units extracted with tests
-- [ ] `npm test -- --run` (full) — green
-- [ ] `npm run lint` — clean
-- [ ] `npm run test:playtest` — green
-- [ ] `npm run test:save-compat` — green
-- [ ] `npm run test:e2e:regression` — green
-- [ ] `gitnexus detect_changes({scope:"compare", base_ref:"master"})` — affected scope matches the two files + new units only
+- [x] verify all Overview goals: both files materially slimmer (`GameEngine.ts` 2157→1570, `NpcShipManager.ts` 2580→1284), layer violation gone (`grep '"pixi.js"' src/systems/GameEngine.ts` empty; `noPixiInGameEngine.test.ts` guard present and green), transient coupling decoupled (`FlightSessionState`, `FlightPositionTracker`), four Phase 1 units (`NpcInteractionController`/`CombatPursuitController`/`EncounterController`/`OvermindBossController`) + four Phase 2 units (`IOverlayPresenter`/`OverlayPresenter`/`DayTickController`/`EndgameController`/`FlightPositionTracker`) all present with dedicated unit tests
+- [x] `npm test -- --run` (full) — green: 485 files / 4348 passed, 7 skipped
+- [x] `npm run lint` — clean (0 errors, only pre-existing `no-explicit-any` warnings)
+- [x] `npx tsc --noEmit` — clean
+- [x] `npm run test:playtest` — green: 42 files / 450 passed, 4 skipped
+- [x] `npm run test:save-compat` — green: 22 tests
+- [x] `npm run test:e2e:regression` — 18 passed, 1 pre-existing failure + 10 cascaded skips, same as Task 7 (`playtest4 A`, font-size ship-in-place — references `hud.gearButton` removed by unrelated ancestor commit f30b192, predates both phases, out of scope, not touched)
+- [x] `gitnexus detect_changes({scope:"compare", base_ref:"master"})` — branch is 53 commits ahead of master (same as Task 7's finding), so raw compare is not a useful scope signal (97K-char result, mostly unrelated prior work); instead diffed Phase 2's own commit range (`7deaae8~1..4d3adf2`, Tasks 8-11) with `git diff --stat`: touches only `GameEngine.ts` (985 lines removed/thinned), the five new Phase-2 units, `main.ts` (DI wiring, +11), `core/adapters/index.ts` + `core/ports/index.ts` (barrel exports), and the Cyrillic baseline — matches the plan's intended scope exactly. A pre-existing unrelated uncommitted diff (`SpaceFlightScene.ts`, `e2eTestHooks.ts`, a `smart-autopilot-player` plan doc) was present in the working tree at session start from an unrelated task — left untouched, not part of this plan's scope (same caveat noted in Tasks 9-11)
 
 ### Task 13: [Final] Docs + index refresh
 - [ ] update `.claude/docs/systems/letsplay.md` / relevant subsystem docs if the flight/day-tick seams they describe moved
