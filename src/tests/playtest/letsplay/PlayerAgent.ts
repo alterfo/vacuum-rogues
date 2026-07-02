@@ -265,8 +265,17 @@ export class PlayerAgent {
         // Only land on the exact targeted planet — never fall back to planets[0]
         // which may be uninhabited (no market, creates a spin-land-takeoff loop).
         const planet = sys?.planets.find((p) => p.id === action.targetId);
-        if (planet) await this.harness.goTo(SceneType.PLANET, { planet });
-        else this.harness.tick();
+        if (planet) {
+          await this.harness.goTo(SceneType.PLANET, { planet });
+          // Mirrors SpaceFlightScene.onLandOnPlanet's refuel side effect — the
+          // headless teleport-land skips the physical flight live play uses to
+          // reach the planet, so it must restore fuel itself or the fuel-survival
+          // tier's "land to refuel" never actually refuels headlessly.
+          const ship = engine.player?.ship;
+          if (ship) ship.energy = ship.maxEnergy;
+        } else {
+          this.harness.tick();
+        }
         return;
       }
 

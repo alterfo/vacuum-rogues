@@ -56,6 +56,15 @@ import {
  */
 export const BATTLE_READY_HULL_FRACTION = 0.99;
 
+/**
+ * Below this fuel fraction the survival tier takes over: land on any in-system
+ * habitable planet to refuel (landing always tops the tank off for free — see
+ * `SpaceFlightScene.onLandOnPlanet`), and no `warp` candidate is emitted at all
+ * (a warp only ever burns fuel, and every planeted system reaches a refuel via
+ * `land`, so this alone eliminates fuel-death).
+ */
+export const REFUEL_THRESHOLD = 0.2;
+
 /** One ranked action candidate: a legal-or-not preference the legal filter prunes. */
 interface Candidate {
   kind: PlayerActionKind;
@@ -464,6 +473,22 @@ export function decideWithMemory(
     push("dock", "dock-to-repair", obs.system?.stations[0]?.id);
   }
 
+  // Fuel survival — refuel before the tank runs dry. Landing on any habitable
+  // planet in-system refuels to full at no fuel cost, so a critical fuel
+  // fraction routes there ahead of everything below (trade/progress/explore).
+  // `fuelGate` additionally suppresses every `warp` candidate this call could
+  // otherwise emit — a warp only ever burns fuel, and burning more while
+  // already critical is exactly the stranding this tier exists to prevent.
+  const fuelFraction = obs.player?.fuelFraction ?? 1;
+  const fuelCritical = fuelFraction < REFUEL_THRESHOLD;
+  const fuelGate = fuelCritical;
+  if (fuelCritical) {
+    const refuelPlanet = (obs.system?.planets ?? []).find(
+      (p) => p.isHabitable !== false,
+    )?.id;
+    if (refuelPlanet) push("land", "refuel-critical", refuelPlanet);
+  }
+
   const best = bestKnownMargin(mem);
   const offer = cheapestKnownOffer(mem);
   const canAffordOffer = offer ? credits >= offer.price : false;
@@ -551,7 +576,7 @@ export function decideWithMemory(
       const holdingForOtherSystem =
         mem.inventoryLots.length > 0 &&
         (best.sellPlanet === null || !planetInSystem(obs, best.sellPlanet));
-      if (holdingForOtherSystem && !avoidDanger) {
+      if (holdingForOtherSystem && !avoidDanger && !fuelGate) {
         push("warp", "find-sell-destination");
       }
       // Generic earn — head to local commerce.
@@ -573,6 +598,7 @@ export function decideWithMemory(
         alreadyVisited &&
         best.fraction === 0 &&
         !avoidDanger &&
+        !fuelGate &&
         mem.inventoryLots.length === 0 &&
         !offer
       ) {
@@ -582,12 +608,13 @@ export function decideWithMemory(
         push("land", "earn", earnPlanet);
       }
       push("dock", "earn", obs.system?.stations[0]?.id);
-      // Explore — but don't warp deeper into a remembered threat while hurt.
+      // Explore — but don't warp deeper into a remembered threat while hurt,
+      // and never warp at all while fuel-critical (land/dock/wait only).
       if (avoidDanger) {
         push("move", "avoid-danger-hold");
-        push("warp", "explore");
+        if (!fuelGate) push("warp", "explore");
       } else {
-        push("warp", "explore");
+        if (!fuelGate) push("warp", "explore");
         push("move", "fly");
       }
       break;
@@ -595,7 +622,7 @@ export function decideWithMemory(
     case SceneType.STAR_MAP: {
       // Don't jump toward a remembered threat while not battle-ready.
       if (avoidDanger) push("move", "avoid-danger-back");
-      push("warp", "warp");
+      if (!fuelGate) push("warp", "warp");
       push("move", "back");
       break;
     }
