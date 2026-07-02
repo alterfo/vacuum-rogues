@@ -36,8 +36,16 @@ import {
   landedPlanet,
   acceptBoardQuests,
   executeTradeOnPlanet,
+  executeRepair,
+  executeSellAll,
   pickWarpTarget,
 } from "./engineQueries";
+import {
+  executeBuyBestGear,
+  executeUpgradeHull,
+  executeBuyBestModule,
+} from "./equipmentQueries";
+import { executeTakeLoan, executeRepayLoan } from "./bankingQueries";
 
 /** The `keydown` that toggles the autopilot (Backquote / `` ` `` — unused in flight). */
 export const AUTOPILOT_HOTKEY_CODE = "Backquote";
@@ -303,26 +311,31 @@ export function createLiveSceneController(
       nm?.breakOffCombatPursuit?.();
     },
     repair() {
-      // Repair is owned by the station UI — a safe no-op.
+      // Guard on a fully-resolved player ship — executeRepair reads
+      // player.ship directly (no optional chaining), so this keeps the verb a
+      // true no-op rather than a throw on an incompletely-initialized player.
+      if (engine.player?.ship) executeRepair(engine);
     },
     buyGear() {
-      // No live executor yet — safe no-op (mirrors the headless applier pattern
-      // for verbs not yet wired to the rendered scene).
+      executeBuyBestGear(engine);
     },
     upgradeHull() {
-      // No live executor yet — safe no-op.
+      executeUpgradeHull(engine);
     },
     buyModule() {
-      // No live executor yet — safe no-op.
+      executeBuyBestModule(engine);
     },
     takeLoan() {
-      // No live executor yet — safe no-op.
+      executeTakeLoan(engine);
     },
     repayLoan() {
-      // No live executor yet — safe no-op.
+      executeRepayLoan(engine);
     },
     sellCargo() {
-      // No live executor yet — safe no-op.
+      // legalActionsForScene only offers sell-cargo from PLANET/TRADE, both of
+      // which imply the player is landed — mirrors PlayerAgent's sell-cargo guard.
+      const planet = landedPlanet(engine);
+      if (planet) executeSellAll(engine, planet);
     },
   };
 }

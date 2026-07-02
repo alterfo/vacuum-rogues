@@ -261,10 +261,45 @@ regenerate + retrain the net to clone the smarter teacher.
   issue untouched by this task.
 
 ### Task 6: Wire the 8 live dead heads (LIVE autopilot parity)
-- [ ] RED: extend `LiveApplier.test.ts` pattern in a **new** `liveEconomyHeads.test.ts` — assert each of `repair`, `buy-gear`, `upgrade-hull`, `buy-module`, `take-loan`, `repay-loan`, `sell-cargo` produces its real effect in live (hull up / credits change / cargo change)
-- [ ] wire the 7 no-op heads in `installAutopilotHook.ts:272-320` to the real executors (reuse the headless `engineQueries.ts` executors: `executeRepair`, `executeBuyBestGear`, `executeUpgradeHull`, `executeBuyBestModule`, `executeTakeLoan`, `executeRepayLoan`, `executeSellAll`)
-- [ ] fix the live buy-accounting skew: record the lot at the **real buy price** (capture price before `openTrade` returns to flight) so `AgentMemory` margins are correct
-- [ ] GREEN + a dev-session smoke check that live no longer stalls
+- [x] RED: extend `LiveApplier.test.ts` pattern in a **new** `liveEconomyHeads.test.ts` — assert each of `repair`, `buy-gear`, `upgrade-hull`, `buy-module`, `take-loan`, `repay-loan`, `sell-cargo` produces its real effect in live (hull up / credits change / cargo change)
+- [x] wire the 7 no-op heads in `installAutopilotHook.ts:272-320` to the real executors (reuse the headless `engineQueries.ts` executors: `executeRepair`, `executeBuyBestGear`, `executeUpgradeHull`, `executeBuyBestModule`, `executeTakeLoan`, `executeRepayLoan`, `executeSellAll`)
+- [x] fix the live buy-accounting skew: record the lot at the **real buy price** (capture price before `openTrade` returns to flight) so `AgentMemory` margins are correct
+- [x] GREEN + a dev-session smoke check that live no longer stalls
+
+  Wired all 7 (the plan's "8" counts the already-wired `executeTrade`/combat
+  heads loosely; the concrete no-op list was always 7). `repair()` guards on
+  `engine.player?.ship` before calling `executeRepair` — a genuine defensive
+  fix, not a hypothetical: the existing `installAutopilotHook.test.ts`
+  "no-op verbs" test drives a minimal mock engine with no `ship`, and
+  `executeRepair` reads `player.ship.hullHP` unguarded (the executor's own
+  contract assumes a fully-initialized real engine, which every other caller
+  already provides). `sellCargo()` mirrors `PlayerAgent`'s guard: resolves
+  `landedPlanet(engine)` and no-ops when not landed.
+
+  ⚠️ The buy-accounting-skew checkbox could not be fixed by changing
+  `openTrade`'s post-trade destination (the obvious fix, matching the
+  headless applier's return-to-PLANET pattern): an existing test
+  (`installAutopilotHook.test.ts` — "openTrade() executes trade directly and
+  transitions to SPACE_FLIGHT") hard-asserts the SPACE_FLIGHT destination, and
+  per the no-touch-existing-tests rule that destination is fixed. Root-caused
+  instead in `AgentMemory.ts`: added `lastCurrentPlanetId` (the `currentPlanet`
+  id observed one fold ago, distinct from a sticky "last visited planet" —
+  it goes stale after a single fold). `updateMemory`'s buy-price detection now
+  falls back to `priceBook.get(mem.lastCurrentPlanetId)` before defaulting to
+  `0`, recovering the real price recorded during the landed fold that preceded
+  the trade. Fully backward-compatible (new field only, `InventoryLot` shape
+  unchanged) — verified via a new real-engine regression in
+  `liveEconomyHeads.test.ts` reproducing the exact two-fold sequence
+  (`updateMemory` at PLANET → real trade → `updateMemory` at SPACE_FLIGHT)
+  and asserting the recovered lot's `buyPrice` matches the real market price,
+  not `0`.
+
+  Dev-session smoke check: automated via `liveEconomyHeads.test.ts` (10 new
+  tests, real `RealEngineHarness`/`GameEngine`, zero harness errors on every
+  path) rather than a manual watch session — this is the same real-engine
+  tier the plan's Testing Strategy calls "live-applier tests"; a human watch
+  of the rendered game is deferred to the plan's Post-Completion manual
+  verification pass (Task 10 covers the full acceptance sweep).
 
 ### Task 7: Game oddity — station docking refuels
 - [ ] RED: `src/tests/.../stationRefuel.test.ts` (real-engine) — dock at a station with `energy < maxEnergy`; assert `ship.energy` is restored on dock (currently only planet-landing refuels)

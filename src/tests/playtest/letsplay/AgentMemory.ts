@@ -95,6 +95,17 @@ export interface AgentMemory {
   /** Internal: the last system observed, used to detect a warp (system change) with no landing since. */
   lastSystemId: string | null;
   /**
+   * Internal: the `currentPlanet` id observed on the immediately-previous fold
+   * (`null` if not landed then) — NOT a sticky "last visited planet", it goes
+   * stale after a single fold. Lets a buy detected one fold after leaving a
+   * planet still resolve its real buy price from the price book instead of
+   * falling back to `0`: the live autopilot's `openTrade` executes the trade
+   * then transitions straight to SPACE_FLIGHT (no intervening PLANET fold), so
+   * the inventory delta is only visible on the *next* fold, by which point
+   * `obs.currentPlanet` is already null.
+   */
+  lastCurrentPlanetId: string | null;
+  /**
    * Internal: the system observed one fold *before* {@link lastSystemId} — i.e.
    * genuinely "where the ship just came from". Distinct from `lastSystemId`,
    * which is overwritten to the *current* system by the end of every fold and
@@ -160,6 +171,7 @@ export function createMemory(): AgentMemory {
     step: 0,
     visitedSystemIds: new Set(),
     lastSystemId: null,
+    lastCurrentPlanetId: null,
     previousSystemId: null,
     consecutiveWarpsWithoutLanding: 0,
     loanState: undefined,
@@ -243,6 +255,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       step,
       visitedSystemIds: new Set(mem.visitedSystemIds),
       lastSystemId: mem.lastSystemId,
+      lastCurrentPlanetId: mem.lastCurrentPlanetId,
       previousSystemId: mem.previousSystemId,
       consecutiveWarpsWithoutLanding: mem.consecutiveWarpsWithoutLanding,
       loanState: mem.loanState,
@@ -287,9 +300,17 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     const before = mem.lastCargo.get(good) ?? 0;
     const after = cargoNow.get(good) ?? 0;
     if (after > before) {
-      // A buy — record a lot at the landed planet's observed buy price (else loot ⇒ 0).
+      // A buy — record a lot at the landed planet's observed buy price. When not
+      // currently landed, fall back to the planet observed one fold ago (the
+      // live open-trade round-trip: the buy happens between this fold and the
+      // last, and the scene has already left PLANET by the time the delta is
+      // visible) before defaulting to 0 (a genuine unpriced gain, e.g. loot).
       const buyPrice =
-        obs.currentPlanet?.market.find((m) => m.resource === good)?.buy ?? 0;
+        obs.currentPlanet?.market.find((m) => m.resource === good)?.buy ??
+        (mem.lastCurrentPlanetId != null
+          ? priceBook.get(mem.lastCurrentPlanetId)?.get(good)?.buy
+          : undefined) ??
+        0;
       inventoryLots.push({ good, qty: after - before, buyPrice });
     } else if (after < before) {
       // A sell / consume — drain the oldest lots of this good first.
@@ -370,6 +391,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     step,
     visitedSystemIds,
     lastSystemId,
+    lastCurrentPlanetId: obs.currentPlanet?.id ?? null,
     previousSystemId,
     consecutiveWarpsWithoutLanding,
     loanState,
