@@ -429,10 +429,30 @@ regenerate + retrain the net to clone the smarter teacher.
   `npm run letsplay:ci` (105), `npm run test:playtest` (506).
 
 ### Task 10: Verify acceptance + docs/memory
-- [ ] verify all Overview goals: goal-less agent survives (no fuel-death), lands/trades/refuels, avoids Overmind, live heads wired, station refuels, net retrained
-- [ ] full gates: `npm test -- --run`, `npm run lint`, `npm run test:playtest`, `npm run letsplay:ci`, `npm run test:save-compat`
-- [ ] `gitnexus detect_changes({scope:"compare", base_ref:"master"})` — scope matches policy/appliers/observe + the station-refuel game file + weights
-- [ ] update `.claude/docs/systems/letsplay.md` (new needs-ladder brain, live-head parity, station refuel, warp targeting)
+- [x] verify all Overview goals: goal-less agent survives (no fuel-death), lands/trades/refuels, avoids Overmind, live heads wired, station refuels, net retrained
+- [x] full gates: `npm test -- --run`, `npm run lint`, `npm run test:playtest`, `npm run letsplay:ci`, `npm run test:save-compat`
+- [x] `gitnexus detect_changes({scope:"compare", base_ref:"master"})` — scope matches policy/appliers/observe + the station-refuel game file + weights
+- [x] update `.claude/docs/systems/letsplay.md` (new needs-ladder brain, live-head parity, station refuel, warp targeting)
+
+  All six Overview goals confirmed via the green gate suite (each has its own
+  committed regression + oracle band): fuel-survival (`fuelSurvival.test.ts` +
+  oracle `maxFuelDeaths: 0`), lands/trades/refuels (`exploreNoWarpLoop`/
+  `competentSession`), Overmind avoidance (`overmindAvoidance` + `maxOvermindLosses:
+  0`), live-head parity (`liveEconomyHeads.test.ts`), station refuel
+  (`stationRefuel.test.ts`), net retrained (`shippedWeights`/`weightsContract`/
+  `neuralSession`). Gates: `npm test -- --run` (4419 passed, 7 skipped),
+  `npm run lint` (0 errors, 44 pre-existing warnings), `npx tsc --noEmit` (clean),
+  `npm run test:playtest` (506), `npm run letsplay:ci` (105),
+  `npm run test:save-compat` (22). `detect_changes`/`git diff --stat master`
+  confirmed this plan's touch points are all present — policy
+  (`MemoryHeuristicPolicy.ts`), appliers (`PlayerAgent`/`installAutopilotHook`/
+  `LiveApplier`/`AutopilotController`), observation (`observe.ts`/`engineQueries.ts`),
+  the station-refuel game file (`SpaceFlightScene.ts` + `stationDockRefuel.test.ts`),
+  and the retrained `player.weights.json` — the remaining diff-vs-master files
+  belong to other plans committed on the shared `architecture-hygiene` branch.
+  `.claude/docs/systems/letsplay.md` updated with the goal-less needs ladder,
+  live-head parity, station-refuel dock routing, warp targeting, and the retrain
+  result (val_acc 0.997, aliasing ceiling was the goal-mix not obs width).
 
 ## Technical Details
 
