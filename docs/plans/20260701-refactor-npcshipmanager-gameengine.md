@@ -174,9 +174,9 @@ Order chosen: extract the four sub-systems (most self-contained), then decouple 
 - [x] `gitnexus detect_changes({scope:"compare", base_ref:"master"})` — branch is 53 commits ahead of master (same as Task 7's finding), so raw compare is not a useful scope signal (97K-char result, mostly unrelated prior work); instead diffed Phase 2's own commit range (`7deaae8~1..4d3adf2`, Tasks 8-11) with `git diff --stat`: touches only `GameEngine.ts` (985 lines removed/thinned), the five new Phase-2 units, `main.ts` (DI wiring, +11), `core/adapters/index.ts` + `core/ports/index.ts` (barrel exports), and the Cyrillic baseline — matches the plan's intended scope exactly. A pre-existing unrelated uncommitted diff (`SpaceFlightScene.ts`, `e2eTestHooks.ts`, a `smart-autopilot-player` plan doc) was present in the working tree at session start from an unrelated task — left untouched, not part of this plan's scope (same caveat noted in Tasks 9-11)
 
 ### Task 13: [Final] Docs + index refresh
-- [ ] update `.claude/docs/systems/letsplay.md` / relevant subsystem docs if the flight/day-tick seams they describe moved
-- [ ] note the new controllers in CLAUDE.md's subsystem table if warranted (keep it terse)
-- [ ] `node .gitnexus/run.cjs analyze` to refresh the code-intelligence index after the large move
+- [x] update `.claude/docs/systems/letsplay.md` / relevant subsystem docs if the flight/day-tick seams they describe moved — checked: the doc only references `NpcShipManager.e2eEngageCombat`/`breakOffCombatPursuit` (both still present as thin forwarders per Task 2) and the observe/decide/apply loop, none of which relocated; no day-tick/endgame internals are described there. No edit needed.
+- [x] note the new controllers in CLAUDE.md's subsystem table if warranted (keep it terse) — not warranted: CLAUDE.md's only mention of the touched files is the one-line `GameEngine.ts` entry-point description ("Central engine: scene transitions, game loop, save coordination"), still accurate; the nine new controllers are internal implementation detail of the existing `presentation/`/`systems/` layers already described generically, not a new onboarding-worthy subsystem. No edit needed.
+- [x] `node .gitnexus/run.cjs analyze` to refresh the code-intelligence index after the large move — done: 14,664 nodes / 47,977 edges / 1,188 clusters / 300 flows (34.0s)
 
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`.*
 
