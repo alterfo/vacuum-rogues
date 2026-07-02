@@ -138,20 +138,26 @@ export interface ScenarioMixEntry {
 }
 
 /**
- * The Task 9 stratified mix (`docs/plans/20260701-letsplay-action-expansion-and-neural-scale.md`):
- * ~100K rows spanning every CJM so the dataset labels the net on the full
- * repertoire (trading + banking, equipment/hull upgrades, combat/loot, quest
- * delivery, Overmind engagement, piracy, exploration) plus unbiased base play.
+ * The default BC mix — **goal-less only** (`docs/plans/20260701-smart-autopilot-player.md`,
+ * Task 9). The shipped net deploys **goal-less** (both the live autopilot and the
+ * headless `letsplay` construct `MemoryHeuristicPolicy` with no goal), and the
+ * `goal` is **not** in the featurize vector (`FEATURE_LENGTH=50`, no goal one-hot).
+ * An earlier goal-**mixed** stratified mix (the superseded
+ * `20260701-letsplay-action-expansion-and-neural-scale.md` plan) therefore
+ * labelled the *same* observation with conflicting actions across goals (e.g. an
+ * explorer warps at game-start where the goal-less teacher lands) — the net
+ * averaged them, argmaxed whichever barely won, and **collapsed to a single
+ * action at rollout** despite ~99% teacher-forcing accuracy. Cloning the one
+ * *deterministic* policy the net actually deploys removes that aliasing, so the
+ * net reproduces the teacher's diverse repertoire in a real session.
+ *
+ * A single `goal: null` stratum (not several) because `collectScenarioMixDataset`
+ * seeds each stratum by `goal` (`"<prefix>-<goal or 'base'>-<i>"`): two `goal:null`
+ * strata would collide on the same `base` seed sub-range and generate identical
+ * sessions. Many sessions on distinct seeds give the diversity instead.
  */
 export const DEFAULT_SCENARIO_MIX: readonly ScenarioMixEntry[] = [
-  { goal: "trade-magnate", sessions: 30, steps: 500 },
-  { goal: "gear-grinder", sessions: 30, steps: 500 },
-  { goal: "bounty-hunter", sessions: 30, steps: 500 },
-  { goal: "quest-runner", sessions: 20, steps: 500 },
-  { goal: "overmind-slayer", sessions: 20, steps: 500 },
-  { goal: "pirate", sessions: 20, steps: 500 },
-  { goal: "explorer", sessions: 20, steps: 500 },
-  { goal: null, sessions: 30, steps: 500 },
+  { goal: null, sessions: 200, steps: 500 },
 ];
 
 /**

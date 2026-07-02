@@ -43,15 +43,18 @@ const rows = await collectBcDataset({ sessions: 50, steps: 200, seedPrefix: "BC"
 writeBcDataset(rows); // → .letsplay/bc-dataset.jsonl
 ```
 
-**The Task 9 stratified CJM mix** (`npm run dataset:export`,
-`scenarioMixExport.run.test.ts`) plays `DEFAULT_SCENARIO_MIX` — every CJM goal
-(`trade-magnate`/`gear-grinder`/`bounty-hunter`/`quest-runner`/
-`overmind-slayer`/`pirate`/`explorer` + unbiased base play) so the dataset
-labels the net on the full repertoire, not just trade/navigate/fight — and
-writes `tools/ai/dataset/train.jsonl` (gitignored):
+**The default BC mix is goal-less** (`npm run dataset:export`,
+`scenarioMixExport.run.test.ts`) — `DEFAULT_SCENARIO_MIX` plays the **goal-less**
+`MemoryHeuristicPolicy` (the policy the net actually deploys, live + headless)
+across many seeds and writes `tools/ai/dataset/train.jsonl` (gitignored). An
+earlier **goal-mixed** stratified mix labelled the same observation with
+conflicting actions across goals (the `goal` isn't featurized), which made the
+net **collapse to a single action at rollout** despite ~99% teacher-forcing
+accuracy; cloning the one deterministic policy the net deploys fixes that
+(`docs/plans/20260701-smart-autopilot-player.md`, Task 9):
 
 ```bash
-npm run dataset:export                       # full mix: ~200 sessions × 500 steps
+npm run dataset:export                       # goal-less: ~200 sessions × 500 steps
 LETSPLAY_EXPORT_MIX_SESSIONS_SCALE=0.5 \
   LETSPLAY_EXPORT_MIX_STEPS=200 \
   npm run dataset:export                     # a faster local/smoke-scale run

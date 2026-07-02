@@ -142,11 +142,40 @@ export function featurize(obs: Observation, memory?: AgentMemory): number[] {
 }
 
 /**
+ * Resolve a concrete `targetId` for a chosen neural `kind` from the observation.
+ *
+ * The net's output head only selects an action **kind** (16 slots) — it does not
+ * name a target. The appliers resolve most targets themselves (warp →
+ * `pickWarpTarget`, dock → first station, trade → landed/first planet), but
+ * `land` is the one action with **no applier fallback**: `PlayerAgent.apply`'s
+ * `land` case lands *only* on the exact `action.targetId` planet (a deliberate
+ * guard against spin-landing an uninhabited planet — see its comment), so a
+ * bare `{kind:"land"}` teleport-lands nowhere and the agent stalls in a
+ * land→no-op→land loop (the neural net can never actually land). Fill that gap
+ * here: prefer a **habitable** in-system planet (has a market — where the
+ * teacher lands to earn/refuel), falling back to the first planet only if none
+ * is flagged habitable. Pure and deterministic (same `obs` ⇒ same target); other
+ * kinds keep the applier's own resolution. Returns `undefined` when nothing in
+ * the observation fits (the applier then no-op-ticks, exactly as before).
+ */
+function resolveNeuralTarget(
+  kind: PlayerActionKind,
+  obs: Observation,
+): string | undefined {
+  if (kind !== "land") return undefined;
+  const planets = obs.system?.planets ?? [];
+  return (planets.find((p) => p.isHabitable) ?? planets[0])?.id;
+}
+
+/**
  * Map a net output (one score per {@link ACTION_ORDER} slot) onto a **legal**
  * {@link Action}: rank the action vocabulary by descending score and return the
  * first whose `kind` is in `obs.legalActions`. `"wait"` is legal in every scene,
  * so the result is always legal even when the net's argmax is an action the
- * current scene can't perform (or `scores` is short / empty). Pure; never throws.
+ * current scene can't perform (or `scores` is short / empty). A concrete
+ * `targetId` is attached for kinds that need one but have no applier fallback
+ * (see {@link resolveNeuralTarget}) so the chosen action actually executes.
+ * Pure; never throws.
  */
 export function mapNetOutputToAction(
   scores: readonly number[],
@@ -158,7 +187,10 @@ export function mapNetOutputToAction(
     score: Number.isFinite(scores[i]) ? scores[i] : -Infinity,
   })).sort((a, b) => b.score - a.score);
   const kind = ranked.find((r) => legal.has(r.kind))?.kind ?? "wait";
-  return { kind, reason: "neural" };
+  const targetId = resolveNeuralTarget(kind, obs);
+  return targetId
+    ? { kind, targetId, reason: "neural" }
+    : { kind, reason: "neural" };
 }
 
 /**
