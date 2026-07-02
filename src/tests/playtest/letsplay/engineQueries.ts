@@ -47,18 +47,30 @@ export function landedPlanet(engine: GameEngine): Planet | null {
  * centralized here rather than per-CJM): prefer a system not yet in
  * `visited`, then fall back to anything other than `lastSystemId` (avoids
  * ping-ponging between two adjacent systems), then the first connection.
- * Pure — no engine access — so it's cheaply unit-testable against a mock
- * connections list.
+ * `avoid` (optional — Overmind-held systems, Task 3) is stripped from the
+ * candidate pool first when doing so still leaves somewhere to go; when every
+ * connection is avoided (a front-encircled system), it falls back to the full
+ * pool rather than returning `undefined` — jumping into the front is still
+ * better than not jumping at all. Pure — no engine access — so it's cheaply
+ * unit-testable against a mock connections list.
  */
 export function pickWarpTarget(
   connections: readonly { toSystemId: string }[],
   lastSystemId: string | null,
   visited: ReadonlySet<string>,
+  avoid?: ReadonlySet<string>,
 ): string | undefined {
+  const pool =
+    avoid && avoid.size > 0
+      ? (() => {
+          const filtered = connections.filter((c) => !avoid.has(c.toSystemId));
+          return filtered.length > 0 ? filtered : connections;
+        })()
+      : connections;
   return (
-    connections.find((c) => !visited.has(c.toSystemId)) ??
-    connections.find((c) => c.toSystemId !== lastSystemId) ??
-    connections[0]
+    pool.find((c) => !visited.has(c.toSystemId)) ??
+    pool.find((c) => c.toSystemId !== lastSystemId) ??
+    pool[0]
   )?.toSystemId;
 }
 

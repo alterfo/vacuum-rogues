@@ -159,10 +159,23 @@ regenerate + retrain the net to clone the smarter teacher.
   `MAX_CONSECUTIVE_WARPS_WITHOUT_LAND` (2).
 
 ### Task 3: Threat & Overmind-avoidance tier
-- [ ] RED: `src/tests/playtest/letsplay/overmindAvoidance.test.ts` — rising `overmindShare` / `nearOvermindCore`; assert the agent **leaves the threatened system** (warp away from the front) instead of idling; hostile-in-range → fight-or-flee by `playerCombatStrength` vs hostile
-- [ ] add a **threat tier** below survival: use `overmindShare`/`nearOvermindCore` (not just `threatMap`) — flee/relocate when the front is near and the player is weak; engage only when strong and cornered
-- [ ] bias warp-target selection **away from Overmind** (feeds Task 5's target logic)
-- [ ] GREEN
+- [x] RED: `src/tests/playtest/letsplay/overmindAvoidance.test.ts` — rising `overmindShare` / `nearOvermindCore`; assert the agent **leaves the threatened system** (warp away from the front) instead of idling; hostile-in-range → fight-or-flee by `playerCombatStrength` vs hostile
+- [x] add a **threat tier** below survival: use `overmindShare`/`nearOvermindCore` (not just `threatMap`) — flee/relocate when the front is near and the player is weak; engage only when strong and cornered
+- [x] bias warp-target selection **away from Overmind** (feeds Task 5's target logic)
+- [x] GREEN
+
+  Added `OVERMIND_THREAT_HULL_FRACTION`/`OVERMIND_THREAT_SHARE` constants and a
+  new threat tier (1.5) in `decideWithMemory`, between the survival tier and
+  the economy candidates: `nearOvermindCore || overmindShare > threshold` +
+  `hull < OVERMIND_THREAT_HULL_FRACTION` + no present hostile + fuel gate
+  clear → `warp "flee-overmind-front"`. Present-hostile cases still defer to
+  the existing fight-or-flee-by-hull reaction (`attack`/`flee`) ahead of this
+  tier, since `warp` isn't legal mid-combat and jumping while under fire risks
+  getting caught mid-transit. `pickWarpTarget` (`engineQueries.ts`) gained an
+  optional `avoid` set that filters Overmind-held neighbors first, falling
+  back to the full pool only when every connection is held; both the live
+  (`installAutopilotHook.ts`) and headless (`PlayerAgent.ts`) appliers now
+  pass `galaxy.overmindSystems` as that avoid set.
 
 ### Task 4: Progression tier + holistic competence (goal-less full loop)
 - [ ] RED: `src/tests/playtest/letsplay/competentSession.test.ts` — over a fixed budget the goal-less agent **survives longer, earns net credits, completes ≥1 buy→sell cycle, completes/advances ≥1 quest delivery, and does not fuel-die** (a single session-level competence assertion)

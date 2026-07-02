@@ -74,6 +74,22 @@ export const REFUEL_THRESHOLD = 0.2;
  */
 export const MAX_CONSECUTIVE_WARPS_WITHOUT_LAND = 2;
 
+/**
+ * Below this hull fraction near a rising Overmind front, the goal-less base
+ * ladder proactively leaves the system (`warp` away) instead of idling —
+ * distinct from `LOW_HULL_FRACTION` (an active hostile's fight-or-flee
+ * cutoff): this fires even with no hostile present, purely off the
+ * remembered front signal.
+ */
+export const OVERMIND_THREAT_HULL_FRACTION = 0.6;
+
+/**
+ * Galaxy-wide Overmind share above which the front counts as "rising" even
+ * when the current system isn't (yet) adjacent to the core — the other half
+ * of the `overmindThreatening` signal alongside `nearOvermindCore`.
+ */
+export const OVERMIND_THREAT_SHARE = 0.15;
+
 /** One ranked action candidate: a legal-or-not preference the legal filter prunes. */
 interface Candidate {
   kind: PlayerActionKind;
@@ -496,6 +512,32 @@ export function decideWithMemory(
       (p) => p.isHabitable !== false,
     )?.id;
     if (refuelPlanet) push("land", "refuel-critical", refuelPlanet);
+  }
+
+  // 1.5) Threat/Overmind — leave a rising front while not battle-ready. Gated
+  // on no *present* hostile: a live engagement defers entirely to the
+  // survive block above's fight-or-flee-by-hull reaction (`attack`/`flee`),
+  // which — unlike `warp` — is never legal from STAR_MAP, so attempting a
+  // warp jump while still under fire risks getting caught by an in-flight
+  // combat intercept mid-transit and finished off (real-engine regression:
+  // a hull=10 ship survived indefinitely disengaging via `avoid-danger-back`
+  // pre-fix, but died mid-warp once this tier pre-empted that branch).  This
+  // tier instead reacts to the remembered front itself once the system is
+  // calm, so the agent doesn't idle/trade in a system the Overmind is
+  // closing in on with nothing currently shooting at it. Ungated by the
+  // anti-consecutive-warp cadence (escaping the front overrides the
+  // loop-prevention heuristic) but still respects the fuel gate — fleeing on
+  // an empty tank just strands the ship, and the fuel tier above already
+  // routes to a refuel landing first when one is available.
+  const overmindThreatening =
+    obs.nearOvermindCore || (obs.overmindShare ?? 0) > OVERMIND_THREAT_SHARE;
+  if (
+    overmindThreatening &&
+    hull < OVERMIND_THREAT_HULL_FRACTION &&
+    !fuelGate &&
+    obs.hostiles.length === 0
+  ) {
+    push("warp", "flee-overmind-front");
   }
 
   const best = bestKnownMargin(mem);

@@ -243,7 +243,13 @@ export function createLiveSceneController(
       // Prefers unvisited systems, then avoids the system we just came from,
       // then falls back to connections[0] — prevents ping-pong.
       const target =
-        systemId ?? pickWarpTarget(connections, lastSystemId, visitedSystemIds);
+        systemId ??
+        pickWarpTarget(
+          connections,
+          lastSystemId,
+          visitedSystemIds,
+          new Set(engine.galaxy?.overmindSystems ?? []),
+        );
       if (prevId) visitedSystemIds.add(prevId);
       lastSystemId = prevId;
       const scene = engine.currentScene as {

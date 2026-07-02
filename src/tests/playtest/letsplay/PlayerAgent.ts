@@ -338,6 +338,7 @@ export class PlayerAgent {
           connections,
           this.lastSystemId,
           this.memory.visitedSystemIds,
+          new Set(engine.galaxy?.overmindSystems ?? []),
         );
         this.lastSystemId = sys?.id ?? null;
         const scene = this.harness.currentScene() as {
