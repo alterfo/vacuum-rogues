@@ -46,31 +46,55 @@ import {
  * **zero** (a crash, a stranded player, or a corrupt vital is never acceptable);
  * these are strict by design and need no headroom.
  *
- * The **balance bands** (credits/day, days-to-upgrade, survival, upgrade-rate)
- * are deliberately left **unscored**. Task 3 measured the heuristic agent's real
- * distribution at the bounded headless budget (`letsplay:ci`, default 3×40, also
- * verified at 4×150) and found that **none of them produce a value**: the galaxy
- * day never advances during headless flight (`VitalsSample.day = galaxy.gameDays`
- * stays 0, so `creditsPerDay` is `null`) and the dumb heuristic never upgrades a
- * hull (`daysToFirstUpgrade` is `null`); survival is a flat 100%. Scoring a band
- * around a never-produced value is a no-op, and the metrics layer already skips an
- * omitted/`null`-valued band rather than spuriously failing — so the honest
- * baseline is hard-faults-zero + unscored balance.
+ * **Task 8 rebaseline** (needs-based `MemoryHeuristicPolicy`, Tasks 1–7):
+ * measured at the default headless budget (`letsplay:ci`, 3×40) and a wider
+ * 5×150 sweep across several seed prefixes. Unlike the pre-Task-8 dumb
+ * heuristic, the galaxy day now reliably advances (`creditsPerDay`/
+ * `daysSurvived` produce real values), so those get real hard-fault + band
+ * coverage here:
+ *  - `maxFuelDeaths`/`maxOvermindLosses` at **0**: zero observed across every
+ *    probe session at both budgets (Task 1's fuel-gate and Task 3's threat
+ *    tier respectively eliminate these), so — like the existing hard faults —
+ *    no headroom is warranted. Both are budget-agnostic (a session can't
+ *    starve/lose the galaxy in a handful of steps either), so — unlike the two
+ *    signals below — they hold at this shared default regardless of run size.
+ *  - `minSurvivalRate` raised to **0.8**: `survivalRate` was a flat 1.0 across
+ *    every probe run; 0.8 keeps generous headroom for an unlucky combat death
+ *    while still catching a real survival regression.
  *
- * **Rebaselining a band (when balance intentionally changes):** once a richer
- * policy or a larger step/day budget makes a signal produce values, run
+ * `minDaysSurvived`/`minAvgDistinctSystemsVisited` are **deliberately not**
+ * set here even though Task 8 measured real floors for them (3 days / 1
+ * distinct system worst-case, 2–4 average) — both are budget-dependent (a
+ * 1–12-step smoke run, like this file's own tiny-budget tests, legitimately
+ * never leaves the start system) and this default is shared by exactly such
+ * runs. They're scored instead in `src/tests/oddities/` against a
+ * properly-sized session budget — see the "competent play" oracle test there.
+ *
+ * `creditsPerDayBand`/`maxAvgDaysToFirstUpgrade`/`minUpgradeRate` stay
+ * **unscored**: `creditsPerDay` was consistently *negative* across every probe
+ * (roughly −25 to −135/day) and no session reached a hull upgrade in the
+ * probed budgets — a real, noted oddity (the agent still isn't a net earner at
+ * this short a horizon; `netCredits` also can't see unsold held cargo as
+ * value), not something to paper over with a band that would either always
+ * fail or have to be set suspiciously loose. Left for a follow-up economy
+ * tune, per this file's "never tighten a band to chase noise" rule applied in
+ * reverse — don't score a band whose honest baseline is still shaky.
+ *
+ * **Rebaselining a band (when balance intentionally changes):** run
  * `npm run letsplay:ci` (optionally bump `LETSPLAY_CI_SESSIONS`/`LETSPLAY_CI_STEPS`),
  * read the printed `balance:` line ({@link formatCiResult}), and set the band to
- * the observed mean ± generous headroom — e.g. `creditsPerDayBand: { min, max }`
- * or `maxAvgDaysToFirstUpgrade` / `minSurvivalRate` / `minUpgradeRate`. When a
- * deliberate balance tune moves the baseline, re-measure and widen/shift the band
- * in the **same** change so the new economics is the intended band, not a
- * surprise red. Never tighten a band to chase noise from a single seed.
+ * the observed mean ± generous headroom. When a deliberate balance tune moves
+ * the baseline, re-measure and widen/shift the band in the **same** change so
+ * the new economics is the intended band, not a surprise red. Never tighten a
+ * band to chase noise from a single seed.
  */
 export const DEFAULT_CI_THRESHOLDS: MetricsThresholds = {
   maxErrors: 0,
   maxSoftLocks: 0,
   maxInvariantViolations: 0,
+  maxFuelDeaths: 0,
+  maxOvermindLosses: 0,
+  minSurvivalRate: 0.8,
 };
 
 /** Options for a CI run — the play knobs plus the scoring thresholds. */
@@ -154,11 +178,14 @@ export function formatCiResult(r: CiRunResult): string {
   const mark = r.ok ? "✓" : "✗";
   const lines: string[] = [
     `${mark} Letsplay CI — ${r.run.sessions} session(s), ${r.run.totalSteps} step(s)`,
-    `  faults: errors=${r.run.totalErrors} soft-locks=${r.run.totalSoftLocks} invariant=${r.run.totalInvariantViolations}`,
+    `  faults: errors=${r.run.totalErrors} soft-locks=${r.run.totalSoftLocks} invariant=${r.run.totalInvariantViolations} ` +
+      `fuel-deaths=${r.run.fuelDeathCount} overmind-losses=${r.run.overmindLossCount}`,
     `  balance: survival=${(r.run.survivalRate * 100).toFixed(0)}% ` +
       `upgrade=${(r.run.upgradeRate * 100).toFixed(0)}% ` +
       `credits/day=${num(r.run.avgCreditsPerDay)} ` +
-      `days-to-upgrade=${num(r.run.avgDaysToFirstUpgrade, 1)}`,
+      `days-to-upgrade=${num(r.run.avgDaysToFirstUpgrade, 1)} ` +
+      `systems-visited=${r.run.avgDistinctSystemsVisited.toFixed(1)} ` +
+      `min-days-survived=${r.run.minDaysSurvived}`,
   ];
   if (!r.ok) {
     lines.push("  GATE FAILURES:");

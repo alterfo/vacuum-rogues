@@ -26,7 +26,16 @@
  * (enforced by `letsplayDevOnly.test.ts`).
  */
 import { SceneType } from "@/types";
+import { GAME_BALANCE } from "@/config/balance";
 import type { PlayerActionKind } from "./observe";
+
+/**
+ * Overmind galaxy-share at/above this fraction is the real loss condition
+ * (`overmindSpread.ts`'s `lossShare`, mirrored here as a read-only threshold —
+ * the oracle only needs to *detect* the share crossing it, not the grace-days/
+ * min-systems gating that decides whether it actually fires in-engine).
+ */
+const OVERMIND_LOSS_SHARE = GAME_BALANCE.OVERMIND_SPREAD_LOSS_SHARE;
 
 /**
  * Invariant ids (from `checkInvariants`) that mean "the player is stranded" — a
@@ -58,6 +67,23 @@ export interface VitalsSample {
   hull: number;
   /** Max hull — a rise above the first sample's value flags a ship upgrade. */
   maxHull: number;
+  /**
+   * Reactor energy / warp fuel at this step (`PlayerSnapshot.fuel`). Optional so
+   * pre-Task-8 synthetic `VitalsSample` fixtures (built without this field) still
+   * type-check; absent ⇒ the fuel-death signal is skipped for that session.
+   */
+  fuel?: number;
+  /**
+   * The player's current star system id. Optional for the same
+   * fixture-compatibility reason; absent samples are excluded from the
+   * distinct-systems-visited count.
+   */
+  systemId?: string;
+  /**
+   * Fraction of the galaxy's systems currently Overmind-controlled, `[0, 1]`.
+   * Optional for the same reason; absent ⇒ treated as `0` (no Overmind signal).
+   */
+  overmindShare?: number;
 }
 
 /** The raw per-session signals the metrics layer aggregates. */
@@ -100,6 +126,24 @@ export interface SessionMetrics {
    * above the opening sample's); `null` if the session never upgraded.
    */
   daysToFirstUpgrade: number | null;
+  /**
+   * `true` ⇔ the session ended in GAME_OVER with the last sample's fuel at (or
+   * below) empty — the specific "starved out mid-transit" failure Task 1's
+   * fuel-survival tier exists to eliminate, distinct from a combat death.
+   */
+  fuelDeath: boolean;
+  /** Count of distinct `systemId`s seen across the session's samples. */
+  distinctSystemsVisited: number;
+  /**
+   * `true` ⇔ the session ended in GAME_OVER with the last sample's
+   * `overmindShare` at/above the real galaxy loss share
+   * ({@link OVERMIND_LOSS_SHARE}) — the game actually ended with the
+   * Overmind holding the galaxy, not merely a share that briefly touched the
+   * band (the real in-engine condition also needs the grace-days gate).
+   */
+  overmindLost: boolean;
+  /** Galaxy days elapsed across the session (last sample's day − first's). */
+  daysSurvived: number;
 }
 
 /** Cross-session aggregate — what the CI gate actually scores. */
@@ -117,6 +161,14 @@ export interface RunMetrics {
   upgradeRate: number;
   /** Mean days-to-first-upgrade over sessions that upgraded; `null` if none did. */
   avgDaysToFirstUpgrade: number | null;
+  /** Sessions that died specifically stranded on empty fuel. */
+  fuelDeathCount: number;
+  /** Sessions where the Overmind reached the real galaxy loss share. */
+  overmindLossCount: number;
+  /** Mean distinct systems visited per session. */
+  avgDistinctSystemsVisited: number;
+  /** The worst-case (minimum) galaxy days survived across sessions. */
+  minDaysSurvived: number;
 }
 
 /**
@@ -141,6 +193,14 @@ export interface MetricsThresholds {
   maxAvgDaysToFirstUpgrade?: number;
   /** Min fraction of sessions that must reach an upgrade; unscored when omitted. */
   minUpgradeRate?: number;
+  /** Max sessions allowed to die stranded on empty fuel (default 0). */
+  maxFuelDeaths?: number;
+  /** Max sessions allowed to lose the galaxy to the Overmind (default 0). */
+  maxOvermindLosses?: number;
+  /** Min mean distinct systems visited per session; unscored when omitted. */
+  minAvgDistinctSystemsVisited?: number;
+  /** Min galaxy days every session must survive; unscored when omitted. */
+  minDaysSurvived?: number;
 }
 
 /** The verdict — `ok` ⇔ `reasons` is empty. */
@@ -187,6 +247,11 @@ export function aggregateSession(input: SessionMetricsInput): SessionMetrics {
   let daysToFirstUpgrade: number | null = null;
 
   const samples = input.samples;
+  let fuelDeath = false;
+  let distinctSystemsVisited = 0;
+  let overmindLost = false;
+  let daysSurvived = 0;
+
   if (samples && samples.length >= 2) {
     const first = samples[0];
     const last = samples[samples.length - 1];
@@ -196,8 +261,24 @@ export function aggregateSession(input: SessionMetricsInput): SessionMetrics {
 
     const upgrade = samples.find((s) => s.maxHull > first.maxHull + 1e-6);
     if (upgrade) daysToFirstUpgrade = upgrade.day - first.day;
+
+    fuelDeath = !survived && last.fuel != null && last.fuel <= 0;
+    daysSurvived = last.day - first.day;
   } else if (samples && samples.length === 1) {
     netCredits = 0;
+  }
+
+  if (samples && samples.length >= 1) {
+    distinctSystemsVisited = new Set(
+      samples.map((s) => s.systemId).filter((id): id is string => id != null),
+    ).size;
+    // Only counts as a *loss* when the game actually ended while the Overmind
+    // held the galaxy — a share crossing the band mid-session is expected
+    // pressure (the real in-engine loss also needs the grace-days gate before
+    // it can fire), not itself a failure. Mirrors `fuelDeath`'s "died with X"
+    // shape rather than "ever touched X".
+    const lastShare = samples[samples.length - 1].overmindShare ?? 0;
+    overmindLost = !survived && lastShare >= OVERMIND_LOSS_SHARE;
   }
 
   return {
@@ -209,6 +290,10 @@ export function aggregateSession(input: SessionMetricsInput): SessionMetrics {
     netCredits,
     creditsPerDay,
     daysToFirstUpgrade,
+    fuelDeath,
+    distinctSystemsVisited,
+    overmindLost,
+    daysSurvived,
   };
 }
 
@@ -249,6 +334,17 @@ export function aggregateRun(sessions: readonly SessionMetrics[]): RunMetrics {
     avgCreditsPerDay: meanOrNull(creditsPerDayValues),
     upgradeRate: n === 0 ? 0 : upgraded.length / n,
     avgDaysToFirstUpgrade: meanOrNull(upgradeDays),
+    fuelDeathCount: sessions.reduce((a, s) => a + (s.fuelDeath ? 1 : 0), 0),
+    overmindLossCount: sessions.reduce(
+      (a, s) => a + (s.overmindLost ? 1 : 0),
+      0,
+    ),
+    avgDistinctSystemsVisited:
+      n === 0
+        ? 0
+        : sessions.reduce((a, s) => a + s.distinctSystemsVisited, 0) / n,
+    minDaysSurvived:
+      n === 0 ? 0 : Math.min(...sessions.map((s) => s.daysSurvived)),
   };
 }
 
@@ -273,6 +369,8 @@ export function evaluate(
   const maxSoftLocks = thresholds.maxSoftLocks ?? 0;
   const maxInvariantViolations = thresholds.maxInvariantViolations ?? 0;
   const minSurvivalRate = thresholds.minSurvivalRate ?? 0;
+  const maxFuelDeaths = thresholds.maxFuelDeaths ?? 0;
+  const maxOvermindLosses = thresholds.maxOvermindLosses ?? 0;
 
   if (run.sessions <= 0)
     reasons.push(
@@ -294,6 +392,14 @@ export function evaluate(
   if (run.survivalRate < minSurvivalRate)
     reasons.push(
       `survival rate ${run.survivalRate.toFixed(2)} < min ${minSurvivalRate.toFixed(2)}`,
+    );
+  if (run.fuelDeathCount > maxFuelDeaths)
+    reasons.push(
+      `fuel-deaths ${run.fuelDeathCount} > max ${maxFuelDeaths} (agent starved out mid-run)`,
+    );
+  if (run.overmindLossCount > maxOvermindLosses)
+    reasons.push(
+      `Overmind losses ${run.overmindLossCount} > max ${maxOvermindLosses} (galaxy overrun while playing)`,
     );
 
   const band = thresholds.creditsPerDayBand;
@@ -323,6 +429,22 @@ export function evaluate(
   )
     reasons.push(
       `upgrade rate ${run.upgradeRate.toFixed(2)} < min ${thresholds.minUpgradeRate.toFixed(2)} (few sessions progressed)`,
+    );
+
+  if (
+    thresholds.minAvgDistinctSystemsVisited != null &&
+    run.avgDistinctSystemsVisited < thresholds.minAvgDistinctSystemsVisited
+  )
+    reasons.push(
+      `distinct systems visited ${run.avgDistinctSystemsVisited.toFixed(1)} < min ${thresholds.minAvgDistinctSystemsVisited} (agent isn't exploring)`,
+    );
+
+  if (
+    thresholds.minDaysSurvived != null &&
+    run.minDaysSurvived < thresholds.minDaysSurvived
+  )
+    reasons.push(
+      `worst-case days survived ${run.minDaysSurvived} < min ${thresholds.minDaysSurvived} (a session died too early)`,
     );
 
   return { ok: reasons.length === 0, reasons };

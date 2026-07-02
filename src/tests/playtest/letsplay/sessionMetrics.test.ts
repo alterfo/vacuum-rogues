@@ -136,6 +136,10 @@ describe("aggregateRun", () => {
     netCredits: 1600,
     creditsPerDay: 500,
     daysToFirstUpgrade: 2,
+    fuelDeath: false,
+    distinctSystemsVisited: 1,
+    overmindLost: false,
+    daysSurvived: 3,
   };
   const died: SessionMetrics = {
     steps: 30,
@@ -146,6 +150,10 @@ describe("aggregateRun", () => {
     netCredits: -200,
     creditsPerDay: 100,
     daysToFirstUpgrade: null,
+    fuelDeath: false,
+    distinctSystemsVisited: 1,
+    overmindLost: false,
+    daysSurvived: 1,
   };
 
   it("totals faults and computes rates + means", () => {
@@ -183,6 +191,10 @@ describe("evaluate", () => {
     netCredits: 1500,
     creditsPerDay: 500,
     daysToFirstUpgrade: 2,
+    fuelDeath: false,
+    distinctSystemsVisited: 1,
+    overmindLost: false,
+    daysSurvived: 3,
   };
 
   it("passes a clean run with no reasons", () => {

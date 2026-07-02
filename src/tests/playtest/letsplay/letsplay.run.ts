@@ -143,6 +143,11 @@ export function checkInvariants(
       });
     if (!Number.isFinite(credits))
       out.push({ invariant: "credits-finite", detail: `credits=${credits}` });
+    else if (credits < 0)
+      out.push({
+        invariant: "credits-nonnegative",
+        detail: `credits=${credits}`,
+      });
   }
 
   return out;
@@ -180,6 +185,9 @@ function checkpoint(
         credits: obs.player.credits,
         hull: obs.player.hull,
         maxHull: obs.player.maxHull,
+        fuel: obs.player.fuel,
+        systemId: obs.player.systemId,
+        overmindShare: obs.overmindShare ?? 0,
       }
     : null;
   return { violations, sample };
