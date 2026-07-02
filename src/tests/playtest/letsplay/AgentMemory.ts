@@ -94,6 +94,15 @@ export interface AgentMemory {
   visitedSystemIds: Set<string>;
   /** Internal: the last system observed, used to detect a warp (system change) with no landing since. */
   lastSystemId: string | null;
+  /**
+   * Internal: the system observed one fold *before* {@link lastSystemId} — i.e.
+   * genuinely "where the ship just came from". Distinct from `lastSystemId`,
+   * which is overwritten to the *current* system by the end of every fold and
+   * so can't itself answer "where were we a moment ago" once decision-time
+   * arrives. Feeds the Task 5 warp-target picker's anti-ping-pong tie-break
+   * (don't warp straight back to the system just left).
+   */
+  previousSystemId: string | null;
   /** Count of system-to-system hops since the last landing — the anti-warp-loop cadence signal. */
   consecutiveWarpsWithoutLanding: number;
   /** The player's known outstanding loan, or absent when none is carried. */
@@ -151,6 +160,7 @@ export function createMemory(): AgentMemory {
     step: 0,
     visitedSystemIds: new Set(),
     lastSystemId: null,
+    previousSystemId: null,
     consecutiveWarpsWithoutLanding: 0,
     loanState: undefined,
     deadlockDetected: false,
@@ -233,6 +243,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       step,
       visitedSystemIds: new Set(mem.visitedSystemIds),
       lastSystemId: mem.lastSystemId,
+      previousSystemId: mem.previousSystemId,
       consecutiveWarpsWithoutLanding: mem.consecutiveWarpsWithoutLanding,
       loanState: mem.loanState,
       deadlockDetected: mem.deadlockDetected,
@@ -294,16 +305,25 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
   // tally; observing a different system while still in flight (no planet
   // under the ship) means a warp completed since the last landing, so bump it.
   let consecutiveWarpsWithoutLanding = mem.consecutiveWarpsWithoutLanding;
+  const systemChanged =
+    obs.system !== null &&
+    mem.lastSystemId !== null &&
+    obs.system.id !== mem.lastSystemId;
   if (obs.currentPlanet) {
     consecutiveWarpsWithoutLanding = 0;
-  } else if (
-    obs.system &&
-    mem.lastSystemId !== null &&
-    obs.system.id !== mem.lastSystemId
-  ) {
+  } else if (systemChanged) {
     consecutiveWarpsWithoutLanding += 1;
   }
   const lastSystemId = obs.system?.id ?? mem.lastSystemId;
+  // Only advances on a genuine system change (`systemChanged`) — several folds
+  // can happen while the system is unchanged (e.g. SPACE_FLIGHT → STAR_MAP is
+  // its own fold before the jump fires), and naively mirroring `lastSystemId`
+  // on every fold would overwrite "where we came from" with the current
+  // system after just one such no-op fold, well before the STAR_MAP-scene
+  // decision that actually consumes it for the anti-ping-pong tie-break.
+  const previousSystemId = systemChanged
+    ? mem.lastSystemId
+    : mem.previousSystemId;
 
   // 5) Loan state — only what the observation says right now; no loan ⇒ absent.
   const loanState = obs.activeLoans
@@ -350,6 +370,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     step,
     visitedSystemIds,
     lastSystemId,
+    previousSystemId,
     consecutiveWarpsWithoutLanding,
     loanState,
     deadlockDetected: mem.deadlockDetected,

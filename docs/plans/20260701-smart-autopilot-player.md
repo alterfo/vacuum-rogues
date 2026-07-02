@@ -218,11 +218,47 @@ regenerate + retrain the net to clone the smarter teacher.
   session's chosen seed/budget doesn't enter combat).
 
 ### Task 5: Smart warp-target selection (fix blind warp — observation enrichment)
-- [ ] RED: `src/tests/playtest/letsplay/warpTargeting.test.ts` — assert the agent warps toward an **unvisited** connected system and **away from** an Overmind-held neighbor, not a blind pick
-- [ ] enrich `Observation`: replace/extend `system.connections` count with neighbor entries (`{ systemId, visited, overmindHeld }`) in `observe.ts` (do NOT featurize — policy uses richer obs than the net; keep `FEATURE_LENGTH=50`)
-- [ ] policy emits `warp` with a chosen `targetId` (unvisited, non-Overmind); appliers honor `action.targetId` on warp (`PlayerAgent` `performWarpJumpTo`, live `performWarpJumpTo`) — fall back to `pickWarpTarget` when absent
-- [ ] extend `observe.test.ts`-adjacent coverage in a **new** test file (don't modify `observe.test.ts`)
-- [ ] GREEN
+- [x] RED: `src/tests/playtest/letsplay/warpTargeting.test.ts` — assert the agent warps toward an **unvisited** connected system and **away from** an Overmind-held neighbor, not a blind pick
+- [x] enrich `Observation`: replace/extend `system.connections` count with neighbor entries (`{ systemId, visited, overmindHeld }`) in `observe.ts` (do NOT featurize — policy uses richer obs than the net; keep `FEATURE_LENGTH=50`)
+- [x] policy emits `warp` with a chosen `targetId` (unvisited, non-Overmind); appliers honor `action.targetId` on warp (`PlayerAgent` `performWarpJumpTo`, live `performWarpJumpTo`) — fall back to `pickWarpTarget` when absent
+- [x] extend `observe.test.ts`-adjacent coverage in a **new** test file (don't modify `observe.test.ts`)
+- [x] GREEN
+
+  `Observation.system.neighbors` is `{systemId, visited, overmindHeld}[]`
+  (`observe.ts`), sourced from real `StarSystem.explored` +
+  `Galaxy.isOvermindSystem`/`overmindCoreSystemId`. `pickWarpNeighbor` in
+  `MemoryHeuristicPolicy.ts` scores each neighbor (lowest wins) and fills
+  `targetId` on every threat/explore-tier `warp` it emits (economy tier's
+  `find-sell-destination` deliberately excluded — see the call site comment).
+  Both `PlayerAgent.warp` and the live `installAutopilotHook.ts` `warp`
+  already honored an explicit target over the blind `pickWarpTarget`, so only
+  the headless applier needed a change to pass `action.targetId` through.
+  `AgentMemory` gained `previousSystemId` (distinct from `lastSystemId`,
+  which is overwritten every fold) to break immediate ping-pong.
+
+  ⚠️ The session-level RED test surfaced a real regression against the
+  existing Task 4 `competentSession.test.ts`: scoring neighbors only on the
+  observation's `visited` flag (real fog-of-war `explored`) cycled the agent
+  among the 2-3 systems galaxy generation pre-reveals around the home system
+  at game start — every one of them already reads `visited: true` despite
+  never having been actually traveled to, so the picker couldn't tell them
+  apart from genuinely fresh territory. Repeatedly returning to the same
+  system let its Overmind garrison grow across visits until a fight there
+  crashed the ship's hull and it died mid-warp fleeing (a separate,
+  already-documented STAR_MAP `avoid-danger-back`-vs-`flee` softlock — see
+  Task 4's note — was briefly considered as the fix point but reverted:
+  patching it exposed the same previously-reverted headless-combat-mid-warp
+  death this exact scenario hits). Fixed at the actual root cause instead:
+  `pickWarpNeighbor` now also weighs `mem.visitedSystemIds` (real
+  session-actual travel, weight 3) and `mem.threatMap` (remembered hostiles
+  at that system, weight 3) alongside `overmindHeld` (4), `previousSystemId`
+  (2), and the raw `visited` flag (1, now a lighter secondary signal). A
+  fresh `AgentMemory` (all existing pure fixtures) has both empty, so this is
+  fully backward-compatible with every existing test. Re-verified full
+  `npm test -- --run` (4399 passed), `npm run lint` (0 errors), `npx tsc
+  --noEmit` (clean), `npm run letsplay:ci`, and `npm run test:playtest` green
+  after the fix — the STAR_MAP softlock remains a known, deferred, separate
+  issue untouched by this task.
 
 ### Task 6: Wire the 8 live dead heads (LIVE autopilot parity)
 - [ ] RED: extend `LiveApplier.test.ts` pattern in a **new** `liveEconomyHeads.test.ts` — assert each of `repair`, `buy-gear`, `upgrade-hull`, `buy-module`, `take-loan`, `repay-loan`, `sell-cargo` produces its real effect in live (hull up / credits change / cargo change)

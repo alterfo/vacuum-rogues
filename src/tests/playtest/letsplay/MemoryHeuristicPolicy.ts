@@ -32,7 +32,7 @@
  */
 import { FactionType, SceneType } from "@/types";
 import type { ResourceType } from "@/types";
-import type { Observation, PlayerActionKind } from "./observe";
+import type { Observation, PlayerActionKind, SystemSnapshot } from "./observe";
 import type { Action, PlayerPolicy } from "./PlayerPolicy";
 import { LOW_HULL_FRACTION } from "./HeuristicPolicy";
 import {
@@ -90,6 +90,20 @@ export const OVERMIND_THREAT_HULL_FRACTION = 0.6;
  */
 export const OVERMIND_THREAT_SHARE = 0.15;
 
+/**
+ * The base-ladder `warp` reasons that get a Task 5 smart-picked `targetId`
+ * (see `pickWarpNeighbor`) — the threat and explore tiers, where "toward the
+ * unknown, away from the Overmind" is a genuinely better heuristic than a
+ * blind pick. Deliberately excludes the economy tier's
+ * `find-sell-destination` (see the call site for why).
+ */
+const WARP_TARGETING_REASONS = new Set([
+  "flee-overmind-front",
+  "early-explore",
+  "explore",
+  "warp",
+]);
+
 /** One ranked action candidate: a legal-or-not preference the legal filter prunes. */
 interface Candidate {
   kind: PlayerActionKind;
@@ -120,6 +134,57 @@ function planetInSystem(obs: Observation, planetId: string | null): boolean {
 function stationInSystem(obs: Observation, stationId: string | null): boolean {
   if (!stationId) return false;
   return (obs.system?.stations ?? []).some((s) => s.id === stationId);
+}
+
+/**
+ * Choose a `warp` destination from the current system's neighbor detail
+ * (Task 5) — "direction of the unknown, away from the Overmind": rank each
+ * neighbor by `overmindHeld` (weight 4), whether `mem.threatMap` remembers it
+ * as having hostiles (weight 3 — don't walk back into a fight the agent has
+ * already had here), whether the agent has actually **traveled** there this
+ * session per `mem.visitedSystemIds` (weight 3 — see below), whether it's
+ * `previousSystemId` (weight 2 — the system just left, avoided so two
+ * mutually-adjacent systems don't ping-pong forever), then the observation's
+ * own `visited` fog-of-war flag (weight 1), and take the lowest score.
+ *
+ * `mem.visitedSystemIds` is weighted well above the raw `visited` field
+ * because `visited` mirrors `StarSystem.explored` — real-engine galaxy
+ * generation pre-reveals a whole pocket of systems around the home system at
+ * game start, so nearly every early neighbor already reads `visited: true`
+ * despite the agent never having actually traveled there. Scoring on that
+ * alone made every home-pocket neighbor look equally "already seen," so the
+ * picker cycled among the 2-3 systems it kept actually landing in (a
+ * real-engine regression: repeatedly returning to the same system let its
+ * Overmind garrison grow across visits until it became fatal). Session-actual
+ * `visitedSystemIds` breaks that tie correctly; `visited` remains a lighter
+ * secondary signal for systems outside the pre-revealed pocket.
+ *
+ * Falls back to the least-bad neighbor (Overmind-held, remembered-dangerous,
+ * or straight back the way it came) only when that's the sole way out.
+ * Returns `undefined` when `obs` carries no neighbor detail at all (older
+ * hand-built fixtures) — callers then fall back to the appliers' blind
+ * `pickWarpTarget`.
+ */
+function pickWarpNeighbor(
+  neighbors: SystemSnapshot["neighbors"],
+  mem: AgentMemory,
+): string | undefined {
+  if (!neighbors || neighbors.length === 0) return undefined;
+  let bestId: string | undefined;
+  let bestScore = Infinity;
+  for (const n of neighbors) {
+    const score =
+      (n.overmindHeld ? 4 : 0) +
+      ((mem.threatMap.get(n.systemId) ?? 0) > 0 ? 3 : 0) +
+      (mem.visitedSystemIds.has(n.systemId) ? 3 : 0) +
+      (n.systemId === mem.previousSystemId ? 2 : 0) +
+      (n.visited ? 1 : 0);
+    if (score < bestScore) {
+      bestScore = score;
+      bestId = n.systemId;
+    }
+  }
+  return bestId;
 }
 
 /** The in-system planet the agent prefers to head to for generic earning. */
@@ -773,9 +838,26 @@ export function decideWithMemory(
     kind: "wait" as PlayerActionKind,
     reason: "idle",
   };
+  // Every threat/explore-tier `warp` candidate above is pushed without a
+  // `targetId` (the ladder reasons about *whether* to jump, not *where*) —
+  // fill in a chosen, smart destination here, in one place, rather than at
+  // each push site. Scoped to the reasons the plan's needs-ladder actually
+  // frames as "go toward the unknown, away from the Overmind" (threat +
+  // explore tiers) — deliberately EXCLUDES the economy tier's
+  // `find-sell-destination` (searching for *any* buyer has no "unvisited is
+  // better" signal, and routing it through the same unvisited-biased pick
+  // can walk a holding-cargo run into a system whose danger is only
+  // discovered on arrival; blind selection there matches pre-Task-5
+  // behavior).
+  const targetId =
+    pick.kind === "warp" &&
+    pick.targetId === undefined &&
+    WARP_TARGETING_REASONS.has(pick.reason)
+      ? pickWarpNeighbor(obs.system?.neighbors, mem)
+      : pick.targetId;
   return {
     kind: pick.kind,
-    targetId: pick.targetId,
+    targetId,
     reason: `mem:${pick.reason}`,
   };
 }

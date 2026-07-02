@@ -144,6 +144,15 @@ export interface SystemSnapshot {
   stations: { id: string; name: string; type: StationType }[];
   /** Number of warp paths leading out of this system. */
   connections: number;
+  /**
+   * The identity of each connected system (Task 5) — replaces the blind
+   * `connections` count for target selection: `visited` is real fog-of-war
+   * (`StarSystem.explored`), `overmindHeld` is `Galaxy.isOvermindSystem`.
+   * Optional so older hand-built `Observation` fixtures (which only set
+   * `connections`) still type-check; the policy falls back to a blind pick
+   * when this is absent.
+   */
+  neighbors?: { systemId: string; visited: boolean; overmindHeld: boolean }[];
 }
 
 /** A single NPC ship present (not in transit) in the player's system. */
@@ -487,6 +496,19 @@ export function observe(engine: GameEngine): Observation {
           type: st.type,
         })),
         connections: system.connections.length,
+        neighbors: system.connections.map((c) => ({
+          systemId: c.toSystemId,
+          visited:
+            galaxy.systems.find((s) => s.id === c.toSystemId)?.explored ??
+            false,
+          // The core itself counts as "held" even before `addOvermindSystem`
+          // has caught up to it (garrison spread lags core placement) — a
+          // "flee the front" warp should never target the front's own core.
+          overmindHeld:
+            galaxy.isOvermindSystem(c.toSystemId) ||
+            (galaxy.overmindCoreSystemId !== "" &&
+              c.toSystemId === galaxy.overmindCoreSystemId),
+        })),
       }
     : null;
 

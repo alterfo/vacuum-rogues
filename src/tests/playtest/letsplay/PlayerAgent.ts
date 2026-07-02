@@ -334,12 +334,17 @@ export class PlayerAgent {
         }
         const sys = currentSystem(engine);
         const connections = sys?.connections ?? [];
-        const target = pickWarpTarget(
-          connections,
-          this.lastSystemId,
-          this.memory.visitedSystemIds,
-          new Set(engine.galaxy?.overmindSystems ?? []),
-        );
+        const target =
+          (action.targetId &&
+          connections.some((c) => c.toSystemId === action.targetId)
+            ? action.targetId
+            : undefined) ??
+          pickWarpTarget(
+            connections,
+            this.lastSystemId,
+            this.memory.visitedSystemIds,
+            new Set(engine.galaxy?.overmindSystems ?? []),
+          );
         this.lastSystemId = sys?.id ?? null;
         const scene = this.harness.currentScene() as {
           performWarpJumpTo?: (id: string) => Promise<void>;
