@@ -775,6 +775,12 @@ export class SpaceFlightScene extends GameScene {
     logger.info(`Docking at station: ${station.name}`);
     this.clearPlannedRoute();
     this.planetManager.routeTargetStationId = null;
+    // Mirrors onLandOnPlanet's free refuel-to-max — docking and landing are
+    // both "arrive and park" actions, so both refuel (Task 7 game oddity fix).
+    if (this.gameEngine.player?.ship) {
+      this.gameEngine.player.ship.energy =
+        this.gameEngine.player.ship.maxEnergy;
+    }
     await this.gameEngine.transitionTo(SceneType.STATION, {
       gameEngine: this.gameEngine,
       station,

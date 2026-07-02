@@ -284,8 +284,16 @@ export class PlayerAgent {
         const station =
           sys?.stations.find((s) => s.id === action.targetId) ??
           sys?.stations[0];
-        if (station) await this.harness.goTo(SceneType.STATION, { station });
-        else this.harness.tick();
+        if (station) {
+          await this.harness.goTo(SceneType.STATION, { station });
+          // Mirrors SpaceFlightScene.onDockAtStation's refuel side effect — the
+          // headless teleport-dock skips the live docking path, so it must
+          // restore fuel itself (Task 7).
+          const ship = engine.player?.ship;
+          if (ship) ship.energy = ship.maxEnergy;
+        } else {
+          this.harness.tick();
+        }
         return;
       }
 

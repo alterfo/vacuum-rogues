@@ -214,7 +214,14 @@ export function createLiveSceneController(
       const sys = currentSystem(engine);
       const station =
         sys?.stations.find((s) => s.id === stationId) ?? sys?.stations[0];
-      if (station) await goTo(SceneType.STATION, { station });
+      if (station) {
+        await goTo(SceneType.STATION, { station });
+        // dock() always teleports (no physical-docking-range simulation like
+        // land()'s real-route branch), so it must refuel itself — mirrors
+        // SpaceFlightScene.onDockAtStation (Task 7).
+        const ship = engine.player?.ship;
+        if (ship) ship.energy = ship.maxEnergy;
+      }
     },
     async openStarMap() {
       // Save ship position before leaving — identical to returnToStarMap() in

@@ -302,10 +302,36 @@ regenerate + retrain the net to clone the smarter teacher.
   verification pass (Task 10 covers the full acceptance sweep).
 
 ### Task 7: Game oddity — station docking refuels
-- [ ] RED: `src/tests/.../stationRefuel.test.ts` (real-engine) — dock at a station with `energy < maxEnergy`; assert `ship.energy` is restored on dock (currently only planet-landing refuels)
-- [ ] make station dock refuel energy (mirror `onLandOnPlanet` refuel at the dock/`StationScene` entry); behavior-only change, **no schema/migration** (energy is existing ship state)
-- [ ] confirm no persisted-field change ⇒ `test:save-compat` unaffected; run it anyway to be safe
-- [ ] GREEN + visual sanity screenshot of the station dock (per the visual-verify rule)
+- [x] RED: `src/tests/.../stationRefuel.test.ts` (real-engine) — dock at a station with `energy < maxEnergy`; assert `ship.energy` is restored on dock (currently only planet-landing refuels)
+- [x] make station dock refuel energy (mirror `onLandOnPlanet` refuel at the dock/`StationScene` entry); behavior-only change, **no schema/migration** (energy is existing ship state)
+- [x] confirm no persisted-field change ⇒ `test:save-compat` unaffected; run it anyway to be safe
+- [x] GREEN + visual sanity screenshot of the station dock (per the visual-verify rule)
+
+  Three call sites transition into `StationScene` without going through a shared
+  entry hook (unlike `PlanetScene`, `StationScene.initialize()` is never reached
+  by a save-resume, so it would have been a safe single fix point, but each
+  "dock" call site independently teleports — mirroring exactly why the land
+  case needed both a live fix *and* a headless mirror in Task 1): live
+  `SpaceFlightScene.onDockAtStation` (the real proactive-docking trigger,
+  `updateShip` within `DOCKING_RANGE`), headless `PlayerAgent.apply`'s `"dock"`
+  case, and the live-autopilot `installAutopilotHook.ts` `dock()` (which —
+  unlike its `land()` sibling — never attempts physical routing, so it always
+  teleports). All three now set `ship.energy = ship.maxEnergy` right
+  before/after the scene transition, mirroring `onLandOnPlanet`'s existing
+  free-refuel-to-max. `gitnexus detect_changes` confirmed the touched symbols
+  were exactly these three call sites (plus their containing methods) — no
+  incidental scope. RED tests: `src/tests/flight/stationDockRefuel.test.ts`
+  (prototype-invocation wiring test for the live fix, mirroring
+  `landingGate.test.ts`'s pattern) and
+  `src/tests/playtest/letsplay/stationRefuel.test.ts` (real-engine
+  `RealEngineHarness`/`PlayerAgent` regression for the headless fix). No
+  schema/migration needed (`energy` is pre-existing ship state); `STATION` is
+  already a `contextDependentScenes` entry so save-resume never re-enters
+  `StationScene.initialize()` and can't double-refuel on load.
+  `test:save-compat` reconfirmed green. Visual sanity: automated real-engine
+  coverage only (`stationRefuel.test.ts`, zero harness errors) — a live-session
+  screenshot is deferred to the plan's Post-Completion manual verification pass
+  (Task 10), same as Task 6's precedent.
 
 ### Task 8: Session oracle — score the now-reachable competent play
 - [ ] add oddity/oracle assertions over the states the smart agent now reaches
