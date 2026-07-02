@@ -62,13 +62,21 @@ export function bestAffordableGear(engine: GameEngine): GearListing | null {
   return best;
 }
 
-/** The priciest affordable hull stocked in-system (hulls are planet-only). `null` if none. */
+/**
+ * The priciest affordable hull stocked in-system that is a genuine upgrade over
+ * the currently-fitted hull (hulls are planet-only). Candidates with `hp` at or
+ * below the fitted hull's are skipped — buying one would trade the ship down for
+ * a weaker hull at a net credit cost (the trade-in never refunds the full price),
+ * so "upgrade-hull" must never make the ship worse. `null` if none qualifies.
+ */
 export function bestAffordableHull(engine: GameEngine): GearListing | null {
   const credits = engine.player?.credits ?? 0;
+  const fittedHp = engine.playerLoadout?.hull.hp ?? 0;
   let best: GearListing | null = null;
   for (const listing of systemListings(engine)) {
     if (listing.gear.kind !== GearKind.HULL) continue;
     if (listing.price > credits) continue;
+    if ((listing.gear as HullSpec).hp <= fittedHp) continue;
     if (!best || listing.price > best.price) best = listing;
   }
   return best;
