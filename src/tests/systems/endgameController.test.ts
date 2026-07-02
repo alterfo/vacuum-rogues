@@ -281,6 +281,10 @@ describe("EndgameController.generateDefaultGameState", () => {
     };
     const restoreSpy = vi.spyOn(deps.questManager, "restoreState");
     const resetLedgerSpy = vi.spyOn(deps.bankingService, "resetLedger");
+    const deletePlayerSpy = vi.spyOn(deps.playerService, "deletePlayer");
+    const resetSessionSpy = vi.spyOn(deps.sessionState, "resetForNewSession");
+    const musicResetSpy = vi.spyOn(deps.music, "reset");
+    const hullAlarmResetSpy = vi.spyOn(deps.hullAlarm, "reset");
 
     await controller.generateDefaultGameState();
 
@@ -289,6 +293,10 @@ describe("EndgameController.generateDefaultGameState", () => {
     expect(controller.pendingNewGamePlus).toBeNull();
     expect(restoreSpy).toHaveBeenCalledWith([], []);
     expect(resetLedgerSpy).toHaveBeenCalled();
+    expect(deletePlayerSpy).toHaveBeenCalled();
+    expect(resetSessionSpy).toHaveBeenCalled();
+    expect(musicResetSpy).toHaveBeenCalled();
+    expect(hullAlarmResetSpy).toHaveBeenCalled();
     expect(deps.clearFlightPositions).toHaveBeenCalled();
     expect(deps.clearCombatStateProvider).toHaveBeenCalled();
     expect(deps.state.galaxy).not.toBeNull();

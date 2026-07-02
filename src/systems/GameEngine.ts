@@ -420,7 +420,7 @@ export class GameEngine {
       // Persist the live in-flight position when the tab is hidden/closed so a
       // reload mid-flight resumes where the ship was (registered once, before the
       // auto-load early-return below).
-      this.registerFlightHideAutosave();
+      this.flightPositions.registerFlightHideAutosave();
 
       // Load settings from localStorage and validate
       const storedSettings = localStorage.getItem("sr_settings");
@@ -706,15 +706,6 @@ export class GameEngine {
    */
   async flushFlightAutosave(): Promise<void> {
     await this.flightPositions.flushFlightAutosave();
-  }
-
-  /**
-   * Register the one-time page-hide autosave listeners. Survives scene
-   * transitions (registered once at engine init), guarded for non-browser
-   * runtimes (bare Vitest constructs the engine without calling `initialize`).
-   */
-  private registerFlightHideAutosave(): void {
-    this.flightPositions.registerFlightHideAutosave();
   }
 
   /**

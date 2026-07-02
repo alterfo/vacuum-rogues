@@ -43,6 +43,7 @@ import {
   recordAndMaybeAutosaveFlight,
   type FlightAutosaveState,
 } from "./flight/flightTurnEnd";
+import { E2ETestHooks } from "./flight/e2eTestHooks";
 
 /** Planet spiral-in hint: where to curve the approach when landing. */
 type LandingHint = { planetX: number; planetY: number; planetRadius: number };
@@ -153,6 +154,23 @@ export class SpaceFlightScene extends GameScene {
   // exceeded the window, right/bottom UI hidden).
   private boundResize: (() => void) | null = null;
   private boundContextMenu: ((e: Event) => void) | null = null;
+
+  // Playwright/e2e driver methods live in e2eTestHooks.ts (dev-only, __DEBUG__-gated);
+  // this scene keeps 1-line forwarders so the public e2e* surface is unchanged.
+  private readonly e2eHooks = new E2ETestHooks({
+    returnToStarMap: () => this.returnToStarMap(),
+    onPlayPause: () => this.onPlayPause(),
+    getIsTurnRunning: () => this.isTurnRunning,
+    getShipPhysics: () => this.shipPhysics,
+    getCamera: () => this.camera,
+    getHud: () => this.hud,
+    getPlanetManager: () => this.planetManager,
+    getNpcManager: () => this.npcManager,
+    getGameEngine: () => this.gameEngine,
+    getGameLayer: () => this.renderer.gameLayer,
+    getSkyContainer: () => this.skyContainer,
+    getBackground: () => this.background,
+  });
 
   initialize(context?: object): void {
     const ctx = context as
@@ -1747,114 +1765,78 @@ export class SpaceFlightScene extends GameScene {
 
   /** E2E helper: click back to star map */
   async e2eClickBackToMap(): Promise<void> {
-    if (!__DEBUG__) return;
-    await this.returnToStarMap();
+    return this.e2eHooks.clickBackToMap();
   }
 
   /** E2E helper: set ship target position */
   e2eSetTarget(x: number, y: number): void {
-    if (!__DEBUG__) return;
-    if (this.shipPhysics) {
-      this.shipPhysics.setTarget(x, y);
-    }
+    this.e2eHooks.setTarget(x, y);
   }
 
   /** E2E helper: get camera state */
   e2eGetCameraState(): { zoom: number; panX: number; panY: number } {
-    if (!__DEBUG__) return { zoom: 1, panX: 0, panY: 0 };
-    return {
-      zoom: this.camera.zoom,
-      panX: this.camera.panX,
-      panY: this.camera.panY,
-    };
+    return this.e2eHooks.getCameraState();
   }
 
   /** E2E helper: set camera zoom */
   e2eSetCameraZoom(zoom: number): void {
-    if (!__DEBUG__) return;
-    this.camera.setZoom(zoom);
+    this.e2eHooks.setCameraZoom(zoom);
   }
 
   /** E2E helper: set camera pan */
   e2eSetCameraPan(x: number, y: number): void {
-    if (!__DEBUG__) return;
-    this.camera.setPan(x, y);
+    this.e2eHooks.setCameraPan(x, y);
   }
 
   /** E2E helper: check if minimap exists */
   e2eHasMinimap(): boolean {
-    if (!__DEBUG__) return false;
-    return this.hud.miniMap !== null;
+    return this.e2eHooks.hasMinimap();
   }
 
   /** E2E helper: get ship position */
   e2eGetShipPosition(): { x: number; y: number } {
-    if (!__DEBUG__) return { x: 0, y: 0 };
-    return {
-      x: this.shipPhysics?.shipX ?? 0,
-      y: this.shipPhysics?.shipY ?? 0,
-    };
+    return this.e2eHooks.getShipPosition();
   }
 
   /** E2E helper: check if quest journal is open */
   e2eIsQuestJournalOpen(): boolean {
-    if (!__DEBUG__) return false;
-    return this.hud.isQuestJournalVisible();
+    return this.e2eHooks.isQuestJournalOpen();
   }
 
   /** E2E helper: return current system planets for test assertions */
   e2eGetPlanets(): { id: string; name: string }[] {
-    if (!__DEBUG__) return [];
-    return this.planetManager.planetSprites.map((ps) => ({
-      id: ps.planet.id,
-      name: ps.planet.name,
-    }));
+    return this.e2eHooks.getPlanets();
   }
 
   /** E2E helper: transition directly to PLANET scene bypassing distance check */
   async e2eLandOnPlanet(): Promise<void> {
-    if (!__DEBUG__) return;
-    const planet = this.planetManager.planetSprites[0]?.planet;
-    if (!planet || !this.gameEngine) return;
-    await this.gameEngine.transitionTo(SceneType.PLANET, {
-      gameEngine: this.gameEngine,
-      planet,
-    });
+    return this.e2eHooks.landOnPlanet();
   }
 
   /** E2E helper: count of NPC ship sprites currently in the scene */
   e2eGetNpcCount(): number {
-    if (!__DEBUG__) return 0;
-    return this.npcManager.npcCount;
+    return this.e2eHooks.getNpcCount();
   }
 
   /** E2E helper: true once a planet renders via the GLSL rotation filter (F1). */
   e2eHasFilterPlanet(): boolean {
-    if (!__DEBUG__) return false;
-    return this.planetManager.e2eHasFilterPlanet();
+    return this.e2eHooks.hasFilterPlanet();
   }
 
   /**
    * E2E helper (F1 pixel assertion): hide everything on the game layer except
-   * one GLSL-filtered planet body and return its on-screen geometry. The scene
-   * owns the gameLayer, the PlanetManager owns the planet sprites — each hides
-   * only what it owns.
+   * one GLSL-filtered planet body and return its on-screen geometry.
    */
   e2eIsolateFilterPlanet(): {
     screenX: number;
     screenY: number;
     displayRadius: number;
   } | null {
-    if (!__DEBUG__) return null;
-    for (const child of this.renderer.gameLayer.children) {
-      child.visible = false;
-    }
-    return this.planetManager.e2eIsolateFilterPlanet();
+    return this.e2eHooks.isolateFilterPlanet();
   }
 
   e2ePlayPause(): void {
-    if (!__DEBUG__) return;
-    this.onPlayPause();
+    this.e2eHooks.playPause();
   }
 
   /**
@@ -1863,9 +1845,7 @@ export class SpaceFlightScene extends GameScene {
    * applyMockHeavySystems fixture flips this off for every E2E test.
    */
   e2eSetBackgroundVisible(visible: boolean): void {
-    if (!__DEBUG__) return;
-    if (this.skyContainer) this.skyContainer.visible = visible;
-    this.background?.setVisible(visible);
+    this.e2eHooks.setBackgroundVisible(visible);
   }
 
   /** E2E helper: snapshot of the scene's high-level state for assertions. */
@@ -1875,39 +1855,26 @@ export class SpaceFlightScene extends GameScene {
     isFlying: boolean;
     turnNumber: number;
   } {
-    if (!__DEBUG__) {
-      return { planetsCount: 0, npcsCount: 0, isFlying: false, turnNumber: 0 };
-    }
-    return {
-      planetsCount: this.planetManager?.planetSprites.length ?? 0,
-      npcsCount: this.npcManager?.npcCount ?? 0,
-      isFlying: this.shipPhysics?.isMoving ?? false,
-      turnNumber: this.gameEngine?.galaxy?.gameDays ?? 0,
-    };
+    return this.e2eHooks.getSceneState();
   }
 
   /** E2E helper: trigger the planet-click handler for the planet at `index`. */
   e2eClickPlanet(index: number): void {
-    if (!__DEBUG__) return;
-    const sprite = this.planetManager?.planetSprites[index];
-    if (sprite) this.planetManager.handlePlanetClick(sprite.planet);
+    this.e2eHooks.clickPlanet(index);
   }
 
   /** E2E helper: trigger the NPC-contact click for the ship at `index`. */
   e2eClickNpc(index: number): void {
-    if (!__DEBUG__) return;
-    this.npcManager?.e2eClickNpc(index);
+    this.e2eHooks.clickNpc(index);
   }
 
   /** E2E helper: press Pause — defers the stop to the day boundary (F1). */
   e2ePressPause(): void {
-    if (!__DEBUG__) return;
-    if (this.isTurnRunning) this.onPlayPause();
+    this.e2eHooks.pressPause();
   }
 
   /** E2E helper: start a turn (Ход) — runs the planned route or a wait turn. */
   e2eStartTurn(): void {
-    if (!__DEBUG__) return;
-    if (!this.isTurnRunning) this.onPlayPause();
+    this.e2eHooks.startTurn();
   }
 }

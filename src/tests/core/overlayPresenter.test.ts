@@ -277,6 +277,44 @@ describe("OverlayPresenter (real, renderer-backed)", () => {
     expect(renderer.uiLayer.addChild).toHaveBeenCalledTimes(4);
   });
 
+  it("showGameOutcome on a win fires onRestart when the restart button is clicked", () => {
+    const renderer = makeRenderer();
+    const presenter = new OverlayPresenter(() => renderer);
+    const onNewGamePlus = vi.fn();
+    const onRestart = vi.fn();
+
+    presenter.showGameOutcome(true, { onRestart, onNewGamePlus });
+
+    // overlay(0) + title(1) + msg(2) + NG+ button(3) + restart button(4)
+    const restartCall = (renderer.uiLayer.addChild as ReturnType<typeof vi.fn>)
+      .mock.calls[4][0] as { on: ReturnType<typeof vi.fn> };
+    const pointerdown = restartCall.on.mock.calls.find(
+      (c: unknown[]) => c[0] === "pointerdown",
+    )?.[1] as () => void;
+    pointerdown();
+
+    expect(onRestart).toHaveBeenCalledTimes(1);
+    expect(onNewGamePlus).not.toHaveBeenCalled();
+  });
+
+  it("showGameOutcome on a loss fires onRestart when the restart button is clicked", () => {
+    const renderer = makeRenderer();
+    const presenter = new OverlayPresenter(() => renderer);
+    const onRestart = vi.fn();
+
+    presenter.showGameOutcome(false, { onRestart });
+
+    // overlay(0) + title(1) + msg(2) + restart button(3)
+    const restartCall = (renderer.uiLayer.addChild as ReturnType<typeof vi.fn>)
+      .mock.calls[3][0] as { on: ReturnType<typeof vi.fn> };
+    const pointerdown = restartCall.on.mock.calls.find(
+      (c: unknown[]) => c[0] === "pointerdown",
+    )?.[1] as () => void;
+    pointerdown();
+
+    expect(onRestart).toHaveBeenCalledTimes(1);
+  });
+
   it("clearModal empties the tracked modal objects", () => {
     const renderer = makeRenderer();
     const presenter = new OverlayPresenter(() => renderer);

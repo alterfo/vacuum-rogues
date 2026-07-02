@@ -1,26 +1,37 @@
 /**
  * Layer guard for the `IOverlayPresenter` extraction (plan 20260701, Phase 2
- * Task 8). `src/systems/` must never depend on `src/presentation/` or import
- * `pixi.js` directly — `GameEngine.ts` used to violate this by building modal/
- * loading/outcome overlays with `Graphics`/`Text` straight from `pixi.js`. That
- * UI now lives behind `IOverlayPresenter` (`core/ports/`), implemented by
- * `presentation/OverlayPresenter.ts`. This guard keeps the import gone, mirroring
- * `noOnnxRuntime.test.ts`'s pattern for the ONNX removal. It also covers the
- * Phase 2 extraction targets (`DayTickController`/`EndgameController`/
- * `FlightPositionTracker`/`FlightSessionState`) — each holds a reference to
- * `IOverlayPresenter` or GameEngine-owned state and is subject to the same rule.
+ * Task 8). `GameEngine.ts` used to import `pixi.js` directly to build modal/
+ * loading/outcome overlays with `Graphics`/`Text`. That UI now lives behind
+ * `IOverlayPresenter` (`core/ports/`), implemented by
+ * `presentation/OverlayPresenter.ts`. This guard keeps the `pixi.js` import
+ * gone, mirroring `noOnnxRuntime.test.ts`'s pattern for the ONNX removal:
+ * it recursively scans all of `src/systems/**`, so newly added files are
+ * covered automatically without a manual allowlist edit.
+ *
+ * Note: this only scans for `pixi.js`/`@pixi/*` specifiers — it does not
+ * enforce the broader `systems/` must-not-import-`presentation/` layer rule
+ * (GameEngine.ts still imports `Renderer`/`GameScene`/`preloadTextures` from
+ * `@/presentation/`, a pre-existing dependency predating this extraction).
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 
-const GUARDED_PATHS = [
-  resolve(__dirname, "..", "..", "systems", "GameEngine.ts"),
-  resolve(__dirname, "..", "..", "systems", "DayTickController.ts"),
-  resolve(__dirname, "..", "..", "systems", "EndgameController.ts"),
-  resolve(__dirname, "..", "..", "systems", "FlightPositionTracker.ts"),
-  resolve(__dirname, "..", "..", "systems", "FlightSessionState.ts"),
-];
+const SYSTEMS_ROOT = resolve(__dirname, "..", "..", "systems");
+
+/** Recursively collect every `.ts` file under `dir`, skipping `.d.ts`. */
+function collectTsFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...collectTsFiles(full));
+    } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".d.ts")) {
+      out.push(full);
+    }
+  }
+  return out;
+}
 
 /** Extract every module specifier from a real import/export/require statement. */
 function importSpecifiers(source: string): string[] {
@@ -46,18 +57,20 @@ function isPixiImport(spec: string): boolean {
   );
 }
 
-describe("src/systems/*.ts never imports pixi.js", () => {
-  it.each(GUARDED_PATHS)(
-    "%s has no static or dynamic pixi.js import",
-    (path) => {
-      const source = readFileSync(path, "utf8");
-      const offenders = importSpecifiers(source).filter(isPixiImport);
-      expect(
-        offenders,
-        `${path} (systems/) must not import pixi.js — route UI through ` +
-          "IOverlayPresenter (core/ports/IOverlayPresenter.ts), implemented by " +
-          "presentation/OverlayPresenter.ts.",
-      ).toHaveLength(0);
-    },
-  );
+describe("src/systems/**/*.ts never imports pixi.js", () => {
+  it("no file under src/systems/ has a static or dynamic pixi.js import", () => {
+    const offenders: string[] = [];
+    for (const file of collectTsFiles(SYSTEMS_ROOT)) {
+      const source = readFileSync(file, "utf8");
+      for (const spec of importSpecifiers(source).filter(isPixiImport)) {
+        offenders.push(`${relative(SYSTEMS_ROOT, file)} imports "${spec}"`);
+      }
+    }
+    expect(
+      offenders,
+      "systems/ must not import pixi.js — route UI through IOverlayPresenter " +
+        "(core/ports/IOverlayPresenter.ts), implemented by " +
+        `presentation/OverlayPresenter.ts.\n${offenders.join("\n")}`,
+    ).toHaveLength(0);
+  });
 });

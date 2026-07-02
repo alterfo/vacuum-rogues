@@ -9,13 +9,18 @@ import { Planet } from "@/domain/Planet";
 import { Market } from "@/domain/Market";
 import { WarpPath } from "@/domain/WarpPath";
 import { Overmind } from "@/domain/Overmind";
-import { StarType, ResourceType, PlanetType } from "@/types";
+import { StarType, ResourceType, PlanetType, FactionType } from "@/types";
 import { Faction } from "@/types/faction";
 import { NpcSimulator } from "@/systems/npc/NpcSimulator";
 import { GalaxySimulator } from "@/systems/GalaxySimulator";
 import { TradeSystem } from "@/systems/TradeSystem";
 import { BankBus } from "@/systems/banking/bus";
 import { BankingService } from "@/systems/banking/BankingService";
+import { Player } from "@/domain/Player";
+import { PlayerShip } from "@/domain/PlayerShip";
+import { Inventory } from "@/domain/Inventory";
+import { SkillTree } from "@/domain/SkillTree";
+import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 
 function makePlanet(id: string, priceMultiplier: number): Planet {
   const market = new Market([ResourceType.METALS], [1], [1]);
@@ -57,6 +62,44 @@ function makeGalaxy(): Galaxy {
   const dear = makeSystem("S2", [makePlanet("S2p", 2.5)]);
   connect(cheap, dear);
   return new Galaxy("g_daytick", [cheap, dear], new Overmind(), [], []);
+}
+
+function makePlayer(hullHP: number, maxHull: number): Player {
+  return new Player(
+    "player",
+    "Captain",
+    FactionType.OUTLANDERS,
+    0,
+    1,
+    new SkillTree([]),
+    {},
+    { activeQuests: [], completedQuests: [] },
+    { entries: [] },
+    1000,
+    new PlayerShip(
+      "Ranger-1",
+      "Ranger-1",
+      hullHP,
+      maxHull,
+      50,
+      50,
+      100,
+      100,
+      1.0,
+      0.8,
+      FactionType.OUTLANDERS,
+    ),
+    new Inventory(),
+    "",
+  );
+}
+
+function makeDroidLoadout(): ShipLoadout {
+  const lo = new ShipLoadout("hull_bastion");
+  lo.install("eq_engine_i");
+  lo.install("eq_tank");
+  lo.install("eq_droid"); // tech 5 → repairRate = 1 + 5*0.5 = 3.5
+  return lo;
 }
 
 function makeDeps(
@@ -117,6 +160,45 @@ describe("DayTickController", () => {
     expect(metalsRumor).toBeDefined();
     expect(metalsRumor!.fromSystemId).toBe("S1");
     expect(metalsRumor!.toSystemId).toBe("S2");
+  });
+
+  it("heals the player hull by the droid repair rate, capped at maxHull", () => {
+    const player = makePlayer(90, 100);
+    const loadout = makeDroidLoadout();
+    const deps = makeDeps(galaxy, {
+      getPlayer: () => player,
+      getPlayerLoadout: () => loadout,
+    });
+
+    new DayTickController(deps).run();
+
+    expect(player.ship.hullHP).toBeCloseTo(93.5, 2);
+  });
+
+  it("caps droid repair healing at maxHull instead of overhealing", () => {
+    const player = makePlayer(99, 100);
+    const loadout = makeDroidLoadout();
+    const deps = makeDeps(galaxy, {
+      getPlayer: () => player,
+      getPlayerLoadout: () => loadout,
+    });
+
+    new DayTickController(deps).run();
+
+    expect(player.ship.hullHP).toBe(100);
+  });
+
+  it("does not repair when hull is already at maxHull", () => {
+    const player = makePlayer(100, 100);
+    const loadout = makeDroidLoadout();
+    const deps = makeDeps(galaxy, {
+      getPlayer: () => player,
+      getPlayerLoadout: () => loadout,
+    });
+
+    new DayTickController(deps).run();
+
+    expect(player.ship.hullHP).toBe(100);
   });
 
   it("dispatches the end-of-day banking batch and quest-expiry check", () => {

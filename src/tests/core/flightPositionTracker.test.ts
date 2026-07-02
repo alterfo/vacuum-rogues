@@ -151,5 +151,56 @@ describe("FlightPositionTracker", () => {
       expect(deps.saveGame).toHaveBeenCalledWith("auto");
       tracker.unregisterFlightHideAutosave();
     });
+
+    it("flushes on visibilitychange when the document becomes hidden", () => {
+      const deps = makeDeps();
+      const tracker = new FlightPositionTracker(deps);
+      tracker.registerFlightHideAutosave();
+
+      const visibilityStateSpy = vi
+        .spyOn(document, "visibilityState", "get")
+        .mockReturnValue("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      expect(deps.saveGame).toHaveBeenCalledWith("auto");
+      tracker.unregisterFlightHideAutosave();
+      visibilityStateSpy.mockRestore();
+    });
+
+    it("does not flush on visibilitychange while the document stays visible", () => {
+      const deps = makeDeps();
+      const tracker = new FlightPositionTracker(deps);
+      tracker.registerFlightHideAutosave();
+
+      const visibilityStateSpy = vi
+        .spyOn(document, "visibilityState", "get")
+        .mockReturnValue("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+
+      expect(deps.saveGame).not.toHaveBeenCalled();
+      tracker.unregisterFlightHideAutosave();
+      visibilityStateSpy.mockRestore();
+    });
+
+    it("detaches the visibilitychange listener on unregister", () => {
+      const addSpy = vi.spyOn(document, "addEventListener");
+      const removeSpy = vi.spyOn(document, "removeEventListener");
+      const tracker = new FlightPositionTracker(makeDeps());
+
+      tracker.registerFlightHideAutosave();
+      expect(addSpy).toHaveBeenCalledWith(
+        "visibilitychange",
+        expect.any(Function),
+      );
+
+      tracker.unregisterFlightHideAutosave();
+      expect(removeSpy).toHaveBeenCalledWith(
+        "visibilitychange",
+        expect.any(Function),
+      );
+
+      addSpy.mockRestore();
+      removeSpy.mockRestore();
+    });
   });
 });
