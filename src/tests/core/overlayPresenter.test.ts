@@ -84,7 +84,6 @@ import { AdaptiveQualityProfile } from "@/ai/AdaptiveQualityProfile";
 
 class FakeOverlayPresenter implements IOverlayPresenter {
   showErrorCalls: { message: string; hasOnDismiss: boolean }[] = [];
-  clearModalCalls = 0;
   showLoadingCalls: string[] = [];
   hideLoadingCalls = 0;
   showGameOutcomeCalls: {
@@ -95,9 +94,6 @@ class FakeOverlayPresenter implements IOverlayPresenter {
 
   showError(message: string, onDismiss?: () => void): void {
     this.showErrorCalls.push({ message, hasOnDismiss: !!onDismiss });
-  }
-  clearModal(): void {
-    this.clearModalCalls++;
   }
   showLoading(text: string): void {
     this.showLoadingCalls.push(text);
@@ -289,6 +285,19 @@ describe("OverlayPresenter (real, renderer-backed)", () => {
     presenter.clearModal();
 
     expect(renderer.uiLayer.removeChild).toHaveBeenCalled();
+  });
+
+  it("a second showError clears every object of the previous modal before drawing a new one", () => {
+    const renderer = makeRenderer();
+    const presenter = new OverlayPresenter(() => renderer);
+    presenter.showError("first");
+
+    presenter.showError("second");
+
+    // first showError tracked 2 objects (overlay + message); the internal
+    // clearModal() the second call runs must remove exactly those before
+    // drawing the new modal.
+    expect(renderer.uiLayer.removeChild).toHaveBeenCalledTimes(2);
   });
 
   it("showLoading replaces a prior loading overlay via hideLoading first", () => {

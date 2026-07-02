@@ -10,7 +10,7 @@ The OVERMIND is an escalating, spreading endgame arc: it captures systems over t
 
 - **`frontierSystems` treats the warp graph as UNDIRECTED.** ~25% of galaxy warp links are one-way (`ensureConnectivity` bridges), so a directed-only scan misses systems reachable via one-way outgoing edges — stalls the front for days.
 - **Win requires GENUINE ENGAGEMENT**: `coreBroken`/`eradicated` are gated on `engaged = state.lastSpreadDay >= 0` (arc actually spread past grace). `peakThreat` is a *false* proxy: it captures the initial Overmind share (e.g. 2/30 ≈ 0.067) during the grace window — without the gate, early clearance of starting systems fired spurious ПОБЕДА. The in-flight **core-kill** win is a separate path (`handleInFlightDeath` → `showGameOutcomeScreen(true)`) and is unaffected.
-- **The arc OWNS the front; equilibrium only churns pirates.** `GameEngine` passes `stepOwnershipTick` a `freezeOvermind: true` when Overmind holds territory, so the equilibrium's ~25% ceiling can't cap the arc below its loss line or liberate the core spuriously.
+- **The arc OWNS the front; equilibrium only churns pirates.** `DayTickController` (invoked from `GameEngine.advanceGalaxyDay()`) passes `stepOwnershipTick` a `freezeOvermind: true` when Overmind holds territory, so the equilibrium's ~25% ceiling can't cap the arc below its loss line or liberate the core spuriously.
 
 Regressions: `overmindNoSpuriousVictory.test.ts`, `overmindSpread.test.ts`, `playtest/overmindArc.test.ts`.
 

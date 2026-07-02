@@ -10,6 +10,11 @@ ContactPanelManager (owns the NPC contact-panel lifecycle: one open panel at a t
 teardown so PixiJS event dispatch is never interrupted mid-frame — extracted from NpcShipManager),
 LootDropHandler (owns floating space loot: spawn, TTL despawn, pulse animation, proximity
 pickup into gear inventory or resource hold — extracted from NpcShipManager),
+NpcInteractionController (contact-panel action cluster: hail/trade/attack/approach/shakedown —
+extracted from NpcShipManager), CombatPursuitController (chase-steering/orbit/breakoff state —
+extracted from NpcShipManager), EncounterController (exploration-encounter rolls + overlay —
+extracted from NpcShipManager), OvermindBossController (OVERMIND-core prompt + combatant spawn —
+extracted from NpcShipManager),
 combatPause (pure active-pause state machine — PixiJS-free, unit-tested standalone),
 cometDustTail (pure dust-tail particle emitter for flyby comets — PixiJS-free, owns a fixed-size
 mote pool with a hard live-count bound; `AsteroidBelt` mirrors each pool slot 1:1 onto a pooled
@@ -43,7 +48,7 @@ every controller method (`pointerType !== "touch"` ⇒ no-op), so the desktop pa
 
 **Exploration encounters are two pure functions + a thin flight bridge**
 (`src/systems/encounters/`, `docs/plans/20260625-exploration-encounters.md`). On system entry
-`NpcShipManager.maybeShowEntryEncounter` rolls one (skipped while a fight is already active) —
+`EncounterController.maybeShowEntryEncounter` rolls one (skipped while a fight is already active) —
 `rollEncounter(system, seed, playerState, ENCOUNTER_CONFIG)` (`encounterGenerator.ts`) is **pure**
 and **deterministic by `(systemId, seed)`**: a weighted, danger/level-scaled
 derelict/anomaly/distress `Encounter` (else `null`). The roll fires **once per system entry**, so
@@ -71,7 +76,7 @@ OVERMIND-core boss and former scripted text-quest encounters. An aggressive NPC 
 (`wpn_pulse`) so the player can fight immediately; `addCombatant` on a genuinely weaponless ship
 surfaces a throttled HUD hint ("Нет оружия — установите его в ангаре") instead of silently
 no-opping. Once engaged, both sides **auto-pursue** to hold `WEAPON_RANGE`: the player ship
-auto-tracks the selected target and each aggressive NPC closes on the player (`NpcShipManager`
+auto-tracks the selected target and each aggressive NPC closes on the player (`CombatPursuitController`
 pursuit, gated on `isInCombat()`, frozen by the active pause). **The in-range hold is a
 controlled orbit/strafe, not a stop** — `steerCombatOrbit` circle-strafes the target at
 `COMBAT_ORBIT_RANGE` (0.6 × weapon range), arc-movement-compatible, so the target stays inside
@@ -90,7 +95,7 @@ own role-scaled reach** `npcWeaponRange(npc)` (`systems/combat/npcWeapon.ts`: TR
 `GAME_BALANCE.weaponRange` 240 — so a long-range player weapon (railgun 360) can no longer trivially
 out-range *every* foe (a PATROL's 340 keeps the edge bounded). `CombatModule.update` drives all
 these timers. A lethal shot calls
-`NpcShipManager`'s in-flight death path (loot drop + domain removal) via the `onNpcDestroyed`
+`NpcShipManager`'s in-flight death path (loot drop + domain removal, not extracted) via the `onNpcDestroyed`
 callback; the scene also completes any bound BOUNTY. Killing the OVERMIND core in flight wins the
 game (`handleInFlightDeath` → `showGameOutcomeScreen(true)`).
 

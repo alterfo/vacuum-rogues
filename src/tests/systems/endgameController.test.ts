@@ -120,7 +120,6 @@ function makeDeps(
     clearCombatStateProvider: vi.fn(),
     overlay: {
       showError: vi.fn(),
-      clearModal: vi.fn(),
       showLoading: vi.fn(),
       hideLoading: vi.fn(),
       showGameOutcome: vi.fn(),

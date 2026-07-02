@@ -49,6 +49,13 @@ npm run letsplay:ci         # Letsplay CI oracle (pre-push + CI gate, ~2.5 s)
 | AI/Infrastructure | `src/ai/`, `src/data/` | Rule-based `FallbackEngine`, IndexedDB, save management; neural policies are pure-TS MLPs |
 | Types/Config | `src/types/`, `src/config/` | Shared types, enums, balance constants; `FactionType` replaces old `RaceType` |
 
+**Fixing a `systems/` → `presentation/` layer violation:** if `systems/` code needs a capability
+only `presentation/` can provide (e.g. PixiJS UI), do not import `presentation/` directly. Define
+a narrow port in `src/core/ports/`, implement it in `src/presentation/`, and inject it via DI as
+an **optional** dependency with a headless no-op adapter fallback in `src/core/adapters/` — see
+`IOverlayPresenter`/`OverlayPresenter`/`NoOpOverlayPresenter`. This keeps `systems/` DI test sites
+compiling and preserves the strict top-down layer direction.
+
 **Cross-cutting modules:**
 - `src/i18n/` — key-based translation (`t(key, params?)`), RU/EN dictionaries
 - `src/utils/` — pure utility functions (font scale, logger, etc.)

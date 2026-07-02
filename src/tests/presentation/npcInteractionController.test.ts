@@ -14,7 +14,7 @@ import { BankBus } from "@/systems/banking/bus";
 import { BankingService } from "@/systems/banking/BankingService";
 import { setupPlayerBanking } from "@/systems/banking/economy";
 import { PlayerService } from "@/core/services/PlayerService";
-import { FactionType } from "@/types";
+import { FactionType, NpcGoalKind } from "@/types";
 import { PIRATE_FACTION_ID } from "@/systems/galaxy/landingAccess";
 import { GAME_BALANCE } from "@/config/balance";
 
@@ -414,13 +414,100 @@ describe("NpcInteractionController.onPayTribute", () => {
     const h = makeHarness({ sprites: [sprite], engine });
 
     const creditsBefore = player.credits;
+    const pirateCreditsBefore = npc.credits;
     const repBefore = player.getReputation(PIRATE_FACTION_ID);
     h.ctrl.onPayTribute(npc);
 
     expect(player.credits).toBeLessThan(creditsBefore); // paid — via the bank bus
+    // Double-entry: the pirate's ledger balance must rise by exactly what the
+    // player lost — proves the transfer routed through the bank, not a raw
+    // `player.credits -=` that a regression could get away with.
+    const tribute = creditsBefore - player.credits;
+    expect(npc.credits).toBe(pirateCreditsBefore + tribute);
     expect(player.getReputation(PIRATE_FACTION_ID)).toBeGreaterThan(repBefore);
     expect(h.set.anchorsCleared).toEqual([sprite]); // pirate disengaged
     expect(h.panels.closeCount).toBe(1);
+  });
+
+  it("a penniless player pays zero tribute and does not farm pirate rep", () => {
+    const bus = new BankBus();
+    const service = new BankingService(bus, { startDate: 1 });
+    const player = new PlayerService().createPlayer({
+      factionType: FactionType.OUTLANDERS,
+      captainName: "Cap",
+      startingMoney: 0,
+    });
+    setupPlayerBanking(bus, service, player);
+    const engine = {
+      galaxy: { npcShips: [], id: "g1", gameDays: 0 },
+      player,
+      bank: { bus, service },
+    } as unknown as GameEngine;
+
+    const npc = makeNpc("pay2", { name: "Рэкетир" });
+    const sprite = makeSprite(npc, 100, 0);
+    (npc as unknown as { credits: number }).credits = 200;
+    const h = makeHarness({ sprites: [sprite], engine });
+
+    const repBefore = player.getReputation(PIRATE_FACTION_ID);
+    h.ctrl.onPayTribute(npc);
+
+    expect(player.credits).toBe(0);
+    expect(npc.credits).toBe(200); // no transfer at all
+    expect(player.getReputation(PIRATE_FACTION_ID)).toBe(repBefore); // no rep farm
+    expect(h.set.anchorsCleared).toEqual([sprite]); // pirate still disengages
+  });
+});
+
+// --- hire/ally contract: no charge for an undeliverable contract -----------
+
+describe("NpcInteractionController.offerHireContract (via onHire/onAlly callbacks)", () => {
+  it("accepts a contract against a hostile target without charging the player", () => {
+    const player = new PlayerService().createPlayer({
+      factionType: FactionType.OUTLANDERS,
+      captainName: "Cap",
+      startingMoney: 1000,
+    });
+    const engine = { player } as unknown as GameEngine;
+    const npc = makeNpc("merc1", { faction: "traders", aggressive: false });
+    const hostile = makeNpc("mark1", { faction: "pirates", aggressive: true });
+    // hireFee() needs combat stats to compute a finite risk premium.
+    Object.assign(hostile, { hullHP: 10, shields: 0, damage: 5 });
+    const h = makeHarness({
+      sprites: [makeSprite(npc, 10, 0), makeSprite(hostile, 20, 0)],
+      physics: makePhysics(100),
+      engine,
+    });
+
+    h.ctrl.onNpcClick(npc);
+    const creditsBefore = player.credits;
+    h.panels.lastOpen?.callbacks.onHire?.();
+
+    // Known limitation: NPC-vs-NPC combat isn't simulated yet, so the contract
+    // can't be delivered — the player must NOT be charged for it (this used to
+    // be a money-loss bug: the fee was taken for an inert contract).
+    expect(player.credits).toBe(creditsBefore);
+    expect(npc.goal).toEqual({
+      kind: NpcGoalKind.HUNT,
+      targetSystemId: hostile.currentSystemId,
+    });
+    expect(h.msgs.some((m) => m.text.includes("плата не взята"))).toBe(true);
+  });
+
+  it("declines with no hostile target present and does not set a goal", () => {
+    const npc = makeNpc("merc2", { aggressive: false });
+    const h = makeHarness({
+      sprites: [makeSprite(npc, 10, 0)],
+      physics: makePhysics(100),
+    });
+
+    h.ctrl.onNpcClick(npc);
+    h.panels.lastOpen?.callbacks.onAlly?.();
+
+    expect(
+      h.msgs.some((m) => m.text.includes("Рядом нет враждебных целей")),
+    ).toBe(true);
+    expect(npc.goal).toBeUndefined();
   });
 });
 

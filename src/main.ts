@@ -164,10 +164,10 @@ async function main(): Promise<void> {
 
     // The presenter is constructed before the engine exists (renderer isn't built
     // until engine.initialize() runs), so it reads the renderer back through this
-    // ref cell rather than holding a reference up front.
-    const engineRef: { current: GameEngine | null } = { current: null };
+    // closure variable rather than holding a reference up front.
+    let engineForRenderer: GameEngine | null = null;
     const overlayPresenter = new OverlayPresenter(
-      () => engineRef.current?.renderer ?? null,
+      () => engineForRenderer?.renderer ?? null,
     );
 
     const engine = new GameEngine({
@@ -179,7 +179,7 @@ async function main(): Promise<void> {
       questService: container.resolve('IQuestService'),
       overlayPresenter,
     });
-    engineRef.current = engine;
+    engineForRenderer = engine;
 
     await engine.initialize({
       seed: 'NEURAL_ONSLAUGHT',

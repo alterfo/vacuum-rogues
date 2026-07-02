@@ -253,8 +253,8 @@ export class NpcShipManager implements FlightModule {
       flight: deps,
       getGameEngine: () => this.gameEngine,
       getNpcSprites: () => this.npcSprites,
-      npcLeadPoint: (sprite) => this.npcLeadPoint(sprite),
-      aimRoute: (x, y) => this.aimRoute(x, y),
+      npcLeadPoint: (sprite) => this.interaction.npcLeadPoint(sprite),
+      aimRoute: (x, y) => this.interaction.aimRoute(x, y),
       scannerRange: this.SCANNER_RANGE,
       weaponRange: this.WEAPON_RANGE,
       handleInFlightDeath: (sprite, rng, killedByPlayer) =>
@@ -1154,11 +1154,6 @@ export class NpcShipManager implements FlightModule {
     this.interaction.onFleeShakedown(npc);
   }
 
-  /** Plot a route to (x,y), remembering it as the live re-aim destination. */
-  private aimRoute(x: number, y: number): void {
-    this.interaction.aimRoute(x, y);
-  }
-
   /**
    * "Атаковать": engage now if in weapon range, else auto-follow to intercept.
    * Public so the existing overmindCombat/npcHostility type-cast tests keep
@@ -1166,11 +1161,6 @@ export class NpcShipManager implements FlightModule {
    */
   onAttackNpc(npc: NpcShip): void {
     this.interaction.onAttackNpc(npc);
-  }
-
-  /** Predicted intercept lead point for chasing a moving NPC. */
-  private npcLeadPoint(sprite: NpcShipSprite): { x: number; y: number } {
-    return this.interaction.npcLeadPoint(sprite);
   }
 
   // ---------------------------------------------------------------------------

@@ -11,7 +11,6 @@ export interface IOverlayPresenter {
    * has no interactive element.
    */
   showError(message: string, onDismiss?: () => void): void;
-  clearModal(): void;
   showLoading(text: string): void;
   hideLoading(): void;
   /** Full-screen win/loss overlay with restart (+ New Game+ on a win) buttons. */

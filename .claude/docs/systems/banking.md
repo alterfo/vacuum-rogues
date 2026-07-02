@@ -21,7 +21,7 @@ All in-game credits live in a **double-entry general ledger** (`src/domain/banki
 
 ## EOD batch
 
-`GameEngine.advanceGalaxyDay()` dispatches `RunEndOfDay`, which: (1) drives each loan's default machine (`processLoanDefaults`: detect overdue, seize whole credits current→loan, write off sub-credit residuals, missed → flip penalty rate, threshold misses → `defaulted`), (2) accrues interest (overdue at ×penalty rate), (3) cuts statements, (4) rolls business date. Idempotent per business date.
+`DayTickController.run()` (invoked by `GameEngine.advanceGalaxyDay()`) dispatches `RunEndOfDay`, which: (1) drives each loan's default machine (`processLoanDefaults`: detect overdue, seize whole credits current→loan, write off sub-credit residuals, missed → flip penalty rate, threshold misses → `defaulted`), (2) accrues interest (overdue at ×penalty rate), (3) cuts statements, (4) rolls business date. Idempotent per business date.
 
 ## Reputation on default
 
