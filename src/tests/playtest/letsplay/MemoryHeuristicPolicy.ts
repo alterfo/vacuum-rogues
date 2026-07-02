@@ -707,7 +707,28 @@ export function decideWithMemory(
       // deliverable-now quest is a closed loop, while the upgrade offer is
       // only ever a saving target.
       if (obs.questDeliveryHere) {
-        const deliveryPlanet = (obs.system?.planets ?? [])[0]?.id;
+        const planets = obs.system?.planets ?? [];
+        const currentSystemId = obs.system?.id ?? null;
+        // In-system courier runs («Местный подряд») only complete on their
+        // named `targetPlanetId` (`evaluateDelivery` returns `n/a` on any
+        // other planet). Landing blindly on `planets[0]` when the target is a
+        // different planet loops land↔take-off forever — an oracle-invisible
+        // soft-lock (it's a land/move, not a `wait`). Prefer the carried
+        // quest's own target planet when it's in this system; only fall back
+        // to `planets[0]` for system-level (cross-system) deliveries that
+        // complete on arrival at any planet.
+        const targetPlanetId =
+          currentSystemId != null
+            ? (obs.quests.find(
+                (q) =>
+                  q.targetSystemId === currentSystemId &&
+                  q.targetPlanetId != null,
+              )?.targetPlanetId ?? null)
+            : null;
+        const deliveryPlanet =
+          targetPlanetId != null && planets.some((p) => p.id === targetPlanetId)
+            ? targetPlanetId
+            : planets[0]?.id;
         if (deliveryPlanet) push("land", "quest-delivery", deliveryPlanet);
       }
       // Pursue an affordable upgrade: route to the offer's in-system location.

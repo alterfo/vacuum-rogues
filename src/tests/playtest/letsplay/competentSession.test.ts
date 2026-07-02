@@ -215,7 +215,12 @@ describe("decideWithMemory — progression tier: quest delivery here (pure)", ()
 
     const action = decideWithMemory(here, createMemory());
 
+    // The quest-delivery branch must not invent a `land` (there is no planet to
+    // land on); with no planet in-system `land` is not even legal, so a bogus
+    // land target would be silently pruned and this assertion alone would still
+    // pass — pin the actual intent: the fall-through picks a real non-land move.
     expect(here.legalActions).toContain(action.kind);
+    expect(action.kind).not.toBe("land");
   });
 });
 

@@ -124,6 +124,127 @@ describe("aggregateSession", () => {
     expect(m.creditsPerDay).toBeNull();
     expect(m.daysToFirstUpgrade).toBeNull();
   });
+
+  it("flags a fuel-death: GAME_OVER with the last sample starved to empty", () => {
+    const starved: VitalsSample[] = [
+      { step: 0, day: 0, credits: 1000, hull: 100, maxHull: 100, fuel: 30 },
+      { step: 20, day: 2, credits: 900, hull: 100, maxHull: 100, fuel: 0 },
+    ];
+    const m = aggregateSession(
+      cleanInput({ endScene: SceneType.GAME_OVER, samples: starved }),
+    );
+    expect(m.fuelDeath).toBe(true);
+  });
+
+  it("does not flag a fuel-death for a combat death that ended with fuel left", () => {
+    const combatDeath: VitalsSample[] = [
+      { step: 0, day: 0, credits: 1000, hull: 100, maxHull: 100, fuel: 30 },
+      { step: 20, day: 2, credits: 900, hull: 0, maxHull: 100, fuel: 25 },
+    ];
+    const m = aggregateSession(
+      cleanInput({ endScene: SceneType.GAME_OVER, samples: combatDeath }),
+    );
+    expect(m.fuelDeath).toBe(false);
+  });
+
+  it("does not flag a fuel-death when the session survived at empty fuel", () => {
+    const survivedEmpty: VitalsSample[] = [
+      { step: 0, day: 0, credits: 1000, hull: 100, maxHull: 100, fuel: 30 },
+      { step: 20, day: 2, credits: 900, hull: 100, maxHull: 100, fuel: 0 },
+    ];
+    const m = aggregateSession(cleanInput({ samples: survivedEmpty }));
+    expect(m.survived).toBe(true);
+    expect(m.fuelDeath).toBe(false);
+  });
+
+  it("flags an Overmind loss: GAME_OVER with the last share at the loss band", () => {
+    const overrun: VitalsSample[] = [
+      {
+        step: 0,
+        day: 0,
+        credits: 1000,
+        hull: 100,
+        maxHull: 100,
+        overmindShare: 0.3,
+      },
+      {
+        step: 20,
+        day: 5,
+        credits: 900,
+        hull: 100,
+        maxHull: 100,
+        overmindShare: 1,
+      },
+    ];
+    const m = aggregateSession(
+      cleanInput({ endScene: SceneType.GAME_OVER, samples: overrun }),
+    );
+    expect(m.overmindLost).toBe(true);
+  });
+
+  it("does not flag an Overmind loss when the session survived at a high share", () => {
+    const pressured: VitalsSample[] = [
+      {
+        step: 0,
+        day: 0,
+        credits: 1000,
+        hull: 100,
+        maxHull: 100,
+        overmindShare: 0.3,
+      },
+      {
+        step: 20,
+        day: 5,
+        credits: 900,
+        hull: 100,
+        maxHull: 100,
+        overmindShare: 1,
+      },
+    ];
+    const m = aggregateSession(cleanInput({ samples: pressured }));
+    expect(m.survived).toBe(true);
+    expect(m.overmindLost).toBe(false);
+  });
+
+  it("counts distinct systems visited and days survived across samples", () => {
+    const roaming: VitalsSample[] = [
+      {
+        step: 0,
+        day: 0,
+        credits: 1000,
+        hull: 100,
+        maxHull: 100,
+        systemId: "sysA",
+      },
+      {
+        step: 10,
+        day: 1,
+        credits: 1100,
+        hull: 100,
+        maxHull: 100,
+        systemId: "sysB",
+      },
+      {
+        step: 20,
+        day: 3,
+        credits: 1200,
+        hull: 100,
+        maxHull: 100,
+        systemId: "sysA",
+      },
+      {
+        step: 30,
+        day: 4,
+        credits: 1300,
+        hull: 100,
+        maxHull: 100,
+        systemId: "sysC",
+      },
+    ];
+    const m = aggregateSession(cleanInput({ samples: roaming }));
+    expect(m.distinctSystemsVisited).toBe(3); // sysA, sysB, sysC
+    expect(m.daysSurvived).toBe(4); // day 4 − day 0
+  });
 });
 
 describe("aggregateRun", () => {
@@ -262,6 +383,36 @@ describe("evaluate", () => {
     });
     expect(res.ok).toBe(false);
     expect(res.reasons.join(" ")).toMatch(/upgrade rate/i);
+  });
+
+  it("fails when a session died stranded on empty fuel", () => {
+    const run = aggregateRun([{ ...clean, survived: false, fuelDeath: true }]);
+    const res = evaluate(run);
+    expect(res.ok).toBe(false);
+    expect(res.reasons.join(" ")).toMatch(/fuel-death/i);
+  });
+
+  it("fails when the Overmind overran the galaxy during play", () => {
+    const run = aggregateRun([
+      { ...clean, survived: false, overmindLost: true },
+    ]);
+    const res = evaluate(run);
+    expect(res.ok).toBe(false);
+    expect(res.reasons.join(" ")).toMatch(/overmind/i);
+  });
+
+  it("fails when the agent isn't exploring enough distinct systems", () => {
+    const run = aggregateRun([{ ...clean, distinctSystemsVisited: 1 }]);
+    const res = evaluate(run, { minAvgDistinctSystemsVisited: 2 });
+    expect(res.ok).toBe(false);
+    expect(res.reasons.join(" ")).toMatch(/exploring/i);
+  });
+
+  it("fails when a session died earlier than the required day floor", () => {
+    const run = aggregateRun([{ ...clean, daysSurvived: 0 }]);
+    const res = evaluate(run, { minDaysSurvived: 2 });
+    expect(res.ok).toBe(false);
+    expect(res.reasons.join(" ")).toMatch(/days survived/i);
   });
 
   it("fails a zero-session run rather than passing vacuously", () => {

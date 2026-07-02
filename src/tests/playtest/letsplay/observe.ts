@@ -170,6 +170,13 @@ export interface QuestSnapshot {
   title: string;
   type: QuestType;
   targetSystemId: string | null;
+  /**
+   * The contract's specific target planet, when it names one. In-system
+   * courier runs («Местный подряд») only complete on this planet, so the
+   * autopilot must land here — not blindly on `planets[0]`. Optional so
+   * existing snapshot fixtures that predate the field still type-check.
+   */
+  targetPlanetId?: string | null;
 }
 
 /**
@@ -530,6 +537,7 @@ export function observe(engine: GameEngine): Observation {
       title: q.title,
       type: q.type,
       targetSystemId: q.targetSystemId ?? null,
+      targetPlanetId: q.targetPlanetId ?? null,
     }));
 
   // The landed planet (PLANET scene), used to gate "take-quest".
