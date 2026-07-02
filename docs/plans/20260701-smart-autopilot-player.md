@@ -178,10 +178,44 @@ regenerate + retrain the net to clone the smarter teacher.
   pass `galaxy.overmindSystems` as that avoid set.
 
 ### Task 4: Progression tier + holistic competence (goal-less full loop)
-- [ ] RED: `src/tests/playtest/letsplay/competentSession.test.ts` — over a fixed budget the goal-less agent **survives longer, earns net credits, completes ≥1 buy→sell cycle, completes/advances ≥1 quest delivery, and does not fuel-die** (a single session-level competence assertion)
-- [ ] add **economy + progression tiers**: complete a known cross-planet margin (sell held where profitable → buy cheap); `quest delivery here` → land/dock to complete; affordable in-system hull/gear upgrade → buy; `broke` (credits low) → `land "earn"`
-- [ ] ensure the full ladder reads coherently: survival → threat/Overmind → economy → progression → explore → wait; document the order in a header comment
-- [ ] GREEN + `npm run test:playtest`
+- [x] RED: `src/tests/playtest/letsplay/competentSession.test.ts` — over a fixed budget the goal-less agent **survives longer, earns net credits, completes ≥1 buy→sell cycle, completes/advances ≥1 quest delivery, and does not fuel-die** (a single session-level competence assertion)
+- [x] add **economy + progression tiers**: complete a known cross-planet margin (sell held where profitable → buy cheap); `quest delivery here` → land/dock to complete; affordable in-system hull/gear upgrade → buy; `broke` (credits low) → `land "earn"`
+- [x] ensure the full ladder reads coherently: survival → threat/Overmind → economy → progression → explore → wait; document the order in a header comment
+- [x] GREEN + `npm run test:playtest`
+
+  Added two goal-less base-ladder candidates in `decideWithMemory`
+  (`MemoryHeuristicPolicy.ts`): a `land "quest-delivery"` candidate (fires on
+  `obs.questDeliveryHere`, ranked above the upgrade-routing block — landing
+  triggers `PlanetScene.checkDeliveryQuestCompletion`, the real completion
+  check) and a STATION-scene `upgrade-hull`/`buy-gear`/`buy-module` block
+  (reuses the CJM-B gear-grinder's affordability buffers) so credits actually
+  get spent on upgrades instead of piling up unspent.
+
+  The session-level RED test surfaced a genuine pre-existing stagnation bug:
+  `holdingForOtherSystem`/`go-sell` used the **globally**-best known margin
+  (`bestKnownMargin(mem)`), which could be for a good the agent wasn't even
+  holding — an unrelated, larger margin masked the held good's own sell
+  opportunity, so the agent looped `land "earn"` / `move "take-off"` forever
+  on unsellable cargo. Fixed by adding an optional `goodFilter` to
+  `bestKnownMargin` and computing a `bestHeld` (margin restricted to
+  currently-held goods) used specifically for `go-sell`/`holdingForOtherSystem`,
+  while buy-side decisions (`buy-low`/`go-buy`) keep the unrestricted `best`.
+  Verified no existing test depends on the old (buggy) behavior — every
+  existing fixture uses a single traded good, so `bestHeld === best` there.
+
+  ⚠️ Also found (but did **not** fix, to avoid a regression — see below): a
+  STAR_MAP-scene softlock where `avoidDanger` ranks `move "avoid-danger-back"`
+  ahead of `warp`, so a ship that just `flee`d a hostile bounces straight back
+  into the same system/hostile forever instead of completing the
+  flee→STAR_MAP→warp escape `PlayerAgent` expects. Attempted the obvious fix
+  (rank `warp` first); it made `npm run letsplay:ci` **regress** (2 new
+  soft-locks) because completing the escape exposes an unrelated, already-
+  deferred limitation — headless `attack` resolves a whole day's combat per
+  step, so a ship can crash from healthy to near-dead in one step and then
+  die mid-transit during the warp's own combat auto-resolve. Reverted the
+  STAR_MAP change (kept `letsplay:ci` green) and left the softlock as a
+  documented follow-up; it does not affect this task's own RED test (that
+  session's chosen seed/budget doesn't enter combat).
 
 ### Task 5: Smart warp-target selection (fix blind warp — observation enrichment)
 - [ ] RED: `src/tests/playtest/letsplay/warpTargeting.test.ts` — assert the agent warps toward an **unvisited** connected system and **away from** an Overmind-held neighbor, not a blind pick

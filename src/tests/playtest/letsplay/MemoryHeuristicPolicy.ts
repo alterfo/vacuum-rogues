@@ -541,6 +541,21 @@ export function decideWithMemory(
   }
 
   const best = bestKnownMargin(mem);
+  // The margin restricted to goods actually held right now — distinct from
+  // `best` (which can surface a bigger margin for a good the agent doesn't
+  // have, useful for the buy-low/go-buy guidance below). Selling decisions
+  // must reason about what's *in the hold*: using the unrestricted `best`
+  // here previously let an unrelated, larger known margin (for a good never
+  // bought) mask the held good's own sell opportunity — the agent believed
+  // "the best sell planet is right here" and never realised it wasn't for
+  // what it was carrying, stalling in an earn/take-off loop forever.
+  const heldGoods = new Set(
+    mem.inventoryLots.filter((l) => l.qty > 0).map((l) => l.good),
+  );
+  const bestHeld =
+    heldGoods.size > 0
+      ? bestKnownMargin(mem, (g) => heldGoods.has(g))
+      : bestKnownMargin(mem, () => false);
   const offer = cheapestKnownOffer(mem);
   const canAffordOffer = offer ? credits >= offer.price : false;
   const danger = routeDangerToGoal(obs, mem);
@@ -604,11 +619,11 @@ export function decideWithMemory(
     case SceneType.SPACE_FLIGHT: {
       // Realise a known sell: holding the good and its sell planet is in-system.
       if (
-        best.good != null &&
-        heldQty(mem, best.good) > 0 &&
-        planetInSystem(obs, best.sellPlanet)
+        bestHeld.good != null &&
+        heldQty(mem, bestHeld.good) > 0 &&
+        planetInSystem(obs, bestHeld.sellPlanet)
       ) {
-        push("land", "go-sell", best.sellPlanet ?? undefined);
+        push("land", "go-sell", bestHeld.sellPlanet ?? undefined);
       }
       // Start a known buy: empty hold and the cheap source is in-system.
       if (
@@ -617,6 +632,18 @@ export function decideWithMemory(
         planetInSystem(obs, best.buyPlanet)
       ) {
         push("land", "go-buy", best.buyPlanet ?? undefined);
+      }
+      // Progression — quest delivery: the current system is a carried quest's
+      // delivery target. Land on any in-system planet to trigger
+      // `PlanetScene.checkDeliveryQuestCompletion` — the real completion check
+      // lives there (it silently no-ops on the wrong planet/cargo shortfall),
+      // so the ladder only needs to get the ship down, not resolve the quest
+      // itself. Ranked above the (memory-driven) upgrade routing below: a
+      // deliverable-now quest is a closed loop, while the upgrade offer is
+      // only ever a saving target.
+      if (obs.questDeliveryHere) {
+        const deliveryPlanet = (obs.system?.planets ?? [])[0]?.id;
+        if (deliveryPlanet) push("land", "quest-delivery", deliveryPlanet);
       }
       // Pursue an affordable upgrade: route to the offer's in-system location.
       if (offer && canAffordOffer) {
@@ -641,7 +668,8 @@ export function decideWithMemory(
       // Both cases need exploration; the second is the early-game cycle-breaker.
       const holdingForOtherSystem =
         mem.inventoryLots.length > 0 &&
-        (best.sellPlanet === null || !planetInSystem(obs, best.sellPlanet));
+        (bestHeld.sellPlanet === null ||
+          !planetInSystem(obs, bestHeld.sellPlanet));
       // Loop-breaker: while holding cargo for a sell planet not in this
       // system, land on an unvisited in-system planet FIRST to populate the
       // price book (and maybe discover the margin outright) rather than
@@ -700,6 +728,25 @@ export function decideWithMemory(
       break;
     }
     case SceneType.STATION: {
+      // Progression — affordable upgrade: buy it now rather than idling with
+      // spare credits. Reuses the CJM-B gear-grinder's affordability buffers
+      // (same "don't spend down to exactly zero" reasoning) so the goal-less
+      // ladder and that goal branch agree on when an upgrade is "worth it".
+      const bestHullPrice = obs.bestHullPrice ?? null;
+      const cheapestGearPrice = obs.cheapestGearPrice ?? null;
+      if (
+        bestHullPrice != null &&
+        credits >= bestHullPrice * GEAR_GRINDER_HULL_BUFFER
+      ) {
+        push("upgrade-hull", "afford-hull-upgrade");
+      }
+      if (
+        cheapestGearPrice != null &&
+        credits >= cheapestGearPrice * GEAR_GRINDER_GEAR_BUFFER
+      ) {
+        push("buy-gear", "afford-gear");
+      }
+      if (obs.hasCraftCenter) push("buy-module", "afford-module");
       push("repair", "repair");
       push("move", "leave");
       break;

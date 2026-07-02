@@ -96,7 +96,10 @@ const NO_MARGIN: BestMargin = {
   fraction: 0,
 };
 
-export function bestKnownMargin(mem: AgentMemory): BestMargin {
+export function bestKnownMargin(
+  mem: AgentMemory,
+  goodFilter?: (good: ResourceType) => boolean,
+): BestMargin {
   // Invert the price book into good → the planets that trade it.
   const byGood = new Map<
     ResourceType,
@@ -112,6 +115,7 @@ export function bestKnownMargin(mem: AgentMemory): BestMargin {
 
   let best: BestMargin = NO_MARGIN;
   for (const [good, list] of byGood) {
+    if (goodFilter && !goodFilter(good)) continue;
     for (const buyAt of list) {
       for (const sellAt of list) {
         if (buyAt.planet === sellAt.planet) continue; // must be a real trip
