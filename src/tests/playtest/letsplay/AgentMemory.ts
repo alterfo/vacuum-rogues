@@ -92,6 +92,10 @@ export interface AgentMemory {
   step: number;
   /** systemIds the run has actually been in (the current system, each step). */
   visitedSystemIds: Set<string>;
+  /** Internal: the last system observed, used to detect a warp (system change) with no landing since. */
+  lastSystemId: string | null;
+  /** Count of system-to-system hops since the last landing — the anti-warp-loop cadence signal. */
+  consecutiveWarpsWithoutLanding: number;
   /** The player's known outstanding loan, or absent when none is carried. */
   loanState?: { balance: number; missedPayments: number };
   /** Sticky once true — the compound worst-case state was seen this run (logged once). */
@@ -146,6 +150,8 @@ export function createMemory(): AgentMemory {
     lastCargo: new Map(),
     step: 0,
     visitedSystemIds: new Set(),
+    lastSystemId: null,
+    consecutiveWarpsWithoutLanding: 0,
     loanState: undefined,
     deadlockDetected: false,
     activeQuestDelivery: [],
@@ -226,6 +232,8 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       lastCargo: mem.lastCargo,
       step,
       visitedSystemIds: new Set(mem.visitedSystemIds),
+      lastSystemId: mem.lastSystemId,
+      consecutiveWarpsWithoutLanding: mem.consecutiveWarpsWithoutLanding,
       loanState: mem.loanState,
       deadlockDetected: mem.deadlockDetected,
       activeQuestDelivery: mem.activeQuestDelivery.map((d) => ({ ...d })),
@@ -282,6 +290,21 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
   const visitedSystemIds = new Set(mem.visitedSystemIds);
   if (obs.system) visitedSystemIds.add(obs.system.id);
 
+  // 4.5) Consecutive-warp cadence — a landing (anywhere) always resets the
+  // tally; observing a different system while still in flight (no planet
+  // under the ship) means a warp completed since the last landing, so bump it.
+  let consecutiveWarpsWithoutLanding = mem.consecutiveWarpsWithoutLanding;
+  if (obs.currentPlanet) {
+    consecutiveWarpsWithoutLanding = 0;
+  } else if (
+    obs.system &&
+    mem.lastSystemId !== null &&
+    obs.system.id !== mem.lastSystemId
+  ) {
+    consecutiveWarpsWithoutLanding += 1;
+  }
+  const lastSystemId = obs.system?.id ?? mem.lastSystemId;
+
   // 5) Loan state — only what the observation says right now; no loan ⇒ absent.
   const loanState = obs.activeLoans
     ? {
@@ -326,6 +349,8 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     lastCargo: cargoNow,
     step,
     visitedSystemIds,
+    lastSystemId,
+    consecutiveWarpsWithoutLanding,
     loanState,
     deadlockDetected: mem.deadlockDetected,
     activeQuestDelivery,

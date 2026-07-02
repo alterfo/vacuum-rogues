@@ -65,6 +65,15 @@ export const BATTLE_READY_HULL_FRACTION = 0.99;
  */
 export const REFUEL_THRESHOLD = 0.2;
 
+/**
+ * Cap on system-to-system hops the base ladder will take back-to-back without
+ * an intervening landing. Without this cadence, a goal-less agent holding
+ * cargo for an unknown sell planet can blind-warp system after system forever
+ * (see `MemoryHeuristicPolicy`'s loop-breaker below) — this is the backstop
+ * that forces a land (or at minimum stops emitting `warp`) once tripped.
+ */
+export const MAX_CONSECUTIVE_WARPS_WITHOUT_LAND = 2;
+
 /** One ranked action candidate: a legal-or-not preference the legal filter prunes. */
 interface Candidate {
   kind: PlayerActionKind;
@@ -495,6 +504,11 @@ export function decideWithMemory(
   const danger = routeDangerToGoal(obs, mem);
   // Heading into a remembered-dangerous goal while not battle-ready ⇒ hold back.
   const avoidDanger = danger > 0 && hull < BATTLE_READY_HULL_FRACTION;
+  // Anti-consecutive-warp cadence — once the run has hopped this many systems
+  // in a row without landing, stop emitting `warp` from the base ladder so the
+  // remaining candidates (land/dock/wait) get a chance to break the streak.
+  const warpCadenceOk =
+    mem.consecutiveWarpsWithoutLanding < MAX_CONSECUTIVE_WARPS_WITHOUT_LAND;
 
   // 2) If a hyperjump is already in transit (ship flying to system edge), wait —
   // opening StarMap would cancel the pending warp. Highest priority after survive,
@@ -569,24 +583,9 @@ export function decideWithMemory(
         else if (stationInSystem(obs, offer.location))
           push("dock", "go-upgrade", offer.location);
       }
-      // Warp to find the sell destination when:
-      //  - holding cargo AND best sell planet not in this system, OR
-      //  - holding cargo AND no sell planet known (priceBook only covers this system)
-      // Both cases need exploration; the second is the early-game cycle-breaker.
-      const holdingForOtherSystem =
-        mem.inventoryLots.length > 0 &&
-        (best.sellPlanet === null || !planetInSystem(obs, best.sellPlanet));
-      if (holdingForOtherSystem && !avoidDanger && !fuelGate) {
-        push("warp", "find-sell-destination");
-      }
-      // Generic earn — head to local commerce.
-      // Early exploration: if the nearest earn planet was already visited this
-      // session (it's in the price book) but there's still no cross-system margin,
-      // warp to explore a NEW system BEFORE landing on the same planet again.
-      // This breaks the "visit same planet forever" cycle: the warp fires only
-      // after the first visit; a fresh system resets alreadyVisited=false so the
-      // agent lands on the new planet first. Positioned before land "earn" so
-      // warp wins over the repeated same-planet land when the condition is met.
+      // Generic earn target + whether landing there would teach the agent
+      // anything new — hoisted here (used by both the loop-breaker below and
+      // the "earn"/"early-explore" candidates further down).
       const earnPlanet = earnPlanetId(obs);
       // An uninhabited visit stores an empty goods map — require at least one
       // known good so the "already explored" signal is only true after a real
@@ -594,11 +593,42 @@ export function decideWithMemory(
       const alreadyVisited =
         earnPlanet !== undefined &&
         (mem.priceBook.get(earnPlanet)?.size ?? 0) > 0;
+      // Warp to find the sell destination when:
+      //  - holding cargo AND best sell planet not in this system, OR
+      //  - holding cargo AND no sell planet known (priceBook only covers this system)
+      // Both cases need exploration; the second is the early-game cycle-breaker.
+      const holdingForOtherSystem =
+        mem.inventoryLots.length > 0 &&
+        (best.sellPlanet === null || !planetInSystem(obs, best.sellPlanet));
+      // Loop-breaker: while holding cargo for a sell planet not in this
+      // system, land on an unvisited in-system planet FIRST to populate the
+      // price book (and maybe discover the margin outright) rather than
+      // blind-warping — without this, `holdingForOtherSystem` always beats
+      // "earn" below and the agent warps system-to-system forever, never
+      // learning a second planet's prices (the warp-forever bug).
+      if (
+        holdingForOtherSystem &&
+        earnPlanet !== undefined &&
+        !alreadyVisited
+      ) {
+        push("land", "discover-prices", earnPlanet);
+      }
+      if (holdingForOtherSystem && !avoidDanger && !fuelGate && warpCadenceOk) {
+        push("warp", "find-sell-destination");
+      }
+      // Early exploration: if the nearest earn planet was already visited this
+      // session (it's in the price book) but there's still no cross-system margin,
+      // warp to explore a NEW system BEFORE landing on the same planet again.
+      // This breaks the "visit same planet forever" cycle: the warp fires only
+      // after the first visit; a fresh system resets alreadyVisited=false so the
+      // agent lands on the new planet first. Positioned before land "earn" so
+      // warp wins over the repeated same-planet land when the condition is met.
       if (
         alreadyVisited &&
         best.fraction === 0 &&
         !avoidDanger &&
         !fuelGate &&
+        warpCadenceOk &&
         mem.inventoryLots.length === 0 &&
         !offer
       ) {
@@ -609,12 +639,13 @@ export function decideWithMemory(
       }
       push("dock", "earn", obs.system?.stations[0]?.id);
       // Explore — but don't warp deeper into a remembered threat while hurt,
-      // and never warp at all while fuel-critical (land/dock/wait only).
+      // never warp at all while fuel-critical, and respect the consecutive-warp
+      // cadence (land/dock/wait only once it's tripped).
       if (avoidDanger) {
         push("move", "avoid-danger-hold");
-        if (!fuelGate) push("warp", "explore");
+        if (!fuelGate && warpCadenceOk) push("warp", "explore");
       } else {
-        if (!fuelGate) push("warp", "explore");
+        if (!fuelGate && warpCadenceOk) push("warp", "explore");
         push("move", "fly");
       }
       break;
@@ -622,7 +653,7 @@ export function decideWithMemory(
     case SceneType.STAR_MAP: {
       // Don't jump toward a remembered threat while not battle-ready.
       if (avoidDanger) push("move", "avoid-danger-back");
-      if (!fuelGate) push("warp", "warp");
+      if (!fuelGate && warpCadenceOk) push("warp", "warp");
       push("move", "back");
       break;
     }

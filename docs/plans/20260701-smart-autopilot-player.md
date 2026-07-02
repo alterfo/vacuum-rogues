@@ -143,11 +143,20 @@ regenerate + retrain the net to clone the smarter teacher.
   there, mirroring the live behavior.
 
 ### Task 2: Break the warp-forever loop — land-before-warp economy tier
-- [ ] RED: `src/tests/playtest/letsplay/exploreNoWarpLoop.test.ts` — agent holding cargo with single-planet knowledge; assert over a budget it **lands (discovers a 2nd planet / sells)** and does NOT warp more than K times consecutively without landing; asserts ≥2 distinct planets visited
-- [ ] ⚠️ **checkpoint:** grep policy tests for an assertion that `warp` outranks `land` in the holding-cargo case; if reordering would red it, STOP + surface (do not edit the test)
-- [ ] reorder the ladder: `land "earn"/"discover-prices"` and in-system `land "go-sell"` fire **before** `warp "find-sell-destination"`; only warp-to-explore when the hold is clear AND no in-system commerce remains; add an anti-consecutive-warp cadence (reuse `visitedSystemIds`)
-- [ ] fix the "warp to find seller but never learns prices" trap: prefer landing on an **unvisited in-system planet** to populate `priceBook` before leaving the system
-- [ ] GREEN
+- [x] RED: `src/tests/playtest/letsplay/exploreNoWarpLoop.test.ts` — agent holding cargo with single-planet knowledge; assert over a budget it **lands (discovers a 2nd planet / sells)** and does NOT warp more than K times consecutively without landing; asserts ≥2 distinct planets visited
+- [x] ⚠️ **checkpoint:** grep policy tests for an assertion that `warp` outranks `land` in the holding-cargo case; if reordering would red it, STOP + surface (do not edit the test) — checked: the existing "warps to find a sell destination" test uses zero in-system planets, so `land` is never legal there; reordering doesn't collide with it (all `MemoryHeuristicPolicy.test.ts` cases re-verified green)
+- [x] reorder the ladder: `land "earn"/"discover-prices"` and in-system `land "go-sell"` fire **before** `warp "find-sell-destination"`; only warp-to-explore when the hold is clear AND no in-system commerce remains; add an anti-consecutive-warp cadence (reuse `visitedSystemIds`)
+- [x] fix the "warp to find seller but never learns prices" trap: prefer landing on an **unvisited in-system planet** to populate `priceBook` before leaving the system
+- [x] GREEN
+
+  Added a new `land "discover-prices"` candidate (fires when holding cargo for
+  an unknown/out-of-system sell planet AND the local earn planet is still
+  unvisited) ranked ahead of `warp "find-sell-destination"`. Also added an
+  anti-consecutive-warp cadence: `AgentMemory` now tracks
+  `consecutiveWarpsWithoutLanding` (reset by any landing, incremented on an
+  observed system change with no landing since), and every base-ladder `warp`
+  candidate (SPACE_FLIGHT + STAR_MAP) is gated on
+  `MAX_CONSECUTIVE_WARPS_WITHOUT_LAND` (2).
 
 ### Task 3: Threat & Overmind-avoidance tier
 - [ ] RED: `src/tests/playtest/letsplay/overmindAvoidance.test.ts` — rising `overmindShare` / `nearOvermindCore`; assert the agent **leaves the threatened system** (warp away from the front) instead of idling; hostile-in-range → fight-or-flee by `playerCombatStrength` vs hostile
