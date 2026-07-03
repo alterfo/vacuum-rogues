@@ -68,6 +68,12 @@ function makeObs(
     hostileCount: 1,
     connectionCount: 1,
     availableQuestCount: 1,
+    // Deep pockets + a stocked shop so the affordability-gated STATION /
+    // EQUIPMENT_SHOP actions (buy-gear, upgrade-hull) are legal for the pure
+    // dispatch-routing rows below.
+    credits: 1_000_000,
+    cheapestGearPrice: 100,
+    bestHullPrice: 100,
     ...ctx,
   });
   return {

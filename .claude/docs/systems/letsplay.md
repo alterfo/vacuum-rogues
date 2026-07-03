@@ -22,9 +22,10 @@ Both runners construct `MemoryHeuristicPolicy` with **no `goal`** — so the
 competent play lives in the base ladder of `decideWithMemory(obs, mem)`, ranked
 strictly by need (single source of truth; see the header comment there):
 
-1. **Survival** — `fuelFraction < REFUEL_THRESHOLD` and a habitable planet
-   in-system → `land` (refuels fully). Warp is **fuel-gated**: never emitted when
-   `energy < ~2× fuelCost`, so the ship lands to refuel before it can strand.
+1. **Survival** — `fuelFraction < REFUEL_THRESHOLD` (0.2) and a habitable planet
+   in-system → `land` (refuels fully). Warp is **fuel-gated** by the same
+   threshold: no `warp` candidate is emitted while `fuelFraction < REFUEL_THRESHOLD`,
+   so the ship lands (or docks) to refuel before it can strand.
 2. **Threat / Overmind** — `nearOvermindCore || overmindShare > OVERMIND_THREAT_SHARE`
    with `hull < OVERMIND_THREAT_HULL_FRACTION` and no present hostile → `warp`
    away from the front. Present hostile → fight-or-flee by hull.

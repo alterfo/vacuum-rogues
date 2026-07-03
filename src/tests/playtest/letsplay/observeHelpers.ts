@@ -5,6 +5,7 @@
  */
 import { StationType } from "@/types";
 import { GearKind } from "@/systems/equipment/GearCatalog";
+import type { HullSpec } from "@/systems/equipment/GearCatalog";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
 import type { GearListing } from "@/systems/info/GalacticRegistry";
 import type { BankingService } from "@/systems/banking/BankingService";
@@ -109,15 +110,28 @@ export interface ShopPriceContext {
     readonly planets: readonly { readonly id: string }[];
     readonly stations: readonly { readonly id: string }[];
   };
+  /**
+   * HP of the currently-fitted hull. `bestHullPrice` counts only hulls that are
+   * a genuine upgrade over this (hp strictly greater), matching what
+   * `bestAffordableHull`/`executeUpgradeHull` will actually buy — otherwise the
+   * `upgrade-hull` gate fires on a hull the executor refuses to install,
+   * soft-locking the autopilot in a no-op STATION loop. Absent ⇒ `0` (count all).
+   */
+  readonly fittedHullHp?: number;
 }
 
 function cheapestOf(
   listings: GearListing[],
   hullsOnly: boolean,
+  minHullHp = 0,
 ): number | null {
   let min: number | null = null;
   for (const l of listings) {
-    if (hullsOnly !== (l.gear.kind === GearKind.HULL)) continue;
+    const isHull = l.gear.kind === GearKind.HULL;
+    if (hullsOnly !== isHull) continue;
+    // A hull that isn't strictly better than the fitted one is never a real
+    // upgrade — skip it so the affordability signal can't outrun the executor.
+    if (isHull && (l.gear as HullSpec).hp <= minHullHp) continue;
     if (min === null || l.price < min) min = l.price;
   }
   return min;
@@ -173,6 +187,6 @@ export function systemShopPrices(ctx: ShopPriceContext): {
   const listings = generateSystemListings(ctx);
   return {
     cheapestGearPrice: cheapestOf(listings, false),
-    bestHullPrice: cheapestOf(listings, true),
+    bestHullPrice: cheapestOf(listings, true, ctx.fittedHullHp ?? 0),
   };
 }

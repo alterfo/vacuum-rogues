@@ -40,6 +40,7 @@ import {
   loanStatusOf,
   systemShopPrices,
 } from "./observeHelpers";
+import { cheapestMicromodule } from "./equipmentQueries";
 
 /**
  * Pricing is stateless (base prices + a heuristic regressor), so a single
@@ -279,6 +280,15 @@ export interface LegalActionContext {
   cargoUsed?: number;
   /** The current system fields a CRAFT_CENTER station. Defaults to false. */
   hasCraftCenter?: boolean;
+  /**
+   * At least one not-yet-owned micromodule is currently affordable — mirrors
+   * `cheapestMicromodule(engine) != null`, what `executeBuyBestModule` actually
+   * needs to do anything. Without this gate `buy-module` stays legal after the
+   * player owns every affordable module, so the executor no-ops and the
+   * autopilot soft-locks re-picking it at a STATION. Defaults to `true` so pure
+   * fixtures (which never simulate a module shop) keep their prior legality.
+   */
+  hasAffordableModule?: boolean;
   /** The player currently owes an outstanding bank loan. Defaults to false. */
   activeLoans?: boolean;
   /** Cheapest non-hull gear price in the current system's shops, null/undefined if none. */
@@ -339,9 +349,29 @@ export function legalActionsForScene(
       set.add("repair");
       set.add("move");
       set.add("wait");
-      set.add("buy-gear");
-      set.add("upgrade-hull");
-      if (ctx.hasCraftCenter && (ctx.credits ?? 0) >= BUY_MODULE_MIN_CREDITS) {
+      // A station is the hub that routes to the equipment shop, so gate
+      // buy-gear/upgrade-hull on the same system-shop affordability signals as
+      // EQUIPMENT_SHOP. Ungated, the NeuralPolicy could argmax to upgrade-hull
+      // at a station stocking only equal/weaker (or unaffordable) hulls; the
+      // executor no-ops and the autopilot soft-locks re-picking it — an
+      // oracle-invisible loop, since it isn't a `wait`.
+      if (
+        ctx.cheapestGearPrice != null &&
+        (ctx.credits ?? 0) >= ctx.cheapestGearPrice
+      ) {
+        set.add("buy-gear");
+      }
+      if (
+        ctx.bestHullPrice != null &&
+        (ctx.credits ?? 0) >= ctx.bestHullPrice
+      ) {
+        set.add("upgrade-hull");
+      }
+      if (
+        ctx.hasCraftCenter &&
+        (ctx.credits ?? 0) >= BUY_MODULE_MIN_CREDITS &&
+        (ctx.hasAffordableModule ?? true)
+      ) {
         set.add("buy-module");
       }
       if (ctx.activeLoans) set.add("repay-loan");
@@ -598,8 +628,16 @@ export function observe(engine: GameEngine): Observation {
           planets: system.planets,
           stations: system.stations,
         },
+        fittedHullHp: engine.playerLoadout?.hull.hp ?? 0,
       })
     : { cheapestGearPrice: null, bestHullPrice: null };
+
+  // Only relevant at a craft center; skip the catalog scan otherwise. Matches
+  // `executeBuyBestModule`'s precondition so `buy-module` is legal only when the
+  // executor could actually buy something (else the autopilot loops on a no-op).
+  const hasAffordableModule = hasCraftCenter
+    ? cheapestMicromodule(engine) != null
+    : false;
 
   const legalActions = legalActionsForScene(scene, {
     hasPlayer: true,
@@ -611,6 +649,7 @@ export function observe(engine: GameEngine): Observation {
     credits: player.credits,
     cargoUsed,
     hasCraftCenter,
+    hasAffordableModule,
     activeLoans: loanStatus.active,
     cheapestGearPrice,
     bestHullPrice,
