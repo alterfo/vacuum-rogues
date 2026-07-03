@@ -315,6 +315,32 @@ describe("decideWithMemory (pure)", () => {
       expect(action.kind).toBe("flee");
     });
 
+    it("an over-HP'd hostile (capture fleet) ⇒ flee even at full hull", () => {
+      // Enemy hull HP (300) exceeds the player's current hull (100): the agent
+      // must disengage rather than trade blows and die in ~2 combat days.
+      const action = decideWithMemory(
+        obs({
+          hostiles: [hostile("capture_1", 300)],
+          player: { hull: 100, maxHull: 100, hullFraction: 1 },
+        }),
+        abBook(),
+      );
+      expect(action.kind).toBe("flee");
+      expect(action.reason).toContain("outmatched");
+      expect(action.targetId).toBe("capture_1");
+    });
+
+    it("a weaker hostile (HP below the player's hull) ⇒ still fight", () => {
+      const action = decideWithMemory(
+        obs({
+          hostiles: [hostile("raider", 60)],
+          player: { hull: 100, maxHull: 100, hullFraction: 1 },
+        }),
+        abBook(),
+      );
+      expect(action.kind).toBe("attack");
+    });
+
     it("a low hull at a repair base ⇒ repair", () => {
       const action = decideWithMemory(
         obs({ scene: SceneType.STATION, player: { hullFraction: 0.2 } }),

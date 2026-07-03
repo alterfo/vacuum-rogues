@@ -306,14 +306,19 @@ export class PlayerAgent {
         }
         if (obs.scene === SceneType.TRADE) {
           // Execute the actual market trade, then return to the planet lobby.
-          // Pass the best-known cross-planet margin good from the agent's belief
-          // so the trade executor buys the good with a known sell destination
-          // rather than the locally-cheapest good regardless of resale value.
-          executeMemoryAwareTrade(
-            engine,
-            planet,
-            bestKnownMargin(this.memory).good,
-          );
+          // Pass the best-known cross-planet margin good ONLY when this planet
+          // is actually that margin's cheap buy planet — otherwise null
+          // (sell-only). Without this check, landing here to realise a SELL
+          // (the ladder's `sell-for-profit`/`go-sell` tiers) would still hand
+          // in the same preferred good, and the executor would immediately
+          // buy it right back at this (non-cheap) planet the moment it's
+          // stocked and affordable — re-creating cargo the ladder just sold,
+          // sometimes at a same-planet loss, and stalling the agent re-selling
+          // the same shrinking lot for many rounds instead of moving on.
+          const margin = bestKnownMargin(this.memory);
+          const preferredGood =
+            margin.buyPlanet === planet.id ? margin.good : null;
+          executeMemoryAwareTrade(engine, planet, preferredGood);
           await this.harness.goTo(SceneType.PLANET, { planet });
           return;
         }

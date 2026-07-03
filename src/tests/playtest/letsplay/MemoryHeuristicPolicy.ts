@@ -75,6 +75,19 @@ export const REFUEL_THRESHOLD = 0.2;
 export const MAX_CONSECUTIVE_WARPS_WITHOUT_LAND = 2;
 
 /**
+ * Folds without a galaxy-day boundary above which the base ladder stops
+ * *starting new* buy cycles (`buy-low`/`go-buy`/price-discovery landings) —
+ * `land` teleports (no flight simulated) and a `trade` costs no time either,
+ * so a locally profitable buy-low/sell-for-profit round trip can otherwise be
+ * farmed forever without a single calendar day passing (Task 1 of the
+ * 20260703 plan wants the loop to fire, not to replace one inertness bug with
+ * a same-planet-pair camping one). Sell-for-profit/go-sell stay ungated so
+ * cargo already in the hold isn't stranded — this only stops NEW buys once
+ * tripped, letting the agent naturally drain out to earn/explore/warp.
+ */
+export const MAX_FOLDS_WITHOUT_DAY_ADVANCE = 12;
+
+/**
  * Below this hull fraction near a rising Overmind front, the goal-less base
  * ladder proactively leaves the system (`warp` away) instead of idling —
  * distinct from `LOW_HULL_FRACTION` (an active hostile's fight-or-flee
@@ -550,8 +563,21 @@ export function decideWithMemory(
   // 1) Survive — react to a present threat first, then patch a low hull.
   if (obs.hostiles.length > 0) {
     const tid = obs.hostiles[0]?.id;
-    if (hurt) {
-      push("flee", "flee-low-hull", tid);
+    // Disengage from a fight we're likely to lose. A hostile whose hull HP
+    // exceeds our *current* hull will out-trade us: empirically the
+    // capture-fleet / Overmind craft carry far more hull than a starter ship
+    // and delete it in ~2 combat days (100%→35%→0), so the plain `hurt`
+    // (<35% hull) cutoff fires too late — one more combat day after it trips
+    // is already lethal. Treat an over-HP'd enemy as a flee-now trigger even
+    // at full hull, so the agent never trades blows with a capture fleet.
+    const playerHull = obs.player?.hull ?? 0;
+    const toughestHostileHull = Math.max(
+      0,
+      ...obs.hostiles.map((h) => h.hullHP ?? 0),
+    );
+    const outmatched = toughestHostileHull > playerHull;
+    if (hurt || outmatched) {
+      push("flee", outmatched ? "flee-outmatched" : "flee-low-hull", tid);
       push("attack", "fight", tid);
     } else {
       push("attack", "fight", tid);
@@ -631,6 +657,13 @@ export function decideWithMemory(
   // remaining candidates (land/dock/wait) get a chance to break the streak.
   const warpCadenceOk =
     mem.consecutiveWarpsWithoutLanding < MAX_CONSECUTIVE_WARPS_WITHOUT_LAND;
+  // No galaxy day has passed in too long — `land`/`trade` are both free in
+  // time, so a good local margin can be farmed forever otherwise. Once
+  // tripped, the ladder stops STARTING new buy cycles (existing cargo can
+  // still be sold off) so the agent is forced back toward earn/explore/warp,
+  // which are what actually advance the calendar.
+  const daysStagnant =
+    mem.foldsSinceDayAdvance >= MAX_FOLDS_WITHOUT_DAY_ADVANCE;
 
   // 2) If a hyperjump is already in transit (ship flying to system edge), wait —
   // opening StarMap would cancel the pending warp. Highest priority after survive,
@@ -667,7 +700,8 @@ export function decideWithMemory(
         best.buyPlanet === landedId &&
         holdsNothing(mem) &&
         hasHold &&
-        credits >= buyPrice
+        credits >= buyPrice &&
+        !daysStagnant
       ) {
         push("trade", `buy-low:${best.good}`);
       }
@@ -677,7 +711,16 @@ export function decideWithMemory(
       // Skip market re-visit when already holding cargo: would sell at a loss
       // (same-planet sell < buy) and keeps the agent stuck on one planet.
       // Instead fall through to take-off so the agent warps to the sell planet.
-      if (mem.inventoryLots.length === 0) push("trade", "inspect-market");
+      // Also skip once this planet's prices are already in the price book —
+      // the observation/memory fold learns a landed planet's market for free
+      // before this decision runs, so re-opening TRADE here teaches nothing
+      // and only ping-pongs PLANET↔TRADE for a step. Only a `mem` that
+      // genuinely hasn't seen this planet yet (a raw/unfolded belief state)
+      // still benefits from it.
+      const pricesKnownHere =
+        (mem.priceBook.get(landedId ?? "")?.size ?? 0) > 0;
+      if (mem.inventoryLots.length === 0 && !pricesKnownHere)
+        push("trade", "inspect-market");
       push("move", "take-off");
       break;
     }
@@ -690,11 +733,36 @@ export function decideWithMemory(
       ) {
         push("land", "go-sell", bestHeld.sellPlanet ?? undefined);
       }
-      // Start a known buy: empty hold and the cheap source is in-system.
+      // Whether the known best margin (if any) can actually be acted on right
+      // now. `best` is computed over the WHOLE session's price book, not just
+      // this system — a margin whose buy planet is a system left behind isn't
+      // "actionable" here at all (warping doesn't undo that), and one whose
+      // buy planet IS in this system can still have drifted unaffordable
+      // (dynamic pricing rises with repeated buys). Both cases used to read as
+      // "there's a real margin" and blocked price-discovery/early-explore
+      // below forever: a stale, unreachable cross-system margin from earlier
+      // in the run permanently masked "nothing left to do in THIS system",
+      // and an in-system-but-unaffordable one kept re-routing the agent back
+      // to the same buy planet, landing, discovering it still can't afford
+      // it, and taking off. Both stalls were previously masked by the removed
+      // blind-buy fallback happening to touch *some* cargo and unstick the
+      // holdsNothing gate below.
+      const bestBuyIsLocal =
+        best.good != null && planetInSystem(obs, best.buyPlanet);
+      const bestBuyPrice =
+        best.good != null && best.buyPlanet != null
+          ? (mem.priceBook.get(best.buyPlanet)?.get(best.good)?.buy ?? Infinity)
+          : Infinity;
+      const bestBuyAffordable = best.good != null && credits >= bestBuyPrice;
+      // Start a known buy: empty hold, the cheap source is in-system, and it's
+      // actually affordable right now — but not once `daysStagnant` (see the
+      // `MAX_FOLDS_WITHOUT_DAY_ADVANCE` doc comment above `warpCadenceOk`).
       if (
         best.good != null &&
         holdsNothing(mem) &&
-        planetInSystem(obs, best.buyPlanet)
+        bestBuyIsLocal &&
+        bestBuyAffordable &&
+        !daysStagnant
       ) {
         push("land", "go-buy", best.buyPlanet ?? undefined);
       }
@@ -772,16 +840,50 @@ export function decideWithMemory(
       if (holdingForOtherSystem && !avoidDanger && !fuelGate && warpCadenceOk) {
         push("warp", "find-sell-destination");
       }
-      // Early exploration: if the nearest earn planet was already visited this
-      // session (it's in the price book) but there's still no cross-system margin,
-      // warp to explore a NEW system BEFORE landing on the same planet again.
-      // This breaks the "visit same planet forever" cycle: the warp fires only
-      // after the first visit; a fresh system resets alreadyVisited=false so the
-      // agent lands on the new planet first. Positioned before land "earn" so
-      // warp wins over the repeated same-planet land when the condition is met.
+      // No local margin worth pursuing right now — either genuinely no known
+      // cross-planet margin, or its buy leg isn't in THIS system, or it is but
+      // isn't affordable (see `bestBuyIsLocal`/`bestBuyAffordable` above).
+      // Either way, sitting here achieves nothing, so the price-discovery/
+      // early-explore tiers below treat it the same as "nothing known" —
+      // deliberately NOT gated on `best.fraction` alone, which reflects the
+      // whole session's price book and stays nonzero from a stale, no-longer-
+      // reachable margin in a system left behind long ago.
+      const noActionableMargin = !bestBuyIsLocal || !bestBuyAffordable;
+      // Price discovery (empty hold): the nearest earn planet is already known
+      // but there's no margin worth acting on — check for a DIFFERENT
+      // in-system planet whose prices aren't in the book yet before giving up
+      // on this system and blind explore-warping (below). A same-system
+      // margin is strictly cheaper to realise than one across a warp, so it's
+      // worth one more landing first rather than leaving an unvisited planet
+      // behind.
+      const undiscoveredPlanet = (obs.system?.planets ?? []).find(
+        (p) =>
+          p.isHabitable !== false && (mem.priceBook.get(p.id)?.size ?? 0) === 0,
+      )?.id;
       if (
         alreadyVisited &&
-        best.fraction === 0 &&
+        noActionableMargin &&
+        mem.inventoryLots.length === 0 &&
+        !offer &&
+        undiscoveredPlanet !== undefined &&
+        !daysStagnant
+      ) {
+        push("land", "discover-prices", undiscoveredPlanet);
+      }
+      // Early exploration: if the nearest earn planet was already visited this
+      // session and there's no margin worth acting on — OR the run has gone
+      // too long without a calendar day passing (`daysStagnant`, even with a
+      // real local margin still on offer: `land`+`trade` never simulate
+      // flight time, so a good-enough margin could otherwise be farmed
+      // forever) — warp to explore a NEW system BEFORE landing on the same
+      // planet again. This breaks the "visit same planet forever" cycle: the
+      // warp fires only after the first visit; a fresh system resets
+      // alreadyVisited=false so the agent lands on the new planet first.
+      // Positioned before land "earn" so warp wins over the repeated
+      // same-planet land when the condition is met.
+      if (
+        alreadyVisited &&
+        (noActionableMargin || daysStagnant) &&
         !avoidDanger &&
         !fuelGate &&
         warpCadenceOk &&

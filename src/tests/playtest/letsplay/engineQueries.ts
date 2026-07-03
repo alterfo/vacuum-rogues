@@ -139,15 +139,31 @@ export function executeTradeOnPlanet(engine: GameEngine, planet: Planet): void {
 }
 
 /**
- * Memory-aware trade executor: sell all held cargo then buy `preferredGood` (when
- * the planet stocks it and credits allow). Falls back to the cheapest available
- * good when `preferredGood` is `null` or not stocked here (price discovery mode).
+ * Never let a single buy spend more than this fraction leaves in reserve —
+ * a bulk buy of a known-profitable good still leaves a credit cushion rather
+ * than emptying the wallet. A buy costing more than the reserve allows is not
+ * blocked outright (that would forbid ever affording the *one* unit of a
+ * genuinely known-profitable good), only the quantity is capped by it.
+ */
+const TRADE_CREDIT_RESERVE_FRACTION = 0.3;
+
+/**
+ * Memory-aware trade executor: sell all held cargo, then — only when a
+ * `preferredGood` is supplied and stocked here — buy it, capped so the buy
+ * never spends the whole wallet (see {@link TRADE_CREDIT_RESERVE_FRACTION}).
  *
- * Separating the BUY target from the blind-cheapest fallback lets the
- * {@link PlayerAgent} hand in the best cross-planet margin good known from its
- * belief state, so the agent buys for a route it already has a sell destination
- * for — rather than buying whatever is cheapest regardless of where it can be
- * sold. Both paths use the same `executeTrade` seam as {@link TradeScene}.
+ * `preferredGood == null` means "no known cross-planet margin" and is
+ * deliberately **sell-only**: blindly buying the locally cheapest good
+ * regardless of whether (or where) it can be resold is the full-wallet
+ * speculation that used to drain the agent's credits into unsellable cargo
+ * (see docs/plans/20260703-autopilot-goal-trading-and-npc-brains.md) — removed
+ * outright rather than capped. Price discovery doesn't need a buy either: the
+ * observation/memory fold already learns a landed planet's market for free.
+ *
+ * The {@link PlayerAgent} hands in the best cross-planet margin good known
+ * from its belief state, so the agent buys for a route it already has a sell
+ * destination for. Both paths use the same `executeTrade` seam as
+ * {@link TradeScene}.
  */
 export function executeMemoryAwareTrade(
   engine: GameEngine,
@@ -161,49 +177,26 @@ export function executeMemoryAwareTrade(
 
   sellAllCargo(ts, engine, planet);
 
+  if (preferredGood === null) return;
+
   const resources = planet.market?.availableResources ?? [];
-  if (resources.length === 0) return;
+  if (!resources.includes(preferredGood)) return;
   const holdUsed = player.inventory.resources.reduce((s, r) => s + r.amount, 0);
   const holdFree = Math.max(0, capacity - holdUsed);
   if (holdFree === 0) return;
 
-  // Try the preferred good first; only if it is stocked and affordable here.
-  if (preferredGood !== null && resources.includes(preferredGood)) {
-    const price = ts.getBuyPrice(planet, preferredGood, player);
-    if (price > 0 && player.credits >= price) {
-      const qty = Math.min(Math.floor(player.credits / price), holdFree);
-      if (qty > 0) {
-        ts.executeTrade(
-          player,
-          planet,
-          preferredGood,
-          qty,
-          true,
-          capacity,
-          engine.bank,
-        );
-      }
-      return;
-    }
-  }
-
-  // Fallback: buy as many units of the cheapest available good as credits + hold allow.
-  let cheapestResource: ResourceType | null = null;
-  let cheapestPrice = Infinity;
-  for (const res of resources) {
-    const price = ts.getBuyPrice(planet, res, player);
-    if (price > 0 && price < cheapestPrice) {
-      cheapestPrice = price;
-      cheapestResource = res;
-    }
-  }
-  if (!cheapestResource || player.credits < cheapestPrice) return;
-  const qty = Math.min(Math.floor(player.credits / cheapestPrice), holdFree);
+  const price = ts.getBuyPrice(planet, preferredGood, player);
+  if (price <= 0 || player.credits < price) return;
+  const reserveSpend = Math.floor(
+    player.credits * (1 - TRADE_CREDIT_RESERVE_FRACTION),
+  );
+  const spendable = Math.max(price, reserveSpend);
+  const qty = Math.min(Math.floor(spendable / price), holdFree);
   if (qty > 0) {
     ts.executeTrade(
       player,
       planet,
-      cheapestResource,
+      preferredGood,
       qty,
       true,
       capacity,

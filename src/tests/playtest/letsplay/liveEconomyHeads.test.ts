@@ -14,6 +14,10 @@
  * the *next* `updateMemory` fold — by which point `obs.currentPlanet` is
  * already null. `AgentMemory.lastCurrentPlanetId` lets that fold still
  * recover the real buy price from the price book instead of defaulting to 0.
+ * Since the 20260703 plan's no-speculation fix, `executeTradeOnPlanet`
+ * (`preferredGood=null`) is sell-only, so this test drives
+ * `executeMemoryAwareTrade` directly with an explicit preferred good to still
+ * exercise a real buy.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -27,7 +31,7 @@ import {
   GL_COUNTERPARTY,
 } from "@/systems/banking/economy";
 import { createLiveSceneController } from "./installAutopilotHook";
-import { currentSystem, executeTradeOnPlanet } from "./engineQueries";
+import { currentSystem, executeMemoryAwareTrade } from "./engineQueries";
 import {
   bestAffordableGear,
   bestAffordableHull,
@@ -232,9 +236,10 @@ describe("live buy-accounting skew — AgentMemory recovers the real buy price (
       await harness.goTo(SceneType.PLANET, { planet });
       let mem = updateMemory(createMemory(), observe(engine));
 
-      // Predict which good `executeTradeOnPlanet` will buy — the cheapest
-      // available good (empty hold, no preferred good) — and its price BEFORE
-      // the trade executes (matches `executeMemoryAwareTrade`'s own fallback).
+      // Pick the cheapest available good as the explicit preferred good and
+      // record its price BEFORE the trade executes — sell-only null-good
+      // buys nothing since the 20260703 no-speculation fix, so this test
+      // drives a real buy via `executeMemoryAwareTrade` directly.
       const ts = new TradeSystem();
       let good = planet.market.availableResources[0];
       let expectedBuyPrice = ts.getBuyPrice(planet, good, engine.player!);
@@ -248,7 +253,7 @@ describe("live buy-accounting skew — AgentMemory recovers the real buy price (
 
       // The live `openTrade` verb executes the real trade, THEN transitions
       // to SPACE_FLIGHT — mirroring `createLiveSceneController.openTrade`.
-      executeTradeOnPlanet(engine, planet);
+      executeMemoryAwareTrade(engine, planet, good);
       await harness.goTo(SceneType.SPACE_FLIGHT);
 
       // Fold 2: the next tick's observation — currentPlanet is now null, but

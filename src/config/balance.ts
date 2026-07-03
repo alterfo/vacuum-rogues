@@ -455,7 +455,11 @@ export const GAME_BALANCE = {
   OVERMIND_SPREAD_GRACE_DAYS: 6,
   OVERMIND_SPREAD_INTERVAL_DAYS: 5,
   OVERMIND_SPREAD_CAPTURES_PER_TICK: 1,
-  OVERMIND_SPREAD_LOSS_SHARE: 0.5,
+  // The galaxy is only truly lost when the Overmind has swallowed nearly all of
+  // it — seeing half the systems still free while being told "you lost" reads as
+  // a bug. 0.85 keeps the last stretch as a genuine losing state without
+  // demanding a pedantic 100% (the final system can be unreachable/garrisoned).
+  OVERMIND_SPREAD_LOSS_SHARE: 0.85,
   OVERMIND_SPREAD_CONTAINED_SHARE: 0.2,
   OVERMIND_SPREAD_MIN_SYSTEMS: 12,
   /**

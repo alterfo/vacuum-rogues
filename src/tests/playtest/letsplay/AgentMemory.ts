@@ -140,6 +140,18 @@ export interface AgentMemory {
   lastReputationBastions: number;
   lastReputationSyndicate: number;
   lastMaxHull: number;
+  /**
+   * Folds since the last genuine galaxy-day boundary (reset alongside
+   * {@link daysWithoutCreditGain}'s day-transition check). A profitable
+   * same-system buy-low/sell-for-profit round trip is a `land`+`trade` cycle
+   * that never simulates flight time (`land` teleports; only `move`/warp
+   * actually advances the calendar), so a sufficiently good local margin can
+   * otherwise be farmed forever without a single day ever passing. The base
+   * ladder's price-discovery/buy-low tiers read this to back off once it's
+   * run long enough, so play keeps progressing instead of camping one planet
+   * pair — see `MemoryHeuristicPolicy`'s `daysStagnant`.
+   */
+  foldsSinceDayAdvance: number;
 }
 
 /**
@@ -184,6 +196,7 @@ export function createMemory(): AgentMemory {
     lastReputationBastions: 0,
     lastReputationSyndicate: 0,
     lastMaxHull: 0,
+    foldsSinceDayAdvance: 0,
   };
 }
 
@@ -268,6 +281,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       lastReputationBastions: mem.lastReputationBastions,
       lastReputationSyndicate: mem.lastReputationSyndicate,
       lastMaxHull: mem.lastMaxHull,
+      foldsSinceDayAdvance: mem.foldsSinceDayAdvance,
     };
   }
 
@@ -372,6 +386,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
   let daysWithoutCreditGain = mem.daysWithoutCreditGain;
   let overmindDaysSeen = mem.overmindDaysSeen;
   let lastDaySeen = mem.lastDaySeen;
+  let foldsSinceDayAdvance = mem.foldsSinceDayAdvance + 1;
   if (obs.gameDay !== undefined && obs.gameDay > mem.lastDaySeen) {
     daysWithoutCreditGain =
       obs.player.credits > mem.creditYesterday
@@ -380,6 +395,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     creditYesterday = obs.player.credits;
     if ((obs.overmindShare ?? 0) > 0) overmindDaysSeen += 1;
     lastDaySeen = obs.gameDay;
+    foldsSinceDayAdvance = 0;
   }
 
   const next: AgentMemory = {
@@ -404,6 +420,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     lastReputationBastions: obs.player.reputationBastions ?? 0,
     lastReputationSyndicate: obs.player.reputationSyndicate ?? 0,
     lastMaxHull: obs.player.maxHull,
+    foldsSinceDayAdvance,
   };
 
   // 8) Deadlock — sticky once true; logged exactly once per run at the transition.

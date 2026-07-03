@@ -198,12 +198,17 @@ describe("Overmind endgame-arc spread (EOD drive)", () => {
     const startOvermind = galaxy.overmindSystems.length;
 
     // Advance EOD days with NO player intervention. The arc should reach "lost"
-    // well within this budget (empirically ~day 31 for a 24-system galaxy).
+    // within this budget. The loss line is now `OVERMIND_SPREAD_LOSS_SHARE`
+    // = 0.85 (a near-total galaxy, not a mere half), so at 1 capture / 5-day
+    // tick a 24-system galaxy needs ~20 captures ≈ day 100 to cross it — the
+    // window is sized generously past that so the invariant (ignoring the
+    // Overmind eventually loses the whole galaxy) still holds under the raised
+    // threshold.
     let reachedLost = false;
     let everWon = false;
     let prevCount = startOvermind;
     let sawGrowth = false;
-    for (let d = 0; d < 60 && !reachedLost; d++) {
+    for (let d = 0; d < 160 && !reachedLost; d++) {
       harness.engine.advanceGalaxyDay();
       const status = galaxy.overmindArc.status;
       if (galaxy.overmindSystems.length > prevCount) sawGrowth = true;
