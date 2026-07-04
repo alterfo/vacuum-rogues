@@ -453,6 +453,7 @@ export class NpcShipManager implements FlightModule {
       }
       if (sprite.isGone()) {
         this.npcAnchorPlanet.delete(sprite);
+        this.warnedAggressorIds.delete(sprite.npc.id);
         sprite.destroy();
         this.npcSprites.splice(i, 1);
       } else {

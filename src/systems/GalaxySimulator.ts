@@ -178,9 +178,21 @@ export class GalaxySimulator {
     const overmindCoreId = core?.id ?? "";
     if (core) overmindStart.push(core.id);
     if (sortedByDistance.length >= 2 && core) {
+      // Bidirectional: the nearest-neighbour generation pass adds each edge on
+      // only ONE side, but the engine allows warping either direction (the
+      // same asymmetry `reachableNeighbors` in the autopilot's `engineQueries`
+      // works around) — reading only `core.connections` missed every system
+      // whose edge to `core` was recorded on the other side, silently
+      // starving the primary branch below and falling through to the
+      // no-adjacency-guarantee fallback far more often than intended.
       const coreNeighbourIds = new Set(
         core.connections.map((c) => c.toSystemId),
       );
+      for (const s of generatedSystems) {
+        if (s.connections.some((c) => c.toSystemId === core.id)) {
+          coreNeighbourIds.add(s.id);
+        }
+      }
       const secondStart =
         sortedByDistance.find(
           (s) =>

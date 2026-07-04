@@ -494,3 +494,40 @@ naming, so the next sweep doesn't have to rediscover them from scratch.
   hoping for seeds that avoid early heavy garrisons, or — better — give the headless applier a
   real "disengage" executor (e.g. warp away when a fight is unwinnable) so `flee` stops being a
   no-op.
+- **`take-quest` was silently dead the whole time (20260703 plan, Task 2 finding, fixed).**
+  `observe.ts` read the static, always-empty `Planet.availableQuests` field instead of the real
+  on-demand job board (`takeableBoardQuestCount`, the same filter `acceptBoardQuests` applies) —
+  the ladder's `take-quest` was never a legal action. Fixing the read alone moved avg
+  quests/session from ~0.17 to ~0.36 across a 100-run diagnostic.
+- **One-directional `system.connections` hid real, immediately-warpable neighbours (20260703
+  plan, Task 2 finding, fixed).** The nearest-neighbour galaxy-generation pass adds each edge on
+  only ONE side of a pair, but the engine allows warping either direction — `observe.ts`'s
+  `neighbors` (feeding `pickWarpNeighbor`) used to read the raw one-directional list, silently
+  hiding legitimate warp targets including a carried quest's own one-hop target. Fixed via
+  `reachableNeighbors` (`engineQueries.ts`), which unions both directions. The same one-directional
+  assumption also bit `GalaxySimulator`'s Overmind second-seed neighbour search (see
+  `.claude/docs/systems/overmind.md`) — check for this asymmetry before trusting `.connections`
+  anywhere in new code.
+- **The STAR_MAP fuel gate is fractional; the live warp gate is absolute (20260703 plan, Task 3
+  finding, fixed).** `MemoryHeuristicPolicy`'s `fuelGate` checks `REFUEL_THRESHOLD` as a *fraction*
+  of max fuel, but the live `StarMapScene.performWarpJump` gates the actual jump on the *absolute*
+  fuel cost of the specific target. A shrunk tank (e.g. after an engine downgrade) can satisfy the
+  fraction gate — so the ladder keeps choosing `warp` — while still being short of the real
+  per-jump cost, so the live executor's call silently no-ops (a toast the autopilot can't see)
+  with zero feedback to the ladder, repeating the same decision forever. Fixed via
+  `AgentMemory.starMapStallFolds`/`MAX_STAR_MAP_WARP_STALLS`: once a `warp` decision on STAR_MAP
+  produces no scene/fuel change for 2 consecutive folds, the tier stops emitting `warp` and falls
+  through to the existing unconditional `move`/"back", returning to SPACE_FLIGHT where the
+  fuel-critical `land` tier can refuel.
+- **The live `openTrade` verb hardcoded sell-only, unlike the headless `PlayerAgent` (found in
+  review of the 20260703 plan, fixed).** The 20260703 no-speculation fix redefined
+  `executeMemoryAwareTrade(engine, planet, null)` from "blind-buy the cheapest good" to
+  "sell-only" — `PlayerAgent.ts`'s TRADE-scene branch was updated to pass a real preferred good
+  (the carried quest's cargo need, else the best known cross-planet margin's good), but
+  `installAutopilotHook.ts`'s `createLiveSceneController.openTrade` was not, so the **live**
+  autopilot (the backtick-key dev toggle) could only ever sell, never execute a `buy-low`/
+  price-discovery buy the ladder had actually decided on. Fixed by threading a `getMemory: () =>
+  AgentMemory` into `createLiveSceneController` (closing over `AutopilotController.currentMemory()`
+  via a `controllerRef`, since the live controller is built before the `AutopilotController` that
+  owns the memory) and mirroring `PlayerAgent`'s lookup in `openTrade` itself. Regression:
+  `liveEconomyHeads.test.ts` → "live openTrade() consults the known cross-planet margin".

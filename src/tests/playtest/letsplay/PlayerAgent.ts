@@ -368,7 +368,7 @@ export class PlayerAgent {
       }
 
       case "take-quest": {
-        acceptBoardQuests(engine);
+        acceptBoardQuests(engine, this.memory.completedQuestsBaseline);
         this.harness.tick();
         return;
       }

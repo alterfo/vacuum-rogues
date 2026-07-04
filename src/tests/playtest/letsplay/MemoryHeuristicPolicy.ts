@@ -30,7 +30,7 @@
  * that folds each observation into a per-run notebook so it is also a drop-in
  * {@link PlayerPolicy} for the agent loop. Lives under `src/tests/` and is dev-only.
  */
-import { FactionType, SceneType } from "@/types";
+import { FactionType, QuestType, SceneType } from "@/types";
 import type { ResourceType } from "@/types";
 import { GAME_BALANCE } from "@/config/balance";
 import type {
@@ -737,7 +737,9 @@ export function decideWithMemory(
   // systems purely as a side effect of buying quest cargo across more than one
   // visit.
   const questCommittedGoods = new Set(
-    obs.quests.filter((q) => q.collectItem).map((q) => q.collectItem!.type),
+    obs.quests
+      .filter((q) => q.type === QuestType.DELIVERY && q.collectItem)
+      .map((q) => q.collectItem!.type),
   );
   // The margin restricted to goods actually held right now — distinct from
   // `best` (which can surface a bigger margin for a good the agent doesn't
@@ -787,6 +789,10 @@ export function decideWithMemory(
   // which are what actually advance the calendar.
   const daysStagnant =
     mem.foldsSinceDayAdvance >= MAX_FOLDS_WITHOUT_DAY_ADVANCE;
+  // Shared by every exploratory-warp gate below: never warp while fuel-
+  // critical, past the anti-consecutive-warp cadence, or once the galaxy is
+  // effectively lost (near the real 0.85 loss share — see `galaxyEffectivelyLost`).
+  const explorationSafe = !fuelGate && warpCadenceOk && !galaxyEffectivelyLost;
 
   // 2) If a hyperjump is already in transit (ship flying to system edge), wait —
   // opening StarMap would cancel the pending warp. Highest priority after survive,
@@ -1057,13 +1063,7 @@ export function decideWithMemory(
       ) {
         push("land", "discover-prices", earnPlanet);
       }
-      if (
-        holdingForOtherSystem &&
-        !avoidDanger &&
-        !fuelGate &&
-        warpCadenceOk &&
-        !galaxyEffectivelyLost
-      ) {
+      if (holdingForOtherSystem && !avoidDanger && explorationSafe) {
         push("warp", "find-sell-destination");
       }
       // No local margin worth pursuing right now — either genuinely no known
@@ -1111,11 +1111,9 @@ export function decideWithMemory(
         alreadyVisited &&
         (noActionableMargin || daysStagnant) &&
         !avoidDanger &&
-        !fuelGate &&
-        warpCadenceOk &&
+        explorationSafe &&
         !holdsNonQuestCargo &&
-        !offer &&
-        !galaxyEffectivelyLost
+        !offer
       ) {
         push("warp", "early-explore");
       }
@@ -1128,11 +1126,9 @@ export function decideWithMemory(
       // cadence (land/dock/wait only once it's tripped).
       if (avoidDanger) {
         push("move", "avoid-danger-hold");
-        if (!fuelGate && warpCadenceOk && !galaxyEffectivelyLost)
-          push("warp", "explore");
+        if (explorationSafe) push("warp", "explore");
       } else {
-        if (!fuelGate && warpCadenceOk && !galaxyEffectivelyLost)
-          push("warp", "explore");
+        if (explorationSafe) push("warp", "explore");
         push("move", "fly");
       }
       break;

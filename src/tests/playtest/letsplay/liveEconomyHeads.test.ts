@@ -269,3 +269,92 @@ describe("live buy-accounting skew — AgentMemory recovers the real buy price (
     },
   );
 });
+
+describe("live openTrade() consults the known cross-planet margin (not sell-only forever)", () => {
+  it("buys the memory's known-margin good when landed at that margin's own buy planet", async () => {
+    // Regression: `openTrade` used to hardcode `executeTradeOnPlanet(engine,
+    // planet)` — `executeMemoryAwareTrade(engine, planet, null)` — which the
+    // 20260703 no-speculation fix redefined as sell-only. The live autopilot
+    // could therefore never execute a `buy-low`/price-discovery buy the
+    // heuristic ladder decided on, only ever sell, unlike the headless
+    // PlayerAgent (which passes a real preferred good). `createLiveSceneController`
+    // now takes a `getMemory` so `openTrade` can mirror PlayerAgent's lookup.
+    const harness = await RealEngineHarness.boot({
+      seed: "LIVE-OPEN-TRADE-MARGIN-TEST",
+    });
+    await harness.newGame();
+    const engine = harness.engine;
+    const sys = currentSystem(engine)!;
+    const planet = sys.planets[0];
+    adjustPlayerCredits(
+      engine.bank,
+      engine.player!,
+      500000,
+      GL_COUNTERPARTY.REWARDS,
+      "test seed",
+    );
+    await harness.goTo(SceneType.PLANET, { planet });
+
+    const ts = new TradeSystem();
+    const good = planet.market.availableResources[0];
+    const buyPrice = ts.getBuyPrice(planet, good, engine.player!);
+    expect(buyPrice).toBeGreaterThan(0);
+
+    // A known margin whose buy planet IS the one the player is standing on
+    // — bestKnownMargin should pick this good, and openTrade should buy it.
+    const memory = createMemory();
+    memory.priceBook.set(
+      planet.id,
+      new Map([[good, { buy: buyPrice, sell: 1, seenAt: 0 }]]),
+    );
+    memory.priceBook.set(
+      "fake-sell-planet",
+      new Map([[good, { buy: 999999, sell: buyPrice + 500, seenAt: 0 }]]),
+    );
+
+    const creditsBefore = engine.player!.credits;
+    const cargoBefore =
+      engine.player!.inventory.resources.find((r) => r.type === good)?.amount ??
+      0;
+
+    await createLiveSceneController(engine, () => memory).openTrade();
+
+    expect(
+      engine.player!.inventory.resources.find((r) => r.type === good)?.amount ??
+        0,
+    ).toBeGreaterThan(cargoBefore);
+    expect(engine.player!.credits).toBeLessThan(creditsBefore);
+    expect(harness.errors()).toHaveLength(0);
+
+    harness.dispose();
+  });
+
+  it("stays sell-only (never buys) when no memory is supplied — the default", async () => {
+    const harness = await RealEngineHarness.boot({
+      seed: "LIVE-OPEN-TRADE-DEFAULT-TEST",
+    });
+    await harness.newGame();
+    const engine = harness.engine;
+    const sys = currentSystem(engine)!;
+    const planet = sys.planets[0];
+    adjustPlayerCredits(
+      engine.bank,
+      engine.player!,
+      500000,
+      GL_COUNTERPARTY.REWARDS,
+      "test seed",
+    );
+    await harness.goTo(SceneType.PLANET, { planet });
+
+    const creditsBefore = engine.player!.credits;
+
+    await createLiveSceneController(engine).openTrade();
+
+    // No margin known (fresh memory) ⇒ no preferred good ⇒ sell-only: credits
+    // never drop (no speculative buy), matching the no-speculation fix.
+    expect(engine.player!.credits).toBeGreaterThanOrEqual(creditsBefore);
+    expect(harness.errors()).toHaveLength(0);
+
+    harness.dispose();
+  });
+});

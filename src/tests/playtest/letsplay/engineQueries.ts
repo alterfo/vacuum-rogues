@@ -266,15 +266,21 @@ function activeDeliveryQuestCount(engine: GameEngine): number {
  * Whether the ladder may take on another DELIVERY quest right now: under the
  * concurrent cap AND under the lifetime completed-quest cap (see
  * {@link MAX_ACTIVE_DELIVERY_QUESTS}/{@link MAX_COMPLETED_DELIVERY_QUESTS}).
- * Only DELIVERY quests are ever accepted (see `isTakeableBoardQuest`), so
- * every completed quest in this closed loop is a DELIVERY completion —
- * `getCompletedQuestIds()` is a safe lifetime-completion proxy without
- * needing separate bookkeeping.
+ * `getCompletedQuestIds()` is a lifetime, all-quest-types counter on the
+ * engine — `completedQuestsBaseline` (the count as first observed this run,
+ * see `AgentMemory`) is subtracted so a save that already had unrelated
+ * completed quests before this loop ever ran doesn't eat into its budget.
+ * Defaults to `0` for the pure-`observe()` call site, which has no memory to
+ * read a baseline from.
  */
-function canAcceptMoreDeliveryQuests(engine: GameEngine): boolean {
+function canAcceptMoreDeliveryQuests(
+  engine: GameEngine,
+  completedQuestsBaseline = 0,
+): boolean {
   return (
     activeDeliveryQuestCount(engine) < MAX_ACTIVE_DELIVERY_QUESTS &&
-    engine.questManager.getCompletedQuestIds().length <
+    engine.questManager.getCompletedQuestIds().length -
+      completedQuestsBaseline <
       MAX_COMPLETED_DELIVERY_QUESTS
   );
 }
@@ -292,8 +298,9 @@ function canAcceptMoreDeliveryQuests(engine: GameEngine): boolean {
 export function takeableBoardQuestCount(
   engine: GameEngine,
   planetId: string,
+  completedQuestsBaseline = 0,
 ): number {
-  if (!canAcceptMoreDeliveryQuests(engine)) return 0;
+  if (!canAcceptMoreDeliveryQuests(engine, completedQuestsBaseline)) return 0;
   return engine.getQuestBoard(planetId).filter(isTakeableBoardQuest).length;
 }
 
@@ -305,18 +312,16 @@ export function takeableBoardQuestCount(
  * `getQuestBoard`/`acceptBoardQuest` seam `PlanetScene.openJobBoard`/
  * `acceptJob` use (EPIC-008).
  */
-export function acceptBoardQuests(engine: GameEngine): void {
+export function acceptBoardQuests(
+  engine: GameEngine,
+  completedQuestsBaseline = 0,
+): void {
   const planet = landedPlanet(engine);
   if (!planet) return;
-  let activeDeliveryCount = activeDeliveryQuestCount(engine);
   for (const offered of engine.getQuestBoard(planet.id)) {
-    if (
-      activeDeliveryCount >= MAX_ACTIVE_DELIVERY_QUESTS ||
-      !canAcceptMoreDeliveryQuests(engine)
-    )
-      break;
+    if (!canAcceptMoreDeliveryQuests(engine, completedQuestsBaseline)) break;
     if (!isTakeableBoardQuest(offered)) continue;
-    if (engine.acceptBoardQuest(offered, planet.id)) activeDeliveryCount++;
+    engine.acceptBoardQuest(offered, planet.id);
   }
 }
 

@@ -248,6 +248,17 @@ export class AutopilotController {
   }
 
   /**
+   * The controller's live belief state. Exposed so the concrete
+   * {@link LiveSceneController} (constructed before this controller, over the
+   * same engine) can read the trading memory a `MemoryHeuristicPolicy` decide
+   * just folded an observation into — e.g. `openTrade` needs the known
+   * cross-planet margin to buy the right good, not just sell.
+   */
+  currentMemory(): AgentMemory {
+    return this.memory;
+  }
+
+  /**
    * Engage the autopilot: show the indicator, subscribe to reclaim-on-input, and
    * begin ticking. Idempotent — a second `start()` while engaged is a no-op.
    */

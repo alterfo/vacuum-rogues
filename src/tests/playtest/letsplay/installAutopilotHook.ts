@@ -18,9 +18,9 @@
  * so the first human pointer/key after engaging hands control straight back.
  */
 import type { GameEngine } from "@/systems/GameEngine";
-import { SceneType } from "@/types";
+import { SceneType, QuestType } from "@/types";
 import { logger } from "@/utils/logger";
-import { observe } from "./observe";
+import { observe, buildQuestSnapshots, marketSnapshotFor } from "./observe";
 import { selectPlayerPolicy } from "./policyGate";
 import { MemoryHeuristicPolicy } from "./MemoryHeuristicPolicy";
 import { isNeuralEnabled } from "@/systems/settings/gameSettings";
@@ -29,13 +29,16 @@ import { isNeuralEnabled } from "@/systems/settings/gameSettings";
 // autopilot runs the net when НЕЙРОСЕТЬ is on; the gate ignores it when off.
 import playerWeights from "./weights/player.weights.json";
 import { AutopilotController, type AutopilotDeps } from "./AutopilotController";
+import { type AgentMemory, createMemory } from "./AgentMemory";
+import { bestKnownMargin } from "./memoryFeatures";
+import { deliveryCargoNeed } from "./observeHelpers";
 import type { LiveSceneController } from "./LiveApplier";
 import { exportFlags } from "./oddityFlags";
 import {
   currentSystem,
   landedPlanet,
   acceptBoardQuests,
-  executeTradeOnPlanet,
+  executeMemoryAwareTrade,
   executeRepair,
   executeSellAll,
   pickWarpTarget,
@@ -106,6 +109,7 @@ export interface AutopilotWindowHook {
  */
 export function createLiveSceneController(
   engine: GameEngine,
+  getMemory: () => AgentMemory = () => createMemory(),
 ): LiveSceneController {
   const goTo = (scene: SceneType, context: object = {}): Promise<void> =>
     engine.transitionTo(scene, { gameEngine: engine, ...context });
@@ -294,12 +298,49 @@ export function createLiveSceneController(
         landedPlanet(engine) ??
         sys?.planets.find((p) => p.id === planetId) ??
         sys?.planets[0];
-      if (planet) {
+      const player = engine.player;
+      if (planet && player) {
         // Execute buy/sell directly via the real TradeSystem seam.
         // Opening the TRADE scene causes PLANET→TRADE→FLIGHT→PLANET loop:
         // the teacher always picks move="leave-market" in TRADE without buying,
         // so no cargo is ever acquired and holdingForOtherSystem stays 0.
-        executeTradeOnPlanet(engine, planet);
+        //
+        // Mirrors PlayerAgent's TRADE-scene branch: a carried DELIVERY quest's
+        // unmet cargo need wins first (never speculative — capped to the exact
+        // shortfall, only when profitable), otherwise the best known
+        // cross-planet margin's good, but ONLY when this planet is that
+        // margin's own cheap buy planet — else `null` (sell-only), so landing
+        // to realise a sell never immediately re-buys the same good here.
+        const quests = buildQuestSnapshots(engine, player);
+        const questCommittedGoods = new Set(
+          quests
+            .filter((q) => q.type === QuestType.DELIVERY && q.collectItem)
+            .map((q) => q.collectItem!.type),
+        );
+        const market = planet.market
+          ? marketSnapshotFor(planet, player)
+          : undefined;
+        const questNeed = deliveryCargoNeed(quests, market);
+        if (questNeed) {
+          executeMemoryAwareTrade(
+            engine,
+            planet,
+            questNeed.good,
+            questNeed.qty,
+            questCommittedGoods,
+          );
+        } else {
+          const margin = bestKnownMargin(getMemory());
+          const preferredGood =
+            margin.buyPlanet === planet.id ? margin.good : null;
+          executeMemoryAwareTrade(
+            engine,
+            planet,
+            preferredGood,
+            undefined,
+            questCommittedGoods,
+          );
+        }
       }
       // Take off after trading; the next FLIGHT tick decides warp/land/etc.
       await goTo(SceneType.SPACE_FLIGHT);
@@ -308,7 +349,7 @@ export function createLiveSceneController(
       // No live market executor yet — safe no-op (mirrors the headless applier).
     },
     takeQuest() {
-      acceptBoardQuests(engine);
+      acceptBoardQuests(engine, getMemory().completedQuestsBaseline);
     },
     attack(targetId) {
       // Engage the nearest (or named) hostile via the real CombatModule seam.
@@ -378,6 +419,11 @@ export function installAutopilotHook(
       : null;
   if (win?.__autopilot) return win.__autopilot;
 
+  // The live scene controller is built before the AutopilotController that will
+  // own the trading memory it needs (openTrade's known-margin lookup) — this
+  // ref lets the controller close over that memory once it exists, without a
+  // circular construction order.
+  let controllerRef: AutopilotController | null = null;
   const controller = new AutopilotController({
     observe: () => observe(engine),
     // When the neural toggle is off (default), use MemoryHeuristicPolicy — the
@@ -389,12 +435,16 @@ export function installAutopilotHook(
     policy: isNeuralEnabled()
       ? selectPlayerPolicy({ weights: playerWeights })
       : new MemoryHeuristicPolicy(),
-    controller: createLiveSceneController(engine),
+    controller: createLiveSceneController(
+      engine,
+      () => controllerRef?.currentMemory() ?? createMemory(),
+    ),
     onError: (err) => logger.warn("Autopilot tick fault (continuing):", err),
     // The Shift+F oddity-flag hotkey (below) must never disengage the autopilot.
     ignoreReclaimKey: isOddityFlagKey,
     ...overrides,
   });
+  controllerRef = controller;
 
   const hook: AutopilotWindowHook = {
     start: () => controller.start(),

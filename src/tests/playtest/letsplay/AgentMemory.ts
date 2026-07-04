@@ -173,6 +173,18 @@ export interface AgentMemory {
    * still refuel) once it trips.
    */
   starMapStallFolds: number;
+  /**
+   * `engine.questManager.getCompletedQuestIds().length` as first observed this
+   * run — `-1` until the first real fold. `canAcceptMoreDeliveryQuests`
+   * (`engineQueries.ts`) subtracts this baseline before comparing against
+   * `MAX_COMPLETED_DELIVERY_QUESTS`: that counter is a *lifetime, all-quest-types*
+   * count on the engine, not scoped to DELIVERY quests this loop itself accepted.
+   * Without a baseline, hooking the live autopilot into a save that already has
+   * unrelated completed quests (story/tutorial/a human's own board pick) would
+   * trip the lifetime cap immediately, silently refusing to ever take a DELIVERY
+   * quest for the rest of the game.
+   */
+  completedQuestsBaseline: number;
 }
 
 /**
@@ -221,6 +233,7 @@ export function createMemory(): AgentMemory {
     lastScene: null,
     lastFuelSeen: 0,
     starMapStallFolds: 0,
+    completedQuestsBaseline: -1,
   };
 }
 
@@ -309,6 +322,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       lastScene: mem.lastScene,
       lastFuelSeen: mem.lastFuelSeen,
       starMapStallFolds: mem.starMapStallFolds,
+      completedQuestsBaseline: mem.completedQuestsBaseline,
     };
   }
 
@@ -436,6 +450,14 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       ? mem.starMapStallFolds + 1
       : 0;
 
+  // 7.6) Completed-quest baseline — captured once, on the first real fold, so
+  // `canAcceptMoreDeliveryQuests` can measure *this run's* DELIVERY completions
+  // instead of the engine's lifetime-all-types counter (see the field doc).
+  const completedQuestsBaseline =
+    mem.completedQuestsBaseline >= 0
+      ? mem.completedQuestsBaseline
+      : (obs.questsCompleted ?? 0);
+
   const next: AgentMemory = {
     priceBook,
     inventoryLots,
@@ -462,6 +484,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     lastScene: obs.scene,
     lastFuelSeen: obs.player.fuel,
     starMapStallFolds,
+    completedQuestsBaseline,
   };
 
   // 8) Deadlock — sticky once true; logged exactly once per run at the transition.

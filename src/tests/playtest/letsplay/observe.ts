@@ -470,7 +470,7 @@ export function legalActionsForScene(
  * standing on, so an unvisited planet's prices are never produced. Order follows
  * the market's `availableResources` so two reads of one state are deep-equal.
  */
-function marketSnapshotFor(
+export function marketSnapshotFor(
   planet: Planet,
   player: Player,
 ): MarketGoodSnapshot[] {
@@ -479,6 +479,41 @@ function marketSnapshotFor(
     buy: TRADE.getBuyPrice(planet, resource, player),
     sell: TRADE.getSellPrice(planet, resource, player),
   }));
+}
+
+/**
+ * The active-quest projection shared by {@link observe} and the live autopilot's
+ * `openTrade` (which needs the same `QuestSnapshot[]` to find a carried
+ * DELIVERY quest's cargo need without re-deriving this mapping).
+ */
+export function buildQuestSnapshots(
+  engine: GameEngine,
+  player: Player,
+): QuestSnapshot[] {
+  return engine.questManager.getActiveQuests().map((q) => {
+    const collectObj = q.objectives.find(
+      (o) => o.type === "COLLECT_ITEM" && !o.completed && o.itemType,
+    );
+    const carried = collectObj
+      ? (player.inventory.resources.find((r) => r.type === collectObj.itemType)
+          ?.amount ?? 0)
+      : 0;
+    return {
+      id: q.id,
+      title: q.title,
+      type: q.type,
+      targetSystemId: q.targetSystemId ?? null,
+      targetPlanetId: q.targetPlanetId ?? null,
+      rewardCredits: q.reward.credits,
+      collectItem: collectObj
+        ? {
+            type: collectObj.itemType as ResourceType,
+            required: collectObj.targetAmount,
+            carried,
+          }
+        : null,
+    };
+  });
 }
 
 /**
@@ -554,33 +589,7 @@ export function observe(engine: GameEngine): Observation {
   const system =
     galaxy.systems.find((s) => s.id === player.currentSystemId) ?? null;
 
-  const quests: QuestSnapshot[] = engine.questManager
-    .getActiveQuests()
-    .map((q) => {
-      const collectObj = q.objectives.find(
-        (o) => o.type === "COLLECT_ITEM" && !o.completed && o.itemType,
-      );
-      const carried = collectObj
-        ? (player.inventory.resources.find(
-            (r) => r.type === collectObj.itemType,
-          )?.amount ?? 0)
-        : 0;
-      return {
-        id: q.id,
-        title: q.title,
-        type: q.type,
-        targetSystemId: q.targetSystemId ?? null,
-        targetPlanetId: q.targetPlanetId ?? null,
-        rewardCredits: q.reward.credits,
-        collectItem: collectObj
-          ? {
-              type: collectObj.itemType as ResourceType,
-              required: collectObj.targetAmount,
-              carried,
-            }
-          : null,
-      };
-    });
+  const quests: QuestSnapshot[] = buildQuestSnapshots(engine, player);
 
   // Multi-hop routing bias (Task 2): the target of a carried DELIVERY quest
   // that isn't the current system, and each of this system's real neighbours'
