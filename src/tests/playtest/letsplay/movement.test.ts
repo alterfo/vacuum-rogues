@@ -159,9 +159,20 @@ describe("letsplay agent — warpInTransit safety net covers every action (Playe
     const agent = new PlayerAgent(harness, scripted("move"));
     await agent.run(1);
 
-    // The route must still point at the warp edge — not an arbitrary point
-    // flyForward() would have picked toward/away from the star.
-    expect(flightScene.plannedRoute).toEqual(edge);
+    // The `move` must be redirected to completeWarp() (drive the pending jump),
+    // NOT to flyForward() which would hijack the route to an arbitrary point
+    // toward/away from the star. Two outcomes prove the route was respected:
+    // the ship is still transiting to the SAME warp edge, or completeWarp()
+    // drove the jump to completion and cleared the route (null). Only a route
+    // pointing at a DIFFERENT point would signal the flyForward hijack bug —
+    // which of the two safe outcomes occurs depends on how far the
+    // seed-derived layout places the warp edge (short jumps finish within the
+    // single simulated turn), so the assertion accepts both rather than a
+    // layout-fragile "still mid-transit" precondition.
+    const route = flightScene.plannedRoute;
+    expect(route === null || (route.x === edge.x && route.y === edge.y)).toBe(
+      true,
+    );
     expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
     expect(harness.errors()).toEqual([]);
   });

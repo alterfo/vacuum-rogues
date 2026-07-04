@@ -56,7 +56,8 @@ describe("GalaxySimulator OVERMIND seed coherence", () => {
       // points — so the arc's first frontier is one coherent cluster.
       expect(areWarpConnected(core!, second!)).toBe(true);
 
-      // The player's own start system is never the second Overmind seed.
+      // The player's own start system is never the Overmind core or second seed.
+      expect(coreId).not.toBe(galaxy.systems[0].id);
       expect(secondId).not.toBe(galaxy.systems[0].id);
     });
   }

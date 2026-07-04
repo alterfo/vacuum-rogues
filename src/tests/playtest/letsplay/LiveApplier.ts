@@ -190,7 +190,7 @@ export async function applyLiveAction(
         await controller.openStarMap();
         return { applied: true, call: "openStarMap" };
       }
-      await controller.warp(action.targetId);
+      await controller.warp(action.targetId, action.reason);
       return { applied: true, call: "warp" };
     }
 

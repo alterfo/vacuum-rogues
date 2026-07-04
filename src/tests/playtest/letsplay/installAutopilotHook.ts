@@ -22,7 +22,10 @@ import { SceneType, QuestType } from "@/types";
 import { logger } from "@/utils/logger";
 import { observe, buildQuestSnapshots, marketSnapshotFor } from "./observe";
 import { selectPlayerPolicy } from "./policyGate";
-import { MemoryHeuristicPolicy } from "./MemoryHeuristicPolicy";
+import {
+  MemoryHeuristicPolicy,
+  warpWantsQuestBias,
+} from "./MemoryHeuristicPolicy";
 import { isNeuralEnabled } from "@/systems/settings/gameSettings";
 // Trained player net (behavioural-cloned from the MemoryHeuristicPolicy teacher,
 // `tools/ai/train_player.py`). Dev-only JSON, passed to the gate so the live
@@ -253,7 +256,7 @@ export function createLiveSceneController(
       }
       await goTo(SceneType.STAR_MAP);
     },
-    async warp(systemId) {
+    async warp(systemId, reason) {
       const sys = currentSystem(engine);
       const prevId = sys?.id ?? null;
       const connections = reachableNeighbors(
@@ -270,11 +273,12 @@ export function createLiveSceneController(
         visitedSystemIds.clear();
       }
       // Prefers unvisited systems, then avoids the system we just came from,
-      // then falls back to connections[0] — prevents ping-pong.
-      const questTarget = questRoutingPreference(
-        engine.questManager.getActiveQuests(),
-        prevId,
-      );
+      // then falls back to connections[0] — prevents ping-pong. A
+      // `find-sell-destination` warp deliberately stays blind to the carried
+      // quest's target (same exclusion PlayerAgent's headless applier uses).
+      const questTarget = warpWantsQuestBias(reason)
+        ? questRoutingPreference(engine.questManager.getActiveQuests(), prevId)
+        : null;
       const target =
         systemId ??
         pickWarpTarget(
@@ -356,25 +360,47 @@ export function createLiveSceneController(
       acceptBoardQuests(engine, getMemory().completedQuestsBaseline);
     },
     attack(targetId) {
-      // Engage the nearest (or named) hostile via the real CombatModule seam.
-      // e2eEngageCombat is __DEBUG__-gated in NpcShipManager so it never runs
-      // in a production build.
-      const nm = (
-        engine.currentScene as {
-          npcManager?: { e2eEngageCombat?: (id?: string) => void };
-        } | null
-      )?.npcManager;
-      nm?.e2eEngageCombat?.(targetId);
+      const scene = engine.currentScene as {
+        combatPause?: { paused?: boolean; confirm?: () => unknown };
+        npcManager?: { e2eEngageCombat?: (id?: string) => void };
+      } | null;
+      // When combat is on the active-pause overlay, pressing «Огонь!» is what
+      // fires — `combatPause.confirm()` shoots one aimed shot and resumes time.
+      // Without this the overlay sits open forever and the ship freezes
+      // mid-fight (the exact "can't react to the Fire modal / stands still"
+      // bug): the headless applier already un-freezes the same pause via
+      // `combatPause.resume()`, but the live executor only *engaged* combat and
+      // never drove the overlay. Confirm on each tick the pause re-arms so the
+      // fight actually resolves shot by shot.
+      if (
+        scene?.combatPause?.paused &&
+        typeof scene.combatPause.confirm === "function"
+      ) {
+        scene.combatPause.confirm();
+        return;
+      }
+      // Otherwise engage the nearest (or named) hostile via the real
+      // CombatModule seam. e2eEngageCombat is __DEBUG__-gated in NpcShipManager
+      // so it never runs in a production build.
+      scene?.npcManager?.e2eEngageCombat?.(targetId);
     },
     flee() {
-      // Break off combat pursuit — mirrors the player plotting a manual flee
-      // route, which calls breakOffCombatPursuit() in SpaceFlightScene.
-      const nm = (
-        engine.currentScene as {
-          npcManager?: { breakOffCombatPursuit?: () => void };
-        } | null
-      )?.npcManager;
-      nm?.breakOffCombatPursuit?.();
+      const scene = engine.currentScene as {
+        combatPause?: { paused?: boolean; resume?: () => void };
+        npcManager?: { breakOffCombatPursuit?: () => void };
+      } | null;
+      // Resume the active-pause overlay first (decline to fire) so time isn't
+      // frozen on it, then break off pursuit — mirrors the player dismissing
+      // «Огонь!» with «Продолжить» and plotting a manual disengage. Without the
+      // resume, a flee decision taken while the overlay is up would leave the
+      // ship frozen on the overlay instead of actually breaking away.
+      if (
+        scene?.combatPause?.paused &&
+        typeof scene.combatPause.resume === "function"
+      ) {
+        scene.combatPause.resume();
+      }
+      scene?.npcManager?.breakOffCombatPursuit?.();
     },
     repair() {
       // Guard on a fully-resolved player ship — executeRepair reads

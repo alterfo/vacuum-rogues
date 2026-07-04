@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { SceneType } from "@/types";
+import { SceneType, QuestType } from "@/types";
 import type { GameEngine } from "@/systems/GameEngine";
 import {
   installAutopilotHook,
@@ -236,6 +236,41 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(engine.transitionTo).not.toHaveBeenCalled();
   });
 
+  it("warp() biases toward a carried quest's target, except for a find-sell-destination reason", async () => {
+    const engine = mockEngine({
+      galaxy: {
+        systems: [
+          {
+            id: "sys1",
+            planets: [{ id: "p1", availableQuests: [] }],
+            stations: [{ id: "s1" }],
+            connections: [{ toSystemId: "sys2" }, { toSystemId: "sys3" }],
+          },
+        ],
+      },
+      questManager: {
+        getActiveQuests: () => [
+          { type: QuestType.DELIVERY, targetSystemId: "sys3" },
+        ],
+        getCompletedQuestIds: () => [] as string[],
+      },
+    });
+
+    // find-sell-destination must stay blind to the carried quest's target —
+    // falls back to the generic "explore the unknown" pick (first connection).
+    await createLiveSceneController(engine).warp(
+      undefined,
+      "mem:find-sell-destination",
+    );
+    expect(engine.currentScene.performWarpJumpTo).toHaveBeenCalledWith("sys2");
+
+    engine.currentScene.performWarpJumpTo.mockClear();
+
+    // Any other warp reason still biases toward the quest target.
+    await createLiveSceneController(engine).warp(undefined, "mem:explore");
+    expect(engine.currentScene.performWarpJumpTo).toHaveBeenCalledWith("sys3");
+  });
+
   it("openTrade() executes trade directly and transitions to SPACE_FLIGHT", async () => {
     // Mock engine must include player.inventory so executeTradeOnPlanet can
     // iterate cargo before transitioning (no TRADE scene — that caused the cycle).
@@ -288,6 +323,50 @@ describe("createLiveSceneController — verb → live engine call", () => {
     await c.flee();
     await c.repair();
     expect(engine.transitionTo).not.toHaveBeenCalled();
+  });
+
+  it("attack() presses «Огонь!» (combatPause.confirm) when the active-pause overlay is up", async () => {
+    const confirm = vi.fn();
+    const e2eEngageCombat = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        combatPause: { paused: true, confirm },
+        npcManager: { e2eEngageCombat },
+      },
+    });
+    await createLiveSceneController(engine).attack("npc1");
+    // The Fire modal is driven (one aimed shot + resume), NOT re-engaged.
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(e2eEngageCombat).not.toHaveBeenCalled();
+  });
+
+  it("attack() engages combat when there is no active-pause overlay", async () => {
+    const e2eEngageCombat = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        combatPause: { paused: false, confirm: vi.fn() },
+        npcManager: { e2eEngageCombat },
+      },
+    });
+    await createLiveSceneController(engine).attack("npc1");
+    expect(e2eEngageCombat).toHaveBeenCalledWith("npc1");
+  });
+
+  it("flee() resumes the active-pause overlay then breaks off pursuit", async () => {
+    const resume = vi.fn();
+    const breakOffCombatPursuit = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        combatPause: { paused: true, resume },
+        npcManager: { breakOffCombatPursuit },
+      },
+    });
+    await createLiveSceneController(engine).flee();
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(breakOffCombatPursuit).toHaveBeenCalledTimes(1);
   });
 
   it("tick() calls closeModals() when npcManager.hasOpenModal() is true", () => {

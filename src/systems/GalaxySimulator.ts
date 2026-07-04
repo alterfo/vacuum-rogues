@@ -155,18 +155,20 @@ export class GalaxySimulator {
     this._eventQueue = [];
 
     // Assign OVERMIND starting systems: the most distant from the galactic
-    // centre (highest q²+r² magnitude) becomes the core, unchanged from
-    // before. The SECOND starter is now a WARP-CONNECTED NEIGHBOUR of the
-    // core (preferring the most isolated one when several qualify) rather
-    // than an independently-chosen distant point — two unrelated far-apart
-    // seeds grew as two disconnected blobs from day one (`frontierSystems` in
-    // `overmindSpread.ts` merges every Overmind system into one hash-ranked
-    // pool), which read as the front "appearing from all sides" instead of
-    // one coherent advancing line. Starting as a single connected pair means
-    // the very first frontier is already one cluster. The player's own start
-    // system (`generatedSystems[0]`) is excluded from this neighbour search —
-    // the small nearest-neighbour pool made it too easy to otherwise sweep
-    // the player's home in as the second Overmind seed.
+    // centre (highest q²+r² magnitude) becomes the core. The SECOND starter
+    // is a WARP-CONNECTED NEIGHBOUR of the core (preferring the most isolated
+    // one when several qualify) rather than an independently-chosen distant
+    // point — two unrelated far-apart seeds grew as two disconnected blobs
+    // from day one (`frontierSystems` in `overmindSpread.ts` merges every
+    // Overmind system into one hash-ranked pool), which read as the front
+    // "appearing from all sides" instead of one coherent advancing line.
+    // Starting as a single connected pair means the very first frontier is
+    // already one cluster. The player's own start system
+    // (`generatedSystems[0]`) is excluded from BOTH the core pick and the
+    // neighbour search — coordinates are random per system, so home can
+    // itself be the single most isolated point, and the core becoming the
+    // player's own start system would put the Overmind's origin on top of
+    // the player from day one.
     const homeId = generatedSystems[0]?.id ?? "";
     const sortedByDistance = [...generatedSystems].sort((a, b) => {
       const da = a.coordinates.q ** 2 + a.coordinates.r ** 2;
@@ -174,7 +176,8 @@ export class GalaxySimulator {
       return db - da; // descending — most isolated first
     });
     const overmindStart: string[] = [];
-    const core = sortedByDistance[0];
+    const core =
+      sortedByDistance.find((s) => s.id !== homeId) ?? sortedByDistance[0];
     const overmindCoreId = core?.id ?? "";
     if (core) overmindStart.push(core.id);
     if (sortedByDistance.length >= 2 && core) {
@@ -218,7 +221,7 @@ export class GalaxySimulator {
         ) ??
         byDistanceToCore[0] ??
         sortedByDistance.find((s) => s.id !== core.id && s.id !== homeId) ??
-        sortedByDistance.find((s) => s.id !== homeId) ??
+        sortedByDistance.find((s) => s.id !== core.id) ??
         sortedByDistance[1];
       overmindStart.push(secondStart.id);
     }

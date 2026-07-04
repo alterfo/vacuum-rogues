@@ -186,6 +186,22 @@ export interface AgentMemory {
    * quest for the rest of the game.
    */
   completedQuestsBaseline: number;
+  /**
+   * Consecutive SPACE_FLIGHT folds that arrived straight from a STAR_MAP fold
+   * with the system unchanged — i.e. the star map was opened to warp and the
+   * ship is back in flight without ever leaving the system. A SUCCESSFUL warp
+   * never produces this pattern: `PlayerAgent.completeWarp` ticks the jump to
+   * completion inside the same `apply()` call, so the very next fold already
+   * observes the NEW system. Only a rejected/failed warp (or a deliberate
+   * `move:back` off the map) returns to SPACE_FLIGHT with the OLD system still
+   * current. Resets to 0 on a genuine system change or a landing (both are
+   * real forward progress). The base ladder reads this to tell "the explore
+   * warp will actually work" apart from "it keeps getting rejected", so it can
+   * rank the explore warp above the `earn`-land refuel fallback in the common
+   * case while still falling back to `earn`-land once warping is visibly
+   * stuck — see `MemoryHeuristicPolicy`'s SPACE_FLIGHT tier.
+   */
+  warpRejectFolds: number;
 }
 
 /**
@@ -254,6 +270,7 @@ export function createMemory(): AgentMemory {
     lastFuelSeen: 0,
     starMapStallFolds: 0,
     completedQuestsBaseline: -1,
+    warpRejectFolds: 0,
   };
 }
 
@@ -343,6 +360,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       lastFuelSeen: mem.lastFuelSeen,
       starMapStallFolds: mem.starMapStallFolds,
       completedQuestsBaseline: mem.completedQuestsBaseline,
+      warpRejectFolds: mem.warpRejectFolds,
     };
   }
 
@@ -478,6 +496,25 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       ? mem.completedQuestsBaseline
       : (obs.questsCompleted ?? 0);
 
+  // 7.7) Warp-reject cadence — see the field doc on `warpRejectFolds`. A
+  // landing or a genuine system change is real progress and always resets it;
+  // otherwise a SPACE_FLIGHT fold arriving straight from STAR_MAP with the
+  // system unchanged means the star-map round trip did NOT complete a jump
+  // (rejected warp, or a deliberate non-warp `back`), so it counts toward the
+  // streak. Any other fold (e.g. consecutive SPACE_FLIGHT folds mid-`move`)
+  // leaves it untouched — it's a streak of failed *warp attempts*, not a
+  // per-fold decay.
+  const returnedFromStarMapSameSystem =
+    obs.scene === SceneType.SPACE_FLIGHT &&
+    mem.lastScene === SceneType.STAR_MAP &&
+    !systemChanged;
+  const warpRejectFolds =
+    obs.currentPlanet || systemChanged
+      ? 0
+      : returnedFromStarMapSameSystem
+        ? mem.warpRejectFolds + 1
+        : mem.warpRejectFolds;
+
   const next: AgentMemory = {
     priceBook,
     inventoryLots,
@@ -505,6 +542,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     lastFuelSeen: obs.player.fuel,
     starMapStallFolds,
     completedQuestsBaseline,
+    warpRejectFolds,
   };
 
   // 8) Deadlock — sticky once true; logged exactly once per run at the transition.

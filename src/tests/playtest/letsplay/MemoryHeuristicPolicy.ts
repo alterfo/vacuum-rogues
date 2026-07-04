@@ -109,6 +109,28 @@ export const MAX_FOLDS_WITHOUT_DAY_ADVANCE = 12;
 export const MAX_STAR_MAP_WARP_STALLS = 2;
 
 /**
+ * How many of a system's habitable planets the agent will land on purely for
+ * price discovery / "earn" before it warps to a NEW system instead of hopping
+ * to every remaining in-system planet. Two is enough to reveal a same-system
+ * margin (cheaper to realise than a cross-warp one) while stopping the visible
+ * "land → take-off → land the next planet → take-off …" churn the user sees
+ * when a system offers nothing actionable. Quest-offering planets are exempt
+ * (landing there is purposeful `take-work`, not aimless discovery).
+ */
+export const DISCOVERY_LANDINGS_PER_SYSTEM = 2;
+
+/**
+ * Trip point for `AgentMemory.warpRejectFolds` — once the SPACE_FLIGHT tier
+ * sees this many consecutive star-map round trips return without a system
+ * change, it stops emitting the `early-explore` warp and lets the
+ * unconditional `earn`-land fallback (the refuel path) win instead. Trips on
+ * the very first rejection: a warp that fails once on the engine's absolute
+ * per-jump fuel cost will keep failing every retry until the tank is refilled,
+ * so there is nothing to gain from tolerating a second failed round trip.
+ */
+export const MAX_WARP_REJECT_FOLDS = 1;
+
+/**
  * Below this hull fraction near a rising Overmind front, the goal-less base
  * ladder proactively leaves the system (`warp` away) instead of idling —
  * distinct from `LOW_HULL_FRACTION` (an active hostile's fight-or-flee
@@ -1046,6 +1068,16 @@ export function decideWithMemory(
       const alreadyVisited =
         earnPlanet !== undefined &&
         (mem.priceBook.get(earnPlanet)?.size ?? 0) > 0;
+      // How many habitable planets in THIS system the agent has already priced,
+      // and whether that's "enough" — once it has discovered this many with no
+      // actionable margin, it warps to a new system instead of landing on every
+      // remaining planet here (the visible land↔take-off churn).
+      const visitedInSystem = (obs.system?.planets ?? []).filter(
+        (p) =>
+          p.isHabitable !== false && (mem.priceBook.get(p.id)?.size ?? 0) > 0,
+      ).length;
+      const systemExploredEnough =
+        visitedInSystem >= DISCOVERY_LANDINGS_PER_SYSTEM;
       // Warp to find the sell destination when:
       //  - holding cargo AND best sell planet not in this system, OR
       //  - holding cargo AND no sell planet known (priceBook only covers this system)
@@ -1106,6 +1138,7 @@ export function decideWithMemory(
         !holdsNonQuestCargo &&
         !offer &&
         undiscoveredPlanet !== undefined &&
+        !systemExploredEnough &&
         !daysStagnant
       ) {
         push("land", "discover-prices", undiscoveredPlanet);
@@ -1120,17 +1153,30 @@ export function decideWithMemory(
       // warp fires only after the first visit; a fresh system resets
       // alreadyVisited=false so the agent lands on the new planet first.
       // Positioned before land "earn" so warp wins over the repeated
-      // same-planet land when the condition is met.
+      // same-planet land when the condition is met — EXCEPT once
+      // `warpRejectFolds` has tripped (see its doc + `MAX_WARP_REJECT_FOLDS`):
+      // a warp that just got rejected on the engine's absolute per-jump fuel
+      // cost will keep getting rejected, so retrying it here instead of
+      // falling through to the `earn`-land refuel below would fly/stall
+      // forever without ever refuelling.
+      const warpRejectTripped = mem.warpRejectFolds >= MAX_WARP_REJECT_FOLDS;
       if (
-        alreadyVisited &&
+        (alreadyVisited || systemExploredEnough) &&
         (noActionableMargin || daysStagnant) &&
         !avoidDanger &&
         explorationSafe &&
         !holdsNonQuestCargo &&
-        !offer
+        !offer &&
+        !warpRejectTripped
       ) {
         push("warp", "early-explore");
       }
+      // Land to "earn" — kept as an unconditional fallback so the agent always
+      // has a forward move here even when every warp is gated (fuel/cadence/
+      // danger/galaxy-lost) or `early-explore` is withheld because
+      // `warpRejectTripped`. This is ALSO the refuel path (landing tops the
+      // tank) and the break-out from a warp that keeps getting rejected on the
+      // engine's absolute per-jump fuel cost.
       if (earnPlanet !== undefined) {
         push("land", "earn", earnPlanet);
       }
