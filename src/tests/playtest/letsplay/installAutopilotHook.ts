@@ -29,7 +29,11 @@ import { isNeuralEnabled } from "@/systems/settings/gameSettings";
 // autopilot runs the net when НЕЙРОСЕТЬ is on; the gate ignores it when off.
 import playerWeights from "./weights/player.weights.json";
 import { AutopilotController, type AutopilotDeps } from "./AutopilotController";
-import { type AgentMemory, createMemory } from "./AgentMemory";
+import {
+  type AgentMemory,
+  createMemory,
+  questBaselineForObserve,
+} from "./AgentMemory";
 import { bestKnownMargin } from "./memoryFeatures";
 import { deliveryCargoNeed } from "./observeHelpers";
 import type { LiveSceneController } from "./LiveApplier";
@@ -425,7 +429,14 @@ export function installAutopilotHook(
   // circular construction order.
   let controllerRef: AutopilotController | null = null;
   const controller = new AutopilotController({
-    observe: () => observe(engine),
+    observe: () =>
+      observe(
+        engine,
+        questBaselineForObserve(
+          controllerRef?.currentMemory() ?? createMemory(),
+          engine,
+        ),
+      ),
     // When the neural toggle is off (default), use MemoryHeuristicPolicy — the
     // BC teacher that carries a per-engagement belief, executes buy-low/sell-high
     // routes, and warps to explore new systems. The stateless HeuristicPolicy

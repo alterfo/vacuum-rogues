@@ -28,6 +28,7 @@
 import { SceneType, type ResourceType } from "@/types";
 import type { Observation } from "./observe";
 import { logger } from "@/utils/logger";
+import type { GameEngine } from "@/systems/GameEngine";
 
 /** One good's last-seen prices at a planet, stamped with when it was seen. */
 export interface PriceRecord {
@@ -185,6 +186,25 @@ export interface AgentMemory {
    * quest for the rest of the game.
    */
   completedQuestsBaseline: number;
+}
+
+/**
+ * The {@link AgentMemory.completedQuestsBaseline} an `observe()` call should use
+ * — the memory's own captured baseline once known, else "no completions yet
+ * this session" (the engine's current lifetime count), so the very first
+ * observation of a run (before the first fold captures the real baseline) never
+ * reads a pre-existing save's completed quests as this session's own. Callers
+ * that drive a live/headless session (not a one-off diagnostic) should resolve
+ * this once per step and pass it into {@link observe} — see `observe`'s own
+ * `completedQuestsBaseline` parameter doc for why.
+ */
+export function questBaselineForObserve(
+  mem: Pick<AgentMemory, "completedQuestsBaseline">,
+  engine: GameEngine,
+): number {
+  return mem.completedQuestsBaseline >= 0
+    ? mem.completedQuestsBaseline
+    : engine.questManager.getCompletedQuestIds().length;
 }
 
 /**

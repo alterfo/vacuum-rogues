@@ -520,8 +520,19 @@ export function buildQuestSnapshots(
  * Project the live engine into an {@link Observation}. Read-only and total — a
  * partially-initialised engine (e.g. on the main menu, before a game) yields
  * `hasPlayer: false` with a `["wait"]` action set rather than throwing.
+ *
+ * `completedQuestsBaseline` is the caller's {@link AgentMemory.completedQuestsBaseline}
+ * (or the equivalent "no completions yet this session" reading) — threaded into
+ * `takeableBoardQuestCount` so a session hooked into a save that already has
+ * unrelated completed quests doesn't read the lifetime cap as already tripped
+ * and silently make `take-quest` illegal from the very first observation.
+ * Defaults to 0 (today's behaviour) for callers with no session memory
+ * (diagnostics/exporters that always start from a fresh game).
  */
-export function observe(engine: GameEngine): Observation {
+export function observe(
+  engine: GameEngine,
+  completedQuestsBaseline = 0,
+): Observation {
   const scene = engine.currentSceneType;
   const player = engine.player;
   const galaxy = engine.galaxy;
@@ -621,7 +632,11 @@ export function observe(engine: GameEngine): Observation {
           // same takeable filter `acceptBoardQuests` applies — an untakeable
           // TEXT_ADVENTURE offer that's never accepted never leaves the board,
           // so counting it here would make the take-quest tier fire forever.
-          availableQuests: takeableBoardQuestCount(engine, p.id),
+          availableQuests: takeableBoardQuestCount(
+            engine,
+            p.id,
+            completedQuestsBaseline,
+          ),
           isHabitable: p.isHabitable,
         })),
         stations: system.stations.map((st) => ({

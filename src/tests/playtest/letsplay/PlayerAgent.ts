@@ -24,7 +24,12 @@ import { QuestType, SceneType } from "@/types";
 import { RealEngineHarness, type RecordedError } from "../realEngineHarness";
 import { observe, type Observation } from "./observe";
 import type { Action, PlayerPolicy } from "./PlayerPolicy";
-import { type AgentMemory, createMemory, updateMemory } from "./AgentMemory";
+import {
+  type AgentMemory,
+  createMemory,
+  questBaselineForObserve,
+  updateMemory,
+} from "./AgentMemory";
 import {
   currentSystem,
   landedPlanet,
@@ -39,6 +44,7 @@ import {
 } from "./engineQueries";
 import { bestKnownMargin } from "./memoryFeatures";
 import { deliveryCargoNeed } from "./observeHelpers";
+import { warpWantsQuestBias } from "./MemoryHeuristicPolicy";
 import {
   executeBuyBestGear,
   executeUpgradeHull,
@@ -163,7 +169,7 @@ export class PlayerAgent {
     const engine = this.harness.engine;
     const steps: AgentStep[] = [];
     for (let index = 0; index < budget; index++) {
-      const obs = observe(engine);
+      const obs = observe(engine, questBaselineForObserve(this.memory, engine));
       this.memory = updateMemory(this.memory, obs);
       const action = this.policy.decide(obs, this.memory);
       // Egocentric per-step record: the day + vitals the player perceives *now*,
@@ -386,7 +392,9 @@ export class PlayerAgent {
           engine.galaxy?.systems ?? [],
           sys?.id ?? null,
         );
-        const questTarget = questRoutingPreference(obs.quests, sys?.id ?? null);
+        const questTarget = warpWantsQuestBias(action.reason)
+          ? questRoutingPreference(obs.quests, sys?.id ?? null)
+          : null;
         const hopsToQuestTarget =
           questTarget != null
             ? systemHopDistances(engine.galaxy?.systems ?? [], questTarget)

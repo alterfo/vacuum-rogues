@@ -43,8 +43,13 @@ export interface LiveSceneController {
   dock(stationId?: string): void | Promise<void>;
   /** Open the galaxy/star map (the first half of a warp from flight). */
   openStarMap(): void | Promise<void>;
-  /** Jump to a connected system (issued from the star map). */
-  warp(systemId?: string): void | Promise<void>;
+  /**
+   * Jump to a connected system (issued from the star map). `reason` is the
+   * deciding policy's `Action.reason` — implementations use it to decide
+   * whether a fallback target (when `systemId` is absent) may bias toward a
+   * carried quest's system (see `warpWantsQuestBias`).
+   */
+  warp(systemId?: string, reason?: string): void | Promise<void>;
   /** Open the market for the current planet (the first half of a trade). */
   openTrade(planetId?: string): void | Promise<void>;
   /** Execute a buy/sell at the already-open market. */

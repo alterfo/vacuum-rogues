@@ -163,6 +163,21 @@ const WARP_TARGETING_REASONS = new Set([
   "warp",
 ]);
 
+/**
+ * Whether an applier-level `warp` with no pre-picked `targetId` should let
+ * quest-target routing bias its destination. Mirrors {@link
+ * WARP_TARGETING_REASONS} for actions this policy produced (reason
+ * `mem:<reason>`) — a `find-sell-destination` warp deliberately stays blind
+ * (see the call site above), so an applier resolving its own fallback target
+ * must respect the same exclusion instead of unconditionally biasing toward
+ * the quest target. Actions from any other policy (no `mem:` prefix) are left
+ * unaffected — they never carried this exclusion.
+ */
+export function warpWantsQuestBias(reason: string | undefined): boolean {
+  if (reason == null || !reason.startsWith("mem:")) return true;
+  return WARP_TARGETING_REASONS.has(reason.slice(4));
+}
+
 /** One ranked action candidate: a legal-or-not preference the legal filter prunes. */
 interface Candidate {
   kind: PlayerActionKind;
