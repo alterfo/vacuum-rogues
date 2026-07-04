@@ -217,7 +217,8 @@ export class GalaxySimulator {
             s.id !== core.id && s.id !== homeId && coreNeighbourIds.has(s.id),
         ) ??
         byDistanceToCore[0] ??
-        sortedByDistance.find((s) => s.id !== core.id) ??
+        sortedByDistance.find((s) => s.id !== core.id && s.id !== homeId) ??
+        sortedByDistance.find((s) => s.id !== homeId) ??
         sortedByDistance[1];
       overmindStart.push(secondStart.id);
     }
@@ -226,11 +227,14 @@ export class GalaxySimulator {
     // system not already claimed by the OVERMIND seed above (spatially
     // separated from it). Without an initial pirate system the balance tick
     // can never create pirates (the capture branch only fires for systems
-    // adjacent to existing pirates).
+    // adjacent to existing pirates). Excludes the player's own home system —
+    // same reasoning as the OVERMIND seed exclusion above: coordinates are
+    // random per system, so home can itself be the most isolated point, and a
+    // pirate-controlled home system aggros the player from turn 0.
     const overmindStartSet = new Set(overmindStart);
     const pirateStart: string[] = [];
     const pirateCandidate = sortedByDistance.find(
-      (s) => !overmindStartSet.has(s.id),
+      (s) => !overmindStartSet.has(s.id) && s.id !== homeId,
     );
     if (pirateCandidate) pirateStart.push(pirateCandidate.id);
 

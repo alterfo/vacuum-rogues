@@ -814,15 +814,17 @@ export function decideWithMemory(
   switch (obs.scene) {
     case SceneType.PLANET: {
       const landedId = obs.currentPlanet?.id ?? null;
-      // A DELIVERY quest's cargo need already fully bought — committed to the
-      // quest's own turn-in, never the market (see `deliveryReadyToTurnIn`).
-      const readyDelivery = deliveryReadyToTurnIn(obs.quests);
       // Sell held cargo here when the remembered buy-price says it profits —
       // unless that cargo is quest-committed (selling it away would strand
       // the delivery the ladder just spent credits building toward).
+      // `profitIfSoldHere`/`heldGoods` already exclude quest-committed goods
+      // (see `questCommittedGoods` above), so `profitHere`/held cargo here
+      // can only ever be non-quest goods — no separate `readyDelivery` gate
+      // is needed, and one would incorrectly block selling an unrelated
+      // profitable good just because some OTHER carried quest happens to be
+      // ready to turn in.
       const profitHere = profitIfSoldHere(obs, mem);
-      if (profitHere > 0 && !readyDelivery)
-        push("trade", `sell-for-profit:${profitHere}`);
+      if (profitHere > 0) push("trade", `sell-for-profit:${profitHere}`);
       // Cut a stale loss: a KNOWN profitable margin exists for held cargo
       // (`heldGoods`/`bestHeld` above), but the run has gone too long without
       // a day passing (`daysStagnant`) while stuck at a planet that isn't
@@ -835,7 +837,6 @@ export function decideWithMemory(
       // market offers rather than idling on cargo with nowhere safe to go.
       if (
         profitHere <= 0 &&
-        !readyDelivery &&
         daysStagnant &&
         heldGoods.size > 0 &&
         (obs.currentPlanet?.market ?? []).some((m) => heldGoods.has(m.resource))
@@ -909,18 +910,16 @@ export function decideWithMemory(
     case SceneType.SPACE_FLIGHT: {
       // A DELIVERY quest's cargo need already fully bought — committed to the
       // quest's own turn-in, never a market sell (see `deliveryReadyToTurnIn`).
-      // Without this, `bestHeld` (a market-margin view over the whole session's
-      // price book) can name this SAME planet as the "best known" sell
-      // destination for quest-bought cargo (the only price point known for it
-      // yet), permanently ping-ponging land↔take-off here instead of routing
-      // toward the quest's actual target.
+      // Its target planet/system is read below (targetPlanetId preference for
+      // `quest-delivery`) — `bestHeld` itself already excludes this good (see
+      // `heldGoods`/`questCommittedGoods` above), so realising a sell here
+      // needs no separate `readyDelivery` gate of its own.
       const readyDelivery = deliveryReadyToTurnIn(obs.quests);
       // Realise a known sell: holding the good and its sell planet is in-system.
       if (
         bestHeld.good != null &&
         heldQty(mem, bestHeld.good) > 0 &&
-        planetInSystem(obs, bestHeld.sellPlanet) &&
-        !readyDelivery
+        planetInSystem(obs, bestHeld.sellPlanet)
       ) {
         push("land", "go-sell", bestHeld.sellPlanet ?? undefined);
       }

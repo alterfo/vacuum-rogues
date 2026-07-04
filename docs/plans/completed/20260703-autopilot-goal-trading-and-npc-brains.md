@@ -430,4 +430,50 @@ for NPCs with distinct goals.
   85%-threshold win condition — both prerequisites this plan depended on — are
   intact and unregressed.
 
+  **Second code-review pass (2026-07-04).** Two confirmed bugs fixed:
+  - `MemoryHeuristicPolicy.ts`'s PLANET/SPACE_FLIGHT `sell-for-profit`/
+    `cut-stale-loss`/`go-sell` tiers carried a redundant `!readyDelivery` gate
+    on top of the already-complete `questCommittedGoods` exclusion
+    (`profitIfSoldHere`/`heldGoods`/`bestHeld` all already exclude quest-tied
+    goods) — the extra gate did nothing to protect quest cargo but did block
+    selling a completely unrelated profitable good whenever ANY carried
+    DELIVERY quest happened to be ready to turn in. Removed; quest cargo
+    protection is unaffected (still fully excluded upstream).
+  - `GalaxySimulator.generateGalaxy`'s pirate-seed pick excluded the OVERMIND
+    seed systems but not the player's own home system — since per-system
+    coordinates are uniform-random (not home-centred), home could itself be
+    the most isolated point and become the pirate seed, aggroing the player
+    from turn 0. This is the exact class of bug Task 7 fixed for the OVERMIND
+    seed but missed for the pirate seed one block below it. Added the same
+    `s.id !== homeId` exclusion, plus defense-in-depth on the OVERMIND second-
+    seed's two unguarded fallback tiers (unreachable today at the default
+    system count, but no longer a latent gap).
+
+  Two known regressions were also confirmed as real but out of scope to fix
+  here (both already carry `it.fails` + inline "KNOWN REGRESSION" comments in
+  their test files per CLAUDE.md's "never weaken a test to hide a regression"
+  rule, but were not previously called out in this plan's own landed notes):
+  - `competentSession.test.ts`'s "realises a known-margin sell-for-profit
+    cycle" — Task 7's `galaxyEffectivelyLost` now correctly refuses the warp
+    to this seed's known margin once its small 6-system galaxy is mostly
+    Overmind-held. The ladder-level decision is still proven correct via a
+    scripted fixture in `MemoryHeuristicPolicy.test.ts`.
+  - `neuralSession.test.ts`'s "picks a diverse action repertoire" — the
+    **shipped** neural net (`weights/player.weights.json`) was trained against
+    the pre-Task-1 speculative-buy `executeMemoryAwareTrade`, so on this seed
+    it now loops `land`+`trade` instead of escaping to `warp`/`move`. Needs a
+    retrain on the corrected teacher; tracked here as a follow-up, not yet in
+    a dedicated memory file.
+
+  A third gap was found and judged not worth a live fix in a review pass:
+  Task 6's sun-avoidance fix (`NpcShipSprite.setDestination`) only covers the
+  ordinary wandering travel branch. `maneuverToward` — used by aggressive
+  garrison pursuit and NPC-vs-NPC combat closing — has no star awareness at
+  all, so a chasing/fighting ship can still cut straight through the star.
+  Not fixed here: the target moves every frame in this path, so it needs a
+  genuine per-frame deflection (not `setDestination`'s one-shot waypoint
+  bypass), and `maneuverToward`/`decideManeuver` are tightly coupled to the
+  well-tested combat-maneuver system — a bigger, dedicated change than this
+  review pass's scope.
+
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`.*
