@@ -266,8 +266,31 @@ for NPCs with distinct goals.
   `test:playtest` all green.
 
 ### Task 5: Incoming-attacker indicator
-- [ ] Show the player which ships are approaching to attack (threat markers /
+- [x] Show the player which ships are approaching to attack (threat markers /
       list in flight), so an incoming hostile isn't a surprise.
+
+  **Landed 2026-07-04.** Two additive, presentation-only pieces, both gated on
+  `NpcShipSprite.aggressive` (already the "closing in on the player" flag used
+  by `CombatPursuitController`/garrison aggro — no new state):
+  - **Mini-map threat ring:** `NpcShipManager.getNpcDots()` now includes an
+    `aggressive: boolean` per dot (was `{x,y,color}`); `SystemMiniMap.
+    updateWithSprites` draws a red ring (`0xff3333`) around an aggressive
+    dot, distinct from its faction-colour fill — a hostile that's merely
+    nearby (not yet closing to attack) still reads as a plain dot.
+  - **One-shot toast:** `NpcShipManager.update()`'s per-sprite loop fires
+    `deps.showMessage("⚠ Incoming attacker: {name}!")` (RU/EN keys
+    `flight.incomingAttacker`) the first frame a sprite goes aggressive,
+    tracked via a `warnedAggressorIds` set (cleared on de-aggro so a later
+    re-aggro warns again). Gated on `!isCombatant(sprite)` so it fires only
+    during the approach, not once the fight's own HUD/pause already makes
+    the engagement obvious — this also keeps a player-initiated attack
+    (`launchCombatWithNpc`, already a combatant by the next tick) from
+    reading as an "incoming" warning about itself.
+  - New tests: `npcShipManager.test.ts` (dot `aggressive` field, one-shot
+    warn + re-arm on de-aggro/re-aggro, suppressed when already a
+    combatant) and a new `systemMiniMap.test.ts` (red-ring stroke present
+    only for an aggressive dot). Full unit suite (4449 tests), lint, tsc,
+    `test:playtest`, `letsplay:ci` all green.
 
 ## Phase 3 — NPC brains (user-sequenced AFTER the autopilot is good)
 

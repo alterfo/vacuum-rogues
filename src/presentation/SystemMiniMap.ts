@@ -311,7 +311,12 @@ export class SystemMiniMap {
     shipY: number,
     centerX: number,
     centerY: number,
-    npcDots: { x: number; y: number; color: number }[] = [],
+    npcDots: {
+      x: number;
+      y: number;
+      color: number;
+      aggressive?: boolean;
+    }[] = [],
     route: { x: number; y: number } | null = null,
     boundaryRadius: number | null = null,
     viewport: {
@@ -376,12 +381,19 @@ export class SystemMiniMap {
       this.graphics.fill({ color });
     }
 
-    // Draw NPC ships as faction-coloured dots
+    // Draw NPC ships as faction-coloured dots. An aggressive one (closing in
+    // to attack — Task 5) gets a bright red ring around it so the threat
+    // reads at a glance, distinct from a merely nearby ship of the same
+    // faction colour.
     for (const dot of npcDots) {
       const nx = mapCenterX + (dot.x - centerX) * this.mapScale;
       const ny = mapCenterY + (dot.y - centerY) * this.mapScale;
       this.graphics.circle(nx, ny, 2);
       this.graphics.fill({ color: dot.color });
+      if (dot.aggressive) {
+        this.graphics.circle(nx, ny, 4);
+        this.graphics.stroke({ color: 0xff3333, width: 1, alpha: 0.9 });
+      }
     }
 
     const shipMapX = mapCenterX + (shipX - centerX) * this.mapScale;

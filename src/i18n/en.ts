@@ -285,6 +285,9 @@ export const en: Dict = {
   "flight.lootArtifact": "artifact",
   "flight.lootModule": "module",
 
+  // --- incoming-attacker warning (Task 5: threat indicator) -----------------
+  "flight.incomingAttacker": "⚠ Incoming attacker: {name}!",
+
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Controls:",
   "help.gotIt": "Got it",

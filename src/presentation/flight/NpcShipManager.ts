@@ -144,6 +144,9 @@ export class NpcShipManager implements FlightModule {
   // Maps each non-pirate NPC sprite to the planet sprite it orbits so the
   // anchor can be refreshed each frame as planets drift along their orbits.
   private npcAnchorPlanet = new Map<NpcShipSprite, PlanetSprite>();
+  // NPC ids already warned about via the incoming-attacker toast (Task 5) —
+  // cleared once the sprite drops aggression so a later re-aggro warns again.
+  private warnedAggressorIds = new Set<string>();
   private readonly panels: ContactPanelManager;
   // Owns the player-vs-NPC contact-panel action cluster (hail/trade/attack/
   // approach/hire + the pirate shakedown flow). Constructed in the ctor with a
@@ -388,6 +391,26 @@ export class NpcShipManager implements FlightModule {
     const timeScale = physics?.timeScale ?? 1;
     for (let i = this.npcSprites.length - 1; i >= 0; i--) {
       const sprite = this.npcSprites[i];
+      // Incoming-attacker warning (Task 5): a one-shot toast the moment a
+      // sprite turns aggressive, so a closing hostile isn't a surprise. Gated
+      // on "not yet a combatant" — once weapon range is reached the fight's
+      // own HUD/pause makes the engagement obvious, and this also keeps a
+      // player-initiated attack (already a combatant by the next tick) from
+      // reading as an "incoming" warning about itself.
+      if (sprite.aggressive) {
+        if (
+          !this.warnedAggressorIds.has(sprite.npc.id) &&
+          !(this.deps.isCombatant?.(sprite) ?? false)
+        ) {
+          this.warnedAggressorIds.add(sprite.npc.id);
+          this.deps.showMessage(
+            t("flight.incomingAttacker", { name: sprite.npc.name }),
+            0xff4444,
+          );
+        }
+      } else {
+        this.warnedAggressorIds.delete(sprite.npc.id);
+      }
       // Garrison aggressors maneuver against the player ship: the good-rep
       // breakoff, the pirate shakedown roll/hail, the out-run escape breakoff,
       // and the pursuit-target refresh + in-range combat launch are all one
@@ -597,9 +620,19 @@ export class NpcShipManager implements FlightModule {
     this.deps.startInFlightCombat?.(sprite);
   }
 
-  /** Mini-map radar dots: world position + faction colour per NPC. */
-  getNpcDots(): { x: number; y: number; color: number }[] {
-    return this.npcSprites.map((s) => ({ x: s.x, y: s.y, color: s.mapColor }));
+  /**
+   * Mini-map radar dots: world position + faction colour per NPC, plus
+   * whether it is currently an aggressor closing in on the player (Task 5) so
+   * the mini-map can mark it as an incoming threat distinct from a merely
+   * nearby, non-hostile ship of the same faction colour.
+   */
+  getNpcDots(): { x: number; y: number; color: number; aggressive: boolean }[] {
+    return this.npcSprites.map((s) => ({
+      x: s.x,
+      y: s.y,
+      color: s.mapColor,
+      aggressive: s.aggressive,
+    }));
   }
 
   /** World position of the auto-follow target, or null when none is set/found. */

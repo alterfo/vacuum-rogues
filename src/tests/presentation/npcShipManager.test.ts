@@ -791,4 +791,142 @@ describe("NpcShipManager.rememberFlightPos", () => {
 
     manager.destroy();
   });
+
+  it("getNpcDots reports each NPC's live aggressive state (Task 5)", () => {
+    const { manager } = makeHarness([makeNpc("npc_1", NpcRole.PIRATE)]);
+    manager.initialize();
+
+    expect(manager.getNpcDots()[0].aggressive).toBe(false);
+
+    const sprite = (
+      manager as unknown as {
+        npcSprites: Array<{ setAggressive(on: boolean): void }>;
+      }
+    ).npcSprites[0];
+    sprite.setAggressive(true);
+
+    expect(manager.getNpcDots()[0].aggressive).toBe(true);
+
+    manager.destroy();
+  });
+
+  it("warns once via showMessage when an NPC turns aggressive, and re-arms after it drops aggression (Task 5)", () => {
+    const messages: Array<{ text: string; color?: number }> = [];
+    const stage = new Container();
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+    const renderer = {
+      app: { screen: { width: 800, height: 600 } },
+      stage,
+      uiLayer,
+      gameLayer,
+    } as unknown as Renderer;
+
+    const galaxy = { npcShips: [makeNpc("npc_threat", NpcRole.PIRATE)] };
+    const gameEngine = {
+      galaxy,
+      player: { currentSystemId: "sys_a" },
+    } as unknown as GameEngine;
+
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => null,
+      getPlanetSprites: () => [],
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => true,
+      showMessage: (text, color) => messages.push({ text, color }),
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: () => {},
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+    };
+
+    const manager = new NpcShipManager(
+      renderer,
+      gameEngine,
+      gameLayer,
+      uiLayer,
+      deps,
+    );
+    manager.initialize();
+
+    const sprite = (
+      manager as unknown as {
+        npcSprites: Array<{ setAggressive(on: boolean): void }>;
+      }
+    ).npcSprites[0];
+    sprite.setAggressive(true);
+
+    manager.update(1 / 60, 100);
+    expect(messages.length).toBe(1);
+    expect(messages[0].text).toContain("npc_threat");
+    expect(messages[0].color).toBe(0xff4444);
+
+    // Still aggressive next frame — no repeat toast.
+    manager.update(1 / 60, 100);
+    expect(messages.length).toBe(1);
+
+    // Drops aggression, then re-aggros — warns again.
+    sprite.setAggressive(false);
+    manager.update(1 / 60, 100);
+    sprite.setAggressive(true);
+    manager.update(1 / 60, 100);
+    expect(messages.length).toBe(2);
+
+    manager.destroy();
+  });
+
+  it("does not warn about an aggressor that is already an active combatant (Task 5)", () => {
+    const messages: Array<{ text: string; color?: number }> = [];
+    const stage = new Container();
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+    const renderer = {
+      app: { screen: { width: 800, height: 600 } },
+      stage,
+      uiLayer,
+      gameLayer,
+    } as unknown as Renderer;
+
+    const galaxy = { npcShips: [makeNpc("npc_engaged", NpcRole.PIRATE)] };
+    const gameEngine = {
+      galaxy,
+      player: { currentSystemId: "sys_a" },
+    } as unknown as GameEngine;
+
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => null,
+      getPlanetSprites: () => [],
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => true,
+      showMessage: (text, color) => messages.push({ text, color }),
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: () => {},
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+      isCombatant: () => true,
+    };
+
+    const manager = new NpcShipManager(
+      renderer,
+      gameEngine,
+      gameLayer,
+      uiLayer,
+      deps,
+    );
+    manager.initialize();
+
+    const sprite = (
+      manager as unknown as {
+        npcSprites: Array<{ setAggressive(on: boolean): void }>;
+      }
+    ).npcSprites[0];
+    sprite.setAggressive(true);
+
+    manager.update(1 / 60, 100);
+    expect(messages.length).toBe(0);
+
+    manager.destroy();
+  });
 });

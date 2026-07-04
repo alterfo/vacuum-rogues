@@ -287,6 +287,9 @@ export const ru: Dict = {
   "flight.lootArtifact": "артефакт",
   "flight.lootModule": "модуль",
 
+  // --- incoming-attacker warning (Task 5: threat indicator) -----------------
+  "flight.incomingAttacker": "⚠ Приближается противник: {name}!",
+
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Управление:",
   "help.gotIt": "Понятно",
