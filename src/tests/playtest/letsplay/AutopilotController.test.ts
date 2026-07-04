@@ -84,6 +84,7 @@ function makeController(overrides: Partial<LiveSceneController> = {}): {
     takeLoan: rec("takeLoan"),
     repayLoan: rec("repayLoan"),
     sellCargo: rec("sellCargo"),
+    liberate: rec("liberate"),
     ...overrides,
   };
   return { controller, calls };

@@ -164,12 +164,41 @@ counter.
       all green.
 
 ### Task 1: `liberate` action + engine seam
-- [ ] Add a `liberate` verb to the action vocab (`observe.ts` `PlayerActionKind`,
-      `ACTION_ORDER`) and make it legal only where `canPlayerLiberate(engine, sys)`
-      holds (current system is Overmind-held with its garrison cleared).
-- [ ] Wire it headless (`PlayerAgent.apply`) → `engine.liberateCurrentSystem()`,
-      and live (`installAutopilotHook.ts`/`LiveApplier.ts`) → the same seam.
-- [ ] Regression tests for legality + the executor calling `tryLiberate`.
+- [x] Add a `liberate` verb to the action vocab (`observe.ts` `PlayerActionKind`)
+      and make it legal only where `canPlayerLiberate(engine, sys)` holds
+      (current system is Overmind-held with its garrison cleared).
+      **Deliberate deviation from the literal wording:** `liberate` is appended
+      to a new `LEGAL_ACTION_ORDER` (`ACTION_ORDER` + `"liberate"`), NOT into
+      `ACTION_ORDER` itself. `ACTION_ORDER` is also the frozen neural-net output
+      vocabulary — `weightsContract.test.ts` pins `ACTION_ORDER.length === 16`
+      and `shippedWeights.test.ts` pins the shipped `player.weights.json`'s
+      output width to it; growing it needs a PyTorch retrain + re-export (the
+      repo's own precedent: `shippedWeights.test.ts`'s comment shows this exact
+      10→16 migration happened once already). That retrain is out of scope for
+      this task and touching those two hardcoded assertions would violate the
+      standing "never touch existing test assertions" rule. `legalActionsForScene`
+      now filters through `LEGAL_ACTION_ORDER` so `liberate` is a real, ordered,
+      legal action for `MemoryHeuristicPolicy` (which reads `obs.legalActions`
+      directly) — `mapNetOutputToAction` still only ranks `ACTION_ORDER` slots,
+      so the trained net simply never scores `liberate` (falls through to the
+      next-best legal action, same as before this change — no neural regression).
+      Gated to SPACE_FLIGHT only (`ctx.canLiberate`).
+- [x] Wire it headless (`PlayerAgent.apply`) → `engine.liberateCurrentSystem()`,
+      and live (`installAutopilotHook.ts`'s `createLiveSceneController` +
+      `LiveApplier.ts`'s `LiveSceneController`/`applyLiveAction`) → the same seam.
+- [x] Regression tests for legality + the executor calling `tryLiberate`:
+      `observe.test.ts` (pure `legalActionsForScene` gating + a real-harness
+      cleared-vs-defended-capture case), `LiveApplier.test.ts` (dispatch),
+      `installAutopilotHook.test.ts` (`createLiveSceneController.liberate()` →
+      `engine.liberateCurrentSystem()`), and a new `liberateExecutor.test.ts`
+      (real-engine `PlayerAgent` executor: frees a cleared Overmind capture,
+      safe no-op while a defender remains). Confirmed the sole pre-existing
+      caller of `liberateCurrentSystem()` is `NpcShipManager`'s automatic
+      post-kill hook (`gitnexus impact` on `liberateCurrentSystem`, LOW risk,
+      1 direct caller) — this task adds a second, deliberate, policy-driven path
+      to the same seam, not a replacement.
+      Full suite (4473 passed), lint (0 errors, pre-existing warnings only),
+      tsc clean.
 
 ### Task 2: military progression — become battle-ready
 - [ ] Make the ladder build combat strength before slaying: earn credits, then

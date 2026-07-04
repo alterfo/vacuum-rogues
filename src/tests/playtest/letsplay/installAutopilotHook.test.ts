@@ -314,15 +314,24 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(engine.acceptBoardQuest).toHaveBeenCalledTimes(1);
   });
 
-  it("no-op verbs (tick/executeTrade/attack/flee/repair) never drive a transition", async () => {
-    const engine = mockEngine();
+  it("no-op verbs (tick/executeTrade/attack/flee/repair/liberate) never drive a transition", async () => {
+    const engine = mockEngine({ liberateCurrentSystem: vi.fn() });
     const c = createLiveSceneController(engine);
     await c.tick();
     await c.executeTrade();
     await c.attack();
     await c.flee();
     await c.repair();
+    await c.liberate();
     expect(engine.transitionTo).not.toHaveBeenCalled();
+  });
+
+  it("liberate() calls engine.liberateCurrentSystem()", () => {
+    const engine = mockEngine({
+      liberateCurrentSystem: vi.fn().mockReturnValue(true),
+    });
+    createLiveSceneController(engine).liberate();
+    expect(engine.liberateCurrentSystem).toHaveBeenCalledTimes(1);
   });
 
   it("attack() presses «Огонь!» (combatPause.confirm) when the active-pause overlay is up", async () => {

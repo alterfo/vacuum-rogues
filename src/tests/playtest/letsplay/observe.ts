@@ -76,7 +76,8 @@ export type PlayerActionKind =
   | "buy-module" // buy a micromodule at a CRAFT_CENTER station
   | "take-loan" // borrow credits from the bank
   | "repay-loan" // repay an outstanding loan
-  | "sell-cargo"; // explicit sell-only action (vs. trade, which also buys)
+  | "sell-cargo" // explicit sell-only action (vs. trade, which also buys)
+  | "liberate"; // free the current (garrison-cleared) captured system
 
 /**
  * Canonical action order so two equal states yield identical `legalActions`.
@@ -103,6 +104,23 @@ export const ACTION_ORDER: readonly PlayerActionKind[] = [
   "take-loan",
   "repay-loan",
   "sell-cargo",
+];
+
+/**
+ * `liberate` is deliberately kept OUT of {@link ACTION_ORDER}: that array is also
+ * the frozen neural-net output vocabulary (`weightsContract.test.ts` /
+ * `shippedWeights.test.ts` pin it at 16 and the shipped `player.weights.json` has
+ * a 16-wide output head — growing it needs a retrain + re-export, out of scope
+ * here). Appending it here instead keeps `legalActionsForScene`'s deterministic
+ * ordering total over the full {@link PlayerActionKind} vocabulary without
+ * touching the net contract: {@link mapNetOutputToAction} only ranks
+ * `ACTION_ORDER` slots, so the trained net simply never scores `liberate` (falls
+ * through to the next best legal action) — no regression for the neural policy,
+ * and `MemoryHeuristicPolicy` (which reads `obs.legalActions` directly) sees it.
+ */
+const LEGAL_ACTION_ORDER: readonly PlayerActionKind[] = [
+  ...ACTION_ORDER,
+  "liberate",
 ];
 
 /** Minimum credits on hand for `buy-module` to be legal at a CRAFT_CENTER station. */
@@ -332,6 +350,8 @@ export interface LegalActionContext {
   cheapestGearPrice?: number | null;
   /** Cheapest hull price in the current system's (planet) shops, null/undefined if none. */
   bestHullPrice?: number | null;
+  /** The current system is a captured (Overmind/pirate) system with its hostile garrison cleared — mirrors `canPlayerLiberate`. Defaults to false. */
+  canLiberate?: boolean;
 }
 
 /**
@@ -362,6 +382,7 @@ export function legalActionsForScene(
         set.add("attack");
         set.add("flee");
       }
+      if (ctx.canLiberate) set.add("liberate");
       break;
     }
     case SceneType.PLANET: {
@@ -461,7 +482,7 @@ export function legalActionsForScene(
     }
   }
 
-  return ACTION_ORDER.filter((a) => set.has(a));
+  return LEGAL_ACTION_ORDER.filter((a) => set.has(a));
 }
 
 /**
@@ -751,6 +772,7 @@ export function observe(
   const hasAffordableModule = hasCraftCenter
     ? cheapestMicromodule(engine) != null
     : false;
+  const canLiberate = engine.canLiberateCurrentSystem();
 
   const legalActions = legalActionsForScene(scene, {
     hasPlayer: true,
@@ -766,6 +788,7 @@ export function observe(
     activeLoans: loanStatus.active,
     cheapestGearPrice,
     bestHullPrice,
+    canLiberate,
   });
 
   // Detect a pending hyperjump: the ship is flying to the system edge and a warp

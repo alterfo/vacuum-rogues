@@ -429,6 +429,9 @@ export function createLiveSceneController(
       const planet = landedPlanet(engine);
       if (planet) executeSellAll(engine, planet);
     },
+    liberate() {
+      engine.liberateCurrentSystem();
+    },
   };
 }
 

@@ -74,6 +74,8 @@ export interface LiveSceneController {
   repayLoan(): void | Promise<void>;
   /** Sell all held cargo at the current market (explicit sell-only). */
   sellCargo(): void | Promise<void>;
+  /** Free the current (garrison-cleared) captured system. */
+  liberate(): void | Promise<void>;
 }
 
 /** Which controller verb {@link applyLiveAction} invoked (`"none"` when skipped). */
@@ -96,6 +98,7 @@ export type ApplyCall =
   | "takeLoan"
   | "repayLoan"
   | "sellCargo"
+  | "liberate"
   | "none";
 
 /** The outcome of dispatching one {@link Action} onto the live controller. */
@@ -243,6 +246,10 @@ export async function applyLiveAction(
     case "sell-cargo":
       await controller.sellCargo();
       return { applied: true, call: "sellCargo" };
+
+    case "liberate":
+      await controller.liberate();
+      return { applied: true, call: "liberate" };
 
     default:
       // Exhaustive over PlayerActionKind; an unknown kind degrades to a no-op.

@@ -48,6 +48,7 @@ function makeController(): {
     takeLoan: rec("takeLoan"),
     repayLoan: rec("repayLoan"),
     sellCargo: rec("sellCargo"),
+    liberate: rec("liberate"),
   };
   return { controller, calls };
 }
@@ -134,6 +135,25 @@ describe("applyLiveAction — legal actions drive the expected controller verb",
     const result = await applyLiveAction(act("buy-module"), obs, controller);
     expect(result.call).toBe("buyModule");
     expect(calls).toEqual(["buyModule"]);
+  });
+
+  it("liberate at SPACE_FLIGHT is legal only when the system is a cleared capture", async () => {
+    const { controller, calls } = makeController();
+    const obs = makeObs(SceneType.SPACE_FLIGHT, { canLiberate: true });
+    expect(obs.legalActions).toContain("liberate");
+
+    const result = await applyLiveAction(act("liberate"), obs, controller);
+    expect(result.call).toBe("liberate");
+    expect(calls).toEqual(["liberate"]);
+
+    const notCleared = makeObs(SceneType.SPACE_FLIGHT, { canLiberate: false });
+    expect(notCleared.legalActions).not.toContain("liberate");
+    const skipped = await applyLiveAction(
+      act("liberate"),
+      notCleared,
+      controller,
+    );
+    expect(skipped.applied).toBe(false);
   });
 
   it("repay-loan replaces take-loan at STATION/BANK once a loan is active", async () => {

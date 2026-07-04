@@ -523,6 +523,11 @@ export class PlayerAgent {
         this.harness.tick();
         return;
 
+      case "liberate":
+        engine.liberateCurrentSystem();
+        this.harness.tick();
+        return;
+
       default:
         this.harness.tick();
         return;

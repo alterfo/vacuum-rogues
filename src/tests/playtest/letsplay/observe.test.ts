@@ -1,8 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "../realEngineHarness";
-import { SceneType, StationType } from "@/types";
+import {
+  SceneType,
+  StationType,
+  FactionType,
+  NpcRole,
+  NpcState,
+} from "@/types";
 import { Faction } from "@/types/faction";
 import { Station } from "@/domain/Station";
+import { NpcShip } from "@/domain/NpcShip";
 import { takeLoan } from "@/systems/banking/products";
 import {
   observe,
@@ -74,6 +81,33 @@ describe("legalActionsForScene (pure)", () => {
     );
     expect(actions).toContain("attack");
     expect(actions).toContain("flee");
+  });
+
+  it("in flight: liberate is legal only when the current system is a cleared capture", () => {
+    const notCaptured = legalActionsForScene(
+      SceneType.SPACE_FLIGHT,
+      ctx({ canLiberate: false }),
+    );
+    expect(notCaptured).not.toContain("liberate");
+
+    const cleared = legalActionsForScene(
+      SceneType.SPACE_FLIGHT,
+      ctx({ canLiberate: true }),
+    );
+    expect(cleared).toContain("liberate");
+  });
+
+  it("liberate never appears outside SPACE_FLIGHT, even when canLiberate is true", () => {
+    const onPlanet = legalActionsForScene(
+      SceneType.PLANET,
+      ctx({ canLiberate: true }),
+    );
+    expect(onPlanet).not.toContain("liberate");
+    const onStarMap = legalActionsForScene(
+      SceneType.STAR_MAP,
+      ctx({ canLiberate: true }),
+    );
+    expect(onStarMap).not.toContain("liberate");
   });
 
   it("on a planet: trade is legal; take-quest only when work is offered", () => {
@@ -380,6 +414,53 @@ describe("observe(engine): Task 1 bank/equipment/Overmind/quest signals", () => 
 
     const obs = observe(harness.engine);
     expect(obs.overmindShare).toBeCloseTo(1 / galaxy.systems.length);
+  });
+
+  it("liberate becomes legal once the current system is a cleared Overmind capture", async () => {
+    await harness.newGame();
+    const galaxy = harness.galaxy()!;
+    const sys = harness.player()!.currentSystemId;
+
+    // Not yet captured: liberate is illegal.
+    expect(observe(harness.engine).legalActions).not.toContain("liberate");
+
+    // A freshly generated galaxy may already place a few hostiles in-system —
+    // clear them first so only the staged garrison below controls the assertion.
+    for (const n of galaxy.npcShips) {
+      if (n.currentSystemId !== sys) continue;
+      if (n.faction === Faction.OVERMIND || n.role === NpcRole.PIRATE) {
+        n.state = NpcState.DEAD;
+      }
+    }
+
+    // Captured but with a live defender still present: still illegal.
+    galaxy.overmindSystems = [sys];
+    galaxy.npcShips.push(
+      new NpcShip({
+        id: "garrison-1",
+        name: "Страж",
+        race: FactionType.OUTLANDERS,
+        faction: Faction.OVERMIND,
+        role: NpcRole.PATROL,
+        hullHP: 100,
+        maxHull: 100,
+        shields: 0,
+        speed: 1,
+        damage: 10,
+        currentSystemId: sys,
+        state: NpcState.PATROLLING,
+        goal: null,
+        destinationSystemId: null,
+        daysToArrival: 0,
+        credits: 0,
+        reputation: 0,
+      }),
+    );
+    expect(observe(harness.engine).legalActions).not.toContain("liberate");
+
+    // Garrison cleared: liberate becomes legal.
+    galaxy.npcShips[galaxy.npcShips.length - 1].state = NpcState.DEAD;
+    expect(observe(harness.engine).legalActions).toContain("liberate");
   });
 
   it("questDeliveryHere is true when a carried quest targets the current system", async () => {
