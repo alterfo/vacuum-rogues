@@ -154,26 +154,54 @@ export class GalaxySimulator {
     this.overmind = new Overmind();
     this._eventQueue = [];
 
-    // Assign OVERMIND starting systems: the 2 most distant from the galactic
-    // centre (highest q²+r² magnitude). The most distant becomes the core.
+    // Assign OVERMIND starting systems: the most distant from the galactic
+    // centre (highest q²+r² magnitude) becomes the core, unchanged from
+    // before. The SECOND starter is now a WARP-CONNECTED NEIGHBOUR of the
+    // core (preferring the most isolated one when several qualify) rather
+    // than an independently-chosen distant point — two unrelated far-apart
+    // seeds grew as two disconnected blobs from day one (`frontierSystems` in
+    // `overmindSpread.ts` merges every Overmind system into one hash-ranked
+    // pool), which read as the front "appearing from all sides" instead of
+    // one coherent advancing line. Starting as a single connected pair means
+    // the very first frontier is already one cluster. The player's own start
+    // system (`generatedSystems[0]`) is excluded from this neighbour search —
+    // the small nearest-neighbour pool made it too easy to otherwise sweep
+    // the player's home in as the second Overmind seed.
+    const homeId = generatedSystems[0]?.id ?? "";
     const sortedByDistance = [...generatedSystems].sort((a, b) => {
       const da = a.coordinates.q ** 2 + a.coordinates.r ** 2;
       const db = b.coordinates.q ** 2 + b.coordinates.r ** 2;
       return db - da; // descending — most isolated first
     });
     const overmindStart: string[] = [];
-    if (sortedByDistance.length >= 1)
-      overmindStart.push(sortedByDistance[0].id);
-    if (sortedByDistance.length >= 2)
-      overmindStart.push(sortedByDistance[1].id);
-    const overmindCoreId = sortedByDistance[0]?.id ?? "";
+    const core = sortedByDistance[0];
+    const overmindCoreId = core?.id ?? "";
+    if (core) overmindStart.push(core.id);
+    if (sortedByDistance.length >= 2 && core) {
+      const coreNeighbourIds = new Set(
+        core.connections.map((c) => c.toSystemId),
+      );
+      const secondStart =
+        sortedByDistance.find(
+          (s) =>
+            s.id !== core.id && s.id !== homeId && coreNeighbourIds.has(s.id),
+        ) ??
+        sortedByDistance.find((s) => s.id !== core.id && s.id !== homeId) ??
+        sortedByDistance[1];
+      overmindStart.push(secondStart.id);
+    }
 
-    // Seed 1 pirate-controlled system at galaxy start: the 3rd most isolated
-    // system (spatially separated from the 2 OVERMIND starters at indices 0–1).
-    // Without an initial pirate system the balance tick can never create pirates
-    // (the capture branch only fires for systems adjacent to existing pirates).
+    // Seed 1 pirate-controlled system at galaxy start: the most isolated
+    // system not already claimed by the OVERMIND seed above (spatially
+    // separated from it). Without an initial pirate system the balance tick
+    // can never create pirates (the capture branch only fires for systems
+    // adjacent to existing pirates).
+    const overmindStartSet = new Set(overmindStart);
     const pirateStart: string[] = [];
-    if (sortedByDistance.length >= 3) pirateStart.push(sortedByDistance[2].id);
+    const pirateCandidate = sortedByDistance.find(
+      (s) => !overmindStartSet.has(s.id),
+    );
+    if (pirateCandidate) pirateStart.push(pirateCandidate.id);
 
     // Assign one home system per faction from the non-OVERMIND systems.
     // Spread them across the galaxy by sorting remaining systems by spatial

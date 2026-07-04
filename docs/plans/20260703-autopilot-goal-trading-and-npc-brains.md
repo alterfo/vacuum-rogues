@@ -348,9 +348,47 @@ for NPCs with distinct goals.
     existing test touched.
 
 ### Task 7: Overmind spawn distribution
-- [ ] Address "Overmind appears from all sides" — review spawn/spread so the
+- [x] Address "Overmind appears from all sides" — review spawn/spread so the
       front reads as a coherent advancing frontier, not simultaneous
       all-directions pop-in. Config in `balance.ts` + `overmindSpread.ts`.
+
+  **Landed 2026-07-04.** Root cause: `GalaxySimulator.generateGalaxy` seeded
+  the 2 starting OVERMIND systems as the most-distant-from-centre point (the
+  core) and an INDEPENDENTLY-chosen second-most-distant point — no adjacency
+  constraint, so on most layouts the two land on unrelated edges of the map.
+  `frontierSystems()` (`overmindSpread.ts`) merges every Overmind system's
+  border into one hash-ranked pool regardless of which cluster it belongs to,
+  so the two disconnected seeds grew as two independent blobs on separate
+  sides of the galaxy from day one — captures alternated between unrelated
+  regions, reading as the front "appearing from all sides" rather than
+  advancing as one line.
+  Fix (`GalaxySimulator.ts`, spawn-side only — `overmindSpread.ts` unchanged):
+  the second starter is now a warp-connected neighbour of the core (the most
+  isolated one when several qualify), so the very first frontier is already
+  one cluster and all subsequent captures grow contiguously from it. The
+  player's own start system (`generatedSystems[0]`) is explicitly excluded
+  from this neighbour search — the small nearest-neighbour pool made it easy
+  to otherwise sweep the player's home in as the second Overmind seed (this
+  surfaced against the `SESSION_ORACLE-*` diagnostic seeds during
+  development). Pirate seeding was generalized to skip whatever the Overmind
+  seed claims (previously a fixed index) so it can't collide with the new
+  non-fixed second-starter slot.
+  Considered and rejected: also fixing `overmindSpread.ts`'s capture ranking
+  to prefer a "core cluster" (BFS component containing the core) over any
+  other pocket. That version is a legitimate, lower-coupling improvement in
+  isolation, but it changes which systems get captured over multi-day spans
+  for ANY existing Overmind configuration — including ones `warpTargeting
+  .test.ts` builds by hand via `addOvermindSystem` mid-test — which redirected
+  that (and only that) pre-existing test's hardcoded final-position assertion
+  even though its actual behavioral assertions (avoids the held neighbour,
+  warps to the clean one) still passed. The spawn-only fix has zero blast
+  radius on that test (organic 2-system starts are already a single cluster
+  once adjacent, making the spread-side change redundant for real play) and
+  was the version kept. New regression:
+  `src/tests/galaxy/overmindSpawnCoherence.test.ts` (8 seeds × adjacency +
+  home-exclusion, plus a pirate-collision check). Full unit suite (4457
+  tests, +9 from this task), lint (0 errors), tsc, `test:playtest`,
+  `letsplay:ci`, `test:save-compat` all green; no existing test touched.
 
 ### Task 8: Final gate + cleanup
 - [ ] Full suite, lint, tsc, playtest, letsplay:ci, save-compat green.
