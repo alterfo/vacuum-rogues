@@ -457,4 +457,13 @@ export const en: Dict = {
     " pause lets you take an aimed «Fire!» shot at the selected target.",
   "help.combat.control1": "Movement — maneuver in combat",
   "help.combat.control2": "«Fire!» — aimed shot on active pause",
+
+  // --- onboarding: refuel ---------------------------------------------------
+  "help.refuel.title": "Refueling",
+  "help.refuel.body1":
+    "Landing on a planet or docking at a station instantly and freely tops" +
+    " off your fuel tank.",
+  "help.refuel.body2":
+    "The station's paid «Refuel» service only matters if you burn fuel" +
+    " again in flight — right after landing or docking, the tank is already full.",
 };

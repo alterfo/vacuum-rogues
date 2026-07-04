@@ -22,6 +22,7 @@ const ALL_KEYS: HelpKey[] = [
   "welcome",
   "quest-journal",
   "combat",
+  "refuel",
 ];
 
 describe("helpContent registry", () => {

@@ -119,4 +119,24 @@ describe("Task 4 — core-loop scenes wire contextual help", () => {
       expect(deps.renderer).toBe(renderer);
     });
   }
+
+  // Task 4 (auto-refuel hint, 20260703 autopilot/NPC plan): landing on a planet
+  // or docking at a station is the moment the free refuel actually happens, so
+  // both scenes surface the "refuel" one-shot hint ahead of their own first-time
+  // panel via the existing firstTimeKey seam (mirrors SPACE_FLIGHT's "welcome").
+  const refuelCases: Array<{ name: string; SceneClass: unknown }> = [
+    { name: "StationScene", SceneClass: StationScene },
+    { name: "PlanetScene", SceneClass: PlanetScene },
+  ];
+
+  for (const { name, SceneClass } of refuelCases) {
+    it(`${name} passes firstTimeKey "refuel" to mountSceneHelp`, () => {
+      mountHelpFor(SceneClass as { prototype: { mountHelp(): void } });
+
+      const options = mountSceneHelp.mock.calls[0]?.[2] as
+        | { firstTimeKey?: HelpKey }
+        | undefined;
+      expect(options?.firstTimeKey).toBe("refuel");
+    });
+  }
 });

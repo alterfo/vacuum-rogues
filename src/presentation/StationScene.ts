@@ -212,6 +212,7 @@ export class StationScene extends GameScene {
     this.helpTeardown = mountSceneHelp(
       { renderer: this.renderer, container: this.renderer.stage },
       "STATION",
+      { firstTimeKey: "refuel" },
     );
   }
 

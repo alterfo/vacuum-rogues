@@ -33,7 +33,8 @@ export type HelpKey =
   | "TEXT_QUEST"
   | "welcome"
   | "quest-journal"
-  | "combat";
+  | "combat"
+  | "refuel";
 
 /** One screen's instructions: a heading, body paragraphs, optional controls. */
 export interface HelpEntry {
@@ -68,6 +69,7 @@ export const HELP_SPEC: Record<HelpKey, { body: number; controls: number }> = {
   TEXT_QUEST: { body: 2, controls: 1 },
   "quest-journal": { body: 2, controls: 1 },
   combat: { body: 2, controls: 2 },
+  refuel: { body: 2, controls: 0 },
 };
 
 /** The i18n key base for a help key, e.g. `welcome` → `help.welcome`. */

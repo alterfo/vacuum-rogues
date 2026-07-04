@@ -245,8 +245,25 @@ for NPCs with distinct goals.
 ## Phase 2 — Player UX
 
 ### Task 4: Auto-refuel hint
-- [ ] Tell the player that landing on a planet / docking at a station refuels for
+- [x] Tell the player that landing on a planet / docking at a station refuels for
       free (contextual hint / onboarding tip), RU+EN via `src/i18n/`.
+
+  **Landed 2026-07-04.** Added a `refuel` one-shot onboarding `HelpKey`
+  (`helpContent.ts`/`HELP_SPEC`, RU+EN strings in `src/i18n/ru.ts`/`en.ts`)
+  explaining that landing/docking tops off fuel for free and that the
+  station's paid «Заправка» only matters if the tank drains again in flight
+  (motivated by `StationScene.doRefuel` otherwise silently reporting "Баки
+  уже полны" right after an undocumented free refuel). Wired via the existing
+  `firstTimeKey` seam (the same mechanism `SPACE_FLIGHT` uses for `welcome`):
+  `PlanetScene`/`StationScene`'s `mountHelp()` now pass
+  `{ firstTimeKey: "refuel" }` to `mountSceneHelp`, so on a player's very
+  first landing/docking the `refuel` hint auto-shows once instead of that
+  scene's own PLANET/STATION panel (which then shows on the next visit) —
+  no double-panel overlap, no new scene wiring. Registered `refuel` in the
+  `helpContent.test.ts` completeness list (same pattern as `combat`/
+  `welcome`) and added new assertions to `sceneHelpWiring.test.ts` pinning
+  the `firstTimeKey` wiring. Full unit suite (4440 tests), lint, tsc,
+  `test:playtest` all green.
 
 ### Task 5: Incoming-attacker indicator
 - [ ] Show the player which ships are approaching to attack (threat markers /
