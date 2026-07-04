@@ -4,10 +4,11 @@ import type { NpcShip } from "@/domain/NpcShip";
 import { NpcRole } from "@/types";
 import { factionColor } from "./ui/palette";
 import { pickVariant } from "./textures";
-import { GAME_BALANCE } from "@/config/balance";
+import { GAME_BALANCE, SUN_EXCLUSION_RADIUS } from "@/config/balance";
 import { npcCruiseSpeed } from "./flight/npcCruiseSpeed";
 import { hashStr } from "@/utils/hashStr";
 import { decideManeuver, ManeuverMode } from "@/systems/combat/combatManeuver";
+import { avoidStarPath, type Point } from "@/utils/flightGeometry";
 
 /** Maps an NPC role to its ship-art asset prefix (src/assets/ships/<prefix>). */
 const ROLE_SHIP_PREFIX: Record<NpcRole, string> = {
@@ -77,6 +78,10 @@ export class NpcShipSprite {
 
   private targetX: number;
   private targetY: number;
+  /** Bypass waypoints (star-avoidance, see {@link setDestination}) queued ahead
+   *  of `targetX`/`targetY`; empty when the straight leg already clears the
+   *  star's exclusion ring. */
+  private waypoints: Point[] = [];
   private readonly graphics: Graphics;
   // Hull art (if loaded); when present the procedural triangle is skipped and
   // only the faction halo + intent dot are drawn (US-070 #8).
@@ -291,6 +296,10 @@ export class NpcShipSprite {
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
     this.targetX = this.bounds.cx + (dx / len) * this.bounds.boundary;
     this.targetY = this.bounds.cy + (dy / len) * this.bounds.boundary;
+    // Departure heads straight outward along the ship's own radial line — it
+    // never approaches the star, so no bypass is needed; drop any leftover
+    // waypoints from the leg that was in progress.
+    this.waypoints = [];
   }
 
   /** True once a departing ship has reached the boundary and should be removed. */
@@ -368,12 +377,17 @@ export class NpcShipSprite {
       return;
     }
 
-    const dx = this.targetX - this.x;
-    const dy = this.targetY - this.y;
+    // Steer toward the next star-avoidance waypoint (if any) instead of
+    // cutting straight at the final target — see setDestination().
+    const aim = this.waypoints[0] ?? { x: this.targetX, y: this.targetY };
+    const dx = aim.x - this.x;
+    const dy = aim.y - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist < 6) {
-      if (this.departing) {
+      if (this.waypoints.length > 0) {
+        this.waypoints.shift(); // reached a bypass waypoint — aim at the next one
+      } else if (this.departing) {
         this.gone = true; // reached the boundary → hyperjump out
       } else {
         // Notify the manager before picking the next target so it can re-anchor
@@ -399,16 +413,17 @@ export class NpcShipSprite {
     // than a random ring point.
     if (this.targetProvider) {
       const pos = this.targetProvider(this.targetSeq++);
-      this.targetX = pos.x;
-      this.targetY = pos.y;
+      this.setDestination(pos.x, pos.y);
       return;
     }
     // Fallback for anchored ships (orbit loiter near the planet).
     if (this.anchorX !== null && this.anchorY !== null) {
       const angle = Math.random() * Math.PI * 2;
       const radius = 40 + Math.random() * 130;
-      this.targetX = this.anchorX + Math.cos(angle) * radius;
-      this.targetY = this.anchorY + Math.sin(angle) * radius;
+      this.setDestination(
+        this.anchorX + Math.cos(angle) * radius,
+        this.anchorY + Math.sin(angle) * radius,
+      );
       return;
     }
     // Last resort: random ring point (reached only when no provider is set and
@@ -417,8 +432,43 @@ export class NpcShipSprite {
     const radius =
       this.bounds.rInner +
       Math.random() * (this.bounds.rOuter - this.bounds.rInner);
-    this.targetX = this.bounds.cx + Math.cos(angle) * radius;
-    this.targetY = this.bounds.cy + Math.sin(angle) * radius;
+    this.setDestination(
+      this.bounds.cx + Math.cos(angle) * radius,
+      this.bounds.cy + Math.sin(angle) * radius,
+    );
+  }
+
+  /**
+   * Set the final destination and, if the straight leg from the ship's current
+   * position would cut through the star's exclusion ring, queue the bypass
+   * waypoints {@link avoidStarPath} plots around it — the same star-avoidance
+   * the player's route planner uses, so a wandering NPC never flies into the
+   * sun (only a hard block via `beginDeparture`'s separate radial-outward path
+   * is exempt, since that direction never approaches the star).
+   */
+  private setDestination(x: number, y: number): void {
+    this.targetX = x;
+    this.targetY = y;
+    const distToStar = Math.hypot(x - this.bounds.cx, y - this.bounds.cy);
+    if (distToStar < SUN_EXCLUSION_RADIUS) {
+      // The destination itself sits inside the exclusion ring — never the case
+      // for a real planet/lane point (SYSTEM_GEOMETRY.innerRadius already
+      // clears SUN_EXCLUSION_RADIUS), so go straight rather than let
+      // avoidStarPath's destination clamp silently retarget the ship away from
+      // where it was told to go.
+      this.waypoints = [];
+      return;
+    }
+    const path = avoidStarPath(
+      this.x,
+      this.y,
+      x,
+      y,
+      this.bounds.cx,
+      this.bounds.cy,
+      SUN_EXCLUSION_RADIUS,
+    );
+    this.waypoints = path.slice(0, -1);
   }
 
   /**

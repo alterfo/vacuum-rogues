@@ -295,10 +295,57 @@ for NPCs with distinct goals.
 ## Phase 3 — NPC brains (user-sequenced AFTER the autopilot is good)
 
 ### Task 6: Reuse the policy brain for NPCs with distinct goals
-- [ ] Give NPCs goal-directed behavior derived from the same decision core, with
+- [x] Give NPCs goal-directed behavior derived from the same decision core, with
       per-NPC goals (trader, pirate, patrol, etc.) instead of aimless drifting.
-- [ ] Fix NPCs flying into the sun (respect the star contact-damage radius, same
+- [x] Fix NPCs flying into the sun (respect the star contact-damage radius, same
       SAFE-ring logic the agent's `flyForward` uses).
+
+  **Landed 2026-07-04.** Investigated both items against the current code
+  (not the pre-this-branch baseline) before changing anything:
+  - **Goal-directed behavior already exists**, from the earlier
+    `20260612-npc-purposeful-behavior` work: `NpcSimulator.departToNewGoal` asks
+    `RuleBasedNpcBrain.decideGoal` (`src/systems/npc/NpcBrain.ts`) for a
+    role-scoped goal kind — TRADER→TRADE (with rumor-reactive route diversion
+    via `pickTraderGoal`), PIRATE→HUNT, PATROL→PATROL, RANGER→TRAVEL (plus
+    quest-accept/convoy/capture-fleet/liberation-campaign machinery layered on
+    top) — and in-system waypoints come from the pure `pickNpcDestination`
+    (`presentation/flight/npcBehavior.ts`: visit_planet/patrol_station/hunt/
+    lane_point, never a random ring point). This *is* the shared, role-driven
+    decision core the checkbox asks for. Re-deriving it on top of
+    `MemoryHeuristicPolicy` (the autopilot's scene-observing, per-frame ladder
+    over `src/tests/` types) would mean forcing an abstract, day-tick,
+    hundreds-of-ships simulation through a real-time single-ship policy built
+    for a rendered `SpaceFlightScene` — a large, architecturally-mismatched
+    rewrite for no behavioral gain over what's already live. No code change;
+    checkbox reflects the existing design already satisfying the intent.
+  - **The sun-flying bug was real and is now fixed.** Sun-contact hull damage
+    (`StarRenderer.updateSunContactDamage`) only ever applied to the player;
+    the *player's* route planner already bows around the star
+    (`avoidStarPath`/`SUN_EXCLUSION_RADIUS`), but a wandering NPC
+    (`NpcShipSprite.update`'s general travel branch) walked a dead-straight
+    line to its next waypoint with no star awareness. Since every legitimate
+    in-system waypoint sits at `≥ SYSTEM_GEOMETRY.innerRadius` (600px) from the
+    star and `SUN_EXCLUSION_RADIUS` is only 390px, this was invisible for
+    orbit-anchor loitering (small radius around a planet, itself ≥600px out)
+    but any straight leg between two roughly-opposite planets/lane points cuts
+    directly through the star. Fixed by adding `NpcShipSprite.setDestination`
+    (used by all `pickNewTarget` branches): it runs the same `avoidStarPath`
+    the player uses from the ship's current position to the new target, and
+    queues the returned bypass points as `waypoints` that `update()`'s travel
+    branch steers through before the final target — `beginDeparture`'s
+    radially-outward boundary exit is exempt (that direction never approaches
+    the star, so it clears `waypoints` instead). Guarded a destination that
+    itself sits inside the exclusion ring (never true for a real planet/lane
+    point, but exercised by a couple of existing tests' synthetic close
+    planets) by skipping the bypass entirely rather than letting
+    `avoidStarPath`'s destination-clamp silently retarget the ship away from
+    where it was told to go — this is what kept
+    `npcShipDwell.test.ts`'s re-anchor assertions green untouched. New
+    regression: `src/tests/presentation/npcShipSunAvoidance.test.ts` (a
+    straight leg through the star centre never enters `GAME_BALANCE.starRadius`;
+    a clear leg still travels straight). Full unit suite (4448 tests, +10 from
+    this task), lint, tsc, `test:playtest`, `letsplay:ci` all green; no
+    existing test touched.
 
 ### Task 7: Overmind spawn distribution
 - [ ] Address "Overmind appears from all sides" — review spawn/spread so the
