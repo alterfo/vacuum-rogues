@@ -193,12 +193,31 @@ export class GalaxySimulator {
           coreNeighbourIds.add(s.id);
         }
       }
+      // Fallback candidates (no direct warp edge to core found above) are
+      // ranked by actual hex distance TO CORE, nearest first — not reused
+      // from `sortedByDistance` (ordered by distance from the galactic
+      // CENTRE), which would rank the fallback by isolation from the middle
+      // of the map, unrelated to proximity to `core`, and previously could
+      // hand back the single most-isolated-after-core system regardless of
+      // how far it actually sat from the core cluster.
+      const byDistanceToCore = [...generatedSystems]
+        .filter((s) => s.id !== core.id && s.id !== homeId)
+        .sort((a, b) => {
+          const da =
+            (a.coordinates.q - core.coordinates.q) ** 2 +
+            (a.coordinates.r - core.coordinates.r) ** 2;
+          const db =
+            (b.coordinates.q - core.coordinates.q) ** 2 +
+            (b.coordinates.r - core.coordinates.r) ** 2;
+          return da - db;
+        });
       const secondStart =
         sortedByDistance.find(
           (s) =>
             s.id !== core.id && s.id !== homeId && coreNeighbourIds.has(s.id),
         ) ??
-        sortedByDistance.find((s) => s.id !== core.id && s.id !== homeId) ??
+        byDistanceToCore[0] ??
+        sortedByDistance.find((s) => s.id !== core.id) ??
         sortedByDistance[1];
       overmindStart.push(secondStart.id);
     }

@@ -1015,6 +1015,7 @@ export class NpcShipManager implements FlightModule {
     const idx = this.npcSprites.indexOf(sprite);
     if (idx >= 0) this.npcSprites.splice(idx, 1);
     this.npcAnchorPlanet.delete(sprite);
+    this.warnedAggressorIds.delete(sprite.npc.id);
     if (sprite.container.parent) {
       sprite.container.parent.removeChild(sprite.container);
     }

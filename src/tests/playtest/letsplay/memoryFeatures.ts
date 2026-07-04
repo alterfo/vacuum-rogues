@@ -25,6 +25,7 @@
  * `0` default. Lives under `src/tests/` and is dev-only.
  */
 import type { ResourceType } from "@/types";
+import { QuestType } from "@/types";
 import type { Observation } from "./observe";
 import type { AgentMemory, KnownOffer } from "./AgentMemory";
 import { createMemory } from "./AgentMemory";
@@ -140,15 +141,25 @@ export function bestKnownMargin(
  * landed planet's sell prices, valued against the price each lot was bought at.
  * Only counts goods this market actually buys; a lot worth less than it was paid for
  * contributes `0` (a human wouldn't sell at a loss). `0` when not landed / no lots.
+ * Excludes cargo committed to an active DELIVERY quest's COLLECT_ITEM need — that
+ * cargo is never actually sellable (`sellAllCargo`'s `protect` set skips it), so
+ * counting it here would report a "profit" the executor can't realise, stalling
+ * the agent in a PLANET↔TRADE loop chasing a sell that never happens.
  */
 export function profitIfSoldHere(obs: Observation, mem: AgentMemory): number {
   const market = obs.currentPlanet?.market;
   if (!market || mem.inventoryLots.length === 0) return 0;
   const sellOf = new Map<ResourceType, number>();
   for (const g of market) sellOf.set(g.resource, g.sell);
+  const questCommittedGoods = new Set(
+    obs.quests
+      .filter((q) => q.type === QuestType.DELIVERY && q.collectItem)
+      .map((q) => q.collectItem!.type),
+  );
 
   let profit = 0;
   for (const lot of mem.inventoryLots) {
+    if (questCommittedGoods.has(lot.good)) continue;
     const sell = sellOf.get(lot.good);
     if (sell === undefined) continue;
     const gain = (sell - lot.buyPrice) * lot.qty;
