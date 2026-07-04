@@ -25,7 +25,7 @@
  * never stores a fact the observation did not contain. Lives under `src/tests/`
  * and is dev-only.
  */
-import type { ResourceType } from "@/types";
+import { SceneType, type ResourceType } from "@/types";
 import type { Observation } from "./observe";
 import { logger } from "@/utils/logger";
 
@@ -152,6 +152,27 @@ export interface AgentMemory {
    * pair — see `MemoryHeuristicPolicy`'s `daysStagnant`.
    */
   foldsSinceDayAdvance: number;
+  /**
+   * Internal: the scene observed on the immediately-previous fold, used only to
+   * detect a STAR_MAP fold that's a genuine *continuation* (not a fresh arrival)
+   * for {@link starMapStallFolds}.
+   */
+  lastScene: SceneType | null;
+  /** Internal: the player's absolute fuel on the immediately-previous fold (see {@link starMapStallFolds}). */
+  lastFuelSeen: number;
+  /**
+   * Consecutive folds spent continuously on STAR_MAP with fuel unchanged — the
+   * signal that a chosen `warp` is silently failing to execute. The live engine
+   * gates a jump on the *absolute* fuel cost of the specific target
+   * (`StarMapScene.performWarpJump`), which can exceed what's left even when
+   * {@link REFUEL_THRESHOLD}'s *fraction* gate says warping is fine (e.g. a
+   * shrunk fuel tank after a downgrade) — that mismatch repeats the same failed
+   * `warp` decision forever with zero feedback, stranding the agent on the map.
+   * The base ladder's STAR_MAP tier reads this to give up on `warp` and fall
+   * back to `move` (leave to flight, where the fuel-critical `land` tier can
+   * still refuel) once it trips.
+   */
+  starMapStallFolds: number;
 }
 
 /**
@@ -197,6 +218,9 @@ export function createMemory(): AgentMemory {
     lastReputationSyndicate: 0,
     lastMaxHull: 0,
     foldsSinceDayAdvance: 0,
+    lastScene: null,
+    lastFuelSeen: 0,
+    starMapStallFolds: 0,
   };
 }
 
@@ -282,6 +306,9 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       lastReputationSyndicate: mem.lastReputationSyndicate,
       lastMaxHull: mem.lastMaxHull,
       foldsSinceDayAdvance: mem.foldsSinceDayAdvance,
+      lastScene: mem.lastScene,
+      lastFuelSeen: mem.lastFuelSeen,
+      starMapStallFolds: mem.starMapStallFolds,
     };
   }
 
@@ -398,6 +425,17 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     foldsSinceDayAdvance = 0;
   }
 
+  // 7.5) STAR_MAP warp-stall — a continuation fold (previous fold was ALSO
+  // STAR_MAP, not a fresh arrival) with fuel unchanged means whatever action
+  // ran since the last fold made no progress; only genuinely repeated
+  // no-progress folds count; a fresh arrival or a fuel change resets to 0.
+  const starMapStallFolds =
+    obs.scene === SceneType.STAR_MAP &&
+    mem.lastScene === SceneType.STAR_MAP &&
+    obs.player.fuel === mem.lastFuelSeen
+      ? mem.starMapStallFolds + 1
+      : 0;
+
   const next: AgentMemory = {
     priceBook,
     inventoryLots,
@@ -421,6 +459,9 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     lastReputationSyndicate: obs.player.reputationSyndicate ?? 0,
     lastMaxHull: obs.player.maxHull,
     foldsSinceDayAdvance,
+    lastScene: obs.scene,
+    lastFuelSeen: obs.player.fuel,
+    starMapStallFolds,
   };
 
   // 8) Deadlock — sticky once true; logged exactly once per run at the transition.

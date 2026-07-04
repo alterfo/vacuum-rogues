@@ -96,6 +96,19 @@ export const MAX_CONSECUTIVE_WARPS_WITHOUT_LAND = 2;
 export const MAX_FOLDS_WITHOUT_DAY_ADVANCE = 12;
 
 /**
+ * Consecutive no-progress STAR_MAP folds (`AgentMemory.starMapStallFolds`)
+ * above which the STAR_MAP tier stops emitting `warp` and falls back to
+ * `move` (leave to flight) instead. The live engine gates a jump on the
+ * *absolute* fuel cost of the specific target (`StarMapScene.performWarpJump`),
+ * which can exceed what's left even when `REFUEL_THRESHOLD`'s *fraction* gate
+ * says warping is fine — that silent, feedback-free failure would otherwise
+ * repeat the same `warp` decision forever, stranding the agent on the map
+ * instead of returning to flight where the fuel-critical `land` tier can
+ * still refuel.
+ */
+export const MAX_STAR_MAP_WARP_STALLS = 2;
+
+/**
  * Below this hull fraction near a rising Overmind front, the goal-less base
  * ladder proactively leaves the system (`warp` away) instead of idling —
  * distinct from `LOW_HULL_FRACTION` (an active hostile's fight-or-flee
@@ -1127,7 +1140,8 @@ export function decideWithMemory(
     case SceneType.STAR_MAP: {
       // Don't jump toward a remembered threat while not battle-ready.
       if (avoidDanger) push("move", "avoid-danger-back");
-      if (!fuelGate && warpCadenceOk) push("warp", "warp");
+      const warpStalled = mem.starMapStallFolds >= MAX_STAR_MAP_WARP_STALLS;
+      if (!fuelGate && warpCadenceOk && !warpStalled) push("warp", "warp");
       push("move", "back");
       break;
     }

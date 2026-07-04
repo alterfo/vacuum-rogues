@@ -30,6 +30,7 @@ interface SessionDiag {
   longestWaitRun: number; // longest consecutive run of no-progress actions
   waitFraction: number;
   lowHullStall: boolean; // hit <30% hull then never changed system again
+  fuelStranded: boolean; // stuck on STAR_MAP many steps in a row (Task 3)
   tookHeavyDamage: boolean; // hull dropped >50% between two steps (combat proxy)
   warps: number;
   distinctScenes: number;
@@ -46,6 +47,7 @@ interface SessionDiag {
 }
 
 const OVERMIND_LOSS_SHARE = 0.5; // GAME_BALANCE.OVERMIND_SPREAD_LOSS_SHARE
+const STAR_MAP_STRANDED_RUN = 5; // consecutive STAR_MAP steps flagged as stranded
 
 const NO_PROGRESS = new Set(["wait", "attack"]);
 
@@ -95,6 +97,20 @@ function diagnose(s: SessionReport): SessionDiag {
     if (!anyWarp && scenesAfter.size <= 1) lowHullStall = true;
   }
 
+  // Fuel-stranded: many STAR_MAP steps in a row with no escape back to flight —
+  // the Task 3 bug (a `warp` the live engine's absolute fuel gate silently
+  // rejects repeats forever with the ladder none the wiser).
+  let starMapRun = 0;
+  let fuelStranded = false;
+  for (const st of t) {
+    if (st.scene === SceneType.STAR_MAP) {
+      starMapRun++;
+      if (starMapRun >= STAR_MAP_STRANDED_RUN) fuelStranded = true;
+    } else {
+      starMapRun = 0;
+    }
+  }
+
   const warps = t.filter((st) => st.action.kind === "warp").length;
   const distinctScenes = new Set(t.map((st) => st.scene)).size;
   const finalHullPct =
@@ -117,6 +133,7 @@ function diagnose(s: SessionReport): SessionDiag {
     longestWaitRun: longest,
     waitFraction: t.length ? waits / t.length : 0,
     lowHullStall,
+    fuelStranded,
     tookHeavyDamage: heavy,
     warps,
     distinctScenes,
@@ -169,6 +186,7 @@ describe("autopilot diagnostic (temp)", () => {
       const stranded = count((d) => d.stranded);
       const errored = count((d) => d.errorCount > 0);
       const lowHullStall = count((d) => d.lowHullStall);
+      const fuelStranded = count((d) => d.fuelStranded);
       const bigWait = count((d) => d.longestWaitRun >= 10);
       const noProgress = count((d) => d.creditsDelta <= 0);
       const noQuests = count((d) => d.questsCompleted === 0);
@@ -197,6 +215,7 @@ describe("autopilot diagnostic (temp)", () => {
       lines.push(`- died (GAME_OVER or hull 0):     ${pct(died)}`);
       lines.push(`- GALAXY FELL (Overmind >=50%):    ${pct(galaxyFell)}`);
       lines.push(`- STALLED at <30% hull (stuck):   ${pct(lowHullStall)}`);
+      lines.push(`- FUEL-STRANDED (stuck on STAR_MAP): ${pct(fuelStranded)}`);
       lines.push(`- stranded (only "wait" offered):  ${pct(stranded)}`);
       lines.push(`- long no-progress run (>=10):     ${pct(bigWait)}`);
       lines.push(`- took heavy combat damage (>50%): ${pct(heavyDmg)}`);

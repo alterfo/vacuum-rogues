@@ -438,3 +438,61 @@ describe("updateMemory — purity & menus", () => {
     expect(mem.inventoryLots).toEqual([]);
   });
 });
+
+describe("updateMemory — STAR_MAP warp-stall (Task 3)", () => {
+  it("starts at 0 for a fresh arrival at STAR_MAP", () => {
+    const mem = updateMemory(
+      createMemory(),
+      obs({ scene: SceneType.STAR_MAP, player: playerFixture({ fuel: 10 }) }),
+    );
+    expect(mem.starMapStallFolds).toBe(0);
+  });
+
+  it("increments each further STAR_MAP fold with fuel unchanged (a warp not taking)", () => {
+    let mem = createMemory();
+    const here = obs({
+      scene: SceneType.STAR_MAP,
+      player: playerFixture({ fuel: 10 }),
+    });
+    mem = updateMemory(mem, here); // fresh arrival: 0
+    mem = updateMemory(mem, here); // continuation, fuel unchanged: 1
+    mem = updateMemory(mem, here); // continuation, fuel unchanged: 2
+    expect(mem.starMapStallFolds).toBe(2);
+  });
+
+  it("resets once fuel actually changes (a warp succeeded/consumed fuel)", () => {
+    let mem = createMemory();
+    const stuck = obs({
+      scene: SceneType.STAR_MAP,
+      player: playerFixture({ fuel: 10 }),
+    });
+    mem = updateMemory(mem, stuck);
+    mem = updateMemory(mem, stuck);
+    expect(mem.starMapStallFolds).toBe(1);
+    const consumed = obs({
+      scene: SceneType.STAR_MAP,
+      player: playerFixture({ fuel: 5 }),
+    });
+    mem = updateMemory(mem, consumed);
+    expect(mem.starMapStallFolds).toBe(0);
+  });
+
+  it("resets once the scene leaves STAR_MAP", () => {
+    let mem = createMemory();
+    const onMap = obs({
+      scene: SceneType.STAR_MAP,
+      player: playerFixture({ fuel: 10 }),
+    });
+    mem = updateMemory(mem, onMap);
+    mem = updateMemory(mem, onMap);
+    expect(mem.starMapStallFolds).toBe(1);
+    mem = updateMemory(
+      mem,
+      obs({
+        scene: SceneType.SPACE_FLIGHT,
+        player: playerFixture({ fuel: 10 }),
+      }),
+    );
+    expect(mem.starMapStallFolds).toBe(0);
+  });
+});

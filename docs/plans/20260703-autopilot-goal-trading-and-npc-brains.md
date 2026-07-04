@@ -210,12 +210,37 @@ for NPCs with distinct goals.
     `letsplay:ci` all green.
 
 ### Task 3: Fuel — never idle on the star map
-- [ ] Fix the live-observed bug: with no fuel on STAR_MAP the autopilot idles
+- [x] Fix the live-observed bug: with no fuel on STAR_MAP the autopilot idles
       instead of returning to flight and landing to refuel. Reproduce (live path
       / `LiveApplier`), add a regression, fix so a fuel-critical agent always
       routes to a refuel landing (or is provably stranded only when truly no
       habitable planet + no fuel exists).
-- [ ] Gate: regression + diagnostic (add a fuel-stranded counter) at 0%.
+- [x] Gate: regression + diagnostic (add a fuel-stranded counter) at 0%.
+
+  **Landed 2026-07-04.** Root cause was NOT in the pure ladder's STAR_MAP tier
+  (it already unconditionally falls back to `move`/"back" — confirmed via a
+  real-engine live-path repro that leaving STAR_MAP itself works fine). The
+  actual bug lives one level down, in the *live* engine's warp gate:
+  `MemoryHeuristicPolicy`'s `fuelGate` only checks `REFUEL_THRESHOLD` as a
+  **fraction** of max fuel, but `StarMapScene.performWarpJump` gates the real
+  jump on the **absolute** fuel cost of the specific target — a shrunk tank
+  (e.g. after an engine downgrade) can satisfy the fraction gate (so the
+  ladder keeps choosing `warp`) while still being short of the real per-jump
+  cost, so the live executor's call silently no-ops (shows a toast the
+  autopilot can't see) with zero feedback to the ladder. The same `warp`
+  decision then repeats forever — reproduced deterministically with a real
+  `RealEngineHarness` + `createLiveSceneController` (small tank: fuel 4/20 =
+  exactly the 0.2 fraction threshold, engine's flat connected-warp cost 5).
+  Fixed by giving the ladder a way to notice a `warp` isn't landing anywhere:
+  `AgentMemory.starMapStallFolds` counts consecutive STAR_MAP folds with fuel
+  unchanged (a continuation, not a fresh arrival); once it reaches
+  `MAX_STAR_MAP_WARP_STALLS` (2), the STAR_MAP tier stops emitting `warp` and
+  falls through to the existing unconditional `move`/"back", which returns to
+  SPACE_FLIGHT where the fuel-critical `land` tier can still refuel. Verified
+  the same repro now escapes STAR_MAP within 3 steps. Added a `fuelStranded`
+  counter to `_autopilotDiag.run.test.ts` (consecutive STAR_MAP steps ≥5) —
+  100-run diagnostic: 0% fuel-stranded, 0% died, unit suite (4438 tests),
+  lint, tsc, `test:playtest`, `letsplay:ci` all green.
 
 ## Phase 2 — Player UX
 
