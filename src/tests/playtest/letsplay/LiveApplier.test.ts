@@ -48,6 +48,7 @@ function makeController(): {
     takeLoan: rec("takeLoan"),
     repayLoan: rec("repayLoan"),
     sellCargo: rec("sellCargo"),
+    armUp: rec("armUp"),
     liberate: rec("liberate"),
   };
   return { controller, calls };
@@ -153,6 +154,21 @@ describe("applyLiveAction — legal actions drive the expected controller verb",
       notCleared,
       controller,
     );
+    expect(skipped.applied).toBe(false);
+  });
+
+  it("arm-up at a shop is legal only when a refit is available, and drives armUp", async () => {
+    const { controller, calls } = makeController();
+    const obs = makeObs(SceneType.STATION, { canArmUp: true });
+    expect(obs.legalActions).toContain("arm-up");
+
+    const result = await applyLiveAction(act("arm-up"), obs, controller);
+    expect(result.call).toBe("armUp");
+    expect(calls).toEqual(["armUp"]);
+
+    const noRefit = makeObs(SceneType.STATION, { canArmUp: false });
+    expect(noRefit.legalActions).not.toContain("arm-up");
+    const skipped = await applyLiveAction(act("arm-up"), noRefit, controller);
     expect(skipped.applied).toBe(false);
   });
 

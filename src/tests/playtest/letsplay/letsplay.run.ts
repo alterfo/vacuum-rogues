@@ -185,6 +185,7 @@ function checkpoint(
         credits: obs.player.credits,
         hull: obs.player.hull,
         maxHull: obs.player.maxHull,
+        weaponDamage: obs.player.weaponDamage ?? 0,
         fuel: obs.player.fuel,
         systemId: obs.player.systemId,
         overmindShare: obs.overmindShare ?? 0,

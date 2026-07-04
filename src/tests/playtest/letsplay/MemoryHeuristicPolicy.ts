@@ -65,6 +65,39 @@ import { questRoutingPreference } from "./engineQueries";
 export const BATTLE_READY_HULL_FRACTION = 0.99;
 
 /**
+ * Minimum ship **capability** (not health) the agent must reach before the
+ * Overmind-slayer tier (Task 3) lets it stand and fight garrison ships instead
+ * of fleeing them. Distinct from {@link BATTLE_READY_HULL_FRACTION}, which is a
+ * *health* fraction (`hull/maxHull`, "am I patched up right now"): these gate on
+ * the loadout's *derived* stats (`maxHull`, `weaponDamage`), i.e. "is this ship
+ * strong enough to win the fight at all". Both must clear for {@link isBattleReady}.
+ *
+ * Starter corvette is `maxHull 140` + one pulse laser (`weaponDamage 14`); the
+ * Overmind capture fleet carries 1.5× NPC hull (`OVERMIND_COMBAT_HP_MULT`), so
+ * the agent must out-hull them and put out real damage first. `200` needs a hull
+ * upgrade beyond the starter corvette; `30` needs a second/stronger gun fitted
+ * (the corvette ships with a free second weapon slot, so `arm-up` reaches it
+ * with one decent buy). Tunable in Task 4 if liberation can't keep pace.
+ */
+export const BATTLE_READY_MAX_HULL = 200;
+export const BATTLE_READY_WEAPON_DAMAGE = 30;
+
+/**
+ * Whether the ship is combat-capable enough to take on an Overmind garrison —
+ * its derived `maxHull` and installed `weaponDamage` both clear the
+ * {@link BATTLE_READY_MAX_HULL}/{@link BATTLE_READY_WEAPON_DAMAGE} thresholds.
+ * A pure read of the observation; `false` with no player snapshot.
+ */
+export function isBattleReady(obs: Observation): boolean {
+  const p = obs.player;
+  if (!p) return false;
+  return (
+    p.maxHull >= BATTLE_READY_MAX_HULL &&
+    (p.weaponDamage ?? 0) >= BATTLE_READY_WEAPON_DAMAGE
+  );
+}
+
+/**
  * Below this fuel fraction the survival tier takes over: land on any in-system
  * habitable planet to refuel (landing always tops the tank off for free — see
  * `SpaceFlightScene.onLandOnPlanet`), and no `warp` candidate is emitted at all
@@ -941,6 +974,28 @@ export function decideWithMemory(
         (mem.priceBook.get(landedId ?? "")?.size ?? 0) > 0;
       if (mem.inventoryLots.length === 0 && !pricesKnownHere)
         push("trade", "inspect-market");
+      // Military progression (Task 2): the planet's Верфь is a refit shop, so
+      // spend spare credits on combat strength before taking off rather than
+      // leaving an already-priced, nothing-to-trade planet empty-handed. Ranked
+      // below the sell/quest/buy tiers above (the earners that fund the refit)
+      // and above `take-off`: arm up first (cheap firepower), then trade up the
+      // hull — both feed `isBattleReady`, gated off each once its half is met.
+      if (!isBattleReady(obs)) {
+        if (
+          legal.has("arm-up") &&
+          (obs.player?.weaponDamage ?? 0) < BATTLE_READY_WEAPON_DAMAGE
+        ) {
+          push("arm-up", "arm-up");
+        }
+        const bestHullPrice = obs.bestHullPrice ?? null;
+        if (
+          (obs.player?.maxHull ?? 0) < BATTLE_READY_MAX_HULL &&
+          bestHullPrice != null &&
+          credits >= bestHullPrice * GEAR_GRINDER_HULL_BUFFER
+        ) {
+          push("upgrade-hull", "afford-hull-upgrade");
+        }
+      }
       push("move", "take-off");
       break;
     }
@@ -1057,6 +1112,25 @@ export function decideWithMemory(
           push("land", "go-upgrade", offer.location);
         else if (stationInSystem(obs, offer.location))
           push("dock", "go-upgrade", offer.location);
+      }
+      // Military progression (Task 2): not yet battle-ready and an in-system
+      // station can actually refit the ship right now — a hull upgrade is
+      // affordable, or a weapon refit would raise firepower (`canArmUp`). Dock
+      // to build combat strength before the slayer tier (Task 3) sends it at
+      // the Overmind front. Gated on a concrete, affordable improvement so it
+      // never docks to a no-op; ranked below trade-realisation/quest tiers (the
+      // earners that fund the refit) but above generic earn/explore, so a ship
+      // sitting on spare credits arms up instead of aimlessly hopping.
+      if (!isBattleReady(obs)) {
+        const refitStation = obs.system?.stations[0]?.id;
+        const canAffordHull =
+          obs.bestHullPrice != null && credits >= obs.bestHullPrice;
+        const wantsArm =
+          (obs.player?.weaponDamage ?? 0) < BATTLE_READY_WEAPON_DAMAGE &&
+          obs.canArmUp === true;
+        if (refitStation && (canAffordHull || wantsArm)) {
+          push("dock", "go-battle-ready", refitStation);
+        }
       }
       // Generic earn target + whether landing there would teach the agent
       // anything new — hoisted here (used by both the loop-breaker below and
@@ -1208,6 +1282,17 @@ export function decideWithMemory(
       // ladder and that goal branch agree on when an upgrade is "worth it".
       const bestHullPrice = obs.bestHullPrice ?? null;
       const cheapestGearPrice = obs.cheapestGearPrice ?? null;
+      // Military progression (Task 2): while the ship still lacks the firepower
+      // half of battle-ready, arm up first — a weapon buy+install is cheap and
+      // directly raises `weaponDamage`, and the corvette's free second weapon
+      // slot makes it the fastest lever toward the slayer tier. Gated off once
+      // weapon-ready so the ladder switches to saving for the hull upgrade.
+      if (
+        legal.has("arm-up") &&
+        (obs.player?.weaponDamage ?? 0) < BATTLE_READY_WEAPON_DAMAGE
+      ) {
+        push("arm-up", "arm-up");
+      }
       if (
         bestHullPrice != null &&
         credits >= bestHullPrice * GEAR_GRINDER_HULL_BUFFER

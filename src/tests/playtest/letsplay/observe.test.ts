@@ -110,6 +110,34 @@ describe("legalActionsForScene (pure)", () => {
     expect(onStarMap).not.toContain("liberate");
   });
 
+  it("arm-up is legal at a shop only when a firepower improvement is available", () => {
+    const noRefit = legalActionsForScene(
+      SceneType.STATION,
+      ctx({ canArmUp: false }),
+    );
+    expect(noRefit).not.toContain("arm-up");
+
+    const atStation = legalActionsForScene(
+      SceneType.STATION,
+      ctx({ canArmUp: true }),
+    );
+    expect(atStation).toContain("arm-up");
+
+    const atShop = legalActionsForScene(
+      SceneType.EQUIPMENT_SHOP,
+      ctx({ canArmUp: true }),
+    );
+    expect(atShop).toContain("arm-up");
+  });
+
+  it("arm-up never appears in flight, even when a refit is available", () => {
+    const inFlight = legalActionsForScene(
+      SceneType.SPACE_FLIGHT,
+      ctx({ canArmUp: true }),
+    );
+    expect(inFlight).not.toContain("arm-up");
+  });
+
   it("on a planet: trade is legal; take-quest only when work is offered", () => {
     const none = legalActionsForScene(
       SceneType.PLANET,

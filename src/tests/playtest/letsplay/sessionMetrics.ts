@@ -68,6 +68,12 @@ export interface VitalsSample {
   /** Max hull — a rise above the first sample's value flags a ship upgrade. */
   maxHull: number;
   /**
+   * Installed weapon damage (`PlayerSnapshot.weaponDamage`). Optional so
+   * pre-existing synthetic fixtures still type-check; absent ⇒ treated as `0`.
+   * Paired with `maxHull` it flags when the ship reached "battle-ready".
+   */
+  weaponDamage?: number;
+  /**
    * Reactor energy / warp fuel at this step (`PlayerSnapshot.fuel`). Optional so
    * pre-Task-8 synthetic `VitalsSample` fixtures (built without this field) still
    * type-check; absent ⇒ the fuel-death signal is skipped for that session.

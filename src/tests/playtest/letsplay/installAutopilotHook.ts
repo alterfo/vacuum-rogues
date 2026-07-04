@@ -57,6 +57,7 @@ import {
   executeBuyBestGear,
   executeUpgradeHull,
   executeBuyBestModule,
+  executeArmUp,
 } from "./equipmentQueries";
 import { executeTakeLoan, executeRepayLoan } from "./bankingQueries";
 
@@ -428,6 +429,9 @@ export function createLiveSceneController(
       // which imply the player is landed — mirrors PlayerAgent's sell-cargo guard.
       const planet = landedPlanet(engine);
       if (planet) executeSellAll(engine, planet);
+    },
+    armUp() {
+      executeArmUp(engine);
     },
     liberate() {
       engine.liberateCurrentSystem();

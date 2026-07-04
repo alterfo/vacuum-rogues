@@ -49,6 +49,7 @@ import {
   executeBuyBestGear,
   executeUpgradeHull,
   executeBuyBestModule,
+  executeArmUp,
 } from "./equipmentQueries";
 import { executeTakeLoan, executeRepayLoan } from "./bankingQueries";
 
@@ -455,6 +456,11 @@ export class PlayerAgent {
 
       case "buy-module":
         executeBuyBestModule(engine);
+        this.harness.tick();
+        return;
+
+      case "arm-up":
+        executeArmUp(engine);
         this.harness.tick();
         return;
 

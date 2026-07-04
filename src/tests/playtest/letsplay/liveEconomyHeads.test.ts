@@ -36,6 +36,7 @@ import {
   bestAffordableGear,
   bestAffordableHull,
   cheapestMicromodule,
+  canArmUp,
 } from "./equipmentQueries";
 import {
   canTakeLoan,
@@ -115,6 +116,18 @@ describe("createLiveSceneController — the 7 wired economy heads (Task 6)", () 
     expect(player.inventory.ownedGearIds).toContain(listing!.gear.id);
     expect(player.inventory.ownedGearIds.length).toBe(ownedBefore + 1);
     expect(player.credits).toBe(creditsBefore - listing!.price);
+    expect(harness.errors()).toHaveLength(0);
+  });
+
+  it("armUp() fits a stronger gun, raising installed weapon damage", () => {
+    const engine = harness.engine;
+    const loadout = engine.playerLoadout!;
+    const before = loadout.derivedStats().weaponDamage;
+    expect(canArmUp(engine)).toBe(true);
+
+    createLiveSceneController(engine).armUp();
+
+    expect(loadout.derivedStats().weaponDamage).toBeGreaterThan(before);
     expect(harness.errors()).toHaveLength(0);
   });
 

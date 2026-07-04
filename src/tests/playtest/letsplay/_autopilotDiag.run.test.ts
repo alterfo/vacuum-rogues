@@ -11,6 +11,10 @@ import { writeFileSync } from "node:fs";
 import { describe, it, expect, vi } from "vitest";
 import { SceneType } from "@/types";
 import { runLetsplay, type SessionReport } from "./letsplay.run";
+import {
+  BATTLE_READY_MAX_HULL,
+  BATTLE_READY_WEAPON_DAMAGE,
+} from "./MemoryHeuristicPolicy";
 
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
@@ -35,6 +39,12 @@ interface Diag {
   landActions: number;
   moveActions: number;
   tradeActions: number;
+  armUpActions: number;
+  // Task 2 gate: the ship reached "battle-ready" (maxHull + weaponDamage both
+  // clear the thresholds) at some point this session.
+  reachedBattleReady: boolean;
+  peakMaxHull: number;
+  peakWeaponDamage: number;
   distinctScenes: number;
   longestSceneRepeat: number; // longest run alternating within {PLANET,SPACE_FLIGHT}
 }
@@ -85,6 +95,20 @@ function diagnose(s: SessionReport): Diag {
     } else cur = 0;
   }
 
+  // Task 2 battle-ready progression: did the ship ever clear BOTH capability
+  // thresholds this session, and how strong did it get?
+  const peakMaxHull = s.samples.length
+    ? Math.max(...s.samples.map((sm) => sm.maxHull ?? 0))
+    : 0;
+  const peakWeaponDamage = s.samples.length
+    ? Math.max(...s.samples.map((sm) => sm.weaponDamage ?? 0))
+    : 0;
+  const reachedBattleReady = s.samples.some(
+    (sm) =>
+      (sm.maxHull ?? 0) >= BATTLE_READY_MAX_HULL &&
+      (sm.weaponDamage ?? 0) >= BATTLE_READY_WEAPON_DAMAGE,
+  );
+
   const shares = s.samples.map((sm) => sm.overmindShare ?? 0);
   const maxShare = shares.length ? Math.max(...shares) : 0;
   const finalShare = shares.length ? shares[shares.length - 1] : 0;
@@ -108,6 +132,10 @@ function diagnose(s: SessionReport): Diag {
     landActions: t.filter((st) => st.action.kind === "land").length,
     moveActions: t.filter((st) => st.action.kind === "move").length,
     tradeActions: t.filter((st) => st.action.kind === "trade").length,
+    armUpActions: t.filter((st) => st.action.kind === "arm-up").length,
+    reachedBattleReady,
+    peakMaxHull,
+    peakWeaponDamage,
     distinctScenes: new Set(sceneSeq).size,
     longestSceneRepeat: longest,
   };
@@ -140,6 +168,18 @@ describe("autopilot diagnostic (temp)", () => {
       L.push(`- galaxy fell (>=85%):      ${pct(cnt((x) => x.galaxyFell))}`);
       L.push(`- had Overmind presence:    ${pct(cnt((x) => x.hadPresence))}`);
       L.push(`- avg final Overmind share: ${avg((x) => x.finalShare)}`);
+      L.push(
+        `## Battle-ready progression (Task 2 gate: maxHull>=${BATTLE_READY_MAX_HULL}, weaponDamage>=${BATTLE_READY_WEAPON_DAMAGE})`,
+      );
+      L.push(
+        `- reached battle-ready:     ${pct(cnt((x) => x.reachedBattleReady))}`,
+      );
+      L.push(
+        `- armed up at least once:   ${pct(cnt((x) => x.armUpActions > 0))}`,
+      );
+      L.push(`- avg arm-up actions:       ${avg((x) => x.armUpActions)}`);
+      L.push(`- avg peak maxHull:         ${avg((x) => x.peakMaxHull)}`);
+      L.push(`- avg peak weaponDamage:    ${avg((x) => x.peakWeaponDamage)}`);
       L.push(`## Health`);
       L.push(`- died:                     ${pct(cnt((x) => x.died))}`);
       L.push(

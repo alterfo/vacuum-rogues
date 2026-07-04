@@ -74,6 +74,8 @@ export interface LiveSceneController {
   repayLoan(): void | Promise<void>;
   /** Sell all held cargo at the current market (explicit sell-only). */
   sellCargo(): void | Promise<void>;
+  /** Buy + install a stronger weapon to raise installed firepower. */
+  armUp(): void | Promise<void>;
   /** Free the current (garrison-cleared) captured system. */
   liberate(): void | Promise<void>;
 }
@@ -98,6 +100,7 @@ export type ApplyCall =
   | "takeLoan"
   | "repayLoan"
   | "sellCargo"
+  | "armUp"
   | "liberate"
   | "none";
 
@@ -246,6 +249,10 @@ export async function applyLiveAction(
     case "sell-cargo":
       await controller.sellCargo();
       return { applied: true, call: "sellCargo" };
+
+    case "arm-up":
+      await controller.armUp();
+      return { applied: true, call: "armUp" };
 
     case "liberate":
       await controller.liberate();

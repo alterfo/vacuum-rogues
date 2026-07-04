@@ -40,7 +40,7 @@ import {
   loanStatusOf,
   systemShopPrices,
 } from "./observeHelpers";
-import { cheapestMicromodule } from "./equipmentQueries";
+import { cheapestMicromodule, canArmUp } from "./equipmentQueries";
 import {
   takeableBoardQuestCount,
   reachableNeighbors,
@@ -77,6 +77,7 @@ export type PlayerActionKind =
   | "take-loan" // borrow credits from the bank
   | "repay-loan" // repay an outstanding loan
   | "sell-cargo" // explicit sell-only action (vs. trade, which also buys)
+  | "arm-up" // buy + install a stronger weapon (raise installed firepower)
   | "liberate"; // free the current (garrison-cleared) captured system
 
 /**
@@ -117,9 +118,15 @@ export const ACTION_ORDER: readonly PlayerActionKind[] = [
  * `ACTION_ORDER` slots, so the trained net simply never scores `liberate` (falls
  * through to the next best legal action) — no regression for the neural policy,
  * and `MemoryHeuristicPolicy` (which reads `obs.legalActions` directly) sees it.
+ *
+ * `arm-up` (buy + install a stronger weapon, the Task 2 military-progression
+ * lever) is appended here for the identical reason — it is not part of the
+ * frozen neural output vocabulary, so the trained net never scores it while the
+ * heuristic ladder can rank it.
  */
 const LEGAL_ACTION_ORDER: readonly PlayerActionKind[] = [
   ...ACTION_ORDER,
+  "arm-up",
   "liberate",
 ];
 
@@ -133,6 +140,15 @@ export interface PlayerSnapshot {
   maxHull: number;
   /** `hull / maxHull` in `[0, 1]` (0 when `maxHull` is 0). */
   hullFraction: number;
+  /**
+   * Installed weapon damage from the canonical loadout (`derivedStats`) — the
+   * ship's actual firepower, not what it merely owns. Feeds the Task 2
+   * "battle-ready" signal (`maxHull` + `weaponDamage` thresholds) that gates the
+   * Overmind-slayer progression. `0` with no loadout / no weapon fitted.
+   * Optional so older hand-built fixtures (which predate the field) still
+   * type-check; absent is treated as `0` (not battle-ready) everywhere.
+   */
+  weaponDamage?: number;
   /** Reactor energy doubles as warp fuel (the star-map "ТОПЛИВО" gauge). */
   fuel: number;
   maxFuel: number;
@@ -310,6 +326,14 @@ export interface Observation {
   /** Cheapest hull price in the CURRENT system's (planet-only) shops, `null` if none. */
   bestHullPrice?: number | null;
   /**
+   * A weapon refit in the CURRENT system would raise installed firepower — an
+   * owned gun can be fitted, or a stronger one is affordable in-shop (mirrors
+   * `canArmUp`/`planArmUp`). Lets the flight ladder decide to dock-and-refit
+   * for the Task 2 battle-ready push even though `arm-up` itself is only legal
+   * once actually at a shop. Defaults to false.
+   */
+  canArmUp?: boolean;
+  /**
    * The galaxy's current business day (`galaxy.gameDays`). Lets
    * {@link updateMemory} detect a day-boundary transition purely from folded
    * observations (no memory field otherwise carries calendar time) — feeds the
@@ -352,6 +376,8 @@ export interface LegalActionContext {
   bestHullPrice?: number | null;
   /** The current system is a captured (Overmind/pirate) system with its hostile garrison cleared — mirrors `canPlayerLiberate`. Defaults to false. */
   canLiberate?: boolean;
+  /** A weapon refit would raise installed firepower right now — mirrors `canArmUp`. Defaults to false. */
+  canArmUp?: boolean;
 }
 
 /**
@@ -392,6 +418,19 @@ export function legalActionsForScene(
       set.add("wait");
       if (ctx.availableQuestCount > 0) set.add("take-quest");
       if ((ctx.cargoUsed ?? 0) > 0) set.add("sell-cargo");
+      // Every planet fields a Верфь (its shop stocks hulls + gear — the source
+      // of `bestHullPrice`/`cheapestGearPrice`, both "planet-only"), so the
+      // military-progression refit levers are legal here too, gated on the same
+      // affordability / improvement signals as the station hub. This is what
+      // makes "become battle-ready" reachable in ordinary play: the agent lands
+      // on planets constantly but docks at (sparse) stations rarely.
+      if (
+        ctx.bestHullPrice != null &&
+        (ctx.credits ?? 0) >= ctx.bestHullPrice
+      ) {
+        set.add("upgrade-hull");
+      }
+      if (ctx.canArmUp) set.add("arm-up");
       break;
     }
     case SceneType.TRADE: {
@@ -432,6 +471,10 @@ export function legalActionsForScene(
       ) {
         set.add("buy-module");
       }
+      // Gate on `canArmUp` (a real firepower improvement is available) exactly
+      // like `buy-module` gates on `hasAffordableModule` — else the executor
+      // no-ops and the autopilot soft-locks re-picking it.
+      if (ctx.canArmUp) set.add("arm-up");
       if (ctx.activeLoans) set.add("repay-loan");
       else set.add("take-loan");
       break;
@@ -451,6 +494,7 @@ export function legalActionsForScene(
       ) {
         set.add("upgrade-hull");
       }
+      if (ctx.canArmUp) set.add("arm-up");
       break;
     }
     case SceneType.BANK: {
@@ -606,6 +650,7 @@ export function observe(
     hull: ship.hullHP,
     maxHull: ship.maxHull,
     hullFraction: ship.maxHull > 0 ? ship.hullHP / ship.maxHull : 0,
+    weaponDamage: engine.playerLoadout?.derivedStats().weaponDamage ?? 0,
     fuel: ship.energy,
     maxFuel: ship.maxEnergy,
     fuelFraction: ship.maxEnergy > 0 ? ship.energy / ship.maxEnergy : 0,
@@ -773,6 +818,7 @@ export function observe(
     ? cheapestMicromodule(engine) != null
     : false;
   const canLiberate = engine.canLiberateCurrentSystem();
+  const armUp = canArmUp(engine);
 
   const legalActions = legalActionsForScene(scene, {
     hasPlayer: true,
@@ -789,6 +835,7 @@ export function observe(
     cheapestGearPrice,
     bestHullPrice,
     canLiberate,
+    canArmUp: armUp,
   });
 
   // Detect a pending hyperjump: the ship is flying to the system edge and a warp
@@ -822,6 +869,7 @@ export function observe(
       : undefined,
     cheapestGearPrice,
     bestHullPrice,
+    canArmUp: armUp,
     gameDay: galaxy.gameDays,
     questsCompleted: engine.questManager.getCompletedQuestIds().length,
   };
