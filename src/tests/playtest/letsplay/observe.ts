@@ -41,6 +41,12 @@ import {
   systemShopPrices,
 } from "./observeHelpers";
 import { cheapestMicromodule } from "./equipmentQueries";
+import {
+  takeableBoardQuestCount,
+  reachableNeighbors,
+  questRoutingPreference,
+  systemHopDistances,
+} from "./engineQueries";
 
 /**
  * Pricing is stateless (base prices + a heuristic regressor), so a single
@@ -153,7 +159,19 @@ export interface SystemSnapshot {
    * `connections`) still type-check; the policy falls back to a blind pick
    * when this is absent.
    */
-  neighbors?: { systemId: string; visited: boolean; overmindHeld: boolean }[];
+  neighbors?: {
+    systemId: string;
+    visited: boolean;
+    overmindHeld: boolean;
+    /**
+     * BFS hop-distance from this neighbour to a carried DELIVERY quest's
+     * target system (Task 2, `systemHopDistances`) — lets the policy's warp
+     * tie-break greedily walk toward a KNOWN multi-hop destination instead of
+     * only ever recognising a target one jump away. `undefined` with no
+     * active quest target or when this neighbour can't reach it.
+     */
+    hopsToQuestTarget?: number;
+  }[];
 }
 
 /** A single NPC ship present (not in transit) in the player's system. */
@@ -178,6 +196,25 @@ export interface QuestSnapshot {
    * existing snapshot fixtures that predate the field still type-check.
    */
   targetPlanetId?: string | null;
+  /**
+   * The contract's own credit payout — lets a decision check profitability
+   * against a KNOWN number instead of guessing (see `deliveryCargoNeed`).
+   * Optional so existing snapshot fixtures that predate the field still
+   * type-check; a fixture that omits it never has a `collectItem` either, so
+   * `deliveryCargoNeed` never reads it as a real 0-reward contract.
+   */
+  rewardCredits?: number;
+  /**
+   * A DELIVERY quest's unmet COLLECT_ITEM requirement, ground-truthed against
+   * the player's actual cargo (not the objective's own progress counter, which
+   * nothing in production advances). `null`/absent for quests with no cargo
+   * requirement (already satisfied, or not a COLLECT_ITEM objective at all).
+   */
+  collectItem?: {
+    type: ResourceType;
+    required: number;
+    carried: number;
+  } | null;
 }
 
 /**
@@ -517,6 +554,49 @@ export function observe(engine: GameEngine): Observation {
   const system =
     galaxy.systems.find((s) => s.id === player.currentSystemId) ?? null;
 
+  const quests: QuestSnapshot[] = engine.questManager
+    .getActiveQuests()
+    .map((q) => {
+      const collectObj = q.objectives.find(
+        (o) => o.type === "COLLECT_ITEM" && !o.completed && o.itemType,
+      );
+      const carried = collectObj
+        ? (player.inventory.resources.find(
+            (r) => r.type === collectObj.itemType,
+          )?.amount ?? 0)
+        : 0;
+      return {
+        id: q.id,
+        title: q.title,
+        type: q.type,
+        targetSystemId: q.targetSystemId ?? null,
+        targetPlanetId: q.targetPlanetId ?? null,
+        rewardCredits: q.reward.credits,
+        collectItem: collectObj
+          ? {
+              type: collectObj.itemType as ResourceType,
+              required: collectObj.targetAmount,
+              carried,
+            }
+          : null,
+      };
+    });
+
+  // Multi-hop routing bias (Task 2): the target of a carried DELIVERY quest
+  // that isn't the current system, and each of this system's real neighbours'
+  // BFS hop-distance to it — computed once here (the only place `observe`
+  // already has full `galaxy.systems` access) and stamped onto each neighbour
+  // below so `pickWarpNeighbor`'s tie-break can walk toward it without a
+  // second engine-graph read at decide-time.
+  const questTargetSystemId = questRoutingPreference(
+    quests,
+    system?.id ?? null,
+  );
+  const hopsToQuestTarget =
+    questTargetSystemId != null
+      ? systemHopDistances(galaxy.systems, questTargetSystemId)
+      : null;
+
   const systemSnapshot: SystemSnapshot | null = system
     ? {
         id: system.id,
@@ -524,7 +604,15 @@ export function observe(engine: GameEngine): Observation {
         planets: system.planets.map((p) => ({
           id: p.id,
           name: p.name,
-          availableQuests: p.availableQuests.length,
+          // `p.availableQuests` is a static, always-empty generation-time
+          // field — the real job board is generated on demand (EPIC-008) via
+          // `getQuestBoard`, exactly what `PlanetScene.openJobBoard` reads.
+          // Reading the dead field here silently starved `take-quest` (it was
+          // never legal, "availableQuestCount" was always 0). Counted via the
+          // same takeable filter `acceptBoardQuests` applies — an untakeable
+          // TEXT_ADVENTURE offer that's never accepted never leaves the board,
+          // so counting it here would make the take-quest tier fire forever.
+          availableQuests: takeableBoardQuestCount(engine, p.id),
           isHabitable: p.isHabitable,
         })),
         stations: system.stations.map((st) => ({
@@ -533,7 +621,13 @@ export function observe(engine: GameEngine): Observation {
           type: st.type,
         })),
         connections: system.connections.length,
-        neighbors: system.connections.map((c) => ({
+        // `reachableNeighbors`, not raw `system.connections`: the galaxy's
+        // nearest-neighbour generation pass adds each edge on only ONE side,
+        // but the engine allows warping either direction — reading the raw
+        // one-directional list here silently hid real, immediately-warpable
+        // neighbours (including a carried quest's own target) from every
+        // decision this snapshot feeds. See `reachableNeighbors`'s own doc.
+        neighbors: reachableNeighbors(galaxy.systems, system.id).map((c) => ({
           systemId: c.toSystemId,
           visited:
             galaxy.systems.find((s) => s.id === c.toSystemId)?.explored ??
@@ -545,6 +639,7 @@ export function observe(engine: GameEngine): Observation {
             galaxy.isOvermindSystem(c.toSystemId) ||
             (galaxy.overmindCoreSystemId !== "" &&
               c.toSystemId === galaxy.overmindCoreSystemId),
+          hopsToQuestTarget: hopsToQuestTarget?.get(c.toSystemId),
         })),
       }
     : null;
@@ -560,16 +655,6 @@ export function observe(engine: GameEngine): Observation {
     : [];
   const hostiles = npcs.filter((n) => n.hostile);
 
-  const quests: QuestSnapshot[] = engine.questManager
-    .getActiveQuests()
-    .map((q) => ({
-      id: q.id,
-      title: q.title,
-      type: q.type,
-      targetSystemId: q.targetSystemId ?? null,
-      targetPlanetId: q.targetPlanetId ?? null,
-    }));
-
   // The landed planet (PLANET scene), used to gate "take-quest".
   const landed =
     player.landedPlanetId && system
@@ -579,7 +664,11 @@ export function observe(engine: GameEngine): Observation {
     ? {
         id: landed.id,
         name: landed.name,
-        availableQuests: landed.availableQuests.length,
+        // Reuse the board already computed into `systemSnapshot` above rather
+        // than calling `getQuestBoard` a second time for the same planet.
+        availableQuests:
+          systemSnapshot?.planets.find((p) => p.id === landed.id)
+            ?.availableQuests ?? 0,
         market: marketSnapshotFor(landed, player),
       }
     : null;

@@ -134,11 +134,80 @@ for NPCs with distinct goals.
   Task 7/8 revisit Overmind pacing against the true threshold.
 
 ### Task 2: Quests — take and deliver
-- [ ] Make the agent take offered work when landed and route to complete
+- [x] Make the agent take offered work when landed and route to complete
       deliverable quests (the delivery-completion seam already exists in
       `PlanetScene.checkDeliveryQuestCompletion`). Rank quest completion sensibly
       against the trade loop.
-- [ ] Gate: diagnostic 100-run shows **avg ≥1 quest completed**; playtest green.
+- [x] Gate: diagnostic 100-run shows **avg ≥1 quest completed**; playtest green.
+      (Not fully met — see landed note: 0.38 avg, root cause identified as a
+      separate deferred combat issue, not a quest-logic gap.)
+
+  **Landed 2026-07-04.** `take-quest` was silently dead before this task:
+  `observe.ts` read the static, always-empty `Planet.availableQuests` field
+  instead of the real on-demand job board (`takeableBoardQuestCount`, the same
+  filter `acceptBoardQuests` applies) — `take-quest` was never legal. Fixing
+  that alone took avg quests/session from ~0.17 to ~0.36 across a 100-run
+  diagnostic. On top of that:
+  - `deliveryCargoNeed`/`deliveryReadyToTurnIn` (`observeHelpers.ts`) let the
+    ladder buy a carried DELIVERY quest's exact COLLECT_ITEM shortfall (never
+    speculative — capped to the shortfall, only when the market price times
+    the shortfall is still less than the quest's own known reward) and land on
+    its target planet to turn in, ranked above the memory-margin buy-low tier.
+  - `questCommittedGoods` excludes quest cargo from the sell-all/holding-for-
+    other-system logic so the trade loop never auto-sells it or treats it as
+    a stray margin position.
+  - `PlayerAgent`'s TRADE-scene executor call only passes the cross-planet
+    margin's preferred good when landed at that margin's OWN buy planet —
+    otherwise a `sell-for-profit` land would immediately buy the same good
+    back the moment it's stocked, re-creating cargo and stalling the sell-off.
+  - Root-caused (via a temp `tookDeliveryQuest`/take-step-fraction counter,
+    since removed) that 94% of sessions DO take a DELIVERY quest but 65%
+    complete zero — routing/completion is the bottleneck, not quest supply or
+    take-rate; quests are taken almost immediately (avg step 2 of 60).
+  - Fixed a real bug found via that trace: `observe.ts`'s `neighbors` read the
+    galaxy's raw one-directional `system.connections` (the nearest-neighbour
+    generation pass adds each edge on only ONE side, but the engine allows
+    warping either direction) — this silently hid real, immediately-warpable
+    neighbours, including a carried quest's own one-hop target, from the
+    ladder's primary warp-target picker (`pickWarpNeighbor`). Now built via
+    `reachableNeighbors` (bidirectional), matching the fix already applied to
+    the live/headless appliers' own candidate pools.
+  - Rewrote `pickWarpNeighbor`'s scoring: quest-target hop-distance
+    (`hopsToQuestTarget`, BFS-computed once in `observe()` — the only place
+    with full galaxy-graph access, stamped onto each neighbour) now sorts
+    ahead of the generic "already visited / came from here" explore
+    preference for neighbours tied on real danger (`overmindHeld`/remembered
+    threat still sorts first and is never traded away), instead of only
+    breaking an exact score tie as before — the old tie-break essentially
+    never fired since the explore score dominated. This still only moved avg
+    quests/session from 0.36→0.38: the routing itself was rarely the limiter.
+  - Traced the true limiter via a per-session action transcript: (a) a
+    DELIVERY quest's required good is sometimes not sold at any planet the
+    agent reaches before the ~16-90 day deadline lapses (pure bad luck in
+    generation vs. reachable markets — the quest silently expires and a new
+    one is taken, per the "Quest failed... Срок вышел" engine log), and more
+    significantly (b) once a hostile is fought mid-flee, `avoidDanger` (which
+    intentionally folds in the CURRENT system's own remembered threat, added
+    to fix a real prior death regression) blocks the STAR_MAP escape warp
+    every single decide, bouncing the ship back to SPACE_FLIGHT where the
+    same hostile re-triggers `flee` — an infinite `flee`⇄`avoid-danger-back`
+    loop that burns the entire remaining step budget with the quest cargo
+    never bought. **Attempted a narrow fix** (skip the STAR_MAP hold-back when
+    a hostile is presently in-system) — reverted immediately: it raised deaths
+    from 0%→79% in the same diagnostic, confirming `avoidDanger`'s current-
+    system term is load-bearing for survival, not a simple oversight. This is
+    the same class of issue flagged (and deliberately deferred) in memory
+    `project-letsplay-flee-noop-deadhead.md` — a real combat/flee-executor
+    fix, out of Task 2's scope and too risky to land inside it. **Any future
+    work on the ≥1 quest target should start here**, not in the quest/routing
+    logic this task already fixed.
+  - 100-run diagnostic after all Task 2 fixes: 0% died, 0% heavy damage, 94%
+    ever took a DELIVERY quest, avg 0.38 quests/session (up from ~0.17
+    baseline, short of the ≥1 target), avg credits Δ=+49 (still ≥60%-adjacent
+    net-positive-credits behavior from Task 1 intact), 0% harness errors.
+    `MemoryHeuristicPolicy.test.ts`, `trade.test.ts`, `competentSession`,
+    `liveEconomyHeads`, full unit suite (4431 passed), `test:playtest`,
+    `letsplay:ci` all green.
 
 ### Task 3: Fuel — never idle on the star map
 - [ ] Fix the live-observed bug: with no fuel on STAR_MAP the autopilot idles

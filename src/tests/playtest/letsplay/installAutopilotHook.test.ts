@@ -172,22 +172,29 @@ describe("createLiveSceneController — verb → live engine call", () => {
       currentScene: { performWarpJumpTo: vi.fn().mockResolvedValue(undefined) },
       questManager: {
         getActiveQuests: () => [] as { id: string }[],
-        getQuestTemplate: () => ({}),
-        acceptQuest: vi.fn(),
+        getCompletedQuestIds: () => [] as string[],
       },
+      getQuestBoard: () => [] as { template: { id: string; type: string } }[],
+      acceptBoardQuest: vi.fn(),
       transitionTo: vi.fn().mockResolvedValue(undefined),
       ...over,
     } as unknown as GameEngine & {
       transitionTo: ReturnType<typeof vi.fn>;
       currentScene: { performWarpJumpTo: ReturnType<typeof vi.fn> };
-      questManager: { acceptQuest: ReturnType<typeof vi.fn> };
+      getQuestBoard: (
+        planetId: string,
+      ) => { template: { id: string; type: string } }[];
+      acceptBoardQuest: ReturnType<typeof vi.fn>;
       _planet: typeof planet;
     };
     (engine as unknown as { _planet: typeof planet })._planet = planet;
     return engine as unknown as GameEngine & {
       transitionTo: ReturnType<typeof vi.fn>;
       currentScene: { performWarpJumpTo: ReturnType<typeof vi.fn> };
-      questManager: { acceptQuest: ReturnType<typeof vi.fn> };
+      getQuestBoard: (
+        planetId: string,
+      ) => { template: { id: string; type: string } }[];
+      acceptBoardQuest: ReturnType<typeof vi.fn>;
       _planet: typeof planet;
     };
   }
@@ -256,14 +263,20 @@ describe("createLiveSceneController — verb → live engine call", () => {
     );
   });
 
-  it("takeQuest() accepts a registered, offered, not-active board quest", () => {
+  it("takeQuest() accepts every non-dialogue quest the real job board offers", () => {
+    const board = [
+      { template: { id: "q1", type: "DELIVERY" } },
+      { template: { id: "q2", type: "TEXT_ADVENTURE" } },
+    ];
     const engine = mockEngine({
       player: { currentSystemId: "sys1", landedPlanetId: "p1" },
+      getQuestBoard: vi.fn().mockReturnValue(board),
     });
-    engine._planet.availableQuests.push({ id: "q1" });
 
     createLiveSceneController(engine).takeQuest();
-    expect(engine.questManager.acceptQuest).toHaveBeenCalledWith("q1", "p1");
+    expect(engine.getQuestBoard).toHaveBeenCalledWith("p1");
+    expect(engine.acceptBoardQuest).toHaveBeenCalledWith(board[0], "p1");
+    expect(engine.acceptBoardQuest).toHaveBeenCalledTimes(1);
   });
 
   it("no-op verbs (tick/executeTrade/attack/flee/repair) never drive a transition", async () => {

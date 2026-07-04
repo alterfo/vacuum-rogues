@@ -32,7 +32,13 @@
  */
 import { FactionType, SceneType } from "@/types";
 import type { ResourceType } from "@/types";
-import type { Observation, PlayerActionKind, SystemSnapshot } from "./observe";
+import { GAME_BALANCE } from "@/config/balance";
+import type {
+  Observation,
+  PlayerActionKind,
+  QuestSnapshot,
+  SystemSnapshot,
+} from "./observe";
 import type { Action, PlayerPolicy } from "./PlayerPolicy";
 import { LOW_HULL_FRACTION } from "./HeuristicPolicy";
 import {
@@ -48,6 +54,8 @@ import {
   profitIfSoldHere,
   routeDangerToGoal,
 } from "./memoryFeatures";
+import { deliveryCargoNeed, deliveryReadyToTurnIn } from "./observeHelpers";
+import { questRoutingPreference } from "./engineQueries";
 
 /**
  * Above this hull fraction the agent treats itself as "battle-ready" — below it,
@@ -102,6 +110,31 @@ export const OVERMIND_THREAT_HULL_FRACTION = 0.6;
  * of the `overmindThreatening` signal alongside `nearOvermindCore`.
  */
 export const OVERMIND_THREAT_SHARE = 0.15;
+
+/**
+ * Galaxy-wide Overmind share above which the ladder stops taking on NEW
+ * DELIVERY quests — well below `OVERMIND_SPREAD_LOSS_SHARE` (0.85, the true
+ * "galaxy lost" line in `balance.ts`), leaving room for an already-accepted
+ * quest's own travel time. A quest's buy→warp→deliver cycle needs several
+ * extra warps beyond the ladder's ordinary trading; committing to a NEW one
+ * once the front is already this far along stacks that extra travel on top
+ * of a galaxy where most remaining systems are Overmind-held — real-engine
+ * regression: a fresh quest taken at ~90% share sent a full-hull ship
+ * straight into an Overmind garrison system (6 hostiles) with no prior
+ * memory signal to have avoided it, and it died fleeing (successfully,
+ * repeatedly — just never escaping) before the front-avoidance tier above
+ * this one could react to a merely "rising" front.
+ */
+export const QUEST_ACCEPT_OVERMIND_SHARE_CEILING = 0.6;
+
+/**
+ * Safety margin subtracted from `OVERMIND_SPREAD_LOSS_SHARE` (0.85) before
+ * gating the ladder's own exploratory warps (see `galaxyEffectivelyLost`
+ * below) — `overmindShare` is only a snapshot at decide time, and a spread
+ * tick can still land during the warp's own multi-day transit, so the ladder
+ * needs to stop exploring meaningfully *before* the true line, not at it.
+ */
+export const OVERMIND_LOSS_SAFETY_MARGIN = 0.05;
 
 /**
  * The base-ladder `warp` reasons that get a Task 5 smart-picked `targetId`
@@ -177,23 +210,55 @@ function stationInSystem(obs: Observation, stationId: string | null): boolean {
  * Returns `undefined` when `obs` carries no neighbor detail at all (older
  * hand-built fixtures) — callers then fall back to the appliers' blind
  * `pickWarpTarget`.
+ *
+ * `questTarget` (Task 2) biases this toward actually finishing a carried
+ * DELIVERY quest: a DIRECT, non-Overmind-held neighbour match wins outright
+ * (skipping the scoring below entirely — reaching a KNOWN destination beats
+ * the generic explore heuristic). Otherwise, among neighbours tied on
+ * *danger* (`overmindHeld`/remembered-threat — real safety, sorted first and
+ * always dominant), a neighbour with a KNOWN `hopsToQuestTarget` (stamped by
+ * `observe()`, the only place with full galaxy-graph access to compute the
+ * BFS distance — see `SystemSnapshot.neighbors`) is ranked by that distance
+ * INSTEAD OF the generic "already visited / came from here" explore
+ * preference, not merely as a tie-break on top of it: a diagnostic 100-run
+ * measured 94% of sessions taking a DELIVERY quest but 65% completing zero of
+ * them when progress was only an exact-score tie-break (avg 0.36-0.38
+ * quests/session, target ≥1) — the generic explore score (0-6) dwarfed the
+ * old tie-break far too often for a multi-hop target to ever win. Danger
+ * still sorts first and is never traded away; with no quest target (or an
+ * unreachable one) every neighbour falls back to the plain explore score,
+ * identical to before.
  */
 function pickWarpNeighbor(
   neighbors: SystemSnapshot["neighbors"],
   mem: AgentMemory,
+  questTarget?: string | null,
 ): string | undefined {
   if (!neighbors || neighbors.length === 0) return undefined;
+  if (questTarget != null) {
+    const direct = neighbors.find(
+      (n) => n.systemId === questTarget && !n.overmindHeld,
+    );
+    if (direct) return direct.systemId;
+  }
   let bestId: string | undefined;
-  let bestScore = Infinity;
+  let bestDanger = Infinity;
+  let bestProgress = Infinity;
   for (const n of neighbors) {
-    const score =
+    const danger =
       (n.overmindHeld ? 4 : 0) +
-      ((mem.threatMap.get(n.systemId) ?? 0) > 0 ? 3 : 0) +
+      ((mem.threatMap.get(n.systemId) ?? 0) > 0 ? 3 : 0);
+    const exploreScore =
       (mem.visitedSystemIds.has(n.systemId) ? 3 : 0) +
       (n.systemId === mem.previousSystemId ? 2 : 0) +
       (n.visited ? 1 : 0);
-    if (score < bestScore) {
-      bestScore = score;
+    const progress = n.hopsToQuestTarget ?? exploreScore;
+    if (
+      danger < bestDanger ||
+      (danger === bestDanger && progress < bestProgress)
+    ) {
+      bestDanger = danger;
+      bestProgress = progress;
       bestId = n.systemId;
     }
   }
@@ -631,7 +696,36 @@ export function decideWithMemory(
     push("warp", "flee-overmind-front");
   }
 
+  // The galaxy is close enough to the true "arc lost" line (`balance.ts`
+  // `OVERMIND_SPREAD_LOSS_SHARE`, 0.85) that nearly every remaining system is
+  // an Overmind garrison, so a speculative exploration/margin-hunting warp is
+  // no longer a reasonable bet. Checked with a safety margin BELOW the true
+  // line, not at it: `overmindShare` is a snapshot at *decide* time, but a
+  // warp's own transit spans several simulated days during which a spread
+  // tick can still land — real-engine regression: a `find-sell-destination`
+  // warp decided at 0.833 (just under the raw 0.85 line) arrived to find
+  // share already at 0.917 mid-flight, dropping a full-hull ship straight
+  // into a 6-ship garrison system. Gates the ladder's own exploratory warps
+  // only — `flee-overmind-front` above (escaping, not exploring) and
+  // STAR_MAP's own explore/back tiers are unaffected, since blocking every
+  // warp everywhere once this share is reached would itself strand the ship.
+  const galaxyEffectivelyLost =
+    (obs.overmindShare ?? 0) >=
+    GAME_BALANCE.OVERMIND_SPREAD_LOSS_SHARE - OVERMIND_LOSS_SAFETY_MARGIN;
+
   const best = bestKnownMargin(mem);
+  // Cargo committed to an active DELIVERY quest's COLLECT_ITEM need — never a
+  // market position. Excluded below from `heldGoods`/`holdingForOtherSystem`:
+  // those exist to route the ship toward a REMEMBERED cross-planet sell price,
+  // which doesn't exist for quest cargo (it's turned in, never sold) — without
+  // this exclusion, holding it while still accumulating the shortfall made the
+  // ladder believe it needed to warp off hunting a "sell destination" that was
+  // never the point, sending the agent into unscouted (and sometimes lethal)
+  // systems purely as a side effect of buying quest cargo across more than one
+  // visit.
+  const questCommittedGoods = new Set(
+    obs.quests.filter((q) => q.collectItem).map((q) => q.collectItem!.type),
+  );
   // The margin restricted to goods actually held right now — distinct from
   // `best` (which can surface a bigger margin for a good the agent doesn't
   // have, useful for the buy-low/go-buy guidance below). Selling decisions
@@ -641,7 +735,9 @@ export function decideWithMemory(
   // "the best sell planet is right here" and never realised it wasn't for
   // what it was carrying, stalling in an earn/take-off loop forever.
   const heldGoods = new Set(
-    mem.inventoryLots.filter((l) => l.qty > 0).map((l) => l.good),
+    mem.inventoryLots
+      .filter((l) => l.qty > 0 && !questCommittedGoods.has(l.good))
+      .map((l) => l.good),
   );
   const bestHeld =
     heldGoods.size > 0
@@ -649,7 +745,21 @@ export function decideWithMemory(
       : bestKnownMargin(mem, () => false);
   const offer = cheapestKnownOffer(mem);
   const canAffordOffer = offer ? credits >= offer.price : false;
-  const danger = routeDangerToGoal(obs, mem);
+  // `routeDangerToGoal`'s `goalSystemId` prefers a carried quest's own target
+  // system over the current one — right for "should I press on toward the
+  // goal", wrong for "am I in danger right now": with an active quest, this
+  // silently swapped in an unrelated (usually danger-free) system, masking
+  // the CURRENT system's own remembered threat entirely. Real-engine
+  // regression: a hostile fought once (hull 130→102) failed to trip
+  // `avoidDanger` while a quest was active — STAR_MAP kept emitting `warp`
+  // instead of holding back, and each new warp risked (and here, compounded
+  // into) another hit, chaining to a death the exact same encounter survives
+  // cleanly goal-less (where `goalSystemId` has nothing to fall back to but
+  // the current system, so this danger is never masked). Folding in the
+  // current system's own threat directly keeps that self-protection intact
+  // regardless of whether a quest redirects the "goal".
+  const currentSystemDanger = mem.threatMap.get(obs.system?.id ?? "") ?? 0;
+  const danger = Math.max(routeDangerToGoal(obs, mem), currentSystemDanger);
   // Heading into a remembered-dangerous goal while not battle-ready ⇒ hold back.
   const avoidDanger = danger > 0 && hull < BATTLE_READY_HULL_FRACTION;
   // Anti-consecutive-warp cadence — once the run has hopped this many systems
@@ -685,9 +795,56 @@ export function decideWithMemory(
   switch (obs.scene) {
     case SceneType.PLANET: {
       const landedId = obs.currentPlanet?.id ?? null;
-      // Sell held cargo here when the remembered buy-price says it profits.
+      // A DELIVERY quest's cargo need already fully bought — committed to the
+      // quest's own turn-in, never the market (see `deliveryReadyToTurnIn`).
+      const readyDelivery = deliveryReadyToTurnIn(obs.quests);
+      // Sell held cargo here when the remembered buy-price says it profits —
+      // unless that cargo is quest-committed (selling it away would strand
+      // the delivery the ladder just spent credits building toward).
       const profitHere = profitIfSoldHere(obs, mem);
-      if (profitHere > 0) push("trade", `sell-for-profit:${profitHere}`);
+      if (profitHere > 0 && !readyDelivery)
+        push("trade", `sell-for-profit:${profitHere}`);
+      // Cut a stale loss: a KNOWN profitable margin exists for held cargo
+      // (`heldGoods`/`bestHeld` above), but the run has gone too long without
+      // a day passing (`daysStagnant`) while stuck at a planet that isn't
+      // that margin's sell destination and isn't profitable to sell at
+      // either. This fires once nothing else in the ladder can make
+      // progress — most commonly once `galaxyEffectivelyLost` (below) is
+      // blocking the warp that would actually reach the sell planet, since a
+      // safety-driven refusal to travel shouldn't also mean holding
+      // unsellable cargo forever. Converts to credits at whatever price this
+      // market offers rather than idling on cargo with nowhere safe to go.
+      if (
+        profitHere <= 0 &&
+        !readyDelivery &&
+        daysStagnant &&
+        heldGoods.size > 0 &&
+        (obs.currentPlanet?.market ?? []).some((m) => heldGoods.has(m.resource))
+      )
+        push("trade", "cut-stale-loss");
+      // Quest cargo — buy the exact remaining amount a carried DELIVERY quest
+      // needs, when this planet stocks it and the KNOWN quest reward already
+      // covers the cost (see `deliveryCargoNeed`: never speculative, always
+      // capped to the shortfall). Ranked above the memory-margin buy-low below
+      // — a contractual payout beats a price guess — and evaluated every visit
+      // regardless of `daysStagnant`: it buys the shortfall exactly once (the
+      // need drops to 0 after), so it can never become a farmed buy/sell loop.
+      const questCargoNeed = deliveryCargoNeed(
+        obs.quests,
+        obs.currentPlanet?.market,
+      );
+      // Gate on affording at least one unit now: without this, an unaffordable
+      // need (profitable on paper against the reward, but pricier than the
+      // agent's current wallet) would push this tier forever with the actual
+      // trade executor buying zero units every visit — a permanent stall.
+      const questCargoPrice =
+        questCargoNeed != null
+          ? (obs.currentPlanet?.market.find(
+              (m) => m.resource === questCargoNeed.good,
+            )?.buy ?? Infinity)
+          : Infinity;
+      if (questCargoNeed && hasHold && credits >= questCargoPrice)
+        push("trade", `buy-quest-cargo:${questCargoNeed.good}`);
       // Buy low: standing on the cheapest source for a known cross-planet margin,
       // with credits + hold space and nothing already in tow.
       const buyPrice =
@@ -706,7 +863,13 @@ export function decideWithMemory(
         push("trade", `buy-low:${best.good}`);
       }
       // Earn — take offered work, else inspect the market, else take off.
-      if ((obs.currentPlanet?.availableQuests ?? 0) > 0)
+      // Stops once the Overmind front is too far along (see
+      // `QUEST_ACCEPT_OVERMIND_SHARE_CEILING`) — a new multi-warp obligation
+      // has no business starting when most of the galaxy is already hostile.
+      if (
+        (obs.currentPlanet?.availableQuests ?? 0) > 0 &&
+        (obs.overmindShare ?? 0) < QUEST_ACCEPT_OVERMIND_SHARE_CEILING
+      )
         push("take-quest", "take-work");
       // Skip market re-visit when already holding cargo: would sell at a loss
       // (same-planet sell < buy) and keeps the agent stuck on one planet.
@@ -725,11 +888,20 @@ export function decideWithMemory(
       break;
     }
     case SceneType.SPACE_FLIGHT: {
+      // A DELIVERY quest's cargo need already fully bought — committed to the
+      // quest's own turn-in, never a market sell (see `deliveryReadyToTurnIn`).
+      // Without this, `bestHeld` (a market-margin view over the whole session's
+      // price book) can name this SAME planet as the "best known" sell
+      // destination for quest-bought cargo (the only price point known for it
+      // yet), permanently ping-ponging land↔take-off here instead of routing
+      // toward the quest's actual target.
+      const readyDelivery = deliveryReadyToTurnIn(obs.quests);
       // Realise a known sell: holding the good and its sell planet is in-system.
       if (
         bestHeld.good != null &&
         heldQty(mem, bestHeld.good) > 0 &&
-        planetInSystem(obs, bestHeld.sellPlanet)
+        planetInSystem(obs, bestHeld.sellPlanet) &&
+        !readyDelivery
       ) {
         push("land", "go-sell", bestHeld.sellPlanet ?? undefined);
       }
@@ -767,38 +939,63 @@ export function decideWithMemory(
         push("land", "go-buy", best.buyPlanet ?? undefined);
       }
       // Progression — quest delivery: the current system is a carried quest's
-      // delivery target. Land on any in-system planet to trigger
-      // `PlanetScene.checkDeliveryQuestCompletion` — the real completion check
-      // lives there (it silently no-ops on the wrong planet/cargo shortfall),
-      // so the ladder only needs to get the ship down, not resolve the quest
-      // itself. Ranked above the (memory-driven) upgrade routing below: a
-      // deliverable-now quest is a closed loop, while the upgrade offer is
-      // only ever a saving target.
-      if (obs.questDeliveryHere) {
+      // delivery target AND that quest is actually completable here (no cargo
+      // requirement, or the requirement is already met). Landing purely because
+      // `obs.questDeliveryHere` (ANY active quest's target, regardless of
+      // readiness) matched used to force a "shortfall" no-op land↔take-off loop
+      // forever whenever a multi-unit cargo need wasn't fully bought yet —
+      // `PlanetScene.checkDeliveryQuestCompletion` just shows a toast and does
+      // nothing else, so nothing ever unstuck it. Only land here once there is
+      // something to actually resolve; otherwise the ladder falls through to
+      // buy/explore tiers that can make real progress toward it. `obs.quests`
+      // is empty only in synthetic fixtures that set the flag directly without
+      // quest detail (real `observe()` output never has the flag true with an
+      // empty list, since it's derived FROM that list) — trust the flag as-is
+      // there so those pure-fixture tests keep pinning the flag's behavior.
+      const currentSystemId = obs.system?.id ?? null;
+      const completableHere = (q: QuestSnapshot) =>
+        q.targetSystemId === currentSystemId &&
+        (!q.collectItem || q.collectItem.carried >= q.collectItem.required);
+      const questDeliveryActionable =
+        obs.questDeliveryHere &&
+        (obs.quests.length === 0 || obs.quests.some(completableHere));
+      if (currentSystemId != null && questDeliveryActionable) {
         const planets = obs.system?.planets ?? [];
-        const currentSystemId = obs.system?.id ?? null;
         // In-system courier runs («Местный подряд») only complete on their
         // named `targetPlanetId` (`evaluateDelivery` returns `n/a` on any
-        // other planet). Landing blindly on `planets[0]` when the target is a
-        // different planet loops land↔take-off forever — an oracle-invisible
-        // soft-lock (it's a land/move, not a `wait`). Prefer the carried
-        // quest's own target planet when it's in this system; only fall back
-        // to `planets[0]` for system-level (cross-system) deliveries that
-        // complete on arrival at any planet.
+        // other planet). Landing blindly on the first completable quest's
+        // target risks picking a DIFFERENT active DELIVERY quest's target
+        // than the one the carried cargo actually satisfies — an
+        // oracle-invisible land↔take-off soft-lock (it's a land/move, not a
+        // `wait`) at the wrong planet. Prefer `readyDelivery`'s own target
+        // (the specific quest the held cargo is committed to) when it names
+        // this system; only fall back to the first completable match's
+        // target / `planets[0]` otherwise.
         const targetPlanetId =
-          currentSystemId != null
-            ? (obs.quests.find(
-                (q) =>
-                  q.targetSystemId === currentSystemId &&
-                  q.targetPlanetId != null,
-              )?.targetPlanetId ?? null)
-            : null;
+          readyDelivery?.targetSystemId === currentSystemId
+            ? (readyDelivery.targetPlanetId ?? null)
+            : (obs.quests.find(
+                (q) => completableHere(q) && q.targetPlanetId != null,
+              )?.targetPlanetId ?? null);
         const deliveryPlanet =
           targetPlanetId != null && planets.some((p) => p.id === targetPlanetId)
             ? targetPlanetId
             : planets[0]?.id;
         if (deliveryPlanet) push("land", "quest-delivery", deliveryPlanet);
       }
+      // Deliberately NOT a dedicated warp toward a ready-to-deliver quest's
+      // DIFFERENT-system target: forcing the ship at high priority toward a
+      // specific never-visited system (rather than the ladder's own ordinary
+      // exploration order) risks an unscouted, possibly-lethal encounter for a
+      // reward that's already a bonus on top of the trade loop, not its point
+      // (real-engine regression: routing straight at a seed's one dangerous
+      // system this way is what killed a full-hull ship in ~5 warp cycles,
+      // where the ladder's ordinary exploration never happened to go there).
+      // Completion for a cross-system delivery is left fully opportunistic —
+      // the in-system `quest-delivery` land tier above fires the moment
+      // ordinary exploration/margin-hunting (see `holdingForOtherSystem` and
+      // the price-discovery/early-explore tiers below, all now quest-cargo-
+      // aware) happens to reach that system on its own.
       // Pursue an affordable upgrade: route to the offer's in-system location.
       if (offer && canAffordOffer) {
         if (planetInSystem(obs, offer.location))
@@ -820,8 +1017,18 @@ export function decideWithMemory(
       //  - holding cargo AND best sell planet not in this system, OR
       //  - holding cargo AND no sell planet known (priceBook only covers this system)
       // Both cases need exploration; the second is the early-game cycle-breaker.
+      // Quest-committed cargo doesn't count (see `questCommittedGoods` above) —
+      // it has no sell destination to hunt for.
+      // Cargo that actually needs a market plan — quest-committed cargo is
+      // excluded (see `questCommittedGoods` above): it never blocks the
+      // price-discovery/early-explore tiers below the way genuine unsold
+      // market cargo does, so the trade loop keeps running (and can still
+      // complete a plain sell-for-profit cycle) while a quest is in tow.
+      const holdsNonQuestCargo = mem.inventoryLots.some(
+        (l) => l.qty > 0 && !questCommittedGoods.has(l.good),
+      );
       const holdingForOtherSystem =
-        mem.inventoryLots.length > 0 &&
+        holdsNonQuestCargo &&
         (bestHeld.sellPlanet === null ||
           !planetInSystem(obs, bestHeld.sellPlanet));
       // Loop-breaker: while holding cargo for a sell planet not in this
@@ -837,7 +1044,13 @@ export function decideWithMemory(
       ) {
         push("land", "discover-prices", earnPlanet);
       }
-      if (holdingForOtherSystem && !avoidDanger && !fuelGate && warpCadenceOk) {
+      if (
+        holdingForOtherSystem &&
+        !avoidDanger &&
+        !fuelGate &&
+        warpCadenceOk &&
+        !galaxyEffectivelyLost
+      ) {
         push("warp", "find-sell-destination");
       }
       // No local margin worth pursuing right now — either genuinely no known
@@ -863,7 +1076,7 @@ export function decideWithMemory(
       if (
         alreadyVisited &&
         noActionableMargin &&
-        mem.inventoryLots.length === 0 &&
+        !holdsNonQuestCargo &&
         !offer &&
         undiscoveredPlanet !== undefined &&
         !daysStagnant
@@ -887,8 +1100,9 @@ export function decideWithMemory(
         !avoidDanger &&
         !fuelGate &&
         warpCadenceOk &&
-        mem.inventoryLots.length === 0 &&
-        !offer
+        !holdsNonQuestCargo &&
+        !offer &&
+        !galaxyEffectivelyLost
       ) {
         push("warp", "early-explore");
       }
@@ -901,9 +1115,11 @@ export function decideWithMemory(
       // cadence (land/dock/wait only once it's tripped).
       if (avoidDanger) {
         push("move", "avoid-danger-hold");
-        if (!fuelGate && warpCadenceOk) push("warp", "explore");
+        if (!fuelGate && warpCadenceOk && !galaxyEffectivelyLost)
+          push("warp", "explore");
       } else {
-        if (!fuelGate && warpCadenceOk) push("warp", "explore");
+        if (!fuelGate && warpCadenceOk && !galaxyEffectivelyLost)
+          push("warp", "explore");
         push("move", "fly");
       }
       break;
@@ -976,7 +1192,11 @@ export function decideWithMemory(
     pick.kind === "warp" &&
     pick.targetId === undefined &&
     WARP_TARGETING_REASONS.has(pick.reason)
-      ? pickWarpNeighbor(obs.system?.neighbors, mem)
+      ? pickWarpNeighbor(
+          obs.system?.neighbors,
+          mem,
+          questRoutingPreference(obs.quests, obs.system?.id ?? null),
+        )
       : pick.targetId;
   return {
     kind: pick.kind,

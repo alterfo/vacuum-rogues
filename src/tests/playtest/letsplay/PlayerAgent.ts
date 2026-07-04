@@ -20,7 +20,7 @@
  * a *real* engine fault (an integration break) is exactly what shows up there.
  * Dev-only: lives under `src/tests/`, imported by no production module.
  */
-import { SceneType } from "@/types";
+import { QuestType, SceneType } from "@/types";
 import { RealEngineHarness, type RecordedError } from "../realEngineHarness";
 import { observe, type Observation } from "./observe";
 import type { Action, PlayerPolicy } from "./PlayerPolicy";
@@ -33,8 +33,12 @@ import {
   executeSellAll,
   executeRepair,
   pickWarpTarget,
+  questRoutingPreference,
+  reachableNeighbors,
+  systemHopDistances,
 } from "./engineQueries";
 import { bestKnownMargin } from "./memoryFeatures";
+import { deliveryCargoNeed } from "./observeHelpers";
 import {
   executeBuyBestGear,
   executeUpgradeHull,
@@ -306,19 +310,51 @@ export class PlayerAgent {
         }
         if (obs.scene === SceneType.TRADE) {
           // Execute the actual market trade, then return to the planet lobby.
-          // Pass the best-known cross-planet margin good ONLY when this planet
-          // is actually that margin's cheap buy planet — otherwise null
-          // (sell-only). Without this check, landing here to realise a SELL
-          // (the ladder's `sell-for-profit`/`go-sell` tiers) would still hand
-          // in the same preferred good, and the executor would immediately
-          // buy it right back at this (non-cheap) planet the moment it's
-          // stocked and affordable — re-creating cargo the ladder just sold,
-          // sometimes at a same-planet loss, and stalling the agent re-selling
-          // the same shrinking lot for many rounds instead of moving on.
-          const margin = bestKnownMargin(this.memory);
-          const preferredGood =
-            margin.buyPlanet === planet.id ? margin.good : null;
-          executeMemoryAwareTrade(engine, planet, preferredGood);
+          // A carried DELIVERY quest's unmet cargo need wins first when it is
+          // stocked+profitable HERE (a known, contractual payout — never a
+          // speculative buy) and is capped to exactly the remaining shortfall.
+          // Otherwise fall back to the best-known cross-planet margin good,
+          // passed ONLY when this planet is actually that margin's cheap buy
+          // planet — otherwise null (sell-only). Without this check, landing
+          // here to realise a SELL (the ladder's `sell-for-profit`/`go-sell`
+          // tiers) would still hand in the same preferred good, and the
+          // executor would immediately buy it right back at this (non-cheap)
+          // planet the moment it's stocked and affordable — re-creating cargo
+          // the ladder just sold, sometimes at a same-planet loss, and
+          // stalling the agent re-selling the same shrinking lot for many
+          // rounds instead of moving on.
+          const questNeed = deliveryCargoNeed(
+            obs.quests,
+            obs.currentPlanet?.market,
+          );
+          // Cargo already committed to an active DELIVERY quest's COLLECT_ITEM
+          // need — never auto-sold by the sell-all-cargo step below, even at a
+          // planet that isn't this quest's own target (see `sellAllCargo`).
+          const questCommittedGoods = new Set(
+            obs.quests
+              .filter((q) => q.type === QuestType.DELIVERY && q.collectItem)
+              .map((q) => q.collectItem!.type),
+          );
+          if (questNeed) {
+            executeMemoryAwareTrade(
+              engine,
+              planet,
+              questNeed.good,
+              questNeed.qty,
+              questCommittedGoods,
+            );
+          } else {
+            const margin = bestKnownMargin(this.memory);
+            const preferredGood =
+              margin.buyPlanet === planet.id ? margin.good : null;
+            executeMemoryAwareTrade(
+              engine,
+              planet,
+              preferredGood,
+              undefined,
+              questCommittedGoods,
+            );
+          }
           await this.harness.goTo(SceneType.PLANET, { planet });
           return;
         }
@@ -346,7 +382,15 @@ export class PlayerAgent {
           return;
         }
         const sys = currentSystem(engine);
-        const connections = sys?.connections ?? [];
+        const connections = reachableNeighbors(
+          engine.galaxy?.systems ?? [],
+          sys?.id ?? null,
+        );
+        const questTarget = questRoutingPreference(obs.quests, sys?.id ?? null);
+        const hopsToQuestTarget =
+          questTarget != null
+            ? systemHopDistances(engine.galaxy?.systems ?? [], questTarget)
+            : undefined;
         const target =
           (action.targetId &&
           connections.some((c) => c.toSystemId === action.targetId)
@@ -357,6 +401,8 @@ export class PlayerAgent {
             this.lastSystemId,
             this.memory.visitedSystemIds,
             new Set(engine.galaxy?.overmindSystems ?? []),
+            questTarget,
+            hopsToQuestTarget,
           );
         this.lastSystemId = sys?.id ?? null;
         const scene = this.harness.currentScene() as {

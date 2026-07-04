@@ -3,7 +3,8 @@
  * (dev-only). Kept isolated from `observe.ts` so each signal is unit-testable
  * against plain data, without booting a `GameEngine`.
  */
-import { StationType } from "@/types";
+import { QuestType, StationType } from "@/types";
+import type { ResourceType } from "@/types";
 import { GearKind } from "@/systems/equipment/GearCatalog";
 import type { HullSpec } from "@/systems/equipment/GearCatalog";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
@@ -67,6 +68,74 @@ export function isQuestDeliveryHere(
   currentSystemId: string,
 ): boolean {
   return quests.some((q) => q.targetSystemId === currentSystemId);
+}
+
+/** One DELIVERY quest's unmet COLLECT_ITEM need — the structural slice of `QuestSnapshot` this reads. */
+export interface QuestCargoNeed {
+  readonly type: QuestType;
+  readonly rewardCredits?: number;
+  readonly collectItem?: {
+    readonly type: ResourceType;
+    readonly required: number;
+    readonly carried: number;
+  } | null;
+}
+
+/**
+ * The best DELIVERY-quest cargo purchase actionable RIGHT HERE: an active
+ * DELIVERY quest's unmet COLLECT_ITEM good, stocked on the current market,
+ * whose full remaining need still costs strictly less than the quest's own
+ * (already-known, contractual) reward. Never a speculative buy — the payout
+ * is a known number, not a price guess — and capped to exactly what the
+ * quest still needs, never the whole wallet. `null` when no active DELIVERY
+ * quest has an affordable, profitable, stocked-here need.
+ */
+export function deliveryCargoNeed(
+  quests: readonly QuestCargoNeed[],
+  market: readonly { resource: ResourceType; buy: number }[] | undefined,
+): { good: ResourceType; qty: number } | null {
+  for (const q of quests) {
+    if (q.type !== QuestType.DELIVERY || !q.collectItem) continue;
+    const need = q.collectItem.required - q.collectItem.carried;
+    if (need <= 0) continue;
+    const listing = market?.find((m) => m.resource === q.collectItem!.type);
+    if (!listing || listing.buy <= 0) continue;
+    const reward = q.rewardCredits ?? 0;
+    if (listing.buy * need >= reward) continue;
+    return { good: q.collectItem.type, qty: need };
+  }
+  return null;
+}
+
+/** A DELIVERY quest ready to turn in, plus where to take the cargo. */
+export interface QuestDeliveryReady {
+  readonly good: ResourceType;
+  readonly targetSystemId: string | null;
+  readonly targetPlanetId: string | null;
+}
+
+/**
+ * An active DELIVERY quest whose COLLECT_ITEM need is now fully met —
+ * cargo held for it is committed to the quest, not a market good to sell, and
+ * the ship should route to the quest's own target rather than a remembered
+ * sell planet. `null` when no carried DELIVERY quest is ready to turn in.
+ */
+export function deliveryReadyToTurnIn(
+  quests: readonly (QuestCargoNeed & {
+    targetSystemId?: string | null;
+    targetPlanetId?: string | null;
+  })[],
+): QuestDeliveryReady | null {
+  for (const q of quests) {
+    if (q.type !== QuestType.DELIVERY || !q.collectItem) continue;
+    if (q.collectItem.carried < q.collectItem.required) continue;
+    return {
+      good: q.collectItem.type,
+      targetSystemId: q.targetSystemId ?? null,
+      targetPlanetId: q.targetPlanetId ?? null,
+    };
+  }
+  return null;
 }
 
 /** The player's outstanding-loan status, read off the bank's ledger + arrears state. */

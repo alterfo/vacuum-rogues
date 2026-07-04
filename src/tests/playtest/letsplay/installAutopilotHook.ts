@@ -39,6 +39,9 @@ import {
   executeRepair,
   executeSellAll,
   pickWarpTarget,
+  questRoutingPreference,
+  reachableNeighbors,
+  systemHopDistances,
 } from "./engineQueries";
 import {
   executeBuyBestGear,
@@ -245,7 +248,10 @@ export function createLiveSceneController(
     async warp(systemId) {
       const sys = currentSystem(engine);
       const prevId = sys?.id ?? null;
-      const connections = sys?.connections ?? [];
+      const connections = reachableNeighbors(
+        engine.galaxy?.systems ?? [],
+        prevId,
+      );
       // When all local connections are already visited (dead-end pocket or
       // fully-explored galaxy) reset the visited set so exploration restarts
       // rather than cycling inside the pocket indefinitely.
@@ -257,6 +263,10 @@ export function createLiveSceneController(
       }
       // Prefers unvisited systems, then avoids the system we just came from,
       // then falls back to connections[0] — prevents ping-pong.
+      const questTarget = questRoutingPreference(
+        engine.questManager.getActiveQuests(),
+        prevId,
+      );
       const target =
         systemId ??
         pickWarpTarget(
@@ -264,6 +274,10 @@ export function createLiveSceneController(
           lastSystemId,
           visitedSystemIds,
           new Set(engine.galaxy?.overmindSystems ?? []),
+          questTarget,
+          questTarget != null
+            ? systemHopDistances(engine.galaxy?.systems ?? [], questTarget)
+            : undefined,
         );
       if (prevId) visitedSystemIds.add(prevId);
       lastSystemId = prevId;

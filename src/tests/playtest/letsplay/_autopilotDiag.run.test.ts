@@ -40,6 +40,9 @@ interface SessionDiag {
   finalOvermindShare: number;
   galaxyFell: boolean; // Overmind share reached the loss threshold at any point
   daysElapsed: number;
+  tookDeliveryQuest: boolean;
+  takeStepFraction: number | null; // fraction of the session elapsed when first taken
+  warpsAfterTake: number;
 }
 
 const OVERMIND_LOSS_SHARE = 0.5; // GAME_BALANCE.OVERMIND_SPREAD_LOSS_SHARE
@@ -124,6 +127,23 @@ function diagnose(s: SessionReport): SessionDiag {
     finalOvermindShare,
     galaxyFell: maxOvermindShare >= OVERMIND_LOSS_SHARE,
     daysElapsed,
+    tookDeliveryQuest: t.some((st) =>
+      (st.action.reason ?? "").includes("take-work"),
+    ),
+    takeStepFraction: (() => {
+      const idx = t.findIndex((st) =>
+        (st.action.reason ?? "").includes("take-work"),
+      );
+      return idx >= 0 ? idx / t.length : null;
+    })(),
+    warpsAfterTake: (() => {
+      const idx = t.findIndex((st) =>
+        (st.action.reason ?? "").includes("take-work"),
+      );
+      return idx >= 0
+        ? t.slice(idx).filter((st) => st.action.kind === "warp").length
+        : 0;
+    })(),
   };
 }
 
@@ -152,6 +172,10 @@ describe("autopilot diagnostic (temp)", () => {
       const bigWait = count((d) => d.longestWaitRun >= 10);
       const noProgress = count((d) => d.creditsDelta <= 0);
       const noQuests = count((d) => d.questsCompleted === 0);
+      const tookQuest = count((d) => d.tookDeliveryQuest);
+      const tookButFailed = count(
+        (d) => d.tookDeliveryQuest && d.questsCompleted === 0,
+      );
       const heavyDmg = count((d) => d.tookHeavyDamage);
       const noWarp = count((d) => d.warps === 0);
       const galaxyFell = count((d) => d.galaxyFell);
@@ -178,6 +202,21 @@ describe("autopilot diagnostic (temp)", () => {
       lines.push(`- took heavy combat damage (>50%): ${pct(heavyDmg)}`);
       lines.push(`- no credit gain over session:     ${pct(noProgress)}`);
       lines.push(`- 0 quests completed:              ${pct(noQuests)}`);
+      lines.push(`- ever took a DELIVERY quest:       ${pct(tookQuest)}`);
+      lines.push(`- took quest but 0 completed:       ${pct(tookButFailed)}`);
+      const takersFrac = diags
+        .filter((d) => d.takeStepFraction != null)
+        .map((d) => d.takeStepFraction as number);
+      const avgTakeFrac = takersFrac.length
+        ? takersFrac.reduce((a, b) => a + b, 0) / takersFrac.length
+        : 0;
+      const avgWarpsAfterTake = avg((d) => d.warpsAfterTake);
+      lines.push(
+        `- avg take-step fraction (of session): ${avgTakeFrac.toFixed(2)}`,
+      );
+      lines.push(
+        `- avg warps AFTER taking a quest:   ${avgWarpsAfterTake.toFixed(2)}`,
+      );
       lines.push(
         `- WANDERING (>=3 warps, 0 quests, Δcr<=0): ${pct(count((d) => d.warps >= 3 && d.questsCompleted === 0 && d.creditsDelta <= 0))}`,
       );
