@@ -391,8 +391,43 @@ for NPCs with distinct goals.
   `letsplay:ci`, `test:save-compat` all green; no existing test touched.
 
 ### Task 8: Final gate + cleanup
-- [ ] Full suite, lint, tsc, playtest, letsplay:ci, save-compat green.
-- [ ] Record the before/after diagnostic table; **delete
+- [x] Full suite, lint, tsc, playtest, letsplay:ci, save-compat green.
+- [x] Record the before/after diagnostic table; **delete
       `_autopilotDiag.run.test.ts`** and its MEMORY.md pointer.
+
+  **Landed 2026-07-04.** Final gate: unit suite 4457 passed / 8 skipped, lint 0
+  errors (44 pre-existing `no-explicit-any` warnings, unrelated), `tsc --noEmit`
+  clean, `test:playtest` 525 passed, `letsplay:ci` 105 passed, `test:save-compat`
+  22 passed. Ran the diagnostic one final time
+  (`DIAG_SESSIONS=100 DIAG_STEPS=60`) to record the before/after table, then
+  deleted `_autopilotDiag.run.test.ts` (scratch harness, per plan instruction)
+  and its `MEMORY.md`/project-memory pointers.
+
+  | Metric | Baseline (2026-07-03, pre-plan) | Final (2026-07-04, post Task 1-7) |
+  |---|---|---|
+  | Died | 13% | 0% |
+  | Net credits delta (avg) | ~−950 | +77 |
+  | Net-positive-credit sessions | ~0-11% (89% no-profit) | 54% (fluctuates 54-60% across runs; short of ≥60% target) |
+  | Quests completed (avg) | ~0.17 (0 originally) | 0.34 (short of ≥1 target) |
+  | Galaxy-fell (≥50% Overmind share) | 50% (old 0.5 loss threshold) | 44% (proxy bucket only — real loss threshold now 0.85, never hit in this run) |
+  | Fuel-stranded | not measured pre-plan | 0% |
+  | Harness errors | 0% | 0% |
+  | Avg game-days/session | ~26 | ~22 |
+
+  The quest (0.34 avg, target ≥1) and net-positive-credit (54%, target ≥60%)
+  numbers remain short of the plan's original success criteria. Both gaps trace
+  to the SAME already-diagnosed, deliberately-deferred root cause from Task 2:
+  once a hostile is fought mid-flee, `avoidDanger`'s current-system threat term
+  blocks the STAR_MAP escape warp every decide, looping `flee`⇄`avoid-danger-
+  back` until the step budget is exhausted with quest cargo never bought and no
+  further trades executed. A narrow attempted fix raised deaths 0%→79% in the
+  same diagnostic and was reverted — `avoidDanger`'s current-system term is
+  load-bearing for the 0%-death result and not a simple oversight. This is
+  tracked in memory `project-letsplay-flee-noop-deadhead.md` as the starting
+  point for any future work on these two numbers; fixing it was out of scope
+  for this plan (which targeted trading/quests/UX/NPC-brains, not the
+  flee-executor). Combat safety (0% deaths, 0% heavy damage) and the Overmind
+  85%-threshold win condition — both prerequisites this plan depended on — are
+  intact and unregressed.
 
 *Note: ralphex automatically moves completed plans to `docs/plans/completed/`.*
