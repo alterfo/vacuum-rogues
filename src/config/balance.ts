@@ -451,6 +451,14 @@ export const GAME_BALANCE = {
    * - LOSS_SHARE: Overmind share at/above which (past grace, big enough) the arc is lost.
    * - CONTAINED_SHARE: once the share peaked above this and is pushed back to/below it, the arc is contained.
    * - MIN_SYSTEMS: loss is suppressed on tiny/legacy maps below this system count.
+   *
+   * Tuning note (autopilot-overmind-slayer plan, Task 4): GRACE_DAYS/INTERVAL_DAYS
+   * are already at the MAXIMUM slowdown the locked arc tests permit (grace ≤ 6,
+   * interval ≤ 5 — see `overmindArc.test.ts`), and CAPTURES_PER_TICK is at its
+   * floor (1). There is no config-only headroom left here to let liberation
+   * outpace the spread; the real gate is gear availability (all systems generate
+   * at techLevel 1, so no hull/weapon is buyable and the autopilot never reaches
+   * battle-ready) — a generation change, not a balance one.
    */
   OVERMIND_SPREAD_GRACE_DAYS: 6,
   OVERMIND_SPREAD_INTERVAL_DAYS: 5,
@@ -476,6 +484,14 @@ export const GAME_BALANCE = {
    * HP and shields multiplier applied to enemies in overmind/pirate-controlled
    * systems. Makes early-game players unable to liberate systems solo while
    * a fully geared player (bastion hull + plasma cannon) can win.
+   *
+   * Tuning note (autopilot-overmind-slayer plan, Task 4): this pair is PINNED by
+   * `combatLiberation.test.ts` — an early scout (90/20/14) must LOSE and a top
+   * loadout (360/100/55) must WIN a garrison fight. Lowering it (e.g. to 1.2)
+   * lets the scout win at round 7 and reds that test, so garrison strength cannot
+   * be softened to help liberation. The design is correct: a battle-ready ship
+   * already clears garrisons; the missing piece is being able to BUY that gear
+   * (all-techLevel-1 generation), which is out of this balance knob's reach.
    */
   OVERMIND_COMBAT_HP_MULT: 1.5,
   /**

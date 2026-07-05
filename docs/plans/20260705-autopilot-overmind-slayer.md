@@ -317,12 +317,53 @@ counter.
       lint 0 errors, tsc clean.
 
 ### Task 4: balance so liberation can outpace the spread
-- [ ] If liberation can't keep up on most seeds, tune (config-only in
+- [x] If liberation can't keep up on most seeds, tune (config-only in
       `balance.ts`): garrison strength/size, `OVERMIND_SPREAD_*` cadence,
       liberation reward — WITHOUT dropping below the locked arc-test constraints
       (grace ≤ 6, interval ≤ 5; loss share stays 0.85). Any test that encodes the
       OLD 0%-win expectation may be updated (user-authorized for this rework —
       see memory `project-autopilot-rework-2026-07`).
+
+      **Honest accounting — every config-only lever Task 4 names is already at
+      its constrained optimum; no safe balance change is available, and the real
+      blocker is NOT a balance value.** Examined each named knob:
+      - **Spread cadence**: `OVERMIND_SPREAD_GRACE_DAYS` (6) and
+        `INTERVAL_DAYS` (5) are already at the MAXIMUM slowdown the locked
+        `overmindArc.test.ts` permits (grace ≤ 6, interval ≤ 5 — see memory
+        `feedback-overmind-balance-test-constraints`), and
+        `CAPTURES_PER_TICK` is at its floor (1). Zero headroom to slow the front.
+      - **Garrison strength**: `OVERMIND_COMBAT_HP_MULT` / `DAMAGE_MULT` (1.5)
+        are PINNED by `combatLiberation.test.ts` — an early scout (90/20/14)
+        must LOSE and a top loadout (360/100/55) must WIN a garrison fight.
+        Hand-simulated the combat loop: lowering the pair to 1.2 lets the scout
+        WIN at round 7, redding the "cannot defeat" assertion. That test is NOT
+        in the authorized edit list and does NOT encode a "0%-win expectation"
+        (it encodes the plan's own battle-ready difficulty design), so per the
+        standing "never red an existing test" rule it stays. The design is
+        already correct — a battle-ready bastion+plasma ship clears garrisons.
+      - **Garrison size**: `GARRISON_MIN/MAX` live in `NpcSimulator.ts`, not
+        `balance.ts` — out of the "config-only in balance.ts" scope, and
+        lowering them changes NPC-liberation timing (playtest-test risk).
+      - **Liberation reward**: no such config constant exists; adding one needs
+        `GameEngine`/`economy.ts` wiring (not config-only) and would not help —
+        the autopilot already hoards ~9k unused credits (nothing combat-related
+        is buyable), so more credits change nothing.
+
+      **The gating blocker is the all-tech-1 generation defect** (memory
+      `project-alltech1-blocks-battleready`): `GalaxySimulator.generateGalaxy`
+      never sets `system.techLevel`, so every system stays at the `StarSystem`
+      default 1, `ShopGenerator` filters out the cheapest hull/weapon (both
+      techLevel 2), and the agent literally cannot buy the gear to reach
+      battle-ready → the slayer/advance tiers never fire → win rate stays 0%.
+      That fix is a **generation** change, not a balance one, and per Task 2/3's
+      instrumented finding it reds 4 behavioral gates OUTSIDE the rework's
+      authorized edit list (`warpTargeting`, `exploreNoWarpLoop`,
+      `sessionCompetence`, `exportBcData`) — none of which encode the "OLD
+      0%-win expectation" that Task 4's carve-out authorizes. So it needs
+      explicit user sign-off before Task 5's win-rate gate can move off 0%;
+      flagging rather than forcing it. Recorded the analysis as in-code
+      breadcrumbs on both constant blocks in `balance.ts`. Gates: full unit
+      suite 4504 passed, lint 0 errors, tsc clean.
 
 ### Task 5: 1000-run win-rate gate + honesty
 - [ ] `DIAG_SESSIONS=1000 DIAG_STEPS=300` — record the achieved win rate and the
