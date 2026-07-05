@@ -164,6 +164,19 @@ export const DISCOVERY_LANDINGS_PER_SYSTEM = 2;
 export const MAX_WARP_REJECT_FOLDS = 1;
 
 /**
+ * Below this hull fraction, the Overmind-slayer tier (Task 3) breaks off a
+ * garrison fight even while battle-ready and standing in a held system —
+ * clearing a garrison is the goal, dying in one is not. Above it, a
+ * battle-ready ship stands and fights (overriding `flee-outmatched`); at or
+ * below it the ordinary survive block's flee/repair sequencing takes back over,
+ * so the slayer never trades itself down to a hull loss. Matches the CJM-E
+ * goal branch's `OVERMIND_SLAYER_RETREAT_HULL_FRACTION` (same "retreat when
+ * genuinely hurt near the core" reasoning); kept as a separate base-ladder
+ * constant so the two tiers can diverge under Task 4 tuning without coupling.
+ */
+export const SLAYER_RETREAT_HULL_FRACTION = 0.4;
+
+/**
  * Below this hull fraction near a rising Overmind front, the goal-less base
  * ladder proactively leaves the system (`warp` away) instead of idling —
  * distinct from `LOW_HULL_FRACTION` (an active hostile's fight-or-flee
@@ -342,6 +355,40 @@ function pickWarpNeighbor(
     ) {
       bestDanger = danger;
       bestProgress = progress;
+      bestId = n.systemId;
+    }
+  }
+  return bestId;
+}
+
+/**
+ * Choose a `warp` destination that walks TOWARD the Overmind front (Task 3) —
+ * the mirror image of {@link pickWarpNeighbor}, used only for the battle-ready
+ * slayer's `slayer-advance` warp. A neighbour that is itself `overmindHeld` is
+ * the front, so it wins outright; otherwise the neighbour with the smallest
+ * `hopsToOvermindFront` (multi-source BFS distance to the nearest held system,
+ * stamped by `observe()`) wins, breaking ties away from `previousSystemId` so
+ * two adjacent systems don't ping-pong. Returns `undefined` when no neighbour
+ * has a known route to the front (no front, or older fixtures without neighbour
+ * detail) — the caller then leaves the warp untargeted for the applier.
+ */
+function pickFrontwardNeighbor(
+  neighbors: SystemSnapshot["neighbors"],
+  mem: AgentMemory,
+): string | undefined {
+  if (!neighbors || neighbors.length === 0) return undefined;
+  const direct = neighbors.find((n) => n.overmindHeld);
+  if (direct) return direct.systemId;
+  let bestId: string | undefined;
+  let bestHops = Infinity;
+  let bestTie = Infinity;
+  for (const n of neighbors) {
+    const hops = n.hopsToOvermindFront;
+    if (hops === undefined) continue;
+    const tie = n.systemId === mem.previousSystemId ? 1 : 0;
+    if (hops < bestHops || (hops === bestHops && tie < bestTie)) {
+      bestHops = hops;
+      bestTie = tie;
       bestId = n.systemId;
     }
   }
@@ -708,6 +755,35 @@ export function decideWithMemory(
   const cargoCap = obs.player?.cargoCapacity ?? 0;
   const hasHold = cargoCap > 0 && cargoUsed < cargoCap;
 
+  // 0.5) Overmind-slayer, close-in (Task 3). Two moves that must OUTRANK the
+  // survive block below (hence pushed first):
+  //  - LIBERATE a garrison-cleared held system — legal only when the current
+  //    system is Overmind-held with no hostile ships left, so it is always a
+  //    pure, downside-free step toward share 0 (freeing NPC-cleared systems the
+  //    ship merely passes through, too). Ungated by battle-ready: the fight is
+  //    already over when it becomes legal.
+  //  - STAND AND FIGHT a garrison while battle-ready and standing in the held
+  //    system — the ONE place `flee-outmatched` is overridden. Gated strictly on
+  //    `isBattleReady` AND `overmindHeldHere` (a deliberate liberation mission,
+  //    reached only by the advance warp below — ordinary play avoids the front),
+  //    so a not-battle-ready ship that stumbles onto a garrison still flees via
+  //    the survive block (no death regression). Breaks off below
+  //    `SLAYER_RETREAT_HULL_FRACTION` — dropping the `attack` push there lets the
+  //    survive block's flee/repair reclaim control before the fight turns lethal.
+  const battleReady = isBattleReady(obs);
+  const inGarrison = obs.overmindHeldHere === true;
+  if (legal.has("liberate")) {
+    push("liberate", "slayer-liberate");
+  }
+  if (
+    battleReady &&
+    inGarrison &&
+    obs.hostiles.length > 0 &&
+    hull >= SLAYER_RETREAT_HULL_FRACTION
+  ) {
+    push("attack", "slayer-clear-garrison", obs.hostiles[0]?.id);
+  }
+
   // 1) Survive — react to a present threat first, then patch a low hull.
   if (obs.hostiles.length > 0) {
     const tid = obs.hostiles[0]?.id;
@@ -777,6 +853,31 @@ export function decideWithMemory(
     obs.hostiles.length === 0
   ) {
     push("warp", "flee-overmind-front");
+  }
+
+  // 1.6) Overmind-slayer, advance (Task 3): a battle-ready ship NOT yet in a
+  // garrison, with no local fight and fuel to spare, routes TOWARD the nearest
+  // Overmind-held system to go clear it (targeted by `pickFrontwardNeighbor` in
+  // the pick block below). Ranked below every survival tier above (present-
+  // hostile reaction, low-hull repair, fuel-critical refuel, front-flee) so
+  // survival always wins *between* engagements, but above the ordinary
+  // trade/earn/explore ladder in the scene switch — once strong enough,
+  // finishing the war outranks more trading. Requires a neighbour with a known
+  // route to the front (`hopsToOvermindFront`), so it never fires with no arc
+  // to fight. Deliberately NOT gated by the anti-consecutive-warp cadence: a
+  // committed march to the front shouldn't be interrupted by the generic
+  // anti-blind-warp heuristic, exactly like `flee-overmind-front` above.
+  const frontReachable = (obs.system?.neighbors ?? []).some(
+    (n) => n.hopsToOvermindFront !== undefined,
+  );
+  if (
+    battleReady &&
+    !inGarrison &&
+    obs.hostiles.length === 0 &&
+    !fuelGate &&
+    frontReachable
+  ) {
+    push("warp", "slayer-advance");
   }
 
   // The galaxy is close enough to the true "arc lost" line (`balance.ts`
@@ -1343,15 +1444,20 @@ export function decideWithMemory(
   // can walk a holding-cargo run into a system whose danger is only
   // discovered on arrival; blind selection there matches pre-Task-5
   // behavior).
+  // A `slayer-advance` warp routes the OPPOSITE way — toward the front, not away
+  // from it — so it takes its own frontward picker rather than the Overmind-
+  // avoiding `pickWarpNeighbor` used by the threat/explore reasons.
   const targetId =
-    pick.kind === "warp" &&
-    pick.targetId === undefined &&
-    WARP_TARGETING_REASONS.has(pick.reason)
-      ? pickWarpNeighbor(
-          obs.system?.neighbors,
-          mem,
-          questRoutingPreference(obs.quests, obs.system?.id ?? null),
-        )
+    pick.kind === "warp" && pick.targetId === undefined
+      ? pick.reason === "slayer-advance"
+        ? pickFrontwardNeighbor(obs.system?.neighbors, mem)
+        : WARP_TARGETING_REASONS.has(pick.reason)
+          ? pickWarpNeighbor(
+              obs.system?.neighbors,
+              mem,
+              questRoutingPreference(obs.quests, obs.system?.id ?? null),
+            )
+          : pick.targetId
       : pick.targetId;
   return {
     kind: pick.kind,

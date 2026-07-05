@@ -260,13 +260,61 @@ counter.
       cheap-gear buys. See memory `project-alltech1-blocks-battleready`.
 
 ### Task 3: Overmind-slayer decision tier
-- [ ] When battle-ready, seek the nearest frontier / Overmind-held system
+- [x] When battle-ready, seek the nearest frontier / Overmind-held system
       (`overmindHeld`, `frontierSystems`, hop distances), route there, engage and
       **clear the garrison** (fight — override `flee-outmatched` ONLY here, ONLY
       when battle-ready), then `liberate`. Repeat toward share 0.
-- [ ] Preserve flee-from-strong when NOT battle-ready / not on a mission (no
+
+      **Done.** Added the full slayer tier to `MemoryHeuristicPolicy.ts`:
+      - **Advance** (§1.6): a battle-ready ship with no local fight and fuel to
+        spare pushes `warp:slayer-advance`, targeted by the new
+        `pickFrontwardNeighbor` (mirror of `pickWarpNeighbor`) — an
+        `overmindHeld` neighbour wins outright, else the neighbour with the
+        smallest `hopsToOvermindFront`. Fed by a new observation surface:
+        `overmindFrontHopDistances` (multi-source BFS over the UNDIRECTED warp
+        graph, `engineQueries.ts`), stamped per-neighbour as
+        `SystemSnapshot.neighbors[].hopsToOvermindFront` and the current-system
+        flag `Observation.overmindHeldHere` (`observe.ts`, seed set mirrors the
+        per-neighbour `overmindHeld`, core counts as held before its garrison
+        catches up).
+      - **Clear the garrison** (§0.5): the ONE place `flee-outmatched` is
+        overridden — `attack:slayer-clear-garrison`, gated strictly on
+        `isBattleReady && overmindHeldHere && hostiles.length>0 &&
+        hull >= SLAYER_RETREAT_HULL_FRACTION (0.4)`. Below the floor it drops the
+        push so the survive block's flee/repair reclaims control.
+      - **Liberate** (§0.5): `liberate:slayer-liberate` wins outright whenever
+        legal (garrison cleared) — ungated by battle-ready, a downside-free step
+        toward share 0 (also frees NPC-cleared systems the ship passes through;
+        the diagnostic logged a real "Player liberated system sys_6").
+      Tests: new `overmindSlayer.test.ts` (14 cases — BFS, advance targeting,
+      stand-and-fight override, retreat-floor break-off, liberate, plus the
+      not-battle-ready / no-front / survival-outranks negatives).
+- [x] Preserve flee-from-strong when NOT battle-ready / not on a mission (no
       death regression). Verify with the diagnostic: deaths stay 0%.
-- [ ] Respect fuel/repair survival tiers between engagements.
+
+      **Verified.** Pure tests pin: a NOT-battle-ready ship in a held system with
+      an over-HP'd garrison still returns `flee:flee-outmatched` (never `slayer`);
+      a NOT-battle-ready ship never emits `slayer-advance`. Diagnostic
+      (`DIAG_SESSIONS=40 DIAG_STEPS=250`): **died 0/40 (0%)**, 0 harness errors.
+      **Honest accounting:** battle-ready is still reached 0/40 (the all-tech-1
+      generation defect flagged in Task 2 — see `project-alltech1-blocks-battleready`),
+      so in real tech-1 sessions the fight/advance tiers are behavior-neutral
+      (never fire); WON stays 0% at the engine level until Task 4 enables varied
+      techLevel generation. The tier's machinery is proven correct by the pure
+      tests over battle-ready fixtures; exercising it end-to-end in a real session
+      needs the Task 4 generation fix + high-tech-shop routing.
+- [x] Respect fuel/repair survival tiers between engagements.
+
+      **Done.** `slayer-advance` is ranked below every survival tier
+      (present-hostile reaction, low-hull repair, fuel-critical refuel,
+      front-flee) and carries the `!fuelGate` guard, so a fuel-critical ship
+      refuels first (test: `refuel-critical` wins over the advance) and a chance
+      hostile en route gets the ordinary fight-or-flee reaction before any march
+      to the front (test). The garrison-fight break-off at
+      `SLAYER_RETREAT_HULL_FRACTION` hands a genuinely hurt ship back to the
+      survive block's flee/repair sequencing.
+      Gates: full unit suite 4504 passed, `letsplay:ci` 105, `test:playtest` 572,
+      lint 0 errors, tsc clean.
 
 ### Task 4: balance so liberation can outpace the spread
 - [ ] If liberation can't keep up on most seeds, tune (config-only in

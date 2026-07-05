@@ -46,6 +46,7 @@ import {
   reachableNeighbors,
   questRoutingPreference,
   systemHopDistances,
+  overmindFrontHopDistances,
 } from "./engineQueries";
 
 /**
@@ -205,6 +206,15 @@ export interface SystemSnapshot {
      * active quest target or when this neighbour can't reach it.
      */
     hopsToQuestTarget?: number;
+    /**
+     * Multi-source BFS hop-distance from this neighbour to the NEAREST
+     * Overmind-held system (Task 3, `overmindFrontHopDistances`) — `0` when the
+     * neighbour is itself held, `1` when it borders the front, etc. Lets the
+     * Overmind-slayer tier route a battle-ready ship *toward* the front by
+     * minimising this value (the mirror of `hopsToQuestTarget`). `undefined`
+     * when no Overmind front exists yet or the neighbour can't reach it.
+     */
+    hopsToOvermindFront?: number;
   }[];
 }
 
@@ -309,6 +319,16 @@ export interface Observation {
   overmindShare?: number;
   /** The current system is (or is one warp hop from) the Overmind core system. */
   nearOvermindCore?: boolean;
+  /**
+   * The player's CURRENT system is Overmind-held (`Galaxy.isOvermindSystem`, or
+   * the core itself before its garrison spread catches up). The Overmind-slayer
+   * tier (Task 3) reads this as "I'm standing at the front on a liberation
+   * mission" — the ONLY place it overrides `flee-outmatched` to stand and clear
+   * a garrison, and where a cleared system becomes `liberate`-able. Defaults to
+   * false. Distinct from `nearOvermindCore` (adjacency to the core), which stays
+   * true one hop out where there is no garrison to fight yet.
+   */
+  overmindHeldHere?: boolean;
   /** A carried quest's delivery system is the player's current system. */
   questDeliveryHere?: boolean;
   /** The player currently owes an outstanding bank loan. */
@@ -683,6 +703,22 @@ export function observe(
       ? systemHopDistances(galaxy.systems, questTargetSystemId)
       : null;
 
+  // Front routing (Task 3): distance from every system to the nearest
+  // Overmind-held one, so a battle-ready ship can walk *toward* the front. The
+  // seed set mirrors the per-neighbour `overmindHeld` flag below — the core
+  // counts as held even before `addOvermindSystem` catches up (garrison spread
+  // lags core placement), so a slayer routing toward the front still homes on
+  // the core itself. Empty map (no field) when no front exists yet.
+  const overmindFrontSeeds =
+    galaxy.overmindCoreSystemId !== "" &&
+    !galaxy.overmindSystems.includes(galaxy.overmindCoreSystemId)
+      ? [...galaxy.overmindSystems, galaxy.overmindCoreSystemId]
+      : galaxy.overmindSystems;
+  const hopsToOvermindFront =
+    overmindFrontSeeds.length > 0
+      ? overmindFrontHopDistances(galaxy.systems, overmindFrontSeeds)
+      : null;
+
   const systemSnapshot: SystemSnapshot | null = system
     ? {
         id: system.id,
@@ -730,6 +766,7 @@ export function observe(
             (galaxy.overmindCoreSystemId !== "" &&
               c.toSystemId === galaxy.overmindCoreSystemId),
           hopsToQuestTarget: hopsToQuestTarget?.get(c.toSystemId),
+          hopsToOvermindFront: hopsToOvermindFront?.get(c.toSystemId),
         })),
       }
     : null;
@@ -795,6 +832,15 @@ export function observe(
     system,
     galaxy.overmindCoreSystemId,
   );
+  // The current system itself is Overmind-held — the "at the front" gate the
+  // slayer tier uses to override flee and to recognise a liberate-able system.
+  // Mirrors the per-neighbour `overmindHeld` seed set (the core counts as held
+  // even before its garrison spread catches up).
+  const overmindHeldHere =
+    system != null &&
+    (galaxy.isOvermindSystem(system.id) ||
+      (galaxy.overmindCoreSystemId !== "" &&
+        system.id === galaxy.overmindCoreSystemId));
   const questDeliveryHere = isQuestDeliveryHere(quests, player.currentSystemId);
   const loanStatus = loanStatusOf(engine.bankingService, player.id);
   const { cheapestGearPrice, bestHullPrice } = system
@@ -861,6 +907,7 @@ export function observe(
     hasRepairDock,
     overmindShare,
     nearOvermindCore,
+    overmindHeldHere,
     questDeliveryHere,
     activeLoans: loanStatus.active,
     loanBalance: loanStatus.active ? loanStatus.balance : undefined,

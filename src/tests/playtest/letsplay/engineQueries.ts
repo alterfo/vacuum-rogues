@@ -181,6 +181,53 @@ export function systemHopDistances(
 }
 
 /**
+ * Multi-source BFS hop-distance from every system to the NEAREST Overmind-held
+ * system, over the warp graph treated as UNDIRECTED (same convention as
+ * {@link systemHopDistances}/`frontierSystems`). Every held system seeds the
+ * queue at distance 0, so a held system reads 0, a frontier system (adjacent to
+ * one) reads 1, and so on outward — letting the Overmind-slayer tier (Task 3)
+ * greedily walk a battle-ready ship *toward* the front by minimising this value,
+ * the mirror image of {@link systemHopDistances}'s quest routing. Empty map when
+ * `overmindSystemIds` is empty (no front to route toward). Pure — no engine
+ * access — so it's cheaply unit-testable against a mock systems list.
+ */
+export function overmindFrontHopDistances(
+  systems: readonly {
+    id: string;
+    connections: readonly { toSystemId: string }[];
+  }[],
+  overmindSystemIds: readonly string[],
+): ReadonlyMap<string, number> {
+  const knownIds = new Set(systems.map((s) => s.id));
+  const dist = new Map<string, number>();
+  const adjacent = new Map<string, Set<string>>();
+  for (const s of systems) adjacent.set(s.id, new Set());
+  for (const s of systems) {
+    for (const c of s.connections) {
+      if (!knownIds.has(c.toSystemId)) continue;
+      adjacent.get(s.id)?.add(c.toSystemId);
+      adjacent.get(c.toSystemId)?.add(s.id);
+    }
+  }
+  const queue: string[] = [];
+  for (const oid of overmindSystemIds) {
+    if (!knownIds.has(oid) || dist.has(oid)) continue;
+    dist.set(oid, 0);
+    queue.push(oid);
+  }
+  for (let head = 0; head < queue.length; head++) {
+    const cur = queue[head];
+    const d = dist.get(cur) ?? 0;
+    for (const n of adjacent.get(cur) ?? []) {
+      if (dist.has(n)) continue;
+      dist.set(n, d + 1);
+      queue.push(n);
+    }
+  }
+  return dist;
+}
+
+/**
  * The target system of the (at most one, {@link MAX_ACTIVE_DELIVERY_QUESTS})
  * active DELIVERY quest, when it differs from `currentSystemId` — the value
  * to pass as {@link pickWarpTarget}'s `prefer` so ordinary exploration warps
