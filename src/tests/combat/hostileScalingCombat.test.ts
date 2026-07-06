@@ -215,6 +215,30 @@ describe("CombatModule — scaled damage stays on the god-mode path (Task 4)", (
     expect(deaths()).toBe(0);
   });
 
+  it("GOD: the engagement ENDS once the ship is downed (no eternal pounding)", () => {
+    // Task 7 campaign wedge: a fight against a permanently-downed GOD ship
+    // used to run forever — the downed ship can't fire, can't die (floor),
+    // and an active fight pins the galaxy calendar (US-070 #5), freezing the
+    // world for the rest of the session (even a live player is soft-locked;
+    // their only out is load-save). A downed ship is not a combatant: the
+    // engagement is decided, so the module must end it.
+    const floor = hullFloorFor("GOD", MAX_HULL);
+    const ship = { hullHP: 15, maxHull: MAX_HULL };
+    const { module, deaths } = makeModule(ship, {
+      mode: "GOD",
+      hostile: true,
+      peakPower: 1,
+    });
+    module.addCombatant(makeSprite("a", { hullHP: 100000, damage: 9999 }));
+    module.update(FIRE); // the flooring volley
+    expect(ship.hullHP).toBe(floor);
+    module.update(FIRE); // next frame: the fight must be over
+    expect(module.isActive).toBe(false);
+    module.update(FIRE); // and stay over — no further volleys land
+    expect(ship.hullHP).toBe(floor);
+    expect(deaths()).toBe(0);
+  });
+
   it("NORMAL: a scaled lethal volley still reaches 0 and reports death", () => {
     const ship = { hullHP: 15, maxHull: MAX_HULL };
     const { module, deaths } = makeModule(ship, {

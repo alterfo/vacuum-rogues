@@ -457,16 +457,40 @@ describe("MemoryHeuristicPolicy (stateful adapter)", () => {
     expect(action.reason).toContain("find-sell-destination");
   });
 
-  it("does NOT warp to sell destination when the route is remembered as dangerous", () => {
+  // Rewritten under the three-year-campaign test license (Task 7), meaning
+  // preserved: a hurt ship doesn't fly a sell route through live danger. The
+  // old pin — a mere threatMap ENTRY for the current system suppressing every
+  // exploratory warp — is exactly the behavior Task 7 removed: threatMap
+  // never decays, so one old scrape permanently pinned any scratched ship in
+  // a depleted system (measured: 126 consecutive earn/take-off steps,
+  // 1207→167cr). Warping AWAY is how a hurt ship gets safer; the sell warp
+  // holds back only while this system's hostiles are PRESENT (they can
+  // intercept mid-transit — `dangerHereLive` in `avoidDangerAhead`).
+  it("does NOT fly the sell route while hostiles are live here and the ship is hurt", () => {
     const mem = abBook();
     mem.inventoryLots = [{ good: M, qty: 5, buyPrice: 100 }];
-    mem.threatMap.set("sysA", 4); // current system remembered as dangerous
+    mem.threatMap.set("sysA", 4);
     const action = decideWithMemory(
-      obs({ connections: 2, player: { hullFraction: 0.5 } }), // hurt + warp legal
+      obs({
+        connections: 2,
+        hostiles: [hostile("raider-1", 300)],
+        player: { hullFraction: 0.5 },
+      }),
       mem,
     );
-    // avoidDanger (danger > 0 && hull < BATTLE_READY_HULL_FRACTION) suppresses warp
-    expect(action.kind).not.toBe("warp");
+    expect(action.reason).not.toContain("find-sell-destination");
+  });
+
+  it("a remembered (stale) threat alone no longer pins the sell route (Task 7)", () => {
+    const mem = abBook();
+    mem.inventoryLots = [{ good: M, qty: 5, buyPrice: 100 }];
+    mem.threatMap.set("sysA", 4); // remembered, but no live hostile in sight
+    const action = decideWithMemory(
+      obs({ connections: 2, player: { hullFraction: 0.5 } }),
+      mem,
+    );
+    expect(action.kind).toBe("warp");
+    expect(action.reason).toContain("find-sell-destination");
   });
 
   it("decide(obs, memory) uses the supplied notebook without double-folding", () => {

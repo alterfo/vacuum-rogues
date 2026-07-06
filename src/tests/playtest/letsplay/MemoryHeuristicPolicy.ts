@@ -100,6 +100,21 @@ export const BATTLE_READY_WEAPON_DAMAGE = 30;
 export const MILITARY_SPEND_TRADE_RESERVE = 1000;
 
 /**
+ * Minimum profit fraction (`BestMargin.fraction`, = margin / sell) a
+ * remembered cross-planet margin must clear before the ladder will WARP BACK
+ * to farm it (`go-restock`, Task 7). Prices drift between recording and
+ * realisation (every buy raises the source price, every sell drops the
+ * destination price, and days pass in transit), so a thin margin routinely
+ * evaporates into a same-planet loss by arrival — measured: an ungated
+ * restock loop turned the 200-day session into 32 trade executions with 19
+ * `cut-stale-loss` dumps and a NET LOSS vs. never farming at all. A margin
+ * that survives the round trip needs real headroom; anything under this is
+ * left as an incidental, single-shot opportunity (`buy-low` while already
+ * standing there), never a route.
+ */
+export const MIN_FARM_MARGIN_FRACTION = 0.25;
+
+/**
  * Whether the ship is combat-capable enough to take on an Overmind garrison —
  * its derived `maxHull` and installed `weaponDamage` both clear the
  * {@link BATTLE_READY_MAX_HULL}/{@link BATTLE_READY_WEAPON_DAMAGE} thresholds.
@@ -247,6 +262,11 @@ const WARP_TARGETING_REASONS = new Set([
   "early-explore",
   "explore",
   "warp",
+  // Task 7: the active quest-completion warp — `pickWarpNeighbor`'s
+  // quest-target routing (direct-neighbour match, else hops-to-target among
+  // danger-tied neighbours) is exactly the "toward the KNOWN destination,
+  // never through a visible garrison" pick this tier needs.
+  "go-deliver",
 ]);
 
 /**
@@ -762,6 +782,22 @@ export function decideWithMemory(
   const legal = new Set(obs.legalActions);
 
   if (detectDeadlock(obs, mem)) {
+    // Shelter landing first (Task 7): in the compound worst-case WITH a live
+    // hostile present, `wait` freezes the galaxy calendar forever (a fight
+    // pins the day by design — US-070 #5), so the "diagnostic wait" became an
+    // eternal wedge once the campaign horizon actually reached this state
+    // (measured: 3181 consecutive deadlock-waits at day 306). Landing is
+    // legal even downed, advances in-system days, refuels, and the planet's
+    // quest board can lift the no-quest arm — the one world-advancing move
+    // left. The bare `wait` remains for fixtures/systems with no planet.
+    const shelter = earnPlanetId(obs);
+    if (shelter !== undefined && legal.has("land")) {
+      return {
+        kind: "land",
+        reason: "mem:deadlock-shelter",
+        targetId: shelter,
+      };
+    }
     return { kind: "wait", reason: "mem:deadlock" };
   }
 
@@ -895,6 +931,29 @@ export function decideWithMemory(
   if (hurt && obs.player?.canAffordRepair !== false) {
     push("repair", "repair-low-hull");
     push("dock", "dock-to-repair", obs.system?.stations[0]?.id);
+  }
+  // Downed-and-broke rescue (Task 7): a DOWNED ship cannot warp/fight and an
+  // unaffordable repair prunes the tier above, so with an empty wallet the
+  // ladder used to fall through to earn-landings that earn nothing — the
+  // terminal churn of the 200-day GOD probe (600+ land↔take-off steps at
+  // 0cr). The game's own exit is the bank: dock and take the standard 5000cr
+  // loan (`take-loan` is legal from STATION/BANK), which makes the repair
+  // affordable next fold; the STATION repay tier below clears the debt once
+  // the economy is running again. Gated on DOWNED so an ordinary broke-but-
+  // mobile ship still earns its repair money honestly instead of borrowing.
+  // Only while debt-free: with a loan already outstanding a second `take-loan`
+  // is illegal, so pushing the dock anyway spun a dock↔leave wedge (measured:
+  // 1832 dock-to-loan no-ops at day 255) — an indebted, downed, broke ship
+  // falls through to the earn-landing tiers instead (landing is legal while
+  // downed, advances the calendar, and slowly rebuilds the repair money).
+  if (
+    downed &&
+    hurt &&
+    obs.player?.canAffordRepair === false &&
+    (obs.loanBalance ?? 0) === 0
+  ) {
+    push("take-loan", "loan-for-repair");
+    push("dock", "dock-to-loan", obs.system?.stations[0]?.id);
   }
 
   // Fuel survival — refuel before the tank runs dry. Landing on any habitable
@@ -1032,6 +1091,32 @@ export function decideWithMemory(
   const danger = Math.max(routeDangerToGoal(obs, mem), currentSystemDanger);
   // Heading into a remembered-dangerous goal while not battle-ready ⇒ hold back.
   const avoidDanger = danger > 0 && hull < BATTLE_READY_HULL_FRACTION;
+  // Danger that lies AHEAD of an exploratory warp, as opposed to the current
+  // system's own remembered threat (Task 7). `avoidDanger` folds the CURRENT
+  // system's threat in (needed by STAR_MAP's `avoid-danger-back`, whose risk
+  // is jumping while this system's hostiles can still intercept mid-transit)
+  // — but `threatMap` never decays, so gating the in-flight exploratory warps
+  // on it too meant one old scrape in a system permanently pinned any
+  // less-than-fully-patched ship THERE: `early-explore`/`find-sell` stayed
+  // blocked, the ladder fell through to the unconditional earn-landing, and
+  // the run churned land↔take-off in a depleted system for its remaining
+  // lifetime while repair fees drained it (the measured 200-day trap: 126
+  // consecutive earn/take-off steps, 1207→167cr). Warping AWAY is how a hurt
+  // ship in a once-dangerous system gets safer — `pickWarpNeighbor` already
+  // ranks remembered-threat/Overmind/pirate neighbours last — so exploratory
+  // warps hold back only for (a) a remembered-dangerous DESTINATION (the
+  // quest goal, when it's elsewhere) or (b) this system's hostiles being
+  // PRESENT right now (a live fight is the survive tier's call, not an
+  // invitation to open the star map mid-volley).
+  const questGoalSystem = questRoutingPreference(
+    obs.quests,
+    obs.system?.id ?? null,
+  );
+  const dangerAhead =
+    questGoalSystem != null ? (mem.threatMap.get(questGoalSystem) ?? 0) : 0;
+  const dangerHereLive = currentSystemDanger > 0 && obs.hostiles.length > 0;
+  const avoidDangerAhead =
+    (dangerAhead > 0 || dangerHereLive) && hull < BATTLE_READY_HULL_FRACTION;
   // The survive tier's own flee condition, re-derived for the STAR_MAP tier
   // (hostiles are system-scoped, so a live fight is visible from the map):
   // a fleeing ship is on the map to ESCAPE the current system, and treating
@@ -1057,6 +1142,131 @@ export function decideWithMemory(
   // which are what actually advance the calendar.
   const daysStagnant =
     mem.foldsSinceDayAdvance >= MAX_FOLDS_WITHOUT_DAY_ADVANCE;
+
+  // Margin farming (Task 7): with an EMPTY hold and a known, affordable
+  // cross-planet margin whose buy planet lives in a remembered OTHER system,
+  // warp back toward that system to restock. Without this the ladder could
+  // only ever act on a margin whose buy leg happened to be in the current
+  // system (`go-buy`) — after one sell it had no route back, so the A-buy →
+  // B-sell loop a human farms was structurally impossible and every
+  // remaining warp was speculative exploration (measured on the 200-day
+  // horizon: ONE profitable sale in the whole session). The remembered
+  // system must be threat-clean; hop routing toward it is the applier's
+  // destination resolution (a non-adjacent `targetId`), exactly like the
+  // quest bias. Derived here because BOTH the flight tier and the STAR_MAP
+  // tier (the second half of the two-step warp) need to re-derive the same
+  // intent — the ladder carries no decision history.
+  // No routed trip ever targets a hostile-held system (Task 7): the threatMap
+  // below is ship-scoped memory (a far-off capture is never in it), while the
+  // real star map shows every captured system galaxy-wide — a remembered
+  // destination the spread front swallowed since the last visit must be
+  // refused HERE, not discovered by flying into its garrison (the measured
+  // day-255 pinned-at-the-front wedge). See `Observation.hostileSystemIds`.
+  const hostileHeld = new Set(obs.hostileSystemIds ?? []);
+  const restockBuyPrice =
+    best.good != null && best.buyPlanet != null
+      ? (mem.priceBook.get(best.buyPlanet)?.get(best.good)?.buy ?? Infinity)
+      : Infinity;
+  const restockCandidate =
+    best.good != null &&
+    best.buyPlanet != null &&
+    best.fraction >= MIN_FARM_MARGIN_FRACTION &&
+    holdsNothing(mem) &&
+    credits >= restockBuyPrice
+      ? (mem.planetSystems.get(best.buyPlanet) ?? null)
+      : null;
+  const restockSystem =
+    restockCandidate != null &&
+    restockCandidate !== (obs.system?.id ?? null) &&
+    (mem.threatMap.get(restockCandidate) ?? 0) === 0 &&
+    !hostileHeld.has(restockCandidate)
+      ? restockCandidate
+      : null;
+
+  // Cargo that actually needs a market plan — quest-committed cargo is
+  // excluded (see `questCommittedGoods` above): it never blocks the
+  // price-discovery/early-explore tiers the way genuine unsold market cargo
+  // does, so the trade loop keeps running (and can still complete a plain
+  // sell-for-profit cycle) while a quest is in tow. Hoisted above the scene
+  // switch (Task 7) because the STAR_MAP tier needs the same signals to
+  // finish a sell route's two-step warp.
+  const holdsNonQuestCargo = mem.inventoryLots.some(
+    (l) => l.qty > 0 && !questCommittedGoods.has(l.good),
+  );
+  const holdingForOtherSystem =
+    holdsNonQuestCargo &&
+    (bestHeld.sellPlanet === null || !planetInSystem(obs, bestHeld.sellPlanet));
+  // The remembered SYSTEM of the held cargo's best sell planet (Task 7) —
+  // lets the sell leg warp TOWARD its destination instead of the old blind
+  // explore-wander, which routinely never reached the sell planet at all, so
+  // the remembered sell price was never refreshed and a stale margin could
+  // zombie-walk the run (buy at A → wander → `cut-stale-loss` dump at C →
+  // repeat). `undefined` when the planet's system was never seen.
+  const sellRouteSystemSeen =
+    bestHeld.sellPlanet != null
+      ? (mem.planetSystems.get(bestHeld.sellPlanet) ?? undefined)
+      : undefined;
+  // A captured sell destination degrades to the blind explore-wander (the
+  // held cargo still needs SOME market), never a routed trip into a garrison.
+  const sellRouteSystem =
+    sellRouteSystemSeen != null && hostileHeld.has(sellRouteSystemSeen)
+      ? undefined
+      : sellRouteSystemSeen;
+
+  const currentSystemId = obs.system?.id ?? null;
+  // A carried DELIVERY quest that is COMPLETABLE (no cargo requirement, or
+  // the requirement fully bought) but targets ANOTHER system (Task 7) — the
+  // `go-deliver` warp's condition, derived once here because the flight tier
+  // AND the STAR_MAP tier (the two-step warp's second half) both need it.
+  // A target the spread captured after acceptance is NOT flown to (the quest
+  // expires honestly instead — no payout is worth entering a garrison).
+  const deliverableElsewhere = obs.quests.some(
+    (q) =>
+      q.type === QuestType.DELIVERY &&
+      q.targetSystemId != null &&
+      q.targetSystemId !== currentSystemId &&
+      !hostileHeld.has(q.targetSystemId) &&
+      (!q.collectItem || q.collectItem.carried >= q.collectItem.required),
+  );
+  // Directed quest-cargo sourcing (Task 7): an active DELIVERY quest with an
+  // UNMET cargo need used to wait for the agent to *stumble* onto a planet
+  // stocking the good (measured: accept ≈ day 40, cargo found ≈ day 70 — the
+  // collect phase dominated the ~60-day quest cycle). When a remembered
+  // planet in a threat-clean OTHER system sells the good at an affordable
+  // price, warp toward that system instead of wandering. The PLANET tier's
+  // `buy-quest-cargo` (exact-shortfall, reward-covered — see
+  // `deliveryCargoNeed`) still owns the actual purchase on arrival.
+  const unmetQuest = obs.quests.find(
+    (q) =>
+      q.type === QuestType.DELIVERY &&
+      q.collectItem != null &&
+      q.collectItem.carried < q.collectItem.required,
+  );
+  const unmetNeed = unmetQuest?.collectItem;
+  // Fires only with the wallet covering the WHOLE remaining shortfall (a
+  // partial chase strands the run mid-collection with no funds to finish)
+  // and no unsold market cargo in tow (sell that first — the sell leg both
+  // funds this buy and is already a routed trip of its own). The remembered
+  // price must ALSO clear the buy tier's own reward-covered rule
+  // (`deliveryCargoNeed`: `buy × need < reward`) — otherwise this warp flies
+  // to a stockist whose purchase the PLANET tier will refuse on arrival (the
+  // measured go-stock×6-yet-0/9 loop of the 200-day probe).
+  let stockSystem: string | null = null;
+  if (unmetNeed && !holdsNonQuestCargo) {
+    const shortfall = unmetNeed.required - unmetNeed.carried;
+    const reward = unmetQuest?.rewardCredits ?? 0;
+    for (const [planetId, goods] of mem.priceBook) {
+      const rec = goods.get(unmetNeed.type);
+      if (!rec || rec.buy <= 0 || credits < rec.buy * shortfall) continue;
+      if (rec.buy * shortfall >= reward) continue;
+      const sys = mem.planetSystems.get(planetId);
+      if (sys == null || sys === currentSystemId) continue;
+      if ((mem.threatMap.get(sys) ?? 0) > 0) continue;
+      if (hostileHeld.has(sys)) continue;
+      stockSystem = sys;
+      break;
+    }
+  }
   // Shared by every exploratory-warp gate below: never warp while fuel-
   // critical, past the anti-consecutive-warp cadence, or once the galaxy is
   // effectively lost (near the real 0.85 loss share — see `galaxyEffectivelyLost`).
@@ -1143,6 +1353,10 @@ export function decideWithMemory(
       if (
         best.good != null &&
         best.buyPlanet === landedId &&
+        // Thin margins evaporate in transit (see MIN_FARM_MARGIN_FRACTION):
+        // starting a buy cycle on one routinely ends in a `cut-stale-loss`
+        // dump — measured NET NEGATIVE over the 200-day horizon (Task 7).
+        best.fraction >= MIN_FARM_MARGIN_FRACTION &&
         holdsNothing(mem) &&
         hasHold &&
         credits >= buyPrice &&
@@ -1186,11 +1400,15 @@ export function decideWithMemory(
         ) {
           push("arm-up", "arm-up");
         }
-        const bestHullPrice = obs.bestHullPrice ?? null;
+        // Executor-truth price (Task 7, same as the STATION tier): the reserve
+        // is checked against the PRICIEST affordable improving hull —
+        // exactly what `executeUpgradeHull` will spend. Legacy fixtures
+        // without the field fall back to `bestHullPrice`.
+        const hullSpend = obs.upgradeHullCost ?? obs.bestHullPrice ?? null;
         if (
           (obs.player?.maxHull ?? 0) < BATTLE_READY_MAX_HULL &&
-          bestHullPrice != null &&
-          canAffordRefit(bestHullPrice)
+          hullSpend != null &&
+          canAffordRefit(hullSpend)
         ) {
           push("upgrade-hull", "afford-hull-upgrade");
         }
@@ -1214,39 +1432,6 @@ export function decideWithMemory(
       ) {
         push("land", "go-sell", bestHeld.sellPlanet ?? undefined);
       }
-      // Whether the known best margin (if any) can actually be acted on right
-      // now. `best` is computed over the WHOLE session's price book, not just
-      // this system — a margin whose buy planet is a system left behind isn't
-      // "actionable" here at all (warping doesn't undo that), and one whose
-      // buy planet IS in this system can still have drifted unaffordable
-      // (dynamic pricing rises with repeated buys). Both cases used to read as
-      // "there's a real margin" and blocked price-discovery/early-explore
-      // below forever: a stale, unreachable cross-system margin from earlier
-      // in the run permanently masked "nothing left to do in THIS system",
-      // and an in-system-but-unaffordable one kept re-routing the agent back
-      // to the same buy planet, landing, discovering it still can't afford
-      // it, and taking off. Both stalls were previously masked by the removed
-      // blind-buy fallback happening to touch *some* cargo and unstick the
-      // holdsNothing gate below.
-      const bestBuyIsLocal =
-        best.good != null && planetInSystem(obs, best.buyPlanet);
-      const bestBuyPrice =
-        best.good != null && best.buyPlanet != null
-          ? (mem.priceBook.get(best.buyPlanet)?.get(best.good)?.buy ?? Infinity)
-          : Infinity;
-      const bestBuyAffordable = best.good != null && credits >= bestBuyPrice;
-      // Start a known buy: empty hold, the cheap source is in-system, and it's
-      // actually affordable right now — but not once `daysStagnant` (see the
-      // `MAX_FOLDS_WITHOUT_DAY_ADVANCE` doc comment above `warpCadenceOk`).
-      if (
-        best.good != null &&
-        holdsNothing(mem) &&
-        bestBuyIsLocal &&
-        bestBuyAffordable &&
-        !daysStagnant
-      ) {
-        push("land", "go-buy", best.buyPlanet ?? undefined);
-      }
       // Progression — quest delivery: the current system is a carried quest's
       // delivery target AND that quest is actually completable here (no cargo
       // requirement, or the requirement is already met). Landing purely because
@@ -1261,7 +1446,8 @@ export function decideWithMemory(
       // quest detail (real `observe()` output never has the flag true with an
       // empty list, since it's derived FROM that list) — trust the flag as-is
       // there so those pure-fixture tests keep pinning the flag's behavior.
-      const currentSystemId = obs.system?.id ?? null;
+      // Ranked ABOVE starting a new speculative buy (`go-buy` below, Task 7):
+      // a contractual, deadlined payout beats opening a fresh trade cycle.
       const completableHere = (q: QuestSnapshot) =>
         q.targetSystemId === currentSystemId &&
         (!q.collectItem || q.collectItem.carried >= q.collectItem.required);
@@ -1292,19 +1478,78 @@ export function decideWithMemory(
             : planets[0]?.id;
         if (deliveryPlanet) push("land", "quest-delivery", deliveryPlanet);
       }
-      // Deliberately NOT a dedicated warp toward a ready-to-deliver quest's
-      // DIFFERENT-system target: forcing the ship at high priority toward a
-      // specific never-visited system (rather than the ladder's own ordinary
-      // exploration order) risks an unscouted, possibly-lethal encounter for a
-      // reward that's already a bonus on top of the trade loop, not its point
-      // (real-engine regression: routing straight at a seed's one dangerous
-      // system this way is what killed a full-hull ship in ~5 warp cycles,
-      // where the ladder's ordinary exploration never happened to go there).
-      // Completion for a cross-system delivery is left fully opportunistic —
-      // the in-system `quest-delivery` land tier above fires the moment
-      // ordinary exploration/margin-hunting (see `holdingForOtherSystem` and
-      // the price-discovery/early-explore tiers below, all now quest-cargo-
-      // aware) happens to reach that system on its own.
+      // Active quest completion (Task 7): a carried DELIVERY quest that is
+      // COMPLETABLE (no cargo requirement, or the requirement fully bought)
+      // but targets ANOTHER system gets a dedicated warp toward it. This
+      // replaces the old fully-opportunistic stance ("wait until exploration
+      // happens to pass the target"), which on the campaign horizon completed
+      // ~1 quest per 200 days while every other accepted contract expired
+      // («Срок вышел» rep damage) — quest payouts are the income that funds
+      // the battle-ready refit, so leaving them to luck starves the whole
+      // military ladder. The lethal-detour regression that motivated the old
+      // stance is closed by three later guards: quest boards no longer issue
+      // targets in hostile-held systems at all (`BoardOptions.hostileSystems`,
+      // Task 6), the `go-deliver` reason is in `WARP_TARGETING_REASONS` so
+      // `pickWarpNeighbor` routes by hops-to-target while STILL ranking
+      // Overmind/pirate/remembered-threat neighbours last, and the pre-contact
+      // kill-time flee (`flee-outgunned`) exits a surprise fight before the
+      // first volley trade. Gated on `avoidDangerAhead` (a remembered-
+      // dangerous TARGET still holds the ship back while hurt) and
+      // `explorationSafe` (fuel / warp cadence / galaxy-lost). Ranked above
+      // `go-buy`/`go-restock` for the same deadline-beats-speculation reason
+      // as the in-system tier above.
+      if (deliverableElsewhere && !avoidDangerAhead && explorationSafe) {
+        push("warp", "go-deliver");
+      }
+      // Source the active quest's unmet cargo need from a remembered
+      // stockist (Task 7, see `stockSystem` above) — deadline work beats
+      // opening a new speculative buy below.
+      if (stockSystem != null && !avoidDangerAhead && explorationSafe) {
+        push("warp", "go-stock", stockSystem);
+      }
+      // Whether the known best margin (if any) can actually be acted on right
+      // now. `best` is computed over the WHOLE session's price book, not just
+      // this system — a margin whose buy planet is a system left behind isn't
+      // "actionable" here at all (warping doesn't undo that), and one whose
+      // buy planet IS in this system can still have drifted unaffordable
+      // (dynamic pricing rises with repeated buys). Both cases used to read as
+      // "there's a real margin" and blocked price-discovery/early-explore
+      // below forever: a stale, unreachable cross-system margin from earlier
+      // in the run permanently masked "nothing left to do in THIS system",
+      // and an in-system-but-unaffordable one kept re-routing the agent back
+      // to the same buy planet, landing, discovering it still can't afford
+      // it, and taking off. Both stalls were previously masked by the removed
+      // blind-buy fallback happening to touch *some* cargo and unstick the
+      // holdsNothing gate below.
+      const bestBuyIsLocal =
+        best.good != null && planetInSystem(obs, best.buyPlanet);
+      const bestBuyPrice =
+        best.good != null && best.buyPlanet != null
+          ? (mem.priceBook.get(best.buyPlanet)?.get(best.good)?.buy ?? Infinity)
+          : Infinity;
+      const bestBuyAffordable = best.good != null && credits >= bestBuyPrice;
+      // Start a known buy: empty hold, the cheap source is in-system, and it's
+      // actually affordable right now — but not once `daysStagnant` (see the
+      // `MAX_FOLDS_WITHOUT_DAY_ADVANCE` doc comment above `warpCadenceOk`).
+      if (
+        best.good != null &&
+        // Same thin-margin gate as `buy-low` — don't even fly to the source
+        // for a spread that won't survive the round trip (Task 7).
+        best.fraction >= MIN_FARM_MARGIN_FRACTION &&
+        holdsNothing(mem) &&
+        bestBuyIsLocal &&
+        bestBuyAffordable &&
+        !daysStagnant
+      ) {
+        push("land", "go-buy", best.buyPlanet ?? undefined);
+      }
+      // Margin farming (Task 7, see `restockSystem` above): head back to the
+      // remembered cheap-buy system. Below `go-deliver` (a contractual
+      // payout with a deadline beats a price spread) and above the
+      // upgrade/discovery/exploration tiers (a KNOWN margin beats a guess).
+      if (restockSystem != null && !avoidDangerAhead && explorationSafe) {
+        push("warp", "go-restock", restockSystem);
+      }
       // Pursue an affordable upgrade: route to the offer's in-system location.
       if (offer && canAffordOffer) {
         if (planetInSystem(obs, offer.location))
@@ -1322,8 +1567,13 @@ export function decideWithMemory(
       // sitting on spare credits arms up instead of aimlessly hopping.
       if (!isBattleReady(obs)) {
         const refitStation = obs.system?.stations[0]?.id;
+        // Executor-truth price (Task 7): must match the STATION tier's own
+        // `upgrade-hull` gate exactly, or the dock is a no-op ping-pong (dock,
+        // find the buy refused, leave, re-dock). Legacy-fixture fallback as
+        // in that tier.
+        const dockHullSpend = obs.upgradeHullCost ?? obs.bestHullPrice ?? null;
         const canAffordHull =
-          obs.bestHullPrice != null && canAffordRefit(obs.bestHullPrice);
+          dockHullSpend != null && canAffordRefit(dockHullSpend);
         const wantsArm =
           (obs.player?.weaponDamage ?? 0) < BATTLE_READY_WEAPON_DAMAGE &&
           obs.canArmUp === true &&
@@ -1362,20 +1612,9 @@ export function decideWithMemory(
       //  - holding cargo AND best sell planet not in this system, OR
       //  - holding cargo AND no sell planet known (priceBook only covers this system)
       // Both cases need exploration; the second is the early-game cycle-breaker.
-      // Quest-committed cargo doesn't count (see `questCommittedGoods` above) —
-      // it has no sell destination to hunt for.
-      // Cargo that actually needs a market plan — quest-committed cargo is
-      // excluded (see `questCommittedGoods` above): it never blocks the
-      // price-discovery/early-explore tiers below the way genuine unsold
-      // market cargo does, so the trade loop keeps running (and can still
-      // complete a plain sell-for-profit cycle) while a quest is in tow.
-      const holdsNonQuestCargo = mem.inventoryLots.some(
-        (l) => l.qty > 0 && !questCommittedGoods.has(l.good),
-      );
-      const holdingForOtherSystem =
-        holdsNonQuestCargo &&
-        (bestHeld.sellPlanet === null ||
-          !planetInSystem(obs, bestHeld.sellPlanet));
+      // Quest-committed cargo doesn't count (see `questCommittedGoods` /
+      // `holdsNonQuestCargo`/`holdingForOtherSystem`, hoisted above the scene
+      // switch) — it has no sell destination to hunt for.
       // Loop-breaker: while holding cargo for a sell planet not in this
       // system, land on an unvisited in-system planet FIRST to populate the
       // price book (and maybe discover the margin outright) rather than
@@ -1389,8 +1628,11 @@ export function decideWithMemory(
       ) {
         push("land", "discover-prices", earnPlanet);
       }
-      if (holdingForOtherSystem && !avoidDanger && explorationSafe) {
-        push("warp", "find-sell-destination");
+      if (holdingForOtherSystem && !avoidDangerAhead && explorationSafe) {
+        // Targeted when the sell planet's system is remembered (the applier
+        // hop-routes toward a non-adjacent targetId); blind exploration only
+        // when no sell destination is known yet (the early-game case).
+        push("warp", "find-sell-destination", sellRouteSystem);
       }
       // No local margin worth pursuing right now — either genuinely no known
       // cross-planet margin, or its buy leg isn't in THIS system, or it is but
@@ -1443,7 +1685,7 @@ export function decideWithMemory(
       if (
         (alreadyVisited || systemExploredEnough) &&
         (noActionableMargin || daysStagnant) &&
-        !avoidDanger &&
+        !avoidDangerAhead &&
         explorationSafe &&
         !holdsNonQuestCargo &&
         !offer &&
@@ -1509,19 +1751,69 @@ export function decideWithMemory(
       // stalled map.
       const escapeJump = fleeingLiveFight && !fuelGate && !warpStalled;
       if (escapeJump) push("warp", "flee-escape-jump");
-      // Don't jump toward a remembered threat while not battle-ready.
+      if (!fuelGate && warpCadenceOk && !warpStalled) {
+        // Second half of a `go-deliver`/`find-sell-destination`/`go-stock`/
+        // `go-restock` two-step (Task 7): the flight tier's intent doesn't
+        // survive the map hop (no decision history), so the same conditions
+        // re-derive it here, in the same priority order — deadline delivery
+        // first, then the sell leg, then restocking. Ranked ABOVE
+        // `avoid-danger-back`: each targeted warp carries its own
+        // `avoidDangerAhead` gate (remembered-dangerous DESTINATION, or live
+        // hostiles HERE that could intercept mid-transit), and the flight
+        // tier only opened the map because those gates passed — letting the
+        // broader `avoidDanger` (this system's own never-decaying threatMap
+        // entry) veto the jump here spun the measured d226 wedge: 1907
+        // go-stock map-opens each bounced straight back by
+        // avoid-danger-back, zero days advanced.
+        if (deliverableElsewhere && !avoidDangerAhead) {
+          push("warp", "go-deliver");
+        }
+        if (
+          holdingForOtherSystem &&
+          sellRouteSystem !== undefined &&
+          !avoidDangerAhead
+        ) {
+          push("warp", "find-sell-destination", sellRouteSystem);
+        }
+        if (stockSystem != null && !avoidDangerAhead) {
+          push("warp", "go-stock", stockSystem);
+        }
+        if (
+          questGoalSystem == null &&
+          restockSystem != null &&
+          !avoidDangerAhead
+        ) {
+          push("warp", "go-restock", restockSystem);
+        }
+      }
+      // Don't jump toward a remembered threat while not battle-ready — the
+      // GENERIC exploratory jump below has no destination gate of its own,
+      // so the remembered-threat back-out still protects it.
       if (avoidDanger && !escapeJump) push("move", "avoid-danger-back");
-      if (!fuelGate && warpCadenceOk && !warpStalled) push("warp", "warp");
+      if (!fuelGate && warpCadenceOk && !warpStalled) {
+        push("warp", "warp");
+      }
       push("move", "back");
       break;
     }
     case SceneType.STATION: {
+      // Debt service first (Task 7): once the wallet covers the FULL balance
+      // plus the trading reserve, clear the loan-for-repair rescue's debt so
+      // interest/arrears stop accruing. Fires only from genuine surplus —
+      // `executeRepayLoan` pays `min(owed, credits)`, so gating on
+      // balance + reserve keeps it a full repayment that still leaves the
+      // economy funded, never a wallet-zeroing trickle.
+      if (
+        legal.has("repay-loan") &&
+        (obs.loanBalance ?? 0) > 0 &&
+        credits >= (obs.loanBalance ?? 0) + MILITARY_SPEND_TRADE_RESERVE
+      ) {
+        push("repay-loan", "repay-loan-surplus");
+      }
       // Progression — affordable upgrade: buy it now rather than idling with
       // spare credits. Reuses the CJM-B gear-grinder's affordability buffers
       // (same "don't spend down to exactly zero" reasoning) so the goal-less
       // ladder and that goal branch agree on when an upgrade is "worth it".
-      const bestHullPrice = obs.bestHullPrice ?? null;
-      const cheapestGearPrice = obs.cheapestGearPrice ?? null;
       // Military progression (Task 2): while the ship still lacks the firepower
       // half of battle-ready, arm up first — a weapon buy+install is cheap and
       // directly raises `weaponDamage`, and the corvette's free second weapon
@@ -1534,16 +1826,62 @@ export function decideWithMemory(
       ) {
         push("arm-up", "arm-up");
       }
-      if (bestHullPrice != null && canAffordRefit(bestHullPrice)) {
+      // Executor-truth price (Task 7): `executeUpgradeHull` buys the PRICIEST
+      // affordable improving hull, so the reserve is checked against exactly
+      // that spend (`upgradeHullCost`), not the cheapest improving listing.
+      // Fixtures that predate the field fall back to `bestHullPrice` (their
+      // exact legacy decision).
+      const hullSpend = obs.upgradeHullCost ?? obs.bestHullPrice ?? null;
+      if (hullSpend != null && canAffordRefit(hullSpend)) {
         push("upgrade-hull", "afford-hull-upgrade");
       }
+      // Discretionary shopping only on a healthy hull (Task 7): a HURT ship
+      // at a station spends on the repair first — measured blowup: the
+      // loan-for-repair rescue's 5000cr got spent on three gear buys while
+      // the hull sat at the GOD floor, and the re-broke ship deadlocked. The
+      // `hurt` survive tier already pushes `repair` above the scene ladder;
+      // this keeps the shopping tiers from competing with it for the wallet.
+      // Three more campaign-horizon rules (all measured on the 200-day probe):
+      //  - DEBT FREEZE: no discretionary shopping while a loan is outstanding
+      //    (the day-184 blowup: the 5000cr repair loan was spent on gear two
+      //    folds after it was taken; repay first — see `repay-loan-surplus`).
+      //  - EXECUTOR-TRUTH PRICE: the gate weighs `buyGearCost` — what
+      //    `executeBuyBestGear` (priciest affordable) will actually spend —
+      //    not `cheapestGearPrice`; the mismatch let one "affordable" step
+      //    spend 3179cr against a ~980cr check.
+      //  - RESERVE: the spend must leave the trade reserve intact
+      //    (`canAffordRefit`, the same rule the arm-up/hull tiers obey) — the
+      //    old buffer-only gate walked the wallet from its 5171cr peak to 0.
+      //  - HULL FIRST: no discretionary gear/module shopping until the ship
+      //    is battle-ready — the 220-HP hull that completes battle-ready costs
+      //    ~7000cr and the campaign wallet peaks near 6700cr between combat
+      //    repairs, so every pre-battle-ready gear buy (non-hull gear feeds
+      //    NEITHER battle-ready threshold) pushes the one purchase the whole
+      //    military ladder waits on out of reach for another ~100 days.
+      const debtFree = (obs.loanBalance ?? 0) === 0;
+      // Legacy fixtures without the executor-truth fields fall back to the
+      // cheapest-listing price (gear) / a bare reserve check (module).
+      const gearSpend = obs.buyGearCost ?? obs.cheapestGearPrice ?? null;
       if (
-        cheapestGearPrice != null &&
-        credits >= cheapestGearPrice * GEAR_GRINDER_GEAR_BUFFER
+        !hurt &&
+        debtFree &&
+        isBattleReady(obs) &&
+        gearSpend != null &&
+        credits >= gearSpend * GEAR_GRINDER_GEAR_BUFFER &&
+        canAffordRefit(gearSpend)
       ) {
         push("buy-gear", "afford-gear");
       }
-      if (obs.hasCraftCenter) push("buy-module", "afford-module");
+      const moduleSpend = obs.buyModuleCost ?? 0;
+      if (
+        !hurt &&
+        debtFree &&
+        isBattleReady(obs) &&
+        obs.hasCraftCenter &&
+        canAffordRefit(moduleSpend)
+      ) {
+        push("buy-module", "afford-module");
+      }
       push("repair", "repair");
       push("move", "leave");
       break;

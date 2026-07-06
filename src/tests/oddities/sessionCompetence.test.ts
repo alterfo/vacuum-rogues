@@ -4,6 +4,9 @@ import {
   formatCiResult,
   DEFAULT_CI_THRESHOLDS,
 } from "../playtest/letsplay/ci.run";
+import { runCampaignSession } from "../playtest/letsplay/campaign.run";
+import { formatCampaignReport } from "../playtest/letsplay/campaignMetrics";
+import { POWER_INDEX_BATTLE_READY_THRESHOLD } from "@/config/balance";
 
 // The real harness (RealEngineHarness → GameEngine) needs PixiJS stubbed to
 // boot headlessly under vitest, same as every other real-engine letsplay test.
@@ -60,4 +63,47 @@ describe("Task 8 — the needs-based agent reaches competent, explorable, surviv
     expect(r.result.reasons, formatCiResult(r)).toEqual([]);
     expect(r.ok, formatCiResult(r)).toBe(true);
   }, 60_000);
+});
+
+/**
+ * Task 7 (three-year-campaign plan) — campaign milestone PROXIES on one seeded
+ * medium session (200 GOD-mode days on the campaign harness's own capacity
+ * seed), per the plan's Testing Strategy: letsplay:ci gains milestone proxies,
+ * not full-campaign wins. GOD isolates the tiers under test from combat
+ * survival (deaths are Task 8's slayer-tuning concern).
+ *
+ * Gated here:
+ *  - the session runs honestly (no wedge, no faults) on the medium horizon;
+ *  - FIRST-LIBERATION proxy fires by proxy-day P2 = 190 (measured d155): the
+ *    Overmind's system count shrinks at least once — the galaxy pushes back;
+ *  - the ratcheted POWER INDEX crosses the battle-ready band
+ *    (`POWER_INDEX_BATTLE_READY_THRESHOLD`) — the economy tier accumulates
+ *    real strength (measured 0.16 at d200 vs 0.02 at start).
+ *
+ * The STRICT battle-ready-by-P1 milestone (`battleReadyDay`: hull ≥ 200 AND
+ * weapon ≥ 30) is deliberately NOT gated here — reaching it needs the Task 8
+ * slayer/economy tuning (its own first checkbox red-tests exactly that);
+ * gating it now would pin a known-unreached state. Noted in the plan.
+ */
+describe("Task 7 — campaign milestone proxies on the seeded medium session", () => {
+  it("liberation fires by P2 and ratcheted power crosses the battle-ready band", async () => {
+    const r = await runCampaignSession({
+      seed: "CAMPAIGN-CAPACITY-0",
+      maxDays: 200,
+      gameMode: "GOD",
+    });
+    const detail = formatCampaignReport([r]);
+
+    expect(r.errors, detail).toBe(0);
+    expect(r.violations, detail).toBe(0);
+    expect(r.calendarWedged, detail).toBe(false);
+    expect(r.stepStalled, detail).toBe(false);
+
+    expect(r.milestones.firstLiberationDay, detail).not.toBeNull();
+    expect(r.milestones.firstLiberationDay!, detail).toBeLessThanOrEqual(190);
+
+    expect(r.peakPower, detail).toBeGreaterThanOrEqual(
+      POWER_INDEX_BATTLE_READY_THRESHOLD,
+    );
+  }, 120_000);
 });

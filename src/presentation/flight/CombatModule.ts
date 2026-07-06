@@ -244,6 +244,25 @@ export class CombatModule implements FlightModule {
     // hull while paused. Damage numbers (above) still float so a killing blow's
     // number finishes its arc.
     if (this.isFrozen()) return;
+    // A DOWNED ship is not a combatant (GOD floors hull instead of killing):
+    // the engagement is decided, so end it. Without this a fight against a
+    // permanently-downed ship ran forever — the ship can't fire back, can't
+    // die, and an active fight pins the galaxy calendar (US-070 #5), freezing
+    // the whole session (the Task 7 campaign wedge; even a live player was
+    // soft-locked, with load-save as the only exit). NORMAL/HARD never derive
+    // `downed`, so this is GOD-scoped by construction.
+    const playerShip = this.deps.getPlayerShip?.() ?? null;
+    if (
+      playerShip &&
+      isHullDowned(
+        this.deps.getGameMode?.() ?? "NORMAL",
+        playerShip.hullHP,
+        playerShip.maxHull,
+      )
+    ) {
+      this.endCombat();
+      return;
+    }
     this.pruneDisengaged();
     // pruneDisengaged can drop the *selected* target (it drifted beyond escape
     // range) and synchronously raise a target-lost active-pause via onTargetLost
@@ -275,6 +294,23 @@ export class CombatModule implements FlightModule {
    */
   addCombatant(npc: NpcShipSprite): void {
     if (this.combatants.has(npc)) return; // idempotent — cheapest check first
+    // A DOWNED ship can't fight (same class as the weaponless no-op below):
+    // refuse the engagement so the every-frame garrison-aggro path doesn't
+    // flap a fight open against a ship that can neither fire nor die — the
+    // "нужен ремонт" toast already fired when the ship went down, so the
+    // state is legible. Once repaired above the floor, the same aggro path
+    // re-engages naturally on its next frame.
+    const shipNow = this.deps.getPlayerShip?.() ?? null;
+    if (
+      shipNow &&
+      isHullDowned(
+        this.deps.getGameMode?.() ?? "NORMAL",
+        shipNow.hullHP,
+        shipNow.maxHull,
+      )
+    ) {
+      return;
+    }
     // The garrison-aggro path calls this every frame for each in-range
     // aggressor; the membership guard above means already-engaged NPCs never
     // reach the loadout rebuild below.

@@ -277,19 +277,47 @@ export function createLiveSceneController(
       // then falls back to connections[0] — prevents ping-pong. A
       // `find-sell-destination` warp deliberately stays blind to the carried
       // quest's target (same exclusion PlayerAgent's headless applier uses).
-      const questTarget = warpWantsQuestBias(reason)
+      // Avoid + never-steer-at hostile-held systems (Task 7), mirroring
+      // PlayerAgent's headless resolution exactly: pirate dens included, and
+      // a hostile target/destination degrades to the blind safe pick.
+      const hostileHeld = new Set([
+        ...(engine.galaxy?.overmindSystems ?? []),
+        ...(engine.galaxy?.pirateSystems ?? []),
+      ]);
+      const rawQuestTarget = warpWantsQuestBias(reason)
         ? questRoutingPreference(engine.questManager.getActiveQuests(), prevId)
         : null;
+      const questTarget =
+        rawQuestTarget != null && hostileHeld.has(rawQuestTarget)
+          ? null
+          : rawQuestTarget;
+      const directTarget =
+        systemId != null &&
+        !hostileHeld.has(systemId) &&
+        connections.some((c) => c.toSystemId === systemId)
+          ? systemId
+          : undefined;
+      // A non-adjacent `systemId` naming a real system is a DESTINATION
+      // (e.g. `go-restock`'s remembered buy system, Task 7) — route toward it
+      // hop-by-hop, mirroring PlayerAgent's headless destination resolution.
+      const destination =
+        directTarget == null &&
+        systemId != null &&
+        !hostileHeld.has(systemId) &&
+        (engine.galaxy?.systems ?? []).some((s) => s.id === systemId)
+          ? systemId
+          : null;
+      const prefer = destination ?? questTarget;
       const target =
-        systemId ??
+        directTarget ??
         pickWarpTarget(
           connections,
           lastSystemId,
           visitedSystemIds,
-          new Set(engine.galaxy?.overmindSystems ?? []),
-          questTarget,
-          questTarget != null
-            ? systemHopDistances(engine.galaxy?.systems ?? [], questTarget)
+          hostileHeld,
+          prefer,
+          prefer != null
+            ? systemHopDistances(engine.galaxy?.systems ?? [], prefer)
             : undefined,
         );
       if (prevId) visitedSystemIds.add(prevId);

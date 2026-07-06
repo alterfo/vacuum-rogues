@@ -85,6 +85,15 @@ export interface AgentMemory {
   inventoryLots: InventoryLot[];
   /** systemId → remembered danger (max hostile count ever seen in that system). */
   threatMap: Map<string, number>;
+  /**
+   * planetId → the systemId it was SEEN in (every planet of every visited
+   * system — planet lists are system-scene-visible, no landing needed). The
+   * egocentric "where was that planet again" a human keeps: it lets the
+   * ladder route BACK to a remembered cheap-buy planet across systems
+   * (`go-restock`, Task 7) instead of only ever exploring outward. Bounded by
+   * the galaxy's planet count, like `priceBook`.
+   */
+  planetSystems: Map<string, string>;
   /** Known upgrade/equipment offers, by location (populated once observed). */
   knownOffers: KnownOffer[];
   /** Internal: last observed cargo amounts, used to diff buys vs sells. */
@@ -247,6 +256,7 @@ export function createMemory(): AgentMemory {
     priceBook: new Map(),
     inventoryLots: [],
     threatMap: new Map(),
+    planetSystems: new Map(),
     knownOffers: [],
     lastCargo: new Map(),
     step: 0,
@@ -328,6 +338,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
   const step = mem.step + 1;
   const priceBook = clonePriceBook(mem.priceBook);
   const threatMap = new Map(mem.threatMap);
+  const planetSystems = new Map(mem.planetSystems);
   const knownOffers = mem.knownOffers.map((o) => ({ ...o }));
   let inventoryLots = mem.inventoryLots.map((l) => ({ ...l }));
 
@@ -337,6 +348,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       priceBook,
       inventoryLots,
       threatMap,
+      planetSystems,
       knownOffers,
       lastCargo: mem.lastCargo,
       step,
@@ -379,6 +391,13 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
   if (obs.system && obs.hostiles.length > 0) {
     const prev = threatMap.get(obs.system.id) ?? 0;
     threatMap.set(obs.system.id, Math.max(prev, obs.hostiles.length));
+  }
+
+  // 2.5) Planet→system gazetteer — every planet of the CURRENT system (the
+  // flight scene shows them all; no landing required). Lets the ladder route
+  // back to a remembered planet's system later (`go-restock`).
+  if (obs.system) {
+    for (const p of obs.system.planets) planetSystems.set(p.id, obs.system.id);
   }
 
   // 3) Inventory lots — diff held cargo against last step to detect buys/sells.
@@ -519,6 +538,7 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     priceBook,
     inventoryLots,
     threatMap,
+    planetSystems,
     knownOffers,
     lastCargo: cargoNow,
     step,

@@ -41,7 +41,13 @@ import {
   loanStatusOf,
   systemShopPrices,
 } from "./observeHelpers";
-import { cheapestMicromodule, planArmUp } from "./equipmentQueries";
+import {
+  bestAffordableGear,
+  bestAffordableHull,
+  cheapestMicromodule,
+  planArmUp,
+} from "./equipmentQueries";
+import { micromodulePrice } from "@/systems/equipment/micromoduleShop";
 import {
   takeableBoardQuestCount,
   reachableNeighbors,
@@ -366,6 +372,20 @@ export interface Observation {
    * true one hop out where there is no garrison to fight yet.
    */
   overmindHeldHere?: boolean;
+  /**
+   * Every system currently held by a hostile faction (Overmind incl. the core
+   * + pirate dens), galaxy-wide. Observation-parity with the real star map,
+   * which renders ALL captured systems (red/orange) regardless of distance —
+   * a human player never plots a trade route into one. Lets the routed trips
+   * (`go-stock`/`go-restock`/targeted sell legs, Task 7) refuse a remembered
+   * destination that was captured SINCE it was last visited: the threatMap is
+   * ship-scoped memory and never learns about a far-off capture, so on the
+   * campaign horizon the spread front routinely swallowed a remembered
+   * cheap-buy system and the ladder flew straight into the new garrison
+   * (measured: the day-255 pinned-at-the-front wedge). Optional so existing
+   * fixtures type-check; absent ⇒ no destination is refused (legacy).
+   */
+  hostileSystemIds?: readonly string[];
   /** A carried quest's delivery system is the player's current system. */
   questDeliveryHere?: boolean;
   /** The player currently owes an outstanding bank loan. */
@@ -398,6 +418,32 @@ export interface Observation {
    * instant it can technically afford one. Defaults to 0.
    */
   armUpCost?: number;
+  /**
+   * Credits the next `buy-gear` would spend right now — the price of the gear
+   * `executeBuyBestGear` (the PRICIEST affordable listing, not the cheapest)
+   * would actually buy; `null` when nothing is affordable/stocked. The
+   * decision gate must weigh this exact number (Task 7): gating on
+   * `cheapestGearPrice` while the executor buys the best let a single
+   * "affordable" shopping step spend 3179cr against a ~980cr gate check and
+   * walk the campaign wallet from its 5171cr peak to 74cr in two folds.
+   */
+  buyGearCost?: number | null;
+  /**
+   * Credits the next `buy-module` would spend right now — the price of the
+   * cheapest not-yet-owned micromodule `executeBuyBestModule` would buy;
+   * `null` when none is affordable/unowned (mirrors `hasAffordableModule`).
+   * Same executor-truth reasoning as `buyGearCost`.
+   */
+  buyModuleCost?: number | null;
+  /**
+   * Credits the next `upgrade-hull` would spend right now — the price of the
+   * hull `executeUpgradeHull` (the PRICIEST affordable genuine upgrade over
+   * the fitted hull) would actually buy; `null` when no improving hull is
+   * affordable/stocked. Same executor-truth reasoning as `buyGearCost`:
+   * `bestHullPrice` is the CHEAPEST improving hull, so gating the reserve on
+   * it while the executor buys the priciest lets the buy break the reserve.
+   */
+  upgradeHullCost?: number | null;
   /**
    * The galaxy's current business day (`galaxy.gameDays`). Lets
    * {@link updateMemory} detect a day-boundary transition purely from folded
@@ -791,6 +837,9 @@ export function observe(
     overmindFrontSeeds.length > 0
       ? overmindFrontHopDistances(galaxy.systems, overmindFrontSeeds)
       : null;
+  // Every hostile-held system galaxy-wide (see `hostileSystemIds` doc) — the
+  // same union the applier's blind warp pick avoids and the star map renders.
+  const hostileSystemIds = [...overmindFrontSeeds, ...galaxy.pirateSystems];
 
   const systemSnapshot: SystemSnapshot | null = system
     ? {
@@ -935,9 +984,16 @@ export function observe(
   // Only relevant at a craft center; skip the catalog scan otherwise. Matches
   // `executeBuyBestModule`'s precondition so `buy-module` is legal only when the
   // executor could actually buy something (else the autopilot loops on a no-op).
-  const hasAffordableModule = hasCraftCenter
-    ? cheapestMicromodule(engine) != null
-    : false;
+  const affordableModule = hasCraftCenter ? cheapestMicromodule(engine) : null;
+  const hasAffordableModule = affordableModule != null;
+  // Executor-truth shop spends (see `buyGearCost`/`buyModuleCost`/
+  // `upgradeHullCost` docs): the exact credits `buy-gear`/`buy-module`/
+  // `upgrade-hull` would move right now.
+  const buyGearCost = bestAffordableGear(engine)?.price ?? null;
+  const buyModuleCost = affordableModule
+    ? micromodulePrice(affordableModule)
+    : null;
+  const upgradeHullCost = bestAffordableHull(engine)?.price ?? null;
   const canLiberate = engine.canLiberateCurrentSystem();
   const armUpPlan = planArmUp(engine);
   const armUp = armUpPlan != null;
@@ -1000,6 +1056,7 @@ export function observe(
     overmindShare,
     nearOvermindCore,
     overmindHeldHere,
+    hostileSystemIds,
     questDeliveryHere,
     activeLoans: loanStatus.active,
     loanBalance: loanStatus.active ? loanStatus.balance : undefined,
@@ -1010,6 +1067,9 @@ export function observe(
     bestHullPrice,
     canArmUp: armUp,
     armUpCost,
+    buyGearCost,
+    buyModuleCost,
+    upgradeHullCost,
     gameDay: galaxy.gameDays,
     questsCompleted: engine.questManager.getCompletedQuestIds().length,
   };

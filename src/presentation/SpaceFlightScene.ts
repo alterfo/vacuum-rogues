@@ -24,7 +24,6 @@ import { RouteRenderer } from "./flight/RouteRenderer";
 import { PlayerShipRenderer } from "./flight/PlayerShipRenderer";
 import { NpcShipManager } from "./flight/NpcShipManager";
 import { CombatModule } from "./flight/CombatModule";
-import { isDowned } from "@/systems/combat/godMode";
 import { createCombatPauseUi } from "./flight/combatPauseUi";
 import { combatOrbitalDayIncrement } from "./flight/combatOrbitClock";
 import { PlanetManager } from "./flight/PlanetManager";
@@ -1301,12 +1300,21 @@ export class SpaceFlightScene extends GameScene {
     );
     if (startedBurning) this.hud.showMessage("☀ Корпус горит!", 0xff8800);
 
-    // Safety auto-stop: halt engines once below 30% hull (latched, once per descent below it).
+    // Safety auto-stop: halt engines once below 30% hull (latched, once per
+    // descent below it) — EXCEPT during a committed hyperjump escape run
+    // (`pendingWarp`): parking a burning ship inside the fight it is fleeing
+    // is the opposite of safety (the stop also cleared the edge route, so a
+    // GOD-floored ship at a garrison could never reach the jump point — the
+    // inescapable pin behind the day-255 campaign wedge).
     const ship = this.gameEngine?.player?.ship;
     if (ship && ship.maxHull > 0) {
       const hullFraction = ship.hullHP / ship.maxHull;
       if (hullFraction < 0.3) {
-        if (this.shipPhysics.isMoving && !this.lowHullStopped) {
+        if (
+          this.shipPhysics.isMoving &&
+          !this.lowHullStopped &&
+          !this.pendingWarp
+        ) {
           this.lowHullStopped = true;
           this.npcManager.followNpcId = null;
           this.clearPlannedRoute();
@@ -1408,16 +1416,15 @@ export class SpaceFlightScene extends GameScene {
     ) {
       return;
     }
-    // A downed ship (GOD mode, hull at the floor) can't hyperjump until repaired
-    // above the floor; cancel the committed warp (predicate derived from gameMode + hull).
-    if (isDowned(this.gameEngine.player)) {
-      this.pendingWarp = null;
-      this.hud.showMessage(
-        "Корабль повреждён — гиперпрыжок недоступен, нужен ремонт",
-        0xff8800,
-      );
-      return;
-    }
+    // Deliberately NO isDowned() cancel here: initiating a jump while downed
+    // is blocked at the gate (StarMapScene.performWarpJump), but a jump
+    // COMMITTED while healthy completes even if a GOD-floor volley downs the
+    // ship mid-transit — reaching the system edge means escape. Cancelling
+    // here created an inescapable GOD-mode soft-lock: at a garrison whose
+    // volley out-damages a full repair, every repair→jump escape got floored
+    // in transit and cancelled at the edge, pinning the ship (calendar frozen
+    // by the live fight) forever. NORMAL/HARD are untouched — only GOD ever
+    // derives `downed` (hull floors above 0 instead of dying).
     this.warpInProgress = true;
     this.gameEngine.audio.playSfx("warp").catch(() => {});
 

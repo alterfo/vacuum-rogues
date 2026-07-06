@@ -161,14 +161,22 @@ describe("CombatModule downed ship cannot fire (Task 4)", () => {
   });
 
   it("repairing above the floor re-enables auto-fire", () => {
+    // Rewritten under the three-year-campaign test license (Task 7), meaning
+    // preserved: repair restores fight capability. A downed ship now REFUSES
+    // engagement outright (same class as the weaponless no-op — it can
+    // neither fire nor die, and an active fight would pin the galaxy
+    // calendar forever), so the resume happens through the garrison-aggro
+    // path, which re-calls addCombatant every frame and re-engages naturally
+    // once the ship is repaired above the floor.
     const ship = { hullHP: FLOOR, maxHull: MAX_HULL }; // downed
     const { module } = makeModule(ship, "GOD");
     const npc = makeSprite("a", 50, 0, { hullHP: 1000, damage: 1 });
-    module.addCombatant(npc);
-    module.update(FIRE); // downed → no fire
+    module.addCombatant(npc); // refused while downed
+    module.update(FIRE); // downed → no engagement, no fire
     expect(npc.npc.hullHP).toBe(1000);
 
     ship.hullHP = MAX_HULL; // repaired above the floor
+    module.addCombatant(npc); // the aggro path's next-frame re-engage
     module.update(FIRE); // now fires
     expect(npc.npc.hullHP).toBeLessThan(1000);
   });

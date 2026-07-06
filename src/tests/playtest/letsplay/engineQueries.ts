@@ -15,6 +15,7 @@ import type { StarSystem } from "@/domain/StarSystem";
 import type { Planet } from "@/domain/Planet";
 import { QuestType } from "@/types";
 import type { ResourceType } from "@/types";
+import { RESOURCE_BASE_PRICES } from "@/config/balance";
 import { TradeSystem } from "@/systems/TradeSystem";
 import {
   cargoCapacityOf,
@@ -263,12 +264,57 @@ export function questRoutingPreference(
  * DELIVERY is the one type this loop can both progress (buy the collect-item
  * need, see `deliveryCargoNeed`) and complete (route to the target, see
  * `deliveryReadyToTurnIn` and `PlanetScene.checkDeliveryQuestCompletion`).
+ *
+ * A DELIVERY offer must ALSO be economically viable (Task 7): the buy tier
+ * (`deliveryCargoNeed`) refuses any purchase where `marketPrice × need ≥
+ * reward`, so accepting a contract whose cargo can never clear that bar just
+ * parks a doomed quest in the single {@link MAX_ACTIVE_DELIVERY_QUESTS} slot
+ * until its ~40-day deadline expires («Срок вышел» rep damage, zero income).
+ * Measured on the 200-day campaign probe: 3 of 5 accepted contracts (9
+ * MEDICINE/916cr, 8 CRYSTALS/796cr, 7 LUXURY/1133cr) were doomed at accept
+ * time by base-price arithmetic alone — ~120 of 200 days spent carrying
+ * quests the ladder's own buy rule could never source. The viability estimate
+ * is the same information a human reads off the board: catalog base prices
+ * (they're in the trade UI) discounted by {@link QUEST_SOURCING_PRICE_ESTIMATE}
+ * for "a well-supplied market sells below base".
  */
 function isTakeableBoardQuest(offered: {
-  template: { type: QuestType };
+  template: {
+    type: QuestType;
+    objectives?: readonly {
+      type: string;
+      targetAmount: number;
+      itemType?: ResourceType;
+    }[];
+    reward?: { credits: number };
+  };
 }): boolean {
-  return offered.template.type === QuestType.DELIVERY;
+  if (offered.template.type !== QuestType.DELIVERY) return false;
+  // Structurally-partial templates (mock boards in tests) carry no
+  // objectives/reward — nothing to estimate, so they stay takeable.
+  for (const o of offered.template.objectives ?? []) {
+    if (o.type !== "COLLECT_ITEM" || o.itemType == null) continue;
+    const estimate =
+      RESOURCE_BASE_PRICES[o.itemType] *
+      QUEST_SOURCING_PRICE_ESTIMATE *
+      o.targetAmount;
+    if (estimate >= (offered.template.reward?.credits ?? 0)) return false;
+  }
+  return true;
 }
+
+/**
+ * Expected best-case unit price for sourcing quest cargo, as a fraction of
+ * the catalog base price. Sized from the real market model: `price ≈ base ×
+ * baseline² × jitter` with the favorable economy baseline 0.7 (see
+ * `economyBaseline`/`seedMarket`) putting a good's cheap source near ~0.5×
+ * base, and MIXED economies with favorable jitter near ~0.75×. At 0.75 the
+ * filter reproduces all five ground-truth outcomes of the 200-day probe:
+ * admits the two contracts the buy tier could actually source (9 METALS/733cr
+ * completed in 21 days; 9 ORGANICS/1024cr) and rejects the three that
+ * expired untouched.
+ */
+const QUEST_SOURCING_PRICE_ESTIMATE = 0.75;
 
 /**
  * At most this many DELIVERY quests active at once. Stacking several
@@ -299,8 +345,16 @@ const MAX_ACTIVE_DELIVERY_QUESTS = 1;
  * *ordinary*, safe-galaxy quest churn rather than carry the whole risk on its
  * own; a *failed* attempt doesn't count against it (it never reduced the
  * galaxy's risk, so it shouldn't spend one of the ladder's shots).
+ *
+ * Sized for the CAMPAIGN horizon (Task 7): the old value of 5 was tuned for
+ * ~55-day sessions under the fixed spread clock, but on the 1080-day adaptive
+ * campaign it silently capped LIFETIME quest income at ~5 payouts — the
+ * agent's main earner toward the battle-ready refit went dark by day ~100
+ * while the share-ceiling guard above already carries the actual risk. 50
+ * keeps a runaway-churn backstop (~1 completion / 20 days over a full
+ * campaign) without starving the military ladder.
  */
-const MAX_COMPLETED_DELIVERY_QUESTS = 5;
+const MAX_COMPLETED_DELIVERY_QUESTS = 50;
 
 /** Active DELIVERY quests right now, against {@link MAX_ACTIVE_DELIVERY_QUESTS}. */
 function activeDeliveryQuestCount(engine: GameEngine): number {

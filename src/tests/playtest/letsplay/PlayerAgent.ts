@@ -393,30 +393,53 @@ export class PlayerAgent {
           engine.galaxy?.systems ?? [],
           sys?.id ?? null,
         );
-        const questTarget = warpWantsQuestBias(action.reason)
+        // Avoid every hostile-HELD system, pirate dens included (Task 6):
+        // both are lethal standing garrisons and both are star-map-visible.
+        const hostileHeld = new Set([
+          ...(engine.galaxy?.overmindSystems ?? []),
+          ...(engine.galaxy?.pirateSystems ?? []),
+        ]);
+        const rawQuestTarget = warpWantsQuestBias(action.reason)
           ? questRoutingPreference(obs.quests, sys?.id ?? null)
           : null;
-        const hopsToQuestTarget =
-          questTarget != null
-            ? systemHopDistances(engine.galaxy?.systems ?? [], questTarget)
-            : undefined;
-        const target =
-          (action.targetId &&
+        // Never steer AT a hostile-held target/destination (Task 7): the
+        // policy refuses them too, but a quest accepted before its target
+        // was captured can still name one — degrade to the blind safe pick.
+        const questTarget =
+          rawQuestTarget != null && hostileHeld.has(rawQuestTarget)
+            ? null
+            : rawQuestTarget;
+        const directTarget =
+          action.targetId &&
+          !hostileHeld.has(action.targetId) &&
           connections.some((c) => c.toSystemId === action.targetId)
             ? action.targetId
-            : undefined) ??
+            : undefined;
+        // A non-adjacent `targetId` naming a real system is a DESTINATION
+        // (e.g. `go-restock`'s remembered buy system, Task 7) — route toward
+        // it hop-by-hop through the same preference machinery the quest bias
+        // uses, rather than dropping it for a blind pick.
+        const destination =
+          directTarget == null &&
+          action.targetId != null &&
+          !hostileHeld.has(action.targetId) &&
+          (engine.galaxy?.systems ?? []).some((s) => s.id === action.targetId)
+            ? action.targetId
+            : null;
+        const prefer = destination ?? questTarget;
+        const hopsToPrefer =
+          prefer != null
+            ? systemHopDistances(engine.galaxy?.systems ?? [], prefer)
+            : undefined;
+        const target =
+          directTarget ??
           pickWarpTarget(
             connections,
             this.lastSystemId,
             this.memory.visitedSystemIds,
-            // Avoid every hostile-HELD system, pirate dens included (Task 6):
-            // both are lethal standing garrisons and both are star-map-visible.
-            new Set([
-              ...(engine.galaxy?.overmindSystems ?? []),
-              ...(engine.galaxy?.pirateSystems ?? []),
-            ]),
-            questTarget,
-            hopsToQuestTarget,
+            hostileHeld,
+            prefer,
+            hopsToPrefer,
           );
         this.lastSystemId = sys?.id ?? null;
         const scene = this.harness.currentScene() as {

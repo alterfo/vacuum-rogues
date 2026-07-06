@@ -34,6 +34,7 @@ import { PlayerAgent } from "./PlayerAgent";
 import type { PlayerPolicy } from "./PlayerPolicy";
 import { MemoryHeuristicPolicy } from "./MemoryHeuristicPolicy";
 import { questBaselineForObserve } from "./AgentMemory";
+import { playerLoanBalance } from "./bankingQueries";
 import { checkInvariants } from "./letsplay.run";
 import {
   classifyCampaignOutcome,
@@ -241,7 +242,9 @@ export async function runCampaignSession(
         peakOvermindCount: milestones.peakOvermindCount,
       },
       died: outcome === "died",
+      questsCompleted: engine.questManager.getCompletedQuestIds().length,
       finalCredits: engine.player?.credits ?? 0,
+      loanBalance: playerLoanBalance(engine),
       finalOvermindShare:
         galaxy && galaxy.systems.length > 0
           ? galaxy.overmindSystems.length / galaxy.systems.length

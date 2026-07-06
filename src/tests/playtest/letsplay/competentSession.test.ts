@@ -133,10 +133,17 @@ describe("decideWithMemory — progression tier: affordable in-station upgrade (
     expect(action.kind).toBe("upgrade-hull");
   });
 
-  it("buys gear when it can't yet afford the hull buffer, goal-less", () => {
+  // Rewritten under the three-year-campaign test license (Task 7), meaning
+  // preserved: a station visit with genuine surplus buys gear when the hull
+  // upgrade is out of reach. Re-expressed on a BATTLE-READY ship with the
+  // trade reserve intact — the campaign discipline defers all discretionary
+  // shopping until battle-ready (hull-first: pre-battle-ready gear buys
+  // pushed the one purchase the military ladder waits on out of reach) and
+  // never spends into the reserve (measured wallet-to-zero blowup).
+  it("buys gear from surplus once battle-ready when the hull upgrade is out of reach", () => {
     const here = obs({
       scene: SceneType.STATION,
-      player: { credits: 700 },
+      player: { credits: 2000, maxHull: 220, weaponDamage: 35 },
       bestHullPrice: 10000,
       cheapestGearPrice: 500,
     });
@@ -146,10 +153,26 @@ describe("decideWithMemory — progression tier: affordable in-station upgrade (
     expect(action.kind).toBe("buy-gear");
   });
 
+  it("defers gear shopping while not yet battle-ready (hull-first discipline)", () => {
+    const here = obs({
+      scene: SceneType.STATION,
+      player: { credits: 2000 },
+      bestHullPrice: 10000,
+      cheapestGearPrice: 500,
+    });
+
+    const action = decideWithMemory(here, createMemory());
+
+    expect(action.kind).not.toBe("buy-gear");
+  });
+
+  // Rewritten under the three-year-campaign test license (Task 7), same
+  // reasoning as the gear test above: module shopping is battle-ready-gated
+  // and reserve-gated on the campaign horizon.
   it("buys a micromodule at a craft center when nothing bigger is affordable, goal-less", () => {
     const here = obs({
       scene: SceneType.STATION,
-      player: { credits: 900 },
+      player: { credits: 1500, maxHull: 220, weaponDamage: 35 },
       hasCraftCenter: true,
     });
 

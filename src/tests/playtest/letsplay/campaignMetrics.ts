@@ -217,8 +217,16 @@ export interface CampaignSessionReport {
   >;
   /** `true` ⇔ the player died (outcome "died"). */
   died: boolean;
+  /** Quests completed by session end (the economy tier's output metric). */
+  questsCompleted: number;
   /** Player credits at session end. */
   finalCredits: number;
+  /**
+   * Outstanding bank-loan balance at session end — subtract from
+   * `finalCredits` for the honest net position (the Task 7 loan-for-repair
+   * rescue means raw credits can be borrowed, not earned).
+   */
+  loanBalance: number;
   /** Overmind galaxy share at session end. */
   finalOvermindShare: number;
   /** Harness-sink errors recorded during the session. */
@@ -344,7 +352,8 @@ export function formatCampaignReport(
       `  [${s.seed}] ${s.outcome.toUpperCase().padEnd(7)} ` +
         `resolved=${day(s.resolutionDay)} end=${day(s.finalDay)} steps=${s.steps}${stall} ` +
         `power=${s.peakPower.toFixed(2)} battleReady=${day(s.milestones.battleReadyDay)} ` +
-        `firstLib=${day(s.milestones.firstLiberationDay)} credits=${s.finalCredits} ` +
+        `firstLib=${day(s.milestones.firstLiberationDay)} quests=${s.questsCompleted} credits=${s.finalCredits} ` +
+        `loan=${s.loanBalance} ` +
         `share=${s.finalOvermindShare.toFixed(2)} errors=${s.errors} violations=${s.violations} ` +
         `wall=${(s.wallMs / 1000).toFixed(1)}s heapΔ=${s.heapDeltaMB.toFixed(0)}MB`,
     );
