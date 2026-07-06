@@ -686,6 +686,55 @@ still wins, game still losable without engagement). Sequence: implement (i) → 
   weak ship never gets to flee. ⇒ **(ii) mid-combat agent reaction is required** to reach the
   gate; proceeding to it next per the approved sequence.
 
+**Task 9 (ii) attempted + measured (2026-07-07) — ⚠️ INSUFFICIENT and self-defeating; the
+win-rate gate is a genuine architectural blocker, ESCALATING to the user:**
+- **(ii) implemented** as a harness seam (`PlayerAgent.ts`, no engine fork, agent/human parity):
+  a non-combat-intent step (`waitOneDay(combatReactive)` / `executeMove`) now **breaks out the
+  instant `combatModule.isActive` flips true**, returning control to `observe→decide` so the
+  policy's outgunned-flee block gets a turn before the multi-round volley accumulates; plus an
+  escape-transit `executeRouteTo` beeline in `completeWarp`. Paired with a **decoupled hostile
+  weak-endpoint** (`HOSTILE_SCALING_HP_WEAK_MULT` 0.9 vs `HOSTILE_SCALING_DAMAGE_WEAK_MULT` 0.3 —
+  gentle incoming fire without softening the garrison's effective HP, so "scout still loses to
+  garrison" holds).
+- **Measured 50-session sweeps (NORMAL):** the damage weak-endpoints are **not** the driver —
+  deaths hold at ~33–37/50 regardless:
+  - `0.3` held / `0.4` neutral (working-tree): **18 %** (37 died, 0 wedged)
+  - `0.2` / `0.2`: **20 %** (36 died, 0 wedged)
+  - `0.1` / `0.1`: **24 %** (33 died, **2 wedged**) — over-gentling **trades deaths for
+    soft-lock wedges**: an immune-but-unwinnable weak ship can neither die nor out-DPS a
+    garrison, so the fight never resolves and the calendar freezes (churn-timeout).
+- **Root cause of the plateau (confirmed, not per-shot damage):** the deaths are **escape-crossing
+  EXPOSURE**, not one-shots. `completeWarp` flies the ship across the whole system to the jump
+  edge (up to 2000×`tick(50)`); NPCs fire every `combatFireIntervalMs` (2500 ms) the entire
+  crossing. The pursuers that catch a fleeing weak ship are **interceptor-class**
+  (`npcSpeed` 0.2 > starter 0.11 — overmind craft + pirate-role packs), which by the economy
+  balance note are **deliberately un-outrunnable until the engine is upgraded**. So a weak ship
+  cannot break weapon range mid-crossing and eats ~40 volleys — per-shot gentling only delays it,
+  and gentling far enough to survive 40 volleys (~0.04×) just converts the death into an
+  unresolvable frozen fight.
+- **(ii) also REGRESSES an invariant** (root-cause signal, not a test to rewrite): the flee
+  break-out makes the agent **flee→STAR_MAP→warp→arrive-into-a-fresh-fight→flee** churn — 7
+  consecutive warps vs the cap of 2 — reddening `exploreNoWarpLoop.test.ts` (GREEN at committed
+  HEAD, RED with the (ii) seam). Fixing the churn (respect the warp cadence) does **not** save the
+  ship, because the crossing-exposure death is independent of the churn. So (ii) as a bounded
+  harness change is **net-negative** (regression + no win-rate gain).
+- **⚠️ ESCALATION (decision for the user):** the approved bounded mitigations — (i) neutral
+  gentling, (ii) mid-combat reaction, and the full `balance.ts` lever iteration — **provably
+  plateau at ~18–24 %**, confirming the prior escalation. Reaching 99 % requires a decision
+  **outside an autonomous config/harness pass** (broad combat blast radius, reserved to the user
+  per the plan's own escalation record above):
+  1. **combat-exposure / NPC-aggro redesign** — e.g. gate wandering interceptor aggro on player
+     power (a weak ship isn't hunted by neutral-space packs), or let a committed flee-jump fire
+     from the near edge (short exposure) instead of a full-system crossing; and/or
+  2. **the neural half (Tasks 10–11)** — but the net is a BC clone of the `MemoryHeuristicPolicy`
+     teacher, so it can only match, not exceed, the teacher's ~18–24 %; the teacher must win first.
+- **State left clean & green:** the buggy (ii) working-tree WIP was **reverted** (branch at
+  committed HEAD `9b63771`, `exploreNoWarpLoop` green again; WIP preserved in `git stash@{0}` if
+  the user wants to resume it). No existing test assertion was modified. The Task-9 gate
+  checkboxes stay **unchecked** — marking them would misreport an unmet gate. The empirical
+  finding above IS the deliverable of this pass; the win-rate gate awaits the user's architectural
+  decision.
+
 ### Task 10: Neural action-space expansion (liberate + arm-up)
 - [ ] extend `ACTION_ORDER` 16 → 18 (`liberate`, `arm-up`) and grow the observation block with
       the campaign features the teacher actually uses (overmind share, hops-to-front,
