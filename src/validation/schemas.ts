@@ -385,6 +385,7 @@ export const NewsEventSchema = z.object({
     "SYSTEM_CAPTURED",
     "LIBERATION_CAMPAIGN",
     "TRADE_OPPORTUNITY",
+    "CAMPAIGN_ESCALATION",
   ]),
   npcId: z.string().optional(),
   systemId: z.string(),

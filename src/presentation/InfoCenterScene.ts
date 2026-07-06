@@ -64,6 +64,7 @@ const NEWS_TYPE_COLOR: Record<NewsEvent["type"], number> = {
   SYSTEM_CAPTURED: 0xff3388,
   LIBERATION_CAMPAIGN: 0x66ccff,
   TRADE_OPPORTUNITY: 0xffd166,
+  CAMPAIGN_ESCALATION: 0xff5588,
 };
 
 const GEAR_SORT_LABELS: Record<string, string> = {

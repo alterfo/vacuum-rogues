@@ -288,15 +288,52 @@ This plan **supersedes** the two open plans:
   lint 0 errors ✓.
 
 ### Task 5: Escalation feedback to the player (difficulty is *felt*, not silent)
-- [ ] write red tests: crossing power/pressure thresholds emits news/warning events
+- [x] write red tests: crossing power/pressure thresholds emits news/warning events
       (reuse `OVERMIND_WARNING_THRESHOLD` machinery); events fire once per threshold, are
       i18n-keyed (RU/EN), and appear in the info feed
-- [ ] implement threshold notifications ("the Overmind has noticed you", "front hardening",
+- [x] implement threshold notifications ("the Overmind has noticed you", "front hardening",
       "final push available") driven by ratcheted power + share bands — systems layer only,
       UI via existing ports (no `systems/ → presentation/` import)
-- [ ] add i18n keys RU/EN for all new strings
-- [ ] add/update a Playwright spec asserting the warning surfaces in the info feed
-- [ ] run unit + playtest + e2e regression — green before Task 6
+- [x] add i18n keys RU/EN for all new strings
+- [x] add/update a Playwright spec asserting the warning surfaces in the info feed
+- [x] run unit + playtest + e2e regression — green before Task 6 (4 PRE-EXISTING e2e
+      failures excluded, see ⚠️ note)
+
+**Task 5 notes (2026-07-06):**
+- New pure module `src/systems/campaign/escalationNotices.ts`: `activeEscalationStages(inputs)`
+  derives the crossed bands — `NOTICED` (ratcheted power ≥ `ESCALATION_NOTICED_POWER`, tied to
+  the battle-ready threshold 0.15), `HARDENING` (Overmind share ≥ `OVERMIND_WARNING_THRESHOLD`
+  0.35 — the exact star-map warning band), `FINAL_PUSH` (arc status machine derived
+  `contained` — front peaked and was pushed back); terminal `won`/`lost` suppress all.
+  `EscalationNoticeTracker` guarantees fire-once per run: keyed by galaxy id, the FIRST
+  observation seeds already-crossed stages silently (a loaded mid-game save never spams
+  retroactive news), lapse-and-re-cross never re-fires. Nothing persisted.
+- Wiring: `DayTickController.emitEscalationNotices` runs right after `advanceOvermindArc`
+  (reads the same ratcheted `peakPower` the adaptive schedule just used) and emits a new
+  `CAMPAIGN_ESCALATION` news event into `galaxy.newsFeed` — the feed the Info Center renders —
+  anchored to the player's current system so the partial-observability filter always shows it.
+  Systems layer only; no new ports needed (news feed is the existing seam).
+- NewsEvent lockstep (per `src/systems/galaxy/CLAUDE.md` convention, doc updated): type union
+  in `src/types/index.ts`, Zod enum in `schemas.ts` (additive — no migration/version bump,
+  save-compat 22 ✓), `NEWS_TYPE_COLOR` in `InfoCenterScene.ts`, i18n keys
+  `news.type.CAMPAIGN_ESCALATION` + `news.escalation.{NOTICED,HARDENING,FINAL_PUSH}` in BOTH
+  ru/en (parity gate green). Descriptions emitted via `t()` (RumorDirector precedent).
+- New tests: 13 in `src/tests/campaign/escalationNotices.test.ts` (band boundaries, terminal
+  suppression, escalation ordering, purity, custom config; tracker fire-once / silent seed /
+  no re-fire / per-galaxy reset), 6 in `src/tests/campaign/escalationNoticesWiring.test.ts`
+  (real DayTickController + real Galaxy: NOTICED/HARDENING/FINAL_PUSH each fire exactly once
+  with i18n'd descriptions, won-arc suppression, loaded-mid-game silent seed, below-band
+  negative path). New e2e in `playtest-regression.spec.ts`: drives the REAL EOD pipeline
+  (baseline tick → capture 45% of systems → tick) and asserts the warning text renders in the
+  Info Center feed. **No existing test touched** (license not needed).
+- Gates: full unit 4613 ✓, playtest 585 ✓, letsplay:ci 105 ✓, save-compat 22 ✓, tsc ✓,
+  lint 0 errors ✓. E2E regression: 26/26 ✓ including the new spec.
+- ⚠️ 4 PRE-EXISTING e2e regression failures on this branch, all verified unrelated via
+  `git stash` (they fail identically WITHOUT this task's changes): "PlanetScene menu buttons
+  respond to REAL mouse hover + click" (cursor stays default), "changing the font size keeps
+  the ship in place", "mouse wheel scrolls the equipment-shop list", "a TRADE_OPPORTUNITY
+  rumor renders in the Info Center news tab". Environmental/branch drift — candidates for the
+  Task 17 visual/e2e sweep; NOT fixed here (one concern per commit).
 
 ### Task 6: Long-horizon harness (1080-day sessions must be runnable)
 - [ ] write a red perf/capacity test: one seeded session runs to day ≥ 1080 (or arc resolution)

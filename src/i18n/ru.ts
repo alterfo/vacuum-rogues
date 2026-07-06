@@ -91,6 +91,13 @@ export const ru: Dict = {
   "news.type.SYSTEM_CAPTURED": "[ЗАХВАТ]",
   "news.type.LIBERATION_CAMPAIGN": "[ПОХОД]",
   "news.type.TRADE_OPPORTUNITY": "[МАРШРУТ]",
+  "news.type.CAMPAIGN_ESCALATION": "[ЭСКАЛАЦИЯ]",
+  "news.escalation.NOTICED":
+    "OVERMIND заметил вас: разведчики докладывают, что фронт ускоряется, а гарнизоны усиливаются",
+  "news.escalation.HARDENING":
+    "Фронт OVERMIND крепнет: под его контролем уже более трети галактики — время на исходе",
+  "news.escalation.FINAL_PUSH":
+    "Фронт OVERMIND сдержан: путь к ядру открыт — решающий удар возможен",
   "news.fallbackDesc": "{label} в системе {system}",
   "news.distCurrentSystem": "текущая система",
   "news.distHere": "здесь",

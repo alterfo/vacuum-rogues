@@ -12,10 +12,12 @@ import {
   type OvermindSpreadConfig,
 } from "@/systems/overmind/overmindSpread";
 import { adaptiveSpreadIntervalDays } from "@/systems/campaign/adaptivePacing";
+import { EscalationNoticeTracker } from "@/systems/campaign/escalationNotices";
 import { BankBus } from "@/systems/banking/bus";
 import { SeededRNG } from "@/utils/seededRNG";
 import { ResourceType } from "@/types";
 import { GAME_BALANCE, ADAPTIVE_GRACE_DAYS } from "@/config/balance";
+import { t } from "@/i18n/i18n";
 import { logger } from "@/utils/logger";
 
 /**
@@ -57,6 +59,13 @@ export interface DayTickControllerDeps {
  * scan must run after today's market drift).
  */
 export class DayTickController {
+  /**
+   * Fire-once escalation-notice state (three-year-campaign Task 5). In-memory
+   * only — keyed by galaxy id inside the tracker, so a new game/other run
+   * resets it and a loaded mid-game save seeds silently (no retroactive spam).
+   */
+  private readonly escalationNotices = new EscalationNoticeTracker();
+
   constructor(private readonly deps: DayTickControllerDeps) {}
 
   run(): void {
@@ -88,7 +97,8 @@ export class DayTickController {
     this.advanceTradeRumors(galaxy);
     this.advanceDroidRepair();
     this.advanceOwnershipEquilibrium(galaxy, rng);
-    this.advanceOvermindArc(galaxy);
+    const peakPower = this.advanceOvermindArc(galaxy);
+    this.emitEscalationNotices(galaxy, peakPower);
     this.dispatchOutcomeOverlay(galaxy);
 
     this.deps.invalidateInfoRegistryCache(); // world advanced → registry is stale
@@ -283,7 +293,7 @@ export class DayTickController {
    * second capture on the same day, status re-derivation is a pure read, and
    * `peakThreat`/`dayZero` are monotone — so a re-run for the same day is a no-op.
    */
-  private advanceOvermindArc(galaxy: Galaxy): void {
+  private advanceOvermindArc(galaxy: Galaxy): number {
     const day = galaxy.gameDays;
 
     // Adaptive pacing (three-year-campaign Task 3): ratchet the campaign peak
@@ -334,6 +344,38 @@ export class DayTickController {
     galaxy.overmindArc = state;
     if (state.status !== prevStatus) {
       logger.info(`OVERMIND arc status: ${prevStatus} → ${state.status}`);
+    }
+    // Escalation notices read the same ratcheted power the schedule just used.
+    return peakPower;
+  }
+
+  /**
+   * Announce escalation-band crossings to the player (three-year-campaign
+   * Task 5): as the ratcheted power / Overmind share / arc status cross the
+   * NOTICED → HARDENING → FINAL_PUSH bands, emit a one-shot i18n-keyed
+   * CAMPAIGN_ESCALATION news event into the feed the Info Center renders.
+   * Runs right after the arc tick so it sees today's post-capture state.
+   */
+  private emitEscalationNotices(galaxy: Galaxy, peakPower: number): void {
+    const total = galaxy.systems.length;
+    const fresh = this.escalationNotices.observe(galaxy.id, {
+      peakPower,
+      overmindShare: total === 0 ? 0 : galaxy.overmindSystems.length / total,
+      arcStatus: galaxy.overmindArc.status,
+    });
+    if (fresh.length === 0) return;
+    // Galaxy-wide notice; anchored to the player's current system so the
+    // partial-observability feed filter (known systems only) always shows it.
+    const systemId =
+      this.deps.getPlayer()?.currentSystemId ?? galaxy.systems[0]?.id ?? "";
+    for (const stage of fresh) {
+      galaxy.addNewsEvent({
+        type: "CAMPAIGN_ESCALATION",
+        systemId,
+        day: galaxy.gameDays,
+        description: t(`news.escalation.${stage}`),
+      });
+      logger.info(`Campaign escalation notice: ${stage}`);
     }
   }
 

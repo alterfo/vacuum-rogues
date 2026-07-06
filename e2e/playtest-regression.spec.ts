@@ -2258,4 +2258,90 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     await new SpaceFlightPage(page).screenshot('npc-clickable-task2');
     errorCollector.assertAndDetach();
   });
+
+  test('regression: campaign escalation warning surfaces in the info feed (three-year-campaign Task 5)', async ({
+    page,
+  }) => {
+    // Task 5: adaptive difficulty must be *felt* — crossing the Overmind-share
+    // warning band emits a one-shot CAMPAIGN_ESCALATION news event that the
+    // Info Center feed renders. Drive the REAL EOD pipeline: tick once at the
+    // fresh-game baseline (seeds the fire-once tracker), push the share past
+    // OVERMIND_WARNING_THRESHOLD, tick again, then read the feed on screen.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        advanceGalaxyDay: () => void;
+      };
+      engine.advanceGalaxyDay();
+    });
+
+    const seeded = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        galaxy: {
+          systems: Array<{ id: string }>;
+          addOvermindSystem: (id: string) => void;
+          newsFeed: Array<{ type: string; description: string }>;
+        } | null;
+        player: { currentSystemId: string } | null;
+        advanceGalaxyDay: () => void;
+      };
+      const galaxy = engine.galaxy;
+      if (!galaxy) return null;
+      // Capture ~45% of systems (past the 0.35 warning band, far below the
+      // 0.85 loss share), sparing the player's own system.
+      const spare = engine.player?.currentSystemId ?? '';
+      const targets = galaxy.systems.filter((s) => s.id !== spare);
+      const need = Math.ceil(galaxy.systems.length * 0.45);
+      for (const s of targets.slice(0, need)) galaxy.addOvermindSystem(s.id);
+      engine.advanceGalaxyDay();
+      const event = galaxy.newsFeed.find(
+        (e) => e.type === 'CAMPAIGN_ESCALATION',
+      );
+      return event ? { description: event.description } : null;
+    });
+    expect(seeded, 'HARDENING escalation event emitted into newsFeed').not.toBeNull();
+    expect(seeded!.description.length).toBeGreaterThan(0);
+
+    // Open the Info Center on a planet in the current (or first) system.
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        galaxy: { systems: Array<{ id: string; planets: Array<{ id: string }> }> } | null;
+        player: { currentSystemId: string } | null;
+        transitionTo: (scene: string, ctx?: object) => Promise<void>;
+      };
+      const systems = engine.galaxy?.systems ?? [];
+      const here =
+        systems.find((s) => s.id === engine.player?.currentSystemId) ?? systems[0];
+      const planet = here?.planets[0];
+      await engine.transitionTo('INFO_CENTER', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'InfoCenterScene', 15_000);
+
+    // Collect every rendered text node under the scene's mainContainer and
+    // assert the escalation warning actually surfaced in the feed.
+    const texts = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const out: string[] = [];
+      const walk = (node: unknown): void => {
+        if (!node || typeof node !== 'object') return;
+        const n = node as { text?: unknown; children?: unknown[] };
+        if (typeof n.text === 'string' && n.text) out.push(n.text);
+        for (const c of n.children ?? []) walk(c);
+      };
+      walk(engine.currentScene?.['mainContainer']);
+      return out;
+    });
+
+    const fragment = seeded!.description.slice(0, 24);
+    expect(
+      texts.some((txt) => txt.includes(fragment)),
+      `info feed shows the escalation warning (looking for "${fragment}")`,
+    ).toBe(true);
+
+    errorCollector.assertAndDetach();
+  });
 });

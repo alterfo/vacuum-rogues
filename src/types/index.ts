@@ -253,7 +253,8 @@ export interface NewsEvent {
     | "SYSTEM_LIBERATED"
     | "SYSTEM_CAPTURED"
     | "LIBERATION_CAMPAIGN"
-    | "TRADE_OPPORTUNITY";
+    | "TRADE_OPPORTUNITY"
+    | "CAMPAIGN_ESCALATION";
   /** Ranger NPC that completed a quest (NPC_QUEST_COMPLETE only). */
   npcId?: string;
   /** System where the event occurred. */

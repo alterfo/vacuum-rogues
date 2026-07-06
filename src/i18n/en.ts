@@ -90,6 +90,13 @@ export const en: Dict = {
   "news.type.SYSTEM_CAPTURED": "[CAPTURED]",
   "news.type.LIBERATION_CAMPAIGN": "[CAMPAIGN]",
   "news.type.TRADE_OPPORTUNITY": "[ROUTE]",
+  "news.type.CAMPAIGN_ESCALATION": "[ESCALATION]",
+  "news.escalation.NOTICED":
+    "The OVERMIND has noticed you: scouts report the front is accelerating and garrisons are hardening",
+  "news.escalation.HARDENING":
+    "The OVERMIND front is hardening: over a third of the galaxy is under its control — time is running out",
+  "news.escalation.FINAL_PUSH":
+    "The OVERMIND front is contained: the path to the core is open — the final push is possible",
   "news.fallbackDesc": "{label} in system {system}",
   "news.distCurrentSystem": "current system",
   "news.distHere": "here",

@@ -814,3 +814,20 @@ export const POWER_INDEX_BATTLE_READY_THRESHOLD = 0.15;
 export const HOSTILE_SCALING_WEAK_MULT = 0.9;
 /** Extra Overmind garrison ships (added to [min,max]) at full power (index 1). */
 export const OVERMIND_GARRISON_POWER_MAX_BONUS = 2;
+/**
+ * ─── Campaign: escalation notices ────────────────────────────────────────────
+ * (three-year-campaign plan, Task 5)
+ *
+ * Adaptive difficulty must be *felt*, not silent: crossing these bands emits a
+ * one-shot CAMPAIGN_ESCALATION news notice (src/systems/campaign/
+ * escalationNotices.ts, driven each EOD by DayTickController). The share band
+ * reuses OVERMIND_WARNING_THRESHOLD; the arc's `contained` status drives the
+ * "final push available" notice — no extra lever needed for those two.
+ */
+/**
+ * Ratcheted power at/above which "the Overmind has noticed you" fires. Tied to
+ * the battle-ready band — the exact point where adaptive spread pacing and
+ * garrison scaling start to bite, so the notice explains the difficulty change
+ * the player is about to feel.
+ */
+export const ESCALATION_NOTICED_POWER = POWER_INDEX_BATTLE_READY_THRESHOLD;
