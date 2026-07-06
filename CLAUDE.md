@@ -91,7 +91,7 @@ MLPs run through a **hand-written pure-TS forward pass** (`src/tests/playtest/le
 - **`NeuralPolicy`** (`src/tests/playtest/letsplay/NeuralPolicy.ts`, dev-only): `featurize → forward → mapNetOutputToAction`. Training: PyTorch (`tools/ai/train_player.py`), exports weights as JSON. Parity test: `weightsContract.test.ts` (within `1e-5`).
 - **Neural flag** = a plain feature gate (`isNeuralEnabled()` / `setNeuralEnabled()` in `gameSettings.ts`, default false). Off ⇒ rule-based heuristic; on ⇒ NeuralPolicy. Do NOT re-introduce dynamic `import()` / lazy ONNX.
 
-Current net: `weights/player.weights.json`, 3-layer `50→256→128→16` ≈ 51,328 params. `FEATURE_LENGTH = 50` (OBS=30 + MEMORY=20). Growing either block requires retraining + re-export.
+Current net: `weights/player.weights.json`, 3-layer `54→256→128→18` ≈ 49,298 params. `FEATURE_LENGTH = 54` (OBS=30 + MEMORY=20 + CAMPAIGN=4). `ACTION_ORDER` is 18 slots (16 base + `arm-up` + `liberate`). Growing any block requires retraining + re-export. The shipped net is currently a **zero-extension** of the prior `50→…→16` clone (new inputs zeroed, new heads bias-suppressed ⇒ byte-identical play) pending the Task 11 retrain on the 18-action teacher.
 
 ### Texture Loading
 

@@ -833,17 +833,54 @@ measured insufficient ALONE, re-confirming the standing escalation:**
   107 ✓, save-compat 22 ✓, tsc ✓, lint 0 errors ✓.
 
 ### Task 10: Neural action-space expansion (liberate + arm-up)
-- [ ] extend `ACTION_ORDER` 16 → 18 (`liberate`, `arm-up`) and grow the observation block with
+- [x] extend `ACTION_ORDER` 16 → 18 (`liberate`, `arm-up`) and grow the observation block with
       the campaign features the teacher actually uses (overmind share, hops-to-front,
       battle-ready, armUpCost, power index) — new `FEATURE_LENGTH`, documented in CLAUDE.md
-- [ ] update `featurize` / `mapNetOutputToAction` / `mlp.ts` plumbing; regenerate the
+- [x] update `featurize` / `mapNetOutputToAction` / `mlp.ts` plumbing; regenerate the
       weights-contract fixtures for the new shapes (under the license — parity MEANING kept)
-- [ ] write tests: featurizer emits the new features correctly on crafted observations;
+- [x] write tests: featurizer emits the new features correctly on crafted observations;
       action mapping round-trips all 18 slots; legality masking still filters illegal actions
-- [ ] update `exportBcData` to emit the new schema; export a smoke dataset from the winning
+- [x] update `exportBcData` to emit the new schema; export a smoke dataset from the winning
       teacher and validate shape/coverage (all 18 actions represented)
-- [ ] run unit + playtest suites — green before Task 11 (shipped 16-slot weights remain the
-      live default until Task 11 swaps them)
+- [x] run unit + playtest suites — green before Task 11 (shipped weights zero-extended to the
+      new shape ⇒ byte-identical play remains the live default until Task 11's real retrain)
+
+**Task 10 notes (2026-07-07):**
+- **Action vocabulary 16 → 18.** `arm-up` + `liberate` moved from the
+  `LEGAL_ACTION_ORDER`-only tail into `ACTION_ORDER` itself (`observe.ts`); `LEGAL_ACTION_ORDER`
+  is now an alias of `ACTION_ORDER`. `mapNetOutputToAction` ranks all 18 slots automatically;
+  `exportBcData`'s `ACTION_ORDER.indexOf(kind)` label now captures arm-up (16) / liberate (17)
+  instead of dropping them as `-1`. `mlp.ts` is dimension-agnostic — no change needed.
+- **Feature vector 50 → 54** (three-block layout `OBS 30 + MEMORY 20 + CAMPAIGN 4`). New
+  `CAMPAIGN_FEATURE_LENGTH = 4` in `NeuralPolicy.ts`, appended at the **tail** (indices 50–53)
+  *after* the memory block precisely so the historical 0–49 layout stays byte-stable for the
+  zero-extended shipped weights. The 4 campaign features: `playerPowerIndex` (50),
+  `battleReady` (51), hops-to-nearest-front normalised (52), `armUpCost` normalised (53).
+  overmind-share was already featurized (index 26). New **optional** `Observation` fields
+  (`playerPowerIndex`, `battleReady`, `hopsToOvermindFront`) computed in `observe()` from the
+  canonical loadout + `player.rank` (`playerPowerIndex` from `@/systems/campaign/playerPower`,
+  battle-ready keyed off `POWER_INDEX_BATTLE_READY_THRESHOLD`); `armUpCost` already existed.
+  These are dev-only letsplay obs fields — **no persisted domain change, no schema/migration**.
+- **Shipped `player.weights.json` regenerated to `54 → 256 → 128 → 18` by behaviour-preserving
+  zero-extension** (NOT a retrain — that's Task 11): 4 zeroed input columns appended to layer 0
+  (new campaign features contribute nothing) + 2 output rows (arm-up/liberate) with a
+  strongly-negative bias (−1e6) so the padded head never wins argmax. The net plays
+  **byte-identically** to the prior 16-action clone — `neuralSession.test.ts` stays green
+  (error-free, neural-driven, its `.fails` diversity marker still fails as documented).
+- **New tests**: `neuralActionSpace.test.ts` (18-slot round-trip for every action, arm-up /
+  liberate selectable end-to-end, legality masking to next-best-legal / wait floor);
+  `featurize.test.ts` campaign-block case (indices 50–53 encode power/ready/hops/armUpCost,
+  at-front=0, defaults); `exportBcData.test.ts` 18-action label-space coverage.
+- **Tests rewritten under the plan's BC/weights-gate license** (feature-width lockstep pins —
+  MEANING preserved, deliberately re-pinned at the new shape, none weakened): `weightsContract`
+  (50/16 → 54/18), `featurize` header (50 split 30/20 → 54 split 30/20/4; memory-degrade loop
+  scoped to `[OBS, OBS+MEMORY)` so it excludes the new obs-derived campaign block),
+  `memoryFeatures` (three widths pinned 30/20/4/54; block-append slices scoped to the memory
+  window). `shippedWeights`/`neuralSession` needed only comment updates (bodies use the symbols).
+  Docs: CLAUDE.md neural section (54/18, zero-extension caveat), `weights/README.md` contract.
+- Gates: full unit **4700 ✓**, playtest **640 ✓**, letsplay:ci **107 ✓**, tsc ✓, lint 0 ✓.
+  No schema touch ⇒ save-compat unaffected. Shipped-16 → 18 is a plumbing/shape change only;
+  the real 18-action training + parity re-gate is Task 11.
 
 ### Task 11: Retrain the net on the winning teacher, ship, gate
 - [ ] export the full BC dataset from `MemoryHeuristicPolicy` campaign runs (hundreds of

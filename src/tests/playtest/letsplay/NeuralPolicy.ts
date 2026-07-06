@@ -60,13 +60,26 @@ export interface NeuralPolicyOptions {
 export const OBS_FEATURE_LENGTH = 30;
 
 /**
- * Length of the {@link featurize} vector — the net's input width: the
- * observation block ({@link OBS_FEATURE_LENGTH}) followed by the belief-derived
- * memory block ({@link MEMORY_FEATURE_LENGTH}). **Growing either changes the MLP
- * input width** — retrain + re-export the player net's weights JSON at the new
- * width (Post-Completion; `load()` rejects a width mismatch).
+ * Number of campaign-difficulty features appended after the memory block
+ * (three-year-campaign Task 10): the adaptive signals the `MemoryHeuristicPolicy`
+ * teacher reasons over — power index, battle-ready, hops-to-front, arm-up cost.
+ * **Appended at the tail** (indices 50–53), *after* the memory block, so the
+ * historical 0–49 feature layout (obs 0–29 + memory 30–49) is byte-stable: the
+ * shipped 16→18 weights were zero-extended by appending 4 input columns + 2
+ * output rows, which only works if the first 50 features keep their positions.
  */
-export const FEATURE_LENGTH = OBS_FEATURE_LENGTH + MEMORY_FEATURE_LENGTH;
+export const CAMPAIGN_FEATURE_LENGTH = 4;
+
+/**
+ * Length of the {@link featurize} vector — the net's input width: the
+ * observation block ({@link OBS_FEATURE_LENGTH}) + the belief-derived memory
+ * block ({@link MEMORY_FEATURE_LENGTH}) + the campaign block
+ * ({@link CAMPAIGN_FEATURE_LENGTH}). **Growing any block changes the MLP input
+ * width** — retrain + re-export the player net's weights JSON at the new width
+ * (Post-Completion; `load()` rejects a width mismatch).
+ */
+export const FEATURE_LENGTH =
+  OBS_FEATURE_LENGTH + MEMORY_FEATURE_LENGTH + CAMPAIGN_FEATURE_LENGTH;
 
 /** Clamp `n / denom` into `[0, 1]` — a saturating count/ratio normaliser. */
 function norm(n: number, denom: number): number {
@@ -80,10 +93,11 @@ function norm(n: number, denom: number): number {
  * into a fixed-length numeric feature vector (the net's input): a
  * {@link OBS_FEATURE_LENGTH}-wide egocentric block (12 vitals/system features +
  * 9 scene-type one-hot bits + 1 warp-in-transit bit + 8 Task-5 bank/equipment/
- * Overmind/quest-delivery signals) followed by the
- * {@link MEMORY_FEATURE_LENGTH}-wide belief block ({@link memoryFeatures}). Pure
- * and deterministic — the same `(obs, memory)` always yields the exact same
- * {@link FEATURE_LENGTH}-wide vector, every component already in `[0, 1]` so it
+ * Overmind/quest-delivery signals), then the {@link MEMORY_FEATURE_LENGTH}-wide
+ * belief block ({@link memoryFeatures}), then the {@link CAMPAIGN_FEATURE_LENGTH}-
+ * wide campaign block (Task 10: power index, battle-ready, hops-to-front, arm-up
+ * cost). Pure and deterministic — the same `(obs, memory)` always yields the exact
+ * same {@link FEATURE_LENGTH}-wide vector, every component already in `[0, 1]` so it
  * needs no further scaling. Player-less observations (menus) encode as all-zero
  * vitals; with **no memory** the belief block degrades to its sane zero defaults
  * (the agent "knows nothing yet"), so callers without a notebook still get a
@@ -138,13 +152,22 @@ export function featurize(obs: Observation, memory?: AgentMemory): number[] {
     norm(obs.cheapestGearPrice ?? 0, 10_000),
     norm(obs.questsCompleted ?? 0, 20),
     ...memoryFeatures(obs, memory),
+    // Campaign block (indices 50–53, Task 10) — the adaptive-difficulty signals
+    // the teacher reasons over, appended AFTER the memory block so the 0–49
+    // layout stays byte-stable for the zero-extended 16→18 shipped weights.
+    obs.playerPowerIndex ?? 0, // already ∈ [0,1]
+    obs.battleReady ? 1 : 0,
+    // Hops to the nearest Overmind front: 0 = standing at the front, → 1 far;
+    // absent (no front yet / systemless) reads as maximally-far.
+    obs.hopsToOvermindFront == null ? 1 : norm(obs.hopsToOvermindFront, 10),
+    norm(obs.armUpCost ?? 0, 10_000),
   ];
 }
 
 /**
  * Resolve a concrete `targetId` for a chosen neural `kind` from the observation.
  *
- * The net's output head only selects an action **kind** (16 slots) — it does not
+ * The net's output head only selects an action **kind** (18 slots) — it does not
  * name a target. The appliers resolve most targets themselves (warp →
  * `pickWarpTarget`, dock → first station, trade → landed/first planet), but
  * `land` is the one action with **no applier fallback**: `PlayerAgent.apply`'s

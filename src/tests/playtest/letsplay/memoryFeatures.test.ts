@@ -21,7 +21,12 @@ import {
   memoryFeatures,
   MEMORY_FEATURE_LENGTH,
 } from "./memoryFeatures";
-import { featurize, FEATURE_LENGTH, OBS_FEATURE_LENGTH } from "./NeuralPolicy";
+import {
+  featurize,
+  FEATURE_LENGTH,
+  OBS_FEATURE_LENGTH,
+  CAMPAIGN_FEATURE_LENGTH,
+} from "./NeuralPolicy";
 
 /**
  * Task 3 of the partial-observability plan: belief-derived (memory) features.
@@ -369,18 +374,29 @@ describe("featurize (observation + memory blocks)", () => {
     });
     const full = featurize(o, mem);
     expect(full).toHaveLength(FEATURE_LENGTH);
-    expect(FEATURE_LENGTH).toBe(OBS_FEATURE_LENGTH + MEMORY_FEATURE_LENGTH);
-    // The tail equals the standalone memory block.
-    expect(full.slice(OBS_FEATURE_LENGTH)).toEqual(memoryFeatures(o, mem));
+    expect(FEATURE_LENGTH).toBe(
+      OBS_FEATURE_LENGTH + MEMORY_FEATURE_LENGTH + CAMPAIGN_FEATURE_LENGTH,
+    );
+    // The memory block sits right after the obs block (the campaign block, Task
+    // 10, follows it) — so the [OBS, OBS+MEMORY) slice equals the standalone block.
+    expect(
+      full.slice(
+        OBS_FEATURE_LENGTH,
+        OBS_FEATURE_LENGTH + MEMORY_FEATURE_LENGTH,
+      ),
+    ).toEqual(memoryFeatures(o, mem));
   });
 
   it("works with no memory — the belief block is the zero default", () => {
     const o = obs();
     const full = featurize(o);
     expect(full).toHaveLength(FEATURE_LENGTH);
-    expect(full.slice(OBS_FEATURE_LENGTH)).toEqual(
-      new Array(MEMORY_FEATURE_LENGTH).fill(0),
-    );
+    expect(
+      full.slice(
+        OBS_FEATURE_LENGTH,
+        OBS_FEATURE_LENGTH + MEMORY_FEATURE_LENGTH,
+      ),
+    ).toEqual(new Array(MEMORY_FEATURE_LENGTH).fill(0));
   });
 
   it("is deterministic — same (obs, memory) ⇒ same vector", () => {
@@ -394,10 +410,13 @@ describe("featurize (observation + memory blocks)", () => {
     // `tools/ai/train_player.py`'s NUM_ACTIONS must match. Changing a width here is
     // a deliberate act that forces a retrain + re-export — so pin the numbers, not
     // just their sum (which is tautological). Bumped 16/7/23 → 30/20/50 by the
-    // Task 5 widening (20260701-letsplay-action-expansion-and-neural-scale.md) —
+    // Task 5 widening (20260701-letsplay-action-expansion-and-neural-scale.md),
+    // then 30/20/50 → 30/20/4/54 by the three-year-campaign Task 10 action-space
+    // expansion (appended a 4-wide campaign block + 2 output actions) —
     // deliberately updated in lockstep with that widening, not a weakened pin.
     expect(OBS_FEATURE_LENGTH).toBe(30);
     expect(MEMORY_FEATURE_LENGTH).toBe(20);
-    expect(FEATURE_LENGTH).toBe(50);
+    expect(CAMPAIGN_FEATURE_LENGTH).toBe(4);
+    expect(FEATURE_LENGTH).toBe(54);
   });
 });

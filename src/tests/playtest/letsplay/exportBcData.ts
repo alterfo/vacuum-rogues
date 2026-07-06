@@ -141,7 +141,7 @@ export interface ScenarioMixEntry {
  * The default BC mix — **goal-less only** (`docs/plans/20260701-smart-autopilot-player.md`,
  * Task 9). The shipped net deploys **goal-less** (both the live autopilot and the
  * headless `letsplay` construct `MemoryHeuristicPolicy` with no goal), and the
- * `goal` is **not** in the featurize vector (`FEATURE_LENGTH=50`, no goal one-hot).
+ * `goal` is **not** in the featurize vector (`FEATURE_LENGTH=54`, no goal one-hot).
  * An earlier goal-**mixed** stratified mix (the superseded
  * `20260701-letsplay-action-expansion-and-neural-scale.md` plan) therefore
  * labelled the *same* observation with conflicting actions across goals (e.g. an

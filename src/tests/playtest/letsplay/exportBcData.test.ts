@@ -129,6 +129,33 @@ describe("collectScenarioMixDataset (stratified CJM mix)", () => {
   }, 60_000);
 });
 
+describe("18-action label space (campaign Task 10)", () => {
+  it("emits labels over the full 18-action vocabulary, incl. the new arm-up/liberate slots", () => {
+    // The exporter labels via `ACTION_ORDER.indexOf(action.kind)` and drops any
+    // index < 0. Before Task 10, `arm-up`/`liberate` were OUT of ACTION_ORDER, so
+    // the teacher's slayer/arm-up steps were silently dropped from the dataset.
+    // Now they are in-vocabulary (indices 16/17), so a teacher that emits them is
+    // captured — the schema the trainer fits spans all 18 heads.
+    expect(ACTION_ORDER).toHaveLength(18);
+    expect(ACTION_ORDER.indexOf("arm-up")).toBe(16);
+    expect(ACTION_ORDER.indexOf("liberate")).toBe(17);
+  });
+
+  it("a smoke dataset's labels are all in [0,18) with the widened feature width", async () => {
+    const rows = await collectBcDataset({
+      sessions: 1,
+      steps: 10,
+      seedPrefix: "BC_TEST_18ACTIONS",
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.features).toHaveLength(FEATURE_LENGTH);
+      expect(row.action).toBeGreaterThanOrEqual(0);
+      expect(row.action).toBeLessThan(18);
+    }
+  }, 60_000);
+});
+
 describe("bcDatasetToJsonl (serialisation)", () => {
   it("emits one parseable JSON object per line, round-tripping the rows", () => {
     const rows: BcRow[] = [

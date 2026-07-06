@@ -32,9 +32,12 @@ function fixture<T>(name: string): T {
 }
 
 describe("weights contract — exported JSON ↔ mlp.forward parity", () => {
-  it("Task 5/2: the net I/O contract is 50 features in, 16 actions out", () => {
-    expect(FEATURE_LENGTH).toBe(50);
-    expect(ACTION_ORDER.length).toBe(16);
+  it("campaign Task 10: the net I/O contract is 54 features in, 18 actions out", () => {
+    // Widened from 50→54 features (obs 30 + memory 20 + campaign 4) and 16→18
+    // actions (arm-up + liberate appended) for the three-year-campaign neural
+    // action-space expansion; the shipped weights were re-exported at this shape.
+    expect(FEATURE_LENGTH).toBe(54);
+    expect(ACTION_ORDER.length).toBe(18);
   });
 
   it("reproduces the reference net's scores within 1e-5 (parity)", () => {

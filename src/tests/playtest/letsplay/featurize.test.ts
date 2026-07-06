@@ -8,7 +8,12 @@ import type {
   QuestSnapshot,
 } from "./observe";
 import { MEMORY_FEATURE_LENGTH } from "./memoryFeatures";
-import { featurize, FEATURE_LENGTH, OBS_FEATURE_LENGTH } from "./NeuralPolicy";
+import {
+  featurize,
+  FEATURE_LENGTH,
+  OBS_FEATURE_LENGTH,
+  CAMPAIGN_FEATURE_LENGTH,
+} from "./NeuralPolicy";
 
 /**
  * Task 5 of the action-expansion plan: the widened 50-feature vector
@@ -69,12 +74,13 @@ const rec = (buy: number, sell: number): PriceRecord => ({
   seenAt: 1,
 });
 
-describe("featurize — Task 5 widened vector (50 = 30 obs + 20 memory)", () => {
-  it("is 50-wide, split 30/20", () => {
+describe("featurize — campaign Task 10 vector (54 = 30 obs + 20 memory + 4 campaign)", () => {
+  it("is 54-wide, split 30/20/4", () => {
     expect(OBS_FEATURE_LENGTH).toBe(30);
     expect(MEMORY_FEATURE_LENGTH).toBe(20);
-    expect(FEATURE_LENGTH).toBe(50);
-    expect(featurize(obs())).toHaveLength(50);
+    expect(CAMPAIGN_FEATURE_LENGTH).toBe(4);
+    expect(FEATURE_LENGTH).toBe(54);
+    expect(featurize(obs())).toHaveLength(54);
   });
 
   it("every slot stays in [0,1] and finite across an extreme/edge mock state", () => {
@@ -244,10 +250,44 @@ describe("featurize — Task 5 widened vector (50 = 30 obs + 20 memory)", () => 
   it("degrades every memory-block feature to 0 with a fresh notebook, even with a rich obs", () => {
     // Mirrors the existing memoryFeatures.test.ts contract: a fresh AgentMemory
     // always zeroes the belief block, regardless of what `obs` itself contains
-    // (a well-fed player fixture has non-zero credits/maxHull/etc.).
+    // (a well-fed player fixture has non-zero credits/maxHull/etc.). Scoped to the
+    // MEMORY block [OBS_FEATURE_LENGTH, OBS+MEMORY): the campaign block that
+    // follows (indices 50–53, Task 10) is obs-derived, not belief-derived, so it
+    // is not part of this "fresh notebook ⇒ 0" contract (e.g. an absent
+    // hops-to-front reads as maximally-far, not 0).
     const v = featurize(obs(), createMemory());
-    for (let i = OBS_FEATURE_LENGTH; i < FEATURE_LENGTH; i++) {
+    for (
+      let i = OBS_FEATURE_LENGTH;
+      i < OBS_FEATURE_LENGTH + MEMORY_FEATURE_LENGTH;
+      i++
+    ) {
       expect(v[i]).toBe(0);
     }
+  });
+
+  it("encodes the campaign block (indices 50-53) from the Task-10 obs signals", () => {
+    // All four campaign features present + non-trivial.
+    const on = featurize(
+      obs({
+        playerPowerIndex: 0.6,
+        battleReady: true,
+        hopsToOvermindFront: 2,
+        armUpCost: 5_000,
+      }),
+    );
+    expect(on[50]).toBeCloseTo(0.6); // playerPowerIndex (already ∈ [0,1])
+    expect(on[51]).toBe(1); // battleReady
+    expect(on[52]).toBeCloseTo(2 / 10); // hops-to-front / 10
+    expect(on[53]).toBeCloseTo(0.5); // armUpCost / 10_000
+
+    // Standing AT the front reads 0; the defaults (no power, not ready, no front,
+    // no arm-up) read power/ready/armUp = 0 but hops = 1 (maximally far / unknown).
+    const atFront = featurize(obs({ hopsToOvermindFront: 0 }));
+    expect(atFront[52]).toBe(0);
+    const off = featurize(obs());
+    expect(off[50]).toBe(0); // playerPowerIndex absent ⇒ 0
+    expect(off[51]).toBe(0); // battleReady absent ⇒ 0
+    expect(off[52]).toBe(1); // hops absent ⇒ maximally far
+    expect(off[53]).toBe(0); // armUpCost absent ⇒ 0
   });
 });

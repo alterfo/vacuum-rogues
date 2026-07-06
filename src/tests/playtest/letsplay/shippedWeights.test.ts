@@ -17,9 +17,12 @@ import { NeuralPolicy, FEATURE_LENGTH } from "./NeuralPolicy";
 import { ACTION_ORDER } from "./observe";
 import playerWeights from "./weights/player.weights.json";
 
-// Retrained + re-exported in Task 10 (20260701 action-expansion plan) against
-// the widened 50-feature / 16-action vocabulary (architecture 50->256->128->16,
-// trained on tools/ai/dataset/train.jsonl via tools/ai/train_player.py).
+// Re-exported at the widened 54-feature / 18-action vocabulary (three-year-
+// campaign Task 10, architecture 54->256->128->18). The behaviour-cloned net is
+// zero-extended from the prior 50->...->16 export — 4 zeroed input columns for
+// the new campaign features + 2 output rows (arm-up/liberate) with a strongly-
+// negative bias so selection stays byte-identical to the 16-action net — pending
+// the real retrain on the new action space (Task 11, tools/ai/train_player.py).
 describe("shipped player.weights.json", () => {
   it("loads through NeuralPolicy at the current FEATURE_LENGTH / ACTION_ORDER", async () => {
     const policy = new NeuralPolicy({ weights: playerWeights });

@@ -11,10 +11,20 @@ runtime and nothing here reaches the prod bundle
 
 | Field | Value |
 |---|---|
-| `FEATURE_LENGTH` (input width) | **50** = `OBS_FEATURE_LENGTH` (30, egocentric observation) + `MEMORY_FEATURE_LENGTH` (20, belief-derived) |
-| `NUM_ACTIONS` (output width) | **16** = `ACTION_ORDER.length` (`observe.ts`) |
-| Architecture | **50 → 256 → 128 → 16** (3 `nn.Linear` layers, ReLU between each hidden pair, linear output head) |
-| Parameters | ≈51,328 |
+| `FEATURE_LENGTH` (input width) | **54** = `OBS_FEATURE_LENGTH` (30, egocentric observation) + `MEMORY_FEATURE_LENGTH` (20, belief-derived) + `CAMPAIGN_FEATURE_LENGTH` (4, campaign difficulty) |
+| `NUM_ACTIONS` (output width) | **18** = `ACTION_ORDER.length` (`observe.ts`) — the 16 base actions + `arm-up` + `liberate` |
+| Architecture | **54 → 256 → 128 → 18** (3 `nn.Linear` layers, ReLU between each hidden pair, linear output head) |
+| Parameters | ≈49,298 |
+
+> **Three-year-campaign Task 10 (action-space expansion).** The shipped file was
+> **zero-extended** from the prior `50 → 256 → 128 → 16` behaviour-cloned net, not
+> retrained: 4 zeroed input columns were appended (the new campaign features
+> contribute nothing) and 2 output rows (`arm-up`, `liberate`) were appended with
+> a strongly-negative bias so the padded head never wins argmax. The net therefore
+> plays **byte-identically** to the prior 16-action clone (it never selects the two
+> new heads) while satisfying the widened load contract. The real retrain on the
+> 18-action teacher is **Task 11** — until then this net cannot express arm-up /
+> liberate; that is expected, not a regression.
 
 `NeuralPolicy.load()` rejects any weights file whose first layer's input width
 != `FEATURE_LENGTH` or last layer's output width != `ACTION_ORDER.length` — a

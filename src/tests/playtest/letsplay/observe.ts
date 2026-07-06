@@ -28,6 +28,8 @@ import { SceneType, StationType, FactionType } from "@/types";
 import type { ResourceType, QuestType } from "@/types";
 import { npcsPresentInSystem } from "@/systems/npc/NpcSimulator";
 import { isDowned } from "@/systems/combat/godMode";
+import { playerPowerIndex } from "@/systems/campaign/playerPower";
+import { POWER_INDEX_BATTLE_READY_THRESHOLD } from "@/config/balance";
 import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
 import { TradeSystem } from "@/systems/TradeSystem";
 import type { Planet } from "@/domain/Planet";
@@ -96,7 +98,17 @@ export type PlayerActionKind =
  * (`NeuralPolicy` maps `scores[i]` → `ACTION_ORDER[i]`), so the ordering is a
  * single source of truth shared by the legal-action surface and the net seam.
  * The original 10-action order is preserved verbatim (several tests pin its
- * exact sequence) — the 6 new actions are appended, not interleaved.
+ * exact sequence) — the newer actions are appended, not interleaved.
+ *
+ * **18-action vocabulary (three-year-campaign Task 10).** `arm-up` and
+ * `liberate` were previously held OUT of this array (kept in `LEGAL_ACTION_ORDER`
+ * only) to freeze the neural output head at 16 while the shipped
+ * `player.weights.json` had a 16-wide head. Task 10 expands the net's action
+ * space to 18 so the trained student can express the Overmind-slayer moves the
+ * `MemoryHeuristicPolicy` teacher uses (arm-up / liberate) — the two are now
+ * appended here, `weightsContract`/`shippedWeights` are re-pinned at 18, and the
+ * shipped weights were zero-extended to an 18-wide head (Task 11 retrains for
+ * real). {@link mapNetOutputToAction} now ranks all 18 slots.
  */
 export const ACTION_ORDER: readonly PlayerActionKind[] = [
   "move",
@@ -115,30 +127,18 @@ export const ACTION_ORDER: readonly PlayerActionKind[] = [
   "take-loan",
   "repay-loan",
   "sell-cargo",
-];
-
-/**
- * `liberate` is deliberately kept OUT of {@link ACTION_ORDER}: that array is also
- * the frozen neural-net output vocabulary (`weightsContract.test.ts` /
- * `shippedWeights.test.ts` pin it at 16 and the shipped `player.weights.json` has
- * a 16-wide output head — growing it needs a retrain + re-export, out of scope
- * here). Appending it here instead keeps `legalActionsForScene`'s deterministic
- * ordering total over the full {@link PlayerActionKind} vocabulary without
- * touching the net contract: {@link mapNetOutputToAction} only ranks
- * `ACTION_ORDER` slots, so the trained net simply never scores `liberate` (falls
- * through to the next best legal action) — no regression for the neural policy,
- * and `MemoryHeuristicPolicy` (which reads `obs.legalActions` directly) sees it.
- *
- * `arm-up` (buy + install a stronger weapon, the Task 2 military-progression
- * lever) is appended here for the identical reason — it is not part of the
- * frozen neural output vocabulary, so the trained net never scores it while the
- * heuristic ladder can rank it.
- */
-const LEGAL_ACTION_ORDER: readonly PlayerActionKind[] = [
-  ...ACTION_ORDER,
   "arm-up",
   "liberate",
 ];
+
+/**
+ * The legal-action ordering is now identical to the neural output vocabulary —
+ * `arm-up` and `liberate` live directly in {@link ACTION_ORDER} (Task 10). Kept
+ * as a distinct alias so the rest of this module reads intent ("this list gates
+ * scene legality") and so a future legal-only action (one the net never scores)
+ * has an obvious home.
+ */
+const LEGAL_ACTION_ORDER: readonly PlayerActionKind[] = ACTION_ORDER;
 
 /** Minimum credits on hand for `buy-module` to be legal at a CRAFT_CENTER station. */
 const BUY_MODULE_MIN_CREDITS = 800;
@@ -454,6 +454,32 @@ export interface Observation {
   gameDay?: number;
   /** Total quests completed so far this run (`questManager.getCompletedQuestIds().length`). */
   questsCompleted?: number;
+  /**
+   * The player-power index ∈ [0,1] (three-year-campaign Task 2) — the adaptive
+   * difficulty input, derived from the canonical loadout's hull/weapon plus
+   * credits + rank ({@link playerPowerIndex}). Fed to the neural featurizer's
+   * campaign block (Task 10) so the net sees the same power signal the adaptive
+   * pacing/garrison scaling react to. Optional so hand-built fixtures type-check;
+   * absent ⇒ treated as 0 (starter-weak) by the featurizer.
+   */
+  playerPowerIndex?: number;
+  /**
+   * The player has crossed the campaign battle-ready band
+   * (`playerPowerIndex >= POWER_INDEX_BATTLE_READY_THRESHOLD`) — the Task 2
+   * "gentle while weak, relentless once armed" switch the Overmind-slayer tier
+   * and the escalation notices key off. A campaign feature the teacher reasons
+   * over, exposed to the net (Task 10). Defaults to false.
+   */
+  battleReady?: boolean;
+  /**
+   * Warp hops from the CURRENT system to the nearest Overmind-held front
+   * (`0` when standing at the front, `undefined` when no front exists yet or the
+   * player is systemless) — the scalar the slayer tier minimises to walk toward
+   * the war. Exposed to the neural campaign block (Task 10). The per-neighbour
+   * `hopsToOvermindFront` on {@link SystemSnapshot.neighbors} stays the routing
+   * signal; this is the ego-system reduction for the featurizer.
+   */
+  hopsToOvermindFront?: number;
 }
 
 /** Flags describing the current location, fed to {@link legalActionsForScene}. */
@@ -1043,6 +1069,22 @@ export function observe(
   const warpInTransit =
     scene === SceneType.SPACE_FLIGHT && flightScene?.pendingWarp != null;
 
+  // Campaign block (Task 10): the adaptive-difficulty signals the teacher reasons
+  // over, reduced to ego-scalars for the neural featurizer. The power index reads
+  // hull/weapon from the canonical loadout (single source of truth) plus credits
+  // + rank; battle-ready is the campaign power band (POWER_INDEX_BATTLE_READY_
+  // THRESHOLD), distinct from the teacher ladder's hull/weapon gate but strongly
+  // correlated; the ego hops-to-front comes from the already-computed front map.
+  const playerPower = playerPowerIndex({
+    maxHull: ship.maxHull,
+    weaponDamage: playerSnapshot.weaponDamage ?? 0,
+    credits: player.credits,
+    rank: player.rank,
+  });
+  const battleReady = playerPower >= POWER_INDEX_BATTLE_READY_THRESHOLD;
+  const hopsToFront =
+    system != null ? hopsToOvermindFront?.get(system.id) : undefined;
+
   return {
     scene,
     hasPlayer: true,
@@ -1076,5 +1118,8 @@ export function observe(
     upgradeHullCost,
     gameDay: galaxy.gameDays,
     questsCompleted: engine.questManager.getCompletedQuestIds().length,
+    playerPowerIndex: playerPower,
+    battleReady,
+    hopsToOvermindFront: hopsToFront,
   };
 }
