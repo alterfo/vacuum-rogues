@@ -19,7 +19,11 @@ import {
 } from "@/systems/banking/economy";
 import { pirateSalvageAmount } from "@/systems/combat/pirateSalvage";
 import { deterministicNpcOffset } from "@/systems/npc/npcPlacement";
-import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
+import {
+  SYSTEM_GEOMETRY,
+  GAME_BALANCE,
+  NEUTRAL_AGGRO_POWER_THRESHOLD,
+} from "@/config/balance";
 import { NpcRole } from "@/types";
 import type { SpaceLootItem } from "@/types";
 import { pickNpcDestination, type NpcBehaviorCtx } from "./npcBehavior";
@@ -905,6 +909,20 @@ export class NpcShipManager implements FlightModule {
     // made pirates + Overmind look allied (playtest 2026-06-27, Issue 6).
     const pirateControlled =
       this.gameEngine?.galaxy?.isPirateSystem?.(playerSystemId) ?? false;
+    // Task 9 (iii): a weak ship (ratcheted campaign power below the battle-ready
+    // band) is NOT hunted by wandering NEUTRAL-system aggressors — the Overview's
+    // "gentle while weak, relentless once armed" applied to aggro, not just the
+    // per-shot damage (Task 9 (i)). A weak ship that is never chased never eats
+    // the un-outrunnable interceptor's crossing volleys (the neutral half of the
+    // Task 9 combat-exposure deaths). The shield lifts as the player arms (power
+    // ≥ threshold ⇒ hunted again); it is INERT without a wired campaign context
+    // (legacy DI stubs read `undefined` ⇒ hunt, byte-identical) and NEVER touches
+    // a captured system's garrison (isHostileSystem) or an engaged combatant.
+    const rawPower = this.gameEngine?.campaignPeakPower;
+    const neutralAggroAllowed =
+      rawPower === undefined
+        ? true
+        : (rawPower ?? 0) >= NEUTRAL_AGGRO_POWER_THRESHOLD;
     for (const sprite of this.npcSprites) {
       const npc = sprite.npc;
       const kind = factionKindOf(npc);
@@ -916,7 +934,8 @@ export class NpcShipManager implements FlightModule {
       const overmindAggro =
         kind === "overmind" &&
         (isHostileSystem ||
-          (npc.isAggressive() &&
+          (neutralAggroAllowed &&
+            npc.isAggressive() &&
             isHostile("overmind", "player", { pirateRep: 0 })));
       // Pirates defend ONLY their own turf: a pirate aggros the player in a
       // pirate-CONTROLLED system, never in an Overmind system (where it is the

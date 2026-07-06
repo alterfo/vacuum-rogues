@@ -833,6 +833,21 @@ export const NEUTRAL_SCALING_WEAK_MULT = 0.4;
 /** Neutral-system incoming-damage multiplier faced by a maxed player (index 1). */
 export const NEUTRAL_SCALING_STRONG_MULT = 1.0;
 /**
+ * ─── Campaign Task 9 (iii): power-keyed neutral-pack aggro gating ─────────────
+ * "A weak ship isn't hunted." A wandering NEUTRAL-system aggressor (a besieging
+ * Overmind interceptor — npcSpeed 0.2, un-outrunnable by a starter ship's 0.11)
+ * does NOT break orbit to chase a ship whose ratcheted `campaignPeakPower` is
+ * below this threshold; the hunt switches on as the player arms (power ≥
+ * threshold). This closes the neutral-space combat-EXPOSURE deaths that per-shot
+ * gentling (Task 9 (i)) alone could not — a weak ship that is never chased never
+ * eats the crossing volleys. Tied to the battle-ready band so pressure arrives
+ * exactly as the ship becomes able to fight back. A captured system's standing
+ * garrison (isHostileSystem) and an already-engaged combatant are NEVER shielded
+ * — only the wandering neutral hunt. Inert without a wired campaign context
+ * (legacy DI reads `undefined` ⇒ hunted, byte-identical).
+ */
+export const NEUTRAL_AGGRO_POWER_THRESHOLD = POWER_INDEX_BATTLE_READY_THRESHOLD;
+/**
  * ─── Campaign: escalation notices ────────────────────────────────────────────
  * (three-year-campaign plan, Task 5)
  *

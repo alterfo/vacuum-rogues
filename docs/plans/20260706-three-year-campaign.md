@@ -589,8 +589,19 @@ This plan **supersedes** the two open plans:
       2026-07-07): let the agent act between combat rounds inside a single headless step (flee
       before a multi-round resolution lands) — parity with what a live player can do; harness
       seam, no engine behavior fork
+- [x] ➕ **(iii) power-keyed neutral-pack aggro gating** (user-approved 2026-07-07, second
+      escalation): wandering NEUTRAL-system interceptor/pirate packs do not aggro a ship below
+      a `campaignPeakPower` threshold — "a weak ship isn't hunted"; pressure switches on as
+      the player arms. Narrowest form per the escalation's own recommendation: additive,
+      optional, config-lever in `balance.ts`, save-safe, legacy-DI byte-identical (mirror how
+      (i)/Task 4 were wired). Red tests first; affected behavior pins rewritten under the
+      plan's license, meaning preserved (an ARMED ship is still hunted; garrisons unaffected)
+- [ ] ➕ **(iv) committed flee-jump fires from the near edge** (user-approved 2026-07-07): a
+      ship committed to fleeing jumps from the nearest usable escape point instead of
+      beelining across the whole system past its pursuers — an engine-mechanics change that
+      benefits live players too (no harness-only fake escape); red playtest first
 - [ ] iterate `balance.ts` adaptive levers (spread slow/fast/grace/creep, garrison scale,
-      economy rewards) on top of (i)/(ii) until 50-session win-rate = 100% and
+      economy rewards) on top of (i)–(iv) until 50-session win-rate = 100% and
       median win lands in year 2–3 (day ~540–1080, per the chosen pacing)
 - [ ] scale up: 300-session campaign run; **gate: ≥ 297/300 wins (99%), all wins ≤ 1080 days,
       0 deaths**; record final numbers + final lever values in this plan
@@ -734,6 +745,41 @@ win-rate gate is a genuine architectural blocker, ESCALATING to the user:**
   checkboxes stay **unchecked** — marking them would misreport an unmet gate. The empirical
   finding above IS the deliverable of this pass; the win-rate gate awaits the user's architectural
   decision.
+
+**Task 9 (iii) landed (2026-07-07) — neutral-pack aggro gating wired; measured flat ALONE
+(as the escalation predicted → (iv) is the driver):**
+- New config lever `NEUTRAL_AGGRO_POWER_THRESHOLD` in `balance.ts` (= `POWER_INDEX_BATTLE_READY_THRESHOLD`
+  0.15). `NpcShipManager.checkGarrisonAggro` gates the NEUTRAL-system Overmind hunt branch
+  (`npc.isAggressive() && isHostile(...)` when `!isHostileSystem`) on the ratcheted
+  `campaignPeakPower`: below the battle-ready band the wandering interceptor does NOT break orbit to
+  chase the ship; the hunt switches on as the player arms (power ≥ threshold). Read **directly** from
+  the `GameEngine.campaignPeakPower` getter the manager already holds — **no SpaceFlightScene wiring
+  line** (that file is at the 1900-line guard, HEAD-red from Task 7), so zero line-guard impact.
+  Legacy-DI byte-identical: a stub without the getter reads `undefined ⇒ hunt`; a real engine
+  pre-ratchet reads `null ⇒ 0 ⇒ weak-shield`. Garrisons (`isHostileSystem`) and already-engaged
+  combatants are NEVER shielded — only the wandering neutral hunt.
+- **No existing pin rewritten.** The pinned `overmindCombat.test.ts` "flags a live Overmind aggressive
+  while besieging a neutral system" and `garrisonCombat.test.ts` stay GREEN verbatim — their manager
+  stubs omit the `campaignPeakPower` getter (`undefined ⇒ hunt`), so the gate is inert for them. The
+  test-modification license was not consumed.
+- New tests: 6 in `src/tests/presentation/neutralAggroGating.test.ts` (weak power-0 not hunted; real
+  engine `null` power shields; armed ≥ threshold hunted; just-below-threshold shielded; captured
+  garrison NEVER shielded even when weak; no-context legacy stub hunts byte-identical). Red-first:
+  before the gate, a besieging Overmind in a neutral system was always `aggressive=true`.
+- Gates: full unit 4685 ✓ (only the pre-existing SpaceFlightScene 1901-line-guard red, HEAD-red from
+  Task 7, file untouched here), playtest 630 ✓, letsplay:ci 107 ✓, tsc ✓, lint 0 errors ✓. No schema
+  touch ⇒ save-compat unaffected.
+- **50-session re-measure (NORMAL):** win-rate **18.0 %** (9 win / 1 loss / 40 died / 0 timeout /
+  0 wedged), median win **d98** — statistically unchanged from the (i)/(ii) 18 % baselines. **Root
+  cause reconfirmed a third time:** the neutral-aggro gate IS active (campaignPeakPower reachable in
+  the harness), but it only prevents the INITIAL wandering-Overmind hunt. It does not touch the two
+  dominant death paths — (a) **flee-crossing EXPOSURE** (the pursuers are already-engaged combatants,
+  past the aggro gate; `completeWarp` flies the ship across the whole system while the un-outrunnable
+  interceptor fires ~40 volleys) and (b) **held-system garrisons** / **agent-initiated pirate fights**
+  (`markHostile` bypasses the shield). ⇒ **(iv) committed flee-jump from the near edge is the actual
+  driver** — it shortens the crossing exposure that (i)/(ii)/(iii) all leave untouched. Proceeding to
+  (iv) next; note it requires an engine change in the line-guarded `SpaceFlightScene.ts` (must extract
+  ≥ 2 lines first per standing rule #6 — its own focused concern).
 
 ### Task 10: Neural action-space expansion (liberate + arm-up)
 - [ ] extend `ACTION_ORDER` 16 → 18 (`liberate`, `arm-up`) and grow the observation block with
