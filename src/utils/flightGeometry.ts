@@ -21,6 +21,48 @@ export function hashToAngle(s: string): number {
 }
 
 /**
+ * The boundary point (on the hyperjump edge, `boundaryRadius` from `center`) a
+ * pending hyperjump flies to before the jump fires (Task 9 iv).
+ *
+ * When the warp was re-plotted while the ship was already inside the system
+ * (`fromMidSystem` — the flee/re-plot case, ship at `ship`), it returns the
+ * NEAREST usable escape point: the boundary point radially outward from the
+ * ship's current position. A fleeing ship thus jumps from the closest edge
+ * instead of beelining across the whole system to the exit-direction edge past
+ * its pursuers (the dominant campaign death path). Otherwise (a fresh system
+ * entry) it returns the exit-direction edge, the established spatial behaviour.
+ *
+ * The destination is fixed by the pending warp's `targetSystemId`; the exit
+ * point is purely positional, so the shorter crossing never changes where the
+ * ship arrives. A radial-out escape also never crosses the star (it lies behind
+ * the ship), so it needs no avoidance detour. A ship exactly at the centre has
+ * no meaningful "nearest" direction and degrades to the exit-direction edge.
+ */
+export function warpEdgePoint(
+  ship: Point,
+  center: Point,
+  exitVector: Point,
+  boundaryRadius: number,
+  fromMidSystem: boolean,
+): Point {
+  if (fromMidSystem) {
+    const dx = ship.x - center.x;
+    const dy = ship.y - center.y;
+    const d = Math.hypot(dx, dy);
+    if (d > 1e-6) {
+      return {
+        x: center.x + (dx / d) * boundaryRadius,
+        y: center.y + (dy / d) * boundaryRadius,
+      };
+    }
+  }
+  return {
+    x: center.x + exitVector.x * boundaryRadius,
+    y: center.y + exitVector.y * boundaryRadius,
+  };
+}
+
+/**
  * Catmull-Rom spline through `pts` with `samplesPerSegment` interpolated points
  * per segment. Ghost points at both ends ensure the curve passes through the
  * first and last control points.

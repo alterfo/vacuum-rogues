@@ -4,6 +4,7 @@ import {
   avoidStarPath,
   questMarkerRadius,
   shouldReaim,
+  warpEdgePoint,
 } from "@/utils/flightGeometry";
 
 describe("questMarkerRadius (quest ring halos the planet, not a stray circle)", () => {
@@ -70,5 +71,46 @@ describe("radarToWorld (US-070 #2: minimap drag-to-pan mapping)", () => {
     const p = radarToWorld(120, 100, W, H, SCALE, 1000, 1000);
     expect(p.x).toBeCloseTo(2000);
     expect(p.y).toBeCloseTo(1000);
+  });
+});
+
+describe("warpEdgePoint (Task 9 iv: committed flee-jump fires from the near edge)", () => {
+  const center = { x: 1000, y: 1000 };
+  const R = 2800; // SYSTEM_BOUNDARY_RADIUS
+  // Destination lies to the right, so a fresh warp exits at the right-hand edge.
+  const exitVector = { x: 1, y: 0 };
+
+  it("a fresh entry (not mid-system) exits at the exit-direction edge", () => {
+    // Ship anywhere; fresh warp ignores its position and heads to the exit edge.
+    const p = warpEdgePoint({ x: 400, y: 1000 }, center, exitVector, R, false);
+    expect(p.x).toBeCloseTo(center.x + R); // 3800
+    expect(p.y).toBeCloseTo(center.y);
+  });
+
+  it("a mid-system flee fires from the NEAREST edge (radially out from the ship)", () => {
+    // Ship fleeing on the LEFT of the star while the destination is to the RIGHT.
+    // The old behaviour beelined right across the whole system past pursuers;
+    // now it exits at the nearest (left) edge instead.
+    const ship = { x: 100, y: 1000 }; // 900px left of centre
+    const p = warpEdgePoint(ship, center, exitVector, R, true);
+    expect(p.x).toBeCloseTo(center.x - R); // 3800 to the LEFT: -1800
+    expect(p.y).toBeCloseTo(center.y);
+    // And the crossing to the near edge is far shorter than to the far edge.
+    const nearDist = Math.hypot(p.x - ship.x, p.y - ship.y);
+    const farDist = Math.hypot(center.x + R - ship.x, center.y - ship.y);
+    expect(nearDist).toBeLessThan(farDist);
+  });
+
+  it("the near-edge point always lies on the boundary circle", () => {
+    const ship = { x: 1600, y: 400 };
+    const p = warpEdgePoint(ship, center, exitVector, R, true);
+    expect(Math.hypot(p.x - center.x, p.y - center.y)).toBeCloseTo(R);
+  });
+
+  it("a ship exactly at the centre degrades to the exit-direction edge (no NaN)", () => {
+    const p = warpEdgePoint(center, center, exitVector, R, true);
+    expect(Number.isFinite(p.x)).toBe(true);
+    expect(Number.isFinite(p.y)).toBe(true);
+    expect(Math.hypot(p.x - center.x, p.y - center.y)).toBeCloseTo(R);
   });
 });

@@ -11,6 +11,7 @@ import {
   clampOutsideRadius,
   spiralApproachPath,
   takeoffArcPath,
+  warpEdgePoint,
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import { PanZoomController } from "@/systems/PanZoomController";
@@ -510,23 +511,29 @@ export class SpaceFlightScene extends GameScene {
     // direction. The jump fires when it reaches the boundary (updateShip →
     // performWarp); days advance during this flight like any other movement.
     if (this.pendingWarp) {
-      const { exitVector } = this.pendingWarp;
-      const edgeX = centerX + exitVector.x * this.SYSTEM_BOUNDARY_RADIUS;
-      const edgeY = centerY + exitVector.y * this.SYSTEM_BOUNDARY_RADIUS;
-      // Pre-plan the route to the jump point, but DO NOT start moving — the
-      // player must press "Ход" (Play) to fly to the edge (US-070 #11). The
-      // route preview (bowing around the star) is drawn immediately.
-      this.routePath = this.computeAvoidancePath(
+      // Flee/re-plot from mid-system (lastPos preserved, Task 9 iv) fires from the
+      // NEAREST escape edge, not a full-system beeline past pursuers; a fresh entry
+      // keeps the exit-direction edge. Arrival is fixed by targetSystemId, so the
+      // shorter crossing can't change the destination. Route is pre-planned but
+      // NOT started — the player presses "Ход" to fly to the edge (US-070 #11).
+      const edge = warpEdgePoint(
+        { x: this.shipPhysics.shipX, y: this.shipPhysics.shipY },
+        { x: centerX, y: centerY },
+        this.pendingWarp.exitVector,
+        this.SYSTEM_BOUNDARY_RADIUS,
+        lastPos != null,
+      );
+      this.routePath = avoidStarPath(
         this.shipPhysics.shipX,
         this.shipPhysics.shipY,
-        edgeX,
-        edgeY,
+        edge.x,
+        edge.y,
+        this.starRenderer.centerX,
+        this.starRenderer.centerY,
+        this.starRenderer.avoidRadius,
       );
-      this.plannedRoute = { x: edgeX, y: edgeY };
+      this.plannedRoute = { x: edge.x, y: edge.y };
       this.plotRoute();
-      logger.info(
-        `Pending warp: course to system edge plotted (${edgeX.toFixed(0)}, ${edgeY.toFixed(0)}) — press Ход to depart`,
-      );
     }
 
     // Just dropped out of hyperspace → play the warp-exit flourish at the ship.
@@ -1499,28 +1506,6 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Build a path from (fx,fy) to (tx,ty) that bows around the star instead of
-   * flying through it. Returns just [{to}] when the straight segment is clear,
-   * otherwise an arc of waypoints around the star plus the destination.
-   */
-  private computeAvoidancePath(
-    fx: number,
-    fy: number,
-    tx: number,
-    ty: number,
-  ): { x: number; y: number }[] {
-    return avoidStarPath(
-      fx,
-      fy,
-      tx,
-      ty,
-      this.starRenderer.centerX,
-      this.starRenderer.centerY,
-      this.starRenderer.avoidRadius,
-    );
-  }
-
-  /**
    * Build the flight path from the ship to (tx,ty): the star-avoidance arc, but
    * when the shot is otherwise straight and the destination is a planet, a
    * curved spiral-in approach so the ship sweeps into the orbit edge rather than
@@ -1535,7 +1520,15 @@ export class SpaceFlightScene extends GameScene {
     if (!this.shipPhysics) return [{ x: tx, y: ty }];
     const fx = this.shipPhysics.shipX;
     const fy = this.shipPhysics.shipY;
-    const path = this.computeAvoidancePath(fx, fy, tx, ty);
+    const path = avoidStarPath(
+      fx,
+      fy,
+      tx,
+      ty,
+      this.starRenderer.centerX,
+      this.starRenderer.centerY,
+      this.starRenderer.avoidRadius,
+    );
     if (landing && path.length <= 1) {
       return spiralApproachPath(
         fx,
