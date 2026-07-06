@@ -296,19 +296,15 @@ describe("PlayerAgent — competent goal-less session (Task 4)", () => {
     expect(completedQuest).toBe(true);
   });
 
-  // KNOWN REGRESSION (do not "fix" by OR-ing in a different signal — see
-  // CLAUDE.md's "never weaken a test to hide a regression" rule): Task 1's
-  // original claim for this seed was "prove `sell-for-profit` fires
-  // legitimately." That stopped holding once Task 2/7 landed on top of it —
-  // `galaxyEffectivelyLost` now correctly refuses the warp toward the known
-  // margin once this seed's small (6-system) galaxy is mostly Overmind-held.
-  // The `sell-for-profit` decision itself is still proven correct at the
-  // ladder level (a scripted-`obs` fixture, not this seed) in
-  // `MemoryHeuristicPolicy.test.ts`'s "picks sell-for-profit" case. Kept
-  // `.fails` and pinned to the original seed/assertion rather than silently
-  // relaxed, so this stays visibly red until either the ladder is proven to
-  // still reach `sell-for-profit` here or the seed is deliberately replaced.
-  it.fails("realises a known-margin sell-for-profit cycle", () => {
+  // HEALED REGRESSION (was pinned `.fails`): under the old fixed spread
+  // (grace 6 / interval 5) this seed's small 6-system galaxy went mostly
+  // Overmind-held mid-session, so `galaxyEffectivelyLost` correctly refused
+  // the warp toward the known margin and `sell-for-profit` never fired. The
+  // adaptive campaign clock (three-year-campaign Task 3: ADAPTIVE_GRACE_DAYS
+  // of dormancy before any arc spread) keeps the galaxy free for the whole
+  // session, so the ladder provably reaches `sell-for-profit` on this very
+  // seed again — the healing condition the `.fails` note demanded.
+  it("realises a known-margin sell-for-profit cycle", () => {
     const soldForProfit = res.steps.some(
       (s) =>
         s.action.kind === "trade" &&

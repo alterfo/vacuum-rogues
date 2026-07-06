@@ -13,6 +13,7 @@ import { stepOwnershipTick } from "@/systems/galaxy/OvermindBalance";
 import { SeededRNG } from "@/utils/seededRNG";
 import {
   GAME_BALANCE,
+  ADAPTIVE_GRACE_DAYS,
   QUEST_REPUTATION_REWARD,
   QUEST_DEADLINE_BASE_DAYS,
   QUEST_DEADLINE_PER_JUMP_DAYS,
@@ -116,15 +117,23 @@ describe("Task 8 — late-game front stays a recoverable equilibrium (not a tota
     });
     await harness.newGame();
     const galaxy = harness.galaxy()!;
-    const startHostile =
-      galaxy.overmindSystems.length + galaxy.pirateSystems.length;
+    const startOvermind = galaxy.overmindSystems.length;
 
+    // Adaptive campaign clock (three-year-campaign Task 3): the arc is dormant
+    // for ADAPTIVE_GRACE_DAYS, so "neglect" only grows the front past grace —
+    // start the arc clock, fast-forward the dormancy window, then let the
+    // neglected days tick for real (arc spread + pirate churn). Growth is
+    // asserted on the OVERMIND front (the deterministic arc): the equilibrium
+    // may simultaneously liberate pirate systems, so the hostile union is not
+    // a monotone measure of the advance.
+    harness.engine.advanceGalaxyDay(); // day 1 — the arc clock starts
+    harness.galaxy()!.gameDays = ADAPTIVE_GRACE_DAYS;
     for (let day = 0; day < 20; day++) harness.engine.advanceGalaxyDay();
     const captured = [
       ...new Set([...galaxy.overmindSystems, ...galaxy.pirateSystems]),
     ];
     // The front genuinely advanced under neglect (otherwise the test is vacuous).
-    expect(captured.length).toBeGreaterThan(startHostile);
+    expect(galaxy.overmindSystems.length).toBeGreaterThan(startOvermind);
 
     // Every captured system flips back to faction control — the player CAN recover.
     for (const id of captured) {

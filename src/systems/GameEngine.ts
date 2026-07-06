@@ -267,6 +267,26 @@ export class GameEngine {
     return this.campaignPeakPowerValue;
   }
 
+  /**
+   * Ratchet the campaign peak power from the live loadout and return the new
+   * peak (0 while no run is active). Called on every EOD tick (the adaptive
+   * spread pacing input) and before every save — the stored value never
+   * decreases within a run, so selling gear cannot soften the front.
+   */
+  private ratchetCampaignPeakPower(): number {
+    if (this.player && this.playerLoadout) {
+      this.campaignPeakPowerValue = ratchetPeakPower(
+        this.campaignPeakPowerValue,
+        powerIndexFromLoadout(
+          this.playerLoadout,
+          this.player.credits,
+          this.player.rank,
+        ),
+      );
+    }
+    return this.campaignPeakPowerValue ?? 0;
+  }
+
   private exceptionHandler: IExceptionHandler;
   private animationFrameId = 0;
   private lastTime = 0;
@@ -385,6 +405,7 @@ export class GameEngine {
       invalidateInfoRegistryCache: () => {
         this.infoRegistryCache = null;
       },
+      updateCampaignPeakPower: () => this.ratchetCampaignPeakPower(),
     });
 
     this.sceneFactory = new SceneFactory();
@@ -1047,16 +1068,7 @@ export class GameEngine {
     // Ratchet the campaign peak power before persisting: the stored value
     // never decreases within a run (selling gear must not soften the adaptive
     // difficulty). A fresh runtime (null) seeds from the current loadout.
-    if (this.playerLoadout) {
-      this.campaignPeakPowerValue = ratchetPeakPower(
-        this.campaignPeakPowerValue,
-        powerIndexFromLoadout(
-          this.playerLoadout,
-          this.player.credits,
-          this.player.rank,
-        ),
-      );
-    }
+    this.ratchetCampaignPeakPower();
 
     const { SaveState } = await import("@/domain/SaveState");
     const state = new SaveState(

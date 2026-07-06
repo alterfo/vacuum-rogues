@@ -445,23 +445,17 @@ export const GAME_BALANCE = {
    * `DEFAULT_OVERMIND_SPREAD_CONFIG`; the EOD drive reads them from here so the
    * arc pacing is tunable in one place (the balance pass tunes these values).
    *
-   * - GRACE_DAYS: no spread for the first N days past the arc's day-zero.
-   * - INTERVAL_DAYS: a spread tick only captures every N days.
    * - CAPTURES_PER_TICK: frontier systems consumed per spread tick.
    * - LOSS_SHARE: Overmind share at/above which (past grace, big enough) the arc is lost.
    * - CONTAINED_SHARE: once the share peaked above this and is pushed back to/below it, the arc is contained.
    * - MIN_SYSTEMS: loss is suppressed on tiny/legacy maps below this system count.
    *
-   * Tuning note (autopilot-overmind-slayer plan, Task 4): GRACE_DAYS/INTERVAL_DAYS
-   * are already at the MAXIMUM slowdown the locked arc tests permit (grace ≤ 6,
-   * interval ≤ 5 — see `overmindArc.test.ts`), and CAPTURES_PER_TICK is at its
-   * floor (1). There is no config-only headroom left here to let liberation
-   * outpace the spread; the real gate is gear availability (all systems generate
-   * at techLevel 1, so no hull/weapon is buyable and the autopilot never reaches
-   * battle-ready) — a generation change, not a balance one.
+   * Pacing note (three-year-campaign plan, Task 3): the old fixed
+   * OVERMIND_SPREAD_GRACE_DAYS / OVERMIND_SPREAD_INTERVAL_DAYS levers were
+   * replaced by the adaptive schedule — grace is ADAPTIVE_GRACE_DAYS and the
+   * interval is `adaptiveSpreadIntervalDays(day, dayZero, campaignPeakPower)`
+   * (see the ADAPTIVE_* levers below and src/systems/campaign/adaptivePacing.ts).
    */
-  OVERMIND_SPREAD_GRACE_DAYS: 6,
-  OVERMIND_SPREAD_INTERVAL_DAYS: 5,
   OVERMIND_SPREAD_CAPTURES_PER_TICK: 1,
   // The galaxy is only truly lost when the Overmind has swallowed nearly all of
   // it — seeing half the systems still free while being told "you lost" reads as
@@ -754,6 +748,34 @@ export const POWER_INDEX_CREDITS_MIN = 1000;
 export const POWER_INDEX_CREDITS_MAX = 50000;
 /** Top rank index on the 0–7 ladder (RANK_THRESHOLDS). */
 export const POWER_INDEX_RANK_MAX = 7;
+/**
+ * ─── Campaign: adaptive Overmind spread pacing — the 2–3-year clock ─────────
+ * (three-year-campaign plan, Task 3)
+ *
+ * The EOD arc drive (`DayTickController.advanceOvermindArc`) no longer uses a
+ * fixed grace/interval: the spread cadence is
+ * `adaptiveSpreadIntervalDays(day, dayZero, campaignPeakPower)`
+ * (src/systems/campaign/adaptivePacing.ts) — a lerp from SLOW (weak player)
+ * to FAST (armed player) on the RATCHETED power index, so growing strong
+ * summons the war and selling gear never softens it. Two guards keep every
+ * run resolvable within the 1080-day campaign ceiling:
+ *  - grace: no spread for the first ADAPTIVE_GRACE_DAYS (year-1 growth room);
+ *  - baseline creep: from ADAPTIVE_CREEP_START_DAY after day-zero the interval
+ *    is floored at ADAPTIVE_CREEP_MIN_DAYS, so even a permanently idle run
+ *    reaches the 0.85 loss share long before day 1080 (idle 24-system galaxy:
+ *    ~7 captures in year 1–2, the rest on the creep floor ⇒ lost ≈ day 500).
+ * Sized for a competent win in year 2–3; the Task 9 balance pass tunes these.
+ */
+/** Spread interval (days) faced by a powerless player (index 0). */
+export const ADAPTIVE_SPREAD_SLOW_DAYS = 45;
+/** Spread interval (days) faced by a maxed player (index 1). */
+export const ADAPTIVE_SPREAD_FAST_DAYS = 10;
+/** No arc spread for this many days past the arc's day-zero. */
+export const ADAPTIVE_GRACE_DAYS = 90;
+/** Days past the arc's day-zero after which the creep floor kicks in. */
+export const ADAPTIVE_CREEP_START_DAY = 360;
+/** Creep floor: the interval is capped at this once creep is active. */
+export const ADAPTIVE_CREEP_MIN_DAYS = 12;
 /**
  * Index at/above which the player counts as battle-ready for adaptive pacing.
  * Sized so the autopilot's battle-ready floor (hull ≥ 200, weapon ≥ 30 — see

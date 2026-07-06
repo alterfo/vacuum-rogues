@@ -11,10 +11,11 @@ import {
   advanceOvermind,
   type OvermindSpreadConfig,
 } from "@/systems/overmind/overmindSpread";
+import { adaptiveSpreadIntervalDays } from "@/systems/campaign/adaptivePacing";
 import { BankBus } from "@/systems/banking/bus";
 import { SeededRNG } from "@/utils/seededRNG";
 import { ResourceType } from "@/types";
-import { GAME_BALANCE } from "@/config/balance";
+import { GAME_BALANCE, ADAPTIVE_GRACE_DAYS } from "@/config/balance";
 import { logger } from "@/utils/logger";
 
 /**
@@ -39,6 +40,12 @@ export interface DayTickControllerDeps {
   markWinScreenShown: () => void;
   transitionToWinScreen: () => void;
   invalidateInfoRegistryCache: () => void;
+  /**
+   * Ratchet the campaign peak power from the live loadout and return the new
+   * peak (adaptive-pacing input, three-year-campaign Task 3). Optional so
+   * headless/legacy DI sites keep compiling; absent ⇒ 0 (the slowest cadence).
+   */
+  updateCampaignPeakPower?: () => number;
 }
 
 /**
@@ -279,9 +286,18 @@ export class DayTickController {
   private advanceOvermindArc(galaxy: Galaxy): void {
     const day = galaxy.gameDays;
 
+    // Adaptive pacing (three-year-campaign Task 3): ratchet the campaign peak
+    // power on this EOD tick, then schedule the spread from it — weak player ⇒
+    // slow cadence, armed player ⇒ fast, creep floor past the dormancy window.
+    // The ratcheted input makes the schedule monotone within a run.
+    const peakPower = this.deps.updateCampaignPeakPower?.() ?? 0;
     const config: OvermindSpreadConfig = {
-      graceDays: GAME_BALANCE.OVERMIND_SPREAD_GRACE_DAYS,
-      spreadIntervalDays: GAME_BALANCE.OVERMIND_SPREAD_INTERVAL_DAYS,
+      graceDays: ADAPTIVE_GRACE_DAYS,
+      spreadIntervalDays: adaptiveSpreadIntervalDays(
+        day,
+        galaxy.overmindArc.dayZero,
+        peakPower,
+      ),
       capturesPerTick: GAME_BALANCE.OVERMIND_SPREAD_CAPTURES_PER_TICK,
       lossShare: GAME_BALANCE.OVERMIND_SPREAD_LOSS_SHARE,
       containedShare: GAME_BALANCE.OVERMIND_SPREAD_CONTAINED_SHARE,

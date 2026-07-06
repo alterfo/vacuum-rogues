@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { RealEngineHarness } from "./realEngineHarness";
 import { SceneType, FactionType } from "@/types";
-import { GAME_BALANCE } from "@/config/balance";
+import { ADAPTIVE_GRACE_DAYS } from "@/config/balance";
 
 /**
  * Real-engine playtest for the "spurious mid-flight Victory" bug
@@ -23,7 +23,9 @@ import { GAME_BALANCE } from "@/config/balance";
  */
 vi.mock("pixi.js", async () => (await import("./pixiStub")).makePixiStub());
 
-const GRACE = GAME_BALANCE.OVERMIND_SPREAD_GRACE_DAYS;
+// Adaptive campaign clock (three-year-campaign Task 3): the arc's dormancy
+// window is now ADAPTIVE_GRACE_DAYS; the engagement scenario fast-forwards it
+// by pre-setting `gameDays` (the grace is ~a quarter-year of EOD ticks).
 
 describe("Overmind arc — no spurious Victory", () => {
   let harness: RealEngineHarness;
@@ -118,8 +120,11 @@ describe("Overmind arc — no spurious Victory", () => {
     const galaxy = harness.galaxy()!;
     const outcome = vi.spyOn(harness.engine, "showGameOutcomeScreen");
 
-    // Engage the arc: advance past grace so it spreads at least once.
-    for (let i = 0; i < GRACE + 1; i++) harness.engine.advanceGalaxyDay();
+    // Engage the arc: start its clock, fast-forward the dormancy window, and
+    // let the first past-grace EOD fire a real spread tick.
+    harness.engine.advanceGalaxyDay(); // day 1 — the arc clock starts
+    galaxy.gameDays = ADAPTIVE_GRACE_DAYS;
+    harness.engine.advanceGalaxyDay(); // first past-grace EOD → the arc spreads
     expect(galaxy.overmindArc.lastSpreadDay).toBeGreaterThanOrEqual(0); // engaged
     expect(galaxy.overmindArc.status).toBe("advancing");
 

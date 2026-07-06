@@ -179,22 +179,62 @@ This plan **supersedes** the two open plans:
   save-compat ✓, tsc ✓, lint (touched files clean) ✓.
 
 ### Task 3: Adaptive Overmind spread pacing (the 2–3-year clock)
-- [ ] write red pacing tests: `src/tests/campaign/adaptivePacing.test.ts` — weak player
+- [x] write red pacing tests: `src/tests/campaign/adaptivePacing.test.ts` — weak player
       (index ≈ 0) ⇒ spread cadence ≈ `ADAPTIVE_SPREAD_SLOW_DAYS`; strong player ⇒
       ≈ `ADAPTIVE_SPREAD_FAST_DAYS`; ratchet never slows after peak; **baseline creep**: with a
       permanently idle player the galaxy still reaches loss share well before day 1080 (game
       always resolves); loss share 0.85 and `engaged` semantics unchanged
-- [ ] add `balance.ts` levers: `ADAPTIVE_SPREAD_SLOW_DAYS` (≈ 45), `ADAPTIVE_SPREAD_FAST_DAYS`
+- [x] add `balance.ts` levers: `ADAPTIVE_SPREAD_SLOW_DAYS` (≈ 45), `ADAPTIVE_SPREAD_FAST_DAYS`
       (≈ 10), `ADAPTIVE_GRACE_DAYS` (≈ 90), `ADAPTIVE_CREEP_START_DAY`, `ADAPTIVE_CREEP_MIN_DAYS`
       — initial values sized so a competent run wins in year 2–3 (tune in Task 9)
-- [ ] rewire `advanceOvermind` / `DayTickController` to consume the adaptive schedule
+- [x] rewire `advanceOvermind` / `DayTickController` to consume the adaptive schedule
       (function of day + ratcheted power) instead of fixed `OVERMIND_SPREAD_GRACE_DAYS` /
       `OVERMIND_SPREAD_INTERVAL_DAYS`; keep undirected `frontierSystems` and `freezeOvermind`
       contracts intact
-- [ ] rewrite `overmindArc.test.ts` under the license: same meanings (losable without
+- [x] rewrite `overmindArc.test.ts` under the license: same meanings (losable without
       engagement, containable with it, win requires engagement) on the new clock; delete the
       grace ≤ 6 / interval ≤ 5 pins; note the rewrite in this plan
-- [ ] run unit + playtest + save-compat suites — green before Task 4
+- [x] run unit + playtest + save-compat suites — green before Task 4
+
+**Task 3 notes (2026-07-06):**
+- New pure module `src/systems/campaign/adaptivePacing.ts`: `adaptiveSpreadIntervalDays(day,
+  dayZero, peakPower)` = `lerp(SLOW, FAST, clamp01(peakPower))`, floored at
+  `ADAPTIVE_CREEP_MIN_DAYS` once `day ≥ dayZero + ADAPTIVE_CREEP_START_DAY` (unstarted clock
+  anchors at the current day, so creep never fires pre-engagement); always ≥ 1 whole day.
+- Levers landed at SLOW 45 / FAST 10 / GRACE 90 / CREEP_START 360 / CREEP_MIN 12. Idle
+  24-system run resolves (lost) ≈ day 500 in the pure simulation — well inside 1080. The fixed
+  `OVERMIND_SPREAD_GRACE_DAYS`/`OVERMIND_SPREAD_INTERVAL_DAYS` levers were **removed** from
+  `GAME_BALANCE` (fully replaced by the adaptive schedule).
+- Wiring: `DayTickController.advanceOvermindArc` builds the spread config from
+  `ADAPTIVE_GRACE_DAYS` + `adaptiveSpreadIntervalDays`; new **optional** dep
+  `updateCampaignPeakPower` (absent ⇒ 0 ⇒ slowest cadence — legacy DI sites keep compiling).
+  `GameEngine` implements it via the extracted `ratchetCampaignPeakPower()` (shared with
+  `saveGame`), so the ratchet now updates **every EOD tick**, not just on save.
+  `frontierSystems` (undirected) and `freezeOvermind` untouched.
+- **Tests rewritten/adjusted under the license** (meanings preserved):
+  - `src/tests/playtest/overmindArc.test.ts` — REWRITTEN for the adaptive clock; grace ≤ 6 /
+    interval ≤ 5 pins deleted; dormancy/creep windows fast-forwarded via manual `gameDays`/arc
+    state (the file's pre-existing technique); "ignored ⇒ lost" now runs on the creep floor and
+    additionally asserts resolution < day 1080.
+  - `src/tests/playtest/overmindNoSpuriousVictory.test.ts` — engagement scenario fast-forwards
+    the 90-day dormancy; grace constant switched to `ADAPTIVE_GRACE_DAYS`; assertions unchanged.
+  - `src/tests/playtest/overmindOutcome.test.ts` — "lost" scenario clock moved past the adaptive
+    grace (day 96 → 97); assertions unchanged.
+  - `src/tests/oddities/lateGameRecoverability.test.ts` — "reversible front" neglect window now
+    starts the arc clock then fast-forwards grace; growth assertion re-anchored to the OVERMIND
+    front (the equilibrium may simultaneously liberate pirate systems, so the hostile union was
+    not a monotone measure); reclamation assertions unchanged.
+  - `src/tests/playtest/letsplay/competentSession.test.ts` — the pinned `.fails`
+    "sell-for-profit" regression HEALED: under the old clock this seed's 6-system galaxy went
+    mostly Overmind-held mid-session and `galaxyEffectivelyLost` blocked the route; with 90-day
+    grace the ladder provably reaches `sell-for-profit` again ⇒ `.fails` → `it` (the exact
+    healing condition its comment demanded).
+- New tests: 14 in `src/tests/campaign/adaptivePacing.test.ts` (cadence endpoints, clamping,
+  monotone in power, ratcheted-sequence never slows, whole-day floor, creep floor on/off/min,
+  custom-config purity, idle-run resolves ≈ day 500 < 900, strong-run resolves sooner, loss
+  share 0.85 + never-engaged-no-win semantics).
+- Gates: full unit 4562 ✓, playtest 585 ✓, letsplay:ci 105 ✓, save-compat 22 ✓, tsc ✓,
+  lint 0 errors ✓.
 
 ### Task 4: Adaptive garrison & combat scaling (revive the dead levers)
 - [ ] write red tests: in-flight combat vs Overmind-held systems applies HP/damage scaling as a

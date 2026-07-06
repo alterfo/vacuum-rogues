@@ -94,10 +94,13 @@ describe("Overmind endgame outcome routing + New Game+", () => {
       GAME_BALANCE.OVERMIND_SPREAD_LOSS_SHARE,
     );
 
-    galaxy.gameDays = 6; // next → 7 (7 % 5 !== 0); a started arc past grace.
+    // A started arc past the ADAPTIVE grace (dayZero 1 + 90 ≤ 97), sitting on
+    // a day whose next EOD skips the churn (97 % 5 !== 0) and whose spread
+    // cadence blocks a same-window capture (lastSpreadDay = 96).
+    galaxy.gameDays = 96;
     galaxy.overmindArc = {
       dayZero: 1,
-      lastSpreadDay: 6,
+      lastSpreadDay: 96,
       status: "advancing",
       threat: share,
       peakThreat: share,
