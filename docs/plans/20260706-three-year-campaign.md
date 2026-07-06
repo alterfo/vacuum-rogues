@@ -504,15 +504,77 @@ This plan **supersedes** the two open plans:
   lint 0 errors ✓.
 
 ### Task 8: Slayer-tier tuning against adaptive pressure
-- [ ] write red seeded playtest: on a medium galaxy the agent reaches battle-ready, clears a
+- [x] write red seeded playtest: on a medium galaxy the agent reaches battle-ready, clears a
       garrison, liberates ≥ 1 system, and arc share declines over a 400-day window
-- [ ] tune `MemoryHeuristicPolicy` slayer constants (`BATTLE_READY_*`,
+- [x] tune `MemoryHeuristicPolicy` slayer constants (`BATTLE_READY_*`,
       `SLAYER_RETREAT_HULL_FRACTION`, advance/clear/liberate ordering, warp-reject folds) for
       the adaptive clock; add hysteresis so the agent doesn't yo-yo between economy and war
-- [ ] handle the endgame: once share is falling, press the advantage (no drifting back to
+- [x] handle the endgame: once share is falling, press the advantage (no drifting back to
       trading with 2 systems left); core-kill path exercised in at least one seeded test
-- [ ] verify deaths stay at 0% and fuel-deaths at 0 on the CI bands
-- [ ] run unit + playtest + letsplay:ci — green before Task 9
+- [x] verify deaths stay at 0% and fuel-deaths at 0 on the CI bands
+- [x] run unit + playtest + letsplay:ci — green before Task 9
+
+**Task 8 notes (2026-07-06):**
+- **Root cause the agent never became battle-ready** (measured pre-Task-8: `battleReadyDay`
+  fired in 0% of sessions across all seeds/modes, hull peaked at 180 / weapon at 49 with
+  6698cr banked): TWO bugs, both fixed at the root.
+  1. **Hull affordability was priced gross, not net** (`bestAffordableHull`/`bestHullPrice`
+     in `equipmentQueries.ts`/`observeHelpers.ts`). Installing a replacement hull trades the
+     old one in, so the wallet only covers `price − trade-in` — the real shop UI
+     (`EquipmentShopScene.buyHull`) already gates on exactly that net, but the dev-only
+     autopilot query gated on the GROSS listing, so it judged a battle-ready hull unaffordable
+     one upgrade before a real player at the same wallet could buy it. Fixed: `bestAffordableHull`
+     + new `hullUpgradeNetCost` price at net; `systemShopPrices` threads the fitted hull's
+     trade-in so the `upgrade-hull` LEGALITY gate (`credits ≥ bestHullPrice`) is net too
+     (else the net-affordable candidate is pruned as illegal). Pure dev-layer correctness fix,
+     matches production, no overdraft (the executor already charges gross-then-credits, which
+     the shipping shop UI proves the ledger tolerates). No production/schema/save change.
+  2. **`BATTLE_READY_MAX_HULL` (200) was unreachable-by-catalog.** The `GearCatalog` has NO hull
+     between the `hull_freighter` (180 hp, tech-4, common) and the `hull_warden` (220 hp,
+     tech-5, rare + ~55% stock), and the next up (`hull_bastion`, 360 hp) is tech-7 — above
+     `GALAXY_MAX_TECH_FLOOR` (5), never stocked. Reaching 200 needs a dedicated "hunt the
+     rare tech-5 warden shop" router (Task 9/10). Lowered to **180** (the plan authorizes
+     moving `BATTLE_READY_*`) — the tech-4 freighter now completes battle-ready, and the
+     campaign agent crosses the STRICT gate at **day 191** on the capacity seed (was: never).
+     Task 9 re-tunes if 180 proves too soft against the adaptive garrison scaling.
+- **Slayer tuning + hysteresis** (`MemoryHeuristicPolicy`): (a) a capability-BATTLE-READY ship
+  no longer flees a hostile-free rising front (`flee-overmind-front` gated `!battleReady`) —
+  the weak-ship survival reflex ceded ground the slayer-advance tier is trying to reclaim;
+  a battle-ready ship holds so advance/clear/liberate can press (the hull-based flee from an
+  ACTUAL fight is untouched — no death regression). (b) Endgame quest hysteresis: a battle-ready
+  ship in an ENGAGED galaxy (`share > OVERMIND_THREAT_SHARE`) stops taking new courier work —
+  the economy already funded the refit, so from here the slayer tiers own the ship's time and
+  it doesn't yo-yo between a delivery run and the war ("no drifting back to trading with 2
+  systems left"). Advance/clear/liberate ordering + `SLAYER_RETREAT_HULL_FRACTION` kept.
+- **Core-kill path**: the existing slayer close-in (`slayer-clear-garrison` in a held system) +
+  `slayer-liberate` already resolve the core — a battle-ready agent standing on the engaged
+  Overmind core liberates it and the next EOD arc tick reads `won` (coreBroken). Exercised in a
+  seeded real-engine test (no new mechanic needed).
+- New tests: `src/tests/playtest/letsplay/slayerCampaign.test.ts` — 4 pure endgame-press
+  decisions (battle-ready holds the front / weak ship still flees; battle-ready suppresses
+  courier work / weak ship still takes it) + 3 real-engine loop gates (battle-ready ship clears
+  a forced aggressor to death over ticks; the REAL `MemoryHeuristicPolicy` liberates a cleared
+  held system, dropping the Overmind count = share declines; core-kill → arc `won`). Plus a new
+  Task 8 block in `src/tests/oddities/sessionCompetence.test.ts` (letsplay:ci): the campaign
+  proxy now crosses the STRICT `battleReadyDay` (Task 7 explicitly deferred it here) AND
+  liberates ≥ 1 with `died === false` (the deaths-stay-0 CI band). **No existing test assertion
+  was modified** — the test-modification license was not needed; all touched constants are
+  referenced by symbol in the fixtures, so lowering `BATTLE_READY_MAX_HULL` kept them
+  self-consistent.
+- **Scope split honored (Task 8 = behaviors, Task 9 = the 99% win rate).** The full-session
+  ORGANIC 400-day win where share declines to zero on every seed is NOT achieved here and is
+  Task 9's config-table iteration: a lone battle-ready 180/49 ship cannot solo the 5-defender
+  `GARRISON_MIN` standing garrison (the `combatLiberation` arithmetic), and in GOD the 5%
+  hull floor keeps it "downed" (can't fire/jump) at the front. The behaviors compose end-to-end
+  (clear → liberate → core-kill → won) in the constructed real-engine loop and the agent
+  reaches battle-ready + liberates on the seeded campaign horizon — the Task 8 deliverable.
+  Task 9 tunes the adaptive spread/creep + garrison levers so the organic session wins.
+- Gates: playtest 630 ✓, letsplay:ci 107 ✓, save-compat 22 ✓, tsc ✓, lint 0 errors ✓,
+  slayerCampaign 7 ✓, sessionCompetence 3 ✓. ⚠️ **Pre-existing unrelated failure**: the full
+  unit suite has 1 red — `moduleContracts.test.ts` SpaceFlightScene `< 1900`-line guard, which
+  the committed HEAD (Task 7 commit `1f383bb`) already breaks at exactly 1900 lines. Verified
+  identical WITH my changes stashed; Task 8 touches none of that file. Not fixed here (one
+  concern per commit; the line guard is its own careful extraction task per standing rule #6).
 
 ### Task 9: Balance iteration to the 99% gate (the core deliverable)
 - [ ] run `letsplay:campaign` at 50 sessions; record win-rate, median resolution day, loss

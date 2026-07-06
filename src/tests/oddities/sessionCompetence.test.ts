@@ -107,3 +107,38 @@ describe("Task 7 — campaign milestone proxies on the seeded medium session", (
     );
   }, 120_000);
 });
+
+/**
+ * Task 8 (three-year-campaign plan) — the STRICT battle-ready milestone Task 7
+ * deferred here. With the net-affordability fix (the hull upgrade is priced at
+ * its trade-in-net cost, matching the shop UI) and the catalog-realistic
+ * `BATTLE_READY_MAX_HULL` (180 = the tech-4 freighter, the best hull a campaign
+ * wallet reliably reaches — the tech-5 warden needs a rare shop no organic
+ * router visits), the campaign agent now crosses the FULL battle-ready gate
+ * (`maxHull >= BATTLE_READY_MAX_HULL` AND `weaponDamage >= BATTLE_READY_*`) —
+ * `battleReadyDay` fires — instead of stalling at hull 180 / weapon 49 forever.
+ *
+ * Deaths gate (checkbox 4): GOD isolates the milestone from combat RNG, so the
+ * session must reach battle-ready with ZERO deaths and a clean run. The
+ * fuel-death / overmind-loss CI bands stay owned by the oracle block above.
+ */
+describe("Task 8 — strict battle-ready + first-liberation on the seeded medium session", () => {
+  it("reaches battle-ready and liberates at least once, with no death", async () => {
+    const r = await runCampaignSession({
+      seed: "CAMPAIGN-CAPACITY-0",
+      maxDays: 200,
+      gameMode: "GOD",
+    });
+    const detail = formatCampaignReport([r]);
+
+    // Reaches STRICT battle-ready (hull + weapon both clear) within the horizon.
+    expect(r.milestones.battleReadyDay, detail).not.toBeNull();
+    expect(r.milestones.battleReadyDay!, detail).toBeLessThanOrEqual(200);
+    // Liberates ≥ 1 system — the slayer loop lands a real push-back.
+    expect(r.milestones.firstLiberationDay, detail).not.toBeNull();
+    // No death across the medium horizon (the deaths-stay-0 CI band).
+    expect(r.died, detail).toBe(false);
+    expect(r.errors, detail).toBe(0);
+    expect(r.calendarWedged, detail).toBe(false);
+  }, 120_000);
+});

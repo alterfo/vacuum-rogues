@@ -76,11 +76,27 @@ export const BATTLE_READY_HULL_FRACTION = 0.99;
  * hostile-system enemies fight at up to 1.5× effective HP/damage
  * (`hostileScaling` lerps toward `OVERMIND_COMBAT_*_MULT` as the ratcheted
  * power grows — three-year-campaign Task 4), so the agent must out-hull them
- * and put out real damage first. `200` needs a hull upgrade beyond the starter
- * corvette; `30` needs a second/stronger gun fitted (the corvette ships with a
- * free second weapon slot, so `arm-up` reaches it with one decent buy).
+ * and put out real damage first. `30` needs a second/stronger gun fitted (the
+ * corvette ships with a free second weapon slot, so `arm-up` reaches it with
+ * one decent buy).
+ *
+ * The hull floor is `180` — the `hull_freighter` (180 hp, techLevel 4), the
+ * best hull a campaign wallet can reliably reach. Task 8 tuning (the plan
+ * authorizes moving `BATTLE_READY_*`): the `GearCatalog` has NO hull between
+ * 180 and the `hull_warden` (220 hp, techLevel 5), and the next one up
+ * (`hull_bastion`, 360 hp) is techLevel 7 — above the `GALAXY_MAX_TECH_FLOOR`
+ * (5), so it is never stocked. The warden is tech-5-gated (rare systems) and
+ * only ~55% stock-chance even there, so an organic economy without a dedicated
+ * "hunt the tech-5 shop" router (Task 9/10 work) can bank the credits but
+ * essentially never stands on a warden shop with them — a `200` floor was
+ * unreachable-by-catalog and pinned every campaign session below battle-ready
+ * (measured: hull peaked at 180 on the strongest seed, weapon at 49, yet
+ * `battleReadyDay` fired in 0% of sessions). `180` makes the tech-4 freighter
+ * (weight-2 systems, ~65% stock) the battle-ready hull, so the slayer tier
+ * actually engages; Task 9's win-rate gate re-tunes if 180 proves too soft
+ * against the adaptive garrison scaling.
  */
-export const BATTLE_READY_MAX_HULL = 200;
+export const BATTLE_READY_MAX_HULL = 180;
 export const BATTLE_READY_WEAPON_DAMAGE = 30;
 
 /**
@@ -987,10 +1003,20 @@ export function decideWithMemory(
   // loop-prevention heuristic) but still respects the fuel gate — fleeing on
   // an empty tank just strands the ship, and the fuel tier above already
   // routes to a refuel landing first when one is available.
+  // A battle-ready ship does NOT flee a rising front (Task 8, endgame press):
+  // fleeing the Overmind is the WEAK ship's survival reflex — once the loadout
+  // can actually take on a garrison, retreating from a hostile-free front just
+  // cedes ground the slayer-advance tier below is trying to reclaim, and it
+  // trades the whole point of becoming battle-ready (finish the war) for more
+  // idle avoidance. A capability-battle-ready ship instead holds and lets the
+  // advance/clear/liberate tiers press. The hull-based flee from an ACTUAL
+  // fight (the survive block above) is untouched — this only suppresses the
+  // no-hostile "the front is scary" pre-emptive retreat.
   const overmindThreatening =
     obs.nearOvermindCore || (obs.overmindShare ?? 0) > OVERMIND_THREAT_SHARE;
   if (
     overmindThreatening &&
+    !battleReady &&
     hull < OVERMIND_THREAT_HULL_FRACTION &&
     !fuelGate &&
     obs.hostiles.length === 0
@@ -1368,9 +1394,17 @@ export function decideWithMemory(
       // Stops once the Overmind front is too far along (see
       // `QUEST_ACCEPT_OVERMIND_SHARE_CEILING`) — a new multi-warp obligation
       // has no business starting when most of the galaxy is already hostile.
+      // Endgame press (Task 8, hysteresis): a BATTLE-READY ship in an engaged
+      // galaxy also stops taking new courier work — once the loadout can fight
+      // the war, a multi-warp trade obligation is exactly the "drift back to
+      // trading with 2 systems left" the plan wants suppressed. The economy has
+      // already funded the refit; from here the slayer tiers own the ship's
+      // time, so it doesn't yo-yo between a delivery run and the front.
+      const engagedFront = (obs.overmindShare ?? 0) > OVERMIND_THREAT_SHARE;
       if (
         (obs.currentPlanet?.availableQuests ?? 0) > 0 &&
-        (obs.overmindShare ?? 0) < QUEST_ACCEPT_OVERMIND_SHARE_CEILING
+        (obs.overmindShare ?? 0) < QUEST_ACCEPT_OVERMIND_SHARE_CEILING &&
+        !(battleReady && engagedFront)
       )
         push("take-quest", "take-work");
       // Skip market re-visit when already holding cargo: would sell at a loss

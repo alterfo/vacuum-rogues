@@ -34,7 +34,10 @@ import {
   ownedUninstalledGear,
   gearFit,
 } from "@/systems/equipment/GearBridge";
-import { buyHullWithTradeIn } from "@/systems/equipment/sellHull";
+import {
+  buyHullWithTradeIn,
+  hullTradeInPrice,
+} from "@/systems/equipment/sellHull";
 import {
   adjustPlayerCredits,
   GL_COUNTERPARTY,
@@ -79,18 +82,45 @@ export function bestAffordableGear(engine: GameEngine): GearListing | null {
  * below the fitted hull's are skipped — buying one would trade the ship down for
  * a weaker hull at a net credit cost (the trade-in never refunds the full price),
  * so "upgrade-hull" must never make the ship worse. `null` if none qualifies.
+ *
+ * Affordability is the **net** cost (`price − trade-in of the fitted hull`), not
+ * the gross listing price — installing a replacement trades the old hull in, so
+ * the wallet only has to cover the net. This mirrors the real shop UI exactly
+ * (`EquipmentShopScene.buyHull`: `if (player.credits < price − tradeIn) return`);
+ * gating on gross made the autopilot believe a battle-ready hull was out of reach
+ * one upgrade before a real player at the same wallet could buy it — the exact
+ * gap that kept the campaign agent stranded at hull 180 (freighter) with the
+ * warden (220) always "unaffordable" despite the ~1800cr freighter trade-in that
+ * covers the difference.
  */
 export function bestAffordableHull(engine: GameEngine): GearListing | null {
   const credits = engine.player?.credits ?? 0;
-  const fittedHp = engine.playerLoadout?.hull.hp ?? 0;
+  const loadout = engine.playerLoadout;
+  const fittedHp = loadout?.hull.hp ?? 0;
+  const tradeIn = loadout ? hullTradeInPrice(loadout.hull) : 0;
   let best: GearListing | null = null;
   for (const listing of systemListings(engine)) {
     if (listing.gear.kind !== GearKind.HULL) continue;
-    if (listing.price > credits) continue;
     if ((listing.gear as HullSpec).hp <= fittedHp) continue;
+    const netPrice = Math.max(0, listing.price - tradeIn);
+    if (netPrice > credits) continue;
     if (!best || listing.price > best.price) best = listing;
   }
   return best;
+}
+
+/**
+ * Net wallet cost of the {@link bestAffordableHull} upgrade right now
+ * (`price − trade-in`), or `null` when no improving hull is affordable — the
+ * exact credits `executeUpgradeHull` will remove, so the policy's reserve gate
+ * (`credits − cost ≥ reserve`) weighs the true spend, not the gross listing.
+ */
+export function hullUpgradeNetCost(engine: GameEngine): number | null {
+  const listing = bestAffordableHull(engine);
+  if (!listing) return null;
+  const loadout = engine.playerLoadout;
+  const tradeIn = loadout ? hullTradeInPrice(loadout.hull) : 0;
+  return Math.max(0, listing.price - tradeIn);
 }
 
 /** The cheapest not-yet-owned micromodule the player can currently afford. `null` if none. */

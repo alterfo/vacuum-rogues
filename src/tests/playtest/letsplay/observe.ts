@@ -43,10 +43,11 @@ import {
 } from "./observeHelpers";
 import {
   bestAffordableGear,
-  bestAffordableHull,
+  hullUpgradeNetCost,
   cheapestMicromodule,
   planArmUp,
 } from "./equipmentQueries";
+import { hullTradeInPrice } from "@/systems/equipment/sellHull";
 import { micromodulePrice } from "@/systems/equipment/micromoduleShop";
 import {
   takeableBoardQuestCount,
@@ -978,6 +979,9 @@ export function observe(
           stations: system.stations,
         },
         fittedHullHp: engine.playerLoadout?.hull.hp ?? 0,
+        fittedHullTradeIn: engine.playerLoadout
+          ? hullTradeInPrice(engine.playerLoadout.hull)
+          : 0,
       })
     : { cheapestGearPrice: null, bestHullPrice: null };
 
@@ -993,7 +997,7 @@ export function observe(
   const buyModuleCost = affordableModule
     ? micromodulePrice(affordableModule)
     : null;
-  const upgradeHullCost = bestAffordableHull(engine)?.price ?? null;
+  const upgradeHullCost = hullUpgradeNetCost(engine);
   const canLiberate = engine.canLiberateCurrentSystem();
   const armUpPlan = planArmUp(engine);
   const armUp = armUpPlan != null;

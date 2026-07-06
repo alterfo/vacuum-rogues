@@ -187,12 +187,24 @@ export interface ShopPriceContext {
    * soft-locking the autopilot in a no-op STATION loop. Absent ⇒ `0` (count all).
    */
   readonly fittedHullHp?: number;
+  /**
+   * Trade-in credits the fitted hull refunds on a replacement — subtracted from
+   * every candidate hull's gross listing so `bestHullPrice` is the NET wallet
+   * cost, matching the shop UI (`EquipmentShopScene.buyHull` gates on
+   * `credits < price − tradeIn`) and `bestAffordableHull`. Without it the
+   * `upgrade-hull` legality gate (`credits >= bestHullPrice`) demanded the gross
+   * price, pruning a hull a real player at the same wallet could afford — the
+   * gap that stalled the campaign agent one upgrade short of a battle-ready hull.
+   * Absent ⇒ `0` (gross, the legacy signal for fixtures that don't thread it).
+   */
+  readonly fittedHullTradeIn?: number;
 }
 
 function cheapestOf(
   listings: GearListing[],
   hullsOnly: boolean,
   minHullHp = 0,
+  hullTradeIn = 0,
 ): number | null {
   let min: number | null = null;
   for (const l of listings) {
@@ -201,7 +213,10 @@ function cheapestOf(
     // A hull that isn't strictly better than the fitted one is never a real
     // upgrade — skip it so the affordability signal can't outrun the executor.
     if (isHull && (l.gear as HullSpec).hp <= minHullHp) continue;
-    if (min === null || l.price < min) min = l.price;
+    // Hulls price at their NET cost (gross − fitted-hull trade-in) so the
+    // affordability signal matches what the wallet actually pays.
+    const price = isHull ? Math.max(0, l.price - hullTradeIn) : l.price;
+    if (min === null || price < min) min = price;
   }
   return min;
 }
@@ -256,6 +271,11 @@ export function systemShopPrices(ctx: ShopPriceContext): {
   const listings = generateSystemListings(ctx);
   return {
     cheapestGearPrice: cheapestOf(listings, false),
-    bestHullPrice: cheapestOf(listings, true, ctx.fittedHullHp ?? 0),
+    bestHullPrice: cheapestOf(
+      listings,
+      true,
+      ctx.fittedHullHp ?? 0,
+      ctx.fittedHullTradeIn ?? 0,
+    ),
   };
 }
