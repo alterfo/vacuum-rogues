@@ -16,6 +16,7 @@
     "test:save-compat": "vitest --run src/tests/data/goldenSaveCompat.test.ts src/tests/core/loadoutRevalidateOnLoad.test.ts",
     "letsplay": "LETSPLAY_FULL=1 vitest --run src/tests/playtest/letsplay/letsplaySession.test.ts",
     "letsplay:ci": "LETSPLAY_CI=1 vitest --run src/tests/playtest/letsplay/ci.run.test.ts src/tests/oddities",
+    "letsplay:campaign": "LETSPLAY_CAMPAIGN=1 vitest --run src/tests/playtest/letsplay/campaign.run.test.ts",
     "letsplay:judge": "LETSPLAY_JUDGE=1 vitest --run tools/ai/judge.run.test.ts",
     "dataset:export": "LETSPLAY_EXPORT_MIX=1 vitest --run src/tests/playtest/letsplay/scenarioMixExport.run.test.ts",
     "test:coverage": "vitest --run --coverage",

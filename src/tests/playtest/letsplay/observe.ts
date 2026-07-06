@@ -27,6 +27,7 @@ import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType, StationType, FactionType } from "@/types";
 import type { ResourceType, QuestType } from "@/types";
 import { npcsPresentInSystem } from "@/systems/npc/NpcSimulator";
+import { isDowned } from "@/systems/combat/godMode";
 import { cargoCapacityOf } from "@/systems/equipment/GearBridge";
 import { TradeSystem } from "@/systems/TradeSystem";
 import type { Planet } from "@/domain/Planet";
@@ -47,6 +48,7 @@ import {
   questRoutingPreference,
   systemHopDistances,
   overmindFrontHopDistances,
+  repairCost,
 } from "./engineQueries";
 
 /**
@@ -171,6 +173,24 @@ export interface PlayerSnapshot {
   reputationBastions?: number;
   /** Reputation with the black-market faction (SYNDICATE), [-100,100] — the "pirate/outlaw" standing proxy. */
   reputationSyndicate?: number;
+  /**
+   * `isDowned(player)` (Task 6) — GOD mode only: the hull sits at the GOD
+   * floor, so the ship can neither FIRE nor HYPERJUMP until repaired (the
+   * star-map jump gate shows «Корабль повреждён — нужен ремонт»). The policy
+   * must not emit fight/flee for a downed ship — both are engine-blocked, and
+   * retrying the blocked jump forever was the day-182 capacity wedge. Never
+   * true on NORMAL/HARD. Optional so pre-Task-6 fixtures are unaffected.
+   */
+  downed?: boolean;
+  /**
+   * The wallet covers `executeRepair`'s bill right now (Task 6) — the policy
+   * gate for `dock-to-repair`: docking to buy a repair the ship cannot pay
+   * for ping-pongs dock→leave→dock forever (repair itself is already
+   * legality-gated at the STATION via `canAffordRepair`). `true` when the
+   * hull is perfect (a no-op repair "costs" nothing). Optional: absent
+   * (pre-Task-6 fixtures) ⇒ treated as affordable, the legacy behaviour.
+   */
+  canAffordRepair?: boolean;
 }
 
 /** The player's current star system + what's reachable from it. */
@@ -199,6 +219,15 @@ export interface SystemSnapshot {
     visited: boolean;
     overmindHeld: boolean;
     /**
+     * `Galaxy.isPirateSystem` (Task 6) — the star map renders pirate-held
+     * systems orange for the player, so this is observation PARITY, not
+     * agent-only intel: a pirate den hosts a standing 5–10-ship garrison
+     * that annihilates a non-battle-ready ship, and the warp picker must
+     * weigh it exactly like Overmind-held danger (a human reading the map
+     * would). Optional so pre-Task-6 fixtures keep their exact decisions.
+     */
+    pirateHeld?: boolean;
+    /**
      * BFS hop-distance from this neighbour to a carried DELIVERY quest's
      * target system (Task 2, `systemHopDistances`) — lets the policy's warp
      * tie-break greedily walk toward a KNOWN multi-hop destination instead of
@@ -225,6 +254,14 @@ export interface NpcSnapshot {
   faction: FactionType;
   hostile: boolean;
   hullHP: number;
+  /**
+   * The ship's per-volley weapon damage (Task 6) — what the policy's
+   * kill-time calculus (`flee-outgunned`) weighs a potential fight with.
+   * Optional so hand-built fixtures that predate it keep their exact
+   * decisions (absent ⇒ 0 ⇒ the hostile is treated as harmless-if-weaker,
+   * the pre-Task-6 behavior).
+   */
+  damage?: number;
 }
 
 /** An active contract the player is carrying. */
@@ -413,6 +450,15 @@ export interface LegalActionContext {
    * don't model hull) keep `repair` unconditionally legal as before.
    */
   needsRepair?: boolean;
+  /**
+   * The player can PAY for the repair (`credits ≥ executeRepair`'s cost,
+   * Task 6) — the second half of the repair no-op gate: `executeRepair`
+   * silently returns when unaffordable, so a broke, hull-damaged agent
+   * re-picking "repair" forever was the day-189 capacity wedge (300× no-op
+   * repairs at 83cr against a 266cr bill). Defaults to `true` so pure
+   * fixtures keep `repair` legality unchanged.
+   */
+  canAffordRepair?: boolean;
 }
 
 /**
@@ -484,7 +530,11 @@ export function legalActionsForScene(
       // forever instead of undocking — the same "no-op stays legal → autopilot
       // re-picks it" trap already guarded for buy-gear/upgrade-hull/buy-module
       // just below. Defaults `true` so pure fixtures keep their prior legality.
-      if (ctx.needsRepair ?? true) set.add("repair");
+      // `canAffordRepair` is the same trap's other half: `executeRepair`
+      // no-ops when the bill exceeds the wallet, so an unaffordable repair
+      // must not be offered either (Task 6).
+      if ((ctx.needsRepair ?? true) && (ctx.canAffordRepair ?? true))
+        set.add("repair");
       set.add("move");
       set.add("wait");
       // A station is the hub that routes to the equipment shop, so gate
@@ -702,6 +752,8 @@ export function observe(
     position: flightPos ? { x: flightPos.x, y: flightPos.y } : null,
     reputationBastions: player.getReputation(FactionType.BASTIONS),
     reputationSyndicate: player.getReputation(FactionType.SYNDICATE),
+    downed: isDowned(player),
+    canAffordRepair: player.credits >= (repairCost(engine) ?? 0),
   };
 
   const system =
@@ -786,6 +838,7 @@ export function observe(
             galaxy.isOvermindSystem(c.toSystemId) ||
             (galaxy.overmindCoreSystemId !== "" &&
               c.toSystemId === galaxy.overmindCoreSystemId),
+          pirateHeld: galaxy.isPirateSystem(c.toSystemId),
           hopsToQuestTarget: hopsToQuestTarget?.get(c.toSystemId),
           hopsToOvermindFront: hopsToOvermindFront?.get(c.toSystemId),
         })),
@@ -799,6 +852,7 @@ export function observe(
         faction: n.race,
         hostile: n.hostile,
         hullHP: n.hullHP,
+        damage: n.damage,
       }))
     : [];
   const hostiles = npcs.filter((n) => n.hostile);
@@ -909,7 +963,18 @@ export function observe(
     canLiberate,
     canArmUp: armUp,
     needsRepair: ship.hullHP < ship.maxHull,
-  });
+    canAffordRepair: player.credits >= (repairCost(engine) ?? 0),
+  }).filter(
+    // A DOWNED ship (GOD floor) can neither fire nor hyperjump — the engine
+    // blocks all three of these (StarMapScene shows «Корабль повреждён —
+    // нужен ремонт”; flee's executor IS a jump), so offering them as "legal"
+    // let the policy retry a blocked jump forever (the day-182 capacity
+    // wedge). Engine truth, filtered at the single legality source so every
+    // policy — heuristic and neural mask alike — inherits it.
+    (a) =>
+      !playerSnapshot.downed ||
+      (a !== "warp" && a !== "attack" && a !== "flee"),
+  );
 
   // Detect a pending hyperjump: the ship is flying to the system edge and a warp
   // will fire when it arrives. Exposing this lets the policy push `wait` instead of

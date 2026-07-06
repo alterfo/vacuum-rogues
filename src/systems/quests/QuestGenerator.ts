@@ -92,6 +92,19 @@ export interface BoardOptions {
    * existing test relies on.
    */
   readonly excludeKeys?: readonly string[];
+  /**
+   * HOSTILE-HELD system IDs (Overmind- or pirate-controlled) that routine
+   * quests must never TARGET (Task 6, three-year-campaign plan). An occupied
+   * system has no functioning civilian port: a board that sells a starter-rank
+   * courier run into a standing 9-ship garrison is selling a death sentence —
+   * measured on the campaign harness, the agent (or an honest player) takes
+   * the 1-jump delivery, flies straight into the den, and is annihilated
+   * before it can flee. War content stays on its designed paths: DEFENSE
+   * quests (via `overmindAdjacentSystems`) target the *frontier*, and finale
+   * quests deliberately point INTO held space. Default `[]` (no exclusion)
+   * keeps legacy boards byte-identical.
+   */
+  readonly hostileSystems?: readonly string[];
   /** OVERMIND-controlled system IDs; used to build DEFENSE quest targets. */
   readonly overmindSystems?: readonly string[];
   /** System IDs adjacent to OVERMIND-controlled systems (non-OVERMIND). Triggers 1 DEFENSE quest when non-empty. */
@@ -383,6 +396,7 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
     chainRatio = QUEST_CHAIN_RATIO,
     completedQuestChains = [],
     excludeKeys,
+    hostileSystems = [],
     overmindSystems = [],
     overmindAdjacentSystems = [],
     homeFactionId = null,
@@ -404,11 +418,18 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
   // Unexplored ("?") systems are excluded — a quest must never point the
   // player at a system they have not yet charted (Task 2). `explored` is a
   // real boolean in production; the `!== false` guard keeps undefined-stub
-  // systems in older tests reachable.
+  // systems in older tests reachable. Hostile-HELD systems are excluded too
+  // (see `BoardOptions.hostileSystems`) — no civilian contract may target an
+  // occupied system; every routine/chain/elite builder draws from this pool,
+  // so the exclusion covers them all at the source.
+  const hostileSet = new Set(hostileSystems);
   const reachable = systems
     .filter(
       (s) =>
-        s.id !== originSystemId && jumpDist.has(s.id) && s.explored !== false,
+        s.id !== originSystemId &&
+        jumpDist.has(s.id) &&
+        s.explored !== false &&
+        !hostileSet.has(s.id),
     )
     .sort((a, b) => a.id.localeCompare(b.id)); // stable order for determinism
   const origin = systems.find((s) => s.id === originSystemId) ?? null;

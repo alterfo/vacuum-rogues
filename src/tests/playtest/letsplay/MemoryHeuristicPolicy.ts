@@ -243,6 +243,7 @@ export const OVERMIND_LOSS_SAFETY_MARGIN = 0.05;
  */
 const WARP_TARGETING_REASONS = new Set([
   "flee-overmind-front",
+  "flee-escape-jump",
   "early-explore",
   "explore",
   "warp",
@@ -350,7 +351,7 @@ function pickWarpNeighbor(
   if (!neighbors || neighbors.length === 0) return undefined;
   if (questTarget != null) {
     const direct = neighbors.find(
-      (n) => n.systemId === questTarget && !n.overmindHeld,
+      (n) => n.systemId === questTarget && !n.overmindHeld && !n.pirateHeld,
     );
     if (direct) return direct.systemId;
   }
@@ -360,6 +361,9 @@ function pickWarpNeighbor(
   for (const n of neighbors) {
     const danger =
       (n.overmindHeld ? 4 : 0) +
+      // A pirate den's standing garrison is as lethal as the Overmind's —
+      // and just as visible on the star map (Task 6, orange systems).
+      (n.pirateHeld ? 4 : 0) +
       ((mem.threatMap.get(n.systemId) ?? 0) > 0 ? 3 : 0);
     const exploreScore =
       (mem.visitedSystemIds.has(n.systemId) ? 3 : 0) +
@@ -807,31 +811,88 @@ export function decideWithMemory(
     push("attack", "slayer-clear-garrison", obs.hostiles[0]?.id);
   }
 
+  // Disengage from a fight we're likely to lose. A hostile whose hull HP
+  // exceeds our *current* hull will out-trade us: empirically the
+  // capture-fleet / Overmind craft carry far more hull than a starter ship
+  // and delete it in ~2 combat days (100%→35%→0), so the plain `hurt`
+  // (<35% hull) cutoff fires too late — one more combat day after it trips
+  // is already lethal. Treat an over-HP'd enemy as a flee-now trigger even
+  // at full hull, so the agent never trades blows with a capture fleet.
+  // Hoisted above the survive block because the STAR_MAP tier must recompute
+  // the SAME flee condition (`fleeingLiveFight` below): the ladder carries no
+  // decision history, so "did the survive tier just choose flee" is only
+  // knowable by re-deriving it.
+  const playerHullHP = obs.player?.hull ?? 0;
+  const toughestHostileHull = Math.max(
+    0,
+    ...obs.hostiles.map((h) => h.hullHP ?? 0),
+  );
+  const outmatched = toughestHostileHull > playerHullHP;
+  // Kill-time calculus (Task 6): the hull-compare above only catches a hostile
+  // that ALREADY out-hulls us, which fires one volley too late against an
+  // equal-hull ship that simply hits harder — measured on the campaign
+  // horizon, a starter (130 hull / 14 dmg) that stands against a 130-hull /
+  // 27-dmg pirate loses the trade arithmetic 9-exchanges-to-kill vs
+  // 5-to-die, and by the time the hull-compare finally trips (first volley
+  // taken) NO exit remains: fleeing post-contact dies to pursuit volleys,
+  // fighting on dies to the trade. So compare kill-times BEFORE contact:
+  // flee while the fight is still winnable to AVOID, i.e. when the hostiles'
+  // total hull × their total volley damage exceeds ours × ours
+  // (cross-multiplied `hull/dmg` exchange counts, so zero-damage cases need
+  // no division guards: an unarmed hostile can never outgun us, and any
+  // armed hostile outguns an unarmed us). Hostile `damage` is optional on
+  // the snapshot — absent (pre-Task-6 fixtures) ⇒ 0 ⇒ exactly the old
+  // decisions. Battle-ready loadouts (hull ≥ 200, weapon ≥ 30) win this
+  // arithmetic against ordinary pirates, so the slayer arc is untouched.
+  const totalHostileHull = obs.hostiles.reduce(
+    (a, h) => a + (h.hullHP ?? 0),
+    0,
+  );
+  const totalHostileDamage = obs.hostiles.reduce(
+    (a, h) => a + (h.damage ?? 0),
+    0,
+  );
+  const playerWeaponDamage = obs.player?.weaponDamage ?? 0;
+  const outgunned =
+    totalHostileHull * totalHostileDamage > playerHullHP * playerWeaponDamage;
+
+  // A DOWNED ship (GOD floor) can neither FIRE nor HYPERJUMP — the engine
+  // blocks both («Корабль повреждён — нужен ремонт»), so fight/flee candidates
+  // are dead pushes that ping-pong forever (the day-182 capacity wedge:
+  // 150× flee → blocked jump → flee). Skip the combat reaction entirely and
+  // let the hurt-tier repair/dock and the ordinary land/trade/wait ladder
+  // run — under the GOD floor the ship is unkillable, so waiting out a
+  // garrison while the calendar (and the arc) advances is honest play, and
+  // repairing above the floor restores every blocked action. Never fires on
+  // NORMAL/HARD (`downed` is GOD-only by construction).
+  const downed = obs.player?.downed === true;
+
   // 1) Survive — react to a present threat first, then patch a low hull.
-  if (obs.hostiles.length > 0) {
+  if (obs.hostiles.length > 0 && !downed) {
     const tid = obs.hostiles[0]?.id;
-    // Disengage from a fight we're likely to lose. A hostile whose hull HP
-    // exceeds our *current* hull will out-trade us: empirically the
-    // capture-fleet / Overmind craft carry far more hull than a starter ship
-    // and delete it in ~2 combat days (100%→35%→0), so the plain `hurt`
-    // (<35% hull) cutoff fires too late — one more combat day after it trips
-    // is already lethal. Treat an over-HP'd enemy as a flee-now trigger even
-    // at full hull, so the agent never trades blows with a capture fleet.
-    const playerHull = obs.player?.hull ?? 0;
-    const toughestHostileHull = Math.max(
-      0,
-      ...obs.hostiles.map((h) => h.hullHP ?? 0),
-    );
-    const outmatched = toughestHostileHull > playerHull;
-    if (hurt || outmatched) {
-      push("flee", outmatched ? "flee-outmatched" : "flee-low-hull", tid);
+    if (hurt || outmatched || outgunned) {
+      push(
+        "flee",
+        outmatched
+          ? "flee-outmatched"
+          : outgunned
+            ? "flee-outgunned"
+            : "flee-low-hull",
+        tid,
+      );
       push("attack", "fight", tid);
     } else {
       push("attack", "fight", tid);
       push("flee", "flee", tid);
     }
   }
-  if (hurt) {
+  // Only chase a repair the wallet can PAY for (Task 6): `executeRepair`
+  // no-ops when unaffordable and the STATION legality already prunes it, so
+  // pushing dock-to-repair broke just ping-pongs dock→leave→dock while the
+  // calendar freezes. Broke-and-hurt falls through to the economy ladder —
+  // sell cargo / trade / earn until the bill is coverable. Absent field
+  // (pre-Task-6 fixtures) ⇒ affordable, the legacy decisions.
+  if (hurt && obs.player?.canAffordRepair !== false) {
     push("repair", "repair-low-hull");
     push("dock", "dock-to-repair", obs.system?.stations[0]?.id);
   }
@@ -971,6 +1032,13 @@ export function decideWithMemory(
   const danger = Math.max(routeDangerToGoal(obs, mem), currentSystemDanger);
   // Heading into a remembered-dangerous goal while not battle-ready ⇒ hold back.
   const avoidDanger = danger > 0 && hull < BATTLE_READY_HULL_FRACTION;
+  // The survive tier's own flee condition, re-derived for the STAR_MAP tier
+  // (hostiles are system-scoped, so a live fight is visible from the map):
+  // a fleeing ship is on the map to ESCAPE the current system, and treating
+  // its own system's remembered threat as a reason to back out would hand it
+  // straight back to the hostile it is fleeing (the campaign calendar wedge).
+  const fleeingLiveFight =
+    obs.hostiles.length > 0 && !downed && (hurt || outmatched || outgunned);
   // Anti-consecutive-warp cadence — once the run has hopped this many systems
   // in a row without landing, stop emitting `warp` from the base ladder so the
   // remaining candidates (land/dock/wait) get a chance to break the streak.
@@ -1383,6 +1451,19 @@ export function decideWithMemory(
       ) {
         push("warp", "early-explore");
       }
+      // Stagnation wait (Task 6): the calendar is frozen (12+ folds without a
+      // day) and the escape valve above (`early-explore` warp) either didn't
+      // fire or is illegal — a DOWNED ship can't warp at all, and land/trade
+      // never advance time, so re-landing "to earn" just spins the same
+      // day forever (the day-190 capacity wedge: 150× land(earn)→take-off
+      // with every buy blocked by this very `daysStagnant` gate). WAIT is the
+      // one always-legal move that advances the world: days pass, markets
+      // and quest boards refresh, `foldsSinceDayAdvance` resets, and the
+      // ladder gets its agency back. Pushed above the earn-landing ONLY while
+      // stagnant, so healthy sessions never see it.
+      if (daysStagnant) {
+        push("wait", "stagnation-wait");
+      }
       // Land to "earn" — kept as an unconditional fallback so the agent always
       // has a forward move here even when every warp is gated (fuel/cadence/
       // danger/galaxy-lost) or `early-explore` is withheld because
@@ -1406,9 +1487,30 @@ export function decideWithMemory(
       break;
     }
     case SceneType.STAR_MAP: {
-      // Don't jump toward a remembered threat while not battle-ready.
-      if (avoidDanger) push("move", "avoid-danger-back");
       const warpStalled = mem.starMapStallFolds >= MAX_STAR_MAP_WARP_STALLS;
+      // Escape jump — a ship whose survive tier just chose `flee` came HERE
+      // to leave the current system: `avoid-danger-back` (tripped by that
+      // same system's remembered threat) would return it to the hostile it
+      // is fleeing, re-triggering `flee` — a two-scene ping-pong that froze
+      // the calendar indefinitely (Task 6 campaign wedge: 8000 straight
+      // steps stuck on day 94). While the flee condition holds the jump
+      // outranks the back-out and — like `flee-overmind-front` — overrides
+      // the anti-consecutive-warp cadence (escape > loop prevention). It is
+      // deliberately NOT gated on `warpRejectFolds`: that counter conflates
+      // engine-rejected jumps with DELIBERATE map back-outs and only resets
+      // on a landing or a system change, so a ship that reaches a standoff
+      // after a long no-landing stretch arrives with the counter poisoned —
+      // gating on it silently re-created the exact back-out wedge this jump
+      // exists to break (measured: zero escape attempts across a 460-step
+      // GOD-mode wedge). A genuinely un-jumpable corner (absolute per-jump
+      // fuel cost exceeding the tank) is the campaign runner's wedge
+      // detector's job to end, not this tier's to predict. Still never fires
+      // fuel-critical (the refuel tier owns an empty tank) or on a visibly
+      // stalled map.
+      const escapeJump = fleeingLiveFight && !fuelGate && !warpStalled;
+      if (escapeJump) push("warp", "flee-escape-jump");
+      // Don't jump toward a remembered threat while not battle-ready.
+      if (avoidDanger && !escapeJump) push("move", "avoid-danger-back");
       if (!fuelGate && warpCadenceOk && !warpStalled) push("warp", "warp");
       push("move", "back");
       break;

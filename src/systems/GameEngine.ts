@@ -881,6 +881,12 @@ export class GameEngine {
       seed: this.galaxy.id,
       completedQuestChains: this.player.completedQuestChains,
       excludeKeys,
+      // Routine contracts must never TARGET an occupied system — its standing
+      // garrison annihilates the courier (see BoardOptions.hostileSystems).
+      hostileSystems: [
+        ...this.galaxy.overmindSystems,
+        ...this.galaxy.pirateSystems,
+      ],
       overmindSystems: this.galaxy.overmindSystems,
       overmindAdjacentSystems: overmindAdjacent,
     });

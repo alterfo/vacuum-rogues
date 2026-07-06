@@ -409,7 +409,12 @@ export class PlayerAgent {
             connections,
             this.lastSystemId,
             this.memory.visitedSystemIds,
-            new Set(engine.galaxy?.overmindSystems ?? []),
+            // Avoid every hostile-HELD system, pirate dens included (Task 6):
+            // both are lethal standing garrisons and both are star-map-visible.
+            new Set([
+              ...(engine.galaxy?.overmindSystems ?? []),
+              ...(engine.galaxy?.pirateSystems ?? []),
+            ]),
             questTarget,
             hopsToQuestTarget,
           );
@@ -555,13 +560,19 @@ export class PlayerAgent {
    * the jump fires at `boundaryRadius` (2800 px) from centre — a max journey
    * of ~3400 px ≈ 680 ticks. The 2000-tick ceiling is a generous safety net.
    *
-   * **Stale vs. active combat pause:** `onCombatEnded` calls `combatPause.reset()`
-   * (which does NOT clear `_paused`) so after a resolved fight the pause flag is
-   * stuck true. We clear it ONLY when `combatModule.isActive=false` (the fight
-   * is over) — this is the *stale* case. If `isActive=true` (live fight), we
-   * leave the pause alone: while paused, `npcManager.updateCombat` is also frozen
-   * so NPCs can't fire — the ship stops safely, the loop times out, and the agent
-   * retries on the next step without taking combat damage.
+   * **Combat pause:** the «Огонь!» controller pauses the frame loop whenever a
+   * fight engages (and `onCombatEnded`'s `reset()` leaves `_paused` stuck true
+   * after it resolves). Both cases are resumed here, before every tick — the
+   * same discipline as `waitOneDay` — because a paused ship does not fly: it
+   * used to be left alone during a LIVE fight on the theory that the freeze
+   * was "safe" (NPCs can't fire either), but measured on the Task 6 campaign
+   * horizon that theory is false twice over. The engagement volley still lands
+   * BEFORE the pause freezes (~27 hull per warp attempt on a starter ship,
+   * with zero ship movement — death by retries on NORMAL), and the frozen
+   * standoff pins the calendar so the session soft-locks (the day-94 campaign
+   * wedge). Resuming is the honest game: a real player must un-pause to run
+   * for the jump point, eats the in-range volleys, breaks weapon range, and
+   * the fight disengages naturally.
    */
   private async completeWarp(startSys?: string): Promise<void> {
     const engine = this.harness.engine;
@@ -572,15 +583,12 @@ export class PlayerAgent {
       isTurnRunning?: boolean;
       combatPause?: { paused?: boolean; resume?(): void } | null;
       combatModule?: { isActive?: boolean } | null;
+      pendingWarp?: unknown;
     } | null;
 
-    // Clear ONLY a stale pause (combat ended but pause flag wasn't cleared).
-    // An active-combat pause (isActive=true) is left alone — ship stays frozen,
-    // NPCs can't fire, player is safe while blocked by combat.
-    const isActiveCombat = flightScene?.combatModule?.isActive === true;
+    // Resume any combat pause (stale or live) — a paused ship does not fly.
     if (
       flightScene?.combatPause?.paused &&
-      !isActiveCombat &&
       typeof flightScene.combatPause.resume === "function"
     ) {
       flightScene.combatPause.resume();
@@ -599,17 +607,46 @@ export class PlayerAgent {
     }
 
     for (let i = 0; i < 2000; i++) {
+      // Un-pause before each tick so the ship keeps flying and weapons fire —
+      // combat auto-resolves (or disengages on range) instead of freezing.
+      if (
+        flightScene?.combatPause?.paused &&
+        typeof flightScene.combatPause.resume === "function"
+      ) {
+        flightScene.combatPause.resume();
+      }
       this.harness.tick(50);
       await Promise.resolve(); // yield so async performWarp() can settle
       if (engine.player?.currentSystemId !== sys0) break;
-      // If the turn ended mid-flight (ship stopped without reaching the edge) and
-      // no active combat blocks it, restart the route.
+      // If the turn ended mid-flight (ship stopped without reaching the edge),
+      // restart the route.
       if (
         !flightScene?.isTurnRunning &&
-        !flightScene?.combatPause?.paused &&
         typeof flightScene?.onPlayPause === "function"
       ) {
         flightScene.onPlayPause();
+      }
+    }
+
+    // Budget exhausted with the jump unfired ⇒ the hyperjump is STUCK — e.g. a
+    // mid-transit combat chase re-routed the ship so it never "arrives" at the
+    // edge, or a downed ship can't fire the jump. Leaving `pendingWarp` set
+    // turns `apply()`'s warp-in-transit intercept into a permanent trap: every
+    // later action (dock-to-repair included) is redirected back here forever
+    // (the day-229 capacity wedge, 300× dock no-ops). A live player can cancel
+    // or re-plot a stuck route; the headless agent's only equivalent is
+    // aborting the orphaned jump — do that, end the turn, and let the next
+    // decide re-plan with full agency.
+    if (
+      engine.player?.currentSystemId === sys0 &&
+      flightScene?.pendingWarp != null
+    ) {
+      flightScene.pendingWarp = null;
+      if (
+        flightScene.isTurnRunning &&
+        typeof flightScene.endTurn === "function"
+      ) {
+        flightScene.endTurn();
       }
     }
   }

@@ -62,13 +62,14 @@ function landed(
   return { id, name: id, availableQuests, market };
 }
 
-function hostile(id = "raider-1", hullHP = 80): NpcSnapshot {
+function hostile(id = "raider-1", hullHP = 80, damage?: number): NpcSnapshot {
   return {
     id,
     name: id,
     faction: FactionType.SYNDICATE,
     hostile: true,
     hullHP,
+    damage,
   };
 }
 
@@ -515,5 +516,272 @@ describe("MemoryHeuristicPolicy (stateful adapter)", () => {
       expect(() => (action = policy.decide(o))).not.toThrow();
       expect(o.legalActions).toContain(action.kind);
     }
+  });
+});
+
+/**
+ * Task 6 (three-year-campaign plan) — the campaign calendar wedge: a ship whose
+ * survive tier chose `flee` lands on STAR_MAP, where `avoid-danger-back`
+ * (tripped by the CURRENT system's own remembered threat) used to outrank the
+ * escape jump, handing the ship straight back to the hostile it was fleeing —
+ * an infinite two-scene ping-pong that froze the galaxy day (measured live:
+ * 8000 straight steps stuck at day 94 on seed CAMPAIGN-0). While the flee
+ * condition holds, the escape jump must win; every other avoid-danger-back
+ * behaviour is preserved.
+ */
+describe("flee escape jump (campaign wedge regression)", () => {
+  /** STAR_MAP, damaged ship, one outmatching live hostile in-system. */
+  function fleeMapObs(over: ObsOpts = {}): Observation {
+    return obs({
+      scene: SceneType.STAR_MAP,
+      connections: 2,
+      hostiles: [hostile("garrison-1", 300)],
+      player: { hull: 104, maxHull: 130, hullFraction: 104 / 130 },
+      ...over,
+    });
+  }
+
+  /** A notebook that remembers the CURRENT system (sysA) as dangerous. */
+  function dangerHere(): AgentMemory {
+    const mem = createMemory();
+    mem.threatMap.set("sysA", 3);
+    return mem;
+  }
+
+  it("fleeing an outmatched live fight ⇒ the escape jump outranks avoid-danger-back", () => {
+    const action = decideWithMemory(fleeMapObs(), dangerHere());
+    expect(action.kind).toBe("warp");
+    expect(action.reason).toContain("flee-escape-jump");
+  });
+
+  it("the escape jump overrides the anti-consecutive-warp cadence (escape > loop prevention)", () => {
+    const mem = dangerHere();
+    mem.consecutiveWarpsWithoutLanding = 99;
+    const action = decideWithMemory(fleeMapObs(), mem);
+    expect(action.kind).toBe("warp");
+    expect(action.reason).toContain("flee-escape-jump");
+  });
+
+  it("no live hostile ⇒ remembered danger still backs out (avoid-danger-back preserved)", () => {
+    const action = decideWithMemory(fleeMapObs({ hostiles: [] }), dangerHere());
+    expect(action.kind).toBe("move");
+    expect(action.reason).toContain("avoid-danger-back");
+  });
+
+  it("a live hostile the ship OUTGUNS at healthy hull does not escape-jump", () => {
+    // Not hurt (full hull) and not outmatched (hostile hull below ours) —
+    // the survive tier would fight here, so the map tier must not flee either.
+    const action = decideWithMemory(
+      fleeMapObs({
+        hostiles: [hostile("weak-1", 20)],
+        player: { hull: 130, maxHull: 130, hullFraction: 1 },
+      }),
+      dangerHere(),
+    );
+    expect(action.reason).not.toContain("flee-escape-jump");
+  });
+
+  it("never escape-jumps fuel-critical (the refuel tier owns an empty tank)", () => {
+    const action = decideWithMemory(
+      fleeMapObs({
+        player: {
+          hull: 104,
+          maxHull: 130,
+          hullFraction: 104 / 130,
+          fuel: 5,
+          maxFuel: 50,
+          fuelFraction: 0.1,
+        },
+      }),
+      dangerHere(),
+    );
+    expect(action.kind).not.toBe("warp");
+  });
+
+  it("fires even with a poisoned warpRejectFolds (the conflated counter must not veto the only exit)", () => {
+    // `warpRejectFolds` counts DELIBERATE map back-outs as well as genuine
+    // engine rejections and only resets on a landing / system change — a ship
+    // cornered after a long no-landing stretch arrives with it sky-high
+    // (measured live: a 460-step GOD-mode wedge with zero escape attempts).
+    const mem = dangerHere();
+    mem.warpRejectFolds = 99;
+    const action = decideWithMemory(fleeMapObs(), mem);
+    expect(action.kind).toBe("warp");
+    expect(action.reason).toContain("flee-escape-jump");
+  });
+
+  it("the escape jump picks the least-dangerous neighbour (danger-aware targeting)", () => {
+    const mem = dangerHere();
+    mem.threatMap.set("sysB", 2); // remembered-dangerous neighbour
+    const o = fleeMapObs();
+    o.system!.neighbors = [
+      { systemId: "sysB", visited: false, overmindHeld: false },
+      { systemId: "sysC", visited: false, overmindHeld: false },
+    ];
+    const action = decideWithMemory(o, mem);
+    expect(action.kind).toBe("warp");
+    expect(action.targetId).toBe("sysC");
+  });
+});
+
+/**
+ * Task 6 — kill-time calculus: the hull-compare (`flee-outmatched`) fires one
+ * volley too late against an equal-hull ship that simply hits harder. Compare
+ * kill-times BEFORE contact (their hull × their damage vs ours × ours) so the
+ * flee happens while a clean escape still exists. Hostile `damage` is a new
+ * OPTIONAL snapshot field — fixtures without it keep pre-Task-6 decisions.
+ */
+describe("kill-time calculus (flee-outgunned, Task 6)", () => {
+  it("flees pre-contact when losing the damage trade at full hull (130hp/14dmg vs 130hp/27dmg)", () => {
+    const action = decideWithMemory(
+      obs({
+        hostiles: [hostile("pirate-1", 130, 27)],
+        player: {
+          hull: 130,
+          maxHull: 130,
+          hullFraction: 1,
+          weaponDamage: 14,
+        },
+        connections: 2,
+      }),
+      createMemory(),
+    );
+    expect(action.kind).toBe("flee");
+    expect(action.reason).toContain("flee-outgunned");
+  });
+
+  it("fights when winning the trade (weak low-damage hostile)", () => {
+    const action = decideWithMemory(
+      obs({
+        hostiles: [hostile("scav-1", 20, 5)],
+        player: {
+          hull: 130,
+          maxHull: 130,
+          hullFraction: 1,
+          weaponDamage: 14,
+        },
+      }),
+      createMemory(),
+    );
+    expect(action.kind).toBe("attack");
+    expect(action.reason).toContain("fight");
+  });
+
+  it("a damage-less legacy fixture keeps the pre-Task-6 decision (fight a weaker hull)", () => {
+    const action = decideWithMemory(
+      obs({
+        hostiles: [hostile("raider-1", 80)],
+        player: { hull: 100, maxHull: 100, hullFraction: 1 },
+      }),
+      createMemory(),
+    );
+    expect(action.kind).toBe("attack");
+  });
+
+  it("a hostile PACK is summed — several individually-weaker ships still outgun", () => {
+    const action = decideWithMemory(
+      obs({
+        hostiles: [
+          hostile("g1", 60, 15),
+          hostile("g2", 60, 15),
+          hostile("g3", 60, 15),
+        ],
+        player: {
+          hull: 130,
+          maxHull: 130,
+          hullFraction: 1,
+          weaponDamage: 14,
+        },
+        connections: 2,
+      }),
+      createMemory(),
+    );
+    expect(action.kind).toBe("flee");
+    expect(action.reason).toContain("flee-outgunned");
+  });
+
+  it("outgunned triggers the STAR_MAP escape jump (fleeingLiveFight parity)", () => {
+    const o = obs({
+      scene: SceneType.STAR_MAP,
+      connections: 2,
+      hostiles: [hostile("pirate-1", 130, 27)],
+      player: { hull: 130, maxHull: 130, hullFraction: 1, weaponDamage: 14 },
+    });
+    const mem = createMemory();
+    mem.threatMap.set("sysA", 3); // remembered danger here must not veto the escape
+    const action = decideWithMemory(o, mem);
+    expect(action.kind).toBe("warp");
+    expect(action.reason).toContain("flee-escape-jump");
+  });
+});
+
+/**
+ * Task 6 — pirate dens are star-map-visible (orange systems) and as lethal as
+ * the Overmind front; warp targeting must weigh `pirateHeld` like
+ * `overmindHeld` instead of walking blind into a standing garrison.
+ */
+describe("pirate-den warp avoidance (Task 6)", () => {
+  it("the warp picker avoids a pirateHeld neighbour when a clean one exists", () => {
+    const o = obs({ scene: SceneType.STAR_MAP, connections: 2 });
+    o.system!.neighbors = [
+      {
+        systemId: "den",
+        visited: false,
+        overmindHeld: false,
+        pirateHeld: true,
+      },
+      { systemId: "calm", visited: false, overmindHeld: false },
+    ];
+    const action = decideWithMemory(o, createMemory());
+    expect(action.kind).toBe("warp");
+    expect(action.targetId).toBe("calm");
+  });
+});
+
+/**
+ * Task 6 — a DOWNED ship (GOD hull floor) can neither fire nor hyperjump (the
+ * engine blocks both), so the policy must not emit fight/flee for it: retrying
+ * the blocked jump forever was the day-182 capacity wedge. `downed` is
+ * GOD-only by construction — NORMAL/HARD behaviour is untouched.
+ */
+describe("downed ship (GOD floor, Task 6)", () => {
+  it("does not fight or flee while downed even with hostiles present", () => {
+    const action = decideWithMemory(
+      obs({
+        hostiles: [hostile("garrison-1", 300, 30)],
+        player: {
+          hull: 7,
+          maxHull: 130,
+          hullFraction: 7 / 130,
+          weaponDamage: 14,
+          downed: true,
+        },
+        connections: 2,
+        planets: [{ id: "p1", name: "P1", availableQuests: 0 }],
+      }),
+      createMemory(),
+    );
+    expect(action.kind).not.toBe("flee");
+    expect(action.kind).not.toBe("attack");
+    expect(action.kind).not.toBe("warp");
+  });
+
+  it("does not escape-jump from the STAR_MAP while downed", () => {
+    const action = decideWithMemory(
+      obs({
+        scene: SceneType.STAR_MAP,
+        connections: 2,
+        hostiles: [hostile("garrison-1", 300, 30)],
+        player: {
+          hull: 7,
+          maxHull: 130,
+          hullFraction: 7 / 130,
+          weaponDamage: 14,
+          downed: true,
+        },
+      }),
+      createMemory(),
+    );
+    expect(action.reason).not.toContain("flee-escape-jump");
   });
 });

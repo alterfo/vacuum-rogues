@@ -505,6 +505,27 @@ export function executeMemoryAwareTrade(
 }
 
 /**
+ * The credit cost `executeRepair` will charge right now, or `null` when the
+ * hull is already perfect (nothing to repair). Exported so `observe` can gate
+ * the `repair` action's LEGALITY on affordability with the exact same formula
+ * the executor uses (Task 6) — an unaffordable repair silently no-ops, and a
+ * broke, hull-damaged agent re-picking the no-op forever was a campaign
+ * capacity wedge (300× repairs at 83cr against a 266cr bill, day frozen).
+ */
+export function repairCost(engine: GameEngine): number | null {
+  const player = engine.player;
+  if (!player) return null;
+  const ship = player.ship;
+  const status = hullStatus(
+    ship.hullHP,
+    ship.maxHull,
+    engine.playerLoadout?.derivedStats().maxHull,
+  );
+  if (status.isPerfect) return null;
+  return Math.ceil(status.missing * 2);
+}
+
+/**
  * Restore the player's hull at the cheapest available rate (planet-Верфь pricing:
  * 2 cr/HP). Mirrors `PlanetScene.doHullRepair` without the UI: syncs the loadout
  * max, checks affordability, deducts credits via the banking bus, then calls
@@ -517,13 +538,8 @@ export function executeRepair(engine: GameEngine): void {
   const ship = player.ship;
   const loadout = engine.playerLoadout;
   if (loadout) applyLoadoutHullToShip(ship, loadout);
-  const status = hullStatus(
-    ship.hullHP,
-    ship.maxHull,
-    loadout?.derivedStats().maxHull,
-  );
-  if (status.isPerfect) return;
-  const cost = Math.ceil(status.missing * 2);
+  const cost = repairCost(engine);
+  if (cost == null) return;
   if (player.credits < cost) return;
   adjustPlayerCredits(
     engine.bank,

@@ -336,16 +336,84 @@ This plan **supersedes** the two open plans:
   Task 17 visual/e2e sweep; NOT fixed here (one concern per commit).
 
 ### Task 6: Long-horizon harness (1080-day sessions must be runnable)
-- [ ] write a red perf/capacity test: one seeded session runs to day ≥ 1080 (or arc resolution)
+- [x] write a red perf/capacity test: one seeded session runs to day ≥ 1080 (or arc resolution)
       headless without error, within a wall-clock budget and bounded memory
       (AgentMemory/priceBook/threatMap growth capped or pruned)
-- [ ] profile + fix whatever breaks at ~6000 steps (unbounded maps, O(n²) scans, log spam);
+- [x] profile + fix whatever breaks at ~6000 steps (unbounded maps, O(n²) scans, log spam);
       add pruning/caps with tests
-- [ ] add `letsplay:campaign` npm script — env-gated (`CAMPAIGN_SESSIONS`, `CAMPAIGN_STEPS`),
+- [x] add `letsplay:campaign` npm script — env-gated (`CAMPAIGN_SESSIONS`, `CAMPAIGN_STEPS`),
       reports per-session: win/loss/timeout, resolution day, peak power, milestone days
       (battle-ready day, first-liberation day), deaths — building on `_autopilotDiag`
-- [ ] keep `letsplay:ci` at its fast budget; verify it still passes untouched
-- [ ] run unit + playtest suites — green before Task 7
+- [x] keep `letsplay:ci` at its fast budget; verify it still passes untouched
+- [x] run unit + playtest suites — green before Task 7
+
+**Task 6 notes (2026-07-06):**
+- **Harness delivered**: `campaignMetrics.ts` (pure fold/classify/bounds/aggregate/format core,
+  17 unit tests on synthetic data) + `campaign.run.ts` (`runCampaignSession`/`runCampaign`/
+  `writeCampaignReport` — no per-step transcript, day-boundary checkpoints, structural
+  memory-bounds evidence, calendar-wedge detector `CAMPAIGN_WEDGE_STEP_LIMIT=300`) +
+  `campaign.run.test.ts` two tiers behind `LETSPLAY_CAMPAIGN` (`npm run letsplay:campaign`;
+  env knobs `CAMPAIGN_SESSIONS`/`CAMPAIGN_DAYS`/`CAMPAIGN_STEPS`/`CAMPAIGN_WALL_MS`):
+  **capacity** (one GOD-mode session to day 1080 or arc resolution, wall/heap/bounds gated)
+  and **campaign run** (NORMAL telemetry sessions; win-rate deliberately NOT gated — Task 9).
+  Reports land in gitignored `.letsplay/`. `_wedgeProbe.run.test.ts` kept as an env-gated
+  inert diagnostic (it found every wedge below; Tasks 7–9 keep burning wedges with it).
+- **What actually broke at ~6000 steps was never memory** (belief structures are world-bounded
+  by construction — asserted via `checkMemoryBounds`): it was a chain of five behavioral/apply
+  soft-locks, each surfaced by the wedge probe and fixed at its root:
+  1. *flee↔avoid-danger-back ping-pong* (8000 steps frozen at day 94): a fleeing ship's map
+     back-out returned it to the fight. Fixed by the `flee-escape-jump` map tier (escape
+     outranks back-out while the flee condition holds).
+  2. *combat-pause freeze made escapes fake* — `completeWarp` left a LIVE-fight pause frozen;
+     the engagement volley still landed per attempt (~27 hull, zero movement) so NORMAL ships
+     died by retries and "survivors" were really frozen. Fixed: `completeWarp` resumes the
+     pause every tick (same discipline as `waitOneDay`) — a transiting ship keeps flying,
+     combat resolves/disengages honestly.
+  3. *orphaned `pendingWarp` trap* (day-229 wedge, 300× dock no-ops): a stuck hyperjump made
+     the apply-layer intercept redirect EVERY action to `completeWarp` forever. Fixed: on
+     budget exhaustion the orphaned jump is aborted (a live player would cancel/re-plot).
+  4. *unaffordable-repair loops* (day-189/190 wedges): `executeRepair` no-ops when broke, so
+     "repair" (at STATION) and "dock-to-repair" ping-ponged. Fixed: repair legality +
+     `dock-to-repair` gated on `canAffordRepair` (new `repairCost()` single-sources the bill).
+  5. *stagnation deadlock*: a DOWNED (GOD-floor) ship can't warp and `daysStagnant` blocks
+     buys, so land(earn)→take-off spun a frozen day forever. Fixed: `stagnation-wait` —
+     when the calendar is frozen and warps didn't fire, WAIT (always legal, advances the
+     world) outranks the earn-landing.
+- **Downed (GOD floor) is now observable + legality-filtered**: `PlayerSnapshot.downed`
+  (`isDowned`), and `observe` removes `warp`/`attack`/`flee` from `legalActions` while downed
+  (engine truth: StarMapScene blocks the jump, downed ships can't fire) — every policy incl.
+  the neural mask inherits it. NORMAL/HARD unaffected by construction.
+- **Kill-time calculus** (`flee-outgunned`): hostile snapshots now carry `damage`; the policy
+  flees BEFORE contact when total hostile hull × damage exceeds player hull × weapon damage
+  (cross-multiplied, zero-safe; absent field ⇒ legacy decisions). The old hull-compare fired
+  one volley too late vs equal-hull/harder-hitting ships, and post-contact flees die to
+  pursuit. Pirate dens are now observation-parity too: `NeighborSnapshot.pirateHeld`
+  (star map renders them orange) weighs like `overmindHeld` in warp targeting, and the
+  applier's blind pick avoids `pirateSystems` alongside `overmindSystems`.
+- **GAME bug found & fixed (agent-as-diagnostic): quest boards sold courier runs into
+  hostile-held systems.** Seed LETSPLAY_CI-0: the board issued «Цепь курьеров» targeting a
+  NINE-pirate garrison den two hops from home; the agent (or any honest player) flies to its
+  own quest marker and is annihilated. Fix in production code: `BoardOptions.hostileSystems`
+  filters the routine/chain/elite target pool at the source (`generateQuestBoard`), wired from
+  `GameEngine.getQuestBoard` with `overmindSystems + pirateSystems`. Additive param, default
+  `[]` ⇒ legacy boards byte-identical; DEFENSE/finale war-quests untouched. 4 new tests in
+  `src/tests/quests/questHostileSystems.test.ts`.
+- **Capacity result (M-series laptop, jsdom+pixi-stub)**: CAMPAIGN-CAPACITY-0 (GOD) runs
+  wedge-free to a NATURAL arc resolution — loss at day 355 (share 0.92), 2296 steps, 10.6 s
+  wall, +102 MB heap, 0 errors / 0 violations / 0 memory-bounds breaches. NORMAL telemetry
+  sessions die honestly at day 63–94 (weak ship, adaptive pressure) — the Task 7–9 baseline.
+- **Tests rewritten under the license** (meanings preserved): `competentSession.test.ts` —
+  the blanket `endScene !== GAME_OVER` pin was satisfied only by the combat-pause FREEZE
+  exploit (a "surviving" ship was a frozen soft-lock this file's own header scopes out).
+  Now: incompetence deaths (fuel/soft-lock/bankruptcy) still hard-fail unconditionally; an
+  honest WAR casualty is tolerated iff late (day ≥ 120) in a war-consumed galaxy
+  (share ≥ 0.35); the soft-lock streak guard measures LIVING steps only (dead sessions idle
+  to the step budget). No other existing test touched; deferred frontier-avoidance policy
+  experiments were reverted after they redded `exploreNoWarpLoop`/`fuelSurvival` — that
+  competence work belongs to Tasks 7–8.
+- Gates: full unit suite ✓, playtest 585 ✓, letsplay:ci 105 ✓ (survival 100% now honest —
+  min-days-survived rose 21→28, systems-visited 3.3→4.3), letsplay:campaign capacity ✓,
+  save-compat 22 ✓, tsc ✓, lint ✓.
 
 ### Task 7: Autopilot long-game competence (economy + combat executors)
 - [ ] write red playtest tests: (a) flee executor actually disengages (not a no-op);
