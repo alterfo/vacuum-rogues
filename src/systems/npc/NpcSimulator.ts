@@ -14,6 +14,7 @@ import type { RouteRumor } from "@/domain/RouteRumor";
 import { applyMarketTradeImpact } from "@/domain/Market";
 import { Faction } from "@/types/faction";
 import { GAME_BALANCE, scaledGarrisonRange } from "@/config/balance";
+import { overmindGarrisonPowerBonus } from "@/systems/campaign/hostileScaling";
 import type { NpcBrain } from "./NpcBrain";
 import { RuleBasedNpcBrain, selectPirateTarget } from "./NpcBrain";
 import {
@@ -352,6 +353,21 @@ export class NpcSimulator {
   }
 
   /**
+   * Live source of the run's RATCHETED peak power index
+   * (`GameEngine.campaignPeakPower`) — the adaptive Overmind garrison-count
+   * input (three-year-campaign Task 4). A provider (not a pushed value) so the
+   * per-tick garrison sizing always reads the current ratchet with a single
+   * wiring point. Null (legacy DI sites/tests) ⇒ 0 ⇒ today's exact garrison
+   * sizes. Derived, never persisted on the simulator itself.
+   */
+  private campaignPeakPowerSource: (() => number) | null = null;
+
+  /** Wire the ratcheted-power source that grows Overmind garrisons (Task 4). */
+  attachCampaignPeakPower(source: (() => number) | null): void {
+    this.campaignPeakPowerSource = source;
+  }
+
+  /**
    * Populate the galaxy with an initial NPC population. Deterministic for a
    * given rng (which is seeded from the galaxy seed during generation).
    */
@@ -536,11 +552,18 @@ export class NpcSimulator {
     systemId: string,
     overmind: boolean,
   ): void {
+    // Adaptive campaign pressure (Task 4): Overmind garrisons grow with the
+    // run's ratcheted peak power — gentle early (0 extra while weak), hard
+    // late. Spawn-time only, so it is generation-independent (existing saves
+    // pick it up as garrisons top up). Pirate garrisons are not power-scaled.
+    const powerBonus = overmind
+      ? overmindGarrisonPowerBonus(this.campaignPeakPowerSource?.() ?? 0)
+      : 0;
     // HARD shifts the garrison range up; NORMAL/GOD keep [GARRISON_MIN, MAX].
     const { min: garrisonMin, max: garrisonMax } = scaledGarrisonRange(
       this.gameMode,
-      GARRISON_MIN,
-      GARRISON_MAX,
+      GARRISON_MIN + powerBonus,
+      GARRISON_MAX + powerBonus,
     );
     let present = this.countGarrisonPresent(galaxy, systemId);
     if (present >= garrisonMin) {

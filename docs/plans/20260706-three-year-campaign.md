@@ -237,17 +237,55 @@ This plan **supersedes** the two open plans:
   lint 0 errors ✓.
 
 ### Task 4: Adaptive garrison & combat scaling (revive the dead levers)
-- [ ] write red tests: in-flight combat vs Overmind-held systems applies HP/damage scaling as a
+- [x] write red tests: in-flight combat vs Overmind-held systems applies HP/damage scaling as a
       function of ratcheted power (weak ⇒ ~0.9×, strong ⇒ up to `OVERMIND_COMBAT_*_MULT`);
       all damage routed through `applyDamageWithMode`; GOD floor respected
-- [ ] wire the scaling into `CombatModule` (the "no production consumer" gap) via a pure
+- [x] wire the scaling into `CombatModule` (the "no production consumer" gap) via a pure
       `hostileScaling(powerIndex, gameMode)` helper in `src/systems/campaign/`; HARD-mode
       multipliers compose from `DIFFICULTY_HOSTILE_SCALING`, never at call sites
-- [ ] scale garrison count/strength on Overmind systems by ratcheted power (gentle early,
+- [x] scale garrison count/strength on Overmind systems by ratcheted power (gentle early,
       hard late) — generation-independent so existing saves are safe
-- [ ] rewrite `combatLiberation.test.ts` under the license: same meaning (scout must lose,
+- [x] rewrite `combatLiberation.test.ts` under the license: same meaning (scout must lose,
       top loadout must win) at the scaling endpoints
-- [ ] run unit + playtest suites — green before Task 5
+- [x] run unit + playtest suites — green before Task 5
+
+**Task 4 notes (2026-07-06):**
+- New pure module `src/systems/campaign/hostileScaling.ts`: `hostileScaling(powerIndex, mode)`
+  = `lerp(HOSTILE_SCALING_WEAK_MULT, OVERMIND_COMBAT_*_MULT, clamp01(power)) ×
+  DIFFICULTY_HOSTILE_SCALING[mode].hostileCombatMultiplier` (new config field: GOD/NORMAL 1.0,
+  HARD 1.25 — additive, so the pinned NORMAL≡GOD equality in `hardScaling.test.ts` holds);
+  `scaleHostileDamage` (whole hits, positive-hit floor 1, zero stays 0);
+  `overmindGarrisonPowerBonus` (floor(power × OVERMIND_GARRISON_POWER_MAX_BONUS), max +2).
+  Levers in `balance.ts`: `HOSTILE_SCALING_WEAK_MULT` 0.9, `OVERMIND_GARRISON_POWER_MAX_BONUS` 2.
+- `CombatModule` consumes it via two new **optional** deps (`isHostileSystem`,
+  `getCampaignPeakPower` — absent ⇒ neutral 1.0, legacy DI sites byte-identical): incoming NPC
+  damage × `damageMult` (still routed through `applyDamageWithMode`, GOD floor verified);
+  player shots divide by `hpMult` (effective enemy HP). `SpaceFlightScene` wires both from
+  `galaxy.isHostileSystem(player.currentSystemId)` + `gameEngine.campaignPeakPower`
+  (SpaceFlightScene at 1893 lines, under the 1898 guard).
+- Garrison count: `NpcSimulator.fillGarrison` shifts the Overmind `[GARRISON_MIN, GARRISON_MAX]`
+  range up by the power bonus (pirate garrisons NOT power-scaled); the ratchet reaches it via
+  `attachCampaignPeakPower(provider)` wired once in the GameEngine constructor (new game resets
+  the value ⇒ no cross-run leak). Spawn-time only ⇒ generation-independent, existing saves safe
+  (garrison *strength* scaling is the CombatModule fight-time path — one source, no
+  double-application on spawned stats).
+- **Tests rewritten under the license**: `src/tests/galaxy/combatLiberation.test.ts` difficulty
+  section — meaning preserved at the endpoints the player actually faces (scout cannot liberate:
+  the GARRISON_MIN=5 standing garrison overwhelms it even at its gentle 0.9× scaling; top
+  loadout beats a full-1.5× garrison ship); new intentional behaviour locked: a LONE weak-scaled
+  patrol is survivable 1v1 (gentle early). The `tryLiberate` section and the mult>1 pins kept
+  verbatim.
+- New tests: 17 in `src/tests/campaign/hostileScaling.test.ts` (endpoints, clamp, monotonicity,
+  HARD composition, NORMAL≡GOD, damage rounding, garrison-bonus steps), 10 in
+  `src/tests/combat/hostileScalingCombat.test.ts` (real CombatModule: weak/strong/neutral/legacy
+  incoming + outgoing scaling, HARD composition, GOD floor on a scaled lethal volley, NORMAL
+  death), 4 in `src/tests/npc/garrisonPowerScaling.test.ts` (power 0 ≡ legacy [5,10], power 1
+  ⇒ exact +bonus shift, sub-step power unchanged, pirates unscaled).
+- Docs: `src/systems/galaxy/CLAUDE.md` "no production consumer" limitation replaced with the
+  adaptive wiring; stale `OVERMIND_COMBAT_*_MULT` "PINNED" comment in `balance.ts` and the
+  capture-fleet comment in `MemoryHeuristicPolicy.ts` updated.
+- Gates: full unit 4594 ✓, playtest 585 ✓, letsplay:ci 105 ✓, save-compat 22 ✓, tsc ✓,
+  lint 0 errors ✓.
 
 ### Task 5: Escalation feedback to the player (difficulty is *felt*, not silent)
 - [ ] write red tests: crossing power/pressure thresholds emits news/warning events

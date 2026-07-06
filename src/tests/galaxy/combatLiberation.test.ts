@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Galaxy } from "@/domain/Galaxy";
 import { Overmind } from "@/domain/Overmind";
 import { GAME_BALANCE } from "@/config/balance";
+import { hostileScaling } from "@/systems/campaign/hostileScaling";
 import type { StarSystem } from "@/domain/StarSystem";
 
 function makeSystems(ids: string[]): StarSystem[] {
@@ -91,15 +92,31 @@ describe("GAME_BALANCE — overmind combat multipliers", () => {
   });
 });
 
-describe("combatLiberation — difficulty simulation", () => {
+/**
+ * REWRITTEN under the three-year-campaign test-modification license (Task 4).
+ *
+ * The old section pinned the raw OVERMIND_COMBAT_*_MULT levers as a flat 1.5×
+ * on every garrison fight. The multipliers are now the STRONG endpoint of the
+ * adaptive `hostileScaling(peakPower, mode)` lerp (weak player ≈ 0.9×), so the
+ * simulation evaluates the endpoints the player actually faces. The MEANING is
+ * preserved: an early loadout cannot liberate a hostile system (the standing
+ * garrison overwhelms the scout even at its gentle scaling), while a top
+ * loadout beats a full-strength garrison ship. New intentional behaviour also
+ * locked: at the weak endpoint a LONE garrison patrol is survivable 1v1 —
+ * gentle early, hard late.
+ */
+describe("combatLiberation — adaptive difficulty simulation (Task 4)", () => {
   /**
-   * Inline combat simulation: player and enemy trade blows, shields absorb
-   * first, hull takes the overflow. Returns "player_won" / "player_lost".
+   * Inline combat simulation vs a garrison of identical enemies: the player
+   * focuses one enemy at a time (shields absorb first, hull takes overflow);
+   * every living enemy returns fire each round. Returns "player_won" /
+   * "player_lost".
    */
-  function simulate(
+  function simulateGarrison(
     playerHp: number,
     playerShields: number,
     playerDmg: number,
+    enemyCount: number,
     enemyHp: number,
     enemyShields: number,
     enemyDmg: number,
@@ -107,62 +124,100 @@ describe("combatLiberation — difficulty simulation", () => {
   ): "player_won" | "player_lost" {
     let pHp = playerHp;
     let pSh = playerShields;
-    let eHp = enemyHp;
-    let eSh = enemyShields;
+    const enemies = Array.from({ length: enemyCount }, () => ({
+      hp: enemyHp,
+      sh: enemyShields,
+    }));
 
     for (let r = 0; r < maxRounds; r++) {
-      // Player attacks first
-      if (eSh > 0) {
-        const abs = Math.min(eSh, playerDmg);
-        eSh -= abs;
-        eHp -= playerDmg - abs;
+      // Player attacks the first living enemy
+      const target = enemies.find((e) => e.hp > 0);
+      if (!target) return "player_won";
+      if (target.sh > 0) {
+        const abs = Math.min(target.sh, playerDmg);
+        target.sh -= abs;
+        target.hp -= playerDmg - abs;
       } else {
-        eHp -= playerDmg;
+        target.hp -= playerDmg;
       }
-      if (eHp <= 0) return "player_won";
+      if (!enemies.some((e) => e.hp > 0)) return "player_won";
 
-      // Enemy retaliates
-      if (pSh > 0) {
-        const abs = Math.min(pSh, enemyDmg);
-        pSh -= abs;
-        pHp -= enemyDmg - abs;
-      } else {
-        pHp -= enemyDmg;
+      // Every living enemy retaliates
+      for (const e of enemies) {
+        if (e.hp <= 0) continue;
+        if (pSh > 0) {
+          const abs = Math.min(pSh, enemyDmg);
+          pSh -= abs;
+          pHp -= enemyDmg - abs;
+        } else {
+          pHp -= enemyDmg;
+        }
       }
       if (pHp <= 0) return "player_lost";
     }
     return "player_lost";
   }
 
-  // Hostile-system enemy: default (60 HP / 20 sh / 15 dmg) scaled by 1.5
+  // Hostile-system enemy baseline (60 HP / 20 sh / 15 dmg), scaled by the
+  // adaptive endpoints the player actually faces on NORMAL.
   const baseEnemyHp = 60;
   const baseEnemyShields = 20;
   const baseEnemyDmg = 15;
+  const weak = hostileScaling(0, "NORMAL"); // fresh scout's ratcheted power ≈ 0
+  const strong = hostileScaling(1, "NORMAL"); // maxed veteran
 
-  it("early loadout (scout hull, pulse laser) cannot defeat a hostile-system enemy", () => {
-    const hmult = GAME_BALANCE.OVERMIND_COMBAT_HP_MULT;
-    const dmult = GAME_BALANCE.OVERMIND_COMBAT_DAMAGE_MULT;
-    const result = simulate(
-      90, // scout hull HP
-      20, // scout hull shields
-      14, // pulse laser damage (wpn_pulse)
-      Math.floor(baseEnemyHp * hmult),
-      Math.floor(baseEnemyShields * hmult),
-      Math.floor(baseEnemyDmg * dmult),
+  // Scout (90/20 + wpn_pulse 14) and top loadout (bastion 360/100 + plasma 55).
+  const scout = { hp: 90, sh: 20, dmg: 14 };
+  const top = { hp: 360, sh: 100, dmg: 55 };
+
+  // NpcSimulator's standing-garrison floor (GARRISON_MIN) — a captured system
+  // never holds fewer defenders than this.
+  const GARRISON_MIN = 5;
+
+  it("strong endpoint equals the OVERMIND_COMBAT_*_MULT levers (still > 1)", () => {
+    expect(strong.hpMult).toBeCloseTo(GAME_BALANCE.OVERMIND_COMBAT_HP_MULT, 10);
+    expect(strong.damageMult).toBeCloseTo(
+      GAME_BALANCE.OVERMIND_COMBAT_DAMAGE_MULT,
+      10,
+    );
+    expect(weak.hpMult).toBeLessThan(strong.hpMult);
+  });
+
+  it("early loadout cannot liberate: the standing garrison overwhelms the scout even at its gentle scaling", () => {
+    const result = simulateGarrison(
+      scout.hp,
+      scout.sh,
+      scout.dmg,
+      GARRISON_MIN,
+      Math.floor(baseEnemyHp * weak.hpMult),
+      Math.floor(baseEnemyShields * weak.hpMult),
+      Math.floor(baseEnemyDmg * weak.damageMult),
     );
     expect(result).toBe("player_lost");
   });
 
-  it("top loadout (bastion hull, plasma cannon) wins against a hostile-system enemy", () => {
-    const hmult = GAME_BALANCE.OVERMIND_COMBAT_HP_MULT;
-    const dmult = GAME_BALANCE.OVERMIND_COMBAT_DAMAGE_MULT;
-    const result = simulate(
-      360, // bastion hull HP
-      100, // bastion + shield equipment
-      55, // wpn_plasma (techLevel 6, damage 55)
-      Math.floor(baseEnemyHp * hmult),
-      Math.floor(baseEnemyShields * hmult),
-      Math.floor(baseEnemyDmg * dmult),
+  it("gentle early: a LONE garrison patrol is survivable for the scout at the weak endpoint", () => {
+    const result = simulateGarrison(
+      scout.hp,
+      scout.sh,
+      scout.dmg,
+      1,
+      Math.floor(baseEnemyHp * weak.hpMult),
+      Math.floor(baseEnemyShields * weak.hpMult),
+      Math.floor(baseEnemyDmg * weak.damageMult),
+    );
+    expect(result).toBe("player_won");
+  });
+
+  it("top loadout wins against a full-strength hostile-system enemy (strong endpoint)", () => {
+    const result = simulateGarrison(
+      top.hp,
+      top.sh,
+      top.dmg,
+      1,
+      Math.floor(baseEnemyHp * strong.hpMult),
+      Math.floor(baseEnemyShields * strong.hpMult),
+      Math.floor(baseEnemyDmg * strong.damageMult),
     );
     expect(result).toBe("player_won");
   });

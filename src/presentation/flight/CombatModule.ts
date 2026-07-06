@@ -6,6 +6,12 @@ import { GAME_BALANCE } from "@/config/balance";
 import type { GameMode } from "@/types";
 import { applyDamageWithMode, isHullDowned } from "@/systems/combat/godMode";
 import { npcWeaponRange } from "@/systems/combat/npcWeapon";
+import {
+  hostileScaling,
+  scaleHostileDamage,
+  NEUTRAL_HOSTILE_SCALING,
+  type HostileScaling,
+} from "@/systems/campaign/hostileScaling";
 import type { NpcShipSprite } from "../NpcShipSprite";
 import type { FlightModule } from "./FlightModule";
 import { CombatHud } from "./CombatHud";
@@ -76,6 +82,18 @@ export interface CombatModuleDeps {
    * lightweight callers (unit tests) need not supply it.
    */
   getGameMode?(): GameMode;
+  /**
+   * Whether the player's current system is hostile-held (Overmind/pirate).
+   * Gates the adaptive garrison scaling (Task 4): fights in a hostile system
+   * scale enemy HP/damage by `hostileScaling(peakPower, mode)`. Absent or
+   * false ⇒ neutral 1.0 scaling, so legacy DI sites keep the exact old damage.
+   */
+  isHostileSystem?(): boolean;
+  /**
+   * The run's RATCHETED peak power index (`GameEngine.campaignPeakPower`) —
+   * the adaptive-scaling input. Absent ⇒ 0 (weakest, gentlest scaling).
+   */
+  getCampaignPeakPower?(): number;
   /** Resolve a killed NPC: drop loot, remove the sprite + domain entry. */
   onNpcDestroyed?(sprite: NpcShipSprite): void;
   /**
@@ -497,25 +515,22 @@ export class CombatModule implements FlightModule {
     // debounces it to the first hit per engagement (it does not re-pause once the
     // player has resumed this fight).
     this.deps.onPlayerUnderAttack?.();
+    // Adaptive garrison scaling (Task 4): inside a hostile-held system the
+    // enemy's hit scales with the run's ratcheted power — gentle while the
+    // player is weak, the full OVERMIND_COMBAT_DAMAGE_MULT once armed.
+    const damage = scaleHostileDamage(
+      npc.npc.damage,
+      this.hostileMults().damageMult,
+    );
     // Route the hit through the difficulty mode: GOD floors the hull above 0 and
     // marks the ship "downed" instead of killing it; NORMAL/HARD clamp to 0 (the
     // old `Math.max(0, …)` behaviour). Absent mode ⇒ NORMAL.
     const mode = this.deps.getGameMode?.() ?? "NORMAL";
-    const result = applyDamageWithMode(
-      mode,
-      ship.hullHP,
-      npc.npc.damage,
-      ship.maxHull,
-    );
+    const result = applyDamageWithMode(mode, ship.hullHP, damage, ship.maxHull);
     ship.hullHP = result.hull;
     const physics = this.deps.getShipPhysics();
     if (physics) {
-      this.damageNumbers?.spawn(
-        npc.npc.damage,
-        physics.shipX,
-        physics.shipY,
-        false,
-      );
+      this.damageNumbers?.spawn(damage, physics.shipX, physics.shipY, false);
       // Per-turn fire flash from the enemy to the player ship (who shoots whom).
       this.hud?.flashShot(npc.x, npc.y, physics.shipX, physics.shipY, false);
     }
@@ -554,8 +569,16 @@ export class CombatModule implements FlightModule {
   /** One player shot: reduce the target's hull, spawn a yellow number, handle the kill. */
   private firePlayerShot(target: NpcShipSprite, weapon: WeaponSpec): void {
     const npc = target.npc;
-    npc.hullHP = Math.max(0, npc.hullHP - weapon.damage);
-    this.damageNumbers?.spawn(weapon.damage, target.x, target.y, true);
+    // Adaptive garrison scaling (Task 4): a hostile-system enemy's effective
+    // HP scales with the run's ratcheted power — the landed damage divides by
+    // hpMult, so a weak player's shots bite harder (~0.9×) and a maxed
+    // player's are absorbed by the full OVERMIND_COMBAT_HP_MULT.
+    const damage = scaleHostileDamage(
+      weapon.damage,
+      1 / this.hostileMults().hpMult,
+    );
+    npc.hullHP = Math.max(0, npc.hullHP - damage);
+    this.damageNumbers?.spawn(damage, target.x, target.y, true);
     // Per-turn fire flash from the player ship to the target (who shoots whom).
     const physics = this.deps.getShipPhysics();
     if (physics) {
@@ -609,6 +632,18 @@ export class CombatModule implements FlightModule {
     const physics = this.deps.getShipPhysics();
     if (!physics) return null;
     return Math.hypot(target.x - physics.shipX, target.y - physics.shipY);
+  }
+
+  /**
+   * The adaptive hostile HP/damage multipliers for the current fight (Task 4).
+   * Neutral (1.0) outside hostile-held systems and for legacy DI sites that
+   * don't wire {@link CombatModuleDeps.isHostileSystem}; otherwise the pure
+   * `hostileScaling` of the run's ratcheted power + difficulty mode.
+   */
+  private hostileMults(): HostileScaling {
+    if (!this.deps.isHostileSystem?.()) return NEUTRAL_HOSTILE_SCALING;
+    const mode = this.deps.getGameMode?.() ?? "NORMAL";
+    return hostileScaling(this.deps.getCampaignPeakPower?.() ?? 0, mode);
   }
 
   /**

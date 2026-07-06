@@ -227,6 +227,13 @@ export class SpaceFlightScene extends GameScene {
       getScreenSize: () => this.renderer.app.screen,
       getPlayerShip: () => this.gameEngine?.player?.ship ?? null,
       getGameMode: () => this.gameEngine?.player?.gameMode ?? "NORMAL",
+      // Adaptive garrison scaling (Task 4): fights in a hostile-held system
+      // scale with the run's ratcheted peak power.
+      isHostileSystem: () => {
+        const sysId = this.gameEngine?.player?.currentSystemId;
+        return !!(sysId && this.gameEngine?.galaxy?.isHostileSystem(sysId));
+      },
+      getCampaignPeakPower: () => this.gameEngine?.campaignPeakPower ?? 0,
       onNpcDestroyed: (s) => {
         const npcId = s.npc.id; // capture before the death path deletes the NPC, then complete its BOUNTY
         this.npcManager.handleInFlightDeath(s);

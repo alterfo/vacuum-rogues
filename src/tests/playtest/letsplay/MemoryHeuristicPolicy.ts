@@ -72,12 +72,13 @@ export const BATTLE_READY_HULL_FRACTION = 0.99;
  * the loadout's *derived* stats (`maxHull`, `weaponDamage`), i.e. "is this ship
  * strong enough to win the fight at all". Both must clear for {@link isBattleReady}.
  *
- * Starter corvette is `maxHull 140` + one pulse laser (`weaponDamage 14`); the
- * Overmind capture fleet carries 1.5× NPC hull (`OVERMIND_COMBAT_HP_MULT`), so
- * the agent must out-hull them and put out real damage first. `200` needs a hull
- * upgrade beyond the starter corvette; `30` needs a second/stronger gun fitted
- * (the corvette ships with a free second weapon slot, so `arm-up` reaches it
- * with one decent buy). Tunable in Task 4 if liberation can't keep pace.
+ * Starter corvette is `maxHull 140` + one pulse laser (`weaponDamage 14`);
+ * hostile-system enemies fight at up to 1.5× effective HP/damage
+ * (`hostileScaling` lerps toward `OVERMIND_COMBAT_*_MULT` as the ratcheted
+ * power grows — three-year-campaign Task 4), so the agent must out-hull them
+ * and put out real damage first. `200` needs a hull upgrade beyond the starter
+ * corvette; `30` needs a second/stronger gun fitted (the corvette ships with a
+ * free second weapon slot, so `arm-up` reaches it with one decent buy).
  */
 export const BATTLE_READY_MAX_HULL = 200;
 export const BATTLE_READY_WEAPON_DAMAGE = 30;

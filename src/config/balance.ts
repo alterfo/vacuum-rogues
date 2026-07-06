@@ -475,22 +475,18 @@ export const GAME_BALANCE = {
   NEW_GAME_PLUS_CREDIT_CARRY_FRACTION: 0.5,
   NEW_GAME_PLUS_CREDIT_CARRY_CAP: 50000,
   /**
-   * HP and shields multiplier applied to enemies in overmind/pirate-controlled
-   * systems. Makes early-game players unable to liberate systems solo while
-   * a fully geared player (bastion hull + plasma cannon) can win.
-   *
-   * Tuning note (autopilot-overmind-slayer plan, Task 4): this pair is PINNED by
-   * `combatLiberation.test.ts` — an early scout (90/20/14) must LOSE and a top
-   * loadout (360/100/55) must WIN a garrison fight. Lowering it (e.g. to 1.2)
-   * lets the scout win at round 7 and reds that test, so garrison strength cannot
-   * be softened to help liberation. The design is correct: a battle-ready ship
-   * already clears garrisons; the missing piece is being able to BUY that gear
-   * (all-techLevel-1 generation), which is out of this balance knob's reach.
+   * Effective-HP multiplier for enemies in overmind/pirate-held systems at the
+   * STRONG end of the adaptive scaling (three-year-campaign Task 4): the live
+   * consumer is `hostileScaling(peakPower, mode)` → `CombatModule`, which lerps
+   * from HOSTILE_SCALING_WEAK_MULT (powerless player) up to this value (maxed
+   * player, ratcheted `campaignPeakPower` = 1). At 1.5× a top loadout (bastion
+   * hull + plasma cannon) still clears a garrison ship while the fight is a
+   * real cost — see `combatLiberation.test.ts` endpoints.
    */
   OVERMIND_COMBAT_HP_MULT: 1.5,
   /**
-   * Damage multiplier applied to enemies in overmind/pirate-controlled systems.
-   * At 1.5× the default enemy deals enough damage to defeat an early scout hull.
+   * Damage multiplier for enemies in overmind/pirate-held systems at the STRONG
+   * end of the adaptive scaling (same lerp as OVERMIND_COMBAT_HP_MULT).
    */
   OVERMIND_COMBAT_DAMAGE_MULT: 1.5,
   /**
@@ -640,15 +636,34 @@ export const GOD_MODE_HULL_FLOOR_FRACTION = 0.05;
  * Per-difficulty-mode hostile scaling. NORMAL and GOD are the baseline — they
  * reproduce today's exact hostile-system count and garrison sizes. HARD seeds
  * modestly more hostile (overmind/pirate) systems and larger standing garrisons
- * ("чуть больше пиратов и Сверхразума"). Tune here, never at call sites.
+ * ("чуть больше пиратов и Сверхразума"). `hostileCombatMultiplier` composes on
+ * top of the adaptive hostile combat lerp (`hostileScaling`, Task 4) — HARD
+ * garrison fights hit/soak 25% harder at every power level. Tune here, never
+ * at call sites.
  */
 export const DIFFICULTY_HOSTILE_SCALING: Record<
   GameMode,
-  { hostileSystemMultiplier: number; garrisonBonus: number }
+  {
+    hostileSystemMultiplier: number;
+    garrisonBonus: number;
+    hostileCombatMultiplier: number;
+  }
 > = {
-  GOD: { hostileSystemMultiplier: 1.0, garrisonBonus: 0 },
-  NORMAL: { hostileSystemMultiplier: 1.0, garrisonBonus: 0 },
-  HARD: { hostileSystemMultiplier: 1.5, garrisonBonus: 2 },
+  GOD: {
+    hostileSystemMultiplier: 1.0,
+    garrisonBonus: 0,
+    hostileCombatMultiplier: 1.0,
+  },
+  NORMAL: {
+    hostileSystemMultiplier: 1.0,
+    garrisonBonus: 0,
+    hostileCombatMultiplier: 1.0,
+  },
+  HARD: {
+    hostileSystemMultiplier: 1.5,
+    garrisonBonus: 2,
+    hostileCombatMultiplier: 1.25,
+  },
 };
 
 /**
@@ -783,3 +798,19 @@ export const ADAPTIVE_CREEP_MIN_DAYS = 12;
  * credits/rank (index ≈ 0.19), while the starter fitting sits at ≈ 0.02.
  */
 export const POWER_INDEX_BATTLE_READY_THRESHOLD = 0.15;
+/**
+ * ─── Campaign: adaptive garrison & combat scaling ────────────────────────────
+ * (three-year-campaign plan, Task 4)
+ *
+ * In-flight fights inside Overmind/pirate-held systems scale the hostiles'
+ * effective HP and damage by `hostileScaling(peakPower, gameMode)`
+ * (src/systems/campaign/hostileScaling.ts): a lerp from WEAK_MULT (powerless
+ * player) up to the full OVERMIND_COMBAT_HP_MULT / OVERMIND_COMBAT_DAMAGE_MULT
+ * (maxed player), composed with the mode's `hostileCombatMultiplier`. The
+ * power input is the RATCHETED `campaignPeakPower`, so selling gear never
+ * softens a garrison. Overmind garrison COUNT also grows with the ratchet.
+ */
+/** Hostile-system HP/damage multiplier faced by a powerless player (index 0). */
+export const HOSTILE_SCALING_WEAK_MULT = 0.9;
+/** Extra Overmind garrison ships (added to [min,max]) at full power (index 1). */
+export const OVERMIND_GARRISON_POWER_MAX_BONUS = 2;

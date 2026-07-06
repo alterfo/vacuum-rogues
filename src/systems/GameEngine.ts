@@ -344,6 +344,13 @@ export class GameEngine {
     this.overlay =
       diDependencies?.overlayPresenter ?? new NoOpOverlayPresenter();
 
+    // Adaptive campaign pressure (Task 4): the per-tick Overmind garrison
+    // sizing reads the run's ratcheted peak power live through this provider
+    // (new game resets the value to null ⇒ 0, so no cross-run leak).
+    this.npcSimulator.attachCampaignPeakPower(
+      () => this.campaignPeakPowerValue ?? 0,
+    );
+
     this.endgame = new EndgameController({
       getPlayer: () => this.player,
       setPlayer: (player) => {
