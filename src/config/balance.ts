@@ -815,6 +815,24 @@ export const HOSTILE_SCALING_WEAK_MULT = 0.9;
 /** Extra Overmind garrison ships (added to [min,max]) at full power (index 1). */
 export const OVERMIND_GARRISON_POWER_MAX_BONUS = 2;
 /**
+ * ─── Campaign Task 9 (i): neutral-system combat gentling ─────────────────────
+ * The Overview's "gentle while weak, relentless once armed" design applied
+ * CONSISTENTLY: a weak ship takes reduced INCOMING hits *everywhere* — wandering
+ * faction/pirate packs in NEUTRAL systems included, not only held-system
+ * garrisons — ramping to full baseline as the ratcheted `campaignPeakPower`
+ * grows. `neutralScaling(power, mode)` lerps the incoming-damage multiplier from
+ * WEAK_MULT (powerless) to STRONG_MULT (maxed); offense is UNSCALED in neutral
+ * space (this gentles survival, not the kill). STRONG_MULT stays 1.0 so a fully
+ * armed ship faces byte-identical neutral combat on NORMAL/GOD (the held-system
+ * 1.5× levers are the only place damage rises above baseline). This is the half
+ * of the campaign deaths the held-system scaling never saw (Task 9 baseline: the
+ * one-shot deaths split ≈50/50 held-garrison vs neutral wandering pack).
+ */
+/** Neutral-system incoming-damage multiplier faced by a powerless player (index 0). */
+export const NEUTRAL_SCALING_WEAK_MULT = 0.4;
+/** Neutral-system incoming-damage multiplier faced by a maxed player (index 1). */
+export const NEUTRAL_SCALING_STRONG_MULT = 1.0;
+/**
  * ─── Campaign: escalation notices ────────────────────────────────────────────
  * (three-year-campaign plan, Task 5)
  *

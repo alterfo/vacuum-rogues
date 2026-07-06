@@ -23,6 +23,8 @@
 import {
   GAME_BALANCE,
   HOSTILE_SCALING_WEAK_MULT,
+  NEUTRAL_SCALING_WEAK_MULT,
+  NEUTRAL_SCALING_STRONG_MULT,
   OVERMIND_GARRISON_POWER_MAX_BONUS,
   DIFFICULTY_HOSTILE_SCALING,
 } from "@/config/balance";
@@ -53,10 +55,24 @@ export const DEFAULT_HOSTILE_SCALING_CONFIG: HostileScalingConfig = {
   damageMultStrong: GAME_BALANCE.OVERMIND_COMBAT_DAMAGE_MULT,
 };
 
-/** The no-op scaling for neutral systems / legacy DI sites (identity). */
+/** The no-op scaling for legacy DI sites that never wire the campaign deps (identity). */
 export const NEUTRAL_HOSTILE_SCALING: HostileScaling = {
   hpMult: 1,
   damageMult: 1,
+};
+
+/** The neutral-system gentling endpoints (Task 9 (i)). */
+export interface NeutralScalingConfig {
+  /** Incoming-damage multiplier faced by a powerless player (index 0). */
+  weakMult: number;
+  /** Incoming-damage multiplier faced by a maxed player (index 1) — baseline. */
+  strongMult: number;
+}
+
+/** The live neutral tuning (balance.ts) as a config object. */
+export const DEFAULT_NEUTRAL_SCALING_CONFIG: NeutralScalingConfig = {
+  weakMult: NEUTRAL_SCALING_WEAK_MULT,
+  strongMult: NEUTRAL_SCALING_STRONG_MULT,
 };
 
 function clamp01(x: number): number {
@@ -82,6 +98,50 @@ export function hostileScaling(
     damageMult:
       (cfg.weakMult + (cfg.damageMultStrong - cfg.weakMult) * t) * modeMult,
   };
+}
+
+/**
+ * Neutral-system combat gentling (Task 9 (i)). A weak ship takes reduced
+ * INCOMING hits *everywhere* — the wandering faction/pirate packs in neutral
+ * systems, not only held-system garrisons — ramping to full baseline as the
+ * ratcheted power grows. This is the Overview's "gentle while weak, relentless
+ * once armed" applied consistently (Task 4 wired it only to held systems, which
+ * left ≈half the campaign one-shot deaths — neutral wandering packs — at full
+ * base damage against a starter hull).
+ *
+ * Offense is UNSCALED here (`hpMult` 1): this gentles survival, not the kill —
+ * so a fully armed ship (index 1) faces byte-identical neutral combat on
+ * NORMAL/GOD (`strongMult` 1.0). Monotone non-decreasing in power; HARD composes
+ * its config multiplier on the incoming damage, never at the call site.
+ */
+export function neutralScaling(
+  powerIndex: number,
+  mode: GameMode,
+  cfg: NeutralScalingConfig = DEFAULT_NEUTRAL_SCALING_CONFIG,
+): HostileScaling {
+  const t = clamp01(powerIndex);
+  const modeMult =
+    DIFFICULTY_HOSTILE_SCALING[mode]?.hostileCombatMultiplier ?? 1.0;
+  return {
+    hpMult: 1,
+    damageMult: (cfg.weakMult + (cfg.strongMult - cfg.weakMult) * t) * modeMult,
+  };
+}
+
+/**
+ * The combat scaling for the fight the player is actually in: the held-system
+ * garrison scaling (weak ⇒ ~0.9×, maxed ⇒ full 1.5× levers) inside an
+ * Overmind/pirate-held system, else the neutral gentling (weak ⇒ reduced hits,
+ * maxed ⇒ baseline). The single dispatch point the CombatModule consumes.
+ */
+export function combatScaling(
+  powerIndex: number,
+  mode: GameMode,
+  isHostileSystem: boolean,
+): HostileScaling {
+  return isHostileSystem
+    ? hostileScaling(powerIndex, mode)
+    : neutralScaling(powerIndex, mode);
 }
 
 /**

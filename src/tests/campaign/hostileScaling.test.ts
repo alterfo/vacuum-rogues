@@ -15,6 +15,8 @@
 import { describe, it, expect } from "vitest";
 import {
   hostileScaling,
+  neutralScaling,
+  combatScaling,
   scaleHostileDamage,
   overmindGarrisonPowerBonus,
   NEUTRAL_HOSTILE_SCALING,
@@ -22,6 +24,8 @@ import {
 import {
   GAME_BALANCE,
   HOSTILE_SCALING_WEAK_MULT,
+  NEUTRAL_SCALING_WEAK_MULT,
+  NEUTRAL_SCALING_STRONG_MULT,
   OVERMIND_GARRISON_POWER_MAX_BONUS,
   DIFFICULTY_HOSTILE_SCALING,
 } from "@/config/balance";
@@ -90,6 +94,90 @@ describe("hostileScaling — difficulty-mode composition", () => {
   it("NORMAL/GOD carry a neutral (1.0) combat multiplier in the config table", () => {
     expect(DIFFICULTY_HOSTILE_SCALING.NORMAL.hostileCombatMultiplier).toBe(1.0);
     expect(DIFFICULTY_HOSTILE_SCALING.GOD.hostileCombatMultiplier).toBe(1.0);
+  });
+});
+
+describe("neutralScaling — Task 9 (i): weak ships gentled in neutral space", () => {
+  it("weak player (index 0) takes reduced incoming hits in a neutral fight", () => {
+    const s = neutralScaling(0, "NORMAL");
+    expect(s.damageMult).toBeCloseTo(NEUTRAL_SCALING_WEAK_MULT, 10);
+    expect(s.damageMult).toBeLessThan(1);
+  });
+
+  it("maxed player (index 1) faces baseline neutral combat (strong = 1.0)", () => {
+    const s = neutralScaling(1, "NORMAL");
+    expect(s.damageMult).toBeCloseTo(NEUTRAL_SCALING_STRONG_MULT, 10);
+    expect(NEUTRAL_SCALING_STRONG_MULT).toBe(1.0);
+  });
+
+  it("never scales offense in neutral space (hpMult stays 1 at every power)", () => {
+    for (const p of [0, 0.3, 0.5, 1]) {
+      expect(neutralScaling(p, "NORMAL").hpMult).toBe(1);
+    }
+  });
+
+  it("is monotone non-decreasing in power and clamps the input", () => {
+    let prev = neutralScaling(0, "NORMAL").damageMult;
+    for (const p of [0.1, 0.5, 0.9, 1]) {
+      const d = neutralScaling(p, "NORMAL").damageMult;
+      expect(d).toBeGreaterThanOrEqual(prev);
+      prev = d;
+    }
+    expect(neutralScaling(-2, "NORMAL")).toEqual(neutralScaling(0, "NORMAL"));
+    expect(neutralScaling(9, "NORMAL")).toEqual(neutralScaling(1, "NORMAL"));
+  });
+
+  it("NORMAL and GOD share the identical neutral baseline", () => {
+    for (const p of [0, 0.5, 1]) {
+      expect(neutralScaling(p, "GOD")).toEqual(neutralScaling(p, "NORMAL"));
+    }
+  });
+
+  it("HARD composes its config combat multiplier on the neutral incoming hit", () => {
+    const hard = DIFFICULTY_HOSTILE_SCALING.HARD.hostileCombatMultiplier;
+    for (const p of [0, 0.5, 1]) {
+      const base = neutralScaling(p, "NORMAL");
+      const s = neutralScaling(p, "HARD");
+      expect(s.damageMult).toBeCloseTo(base.damageMult * hard, 10);
+    }
+  });
+
+  it("is pure/deterministic", () => {
+    expect(neutralScaling(0.33, "NORMAL")).toEqual(
+      neutralScaling(0.33, "NORMAL"),
+    );
+  });
+});
+
+describe("combatScaling — dispatch by held vs neutral system", () => {
+  it("routes a held system to the garrison scaling (weak → 1.5× levers)", () => {
+    for (const p of [0, 0.5, 1]) {
+      expect(combatScaling(p, "NORMAL", true)).toEqual(
+        hostileScaling(p, "NORMAL"),
+      );
+    }
+  });
+
+  it("routes a neutral system to the neutral gentling", () => {
+    for (const p of [0, 0.5, 1]) {
+      expect(combatScaling(p, "NORMAL", false)).toEqual(
+        neutralScaling(p, "NORMAL"),
+      );
+    }
+  });
+
+  it("a weak ship takes strictly less in neutral space than in a held garrison", () => {
+    const neutral = combatScaling(0, "NORMAL", false);
+    const held = combatScaling(0, "NORMAL", true);
+    expect(neutral.damageMult).toBeLessThan(held.damageMult);
+  });
+
+  it("a maxed ship faces baseline neutral but the full garrison in a held system", () => {
+    expect(combatScaling(1, "NORMAL", false).damageMult).toBe(1.0);
+    expect(combatScaling(1, "NORMAL", true).damageMult).toBeCloseTo(
+      GAME_BALANCE.OVERMIND_COMBAT_DAMAGE_MULT,
+      10,
+    );
   });
 });
 

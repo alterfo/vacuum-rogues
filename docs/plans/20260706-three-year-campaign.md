@@ -579,9 +579,19 @@ This plan **supersedes** the two open plans:
 ### Task 9: Balance iteration to the 99% gate (the core deliverable)
 - [x] run `letsplay:campaign` at 50 sessions; record win-rate, median resolution day, loss
       taxonomy (what killed the losses) in this plan
+- [x] ➕ **(i) extend power-keyed adaptive gentling to neutral-system combat** (user-approved
+      2026-07-07, see decision record below): weak ship takes reduced hits *everywhere* —
+      neutral-system wandering packs included — ramping to full damage as `campaignPeakPower`
+      grows. Red tests first; rewrite the Task-3/4 pins (`hostileScaling.test.ts` weak-mult,
+      `garrisonPowerScaling` [5,10], `adaptivePacing` slow=45) under the plan's test license,
+      preserving meaning (scout loses to garrison; top loadout wins; game losable)
+- [ ] ➕ **(ii) if (i) alone doesn't reach the gate: mid-combat agent reaction** (user-approved
+      2026-07-07): let the agent act between combat rounds inside a single headless step (flee
+      before a multi-round resolution lands) — parity with what a live player can do; harness
+      seam, no engine behavior fork
 - [ ] iterate `balance.ts` adaptive levers (spread slow/fast/grace/creep, garrison scale,
-      economy rewards) — config-table changes only — until 50-session win-rate = 100% and
-      median win lands in year 2–3 (day ~540–1080, per the chosen pacing)  ⚠️ BLOCKED — see notes
+      economy rewards) on top of (i)/(ii) until 50-session win-rate = 100% and
+      median win lands in year 2–3 (day ~540–1080, per the chosen pacing)
 - [ ] scale up: 300-session campaign run; **gate: ≥ 297/300 wins (99%), all wins ≤ 1080 days,
       0 deaths**; record final numbers + final lever values in this plan
 - [ ] promote the tuned pacing into a fast seeded regression test (accelerated proxy asserting
@@ -635,6 +645,46 @@ This plan **supersedes** the two open plans:
   changed unilaterally in an autonomous pass (broad combat-balance blast radius; standing "don't
   weaken existing tests" rule). The experimental config was **reverted** so the suite stays
   green; the baseline finding above is the deliverable of this pass.
+
+**✅ DECISION (user, 2026-07-07): approved BOTH — (i) first, then (ii) if the gate is still
+unmet.** Rationale: (i) is literally the plan's chosen design ("gentle while weak, relentless
+once armed") applied consistently — it was an implementation narrowing that it only reached
+held systems, and it benefits live players; (ii) restores agent/human parity (a live player can
+flee mid-fight, the headless agent can't). Both carry the plan's full test-modification license
+for the affected behavior pins (meaning preserved: scout still loses to a garrison, top loadout
+still wins, game still losable without engagement). Sequence: implement (i) → re-measure
+50 sessions → add (ii) only if < 100%; then resume the lever iteration and the 300-run gate.
+
+**Task 9 (i) landed (2026-07-07) — neutral-system gentling wired; measured insufficient ALONE
+(as predicted → (ii) required):**
+- New pure functions in `src/systems/campaign/hostileScaling.ts`: `neutralScaling(power, mode)`
+  (incoming-damage mult lerps `NEUTRAL_SCALING_WEAK_MULT` → `NEUTRAL_SCALING_STRONG_MULT` = 1.0;
+  offense UNSCALED — `hpMult` 1 — so armed ships face byte-identical neutral combat on NORMAL/GOD;
+  HARD composes its config mult) and `combatScaling(power, mode, isHostile)` (the single dispatch
+  point: held ⇒ `hostileScaling` 0.9→1.5, neutral ⇒ `neutralScaling`). Levers in `balance.ts`:
+  `NEUTRAL_SCALING_WEAK_MULT` 0.4, `NEUTRAL_SCALING_STRONG_MULT` 1.0.
+- `CombatModule.hostileMults` now dispatches through `combatScaling`, gated on the
+  `getCampaignPeakPower` dep being wired (legacy DI sites — dep absent — stay byte-identical
+  neutral 1.0). `SpaceFlightScene` already wires all three deps (Task 4), so the headless campaign
+  harness picks the neutral gentling up automatically.
+- **No existing pin rewritten**: the Task-4 `hostileScaling` endpoints (held) are untouched; the
+  one neutral CombatModule pin (`hostileScalingCombat.test.ts` "neutral applies no scaling even at
+  max power") holds verbatim because neutral at index 1 = 1.0 by construction. The listed
+  `garrisonPowerScaling`/`adaptivePacing` pins did NOT need rewriting (the change is additive — a
+  new neutral path, not a re-tuning of the held pins). Test-modification license was not consumed.
+- New tests: 11 in `hostileScaling.test.ts` (`neutralScaling` endpoints/monotonicity/clamp/
+  NORMAL≡GOD/HARD-compose/purity; `combatScaling` dispatch, neutral<held, maxed baseline) + 4 in
+  `hostileScalingCombat.test.ts` (real CombatModule: weak/mid neutral gentling, offense unscaled,
+  GOD floor on scaled neutral volley). Full unit suite green except the pre-existing
+  SpaceFlightScene line-guard red (1901 `split` length; unmodified file, HEAD-red from Task 7 —
+  verified via `git stash`; deferred to its own extraction per standing rule #6, as Task 8 did).
+- **50-session re-measure (NORMAL, `NEUTRAL_SCALING_WEAK_MULT` 0.4):** win-rate **18.0 %**
+  (9 win / 2 loss / 39 died) — statistically unchanged from the 18 % baseline. **Root cause
+  confirmed** exactly as the escalation predicted: a single `agent.run(1)` step ticks up to 4
+  combat frames (`PlayerAgent.waitOneDay`) and lands a MULTI-round volley before the agent gets a
+  turn — so per-round gentling to 0.4× still accumulates past a 130-hull starter in one step. The
+  weak ship never gets to flee. ⇒ **(ii) mid-combat agent reaction is required** to reach the
+  gate; proceeding to it next per the approved sequence.
 
 ### Task 10: Neural action-space expansion (liberate + arm-up)
 - [ ] extend `ACTION_ORDER` 16 → 18 (`liberate`, `arm-up`) and grow the observation block with

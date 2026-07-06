@@ -26,6 +26,7 @@ import { GAME_BALANCE } from "@/config/balance";
 import { hullFloorFor } from "@/systems/combat/godMode";
 import {
   hostileScaling,
+  neutralScaling,
   scaleHostileDamage,
 } from "@/systems/campaign/hostileScaling";
 import type { GameMode } from "@/types";
@@ -149,6 +150,59 @@ describe("CombatModule — incoming NPC damage scales with ratcheted power (Task
       NPC_DAMAGE * GAME_BALANCE.OVERMIND_COMBAT_DAMAGE_MULT,
     );
     expect(ship.hullHP).toBe(MAX_HULL - expected);
+  });
+});
+
+describe("CombatModule — neutral-system gentling (Task 9 (i))", () => {
+  it("a weak player (index 0) in a neutral system takes the reduced hit", () => {
+    const ship = { hullHP: MAX_HULL, maxHull: MAX_HULL };
+    const { module } = makeModule(ship, { hostile: false, peakPower: 0 });
+    module.addCombatant(makeSprite("a"));
+    module.update(FIRE);
+    const expected = scaleHostileDamage(
+      NPC_DAMAGE,
+      neutralScaling(0, "NORMAL").damageMult,
+    );
+    expect(expected).toBeLessThan(NPC_DAMAGE); // gentled below base
+    expect(ship.hullHP).toBe(MAX_HULL - expected);
+  });
+
+  it("a mid-power player (index 0.5) takes a partly-ramped neutral hit", () => {
+    const ship = { hullHP: MAX_HULL, maxHull: MAX_HULL };
+    const { module } = makeModule(ship, { hostile: false, peakPower: 0.5 });
+    module.addCombatant(makeSprite("a"));
+    module.update(FIRE);
+    const expected = scaleHostileDamage(
+      NPC_DAMAGE,
+      neutralScaling(0.5, "NORMAL").damageMult,
+    );
+    expect(ship.hullHP).toBe(MAX_HULL - expected);
+  });
+
+  it("offense is unscaled in neutral space — the player's raw weapon damage lands", () => {
+    const ship = { hullHP: MAX_HULL, maxHull: MAX_HULL };
+    const { module, weaponDamage } = makeModule(ship, {
+      hostile: false,
+      peakPower: 0,
+    });
+    const npc = makeSprite("a", { damage: 0 });
+    module.addCombatant(npc);
+    module.update(FIRE);
+    expect(npc.npc.hullHP).toBe(1000 - weaponDamage);
+  });
+
+  it("GOD neutral gentling still routes through the god-mode floor", () => {
+    const floor = hullFloorFor("GOD", MAX_HULL);
+    const ship = { hullHP: 10, maxHull: MAX_HULL };
+    const { module, deaths } = makeModule(ship, {
+      mode: "GOD",
+      hostile: false,
+      peakPower: 0,
+    });
+    module.addCombatant(makeSprite("a", { hullHP: 100000, damage: 9999 }));
+    module.update(FIRE);
+    expect(ship.hullHP).toBe(floor);
+    expect(deaths()).toBe(0);
   });
 });
 

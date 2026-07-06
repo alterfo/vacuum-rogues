@@ -7,7 +7,7 @@ import type { GameMode } from "@/types";
 import { applyDamageWithMode, isHullDowned } from "@/systems/combat/godMode";
 import { npcWeaponRange } from "@/systems/combat/npcWeapon";
 import {
-  hostileScaling,
+  combatScaling,
   scaleHostileDamage,
   NEUTRAL_HOSTILE_SCALING,
   type HostileScaling,
@@ -551,9 +551,10 @@ export class CombatModule implements FlightModule {
     // debounces it to the first hit per engagement (it does not re-pause once the
     // player has resumed this fight).
     this.deps.onPlayerUnderAttack?.();
-    // Adaptive garrison scaling (Task 4): inside a hostile-held system the
-    // enemy's hit scales with the run's ratcheted power — gentle while the
-    // player is weak, the full OVERMIND_COMBAT_DAMAGE_MULT once armed.
+    // Adaptive combat scaling: the enemy's hit scales with the run's ratcheted
+    // power — gentle while the player is weak, full damage once armed. Inside a
+    // held system this ramps up to OVERMIND_COMBAT_DAMAGE_MULT (Task 4); in
+    // neutral space it gentles the weak ship up to baseline (Task 9 (i)).
     const damage = scaleHostileDamage(
       npc.npc.damage,
       this.hostileMults().damageMult,
@@ -605,10 +606,11 @@ export class CombatModule implements FlightModule {
   /** One player shot: reduce the target's hull, spawn a yellow number, handle the kill. */
   private firePlayerShot(target: NpcShipSprite, weapon: WeaponSpec): void {
     const npc = target.npc;
-    // Adaptive garrison scaling (Task 4): a hostile-system enemy's effective
-    // HP scales with the run's ratcheted power — the landed damage divides by
-    // hpMult, so a weak player's shots bite harder (~0.9×) and a maxed
-    // player's are absorbed by the full OVERMIND_COMBAT_HP_MULT.
+    // Adaptive garrison scaling (Task 4): a HELD-system enemy's effective HP
+    // scales with the run's ratcheted power — the landed damage divides by
+    // hpMult, so a weak player's shots bite harder (~0.9×) and a maxed player's
+    // are absorbed by the full OVERMIND_COMBAT_HP_MULT. Neutral space leaves
+    // offense at baseline (hpMult 1 — Task 9 (i) gentles survival, not the kill).
     const damage = scaleHostileDamage(
       weapon.damage,
       1 / this.hostileMults().hpMult,
@@ -671,15 +673,22 @@ export class CombatModule implements FlightModule {
   }
 
   /**
-   * The adaptive hostile HP/damage multipliers for the current fight (Task 4).
-   * Neutral (1.0) outside hostile-held systems and for legacy DI sites that
-   * don't wire {@link CombatModuleDeps.isHostileSystem}; otherwise the pure
-   * `hostileScaling` of the run's ratcheted power + difficulty mode.
+   * The adaptive combat HP/damage multipliers for the current fight. Legacy DI
+   * sites that never wire the campaign ratchet ({@link
+   * CombatModuleDeps.getCampaignPeakPower} absent) stay byte-identical to the
+   * old game (neutral 1.0). Otherwise `combatScaling` of the run's ratcheted
+   * power + difficulty mode: the held-system garrison scaling (Task 4, up to
+   * the full 1.5× levers) inside an Overmind/pirate-held system, else the
+   * neutral-system gentling (Task 9 (i)) — a weak ship takes reduced hits
+   * everywhere, ramping to baseline as it arms.
    */
   private hostileMults(): HostileScaling {
-    if (!this.deps.isHostileSystem?.()) return NEUTRAL_HOSTILE_SCALING;
+    if (this.deps.getCampaignPeakPower === undefined)
+      return NEUTRAL_HOSTILE_SCALING;
     const mode = this.deps.getGameMode?.() ?? "NORMAL";
-    return hostileScaling(this.deps.getCampaignPeakPower?.() ?? 0, mode);
+    const power = this.deps.getCampaignPeakPower() ?? 0;
+    const isHostile = this.deps.isHostileSystem?.() ?? false;
+    return combatScaling(power, mode, isHostile);
   }
 
   /**
