@@ -83,6 +83,22 @@ export const BATTLE_READY_MAX_HULL = 200;
 export const BATTLE_READY_WEAPON_DAMAGE = 30;
 
 /**
+ * Credits the agent keeps in reserve for trading before it will spend on a
+ * military refit (`arm-up`/`upgrade-hull`). Without it, a fresh ship blew its
+ * entire ~1000cr starting wallet on the first affordable weapon the instant a
+ * shop stocked one — reaching only a second pulse laser (28 damage, short of the
+ * 30 threshold) and going broke, unable to fund a single trade, which collapsed
+ * the whole economy back into land↔take-off churn (a 100-run diagnostic: 0
+ * quests, avg -944cr). The refit is only worthwhile *on top of* a working trade
+ * income, so it fires only from genuine surplus — `credits >= cost + reserve` —
+ * mirroring the CJM gear-grinder's affordability buffers (`GEAR_GRINDER_*`),
+ * which exist for exactly this "don't spend down to zero" reason. Tunable: lower
+ * it to let the ship arm up sooner once the economy proves it can rebuild the
+ * reserve, raise it to force a longer trading runway first.
+ */
+export const MILITARY_SPEND_TRADE_RESERVE = 1000;
+
+/**
  * Whether the ship is combat-capable enough to take on an Overmind garrison —
  * its derived `maxHull` and installed `weaponDamage` both clear the
  * {@link BATTLE_READY_MAX_HULL}/{@link BATTLE_READY_WEAPON_DAMAGE} thresholds.
@@ -754,6 +770,12 @@ export function decideWithMemory(
   const cargoUsed = obs.player?.cargoUsed ?? 0;
   const cargoCap = obs.player?.cargoCapacity ?? 0;
   const hasHold = cargoCap > 0 && cargoUsed < cargoCap;
+  // A military refit (arm-up / hull upgrade) is only worthwhile on top of a
+  // working trade income — so it fires only when paying for it still leaves the
+  // trade-capital reserve intact (`MILITARY_SPEND_TRADE_RESERVE`). Prevents the
+  // fresh-ship bankruptcy the arm-up tiers below used to cause.
+  const canAffordRefit = (cost: number) =>
+    credits - cost >= MILITARY_SPEND_TRADE_RESERVE;
 
   // 0.5) Overmind-slayer, close-in (Task 3). Two moves that must OUTRANK the
   // survive block below (hence pushed first):
@@ -951,6 +973,12 @@ export function decideWithMemory(
   // Anti-consecutive-warp cadence — once the run has hopped this many systems
   // in a row without landing, stop emitting `warp` from the base ladder so the
   // remaining candidates (land/dock/wait) get a chance to break the streak.
+  // Its main target is the laden agent blind-warping system after system
+  // hunting an unknown sell planet, but it deliberately bounds EVERY base-
+  // ladder warp (empty holds included) — the real-engine gate in
+  // `exploreNoWarpLoop.test.ts` pins that no session ever strings more than
+  // the cap of consecutive warps. Any landing resets the tally (see
+  // `updateMemory`), so a productive explorer never feels the cap.
   const warpCadenceOk =
     mem.consecutiveWarpsWithoutLanding < MAX_CONSECUTIVE_WARPS_WITHOUT_LAND;
   // No galaxy day has passed in too long — `land`/`trade` are both free in
@@ -1084,7 +1112,8 @@ export function decideWithMemory(
       if (!isBattleReady(obs)) {
         if (
           legal.has("arm-up") &&
-          (obs.player?.weaponDamage ?? 0) < BATTLE_READY_WEAPON_DAMAGE
+          (obs.player?.weaponDamage ?? 0) < BATTLE_READY_WEAPON_DAMAGE &&
+          canAffordRefit(obs.armUpCost ?? 0)
         ) {
           push("arm-up", "arm-up");
         }
@@ -1092,7 +1121,7 @@ export function decideWithMemory(
         if (
           (obs.player?.maxHull ?? 0) < BATTLE_READY_MAX_HULL &&
           bestHullPrice != null &&
-          credits >= bestHullPrice * GEAR_GRINDER_HULL_BUFFER
+          canAffordRefit(bestHullPrice)
         ) {
           push("upgrade-hull", "afford-hull-upgrade");
         }
@@ -1225,10 +1254,11 @@ export function decideWithMemory(
       if (!isBattleReady(obs)) {
         const refitStation = obs.system?.stations[0]?.id;
         const canAffordHull =
-          obs.bestHullPrice != null && credits >= obs.bestHullPrice;
+          obs.bestHullPrice != null && canAffordRefit(obs.bestHullPrice);
         const wantsArm =
           (obs.player?.weaponDamage ?? 0) < BATTLE_READY_WEAPON_DAMAGE &&
-          obs.canArmUp === true;
+          obs.canArmUp === true &&
+          canAffordRefit(obs.armUpCost ?? 0);
         if (refitStation && (canAffordHull || wantsArm)) {
           push("dock", "go-battle-ready", refitStation);
         }
@@ -1243,10 +1273,16 @@ export function decideWithMemory(
       const alreadyVisited =
         earnPlanet !== undefined &&
         (mem.priceBook.get(earnPlanet)?.size ?? 0) > 0;
-      // How many habitable planets in THIS system the agent has already priced,
-      // and whether that's "enough" — once it has discovered this many with no
-      // actionable margin, it warps to a new system instead of landing on every
-      // remaining planet here (the visible land↔take-off churn).
+      // Whether every habitable planet in THIS system has been priced — landing
+      // on each is *productive* (its market prices + its quest board), so the
+      // agent works through all of them before moving on. Replaces the old fixed
+      // cap of `DISCOVERY_LANDINGS_PER_SYSTEM`: generation guarantees only ONE
+      // habitable planet per system, so a cap of 2 could never be reached there
+      // and the ladder kept re-landing on that single already-priced,
+      // quest-less planet forever (the land↔take-off churn). Basing "explored"
+      // on the real habitable count graduates a 1-planet system after its one
+      // productive landing, and lets a richer system be fully worked (more
+      // quests/prices seen) rather than abandoned after two.
       const visitedInSystem = (obs.system?.planets ?? []).filter(
         (p) =>
           p.isHabitable !== false && (mem.priceBook.get(p.id)?.size ?? 0) > 0,
@@ -1390,14 +1426,12 @@ export function decideWithMemory(
       // weapon-ready so the ladder switches to saving for the hull upgrade.
       if (
         legal.has("arm-up") &&
-        (obs.player?.weaponDamage ?? 0) < BATTLE_READY_WEAPON_DAMAGE
+        (obs.player?.weaponDamage ?? 0) < BATTLE_READY_WEAPON_DAMAGE &&
+        canAffordRefit(obs.armUpCost ?? 0)
       ) {
         push("arm-up", "arm-up");
       }
-      if (
-        bestHullPrice != null &&
-        credits >= bestHullPrice * GEAR_GRINDER_HULL_BUFFER
-      ) {
+      if (bestHullPrice != null && canAffordRefit(bestHullPrice)) {
         push("upgrade-hull", "afford-hull-upgrade");
       }
       if (

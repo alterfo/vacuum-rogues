@@ -40,6 +40,14 @@ interface Diag {
   moveActions: number;
   tradeActions: number;
   armUpActions: number;
+  attackActions: number;
+  fleeActions: number;
+  warpActions: number;
+  // The genuine "сел-взлетел" symptom: a `land` immediately followed by a
+  // take-off (`move`) — the ship touched down and left with nothing productive
+  // (trade/take-quest/arm-up/sell) done in between. Distinct from the noisy
+  // `landTakeoffCycles` (which also counts busy PLANET↔TRADE trading bounces).
+  barrenLandings: number;
   // Task 2 gate: the ship reached "battle-ready" (maxHull + weaponDamage both
   // clear the thresholds) at some point this session.
   reachedBattleReady: boolean;
@@ -133,6 +141,12 @@ function diagnose(s: SessionReport): Diag {
     moveActions: t.filter((st) => st.action.kind === "move").length,
     tradeActions: t.filter((st) => st.action.kind === "trade").length,
     armUpActions: t.filter((st) => st.action.kind === "arm-up").length,
+    attackActions: t.filter((st) => st.action.kind === "attack").length,
+    fleeActions: t.filter((st) => st.action.kind === "flee").length,
+    warpActions: t.filter((st) => st.action.kind === "warp").length,
+    barrenLandings: t.filter(
+      (st, i) => st.action.kind === "land" && t[i + 1]?.action.kind === "move",
+    ).length,
     reachedBattleReady,
     peakMaxHull,
     peakWeaponDamage,
@@ -160,6 +174,23 @@ describe("autopilot diagnostic (temp)", () => {
 
       const hist: Record<string, number> = {};
       for (const x of d) hist[x.endScene] = (hist[x.endScene] ?? 0) + 1;
+
+      // Histogram of the REASON behind each barren landing (land→take-off, no
+      // productive action between) — pinpoints which land tier churns.
+      const barrenReasons: Record<string, number> = {};
+      for (const s of report.sessions) {
+        const tr = s.transcript;
+        for (let i = 0; i < tr.length; i++) {
+          if (
+            tr[i].action.kind === "land" &&
+            tr[i + 1]?.action.kind === "move"
+          ) {
+            const held = (tr[i].vitals?.cargoUsed ?? 0) > 0 ? "laden" : "empty";
+            const r = `${tr[i].action.reason ?? "?"} [${held}]`;
+            barrenReasons[r] = (barrenReasons[r] ?? 0) + 1;
+          }
+        }
+      }
 
       const L: string[] = [];
       L.push(`# Autopilot diagnostic — ${n} sessions × ${STEPS} steps`);
@@ -193,6 +224,9 @@ describe("autopilot diagnostic (temp)", () => {
       );
       L.push(`## Land↔take-off oscillation`);
       L.push(
+        `- BARREN landings (land→takeoff, nothing done): avg ${avg((x) => x.barrenLandings)}, >=3 in ${pct(cnt((x) => x.barrenLandings >= 3))}`,
+      );
+      L.push(
         `- >=3 land/take-off cycles: ${pct(cnt((x) => x.landTakeoffCycles >= 3))}`,
       );
       L.push(
@@ -210,9 +244,22 @@ describe("autopilot diagnostic (temp)", () => {
       L.push(`- avg land actions:   ${avg((x) => x.landActions)}`);
       L.push(`- avg move actions:   ${avg((x) => x.moveActions)}`);
       L.push(`- avg trade actions:  ${avg((x) => x.tradeActions)}`);
+      L.push(`- avg warp actions:   ${avg((x) => x.warpActions)}`);
+      L.push(`## Combat participation`);
+      L.push(
+        `- attacked at least once: ${pct(cnt((x) => x.attackActions > 0))}`,
+      );
+      L.push(`- fled at least once:     ${pct(cnt((x) => x.fleeActions > 0))}`);
+      L.push(`- avg attack actions:     ${avg((x) => x.attackActions)}`);
+      L.push(`- avg flee actions:       ${avg((x) => x.fleeActions)}`);
       L.push(`- avg land/take-off cycles: ${avg((x) => x.landTakeoffCycles)}`);
       L.push(`- avg pure-move re-lands:   ${avg((x) => x.pureMoveReland)}`);
       L.push(`- avg earn-land actions:    ${avg((x) => x.earnLandActions)}`);
+      L.push(`## Barren-landing reasons (land→takeoff, nothing done)`);
+      for (const [r, c] of Object.entries(barrenReasons).sort(
+        (a, b) => b[1] - a[1],
+      ))
+        L.push(`- ${r}: ${c}`);
       L.push(`## End-scene distribution`);
       for (const [sc, c] of Object.entries(hist).sort((a, b) => b[1] - a[1]))
         L.push(`- ${sc}: ${pct(c)}`);
@@ -247,6 +294,7 @@ describe("autopilot diagnostic (temp)", () => {
       console.log("\n" + text + "\n");
       expect(n).toBe(SESSIONS);
     },
-    600_000,
+    // 1000×300 win-rate gate (~20 min) needs headroom over the default 600 s.
+    1_800_000,
   );
 });

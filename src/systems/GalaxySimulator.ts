@@ -10,6 +10,7 @@ import { SystemNameGenerator } from "@/utils/systemNameGenerator";
 import { PlanetGenerator } from "./PlanetGenerator";
 import { seedMarket } from "./galaxy/marketSeeding";
 import { pickStarType } from "./galaxy/starTypeDistribution";
+import { assignSystemTechLevels } from "./galaxy/systemTechDistribution";
 import { NpcSimulator } from "./npc/NpcSimulator";
 import { logger } from "@/utils/logger";
 import {
@@ -119,6 +120,12 @@ export class GalaxySimulator {
       );
       generatedSystems.push(system);
     }
+
+    // Spread system tech levels so gear is buyable across the galaxy (weapons/
+    // hulls, not just the lone tech-1 fuel tank) — mutates each system's
+    // techLevel from an independent per-system seed, so the shared generation
+    // RNG stream (and thus all downstream determinism) is untouched.
+    assignSystemTechLevels(generatedSystems, seed);
 
     // Ensure minimum 2 warp paths per system using simplified distance-based connections
     for (const system of generatedSystems) {

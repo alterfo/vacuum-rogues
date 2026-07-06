@@ -40,7 +40,7 @@ import {
   loanStatusOf,
   systemShopPrices,
 } from "./observeHelpers";
-import { cheapestMicromodule, canArmUp } from "./equipmentQueries";
+import { cheapestMicromodule, planArmUp } from "./equipmentQueries";
 import {
   takeableBoardQuestCount,
   reachableNeighbors,
@@ -354,6 +354,14 @@ export interface Observation {
    */
   canArmUp?: boolean;
   /**
+   * Credits the next `arm-up` would spend right now (the price of the weapon it
+   * would buy), or `0` when it fields an already-owned spare gun for free.
+   * Lets the policy arm up only from genuine surplus — keeping enough trade
+   * capital to keep earning — rather than bankrupting itself on a weapon the
+   * instant it can technically afford one. Defaults to 0.
+   */
+  armUpCost?: number;
+  /**
    * The galaxy's current business day (`galaxy.gameDays`). Lets
    * {@link updateMemory} detect a day-boundary transition purely from folded
    * observations (no memory field otherwise carries calendar time) — feeds the
@@ -398,6 +406,13 @@ export interface LegalActionContext {
   canLiberate?: boolean;
   /** A weapon refit would raise installed firepower right now — mirrors `canArmUp`. Defaults to false. */
   canArmUp?: boolean;
+  /**
+   * The ship has hull damage to restore (`hull < maxHull`) — gates the STATION
+   * `repair` action so a full-hull agent can't soft-lock re-picking a no-op
+   * repair instead of undocking. Defaults to `true` so pure fixtures (which
+   * don't model hull) keep `repair` unconditionally legal as before.
+   */
+  needsRepair?: boolean;
 }
 
 /**
@@ -463,7 +478,13 @@ export function legalActionsForScene(
     case SceneType.STATION: {
       // Off-planet bases repair/refit; leaving returns to flight. Also the
       // shortcut hub that routes to the equipment shop / bank sub-screens.
-      set.add("repair");
+      // Gate `repair` on actual hull damage: a full-hull repair is a no-op, and
+      // since the STATION ladder ranks `repair` above `move` (leave), leaving it
+      // always-legal soft-locks a docked, patched-up agent re-picking the no-op
+      // forever instead of undocking — the same "no-op stays legal → autopilot
+      // re-picks it" trap already guarded for buy-gear/upgrade-hull/buy-module
+      // just below. Defaults `true` so pure fixtures keep their prior legality.
+      if (ctx.needsRepair ?? true) set.add("repair");
       set.add("move");
       set.add("wait");
       // A station is the hub that routes to the equipment shop, so gate
@@ -864,7 +885,12 @@ export function observe(
     ? cheapestMicromodule(engine) != null
     : false;
   const canLiberate = engine.canLiberateCurrentSystem();
-  const armUp = canArmUp(engine);
+  const armUpPlan = planArmUp(engine);
+  const armUp = armUpPlan != null;
+  // Credits the next arm-up would actually spend (0 when it fields an already
+  // owned spare gun for free) — lets the policy keep a trade-capital reserve
+  // instead of blowing the whole wallet on a weapon (see `armUpCost` below).
+  const armUpCost = armUpPlan?.buyPrice ?? 0;
 
   const legalActions = legalActionsForScene(scene, {
     hasPlayer: true,
@@ -882,6 +908,7 @@ export function observe(
     bestHullPrice,
     canLiberate,
     canArmUp: armUp,
+    needsRepair: ship.hullHP < ship.maxHull,
   });
 
   // Detect a pending hyperjump: the ship is flying to the system edge and a warp
@@ -917,6 +944,7 @@ export function observe(
     cheapestGearPrice,
     bestHullPrice,
     canArmUp: armUp,
+    armUpCost,
     gameDay: galaxy.gameDays,
     questsCompleted: engine.questManager.getCompletedQuestIds().length,
   };
