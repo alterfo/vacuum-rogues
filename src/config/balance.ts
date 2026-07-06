@@ -715,3 +715,49 @@ export function additionalHostileSeeds(
     pirate: pool.slice(extraOvermind, extraOvermind + extraPirate),
   };
 }
+
+/**
+ * ─── Campaign: adaptive difficulty — playerPowerIndex normalization ─────────
+ * (three-year-campaign plan, Task 2)
+ *
+ * `playerPowerIndex` (src/systems/campaign/playerPower.ts) collapses the
+ * player's material strength into one number in [0,1]:
+ *
+ *   index = clamp01( w.hull·norm(maxHull) + w.weapon·norm(weaponDamage)
+ *                  + w.credits·norm(credits) + w.rank·norm(rank) )
+ *
+ * where norm(x) = clamp01((x − MIN) / (MAX − MIN)). The MINs anchor at the
+ * starter fitting (corvette + pulse laser + STARTING_MONEY), so a fresh
+ * captain reads ≈ 0; the MAXes anchor at the apex catalog gear (hull_bastion
+ * 360 HP, twin torpedo launchers 2×55 dmg) and the NG+ credit-carry scale, so
+ * a fully armed veteran saturates toward 1. The Overmind's spread cadence and
+ * garrison scaling (Tasks 3–4) consume the RATCHETED index (campaignPeakPower
+ * — never decreases within a run), so selling gear cannot soften the front.
+ */
+export const POWER_INDEX_WEIGHTS = {
+  hull: 0.35,
+  weapon: 0.35,
+  credits: 0.15,
+  rank: 0.15,
+} as const;
+/** Starter corvette hull anchor — derived maxHull of a fresh fitting. */
+export const POWER_INDEX_HULL_MIN = 130;
+/** Apex hull anchor — hull_bastion (360 HP). */
+export const POWER_INDEX_HULL_MAX = 360;
+/** Starter weapon anchor — wpn_pulse (14 dmg). */
+export const POWER_INDEX_WEAPON_MIN = 14;
+/** Apex installed-damage anchor — two top launchers (2 × 55). */
+export const POWER_INDEX_WEAPON_MAX = 110;
+/** Starter capital anchor — STARTING_MONEY. */
+export const POWER_INDEX_CREDITS_MIN = 1000;
+/** War-chest saturation — the NG+ credit-carry cap / apex-gear savings scale. */
+export const POWER_INDEX_CREDITS_MAX = 50000;
+/** Top rank index on the 0–7 ladder (RANK_THRESHOLDS). */
+export const POWER_INDEX_RANK_MAX = 7;
+/**
+ * Index at/above which the player counts as battle-ready for adaptive pacing.
+ * Sized so the autopilot's battle-ready floor (hull ≥ 200, weapon ≥ 30 — see
+ * BATTLE_READY_* in MemoryHeuristicPolicy) crosses it even with starter
+ * credits/rank (index ≈ 0.19), while the starter fitting sits at ≈ 0.02.
+ */
+export const POWER_INDEX_BATTLE_READY_THRESHOLD = 0.15;

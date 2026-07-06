@@ -149,17 +149,34 @@ This plan **supersedes** the two open plans:
   past `BATTLE_READY_WEAPON_DAMAGE`).
 
 ### Task 2: `playerPowerIndex` — the adaptive difficulty input
-- [ ] write red tests first: `src/tests/campaign/playerPower.test.ts` — index ∈ [0,1];
+- [x] write red tests first: `src/tests/campaign/playerPower.test.ts` — index ∈ [0,1];
       starter ship (hull 130 / weapon 14 / 1000cr / rank 1) ≈ 0; battle-ready (hull ≥ 200,
       weapon ≥ 30) crosses a defined threshold; monotone in each component; pure/deterministic
-- [ ] implement `src/systems/campaign/playerPower.ts` — pure function of
+- [x] implement `src/systems/campaign/playerPower.ts` — pure function of
       (maxHull, weaponDamage, credits, rank) with normalization constants in `balance.ts`
       (`POWER_INDEX_*`); reads loadout via `GearCatalog`/`ShipLoadout` (single source of truth)
-- [ ] implement the **ratchet**: `campaignPeakPower` — persisted optional additive field on the
+- [x] implement the **ratchet**: `campaignPeakPower` — persisted optional additive field on the
       save state; schema `.optional()`, absent ⇒ derive from current loadout on load
-- [ ] update `src/validation/schemas.ts` for the optional field; write schema round-trip test
+- [x] update `src/validation/schemas.ts` for the optional field; write schema round-trip test
       (absent field tolerated, present field preserved)
-- [ ] run `npm run test:save-compat` + unit tests — must pass before Task 3
+- [x] run `npm run test:save-compat` + unit tests — must pass before Task 3
+
+**Task 2 notes (2026-07-06):**
+- New module `src/systems/campaign/playerPower.ts`: `playerPowerIndex` (weighted clamp01
+  linear norms), `powerIndexFromLoadout` (reads `ShipLoadout.derivedStats()` — single source
+  of truth), `ratchetPeakPower` (never decreases; clamps corrupted values), `restoredPeakPower`
+  (present ⇒ clamp; absent ⇒ derive from loadout).
+- Levers in `balance.ts`: `POWER_INDEX_WEIGHTS` (hull .35 / weapon .35 / credits .15 /
+  rank .15), HULL 130→360, WEAPON 14→110, CREDITS 1000→50000, RANK_MAX 7,
+  `POWER_INDEX_BATTLE_READY_THRESHOLD` 0.15 (starter ≈ 0.02, battle-ready floor ≈ 0.19).
+- Persistence: optional additive `campaignPeakPower` on `SaveState` + `SaveStateSchema`
+  (`.min(0).max(1).optional()`) — no migration, no version bump. `GameEngine`: ratchet on
+  `saveGame`, restore/derive after loadout revalidation in `loadGame`, reset to null on new-game
+  creation (no cross-run leak), read seam `get campaignPeakPower` for Tasks 3–4.
+- Tests: 19 new in `src/tests/campaign/playerPower.test.ts` (bounds/anchors/monotonicity/
+  purity, loadout path, ratchet, restore semantics, schema round-trip incl. out-of-range
+  rejection). **No existing test touched.** Gates: full unit 4548 ✓, playtest 585 ✓,
+  save-compat ✓, tsc ✓, lint (touched files clean) ✓.
 
 ### Task 3: Adaptive Overmind spread pacing (the 2–3-year clock)
 - [ ] write red pacing tests: `src/tests/campaign/adaptivePacing.test.ts` — weak player

@@ -41,6 +41,13 @@ export class SaveState {
      * See `GameEngine.saveGame`/`loadGame` and `applyEntrySpawn`.
      */
     public flightShipPos?: FlightShipPos,
+    /**
+     * Highest `playerPowerIndex` reached this run (adaptive-difficulty
+     * ratchet, ∈ [0,1]). Optional and additive: saves made before the
+     * campaign lack it and derive it from the restored loadout on load —
+     * no migration, no version bump. See `systems/campaign/playerPower.ts`.
+     */
+    public campaignPeakPower?: number,
   ) {}
 
   serialize(): SerializedSave {
@@ -57,6 +64,7 @@ export class SaveState {
         loadout: this.loadout,
         banking: this.banking,
         flightShipPos: this.flightShipPos,
+        campaignPeakPower: this.campaignPeakPower,
       }),
     };
   }
@@ -74,6 +82,7 @@ export class SaveState {
       parsed.loadout,
       parsed.banking,
       parsed.flightShipPos,
+      parsed.campaignPeakPower,
     );
   }
 }

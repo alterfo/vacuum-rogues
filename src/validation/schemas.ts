@@ -597,6 +597,11 @@ export const SaveStateSchema = z.object({
   flightShipPos: z
     .object({ x: z.number(), y: z.number(), systemId: z.string() })
     .optional(),
+  // Optional additive (three-year-campaign Task 2): highest playerPowerIndex
+  // reached this run — the adaptive-difficulty ratchet. Saves made before the
+  // campaign lack it and derive it from the restored loadout on load
+  // (GameEngine.loadGame → restoredPeakPower); no migration, no version bump.
+  campaignPeakPower: z.number().min(0).max(1).optional(),
 });
 
 export function validateSaveState(

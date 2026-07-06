@@ -46,6 +46,11 @@ import type {
 } from "@/core/ports";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import {
+  powerIndexFromLoadout,
+  ratchetPeakPower,
+  restoredPeakPower,
+} from "@/systems/campaign/playerPower";
+import {
   applyLoadoutHullToShip,
   slotToBagModule,
 } from "@/systems/equipment/GearBridge";
@@ -253,6 +258,15 @@ export class GameEngine {
     return this.npcSimulator;
   }
 
+  /**
+   * The ratcheted peak `playerPowerIndex` of this run (null before the first
+   * ratchet/restore). The adaptive-difficulty consumers (spread pacing,
+   * garrison scaling — Tasks 3–4) read the peak through this seam.
+   */
+  public get campaignPeakPower(): number | null {
+    return this.campaignPeakPowerValue;
+  }
+
   private exceptionHandler: IExceptionHandler;
   private animationFrameId = 0;
   private lastTime = 0;
@@ -272,6 +286,14 @@ export class GameEngine {
   }
   /** Drops the active `credits` projection binding before re-binding a new player. */
   private bankProjectionUnsub: Unsubscribe | null = null;
+  /**
+   * Highest `playerPowerIndex` reached this run — the adaptive-difficulty
+   * ratchet (three-year-campaign Task 2). Null until first ratcheted (fresh
+   * runtime); persisted as the optional additive `campaignPeakPower` save
+   * field; restored (or derived from the loadout for pre-campaign saves) in
+   * {@link loadGame}. Only ever rises within a run — see `ratchetPeakPower`.
+   */
+  private campaignPeakPowerValue: number | null = null;
   private readonly galaxyService: IGalaxyService;
   private readonly playerService: IPlayerService;
   private readonly sceneFactory: SceneFactory;
@@ -544,6 +566,10 @@ export class GameEngine {
         captainName: "Captain",
         startingMoney: ngPlus?.credits ?? 1000,
       });
+
+      // A fresh run starts with no peak-power ratchet — a previous session's
+      // value must not leak into the new campaign. Re-seeded on first save.
+      this.campaignPeakPowerValue = null;
 
       // NG+ carries the won captain's rank forward (veteran status persists).
       if (ngPlus) this.player.rank = ngPlus.rank;
@@ -1018,6 +1044,20 @@ export class GameEngine {
       this.player.currentSystemId,
     );
 
+    // Ratchet the campaign peak power before persisting: the stored value
+    // never decreases within a run (selling gear must not soften the adaptive
+    // difficulty). A fresh runtime (null) seeds from the current loadout.
+    if (this.playerLoadout) {
+      this.campaignPeakPowerValue = ratchetPeakPower(
+        this.campaignPeakPowerValue,
+        powerIndexFromLoadout(
+          this.playerLoadout,
+          this.player.credits,
+          this.player.rank,
+        ),
+      );
+    }
+
     const { SaveState } = await import("@/domain/SaveState");
     const state = new SaveState(
       this.saveManager.currentVersion,
@@ -1031,6 +1071,7 @@ export class GameEngine {
       // ledger reloads verbatim instead of being re-seeded from `player.credits`.
       this.bankingService.toSnapshot(),
       flightShipPos,
+      this.campaignPeakPowerValue ?? undefined,
     );
 
     await this.saveManager.write(slotId, state);
@@ -1124,6 +1165,18 @@ export class GameEngine {
         if (g) this.player.inventory.addItem(slotToBagModule(g, slot));
       }
     }
+
+    // Restore the adaptive-difficulty ratchet. Pre-campaign saves carry no
+    // `campaignPeakPower` — derive it from the just-restored (and revalidated)
+    // loadout so the run resumes with a faithful peak instead of null.
+    this.campaignPeakPowerValue = this.player
+      ? restoredPeakPower(
+          save.campaignPeakPower,
+          this.playerLoadout,
+          this.player.credits,
+          this.player.rank,
+        )
+      : null;
 
     // Project the canonical loadout's hull onto the live ship at load time, just
     // as both hull shops do at hull-change time. The save's `ship.maxHull`/
