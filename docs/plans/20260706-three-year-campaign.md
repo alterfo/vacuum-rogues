@@ -577,17 +577,64 @@ This plan **supersedes** the two open plans:
   concern per commit; the line guard is its own careful extraction task per standing rule #6).
 
 ### Task 9: Balance iteration to the 99% gate (the core deliverable)
-- [ ] run `letsplay:campaign` at 50 sessions; record win-rate, median resolution day, loss
+- [x] run `letsplay:campaign` at 50 sessions; record win-rate, median resolution day, loss
       taxonomy (what killed the losses) in this plan
 - [ ] iterate `balance.ts` adaptive levers (spread slow/fast/grace/creep, garrison scale,
       economy rewards) — config-table changes only — until 50-session win-rate = 100% and
-      median win lands in year 2–3 (day ~540–1080, per the chosen pacing)
+      median win lands in year 2–3 (day ~540–1080, per the chosen pacing)  ⚠️ BLOCKED — see notes
 - [ ] scale up: 300-session campaign run; **gate: ≥ 297/300 wins (99%), all wins ≤ 1080 days,
       0 deaths**; record final numbers + final lever values in this plan
 - [ ] promote the tuned pacing into a fast seeded regression test (accelerated proxy asserting
       the pacing SHAPE: dormant→pressure→resolution ordering) so future edits can't silently
       break the campaign clock
 - [ ] run all suites (unit, playtest, letsplay:ci, save-compat) — green before Task 10
+
+**Task 9 notes (2026-07-06) — baseline measured; ⚠️ config-only path BLOCKED, escalating:**
+- **50-session baseline (`npm run letsplay:campaign` NORMAL, committed HEAD levers):**
+  win-rate **18.0 %** (9 win / 1 loss / **40 died** / 0 timeout), median win **d98**,
+  battle-ready reached in only **14 %** of runs, liberation-proxy **46 %**. The dominant
+  outcome is **DEATH (80 %)**, not galaxy-loss (2 %) or timeout. Report artifact:
+  `.letsplay/campaign-summary.txt`.
+- **Loss taxonomy (diagnostic `_deathDiag.run.test.ts`, DEATH_DIAG-gated, since removed):**
+  the ship dies from **full hull (130 → 0) in a SINGLE agent step** — a combat one-shot, never
+  a gradual wear-down. A 20-seed death-location census split the deaths **≈50 / 50**:
+  - **held-system garrisons** (`isHostileSystem` = true) — the agent warps into / is caught in
+    an Overmind/pirate-captured system's standing garrison;
+  - **wandering faction/pirate packs in NEUTRAL systems** — `nHost` 3–5 hostiles (observed
+    factions: PARADOXES pirate-role packs, and the player's own OUTLANDERS turning
+    reactive-hostile) that fire at **full base damage**. `hostileScaling`/garrison levers do
+    **not** apply outside held systems, so this half of the deaths is **outside the reach of
+    every Task-9-listed config lever** (spread pacing, garrison scale, economy rewards).
+- **Config iterations tried (all measured at 50 sessions):**
+  1. garrison 3-5, `HOSTILE_SCALING_WEAK_MULT` 0.6, `ADAPTIVE_GRACE_DAYS` 150, slow 55 →
+     **16 %** win (grace 150 back-fired: the arc never *engages* when NPCs clear the initial
+     Overmind seed during the long grace ⇒ unresolvable **share-0 timeouts**, +3 wedges over
+     the longer sessions). Reverted grace to 90.
+  2. garrison **2-3**, `HOSTILE_SCALING_WEAK_MULT` **0.35**, slow **70** → **22 %** win
+     (11 win / 4 loss / **34 died** / 1 timeout). **Liberation-proxy leapt 46 % → 82 %** — the
+     smaller garrison makes the front genuinely clearable — **but the win-rate barely moved
+     because deaths still dominate (68 %)**: the front gets cleared, yet the weak ship dies
+     before the arc resolves to `won`.
+- **Root cause (why config plateaus ≈ 18–22 %):** the 99 % gate requires **weak-ship combat
+  survivability**, which the config-table levers cannot deliver. Two structural reasons:
+  (a) ≈half the deaths are neutral-system packs the held-system scaling never sees; (b) a
+  single headless `agent.run(1)` step resolves **many** engine combat rounds (the step spans
+  days), so even at 0.35× held-system scaling a 3–4-ship group deals ~130 damage in ONE step —
+  the agent never gets a turn to flee. Softening damage far enough to matter (≈0.1×) would
+  trivialise all early combat and break the Task-3/4 behavior tests
+  (`hostileScaling.test.ts` pins weak-mult ≈0.9; `garrisonPowerScaling` pins [5,10];
+  `adaptivePacing` pins slow=45).
+- **⚠️ ESCALATION — Task 9 as specified ("config-table changes only") cannot reach 100 %/99 %.**
+  The proper fix is weak-ship combat survivability — either (i) extend the plan's own
+  power-keyed adaptive gentling (Task 4's `hostileScaling`) to **neutral-system** combat so a
+  weak ship takes reduced hits *everywhere*, ramping to full as it arms (this is the Overview's
+  stated "gentle while weak, relentless once armed" design, currently only wired to held
+  systems); and/or (ii) a harness/policy change so the agent can act **mid-combat** (flee before
+  the multi-round step lands). Both are **outside Task 9's config-only method** and touch
+  Task-4/6/7/8 code marked done — a scope/architecture decision left to the user rather than
+  changed unilaterally in an autonomous pass (broad combat-balance blast radius; standing "don't
+  weaken existing tests" rule). The experimental config was **reverted** so the suite stays
+  green; the baseline finding above is the deliverable of this pass.
 
 ### Task 10: Neural action-space expansion (liberate + arm-up)
 - [ ] extend `ACTION_ORDER` 16 → 18 (`liberate`, `arm-up`) and grow the observation block with
