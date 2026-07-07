@@ -266,11 +266,31 @@ understanding on the committed state before starting Task 4.
       clean)
 
 ### Task 9: Verify acceptance criteria
-- [ ] all 8 bugs re-verified against the original reports (screenshot evidence for 1, 3, 7;
-      behavioral tests for 2, 4, 5, 6, 8)
-- [ ] run full test suite, `npm run test:playtest`, `npm run letsplay:ci`,
+- [x] all 8 bugs re-verified against the original reports — screenshot evidence for 1, 3, 7:
+      a fresh flight-HUD capture shows the icon button and "?" button sitting side-by-side
+      with no overlap (Bug 1), `[МЕНЮ]` bottom-left above the accessibility toggle with no
+      "Камера:" text and a clock-free `1 января 4000 г.` date (Bug 3); the existing
+      `planet-help-balance.png` shows the live credits HUD (Bug 7, also pinned by
+      `starMapPurchaseFeedback.test.ts`). Behavioral tests green for 2, 4, 5, 6, 8 (unit +
+      playtest + e2e, see below)
+- [x] ran full test suite, `npm run test:playtest`, `npm run letsplay:ci`,
       `npm run test:save-compat`, `npm run test:e2e:regression`, `npm run lint` — all green
-- [ ] confirm `SpaceFlightScene.ts` line guard and architecture tests still pass
+      except 3 pre-existing E2E failures in `playtest-regression.spec.ts`, confirmed via a
+      throwaway git-worktree run at `3cff352` (the commit immediately before this pack's
+      Task 1) that they fail identically there, i.e. predate and are unrelated to all 8 bugs:
+      (1) "changing the font size keeps the ship in place" references `hud.gearButton`, a
+      button removed from `FlightHud` on 2026-06-26 when the settings panel moved to the main
+      menu — the E2E test was never updated and is now permanently stale; (2) "mouse wheel
+      scrolls the equipment-shop list" — pre-existing scrollOffset clamp mismatch; (3) "a
+      TRADE_OPPORTUNITY rumor renders in the Info Center news tab" — pre-existing rumor-gen
+      mismatch. Because the suite runs `.serial`, failure (1) blocked 13 subsequent tests from
+      running at all; re-run with `--grep-invert` on all three confirmed the remaining 38
+      tests pass, including the Bug 6 InfoCenter-search regression. Full results: unit 5160
+      passed/12 skipped, playtest 684 passed/9 skipped, letsplay:ci 107 passed, save-compat 22
+      passed, e2e 38/41 passed (3 pre-existing unrelated), lint 0 errors (46 pre-existing `any`
+      warnings), `tsc --noEmit` clean
+- [x] confirmed `SpaceFlightScene.ts` line guard (1895 ≤ 1898) and architecture tests still
+      pass (included in the green unit run above)
 
 ## Technical Details
 
