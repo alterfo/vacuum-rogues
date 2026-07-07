@@ -1157,17 +1157,60 @@ the user's "тупизна автопилота" hypothesis is CONFIRMED and now
 - Gates: full unit 4749 ✓, playtest 656 ✓, save-compat 22 ✓, tsc ✓, lint 0 errors ✓.
 
 ### Task 13: Rewrite the 12 existing text quests (prose + puzzle sharpening)
-- [ ] audit all 12 scripts (`customs, gravity-slalom, investigation, cargo-sort, reactor,
+- [x] audit all 12 scripts (`customs, gravity-slalom, investigation, cargo-sort, reactor,
       auction, derelict-salvage, smuggling-run, hostage-rescue, sabotage-heist, first-contact,
       plague-crisis`): per script note the puzzle core and where stakes/prose are flat
-- [ ] rewrite prose pass 1 (6 scripts): life-and-death framing in the setup, concrete sensory
+- [x] rewrite prose pass 1 (6 scripts): life-and-death framing in the setup, concrete sensory
       detail, choices that read as decisions (not menu items), endings that acknowledge the
       path taken; keep script IDs/params/graph shape stable (catalog data — no migration)
-- [ ] rewrite prose pass 2 (remaining 6 scripts), same bar
-- [ ] sharpen 3–4 weakest puzzles: the optimal path should require actual reasoning
+- [x] rewrite prose pass 2 (remaining 6 scripts), same bar
+- [x] sharpen 3–4 weakest puzzles: the optimal path should require actual reasoning
       (meter arithmetic, ordering, deduction) while a survivable non-optimal path exists
-- [ ] write/refresh graph-validation tests: every ending reachable, no orphan locations, all
+- [x] write/refresh graph-validation tests: every ending reachable, no orphan locations, all
       transitions legal, meter effects within bounds; run full quest test suite — green
+
+**Task 13 notes (2026-07-07):**
+- **Audit — puzzle core + flat spots per script** (drove the rewrite briefs): `customs`
+  suspicion-threshold fine-quota (weakest — pure heuristic, dry inspector menu); `gravity-slalom`
+  fuel-budget route optimization through gravity windows (mechanic solid, prose flat/abstract);
+  `investigation` deduction whodunit with planted `ПРОТИВОРЕЧИЕ` clues (good bones, suspects
+  faceless); `cargo-sort` bin-packing dock-load balancing (loads invisible in choices); `reactor`
+  set 4 rods to a stable state under a countdown (target was hard-coded/unmotivated); `auction`
+  budget/expected-value bidding vs bots (lot value opaque); the 6 newer narrative dilemmas
+  (`derelict-salvage`, `smuggling-run`, `hostage-rescue`, `sabotage-heist`, `first-contact`,
+  `plague-crisis`) had strong branching but menu-flat prose and endings that didn't name the path.
+- **Prose rewritten to the life-and-death bar across ALL 12** (both passes; parallelised one
+  focused sub-writer per script). Discipline enforced: only `text:` and player-facing `label:`
+  string VALUES changed — every `id`/`toLocation`/`condition`/`effects`/`autoExecute`/
+  `isSuccess`/`isFailure`/param/`title` byte-identical, every `{placeholder}` preserved in its
+  original location, the `ПРОТИВОРЕЧИЕ` markers kept verbatim. Verified mechanically: a
+  git-diff filter shows NO changed line outside `text:`/`label:`/comment; per-file
+  `id`/`toLocation`/`effects` counts unchanged. **No existing test assertion touched** (the
+  behavioural suites `questScripts.test.ts` 100 ✓ + `newQuestScripts.test.ts` 97 ✓ +
+  `customsExit` 6 ✓ + `textQuestRuntime` 21 ✓ all pass on the rewritten prose — the graph-shape
+  preservation is exactly what keeps them green; the test-modification license was NOT needed).
+- **4 puzzles sharpened so the optimal path requires reasoning, survivable non-optimal preserved**
+  (test-safe — mechanics/solutions unchanged, only the reasoning is now surfaced in-prose):
+  `reactor` now shows the stability CONDITIONS as a solvable equation system (`A+B=7`, `C−D=2`,
+  `A×C=12`, `B+D=6` → uniquely A3 B4 C4 D2) instead of the bare target — the player solves
+  simultaneous equations, the greedy-solver test still passes; `cargo-sort` dock-choice labels
+  now carry `{dockN_load}ч` so the player reads current load before assigning; `gravity-slalom`
+  choice labels surface each move's fuel cost (−26 direct vs 0/−40 slingshot, ≥10 dock reserve);
+  `customs` decision screen surfaces the scan-cost/diplomatic-scandal tradeoff and the
+  suspicion bands. All four keep a survivable non-optimal path (VM clamps, greedy still wins).
+- **New graph-validation suite** `src/tests/quests/questScriptGraph.test.ts` (145 tests) over
+  the FULL registry (the prior generic-invariant suite covered only the 6 newer scripts): start
+  exists, unique location ids, no unreachable locations, every transition/`critTarget` resolves,
+  ≥1 success + ≥1 failure terminal, terminals dead-end, no non-terminal is choiceless, every
+  `{placeholder}` resolves to a declared param, every effect targets a declared param, and every
+  randomised (`= random(a,b)`) meter effect samples inside its param bounds (constant `= N`
+  resets like `checkpoint = 0` are intentionally VM-clamped and exempted — a real finding the
+  suite surfaced and correctly tolerates).
+- **`cyrillicBaseline.json` regenerated** (`UPDATE_CYRILLIC_BASELINE=1`, the sanctioned snapshot
+  path — not an assertion): only `auction.ts`'s literal count shifted (a previously non-Cyrillic
+  `"..."` label became prose); all other files kept identical counts (prose-for-prose swap).
+- Gates: quest suites 224 ✓, new graph suite 145 ✓, cyrillic gate 3 ✓, tsc ✓, lint 0 errors ✓,
+  full unit suite ✓.
 
 ### Task 14: New text quests, batch 1 (3–4 puzzle scripts)
 - [ ] write 3–4 new `QuestScript`s in distinct puzzle genres, e.g.: logistics routing under

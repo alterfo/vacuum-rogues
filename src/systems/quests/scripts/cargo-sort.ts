@@ -164,7 +164,7 @@ export const cargoSortScript: QuestScript = {
     // Step 1: Apply breakdown (+2h) to the affected transport
     {
       id: "init_breakdown",
-      text: "Получаем данные о транспортах...",
+      text: "Грузовой узел «Перекрёсток-9». Смена только началась — и уже гарь в воздухе. По селектору хрипит аварийная сводка: один из бортов заглох на подходе, стыковка встанет дольше на два часа. Диспетчерская вгрызается в данные...",
       transitions: [
         {
           id: "break_A",
@@ -213,42 +213,42 @@ export const cargoSortScript: QuestScript = {
     {
       id: "dispatch_hub",
       text:
-        "Диспетчерская. Назначьте транспорты по докам.\n" +
-        "Транспорт A: {time_A}ч | B: {time_B}ч | C: {time_C}ч | D: {time_D}ч | E: {time_E}ч\n" +
-        "Дог 1: {dock1_load}ч | Дог 2: {dock2_load}ч | Дог 3: {dock3_load}ч\n" +
-        "Назначено: {assigned_count}/5",
+        "ДИСПЕТЧЕРСКАЯ. Клаксоны воют, табло мигает красным. Пять бортов висят на орбите и жгут топливо, три дока ждут груз. Порог дока — 12 часов: перевалишь — уходит в сверхурочные, а это сорванные рейсы, разъярённые клиенты и твоя голова на плахе. Распредели борта так, чтобы ни один док не лопнул.\n" +
+        "Борта на разгрузку — A: {time_A}ч | B: {time_B}ч | C: {time_C}ч | D: {time_D}ч | E: {time_E}ч\n" +
+        "Загрузка доков — Док 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч (порог 12ч)\n" +
+        "Пришвартовано: {assigned_count}/5. Бригадир орёт с эстакады: «Кого заводим?!»",
       transitions: [
         {
           id: "go_select_A",
-          label: "Транспорт A ({time_A}ч)",
+          label: "Завести борт A ({time_A}ч)",
           toLocation: "select_A",
           condition: "assigned_A == 0",
           effects: [],
         },
         {
           id: "go_select_B",
-          label: "Транспорт B ({time_B}ч)",
+          label: "Завести борт B ({time_B}ч)",
           toLocation: "select_B",
           condition: "assigned_B == 0",
           effects: [],
         },
         {
           id: "go_select_C",
-          label: "Транспорт C ({time_C}ч)",
+          label: "Завести борт C ({time_C}ч)",
           toLocation: "select_C",
           condition: "assigned_C == 0",
           effects: [],
         },
         {
           id: "go_select_D",
-          label: "Транспорт D ({time_D}ч)",
+          label: "Завести борт D ({time_D}ч)",
           toLocation: "select_D",
           condition: "assigned_D == 0",
           effects: [],
         },
         {
           id: "go_select_E",
-          label: "Транспорт E ({time_E}ч)",
+          label: "Завести борт E ({time_E}ч)",
           toLocation: "select_E",
           condition: "assigned_E == 0",
           effects: [],
@@ -259,11 +259,11 @@ export const cargoSortScript: QuestScript = {
     // Step 3: Select dock for each transport
     {
       id: "select_A",
-      text: "Транспорт A — {time_A} ч разгрузки.\nДог 1: {dock1_load}ч | Дог 2: {dock2_load}ч | Дог 3: {dock3_load}ч\nКуда направить?",
+      text: "Борт A тянет на швартовку — {time_A} ч под краном. Куда его, пока клиент не поседел? Считай остаток до порога в 12 ч.\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч",
       transitions: [
         {
           id: "assign_A_dock1",
-          label: "→ Дог 1",
+          label: "В Док 1 (сейчас {dock1_load}ч)",
           toLocation: "assign_to_dock1",
           effects: [
             "pending_time = time_A + 0",
@@ -273,7 +273,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "assign_A_dock2",
-          label: "→ Дог 2",
+          label: "В Док 2 (сейчас {dock2_load}ч)",
           toLocation: "assign_to_dock2",
           effects: [
             "pending_time = time_A + 0",
@@ -283,7 +283,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "assign_A_dock3",
-          label: "→ Дог 3",
+          label: "В Док 3 (сейчас {dock3_load}ч)",
           toLocation: "assign_to_dock3",
           effects: [
             "pending_time = time_A + 0",
@@ -293,7 +293,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "back_from_A",
-          label: "← Назад",
+          label: "← Назад к сводке",
           toLocation: "dispatch_hub",
           effects: [],
         },
@@ -301,11 +301,11 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "select_B",
-      text: "Транспорт B — {time_B} ч разгрузки.\nДог 1: {dock1_load}ч | Дог 2: {dock2_load}ч | Дог 3: {dock3_load}ч\nКуда направить?",
+      text: "Борт B подан к причалу — {time_B} ч под краном. Бригадир тычет пальцем в табло: «Ну?!» Ищи док, где после B ещё останется место до 12 ч.\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч",
       transitions: [
         {
           id: "assign_B_dock1",
-          label: "→ Дог 1",
+          label: "В Док 1 (сейчас {dock1_load}ч)",
           toLocation: "assign_to_dock1",
           effects: [
             "pending_time = time_B + 0",
@@ -315,7 +315,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "assign_B_dock2",
-          label: "→ Дог 2",
+          label: "В Док 2 (сейчас {dock2_load}ч)",
           toLocation: "assign_to_dock2",
           effects: [
             "pending_time = time_B + 0",
@@ -325,7 +325,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "assign_B_dock3",
-          label: "→ Дог 3",
+          label: "В Док 3 (сейчас {dock3_load}ч)",
           toLocation: "assign_to_dock3",
           effects: [
             "pending_time = time_B + 0",
@@ -335,7 +335,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "back_from_B",
-          label: "← Назад",
+          label: "← Назад к сводке",
           toLocation: "dispatch_hub",
           effects: [],
         },
@@ -343,11 +343,11 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "select_C",
-      text: "Транспорт C — {time_C} ч разгрузки.\nДог 1: {dock1_load}ч | Дог 2: {dock2_load}ч | Дог 3: {dock3_load}ч\nКуда направить?",
+      text: "Борт C заходит на стыковку — {time_C} ч работы захватам. Где ему хватит места, не пробив потолок в 12 ч?\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч",
       transitions: [
         {
           id: "assign_C_dock1",
-          label: "→ Дог 1",
+          label: "В Док 1 (сейчас {dock1_load}ч)",
           toLocation: "assign_to_dock1",
           effects: [
             "pending_time = time_C + 0",
@@ -357,7 +357,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "assign_C_dock2",
-          label: "→ Дог 2",
+          label: "В Док 2 (сейчас {dock2_load}ч)",
           toLocation: "assign_to_dock2",
           effects: [
             "pending_time = time_C + 0",
@@ -367,7 +367,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "assign_C_dock3",
-          label: "→ Дог 3",
+          label: "В Док 3 (сейчас {dock3_load}ч)",
           toLocation: "assign_to_dock3",
           effects: [
             "pending_time = time_C + 0",
@@ -377,7 +377,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "back_from_C",
-          label: "← Назад",
+          label: "← Назад к сводке",
           toLocation: "dispatch_hub",
           effects: [],
         },
@@ -385,11 +385,11 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "select_D",
-      text: "Транспорт D — {time_D} ч разгрузки.\nДог 1: {dock1_load}ч | Дог 2: {dock2_load}ч | Дог 3: {dock3_load}ч\nКуда направить?",
+      text: "Борт D просится к причалу — {time_D} ч возни с грузом. Часы на стене щёлкают, клиенты на линии. В какой док он влезет без перегруза?\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч",
       transitions: [
         {
           id: "assign_D_dock1",
-          label: "→ Дог 1",
+          label: "В Док 1 (сейчас {dock1_load}ч)",
           toLocation: "assign_to_dock1",
           effects: [
             "pending_time = time_D + 0",
@@ -399,7 +399,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "assign_D_dock2",
-          label: "→ Дог 2",
+          label: "В Док 2 (сейчас {dock2_load}ч)",
           toLocation: "assign_to_dock2",
           effects: [
             "pending_time = time_D + 0",
@@ -409,7 +409,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "assign_D_dock3",
-          label: "→ Дог 3",
+          label: "В Док 3 (сейчас {dock3_load}ч)",
           toLocation: "assign_to_dock3",
           effects: [
             "pending_time = time_D + 0",
@@ -419,7 +419,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "back_from_D",
-          label: "← Назад",
+          label: "← Назад к сводке",
           toLocation: "dispatch_hub",
           effects: [],
         },
@@ -427,11 +427,11 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "select_E",
-      text: "Транспорт E — {time_E} ч разгрузки.\nДог 1: {dock1_load}ч | Дог 2: {dock2_load}ч | Дог 3: {dock3_load}ч\nКуда направить?",
+      text: "Последний борт, E, зависает над стыком — {time_E} ч разгрузки. Одно неверное назначение сейчас — и док лопнет за 12 ч. Прикинь остатки и решай.\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч",
       transitions: [
         {
           id: "assign_E_dock1",
-          label: "→ Дог 1",
+          label: "В Док 1 (сейчас {dock1_load}ч)",
           toLocation: "assign_to_dock1",
           effects: [
             "pending_time = time_E + 0",
@@ -441,7 +441,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "assign_E_dock2",
-          label: "→ Дог 2",
+          label: "В Док 2 (сейчас {dock2_load}ч)",
           toLocation: "assign_to_dock2",
           effects: [
             "pending_time = time_E + 0",
@@ -451,7 +451,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "assign_E_dock3",
-          label: "→ Дог 3",
+          label: "В Док 3 (сейчас {dock3_load}ч)",
           toLocation: "assign_to_dock3",
           effects: [
             "pending_time = time_E + 0",
@@ -461,7 +461,7 @@ export const cargoSortScript: QuestScript = {
         },
         {
           id: "back_from_E",
-          label: "← Назад",
+          label: "← Назад к сводке",
           toLocation: "dispatch_hub",
           effects: [],
         },
@@ -471,7 +471,7 @@ export const cargoSortScript: QuestScript = {
     // Step 4: Routing — add pending_time to the chosen dock (autoExecute by value match)
     {
       id: "assign_to_dock1",
-      text: "Назначение в Дог 1...",
+      text: "Захваты Дока 1 подхватывают борт, лебёдки визжат...",
       transitions: [
         {
           id: "d1_t1",
@@ -525,7 +525,7 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "assign_to_dock2",
-      text: "Назначение в Дог 2...",
+      text: "Док 2 разводит зажимы, борт тянут к причалу...",
       transitions: [
         {
           id: "d2_t1",
@@ -579,7 +579,7 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "assign_to_dock3",
-      text: "Назначение в Дог 3...",
+      text: "Стыковочные фермы Дока 3 смыкаются на борту...",
       transitions: [
         {
           id: "d3_t1",
@@ -635,7 +635,7 @@ export const cargoSortScript: QuestScript = {
     // Step 5: Route back to hub or forward to dock-overload checks
     {
       id: "check_progress",
-      text: "Проверка состояния...",
+      text: "Диспетчер сверяется с табло: кто ещё висит на орбите?",
       transitions: [
         {
           id: "more_ships",
@@ -658,7 +658,7 @@ export const cargoSortScript: QuestScript = {
     // Step 6: Check each dock for overload (> 12h)
     {
       id: "check_dock1",
-      text: "Проверка Дога 1...",
+      text: "Табло Дока 1 гаснет в расчётах: уложились в 12 или ушли в красное?",
       transitions: [
         {
           id: "dock1_ok",
@@ -679,7 +679,7 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "overload_dock1",
-      text: "Дог 1 перегружен!",
+      text: "Док 1 пробил порог — сирена сверхурочных, бригадир хватается за голову!",
       transitions: [
         {
           id: "add_ot1",
@@ -692,7 +692,7 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "check_dock2",
-      text: "Проверка Дога 2...",
+      text: "Черёд Дока 2: стрелка нагрузки замерла у отметки 12...",
       transitions: [
         {
           id: "dock2_ok",
@@ -713,7 +713,7 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "overload_dock2",
-      text: "Дог 2 перегружен!",
+      text: "Док 2 захлебнулся — сверхурочные, ещё один сорванный рейс!",
       transitions: [
         {
           id: "add_ot2",
@@ -726,7 +726,7 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "check_dock3",
-      text: "Проверка Дога 3...",
+      text: "Последняя сверка — Док 3. Весь узел замер, ждёт цифру...",
       transitions: [
         {
           id: "dock3_ok",
@@ -747,7 +747,7 @@ export const cargoSortScript: QuestScript = {
     },
     {
       id: "overload_dock3",
-      text: "Дог 3 перегружен!",
+      text: "Док 3 не выдержал — красный свет по всей эстакаде!",
       transitions: [
         {
           id: "add_ot3",
@@ -762,7 +762,7 @@ export const cargoSortScript: QuestScript = {
     // Step 7: Final verdict
     {
       id: "final_verdict",
-      text: "Итог смены. Перегрузы: {overtime}",
+      text: "Клаксоны смолкают. Диспетчер выдыхает и смотрит на сводку смены — доков в перегрузе: {overtime}",
       transitions: [
         {
           id: "verdict_success",
@@ -785,13 +785,13 @@ export const cargoSortScript: QuestScript = {
     // Terminal locations
     {
       id: "quest_success",
-      text: "Отличная работа, диспетчер! Все грузы разгружены в срок.\nДог 1: {dock1_load}ч | Дог 2: {dock2_load}ч | Дог 3: {dock3_load}ч",
+      text: "Ни одного перегруза. Все пять бортов сели в срок, ни один рейс не сорван — бригадир хлопает тебя по плечу, клиенты снимают трубки. Смена спасена, диспетчер!\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч (порог 12ч)",
       isSuccess: true,
       transitions: [],
     },
     {
       id: "quest_failure_overtime",
-      text: "Доки перегружены! Контракт не выполнен.\nПерегрузы: {overtime} дока(ов)\nДог 1: {dock1_load}ч | Дог 2: {dock2_load}ч | Дог 3: {dock3_load}ч",
+      text: "Узел встал. Доки ушли в сверхурочные, рейсы посыпались, диспетчерская тонет в звонках разъярённых клиентов. Контракт сорван — и твоя должность вместе с ним.\nДоков в перегрузе: {overtime}\nДок 1: {dock1_load}ч | Док 2: {dock2_load}ч | Док 3: {dock3_load}ч (порог 12ч)",
       isFailure: true,
       transitions: [],
     },

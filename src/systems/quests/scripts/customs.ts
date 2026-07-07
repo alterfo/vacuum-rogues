@@ -56,17 +56,17 @@ export const customsScript: QuestScript = {
   locations: [
     {
       id: "inspect_decision",
-      text: "Корабль {shipNum}/20 на шлюзе.\nПодозрительность: {suspicion}/10\nКредиты: {money} | Рейтинг: {rating}\n\nВаше решение?",
+      text: "Шлюз лязгает, и к причальному воротнику подходит корабль {shipNum} из двадцати. За смену вы должны выбить из контрабандистов 5000 кредитов штрафов — иначе вас снимут с поста.\n\nВ воздухе шлюза пахнет озоном и горелой изоляцией. На комме сипит капитан, ждёт вашего слова.\n\nДатчики выставили подозрительность: {suspicion}/10.\nВ кассе: {money} кр.  Ваш рейтинг: {rating}.\n\nКаждый скан жрёт 200 кредитов и, если трюм окажется чист, дарит вам дипломатический скандал. Чутьё против инструкции — решайте.",
       transitions: [
         {
           id: "scan",
-          label: "Сканировать (−200 кр)",
+          label: "Продавить полный досмотр (−200 кр)",
           toLocation: "scan_check_high",
           effects: ["money -= 200", "scan_roll = random(0,9)"],
         },
         {
           id: "pass",
-          label: "Пропустить",
+          label: "Махнуть рукой — пусть летит",
           toLocation: "next_ship",
           effects: [],
         },
@@ -75,7 +75,7 @@ export const customsScript: QuestScript = {
     // Staged smuggler check: first filter high suspicion (>=7 = certain smuggler)
     {
       id: "scan_check_high",
-      text: "Сканирование...",
+      text: "Захваты фиксируют корпус. Сканирующая арка ползёт вдоль обшивки, и на экране медленно проступают контуры трюма...",
       transitions: [
         {
           id: "high_confirmed",
@@ -99,7 +99,7 @@ export const customsScript: QuestScript = {
     // Ordering is critical: low-suspicion check must come before roll check
     {
       id: "scan_check_medium",
-      text: "Анализ данных...",
+      text: "Явных пустот сканер не нашёл. Вы гоняете сигнатуры через таможенную базу, вслушиваясь в шумы за переборкой. Чисто? Или капитан слишком хорошо спрятал груз?",
       transitions: [
         {
           id: "medium_low_suspicion",
@@ -128,11 +128,11 @@ export const customsScript: QuestScript = {
     },
     {
       id: "found_smuggler",
-      text: "Контрабанда обнаружена! Штраф выплачен. +1000 кр.",
+      text: "Есть! За фальшивой переборкой — контейнеры без пломб. Капитан сразу сдулся, торговаться не стал: штраф на бочку, лишь бы без протокола и конвоя. В кассу падает 1000 кредитов. Чутьё не подвело.",
       transitions: [
         {
           id: "collect_fine",
-          label: "Далее",
+          label: "Оформить штраф и вызвать следующего",
           toLocation: "next_ship",
           effects: ["money += 1000"],
           autoExecute: true,
@@ -141,11 +141,11 @@ export const customsScript: QuestScript = {
     },
     {
       id: "found_clean",
-      text: "Корабль чист. Дипломатический скандал! −500 рейтинга.",
+      text: "Трюм пуст, документы в порядке. Вы задержали и перетряхнули добропорядочного капитана — и теперь его консул строчит ноту протеста. Начальство в бешенстве: минус 500 к рейтингу. Ещё пара таких «досмотров», и вас вышвырнут с поста.",
       transitions: [
         {
           id: "accept_scandal",
-          label: "Принять",
+          label: "Проглотить выговор и работать дальше",
           toLocation: "next_ship",
           effects: ["rating -= 500"],
           autoExecute: true,
@@ -154,7 +154,7 @@ export const customsScript: QuestScript = {
     },
     {
       id: "next_ship",
-      text: "Следующий корабль подходит к шлюзу...",
+      text: "Причальный воротник отпускает корпус, двигатели уходят в чёрное. Мигает очередь: следующий борт уже подтягивается к шлюзу. Смена не ждёт.",
       transitions: [
         {
           id: "advance_ship",
@@ -168,11 +168,11 @@ export const customsScript: QuestScript = {
     // Reached via critMax on shipNum (>20). Auto-check win/fail.
     {
       id: "check_final",
-      text: "Смена окончена.\nЗаработано: {money} кр. Цель: 5000 кр.",
+      text: "Двадцатый корабль растворился в звёздах. Смена окончена, шлюз затихает.\n\nВы сводите кассу под гул остывающих насосов: собрано {money} кр. при плане в 5000. Начальство ждёт цифру.",
       transitions: [
         {
           id: "win",
-          label: "Получить премию",
+          label: "Сдать выручку начальству",
           toLocation: "quest_success",
           condition: "money >= 5000",
           effects: [],
@@ -180,7 +180,7 @@ export const customsScript: QuestScript = {
         },
         {
           id: "lose",
-          label: "Провал",
+          label: "Признать, что план не закрыт",
           toLocation: "quest_failure_credits",
           effects: [],
           autoExecute: true,
@@ -189,19 +189,19 @@ export const customsScript: QuestScript = {
     },
     {
       id: "quest_success",
-      text: "Отличная работа, инспектор! План выполнен. Ваша смена окончена.",
+      text: "План закрыт с запасом. Начальник смены хмыкает, ставит печать и суёт вам конверт с премией — редкая на этом посту похвала. Вы нюхом вычислили контрабанду и не спалили ни одного честного капитана зря. Пост за вами.",
       isSuccess: true,
       transitions: [],
     },
     {
       id: "quest_failure_credits",
-      text: "Недостаточно кредитов. Вы не выполнили план смены.",
+      text: "Кассы не хватает до плана. Вы были слишком осторожны — пропускали борта, боясь скандала, и упустили штрафы. Начальник молча вычёркивает вас из графика. Пост уйдёт тому, у кого крепче нервы.",
       isFailure: true,
       transitions: [],
     },
     {
       id: "quest_failure_rating",
-      text: "Дипломатический скандал достиг критического уровня. Вы отстранены от должности.",
+      text: "Ноты протеста легли на стол посла стопкой. Вы трясли честные корабли один за другим, и терпение начальства лопнуло: значок на стол, пропуск сдать. Слишком рьяный инспектор опаснее любого контрабандиста — и вас отстраняют от должности.",
       isFailure: true,
       transitions: [],
     },

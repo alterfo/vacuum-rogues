@@ -151,7 +151,7 @@ export const auctionScript: QuestScript = {
     // --- Lot preparation (copy class to staging, re-roll random bot) ---
     {
       id: "prepare_lot_1",
-      text: "Объявляется лот 1...",
+      text: "Молоток аукциониста бьёт по кафедре. «Лот первый — на подиум!» Прожекторы вспыхивают над помостом.",
       transitions: [
         {
           id: "init_lot_1",
@@ -168,7 +168,7 @@ export const auctionScript: QuestScript = {
     },
     {
       id: "prepare_lot_2",
-      text: "Объявляется лот 2...",
+      text: "Служители укатывают проданное во тьму. «Лот второй!» — и новый груз выкатывают под слепящий свет.",
       transitions: [
         {
           id: "init_lot_2",
@@ -185,7 +185,7 @@ export const auctionScript: QuestScript = {
     },
     {
       id: "prepare_lot_3",
-      text: "Объявляется лот 3...",
+      text: "В дымном воздухе плывёт гул голосов. «Лот третий, господа!» Аукционист обводит зал цепким взглядом.",
       transitions: [
         {
           id: "init_lot_3",
@@ -202,7 +202,7 @@ export const auctionScript: QuestScript = {
     },
     {
       id: "prepare_lot_4",
-      text: "Объявляется лот 4...",
+      text: "Ночь только разгорается. «Лот четвёртый!» — молоток замирает в поднятой руке, ожидая первую ставку.",
       transitions: [
         {
           id: "init_lot_4",
@@ -219,7 +219,7 @@ export const auctionScript: QuestScript = {
     },
     {
       id: "prepare_lot_5",
-      text: "Объявляется лот 5...",
+      text: "Половина торгов позади. «Лот пятый!» Кошельки в зале заметно похудели — самое время оценить соперников.",
       transitions: [
         {
           id: "init_lot_5",
@@ -236,7 +236,7 @@ export const auctionScript: QuestScript = {
     },
     {
       id: "prepare_lot_6",
-      text: "Объявляется лот 6...",
+      text: "«Лот шестой!» Аукционист смахивает пот со лба. В зале остались только те, кому ещё есть чем платить.",
       transitions: [
         {
           id: "init_lot_6",
@@ -253,7 +253,7 @@ export const auctionScript: QuestScript = {
     },
     {
       id: "prepare_lot_7",
-      text: "Объявляется лот 7...",
+      text: "Торги идут к концу. «Лот седьмой!» Каждая монета теперь на счету — ошибок больше не простят.",
       transitions: [
         {
           id: "init_lot_7",
@@ -270,7 +270,7 @@ export const auctionScript: QuestScript = {
     },
     {
       id: "prepare_lot_8",
-      text: "Объявляется лот 8...",
+      text: "«Последний лот, дамы и господа — восьмой!» Зал замирает. Это твой финальный шанс сорвать банк.",
       transitions: [
         {
           id: "init_lot_8",
@@ -290,28 +290,28 @@ export const auctionScript: QuestScript = {
     {
       id: "lot_screen",
       text:
-        "Аукцион Мэлоков. Лот {current_lot}/8.\n" +
-        "Класс: {lot_class_current} | Оценочная стоимость: {lot_class_current}00 кр\n" +
-        "Ваш бюджет: {budget} кр | Текущая прибыль: {profit} кр\n" +
-        "Три участника: агрессивный бот, осторожный, случайный.\n" +
-        "Сделайте ставку:",
+        "Наследственный аукцион Мэлоков. Под прожекторами — лот {current_lot} из 8.\n" +
+        "Класс груза: {lot_class_current} — при перепродаже это верных {lot_class_current}00 кр.\n" +
+        "В кошельке осталось {budget} кр, за ночь наторговано {profit} кр прибыли.\n" +
+        "Слева хрипло дышит богатый спорщик, где-то в тени притаился шальной покупатель.\n" +
+        "Аукционист поднимает молоток — твоё слово:",
       transitions: [
         {
           id: "skip_lot",
-          label: "Пропустить лот",
+          label: "Молчать. Пусть уходит другому",
           toLocation: "next_lot_dispatch",
           effects: ["bid_result = 0"],
         },
         {
           id: "bid_low",
-          label: "Ставка 100 кр (рискованно)",
+          label: "Кинуть 100 кр — дёшево, но соперники не дремлют",
           toLocation: "bot_response",
           condition: "budget >= 100",
           effects: ["budget -= 100", "bid_result = 1"],
         },
         {
           id: "bid_high",
-          label: "Ставка 250 кр (надёжно)",
+          label: "Бахнуть 250 кр — дорого, зато лот твой наверняка",
           toLocation: "player_wins",
           condition: "budget >= 250",
           effects: ["budget -= 250", "bid_result = 2"],
@@ -323,7 +323,7 @@ export const auctionScript: QuestScript = {
     // Aggressive bot outbids if it has budget left (≥200cr); otherwise random bot may snipe
     {
       id: "bot_response",
-      text: "Боты реагируют на вашу ставку...",
+      text: "Твои 100 кр повисают в дыму. Аукционист выжидает — соперники переглядываются...",
       transitions: [
         {
           id: "bot_agg_outbids",
@@ -345,11 +345,11 @@ export const auctionScript: QuestScript = {
     // Aggressive bot wins: refund player bid, deduct bot budget
     {
       id: "bot_agg_bids",
-      text: "Агрессивный бот перебил вашу ставку!",
+      text: "«Двести!» — рявкает толстосум слева, не дав тебе и вздохнуть. Молоток падает: лот ушёл ему, твои 100 кр возвращают.",
       transitions: [
         {
           id: "bot_agg_wins",
-          label: "...",
+          label: "Забрать назад свою ставку",
           toLocation: "next_lot_dispatch",
           effects: ["budget += 100", "bot_agg_budget -= 200"],
           autoExecute: true,
@@ -359,7 +359,7 @@ export const auctionScript: QuestScript = {
     // Random bot check (after aggressive bot passed)
     {
       id: "random_bot_check",
-      text: "Случайный бот рассматривает ставку...",
+      text: "Богач молчит — денег у него не осталось. Но в тени кто-то поглаживает подбородок...",
       transitions: [
         {
           id: "random_bot_wins",
@@ -381,11 +381,11 @@ export const auctionScript: QuestScript = {
     // Random bot wins: refund player
     {
       id: "random_bot_bids",
-      text: "Случайный бот сделал неожиданно высокую ставку!",
+      text: "Шальной покупатель вдруг вскидывает табличку и перебивает тебя! Молоток бьёт — лот не твой, ставку возвращают.",
       transitions: [
         {
           id: "random_bot_claim",
-          label: "...",
+          label: "Забрать назад свою ставку",
           toLocation: "next_lot_dispatch",
           effects: ["budget += 100"],
           autoExecute: true,
@@ -397,7 +397,7 @@ export const auctionScript: QuestScript = {
     // Level 1: dispatch by lot_class_current (1–4)
     {
       id: "player_wins",
-      text: "Вы выиграли лот {current_lot}!",
+      text: "«Продано!» — молоток бьёт в твою пользу. Лот {current_lot} твой, служители катят добычу к тебе.",
       transitions: [
         {
           id: "pw_c1",
@@ -437,7 +437,7 @@ export const auctionScript: QuestScript = {
     // Class 1 (value 100): profit deltas → bid_low: +0, bid_high: -150
     {
       id: "pw_bid_c1",
-      text: "...",
+      text: "Под тряпьём — дешёвый хлам класса 1, от силы 100 кр. Барыш едва покроет ставку.",
       transitions: [
         {
           id: "pw_c1_b1",
@@ -460,7 +460,7 @@ export const auctionScript: QuestScript = {
     // Class 2 (value 200): bid_low: +100, bid_high: -50
     {
       id: "pw_bid_c2",
-      text: "...",
+      text: "Груз класса 2 — крепкий товар на 200 кр перекупщику. Прибавка честная.",
       transitions: [
         {
           id: "pw_c2_b1",
@@ -483,7 +483,7 @@ export const auctionScript: QuestScript = {
     // Class 3 (value 300): bid_low: +200, bid_high: +50
     {
       id: "pw_bid_c3",
-      text: "...",
+      text: "Лакомый груз класса 3 — на рынке уйдёт за 300 кр. Есть чем поживиться.",
       transitions: [
         {
           id: "pw_c3_b1",
@@ -506,7 +506,7 @@ export const auctionScript: QuestScript = {
     // Class 4 (value 400): bid_low: +300, bid_high: +150
     {
       id: "pw_bid_c4",
-      text: "...",
+      text: "Жемчужина торгов — редкость класса 4, добрых 400 кр перекупщику. Ты сорвал куш.",
       transitions: [
         {
           id: "pw_c4_b1",
@@ -528,7 +528,7 @@ export const auctionScript: QuestScript = {
     },
     {
       id: "pw_done",
-      text: "...",
+      text: "Добычу оттаскивают к твоим ногам. Аукционист уже тянется за следующим лотом.",
       transitions: [
         {
           id: "pw_next",
@@ -543,7 +543,7 @@ export const auctionScript: QuestScript = {
     // --- Next lot dispatcher (routes by current_lot 1–8) ---
     {
       id: "next_lot_dispatch",
-      text: "Следующий лот...",
+      text: "Помост пустеет. Аукционист сверяется со списком — на очереди новый лот...",
       transitions: [
         {
           id: "nl_1",
@@ -614,7 +614,7 @@ export const auctionScript: QuestScript = {
     // --- Final verdict ---
     {
       id: "final_verdict",
-      text: "Аукцион завершён. Куплено лотов: {lots_won}/8 | Прибыль: {profit} кр",
+      text: "Последний молоток отгремел, зал пустеет. В твоих руках {lots_won} из 8 лотов, в книге барыша — {profit} кр. Устоял ли ты порог в 500?",
       transitions: [
         {
           id: "fv_win",
@@ -638,16 +638,18 @@ export const auctionScript: QuestScript = {
     {
       id: "quest_success",
       text:
-        "Блестящая торговля! Прибыль {profit} кр — достаточно для апгрейда корабля.\n" +
-        "Куплено лотов: {lots_won}/8 | Остаток бюджета: {budget} кр",
+        "Ты читал зал как открытую книгу — дал богачу выдохнуться и снимал сливки по дешёвке.\n" +
+        "Барыш {profit} кр хватит на славный апгрейд корабля.\n" +
+        "Взято лотов: {lots_won}/8 | В кошельке ещё звенит: {budget} кр",
       isSuccess: true,
       transitions: [],
     },
     {
       id: "quest_failure_profit",
       text:
-        "Аукцион окончен. Прибыль {profit} кр — недостаточно (нужно ≥500 кр).\n" +
-        "Куплено лотов: {lots_won}/8 | Остаток бюджета: {budget} кр",
+        "Ты либо палил дорогими ставками, либо дрожал над каждой монетой — и упустил ночь.\n" +
+        "Барыш всего {profit} кр, а требовалось не меньше 500. Перекупщик разводит руками.\n" +
+        "Взято лотов: {lots_won}/8 | Осталось на дне кошелька: {budget} кр",
       isFailure: true,
       transitions: [],
     },
