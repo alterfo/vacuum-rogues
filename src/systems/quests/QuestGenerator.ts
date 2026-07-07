@@ -616,7 +616,13 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
         template: {
           id: defId,
           title: `Оборона: ${targetSys.name} (${jumps} прыж.)`,
-          description: `${defIssuer.title} ${defIssuer.name} бьёт тревогу: OVERMIND угрожает системе ${targetSys.name}. Прилетите туда лично и остановите экспансию, пока ещё есть что оборонять.`,
+          description: pickDefenseDesc(
+            defRng,
+            defIssuer.title,
+            defIssuer.name,
+            targetSys.name,
+            credits,
+          ),
           type: QuestType.DEFENSE,
           objectives: [
             {
@@ -1353,3 +1359,44 @@ function pickExplorationDesc(
   ];
   return templates[rng.nextInt(0, templates.length - 1)];
 }
+
+function pickDefenseDesc(
+  rng: SeededRNG,
+  issuerTitle: string,
+  issuerName: string,
+  targetName: string,
+  reward: number,
+): string {
+  const who = `${issuerTitle} ${issuerName}`;
+  const templates = [
+    `${who} бьёт тревогу: OVERMIND угрожает системе ${targetName}. Прилетите туда лично и остановите экспансию, пока ещё есть что оборонять. Оплата: ${reward} ₢.`,
+    `Фронт у ${targetName} трещит по швам. ${who} умоляет удержать рубеж лично — эвакуация не успевает, а OVERMIND не ждёт. За оборону системы платят ${reward} ₢.`,
+    `${who} шлёт сигнал бедствия из ${targetName}: щупальца OVERMIND уже на подходе. Нужен кто-то, кто не сбежит при первом контакте. Ставка — ${reward} ₢ и репутация героя.`,
+    `Гарнизон ${targetName} редеет, а ${who} не может гарантировать даже завтрашний день. Прикрой систему, пока не поздно, — контракт на ${reward} ₢ уже подписан твоим именем.`,
+    `«${targetName} нельзя отдавать», — коротко говорит ${who}. OVERMIND в соседней системе, счёт идёт на дни. Прилетай, держи оборону, получи ${reward} ₢ — если будет кому платить.`,
+    `${who} собирает последних добровольцев на защиту ${targetName}. Соседний узел уже заражён, и оттуда ползёт тьма. За то, чтобы фронт устоял, обещают ${reward} ₢.`,
+  ];
+  return templates[rng.nextInt(0, templates.length - 1)];
+}
+
+/**
+ * Test-facing view onto the per-`QuestType` flavor-text pickers (Task 16). Each
+ * renders one of ≥ 4 seeded phrasing variants with the given interpolation
+ * inputs. Exported for `questBoardTextVariety.test.ts` (variant coverage /
+ * broken-interpolation checks) — production quest generation calls the module
+ * helpers directly, never through this record.
+ */
+export const __questDescPickers = {
+  delivery: (rng: SeededRNG) =>
+    pickDeliveryDesc(rng, "Логист Вега", "медикаменты", "Гамма", 4200),
+  bounty: (rng: SeededRNG) =>
+    pickBountyDesc(rng, "Егерь Тор", "Скорпион", "Дельта", 6100),
+  escort: (rng: SeededRNG) =>
+    pickEscortDesc(rng, "Обозный Кит", "Транспорт «Мул»", "Эпсилон", 5300),
+  diplomacy: (rng: SeededRNG) =>
+    pickDiplomacyDesc(rng, "Эмиссар Лан", "Дзета", 3800),
+  exploration: (rng: SeededRNG) =>
+    pickExplorationDesc(rng, "Изыскатель Ро", "Эта", 2900),
+  defense: (rng: SeededRNG) =>
+    pickDefenseDesc(rng, "Комендант", "Оск", "Тета", 7400),
+} as const;

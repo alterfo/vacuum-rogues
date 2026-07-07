@@ -1315,14 +1315,38 @@ the user's "тупизна автопилота" hypothesis is CONFIRMED and now
   cyrillic gate 3 ✓, tsc ✓, lint 0 errors ✓.
 
 ### Task 16: Procedural board text variety
-- [ ] write seeded template-variant system for board quests: ≥ 4 phrasing variants per
+- [x] write seeded template-variant system for board quests: ≥ 4 phrasing variants per
       `QuestType` (DELIVERY/BOUNTY/ESCORT/DIPLOMACY/EXPLORATION/DEFENSE), picked
       deterministically by seed; texts read as живые объявления, not dry templates
-- [ ] thread faction/system/cargo details into the variants so no two boards read identical
-- [ ] write tests: determinism (same seed ⇒ same text), variant coverage (all variants
+- [x] thread faction/system/cargo details into the variants so no two boards read identical
+- [x] write tests: determinism (same seed ⇒ same text), variant coverage (all variants
       reachable), no broken interpolations, dedup still holds
-- [ ] update e2e quest-board spec if visible texts changed
-- [ ] run quest + e2e regression suites — green before Task 17
+- [x] update e2e quest-board spec if visible texts changed (no update needed — no e2e pins
+      these flavor texts; DEFENSE was the only changed string and nothing asserts it)
+- [x] run quest + e2e regression suites — green before Task 17 (1 PRE-EXISTING unrelated
+      e2e failure, see notes)
+
+**Task 16 notes (2026-07-07):**
+- The five ROUTINE pickers already shipped ≥ 4 seeded phrasing variants each (8–9 apiece,
+  widened over `50fc600`/`59f1f0f`) threading issuer/system/cargo/reward — DELIVERY 9, BOUNTY 8
+  (+ internal gang pool), ESCORT 8, DIPLOMACY 8, EXPLORATION 8. Task 16's real gap was **DEFENSE**,
+  which had a single hard-coded description in `generateQuestBoard`.
+- New `pickDefenseDesc(rng, issuerTitle, issuerName, targetName, reward)` — 6 seeded variants
+  (kept the legacy «бьёт тревогу» line as variant 0, + 5 new живые объявления), each threading
+  the issuer, the frontier system name, and a `${reward} ₢` payout. Wired into the DEFENSE
+  injection block (`defRng`-seeded, so byte-deterministic per board). No production DEFENSE text
+  was pinned by any test, so no existing assertion was touched.
+- Test-facing `__questDescPickers` record exported (dev/test surface only — production calls the
+  module helpers directly) so variant coverage / broken-interpolation can be asserted directly.
+- New tests: `src/tests/quests/questBoardTextVariety.test.ts` (8 tests) — ≥ 4 distinct phrasings
+  per picker with no broken interpolation (`undefined`/`NaN`/`${`/`«»`), per-picker determinism,
+  routine boards always thread reward + target system, DEFENSE ≥ 4 distinct across 80 seeds,
+  board byte-determinism, and the dedupe contract (unique keys per board + active-quest exclusion
+  on refresh). **No existing test assertion touched** (license not needed — additive flavor).
+- Gates: quest suite 33 files / 619 ✓ (incl. the 8 new), pre-existing `questGeneratorFlavor` +
+  `overmind` DEFENSE tests still green, tsc ✓, lint 0 errors ✓. E2E regression: only failure is
+  the documented pre-existing "PlanetScene cursor stays default" smoke (Task 5 ⚠️ note) — verified
+  identical WITH my changes stashed; unrelated to quest text (Task 17 visual sweep candidate).
 
 ### Task 17: Visual audit + targeted fixes
 - [ ] sweep a full campaign session visually: letsplay live (`` ` ``) + Playwright screenshots
