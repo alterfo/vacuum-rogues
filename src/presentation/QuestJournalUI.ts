@@ -306,7 +306,8 @@ export class QuestJournalUI {
     // to a concrete NEIGHBOUR planet (`targetPlanetId`). Resolve that destination
     // so the cargo objective can offer a route to the neighbour. Cross-system
     // deliveries already route via their own VISIT_LOCATION objective, so skip
-    // those (they keep the existing per-objective button).
+    // those (they keep the existing per-objective button). A BOUNTY hunt
+    // (DEFEAT_ENEMY-only) reuses the same resolution below.
     const hasVisitObjective = quest.objectives.some(
       (o) => o.type === "VISIT_LOCATION" || o.type === "VISIT_SYSTEM",
     );
@@ -335,7 +336,11 @@ export class QuestJournalUI {
       const suffix = isReadyToDeliver ? " — ✓ сдать" : "";
       const text = `${completedOrReady ? "✓" : "○"} ${objective.description}: ${displayAmount}/${objective.targetAmount}${suffix}`;
 
-      // Navigate target for VISIT_LOCATION / VISIT_SYSTEM / courier COLLECT_ITEM.
+      // Navigate target for VISIT_LOCATION / VISIT_SYSTEM / courier COLLECT_ITEM /
+      // BOUNTY DEFEAT_ENEMY. The bounty hunt reuses the courier destination
+      // resolution (same-system + concrete target planet → the planet, else the
+      // system), falling back to the quest's target system when no concrete
+      // target planet resolves at all (e.g. an uninhabited target system).
       const navTargetId =
         !objective.completed && this.onNavigateToObjective
           ? objective.type === "VISIT_LOCATION" &&
@@ -346,7 +351,9 @@ export class QuestJournalUI {
               ? objective.targetSystemId
               : objective.type === "COLLECT_ITEM" && courierNavId
                 ? courierNavId
-                : null
+                : objective.type === "DEFEAT_ENEMY"
+                  ? (courierNavId ?? quest.targetSystemId)
+                  : null
           : null;
       return { text, completedOrReady, navTargetId };
     });

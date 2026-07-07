@@ -177,15 +177,15 @@ understanding on the committed state before starting Task 4.
 - [x] run unit + playtest suites — green before Task 5
 
 ### Task 5: «Проложить маршрут» on BOUNTY quests (Bug 5)
-- [ ] write red unit test: `activeDestination`/nav-target resolution yields the hunted ship's
+- [x] write red unit test: `activeDestination`/nav-target resolution yields the hunted ship's
       system for a BOUNTY quest (`DEFEAT_ENEMY` + `targetSystemId`); red E2E: bounty card in
       the quest journal shows the route button
-- [ ] extend the `navTargetId` logic in `QuestJournalUI.buildCardContent` (:338-350) so
+- [x] extend the `navTargetId` logic in `QuestJournalUI.buildCardContent` (:338-350) so
       `DEFEAT_ENEMY` objectives route to `quest.targetSystemId` via the existing
       warp-to-system action (reuse `createPlotRouteButton`/`activeDestination` — no new nav)
-- [ ] verify same-system bounty routes to the local target planet where set
+- [x] verify same-system bounty routes to the local target planet where set
       (`targetPlanetId`), cross-system to the system
-- [ ] run unit + playtest + e2e — green before Task 6
+- [x] run unit + playtest + e2e — green before Task 6
 
 ### Task 6: InfoCenter search actually finds things (Bug 6)
 - [ ] first run an empirical probe (headless scene or E2E) reproducing «ничего не ищется»:

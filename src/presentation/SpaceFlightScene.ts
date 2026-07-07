@@ -178,8 +178,7 @@ export class SpaceFlightScene extends GameScene {
       | {
           gameEngine?: GameEngine;
           entryVector?: { x: number; y: number };
-          // Arrival heading (radians) — continues the departure heading (Bug 4).
-          arrivalHeading?: number;
+          arrivalHeading?: number; // radians — continues the departure heading
           pendingWarp?: {
             targetSystemId: string;
             fuelCost: number;
@@ -367,12 +366,7 @@ export class SpaceFlightScene extends GameScene {
       ? loadoutStats.speed
       : (this.DISTANCE_PER_DAY / 1000) *
         Math.min(1.4, Math.max(0.8, ship?.speed ?? 1));
-    this.shipPhysics = new ShipPhysics(
-      entryX,
-      entryY,
-      cruise || 0.1,
-      ctx?.arrivalHeading ?? 0,
-    );
+    this.shipPhysics = new ShipPhysics(entryX, entryY, cruise || 0.1, ctx?.arrivalHeading ?? 0); // prettier-ignore
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();

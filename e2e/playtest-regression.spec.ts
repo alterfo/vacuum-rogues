@@ -721,6 +721,116 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('BOUNTY quest card shows a real-pointer "Проложить маршрут" route button (Bug 5)', async ({ page }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+    await page.mouse.move(5, 5);
+
+    // Pick a real target system (not the player's current one) + one of its
+    // planets, so the route button has a genuine cross-system destination to
+    // dispatch to the star map.
+    const targets = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle & {
+        player: { currentSystemId: string } | null;
+      };
+      const systems = (engine.galaxy?.systems ?? []) as Array<{
+        id: string;
+        planets: Array<{ id: string }>;
+      }>;
+      const here = engine.player?.currentSystemId;
+      const target = systems.find((s) => s.id !== here && s.planets.length > 0);
+      return target ? { systemId: target.id, planetId: target.planets[0].id } : null;
+    });
+    expect(targets).not.toBeNull();
+
+    // Seed a BOUNTY quest with only a DEFEAT_ENEMY objective (no VISIT
+    // objective — the bug was that such quests got no route button at all).
+    await page.evaluate(({ systemId, planetId }) => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        questManager: {
+          acceptQuestFromTemplate: (t: unknown, p?: string, d?: number, f?: string) => unknown;
+        };
+      };
+      engine.questManager.acceptQuestFromTemplate(
+        {
+          id: 'e2e-bounty-route',
+          title: 'Охота: E2E цель',
+          description: 'bounty route test',
+          type: 'BOUNTY',
+          objectives: [
+            {
+              id: 'e2e-bounty-route_kill',
+              description: 'Уничтожить корабль «Тень»',
+              type: 'DEFEAT_ENEMY',
+              targetAmount: 1,
+            },
+          ],
+          reward: { credits: 300, experience: 90, items: [] },
+          dialogueAnchors: [],
+          deadline: 0,
+          failurePenalty: null,
+          targetSystemId: systemId,
+          targetPlanetId: planetId,
+        },
+        'unknown',
+        0,
+        '',
+      );
+    }, targets!);
+
+    // Open the journal via the HUD.
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+      (hud?.['toggleQuestJournal'] as (() => void) | undefined)?.();
+    });
+
+    // Find the "→ Лететь к цели" route button by walking the journal's Pixi tree.
+    const btn = await page.evaluate(() => {
+      type Node = {
+        text?: unknown;
+        eventMode?: string;
+        children?: Node[];
+        getGlobalPosition?: () => { x: number; y: number };
+      };
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as
+        | { questJournalUI?: { container: Node } | null }
+        | undefined;
+      const root = hud?.questJournalUI?.container;
+      if (!root) return null;
+      const hasText = (n: Node, needle: string): boolean => {
+        if (typeof n.text === 'string' && n.text.includes(needle)) return true;
+        return (n.children ?? []).some((c) => hasText(c, needle));
+      };
+      const findBtn = (n: Node): Node | null => {
+        for (const c of n.children ?? []) {
+          if (c.eventMode === 'static' && hasText(c, 'Лететь к цели')) return c;
+          const found = findBtn(c);
+          if (found) return found;
+        }
+        return null;
+      };
+      const node = findBtn(root);
+      if (!node?.getGlobalPosition) return null;
+      const p = node.getGlobalPosition();
+      return { x: p.x + 60, y: p.y + 8 };
+    });
+    expect(btn, 'bounty route button must be found').not.toBeNull();
+
+    await page.mouse.click(btn!.x, btn!.y);
+    await waitForScene(page, 'StarMapScene', 10_000);
+
+    // The route dispatched the target SYSTEM (cross-system bounty), not the planet.
+    const selected = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      return (engine.currentScene as Record<string, unknown>)?.['selectedSystemId'] ?? null;
+    });
+    expect(selected).toBe(targets!.systemId);
+
+    errorCollector.assertAndDetach();
+  });
+
   test('real-pointer install + jettison in the inventory scene work (Bug 2)', async ({ page }) => {
     await setupNewGame(page);
     const errorCollector = new ErrorCollector(page);
