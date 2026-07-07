@@ -158,7 +158,7 @@ export class LootDropHandler {
       this.removeAt(i);
       const label = item.artifactId
         ? t("flight.lootArtifact")
-        : (item.moduleId ?? t("flight.lootModule"));
+        : t("flight.lootModule");
       deps.showMessage(
         handsOn
           ? t("flight.lootPickup", { item: label })

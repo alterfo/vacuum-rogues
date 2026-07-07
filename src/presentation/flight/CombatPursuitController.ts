@@ -351,6 +351,8 @@ export class CombatPursuitController {
           )
         ) {
           this.deps.aimRoute(lead.x, lead.y);
+          this.lastAimX = lead.x;
+          this.lastAimY = lead.y;
         }
         return;
       }

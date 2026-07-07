@@ -406,12 +406,12 @@ export class NpcShipManager implements FlightModule {
           !this.warnedAggressorIds.has(sprite.npc.id) &&
           !(this.deps.isCombatant?.(sprite) ?? false)
         ) {
-          this.warnedAggressorIds.add(sprite.npc.id);
           this.deps.showMessage(
             t("flight.incomingAttacker", { name: sprite.npc.name }),
             0xff4444,
           );
         }
+        this.warnedAggressorIds.add(sprite.npc.id);
       } else {
         this.warnedAggressorIds.delete(sprite.npc.id);
       }
