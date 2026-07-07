@@ -55,7 +55,7 @@
   "src/systems/equipment/sellGear.ts": 1,
   "src/systems/equipment/sellHull.ts": 2,
   "src/systems/npc/NpcSimulator.ts": 27,
-  "src/systems/quests/QuestGenerator.ts": 234,
+  "src/systems/quests/QuestGenerator.ts": 255,
   "src/systems/quests/TextQuestRuntime.ts": 6,
   "src/systems/quests/campaignChain.ts": 27,
   "src/systems/quests/scripts/auction.ts": 53,
