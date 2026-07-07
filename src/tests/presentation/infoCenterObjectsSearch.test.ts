@@ -140,3 +140,71 @@ describe("InfoCenterScene objects search", () => {
     expect(scene.objectsQuery).toBe("");
   });
 });
+
+// Bug 6: the search index only covered NPC-ship + planet names, so a query
+// for a star-system name silently returned "Ничего не найдено" even though
+// the system exists and is reachable.
+describe("InfoCenterScene objects search — star systems (Bug 6)", () => {
+  type SceneWithRegistry = SceneInternals & {
+    gameEngine: unknown;
+    objectsResults: Array<{ kind: string }>;
+  };
+
+  it("includes a matching star system among the results, not just ships/planets", async () => {
+    const { GalacticRegistry } =
+      await import("@/systems/info/GalacticRegistry");
+    const systems = [
+      {
+        id: "A",
+        name: "Альфа",
+        connections: [{ fromSystemId: "A", toSystemId: "B", fuelCost: 5 }],
+        planets: [],
+      },
+      {
+        id: "B",
+        name: "Бета",
+        connections: [{ fromSystemId: "B", toSystemId: "A", fuelCost: 5 }],
+        planets: [],
+      },
+    ] as unknown as import("@/domain/StarSystem").StarSystem[];
+    const registry = new GalacticRegistry(systems, []);
+
+    const scene = (await makeScene()) as SceneWithRegistry;
+    scene.gameEngine = {
+      getInfoRegistry: () => registry,
+      galaxy: { systems, gameDays: 10 },
+      player: { currentSystemId: "A" },
+    };
+    scene.activeTab = "objects";
+    scene.objectsQuery = "Бета";
+    scene.runObjectsSearch();
+
+    expect(scene.objectsResults.some((r) => r.kind === "system")).toBe(true);
+  });
+
+  it("returns nothing for a query that matches no ship, planet, or system", async () => {
+    const { GalacticRegistry } =
+      await import("@/systems/info/GalacticRegistry");
+    const systems = [
+      {
+        id: "A",
+        name: "Альфа",
+        connections: [],
+        planets: [],
+      },
+    ] as unknown as import("@/domain/StarSystem").StarSystem[];
+    const registry = new GalacticRegistry(systems, []);
+
+    const scene = (await makeScene()) as SceneWithRegistry;
+    scene.gameEngine = {
+      getInfoRegistry: () => registry,
+      galaxy: { systems, gameDays: 10 },
+      player: { currentSystemId: "A" },
+    };
+    scene.activeTab = "objects";
+    scene.objectsQuery = "нигдешния";
+    scene.runObjectsSearch();
+
+    expect(scene.objectsResults).toEqual([]);
+  });
+});

@@ -22,6 +22,7 @@ import type { NewsEvent } from "@/types";
 import type {
   PlanetHit,
   ShipLocation,
+  SystemHit,
   EquipmentFacet,
   EquipmentHit,
 } from "@/systems/info/GalacticRegistry";
@@ -325,7 +326,8 @@ const FACET_LABELS: Record<EquipmentFacet, string> = {
 
 type ObjectResult =
   | { kind: "ship"; loc: ShipLocation & { jumps: number }; stale: boolean }
-  | { kind: "planet"; hit: PlanetHit; stale: boolean };
+  | { kind: "planet"; hit: PlanetHit; stale: boolean }
+  | { kind: "system"; hit: SystemHit; stale: boolean };
 
 export class InfoCenterScene extends GameScene {
   private gameEngine: GameEngine | null = null;
@@ -566,6 +568,23 @@ export class InfoCenterScene extends GameScene {
       tabLabel.y = TAB_Y + TAB_H / 2;
       tabLabel.eventMode = "none";
       this.mainContainer.addChild(tabLabel);
+    }
+
+    // Discoverability nudge: the search field lives only on ОБЪЕКТЫ, so a
+    // player who starts typing on another tab gets a visible pointer instead
+    // of silently-dropped keystrokes (Bug 6).
+    if (this.activeTab !== "objects" && PW > 620) {
+      const searchHint = scaledText(
+        t("infoCenter.objectsHintOtherTab"),
+        11,
+        0x557799,
+        { rawColor: true, fontFamily: "monospace" },
+      );
+      searchHint.anchor.set(1, 0.5);
+      searchHint.x = PX + PW - 16;
+      searchHint.y = TAB_Y + TAB_H / 2;
+      searchHint.eventMode = "none";
+      this.mainContainer.addChild(searchHint);
     }
 
     const CONTENT_Y = TAB_Y + TAB_H + 6;
@@ -866,7 +885,7 @@ export class InfoCenterScene extends GameScene {
     const queryText =
       this.objectsQuery.length > 0
         ? this.objectsQuery
-        : "Введите имя NPC или планеты...";
+        : t("infoCenter.objectsPlaceholder");
     const inputLabel = scaledText(
       queryText,
       13,
@@ -949,22 +968,32 @@ export class InfoCenterScene extends GameScene {
       rowBg.fill({ color: i % 2 === 0 ? 0x0d1220 : 0x0a0e18 });
       container.addChild(rowBg);
 
-      const stale =
-        result.kind === "ship"
-          ? isStaleSystem(result.loc.systemId, systemMap, currentDay)
-          : isStaleSystem(result.hit.systemId, systemMap, currentDay);
-
-      const name =
-        result.kind === "ship" ? result.loc.name : result.hit.planetName;
-      const sysName =
-        result.kind === "ship"
-          ? (systemMap.get(result.loc.systemId)?.name ?? result.loc.systemId)
-          : result.hit.systemName;
-      const jumps =
-        result.kind === "ship" ? result.loc.jumps : result.hit.jumps;
-      const typeLabel = result.kind === "ship" ? "[NPC]" : "[ПЛН]";
-      const systemId =
-        result.kind === "ship" ? result.loc.systemId : result.hit.systemId;
+      let name: string;
+      let sysName: string;
+      let jumps: number;
+      let typeLabel: string;
+      let systemId: string;
+      if (result.kind === "ship") {
+        name = result.loc.name;
+        sysName =
+          systemMap.get(result.loc.systemId)?.name ?? result.loc.systemId;
+        jumps = result.loc.jumps;
+        typeLabel = "[NPC]";
+        systemId = result.loc.systemId;
+      } else if (result.kind === "planet") {
+        name = result.hit.planetName;
+        sysName = result.hit.systemName;
+        jumps = result.hit.jumps;
+        typeLabel = "[ПЛН]";
+        systemId = result.hit.systemId;
+      } else {
+        name = result.hit.systemName;
+        sysName = "";
+        jumps = result.hit.jumps;
+        typeLabel = "[СИС]";
+        systemId = result.hit.systemId;
+      }
+      const stale = isStaleSystem(systemId, systemMap, currentDay);
 
       const distStr = jumps === 0 ? "здесь" : `${jumps} пр.`;
       const staleStr = stale ? " (уст.)" : "";
@@ -1051,6 +1080,15 @@ export class InfoCenterScene extends GameScene {
     for (const hit of planets.slice(0, 10)) {
       const stale = isStaleSystem(hit.systemId, systemMap, currentDay);
       this.objectsResults.push({ kind: "planet", hit, stale });
+    }
+
+    const systems = registry.findSystem({
+      name: this.objectsQuery.trim(),
+      originSystemId: originId,
+    });
+    for (const hit of systems.slice(0, 10)) {
+      const stale = isStaleSystem(hit.systemId, systemMap, currentDay);
+      this.objectsResults.push({ kind: "system", hit, stale });
     }
 
     this.objectsResults.sort((a, b) => {

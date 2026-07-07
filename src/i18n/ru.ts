@@ -488,4 +488,9 @@ export const ru: Dict = {
   "inventory.jettison": "[Выбросить]",
   "inventory.jettisonConfirm": "Точно?",
   "inventory.overflowMore": "…и ещё {n}",
+
+  // --- info center: objects search (Bug 6) -----------------------------------
+  "infoCenter.objectsPlaceholder": "Введите имя NPC, планеты или системы...",
+  "infoCenter.objectsHintOtherTab":
+    "Поиск кораблей, планет и систем — вкладка ОБЪЕКТЫ",
 };

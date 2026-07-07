@@ -188,19 +188,28 @@ understanding on the committed state before starting Task 4.
 - [x] run unit + playtest + e2e — green before Task 6
 
 ### Task 6: InfoCenter search actually finds things (Bug 6)
-- [ ] first run an empirical probe (headless scene or E2E) reproducing «ничего не ищется»:
+- [x] first run an empirical probe (headless scene or E2E) reproducing «ничего не ищется»:
       confirm the two causes — narrow index (systems/goods unsearchable) and keystrokes
-      dropped outside the ОБЪЕКТЫ tab; capture as red tests
-- [ ] broaden `GalacticRegistry`: index **star-system names** (case-insensitive substring,
+      dropped outside the ОБЪЕКТЫ tab; capture as red tests — the E2E probe additionally
+      surfaced a third, deeper cause: `GalacticRegistry`'s 5 query methods called
+      `jumpDistances` without `{ undirected: true }`, so a **directed-only BFS** under-counted
+      reachability (only 8/30 systems reachable in a real generated galaxy, vs the player's
+      actual undirected star-map nav) and silently dropped real, in-range hits — the same class
+      of bug the Overmind arc's `frontierSystems` already had to fix. This was the dominant
+      root cause; fixed alongside the index broadening (blast radius confirmed via
+      `gitnexus impact` — confined to `GalacticRegistry`'s 5 methods + `InfoCenterScene`, no
+      other production caller)
+- [x] broaden `GalacticRegistry`: index **star-system names** (case-insensitive substring,
       sorted by jump distance, same reachability rule) and surface them in `runObjectsSearch`
       results with a system-row renderer; keep ship/planet search working
-- [ ] fix the input UX: typing on the ОБЪЕКТЫ tab works from the first keystroke (visible
-      focused search field with placeholder `t()` hint; consider auto-switching to ОБЪЕКТЫ
-      when the user starts typing elsewhere in the scene, or an explicit on-screen hint)
-- [ ] write unit tests for the registry additions (match, no-match, unreachable filtered) and
+- [x] fix the input UX: typing on the ОБЪЕКТЫ tab works from the first keystroke (visible
+      focused search field with placeholder `t()` hint; kept the existing pinned "typing on a
+      different tab is a no-op" test intact and instead added an explicit on-screen hint
+      pointing to the ОБЪЕКТЫ tab when another tab is active)
+- [x] write unit tests for the registry additions (match, no-match, unreachable filtered) and
       an E2E: type a known system name → result row appears; empty query → hint, not «Ничего
       не найдено»
-- [ ] run unit + e2e — green before Task 7
+- [x] run unit + e2e — green before Task 7
 
 ### Task 7: Star-map purchase feedback — live balance + purchase toast (Bug 7)
 - [ ] write red test (unit/playtest on the scene seam): after a star-map tier purchase the

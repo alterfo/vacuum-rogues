@@ -486,4 +486,9 @@ export const en: Dict = {
   "inventory.jettison": "[Jettison]",
   "inventory.jettisonConfirm": "Confirm?",
   "inventory.overflowMore": "…and {n} more",
+
+  // --- info center: objects search (Bug 6) -----------------------------------
+  "infoCenter.objectsPlaceholder": "Enter an NPC, planet, or system name...",
+  "infoCenter.objectsHintOtherTab":
+    "Search ships, planets, systems — OBJECTS tab",
 };

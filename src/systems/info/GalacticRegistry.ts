@@ -11,6 +11,13 @@
  * or mutate it); rebuild (or construct anew) after the simulation advances.
  * Gear/weapon/hull search (EPIC-007 catalog) plugs in here once that data
  * model exists; for now market goods are the searchable inventory.
+ *
+ * All jump-distance ranking is `jumpDistances(..., { undirected: true })` — the
+ * warp graph has one-way links, but the star-map nav lets the player jump an
+ * edge either direction, so a directed-only BFS under-counted reachability and
+ * a real, in-range ship/planet/system silently vanished from search (Bug 6,
+ * `docs/plans/20260706-ui-flight-bugfixes.md`). Same metric `QuestGenerator`
+ * and `GameEngine` already use.
  */
 import type { StarSystem } from "@/domain/StarSystem";
 import type { NpcShip } from "@/domain/NpcShip";
@@ -80,6 +87,20 @@ export interface PlanetHit {
 
 export interface PlanetQuery {
   /** Case-insensitive substring to match against planet names. */
+  readonly name: string;
+  readonly originSystemId: string;
+  readonly maxJumps?: number;
+}
+
+/** A star-system location result for the "Объекты" info-center tab. */
+export interface SystemHit {
+  readonly systemId: string;
+  readonly systemName: string;
+  readonly jumps: number;
+}
+
+export interface SystemQuery {
+  /** Case-insensitive substring to match against system names. */
   readonly name: string;
   readonly originSystemId: string;
   readonly maxJumps?: number;
@@ -222,7 +243,9 @@ export class GalacticRegistry {
 
   /** Ships matching role/faction/name, within an optional jump radius, nearest first. */
   findShips(query: ShipQuery): (ShipLocation & { jumps: number })[] {
-    const dist = jumpDistances(this.systems, query.originSystemId);
+    const dist = jumpDistances(this.systems, query.originSystemId, {
+      undirected: true,
+    });
     const nameLower = query.name?.toLowerCase();
     const out: (ShipLocation & { jumps: number })[] = [];
     for (const loc of this.shipById.values()) {
@@ -241,7 +264,9 @@ export class GalacticRegistry {
 
   /** Find planets by (partial, case-insensitive) name match, nearest first. */
   findPlanet(query: PlanetQuery): PlanetHit[] {
-    const dist = jumpDistances(this.systems, query.originSystemId);
+    const dist = jumpDistances(this.systems, query.originSystemId, {
+      undirected: true,
+    });
     const nameLower = query.name.toLowerCase();
     const out: PlanetHit[] = [];
     for (const sys of this.systems) {
@@ -267,6 +292,26 @@ export class GalacticRegistry {
     return out;
   }
 
+  /** Find star systems by (partial, case-insensitive) name match, nearest first. */
+  findSystem(query: SystemQuery): SystemHit[] {
+    const dist = jumpDistances(this.systems, query.originSystemId, {
+      undirected: true,
+    });
+    const nameLower = query.name.toLowerCase();
+    const out: SystemHit[] = [];
+    for (const sys of this.systems) {
+      if (!sys.name.toLowerCase().includes(nameLower)) continue;
+      const jumps = dist.get(sys.id);
+      if (jumps === undefined) continue; // unreachable from origin
+      if (query.maxJumps !== undefined && jumps > query.maxJumps) continue;
+      out.push({ systemId: sys.id, systemName: sys.name, jumps });
+    }
+    out.sort(
+      (a, b) => a.jumps - b.jumps || a.systemName.localeCompare(b.systemName),
+    );
+    return out;
+  }
+
   // --- Market / resource queries (US-092/093/094) -------------------------
 
   /**
@@ -275,7 +320,9 @@ export class GalacticRegistry {
    * I buy X best / cheapest, and how far is it" lookup (US-094).
    */
   findResource(query: ResourceQuery): ResourceHit[] {
-    const dist = jumpDistances(this.systems, query.originSystemId);
+    const dist = jumpDistances(this.systems, query.originSystemId, {
+      undirected: true,
+    });
     const hits: ResourceHit[] = [];
     for (const l of this.listings) {
       if (l.resource !== query.resource) continue;
@@ -307,7 +354,9 @@ export class GalacticRegistry {
    * hull/weapon meeting criterion X, and how far is it" (US-094).
    */
   findGear(query: GearQuery): GearHit[] {
-    const dist = jumpDistances(this.systems, query.originSystemId);
+    const dist = jumpDistances(this.systems, query.originSystemId, {
+      undirected: true,
+    });
     const hits: GearHit[] = [];
     for (const l of this.gearListings) {
       const g = l.gear;
@@ -339,7 +388,9 @@ export class GalacticRegistry {
    * names. Used by the InfoCenter gear tab faceted filter.
    */
   findEquipment(query: EquipmentQuery): EquipmentHit[] {
-    const dist = jumpDistances(this.systems, query.originSystemId);
+    const dist = jumpDistances(this.systems, query.originSystemId, {
+      undirected: true,
+    });
     const systemMap = new Map<string, StarSystem>(
       this.systems.map((s) => [s.id, s]),
     );

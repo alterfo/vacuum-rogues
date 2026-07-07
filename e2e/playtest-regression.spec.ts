@@ -2797,4 +2797,100 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
 
     errorCollector.assertAndDetach();
   });
+
+  test('regression: InfoCenter objects search finds star systems by name, not just ships/planets (Bug 6)', async ({
+    page,
+  }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        galaxy: { systems: Array<{ id: string; planets: Array<{ id: string }> }> } | null;
+        player: { currentSystemId: string } | null;
+        transitionTo: (scene: string, ctx?: object) => Promise<void>;
+      };
+      const systems = engine.galaxy?.systems ?? [];
+      const here =
+        systems.find((s) => s.id === engine.player?.currentSystemId) ?? systems[0];
+      const planet = here?.planets[0];
+      await engine.transitionTo('INFO_CENTER', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'InfoCenterScene', 15_000);
+
+    // Pick a reachable system other than the player's own — the exact kind of
+    // query that used to come back "Ничего не найдено" because the index only
+    // covered NPC-ship + planet names.
+    const target = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        galaxy: { systems: Array<{ id: string; name: string }> } | null;
+        player: { currentSystemId: string } | null;
+      };
+      const systems = engine.galaxy?.systems ?? [];
+      const other = systems.find((s) => s.id !== engine.player?.currentSystemId);
+      return other ? { id: other.id, name: other.name } : null;
+    });
+    expect(target, 'a second reachable system exists to search for').not.toBeNull();
+
+    // Click the "ОБЪЕКТЫ" tab with a REAL pointer. The tab background Graphics
+    // draws its hit-rect at an absolute panel offset (not at its own x/y), so
+    // this mirrors InfoCenterScene.render()'s own layout math rather than
+    // relying on getGlobalPosition() (which would return the origin, not the
+    // drawn rect).
+    const tabCenter = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const renderer = (
+        engine.currentScene as unknown as {
+          renderer: { app: { screen: { width: number; height: number } } };
+        }
+      ).renderer;
+      const sw = renderer.app.screen.width;
+      const sh = renderer.app.screen.height;
+      const PW = Math.min(860, sw - 40);
+      const PX = (sw - PW) / 2;
+      const PY = 20;
+      const TAB_Y = PY + 50;
+      const TAB_W = 120;
+      const TAB_H = 30;
+      const tabsStartX = PX + 16;
+      const tx = tabsStartX + 1 * (TAB_W + 6); // index 1 = "ОБЪЕКТЫ"
+      void sh;
+      return { x: tx + TAB_W / 2, y: TAB_Y + TAB_H / 2 };
+    });
+    await page.mouse.move(5, 5);
+    await page.mouse.click(tabCenter.x, tabCenter.y);
+
+    // Type the target system's name via real KeyboardEvents dispatched on
+    // `window` — the exact channel InfoCenterScene.onKeyDown listens on
+    // (the scene has no DOM text input to focus; it's canvas-only UI).
+    await page.evaluate((name: string) => {
+      for (const ch of name) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: ch }));
+      }
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    }, target!.name);
+
+    const texts = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const out: string[] = [];
+      const walk = (node: unknown): void => {
+        if (!node || typeof node !== 'object') return;
+        const n = node as { text?: unknown; children?: unknown[] };
+        if (typeof n.text === 'string' && n.text) out.push(n.text);
+        for (const c of n.children ?? []) walk(c);
+      };
+      walk(engine.currentScene?.['mainContainer']);
+      return out;
+    });
+
+    expect(texts.some((t) => t.includes(target!.name))).toBe(true);
+    expect(texts.some((t) => t.includes('[СИС]'))).toBe(true);
+    expect(texts.some((t) => t.includes('Ничего не найдено'))).toBe(false);
+
+    errorCollector.assertAndDetach();
+  });
 });
