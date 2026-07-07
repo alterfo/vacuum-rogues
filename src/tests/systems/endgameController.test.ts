@@ -123,6 +123,7 @@ function makeDeps(
       showLoading: vi.fn(),
       hideLoading: vi.fn(),
       showGameOutcome: vi.fn(),
+      dismissAll: vi.fn(),
     },
     hasRenderer: () => true,
     getPlayerDeathCallback: () => undefined,

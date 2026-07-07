@@ -124,6 +124,28 @@ export interface AgentMemory {
    * (don't warp straight back to the system just left).
    */
   previousSystemId: string | null;
+  /**
+   * Internal: a short rolling history of recently-departed system ids
+   * (most-recent-first, bounded to {@link RECENT_SYSTEM_IDS_MAX}), pushed
+   * alongside {@link previousSystemId} on every genuine system change.
+   * Unlike `previousSystemId` (one step back), this survives more than one
+   * hop — `pickFrontwardNeighbor`'s slayer-advance tie-break needs it because
+   * a single-step anti-backtrack doesn't stop a hub/triangle topology from
+   * ping-ponging between two-or-more tied neighbours forever (F1, live-session
+   * finding: sys_22↔14↔23 bounced 173 times around a hub).
+   */
+  recentSystemIds: string[];
+  /**
+   * Internal: consecutive genuine system-changes that land on a system
+   * already in {@link recentSystemIds} — the backstop for a topology where
+   * `pickFrontwardNeighbor`'s recency tie-break still can't escape (every
+   * neighbour of every system in the cycle is itself in the recent history).
+   * Resets to 0 on a system change that is NOT a revisit. `MemoryHeuristicPolicy`
+   * reads this to stand the slayer-advance tier down once it crosses
+   * `FRONT_CYCLE_STREAK_LIMIT`, treating the front as not genuinely reachable
+   * this tick instead of looping forever.
+   */
+  frontCycleStreak: number;
   /** Count of system-to-system hops since the last landing — the anti-warp-loop cadence signal. */
   consecutiveWarpsWithoutLanding: number;
   /** The player's known outstanding loan, or absent when none is carried. */
@@ -213,6 +235,9 @@ export interface AgentMemory {
   warpRejectFolds: number;
 }
 
+/** Bound on {@link AgentMemory.recentSystemIds} — see its field doc. */
+export const RECENT_SYSTEM_IDS_MAX = 4;
+
 /**
  * The {@link AgentMemory.completedQuestsBaseline} an `observe()` call should use
  * — the memory's own captured baseline once known, else "no completions yet
@@ -264,6 +289,8 @@ export function createMemory(): AgentMemory {
     lastSystemId: null,
     lastCurrentPlanetId: null,
     previousSystemId: null,
+    recentSystemIds: [],
+    frontCycleStreak: 0,
     consecutiveWarpsWithoutLanding: 0,
     loanState: undefined,
     deadlockDetected: false,
@@ -356,6 +383,8 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
       lastSystemId: mem.lastSystemId,
       lastCurrentPlanetId: mem.lastCurrentPlanetId,
       previousSystemId: mem.previousSystemId,
+      recentSystemIds: [...mem.recentSystemIds],
+      frontCycleStreak: mem.frontCycleStreak,
       consecutiveWarpsWithoutLanding: mem.consecutiveWarpsWithoutLanding,
       loanState: mem.loanState,
       deadlockDetected: mem.deadlockDetected,
@@ -457,6 +486,26 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
   const previousSystemId = systemChanged
     ? mem.lastSystemId
     : mem.previousSystemId;
+  // 4.6) Recent-system history + front-cycle streak (F1, three-year-campaign
+  // Task 16b): on a genuine hop, push the just-departed system onto a bounded
+  // rolling history (most-recent-first) — see `AgentMemory.recentSystemIds`'s
+  // field doc for why this outlives the single-step `previousSystemId`.
+  // `frontCycleStreak` counts consecutive hops that land back on a system
+  // already in that PRE-update history (a revisit within the window); any
+  // other hop (fresh territory) resets it, and a non-hop fold leaves both
+  // untouched.
+  const recentSystemIds =
+    systemChanged && mem.lastSystemId !== null
+      ? [mem.lastSystemId, ...mem.recentSystemIds].slice(
+          0,
+          RECENT_SYSTEM_IDS_MAX,
+        )
+      : mem.recentSystemIds;
+  const frontCycleStreak = !systemChanged
+    ? mem.frontCycleStreak
+    : obs.system && mem.recentSystemIds.includes(obs.system.id)
+      ? mem.frontCycleStreak + 1
+      : 0;
 
   // 5) Loan state — only what the observation says right now; no loan ⇒ absent.
   const loanState = obs.activeLoans
@@ -546,6 +595,8 @@ export function updateMemory(mem: AgentMemory, obs: Observation): AgentMemory {
     lastSystemId,
     lastCurrentPlanetId: obs.currentPlanet?.id ?? null,
     previousSystemId,
+    recentSystemIds,
+    frontCycleStreak,
     consecutiveWarpsWithoutLanding,
     loanState,
     deadlockDetected: mem.deadlockDetected,

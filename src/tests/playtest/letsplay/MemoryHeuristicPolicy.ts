@@ -201,6 +201,21 @@ export const MAX_STAR_MAP_WARP_STALLS = 2;
 export const DISCOVERY_LANDINGS_PER_SYSTEM = 2;
 
 /**
+ * Consecutive system-changes that land back on a system already in
+ * `AgentMemory.recentSystemIds` (F1, live-session finding) above which the
+ * slayer-advance tier treats the front as NOT genuinely reachable this tick
+ * and stands down. A single-step anti-backtrack (never warp straight back to
+ * `previousSystemId`) is not enough to break a hub/triangle topology where
+ * `hopsToOvermindFront` ties across 2+ neighbours: a live session bounced
+ * sys_22↔14↔23 around a hub 173 times, alternating between the same two
+ * "not the immediate previous" neighbours forever. `recentSystemIds` tracks a
+ * short multi-step history so the tie-break (`pickFrontwardNeighbor`)
+ * de-prioritises anything recently visited, and this streak counter is the
+ * backstop for topologies where every neighbour is still in that history.
+ */
+export const FRONT_CYCLE_STREAK_LIMIT = 3;
+
+/**
  * Trip point for `AgentMemory.warpRejectFolds` — once the SPACE_FLIGHT tier
  * sees this many consecutive star-map round trips return without a system
  * change, it stops emitting the `early-explore` warp and lets the
@@ -424,10 +439,16 @@ function pickWarpNeighbor(
  * slayer's `slayer-advance` warp. A neighbour that is itself `overmindHeld` is
  * the front, so it wins outright; otherwise the neighbour with the smallest
  * `hopsToOvermindFront` (multi-source BFS distance to the nearest held system,
- * stamped by `observe()`) wins, breaking ties away from `previousSystemId` so
- * two adjacent systems don't ping-pong. Returns `undefined` when no neighbour
- * has a known route to the front (no front, or older fixtures without neighbour
- * detail) — the caller then leaves the warp untargeted for the applier.
+ * stamped by `observe()`) wins, breaking ties by `mem.recentSystemIds` — a
+ * short rolling history of recently-departed systems (F1, hardened past the
+ * single-step `previousSystemId` check: a hub/triangle topology where two or
+ * more neighbours tie on hop count can still ping-pong between "not the
+ * immediate previous" neighbours forever — a live session bounced
+ * sys_22↔14↔23 around a hub 173 times). The most recently visited tied
+ * neighbour loses first; a neighbour never visited recently always wins a
+ * tie. Returns `undefined` when no neighbour has a known route to the front
+ * (no front, or older fixtures without neighbour detail) — the caller then
+ * leaves the warp untargeted for the applier.
  */
 function pickFrontwardNeighbor(
   neighbors: SystemSnapshot["neighbors"],
@@ -442,7 +463,12 @@ function pickFrontwardNeighbor(
   for (const n of neighbors) {
     const hops = n.hopsToOvermindFront;
     if (hops === undefined) continue;
-    const tie = n.systemId === mem.previousSystemId ? 1 : 0;
+    const recentIdx = mem.recentSystemIds.indexOf(n.systemId);
+    // Not recently visited ⇒ tie 0 (best). Recently visited ⇒ a penalty that
+    // grows with recency (index 0 = just departed = the worst tie), so a
+    // longer-ago revisit is still preferred over immediately doubling back —
+    // and a genuinely fresh neighbour always beats either.
+    const tie = recentIdx === -1 ? 0 : mem.recentSystemIds.length - recentIdx;
     if (hops < bestHops || (hops === bestHops && tie < bestTie)) {
       bestHops = hops;
       bestTie = tie;
@@ -1024,27 +1050,70 @@ export function decideWithMemory(
     push("warp", "flee-overmind-front");
   }
 
-  // 1.6) Overmind-slayer, advance (Task 3): a battle-ready ship NOT yet in a
-  // garrison, with no local fight and fuel to spare, routes TOWARD the nearest
-  // Overmind-held system to go clear it (targeted by `pickFrontwardNeighbor` in
-  // the pick block below). Ranked below every survival tier above (present-
-  // hostile reaction, low-hull repair, fuel-critical refuel, front-flee) so
-  // survival always wins *between* engagements, but above the ordinary
-  // trade/earn/explore ladder in the scene switch — once strong enough,
-  // finishing the war outranks more trading. Requires a neighbour with a known
-  // route to the front (`hopsToOvermindFront`), so it never fires with no arc
-  // to fight. Deliberately NOT gated by the anti-consecutive-warp cadence: a
-  // committed march to the front shouldn't be interrupted by the generic
-  // anti-blind-warp heuristic, exactly like `flee-overmind-front` above.
+  // Hoisted above the slayer-advance tier (originally derived further down,
+  // alongside `restockSystem`/`go-deliver`) so slayer-advance can itself read
+  // `deliverableElsewhere` (F1: don't preempt a loaded, ready delivery for a
+  // multi-hop trek to the front). Pure functions of `obs` only — safe to
+  // compute this early; still used unchanged at their original call sites.
+  const hostileHeld = new Set(obs.hostileSystemIds ?? []);
+  const currentSystemId = obs.system?.id ?? null;
+  const deliverableElsewhere = obs.quests.some(
+    (q) =>
+      q.type === QuestType.DELIVERY &&
+      q.targetSystemId != null &&
+      q.targetSystemId !== currentSystemId &&
+      !hostileHeld.has(q.targetSystemId) &&
+      (!q.collectItem || q.collectItem.carried >= q.collectItem.required),
+  );
+
+  // 1.6) Overmind-slayer, advance (Task 3, hardened Task 16b/F1): a
+  // battle-ready ship NOT yet in a garrison, with no local fight and fuel to
+  // spare, routes TOWARD the nearest Overmind-held system to go clear it
+  // (targeted by `pickFrontwardNeighbor` in the pick block below). Ranked
+  // below every survival tier above (present-hostile reaction, low-hull
+  // repair, fuel-critical refuel, front-flee) so survival always wins
+  // *between* engagements, but above the ordinary trade/earn/explore ladder
+  // in the scene switch — once strong enough, finishing the war outranks
+  // more trading. Requires a neighbour with a known route to the front
+  // (`hopsToOvermindFront`), so it never fires with no arc to fight.
+  // Deliberately NOT gated by the anti-consecutive-warp cadence: a committed
+  // march to the front shouldn't be interrupted by the generic anti-blind-warp
+  // heuristic, exactly like `flee-overmind-front` above.
+  //
+  // Two live-session findings (F1) hardened this tier:
+  //  - `frontCycleOk` — `mem.frontCycleStreak` (see `AgentMemory`) counts
+  //    consecutive system-changes that land back on a recently-visited system
+  //    (`mem.recentSystemIds`, a short rolling history — not just the single
+  //    immediate previous system `pickFrontwardNeighbor` already avoids). A
+  //    live session bounced sys_22↔14↔23 around a hub 173 times: every hop
+  //    tied on `hopsToOvermindFront` and the single-step anti-backtrack let it
+  //    alternate between the same two neighbours forever. Once the streak
+  //    crosses `FRONT_CYCLE_STREAK_LIMIT` the front is treated as NOT
+  //    genuinely reachable this tick — the ladder falls through to the
+  //    ordinary economy/explore tiers below instead of looping.
+  //  - `frontAdjacent || !deliverableElsewhere` — a battle-ready ship must not
+  //    preempt a loaded, ready-to-turn-in delivery for a multi-hop trek to the
+  //    front (measured: a live session sat on 12/12 loaded cargo, 969cr, 3
+  //    jumps out, the ENTIRE late game because slayer-advance always won the
+  //    tie against `go-deliver`). It MAY still preempt when the front is
+  //    genuinely reachable+clearable — i.e. a neighbour is already
+  //    Overmind-held, one warp from a fight — since finishing an adjacent
+  //    fight is worth more than a detour to deliver.
   const frontReachable = (obs.system?.neighbors ?? []).some(
     (n) => n.hopsToOvermindFront !== undefined,
   );
+  const frontAdjacent = (obs.system?.neighbors ?? []).some(
+    (n) => n.overmindHeld,
+  );
+  const frontCycleOk = mem.frontCycleStreak < FRONT_CYCLE_STREAK_LIMIT;
   if (
     battleReady &&
     !inGarrison &&
     obs.hostiles.length === 0 &&
     !fuelGate &&
-    frontReachable
+    frontReachable &&
+    frontCycleOk &&
+    (frontAdjacent || !deliverableElsewhere)
   ) {
     push("warp", "slayer-advance");
   }
@@ -1187,8 +1256,8 @@ export function decideWithMemory(
   // real star map shows every captured system galaxy-wide — a remembered
   // destination the spread front swallowed since the last visit must be
   // refused HERE, not discovered by flying into its garrison (the measured
-  // day-255 pinned-at-the-front wedge). See `Observation.hostileSystemIds`.
-  const hostileHeld = new Set(obs.hostileSystemIds ?? []);
+  // day-255 pinned-at-the-front wedge). See `Observation.hostileSystemIds`
+  // (`hostileHeld` itself is now hoisted above the slayer-advance tier).
   const restockBuyPrice =
     best.good != null && best.buyPlanet != null
       ? (mem.priceBook.get(best.buyPlanet)?.get(best.good)?.buy ?? Infinity)
@@ -1239,21 +1308,10 @@ export function decideWithMemory(
       ? undefined
       : sellRouteSystemSeen;
 
-  const currentSystemId = obs.system?.id ?? null;
-  // A carried DELIVERY quest that is COMPLETABLE (no cargo requirement, or
-  // the requirement fully bought) but targets ANOTHER system (Task 7) — the
-  // `go-deliver` warp's condition, derived once here because the flight tier
-  // AND the STAR_MAP tier (the two-step warp's second half) both need it.
-  // A target the spread captured after acceptance is NOT flown to (the quest
-  // expires honestly instead — no payout is worth entering a garrison).
-  const deliverableElsewhere = obs.quests.some(
-    (q) =>
-      q.type === QuestType.DELIVERY &&
-      q.targetSystemId != null &&
-      q.targetSystemId !== currentSystemId &&
-      !hostileHeld.has(q.targetSystemId) &&
-      (!q.collectItem || q.collectItem.carried >= q.collectItem.required),
-  );
+  // `currentSystemId`/`deliverableElsewhere` (the `go-deliver` warp's
+  // condition — the flight tier AND the STAR_MAP tier's two-step warp both
+  // need it, and now so does the slayer-advance tier above) are hoisted
+  // above the slayer-advance tier; still in scope here unchanged.
   // Directed quest-cargo sourcing (Task 7): an active DELIVERY quest with an
   // UNMET cargo need used to wait for the agent to *stumble* onto a planet
   // stocking the good (measured: accept ≈ day 40, cargo found ≈ day 70 — the

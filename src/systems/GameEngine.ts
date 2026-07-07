@@ -576,6 +576,12 @@ export class GameEngine {
       this.currentScene = null;
     }
 
+    // Tear down any open modal/loading overlay's OWN bookkeeping BEFORE the
+    // blanket clearUILayer() below destroys every UI-layer child out from
+    // under it — else the presenter's tracking arrays keep stale destroyed-
+    // object references across scenes (F4, three-year-campaign Task 16b).
+    this.overlay.dismissAll();
+
     // Safety net: guarantee no orphaned interactive objects survive a scene's incomplete destroy() (prevents click-swallowing across scenes).
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
@@ -828,7 +834,7 @@ export class GameEngine {
   liberateCurrentSystem(): boolean {
     if (!this.canLiberateCurrentSystem()) return false;
     const systemId = this.player!.currentSystemId;
-    const liberated = this.galaxy!.tryLiberate(systemId);
+    const liberated = this.galaxy!.tryLiberate(systemId, "player");
     if (liberated) {
       logger.info(`Player liberated system ${systemId}`);
     }

@@ -120,7 +120,7 @@ export class QuestCompletion {
       const marked = questManager.markObjectivesDone(quest.id);
       if (marked) {
         if (quest.targetObjectId) {
-          galaxy.tryLiberate(quest.targetObjectId);
+          galaxy.tryLiberate(quest.targetObjectId, "player");
           logger.info(
             `DEFENSE quest objectives done: ${quest.title}, liberated hostile system ${quest.targetObjectId}`,
           );

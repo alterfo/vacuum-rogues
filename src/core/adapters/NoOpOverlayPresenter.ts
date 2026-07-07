@@ -12,4 +12,5 @@ export class NoOpOverlayPresenter implements IOverlayPresenter {
   showLoading(): void {}
   hideLoading(): void {}
   showGameOutcome(): void {}
+  dismissAll(): void {}
 }

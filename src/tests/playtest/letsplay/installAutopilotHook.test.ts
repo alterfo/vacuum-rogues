@@ -1,6 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { SceneType, QuestType } from "@/types";
 import type { GameEngine } from "@/systems/GameEngine";
+
+// Mocked so tests can drive the F3 "a help panel is open" branch without
+// constructing a real PixiJS HelpPanel (this file never mocks pixi.js —
+// the `createLiveSceneController` tests below use hand-built engine fakes).
+vi.mock("@/presentation/ui/mountSceneHelp", () => ({
+  isHelpPanelOpen: vi.fn(() => false),
+  dismissHelpPanel: vi.fn(),
+}));
+import {
+  isHelpPanelOpen,
+  dismissHelpPanel,
+} from "@/presentation/ui/mountSceneHelp";
 import {
   installAutopilotHook,
   createLiveSceneController,
@@ -153,6 +165,55 @@ describe("installAutopilotHook — window hook + hotkey", () => {
     onKey({ shiftKey: true, key: "F" } as KeyboardEvent);
     expect(flagSpy).not.toHaveBeenCalled();
     expect(hook.engaged).toBe(false);
+  });
+});
+
+describe("installAutopilotHook — AgentMemory reset on galaxy-identity change (F6)", () => {
+  beforeEach(() => {
+    clearWindowHook();
+  });
+  afterEach(() => {
+    clearWindowHook();
+  });
+
+  /** A minimal no-player engine — `observe()` early-returns for it (cheap, no scene rendering). */
+  function fakeEngine(galaxyId: string): GameEngine {
+    return {
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      player: null,
+      galaxy: { id: galaxyId },
+      questManager: { getCompletedQuestIds: () => [] as string[] },
+    } as unknown as GameEngine;
+  }
+
+  it("resets AgentMemory when the engine's galaxy id changes across ticks (new game while still engaged)", async () => {
+    const engine = fakeEngine("galaxy-A");
+    const hook = installAutopilotHook(engine, quietDeps);
+    hook.start();
+
+    await hook.controller.tickOnce();
+    await hook.controller.tickOnce();
+    await hook.controller.tickOnce();
+    expect(hook.controller.currentMemory().step).toBe(3);
+
+    // Simulate «Новая игра» while the autopilot stayed engaged (never disengaged,
+    // so `start()`'s own reset never re-fires) — a fresh galaxy, same engine instance.
+    (engine as unknown as { galaxy: { id: string } }).galaxy.id = "galaxy-B";
+    await hook.controller.tickOnce();
+
+    // Reset-then-incremented-once, not carried over from the previous galaxy.
+    expect(hook.controller.currentMemory().step).toBe(1);
+  });
+
+  it("does NOT reset when the galaxy id stays the same across ticks", async () => {
+    const engine = fakeEngine("galaxy-A");
+    const hook = installAutopilotHook(engine, quietDeps);
+    hook.start();
+
+    await hook.controller.tickOnce();
+    await hook.controller.tickOnce();
+
+    expect(hook.controller.currentMemory().step).toBe(2);
   });
 });
 
@@ -378,6 +439,104 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(breakOffCombatPursuit).toHaveBeenCalledTimes(1);
   });
 
+  it("flee() drives an actual escape route away from the system centre (F8 — breaking off pursuit alone froze the ship)", async () => {
+    const executeRouteTo = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        combatPause: { paused: false },
+        npcManager: { breakOffCombatPursuit: vi.fn() },
+        shipPhysics: { shipX: 100, shipY: 0, isMoving: false },
+        executeRouteTo,
+        pendingWarp: null,
+        starRenderer: { centerX: 0, centerY: 0 },
+        SYSTEM_BOUNDARY_RADIUS: 1000,
+      },
+    });
+
+    await createLiveSceneController(engine).flee();
+
+    // The ship sits at (100, 0), 100 px from centre (0,0) along +x — the
+    // near-edge escape point is the SAME direction, scaled out to the
+    // boundary radius (1000, 0), never a NaN/degenerate result.
+    expect(executeRouteTo).toHaveBeenCalledTimes(1);
+    const [x, y] = executeRouteTo.mock.calls[0] as [number, number];
+    expect(x).toBeCloseTo(1000);
+    expect(y).toBeCloseTo(0);
+  });
+
+  it("flee() does NOT plot a route while a jump is already pending (the committed-warp near-edge path owns that)", async () => {
+    const executeRouteTo = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { breakOffCombatPursuit: vi.fn() },
+        shipPhysics: { shipX: 100, shipY: 0, isMoving: false },
+        executeRouteTo,
+        pendingWarp: { targetSystemId: "sys-2" },
+        starRenderer: { centerX: 0, centerY: 0 },
+        SYSTEM_BOUNDARY_RADIUS: 1000,
+      },
+    });
+
+    await createLiveSceneController(engine).flee();
+
+    expect(executeRouteTo).not.toHaveBeenCalled();
+  });
+
+  it("flee() does NOT re-plot a route while the ship is already moving (an escape already in progress)", async () => {
+    const executeRouteTo = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { breakOffCombatPursuit: vi.fn() },
+        shipPhysics: { shipX: 100, shipY: 0, isMoving: true },
+        executeRouteTo,
+        pendingWarp: null,
+        starRenderer: { centerX: 0, centerY: 0 },
+        SYSTEM_BOUNDARY_RADIUS: 1000,
+      },
+    });
+
+    await createLiveSceneController(engine).flee();
+
+    expect(executeRouteTo).not.toHaveBeenCalled();
+  });
+
+  it("tick() dismisses an open help panel and returns without touching anything else (F3)", () => {
+    vi.mocked(isHelpPanelOpen).mockReturnValue(true);
+    const closeModals = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        npcManager: { hasOpenModal: () => true, closeModals },
+      },
+    });
+
+    createLiveSceneController(engine).tick();
+
+    expect(dismissHelpPanel).toHaveBeenCalledTimes(1);
+    // The help-panel check runs FIRST and returns — the encounter-overlay
+    // dismissal (a separate, later concern) must not also fire this tick.
+    expect(closeModals).not.toHaveBeenCalled();
+
+    vi.mocked(isHelpPanelOpen).mockReturnValue(false);
+  });
+
+  it("tick() does not touch the help-panel seam when none is open", () => {
+    vi.mocked(isHelpPanelOpen).mockReturnValue(false);
+    vi.mocked(dismissHelpPanel).mockClear();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+
+    createLiveSceneController(engine).tick();
+
+    expect(dismissHelpPanel).not.toHaveBeenCalled();
+  });
+
   it("tick() calls closeModals() when npcManager.hasOpenModal() is true", () => {
     const closeModals = vi.fn();
     const engine = mockEngine({
@@ -400,6 +559,78 @@ describe("createLiveSceneController — verb → live engine call", () => {
     });
     createLiveSceneController(engine).tick();
     expect(closeModals).not.toHaveBeenCalled();
+  });
+
+  it("tick() starts a turn (e2eStartTurn) when the ship is genuinely idle in flight (F7)", () => {
+    const e2eStartTurn = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        pendingWarp: null,
+        plannedRoute: null,
+        shipPhysics: { isMoving: false },
+        isTurnRunning: false,
+        combatModule: { isActive: false },
+        e2eStartTurn,
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(e2eStartTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it("tick() does NOT start a turn when a turn is already running", () => {
+    const e2eStartTurn = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        pendingWarp: null,
+        plannedRoute: null,
+        shipPhysics: { isMoving: false },
+        isTurnRunning: true,
+        combatModule: { isActive: false },
+        e2eStartTurn,
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(e2eStartTurn).not.toHaveBeenCalled();
+  });
+
+  it("tick() does NOT start a turn while a fight is active", () => {
+    const e2eStartTurn = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        pendingWarp: null,
+        plannedRoute: null,
+        shipPhysics: { isMoving: false },
+        isTurnRunning: false,
+        combatModule: { isActive: true },
+        e2eStartTurn,
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(e2eStartTurn).not.toHaveBeenCalled();
+  });
+
+  it("tick() does NOT start a turn while the ship is already moving", () => {
+    const e2eStartTurn = vi.fn();
+    const engine = mockEngine({
+      currentSceneType: SceneType.SPACE_FLIGHT,
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        pendingWarp: null,
+        plannedRoute: null,
+        shipPhysics: { isMoving: true },
+        isTurnRunning: false,
+        combatModule: { isActive: false },
+        e2eStartTurn,
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(e2eStartTurn).not.toHaveBeenCalled();
   });
 
   it("attack(targetId) delegates to npcManager.e2eEngageCombat(targetId)", () => {

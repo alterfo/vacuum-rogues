@@ -14,13 +14,14 @@
  * / `MemoryHeuristicPolicy.test.ts`, plus a unit test of the frontward BFS.
  */
 import { describe, it, expect } from "vitest";
-import { SceneType, FactionType } from "@/types";
+import { SceneType, FactionType, QuestType } from "@/types";
 import {
   legalActionsForScene,
   type Observation,
   type PlayerSnapshot,
   type SystemSnapshot,
   type NpcSnapshot,
+  type QuestSnapshot,
 } from "./observe";
 import { createMemory } from "./AgentMemory";
 import {
@@ -30,6 +31,7 @@ import {
   BATTLE_READY_WEAPON_DAMAGE,
   SLAYER_RETREAT_HULL_FRACTION,
   REFUEL_THRESHOLD,
+  FRONT_CYCLE_STREAK_LIMIT,
 } from "./MemoryHeuristicPolicy";
 import { overmindFrontHopDistances } from "./engineQueries";
 
@@ -64,6 +66,7 @@ interface Opts {
   overmindShare?: number;
   nearOvermindCore?: boolean;
   canLiberate?: boolean;
+  quests?: QuestSnapshot[];
 }
 
 function obs(opts: Opts = {}): Observation {
@@ -102,7 +105,7 @@ function obs(opts: Opts = {}): Observation {
     currentPlanet: null,
     npcs: hostiles,
     hostiles,
-    quests: [],
+    quests: opts.quests ?? [],
     legalActions,
     overmindHeldHere: opts.overmindHeldHere,
     overmindShare: opts.overmindShare,
@@ -354,5 +357,155 @@ describe("decideWithMemory — survival tiers outrank the advance (Task 3)", () 
     // fight-or-flee-by-hull reaction applies, never `slayer-advance`.
     expect(action.reason).not.toContain("slayer-advance");
     expect(["attack", "flee"]).toContain(action.kind);
+  });
+});
+
+describe("decideWithMemory — slayer-advance anti-ping-pong (Task 16b / F1)", () => {
+  it("recentSystemIds (not just the single previous system) breaks a tied hop count toward the neighbour NOT recently visited", () => {
+    const here = obs({
+      neighbors: [
+        {
+          systemId: "B",
+          visited: true,
+          overmindHeld: false,
+          hopsToOvermindFront: 2,
+        },
+        {
+          systemId: "C",
+          visited: true,
+          overmindHeld: false,
+          hopsToOvermindFront: 2,
+        },
+      ],
+    });
+    const mem = { ...createMemory(), recentSystemIds: ["B"] };
+
+    const action = decideWithMemory(here, mem);
+
+    expect(action.reason).toContain("slayer-advance");
+    expect(action.targetId).toBe("C");
+  });
+
+  it("a 3-system hub cycle (sys_22↔14↔23, the live-session finding) never repeats the same pick twice in a row", () => {
+    // Simulates standing at the hub with both spokes tied on hop count and
+    // BOTH already in the rolling history (the pathological case a single-step
+    // anti-backtrack can't escape) — the least-recently-visited of the two wins.
+    const here = obs({
+      neighbors: [
+        {
+          systemId: "sys_22",
+          visited: true,
+          overmindHeld: false,
+          hopsToOvermindFront: 2,
+        },
+        {
+          systemId: "sys_23",
+          visited: true,
+          overmindHeld: false,
+          hopsToOvermindFront: 2,
+        },
+      ],
+    });
+    // Just came from sys_23, and sys_22 before that.
+    const mem = { ...createMemory(), recentSystemIds: ["sys_23", "sys_22"] };
+
+    const action = decideWithMemory(here, mem);
+
+    // sys_22 is the least-recently-visited of the two tied candidates.
+    expect(action.targetId).toBe("sys_22");
+  });
+
+  it("a front-cycle streak at the limit stands slayer-advance down (treats the front as unreachable this tick)", () => {
+    const here = obs({
+      neighbors: [
+        {
+          systemId: "near",
+          visited: false,
+          overmindHeld: false,
+          hopsToOvermindFront: 1,
+        },
+      ],
+      planets: [{ id: "P", name: "P", availableQuests: 0 }],
+    });
+    const mem = {
+      ...createMemory(),
+      frontCycleStreak: FRONT_CYCLE_STREAK_LIMIT,
+    };
+
+    const action = decideWithMemory(here, mem);
+
+    expect(action.reason).not.toContain("slayer-advance");
+  });
+
+  it("a front-cycle streak below the limit still allows the advance", () => {
+    const here = obs({
+      neighbors: [
+        {
+          systemId: "near",
+          visited: false,
+          overmindHeld: false,
+          hopsToOvermindFront: 1,
+        },
+      ],
+    });
+    const mem = {
+      ...createMemory(),
+      frontCycleStreak: FRONT_CYCLE_STREAK_LIMIT - 1,
+    };
+
+    const action = decideWithMemory(here, mem);
+
+    expect(action.reason).toContain("slayer-advance");
+  });
+
+  it("does NOT preempt a loaded, ready-to-turn-in delivery for a multi-hop trek to the front", () => {
+    const here = obs({
+      neighbors: [
+        {
+          systemId: "near",
+          visited: false,
+          overmindHeld: false,
+          hopsToOvermindFront: 3,
+        },
+      ],
+      quests: [
+        {
+          id: "q1",
+          title: "Delivery",
+          type: QuestType.DELIVERY,
+          targetSystemId: "elsewhere",
+        },
+      ],
+    });
+
+    const action = decideWithMemory(here, createMemory());
+
+    expect(action.reason).not.toContain("slayer-advance");
+  });
+
+  it("STILL advances when the front is genuinely adjacent, even with a ready delivery elsewhere", () => {
+    const here = obs({
+      neighbors: [
+        {
+          systemId: "held",
+          visited: true,
+          overmindHeld: true,
+          hopsToOvermindFront: 0,
+        },
+      ],
+      quests: [
+        {
+          id: "q1",
+          title: "Delivery",
+          type: QuestType.DELIVERY,
+          targetSystemId: "elsewhere",
+        },
+      ],
+    });
+
+    const action = decideWithMemory(here, createMemory());
+
+    expect(action.reason).toContain("slayer-advance");
+    expect(action.targetId).toBe("held");
   });
 });

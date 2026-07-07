@@ -466,6 +466,7 @@ export const OvermindSpreadStateSchema = z.object({
   status: OvermindStatusSchema,
   threat: z.number().min(0).max(1),
   peakThreat: z.number().min(0).max(1),
+  playerLiberations: z.number().int().min(0).optional(),
 });
 
 /** The dormant default arc state (mirrors initialOvermindSpreadState()). */

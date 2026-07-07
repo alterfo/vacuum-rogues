@@ -104,6 +104,50 @@ export function helpButtonRect(screenWidth: number): {
   };
 }
 
+/** A tracked open panel: itself + the container it was added to (for removal). */
+interface TrackedHelpPanel {
+  panel: HelpPanel;
+  container: Container;
+}
+
+/**
+ * Module-level registry of every currently-open help panel — normally at most
+ * one (only one scene is active at once, and its teardown closes its own
+ * panel), but a `Set` rather than a single slot so a rare stacked case (a
+ * scene's own auto-hint plus a transient `showHelpOnce` panel both live at
+ * once) can never cross-clobber each other's bookkeeping. Promoted to module
+ * scope so it can be queried/dismissed WITHOUT a scene reference — this is
+ * what lets the dev autopilot (F3, three-year-campaign Task 16b) detect and
+ * close a help panel it can't see through the scene port: a live session
+ * showed the autopilot acting through the port UNDER a full-screen help/
+ * onboarding backdrop that blocks a real player's pointer but never
+ * dismisses on its own.
+ */
+const openHelpPanels = new Set<TrackedHelpPanel>();
+
+/** Whether any onboarding/contextual-help panel is currently open (F3). */
+export function isHelpPanelOpen(): boolean {
+  return openHelpPanels.size > 0;
+}
+
+/**
+ * Dismiss ONE currently-open help panel (arbitrary if more than one is
+ * stacked) — identical effect to the player clicking «Понятно»/«✕» (F3). A
+ * safe no-op when nothing is open. The autopilot's per-tick loop calls this
+ * repeatedly, so a rare multi-panel stack clears within a few ticks.
+ */
+export function dismissHelpPanel(): void {
+  const tracked = openHelpPanels.values().next().value;
+  if (!tracked) return;
+  removeTrackedPanel(tracked);
+}
+
+function removeTrackedPanel(tracked: TrackedHelpPanel): void {
+  openHelpPanels.delete(tracked);
+  tracked.container.removeChild(tracked.panel.container);
+  tracked.panel.destroy();
+}
+
 /**
  * Mount contextual help for `key` into the scene. Returns a teardown to call
  * from `destroy()`. Pass `options.firstTimeKey` to greet a brand-new player with
@@ -122,20 +166,22 @@ export function mountSceneHelp(
   const hasSeen = deps.hasSeen ?? defaultHasSeen;
   const markSeen = deps.markSeen ?? defaultMarkSeen;
 
-  // The currently-open panel, if any (one at a time).
-  let panel: HelpPanel | null = null;
+  // The currently-open panel FOR THIS MOUNT, if any (one at a time — unchanged
+  // from before the shared registry existed).
+  let tracked: TrackedHelpPanel | null = null;
 
   const closePanel = (): void => {
-    if (!panel) return;
-    deps.container.removeChild(panel.container);
-    panel.destroy();
-    panel = null;
+    if (!tracked) return;
+    removeTrackedPanel(tracked);
+    tracked = null;
   };
 
   const openPanel = (entry: HelpEntry): void => {
-    if (panel) return; // already open — ignore re-clicks
-    panel = new HelpPanel(deps.renderer, entry, closePanel);
+    if (tracked) return; // already open — ignore re-clicks
+    const panel = new HelpPanel(deps.renderer, entry, closePanel);
     deps.container.addChild(panel.container);
+    tracked = { panel, container: deps.container };
+    openHelpPanels.add(tracked);
   };
 
   // The always-available top-right «?» reopen button — always opens `key`'s hint
@@ -185,14 +231,15 @@ export function showHelpOnce(deps: SceneHelpDeps, key: HelpKey): () => void {
   if (hasSeen(key)) return () => {};
   markSeen(key);
 
-  let panel: HelpPanel | null = null;
+  let tracked: TrackedHelpPanel | null = null;
   const close = (): void => {
-    if (!panel) return;
-    deps.container.removeChild(panel.container);
-    panel.destroy();
-    panel = null;
+    if (!tracked) return;
+    removeTrackedPanel(tracked);
+    tracked = null;
   };
-  panel = new HelpPanel(deps.renderer, helpFor(key), close);
+  const panel = new HelpPanel(deps.renderer, helpFor(key), close);
   deps.container.addChild(panel.container);
+  tracked = { panel, container: deps.container };
+  openHelpPanels.add(tracked);
   return close;
 }

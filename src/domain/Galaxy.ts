@@ -137,14 +137,28 @@ export class Galaxy {
    * Liberate a system: remove it from overmind or pirate control and emit a
    * SYSTEM_LIBERATED news event. Returns true if the system was hostile and
    * has been freed; false if it was already faction-controlled (no-op).
+   *
+   * `source: "player"` marks a genuine player-driven liberation (a combat
+   * clear the player actually fought, or a DEFENSE quest they completed) and
+   * increments `overmindArc.playerLiberations` when the freed system was
+   * Overmind-held — the counter `advanceOvermind` reads to gate the arc's
+   * `won` derivation on real player participation (F10: an NPC-only
+   * equilibrium/auto-liberation clearing the front must never win the game
+   * for a player who never engaged). NPC-driven liberation (Ranger convoys,
+   * the garrison-cleared-and-held countdown) defaults to `"npc"` and does
+   * not count.
    */
-  tryLiberate(systemId: string): boolean {
+  tryLiberate(systemId: string, source: "player" | "npc" = "npc"): boolean {
     const wasOvermind = this.isOvermindSystem(systemId);
     const wasPirate = this.isPirateSystem(systemId);
     if (!wasOvermind && !wasPirate) return false;
 
     if (wasOvermind) {
       this.removeOvermindSystem(systemId);
+      if (source === "player") {
+        this.overmindArc.playerLiberations =
+          (this.overmindArc.playerLiberations ?? 0) + 1;
+      }
     } else {
       this.removePirateSystem(systemId);
     }

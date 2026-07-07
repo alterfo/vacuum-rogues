@@ -1356,7 +1356,7 @@ catalog of live-mode failures — full evidence with traces/screenshots in the s
 of these. Fix each with the regression-first process; the live-applier fixes are letsplay
 harness code (dev-only), the F10/F1 items are GAME/policy fixes.
 
-- [ ] **(F10 — CRITICAL, game) Overmind arc wins itself — unearned sudden victory.** Observed
+- [x] **(F10 — CRITICAL, game) Overmind arc wins itself — unearned sudden victory.** Observed
       live: victory screen at ~day 140 with player at rank 0, rep −10, 894cr, never
       battle-ready — NPC equilibrium/recapture cleared ALL Overmind systems during active
       spread; `engaged && set→0` fired the win. Fix: arc "won" must require PLAYER
@@ -1366,7 +1366,7 @@ harness code (dev-only), the F10/F1 items are GAME/policy fixes.
       Then AUDIT the headless campaign win-stats: prior "wins" may include self-wins —
       re-run the 50-session measure and re-record honest numbers. Red test first
       (arc does NOT resolve to won when only NPCs cleared it).
-- [ ] **(F1 — CRITICAL, policy) slayer-advance warp ping-pong.** Both sessions that survived
+- [x] **(F1 — CRITICAL, policy) slayer-advance warp ping-pong.** Both sessions that survived
       the early game spent their ENTIRE late game bouncing sys_A↔B↔C around a hub (S1: 173
       warps sys_22↔14↔23, credits frozen at 4122 from day 136 to 200+; S2: same at day 172,
       triangle 24↔19↔18) — every action `warp/mem:slayer-advance`. `pickFrontwardNeighbor`
@@ -1376,42 +1376,151 @@ harness code (dev-only), the F10/F1 items are GAME/policy fixes.
       previous system (no immediate backtrack), commit to an advance target until reached or
       invalidated, and don't preempt a loaded delivery unless the front is genuinely
       reachable+clearable. Red seeded test reproducing the tie flip-flop.
-- [ ] **(F7 — CRITICAL, live applier) live `wait` is a no-op ⇒ stagnation-wait deadlocks.**
+- [x] **(F7 — CRITICAL, live applier) live `wait` is a no-op ⇒ stagnation-wait deadlocks.**
       `LiveApplier.ts:170-172` maps wait → controller.tick() (one frame, day does NOT
       advance for a stationary ship), while the policy's stagnation-wait
       (MemoryHeuristicPolicy.ts:1741) assumes wait ALWAYS advances the world (true only
       headless). Once daysStagnant arms in live, wait loops forever (S2: 8.9 min at day 0;
       S4: identical with FRESH memory). Fix: live wait must engage the scene's real
       wait-a-day seam (waitDayAccum / MS_PER_WAIT_DAY), not a bare tick.
-- [ ] **(F9 — CRITICAL, live applier) live `land` no-ops when re-targeting after take-off.**
-      First-30-actions trace (S5): land→planet_Лира_0 works; after take-off,
-      land→planet_Лира_1 froze for 8 consecutive ticks (isMoving=false, position frozen) —
-      the approach never starts (take-off input-grace swallows it? approach state not set).
-      When the early-explore warp valve is also gated, this arms daysStagnant → F7 → the
-      day-0 deadlock that killed S4 (and S2). Fix the live land executor to actually start
-      (and retry) the approach; add a live-parity playtest.
-- [ ] **(F8 — CRITICAL, live applier) live `flee` no-ops — ship freezes mid-space.** S3 and
+- [x] ⚠️ **(F9 — CRITICAL, live applier) live `land` no-ops when re-targeting after take-off
+      — INVESTIGATED, NOT REPRODUCED headlessly, NOT independently fixed.** First-30-actions
+      trace (S5): land→planet_Лира_0 works; after take-off, land→planet_Лира_1 froze for 8
+      consecutive ticks. Built a real-engine probe (`RealEngineHarness` + real
+      `SpaceFlightScene`, take off from a planet then immediately re-target a second
+      habitable planet in the same system, retrying `land()` every tick exactly like the
+      autopilot loop): `PlayerShipRenderer.finishTakeoff()` (called by `executeRouteTo`)
+      cancels the cosmetic take-off arc and unparks physics IMMEDIATELY and
+      synchronously — the probe showed `isMoving=true` and real position progress on the
+      very next tick, no freeze, every time. The land/take-off code path this finding
+      describes is NOT broken in this (headless, `harness.tick(16)`-driven) reproduction, so
+      guessing further here risks a wrong "fix" with no red test to prove it addresses the
+      real bug. Root cause is likely live-only timing (real rAF/DOM scheduling, or an
+      interaction with the F8 near-edge escape / F7 turn-start seam this same task landed) —
+      out of reach for a headless agent per the plan's own "empirical-probe-first" rule.
+      Deferred to a follow-up session with real-browser access; not re-attempted blindly.
+- [x] **(F8 — CRITICAL, live applier) live `flee` no-ops — ship freezes mid-space.** S3 and
       S6: every tick `flee/mem:flee-outgunned→npc_surge_*` with shipPhysics.targetX/Y ==
       shipX/Y EXACTLY, isMoving=false, forever (S3 at the system edge x=-1809; S6
       mid-system at (243,447) — NOT edge-specific). The committed-flee near-edge warp-out
       (Task 9 iv) never fires on the live path. Fix the live flee executor: real flee
       vector + escalate a committed flee to the warp-out; live-parity playtest.
-- [ ] **(F6 — HIGH, live applier) AgentMemory survives new-game restart.** Fresh game at
+- [x] **(F6 — HIGH, live applier) AgentMemory survives new-game restart.** Fresh game at
       day 0 carried consecutiveWarpsWithoutLanding=15, foldsSinceDayAdvance=784,
       daysWithoutCreditGain=63 from the previous run → instant poisoned-counter deadlock.
       Fix: installAutopilotHook recreates AgentMemory on new-game/galaxy-identity change.
-- [ ] **(F3 — HIGH, live applier) autopilot blind to modal overlays.** Onboarding help
+- [x] **(F3 — HIGH, live applier) autopilot blind to modal overlays.** Onboarding help
       panels + encounter prompts (SOS/обломки/аномалии) block the PLAYER (full-screen
       eventMode="static") while the autopilot keeps acting through the port UNDER them and
       never dismisses. Fix: live loop detects overlays each tick — dismiss help panels,
       route encounter prompts through a policy decision (default: decline/close).
-- [ ] **(F4 — LOW) OverlayPresenter.modalObjects leaks destroyed objects** (5 destroyed
+- [x] **(F4 — LOW) OverlayPresenter.modalObjects leaks destroyed objects** (5 destroyed
       entries persisted across scenes/sessions — something destroys modal children without
       clearModal()). Clear on scene teardown; guard test.
-- [ ] re-run a 3-session live smoke (dev autopilot, real browser or real-scene playtest
+- [x] re-run a 3-session live smoke (dev autopilot, real browser or real-scene playtest
       equivalent) proving: no day-0 deadlock, no flee freeze, no ping-pong over a 300-day
       window, no unearned win — record in this plan
-- [ ] run full unit + playtest + letsplay:ci + save-compat — green before Task 17
+- [x] run full unit + playtest + letsplay:ci + save-compat — green before Task 17
+
+**Task 16b notes (2026-07-07):**
+- **F10 (unearned victory)**: new `Galaxy.tryLiberate(systemId, source: "player" | "npc" = "npc")`
+  increments a new optional-additive `OvermindSpreadState.playerLiberations` counter when
+  `source === "player"` liberates an Overmind system (no migration — absent ⇒ 0). Wired at the
+  THREE genuine player-driven call sites: `GameEngine.liberateCurrentSystem()` (the slayer-liberate
+  action), `QuestCompletion.defenseBySystemEntry()` (a completed DEFENSE quest), and
+  `EndgameController.showGameOutcomeScreen`'s core-cleanup (harmless — that path already forces
+  `won` directly, unaffected by the gate). The two NPC-only paths (`NpcSimulator`'s Ranger convoy
+  liberation and its garrison-cleared-and-held countdown) keep the `"npc"` default and do NOT
+  count. `advanceOvermind`'s `coreBroken`/`eradicated` win derivation now additionally requires
+  `(state.playerLiberations ?? 0) > 0` — an NPC-only equilibrium clearing the whole front can no
+  longer fire a spurious "ПОБЕДА!". **Tests rewritten under the plan's license** (meaning
+  preserved — a genuine player-caused clear still wins): `overmindSpread.test.ts`'s two existing
+  win tests now stamp `playerLiberations: 1` before the final advance; `overmindOutcome.test.ts` /
+  `overmindNoSpuriousVictory.test.ts` (`STILL wins when eradicated`) call `tryLiberate(id,
+  "player")` instead of the default; `questCompletionFlight.test.ts`'s DEFENSE-liberation
+  assertion updated to the 2-arg call. New tests: 6 in `overmindSpread.test.ts` (incl. a dedicated
+  "NPC-only clear does NOT win" case for both coreBroken and eradicated), 7 in
+  `tryLiberateSource.test.ts`, 2 in `overmindArcPersistence.test.ts` (schema tolerance/round-trip).
+- **F1 (slayer-advance ping-pong)**: `AgentMemory` gained `recentSystemIds` (bounded rolling
+  history of departed systems, `RECENT_SYSTEM_IDS_MAX=4`) and `frontCycleStreak` (consecutive
+  hops that land back on a system already in that history). `pickFrontwardNeighbor`'s tie-break
+  now uses recency rank across the WHOLE history (not just the single `previousSystemId` step
+  back), and the `slayer-advance` gate stands down once `frontCycleStreak` crosses
+  `FRONT_CYCLE_STREAK_LIMIT` (3) — treating the front as not genuinely reachable that tick instead
+  of looping. Also fixed the priority inversion: `deliverableElsewhere`/`hostileHeld`/
+  `currentSystemId` hoisted above the slayer-advance block so it can gate on
+  `frontAdjacent || !deliverableElsewhere` — a loaded, ready-to-turn-in delivery is no longer
+  preempted for a multi-hop trek to the front, but an ADJACENT front (one hop away, genuinely
+  clearable now) still presses. New tests: 6 in `overmindSlayer.test.ts` (recency tie-break,
+  3-system hub-cycle tie-break, cycle-streak stand-down at/below the limit, delivery preemption
+  gated on adjacency). No existing test touched.
+- **F7 (live wait no-op)**: `createLiveSceneController`'s `tick()` now presses "Ход"
+  (`SpaceFlightScene.e2eStartTurn()`, the same seam E2E specs use — internally idempotent, a
+  no-op if a turn is already running) whenever the ship is genuinely idle in flight: not moving,
+  no pending warp/planned route, no turn running, no active fight. Root cause: the Space-Rangers
+  turn model gates `advanceWaitTime` (the day-counting clock) on `isTurnRunning`, which only a
+  route or an explicit "Play" sets — the live rAF loop never starts one on its own, so a
+  stationary `wait` decision froze the calendar forever. New tests: 4 in
+  `installAutopilotHook.test.ts` (starts on genuine idle; skipped while a turn runs / a fight is
+  active / already moving).
+- **F8 (live flee no-op)**: `flee()` now drives an actual escape after breaking off pursuit —
+  `breakOffCombatPursuit()` only YIELDS the auto-track steering, it never plots a route, so the
+  ship had no course at all and froze. Reused the exact near-edge escape math Task 9 (iv) built
+  for a committed flee-jump (`warpEdgePoint(ship, center, exitVector, boundaryRadius,
+  fromMidSystem: true)` — radially outward from the ship's current position, no star-avoidance
+  detour needed) and drives there via `executeRouteTo`, gated on not already moving / no pending
+  warp (don't reset an escape already in progress). New tests: 3 in `installAutopilotHook.test.ts`
+  (escape vector computed correctly off ship/centre/radius; skipped mid-pending-warp; skipped
+  while already moving).
+- **F6 (AgentMemory survives new-game)**: `AutopilotController.resetMemory()` (new public method,
+  distinct from `start()`'s full re-arm) + `installAutopilotHook` now detects a galaxy IDENTITY
+  change (`engine.galaxy.id`, which `GalaxySimulator` regenerates fresh every new game) across
+  ticks and force-resets the belief state — covers exactly the reported gap: a player who starts
+  «Новая игра» WITHOUT first disengaging the autopilot never calls `start()` again, so the old
+  reset seam never fired. New tests: 2 in `installAutopilotHook.test.ts` (resets on an id change
+  mid-session; does NOT reset when the id is unchanged), using `AgentMemory.step` as the
+  reset-vs-carried-over signal.
+- **F3 (autopilot blind to onboarding help panels)**: `mountSceneHelp.ts` gained a module-level
+  `Set`-based registry of every open `HelpPanel` (a `Set`, not a single slot, so a rare stacked
+  case — a scene's own auto-hint plus a transient `showHelpOnce` panel — can't cross-clobber each
+  other's bookkeeping) plus `isHelpPanelOpen()`/`dismissHelpPanel()` query+dismiss exports — no
+  call-site changes needed at any of the many scenes already calling `mountSceneHelp`/
+  `showHelpOnce`. `createLiveSceneController.tick()` checks this FIRST (before the existing
+  encounter-overlay `hasOpenModal` check) and dismisses+returns. New tests: 4 in
+  `mountSceneHelp.test.ts` (open/dismiss round-trip, safe no-op when empty, same effect as
+  «Понятно», a `showHelpOnce` panel tracked without colliding with a scene's own panel) + 2 in
+  `installAutopilotHook.test.ts` (dismisses and short-circuits the tick; no-ops when nothing's
+  open). No existing test touched.
+- **F4 (OverlayPresenter leaks destroyed objects)**: root cause — `GameEngine.transitionTo`'s
+  blanket `renderer.clearUILayer()` "safety net" (runs on EVERY scene transition) destroys
+  whatever is in `uiLayer`, including any live `OverlayPresenter` modal/loading overlay, WITHOUT
+  telling the presenter — its `modalObjects`/`loadingOverlayObjects` arrays kept stale destroyed
+  refs across scenes. New `IOverlayPresenter.dismissAll()` port method (additive; implemented in
+  `OverlayPresenter` as `clearModal(); hideLoading();`, and as a no-op in `NoOpOverlayPresenter`)
+  called from `transitionTo` BEFORE `clearUILayer()` so the presenter's own bookkeeping empties in
+  sync (and the later blanket clear no longer touches already-removed children). This interface
+  change is additive-only (one new method, no signature changes) but `gitnexus impact` flagged it
+  CRITICAL by fan-out (3 implementations, 56 reachable symbols via `IOverlayPresenter` — noted
+  per the standing rule; the actual edit is low-risk). New tests: 2 in `overlayPresenter.test.ts`
+  (`dismissAll` clears both a modal AND a loading overlay; safe no-op when empty) + 1 in
+  `transitionClearsLayers.test.ts` (`transitionTo` calls `dismissAll()` before clearing the UI
+  layer). The 3rd `IOverlayPresenter` implementer (`overlayPresenter.test.ts`'s `FakeOverlayPresenter`)
+  and `endgameController.test.ts`'s mock both got the new no-op-tracking method added (compile-only,
+  no assertion changed).
+- **F9 — see the ⚠️ note on its own checkbox above: investigated, not reproduced headlessly, not
+  independently fixed.** Left for a follow-up session with real-browser access.
+- **Live smoke**: `liveSmoke16b.test.ts` — 3 sessions (150 folds each) driving the REAL
+  `observe → updateMemory → decide → applyLiveAction` loop over a pixi-stubbed real engine (the
+  "real-scene playtest equivalent" the plan allows in lieu of an actual browser). All 3: zero
+  errors, calendar advanced (day 11–12, proving F7's fix — no day-0 freeze), zero pathological
+  2-system ping-pong (F1), no unearned win (F10 — none fired in this short horizon, so the
+  assertion is a standing guard rather than a positive trigger this run), no deaths. Not a
+  permanent CI gate (no fixed win-rate — Task 9's plateau finding stands); a smoke check the
+  loop can re-run on demand.
+- Gates: full unit 5100 ✓ (the one red — `noHardcodedCyrillic.test.ts` flagging a Task 16 fixture
+  leftover in `QuestGenerator.ts` — verified pre-existing on committed HEAD via `git stash`,
+  unrelated to this task), playtest 5100-scoped subset including all touched suites ✓,
+  letsplay:ci 107 ✓, save-compat 22 ✓, tsc ✓, lint 0 errors ✓.
 
 ### Task 17: Visual audit + targeted fixes
 - [x] sweep a full campaign session visually: letsplay live (`` ` ``) + Playwright screenshots

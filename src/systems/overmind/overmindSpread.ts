@@ -134,10 +134,14 @@ function frontierSystems(galaxy: SpreadGalaxyView): string[] {
  * - Initialises the arc clock on first call.
  * - Sticky once `won`/`lost`.
  * - **Win** — only after the arc has GENUINELY ENGAGED (`lastSpreadDay >= 0`,
- *   i.e. it actually spread at least once) — when the core is broken (removed
- *   from Overmind control) or the Overmind is eradicated entirely (an *engaged*
- *   arc reduced to zero systems). Clearing the never-engaged dormant starting
- *   front is **not** a win (it fired a spurious Victory before the engagement gate).
+ *   i.e. it actually spread at least once) AND the player PARTICIPATED
+ *   (`playerLiberations > 0` — a real combat clear or a completed DEFENSE
+ *   quest) — when the core is broken (removed from Overmind control) or the
+ *   Overmind is eradicated entirely (an *engaged* arc reduced to zero
+ *   systems). Clearing the never-engaged dormant starting front is **not** a
+ *   win, and neither is an NPC-only equilibrium clearing the whole front
+ *   while the player never fought (F10 — see `Galaxy.tryLiberate`'s `source`
+ *   param).
  * - **Spread** on cadence past the grace period: captures `capturesPerTick`
  *   frontier systems, ranked deterministically by `hash(seed:day:id)`.
  * - **Status** is then re-derived from the post-capture share: `lost` past the
@@ -179,12 +183,22 @@ export function advanceOvermind(
   // not winning the endgame arc.
   const engaged = state.lastSpreadDay >= 0;
 
-  // --- Win: core broken, or the Overmind eradicated, after a real engagement. ---
+  // The arc may also declare victory only when the PLAYER actually shrank the
+  // front at least once (`playerLiberations > 0` — a real combat clear or a
+  // completed DEFENSE quest, tracked by `Galaxy.tryLiberate(id, "player")`).
+  // Without this an NPC-only equilibrium (Ranger auto-liberation, the
+  // garrison-cleared-and-held countdown) can clear every Overmind system on
+  // its own and fire a victory the player never earned (F10, live-session
+  // finding: a rank-0, never-battle-ready player got "ПОБЕДА!" at day ~140).
+  const playerParticipated = (state.playerLiberations ?? 0) > 0;
+
+  // --- Win: core broken, or the Overmind eradicated, after a real engagement
+  //     AND real player participation. ---
   const coreId = galaxy.overmindCoreSystemId;
   const coreBroken =
     engaged && coreId !== "" && !overmindSet.has(coreId) && hadPresence;
   const eradicated = engaged && overmindSet.size === 0 && state.peakThreat > 0;
-  if (coreBroken || eradicated) {
+  if ((coreBroken || eradicated) && playerParticipated) {
     next.threat = total === 0 ? 0 : overmindSet.size / total;
     next.peakThreat = Math.max(next.peakThreat, next.threat);
     next.status = "won";

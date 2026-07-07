@@ -50,7 +50,7 @@ describe("Overmind endgame outcome routing + New Game+", () => {
     };
 
     // When the player breaks the core (removes it from Overmind control).
-    galaxy.tryLiberate(core);
+    galaxy.tryLiberate(core, "player");
     const spy = vi.spyOn(harness.engine, "showGameOutcomeScreen");
 
     harness.engine.advanceGalaxyDay();

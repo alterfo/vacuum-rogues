@@ -86,6 +86,12 @@ export class OverlayPresenter implements IOverlayPresenter {
     }
   }
 
+  /** Port method — see `IOverlayPresenter.dismissAll` for the F4 rationale. */
+  dismissAll(): void {
+    this.clearModal();
+    this.hideLoading();
+  }
+
   clearModal(): void {
     const renderer = this.renderer;
     if (!renderer) return;

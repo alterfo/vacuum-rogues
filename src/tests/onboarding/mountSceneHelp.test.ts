@@ -103,6 +103,9 @@ import { Container } from "pixi.js";
 import {
   mountSceneHelp,
   shouldAutoShow,
+  isHelpPanelOpen,
+  dismissHelpPanel,
+  showHelpOnce,
 } from "@/presentation/ui/mountSceneHelp";
 import { HelpPanel } from "@/presentation/ui/HelpPanel";
 import { helpFor, type HelpKey } from "@/systems/onboarding/helpContent";
@@ -113,6 +116,14 @@ const renderer = {
 } as unknown as Renderer;
 
 const fakeEvent = { stopPropagation: vi.fn() };
+
+// The open-help-panel registry (`isHelpPanelOpen`/`dismissHelpPanel`) is
+// module-level by design (F3 — queryable without a scene reference), so a
+// panel a test opens without an explicit teardown would otherwise leak into
+// the next test. Drain it before every test in this file.
+beforeEach(() => {
+  while (isHelpPanelOpen()) dismissHelpPanel();
+});
 
 /** A fake injectable "seen" store backed by a plain Set. */
 function makeSeenStore(seeded: HelpKey[] = []) {
@@ -274,6 +285,88 @@ describe("mountSceneHelp — first-time auto-hint + «?» reopen", () => {
     expect((helpBtn as unknown as { destroyed?: boolean }).destroyed).toBe(
       true,
     );
+  });
+});
+
+describe("isHelpPanelOpen / dismissHelpPanel — cross-cutting query+dismiss (F3)", () => {
+  it("reports false with nothing open, true once a panel auto-shows, false again after dismissHelpPanel()", () => {
+    expect(isHelpPanelOpen()).toBe(false);
+
+    const container = new Container() as unknown as FakeNode;
+    const store = makeSeenStore();
+    const teardown = mountSceneHelp(
+      {
+        renderer,
+        container: container as unknown as Container,
+        hasSeen: store.hasSeen,
+        markSeen: store.markSeen,
+      },
+      "BANK",
+    );
+
+    expect(isHelpPanelOpen()).toBe(true);
+
+    dismissHelpPanel();
+
+    expect(isHelpPanelOpen()).toBe(false);
+    // The panel is gone; teardown only needs to clean up the «?» button now.
+    teardown();
+  });
+
+  it("dismissHelpPanel() is a safe no-op when nothing is open", () => {
+    expect(() => dismissHelpPanel()).not.toThrow();
+    expect(isHelpPanelOpen()).toBe(false);
+  });
+
+  it("dismissHelpPanel() has the same effect as clicking «Понятно» — removes the panel from the scene", () => {
+    const container = new Container() as unknown as FakeNode;
+    const store = makeSeenStore();
+    mountSceneHelp(
+      {
+        renderer,
+        container: container as unknown as Container,
+        hasSeen: store.hasSeen,
+        markSeen: store.markSeen,
+      },
+      "BANK",
+    );
+    // container has the «?» button + the auto-shown panel.
+    expect(container.children.length).toBe(2);
+
+    dismissHelpPanel();
+
+    // Only the «?» button remains — the panel was removed + destroyed.
+    expect(container.children.length).toBe(1);
+  });
+
+  it("a showHelpOnce panel is also tracked (and doesn't collide with a scene's own mountSceneHelp panel)", () => {
+    const container = new Container() as unknown as FakeNode;
+    const sceneStore = makeSeenStore(["SPACE_FLIGHT"]); // scene's own key already seen
+    mountSceneHelp(
+      {
+        renderer,
+        container: container as unknown as Container,
+        hasSeen: sceneStore.hasSeen,
+        markSeen: sceneStore.markSeen,
+      },
+      "SPACE_FLIGHT",
+    );
+    expect(isHelpPanelOpen()).toBe(false); // already-seen key ⇒ no auto-show
+
+    const onceStore = makeSeenStore();
+    showHelpOnce(
+      {
+        renderer,
+        container: container as unknown as Container,
+        hasSeen: onceStore.hasSeen,
+        markSeen: onceStore.markSeen,
+      },
+      "combat",
+    );
+
+    expect(isHelpPanelOpen()).toBe(true);
+    dismissHelpPanel();
+    expect(isHelpPanelOpen()).toBe(false);
   });
 });
 

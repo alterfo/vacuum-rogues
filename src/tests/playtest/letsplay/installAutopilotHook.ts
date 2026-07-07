@@ -20,6 +20,7 @@
 import type { GameEngine } from "@/systems/GameEngine";
 import { SceneType, QuestType } from "@/types";
 import { logger } from "@/utils/logger";
+import { warpEdgePoint } from "@/utils/flightGeometry";
 import { observe, buildQuestSnapshots, marketSnapshotFor } from "./observe";
 import { selectPlayerPolicy } from "./policyGate";
 import {
@@ -27,6 +28,10 @@ import {
   warpWantsQuestBias,
 } from "./MemoryHeuristicPolicy";
 import { isNeuralEnabled } from "@/systems/settings/gameSettings";
+import {
+  isHelpPanelOpen,
+  dismissHelpPanel,
+} from "@/presentation/ui/mountSceneHelp";
 // Trained player net (behavioural-cloned from the MemoryHeuristicPolicy teacher,
 // `tools/ai/train_player.py`). Dev-only JSON, passed to the gate so the live
 // autopilot runs the net when НЕЙРОСЕТЬ is on; the gate ignores it when off.
@@ -128,6 +133,17 @@ export function createLiveSceneController(
 
   return {
     tick() {
+      // Auto-dismiss any open onboarding/contextual-help panel (F3, live-session
+      // finding): a full-screen help panel blocks a real player's pointer, but
+      // the autopilot keeps acting through the port UNDER it and never
+      // dismisses on its own. `isHelpPanelOpen`/`dismissHelpPanel` are the
+      // module-level query+dismiss seam `mountSceneHelp`/`showHelpOnce` expose
+      // for exactly this (no scene reference needed).
+      if (isHelpPanelOpen()) {
+        dismissHelpPanel();
+        return;
+      }
+
       // Auto-dismiss any open encounter overlay (SOS / wreckage / anomaly scan)
       // so the autopilot keeps flying without a human pointer click. A click on
       // the overlay's dismiss button fires a native `pointerdown` that bubbles to
@@ -151,6 +167,9 @@ export function createLiveSceneController(
         plannedRoute?: { x: number; y: number } | null;
         executeRouteTo?: (x: number, y: number) => void;
         shipPhysics?: { isMoving: boolean } | null;
+        isTurnRunning?: boolean;
+        combatModule?: { isActive?: boolean } | null;
+        e2eStartTurn?: () => void;
       } | null;
       if (
         engine.currentSceneType === SceneType.SPACE_FLIGHT &&
@@ -160,6 +179,29 @@ export function createLiveSceneController(
         !scene.shipPhysics?.isMoving
       ) {
         scene.executeRouteTo(scene.plannedRoute.x, scene.plannedRoute.y);
+        return;
+      }
+
+      // F7 (live-session finding): a stationary "wait" decision needs an
+      // actively RUNNING turn for `SpaceFlightScene.advanceWaitTime` to accrue
+      // days — the Space-Rangers turn model gates it on `isTurnRunning`, and
+      // the live rAF loop never starts one on its own (only a route/committed
+      // jump does, via `executeRouteTo`). Press "Ход" (`e2eStartTurn`, the
+      // same seam E2E specs use — idempotent, it no-ops if already running)
+      // whenever the ship is genuinely idle: not moving, no pending warp/
+      // planned route (both handled above), no turn already running, no
+      // active fight. Without this a stagnation-wait loops forever with the
+      // calendar frozen (measured: 8.9 min stuck at day 0).
+      if (
+        engine.currentSceneType === SceneType.SPACE_FLIGHT &&
+        scene?.pendingWarp == null &&
+        !scene?.plannedRoute &&
+        !scene?.shipPhysics?.isMoving &&
+        !scene?.isTurnRunning &&
+        !scene?.combatModule?.isActive &&
+        typeof scene?.e2eStartTurn === "function"
+      ) {
+        scene.e2eStartTurn();
       }
     },
     async leaveToFlight() {
@@ -417,6 +459,15 @@ export function createLiveSceneController(
       const scene = engine.currentScene as {
         combatPause?: { paused?: boolean; resume?: () => void };
         npcManager?: { breakOffCombatPursuit?: () => void };
+        shipPhysics?: {
+          shipX: number;
+          shipY: number;
+          isMoving?: boolean;
+        } | null;
+        executeRouteTo?: (x: number, y: number) => void;
+        pendingWarp?: unknown;
+        starRenderer?: { centerX: number; centerY: number } | null;
+        SYSTEM_BOUNDARY_RADIUS?: number;
       } | null;
       // Resume the active-pause overlay first (decline to fire) so time isn't
       // frozen on it, then break off pursuit — mirrors the player dismissing
@@ -430,6 +481,37 @@ export function createLiveSceneController(
         scene.combatPause.resume();
       }
       scene?.npcManager?.breakOffCombatPursuit?.();
+
+      // F8 (live-session finding): breaking off pursuit ALONE leaves the ship
+      // with no course at all — `breakOffCombatPursuit` only yields the
+      // auto-track steering, it never plots a route, so a real player's flee
+      // (a click away from the threat) has no live-autopilot equivalent and
+      // the ship freezes mid-space (shipPhysics.targetX/Y == shipX/Y exactly,
+      // isMoving=false, forever). Drive an actual escape: the same radially-
+      // outward-from-ship near-edge point `warpEdgePoint(..., fromMidSystem:
+      // true)` computes for a COMMITTED flee-jump (Task 9 (iv)) — any
+      // direction away from the system centre needs no star-avoidance detour
+      // and is a real, immediate escape vector, not just a steering release.
+      // Skipped while a jump is already pending/in transit (that flee path is
+      // the committed-warp near-edge routing, not this one) or already moving
+      // (don't reset an in-progress escape route every tick).
+      if (
+        scene?.shipPhysics &&
+        typeof scene.executeRouteTo === "function" &&
+        scene.pendingWarp == null &&
+        !scene.shipPhysics.isMoving &&
+        scene.starRenderer &&
+        typeof scene.SYSTEM_BOUNDARY_RADIUS === "number"
+      ) {
+        const edge = warpEdgePoint(
+          { x: scene.shipPhysics.shipX, y: scene.shipPhysics.shipY },
+          { x: scene.starRenderer.centerX, y: scene.starRenderer.centerY },
+          { x: 1, y: 0 }, // degenerate-centre fallback only; fromMidSystem wins otherwise
+          scene.SYSTEM_BOUNDARY_RADIUS,
+          true,
+        );
+        scene.executeRouteTo(edge.x, edge.y);
+      }
     },
     repair() {
       // Guard on a fully-resolved player ship — executeRepair reads
@@ -489,15 +571,30 @@ export function installAutopilotHook(
   // ref lets the controller close over that memory once it exists, without a
   // circular construction order.
   let controllerRef: AutopilotController | null = null;
+  // F6 (live-session finding): AgentMemory must not survive a «Новая игра»
+  // restart while the autopilot stays continuously engaged across it (that
+  // path never calls `AutopilotController.start()`, the usual reset seam).
+  // Detected by galaxy IDENTITY, not just presence — `GalaxySimulator`
+  // constructs a fresh `Galaxy` with a new id every new game/generation.
+  let lastGalaxyId: string | null = null;
+  const resetMemoryOnGalaxyChange = (): void => {
+    const id = engine.galaxy?.id ?? null;
+    if (id !== null && id !== lastGalaxyId) {
+      if (lastGalaxyId !== null) controllerRef?.resetMemory();
+      lastGalaxyId = id;
+    }
+  };
   const controller = new AutopilotController({
-    observe: () =>
-      observe(
+    observe: () => {
+      resetMemoryOnGalaxyChange();
+      return observe(
         engine,
         questBaselineForObserve(
           controllerRef?.currentMemory() ?? createMemory(),
           engine,
         ),
-      ),
+      );
+    },
     // When the neural toggle is off (default), use MemoryHeuristicPolicy — the
     // BC teacher that carries a per-engagement belief, executes buy-low/sell-high
     // routes, and warps to explore new systems. The stateless HeuristicPolicy

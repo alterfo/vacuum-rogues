@@ -259,6 +259,21 @@ export class AutopilotController {
   }
 
   /**
+   * Force a fresh belief state without touching engagement/scheduler state
+   * (unlike {@link start}, which also re-arms the timer/indicator). Exposed
+   * for `installAutopilotHook` to call when it detects a new-game/galaxy
+   * identity change while the autopilot stayed continuously engaged across it
+   * (F6, live-session finding): a player who starts «Новая игра» WITHOUT first
+   * disengaging the autopilot never calls `start()` again, so the stale
+   * memory — poisoned counters like `consecutiveWarpsWithoutLanding`/
+   * `foldsSinceDayAdvance` from the finished run — would otherwise carry into
+   * the fresh game and can immediately arm a stagnation deadlock at day 0.
+   */
+  resetMemory(): void {
+    this.memory = createMemory();
+  }
+
+  /**
    * Engage the autopilot: show the indicator, subscribe to reclaim-on-input, and
    * begin ticking. Idempotent — a second `start()` while engaged is a no-op.
    */

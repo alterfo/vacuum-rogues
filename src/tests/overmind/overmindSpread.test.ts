@@ -219,13 +219,16 @@ describe("advanceOvermind", () => {
     expect(state.status).toBe("advancing");
 
     // Player destroys the core: it leaves Overmind control. Advance on a
-    // non-cadence day so no re-capture masks the broken core.
+    // non-cadence day so no re-capture masks the broken core. `playerLiberations`
+    // records the genuine player participation (F10) — without it an
+    // otherwise-identical NPC-only clear must not win (see below).
     galaxy.overmindSystems = galaxy.overmindSystems.filter((id) => id !== "s5");
+    state = { ...state, playerLiberations: 1 };
     const r = advanceOvermind(state, galaxy, 4, FAST);
     expect(r.state.status).toBe("won");
   });
 
-  it("wins when a GENUINELY ENGAGED Overmind is eradicated entirely", () => {
+  it("wins when a GENUINELY ENGAGED Overmind is eradicated entirely (player participated)", () => {
     const galaxy = makeGalaxy(12, ["s5", "s6"]);
     // Engage the arc (spread at least once past grace) before it can be won.
     let state = advanceOvermind(
@@ -240,10 +243,53 @@ describe("advanceOvermind", () => {
     expect(state.lastSpreadDay).toBeGreaterThanOrEqual(0); // engaged
     expect(state.peakThreat).toBeGreaterThan(0);
 
-    // Player clears every Overmind system. Advance on a non-cadence day.
+    // Player clears every Overmind system (recorded via playerLiberations,
+    // exactly what `Galaxy.tryLiberate(id, "player")` increments — F10).
+    // Advance on a non-cadence day.
     galaxy.overmindSystems = [];
+    state = { ...state, playerLiberations: 1 };
     const r = advanceOvermind(state, galaxy, 4, FAST);
     expect(r.state.status).toBe("won");
+  });
+
+  it("does NOT win when an engaged front is eradicated/core-broken by NPCs alone, with zero player participation (F10 — no unearned victory)", () => {
+    // Same engaged-arc setup as the two tests above, but `playerLiberations`
+    // stays 0 — an NPC-only equilibrium/auto-liberation cleared the front
+    // (a live-session finding: the player was rank 0, never battle-ready).
+    const coreGalaxy = makeGalaxy(12, ["s5", "s6"], "s5");
+    let coreState = advanceOvermind(
+      initialOvermindSpreadState(),
+      coreGalaxy,
+      0,
+      FAST,
+    ).state;
+    const coreSpread = advanceOvermind(coreState, coreGalaxy, 3, FAST);
+    for (const id of coreSpread.captured) coreGalaxy.overmindSystems.push(id);
+    coreState = coreSpread.state;
+    expect(coreState.lastSpreadDay).toBeGreaterThanOrEqual(0); // engaged
+    expect(coreState.playerLiberations ?? 0).toBe(0); // never touched by the player
+
+    coreGalaxy.overmindSystems = coreGalaxy.overmindSystems.filter(
+      (id) => id !== "s5",
+    );
+    const coreResult = advanceOvermind(coreState, coreGalaxy, 4, FAST);
+    expect(coreResult.state.status).not.toBe("won");
+
+    const eradGalaxy = makeGalaxy(12, ["s5", "s6"]);
+    let eradState = advanceOvermind(
+      initialOvermindSpreadState(),
+      eradGalaxy,
+      0,
+      FAST,
+    ).state;
+    const eradSpread = advanceOvermind(eradState, eradGalaxy, 3, FAST);
+    for (const id of eradSpread.captured) eradGalaxy.overmindSystems.push(id);
+    eradState = eradSpread.state;
+    expect(eradState.playerLiberations ?? 0).toBe(0);
+
+    eradGalaxy.overmindSystems = [];
+    const eradResult = advanceOvermind(eradState, eradGalaxy, 4, FAST);
+    expect(eradResult.state.status).not.toBe("won");
   });
 
   it("does NOT false-win a galaxy that never had any Overmind presence", () => {

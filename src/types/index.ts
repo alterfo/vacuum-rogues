@@ -577,6 +577,14 @@ export interface OvermindSpreadState {
   threat: number;
   /** High-water mark of the Overmind share — lets us detect "pushed back" → contained. */
   peakThreat: number;
+  /**
+   * Count of Overmind systems the PLAYER personally liberated (via
+   * `Galaxy.tryLiberate(id, "player")` — `liberateCurrentSystem()` or a DEFENSE
+   * quest completion). Optional additive (absent on old saves ⇒ 0 — no
+   * migration). Gates the arc's `won` derivation: an NPC-only equilibrium
+   * clearing the front must never fire a spurious, unearned victory (F10).
+   */
+  playerLiberations?: number;
 }
 
 export interface ModelConfig {

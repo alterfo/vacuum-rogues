@@ -157,7 +157,10 @@ describe("QuestCompletion (extracted from SpaceFlightScene)", () => {
     ]);
     new QuestCompletion(engine).defenseBySystemEntry();
     expect(markDone).toHaveBeenCalledTimes(1);
-    expect(tryLiberate).toHaveBeenCalledWith("overmind-2");
+    // "player" source (F10, three-year-campaign Task 16b): a completed DEFENSE
+    // quest is genuine player participation, tracked toward the arc's `won`
+    // gate — meaning preserved (the stored hostile system is still liberated).
+    expect(tryLiberate).toHaveBeenCalledWith("overmind-2", "player");
   });
 
   it("marks pending-return for matching ESCORT quest when convoy arrives at target system", () => {

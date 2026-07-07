@@ -86,6 +86,18 @@ describe("Overmind-arc state — save/load round-trip", () => {
     );
   });
 
+  it("the schema tolerates an absent playerLiberations and round-trips a present one (F10)", () => {
+    expect(
+      OvermindSpreadStateSchema.parse(ADVANCING_ARC).playerLiberations,
+    ).toBeUndefined();
+    expect(
+      OvermindSpreadStateSchema.parse({
+        ...ADVANCING_ARC,
+        playerLiberations: 2,
+      }).playerLiberations,
+    ).toBe(2);
+  });
+
   it("the schema rejects an unknown status / out-of-range threat", () => {
     expect(() =>
       OvermindSpreadStateSchema.parse({ ...ADVANCING_ARC, status: "nope" }),

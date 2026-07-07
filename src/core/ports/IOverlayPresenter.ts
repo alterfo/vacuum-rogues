@@ -18,4 +18,15 @@ export interface IOverlayPresenter {
     win: boolean,
     handlers: { onRestart: () => void; onNewGamePlus?: () => void },
   ): void;
+  /**
+   * Tear down any open modal/loading overlay's own bookkeeping. Called by
+   * `GameEngine.transitionTo` on every scene teardown, BEFORE the renderer's
+   * blanket `clearUILayer()` destroys every UI-layer child indiscriminately —
+   * without this, an overlay left open across a scene transition (or a page
+   * reload / new-game reset) has its PixiJS objects destroyed out from under
+   * the presenter, leaking destroyed-object references in its own tracking
+   * arrays across scenes/sessions until the next `showError`/`showGameOutcome`
+   * call happens to overwrite them (F4, three-year-campaign Task 16b).
+   */
+  dismissAll(): void;
 }

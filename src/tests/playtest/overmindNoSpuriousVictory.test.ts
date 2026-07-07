@@ -129,7 +129,8 @@ describe("Overmind arc — no spurious Victory", () => {
     expect(galaxy.overmindArc.status).toBe("advancing");
 
     // Now the player wipes out the engaged front.
-    for (const id of [...galaxy.overmindSystems]) galaxy.tryLiberate(id);
+    for (const id of [...galaxy.overmindSystems])
+      galaxy.tryLiberate(id, "player");
     expect(galaxy.overmindSystems).toHaveLength(0);
 
     // The next EOD recognises the genuine eradication as a win.

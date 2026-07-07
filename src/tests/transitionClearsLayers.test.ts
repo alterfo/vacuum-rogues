@@ -160,4 +160,27 @@ describe("transitionTo central layer-clear safety net", () => {
     expect(renderer.gameLayer.children.length).toBe(0);
     expect(renderer.uiLayer.children.length).toBe(0);
   });
+
+  it("calls the overlay presenter's dismissAll() before clearing the UI layer (F4 — no destroyed-object leak across scenes)", async () => {
+    const renderer = makeMockRenderer(1, 1);
+    engine.renderer = renderer;
+    engine.currentScene = null;
+    const dismissAll = vi.fn();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (engine as any).overlay = {
+      showError: vi.fn(),
+      showLoading: vi.fn(),
+      hideLoading: vi.fn(),
+      showGameOutcome: vi.fn(),
+      dismissAll,
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (engine as any).sceneFactory = {
+      createScene: () => new NoOpScene(renderer),
+    };
+
+    await engine.transitionTo(SceneType.MAIN_MENU, { gameEngine: engine });
+
+    expect(dismissAll).toHaveBeenCalledTimes(1);
+  });
 });

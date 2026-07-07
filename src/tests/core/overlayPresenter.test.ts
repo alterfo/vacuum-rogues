@@ -91,6 +91,7 @@ class FakeOverlayPresenter implements IOverlayPresenter {
     hasOnRestart: boolean;
     hasOnNewGamePlus: boolean;
   }[] = [];
+  dismissAllCalls = 0;
 
   showError(message: string, onDismiss?: () => void): void {
     this.showErrorCalls.push({ message, hasOnDismiss: !!onDismiss });
@@ -110,6 +111,9 @@ class FakeOverlayPresenter implements IOverlayPresenter {
       hasOnRestart: !!handlers.onRestart,
       hasOnNewGamePlus: !!handlers.onNewGamePlus,
     });
+  }
+  dismissAll(): void {
+    this.dismissAllCalls++;
   }
 }
 
@@ -347,5 +351,24 @@ describe("OverlayPresenter (real, renderer-backed)", () => {
 
     // 2 children per call (overlay + label) x2 calls = 4
     expect(renderer.uiLayer.addChild).toHaveBeenCalledTimes(4);
+  });
+
+  it("dismissAll() clears both a tracked modal AND a tracked loading overlay (F4)", () => {
+    const renderer = makeRenderer();
+    const presenter = new OverlayPresenter(() => renderer);
+    presenter.showGameOutcome(true, { onRestart: () => {} });
+    presenter.showLoading("Загрузка...");
+
+    presenter.dismissAll();
+
+    // showGameOutcome(win, no NG+) tracks 4 objects (overlay/title/msg/restart
+    // button); showLoading tracks 2 (overlay/label) — dismissAll must remove
+    // every one of them, not just the modal or just the loading overlay.
+    expect(renderer.uiLayer.removeChild).toHaveBeenCalledTimes(6);
+  });
+
+  it("dismissAll() is a safe no-op when nothing is open", () => {
+    const presenter = new OverlayPresenter(() => makeRenderer());
+    expect(() => presenter.dismissAll()).not.toThrow();
   });
 });

@@ -133,7 +133,7 @@ export class EndgameController {
     const galaxy = this.deps.getGalaxy();
     if (win && galaxy) {
       if (galaxy.overmindCoreSystemId) {
-        galaxy.tryLiberate(galaxy.overmindCoreSystemId);
+        galaxy.tryLiberate(galaxy.overmindCoreSystemId, "player");
       }
       galaxy.overmindArc.status = "won";
     }
