@@ -234,17 +234,36 @@ understanding on the committed state before starting Task 4.
       what that harness already exercises
 
 ### Task 8: Take-off spawns beside the station, not at the system edge (Bug 8)
-- [ ] reproduce first (empirical probe): real-engine playtest — dock at a station/shipyard,
+- [x] reproduce first (empirical probe): real-engine playtest — dock at a station/shipyard,
       undock, assert spawn position is within a small radius of the station; prove it red
       against HEAD; check whether reverting `ee634bc`'s initialize-gate makes it green
-      (regression confirmation)
-- [ ] fix the root cause: the take-off/undock path must not be classified as a mid-system
-      flee re-plot (clear/bypass `lastFlightShipPos` on dock, or gate `warpEdgePoint` on an
-      explicit flee signal instead of position-presence) — WITHOUT regressing the near-edge
-      flee-jump tests (`fleeNearEdge.test.ts`, `flightGeometry.test.ts`)
-- [ ] write regression tests: undock-from-station spawn (near issuer), undock-from-planet
-      spawn, and the flee path still routing near-edge — all three pinned
-- [ ] run unit + playtest + letsplay:ci — green before Task 9
+      (regression confirmation) — **did NOT reproduce as red.** `gitnexus impact` +
+      `warpEdgePoint` blast-radius confirmed the `ee634bc` near-edge-flee gate only ever runs
+      inside `if (this.pendingWarp)` in `SpaceFlightScene.initialize` — a plain dock/undock
+      (`StationScene.undock` → `fromStationId`, `PlanetScene.takeOff` → `fromPlanetId`) never
+      sets `pendingWarp`, so that gate is never on the undock code path. Dynamically confirmed
+      three ways in `src/tests/playtest/stationTakeoffSpawn.test.ts`: (1) fly-and-dock via the
+      real proactive `DOCKING_RANGE` check then undock, (2) direct dock/undock at a
+      `REPAIR_DOCK` ("Верфь"/shipyard) station specifically, (3) land-and-take-off from a
+      planet via the real `e2e*` production hooks — all three spawn the ship within 200px of
+      the body it left, not the system edge, on unmodified HEAD. `applyReentrySpawn`'s
+      `fromStationId`/`fromPlanetId` branches (`SpaceFlightScene.ts`, Task 9 commit 8d298e8,
+      long predating the campaign work) short-circuit unconditionally before ever consulting
+      `lastFlightShipPos`/`pendingWarp`. Side finding (out of scope for this bug — logged, not
+      chased): a fresh `SPACE_FLIGHT` entry into an unexplored system can roll an
+      exploration-encounter prompt that halts the turn if never dismissed; unrelated to
+      spawn-on-undock, worth a follow-up ticket if reproduced live
+- [x] fix the root cause — **no code fix applied**; no regression exists to fix (see above).
+      `fleeNearEdge.test.ts`/`flightGeometry.test.ts` re-run clean (14/14), confirming the
+      near-edge flee-jump gate this task suspected is untouched and correct
+- [x] write regression tests: undock-from-station spawn (near issuer, both a generic station
+      and a `REPAIR_DOCK`/shipyard specifically), undock-from-planet spawn (via real `e2e*`
+      hooks), and the flee path still routing near-edge — all three pinned
+      (`stationTakeoffSpawn.test.ts` + pre-existing `fleeNearEdge.test.ts`/
+      `flightGeometry.test.ts`, left untouched per the no-touch-existing-tests rule)
+- [x] run unit + playtest + letsplay:ci — green before Task 9 (5160 unit tests, 682 real-engine
+      playtest tests, 107 letsplay:ci tests, all passing; `npx tsc --noEmit` and `npm run lint`
+      clean)
 
 ### Task 9: Verify acceptance criteria
 - [ ] all 8 bugs re-verified against the original reports (screenshot evidence for 1, 3, 7;
