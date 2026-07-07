@@ -74,8 +74,20 @@ export function createCombatPauseUi(
         controller.selectWeapon(w);
         sync();
       },
-      onConfirm: () => controller.confirm(),
-      onResume: () => controller.resume(),
+      // Resuming from the overlay (fire OR continue) starts a fresh combat round
+      // (Task 9 (v)): the player has taken their between-rounds decision, so the
+      // round's spent-damage budget resets and fire re-opens. This is the
+      // live-only begin-round seam — the headless agent drives the controller's
+      // resume() directly (bypassing these handlers) and begins its rounds
+      // explicitly per step, so it never resets the budget mid-step.
+      onConfirm: () => {
+        combat.beginCombatRound();
+        controller.confirm();
+      },
+      onResume: () => {
+        combat.beginCombatRound();
+        controller.resume();
+      },
     },
   );
 

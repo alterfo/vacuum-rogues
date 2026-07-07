@@ -605,9 +605,16 @@ export class PlayerAgent {
       endTurn?(): void;
       isTurnRunning?: boolean;
       combatPause?: { paused?: boolean; resume?(): void } | null;
-      combatModule?: { isActive?: boolean } | null;
+      combatModule?: { isActive?: boolean; beginCombatRound?(): void } | null;
       pendingWarp?: unknown;
     } | null;
+
+    // Round-based combat (Task 9 (v)): a committed flee/warp crossing is ONE
+    // round — incoming fire is bounded to a single round's budget for the whole
+    // traverse, so a fleeing weak ship survives the escape (the near-edge route
+    // from Task 9 (iv) keeps the crossing short; the round cap keeps its cost
+    // bounded). Begun once here, NOT per tick, so the budget spans the crossing.
+    flightScene?.combatModule?.beginCombatRound?.();
 
     // Resume any combat pause (stale or live) — a paused ship does not fly.
     if (
@@ -697,7 +704,11 @@ export class PlayerAgent {
       endTurn?(): void;
       isTurnRunning?: boolean;
       combatPause?: { paused?: boolean; resume?(): void } | null;
-      combatModule?: { isActive?: boolean } | null;
+      combatModule?: {
+        isActive?: boolean;
+        roundComplete?: boolean;
+        beginCombatRound?(): void;
+      } | null;
     } | null;
     if (
       engine.currentSceneType !== SceneType.SPACE_FLIGHT ||
@@ -708,6 +719,13 @@ export class PlayerAgent {
     }
     const day0 = engine.galaxy?.gameDays ?? 0;
     if (!scene.isTurnRunning) scene.onPlayPause(); // start the course-less wait
+    // Round-based combat (Task 9 (v)): start a fresh combat round for THIS step so
+    // incoming fire is bounded to one round's budget (a fraction of max hull).
+    // The natural observe→decide between steps is the reaction window — the
+    // policy's outgunned-flee gets a turn each step instead of the ship being
+    // deleted from full hull inside a single 4-tick blur (the death that four
+    // prior config/harness escalations could not close).
+    scene.combatModule?.beginCombatRound?.();
     // Tick budget: 4 × 1000 ms covers the combatFireIntervalMs (2500 ms).
     // Exit early only when a day has passed AND combat is NOT active — the
     // non-combat "wait one day" case. When combat is active (NPC initiated in
@@ -715,7 +733,10 @@ export class PlayerAgent {
     // same frame), continue ticking so fire timers accumulate past 2500 ms even
     // though the day already advanced in the first tick.
     for (let i = 0; i < 4; i++) {
-      // Un-pause before each tick so weapons fire (combat resolves rather than freezing).
+      // Un-pause before each tick so weapons fire (combat resolves rather than
+      // freezing). This drives the controller directly, so it does NOT reset the
+      // round budget (only the live overlay buttons begin a new round) — the
+      // budget keeps accruing across the step's ticks until the round completes.
       if (
         scene.combatPause?.paused &&
         typeof scene.combatPause.resume === "function"
@@ -723,6 +744,9 @@ export class PlayerAgent {
         scene.combatPause.resume();
       }
       this.harness.tick(1000);
+      // A completed combat round halts fire and opens the reaction window — end
+      // the step so the policy re-decides (flee vs fight on) before more damage.
+      if (scene.combatModule?.roundComplete === true) break;
       // Stop once a day has passed AND we are not in an active fight.
       const dayAdvanced = (engine.galaxy?.gameDays ?? 0) > day0;
       const inCombat = scene.combatModule?.isActive === true;

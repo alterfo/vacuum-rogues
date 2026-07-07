@@ -247,6 +247,7 @@ export class SpaceFlightScene extends GameScene {
         if (!this.destroyed) this.endTurn(); // combat over → end the turn (skip teardown)
       },
       onTargetLost: (npc) => this.combatPause.loseTarget(npc), // re-pause on lost target
+      onRoundComplete: () => this.combatPause.repause(), // Task 9 (v): between-rounds reaction window
       showMessage: (t, c) => this.hud.showMessage(t, c),
     });
     this.combatPause = createCombatPauseUi(

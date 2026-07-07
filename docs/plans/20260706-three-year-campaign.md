@@ -610,6 +610,30 @@ This plan **supersedes** the two open plans:
 - [x] ⚠️ **GATE NOT MET — deferred to Task 19 acceptance re-run.** 300-session campaign run
       (≥ 297/300 wins, ≤ 1080 days, 0 deaths): NOT achievable while the plateau above holds;
       Task 19 re-runs this gate after the user's architectural decision lands
+- [x] ➕ **(v) engine round-based combat with a disengage window** (user decision #4,
+      2026-07-07 — the approved combat-survivability architecture): the engine resolves
+      combat in **rounds with a disengage check between them** so hull can NEVER drop from
+      full to zero within a single resolution step — the defender (player AND the headless
+      agent alike) gets a reaction window (flee/fight decision) between rounds. This is the
+      deep combat change the plan reserved to the user: full test license applies to combat
+      behavior pins (meaning preserved: scout still loses a *committed* garrison fight, top
+      loadout still wins, fleeing has a cost — it is an escape window, not invulnerability).
+      Red tests first (unit for the round scheduler; real-engine playtest for the
+      reaction-window seam); live-player combat timing must stay playable (verify via the
+      live autopilot eyeball, note in plan) — **LANDED 2026-07-07** (see Task 9 (v) notes)
+- [x] ➕ re-run the 50-session measure after (v); resume the `balance.ts` lever iteration on
+      top of (i)–(v) until 50-session win-rate = 100% and median win in year 2–3; then run
+      the real **300-session gate (≥ 297/300, ≤ 1080 days, 0 deaths)** — this re-opens the
+      two NOT-MET gate items above; Task 19's acceptance re-run stands — ⚠️ **RE-MEASURED +
+      LEVER-ITERATED; win-rate gate STILL NOT MET** (plateau confirmed a FIFTH time). (v) is
+      the mechanism the escalations called for and it works as specified (bounded per-step
+      damage + reaction window, unit + real-engine tested), but on its own it does not close
+      the ~16–18 % plateau: 3 round-budget sweeps (0.5→18 %, 0.34→18 %, 0.2→16 %) all land at
+      the same win-rate, because finer flee-granularity trades DEATHS for galaxy-share LOSSES
+      (a weak ship that always flees never contests the front). Root bottleneck is now the
+      **arming-up path** (battle-ready reached in only ~16 % of runs), not per-fight
+      survivability. The 300-session acceptance stays deferred to **Task 19** as the plan's
+      own text provides ("Task 19's acceptance re-run stands"); full record in Task 9 (v) notes.
 - [x] promote the tuned pacing into a fast seeded regression test (accelerated proxy asserting
       the pacing SHAPE: dormant→pressure→resolution ordering) so future edits can't silently
       break the campaign clock — ⚠️ **deferred**: the "tuned" pacing awaits the win-rate decision;
@@ -831,6 +855,62 @@ measured insufficient ALONE, re-confirming the standing escalation:**
   user's decision lands (the acceptance is not lost, only deferred).
 - Gates: full unit 4692 ✓ (the SpaceFlightScene line guard now GREEN), playtest 632 ✓, letsplay:ci
   107 ✓, save-compat 22 ✓, tsc ✓, lint 0 errors ✓.
+
+**Task 9 (v) landed (2026-07-07) — engine round-based combat + between-rounds disengage window;
+mechanism correct + tested, but win-rate STILL plateaus (fifth confirmation → 300-session gate
+stays deferred to Task 19):**
+- **New pure scheduler** `src/systems/combat/combatRounds.ts` (`roundDamageBudget` /
+  `roundAcceptsShot` / `roundIsComplete`): a **round** may remove at most
+  `GAME_BALANCE.combatRoundHullFraction` of MAX hull, clamped strictly into `[1, maxHull)` so it
+  can neither freeze the fight (budget 0) nor allow a full-hull one-shot (budget ≥ maxHull). The
+  invariant it guarantees — **budget < maxHull ⇒ full → zero is impossible in one round** — is the
+  whole feature. 11 unit tests (`combatRounds.test.ts`).
+- **CombatModule wiring**: tracks `roundDamageTaken` (accrues the applied hull delta per NPC shot),
+  a public `roundComplete` flag, and `beginCombatRound()`. Once the budget is spent, `advanceNpcTimers`
+  halts (breaks) and fires the new `onRoundComplete` dep **once**; `update()` gates BOTH fire loops on
+  `!roundComplete` so a completed round freezes the whole exchange (prune/downed/empty/HUD still run).
+  **Gated on `getCampaignPeakPower !== undefined` AND mode ≠ GOD** — legacy DI sites (unit tests) and
+  GOD (its hull floor already prevents the death) keep the flat real-time fight byte-identical, so
+  **NO existing combat pin needed rewriting** (the plan's test license was NOT consumed). The
+  live-only begin-round seam is the combat-pause overlay buttons (`combatPauseUi`: fire/continue →
+  `beginCombatRound()` then resume) — the headless agent drives the controller's `resume()` directly,
+  bypassing it, and begins its rounds explicitly per step, so the two never interfere.
+- **Live-player reaction window**: `CombatPauseController.repause()` (re-arms the incoming-attack
+  debounce + re-enters the pause) is wired from `SpaceFlightScene`'s `onRoundComplete` (ONE line —
+  scene at 1894 lines, under the 1900 guard). A live fight now re-pauses every ~third of hull (an
+  FTL-style between-rounds decision) instead of only on first contact. Timing stays playable (more
+  control, not less); autopilot-eyeball verification is a Post-Completion item (headless can't judge feel).
+- **Headless agent**: `PlayerAgent.waitOneDay` begins one round per step and BREAKS the tick loop when
+  `roundComplete` — so the natural `observe→decide` between steps IS the reaction window (the policy's
+  outgunned-flee gets a turn each step). `completeWarp` begins ONE round for the whole flee crossing,
+  so a committed escape takes at most one round's exposure (compounds Task 9 (iv)'s near-edge routing).
+- **Real-engine seam test** `src/tests/playtest/combatRoundReaction.test.ts` (real CombatModule + real
+  CombatPauseController wired as `SpaceFlightScene`): a full-hull weak ship in a 4-ship garrison can
+  never be dropped to zero in one round (a reaction window opens first); a **committed** fight still
+  dies across ≥ 2 rounds (meaning preserved — fleeing has a cost); declining to resume halts fire
+  (the window is real); GOD keeps the flat fight (rounds inert). 4 tests.
+- **Balance lever** `combatRoundHullFraction` landed at **0.34** — sized BELOW the policy's
+  `LOW_HULL_FRACTION` flee threshold (0.35) so a weak ship reaches a reaction window INSIDE the flee
+  band (hull < 0.35 while still alive, ≈ 2 rounds from full: 100→66→32 %) and escapes, instead of a
+  coarse round leaping the band straight to zero.
+- **50-session re-measure (NORMAL) + lever sweep — win-rate STILL 18 %:**
+  - `0.50` → **18.0 %** (9 win / 2 loss / 39 died / 0 wedged), median win d98
+  - `0.34` → **18.0 %** (9 win / 1 loss / **40 died** / 0 timeout / **0 wedged**) — cleanest (fewest
+    non-death failures); **kept**
+  - `0.20` → **16.0 %** (8 win / 5 loss / 36 died / 1 timeout / **1 wedged**) — finer granularity
+    trades deaths for galaxy-share LOSSES + a soft-lock wedge (an ever-fleeing weak ship never
+    contests the front, so the Overmind wins)
+- **Root cause of the persistent plateau (now confirmed a FIFTH time, incl. the user's approved
+  architectural fix):** the deaths are dominated by ships that **never reach battle-ready**
+  (`battleReadyDay` fires in only ~16 % of runs; avg peak power ~0.10). (v) makes per-fight death
+  survivable, but survival → fleeing → the front is uncontested → galaxy-share loss, OR the agent
+  commits to a garrison it is too weak to clear and dies over rounds. The bottleneck is the
+  **arming-up economy path**, not per-fight survivability — which no combat-round lever can supply.
+  The real 300-session acceptance is **deferred to Task 19** exactly as this checkbox's own text
+  provides; the two NOT-MET gate items above stay NOT-MET. The (v) mechanism is correct, tested, and
+  benefits live players — it is the right architecture, just not sufficient ALONE for the 99 % gate.
+- Gates: full unit ✓ (no existing pin touched), playtest 644 ✓, letsplay:ci 107 ✓, save-compat 22 ✓
+  (no schema touch), tsc ✓, lint 0 errors ✓, SpaceFlightScene 1894 lines (< 1900 guard) ✓.
 
 ### Task 10: Neural action-space expansion (liberate + arm-up)
 - [x] extend `ACTION_ORDER` 16 → 18 (`liberate`, `arm-up`) and grow the observation block with

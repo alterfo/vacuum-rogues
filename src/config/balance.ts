@@ -340,6 +340,25 @@ export const GAME_BALANCE = {
   weaponRange: 240,
   /** Real-time in-flight combat cadence: a ship fires once per this many ms while in range. */
   combatFireIntervalMs: 2500,
+  /**
+   * Round-based combat (campaign Task 9 (v)): the max fraction of the player's
+   * MAX hull that a single **combat round** may remove before the module halts
+   * fire and raises a fresh reaction window (an active-pause re-raise for the
+   * live player, a decision turn for the headless agent). Because it is < 1, a
+   * ship can NEVER drop from full hull to zero inside one resolution step — the
+   * defender always gets a flee/fight decision between rounds. A committed fight
+   * (repeatedly choosing to fight on) still loses across multiple rounds, so
+   * fleeing has a cost — it is an escape window, not invulnerability. Active
+   * only in campaign-aware combat (the CombatModule's `getCampaignPeakPower`
+   * dep is wired); legacy DI sites without it keep the flat real-time fight.
+   *
+   * Sized BELOW the policy's `LOW_HULL_FRACTION` flee threshold (0.35) so a weak
+   * ship reaches a reaction window inside the flee band (hull < 0.35 while still
+   * alive) and escapes, instead of a coarse round leaping past the band straight
+   * to zero. Small enough for several windows from full hull; a committed fight
+   * still loses over those rounds (total exchange is unchanged — no immunity).
+   */
+  combatRoundHullFraction: 0.34,
   /** Scanner (radar) range in world px. */
   scannerRange: 1200,
   /**

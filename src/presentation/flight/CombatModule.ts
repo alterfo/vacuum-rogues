@@ -7,6 +7,10 @@ import type { GameMode } from "@/types";
 import { applyDamageWithMode, isHullDowned } from "@/systems/combat/godMode";
 import { npcWeaponRange } from "@/systems/combat/npcWeapon";
 import {
+  roundAcceptsShot,
+  type CombatRoundConfig,
+} from "@/systems/combat/combatRounds";
+import {
   combatScaling,
   scaleHostileDamage,
   NEUTRAL_HOSTILE_SCALING,
@@ -128,6 +132,18 @@ export interface CombatModuleDeps {
   onTargetLost?(sprite: NpcShipSprite): void;
   /** Transient toast feedback (kill confirmation / low-hull retreat). */
   showMessage?(text: string, color?: number): void;
+  /**
+   * A combat **round** completed (campaign Task 9 (v)): incoming fire removed a
+   * round's worth of hull ({@link GAME_BALANCE.combatRoundHullFraction} of max)
+   * without killing the player, so fire halts and a reaction window opens. The
+   * live scene wires this to re-raise the active pause (a fresh flee/fight
+   * choice); the headless agent reads {@link CombatModule.roundComplete} to end
+   * its step and re-decide. Fired at most once per round. Absent ⇒ the round
+   * mechanic is inert (legacy DI sites without campaign scaling keep the flat
+   * real-time fight); the mechanic is additionally gated on
+   * {@link CombatModuleDeps.getCampaignPeakPower} being wired.
+   */
+  onRoundComplete?(): void;
 }
 
 /**
@@ -193,6 +209,23 @@ export class CombatModule implements FlightModule {
 
   /** True while at least one combatant is engaged. */
   isActive = false;
+
+  /**
+   * Round-based combat (campaign Task 9 (v)): hull points the player has taken
+   * from incoming fire in the **current round**. Reset by {@link beginCombatRound}
+   * (each fresh round) and on engage/end. Only accrues in campaign-aware combat
+   * (the {@link CombatModuleDeps.getCampaignPeakPower} dep is wired).
+   */
+  private roundDamageTaken = 0;
+
+  /**
+   * True once the current round's incoming-damage budget is spent (a reaction
+   * window is open): fire — both sides — is halted until {@link beginCombatRound}
+   * starts the next round. Public so the headless agent can end its step and
+   * re-decide when a round completes; the live scene re-raises the active pause
+   * via {@link CombatModuleDeps.onRoundComplete}.
+   */
+  roundComplete = false;
 
   /**
    * Wall-clock ms of the last "нет оружия" hint. The garrison-aggro path calls
@@ -271,13 +304,20 @@ export class CombatModule implements FlightModule {
     // survivor this frame — re-check the gate before it, mirroring the guard
     // before advanceNpcTimers below.
     if (this.isFrozen()) return;
-    this.advancePlayerWeapons(deltaTime);
-    // A killing player shot can re-pause the fight mid-frame: the selected target
-    // was lost but a survivor remains → onTargetLost → active-pause. The world is
-    // frozen the instant that pause is raised, so surviving NPCs must not still
-    // fire this frame (re-check the same gate as the top of update()).
-    if (this.isFrozen()) return;
-    this.advanceNpcTimers(deltaTime);
+    // Round-based combat (Task 9 (v)): once a round's incoming-damage budget is
+    // spent, BOTH sides' fire halts (the reaction window) until the next round
+    // begins — so a committed fight resolves round-by-round and the defender can
+    // never be deleted from full hull inside one resolution step. Prune/downed/
+    // empty/HUD still run so a disengage or kill during the window resolves.
+    if (!this.roundComplete) {
+      this.advancePlayerWeapons(deltaTime);
+      // A killing player shot can re-pause the fight mid-frame: the selected target
+      // was lost but a survivor remains → onTargetLost → active-pause. The world is
+      // frozen the instant that pause is raised, so surviving NPCs must not still
+      // fire this frame (re-check the same gate as the top of update()).
+      if (this.isFrozen()) return;
+      this.advanceNpcTimers(deltaTime);
+    }
     if (this.combatants.size === 0) {
       this.endCombat();
       return;
@@ -332,6 +372,7 @@ export class CombatModule implements FlightModule {
       this.isActive = true;
       this.weaponFireTimers.clear();
       this.lowHullWarned = false;
+      this.beginCombatRound(); // fresh engagement ⇒ fresh round budget
       this.hud?.open(this.selectedTarget);
     }
     logger.info(`In-flight combat: engaged ${npc.npc.id}`);
@@ -391,6 +432,18 @@ export class CombatModule implements FlightModule {
     this.hud?.setTarget(sprite);
   }
 
+  /**
+   * Start a fresh combat round (campaign Task 9 (v)): clear the round's taken
+   * damage and re-open fire after a completed round. The live scene calls this
+   * when the player resumes from the reaction-window pause (via the combat-pause
+   * UI buttons); the headless agent calls it at the start of each combat step.
+   * A no-op-safe reset — cheap to call even when no round is in progress.
+   */
+  beginCombatRound(): void {
+    this.roundDamageTaken = 0;
+    this.roundComplete = false;
+  }
+
   /** End the current fight: drop every combatant, reset timers, close the HUD. */
   endCombat(): void {
     this.isActive = false;
@@ -401,6 +454,8 @@ export class CombatModule implements FlightModule {
     this.lowHullWarned = false;
     this.downedWarned = false;
     this.playerDeathReported = false;
+    this.roundDamageTaken = 0;
+    this.roundComplete = false;
     this.hud?.close();
     // Re-arm the active-pause debounce so the next engagement pauses fresh on
     // its first incoming shot (idempotent — safe on a no-op end / teardown).
@@ -464,6 +519,15 @@ export class CombatModule implements FlightModule {
       // and every survivor would otherwise drain the player's hull on the same
       // pausing frame. Re-check the same gate as the top of update() per iteration.
       if (this.isFrozen()) break;
+      // Round-based combat (Task 9 (v)): once this round's incoming-damage budget
+      // is spent, halt fire and open the reaction window (fire the once-per-round
+      // hook). The shot that CROSSES the budget already landed on the previous
+      // iteration — this stops the NEXT one — so a round removes at most its
+      // budget plus one crossing shot, always leaving hull above zero.
+      if (this.roundBudgetSpent()) {
+        this.completeRound();
+        break;
+      }
       const t = (this.npcFireTimers.get(npc) ?? 0) + deltaTime;
       const d = this.distanceToShip(npc);
       if (
@@ -564,6 +628,11 @@ export class CombatModule implements FlightModule {
     // old `Math.max(0, …)` behaviour). Absent mode ⇒ NORMAL.
     const mode = this.deps.getGameMode?.() ?? "NORMAL";
     const result = applyDamageWithMode(mode, ship.hullHP, damage, ship.maxHull);
+    // Round-based combat (Task 9 (v)): tally the hull actually lost this shot
+    // toward the round budget (the applied delta, so a GOD-floored/clamped hit
+    // only counts what it removed). The budget gate in advanceNpcTimers stops the
+    // NEXT shot once this crosses the round's fraction of max hull.
+    this.roundDamageTaken += Math.max(0, ship.hullHP - result.hull);
     ship.hullHP = result.hull;
     const physics = this.deps.getShipPhysics();
     if (physics) {
@@ -689,6 +758,52 @@ export class CombatModule implements FlightModule {
     const power = this.deps.getCampaignPeakPower() ?? 0;
     const isHostile = this.deps.isHostileSystem?.() ?? false;
     return combatScaling(power, mode, isHostile);
+  }
+
+  /**
+   * Whether round-based combat (Task 9 (v)) is active for this fight. Gated on
+   * the campaign-scaling dep exactly like {@link hostileMults}: legacy DI sites
+   * (unit tests) that never wire {@link CombatModuleDeps.getCampaignPeakPower}
+   * keep the flat real-time exchange (byte-identical), while the production
+   * scene + headless harness (which do wire it) get the round-based fight.
+   *
+   * Skipped in GOD: the GOD hull floor already prevents the full → zero death
+   * the round mechanic exists to stop, so rounds there would only add combat
+   * friction (needless flee windows) — GOD combat stays byte-identical, and the
+   * survivability mechanic applies exactly on NORMAL/HARD where death happens.
+   */
+  private roundsEnabled(): boolean {
+    return (
+      this.deps.getCampaignPeakPower !== undefined &&
+      (this.deps.getGameMode?.() ?? "NORMAL") !== "GOD"
+    );
+  }
+
+  private readonly roundConfig: CombatRoundConfig = {
+    hullFraction: GAME_BALANCE.combatRoundHullFraction,
+  };
+
+  /**
+   * Whether the current round's incoming-damage budget is spent — i.e. no
+   * further NPC shot may land until {@link beginCombatRound}. Inert (always
+   * false) when round-based combat is disabled or the player ship is unknown.
+   */
+  private roundBudgetSpent(): boolean {
+    if (!this.roundsEnabled()) return false;
+    const ship = this.deps.getPlayerShip?.() ?? null;
+    if (!ship) return false;
+    return !roundAcceptsShot(
+      this.roundDamageTaken,
+      ship.maxHull,
+      this.roundConfig,
+    );
+  }
+
+  /** Mark the round complete once and open the reaction window (once per round). */
+  private completeRound(): void {
+    if (this.roundComplete) return;
+    this.roundComplete = true;
+    this.deps.onRoundComplete?.();
   }
 
   /**
