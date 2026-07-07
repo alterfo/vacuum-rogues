@@ -126,15 +126,15 @@ understanding on the committed state before starting Task 4.
 ## Implementation Steps
 
 ### Task 1: Star-map icon button clear of the help corner (Bug 1)
-- [ ] write red E2E test: at common viewport sizes the star-map control's bounds do not
+- [x] write red E2E test: at common viewport sizes the star-map control's bounds do not
       intersect `helpButtonRect(screenWidth)`, and a real-pointer click on it opens STAR_MAP
-- [ ] replace the `[МЕЖЗВЕЗДНАЯ КАРТА]` text button in `FlightHud` with a compact icon button
+- [x] replace the `[МЕЖЗВЕЗДНАЯ КАРТА]` text button in `FlightHud` with a compact icon button
       (drawn Graphics galaxy/map glyph, ~34px, matching the "?" button's visual language),
       with a `t()` tooltip/label on hover; position it left of `helpButtonRect` with a margin,
       re-anchored in `reposition()`
-- [ ] consult `helpButtonRect` (single source of truth) rather than hardcoding the offset
-- [ ] update any E2E selectors that referenced the old text label
-- [ ] screenshot-verify at ≥ 2 viewport sizes; run e2e regression — green before Task 2
+- [x] consult `helpButtonRect` (single source of truth) rather than hardcoding the offset
+- [x] update any E2E selectors that referenced the old text label
+- [x] screenshot-verify at ≥ 2 viewport sizes; run e2e regression — green before Task 2
 
 ### Task 2: Inventory verbs — jettison + move to hold (Bug 2)
 - [ ] write red unit tests: `Inventory.removeResource(id, qty)` (partial, full, missing-id

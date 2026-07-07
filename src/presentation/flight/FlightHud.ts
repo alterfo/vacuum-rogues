@@ -19,7 +19,9 @@ import {
 } from "../ui/AccessibilityPanel";
 import { GAME_BALANCE } from "@/config/balance";
 import { logger } from "@/utils/logger";
+import { t } from "@/i18n/i18n";
 import type { FlightModule } from "./FlightModule";
+import { starMapButtonRect } from "./starMapButton";
 
 /** Touch «✕» cancel button width (px) and the gap to the left of Play. */
 const CANCEL_BTN_W = 56;
@@ -61,8 +63,11 @@ export class FlightHud implements FlightModule {
   // read-out shows sub-day progress within a turn (gameDays + distance/wait
   // fraction); without it the counter falls back to the whole-day `gameDays`.
   private dayProvider: (() => number) | null = null;
-  // Star-map button (top-right) — repositioned on resize.
-  private backButton: Text | null = null;
+  // Star-map button (top-right, left of the «?» help corner) — repositioned on resize.
+  private backButton: UiButton | null = null;
+  // Hover tooltip label for the icon-only star-map button (no visible text on the
+  // button itself now, so the name is surfaced on hover instead).
+  private starMapTooltip: Text | null = null;
   // Camera debug read-out (development only); the scene's camera loop sets its text.
   private cameraDebugText: Text | null = null;
 
@@ -232,6 +237,7 @@ export class FlightHud implements FlightModule {
     }
     // Buttons live on uiContainer (torn down by clearUILayer); drop the refs.
     this.backButton = null;
+    this.starMapTooltip = null;
     this.playPauseButton = null;
     this.cancelButton = null;
     this.speedButton = null;
@@ -330,6 +336,7 @@ export class FlightHud implements FlightModule {
     }
     // These live on the now-destroyed uiContainer — drop the dangling refs.
     this.backButton = null;
+    this.starMapTooltip = null;
     this.playPauseButton = null;
     this.cancelButton = null;
     this.cameraDebugText = null;
@@ -376,8 +383,13 @@ export class FlightHud implements FlightModule {
   /** Re-anchor the screen-edge HUD after the window/canvas resizes. */
   reposition(w: number, h: number): void {
     if (this.backButton) {
-      this.backButton.x = w - 220;
-      this.backButton.y = 20;
+      const starMapRect = starMapButtonRect(w);
+      this.backButton.x = starMapRect.x;
+      this.backButton.y = starMapRect.y;
+      if (this.starMapTooltip) {
+        this.starMapTooltip.x = starMapRect.x - 8;
+        this.starMapTooltip.y = starMapRect.y + starMapRect.h / 2;
+      }
     }
     if (this.toast) {
       this.toast.x = w / 2;
@@ -755,37 +767,54 @@ export class FlightHud implements FlightModule {
     });
     this.uiContainer.addChild(menuBtn);
 
-    // Star map button
-    const backBtn = new Text({
-      text: "[МЕЖЗВЕЗДНАЯ КАРТА]",
+    // Star map button — compact icon button (Bug 1), left of the top-right «?»
+    // help corner (`helpButtonRect`, the single source of truth for that zone) so
+    // it can never overlap it at any screen width. A hover tooltip surfaces the
+    // label the old wide text button used to show permanently.
+    const starMapRect = starMapButtonRect(this.renderer.app.screen.width);
+    const starMapLabel = t("flight.starMap");
+    const backBtn = new UiButton(
+      "🗺",
+      "",
+      0xffaa00,
+      (event) => {
+        event.stopPropagation();
+        this.gameEngine?.audio?.playUiClick();
+        logger.info("Star map button clicked");
+        this.onStarMap?.();
+      },
+      starMapRect.w,
+      starMapRect.h,
+    );
+    backBtn.x = starMapRect.x;
+    backBtn.y = starMapRect.y;
+
+    const starMapTooltip = new Text({
+      text: starMapLabel,
       style: {
         fontFamily: "Courier New",
-        fontSize: scaledFont(14),
+        fontSize: scaledFont(12),
         fill: 0xffaa00,
-        fontWeight: "bold" as const,
       },
     });
-    backBtn.x = this.renderer.app.screen.width - 220;
-    backBtn.y = 20;
-    backBtn.eventMode = "static";
-    backBtn.cursor = "pointer";
-    backBtn.on("pointerdown", (event) => {
-      event.stopPropagation();
-      this.gameEngine?.audio?.playUiClick();
-      logger.info("Star map button clicked");
-      this.onStarMap?.();
-    });
+    starMapTooltip.anchor.set(1, 0.5);
+    starMapTooltip.eventMode = "none";
+    starMapTooltip.visible = false;
+    starMapTooltip.x = starMapRect.x - 8;
+    starMapTooltip.y = starMapRect.y + starMapRect.h / 2;
 
     backBtn.on("pointerover", () => {
       this.gameEngine?.audio?.playUiHover();
-      backBtn.alpha = 0.7;
+      starMapTooltip.visible = true;
     });
     backBtn.on("pointerout", () => {
-      backBtn.alpha = 1;
+      starMapTooltip.visible = false;
     });
 
-    this.uiContainer.addChild(backBtn);
+    this.uiContainer.addChild(backBtn.container);
+    this.uiContainer.addChild(starMapTooltip);
     this.backButton = backBtn;
+    this.starMapTooltip = starMapTooltip;
 
     // Play / Pause turn control (bottom-centre). Play runs the planned turn;
     // while moving it becomes Pause, which ends the turn at the next day segment.

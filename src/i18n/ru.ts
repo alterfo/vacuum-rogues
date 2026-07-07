@@ -296,6 +296,7 @@ export const ru: Dict = {
 
   // --- incoming-attacker warning (Task 5: threat indicator) -----------------
   "flight.incomingAttacker": "⚠ Приближается противник: {name}!",
+  "flight.starMap": "Межзвёздная карта",
 
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Управление:",

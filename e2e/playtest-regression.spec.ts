@@ -634,6 +634,93 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  for (const width of [1024, 1920]) {
+    test(`star-map icon button never overlaps the help corner at width ${width} (Bug 1)`, async ({ page }) => {
+      // Before the fix the star-map control was a wide "[МЕЖЗВЕЗДНАЯ КАРТА]" text
+      // button anchored at x = w-220 — at common widths its live bounds reached
+      // into the top-right «?» help corner. Set the viewport BEFORE the scene
+      // mounts so the real «?» button (mountSceneHelp, which does not track a
+      // later resize) is placed for this exact width — then compare both
+      // buttons' REAL measured bounds, not a re-derived formula.
+      await page.setViewportSize({ width, height: 800 });
+      await setupNewGame(page);
+      const errorCollector = new ErrorCollector(page);
+      await page.mouse.move(5, 5);
+
+      const rects = await page.evaluate(() => {
+        type BoundsHolder = {
+          container?: {
+            getGlobalPosition: () => { x: number; y: number };
+            width: number;
+            height: number;
+          };
+        };
+        const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+        const scene = engine.currentScene as Record<string, unknown>;
+        const hud = scene?.['hud'] as Record<string, unknown>;
+        const starMapC = (hud?.['backButton'] as BoundsHolder)?.container;
+        if (!starMapC) return null;
+
+        // The onboarding «?» button lives directly on renderer.stage (mounted by
+        // mountSceneHelp) — find it by its icon glyph rather than any formula.
+        const renderer = scene?.['renderer'] as {
+          stage: { children: Array<{ children?: Array<{ text?: string }> }> };
+        };
+        const helpContainer = renderer.stage.children.find((c) =>
+          c.children?.some((gc) => gc.text === "?"),
+        ) as unknown as BoundsHolder['container'];
+        if (!helpContainer) return null;
+
+        const sp = starMapC.getGlobalPosition();
+        const hp = helpContainer.getGlobalPosition();
+        return {
+          starMap: { x: sp.x, y: sp.y, w: starMapC.width, h: starMapC.height },
+          help: { x: hp.x, y: hp.y, w: helpContainer.width, h: helpContainer.height },
+        };
+      });
+      expect(rects, 'both buttons must be found').not.toBeNull();
+
+      const { starMap, help } = rects!;
+      const intersects =
+        starMap.x < help.x + help.w &&
+        starMap.x + starMap.w > help.x &&
+        starMap.y < help.y + help.h &&
+        starMap.y + starMap.h > help.y;
+      expect(intersects, `overlap at width=${width}: starMap=${JSON.stringify(starMap)} help=${JSON.stringify(help)}`).toBe(false);
+
+      errorCollector.assertAndDetach();
+    });
+  }
+
+  test('real-pointer click on the star-map icon button opens StarMapScene (Bug 1)', async ({ page }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+    await page.mouse.move(5, 5);
+
+    const btn = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+      const c = (hud?.['backButton'] as {
+        container?: { getGlobalPosition: () => { x: number; y: number }; width: number; height: number };
+      })?.container;
+      if (!c) return null;
+      const p = c.getGlobalPosition();
+      return { x: p.x + c.width / 2, y: p.y + c.height / 2 };
+    });
+    expect(btn).not.toBeNull();
+
+    await page.mouse.click(btn!.x, btn!.y);
+    await waitForScene(page, 'StarMapScene', 10_000);
+
+    const sceneName = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      return engine?.currentScene?.constructor?.name ?? null;
+    });
+    expect(sceneName).toBe('StarMapScene');
+
+    errorCollector.assertAndDetach();
+  });
+
   test('smoke: cursor changes over an NPC ship on REAL mouse hover after a turn (playtest2 ②)', async ({ page }) => {
     // The user's playtest finding ②: the pointer stays the default arrow over
     // NPC ships. Root cause: every NPC spawned IDLE, so the first day-tick sent

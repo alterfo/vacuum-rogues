@@ -294,6 +294,7 @@ export const en: Dict = {
 
   // --- incoming-attacker warning (Task 5: threat indicator) -----------------
   "flight.incomingAttacker": "⚠ Incoming attacker: {name}!",
+  "flight.starMap": "Interstellar Map",
 
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Controls:",

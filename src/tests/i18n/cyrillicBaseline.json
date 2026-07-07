@@ -26,7 +26,7 @@
   "src/presentation/flight/CombatPauseOverlay.ts": 9,
   "src/presentation/flight/CombatPursuitController.ts": 1,
   "src/presentation/flight/EncounterController.ts": 19,
-  "src/presentation/flight/FlightHud.ts": 25,
+  "src/presentation/flight/FlightHud.ts": 24,
   "src/presentation/flight/NpcInteractionController.ts": 15,
   "src/presentation/flight/OvermindBossController.ts": 6,
   "src/presentation/flight/QuestCompletion.ts": 4,
