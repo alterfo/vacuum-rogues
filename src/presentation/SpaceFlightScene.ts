@@ -34,6 +34,7 @@ import { FlightTouchController } from "./flight/flightTouchControls";
 import { isTouchLayoutActive } from "./ui/responsiveLayout";
 import { WarpEffectRenderer } from "./flight/WarpEffectRenderer";
 import { QuestCompletion } from "./flight/QuestCompletion";
+import { arrivalHeadingFromExitVector } from "./flight/warpHeading";
 import { handleFlightKey } from "./flight/flightKeyHandler";
 import { wireFlightSystemMenu } from "./flight/flightSystemMenu";
 import { mountFlightSceneHelp, type FlightSceneHelp } from "./flight/flightSceneHelp"; // prettier-ignore
@@ -177,6 +178,8 @@ export class SpaceFlightScene extends GameScene {
       | {
           gameEngine?: GameEngine;
           entryVector?: { x: number; y: number };
+          // Arrival heading (radians) — continues the departure heading (Bug 4).
+          arrivalHeading?: number;
           pendingWarp?: {
             targetSystemId: string;
             fuelCost: number;
@@ -364,7 +367,12 @@ export class SpaceFlightScene extends GameScene {
       ? loadoutStats.speed
       : (this.DISTANCE_PER_DAY / 1000) *
         Math.min(1.4, Math.max(0.8, ship?.speed ?? 1));
-    this.shipPhysics = new ShipPhysics(entryX, entryY, cruise || 0.1);
+    this.shipPhysics = new ShipPhysics(
+      entryX,
+      entryY,
+      cruise || 0.1,
+      ctx?.arrivalHeading ?? 0,
+    );
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
@@ -1469,6 +1477,7 @@ export class SpaceFlightScene extends GameScene {
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
       entryVector,
+      arrivalHeading: arrivalHeadingFromExitVector(exitVector),
       warpArrival: true,
     });
   }

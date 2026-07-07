@@ -47,12 +47,17 @@ export class ShipPhysics {
   // the cap is reserved for the off-axis case that would otherwise orbit forever.
   private readonly ARC_CAP_HEADING: number = Math.PI / 6;
 
-  constructor(initialX: number, initialY: number, maxSpeed?: number) {
+  constructor(
+    initialX: number,
+    initialY: number,
+    maxSpeed?: number,
+    initialAngle: number = 0,
+  ) {
     this.shipX = initialX;
     this.shipY = initialY;
     this.targetX = initialX;
     this.targetY = initialY;
-    this.shipAngle = 0;
+    this.shipAngle = initialAngle;
     this.maxSpeed = maxSpeed ?? 0.1; // pixels/ms - slower for turn-based gameplay (was 0.3)
     // Calculate rotation speed: 90° (π/2 rad) in 300ms = 5.24 rad/s = 0.00524 rad/ms
     this.rotationSpeed = Math.PI / 2 / 300;

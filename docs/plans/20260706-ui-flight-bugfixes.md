@@ -163,18 +163,18 @@ understanding on the committed state before starting Task 4.
 - [x] screenshot-verify; run e2e regression — green before Task 4
 
 ### Task 4: Ship enters a system on its departure heading (Bug 4)
-- [ ] write red playtest (real engine): warp out with a known `exitVector`, assert on arrival
+- [x] write red playtest (real engine): warp out with a known `exitVector`, assert on arrival
       `shipPhysics.shipAngle` equals the departure heading (entry continues the same flight
       direction), not 0
-- [ ] add an initial-angle seam to `ShipPhysics` (constructor param defaulting to 0 — no
+- [x] add an initial-angle seam to `ShipPhysics` (constructor param defaulting to 0 — no
       call-site churn)
-- [ ] thread the heading through the warp ctx: derive it from `exitVector` in `performWarp`
+- [x] thread the heading through the warp ctx: derive it from `exitVector` in `performWarp`
       alongside `entryVector`, apply it at the `ShipPhysics` construction on entry; cover the
       re-entry-from-planet path only if it shares the seam trivially (otherwise note it)
-- [ ] keep `SpaceFlightScene.ts` under the line guard (extract any non-trivial math to a
+- [x] keep `SpaceFlightScene.ts` under the line guard (extract any non-trivial math to a
       `flight/` helper with unit tests for the angle derivation, including the flip vs
       `entryVector` inversion)
-- [ ] run unit + playtest suites — green before Task 5
+- [x] run unit + playtest suites — green before Task 5
 
 ### Task 5: «Проложить маршрут» on BOUNTY quests (Bug 5)
 - [ ] write red unit test: `activeDestination`/nav-target resolution yields the hunted ship's
