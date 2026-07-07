@@ -276,7 +276,20 @@ export class CombatModule implements FlightModule {
     // Pausing freezes the world, so combat must not keep draining the player's
     // hull while paused. Damage numbers (above) still float so a killing blow's
     // number finishes its arc.
-    if (this.isFrozen()) return;
+    if (this.isFrozen()) {
+      // Even while frozen, a combatant whose sprite was DESTROYED (killed or
+      // despawned by a non-combat path) is unambiguously gone — a distance-based
+      // disengagement is a live choice the paused player is making, but a gone
+      // sprite is not. Keeping it leaves a phantom combat stance: the attack
+      // radius stays drawn with nothing to fight and the ship frozen on it (the
+      // live "stands in a combat stance, no hostiles nearby, just stands" bug
+      // the user reports — Task 9 (vi)). Dropping destroyed sprites fires no
+      // weapons, so it is safe under the active pause; an emptied set ends the
+      // fight (closing the HUD stance) and the host resumes the pause on end.
+      this.pruneDestroyed();
+      if (this.combatants.size === 0) this.endCombat();
+      return;
+    }
     // A DOWNED ship is not a combatant (GOD floors hull instead of killing):
     // the engagement is decided, so end it. Without this a fight against a
     // permanently-downed ship ran forever — the ship can't fire back, can't
@@ -493,6 +506,19 @@ export class CombatModule implements FlightModule {
       if (npc !== this.selectedTarget) this.removeCombatant(npc);
     if (this.selectedTarget && toDrop.includes(this.selectedTarget))
       this.removeCombatant(this.selectedTarget);
+  }
+
+  /**
+   * Drop only combatants whose sprite was DESTROYED (a non-combat despawn: it
+   * hyperjumped out, or the day-tick refresh removed it). Unlike {@link
+   * pruneDisengaged} this ignores distance — it is safe to run even while the
+   * active pause is frozen, because a gone sprite is gone regardless of the
+   * pause, and clearing it prevents a phantom combat stance (Task 9 (vi)). Fires
+   * no shots.
+   */
+  private pruneDestroyed(): void {
+    for (const npc of [...this.combatants])
+      if (npc.container?.destroyed) this.removeCombatant(npc);
   }
 
   /** A combatant disengages when its sprite is destroyed or opens beyond escape range. */

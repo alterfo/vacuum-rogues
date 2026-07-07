@@ -15,12 +15,15 @@ import {
   checkMemoryBounds,
   classifyCampaignOutcome,
   emptyMilestones,
+  emptyStallStats,
   foldCampaignDay,
+  foldCampaignStep,
   formatCampaignReport,
   NEWS_FEED_CAP,
   type CampaignDaySignal,
   type CampaignMemoryStats,
   type CampaignSessionReport,
+  type CampaignStepSignal,
 } from "./campaignMetrics";
 
 /** A weak-ship, no-Overmind day signal; override per scenario. */
@@ -82,6 +85,140 @@ function mkReport(
     ...over,
   };
 }
+
+/** A no-progress in-flight step signal; override per scenario. */
+function mkStep(over: Partial<CampaignStepSignal> = {}): CampaignStepSignal {
+  return {
+    day: 10,
+    scene: SceneType.SPACE_FLIGHT,
+    actionKind: "wait",
+    credits: 1000,
+    combatActive: false,
+    hostileCount: 0,
+    ...over,
+  };
+}
+
+describe("foldCampaignStep — stall/cycle detectors (Task 9 vi)", () => {
+  it("counts a phantom combat stance (combat active, zero hostiles)", () => {
+    let s = emptyStallStats();
+    s = foldCampaignStep(s, mkStep({ combatActive: true, hostileCount: 0 }));
+    s = foldCampaignStep(s, mkStep({ combatActive: true, hostileCount: 2 })); // real fight
+    s = foldCampaignStep(s, mkStep({ combatActive: true, hostileCount: 0 }));
+    s = foldCampaignStep(s, mkStep({ combatActive: false, hostileCount: 0 }));
+    expect(s.combatStanceZeroHostileSteps).toBe(2);
+    expect(s.steps).toBe(4);
+  });
+
+  it("measures the longest no-progress repeat-action run (same scene+action, day+credits frozen)", () => {
+    let s = emptyStallStats();
+    // Three identical stuck steps in a row → run of 3.
+    for (let i = 0; i < 3; i++)
+      s = foldCampaignStep(
+        s,
+        mkStep({ day: 10, credits: 500, actionKind: "warp" }),
+      );
+    // Day advances → the streak breaks even with the same action.
+    s = foldCampaignStep(
+      s,
+      mkStep({ day: 11, credits: 500, actionKind: "warp" }),
+    );
+    // Two more stuck → run of 2, so the max stays 3.
+    s = foldCampaignStep(
+      s,
+      mkStep({ day: 11, credits: 500, actionKind: "warp" }),
+    );
+    s = foldCampaignStep(
+      s,
+      mkStep({ day: 11, credits: 500, actionKind: "warp" }),
+    );
+    expect(s.maxRepeatActionRun).toBe(3);
+    // The culprit key names the stuck (scene, action) for diagnosis.
+    expect(s.worstRepeatKey).toBe(`${SceneType.SPACE_FLIGHT}|warp`);
+  });
+
+  it("a credit change breaks the no-progress run even at a frozen day", () => {
+    let s = emptyStallStats();
+    s = foldCampaignStep(
+      s,
+      mkStep({ day: 10, credits: 500, actionKind: "trade" }),
+    );
+    s = foldCampaignStep(
+      s,
+      mkStep({ day: 10, credits: 500, actionKind: "trade" }),
+    ); // run 2
+    s = foldCampaignStep(
+      s,
+      mkStep({ day: 10, credits: 900, actionKind: "trade" }),
+    ); // progress → reset
+    s = foldCampaignStep(
+      s,
+      mkStep({ day: 10, credits: 900, actionKind: "trade" }),
+    ); // run 2
+    expect(s.maxRepeatActionRun).toBe(2);
+  });
+
+  it("measures the undocked day-frozen streak but exempts a docked/landed stay", () => {
+    let s = emptyStallStats();
+    // Four undocked steps with the day frozen → streak of 3 (first has no prior day).
+    for (let i = 0; i < 4; i++)
+      s = foldCampaignStep(
+        s,
+        mkStep({ day: 10, scene: SceneType.SPACE_FLIGHT }),
+      );
+    expect(s.maxDayFrozenStreakUndocked).toBe(3);
+    // A long STATION stay at a frozen day does NOT extend the undocked streak.
+    let d = emptyStallStats();
+    for (let i = 0; i < 5; i++)
+      d = foldCampaignStep(d, mkStep({ day: 10, scene: SceneType.STATION }));
+    expect(d.maxDayFrozenStreakUndocked).toBe(0);
+  });
+
+  it("a healthy run (progressing day, varied actions) shows no stalls", () => {
+    let s = emptyStallStats();
+    for (let i = 0; i < 10; i++)
+      s = foldCampaignStep(
+        s,
+        mkStep({
+          day: 10 + i,
+          credits: 1000 + i * 50,
+          actionKind: i % 2 ? "warp" : "trade",
+        }),
+      );
+    expect(s.combatStanceZeroHostileSteps).toBe(0);
+    expect(s.maxRepeatActionRun).toBe(1);
+    expect(s.maxDayFrozenStreakUndocked).toBe(0);
+  });
+
+  it("does not mutate the input fold value (pure)", () => {
+    const s0 = emptyStallStats();
+    const s1 = foldCampaignStep(s0, mkStep({ combatActive: true }));
+    expect(s0.steps).toBe(0);
+    expect(s1.steps).toBe(1);
+    expect(s1).not.toBe(s0);
+  });
+});
+
+describe("formatCampaignReport — stall footer", () => {
+  it("renders the stall detail + aggregate when present, and omits it when absent", () => {
+    const stall = {
+      ...emptyStallStats(),
+      combatStanceZeroHostileSteps: 4,
+      maxRepeatActionRun: 7,
+      maxDayFrozenStreakUndocked: 12,
+      steps: 100,
+    };
+    const withStall = formatCampaignReport([mkReport({ stall })]);
+    expect(withStall).toContain("phantom=4");
+    expect(withStall).toContain("repeat=7");
+    expect(withStall).toContain("dayFrozen=12");
+    expect(withStall).toContain("phantom-stance sessions=1/1");
+    // A report with no stall data omits the footer entirely.
+    const noStall = formatCampaignReport([mkReport()]);
+    expect(noStall).not.toContain("phantom");
+    expect(noStall).not.toContain("stalls:");
+  });
+});
 
 describe("foldCampaignDay — milestone latching", () => {
   it("latches battle-ready on the first day BOTH thresholds are met, and never moves it", () => {

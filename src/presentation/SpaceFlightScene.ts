@@ -243,6 +243,9 @@ export class SpaceFlightScene extends GameScene {
       onPlayerUnderAttack: () =>
         this.combatPause.requestPause("incoming-attack"),
       onCombatEnded: () => {
+        // Resume if a fight ended while paused (a phantom stance cleaned up while
+        // frozen — Task 9 (vi)); reset() alone leaves `paused` set → still frozen.
+        if (this.combatPause.paused) this.combatPause.resume();
         this.combatPause.reset(); // re-arm pause debounce
         if (!this.destroyed) this.endTurn(); // combat over → end the turn (skip teardown)
       },

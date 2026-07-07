@@ -39,10 +39,13 @@ import { checkInvariants } from "./letsplay.run";
 import {
   classifyCampaignOutcome,
   emptyMilestones,
+  emptyStallStats,
   foldCampaignDay,
+  foldCampaignStep,
   formatCampaignReport,
   type CampaignMemoryStats,
   type CampaignSessionReport,
+  type CampaignStallStats,
 } from "./campaignMetrics";
 
 /** Knobs for one campaign session; defaults size the full 3-year clock. */
@@ -133,6 +136,8 @@ export async function runCampaignSession(
     const agent = new PlayerAgent(harness, makePolicy());
 
     let milestones = emptyMilestones();
+    let stall: CampaignStallStats = emptyStallStats();
+    let peakCredits = 0;
     let violations = 0;
     let steps = 0;
     let lastCheckpointDay = -1;
@@ -175,12 +180,30 @@ export async function runCampaignSession(
         stepStalled = true;
         break;
       }
-      await agent.run(1);
+      const runResult = await agent.run(1);
       steps++;
 
       const day = engine.galaxy?.gameDays ?? 0;
       const status = engine.galaxy?.overmindArc.status ?? "dormant";
       const scene = engine.currentSceneType;
+
+      // Per-step stall/cycle fold (Task 9 (vi)): read the combat stance directly
+      // off the live scene (isActive with an empty combatant set is the phantom
+      // stance the user reports live). Cheap scalars only — no re-observe.
+      const flightScene = harness.currentScene() as {
+        combatModule?: { isActive?: boolean; combatants?: { size: number } };
+      } | null;
+      const lastStep = runResult.steps[runResult.steps.length - 1];
+      const creditsNow = engine.player?.credits ?? 0;
+      peakCredits = Math.max(peakCredits, creditsNow);
+      stall = foldCampaignStep(stall, {
+        day,
+        scene,
+        actionKind: lastStep?.action.kind ?? "wait",
+        credits: creditsNow,
+        combatActive: flightScene?.combatModule?.isActive === true,
+        hostileCount: flightScene?.combatModule?.combatants?.size ?? 0,
+      });
 
       if (arcResolved(status) || sceneTerminal(scene)) {
         resolutionDay = day;
@@ -244,6 +267,7 @@ export async function runCampaignSession(
       died: outcome === "died",
       questsCompleted: engine.questManager.getCompletedQuestIds().length,
       finalCredits: engine.player?.credits ?? 0,
+      peakCredits,
       loanBalance: playerLoanBalance(engine),
       finalOvermindShare:
         galaxy && galaxy.systems.length > 0
@@ -254,6 +278,7 @@ export async function runCampaignSession(
       wallMs: performance.now() - wallStart,
       heapDeltaMB: (process.memoryUsage().heapUsed - heapBefore) / MB,
       memory,
+      stall,
     };
   } finally {
     harness.dispose();

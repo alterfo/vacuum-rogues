@@ -634,6 +634,29 @@ This plan **supersedes** the two open plans:
       **arming-up path** (battle-ready reached in only ~16 % of runs), not per-fight
       survivability. The 300-session acceptance stays deferred to **Task 19** as the plan's
       own text provides ("Task 19's acceptance re-run stands"); full record in Task 9 (v) notes.
+- [x] ➕ **(vi) diagnose + fix autopilot STALLS/CYCLES — user's primary hypothesis
+      (2026-07-07, fifth escalation answer): "дело не в экономике, а в тупизне автопилота"**.
+      The user has repeatedly observed LIVE in the browser: the ship **freezes in a combat
+      stance — attack radius drawn, NO hostile ships anywhere nearby — and just stands**, or
+      generally stalls in cycles. Work items, empirical-probe-first (prove the symptom before
+      reading code):
+      (a) reproduce the live combat-stance stall (live-autopilot flow or a real-scene playtest
+      with the CombatPauseController wired exactly as `SpaceFlightScene`); prime suspects:
+      combat pause engaging/not clearing with zero hostiles in range, stale `isPaused`/stance
+      state after hostiles despawn or leave, and interaction with (v)'s new `repause()`
+      between-rounds window in LIVE mode (headless drives `resume()` directly and can't see
+      this class — this is the known «Огонь!»-freeze family);
+      (b) add stall/cycle detectors to campaign metrics: steps in combat stance with 0
+      hostiles, decide→apply action loops (same action+state N times), day-frozen streaks
+      outside docking — surface per-session in the campaign report;
+      (c) fix root causes found; red test each (real-engine playtest tier);
+      (d) re-run the 50-session measure; record whether the plateau moves before touching
+      economy
+- [x] ➕ **(vii) economy check (secondary, user-ordered "на всякий случай")**: instrument the
+      arming-up path in campaign telemetry — earn rate by source (quests/trade/salvage), time
+      credits sit above the refit reserve, gear-price vs earn-rate curve at each tech level;
+      determine whether battle-ready-by-day-X fails on INCOME or on PRICES; apply the cheapest
+      corrective lever (economy config values are in-scope Task 9 levers) and re-measure
 - [x] promote the tuned pacing into a fast seeded regression test (accelerated proxy asserting
       the pacing SHAPE: dormant→pressure→resolution ordering) so future edits can't silently
       break the campaign clock — ⚠️ **deferred**: the "tuned" pacing awaits the win-rate decision;
@@ -911,6 +934,54 @@ stays deferred to Task 19):**
   benefits live players — it is the right architecture, just not sufficient ALONE for the 99 % gate.
 - Gates: full unit ✓ (no existing pin touched), playtest 644 ✓, letsplay:ci 107 ✓, save-compat 22 ✓
   (no schema touch), tsc ✓, lint 0 errors ✓, SpaceFlightScene 1894 lines (< 1900 guard) ✓.
+
+**Task 9 (vi)+(vii) notes (2026-07-07) — stall/cycle detectors + phantom-stance fix landed;
+the user's "тупизна автопилота" hypothesis is CONFIRMED and now MEASURED (not economy):**
+- **(vi b) Stall/cycle detectors** — new pure `CampaignStallStats` / `foldCampaignStep` in
+  `campaignMetrics.ts` folding three per-step signals: (1) **phantom combat stance** (combat
+  `isActive` with 0 combatants — the exact "attack radius drawn, nothing nearby, just stands"
+  symptom); (2) longest **no-progress repeat-action run** (same `scene|action` with day AND
+  credits frozen) that **NAMES the culprit** `scene|action` so a cycle is diagnosable, not just
+  counted; (3) longest **undocked day-frozen streak** (a docked/landed stay is exempt). Wired
+  per-step into `campaign.run.ts`; surfaced per-session + aggregate in the report. 8 new unit
+  tests in `campaignMetrics.test.ts`.
+- **(vi a+c) Phantom-stance GAME fix (agent-as-diagnostic — the LIVE bug the user reports).**
+  Root cause: `CombatModule.update()` early-returns on the active pause BEFORE it prunes/ends the
+  fight, so a combatant whose sprite was destroyed by a **non-combat path** (hyperjumped out /
+  day-tick despawn) leaves a phantom combatant — `isActive` stays true, the HUD attack radius
+  stays drawn, the ship is frozen on a fight with nothing to fight, and NOTHING resumes it (the
+  policy sees no hostile to attack/flee). Fix: while frozen, drop **destroyed-sprite** combatants
+  (fires no weapons ⇒ safe under the pause — a *distance*-disengaged LIVE combatant is a paused
+  player's live choice and is NOT dropped) and end an emptied fight; `SpaceFlightScene.onCombatEnded`
+  now `resume()`s if paused so the ship isn't left frozen (aligning with `reset()`'s documented
+  "the host resumes time on combat end" contract, which nothing actually honoured). Red tests:
+  3 in `src/tests/combat/phantomStanceCleanup.test.ts` (real `CombatModule` + real
+  `CombatPauseController` wired as the scene). **No existing assertion touched.** SpaceFlightScene
+  1897 lines (< 1900 guard); a thin comment discharged the +1.
+- **(vi d) 20-session NORMAL re-measure with the new telemetry:** **phantom-stance sessions=0/20**
+  — the phantom stance is a **LIVE-only** freeze (headless drives `resume()` directly), so it is
+  NOT a headless-measurable plateau driver; the fix is for live players (and now guarded). BUT the
+  detectors surfaced a **64-step `repeat=SPACE_FLIGHT|attack` / 64-step undocked day-frozen cycle**
+  on the ONE session that reached battle-ready (CAMPAIGN-6: power 0.27, peakCredits 9785): a
+  battle-ready ship commits to a garrison it **cannot clear**, grinds the day-frozen fight for 64
+  steps, and dies at share 0.75. This is NOT spurious stupidity — it is the **KNOWN
+  combat-survivability blocker** (Task 8: "a lone battle-ready 180/49 ship cannot solo the
+  5-defender `GARRISON_MIN` standing garrison"), now **quantified** by the detector. The plateau's
+  headless drivers are (a) early death before arm-up and (b) this battle-ready-grind-to-death — the
+  combat-survivability architecture the plan escalated to the user, deferred to **Task 19**; the
+  detector now guards against a silent regression.
+- **(vii) Economy check — the answer is NOT economy.** Added optional `peakCredits` to the session
+  report. Income-vs-price finding: surviving sessions bank plenty (CAMPAIGN-6 peakCredits **9785**,
+  CAMPAIGN-7 **9290**) — **INCOME is sufficient when survival permits**; battle-ready is reached in
+  the sessions that live long enough. The blocker is NOT prices/income; it is **SURVIVAL-to-arm-up +
+  the battle-ready garrison grind** above. No economy lever moves the plateau (consistent with the
+  five prior escalations), so **no config-value change was applied** — the cheapest corrective lever
+  is not an economy value but the combat-survivability decision (Task 19). The user's ordering was
+  right: it is the autopilot/combat, not the economy.
+- Gates: full unit **4725 ✓** (the lone red — untracked `shippedParity.test.ts`, a pre-existing
+  working-tree leftover referencing a missing `fixtures/player.io.json`, verified unrelated and NOT
+  committed), combat/flight playtest **557 ✓**, campaignMetrics **24 ✓**, phantomStanceCleanup
+  **3 ✓**, tsc ✓, lint 0 errors ✓, SpaceFlightScene 1897 < 1900 ✓.
 
 ### Task 10: Neural action-space expansion (liberate + arm-up)
 - [x] extend `ACTION_ORDER` 16 → 18 (`liberate`, `arm-up`) and grow the observation block with
