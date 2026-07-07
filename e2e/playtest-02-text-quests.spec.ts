@@ -280,4 +280,39 @@ test.describe('Playtest 02: Text quests', () => {
 
     errorCollector.assertAndDetach();
   });
+
+  // Task 18: quest illustration (quest_art/<scriptId>) — no `quest_art/` art
+  // is shipped yet (generation is a Post-Completion, GPU-box step), so this
+  // is the real, currently-reachable state: the description panel must
+  // render exactly as before (no missing-texture placeholder, no crash). The
+  // "art lands" mount path is pinned at the unit level
+  // (`textQuestIllustration.test.ts`, mocked manifest) since a real asset
+  // would be needed to reach it through the actual Vite-built manifest here.
+  test('text quest scene renders correctly with no quest_art asset (graceful no-art fallback)', async ({ page }) => {
+    const errorCollector = new ErrorCollector(page);
+
+    for (const scriptId of ['auction', 'reactor', 'tribunal']) {
+      await page.evaluate(async (id) => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          startTextQuest: (id: string, seed?: number) => Promise<void>;
+        };
+        await engine.startTextQuest(id, 7);
+      }, scriptId);
+      await waitForScene(page, 'TextQuestScene', 15_000);
+
+      const narration = await page.evaluate(() => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+        };
+        const text = engine.currentScene?.['vmNarrationText'] as
+          | { text?: string }
+          | null
+          | undefined;
+        return text?.text ?? '';
+      });
+      expect(narration.length).toBeGreaterThan(0);
+    }
+
+    errorCollector.assertAndDetach();
+  });
 });

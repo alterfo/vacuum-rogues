@@ -311,6 +311,60 @@
           "progressors": "refined blue-skinned scientist, sleek cyan tech attire"
         }
       }
+    },
+    "quest_art": {
+      "size": [
+        1024,
+        640
+      ],
+      "template": "Cinematic sci-fi digital painting, dramatic key-art illustration for a story scene, {scene}, moody atmospheric lighting, high stakes, original character design, no readable text, detailed, painterly concept art",
+      "negative": "text, words, letters, caption, watermark, logo, comic panel, speech bubble, multiple panels, low quality, blurry",
+      "name_order": [
+        "scene"
+      ],
+      "axes": {
+        "scene": {
+          "auction": "tense black-market auction hall aboard a station, rival bidders eyeing a crate of contraband under dim spotlights",
+          "boarding-standoff": "a hostile boarder frozen mid-step in an airlock corridor, hand near a weapon, standoff tension, red emergency lighting",
+          "cargo-sort": "cramped cargo hold stacked with mismatched crates and manifests, a lone crewer racing against a departure clock",
+          "customs": "a nervous captain facing an armored customs inspector at a station checkpoint, scanner light sweeping a cargo hold",
+          "derelict-salvage": "a derelict freighter drifting dark and silent, hull breaches venting frost, a salvage crew's flashlight beam cutting the dark",
+          "evacuation": "crowded evacuation bay of a dying station, alarms flashing red, crew ushering panicked civilians toward escape pods",
+          "first-contact": "an alien vessel of unfamiliar geometric design hanging silently in open space, a lone ship approaching, first-contact tension",
+          "gravity-slalom": "a ship threading a narrow corridor between crushing gravity wells and debris, streaks of distorted starlight",
+          "hostage-rescue": "a dim station corridor, armed captors guarding bound hostages, a rescuer's silhouette in a doorway",
+          "investigation": "a shadowy crime-scene cabin aboard a ship, scattered clues under a single swinging light, an investigator crouched over evidence",
+          "life-support": "a failing life-support control room, flickering warning panels reading critical oxygen levels, condensation on cold metal",
+          "locked-room": "an opulent but chilling captain's quarters, a body outline chalked on the floor, suspects gathered in shadow",
+          "orbital-escape": "a ship tearing away from a collapsing orbital station, debris and flame trailing against a curving planet horizon",
+          "plague-crisis": "a quarantined colony ward, medics in hazard suits moving between rows of sick patients under sickly green light",
+          "quarantine": "a sealed station airlock stamped with quarantine warnings, a masked officer barring the way, red beacon light",
+          "reactor": "a ship's reactor core chamber bathed in unstable blue-white light, alarms flashing, an engineer racing to stabilize it",
+          "sabotage-heist": "a covert crew breaching a guarded warehouse vault at night, cutting torches sparking, tense silhouettes",
+          "signal-decode": "a cramped comms station bristling with cables and monitors, a garbled alien signal waveform glowing on the display",
+          "smuggling-run": "a ship weaving through a patrol blockade at night, cargo bay hiding contraband, running lights dimmed",
+          "tribunal": "a stark military tribunal chamber, a lone defendant standing before stern robed judges under harsh overhead light"
+        }
+      }
+    },
+    "overmind_mood": {
+      "size": [
+        1600,
+        900
+      ],
+      "upscale": true,
+      "template": "Cinematic sci-fi digital painting, wide establishing shot of an ancient awakened precursor swarm intelligence, {stage}, angular dark-hulled drone ships with faint magenta-pink bioluminescent circuitry, cold alien dread, deep-space void, no text",
+      "negative": "text, words, letters, caption, watermark, logo, organic biological creature, humanoid, friendly, warm colors, comic style",
+      "name_order": [
+        "stage"
+      ],
+      "axes": {
+        "stage": {
+          "noticed": "a cluster of drones turning in unison toward the viewer, faint magenta circuitry brightening, first stirrings of awareness",
+          "hardening": "a dense geometric formation of drone ships massing before a captured system, fortified silhouettes, red-orange threat glow intensifying",
+          "final_push": "an overwhelming armada of angular drone ships surging forward in eerie unison, blinding magenta-red glow, an unstoppable tide"
+        }
+      }
     }
   }
 }

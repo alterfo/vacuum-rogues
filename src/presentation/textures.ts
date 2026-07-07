@@ -24,6 +24,8 @@ const LAZY_PREFIXES = [
   "star_maps/",
   "stars/",
   "nebula/",
+  "quest_art/",
+  "overmind_mood/",
 ];
 
 /**

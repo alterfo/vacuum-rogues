@@ -1585,16 +1585,79 @@ harness code (dev-only), the F10/F1 items are GAME/policy fixes.
   from commit `b06dfd8`, verified identical on clean HEAD).
 
 ### Task 18: New art category — text-quest illustrations + Overmind front
-- [ ] define the category: 1 illustration per text quest (~20 incl. new scripts) + 3–5
+- [x] define the category: 1 illustration per text quest (~20 incl. new scripts) + 3–5
       Overmind-front mood pieces; write prompts to `asset_prompts.json` (ComfyUI pipeline
       convention), keyed by quest/script id via `pickVariant` by id
-- [ ] implement integration: `TextQuestScene` (and Overmind info surfaces) mount the
+- [x] implement integration: `TextQuestScene` (and Overmind info surfaces) mount the
       illustration when the texture exists, with a graceful no-art fallback; category added to
       `LAZY_PREFIXES` (will exceed 10 MB), `pickVariantKey` + `loadTextureAsync` pattern
-- [ ] write tests: fallback path renders without the assets; manifest key-parity snapshot
+- [x] write tests: fallback path renders without the assets; manifest key-parity snapshot
       updated only for keys that exist; lazy-load path covered
-- [ ] add an e2e spec: text quest scene renders correctly in both with-art and no-art states
-- [ ] run unit + e2e suites — green (actual generation on the GPU box → Post-Completion)
+- [x] add an e2e spec: text quest scene renders correctly in both with-art and no-art states
+- [x] run unit + e2e suites — green (actual generation on the GPU box → Post-Completion)
+
+**Task 18 notes (2026-07-07):**
+- **`asset_prompts.json`**: two new categories. `quest_art` — no `variants` field (always exactly
+  one image per id, matching "1 illustration per text quest"), axis `scene` keyed by all 20
+  `QuestScript` ids on disk (`src/systems/quests/scripts/*.ts`, auction..tribunal, verified against
+  the registry — includes Tasks 14/15's new scripts), each a short cinematic key-art prompt derived
+  from the script's title/premise. `overmind_mood` — axis `stage` with 3 values (`noticed`,
+  `hardening`, `final_push` — within the plan's 3–5 range; no `dormant` art since the mount code
+  never queries that stage, see below), prompt lore pulled from `SOURCE-OF-TRUTH.md`/`en.ts`
+  ("silent mechanical swarm") + existing hull-glow color `0xff33dd` so the mood art matches the
+  in-game Overmind palette.
+- **`TextQuestScene` integration**: new private `mountQuestIllustration` in `buildVmLayout`
+  (the `QuestScript`/VM render path — the 20 scripts above all route through it). Resolves
+  `quest_art/<questScript.id>` via `pickVariantKey`; on a cache hit or after `loadTextureAsync`
+  resolves, mounts a cover-fit `Sprite` masked to the description-panel rect (mask pattern from
+  `RaceSelectionScene`'s portrait thumbnail: `sprite.mask = mask` set before both are
+  `addChild`'d, per CLAUDE.md's PixiJS mask rule) *behind* the panel's dark scrim, then lightens
+  the scrim from `alpha:0.85` to `alpha:0.6` so the art reads through while text stays legible.
+  With no matching key, `mountQuestIllustration` returns immediately and the panel renders with
+  the original `alpha:0.85` scrim and no sprite — byte-identical to pre-Task-18 output.
+  Guarded against a stale async mount (scene destroyed/re-initialized mid-load) via
+  `ui.destroyed` + `this.questScript?.id !== scriptId` checks in the resolved callback.
+- **Overmind info surface = `StarMapScene`** (the actual "Overmind front" visualization — colored
+  system markers). New `src/systems/campaign/overmindMoodStage.ts` (pure): maps Task 5's
+  `activeEscalationStages` bands down to the single most-severe active stage as a mood-art key
+  (`"dormant"` before any band crosses, matching terminal won/lost suppression already built into
+  `activeEscalationStages`). New `src/presentation/overmindMoodArt.ts` (`overmindMoodArtKey`,
+  mirrors `flight/stationArt.ts`'s `stationSpriteKey` precedent): composes the stage with
+  `pickVariantKey("overmind_mood", stage, stage)`, returning `null` for `"dormant"` or no-art —
+  the one function `StarMapScene.mountOvermindMoodBackdrop` needs, kept outside the scene so it's
+  unit-testable without a full scene render harness (`StarMapScene` has none; it's exercised via
+  playtest/e2e per CLAUDE.md's bug-tier convention). The backdrop is a faint (`alpha:0.25`)
+  full-screen cover-fit wash mounted right above the opaque map background, re-derived on every
+  `renderStarMap()` call (pan/select re-renders the map) — old sprite torn down synchronously each
+  time, and a `moodRenderGen` counter (same pattern as `MainMenuScene.mountNebulaBackdrop`) guards
+  a late `loadTextureAsync` resolution from mounting into a since-superseded render. `peakPower`
+  reads the existing `GameEngine.campaignPeakPower` getter; `overmindShare`/`arcStatus` mirror
+  `DayTickController.emitEscalationNotices`'s exact derivation — no new state, no schema/save
+  change.
+- **Tests**: `overmindMoodStage.test.ts` (5, pure derivation incl. most-severe-wins and
+  won/lost suppression), `textQuestIllustration.test.ts` (4 — prefix/seed call shape, no-art
+  fallback leaves `tex`/`loadTextureAsync` uncalled, cached-hit mount, lazy-load-then-mount),
+  `overmindMoodArtWiring.test.ts` (4, mirrors `stationArtWiring.test.ts` exactly: dormant short-
+  circuits before querying art, correct category/prefix/seed, resolved-key passthrough, no-art
+  → null). New e2e in `playtest-02-text-quests.spec.ts`: starts 3 different quest scripts
+  (auction/reactor/tribunal) and asserts non-empty narration renders each time — the real,
+  currently-reachable no-art state (no `quest_art/` file exists in the actual Vite-built
+  manifest, so a genuine "with-art" e2e run isn't reachable without committing a real asset,
+  which Post-Completion's GPU-box step owns). The "art lands" mount path is pinned at the unit
+  level instead (`textQuestIllustration.test.ts`'s mocked-manifest tests) — same precedent as
+  `stationArtWiring.test.ts` before station art existed on disk.
+- **Manifest snapshot**: no update — no `quest_art/`/`overmind_mood/` files exist on disk yet, so
+  `manifestKeys.snapshot.json` (which only pins keys that already resolve) has nothing new to add;
+  it'll gain entries once Post-Completion's GPU generation lands real assets.
+- **Gates**: unit 5113/5114 ✓ (1 pre-existing failure, `noHardcodedCyrillic.test.ts` on
+  `QuestGenerator.ts:1401` — verified identical without this task's changes, documented since
+  Task 16/`b06dfd8`), tsc ✓, lint 0 errors (46 pre-existing `no-explicit-any` warnings, +2 from
+  this task's own test mocks, same style as the rest of the suite) ✓, playtest 676 ✓,
+  save-compat 22 ✓ (no schema touched), letsplay:ci 107 ✓. E2E regression 28/28 ✓ with the same
+  3 pre-existing failures Task 17 documented excluded (`changing the font size…`, `mouse wheel
+  scrolls…`, `a TRADE_OPPORTUNITY rumor…` — reran each in isolation with this branch's changes
+  stashed out to reconfirm pre-existing, unrelated to Task 18). New text-quest e2e spec + the
+  existing `space-flight-ui.spec.ts` star-map navigation test both green.
 
 ### Task 19: Verify acceptance criteria
 - [ ] re-run the **300-session campaign gate**: ≥ 99% wins, all ≤ 1080 days, median in year 2–3,

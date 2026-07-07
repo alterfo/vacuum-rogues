@@ -1,6 +1,9 @@
 import { GameScene } from "./GameScene";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
-import { Graphics, Text, Container, BlurFilter } from "pixi.js";
+import { Graphics, Text, Container, Sprite, BlurFilter } from "pixi.js";
+import type { Texture } from "pixi.js";
+import { tex, loadTextureAsync } from "./textures";
+import { overmindMoodArtKey } from "./overmindMoodArt";
 import type { Galaxy } from "@/domain/Galaxy";
 import type { StarSystem } from "@/domain/StarSystem";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -57,6 +60,9 @@ export class StarMapScene extends GameScene {
   private messageTimers: ReturnType<typeof setTimeout>[] = [];
   /** Teardown for the contextual-help layer (first-time hint + «?» button). */
   private helpTeardown: (() => void) | null = null;
+  /** Faint Overmind mood-art wash behind the map (Task 18); null with no art. */
+  private moodBackdrop: Sprite | null = null;
+  private moodRenderGen = 0;
 
   initialize(context?: object): void {
     // Ensure PixiJS events are active (previous scene may have disabled them)
@@ -291,6 +297,57 @@ export class StarMapScene extends GameScene {
     this.infoPanel = null;
     this.fixedUIContainer = null;
     this.gameEngine = null;
+    this.moodBackdrop = null;
+  }
+
+  /**
+   * Faint Overmind mood-art wash behind the map, keyed to the current
+   * escalation stage (Task 18) — reuses Task 5's bands (`overmindMoodStage`)
+   * so the mood matches the news feed's warning tone. `overmind_mood/` is a
+   * LAZY_PREFIXES category; with no matching key (or a `"dormant"` stage)
+   * this is a no-op and the map renders exactly as before. Re-mounted on
+   * every `renderStarMap` call (pan/select re-renders), so a stale reference
+   * is torn down first and a generation counter guards a late async load
+   * from mounting into a map that has since re-rendered or closed.
+   */
+  private mountOvermindMoodBackdrop(width: number, height: number): void {
+    if (this.moodBackdrop) {
+      this.moodBackdrop.parent?.removeChild(this.moodBackdrop);
+      this.moodBackdrop.destroy();
+      this.moodBackdrop = null;
+    }
+    if (!this.galaxy || !this.gameEngine) return;
+
+    const total = this.galaxy.systems.length;
+    const key = overmindMoodArtKey({
+      peakPower: this.gameEngine.campaignPeakPower ?? 0,
+      overmindShare:
+        total === 0 ? 0 : this.galaxy.overmindSystems.length / total,
+      arcStatus: this.galaxy.overmindArc.status,
+    });
+    if (!key) return;
+
+    const gen = ++this.moodRenderGen;
+    const mount = (t: Texture): void => {
+      if (gen !== this.moodRenderGen || !this.gameEngine) return;
+      const sp = new Sprite(t);
+      const cover = Math.max(width / t.width, height / t.height);
+      sp.scale.set(cover);
+      sp.anchor.set(0.5);
+      sp.x = width / 2;
+      sp.y = height / 2;
+      sp.alpha = 0.25;
+      sp.eventMode = "none";
+      this.moodBackdrop = sp;
+      this.renderer.gameLayer.addChildAt(sp, 1);
+    };
+
+    const cached = tex(key);
+    if (cached) mount(cached);
+    else
+      void loadTextureAsync(key).then((t) => {
+        if (t) mount(t);
+      });
   }
 
   private renderStarMap(): void {
@@ -302,6 +359,8 @@ export class StarMapScene extends GameScene {
     background.fill({ color: 0x000510 });
     background.rect(0, 0, width, height);
     this.renderer.gameLayer.addChildAt(background, 0);
+
+    this.mountOvermindMoodBackdrop(width, height);
 
     // Clear and recreate fixed UI container
     if (this.fixedUIContainer) {

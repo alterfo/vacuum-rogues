@@ -1,6 +1,8 @@
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics, Text, Sprite } from "pixi.js";
+import type { Texture } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
+import { pickVariantKey, tex, loadTextureAsync } from "./textures";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -199,6 +201,13 @@ export class TextQuestScene extends GameScene {
     descBg.stroke({ color: 0xff99ff, width: 1, alpha: 0.2 });
     ui.addChild(descBg);
 
+    this.mountQuestIllustration(ui, descBg, {
+      x: 8,
+      y: contentTop,
+      w: CONTENT_W - 16,
+      h: descH,
+    });
+
     const narText = scaledText("...", 14, 0xddeeff, {
       rawColor: true,
       wordWrap: true,
@@ -272,6 +281,57 @@ export class TextQuestScene extends GameScene {
       () => this.doReturn(),
     );
     ui.addChild(quitBtn);
+  }
+
+  /**
+   * Lazy quest illustration behind the description panel (Task 18). One
+   * image per `QuestScript` id (`quest_art/<id>` — no numeric suffix, always
+   * exactly one variant). Graceful no-art fallback: with no matching manifest
+   * key the panel renders exactly as before (opaque dark fill, no image).
+   */
+  private mountQuestIllustration(
+    ui: Container,
+    descBg: Graphics,
+    rect: { x: number; y: number; w: number; h: number },
+  ): void {
+    const scriptId = this.questScript?.id;
+    if (!scriptId) return;
+    const key = pickVariantKey("quest_art", scriptId, scriptId);
+    if (!key) return;
+
+    const mount = (t: Texture): void => {
+      if (ui.destroyed || this.questScript?.id !== scriptId) return;
+      const sp = new Sprite(t);
+      const cover = Math.max(rect.w / t.width, rect.h / t.height);
+      sp.scale.set(cover);
+      sp.anchor.set(0.5);
+      sp.x = rect.x + rect.w / 2;
+      sp.y = rect.y + rect.h / 2;
+      sp.eventMode = "none";
+
+      const mask = new Graphics();
+      mask.rect(rect.x, rect.y, rect.w, rect.h);
+      mask.fill({ color: 0xffffff });
+      mask.eventMode = "none";
+      sp.mask = mask;
+
+      const idx = ui.getChildIndex(descBg);
+      ui.addChildAt(mask, idx);
+      ui.addChildAt(sp, idx);
+
+      // Lighten the scrim so the art reads through while text stays legible.
+      descBg.clear();
+      descBg.rect(rect.x, rect.y, rect.w, rect.h);
+      descBg.fill({ color: 0x05101c, alpha: 0.6 });
+      descBg.stroke({ color: 0xff99ff, width: 1, alpha: 0.2 });
+    };
+
+    const cached = tex(key);
+    if (cached) mount(cached);
+    else
+      void loadTextureAsync(key).then((t) => {
+        if (t) mount(t);
+      });
   }
 
   private makeRightPanelButton(
