@@ -1,0 +1,250 @@
+import type { QuestScript } from "../QuestScript";
+
+// Design: A containment-ethics dilemma (distinct from plague-crisis, which is a
+// race against a draining time budget). A colony station reports a viral
+// outbreak in Sector 7, and you hold the quarantine authority. Two pressures run
+// in parallel: `containment` (the integrity of the seal) and `panic` among the
+// uninfected. Let the seal fail and the pathogen breaks loose station-wide
+// (a `critMin` on containment → ending_outbreak); let panic boil over and a mob
+// tears the quarantine open themselves (a `critMax` on panic → ending_riot).
+// Every choice trades containment against `saved` lives and against panic. The
+// puzzle is holding both meters inside their bounds while pulling as many people
+// out as possible.
+// Choice points:
+//   1. First protocol — hard-seal (max containment, feeds panic), screening
+//      checkpoint (saves many, risks a carrier), or a calming broadcast.
+//   2. Triage ward — send medics in (saves lives, breaks the seal a little),
+//      isolate and treat remotely (safe, few saved), or call a med-frigate
+//      (roll: it arrives, or the wait spikes panic).
+//   3. Final call — vent the infected section (guarantees containment, grim),
+//      reinforce the seals (safe hold), or throw the doors for a last evac
+//      (saves many, strains containment).
+//   4. Outcome — an auto gate on `saved`, reached only if the seal held.
+// Outcomes (by `saved`, unless containment or panic broke first):
+//   - ending_contained (saved >= 12 — sealed and most pulled out)  SUCCESS
+//   - ending_partial   (saved >= 6  — sealed, a hard toll)         SUCCESS
+//   - ending_grim      (saved < 6   — sealed, but few made it)     SUCCESS
+//   - ending_outbreak  (seal breached — station-wide spread)       FAILURE
+//   - ending_riot      (panic broke the quarantine open)           FAILURE
+export const quarantineScript: QuestScript = {
+  id: "quarantine",
+  title: "Карантин",
+  params: [
+    {
+      id: "credits",
+      name: "Кредиты",
+      min: -9999,
+      max: 99999,
+      initial: 0,
+      showInUI: true,
+    },
+    {
+      id: "rating",
+      name: "Репутация",
+      min: -9999,
+      max: 300,
+      initial: 100,
+      showInUI: true,
+    },
+    {
+      id: "containment",
+      name: "Герметичность карантина",
+      min: -9999,
+      max: 99,
+      initial: 8,
+      critMin: 1,
+      critTarget: "ending_outbreak",
+      showInUI: true,
+    },
+    {
+      id: "panic",
+      name: "Паника",
+      min: 0,
+      max: 20,
+      initial: 3,
+      critMax: 9,
+      critTarget: "ending_riot",
+      showInUI: true,
+    },
+    {
+      id: "saved",
+      name: "Спасено людей",
+      min: 0,
+      max: 999,
+      initial: 0,
+      showInUI: true,
+    },
+    {
+      id: "roll",
+      name: "Бросок",
+      min: 0,
+      max: 9,
+      initial: 0,
+      showInUI: false,
+    },
+  ],
+  startLocation: "alert",
+  locations: [
+    {
+      id: "alert",
+      text: "Красный вызов с колониальной станции: в седьмом секторе — вспышка. Неизвестный вирус, инкубация в часы, а не в сутки. На вас — карантинный протокол, и от первого решения зависит, удержите ли вы заразу за переборками или выпустите её на весь жилой обод.\nГерметичность карантина: {containment} | Паника: {panic}",
+      transitions: [
+        {
+          id: "seal_hard",
+          label:
+            "Наглухо заварить переборки сектора — максимум герметичности, но люди в панике (+3 герметичности, +2 паники, +2 спасено)",
+          toLocation: "triage_ward",
+          effects: ["containment += 3", "panic += 2", "saved += 2"],
+        },
+        {
+          id: "screen_all",
+          label:
+            "Пропускной контроль на выходе — выпустить здоровых, рискуя носителем (−2 герметичности, +6 спасено)",
+          toLocation: "triage_ward",
+          effects: ["containment -= 2", "saved += 6"],
+        },
+        {
+          id: "calm_broadcast",
+          label:
+            "Сначала обратиться к станции — сбить панику словом (−2 паники)",
+          toLocation: "triage_ward",
+          effects: ["panic -= 2"],
+        },
+      ],
+    },
+    {
+      id: "triage_ward",
+      text: "В заражённом крыле — те, кто ещё жив. Медотсек на связи и ждёт вашего слова: идти внутрь к людям или держать оборону снаружи.\nГерметичность карантина: {containment} | Паника: {panic} | Спасено людей: {saved}",
+      transitions: [
+        {
+          id: "treat_infected",
+          label:
+            "Послать медиков внутрь — спасти многих, но вскрыть контур (−3 герметичности, +6 спасено, +1 паники)",
+          toLocation: "final_call",
+          effects: ["containment -= 3", "saved += 6", "panic += 1"],
+        },
+        {
+          id: "isolate_ward",
+          label:
+            "Запечатать крыло, лечить дистанционно — безопасно, но спасёшь немногих (+2 герметичности, +2 спасено)",
+          toLocation: "final_call",
+          effects: ["containment += 2", "saved += 2"],
+        },
+        {
+          id: "request_help",
+          label:
+            "Вызвать медицинский фрегат — успеет ли (бросок: прибудет вовремя или толпа не дождётся)",
+          toLocation: "help_check",
+          effects: ["roll = random(0,9)"],
+        },
+      ],
+    },
+    {
+      id: "help_check",
+      text: "Вы бросаете вызов на всех частотах и вслушиваетесь в эфир — придёт ли помощь раньше, чем сдадут нервы у запертых людей...",
+      transitions: [
+        {
+          id: "help_arrives",
+          label: "...",
+          toLocation: "final_call",
+          condition: "roll >= 4",
+          effects: ["saved += 8", "containment += 1"],
+          autoExecute: true,
+        },
+        {
+          id: "help_delayed",
+          label: "...",
+          toLocation: "final_call",
+          effects: ["panic += 5"],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "final_call",
+      text: "Вирус подобрался к самым стыкам карантинного контура. Датчики герметичности мигают, толпа за прозрачной переборкой давит на створки. Последнее решение — и назад дороги не будет.\nГерметичность карантина: {containment} | Паника: {panic} | Спасено людей: {saved}",
+      transitions: [
+        {
+          id: "purge_section",
+          label:
+            "Стравить заражённый сектор в космос — гарантия герметичности ценой оставшихся там (+5 герметичности, −15 репутации)",
+          toLocation: "outcome_gate",
+          effects: ["containment += 5", "rating -= 15"],
+        },
+        {
+          id: "hold_seals",
+          label:
+            "Бросить все силы на удержание существующих печатей (+2 герметичности)",
+          toLocation: "outcome_gate",
+          effects: ["containment += 2"],
+        },
+        {
+          id: "last_evac",
+          label:
+            "Распахнуть створки для последнего рывка эвакуации — многих спасёшь, но контур трещит (+6 спасено, −4 герметичности, +2 паники)",
+          toLocation: "outcome_gate",
+          effects: ["saved += 6", "containment -= 4", "panic += 2"],
+        },
+      ],
+    },
+    {
+      id: "outcome_gate",
+      text: "Створки лязгают в последний раз. Карантин выстоял — теперь считают живых.\nСпасено людей: {saved}",
+      transitions: [
+        {
+          id: "gate_full",
+          label: "...",
+          toLocation: "ending_contained",
+          condition: "saved >= 12",
+          effects: ["credits += 3000", "rating += 25"],
+          autoExecute: true,
+        },
+        {
+          id: "gate_partial",
+          label: "...",
+          toLocation: "ending_partial",
+          condition: "saved >= 6",
+          effects: ["credits += 1200", "rating += 8"],
+          autoExecute: true,
+        },
+        {
+          id: "gate_grim",
+          label: "...",
+          toLocation: "ending_grim",
+          effects: ["credits += 400"],
+          autoExecute: true,
+        },
+      ],
+    },
+    {
+      id: "ending_contained",
+      text: "Печати выдержали, и вирус остался за переборками — а из седьмого сектора вы вытащили почти всех. Колониальный медцентр рапортует: вспышка локализована, ни одного нового заражения на ободе. Люди, которых вы вывели, ещё не понимают, как близко прошла смерть; вы понимаете. Санитарный контроль сектора заносит ваш позывной в список тех, кому доверяют красный вызов.\nКредиты: {credits} | Репутация: {rating}",
+      isSuccess: true,
+      transitions: [],
+    },
+    {
+      id: "ending_partial",
+      text: "Карантин устоял, зараза не вышла наружу — но заплатить пришлось дорого. Вы вывели больше половины; остальных удержать не смогли. Списки спасённых и списки потерянных ложатся на стол рядом, и вторые вы будете перечитывать ещё долго. И всё же станция жива — а могло не остаться никого.\nКредиты: {credits} | Репутация: {rating}",
+      isSuccess: true,
+      transitions: [],
+    },
+    {
+      id: "ending_grim",
+      text: "Контур вы удержали — вирус не вырвался. Но за печатями осталось слишком много тех, до кого вы не дотянулись. Горстка выживших молча грузится в шлюз, не глядя на запечатанный сектор. Вы сделали жестокий выбор и спасли станцию — но цена этой победы будет сниться вам ещё не одну ночь.\nСпасено людей: {saved}",
+      isSuccess: true,
+      transitions: [],
+    },
+    {
+      id: "ending_outbreak",
+      text: "Герметичность рухнула. Датчики один за другим вспыхивают красным по всему ободу — вирус прорвал контур и хлынул в жилые сектора быстрее, чем вы успели закрыть хоть одну створку. Станция превращается в общую могилу на ваших глазах, и сделать уже ничего нельзя. Карантин, который вы должны были удержать, стал вашим приговором.\nГерметичность карантина: {containment}",
+      isFailure: true,
+      transitions: [],
+    },
+    {
+      id: "ending_riot",
+      text: "Паника взяла верх раньше вируса. Обезумевшая толпа снесла карантинные посты и вырвала створки голыми руками — и вместе с людьми на обод хлынула зараза. Крики в переговорнике обрываются один за другим. Вы потеряли не переборки, а доверие; а без него никакой карантин не держится.\nПаника: {panic}",
+      isFailure: true,
+      transitions: [],
+    },
+  ],
+};

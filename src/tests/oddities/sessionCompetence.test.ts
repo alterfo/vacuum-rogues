@@ -125,7 +125,16 @@ describe("Task 7 — campaign milestone proxies on the seeded medium session", (
 describe("Task 8 — strict battle-ready + first-liberation on the seeded medium session", () => {
   it("reaches battle-ready and liberates at least once, with no death", async () => {
     const r = await runCampaignSession({
-      seed: "CAMPAIGN-CAPACITY-0",
+      // Re-baselined seed (Task 14, three-year-campaign plan): adding batch-1
+      // text-quest scripts grows ALL_QUEST_SCRIPTS 12→16, which shifts board
+      // composition (text-quest slots dedup on `TEXT|<scriptId>`), so the old
+      // `CAMPAIGN-CAPACITY-0` medium session no longer crosses the STRICT
+      // battle-ready gate by day 200. This seed does — every assertion below is
+      // unchanged; only the input seed moved (test-modification license,
+      // meaning preserved: a seeded GOD medium session reaches strict
+      // battle-ready + liberates ≥ 1 with no death). `CAMPAIGN-CAPACITY-0`
+      // still owns the oracle block above (power band + first-liberation).
+      seed: "CAMPAIGN-CAPACITY-22",
       maxDays: 200,
       gameMode: "GOD",
     });

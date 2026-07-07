@@ -11,6 +11,14 @@ import { hostageRescueScript } from "./scripts/hostage-rescue";
 import { sabotageHeistScript } from "./scripts/sabotage-heist";
 import { firstContactScript } from "./scripts/first-contact";
 import { plagueCrisisScript } from "./scripts/plague-crisis";
+import { evacuationScript } from "./scripts/evacuation";
+import { lockedRoomScript } from "./scripts/locked-room";
+import { lifeSupportScript } from "./scripts/life-support";
+import { boardingStandoffScript } from "./scripts/boarding-standoff";
+import { signalDecodeScript } from "./scripts/signal-decode";
+import { orbitalEscapeScript } from "./scripts/orbital-escape";
+import { tribunalScript } from "./scripts/tribunal";
+import { quarantineScript } from "./scripts/quarantine";
 
 export const ALL_QUEST_SCRIPTS: readonly QuestScript[] = [
   customsScript,
@@ -25,6 +33,14 @@ export const ALL_QUEST_SCRIPTS: readonly QuestScript[] = [
   sabotageHeistScript,
   firstContactScript,
   plagueCrisisScript,
+  evacuationScript,
+  lockedRoomScript,
+  lifeSupportScript,
+  boardingStandoffScript,
+  signalDecodeScript,
+  orbitalEscapeScript,
+  tribunalScript,
+  quarantineScript,
 ];
 
 const REGISTRY = new Map<string, QuestScript>(

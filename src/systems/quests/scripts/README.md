@@ -13,7 +13,7 @@ Scripts are pure catalog data — adding one needs **no save migration**.
 ## Catalogue
 
 A script is live the moment it is listed in `ALL_QUEST_SCRIPTS`
-(`../TextQuestRegistry.ts`). Current set (12):
+(`../TextQuestRegistry.ts`). Current set (20):
 
 | `id` | Title | Theme |
 |------|-------|-------|
@@ -29,10 +29,21 @@ A script is live the moment it is listed in `ALL_QUEST_SCRIPTS`
 | `sabotage-heist` | Налёт на хранилище | Vault heist with a **betrayal branch** — entry (bribe/hack/force), what to grab, and a partner who may double-cross you |
 | `first-contact` | Первый контакт | Diplomacy with an alien vessel driven by a `trust` meter — **peace vs hostility** outcomes |
 | `plague-crisis` | Эпидемия на колонии | Race a draining `time` budget to a plague colony, then triage / treat-all / profiteer (running out of time loses the colony) |
+| `evacuation` | Эвакуация станции «Терминус» | Logistics routing under a draining evac window — order + route shuttle runs to maximise the `saved` headcount before the reactor breaches (out of time loses everyone) |
+| `locked-room` | Убийство на «Гелиосе» | Locked-room whodunit — gather `clues` and accuse the right suspect before the airlock realigns; a conviction needs both the correct name AND enough proof (wrong / unproven / too-late failures) |
+| `life-support` | Кислородный расчёт | Resource-optimisation puzzle — ration a fixed `oxygen` reserve across sealed sections to save the most; reserve hits zero mid-op ⇒ mass decompression failure |
+| `boarding-standoff` | Переговоры на абордаже | Negotiation under pressure vs a raider boarding party — build `leverage` while keeping `tension` below the boiling point (firefight / drawing-first failures) |
+| `signal-decode` | Расшифровка сигнала | Cryptanalysis under a decoder `power` budget — raise `clarity` to recover a distress code before the array browns out; efficient pattern-deduction beats brute force (garbled / power-lost failures) |
+| `orbital-escape` | Срыв с орбиты | Orbital burn-scheduling — raise `altitude` above escape before a decaying orbit burns you up, spending a finite `fuel` budget (periapsis burns are efficient); stranded / burn-up failures |
+| `tribunal` | Трибунал | Courtroom defense — build `defense` while keeping the judge's `hostility` below contempt; aggression is strong but inflames, concession buys goodwill (guilty / contempt failures) |
+| `quarantine` | Карантин | Containment-ethics dilemma — hold `containment` and keep `panic` in check while pulling out the most `saved`; a breach or a riot loses the station (distinct from `plague-crisis`'s time-race triage) |
 
-The 6 below the divider (`derelict-salvage` … `plague-crisis`) were added by
-`docs/plans/20260625-more-interesting-quests.md`; the design comment at the top
-of each file documents its choice points and every ending.
+The 6 below the first divider (`derelict-salvage` … `plague-crisis`) were added by
+`docs/plans/20260625-more-interesting-quests.md`; the 4 after them
+(`evacuation` … `boarding-standoff`) by Task 14 of
+`docs/plans/20260706-three-year-campaign.md`, and the last 4
+(`signal-decode` … `quarantine`) by Task 15 of the same plan. The design comment
+at the top of each file documents its choice points and every ending.
 
 ## Recipe: add a branching quest
 

@@ -1213,23 +1213,106 @@ the user's "тупизна автопилота" hypothesis is CONFIRMED and now
   full unit suite ✓.
 
 ### Task 14: New text quests, batch 1 (3–4 puzzle scripts)
-- [ ] write 3–4 new `QuestScript`s in distinct puzzle genres, e.g.: logistics routing under
+- [x] write 3–4 new `QuestScript`s in distinct puzzle genres, e.g.: logistics routing under
       deadline (evacuation scheduling), deduction/whodunit aboard a sealed station, resource
       optimization (triage with too few doses), negotiation under pressure (hostile boarding
       party, trust/heat meters) — each a "starred problem" wrapped in a life-and-death story
-- [ ] register in `TextQuestRegistry`/`ALL_QUEST_SCRIPTS`; RU prose to the Task 13 bar
-- [ ] write graph-validation + smoke-playthrough tests per script (best path, worst path,
+- [x] register in `TextQuestRegistry`/`ALL_QUEST_SCRIPTS`; RU prose to the Task 13 bar
+- [x] write graph-validation + smoke-playthrough tests per script (best path, worst path,
       one mixed path; success and failure endings both reachable)
-- [ ] verify board integration: new scripts appear via TEXT_ADVENTURE issuance, dedup holds
-- [ ] run quest + playtest suites — green before Task 15
+- [x] verify board integration: new scripts appear via TEXT_ADVENTURE issuance, dedup holds
+- [x] run quest + playtest suites — green before Task 15
+
+**Task 14 notes (2026-07-07):**
+- **Four new branching scripts, all distinct puzzle genres** (none repeat the Task 13 set),
+  each with a top-of-file design comment listing every choice point + ending, RU prose at the
+  Task 13 life-and-death bar:
+  - `evacuation` (Эвакуация станции «Терминус») — **logistics routing** under a draining evac
+    window (`time` critMin → `ending_collapse`): order + route shuttle runs to maximise the
+    `saved` headcount. 3 success tiers (full/partial/few) + the time-out failure.
+  - `locked-room` (Убийство на «Гелиосе») — **deduction/whodunit** under an airlock clock: a
+    conviction needs BOTH the right suspect (the medic) AND `clues >= 5`. Failures: wrong
+    suspect, right-suspect-no-proof (walks), airlock-opens (escaped).
+  - `life-support` (Кислородный расчёт) — **resource optimisation** against a fixed `oxygen`
+    reserve (critMin → `ending_suffocate`); distinct from `plague-crisis` (a TIME budget). 3
+    success tiers by `saved` + the reserve-blows failure.
+  - `boarding-standoff` (Переговоры на абордаже) — **negotiation under pressure** as the VICTIM
+    of a raider boarding: build `leverage` while keeping `tension` below the boiling point
+    (critMax → `ending_firefight`). 3 survive tiers (negotiated/bought-off/robbed) + firefight
+    and drew-first failures.
+- Registered in `TextQuestRegistry.ts` (`ALL_QUEST_SCRIPTS` 12 → 16); `scripts/README.md`
+  catalogue updated (count + rows + the new divider note).
+- **Tests**: new `src/tests/quests/batch1QuestScripts.test.ts` (29 tests) — best/worst/mixed
+  playthroughs per script (every branch reaches its intended terminal with the right
+  credits/rating/`saved`/`clues`), determinism-by-seed, a registry test (all 4 ids present +
+  unique + resolve), a TEXT_ADVENTURE-eligibility draw, and a real `generateQuestBoard`
+  integration over 400 boards (every issued text quest's `targetObjectId` resolves via
+  `getQuestScript`; dedup holds within each board; all 4 new ids surface). The parametrised
+  graph suite `questScriptGraph.test.ts` auto-covers the structural invariants over the full
+  16-script registry (145 → 193 tests).
+- `cyrillicBaseline.json` regenerated (`UPDATE_CYRILLIC_BASELINE=1`, sanctioned snapshot path):
+  +4 lines only (one per new catalog-data script file — same class as the existing 12 scripts);
+  no existing file shrank.
+- **One existing seeded test re-baselined under the plan's license** (meaning preserved, listed
+  per the license rule): `src/tests/oddities/sessionCompetence.test.ts` Task 8 STRICT block.
+  `nextInt` consumes exactly one draw regardless of range, so the shared RNG stream stays
+  byte-identical — but text-quest board slots dedup on `TEXT|<scriptId>`, so growing the
+  registry legitimately shifts board composition and the seeded GOD economy. Empirically probed
+  24 `CAMPAIGN-CAPACITY-*` seeds at maxDays 240: `CAMPAIGN-CAPACITY-0` no longer crosses strict
+  battle-ready (power 0.16, hull/weapon not both clearing) but `CAMPAIGN-CAPACITY-22` does
+  (battleReady d129, firstLib d155, no death, 0 errors). Only the input **seed** moved
+  (0 → 22); every `expect(...)` is byte-identical. The oracle block above keeps
+  `CAMPAIGN-CAPACITY-0` (power-band + first-liberation, still green).
+- Gates: batch1 29 ✓, graph suite 193 ✓, newQuestScripts 97 ✓, sessionCompetence 3 ✓,
+  playtest 656 ✓, letsplay:ci 107 ✓, cyrillic gate 3 ✓, tsc ✓, lint 0 errors ✓.
 
 ### Task 15: New text quests, batch 2 (3–4 more)
-- [ ] write 3–4 more scripts in genres not yet covered (e.g. signal-decoding first-contact
+- [x] write 3–4 more scripts in genres not yet covered (e.g. signal-decoding first-contact
       variant, orbital-mechanics escape, courtroom/tribunal defense, plague-ship quarantine
       dilemma) — no genre repeats within the new 6–8
-- [ ] register + RU prose to bar; EN keys where UI requires
-- [ ] write graph-validation + smoke-playthrough tests per script
-- [ ] run quest + playtest suites — green before Task 16
+- [x] register + RU prose to bar; EN keys where UI requires
+- [x] write graph-validation + smoke-playthrough tests per script
+- [x] run quest + playtest suites — green before Task 16
+
+**Task 15 notes (2026-07-07):**
+- **Four new branching scripts, all distinct puzzle genres** (none repeat Task 13's 12 nor Task
+  14's batch-1 logistics/whodunit/resource-opt/negotiation), each with a top-of-file design
+  comment listing every choice point + ending, RU prose at the Task 13 life-and-death bar and
+  choice labels that surface the numeric tradeoff (Task 13 sharpening bar):
+  - `signal-decode` (Расшифровка сигнала) — **cryptanalysis** under a decoder `power` budget
+    (critMin → `ending_signal_lost`): raise `clarity` to recover a distress code; efficient
+    pattern-deduction (+4 clarity / −2 power) beats brute force (+5 / −5). 2 success tiers
+    (decoded ≥8 / partial ≥4) + garbled + power-lost failures.
+  - `orbital-escape` (Срыв с орбиты) — **orbital burn-scheduling**: raise `altitude` above escape
+    before a decaying orbit burns you up (critMin → `ending_burnup`), spending a finite `fuel`
+    budget (periapsis burn +5/−4 fuel vs panic +3/−6; trim burn gated on `fuel >= 3`). 2 success
+    (escaped ≥10 / grazing ≥7) + stranded + burn-up failures.
+  - `tribunal` (Трибунал) — **courtroom defense**: build `defense` while keeping the judge's
+    `hostility` below contempt (critMax 9 → `ending_contempt`); aggression is strong-but-inflaming,
+    concession cools the bench. Verdict auto-gate on defense (acquit ≥8 / lenient ≥4 / guilty).
+  - `quarantine` (Карантин) — **containment dilemma** (distinct from `plague-crisis`'s time-race
+    triage): hold `containment` (critMin → `ending_outbreak`) AND keep `panic` in check
+    (critMax 9 → `ending_riot`) while maximising `saved`. 3 success tiers (contained ≥12 / partial
+    ≥6 / grim) + the two crit failures.
+- Registered in `TextQuestRegistry.ts` (`ALL_QUEST_SCRIPTS` 16 → 20); `scripts/README.md`
+  catalogue updated (count 16→20 + 4 rows + Task 15 divider note). Player-facing copy is inline
+  RU per the established catalog-data norm (the other 19 scripts are inline RU) — no EN keys
+  needed (nothing routes through `t()` in a `QuestScript`).
+- **Tests**: new `src/tests/quests/batch2QuestScripts.test.ts` (31 tests) — best/worst/mixed
+  playthroughs per script (every branch reaches its intended terminal with the right
+  credits/rating/`clarity`/`altitude`/`defense`/`saved`, incl. both crit-failure spines and a
+  lucky-roll recovery), determinism-by-seed on each roll path, a registry test (all 4 ids present
+  + unique + resolve, ≥20 registered), a TEXT_ADVENTURE-eligibility draw, and a real
+  `generateQuestBoard` integration over 600 boards (every issued text quest resolves via
+  `getQuestScript`; dedup holds per board; all 4 new ids surface). The parametrised graph suite
+  `questScriptGraph.test.ts` auto-covers the structural invariants over the full 20-script
+  registry (193 → 241 tests).
+- `cyrillicBaseline.json` regenerated (`UPDATE_CYRILLIC_BASELINE=1`, sanctioned snapshot path):
+  +4 entries only (one per new catalog-data script file — same class as the existing 19); no
+  existing file shrank. **No existing test assertion touched** (the test-modification license was
+  not needed — the new scripts are additive catalog data).
+- Gates: quest suite 711 ✓ (incl. batch2 31 + graph 241 + newQuestScripts 97), playtest 656 ✓,
+  cyrillic gate 3 ✓, tsc ✓, lint 0 errors ✓.
 
 ### Task 16: Procedural board text variety
 - [ ] write seeded template-variant system for board quests: ≥ 4 phrasing variants per
