@@ -325,9 +325,12 @@ export class StarMapScene extends GameScene {
         total === 0 ? 0 : this.galaxy.overmindSystems.length / total,
       arcStatus: this.galaxy.overmindArc.status,
     });
-    if (!key) return;
-
+    // Bump the generation even on a no-art render: an earlier call's pending
+    // `loadTextureAsync` must not mount onto a map that has since moved to a
+    // dormant/no-art mood — otherwise a stale wash can paint in after e.g. a
+    // win/loss, since an unbumped gen still matches the stale promise's.
     const gen = ++this.moodRenderGen;
+    if (!key) return;
     const mount = (t: Texture): void => {
       if (gen !== this.moodRenderGen || !this.gameEngine) return;
       const sp = new Sprite(t);

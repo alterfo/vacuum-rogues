@@ -75,6 +75,15 @@ export class DayTickController {
     galaxy.simulateDay();
     const rng = new SeededRNG(`${galaxy.id}_day_${galaxy.gameDays}`);
 
+    // Ratchet the campaign peak power BEFORE the NPC tick: `NpcSimulator`
+    // reads it live (via `attachCampaignPeakPower`) to size today's Overmind
+    // garrisons, so it must see today's ratchet, not yesterday's — see the
+    // "always reads the current ratchet" contract on
+    // `NpcSimulator.campaignPeakPowerSource`. `advanceOvermindArc` below
+    // re-ratchets too, which is an idempotent no-op re-read of the same
+    // (unchanged) player/loadout state.
+    this.deps.updateCampaignPeakPower?.();
+
     const npcEvents = this.deps.npcSimulator.tick(
       galaxy,
       rng,

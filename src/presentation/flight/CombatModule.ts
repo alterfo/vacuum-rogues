@@ -7,7 +7,7 @@ import type { GameMode } from "@/types";
 import { applyDamageWithMode, isHullDowned } from "@/systems/combat/godMode";
 import { npcWeaponRange } from "@/systems/combat/npcWeapon";
 import {
-  roundAcceptsShot,
+  roundIsComplete,
   type CombatRoundConfig,
 } from "@/systems/combat/combatRounds";
 import {
@@ -271,6 +271,12 @@ export class CombatModule implements FlightModule {
     // hud.close() — and a fight only reaches that end while already unpaused.
     if (!this.isFrozen()) this.hud?.update(deltaTime);
     if (!this.isActive) return;
+    // The player's death was already reported this fight: the GAME_OVER
+    // transition is pending (fired-and-forgotten, not awaited), so further
+    // frames must not advance fire timers or complete a round — else a
+    // round-budget crossing on the SAME frame the ship died can reopen the
+    // combat-pause reaction window on an already-dead ship.
+    if (this.playerDeathReported) return;
     // Combat fire is gated on the active-pause ONLY — the fight ticks in real
     // time whether or not a route-"Ход" is running (decoupled from the turn).
     // Pausing freezes the world, so combat must not keep draining the player's
@@ -544,7 +550,11 @@ export class CombatModule implements FlightModule {
       // whose timers are aligned (all added with timer 0), the first shot pauses
       // and every survivor would otherwise drain the player's hull on the same
       // pausing frame. Re-check the same gate as the top of update() per iteration.
-      if (this.isFrozen()) break;
+      // A prior NPC's shot this same frame may have just killed the player
+      // (playerDeathReported) — stop immediately so a later NPC's shot can't
+      // land on a dead ship, and so the round-budget check below can't reopen
+      // the reaction-window pause on it.
+      if (this.isFrozen() || this.playerDeathReported) break;
       // Round-based combat (Task 9 (v)): once this round's incoming-damage budget
       // is spent, halt fire and open the reaction window (fire the once-per-round
       // hook). The shot that CROSSES the budget already landed on the previous
@@ -818,8 +828,9 @@ export class CombatModule implements FlightModule {
     if (!this.roundsEnabled()) return false;
     const ship = this.deps.getPlayerShip?.() ?? null;
     if (!ship) return false;
-    return !roundAcceptsShot(
+    return roundIsComplete(
       this.roundDamageTaken,
+      ship.hullHP,
       ship.maxHull,
       this.roundConfig,
     );

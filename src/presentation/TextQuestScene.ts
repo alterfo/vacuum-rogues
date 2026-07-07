@@ -315,9 +315,12 @@ export class TextQuestScene extends GameScene {
       mask.eventMode = "none";
       sp.mask = mask;
 
+      // Insert sp first, then mask at the same index: addChildAt shifts sp to
+      // idx+1, so the final order is mask(idx) behind sp(idx+1) — the opaque
+      // mask rect must render BEHIND the sprite it clips, not on top of it.
       const idx = ui.getChildIndex(descBg);
-      ui.addChildAt(mask, idx);
       ui.addChildAt(sp, idx);
+      ui.addChildAt(mask, idx);
 
       // Lighten the scrim so the art reads through while text stays legible.
       descBg.clear();

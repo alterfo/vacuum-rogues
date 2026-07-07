@@ -170,6 +170,67 @@ describe("Round-based combat reaction window (Task 9 (v), real engine)", () => {
     expect(ship.hullHP).toBeGreaterThan(0);
   });
 
+  it("a fatal shot that also crosses the round budget never reopens the pause on a later frame (regression)", () => {
+    // Small hull, two hostiles: "a"'s hit is non-lethal (raises the pause,
+    // then contributes most of the round budget on resume); "b" (queued
+    // behind "a" in the same combatants set) lands the kill on the SAME
+    // resumed frame while also pushing roundDamageTaken past the budget. The
+    // bug is what happens on the FOLLOWING frame, before the (un-awaited)
+    // GAME_OVER transition has torn this module down.
+    const maxHull = 10;
+    const ship = { hullHP: maxHull, maxHull };
+    const loadout = new ShipLoadout("hull_warden");
+    loadout.install("wpn_pulse");
+    let deaths = 0;
+    let roundCompletions = 0;
+    const controller = new CombatPauseController<NpcShipSprite, WeaponSpec>();
+    const module = new CombatModule({
+      getShipPhysics: () => makePhysics(),
+      isPaused: () => controller.paused,
+      getPlayerLoadout: () => loadout,
+      getPlayerShip: () => ship,
+      getGameMode: () => "NORMAL",
+      isHostileSystem: () => true,
+      getCampaignPeakPower: () => 0,
+      onPlayerDestroyed: () => {
+        deaths++;
+      },
+      onPlayerUnderAttack: () => controller.requestPause("incoming-attack"),
+      onRoundComplete: () => {
+        roundCompletions++;
+        controller.repause();
+      },
+      onCombatEnded: () => controller.reset(),
+    });
+    module.addCombatant(makeHostile("a", 40, 3));
+    module.addCombatant(makeHostile("b", 50, 10));
+
+    // First contact: only "a" fires this frame (the active pause freezes "b"
+    // before its turn) — hull survives (10 → 7).
+    module.update(FIRE);
+    expect(controller.paused).toBe(true);
+    expect(ship.hullHP).toBe(7);
+    expect(deaths).toBe(0);
+
+    // Resume into a fresh round: "a" fires again (7 → 4, roundDamageTaken=3,
+    // still under budget), then "b" fires behind it in the SAME frame,
+    // killing the ship (4 → 0) and pushing roundDamageTaken to 7 — past the
+    // ~3.4 budget for a maxHull-10 ship.
+    module.beginCombatRound();
+    controller.resume();
+    module.update(FIRE);
+    expect(deaths).toBe(1);
+
+    // The NEXT frame (GAME_OVER transition still pending — it's fired via an
+    // un-awaited promise): nothing must advance. completeRound()/
+    // onRoundComplete must never fire once death is reported — else the
+    // reaction-window pause reopens on an already-dead ship.
+    module.update(FIRE);
+    expect(deaths).toBe(1); // still exactly one death
+    expect(roundCompletions).toBe(0);
+    expect(module.roundComplete).toBe(false);
+  });
+
   it("GOD keeps the flat fight — the hull floor already prevents the death, so no rounds", () => {
     const { module, controller, ship } = setup({ mode: "GOD", maxHull: 130 });
     module.addCombatant(makeHostile("a", 50, 40));
