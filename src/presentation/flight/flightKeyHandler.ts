@@ -13,7 +13,19 @@ import {
  * other `flight/` modules).
  */
 export interface FlightKeyContext {
-  combatPause: { paused: boolean; resume(): void };
+  combatPause: {
+    paused: boolean;
+    resume(): void;
+    /**
+     * Begin a fresh combat round before resuming (mirrors the overlay's own
+     * «Продолжить» button, `combatPauseUi.ts` onResume) — optional so tests
+     * that don't model round-based combat can omit it. Without this, Escape
+     * (and the touch «✕» button, which replays this same action) would leave
+     * `CombatModule.roundComplete` stuck `true`, silently blocking fire for
+     * both sides for the rest of the engagement.
+     */
+    beginCombatRound?(): void;
+  };
   npcManager: {
     isContactPanelOpen: boolean;
     closeContactPanel(): void;
@@ -93,8 +105,10 @@ export function handleFlightKey(
 ): void {
   const action = resolveFlightAction(event, ctx.keymap ?? currentKeymap());
   if (action === "cancel") {
-    if (ctx.combatPause.paused) ctx.combatPause.resume();
-    else if (ctx.npcManager.isEncounterPromptOpen)
+    if (ctx.combatPause.paused) {
+      ctx.combatPause.beginCombatRound?.();
+      ctx.combatPause.resume();
+    } else if (ctx.npcManager.isEncounterPromptOpen)
       ctx.npcManager.closeEncounterPrompt?.();
     else if (ctx.npcManager.isContactPanelOpen)
       ctx.npcManager.closeContactPanel();

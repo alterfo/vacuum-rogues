@@ -1727,14 +1727,14 @@ export class SpaceFlightScene extends GameScene {
     }
   }
 
-  /**
-   * Handle keyboard input. Routing lives in the pure `handleFlightKey` helper;
-   * this delegate just hands it the live scene members (the three private
-   * methods wrapped so the helper stays decoupled from the scene class).
-   */
+  /** Handle keyboard input via the pure `handleFlightKey` helper. */
   private onKeyDown(event: KeyboardEvent): void {
     handleFlightKey(event, {
-      combatPause: this.combatPause,
+      combatPause: {
+        paused: this.combatPause.paused,
+        resume: () => this.combatPause.resume(),
+        beginCombatRound: () => this.combatModule.beginCombatRound(),
+      },
       npcManager: this.npcManager,
       hud: this.hud,
       planetManager: this.planetManager,

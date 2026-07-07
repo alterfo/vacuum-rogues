@@ -62,6 +62,23 @@ describe("GalaxySimulator OVERMIND seed coherence", () => {
     });
   }
 
+  it("never seeds the player's home system as the second OVERMIND starter in a 2-system galaxy", async () => {
+    // Regression: the second-starter fallback chain's terminal branch used to
+    // be an unfiltered `sortedByDistance[1]`, dropping the home/core exclusion
+    // every earlier branch enforced — reachable only when the galaxy has just
+    // 2 systems (core + home, nothing else), so every filtered branch is
+    // empty. No production call site generates this small (systemCount is
+    // hardcoded to 30), but the fallback must still hold the invariant.
+    const galaxy = await new GalaxySimulator().generateGalaxy(
+      "overmind-tiny-seed",
+      2,
+    );
+    const homeId = galaxy.systems[0].id;
+    for (const id of galaxy.overmindSystems) {
+      expect(id).not.toBe(homeId);
+    }
+  });
+
   it("still seeds a distinct pirate system that doesn't collide with the OVERMIND seed", async () => {
     const galaxy = await new GalaxySimulator().generateGalaxy(
       "overmind-pirate-seed",

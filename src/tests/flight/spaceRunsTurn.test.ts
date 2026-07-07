@@ -269,6 +269,28 @@ describe("Space runs the planned turn in flight", () => {
     expect(executeRouteTo).not.toHaveBeenCalled();
   });
 
+  it("Escape resuming a round-complete combat pause starts a fresh combat round", () => {
+    // Regression: Escape (and the touch «✕» button, which replays this same
+    // Escape action) used to call `combatPause.resume()` directly, bypassing
+    // `combatModule.beginCombatRound()` — unlike the overlay's own «Продолжить»
+    // button (combatPauseUi.ts onResume), which always begins a fresh round.
+    // Left unfixed, `CombatModule.roundComplete` would stay stuck `true` and
+    // silently block fire for BOTH sides for the rest of the engagement.
+    const beginCombatRound = vi.fn();
+    s.combatModule = { beginCombatRound };
+    const resume = vi.fn();
+    s.combatPause = { paused: true, resume };
+
+    press({ key: "Escape" });
+
+    expect(beginCombatRound).toHaveBeenCalledTimes(1);
+    expect(resume).toHaveBeenCalledTimes(1);
+    // beginCombatRound must run BEFORE resume (mirrors combatPauseUi.ts onResume).
+    expect(beginCombatRound.mock.invocationCallOrder[0]).toBeLessThan(
+      resume.mock.invocationCallOrder[0],
+    );
+  });
+
   it("leaves the existing j / i handling intact", () => {
     press({ key: "j" });
     expect(toggleQuestJournal).toHaveBeenCalledTimes(1);

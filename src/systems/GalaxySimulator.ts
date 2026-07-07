@@ -227,9 +227,14 @@ export class GalaxySimulator {
             s.id !== core.id && s.id !== homeId && coreNeighbourIds.has(s.id),
         ) ??
         byDistanceToCore[0] ??
-        sortedByDistance.find((s) => s.id !== core.id && s.id !== homeId) ??
-        sortedByDistance[1];
-      overmindStart.push(secondStart.id);
+        sortedByDistance.find((s) => s.id !== core.id && s.id !== homeId);
+      // Only a 2-system galaxy (core + home, nothing else) reaches here — every
+      // branch above excludes both `core.id` and `homeId`. Reuse `core` itself
+      // rather than falling back to an unfiltered `sortedByDistance[1]`, which
+      // could silently reintroduce the player's home system (or duplicate the
+      // core) as the second Overmind starter — exactly what every guard above
+      // exists to prevent.
+      overmindStart.push(secondStart?.id ?? core.id);
     }
 
     // Seed 1 pirate-controlled system at galaxy start: the most isolated
