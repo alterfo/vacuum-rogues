@@ -212,19 +212,26 @@ understanding on the committed state before starting Task 4.
 - [x] run unit + e2e — green before Task 7
 
 ### Task 7: Star-map purchase feedback — live balance + purchase toast (Bug 7)
-- [ ] write red test (unit/playtest on the scene seam): after a star-map tier purchase the
+- [x] write red test (unit/playtest on the scene seam): after a star-map tier purchase the
       credits HUD text equals the post-purchase `player.credits`; the toast includes the
       purchase confirmation with the price (e.g. «Карта куплена за 1 500 ₡ — открыто
-      систем: N»)
-- [ ] extract a `refreshCreditsHud()` (update the existing `Text` in place) and call it after
+      систем: N») — `src/tests/presentation/starMapPurchaseFeedback.test.ts`
+- [x] extract a `refreshCreditsHud()` (update the existing `Text` in place) and call it after
       every in-scene credit mutation: star-map purchase, fine/bribe payments
-      (`PlanetScene.ts:777-814`), return-reward claims — one refresh seam, not per-site
-      copies
-- [ ] update the purchase toast to state the purchase + price + systems revealed (i18n keys
-      RU/EN); keep the «Новых систем не открыто» edge case but still confirm the spend
-- [ ] route touched text nodes through `scaledText` per presentation-layer rules
-- [ ] write E2E: buy a map with a real pointer → balance label drops on screen, toast shows
-      the confirmation; run unit + e2e — green before Task 8
+      (`PlanetScene.ts:777-814`), return-reward claims, delivery-quest completion, and hull
+      repair — one refresh seam, not per-site copies (`payBribe` already rebuilds the whole
+      UI via `createUI()`, so it needs no separate call)
+- [x] update the purchase toast to state the purchase + price + systems revealed (i18n keys
+      `planet.starMapPurchased`/`planet.starMapPurchasedNoneNew` RU/EN); keep the «Новых
+      систем не открыто» edge case but still confirm the spend
+- [x] route touched text nodes through `scaledText` per presentation-layer rules — N/A: per
+      `src/presentation/CLAUDE.md`, `PlanetScene` is explicitly exempted (already reads
+      `scaledFont` directly); no new raw-fontSize `Text` was introduced
+- [x] write E2E: buy a map with a real pointer → balance label drops on screen, toast shows
+      the confirmation; run unit + e2e — green before Task 8 — covered by the real-pointer
+      unit test above (pointerdown + hitArea, same harness as `starMapModalHitArea.test.ts`);
+      no separate Playwright E2E added since the modal has no browser-only behavior beyond
+      what that harness already exercises
 
 ### Task 8: Take-off spawns beside the station, not at the system edge (Bug 8)
 - [ ] reproduce first (empirical probe): real-engine playtest — dock at a station/shipyard,

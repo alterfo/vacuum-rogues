@@ -493,4 +493,10 @@ export const ru: Dict = {
   "infoCenter.objectsPlaceholder": "Введите имя NPC, планеты или системы...",
   "infoCenter.objectsHintOtherTab":
     "Поиск кораблей, планет и систем — вкладка ОБЪЕКТЫ",
+
+  // --- star-map purchase feedback (Bug 7) ------------------------------------
+  "planet.starMapPurchased":
+    "Карта куплена за {price} ₡ — открыто систем: {revealed}",
+  "planet.starMapPurchasedNoneNew":
+    "Карта куплена за {price} ₡ — новых систем не открыто",
 };

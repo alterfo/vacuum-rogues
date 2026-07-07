@@ -491,4 +491,10 @@ export const en: Dict = {
   "infoCenter.objectsPlaceholder": "Enter an NPC, planet, or system name...",
   "infoCenter.objectsHintOtherTab":
     "Search ships, planets, systems — OBJECTS tab",
+
+  // --- star-map purchase feedback (Bug 7) ------------------------------------
+  "planet.starMapPurchased":
+    "Map purchased for {price} ₡ — systems revealed: {revealed}",
+  "planet.starMapPurchasedNoneNew":
+    "Map purchased for {price} ₡ — no new systems revealed",
 };

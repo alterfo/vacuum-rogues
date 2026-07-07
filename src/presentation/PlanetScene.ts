@@ -36,6 +36,7 @@ import { mountSceneHelp, helpButtonRect } from "./ui/mountSceneHelp";
 import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
 import { applyLoadoutHullToShip } from "@/systems/equipment/GearBridge";
 import { hullStatus } from "@/systems/equipment/hullStatus";
+import { t } from "@/i18n/i18n";
 
 interface PlanetContext {
   gameEngine?: GameEngine;
@@ -310,6 +311,8 @@ export class PlanetScene extends GameScene {
   private uiContainer: Container | null = null;
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
   private jobBoardPanel: JobBoardPanel | null = null;
+  /** The top-right credits readout, kept live via {@link refreshCreditsHud}. */
+  private creditsHudText: Text | null = null;
   /** Teardown for the contextual-help layer (first-time hint + «?» button). */
   private helpTeardown: (() => void) | null = null;
   /** Bribe paid this landing — gates are lifted for the duration of the visit. */
@@ -493,6 +496,7 @@ export class PlanetScene extends GameScene {
       const { collectObj, stack } = result;
       const completed = questManager.forceCompleteQuest(quest.id, player);
       if (completed) {
+        this.refreshCreditsHud();
         if (stack && collectObj && collectObj.itemType) {
           stack.amount -= collectObj.targetAmount;
           player.contrabandGoods = player.contrabandGoods.filter(
@@ -556,6 +560,7 @@ export class PlanetScene extends GameScene {
       if (quest.planetId !== this.planet.id) continue;
       const claimed = questManager.claimReturnReward(quest.id, player);
       if (claimed) {
+        this.refreshCreditsHud();
         this.gameEngine.audio.playSfx("reward").catch(() => {});
         this.showMessage(
           `Награда получена: +${quest.reward.credits} ₡`,
@@ -785,6 +790,7 @@ export class PlanetScene extends GameScene {
         );
         return;
       }
+      this.refreshCreditsHud();
       logger.info(`Customs fine paid: ${penalty} cr (faction ${faction})`);
       modal.destroy({ children: true });
       this.showMessage(`Штраф уплачен: −${penalty} ₡`, 0xff8844);
@@ -809,6 +815,7 @@ export class PlanetScene extends GameScene {
           GL_COUNTERPARTY.BRIBES,
           "Взятка таможне",
         );
+        this.refreshCreditsHud();
         logger.info(`Customs bribed: ${bribeCost} cr`);
         modal.destroy({ children: true });
         this.showMessage(`Взятка уплачена: −${bribeCost} ₡`, 0xffaa44);
@@ -1052,6 +1059,9 @@ export class PlanetScene extends GameScene {
       creditsHud.y = creditsAnchor.y;
       creditsHud.eventMode = "none";
       ui.addChild(creditsHud);
+      this.creditsHudText = creditsHud;
+    } else {
+      this.creditsHudText = null;
     }
 
     // Layout calculations: flow below the planet
@@ -1569,6 +1579,7 @@ export class PlanetScene extends GameScene {
       "Ремонт корпуса",
     );
     ship.repair();
+    this.refreshCreditsHud();
     logger.info(`Repaired for ${cost}`);
     this.showMessage(
       `Корпус восстановлен (+${missing}) за ${cost} кр.`,
@@ -1776,14 +1787,20 @@ export class PlanetScene extends GameScene {
               system.id,
               tier.hops,
             );
+            this.refreshCreditsHud();
             logger.info(
               `Star map purchased: ${tier.hops} hops, ${tier.cost} cr, revealed ${revealed} systems`,
             );
             close();
             this.showMessage(
               revealed > 0
-                ? `Открыто систем: ${revealed}`
-                : "Новых систем не открыто",
+                ? t("planet.starMapPurchased", {
+                    price: tier.cost.toLocaleString("ru"),
+                    revealed,
+                  })
+                : t("planet.starMapPurchasedNoneNew", {
+                    price: tier.cost.toLocaleString("ru"),
+                  }),
               0x44ddff,
             );
           },
@@ -1831,6 +1848,16 @@ export class PlanetScene extends GameScene {
   /**
    * Show a transient feedback message near the bottom of the planet screen.
    */
+  /**
+   * Update the top-right credits readout in place (`createUI` builds it once
+   * per scene entry, so any in-scene credit mutation — purchase, fine, bribe,
+   * repair, return-reward claim — must call this or the balance goes stale).
+   */
+  private refreshCreditsHud(): void {
+    if (!this.creditsHudText || !this.gameEngine?.player) return;
+    this.creditsHudText.text = `${this.gameEngine.player.credits.toLocaleString("ru")} ₡`;
+  }
+
   private showMessage(text: string, color: number): void {
     if (!this.uiContainer) return;
 
