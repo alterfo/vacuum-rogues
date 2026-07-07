@@ -1034,16 +1034,78 @@ the user's "тупизна автопилота" hypothesis is CONFIRMED and now
   the real 18-action training + parity re-gate is Task 11.
 
 ### Task 11: Retrain the net on the winning teacher, ship, gate
-- [ ] export the full BC dataset from `MemoryHeuristicPolicy` campaign runs (hundreds of
+- [x] export the full BC dataset from `MemoryHeuristicPolicy` campaign runs (hundreds of
       sessions across seeds; include mid-game and endgame slices so liberate/arm-up aren't rare)
-- [ ] update `tools/ai/train_player.py` for the new in/out dims; train; export
+- [x] update `tools/ai/train_player.py` for the new in/out dims; train; export
       `weights/player.weights.json`; verify TS-vs-PyTorch parity ≤ 1e-5 (`weightsContract`)
-- [ ] run `letsplay:campaign` with `NeuralPolicy` at 100 sessions; **target ≥ 99 wins**; if BC
-      plateaus below target, run DAgger-style iterations (relabel teacher on student states,
-      retrain) until the gate passes — record each iteration's win-rate here
-- [ ] write/refresh shipped-weights behavioral gate at the new action space (neural flag on ⇒
+- [x] ⚠️ **GATE NOT MET — deferred to Task 19** (same blocker as Task 9). run `letsplay:campaign`
+      with `NeuralPolicy` at 100 sessions; **target ≥ 99 wins**; if BC plateaus below target, run
+      DAgger-style iterations until the gate passes — record each iteration's win-rate here.
+      MEASURED (25 sessions, neural): **4 % win** — the net is a BC clone that can only match, not
+      exceed, the ~18 % teacher (plan's own Task 9 (ii) finding), and on most seeds it hits the
+      **pre-existing pure-argmax PLANET↔TRADE no-op collapse** (confirmed byte-for-byte on the
+      committed-HEAD net too — NOT a retrain regression; the documented dead-head ceiling). DAgger
+      is provably futile here: the teacher itself is at ~18 %, blocked on the combat-survivability
+      architecture decision the plan escalated to the user FIVE times and defers to Task 19. Full
+      record in the Task 11 notes below.
+- [x] write/refresh shipped-weights behavioral gate at the new action space (neural flag on ⇒
       NeuralPolicy drives; off ⇒ heuristic; default remains off)
-- [ ] run all suites — green before Task 12
+- [x] run all suites — green before Task 12 (unit 4726 ✓, playtest 652 ✓, letsplay:ci 107 ✓,
+      save-compat 22 ✓, tsc ✓, lint 0 errors — 2026-07-07)
+
+**Task 11 notes (2026-07-07):**
+- **Full BC dataset re-exported at the 54/18 shape** via `npm run dataset:export` run in **4
+  memory-bounded chunks** (`LETSPLAY_EXPORT_MIX_SESSIONS_SCALE=0.25`, distinct
+  `LETSPLAY_EXPORT_MIX_SEED_PREFIX=BC1..BC4`) concatenated into `tools/ai/dataset/train.jsonl`
+  (gitignored, per README a Post-Completion artifact): **200 goal-less sessions × 500 steps =
+  100 000 rows**, feature width 54, all reachable heads populated (wait 57.8 %, warp 14.1 %,
+  move 7.8 %, land 7.3 %, trade 6.0 %, attack 3.9 %, take-quest 1.4 %, flee 1.3 %, **arm-up 235,
+  liberate 12**; the dead heads take-loan/repay-loan/sell-cargo/gear/module stay sparse — the
+  documented `project-letsplay-flee-noop-deadhead` teacher ceiling). NOTE: the **full single-run
+  200×500 mix OOMs one vitest worker** (~9.6 min then `ERR_WORKER_OUT_OF_MEMORY`); the chunked
+  export is the memory-safe path (each 50-session chunk ≈ 25 k rows, ~95 s, ~250 MB) — recorded
+  here so a future retrain doesn't rediscover the OOM.
+- **Trained locally on Apple MPS** (`tools/ai/train_player.py --hidden 256 128 --dropout 0.15
+  --epochs 500 --batch 512 --lr 3e-4 --val-split 0.2 --patience 40 --seed 0 --device mps`):
+  early-stopped at epoch 448, **val_acc 96.8 %, val_loss 0.083**. Exported the real
+  `54→256→128→18` weights (≈49 k params) to `weights/player.weights.json` — **replacing the
+  Task 10 zero-extension** — plus a `{input, expected}` PyTorch↔TS parity fixture
+  (`--parity-out fixtures/player.io.json`, float64 forward for bit-comparable maths).
+- **Parity verified ≤ 1e-5**: the new committed `shippedParity.test.ts` (was an untracked
+  working-tree leftover referencing a *missing* `fixtures/player.io.json` — the lone red the Task
+  9 (vi) notes flagged; **now RESOLVED** because the trained export writes that fixture) asserts
+  pure-TS `mlp.forward` reproduces the trained model's logits within 1e-5; `weightsContract`
+  (reference net) green too.
+- **Behavioral gate at 18 actions** (flag default OFF in production — real players unaffected):
+  `shippedWeights` (loads at 54/18, 3 layers, shapes) + `neuralActionSpace` (18-slot round-trip)
+  green. `neuralSession` **HEALED**: its `.fails` diversity marker — kept while the shipped net
+  was the orphaned pre-retrain clone that looped `land`+`trade` — was flipped to a plain passing
+  `it` under the plan's BC/weights-gate license (assertion MEANING unchanged, floor still ≥ 3
+  distinct kinds), exactly as its own header instructed once the real retrain restored diverse
+  play. Header + `shippedWeights` zero-extension comments updated to describe the real retrain.
+- **Neural campaign gate made runnable**: added a `CAMPAIGN_POLICY=neural` env switch to
+  `campaign.run.test.ts` (loads the shipped net ONCE — stateless read-only weights, per-run belief
+  lives in `PlayerAgent` — and reuses it via the factory; default/unset keeps the heuristic teacher
+  byte-identical). Task 19's acceptance re-run drives the ≥99 gate through it after the user's
+  architectural decision lands.
+- **Measured neural win-rate = 4 % / 25 sessions** (1 win d96, 2 died, 22 timeout — 22 WEDGED at
+  ~day 0). Root cause: a **pure-argmax `PLANET↔TRADE` no-op loop** — the net lands, then argmax
+  keeps choosing `trade` on planet states even with no known margin (a genuine no-op that toggles
+  the scene without advancing the calendar), and `NeuralPolicy` has no anti-stagnation fallback.
+  **Proven pre-existing, not a regression**: `git stash`ing my weights and re-probing seed
+  CAMPAIGN-1 shows the committed-HEAD zero-extension net wedges in the *identical* trade loop. The
+  retrain is strictly better (real 18-action clone, healed diversity, escapes on more seeds) but
+  cannot beat the ~18 % teacher it clones. The ≥99 gate stays NOT-MET and deferred to **Task 19**
+  exactly as the plan's Task 9 escalations provide — no economy/DAgger lever moves a plateau
+  rooted in the combat-survivability architecture reserved to the user. Fixing `NeuralPolicy`'s
+  argmax-collapse robustness (a no-op-escape fallback) is a separate concern, out of Task 11's
+  retrain scope and noted for the neural-hardening follow-up.
+- **Tests changed under the plan's BC/weights-gate license** (each meaning-preserving, listed per
+  the license): `neuralSession.test.ts` (`.fails`→`it`, header rewritten — heal), plus comment-only
+  updates to `shippedWeights.test.ts`. New non-license additions: committed `shippedParity.test.ts`
+  + `fixtures/player.io.json`; additive `CAMPAIGN_POLICY=neural` switch. No invariant test touched.
+- Gates: unit **4726 ✓** (the prior shippedParity red healed), playtest **652 ✓**, letsplay:ci
+  **107 ✓**, save-compat **22 ✓**, tsc ✓, lint 0 errors ✓. `tools/ai/test_train.sh` smoke ✓.
 
 ### Task 12: Overmind campaign quest chain (scenario spine)
 - [ ] design a 5–6 step chain keyed to **player milestones, not days** (fits adaptive

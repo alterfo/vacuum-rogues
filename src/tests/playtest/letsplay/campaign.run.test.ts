@@ -28,6 +28,9 @@ import {
   CAMPAIGN_STEPS_PER_DAY_GUARD,
 } from "./campaign.run";
 import { checkMemoryBounds, formatCampaignReport } from "./campaignMetrics";
+import { NeuralPolicy } from "./NeuralPolicy";
+import type { PlayerPolicy } from "./PlayerPolicy";
+import playerWeights from "./weights/player.weights.json";
 
 vi.mock("pixi.js", async () => (await import("../pixiStub")).makePixiStub());
 
@@ -61,6 +64,30 @@ const MAX_STEPS = positiveIntEnv(
 const WALL_BUDGET_MS = positiveIntEnv(process.env.CAMPAIGN_WALL_MS, 480_000);
 /** Heap-growth cap per session — measured ≈ 260 MB; 1 GB flags a runaway leak. */
 const HEAP_BUDGET_MB = 1024;
+
+/**
+ * `CAMPAIGN_POLICY=neural` swaps the campaign-run tier's teacher
+ * ({@link MemoryHeuristicPolicy}) for the **shipped trained net**
+ * ({@link NeuralPolicy} over `weights/player.weights.json`) — the Task 11 neural
+ * win-rate gate the plan calls for ("run letsplay:campaign with NeuralPolicy").
+ * The net is loaded ONCE (stateless read-only weights; the per-run belief lives
+ * in `PlayerAgent`, not the policy) and reused across sessions via the factory.
+ * Any other value (or unset) keeps the default heuristic teacher, so the existing
+ * telemetry runs are byte-identical.
+ */
+const USE_NEURAL = process.env.CAMPAIGN_POLICY === "neural";
+let neuralPolicy: PlayerPolicy | undefined;
+async function campaignPolicyFactory(): Promise<
+  (() => PlayerPolicy) | undefined
+> {
+  if (!USE_NEURAL) return undefined;
+  if (!neuralPolicy) {
+    const p = new NeuralPolicy({ weights: playerWeights });
+    await p.load();
+    neuralPolicy = p;
+  }
+  return () => neuralPolicy as PlayerPolicy;
+}
 
 describe.runIf(RUN)("npm run letsplay:campaign — long-horizon gate", () => {
   it(
@@ -117,6 +144,7 @@ describe.runIf(RUN)("npm run letsplay:campaign — long-horizon gate", () => {
         seedPrefix: "CAMPAIGN",
         maxDays: MAX_DAYS,
         maxSteps: MAX_STEPS,
+        policy: await campaignPolicyFactory(),
       });
       const paths = writeCampaignReport(reports);
       // eslint-disable-next-line no-console

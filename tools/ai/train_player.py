@@ -5,7 +5,7 @@ This is the **Python side** of the pure-TS MLP pipeline (the TS data-gen lives i
 ``src/tests/playtest/letsplay/exportBcData.ts``). It takes the JSONL dataset that
 exporter produces — one ``{"features": [...], "action": <int>}`` row per teacher
 step — and fits a multi-layer perceptron as a multi-class classifier
-(cross-entropy over the 16-action vocabulary), then exports the trained weights as
+(cross-entropy over the 18-action vocabulary), then exports the trained weights as
 JSON in the exact shape ``src/tests/playtest/letsplay/mlp.ts`` loads.
 
 Behavioural cloning means **no environment in the training loop**: the teacher
@@ -28,7 +28,7 @@ Usage (small local smoke run)::
         --out  src/tests/playtest/letsplay/weights/player.weights.json \
         --hidden 32 --epochs 200 --seed 0
 
-Usage (the RTX 4090 target architecture, 50→256→128→16)::
+Usage (the RTX 4090 target architecture, 54→256→128→18)::
 
     python3 tools/ai/train_player.py \
         --data train.jsonl \
@@ -56,8 +56,11 @@ from pathlib import Path
 # Must match ACTION_ORDER in src/tests/playtest/letsplay/observe.ts — the net's
 # output head has one score per action slot: move, warp, land, dock, trade,
 # take-quest, attack, flee, repair, wait, buy-gear, upgrade-hull, buy-module,
-# take-loan, repay-loan, sell-cargo.
-NUM_ACTIONS = 16
+# take-loan, repay-loan, sell-cargo, arm-up, liberate.
+# Three-year-campaign Task 10/11: widened 16 → 18 (arm-up + liberate appended);
+# the input width is inferred from the dataset (FEATURE_LENGTH = 54: obs 30 +
+# memory 20 + campaign 4), so only the action count is pinned here.
+NUM_ACTIONS = 18
 
 
 def load_dataset(path: Path) -> tuple[list[list[float]], list[int]]:
@@ -171,6 +174,39 @@ def export_weights(model, out_path: Path) -> None:
             )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps({"layers": layers}, indent=2), encoding="utf8")
+
+
+def emit_parity_fixture(model, in_dim: int, out_path: Path, seed: int) -> None:
+    """Write a ``{input, expected}`` cross-language parity fixture for the export.
+
+    Computes the trained model's forward pass (eval mode, no dropout) on a
+    deterministic pseudo-random input and records the resulting logits. A TS test
+    (``shippedParity.test.ts``) then asserts ``mlp.forward`` reproduces those
+    logits from the exported weights within ``1e-5`` — genuinely closing the
+    PyTorch → pure-TS parity loop for the *shipped* net, not just the reference
+    maths fixture. Seeded so the fixture is reproducible from the same export.
+
+    The forward runs in **float64** (``.double()``): ``mlp.ts`` computes in JS
+    ``number`` (float64) over the exported weights, so evaluating the reference
+    logits in float64 over the *same* float32-valued weights makes the two
+    arithmetics bit-for-bit comparable — a float32 forward here would accumulate a
+    ~1e-5 gap on a 256-wide layer that the 1e-5 gate would flag spuriously.
+    """
+    import torch  # local import: keep module import torch-free
+
+    gen = torch.Generator().manual_seed(seed)
+    x = torch.rand(in_dim, generator=gen, dtype=torch.float64)
+    model = model.double()
+    model.eval()
+    with torch.no_grad():
+        expected = model(x.unsqueeze(0)).squeeze(0)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        json.dumps(
+            {"input": x.tolist(), "expected": expected.tolist()}, indent=2
+        ),
+        encoding="utf8",
+    )
 
 
 def train(args: argparse.Namespace) -> None:
@@ -290,6 +326,10 @@ def train(args: argparse.Namespace) -> None:
     export_weights(model, Path(args.out))
     print(f"exported weights → {args.out}")
 
+    if args.parity_out:
+        emit_parity_fixture(model.cpu(), in_dim, Path(args.parity_out), args.seed)
+        print(f"exported parity fixture → {args.parity_out}")
+
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
@@ -316,6 +356,11 @@ def main() -> None:
     )
     p.add_argument("--num-workers", type=int, default=0, help="DataLoader worker processes")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument(
+        "--parity-out",
+        default=None,
+        help="optional path to write a {input, expected} TS↔PyTorch parity fixture",
+    )
     train(p.parse_args())
 
 

@@ -5,11 +5,14 @@ The letsplay neural player (`NeuralPolicy`) is a **tiny pure-TS MLP** run by
 a small weights JSON. This directory is the **code side** of producing that
 JSON; the actual training run is a manual Post-Completion step.
 
-The current target architecture (for the RTX 4090 retrain) is **50 → 256 → 128
-→ 16** (≈51K params: `FEATURE_LENGTH` = 30 observation + 20 memory features,
-`ACTION_ORDER.length` = 16). The reference/parity-test net (`fixtures/*.weights.json`
-in `weightsContract.test.ts`) stays small (`18 → 32 → 10`) — it pins the
-*format*, not the shipped architecture.
+The current target architecture (three-year-campaign Task 10/11) is **54 → 256 →
+128 → 18** (≈49K params: `FEATURE_LENGTH` = 30 observation + 20 memory + 4
+campaign features, `ACTION_ORDER.length` = 18 — the 16 base actions + `arm-up` +
+`liberate`). The reference/parity-test net (`fixtures/*.weights.json` in
+`weightsContract.test.ts`) stays small — it pins the *format*, not the shipped
+architecture. The *shipped* net's PyTorch→TS parity is pinned separately by
+`shippedParity.test.ts` against `fixtures/player.io.json` (emitted by
+`train_player.py --parity-out`).
 
 ## Pipeline
 
@@ -86,7 +89,7 @@ zero-row/dead action head), and per-feature-column mean/std/min/max (flags NaNs
 and constant/dead columns) — catch a broken export before spending a training run
 on it.
 
-Every row is `{"features": number[50], "action": 0..15}`; the action index is
+Every row is `{"features": number[54], "action": 0..17}`; the action index is
 into `ACTION_ORDER` (observe.ts) — the single source of truth shared by the
 legal-action surface, the net's output head, and `NUM_ACTIONS` in the trainer.
 
@@ -124,7 +127,7 @@ python3 tools/ai/train_player.py \
     --hidden 32 --epochs 200 --seed 0
 ```
 
-The RTX 4090 target architecture (**50 → 256 → 128 → 16**, ≈51K params), run
+The RTX 4090 target architecture (**54 → 256 → 128 → 18**, ≈49K params), run
 over SSH on `oleg@192.168.88.193`:
 
 ```bash
@@ -140,9 +143,12 @@ ssh oleg@192.168.88.193 "cd /tmp && python train_player.py \
   --val-split 0.2 \
   --patience 30 \
   --device cuda \
+  --parity-out player.io.json \
   --out player.weights.json"
 scp oleg@192.168.88.193:/tmp/player.weights.json \
   src/tests/playtest/letsplay/weights/player.weights.json
+scp oleg@192.168.88.193:/tmp/player.io.json \
+  src/tests/playtest/letsplay/fixtures/player.io.json
 ```
 
 CLI reference:
@@ -160,7 +166,8 @@ CLI reference:
 | `--patience` | `30` | epochs of no val-loss improvement before stopping early |
 | `--device` | `auto` | `auto`\|`cuda`\|`mps`\|`cpu` — `auto` and any unavailable explicit choice fall back down the cuda → mps → cpu chain |
 | `--num-workers` | `0` | `DataLoader` worker processes (dataset fits in RAM, so `0` is fine) |
-| `--seed` | `0` | seeds `torch`, the train/val split, and shuffling |
+| `--seed` | `0` | seeds `torch`, the train/val split, shuffling, and the `--parity-out` input |
+| `--parity-out` | none | optional path for a `{input, expected}` TS↔PyTorch parity fixture (feeds `shippedParity.test.ts`) |
 
 `in_dim` is always read from the dataset's feature width (tracks `FEATURE_LENGTH`
 automatically); only `NUM_ACTIONS` is a pinned constant in the script.
@@ -180,7 +187,7 @@ Exported shape (one entry per `nn.Linear`, so a 3-hidden-layer net exports 4):
 
 ### Smoke test
 
-`tools/ai/test_train.sh` generates a tiny random 50-feature/16-action dataset
+`tools/ai/test_train.sh` generates a tiny random 54-feature/18-action dataset
 and runs 3 epochs end-to-end (mini-batch + dropout + val-split + early-stopping
 config all exercised) to catch a pipeline crash before spending a real 4090 run:
 
@@ -192,7 +199,7 @@ tools/ai/test_train.sh
 
 Drop the exported `*.weights.json` where `NeuralPolicy` loads it (dev-only) and
 construct `new NeuralPolicy({ weights })`. `load()` validates that the input width
-== `FEATURE_LENGTH` (50) and the output width == `ACTION_ORDER.length` (16), so a
+== `FEATURE_LENGTH` (54) and the output width == `ACTION_ORDER.length` (18), so a
 mis-sized export fails loudly.
 
 ## Contract / parity test
@@ -200,15 +207,19 @@ mis-sized export fails loudly.
 `src/tests/playtest/letsplay/weightsContract.test.ts` pins the interchange format
 so a trained net is guaranteed to load and run identically to the reference:
 
-- **Parity** — `fixtures/reference.weights.json` + `fixtures/reference.io.json`
-  (a hand-computed `input → expected scores` triple, a small fixed `18 → 32 → 10`
-  net) must be reproduced by `mlp.forward` within `1e-5`. If `forward`'s maths or
-  the JSON orientation ever drift, this fails. This fixture is intentionally
-  **not** resized when the real architecture changes — it only pins the
-  interchange format, not the shipped shape.
+- **Parity (format)** — `fixtures/reference.weights.json` + `fixtures/reference.io.json`
+  (a hand-computed `input → expected scores` triple, a small fixed net) must be
+  reproduced by `mlp.forward` within `1e-5`. If `forward`'s maths or the JSON
+  orientation ever drift, this fails. This fixture is intentionally **not** resized
+  when the real architecture changes — it only pins the interchange format.
+- **Parity (shipped net)** — `shippedParity.test.ts` pins the *actual* shipped net:
+  `fixtures/player.io.json` (emitted by `train_player.py --parity-out`) holds the
+  trained PyTorch model's logits on a deterministic input, and `mlp.forward` on the
+  shipped `weights/player.weights.json` must reproduce them within `1e-5`.
+  Regenerate both files together on every retrain.
 - **Shape** — a `FEATURE_LENGTH → 32 → ACTION_ORDER` export loads via
-  `loadWeights` with the widths `NeuralPolicy` requires (`FEATURE_LENGTH` = 50,
-  `ACTION_ORDER.length` = 16).
+  `loadWeights` with the widths `NeuralPolicy` requires (`FEATURE_LENGTH` = 54,
+  `ACTION_ORDER.length` = 18).
 
 When you change `featurize`'s width or `ACTION_ORDER`, update `FEATURE_LENGTH`
 (NeuralPolicy.ts) and `NUM_ACTIONS` (train_player.py) together and regenerate the

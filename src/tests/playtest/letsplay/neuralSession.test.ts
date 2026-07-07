@@ -8,25 +8,18 @@
  * session on the real `GameEngine` with **zero harness errors**, and (c) picks a
  * **diverse** repertoire — not collapsed onto a single action.
  *
- * The teacher's dataset populates 8 of the 16 action heads (the other 8 —
- * dock/take-quest/repair/gear/hull/module/loan-heads — are dead in the headless
- * teacher, the documented `project-letsplay-flee-noop-deadhead` ceiling), so the
- * bar here is "several distinct legal kinds", not the full 16.
+ * The teacher's dataset populates the reachable action heads (dead heads —
+ * take-loan/repay-loan/sell-cargo, and the rare gear/module heads — stay sparse
+ * in the headless teacher, the documented `project-letsplay-flee-noop-deadhead`
+ * ceiling), so the bar here is "several distinct legal kinds", not the full 18.
  *
- * KNOWN REGRESSION (do not "fix" by lowering the floor again — see CLAUDE.md's
- * "never weaken a test to hide a regression" rule): the 20260703 plan's
- * no-speculation trade fix orphaned this **shipped** net. It was trained on
- * the OLD `executeMemoryAwareTrade`, which always bought *something* on a
- * fresh, single-planet landing (no known margin yet) and so always nudged the
- * state (cargo) forward. With that speculative buy removed, a `trade` action
- * with no known margin is now a genuine no-op, so on this seed the net loops
- * `land`+`trade` (2 kinds) indefinitely instead of escaping to `warp`/`move`.
- * The diversity assertion below is intentionally marked `.fails` (kept at its
- * original floor of 3, not silently lowered to 2) so this stays visibly red
- * until the real fix — a retrain on the corrected teacher, out of this task's
- * scope, see docs/plans/20260703-autopilot-goal-trading-and-npc-brains.md —
- * lands; if it starts passing again for some other reason, `.fails` itself
- * turns red as a signal to remove this marker.
+ * HISTORY (now healed): while the shipped net was the orphaned pre-retrain clone
+ * (trained on the OLD `executeMemoryAwareTrade` that always nudged cargo forward),
+ * the no-speculation trade fix collapsed it into a `land`+`trade` (2-kind) loop on
+ * this seed, so the diversity assertion was marked `.fails`. The three-year-campaign
+ * Task 11 retrain — a behavioural clone of the *current* teacher on the widened
+ * 54→256→128→18 space — restored the diverse repertoire, so the marker is removed
+ * and the assertion is a plain passing gate again (as the old header instructed).
  *
  * Dev-only, like the rest of `letsplay/`.
  */
@@ -66,9 +59,14 @@ describe("shipped net drives a real-engine session", () => {
     expect(neuralSteps.length).toBeGreaterThan(0);
   });
 
-  // KNOWN REGRESSION, see file header: kept at its original floor of 3 and
-  // marked `.fails` rather than silently lowered to 2.
-  it.fails("picks a diverse action repertoire (>= 3 distinct kinds)", () => {
+  // HEALED by the Task 11 retrain (three-year-campaign): the shipped net is now
+  // a behavioural clone of the *current* `MemoryHeuristicPolicy` teacher on the
+  // 54→256→128→18 action space, cloned goal-less (no aliasing), so it reproduces
+  // the teacher's diverse repertoire in a real session instead of collapsing to
+  // the old `land`+`trade` loop. The `.fails` marker (kept while the shipped net
+  // was the orphaned pre-retrain clone) is removed now that the assertion passes,
+  // exactly as the prior header instructed. Floor stays at its original 3.
+  it("picks a diverse action repertoire (>= 3 distinct kinds)", () => {
     const kinds = new Set(result.steps.map((s) => s.action.kind));
     expect(kinds.size).toBeGreaterThanOrEqual(3);
   });

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Smoke test for tools/ai/train_player.py — generates a tiny random BC-shaped
-# dataset (50 features / 16 actions, matching the current letsplay contract)
+# dataset (54 features / 18 actions, matching the current letsplay contract)
 # and runs a few epochs end-to-end, so a pipeline crash (bad arg wiring, a
 # device fallback bug, an export shape regression) surfaces before spending a
 # real training run on the RTX 4090. Not a gate — run manually before a
@@ -24,8 +24,8 @@ path = sys.argv[1]
 random.seed(0)
 with open(path, "w", encoding="utf8") as fh:
     for _ in range(200):
-        features = [random.random() for _ in range(50)]
-        action = random.randrange(16)
+        features = [random.random() for _ in range(54)]
+        action = random.randrange(18)
         fh.write(json.dumps({"features": features, "action": action}) + "\n")
 PYEOF
 
@@ -50,8 +50,8 @@ with open(path, encoding="utf8") as fh:
     data = json.load(fh)
 layers = data.get("layers", [])
 assert len(layers) == 3, f"expected 3 Linear layers (2 hidden + output), got {len(layers)}"
-assert len(layers[0]["W"]) == 16 and len(layers[0]["W"][0]) == 50, "layer 0 shape mismatch"
-assert len(layers[-1]["W"]) == 16, "output layer must have 16 action scores"
+assert len(layers[0]["W"]) == 16 and len(layers[0]["W"][0]) == 54, "layer 0 shape mismatch"
+assert len(layers[-1]["W"]) == 18, "output layer must have 18 action scores"
 print(f"smoke test OK: {len(layers)} Linear layers exported")
 PYEOF
 
