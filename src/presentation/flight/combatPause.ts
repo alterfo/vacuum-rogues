@@ -159,11 +159,15 @@ export class CombatPauseController<TTarget, TWeapon> {
    * Force a fresh reaction-window pause (campaign Task 9 (v)): a combat **round**
    * completed — a round's worth of hull was lost — so re-open the target/weapon
    * overlay even though the incoming-attack debounce was already consumed this
-   * engagement. Re-arms that debounce and enters the pause; a no-op if already
-   * paused. Returns whether it flipped to paused.
+   * engagement. Enters the pause directly (bypassing the debounce check
+   * `requestPause` applies); leaves the debounce untouched — it must stay
+   * consumed for the rest of the engagement, else the very next incoming shot
+   * of the new round would re-trigger `requestPause` on its own and collapse
+   * every round after the first into a single-shot pause instead of letting
+   * damage accumulate to the round budget. A no-op if already paused. Returns
+   * whether it flipped to paused.
    */
   repause(): boolean {
-    this.incomingConsumed = false;
     return this.enterPause("incoming-attack");
   }
 

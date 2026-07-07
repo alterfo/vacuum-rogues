@@ -228,7 +228,6 @@ export class GalaxySimulator {
         ) ??
         byDistanceToCore[0] ??
         sortedByDistance.find((s) => s.id !== core.id && s.id !== homeId) ??
-        sortedByDistance.find((s) => s.id !== core.id) ??
         sortedByDistance[1];
       overmindStart.push(secondStart.id);
     }
