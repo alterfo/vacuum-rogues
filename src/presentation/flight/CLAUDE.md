@@ -139,9 +139,12 @@ can't escape the deliberate choice.
 (`gameDays + distanceTraveled/DISTANCE_PER_DAY + waitDayAccum`) is the **one** source for
 sub-day time — it feeds both planet orbits (the `getOrbitalDay` dep) **and** the HUD date
 read-out, pushed in via `FlightHud.setDayProvider(() => this.currentDay)`.
-`FlightHud.updateDayCounter` renders it with `formatGameTimestamp` (date + HH:MM clock); with no
-provider wired it falls back to whole-day `galaxy.gameDays`. Do **not** re-derive the fractional
-day at a call site or render the HUD date straight from `gameDays` (that was the frozen-date bug).
+`FlightHud.updateDayCounter` renders it with `formatGameDate` (clock-free calendar date only — the
+HH:MM read-out was removed as HUD clutter, playtest bug 2026-07-06/07 #3); with no provider wired
+it falls back to whole-day `galaxy.gameDays`. The provider seam stays wired so a whole-day boundary
+crossed mid-turn via distance/wait accrual still shows up immediately. Do **not** re-derive the
+fractional day at a call site or render the HUD date straight from `gameDays` (that was the
+frozen-date bug).
 The day has **three** sub-day sources, all summed into `currentDay`: move-distance, the wait-turn
 accumulator, **and a real-time-combat path** so planets keep orbiting during a stationary fight.
 A fight freezes the calendar (and the move/wait paths are gated off while it runs), so a still

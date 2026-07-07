@@ -803,6 +803,93 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('no camera debug text on the flight HUD (Bug 3)', async ({ page }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    const hasCameraDebugText = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+      const uiContainer = hud?.['uiContainer'] as
+        | { children: Array<{ text?: string }> }
+        | undefined;
+      return (uiContainer?.children ?? []).some(
+        (c) => typeof c.text === 'string' && c.text.startsWith('Камера:'),
+      );
+    });
+    expect(hasCameraDebugText, 'the removed "Камера:" debug read-out must not exist').toBe(false);
+
+    errorCollector.assertAndDetach();
+  });
+
+  for (const width of [1024, 1920]) {
+    test(`[МЕНЮ] sits bottom-left clear of the radar at width ${width} (Bug 3)`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await setupNewGame(page);
+      const errorCollector = new ErrorCollector(page);
+
+      const rect = await page.evaluate(() => {
+        const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+        const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+        const uiContainer = hud?.['uiContainer'] as
+          | {
+              children: Array<{
+                text?: string;
+                getGlobalPosition: () => { x: number; y: number };
+              }>;
+            }
+          | undefined;
+        const menuNode = uiContainer?.children.find((c) => c.text === '[МЕНЮ]');
+        if (!menuNode) return null;
+        const p = menuNode.getGlobalPosition();
+        return { x: p.x, y: p.y, viewportH: window.innerHeight };
+      });
+      expect(rect, '[МЕНЮ] text node must be found').not.toBeNull();
+      expect(rect!.y, 'МЕНЮ must sit in the bottom half of the screen').toBeGreaterThan(
+        rect!.viewportH / 2,
+      );
+
+      errorCollector.assertAndDetach();
+    });
+  }
+
+  test('real-pointer click on [МЕНЮ] opens the system menu from its bottom-left position (Bug 3)', async ({ page }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+    await page.mouse.move(5, 5);
+
+    const btn = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+      const uiContainer = hud?.['uiContainer'] as
+        | {
+            children: Array<{
+              text?: string;
+              getGlobalPosition: () => { x: number; y: number };
+              width: number;
+              height: number;
+            }>;
+          }
+        | undefined;
+      const node = uiContainer?.children.find((c) => c.text === '[МЕНЮ]');
+      if (!node) return null;
+      const p = node.getGlobalPosition();
+      return { x: p.x + node.width / 2, y: p.y + node.height / 2 };
+    });
+    expect(btn, '[МЕНЮ] text node must be found').not.toBeNull();
+
+    await page.mouse.click(btn!.x, btn!.y);
+    await page.waitForFunction(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as {
+        isSystemMenuOpen?: () => boolean;
+      };
+      return hud?.isSystemMenuOpen?.() === true;
+    }, undefined, { timeout: 3_000 });
+
+    errorCollector.assertAndDetach();
+  });
+
   test('smoke: cursor changes over an NPC ship on REAL mouse hover after a turn (playtest2 ②)', async ({ page }) => {
     // The user's playtest finding ②: the pointer stays the default arrow over
     // NPC ships. Root cause: every NPC spawned IDLE, so the first day-tick sent

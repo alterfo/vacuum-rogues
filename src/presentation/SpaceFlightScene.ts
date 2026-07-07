@@ -441,7 +441,7 @@ export class SpaceFlightScene extends GameScene {
     );
 
     // World camera: owns zoom/pan/follow/clamp. Reads ship physics + star centre;
-    // fans each transform out to the NPC hit-area rescale and the HUD debug read-out.
+    // fans each transform out to the NPC hit-area rescale.
     this.camera = new CameraController(this.renderer, {
       getShipPhysics: () => this.shipPhysics,
       getStarCenter: () => ({
@@ -454,11 +454,6 @@ export class SpaceFlightScene extends GameScene {
     this.camera.onTransform = (zoom) => {
       // Keep NPC hit areas a fixed screen size regardless of zoom level.
       this.npcManager?.updateHitAreas(zoom);
-      this.hud?.setCameraDebug(
-        this.camera.zoom,
-        this.camera.panX,
-        this.camera.panY,
-      );
     };
 
     this.touchControls = new FlightTouchController(

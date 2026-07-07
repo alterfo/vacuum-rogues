@@ -152,15 +152,15 @@ understanding on the committed state before starting Task 4.
       — green before Task 3
 
 ### Task 3: HUD cleanup — camera text, date format, [МЕНЮ] position (Bug 3)
-- [ ] write red E2E/unit assertions: no "Камера:" text on the flight HUD; day counter matches
+- [x] write red E2E/unit assertions: no "Камера:" text on the flight HUD; day counter matches
       the clock-free date format; [МЕНЮ] anchored bottom-left at multiple viewports
-- [ ] delete the `cameraDebugText` block (`FlightHud.ts:616-628`) plus `setCameraDebug` /
+- [x] delete the `cameraDebugText` block (`FlightHud.ts:616-628`) plus `setCameraDebug` /
       `positionCameraDebugText` and their call sites
-- [ ] switch `updateDayCounter` to `formatGameDate` (keep the sub-day provider seam intact —
+- [x] switch `updateDayCounter` to `formatGameDate` (keep the sub-day provider seam intact —
       only the display format changes)
-- [ ] move `menuBtn` to bottom-left (`y = screenHeight - …`) and add it to `reposition()`;
+- [x] move `menuBtn` to bottom-left (`y = screenHeight - …`) and add it to `reposition()`;
       verify no collision with the minimap/radar zone at small viewports
-- [ ] screenshot-verify; run e2e regression — green before Task 4
+- [x] screenshot-verify; run e2e regression — green before Task 4
 
 ### Task 4: Ship enters a system on its departure heading (Bug 4)
 - [ ] write red playtest (real engine): warp out with a known `exitVector`, assert on arrival
