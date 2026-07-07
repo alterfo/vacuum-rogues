@@ -31,6 +31,13 @@ import {
   questKeyForQuest,
   type GeneratedQuest,
 } from "@/systems/quests/QuestGenerator";
+import {
+  nextCampaignChainStep,
+  buildCampaignChainQuest,
+  type CampaignChainStep,
+  type CampaignChainTarget,
+} from "@/systems/quests/campaignChain";
+import { jumpDistances } from "@/systems/galaxy/jumpDistance";
 import type { QuestTemplate } from "@/systems/QuestManager";
 import { buildRegistry } from "@/systems/info/InfoService";
 import type { GalacticRegistry } from "@/systems/info/GalacticRegistry";
@@ -890,6 +897,14 @@ export class GameEngine {
       overmindSystems: this.galaxy.overmindSystems,
       overmindAdjacentSystems: overmindAdjacent,
     });
+    // Inject the Overmind campaign chain step this board should offer (Task 12).
+    // The step is gated on player milestones + prior-step completion (pure
+    // predicate over the already-persisted completed-quest list), so it appears
+    // only in order and only once its milestone band is crossed. Pushed onto the
+    // board so the shared `taken` filter below drops it while it is active or
+    // once completed. No board slot is consumed and no save shape changes.
+    const campaignQuest = this.buildCampaignBoardQuest(planetId);
+    if (campaignQuest) board.push(campaignQuest);
     // Record when this board was last fetched for persistence tracking.
     this.galaxy.questBoards[planetId] = this.galaxy.gameDays;
     const taken = new Set<string>([
@@ -911,6 +926,85 @@ export class GameEngine {
       if (minRank > 0 && (this.player!.rank ?? 0) < minRank) return false;
       return true;
     });
+  }
+
+  /**
+   * The Overmind campaign chain quest a board should currently offer, or null
+   * (chain complete / next milestone not reached / run decided / no reachable
+   * target yet). The step selection is a pure predicate over the persisted
+   * completed-quest list + Overmind state + ratcheted power (Task 12); the
+   * target system is resolved from the live galaxy here.
+   */
+  private buildCampaignBoardQuest(planetId: string): GeneratedQuest | null {
+    if (!this.galaxy || !this.player) return null;
+    const totalSystems = this.galaxy.systems.length;
+    const overmindShare =
+      totalSystems > 0 ? this.galaxy.overmindSystems.length / totalSystems : 0;
+    const step = nextCampaignChainStep({
+      completedStepIds: this.questManager.getCompletedQuestIds(),
+      overmindShare,
+      peakPower: this.campaignPeakPower ?? 0,
+      arcStatus: this.galaxy.overmindArc.status,
+    });
+    if (!step) return null;
+    const target = this.resolveCampaignChainTarget(step);
+    if (!target) return null;
+    return buildCampaignChainQuest(step, target, planetId);
+  }
+
+  /**
+   * Resolve a concrete destination system for a campaign step from the live
+   * galaxy: a `frontier` step points at an explored, non-hostile system on the
+   * Overmind border (falling back to any safe rear system when the front is not
+   * yet charted); a `safe` step points at an explored, non-hostile rear system.
+   * Returns null when no valid (explored, non-hostile) system is reachable.
+   */
+  private resolveCampaignChainTarget(
+    step: CampaignChainStep,
+  ): CampaignChainTarget | null {
+    if (!this.galaxy || !this.player) return null;
+    const galaxy = this.galaxy;
+    const currentId = this.player.currentSystemId;
+    const jumpDist = jumpDistances(galaxy.systems, currentId, {
+      undirected: true,
+    });
+    const isSafe = (s: { id: string; explored?: boolean }): boolean =>
+      s.id !== currentId &&
+      s.explored !== false &&
+      jumpDist.has(s.id) &&
+      !galaxy.isHostileSystem(s.id);
+
+    const frontierIds = new Set(
+      galaxy
+        .getOvermindAdjacentSystems(currentId)
+        .filter((s) => isSafe(s))
+        .map((s) => s.id),
+    );
+    const frontier = galaxy.systems
+      .filter((s) => frontierIds.has(s.id))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    const safeRear = galaxy.systems
+      .filter((s) => isSafe(s) && !frontierIds.has(s.id))
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+    // frontier steps prefer the front, fall back to the rear; safe steps prefer
+    // the rear, fall back to the front — so the chain always resolves a target
+    // as long as any explored, non-hostile system is reachable.
+    const preferred =
+      step.targetKind === "frontier"
+        ? [...frontier, ...safeRear]
+        : [...safeRear, ...frontier];
+    const chosen = preferred[0];
+    if (!chosen) return null;
+
+    const planet =
+      chosen.planets.find((p) => p.isHabitable) ?? chosen.planets[0] ?? null;
+    return {
+      systemId: chosen.id,
+      systemName: chosen.name,
+      planetId: planet?.id ?? null,
+      jumps: jumpDist.get(chosen.id) ?? 1,
+    };
   }
 
   /**

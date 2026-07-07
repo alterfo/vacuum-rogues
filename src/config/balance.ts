@@ -883,3 +883,33 @@ export const NEUTRAL_AGGRO_POWER_THRESHOLD = POWER_INDEX_BATTLE_READY_THRESHOLD;
  * the player is about to feel.
  */
 export const ESCALATION_NOTICED_POWER = POWER_INDEX_BATTLE_READY_THRESHOLD;
+/**
+ * ─── Campaign: Overmind quest chain (scenario spine) ─────────────────────────
+ * (three-year-campaign plan, Task 12)
+ *
+ * A 5–6 step narrative chain (distress → recon → requisition → liberation
+ * support → counteroffensive → core assault) keyed to PLAYER MILESTONES, not
+ * days, so it fits adaptive difficulty. Each step is a catalog board quest
+ * offered by `getQuestBoard` only when the previous step is complete (tracked
+ * in the already-persisted `questLog.completedQuests`) AND the milestone band
+ * below is crossed — no new persisted field, no migration. See
+ * `src/systems/quests/campaignChain.ts`.
+ */
+/**
+ * Ratcheted power at/above which the arm-up dependent steps (first liberation
+ * support onward) unlock — the player must be battle-ready before the chain
+ * sends them into the war. Tied to the battle-ready band.
+ */
+export const CAMPAIGN_CHAIN_LIBERATION_POWER =
+  POWER_INDEX_BATTLE_READY_THRESHOLD;
+/**
+ * Overmind share at/below which the final "core assault" step unlocks — the
+ * front has been pushed back to a remnant and only the core remains.
+ */
+export const CAMPAIGN_CHAIN_CORE_ASSAULT_SHARE = 0.15;
+/**
+ * Per-step base credit reward (index 0..5). Meaningful and rising: the
+ * requisition run (step 3) pays the most so it can genuinely fund the arm-up it
+ * hands the player toward; the core assault (step 6) pays a hero's bounty.
+ */
+export const CAMPAIGN_CHAIN_STEP_REWARDS = [1200, 1800, 6000, 3000, 4000, 8000];

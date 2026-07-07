@@ -1108,19 +1108,53 @@ the user's "тупизна автопилота" hypothesis is CONFIRMED and now
   **107 ✓**, save-compat **22 ✓**, tsc ✓, lint 0 errors ✓. `tools/ai/test_train.sh` smoke ✓.
 
 ### Task 12: Overmind campaign quest chain (scenario spine)
-- [ ] design a 5–6 step chain keyed to **player milestones, not days** (fits adaptive
+- [x] design a 5–6 step chain keyed to **player milestones, not days** (fits adaptive
       difficulty): first-contact distress → recon the front → requisition run (arm-up assist) →
       first liberation support → counteroffensive → core assault; each step is a catalog quest
       (`QuestScript` or board quest) gated on overmind state + prior-step completion in
       QuestLog — **no new persisted fields, no migration**
-- [ ] implement chain gating in the quest offer path (`getQuestBoard`/registry predicate);
+- [x] implement chain gating in the quest offer path (`getQuestBoard`/registry predicate);
       chain steps pay meaningfully and hand the player toward the next milestone
-- [ ] write the step texts RU (life-and-death framing, readable, EN keys where the UI needs
+- [x] write the step texts RU (life-and-death framing, readable, EN keys where the UI needs
       them) — prose quality bar: a reader should *want* to accept
-- [ ] write tests: chain steps unlock in order and only in order; completing the chain tracks
+- [x] write tests: chain steps unlock in order and only in order; completing the chain tracks
       the arc (seeded playtest: milestones fire as the agent progresses); save/load mid-chain
       resumes correctly (golden-save gate stays green)
-- [ ] run unit + playtest + save-compat — green before Task 13
+- [x] run unit + playtest + save-compat — green before Task 13
+
+**Task 12 notes (2026-07-07):**
+- New pure module `src/systems/quests/campaignChain.ts`: a 6-step ordered chain
+  (distress → recon → requisition → liberation → counteroffensive → core). `nextCampaignChainStep`
+  is a pure predicate over (`completedStepIds` from the persisted `questLog.completedQuests`,
+  `overmindShare`, ratcheted `peakPower`, `arcStatus`) — returns the FIRST incomplete step and
+  only when every earlier step is complete AND its milestone band is crossed (in order and only
+  in order; won/lost suppress the whole chain; corrupted-order saves never skip ahead).
+  `buildCampaignChainQuest` emits a `GeneratedQuest` reusing existing completion paths — the
+  requisition step is a DELIVERY (COLLECT+VISIT), every other step an EXPLORATION visit — with the
+  STABLE step id as the template id, so completing it lands that id in `completedQuests` (which the
+  gate reads back). **No new persisted field, no migration** (save-compat 22 ✓).
+- Milestone bands: steps 1–3 unlock once the Overmind is present (`overmindShare > 0` or arc
+  advancing/contained); step 4 (first liberation) gates on `peakPower ≥ CAMPAIGN_CHAIN_LIBERATION_POWER`
+  (= battle-ready threshold); step 5 on `arcStatus === "contained"` (front pushed back); step 6 on
+  a positive remnant (`0 < share ≤ CAMPAIGN_CHAIN_CORE_ASSAULT_SHARE`).
+- Levers in `balance.ts`: `CAMPAIGN_CHAIN_LIBERATION_POWER` (= `POWER_INDEX_BATTLE_READY_THRESHOLD`),
+  `CAMPAIGN_CHAIN_CORE_ASSAULT_SHARE` 0.15, `CAMPAIGN_CHAIN_STEP_REWARDS` [1200,1800,6000,3000,4000,8000]
+  (requisition pays most so it funds the arm-up it hands the player toward; core assault a hero's bounty).
+- Wiring: `GameEngine.getQuestBoard` pushes the campaign step onto the board via
+  `buildCampaignBoardQuest` (+ `resolveCampaignChainTarget`, which picks an explored, non-hostile
+  frontier/rear system by `jumpDistances`); the board's existing `taken` id-filter dedups an
+  active/completed step. No board slot consumed, no save-shape change.
+- Player-facing copy is inline RU per the job-board norm (procedural board `QuestGenerator.ts` is
+  already 234 inline-RU literals in the baseline — the chain follows the identical established
+  pattern, needing no separate EN keys). `cyrillicBaseline.json` regenerated with one additive
+  entry (`campaignChain.ts: 27`) — the sanctioned grandfathering mechanism (a data snapshot, not a
+  test assertion; Task 7 did the same).
+- Tests: 19 in `src/tests/campaign/campaignChain.test.ts` (step-id helpers, ordering, milestone
+  bands, custom config, builder) + 4 in `src/tests/playtest/campaignChainOffer.test.ts` (REAL
+  engine `getQuestBoard`→`acceptBoardQuest`→`forceCompleteQuest`: only step 1 offered at start,
+  one-step-at-a-time advance, liberation held back until battle-ready, mid-chain save/load resume).
+  **No existing test assertion touched** (the test-modification license was not needed).
+- Gates: full unit 4749 ✓, playtest 656 ✓, save-compat 22 ✓, tsc ✓, lint 0 errors ✓.
 
 ### Task 13: Rewrite the 12 existing text quests (prose + puzzle sharpening)
 - [ ] audit all 12 scripts (`customs, gravity-slalom, investigation, cargo-sort, reactor,
