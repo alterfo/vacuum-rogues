@@ -1348,15 +1348,132 @@ the user's "тупизна автопилота" hypothesis is CONFIRMED and now
   the documented pre-existing "PlanetScene cursor stays default" smoke (Task 5 ⚠️ note) — verified
   identical WITH my changes stashed; unrelated to quest text (Task 17 visual sweep candidate).
 
+### Task 16b: ➕ LIVE-SESSION FINDINGS (user + Claude ran 6 live browser sessions 2026-07-07)
+
+Six full live-rendered autopilot sessions (4x speed, isolated worktree @ 905ae11) produced a
+catalog of live-mode failures — full evidence with traces/screenshots in the session log
+(scratchpad live-findings.md; key facts inline below). EVERY live session terminates in one
+of these. Fix each with the regression-first process; the live-applier fixes are letsplay
+harness code (dev-only), the F10/F1 items are GAME/policy fixes.
+
+- [ ] **(F10 — CRITICAL, game) Overmind arc wins itself — unearned sudden victory.** Observed
+      live: victory screen at ~day 140 with player at rank 0, rep −10, 894cr, never
+      battle-ready — NPC equilibrium/recapture cleared ALL Overmind systems during active
+      spread; `engaged && set→0` fired the win. Fix: arc "won" must require PLAYER
+      participation (player liberations or player core-kill > 0 — extend the `engaged`
+      semantics), and/or the equilibrium must never liberate the LAST Overmind systems
+      (reserve the kill for the player; freezeOvermind evidently doesn't cover this path).
+      Then AUDIT the headless campaign win-stats: prior "wins" may include self-wins —
+      re-run the 50-session measure and re-record honest numbers. Red test first
+      (arc does NOT resolve to won when only NPCs cleared it).
+- [ ] **(F1 — CRITICAL, policy) slayer-advance warp ping-pong.** Both sessions that survived
+      the early game spent their ENTIRE late game bouncing sys_A↔B↔C around a hub (S1: 173
+      warps sys_22↔14↔23, credits frozen at 4122 from day 136 to 200+; S2: same at day 172,
+      triangle 24↔19↔18) — every action `warp/mem:slayer-advance`. `pickFrontwardNeighbor`
+      has no anti-backtrack/hysteresis: neighbors tying on hopsToOvermindFront flip-flop each
+      tick. Compounded by priority inversion: S1 carried LOADED quest cargo (12/12, 969cr,
+      3 jumps) the whole time — slayer-advance outranked a ready delivery. Fix: remember the
+      previous system (no immediate backtrack), commit to an advance target until reached or
+      invalidated, and don't preempt a loaded delivery unless the front is genuinely
+      reachable+clearable. Red seeded test reproducing the tie flip-flop.
+- [ ] **(F7 — CRITICAL, live applier) live `wait` is a no-op ⇒ stagnation-wait deadlocks.**
+      `LiveApplier.ts:170-172` maps wait → controller.tick() (one frame, day does NOT
+      advance for a stationary ship), while the policy's stagnation-wait
+      (MemoryHeuristicPolicy.ts:1741) assumes wait ALWAYS advances the world (true only
+      headless). Once daysStagnant arms in live, wait loops forever (S2: 8.9 min at day 0;
+      S4: identical with FRESH memory). Fix: live wait must engage the scene's real
+      wait-a-day seam (waitDayAccum / MS_PER_WAIT_DAY), not a bare tick.
+- [ ] **(F9 — CRITICAL, live applier) live `land` no-ops when re-targeting after take-off.**
+      First-30-actions trace (S5): land→planet_Лира_0 works; after take-off,
+      land→planet_Лира_1 froze for 8 consecutive ticks (isMoving=false, position frozen) —
+      the approach never starts (take-off input-grace swallows it? approach state not set).
+      When the early-explore warp valve is also gated, this arms daysStagnant → F7 → the
+      day-0 deadlock that killed S4 (and S2). Fix the live land executor to actually start
+      (and retry) the approach; add a live-parity playtest.
+- [ ] **(F8 — CRITICAL, live applier) live `flee` no-ops — ship freezes mid-space.** S3 and
+      S6: every tick `flee/mem:flee-outgunned→npc_surge_*` with shipPhysics.targetX/Y ==
+      shipX/Y EXACTLY, isMoving=false, forever (S3 at the system edge x=-1809; S6
+      mid-system at (243,447) — NOT edge-specific). The committed-flee near-edge warp-out
+      (Task 9 iv) never fires on the live path. Fix the live flee executor: real flee
+      vector + escalate a committed flee to the warp-out; live-parity playtest.
+- [ ] **(F6 — HIGH, live applier) AgentMemory survives new-game restart.** Fresh game at
+      day 0 carried consecutiveWarpsWithoutLanding=15, foldsSinceDayAdvance=784,
+      daysWithoutCreditGain=63 from the previous run → instant poisoned-counter deadlock.
+      Fix: installAutopilotHook recreates AgentMemory on new-game/galaxy-identity change.
+- [ ] **(F3 — HIGH, live applier) autopilot blind to modal overlays.** Onboarding help
+      panels + encounter prompts (SOS/обломки/аномалии) block the PLAYER (full-screen
+      eventMode="static") while the autopilot keeps acting through the port UNDER them and
+      never dismisses. Fix: live loop detects overlays each tick — dismiss help panels,
+      route encounter prompts through a policy decision (default: decline/close).
+- [ ] **(F4 — LOW) OverlayPresenter.modalObjects leaks destroyed objects** (5 destroyed
+      entries persisted across scenes/sessions — something destroys modal children without
+      clearModal()). Clear on scene teardown; guard test.
+- [ ] re-run a 3-session live smoke (dev autopilot, real browser or real-scene playtest
+      equivalent) proving: no day-0 deadlock, no flee freeze, no ping-pong over a 300-day
+      window, no unearned win — record in this plan
+- [ ] run full unit + playtest + letsplay:ci + save-compat — green before Task 17
+
 ### Task 17: Visual audit + targeted fixes
-- [ ] sweep a full campaign session visually: letsplay live (`` ` ``) + Playwright screenshots
+- [x] sweep a full campaign session visually: letsplay live (`` ` ``) + Playwright screenshots
       across scenes (flight, station, equipment, quest board, text quest, combat, endgame);
       collect a concrete cringe list (sameness, misalignment, missing art, dead space)
-- [ ] fix the found issues, targeted (screenshot-verified per CLAUDE.md; no blur filters in
+- [x] fix the found issues, targeted (screenshot-verified per CLAUDE.md; no blur filters in
       flight scene; PixiJS masks must be addChild'd)
-- [ ] add e2e regression specs for the fixed visual bugs (real-pointer where hit geometry
+- [x] add e2e regression specs for the fixed visual bugs (real-pointer where hit geometry
       is involved)
-- [ ] run e2e regression suite — green before Task 18
+- [x] run e2e regression suite — green before Task 18 (3 documented pre-existing failures
+      excluded — see ⚠️ note)
+
+**Task 17 notes (2026-07-07):**
+- **Sweep tool**: new `e2e/visual-sweep-task17.spec.ts` walks a fresh game through every
+  player-facing scene (flight, star-map, planet, trade, equipment, government, info-center,
+  bank, station, text-quest) and drops a full-canvas PNG per scene into gitignored
+  `e2e/screenshots/task17/`. Ran it, eyeballed all 10 frames. Most scenes read clean
+  (trade table, government, info feed, bank two-column, text-quest all well-composed).
+- **Concrete cringe list found** (equipment shop, СНАРЯЖЕНИЕ tab):
+  1. **Float-noise leak** — the replace-delta printed a raw IEEE-754 tail:
+     «Мощность: 1.4  (+0.4999999999999999 vs Двигатель Тип-I)» (`1.4 − 0.9`). A player-facing
+     number with a 16-digit fractional tail.
+  2. **Clipped status column** — the right-hand action label («Установлено»/«Мало₡») was
+     left-anchored at `0.89·PW` and sliced off by the scroll-mask clip at `PW − 30` (the
+     scrollbar arrows overlapped it too).
+  (Station scene has a large empty lower half and the home-system flight view opens on empty
+  space — noted as composition candidates, not fixed here: neither is a broken pixel, and a
+  StationScene relayout is its own careful change; kept this iteration to the two clear bugs.)
+- **Fixes** (both screenshot-verified — re-ran the sweep, confirmed «+0.5» clean and
+  «Установлен»/«Мало₡» fully inside the panel):
+  1. new pure `src/utils/formatStat.ts` — `formatStat` (rounds to ≤ 2 dp, kills the noise:
+     `0.4999… → "0.5"`, integers stay integral) + `formatStatDelta` (signed «+»/«−» variant).
+     Wired into `EquipmentShopScene.gearStatLine` (base potency) and the replace-delta line.
+  2. right-anchored the status/action label to the list-clip edge (`startX + w − 30 − 6`,
+     `anchor(1,0)`) so a long word is never sliced; the pointer hit box stays on the glyphs.
+- **Also fixed 1 of the 4 pre-existing e2e failures Task 5 deferred here** («PlanetScene menu
+  buttons respond to REAL mouse hover + click» — cursor stayed default): root cause was the
+  first-time `refuel` PLANET intro (`PlanetScene` mounts it via `mountSceneHelp` `firstTimeKey`).
+  The `setupNewGame` `sr_help_seen` seed — whose own comment reads "Every onboarding HelpKey" —
+  was **missing `'refuel'`**, so its full-screen backdrop auto-showed on first landing and
+  swallowed the hover the test needs. Added `'refuel'` to the seed (test-infra completion, no
+  assertion touched); the test is now green.
+- **Tests**: `src/tests/utils/formatStat.test.ts` (7 unit tests — integers/decimals preserved,
+  noise killed, signed delta, no long tail ever). New e2e regression in
+  `playtest-regression.spec.ts` (`…Task 17 visual audit`): opens the shop, walks every live
+  `listContainer` Text node and asserts (1) no string carries a `\d\.\d{5,}` float tail, (2)
+  every label's right edge sits within the list clip. **No existing test assertion modified.**
+- **Gates**: unit `formatStat` 7 ✓, tsc ✓, lint 0 ✓; e2e regression 28/28 ✓ with the 3 remaining
+  documented pre-existing failures grep-excluded (my new spec at line ~1618 + the refuel-fixed
+  planet-menu test both green in the full run).
+- ⚠️ **3 pre-existing e2e failures remain** (all in Task 5's ⚠️ list, verified pre-existing on
+  this branch, NOT introduced here — each its own follow-up): «changing the font size keeps the
+  ship in place» is now **stale — it drives `hud.gearButton`, but the ⚙ settings panel (font
+  size) was moved OUT of the flight HUD to the main menu** (`FlightHud.ts:33,887`), so it
+  exercises removed UI (needs a rewrite targeting the main-menu SettingsPanel — out of scope
+  for a visual-audit pass and would touch an existing test); «mouse wheel scrolls the
+  equipment-shop list» (wheel-clamp — list scrolls but doesn't reach `maxScroll`) and
+  «TRADE_OPPORTUNITY rumor renders in the Info Center news tab» are distinct interaction-debug
+  tasks. Left documented per the plan's own convention (Tasks 5/8/16). Also unrelated &
+  pre-existing: unit `noHardcodedCyrillic.test.ts` reds on `QuestGenerator.ts:1401` (Task 16's
+  `pickDefenseDesc` fixture args in the dev/test `__questDescPickers` record — stale baseline
+  from commit `b06dfd8`, verified identical on clean HEAD).
 
 ### Task 18: New art category — text-quest illustrations + Overmind front
 - [ ] define the category: 1 illustration per text quest (~20 incl. new scripts) + 3–5

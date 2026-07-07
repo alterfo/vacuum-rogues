@@ -26,6 +26,7 @@ import { shopRowAction } from "./equipment/shopRowAction";
 import { HangarPanel } from "./ui/HangarPanel";
 import { MicromoduleApplyPanel } from "./ui/MicromoduleApplyPanel";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
+import { formatStat, formatStatDelta } from "@/utils/formatStat";
 import { EquipmentSystem } from "@/systems/EquipmentSystem";
 import type { SlotCategory } from "@/systems/equipment/GearCatalog";
 import {
@@ -76,7 +77,7 @@ function gearStatLine(gear: Gear): string {
   if (gear.kind === GearKind.WEAPON) {
     return `Урон: ${gear.damage}  Дальность: ${gear.range}`;
   }
-  return `Мощность: ${gear.potency}`;
+  return `Мощность: ${formatStat(gear.potency)}`;
 }
 
 /** Bank labels for the per-listing fit indicator (mirrors the hangar's banks). */
@@ -748,8 +749,7 @@ export class EquipmentShopScene extends GameScene {
         const shopPotency = (gear as EquipmentSpec).potency;
         const curPotency = replacing.potency;
         const delta = shopPotency - curPotency;
-        const sign = delta >= 0 ? "+" : "";
-        statLine += `  (${sign}${delta} vs ${replacing.name})`;
+        statLine += `  (${formatStatDelta(delta)} vs ${replacing.name})`;
       }
       const statText = scaledText(
         statLine,
@@ -809,7 +809,12 @@ export class EquipmentShopScene extends GameScene {
         rawColor: true,
         fontWeight: "bold",
       });
-      buyBtn.x = startX + w * 0.89;
+      // Right-align the status/action label to the list clip edge (PW - 30) so a
+      // long word («Установлено») is never sliced off by the scroll mask — the
+      // fixed 0.89·w left edge overflowed the clip. Anchor keeps the pointer hit
+      // box on the glyphs.
+      buyBtn.anchor.set(1, 0);
+      buyBtn.x = startX + w - 30 - 6;
       buyBtn.y = rowY + 16;
 
       if (rowAction.actionable) {

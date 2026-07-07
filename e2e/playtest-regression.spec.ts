@@ -34,6 +34,13 @@ async function setupNewGame(page: Page): Promise<void> {
           'welcome', 'RACE_SELECTION', 'SPACE_FLIGHT', 'STAR_MAP', 'PLANET',
           'TRADE', 'STATION', 'EQUIPMENT_SHOP', 'GOVERNMENT', 'INFO_CENTER',
           'BANK', 'INVENTORY', 'TEXT_QUEST', 'quest-journal', 'combat',
+          // 'refuel' is the first-time PLANET intro (PlanetScene mounts it via
+          // mountSceneHelp firstTimeKey). It was missing here, so its full-screen
+          // backdrop auto-showed on first landing and swallowed the REAL hover the
+          // «⑥ PlanetScene menu buttons» test needs — cursor stayed default. Seed
+          // it like every other onboarding key so the live service menu is
+          // hover-testable (Task 17 visual/e2e sweep).
+          'refuel',
         ]),
       );
     } catch {
@@ -1604,6 +1611,86 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
       return (engine.currentScene?.['scrollOffset'] as number | undefined) ?? -1;
     });
     expect(afterUp).toBe(0);
+
+    errorCollector.assertAndDetach();
+  });
+
+  test('regression: shop stat lines carry no float noise and the status column stays inside the panel (Task 17 visual audit)', async ({ page }) => {
+    // Two visual bugs found in the Task 17 sweep, both in the СНАРЯЖЕНИЕ list:
+    //   1. the replace-delta leaked a raw IEEE-754 tail — «+0.4999999999999999 vs …»
+    //      (1.4 − 0.9). Fixed via utils/formatStat (rounds to ≤ 2 dp).
+    //   2. the right-hand status label («Установлено»/«Мало₡») was left-anchored at
+    //      0.89·PW and sliced by the scroll-mask clip at PW − 30. Fixed by
+    //      right-anchoring it to the clip edge.
+    // Introspect every Text node in the live listContainer and assert neither
+    // recurs: no long fractional tail anywhere, and every label's right edge sits
+    // within the list clip.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    await page.mouse.move(5, 5);
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { e2eLandOnPlanet?: () => Promise<void> } | null;
+      };
+      await engine.currentScene?.e2eLandOnPlanet?.();
+    });
+    await waitForScene(page, 'PlanetScene', 15_000);
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: { planet?: unknown } | null;
+        transitionTo: (s: string, ctx?: object) => Promise<void>;
+      };
+      const planet = engine.currentScene?.planet;
+      await engine.transitionTo('EQUIPMENT_SHOP', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'EquipmentShopScene', 15_000);
+
+    const audit = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene;
+      if (!scene) return null;
+
+      // Panel geometry mirrors EquipmentShopScene.render (PW = min(820, sw−40)).
+      const renderer = scene['renderer'] as { app: { screen: { width: number } } };
+      const sw = renderer.app.screen.width;
+      const PW = Math.min(820, sw - 40);
+      const PX = (sw - PW) / 2;
+      const clipRight = PX + PW - 30;
+
+      const list = scene['listContainer'] as
+        | { children: Array<Record<string, unknown>> }
+        | undefined;
+      const texts: Array<{ text: string; maxX: number }> = [];
+      for (const child of list?.children ?? []) {
+        const text = child['text'];
+        if (typeof text !== 'string' || text.length === 0) continue;
+        const getBounds = child['getBounds'] as (() => { maxX?: number; x: number; width: number }) | undefined;
+        const b = getBounds ? getBounds.call(child) : { x: 0, width: 0 };
+        const maxX = b.maxX ?? b.x + b.width;
+        texts.push({ text, maxX });
+      }
+      return { clipRight, texts };
+    });
+
+    expect(audit).not.toBeNull();
+    expect(audit!.texts.length).toBeGreaterThan(0);
+
+    // (1) No player-facing stat string may carry a 5+-digit run (float noise like
+    // 0.4999999999999999 / 0.30000000000000004). Clean integers/decimals pass.
+    for (const t of audit!.texts) {
+      expect(t.text, `float-noise leak in "${t.text}"`).not.toMatch(/\d\.\d{5,}/);
+    }
+
+    // (2) Every list label's right edge must sit within the scroll-mask clip — a
+    // 2 px tolerance for sub-pixel rounding. Regression for the sliced status word.
+    for (const t of audit!.texts) {
+      expect(t.maxX, `label "${t.text}" overflows the list clip`).toBeLessThanOrEqual(
+        audit!.clipRight + 2,
+      );
+    }
 
     errorCollector.assertAndDetach();
   });
