@@ -29,7 +29,7 @@ The live `PlayerShip` carries only in-combat HP/shield/energy pools + `hullClass
 
 ## Owned-but-uninstalled gear
 
-Canonical home: `Inventory.ownedGearIds`, read **only** through `ownedUninstalledGear(player, loadout)` in `GearBridge`. Transitions: `acquireUninstalledGear` (purchase/loot), `installOwnedGear` (owned → loadout), `uninstallToOwned` (loadout → owned). Both hangar ТРЮМ strips consume this one accessor. Selling: `sellUninstalledGear` (refund `basePrice × 0.4`). Persisted via `InventorySchema.ownedGearIds` (defaults `[]` — no save-version bump).
+Canonical home: `Inventory.ownedGearIds`, read **only** through `ownedUninstalledGear(player, loadout)` in `GearBridge`. Transitions: `acquireUninstalledGear` (purchase/loot), `installOwnedGear` (owned → loadout), `uninstallToOwned` (loadout → owned), `jettisonOwnedGear` (owned → discarded, no refund — `InventoryScene`'s jettison action; contrast with `sellUninstalledGear`'s paid path). Both hangar ТРЮМ strips consume this one accessor. Selling: `sellUninstalledGear` (refund `basePrice × 0.4`). Persisted via `InventorySchema.ownedGearIds` (defaults `[]` — no save-version bump).
 
 ## Shop/trade-in seams
 

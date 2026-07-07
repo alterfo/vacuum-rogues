@@ -101,6 +101,11 @@ player knows *where* to fly, and (when a galaxy + nav hook are wired) hosts the
 the chosen id (planet id or system id) to the existing
 `onNavigateToObjective` → `SpaceFlightScene.navigateToQuestObjective` seam
 (in-system planet approach vs. star-map warp) — it **invents no navigation**.
+An **active** BOUNTY card (`DEFEAT_ENEMY`) gets the same button by reusing the
+courier destination resolution as its `navTargetId`, falling back to
+`quest.targetSystemId` when no concrete planet resolves (`buildCardContent`,
+`docs/plans/20260706-ui-flight-bugfixes.md` Bug 5) — no new quest data needed,
+BOUNTY already stores `targetSystemId`/`targetPlanetId`.
 `FlightHud` feeds `gameEngine.galaxy` + `player.currentSystemId` into the journal
 ctor (both optional — the system suffix/button simply omit when absent). Pure
 helper + reuse of existing routing: no domain/schema/save change.

@@ -77,4 +77,29 @@ describe("InventoryScene — jettison/install wiring (Bug 2)", () => {
     );
     expect(harness.errors()).toEqual([]);
   });
+
+  it("a blocked install (hull id, never fits a slot) leaves the warehouse item untouched and shows feedback", async () => {
+    // Mirrors HangarPanel.installFromWarehouse's explainInstallBlock guard —
+    // InventoryScene must not silently no-op the [Установить] button.
+    const player = harness.player();
+    expect(player).not.toBeNull();
+    player!.inventory.addOwnedGear("hull_corvette");
+
+    await harness.goTo(SceneType.INVENTORY);
+    const scene = harness.currentScene() as unknown as InventoryScene;
+
+    scene.installFromWarehouse("hull_corvette");
+
+    expect(player!.inventory.ownedGearIds).toContain("hull_corvette");
+    expect(harness.engine.playerLoadout?.installedGearIds()).not.toContain(
+      "hull_corvette",
+    );
+    const toastTexts = (
+      harness.engine.renderer!.stage.children as Array<{ text?: string }>
+    )
+      .map((c) => c.text)
+      .filter((text): text is string => !!text);
+    expect(toastTexts.length).toBeGreaterThan(0);
+    expect(harness.errors()).toEqual([]);
+  });
 });

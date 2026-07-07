@@ -2,7 +2,7 @@ import { Container, Graphics, Text } from "pixi.js";
 import { GameScene } from "./GameScene";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { scaledText } from "./ui/scaledText";
-import { RESOURCE_LABEL } from "./ui/HangarPanel";
+import { RESOURCE_LABEL, explainInstallBlock } from "./ui/HangarPanel";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
@@ -17,6 +17,7 @@ import {
 import { logger } from "@/utils/logger";
 import { SceneType, type ResourceType } from "@/types";
 import { t } from "@/i18n/i18n";
+import { scaledFont } from "@/utils/fontScale";
 
 /** A jettison action awaiting its second confirmation click. */
 interface PendingJettison {
@@ -49,6 +50,9 @@ export class InventoryScene extends GameScene {
   private helpTeardown: (() => void) | null = null;
   /** Jettison action armed and awaiting its second confirmation click. */
   private pendingJettison: PendingJettison | null = null;
+  /** Auto-dismiss handle for the blocked-install toast; mounted on `renderer.stage`
+   * (not `mainContainer`) so it survives the `refresh()` teardown/rebuild cycle. */
+  private toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor(renderer: Renderer) {
     super(renderer);
@@ -94,6 +98,10 @@ export class InventoryScene extends GameScene {
   destroy(): void {
     this.helpTeardown?.();
     this.helpTeardown = null;
+    if (this.toastTimeout) {
+      clearTimeout(this.toastTimeout);
+      this.toastTimeout = null;
+    }
     // Remove keyboard listener
     if (this.boundKeyDown) {
       window.removeEventListener("keydown", this.boundKeyDown);
@@ -680,8 +688,45 @@ export class InventoryScene extends GameScene {
     const player = this.gameEngine?.player;
     const loadout = this.gameEngine?.playerLoadout;
     if (!player || !loadout) return;
+    // Same fit check the HangarPanel's install row uses, so a full category or
+    // an over-mass fit tells the player why instead of silently doing nothing.
+    const blocked = explainInstallBlock(loadout, gearId);
+    if (blocked) {
+      this.showToast(blocked, 0xff6644);
+      return;
+    }
     installOwnedGear(player, loadout, gearId);
     this.refresh();
+  }
+
+  /** Transient bottom-of-screen message (e.g. a blocked install's reason). */
+  private showToast(text: string, color: number): void {
+    if (this.toastTimeout) {
+      clearTimeout(this.toastTimeout);
+      this.toastTimeout = null;
+    }
+    const w = this.renderer.app.screen.width;
+    const h = this.renderer.app.screen.height;
+    const toast = new Text({
+      text,
+      style: {
+        fontFamily: "Courier New",
+        fontSize: scaledFont(16),
+        fill: color,
+        fontWeight: "bold",
+        align: "center",
+      },
+    });
+    toast.anchor.set(0.5);
+    toast.x = w / 2;
+    toast.y = h - 40;
+    toast.eventMode = "none";
+    this.renderer.stage.addChild(toast);
+
+    this.toastTimeout = setTimeout(() => {
+      toast.destroy();
+      this.toastTimeout = null;
+    }, 2200);
   }
 
   /** Uninstall a fitted loadout slot back into the owned warehouse. */
