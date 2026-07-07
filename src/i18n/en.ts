@@ -477,4 +477,13 @@ export const en: Dict = {
   "help.refuel.body2":
     "The station's paid «Refuel» service only matters if you burn fuel" +
     " again in flight — right after landing or docking, the tank is already full.",
+
+  // --- inventory scene: warehouse / cargo actions (Bug 2) -------------------
+  "inventory.warehouseTitle": "WAREHOUSE",
+  "inventory.warehouseEmpty": "Warehouse is empty",
+  "inventory.install": "[Install]",
+  "inventory.uninstall": "[To hold]",
+  "inventory.jettison": "[Jettison]",
+  "inventory.jettisonConfirm": "Confirm?",
+  "inventory.overflowMore": "…and {n} more",
 };

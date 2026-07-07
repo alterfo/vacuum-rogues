@@ -137,18 +137,18 @@ understanding on the committed state before starting Task 4.
 - [x] screenshot-verify at ≥ 2 viewport sizes; run e2e regression — green before Task 2
 
 ### Task 2: Inventory verbs — jettison + move to hold (Bug 2)
-- [ ] write red unit tests: `Inventory.removeResource(id, qty)` (partial, full, missing-id
+- [x] write red unit tests: `Inventory.removeResource(id, qty)` (partial, full, missing-id
       error) and gear jettison via `removeOwnedGear`; write red playtest: jettisoning owned
       gear/cargo from the inventory scene reduces the domain state and grants nothing
-- [ ] add `Inventory.removeResource` (explicit mutation method, `readonly` conventions);
+- [x] add `Inventory.removeResource` (explicit mutation method, `readonly` conventions);
       add a `jettisonOwnedGear(player, gearId)` helper in `src/systems/equipment/` (no credit
       grant; must not touch installed loadout slots)
-- [ ] extend `InventoryScene` with action rows reusing the `HangarPanel` row pattern:
+- [x] extend `InventoryScene` with action rows reusing the `HangarPanel` row pattern:
       СКЛАД gear → [Установить] (reuse `installOwnedGear`) + [Выбросить] with confirm;
       installed gear → [Снять в трюм] (uninstall to owned, via GearBridge — do NOT fork fit
       logic into the scene); cargo resources → [Выбросить] with quantity handling
-- [ ] i18n keys RU/EN for the new buttons/confirmations
-- [ ] write E2E: buttons visible and functional with real pointer; run unit + playtest + e2e
+- [x] i18n keys RU/EN for the new buttons/confirmations
+- [x] write E2E: buttons visible and functional with real pointer; run unit + playtest + e2e
       — green before Task 3
 
 ### Task 3: HUD cleanup — camera text, date format, [МЕНЮ] position (Bug 3)

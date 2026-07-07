@@ -33,6 +33,8 @@ vi.mock("pixi.js", () => ({
     height: 14,
     style: {},
     eventMode: "auto",
+    cursor: "default",
+    anchor: { set: vi.fn() },
     on: vi.fn(),
     destroy: vi.fn(),
   })),

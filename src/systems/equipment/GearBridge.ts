@@ -195,6 +195,17 @@ export function installOwnedGear(
 }
 
 /**
+ * Jettison-to-space: drop one owned-but-uninstalled gear copy with no refund
+ * (selling via {@link sellUninstalledGear} is the separate paid path). Never
+ * touches installed loadout slots — it only removes from the owned store, the
+ * same guard {@link sellUninstalledGear} relies on. Returns false when the id
+ * isn't in the owned store.
+ */
+export function jettisonOwnedGear(player: Player, gearId: string): boolean {
+  return player.inventory.removeOwnedGear(gearId);
+}
+
+/**
  * Unequip the gear at a loadout slot index back into the owned-uninstalled
  * store. Returns false (and changes nothing) for an out-of-range slot.
  */

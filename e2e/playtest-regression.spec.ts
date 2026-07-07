@@ -721,6 +721,88 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('real-pointer install + jettison in the inventory scene work (Bug 2)', async ({ page }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+    await page.mouse.move(5, 5);
+
+    // Seed one owned-but-uninstalled gear item and one cargo stack so both the
+    // warehouse and resources rows render an action button.
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle & {
+        player: { inventory: { addOwnedGear: (id: string) => void; addResource: (t: string, n: number) => void } } | null;
+      };
+      engine.player?.inventory.addOwnedGear('eq_radar');
+      engine.player?.inventory.addResource('METALS', 5);
+      void engine.transitionTo('INVENTORY', { gameEngine: engine });
+    });
+    await waitForScene(page, 'InventoryScene');
+
+    type TextButtonQuery = { label: string };
+    const findButtonCenter = async (label: string) =>
+      page.evaluate(({ label }: TextButtonQuery) => {
+        const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+        const scene = engine.currentScene as unknown as {
+          mainContainer: { children: Array<Record<string, unknown>> } | null;
+        };
+        const node = scene.mainContainer?.children.find(
+          (c) => (c as { text?: string }).text === label,
+        ) as
+          | { getGlobalPosition: () => { x: number; y: number }; width: number; height: number }
+          | undefined;
+        if (!node) return null;
+        // Row buttons are anchored (1, 0.5) — getGlobalPosition() already
+        // returns the right-middle point, so the center is width/2 to the
+        // LEFT of it (y is already vertically centered).
+        const p = node.getGlobalPosition();
+        return { x: p.x - node.width / 2, y: p.y };
+      }, { label });
+
+    // Install the seeded warehouse item into the real loadout.
+    const installBtn = await findButtonCenter('[Установить]');
+    expect(installBtn, 'install button must be found').not.toBeNull();
+    await page.mouse.click(installBtn!.x, installBtn!.y);
+
+    await page.waitForFunction(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle & {
+        player: { inventory: { ownedGearIds: string[] } } | null;
+      };
+      return !(engine.player?.inventory.ownedGearIds ?? []).includes('eq_radar');
+    }, undefined, { timeout: 5_000 });
+
+    // Jettison the metals stack (two-step confirm) — no credit refund.
+    const creditsBefore = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      return engine.player?.credits ?? 0;
+    });
+
+    const jettisonBtn = await findButtonCenter('[Выбросить]');
+    expect(jettisonBtn, 'jettison button must be found').not.toBeNull();
+    await page.mouse.click(jettisonBtn!.x, jettisonBtn!.y);
+
+    const confirmBtn = await findButtonCenter('Точно?');
+    expect(confirmBtn, 'confirm button must be found').not.toBeNull();
+    await page.mouse.click(confirmBtn!.x, confirmBtn!.y);
+
+    await page.waitForFunction(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle & {
+        player: {
+          inventory: { resources: Array<{ type: string; amount: number }> };
+        } | null;
+      };
+      const metals = engine.player?.inventory.resources.find((r) => r.type === 'METALS');
+      return (metals?.amount ?? 0) === 0;
+    }, undefined, { timeout: 5_000 });
+
+    const creditsAfter = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      return engine.player?.credits ?? 0;
+    });
+    expect(creditsAfter, 'jettison must not grant credits').toBe(creditsBefore);
+
+    errorCollector.assertAndDetach();
+  });
+
   test('smoke: cursor changes over an NPC ship on REAL mouse hover after a turn (playtest2 ②)', async ({ page }) => {
     // The user's playtest finding ②: the pointer stays the default arrow over
     // NPC ships. Root cause: every NPC spawned IDLE, so the first day-tick sent

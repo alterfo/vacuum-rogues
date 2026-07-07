@@ -57,7 +57,7 @@ const HANGAR_BANKS: readonly SlotCategory[] = [
 ];
 
 /** Russian goods names for the cargo hold (ТРЮМ) read-out. */
-const RESOURCE_LABEL: Record<string, string> = {
+export const RESOURCE_LABEL: Record<string, string> = {
   FUEL: "Топливо",
   METALS: "Металлы",
   CRYSTALS: "Кристаллы",
