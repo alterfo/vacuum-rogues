@@ -33,7 +33,9 @@ export interface PowerInputs {
   readonly rank: number;
 }
 
+/** Clamps into [0,1]; non-finite input (NaN/Infinity) falls back to 0 (safest/weakest). */
 function clamp01(x: number): number {
+  if (!Number.isFinite(x)) return 0;
   return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 

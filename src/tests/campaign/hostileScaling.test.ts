@@ -56,6 +56,13 @@ describe("hostileScaling — endpoints", () => {
     expect(hostileScaling(7, "NORMAL")).toEqual(hostileScaling(1, "NORMAL"));
   });
 
+  it("a NaN power falls back to the weak (safest) multiplier instead of NaN", () => {
+    const s = hostileScaling(NaN, "NORMAL");
+    expect(Number.isNaN(s.hpMult)).toBe(false);
+    expect(Number.isNaN(s.damageMult)).toBe(false);
+    expect(s).toEqual(hostileScaling(0, "NORMAL"));
+  });
+
   it("is monotone non-decreasing in power on both axes", () => {
     let prev = hostileScaling(0, "NORMAL");
     for (const p of [0.1, 0.25, 0.5, 0.75, 0.9, 1]) {

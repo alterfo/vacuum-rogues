@@ -44,4 +44,8 @@ describe("formatStatDelta", () => {
     expect(formatStatDelta(1.4 - 0.9)).toBe("+0.5");
     expect(formatStatDelta(0.9 - 1.4)).toBe("-0.5");
   });
+
+  it("does not mislabel a tiny negative delta that rounds to -0 as positive", () => {
+    expect(formatStatDelta(-0.001)).not.toBe("+0");
+  });
 });

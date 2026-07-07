@@ -23,6 +23,7 @@ npm run test:e2e:regression # Run regression playtest suite only (fast gate, < 6
 npm run test:playtest       # Real-engine playtest suite (pre-push gate, ~3 s)
 npm run letsplay            # Dev-only letsplay bug-finder — an agent plays the real engine
 npm run letsplay:ci         # Letsplay CI oracle (pre-push + CI gate, ~2.5 s)
+npm run letsplay:campaign   # Long-horizon (1080-day) campaign win-rate measure, env-gated, manual/nightly
 ```
 
 **Run single test file:** `npm test -- --run src/tests/pathfinding.test.ts`

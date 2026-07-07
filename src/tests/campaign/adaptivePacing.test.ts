@@ -109,6 +109,12 @@ describe("adaptiveSpreadIntervalDays — power-keyed cadence", () => {
     );
   });
 
+  it("a NaN power falls back to the slow cadence instead of freezing the arc", () => {
+    const interval = adaptiveSpreadIntervalDays(100, 1, NaN);
+    expect(Number.isNaN(interval)).toBe(false);
+    expect(interval).toBe(ADAPTIVE_SPREAD_SLOW_DAYS);
+  });
+
   it("is monotone non-increasing in power — stronger never slows the front", () => {
     let prev = Infinity;
     for (let p = 0; p <= 1.0001; p += 0.05) {

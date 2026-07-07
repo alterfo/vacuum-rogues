@@ -114,10 +114,11 @@ signal to its sane `0` default. `featurize` (`NeuralPolicy.ts`) appends this blo
 also carries bank/equipment/Overmind/quest-delivery signals: `hasCraftCenter`, `hasBank`,
 `activeLoans`, `questDeliveryHere`, `overmindShare`, `nearOvermindCore`,
 `cheapestGearFraction`, `questsCompleted`, plus a `warpInTransit` signal so the policy can
-wait out a pending hyperjump instead of cancelling it), so the net input is
-**`FEATURE_LENGTH = 30 + 20 = 50`** wide — **growing either block widens the MLP input and
-requires retraining** (`weightsContract.test.ts` pins the contract; both blocks are frozen
-again after the 20260701 widening until a future plan explicitly reopens them).
+wait out a pending hyperjump instead of cancelling it), then the `CAMPAIGN_FEATURE_LENGTH = 4`
+campaign-difficulty block (three-year-campaign Task 10: `playerPowerIndex`, `battleReady`,
+hops-to-nearest-front, `armUpCost`), so the net input is
+**`FEATURE_LENGTH = 30 + 20 + 4 = 54`** wide — **growing any block widens the MLP input and
+requires retraining** (`weightsContract.test.ts` pins the contract).
 
 **4. The memory-using heuristic — the BC teacher (`MemoryHeuristicPolicy.ts`).** A
 `PlayerPolicy` that reasons over the belief for human-like, goal-sequenced play where the
@@ -197,18 +198,23 @@ self-play on the RTX 4090), so until a `*.weights.json` is dropped in the policy
 **inert** and falls back to the `HeuristicPolicy`. The seam:
 
 1. **`featurize(obs, memory?)`** — a pure, `FEATURE_LENGTH`-wide numeric vector: the
-   `OBS_FEATURE_LENGTH = 30` egocentric block followed by the `MEMORY_FEATURE_LENGTH = 20`
-   belief block (`memoryFeatures` above). Deterministic, every component in `[0,1]`, so it
-   doubles as the training encoder. With **no** `memory` the belief block degrades to zeros.
+   `OBS_FEATURE_LENGTH = 30` egocentric block, then the `MEMORY_FEATURE_LENGTH = 20`
+   belief block (`memoryFeatures` above), then the `CAMPAIGN_FEATURE_LENGTH = 4` campaign
+   block (three-year-campaign Task 10: `playerPowerIndex`, `battleReady`,
+   hops-to-nearest-front normalised, `armUpCost` normalised — appended at the tail so the
+   historical 0–49 layout stayed byte-stable during the Task 10 zero-extension). Deterministic,
+   every component in `[0,1]`, so it doubles as the training encoder. With **no** `memory` the
+   belief block degrades to zeros.
 2. **`mapNetOutputToAction(scores, obs)`** — maps the net's output head (one score per
-   `ACTION_ORDER` slot, 16 slots) to the highest-scoring action whose `kind` ∈
-   `obs.legalActions`, with `wait` as the guaranteed floor — so even a net that argmaxes to an
-   illegal action yields a legal move.
+   `ACTION_ORDER` slot, 18 slots — the 16 base actions plus `arm-up`/`liberate`, three-year-
+   campaign Task 10) to the highest-scoring action whose `kind` ∈ `obs.legalActions`, with
+   `wait` as the guaranteed floor — so even a net that argmaxes to an illegal action yields a
+   legal move.
 3. **`load()` / `decide(obs, memory?)`** — with trained weights, `decide` runs
    `featurize(obs, memory) → forward → mapNetOutputToAction`, threading the agent-owned
    `AgentMemory` belief block in so the net sees the memory-derived features it was trained
-   on. `load` validates the net's input width equals `FEATURE_LENGTH` (`50`) and its output
-   width equals `ACTION_ORDER.length` (`16`); a width mismatch throws rather than silently
+   on. `load` validates the net's input width equals `FEATURE_LENGTH` (`54`) and its output
+   width equals `ACTION_ORDER.length` (`18`); a width mismatch throws rather than silently
    mispredicting. With no weights it stays inert.
 
 When a trained net exists, drop its `*.weights.json` where `NeuralPolicy` loads it
@@ -217,39 +223,40 @@ the same belief block the teacher used), the heuristic stays the default everywh
 and nothing reaches the prod bundle. Parity between the PyTorch export and the pure-TS
 forward pass is pinned by `weightsContract.test.ts` (within `1e-5`).
 
-### Shipped architecture: 50 → 256 → 128 → 16
+### Shipped architecture: 54 → 256 → 128 → 18
 
 The current `weights/player.weights.json` (`src/tests/playtest/letsplay/weights/`, see its
-sibling `README.md` for full training details) is a 3-`nn.Linear`-layer net sized for the RTX
-4090:
+sibling `README.md` for full training details) is a 3-`nn.Linear`-layer net, retrained at the
+widened three-year-campaign Task 10/11 shape:
 
 ```
-input (50)  →  Linear(50, 256) + ReLU + Dropout(0.15)
+input (54)  →  Linear(54, 256) + ReLU + Dropout(0.15)
             →  Linear(256, 128) + ReLU + Dropout(0.15)
-            →  Linear(128, 16)                              → output logits (ACTION_ORDER)
+            →  Linear(128, 18)                              → output logits (ACTION_ORDER)
 ```
 
-≈51,328 parameters. Dropout is training-only — the exported JSON carries only the three
+≈49,298 parameters. Dropout is training-only — the exported JSON carries only the three
 `nn.Linear` weight/bias pairs, since `mlp.ts`'s forward pass applies ReLU between every layer
 except the last and has no dropout concept at inference. Trained via `tools/ai/train_player.py`
-(N-layer/mini-batch/early-stopping support added Task 8) over SSH on the game's ComfyUI host:
+(N-layer/mini-batch/early-stopping support added Task 8) locally on Apple MPS:
 
 ```bash
-scp tools/ai/train_player.py oleg@192.168.88.193:/tmp/
-scp tools/ai/dataset/train.jsonl oleg@192.168.88.193:/tmp/
-ssh oleg@192.168.88.193 "cd /tmp && python train_player.py \
-  --data train.jsonl --hidden 256 128 --dropout 0.15 --epochs 500 --batch 512 \
-  --lr 3e-4 --val-split 0.2 --patience 30 --device cuda --out player.weights.json"
-scp oleg@192.168.88.193:/tmp/player.weights.json \
-  src/tests/playtest/letsplay/weights/player.weights.json
+python tools/ai/train_player.py \
+  --data tools/ai/dataset/train.jsonl --hidden 256 128 --dropout 0.15 --epochs 500 --batch 512 \
+  --lr 3e-4 --val-split 0.2 --patience 40 --seed 0 --device mps \
+  --parity-out fixtures/player.io.json \
+  --out src/tests/playtest/letsplay/weights/player.weights.json
 ```
 
-Converged in 409/500 epochs (early-stopped), val accuracy 0.351 → 0.997, val loss 2.42 →
-0.0047, no NaN. **That 99.7% figure reflects the training dataset's dead action heads, not a
-99.7%-competent full-16-action policy** — see "Known Traps" below (`train.jsonl` only ever
-labeled 8 of the 16 actions, so the net only had to discriminate among those 8). The shipped
-net faithfully reproduces the teacher's real, narrower behavior; a fuller-repertoire net needs
-the dataset fix described there first.
+Trained on 200 goal-less `MemoryHeuristicPolicy` sessions × 500 steps (100,000 rows at the
+54-wide feature shape, exported in 4 memory-bounded chunks — see the weights `README.md`).
+Converged early-stopped at epoch 448/500, **val_acc 0.968**, val_loss 0.083, no NaN. Unlike
+the prior 50→16 net's dataset (8 of 16 action heads dead), this dataset populates every
+reachable head including `arm-up`/`liberate`, so the net genuinely learned to select them —
+but as a BC clone it can only **match, not exceed**, its teacher's own win rate: measured 4%
+win-rate / 25 sessions vs. the teacher's ~18%, because most seeds hit a pre-existing
+pure-argmax `PLANET↔TRADE` no-op collapse (`NeuralPolicy` has no anti-stagnation fallback —
+see "Known Traps" below). The neural flag stays **off** in production.
 
 ## Oracle — the CI regression + balance gate (`letsplay:ci`)
 
@@ -472,7 +479,9 @@ naming, so the next sweep doesn't have to rediscover them from scratch.
   CJM) is the teacher that actually trades/explores/fights, and is what dataset generation
   (Task 9) uses.
 - **Headless `flee`/`repair` no-op ⇒ an unwinnable fight can never be disengaged, starving every
-  non-combat CJM of rows (Task 9 dataset-generation finding, NOT fixed — flagged for follow-up).**
+  non-combat CJM of rows (Task 9 dataset-generation finding of the 20260701 plan; the executor
+  no-ops themselves were fixed in three-year-campaign Task 7 — see "Long-horizon campaign wedges"
+  below for that fix and the further soft-locks it uncovered).**
   `PlayerAgent.apply`'s `case "attack"` advances a full day so `NpcShipManager` can actually
   resolve the fight, but `case "flee"`/`case "repair"` intentionally "degrade to a tick" (no real
   navigate-away or repair-dock executor exists headlessly) — by design, since headless combat
@@ -531,3 +540,39 @@ naming, so the next sweep doesn't have to rediscover them from scratch.
   via a `controllerRef`, since the live controller is built before the `AutopilotController` that
   owns the memory) and mirroring `PlayerAgent`'s lookup in `openTrade` itself. Regression:
   `liveEconomyHeads.test.ts` → "live openTrade() consults the known cross-planet margin".
+
+### Long-horizon campaign wedges (three-year-campaign Task 6/7/9, fixed)
+
+Running sessions out to ~6000 steps (day ≥ 1080) for the first time surfaced a class of
+soft-locks invisible at the old ~300-step/55-day budget — each froze the world (calendar/day
+count stopped advancing) rather than crashing, so only a long-horizon run could find them. Full
+root-cause writeups live in the plan's Task 6/7 notes; the durable lessons:
+
+- **A fleeing ship's map back-out undid its own escape.** `avoid-danger-back` could route a
+  ship that had just decided to flee straight back into the fight it was fleeing. Fixed by a
+  `flee-escape-jump` tier that outranks back-out while the flee condition holds.
+- **`completeWarp` left a live-fight combat pause frozen during transit**, so a "successful"
+  escape was actually a frozen ship still eating the engagement's volleys every tick. Fixed by
+  resuming the pause every tick during a committed warp (mirroring the `waitOneDay` discipline
+  above) so a transiting ship keeps flying and combat honestly resolves or disengages.
+- **An orphaned `pendingWarp` could trap the apply layer forever**, redirecting every action to
+  `completeWarp` with no way out. Fixed by aborting the stuck jump once its step budget is
+  exhausted (a live player would cancel/re-plot).
+- **`CombatModule` fought a permanently-downed (GOD-floor) ship forever**, pinning the galaxy
+  calendar indefinitely (a downed ship can't fire or flee, but nothing ended the engagement). A
+  downed ship is no longer a valid combatant: `update()` ends an in-progress fight and
+  `addCombatant` refuses to start one while downed.
+- **Phantom combat stance**: a destroyed NPC sprite's `isCombatant` bookkeeping could stay `true`
+  forever after the sprite itself was gone, freezing the HUD/pause state as if a fight were still
+  live. Fixed by clearing combatant state on sprite destruction, not only on `endCombat`.
+- **A DOWNED ship with a frozen calendar and `daysStagnant`-blocked buys could spin forever**
+  between landing and take-off (neither `wait` nor the earn-landing path advanced the world).
+  Fixed by a `stagnation-wait` tier: when the calendar is frozen and no warp fired, WAIT (always
+  legal, always advances the world) outranks the earn-landing decision.
+- **An NPC-only Overmind equilibrium could clear the front and fire a spurious win** with zero
+  player participation. Fixed by gating the win condition on `(state.playerLiberations ?? 0) > 0`
+  in addition to `engaged` — see `.claude/docs/systems/overmind.md`.
+
+These are exactly the class of bug this section exists to name so a future long-horizon sweep
+doesn't have to rediscover them from scratch — if a new campaign-length run wedges, check this
+list before re-diagnosing from zero.
