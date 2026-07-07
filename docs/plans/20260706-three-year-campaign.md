@@ -1694,12 +1694,49 @@ harness code (dev-only), the F10/F1 items are GAME/policy fixes.
       above) — no logged error, credits and galaxy intact
 
 ### Task 20: [Final] Update documentation
-- [ ] update `.claude/docs/systems/overmind.md` (adaptive pacing, ratchet, creep, new invariants)
+- [x] update `.claude/docs/systems/overmind.md` (adaptive pacing, ratchet, creep, new invariants)
       and `.claude/docs/systems/letsplay.md` (campaign harness, 18-action net, gates)
-- [ ] update CLAUDE.md neural section (new FEATURE_LENGTH / action count / weights) and balance
+- [x] update CLAUDE.md neural section (new FEATURE_LENGTH / action count / weights) and balance
       section (adaptive levers); update `src/systems/quests/scripts/README.md` (new count, prose bar)
-- [ ] record final lever values + measured win-rates in this plan; note all rewritten tests
-- [ ] update `docs/requirements`/`docs/design` if the scenario description changed
+- [x] record final lever values + measured win-rates in this plan; note all rewritten tests
+- [x] update `docs/requirements`/`docs/design` if the scenario description changed (checked:
+      neither directory references pacing/Overmind day-counts that this plan altered — no update
+      needed; `docs/requirements/reference/SOURCE-OF-TRUTH.md` documents the *original* Space
+      Rangers canon, not this game's tuned scenario)
+
+**Task 20 notes (2026-07-07):**
+- `.claude/docs/systems/overmind.md` rewritten with an "Adaptive difficulty" section (power
+  index, ratchet, creep, combat scaling, escalation notices, round-based combat, campaign quest
+  chain), the player-participation win invariant, and a "Known-unmet gate" section recording the
+   2.0% Task 19 win-rate honestly (not silently loosened).
+- `.claude/docs/systems/letsplay.md` updated: 18-action `ACTION_ORDER`, 54-feature vector
+  (OBS 30 + MEMORY 20 + CAMPAIGN 4), the real Task 11 retrain (val_acc 0.968, not the Task 10
+  zero-extension), its known 4%-vs-18%-teacher ceiling, and a new "Campaign harness" section for
+  `letsplay:campaign`.
+- `CLAUDE.md` neural section now describes the retrained (not zero-extended) net; Overmind
+  section gained the player-participation invariant and an adaptive-levers pointer with the
+  gate status.
+- `src/systems/quests/scripts/README.md` gained a "Prose quality bar" paragraph (life-and-death
+  framing, numeric-tradeoff labels, survivable non-optimal path) codifying the Task 13 standard
+  already applied to all 20 scripts.
+- **Final lever values and measured win-rates**: see the "Final adaptive-pacing levers" block
+  below (Technical Details) and the Task 19 acceptance re-run (300-session gate: 2.0% win-rate,
+  NOT MET, reserved to a user architectural decision per five escalations in Task 9).
+- **Rewritten tests across the plan** (full audit, each under the plan's test-modification
+  license, meaning preserved in every case): Task 1 — none. Task 3 — `overmindArc.test.ts`,
+  `overmindNoSpuriousVictory.test.ts`, `overmindOutcome.test.ts`,
+  `oddities/lateGameRecoverability.test.ts`, `competentSession.test.ts` (healed). Task 4 —
+  `galaxy/combatLiberation.test.ts`. Task 6 — `competentSession.test.ts` (soft-lock-exploit pin
+  removed). Task 7 — `godModeIntegration.test.ts`, `competentSession.test.ts`,
+  `MemoryHeuristicPolicy.test.ts`, `warpTargeting.test.ts`, `cyrillicBaseline.json` snapshot.
+  Task 9(i) — none (additive). Task 9(iii) — none (additive). Task 9(iv) — none (route-stability
+  pin unaffected). Task 9(v) — none (gated on new-only DI dep). Task 10 — `weightsContract.test.ts`,
+  `featurize.test.ts`, `memoryFeatures.test.ts` (all re-pinned at the 54/18 shape). Task 11 —
+  `neuralSession.test.ts` (`.fails` → `it`, healed). Task 14 — `sessionCompetence.test.ts`
+  (seed re-baselined, assertions unchanged). Task 16b — `overmindSpread.test.ts`,
+  `overmindOutcome.test.ts`, `overmindNoSpuriousVictory.test.ts`, `questCompletionFlight.test.ts`
+  (2-arg `tryLiberate` call). No invariant test (save-compat/golden-saves/money/architecture/layer/
+  manifest-parity) was ever touched, per the license's own carve-out.
 
 ## Technical Details
 
@@ -1719,6 +1756,40 @@ harness code (dev-only), the F10/F1 items are GAME/policy fixes.
   regenerated (license); default policy flag stays off in production.
 - **Quest chain**: availability = pure predicate over (overmind state, QuestLog completions);
   no new persisted state.
+
+### Final adaptive-pacing levers (as committed, 2026-07-07 — `src/config/balance.ts`)
+
+| Lever | Value | Lever | Value |
+|---|---|---|---|
+| `ADAPTIVE_SPREAD_SLOW_DAYS` | 45 | `POWER_INDEX_BATTLE_READY_THRESHOLD` | 0.15 |
+| `ADAPTIVE_SPREAD_FAST_DAYS` | 10 | `HOSTILE_SCALING_WEAK_MULT` | 0.9 |
+| `ADAPTIVE_GRACE_DAYS` | 90 | `OVERMIND_COMBAT_HP_MULT` / `_DAMAGE_MULT` | 1.5 / 1.5 |
+| `ADAPTIVE_CREEP_START_DAY` | 360 | `NEUTRAL_SCALING_WEAK_MULT` / `_STRONG_MULT` | 0.4 / 1.0 |
+| `ADAPTIVE_CREEP_MIN_DAYS` | 12 | `NEUTRAL_AGGRO_POWER_THRESHOLD` | = battle-ready (0.15) |
+| `OVERMIND_GARRISON_POWER_MAX_BONUS` | 2 | `combatRoundHullFraction` | 0.34 |
+| `BATTLE_READY_MAX_HULL` (policy) | 180 | `CAMPAIGN_CHAIN_CORE_ASSAULT_SHARE` | 0.15 |
+
+These are the values the Task 9 lever-iteration sweeps converged on; every sweep (grace 150,
+garrison 2–3/weak-mult 0.35/slow 70, round-budget 0.5/0.2) is recorded with its measured
+win-rate in the Task 9 notes above and was reverted when it traded one failure mode for another
+without moving the win-rate.
+
+### Final measured win-rates (all NORMAL unless noted; full history in Task 9/11/19 notes)
+
+| Measure | Result | Note |
+|---|---|---|
+| Task 9 baseline (50 sessions) | 18.0% | 9 win / 1 loss / 40 died — death-dominated |
+| Task 9 lever sweeps (i)–(v) | 10–24% (flat) | 5 escalations, each a real fix, none moved the plateau |
+| Task 11 neural (25 sessions) | 4% | BC clone of the ~18% teacher; argmax no-op collapse on most seeds |
+| **Task 19 acceptance — heuristic (300 sessions)** | **2.0%** | 6 win / 18 loss / 270 died / 6 timeout — gate NOT MET |
+| **Task 19 acceptance — neural (100 sessions)** | **0%** | 94% wedged (argmax collapse), 6% died — gate NOT MET |
+
+**Status**: the 99%-win-rate gate is a confirmed, measured, open gap — root cause is the
+arming-up/combat-survivability path (battle-ready reached in only ~14–16% of runs), an
+architectural decision the plan escalated to the user five times (Task 9) without an
+autonomous resolution in scope. All other deliverables (adaptive pacing, escalation feedback,
+18-action neural pipeline, campaign quest chain, 20 quests at the Task 13 prose bar, visual
+audit, new art category) shipped and are green across all test suites.
 
 ## Post-Completion
 

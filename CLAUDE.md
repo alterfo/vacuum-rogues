@@ -91,7 +91,7 @@ MLPs run through a **hand-written pure-TS forward pass** (`src/tests/playtest/le
 - **`NeuralPolicy`** (`src/tests/playtest/letsplay/NeuralPolicy.ts`, dev-only): `featurize → forward → mapNetOutputToAction`. Training: PyTorch (`tools/ai/train_player.py`), exports weights as JSON. Parity test: `weightsContract.test.ts` (within `1e-5`).
 - **Neural flag** = a plain feature gate (`isNeuralEnabled()` / `setNeuralEnabled()` in `gameSettings.ts`, default false). Off ⇒ rule-based heuristic; on ⇒ NeuralPolicy. Do NOT re-introduce dynamic `import()` / lazy ONNX.
 
-Current net: `weights/player.weights.json`, 3-layer `54→256→128→18` ≈ 49,298 params. `FEATURE_LENGTH = 54` (OBS=30 + MEMORY=20 + CAMPAIGN=4). `ACTION_ORDER` is 18 slots (16 base + `arm-up` + `liberate`). Growing any block requires retraining + re-export. The shipped net is currently a **zero-extension** of the prior `50→…→16` clone (new inputs zeroed, new heads bias-suppressed ⇒ byte-identical play) pending the Task 11 retrain on the 18-action teacher.
+Current net: `weights/player.weights.json`, 3-layer `54→256→128→18` ≈ 49,298 params. `FEATURE_LENGTH = 54` (OBS=30 + MEMORY=20 + CAMPAIGN=4). `ACTION_ORDER` is 18 slots (16 base + `arm-up` + `liberate`). Growing any block requires retraining + re-export. Retrained on the real 18-action BC teacher (val_acc 0.968, parity ≤ 1e-5) — see `.claude/docs/systems/letsplay.md`; the net can only match its teacher's win-rate, not exceed it, so it stays off by default in production.
 
 ### Texture Loading
 
@@ -138,7 +138,9 @@ Classify your change and follow the matching rule:
 Full details: `.claude/docs/systems/overmind.md`. Critical invariants:
 - `frontierSystems` treats the warp graph as **UNDIRECTED** — do not revert to a directed scan.
 - Win requires **genuine engagement** (`engaged = state.lastSpreadDay >= 0`) — `peakThreat` is a false proxy.
+- Win also requires **player participation**: `(state.playerLiberations ?? 0) > 0` — an NPC-only equilibrium clearing the front must never fire a spurious victory.
 - `freezeOvermind: true` prevents the equilibrium tick from capping/liberating the Overmind front.
+- Spread cadence/combat scaling are **adaptive** (keyed to a ratcheted `campaignPeakPower`, not fixed day phases) — tune levers in `balance.ts` (`ADAPTIVE_*`, `HOSTILE_SCALING_*`, `NEUTRAL_SCALING_*`), never at call sites. Target pacing: a 2–3 in-game-year campaign (`docs/plans/20260706-three-year-campaign.md`); the plan's 99%-win-rate gate is a known, measured, **open** gap (~2–24% across runs, root cause is the arming-up path) — not silently loosened.
 
 ## Money System (key rules only)
 

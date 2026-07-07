@@ -6,7 +6,7 @@
 
 `observe(engine)` → pure `Observation` (scene, vitals, nearby planets/stations/NPCs, active quests, legal actions) → `PlayerPolicy.decide(obs) → Action` → `PlayerAgent` applies it onto the real engine.
 
-`ACTION_ORDER` in `observe.ts` is the single source of truth for the action vocabulary (16 actions incl. 6 economy heads added by `docs/plans/20260701-letsplay-action-expansion-and-neural-scale.md`). `wait` is always legal.
+`ACTION_ORDER` in `observe.ts` is the single source of truth for the action vocabulary — **18 actions**: the original 16 (incl. 6 economy heads added by `docs/plans/20260701-letsplay-action-expansion-and-neural-scale.md`) plus `arm-up`/`liberate`, promoted from the `LEGAL_ACTION_ORDER`-only tail into the vocabulary proper by `docs/plans/20260706-three-year-campaign.md` Task 10 (`LEGAL_ACTION_ORDER` is now an alias of `ACTION_ORDER`). `wait` is always legal.
 
 ## Policy hierarchy
 
@@ -46,19 +46,18 @@ diversity but is **not** on the shipped path.
 
 ## POMDP / memory design
 
-`observe` is **egocentric** — market prices appear only on the *landed* `currentPlanet`. `AgentMemory` is reset fresh each game and updated *before* deciding. `FEATURE_LENGTH = OBS_FEATURE_LENGTH(30) + MEMORY_FEATURE_LENGTH(20) = 50`. Growing either block requires retraining + re-exporting weights JSON (the lockstep `load()` rejects a width mismatch).
+`observe` is **egocentric** — market prices appear only on the *landed* `currentPlanet`. `AgentMemory` is reset fresh each game and updated *before* deciding. `FEATURE_LENGTH = OBS_FEATURE_LENGTH(30) + MEMORY_FEATURE_LENGTH(20) + CAMPAIGN_FEATURE_LENGTH(4) = 54`. The campaign block (indices 50–53: `playerPowerIndex`, `battleReady`, hops-to-nearest-front normalised, `armUpCost` normalised) was appended at the tail by `docs/plans/20260706-three-year-campaign.md` Task 10 specifically so the historical 0–49 layout stayed byte-stable during the zero-extension migration. Growing any block requires retraining + re-exporting weights JSON (the lockstep `load()` rejects a width mismatch).
 
 ## Neural policy / weights
 
-Currently trained net: `weights/player.weights.json` — BC-cloned from the
-**goal-less** `MemoryHeuristicPolicy` teacher above at **val_acc 0.997**. The old
-~67% aliasing ceiling was **not** observation-bound: it came from goal-**mixed**
-training data labelling the same obs with conflicting actions across goals (the
-`goal` isn't featurized). Cloning the *single* deterministic goal-less policy the
-net actually deploys removed the aliasing — no featurize-widen needed
-(`FEATURE_LENGTH` stays frozen at 50). Dataset stratum: `DEFAULT_SCENARIO_MIX`
-in `exportBcData.ts` is a single `goal: null` block. Wired to dev autopilot via
-`selectPlayerPolicy({weights})` in `installAutopilotHook`.
+Currently shipped net: `weights/player.weights.json` — BC-cloned from the
+**goal-less** `MemoryHeuristicPolicy` teacher above, retrained at the 54/18
+shape (Task 11 of the three-year-campaign plan) on a 200-session/100k-row
+dataset, **val_acc 0.968**. TS↔Python forward-pass parity ≤ 1e-5
+(`weightsContract.test.ts` + `shippedParity.test.ts`). Dataset stratum:
+`DEFAULT_SCENARIO_MIX` in `exportBcData.ts` is a single `goal: null` block.
+Wired to dev autopilot via `selectPlayerPolicy({weights})` in
+`installAutopilotHook`.
 
 The net's output head picks an action **kind** only; `mapNetOutputToAction`'s
 `resolveNeuralTarget` resolves a habitable in-system planet for a `land` kind
@@ -66,7 +65,29 @@ The net's output head picks an action **kind** only; `mapNetOutputToAction`'s
 actually land instead of stalling. Guards: `neuralSession.test.ts` (drives a real
 session error-free, picks ≥3 distinct action kinds) + `neuralTargetResolution.test.ts`.
 
-Net architecture: 3-layer `50→256→128→16` ≈ 51,328 params. Guard: `shippedWeights.test.ts` asserts it loads at current `FEATURE_LENGTH`/`ACTION_ORDER.length`; `weightsContract.test.ts` pins TS↔Python forward-pass parity (1e-5).
+Net architecture: 3-layer `54→256→128→18` ≈ 49,298 params. Guard: `shippedWeights.test.ts` asserts it loads at current `FEATURE_LENGTH`/`ACTION_ORDER.length`; `weightsContract.test.ts` pins TS↔Python forward-pass parity (1e-5).
+
+**⚠️ Known ceiling**: the net can only match, not exceed, its BC teacher —
+measured **4% win-rate / 25 sessions** (Task 11) vs the teacher's own ~18%,
+because most seeds hit a pre-existing pure-argmax `PLANET↔TRADE` no-op collapse
+(`NeuralPolicy` has no anti-stagnation fallback; confirmed pre-existing, not a
+retrain regression). The neural flag stays **off** in production. See
+`docs/plans/20260706-three-year-campaign.md` Task 9/11 for the full
+combat-survivability root-cause record — the teacher's win-rate is the actual
+bottleneck, not the net.
+
+## Campaign harness (`npm run letsplay:campaign`)
+
+Env-gated long-horizon runner (`src/tests/playtest/letsplay/campaign.run.ts` +
+`campaignMetrics.ts`) that plays full sessions to day ≥ 1080 or arc resolution,
+day-boundary checkpointed (no per-step transcript) so memory stays bounded over
+~6000 steps. Env knobs: `CAMPAIGN_SESSIONS`, `CAMPAIGN_DAYS`/`CAMPAIGN_STEPS`,
+`CAMPAIGN_WALL_MS`, `CAMPAIGN_POLICY=neural` (default: the heuristic teacher).
+Reports (win/loss/timeout, resolution day, peak power, milestone days,
+stall/cycle detectors — phantom combat stance, repeat-action loops,
+undocked day-frozen streaks) land in gitignored `.letsplay/`. Distinct from
+`letsplay:ci`, which stays at its fast ~3×40-step budget with milestone
+*proxies* (not full-campaign wins) and is the pre-push gate.
 
 ## Dev-only enforcement
 

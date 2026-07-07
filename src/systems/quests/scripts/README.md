@@ -10,6 +10,14 @@ outcomes with credit / reputation / cargo effects.
 Player-facing copy is **Russian** (project norm); code and comments are English.
 Scripts are pure catalog data — adding one needs **no save migration**.
 
+**Prose quality bar** (established `docs/plans/20260706-three-year-campaign.md`
+Task 13, applied to all 20 scripts): life-and-death framing in the setup,
+concrete sensory detail, choices that read as decisions rather than menu items,
+endings that acknowledge the path taken, and — where the puzzle allows it —
+choice labels that surface the numeric tradeoff (fuel cost, current load,
+meter delta) so the optimal path requires reasoning, not guessing, while a
+survivable non-optimal path stays open.
+
 ## Catalogue
 
 A script is live the moment it is listed in `ALL_QUEST_SCRIPTS`
