@@ -8,6 +8,12 @@ import { SceneType } from "@/types";
 import { logger } from "@/utils/logger";
 import { scaledText } from "./ui/scaledText";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
+import {
+  MONO_CHAR_WIDTH_RATIO,
+  estimateWrappedLines,
+  lineStepFor,
+} from "./ui/questCardLayout";
+import { scaledFont } from "@/utils/fontScale";
 import { INTERNAL_ACCOUNTS, type AccountType } from "@/domain/banking/Ledger";
 import type { BankEvent, Unsubscribe } from "@/systems/banking/bus";
 import {
@@ -420,9 +426,10 @@ export class BankScene extends GameScene {
       ui.addChild(empty);
       y += 22;
     }
+    const statementRowStep = Math.max(22, lineStepFor(scaledFont(12)) + 5);
     for (const row of rows) {
       this.renderStatementLine(ui, row, x, y, width);
-      y += 22;
+      y += statementRowStep;
     }
 
     y += 16;
@@ -449,7 +456,11 @@ export class BankScene extends GameScene {
       t.y = y;
       t.eventMode = "none";
       ui.addChild(t);
-      y += 18;
+      // Row step tracks the line's actual wrapped-line count at the current
+      // font scale — a fixed 18 px step assumed one line, so a long bus
+      // message that wraps at "L" scale used to bleed into the next row.
+      const lines = estimateWrappedLines(line, width, scaledFont(11));
+      y += lines * lineStepFor(scaledFont(11));
       if (y > h - 80) break;
     }
   }
@@ -461,8 +472,21 @@ export class BankScene extends GameScene {
     y: number,
     width: number,
   ): void {
+    // Max reason length in chars, sized from the *pixel* width available before
+    // the right-aligned delta text — not a fixed char count, which used to
+    // render wider at "L" scale (same glyph count, bigger glyphs) and bleed
+    // into the delta column.
+    const datePrefixLen = `Д${row.date}  `.length;
+    const deltaClearance = 90;
+    const charPx = Math.max(1, scaledFont(12) * MONO_CHAR_WIDTH_RATIO);
+    const maxReasonChars = Math.max(
+      6,
+      Math.floor((width - deltaClearance) / charPx) - datePrefixLen,
+    );
     const reason =
-      row.reason.length > 30 ? row.reason.slice(0, 29) + "…" : row.reason;
+      row.reason.length > maxReasonChars
+        ? row.reason.slice(0, Math.max(1, maxReasonChars - 1)) + "…"
+        : row.reason;
     const left = scaledText(`Д${row.date}  ${reason}`, 12, 0xcfe3f5);
     left.x = x + 4;
     left.y = y;

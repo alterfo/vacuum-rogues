@@ -100,8 +100,8 @@ vi.mock("@/presentation/ui/UiButton", () => ({
     ),
 }));
 
-// SystemMiniMap is deliberately NOT mocked: the overlap regression below
-// (playtest2 finding ④) must measure the radar's REAL position and size.
+// SystemMiniMap is deliberately NOT mocked: the Bug 3 HUD-cleanup regression
+// below must measure the radar's REAL position and size.
 
 vi.mock("@/presentation/QuestJournalUI", () => ({
   QuestJournalUI: vi.fn().mockImplementation((_qm, _w, _h, _onClose) => ({
@@ -460,9 +460,10 @@ describe("FlightHud help overlay and inventory button (Task 6)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Playtest2 finding ④: the radar (SystemMiniMap, bottom-right) covered the
-// camera hint text «Камера: Zoom …». The hint must derive its position from
-// the radar's actual bounds so the two can never intersect.
+// Bug 3 (HUD clutter, 2026-07-06/07 playtest): the camera zoom/pan debug
+// read-out near the minimap is gone entirely, and the [МЕНЮ] button now lives
+// in the bottom-left corner (stacked above ♿) instead of the top-left stack —
+// clear of the bottom-right radar at every viewport.
 // ---------------------------------------------------------------------------
 
 type Box = { left: number; top: number; right: number; bottom: number };
@@ -482,23 +483,18 @@ type MockText = {
   anchor: { x: number; y: number };
 };
 
-/** Anchor-aware bounding box of a mocked Text. */
+/** Bounding box of a mocked Text (anchor is always (0,0) for HUD labels here). */
 function textBox(t: MockText): Box {
-  const left = t.x - t.anchor.x * t.width;
-  const top = t.y - t.anchor.y * t.height;
-  return { left, top, right: left + t.width, bottom: top + t.height };
+  return { left: t.x, top: t.y, right: t.x + t.width, bottom: t.y + t.height };
 }
 
-/** The camera read-out the HUD created (found by its «Камера:» prefix). */
-function findCameraDebugText(): MockText {
+/** The [МЕНЮ] button label the HUD created. */
+function findMenuButtonText(): MockText {
   const hit = vi
     .mocked(Text)
     .mock.results.map((r) => r.value as MockText)
-    .find((t) => String(t.text).startsWith("Камера:"));
-  expect(
-    hit,
-    "cameraDebugText must exist (__DEBUG__ is true in tests)",
-  ).toBeDefined();
+    .find((t) => t.text === "[МЕНЮ]");
+  expect(hit, "[МЕНЮ] button text must exist").toBeDefined();
   return hit!;
 }
 
@@ -514,19 +510,38 @@ function miniMapBox(h: FlightHud): Box {
   };
 }
 
-describe("FlightHud camera hint vs minimap (playtest2 ④)", () => {
+describe("FlightHud HUD cleanup (Bug 3)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("never creates a camera zoom/pan debug text node", () => {
+    const m = makeMockRenderer();
+    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
+    hud.initialize();
+    const hit = vi
+      .mocked(Text)
+      .mock.results.map((r) => r.value as MockText)
+      .find((t) => String(t.text).startsWith("Камера:"));
+    expect(hit).toBeUndefined();
+  });
+
+  it("has no setCameraDebug method left to call", () => {
+    const m = makeMockRenderer();
+    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
+    expect(
+      (hud as unknown as { setCameraDebug?: unknown }).setCameraDebug,
+    ).toBeUndefined();
+  });
+
   const sizes: ReadonlyArray<readonly [number, number]> = [
     [1280, 720],
     [1920, 1080],
     [1024, 768],
   ];
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   for (const [w, h] of sizes) {
-    it(`hint text does not intersect the radar when built at ${w}×${h}`, () => {
+    it(`[МЕНЮ] sits bottom-left clear of the radar when built at ${w}×${h}`, () => {
       const m = makeMockRenderer(w, h);
       const hud = new FlightHud(
         m.renderer,
@@ -534,14 +549,12 @@ describe("FlightHud camera hint vs minimap (playtest2 ④)", () => {
         m.renderer.uiLayer,
       );
       hud.initialize();
-      // Worst case: camera panned far out — the read-out is at its widest.
-      hud.setCameraDebug(0.35, -123456, -98765);
-      expect(intersects(textBox(findCameraDebugText()), miniMapBox(hud))).toBe(
-        false,
-      );
+      const menuBox = textBox(findMenuButtonText());
+      expect(menuBox.top).toBeGreaterThan(h / 2); // bottom half of the screen
+      expect(intersects(menuBox, miniMapBox(hud))).toBe(false);
     });
 
-    it(`hint text does not intersect the radar after reposition to ${w}×${h}`, () => {
+    it(`[МЕНЮ] stays bottom-left clear of the radar after reposition to ${w}×${h}`, () => {
       const m = makeMockRenderer(800, 600);
       const hud = new FlightHud(
         m.renderer,
@@ -550,10 +563,9 @@ describe("FlightHud camera hint vs minimap (playtest2 ④)", () => {
       );
       hud.initialize();
       hud.reposition(w, h);
-      hud.setCameraDebug(0.35, -123456, -98765);
-      expect(intersects(textBox(findCameraDebugText()), miniMapBox(hud))).toBe(
-        false,
-      );
+      const menuBox = textBox(findMenuButtonText());
+      expect(menuBox.top).toBeGreaterThan(h / 2);
+      expect(intersects(menuBox, miniMapBox(hud))).toBe(false);
     });
   }
 });

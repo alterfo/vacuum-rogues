@@ -101,6 +101,11 @@ player knows *where* to fly, and (when a galaxy + nav hook are wired) hosts the
 the chosen id (planet id or system id) to the existing
 `onNavigateToObjective` → `SpaceFlightScene.navigateToQuestObjective` seam
 (in-system planet approach vs. star-map warp) — it **invents no navigation**.
+An **active** BOUNTY card (`DEFEAT_ENEMY`) gets the same button by reusing the
+courier destination resolution as its `navTargetId`, falling back to
+`quest.targetSystemId` when no concrete planet resolves (`buildCardContent`,
+`docs/plans/20260706-ui-flight-bugfixes.md` Bug 5) — no new quest data needed,
+BOUNTY already stores `targetSystemId`/`targetPlanetId`.
 `FlightHud` feeds `gameEngine.galaxy` + `player.currentSystemId` into the journal
 ctor (both optional — the system suffix/button simply omit when absent). Pure
 helper + reuse of existing routing: no domain/schema/save change.
@@ -203,6 +208,27 @@ the brain + live applier live wholly under `src/tests/` (`LiveApplier`/`Autopilo
 `installAutopilotHook`); the lone prod seam is `src/dev/devAutopilot.ts`, attached via a
 DEV-gated dynamic `import()` in `main.ts` that Vite drops from the prod bundle
 (`letsplayDevOnly.test.ts` enforces it). No domain/schema/save change.
+
+**Fixed-pixel row heights/y-offsets and character-count truncation don't scale with `scaledFont`**
+(`20260708-font-scale-and-faction-bugs`, Bug 1). `scaledFont(base)` only scales font **size** — it
+never touches layout dims, so a panel with a fixed row step or a `str.length > N` truncation can
+overlap/clip/overflow at the "L" font setting even though its text already goes through
+`scaledText`/`scaledFont`. The fix pattern (first established by `QuestJournalUI`'s
+`ui/questCardLayout.ts`, then generalized): step row/line offsets by `lineStepFor` (font-scale-derived
+line height) instead of a fixed `+N` pixel constant, and replace `slice(N)+"…"` truncation with either
+real `wordWrap`/`wordWrapWidth` or a `MONO_CHAR_WIDTH_RATIO`-derived pixel-width budget. Applied to:
+`JobBoardPanel` (`ui/jobBoardRowLayout.ts`, dynamic per-row height replacing fixed `ROW_H`/`ROW_H_OFFER`),
+`HangarPanel` (fitted-slot/warehouse row gaps), `BankScene` (ledger row step + reason truncation),
+`EquipmentShopScene` (`renderRows` name/stat/price stacks, `ROW_H` now a floored getter), `StationScene`
+(in-space shop rows + micromodule-shop rows), `InventoryScene` (`renderWarehouseRow` button gap),
+`InfoCenterScene` (gear-search row stack + name/system truncation), `TextQuestScene`
+(`refreshVmParamPanel` param stack). When adding a new stacked-row/multi-line panel behind
+`scaledText`, size its row step and any truncation from `scaledFont`/`lineStepFor` up front rather
+than a fixed pixel constant — retrofitting it later means auditing every consumer for this same bug
+class. **Known gap, not yet fixed:** `ScrollableList`'s shared `itemHeight` is still uniform
+(non-variable) across its 6+ panel consumers — a long wrapped item (e.g. InfoCenter news rows) can
+still bleed into the next row at "L" scale; fixing it needs per-item variable-height support in that
+shared component, out of scope for a single-panel fix.
 
 Three most-hit PixiJS 8 traps:
 - **`eventMode='none'` on Text over clickable areas** — Text defaults to `'auto'` and blocks

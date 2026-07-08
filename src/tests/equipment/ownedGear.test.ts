@@ -7,6 +7,7 @@ import {
   acquireUninstalledGear,
   installOwnedGear,
   uninstallToOwned,
+  jettisonOwnedGear,
 } from "@/systems/equipment/GearBridge";
 import { InventorySchema } from "@/validation/schemas";
 
@@ -206,5 +207,38 @@ describe("InventorySchema persists ownedGearIds", () => {
       ownedGearIds: ["wpn_pulse", "eq_radar"],
     });
     expect(parsed.ownedGearIds).toEqual(["wpn_pulse", "eq_radar"]);
+  });
+});
+
+describe("jettisonOwnedGear — drop an owned item with no refund (Bug 2)", () => {
+  it("drops the first owned copy from the store", () => {
+    const inv = new Inventory();
+    inv.addOwnedGear("wpn_pulse");
+    const player = playerWith(inv);
+
+    expect(jettisonOwnedGear(player, "wpn_pulse")).toBe(true);
+    expect(inv.ownedGearIds).toEqual([]);
+  });
+
+  it("returns false and changes nothing for an id not in the owned store", () => {
+    const inv = new Inventory();
+    inv.addOwnedGear("eq_radar");
+    const player = playerWith(inv);
+
+    expect(jettisonOwnedGear(player, "wpn_pulse")).toBe(false);
+    expect(inv.ownedGearIds).toEqual(["eq_radar"]);
+  });
+
+  it("never touches installed loadout slots — only the owned store", () => {
+    const inv = new Inventory();
+    inv.addOwnedGear("wpn_pulse"); // a spare, also fitted
+    const loadout = new ShipLoadout("hull_corvette");
+    loadout.install("wpn_pulse");
+    const player = playerWith(inv);
+
+    expect(jettisonOwnedGear(player, "wpn_pulse")).toBe(true);
+    expect(inv.ownedGearIds).toEqual([]);
+    // The fitted copy is untouched — jettison only ever drops the spare.
+    expect(loadout.installedGearIds()).toContain("wpn_pulse");
   });
 });

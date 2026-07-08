@@ -296,6 +296,7 @@ export const ru: Dict = {
 
   // --- incoming-attacker warning (Task 5: threat indicator) -----------------
   "flight.incomingAttacker": "⚠ Приближается противник: {name}!",
+  "flight.starMap": "Межзвёздная карта",
 
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Управление:",
@@ -478,4 +479,24 @@ export const ru: Dict = {
   "help.refuel.body2":
     "Платная «Заправка» на станции нужна только если бак опустел в полёте —" +
     " после самой посадки или стыковки он уже полон.",
+
+  // --- inventory scene: warehouse / cargo actions (Bug 2) -------------------
+  "inventory.warehouseTitle": "СКЛАД",
+  "inventory.warehouseEmpty": "Склад пуст",
+  "inventory.install": "[Установить]",
+  "inventory.uninstall": "[В трюм]",
+  "inventory.jettison": "[Выбросить]",
+  "inventory.jettisonConfirm": "Точно?",
+  "inventory.overflowMore": "…и ещё {n}",
+
+  // --- info center: objects search (Bug 6) -----------------------------------
+  "infoCenter.objectsPlaceholder": "Введите имя NPC, планеты или системы...",
+  "infoCenter.objectsHintOtherTab":
+    "Поиск кораблей, планет и систем — вкладка ОБЪЕКТЫ",
+
+  // --- star-map purchase feedback (Bug 7) ------------------------------------
+  "planet.starMapPurchased":
+    "Карта куплена за {price} ₡ — открыто систем: {revealed}",
+  "planet.starMapPurchasedNoneNew":
+    "Карта куплена за {price} ₡ — новых систем не открыто",
 };

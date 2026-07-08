@@ -34,6 +34,7 @@ import { FlightTouchController } from "./flight/flightTouchControls";
 import { isTouchLayoutActive } from "./ui/responsiveLayout";
 import { WarpEffectRenderer } from "./flight/WarpEffectRenderer";
 import { QuestCompletion } from "./flight/QuestCompletion";
+import { arrivalHeadingFromExitVector } from "./flight/warpHeading";
 import { handleFlightKey } from "./flight/flightKeyHandler";
 import { wireFlightSystemMenu } from "./flight/flightSystemMenu";
 import { mountFlightSceneHelp, type FlightSceneHelp } from "./flight/flightSceneHelp"; // prettier-ignore
@@ -177,6 +178,7 @@ export class SpaceFlightScene extends GameScene {
       | {
           gameEngine?: GameEngine;
           entryVector?: { x: number; y: number };
+          arrivalHeading?: number; // radians — continues the departure heading
           pendingWarp?: {
             targetSystemId: string;
             fuelCost: number;
@@ -364,7 +366,7 @@ export class SpaceFlightScene extends GameScene {
       ? loadoutStats.speed
       : (this.DISTANCE_PER_DAY / 1000) *
         Math.min(1.4, Math.max(0.8, ship?.speed ?? 1));
-    this.shipPhysics = new ShipPhysics(entryX, entryY, cruise || 0.1);
+    this.shipPhysics = new ShipPhysics(entryX, entryY, cruise || 0.1, ctx?.arrivalHeading ?? 0); // prettier-ignore
 
     this.renderer.clearGameLayer();
     this.renderer.clearUILayer();
@@ -441,7 +443,7 @@ export class SpaceFlightScene extends GameScene {
     );
 
     // World camera: owns zoom/pan/follow/clamp. Reads ship physics + star centre;
-    // fans each transform out to the NPC hit-area rescale and the HUD debug read-out.
+    // fans each transform out to the NPC hit-area rescale.
     this.camera = new CameraController(this.renderer, {
       getShipPhysics: () => this.shipPhysics,
       getStarCenter: () => ({
@@ -454,11 +456,6 @@ export class SpaceFlightScene extends GameScene {
     this.camera.onTransform = (zoom) => {
       // Keep NPC hit areas a fixed screen size regardless of zoom level.
       this.npcManager?.updateHitAreas(zoom);
-      this.hud?.setCameraDebug(
-        this.camera.zoom,
-        this.camera.panX,
-        this.camera.panY,
-      );
     };
 
     this.touchControls = new FlightTouchController(
@@ -652,6 +649,9 @@ export class SpaceFlightScene extends GameScene {
     this.hud.update(deltaTime, this.bgElapsed);
   }
 
+  persistLiveState(): void {
+    this.npcManager?.persistLivePositions();
+  }
   destroy(): void {
     this.destroyed = true;
     this.flightHelp?.destroy(); // contextual help (first-time hint + «?» + combat hint)
@@ -1311,12 +1311,9 @@ export class SpaceFlightScene extends GameScene {
     );
     if (startedBurning) this.hud.showMessage("☀ Корпус горит!", 0xff8800);
 
-    // Safety auto-stop: halt engines once below 30% hull (latched, once per
-    // descent below it) — EXCEPT during a committed hyperjump escape run
-    // (`pendingWarp`): parking a burning ship inside the fight it is fleeing
-    // is the opposite of safety (the stop also cleared the edge route, so a
-    // GOD-floored ship at a garrison could never reach the jump point — the
-    // inescapable pin behind the day-255 campaign wedge).
+    // Safety auto-stop: halt engines below 30% hull (latched) — EXCEPT a
+    // committed hyperjump escape (`pendingWarp`) or a route to a planet
+    // (`routeTargetPlanetId`, per the warning below).
     const ship = this.gameEngine?.player?.ship;
     if (ship && ship.maxHull > 0) {
       const hullFraction = ship.hullHP / ship.maxHull;
@@ -1324,7 +1321,8 @@ export class SpaceFlightScene extends GameScene {
         if (
           this.shipPhysics.isMoving &&
           !this.lowHullStopped &&
-          !this.pendingWarp
+          !this.pendingWarp &&
+          !this.planetManager.routeTargetPlanetId
         ) {
           this.lowHullStopped = true;
           this.npcManager.followNpcId = null;
@@ -1474,6 +1472,7 @@ export class SpaceFlightScene extends GameScene {
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
       entryVector,
+      arrivalHeading: arrivalHeadingFromExitVector(exitVector),
       warpArrival: true,
     });
   }
@@ -1638,10 +1637,12 @@ export class SpaceFlightScene extends GameScene {
 
   /**
    * Play/Pause turn control. Paused: Play executes the planned route. Running:
-   * Pause defers the stop to the next whole-day boundary so the ship finishes its
-   * day (F1, playtest3) — except a combat auto-follow, which aborts immediately.
+   * Pause defers the stop to the next whole-day boundary (F1, playtest3) — except
+   * a combat auto-follow, which aborts immediately. Suppressed while the active-
+   * pause overlay is open — else a stray click desyncs `isTurnRunning` below.
    */
   private onPlayPause(): void {
+    if (this.combatPause.paused) return;
     if (this.isTurnRunning) {
       // A combat auto-follow / active fight has no advancing day to defer the
       // pause to (combat freezes the calendar), so the day-boundary latch would

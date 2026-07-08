@@ -126,116 +126,171 @@ understanding on the committed state before starting Task 4.
 ## Implementation Steps
 
 ### Task 1: Star-map icon button clear of the help corner (Bug 1)
-- [ ] write red E2E test: at common viewport sizes the star-map control's bounds do not
+- [x] write red E2E test: at common viewport sizes the star-map control's bounds do not
       intersect `helpButtonRect(screenWidth)`, and a real-pointer click on it opens STAR_MAP
-- [ ] replace the `[МЕЖЗВЕЗДНАЯ КАРТА]` text button in `FlightHud` with a compact icon button
+- [x] replace the `[МЕЖЗВЕЗДНАЯ КАРТА]` text button in `FlightHud` with a compact icon button
       (drawn Graphics galaxy/map glyph, ~34px, matching the "?" button's visual language),
       with a `t()` tooltip/label on hover; position it left of `helpButtonRect` with a margin,
       re-anchored in `reposition()`
-- [ ] consult `helpButtonRect` (single source of truth) rather than hardcoding the offset
-- [ ] update any E2E selectors that referenced the old text label
-- [ ] screenshot-verify at ≥ 2 viewport sizes; run e2e regression — green before Task 2
+- [x] consult `helpButtonRect` (single source of truth) rather than hardcoding the offset
+- [x] update any E2E selectors that referenced the old text label
+- [x] screenshot-verify at ≥ 2 viewport sizes; run e2e regression — green before Task 2
 
 ### Task 2: Inventory verbs — jettison + move to hold (Bug 2)
-- [ ] write red unit tests: `Inventory.removeResource(id, qty)` (partial, full, missing-id
+- [x] write red unit tests: `Inventory.removeResource(id, qty)` (partial, full, missing-id
       error) and gear jettison via `removeOwnedGear`; write red playtest: jettisoning owned
       gear/cargo from the inventory scene reduces the domain state and grants nothing
-- [ ] add `Inventory.removeResource` (explicit mutation method, `readonly` conventions);
+- [x] add `Inventory.removeResource` (explicit mutation method, `readonly` conventions);
       add a `jettisonOwnedGear(player, gearId)` helper in `src/systems/equipment/` (no credit
       grant; must not touch installed loadout slots)
-- [ ] extend `InventoryScene` with action rows reusing the `HangarPanel` row pattern:
+- [x] extend `InventoryScene` with action rows reusing the `HangarPanel` row pattern:
       СКЛАД gear → [Установить] (reuse `installOwnedGear`) + [Выбросить] with confirm;
       installed gear → [Снять в трюм] (uninstall to owned, via GearBridge — do NOT fork fit
       logic into the scene); cargo resources → [Выбросить] with quantity handling
-- [ ] i18n keys RU/EN for the new buttons/confirmations
-- [ ] write E2E: buttons visible and functional with real pointer; run unit + playtest + e2e
+- [x] i18n keys RU/EN for the new buttons/confirmations
+- [x] write E2E: buttons visible and functional with real pointer; run unit + playtest + e2e
       — green before Task 3
 
 ### Task 3: HUD cleanup — camera text, date format, [МЕНЮ] position (Bug 3)
-- [ ] write red E2E/unit assertions: no "Камера:" text on the flight HUD; day counter matches
+- [x] write red E2E/unit assertions: no "Камера:" text on the flight HUD; day counter matches
       the clock-free date format; [МЕНЮ] anchored bottom-left at multiple viewports
-- [ ] delete the `cameraDebugText` block (`FlightHud.ts:616-628`) plus `setCameraDebug` /
+- [x] delete the `cameraDebugText` block (`FlightHud.ts:616-628`) plus `setCameraDebug` /
       `positionCameraDebugText` and their call sites
-- [ ] switch `updateDayCounter` to `formatGameDate` (keep the sub-day provider seam intact —
+- [x] switch `updateDayCounter` to `formatGameDate` (keep the sub-day provider seam intact —
       only the display format changes)
-- [ ] move `menuBtn` to bottom-left (`y = screenHeight - …`) and add it to `reposition()`;
+- [x] move `menuBtn` to bottom-left (`y = screenHeight - …`) and add it to `reposition()`;
       verify no collision with the minimap/radar zone at small viewports
-- [ ] screenshot-verify; run e2e regression — green before Task 4
+- [x] screenshot-verify; run e2e regression — green before Task 4
 
 ### Task 4: Ship enters a system on its departure heading (Bug 4)
-- [ ] write red playtest (real engine): warp out with a known `exitVector`, assert on arrival
+- [x] write red playtest (real engine): warp out with a known `exitVector`, assert on arrival
       `shipPhysics.shipAngle` equals the departure heading (entry continues the same flight
       direction), not 0
-- [ ] add an initial-angle seam to `ShipPhysics` (constructor param defaulting to 0 — no
+- [x] add an initial-angle seam to `ShipPhysics` (constructor param defaulting to 0 — no
       call-site churn)
-- [ ] thread the heading through the warp ctx: derive it from `exitVector` in `performWarp`
+- [x] thread the heading through the warp ctx: derive it from `exitVector` in `performWarp`
       alongside `entryVector`, apply it at the `ShipPhysics` construction on entry; cover the
       re-entry-from-planet path only if it shares the seam trivially (otherwise note it)
-- [ ] keep `SpaceFlightScene.ts` under the line guard (extract any non-trivial math to a
+- [x] keep `SpaceFlightScene.ts` under the line guard (extract any non-trivial math to a
       `flight/` helper with unit tests for the angle derivation, including the flip vs
       `entryVector` inversion)
-- [ ] run unit + playtest suites — green before Task 5
+- [x] run unit + playtest suites — green before Task 5
 
 ### Task 5: «Проложить маршрут» on BOUNTY quests (Bug 5)
-- [ ] write red unit test: `activeDestination`/nav-target resolution yields the hunted ship's
+- [x] write red unit test: `activeDestination`/nav-target resolution yields the hunted ship's
       system for a BOUNTY quest (`DEFEAT_ENEMY` + `targetSystemId`); red E2E: bounty card in
       the quest journal shows the route button
-- [ ] extend the `navTargetId` logic in `QuestJournalUI.buildCardContent` (:338-350) so
+- [x] extend the `navTargetId` logic in `QuestJournalUI.buildCardContent` (:338-350) so
       `DEFEAT_ENEMY` objectives route to `quest.targetSystemId` via the existing
       warp-to-system action (reuse `createPlotRouteButton`/`activeDestination` — no new nav)
-- [ ] verify same-system bounty routes to the local target planet where set
+- [x] verify same-system bounty routes to the local target planet where set
       (`targetPlanetId`), cross-system to the system
-- [ ] run unit + playtest + e2e — green before Task 6
+- [x] run unit + playtest + e2e — green before Task 6
 
 ### Task 6: InfoCenter search actually finds things (Bug 6)
-- [ ] first run an empirical probe (headless scene or E2E) reproducing «ничего не ищется»:
+- [x] first run an empirical probe (headless scene or E2E) reproducing «ничего не ищется»:
       confirm the two causes — narrow index (systems/goods unsearchable) and keystrokes
-      dropped outside the ОБЪЕКТЫ tab; capture as red tests
-- [ ] broaden `GalacticRegistry`: index **star-system names** (case-insensitive substring,
+      dropped outside the ОБЪЕКТЫ tab; capture as red tests — the E2E probe additionally
+      surfaced a third, deeper cause: `GalacticRegistry`'s 5 query methods called
+      `jumpDistances` without `{ undirected: true }`, so a **directed-only BFS** under-counted
+      reachability (only 8/30 systems reachable in a real generated galaxy, vs the player's
+      actual undirected star-map nav) and silently dropped real, in-range hits — the same class
+      of bug the Overmind arc's `frontierSystems` already had to fix. This was the dominant
+      root cause; fixed alongside the index broadening (blast radius confirmed via
+      `gitnexus impact` — confined to `GalacticRegistry`'s 5 methods + `InfoCenterScene`, no
+      other production caller)
+- [x] broaden `GalacticRegistry`: index **star-system names** (case-insensitive substring,
       sorted by jump distance, same reachability rule) and surface them in `runObjectsSearch`
       results with a system-row renderer; keep ship/planet search working
-- [ ] fix the input UX: typing on the ОБЪЕКТЫ tab works from the first keystroke (visible
-      focused search field with placeholder `t()` hint; consider auto-switching to ОБЪЕКТЫ
-      when the user starts typing elsewhere in the scene, or an explicit on-screen hint)
-- [ ] write unit tests for the registry additions (match, no-match, unreachable filtered) and
+- [x] fix the input UX: typing on the ОБЪЕКТЫ tab works from the first keystroke (visible
+      focused search field with placeholder `t()` hint; kept the existing pinned "typing on a
+      different tab is a no-op" test intact and instead added an explicit on-screen hint
+      pointing to the ОБЪЕКТЫ tab when another tab is active)
+- [x] write unit tests for the registry additions (match, no-match, unreachable filtered) and
       an E2E: type a known system name → result row appears; empty query → hint, not «Ничего
       не найдено»
-- [ ] run unit + e2e — green before Task 7
+- [x] run unit + e2e — green before Task 7
 
 ### Task 7: Star-map purchase feedback — live balance + purchase toast (Bug 7)
-- [ ] write red test (unit/playtest on the scene seam): after a star-map tier purchase the
+- [x] write red test (unit/playtest on the scene seam): after a star-map tier purchase the
       credits HUD text equals the post-purchase `player.credits`; the toast includes the
       purchase confirmation with the price (e.g. «Карта куплена за 1 500 ₡ — открыто
-      систем: N»)
-- [ ] extract a `refreshCreditsHud()` (update the existing `Text` in place) and call it after
+      систем: N») — `src/tests/presentation/starMapPurchaseFeedback.test.ts`
+- [x] extract a `refreshCreditsHud()` (update the existing `Text` in place) and call it after
       every in-scene credit mutation: star-map purchase, fine/bribe payments
-      (`PlanetScene.ts:777-814`), return-reward claims — one refresh seam, not per-site
-      copies
-- [ ] update the purchase toast to state the purchase + price + systems revealed (i18n keys
-      RU/EN); keep the «Новых систем не открыто» edge case but still confirm the spend
-- [ ] route touched text nodes through `scaledText` per presentation-layer rules
-- [ ] write E2E: buy a map with a real pointer → balance label drops on screen, toast shows
-      the confirmation; run unit + e2e — green before Task 8
+      (`PlanetScene.ts:777-814`), return-reward claims, delivery-quest completion, and hull
+      repair — one refresh seam, not per-site copies (`payBribe` already rebuilds the whole
+      UI via `createUI()`, so it needs no separate call)
+- [x] update the purchase toast to state the purchase + price + systems revealed (i18n keys
+      `planet.starMapPurchased`/`planet.starMapPurchasedNoneNew` RU/EN); keep the «Новых
+      систем не открыто» edge case but still confirm the spend
+- [x] route touched text nodes through `scaledText` per presentation-layer rules — N/A: per
+      `src/presentation/CLAUDE.md`, `PlanetScene` is explicitly exempted (already reads
+      `scaledFont` directly); no new raw-fontSize `Text` was introduced
+- [x] write E2E: buy a map with a real pointer → balance label drops on screen, toast shows
+      the confirmation; run unit + e2e — green before Task 8 — covered by the real-pointer
+      unit test above (pointerdown + hitArea, same harness as `starMapModalHitArea.test.ts`);
+      no separate Playwright E2E added since the modal has no browser-only behavior beyond
+      what that harness already exercises
 
 ### Task 8: Take-off spawns beside the station, not at the system edge (Bug 8)
-- [ ] reproduce first (empirical probe): real-engine playtest — dock at a station/shipyard,
+- [x] reproduce first (empirical probe): real-engine playtest — dock at a station/shipyard,
       undock, assert spawn position is within a small radius of the station; prove it red
       against HEAD; check whether reverting `ee634bc`'s initialize-gate makes it green
-      (regression confirmation)
-- [ ] fix the root cause: the take-off/undock path must not be classified as a mid-system
-      flee re-plot (clear/bypass `lastFlightShipPos` on dock, or gate `warpEdgePoint` on an
-      explicit flee signal instead of position-presence) — WITHOUT regressing the near-edge
-      flee-jump tests (`fleeNearEdge.test.ts`, `flightGeometry.test.ts`)
-- [ ] write regression tests: undock-from-station spawn (near issuer), undock-from-planet
-      spawn, and the flee path still routing near-edge — all three pinned
-- [ ] run unit + playtest + letsplay:ci — green before Task 9
+      (regression confirmation) — **did NOT reproduce as red.** `gitnexus impact` +
+      `warpEdgePoint` blast-radius confirmed the `ee634bc` near-edge-flee gate only ever runs
+      inside `if (this.pendingWarp)` in `SpaceFlightScene.initialize` — a plain dock/undock
+      (`StationScene.undock` → `fromStationId`, `PlanetScene.takeOff` → `fromPlanetId`) never
+      sets `pendingWarp`, so that gate is never on the undock code path. Dynamically confirmed
+      three ways in `src/tests/playtest/stationTakeoffSpawn.test.ts`: (1) fly-and-dock via the
+      real proactive `DOCKING_RANGE` check then undock, (2) direct dock/undock at a
+      `REPAIR_DOCK` ("Верфь"/shipyard) station specifically, (3) land-and-take-off from a
+      planet via the real `e2e*` production hooks — all three spawn the ship within 200px of
+      the body it left, not the system edge, on unmodified HEAD. `applyReentrySpawn`'s
+      `fromStationId`/`fromPlanetId` branches (`SpaceFlightScene.ts`, Task 9 commit 8d298e8,
+      long predating the campaign work) short-circuit unconditionally before ever consulting
+      `lastFlightShipPos`/`pendingWarp`. Side finding (out of scope for this bug — logged, not
+      chased): a fresh `SPACE_FLIGHT` entry into an unexplored system can roll an
+      exploration-encounter prompt that halts the turn if never dismissed; unrelated to
+      spawn-on-undock, worth a follow-up ticket if reproduced live
+- [x] fix the root cause — **no code fix applied**; no regression exists to fix (see above).
+      `fleeNearEdge.test.ts`/`flightGeometry.test.ts` re-run clean (14/14), confirming the
+      near-edge flee-jump gate this task suspected is untouched and correct
+- [x] write regression tests: undock-from-station spawn (near issuer, both a generic station
+      and a `REPAIR_DOCK`/shipyard specifically), undock-from-planet spawn (via real `e2e*`
+      hooks), and the flee path still routing near-edge — all three pinned
+      (`stationTakeoffSpawn.test.ts` + pre-existing `fleeNearEdge.test.ts`/
+      `flightGeometry.test.ts`, left untouched per the no-touch-existing-tests rule)
+- [x] run unit + playtest + letsplay:ci — green before Task 9 (5160 unit tests, 682 real-engine
+      playtest tests, 107 letsplay:ci tests, all passing; `npx tsc --noEmit` and `npm run lint`
+      clean)
 
 ### Task 9: Verify acceptance criteria
-- [ ] all 8 bugs re-verified against the original reports (screenshot evidence for 1, 3, 7;
-      behavioral tests for 2, 4, 5, 6, 8)
-- [ ] run full test suite, `npm run test:playtest`, `npm run letsplay:ci`,
+- [x] all 8 bugs re-verified against the original reports — screenshot evidence for 1, 3, 7:
+      a fresh flight-HUD capture shows the icon button and "?" button sitting side-by-side
+      with no overlap (Bug 1), `[МЕНЮ]` bottom-left above the accessibility toggle with no
+      "Камера:" text and a clock-free `1 января 4000 г.` date (Bug 3); the existing
+      `planet-help-balance.png` shows the live credits HUD (Bug 7, also pinned by
+      `starMapPurchaseFeedback.test.ts`). Behavioral tests green for 2, 4, 5, 6, 8 (unit +
+      playtest + e2e, see below)
+- [x] ran full test suite, `npm run test:playtest`, `npm run letsplay:ci`,
       `npm run test:save-compat`, `npm run test:e2e:regression`, `npm run lint` — all green
-- [ ] confirm `SpaceFlightScene.ts` line guard and architecture tests still pass
+      except 3 pre-existing E2E failures in `playtest-regression.spec.ts`, confirmed via a
+      throwaway git-worktree run at `3cff352` (the commit immediately before this pack's
+      Task 1) that they fail identically there, i.e. predate and are unrelated to all 8 bugs:
+      (1) "changing the font size keeps the ship in place" references `hud.gearButton`, a
+      button removed from `FlightHud` on 2026-06-26 when the settings panel moved to the main
+      menu — the E2E test was never updated and is now permanently stale; (2) "mouse wheel
+      scrolls the equipment-shop list" — pre-existing scrollOffset clamp mismatch; (3) "a
+      TRADE_OPPORTUNITY rumor renders in the Info Center news tab" — pre-existing rumor-gen
+      mismatch. Because the suite runs `.serial`, failure (1) blocked 13 subsequent tests from
+      running at all; re-run with `--grep-invert` on all three confirmed the remaining 38
+      tests pass, including the Bug 6 InfoCenter-search regression. Full results: unit 5160
+      passed/12 skipped, playtest 684 passed/9 skipped, letsplay:ci 107 passed, save-compat 22
+      passed, e2e 38/41 passed (3 pre-existing unrelated), lint 0 errors (46 pre-existing `any`
+      warnings), `tsc --noEmit` clean
+- [x] confirmed `SpaceFlightScene.ts` line guard (1895 ≤ 1898) and architecture tests still
+      pass (included in the green unit run above)
 
 ## Technical Details
 

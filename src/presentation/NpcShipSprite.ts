@@ -557,6 +557,25 @@ export class NpcShipSprite {
       hullRatio: this.npc.maxHull > 0 ? this.npc.hullHP / this.npc.maxHull : 1,
       orbitDir: this.aggressorOrbitDir,
     });
+
+    // A BREAK_OFF flee has no target to hold position against, so it would
+    // otherwise run outward forever. Once this frame's step would carry the
+    // ship past the system boundary, route it through the existing scripted
+    // departure path instead — same outward-radial target math and `gone`
+    // transition a cross-system move uses — rather than letting it move
+    // unbounded (it would become permanently unreachable past the edge).
+    if (decision.mode === ManeuverMode.BREAK_OFF) {
+      const step = this.speed * deltaTime;
+      const nextDist = Math.hypot(
+        this.x + Math.cos(decision.heading) * step - this.bounds.cx,
+        this.y + Math.sin(decision.heading) * step - this.bounds.cy,
+      );
+      if (nextDist >= this.bounds.boundary) {
+        this.beginDeparture();
+        return;
+      }
+    }
+
     // While closing, don't jitter when essentially on top of the target;
     // orbiting/breaking off always move (they steer sideways/away, not onto it).
     if (decision.mode !== ManeuverMode.CLOSE || range > 6) {

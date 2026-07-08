@@ -22,6 +22,7 @@ import type { NewsEvent } from "@/types";
 import type {
   PlanetHit,
   ShipLocation,
+  SystemHit,
   EquipmentFacet,
   EquipmentHit,
 } from "@/systems/info/GalacticRegistry";
@@ -36,6 +37,8 @@ import {
 } from "@/systems/equipment/GearCatalog";
 import { attachWheelScroll } from "./ui/WheelScroll";
 import { ScrollableList } from "./ui/ScrollableList";
+import { MONO_CHAR_WIDTH_RATIO, lineStepFor } from "./ui/questCardLayout";
+import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
 
 interface InfoContext {
@@ -325,7 +328,8 @@ const FACET_LABELS: Record<EquipmentFacet, string> = {
 
 type ObjectResult =
   | { kind: "ship"; loc: ShipLocation & { jumps: number }; stale: boolean }
-  | { kind: "planet"; hit: PlanetHit; stale: boolean };
+  | { kind: "planet"; hit: PlanetHit; stale: boolean }
+  | { kind: "system"; hit: SystemHit; stale: boolean };
 
 export class InfoCenterScene extends GameScene {
   private gameEngine: GameEngine | null = null;
@@ -566,6 +570,23 @@ export class InfoCenterScene extends GameScene {
       tabLabel.y = TAB_Y + TAB_H / 2;
       tabLabel.eventMode = "none";
       this.mainContainer.addChild(tabLabel);
+    }
+
+    // Discoverability nudge: the search field lives only on ОБЪЕКТЫ, so a
+    // player who starts typing on another tab gets a visible pointer instead
+    // of silently-dropped keystrokes (Bug 6).
+    if (this.activeTab !== "objects" && PW > 620) {
+      const searchHint = scaledText(
+        t("infoCenter.objectsHintOtherTab"),
+        11,
+        0x557799,
+        { rawColor: true, fontFamily: "monospace" },
+      );
+      searchHint.anchor.set(1, 0.5);
+      searchHint.x = PX + PW - 16;
+      searchHint.y = TAB_Y + TAB_H / 2;
+      searchHint.eventMode = "none";
+      this.mainContainer.addChild(searchHint);
     }
 
     const CONTENT_Y = TAB_Y + TAB_H + 6;
@@ -866,7 +887,7 @@ export class InfoCenterScene extends GameScene {
     const queryText =
       this.objectsQuery.length > 0
         ? this.objectsQuery
-        : "Введите имя NPC или планеты...";
+        : t("infoCenter.objectsPlaceholder");
     const inputLabel = scaledText(
       queryText,
       13,
@@ -949,22 +970,32 @@ export class InfoCenterScene extends GameScene {
       rowBg.fill({ color: i % 2 === 0 ? 0x0d1220 : 0x0a0e18 });
       container.addChild(rowBg);
 
-      const stale =
-        result.kind === "ship"
-          ? isStaleSystem(result.loc.systemId, systemMap, currentDay)
-          : isStaleSystem(result.hit.systemId, systemMap, currentDay);
-
-      const name =
-        result.kind === "ship" ? result.loc.name : result.hit.planetName;
-      const sysName =
-        result.kind === "ship"
-          ? (systemMap.get(result.loc.systemId)?.name ?? result.loc.systemId)
-          : result.hit.systemName;
-      const jumps =
-        result.kind === "ship" ? result.loc.jumps : result.hit.jumps;
-      const typeLabel = result.kind === "ship" ? "[NPC]" : "[ПЛН]";
-      const systemId =
-        result.kind === "ship" ? result.loc.systemId : result.hit.systemId;
+      let name: string;
+      let sysName: string;
+      let jumps: number;
+      let typeLabel: string;
+      let systemId: string;
+      if (result.kind === "ship") {
+        name = result.loc.name;
+        sysName =
+          systemMap.get(result.loc.systemId)?.name ?? result.loc.systemId;
+        jumps = result.loc.jumps;
+        typeLabel = "[NPC]";
+        systemId = result.loc.systemId;
+      } else if (result.kind === "planet") {
+        name = result.hit.planetName;
+        sysName = result.hit.systemName;
+        jumps = result.hit.jumps;
+        typeLabel = "[ПЛН]";
+        systemId = result.hit.systemId;
+      } else {
+        name = result.hit.systemName;
+        sysName = "";
+        jumps = result.hit.jumps;
+        typeLabel = "[СИС]";
+        systemId = result.hit.systemId;
+      }
+      const stale = isStaleSystem(systemId, systemMap, currentDay);
 
       const distStr = jumps === 0 ? "здесь" : `${jumps} пр.`;
       const staleStr = stale ? " (уст.)" : "";
@@ -1051,6 +1082,15 @@ export class InfoCenterScene extends GameScene {
     for (const hit of planets.slice(0, 10)) {
       const stale = isStaleSystem(hit.systemId, systemMap, currentDay);
       this.objectsResults.push({ kind: "planet", hit, stale });
+    }
+
+    const systems = registry.findSystem({
+      name: this.objectsQuery.trim(),
+      originSystemId: originId,
+    });
+    for (const hit of systems.slice(0, 10)) {
+      const stale = isStaleSystem(hit.systemId, systemMap, currentDay);
+      this.objectsResults.push({ kind: "system", hit, stale });
     }
 
     this.objectsResults.sort((a, b) => {
@@ -1339,7 +1379,14 @@ export class InfoCenterScene extends GameScene {
 
     // Results
     const LIST_Y = CTRL_Y + CTRL_H + 8;
-    const ROW_H = 38;
+    // Historically a fixed 38 px, sized for the "M" scale's line + stats
+    // two-line stack — at "L" scale the taller line bled into the stats line
+    // beneath it (Task 3, `docs/plans/20260708-font-scale-and-faction-bugs.md`).
+    // Grows with the current font scale, floored at the historical 38 px.
+    const ROW_H = Math.max(
+      38,
+      5 + lineStepFor(scaledFont(11)) + lineStepFor(scaledFont(10)) + 3,
+    );
     const VISIBLE = Math.floor((ph - LIST_Y) / ROW_H);
 
     if (this.gearResults.length === 0) {
@@ -1373,8 +1420,24 @@ export class InfoCenterScene extends GameScene {
 
       const distStr = hit.jumps === 0 ? "здесь" : `${hit.jumps} пр.`;
       const staleStr = stale ? " (уст.)" : "";
-      const gearName = hit.gear.name.slice(0, 18).padEnd(18);
-      const planetSys = `${hit.planet} / ${hit.system}`.slice(0, 22).padEnd(22);
+      // Column widths in chars, calibrated in PIXELS at the "M"-scale baseline
+      // (font 11) and re-derived per the current font scale — a fixed 18/22
+      // char count rendered WIDER at "L" scale (same glyph count, bigger
+      // glyphs) and bled past the row into the "→ карта" button (Task 3, same
+      // class of bug as BankScene's `maxReasonChars`).
+      const baseCharPx = 11 * MONO_CHAR_WIDTH_RATIO;
+      const charPx = Math.max(1, scaledFont(11) * MONO_CHAR_WIDTH_RATIO);
+      const gearNameChars = Math.max(6, Math.floor((18 * baseCharPx) / charPx));
+      const planetSysChars = Math.max(
+        6,
+        Math.floor((22 * baseCharPx) / charPx),
+      );
+      const gearName = hit.gear.name
+        .slice(0, gearNameChars)
+        .padEnd(gearNameChars);
+      const planetSys = `${hit.planet} / ${hit.system}`
+        .slice(0, planetSysChars)
+        .padEnd(planetSysChars);
       const lineText = `T${hit.gear.techLevel} ${gearName} ${planetSys}${staleStr} — ${hit.price}₡  ${distStr}`;
 
       const lineLabel = scaledText(lineText, 11, stale ? 0x7799aa : 0xaabbcc, {
@@ -1382,7 +1445,8 @@ export class InfoCenterScene extends GameScene {
         fontFamily: "monospace",
       });
       lineLabel.x = PAD + 4;
-      lineLabel.y = y + 5;
+      const lineTop = y + 5;
+      lineLabel.y = lineTop;
       lineLabel.eventMode = "none";
       container.addChild(lineLabel);
 
@@ -1391,7 +1455,10 @@ export class InfoCenterScene extends GameScene {
         fontFamily: "monospace",
       });
       statsLabel.x = PAD + 4;
-      statsLabel.y = y + 20;
+      // Stacked below the main line — steps by its own font-scale line height
+      // so the two never overlap at "L" (Task 3: the fixed +20 offset assumed
+      // the "M"-scale ~14 px line height).
+      statsLabel.y = lineTop + lineStepFor(scaledFont(11));
       statsLabel.eventMode = "none";
       container.addChild(statsLabel);
 

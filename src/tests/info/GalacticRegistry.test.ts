@@ -162,4 +162,53 @@ describe("GalacticRegistry", () => {
       }),
     ).toBeNull();
   });
+
+  it("finds star systems by (partial, case-insensitive) name match, nearest first", () => {
+    const reg = new GalacticRegistry(galaxy(), []);
+    const hits = reg.findSystem({ name: "ет", originSystemId: "A" }); // matches "Бета"
+    expect(hits.map((h) => h.systemId)).toEqual(["B"]);
+    expect(hits[0].systemName).toBe("Бета");
+    expect(hits[0].jumps).toBe(1);
+
+    const upper = reg.findSystem({ name: "ГАММА", originSystemId: "A" });
+    expect(upper.map((h) => h.systemId)).toEqual(["C"]);
+  });
+
+  it("system search honours maxJumps and returns nothing for no match", () => {
+    const reg = new GalacticRegistry(galaxy(), []);
+    expect(
+      reg.findSystem({ name: "Дельта", originSystemId: "A", maxJumps: 2 }),
+    ).toEqual([]); // D is 3 jumps away
+
+    expect(reg.findSystem({ name: "нигдешния", originSystemId: "A" })).toEqual(
+      [],
+    );
+  });
+
+  it("Bug 6: finds ships/planets/systems reachable only via a one-way link's reverse direction", () => {
+    // A --(one-way)--> B, no B->A edge — the star-map nav still lets the
+    // player warp A<->B either direction, so a directed-only BFS from A would
+    // wrongly report B unreachable and silently drop every hit inside it.
+    const systems = [
+      sys("A", "Альфа", ["B"], []),
+      sys("B", "Бета", [], [{ id: "B1" }]),
+    ];
+    const reg = new GalacticRegistry(systems, [
+      ship("s1", "B", NpcRole.TRADER, Faction.OUTLANDERS),
+    ]);
+
+    expect(
+      reg.findShips({ originSystemId: "B", name: "s1" }).map((s) => s.id),
+    ).toEqual(["s1"]);
+    expect(
+      reg
+        .findPlanet({ name: "B1", originSystemId: "B" })
+        .map((p) => p.planetId),
+    ).toEqual(["B1"]);
+    expect(
+      reg
+        .findSystem({ name: "Альфа", originSystemId: "B" })
+        .map((s) => s.systemId),
+    ).toEqual(["A"]);
+  });
 });

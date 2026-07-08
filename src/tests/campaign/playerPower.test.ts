@@ -19,12 +19,27 @@ import {
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { validateSaveState } from "@/validation/schemas";
 import { MigrationPipeline } from "@/data/MigrationPipeline";
+import {
+  BATTLE_READY_MAX_HULL,
+  BATTLE_READY_WEAPON_DAMAGE,
+} from "@/tests/playtest/letsplay/MemoryHeuristicPolicy";
 
 /** Starter ship per the campaign plan: hull 130 / weapon 14 / 1000 cr / rank 1. */
 const STARTER = { maxHull: 130, weaponDamage: 14, credits: 1000, rank: 1 };
 
-/** Battle-ready floor per the autopilot signal: hull ≥ 200, weapon ≥ 30. */
-const BATTLE_READY = { maxHull: 200, weaponDamage: 30, credits: 1000, rank: 1 };
+/**
+ * Battle-ready floor per the autopilot's own signal — read the live
+ * constants rather than duplicating them, so a future hull-floor retune
+ * (e.g. Task 8's 200 → 180) can't silently desync this fixture from what
+ * the autopilot actually treats as battle-ready. Rank 0 is the true
+ * `Player` starting rank (the worst case the threshold must still cross).
+ */
+const BATTLE_READY = {
+  maxHull: BATTLE_READY_MAX_HULL,
+  weaponDamage: BATTLE_READY_WEAPON_DAMAGE,
+  credits: 1000,
+  rank: 0,
+};
 
 describe("playerPowerIndex — bounded, anchored, monotone, pure", () => {
   it("stays within [0,1] at the extremes", () => {
@@ -56,13 +71,25 @@ describe("playerPowerIndex — bounded, anchored, monotone, pure", () => {
     expect(idx).toBe(0);
   });
 
+  it("a NaN component doesn't propagate NaN through the whole index", () => {
+    const idx = playerPowerIndex({
+      maxHull: NaN,
+      weaponDamage: 30,
+      credits: 1000,
+      rank: 0,
+    });
+    expect(Number.isNaN(idx)).toBe(false);
+    expect(idx).toBeGreaterThanOrEqual(0);
+    expect(idx).toBeLessThanOrEqual(1);
+  });
+
   it("starter ship (hull 130 / weapon 14 / 1000 cr / rank 1) ≈ 0", () => {
     const idx = playerPowerIndex(STARTER);
     expect(idx).toBeGreaterThanOrEqual(0);
     expect(idx).toBeLessThan(0.05);
   });
 
-  it("battle-ready (hull ≥ 200, weapon ≥ 30) crosses the defined threshold; starter does not", () => {
+  it("battle-ready (autopilot's own hull/weapon floor) crosses the defined threshold; starter does not", () => {
     expect(playerPowerIndex(BATTLE_READY)).toBeGreaterThanOrEqual(
       POWER_INDEX_BATTLE_READY_THRESHOLD,
     );

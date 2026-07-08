@@ -13,6 +13,7 @@ import { getSystemVisibility, pickLabelPosition } from "@/utils/starMapUtils";
 import type { LabelBound, StarPos, WarpLine } from "@/utils/starMapUtils";
 import { computeGalaxyThreat } from "@/systems/galaxy/GalaxyStatusIndicator";
 import { isDowned } from "@/systems/combat/godMode";
+import { FACTION_LABEL } from "@/config/factionConfig";
 
 export interface StarMapContext {
   galaxy?: Galaxy;
@@ -934,7 +935,7 @@ export class StarMapScene extends GameScene {
     this.infoPanel.addChild(nameText);
 
     const factionText = new Text({
-      text: `Владелец: ${system.ownerFaction}`,
+      text: `Владелец: ${FACTION_LABEL[system.ownerFaction] ?? system.ownerFaction}`,
       style: {
         fontFamily: "Courier New",
         fontSize: 11,

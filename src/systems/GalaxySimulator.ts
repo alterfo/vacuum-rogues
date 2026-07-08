@@ -11,6 +11,7 @@ import { PlanetGenerator } from "./PlanetGenerator";
 import { seedMarket } from "./galaxy/marketSeeding";
 import { pickStarType } from "./galaxy/starTypeDistribution";
 import { assignSystemTechLevels } from "./galaxy/systemTechDistribution";
+import { pickSystemFaction } from "./galaxy/systemFactionDistribution";
 import { NpcSimulator } from "./npc/NpcSimulator";
 import { logger } from "@/utils/logger";
 import {
@@ -97,8 +98,11 @@ export class GalaxySimulator {
         planet.market.populate(seedMarket(economyType, planet.id));
       }
 
-      // Generate 1 station per system (type depends on index/seed)
-      const faction = "INDEPENDENT" as Faction;
+      // Generate 1 station per system (type depends on index/seed). Faction
+      // is a weighted per-system pick from an independent seed (mirrors
+      // pickStarType) so a galaxy is no longer a field of identical
+      // INDEPENDENT owners, without perturbing the shared `this.rng` stream.
+      const faction = pickSystemFaction(new SeededRNG(`${seed}_faction_${i}`));
       const stations = generateStations(
         `sys_${i}`,
         systemNames[i],
@@ -229,12 +233,13 @@ export class GalaxySimulator {
         byDistanceToCore[0] ??
         sortedByDistance.find((s) => s.id !== core.id && s.id !== homeId);
       // Only a 2-system galaxy (core + home, nothing else) reaches here — every
-      // branch above excludes both `core.id` and `homeId`. Reuse `core` itself
-      // rather than falling back to an unfiltered `sortedByDistance[1]`, which
-      // could silently reintroduce the player's home system (or duplicate the
-      // core) as the second Overmind starter — exactly what every guard above
-      // exists to prevent.
-      overmindStart.push(secondStart?.id ?? core.id);
+      // branch above excludes both `core.id` and `homeId`. `core.id` is
+      // already the sole entry in `overmindStart` (pushed above) — leave it
+      // as the single starter rather than falling back to an unfiltered
+      // `sortedByDistance[1]` (which could reintroduce the player's home
+      // system) or re-pushing `core.id` (which would duplicate the entry and
+      // break `overmindSystems.length`-based share/win-condition math).
+      if (secondStart) overmindStart.push(secondStart.id);
     }
 
     // Seed 1 pirate-controlled system at galaxy start: the most isolated
@@ -702,6 +707,12 @@ function assignFactionHomeSystems(
     best.isFactionHome = true;
     best.homeFactionId =
       faction as unknown as import("@/types/faction").Faction;
+    // A faction's home system must display that faction as owner — override
+    // whatever the generation-time roll produced. `ownerFaction` is readonly;
+    // cast needed for assignment (same pattern as the economyType override
+    // just below).
+    (best as unknown as { ownerFaction: Faction }).ownerFaction =
+      best.homeFactionId;
 
     // Override economy type to match faction identity.
     const econOverride = FACTION_HOME_ECONOMY[faction];

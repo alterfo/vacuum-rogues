@@ -11,7 +11,7 @@ import { HelpPanel } from "../ui/HelpPanel";
 import { helpFor } from "@/systems/onboarding/helpContent";
 import { buildPlanetTooltipLines } from "@/utils/planetTooltip";
 import type { LandingDenialReason } from "@/systems/galaxy/landingAccess";
-import { formatGameDate, formatGameTimestamp } from "@/utils/gameCalendar";
+import { formatGameDate } from "@/utils/gameCalendar";
 import { scaledFont } from "@/utils/fontScale";
 import {
   AccessibilityPanel,
@@ -19,7 +19,9 @@ import {
 } from "../ui/AccessibilityPanel";
 import { GAME_BALANCE } from "@/config/balance";
 import { logger } from "@/utils/logger";
+import { t } from "@/i18n/i18n";
 import type { FlightModule } from "./FlightModule";
+import { starMapButtonRect } from "./starMapButton";
 
 /** Touch «✕» cancel button width (px) and the gap to the left of Play. */
 const CANCEL_BTN_W = 56;
@@ -46,8 +48,7 @@ const CANCEL_BTN_GAP = 8;
  * The mini-map *object* lives here (created/destroyed with the rest of the HUD),
  * but its per-frame refresh stays in the scene — it reads route + camera + world
  * state — and reaches the radar via {@link miniMap} (matches the Task 9
- * `updateSystemMiniMap` decision). Likewise {@link setCameraDebug} lets the
- * scene's camera loop drive the debug read-out the HUD owns.
+ * `updateSystemMiniMap` decision).
  */
 export class FlightHud implements FlightModule {
   private readonly renderer: Renderer;
@@ -61,10 +62,11 @@ export class FlightHud implements FlightModule {
   // read-out shows sub-day progress within a turn (gameDays + distance/wait
   // fraction); without it the counter falls back to the whole-day `gameDays`.
   private dayProvider: (() => number) | null = null;
-  // Star-map button (top-right) — repositioned on resize.
-  private backButton: Text | null = null;
-  // Camera debug read-out (development only); the scene's camera loop sets its text.
-  private cameraDebugText: Text | null = null;
+  // Star-map button (top-right, left of the «?» help corner) — repositioned on resize.
+  private backButton: UiButton | null = null;
+  // Hover tooltip label for the icon-only star-map button (no visible text on the
+  // button itself now, so the name is surfaced on hover instead).
+  private starMapTooltip: Text | null = null;
 
   // Play / Pause turn control (bottom-centre).
   private playPauseButton: UiButton | null = null;
@@ -89,9 +91,10 @@ export class FlightHud implements FlightModule {
   private accessibilityPanel: Container | null = null;
   private accessibilityPanelComp: AccessibilityPanel | null = null;
 
-  // In-flight system menu (top-left [МЕНЮ] button) + its toggled panel. Always
+  // In-flight system menu (bottom-left [МЕНЮ] button) + its toggled panel. Always
   // reachable so the player can load a save or quit from any dead-end — a
   // general escape hatch, not a fragile "stuck" auto-detect.
+  private menuButtonText: Text | null = null;
   private systemMenuPanel: Container | null = null;
   // Confirm sub-panel raised by «Загрузить сохранение» (guards against losing the
   // current run). Torn down together with the menu by {@link closeSystemMenu}.
@@ -232,6 +235,7 @@ export class FlightHud implements FlightModule {
     }
     // Buttons live on uiContainer (torn down by clearUILayer); drop the refs.
     this.backButton = null;
+    this.starMapTooltip = null;
     this.playPauseButton = null;
     this.cancelButton = null;
     this.speedButton = null;
@@ -269,9 +273,9 @@ export class FlightHud implements FlightModule {
       this.systemMiniMap.destroy();
       this.systemMiniMap = null;
     }
-    this.cameraDebugText = null;
     this.dayCounterText = null;
     this.dayProvider = null;
+    this.menuButtonText = null;
     this.uiContainer = null;
     this.turnRunning = false;
   }
@@ -330,10 +334,11 @@ export class FlightHud implements FlightModule {
     }
     // These live on the now-destroyed uiContainer — drop the dangling refs.
     this.backButton = null;
+    this.starMapTooltip = null;
     this.playPauseButton = null;
     this.cancelButton = null;
-    this.cameraDebugText = null;
     this.dayCounterText = null;
+    this.menuButtonText = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -351,33 +356,16 @@ export class FlightHud implements FlightModule {
     return this.systemMiniMap;
   }
 
-  /** Set the camera debug read-out (development only; driven by the scene). */
-  setCameraDebug(zoom: number, panX: number, panY: number): void {
-    if (this.cameraDebugText) {
-      this.cameraDebugText.text = `Камера: Zoom ${zoom.toFixed(2)} | Pan (${panX.toFixed(0)}, ${panY.toFixed(0)})`;
-    }
-  }
-
-  /**
-   * Place the camera read-out beside the radar: its right edge hugs the
-   * minimap's left edge (playtest2 finding ④ — independent absolute offsets
-   * let the radar cover the text). Requires anchor (1, 0) on the text.
-   */
-  private positionCameraDebugText(
-    screenWidth: number,
-    screenHeight: number,
-  ): void {
-    if (!this.cameraDebugText) return;
-    const mapLeft = this.systemMiniMap?.container.x ?? screenWidth - 220;
-    this.cameraDebugText.x = mapLeft - 12;
-    this.cameraDebugText.y = screenHeight - 30;
-  }
-
   /** Re-anchor the screen-edge HUD after the window/canvas resizes. */
   reposition(w: number, h: number): void {
     if (this.backButton) {
-      this.backButton.x = w - 220;
-      this.backButton.y = 20;
+      const starMapRect = starMapButtonRect(w);
+      this.backButton.x = starMapRect.x;
+      this.backButton.y = starMapRect.y;
+      if (this.starMapTooltip) {
+        this.starMapTooltip.x = starMapRect.x - 8;
+        this.starMapTooltip.y = starMapRect.y + starMapRect.h / 2;
+      }
     }
     if (this.toast) {
       this.toast.x = w / 2;
@@ -392,8 +380,6 @@ export class FlightHud implements FlightModule {
       this.cancelButton.y = this.playPauseButton.y;
     }
     this.systemMiniMap?.reposition(w, h);
-    // After the radar settles, re-derive the camera hint from its bounds.
-    this.positionCameraDebugText(w, h);
 
     if (this.speedButton) {
       this.speedButton.x = w - 20 - 52;
@@ -415,6 +401,9 @@ export class FlightHud implements FlightModule {
     }
     if (this.dayCounterText) {
       this.dayCounterText.y = 50;
+    }
+    if (this.menuButtonText) {
+      this.menuButtonText.y = h - 188;
     }
     if (this.systemMenuPanel) {
       const b = this.systemMenuPanel.getLocalBounds();
@@ -610,23 +599,6 @@ export class FlightHud implements FlightModule {
     // Container uses default eventMode ('auto') - it won't block clicks since it has no handlers
     // Child elements with eventMode='static' will receive events
 
-    // Camera debug display (development only). Right-edge anchored: the text
-    // grows leftward as pan values widen, so it can never extend under the
-    // minimap. Positioned from the minimap's bounds once the radar exists.
-    if (__DEBUG__) {
-      this.cameraDebugText = new Text({
-        text: "Камера: Zoom 1.00 | Pan (0, 0)",
-        style: {
-          fontFamily: "Courier New",
-          fontSize: scaledFont(12),
-          fill: 0xff00ff,
-        },
-      });
-      this.cameraDebugText.anchor.set(1, 0);
-      this.cameraDebugText.eventMode = "none";
-      this.uiContainer.addChild(this.cameraDebugText);
-    }
-
     // Current date display
     this.dayCounterText = new Text({
       text: formatGameDate(this.gameEngine?.galaxy?.gameDays ?? 0),
@@ -725,9 +697,11 @@ export class FlightHud implements FlightModule {
     });
     this.uiContainer.addChild(helpBtn);
 
-    // System menu button [МЕНЮ] — top-left, opens the always-available in-flight
-    // system menu (Продолжить / Загрузить сохранение / В главное меню) so the
-    // player can recover from any dead-end (e.g. stranded, <30% hull, broke).
+    // System menu button [МЕНЮ] — bottom-left (stacked above the ♿ accessibility
+    // button, clear of the top-left journal/inventory/help stack), opens the
+    // always-available in-flight system menu (Продолжить / Загрузить сохранение /
+    // В главное меню) so the player can recover from any dead-end (e.g. stranded,
+    // <30% hull, broke).
     const menuBtn = new Text({
       text: "[МЕНЮ]",
       style: {
@@ -738,7 +712,7 @@ export class FlightHud implements FlightModule {
       },
     });
     menuBtn.x = 20;
-    menuBtn.y = 20;
+    menuBtn.y = this.renderer.app.screen.height - 188;
     menuBtn.eventMode = "static";
     menuBtn.cursor = "pointer";
     menuBtn.on("pointerdown", (event) => {
@@ -754,38 +728,56 @@ export class FlightHud implements FlightModule {
       menuBtn.alpha = 1;
     });
     this.uiContainer.addChild(menuBtn);
+    this.menuButtonText = menuBtn;
 
-    // Star map button
-    const backBtn = new Text({
-      text: "[МЕЖЗВЕЗДНАЯ КАРТА]",
+    // Star map button — compact icon button (Bug 1), left of the top-right «?»
+    // help corner (`helpButtonRect`, the single source of truth for that zone) so
+    // it can never overlap it at any screen width. A hover tooltip surfaces the
+    // label the old wide text button used to show permanently.
+    const starMapRect = starMapButtonRect(this.renderer.app.screen.width);
+    const starMapLabel = t("flight.starMap");
+    const backBtn = new UiButton(
+      "🗺",
+      "",
+      0xffaa00,
+      (event) => {
+        event.stopPropagation();
+        this.gameEngine?.audio?.playUiClick();
+        logger.info("Star map button clicked");
+        this.onStarMap?.();
+      },
+      starMapRect.w,
+      starMapRect.h,
+    );
+    backBtn.x = starMapRect.x;
+    backBtn.y = starMapRect.y;
+
+    const starMapTooltip = new Text({
+      text: starMapLabel,
       style: {
         fontFamily: "Courier New",
-        fontSize: scaledFont(14),
+        fontSize: scaledFont(12),
         fill: 0xffaa00,
-        fontWeight: "bold" as const,
       },
     });
-    backBtn.x = this.renderer.app.screen.width - 220;
-    backBtn.y = 20;
-    backBtn.eventMode = "static";
-    backBtn.cursor = "pointer";
-    backBtn.on("pointerdown", (event) => {
-      event.stopPropagation();
-      this.gameEngine?.audio?.playUiClick();
-      logger.info("Star map button clicked");
-      this.onStarMap?.();
-    });
+    starMapTooltip.anchor.set(1, 0.5);
+    starMapTooltip.eventMode = "none";
+    starMapTooltip.visible = false;
+    starMapTooltip.x = starMapRect.x - 8;
+    starMapTooltip.y = starMapRect.y + starMapRect.h / 2;
 
     backBtn.on("pointerover", () => {
       this.gameEngine?.audio?.playUiHover();
-      backBtn.alpha = 0.7;
+      starMapTooltip.visible = true;
     });
     backBtn.on("pointerout", () => {
-      backBtn.alpha = 1;
+      starMapTooltip.visible = false;
     });
 
-    this.uiContainer.addChild(backBtn);
+    this.uiContainer.addChild(backBtn.container);
+    this.uiContainer.addChild(starMapTooltip);
     this.backButton = backBtn;
+    this.starMapTooltip = starMapTooltip;
 
     // Play / Pause turn control (bottom-centre). Play runs the planned turn;
     // while moving it becomes Pause, which ends the turn at the next day segment.
@@ -858,10 +850,6 @@ export class FlightHud implements FlightModule {
     );
     this.systemMiniMap.setReturnCameraHandler(() => this.onMiniMapReturn?.());
     this.uiLayer.addChild(this.systemMiniMap.container);
-    this.positionCameraDebugText(
-      this.renderer.app.screen.width,
-      this.renderer.app.screen.height,
-    );
 
     // Speed button: cycles 1×/2×/4× — placed above the minimap (bottom-right).
     const SPEED_BTN_W = 52;
@@ -1381,22 +1369,23 @@ export class FlightHud implements FlightModule {
   // ---------------------------------------------------------------------------
 
   /**
-   * Push the scene's fractional "day of turn" so the date read-out reflects
-   * sub-day progress (a short turn no longer looks frozen). Pass `null` to fall
-   * back to the whole-day `galaxy.gameDays`.
+   * Push the scene's fractional "day of turn" so a whole-day boundary crossed
+   * mid-turn via distance/wait accrual shows up immediately (the date is
+   * still floored to the whole day for display — no HH:MM clock). Pass `null`
+   * to fall back to the whole-day `galaxy.gameDays`.
    */
   setDayProvider(provider: (() => number) | null): void {
     this.dayProvider = provider;
   }
 
-  /** Update day counter UI text (date + sub-day clock). */
+  /** Update day counter UI text (clock-free calendar date). */
   private updateDayCounter(): void {
     if (!this.dayCounterText) return;
     const day = this.dayProvider
       ? this.dayProvider()
       : (this.gameEngine?.galaxy?.gameDays ?? null);
     if (day === null) return;
-    this.dayCounterText.text = formatGameTimestamp(day);
+    this.dayCounterText.text = formatGameDate(day);
   }
 
   /** Refresh the Play/Pause button label/colour to match the turn state. */

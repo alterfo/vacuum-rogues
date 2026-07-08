@@ -294,6 +294,7 @@ export const en: Dict = {
 
   // --- incoming-attacker warning (Task 5: threat indicator) -----------------
   "flight.incomingAttacker": "⚠ Incoming attacker: {name}!",
+  "flight.starMap": "Interstellar Map",
 
   // --- onboarding / contextual help (panel chrome) -------------------------
   "help.controlsHeader": "Controls:",
@@ -476,4 +477,24 @@ export const en: Dict = {
   "help.refuel.body2":
     "The station's paid «Refuel» service only matters if you burn fuel" +
     " again in flight — right after landing or docking, the tank is already full.",
+
+  // --- inventory scene: warehouse / cargo actions (Bug 2) -------------------
+  "inventory.warehouseTitle": "WAREHOUSE",
+  "inventory.warehouseEmpty": "Warehouse is empty",
+  "inventory.install": "[Install]",
+  "inventory.uninstall": "[To hold]",
+  "inventory.jettison": "[Jettison]",
+  "inventory.jettisonConfirm": "Confirm?",
+  "inventory.overflowMore": "…and {n} more",
+
+  // --- info center: objects search (Bug 6) -----------------------------------
+  "infoCenter.objectsPlaceholder": "Enter an NPC, planet, or system name...",
+  "infoCenter.objectsHintOtherTab":
+    "Search ships, planets, systems — OBJECTS tab",
+
+  // --- star-map purchase feedback (Bug 7) ------------------------------------
+  "planet.starMapPurchased":
+    "Map purchased for {price} ₡ — systems revealed: {revealed}",
+  "planet.starMapPurchasedNoneNew":
+    "Map purchased for {price} ₡ — no new systems revealed",
 };

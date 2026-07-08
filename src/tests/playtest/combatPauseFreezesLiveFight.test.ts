@@ -62,6 +62,7 @@ function makeDriftingHostile(id: string, x: number, y: number): NpcShipSprite {
     isGone: () => false,
     isAnchored: () => false,
     updateHitArea: () => {},
+    restoreInteractivity: () => {},
     // NPC-vs-NPC engagement seam (manager calls these each frame) — no-ops here;
     // this stub drives its own drift in update() above.
     setAggressive: (v: boolean) => {
@@ -82,6 +83,7 @@ interface FlightPrivates {
   isTurnRunning: boolean;
   pauseAtDayBoundary: boolean;
   plannedRoute: { x: number; y: number } | null;
+  hud: { onPlayPause: (() => void) | null };
 }
 
 describe("Active pause freezes the live fight over the real engine (Task 1)", () => {
@@ -349,6 +351,66 @@ describe("Active pause freezes the live fight over the real engine (Task 1)", ()
     expect(enemy.npc.hullHP).toBe(enemyHull0); // player didn't fire
     expect(harness.player()!.ship.hullHP).toBe(playerHull0); // NPC didn't fire
     expect(combatModule.isActive).toBe(true); // combat still engaged
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("ignores the HUD «Ход» button while the active-pause overlay is open, so combat starts firing on the very first legitimate resume (no extra clicks needed)", () => {
+    expect(harness.currentSceneType()).toBe(SceneType.SPACE_FLIGHT);
+    const scene = harness.currentScene() as unknown as FlightPrivates;
+    const { shipPhysics: physics, npcManager, combatModule, combatPause } =
+      scene;
+
+    // Stationary engagement inside weapon range — the "start of combat" case
+    // the bug report describes: the overlay opens immediately (no orbit before
+    // the dialog).
+    const enemy = makeDriftingHostile(
+      "hud-click-foe",
+      physics.shipX + 100,
+      physics.shipY,
+    );
+    (npcManager as unknown as { npcSprites: NpcShipSprite[] }).npcSprites.push(
+      enemy,
+    );
+
+    (
+      npcManager as unknown as {
+        launchCombatWithNpc(n: NpcShipSprite["npc"]): void;
+      }
+    ).launchCombatWithNpc(enemy.npc);
+
+    expect(combatPause.paused).toBe(true); // overlay open, awaiting target/weapon
+    expect(scene.isTurnRunning).toBe(true); // engagement forces the turn open
+
+    // The player, out of turn-based-Space-Rangers habit, clicks the HUD
+    // «Ход»/«Пауза» toggle button WHILE the overlay is still open — the exact
+    // path a mouse click on that button takes (`FlightHud`'s button handler
+    // calls `onPlayPause` directly with no `combatPause.paused` guard, unlike
+    // the equivalent keyboard Space action in `flightKeyHandler.ts`, which
+    // early-returns on `ctx.combatPause.paused`).
+    scene.hud.onPlayPause?.();
+
+    // The stray click must be a no-op while the overlay is open — it must NOT
+    // desync `isTurnRunning` from `combatPause.paused` (the bug: it currently
+    // hits the `if (isTurnRunning) { ...endTurn() }` branch and zeroes
+    // `isTurnRunning` without resolving the overlay).
+    expect(combatPause.paused).toBe(true);
+    expect(scene.isTurnRunning).toBe(true);
+
+    // Now the player legitimately resolves the overlay (its own «Продолжить»/
+    // «Огонь!» action) — this must be enough, on its own, for the exchange of
+    // fire to actually begin: no extra HUD clicks required.
+    combatPause.resume();
+    expect(combatPause.paused).toBe(false);
+    expect(scene.isTurnRunning).toBe(true);
+
+    const enemyHull0 = enemy.npc.hullHP;
+    const playerHull0 = harness.player()!.ship.hullHP;
+    for (let i = 0; i < 3; i++) harness.tick(FIRE);
+
+    expect(
+      enemy.npc.hullHP < enemyHull0 || harness.player()!.ship.hullHP < playerHull0,
+    ).toBe(true); // a shot landed within the very first resume, no extra clicks
+    expect(combatModule.isActive).toBe(true);
     expect(harness.errors()).toEqual([]);
   });
 });

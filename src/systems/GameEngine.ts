@@ -128,6 +128,7 @@ export class GameEngine {
         this.currentSceneType === SceneType.SPACE_FLIGHT,
       hasActiveGame: () => !!this.galaxy && !!this.player,
       saveGame: (slotId) => this.saveGame(slotId),
+      persistLiveSceneState: () => this.currentScene?.persistLiveState?.(),
     });
   /**
    * Transient: the ship's world position in the system when the player last left

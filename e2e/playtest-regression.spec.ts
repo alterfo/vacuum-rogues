@@ -634,6 +634,372 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  for (const width of [1024, 1920]) {
+    test(`star-map icon button never overlaps the help corner at width ${width} (Bug 1)`, async ({ page }) => {
+      // Before the fix the star-map control was a wide "[МЕЖЗВЕЗДНАЯ КАРТА]" text
+      // button anchored at x = w-220 — at common widths its live bounds reached
+      // into the top-right «?» help corner. Set the viewport BEFORE the scene
+      // mounts so the real «?» button (mountSceneHelp, which does not track a
+      // later resize) is placed for this exact width — then compare both
+      // buttons' REAL measured bounds, not a re-derived formula.
+      await page.setViewportSize({ width, height: 800 });
+      await setupNewGame(page);
+      const errorCollector = new ErrorCollector(page);
+      await page.mouse.move(5, 5);
+
+      const rects = await page.evaluate(() => {
+        type BoundsHolder = {
+          container?: {
+            getGlobalPosition: () => { x: number; y: number };
+            width: number;
+            height: number;
+          };
+        };
+        const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+        const scene = engine.currentScene as Record<string, unknown>;
+        const hud = scene?.['hud'] as Record<string, unknown>;
+        const starMapC = (hud?.['backButton'] as BoundsHolder)?.container;
+        if (!starMapC) return null;
+
+        // The onboarding «?» button lives directly on renderer.stage (mounted by
+        // mountSceneHelp) — find it by its icon glyph rather than any formula.
+        const renderer = scene?.['renderer'] as {
+          stage: { children: Array<{ children?: Array<{ text?: string }> }> };
+        };
+        const helpContainer = renderer.stage.children.find((c) =>
+          c.children?.some((gc) => gc.text === "?"),
+        ) as unknown as BoundsHolder['container'];
+        if (!helpContainer) return null;
+
+        const sp = starMapC.getGlobalPosition();
+        const hp = helpContainer.getGlobalPosition();
+        return {
+          starMap: { x: sp.x, y: sp.y, w: starMapC.width, h: starMapC.height },
+          help: { x: hp.x, y: hp.y, w: helpContainer.width, h: helpContainer.height },
+        };
+      });
+      expect(rects, 'both buttons must be found').not.toBeNull();
+
+      const { starMap, help } = rects!;
+      const intersects =
+        starMap.x < help.x + help.w &&
+        starMap.x + starMap.w > help.x &&
+        starMap.y < help.y + help.h &&
+        starMap.y + starMap.h > help.y;
+      expect(intersects, `overlap at width=${width}: starMap=${JSON.stringify(starMap)} help=${JSON.stringify(help)}`).toBe(false);
+
+      errorCollector.assertAndDetach();
+    });
+  }
+
+  test('real-pointer click on the star-map icon button opens StarMapScene (Bug 1)', async ({ page }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+    await page.mouse.move(5, 5);
+
+    const btn = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+      const c = (hud?.['backButton'] as {
+        container?: { getGlobalPosition: () => { x: number; y: number }; width: number; height: number };
+      })?.container;
+      if (!c) return null;
+      const p = c.getGlobalPosition();
+      return { x: p.x + c.width / 2, y: p.y + c.height / 2 };
+    });
+    expect(btn).not.toBeNull();
+
+    await page.mouse.click(btn!.x, btn!.y);
+    await waitForScene(page, 'StarMapScene', 10_000);
+
+    const sceneName = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      return engine?.currentScene?.constructor?.name ?? null;
+    });
+    expect(sceneName).toBe('StarMapScene');
+
+    errorCollector.assertAndDetach();
+  });
+
+  test('BOUNTY quest card shows a real-pointer "Проложить маршрут" route button (Bug 5)', async ({ page }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+    await page.mouse.move(5, 5);
+
+    // Pick a real target system (not the player's current one) + one of its
+    // planets, so the route button has a genuine cross-system destination to
+    // dispatch to the star map.
+    const targets = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle & {
+        player: { currentSystemId: string } | null;
+      };
+      const systems = (engine.galaxy?.systems ?? []) as Array<{
+        id: string;
+        planets: Array<{ id: string }>;
+      }>;
+      const here = engine.player?.currentSystemId;
+      const target = systems.find((s) => s.id !== here && s.planets.length > 0);
+      return target ? { systemId: target.id, planetId: target.planets[0].id } : null;
+    });
+    expect(targets).not.toBeNull();
+
+    // Seed a BOUNTY quest with only a DEFEAT_ENEMY objective (no VISIT
+    // objective — the bug was that such quests got no route button at all).
+    await page.evaluate(({ systemId, planetId }) => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        questManager: {
+          acceptQuestFromTemplate: (t: unknown, p?: string, d?: number, f?: string) => unknown;
+        };
+      };
+      engine.questManager.acceptQuestFromTemplate(
+        {
+          id: 'e2e-bounty-route',
+          title: 'Охота: E2E цель',
+          description: 'bounty route test',
+          type: 'BOUNTY',
+          objectives: [
+            {
+              id: 'e2e-bounty-route_kill',
+              description: 'Уничтожить корабль «Тень»',
+              type: 'DEFEAT_ENEMY',
+              targetAmount: 1,
+            },
+          ],
+          reward: { credits: 300, experience: 90, items: [] },
+          dialogueAnchors: [],
+          deadline: 0,
+          failurePenalty: null,
+          targetSystemId: systemId,
+          targetPlanetId: planetId,
+        },
+        'unknown',
+        0,
+        '',
+      );
+    }, targets!);
+
+    // Open the journal via the HUD.
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+      (hud?.['toggleQuestJournal'] as (() => void) | undefined)?.();
+    });
+
+    // Find the "→ Лететь к цели" route button by walking the journal's Pixi tree.
+    const btn = await page.evaluate(() => {
+      type Node = {
+        text?: unknown;
+        eventMode?: string;
+        children?: Node[];
+        getGlobalPosition?: () => { x: number; y: number };
+      };
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as
+        | { questJournalUI?: { container: Node } | null }
+        | undefined;
+      const root = hud?.questJournalUI?.container;
+      if (!root) return null;
+      const hasText = (n: Node, needle: string): boolean => {
+        if (typeof n.text === 'string' && n.text.includes(needle)) return true;
+        return (n.children ?? []).some((c) => hasText(c, needle));
+      };
+      const findBtn = (n: Node): Node | null => {
+        for (const c of n.children ?? []) {
+          if (c.eventMode === 'static' && hasText(c, 'Лететь к цели')) return c;
+          const found = findBtn(c);
+          if (found) return found;
+        }
+        return null;
+      };
+      const node = findBtn(root);
+      if (!node?.getGlobalPosition) return null;
+      const p = node.getGlobalPosition();
+      return { x: p.x + 60, y: p.y + 8 };
+    });
+    expect(btn, 'bounty route button must be found').not.toBeNull();
+
+    await page.mouse.click(btn!.x, btn!.y);
+    await waitForScene(page, 'StarMapScene', 10_000);
+
+    // The route dispatched the target SYSTEM (cross-system bounty), not the planet.
+    const selected = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      return (engine.currentScene as Record<string, unknown>)?.['selectedSystemId'] ?? null;
+    });
+    expect(selected).toBe(targets!.systemId);
+
+    errorCollector.assertAndDetach();
+  });
+
+  test('real-pointer install + jettison in the inventory scene work (Bug 2)', async ({ page }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+    await page.mouse.move(5, 5);
+
+    // Seed one owned-but-uninstalled gear item and one cargo stack so both the
+    // warehouse and resources rows render an action button.
+    await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle & {
+        player: { inventory: { addOwnedGear: (id: string) => void; addResource: (t: string, n: number) => void } } | null;
+      };
+      engine.player?.inventory.addOwnedGear('eq_radar');
+      engine.player?.inventory.addResource('METALS', 5);
+      void engine.transitionTo('INVENTORY', { gameEngine: engine });
+    });
+    await waitForScene(page, 'InventoryScene');
+
+    type TextButtonQuery = { label: string };
+    const findButtonCenter = async (label: string) =>
+      page.evaluate(({ label }: TextButtonQuery) => {
+        const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+        const scene = engine.currentScene as unknown as {
+          mainContainer: { children: Array<Record<string, unknown>> } | null;
+        };
+        const node = scene.mainContainer?.children.find(
+          (c) => (c as { text?: string }).text === label,
+        ) as
+          | { getGlobalPosition: () => { x: number; y: number }; width: number; height: number }
+          | undefined;
+        if (!node) return null;
+        // Row buttons are anchored (1, 0.5) — getGlobalPosition() already
+        // returns the right-middle point, so the center is width/2 to the
+        // LEFT of it (y is already vertically centered).
+        const p = node.getGlobalPosition();
+        return { x: p.x - node.width / 2, y: p.y };
+      }, { label });
+
+    // Install the seeded warehouse item into the real loadout.
+    const installBtn = await findButtonCenter('[Установить]');
+    expect(installBtn, 'install button must be found').not.toBeNull();
+    await page.mouse.click(installBtn!.x, installBtn!.y);
+
+    await page.waitForFunction(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle & {
+        player: { inventory: { ownedGearIds: string[] } } | null;
+      };
+      return !(engine.player?.inventory.ownedGearIds ?? []).includes('eq_radar');
+    }, undefined, { timeout: 5_000 });
+
+    // Jettison the metals stack (two-step confirm) — no credit refund.
+    const creditsBefore = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      return engine.player?.credits ?? 0;
+    });
+
+    const jettisonBtn = await findButtonCenter('[Выбросить]');
+    expect(jettisonBtn, 'jettison button must be found').not.toBeNull();
+    await page.mouse.click(jettisonBtn!.x, jettisonBtn!.y);
+
+    const confirmBtn = await findButtonCenter('Точно?');
+    expect(confirmBtn, 'confirm button must be found').not.toBeNull();
+    await page.mouse.click(confirmBtn!.x, confirmBtn!.y);
+
+    await page.waitForFunction(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle & {
+        player: {
+          inventory: { resources: Array<{ type: string; amount: number }> };
+        } | null;
+      };
+      const metals = engine.player?.inventory.resources.find((r) => r.type === 'METALS');
+      return (metals?.amount ?? 0) === 0;
+    }, undefined, { timeout: 5_000 });
+
+    const creditsAfter = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      return engine.player?.credits ?? 0;
+    });
+    expect(creditsAfter, 'jettison must not grant credits').toBe(creditsBefore);
+
+    errorCollector.assertAndDetach();
+  });
+
+  test('no camera debug text on the flight HUD (Bug 3)', async ({ page }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    const hasCameraDebugText = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+      const uiContainer = hud?.['uiContainer'] as
+        | { children: Array<{ text?: string }> }
+        | undefined;
+      return (uiContainer?.children ?? []).some(
+        (c) => typeof c.text === 'string' && c.text.startsWith('Камера:'),
+      );
+    });
+    expect(hasCameraDebugText, 'the removed "Камера:" debug read-out must not exist').toBe(false);
+
+    errorCollector.assertAndDetach();
+  });
+
+  for (const width of [1024, 1920]) {
+    test(`[МЕНЮ] sits bottom-left clear of the radar at width ${width} (Bug 3)`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await setupNewGame(page);
+      const errorCollector = new ErrorCollector(page);
+
+      const rect = await page.evaluate(() => {
+        const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+        const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+        const uiContainer = hud?.['uiContainer'] as
+          | {
+              children: Array<{
+                text?: string;
+                getGlobalPosition: () => { x: number; y: number };
+              }>;
+            }
+          | undefined;
+        const menuNode = uiContainer?.children.find((c) => c.text === '[МЕНЮ]');
+        if (!menuNode) return null;
+        const p = menuNode.getGlobalPosition();
+        return { x: p.x, y: p.y, viewportH: window.innerHeight };
+      });
+      expect(rect, '[МЕНЮ] text node must be found').not.toBeNull();
+      expect(rect!.y, 'МЕНЮ must sit in the bottom half of the screen').toBeGreaterThan(
+        rect!.viewportH / 2,
+      );
+
+      errorCollector.assertAndDetach();
+    });
+  }
+
+  test('real-pointer click on [МЕНЮ] opens the system menu from its bottom-left position (Bug 3)', async ({ page }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+    await page.mouse.move(5, 5);
+
+    const btn = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as Record<string, unknown>;
+      const uiContainer = hud?.['uiContainer'] as
+        | {
+            children: Array<{
+              text?: string;
+              getGlobalPosition: () => { x: number; y: number };
+              width: number;
+              height: number;
+            }>;
+          }
+        | undefined;
+      const node = uiContainer?.children.find((c) => c.text === '[МЕНЮ]');
+      if (!node) return null;
+      const p = node.getGlobalPosition();
+      return { x: p.x + node.width / 2, y: p.y + node.height / 2 };
+    });
+    expect(btn, '[МЕНЮ] text node must be found').not.toBeNull();
+
+    await page.mouse.click(btn!.x, btn!.y);
+    await page.waitForFunction(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as EngineHandle;
+      const hud = (engine.currentScene as Record<string, unknown>)?.['hud'] as {
+        isSystemMenuOpen?: () => boolean;
+      };
+      return hud?.isSystemMenuOpen?.() === true;
+    }, undefined, { timeout: 3_000 });
+
+    errorCollector.assertAndDetach();
+  });
+
   test('smoke: cursor changes over an NPC ship on REAL mouse hover after a turn (playtest2 ②)', async ({ page }) => {
     // The user's playtest finding ②: the pointer stays the default arrow over
     // NPC ships. Root cause: every NPC spawned IDLE, so the first day-tick sent
@@ -1968,6 +2334,124 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('regression: Job Board description text never overlaps its highlights row', async ({
+    page,
+  }) => {
+    // jobBoardRowLayout.ts's `computeRowLayout` positions the highlights row
+    // (`highlightsY`) from `estimateWrappedLines`'s UPPER-BOUND estimate of the
+    // description's wrapped line count — computed BEFORE any real PixiJS Text
+    // exists. If the estimate under-shoots the real Cyrillic-Courier-New
+    // rendered line count for a long description (e.g. one with an em-dash and
+    // guillemets), the highlights row is placed too high and the real
+    // description text visually bleeds into it. Measure the REAL rendered
+    // bounds (`getBounds()`), not the estimate, so this can't pass on
+    // coincidence.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        galaxy: {
+          systems: Array<{
+            id: string;
+            planets: Array<{ id: string; isHabitable: boolean }>;
+          }>;
+        } | null;
+        player: { currentSystemId: string } | null;
+        transitionTo: (scene: string, ctx?: object) => Promise<void>;
+      };
+      const systems = engine.galaxy?.systems ?? [];
+      const here = systems.find((s) => s.id === engine.player?.currentSystemId);
+      const planet =
+        here?.planets.find((p) => p.isHabitable) ??
+        systems.flatMap((s) => s.planets).find((p) => p.isHabitable) ??
+        systems.flatMap((s) => s.planets)[0];
+      if (!planet) return;
+      await engine.transitionTo('PLANET', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'PlanetScene', 15_000);
+    await page.waitForFunction(
+      () => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          loadingOverlayObjects?: unknown[];
+        };
+        return (engine.loadingOverlayObjects?.length ?? 0) === 0;
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
+
+    const texts = await page.evaluate(() => {
+      localStorage.setItem('fontScale', 'L');
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene as Record<string, unknown> | null;
+      const open = scene?.['openJobBoard'] as (() => void) | undefined;
+      if (!open) return null;
+      open.call(scene);
+      const panel = scene?.['jobBoardPanel'] as { container: unknown } | null;
+      if (!panel) return null;
+      const out: { text: string; x: number; y: number; width: number; height: number }[] =
+        [];
+      const walk = (node: {
+        text?: unknown;
+        getBounds?: () => { x: number; y: number; width: number; height: number };
+        children?: unknown[];
+      }): void => {
+        if (typeof node.text === 'string' && node.text.length > 0 && node.getBounds) {
+          const b = node.getBounds();
+          out.push({ text: node.text, x: b.x, y: b.y, width: b.width, height: b.height });
+        }
+        for (const c of (node.children as (typeof node)[]) ?? []) walk(c);
+      };
+      walk(panel.container as never);
+      return out;
+    });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: 'e2e/screenshots/jobboard-overlap-check.png' });
+
+    expect(texts).not.toBeNull();
+
+    // Group highlight-tag texts ("[Label: value]") into rows by shared y (all
+    // tags on one row render at the same y), then for each row find its own
+    // description — the nearest long prose text directly above it.
+    const highlightRe = /^\[.+: .+\]$/;
+    const highlights = texts!.filter((t) => highlightRe.test(t.text));
+    const descriptions = texts!.filter(
+      (t) => t.text.length > 40 && !highlightRe.test(t.text),
+    );
+    const rows: { y: number; items: typeof highlights }[] = [];
+    for (const h of highlights) {
+      let row = rows.find((r) => Math.abs(r.y - h.y) < 3);
+      if (!row) {
+        row = { y: h.y, items: [] };
+        rows.push(row);
+      }
+      row.items.push(h);
+    }
+
+    expect(rows.length).toBeGreaterThan(0); // the board must actually have offer rows
+
+    let checkedCount = 0;
+    for (const row of rows) {
+      const candidates = descriptions
+        .filter((d) => d.y < row.y && row.y - (d.y + d.height) < 400)
+        .sort((a, b) => b.y - a.y);
+      if (candidates.length === 0) continue; // no description above this row's y — nothing to check
+      checkedCount++;
+      const desc = candidates[0];
+      const descBottom = desc.y + desc.height;
+      expect(
+        descBottom,
+        `description "${desc.text.slice(0, 50)}…" bottom=${descBottom} overlaps highlights row at y=${row.y}`,
+      ).toBeLessThanOrEqual(row.y + 1); // 1px render-rounding tolerance
+    }
+    expect(checkedCount).toBeGreaterThan(0); // the board must have at least one row with a description to check
+
+    errorCollector.assertAndDetach();
+  });
+
   test('regression: planet-screen «?» help button never covers the credit balance', async ({ page }) => {
     await setupNewGame(page);
     const errorCollector = new ErrorCollector(page);
@@ -2428,6 +2912,102 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
       texts.some((txt) => txt.includes(fragment)),
       `info feed shows the escalation warning (looking for "${fragment}")`,
     ).toBe(true);
+
+    errorCollector.assertAndDetach();
+  });
+
+  test('regression: InfoCenter objects search finds star systems by name, not just ships/planets (Bug 6)', async ({
+    page,
+  }) => {
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        galaxy: { systems: Array<{ id: string; planets: Array<{ id: string }> }> } | null;
+        player: { currentSystemId: string } | null;
+        transitionTo: (scene: string, ctx?: object) => Promise<void>;
+      };
+      const systems = engine.galaxy?.systems ?? [];
+      const here =
+        systems.find((s) => s.id === engine.player?.currentSystemId) ?? systems[0];
+      const planet = here?.planets[0];
+      await engine.transitionTo('INFO_CENTER', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'InfoCenterScene', 15_000);
+
+    // Pick a reachable system other than the player's own — the exact kind of
+    // query that used to come back "Ничего не найдено" because the index only
+    // covered NPC-ship + planet names.
+    const target = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        galaxy: { systems: Array<{ id: string; name: string }> } | null;
+        player: { currentSystemId: string } | null;
+      };
+      const systems = engine.galaxy?.systems ?? [];
+      const other = systems.find((s) => s.id !== engine.player?.currentSystemId);
+      return other ? { id: other.id, name: other.name } : null;
+    });
+    expect(target, 'a second reachable system exists to search for').not.toBeNull();
+
+    // Click the "ОБЪЕКТЫ" tab with a REAL pointer. The tab background Graphics
+    // draws its hit-rect at an absolute panel offset (not at its own x/y), so
+    // this mirrors InfoCenterScene.render()'s own layout math rather than
+    // relying on getGlobalPosition() (which would return the origin, not the
+    // drawn rect).
+    const tabCenter = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const renderer = (
+        engine.currentScene as unknown as {
+          renderer: { app: { screen: { width: number; height: number } } };
+        }
+      ).renderer;
+      const sw = renderer.app.screen.width;
+      const sh = renderer.app.screen.height;
+      const PW = Math.min(860, sw - 40);
+      const PX = (sw - PW) / 2;
+      const PY = 20;
+      const TAB_Y = PY + 50;
+      const TAB_W = 120;
+      const TAB_H = 30;
+      const tabsStartX = PX + 16;
+      const tx = tabsStartX + 1 * (TAB_W + 6); // index 1 = "ОБЪЕКТЫ"
+      void sh;
+      return { x: tx + TAB_W / 2, y: TAB_Y + TAB_H / 2 };
+    });
+    await page.mouse.move(5, 5);
+    await page.mouse.click(tabCenter.x, tabCenter.y);
+
+    // Type the target system's name via real KeyboardEvents dispatched on
+    // `window` — the exact channel InfoCenterScene.onKeyDown listens on
+    // (the scene has no DOM text input to focus; it's canvas-only UI).
+    await page.evaluate((name: string) => {
+      for (const ch of name) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: ch }));
+      }
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    }, target!.name);
+
+    const texts = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const out: string[] = [];
+      const walk = (node: unknown): void => {
+        if (!node || typeof node !== 'object') return;
+        const n = node as { text?: unknown; children?: unknown[] };
+        if (typeof n.text === 'string' && n.text) out.push(n.text);
+        for (const c of n.children ?? []) walk(c);
+      };
+      walk(engine.currentScene?.['mainContainer']);
+      return out;
+    });
+
+    expect(texts.some((t) => t.includes(target!.name))).toBe(true);
+    expect(texts.some((t) => t.includes('[СИС]'))).toBe(true);
+    expect(texts.some((t) => t.includes('Ничего не найдено'))).toBe(false);
 
     errorCollector.assertAndDetach();
   });

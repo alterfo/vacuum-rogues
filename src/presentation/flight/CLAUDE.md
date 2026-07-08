@@ -139,9 +139,12 @@ can't escape the deliberate choice.
 (`gameDays + distanceTraveled/DISTANCE_PER_DAY + waitDayAccum`) is the **one** source for
 sub-day time — it feeds both planet orbits (the `getOrbitalDay` dep) **and** the HUD date
 read-out, pushed in via `FlightHud.setDayProvider(() => this.currentDay)`.
-`FlightHud.updateDayCounter` renders it with `formatGameTimestamp` (date + HH:MM clock); with no
-provider wired it falls back to whole-day `galaxy.gameDays`. Do **not** re-derive the fractional
-day at a call site or render the HUD date straight from `gameDays` (that was the frozen-date bug).
+`FlightHud.updateDayCounter` renders it with `formatGameDate` (clock-free calendar date only — the
+HH:MM read-out was removed as HUD clutter, playtest bug 2026-07-06/07 #3); with no provider wired
+it falls back to whole-day `galaxy.gameDays`. The provider seam stays wired so a whole-day boundary
+crossed mid-turn via distance/wait accrual still shows up immediately. Do **not** re-derive the
+fractional day at a call site or render the HUD date straight from `gameDays` (that was the
+frozen-date bug).
 The day has **three** sub-day sources, all summed into `currentDay`: move-distance, the wait-turn
 accumulator, **and a real-time-combat path** so planets keep orbiting during a stationary fight.
 A fight freezes the calendar (and the move/wait paths are gated off while it runs), so a still
@@ -171,6 +174,28 @@ tab-close/backgrounding. `flushFlightAutosave` **no-ops outside SPACE_FLIGHT**, 
 scenes are never clobbered with a stale flight capture; `performWarp` clears `liveFlightShipPos`
 when the ship leaves the system so a capture can't leak into a cross-system spawn. No schema change
 (`flightShipPos` already persists). Detail in `playtest-traps.md`.
+
+**Twinkle stars, nebula clouds, the `AsteroidBelt` flyby-comet coma, and asteroid rocks are baked
+Canvas2D sprites, not runtime `Graphics` shapes or per-frame `BlurFilter`s** (`gradientTexture.ts`,
+`docs/plans/20260708-space-visual-cleanup.md`). `SpaceBackgroundLayer` and `AsteroidBelt` mount cheap
+tinted `Sprite`s of textures baked once and cached in `gradientTexture.ts`: `starPointTexture(hero)`
+for background twinkle stars (replaced a stroked 4-point diffraction-spike `Graphics` cross that read
+as a flat vector plus-sign), `nebulaCloudTexture(seed)` for nebula clouds (replaced 4 perfectly
+concentric `softGlowTexture` rings that stacked into one muddy undifferentiated blob — now a single
+wispy, internally-structured cloud per seed), and `cometHeadTexture()` for the `AsteroidBelt` flyby
+comet's coma (replaced reusing the generic `softGlowTexture` blob with a sharp bright nucleus +
+asymmetric coma so the head reads as a coherent object). `rockTexture(seed)` (pre-existing) was also
+redesigned for more silhouette/crater variety plus a rim-light pass. Every factory follows the same
+contract: bake once via `document.createElement("canvas")` + `getContext("2d")`, cache by
+variant/seed, return `null` with no 2D context (jsdom/unit tests) so callers fall back to a
+`Graphics` approximation instead of crashing. Do **not** reintroduce a stroked cross-spike star, a
+stacked-concentric-ring nebula/comet, or a per-frame `BlurFilter` for any of these — bake a new
+variant into `gradientTexture.ts` instead. **Known gap:** `SpaceBackgroundLayer`'s separate ambient
+"shooting star" streak (`CometStreak`/`spawnComet()` — ~15-40s cadence, ephemeral, ranging across the
+screen) is a *different* comet visual from `AsteroidBelt`'s in-system flyby comet and was **not**
+in this plan's scope; it still draws its tail/nucleus as raw `Graphics.poly()`/`circle()` fills. If
+it turns out to be what a future "muddy comet" complaint is about, it needs its own
+`gradientTexture.ts` bake — don't assume `cometHeadTexture()` already covers it.
 
 Rules: a module never imports another — the scene mediates via callbacks + `*Deps` bundles;
 each `destroy()` must leave `gameLayer.children.length === 0`; dispose `BlurFilter`s in
@@ -203,6 +228,22 @@ names the live occupier (Овермайнд / Пираты) on the controlling-f
 capture is tracked **per-system on the galaxy**, not on `planet.capturedBy` (never written in
 production), so without this the controller line would name the stale benign system owner and
 contradict the red denial line.
+
+**A fleeing (`BREAK_OFF`) NPC is bounded at the system edge via the departure path, never left to
+run unbounded** (`20260708-font-scale-and-faction-bugs`, Bug 3). `NpcShipSprite.maneuverToward`
+used to add `cos/sin(heading) * speed * deltaTime` straight to `this.x/this.y` with no radius check
+at all whenever `decideManeuver` returned `BREAK_OFF` — a ship fleeing a low-hull or out-matched
+fight could run to any distance and stay in the live ship list forever, unreachable (the player is
+only *soft*-bounded by `CameraController.clampPan()`, which clamps the camera focus, not any ship's
+real position). The fix: when `BREAK_OFF` fires, `maneuverToward` checks whether this frame's step
+would carry the ship's distance from `bounds.cx/cy` past `bounds.boundary` and, if so, calls the
+existing `beginDeparture()` (the same scripted cross-system departure path, reusing its outward-radial
+target math) instead of applying the raw unbounded move. Once `departing = true`, the aggressive-pursuit
+branch's `!this.departing` guard falls through to the general waypoint-following code, which carries
+the ship the rest of the way to the boundary and sets `gone = true` on arrival — `NpcShipManager`'s
+`isGone()` cleanup and `CombatModule`'s `destroyed` sweep handle it generically, with no new despawn
+path needed. Do **not** reintroduce a second boundary concept for flee movement — route any future
+flee/maneuver change through `beginDeparture()`'s existing boundary, not a fresh radius check.
 
 Historical playtest bugs and detailed conventions (re-entry spawn, NPC spawn states, route
 dashing, sun clearance, pause-finishes-day, font-scale ship pos, NPC purposeful behavior,

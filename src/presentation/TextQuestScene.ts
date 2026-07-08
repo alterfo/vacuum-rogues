@@ -1,6 +1,8 @@
 import { Container, Graphics, Text, Sprite } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
+import { lineStepFor } from "./ui/questCardLayout";
+import { scaledFont } from "@/utils/fontScale";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { pickVariantKey, tex, loadTextureAsync } from "./textures";
 import { GameScene } from "./GameScene";
@@ -408,7 +410,10 @@ export class TextQuestScene extends GameScene {
       nameT.y = yOff;
       nameT.eventMode = "none";
       this.vmParamPanel.addChild(nameT);
-      yOff += 16;
+      // Steps by the name line's own font-scale line height so the value line
+      // below it never overlaps at "L" (Task 3: the fixed +16 offset assumed
+      // the "M"-scale ~14 px name-line height).
+      yOff += lineStepFor(scaledFont(11));
 
       const valT = scaledText(String(value), 13, 0xeeeeff, {
         rawColor: true,
@@ -418,7 +423,10 @@ export class TextQuestScene extends GameScene {
       valT.y = yOff;
       valT.eventMode = "none";
       this.vmParamPanel.addChild(valT);
-      yOff += 18;
+      // Steps by the value line's own font-scale line height so the progress
+      // bar / next param never overlaps at "L" (Task 3: the fixed +18 offset
+      // assumed the "M"-scale ~16 px value-line height).
+      yOff += lineStepFor(scaledFont(13));
 
       // Progress bar if min/max range is meaningful
       if (param.max > param.min) {

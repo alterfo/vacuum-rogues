@@ -356,6 +356,7 @@ export class NpcShipManager implements FlightModule {
     // Entering a captured system: its standing garrison immediately turns hostile
     // and pursues the player (combat resolves in-flight, not via CombatScene).
     this.applyGarrisonAggro();
+    this.reengageNearbyHostiles();
     logger.info(`Created ${this.npcSprites.length} NPC sprites`);
     // Entering a captured system: surface the liberation counter-play so the
     // player learns they can free it by destroying the garrison (Task 4).
@@ -890,6 +891,30 @@ export class NpcShipManager implements FlightModule {
       typeof galaxy.isHostileSystem === "function" &&
       galaxy.isHostileSystem(systemId);
     this.checkGarrisonAggro(systemId, hostile);
+  }
+
+  /**
+   * Re-arm pursuit for a persisted-hostile NPC that's still close to the
+   * player right after scene init — a reload mid-fight (`CombatModule.combatants`
+   * starts empty on the fresh scene) otherwise leaves it `npc.hostile===true`
+   * but passive forever, since `checkGarrisonAggro`'s `engaged` check can't see
+   * it yet. Scoped to nearby sprites only (not every hostile system-wide) so an
+   * old, successfully-escaped grudge from a past visit doesn't resume chasing —
+   * only one still close enough to plausibly have been mid-engagement at save
+   * time. One-time nudge into `aggressive`; the existing per-frame pursuit loop
+   * closes to weapon range and calls `startInFlightCombat` on its own from there,
+   * which keeps `engaged` (and so `aggressive`) true on every later re-check.
+   */
+  private reengageNearbyHostiles(): void {
+    const physics = this.deps.getShipPhysics();
+    if (!physics) return;
+    const range = GAME_BALANCE.combatEscapeRange;
+    for (const sprite of this.npcSprites) {
+      if (!sprite.npc.hostile || sprite.aggressive) continue;
+      const dx = sprite.x - physics.shipX;
+      const dy = sprite.y - physics.shipY;
+      if (dx * dx + dy * dy <= range * range) sprite.setAggressive(true);
+    }
   }
 
   /**

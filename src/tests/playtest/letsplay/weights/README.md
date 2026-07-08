@@ -16,15 +16,14 @@ runtime and nothing here reaches the prod bundle
 | Architecture | **54 → 256 → 128 → 18** (3 `nn.Linear` layers, ReLU between each hidden pair, linear output head) |
 | Parameters | ≈49,298 |
 
-> **Three-year-campaign Task 10 (action-space expansion).** The shipped file was
-> **zero-extended** from the prior `50 → 256 → 128 → 16` behaviour-cloned net, not
-> retrained: 4 zeroed input columns were appended (the new campaign features
-> contribute nothing) and 2 output rows (`arm-up`, `liberate`) were appended with
-> a strongly-negative bias so the padded head never wins argmax. The net therefore
-> plays **byte-identically** to the prior 16-action clone (it never selects the two
-> new heads) while satisfying the widened load contract. The real retrain on the
-> 18-action teacher is **Task 11** — until then this net cannot express arm-up /
-> liberate; that is expected, not a regression.
+> **Three-year-campaign Task 11 (real retrain).** Task 10 first shipped this file
+> **zero-extended** from the prior `50 → 256 → 128 → 16` net (4 zeroed input
+> columns + 2 strongly-negative-biased output rows, so it played byte-identically
+> to the 16-action clone and could not express `arm-up`/`liberate`). Task 11
+> **replaced that zero-extension with a real retrain** on the goal-less
+> `MemoryHeuristicPolicy` teacher at the full 54/18 shape — the net now can and
+> does select `arm-up`/`liberate` (see Result below). Its win-rate ceiling is the
+> teacher's own — see "Known ceiling" below.
 
 `NeuralPolicy.load()` rejects any weights file whose first layer's input width
 != `FEATURE_LENGTH` or last layer's output width != `ACTION_ORDER.length` — a
@@ -37,11 +36,13 @@ architecture changes; it only pins the wire format.
 
 ## Training config
 
-Trained on `tools/ai/dataset/train.jsonl` (9,600 rows, generated via
-`npm run dataset:export` at a reduced scale — see `tools/ai/README.md` and the
-20260701 action-expansion plan's Task 9 notes) via `tools/ai/train_player.py`,
-over SSH on the game's ComfyUI host (`oleg@192.168.88.193`, RTX 4090, using the
-host's existing `torch 2.6.0+cu124` venv):
+Trained on `tools/ai/dataset/train.jsonl` (200 goal-less `MemoryHeuristicPolicy`
+sessions × 500 steps = 100,000 rows at the 54-wide feature shape, exported via
+`npm run dataset:export` in 4 memory-bounded chunks —
+`LETSPLAY_EXPORT_MIX_SESSIONS_SCALE=0.25` with distinct
+`LETSPLAY_EXPORT_MIX_SEED_PREFIX=BC1..BC4` — since a single 200×500 run OOMs one
+vitest worker; see `tools/ai/README.md`) via `tools/ai/train_player.py`, trained
+**locally on Apple MPS** (not the RTX 4090 host):
 
 ```bash
 python train_player.py \
@@ -52,8 +53,10 @@ python train_player.py \
   --batch 512 \
   --lr 3e-4 \
   --val-split 0.2 \
-  --patience 30 \
-  --device cuda \
+  --patience 40 \
+  --seed 0 \
+  --device mps \
+  --parity-out fixtures/player.io.json \
   --out player.weights.json
 ```
 
@@ -64,39 +67,30 @@ python train_player.py \
 | Batch size | `512` |
 | Learning rate | `3e-4`, Adam, cosine-annealed over `--epochs` |
 | Val split | `0.2` |
-| Early-stop patience | `30` epochs of no val-loss improvement |
-| Device | `cuda` (RTX 4090) |
+| Early-stop patience | `40` epochs of no val-loss improvement |
+| Device | `mps` (Apple Silicon) |
 
 ## Result
 
-Converged and **early-stopped at epoch 409/500** (< 60 s wall-clock on the
-4090). No NaN loss at any point.
+Converged and **early-stopped at epoch 448/500**, **val_acc 96.8%**,
+val_loss 0.083. No NaN loss at any point. `--parity-out` also wrote
+`fixtures/player.io.json`, a `{input, expected}` PyTorch↔TS parity fixture
+(float64 forward pass for bit-comparable maths), asserted against the pure-TS
+`mlp.forward` by `shippedParity.test.ts` (≤ 1e-5).
 
-| Epoch | train_loss | train_acc | val_loss | val_acc |
-|---|---|---|---|---|
-| 1 | 2.5846 | 0.377 | 2.4228 | 0.351 |
-| 100 | 0.0122 | 0.996 | 0.0114 | 0.994 |
-| 250 | 0.0052 | 0.998 | 0.0059 | 0.997 |
-| 409 (early stop) | 0.0041 | 0.999 | 0.0047 | **0.997** |
-
-Full log: `tools/ai/dataset/training_log.txt`.
-
-**Read the 99.7% val accuracy with the documented caveat, not at face value.**
-The `train.jsonl` this net trained on has **8 of 16 action kinds as dead heads**
-(zero labeled rows) — `dock`, `take-quest`, `repair`, and all 6 of this plan's
-new economy actions (`buy-gear`, `upgrade-hull`, `buy-module`, `take-loan`,
-`repay-loan`). Root cause: the headless applier's `flee`/`repair` degrade to a
-no-op tick (no real disengage/repair-dock executor exists yet), so once the
-teacher engages a heavily-garrisoned Overmind system it can neither win nor
-escape — hull oscillates around the ~50% engage/retreat threshold and the run
-spends its step budget cycling `attack`/`flee` forever, never reaching a
-station/bank/quest/gear action. The net therefore only ever had to discriminate
-among the 8 action kinds the teacher actually emitted; 99.7% reflects mastery of
-*that* narrower task, not full 16-action competence. See
-`docs/architecture/LETSPLAY_ENGINE.md` → "Known Traps" and `tools/ai/README.md`
-for the full writeup and the recommended fix (give the headless applier a real
-disengage executor, regenerate the dataset, retrain) before relying on this net
-for anything beyond the trade/navigate/fight repertoire it actually learned.
+**Read the 96.8% val accuracy with the documented ceiling, not as a win-rate.**
+The dataset populates every reachable action head (`wait` 57.8%, `warp` 14.1%,
+`move` 7.8%, `land` 7.3%, `trade` 6.0%, `attack` 3.9%, `take-quest` 1.4%,
+`flee` 1.3%, `arm-up` 235 rows, `liberate` 12 rows), so — unlike the Task 10
+zero-extension's 8-dead-head dataset — this net genuinely learned to select
+`arm-up`/`liberate`, not just the trade/navigate/fight repertoire. But a BC
+clone can only **match**, not **exceed**, its teacher: measured **4% win-rate /
+25 sessions** vs the `MemoryHeuristicPolicy` teacher's own ~18%, because most
+seeds hit a pre-existing pure-argmax `PLANET↔TRADE` no-op collapse
+(`NeuralPolicy` has no anti-stagnation fallback — confirmed pre-existing via
+`git stash` on the committed weights, not a retrain regression). The neural
+flag stays **off** in production; see `docs/plans/20260706-three-year-campaign.md`
+Task 11 and `.claude/docs/systems/letsplay.md` for the full record.
 
 ## Regenerating
 

@@ -1,5 +1,7 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
+import { lineStepFor } from "./ui/questCardLayout";
+import { scaledFont } from "@/utils/fontScale";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { HangarPanel, explainInstallBlock } from "./ui/HangarPanel";
 import { MicromoduleApplyPanel } from "./ui/MicromoduleApplyPanel";
@@ -140,7 +142,6 @@ export class StationScene extends GameScene {
   /** Rows the micromodule list can show at once — set by its render, read by the
    *  scroll clamp so the full catalog (gear + hull families) is reachable. */
   private micromoduleVisibleRows = 0;
-  private readonly ROW_H = 50;
   private readonly VISIBLE_ROWS = 9;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private detachWheel: (() => void) | null = null;
@@ -868,6 +869,19 @@ export class StationScene extends GameScene {
 
   // ── shop sub-view ─────────────────────────────────────────────────────────
 
+  /**
+   * Gear-listing row height. Historically a fixed 50 px, sized for the "M"
+   * scale's kind-badge + name two-line stack — at "L" scale the taller badge
+   * line bled into the name line beneath it (Task 3,
+   * `docs/plans/20260708-font-scale-and-faction-bugs.md`). Grows with the
+   * current font scale, floored at the historical 50 px.
+   */
+  private get ROW_H(): number {
+    const badgeStep = lineStepFor(scaledFont(11));
+    const nameStep = lineStepFor(scaledFont(13));
+    return Math.max(50, 8 + badgeStep + nameStep + 4);
+  }
+
   private renderShop(): void {
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;
@@ -971,7 +985,8 @@ export class StationScene extends GameScene {
         { rawColor: true, fontFamily: "monospace" },
       );
       kindBadge.x = PX + PAD + 6;
-      kindBadge.y = y + 8;
+      const kindBadgeTop = y + 8;
+      kindBadge.y = kindBadgeTop;
       kindBadge.eventMode = "none";
       listContainer.addChild(kindBadge);
 
@@ -991,7 +1006,10 @@ export class StationScene extends GameScene {
         fontFamily: "monospace",
       });
       name.x = PX + PAD + 6;
-      name.y = y + 26;
+      // Stacked below the kind badge — steps by the badge's own font-scale
+      // line height so the two never overlap at "L" (Task 3: the fixed +26
+      // offset assumed the "M"-scale ~14 px badge-line height).
+      name.y = kindBadgeTop + lineStepFor(scaledFont(11));
       name.eventMode = "none";
       listContainer.addChild(name);
 
@@ -1129,7 +1147,14 @@ export class StationScene extends GameScene {
     credText.eventMode = "none";
     this.mainContainer!.addChild(credText);
 
-    const ROW = 46;
+    // Historically a fixed 46 px, sized for the "M" scale's tier-badge + name
+    // two-line stack — at "L" scale the taller badge line bled into the name
+    // line beneath it (Task 3). Grows with the current font scale, floored at
+    // the historical 46 px.
+    const ROW = Math.max(
+      46,
+      6 + lineStepFor(scaledFont(11)) + lineStepFor(scaledFont(13)) + 6,
+    );
     let rowY = PY + 50;
     const TIER_BONUS = ["", "+20%", "+12%", "+6%"] as const;
 
@@ -1177,16 +1202,21 @@ export class StationScene extends GameScene {
         { rawColor: true, fontFamily: "monospace" },
       );
       tierBadge.x = PX + 20;
-      tierBadge.y = rowY + 6;
+      const tierBadgeTop = rowY + 6;
+      tierBadge.y = tierBadgeTop;
       tierBadge.eventMode = "none";
       this.mainContainer!.addChild(tierBadge);
 
+      // Stacked below the tier badge — steps by the badge's own font-scale
+      // line height so the two never overlap at "L" (Task 3: the fixed +24
+      // offset assumed the "M"-scale ~14 px badge-line height).
+      const nameTop = tierBadgeTop + lineStepFor(scaledFont(11));
       const nameText = scaledText(mm.name, 13, 0xddeeff, {
         rawColor: true,
         fontFamily: "monospace",
       });
       nameText.x = PX + 20;
-      nameText.y = rowY + 24;
+      nameText.y = nameTop;
       nameText.eventMode = "none";
       this.mainContainer!.addChild(nameText);
 
@@ -1195,7 +1225,7 @@ export class StationScene extends GameScene {
         fontFamily: "monospace",
       });
       catText.x = PX + 180;
-      catText.y = rowY + 24;
+      catText.y = nameTop;
       catText.eventMode = "none";
       this.mainContainer!.addChild(catText);
 

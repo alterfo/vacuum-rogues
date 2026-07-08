@@ -1,5 +1,9 @@
 import { Container, Graphics, Sprite } from "pixi.js";
-import { softGlowTexture } from "./gradientTexture";
+import {
+  nebulaCloudTexture,
+  softGlowTexture,
+  starPointTexture,
+} from "./gradientTexture";
 import type { Texture } from "pixi.js";
 import type { Renderer } from "./Renderer";
 import { SeededRNG } from "@/utils/seededRNG";
@@ -54,7 +58,7 @@ interface NebulaLayer {
 }
 
 interface TwinkleStar {
-  graphics: Graphics;
+  graphics: Graphics | Sprite;
   baseAlpha: number;
   phase: number;
   speed: number;
@@ -382,8 +386,14 @@ export class SpaceBackgroundLayer implements FlightModule {
   }
 
   /**
-   * A handful of bright "hero" stars with a 4-point glint that gently pulse
-   * (twinkle). Only these few are animated per-frame, so it stays cheap.
+   * A handful of bright "hero" stars with a soft photographic glint that
+   * gently pulse (twinkle). Only these few are animated per-frame, so it
+   * stays cheap. Rendered as a tinted `Sprite` of the baked
+   * `starPointTexture()` (a tight core + anti-aliased glints for hero stars)
+   * — NOT a runtime `Graphics.stroke()` cross, which reads as a flat vector
+   * plus-sign rather than a point of light. Falls back to a plain `Graphics`
+   * dot (no stroke spike) only when no 2D canvas context is available
+   * (jsdom / unit tests).
    */
   private createTwinkleStars(): void {
     const width = this.renderer.app.screen.width;
@@ -404,35 +414,43 @@ export class SpaceBackgroundLayer implements FlightModule {
     }
 
     const count = 60;
+    const heroTex = starPointTexture(true);
+    const normalTex = starPointTexture(false);
 
     for (let i = 0; i < count; i++) {
       const x = Math.random() * width * 2.2 - width * 0.6;
       const y = Math.random() * height * 2.2 - height * 0.6;
       const color = twinklePool[Math.floor(Math.random() * twinklePool.length)];
+      const isHero = Math.random() < 0.15;
       // vary size: most small, a few large "hero" stars
-      const r =
-        Math.random() < 0.15
-          ? 2.2 + Math.random() * 1.4 // bright hero star
-          : 1.1 + Math.random() * 1.4; // normal bright star
+      const r = isHero
+        ? 2.2 + Math.random() * 1.4 // bright hero star
+        : 1.1 + Math.random() * 1.4; // normal bright star
       const baseAlpha = 0.55 + Math.random() * 0.45;
 
-      const g = new Graphics();
-      // outer soft diffraction halo
-      g.circle(0, 0, r * 5).fill({ color, alpha: 0.06 });
-      g.circle(0, 0, r * 2.8).fill({ color, alpha: 0.18 });
-      // 4-point diffraction spike
-      const len = r * (r > 2 ? 9 : 6);
-      g.moveTo(-len, 0).lineTo(len, 0).moveTo(0, -len).lineTo(0, len);
-      g.stroke({ width: r > 2 ? 1.0 : 0.7, color, alpha: 0.45 });
-      // bright core
-      g.circle(0, 0, r).fill({ color, alpha: 1 });
-      g.x = x;
-      g.y = y;
-      g.alpha = baseAlpha;
-      container.addChild(g);
+      const tex = isHero ? heroTex : normalTex;
+      let display: Graphics | Sprite;
+      if (tex) {
+        const sprite = new Sprite(tex);
+        sprite.anchor.set(0.5);
+        sprite.tint = color;
+        const outerRadius = r * (isHero ? 4.2 : 3.4);
+        sprite.scale.set(outerRadius / (tex.width / 2));
+        display = sprite;
+      } else {
+        const g = new Graphics();
+        g.circle(0, 0, r * 5).fill({ color, alpha: 0.06 });
+        g.circle(0, 0, r * 2.8).fill({ color, alpha: 0.18 });
+        g.circle(0, 0, r).fill({ color, alpha: 1 });
+        display = g;
+      }
+      display.x = x;
+      display.y = y;
+      display.alpha = baseAlpha;
+      container.addChild(display);
 
       this.twinkleStars.push({
-        graphics: g,
+        graphics: display,
         baseAlpha,
         phase: Math.random() * Math.PI * 2,
         speed: 0.0008 + Math.random() * 0.0018,
@@ -532,43 +550,37 @@ export class SpaceBackgroundLayer implements FlightModule {
       cloud.x = rng.nextFloat(-sw * 0.7, sw * 0.7);
       cloud.y = rng.nextFloat(-sh * 0.7, sh * 0.7);
 
-      const outerColor = palette[0];
       const bodyColor = palette[rng.nextInt(1, 2)];
-      const innerColor = palette[3];
-      const coreColor = palette[4];
 
       // cloudR in screen pixels (was world-px, caused scaling artifacts on zoom).
       const cloudR = rng.nextFloat(200, 450);
       const squash = rng.nextFloat(0.45, 0.92);
       const rot = rng.next() * Math.PI;
 
-      // Smooth multi-hue cloud from a few tinted gradient sprites (haze → body →
-      // inner → core), sharing one baked texture — no per-frame BlurFilter. Each
-      // is a squashed, rotated soft ellipse; under screen blend they accumulate
-      // into a soft nebula. Falls back to stacked translucent circles in jsdom.
-      const glowTex = softGlowTexture();
-      if (glowTex) {
-        const addBlob = (
-          diameter: number,
-          color: number,
-          alpha: number,
-        ): void => {
-          const s = new Sprite(glowTex);
-          s.anchor.set(0.5);
-          s.eventMode = "none";
-          s.width = diameter;
-          s.height = diameter * squash;
-          s.rotation = rot;
-          s.tint = color;
-          s.alpha = alpha;
-          cloud.addChild(s);
-        };
-        addBlob(cloudR * 2.3, outerColor, 0.22); // outer haze
-        addBlob(cloudR * 1.7, bodyColor, 0.3); // body
-        addBlob(cloudR * 0.9, innerColor, 0.42); // hot inner
-        addBlob(cloudR * 0.4, coreColor, 0.6); // luminous core
+      // One wispy, internally-structured cloud sprite (space-visual-cleanup,
+      // 2026-07-08) — replaces the previous 4 perfectly concentric
+      // `softGlowTexture` rings (haze/body/inner/core), which under screen
+      // blend read as a single smooth, undifferentiated blob rather than a
+      // nebula. `nebulaCloudTexture` bakes its own internal density variation
+      // (offset blobs + a denser core + speckle) so ONE tinted, squashed,
+      // rotated sprite already reads as structured. Falls back to the
+      // previous stacked-Graphics rings in jsdom (no canvas).
+      const nebulaTex = nebulaCloudTexture(rng.nextInt(0, 999));
+      if (nebulaTex) {
+        const s = new Sprite(nebulaTex);
+        s.anchor.set(0.5);
+        s.eventMode = "none";
+        s.width = cloudR * 2.2;
+        s.height = cloudR * 2.2 * squash;
+        s.rotation = rot;
+        s.tint = bodyColor;
+        s.alpha = 0.55;
+        cloud.addChild(s);
       } else {
         // Fallback (no canvas): stacked translucent circles per layer.
+        const outerColor = palette[0];
+        const innerColor = palette[3];
+        const coreColor = palette[4];
         const outerG = new Graphics();
         for (let b = 0; b < 24; b++) {
           const ang = rng.next() * Math.PI * 2;

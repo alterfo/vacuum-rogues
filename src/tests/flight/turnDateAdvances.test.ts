@@ -32,6 +32,15 @@
  * Built against REAL PixiJS (Container/Text construct in jsdom without WebGL),
  * mirroring fontScaleRestyle.test.ts — only the WebGL-texture-bearing PlanetSprite
  * / PlanetInfoPanel are stubbed.
+ *
+ * SUPERSEDED (Bug 3b, HUD-clutter playtest pass 2026-07-06/07): the sub-day
+ * HH:MM clock this fix added to the date label was itself reported as clutter
+ * and removed — `updateDayCounter` now renders `formatGameDate` (whole day
+ * only) again. Part B's sub-day assertions below were updated to pin the new,
+ * deliberate behaviour (sub-day progress no longer changes the visible date);
+ * the whole-day baseline and Part A's sub-day-source assertions are unchanged
+ * since the underlying `currentDay` accumulator is still correct — only the
+ * HUD's display format changed.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 
@@ -178,9 +187,11 @@ describe("a turn advances sub-day time (the date SOURCE moves)", () => {
 
   // End-to-end: a real scene turn drives a REAL FlightHud's date label through the
   // whole chain — scene accumulators → scene.currentDay getter → setDayProvider
-  // closure → updateDayCounter → formatGameTimestamp → Text. The unit tests above
+  // closure → updateDayCounter → formatGameDate → Text. The unit tests above
   // and in turnDateDisplay.test.ts each cover one link; this asserts they compose,
   // wired the way SpaceFlightScene.createUI does it (`setDayProvider(() => this.currentDay)`).
+  // The label is clock-free (Bug 3b), so the turn must cross a whole-day boundary
+  // for the composed label to move.
   it("a real scene turn moves the real HUD date label (composed end-to-end)", () => {
     const physics = {
       shipX: 0,
@@ -211,9 +222,12 @@ describe("a turn advances sub-day time (the date SOURCE moves)", () => {
 
     hud.update(16, 0);
     const before = label();
+    // 5 × 120 px = 600 px > DISTANCE_PER_DAY (500) — crosses into day 1.
     updateShip(16);
     updateShip(16);
-    updateShip(16); // accrue sub-day distance on the real scene (still day 0)
+    updateShip(16);
+    updateShip(16);
+    updateShip(16);
     hud.update(16, 0);
 
     expect(label()).not.toBe(before); // the rendered label moved, driven by the scene turn
@@ -263,20 +277,19 @@ describe("the HUD date the player sees advances during a turn", () => {
     hud.destroy();
   });
 
-  // GREEN after the Task 2 fix (was the Task-1 red repro, committed as `it.fails`).
-  // While a turn is mid-day the day-of-turn carries a growing fraction
-  // (gameDays + distanceTraveled/DISTANCE_PER_DAY + waitDayAccum); the displayed
-  // date now reflects that sub-day progress (a HH:MM clock from the fractional
-  // part) so the player sees time moving. Before the fix the HUD floored to the
-  // integer day and all three reads were the same string — the date looked frozen.
-  it("sub-day progress within one whole day is visible to the player", () => {
+  // SUPERSEDED by Bug 3b (HUD-clutter playtest pass 2026-07-06/07): the HH:MM
+  // clock this test used to require was itself reported as clutter and removed.
+  // The date label is deliberately clock-free again — sub-day progress within
+  // one whole day must NOT change the displayed string (only a whole-day tick
+  // does, per the baseline above).
+  it("sub-day progress within one whole day is not shown (clock removed)", () => {
     const { hud, render } = buildHud();
     const atDayStart = render(5.0);
     const atQuarterDay = render(5.25);
     const atThreeQuarterDay = render(5.75);
 
-    expect(atQuarterDay).not.toBe(atDayStart);
-    expect(atThreeQuarterDay).not.toBe(atQuarterDay);
+    expect(atQuarterDay).toBe(atDayStart);
+    expect(atThreeQuarterDay).toBe(atDayStart);
     hud.destroy();
   });
 });

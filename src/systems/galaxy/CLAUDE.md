@@ -35,6 +35,14 @@ Completed `20260616-living-trade-economy-rumors` — a self-balancing "trade-rus
 - **NPC reaction** (`rumorReactionChance`, exported) `= clamp(rumorNpcBaseChance + rumorNpcMarginScale × max(0, marginPct − rumorMarginExpire), 0, rumorNpcMaxChance)` — anchored to the margin *above* expiry so the pull tapers to ~base as the spread closes. Only `TRADER` NPCs react, and `rng` is drawn **only** when a reachable rumor exists (the no-rumor stream stays bit-identical).
 - **Persistence:** `Galaxy.activeRumors: RouteRumor[]` is a method-less value type, JSON-serialized like the rest of the galaxy. `RouteRumorSchema` + `GalaxySchema.activeRumors` mirror it (default `[]` for old saves). `RouteRumor` lives in the domain layer and avoids the upward import by structurally matching the systems-layer `RouteCandidate` via `RouteLike = Omit<RouteRumor, "id"|"createdDay"|"lastMarginPct">`. **Load caveat:** `setPrototypeOf` does not run the `activeRumors = []` field initializer and SaveManager returns the raw (un-defaulted) parsed object, so `rehydrateLoadedState` must coerce a missing `activeRumors` back to `[]` (regression: `GameEngine.rumor-rehydration.test.ts`).
 
+## Faction Distribution (generation-time `ownerFaction`)
+
+Completed `20260708-font-scale-and-faction-bugs` (Bug 2):
+- **Every system's `ownerFaction` used to hardcode `"INDEPENDENT" as Faction`** (`GalaxySimulator.ts:101`) — no distribution existed at all. Fixed with a weighted per-system pick: `FACTION_DISTRIBUTION_WEIGHTS` in `src/config/balance.ts` (`INDEPENDENT` weight 10, each of the 5 `HOME_FACTIONS` weight 3 — `OVERMIND` is excluded, it's a live capture state, never a generation-time roll) consumed by `pickSystemFaction(rng)` (`src/systems/galaxy/systemFactionDistribution.ts`), mirroring `systemTechDistribution.ts`'s `pickSystemTechLevel` cumulative-subtraction algorithm exactly.
+- **Per-system seeded, never the shared stream**: called inline per-system as `pickSystemFaction(new SeededRNG(`${seed}_faction_${i}`))`, the same convention as `pickStarType`'s `_star_${i}` and `pickSystemTechLevel`'s tech seed — it never perturbs `this.rng`, so existing generation determinism/snapshots stay bit-identical.
+- **Home-system override**: `assignFactionHomeSystems` (`:658-722`) now also writes `best.ownerFaction = best.homeFactionId` right after setting `homeFactionId`, so a faction's own home system always displays that faction as owner regardless of its generation-time roll (same pattern as the pre-existing `economyType` override at the same call site).
+- Generation-only change — no domain field added, no migration needed; existing saves keep whatever galaxy they already generated.
+
 ## DialogueSystem
 
 **`startDialogue` deletes the previous session's timestamped key when re-indexing the NPC** — the map holds ≤ 2 entries per NPC (never grows unboundedly). Regression test: `src/tests/dialogueSystem.test.ts`.

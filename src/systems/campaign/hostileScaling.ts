@@ -75,7 +75,9 @@ export const DEFAULT_NEUTRAL_SCALING_CONFIG: NeutralScalingConfig = {
   strongMult: NEUTRAL_SCALING_STRONG_MULT,
 };
 
+/** Clamps into [0,1]; non-finite input (NaN/Infinity) falls back to 0 (safest/weakest). */
 function clamp01(x: number): number {
+  if (!Number.isFinite(x)) return 0;
   return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 

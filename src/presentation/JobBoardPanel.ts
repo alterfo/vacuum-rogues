@@ -1,6 +1,12 @@
 import { Container, Graphics, Rectangle, Text } from "pixi.js";
 import { attachWheelScroll } from "./ui/WheelScroll";
 import { scaledText } from "./ui/scaledText";
+import { scaledFont } from "@/utils/fontScale";
+import {
+  computeRowLayout,
+  TOP_PAD,
+  type RowLayout,
+} from "./ui/jobBoardRowLayout";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import type { Quest } from "@/domain/Quest";
 import { QuestType } from "@/types";
@@ -60,11 +66,21 @@ export class JobBoardPanel {
   private detachWheel: (() => void) | null = null;
 
   private static readonly W = 520;
-  private static readonly ROW_H = 60;
-  private static readonly ROW_H_OFFER = 130;
   private static readonly HEAD = 48;
   /** Reserved bottom bar for the scroll arrows when the list overflows. */
   private static readonly SCROLL_BAR_H = 26;
+  /** Row-to-row gap added on top of each row's own (dynamic) content height. */
+  private static readonly ROW_GAP = 6;
+  /** Historical fixed offer-row height — floor so a short quest keeps the old size. */
+  private static readonly MIN_OFFER_ROW_H = 124;
+  /** Historical fixed active-row height — floor so a short title keeps the old size. */
+  private static readonly MIN_ACTIVE_ROW_H = 54;
+  /** Shared offer-row wrap width for title/description — clearance before the reward badge. */
+  private static readonly OFFER_WRAP_WIDTH = JobBoardPanel.W - 120;
+  /** Active-row title wrap width — clearance before the right-aligned countdown badge. */
+  private static readonly ACTIVE_WRAP_WIDTH = JobBoardPanel.W - 140;
+  /** Cumulative y offsets (within the offers container) of each rendered offer row. */
+  private offerRowOffsets: number[] = [];
 
   constructor(
     quests: GeneratedQuest[],
@@ -84,15 +100,29 @@ export class JobBoardPanel {
   ) {
     this.callbacks = callbacks;
     this.container = new Container();
-    const availableRows = Math.max(quests.length, 1);
-    const activeRows = activeQuests.length;
-    const activeSection =
-      activeRows > 0 ? activeRows * JobBoardPanel.ROW_H + 36 : 0;
-    const fullH =
-      JobBoardPanel.HEAD +
-      activeSection +
-      availableRows * JobBoardPanel.ROW_H_OFFER +
-      16;
+
+    const offerLayouts = quests.map((q) => JobBoardPanel.offerRowLayout(q));
+    const activeLayouts = activeQuests.map((q) =>
+      JobBoardPanel.activeRowLayout(q),
+    );
+
+    const activeSlotSum = activeLayouts.reduce(
+      (sum, l) => sum + l.contentHeight + JobBoardPanel.ROW_GAP,
+      0,
+    );
+    const activeSection = activeQuests.length > 0 ? activeSlotSum + 36 : 0;
+    const offerSlotSum = offerLayouts.reduce(
+      (sum, l) => sum + l.contentHeight + JobBoardPanel.ROW_GAP,
+      0,
+    );
+    // An empty offer list still reserves one row's worth of space for the
+    // "нет заданий" message (mirrors the historical `max(quests.length, 1)`).
+    const offersHeight =
+      quests.length > 0
+        ? offerSlotSum
+        : JobBoardPanel.MIN_OFFER_ROW_H + JobBoardPanel.ROW_GAP;
+    const fullH = JobBoardPanel.HEAD + activeSection + offersHeight + 16;
+
     // Never let the board overflow the screen — cap it and scroll the offers.
     const h = Math.min(fullH, screenHeight - 16);
     this.panelHeight = h;
@@ -106,6 +136,52 @@ export class JobBoardPanel {
       activeQuests,
       currentDay,
       playerRank,
+      offerLayouts,
+      activeLayouts,
+    );
+  }
+
+  /** Pure per-quest row layout for an offer row — see `jobBoardRowLayout.ts`. */
+  private static offerRowLayout(q: GeneratedQuest): RowLayout {
+    return computeRowLayout(
+      {
+        title: q.template.title,
+        hasIssuer: !!q.issuerName,
+        description: q.template.description ?? "",
+        hasHighlights: q.highlights.length > 0,
+      },
+      {
+        wrapWidth: JobBoardPanel.OFFER_WRAP_WIDTH,
+        tagFontPx: scaledFont(11),
+        metaFontPx: scaledFont(13),
+        titleFontPx: scaledFont(12),
+        issuerFontPx: scaledFont(10),
+        descFontPx: scaledFont(13),
+        highlightsFontPx: scaledFont(11),
+        minHeight: JobBoardPanel.MIN_OFFER_ROW_H,
+      },
+    );
+  }
+
+  /** Pure per-quest row layout for an active-quest row — see `jobBoardRowLayout.ts`. */
+  private static activeRowLayout(q: Quest): RowLayout {
+    return computeRowLayout(
+      {
+        title: q.title,
+        hasIssuer: false,
+        description: "",
+        hasHighlights: false,
+      },
+      {
+        wrapWidth: JobBoardPanel.ACTIVE_WRAP_WIDTH,
+        tagFontPx: scaledFont(11),
+        metaFontPx: scaledFont(11),
+        titleFontPx: scaledFont(12),
+        issuerFontPx: scaledFont(10),
+        descFontPx: scaledFont(13),
+        highlightsFontPx: scaledFont(11),
+        minHeight: JobBoardPanel.MIN_ACTIVE_ROW_H,
+      },
     );
   }
 
@@ -117,6 +193,8 @@ export class JobBoardPanel {
     activeQuests: Quest[],
     currentDay: number,
     playerRank = 0,
+    offerLayouts: RowLayout[] = [],
+    activeLayouts: RowLayout[] = [],
   ): void {
     const W = JobBoardPanel.W;
     const bg = new Graphics();
@@ -166,10 +244,11 @@ export class JobBoardPanel {
         true,
       );
       y += 26;
-      for (const q of activeQuests) {
-        this.addActiveRow(q, y, W, currentDay);
-        y += JobBoardPanel.ROW_H;
-      }
+      activeQuests.forEach((q, i) => {
+        const layout = activeLayouts[i];
+        this.addActiveRow(q, y, W, currentDay, layout);
+        y += layout.contentHeight + JobBoardPanel.ROW_GAP;
+      });
       // Divider
       const divider = new Graphics();
       divider.rect(10, y + 2, W - 20, 1).fill({ color: 0x334466, alpha: 0.9 });
@@ -204,15 +283,38 @@ export class JobBoardPanel {
     // ---- Scrollable offers area ----------------------------------------
     const offerAreaTop = y;
     const bottomPad = 8;
-    const ROW_H_OFFER = JobBoardPanel.ROW_H_OFFER;
-    const contentHeight = quests.length * ROW_H_OFFER;
+    // Row heights vary with content now, so track each row's own slot height
+    // (content + gap) and its cumulative offset instead of a fixed step.
+    const offerSlots = offerLayouts.map(
+      (l) => l.contentHeight + JobBoardPanel.ROW_GAP,
+    );
+    const offerRowOffsets: number[] = [];
+    let offerAcc = 0;
+    for (const slot of offerSlots) {
+      offerRowOffsets.push(offerAcc);
+      offerAcc += slot;
+    }
+    this.offerRowOffsets = offerRowOffsets;
+    const contentHeight = offerAcc;
     let offerAreaHeight = h - offerAreaTop - bottomPad;
     const overflows = contentHeight > offerAreaHeight;
     if (overflows) {
       // Reserve a strip at the bottom for the scroll arrows.
       offerAreaHeight -= JobBoardPanel.SCROLL_BAR_H;
     }
-    const visibleRows = Math.max(1, Math.floor(offerAreaHeight / ROW_H_OFFER));
+    // How many TRAILING rows fit within the visible window — generalises the
+    // old `floor(offerAreaHeight / ROW_H_OFFER)` to variable row heights.
+    let visibleRows = 1;
+    if (offerSlots.length > 0) {
+      let sum = 0;
+      let count = 0;
+      for (let i = offerSlots.length - 1; i >= 0; i--) {
+        if (count > 0 && sum + offerSlots[i] > offerAreaHeight) break;
+        sum += offerSlots[i];
+        count++;
+      }
+      visibleRows = Math.max(1, count);
+    }
     const maxScroll = Math.max(0, quests.length - visibleRows);
 
     // Mask sits on the panel (parent), so it stays fixed while the offers
@@ -241,7 +343,7 @@ export class JobBoardPanel {
     );
     offers.hitArea = this.offersHitArea;
 
-    for (const q of quests) {
+    quests.forEach((q, i) => {
       const alreadyTaken = acceptedQuestIds.has(q.template.id);
       const minRank = q.template.minRank ?? 0;
       const rankBlocked = minRank > 0 && playerRank < minRank;
@@ -252,11 +354,12 @@ export class JobBoardPanel {
         W,
         canAccept,
         alreadyTaken,
+        offerLayouts[i],
         rankBlocked ? minRank : 0,
         offers,
       );
-      y += ROW_H_OFFER;
-    }
+      y += offerSlots[i];
+    });
 
     if (maxScroll > 0) {
       this.addScrollControls(W, offerAreaTop + offerAreaHeight + 2, maxScroll);
@@ -282,14 +385,14 @@ export class JobBoardPanel {
     );
     if (next === this.offerScrollOffset) return;
     this.offerScrollOffset = next;
+    const offsetPx = this.offerRowOffsets[next] ?? 0;
     if (this.offersContainer) {
       // `|| 0` normalises the `-0` you'd otherwise get at offset 0.
-      this.offersContainer.y = -next * JobBoardPanel.ROW_H_OFFER || 0;
+      this.offersContainer.y = -offsetPx || 0;
       // Keep the hit window fixed on screen as the content scrolls under it, so
       // masked-out rows stay un-clickable (mask clips render only).
       if (this.offersHitArea) {
-        this.offersHitArea.y =
-          this.offerAreaTopPx + next * JobBoardPanel.ROW_H_OFFER;
+        this.offersHitArea.y = this.offerAreaTopPx + offsetPx;
       }
     }
     this.updateScrollArrows(maxOffset);
@@ -341,8 +444,9 @@ export class JobBoardPanel {
     y: number,
     W: number,
     currentDay: number,
+    layout: RowLayout,
   ): void {
-    const rowH = JobBoardPanel.ROW_H - 6;
+    const rowH = layout.contentHeight;
     const color = TYPE_COLOR[q.type as QuestType] ?? 0xffffff;
     const typeLabel = questTypeLabel(q.type as QuestType);
 
@@ -352,10 +456,27 @@ export class JobBoardPanel {
     row.eventMode = "static";
     this.container.addChild(row);
 
-    this.label(typeLabel, 20, y + 6, 11, color, false, this.container, true);
+    this.label(
+      typeLabel,
+      20,
+      y + TOP_PAD,
+      11,
+      color,
+      false,
+      this.container,
+      true,
+    );
 
-    const title = q.title.length > 28 ? q.title.slice(0, 27) + "…" : q.title;
-    this.label(title, 20, y + 22, 12, 0xdddddd, true);
+    // Word-wrapped — no more character-count truncation (`slice(0,27)+"…"`).
+    const titleT = scaledText(q.title, 12, 0xdddddd, {
+      fontWeight: "bold",
+      wordWrap: true,
+      wordWrapWidth: JobBoardPanel.ACTIVE_WRAP_WIDTH,
+    });
+    titleT.eventMode = "none";
+    titleT.x = 20;
+    titleT.y = y + layout.titleY;
+    this.container.addChild(titleT);
 
     // Countdown
     let countdownText: string;
@@ -384,7 +505,9 @@ export class JobBoardPanel {
     cd.eventMode = "none";
     cd.anchor.set(1, 0);
     cd.x = W - 16;
-    cd.y = y + 14;
+    // Shares the type-tag's line (TOP_PAD), not the title's, for the same
+    // reason as the offer row's reward badge (see `addRow`).
+    cd.y = y + TOP_PAD;
     this.container.addChild(cd);
   }
 
@@ -394,10 +517,11 @@ export class JobBoardPanel {
     W: number,
     canAccept: boolean,
     alreadyTaken: boolean,
+    layout: RowLayout,
     requiredRank = 0,
     parent: Container = this.container,
   ): void {
-    const rowH = JobBoardPanel.ROW_H_OFFER - 6;
+    const rowH = layout.contentHeight;
     const tpl = q.template;
     const color = TYPE_COLOR[tpl.type] ?? 0xffffff;
 
@@ -409,19 +533,26 @@ export class JobBoardPanel {
 
     // Type tag
     const tag = questTypeLabel(tpl.type);
-    this.label(tag, 20, y + 6, 11, color, false, parent, true);
+    this.label(tag, 20, y + TOP_PAD, 11, color, false, parent, true);
 
-    // Title (truncated)
-    const title =
-      tpl.title.length > 36 ? tpl.title.slice(0, 35) + "…" : tpl.title;
-    this.label(title, 20, y + 20, 12, 0xffffff, true, parent);
+    // Title — word-wrapped — no more character-count truncation
+    // (`slice(0,35)+"…"`), so the full title is always readable.
+    const titleT = scaledText(tpl.title, 12, 0xffffff, {
+      fontWeight: "bold",
+      wordWrap: true,
+      wordWrapWidth: JobBoardPanel.OFFER_WRAP_WIDTH,
+    });
+    titleT.eventMode = "none";
+    titleT.x = 20;
+    titleT.y = y + layout.titleY;
+    parent.addChild(titleT);
 
     // Issuer line: who posted the job (e.g. "— Снабженец Маклай").
     if (q.issuerName) {
       const issuer = q.issuerTitle
         ? `— ${q.issuerTitle} ${q.issuerName}`
         : `— ${q.issuerName}`;
-      this.label(issuer, 20, y + 36, 10, 0x77aacc, false, parent);
+      this.label(issuer, 20, y + layout.issuerY, 10, 0x77aacc, false, parent);
     }
 
     // Description (full text, grey, small, wrapped). Routed through scaledText:
@@ -430,17 +561,17 @@ export class JobBoardPanel {
     if (tpl.description) {
       const descText = scaledText(tpl.description, 13, 0x889aaa, {
         wordWrap: true,
-        wordWrapWidth: W - 120,
+        wordWrapWidth: JobBoardPanel.OFFER_WRAP_WIDTH,
       });
       descText.eventMode = "none";
       descText.x = 20;
-      descText.y = y + (q.issuerName ? 50 : 36);
+      descText.y = y + layout.descY;
       parent.addChild(descText);
     }
 
     // Highlight tags: [Груз: медикаменты]  [Система: Альфа]  [Выдан: планета X]
     if (q.highlights.length > 0) {
-      const hy = y + JobBoardPanel.ROW_H_OFFER - 30;
+      const hy = y + layout.highlightsY;
       const tagSpacing = 140;
       let hx = 20;
       for (const hl of q.highlights) {
@@ -467,7 +598,10 @@ export class JobBoardPanel {
     m.eventMode = "none";
     m.anchor.set(1, 0);
     m.x = W - 90;
-    m.y = y + 20;
+    // Shares the type-tag's line (TOP_PAD), not the title's — the title is
+    // now word-wrapped to its full length, so a long title's first line would
+    // otherwise run directly into this right-anchored badge.
+    m.y = y + TOP_PAD;
     parent.addChild(m);
 
     // "Принять" button on the right

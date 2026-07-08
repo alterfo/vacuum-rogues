@@ -209,4 +209,16 @@ describe("SpaceBackgroundLayer (extracted FlightModule)", () => {
     expect(internal.twinkleStars.length).toBe(0);
     expect(internal.swarmLayers.length).toBe(0);
   });
+
+  it("builds nebula clouds via the Graphics fallback when no 2D canvas context is available", () => {
+    // jsdom has no canvas 2D context, so nebulaCloudTexture() returns null and
+    // createNebulae() must fall back to its stacked-Graphics cloud rendering
+    // instead of throwing or silently building zero clouds.
+    const { layer } = makeHarness();
+    layer.initialize();
+    const internal = layer as unknown as BackgroundInternals;
+    expect(internal.nebulaeContainer).not.toBeNull();
+    expect(internal.nebulaeContainer!.children.length).toBeGreaterThan(0);
+    layer.destroy();
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { Container } from "pixi.js";
+import { Container, Sprite } from "pixi.js";
 import { AsteroidBelt } from "@/presentation/flight/AsteroidBelt";
+import { cometHeadTexture } from "@/presentation/gradientTexture";
 import type { Renderer } from "@/presentation/Renderer";
 
 /**
@@ -46,5 +47,23 @@ describe("AsteroidBelt (extracted FlightModule)", () => {
     // destroy() removes (and destroys) its own container from the layer.
     expect(gameLayer.children.length).toBe(0);
     expect(belt.count).toBe(0);
+  });
+
+  it("falls back to the minimal drawn nucleus when cometHeadTexture is null (jsdom, no canvas)", () => {
+    // No canvas mock in this file — jsdom's default getContext() returns null.
+    expect(cometHeadTexture()).toBeNull();
+
+    const { belt, gameLayer } = makeHarness();
+    expect(() => belt.initialize()).not.toThrow();
+
+    // No head/core Sprites were mounted — the comet nucleus is drawn on its
+    // Graphics fallback instead (setupCometVisuals leaves head/core null).
+    const fieldContainer = gameLayer.children[0] as Container;
+    const sprites = fieldContainer.children.filter(
+      (c): c is Sprite => c instanceof Sprite,
+    );
+    expect(sprites.length).toBe(0);
+
+    belt.destroy();
   });
 });

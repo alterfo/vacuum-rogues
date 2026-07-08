@@ -96,6 +96,82 @@ describe("baked dust + rock textures (canvas available)", () => {
     // seed and seed+ROCK_VARIANT_COUNT map to the same baked variant.
     expect(rockTexture(0)).toBe(rockTexture(ROCK_VARIANT_COUNT));
   });
+
+  it("starPointTexture bakes a non-null texture for hero and non-hero and caches each", async () => {
+    const { starPointTexture } = await import("@/presentation/gradientTexture");
+    const heroA = starPointTexture(true);
+    const heroB = starPointTexture(true);
+    const normalA = starPointTexture(false);
+    const normalB = starPointTexture(false);
+    expect(heroA).not.toBeNull();
+    expect(normalA).not.toBeNull();
+    expect(heroB).toBe(heroA); // reused, not re-baked
+    expect(normalB).toBe(normalA); // reused, not re-baked
+    expect(heroA).not.toBe(normalA); // distinct hero vs non-hero bake
+  });
+
+  it("nebulaCloudTexture bakes a non-null texture and reuses it for the same seed", async () => {
+    const { nebulaCloudTexture } =
+      await import("@/presentation/gradientTexture");
+    const a = nebulaCloudTexture(0);
+    const b = nebulaCloudTexture(0);
+    expect(a).not.toBeNull();
+    expect(b).toBe(a); // reused, not re-baked
+  });
+
+  it("distinct nebula seeds produce distinct cached textures", async () => {
+    const { nebulaCloudTexture } =
+      await import("@/presentation/gradientTexture");
+    const n0 = nebulaCloudTexture(0);
+    const n1 = nebulaCloudTexture(1);
+    expect(n0).not.toBeNull();
+    expect(n1).not.toBeNull();
+    expect(n1).not.toBe(n0);
+  });
+
+  it("nebula seeds wrap onto a bounded variant set (same variant → same texture)", async () => {
+    const { nebulaCloudTexture, NEBULA_VARIANT_COUNT } =
+      await import("@/presentation/gradientTexture");
+    expect(nebulaCloudTexture(0)).toBe(
+      nebulaCloudTexture(NEBULA_VARIANT_COUNT),
+    );
+  });
+
+  it("cometHeadTexture bakes a non-null texture and caches it (baked once)", async () => {
+    const { cometHeadTexture } = await import("@/presentation/gradientTexture");
+    const a = cometHeadTexture();
+    const b = cometHeadTexture();
+    expect(a).not.toBeNull();
+    expect(b).toBe(a); // reused, not re-baked
+  });
+
+  it("rockTexture redesign (20260708-space-visual-cleanup) widened the variant set for more visual variety", async () => {
+    const { ROCK_VARIANT_COUNT } =
+      await import("@/presentation/gradientTexture");
+    expect(ROCK_VARIANT_COUNT).toBeGreaterThanOrEqual(16);
+  });
+
+  it("rockTexture bakes a distinct, cached texture for every variant across the widened set", async () => {
+    const { rockTexture, ROCK_VARIANT_COUNT } =
+      await import("@/presentation/gradientTexture");
+    const textures = new Set(
+      Array.from({ length: ROCK_VARIANT_COUNT }, (_, i) => rockTexture(i)),
+    );
+    expect(textures.has(null)).toBe(false);
+    expect(textures.size).toBe(ROCK_VARIANT_COUNT);
+    // A seed one full cycle later wraps back onto the same baked variant.
+    expect(rockTexture(2)).toBe(rockTexture(2 + ROCK_VARIANT_COUNT));
+  });
+
+  it("rockTexture strokes a rim-light gradient along the silhouette edge (faceted 3D read)", async () => {
+    const ctx = mockCtx();
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ctx) as never;
+    const { rockTexture } = await import("@/presentation/gradientTexture");
+    const tex = rockTexture(0);
+    expect(tex).not.toBeNull();
+    expect(ctx.createLinearGradient).toHaveBeenCalled();
+    expect(ctx.stroke).toHaveBeenCalled();
+  });
 });
 
 describe("baked textures are null-safe without a 2D context", () => {
@@ -116,5 +192,22 @@ describe("baked textures are null-safe without a 2D context", () => {
   it("rockTexture returns null (jsdom fallback, no throw)", async () => {
     const { rockTexture } = await import("@/presentation/gradientTexture");
     expect(rockTexture(0)).toBeNull();
+  });
+
+  it("starPointTexture returns null for both hero and non-hero (jsdom fallback, no throw)", async () => {
+    const { starPointTexture } = await import("@/presentation/gradientTexture");
+    expect(starPointTexture(true)).toBeNull();
+    expect(starPointTexture(false)).toBeNull();
+  });
+
+  it("nebulaCloudTexture returns null (jsdom fallback, no throw)", async () => {
+    const { nebulaCloudTexture } =
+      await import("@/presentation/gradientTexture");
+    expect(nebulaCloudTexture(0)).toBeNull();
+  });
+
+  it("cometHeadTexture returns null (jsdom fallback, no throw)", async () => {
+    const { cometHeadTexture } = await import("@/presentation/gradientTexture");
+    expect(cometHeadTexture()).toBeNull();
   });
 });

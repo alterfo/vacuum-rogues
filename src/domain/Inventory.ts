@@ -97,4 +97,22 @@ export class Inventory {
       }
     }
   }
+
+  /**
+   * Jettison-to-space: remove `amount` of a held resource, no credit refund
+   * (selling is the separate paid path). Throws when the type isn't held or
+   * the requested amount exceeds the stack — same error code
+   * {@link consumeResources} uses for an insufficient stack.
+   */
+  removeResource(type: ResourceType, amount: number): void {
+    const stack = this.resources.find((r) => r.type === type);
+    if (!stack || stack.amount < amount) {
+      throw new GameBusinessException(
+        "INSUFFICIENT_RESOURCES",
+        `Not enough ${type} to remove.`,
+        { type, amount },
+      );
+    }
+    stack.amount -= amount;
+  }
 }

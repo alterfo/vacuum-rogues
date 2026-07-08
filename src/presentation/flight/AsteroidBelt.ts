@@ -13,10 +13,10 @@ import {
   type CometFlyby,
 } from "@/utils/flightGeometry";
 import {
+  cometHeadTexture,
   dustParticleTexture,
   rockTexture,
   ROCK_VARIANT_COUNT,
-  softGlowTexture,
 } from "../gradientTexture";
 import {
   CometDustTail,
@@ -40,10 +40,10 @@ const TAIL_ALPHA = 0.5;
 /** Head→tail colour grade: a warm white coma fading to a cool blue tail tip. */
 const TAIL_HEAD_TINT = 0xfff0cf;
 const TAIL_TIP_TINT = 0x8fbcff;
-/** Outer coma halo: softGlowTexture is 256 px (r 128); 0.72 → a ~92 px glow. */
+/** Outer coma halo: cometHeadTexture is 256 px (r 128); 0.72 → a ~92 px glow. */
 const HEAD_SCALE = 0.72;
 /** Bright inner nucleus core (smaller, near-white, sits inside the coma halo). */
-const CORE_SCALE = 0.34;
+const CORE_SCALE = 0.26;
 /** Icy white-blue coma + warm-white core tints. */
 const HEAD_TINT = 0xd6ecff;
 const CORE_TINT = 0xfff4e0;
@@ -84,8 +84,8 @@ interface AsteroidMote {
   cometCooldown: number; // ms left offscreen before a fresh comet flies in (0 = active)
   // Particle-comet visuals (comets only; null when no 2D canvas is available —
   // jsdom / unit tests — so the module degrades without throwing).
-  head: Sprite | null; // outer coma halo (softGlowTexture sprite)
-  core: Sprite | null; // bright inner nucleus core (softGlowTexture sprite)
+  head: Sprite | null; // outer coma halo (cometHeadTexture sprite)
+  core: Sprite | null; // bright inner nucleus core (cometHeadTexture sprite)
   tail: CometDustTail | null; // pure dust-tail emitter (PixiJS-free)
   particles: Particle[]; // pooled visuals, mirrored 1:1 with tail.slots
 }
@@ -206,7 +206,7 @@ export class AsteroidBelt implements FlightModule {
 
   /**
    * Build the particle-comet visuals (head glow sprite + dust-tail emitter +
-   * pooled particle layer). Soft edges come from the baked `softGlowTexture` /
+   * pooled particle layer). Soft edges come from the baked `cometHeadTexture` /
    * `dustParticleTexture` alpha — NOT a per-frame BlurFilter
    * (`feedback-no-blur-filters-flight`). All three are null when no 2D canvas is
    * available (jsdom / unit tests); the comet then falls back to a small drawn
@@ -241,10 +241,11 @@ export class AsteroidBelt implements FlightModule {
       container.addChildAt(layer, 0);
     }
 
-    // Coma: two stacked additive glow sprites of the baked softGlowTexture — a
+    // Coma: two stacked additive glow sprites of the baked cometHeadTexture — a
     // wide icy halo with a smaller, brighter near-white nucleus core inside it —
-    // give a real comet-head read with no per-frame BlurFilter.
-    const headTex = softGlowTexture();
+    // give a real comet-head read (sharp pinpoint core + asymmetric coma, not
+    // another generic soft circle) with no per-frame BlurFilter.
+    const headTex = cometHeadTexture();
     if (headTex) {
       const head = new Sprite(headTex);
       head.anchor.set(0.5);
@@ -486,14 +487,19 @@ export class AsteroidBelt implements FlightModule {
         a.graphics.x = a.x;
         a.graphics.y = a.y;
         a.graphics.alpha = fade;
+        // cometHeadTexture bakes its coma bulge offset along local +x, so rotate
+        // the sprite to point that bulge anti-sunward (same direction as the tail).
+        const comaRotation = Math.atan2(uy, ux);
         if (a.head) {
           a.head.x = a.x;
           a.head.y = a.y;
+          a.head.rotation = comaRotation;
           a.head.alpha = fade;
         }
         if (a.core) {
           a.core.x = a.x;
           a.core.y = a.y;
+          a.core.rotation = comaRotation;
           // The hot nucleus reads brighter than the surrounding halo.
           a.core.alpha = fade;
         }

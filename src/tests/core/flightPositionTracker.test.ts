@@ -115,6 +115,21 @@ describe("FlightPositionTracker", () => {
       await tracker.flushFlightAutosave();
       expect(deps.saveGame).not.toHaveBeenCalled();
     });
+
+    it("flushes the active scene's live state (e.g. NPC positions) before saving", async () => {
+      const persistLiveSceneState = vi.fn();
+      deps.persistLiveSceneState = persistLiveSceneState;
+      const tracker = new FlightPositionTracker(deps);
+      await tracker.flushFlightAutosave();
+      expect(persistLiveSceneState).toHaveBeenCalled();
+      expect(deps.saveGame).toHaveBeenCalledWith("auto");
+    });
+
+    it("still saves when persistLiveSceneState is not provided", async () => {
+      const tracker = new FlightPositionTracker(deps);
+      await expect(tracker.flushFlightAutosave()).resolves.toBeUndefined();
+      expect(deps.saveGame).toHaveBeenCalledWith("auto");
+    });
   });
 
   describe("registerFlightHideAutosave / unregisterFlightHideAutosave", () => {

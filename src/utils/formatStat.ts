@@ -14,5 +14,11 @@ export function formatStat(value: number): string {
 /** Signed variant for comparison deltas: always prefixes non-negative values with «+». */
 export function formatStatDelta(value: number): string {
   const rounded = Math.round(value * 100) / 100;
-  return rounded >= 0 ? `+${rounded}` : String(rounded);
+  if (rounded === 0) {
+    // A tiny negative delta (e.g. -0.001) rounds to -0, and -0 >= 0 is true in
+    // JS — without this branch it would read "+0", misreporting a negative
+    // delta as non-negative.
+    return Object.is(rounded, -0) ? "0" : "+0";
+  }
+  return rounded > 0 ? `+${rounded}` : String(rounded);
 }

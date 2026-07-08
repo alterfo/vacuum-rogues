@@ -506,6 +506,7 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
             bucket,
             i,
             day,
+            origin,
           ),
         );
         // Increment so subsequent isChain rolls fall through to the else branch
@@ -525,6 +526,7 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
             day,
             chainId,
             chainPartsOnBoard,
+            origin,
           ),
         );
         chainPartsOnBoard++;
@@ -532,7 +534,17 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
       }
       // Chain finale already on board: emit normal quest instead.
       return applyPrefix(
-        buildRoutineQuest(rng, type, target, jumps, planetId, bucket, i, day),
+        buildRoutineQuest(
+          rng,
+          type,
+          target,
+          jumps,
+          planetId,
+          bucket,
+          i,
+          day,
+          origin,
+        ),
       );
     }
 
@@ -547,6 +559,7 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
         bucket,
         i,
         day,
+        origin,
         isElite,
       ),
     );
@@ -652,7 +665,11 @@ export function generateQuestBoard(opts: BoardOptions): GeneratedQuest[] {
         targetNpcName: null,
         highlights: [
           { label: "Система", value: targetSys.name, color: 0x66ddff },
-          { label: "Выдан", value: planetId, color: 0xaaaaaa },
+          {
+            label: "Выдан",
+            value: planetDisplayName(origin, planetId),
+            color: 0xaaaaaa,
+          },
         ],
         issuerPlanetId: planetId,
       };
@@ -696,6 +713,19 @@ function pickTargetPlanet(
 /** Stable quest id for a board slot. */
 function slotId(planetId: string, bucket: number, i: number): string {
   return `gen_${planetId}_${bucket}_${i}`;
+}
+
+/**
+ * Resolve a planet id (e.g. `planet_Сириус_0`) to its display name for quest
+ * UI (highlight chips, flavor text) — never leak the raw internal id. Falls
+ * back to the id itself only when the owning system's planet list doesn't
+ * resolve it (an unknown/stubbed system, test-only path).
+ */
+function planetDisplayName(
+  system: StarSystem | null | undefined,
+  planetId: string,
+): string {
+  return system?.planets.find((p) => p.id === planetId)?.name ?? planetId;
 }
 
 /**
@@ -769,6 +799,7 @@ function buildRoutineQuest(
   bucket: number,
   i: number,
   _day: number,
+  origin: StarSystem | null,
   isElite = false,
 ): GeneratedQuest {
   const id = slotId(planetId, bucket, i);
@@ -824,7 +855,11 @@ function buildRoutineQuest(
       highlights = [
         { label: "Груз", value: cargo.label, color: 0x88ccff },
         { label: "Система", value: target.name, color: 0x66ffcc },
-        { label: "Выдан", value: planetId, color: 0xaaaaaa },
+        {
+          label: "Выдан",
+          value: planetDisplayName(origin, planetId),
+          color: 0xaaaaaa,
+        },
       ];
       break;
     }
@@ -848,7 +883,11 @@ function buildRoutineQuest(
       highlights = [
         { label: "Цель", value: `«${shipName}»`, color: 0xff6666 },
         { label: "Система", value: target.name, color: 0x66ffcc },
-        { label: "Выдан", value: planetId, color: 0xaaaaaa },
+        {
+          label: "Выдан",
+          value: planetDisplayName(origin, planetId),
+          color: 0xaaaaaa,
+        },
       ];
       break;
     }
@@ -874,7 +913,11 @@ function buildRoutineQuest(
       highlights = [
         { label: "Конвой", value: convoiName, color: 0x88ff88 },
         { label: "Система", value: target.name, color: 0x66ffcc },
-        { label: "Выдан", value: planetId, color: 0xaaaaaa },
+        {
+          label: "Выдан",
+          value: planetDisplayName(origin, planetId),
+          color: 0xaaaaaa,
+        },
       ];
       break;
     }
@@ -893,10 +936,16 @@ function buildRoutineQuest(
       highlights = [
         {
           label: "Планета",
-          value: targetPlanetId ?? target.name,
+          value: targetPlanetId
+            ? planetDisplayName(target, targetPlanetId)
+            : target.name,
           color: 0xffcc66,
         },
-        { label: "Выдан", value: planetId, color: 0xaaaaaa },
+        {
+          label: "Выдан",
+          value: planetDisplayName(origin, planetId),
+          color: 0xaaaaaa,
+        },
       ];
       break;
     }
@@ -915,7 +964,11 @@ function buildRoutineQuest(
       ];
       highlights = [
         { label: "Система", value: target.name, color: 0x66ddff },
-        { label: "Выдан", value: planetId, color: 0xaaaaaa },
+        {
+          label: "Выдан",
+          value: planetDisplayName(origin, planetId),
+          color: 0xaaaaaa,
+        },
       ];
       break;
     }
@@ -972,6 +1025,7 @@ function buildChainQuest(
   _day: number,
   chainId: string,
   chainPart: number,
+  origin: StarSystem | null,
 ): GeneratedQuest {
   const id = `${slotId(planetId, bucket, i)}_chain${chainPart}`;
   const targetPlanetId = pickTargetPlanet(target);
@@ -1027,7 +1081,11 @@ function buildChainQuest(
     highlights: [
       { label: "Груз", value: cargo.label, color: 0x88ccff },
       { label: "Система", value: target.name, color: 0x66ffcc },
-      { label: "Выдан", value: planetId, color: 0xaaaaaa },
+      {
+        label: "Выдан",
+        value: planetDisplayName(origin, planetId),
+        color: 0xaaaaaa,
+      },
     ],
     issuerPlanetId: planetId,
   };
@@ -1043,6 +1101,7 @@ function buildFinaleQuest(
   bucket: number,
   i: number,
   _day: number,
+  origin: StarSystem | null,
 ): GeneratedQuest {
   const id = `${slotId(planetId, bucket, i)}_finale`;
   const targetPlanetId = pickTargetPlanet(target);
@@ -1099,7 +1158,11 @@ function buildFinaleQuest(
     highlights: [
       { label: "Груз", value: cargo.label, color: 0x88ccff },
       { label: "Система", value: target.name, color: 0x66ffcc },
-      { label: "Выдан", value: planetId, color: 0xaaaaaa },
+      {
+        label: "Выдан",
+        value: planetDisplayName(origin, planetId),
+        color: 0xaaaaaa,
+      },
     ],
     issuerPlanetId: planetId,
   };
@@ -1175,7 +1238,11 @@ function buildLocalDelivery(
       ...(origin
         ? [{ label: "Система", value: origin.name, color: 0x66ffcc }]
         : []),
-      { label: "Выдан", value: planetId, color: 0xaaaaaa },
+      {
+        label: "Выдан",
+        value: planetDisplayName(origin, planetId),
+        color: 0xaaaaaa,
+      },
     ],
     issuerPlanetId: planetId,
   };
@@ -1198,8 +1265,7 @@ function buildTextQuest(
   const script =
     ALL_QUEST_SCRIPTS[rng.nextInt(0, ALL_QUEST_SCRIPTS.length - 1)];
 
-  const planet = origin?.planets.find((p) => p.id === planetId);
-  const planetName = planet?.name ?? planetId;
+  const planetName = planetDisplayName(origin, planetId);
 
   return {
     template: {
@@ -1229,7 +1295,7 @@ function buildTextQuest(
     issuerName: issuer.name,
     issuerTitle: issuer.title,
     targetNpcName: null,
-    highlights: [{ label: "Выдан", value: planetId, color: 0xaaaaaa }],
+    highlights: [{ label: "Выдан", value: planetName, color: 0xaaaaaa }],
     issuerPlanetId: planetId,
   };
 }

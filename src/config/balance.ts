@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { GameMode, ResourceType } from "@/types";
 import type { EncounterConfig } from "@/systems/encounters/encounterGenerator";
 import type { EncounterOutcomeConfig } from "@/systems/encounters/encounterOutcome";
+import { Faction } from "@/types/faction";
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -812,11 +813,15 @@ export const ADAPTIVE_CREEP_START_DAY = 360;
 export const ADAPTIVE_CREEP_MIN_DAYS = 12;
 /**
  * Index at/above which the player counts as battle-ready for adaptive pacing.
- * Sized so the autopilot's battle-ready floor (hull ≥ 200, weapon ≥ 30 — see
+ * Sized so the autopilot's battle-ready floor (hull ≥ 180, weapon ≥ 30 — see
  * BATTLE_READY_* in MemoryHeuristicPolicy) crosses it even with starter
- * credits/rank (index ≈ 0.19), while the starter fitting sits at ≈ 0.02.
+ * credits/rank (index ≈ 0.134), while the starter fitting sits at 0. Keep
+ * this in sync with BATTLE_READY_MAX_HULL/BATTLE_READY_WEAPON_DAMAGE — a
+ * lowered hull floor without a matching drop here desyncs the escalation
+ * notice / neutral-aggro shield / campaign-chain gate from the autopilot's
+ * own definition of battle-ready (see playerPower.test.ts).
  */
-export const POWER_INDEX_BATTLE_READY_THRESHOLD = 0.15;
+export const POWER_INDEX_BATTLE_READY_THRESHOLD = 0.13;
 /**
  * ─── Campaign: adaptive garrison & combat scaling ────────────────────────────
  * (three-year-campaign plan, Task 4)
@@ -913,3 +918,23 @@ export const CAMPAIGN_CHAIN_CORE_ASSAULT_SHARE = 0.15;
  * hands the player toward; the core assault (step 6) pays a hero's bounty.
  */
 export const CAMPAIGN_CHAIN_STEP_REWARDS = [1200, 1800, 6000, 3000, 4000, 8000];
+
+/**
+ * Per-system owner-faction weights for generation-time galaxy seeding. Every
+ * system used to hardcode `ownerFaction = "INDEPENDENT"` — a galaxy with zero
+ * faction presence anywhere. `INDEPENDENT` still gets the largest single share
+ * (unclaimed frontier space is the norm), but the 5 playable factions now
+ * split the remainder so faction territory actually exists on the star map.
+ * `OVERMIND` is excluded — its ownership is a live capture state
+ * (`Galaxy.overmindSystems`), never a generation-time roll.
+ */
+export const FACTION_DISTRIBUTION_WEIGHTS: ReadonlyArray<
+  readonly [Faction, number]
+> = [
+  [Faction.INDEPENDENT, 10],
+  [Faction.OUTLANDERS, 3],
+  [Faction.BASTIONS, 3],
+  [Faction.SYNDICATE, 3],
+  [Faction.PARADOXES, 3],
+  [Faction.PROGRESSORS, 3],
+];
