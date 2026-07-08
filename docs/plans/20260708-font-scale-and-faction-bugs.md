@@ -444,33 +444,77 @@ start this plan only after that run stops/completes.
 
 ### Task 7: Red test — fleeing NPC crosses the system boundary unbounded
 
-- [ ] add a regression test (new `src/tests/presentation/npcShipBoundary.test.ts` or
+- [x] add a regression test (new `src/tests/presentation/npcShipBoundary.test.ts` or
       alongside `combatManeuver.test.ts`, whichever layer ends up owning the clamp) that
       drives a `BREAK_OFF` flee (low hull ratio or out-matched pursuer) toward/past
       `bounds.boundary` over repeated `update()` ticks and asserts the NPC's distance from
       the system centre never exceeds `bounds.boundary` (or that it transitions to
       `isGone()` at the boundary instead of continuing outward) — must fail against current
       code
-- [ ] add a case confirming a normal (non-fleeing) aggressive pursuit inside the boundary is
+- [x] add a case confirming a normal (non-fleeing) aggressive pursuit inside the boundary is
       unaffected (no regression to ordinary chase behavior)
-- [ ] run the new test — confirm it fails (red) before implementing the fix
+- [x] run the new test — confirm it fails (red) before implementing the fix
+
+  Implemented in new `src/tests/presentation/npcShipBoundary.test.ts` (2 cases): (1) an
+  aggressive `NpcShipSprite` with hull ratio 0.1 (< `BREAK_OFF_HULL_RATIO`) and a pursuit
+  target that puts the flee heading straight away from the system centre — ticks `update(16)`
+  up to 3000 times and asserts distance from `bounds.cx/cy` never exceeds `bounds.boundary`
+  (or the ship goes `gone` first); fails today (`3840 > 301`, the ship blows straight past
+  the 300px test boundary with no containment); (2) a full-hull, in-range pursuit control case
+  (CLOSE/ORBIT only, never BREAK_OFF) confirming ordinary chase is unaffected — passes today,
+  establishing the no-regression baseline before the Task 8 fix. Confirmed via
+  `npx vitest run src/tests/presentation/npcShipBoundary.test.ts`; `npx tsc --noEmit` and
+  `npx eslint` on the new file both clean.
 
 ### Task 8: Fix — bound fleeing NPC movement to the system boundary
 
-- [ ] in `NpcShipSprite` (`src/presentation/NpcShipSprite.ts`), make the aggressive-pursuit
+- [x] in `NpcShipSprite` (`src/presentation/NpcShipSprite.ts`), make the aggressive-pursuit
       branch of `update()` (`:318-331`)/`maneuverToward` (`:541-570`) detect a `BREAK_OFF`
       decision that would carry the ship past `this.bounds.boundary` from the system centre,
       and route it into the existing departure path (`beginDeparture()`, `:290-303`) instead
       of moving the ship unbounded
-- [ ] confirm `NpcShipManager` (the `isGone()` consumers at `:458-462`/`:860`) correctly
+- [x] confirm `NpcShipManager` (the `isGone()` consumers at `:458-462`/`:860`) correctly
       despawns/cleans up a ship that reaches `gone` via this new path the same way it does
       for a scripted departure (garrison/pursuit-tracking sets, aggressor bookkeeping)
-- [ ] write unit tests for the boundary-triggered departure transition (NPC at various
+- [x] write unit tests for the boundary-triggered departure transition (NPC at various
       hull-ratio/out-matched states fleeing from various angles/positions)
-- [ ] make Task 7's tests green
-- [ ] run `gitnexus impact NpcShipSprite` — confirm no unexpected callers broken
-- [ ] run `npm test -- --run` targeted files + `npx tsc --noEmit` + `npm run lint` — must
+- [x] make Task 7's tests green
+- [x] run `gitnexus impact NpcShipSprite` — confirm no unexpected callers broken
+- [x] run `npm test -- --run` targeted files + `npx tsc --noEmit` + `npm run lint` — must
       pass before next task
+
+  In `maneuverToward`, when `decideManeuver` returns `BREAK_OFF`, the fix now computes this
+  frame's step and checks whether it would carry the ship's distance from `bounds.cx/cy` past
+  `bounds.boundary`; if so it calls `this.beginDeparture()` (the existing scripted-departure
+  outward-radial target math) and returns instead of applying the raw unbounded move. Once
+  `departing = true`, the aggressive-pursuit branch's `!this.departing` guard in `update()`
+  falls through to the existing general waypoint-following code, which carries the ship the
+  rest of the way to the boundary point and sets `gone = true` on arrival — the same
+  transition a cross-system scripted departure already uses. No new cleanup path was needed:
+  `NpcShipManager.update`'s existing `sprite.isGone()` branch (`:458-462`) and
+  `CombatModule.update`'s existing `npc.container?.destroyed` sweep (`CombatModule.ts:527`)
+  already handle a sprite going `gone`/`destroy()`d generically, regardless of what triggered
+  it — confirmed by reading both call sites rather than special-casing the new trigger.
+  Extended `src/tests/presentation/npcShipBoundary.test.ts` (now 6 cases): the two Task 7 red
+  cases are now green, plus 4 new Task 8 cases — an outmatched (full-hull, out-run) BREAK_OFF
+  is bounded, a diagonal-heading BREAK_OFF is bounded, a ship already at the boundary
+  transitions to `gone` almost immediately without overshoot, and a full `NpcShipManager`
+  integration test confirms a fleeing garrison aggressor is despawned (removed from the live
+  `npcSprites` list) the same way a scripted departure is. `gitnexus impact NpcShipSprite`
+  (upstream): 12 impacted symbols, risk MEDIUM (driven by the class's normal fan-in — 9 direct
+  callers — not by this change), 0 affected processes/modules. `gitnexus detect_changes({scope:
+  "all"})`: 2 changed symbols; the second (`render`) is a line-shift false-positive from a
+  line-number-based diff correlation (the actual edit is only in the private `maneuverToward`
+  method — `render`'s body is untouched), 1 affected process (`Constructor →
+  CurrentPaletteMode`, unrelated to the flee/boundary behavior). Full suite: 556 files / 5194
+  tests passed (12 pre-existing skips, 0 failed); `npx tsc --noEmit` clean; `npm run lint` 0
+  errors (46 pre-existing warnings).
+
+  ⚠️ **Note (mirrors Task 1/2 and 4/5's precedent)**: the pre-commit hook runs the staged test
+  file through `npm test`, which fails on a deliberately red TDD test — so Task 7 (red) and
+  Task 8 (fix) had to land in one combined commit to satisfy "never skip hooks." Both tasks'
+  checkboxes are recorded above for plan-tracking accuracy; the actual commit history has them
+  as a single commit.
 
 ### Task 9: Verify acceptance criteria
 
