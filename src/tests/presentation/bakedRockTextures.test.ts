@@ -136,6 +136,14 @@ describe("baked dust + rock textures (canvas available)", () => {
       nebulaCloudTexture(NEBULA_VARIANT_COUNT),
     );
   });
+
+  it("cometHeadTexture bakes a non-null texture and caches it (baked once)", async () => {
+    const { cometHeadTexture } = await import("@/presentation/gradientTexture");
+    const a = cometHeadTexture();
+    const b = cometHeadTexture();
+    expect(a).not.toBeNull();
+    expect(b).toBe(a); // reused, not re-baked
+  });
 });
 
 describe("baked textures are null-safe without a 2D context", () => {
@@ -168,5 +176,10 @@ describe("baked textures are null-safe without a 2D context", () => {
     const { nebulaCloudTexture } =
       await import("@/presentation/gradientTexture");
     expect(nebulaCloudTexture(0)).toBeNull();
+  });
+
+  it("cometHeadTexture returns null (jsdom fallback, no throw)", async () => {
+    const { cometHeadTexture } = await import("@/presentation/gradientTexture");
+    expect(cometHeadTexture()).toBeNull();
   });
 });

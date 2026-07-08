@@ -186,23 +186,23 @@ user confirmed these already look fine and should not be touched.
 
 ### Task 4: Redesign comet coma texture (fix blurry/muddy comets)
 
-- [ ] In `src/presentation/gradientTexture.ts`, add `cometHeadTexture()` — bakes a distinct comet
+- [x] In `src/presentation/gradientTexture.ts`, add `cometHeadTexture()` — bakes a distinct comet
       coma: a sharp, bright pinpoint nucleus (tighter, brighter falloff than `softGlowTexture`'s
       generic core) surrounded by a softer, slightly asymmetric coma (denser on one side to suggest
       solar heating direction), so it reads as a coherent object with a clear bright centre rather
       than a uniform blur. Follow the same cache-once contract as `softGlowTexture`.
-- [ ] In `src/presentation/flight/AsteroidBelt.ts`, update `setupCometVisuals()` to build the
+- [x] In `src/presentation/flight/AsteroidBelt.ts`, update `setupCometVisuals()` to build the
       `head`/`core` sprites from `cometHeadTexture()` instead of the generic `softGlowTexture()`,
       tuning `HEAD_SCALE`/`CORE_SCALE`/tint constants as needed so the nucleus reads as a bright
       point rather than another soft circle. Leave the dust-tail (`ParticleContainer` +
       `dustParticleTexture`) untouched — the tail isn't part of the "muddy comet" complaint, only
       the head/coma is.
-- [ ] Write tests for `cometHeadTexture` (success): returns a `Texture` when a 2D context is
+- [x] Write tests for `cometHeadTexture` (success): returns a `Texture` when a 2D context is
       available, and repeated calls return the same cached instance.
-- [ ] Write tests for `cometHeadTexture` (error/edge case): returns `null` gracefully with no 2D
+- [x] Write tests for `cometHeadTexture` (error/edge case): returns `null` gracefully with no 2D
       context, and `setupCometVisuals()` still falls back to the existing minimal-nucleus
       `drawAsteroid()` path (lines ~301-305) when the texture is `null`.
-- [ ] Run tests — must pass before task 5.
+- [x] Run tests — must pass before task 5.
 
 ### Task 5: Fix asteroid render path + redesign rock texture (fix angular asteroids)
 

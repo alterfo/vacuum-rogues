@@ -166,6 +166,71 @@ function mulberry32(seed: number): () => number {
   };
 }
 
+/**
+ * Baked comet-head texture (space-visual-cleanup, 2026-07-08). Replaces
+ * `setupCometVisuals`' reuse of the generic `softGlowTexture` glow — a
+ * symmetric blob with no distinct centre, giving comets the same shapeless,
+ * muddy look as the nebula clouds — with a texture built for a comet nucleus:
+ * a sharp, bright pinpoint core (tighter falloff than `softGlowTexture`'s)
+ * plus a softer coma offset toward one side (solar-heating asymmetry) instead
+ * of a perfectly round halo, so the head reads as a coherent object with a
+ * clear bright centre. Baked ONCE and cached (like `softGlowTexture`/
+ * `dustParticleTexture`) so callers tint/scale a `Sprite` of it with zero
+ * per-frame cost. Returns `null` with no 2D context (jsdom / unit tests) so
+ * callers fall back to the existing minimal drawn nucleus.
+ */
+let cometHeadCached: Texture | null | undefined;
+
+export function cometHeadTexture(): Texture | null {
+  if (cometHeadCached !== undefined) return cometHeadCached;
+
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    cometHeadCached = null;
+    return null;
+  }
+
+  const cx = size / 2;
+  const cy = size / 2;
+
+  // Asymmetric coma: offset toward one side (away from the sun-facing edge)
+  // rather than a perfectly centred halo, so the head isn't a uniform circle.
+  const comaOffsetX = size * 0.1;
+  const comaR = size * 0.46;
+  const comaGrad = ctx.createRadialGradient(
+    cx + comaOffsetX,
+    cy,
+    0,
+    cx + comaOffsetX,
+    cy,
+    comaR,
+  );
+  comaGrad.addColorStop(0.0, "rgba(255,255,255,0.55)");
+  comaGrad.addColorStop(0.4, "rgba(255,255,255,0.22)");
+  comaGrad.addColorStop(0.75, "rgba(255,255,255,0.07)");
+  comaGrad.addColorStop(1.0, "rgba(255,255,255,0)");
+  ctx.fillStyle = comaGrad;
+  ctx.fillRect(0, 0, size, size);
+
+  // Sharp, bright pinpoint nucleus — a tighter falloff than softGlowTexture's
+  // generic core, so the centre stays a distinct hot point, not a blur.
+  const coreR = size * 0.22;
+  const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+  coreGrad.addColorStop(0.0, "rgba(255,255,255,1)");
+  coreGrad.addColorStop(0.15, "rgba(255,255,255,0.95)");
+  coreGrad.addColorStop(0.4, "rgba(255,255,255,0.4)");
+  coreGrad.addColorStop(1.0, "rgba(255,255,255,0)");
+  ctx.fillStyle = coreGrad;
+  ctx.fillRect(0, 0, size, size);
+
+  cometHeadCached = Texture.from(canvas);
+  return cometHeadCached;
+}
+
 /** How many distinct rock textures are baked; seeds wrap onto this set. */
 export const ROCK_VARIANT_COUNT = 8;
 const rockCache = new Map<number, Texture | null>();
