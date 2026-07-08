@@ -1638,8 +1638,11 @@ export class SpaceFlightScene extends GameScene {
    * Play/Pause turn control. Paused: Play executes the planned route. Running:
    * Pause defers the stop to the next whole-day boundary so the ship finishes its
    * day (F1, playtest3) — except a combat auto-follow, which aborts immediately.
+   * Suppressed while the active-pause overlay is open (mirrors the keyboard Space
+   * guard) — else a stray click desyncs `isTurnRunning` via `endTurn()` below.
    */
   private onPlayPause(): void {
+    if (this.combatPause.paused) return;
     if (this.isTurnRunning) {
       // A combat auto-follow / active fight has no advancing day to defer the
       // pause to (combat freezes the calendar), so the day-boundary latch would
