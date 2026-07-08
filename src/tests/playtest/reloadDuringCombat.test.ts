@@ -23,6 +23,7 @@ interface FlightPrivates {
   npcManager: {
     npcSprites: NpcShipSprite[];
     escalateHostility(target: NpcShip): void;
+    initialize(isResumedFlight?: boolean): void;
   };
   persistLiveState?(): void;
 }
@@ -54,7 +55,13 @@ describe("Reload during combat preserves nearby hostile NPCs", () => {
     const liveX = sprite.x;
     const liveY = sprite.y;
 
-    // The page-hide flush path (Fix A): mirror live positions, then save.
+    // The page-hide flush path (Fix A): record the live ship position (so the
+    // reload resumes the SAME live flight, not an edge-spawn — the signal
+    // Fix B's reengageNearbyHostiles gates on), mirror NPC positions, then save.
+    harness.engine.recordLiveFlightPos(
+      scene.shipPhysics.shipX,
+      scene.shipPhysics.shipY,
+    );
     scene.persistLiveState?.();
     await harness.engine.saveGame("auto");
 
@@ -94,6 +101,10 @@ describe("Reload during combat preserves nearby hostile NPCs", () => {
     sprite.y = scene.shipPhysics.shipY + 50_000;
     const npcId = sprite.npc.id;
 
+    harness.engine.recordLiveFlightPos(
+      scene.shipPhysics.shipX,
+      scene.shipPhysics.shipY,
+    );
     scene.persistLiveState?.();
     await harness.engine.saveGame("auto");
     await harness.engine.loadGame("auto");
@@ -106,6 +117,33 @@ describe("Reload during combat preserves nearby hostile NPCs", () => {
     // simulation rules, but if it is, it must stay passive.
     if (resumed) expect(resumed.aggressive).toBe(false);
 
+    expect(harness.errors()).toEqual([]);
+  });
+
+  it("a normal (non-reload) scene entry does NOT reengage a nearby hostile — only a genuine resume does", async () => {
+    // Regression guard: reengageNearbyHostiles() must be gated on a genuine
+    // flight resume (isResumedFlight), never fire on every ordinary
+    // initialize() (dock/undock/hyperjump) — an earlier version of this fix
+    // fired unconditionally and made routine system entry near an old
+    // hostile more dangerous than intended (dropped the letsplay CI
+    // survival-rate gate below its threshold).
+    harness = await RealEngineHarness.boot();
+    await harness.newGame();
+
+    const scene = harness.currentScene() as unknown as FlightPrivates;
+    const sprite = scene.npcManager.npcSprites[0];
+    expect(sprite).toBeDefined();
+
+    scene.npcManager.escalateHostility(sprite.npc);
+    sprite.setAggressive(false);
+    sprite.x = scene.shipPhysics.shipX + 50; // right next to the player
+    sprite.y = scene.shipPhysics.shipY;
+
+    // A plain re-initialize (no resume signal) — e.g. what a normal
+    // undock/hyperjump/system-entry drives.
+    scene.npcManager.initialize();
+
+    expect(sprite.aggressive).toBe(false);
     expect(harness.errors()).toEqual([]);
   });
 });

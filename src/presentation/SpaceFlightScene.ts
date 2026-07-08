@@ -495,7 +495,7 @@ export class SpaceFlightScene extends GameScene {
     this.starRenderer.initialize();
     this.orbitRenderer.initialize(); // Orbit circles + boundary (hyperjump edge)
     this.planetManager.initialize(); // Planets + station markers (US-066)
-    this.npcManager.initialize(); // NPC ships present in this system (Feature 8)
+    this.npcManager.initialize(!!ctx?.preserveShipPos); // NPC ships present in this system (Feature 8)
     this.combatModule.initialize(); // In-flight combat lifecycle (Tasks 11–14)
     this.playerShip.initialize(); // Ship hull/sprite, glow, heading crosshair
     this.asteroidBelt.initialize(); // Foreground asteroids/comets (US-070 #1)
