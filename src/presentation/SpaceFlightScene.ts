@@ -649,6 +649,9 @@ export class SpaceFlightScene extends GameScene {
     this.hud.update(deltaTime, this.bgElapsed);
   }
 
+  persistLiveState(): void {
+    this.npcManager?.persistLivePositions();
+  }
   destroy(): void {
     this.destroyed = true;
     this.flightHelp?.destroy(); // contextual help (first-time hint + «?» + combat hint)
@@ -1308,11 +1311,9 @@ export class SpaceFlightScene extends GameScene {
     );
     if (startedBurning) this.hud.showMessage("☀ Корпус горит!", 0xff8800);
 
-    // Safety auto-stop: halt engines below 30% hull (latched) — EXCEPT during
-    // a committed hyperjump escape (`pendingWarp`, else a GOD-floored ship at
-    // a garrison could never reach the jump point) or a route targeting a
-    // planet (`routeTargetPlanetId` — the warning below tells the player to
-    // fly to one, so don't cancel that exact route on the first attempt).
+    // Safety auto-stop: halt engines below 30% hull (latched) — EXCEPT a
+    // committed hyperjump escape (`pendingWarp`) or a route to a planet
+    // (`routeTargetPlanetId`, per the warning below).
     const ship = this.gameEngine?.player?.ship;
     if (ship && ship.maxHull > 0) {
       const hullFraction = ship.hullHP / ship.maxHull;
@@ -1636,10 +1637,9 @@ export class SpaceFlightScene extends GameScene {
 
   /**
    * Play/Pause turn control. Paused: Play executes the planned route. Running:
-   * Pause defers the stop to the next whole-day boundary so the ship finishes its
-   * day (F1, playtest3) — except a combat auto-follow, which aborts immediately.
-   * Suppressed while the active-pause overlay is open (mirrors the keyboard Space
-   * guard) — else a stray click desyncs `isTurnRunning` via `endTurn()` below.
+   * Pause defers the stop to the next whole-day boundary (F1, playtest3) — except
+   * a combat auto-follow, which aborts immediately. Suppressed while the active-
+   * pause overlay is open — else a stray click desyncs `isTurnRunning` below.
    */
   private onPlayPause(): void {
     if (this.combatPause.paused) return;

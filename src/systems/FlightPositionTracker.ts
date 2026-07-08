@@ -9,6 +9,13 @@ export interface FlightPositionTrackerDeps {
   isSpaceFlightActive: () => boolean;
   hasActiveGame: () => boolean;
   saveGame: (slotId?: string) => Promise<void>;
+  /**
+   * Flush the active scene's live derived state (e.g. NPC sprite positions)
+   * into domain objects right before a page-hide save serializes them —
+   * `SpaceFlightScene.persistLiveState`. Optional so callers/tests that don't
+   * model a scene can omit it.
+   */
+  persistLiveSceneState?: () => void;
 }
 
 /**
@@ -105,6 +112,7 @@ export class FlightPositionTracker {
   async flushFlightAutosave(): Promise<void> {
     if (!this.deps.isSpaceFlightActive()) return;
     if (!this.deps.hasActiveGame()) return;
+    this.deps.persistLiveSceneState?.();
     await this.deps.saveGame("auto");
   }
 
