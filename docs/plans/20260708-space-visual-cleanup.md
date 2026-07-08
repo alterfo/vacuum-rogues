@@ -161,28 +161,28 @@ user confirmed these already look fine and should not be touched.
 
 ### Task 3: Redesign nebula cloud texture (fix muddy blob)
 
-- [ ] In `src/presentation/gradientTexture.ts`, add `nebulaCloudTexture(seed: number)` — bakes ONE
+- [x] In `src/presentation/gradientTexture.ts`, add `nebulaCloudTexture(seed: number)` — bakes ONE
       detailed, wispy cloud shape per seed onto a single offscreen canvas by compositing multiple
       randomly-offset/randomly-sized soft radial-gradient blobs (mulberry32-seeded, same
       determinism pattern as `rockTexture`) at varied alpha, rather than perfectly concentric
       uniform rings. Add fine alpha-noise speckle (same technique as `rockTexture`'s surface
       speckle) for texture. Cache per seed like `rockCache`, with a bounded variant count
       (`NEBULA_VARIANT_COUNT`) so memory stays bounded, mirroring `ROCK_VARIANT_COUNT`.
-- [ ] In `src/presentation/SpaceBackgroundLayer.ts`, replace the 4-blob concentric stack in
+- [x] In `src/presentation/SpaceBackgroundLayer.ts`, replace the 4-blob concentric stack in
       `createNebulae()` (the `addBlob(cloudR * 2.3, ...)` through `addBlob(cloudR * 0.4, ...)`
       calls) with a single tinted `Sprite` built from `nebulaCloudTexture(seed)`, keeping the
       existing per-system palette selection, squash/rotation, and parallax/breathing-pulse
       animation logic untouched. Keep the existing `Graphics`-stacked-circle fallback for the
       no-canvas case (it already produces a wispier look than the current live path — reuse/adapt
       it rather than deleting it).
-- [ ] Write tests for `nebulaCloudTexture` (success): returns a `Texture` when a 2D context is
+- [x] Write tests for `nebulaCloudTexture` (success): returns a `Texture` when a 2D context is
       available, and the same `seed` returns the same cached texture (determinism), while a
       different `seed` returns a distinct cached entry.
-- [ ] Write tests for `nebulaCloudTexture` (error/edge case): returns `null` gracefully with no 2D
+- [x] Write tests for `nebulaCloudTexture` (error/edge case): returns `null` gracefully with no 2D
       context, seed wraps correctly onto `NEBULA_VARIANT_COUNT` (mirroring the `ROCK_VARIANT_COUNT`
       wrap test pattern), and `createNebulae()` still builds the expected cloud count when the
       texture is `null`.
-- [ ] Run tests — must pass before task 4.
+- [x] Run tests — must pass before task 4.
 
 ### Task 4: Redesign comet coma texture (fix blurry/muddy comets)
 

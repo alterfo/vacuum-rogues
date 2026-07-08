@@ -109,6 +109,33 @@ describe("baked dust + rock textures (canvas available)", () => {
     expect(normalB).toBe(normalA); // reused, not re-baked
     expect(heroA).not.toBe(normalA); // distinct hero vs non-hero bake
   });
+
+  it("nebulaCloudTexture bakes a non-null texture and reuses it for the same seed", async () => {
+    const { nebulaCloudTexture } =
+      await import("@/presentation/gradientTexture");
+    const a = nebulaCloudTexture(0);
+    const b = nebulaCloudTexture(0);
+    expect(a).not.toBeNull();
+    expect(b).toBe(a); // reused, not re-baked
+  });
+
+  it("distinct nebula seeds produce distinct cached textures", async () => {
+    const { nebulaCloudTexture } =
+      await import("@/presentation/gradientTexture");
+    const n0 = nebulaCloudTexture(0);
+    const n1 = nebulaCloudTexture(1);
+    expect(n0).not.toBeNull();
+    expect(n1).not.toBeNull();
+    expect(n1).not.toBe(n0);
+  });
+
+  it("nebula seeds wrap onto a bounded variant set (same variant → same texture)", async () => {
+    const { nebulaCloudTexture, NEBULA_VARIANT_COUNT } =
+      await import("@/presentation/gradientTexture");
+    expect(nebulaCloudTexture(0)).toBe(
+      nebulaCloudTexture(NEBULA_VARIANT_COUNT),
+    );
+  });
 });
 
 describe("baked textures are null-safe without a 2D context", () => {
@@ -135,5 +162,11 @@ describe("baked textures are null-safe without a 2D context", () => {
     const { starPointTexture } = await import("@/presentation/gradientTexture");
     expect(starPointTexture(true)).toBeNull();
     expect(starPointTexture(false)).toBeNull();
+  });
+
+  it("nebulaCloudTexture returns null (jsdom fallback, no throw)", async () => {
+    const { nebulaCloudTexture } =
+      await import("@/presentation/gradientTexture");
+    expect(nebulaCloudTexture(0)).toBeNull();
   });
 });

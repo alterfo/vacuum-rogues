@@ -274,3 +274,89 @@ export function rockTexture(seed: number): Texture | null {
   rockCache.set(variant, tex);
   return tex;
 }
+
+/** How many distinct nebula-cloud textures are baked; seeds wrap onto this set. */
+export const NEBULA_VARIANT_COUNT = 8;
+const nebulaCache = new Map<number, Texture | null>();
+
+/**
+ * Baked, wispy nebula-cloud texture (space-visual-cleanup, 2026-07-08).
+ * Replaces the 4 perfectly concentric, uniformly-smooth `softGlowTexture`
+ * rings `createNebulae` used to stack — which read as one flat, muddy blob —
+ * with a single white (tintable, like `softGlowTexture`) canvas compositing
+ * many randomly-offset/-sized soft blobs plus a denser core and fine alpha
+ * speckle, so the silhouette has real internal structure. The `seed` wraps
+ * onto {@link NEBULA_VARIANT_COUNT} variants to bound memory, cached like
+ * `rockTexture`. Returns `null` with no 2D context (jsdom / unit tests) so
+ * callers fall back to the existing stacked-`Graphics` approximation.
+ */
+export function nebulaCloudTexture(seed: number): Texture | null {
+  const variant =
+    ((Math.trunc(seed) % NEBULA_VARIANT_COUNT) + NEBULA_VARIANT_COUNT) %
+    NEBULA_VARIANT_COUNT;
+  const existing = nebulaCache.get(variant);
+  if (existing !== undefined) return existing;
+
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    nebulaCache.set(variant, null);
+    return null;
+  }
+
+  const rng = mulberry32(0x2545f491 ^ ((variant + 1) * 0x27d4eb2f));
+  const cx = size / 2;
+  const cy = size / 2;
+  const spread = size * 0.34;
+
+  // Wispy structure: many randomly offset/sized soft blobs at varied alpha —
+  // an irregular, non-concentric cloud silhouette instead of stacked rings.
+  const blobCount = 10 + Math.floor(rng() * 6);
+  for (let i = 0; i < blobCount; i++) {
+    const ang = rng() * Math.PI * 2;
+    const dist = rng() * rng() * spread;
+    const bx = cx + Math.cos(ang) * dist;
+    const by = cy + Math.sin(ang) * dist * (0.55 + rng() * 0.3);
+    const r = size * (0.12 + rng() * 0.22) * (1 - (dist / spread) * 0.3);
+    const alpha = 0.08 + rng() * 0.16;
+    const grad = ctx.createRadialGradient(bx, by, 0, bx, by, r);
+    grad.addColorStop(0.0, `rgba(255,255,255,${alpha.toFixed(3)})`);
+    grad.addColorStop(0.6, `rgba(255,255,255,${(alpha * 0.4).toFixed(3)})`);
+    grad.addColorStop(1.0, "rgba(255,255,255,0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(bx, by, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Bright core — denser and tighter than any single haze blob, giving the
+  // cloud a clear luminous centre rather than uniform density throughout.
+  const coreR = size * 0.16;
+  const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+  coreGrad.addColorStop(0.0, "rgba(255,255,255,0.9)");
+  coreGrad.addColorStop(0.5, "rgba(255,255,255,0.5)");
+  coreGrad.addColorStop(1.0, "rgba(255,255,255,0)");
+  ctx.fillStyle = coreGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Fine alpha-noise speckle — same technique as `rockTexture`'s surface
+  // speckle — breaks up any remaining smooth gradient banding.
+  for (let i = 0; i < 140; i++) {
+    const x = rng() * size;
+    const y = rng() * size;
+    const rad = 0.6 + rng() * 1.8;
+    ctx.fillStyle = `rgba(255,255,255,${(0.03 + rng() * 0.06).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(x, y, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const tex = Texture.from(canvas);
+  nebulaCache.set(variant, tex);
+  return tex;
+}

@@ -1,5 +1,9 @@
 import { Container, Graphics, Sprite } from "pixi.js";
-import { softGlowTexture, starPointTexture } from "./gradientTexture";
+import {
+  nebulaCloudTexture,
+  softGlowTexture,
+  starPointTexture,
+} from "./gradientTexture";
 import type { Texture } from "pixi.js";
 import type { Renderer } from "./Renderer";
 import { SeededRNG } from "@/utils/seededRNG";
@@ -556,31 +560,25 @@ export class SpaceBackgroundLayer implements FlightModule {
       const squash = rng.nextFloat(0.45, 0.92);
       const rot = rng.next() * Math.PI;
 
-      // Smooth multi-hue cloud from a few tinted gradient sprites (haze → body →
-      // inner → core), sharing one baked texture — no per-frame BlurFilter. Each
-      // is a squashed, rotated soft ellipse; under screen blend they accumulate
-      // into a soft nebula. Falls back to stacked translucent circles in jsdom.
-      const glowTex = softGlowTexture();
-      if (glowTex) {
-        const addBlob = (
-          diameter: number,
-          color: number,
-          alpha: number,
-        ): void => {
-          const s = new Sprite(glowTex);
-          s.anchor.set(0.5);
-          s.eventMode = "none";
-          s.width = diameter;
-          s.height = diameter * squash;
-          s.rotation = rot;
-          s.tint = color;
-          s.alpha = alpha;
-          cloud.addChild(s);
-        };
-        addBlob(cloudR * 2.3, outerColor, 0.22); // outer haze
-        addBlob(cloudR * 1.7, bodyColor, 0.3); // body
-        addBlob(cloudR * 0.9, innerColor, 0.42); // hot inner
-        addBlob(cloudR * 0.4, coreColor, 0.6); // luminous core
+      // One wispy, internally-structured cloud sprite (space-visual-cleanup,
+      // 2026-07-08) — replaces the previous 4 perfectly concentric
+      // `softGlowTexture` rings (haze/body/inner/core), which under screen
+      // blend read as a single smooth, undifferentiated blob rather than a
+      // nebula. `nebulaCloudTexture` bakes its own internal density variation
+      // (offset blobs + a denser core + speckle) so ONE tinted, squashed,
+      // rotated sprite already reads as structured. Falls back to the
+      // previous stacked-Graphics rings in jsdom (no canvas).
+      const nebulaTex = nebulaCloudTexture(rng.nextInt(0, 999));
+      if (nebulaTex) {
+        const s = new Sprite(nebulaTex);
+        s.anchor.set(0.5);
+        s.eventMode = "none";
+        s.width = cloudR * 2.2;
+        s.height = cloudR * 2.2 * squash;
+        s.rotation = rot;
+        s.tint = bodyColor;
+        s.alpha = 0.55;
+        cloud.addChild(s);
       } else {
         // Fallback (no canvas): stacked translucent circles per layer.
         const outerG = new Graphics();
