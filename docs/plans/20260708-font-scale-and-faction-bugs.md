@@ -338,38 +338,71 @@ start this plan only after that run stops/completes.
 
 ### Task 4: Red test — galaxy generation produces zero faction diversity
 
-- [ ] add a regression test in `src/tests/galaxy/` (new file, e.g.
+- [x] add a regression test in `src/tests/galaxy/` (new file, e.g.
       `galaxyFactionDistribution.test.ts`) asserting `GalaxySimulator.generateGalaxy(seed,
       systemCount)` with a reasonably sized galaxy produces **more than one** distinct
       `ownerFaction` value across generated systems — must fail against current code
       (currently always exactly 1: `INDEPENDENT`)
-- [ ] add an assertion that each system with `isFactionHome === true` has
+- [x] add an assertion that each system with `isFactionHome === true` has
       `ownerFaction === homeFactionId`
-- [ ] run the new test — confirm it fails (red) before implementing the fix
+- [x] run the new test — confirm it fails (red) before implementing the fix
+
+  Implemented in new `src/tests/galaxy/galaxyFactionDistribution.test.ts` (2 cases,
+  mirroring `starTypeVariety.test.ts`'s style): (1) asserts a 40-system generated galaxy has
+  more than one distinct `ownerFaction` — fails today (`expected 1 to be greater than 1`,
+  every system is `INDEPENDENT`); (2) asserts every `isFactionHome` system's `ownerFaction`
+  equals its `homeFactionId` — fails today (`expected 'INDEPENDENT' to be 'PROGRESSORS'`,
+  `assignFactionHomeSystems` never writes `ownerFaction`). Confirmed both red via
+  `npx vitest run`; `npx tsc --noEmit` and `npm run lint` clean.
 
 ### Task 5: Implement weighted per-system faction distribution
 
-- [ ] add `FACTION_DISTRIBUTION_WEIGHTS` to `src/config/balance.ts` (named constants, single
+- [x] add `FACTION_DISTRIBUTION_WEIGHTS` to `src/config/balance.ts` (named constants, single
       source of truth per project convention) covering `INDEPENDENT` + the 5 `HOME_FACTIONS`
       values, documented with a comment explaining the chosen split
-- [ ] create `src/systems/galaxy/systemFactionDistribution.ts` mirroring
+- [x] create `src/systems/galaxy/systemFactionDistribution.ts` mirroring
       `systemTechDistribution.ts`'s weighted-pick shape: `pickSystemFaction(rng: {
       next(): number }): Faction`
-- [ ] in `GalaxySimulator.ts`, replace the hardcoded `const faction = "INDEPENDENT" as
+- [x] in `GalaxySimulator.ts`, replace the hardcoded `const faction = "INDEPENDENT" as
       Faction;` (`:101`) with a per-system seeded pick — `pickSystemFaction(new
       SeededRNG(`${seed}_faction_${i}`))` — mirroring the `pickStarType` inline pattern so
       the shared `this.rng` stream (and downstream determinism) is untouched
-    - [ ] in `assignFactionHomeSystems` (`:658-722`), also set
+    - [x] in `assignFactionHomeSystems` (`:658-722`), also set
       `best.ownerFaction = faction as unknown as Faction` alongside the existing
       `homeFactionId` assignment, so a faction's home system always displays as owned by
       that faction regardless of what its generation-time roll produced
-- [ ] write unit tests for `pickSystemFaction` (weighted distribution over many draws,
+- [x] write unit tests for `pickSystemFaction` (weighted distribution over many draws,
       deterministic given a fixed seed)
-- [ ] make Task 4's tests green
-- [ ] run `gitnexus detect_changes` — confirm scope matches expectations, no unexpected
+- [x] make Task 4's tests green
+- [x] run `gitnexus detect_changes` — confirm scope matches expectations, no unexpected
       execution-flow breakage
-- [ ] run `npm test -- --run` targeted files + `npx tsc --noEmit` + `npm run lint` — must
+- [x] run `npm test -- --run` targeted files + `npx tsc --noEmit` + `npm run lint` — must
       pass before next task
+
+  Implemented `FACTION_DISTRIBUTION_WEIGHTS` in `src/config/balance.ts` (`INDEPENDENT`
+  weight 10, each of the 5 playable factions weight 3 — `OVERMIND` excluded, it's a live
+  capture state not a generation roll) and `pickSystemFaction` in new
+  `src/systems/galaxy/systemFactionDistribution.ts`, mirroring `pickSystemTechLevel`'s
+  cumulative-subtraction algorithm exactly. `GalaxySimulator.ts:101`'s hardcoded
+  `"INDEPENDENT" as Faction` now calls `pickSystemFaction(new
+  SeededRNG(`${seed}_faction_${i}`))`, an independent per-system seed stream (never
+  perturbing `this.rng`). `assignFactionHomeSystems` now also writes
+  `best.ownerFaction = best.homeFactionId` (readonly-field cast, same pattern as the
+  existing `economyType` override) right after setting `homeFactionId`, so a faction's home
+  system always displays that faction as owner regardless of its generation-time roll.
+  New `src/tests/galaxy/systemFactionDistribution.test.ts` (4 cases: deterministic-per-seed,
+  every weighted faction appears + INDEPENDENT commonest, OVERMIND never emitted, weights
+  roughly tracked) mirrors `starTypeVariety.test.ts`'s style. Both of Task 4's red tests are
+  now green. `gitnexus detect_changes({scope:"all"})`: 2 changed symbols
+  (`GalaxySimulator`/`generateGalaxy`), 0 affected processes, risk `low`. Full suite: 553
+  files / 5185 tests passed (12 pre-existing skips, 0 failed); `npx tsc --noEmit` and
+  `npm run lint` clean (0 errors, 46 pre-existing warnings).
+
+  ⚠️ **Note (mirrors Task 1/2's precedent)**: the pre-commit hook runs the staged test file
+  through `npm test`, which fails on a deliberately red TDD test — so Task 4 (red) and
+  Task 5 (fix) had to land in one combined commit to satisfy "never skip hooks." Both tasks'
+  checkboxes are recorded above for plan-tracking accuracy; the actual commit history has
+  them as a single commit.
 
 ### Task 6: Fix StarMapScene raw-enum owner display
 
