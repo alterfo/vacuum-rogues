@@ -175,21 +175,27 @@ scenes are never clobbered with a stale flight capture; `performWarp` clears `li
 when the ship leaves the system so a capture can't leak into a cross-system spawn. No schema change
 (`flightShipPos` already persists). Detail in `playtest-traps.md`.
 
-**Background/foreground decorative visuals are baked Canvas2D sprites, never runtime `Graphics`
-shapes or per-frame `BlurFilter`s** (`gradientTexture.ts`, `docs/plans/20260708-space-visual-cleanup.md`).
-`SpaceBackgroundLayer` and `AsteroidBelt` both mount cheap tinted `Sprite`s of textures baked
-once and cached in `gradientTexture.ts`: `starPointTexture(hero)` for background twinkle stars
-(replaced a stroked 4-point diffraction-spike `Graphics` cross that read as a flat vector plus-sign),
-`nebulaCloudTexture(seed)` for nebula clouds (replaced 4 perfectly concentric `softGlowTexture`
-rings that stacked into one muddy undifferentiated blob — now a single wispy, internally-structured
-cloud per seed), and `cometHeadTexture()` for the comet coma (replaced reusing the generic
-`softGlowTexture` blob with a sharp bright nucleus + asymmetric coma so the head reads as a
-coherent object). `rockTexture(seed)` (pre-existing) was also redesigned for more silhouette/crater
-variety plus a rim-light pass. Every factory follows the same contract: bake once via
-`document.createElement("canvas")` + `getContext("2d")`, cache by variant/seed, return `null` with
-no 2D context (jsdom/unit tests) so callers fall back to a `Graphics` approximation instead of
-crashing. Do **not** reintroduce a stroked cross-spike star, a stacked-concentric-ring nebula/comet,
-or a per-frame `BlurFilter` for any of these — bake a new variant into `gradientTexture.ts` instead.
+**Twinkle stars, nebula clouds, the `AsteroidBelt` flyby-comet coma, and asteroid rocks are baked
+Canvas2D sprites, not runtime `Graphics` shapes or per-frame `BlurFilter`s** (`gradientTexture.ts`,
+`docs/plans/20260708-space-visual-cleanup.md`). `SpaceBackgroundLayer` and `AsteroidBelt` mount cheap
+tinted `Sprite`s of textures baked once and cached in `gradientTexture.ts`: `starPointTexture(hero)`
+for background twinkle stars (replaced a stroked 4-point diffraction-spike `Graphics` cross that read
+as a flat vector plus-sign), `nebulaCloudTexture(seed)` for nebula clouds (replaced 4 perfectly
+concentric `softGlowTexture` rings that stacked into one muddy undifferentiated blob — now a single
+wispy, internally-structured cloud per seed), and `cometHeadTexture()` for the `AsteroidBelt` flyby
+comet's coma (replaced reusing the generic `softGlowTexture` blob with a sharp bright nucleus +
+asymmetric coma so the head reads as a coherent object). `rockTexture(seed)` (pre-existing) was also
+redesigned for more silhouette/crater variety plus a rim-light pass. Every factory follows the same
+contract: bake once via `document.createElement("canvas")` + `getContext("2d")`, cache by
+variant/seed, return `null` with no 2D context (jsdom/unit tests) so callers fall back to a
+`Graphics` approximation instead of crashing. Do **not** reintroduce a stroked cross-spike star, a
+stacked-concentric-ring nebula/comet, or a per-frame `BlurFilter` for any of these — bake a new
+variant into `gradientTexture.ts` instead. **Known gap:** `SpaceBackgroundLayer`'s separate ambient
+"shooting star" streak (`CometStreak`/`spawnComet()` — ~15-40s cadence, ephemeral, ranging across the
+screen) is a *different* comet visual from `AsteroidBelt`'s in-system flyby comet and was **not**
+in this plan's scope; it still draws its tail/nucleus as raw `Graphics.poly()`/`circle()` fills. If
+it turns out to be what a future "muddy comet" complaint is about, it needs its own
+`gradientTexture.ts` bake — don't assume `cometHeadTexture()` already covers it.
 
 Rules: a module never imports another — the scene mediates via callbacks + `*Deps` bundles;
 each `destroy()` must leave `gameLayer.children.length === 0`; dispose `BlurFilter`s in

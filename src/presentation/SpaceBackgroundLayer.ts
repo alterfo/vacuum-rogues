@@ -550,10 +550,7 @@ export class SpaceBackgroundLayer implements FlightModule {
       cloud.x = rng.nextFloat(-sw * 0.7, sw * 0.7);
       cloud.y = rng.nextFloat(-sh * 0.7, sh * 0.7);
 
-      const outerColor = palette[0];
       const bodyColor = palette[rng.nextInt(1, 2)];
-      const innerColor = palette[3];
-      const coreColor = palette[4];
 
       // cloudR in screen pixels (was world-px, caused scaling artifacts on zoom).
       const cloudR = rng.nextFloat(200, 450);
@@ -581,6 +578,9 @@ export class SpaceBackgroundLayer implements FlightModule {
         cloud.addChild(s);
       } else {
         // Fallback (no canvas): stacked translucent circles per layer.
+        const outerColor = palette[0];
+        const innerColor = palette[3];
+        const coreColor = palette[4];
         const outerG = new Graphics();
         for (let b = 0; b < 24; b++) {
           const ang = rng.next() * Math.PI * 2;

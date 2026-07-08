@@ -487,14 +487,19 @@ export class AsteroidBelt implements FlightModule {
         a.graphics.x = a.x;
         a.graphics.y = a.y;
         a.graphics.alpha = fade;
+        // cometHeadTexture bakes its coma bulge offset along local +x, so rotate
+        // the sprite to point that bulge anti-sunward (same direction as the tail).
+        const comaRotation = Math.atan2(uy, ux);
         if (a.head) {
           a.head.x = a.x;
           a.head.y = a.y;
+          a.head.rotation = comaRotation;
           a.head.alpha = fade;
         }
         if (a.core) {
           a.core.x = a.x;
           a.core.y = a.y;
+          a.core.rotation = comaRotation;
           // The hot nucleus reads brighter than the surrounding halo.
           a.core.alpha = fade;
         }

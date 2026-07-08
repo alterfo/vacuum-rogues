@@ -94,10 +94,11 @@ export function dustParticleTexture(): Texture | null {
  * star colour. Cached per `hero` value (baked once). Returns `null` with no 2D
  * context (jsdom / unit tests) so callers fall back to a plain `Graphics` dot.
  */
-const starPointCache = new Map<boolean, Texture | null>();
+let starPointCachedNormal: Texture | null | undefined;
+let starPointCachedHero: Texture | null | undefined;
 
 export function starPointTexture(hero: boolean): Texture | null {
-  const existing = starPointCache.get(hero);
+  const existing = hero ? starPointCachedHero : starPointCachedNormal;
   if (existing !== undefined) return existing;
 
   const size = hero ? 192 : 96;
@@ -106,7 +107,8 @@ export function starPointTexture(hero: boolean): Texture | null {
   canvas.height = size;
   const ctx = canvas.getContext("2d");
   if (!ctx) {
-    starPointCache.set(hero, null);
+    if (hero) starPointCachedHero = null;
+    else starPointCachedNormal = null;
     return null;
   }
 
@@ -147,7 +149,8 @@ export function starPointTexture(hero: boolean): Texture | null {
   ctx.fillRect(0, 0, size, size);
 
   const tex = Texture.from(canvas);
-  starPointCache.set(hero, tex);
+  if (hero) starPointCachedHero = tex;
+  else starPointCachedNormal = tex;
   return tex;
 }
 

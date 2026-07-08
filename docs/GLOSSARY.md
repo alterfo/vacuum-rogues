@@ -73,9 +73,10 @@ English; the in-game terms are quoted in their original Russian.
   asset categories **panoramas / planet_maps / star_maps / surfaces / nebula**.
 - **pickVariant / pickVariantKey** — stable per-entity art selection by id;
   **LAZY_PREFIXES** — heavy art categories excluded from eager boot preload.
-- **twinkle stars** (bright "hero" stars), **dust streaks** (the removed
-  velocity-scaled speed-streaks), **comet coma/tail**, **softGlowTexture** (a baked
-  glow gradient — no per-frame `BlurFilter` in the flight scene).
+- **twinkle stars** (bright "hero" stars, baked via `starPointTexture`), **dust streaks**
+  (the removed velocity-scaled speed-streaks), **comet coma/tail** (baked via
+  `cometHeadTexture`), **softGlowTexture** (the generic baked glow gradient other sprites
+  use) — no per-frame `BlurFilter` in the flight scene.
 - **FlightModule** — the `initialize / update / destroy` flight sub-module interface;
   **SceneType** — the scene enum.
 

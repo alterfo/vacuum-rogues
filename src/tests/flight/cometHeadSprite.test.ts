@@ -80,4 +80,36 @@ describe("AsteroidBelt comet head sprites (2D context available)", () => {
 
     belt.destroy();
   });
+
+  it("rotates head/core sprites so the baked coma bulge (+x offset) points anti-sunward", () => {
+    const tex = cometHeadTexture();
+    const { belt, gameLayer } = makeHarness();
+    belt.initialize();
+    // Star centre = renderer screen size / 2 (see makeHarness: 800x600).
+    const centerX = 400;
+    const centerY = 300;
+
+    // Advance a frame so `updateAsteroids` computes each comet's live position
+    // and sets `head.rotation`/`core.rotation` from it.
+    belt.update(500, 500);
+
+    const cometSprites = fieldContainer(gameLayer).children.filter(
+      (c): c is Sprite => c instanceof Sprite && c.texture === tex,
+    );
+    expect(cometSprites.length).toBe(4); // 2 comets × (head + core)
+
+    for (const sprite of cometSprites) {
+      // The anti-sunward direction is simply the angle of the comet's own
+      // position relative to the star, independent of how the production
+      // code derives it — this pins the geometric contract (baked +x bulge
+      // must point away from the star), not just today's implementation.
+      const expectedRotation = Math.atan2(
+        sprite.y - centerY,
+        sprite.x - centerX,
+      );
+      expect(sprite.rotation).toBeCloseTo(expectedRotation, 5);
+    }
+
+    belt.destroy();
+  });
 });
