@@ -269,19 +269,72 @@ start this plan only after that run stops/completes.
 
 ### Task 3: Audit remaining panels for the same fixed-geometry font-scale bug
 
-- [ ] for each candidate panel listed in Context (BankScene, EquipmentShopScene,
+- [x] for each candidate panel listed in Context (BankScene, EquipmentShopScene,
       GameOverScene, InfoCenterScene, InventoryScene, PlanetScene, StationScene,
       TextQuestScene, TradeScene, HangarPanel, AccessibilityPanel, HelpPanel,
       MicromoduleApplyPanel, SettingsPanel), check for hardcoded row heights/y-offsets or
       character-count truncation independent of `scaledFont`/wordWrap, focusing on
       list/multi-row layouts first (HangarPanel warehouse rows, TradeScene commodity rows,
       BankScene ledger rows, InfoCenterScene news/rumor rows) — grep + read, no edits yet
-- [ ] for each panel where a genuine overlap/clip/overflow risk is confirmed at "L" scale,
+- [x] for each panel where a genuine overlap/clip/overflow risk is confirmed at "L" scale,
       write a failing regression test first (mirroring Task 1's approach)
-- [ ] fix each confirmed panel using the same dynamic-height/wordWrap pattern from Task 2
-- [ ] if a panel is checked and found NOT to have the bug (e.g. already scale-safe or
+- [x] fix each confirmed panel using the same dynamic-height/wordWrap pattern from Task 2
+- [x] if a panel is checked and found NOT to have the bug (e.g. already scale-safe or
       single-line-only), note it in this plan with ⚠️/note rather than silently skipping
-- [ ] run full targeted test suite — must pass before next task
+- [x] run full targeted test suite — must pass before next task
+
+  **Fixed (genuine fixed-geometry bug, same pattern as JobBoardPanel), each with a new
+  regression test under `src/tests/presentation/`:**
+  - `HangarPanel.ts` — fitted-slot box height + unfit/micromodule-row offsets, and warehouse
+    row `btnGap`, all font-scale-derived via `lineStepFor` (`hangarPanelFontScaleLayout.test.ts`).
+  - `BankScene.ts` — statement/bus-log row step via `lineStepFor`/`estimateWrappedLines`, and
+    the `reason` truncation switched from a fixed 30-char cap to a pixel-width-derived cap via
+    `MONO_CHAR_WIDTH_RATIO` (`bankSceneFontScaleLayout.test.ts`).
+  - `EquipmentShopScene.ts` (`renderRows`) — name/stat and price/fit-hint stacks now step by
+    `lineStepFor`; `ROW_H` is now a getter floored at the historical 52px
+    (`equipmentShopFontScaleLayout.test.ts`).
+  - `StationScene.ts` — in-space shop rows (kind-badge/name stack, `ROW_H` getter floored at
+    50px) and micromodule-shop rows (tier-badge/name stack, `ROW` floored at 46px)
+    (`stationScopeFontScaleLayout.test.ts`).
+  - `InventoryScene.ts` (`renderWarehouseRow`) — «Установить»/«Выбросить» button gap now
+    derives from `lineStepFor` instead of a fixed 16px gap (`inventoryFontScaleLayout.test.ts`).
+  - `InfoCenterScene.ts` (gear-search rows) — main/stats line stack now steps by
+    `lineStepFor`, and the `gearName.slice(0,18)`/`planetSys.slice(0,22)` fixed char-count
+    truncation replaced with a `MONO_CHAR_WIDTH_RATIO`-derived budget
+    (`infoCenterGearSearchFontScaleLayout.test.ts`).
+  - `TextQuestScene.ts` (`refreshVmParamPanel`) — per-param name/value/bar stack now steps by
+    `lineStepFor` instead of fixed `+16`/`+18` (`textQuestParamPanelFontScaleLayout.test.ts`).
+
+  **Confirmed safe, no change (documented per plan convention rather than silently skipped):**
+  - `GameOverScene.ts` — two static single-line buttons in a fixed box, no stacking.
+  - `InfoCenterScene.ts` news rows — already wordWrap/per-item dynamic; objects-search rows
+    (`ROW_H=34`) are single-line and use `padEnd`, not truncating `slice`.
+  - `InventoryScene.ts` resource row (`rowH=20`) — single line, no stacking.
+  - `TextQuestScene.ts` outcome lines (`lineY+=22`) — coincidentally already equals
+    `lineStepFor` at "L" scale; no overlap.
+  - `TradeScene.ts` — each row is columns, not stacked lines; the 44px step covers the
+    tallest control at any scale.
+  - `AccessibilityPanel.ts` — every row is single-line with ample headroom over `lineStepFor`.
+  - `HelpPanel.ts` — already fully dynamic (`y += node.height + gap`).
+  - `MicromoduleApplyPanel.ts` — info text and apply button share one row, not stacked.
+  - `SettingsPanel.ts` — audited only, **not touched**: this panel's hit-area layout is a
+    locked contract per `src/presentation/CLAUDE.md` (pinned tests); no fix attempted here.
+
+  ⚠️ **Flagged, not fixed (real but out-of-scope-sized for this pack):**
+  - `InfoCenterScene.ts` news rows (`ScrollableList`, `NEWS_ROW_H=38`): a long
+    `CAMPAIGN_ESCALATION` string can still wrap to 2 lines and bleed into the next row at "L"
+    scale, but the root cause is `ScrollableList`'s shared **uniform** `itemHeight` design
+    (used by 6+ panels) — a correct fix needs per-item variable-height support in that shared
+    component, too large a change to bundle here.
+  - `PlanetScene.ts` service-menu buttons — `computePlanetMenuLayout`'s `btnH` isn't
+    font-scale aware; only a theoretical risk on very short screens with many buttons. That
+    function carries its own pinned-test contract, so left untouched.
+
+  Verified: `npm test -- --run` 551 files / 5179 tests passed (12 pre-existing skips, 0
+  failed), `npx tsc --noEmit` clean, `npm run lint` 0 errors (46 pre-existing warnings in
+  unrelated files). `cyrillicBaseline.json`'s `BankScene.ts` entry bumped 26→27 via the
+  gate's own sanctioned `UPDATE_CYRILLIC_BASELINE=1` procedure (one new legitimate literal
+  from the reason-truncation fix's prefix-length calc), not a weakened assertion.
 
 ### Task 4: Red test — galaxy generation produces zero faction diversity
 

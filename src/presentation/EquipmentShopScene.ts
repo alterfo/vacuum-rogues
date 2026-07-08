@@ -1,5 +1,7 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { scaledText } from "./ui/scaledText";
+import { lineStepFor } from "./ui/questCardLayout";
+import { scaledFont } from "@/utils/fontScale";
 import { GameScene } from "./GameScene";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -129,7 +131,6 @@ export class EquipmentShopScene extends GameScene {
   private listings: GearListing[] = [];
   private scrollOffset = 0;
   private activeTab: ShopTab = "gear";
-  private readonly ROW_H = 52;
   private readonly VISIBLE_ROWS = 7;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private detachWheel: (() => void) | null = null;
@@ -678,6 +679,20 @@ export class EquipmentShopScene extends GameScene {
     return null;
   }
 
+  /**
+   * Gear-listing row height. Historically a fixed 52 px, sized for the "M"
+   * scale's ~14 px name-line height + ~18 px gap to the stat line below it —
+   * at "L" scale the taller name line bled into the stat line beneath it
+   * (Task 3, `docs/plans/20260708-font-scale-and-faction-bugs.md`). Grows with
+   * the current font scale, floored at the historical 52 px so "M"/"S" keep
+   * the established row density.
+   */
+  private get ROW_H(): number {
+    const nameStep = lineStepFor(scaledFont(13));
+    const statStep = lineStepFor(scaledFont(10));
+    return Math.max(52, 6 + nameStep + statStep + 6);
+  }
+
   private renderRows(startX: number, startY: number, w: number): void {
     if (!this.listContainer) return;
     this.listContainer.removeChildren();
@@ -740,7 +755,8 @@ export class EquipmentShopScene extends GameScene {
       );
       nameText.eventMode = "none";
       nameText.x = startX + w * 0.01;
-      nameText.y = rowY + 6;
+      const nameTop = rowY + 6;
+      nameText.y = nameTop;
       this.listContainer.addChild(nameText);
 
       // Stat line — show comparison delta if this item replaces an installed one
@@ -759,7 +775,10 @@ export class EquipmentShopScene extends GameScene {
       );
       statText.eventMode = "none";
       statText.x = startX + w * 0.01;
-      statText.y = rowY + 25;
+      // Stacked below the name line — its step tracks the name's own font-scale
+      // line height so the two never overlap at "L" (Task 3: the fixed +25
+      // offset assumed the "M"-scale ~14 px name-line height).
+      statText.y = nameTop + lineStepFor(scaledFont(13));
       this.listContainer.addChild(statText);
 
       // Kind badge
@@ -792,7 +811,8 @@ export class EquipmentShopScene extends GameScene {
       );
       priceText.eventMode = "none";
       priceText.x = startX + w * 0.78;
-      priceText.y = rowY + 16;
+      const priceTop = rowY + 16;
+      priceText.y = priceTop;
       this.listContainer.addChild(priceText);
 
       // Right-hand control: buy / owned-in-hold / no-funds. Fitting lives on the
@@ -842,7 +862,10 @@ export class EquipmentShopScene extends GameScene {
         const fitText = scaledText(fit.text, 10, fit.color, { rawColor: true });
         fitText.eventMode = "none";
         fitText.x = startX + w * 0.78;
-        fitText.y = rowY + 34;
+        // Stacked below the price line in the same column — steps by the
+        // price line's own font-scale height (Task 3: the fixed +34 offset
+        // assumed the "M"-scale ~14 px price-line height).
+        fitText.y = priceTop + lineStepFor(scaledFont(12));
         this.listContainer.addChild(fitText);
       }
     }

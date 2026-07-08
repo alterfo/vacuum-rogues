@@ -2,6 +2,7 @@ import { Container, Graphics, Text } from "pixi.js";
 import { GameScene } from "./GameScene";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { scaledText } from "./ui/scaledText";
+import { lineStepFor } from "./ui/questCardLayout";
 import { RESOURCE_LABEL, explainInstallBlock } from "./ui/HangarPanel";
 import type { Renderer } from "./Renderer";
 import type { GameEngine } from "@/systems/GameEngine";
@@ -443,7 +444,13 @@ export class InventoryScene extends GameScene {
     if (!this.mainContainer) return y;
     const gear = gearById(gearId);
     const rowW = 280;
-    const rowH = 40;
+    // Vertical gap between the two stacked «Установить»/«Выбросить» (or
+    // «Отмена»/подтверждение) actions — sized for the "M" line height (16 px
+    // cleared the ~14 px text) but that margin shrinks to zero at "L"; grow it
+    // with the font scale so the two buttons never overlap (Task 3, mirrors
+    // HangarPanel.renderWarehouseAndCargo's `btnGap`).
+    const btnGap = Math.max(16, lineStepFor(scaledFont(11)) + 4);
+    const rowH = 12 + btnGap + 8;
 
     const bg = new Graphics();
     bg.rect(x, y, rowW, rowH);
@@ -472,7 +479,7 @@ export class InventoryScene extends GameScene {
         t("inventory.jettisonConfirm"),
         0xff7755,
         btnRight,
-        y + 28,
+        y + 12 + btnGap,
         () => this.confirmJettison(),
       );
       return y + rowH + 8;
@@ -487,8 +494,12 @@ export class InventoryScene extends GameScene {
         () => this.installFromWarehouse(gearId),
       );
     }
-    this.addRowButton(t("inventory.jettison"), 0xff8844, btnRight, y + 28, () =>
-      this.requestJettisonConfirm("gear", gearId),
+    this.addRowButton(
+      t("inventory.jettison"),
+      0xff8844,
+      btnRight,
+      y + 12 + btnGap,
+      () => this.requestJettisonConfirm("gear", gearId),
     );
 
     return y + rowH + 8;

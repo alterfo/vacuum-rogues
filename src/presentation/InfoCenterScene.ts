@@ -37,6 +37,8 @@ import {
 } from "@/systems/equipment/GearCatalog";
 import { attachWheelScroll } from "./ui/WheelScroll";
 import { ScrollableList } from "./ui/ScrollableList";
+import { MONO_CHAR_WIDTH_RATIO, lineStepFor } from "./ui/questCardLayout";
+import { scaledFont } from "@/utils/fontScale";
 import { logger } from "@/utils/logger";
 
 interface InfoContext {
@@ -1377,7 +1379,14 @@ export class InfoCenterScene extends GameScene {
 
     // Results
     const LIST_Y = CTRL_Y + CTRL_H + 8;
-    const ROW_H = 38;
+    // Historically a fixed 38 px, sized for the "M" scale's line + stats
+    // two-line stack — at "L" scale the taller line bled into the stats line
+    // beneath it (Task 3, `docs/plans/20260708-font-scale-and-faction-bugs.md`).
+    // Grows with the current font scale, floored at the historical 38 px.
+    const ROW_H = Math.max(
+      38,
+      5 + lineStepFor(scaledFont(11)) + lineStepFor(scaledFont(10)) + 3,
+    );
     const VISIBLE = Math.floor((ph - LIST_Y) / ROW_H);
 
     if (this.gearResults.length === 0) {
@@ -1411,8 +1420,24 @@ export class InfoCenterScene extends GameScene {
 
       const distStr = hit.jumps === 0 ? "здесь" : `${hit.jumps} пр.`;
       const staleStr = stale ? " (уст.)" : "";
-      const gearName = hit.gear.name.slice(0, 18).padEnd(18);
-      const planetSys = `${hit.planet} / ${hit.system}`.slice(0, 22).padEnd(22);
+      // Column widths in chars, calibrated in PIXELS at the "M"-scale baseline
+      // (font 11) and re-derived per the current font scale — a fixed 18/22
+      // char count rendered WIDER at "L" scale (same glyph count, bigger
+      // glyphs) and bled past the row into the "→ карта" button (Task 3, same
+      // class of bug as BankScene's `maxReasonChars`).
+      const baseCharPx = 11 * MONO_CHAR_WIDTH_RATIO;
+      const charPx = Math.max(1, scaledFont(11) * MONO_CHAR_WIDTH_RATIO);
+      const gearNameChars = Math.max(6, Math.floor((18 * baseCharPx) / charPx));
+      const planetSysChars = Math.max(
+        6,
+        Math.floor((22 * baseCharPx) / charPx),
+      );
+      const gearName = hit.gear.name
+        .slice(0, gearNameChars)
+        .padEnd(gearNameChars);
+      const planetSys = `${hit.planet} / ${hit.system}`
+        .slice(0, planetSysChars)
+        .padEnd(planetSysChars);
       const lineText = `T${hit.gear.techLevel} ${gearName} ${planetSys}${staleStr} — ${hit.price}₡  ${distStr}`;
 
       const lineLabel = scaledText(lineText, 11, stale ? 0x7799aa : 0xaabbcc, {
@@ -1420,7 +1445,8 @@ export class InfoCenterScene extends GameScene {
         fontFamily: "monospace",
       });
       lineLabel.x = PAD + 4;
-      lineLabel.y = y + 5;
+      const lineTop = y + 5;
+      lineLabel.y = lineTop;
       lineLabel.eventMode = "none";
       container.addChild(lineLabel);
 
@@ -1429,7 +1455,10 @@ export class InfoCenterScene extends GameScene {
         fontFamily: "monospace",
       });
       statsLabel.x = PAD + 4;
-      statsLabel.y = y + 20;
+      // Stacked below the main line — steps by its own font-scale line height
+      // so the two never overlap at "L" (Task 3: the fixed +20 offset assumed
+      // the "M"-scale ~14 px line height).
+      statsLabel.y = lineTop + lineStepFor(scaledFont(11));
       statsLabel.eventMode = "none";
       container.addChild(statsLabel);
 

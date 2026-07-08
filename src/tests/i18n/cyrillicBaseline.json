@@ -1,6 +1,6 @@
 {
   "src/ai/adapters/QuestNarrator.ts": 35,
-  "src/presentation/BankScene.ts": 26,
+  "src/presentation/BankScene.ts": 27,
   "src/presentation/DialogueScene.ts": 22,
   "src/presentation/EquipmentShopScene.ts": 33,
   "src/presentation/GameOverScene.ts": 5,

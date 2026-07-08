@@ -5,6 +5,8 @@ import {
   type FederatedPointerEvent,
 } from "pixi.js";
 import { scaledText } from "./scaledText";
+import { lineStepFor } from "./questCardLayout";
+import { scaledFont } from "@/utils/fontScale";
 import type { Renderer } from "../Renderer";
 import type { Player } from "@/domain/Player";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
@@ -55,6 +57,18 @@ const HANGAR_BANKS: readonly SlotCategory[] = [
   "radar",
   "equipment",
 ];
+
+/** Historical fitted-slot box height at the "M" font scale — the floor a
+ * font-scale-driven height never shrinks below. */
+const FITTED_SLOT_MIN_H = 34;
+
+/** Fitted-slot box height: name row + micromodule row, each sized off the
+ * current font scale so the two lines never overlap at "L" (Task 3). */
+function fittedSlotHeight(): number {
+  const nameStep = lineStepFor(scaledFont(11));
+  const mmStep = lineStepFor(scaledFont(10));
+  return Math.max(FITTED_SLOT_MIN_H, 4 + nameStep + mmStep + 4);
+}
 
 /** Russian goods names for the cargo hold (ТРЮМ) read-out. */
 export const RESOURCE_LABEL: Record<string, string> = {
@@ -389,13 +403,14 @@ export class HangarPanel {
       y += 22;
 
       const entries = byCat(cat);
+      const slotH = fittedSlotHeight();
       for (const e of entries) {
-        if (y + 34 > contentBottom) {
+        if (y + slotH > contentBottom) {
           clipped = true;
           break;
         }
-        this.renderFilledSlot(layout, loadout!, player, e, y);
-        y += 38;
+        this.renderFilledSlot(layout, loadout!, player, e, y, slotH);
+        y += slotH + 4;
       }
       if (clipped) break;
 
@@ -445,16 +460,22 @@ export class HangarPanel {
       gear: Gear | undefined;
     },
     y: number,
+    slotH: number,
   ): void {
     const container = this.ctx!.container;
     const { leftX, leftW } = layout;
     const gear = entry.gear!;
     const slot = entry.slot;
     const idx = entry.idx;
+    // Name sits above the micromodule row; both steps scale with the current
+    // font setting so the two lines never overlap at "L" (Task 3: they used to
+    // sit at fixed y+4/y+20 offsets sized for the "M" line height).
+    const nameStep = lineStepFor(scaledFont(11));
+    const mmStep = lineStepFor(scaledFont(10));
 
     const slotBg = new Graphics();
-    slotBg.rect(leftX, y, leftW, 34).fill({ color: 0x0d2030, alpha: 1 });
-    slotBg.rect(leftX, y, leftW, 34).stroke({ color: 0x336655, width: 1 });
+    slotBg.rect(leftX, y, leftW, slotH).fill({ color: 0x0d2030, alpha: 1 });
+    slotBg.rect(leftX, y, leftW, slotH).stroke({ color: 0x336655, width: 1 });
     slotBg.eventMode = "none";
     container.addChild(slotBg);
 
@@ -465,7 +486,7 @@ export class HangarPanel {
       x: leftX,
       y,
       w: leftW,
-      h: 34,
+      h: slotH,
       target: { kind: "gear", slotIndex: idx },
     });
 
@@ -484,7 +505,7 @@ export class HangarPanel {
     });
     unBtn.anchor.set(1, 0.5);
     unBtn.x = leftX + leftW - 8;
-    unBtn.y = y + 11;
+    unBtn.y = y + 4 + nameStep / 2;
     unBtn.eventMode = "static";
     unBtn.cursor = "pointer";
     unBtn.on("pointerdown", (e) => {
@@ -502,6 +523,7 @@ export class HangarPanel {
 
     // Micromodule control — one per item, never removed.
     const mmCategory = gearMicromoduleCategory(gear);
+    const mmRowY = y + 4 + nameStep;
     if (slot.micromoduleId) {
       const mmLabel =
         microModuleById(slot.micromoduleId)?.name ?? slot.micromoduleId;
@@ -510,7 +532,7 @@ export class HangarPanel {
         fontFamily: "monospace",
       });
       mmTag.x = leftX + 8;
-      mmTag.y = y + 20;
+      mmTag.y = mmRowY;
       mmTag.eventMode = "none";
       container.addChild(mmTag);
     } else {
@@ -530,7 +552,7 @@ export class HangarPanel {
       );
       mmBtn.anchor.set(1, 0.5);
       mmBtn.x = leftX + leftW - 8;
-      mmBtn.y = y + 26;
+      mmBtn.y = mmRowY + mmStep / 2;
       if (hasMatchingMm) {
         mmBtn.eventMode = "static";
         mmBtn.cursor = "pointer";
@@ -901,8 +923,14 @@ export class HangarPanel {
       empty.eventMode = "none";
       container.addChild(empty);
     }
+    // Vertical gap between the two stacked «Установить»/«Продать» actions —
+    // sized for the "M" line height (20 px cleared the ~14 px text) but that
+    // margin shrinks to zero at "L"; grow it with the font scale so the two
+    // buttons never overlap (Task 3).
+    const btnGap = Math.max(20, lineStepFor(scaledFont(11)) + 4);
+    const warehouseRowH = 12 + btnGap + 8;
     for (const row of rows) {
-      if (y + 42 > splitY - 6) break; // clip to the СКЛАД region
+      if (y + warehouseRowH + 2 > splitY - 6) break; // clip to the СКЛАД region
       const gearId =
         row.kind === "owned" ? row.gearId : (legacy[row.index]?.id ?? "");
       const gear = gearById(gearId);
@@ -915,8 +943,12 @@ export class HangarPanel {
       // («Установить» and «Продать» were 13 px apart — within text height, so
       // they overlapped and got mis-tapped; see Task 3).
       const rowBg = new Graphics();
-      rowBg.rect(rightX, y, rightW, 40).fill({ color: 0x14160a, alpha: 1 });
-      rowBg.rect(rightX, y, rightW, 40).stroke({ color: 0x30401a, width: 1 });
+      rowBg
+        .rect(rightX, y, rightW, warehouseRowH)
+        .fill({ color: 0x14160a, alpha: 1 });
+      rowBg
+        .rect(rightX, y, rightW, warehouseRowH)
+        .stroke({ color: 0x30401a, width: 1 });
       rowBg.eventMode = "none";
       container.addChild(rowBg);
 
@@ -943,9 +975,10 @@ export class HangarPanel {
         );
         sellBtn.anchor.set(1, 0.5);
         sellBtn.x = btnRight;
-        // Lower action: a 20 px centre gap from «Установить» (y + 12) clears the
-        // ~14 px text height so the two buttons never overlap.
-        sellBtn.y = y + 32;
+        // Lower action: a font-scale-derived centre gap from «Установить»
+        // (y + 12) clears the text height at every scale so the two buttons
+        // never overlap.
+        sellBtn.y = y + 12 + btnGap;
         sellBtn.eventMode = "static";
         sellBtn.cursor = "pointer";
         sellBtn.on("pointerdown", (e) => {
@@ -971,7 +1004,7 @@ export class HangarPanel {
         });
         eqBtn.anchor.set(1, 0.5);
         eqBtn.x = btnRight;
-        // Upper action — paired with «Продать» (y + 32) at a 20 px gap.
+        // Upper action — paired with «Продать» at `btnGap` below.
         eqBtn.y = y + 12;
         eqBtn.eventMode = "static";
         eqBtn.cursor = "pointer";
@@ -987,7 +1020,7 @@ export class HangarPanel {
         });
         container.addChild(eqBtn);
       }
-      y += 48;
+      y += warehouseRowH + 8;
     }
 
     // ── ТРЮМ — cargo hold (goods), separate read-only panel. ──
