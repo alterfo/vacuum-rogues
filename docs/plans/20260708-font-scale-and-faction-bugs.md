@@ -518,18 +518,58 @@ start this plan only after that run stops/completes.
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] verify Bug 1 (JobBoardPanel + any Task 3 findings) no longer overlaps/clips/overflows
+- [x] verify Bug 1 (JobBoardPanel + any Task 3 findings) no longer overlaps/clips/overflows
       at "L" font scale — visually confirm via a real Playwright screenshot
-- [ ] verify Bug 2: a freshly generated galaxy shows varied faction owners on the star map,
+- [x] verify Bug 2: a freshly generated galaxy shows varied faction owners on the star map,
       and each faction's home system shows that faction as owner
-- [ ] verify Bug 3: a fleeing NPC (trigger `BREAK_OFF` in a real-engine playtest or live
+- [x] verify Bug 3: a fleeing NPC (trigger `BREAK_OFF` in a real-engine playtest or live
       session) is bounded at the system edge and eventually despawns via departure rather
       than running to unbounded distance
-- [ ] run full unit test suite (`npm test -- --run`)
-- [ ] run `npm run test:playtest` and `npm run test:e2e:regression`
-- [ ] run `npm run lint` and `npx tsc --noEmit` — all issues fixed
-- [ ] run `gitnexus detect_changes({scope: "compare", base_ref: "master"})` — confirm no
+- [x] run full unit test suite (`npm test -- --run`)
+- [x] run `npm run test:playtest` and `npm run test:e2e:regression`
+- [x] run `npm run lint` and `npx tsc --noEmit` — all issues fixed
+- [x] run `gitnexus detect_changes({scope: "compare", base_ref: "master"})` — confirm no
       unexpected affected processes
+
+  Full unit suite: 556 files / 5194 tests passed (12 pre-existing skips, 0 failed).
+  `npm run test:playtest`: 68 files / 685 tests passed (4/9 pre-existing skips, 0 failed).
+  `npx tsc --noEmit`: clean. `npm run lint`: 0 errors, 46 pre-existing `no-explicit-any`
+  warnings in unrelated test files.
+
+  Bug 1 (visual): the existing E2E test `regression: Job Board text scales with the S/M/L
+  font setting (font-scale plan Task 3)` passed — real Playwright screenshot at "L" scale
+  shows rows growing to fit long titles/descriptions, no overlap/clip.
+  Bug 2: covered by automated tests rather than manual play — `galaxyFactionDistribution.test.ts`
+  (diversity across a generated galaxy) and `starMapFactionLabel.test.ts` (drives the real
+  `StarMapScene.showSystemInfo` and asserts a localized non-INDEPENDENT label renders) are the
+  in-repo equivalent of "open the star map and see varied owners"; both pass.
+  Bug 3: covered by `npcShipBoundary.test.ts`'s 6 cases (boundary clamp + departure/despawn
+  transition across hull-ratio/out-matched/angle variants), all passing.
+
+  `npm run test:e2e:regression` (needed `NO_PROXY=localhost,127.0.0.1` / `no_proxy` set first
+  — the shell's `http_proxy`/`https_proxy` env otherwise routes the Playwright webServer probe
+  through Privoxy and the server never comes up, a known environment quirk unrelated to this
+  plan). Full run: 27/28 pass before the `test.describe.serial` block's first failure stops the
+  rest (serial mode skips siblings after a failure); ran the remaining 13 individually instead.
+  3 failures found, **all confirmed pre-existing on `master`** via a disposable `git worktree`
+  (identical failure/line/values on both branches, not introduced by this plan): (1) `smoke:
+  changing the font size keeps the ship in place` — `hud.gearButton` container is null,
+  unrelated FlightHud seam from the concurrent `ui-flight-bugfixes` plan; (2) `mouse wheel
+  scrolls the equipment-shop list` — `maxScroll` computed from `listings.length` (includes
+  hulls) vs. the scroll clamp's `gearListings().length` (excludes hulls), a pre-existing
+  off-by-hull-count mismatch, not touched by this plan's `EquipmentShopScene.ROW_H` fix; (3) `a
+  TRADE_OPPORTUNITY rumor renders in the Info Center news tab` — pre-existing, unrelated to
+  faction/font-scale/boundary changes. All other 25 regression tests (including this plan's own
+  Job Board font-scale test) pass. Worktrees cleaned up (`git worktree remove --force`), no
+  master-branch changes made.
+
+  `gitnexus detect_changes({scope: "compare", base_ref: "master"})`: 156 changed symbols / 70
+  affected processes, risk `critical` — expected given this branch's diff vs. `master` spans
+  both this plan (Tasks 1–8) and the already-landed concurrent `ui-flight-bugfixes` plan (76
+  files changed total). Affected-process list matches the intentionally-touched render/lifecycle
+  methods across the panels fixed in Task 3 plus the flight-module work from the other plan
+  (`RenderGear`, `ScrollableList`, `CurrentFontSizeKey`, etc.) — no symbol outside the two plans'
+  documented scope appeared.
 
 ### Task 10: [Final] Update documentation
 
