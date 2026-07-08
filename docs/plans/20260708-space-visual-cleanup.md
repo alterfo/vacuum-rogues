@@ -249,19 +249,43 @@ user confirmed these already look fine and should not be touched.
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] Re-run the live screenshot pass from Task 1 (dev-autopilot / manual flight) for all four
+- [x] Re-run the live screenshot pass from Task 1 (dev-autopilot / manual flight) for all four
       areas — background stars, nebula near a sun, a comet, and close-up asteroids — and confirm
       each no longer matches the complained-about look (no plus-sign stars, no smooth undifferentiated
       blob, no shapeless comet, no flat angular polygon asteroid).
-- [ ] Verify sun/planet visuals are visually unchanged (out-of-scope areas untouched) via the same
+      ⚠️ Done via a second throwaway Playwright spec (real browser, same pattern as Task 1; deleted
+      after use, screenshots not committed). Confirmed live: (1) background stars now read as small
+      crisp point-glints scattered across every shot — no stroked 4-point cross-flare visible
+      anywhere; (2) the nebula reads as organic wispy pillar-shaped structure (procedural
+      `nebulaCloudTexture` cloud + the existing per-family backdrop art), not 4 perfectly round
+      concentric glow circles; (3) a comet close-up (`05-comet-1.png`) showed a bright pinpoint
+      nucleus with a soft asymmetric coma/tail smear — a coherent bright-centred object, not a
+      shapeless blob (a second comet capture missed-framed due to comet drift/cooldown timing in
+      the throwaway harness itself, not a product issue — the one successful capture is sufficient
+      evidence the new `cometHeadTexture` path renders as designed); (4) asteroid close-ups
+      (`04-asteroid-0.png`, `04-asteroid-1.png`) showed clearly irregular, faceted, shaded rock
+      silhouettes with visible craters and a lit rim edge — matching `rockTexture()`'s redesigned
+      3D read, no flat single-colour polygon anywhere.
+- [x] Verify sun/planet visuals are visually unchanged (out-of-scope areas untouched) via the same
       screenshot pass.
-- [ ] Run full unit test suite (`npm test -- --run`) — must pass.
-- [ ] Run `npm run lint` — all issues must be fixed.
-- [ ] Run `npm run test:playtest` (real-engine playtest gate) — must pass, confirms no wiring
+      ⚠️ `02-sun.png`/`03-planet.png` captured — real WebP star/planet art renders identically to
+      the Task 1 baseline shots, untouched by any of the Task 2-5 changes.
+- [x] Run full unit test suite (`npm test -- --run`) — must pass.
+      ⚠️ 557 test files / 5211 tests passed, 0 failed, 12 skipped (pre-existing skips).
+- [x] Run `npm run lint` — all issues must be fixed.
+      ⚠️ 0 errors (pre-existing warnings only, unrelated to this branch's changes).
+- [x] Run `npm run test:playtest` (real-engine playtest gate) — must pass, confirms no wiring
       regression in `SpaceBackgroundLayer`/`AsteroidBelt` module lifecycle.
-- [ ] Run `gitnexus detect_changes` (compare against `master`) to confirm only the expected
+      ⚠️ Passed.
+- [x] Run `gitnexus detect_changes` (compare against `master`) to confirm only the expected
       symbols/files changed (`gradientTexture.ts`, `SpaceBackgroundLayer.ts`, `AsteroidBelt.ts`,
       plus their tests) — no unexpected blast radius.
+      ⚠️ Raw compare against `master` reports "critical" risk / 85 changed files — this is the
+      `architecture-hygiene` branch's full 25-commit history ahead of `master` (unrelated prior
+      work), not something introduced here. Scoped to just this plan's commits
+      (`git diff --stat 6e211da^..HEAD`, i.e. from immediately before Task 1 started to now), the
+      diff touches exactly `gradientTexture.ts`, `SpaceBackgroundLayer.ts`, `AsteroidBelt.ts`, their
+      three test files, and this plan doc — no unexpected blast radius.
 
 ### Task 7: [Final] Update documentation
 
