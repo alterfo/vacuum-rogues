@@ -26,6 +26,9 @@ export interface RowMetrics {
    * the right-aligned reward/countdown badge on the row's first line. */
   wrapWidth: number;
   tagFontPx: number;
+  /** Font size of the right-aligned reward/countdown badge sharing the tag's
+   * top line — the top line must be tall enough for whichever is bigger. */
+  metaFontPx: number;
   titleFontPx: number;
   issuerFontPx: number;
   descFontPx: number;
@@ -43,7 +46,9 @@ export interface RowLayout {
   highlightsY: number;
 }
 
-const TOP_PAD = 6;
+/** The row's top-line inset — `JobBoardPanel`'s tag/reward/countdown text
+ * shares this same offset from the row's top so it lines up with `titleY`. */
+export const TOP_PAD = 6;
 const GAP = 6;
 const BOTTOM_PAD = 14;
 
@@ -57,7 +62,11 @@ export function computeRowLayout(
   content: RowContent,
   metrics: RowMetrics,
 ): RowLayout {
-  const titleY = TOP_PAD + lineStepFor(metrics.tagFontPx);
+  const topLineStep = Math.max(
+    lineStepFor(metrics.tagFontPx),
+    lineStepFor(metrics.metaFontPx),
+  );
+  const titleY = TOP_PAD + topLineStep;
   const titleLines = estimateWrappedLines(
     content.title,
     metrics.wrapWidth,
@@ -69,7 +78,11 @@ export function computeRowLayout(
   if (content.hasIssuer) {
     cursor += lineStepFor(metrics.issuerFontPx);
   }
-  cursor += GAP;
+  // Only spend a gap when the block it separates from the next one is
+  // actually about to render — gate on what FOLLOWS, not on what precedes,
+  // else a partial-content row (e.g. issuer but no description) pays for a
+  // gap that separates nothing from nothing.
+  if (content.description) cursor += GAP;
 
   const descY = cursor;
   if (content.description) {
@@ -80,7 +93,7 @@ export function computeRowLayout(
     );
     cursor += descLines * lineStepFor(metrics.descFontPx);
   }
-  cursor += GAP;
+  if (content.hasHighlights) cursor += GAP;
 
   const highlightsY = cursor;
   if (content.hasHighlights) {

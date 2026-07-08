@@ -2,7 +2,11 @@ import { Container, Graphics, Rectangle, Text } from "pixi.js";
 import { attachWheelScroll } from "./ui/WheelScroll";
 import { scaledText } from "./ui/scaledText";
 import { scaledFont } from "@/utils/fontScale";
-import { computeRowLayout, type RowLayout } from "./ui/jobBoardRowLayout";
+import {
+  computeRowLayout,
+  TOP_PAD,
+  type RowLayout,
+} from "./ui/jobBoardRowLayout";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import type { Quest } from "@/domain/Quest";
 import { QuestType } from "@/types";
@@ -149,6 +153,7 @@ export class JobBoardPanel {
       {
         wrapWidth: JobBoardPanel.OFFER_WRAP_WIDTH,
         tagFontPx: scaledFont(11),
+        metaFontPx: scaledFont(13),
         titleFontPx: scaledFont(12),
         issuerFontPx: scaledFont(10),
         descFontPx: scaledFont(13),
@@ -170,6 +175,7 @@ export class JobBoardPanel {
       {
         wrapWidth: JobBoardPanel.ACTIVE_WRAP_WIDTH,
         tagFontPx: scaledFont(11),
+        metaFontPx: scaledFont(11),
         titleFontPx: scaledFont(12),
         issuerFontPx: scaledFont(10),
         descFontPx: scaledFont(13),
@@ -450,7 +456,16 @@ export class JobBoardPanel {
     row.eventMode = "static";
     this.container.addChild(row);
 
-    this.label(typeLabel, 20, y + 6, 11, color, false, this.container, true);
+    this.label(
+      typeLabel,
+      20,
+      y + TOP_PAD,
+      11,
+      color,
+      false,
+      this.container,
+      true,
+    );
 
     // Word-wrapped — no more character-count truncation (`slice(0,27)+"…"`).
     const titleT = scaledText(q.title, 12, 0xdddddd, {
@@ -490,7 +505,9 @@ export class JobBoardPanel {
     cd.eventMode = "none";
     cd.anchor.set(1, 0);
     cd.x = W - 16;
-    cd.y = y + 14;
+    // Shares the type-tag's line (TOP_PAD), not the title's, for the same
+    // reason as the offer row's reward badge (see `addRow`).
+    cd.y = y + TOP_PAD;
     this.container.addChild(cd);
   }
 
@@ -516,7 +533,7 @@ export class JobBoardPanel {
 
     // Type tag
     const tag = questTypeLabel(tpl.type);
-    this.label(tag, 20, y + 6, 11, color, false, parent, true);
+    this.label(tag, 20, y + TOP_PAD, 11, color, false, parent, true);
 
     // Title — word-wrapped — no more character-count truncation
     // (`slice(0,35)+"…"`), so the full title is always readable.
@@ -581,7 +598,10 @@ export class JobBoardPanel {
     m.eventMode = "none";
     m.anchor.set(1, 0);
     m.x = W - 90;
-    m.y = y + 20;
+    // Shares the type-tag's line (TOP_PAD), not the title's — the title is
+    // now word-wrapped to its full length, so a long title's first line would
+    // otherwise run directly into this right-anchored badge.
+    m.y = y + TOP_PAD;
     parent.addChild(m);
 
     // "Принять" button on the right

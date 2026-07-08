@@ -628,3 +628,39 @@ generated before `assignFactionHomeSystems` runs, so a station's faction may not
 home system's overridden owner faction — this mirrors the pre-existing behavior for economy
 type (also only overridden on the system/planets, not stations) and is out of scope for this
 bug-fix pack.
+
+**Post-completion code-review fix (2026-07-08)**: Task 9's acceptance screenshot for Bug 1
+actually showed a residual overlap the automated tests didn't catch — a long, now fully
+word-wrapped offer/active-row title ran into the right-aligned reward/countdown badge sharing
+its first line (the badge previously sat at a hardcoded `y` near the title's line; the old
+character-count truncation had accidentally kept titles short enough to avoid this). Fixed by
+moving the badge onto the type-tag's line instead (`JobBoardPanel.addRow`/`addActiveRow`), and
+widening `jobBoardRowLayout.ts`'s `titleY` calculation (`RowMetrics.metaFontPx`) to reserve
+enough top-line height for whichever of the tag/badge text is taller. Also fixed a related
+`computeRowLayout` bug found in the same review: the two inter-block gaps were added
+unconditionally even when the following block was absent, so an active-quest row (no
+issuer/description) was always ~10px taller than `MIN_ACTIVE_ROW_H`, making that floor
+unreachable — gaps are now only spent when a block actually follows. New regression test:
+`jobBoardFontScaleLayout.test.ts` → "keeps the reward badge clear of the (now word-wrapped)
+title line" (confirmed red against the pre-fix code, green after). Full suite (556 files/5195
+tests), `tsc`, and `lint` all clean after the fix. The pre-existing, self-flagged highlight-tag
+`tagSpacing` overlap (Task 2's note) remains a known, unfixed, out-of-scope gap — it predates
+this plan and was never claimed as fixed.
+
+**Second code-review pass (2026-07-08)**: the prior fix above was verified but under-tested and
+had a latent logic bug. (1) `computeRowLayout`'s two inter-block gaps were gated on the
+*preceding* block's presence instead of the *following* one, so a partial-content row (issuer
+present, description absent, highlights present — unreachable via today's `QuestGenerator`
+output, which always populates all three or none, but reachable by any future caller) would
+double- or waste-spend a gap; the gate now checks what actually follows. (2) `TOP_PAD` (the
+row's top-line inset) was duplicated as an unexported magic `6` at four call sites in
+`JobBoardPanel.ts` with nothing tying them to `jobBoardRowLayout.ts`'s constant — exported it
+and switched all four sites to reference it, so a future tuning of `TOP_PAD` can't silently
+desync the tag/badge/countdown y-position from the layout math and reintroduce the overlap this
+plan fixed. (3) Added the two regression tests the prior fix was missing: the active-row
+countdown badge vs. word-wrapped title clearance (the `addActiveRow` twin of the already-tested
+offer-row reward badge), and `computeRowLayout` returning exactly `MIN_ACTIVE_ROW_H` for a fully
+empty active row (confirmed red pre-fix at 64px, green post-fix at 54px). Full suite (556
+files/5197 tests), `tsc`, and `lint` all clean; `gitnexus detect_changes` confirms the blast
+radius stays confined to `JobBoardPanel`/`jobBoardRowLayout` (medium risk, 4 symbols, all
+`Render`-process — expected for this touch).

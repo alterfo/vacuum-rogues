@@ -23,10 +23,12 @@ import {
   estimateWrappedLines,
   lineStepFor,
 } from "@/presentation/ui/questCardLayout";
+import { computeRowLayout } from "@/presentation/ui/jobBoardRowLayout";
 import { QuestType } from "@/types";
 import type { GeneratedQuest } from "@/systems/quests/QuestGenerator";
 import type { Quest } from "@/domain/Quest";
 import type { QuestTemplate } from "@/systems/QuestManager";
+import { t as translate } from "@/i18n/i18n";
 
 afterEach(() => setFontScale("M")); // never leak a scale into other tests
 
@@ -151,6 +153,30 @@ describe("JobBoardPanel offer rows at L font scale", () => {
     // must be replaced by word-wrap that keeps the full string.
     expect(titleText!.text).toBe(LONG_TITLE);
   });
+
+  it("keeps the reward badge clear of the (now word-wrapped) title line", () => {
+    setFontScale("L");
+    // A long title used to be character-truncated short enough to clear the
+    // right-anchored reward badge; word-wrap alone (Task 2) lets a long
+    // title's first line run at full width, so the badge must live on its
+    // own line (the type-tag's) instead of sharing the title's.
+    const panel = new JobBoardPanel(
+      [makeQuest("q1", LONG_TITLE, "Короткое описание.")],
+      800,
+      900,
+      { onAccept: () => {}, onClose: () => {} },
+    );
+    const texts = collectTexts(panel.container);
+    const titleText = texts.find((t) => t.text === LONG_TITLE);
+    const rewardText = texts.find((t) => t.text.includes("💰"));
+    expect(titleText, "expected the title Text node").toBeTruthy();
+    expect(rewardText, "expected the reward badge Text node").toBeTruthy();
+    // The reward badge's own line must fully clear the title's first line —
+    // not just start above it, since the badge's font (13) renders taller
+    // than the tag's (11) it shares a line with.
+    const rewardBottom = rewardText!.y + lineStepFor(scaledFont(13));
+    expect(rewardBottom).toBeLessThanOrEqual(titleText!.y);
+  });
 });
 
 describe("JobBoardPanel active-quest rows at L font scale", () => {
@@ -179,5 +205,70 @@ describe("JobBoardPanel active-quest rows at L font scale", () => {
     // Same character-count truncation bug (`q.title.length > 28 ? … : …`) in
     // `addActiveRow` must be replaced by word-wrap that keeps the full string.
     expect(titleText!.text).toBe(LONG_TITLE);
+  });
+
+  it("keeps the countdown badge clear of the (now word-wrapped) title line", () => {
+    setFontScale("L");
+    // Mirrors the offer-row reward-badge fix: a long active-quest title used
+    // to be character-truncated short enough to clear the right-anchored
+    // countdown badge; word-wrap alone lets the title's first line run at
+    // full width, so the countdown must live on its own line (the type-tag's)
+    // instead of sharing the title's.
+    const activeQuest = {
+      type: QuestType.DELIVERY,
+      title: LONG_TITLE,
+      deadline: 0,
+      getRemainingDays: () => 0,
+    } as unknown as Quest;
+    const panel = new JobBoardPanel(
+      [],
+      800,
+      900,
+      { onAccept: () => {}, onClose: () => {} },
+      0,
+      new Set(),
+      [activeQuest],
+      0,
+    );
+    const texts = collectTexts(panel.container);
+    const titleText = texts.find((t) => t.text === LONG_TITLE);
+    const countdownText = texts.find(
+      (t) => t.text === translate("jobBoard.noDeadline"),
+    );
+    expect(titleText, "expected the active-row title Text node").toBeTruthy();
+    expect(
+      countdownText,
+      "expected the countdown badge Text node",
+    ).toBeTruthy();
+    const countdownBottom = countdownText!.y + lineStepFor(scaledFont(11));
+    expect(countdownBottom).toBeLessThanOrEqual(titleText!.y);
+  });
+});
+
+describe("computeRowLayout gap accounting", () => {
+  it("keeps a fully-empty active row at the historical MIN_ACTIVE_ROW_H floor", () => {
+    setFontScale("M");
+    // Regression: an unconditional double GAP (one after the issuer block,
+    // one after the description block) used to fire even when neither block
+    // rendered, making a short active-quest row's floor (54px) unreachable.
+    const layout = computeRowLayout(
+      {
+        title: "Короткое",
+        hasIssuer: false,
+        description: "",
+        hasHighlights: false,
+      },
+      {
+        wrapWidth: 380,
+        tagFontPx: scaledFont(11),
+        metaFontPx: scaledFont(11),
+        titleFontPx: scaledFont(12),
+        issuerFontPx: scaledFont(10),
+        descFontPx: scaledFont(13),
+        highlightsFontPx: scaledFont(11),
+        minHeight: 54,
+      },
+    );
+    expect(layout.contentHeight).toBe(54);
   });
 });
