@@ -1,6 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import type { Planet } from "@/domain/Planet";
-import { FactionType } from "@/types";
+import type { Faction } from "@/types/faction";
 import { FACTION_LABEL } from "@/config/factionConfig";
 
 export class PlanetInfoPanel {
@@ -59,7 +59,7 @@ export class PlanetInfoPanel {
 
     const factionName =
       this.ownerFaction !== undefined
-        ? (FACTION_LABEL[this.ownerFaction as FactionType] ?? this.ownerFaction)
+        ? (FACTION_LABEL[this.ownerFaction as Faction] ?? this.ownerFaction)
         : "Окраинники";
     const habitability = new Text({
       text: this.planet.isHabitable

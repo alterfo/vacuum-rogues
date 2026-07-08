@@ -1,4 +1,5 @@
 import { FactionType } from "@/types";
+import { Faction } from "@/types/faction";
 
 // Faction title / description / bonus copy now lives in the i18n catalogs
 // (`race.faction.*` keys in `src/i18n/{ru,en}.ts`) and is read through `t()` by
@@ -31,10 +32,16 @@ export const FACTION_STATS: Record<
   },
 };
 
-export const FACTION_LABEL: Record<FactionType, string> = {
-  [FactionType.OUTLANDERS]: "Окраинники",
-  [FactionType.BASTIONS]: "Бастионы",
-  [FactionType.SYNDICATE]: "Синдикат",
-  [FactionType.PARADOXES]: "Парадоксы",
-  [FactionType.PROGRESSORS]: "Прогрессоры",
+// Keyed by `Faction` (system-ownership enum, 7 values) rather than `FactionType`
+// (player-race enum, 5 values) so it covers non-playable owners (`INDEPENDENT`,
+// `OVERMIND`) too — every `StarSystem.ownerFaction` value needs a label, not just
+// the player-selectable races.
+export const FACTION_LABEL: Record<Faction, string> = {
+  [Faction.OUTLANDERS]: "Окраинники",
+  [Faction.BASTIONS]: "Бастионы",
+  [Faction.SYNDICATE]: "Синдикат",
+  [Faction.PARADOXES]: "Парадоксы",
+  [Faction.PROGRESSORS]: "Прогрессоры",
+  [Faction.INDEPENDENT]: "Независимая",
+  [Faction.OVERMIND]: "Сверхразум",
 };

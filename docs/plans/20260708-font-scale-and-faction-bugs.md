@@ -406,17 +406,41 @@ start this plan only after that run stops/completes.
 
 ### Task 6: Fix StarMapScene raw-enum owner display
 
-- [ ] extend `FACTION_LABEL` in `src/config/factionConfig.ts` to cover `INDEPENDENT` and
+- [x] extend `FACTION_LABEL` in `src/config/factionConfig.ts` to cover `INDEPENDENT` and
       `OVERMIND` (matching the localized text already duplicated in `GovernmentScene.ts`/
       `PlanetScene.ts`'s local maps)
-- [ ] update `src/presentation/StarMapScene.ts:936-937` to render
+- [x] update `src/presentation/StarMapScene.ts:936-937` to render
       `FACTION_LABEL[system.ownerFaction] ?? system.ownerFaction` instead of the raw enum
       value
-- [ ] write/update a unit test asserting `FACTION_LABEL` covers every `Faction` enum value
+- [x] write/update a unit test asserting `FACTION_LABEL` covers every `Faction` enum value
       (a completeness guard so a future new faction can't silently regress to a raw string)
-- [ ] write a test (or extend an existing `StarMapScene` test) asserting the info-panel text
+- [x] write a test (or extend an existing `StarMapScene` test) asserting the info-panel text
       shows a localized label, not a raw enum value, for an `INDEPENDENT` system
-- [ ] run targeted tests — must pass before next task
+- [x] run targeted tests — must pass before next task
+
+  Retyped `FACTION_LABEL` from `Record<FactionType, string>` (5 playable-race values) to
+  `Record<Faction, string>` (the actual 7-value system-ownership enum used by
+  `StarSystem.ownerFaction`) and added `INDEPENDENT: "Независимая"` /
+  `OVERMIND: "Сверхразум"` entries, matching the precedent local maps in
+  `GovernmentScene.ts`/`PlanetScene.ts`. Updated the one other consumer,
+  `PlanetInfoPanel.ts` (`:60-62`), to cast through `Faction` instead of `FactionType` (same
+  runtime string values, now type-correct against the widened map) — the unused
+  `FactionType` import was dropped. `StarMapScene.ts:937` now renders
+  `` `Владелец: ${FACTION_LABEL[system.ownerFaction] ?? system.ownerFaction}` `` behind a new
+  `FACTION_LABEL` import.
+  New tests: `src/tests/presentation/factionLabelCompleteness.test.ts` (every `Faction` value
+  has a non-empty label; `INDEPENDENT`/`OVERMIND` match the established localized text) and
+  `src/tests/presentation/starMapFactionLabel.test.ts` (drives the real
+  `StarMapScene.showSystemInfo` — private-method cast, same convention as
+  `doubleClickJump.test.ts` — behind a lightweight `pixi.js` mock — same convention as
+  `equipmentShopFontScaleLayout.test.ts`, since real `Text` needs canvas metrics unavailable
+  in jsdom — and asserts the rendered faction line reads "Владелец: Независимая", not
+  "Владелец: INDEPENDENT"). Both confirmed red against the pre-fix code (`git stash`) before
+  the fix, green after. `gitnexus detect_changes({scope:"all"})`: 6 changed symbols across 3
+  files (`FACTION_LABEL`, `PlanetInfoPanel`/`render`, `StarMapContext`/`StarMapScene`/
+  `showSystemInfo`), 0 affected processes, risk `low` — matches the expected 2-consumer blast
+  radius exactly. Full suite: 555 files / 5188 tests passed (12 pre-existing skips, 0
+  failed); `npx tsc --noEmit` clean; `npm run lint` 0 errors (46 pre-existing warnings).
 
 ### Task 7: Red test — fleeing NPC crosses the system boundary unbounded
 
