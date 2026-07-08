@@ -232,17 +232,20 @@ export function cometHeadTexture(): Texture | null {
 }
 
 /** How many distinct rock textures are baked; seeds wrap onto this set. */
-export const ROCK_VARIANT_COUNT = 8;
+export const ROCK_VARIANT_COUNT = 16;
 const rockCache = new Map<number, Texture | null>();
 
 /**
  * Baked, shaded rock-texture sprite for the foreground asteroids (natural-comet
- * /asteroid rework, 2026-06-20). Replaces the flat `poly`+crater `Graphics`
- * rocks with an irregular grey rock lit from the top-left (radial gradient),
- * speckled with noise and a few craters — baked ONCE per variant and cached so
- * each asteroid is just a tinted/rotated `Sprite` (no per-frame redraw). The
- * `seed` wraps onto {@link ROCK_VARIANT_COUNT} variants to bound memory.
- * Returns `null` with no 2D context (jsdom / unit tests).
+ * /asteroid rework, 2026-06-20; redesigned 2026-07-08 for more silhouette
+ * variety + a rim-light pass, `20260708-space-visual-cleanup` Task 5). Replaces
+ * the flat `poly`+crater `Graphics` rocks with an irregular grey rock lit from
+ * the top-left (radial gradient), speckled with noise, a varied set of craters,
+ * and a bright-to-dark rim-light stroke along the silhouette edge so the shape
+ * reads as a faceted 3D chunk rather than a jittered circle — baked ONCE per
+ * variant and cached so each asteroid is just a tinted/rotated `Sprite` (no
+ * per-frame redraw). The `seed` wraps onto {@link ROCK_VARIANT_COUNT} variants
+ * to bound memory. Returns `null` with no 2D context (jsdom / unit tests).
  */
 export function rockTexture(seed: number): Texture | null {
   const variant =
@@ -266,13 +269,13 @@ export function rockTexture(seed: number): Texture | null {
   const cy = size / 2;
   const baseR = size * 0.4;
 
-  // Irregular rock silhouette — a jittered polygon, clipped so the shading and
-  // craters stay inside the rock.
-  const sides = 9;
+  // Irregular rock silhouette — a variable side-count + wide per-vertex jitter
+  // so variants read as differently-shaped chunks, not a jittered near-circle.
+  const sides = 7 + Math.floor(rng() * 5); // 7..11
   const pts: Array<[number, number]> = [];
   for (let i = 0; i < sides; i++) {
     const ang = (i / sides) * Math.PI * 2;
-    const rr = baseR * (0.66 + rng() * 0.42);
+    const rr = baseR * (0.52 + rng() * 0.62);
     pts.push([cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr]);
   }
   ctx.save();
@@ -317,22 +320,46 @@ export function rockTexture(seed: number): Texture | null {
     ctx.fill();
   }
 
-  // Craters — a dark bowl with a light rim catching the top-left light.
-  const craters = 2 + Math.floor(rng() * 3);
+  // Craters — a dark bowl with a light rim catching the top-left light. Varied
+  // count/size/depth so craters don't read as a repeated stamp.
+  const craters = 2 + Math.floor(rng() * 5); // 2..6
   for (let i = 0; i < craters; i++) {
     const x = cx + (rng() - 0.5) * baseR * 1.3;
     const y = cy + (rng() - 0.5) * baseR * 1.3;
-    const cr = baseR * (0.12 + rng() * 0.2);
-    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    const cr = baseR * (0.1 + rng() * 0.24);
+    const depth = 0.18 + rng() * 0.26;
+    ctx.fillStyle = `rgba(0,0,0,${depth.toFixed(3)})`;
     ctx.beginPath();
     ctx.arc(x, y, cr, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.13)";
+    ctx.strokeStyle = `rgba(255,255,255,${(0.08 + rng() * 0.1).toFixed(3)})`;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
     ctx.arc(x - cr * 0.15, y - cr * 0.15, cr, Math.PI * 0.9, Math.PI * 1.95);
     ctx.stroke();
   }
+  ctx.restore();
+
+  // Rim-light pass — a bright-to-dark gradient stroke along the silhouette
+  // edge (outside the clip, so it isn't cropped) gives the outline a
+  // faceted, lit-edge read instead of a flat gradient-filled blob.
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < sides; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+  const rimGrad = ctx.createLinearGradient(
+    cx - baseR,
+    cy - baseR,
+    cx + baseR,
+    cy + baseR,
+  );
+  rimGrad.addColorStop(0.0, "rgba(255,255,255,0.5)");
+  rimGrad.addColorStop(0.5, "rgba(255,255,255,0.05)");
+  rimGrad.addColorStop(1.0, "rgba(0,0,0,0.35)");
+  ctx.strokeStyle = rimGrad;
+  ctx.lineWidth = 2;
+  ctx.stroke();
   ctx.restore();
 
   const tex = Texture.from(canvas);

@@ -206,26 +206,46 @@ user confirmed these already look fine and should not be touched.
 
 ### Task 5: Fix asteroid render path + redesign rock texture (fix angular asteroids)
 
-- [ ] Apply the Task 1 diagnosis: if the flat-polygon `drawAsteroid()` fallback was confirmed to be
+- [x] Apply the Task 1 diagnosis: if the flat-polygon `drawAsteroid()` fallback was confirmed to be
       the live render path (not just a jsdom-only fallback), root-cause why `rockTexture()` is
       returning `null` (or why `a.rock` isn't set) in the live browser and fix that root cause first
       — per root `CLAUDE.md`'s regression-first bug-fixing process, this is a real bug, not just an
       aesthetic tweak, if confirmed. ⚠️ mark this sub-step done/not-applicable based on Task 1
       findings before proceeding.
-- [ ] In `src/presentation/gradientTexture.ts`, redesign `rockTexture()`: increase
+      ⚠️ Not applicable — Task 1 confirmed `rockTexture()` (not the polygon fallback) is the live
+      render path in the browser, so there is no root cause to fix here; this stays a pure
+      redesign of `rockTexture()` per the next item.
+- [x] In `src/presentation/gradientTexture.ts`, redesign `rockTexture()`: increase
       `ROCK_VARIANT_COUNT` for more visual variety, increase silhouette jitter/side-count for a
       less uniformly-round outline, add an edge rim-light highlight pass and more varied crater
       sizes/depths so the shaded 3D read is stronger and unmistakably different from a flat
       polygon at typical on-screen asteroid size.
-- [ ] Tighten/simplify `drawAsteroid()`'s flat-polygon fallback (lines ~310-332) only as a safety
+      ⚠️ `ROCK_VARIANT_COUNT` 8→16; silhouette now 7-11 sides (was fixed 9) with wider per-vertex
+      jitter (0.52-1.14×baseR, was 0.66-1.08×); craters now 2-6 (was 2-4) with varied depth/rim
+      alpha per crater; added a rim-light pass — a bright-to-dark `createLinearGradient` stroke
+      along the silhouette edge — for a faceted lit-edge read.
+- [x] Tighten/simplify `drawAsteroid()`'s flat-polygon fallback (lines ~310-332) only as a safety
       net for genuine no-canvas environments — it should never be reachable in a real browser after
       the Task 1 root-cause fix, so no need to make it pretty, just keep it non-crashing.
-- [ ] Write tests for the redesigned `rockTexture()` (success): returns a `Texture` for a range of
+      ⚠️ No change needed — the existing fallback is already minimal, non-crashing, and confirmed
+      unreachable in a real browser (Task 1); left as-is per the "no need to make it pretty" note.
+- [x] Write tests for the redesigned `rockTexture()` (success): returns a `Texture` for a range of
       seeds, and seed-to-variant wrapping is correct for the new `ROCK_VARIANT_COUNT`.
-- [ ] Write tests for the redesigned `rockTexture()` (error/edge case): returns `null` gracefully
+      ⚠️ Added to `bakedRockTextures.test.ts`: variant-count floor assertion, a full-range
+      distinct-and-cached-per-variant test with wrap-around check, and a rim-light-stroke
+      assertion (`createLinearGradient`/`stroke` called).
+- [x] Write tests for the redesigned `rockTexture()` (error/edge case): returns `null` gracefully
       with no 2D context, and `setupAsteroidVisuals()`/`drawAsteroid()` still produce a valid
       (even if fallback) visual with no throw.
-- [ ] Run tests — must pass before task 6.
+      ⚠️ Already covered by the existing `rockTexture returns null` test and
+      `asteroidBelt.test.ts`'s no-canvas fallback test (`belt.initialize()` doesn't throw and
+      mounts zero sprites when both `rockTexture`/`cometHeadTexture` are null) — no new test
+      needed since neither behavior changed.
+- [x] Run tests — must pass before task 6.
+      ⚠️ `npm test -- --run` — 557 files / 5211 tests passed, 0 failed. `npx tsc --noEmit` clean.
+      `npm run lint` — 0 errors (46 pre-existing warnings, unrelated). `gitnexus detect_changes`
+      (working tree) confirms only `gradientTexture.ts` + `bakedRockTextures.test.ts` changed,
+      risk low.
 
 ### Task 6: Verify acceptance criteria
 

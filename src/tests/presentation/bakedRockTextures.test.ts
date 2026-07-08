@@ -144,6 +144,34 @@ describe("baked dust + rock textures (canvas available)", () => {
     expect(a).not.toBeNull();
     expect(b).toBe(a); // reused, not re-baked
   });
+
+  it("rockTexture redesign (20260708-space-visual-cleanup) widened the variant set for more visual variety", async () => {
+    const { ROCK_VARIANT_COUNT } =
+      await import("@/presentation/gradientTexture");
+    expect(ROCK_VARIANT_COUNT).toBeGreaterThanOrEqual(16);
+  });
+
+  it("rockTexture bakes a distinct, cached texture for every variant across the widened set", async () => {
+    const { rockTexture, ROCK_VARIANT_COUNT } =
+      await import("@/presentation/gradientTexture");
+    const textures = new Set(
+      Array.from({ length: ROCK_VARIANT_COUNT }, (_, i) => rockTexture(i)),
+    );
+    expect(textures.has(null)).toBe(false);
+    expect(textures.size).toBe(ROCK_VARIANT_COUNT);
+    // A seed one full cycle later wraps back onto the same baked variant.
+    expect(rockTexture(2)).toBe(rockTexture(2 + ROCK_VARIANT_COUNT));
+  });
+
+  it("rockTexture strokes a rim-light gradient along the silhouette edge (faceted 3D read)", async () => {
+    const ctx = mockCtx();
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ctx) as never;
+    const { rockTexture } = await import("@/presentation/gradientTexture");
+    const tex = rockTexture(0);
+    expect(tex).not.toBeNull();
+    expect(ctx.createLinearGradient).toHaveBeenCalled();
+    expect(ctx.stroke).toHaveBeenCalled();
+  });
 });
 
 describe("baked textures are null-safe without a 2D context", () => {
