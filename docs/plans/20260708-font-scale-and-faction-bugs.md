@@ -573,14 +573,27 @@ start this plan only after that run stops/completes.
 
 ### Task 10: [Final] Update documentation
 
-- [ ] add a bullet to `src/systems/galaxy/CLAUDE.md` documenting the faction-distribution fix
+- [x] add a bullet to `src/systems/galaxy/CLAUDE.md` documenting the faction-distribution fix
       (weights location, the per-system seeded-pick pattern, the home-system override),
       mirroring the style of existing completed-plan bullets in that file
-- [ ] if any panel beyond `JobBoardPanel` was fixed in Task 3, note it in
+- [x] if any panel beyond `JobBoardPanel` was fixed in Task 3, note it in
       `src/presentation/CLAUDE.md`'s scaledText/layout guidance if relevant
-- [ ] add a note to `src/presentation/flight/CLAUDE.md` (or the relevant flight-module doc)
+- [x] add a note to `src/presentation/flight/CLAUDE.md` (or the relevant flight-module doc)
       documenting that fleeing NPCs are now boundary-clamped via the departure path, so a
       future flee/maneuver change doesn't silently reintroduce unbounded movement
+
+  Added a new "Faction Distribution (generation-time `ownerFaction`)" section to
+  `src/systems/galaxy/CLAUDE.md` documenting `FACTION_DISTRIBUTION_WEIGHTS`, `pickSystemFaction`'s
+  per-system-seeded pattern, and the `assignFactionHomeSystems` owner override. Added a new bullet
+  to `src/presentation/CLAUDE.md` (before the PixiJS traps list) documenting the fixed-geometry
+  font-scale bug class and every panel fixed in Tasks 2/3 (JobBoardPanel, HangarPanel, BankScene,
+  EquipmentShopScene, StationScene, InventoryScene, InfoCenterScene, TextQuestScene), plus the
+  known `ScrollableList` uniform-`itemHeight` gap. Added a new bullet to
+  `src/presentation/flight/CLAUDE.md` documenting the `BREAK_OFF`-flee boundary clamp via
+  `beginDeparture()`, with an explicit "don't reintroduce a second boundary concept" guardrail for
+  future flee/maneuver changes. Documentation-only task, no code/test changes; verified
+  `npm run lint` and `npx tsc --noEmit` stay clean (markdown files aren't linted/compiled, but
+  confirms nothing else regressed).
 
 *Note: ralphex automatically moves this plan to `docs/plans/completed/` on completion.*
 

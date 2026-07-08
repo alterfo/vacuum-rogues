@@ -207,6 +207,22 @@ capture is tracked **per-system on the galaxy**, not on `planet.capturedBy` (nev
 production), so without this the controller line would name the stale benign system owner and
 contradict the red denial line.
 
+**A fleeing (`BREAK_OFF`) NPC is bounded at the system edge via the departure path, never left to
+run unbounded** (`20260708-font-scale-and-faction-bugs`, Bug 3). `NpcShipSprite.maneuverToward`
+used to add `cos/sin(heading) * speed * deltaTime` straight to `this.x/this.y` with no radius check
+at all whenever `decideManeuver` returned `BREAK_OFF` — a ship fleeing a low-hull or out-matched
+fight could run to any distance and stay in the live ship list forever, unreachable (the player is
+only *soft*-bounded by `CameraController.clampPan()`, which clamps the camera focus, not any ship's
+real position). The fix: when `BREAK_OFF` fires, `maneuverToward` checks whether this frame's step
+would carry the ship's distance from `bounds.cx/cy` past `bounds.boundary` and, if so, calls the
+existing `beginDeparture()` (the same scripted cross-system departure path, reusing its outward-radial
+target math) instead of applying the raw unbounded move. Once `departing = true`, the aggressive-pursuit
+branch's `!this.departing` guard falls through to the general waypoint-following code, which carries
+the ship the rest of the way to the boundary and sets `gone = true` on arrival — `NpcShipManager`'s
+`isGone()` cleanup and `CombatModule`'s `destroyed` sweep handle it generically, with no new despawn
+path needed. Do **not** reintroduce a second boundary concept for flee movement — route any future
+flee/maneuver change through `beginDeparture()`'s existing boundary, not a fresh radius check.
+
 Historical playtest bugs and detailed conventions (re-entry spawn, NPC spawn states, route
 dashing, sun clearance, pause-finishes-day, font-scale ship pos, NPC purposeful behavior,
 ship movement model, NPC clickability invariant, smoothed auto-follow/chase steering, combat
