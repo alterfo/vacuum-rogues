@@ -2334,6 +2334,124 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     errorCollector.assertAndDetach();
   });
 
+  test('regression: Job Board description text never overlaps its highlights row', async ({
+    page,
+  }) => {
+    // jobBoardRowLayout.ts's `computeRowLayout` positions the highlights row
+    // (`highlightsY`) from `estimateWrappedLines`'s UPPER-BOUND estimate of the
+    // description's wrapped line count — computed BEFORE any real PixiJS Text
+    // exists. If the estimate under-shoots the real Cyrillic-Courier-New
+    // rendered line count for a long description (e.g. one with an em-dash and
+    // guillemets), the highlights row is placed too high and the real
+    // description text visually bleeds into it. Measure the REAL rendered
+    // bounds (`getBounds()`), not the estimate, so this can't pass on
+    // coincidence.
+    await setupNewGame(page);
+    const errorCollector = new ErrorCollector(page);
+
+    await page.evaluate(async () => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        galaxy: {
+          systems: Array<{
+            id: string;
+            planets: Array<{ id: string; isHabitable: boolean }>;
+          }>;
+        } | null;
+        player: { currentSystemId: string } | null;
+        transitionTo: (scene: string, ctx?: object) => Promise<void>;
+      };
+      const systems = engine.galaxy?.systems ?? [];
+      const here = systems.find((s) => s.id === engine.player?.currentSystemId);
+      const planet =
+        here?.planets.find((p) => p.isHabitable) ??
+        systems.flatMap((s) => s.planets).find((p) => p.isHabitable) ??
+        systems.flatMap((s) => s.planets)[0];
+      if (!planet) return;
+      await engine.transitionTo('PLANET', { gameEngine: engine, planet });
+    });
+    await waitForScene(page, 'PlanetScene', 15_000);
+    await page.waitForFunction(
+      () => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          loadingOverlayObjects?: unknown[];
+        };
+        return (engine.loadingOverlayObjects?.length ?? 0) === 0;
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
+
+    const texts = await page.evaluate(() => {
+      localStorage.setItem('fontScale', 'L');
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene as Record<string, unknown> | null;
+      const open = scene?.['openJobBoard'] as (() => void) | undefined;
+      if (!open) return null;
+      open.call(scene);
+      const panel = scene?.['jobBoardPanel'] as { container: unknown } | null;
+      if (!panel) return null;
+      const out: { text: string; x: number; y: number; width: number; height: number }[] =
+        [];
+      const walk = (node: {
+        text?: unknown;
+        getBounds?: () => { x: number; y: number; width: number; height: number };
+        children?: unknown[];
+      }): void => {
+        if (typeof node.text === 'string' && node.text.length > 0 && node.getBounds) {
+          const b = node.getBounds();
+          out.push({ text: node.text, x: b.x, y: b.y, width: b.width, height: b.height });
+        }
+        for (const c of (node.children as (typeof node)[]) ?? []) walk(c);
+      };
+      walk(panel.container as never);
+      return out;
+    });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: 'e2e/screenshots/jobboard-overlap-check.png' });
+
+    expect(texts).not.toBeNull();
+
+    // Group highlight-tag texts ("[Label: value]") into rows by shared y (all
+    // tags on one row render at the same y), then for each row find its own
+    // description — the nearest long prose text directly above it.
+    const highlightRe = /^\[.+: .+\]$/;
+    const highlights = texts!.filter((t) => highlightRe.test(t.text));
+    const descriptions = texts!.filter(
+      (t) => t.text.length > 40 && !highlightRe.test(t.text),
+    );
+    const rows: { y: number; items: typeof highlights }[] = [];
+    for (const h of highlights) {
+      let row = rows.find((r) => Math.abs(r.y - h.y) < 3);
+      if (!row) {
+        row = { y: h.y, items: [] };
+        rows.push(row);
+      }
+      row.items.push(h);
+    }
+
+    expect(rows.length).toBeGreaterThan(0); // the board must actually have offer rows
+
+    let checkedCount = 0;
+    for (const row of rows) {
+      const candidates = descriptions
+        .filter((d) => d.y < row.y && row.y - (d.y + d.height) < 400)
+        .sort((a, b) => b.y - a.y);
+      if (candidates.length === 0) continue; // no description above this row's y — nothing to check
+      checkedCount++;
+      const desc = candidates[0];
+      const descBottom = desc.y + desc.height;
+      expect(
+        descBottom,
+        `description "${desc.text.slice(0, 50)}…" bottom=${descBottom} overlaps highlights row at y=${row.y}`,
+      ).toBeLessThanOrEqual(row.y + 1); // 1px render-rounding tolerance
+    }
+    expect(checkedCount).toBeGreaterThan(0); // the board must have at least one row with a description to check
+
+    errorCollector.assertAndDetach();
+  });
+
   test('regression: planet-screen «?» help button never covers the credit balance', async ({ page }) => {
     await setupNewGame(page);
     const errorCollector = new ErrorCollector(page);

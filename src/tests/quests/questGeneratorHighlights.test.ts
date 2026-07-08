@@ -20,6 +20,51 @@ function twoSystemGalaxy(): StarSystem[] {
   return [sys("A", "Альфа", ["B"]), sys("B", "Бета", ["A"])];
 }
 
+/** Like {@link sys}, but with real planet `.name`s (not just ids) — needed to
+ * tell a resolved display name apart from the raw `<system>_p<n>` id. */
+function namedSys(
+  id: string,
+  name: string,
+  toIds: string[],
+  planetNames: string[],
+): StarSystem {
+  return {
+    id,
+    name,
+    connections: toIds.map((toSystemId) => ({
+      fromSystemId: id,
+      toSystemId,
+      fuelCost: 5,
+    })),
+    planets: planetNames.map((n, idx) => ({
+      id: `${id}_p${idx + 1}`,
+      name: n,
+      isHabitable: true,
+    })),
+  } as unknown as StarSystem;
+}
+
+function namedGalaxy(): StarSystem[] {
+  return [
+    namedSys("A", "Альфа", ["B"], ["Земля-Альфа"]),
+    namedSys("B", "Бета", ["A"], ["Кадар", "Зорга"]),
+  ];
+}
+
+function namedFullBoard(seed: string, count = 30) {
+  return generateQuestBoard({
+    systems: namedGalaxy(),
+    originSystemId: "A",
+    planetId: "A_p1",
+    day: 0,
+    seed,
+    count,
+    textRatio: 0,
+    eliteRatio: 0,
+    chainRatio: 0,
+  });
+}
+
 function fullBoard(seed: string) {
   return generateQuestBoard({
     systems: twoSystemGalaxy(),
@@ -143,5 +188,47 @@ describe("GeneratedQuest highlights", () => {
     const sysHighlight = explore!.highlights.find((h) => h.label === "Система");
     expect(sysHighlight).toBeDefined();
     expect(sysHighlight!.value).toBe("Бета");
+  });
+
+  // Job-board bug: the 'Выдан'/'Планета' highlight chips showed the raw
+  // internal planet id (e.g. "A_p1") instead of the planet's display name —
+  // it read as an unresolved template placeholder in the UI. Every highlight
+  // must resolve to a real name when the owning system's planets carry one.
+  it("no highlight value ever leaks a raw internal planet id (planet_<sys>_p<n>)", () => {
+    for (let s = 0; s < 20; s++) {
+      const board = namedFullBoard(`hl-no-leak-${s}`);
+      for (const q of board) {
+        for (const h of q.highlights) {
+          if (h.label === "Выдан" || h.label === "Планета") {
+            expect(h.value).not.toMatch(/^[A-Z]_p\d+$/);
+          }
+        }
+      }
+    }
+  });
+
+  it("every quest's 'Выдан' highlight resolves to the issuer planet's real name", () => {
+    for (let s = 0; s < 20; s++) {
+      const board = namedFullBoard(`hl-issued-name-${s}`);
+      for (const q of board) {
+        const issued = q.highlights.find((h) => h.label === "Выдан");
+        expect(issued).toBeDefined();
+        expect(issued!.value).toBe("Земля-Альфа");
+      }
+    }
+  });
+
+  it("DIPLOMACY's 'Планета' highlight resolves to the target planet's real name, not its raw id", () => {
+    let found: { value: string } | undefined;
+    for (let s = 0; s < 40 && !found; s++) {
+      const board = namedFullBoard(`hl-diplomacy-name-${s}`);
+      const diplomacy = board.find(
+        (q) =>
+          q.template.type === QuestType.DIPLOMACY && q.targetPlanetId !== null,
+      );
+      found = diplomacy?.highlights.find((h) => h.label === "Планета");
+    }
+    expect(found).toBeDefined();
+    expect(["Кадар", "Зорга"]).toContain(found!.value);
   });
 });
