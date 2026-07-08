@@ -1308,12 +1308,11 @@ export class SpaceFlightScene extends GameScene {
     );
     if (startedBurning) this.hud.showMessage("☀ Корпус горит!", 0xff8800);
 
-    // Safety auto-stop: halt engines once below 30% hull (latched, once per
-    // descent below it) — EXCEPT during a committed hyperjump escape run
-    // (`pendingWarp`): parking a burning ship inside the fight it is fleeing
-    // is the opposite of safety (the stop also cleared the edge route, so a
-    // GOD-floored ship at a garrison could never reach the jump point — the
-    // inescapable pin behind the day-255 campaign wedge).
+    // Safety auto-stop: halt engines below 30% hull (latched) — EXCEPT during
+    // a committed hyperjump escape (`pendingWarp`, else a GOD-floored ship at
+    // a garrison could never reach the jump point) or a route targeting a
+    // planet (`routeTargetPlanetId` — the warning below tells the player to
+    // fly to one, so don't cancel that exact route on the first attempt).
     const ship = this.gameEngine?.player?.ship;
     if (ship && ship.maxHull > 0) {
       const hullFraction = ship.hullHP / ship.maxHull;
@@ -1321,7 +1320,8 @@ export class SpaceFlightScene extends GameScene {
         if (
           this.shipPhysics.isMoving &&
           !this.lowHullStopped &&
-          !this.pendingWarp
+          !this.pendingWarp &&
+          !this.planetManager.routeTargetPlanetId
         ) {
           this.lowHullStopped = true;
           this.npcManager.followNpcId = null;
