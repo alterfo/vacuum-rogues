@@ -137,7 +137,7 @@ user confirmed these already look fine and should not be touched.
 
 ### Task 2: Redesign background twinkle stars (remove cartoonish cross-flare)
 
-- [ ] In `src/presentation/gradientTexture.ts`, add a new baked texture factory
+- [x] In `src/presentation/gradientTexture.ts`, add a new baked texture factory
       `starPointTexture(hero: boolean)` following the existing `softGlowTexture` contract (bake
       once per variant via Canvas2D radial gradient, cache by variant, return `null` with no 2D
       context). Bake a tight bright core with smooth falloff; for `hero === true`, additionally
@@ -145,19 +145,19 @@ user confirmed these already look fine and should not be touched.
       (e.g. via a thin linear gradient stroke drawn at low opacity with blur-free but soft-edged
       falloff) — not a runtime `Graphics.stroke()` line, so it anti-aliases naturally instead of
       reading as a crisp vector plus-sign.
-- [ ] In `src/presentation/SpaceBackgroundLayer.ts`, replace the `Graphics`-based star construction
+- [x] In `src/presentation/SpaceBackgroundLayer.ts`, replace the `Graphics`-based star construction
       in `createTwinkleStars()` (the `g.circle(...)`/`g.moveTo/lineTo/stroke` block) with a tinted
       `Sprite` of the new `starPointTexture()`, keeping the existing per-star color/size/alpha/
       twinkle-phase logic. Remove the stroked 4-point diffraction spike entirely. Keep the existing
       `Graphics` fallback path only for the no-canvas case (mirror the `rockTexture`/`drawAsteroid`
       null-fallback pattern) so jsdom/unit tests don't crash.
-- [ ] Write tests for `starPointTexture` (success): returns a `Texture` when a 2D context is
+- [x] Write tests for `starPointTexture` (success): returns a `Texture` when a 2D context is
       available for both `hero=true` and `hero=false`, and repeated calls for the same `hero` value
       return the same cached texture instance.
-- [ ] Write tests for `starPointTexture` (error/edge case): returns `null` gracefully with no 2D
+- [x] Write tests for `starPointTexture` (error/edge case): returns `null` gracefully with no 2D
       context (existing jsdom test environment), and `createTwinkleStars()` still populates
       `this.twinkleStars` with the expected count/shape when the texture is `null` (fallback path).
-- [ ] Run tests — must pass before task 3.
+- [x] Run tests — must pass before task 3.
 
 ### Task 3: Redesign nebula cloud texture (fix muddy blob)
 

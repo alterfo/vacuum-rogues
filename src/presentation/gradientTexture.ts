@@ -83,6 +83,75 @@ export function dustParticleTexture(): Texture | null {
 }
 
 /**
+ * Baked, tintable star-point texture for the background twinkle stars
+ * (space-visual-cleanup, 2026-07-08). Replaces the runtime `Graphics`
+ * 4-point diffraction-spike stroke (a crisp vector plus-sign) with a
+ * Canvas2D-baked tight bright core + smooth falloff; when `hero` is true, two
+ * soft, tapered, low-alpha glints are baked directly into the gradient canvas
+ * as anti-aliased linear-gradient strokes, so they read as a photographic
+ * lens glint rather than a hard-edged cross. Callers tint a `Sprite` of this
+ * per-star (white base, like `softGlowTexture`), so one texture serves every
+ * star colour. Cached per `hero` value (baked once). Returns `null` with no 2D
+ * context (jsdom / unit tests) so callers fall back to a plain `Graphics` dot.
+ */
+const starPointCache = new Map<boolean, Texture | null>();
+
+export function starPointTexture(hero: boolean): Texture | null {
+  const existing = starPointCache.get(hero);
+  if (existing !== undefined) return existing;
+
+  const size = hero ? 192 : 96;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    starPointCache.set(hero, null);
+    return null;
+  }
+
+  const cx = size / 2;
+  const cy = size / 2;
+
+  if (hero) {
+    const armLen = size * 0.46;
+    const drawGlint = (dx: number, dy: number) => {
+      const grad = ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
+      grad.addColorStop(0.0, "rgba(255,255,255,0)");
+      grad.addColorStop(0.42, "rgba(255,255,255,0.05)");
+      grad.addColorStop(0.5, "rgba(255,255,255,0.22)");
+      grad.addColorStop(0.58, "rgba(255,255,255,0.05)");
+      grad.addColorStop(1.0, "rgba(255,255,255,0)");
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = size * 0.05;
+      ctx.beginPath();
+      ctx.moveTo(cx - dx, cy - dy);
+      ctx.lineTo(cx + dx, cy + dy);
+      ctx.stroke();
+    };
+    drawGlint(armLen, 0);
+    drawGlint(0, armLen);
+  }
+
+  // Tight bright core with smooth falloff — the point-light look a real star
+  // photographs with, drawn over the glint tails so the core stays the
+  // brightest, sharpest feature.
+  const coreR = size * 0.5;
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+  grad.addColorStop(0.0, "rgba(255,255,255,1)");
+  grad.addColorStop(0.12, "rgba(255,255,255,0.9)");
+  grad.addColorStop(0.3, "rgba(255,255,255,0.35)");
+  grad.addColorStop(0.55, "rgba(255,255,255,0.1)");
+  grad.addColorStop(1.0, "rgba(255,255,255,0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  const tex = Texture.from(canvas);
+  starPointCache.set(hero, tex);
+  return tex;
+}
+
+/**
  * Deterministic small PRNG (mulberry32) so a given rock `seed` always bakes the
  * same rock — distinct seeds give distinct rocks, identical seeds reuse the
  * cached texture.

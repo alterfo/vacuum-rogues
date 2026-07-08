@@ -96,6 +96,19 @@ describe("baked dust + rock textures (canvas available)", () => {
     // seed and seed+ROCK_VARIANT_COUNT map to the same baked variant.
     expect(rockTexture(0)).toBe(rockTexture(ROCK_VARIANT_COUNT));
   });
+
+  it("starPointTexture bakes a non-null texture for hero and non-hero and caches each", async () => {
+    const { starPointTexture } = await import("@/presentation/gradientTexture");
+    const heroA = starPointTexture(true);
+    const heroB = starPointTexture(true);
+    const normalA = starPointTexture(false);
+    const normalB = starPointTexture(false);
+    expect(heroA).not.toBeNull();
+    expect(normalA).not.toBeNull();
+    expect(heroB).toBe(heroA); // reused, not re-baked
+    expect(normalB).toBe(normalA); // reused, not re-baked
+    expect(heroA).not.toBe(normalA); // distinct hero vs non-hero bake
+  });
 });
 
 describe("baked textures are null-safe without a 2D context", () => {
@@ -116,5 +129,11 @@ describe("baked textures are null-safe without a 2D context", () => {
   it("rockTexture returns null (jsdom fallback, no throw)", async () => {
     const { rockTexture } = await import("@/presentation/gradientTexture");
     expect(rockTexture(0)).toBeNull();
+  });
+
+  it("starPointTexture returns null for both hero and non-hero (jsdom fallback, no throw)", async () => {
+    const { starPointTexture } = await import("@/presentation/gradientTexture");
+    expect(starPointTexture(true)).toBeNull();
+    expect(starPointTexture(false)).toBeNull();
   });
 });

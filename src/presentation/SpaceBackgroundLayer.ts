@@ -1,5 +1,5 @@
 import { Container, Graphics, Sprite } from "pixi.js";
-import { softGlowTexture } from "./gradientTexture";
+import { softGlowTexture, starPointTexture } from "./gradientTexture";
 import type { Texture } from "pixi.js";
 import type { Renderer } from "./Renderer";
 import { SeededRNG } from "@/utils/seededRNG";
@@ -54,7 +54,7 @@ interface NebulaLayer {
 }
 
 interface TwinkleStar {
-  graphics: Graphics;
+  graphics: Graphics | Sprite;
   baseAlpha: number;
   phase: number;
   speed: number;
@@ -382,8 +382,14 @@ export class SpaceBackgroundLayer implements FlightModule {
   }
 
   /**
-   * A handful of bright "hero" stars with a 4-point glint that gently pulse
-   * (twinkle). Only these few are animated per-frame, so it stays cheap.
+   * A handful of bright "hero" stars with a soft photographic glint that
+   * gently pulse (twinkle). Only these few are animated per-frame, so it
+   * stays cheap. Rendered as a tinted `Sprite` of the baked
+   * `starPointTexture()` (a tight core + anti-aliased glints for hero stars)
+   * — NOT a runtime `Graphics.stroke()` cross, which reads as a flat vector
+   * plus-sign rather than a point of light. Falls back to a plain `Graphics`
+   * dot (no stroke spike) only when no 2D canvas context is available
+   * (jsdom / unit tests).
    */
   private createTwinkleStars(): void {
     const width = this.renderer.app.screen.width;
@@ -404,35 +410,43 @@ export class SpaceBackgroundLayer implements FlightModule {
     }
 
     const count = 60;
+    const heroTex = starPointTexture(true);
+    const normalTex = starPointTexture(false);
 
     for (let i = 0; i < count; i++) {
       const x = Math.random() * width * 2.2 - width * 0.6;
       const y = Math.random() * height * 2.2 - height * 0.6;
       const color = twinklePool[Math.floor(Math.random() * twinklePool.length)];
+      const isHero = Math.random() < 0.15;
       // vary size: most small, a few large "hero" stars
-      const r =
-        Math.random() < 0.15
-          ? 2.2 + Math.random() * 1.4 // bright hero star
-          : 1.1 + Math.random() * 1.4; // normal bright star
+      const r = isHero
+        ? 2.2 + Math.random() * 1.4 // bright hero star
+        : 1.1 + Math.random() * 1.4; // normal bright star
       const baseAlpha = 0.55 + Math.random() * 0.45;
 
-      const g = new Graphics();
-      // outer soft diffraction halo
-      g.circle(0, 0, r * 5).fill({ color, alpha: 0.06 });
-      g.circle(0, 0, r * 2.8).fill({ color, alpha: 0.18 });
-      // 4-point diffraction spike
-      const len = r * (r > 2 ? 9 : 6);
-      g.moveTo(-len, 0).lineTo(len, 0).moveTo(0, -len).lineTo(0, len);
-      g.stroke({ width: r > 2 ? 1.0 : 0.7, color, alpha: 0.45 });
-      // bright core
-      g.circle(0, 0, r).fill({ color, alpha: 1 });
-      g.x = x;
-      g.y = y;
-      g.alpha = baseAlpha;
-      container.addChild(g);
+      const tex = isHero ? heroTex : normalTex;
+      let display: Graphics | Sprite;
+      if (tex) {
+        const sprite = new Sprite(tex);
+        sprite.anchor.set(0.5);
+        sprite.tint = color;
+        const outerRadius = r * (isHero ? 4.2 : 3.4);
+        sprite.scale.set(outerRadius / (tex.width / 2));
+        display = sprite;
+      } else {
+        const g = new Graphics();
+        g.circle(0, 0, r * 5).fill({ color, alpha: 0.06 });
+        g.circle(0, 0, r * 2.8).fill({ color, alpha: 0.18 });
+        g.circle(0, 0, r).fill({ color, alpha: 1 });
+        display = g;
+      }
+      display.x = x;
+      display.y = y;
+      display.alpha = baseAlpha;
+      container.addChild(display);
 
       this.twinkleStars.push({
-        graphics: g,
+        graphics: display,
         baseAlpha,
         phase: Math.random() * Math.PI * 2,
         speed: 0.0008 + Math.random() * 0.0018,
