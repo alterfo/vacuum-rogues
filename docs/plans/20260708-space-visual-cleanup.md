@@ -289,12 +289,17 @@ user confirmed these already look fine and should not be touched.
 
 ### Task 7: [Final] Update documentation
 
-- [ ] Update `src/presentation/CLAUDE.md` / `flight/CLAUDE.md` (or `gradientTexture.ts`'s own
+- [x] Update `src/presentation/CLAUDE.md` / `flight/CLAUDE.md` (or `gradientTexture.ts`'s own
       doc-comments, matching the existing `softGlowTexture`/`rockTexture` comment style) to
       describe the new `starPointTexture`/`nebulaCloudTexture`/`cometHeadTexture` factories and
       why they replaced the previous Graphics/stacked-blob approach — future readers should not
       reintroduce the flat cross-spike or uniform-blob patterns.
-- [ ] Update `docs/plans/` — this file moves to `docs/plans/completed/` automatically once done.
+      ⚠️ `gradientTexture.ts`'s own doc-comments for the three new factories (added during Tasks
+      2-4) already matched the existing style and covered this. Added a new paragraph to
+      `src/presentation/flight/CLAUDE.md` (before the module-rules line) naming all four
+      factories, what each replaced, and an explicit "do not reintroduce" note for future readers
+      touching `SpaceBackgroundLayer`/`AsteroidBelt`.
+- [x] Update `docs/plans/` — this file moves to `docs/plans/completed/` automatically once done.
 
 ## Technical Details
 
