@@ -337,7 +337,15 @@ export class NpcShipManager implements FlightModule {
   // ---------------------------------------------------------------------------
 
   /** Create NPC ship sprites for every NPC currently present in this system. */
-  initialize(): void {
+  /**
+   * @param isResumedFlight True only when this re-initializes an
+   * ALREADY-LIVE flight (a reload/resume, or a pure HUD rebuild — both pass
+   * `preserveShipPos`), never a fresh system entry (undock/hyperjump/first
+   * arrival). Gates {@link reengageNearbyHostiles}: it must not fire on a
+   * normal entry, where a hostile NPC merely being nearby is unremarkable
+   * and must stay gated by the usual neutral-aggro pacing.
+   */
+  initialize(isResumedFlight = false): void {
     // Build the ship-death blast renderer first (before the no-galaxy early
     // return) so update()/destroy()/spawn always have it on a live scene. Tear
     // down any prior renderer first so a re-init without an intervening
@@ -356,7 +364,7 @@ export class NpcShipManager implements FlightModule {
     // Entering a captured system: its standing garrison immediately turns hostile
     // and pursues the player (combat resolves in-flight, not via CombatScene).
     this.applyGarrisonAggro();
-    this.reengageNearbyHostiles();
+    if (isResumedFlight) this.reengageNearbyHostiles();
     logger.info(`Created ${this.npcSprites.length} NPC sprites`);
     // Entering a captured system: surface the liberation counter-play so the
     // player learns they can free it by destroying the garrison (Task 4).
@@ -508,6 +516,9 @@ export class NpcShipManager implements FlightModule {
   persistLivePositions(): void {
     const center = this.deps.getStarCenter();
     for (const sprite of this.npcSprites) {
+      // Defensive: some lightweight test doubles stub `npc` as a plain object
+      // without the full NpcShip API — skip rather than throw.
+      if (typeof sprite.npc.setWorldPosition !== "function") continue;
       sprite.npc.setWorldPosition(sprite.x - center.x, sprite.y - center.y);
     }
   }
