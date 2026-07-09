@@ -387,7 +387,7 @@ export class FlightHud implements FlightModule {
     }
 
     if (this.accessibilityButton) {
-      this.accessibilityButton.y = h - 188;
+      this.accessibilityButton.y = h - 80;
     }
     if (this.accessibilityPanel && this.accessibilityButton) {
       this.accessibilityPanel.y = Math.max(
@@ -397,15 +397,18 @@ export class FlightHud implements FlightModule {
     }
 
     if (this.miniLogContainer) {
-      this.miniLogContainer.y = h - 105;
+      this.miniLogContainer.y = h - 180;
     }
     if (this.dayCounterText) {
-      this.dayCounterText.y = 50;
+      this.dayCounterText.y = 20;
     }
     if (this.menuButtonText) {
-      // The true bottom-left corner element (♿ stacks above it) — a fixed
-      // escape hatch belongs at the corner itself, not one row up from it.
-      this.menuButtonText.y = h - 162;
+      // The true bottom-left corner element (♿ stacks tight above it, the
+      // mini-log reserves its space further up) — when the mini-log sat
+      // between МЕНЮ and the screen edge, an empty (no recent events) log
+      // read as a dead gap under the button, so nothing here can render
+      // below МЕНЮ.
+      this.menuButtonText.y = h - 40;
     }
     if (this.systemMenuPanel) {
       const b = this.systemMenuPanel.getLocalBounds();
@@ -536,7 +539,7 @@ export class FlightHud implements FlightModule {
     overlay.addChild(bg);
     overlay.addChild(hints);
     overlay.x = 20;
-    overlay.y = 165;
+    overlay.y = 135;
 
     this.uiLayer.addChild(overlay);
     this.helpOverlay = overlay;
@@ -611,7 +614,7 @@ export class FlightHud implements FlightModule {
       },
     });
     this.dayCounterText.x = 20;
-    this.dayCounterText.y = 50;
+    this.dayCounterText.y = 20;
     this.uiContainer.addChild(this.dayCounterText);
 
     // Quest Journal button
@@ -625,7 +628,7 @@ export class FlightHud implements FlightModule {
       },
     });
     questBtn.x = 20;
-    questBtn.y = 80;
+    questBtn.y = 50;
     questBtn.eventMode = "static";
     questBtn.cursor = "pointer";
     questBtn.on("pointerdown", (event) => {
@@ -654,7 +657,7 @@ export class FlightHud implements FlightModule {
       },
     });
     invBtn.x = 20;
-    invBtn.y = 110;
+    invBtn.y = 80;
     invBtn.eventMode = "static";
     invBtn.cursor = "pointer";
     invBtn.on("pointerdown", (event) => {
@@ -682,7 +685,7 @@ export class FlightHud implements FlightModule {
       },
     });
     helpBtn.x = 20;
-    helpBtn.y = 140;
+    helpBtn.y = 110;
     helpBtn.eventMode = "static";
     helpBtn.cursor = "pointer";
     helpBtn.on("pointerdown", (event) => {
@@ -714,7 +717,7 @@ export class FlightHud implements FlightModule {
       },
     });
     menuBtn.x = 20;
-    menuBtn.y = this.renderer.app.screen.height - 162;
+    menuBtn.y = this.renderer.app.screen.height - 40;
     menuBtn.eventMode = "static";
     menuBtn.cursor = "pointer";
     menuBtn.on("pointerdown", (event) => {
@@ -840,7 +843,7 @@ export class FlightHud implements FlightModule {
     this.miniLogContainer = new Container();
     this.miniLogContainer.eventMode = "none";
     this.miniLogContainer.x = 20;
-    this.miniLogContainer.y = this.renderer.app.screen.height - 105;
+    this.miniLogContainer.y = this.renderer.app.screen.height - 180;
     this.uiLayer.addChild(this.miniLogContainer);
 
     // Create mini-map. Dragging on it pans the main view (it no longer falls
@@ -892,7 +895,7 @@ export class FlightHud implements FlightModule {
       ACC_BTN_H,
     );
     accBtn.x = 20;
-    accBtn.y = this.renderer.app.screen.height - 188;
+    accBtn.y = this.renderer.app.screen.height - 80;
     this.uiLayer.addChild(accBtn.container);
     this.accessibilityButton = accBtn;
 
