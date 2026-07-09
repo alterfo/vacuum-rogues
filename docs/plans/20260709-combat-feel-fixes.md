@@ -65,11 +65,11 @@ This plan fixes all three. It does **not** touch multi-weapon range-tiered firin
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] verify all three bugs are independently reproducible-as-fixed: orbit never exceeds the system boundary, first shot lands well before the cold-start interval, the route overlay shows exactly one day-marker (or none, per the decided rule) and never a repeating tick pattern.
-- [ ] run full unit test suite (`npm test -- --run`)
-- [ ] run `npm run test:playtest` (real-engine gate)
-- [ ] run `npm run lint`
-- [ ] `gitnexus detect_changes` — confirm only the expected symbols/flows are affected before committing.
+- [x] verify all three bugs are independently reproducible-as-fixed: orbit never exceeds the system boundary, first shot lands well before the cold-start interval, the route overlay shows exactly one day-marker (or none, per the decided rule) and never a repeating tick pattern. Targeted files re-run green: `combatPursuitController.test.ts` (27), `weaponCadence.test.ts`, `routeRenderer.test.ts` (incl. the unmodified playtest4 B guard), `routeMatchesPath.test.ts` (52 tests total).
+- [x] run full unit test suite (`npm test -- --run`) — 5246 passed, 12 skipped, 0 failures.
+- [x] run `npm run test:playtest` (real-engine gate) — 693 passed, 9 skipped, 0 failures.
+- [x] run `npm run lint` — 0 errors (46 pre-existing `any` warnings); `npx tsc --noEmit` clean.
+- [x] `gitnexus detect_changes` — confirm only the expected symbols/flows are affected before committing. Compare-vs-master shows the whole branch (16 files incl. prior HUD/warp commits); the Task 1–3 footprint is exactly `steerCombatOrbit`/`CombatModule` timers/`RouteRenderer`/`plotRoute`/`pointAlongPath` — all affected flows covered by the green unit + playtest gates.
 
 ## Technical Details
 
