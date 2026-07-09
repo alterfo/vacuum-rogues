@@ -143,6 +143,16 @@ export class GameEngine {
     this.flightPositions.lastFlightShipPos = pos;
   }
   /**
+   * True only when `lastFlightShipPos` was captured while fleeing an active
+   * fight (`SpaceFlightScene.saveShipPosition`, gated on `combatModule.isActive`)
+   * — the sole signal `warpEdgePoint`'s near-edge escape (Task 9 iv) may use.
+   * `lastFlightShipPos` alone is NOT that signal: it's set on every routine
+   * inventory/star-map/quest-nav trip too, so gating on it alone fired the
+   * near-edge exit on every hyperjump, not just a genuine flee. Transient
+   * cross-scene state, like `lastFlightShipPos` — not part of `SaveState`.
+   */
+  public lastFlightWasFleeing = false;
+  /**
    * Live in-flight ship position captured on each turn-end during FREE flight (no
    * scene exit), so the headline reload case — warp/take-off in, fly around, reload
    * — resumes where the ship stopped instead of edge-spawning. Distinct from

@@ -345,10 +345,11 @@ export class SpaceFlightScene extends GameScene {
     const centerX = this.renderer.app.screen.width / 2;
     const centerY = this.renderer.app.screen.height / 2;
 
-    // Normal entry comes from the system boundary (рубеж гиперпрыжка) in the warp
-    // direction; a pending hyperjump (US-023/US-070 #1) starts at lastFlightShipPos.
+    // Normal entry is the boundary edge; a pending hyperjump starts at lastFlightShipPos.
     const lastPos = this.gameEngine?.lastFlightShipPos ?? null;
+    const wasFleeing = this.gameEngine?.lastFlightWasFleeing ?? false;
     if (this.gameEngine) this.gameEngine.lastFlightShipPos = null; // consume
+    if (this.gameEngine) this.gameEngine.lastFlightWasFleeing = false; // consume
     const entryVector = ctx?.entryVector ?? { x: 0, y: 1 };
     const entryX = this.pendingWarp
       ? (lastPos?.x ??
@@ -512,17 +513,16 @@ export class SpaceFlightScene extends GameScene {
     // direction. The jump fires when it reaches the boundary (updateShip →
     // performWarp); days advance during this flight like any other movement.
     if (this.pendingWarp) {
-      // Flee/re-plot from mid-system (lastPos preserved, Task 9 iv) fires from the
-      // NEAREST escape edge, not a full-system beeline past pursuers; a fresh entry
-      // keeps the exit-direction edge. Arrival is fixed by targetSystemId, so the
-      // shorter crossing can't change the destination. Route is pre-planned but
-      // NOT started — the player presses "Ход" to fly to the edge (US-070 #11).
+      // Flee/re-plot mid-fight (wasFleeing, Task 9 iv) fires from the NEAREST
+      // escape edge; every other case (incl. a routine star-map jump) keeps
+      // the exit-direction edge. Route is pre-planned but NOT started — press
+      // "Ход" to fly to it (US-070 #11).
       const edge = warpEdgePoint(
         { x: this.shipPhysics.shipX, y: this.shipPhysics.shipY },
         { x: centerX, y: centerY },
         this.pendingWarp.exitVector,
         this.SYSTEM_BOUNDARY_RADIUS,
-        lastPos != null,
+        wasFleeing,
       );
       this.routePath = avoidStarPath(
         this.shipPhysics.shipX,
@@ -1709,14 +1709,14 @@ export class SpaceFlightScene extends GameScene {
     this.planetManager.closeInfoPanel();
   }
 
-  // Remember the ship's position before leaving so a hyperjump or a later
-  // return starts from here rather than the system-entry edge (US-070 #1).
+  // Remember the ship's position so a later return starts here, not the edge.
   private saveShipPosition(): void {
     if (this.gameEngine && this.shipPhysics) {
       this.gameEngine.lastFlightShipPos = {
         x: this.shipPhysics.shipX,
         y: this.shipPhysics.shipY,
       };
+      this.gameEngine.lastFlightWasFleeing = !!this.combatModule?.isActive;
     }
   }
 

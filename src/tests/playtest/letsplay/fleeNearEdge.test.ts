@@ -82,10 +82,15 @@ describe("flee jump fires from the near edge (Task 9 iv)", () => {
     // Simulate a flee: the ship is caught on the FAR side of the star from the
     // destination. Preserving `lastFlightShipPos` (as returnToStarMap does) makes
     // the re-entered flight scene spawn the ship there — the flee/re-plot path.
+    // `lastFlightWasFleeing` is the actual "this was a genuine flee, not a
+    // routine star-map trip" signal (`saveShipPosition` sets it from
+    // `combatModule.isActive`) — a plain lastFlightShipPos alone no longer
+    // triggers the near-edge escape (that was firing on every hyperjump).
     harness.engine.lastFlightShipPos = {
       x: center.x - exit.x * R * 0.9,
       y: center.y - exit.y * R * 0.9,
     };
+    harness.engine.lastFlightWasFleeing = true;
 
     await harness.goTo(SceneType.STAR_MAP);
     const starMap = harness.currentScene() as unknown as {
