@@ -342,6 +342,17 @@ export const GAME_BALANCE = {
   /** Real-time in-flight combat cadence: a ship fires once per this many ms while in range. */
   combatFireIntervalMs: 2500,
   /**
+   * Fraction of a weapon's fire interval pre-charged into its cold-start timer
+   * when combat begins ({@link CombatModule.addCombatant}), applied only to
+   * weapons whose `cooldownTurns > 1`. A `cooldownTurns:1` weapon's interval
+   * already equals one turn (`combatFireIntervalMs`), so it keeps the old flat
+   * cold-start unchanged; a slower weapon (e.g. `cooldownTurns:3`, 7500ms) would
+   * otherwise force the full interval's wait for its first shot even after the
+   * ship already spent time closing to range — this halves that wait so first
+   * contact reads as prompt rather than a stall.
+   */
+  combatEngagePrechargeFraction: 0.5,
+  /**
    * Round-based combat (campaign Task 9 (v)): the max fraction of the player's
    * MAX hull that a single **combat round** may remove before the module halts
    * fire and raises a fresh reaction window (an active-pause re-raise for the

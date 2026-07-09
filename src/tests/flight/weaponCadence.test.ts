@@ -157,4 +157,45 @@ describe("CombatModule fires per-weapon cadence", () => {
     module.update(BASE * 2); // now 3× base total → the beam fires once
     expect(target.npc.hullHP).toBe(10_000 - weapon("wpn_beam").damage);
   });
+
+  it("a cooldownTurns:3 weapon's first shot after engaging lands well before the full cold-start interval (engage pre-charge)", () => {
+    const beamInterval = weaponFireIntervalMs(weapon("wpn_beam")); // 7500 ms
+    const budget = beamInterval * GAME_BALANCE.combatEngagePrechargeFraction; // target: no later than half the cold-start interval
+    const { module } = moduleWith("wpn_beam");
+    const target = makeSprite("t", 50, 0, 10_000);
+    module.addCombatant(target);
+
+    module.update(budget - 1); // just shy of the pre-charged budget — no shot yet
+    expect(target.npc.hullHP).toBe(10_000);
+
+    module.update(1); // crosses the budget — first shot lands, well short of the full 7500 ms
+    expect(target.npc.hullHP).toBe(10_000 - weapon("wpn_beam").damage);
+  });
+
+  it("engage pre-charge does not change steady-state cadence — the second shot still waits the full interval", () => {
+    const beamInterval = weaponFireIntervalMs(weapon("wpn_beam"));
+    const budget = beamInterval * GAME_BALANCE.combatEngagePrechargeFraction;
+    const { module } = moduleWith("wpn_beam");
+    const target = makeSprite("t", 50, 0, 10_000_000);
+    module.addCombatant(target);
+
+    module.update(budget); // first (pre-charged) shot lands
+    expect(target.npc.hullHP).toBe(10_000_000 - weapon("wpn_beam").damage);
+
+    module.update(beamInterval - 1); // just shy of a full interval since the first shot
+    expect(target.npc.hullHP).toBe(10_000_000 - weapon("wpn_beam").damage); // still one shot
+
+    module.update(1); // crosses the full interval — second shot lands
+    expect(target.npc.hullHP).toBe(10_000_000 - weapon("wpn_beam").damage * 2);
+  });
+
+  it("a cooldownTurns:1 weapon gets no engage pre-charge (its interval already equals one turn)", () => {
+    const { module } = moduleWith("wpn_pulse");
+    const target = makeSprite("t", 50, 0, 10_000);
+    module.addCombatant(target);
+    module.update(BASE - 1); // just shy of the interval — no shot yet, precharge would break this
+    expect(target.npc.hullHP).toBe(10_000);
+    module.update(1);
+    expect(target.npc.hullHP).toBe(10_000 - weapon("wpn_pulse").damage);
+  });
 });
