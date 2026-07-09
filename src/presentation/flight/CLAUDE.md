@@ -163,6 +163,21 @@ the stationary and moving combat day-sources never double-count. The **active pa
 the orbits along with movement, NPC AI and fire. Position stays a pure function of `orbitalDay` (no
 per-planet motion state); only the day source gains a combat path — no data/schema/save impact.
 
+**Orbit-visual floor: planets must visibly orbit while flying, not just while waiting**
+(`20260709-planet-orbit-visual-floor` — playtest bug "planets don't orbit while moving, only
+stationary + «Ход»"). Root cause: a moving turn's day-rate is `distanceTraveled / DISTANCE_PER_DAY`
+at the ship's actual cruise speed (0.08 px/ms starter engine .. 0.29 px/ms top-tier) — 5-10x slower
+than the wait-turn's fixed `MS_PER_WAIT_DAY` (1 day/1000ms, "день = секунда"), so planets crept
+almost imperceptibly during flight next to a visibly-fast spin while waiting. `visualOrbitBoost`
+tops up **only** the value `getOrbitalDay()` hands to `PlanetManager` (`currentDay +
+visualOrbitBoost`) via `combatOrbitalDayIncrement` at the same 1-day/1000ms rate whenever
+`shipPhysics.isMoving` — it never feeds `gameDays`, the HUD date, or any economy/quest/NPC-sim
+pacing (those still use the untouched `currentDay`), so a trip still takes exactly as many in-game
+days as its distance/speed dictates. It settles to 0 in `endTurn()`, same as
+`waitDayAccum`/`distanceTraveled` ("orbits settle to gameDays" on stop). Do **not** fold this into
+`currentDay` itself — that would speed up the real calendar during travel and ripple into
+day-calibrated systems (quest deadlines, the Overmind arc's `campaignPeakPower` pacing).
+
 **Live in-flight position persists across a reload.** Free flight otherwise only autosaves at
 discrete turn-ends (and a combat orbit moves the ship with **no** turn-end), so a reload used to
 edge-spawn at the system entry. The scene calls `recordAndMaybeAutosaveFlight` (`flight/flightTurnEnd.ts`)

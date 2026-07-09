@@ -105,8 +105,9 @@ export class SpaceFlightScene extends GameScene {
   // stationary real-time fight (combat advances orbits but not the calendar; see updateShip).
   private waitDayAccum: number = 0;
   private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070); must equal MS_PER_ORBITAL_DAY
-  // Fractional "day of turn" (gameDays + sub-day move/wait/combat); feeds orbits + the HUD date read-out.
+  private visualOrbitBoost: number = 0; // orbit-visual day floor while moving — flight/CLAUDE.md
   private get currentDay(): number {
+    // gameDays + sub-day move/wait/combat; feeds orbits + HUD date
     const days = this.gameEngine?.galaxy?.gameDays ?? 0;
     const frac = this.distanceTraveled / this.DISTANCE_PER_DAY;
     return days + frac + this.waitDayAccum;
@@ -418,7 +419,7 @@ export class SpaceFlightScene extends GameScene {
           y: this.starRenderer.centerY,
         }),
         isTurnRunning: () => this.isTurnRunning,
-        getOrbitalDay: () => this.currentDay,
+        getOrbitalDay: () => this.currentDay + this.visualOrbitBoost,
         showPlanetTooltip: (planet, faction, sx, sy, landingDenial) =>
           this.hud.showPlanetTooltip(planet, faction, sx, sy, landingDenial),
         hideTooltip: () => this.hud.hideTooltip(),
@@ -1340,6 +1341,12 @@ export class SpaceFlightScene extends GameScene {
 
     // Turn-based time: only advance days when ship is moving (every DISTANCE_PER_DAY px = 1 day).
     if (this.shipPhysics.isMoving && this.shipPhysics.currentSpeed > 0.01) {
+      this.visualOrbitBoost += combatOrbitalDayIncrement({
+        inCombat: true,
+        paused: this.combatPause.paused,
+        dt: deltaTime,
+        timeScale: this.shipPhysics?.timeScale ?? 1,
+      }); // visualOrbitBoost: orbit-visual top-up only
       const dx = this.shipPhysics.shipX - prevX;
       const dy = this.shipPhysics.shipY - prevY;
       this.distanceTraveled += Math.sqrt(dx * dx + dy * dy);
@@ -1677,6 +1684,7 @@ export class SpaceFlightScene extends GameScene {
     this.pauseAtDayBoundary = false; // deferred pause consumed (or turn ended)
     this.waitDayAccum = 0; // also drops any combat-orbit offset: orbits settle to gameDays
     this.distanceTraveled = 0;
+    this.visualOrbitBoost = 0;
     this.turnHintShown = false;
     this.updateInteractiveCursors(false);
     // Settle the ship in place and persist where it stopped (reload-resume).
