@@ -6,6 +6,7 @@ import {
 } from "pixi.js";
 import { scaledText } from "./scaledText";
 import { lineStepFor } from "./questCardLayout";
+import { attachWheelScroll } from "./WheelScroll";
 import { scaledFont } from "@/utils/fontScale";
 import type { Renderer } from "../Renderer";
 import type { Player } from "@/domain/Player";
@@ -192,7 +193,36 @@ export class HangarPanel {
    *  which outlive a single render. Refreshed on every render. */
   private ctx: HangarPanelContext | null = null;
 
+  /**
+   * The two scrollable content columns for the current render (left: hull
+   * micromodule bank + the four fitting banks; right: СКЛАД warehouse + ТРЮМ
+   * cargo). Rebuilt fresh every render() — the host scenes fully tear down
+   * and rebuild on every mutation (`rerender()` → full scene render), so
+   * there is no incremental content to preserve across renders.
+   */
+  private leftContent: Container | null = null;
+  private rightContent: Container | null = null;
+  /** Current/max px scroll offset per column — mutated in place by wheel/drag
+   *  handlers so `dropZoneAt` and `getScrollInfo` always read the live value. */
+  private leftScroll = { offset: 0, max: 0 };
+  private rightScroll = { offset: 0, max: 0 };
+  /** Detach fns for the two columns' window-level wheel listeners. Re-armed at
+   *  the top of every render() — a host rerender() fully rebuilds the panel's
+   *  display objects without disposing the HangarPanel instance itself, so a
+   *  stale listener from the previous render would otherwise leak and
+   *  double-scroll. */
+  private detachLeftWheel: (() => void) | null = null;
+  private detachRightWheel: (() => void) | null = null;
+
   constructor(private readonly renderer: Renderer) {}
+
+  /** Current scroll offset/max per column (E2E + tests, read-only). */
+  getScrollInfo(): {
+    left: { offset: number; max: number };
+    right: { offset: number; max: number };
+  } {
+    return { left: { ...this.leftScroll }, right: { ...this.rightScroll } };
+  }
 
   /** Screen-coord drop zones for the current hangar render (read-only, for E2E). */
   getDropZones(): ReadonlyArray<{
@@ -219,13 +249,27 @@ export class HangarPanel {
   /** Tear down any in-flight drag + clear registered zones (host scene destroy). */
   dispose(): void {
     this.cancelMicromoduleDrag();
+    this.detachScrollListeners();
     this.dropZones = [];
     this.ctx = null;
+  }
+
+  /** Detach both columns' window-level wheel listeners, if attached. */
+  private detachScrollListeners(): void {
+    this.detachLeftWheel?.();
+    this.detachLeftWheel = null;
+    this.detachRightWheel?.();
+    this.detachRightWheel = null;
   }
 
   /** Draw the full hangar board into the host container at panel geometry. */
   render(ctx: HangarPanelContext): void {
     this.ctx = ctx;
+    // A host rerender() fully rebuilds the panel's display objects on this
+    // same HangarPanel instance (dispose() is only called on scene destroy),
+    // so any wheel listener armed by the previous render must be detached
+    // first — otherwise it leaks and the content scrolls twice.
+    this.detachScrollListeners();
     const sw = this.renderer.app.screen.width;
     const sh = this.renderer.app.screen.height;
     const player = ctx.player;
@@ -282,7 +326,8 @@ export class HangarPanel {
     const gap = 18;
     const leftW = Math.round((CW - gap) * 0.55);
     // Reserve a strip along the bottom for the draggable micromodule tray, above
-    // the [Назад] button. The two columns clip to `contentBottom` as before.
+    // the [Назад] button. The two columns scroll within `contentTop..contentBottom`
+    // instead of clipping — see `wireScrollRegion`.
     const trayH = 64;
     const trayY = PY + PH - 38 - trayH;
     const layout: HangarLayout = {
@@ -294,16 +339,48 @@ export class HangarPanel {
       contentBottom: trayY - 8,
     };
 
+    // Each column's content draws into its own masked, scrollable Container
+    // (added to `ctx.container` up front so children appended by the
+    // sub-renderers below are already in the scene graph) rather than
+    // `ctx.container` directly — content that overflows the visible band is
+    // reachable by wheel/drag instead of being silently clipped (the
+    // reported bug: an installed item could render below the fold with no
+    // way to reach it).
+    this.leftContent = new Container();
+    this.rightContent = new Container();
+    ctx.container.addChild(this.leftContent);
+    ctx.container.addChild(this.rightContent);
+
     // Hull micromodule bank sits atop the left column; the fitting banks flow
-    // below the y it consumes.
+    // below the y it consumes. Both draw unclipped — `bottomY` is the actual
+    // bottom of the drawn content, used below to size the scroll range.
     const banksTop = this.renderHullMicromoduleBank(layout, loadout);
-    this.renderFittingBanks(
+    const leftBottomY = this.renderFittingBanks(
       { ...layout, contentTop: banksTop },
       loadout,
       player,
     );
-    this.renderWarehouseAndCargo(layout, loadout, player);
+    const rightBottomY = this.renderWarehouseAndCargo(layout, loadout, player);
     this.renderMicromoduleTray(PX + 18, trayY, PW - 36, trayH, player, loadout);
+
+    this.detachLeftWheel = this.wireScrollRegion(
+      this.leftContent,
+      this.leftScroll,
+      layout.leftX,
+      layout.contentTop,
+      layout.contentBottom,
+      layout.leftW,
+      leftBottomY - layout.contentTop,
+    );
+    this.detachRightWheel = this.wireScrollRegion(
+      this.rightContent,
+      this.rightScroll,
+      layout.rightX,
+      layout.contentTop,
+      layout.contentBottom,
+      layout.rightW,
+      rightBottomY - layout.contentTop,
+    );
 
     // Toast slot so drag-drop fit hints (and sell/unequip messages) show here.
     ctx.addToastSlot(PX, PY, PW, PH);
@@ -323,6 +400,83 @@ export class HangarPanel {
       ctx.back();
     });
     ctx.container.addChild(backBtn);
+  }
+
+  /**
+   * Mask + wheel/drag-scroll a content column that already drew all of its
+   * children unclipped. Mirrors `ScrollableList`'s proven mask pattern (mask
+   * as a sibling of `content`, `addChild()`'d to the shared parent BEFORE
+   * `content.mask = mask` — a mask ignored by PixiJS 8 unless it's in the
+   * scene graph), adapted for heterogeneous, non-uniform-row content instead
+   * of a fixed `itemHeight` list.
+   *
+   * Returns a detach function for the window-level wheel listener (only
+   * attached when the column actually overflows), or `null` when everything
+   * already fits — mirroring `ScrollableList`'s `enableWheel && maxScroll > 0`
+   * gate so a fitting column never needlessly intercepts page scroll.
+   */
+  private wireScrollRegion(
+    content: Container,
+    state: { offset: number; max: number },
+    x: number,
+    contentTop: number,
+    contentBottom: number,
+    w: number,
+    contentHeight: number,
+  ): (() => void) | null {
+    const viewportH = Math.max(0, contentBottom - contentTop);
+    state.max = Math.max(0, contentHeight - viewportH);
+    state.offset = 0;
+
+    const mask = new Graphics();
+    mask.rect(x, contentTop, w, viewportH).fill({ color: 0xffffff });
+    mask.eventMode = "none";
+    this.ctx!.container.addChild(mask);
+    content.mask = mask;
+
+    // A mask clips render only — without a tracking hitArea the scrolled-out
+    // rows stay clickable in their old on-screen spots (real interactive
+    // children still hit-test correctly through the container's own
+    // transform; this hitArea exists so empty background space inside the
+    // column also catches a drag-scroll gesture).
+    const hitArea = new Rectangle(x, contentTop, w, viewportH);
+    content.eventMode = "static";
+    content.hitArea = hitArea;
+
+    const apply = (): void => {
+      content.y = -state.offset || 0;
+      hitArea.y = contentTop + state.offset;
+    };
+    const scrollBy = (delta: number): void => {
+      state.offset = Math.max(0, Math.min(state.max, state.offset + delta));
+      apply();
+    };
+
+    let dragging = false;
+    let dragStartY = 0;
+    let dragStartOffset = 0;
+    content.on("pointerdown", (e: FederatedPointerEvent) => {
+      dragging = true;
+      dragStartY = e.global.y;
+      dragStartOffset = state.offset;
+    });
+    const endDrag = (): void => {
+      dragging = false;
+    };
+    content.on("globalpointermove", (e: FederatedPointerEvent) => {
+      if (!dragging) return;
+      state.offset = Math.max(
+        0,
+        Math.min(state.max, dragStartOffset - (e.global.y - dragStartY)),
+      );
+      apply();
+    });
+    content.on("pointerup", endDrag);
+    content.on("pointerupoutside", endDrag);
+
+    if (state.max <= 0) return null;
+    const WHEEL_STEP = 40;
+    return attachWheelScroll((dir) => scrollBy(dir * WHEEL_STEP));
   }
 
   /** МАССА / СВОБОДНО / СКОРОСТЬ / ЗАЩИТА strip under the title. */
@@ -366,15 +520,18 @@ export class HangarPanel {
    * The four categorized fitting banks (weapons / engine / radar / equipment) in
    * the left column: a header per bank showing `used/total` from the hull, the
    * filled slots (with [снять] + micromodule controls), then the remaining empty
-   * slots. Rendering clips to the column; an overflow row marks any spill-over.
+   * slots. Draws unclipped into the scrollable `leftContent` — `wireScrollRegion`
+   * (called by `render()` once the true bottom is known) makes any overflow
+   * reachable by scroll instead of silently dropping it below the fold.
+   * Returns the y just past the last thing drawn, for sizing the scroll range.
    */
   private renderFittingBanks(
     layout: HangarLayout,
     loadout: ShipLoadout | null,
     player: Player,
-  ): void {
-    const container = this.ctx!.container;
-    const { leftX, leftW, contentTop, contentBottom } = layout;
+  ): number {
+    const container = this.leftContent!;
+    const { leftX, leftW, contentTop } = layout;
     const stats = loadout?.derivedStats() ?? null;
     const installed = loadout?.installedSlots() ?? [];
     // Flat slot index of each installed item, grouped by category — the index is
@@ -385,9 +542,7 @@ export class HangarPanel {
         .filter((e) => e.gear && slotCategoryFor(e.gear) === cat);
 
     let y = contentTop;
-    let clipped = false;
     for (const cat of HANGAR_BANKS) {
-      if (clipped) break;
       const c = stats?.categories[cat] ?? { used: 0, total: 0 };
 
       const header = scaledText(
@@ -405,21 +560,12 @@ export class HangarPanel {
       const entries = byCat(cat);
       const slotH = fittedSlotHeight();
       for (const e of entries) {
-        if (y + slotH > contentBottom) {
-          clipped = true;
-          break;
-        }
         this.renderFilledSlot(layout, loadout!, player, e, y, slotH);
         y += slotH + 4;
       }
-      if (clipped) break;
 
       const empties = Math.max(0, c.total - entries.length);
       for (let k = 0; k < empties; k++) {
-        if (y + 26 > contentBottom) {
-          clipped = true;
-          break;
-        }
         const slotBg = new Graphics();
         slotBg.rect(leftX, y, leftW, 24).fill({ color: 0x0a1218, alpha: 1 });
         slotBg.rect(leftX, y, leftW, 24).stroke({ color: 0x1a2a3a, width: 1 });
@@ -437,16 +583,7 @@ export class HangarPanel {
       }
       y += 8;
     }
-    if (clipped) {
-      const more = scaledText("…ещё слоты ниже", 10, 0xb4bcc4, {
-        rawColor: true,
-        fontFamily: "monospace",
-      });
-      more.x = leftX;
-      more.y = contentBottom + 2;
-      more.eventMode = "none";
-      container.addChild(more);
-    }
+    return y;
   }
 
   /** One occupied fitting slot: name, [снять], and micromodule control. */
@@ -462,7 +599,7 @@ export class HangarPanel {
     y: number,
     slotH: number,
   ): void {
-    const container = this.ctx!.container;
+    const container = this.leftContent!;
     const { leftX, leftW } = layout;
     const gear = entry.gear!;
     const slot = entry.slot;
@@ -586,7 +723,7 @@ export class HangarPanel {
     layout: HangarLayout,
     loadout: ShipLoadout | null,
   ): number {
-    const container = this.ctx!.container;
+    const container = this.leftContent!;
     const { leftX, leftW, contentTop } = layout;
     if (!loadout) return contentTop;
     const slots = loadout.hullMicromoduleSlots();
@@ -861,13 +998,21 @@ export class HangarPanel {
     }
   }
 
-  /** The registered drop zone containing the screen point, if any. */
+  /**
+   * The registered drop zone containing the screen point, if any. Every
+   * current drop zone (hull micromodule bank + fitted gear slots) is
+   * registered by the left column's renderers in that column's unscrolled
+   * layout coordinates — `leftContent` visually shifts them by `-leftScroll.
+   * offset`, so translate the pointer's global y back into that same
+   * content-local space before comparing.
+   */
   private dropZoneAt(
     gx: number,
     gy: number,
   ): { target: MicromoduleDropTarget } | null {
+    const adjGy = gy + this.leftScroll.offset;
     for (const z of this.dropZones) {
-      if (gx >= z.x && gx <= z.x + z.w && gy >= z.y && gy <= z.y + z.h) {
+      if (gx >= z.x && gx <= z.x + z.w && adjGy >= z.y && adjGy <= z.y + z.h) {
         return z;
       }
     }
@@ -878,17 +1023,25 @@ export class HangarPanel {
    * Right column: the СКЛАД warehouse (owned-but-uninstalled gear + the legacy
    * bag, each installable into its matching category or sellable) above the ТРЮМ
    * cargo hold (goods, read-only). Installing routes through the loadout's
-   * category+mass rules; a blocked install shows a toast explaining why.
+   * category+mass rules; a blocked install shows a toast explaining why. Draws
+   * unclipped into the scrollable `rightContent` — `wireScrollRegion` (called by
+   * `render()` once the true bottom is known) makes any overflow reachable by
+   * scroll instead of silently dropping it below the fold. Returns the y just
+   * past the last thing drawn, for sizing the scroll range.
    */
   private renderWarehouseAndCargo(
     layout: HangarLayout,
     loadout: ShipLoadout | null,
     player: Player,
-  ): void {
-    const container = this.ctx!.container;
+  ): number {
+    const container = this.rightContent!;
     const { rightX, rightW, contentTop, contentBottom } = layout;
-    // СКЛАД occupies the top ~60 % of the column; ТРЮМ the rest.
-    const splitY = Math.round(contentTop + (contentBottom - contentTop) * 0.6);
+    // СКЛАД starts at the top of the column; ТРЮМ nominally starts 60 % down
+    // (unchanged look for the common case), but is pushed further down below
+    // when the warehouse itself grows past that split — never overlapping it.
+    const nominalSplitY = Math.round(
+      contentTop + (contentBottom - contentTop) * 0.6,
+    );
 
     const sklLabel = scaledText("СКЛАД (снаряжение):", 12, 0x88aa44, {
       rawColor: true,
@@ -930,7 +1083,6 @@ export class HangarPanel {
     const btnGap = Math.max(20, lineStepFor(scaledFont(11)) + 4);
     const warehouseRowH = 12 + btnGap + 8;
     for (const row of rows) {
-      if (y + warehouseRowH + 2 > splitY - 6) break; // clip to the СКЛАД region
       const gearId =
         row.kind === "owned" ? row.gearId : (legacy[row.index]?.id ?? "");
       const gear = gearById(gearId);
@@ -1023,7 +1175,11 @@ export class HangarPanel {
       y += warehouseRowH + 8;
     }
 
-    // ── ТРЮМ — cargo hold (goods), separate read-only panel. ──
+    // ── ТРЮМ — cargo hold (goods), separate read-only panel. Starts at the
+    // nominal 60 % split (unchanged look when the warehouse is short), but
+    // never overlaps a warehouse that grew past it — pushed down to clear the
+    // last drawn row plus a gap instead.
+    const splitY = Math.max(nominalSplitY, y + 12);
     const stats = loadout?.derivedStats() ?? null;
     const resources = player.inventory.resources.filter((r) => r.amount > 0);
     const usedCargo = resources.reduce((n, r) => n + r.amount, 0);
@@ -1048,9 +1204,9 @@ export class HangarPanel {
       empty.y = cy;
       empty.eventMode = "none";
       container.addChild(empty);
+      cy += 18;
     } else {
       for (const r of resources) {
-        if (cy + 18 > contentBottom) break;
         const label = RESOURCE_LABEL[r.type] ?? r.type;
         const line = scaledText(`${label} ×${r.amount}`, 11, 0xb4c4d4, {
           rawColor: true,
@@ -1063,6 +1219,7 @@ export class HangarPanel {
         cy += 18;
       }
     }
+    return cy;
   }
 
   /**

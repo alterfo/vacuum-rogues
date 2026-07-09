@@ -48,6 +48,16 @@ vi.mock("pixi.js", () => ({
     on: vi.fn(),
     destroy: vi.fn(),
   })),
+  // HangarPanel's scrollable columns (wireScrollRegion) need a Rectangle for
+  // the tracking hitArea — this mock didn't exercise that path before.
+  Rectangle: class Rectangle {
+    constructor(
+      public x = 0,
+      public y = 0,
+      public width = 0,
+      public height = 0,
+    ) {}
+  },
 }));
 
 function renderedTexts(): string[] {
