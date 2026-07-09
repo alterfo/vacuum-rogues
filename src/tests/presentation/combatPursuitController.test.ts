@@ -11,7 +11,7 @@ import type { GameEngine } from "@/systems/GameEngine";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import { NpcRole } from "@/types";
 import { Faction } from "@/types/faction";
-import { GAME_BALANCE } from "@/config/balance";
+import { GAME_BALANCE, SYSTEM_GEOMETRY } from "@/config/balance";
 
 /**
  * Focused unit tests for the combat steering / orbit / chase-state cluster
@@ -336,6 +336,53 @@ describe("CombatPursuitController real-time combat orbit", () => {
     const deg = (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
     // Radial-dominated escape: within ~30° of straight away from the target.
     expect(deg).toBeLessThan(30);
+  });
+
+  it("clamps the orbit carrot to the system boundary near the edge", () => {
+    // Ship sits just inside the boundary (2700 of 2800), facing straight away
+    // from the star center (angle 0), target coincident with the ship (dist<1e-3
+    // branch) so the steer is purely radial — the raw 2000px carrot would land
+    // at 4700, well past the 2800 boundary.
+    const npc = makeNpc("edge1");
+    const sprite = makeSprite(npc, 2700, 0);
+    const physics = new ShipPhysics(2700, 0, 0.5, 0);
+    const h = makeHarness({
+      physics,
+      inCombat: true,
+      combatTargetId: "edge1",
+      sprites: [sprite],
+      starCenter: { x: 0, y: 0 },
+    });
+    h.ctrl.updateCombat(50);
+
+    const distFromCenter = Math.hypot(
+      physics.getTargetX(),
+      physics.getTargetY(),
+    );
+    expect(distFromCenter).toBeLessThanOrEqual(
+      SYSTEM_GEOMETRY.boundaryRadius + 1,
+    );
+  });
+
+  it("leaves the orbit unclamped when the ship is well inside the boundary", () => {
+    // Same geometry as the "circle-strafes" case above, but with a realistic
+    // near star center instead of the far test sentinel — the un-clamped
+    // carrot (0,-2000) already sits well inside the 2800 boundary, so the
+    // clamp must not alter it.
+    const npc = makeNpc("orb3");
+    const sprite = makeSprite(npc, ORBIT, 0);
+    const physics = new ShipPhysics(0, 0, 0.5);
+    const h = makeHarness({
+      physics,
+      inCombat: true,
+      combatTargetId: "orb3",
+      sprites: [sprite],
+      starCenter: { x: 0, y: 0 },
+    });
+    h.ctrl.updateCombat(50);
+
+    expect(physics.getTargetX()).toBeCloseTo(0);
+    expect(physics.getTargetY()).toBeCloseTo(-2000);
   });
 });
 

@@ -18,7 +18,7 @@ import {
   avoidStarPath,
   type Point,
 } from "@/utils/flightGeometry";
-import { GAME_BALANCE } from "@/config/balance";
+import { GAME_BALANCE, SYSTEM_GEOMETRY } from "@/config/balance";
 import { NpcRole } from "@/types";
 
 /**
@@ -472,22 +472,71 @@ export class CombatPursuitController {
     const dlen = Math.hypot(dirX, dirY) || 1;
     dirX /= dlen;
     dirY /= dlen;
-    const carrot = {
-      x: physics.shipX + dirX * this.COMBAT_ORBIT_CARROT,
-      y: physics.shipY + dirY * this.COMBAT_ORBIT_CARROT,
-    };
+    const carrot = this.clampOrbitPoint(
+      physics,
+      dirX,
+      dirY,
+      this.COMBAT_ORBIT_CARROT,
+    );
+    const far = this.clampOrbitPoint(
+      physics,
+      dirX,
+      dirY,
+      this.COMBAT_ORBIT_CARROT * 2,
+    );
     this.lastAimX = carrot.x;
     this.lastAimY = carrot.y;
     // Plot as a >1-point route: keeps ShipPhysics on a non-final leg (full
     // cruise, no deceleration/arc-cap) AND hides the heading crosshair while
     // engaged.
-    physics.setPath([
-      carrot,
-      {
-        x: physics.shipX + dirX * this.COMBAT_ORBIT_CARROT * 2,
-        y: physics.shipY + dirY * this.COMBAT_ORBIT_CARROT * 2,
-      },
-    ]);
+    physics.setPath([carrot, far]);
+  }
+
+  /**
+   * Cap an orbit-carrot projection at {@link SYSTEM_GEOMETRY.boundaryRadius}
+   * of the star center: a point `desiredDist` ahead of the ship along the
+   * unit heading `(dirX, dirY)`, shortened — along the SAME heading — to
+   * where that ray first exits the boundary circle, if the raw projection
+   * would land outside it. Shrinking along the ray (not reprojecting the
+   * endpoint radially from the center, as {@link NpcShipSprite.beginDeparture}
+   * does for a literal departure) keeps the orbit's tangent/radial mix
+   * continuous as the ship nears the edge — a radial snap would swap the
+   * carrot onto an unrelated bearing and break the strafe. Only clamps while
+   * the ship itself is inside a sane system radius — a ship already outside
+   * (e.g. an unconfigured/test star center) has no meaningful boundary to
+   * clamp against, so the raw point is returned unchanged.
+   */
+  private clampOrbitPoint(
+    physics: ShipPhysics,
+    dirX: number,
+    dirY: number,
+    desiredDist: number,
+  ): Point {
+    const raw = {
+      x: physics.shipX + dirX * desiredDist,
+      y: physics.shipY + dirY * desiredDist,
+    };
+    const center = this.deps.flight.getStarCenter();
+    const ocx = physics.shipX - center.x;
+    const ocy = physics.shipY - center.y;
+    const shipDistToCenter = Math.hypot(ocx, ocy);
+    if (shipDistToCenter > SYSTEM_GEOMETRY.boundaryRadius) return raw;
+    const rawDistToCenter = Math.hypot(raw.x - center.x, raw.y - center.y);
+    if (rawDistToCenter <= SYSTEM_GEOMETRY.boundaryRadius) return raw;
+    // Ray-circle intersection (ship is inside the circle, so exactly one
+    // forward root exists): the ray exits the boundary at t = -b/2 + √disc/2.
+    const b = 2 * (ocx * dirX + ocy * dirY);
+    const c =
+      ocx * ocx +
+      ocy * ocy -
+      SYSTEM_GEOMETRY.boundaryRadius * SYSTEM_GEOMETRY.boundaryRadius;
+    const disc = Math.max(0, b * b - 4 * c);
+    const tExit = (-b + Math.sqrt(disc)) / 2;
+    const t = Math.max(0, Math.min(desiredDist, tExit));
+    return {
+      x: physics.shipX + dirX * t,
+      y: physics.shipY + dirY * t,
+    };
   }
 
   /**
