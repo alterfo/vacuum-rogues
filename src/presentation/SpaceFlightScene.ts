@@ -26,7 +26,7 @@ import { PlayerShipRenderer } from "./flight/PlayerShipRenderer";
 import { NpcShipManager } from "./flight/NpcShipManager";
 import { CombatModule } from "./flight/CombatModule";
 import { createCombatPauseUi } from "./flight/combatPauseUi";
-import { combatOrbitalDayIncrement } from "./flight/combatOrbitClock";
+import { orbitBump } from "./flight/combatOrbitClock";
 import { PlanetManager } from "./flight/PlanetManager";
 import { FlightHud } from "./flight/FlightHud";
 import { CameraController } from "./flight/CameraController";
@@ -106,8 +106,10 @@ export class SpaceFlightScene extends GameScene {
   private waitDayAccum: number = 0;
   private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070); must equal MS_PER_ORBITAL_DAY
   private visualOrbitBoost: number = 0; // orbit-visual day floor while moving — flight/CLAUDE.md
+  private orbitTopUp = (dt: number): number =>
+    orbitBump(this.combatPause.paused, dt, this.shipPhysics?.timeScale ?? 1);
+  // Fractional "day of turn" (gameDays + sub-day move/wait/combat); feeds orbits + the HUD date read-out.
   private get currentDay(): number {
-    // gameDays + sub-day move/wait/combat; feeds orbits + HUD date
     const days = this.gameEngine?.galaxy?.gameDays ?? 0;
     const frac = this.distanceTraveled / this.DISTANCE_PER_DAY;
     return days + frac + this.waitDayAccum;
@@ -1341,12 +1343,7 @@ export class SpaceFlightScene extends GameScene {
 
     // Turn-based time: only advance days when ship is moving (every DISTANCE_PER_DAY px = 1 day).
     if (this.shipPhysics.isMoving && this.shipPhysics.currentSpeed > 0.01) {
-      this.visualOrbitBoost += combatOrbitalDayIncrement({
-        inCombat: true,
-        paused: this.combatPause.paused,
-        dt: deltaTime,
-        timeScale: this.shipPhysics?.timeScale ?? 1,
-      }); // visualOrbitBoost: orbit-visual top-up only
+      this.visualOrbitBoost += this.orbitTopUp(deltaTime); // orbit-visual top-up only
       const dx = this.shipPhysics.shipX - prevX;
       const dy = this.shipPhysics.shipY - prevY;
       this.distanceTraveled += Math.sqrt(dx * dx + dy * dy);
@@ -1387,12 +1384,7 @@ export class SpaceFlightScene extends GameScene {
       !this.pendingWarp
     ) {
       if (this.combatModule?.isActive)
-        this.waitDayAccum += combatOrbitalDayIncrement({
-          inCombat: true,
-          paused: this.combatPause.paused,
-          dt: deltaTime,
-          timeScale: this.shipPhysics?.timeScale ?? 1,
-        });
+        this.waitDayAccum += this.orbitTopUp(deltaTime);
       else this.advanceWaitTime(deltaTime);
     }
   }

@@ -54,3 +54,12 @@ export function combatOrbitalDayIncrement(
   const clampedDt = Math.min(Math.max(dt, 0), MS_PER_ORBITAL_DAY);
   return (clampedDt * (timeScale ?? 1)) / MS_PER_ORBITAL_DAY;
 }
+
+/** `combatOrbitalDayIncrement` for the flying/fighting callers, which always pass `inCombat: true`. */
+export function orbitBump(
+  paused: boolean,
+  dt: number,
+  timeScale: number,
+): number {
+  return combatOrbitalDayIncrement({ inCombat: true, paused, dt, timeScale });
+}
