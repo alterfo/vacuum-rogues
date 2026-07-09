@@ -506,14 +506,6 @@ export class StarRenderer implements FlightModule {
 
     halo.blendMode = "screen";
 
-    // Thin bright limb ring at exactly the star radius — a crisp edge without a
-    // hard clip. Drawn unblurred (added after the filter is set so it stays
-    // sharp on its own layer? no — it shares the halo blur, which is fine: a
-    // 2px stroke at 1.0R reads as a soft rim under screen blend).
-    const limb = new Graphics();
-    limb.circle(0, 0, R).stroke({ color: 0xffffff, alpha: 0.6, width: 2 });
-    halo.addChild(limb);
-
     return halo;
   }
 
