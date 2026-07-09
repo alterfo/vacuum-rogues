@@ -361,6 +361,10 @@ export class InfoCenterScene extends GameScene {
   private gearMaxPriceIdx = 0; // index into GEAR_MAX_PRICE_OPTIONS
   private gearSort: GearSortOption = "price";
   private gearResults: EquipmentHit[] = [];
+  // Persisted scroll position + the scrollable region for the results list —
+  // same pattern as newsScroll/newsList (no ad-hoc "show first N" truncation).
+  private gearScroll = 0;
+  private gearList: ScrollableList<EquipmentHit> | null = null;
 
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private detachWheel: (() => void) | null = null;
@@ -422,10 +426,11 @@ export class InfoCenterScene extends GameScene {
 
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.boundKeyDown);
-    // Mouse-wheel scrolls the news list (matches the ArrowUp/Down keys); only
-    // the news tab is scrollable, so other tabs ignore the wheel.
+    // Mouse-wheel scrolls the news/gear lists (matches the ArrowUp/Down keys);
+    // other tabs ignore the wheel.
     this.detachWheel = attachWheelScroll((dir) => {
       if (this.activeTab === "news") this.scrollNews(dir);
+      else if (this.activeTab === "gear") this.scrollGear(dir);
     });
 
     this.mountHelp();
@@ -448,6 +453,10 @@ export class InfoCenterScene extends GameScene {
       this.newsList.destroy();
       this.newsList = null;
     }
+    if (this.gearList) {
+      this.gearList.destroy();
+      this.gearList = null;
+    }
     if (this.mainContainer) {
       this.renderer.uiLayer.removeChild(this.mainContainer);
       this.mainContainer.destroy({ children: true });
@@ -469,6 +478,11 @@ export class InfoCenterScene extends GameScene {
       this.newsScroll = this.newsList.offset;
       this.newsList.destroy();
       this.newsList = null;
+    }
+    if (this.gearList) {
+      this.gearScroll = this.gearList.offset;
+      this.gearList.destroy();
+      this.gearList = null;
     }
     this.mainContainer.removeChildren();
 
@@ -1387,7 +1401,6 @@ export class InfoCenterScene extends GameScene {
       38,
       5 + lineStepFor(scaledFont(11)) + lineStepFor(scaledFont(10)) + 3,
     );
-    const VISIBLE = Math.floor((ph - LIST_Y) / ROW_H);
 
     if (this.gearResults.length === 0) {
       const empty = scaledText(
@@ -1409,87 +1422,30 @@ export class InfoCenterScene extends GameScene {
     );
     const currentDay = galaxy?.gameDays ?? 0;
 
-    for (const [i, hit] of this.gearResults.slice(0, VISIBLE).entries()) {
-      const y = LIST_Y + i * ROW_H;
-      const stale = isStaleSystem(hit.systemId, systemMap, currentDay);
-
-      const rowBg = new Graphics();
-      rowBg.rect(PAD, y + 1, pw - PAD * 2, ROW_H - 2);
-      rowBg.fill({ color: i % 2 === 0 ? 0x0d1220 : 0x0a0e18 });
-      container.addChild(rowBg);
-
-      const distStr = hit.jumps === 0 ? "здесь" : `${hit.jumps} пр.`;
-      const staleStr = stale ? " (уст.)" : "";
-      // Column widths in chars, calibrated in PIXELS at the "M"-scale baseline
-      // (font 11) and re-derived per the current font scale — a fixed 18/22
-      // char count rendered WIDER at "L" scale (same glyph count, bigger
-      // glyphs) and bled past the row into the "→ карта" button (Task 3, same
-      // class of bug as BankScene's `maxReasonChars`).
-      const baseCharPx = 11 * MONO_CHAR_WIDTH_RATIO;
-      const charPx = Math.max(1, scaledFont(11) * MONO_CHAR_WIDTH_RATIO);
-      const gearNameChars = Math.max(6, Math.floor((18 * baseCharPx) / charPx));
-      const planetSysChars = Math.max(
-        6,
-        Math.floor((22 * baseCharPx) / charPx),
-      );
-      const gearName = hit.gear.name
-        .slice(0, gearNameChars)
-        .padEnd(gearNameChars);
-      const planetSys = `${hit.planet} / ${hit.system}`
-        .slice(0, planetSysChars)
-        .padEnd(planetSysChars);
-      const lineText = `T${hit.gear.techLevel} ${gearName} ${planetSys}${staleStr} — ${hit.price}₡  ${distStr}`;
-
-      const lineLabel = scaledText(lineText, 11, stale ? 0x7799aa : 0xaabbcc, {
-        rawColor: true,
-        fontFamily: "monospace",
-      });
-      lineLabel.x = PAD + 4;
-      const lineTop = y + 5;
-      lineLabel.y = lineTop;
-      lineLabel.eventMode = "none";
-      container.addChild(lineLabel);
-
-      const statsLabel = scaledText(gearStatLine(hit.gear), 10, 0x557799, {
-        rawColor: true,
-        fontFamily: "monospace",
-      });
-      statsLabel.x = PAD + 4;
-      // Stacked below the main line — steps by its own font-scale line height
-      // so the two never overlap at "L" (Task 3: the fixed +20 offset assumed
-      // the "M"-scale ~14 px line height).
-      statsLabel.y = lineTop + lineStepFor(scaledFont(11));
-      statsLabel.eventMode = "none";
-      container.addChild(statsLabel);
-
-      // "→ карта" button
-      const mapBtnX = pw - PAD - 70;
-      const mapBtn = new Graphics();
-      mapBtn.rect(mapBtnX, y + 3, 64, ROW_H - 6);
-      mapBtn.fill({ color: 0x0d1a22 });
-      mapBtn.stroke({ color: 0x334466, width: 1 });
-      mapBtn.eventMode = "static";
-      mapBtn.cursor = "pointer";
-      mapBtn.on("pointerdown", (e) => {
-        e.stopPropagation();
-        void this.openStarMapForSystem(hit.systemId);
-      });
-      container.addChild(mapBtn);
-
-      const mapBtnLabel = scaledText("→ карта", 10, 0x6699bb, {
-        rawColor: true,
-        fontFamily: "monospace",
-      });
-      mapBtnLabel.anchor.set(0.5, 0.5);
-      mapBtnLabel.x = mapBtnX + 32;
-      mapBtnLabel.y = y + ROW_H / 2;
-      mapBtnLabel.eventMode = "none";
-      container.addChild(mapBtnLabel);
-    }
+    // The results list scrolls inside the shared `ScrollableList` (same design
+    // as the news tab) — ALL hits render, no ad-hoc "show first N" truncation
+    // that could hide the exact (pricier/rarer) item the player is after.
+    const listH = Math.max(ROW_H, ph - LIST_Y);
+    const VISIBLE = Math.floor(listH / ROW_H);
+    this.gearList = new ScrollableList<EquipmentHit>({
+      x: 0,
+      y: LIST_Y,
+      width: pw,
+      height: listH,
+      itemHeight: ROW_H,
+      items: this.gearResults,
+      enableWheel: false, // the scene's own wheel handler drives scrollGear
+      renderItem: (hit, i) =>
+        this.buildGearRow(hit, i, pw, PAD, ROW_H, systemMap, currentDay),
+    });
+    this.gearList.scrollTo(this.gearScroll);
+    this.gearScroll = this.gearList.offset;
+    container.addChild(this.gearList.container);
 
     if (this.gearResults.length > VISIBLE) {
+      const firstRow = Math.round(this.gearScroll / ROW_H);
       const hint = scaledText(
-        `показаны первые ${VISIBLE} из ${this.gearResults.length}`,
+        `↑↓  ${firstRow + 1}–${Math.min(firstRow + VISIBLE, this.gearResults.length)} / ${this.gearResults.length}`,
         11,
         0x334455,
         { rawColor: true, fontFamily: "monospace" },
@@ -1500,6 +1456,92 @@ export class InfoCenterScene extends GameScene {
       hint.eventMode = "none";
       container.addChild(hint);
     }
+  }
+
+  /** Build one gear-search result row (local coords — positioned by the ScrollableList). */
+  private buildGearRow(
+    hit: EquipmentHit,
+    i: number,
+    pw: number,
+    PAD: number,
+    ROW_H: number,
+    systemMap: Map<string, StarSystem>,
+    currentDay: number,
+  ): Container {
+    const row = new Container();
+    const stale = isStaleSystem(hit.systemId, systemMap, currentDay);
+
+    const rowBg = new Graphics();
+    rowBg.rect(PAD, 1, pw - PAD * 2, ROW_H - 2);
+    rowBg.fill({ color: i % 2 === 0 ? 0x0d1220 : 0x0a0e18 });
+    row.addChild(rowBg);
+
+    const distStr = hit.jumps === 0 ? "здесь" : `${hit.jumps} пр.`;
+    const staleStr = stale ? " (уст.)" : "";
+    // Column widths in chars, calibrated in PIXELS at the "M"-scale baseline
+    // (font 11) and re-derived per the current font scale — a fixed 18/22
+    // char count rendered WIDER at "L" scale (same glyph count, bigger
+    // glyphs) and bled past the row into the "→ карта" button (Task 3, same
+    // class of bug as BankScene's `maxReasonChars`).
+    const baseCharPx = 11 * MONO_CHAR_WIDTH_RATIO;
+    const charPx = Math.max(1, scaledFont(11) * MONO_CHAR_WIDTH_RATIO);
+    const gearNameChars = Math.max(6, Math.floor((18 * baseCharPx) / charPx));
+    const planetSysChars = Math.max(6, Math.floor((22 * baseCharPx) / charPx));
+    const gearName = hit.gear.name
+      .slice(0, gearNameChars)
+      .padEnd(gearNameChars);
+    const planetSys = `${hit.planet} / ${hit.system}`
+      .slice(0, planetSysChars)
+      .padEnd(planetSysChars);
+    const lineText = `T${hit.gear.techLevel} ${gearName} ${planetSys}${staleStr} — ${hit.price}₡  ${distStr}`;
+
+    const lineLabel = scaledText(lineText, 11, stale ? 0x7799aa : 0xaabbcc, {
+      rawColor: true,
+      fontFamily: "monospace",
+    });
+    lineLabel.x = PAD + 4;
+    const lineTop = 5;
+    lineLabel.y = lineTop;
+    lineLabel.eventMode = "none";
+    row.addChild(lineLabel);
+
+    const statsLabel = scaledText(gearStatLine(hit.gear), 10, 0x557799, {
+      rawColor: true,
+      fontFamily: "monospace",
+    });
+    statsLabel.x = PAD + 4;
+    // Stacked below the main line — steps by its own font-scale line height
+    // so the two never overlap at "L" (Task 3: the fixed +20 offset assumed
+    // the "M"-scale ~14 px line height).
+    statsLabel.y = lineTop + lineStepFor(scaledFont(11));
+    statsLabel.eventMode = "none";
+    row.addChild(statsLabel);
+
+    // "→ карта" button
+    const mapBtnX = pw - PAD - 70;
+    const mapBtn = new Graphics();
+    mapBtn.rect(mapBtnX, 3, 64, ROW_H - 6);
+    mapBtn.fill({ color: 0x0d1a22 });
+    mapBtn.stroke({ color: 0x334466, width: 1 });
+    mapBtn.eventMode = "static";
+    mapBtn.cursor = "pointer";
+    mapBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      void this.openStarMapForSystem(hit.systemId);
+    });
+    row.addChild(mapBtn);
+
+    const mapBtnLabel = scaledText("→ карта", 10, 0x6699bb, {
+      rawColor: true,
+      fontFamily: "monospace",
+    });
+    mapBtnLabel.anchor.set(0.5, 0.5);
+    mapBtnLabel.x = mapBtnX + 32;
+    mapBtnLabel.y = ROW_H / 2;
+    mapBtnLabel.eventMode = "none";
+    row.addChild(mapBtnLabel);
+
+    return row;
   }
 
   private runGearSearch(): void {
@@ -1535,7 +1577,11 @@ export class InfoCenterScene extends GameScene {
     }
     // default "price" sort is already applied by findEquipment
 
-    this.gearResults = hits.slice(0, 20);
+    // No cap: the results list scrolls (ScrollableList) instead of hiding a
+    // pricier/rarer match past a fixed top-N — a hard cap here combined with
+    // the default cheapest-first sort could silently drop exactly the
+    // expensive/powerful item the player is searching for.
+    this.gearResults = hits;
   }
 
   private getEquippedItemForFacet(facet: EquipmentFacet): Gear | null {
@@ -1588,6 +1634,11 @@ export class InfoCenterScene extends GameScene {
       if (e.key === "ArrowDown") this.scrollNews(1);
       return;
     }
+    if (this.activeTab === "gear") {
+      if (e.key === "ArrowUp") this.scrollGear(-1);
+      if (e.key === "ArrowDown") this.scrollGear(1);
+      return;
+    }
     // The objects tab is always "focused" for typing while it is active — no
     // separate click on the input box is required (playtest 2026-06-15 fix).
     if (this.activeTab === "objects") {
@@ -1619,6 +1670,22 @@ export class InfoCenterScene extends GameScene {
     // re-render refreshes the footer "X–Y / N" hint.
     this.newsList.scrollBy(deltaRows * InfoCenterScene.NEWS_ROW_H);
     this.newsScroll = this.newsList.offset;
+    this.render();
+  }
+
+  /** Scroll the gear-search results by `deltaRows` rows (wheel notch / arrow press). */
+  private scrollGear(deltaRows: number): void {
+    if (!this.gearList) {
+      this.render();
+      return;
+    }
+    // Same row-height formula as renderGear's ROW_H (font-scale dependent).
+    const rowH = Math.max(
+      38,
+      5 + lineStepFor(scaledFont(11)) + lineStepFor(scaledFont(10)) + 3,
+    );
+    this.gearList.scrollBy(deltaRows * rowH);
+    this.gearScroll = this.gearList.offset;
     this.render();
   }
 

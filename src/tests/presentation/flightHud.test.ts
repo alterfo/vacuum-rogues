@@ -568,4 +568,18 @@ describe("FlightHud HUD cleanup (Bug 3)", () => {
       expect(intersects(menuBox, miniMapBox(hud))).toBe(false);
     });
   }
+
+  it("[МЕНЮ] sits at the true bottom-left corner, below the ♿ accessibility button (not above it)", () => {
+    const m = makeMockRenderer();
+    const hud = new FlightHud(m.renderer, makeGameEngine(), m.renderer.uiLayer);
+    hud.initialize();
+    const menuY = findMenuButtonText().y;
+    const accBtn = vi
+      .mocked(UiButton)
+      .mock.results.map((r) => r.value as { icon: string; y: number })
+      .find((b) => b.icon === "♿");
+    expect(accBtn, "♿ accessibility button must exist").toBeDefined();
+    // Larger y = lower on screen = closer to the actual corner.
+    expect(menuY).toBeGreaterThan(accBtn!.y);
+  });
 });

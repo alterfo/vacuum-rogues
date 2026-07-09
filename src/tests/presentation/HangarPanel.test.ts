@@ -296,6 +296,139 @@ describe("HangarPanel — shared slot-fitting component", () => {
   });
 });
 
+describe("HangarPanel scrolling — overflowing content stays reachable (bug report: repair droid unreachable below the fold)", () => {
+  beforeEach(() => {
+    created.length = 0;
+  });
+
+  // A deliberately tiny screen collapses the visible content band
+  // (contentBottom - contentTop) to well under a single row's height, so even
+  // one installed slot / one warehouse row overflows deterministically —
+  // regardless of how many real hull slots exist — without needing a huge
+  // fixture. Mirrors the reported bug: content the panel computed correctly
+  // still ends up below the visible fold.
+  const tinyRenderer = {
+    app: {
+      screen: { width: 1280, height: 260 },
+      stage: { eventMode: "auto", on: vi.fn(), off: vi.fn() },
+    },
+    uiLayer: { addChild: vi.fn(), removeChild: vi.fn() },
+  } as unknown as Renderer;
+
+  it("still renders every fitted slot's [снять] button when the fitting-bank column overflows the visible height", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    loadout.install("wpn_pulse");
+    loadout.install("eq_engine_i");
+    const player = makePlayer();
+
+    new HangarPanel(tinyRenderer).render(makeCtx(loadout, player));
+
+    // Pre-fix: renderFittingBanks stopped drawing once `y` passed
+    // `contentBottom`, so an overflowing slot's [снять] control was never
+    // created at all — clipped, not just visually scrolled off. Post-fix the
+    // full column renders (scroll reveals it), so both controls exist.
+    const unfitButtons = created.filter((n) => n.text === "[снять]");
+    expect(unfitButtons.length).toBe(2);
+  });
+
+  it("still renders every warehouse row when the СКЛАД column overflows the visible height", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer();
+    // Legacy bag items need no catalog entry to render a row — cheap way to
+    // force many rows without depending on real gear ids.
+    player.inventory.modules = Array.from({ length: 6 }, (_, i) => ({
+      id: `fake_item_${i}`,
+      name: `Дроид-ремонтник ${i}`,
+    })) as unknown as Player["inventory"]["modules"];
+    const ctx = makeCtx(loadout, player);
+
+    new HangarPanel(tinyRenderer).render(ctx);
+
+    for (let i = 0; i < 6; i++) {
+      expect(created.some((n) => n.text.includes(`Дроид-ремонтник ${i}`))).toBe(
+        true,
+      );
+    }
+  });
+
+  it("reports a positive scroll range for both columns once content overflows the visible band", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    loadout.install("wpn_pulse");
+    const player = makePlayer();
+    player.inventory.modules = [
+      { id: "fake_1", name: "Item 1" },
+    ] as unknown as Player["inventory"]["modules"];
+    const panel = new HangarPanel(tinyRenderer);
+
+    panel.render(makeCtx(loadout, player));
+
+    const info = panel.getScrollInfo();
+    expect(info.left.max).toBeGreaterThan(0);
+    expect(info.right.max).toBeGreaterThan(0);
+    expect(info.left.offset).toBe(0);
+    expect(info.right.offset).toBe(0);
+  });
+
+  it("scrolls the overflowing column on a window wheel event, clamped to its max", () => {
+    const wheelHandlers: Array<(e: WheelEvent) => void> = [];
+    const addSpy = vi
+      .spyOn(window, "addEventListener")
+      .mockImplementation((type, handler) => {
+        if (String(type) === "wheel") {
+          wheelHandlers.push(handler as (e: WheelEvent) => void);
+        }
+      });
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+    try {
+      const loadout = new ShipLoadout("hull_scout");
+      loadout.install("wpn_pulse");
+      loadout.install("eq_engine_i");
+      const player = makePlayer();
+      const panel = new HangarPanel(tinyRenderer);
+
+      panel.render(makeCtx(loadout, player));
+
+      // Two overflowing columns → two window-level wheel listeners.
+      expect(wheelHandlers.length).toBeGreaterThanOrEqual(1);
+      const before = panel.getScrollInfo();
+      expect(before.left.offset).toBe(0);
+
+      // Scroll down: offset should advance, clamped at the column's max.
+      for (const wheel of wheelHandlers) {
+        wheel({
+          deltaY: 100,
+          preventDefault: vi.fn(),
+        } as unknown as WheelEvent);
+      }
+      const scrolled = panel.getScrollInfo();
+      expect(scrolled.left.offset).toBeGreaterThan(0);
+      expect(scrolled.left.offset).toBeLessThanOrEqual(scrolled.left.max);
+
+      // Scrolling far past the end clamps to max, never past it.
+      for (const wheel of wheelHandlers) {
+        for (let i = 0; i < 50; i++) {
+          wheel({
+            deltaY: 1000,
+            preventDefault: vi.fn(),
+          } as unknown as WheelEvent);
+        }
+      }
+      const clamped = panel.getScrollInfo();
+      expect(clamped.left.offset).toBe(clamped.left.max);
+
+      // A second render() re-arms fresh listeners rather than stacking old
+      // ones (host scenes fully rebuild + re-call render() on every
+      // install/sell — a stale window listener would leak and double-scroll).
+      const priorRemoveCalls = removeSpy.mock.calls.length;
+      panel.render(makeCtx(loadout, player));
+      expect(removeSpy.mock.calls.length).toBeGreaterThan(priorRemoveCalls);
+    } finally {
+      addSpy.mockRestore();
+      removeSpy.mockRestore();
+    }
+  });
+});
+
 describe("explainInstallBlock — shared fit-block reason (one source of truth)", () => {
   it("returns null when the gear fits", () => {
     const loadout = new ShipLoadout("hull_scout");

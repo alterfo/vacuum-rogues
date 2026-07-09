@@ -387,7 +387,7 @@ export class FlightHud implements FlightModule {
     }
 
     if (this.accessibilityButton) {
-      this.accessibilityButton.y = h - 162;
+      this.accessibilityButton.y = h - 188;
     }
     if (this.accessibilityPanel && this.accessibilityButton) {
       this.accessibilityPanel.y = Math.max(
@@ -403,7 +403,9 @@ export class FlightHud implements FlightModule {
       this.dayCounterText.y = 50;
     }
     if (this.menuButtonText) {
-      this.menuButtonText.y = h - 188;
+      // The true bottom-left corner element (♿ stacks above it) — a fixed
+      // escape hatch belongs at the corner itself, not one row up from it.
+      this.menuButtonText.y = h - 162;
     }
     if (this.systemMenuPanel) {
       const b = this.systemMenuPanel.getLocalBounds();
@@ -697,11 +699,11 @@ export class FlightHud implements FlightModule {
     });
     this.uiContainer.addChild(helpBtn);
 
-    // System menu button [МЕНЮ] — bottom-left (stacked above the ♿ accessibility
-    // button, clear of the top-left journal/inventory/help stack), opens the
-    // always-available in-flight system menu (Продолжить / Загрузить сохранение /
-    // В главное меню) so the player can recover from any dead-end (e.g. stranded,
-    // <30% hull, broke).
+    // System menu button [МЕНЮ] — the true bottom-left corner element (♿
+    // accessibility stacks above it, clear of the top-left journal/inventory/
+    // help stack), opens the always-available in-flight system menu
+    // (Продолжить / Загрузить сохранение / В главное меню) so the player can
+    // recover from any dead-end (e.g. stranded, <30% hull, broke).
     const menuBtn = new Text({
       text: "[МЕНЮ]",
       style: {
@@ -712,7 +714,7 @@ export class FlightHud implements FlightModule {
       },
     });
     menuBtn.x = 20;
-    menuBtn.y = this.renderer.app.screen.height - 188;
+    menuBtn.y = this.renderer.app.screen.height - 162;
     menuBtn.eventMode = "static";
     menuBtn.cursor = "pointer";
     menuBtn.on("pointerdown", (event) => {
@@ -733,11 +735,13 @@ export class FlightHud implements FlightModule {
     // Star map button — compact icon button (Bug 1), left of the top-right «?»
     // help corner (`helpButtonRect`, the single source of truth for that zone) so
     // it can never overlap it at any screen width. A hover tooltip surfaces the
-    // label the old wide text button used to show permanently.
+    // label the old wide text button used to show permanently. A plain Unicode
+    // glyph (not a color emoji) so `fill` actually themes it, matching the "?"
+    // help button instead of clashing with its own native emoji palette.
     const starMapRect = starMapButtonRect(this.renderer.app.screen.width);
     const starMapLabel = t("flight.starMap");
     const backBtn = new UiButton(
-      "🗺",
+      "★",
       "",
       0xffaa00,
       (event) => {
@@ -888,7 +892,7 @@ export class FlightHud implements FlightModule {
       ACC_BTN_H,
     );
     accBtn.x = 20;
-    accBtn.y = this.renderer.app.screen.height - 130 - ACC_BTN_H;
+    accBtn.y = this.renderer.app.screen.height - 188;
     this.uiLayer.addChild(accBtn.container);
     this.accessibilityButton = accBtn;
 
