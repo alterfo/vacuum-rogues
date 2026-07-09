@@ -98,6 +98,66 @@ describe("RouteRenderer (extracted route overlay)", () => {
     expect(gameLayer.children.length).toBe(1);
   });
 
+  it("draws a one-day-travel marker distinct from the removed per-day tick pattern", () => {
+    const gameLayer = new Container();
+    const route = new RouteRenderer(gameLayer);
+
+    // No-op before a route line exists (mirrors drawLandingMarker's guard).
+    expect(() => route.drawDayMarker(10, 10)).not.toThrow();
+    expect(route.graphics).toBeNull();
+
+    route.drawRoute([
+      { x: 0, y: 0 },
+      { x: 2000, y: 0 },
+    ]);
+    expect(() => route.drawDayMarker(500, 0)).not.toThrow();
+
+    // Still a single overlay (the marker appends to it, not a new object).
+    expect(gameLayer.children.length).toBe(1);
+
+    const instructions = (
+      route.graphics!.context as unknown as {
+        instructions: {
+          action: string;
+          data: { style?: { color?: number } };
+        }[];
+      }
+    ).instructions;
+    const strokeColors = instructions
+      .filter((i) => i.action === "stroke")
+      .map((i) => i.data.style?.color);
+
+    // A magenta diamond — distinct from the cyan course line/nav marker, the
+    // orange landing marker, and the removed yellow per-day tick (0xffee66).
+    expect(strokeColors).toContain(0xff00ff);
+    expect(strokeColors).not.toContain(0xffee66);
+  });
+
+  it("draws only the cyan course line — no yellow per-day tick crosses (playtest4 B) — still holds with the day marker present", () => {
+    const gameLayer = new Container();
+    const route = new RouteRenderer(gameLayer);
+    route.drawRoute([
+      { x: 0, y: 0 },
+      { x: 2000, y: 0 },
+    ]);
+    route.drawDayMarker(500, 0);
+
+    const instructions = (
+      route.graphics!.context as unknown as {
+        instructions: {
+          action: string;
+          data: { style?: { color?: number } };
+        }[];
+      }
+    ).instructions;
+    const strokeColors = instructions
+      .filter((i) => i.action === "stroke")
+      .map((i) => i.data.style?.color);
+
+    expect(strokeColors).toContain(0x00ffff);
+    expect(strokeColors).not.toContain(0xffee66);
+  });
+
   it("clears the overlay and leaks no children", () => {
     const gameLayer = new Container();
     const route = new RouteRenderer(gameLayer);

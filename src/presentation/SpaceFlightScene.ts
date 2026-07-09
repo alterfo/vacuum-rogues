@@ -9,7 +9,8 @@ import { logger } from "@/utils/logger";
 import {
   avoidStarPath,
   clampOutsideRadius,
-  spiralApproachPath,
+  computeFlightPath,
+  pointAlongPath,
   takeoffArcPath,
   warpEdgePoint,
 } from "@/utils/flightGeometry";
@@ -1505,43 +1506,14 @@ export class SpaceFlightScene extends GameScene {
     } else {
       this.routeRenderer.drawNavigationMarker(toX, toY);
     }
-  }
 
-  /**
-   * Build the flight path from the ship to (tx,ty): the star-avoidance arc, but
-   * when the shot is otherwise straight and the destination is a planet, a
-   * curved spiral-in approach so the ship sweeps into the orbit edge rather than
-   * beelining at the disc (Task 5). When the path already bows around the star
-   * it is curved enough and left as-is.
-   */
-  private computeFlightPath(
-    tx: number,
-    ty: number,
-    landing?: LandingHint,
-  ): { x: number; y: number }[] {
-    if (!this.shipPhysics) return [{ x: tx, y: ty }];
-    const fx = this.shipPhysics.shipX;
-    const fy = this.shipPhysics.shipY;
-    const path = avoidStarPath(
-      fx,
-      fy,
-      tx,
-      ty,
-      this.starRenderer.centerX,
-      this.starRenderer.centerY,
-      this.starRenderer.avoidRadius,
-    );
-    if (landing && path.length <= 1) {
-      return spiralApproachPath(
-        fx,
-        fy,
-        landing.planetX,
-        landing.planetY,
-        landing.planetRadius,
-        GAME_BALANCE.landingApproachOffset,
-      );
+    // One-day-travel marker: only when the route is longer than one day's
+    // travel — a route shorter than that has no meaningful midpoint (it would
+    // coincide with the end marker).
+    const dayPoint = pointAlongPath(points, this.DISTANCE_PER_DAY);
+    if (!dayPoint.done) {
+      this.routeRenderer.drawDayMarker(dayPoint.x, dayPoint.y);
     }
-    return path;
   }
 
   /**
@@ -1554,7 +1526,15 @@ export class SpaceFlightScene extends GameScene {
   private planRouteTo(x: number, y: number, landing?: LandingHint): void {
     if (!this.shipPhysics) return;
     this.plannedRoute = { x, y, landing };
-    this.routePath = this.computeFlightPath(x, y, landing);
+    this.routePath = computeFlightPath(
+      this.shipPhysics.shipX,
+      this.shipPhysics.shipY,
+      x,
+      y,
+      this.starRenderer,
+      GAME_BALANCE.landingApproachOffset,
+      landing,
+    );
     this.plotRoute();
   }
 
@@ -1572,7 +1552,15 @@ export class SpaceFlightScene extends GameScene {
     // recovering the spiral hint callers (Ход) drop (recompute, don't replay).
     const same = this.plannedRoute?.x === x && this.plannedRoute?.y === y;
     const hint = landing ?? (same ? this.plannedRoute?.landing : undefined);
-    this.routePath = this.computeFlightPath(x, y, hint);
+    this.routePath = computeFlightPath(
+      this.shipPhysics.shipX,
+      this.shipPhysics.shipY,
+      x,
+      y,
+      this.starRenderer,
+      GAME_BALANCE.landingApproachOffset,
+      hint,
+    );
     // Physics flows through the waypoints without stopping (US-070 #5).
     this.shipPhysics.setPath(this.routePath);
     this.plannedRoute = { x, y, landing: hint };

@@ -361,6 +361,43 @@ export function spiralApproachPath(
 }
 
 /**
+ * The star-avoidance path, falling back to a landing spiral-in when the
+ * straight shot is clear of the star but a planet destination was hinted —
+ * the single flight-path derivation shared by planning and executing a route
+ * (SpaceFlightScene.planRouteTo / executeRouteTo, "drawn == flown" contract).
+ */
+export function computeFlightPath(
+  fx: number,
+  fy: number,
+  tx: number,
+  ty: number,
+  star: { centerX: number; centerY: number; avoidRadius: number },
+  landingApproachOffset: number,
+  landing?: { planetX: number; planetY: number; planetRadius: number },
+): Point[] {
+  const path = avoidStarPath(
+    fx,
+    fy,
+    tx,
+    ty,
+    star.centerX,
+    star.centerY,
+    star.avoidRadius,
+  );
+  if (landing && path.length <= 1) {
+    return spiralApproachPath(
+      fx,
+      fy,
+      landing.planetX,
+      landing.planetY,
+      landing.planetRadius,
+      landingApproachOffset,
+    );
+  }
+  return path;
+}
+
+/**
  * Short outward arc a ship flies when lifting off a planet, before autopilot
  * engages (Task 5). `(outX,outY)` is the outward unit direction (planet facing
  * away from the star); the ship rises from the planet edge and curves out to a

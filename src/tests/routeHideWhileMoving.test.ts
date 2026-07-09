@@ -156,6 +156,7 @@ describe("plotRoute: route overlay visibility while moving", () => {
       drawRoute,
       drawLandingMarker: vi.fn(),
       drawNavigationMarker: vi.fn(),
+      drawDayMarker: vi.fn(),
     };
     s.shipPhysics = new ShipPhysics(100, 100, 0.1);
     s.plannedRoute = { x: 500, y: 500 };

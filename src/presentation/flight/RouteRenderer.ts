@@ -127,6 +127,21 @@ export class RouteRenderer {
     this.routeLineGraphics.stroke({ color: 0x00ffff, width: 1.5, alpha: 0.4 });
   }
 
+  /**
+   * Draw a one-day-travel marker (small magenta diamond) at (x,y) onto the
+   * current route overlay — distinct from both the cyan course line and the
+   * orange/cyan end markers, and a single mark (not the removed per-day tick
+   * grid, playtest4 B). No-op if no route line has been drawn yet.
+   */
+  drawDayMarker(x: number, y: number): void {
+    if (!this.routeLineGraphics) return;
+
+    const r = 6;
+    this.routeLineGraphics
+      .poly([x, y - r, x + r, y, x, y + r, x - r, y])
+      .stroke({ color: 0xff00ff, width: 2, alpha: 0.8 });
+  }
+
   /** Remove and dispose the route overlay (called when the route is cleared). */
   clearRoute(): void {
     if (this.routeLineGraphics) {

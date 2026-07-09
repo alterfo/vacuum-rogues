@@ -177,6 +177,7 @@ function makeHarness(
     drawRoute: vi.fn((p: Pt[]) => drawn.push(p)),
     drawLandingMarker: vi.fn(),
     drawNavigationMarker: vi.fn(),
+    drawDayMarker: vi.fn(),
     clearRoute: vi.fn(),
   };
   s.planetManager = {
@@ -292,5 +293,34 @@ describe("Task 1: drawn route == flown path (single source)", () => {
     // position instead of replaying the stale origin-side bow (which would aim
     // the ship back at a waypoint it already passed → flying backward).
     expect(flown).toEqual([{ x: 700, y: 300 }]);
+  });
+});
+
+describe("Task 3: one-day-travel marker on the planned route", () => {
+  // A star well off the horizontal path so the route stays a straight
+  // beeline — keeps the expected day-marker point simple arithmetic.
+  const FAR_STAR = { centerX: 400, centerY: 2000, avoidRadius: 120 };
+
+  it("draws a day marker once, DISTANCE_PER_DAY (500px) along a route longer than one day", () => {
+    const h = makeHarness({ x: 100, y: 300 }, FAR_STAR);
+    const dayMarker = h.s.routeRenderer as {
+      drawDayMarker: ReturnType<typeof vi.fn>;
+    };
+
+    h.plan(700, 300); // 600px, straight shot — longer than one day's travel
+
+    expect(dayMarker.drawDayMarker).toHaveBeenCalledTimes(1);
+    expect(dayMarker.drawDayMarker).toHaveBeenCalledWith(600, 300);
+  });
+
+  it("draws no day marker when the route is shorter than one day", () => {
+    const h = makeHarness({ x: 100, y: 300 }, FAR_STAR);
+    const dayMarker = h.s.routeRenderer as {
+      drawDayMarker: ReturnType<typeof vi.fn>;
+    };
+
+    h.plan(400, 300); // 300px, well under the 500px one-day distance
+
+    expect(dayMarker.drawDayMarker).not.toHaveBeenCalled();
   });
 });
