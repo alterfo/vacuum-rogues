@@ -110,7 +110,9 @@ const PIRATE_CARGO_RAID_CHANCE = 0.05;
 const CONVOY_ASSEMBLY_INTERVAL = 30;
 /** Max PATROL ships recruited into a single convoy. */
 const CONVOY_MAX_SHIPS = 3;
-/** Per-convoy chance to liberate a contested system on arrival. */
+/** Per-PATROL-convoy chance to liberate a contested system on arrival.
+ *  Liberation-rally rangers no longer roll this — they persist as an assault
+ *  force and fight the garrison instead (see resolveLiberationAssaults). */
 const CONVOY_LIBERATION_CHANCE = 0.2;
 
 /** Minimum hostile ships a captured (overmind/pirate) system always holds. */
@@ -140,8 +142,12 @@ const CAPTURE_FLEET_MAX = 5;
 const LIBERATION_CAMPAIGN_INTERVAL = 50;
 /** Days between a liberation announcement and the rally/assault date. */
 const LIBERATION_RALLY_DELAY = 30;
-/** Max ranger ships rallied from a staging system in a single campaign. */
-const LIBERATION_RALLY_MAX_SHIPS = 5;
+/** Max ranger ships mustered galaxy-wide into a single liberation campaign.
+ *  Sized against the real garrison fight (resolveLiberationAssaults): a full
+ *  standing garrison is GARRISON_MIN..GARRISON_MAX PATROL hulls, so a rally
+ *  needs this many full-hull rangers to have a genuine (not guaranteed) shot —
+ *  5 was tuned for the old flip-roll era where force size didn't matter. */
+const LIBERATION_RALLY_MAX_SHIPS = 8;
 /** Max freshly-captured system ids remembered for priority liberation
  *  targeting — a small FIFO so the "rangers are massing to retake it" news
  *  follows recent losses without the queue growing unbounded. */
@@ -315,6 +321,18 @@ export class NpcSimulator {
    * standing garrison (moved to {@link garrisonIds}).
    */
   private readonly captureFleetIds = new Set<string>();
+  /**
+   * IDs of liberation-rally rangers currently besieging a hostile system.
+   * Transient (not persisted), same category as {@link captureFleetIds}: an
+   * arrived rally ranger holds position and fights the standing garrison over
+   * subsequent ticks (see {@link resolveLiberationAssaults}) instead of the
+   * old flat CONVOY_LIBERATION_CHANCE coin-flip. Rebuilt after a load by
+   * {@link reconcileTransientState} from the `liberation_` convoyId prefix
+   * (kept on the ship while it besieges). Ships are released (convoyId
+   * cleared, removed from the set) once the system falls or is freed by
+   * another path; dead ones are pruned with the other hold sets.
+   */
+  private readonly liberationAssaultIds = new Set<string>();
   /**
    * Active Ranger liberation campaigns: each holds a hostile target, the
    * friendly staging system, and the absolute day the rally departs. Transient
@@ -560,6 +578,16 @@ export class NpcSimulator {
           galaxy.isHostileSystem(npc.currentSystemId);
         if (parkedInHostile) this.garrisonIds.add(npc.id);
         else this.captureFleetIds.add(npc.id);
+      } else if (
+        npc.convoyId?.startsWith("liberation_") &&
+        npc.state !== NpcState.TRAVELING &&
+        galaxy.isHostileSystem(npc.currentSystemId)
+      ) {
+        // A rally ranger parked in a still-hostile system is mid-siege: the
+        // liberation_ convoyId (persisted with the ship) is the marker that
+        // rebuilds the assault hold after a load. One still TRAVELING is a
+        // normal in-flight convoy — the arrival branch enrolls it instead.
+        this.liberationAssaultIds.add(npc.id);
       }
     }
   }
@@ -613,6 +641,10 @@ export class NpcSimulator {
     // liberation countdown can run rather than resurrecting the garrison every
     // tick. Only initial establishment or topping up a partial garrison spawns.
     if (present === 0 && this.establishedGarrisons.has(systemId)) return;
+    // Siege freeze: no reinforcements spawn into a system under active Ranger
+    // assault — otherwise the daily top-up out-replenishes the assault's
+    // attrition and a liberation siege can mathematically never be won.
+    if (this.underLiberationAssault(galaxy, systemId)) return;
     const target = rng.nextInt(garrisonMin, garrisonMax);
     let spawned = 0;
     while (present < target) {
@@ -661,6 +693,10 @@ export class NpcSimulator {
       if (baseline === undefined) continue;
       const present = this.countGarrisonPresent(galaxy, systemId);
       if (present === 0) continue;
+      // Siege freeze (mirrors fillGarrison): a garrison under active Ranger
+      // assault neither grows nor buds off mid-battle — growth would negate
+      // the assault's attrition, and a bud-off would despawn defenders.
+      if (this.underLiberationAssault(galaxy, systemId)) continue;
       const cap = Math.round(baseline * GARRISON_GROWTH_BUD_THRESHOLD);
       if (present >= cap) {
         // Threshold reached: the grown excess buds off as a capture fleet
@@ -981,33 +1017,37 @@ export class NpcSimulator {
             this.rumorDestPlanet.delete(npc.id);
             this.simulateTraderTrade(npc, galaxy, rng, sellPlanetId);
           }
-          // A convoy/rally arriving at a contested system has a chance to
-          // liberate it. PATROL convoys roll from the main stream (unchanged);
-          // liberation-rally RANGERS roll from an isolated, day+id-seeded RNG so
-          // the Ranger assault can actually free the system without perturbing
-          // the deterministic main stream. Without this the rally was cosmetic:
-          // rangers could never clear the auto-replenished garrison (Task 7).
+          // A PATROL convoy arriving at a contested system has a chance to
+          // liberate it (main-stream roll, unchanged). A liberation-rally
+          // RANGER instead persists as an assault force and fights the
+          // standing garrison over subsequent ticks — the system only falls
+          // once the garrison is actually destroyed (see
+          // resolveLiberationAssaults), never via a flat coin-flip.
           const isConvoyPatrol = npc.role === NpcRole.PATROL && !!npc.convoyId;
           const isRallyRanger =
             npc.role === NpcRole.RANGER &&
             !!npc.convoyId &&
             npc.convoyId.startsWith("liberation_");
-          if (
-            (isConvoyPatrol || isRallyRanger) &&
-            arrivedAt &&
-            galaxy.isHostileSystem(arrivedAt)
-          ) {
-            const roll = isRallyRanger
-              ? new SeededRNG(
-                  `liberation_assault_${galaxy.gameDays}_${npc.id}`,
-                ).next()
-              : rng.next();
-            if (roll < CONVOY_LIBERATION_CHANCE) {
+          if (isRallyRanger && arrivedAt && galaxy.isHostileSystem(arrivedAt)) {
+            // Keep the liberation_ convoyId while besieging: it is the marker
+            // reconcileTransientState uses to rebuild this (transient) hold
+            // set after a save/load.
+            this.liberationAssaultIds.add(npc.id);
+            logger.info(
+              `Liberation assault: ${npc.name} joins the siege of ${arrivedAt}`,
+            );
+          } else {
+            if (
+              isConvoyPatrol &&
+              arrivedAt &&
+              galaxy.isHostileSystem(arrivedAt) &&
+              rng.next() < CONVOY_LIBERATION_CHANCE
+            ) {
               galaxy.tryLiberate(arrivedAt);
               logger.info(`Convoy ${npc.convoyId} liberated ${arrivedAt}`);
             }
+            if (npc.convoyId) npc.convoyId = undefined;
           }
-          if (npc.convoyId) npc.convoyId = undefined;
           // Ranger arriving at quest target → quest complete
           if (
             npc.role === NpcRole.RANGER &&
@@ -1044,6 +1084,14 @@ export class NpcSimulator {
       // rather than wandering off. Like the garrison hold this consumes no main
       // RNG, so capture campaigns never perturb the deterministic stream.
       if (this.captureFleetIds.has(npc.id)) {
+        continue;
+      }
+
+      // Liberation-assault hold: a rally ranger besieging a hostile system
+      // keeps fighting its garrison (resolveLiberationAssaults) until the
+      // system falls or the force is wiped, rather than wandering off. Like
+      // the holds above this consumes no main RNG.
+      if (this.liberationAssaultIds.has(npc.id)) {
         continue;
       }
 
@@ -1123,6 +1171,7 @@ export class NpcSimulator {
     // Resolve abstract off-screen fights, then keep the population topped up.
     this.resolveOffscreenCombat(galaxy, rng, playerSystemId);
     for (const e of this.resolveCaptureFleets(galaxy)) events.push(e);
+    this.resolveLiberationAssaults(galaxy);
     const raidEvents = this.resolveOffscreenPirateRaids(
       galaxy,
       rng,
@@ -1323,11 +1372,13 @@ export class NpcSimulator {
         continue;
       }
       if (npc.currentSystemId === playerSystemId) continue;
-      // Standing-garrison and besieging capture-fleet ships are isolated from
-      // abstract off-screen combat: they never perturb the deterministic main
-      // stream, and a passing pirate can't wipe a besieging Overmind fleet.
+      // Standing-garrison, besieging capture-fleet, and liberation-assault
+      // ships are isolated from abstract off-screen combat: they never perturb
+      // the deterministic main stream, and a passing pirate can't wipe a
+      // besieging fleet whose fight is owned by its own siege resolver.
       if (this.garrisonIds.has(npc.id)) continue;
       if (this.captureFleetIds.has(npc.id)) continue;
+      if (this.liberationAssaultIds.has(npc.id)) continue;
       const list = bySystem.get(npc.currentSystemId) ?? [];
       list.push(npc);
       bySystem.set(npc.currentSystemId, list);
@@ -1483,9 +1534,15 @@ export class NpcSimulator {
       // non-Overmind kind, **including a wandering pirate** (mutual enemies), not
       // only friendly traders/rangers. One source of truth (the matrix), no
       // re-derived relation logic.
+      // Besieging liberation-assault rangers are NOT prey here: their battle
+      // with this garrison is owned by resolveLiberationAssaults, which models
+      // mutual attrition. Letting the garrison also swat them through this
+      // no-retaliation wanderer path would double its damage output and make
+      // every Ranger siege mathematically unwinnable.
       const victims = ships.filter(
         (s) =>
           !this.garrisonIds.has(s.id) &&
+          !this.liberationAssaultIds.has(s.id) &&
           isHostile("overmind", factionKindOf(s), { pirateRep: 0 }),
       );
       if (garrison.length === 0 || victims.length === 0) continue;
@@ -1853,6 +1910,114 @@ export class NpcSimulator {
   }
 
   /**
+   * Resolve the siege phase of every active liberation assault — the Ranger
+   * mirror of {@link resolveCaptureFleets}. For each system where arrived
+   * assault rangers are present:
+   *  - if the system is no longer hostile (freed by another path), release
+   *    the force back to normal life;
+   *  - else if garrison defenders remain, resolve one attrition round (plays
+   *    out over subsequent ticks) using an isolated day-seeded RNG and the
+   *    same damage-trade constants as the capture-fleet siege;
+   *  - else the garrison is destroyed: liberation is earned, not a coin-flip —
+   *    {@link Galaxy.tryLiberate} fires (it emits the SYSTEM_LIBERATED news
+   *    itself, matching the detection/convoy paths — returning it here too
+   *    would double-post the headline) and the survivors are released.
+   * No-op when no assault is active, so galaxies without rallies are untouched.
+   */
+  private resolveLiberationAssaults(galaxy: Galaxy): void {
+    if (this.liberationAssaultIds.size === 0) return;
+
+    const rng = new SeededRNG(`liberation_assault_resolve_${galaxy.gameDays}`);
+    const bySystem = new Map<string, NpcShip[]>();
+    for (const npc of galaxy.npcShips) {
+      if (!this.liberationAssaultIds.has(npc.id)) continue;
+      if (npc.state === NpcState.DEAD || npc.state === NpcState.TRAVELING) {
+        continue;
+      }
+      const list = bySystem.get(npc.currentSystemId) ?? [];
+      list.push(npc);
+      bySystem.set(npc.currentSystemId, list);
+    }
+
+    for (const [systemId, attackers] of bySystem) {
+      // Target already freed (another path): stand the assault force down.
+      if (!galaxy.isHostileSystem(systemId)) {
+        logger.info(
+          `Liberation assault at ${systemId} stands down — already freed`,
+        );
+        for (const a of attackers) this.releaseAssaultShip(a);
+        continue;
+      }
+
+      const defenders = galaxy.npcShips.filter(
+        (n) =>
+          n.currentSystemId === systemId &&
+          n.state !== NpcState.DEAD &&
+          n.state !== NpcState.TRAVELING &&
+          !this.liberationAssaultIds.has(n.id) &&
+          (n.faction === Faction.OVERMIND || n.role === NpcRole.PIRATE),
+      );
+
+      if (defenders.length === 0) {
+        // Garrison actually destroyed — liberation is guaranteed, no roll.
+        galaxy.tryLiberate(systemId);
+        logger.info(`Liberation assault freed ${systemId}`);
+        for (const a of attackers) this.releaseAssaultShip(a);
+        continue;
+      }
+
+      // Garrison holds: resolve one attrition round (mirrors resolveCaptureFleets).
+      for (const attacker of attackers) {
+        if (attacker.state === NpcState.DEAD) continue;
+        const alive = defenders.filter((d) => d.state !== NpcState.DEAD);
+        if (alive.length === 0) break;
+        const victim = alive[rng.nextInt(0, alive.length - 1)];
+
+        victim.hullHP -= Math.max(
+          1,
+          Math.round(attacker.damage * PIRATE_DAMAGE_FRACTION),
+        );
+        attacker.hullHP -= Math.max(
+          1,
+          Math.round(victim.damage * VICTIM_RETALIATION_FRACTION),
+        );
+
+        if (victim.hullHP <= 0) {
+          victim.hullHP = 0;
+          victim.state = NpcState.DEAD;
+          logger.info(
+            `Liberation assault ${attacker.name} destroyed ${victim.name} in ${systemId}`,
+          );
+        }
+        if (attacker.hullHP <= 0) {
+          attacker.hullHP = 0;
+          attacker.state = NpcState.DEAD;
+        }
+      }
+    }
+  }
+
+  /** Stand an assault ranger down: drop the hold and the liberation_ marker so
+   *  it rejoins the wandering population on the next tick. */
+  private releaseAssaultShip(npc: NpcShip): void {
+    this.liberationAssaultIds.delete(npc.id);
+    npc.convoyId = undefined;
+  }
+
+  /** Whether a live liberation-assault ship is present (arrived, not dead) in
+   *  the system — i.e. the system is under active Ranger siege. */
+  private underLiberationAssault(galaxy: Galaxy, systemId: string): boolean {
+    for (const npc of galaxy.npcShips) {
+      if (!this.liberationAssaultIds.has(npc.id)) continue;
+      if (npc.state === NpcState.DEAD || npc.state === NpcState.TRAVELING) {
+        continue;
+      }
+      if (npc.currentSystemId === systemId) return true;
+    }
+    return false;
+  }
+
+  /**
    * Announce a Ranger campaign to liberate a hostile system. Picks one hostile
    * system as the target and a friendly (non-hostile) neighbour as the staging
    * point, schedules the rally LIBERATION_RALLY_DELAY days out, and records the
@@ -1994,17 +2159,24 @@ export class NpcSimulator {
   }
 
   /**
-   * Send idle ranger NPCs gathered in a campaign's staging system toward its
-   * target as a single convoy (shared convoyId), using the same convoy
-   * mechanism as {@link assembleConvoys}. Garrison and capture-fleet ships are
-   * excluded. Returns true when at least one ranger departed, false when none
-   * were staged (so the caller can retry the campaign on a later tick).
+   * Muster idle ranger NPCs toward a campaign's target as a single convoy
+   * (shared convoyId), using the same convoy mechanism as
+   * {@link assembleConvoys}. Rangers staged in the campaign's staging system
+   * go first; when fewer than LIBERATION_RALLY_MAX_SHIPS are staged, the
+   * muster widens galaxy-wide, nearest-to-the-target first — the announced
+   * "rangers are massing" actually masses a real force instead of whatever
+   * single ranger happened to be parked at the staging system (a token force
+   * could win the old 20% flip-roll, but is hopeless in the real garrison
+   * fight of {@link resolveLiberationAssaults}; farther recruits simply join
+   * the siege as they arrive). Garrison, capture-fleet, and already-besieging
+   * ships are excluded. Returns true when at least one ranger departed, false
+   * when none were available (so the caller can retry on a later tick).
    */
   private dispatchLiberationRally(
     galaxy: Galaxy,
     campaign: LiberationCampaign,
   ): boolean {
-    const rangers = galaxy.npcShips.filter(
+    const idleRangers = galaxy.npcShips.filter(
       (n) =>
         n.role === NpcRole.RANGER &&
         n.state !== NpcState.TRAVELING &&
@@ -2012,23 +2184,38 @@ export class NpcSimulator {
         !n.convoyId &&
         !this.garrisonIds.has(n.id) &&
         !this.captureFleetIds.has(n.id) &&
-        n.currentSystemId === campaign.stagingSystemId,
+        !this.liberationAssaultIds.has(n.id) &&
+        n.currentSystemId !== campaign.targetSystemId,
     );
+    // Staged rangers first, then the rest of the galaxy nearest-to-target
+    // first — deterministic (travelDays + stable sort), no RNG consumed.
+    const staged = idleRangers.filter(
+      (n) => n.currentSystemId === campaign.stagingSystemId,
+    );
+    const remote = idleRangers
+      .filter((n) => n.currentSystemId !== campaign.stagingSystemId)
+      .sort(
+        (a, b) =>
+          this.travelDays(galaxy, a.currentSystemId, campaign.targetSystemId) -
+          this.travelDays(galaxy, b.currentSystemId, campaign.targetSystemId),
+      );
+    const rangers = [...staged, ...remote].slice(0, LIBERATION_RALLY_MAX_SHIPS);
     if (rangers.length === 0) return false;
 
-    const count = Math.min(LIBERATION_RALLY_MAX_SHIPS, rangers.length);
     const convoyId = `liberation_${campaign.liberationDate}_${campaign.targetSystemId}`;
-    const daysToArrival = this.travelDays(
-      galaxy,
-      campaign.stagingSystemId,
-      campaign.targetSystemId,
-    );
-
-    for (let i = 0; i < count; i++) {
-      const npc = rangers[i];
+    for (const npc of rangers) {
+      // Refit before the offensive: the 30-day window between announcement and
+      // rally is the muster — rangers depart the set-piece assault at full
+      // hull. Without this, wandering-damage-worn hulls (often 30-70/120)
+      // make every siege of a full garrison mathematically unwinnable.
+      npc.hullHP = npc.maxHull;
       npc.convoyId = convoyId;
       npc.destinationSystemId = campaign.targetSystemId;
-      npc.daysToArrival = daysToArrival;
+      npc.daysToArrival = this.travelDays(
+        galaxy,
+        npc.currentSystemId,
+        campaign.targetSystemId,
+      );
       npc.state = NpcState.TRAVELING;
       npc.goal = {
         kind: NpcGoalKind.PATROL,
@@ -2056,6 +2243,7 @@ export class NpcSimulator {
       if (galaxy.npcShips[i].state === NpcState.DEAD) {
         this.garrisonIds.delete(galaxy.npcShips[i].id);
         this.captureFleetIds.delete(galaxy.npcShips[i].id);
+        this.liberationAssaultIds.delete(galaxy.npcShips[i].id);
         this.rumorDestPlanet.delete(galaxy.npcShips[i].id);
         galaxy.npcShips.splice(i, 1);
       }
