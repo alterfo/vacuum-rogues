@@ -4,7 +4,11 @@ import type { Player } from "@/domain/Player";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { type SpaceLootItem, ResourceType } from "@/types";
 import { Faction } from "@/types/faction";
-import { GAME_BALANCE, ARTIFACT_DROP_CHANCE } from "@/config/balance";
+import {
+  GAME_BALANCE,
+  ARTIFACT_DROP_CHANCE,
+  OVERMIND_ARTIFACT_DROP,
+} from "@/config/balance";
 import {
   cargoCapacityOf,
   acquireUninstalledGear,
@@ -46,10 +50,13 @@ export class LootDropHandler {
   constructor(private readonly gameLayer: Container) {}
 
   /**
-   * Spawn 0–2 floating loot items at a destroyed NPC's world position. Overmind
-   * ships drop Overmind artifacts (40% per item, otherwise a salvaged module);
-   * everyone else drops a random module from their scanned loadout. `rng` is
-   * injectable so tests can drive the roll deterministically.
+   * Spawn floating loot items at a destroyed NPC's world position. Overmind
+   * ships drop Overmind artifacts, otherwise a salvaged module; the artifact
+   * chance and item count scale with the ship's `sizeTier` (a boss kill
+   * guarantees artifacts — see {@link OVERMIND_ARTIFACT_DROP}; a tier-less
+   * ship keeps the flat baseline). Everyone else drops a random module from
+   * their scanned loadout. `rng` is injectable so tests can drive the roll
+   * deterministically.
    */
   spawn(
     npc: NpcShip,
@@ -58,11 +65,18 @@ export class LootDropHandler {
     rng: () => number = Math.random,
   ): void {
     const isOvermind = npc.faction === Faction.OVERMIND;
-    const count = this.rollLootCount(rng);
+    const drop = isOvermind
+      ? OVERMIND_ARTIFACT_DROP[npc.sizeTier ?? "small"]
+      : undefined;
+    const count = this.rollLootCount(rng) + (drop?.bonusLootRolls ?? 0);
+    const artifactChance = Math.min(
+      1,
+      ARTIFACT_DROP_CHANCE * (drop?.artifactChanceMult ?? 1),
+    );
     for (let i = 0; i < count; i++) {
       let moduleId: string | undefined;
       let artifactId: string | undefined;
-      if (isOvermind && rng() < ARTIFACT_DROP_CHANCE) {
+      if (isOvermind && rng() < artifactChance) {
         artifactId = "ARTIFACTS";
       } else {
         moduleId = this.pickModuleId(npc, rng);

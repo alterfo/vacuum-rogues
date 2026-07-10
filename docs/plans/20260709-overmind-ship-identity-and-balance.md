@@ -105,10 +105,10 @@ Five related requests bundled together at planning time (ship balance + Overmind
 
 ### Task 5: Size-scaled research-substance loot
 
-- [ ] write a failing test asserting `LootDropHandler.spawn()` for a `"boss"`/`"large"` sizeTier Overmind ship rolls a higher artifact count/chance than a `"small"` one, and non-Overmind ships are unaffected.
-- [ ] in `LootDropHandler.spawn()` (`src/presentation/flight/LootDropHandler.ts:54-81`), scale `ARTIFACT_DROP_CHANCE` and/or `rollLootCount`'s upper bound by `npc.sizeTier` (new named constants in `balance.ts`, e.g. a small multiplier table keyed by tier — reuse the tier vocabulary from Task 2, don't invent a parallel one).
-- [ ] write tests for: a boss kill guarantees (or near-guarantees) at least one artifact; a small garrison ship's drop odds are unchanged from today's flat `ARTIFACT_DROP_CHANCE`; non-Overmind ships (no `sizeTier`) fall back to current behavior exactly.
-- [ ] run affected test files — must pass before Task 6.
+- [x] write a failing test asserting `LootDropHandler.spawn()` for a `"boss"`/`"large"` sizeTier Overmind ship rolls a higher artifact count/chance than a `"small"` one, and non-Overmind ships are unaffected. *(`src/tests/presentation/lootDropSizeTier.test.ts`, confirmed red first — 4 red.)*
+- [x] in `LootDropHandler.spawn()` (`src/presentation/flight/LootDropHandler.ts:54-81`), scale `ARTIFACT_DROP_CHANCE` and/or `rollLootCount`'s upper bound by `npc.sizeTier` (new named constants in `balance.ts`, e.g. a small multiplier table keyed by tier — reuse the tier vocabulary from Task 2, don't invent a parallel one). *(New `OVERMIND_ARTIFACT_DROP: Record<NpcSizeTier, {artifactChanceMult, bonusLootRolls}>` in `balance.ts` — small 1×/0 (flat baseline), medium 1.4×/0, large 2×/+1, boss 4×-capped-at-1.0/+2. `bonusLootRolls` adds guaranteed items atop the flat 0–2 count roll; the rng consumption order is unchanged, so seeded/existing tests stay byte-identical.)*
+- [x] write tests for: a boss kill guarantees (or near-guarantees) at least one artifact; a small garrison ship's drop odds are unchanged from today's flat `ARTIFACT_DROP_CHANCE`; non-Overmind ships (no `sizeTier`) fall back to current behavior exactly. *(Boss guarantee = capped 1.0 chance + ≥1 guaranteed roll, asserted structurally AND behaviorally on the worst count roll; small pinned at the exact `ARTIFACT_DROP_CHANCE` boundary; tier-less Overmind (old save) and non-Overmind-with-sizeTier both pinned to current behavior; a table drift guard asserts monotonic small→boss scaling.)*
+- [x] run affected test files — must pass before Task 6. *(Full unit suite 5341 passed, lint 0 errors, tsc clean; `detect_changes` low risk, scope = balance.ts + LootDropHandler.spawn only.)*
 
 ### Task 6: Retune engine speed formula and gate the apex engine to ~year 3
 

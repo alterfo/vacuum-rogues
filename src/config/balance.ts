@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { GameMode, ResourceType } from "@/types";
+import type { GameMode, NpcSizeTier, ResourceType } from "@/types";
 import type { EncounterConfig } from "@/systems/encounters/encounterGenerator";
 import type { EncounterOutcomeConfig } from "@/systems/encounters/encounterOutcome";
 import { Faction } from "@/types/faction";
@@ -293,6 +293,28 @@ export const OVERMIND_SIZE_TIERS: Record<
  * (300 + 150 = 450 effective HP); damage 45 as before.
  */
 export const OVERMIND_BOSS_TIER = { hull: 450, damage: 45 } as const;
+
+/**
+ * Size-tier-scaled research-substance loot (plan 20260709 Task 5): bigger
+ * Overmind hulls drop more/better artifacts for research-station upgrades.
+ * `artifactChanceMult` scales {@link ARTIFACT_DROP_CHANCE} (capped at 1.0 by
+ * the consumer); `bonusLootRolls` adds guaranteed loot items on top of the
+ * flat 0–2 count roll. `small` is deliberately the unchanged flat baseline
+ * (mult 1, no bonus) so a garrison-ship kill pays exactly what it does today;
+ * `boss` caps the chance at 1.0 AND guarantees ≥1 loot roll, so a boss kill
+ * always yields artifacts. A ship with no `sizeTier` (old save) also falls
+ * back to the flat baseline. Only `LootDropHandler.spawn()` consumes this —
+ * non-Overmind ships never roll artifacts and ignore the table entirely.
+ */
+export const OVERMIND_ARTIFACT_DROP: Record<
+  NpcSizeTier,
+  { artifactChanceMult: number; bonusLootRolls: number }
+> = {
+  small: { artifactChanceMult: 1.0, bonusLootRolls: 0 },
+  medium: { artifactChanceMult: 1.4, bonusLootRolls: 0 },
+  large: { artifactChanceMult: 2.0, bonusLootRolls: 1 },
+  boss: { artifactChanceMult: 4.0, bonusLootRolls: 2 },
+};
 
 /** Player rank at which the government faction discount applies. */
 export const RANK_DISCOUNT_THRESHOLD = 5;
