@@ -220,6 +220,48 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
     }
   });
 
+  it("drops bud-off donors from the arrival-dwell map (no stale entries)", () => {
+    const galaxy = makeGalaxy();
+    galaxy.addOvermindSystem("sys_a");
+    const sim = new NpcSimulator();
+    const { baseline, cap } = growToCap(sim, galaxy, "bud_dwell");
+
+    galaxy.gameDays = cap - baseline + 1;
+    internals(sim).growGarrisons(galaxy, new SeededRNG("bud_dwell_fire"));
+    expect(internals(sim).captureFleetIds.size).toBeGreaterThan(0);
+
+    // Despawned donors must not leak dwell-countdown entries: every key in the
+    // map corresponds to a ship that still exists.
+    const dwell = (
+      sim as unknown as { arrivalDwellCountdown: Map<string, number> }
+    ).arrivalDwellCountdown;
+    const liveIds = new Set(galaxy.npcShips.map((n) => n.id));
+    for (const id of dwell.keys()) {
+      expect(liveIds.has(id)).toBe(true);
+    }
+  });
+
+  it("classifies a neutral neighbour behind a one-way incoming edge as adjacent", () => {
+    // ~25% of warp links are one-way (ensureConnectivity bridges): sys_b links
+    // to sys_a but not vice versa. The undirected scan must still see sys_b.
+    const sysA = makeSystem("sys_a", "Alpha", 0);
+    const sysB = makeSystem("sys_b", "Beta", 10);
+    sysB.connections.push(new WarpPath("sys_b", "sys_a", 3)); // one-way b → a
+    const galaxy = new Galaxy(
+      "galaxy_oneway_bud",
+      [sysA, sysB],
+      new Overmind(),
+      [],
+      [],
+    );
+    const neighbours = (
+      new NpcSimulator() as unknown as {
+        undirectedNeighbors(g: Galaxy, id: string): string[];
+      }
+    ).undirectedNeighbors(galaxy, "sys_a");
+    expect(neighbours).toEqual(["sys_b"]);
+  });
+
   it("falls back to a distant neutral when every neighbour is hostile", () => {
     const galaxy = makeGalaxy();
     galaxy.systems.push(makeSystem("sys_c", "Gamma", 30));

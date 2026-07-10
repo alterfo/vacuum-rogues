@@ -245,4 +245,48 @@ describe("NpcSimulator liberation assaults (real combat, no coin flip)", () => {
     tickDays(sim, galaxy, 4, "reload_more");
     expect(galaxy.isHostileSystem("sys_a")).toBe(false);
   });
+
+  it("a load clears a stale liberation_ marker on a ranger parked in a friendly system", () => {
+    // The target was freed and the save landed before the stand-down tick:
+    // the ranger is parked in a NON-hostile system with the marker still set.
+    const galaxy = makeGalaxy(); // sys_a never added to overmindSystems
+    const ranger = makeBesiegingRanger("r_stale", { damage: 20, hull: 200 });
+    galaxy.npcShips.push(ranger);
+
+    const sim = new NpcSimulator();
+    tickDays(sim, galaxy, 1, "stale");
+
+    // The exhausted marker is cleared — a stale one would sideline the ranger
+    // from every future convoy/rally, and a later load could enroll it as a
+    // lone doomed siege of whatever hostile system it was parked in.
+    expect(ranger.convoyId).toBeUndefined();
+  });
+
+  it("defers siege attrition for the player's current system, resuming after departure", () => {
+    const galaxy = makeGalaxy();
+    galaxy.addOvermindSystem("sys_a");
+    const garrison = Array.from({ length: 3 }, (_, n) =>
+      makeGarrisonShip(n, { damage: 5, hull: 400 }),
+    );
+    const rangers = Array.from({ length: 3 }, (_, n) =>
+      makeBesiegingRanger(`r${n}`, { damage: 100, hull: 500 }),
+    );
+    galaxy.npcShips.push(...garrison, ...rangers);
+
+    const sim = new NpcSimulator();
+    // Player parked in the besieged system: the fight there is visible, so no
+    // abstract attrition may land on either side under the player's nose.
+    galaxy.simulateDay();
+    sim.tick(galaxy, new SeededRNG("defer_player_0"), "sys_a");
+    for (const g of garrison) expect(g.hullHP).toBe(g.maxHull);
+    for (const r of rangers) expect(r.hullHP).toBe(r.maxHull);
+
+    // Player moves on: the siege resumes.
+    galaxy.simulateDay();
+    sim.tick(galaxy, new SeededRNG("defer_player_1"), "sys_b");
+    const damaged = garrison.filter(
+      (g) => g.hullHP < g.maxHull || g.state === NpcState.DEAD,
+    );
+    expect(damaged.length).toBeGreaterThan(0);
+  });
 });

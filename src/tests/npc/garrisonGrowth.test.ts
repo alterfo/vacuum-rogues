@@ -106,10 +106,9 @@ describe("NpcSimulator garrison growth (Overmind organic expansion)", () => {
     const galaxy = makeGalaxy();
     galaxy.addOvermindSystem("sys_a");
 
-    // Establish directly and drive growth passes directly: a garrison-only
-    // galaxy keeps the counts exact (a wandering pirate in sys_a would inflate
-    // the present-count the growth cap is checked against). The tick wiring
-    // (interval gating) is covered by the grows-by-1 / non-interval tests.
+    // Establish directly and drive growth passes directly so the counts stay
+    // exact. The tick wiring (interval gating) is covered by the grows-by-1 /
+    // non-interval tests; visitor-count isolation by the members-only test.
     const sim = new NpcSimulator();
     sim.attachCampaignPeakPower(() => 1);
     sim.ensureGarrison(galaxy, new SeededRNG("cap_seed"));
@@ -170,6 +169,66 @@ describe("NpcSimulator garrison growth (Overmind organic expansion)", () => {
       sim.tick(galaxy, new SeededRNG(`pirate_tick_${day}`));
     }
     expect(garrisonShips(galaxy, "sys_a")).toHaveLength(established);
+  });
+
+  it("clamps a reload-re-recorded baseline to the scaled max (no cross-session ratchet)", () => {
+    const galaxy = makeGalaxy();
+    galaxy.addOvermindSystem("sys_a");
+
+    // The shape a save captures mid/post-growth: more garrison_ ships present
+    // than the establishment band would ever spawn.
+    const seeder = new NpcSimulator();
+    for (let i = 0; i < 15; i++) {
+      const ship = seeder.spawnOvermindInSystem(
+        new SeededRNG(`ratchet_${i}`),
+        `garrison_ov_sys_a_saved_${i}`,
+        "sys_a",
+      );
+      galaxy.npcShips.push(ship);
+    }
+
+    // A fresh simulator = a fresh GameEngine after load. Re-recording the raw
+    // grown count as the baseline would ratchet the growth band ~1.5× per
+    // reload without bound; it must clamp to the scaled GARRISON_MAX (10).
+    const sim = new NpcSimulator();
+    sim.ensureGarrison(galaxy, new SeededRNG("ratchet_est"));
+    const baseline = (
+      sim as unknown as { garrisonBaseline: Map<string, number> }
+    ).garrisonBaseline.get("sys_a");
+    expect(baseline).toBe(10);
+  });
+
+  it("ignores wandering visitors when checking the growth cap (members only)", () => {
+    const galaxy = makeGalaxy();
+    galaxy.addOvermindSystem("sys_a");
+
+    const sim = new NpcSimulator();
+    sim.attachCampaignPeakPower(() => 1);
+    sim.ensureGarrison(galaxy, new SeededRNG("visitor_seed"));
+    const baseline = garrisonShips(galaxy, "sys_a").length;
+    const cap = Math.round(baseline * 1.5);
+
+    // Enough wandering (non-garrison) Overmind visitors to fake present ≥ cap.
+    for (let i = 0; i < cap; i++) {
+      const visitor = sim.spawnOvermindInSystem(
+        new SeededRNG(`vis_${i}`),
+        `wanderer_${i}`,
+        "sys_a",
+      );
+      galaxy.npcShips.push(visitor);
+    }
+
+    const sim2 = sim as unknown as {
+      growGarrisons(g: Galaxy, r: SeededRNG): void;
+      captureFleetIds: Set<string>;
+    };
+    galaxy.gameDays = 1;
+    sim2.growGarrisons(galaxy, new SeededRNG("visitor_grow"));
+
+    // Members (= baseline) are below the cap: growth adds 1; the visitors must
+    // NOT fake a threshold crossing whose bud-off strips real defenders.
+    expect(sim2.captureFleetIds.size).toBe(0);
+    expect(garrisonShips(galaxy, "sys_a")).toHaveLength(baseline + 1);
   });
 
   it("does not resurrect a cleared garrison one ship at a time", () => {

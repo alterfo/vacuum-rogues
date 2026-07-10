@@ -358,7 +358,9 @@ export class NpcSimulator {
    * Transient (not persisted), same lifecycle as {@link establishedGarrisons}:
    * recorded when {@link fillGarrison} first establishes a system's garrison,
    * pruned when the system stops being hostile so a recapture re-baselines.
-   * After a load a fresh simulator re-records the then-present count.
+   * After a load a fresh simulator re-records the then-present count, clamped
+   * to the scaled garrison max — an already-grown count re-anchored raw would
+   * ratchet the growth band ~1.5× per reload without bound.
    */
   private readonly garrisonBaseline = new Map<string, number>();
   /**
@@ -533,6 +535,25 @@ export class NpcSimulator {
   }
 
   /**
+   * Count live standing-garrison *members* (ships in {@link garrisonIds})
+   * present in a system. Unlike {@link countGarrisonPresent}, transient
+   * visitors — wandering Overmind ships, capture-fleet stopovers, visiting
+   * pirates — do not count. Growth/bud-off decisions use this so a passing
+   * wanderer can neither push a garrison over its bud threshold (a bud-off
+   * would then strip real defenders it never grew) nor resurrect a cleared
+   * garrison the liberation countdown owns.
+   */
+  private countGarrisonMembers(galaxy: Galaxy, systemId: string): number {
+    let count = 0;
+    for (const n of galaxy.npcShips) {
+      if (n.currentSystemId !== systemId) continue;
+      if (n.state === NpcState.DEAD || n.state === NpcState.TRAVELING) continue;
+      if (this.garrisonIds.has(n.id)) count++;
+    }
+    return count;
+  }
+
+  /**
    * System ids that currently hold a *live fight*: at least one hostile
    * (pirate/Overmind) ship AND at least one friendly/Ranger ship both present
    * (located, not in transit or destroyed) in the same system. Feeds the live
@@ -580,14 +601,22 @@ export class NpcSimulator {
         else this.captureFleetIds.add(npc.id);
       } else if (
         npc.convoyId?.startsWith("liberation_") &&
-        npc.state !== NpcState.TRAVELING &&
-        galaxy.isHostileSystem(npc.currentSystemId)
+        npc.state !== NpcState.TRAVELING
       ) {
         // A rally ranger parked in a still-hostile system is mid-siege: the
         // liberation_ convoyId (persisted with the ship) is the marker that
         // rebuilds the assault hold after a load. One still TRAVELING is a
         // normal in-flight convoy — the arrival branch enrolls it instead.
-        this.liberationAssaultIds.add(npc.id);
+        if (galaxy.isHostileSystem(npc.currentSystemId)) {
+          this.liberationAssaultIds.add(npc.id);
+        } else {
+          // Parked in a NON-hostile system the marker is exhausted (the target
+          // was freed and the save landed before the stand-down tick). Clear
+          // it: a stale marker sidelines the ranger from all future convoys,
+          // and a later load could enroll it as a lone doomed siege of
+          // whatever unrelated hostile system it happens to be parked in.
+          npc.convoyId = undefined;
+        }
       }
     }
   }
@@ -632,7 +661,10 @@ export class NpcSimulator {
     if (present >= garrisonMin) {
       this.establishedGarrisons.add(systemId);
       if (!this.garrisonBaseline.has(systemId)) {
-        this.garrisonBaseline.set(systemId, present);
+        // Clamp to the scaled max: after a save/load a fresh simulator lands
+        // here with an already-GROWN count — re-anchoring at that raw value
+        // would ratchet the growth band ~1.5× per reload without bound.
+        this.garrisonBaseline.set(systemId, Math.min(present, garrisonMax));
       }
       return;
     }
@@ -659,7 +691,7 @@ export class NpcSimulator {
     }
     this.establishedGarrisons.add(systemId);
     if (!this.garrisonBaseline.has(systemId)) {
-      this.garrisonBaseline.set(systemId, present);
+      this.garrisonBaseline.set(systemId, Math.min(present, garrisonMax));
     }
     logger.info(
       `Garrison: spawned ${spawned} hostile ships in ${systemId} (now ${present})`,
@@ -691,7 +723,10 @@ export class NpcSimulator {
     for (const systemId of galaxy.overmindSystems) {
       const baseline = this.garrisonBaseline.get(systemId);
       if (baseline === undefined) continue;
-      const present = this.countGarrisonPresent(galaxy, systemId);
+      // Members only: a wandering Overmind/pirate visitor must not push the
+      // count over the bud threshold (the bud-off would strip real defenders)
+      // or resurrect a cleared garrison via the present!==0 path.
+      const present = this.countGarrisonMembers(galaxy, systemId);
       if (present === 0) continue;
       // Siege freeze (mirrors fillGarrison): a garrison under active Ranger
       // assault neither grows nor buds off mid-battle — growth would negate
@@ -749,6 +784,7 @@ export class NpcSimulator {
     if (count === 0) return;
     for (const donor of donors.slice(0, count)) {
       this.garrisonIds.delete(donor.id);
+      this.arrivalDwellCountdown.delete(donor.id);
       const idx = galaxy.npcShips.indexOf(donor);
       if (idx >= 0) galaxy.npcShips.splice(idx, 1);
     }
@@ -777,10 +813,9 @@ export class NpcSimulator {
     rng: SeededRNG,
     sourceId: string,
   ): string | null {
-    const source = galaxy.systems.find((s) => s.id === sourceId);
-    const adjacent = (source?.connections ?? [])
-      .map((c) => c.toSystemId)
-      .filter((id) => !galaxy.isHostileSystem(id));
+    const adjacent = this.undirectedNeighbors(galaxy, sourceId).filter(
+      (id) => !galaxy.isHostileSystem(id),
+    );
     if (adjacent.length > 0) {
       return adjacent[rng.nextInt(0, adjacent.length - 1)];
     }
@@ -800,6 +835,26 @@ export class NpcSimulator {
       if (roll <= 0) return distant[i].id;
     }
     return distant[distant.length - 1].id;
+  }
+
+  /**
+   * Warp neighbours of a system over the **undirected** graph: outgoing edges
+   * plus systems whose own connections point here. ~25% of warp links are
+   * stored one-way (`ensureConnectivity` bridges — see the `frontierSystems`
+   * invariant in root CLAUDE.md), so a directed-only scan silently misses
+   * genuinely adjacent systems. Deterministic, systems-order listing.
+   */
+  private undirectedNeighbors(galaxy: Galaxy, systemId: string): string[] {
+    const ids = new Set<string>();
+    for (const sys of galaxy.systems) {
+      if (sys.id === systemId) {
+        for (const conn of sys.connections) ids.add(conn.toSystemId);
+      } else if (sys.connections.some((c) => c.toSystemId === systemId)) {
+        ids.add(sys.id);
+      }
+    }
+    ids.delete(systemId);
+    return [...ids];
   }
 
   /** Create one NPC with the given id at a random system. */
@@ -1171,7 +1226,7 @@ export class NpcSimulator {
     // Resolve abstract off-screen fights, then keep the population topped up.
     this.resolveOffscreenCombat(galaxy, rng, playerSystemId);
     for (const e of this.resolveCaptureFleets(galaxy)) events.push(e);
-    this.resolveLiberationAssaults(galaxy);
+    this.resolveLiberationAssaults(galaxy, playerSystemId);
     const raidEvents = this.resolveOffscreenPirateRaids(
       galaxy,
       rng,
@@ -1923,8 +1978,17 @@ export class NpcSimulator {
    *    itself, matching the detection/convoy paths — returning it here too
    *    would double-post the headline) and the survivors are released.
    * No-op when no assault is active, so galaxies without rallies are untouched.
+   *
+   * Skips the player's current system (same rule as `resolveOffscreenCombat`
+   * and the other abstract resolvers): those ships are visible, so garrison
+   * hulls silently dropping — or the system flipping with the liberation
+   * credited to the NPC path while the player is there to do it — reads as a
+   * glitch. The siege simply resumes once the player moves on.
    */
-  private resolveLiberationAssaults(galaxy: Galaxy): void {
+  private resolveLiberationAssaults(
+    galaxy: Galaxy,
+    playerSystemId?: string,
+  ): void {
     if (this.liberationAssaultIds.size === 0) return;
 
     const rng = new SeededRNG(`liberation_assault_resolve_${galaxy.gameDays}`);
@@ -1940,6 +2004,10 @@ export class NpcSimulator {
     }
 
     for (const [systemId, attackers] of bySystem) {
+      // Player present: defer — the fight there is visible, not abstract.
+      if (playerSystemId !== undefined && systemId === playerSystemId) {
+        continue;
+      }
       // Target already freed (another path): stand the assault force down.
       if (!galaxy.isHostileSystem(systemId)) {
         logger.info(
@@ -2121,13 +2189,14 @@ export class NpcSimulator {
         this.recentlyCaptured.splice(i--, 1);
         continue;
       }
-      const sys = galaxy.systems.find((s) => s.id === targetId);
-      const staging = sys?.connections.find(
-        (conn) => !galaxy.isHostileSystem(conn.toSystemId),
+      // Undirected neighbour scan: a fresh capture whose only friendly
+      // neighbour sits behind a one-way incoming edge must still dequeue.
+      const stagingId = this.undirectedNeighbors(galaxy, targetId).find(
+        (id) => !galaxy.isHostileSystem(id),
       );
-      if (!staging) continue;
+      if (!stagingId) continue;
       this.recentlyCaptured.splice(i, 1);
-      return { targetId, stagingId: staging.toSystemId };
+      return { targetId, stagingId };
     }
     return null;
   }

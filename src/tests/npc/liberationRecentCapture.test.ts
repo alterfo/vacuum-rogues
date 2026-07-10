@@ -188,4 +188,30 @@ describe("NpcSimulator liberation targeting of freshly-captured systems", () => 
     internals(sim).recordRecentCapture("sys_a");
     expect(internals(sim).recentlyCaptured).toEqual(["sys_b", "sys_a"]);
   });
+
+  it("dequeues a fresh capture whose only friendly neighbour is one-way incoming", () => {
+    // ~25% of warp links are stored one-way (ensureConnectivity bridges): the
+    // staging scan must treat the graph as undirected, or a fresh capture
+    // behind a one-way edge silently never gets its priority retake.
+    const sysN = makeSystem("sys_n", "Fresh", 0);
+    const sysF2 = makeSystem("sys_f2", "Staging2", 10);
+    sysF2.connections.push(new WarpPath("sys_f2", "sys_n", 3)); // one-way f2 → n
+    const galaxy = new Galaxy(
+      "galaxy_oneway_staging",
+      [sysN, sysF2],
+      new Overmind(),
+      [],
+      [],
+    );
+    galaxy.addOvermindSystem("sys_n");
+    const sim = new NpcSimulator();
+    internals(sim).recordRecentCapture("sys_n");
+
+    const campaign = sim.assembleLiberationCampaign(
+      galaxy,
+      new SeededRNG("oneway_staging"),
+    );
+    expect(campaign?.targetSystemId).toBe("sys_n");
+    expect(campaign?.stagingSystemId).toBe("sys_f2");
+  });
 });
