@@ -262,6 +262,42 @@ describe("NpcSimulator liberation assaults (real combat, no coin flip)", () => {
     expect(ranger.convoyId).toBeUndefined();
   });
 
+  it("stands a parked assault force down in a freed system even while the player camps it", () => {
+    const galaxy = makeGalaxy();
+    galaxy.addOvermindSystem("sys_a");
+    const garrison = Array.from({ length: 3 }, (_, n) =>
+      makeGarrisonShip(n, { damage: 5, hull: 400 }),
+    );
+    const rangers = Array.from({ length: 2 }, (_, n) =>
+      makeBesiegingRanger(`r${n}`, { damage: 20, hull: 200 }),
+    );
+    galaxy.npcShips.push(...garrison, ...rangers);
+
+    // Enroll the besiegers while the target is still hostile (player elsewhere).
+    const sim = new NpcSimulator();
+    galaxy.simulateDay();
+    sim.tick(galaxy, new SeededRNG("camp_enroll"), "sys_b");
+    const ids = (sim as unknown as { liberationAssaultIds: Set<string> })
+      .liberationAssaultIds;
+    expect(ids.size).toBe(2);
+
+    // The player clears the garrison and liberates the system personally...
+    for (const g of garrison) g.state = NpcState.DEAD;
+    galaxy.tryLiberate("sys_a");
+    expect(galaxy.isHostileSystem("sys_a")).toBe(false);
+
+    // ...then stays to dock/repair/trade. The stand-down is cleanup, not
+    // visible combat — it must NOT be deferred by the player-present skip,
+    // or the whole force sits frozen (held out of the movement loop) for as
+    // long as the player camps the system.
+    galaxy.simulateDay();
+    sim.tick(galaxy, new SeededRNG("camp_release"), "sys_a");
+    expect(ids.size).toBe(0);
+    for (const r of rangers) {
+      expect(r.convoyId).toBeUndefined();
+    }
+  });
+
   it("defers siege attrition for the player's current system, resuming after departure", () => {
     const galaxy = makeGalaxy();
     galaxy.addOvermindSystem("sys_a");

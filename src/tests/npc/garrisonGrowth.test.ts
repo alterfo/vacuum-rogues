@@ -153,6 +153,29 @@ describe("NpcSimulator garrison growth (Overmind organic expansion)", () => {
     expect(garrisonShips(galaxy, "sys_a")).toHaveLength(established);
   });
 
+  it("defers growth and bud-off for the player's current system", () => {
+    const galaxy = makeGalaxy();
+    galaxy.addOvermindSystem("sys_a");
+
+    const sim = new NpcSimulator();
+    sim.attachCampaignPeakPower(() => 1);
+    galaxy.gameDays = 1;
+    sim.tick(galaxy, new SeededRNG("skip_tick_0"), "sys_a");
+    const established = garrisonShips(galaxy, "sys_a").length;
+
+    // Growth day with the player parked in sys_a: a ship popping into
+    // existence (or defenders vanishing into a bud-off fleet) is visible
+    // under the player's nose — defer, same rule as the abstract resolvers.
+    galaxy.gameDays = 10;
+    sim.tick(galaxy, new SeededRNG("skip_tick_1"), "sys_a");
+    expect(garrisonShips(galaxy, "sys_a")).toHaveLength(established);
+
+    // Player moved on: the next growth day proceeds normally.
+    galaxy.gameDays = 20;
+    sim.tick(galaxy, new SeededRNG("skip_tick_2"), "sys_b");
+    expect(garrisonShips(galaxy, "sys_a")).toHaveLength(established + 1);
+  });
+
   it("does not grow pirate garrisons (growth is Overmind-only)", () => {
     const galaxy = makeGalaxy();
     galaxy.addPirateSystem("sys_a");

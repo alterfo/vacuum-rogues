@@ -660,12 +660,7 @@ export class NpcSimulator {
     let present = this.countGarrisonPresent(galaxy, systemId);
     if (present >= garrisonMin) {
       this.establishedGarrisons.add(systemId);
-      if (!this.garrisonBaseline.has(systemId)) {
-        // Clamp to the scaled max: after a save/load a fresh simulator lands
-        // here with an already-GROWN count — re-anchoring at that raw value
-        // would ratchet the growth band ~1.5× per reload without bound.
-        this.garrisonBaseline.set(systemId, Math.min(present, garrisonMax));
-      }
+      this.anchorGarrisonBaseline(systemId, present, garrisonMin, garrisonMax);
       return;
     }
     // A fully wiped garrison in an already-established system has been *cleared*
@@ -690,12 +685,38 @@ export class NpcSimulator {
       spawned++;
     }
     this.establishedGarrisons.add(systemId);
-    if (!this.garrisonBaseline.has(systemId)) {
-      this.garrisonBaseline.set(systemId, Math.min(present, garrisonMax));
-    }
+    this.anchorGarrisonBaseline(systemId, present, garrisonMin, garrisonMax);
     logger.info(
       `Garrison: spawned ${spawned} hostile ships in ${systemId} (now ${present})`,
     );
+  }
+
+  /**
+   * Record (or repair) a system's growth baseline. First establishment clamps
+   * to the scaled max: after a save/load a fresh simulator lands here with an
+   * already-GROWN count — re-anchoring at that raw value would ratchet the
+   * growth band ~1.5× per reload without bound. A recorded baseline below the
+   * CURRENT scaled minimum is stale — set in a weaker era, or by a bud-off
+   * that dropped below a floor the campaign ratchet has since raised. Left
+   * alone, its bud cap round(baseline × 1.5) sits inside the replenishment
+   * band, so every growth tick buds off a capture fleet whose cost the free
+   * daily top-up refunds — a perpetual subsidized fleet factory instead of
+   * slow organic growth. Re-anchoring at the scaled minimum keeps the
+   * grow→bud cycle self-funding (post-bud count stays at/above the floor) and
+   * matches what a reload's fresh re-record would produce anyway.
+   */
+  private anchorGarrisonBaseline(
+    systemId: string,
+    present: number,
+    garrisonMin: number,
+    garrisonMax: number,
+  ): void {
+    const prior = this.garrisonBaseline.get(systemId);
+    if (prior === undefined) {
+      this.garrisonBaseline.set(systemId, Math.min(present, garrisonMax));
+    } else if (prior < garrisonMin) {
+      this.garrisonBaseline.set(systemId, garrisonMin);
+    }
   }
 
   /**
@@ -715,12 +736,22 @@ export class NpcSimulator {
    * so early liberations stay within reach (the seeded campaign pacing gate in
    * sessionCompetence.test.ts reds if a weak-era player faces grown garrisons).
    */
-  private growGarrisons(galaxy: Galaxy, rng: SeededRNG): void {
+  private growGarrisons(
+    galaxy: Galaxy,
+    rng: SeededRNG,
+    playerSystemId?: string,
+  ): void {
     const powerBonus = overmindGarrisonPowerBonus(
       this.campaignPeakPowerSource?.() ?? 0,
     );
     if (powerBonus < 1) return;
     for (const systemId of galaxy.overmindSystems) {
+      // Player present: defer (same rule as the abstract siege resolvers) —
+      // a ship popping into existence, or a bud-off despawning live garrison
+      // ships the player may be tracking or fighting, reads as a glitch.
+      if (playerSystemId !== undefined && systemId === playerSystemId) {
+        continue;
+      }
       const baseline = this.garrisonBaseline.get(systemId);
       if (baseline === undefined) continue;
       // Members only: a wandering Overmind/pirate visitor must not push the
@@ -1252,6 +1283,7 @@ export class NpcSimulator {
       this.growGarrisons(
         galaxy,
         new SeededRNG(`garrison_growth_${galaxy.gameDays}`),
+        playerSystemId,
       );
     }
 
@@ -2004,16 +2036,20 @@ export class NpcSimulator {
     }
 
     for (const [systemId, attackers] of bySystem) {
-      // Player present: defer — the fight there is visible, not abstract.
-      if (playerSystemId !== undefined && systemId === playerSystemId) {
-        continue;
-      }
       // Target already freed (another path): stand the assault force down.
+      // Runs BEFORE the player-present defer — releasing parked rangers is
+      // cleanup, not visible combat, and the player liberating the system
+      // personally then staying to dock/repair is the normal case; deferring
+      // would hold the whole force frozen there for as long as they camp.
       if (!galaxy.isHostileSystem(systemId)) {
         logger.info(
           `Liberation assault at ${systemId} stands down — already freed`,
         );
         for (const a of attackers) this.releaseAssaultShip(a);
+        continue;
+      }
+      // Player present: defer — the fight there is visible, not abstract.
+      if (playerSystemId !== undefined && systemId === playerSystemId) {
         continue;
       }
 

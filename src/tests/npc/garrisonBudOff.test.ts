@@ -182,6 +182,29 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
     expect(internals(sim).garrisonBaseline.get("sys_a")).toBe(1);
   });
 
+  it("re-anchors a stale below-floor baseline instead of letting refills fund bud-offs", () => {
+    const galaxy = makeGalaxy();
+    galaxy.addOvermindSystem("sys_a");
+    const sim = new NpcSimulator();
+    // A weaker-era garrison: baseline 5 was recorded before the campaign
+    // ratchet lifted the replenishment floor to 7 (power bonus 2). Its bud cap
+    // round(5 × 1.5) = 8 sits inside the refill band [7, 12], so without
+    // re-anchoring every growth tick would bud off a 3-ship fleet whose cost
+    // the next day's free top-up refunds — a perpetual subsidized fleet
+    // factory that never grows organically.
+    seedGarrison(sim, galaxy, "sys_a", 5, 8);
+    sim.ensureGarrison(galaxy, new SeededRNG("stale_anchor_est"));
+    expect(internals(sim).garrisonBaseline.get("sys_a")).toBe(7);
+
+    // With the repaired baseline the growth pass grows organically
+    // (8 < cap round(7 × 1.5) = 11) instead of stripping defenders into a
+    // subsidized capture fleet.
+    galaxy.gameDays = 1;
+    internals(sim).growGarrisons(galaxy, new SeededRNG("stale_anchor_grow"));
+    expect(internals(sim).captureFleetIds.size).toBe(0);
+    expect(garrisonShips(galaxy, "sys_a")).toHaveLength(9);
+  });
+
   it("skips bud-off without erroring when every system is hostile", () => {
     const galaxy = makeGalaxy();
     galaxy.addOvermindSystem("sys_a");
