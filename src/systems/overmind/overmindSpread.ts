@@ -128,6 +128,43 @@ function frontierSystems(galaxy: SpreadGalaxyView): string[] {
   return galaxy.systems.filter((s) => frontier.has(s.id)).map((s) => s.id);
 }
 
+/** Sorts-after-everything sentinel for frontier candidates the BFS can't reach. */
+const UNREACHABLE_HOPS = Number.MAX_SAFE_INTEGER;
+
+/**
+ * Undirected warp-hop distances from `fromId` to every reachable system (BFS).
+ * Undirected for the same reason as `frontierSystems`: ~25% of warp links are
+ * stored one-way, and a directed walk would misjudge reachable neighbors.
+ * Deterministic: distances are shortest-path lengths, independent of visit order.
+ */
+function hopDistancesFrom(
+  galaxy: SpreadGalaxyView,
+  fromId: string,
+): Map<string, number> {
+  const adjacency = new Map<string, Set<string>>();
+  for (const sys of galaxy.systems) adjacency.set(sys.id, new Set());
+  for (const sys of galaxy.systems) {
+    for (const conn of sys.connections) {
+      if (!adjacency.has(conn.toSystemId)) continue;
+      adjacency.get(sys.id)!.add(conn.toSystemId);
+      adjacency.get(conn.toSystemId)!.add(sys.id);
+    }
+  }
+  const dist = new Map<string, number>([[fromId, 0]]);
+  const queue = [fromId];
+  for (let head = 0; head < queue.length; head++) {
+    const cur = queue[head];
+    const d = dist.get(cur)! + 1;
+    for (const next of adjacency.get(cur) ?? []) {
+      if (!dist.has(next)) {
+        dist.set(next, d);
+        queue.push(next);
+      }
+    }
+  }
+  return dist;
+}
+
 /**
  * Advance the Overmind arc one EOD tick.
  *
@@ -213,7 +250,23 @@ export function advanceOvermind(
     day >= next.lastSpreadDay + config.spreadIntervalDays;
 
   if (pastGrace && cadenceReady && overmindSet.size > 0) {
+    // Coherent-front bias: rank candidates by warp-hop proximity to the most
+    // recently captured system first (`overmindSystems` is append-ordered by
+    // `Galaxy.addOvermindSystem`, so the last entry is the freshest capture),
+    // hash-tiebreak within a distance band. Without this the pure hash re-rolls
+    // the whole border every tick and a single contiguous blob's growth can
+    // jump between its far edges — the "appears from all sides" playtest feel.
+    // Still fully deterministic by (galaxy.id, day, systemId).
+    const lastCaptured =
+      galaxy.overmindSystems[galaxy.overmindSystems.length - 1];
+    const proximity =
+      lastCaptured !== undefined
+        ? hopDistancesFrom(galaxy, lastCaptured)
+        : new Map<string, number>();
     const ranked = [...frontierSystems(galaxy)].sort((a, b) => {
+      const da = proximity.get(a) ?? UNREACHABLE_HOPS;
+      const db = proximity.get(b) ?? UNREACHABLE_HOPS;
+      if (da !== db) return da - db;
       const ha = hashStr(`${galaxy.id}:${day}:${a}`);
       const hb = hashStr(`${galaxy.id}:${day}:${b}`);
       if (ha !== hb) return ha - hb;
