@@ -124,6 +124,10 @@ const GARRISON_GROWTH_INTERVAL_DAYS = 10;
  *  garrison reaches round(baseline × threshold) it stops growing (the excess
  *  buds off as a capture fleet — organic-expansion arc). */
 const GARRISON_GROWTH_BUD_THRESHOLD = 1.5;
+/** Fraction of a garrison's baseline that buds off as a capture fleet once the
+ *  garrison reaches the growth threshold — half the excess flies out to seize
+ *  a neighbouring (or distant) system, and the cycle restarts. */
+const GARRISON_BUD_OFF_FRACTION = 0.5;
 
 /** How often (game days) the Overmind launches a fleet to capture a new system. */
 const CAPTURE_FLEET_INTERVAL = 60;
@@ -643,7 +647,12 @@ export class NpcSimulator {
       const present = this.countGarrisonPresent(galaxy, systemId);
       if (present === 0) continue;
       const cap = Math.round(baseline * GARRISON_GROWTH_BUD_THRESHOLD);
-      if (present >= cap) continue;
+      if (present >= cap) {
+        // Threshold reached: the grown excess buds off as a capture fleet
+        // instead of piling up further (see budOffGarrison).
+        this.budOffGarrison(galaxy, rng, systemId, baseline, present);
+        continue;
+      }
       const id = `garrison_ovg_${systemId}_${galaxy.gameDays}`;
       galaxy.npcShips.push(this.spawnOvermindInSystem(rng, id, systemId));
       this.garrisonIds.add(id);
@@ -651,6 +660,95 @@ export class NpcSimulator {
         `Garrison growth: +1 ship in ${systemId} (now ${present + 1}/${cap})`,
       );
     }
+  }
+
+  /**
+   * Bud off a grown garrison's excess as a new capture fleet (organic
+   * expansion): round(baseline × GARRISON_BUD_OFF_FRACTION) standing-garrison
+   * ships leave the system and fly — a normal multi-day journey, never an
+   * instant flip — to besiege a neutral system, resolved by the same
+   * {@link resolveCaptureFleets} siege loop as the periodic capture fleet.
+   * Donor garrison ships are despawned and replaced one-for-one by
+   * `capture_`-prefixed fleet ships so {@link reconcileTransientState}'s
+   * id-prefix rebuild classifies them correctly across a mid-flight save/load.
+   * The source garrison's recorded baseline resets to its post-bud-off size so
+   * the grow→bud cycle repeats. Skips silently (retrying next growth interval)
+   * when no neutral target exists or no live garrison ship can be donated.
+   */
+  private budOffGarrison(
+    galaxy: Galaxy,
+    rng: SeededRNG,
+    systemId: string,
+    baseline: number,
+    present: number,
+  ): void {
+    const targetId = this.pickBudOffTarget(galaxy, rng, systemId);
+    if (!targetId) return;
+    const donors = galaxy.npcShips.filter(
+      (n) =>
+        n.currentSystemId === systemId &&
+        n.state !== NpcState.DEAD &&
+        n.state !== NpcState.TRAVELING &&
+        this.garrisonIds.has(n.id),
+    );
+    const count = Math.min(
+      donors.length,
+      Math.max(1, Math.round(baseline * GARRISON_BUD_OFF_FRACTION)),
+    );
+    if (count === 0) return;
+    for (const donor of donors.slice(0, count)) {
+      this.garrisonIds.delete(donor.id);
+      const idx = galaxy.npcShips.indexOf(donor);
+      if (idx >= 0) galaxy.npcShips.splice(idx, 1);
+    }
+    this.launchCaptureFleet(
+      galaxy,
+      rng,
+      systemId,
+      targetId,
+      count,
+      `capture_bud_${systemId}_${galaxy.gameDays}`,
+    );
+    this.garrisonBaseline.set(systemId, present - count);
+    logger.info(
+      `Garrison bud-off: ${count} ships leave ${systemId} to seize ${targetId}`,
+    );
+  }
+
+  /**
+   * Pick where a bud-off fleet strikes: a neutral system directly connected to
+   * the source garrison ("neighbouring"); when every neighbour is hostile, any
+   * neutral system in the galaxy, weighted toward nearer ones by travel time
+   * ("or distant"). Null when the whole galaxy is hostile.
+   */
+  private pickBudOffTarget(
+    galaxy: Galaxy,
+    rng: SeededRNG,
+    sourceId: string,
+  ): string | null {
+    const source = galaxy.systems.find((s) => s.id === sourceId);
+    const adjacent = (source?.connections ?? [])
+      .map((c) => c.toSystemId)
+      .filter((id) => !galaxy.isHostileSystem(id));
+    if (adjacent.length > 0) {
+      return adjacent[rng.nextInt(0, adjacent.length - 1)];
+    }
+    const distant = galaxy.systems.filter(
+      (s) => s.id !== sourceId && !galaxy.isHostileSystem(s.id),
+    );
+    if (distant.length === 0) return null;
+    // Weight ∝ 1 / travel-days: nearer neutral systems are likelier targets,
+    // but any neutral system can draw the strike.
+    const weights = distant.map(
+      (s) => 1 / this.travelDays(galaxy, sourceId, s.id),
+    );
+    const total = weights.reduce((a, b) => a + b, 0);
+    let roll = rng.next() * total;
+    for (let i = 0; i < distant.length; i++) {
+      roll -= weights[i];
+      if (roll <= 0) return distant[i].id;
+    }
+    return distant[distant.length - 1].id;
   }
 
   /** Create one NPC with the given id at a random system. */
@@ -1584,8 +1682,34 @@ export class NpcSimulator {
     const front = fronts[rng.nextInt(0, fronts.length - 1)];
     const { hostileId, targetId } = front;
     const count = rng.nextInt(CAPTURE_FLEET_MIN, CAPTURE_FLEET_MAX);
+    this.launchCaptureFleet(
+      galaxy,
+      rng,
+      hostileId,
+      targetId,
+      count,
+      `capture_${galaxy.gameDays}_${targetId}`,
+    );
+  }
+
+  /**
+   * Spawn `count` fresh Overmind ships in `hostileId`, bound for `targetId`
+   * with a HUNT goal via the normal multi-day travel mechanism, and hold them
+   * in {@link captureFleetIds} so {@link resolveCaptureFleets} runs their
+   * siege. Shared body of the periodic {@link assembleCaptureFleet} trigger
+   * and the garrison {@link budOffGarrison} path. `fleetId` must stay
+   * `capture_`-prefixed — {@link reconcileTransientState} reclassifies these
+   * ships by that prefix after a save/load.
+   */
+  private launchCaptureFleet(
+    galaxy: Galaxy,
+    rng: SeededRNG,
+    hostileId: string,
+    targetId: string,
+    count: number,
+    fleetId: string,
+  ): void {
     const daysToArrival = this.travelDays(galaxy, hostileId, targetId);
-    const fleetId = `capture_${galaxy.gameDays}_${targetId}`;
 
     for (let i = 0; i < count; i++) {
       const id = `${fleetId}_${i}`;

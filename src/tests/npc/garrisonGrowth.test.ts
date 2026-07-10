@@ -102,7 +102,7 @@ describe("NpcSimulator garrison growth (Overmind organic expansion)", () => {
     expect(garrisonShips(galaxy, "sys_a")).toHaveLength(established);
   });
 
-  it("stops growing at round(baseline × 1.5) and never exceeds it", () => {
+  it("grows by exactly 1 per pass and never exceeds round(baseline × 1.5)", () => {
     const galaxy = makeGalaxy();
     galaxy.addOvermindSystem("sys_a");
 
@@ -119,13 +119,12 @@ describe("NpcSimulator garrison growth (Overmind organic expansion)", () => {
       sim as unknown as { growGarrisons(g: Galaxy, r: SeededRNG): void }
     ).growGarrisons.bind(sim);
 
-    // Each pass below the cap adds exactly 1; at the cap it plateaus. Eight
-    // passes is more than enough headroom (cap − baseline ≤ 5).
-    for (let pass = 1; pass <= 8; pass++) {
+    // Each pass below the cap adds exactly 1 and growth never pushes the
+    // count past the cap. What happens ON reaching the cap — the excess buds
+    // off as a traveling capture fleet — is covered by garrisonBudOff.test.ts.
+    for (let pass = 1; pass <= cap - baseline; pass++) {
       grow(galaxy, new SeededRNG(`cap_grow_${pass}`));
-      expect(garrisonShips(galaxy, "sys_a")).toHaveLength(
-        Math.min(baseline + pass, cap),
-      );
+      expect(garrisonShips(galaxy, "sys_a")).toHaveLength(baseline + pass);
     }
     expect(garrisonShips(galaxy, "sys_a")).toHaveLength(cap);
   });
