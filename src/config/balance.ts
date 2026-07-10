@@ -251,6 +251,18 @@ export const LOCAL_DELIVERY_REWARD_MARGIN = 3.1;
 export const RARE_TECH_THRESHOLD = 6;
 
 /**
+ * First in-game day the **apex engine** (`eq_engine_v`) may appear in any shop
+ * (`GearBase.minDay`, enforced by {@link ShopGenerator.generateShop}). The
+ * natural tech climb reaches tech 7 in well under a year (research-lab systems
+ * advance +1 tech / 50 days regardless of starting level), which made the
+ * endgame 2× cruise speed available far too early. Gating the one apex engine
+ * by calendar day — rather than slowing tech growth galaxy-wide, which would
+ * delay every other tech-7/8 item — lands it around year 3 of the documented
+ * 2–3-year campaign pacing. Tune here, never at call sites.
+ */
+export const APEX_ENGINE_MIN_DAY = 1050;
+
+/**
  * Probability that killing an Overmind enemy drops artifacts (per kill).
  *
  * Oddity sweep (Task 4): lowered 0.4 → 0.25 to tame combat as a money-printer.
@@ -373,9 +385,10 @@ export const GAME_BALANCE = {
    * Drift/pursuit speed (px/ms) of an **interceptor-class** NPC — OVERMIND craft
    * and PIRATE raiders (see `npcCruiseSpeed`). Deliberately faster than the
    * fresh starter ship (~0.11 px/ms with `eq_engine_i`), so escaping an *elite*
-   * threat stays upgrade-gated: the mid engine `eq_engine_iii` (tech 5) only
-   * *ties* it, and only the rare, very-expensive apex engine `eq_engine_v`
-   * (tech 7) finally *out-runs* it — the reward for the long climb to top tech.
+   * threat stays upgrade-gated: the mid engine `eq_engine_iii` (tech 5, 0.176)
+   * stays below it, and only the rare, very-expensive apex engine `eq_engine_v`
+   * (tech 7, 0.22 — a thin 10% margin) finally *out-runs* it — the reward for
+   * the long, day-gated (`APEX_ENGINE_MIN_DAY`) climb to top tech.
    */
   npcSpeed: 0.2,
   /**

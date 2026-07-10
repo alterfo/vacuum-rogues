@@ -510,7 +510,8 @@ export class ShipLoadout {
     const maxHull = Math.round(hull.hp * hullEff.defense);
     let weaponDamage = 0;
     let weaponCount = 0;
-    // Best engine speed in px/ms: 0.05 + techLevel × 0.03
+    // Best engine speed in px/ms: 0.066 + techLevel × 0.022 — tuned so the
+    // apex engine (tech 7 → 0.22) is exactly 2× the starter (tech 2 → 0.11).
     let bestEngineSpeed = 0;
     let radarRange = 0;
     let scannerStrength = 0;
@@ -544,7 +545,7 @@ export class ShipLoadout {
         switch (e.equipmentClass) {
           case EquipmentClass.ENGINE: {
             // Higher tech level wins; micromodule scales the derived speed
-            const spd = (0.05 + e.techLevel * 0.03) * m;
+            const spd = (0.066 + e.techLevel * 0.022) * m;
             if (spd > bestEngineSpeed) bestEngineSpeed = spd;
             hasEngine = true;
             break;

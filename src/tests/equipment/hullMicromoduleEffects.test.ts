@@ -105,7 +105,7 @@ describe("ShipLoadout — hull micromodule effects in derivedStats", () => {
 
   it("an energy→engine (engine-targeted) hull micromodule raises engine speed", () => {
     const lo = new ShipLoadout("hull_warden");
-    expect(lo.install("eq_engine_i")).toBe(true); // tech 2 → 0.05 + 2*0.03 = 0.11
+    expect(lo.install("eq_engine_i")).toBe(true); // tech 2 → 0.066 + 2*0.022 = 0.11
     const base = lo.derivedStats().speed;
     expect(base).toBeCloseTo(0.11, 3);
 

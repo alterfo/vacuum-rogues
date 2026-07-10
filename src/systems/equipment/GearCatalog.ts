@@ -15,7 +15,7 @@ import {
   type MicroModule,
 } from "@/types";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
-import { RARE_TECH_THRESHOLD } from "@/config/balance";
+import { APEX_ENGINE_MIN_DAY, RARE_TECH_THRESHOLD } from "@/config/balance";
 
 export enum GearKind {
   HULL = "HULL",
@@ -65,6 +65,14 @@ interface GearBase {
    * absent ⇒ common (the implicit default for every mid/low-tech item).
    */
   readonly rare?: boolean;
+  /**
+   * Earliest in-game day this item may be stocked by any shop
+   * ({@link ShopGenerator}) — a calendar gate on top of the tech-level and
+   * stock-chance filters. Optional: absent ⇒ available whenever tech allows
+   * (the implicit default for every item except the apex engine, which sets
+   * `APEX_ENGINE_MIN_DAY` so its 2× cruise speed stays a ~year-3 payoff).
+   */
+  readonly minDay?: number;
 }
 
 export interface HullSpec extends GearBase {
@@ -363,9 +371,11 @@ const EQUIPMENT: EquipmentSpec[] = [
   },
   {
     // Apex engine: the rare, very-expensive top tier. Its tech-7 cruise speed
-    // (0.05 + 7×0.03 = 0.26 px/ms) finally out-runs the interceptor tier
-    // (`npcSpeed` 0.2) — the reward for the long climb to top tech. Priced at the
-    // ceiling of the tech-7/8 band (≤ 14000) and stocked only by high-end markets.
+    // (0.066 + 7×0.022 = 0.22 px/ms, exactly 2× the starter's 0.11) still
+    // out-runs the interceptor tier (`npcSpeed` 0.2), though the margin is now
+    // thin (10%) — flagged for a balance follow-up if escapes feel too slow.
+    // Priced at the ceiling of the tech-7/8 band (≤ 14000), stocked only by
+    // high-end markets, and calendar-gated (`minDay`) to a ~year-3 payoff.
     id: "eq_engine_v",
     name: "Двигатель Тип-V",
     kind: GearKind.EQUIPMENT,
@@ -376,6 +386,7 @@ const EQUIPMENT: EquipmentSpec[] = [
     equipmentClass: EquipmentClass.ENGINE,
     potency: 1.8,
     rare: true,
+    minDay: APEX_ENGINE_MIN_DAY,
   },
   {
     id: "eq_tank",

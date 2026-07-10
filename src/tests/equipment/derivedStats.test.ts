@@ -2,21 +2,21 @@ import { describe, it, expect } from "vitest";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 
 describe("ShipLoadout.derivedStats — tech-based formulas (Task 6)", () => {
-  it("engine speed = 0.05 + techLevel × 0.03 px/ms", () => {
+  it("engine speed = 0.066 + techLevel × 0.022 px/ms", () => {
     const lo = new ShipLoadout("hull_corvette");
     lo.install("eq_engine_i"); // tech 2
     lo.install("eq_tank");
     const s = lo.derivedStats();
-    // tech 2: 0.05 + 2*0.03 = 0.11
+    // tech 2: 0.066 + 2*0.022 = 0.11
     expect(s.speed).toBeCloseTo(0.11, 3);
   });
 
   it("higher-tech engine wins when both installed", () => {
     const lo = new ShipLoadout("hull_bastion"); // 9 slots
     lo.install("eq_engine_i"); // tech 2 → 0.11
-    lo.install("eq_engine_iii"); // tech 5 → 0.20 → wins
+    lo.install("eq_engine_iii"); // tech 5 → 0.176 → wins
     lo.install("eq_tank");
-    expect(lo.derivedStats().speed).toBeCloseTo(0.2, 3);
+    expect(lo.derivedStats().speed).toBeCloseTo(0.176, 3);
   });
 
   it("fuel capacity = 50 base + potency per tank, summed", () => {
