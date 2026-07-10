@@ -33,18 +33,18 @@ function stubTouchEnv(): void {
   vi.stubGlobal("innerHeight", 844);
 }
 
-function makeRenderer(uiLayer: Container): Renderer {
+function makeRenderer(uiLayer: Container, w = 800, h = 600): Renderer {
   return {
-    app: { screen: { width: 800, height: 600 } },
+    app: { screen: { width: w, height: h } },
     stage: new Container(),
     uiLayer,
     gameLayer: new Container(),
   } as unknown as Renderer;
 }
 
-function build(): { hud: FlightHud; uiLayer: Container } {
+function build(w = 800, h = 600): { hud: FlightHud; uiLayer: Container } {
   const uiLayer = new Container();
-  const renderer = makeRenderer(uiLayer);
+  const renderer = makeRenderer(uiLayer, w, h);
   const gameEngine = {
     galaxy: { gameDays: 0 },
     audio: {
@@ -100,6 +100,35 @@ describe("FlightHud — touch ✕ cancel button", () => {
     hud.onCancel = () => cancels++;
     clickLabel(uiLayer, "✕");
     expect(cancels).toBe(1);
+    hud.destroy();
+  });
+
+  it("on a narrow phone the ✕/ХОД pair shifts right of the bottom-left [МЕНЮ] lane instead of overlapping it", () => {
+    // Regression: with [МЕНЮ] at its bottom-left corner anchor (x=20, y=h-40)
+    // the centred ✕ (x = w/2 - 134, same bottom band) lands on top of the
+    // [МЕНЮ] text under ~430px width and steals its taps. The cluster must
+    // clamp right of the [МЕНЮ]/♿ lane (BOTTOM_LEFT_LANE_W = 104 in
+    // FlightHud.ts — [МЕНЮ]'s x=20 + ~65px bold text at the largest scale).
+    stubTouchEnv();
+    const { hud, uiLayer } = build(390, 844);
+    hud.initialize();
+    const buttonX = (label: string): number => {
+      const text = allTexts(uiLayer).find((t) => t.text === label);
+      if (!text) throw new Error(`No "${label}" button`);
+      let node: Container | null = text;
+      while (node && node.eventMode !== "static") node = node.parent;
+      if (!node) throw new Error(`No clickable ancestor for "${label}"`);
+      return node.x;
+    };
+    // Creation path: the ✕ clears the lane, ХОД keeps its 64px offset from it.
+    expect(buttonX("✕")).toBeGreaterThanOrEqual(104);
+    expect(buttonX("▶ ХОД")).toBe(buttonX("✕") + 64);
+    // Resize path (reposition) holds the same clamp.
+    hud.reposition(390, 844);
+    expect(buttonX("✕")).toBeGreaterThanOrEqual(104);
+    // A wide touch screen keeps the exact centred position (no clamp).
+    hud.reposition(800, 600);
+    expect(buttonX("✕")).toBe(800 / 2 - 134);
     hud.destroy();
   });
 

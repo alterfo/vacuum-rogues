@@ -4,7 +4,9 @@
  *
  * Orbital position is a pure function of `SpaceFlightScene.currentDay`
  * (`gameDays + distanceTraveled/DISTANCE_PER_DAY + waitDayAccum`), surfaced to the
- * planets through `getOrbitalDay: () => this.currentDay`. During an
+ * planets through `getOrbitalDay: () => this.orbitalVisualDay` (currentDay plus
+ * the moving-only visual floor — zero for the stationary fights here, see
+ * orbitVisualFloorDuringFlight.test.ts). During an
  * in-flight fight the ship is stationary, so `distanceTraveled` never grows, and
  * `advanceWaitTime` — the only sub-day source for a *still* ship — is gated off while
  * a fight is active (the wait guard at the bottom of `updateShip` excludes
@@ -110,8 +112,9 @@ function buildCombatScene(opts: { inCombat?: boolean } = {}) {
 
   const updateShip = (dt: number) =>
     (scene as unknown as { updateShip(dt: number): void }).updateShip(dt);
-  /** The scene's REAL fractional-day getter — the production source that
-   * `getOrbitalDay: () => this.currentDay` hands to the planets. Reading it here
+  /** The scene's REAL fractional-day getter — the base of the
+   * `getOrbitalDay: () => this.orbitalVisualDay` source the planets read
+   * (the visual boost on top is zero for a stationary fight). Reading it here
    * (not a local re-derivation) keeps the assertion honest. */
   const currentDay = () => s.currentDay as number;
   return { s, galaxy, combatPause, updateShip, currentDay };

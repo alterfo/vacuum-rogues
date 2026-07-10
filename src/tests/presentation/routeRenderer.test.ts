@@ -131,6 +131,26 @@ describe("RouteRenderer (extracted route overlay)", () => {
     // orange landing marker, and the removed yellow per-day tick (0xffee66).
     expect(strokeColors).toContain(0xff00ff);
     expect(strokeColors).not.toContain(0xffee66);
+
+    // The diamond must be CLOSED: PixiJS 8's ShapePath.poly assigns
+    // `closePath = close` verbatim (its "true by default" JSDoc is not
+    // implemented), so an omitted close leaves a stroked three-sided diamond
+    // with a visible gap. The poly path instruction records [points, close].
+    const polyInstructions = (
+      route.graphics!.context as unknown as {
+        instructions: {
+          action: string;
+          data: {
+            path?: { instructions: { action: string; data: unknown[] }[] };
+          };
+        }[];
+      }
+    ).instructions
+      .filter((i) => i.action === "stroke" && i.data.path)
+      .flatMap((i) => i.data.path!.instructions)
+      .filter((pi) => pi.action === "poly");
+    expect(polyInstructions.length).toBe(1);
+    expect(polyInstructions[0].data[1]).toBe(true);
   });
 
   it("draws only the cyan course line — no yellow per-day tick crosses (playtest4 B) — still holds with the day marker present", () => {

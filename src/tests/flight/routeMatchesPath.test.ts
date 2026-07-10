@@ -323,4 +323,17 @@ describe("Task 3: one-day-travel marker on the planned route", () => {
 
     expect(dayMarker.drawDayMarker).not.toHaveBeenCalled();
   });
+
+  it("draws no day marker on a route of EXACTLY one day (it would sit on the end marker)", () => {
+    const h = makeHarness({ x: 100, y: 300 }, FAR_STAR);
+    const dayMarker = h.s.routeRenderer as {
+      drawDayMarker: ReturnType<typeof vi.fn>;
+    };
+
+    // Exactly 500px — pointAlongPath's strict `<` reports done:true at the
+    // total length, so the boundary case draws no mid-route marker.
+    h.plan(600, 300);
+
+    expect(dayMarker.drawDayMarker).not.toHaveBeenCalled();
+  });
 });

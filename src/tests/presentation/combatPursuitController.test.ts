@@ -364,6 +364,155 @@ describe("CombatPursuitController real-time combat orbit", () => {
     );
   });
 
+  it("clamps BOTH queued orbit waypoints (carrot AND the ×2 far point) to the boundary", () => {
+    // getTargetX/Y only reads the first path point — capture the full setPath
+    // arg so the far point (COMBAT_ORBIT_CARROT × 2, the leg WAYPOINT_SWITCH
+    // can promote before any re-steer) is asserted in-bounds too.
+    const npc = makeNpc("edge2");
+    const sprite = makeSprite(npc, 2700, 0);
+    const physics = new ShipPhysics(2700, 0, 0.5, 0);
+    const paths: { x: number; y: number }[][] = [];
+    const origSetPath = physics.setPath.bind(physics);
+    physics.setPath = (pts) => {
+      paths.push(pts);
+      origSetPath(pts);
+    };
+    const h = makeHarness({
+      physics,
+      inCombat: true,
+      combatTargetId: "edge2",
+      sprites: [sprite],
+      starCenter: { x: 0, y: 0 },
+    });
+    h.ctrl.updateCombat(50);
+
+    expect(paths.length).toBeGreaterThan(0);
+    for (const point of paths[paths.length - 1]) {
+      expect(Math.hypot(point.x, point.y)).toBeLessThanOrEqual(
+        SYSTEM_GEOMETRY.boundaryRadius + 1,
+      );
+    }
+  });
+
+  it("keeps the clamped waypoints DISTINCT so the non-final-leg cruise contract survives", () => {
+    // Ship pinned at the wall heading outward, the clamped leg inside
+    // ShipPhysics' STOP_THRESHOLD arrival window (2795 of 2800 → tExit 5):
+    // the leftover distance slides along the boundary arc — carrot and the
+    // ×2 far point must NOT collapse onto the ship's own position, where
+    // setPath([P, P]) is an instant arrival and the strafe parks dead at the
+    // edge.
+    const npc = makeNpc("edge3");
+    const sprite = makeSprite(npc, 2795, 0);
+    const physics = new ShipPhysics(2795, 0, 0.5, 0);
+    const paths: { x: number; y: number }[][] = [];
+    const origSetPath = physics.setPath.bind(physics);
+    physics.setPath = (pts) => {
+      paths.push(pts);
+      origSetPath(pts);
+    };
+    const h = makeHarness({
+      physics,
+      inCombat: true,
+      combatTargetId: "edge3",
+      sprites: [sprite],
+      starCenter: { x: 0, y: 0 },
+    });
+    h.ctrl.updateCombat(50);
+
+    const last = paths[paths.length - 1];
+    expect(last.length).toBe(2);
+    const gap = Math.hypot(last[1].x - last[0].x, last[1].y - last[0].y);
+    // Comfortably above ShipPhysics.WAYPOINT_SWITCH (48px), so the far point
+    // can never be promoted-and-arrived in the same steer frame.
+    expect(gap).toBeGreaterThan(100);
+  });
+
+  it("keeps strafing along the edge (never parks) when the orbit circle pokes past the boundary", () => {
+    // Real ShipPhysics driven over ~48s of frames against a stationary target
+    // whose orbit circle crosses the boundary — the exact edge-fight scenario
+    // of 20260709-combat-feel-fixes Task 1. The pre-arc-slide clamp collapsed
+    // carrot === far here and the ship sat motionless (0px travelled for 38s)
+    // while being shot; the arc slide degrades the orbit into an
+    // edge-following strafe instead.
+    const npc = makeNpc("edge4");
+    const targetX = SYSTEM_GEOMETRY.boundaryRadius - ORBIT / 2;
+    const sprite = makeSprite(npc, targetX, 0);
+    const physics = new ShipPhysics(targetX - ORBIT, 0, 0.5, 0);
+    const h = makeHarness({
+      physics,
+      inCombat: true,
+      combatTargetId: "edge4",
+      sprites: [sprite],
+      starCenter: { x: 0, y: 0 },
+    });
+
+    let maxR = 0;
+    let travelled = 0;
+    const FRAMES = 3000;
+    const WARMUP = 600; // let the approach/orbit settle first
+    let px = physics.shipX;
+    let py = physics.shipY;
+    for (let i = 0; i < FRAMES; i++) {
+      h.ctrl.updateCombat(16);
+      physics.update(16);
+      if (i >= WARMUP) {
+        maxR = Math.max(maxR, Math.hypot(physics.shipX, physics.shipY));
+        travelled += Math.hypot(physics.shipX - px, physics.shipY - py);
+      }
+      px = physics.shipX;
+      py = physics.shipY;
+    }
+
+    // The SHIP stays bounded by the fight's own geometry — the orbit may
+    // legitimately swing past the edge by up to COMBAT_ORBIT_RANGE (0.6 × WR)
+    // plus momentum (ShipPhysics never clamps position; the excursion
+    // re-enters on the next orbit pass). The pre-fix failure mode was the
+    // opposite: travelled = 0 — parked dead at the wall for the whole sim.
+    expect(maxR).toBeLessThanOrEqual(
+      SYSTEM_GEOMETRY.boundaryRadius + ORBIT + 60,
+    );
+    expect(travelled).toBeGreaterThan(5000);
+  });
+
+  it("re-enters promptly (no runaway) when pushed marginally outside the boundary", () => {
+    // A ship at/past the boundary is deliberately UNclamped (caging it at its
+    // current radius collapses the orbit-hold on a target cruising past the
+    // edge — see combatOrbit.test.ts). The excursion must instead be
+    // self-correcting: pushed outside too close to an edge target (radial
+    // push pointing further out), the orbit's pull keeps the ship bounded and
+    // brings it back inside within a few seconds.
+    const npc = makeNpc("edge5");
+    const sprite = makeSprite(npc, SYSTEM_GEOMETRY.boundaryRadius, 0);
+    const start = SYSTEM_GEOMETRY.boundaryRadius + 50;
+    const physics = new ShipPhysics(start, 0, 0.5, 0);
+    const h = makeHarness({
+      physics,
+      inCombat: true,
+      combatTargetId: "edge5",
+      sprites: [sprite],
+      starCenter: { x: 0, y: 0 },
+    });
+
+    let maxR = 0;
+    let everInside = false;
+    for (let i = 0; i < 3000; i++) {
+      h.ctrl.updateCombat(16);
+      physics.update(16);
+      const r = Math.hypot(physics.shipX, physics.shipY);
+      maxR = Math.max(maxR, r);
+      if (r <= SYSTEM_GEOMETRY.boundaryRadius) everInside = true;
+    }
+    // Bounded by the fight's own geometry: orbiting an ON-boundary target
+    // legitimately swings out to boundary + COMBAT_ORBIT_RANGE (0.6 × WR) +
+    // momentum — a runaway carrot would blow thousands of px past this. The
+    // ship also re-enters the boundary (the excursion is an orbit pass, not a
+    // departure).
+    expect(maxR).toBeLessThanOrEqual(
+      SYSTEM_GEOMETRY.boundaryRadius + ORBIT + 60,
+    );
+    expect(everInside).toBe(true);
+  });
+
   it("leaves the orbit unclamped when the ship is well inside the boundary", () => {
     // Same geometry as the "circle-strafes" case above, but with a realistic
     // near star center instead of the far test sentinel — the un-clamped

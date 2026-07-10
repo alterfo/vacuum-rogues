@@ -13,6 +13,7 @@ import {
   pointAlongPath,
   takeoffArcPath,
   warpEdgePoint,
+  type Point,
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import { PanZoomController } from "@/systems/PanZoomController";
@@ -106,9 +107,15 @@ export class SpaceFlightScene extends GameScene {
   // stationary real-time fight (combat advances orbits but not the calendar; see updateShip).
   private waitDayAccum: number = 0;
   private readonly MS_PER_WAIT_DAY: number = 1000; // день = секунда (US-070); must equal MS_PER_ORBITAL_DAY
-  private visualOrbitBoost: number = 0; // orbit-visual day floor while moving — flight/CLAUDE.md
+  private visualOrbitBoost: number = 0; // orbit-visual day top-up while moving (additive, NOT a floor) — flight/CLAUDE.md
   private orbitTopUp = (dt: number): number =>
     orbitBump(this.combatPause.paused, dt, this.shipPhysics?.timeScale ?? 1);
+  // The day the planets render from: currentDay plus the presentation-only
+  // moving top-up. The single production source behind getOrbitalDay —
+  // orbitVisualFloorDuringFlight.test.ts asserts against THIS getter.
+  private get orbitalVisualDay(): number {
+    return this.currentDay + this.visualOrbitBoost;
+  }
   // Fractional "day of turn" (gameDays + sub-day move/wait/combat); feeds orbits + the HUD date read-out.
   private get currentDay(): number {
     const days = this.gameEngine?.galaxy?.gameDays ?? 0;
@@ -422,7 +429,7 @@ export class SpaceFlightScene extends GameScene {
           y: this.starRenderer.centerY,
         }),
         isTurnRunning: () => this.isTurnRunning,
-        getOrbitalDay: () => this.currentDay + this.visualOrbitBoost,
+        getOrbitalDay: () => this.orbitalVisualDay,
         showPlanetTooltip: (planet, faction, sx, sy, landingDenial) =>
           this.hud.showPlanetTooltip(planet, faction, sx, sy, landingDenial),
         hideTooltip: () => this.hud.hideTooltip(),
@@ -785,6 +792,7 @@ export class SpaceFlightScene extends GameScene {
     this.bgElapsed = 0;
     this.shipPhysics = null;
     this.distanceTraveled = 0;
+    this.visualOrbitBoost = 0;
     this.clearPlannedRoute(); // Clean up route line
     logger.info("SpaceFlightScene destroyed");
   }
@@ -1344,10 +1352,14 @@ export class SpaceFlightScene extends GameScene {
 
     // Turn-based time: only advance days when ship is moving (every DISTANCE_PER_DAY px = 1 day).
     if (this.shipPhysics.isMoving && this.shipPhysics.currentSpeed > 0.01) {
-      this.visualOrbitBoost += this.orbitTopUp(deltaTime); // orbit-visual top-up only
       const dx = this.shipPhysics.shipX - prevX;
       const dy = this.shipPhysics.shipY - prevY;
-      this.distanceTraveled += Math.sqrt(dx * dx + dy * dy);
+      const stepPx = Math.sqrt(dx * dx + dy * dy);
+      // ADDITIVE top-up (deliberately NOT a floor): a shortfall-only top-up
+      // reroutes the letsplay campaign gate (longGameCompetence (c)) via the
+      // planets' live geometry — see flight/CLAUDE.md before changing this.
+      this.visualOrbitBoost += this.orbitTopUp(deltaTime);
+      this.distanceTraveled += stepPx;
       while (this.distanceTraveled >= this.DISTANCE_PER_DAY) {
         this.distanceTraveled -= this.DISTANCE_PER_DAY;
         // Combat freezes the REAL calendar (NPC sim/markets) — see orbitsDuringCombat.
@@ -1526,7 +1538,15 @@ export class SpaceFlightScene extends GameScene {
   private planRouteTo(x: number, y: number, landing?: LandingHint): void {
     if (!this.shipPhysics) return;
     this.plannedRoute = { x, y, landing };
-    this.routePath = computeFlightPath(
+    this.routePath = this.flightPathTo(x, y, landing);
+    this.plotRoute();
+  }
+
+  /** Star-avoiding (planet target: spiral-in) path from the ship's CURRENT position —
+   * the single marshalling point behind BOTH planning and executing (drawn == flown). */
+  private flightPathTo(x: number, y: number, landing?: LandingHint): Point[] {
+    if (!this.shipPhysics) return [];
+    return computeFlightPath(
       this.shipPhysics.shipX,
       this.shipPhysics.shipY,
       x,
@@ -1535,7 +1555,6 @@ export class SpaceFlightScene extends GameScene {
       GAME_BALANCE.landingApproachOffset,
       landing,
     );
-    this.plotRoute();
   }
 
   /**
@@ -1552,15 +1571,7 @@ export class SpaceFlightScene extends GameScene {
     // recovering the spiral hint callers (Ход) drop (recompute, don't replay).
     const same = this.plannedRoute?.x === x && this.plannedRoute?.y === y;
     const hint = landing ?? (same ? this.plannedRoute?.landing : undefined);
-    this.routePath = computeFlightPath(
-      this.shipPhysics.shipX,
-      this.shipPhysics.shipY,
-      x,
-      y,
-      this.starRenderer,
-      GAME_BALANCE.landingApproachOffset,
-      hint,
-    );
+    this.routePath = this.flightPathTo(x, y, hint);
     // Physics flows through the waypoints without stopping (US-070 #5).
     this.shipPhysics.setPath(this.routePath);
     this.plannedRoute = { x, y, landing: hint };

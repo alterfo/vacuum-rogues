@@ -46,6 +46,21 @@ the finger midpoint. The keyboard-only **Esc/cancel** gets a touch-only «✕» 
 every controller method (`pointerType !== "touch"` ⇒ no-op), so the desktop path is untouched. Do
 **not** re-implement the route guards in the touch controller — it only ever adds pinch-zoom.
 
+**HUD bottom-left corner lane** (`FlightHud`, ae8b082 + `layoutTurnControls`): [МЕНЮ] is the true
+bottom-left corner element (`h-40`), ♿ stacks tight above it (`h-80`), the mini-log sits above both
+(`h-180`) — nothing may render below [МЕНЮ] (an empty mini-log gap under it read as dead space).
+The bottom-centre ✕/ХОД cluster (`layoutTurnControls`) must clamp right of that lane on narrow
+touch screens: the ✕ is `addChild`'d to `uiContainer` **after** [МЕНЮ], so an overlap renders
+*above* the text and steals its taps (the ~430px-width regression). The lane is the constant
+`BOTTOM_LEFT_LANE_W` (104px — [МЕНЮ]'s x=20 + ~65px of bold text at the largest font scale), NOT a
+live `menuButtonText.width` read: PixiJS Text measurement throws in the jsdom unit harness, so a
+measured lane would be permanently untested — re-derive the constant if the label or font scaling
+changes. Desktop (no ✕) keeps exact centring. Below ~316px viewport width the lane clamp and the
+right screen edge conflict — the lane deliberately wins (tap-stealing [МЕНЮ] is worse than ХОД
+touching the edge). Guarded by `flightHudTouchControls.test.ts` (lane clamp on narrow touch
+screens) and `flightHudCornerLayout.test.ts` (corner-stack order — mini-log above ♿ above
+[МЕНЮ] — on both the create and reposition paths).
+
 **Exploration encounters are two pure functions + a thin flight bridge**
 (`src/systems/encounters/`, `docs/plans/20260625-exploration-encounters.md`). On system entry
 `EncounterController.maybeShowEntryEncounter` rolls one (skipped while a fight is already active) —
@@ -81,7 +96,25 @@ pursuit, gated on `isInCombat()`, frozen by the active pause). **The in-range ho
 controlled orbit/strafe, not a stop** — `steerCombatOrbit` circle-strafes the target at
 `COMBAT_ORBIT_RANGE` (0.6 × weapon range), arc-movement-compatible, so the target stays inside
 `WEAPON_RANGE` continuously and auto-fire always has a hit (a dead-heading "no steer" hold let
-the always-cruising ship coast straight through and orbit unboundedly). A player who plots a
+the always-cruising ship coast straight through and orbit unboundedly). The orbit carrot and its
+×2 far point are capped at `SYSTEM_GEOMETRY.boundaryRadius` from the star center via a
+**heading-preserving ray/circle shrink** (`clampOrbitPoint`) — deliberately NOT a radial
+reprojection à la `NpcShipSprite.beginDeparture`: a radial snap swaps the carrot onto
+an unrelated bearing near the edge and reds `combatOrbit.test.ts`'s orbit-hold assertions
+(trap hit during `20260709-combat-feel-fixes` Task 1). The truncation keeps the exact steer
+heading, so carrot and far both land on the ray's boundary-exit point — an accepted final-leg
+deceleration near the wall — EXCEPT in the edge-parking window: when the clamped leg `tExit`
+is ≤ `ORBIT_PARK_EPS` (= the imported `SHIP_STOP_THRESHOLD`, 8px), the coincident
+`setPath([P, P])` sits inside ShipPhysics' arrival window and the strafe **parks dead at the
+edge** (2nd-review sim: 0px travelled for 38s against an edge target), so only then is the
+leftover distance **slid along the boundary arc** in the heading's tangential sense, turning
+the freeze into an edge-following strafe. A ship at/past the boundary (entry spawn at exactly
+`boundaryRadius`, momentum overshoot — `ShipPhysics` never clamps position) deliberately keeps
+the **raw unclamped** point: the orbit legitimately swings past the boundary by up to
+`COMBAT_ORBIT_RANGE` + momentum and self-corrects on the next pass, and the exemption also
+covers an unconfigured/test star center; caging an outside ship at its current radius was tried
+in review and reds `combatOrbit.test.ts`'s range-hold on a moving edge target. All locked by
+`combatPursuitController.test.ts` edge3–edge5 (edge5 pins the ship-outside exemption). A player who plots a
 manual route (to a planet or to flee) **overrides** the auto-pursuit via
 `breakOffCombatPursuit()` — `updateCombatPursuit` yields navigation while the route flies and
 re-engages only once it completes with a hostile still in range. Detail in `playtest-traps.md`.
@@ -89,7 +122,13 @@ re-engages only once it completes with a hostile still in range. Detail in `play
 cadence:** the player fires **every** fitted weapon (`advancePlayerWeapons`), each on its own
 `weaponFireIntervalMs(weapon)` = `max(1, cooldownTurns) × GAME_BALANCE.combatFireIntervalMs` timer
 — so a slow `cooldownTurns:3` beam fires ~⅓ as often as a `cooldownTurns:1` pulse, making cadence a
-real tradeoff against damage (DPS = `damage ÷ interval`). Each engaged NPC fires from within **its
+real tradeoff against damage (DPS = `damage ÷ interval`). On a **fresh** engagement `addCombatant`
+pre-charges every `cooldownTurns > 1` weapon's timer to
+`GAME_BALANCE.combatEngagePrechargeFraction` (0.5) of its interval (`primeWeaponFireTimers`) so a
+slow weapon's first shot lands at half its cold-start wait; a `cooldownTurns:1` weapon keeps the
+flat cold start (its exemption is locked by `weaponCadence.test.ts`), `npcFireTimers` are
+untouched, and a combatant joining an already-active fight never re-primes (the `!isActive`
+guard). Each engaged NPC fires from within **its
 own role-scaled reach** `npcWeaponRange(npc)` (`systems/combat/npcWeapon.ts`: TRADER 200 / PIRATE
 260 / RANGER 300 / PATROL 340, role-derived → **no schema/migration**), not the legacy flat
 `GAME_BALANCE.weaponRange` 240 — so a long-range player weapon (railgun 360) can no longer trivially
@@ -164,19 +203,31 @@ the orbits along with movement, NPC AI and fire. Position stays a pure function 
 per-planet motion state); only the day source gains a combat path — no data/schema/save impact.
 
 **Orbit-visual floor: planets must visibly orbit while flying, not just while waiting**
-(`20260709-planet-orbit-visual-floor` — playtest bug "planets don't orbit while moving, only
+(playtest bug 2026-07-09, fixed directly without a plan file — "planets don't orbit while moving, only
 stationary + «Ход»"). Root cause: a moving turn's day-rate is `distanceTraveled / DISTANCE_PER_DAY`
 at the ship's actual cruise speed (0.08 px/ms starter engine .. 0.29 px/ms top-tier) — 5-10x slower
 than the wait-turn's fixed `MS_PER_WAIT_DAY` (1 day/1000ms, "день = секунда"), so planets crept
 almost imperceptibly during flight next to a visibly-fast spin while waiting. `visualOrbitBoost`
 tops up **only** the value `getOrbitalDay()` hands to `PlanetManager` (`currentDay +
-visualOrbitBoost`) via `combatOrbitalDayIncrement` at the same 1-day/1000ms rate whenever
-`shipPhysics.isMoving` — it never feeds `gameDays`, the HUD date, or any economy/quest/NPC-sim
-pacing (those still use the untouched `currentDay`), so a trip still takes exactly as many in-game
-days as its distance/speed dictates. It settles to 0 in `endTurn()`, same as
-`waitDayAccum`/`distanceTraveled` ("orbits settle to gameDays" on stop). Do **not** fold this into
-`currentDay` itself — that would speed up the real calendar during travel and ripple into
-day-calibrated systems (quest deadlines, the Overmind arc's `campaignPeakPower` pacing).
+visualOrbitBoost`) whenever `shipPhysics.isMoving`, via `orbitBump` (the thin
+`combatOrbitalDayIncrement` wrapper in `combatOrbitClock.ts` both the moving top-up and the
+stationary-combat path share — kept there for the SpaceFlightScene line guard). The top-up is
+**additive** at the full 1-day/1000ms wait rate — deliberately NOT a shortfall-only floor: a
+floor (`max(0, waitRate·dt − distanceDayDelta)`) was tried in review and reds the deterministic
+letsplay campaign gate (`longGameCompetence` (c)), because the boosted day moves the planets'
+**live geometry** (`screenX/screenY`) that landing/lead/click reads consume, and slowing it
+reroutes a whole 200-day agent trajectory. Known accepted consequences: a fast engine's visual
+orbit rate slightly exceeds the wait rate (up to ~1.6×), a moving combat orbit stacks with the
+whole-day `waitDayAccum` routing, and the boost accrues ~1 day per real second of flight, so the
+`endTurn()` settle to 0 (same as `waitDayAccum`/`distanceTraveled`, "orbits settle to gameDays")
+is a **visible backward snap after a long flight**. Changing any of this is a game-feel/design
+decision — re-run the letsplay campaign gates, don't just eyeball it. The boost never feeds
+`gameDays`, the HUD date, or any economy/quest/NPC-sim pacing (those still use the untouched
+`currentDay`), so a trip still takes exactly as many in-game days as its distance/speed
+dictates. Do **not** fold this into `currentDay` itself — that would speed up the real calendar
+during travel and ripple into day-calibrated systems (quest deadlines, the Overmind arc's
+`campaignPeakPower` pacing). The mid-flight `reaim` loop (`updateRouteToTarget`, 30px drift) is
+what keeps a route to an orbiting planet converging under the faster visual motion.
 
 **Live in-flight position persists across a reload.** Free flight otherwise only autosaves at
 discrete turn-ends (and a combat orbit moves the ship with **no** turn-end), so a reload used to
@@ -216,6 +267,13 @@ Rules: a module never imports another — the scene mediates via callbacks + `*D
 each `destroy()` must leave `gameLayer.children.length === 0`; dispose `BlurFilter`s in
 `destroy()`. **Line-count guard: `SpaceFlightScene.ts` < 1900 lines**
 (`src/tests/flight/moduleContracts.test.ts`).
+
+**One flight-path derivation for plotting AND execution:** both `planRouteTo` and
+`executeRouteTo` derive their polyline from the single `computeFlightPath()` in
+`src/utils/flightGeometry.ts` (star-avoidance bow + landing spiral-in; extracted from the scene
+for the line-count guard). Never re-derive a route path inside `SpaceFlightScene` — a second
+derivation forks the drawn route from the flown path (the "drawn == flown" contract,
+`routeMatchesPath.test.ts`).
 
 **Ship movement is momentum / arc-only (no rotate-in-place).** `ShipPhysics.update`
 (`src/systems/ShipPhysics.ts`) always cruises forward along `shipAngle` and steers toward

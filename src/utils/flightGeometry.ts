@@ -464,7 +464,11 @@ export function pointAlongPath(points: Point[], dist: number): PathSample {
     const seg = Math.hypot(b.x - a.x, b.y - a.y);
     if (seg === 0) continue;
     const heading = Math.atan2(b.y - a.y, b.x - a.x);
-    if (dist <= acc + seg) {
+    // Strict <: a sample landing EXACTLY on the total length falls through to
+    // the done:true return below, honouring the documented "reaches/exceeds"
+    // contract (so a route of exactly one day draws no mid-route day marker
+    // on top of its end marker).
+    if (dist < acc + seg) {
       const t = (dist - acc) / seg;
       return {
         x: a.x + (b.x - a.x) * t,

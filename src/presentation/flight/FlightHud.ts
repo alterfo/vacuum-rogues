@@ -26,6 +26,14 @@ import { starMapButtonRect } from "./starMapButton";
 /** Touch «✕» cancel button width (px) and the gap to the left of Play. */
 const CANCEL_BTN_W = 56;
 const CANCEL_BTN_GAP = 8;
+const PLAY_BTN_W = 140;
+const PLAY_BTN_H = 36;
+// Bottom-left corner lane: [МЕНЮ] sits at x=20 with ~65px of bold text at the
+// largest font scale, ♿ stacks above it. On a narrow touch screen the
+// centred ✕/ХОД cluster must never slide left into this lane — the ✕ is added
+// to uiContainer after [МЕНЮ], so an overlap renders above the text and
+// steals its taps.
+const BOTTOM_LEFT_LANE_W = 104;
 
 /**
  * Owns the in-flight HUD: the static instruction/date text, the quest-journal and
@@ -370,15 +378,7 @@ export class FlightHud implements FlightModule {
     if (this.toast) {
       this.toast.x = w / 2;
     }
-    if (this.playPauseButton) {
-      this.playPauseButton.x = w / 2 - 70;
-      this.playPauseButton.y = h - 54;
-    }
-    if (this.cancelButton && this.playPauseButton) {
-      this.cancelButton.x =
-        this.playPauseButton.x - CANCEL_BTN_W - CANCEL_BTN_GAP;
-      this.cancelButton.y = this.playPauseButton.y;
-    }
+    this.layoutTurnControls(w, h);
     this.systemMiniMap?.reposition(w, h);
 
     if (this.speedButton) {
@@ -414,6 +414,35 @@ export class FlightHud implements FlightModule {
       const b = this.systemMenuPanel.getLocalBounds();
       this.systemMenuPanel.x = Math.round((w - b.width) / 2);
       this.systemMenuPanel.y = Math.round((h - b.height) / 2);
+    }
+  }
+
+  /**
+   * Bottom-centre turn cluster (▶ ХОД + the touch-only ✕ riding just left of
+   * it). Normally centred; when the ✕ exists (touch layout) the pair shifts
+   * right as needed so the ✕ never enters the bottom-left [МЕНЮ]/♿ lane on a
+   * narrow screen (regression: [МЕНЮ] at h-40 put the two in the same band,
+   * and the later-added ✕ stole [МЕНЮ]'s taps under ~430px width). Desktop
+   * (no ✕) keeps the exact centred position.
+   */
+  private layoutTurnControls(w: number, h: number): void {
+    if (!this.playPauseButton) return;
+    let playX = w / 2 - PLAY_BTN_W / 2;
+    if (this.cancelButton) {
+      // NOTE: the lane is a constant, not a live `menuButtonText.width` read —
+      // PixiJS Text measurement throws in the jsdom unit harness (no canvas),
+      // so a measured lane would be permanently untested. If [МЕНЮ]'s label or
+      // font scaling ever changes, re-derive BOTTOM_LEFT_LANE_W.
+      playX = Math.max(
+        playX,
+        BOTTOM_LEFT_LANE_W + CANCEL_BTN_W + CANCEL_BTN_GAP,
+      );
+    }
+    this.playPauseButton.x = playX;
+    this.playPauseButton.y = h - PLAY_BTN_H - 18;
+    if (this.cancelButton) {
+      this.cancelButton.x = playX - CANCEL_BTN_W - CANCEL_BTN_GAP;
+      this.cancelButton.y = this.playPauseButton.y;
     }
   }
 
@@ -788,8 +817,6 @@ export class FlightHud implements FlightModule {
 
     // Play / Pause turn control (bottom-centre). Play runs the planned turn;
     // while moving it becomes Pause, which ends the turn at the next day segment.
-    const PLAY_BTN_W = 140;
-    const PLAY_BTN_H = 36;
     const playBtn = new UiButton(
       "",
       "▶ ХОД",
@@ -802,8 +829,6 @@ export class FlightHud implements FlightModule {
       PLAY_BTN_W,
       PLAY_BTN_H,
     );
-    playBtn.x = this.renderer.app.screen.width / 2 - PLAY_BTN_W / 2;
-    playBtn.y = this.renderer.app.screen.height - PLAY_BTN_H - 18;
     playBtn.on("pointerover", () => {
       this.gameEngine?.audio?.playUiHover();
     });
@@ -813,6 +838,12 @@ export class FlightHud implements FlightModule {
     playBtn.container.cursor = "pointer";
     this.uiContainer.addChild(playBtn.container);
     this.playPauseButton = playBtn;
+    // Single source of truth for the cluster position — the same layout the
+    // resize path runs, so the create-time placement can never drift from it.
+    this.layoutTurnControls(
+      this.renderer.app.screen.width,
+      this.renderer.app.screen.height,
+    );
 
     // Touch «✕» cancel button — only on a touch layout (the Esc key's on-screen
     // twin). Placed just left of Play; the scene fans it through onCancel to the
@@ -830,11 +861,15 @@ export class FlightHud implements FlightModule {
         CANCEL_BTN_W,
         PLAY_BTN_H,
       );
-      cancelBtn.x = playBtn.x - CANCEL_BTN_W - CANCEL_BTN_GAP;
-      cancelBtn.y = playBtn.y;
       cancelBtn.container.cursor = "pointer";
       this.uiContainer.addChild(cancelBtn.container);
       this.cancelButton = cancelBtn;
+      // Re-run the cluster layout now the ✕ exists: on a narrow screen it
+      // shifts the pair right, clear of the bottom-left [МЕНЮ]/♿ lane.
+      this.layoutTurnControls(
+        this.renderer.app.screen.width,
+        this.renderer.app.screen.height,
+      );
     }
 
     this.uiLayer.addChild(this.uiContainer);

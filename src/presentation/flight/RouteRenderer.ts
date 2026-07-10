@@ -137,8 +137,11 @@ export class RouteRenderer {
     if (!this.routeLineGraphics) return;
 
     const r = 6;
+    // Explicit close=true: PixiJS 8's ShapePath.poly assigns `closePath = close`
+    // verbatim, so omitting it leaves the stroked diamond OPEN (its JSDoc's
+    // "true by default" is not implemented) — the fourth edge never draws.
     this.routeLineGraphics
-      .poly([x, y - r, x + r, y, x, y + r, x - r, y])
+      .poly([x, y - r, x + r, y, x, y + r, x - r, y], true)
       .stroke({ color: 0xff00ff, width: 2, alpha: 0.8 });
   }
 

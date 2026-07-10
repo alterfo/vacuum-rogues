@@ -90,9 +90,12 @@ function buildScene(physics: Record<string, unknown>) {
 
   const updateShip = (dt: number) =>
     (scene as unknown as { updateShip(dt: number): void }).updateShip(dt);
-  /** The exact value handed to `getOrbitalDay()` in production wiring. */
-  const orbitalVisualDay = () =>
-    (s.currentDay as number) + (s.visualOrbitBoost as number);
+  /** The scene's REAL `orbitalVisualDay` getter — the production source
+   * `getOrbitalDay: () => this.orbitalVisualDay` hands to `PlanetManager`.
+   * Reading the getter (not a local `currentDay + visualOrbitBoost`
+   * re-derivation) keeps the assertion honest: reverting the production sum
+   * to plain `currentDay` reds these tests. */
+  const orbitalVisualDay = () => s.orbitalVisualDay as number;
   const currentDay = () => s.currentDay as number;
   const endTurn = () => (scene as unknown as { endTurn(): void }).endTurn();
   return { s, galaxy, updateShip, orbitalVisualDay, currentDay, endTurn };
@@ -171,5 +174,54 @@ describe("planet orbit visuals keep pace while the ship is genuinely moving", ()
 
     endTurn();
     expect(orbitalVisualDay()).toBe(currentDay());
+  });
+
+  it("freezes the top-up while the combat active-pause is up (pause freezes orbits with movement)", () => {
+    const physics = {
+      shipX: 0,
+      shipY: 0,
+      isMoving: true,
+      currentSpeed: 1,
+      timeScale: 1,
+      update: vi.fn(),
+    };
+    const { s, updateShip, orbitalVisualDay, currentDay } = buildScene(physics);
+    s.combatPause = { paused: true };
+
+    for (let i = 0; i < 60; i++) updateShip(16);
+
+    // orbitBump returns 0 while paused — no boost accrues.
+    expect(orbitalVisualDay()).toBe(currentDay());
+  });
+
+  it("scales the top-up by ShipPhysics.timeScale (fast-forward spins orbits faster)", () => {
+    const physics = {
+      shipX: 0,
+      shipY: 0,
+      isMoving: true,
+      currentSpeed: 1,
+      timeScale: 2,
+      update: vi.fn(function (this: { shipX: number }) {
+        this.shipX += 2;
+      }),
+    };
+    const { updateShip, orbitalVisualDay } = buildScene(physics);
+
+    const visualBefore = orbitalVisualDay();
+    for (let i = 0; i < 60; i++) updateShip(16); // 960ms at 2× ≈ 1.92 wait-days
+
+    expect(orbitalVisualDay() - visualBefore).toBeGreaterThan(1.6);
+  });
+});
+
+describe("production wiring guard", () => {
+  it("SpaceFlightScene hands PlanetManager the boosted orbitalVisualDay, not plain currentDay", async () => {
+    // The behaviour tests above stub planetManager, so they can't catch a
+    // silent revert of the deps line itself (`getOrbitalDay: () =>
+    // this.currentDay` was the exact pre-fix code). Lock the seam at source
+    // level, same idiom as the scene's line-count guard.
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/presentation/SpaceFlightScene.ts", "utf-8");
+    expect(src).toMatch(/getOrbitalDay:\s*\(\)\s*=>\s*this\.orbitalVisualDay/);
   });
 });
