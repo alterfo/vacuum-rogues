@@ -142,6 +142,10 @@ const LIBERATION_CAMPAIGN_INTERVAL = 50;
 const LIBERATION_RALLY_DELAY = 30;
 /** Max ranger ships rallied from a staging system in a single campaign. */
 const LIBERATION_RALLY_MAX_SHIPS = 5;
+/** Max freshly-captured system ids remembered for priority liberation
+ *  targeting — a small FIFO so the "rangers are massing to retake it" news
+ *  follows recent losses without the queue growing unbounded. */
+const RECENTLY_CAPTURED_MAX = 5;
 
 /** Consecutive garrison-free days a captured system must hold before it is
  *  automatically liberated (mirrors the player/ranger "clear and hold" rule). */
@@ -339,6 +343,17 @@ export class NpcSimulator {
    * After a load a fresh simulator re-records the then-present count.
    */
   private readonly garrisonBaseline = new Map<string, number>();
+  /**
+   * Freshly Overmind-captured system ids, oldest first (FIFO, capped at
+   * RECENTLY_CAPTURED_MAX). {@link assembleLiberationCampaign} retakes these
+   * before its random-front scan, so the "rangers are massing to retake it"
+   * announcement reliably follows a fresh loss rather than an unrelated
+   * 50-day clock. Transient (not persisted), same lifecycle as
+   * {@link liberationCampaigns}. Entries are dropped once targeted, already
+   * campaigned for, or no longer hostile; an entry with no friendly
+   * neighbour yet stays queued for a later retry.
+   */
+  private readonly recentlyCaptured: string[] = [];
   /**
    * Per-system liberation countdown: days of consecutive garrison-free presence
    * remaining before a captured system is auto-liberated. Transient (not
@@ -1783,6 +1798,7 @@ export class NpcSimulator {
           continue;
         }
         galaxy.addOvermindSystem(systemId);
+        this.recordRecentCapture(systemId);
         const sys = galaxy.systems.find((s) => s.id === systemId);
         const event: NewsEvent = {
           type: "SYSTEM_CAPTURED",
@@ -1843,24 +1859,28 @@ export class NpcSimulator {
    * campaign so rangers depart the staging system once that date arrives (see
    * {@link resolveLiberationCampaigns}). Returns the LIBERATION_CAMPAIGN news
    * event, or null when no hostile system borders a friendly one — or one is
-   * already pending for the chosen target (no duplicate rallies). Called every
-   * LIBERATION_CAMPAIGN_INTERVAL days from {@link tick}.
+   * already pending for the chosen target (no duplicate rallies). Freshly
+   * captured systems ({@link recentlyCaptured}) are targeted before the
+   * random-front scan, so the retake announcement follows a fresh loss.
+   * Called every LIBERATION_CAMPAIGN_INTERVAL days from {@link tick}.
    */
   assembleLiberationCampaign(galaxy: Galaxy, rng: SeededRNG): NewsEvent | null {
-    // Fronts the Rangers can liberate: hostile system → friendly neighbour to stage from.
-    const fronts: Array<{ targetId: string; stagingId: string }> = [];
-    for (const sys of galaxy.systems) {
-      if (!galaxy.isHostileSystem(sys.id)) continue;
-      for (const conn of sys.connections) {
-        if (!galaxy.isHostileSystem(conn.toSystemId)) {
-          fronts.push({ targetId: sys.id, stagingId: conn.toSystemId });
-          break;
+    let front = this.dequeueRecentCaptureFront(galaxy);
+    if (!front) {
+      // Fronts the Rangers can liberate: hostile system → friendly neighbour to stage from.
+      const fronts: Array<{ targetId: string; stagingId: string }> = [];
+      for (const sys of galaxy.systems) {
+        if (!galaxy.isHostileSystem(sys.id)) continue;
+        for (const conn of sys.connections) {
+          if (!galaxy.isHostileSystem(conn.toSystemId)) {
+            fronts.push({ targetId: sys.id, stagingId: conn.toSystemId });
+            break;
+          }
         }
       }
+      if (fronts.length === 0) return null;
+      front = fronts[rng.nextInt(0, fronts.length - 1)];
     }
-    if (fronts.length === 0) return null;
-
-    const front = fronts[rng.nextInt(0, fronts.length - 1)];
     const { targetId, stagingId } = front;
 
     // Don't stack a second pending rally on a target already being campaigned for.
@@ -1894,6 +1914,57 @@ export class NpcSimulator {
       liberationDate,
       description: `Рейнджеры освободят ${target?.name ?? targetId} через ${LIBERATION_RALLY_DELAY} дней. Сбор в ${staging?.name ?? stagingId}`,
     };
+  }
+
+  /**
+   * Remember a fresh Overmind capture for priority liberation targeting. A
+   * re-captured system moves to the back of the queue instead of duplicating;
+   * the oldest entry falls off once the FIFO exceeds RECENTLY_CAPTURED_MAX.
+   */
+  private recordRecentCapture(systemId: string): void {
+    const existing = this.recentlyCaptured.indexOf(systemId);
+    if (existing >= 0) this.recentlyCaptured.splice(existing, 1);
+    this.recentlyCaptured.push(systemId);
+    while (this.recentlyCaptured.length > RECENTLY_CAPTURED_MAX) {
+      this.recentlyCaptured.shift();
+    }
+  }
+
+  /**
+   * Pull the oldest still-valid freshly-captured system off
+   * {@link recentlyCaptured} as the next liberation front: it must still be
+   * hostile, have no pending campaign, and border a friendly staging system.
+   * Stale entries (liberated, or already campaigned for) are dropped; an
+   * entry deep in hostile territory is kept for a retry once a neighbour is
+   * freed. Returns null when no queued capture qualifies, letting the caller
+   * fall back to its random-front scan.
+   */
+  private dequeueRecentCaptureFront(
+    galaxy: Galaxy,
+  ): { targetId: string; stagingId: string } | null {
+    for (let i = 0; i < this.recentlyCaptured.length; i++) {
+      const targetId = this.recentlyCaptured[i];
+      if (!galaxy.isHostileSystem(targetId)) {
+        this.recentlyCaptured.splice(i--, 1);
+        continue;
+      }
+      if (
+        this.liberationCampaigns.some(
+          (c) => c.targetSystemId === targetId && !c.dispatched,
+        )
+      ) {
+        this.recentlyCaptured.splice(i--, 1);
+        continue;
+      }
+      const sys = galaxy.systems.find((s) => s.id === targetId);
+      const staging = sys?.connections.find(
+        (conn) => !galaxy.isHostileSystem(conn.toSystemId),
+      );
+      if (!staging) continue;
+      this.recentlyCaptured.splice(i, 1);
+      return { targetId, stagingId: staging.toSystemId };
+    }
+    return null;
   }
 
   /**

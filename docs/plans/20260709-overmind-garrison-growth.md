@@ -72,11 +72,13 @@ This plan is scoped as an **additive layer**: it does not touch `advanceOvermind
 
 ### Task 3: Bias liberation-campaign targeting toward freshly-captured systems
 
-- [ ] write a failing test asserting: after a system is captured (via `resolveCaptureFleets`' `SYSTEM_CAPTURED` path, including the new bud-off fleets from Task 2), the next `assembleLiberationCampaign` call targets that system in preference to the generic random-front scan, as long as it still borders a friendly staging system.
-- [ ] add a small `recentlyCaptured: string[]` queue on `NpcSimulator` (FIFO, capped at a small size e.g. 5 to avoid unbounded growth); push the captured `systemId` wherever `SYSTEM_CAPTURED` is emitted in `resolveCaptureFleets` (~line 1583-1592, both the pre-existing periodic path and the new bud-off path from Task 2, since both funnel through the same function).
-- [ ] in `assembleLiberationCampaign` (~line 1647), before falling back to the existing random `fronts` scan, check `recentlyCaptured` for an entry that still borders a friendly system and has no pending campaign already (reuse the existing dedup check at ~line 1666); pop it from the queue once selected.
-- [ ] write tests for: a freshly captured system with a valid friendly neighbor is prioritized over the random scan; a captured system with no friendly neighbor (deep in hostile territory) is skipped and the queue moves to the next entry / falls back to random; the queue doesn't grow unbounded across many captures.
-- [ ] run affected test files — must pass before Task 4.
+- [x] write a failing test asserting: after a system is captured (via `resolveCaptureFleets`' `SYSTEM_CAPTURED` path, including the new bud-off fleets from Task 2), the next `assembleLiberationCampaign` call targets that system in preference to the generic random-front scan, as long as it still borders a friendly staging system.
+- [x] add a small `recentlyCaptured: string[]` queue on `NpcSimulator` (FIFO, capped at a small size e.g. 5 to avoid unbounded growth); push the captured `systemId` wherever `SYSTEM_CAPTURED` is emitted in `resolveCaptureFleets` (~line 1583-1592, both the pre-existing periodic path and the new bud-off path from Task 2, since both funnel through the same function).
+- [x] in `assembleLiberationCampaign` (~line 1647), before falling back to the existing random `fronts` scan, check `recentlyCaptured` for an entry that still borders a friendly system and has no pending campaign already (reuse the existing dedup check at ~line 1666); pop it from the queue once selected.
+- [x] write tests for: a freshly captured system with a valid friendly neighbor is prioritized over the random scan; a captured system with no friendly neighbor (deep in hostile territory) is skipped and the queue moves to the next entry / falls back to random; the queue doesn't grow unbounded across many captures.
+- [x] run affected test files — must pass before Task 4.
+
+> **Implementation note (Task 3):** `SYSTEM_CAPTURED` has exactly one emit site (`resolveCaptureFleets`), so a single `recordRecentCapture` push covers both the periodic and bud-off fleet paths. Queue semantics settled during implementation: a re-captured system moves to the back instead of duplicating; a stale entry (liberated, or already campaigned for) is dropped during the scan; a landlocked entry (no friendly neighbour) **stays queued** for a retry once a neighbour is freed — the 5-entry cap bounds it. The queue path consumes no RNG, so the random-front stream is byte-identical whenever the queue is empty (existing `liberationCampaign.test.ts` passes unmodified). New suite: `liberationRecentCapture.test.ts` (6 tests).
 
 ### Task 4: Real combat for liberation assaults
 
