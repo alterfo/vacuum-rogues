@@ -338,7 +338,7 @@ export const NpcShipSchema = z.object({
     "INDEPENDENT",
     "OVERMIND",
   ]),
-  role: z.enum(["RANGER", "TRADER", "PIRATE", "PATROL"]),
+  role: z.enum(["RANGER", "TRADER", "PIRATE", "PATROL", "OVERMIND"]),
   hullHP: z.number(),
   maxHull: z.number(),
   shields: z.number(),

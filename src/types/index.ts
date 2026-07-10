@@ -177,6 +177,8 @@ export enum NpcRole {
   TRADER = "TRADER",
   PIRATE = "PIRATE",
   PATROL = "PATROL",
+  /** Overmind hive craft — hostile-faction ships with their own stats/art. */
+  OVERMIND = "OVERMIND",
 }
 
 export enum NpcState {

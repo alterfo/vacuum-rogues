@@ -14,7 +14,9 @@ import { GAME_BALANCE } from "@/config/balance";
  * - PIRATE 260 — a mid-range raider;
  * - RANGER 300 — a disciplined mid-long beam;
  * - PATROL 340 — the law's long ballistic reach (just shy of the player's
- *   best common weapon, the railgun's 360).
+ *   best common weapon, the railgun's 360);
+ * - OVERMIND 340 — hive craft match the patrol's reach (they flew PATROL
+ *   stats before gaining their own role, so combat range is preserved).
  *
  * Damage stays per-NPC on {@link NpcShip.damage} (sourced from `ROLE_STATS`), so
  * adding range here is purely catalog/derived — **no save migration** (the value
@@ -25,6 +27,7 @@ export const NPC_WEAPON_RANGE: Record<NpcRole, number> = {
   [NpcRole.PIRATE]: 260,
   [NpcRole.RANGER]: 300,
   [NpcRole.PATROL]: 340,
+  [NpcRole.OVERMIND]: 340,
 };
 
 /**

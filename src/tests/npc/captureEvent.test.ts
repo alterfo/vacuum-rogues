@@ -52,7 +52,7 @@ describe("NpcSimulator.assembleCaptureFleet", () => {
     expect(galaxy.isHostileSystem("sys_a")).toBe(true);
   });
 
-  it("spawns 3-5 Overmind PATROL ships in the hostile neighbour bound for the target", () => {
+  it("spawns 3-5 Overmind OVERMIND-role ships in the hostile neighbour bound for the target", () => {
     const galaxy = makeGalaxy();
     galaxy.addOvermindSystem("sys_b");
 
@@ -65,7 +65,7 @@ describe("NpcSimulator.assembleCaptureFleet", () => {
     expect(fleet.length).toBeGreaterThanOrEqual(3);
     expect(fleet.length).toBeLessThanOrEqual(5);
     for (const ship of fleet) {
-      expect(ship.role).toBe(NpcRole.PATROL);
+      expect(ship.role).toBe(NpcRole.OVERMIND);
       expect(ship.currentSystemId).toBe("sys_b");
       expect(ship.destinationSystemId).toBe("sys_a");
     }

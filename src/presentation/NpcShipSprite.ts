@@ -16,6 +16,9 @@ const ROLE_SHIP_PREFIX: Record<NpcRole, string> = {
   [NpcRole.TRADER]: "trader",
   [NpcRole.PIRATE]: "pirate",
   [NpcRole.PATROL]: "patrol",
+  // Dedicated overmind_* tier art lands with plan 20260709 Task 2; until then
+  // OVERMIND ships reuse the patrol hull art (distinguished by faction tint).
+  [NpcRole.OVERMIND]: "patrol",
 };
 
 /** Hull art faces nose-up (bow at the top of the image); the container points +X
@@ -40,6 +43,8 @@ const INTENT_COLORS: Record<NpcRole, number> = {
   [NpcRole.TRADER]: 0xffcc44,
   [NpcRole.RANGER]: 0x44ddff,
   [NpcRole.PATROL]: 0x44ff88,
+  // Hostile hive magenta — matches the overmind bioluminescent-circuitry motif.
+  [NpcRole.OVERMIND]: 0xdd44ff,
 };
 
 /**

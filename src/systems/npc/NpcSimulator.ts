@@ -190,10 +190,11 @@ const ROLE_NAME: Record<NpcRole, string> = {
   [NpcRole.TRADER]: "Торговец",
   [NpcRole.PIRATE]: "Пират",
   [NpcRole.PATROL]: "Патруль",
+  [NpcRole.OVERMIND]: "Доминатор",
 };
 
-/** Base combat stats per role. */
-const ROLE_STATS: Record<
+/** Base combat stats per role. Exported for the role-map drift guard test. */
+export const ROLE_STATS: Record<
   NpcRole,
   {
     hull: number;
@@ -231,6 +232,21 @@ const ROLE_STATS: Record<
     damage: 28,
     shieldPower: 4,
   },
+  // Hostile hive craft: tougher than the law's PATROL hull, but the *base*
+  // (medium) tier stays well under the boss override's 450-hull ceiling —
+  // size tiers scale from here (plan 20260709 Task 2). Damage deliberately
+  // stays at PATROL's 28: the seeded letsplay campaign gates
+  // (sessionCompetence) are sensitive to garrison DAMAGE — every +damage
+  // point tried (30/34) stalled the agent's power climb below the
+  // battle-ready band, while hull/shield buffs pass. Retune damage only with
+  // the campaign gates re-run.
+  [NpcRole.OVERMIND]: {
+    hull: 160,
+    shields: 80,
+    speed: 0.1,
+    damage: 28,
+    shieldPower: 5,
+  },
 };
 
 /** Representative equipment loadout names for each role (shown via scan). */
@@ -239,6 +255,9 @@ export const ROLE_LOADOUT: Record<NpcRole, string[]> = {
   [NpcRole.TRADER]: ["Двигатель ур.1", "Топливный бак", "Ремонтный дроид"],
   [NpcRole.PIRATE]: ["Двигатель ур.2", "Импульсная пушка", "Радар"],
   [NpcRole.PATROL]: ["Двигатель ур.3", "Генератор поля", "Балистическая пушка"],
+  // Hive-craft flavor: the plasma token resolves to the wpn_beam emitter via
+  // GearCatalog's LOADOUT_NAME_ALIASES (guarded by lootTokenResolution.test).
+  [NpcRole.OVERMIND]: ["Двигатель ур.3", "Генератор поля", "Плазменная пушка"],
 };
 
 /**
@@ -265,6 +284,7 @@ export const NPC_TECH_BAND = { min: 1, max: 3 } as const;
 export function npcRoleTechLevel(role: NpcRole): number {
   const map: Record<NpcRole, number> = {
     [NpcRole.PATROL]: 3,
+    [NpcRole.OVERMIND]: 3,
     [NpcRole.RANGER]: 2,
     [NpcRole.PIRATE]: 2,
     [NpcRole.TRADER]: 1,
@@ -488,18 +508,19 @@ export class NpcSimulator {
 
   /**
    * Spawn an OVERMIND garrison NPC directly in the specified system and return
-   * it. Same combat stats as a PATROL ship, but flagged as faction OVERMIND so
-   * it reads as hostile to the player and friendly NPCs. Used by ensureGarrison.
+   * it. Carries its own `NpcRole.OVERMIND` stats (tougher than a PATROL hull)
+   * and faction OVERMIND so it reads as hostile to the player and friendly
+   * NPCs. Used by ensureGarrison.
    */
   spawnOvermindInSystem(rng: SeededRNG, id: string, systemId: string): NpcShip {
-    const stats = ROLE_STATS[NpcRole.PATROL];
+    const stats = ROLE_STATS[NpcRole.OVERMIND];
     this.arrivalDwellCountdown.set(id, MIN_DWELL_DAYS);
     return new NpcShip({
       id,
       name: `Доминатор ${id}`,
       race: FactionType.PARADOXES,
       faction: Faction.OVERMIND,
-      role: NpcRole.PATROL,
+      role: NpcRole.OVERMIND,
       hullHP: stats.hull,
       maxHull: stats.hull,
       shields: stats.shields,
@@ -513,7 +534,7 @@ export class NpcSimulator {
       credits: rng.nextInt(50, 300),
       reputation: 0,
       shieldPower: stats.shieldPower,
-      loadoutSummary: ROLE_LOADOUT[NpcRole.PATROL],
+      loadoutSummary: ROLE_LOADOUT[NpcRole.OVERMIND],
       cargo: [],
       hostile: true,
     });
@@ -625,7 +646,7 @@ export class NpcSimulator {
    * Guarantee that every captured (overmind/pirate) system holds a standing
    * garrison of hostile ships. For each hostile system whose present garrison is
    * below GARRISON_MIN, spawn fresh hostile ships up to a random target in
-   * [GARRISON_MIN, GARRISON_MAX]. Overmind systems get OVERMIND PATROL ships;
+   * [GARRISON_MIN, GARRISON_MAX]. Overmind systems get OVERMIND-role ships;
    * pirate systems get PIRATE ships. Idempotent once the minimum is met.
    */
   ensureGarrison(galaxy: Galaxy, rng: SeededRNG): void {

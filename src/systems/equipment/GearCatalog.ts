@@ -723,6 +723,8 @@ const LOADOUT_NAME_ALIASES: Record<string, string> = {
   "Двигатель ур.3": "eq_engine_v",
   "Импульсная пушка": "wpn_pulse",
   "Балистическая пушка": "wpn_scatter",
+  // OVERMIND hive craft scan label — resolves to the energy beam emitter.
+  "Плазменная пушка": "wpn_beam",
   Радар: "eq_radar",
 };
 

@@ -59,7 +59,7 @@ describe("NpcSimulator.ensureGarrison", () => {
     expect(present.length).toBeGreaterThan(0);
     for (const ship of present) {
       expect(ship.faction).toBe(Faction.OVERMIND);
-      expect(ship.role).toBe(NpcRole.PATROL);
+      expect(ship.role).toBe(NpcRole.OVERMIND);
       expect(ship.state).not.toBe(NpcState.DEAD);
     }
   });
@@ -111,7 +111,7 @@ describe("NpcSimulator.ensureGarrison", () => {
     const sim = new NpcSimulator();
     sim.tick(galaxy, new SeededRNG("tick_seed"));
 
-    // The captured system holds a full hostile garrison (Overmind PATROL ships,
+    // The captured system holds a full hostile garrison (OVERMIND-role ships,
     // plus any wandering pirate that happens to be co-located counts as hostile).
     const hostile = npcsPresentInSystem(galaxy, "sys_a").filter(
       (n) => n.faction === Faction.OVERMIND || n.role === NpcRole.PIRATE,
