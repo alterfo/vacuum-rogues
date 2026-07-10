@@ -86,12 +86,12 @@ Five related requests bundled together at planning time (ship balance + Overmind
 
 ### Task 3: Rename "Доминатор" → "Жнец"
 
-- [ ] write a failing test asserting `spawnOvermindInSystem()` (or wherever the name is now built post-Task-1/2) produces `` `Жнец ${id}` ``, not `` `Доминатор ${id}` ``.
-- [ ] update the spawn-site name (`NpcSimulator.ts:444`, or its Task-1-refactored location).
-- [ ] update the capture-news flavor string (`NpcSimulator.ts:1589`): `` `Система ${sys?.name ?? systemId} захвачена Доминаторами!` `` → the "Жнец" plural instrumental equivalent.
-- [ ] update the `liberationDetect.test.ts:65` fixture to match (it's asserting real spawn behavior, not testing the string itself — update it to keep testing real behavior, don't weaken the assertion).
-- [ ] grep-confirm no other "Доминатор" string survives in `src/` outside code comments (the `OvermindBossController.ts:99` comment is not user-facing and doesn't need to change, but note it for the documentation task).
-- [ ] run affected test files — must pass before Task 4.
+- [x] write a failing test asserting `spawnOvermindInSystem()` (or wherever the name is now built post-Task-1/2) produces `` `Жнец ${id}` ``, not `` `Доминатор ${id}` ``. *(Added to `overmindRole.test.ts`, confirmed red first.)*
+- [x] update the spawn-site name (`NpcSimulator.ts:444`, or its Task-1-refactored location). *(Now at `NpcSimulator.ts:569`; the Task-1 `ROLE_NAME[NpcRole.OVERMIND]` display entry renamed too. Cyrillic ratchet unchanged — 1:1 literal swap, counts identical.)*
+- [x] update the capture-news flavor string (`NpcSimulator.ts:1589`): `` `Система ${sys?.name ?? systemId} захвачена Доминаторами!` `` → the "Жнец" plural instrumental equivalent. *(Now at `:2039` — «захвачена Жнецами!».)*
+- [x] update the `liberationDetect.test.ts:65` fixture to match (it's asserting real spawn behavior, not testing the string itself — update it to keep testing real behavior, don't weaken the assertion).
+- [x] grep-confirm no other "Доминатор" string survives in `src/` outside code comments (the `OvermindBossController.ts:99` comment is not user-facing and doesn't need to change, but note it for the documentation task). *(Case-insensitive grep over `src/`+`tools/`+`e2e/`: only the new regression test's own assertions remain; the `OvermindBossController` comment no longer exists — already reworded by Tasks 1-2, so Task 8's second item is pre-satisfied.)*
+- [x] run affected test files — must pass before Task 4. *(Full unit suite 5327 passed, lint 0 errors, tsc clean.)*
 
 ### Task 4: Unify the Overmind faction label
 

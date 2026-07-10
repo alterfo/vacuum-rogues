@@ -196,7 +196,7 @@ const ROLE_NAME: Record<NpcRole, string> = {
   [NpcRole.TRADER]: "Торговец",
   [NpcRole.PIRATE]: "Пират",
   [NpcRole.PATROL]: "Патруль",
-  [NpcRole.OVERMIND]: "Доминатор",
+  [NpcRole.OVERMIND]: "Жнец",
 };
 
 /** Base combat stats per role. Exported for the role-map drift guard test. */
@@ -566,7 +566,7 @@ export class NpcSimulator {
     this.arrivalDwellCountdown.set(id, MIN_DWELL_DAYS);
     return new NpcShip({
       id,
-      name: `Доминатор ${id}`,
+      name: `Жнец ${id}`,
       race: FactionType.PARADOXES,
       faction: Faction.OVERMIND,
       role: NpcRole.OVERMIND,
@@ -2036,7 +2036,7 @@ export class NpcSimulator {
           type: "SYSTEM_CAPTURED",
           systemId,
           day: galaxy.gameDays,
-          description: `Система ${sys?.name ?? systemId} захвачена Доминаторами!`,
+          description: `Система ${sys?.name ?? systemId} захвачена Жнецами!`,
         };
         // Return via the events array only — the caller (advanceGalaxyDay) writes
         // it to the news feed. Adding here too double-posted the capture headline.

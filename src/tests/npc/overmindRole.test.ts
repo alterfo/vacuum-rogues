@@ -84,6 +84,17 @@ describe("NpcRole.OVERMIND — distinct Overmind ship identity", () => {
     ).toBe("overmind");
   });
 
+  it("spawned Overmind ships are named «Жнец N», not «Доминатор N» (Task 3 rename)", () => {
+    const sim = new NpcSimulator();
+    const ship = sim.spawnOvermindInSystem(
+      new SeededRNG("ov_name"),
+      "ov_42",
+      "sys_a",
+    );
+    expect(ship.name).toBe("Жнец ov_42");
+    expect(ship.name).not.toContain("Доминатор");
+  });
+
   it("a persisted role 'OVERMIND' ship round-trips through NpcShipSchema", () => {
     const sim = new NpcSimulator();
     const ship = sim.spawnOvermindInSystem(
