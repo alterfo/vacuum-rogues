@@ -267,6 +267,33 @@ export const ARTIFACT_DROP_COUNT_MIN = 1;
 /** Maximum artifact count per Overmind-kill drop. */
 export const ARTIFACT_DROP_COUNT_MAX = 3;
 
+/**
+ * Overmind size tiers (plan 20260709 Task 2): garrison/capture-fleet ships get
+ * a small/medium/large tier by `weight` (small most common, hashed from the
+ * ship id); `statMult` scales HULL off `ROLE_STATS[NpcRole.OVERMIND]`. Damage
+ * deliberately does NOT scale with tier: the seeded letsplay campaign gates
+ * and the seeded siege tests red on any garrison damage change (both up and
+ * redistributed — see the ROLE_STATS[OVERMIND] comment and garrisonBudOff's
+ * 20-tick capture window), empirically re-confirmed while landing this table.
+ * Scale damage only with those gates re-run.
+ */
+export const OVERMIND_SIZE_TIERS: Record<
+  "small" | "medium" | "large",
+  { statMult: number; weight: number }
+> = {
+  small: { statMult: 0.8, weight: 50 },
+  medium: { statMult: 1.0, weight: 35 },
+  large: { statMult: 1.3, weight: 15 },
+};
+
+/**
+ * The OVERMIND-core boss tier's fixed stats — the single source for what was an
+ * ad-hoc override in OvermindBossController. Real-time combat does not model
+ * shields, so the old hex encounter's 150-shield layer is folded into the hull
+ * (300 + 150 = 450 effective HP); damage 45 as before.
+ */
+export const OVERMIND_BOSS_TIER = { hull: 450, damage: 45 } as const;
+
 /** Player rank at which the government faction discount applies. */
 export const RANK_DISCOUNT_THRESHOLD = 5;
 

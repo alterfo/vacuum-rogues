@@ -4,6 +4,7 @@ import type {
   NpcState,
   NpcGoal,
   NpcShipInit,
+  NpcSizeTier,
 } from "@/types";
 
 import type { Faction } from "@/types/faction";
@@ -56,6 +57,12 @@ export class NpcShip {
    * {@link isAggressive}.
    */
   hostile: boolean;
+  /**
+   * Overmind hull size tier (small/medium/large/boss) — scales spawn stats and
+   * selects per-tier ship art. Unset on non-Overmind ships and on old saves
+   * (readers default to the medium tier).
+   */
+  sizeTier?: NpcSizeTier;
 
   constructor(init: NpcShipInit) {
     this.id = init.id;
@@ -83,6 +90,7 @@ export class NpcShip {
     this.worldX = init.worldX ?? null;
     this.worldY = init.worldY ?? null;
     this.hostile = init.hostile ?? false;
+    this.sizeTier = init.sizeTier;
   }
 
   /**

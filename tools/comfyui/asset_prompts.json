@@ -148,7 +148,11 @@
           "ranger": "small agile ranger vessel, metallic blue hull with cyan glow",
           "trader": "bulky merchant freighter with cargo pods, worn metal",
           "pirate": "asymmetric raider with spikes and dark red plating, menacing",
-          "patrol": "sleek military patrol craft, cyan accents, clean lines"
+          "patrol": "sleek military patrol craft, cyan accents, clean lines",
+          "overmind_small": "small angular dark-hulled alien drone ship, faint magenta-pink bioluminescent circuitry lines, sharp geometric silhouette, cold alien menace",
+          "overmind_medium": "angular dark-hulled alien warship, glowing magenta-pink bioluminescent circuitry veins across the hull, layered geometric plating, cold alien menace",
+          "overmind_large": "massive angular dark-hulled alien battlecruiser, dense magenta-pink bioluminescent circuitry lattice, heavy fortified geometric superstructure, cold alien menace",
+          "overmind_boss": "colossal angular dark-hulled alien dreadnought core-ship, blazing magenta-pink bioluminescent circuitry web, cathedral-scale geometric superstructure with a glowing central core, overwhelming alien menace"
         }
       }
     },

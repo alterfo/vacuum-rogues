@@ -181,6 +181,14 @@ export enum NpcRole {
   OVERMIND = "OVERMIND",
 }
 
+/**
+ * Overmind hull size tier — scales spawn stats off `ROLE_STATS[NpcRole.OVERMIND]`
+ * (small/medium/large; boss uses fixed stats) and selects per-tier ship art
+ * (`ships/overmind_<tier>`). Optional/additive: absent on non-Overmind ships
+ * and on old saves (both read as the medium base tier where it matters).
+ */
+export type NpcSizeTier = "small" | "medium" | "large" | "boss";
+
 export enum NpcState {
   IDLE = "IDLE",
   TRAVELING = "TRAVELING",
@@ -239,6 +247,8 @@ export interface NpcShipInit {
   worldY?: number | null;
   /** True when openly hostile to the player (garrison/pirate spawns, or attacked). */
   hostile?: boolean;
+  /** Overmind hull size tier (stat scaling + per-tier art). Unset for other factions. */
+  sizeTier?: NpcSizeTier;
 }
 
 /** A simulation event emitted by the living-galaxy and collected in newsFeed. */

@@ -211,6 +211,14 @@ describe("OvermindBossController combatant spawn", () => {
     expect(h.msgs.some((m) => m.text.includes("OVERMIND"))).toBe(true);
   });
 
+  it("spawns the core as the boss size tier (plan 20260709 Task 2)", () => {
+    const h = makeHarness();
+    h.ctrl.spawnOvermindCoreCombatant();
+
+    expect(h.addedNpcs.length).toBe(1);
+    expect(h.addedNpcs[0].sizeTier).toBe("boss");
+  });
+
   it("is idempotent: attacking again while the core is already engaged spawns nothing new", () => {
     const h = makeHarness();
     h.ctrl.showOvermindCorePrompt();

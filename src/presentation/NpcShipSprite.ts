@@ -2,6 +2,7 @@ import { Container, Graphics, Sprite, Circle } from "pixi.js";
 import type { FederatedPointerEvent } from "pixi.js";
 import type { NpcShip } from "@/domain/NpcShip";
 import { NpcRole } from "@/types";
+import { Faction } from "@/types/faction";
 import { factionColor } from "./ui/palette";
 import { pickVariant } from "./textures";
 import { GAME_BALANCE, SUN_EXCLUSION_RADIUS } from "@/config/balance";
@@ -16,10 +17,28 @@ const ROLE_SHIP_PREFIX: Record<NpcRole, string> = {
   [NpcRole.TRADER]: "trader",
   [NpcRole.PIRATE]: "pirate",
   [NpcRole.PATROL]: "patrol",
-  // Dedicated overmind_* tier art lands with plan 20260709 Task 2; until then
-  // OVERMIND ships reuse the patrol hull art (distinguished by faction tint).
+  // Overmind-faction ships resolve size-tier art via shipArtPrefix before this
+  // map is consulted; the entry only backstops a hypothetical OVERMIND-role
+  // ship of another faction (exhaustiveness — a Record<NpcRole, …> must be total).
   [NpcRole.OVERMIND]: "patrol",
 };
+
+/**
+ * Resolve the hull-art asset prefix (`src/assets/ships/<prefix>`) for an NPC.
+ * Overmind-faction ships get size-tier-specific art (`overmind_<tier>`, a
+ * tier-less old-save ship reads as medium); everything else keys on role. An
+ * ungenerated `overmind_*` variant simply makes {@link pickVariant} return
+ * undefined and the sprite falls back to its procedural Graphics hull — the
+ * same degradation every role already relies on.
+ */
+export function shipArtPrefix(
+  npc: Pick<NpcShip, "role" | "faction" | "sizeTier">,
+): string {
+  if (npc.faction === Faction.OVERMIND) {
+    return `overmind_${npc.sizeTier ?? "medium"}`;
+  }
+  return ROLE_SHIP_PREFIX[npc.role] ?? "ranger";
+}
 
 /** Hull art faces nose-up (bow at the top of the image); the container points +X
  *  along heading, so the sprite is pre-rotated +90° (clockwise) to align the
@@ -183,7 +202,7 @@ export class NpcShipSprite {
 
     // Prefer ship art for the hull; a deterministic variant per ship id keeps
     // the same ship looking consistent across frames/visits.
-    const prefix = ROLE_SHIP_PREFIX[npc.role] ?? "ranger";
+    const prefix = shipArtPrefix(npc);
     const tex = pickVariant("ships", prefix, npc.id);
     if (tex) {
       const sp = new Sprite(tex);

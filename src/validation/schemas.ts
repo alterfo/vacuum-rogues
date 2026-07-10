@@ -369,6 +369,9 @@ export const NpcShipSchema = z.object({
   worldX: z.number().nullable().default(null),
   worldY: z.number().nullable().default(null),
   hostile: z.boolean().default(false),
+  // Additive/optional (plan 20260709 Task 2): absent on old saves and on
+  // non-Overmind ships — no migration needed.
+  sizeTier: z.enum(["small", "medium", "large", "boss"]).optional(),
 });
 
 export const NewsEventSchema = z.object({

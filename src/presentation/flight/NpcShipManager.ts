@@ -327,8 +327,8 @@ export class NpcShipManager implements FlightModule {
       getGameEngine: () => this.gameEngine,
       getNpcSprites: () => this.npcSprites,
       addNpcSprite: (npc, entry) => this.addNpcSprite(npc, entry),
-      spawnOvermindInSystem: (rng, id, systemId) =>
-        this.npcSimulator.spawnOvermindInSystem(rng, id, systemId),
+      spawnOvermindInSystem: (rng, id, systemId, sizeTier) =>
+        this.npcSimulator.spawnOvermindInSystem(rng, id, systemId, sizeTier),
     });
   }
 

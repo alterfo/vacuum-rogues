@@ -9,11 +9,16 @@ import {
   FactionType,
   ResourceType,
 } from "@/types";
-import type { GameMode, NewsEvent } from "@/types";
+import type { GameMode, NewsEvent, NpcSizeTier } from "@/types";
 import type { RouteRumor } from "@/domain/RouteRumor";
 import { applyMarketTradeImpact } from "@/domain/Market";
 import { Faction } from "@/types/faction";
-import { GAME_BALANCE, scaledGarrisonRange } from "@/config/balance";
+import {
+  GAME_BALANCE,
+  scaledGarrisonRange,
+  OVERMIND_SIZE_TIERS,
+  OVERMIND_BOSS_TIER,
+} from "@/config/balance";
 import { overmindGarrisonPowerBonus } from "@/systems/campaign/hostileScaling";
 import type { NpcBrain } from "./NpcBrain";
 import { RuleBasedNpcBrain, selectPirateTarget } from "./NpcBrain";
@@ -24,6 +29,7 @@ import {
   pirateCoordination,
 } from "./factionHostility";
 import { npcOrbitStep, advanceNpcOrbit } from "./npcPlacement";
+import { hashStr } from "@/utils/hashStr";
 import { logger } from "@/utils/logger";
 import {
   creditNpc,
@@ -292,6 +298,30 @@ export function npcRoleTechLevel(role: NpcRole): number {
   return map[role] ?? 1;
 }
 
+/**
+ * Derive a garrison/capture-fleet Overmind ship's size tier from its id by the
+ * {@link OVERMIND_SIZE_TIERS} weights (small most common). Never yields the
+ * boss tier — that is reserved for the OVERMIND-core spawn. Deliberately a
+ * deterministic id hash, NOT an rng draw: consuming a draw per spawn shifts
+ * every downstream roll of the shared seeded rng, which reds the seeded
+ * letsplay campaign gates and siege tests; a hash keeps those streams
+ * byte-identical while ships still vary (the same trick ship-art variant
+ * selection uses).
+ */
+export function overmindSizeTierForId(id: string): NpcSizeTier {
+  const tiers = Object.entries(OVERMIND_SIZE_TIERS) as [
+    NpcSizeTier,
+    { statMult: number; weight: number },
+  ][];
+  const total = tiers.reduce((sum, [, t]) => sum + t.weight, 0);
+  let roll = (hashStr(id) % total) + 1;
+  for (const [tier, t] of tiers) {
+    roll -= t.weight;
+    if (roll <= 0) return tier;
+  }
+  return "medium";
+}
+
 /** A scheduled Ranger campaign to liberate a hostile system. */
 interface LiberationCampaign {
   /** Hostile system the campaign aims to free. */
@@ -511,9 +541,28 @@ export class NpcSimulator {
    * it. Carries its own `NpcRole.OVERMIND` stats (tougher than a PATROL hull)
    * and faction OVERMIND so it reads as hostile to the player and friendly
    * NPCs. Used by ensureGarrison.
+   *
+   * `sizeTier` (default medium = the exact base stats) scales hull via
+   * {@link OVERMIND_SIZE_TIERS}; the boss tier applies the fixed
+   * {@link OVERMIND_BOSS_TIER} stats. Garrison/capture-fleet callers derive
+   * the tier with {@link overmindSizeTierForId} — kept out of this factory so
+   * a direct (tier-less) spawn keeps its exact base stats.
    */
-  spawnOvermindInSystem(rng: SeededRNG, id: string, systemId: string): NpcShip {
+  spawnOvermindInSystem(
+    rng: SeededRNG,
+    id: string,
+    systemId: string,
+    sizeTier?: NpcSizeTier,
+  ): NpcShip {
     const stats = ROLE_STATS[NpcRole.OVERMIND];
+    const tier = sizeTier ?? "medium";
+    const hull =
+      tier === "boss"
+        ? OVERMIND_BOSS_TIER.hull
+        : Math.round(stats.hull * OVERMIND_SIZE_TIERS[tier].statMult);
+    // Damage is tier-flat below boss (see OVERMIND_SIZE_TIERS — the seeded
+    // campaign/siege gates red on any garrison damage change).
+    const damage = tier === "boss" ? OVERMIND_BOSS_TIER.damage : stats.damage;
     this.arrivalDwellCountdown.set(id, MIN_DWELL_DAYS);
     return new NpcShip({
       id,
@@ -521,11 +570,12 @@ export class NpcSimulator {
       race: FactionType.PARADOXES,
       faction: Faction.OVERMIND,
       role: NpcRole.OVERMIND,
-      hullHP: stats.hull,
-      maxHull: stats.hull,
+      hullHP: hull,
+      maxHull: hull,
       shields: stats.shields,
       speed: stats.speed,
-      damage: stats.damage,
+      damage,
+      sizeTier: tier,
       currentSystemId: systemId,
       state: NpcState.PATROLLING,
       goal: null,
@@ -698,7 +748,12 @@ export class NpcSimulator {
     while (present < target) {
       const id = `garrison_${overmind ? "ov" : "pi"}_${systemId}_${galaxy.gameDays}_${spawned}`;
       const ship = overmind
-        ? this.spawnOvermindInSystem(rng, id, systemId)
+        ? this.spawnOvermindInSystem(
+            rng,
+            id,
+            systemId,
+            overmindSizeTierForId(id),
+          )
         : this.spawnPirateInSystem(rng, id, systemId);
       galaxy.npcShips.push(ship);
       this.garrisonIds.add(id);
@@ -792,7 +847,14 @@ export class NpcSimulator {
         continue;
       }
       const id = `garrison_ovg_${systemId}_${galaxy.gameDays}`;
-      galaxy.npcShips.push(this.spawnOvermindInSystem(rng, id, systemId));
+      galaxy.npcShips.push(
+        this.spawnOvermindInSystem(
+          rng,
+          id,
+          systemId,
+          overmindSizeTierForId(id),
+        ),
+      );
       this.garrisonIds.add(id);
       logger.info(
         `Garrison growth: +1 ship in ${systemId} (now ${present + 1}/${cap})`,
@@ -1893,7 +1955,12 @@ export class NpcSimulator {
 
     for (let i = 0; i < count; i++) {
       const id = `${fleetId}_${i}`;
-      const ship = this.spawnOvermindInSystem(rng, id, hostileId);
+      const ship = this.spawnOvermindInSystem(
+        rng,
+        id,
+        hostileId,
+        overmindSizeTierForId(id),
+      );
       ship.destinationSystemId = targetId;
       ship.daysToArrival = daysToArrival;
       ship.state = NpcState.TRAVELING;
