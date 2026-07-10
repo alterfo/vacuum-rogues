@@ -45,3 +45,11 @@ export const FACTION_LABEL: Record<Faction, string> = {
   [Faction.INDEPENDENT]: "Независимая",
   [Faction.OVERMIND]: "Сверхразум",
 };
+
+// Display label for a possibly-untyped faction id (scene call sites carry
+// `string`, e.g. `system.ownerFaction ?? "INDEPENDENT"`). Falls back to the raw
+// id so an unexpected value renders visibly instead of blanking — the same
+// `?? faction` contract the scenes' former private dicts had.
+export function factionDisplayLabel(faction: string): string {
+  return FACTION_LABEL[faction as Faction] ?? faction;
+}

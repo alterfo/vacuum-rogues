@@ -95,13 +95,13 @@ Five related requests bundled together at planning time (ship balance + Overmind
 
 ### Task 4: Unify the Overmind faction label
 
-- [ ] write a failing test asserting `NpcContactPanel`'s faction-label resolution for `Faction.OVERMIND` returns `"Сверхразум"` (matching `FACTION_LABEL`), not `"Предтечи"`.
-- [ ] change `NpcContactPanel.ts:36` to read `FACTION_LABEL[faction]` directly (`src/config/factionConfig.ts`) instead of `t(\`faction.${faction}\`)` — confirm this doesn't regress EN localization (check whether `FACTION_LABEL` is itself localized or RU-only; if RU-only, this may need an i18n-aware wrapper — resolve during implementation, don't assume).
-- [ ] replace the duplicate hardcoded dicts in `GovernmentScene.ts:67` and `PlanetScene.ts:169` with reads from the shared `FACTION_LABEL` map.
-- [ ] remove or repoint the now-unused `"faction.OVERMIND"` i18n keys (`src/i18n/ru.ts:133`, `src/i18n/en.ts:133`) if nothing else consumes the `"faction.*"` i18n namespace for other factions — verify via grep before deleting (other `faction.*` keys for RANGER/PIRATE/etc. may still be legitimately used elsewhere; only touch the OVERMIND entry if so).
-- [ ] confirm `factionLabelCompleteness.test.ts` still passes unmodified.
-- [ ] write a test confirming `GovernmentScene`/`PlanetScene`/`NpcContactPanel` all render the same string for `Faction.OVERMIND`.
-- [ ] run affected test files — must pass before Task 5.
+- [x] write a failing test asserting `NpcContactPanel`'s faction-label resolution for `Faction.OVERMIND` returns `"Сверхразум"` (matching `FACTION_LABEL`), not `"Предтечи"`. *(`src/tests/presentation/overmindFactionLabel.test.ts`, confirmed red first — renders the real panel headless and inspects the alliance line.)*
+- [x] change `NpcContactPanel.ts:36` to read `FACTION_LABEL[faction]` directly (`src/config/factionConfig.ts`) instead of `t(\`faction.${faction}\`)` — confirm this doesn't regress EN localization (check whether `FACTION_LABEL` is itself localized or RU-only; if RU-only, this may need an i18n-aware wrapper — resolve during implementation, don't assume). *(Resolved as the anticipated caveat: `FACTION_LABEL` IS RU-only, so the panel keeps its i18n-aware `t("faction.*")` path — EN localization preserved — and the divergent dictionary VALUES were repointed instead: ru «Предтечи»→«Сверхразум», en "Precursors"→"Overmind". The convergence is pinned by the new test.)*
+- [x] replace the duplicate hardcoded dicts in `GovernmentScene.ts:67` and `PlanetScene.ts:169` with reads from the shared `FACTION_LABEL` map. *(Via new exported `factionDisplayLabel(faction: string)` helper in `factionConfig.ts` keeping the scenes' `?? faction` fallback contract; also converges their divergent singular «Бастион»/«Парадокс» onto canonical «Бастионы»/«Парадоксы». Cyrillic ratchet baseline regenerated — both scenes dropped 7 literals.)*
+- [x] remove or repoint the now-unused `"faction.OVERMIND"` i18n keys (`src/i18n/ru.ts:133`, `src/i18n/en.ts:133`) if nothing else consumes the `"faction.*"` i18n namespace for other factions — verify via grep before deleting (other `faction.*` keys for RANGER/PIRATE/etc. may still be legitimately used elsewhere; only touch the OVERMIND entry if so). *(Grep: the `faction.*` namespace is consumed ONLY by `NpcContactPanel` — but for ALL factions, so the keys stay; only the OVERMIND values were repointed. The ru.ts:142 lore line keeps «Предтечи» deliberately — there it names the ancient race in narrative text, not the faction-label surface.)*
+- [x] confirm `factionLabelCompleteness.test.ts` still passes unmodified.
+- [x] write a test confirming `GovernmentScene`/`PlanetScene`/`NpcContactPanel` all render the same string for `Faction.OVERMIND`. *(In `overmindFactionLabel.test.ts`: contact-panel i18n path, scene `factionDisplayLabel` path, and canonical `FACTION_LABEL` all asserted equal, plus a full-enum drift guard and unknown-id fallback.)*
+- [x] run affected test files — must pass before Task 5. *(Full unit suite 5333 passed, lint 0 errors, tsc clean.)*
 
 ### Task 5: Size-scaled research-substance loot
 
