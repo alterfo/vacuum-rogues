@@ -113,7 +113,9 @@ This plan is scoped as an **additive layer**: it does not touch `advanceOvermind
 
 ### Task 7: Update documentation
 
-- [ ] update `.claude/docs/systems/overmind.md` with the new garrison-growth/bud-off mechanic, the liberation-assault combat change, and the frontier-proximity bias — cross-reference from root `CLAUDE.md`'s existing "Overmind Arc" summary if it needs a one-line pointer to the new additive layer.
+- [x] update `.claude/docs/systems/overmind.md` with the new garrison-growth/bud-off mechanic, the liberation-assault combat change, and the frontier-proximity bias — cross-reference from root `CLAUDE.md`'s existing "Overmind Arc" summary if it needs a one-line pointer to the new additive layer.
+
+> **Implementation note (Task 7):** `overmind.md` gained a "The garrison layer" section (growth gate/cadence, `capture_bud_` prefix rationale, `recentlyCaptured` queue semantics, assault winnability rules, transient-state/persistence note, test index) and the spread-machine section now documents the proximity-primary/hash-tiebreak frontier ranking. Root `CLAUDE.md`'s "Overmind Arc" summary got a one-line pointer to the additive layer. All constant names/values and test-file paths were verified against `NpcSimulator.ts` before committing.
 
 ## Technical Details
 

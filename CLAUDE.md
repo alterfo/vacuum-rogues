@@ -142,6 +142,7 @@ Full details: `.claude/docs/systems/overmind.md`. Critical invariants:
 - Win also requires **player participation**: `(state.playerLiberations ?? 0) > 0` — an NPC-only equilibrium clearing the front must never fire a spurious victory.
 - `freezeOvermind: true` prevents the equilibrium tick from capping/liberating the Overmind front.
 - Spread cadence/combat scaling are **adaptive** (keyed to a ratcheted `campaignPeakPower`, not fixed day phases) — tune levers in `balance.ts` (`ADAPTIVE_*`, `HOSTILE_SCALING_*`, `NEUTRAL_SCALING_*`), never at call sites. Target pacing: a 2–3 in-game-year campaign (`docs/plans/20260706-three-year-campaign.md`); the plan's 99%-win-rate gate is a known, measured, **open** gap (~2–24% across runs, root cause is the arming-up path) — not silently loosened.
+- An **additive garrison layer** in `NpcSimulator` (growth → 1.5× bud-off capture fleets, real-combat liberation assaults, fresh-capture liberation targeting) runs alongside `advanceOvermind()` without touching its pacing — see the subsystem doc's "garrison layer" section.
 
 ## Money System (key rules only)
 
