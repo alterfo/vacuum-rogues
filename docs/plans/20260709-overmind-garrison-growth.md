@@ -102,12 +102,14 @@ This plan is scoped as an **additive layer**: it does not touch `advanceOvermind
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] verify all five gaps from the Overview are addressed: garrison growth exists and caps at 1.5×; bud-off fleets travel (not instant) and fight real combat on arrival (via existing `resolveCaptureFleets` reuse); liberation campaigns preferentially target fresh captures; liberation assaults fight real combat instead of a coin-flip; frontier capture selection favors geographic coherence.
-- [ ] run full unit test suite (`npm test -- --run`)
-- [ ] run `npm run test:playtest` (confirms no wiring regression in the real-engine harness)
-- [ ] run `npm run letsplay:ci` (confirms no pacing/win-rate regression from the autopilot oracle)
-- [ ] run `npm run lint`
-- [ ] `gitnexus detect_changes` — confirm only the expected `NpcSimulator`/`overmindSpread` symbols and flows are affected before committing; flag if `advanceOvermind`'s win-condition flow (`campaignPeakPower`, `engaged`, `playerLiberations` invariants — root `CLAUDE.md` "Overmind Arc") shows up as affected, since this plan is explicitly meant not to touch it.
+- [x] verify all five gaps from the Overview are addressed: garrison growth exists and caps at 1.5×; bud-off fleets travel (not instant) and fight real combat on arrival (via existing `resolveCaptureFleets` reuse); liberation campaigns preferentially target fresh captures; liberation assaults fight real combat instead of a coin-flip; frontier capture selection favors geographic coherence.
+- [x] run full unit test suite (`npm test -- --run`) — 5293 passed, 12 skipped
+- [x] run `npm run test:playtest` (confirms no wiring regression in the real-engine harness) — 693 passed, 9 skipped
+- [x] run `npm run letsplay:ci` (confirms no pacing/win-rate regression from the autopilot oracle) — 107 passed
+- [x] run `npm run lint` — 0 errors (46 pre-existing warnings)
+- [x] `gitnexus detect_changes` — confirm only the expected `NpcSimulator`/`overmindSpread` symbols and flows are affected before committing; flag if `advanceOvermind`'s win-condition flow (`campaignPeakPower`, `engaged`, `playerLiberations` invariants — root `CLAUDE.md` "Overmind Arc") shows up as affected, since this plan is explicitly meant not to touch it.
+
+> **Verification note (Task 6):** `detect_changes` (compare vs `master`) lists `advanceOvermind` as touched, which is expected — Task 5's proximity ranking lives inside it. The commit diff (`3afabdc..322cd37`, `overmindSpread.ts`) confirms the change is confined to the frontier-candidate sort (new `hopDistancesFrom` BFS helper + proximity-primary/hash-tiebreak comparator); the win-condition flow (`campaignPeakPower` ratchet, `engaged`, `playerLiberations`) is byte-identical to master. The plan's five commits touch exactly: `NpcSimulator.ts`, `overmindSpread.ts`, the letsplay `PlayerAgent.ts` (Task 4's out-of-plan attack-executor fix), five new test files, and this plan doc. Other symbols in the compare-vs-master report belong to earlier, unrelated commits on the `architecture-hygiene` branch (flight refactors, InfoCenter search).
 
 ### Task 7: Update documentation
 
