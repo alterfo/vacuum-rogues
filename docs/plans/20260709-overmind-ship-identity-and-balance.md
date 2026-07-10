@@ -132,8 +132,8 @@ Five related requests bundled together at planning time (ship balance + Overmind
 
 ### Task 8: Update documentation
 
-- [ ] update `.claude/docs/systems/overmind.md` (or the relevant subsystem doc) with the new `NpcRole.OVERMIND`, `sizeTier`, rename, and engine-gating notes.
-- [ ] update the stray `OvermindBossController.ts:99` code comment that still says "Доминатор" to match the rename, for consistency (not user-facing, but avoids confusing future readers).
+- [x] update `.claude/docs/systems/overmind.md` (or the relevant subsystem doc) with the new `NpcRole.OVERMIND`, `sizeTier`, rename, and engine-gating notes. *(New "Overmind ship identity" section: role + exhaustive maps, sizeTier mechanics incl. the deterministic-id-hash rng invariant and the damage-stays-flat campaign-gate constraint, art prefix + manual ComfyUI step, rename, loot table, faction-label unification, engine retune + minDay gate, test index.)*
+- [x] update the stray `OvermindBossController.ts:99` code comment that still says "Доминатор" to match the rename, for consistency (not user-facing, but avoids confusing future readers). *(Pre-satisfied — Task 3's grep already found the comment gone, reworded during Tasks 1–2; re-verified now: the only "Доминатор" strings left in the repo are the rename regression test's own assertions.)*
 
 ## Technical Details
 
