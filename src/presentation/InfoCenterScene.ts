@@ -307,6 +307,19 @@ type GearSortOption = "price" | "tech" | "distance";
 
 const GEAR_SORT_OPTIONS: GearSortOption[] = ["price", "tech", "distance"];
 const GEAR_MAX_PRICE_OPTIONS = [0, 1000, 5000, 10000, 50000];
+/**
+ * The "Т.ур:" range ceiling. Catalog literals top out at tech 7, but
+ * `upgradeGear` boosts an item's techLevel by +1 (the type's documented 1..8
+ * domain), so the ceiling is 8 to keep any upgraded listing searchable —
+ * defaulting BELOW the reachable max silently hides gear (the original bug:
+ * a hardcoded 6 excluded tech-7 items with no visible sign).
+ */
+export const GEAR_TECH_MAX = 8;
+
+/** Cycle a "Т.ур:" min/max value: 1 → 2 → … → GEAR_TECH_MAX → wrap to 1. */
+export function cycleGearTech(value: number): number {
+  return (value % GEAR_TECH_MAX) + 1;
+}
 
 const EQUIPMENT_FACETS: EquipmentFacet[] = [
   "engine",
@@ -357,7 +370,7 @@ export class InfoCenterScene extends GameScene {
   // gear tab state — multi-select; empty set = all types shown
   private gearFacets = new Set<EquipmentFacet>(["engine" as EquipmentFacet]);
   private gearMinTech = 1;
-  private gearMaxTech = 6;
+  private gearMaxTech = GEAR_TECH_MAX;
   private gearMaxPriceIdx = 0; // index into GEAR_MAX_PRICE_OPTIONS
   private gearSort: GearSortOption = "price";
   private gearResults: EquipmentHit[] = [];
@@ -1236,7 +1249,7 @@ export class InfoCenterScene extends GameScene {
     techMinBg.cursor = "pointer";
     techMinBg.on("pointerdown", (e) => {
       e.stopPropagation();
-      this.gearMinTech = (this.gearMinTech % 6) + 1;
+      this.gearMinTech = cycleGearTech(this.gearMinTech);
       if (this.gearMinTech > this.gearMaxTech)
         this.gearMaxTech = this.gearMinTech;
       this.render();
@@ -1273,7 +1286,7 @@ export class InfoCenterScene extends GameScene {
     techMaxBg.cursor = "pointer";
     techMaxBg.on("pointerdown", (e) => {
       e.stopPropagation();
-      this.gearMaxTech = (this.gearMaxTech % 6) + 1;
+      this.gearMaxTech = cycleGearTech(this.gearMaxTech);
       if (this.gearMaxTech < this.gearMinTech)
         this.gearMinTech = this.gearMaxTech;
       this.render();
