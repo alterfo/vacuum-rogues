@@ -123,12 +123,12 @@ Five related requests bundled together at planning time (ship balance + Overmind
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] verify all five Overview items: Overmind ships are named "Жнец N"; they have a distinct role/stats/art from regular PATROL ships, in multiple visually distinct sizes; bigger ships drop more/better artifacts; the best engine is ~2× starter speed and doesn't appear before ~year 3; the faction label is consistent across all four surfaces.
-- [ ] run full unit test suite (`npm test -- --run`)
-- [ ] run `npm run test:playtest`
-- [ ] run `npm run letsplay:ci` (confirms no combat/pacing regression from the role/speed changes)
-- [ ] run `npm run lint`
-- [ ] `gitnexus detect_changes` — confirm the affected scope matches this plan's intent (expect it to be broad given Task 1's exhaustive-map edits; review each flagged process rather than assuming it's wrong).
+- [x] verify all five Overview items: Overmind ships are named "Жнец N"; they have a distinct role/stats/art from regular PATROL ships, in multiple visually distinct sizes; bigger ships drop more/better artifacts; the best engine is ~2× starter speed and doesn't appear before ~year 3; the faction label is consistent across all four surfaces. *(All five grep-confirmed on the final tree AND each pinned by its own task test: `overmindRole/overmindSizeTier/overmindShipArt/lootDropSizeTier/engineSpeedRetune/apexEngineMinDay/overmindFactionLabel` — all green in the full-suite run below. Visual confirmation of the per-tier art itself remains Post-Completion — the `overmind_*` variants aren't generated yet by design.)*
+- [x] run full unit test suite (`npm test -- --run`) *(5347 passed, 12 skipped.)*
+- [x] run `npm run test:playtest` *(693 passed, 9 skipped.)*
+- [x] run `npm run letsplay:ci` (confirms no combat/pacing regression from the role/speed changes) *(108 passed.)*
+- [x] run `npm run lint` *(0 errors, 46 pre-existing warnings; `npx tsc --noEmit` also clean.)*
+- [x] `gitnexus detect_changes` — confirm the affected scope matches this plan's intent (expect it to be broad given Task 1's exhaustive-map edits; review each flagged process rather than assuming it's wrong). *(Compare vs master: "critical", 153 symbols / 80 processes — reviewed, three clean buckets: (a) `derivedStats`-hub processes from the Task 6 formula change, exactly the anticipated centrality hit; (b) this plan's NpcSimulator/NpcShipSprite/LootDropHandler/GearCatalog/ShopGenerator/faction-label scope; (c) `steerTowardLead`/`performWarp`/`updateShip` processes from the earlier combat-feel + garrison commits sharing this branch, validated under their own plans. Nothing out-of-scope.)*
 
 ### Task 8: Update documentation
 
