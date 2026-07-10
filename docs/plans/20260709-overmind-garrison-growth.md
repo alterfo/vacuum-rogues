@@ -1,0 +1,122 @@
+# Overmind Garrison Growth & Coherent Expansion
+
+## Overview
+
+Playtest feedback: Overmind expansion feels like it "suddenly appears from all sides" rather than spreading outward from one place, and there's no felt sense that a captured system is a growing threat that begets more captures. The request was to make expansion organic — one captured system grows its garrison, and once it's 1.5× its starting size, half the excess buds off and flies (normal jump, not instant) to seize a neighboring or distant system — with a "rangers are massing to retake it" announcement firing specifically off *fresh* captures, and a real fight (not a coin flip) deciding whether the counter-attack succeeds.
+
+Investigation found the codebase already has most of the scaffolding for this — a real ship-vs-ship siege resolver, a liberation-campaign announcer/dispatcher, deterministic day-seeded RNG streams for every periodic system. The actual gaps are narrower than they first looked:
+
+1. **No garrison growth at all.** `ensureGarrison`/`fillGarrison` tops a captured system up to a *one-time* random target (5–10 ships, ±difficulty/power bonus) and never grows it further once met.
+2. **No bud-off mechanic.** Nothing ever spawns a new capture fleet *from* an existing garrison based on its size — the only capture-fleet trigger is a flat 60-day interval (`assembleCaptureFleet`) picking a random front anywhere on the map.
+3. **Liberation-campaign targeting is decoupled from capture events.** `assembleLiberationCampaign` fires every 50 days and picks a random hostile↔friendly front — it has no bias toward systems that were *just* captured, so the "massing to retake" news doesn't reliably follow a fresh loss.
+4. **Liberation "combat" is a single 20% coin-flip on arrival**, not a fight against the garrison — unlike the Overmind's own capture-fleet siege (`resolveCaptureFleets`), which already runs real per-ship attrition combat against defenders.
+5. **The "all sides at once" feel has a partial existing fix** (commit `d20d23c`, forces the two starting Overmind systems to be warp-adjacent instead of two independent far-apart seeds) but a residual cause remains: `frontierSystems()` ranks candidates by a pseudo-random hash over the *entire* current border every tick, not by proximity to the most recently captured system, so a single contiguous blob's border can still jump between its far edges over a long game.
+
+This plan is scoped as an **additive layer**: it does not touch `advanceOvermind()`, the pure/deterministic arc that governs overall capture *pacing* (tuned to the documented 2–3 year campaign target and the already-fragile 99%-win-rate gate — see root `CLAUDE.md` "Overmind Arc"). The existing periodic `assembleCaptureFleet` (60-day random front) and `assembleLiberationCampaign` (50-day random front) triggers are **left running unchanged** — new logic runs alongside them, sourced from garrison state instead of the calendar.
+
+## Context (from discovery)
+
+- `src/systems/npc/NpcSimulator.ts` is the single file all of this lives in:
+  - `fillGarrison()` (~line 549) tops a system to `[GARRISON_MIN=5, GARRISON_MAX=10]` (+power/difficulty bonus) once; `establishedGarrisons: Set<string>` (~line 291) marks a system as "garrison ever established" so a *cleared* garrison (player/ranger kill) isn't instantly respawned.
+  - `assembleCaptureFleet()` (~line 1493): spawns `[CAPTURE_FLEET_MIN=3, CAPTURE_FLEET_MAX=5]` fresh Overmind ships in a hostile system, bound (via `travelDays`, which handles both adjacent-warp and non-adjacent straight-line travel) for a random neutral neighbor, added to `captureFleetIds: Set<string>`.
+  - `resolveCaptureFleets()` (~line 1538): every tick, resolves **any** ship in `captureFleetIds` currently present in a system — runs real per-ship attrition combat against defenders (damage-trade loop, `PIRATE_DAMAGE_FRACTION`/`VICTIM_RETALIATION_FRACTION`), captures the system and emits `SYSTEM_CAPTURED` news once defenders are cleared and the assault force is still ≥ `CAPTURE_FLEET_MIN`. **Reusable as-is** for bud-off fleets — anything added to `captureFleetIds` gets resolved here for free.
+  - `assembleLiberationCampaign()` (~line 1647) / `resolveLiberationCampaigns()` (~line 1704) / `dispatchLiberationRally()` (~line 1730): announces a target+staging+date, then at the rally date pulls up to `LIBERATION_RALLY_MAX_SHIPS=5` idle rangers already parked in the staging system and sends them traveling.
+  - Arrival resolution (`tick()`, ~line 818): a `liberation_`-prefixed convoy rolls `CONVOY_LIBERATION_CHANCE=0.2` once on arrival via `galaxy.tryLiberate()` — **no combat against the garrison at all**, garrison ships aren't destroyed by this path.
+  - `frontierSystems()` (`src/systems/overmind/overmindSpread.ts:104-129`) — undirected border scan, candidates ranked by `hashStr(seed:day:id)` (pure hash, no locality bias).
+- `tick()` orchestration order (~line 786-968): `resolveLiberationCampaigns` → per-NPC movement/arrival loop → periodic `assembleCaptureFleet`/`assembleLiberationCampaign` triggers → `resolveOffscreenCombat` → `resolveCaptureFleets` → `pruneAndReplenish` → `ensureGarrison` → `resolveLiberationDetection`. New growth/bud-off logic belongs **after `ensureGarrison`** (garrison counts finalized for the day), using an isolated day-seeded `SeededRNG` stream (matching every other periodic call here) so it never perturbs the deterministic main stream other tests depend on.
+- `NewsEvent` (`src/types/index.ts:243`) plumbing for a type used/extended here (`LIBERATION_CAMPAIGN`, `SYSTEM_CAPTURED`) already has entries in `src/validation/schemas.ts:385-391`, `src/i18n/ru.ts:91-92`, `src/i18n/en.ts:90-91`, `src/presentation/InfoCenterScene.ts:67-68` (`NEWS_TYPE_COLOR` is `Record<NewsEvent["type"], number>` — TS hard-errors if a new enum member is added without a color entry).
+- Balance constants for this feature belong in `src/config/balance.ts` near the existing `GARRISON_MIN`/`CAPTURE_FLEET_INTERVAL`/`LIBERATION_CAMPAIGN_INTERVAL` block in `NpcSimulator.ts` (lines ~116-133) — those are currently **module-level `const`s in `NpcSimulator.ts`, not `balance.ts`**; follow the existing local pattern for consistency rather than introducing a new location.
+- Existing deterministic-RNG unit tests to extend (all mock `SeededRNG`/construct a minimal `Galaxy`): `src/tests/npc/hostileGarrison.test.ts`, `src/tests/npc/garrisonPersistence.test.ts`, `src/tests/npc/garrisonPowerScaling.test.ts`, `src/tests/npc/liberationCampaign.test.ts`, `src/tests/npc/liberationDetect.test.ts`, `src/tests/npcSimulator.test.ts`, `src/tests/presentation/garrisonCombat.test.ts`, `src/tests/galaxy/combatLiberation.test.ts`.
+- **Explicit decisions from planning discussion** (do not revisit without checking with the user):
+  - Liberation gets **real attrition combat**, mirroring `resolveCaptureFleets`, replacing the 20% flip-roll.
+  - Garrison growth is **slow periodic** (+1 ship per interval, not power-scaled), capped at 1.5× the garrison's baseline size.
+  - This is an **additive layer** — `advanceOvermind()`'s abstract pacing arc, and the existing fixed-interval `assembleCaptureFleet`/`assembleLiberationCampaign` triggers, are **not removed or altered**.
+
+## Development Approach
+
+- **Testing approach**: TDD/regression-first — each task starts with a failing unit test (extending the existing `SeededRNG`-driven `NpcSimulator` test patterns above), then implements until green.
+- Complete each task fully before moving to the next; all tests pass before starting the next task.
+- **Do not modify or weaken any existing test assertion** — the suite is known-good; if a change reds an existing test, stop and re-diagnose rather than adjusting the test.
+- No domain/schema/save changes expected: `garrisonBaseline`/liberation-assault tracking are `NpcSimulator`-private runtime `Map`/`Set` state (same category as the existing `garrisonIds`/`captureFleetIds`/`establishedGarrisons`, which are already excluded from persistence and rebuilt via `reconcileTransientState` on load — confirm this holds for any new state introduced).
+
+## Testing Strategy
+
+- **Unit tests** (mocked `Galaxy`/`SeededRNG`, no PixiJS): the primary tier for every task — this is pure simulation logic in `NpcSimulator`.
+- **Balance/regression tests**: if a new constant risks destabilizing the documented Overmind pacing invariants (root `CLAUDE.md` "Overmind Arc"), run the existing Overmind balance test suite (`overmindArc.test.ts` and related, subject to the documented day-constraint limits — see project memory on hardcoded `dayZero=1`/`day=7` constraints in those tests) to confirm no regression, but do not alter their fixed day parameters.
+- Run affected test files after each task; run the full `npm test -- --run` before the final verification task.
+
+## Implementation Steps
+
+### Task 1: Track garrison baseline and grow it slowly toward 1.5×
+
+- [x] write a failing test (extend `garrisonPersistence.test.ts` or a new `garrisonGrowth.test.ts`) asserting: a freshly-established garrison records its baseline count; after `GARRISON_GROWTH_INTERVAL_DAYS` elapses, its ship count increases by 1; growth stops once the count reaches `round(baseline × GARRISON_GROWTH_BUD_THRESHOLD)`.
+- [x] add `garrisonBaseline: Map<string, number>` to `NpcSimulator` (same lifecycle category as `garrisonIds`/`establishedGarrisons`); record the baseline the first time `fillGarrison` establishes a system's garrison (~line 585, alongside `this.establishedGarrisons.add(systemId)`).
+- [x] add `GARRISON_GROWTH_INTERVAL_DAYS` and `GARRISON_GROWTH_BUD_THRESHOLD = 1.5` constants alongside the existing `GARRISON_MIN`/`GARRISON_MAX` block (~line 116).
+- [x] add `private growGarrisons(galaxy: Galaxy, rng: SeededRNG): void` — for each Overmind system with a recorded baseline, present count `< baseline × GARRISON_GROWTH_BUD_THRESHOLD`, and no pending bud-off (see Task 2): spawn one additional ship (mirror the spawn call already in `fillGarrison`), add to `garrisonIds`.
+- [x] wire the call into `tick()` after `ensureGarrison` (~line 965), gated on `galaxy.gameDays % GARRISON_GROWTH_INTERVAL_DAYS === 0`, using an isolated `new SeededRNG(\`garrison_growth_${galaxy.gameDays}\`)` stream matching the surrounding calls' convention.
+- [x] write tests for: a system below baseline×1.5 grows by exactly 1 per interval; a system at/above the threshold does not grow (Task 2 takes over); pirate garrisons are unaffected (Overmind-only per the growth request).
+- [x] run affected test files — must pass before Task 2.
+
+> **Implementation note (Task 1):** growth got an **adaptive activation gate** not in the original task list: `growGarrisons` returns early while `overmindGarrisonPowerBonus(campaignPeakPower) < 1` (i.e. ratcheted power < 0.5 — the same existing lever `fillGarrison` consumes). Without it, weak-era garrisons grew to 8–15 ships and the seeded campaign pacing gate (`sessionCompetence.test.ts`, first liberation by P2) went red — the letsplay agent could never fully clear a grown garrison. Growth (and thus Task 2's bud-off) is a mid/late-campaign pressure, consistent with the documented "gentle early, hard late" adaptive scaling in root `CLAUDE.md`. `GARRISON_GROWTH_INTERVAL_DAYS = 10`. Growth also skips cleared garrisons (present = 0), mirroring `fillGarrison`'s cleared-system rule so it never resurrects a wiped garrison during the liberation countdown; `garrisonBaseline` is pruned alongside `establishedGarrisons` in `resolveLiberationDetection`.
+
+### Task 2: Bud off the excess as a capture fleet when a garrison hits 1.5×
+
+- [ ] write a failing test asserting: once a garrison's count reaches `baseline × 1.5`, `round(baseline × 0.5)` ships are removed from the garrison and added to `captureFleetIds` bound for a neutral system with a multi-day `daysToArrival` (not an instant flip); the source garrison's tracked baseline resets so it can grow again; existing `resolveCaptureFleets` then resolves the siege exactly as it does for the periodic capture fleet (no new resolution logic needed — confirm via test that a spawned bud-off fleet is captured by `resolveCaptureFleets`' existing loop).
+- [ ] extract the shared "spawn N Overmind ships in `hostileId`, bound for `targetId`, added to `captureFleetIds`" body from `assembleCaptureFleet` (~line 1493-1521) into a small private helper (e.g. `launchCaptureFleet(galaxy, rng, hostileId, targetId, count)`) reused by both the existing periodic trigger and the new bud-off path — **do not change `assembleCaptureFleet`'s existing external behavior or signature**, its existing tests must keep passing unmodified.
+- [ ] implement target selection for a bud-off fleet: prefer a neutral system directly connected to the growing garrison's system (mirrors "neighboring"); when none exists, fall back to a `rng`-weighted-toward-nearer neutral system anywhere in the galaxy via `travelDays` (mirrors "or distant" from the request) — keep this selection in the isolated day-seeded RNG stream.
+- [ ] in `growGarrisons` (Task 1), when a system's count would exceed the 1.5× threshold, instead call the new bud-off path: peel off the excess via `launchCaptureFleet`, reset `garrisonBaseline` for that system to its post-bud-off count.
+- [ ] write tests for: bud-off fires exactly once per threshold crossing (not every tick while over threshold); the bud-off fleet size is `round(baseline × 0.5)`, floored to at least 1; a system with no reachable neutral target (fully surrounded by hostile) skips bud-off without erroring.
+- [ ] run affected test files — must pass before Task 3.
+
+### Task 3: Bias liberation-campaign targeting toward freshly-captured systems
+
+- [ ] write a failing test asserting: after a system is captured (via `resolveCaptureFleets`' `SYSTEM_CAPTURED` path, including the new bud-off fleets from Task 2), the next `assembleLiberationCampaign` call targets that system in preference to the generic random-front scan, as long as it still borders a friendly staging system.
+- [ ] add a small `recentlyCaptured: string[]` queue on `NpcSimulator` (FIFO, capped at a small size e.g. 5 to avoid unbounded growth); push the captured `systemId` wherever `SYSTEM_CAPTURED` is emitted in `resolveCaptureFleets` (~line 1583-1592, both the pre-existing periodic path and the new bud-off path from Task 2, since both funnel through the same function).
+- [ ] in `assembleLiberationCampaign` (~line 1647), before falling back to the existing random `fronts` scan, check `recentlyCaptured` for an entry that still borders a friendly system and has no pending campaign already (reuse the existing dedup check at ~line 1666); pop it from the queue once selected.
+- [ ] write tests for: a freshly captured system with a valid friendly neighbor is prioritized over the random scan; a captured system with no friendly neighbor (deep in hostile territory) is skipped and the queue moves to the next entry / falls back to random; the queue doesn't grow unbounded across many captures.
+- [ ] run affected test files — must pass before Task 4.
+
+### Task 4: Real combat for liberation assaults
+
+- [ ] write a failing test asserting: liberation-rally rangers arriving at a hostile system do **not** immediately roll a flat chance and vanish — they persist as an assault force and fight the standing garrison over subsequent ticks (attrition, mirroring `resolveCaptureFleets`' defender-fight loop), and the system only liberates once the garrison is actually destroyed (or the assault force is wiped, in which case it does not liberate).
+- [ ] add `liberationAssaultIds: Set<string>` (same category as `captureFleetIds`) on `NpcSimulator`; on ranger arrival at a hostile system (`tick()` ~line 818, the `isRallyRanger` branch), instead of the immediate `CONVOY_LIBERATION_CHANCE` roll, add the arriving rangers to `liberationAssaultIds` (mirrors how capture-fleet ships persist rather than resolving on arrival).
+- [ ] add `private resolveLiberationAssaults(galaxy: Galaxy): NewsEvent[]`, called from `tick()` alongside `resolveCaptureFleets` (~line 952) — for each system with present `liberationAssaultIds` ships: run the same per-ship attrition trade against the current garrison as `resolveCaptureFleets`' defender loop (reuse the damage-trade pattern, do not duplicate the constants — extract if it keeps both call sites simple); once the garrison is cleared, call `galaxy.tryLiberate(systemId)` (guaranteed success now that the garrison is actually destroyed, not a further coin-flip) and emit a `SYSTEM_LIBERATED`-class news event (confirm the existing `SYSTEM_LIBERATED` enum entry in `schemas.ts` covers this, or reuse whatever `galaxy.tryLiberate`'s existing callers already emit).
+- [ ] remove the now-dead `CONVOY_LIBERATION_CHANCE` roll for the `isRallyRanger` branch specifically — **leave it untouched for the `isConvoyPatrol` branch**, which is a separate, unrelated mechanic (PATROL convoys liberating contested systems) not in scope for this plan.
+- [ ] write tests for: an assault force stronger than the garrison eventually liberates the system; a garrison that outnumbers/out-damages the assault force can wipe it without liberating; a mid-fight save/load round-trips `liberationAssaultIds` correctly (check `reconcileTransientState`, ~line 520, needs a matching id-prefix branch like the existing `garrison_`/`capture_` ones — assault convoy ids already carry the `liberation_` prefix per `dispatchLiberationRally`, ~line 1748).
+- [ ] run affected test files — must pass before Task 5.
+
+### Task 5: Bias frontier capture toward the most recently captured system (residual "scattered front" fix)
+
+- [ ] write a failing test in the existing `overmindSpread` test suite asserting: when multiple frontier candidates are available, `frontierSystems`/`advanceOvermind`'s selection prefers a candidate adjacent to (or nearer to) the most recently captured system over the current pure-hash ranking, while remaining fully deterministic by `(galaxy.id, day, systemId)`.
+- [ ] in `src/systems/overmind/overmindSpread.ts`, adjust the candidate ranking (~line 216-221) to weight by proximity to the last-captured system (tracked as existing state or derived from `galaxy.overmindSystems`' most recent addition) as a secondary sort key after (or blended with) the existing hash, so ties/near-ties favor geographic coherence without breaking determinism.
+- [ ] write a test confirming the existing `overmindArc.test.ts` day-constrained assertions (`dayZero=1`, `day=7`, `graceDays ≤ 6`, `interval ≤ 5` — see project convention: these tests hardcode day budgets and **cannot be changed**) still pass unmodified.
+- [ ] run the full Overmind test suite — must pass before Task 6.
+
+### Task 6: Verify acceptance criteria
+
+- [ ] verify all five gaps from the Overview are addressed: garrison growth exists and caps at 1.5×; bud-off fleets travel (not instant) and fight real combat on arrival (via existing `resolveCaptureFleets` reuse); liberation campaigns preferentially target fresh captures; liberation assaults fight real combat instead of a coin-flip; frontier capture selection favors geographic coherence.
+- [ ] run full unit test suite (`npm test -- --run`)
+- [ ] run `npm run test:playtest` (confirms no wiring regression in the real-engine harness)
+- [ ] run `npm run letsplay:ci` (confirms no pacing/win-rate regression from the autopilot oracle)
+- [ ] run `npm run lint`
+- [ ] `gitnexus detect_changes` — confirm only the expected `NpcSimulator`/`overmindSpread` symbols and flows are affected before committing; flag if `advanceOvermind`'s win-condition flow (`campaignPeakPower`, `engaged`, `playerLiberations` invariants — root `CLAUDE.md` "Overmind Arc") shows up as affected, since this plan is explicitly meant not to touch it.
+
+### Task 7: Update documentation
+
+- [ ] update `.claude/docs/systems/overmind.md` with the new garrison-growth/bud-off mechanic, the liberation-assault combat change, and the frontier-proximity bias — cross-reference from root `CLAUDE.md`'s existing "Overmind Arc" summary if it needs a one-line pointer to the new additive layer.
+
+## Technical Details
+
+- New `NpcSimulator`-private state (transient, rebuilt on load like `garrisonIds`/`captureFleetIds`): `garrisonBaseline: Map<string, number>`, `recentlyCaptured: string[]`, `liberationAssaultIds: Set<string>`.
+- New constants (local to `NpcSimulator.ts`, matching the existing `GARRISON_MIN` etc. block): `GARRISON_GROWTH_INTERVAL_DAYS`, `GARRISON_GROWTH_BUD_THRESHOLD = 1.5`, `GARRISON_BUD_OFF_FRACTION = 0.5`.
+- All new periodic logic uses an isolated day-seeded `SeededRNG` stream (e.g. `` `garrison_growth_${galaxy.gameDays}` ``), matching every existing periodic call in `tick()` — never the shared main-stream `rng`.
+- Combat math for liberation assaults reuses `resolveCaptureFleets`' existing damage-trade constants (`PIRATE_DAMAGE_FRACTION`/`VICTIM_RETALIATION_FRACTION`) rather than introducing parallel balance numbers.
+
+## Post-Completion
+
+**Manual verification**:
+- Play/observe (or letsplay-record) a long run and confirm a captured system's garrison visibly grows over weeks, buds off a fleet that travels (visible in the star map / news feed) rather than instantly flipping a new system, and that a "massing to retake" news item reliably follows shortly after a capture rather than appearing on an unrelated 50-day clock.
+- Confirm a liberation rally that arrives at a heavily-garrisoned system can now visibly lose (ships die, system stays hostile) rather than always eventually flipping via repeated 20% rolls.
+
+**Balance follow-up** (not part of this plan's scope, but likely needed after playtesting):
+- `GARRISON_GROWTH_INTERVAL_DAYS` and the bud-off fraction may need tuning against the existing 2–3 year campaign pacing target once this is live — treat as a `balance.ts`-style tuning pass, not a re-open of this plan's task list.

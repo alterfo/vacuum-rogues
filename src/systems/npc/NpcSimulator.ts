@@ -118,6 +118,13 @@ const GARRISON_MIN = 5;
 /** Maximum hostile ships spawned to fill a captured system's garrison. */
 const GARRISON_MAX = 10;
 
+/** How often (game days) an established Overmind garrison grows by one ship. */
+const GARRISON_GROWTH_INTERVAL_DAYS = 10;
+/** Growth cap as a multiple of a garrison's recorded baseline size. Once a
+ *  garrison reaches round(baseline × threshold) it stops growing (the excess
+ *  buds off as a capture fleet — organic-expansion arc). */
+const GARRISON_GROWTH_BUD_THRESHOLD = 1.5;
+
 /** How often (game days) the Overmind launches a fleet to capture a new system. */
 const CAPTURE_FLEET_INTERVAL = 60;
 /** Minimum ships in a capture fleet (also the threshold needed to seize a system). */
@@ -319,6 +326,15 @@ export class NpcSimulator {
    * recapture re-garrisons from scratch.
    */
   private readonly establishedGarrisons = new Set<string>();
+  /**
+   * As-established garrison size per system — the anchor for slow Overmind
+   * garrison growth toward round(baseline × GARRISON_GROWTH_BUD_THRESHOLD).
+   * Transient (not persisted), same lifecycle as {@link establishedGarrisons}:
+   * recorded when {@link fillGarrison} first establishes a system's garrison,
+   * pruned when the system stops being hostile so a recapture re-baselines.
+   * After a load a fresh simulator re-records the then-present count.
+   */
+  private readonly garrisonBaseline = new Map<string, number>();
   /**
    * Per-system liberation countdown: days of consecutive garrison-free presence
    * remaining before a captured system is auto-liberated. Transient (not
@@ -568,6 +584,9 @@ export class NpcSimulator {
     let present = this.countGarrisonPresent(galaxy, systemId);
     if (present >= garrisonMin) {
       this.establishedGarrisons.add(systemId);
+      if (!this.garrisonBaseline.has(systemId)) {
+        this.garrisonBaseline.set(systemId, present);
+      }
       return;
     }
     // A fully wiped garrison in an already-established system has been *cleared*
@@ -588,9 +607,50 @@ export class NpcSimulator {
       spawned++;
     }
     this.establishedGarrisons.add(systemId);
+    if (!this.garrisonBaseline.has(systemId)) {
+      this.garrisonBaseline.set(systemId, present);
+    }
     logger.info(
       `Garrison: spawned ${spawned} hostile ships in ${systemId} (now ${present})`,
     );
+  }
+
+  /**
+   * Slow organic garrison growth (Overmind-only): every growth interval, each
+   * established Overmind garrison below round(baseline ×
+   * GARRISON_GROWTH_BUD_THRESHOLD) gains one ship, so a captured system reads
+   * as a mounting threat rather than a static occupation. Pirate garrisons
+   * never grow. A *cleared* garrison (zero live hostile ships) is left empty —
+   * the liberation-detection countdown owns it, mirroring {@link fillGarrison}'s
+   * cleared-system rule — so growth never resurrects a wiped garrison.
+   *
+   * Adaptive activation ("gentle early, hard late" — root CLAUDE.md Overmind
+   * Arc): growth only runs once the run's ratcheted peak power clears the same
+   * {@link overmindGarrisonPowerBonus} lever {@link fillGarrison} consumes —
+   * the moment the Overmind starts fielding bigger garrisons at all. While the
+   * player is still arming up, captured systems hold at their static baseline
+   * so early liberations stay within reach (the seeded campaign pacing gate in
+   * sessionCompetence.test.ts reds if a weak-era player faces grown garrisons).
+   */
+  private growGarrisons(galaxy: Galaxy, rng: SeededRNG): void {
+    const powerBonus = overmindGarrisonPowerBonus(
+      this.campaignPeakPowerSource?.() ?? 0,
+    );
+    if (powerBonus < 1) return;
+    for (const systemId of galaxy.overmindSystems) {
+      const baseline = this.garrisonBaseline.get(systemId);
+      if (baseline === undefined) continue;
+      const present = this.countGarrisonPresent(galaxy, systemId);
+      if (present === 0) continue;
+      const cap = Math.round(baseline * GARRISON_GROWTH_BUD_THRESHOLD);
+      if (present >= cap) continue;
+      const id = `garrison_ovg_${systemId}_${galaxy.gameDays}`;
+      galaxy.npcShips.push(this.spawnOvermindInSystem(rng, id, systemId));
+      this.garrisonIds.add(id);
+      logger.info(
+        `Garrison growth: +1 ship in ${systemId} (now ${present + 1}/${cap})`,
+      );
+    }
   }
 
   /** Create one NPC with the given id at a random system. */
@@ -964,6 +1024,20 @@ export class NpcSimulator {
     // deterministic main simulation stream that other systems/tests depend on.
     this.ensureGarrison(galaxy, new SeededRNG(`garrison_${galaxy.gameDays}`));
 
+    // Grow established Overmind garrisons slowly toward the bud-off threshold
+    // (organic-expansion arc). Runs after ensureGarrison so the day's garrison
+    // counts are final; the isolated day-seeded RNG keeps it off the
+    // deterministic main stream, matching the surrounding periodic calls.
+    if (
+      galaxy.gameDays > 0 &&
+      galaxy.gameDays % GARRISON_GROWTH_INTERVAL_DAYS === 0
+    ) {
+      this.growGarrisons(
+        galaxy,
+        new SeededRNG(`garrison_growth_${galaxy.gameDays}`),
+      );
+    }
+
     // Liberate any captured system whose garrison has been cleared and held empty
     // for LIBERATION_CLEAR_DAYS. Runs after ensureGarrison so a freshly captured
     // system is garrisoned (and excluded) before its first detection pass.
@@ -1017,6 +1091,9 @@ export class NpcSimulator {
     for (const id of [...this.establishedGarrisons]) {
       if (!hostileSet.has(id)) this.establishedGarrisons.delete(id);
     }
+    for (const id of [...this.garrisonBaseline.keys()]) {
+      if (!hostileSet.has(id)) this.garrisonBaseline.delete(id);
+    }
 
     // A system freed via another path (convoy liberation, DEFENSE quest, or a
     // direct tryLiberate) may still hold standing-garrison ships frozen in place
@@ -1041,6 +1118,7 @@ export class NpcSimulator {
       if (remaining <= 0) {
         this.liberationCountdown.delete(systemId);
         this.establishedGarrisons.delete(systemId);
+        this.garrisonBaseline.delete(systemId);
         if (galaxy.tryLiberate(systemId)) {
           logger.info(
             `System ${systemId} liberated: garrison cleared and held`,
