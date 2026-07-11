@@ -433,10 +433,28 @@ difficulty and the autopilot's arm-up logic. Never two ralphex instances at once
       hangar renders correctly against a loaded loadout
 
 ### Task 10: [Final] Update documentation
-- [ ] update `.claude/docs/systems/equipment.md` (new families/dimensions, ring UI, presets,
-      icon pattern) + `src/presentation/CLAUDE.md` hangar section
-- [ ] update `docs/requirements` reference if the equipment model description changed
-- [ ] record final catalog counts + any balance-anchor changes in this plan
+- [x] updated `.claude/docs/systems/equipment.md`: new "Catalog scope", "Hangar ring UI",
+      "Gear icons", "Loadout presets" sections (families/dimensions, ring layout, repair-cost
+      seam, icon fallback chain, preset apply semantics) + `src/presentation/CLAUDE.md`'s
+      hangar paragraph (ring/jettison/service-center/presets/icon-module pointers, cross-linked
+      to the new equipment.md sections)
+- [x] `docs/requirements` reference: **no update needed** — checked
+      `docs/requirements/reference/ENTITIES_AND_MODULES.md`; its `Equipment`/`Weapon` model
+      description (categories, slot structure, `WeaponType`) is a pre-existing conceptual sketch
+      that already used different naming than the live code before this plan (`GRABBER` vs the
+      catalog's `GRAPPLE`, `KINETIC` vs `FRAGMENT`) — that drift predates this plan and is out of
+      its blast radius. This plan grew catalog *data* (item counts, a grapple family, presets)
+      without changing the *model* (slot categories, `GearBase` shape, `EquipmentClass` enum
+      values), so nothing in that reference doc's structural description went stale as a result
+      of this work.
+- [x] final catalog counts: 6 hulls, 12 weapons (4 ENERGY / 4 FRAGMENT / 4 MISSILE, T1–T8
+      ladder), 26 equipment (5 engine, 3 fuel tank, 3 radar, 3 scanner, 3 repair droid, 3
+      shield, 3 grapple, 3 grav-tractor) — 44 catalog items total, up from the pre-plan 6
+      hulls / 6 weapons / 12 equipment (24 total). Balance-anchor changes: **none** —
+      `POWER_INDEX_WEAPON_MAX` (110) and `BATTLE_READY_WEAPON_DAMAGE` (30) both already sat
+      above the new ladder's damage ceiling (55, tied by the pre-existing `wpn_torpedo`, not
+      raised by any new weapon), confirmed via Task 3/8's `playerPower.test.ts` +
+      `armUpReserve.test.ts` reruns, so no anchor retune was required or made.
 
 ## Technical Details
 
