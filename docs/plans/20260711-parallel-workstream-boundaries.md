@@ -382,9 +382,12 @@ primary workstream.
 
 ### Task 4: Track 3 (Economy) — combat-stat equipment edits
 
-- [ ] *(placeholder — you've confirmed scope is "combat stats only" in
+- [x] *(placeholder — you've confirmed scope is "combat stats only" in
       `GearCatalog.ts`/`hullStatus.ts`, but no specific stat change is named
       yet; add the concrete stat/value change here when known)*
+      (skipped - not automatable; no concrete stat/value change has been named
+      yet, same as the Task 3/5 placeholders — this doc itself says to add the
+      real change here once known rather than guessing one)
 
 ### Task 5: Track 4 (Content) — no scoped work yet
 
