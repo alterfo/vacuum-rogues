@@ -35,14 +35,22 @@ import {
   evaluateMicromoduleDrop,
   applyMicromoduleDrop,
   micromoduleDropHint,
+  jettisonOwnedGear,
+  applyLoadoutHullToShip,
   type MicromoduleDropTarget,
 } from "@/systems/equipment/GearBridge";
 import {
   sellGearPrice,
   sellUninstalledGear,
 } from "@/systems/equipment/sellGear";
-import type { BankAccess } from "@/systems/banking/economy";
+import { hullStatus, repairCost } from "@/systems/equipment/hullStatus";
+import {
+  adjustPlayerCredits,
+  GL_COUNTERPARTY,
+  type BankAccess,
+} from "@/systems/banking/economy";
 import type { EquipmentSystem } from "@/systems/EquipmentSystem";
+import type { ResourceType } from "@/types";
 import { logger } from "@/utils/logger";
 
 // ── Hangar (SR-canon categorized fitting) ────────────────────────────────────
@@ -226,6 +234,13 @@ export class HangarPanel {
    *  which outlive a single render. Refreshed on every render. */
   private ctx: HangarPanelContext | null = null;
 
+  /** Two-step ВЫБРОСИТЬ/ШЛЮЗ confirmation armed by a СКЛАД/ТРЮМ [Выброс]
+   *  click — no credit refund (selling is the separate paid path). Persists
+   *  across a `ctx.rerender()` on this same instance until confirmed or
+   *  cancelled, mirroring `InventoryScene`'s `pendingJettison`. */
+  private pendingJettison: { kind: "gear" | "resource"; id: string } | null =
+    null;
+
   /**
    * The two scrollable content columns for the current render (left: hull
    * micromodule bank + the four fitting banks; right: СКЛАД warehouse + ТРЮМ
@@ -284,6 +299,7 @@ export class HangarPanel {
     this.cancelMicromoduleDrag();
     this.detachScrollListeners();
     this.dropZones = [];
+    this.pendingJettison = null;
     this.ctx = null;
   }
 
@@ -393,7 +409,13 @@ export class HangarPanel {
       loadout,
       player,
     );
-    const rightBottomY = this.renderWarehouseAndCargo(layout, loadout, player);
+    const cargoBottomY = this.renderWarehouseAndCargo(layout, loadout, player);
+    const rightBottomY = this.renderServiceCenter(
+      layout,
+      loadout,
+      player,
+      cargoBottomY,
+    );
     this.renderMicromoduleTray(PX + 18, trayY, PW - 36, trayH, player, loadout);
 
     this.detachLeftWheel = this.wireScrollRegion(
@@ -1353,7 +1375,10 @@ export class HangarPanel {
     // margin shrinks to zero at "L"; grow it with the font scale so the two
     // buttons never overlap (Task 3).
     const btnGap = Math.max(20, lineStepFor(scaledFont(11)) + 4);
-    const warehouseRowH = 12 + btnGap + 8;
+    // Owned rows stack up to three actions («Установить»/«Продать»/«Выброс»,
+    // or the «Отмена»/«Выбросить» confirm pair) at `btnGap` apart — size the
+    // row for the tallest case so it never shrinks when a jettison is armed.
+    const warehouseRowH = 12 + btnGap * 2 + 8;
     for (const row of rows) {
       const gearId =
         row.kind === "owned" ? row.gearId : (legacy[row.index]?.id ?? "");
@@ -1397,61 +1422,120 @@ export class HangarPanel {
       container.addChild(rowText);
 
       const btnRight = rightX + rightW - 8;
+      const ownedGearId = row.kind === "owned" ? row.gearId : null;
+      const confirmingJettison =
+        ownedGearId !== null &&
+        this.pendingJettison?.kind === "gear" &&
+        this.pendingJettison.id === ownedGearId;
 
-      // Sell — only the canonical owned store is sellable.
-      if (row.kind === "owned" && gear) {
-        const sellBtn = scaledText(
-          `[Продать ${sellGearPrice(gear)}₡]`,
-          11,
-          0x44ff88,
-          { rawColor: true, fontFamily: "monospace" },
-        );
-        sellBtn.anchor.set(1, 0.5);
-        sellBtn.x = btnRight;
-        // Lower action: a font-scale-derived centre gap from «Установить»
-        // (y + 12) clears the text height at every scale so the two buttons
-        // never overlap.
-        sellBtn.y = y + 12 + btnGap;
-        sellBtn.eventMode = "static";
-        sellBtn.cursor = "pointer";
-        sellBtn.on("pointerdown", (e) => {
-          e.stopPropagation();
-          const refund = sellUninstalledGear(player, gearId, this.ctx!.bank);
-          if (refund > 0) {
-            this.ctx!.showToast(
-              `Продано: ${gear.name} (+${refund} ₡)`,
-              0x44ff88,
-            );
-          }
-          this.ctx!.rerender();
-        });
-        container.addChild(sellBtn);
-      }
-
-      // Install into the matching category — catalog non-hull gear only.
-      const installable = !!gear && gear.kind !== GearKind.HULL && !!loadout;
-      if (installable && loadout) {
-        const eqBtn = scaledText("[Установить]", 11, 0x44ddaa, {
+      if (confirmingJettison && ownedGearId) {
+        // ВЫБРОСИТЬ/ШЛЮЗ two-step confirm — replaces the normal row actions
+        // while armed so a mis-tap can't jettison without a second click.
+        const cancelBtn = scaledText("[Отмена]", 11, 0x99aabb, {
           rawColor: true,
           fontFamily: "monospace",
         });
-        eqBtn.anchor.set(1, 0.5);
-        eqBtn.x = btnRight;
-        // Upper action — paired with «Продать» at `btnGap` below.
-        eqBtn.y = y + 12;
-        eqBtn.eventMode = "static";
-        eqBtn.cursor = "pointer";
-        eqBtn.on("pointerdown", (e) => {
+        cancelBtn.anchor.set(1, 0.5);
+        cancelBtn.x = btnRight;
+        cancelBtn.y = y + 12;
+        cancelBtn.eventMode = "static";
+        cancelBtn.cursor = "pointer";
+        cancelBtn.on("pointerdown", (e) => {
           e.stopPropagation();
-          this.installFromWarehouse(loadout, player, row);
+          this.cancelJettisonConfirm();
         });
-        eqBtn.on("pointerover", () => {
-          eqBtn.alpha = 0.7;
+        container.addChild(cancelBtn);
+
+        const confirmBtn = scaledText("[Выбросить]", 11, 0xff7755, {
+          rawColor: true,
+          fontFamily: "monospace",
         });
-        eqBtn.on("pointerout", () => {
-          eqBtn.alpha = 1;
+        confirmBtn.anchor.set(1, 0.5);
+        confirmBtn.x = btnRight;
+        confirmBtn.y = y + 12 + btnGap;
+        confirmBtn.eventMode = "static";
+        confirmBtn.cursor = "pointer";
+        confirmBtn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          this.confirmJettison();
         });
-        container.addChild(eqBtn);
+        container.addChild(confirmBtn);
+      } else {
+        // Sell — only the canonical owned store is sellable.
+        if (row.kind === "owned" && gear) {
+          const sellBtn = scaledText(
+            `[Продать ${sellGearPrice(gear)}₡]`,
+            11,
+            0x44ff88,
+            { rawColor: true, fontFamily: "monospace" },
+          );
+          sellBtn.anchor.set(1, 0.5);
+          sellBtn.x = btnRight;
+          // Middle action: a font-scale-derived centre gap from «Установить»
+          // (y + 12) clears the text height at every scale so the stacked
+          // actions never overlap.
+          sellBtn.y = y + 12 + btnGap;
+          sellBtn.eventMode = "static";
+          sellBtn.cursor = "pointer";
+          sellBtn.on("pointerdown", (e) => {
+            e.stopPropagation();
+            const refund = sellUninstalledGear(player, gearId, this.ctx!.bank);
+            if (refund > 0) {
+              this.ctx!.showToast(
+                `Продано: ${gear.name} (+${refund} ₡)`,
+                0x44ff88,
+              );
+            }
+            this.ctx!.rerender();
+          });
+          container.addChild(sellBtn);
+        }
+
+        // Install into the matching category — catalog non-hull gear only.
+        const installable = !!gear && gear.kind !== GearKind.HULL && !!loadout;
+        if (installable && loadout) {
+          const eqBtn = scaledText("[Установить]", 11, 0x44ddaa, {
+            rawColor: true,
+            fontFamily: "monospace",
+          });
+          eqBtn.anchor.set(1, 0.5);
+          eqBtn.x = btnRight;
+          // Top action — paired with «Продать» at `btnGap` below.
+          eqBtn.y = y + 12;
+          eqBtn.eventMode = "static";
+          eqBtn.cursor = "pointer";
+          eqBtn.on("pointerdown", (e) => {
+            e.stopPropagation();
+            this.installFromWarehouse(loadout, player, row);
+          });
+          eqBtn.on("pointerover", () => {
+            eqBtn.alpha = 0.7;
+          });
+          eqBtn.on("pointerout", () => {
+            eqBtn.alpha = 1;
+          });
+          container.addChild(eqBtn);
+        }
+
+        // Jettison-to-space (ВЫБРОСИТЬ/ШЛЮЗ) — owned store only, no refund;
+        // arms the two-step confirm above instead of discarding immediately.
+        if (ownedGearId) {
+          const jettisonBtn = scaledText("[Выброс]", 11, 0xff8844, {
+            rawColor: true,
+            fontFamily: "monospace",
+          });
+          jettisonBtn.anchor.set(1, 0.5);
+          jettisonBtn.x = btnRight;
+          // Bottom action — two `btnGap` steps below «Установить».
+          jettisonBtn.y = y + 12 + btnGap * 2;
+          jettisonBtn.eventMode = "static";
+          jettisonBtn.cursor = "pointer";
+          jettisonBtn.on("pointerdown", (e) => {
+            e.stopPropagation();
+            this.requestJettisonConfirm("gear", ownedGearId);
+          });
+          container.addChild(jettisonBtn);
+        }
       }
       y += warehouseRowH + 8;
     }
@@ -1487,7 +1571,16 @@ export class HangarPanel {
       container.addChild(empty);
       cy += 18;
     } else {
+      const btnRight = rightX + rightW - 8;
       for (const r of resources) {
+        const confirmingResource =
+          this.pendingJettison?.kind === "resource" &&
+          this.pendingJettison.id === r.type;
+        // Stacked confirm pair needs two `btnGap`-spaced lines below the
+        // label instead of the normal single-line row — mirrors the СКЛАД
+        // row's confirm layout so the two zones behave identically.
+        const rowH = confirmingResource ? 8 + btnGap * 2 : 18;
+
         const label = RESOURCE_LABEL[r.type] ?? r.type;
         const line = scaledText(`${label} ×${r.amount}`, 11, 0xb4c4d4, {
           rawColor: true,
@@ -1497,10 +1590,147 @@ export class HangarPanel {
         line.y = cy;
         line.eventMode = "none";
         container.addChild(line);
-        cy += 18;
+
+        if (confirmingResource) {
+          const cancelBtn = scaledText("[Отмена]", 10, 0x99aabb, {
+            rawColor: true,
+            fontFamily: "monospace",
+          });
+          cancelBtn.anchor.set(1, 0.5);
+          cancelBtn.x = btnRight;
+          cancelBtn.y = cy + 4;
+          cancelBtn.eventMode = "static";
+          cancelBtn.cursor = "pointer";
+          cancelBtn.on("pointerdown", (e) => {
+            e.stopPropagation();
+            this.cancelJettisonConfirm();
+          });
+          container.addChild(cancelBtn);
+
+          const confirmBtn = scaledText("[Выбросить]", 10, 0xff7755, {
+            rawColor: true,
+            fontFamily: "monospace",
+          });
+          confirmBtn.anchor.set(1, 0.5);
+          confirmBtn.x = btnRight;
+          confirmBtn.y = cy + 4 + btnGap;
+          confirmBtn.eventMode = "static";
+          confirmBtn.cursor = "pointer";
+          confirmBtn.on("pointerdown", (e) => {
+            e.stopPropagation();
+            this.confirmJettison();
+          });
+          container.addChild(confirmBtn);
+        } else {
+          const jettisonBtn = scaledText("[Выброс]", 10, 0xff8844, {
+            rawColor: true,
+            fontFamily: "monospace",
+          });
+          jettisonBtn.anchor.set(1, 0.5);
+          jettisonBtn.x = btnRight;
+          jettisonBtn.y = cy + 6;
+          jettisonBtn.eventMode = "static";
+          jettisonBtn.cursor = "pointer";
+          jettisonBtn.on("pointerdown", (e) => {
+            e.stopPropagation();
+            this.requestJettisonConfirm("resource", r.type);
+          });
+          container.addChild(jettisonBtn);
+        }
+        cy += rowH;
       }
     }
     return cy;
+  }
+
+  /**
+   * СЕРВИСНЫЙ ЦЕНТР — hull repair status + a single [Полный ремонт <cost>₡]
+   * action, drawn below the ТРЮМ cargo strip in the same scrollable right
+   * column. Prices off the shared `repairCost` seam (`hullStatus.ts`) so the
+   * bill can never drift from the hangar's own percent read-out; syncs the
+   * live ship to the canonical loadout max first (`applyLoadoutHullToShip`,
+   * same as the planet Верфь) so a stale `ship.maxHull` can't under/over-charge.
+   * Returns the y just past the block, for sizing the column's scroll range.
+   */
+  private renderServiceCenter(
+    layout: HangarLayout,
+    loadout: ShipLoadout | null,
+    player: Player,
+    y: number,
+  ): number {
+    const container = this.rightContent!;
+    const { rightX } = layout;
+    const ship = player.ship;
+    if (loadout) applyLoadoutHullToShip(ship, loadout);
+    const status = hullStatus(
+      ship.hullHP,
+      ship.maxHull,
+      loadout?.derivedStats().maxHull,
+    );
+
+    y += 12;
+    const title = scaledText("СЕРВИСНЫЙ ЦЕНТР", 12, 0x88ccff, {
+      rawColor: true,
+      fontFamily: "monospace",
+    });
+    title.x = rightX;
+    title.y = y;
+    title.eventMode = "none";
+    container.addChild(title);
+    y += 22;
+
+    const hullLine = scaledText(
+      `Корпус: ${status.percent}% (${status.maxHull - status.missing}/${status.maxHull})`,
+      11,
+      0xb4c4d4,
+      { rawColor: true, fontFamily: "monospace" },
+    );
+    hullLine.x = rightX;
+    hullLine.y = y;
+    hullLine.eventMode = "none";
+    container.addChild(hullLine);
+    y += 20;
+
+    const cost = repairCost(status);
+    if (cost == null) {
+      const label = scaledText("Ремонт не требуется", 11, 0x66dd88, {
+        rawColor: true,
+        fontFamily: "monospace",
+      });
+      label.x = rightX;
+      label.y = y;
+      label.eventMode = "none";
+      container.addChild(label);
+      return y + 20;
+    }
+
+    const repairBtn = scaledText(`[Полный ремонт ${cost}₡]`, 11, 0xffcc44, {
+      rawColor: true,
+      fontFamily: "monospace",
+    });
+    repairBtn.x = rightX;
+    repairBtn.y = y;
+    repairBtn.eventMode = "static";
+    repairBtn.cursor = "pointer";
+    repairBtn.on("pointerdown", (e) => {
+      e.stopPropagation();
+      if (player.credits < cost) {
+        this.ctx!.showToast(`Нужно ${cost} ₡ — недостаточно средств`, 0xff5544);
+        return;
+      }
+      adjustPlayerCredits(
+        this.ctx!.bank,
+        player,
+        -cost,
+        GL_COUNTERPARTY.SERVICES,
+        "Ремонт корпуса",
+      );
+      ship.hullHP = ship.maxHull;
+      this.ctx!.showToast(`Корпус восстановлен за ${cost} ₡`, 0x44ff88);
+      this.ctx!.rerender();
+    });
+    container.addChild(repairBtn);
+    return y + 20;
   }
 
   /**
@@ -1546,5 +1776,44 @@ export class HangarPanel {
       }
     }
     this.ctx!.rerender();
+  }
+
+  /** Arm a two-step ВЫБРОСИТЬ/ШЛЮЗ confirmation for an owned gear id or a
+   *  held cargo resource type. */
+  private requestJettisonConfirm(kind: "gear" | "resource", id: string): void {
+    this.pendingJettison = { kind, id };
+    this.ctx!.rerender();
+  }
+
+  /** Disarm an armed jettison confirmation without discarding anything. */
+  private cancelJettisonConfirm(): void {
+    this.pendingJettison = null;
+    this.ctx!.rerender();
+  }
+
+  /** Carry out the armed jettison — no credit refund (selling is the paid path). */
+  private confirmJettison(): void {
+    const pending = this.pendingJettison;
+    this.pendingJettison = null;
+    const ctx = this.ctx!;
+    const player = ctx.player;
+    if (!pending) {
+      ctx.rerender();
+      return;
+    }
+    if (pending.kind === "gear") {
+      jettisonOwnedGear(player, pending.id);
+    } else {
+      const stack = player.inventory.resources.find(
+        (r) => r.type === pending.id,
+      );
+      if (stack) {
+        player.inventory.removeResource(
+          pending.id as ResourceType,
+          stack.amount,
+        );
+      }
+    }
+    ctx.rerender();
   }
 }

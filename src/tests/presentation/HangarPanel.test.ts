@@ -126,8 +126,18 @@ function makePlayer(ownedGearIds: string[] = []) {
       }
       return false;
     },
+    removeResource(type: string, amount: number) {
+      const stack = this.resources.find((r) => r.type === type);
+      if (stack) stack.amount -= amount;
+    },
   };
-  return { credits: 1000, inventory } as unknown as Player;
+  // Effectively-infinite hull pool so `applyLoadoutHullToShip` always syncs
+  // it down to exactly the loadout's max — a healthy/perfect status for every
+  // existing test regardless of which hull it fits, so the new СЕРВИСНЫЙ
+  // ЦЕНТР block never renders a repair button unless a test deliberately
+  // damages `player.ship.hullHP` below `maxHull`.
+  const ship = { hullHP: 1_000_000_000, maxHull: 1_000_000_000 };
+  return { credits: 1000, inventory, ship } as unknown as Player;
 }
 
 function makeCtx(loadout: ShipLoadout | null, player: Player) {
@@ -532,5 +542,154 @@ describe("gearIconKey — module-class icon resolution (Task 4)", () => {
   it("falls back to undefined for module classes with no art yet", () => {
     expect(gearIconKey(gearById("eq_scanner")!)).toBeUndefined();
     expect(gearIconKey(gearById("eq_grapple_i")!)).toBeUndefined();
+  });
+});
+
+describe("HangarPanel — ВЫБРОСИТЬ/ШЛЮЗ jettison (Task 5)", () => {
+  beforeEach(() => {
+    created.length = 0;
+  });
+
+  it("arms a two-step confirm before jettisoning owned gear — no mutation until confirmed", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer(["eq_radar"]);
+    const ctx = makeCtx(loadout, player);
+    const panel = new HangarPanel(renderer);
+
+    panel.render(ctx);
+    const jettisonBtn = findButton("[Выброс]");
+    expect(jettisonBtn).toBeDefined();
+    jettisonBtn!.handlers.pointerdown(fakeEvent);
+
+    // Armed, not yet discarded — the mutation only happens on the confirm click.
+    expect(player.inventory.ownedGearIds).toContain("eq_radar");
+    expect(ctx.rerender).toHaveBeenCalled();
+  });
+
+  it("discards owned gear with no credit refund once the confirm click lands", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer(["eq_radar"]);
+    const ctx = makeCtx(loadout, player);
+    const panel = new HangarPanel(renderer);
+    const creditsBefore = player.credits;
+
+    panel.render(ctx);
+    findButton("[Выброс]")!.handlers.pointerdown(fakeEvent);
+
+    created.length = 0;
+    panel.render(ctx); // re-render as the host scene's ctx.rerender() would
+
+    const confirmBtn = findButton("[Выбросить]");
+    expect(confirmBtn).toBeDefined();
+    confirmBtn!.handlers.pointerdown(fakeEvent);
+
+    expect(player.inventory.ownedGearIds).not.toContain("eq_radar");
+    expect(player.credits).toBe(creditsBefore); // no refund — selling is the paid path
+  });
+
+  it("cancelling the confirm leaves the gear in the warehouse untouched", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer(["eq_radar"]);
+    const ctx = makeCtx(loadout, player);
+    const panel = new HangarPanel(renderer);
+
+    panel.render(ctx);
+    findButton("[Выброс]")!.handlers.pointerdown(fakeEvent);
+
+    created.length = 0;
+    panel.render(ctx);
+    findButton("[Отмена]")!.handlers.pointerdown(fakeEvent);
+
+    created.length = 0;
+    panel.render(ctx);
+
+    expect(player.inventory.ownedGearIds).toContain("eq_radar");
+    expect(findButton("[Выброс]")).toBeDefined(); // back to the normal row state
+  });
+
+  it("jettisons a cargo resource stack through the ТРЮМ [Выброс] action", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer(); // no owned gear — only the ТРЮМ row offers [Выброс]
+    player.inventory.resources = [
+      { type: "METALS", amount: 5 },
+    ] as unknown as Player["inventory"]["resources"];
+    const ctx = makeCtx(loadout, player);
+    const panel = new HangarPanel(renderer);
+
+    panel.render(ctx);
+    findButton("[Выброс]")!.handlers.pointerdown(fakeEvent);
+
+    created.length = 0;
+    panel.render(ctx);
+    findButton("[Выбросить]")!.handlers.pointerdown(fakeEvent);
+
+    // Mirrors the real `Inventory.removeResource`: the stack's amount drops
+    // to 0 (not spliced out) — the `.filter((r) => r.amount > 0)` in
+    // `renderWarehouseAndCargo` is what actually stops showing it.
+    expect(player.inventory.resources).toEqual([{ type: "METALS", amount: 0 }]);
+  });
+});
+
+describe("HangarPanel — СЕРВИСНЫЙ ЦЕНТР repair block (Task 5)", () => {
+  beforeEach(() => {
+    created.length = 0;
+  });
+
+  it("shows «не требуется» and no repair button when the hull is already at max", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    // makePlayer's default ship pool is effectively infinite, so it always
+    // syncs down to a perfect hull for any real hull's derived max.
+    const player = makePlayer();
+
+    new HangarPanel(renderer).render(makeCtx(loadout, player));
+
+    expect(texts().some((t) => t.includes("СЕРВИСНЫЙ ЦЕНТР"))).toBe(true);
+    expect(texts().some((t) => t.includes("не требуется"))).toBe(true);
+    expect(findButton("[Полный ремонт")).toBeUndefined();
+  });
+
+  it("prices a damaged hull off the shared repairCost seam and repairs it on click", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer();
+    const maxHull = loadout.derivedStats().maxHull;
+    (player as unknown as { ship: { hullHP: number; maxHull: number } }).ship =
+      { hullHP: maxHull - 10, maxHull };
+    const ctx = makeCtx(loadout, player);
+    const creditsBefore = player.credits;
+
+    new HangarPanel(renderer).render(ctx);
+
+    const repairBtn = findButton("[Полный ремонт");
+    expect(repairBtn).toBeDefined();
+    expect(repairBtn!.text).toBe("[Полный ремонт 20₡]"); // 10 missing HP × 2 cr/HP
+
+    repairBtn!.handlers.pointerdown(fakeEvent);
+
+    expect(
+      (player as unknown as { ship: { hullHP: number } }).ship.hullHP,
+    ).toBe(maxHull);
+    expect(player.credits).toBe(creditsBefore - 20);
+    expect(ctx.rerender).toHaveBeenCalled();
+  });
+
+  it("blocks the repair with a toast, no mutation, when the player can't afford it", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer();
+    player.credits = 0;
+    const maxHull = loadout.derivedStats().maxHull;
+    (player as unknown as { ship: { hullHP: number; maxHull: number } }).ship =
+      { hullHP: maxHull - 10, maxHull };
+    const ctx = makeCtx(loadout, player);
+
+    new HangarPanel(renderer).render(ctx);
+    findButton("[Полный ремонт")!.handlers.pointerdown(fakeEvent);
+
+    expect(ctx.showToast).toHaveBeenCalledWith(
+      expect.stringContaining("недостаточно"),
+      expect.any(Number),
+    );
+    expect(
+      (player as unknown as { ship: { hullHP: number } }).ship.hullHP,
+    ).toBe(maxHull - 10);
   });
 });

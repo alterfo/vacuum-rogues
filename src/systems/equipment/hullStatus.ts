@@ -47,3 +47,14 @@ export function hullStatus(
     isPerfect: missing <= 0,
   };
 }
+
+/**
+ * Whole-credit repair bill for restoring a hull status to its canonical max,
+ * or `null` when already perfect (nothing to repair) — the single source
+ * the hangar's СЕРВИСНЫЙ ЦЕНТР block prices from (planet-Верфь baseline rate,
+ * 2 cr/HP — mirrors `PlanetScene.openGarage`'s formula).
+ */
+export function repairCost(status: HullStatus, ratePerHp = 2): number | null {
+  if (status.isPerfect) return null;
+  return Math.ceil(status.missing * ratePerHp);
+}

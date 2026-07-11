@@ -233,18 +233,61 @@ difficulty and the autopilot's arm-up logic. Never two ralphex instances at once
       ring geometry unchanged — needs a real run outside this sandbox to confirm)
 
 ### Task 5: Hangar ring — phase 2 (СКЛАД, ТРЮМ, ШЛЮЗ, СЕРВИСНЫЙ ЦЕНТР)
-- [ ] СКЛАД column (left): owned-uninstalled gear with icons, [Установить]/[Продать] (reuse
-      the row seams; keep the ≥16px button-clearance contract)
-- [ ] ТРЮМ strip (bottom): cargo goods with quantities; scrollable when overflowing
-- [ ] ВЫБРОСИТЬ/ШЛЮЗ zone: jettison owned gear AND cargo (reuse/share the jettison helpers
-      from ui-flight-bugfixes Task 2 if landed — `jettisonOwnedGear`, `Inventory.
-      removeResource`; if not landed yet, implement them HERE with the same names/tests and
-      mark that plan's items done) — confirm-before-discard, no credit grant
-- [ ] СЕРВИСНЫЙ ЦЕНТР block: hull repair status + [Полный ремонт <cost>₡] через the
-      single-sourced `repairCost` seam (campaign Task 6/7 landed it) — «не требуется» state
-      when full
-- [ ] tests: jettison unit+playtest, repair block states, E2E pointer pass over all four
-      zones — green before Task 6
+- [x] СКЛАД column (left): owned-uninstalled gear with icons, [Установить]/[Продать] (reuse
+      the row seams; keep the ≥16px button-clearance contract) — **discovery: already landed**
+      by Task 4 (`renderWarehouseAndCargo`'s icon wiring + the existing install/sell row seams);
+      no new code needed for this checkbox, just verified it's still intact.
+- [x] ТРЮМ strip (bottom): cargo goods with quantities; scrollable when overflowing —
+      **discovery: already landed** pre-Task-5 (`renderWarehouseAndCargo`'s cargo block +
+      `wireScrollRegion` on the shared `rightContent` column, which covers both СКЛАД and ТРЮМ);
+      verified still intact.
+- [x] ВЫБРОСИТЬ/ШЛЮЗ zone: jettison owned gear AND cargo — reused the already-landed
+      `jettisonOwnedGear` (`GearBridge.ts`) and `Inventory.removeResource` (both landed by
+      `ui-flight-bugfixes` Task 2 for `InventoryScene`, confirmed via that plan's completed
+      copy — no re-implementation needed). Added a `[Выброс]` action to each owned СКЛАД row
+      (third stacked action below Установить/Продать) and each ТРЮМ resource row, each arming
+      a two-step `pendingJettison` confirm on the `HangarPanel` instance (mirrors
+      `InventoryScene`'s `requestJettisonConfirm`/`cancelJettisonConfirm`/`confirmJettison`
+      pattern) — a second `[Выбросить]` click is required, `[Отмена]` disarms it; no credit
+      grant either way.
+- [x] СЕРВИСНЫЙ ЦЕНТР block: hull repair status + [Полный ремонт <cost>₡] — **discovery: the
+      "single-sourced `repairCost` seam (campaign Task 6/7 landed it)" premise was stale**,
+      like Task 3's weapon-consumer premise. Task 6/7's `repairCost()` is a **dev-only**
+      letsplay helper (`src/tests/playtest/letsplay/engineQueries.ts`), not a production seam;
+      `StationScene.doRepair` and `PlanetScene.openGarage` still price repairs independently
+      (8 cr/HP×discount vs 2 cr/HP) and neither was touched here (out of this task's blast
+      radius — retuning either is a separate balance-anchor concern per the plan's
+      Authorizations). Added the real production seam: `repairCost(status, ratePerHp = 2)` in
+      `src/systems/equipment/hullStatus.ts` (pure, alongside `hullStatus`), and a new
+      `HangarPanel.renderServiceCenter` block (rendered below ТРЮМ in the same scrollable right
+      column) that syncs the live ship to the loadout max (`applyLoadoutHullToShip`, same as
+      the planet Верфь), reads `hullStatus`, and either shows «Ремонт не требуется» (perfect) or
+      a `[Полный ремонт <cost>₡]` button that pays via `adjustPlayerCredits`
+      (`GL_COUNTERPARTY.SERVICES`) and sets `ship.hullHP = ship.maxHull` — toasts
+      "недостаточно средств" and no-ops when unaffordable.
+- [x] tests: jettison unit + repair block states — `src/tests/presentation/HangarPanel.test.ts`
+      (7 new cases: arm/confirm/cancel/no-refund for gear, resource jettison, perfect/damaged/
+      unaffordable repair states) and `src/tests/presentation/hullRepairConsistency.test.ts` (4
+      new `repairCost` cases: null-when-perfect, default rate, custom rate, rounding). Existing
+      СКЛАД/ТРЮМ/scroll/ring pinning tests across `HangarPanel.test.ts`, `hangarLayout.test.ts`,
+      `shopHangar.test.ts`, `shipyardParity.test.ts`, `hangarPanelFontScaleLayout.test.ts` all
+      stayed green — the new rows/block are additive over the unchanged bank model. Fixed 2
+      test fixtures that constructed a `Player` without a `.ship` field (`HangarPanel.test.ts`,
+      `hangarPanelFontScaleLayout.test.ts`) — added an effectively-infinite default hull pool so
+      every pre-existing test syncs to a perfect/undamaged hull and never renders a stray repair
+      button; `shopHangar.test.ts`'s ship fixture was missing `hullHP` (NaN risk), given a real
+      value. Regenerated `cyrillicBaseline.json` for the new hardcoded Cyrillic literals
+      (СЕРВИСНЫЙ ЦЕНТР block + jettison buttons), same pattern as Task 4.
+      ⚠️ **E2E pointer pass over all four zones: skipped (not automatable here)** — same sandbox
+      limitation Task 4 hit (outbound Playwright `webServer` probes blocked); additionally, the
+      real-engine playtest harness's `pixiStub.ts` `.on()` is a total no-op (doesn't record
+      handlers), so simulated pointer clicks aren't reachable through that harness either — the
+      established precedent for ALL of HangarPanel's install/sell/unfit wiring (Tasks 3-4) is
+      the same mocked-pixi unit tier used here, with zero prior real-click-through playtest
+      coverage to match. Needs a real run outside this sandbox to confirm.
+      Full unit suite green (5389 tests, 0 failed), `test:playtest` (693 tests), `test:save-compat`
+      (22 tests, no schema change — no new persisted field), lint (0 errors), `tsc --noEmit`
+      (clean) — before Task 6.
 
 ### Task 6: КОМПЛЕКТАЦИЯ 1/2/3 — loadout presets
 - [ ] design: presets store gear-id layouts (slots + micromodules), NOT copies — applying a
