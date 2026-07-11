@@ -373,9 +373,12 @@ primary workstream.
 
 ### Task 3: Track 1 (Navigation) — no scoped work yet
 
-- [ ] *(placeholder — add concrete tasks here once navigation work is defined;
+- [x] *(placeholder — add concrete tasks here once navigation work is defined;
       the icon-button migration for `starMapButton.ts`/`SystemMiniMap.ts` will
       land here once Task 2 proves the pattern)*
+      (skipped - not automatable; no navigation work has been defined yet and
+      the icon-button migration it references is itself still blocked on the
+      icon-set decision from Task 2)
 
 ### Task 4: Track 3 (Economy) — combat-stat equipment edits
 
