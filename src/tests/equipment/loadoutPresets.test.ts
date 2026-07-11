@@ -127,6 +127,31 @@ describe("applyLoadoutPreset — round-trip", () => {
     expect(slot?.micromoduleId).toBe("mm_wpn_1");
   });
 
+  it("preserves a slot's artifact-upgrade count even when the exact upgraded bag copy is gone (re-bought via ownedGearIds)", () => {
+    const inv = new Inventory();
+    const player = playerWith(inv);
+    const loadout = new ShipLoadout("hull_corvette");
+    loadout.install("wpn_pulse");
+    loadout.setSlotUpgrades(0, 2);
+
+    const preset = captureLoadoutPreset("1", loadout);
+    expect(preset.slots[0].upgrades).toBe(2);
+
+    // Simulate the exact upgraded copy having been sold and a fresh,
+    // un-upgraded copy bought back before re-applying the preset — the
+    // preset's own captured upgrade count must still be restored, not
+    // silently reset to 0 just because the original bag object is gone.
+    loadout.removeAt(0);
+    inv.modules.length = 0;
+    inv.addOwnedGear("wpn_pulse");
+
+    const result = applyLoadoutPreset(player, loadout, preset);
+
+    expect(result.applied).toEqual(["wpn_pulse"]);
+    const slot = loadout.installedSlots().find((s) => s.gearId === "wpn_pulse");
+    expect(slot?.upgrades).toBe(2);
+  });
+
   it("skips a preset slot whose gear was sold, keeping the rest fitted", () => {
     const inv = new Inventory();
     const player = playerWith(inv);

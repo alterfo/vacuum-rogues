@@ -1403,6 +1403,11 @@ export class StationScene extends GameScene {
       loadout: this.gameEngine?.playerLoadout ?? null,
       bank: this.gameEngine?.bank ?? null,
       equipment: this.equipment,
+      // Match this station's own "Ремонт" pricing (REPAIR_DISCOUNT) so the
+      // hangar tab's СЕРВИСНЫЙ ЦЕНТР can't undercut the same station's
+      // discounted rate with the planet Верфь's flat 2 cr/HP baseline.
+      repairRatePerHp:
+        8 * (this.station ? REPAIR_DISCOUNT[this.station.type] : 1.0),
       presets: this.gameEngine?.playerLoadoutPresets ?? [],
       mutatePresets: (next) => {
         if (this.gameEngine) this.gameEngine.playerLoadoutPresets = next;

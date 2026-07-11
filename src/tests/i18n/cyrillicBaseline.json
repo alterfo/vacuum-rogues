@@ -2,7 +2,7 @@
   "src/ai/adapters/QuestNarrator.ts": 35,
   "src/presentation/BankScene.ts": 27,
   "src/presentation/DialogueScene.ts": 22,
-  "src/presentation/EquipmentShopScene.ts": 33,
+  "src/presentation/EquipmentShopScene.ts": 34,
   "src/presentation/GameOverScene.ts": 5,
   "src/presentation/GovernmentScene.ts": 36,
   "src/presentation/InfoCenterScene.ts": 43,

@@ -684,6 +684,10 @@ export interface LoadoutPreset {
   readonly slots: ReadonlyArray<{
     readonly gearId: string;
     readonly micromoduleId?: string;
+    /** Artifact-upgrade count captured with the slot, so re-applying the
+     *  preset later restores the same effective tech level instead of
+     *  silently resetting a spent artifact-upgrade investment to 0. */
+    readonly upgrades?: number;
   }>;
   readonly hullMicromoduleIds?: readonly string[];
 }

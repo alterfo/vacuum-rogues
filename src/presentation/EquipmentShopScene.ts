@@ -11,6 +11,7 @@ import { generateShop } from "@/systems/equipment/ShopGenerator";
 import {
   GearKind,
   gearById,
+  EquipmentClass,
   type Gear,
   type HullSpec,
   type EquipmentSpec,
@@ -73,12 +74,19 @@ function techLevelForPlanet(type: PlanetType): number {
 }
 
 /** Build a one-line stat summary for a gear item (shown on hover / detail). */
-function gearStatLine(gear: Gear): string {
+export function gearStatLine(gear: Gear): string {
   if (gear.kind === GearKind.HULL) {
     return `HP: ${gear.hp}  Слоты: ${gear.slots}  Трюм: ${gear.cargo}`;
   }
   if (gear.kind === GearKind.WEAPON) {
     return `Урон: ${gear.damage}  Дальность: ${gear.range}`;
+  }
+  // Engine speed is purely tech-level-driven (ShipLoadout.derivedStats never
+  // reads an engine's `potency`) — a "Мощность: <potency>" line would compare
+  // a number that doesn't actually affect speed, misleadingly implying a
+  // lower-potency same-tier engine (a genuine mass/price tradeoff) is slower.
+  if ((gear as EquipmentSpec).equipmentClass === EquipmentClass.ENGINE) {
+    return `Тех.ур.: ${gear.techLevel}  Масса: ${gear.mass}`;
   }
   return `Мощность: ${formatStat(gear.potency)}`;
 }
@@ -779,9 +787,14 @@ export class EquipmentShopScene extends GameScene {
       // Stat line — show comparison delta if this item replaces an installed one
       let statLine = gearStatLine(gear);
       if (replacing && !isInstalled) {
-        const shopPotency = (gear as EquipmentSpec).potency;
-        const curPotency = replacing.potency;
-        const delta = shopPotency - curPotency;
+        // Engine speed is tech-level-driven, not potency-driven (see
+        // gearStatLine) — compare tech level so the delta reflects the stat
+        // that actually changes, not a same-tier mass/price tradeoff.
+        const isEngine =
+          (gear as EquipmentSpec).equipmentClass === EquipmentClass.ENGINE;
+        const delta = isEngine
+          ? gear.techLevel - replacing.techLevel
+          : (gear as EquipmentSpec).potency - replacing.potency;
         statLine += `  (${formatStatDelta(delta)} vs ${replacing.name})`;
       }
       const statText = scaledText(
@@ -1069,6 +1082,10 @@ export class EquipmentShopScene extends GameScene {
       loadout: this.gameEngine?.playerLoadout ?? null,
       bank: this.gameEngine?.bank ?? null,
       equipment: this.equipment,
+      // Planet Верфь baseline rate — mirrors `PlanetScene.openGarage`'s flat
+      // 2 cr/HP (the `repairCost` default); explicit here so both hangar
+      // mount points always supply the same context shape as `StationScene`.
+      repairRatePerHp: 2,
       presets: this.gameEngine?.playerLoadoutPresets ?? [],
       mutatePresets: (next) => {
         if (this.gameEngine) this.gameEngine.playerLoadoutPresets = next;

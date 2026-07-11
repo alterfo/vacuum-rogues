@@ -433,9 +433,11 @@ export function captureLoadoutPreset(
 ): LoadoutPreset {
   return {
     name,
-    slots: loadout
-      .installedSlots()
-      .map((s) => ({ gearId: s.gearId, micromoduleId: s.micromoduleId })),
+    slots: loadout.installedSlots().map((s) => ({
+      gearId: s.gearId,
+      micromoduleId: s.micromoduleId,
+      upgrades: s.upgrades || undefined,
+    })),
     hullMicromoduleIds: loadout.hullMicromodules(),
   };
 }
@@ -505,6 +507,7 @@ export function applyLoadoutPreset(
         loadout,
         presetSlot.gearId,
         presetSlot.micromoduleId,
+        presetSlot.upgrades,
       )
     ) {
       applied.push(presetSlot.gearId);
@@ -549,15 +552,21 @@ export function applyLoadoutPreset(
  * Install one preset slot's gearId from whichever owned store has it,
  * preferring a legacy-bag copy carrying the preset's own micromodule (so a
  * round-trip through {@link applyLoadoutPreset} restores it), else any
- * legacy-bag copy (restoring whatever micromodule/upgrades it carries), else
- * a plain `ownedGearIds` copy (no micromodule/upgrade to carry). Mirrors
- * `HangarPanel.installFromWarehouse`'s legacy branch.
+ * legacy-bag copy, else a plain `ownedGearIds` copy. The preset's own
+ * `preferredUpgrades` (captured at save time) is always the authoritative
+ * upgrade count applied to the reinstalled slot — falling back to whatever
+ * the bag copy happens to carry only for presets saved before upgrades were
+ * captured (`upgrades` absent) — so a preset restores the artifact-upgrade
+ * investment it was saved with even when the exact bag copy that carried it
+ * was since sold/replaced. Mirrors `HangarPanel.installFromWarehouse`'s
+ * legacy branch.
  */
 function installFromBagOrOwned(
   player: Player,
   loadout: ShipLoadout,
   gearId: string,
   preferredMicromoduleId?: string,
+  preferredUpgrades?: number,
 ): boolean {
   const bag = player.inventory.modules;
   const legacyIdx = bag.findIndex(
@@ -575,7 +584,8 @@ function installFromBagOrOwned(
     const lastSlot = loadout.installedGearIds().length - 1;
     if (mod.micromoduleId)
       loadout.applyMicromoduleAt(lastSlot, mod.micromoduleId);
-    if (mod.upgrades) loadout.setSlotUpgrades(lastSlot, mod.upgrades);
+    const upgrades = preferredUpgrades ?? mod.upgrades;
+    if (upgrades) loadout.setSlotUpgrades(lastSlot, upgrades);
     bag.splice(idx, 1);
     if (displaced) {
       const dg = gearById(displaced);
@@ -584,7 +594,12 @@ function installFromBagOrOwned(
     return true;
   }
   if ((player.inventory.ownedGearIds ?? []).includes(gearId)) {
-    return installOwnedGear(player, loadout, gearId);
+    const installed = installOwnedGear(player, loadout, gearId);
+    if (installed && preferredUpgrades) {
+      const lastSlot = loadout.installedGearIds().length - 1;
+      loadout.setSlotUpgrades(lastSlot, preferredUpgrades);
+    }
+    return installed;
   }
   return false;
 }

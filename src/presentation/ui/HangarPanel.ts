@@ -173,6 +173,10 @@ export interface HangarPanelContext {
   back(): void;
   /** Open the micromodule-apply sub-panel for a fitted slot. */
   openMicromoduleApply(slotIndex: number, gearId: string): void;
+  /** Repair rate (cr/HP) for СЕРВИСНЫЙ ЦЕНТР, so a station's own discounted
+   *  rate (`REPAIR_DISCOUNT`) isn't undercut by the hangar tab's default —
+   *  omit to use the planet Верфь baseline (`repairCost`'s default, 2 cr/HP). */
+  readonly repairRatePerHp?: number;
 }
 
 /**
@@ -1762,7 +1766,7 @@ export class HangarPanel {
     container.addChild(hullLine);
     y += 20;
 
-    const cost = repairCost(status);
+    const cost = repairCost(status, this.ctx!.repairRatePerHp);
     if (cost == null) {
       const label = scaledText("Ремонт не требуется", 11, 0x66dd88, {
         rawColor: true,

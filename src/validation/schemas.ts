@@ -532,6 +532,7 @@ export const LoadoutPresetSchema = z.object({
     z.object({
       gearId: z.string(),
       micromoduleId: z.string().optional(),
+      upgrades: z.number().optional(),
     }),
   ),
   hullMicromoduleIds: z.array(z.string()).optional(),
