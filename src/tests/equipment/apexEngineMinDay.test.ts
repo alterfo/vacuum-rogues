@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { generateShop } from "@/systems/equipment/ShopGenerator";
-import { GEAR_CATALOG, gearById } from "@/systems/equipment/GearCatalog";
+import {
+  GEAR_CATALOG,
+  gearById,
+  GearKind,
+  EquipmentClass,
+  type EquipmentSpec,
+} from "@/systems/equipment/GearCatalog";
 import { APEX_ENGINE_MIN_DAY } from "@/config/balance";
+import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 
 /**
  * Overmind plan Task 6: the apex engine `eq_engine_v` is calendar-gated — it
@@ -60,6 +67,29 @@ describe("apex engine minDay gate (plan Task 6)", () => {
     // The ordinary stock-chance roll still applies on both sides.
     expect(stocked).toBeGreaterThan(0);
     expect(missing).toBeGreaterThan(0);
+  });
+
+  it("no un-gated engine matches the apex engine's top speed (the gate must not be bypassable)", () => {
+    const apex = gearById("eq_engine_v") as EquipmentSpec;
+    const apexLoadout = new ShipLoadout("hull_bastion");
+    apexLoadout.install(apex.id);
+    const apexSpeed = apexLoadout.derivedStats().speed;
+
+    const otherEngines = GEAR_CATALOG.filter(
+      (g): g is EquipmentSpec =>
+        g.kind === GearKind.EQUIPMENT &&
+        g.equipmentClass === EquipmentClass.ENGINE &&
+        g.id !== apex.id,
+    );
+    for (const engine of otherEngines) {
+      expect(engine.minDay, engine.id).toBeUndefined();
+      const loadout = new ShipLoadout("hull_bastion");
+      loadout.install(engine.id);
+      expect(
+        loadout.derivedStats().speed,
+        `${engine.id} must not match the calendar-gated apex engine's speed`,
+      ).toBeLessThan(apexSpeed);
+    }
   });
 
   it("every other item is untouched: same rng bucket differs only by eq_engine_v", () => {

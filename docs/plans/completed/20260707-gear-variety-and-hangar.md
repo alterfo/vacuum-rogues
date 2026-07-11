@@ -141,7 +141,8 @@ difficulty and the autopilot's arm-up logic. Never two ralphex instances at once
       (`eq_droid_basic`/`eq_droid`/`eq_droid_nano`), shields
       (`eq_shield_light`/`eq_shield`/`eq_shield_apex`) — each tier a real mass/potency/price
       tradeoff, not a linear clone; added 2 more engines (`eq_engine_light` T2 light /
-      `eq_engine_iv` T7 rare)
+      `eq_engine_iv` T6 rare — kept below the calendar-gated apex engine's T7 so it can't
+      match its top speed for free)
 - [x] fixed the latent `radarRange` inconsistency: `derivedStats` now consumes the item's
       `potency` directly (`eq_radar`'s potency was set equal to the old tech-formula output,
       600+4×200=1400, so shipped values are unchanged); artifact-upgrade scaling (

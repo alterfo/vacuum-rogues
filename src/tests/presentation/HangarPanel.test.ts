@@ -147,7 +147,13 @@ function makePlayer(ownedGearIds: string[] = []) {
   // existing test regardless of which hull it fits, so the new СЕРВИСНЫЙ
   // ЦЕНТР block never renders a repair button unless a test deliberately
   // damages `player.ship.hullHP` below `maxHull`.
-  const ship = { hullHP: 1_000_000_000, maxHull: 1_000_000_000 };
+  const ship = {
+    hullHP: 1_000_000_000,
+    maxHull: 1_000_000_000,
+    repair(this: { hullHP: number; maxHull: number }) {
+      this.hullHP = this.maxHull;
+    },
+  };
   return { credits: 1000, inventory, ship } as unknown as Player;
 }
 
@@ -673,8 +679,17 @@ describe("HangarPanel — СЕРВИСНЫЙ ЦЕНТР repair block (Task 5)", 
     const loadout = new ShipLoadout("hull_scout");
     const player = makePlayer();
     const maxHull = loadout.derivedStats().maxHull;
-    (player as unknown as { ship: { hullHP: number; maxHull: number } }).ship =
-      { hullHP: maxHull - 10, maxHull };
+    (
+      player as unknown as {
+        ship: { hullHP: number; maxHull: number; repair: () => void };
+      }
+    ).ship = {
+      hullHP: maxHull - 10,
+      maxHull,
+      repair(this: { hullHP: number; maxHull: number }) {
+        this.hullHP = this.maxHull;
+      },
+    };
     const ctx = makeCtx(loadout, player);
     const creditsBefore = player.credits;
 
@@ -691,6 +706,47 @@ describe("HangarPanel — СЕРВИСНЫЙ ЦЕНТР repair block (Task 5)", 
     ).toBe(maxHull);
     expect(player.credits).toBe(creditsBefore - 20);
     expect(ctx.rerender).toHaveBeenCalled();
+  });
+
+  it("full repair also restores shields and energy, not just hull (matches the planet Верфь)", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer();
+    const maxHull = loadout.derivedStats().maxHull;
+    const repairSpy = vi.fn(function (this: {
+      hullHP: number;
+      maxHull: number;
+      shields: number;
+      maxShields: number;
+    }) {
+      this.hullHP = this.maxHull;
+      this.shields = this.maxShields;
+    });
+    (
+      player as unknown as {
+        ship: {
+          hullHP: number;
+          maxHull: number;
+          shields: number;
+          maxShields: number;
+          repair: () => void;
+        };
+      }
+    ).ship = {
+      hullHP: maxHull - 10,
+      maxHull,
+      shields: 0,
+      maxShields: 50,
+      repair: repairSpy,
+    };
+    const ctx = makeCtx(loadout, player);
+
+    new HangarPanel(renderer).render(ctx);
+    findButton("[Полный ремонт")!.handlers.pointerdown(fakeEvent);
+
+    expect(repairSpy).toHaveBeenCalledTimes(1);
+    expect(
+      (player as unknown as { ship: { shields: number } }).ship.shields,
+    ).toBe(50);
   });
 
   it("blocks the repair with a toast, no mutation, when the player can't afford it", () => {

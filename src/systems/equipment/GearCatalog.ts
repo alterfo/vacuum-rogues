@@ -491,14 +491,18 @@ const EQUIPMENT: EquipmentSpec[] = [
   },
   {
     // A second, un-gated rare tier below the calendar-locked apex — a rare
-    // T7 alternative players can field well before APEX_ENGINE_MIN_DAY, at a
-    // heavier-mass/cheaper-than-apex tradeoff.
+    // T6 alternative players can field well before APEX_ENGINE_MIN_DAY.
+    // Engine speed is purely tech-level-driven (see derivedStats), so this
+    // MUST sit below eq_engine_v's techLevel (7) or it would deliver the
+    // apex's exact top speed for free, voiding the calendar gate — the
+    // heavier-mass/cheaper-than-apex tradeoff is the deliberately slower
+    // cruise speed this tier level buys.
     id: "eq_engine_iv",
     name: "Двигатель Тип-IV (форсированный)",
     kind: GearKind.EQUIPMENT,
-    techLevel: 7,
+    techLevel: 6,
     size: 4,
-    basePrice: 10800,
+    basePrice: 8800,
     mass: 13,
     equipmentClass: EquipmentClass.ENGINE,
     potency: 1.6,

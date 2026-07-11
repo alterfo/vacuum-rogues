@@ -1796,7 +1796,7 @@ export class HangarPanel {
         GL_COUNTERPARTY.SERVICES,
         "Ремонт корпуса",
       );
-      ship.hullHP = ship.maxHull;
+      ship.repair();
       this.ctx!.showToast(`Корпус восстановлен за ${cost} ₡`, 0x44ff88);
       this.ctx!.rerender();
     });

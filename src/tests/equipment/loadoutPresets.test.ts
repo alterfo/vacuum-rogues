@@ -10,7 +10,7 @@ import {
   installOwnedGear,
 } from "@/systems/equipment/GearBridge";
 import { LoadoutPresetSchema, SaveStateSchema } from "@/validation/schemas";
-import type { LoadoutPreset } from "@/types";
+import { ModuleCategory, type LoadoutPreset } from "@/types";
 
 /**
  * Task 6 (gear-variety-and-hangar): КОМПЛЕКТАЦИЯ 1/2/3 loadout presets.
@@ -149,6 +149,101 @@ describe("applyLoadoutPreset — round-trip", () => {
     expect(result.applied).toEqual(["wpn_pulse"]);
     expect(result.skipped).toEqual(["eq_engine_i"]);
     expect(loadout.installedGearIds()).toEqual(["wpn_pulse"]);
+  });
+
+  it("restores a captured hull micromodule from an owned-but-uninstalled copy", () => {
+    const inv = new Inventory();
+    const player = playerWith(inv);
+    const loadout = new ShipLoadout("hull_corvette");
+    loadout.applyMicromodule("hull_corvette", "mm_hull_armor_1");
+    const preset = captureLoadoutPreset("1", loadout);
+
+    // Swap hulls to lose the (unremovable) hull micromodule, then apply the
+    // preset on the fresh hull, which still has a free hull-micromodule slot.
+    // Restoring a destroyed hull micromodule must spend a fresh, owned,
+    // uninstalled copy — it is a non-refundable purchase, never conjured.
+    const fresh = new ShipLoadout("hull_corvette");
+    expect(fresh.hullMicromodules()).toEqual([]);
+    inv.micromodules.push({
+      id: "mm_hull_armor_1",
+      name: "Броневой набор ур.1",
+      targetCategory: ModuleCategory.HULL,
+      bonusType: "defense",
+      bonusTier: 1,
+    });
+
+    const result = applyLoadoutPreset(player, fresh, preset);
+
+    expect(fresh.hullMicromodules()).toEqual(["mm_hull_armor_1"]);
+    expect(result.applied).toContain("mm_hull_armor_1");
+    expect(inv.micromodules).toEqual([]);
+  });
+
+  it("skips restoring a destroyed hull micromodule when no owned copy remains (never free)", () => {
+    const inv = new Inventory();
+    const player = playerWith(inv);
+    const loadout = new ShipLoadout("hull_corvette");
+    loadout.applyMicromodule("hull_corvette", "mm_hull_armor_1");
+    const preset = captureLoadoutPreset("1", loadout);
+
+    // Hull swap destroyed the micromodule and no fresh copy was bought back —
+    // applying the preset on the new hull must NOT resurrect it for free.
+    const fresh = new ShipLoadout("hull_corvette");
+
+    const result = applyLoadoutPreset(player, fresh, preset);
+
+    expect(fresh.hullMicromodules()).toEqual([]);
+    expect(result.skipped).toContain("mm_hull_armor_1");
+    expect(result.applied).not.toContain("mm_hull_armor_1");
+  });
+
+  it("does not re-apply (or spend inventory for) a hull micromodule already fitted on the live loadout", () => {
+    const inv = new Inventory();
+    const player = playerWith(inv);
+    const loadout = new ShipLoadout("hull_corvette");
+    loadout.applyMicromodule("hull_corvette", "mm_hull_armor_1");
+    const preset = captureLoadoutPreset("1", loadout);
+
+    const result = applyLoadoutPreset(player, loadout, preset);
+
+    expect(loadout.hullMicromodules()).toEqual(["mm_hull_armor_1"]);
+    expect(result.applied).not.toContain("mm_hull_armor_1");
+    expect(result.skipped).not.toContain("mm_hull_armor_1");
+    expect(inv.micromodules).toEqual([]);
+  });
+
+  it("restores only as many copies of a duplicate hull-micromodule id as are owned", () => {
+    const inv = new Inventory();
+    const player = playerWith(inv);
+    const loadout = new ShipLoadout("hull_bastion"); // 2+ hull micromodule slots
+    loadout.applyMicromodule(loadout.hull.id, "mm_hull_armor_1");
+    loadout.applyMicromodule(loadout.hull.id, "mm_hull_armor_1");
+    const preset = captureLoadoutPreset("1", loadout);
+    expect(preset.hullMicromoduleIds).toEqual([
+      "mm_hull_armor_1",
+      "mm_hull_armor_1",
+    ]);
+
+    // Hull swap destroys both; only one replacement copy was bought back.
+    const fresh = new ShipLoadout("hull_bastion");
+    inv.micromodules.push({
+      id: "mm_hull_armor_1",
+      name: "Броневой набор ур.1",
+      targetCategory: ModuleCategory.HULL,
+      bonusType: "defense",
+      bonusTier: 1,
+    });
+
+    const result = applyLoadoutPreset(player, fresh, preset);
+
+    expect(fresh.hullMicromodules()).toEqual(["mm_hull_armor_1"]);
+    expect(
+      result.applied.filter((id) => id === "mm_hull_armor_1"),
+    ).toHaveLength(1);
+    expect(
+      result.skipped.filter((id) => id === "mm_hull_armor_1"),
+    ).toHaveLength(1);
+    expect(inv.micromodules).toEqual([]);
   });
 
   it("never force-fits more copies than the current hull has slots for", () => {

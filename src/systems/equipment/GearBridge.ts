@@ -512,6 +512,36 @@ export function applyLoadoutPreset(
       skipped.push(presetSlot.gearId);
     }
   }
+  const alreadyFitted = new Map<string, number>();
+  for (const id of loadout.hullMicromodules()) {
+    alreadyFitted.set(id, (alreadyFitted.get(id) ?? 0) + 1);
+  }
+  for (const micromoduleId of preset.hullMicromoduleIds ?? []) {
+    const carried = alreadyFitted.get(micromoduleId) ?? 0;
+    if (carried > 0) {
+      // Already on the live hull (never removed — canon forbids it) — this
+      // preset entry is already satisfied, nothing to restore or spend.
+      alreadyFitted.set(micromoduleId, carried - 1);
+      continue;
+    }
+    // A hull micromodule is a consumed, non-refundable purchase (destroyed on
+    // hull swap, {@link ShipLoadout.swapHull}) — restoring one must spend an
+    // owned-but-uninstalled copy from inventory, exactly like the hangar's
+    // drag-drop path ({@link applyMicromoduleDrop}) does, never conjure one
+    // for free.
+    const ownedIdx = player.inventory.micromodules.findIndex(
+      (m) => m.id === micromoduleId,
+    );
+    if (
+      ownedIdx >= 0 &&
+      loadout.applyMicromodule(loadout.hull.id, micromoduleId)
+    ) {
+      player.inventory.micromodules.splice(ownedIdx, 1);
+      applied.push(micromoduleId);
+    } else {
+      skipped.push(micromoduleId);
+    }
+  }
   return { applied, skipped };
 }
 
