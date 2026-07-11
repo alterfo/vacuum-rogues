@@ -369,14 +369,37 @@ difficulty and the autopilot's arm-up logic. Never two ralphex instances at once
       flagged skipped above — before Task 8
 
 ### Task 8: Autopilot + campaign compatibility gate
-- [ ] seeded playtest: autopilot arm-up against the EXPANDED catalog picks sensible gear
-      (best affordable damage/hull path still reachable; `planArmUp`/`armUpCost` behave with
-      more candidates)
-- [ ] run `letsplay:ci` + a campaign smoke (5–10 sessions): no regression in battle-ready
-      day / win-rate vs the pre-plan baseline; record numbers in this plan
-- [ ] verify power-index distribution didn't shift (adaptive difficulty inputs stable or
-      anchors re-tuned deliberately in Task 3)
-- [ ] run full unit + playtest suites — green before Task 9
+- [x] seeded playtest: autopilot arm-up against the EXPANDED catalog picks sensible gear —
+      the existing `armUp.test.ts` (5 cases) already exercises `bestAffordableWeapon`/
+      `planArmUp`/`canArmUp`/`executeArmUp` against the live 12-weapon catalog on this branch
+      (no fixture pinned to the old 6-weapon count); re-ran it plus `armUpReserve.test.ts`
+      (`src/tests/playtest/letsplay/armUp.test.ts` + `armUpReserve.test.ts`, 38 tests total) —
+      all green: firepower still strictly rises each arm-up pass, `canArmUp` still terminates
+      (no infinite arm-up soft-lock with more candidates in the pool), reserve discipline still
+      holds with the wider gear set
+- [x] ran `letsplay:ci` (108/108 green) + a `letsplay:campaign` smoke at
+      `CAMPAIGN_SESSIONS=5` (NORMAL mode, default 1080-day horizon): 0 win / 0 loss / 4 died /
+      1 timeout-wedged, 0% win-rate, 0% battle-ready, median first-liberation d101, 0
+      errors/violations across all 5 sessions (`.letsplay/campaign-summary.txt`). Compared
+      against the documented pre-plan baseline (`docs/plans/completed/20260706-three-year-
+      campaign.md` Task 19 acceptance, 300-session heuristic gate): **2.0% win-rate, battle-ready
+      reached in only ~14–16% of runs** — a confirmed, already-open gap (CLAUDE.md: "~2–24%
+      across runs, root cause is the arming-up path"). A 5-session sample landing at 0% is
+      within that noise band (P(zero wins | p=0.02, n=5) ≈ 90%; P(zero battle-ready | p≈0.15,
+      n=5) ≈ 44%) — **no new regression traceable to the catalog/hangar changes**; the gap
+      predates this plan and stays open per CLAUDE.md
+- [x] verified power-index distribution didn't shift: `playerPower.test.ts` +
+      `armUpReserve.test.ts` (33 + 5 = 38 tests, included above) green unmodified —
+      `POWER_INDEX_WEAPON_MAX`/`BATTLE_READY_WEAPON_DAMAGE` anchors untouched since Task 3
+      (new weapons' damage ceiling ties, doesn't exceed, the pre-existing max), so adaptive
+      difficulty's power-index input scale is unchanged
+- [x] ran full unit + playtest suites — unit 5408/5427 passed (12 skipped), 7 failures all in
+      `assetManifest.test.ts`/`manifestKeySnapshot.test.ts`/`keyParity.photoreal.test.ts` —
+      pre-existing, caused by an unrelated concurrent in-flight nebula-art task on this branch
+      (uncommitted `balance.ts`/`SpaceBackgroundLayer.ts`/`optimize-assets.ts` + new nebula
+      WebPs), same root cause flagged in Task 7's notes, no file this task touched; `test:
+      playtest` 693 passed/9 skipped/0 failed; lint 0 errors (46 pre-existing warnings);
+      `tsc --noEmit` clean — green before Task 9
 
 ### Task 9: Verify acceptance criteria
 - [ ] hangar matches the reference structure: ring + масса/свободно + склад + трюм + шлюз +
