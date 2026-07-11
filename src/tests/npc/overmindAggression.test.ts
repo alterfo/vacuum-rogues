@@ -118,14 +118,16 @@ describe("NpcSimulator Overmind off-screen aggression", () => {
     galaxy.npcShips.push(pirate);
 
     const simAny = sim as unknown as {
-      resolveOffscreenCombat(
-        g: Galaxy,
-        rng: SeededRNG,
-        playerSystemId?: string,
-      ): void;
+      garrison: {
+        resolveOffscreenCombat(
+          g: Galaxy,
+          rng: SeededRNG,
+          playerSystemId?: string,
+        ): void;
+      };
     };
     for (let i = 0; i < 20 && pirate.state !== NpcState.DEAD; i++) {
-      simAny.resolveOffscreenCombat(
+      simAny.garrison.resolveOffscreenCombat(
         galaxy,
         new SeededRNG(`ov_aggro_${i}`),
         "elsewhere",
@@ -152,14 +154,16 @@ describe("NpcSimulator Overmind off-screen aggression", () => {
     galaxy.npcShips.push(trader);
 
     const simAny = sim as unknown as {
-      resolveOffscreenCombat(
-        g: Galaxy,
-        rng: SeededRNG,
-        playerSystemId?: string,
-      ): void;
+      garrison: {
+        resolveOffscreenCombat(
+          g: Galaxy,
+          rng: SeededRNG,
+          playerSystemId?: string,
+        ): void;
+      };
     };
     for (let i = 0; i < 20 && trader.state !== NpcState.DEAD; i++) {
-      simAny.resolveOffscreenCombat(
+      simAny.garrison.resolveOffscreenCombat(
         galaxy,
         new SeededRNG(`ov_trader_${i}`),
         "elsewhere",

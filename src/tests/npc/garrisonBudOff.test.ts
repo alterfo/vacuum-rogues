@@ -17,7 +17,7 @@ interface SimInternals {
 }
 
 function internals(sim: NpcSimulator): SimInternals {
-  return sim as unknown as SimInternals;
+  return (sim as unknown as { garrison: SimInternals }).garrison;
 }
 
 function makeSystem(id: string, name: string, q: number): StarSystem {
@@ -256,8 +256,10 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
     // Despawned donors must not leak dwell-countdown entries: every key in the
     // map corresponds to a ship that still exists.
     const dwell = (
-      sim as unknown as { arrivalDwellCountdown: Map<string, number> }
-    ).arrivalDwellCountdown;
+      sim as unknown as {
+        placement: { arrivalDwellCountdown: Map<string, number> };
+      }
+    ).placement.arrivalDwellCountdown;
     const liveIds = new Set(galaxy.npcShips.map((n) => n.id));
     for (const id of dwell.keys()) {
       expect(liveIds.has(id)).toBe(true);
@@ -279,9 +281,9 @@ describe("NpcSimulator garrison bud-off (organic Overmind expansion)", () => {
     );
     const neighbours = (
       new NpcSimulator() as unknown as {
-        undirectedNeighbors(g: Galaxy, id: string): string[];
+        garrison: { undirectedNeighbors(g: Galaxy, id: string): string[] };
       }
-    ).undirectedNeighbors(galaxy, "sys_a");
+    ).garrison.undirectedNeighbors(galaxy, "sys_a");
     expect(neighbours).toEqual(["sys_b"]);
   });
 

@@ -169,11 +169,13 @@ function makeGalaxy(): Galaxy {
 }
 
 type OffscreenSim = {
-  resolveOffscreenCombat(
-    g: Galaxy,
-    rng: SeededRNG,
-    playerSystemId?: string,
-  ): void;
+  garrison: {
+    resolveOffscreenCombat(
+      g: Galaxy,
+      rng: SeededRNG,
+      playerSystemId?: string,
+    ): void;
+  };
 };
 
 describe("NpcSimulator cross-faction off-screen combat", () => {
@@ -196,7 +198,7 @@ describe("NpcSimulator cross-faction off-screen combat", () => {
     galaxy.npcShips.push(ov, pirate);
 
     const sim = new NpcSimulator();
-    (sim as unknown as OffscreenSim).resolveOffscreenCombat(
+    (sim as unknown as OffscreenSim).garrison.resolveOffscreenCombat(
       galaxy,
       new SeededRNG("cf_round"),
       "elsewhere",
@@ -227,7 +229,7 @@ describe("NpcSimulator cross-faction off-screen combat", () => {
 
     const sim = new NpcSimulator();
     for (let i = 0; i < 30 && pirate.state !== NpcState.DEAD; i++) {
-      (sim as unknown as OffscreenSim).resolveOffscreenCombat(
+      (sim as unknown as OffscreenSim).garrison.resolveOffscreenCombat(
         galaxy,
         new SeededRNG(`cf_${i}`),
         "elsewhere",
@@ -259,7 +261,7 @@ describe("NpcSimulator cross-faction off-screen combat", () => {
     galaxy.npcShips.push(pirate, trader);
 
     const sim = new NpcSimulator();
-    (sim as unknown as OffscreenSim).resolveOffscreenCombat(
+    (sim as unknown as OffscreenSim).garrison.resolveOffscreenCombat(
       galaxy,
       new SeededRNG("raid_round"),
       "elsewhere",
