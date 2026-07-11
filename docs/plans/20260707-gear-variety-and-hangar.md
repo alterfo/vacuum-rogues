@@ -114,16 +114,18 @@ difficulty and the autopilot's arm-up logic. Never two ralphex instances at once
 ## Implementation Steps
 
 ### Task 1: Shop tech-gating fix (prerequisite correctness)
-- [ ] write red test: `EquipmentShopScene.buildShopInventory` on a techLevel-2 system must not
+- [x] write red test: `EquipmentShopScene.buildShopInventory` on a techLevel-2 system must not
       stock T4+ gear (mirror the existing `shopGenerator.test.ts` gating through the scene
-      path)
-- [ ] thread `maxTechLevel` from the planet's `starSystem.techLevel` into
-      `buildShopInventory` (:232-243), matching StationScene's pattern (RESEARCH_LAB bonus
-      where applicable)
-- [ ] verify the letsplay arm-up path is unaffected (it already gates via
-      `generateSystemListings`); run the campaign smoke (few sessions) to confirm no arm-up
-      regression
-- [ ] run unit + playtest + letsplay:ci — green before Task 2
+      path) — `src/tests/presentation/equipmentShopTechGate.test.ts`
+- [x] thread `maxTechLevel` from the planet's `starSystem.techLevel` into
+      `buildShopInventory` (:232-243), matching StationScene's pattern (no RESEARCH_LAB
+      analog exists for `PlanetType` — that bonus is station-only, so planet shops use the
+      plain system `techLevel`, defaulting to 1 when no system is found, same as StationScene)
+- [x] verify the letsplay arm-up path is unaffected (it already gates via
+      `generateSystemListings`, a separate helper untouched by this change); ran
+      `letsplay:ci` (108 tests green) to confirm no arm-up regression
+- [x] run unit + playtest + letsplay:ci — green before Task 2 (5352 unit + 693 playtest + 108
+      letsplay:ci, all green; lint 0 errors; tsc clean)
 
 ### Task 2: Catalog invariants + equipment variety wave (fill the families)
 - [ ] write catalog invariant tests FIRST: unique ids; every `EquipmentClass` has ≥3 items

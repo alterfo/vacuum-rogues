@@ -236,12 +236,17 @@ export class EquipmentShopScene extends GameScene {
     const system = this.gameEngine.galaxy.systems.find(
       (s) => s.id === this.gameEngine!.player?.currentSystemId,
     );
+    // Cap stock to the owning system's current research level — mirrors
+    // StationScene's gating so planet shops can't stock gear the local
+    // system hasn't researched yet.
+    const maxTechLevel = system?.techLevel ?? 1;
     this.listings = generateShop({
       systemId: system?.id ?? "unknown",
       planetId: this.planet.id,
       seed: this.gameEngine.galaxy.id,
       day: this.gameEngine.galaxy.gameDays,
       priceFactor: techLevelForPlanet(this.planet.type) >= 4 ? 0.9 : 1.0,
+      maxTechLevel,
     });
   }
 
