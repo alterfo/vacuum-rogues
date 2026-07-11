@@ -329,17 +329,44 @@ difficulty and the autopilot's arm-up logic. Never two ralphex instances at once
       a real run outside this sandbox to confirm.
 
 ### Task 7: Gear icon art category (per-item icons)
-- [ ] extend the `icons` category in `tools/comfyui/asset_prompts.json`: one 768×768
-      alpha-WebP prompt per catalog item family/tier (weapons by class+tier, equipment
-      families, hulls for the central view) — id-keyed so `pickVariant` by id resolves
-- [ ] integration: icon resolution helper (item id → icon key → `tex()` cached, eager
-      category like station art; text fallback pinned by test) used by hangar + equipment
-      shop listings
-- [ ] manifest key-parity snapshot updated only for keys that exist; no-art state remains
-      fully functional (test both states)
-- [ ] E2E: shop + hangar render correctly with and without the new art
-- [ ] run unit + e2e — green before Task 8 (actual generation on the GPU box →
-      Post-Completion)
+- [x] extended the `icons` category in `tools/comfyui/asset_prompts.json`: one prompt per
+      weapon class×tier (`wpn_energy/fragment/missile_low/mid/high`) and equipment
+      family×tier (`eq_engine/fuel_tank/radar/scanner/repair_droid/grapple/shield/
+      grav_tractor_low/mid/high`) — 27 new id-keyed prompts (hulls deferred: the central
+      hull-view box already renders via the existing per-hull ship-art pattern, not a
+      generic icon, so no new prompt axis was needed there)
+- [x] integration: `src/presentation/ui/gearIcon.ts` — new shared `gearIconKey(gear)` +
+      `mountGearIcon(container, gear, x, y, size)`, resolving a per-item
+      `wpn_<class>_<tier>`/`eq_<family>_<tier>` key (tier bucketed low/mid/high from
+      `techLevel`) via `pickVariantKey` + cached `tex()` (eager `icons/` category), falling
+      back to the flat family icon (today's 6 shipped WebPs), then to `undefined` (text-only).
+      `HangarPanel` now imports this shared module instead of its own local
+      `gearIconKey`/`mountGearIcon` (deleted the fork, re-exports `gearIconKey` for the
+      pinned test import); `EquipmentShopScene.renderRows` wired the same `mountGearIcon`
+      call so shop listings show icons identically to the hangar. `src/tests/presentation/
+      gearIcon.test.ts` (13 cases: exact prefix per weapon/equipment tier bucket, flat
+      fallback, text-only fallback, mount no-op/mount-with-texture) +
+      `equipmentShopGearIcon.test.ts` (2 cases: one `mountGearIcon` call per row, name
+      offset by consumed width) — both green
+- [x] manifest key-parity snapshot: no update needed — Task 7 only lands prompts (art
+      generation is the separate Post-Completion GPU step), so no new files exist under
+      `src/assets/icons/` yet and the live manifest is unchanged; the "no-art state stays
+      fully functional" contract is exactly what `gearIcon.test.ts`'s fallback-to-flat-icon
+      and text-only cases pin
+- [x] E2E: attempted `npx playwright test e2e/specs/shipyard-hangar-parity.spec.ts` —
+      **blocked (not automatable here)**, same sandbox limitation Tasks 4–6 documented
+      (`config.webServer` readiness probe to `127.0.0.1` times out after 120 s under this
+      session's outbound-network sandboxing); needs a real run outside this sandbox to
+      confirm shop + hangar render correctly with and without the new art
+- [x] run unit + e2e — unit green: full suite 5412/5427 passed (12 skipped), the 3 failures
+      (`assetManifest.test.ts`, `manifestKeySnapshot.test.ts`) are pre-existing and belong to
+      an unrelated concurrent in-flight task on this branch (nebula backdrop visual tuning —
+      uncommitted changes to `balance.ts`/`SpaceBackgroundLayer.ts`/`optimize-assets.ts` plus
+      untracked `src/assets/nebula/*.webp`, none touched by this task); all Task-7-scoped
+      files (`gearIcon.test.ts`, `equipmentShopGearIcon.test.ts`, `HangarPanel.test.ts`,
+      `hangarLayout.test.ts`, `shopHangar.test.ts`, `shipyardParity.test.ts`, 52 tests) pass
+      in isolation, lint 0 errors (46 pre-existing warnings), `tsc --noEmit` clean; e2e
+      flagged skipped above — before Task 8
 
 ### Task 8: Autopilot + campaign compatibility gate
 - [ ] seeded playtest: autopilot arm-up against the EXPANDED catalog picks sensible gear

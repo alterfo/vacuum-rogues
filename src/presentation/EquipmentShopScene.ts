@@ -26,6 +26,7 @@ import {
 } from "@/systems/equipment/GearBridge";
 import { shopRowAction } from "./equipment/shopRowAction";
 import { HangarPanel } from "./ui/HangarPanel";
+import { mountGearIcon } from "./ui/gearIcon";
 import { MicromoduleApplyPanel } from "./ui/MicromoduleApplyPanel";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { formatStat, formatStatDelta } from "@/utils/formatStat";
@@ -744,6 +745,17 @@ export class EquipmentShopScene extends GameScene {
       if (isInstalled) rowBg.stroke({ width: 1, color: 0x226622 });
       this.listContainer.addChild(rowBg);
 
+      // Icon (mirrors the hangar's per-slot icon; text-only fallback until
+      // the item's tiered/family art is loaded — Task 7 shared `gearIcon.ts`)
+      const iconSize = 16;
+      const iconOffset = mountGearIcon(
+        this.listContainer,
+        gear,
+        startX + w * 0.01,
+        rowY + 6 + iconSize / 2,
+        iconSize,
+      );
+
       // Name + stat line
       const nameColor = isInstalled
         ? 0x44ff88
@@ -759,7 +771,7 @@ export class EquipmentShopScene extends GameScene {
         { rawColor: true, fontWeight: "bold" },
       );
       nameText.eventMode = "none";
-      nameText.x = startX + w * 0.01;
+      nameText.x = startX + w * 0.01 + iconOffset;
       const nameTop = rowY + 6;
       nameText.y = nameTop;
       this.listContainer.addChild(nameText);

@@ -9,7 +9,8 @@ import { scaledText } from "./scaledText";
 import { lineStepFor } from "./questCardLayout";
 import { attachWheelScroll } from "./WheelScroll";
 import { scaledFont } from "@/utils/fontScale";
-import { tex, pickVariant } from "../textures";
+import { pickVariant } from "../textures";
+import { gearIconKey, mountGearIcon } from "./gearIcon";
 import type { Renderer } from "../Renderer";
 import type { Player } from "@/domain/Player";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
@@ -68,32 +69,10 @@ export const CATEGORY_LABEL: Record<SlotCategory, string> = {
 };
 
 /**
- * Manifest icon key (`icons/<module>`) for a catalog item's module class, or
- * `undefined` when no generic icon exists yet for that class — callers fall
- * back to the text label (art exists for 6 module classes today: engine,
- * fuel tank, radar, shield, weapon (generic laser), repair droid; scanner/
- * grapple/grav-tractor have no art yet — Task 7 extends this set per item).
+ * Re-exported for `HangarPanel.test.ts`'s pinned import — the implementation
+ * lives in `./gearIcon.ts` (shared with `EquipmentShopScene`'s gear listing).
  */
-export function gearIconKey(gear: Gear): string | undefined {
-  if (gear.kind === GearKind.WEAPON) return "icons/laser";
-  if (gear.kind === GearKind.EQUIPMENT) {
-    switch ((gear as EquipmentSpec).equipmentClass) {
-      case EquipmentClass.ENGINE:
-        return "icons/engine";
-      case EquipmentClass.FUEL_TANK:
-        return "icons/fuel_tank";
-      case EquipmentClass.RADAR:
-        return "icons/radar";
-      case EquipmentClass.SHIELD:
-        return "icons/shield";
-      case EquipmentClass.REPAIR_DROID:
-        return "icons/repair_droid";
-      default:
-        return undefined;
-    }
-  }
-  return undefined;
-}
+export { gearIconKey };
 
 /** Historical fitted-slot box height at the "M" font scale — the floor a
  * font-scale-driven height never shrinks below. */
@@ -967,33 +946,6 @@ export class HangarPanel {
     return y + h;
   }
 
-  /**
-   * Mount the gear's class icon at `(x, y)` (vertically centered), sized to
-   * `size`. No-ops when the item has no icon key yet or the art isn't loaded
-   * (dev/unit-test environments never preload textures) — callers offset
-   * their text by the returned consumed width, 0 meaning "no icon drawn".
-   */
-  private mountGearIcon(
-    container: Container,
-    gear: Gear,
-    x: number,
-    y: number,
-    size: number,
-  ): number {
-    const key = gearIconKey(gear);
-    const texture = key ? tex(key) : undefined;
-    if (!texture) return 0;
-    const sp = new Sprite(texture);
-    sp.anchor.set(0, 0.5);
-    sp.width = size;
-    sp.height = size;
-    sp.x = x;
-    sp.y = y;
-    sp.eventMode = "none";
-    container.addChild(sp);
-    return size + 4;
-  }
-
   /** One occupied fitting slot: icon, name, [снять], and micromodule control. */
   private renderFilledSlot(
     x: number,
@@ -1032,7 +984,7 @@ export class HangarPanel {
     });
 
     const iconSize = Math.min(18, slotH - 8);
-    const iconOffset = this.mountGearIcon(
+    const iconOffset = mountGearIcon(
       container,
       gear,
       x + 6,
@@ -1521,7 +1473,7 @@ export class HangarPanel {
       container.addChild(rowBg);
 
       const rowIconOffset = gear
-        ? this.mountGearIcon(
+        ? mountGearIcon(
             container,
             gear,
             rightX + 6,
