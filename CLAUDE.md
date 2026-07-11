@@ -175,6 +175,8 @@ Every bug follows this order — no exceptions:
 
 Full details: `.claude/docs/systems/letsplay.md`. `src/tests/playtest/letsplay/` plays the real engine (dev-only). Loop: `observe → decide → apply → tick`. Live autopilot: `` ` `` (Backquote) in `npm run dev`. Default policy: `MemoryHeuristicPolicy`. First human input reclaims control.
 
+**F9 open (live `land()` re-targeting freeze):** still not independently fixed as of `docs/plans/20260711-autopilot-reliability-fixes.md`; leading hypothesis is `gameLoop`'s `requestAnimationFrame` throttling under tab-backgrounding racing the autopilot's `setInterval` poll — needs live-browser confirmation. Repro recipe: that plan's Post-Completion section.
+
 ## Equipment System (key rules only)
 
 Full details: `.claude/docs/systems/equipment.md`. Key rules:

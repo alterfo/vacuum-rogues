@@ -1399,6 +1399,18 @@ harness code (dev-only), the F10/F1 items are GAME/policy fixes.
       interaction with the F8 near-edge escape / F7 turn-start seam this same task landed) —
       out of reach for a headless agent per the plan's own "empirical-probe-first" rule.
       Deferred to a follow-up session with real-browser access; not re-attempted blindly.
+      **Update (`docs/plans/20260711-autopilot-reliability-fixes.md` Task 3, 2026-07-12):**
+      re-investigated, still not independently fixed. Static re-trace ruled out both a stale
+      `routeTargetPlanetId`/`plannedRoute` leak (the scene is always destroyed/recreated by
+      `GameEngine.transitionTo` on take-off) and a `currentSceneType`-vs-`currentScene` async race
+      (blocked by `AutopilotController.tickOnce()`'s `busy` re-entrancy guard). New leading
+      hypothesis, not yet ruled out: `GameEngine.gameLoop` drives ship physics off
+      `requestAnimationFrame` (throttled/paused by real browsers on tab/window backgrounding),
+      while the autopilot's poll loop is `setInterval`-backed and keeps firing regardless — a
+      backgrounded tab during live play would stall the ship while the autopilot keeps observing
+      "unmoved" for several ticks, matching the reported freeze. Structurally unreproducible in
+      any headless/mocked test (no real rAF/tab-visibility semantics in Vitest). Live-browser
+      repro recipe recorded in that plan's Post-Completion section.
 - [x] **(F8 — CRITICAL, live applier) live `flee` no-ops — ship freezes mid-space.** S3 and
       S6: every tick `flee/mem:flee-outgunned→npc_surge_*` with shipPhysics.targetX/Y ==
       shipX/Y EXACTLY, isMoving=false, forever (S3 at the system edge x=-1809; S6
@@ -1508,7 +1520,10 @@ harness code (dev-only), the F10/F1 items are GAME/policy fixes.
   and `endgameController.test.ts`'s mock both got the new no-op-tracking method added (compile-only,
   no assertion changed).
 - **F9 — see the ⚠️ note on its own checkbox above: investigated, not reproduced headlessly, not
-  independently fixed.** Left for a follow-up session with real-browser access.
+  independently fixed.** Left for a follow-up session with real-browser access. Re-investigated
+  in `docs/plans/20260711-autopilot-reliability-fixes.md` Task 3 (2026-07-12): still not
+  independently fixed; new tab-visibility/`requestAnimationFrame`-throttling hypothesis recorded,
+  needs live-browser confirmation (recipe in that plan's Post-Completion section).
 - **Live smoke**: `liveSmoke16b.test.ts` — 3 sessions (150 folds each) driving the REAL
   `observe → updateMemory → decide → applyLiveAction` loop over a pixi-stubbed real engine (the
   "real-scene playtest equivalent" the plan allows in lieu of an actual browser). All 3: zero

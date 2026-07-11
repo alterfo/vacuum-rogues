@@ -114,9 +114,9 @@ This plan fixes (1) and (2) with concrete, minimal code changes, and investigate
 
 ### Task 5: [Final] Update documentation
 
-- [ ] Update `.claude/docs/systems/letsplay.md` with the wheel-zoom-disengage fix and the flee-jump entry-vector fix (both are exactly the kind of "live-session finding" this doc already tracks).
-- [ ] Update `docs/plans/completed/20260706-three-year-campaign.md`'s F9 entry with this plan's investigation outcome (fixed / still-open-with-new-findings), so a future session doesn't re-investigate from scratch.
-- [ ] If Task 3 did not land a fix, add a short note to root `CLAUDE.md`'s Overmind/autopilot-adjacent section (or wherever most discoverable) pointing at the live-browser verification recipe.
+- [x] Update `.claude/docs/systems/letsplay.md` with the wheel-zoom-disengage fix and the flee-jump entry-vector fix (both are exactly the kind of "live-session finding" this doc already tracks).
+- [x] Update `docs/plans/completed/20260706-three-year-campaign.md`'s F9 entry with this plan's investigation outcome (fixed / still-open-with-new-findings), so a future session doesn't re-investigate from scratch.
+- [x] If Task 3 did not land a fix, add a short note to root `CLAUDE.md`'s Overmind/autopilot-adjacent section (or wherever most discoverable) pointing at the live-browser verification recipe. Added under the "Letsplay engine (key facts)" section (closer to autopilot-adjacent content than Overmind).
 
 *Note: ralphex automatically moves this plan to `docs/plans/completed/` once all tasks are checked off.*
 
