@@ -9,7 +9,7 @@ import type { Renderer } from "./Renderer";
 import { SeededRNG } from "@/utils/seededRNG";
 import type { FlightModule } from "./flight/FlightModule";
 import { pickVariant, pickVariantKey, loadTextureAsync } from "./textures";
-import { BACKGROUND_DIM } from "@/config/balance";
+import { BACKGROUND_DIM, NEBULA_BACKDROP_ALPHA } from "@/config/balance";
 import { reducedMotion } from "./ui/reducedMotion";
 
 interface DriftAsteroid {
@@ -520,7 +520,7 @@ export class SpaceBackgroundLayer implements FlightModule {
         const size = Math.max(sw, sh) * 2.4;
         bg.width = size;
         bg.height = size;
-        bg.alpha = 0.38;
+        bg.alpha = NEBULA_BACKDROP_ALPHA;
         bg.eventMode = "none";
         this.nebulaBackdropSprite = bg;
         this.skyContainer.addChildAt(bg, 0);
@@ -1190,7 +1190,8 @@ export class SpaceBackgroundLayer implements FlightModule {
         sy = Math.random() * h;
         angle = -Math.PI * 0.2 + Math.random() * Math.PI * 0.4;
     }
-    const speed = 0.28 + Math.random() * 0.18;
+    // Slow, graceful drift (was 0.28-0.46 — read as a fast streak, not a comet).
+    const speed = 0.09 + Math.random() * 0.06;
     const vx = Math.cos(angle) * speed;
     const vy = Math.sin(angle) * speed;
     const maxLife = (Math.max(w, h) * 1.6) / speed;
@@ -1200,16 +1201,17 @@ export class SpaceBackgroundLayer implements FlightModule {
     // Tail points opposite to the direction of travel
     const tailAngle = Math.atan2(-vy, -vx);
     const tailLen = 55 + Math.random() * 55;
-    // Wide dust tail
-    for (let i = 0; i < 6; i++) {
-      const spread = (i / 5 - 0.5) * 0.22;
+    // Soft dust tail: neutral sunlit white (not icy blue), 3 layered wedges
+    // instead of 6 so the overlap doesn't stack into a hazy/glowing smear.
+    for (let i = 0; i < 3; i++) {
+      const spread = (i / 2 - 0.5) * 0.22;
       const ta = tailAngle + spread;
       const tl = tailLen * (1 - Math.abs(spread) * 1.4);
       const hw = 3.5 - Math.abs(spread) * 10;
       if (hw <= 0) continue;
       g.poly([Math.cos(ta) * tl, Math.sin(ta) * tl, 0, -hw, 0, hw]).fill({
-        color: 0xc0d8ff,
-        alpha: 0.04,
+        color: 0xfff6e0,
+        alpha: 0.05,
       });
     }
     // Bright spine
@@ -1220,10 +1222,10 @@ export class SpaceBackgroundLayer implements FlightModule {
       -1.2,
       0,
       1.2,
-    ]).fill({ color: 0xe8f4ff, alpha: 0.35 });
-    // Nucleus
-    g.circle(0, 0, 3.5).fill({ color: 0xd8eeff, alpha: 0.8 });
-    g.circle(0, 0, 1.5).fill({ color: 0xffffff, alpha: 1 });
+    ]).fill({ color: 0xfffdf5, alpha: 0.3 });
+    // Nucleus — sunlit white, not a saturated glow
+    g.circle(0, 0, 3).fill({ color: 0xfffdf5, alpha: 0.7 });
+    g.circle(0, 0, 1.3).fill({ color: 0xffffff, alpha: 1 });
 
     g.x = sx;
     g.y = sy;

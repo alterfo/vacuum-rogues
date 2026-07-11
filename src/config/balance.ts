@@ -691,8 +691,18 @@ export const PIRATE_TRIBUTE_REP_GAIN = 3;
  * letsplay): alpha of the full-screen black overlay mounted above the nebula
  * backdrop/clouds/star fields so the game layer (planets, ship, routes, NPCs)
  * stays readable against the bright panorama. 0 = no dimming, 1 = black sky.
+ * Kept low (not 0) so the nebula backdrop art reads as the hero visual it's
+ * meant to be — a heavy dimmer was drowning it out (2026-07-11 feedback).
  */
-export const BACKGROUND_DIM = 0.45;
+export const BACKGROUND_DIM = 0.12;
+
+/**
+ * Opacity of the nebula backdrop art sprite itself, independent of
+ * {@link BACKGROUND_DIM}. Raised from the original 0.38 so the AI-generated
+ * panorama actually reads as a visible nebula instead of a faint tint
+ * (2026-07-11 feedback: the nebula should be a mesmerizing hero backdrop).
+ */
+export const NEBULA_BACKDROP_ALPHA = 0.62;
 
 /**
  * Sun-avoidance tuning (Sprint 2, Task 3).
