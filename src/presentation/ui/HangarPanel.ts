@@ -2,24 +2,28 @@ import {
   Container,
   Graphics,
   Rectangle,
+  Sprite,
   type FederatedPointerEvent,
 } from "pixi.js";
 import { scaledText } from "./scaledText";
 import { lineStepFor } from "./questCardLayout";
 import { attachWheelScroll } from "./WheelScroll";
 import { scaledFont } from "@/utils/fontScale";
+import { tex, pickVariant } from "../textures";
 import type { Renderer } from "../Renderer";
 import type { Player } from "@/domain/Player";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { MicroModule } from "@/types";
 import {
   GearKind,
+  EquipmentClass,
   gearById,
   microModuleById,
   hullMicroModuleById,
   slotCategoryFor,
   type SlotCategory,
   type Gear,
+  type EquipmentSpec,
 } from "@/systems/equipment/GearCatalog";
 import {
   slotToBagModule,
@@ -51,13 +55,33 @@ export const CATEGORY_LABEL: Record<SlotCategory, string> = {
   equipment: "ОБОРУДОВАНИЕ",
 };
 
-/** Order the four banks render in: weapons row, engine, radar, equipment. */
-const HANGAR_BANKS: readonly SlotCategory[] = [
-  "weapon",
-  "engine",
-  "radar",
-  "equipment",
-];
+/**
+ * Manifest icon key (`icons/<module>`) for a catalog item's module class, or
+ * `undefined` when no generic icon exists yet for that class — callers fall
+ * back to the text label (art exists for 6 module classes today: engine,
+ * fuel tank, radar, shield, weapon (generic laser), repair droid; scanner/
+ * grapple/grav-tractor have no art yet — Task 7 extends this set per item).
+ */
+export function gearIconKey(gear: Gear): string | undefined {
+  if (gear.kind === GearKind.WEAPON) return "icons/laser";
+  if (gear.kind === GearKind.EQUIPMENT) {
+    switch ((gear as EquipmentSpec).equipmentClass) {
+      case EquipmentClass.ENGINE:
+        return "icons/engine";
+      case EquipmentClass.FUEL_TANK:
+        return "icons/fuel_tank";
+      case EquipmentClass.RADAR:
+        return "icons/radar";
+      case EquipmentClass.SHIELD:
+        return "icons/shield";
+      case EquipmentClass.REPAIR_DROID:
+        return "icons/repair_droid";
+      default:
+        return undefined;
+    }
+  }
+  return undefined;
+}
 
 /** Historical fitted-slot box height at the "M" font scale — the floor a
  * font-scale-driven height never shrinks below. */
@@ -93,6 +117,15 @@ interface HangarLayout {
   readonly rightW: number;
   readonly contentTop: number;
   readonly contentBottom: number;
+}
+
+/** A resolved installed-slot entry: the slot data, its flat loadout index
+ *  (needed so [снять]/micromodule target the exact clicked copy), and its
+ *  resolved catalog item. */
+interface FittedEntry {
+  readonly slot: { gearId: string; micromoduleId?: string; upgrades: number };
+  readonly idx: number;
+  readonly gear: Gear;
 }
 
 /**
@@ -355,7 +388,7 @@ export class HangarPanel {
     // below the y it consumes. Both draw unclipped — `bottomY` is the actual
     // bottom of the drawn content, used below to size the scroll range.
     const banksTop = this.renderHullMicromoduleBank(layout, loadout);
-    const leftBottomY = this.renderFittingBanks(
+    const leftBottomY = this.renderFittingRing(
       { ...layout, contentTop: banksTop },
       loadout,
       player,
@@ -504,104 +537,334 @@ export class HangarPanel {
       { text: `ЗАЩИТА ${shields}`, fill: 0x88ffcc },
     ];
     const colW = (PW - 40) / segs.length;
+    const chipH = 22;
+    const chipY = PY + 50;
     segs.forEach((s, i) => {
+      const cx = PX + 20 + i * colW;
+      const chipW = colW - 8;
+      const chip = new Graphics();
+      chip.rect(cx, chipY, chipW, chipH).fill({ color: 0x0d1822, alpha: 1 });
+      chip.rect(cx, chipY, chipW, chipH).stroke({ color: 0x2a4a5a, width: 1 });
+      chip.eventMode = "none";
+      container.addChild(chip);
+
       const t = scaledText(s.text, 12, s.fill, {
         rawColor: true,
         fontFamily: "monospace",
       });
-      t.x = PX + 20 + i * colW;
-      t.y = PY + 54;
+      t.x = cx + 6;
+      t.y = chipY + 4;
       t.eventMode = "none";
       container.addChild(t);
     });
   }
 
   /**
-   * The four categorized fitting banks (weapons / engine / radar / equipment) in
-   * the left column: a header per bank showing `used/total` from the hull, the
-   * filled slots (with [снять] + micromodule controls), then the remaining empty
-   * slots. Draws unclipped into the scrollable `leftContent` — `wireScrollRegion`
-   * (called by `render()` once the true bottom is known) makes any overflow
-   * reachable by scroll instead of silently dropping it below the fold.
-   * Returns the y just past the last thing drawn, for sizing the scroll range.
+   * The SR2-style fitting ring: a central hull view flanked by four visually
+   * grouped zones — ВООРУЖЕНИЕ (top, weapon bank), СИСТЕМА ДВИЖЕНИЯ (left,
+   * engine bank + fuel-tank items), СИСТЕМА ОТСЛЕЖИВАНИЯ (right, radar bank +
+   * scanner items), ДОПОЛНИТЕЛЬНОЕ ОБОРУДОВАНИЕ (bottom, the rest of the
+   * shared equipment bank). The domain model underneath is untouched — still
+   * the four `SlotCategory` banks (`weapon`/`engine`/`radar`/`equipment`);
+   * fuel/scanner items are equipment-bank members that this view simply
+   * *displays* alongside their related zone. Draws unclipped into the
+   * scrollable `leftContent` — `wireScrollRegion` (called by `render()` once
+   * the true bottom is known) makes any overflow reachable by scroll instead
+   * of silently dropping it below the fold. Returns the y just past the last
+   * thing drawn, for sizing the scroll range.
    */
-  private renderFittingBanks(
+  private renderFittingRing(
     layout: HangarLayout,
     loadout: ShipLoadout | null,
     player: Player,
   ): number {
-    const container = this.leftContent!;
     const { leftX, leftW, contentTop } = layout;
     const stats = loadout?.derivedStats() ?? null;
     const installed = loadout?.installedSlots() ?? [];
-    // Flat slot index of each installed item, grouped by category — the index is
-    // needed so [снять]/micromodule target the exact clicked copy.
+    const entries: FittedEntry[] = installed
+      .map((slot, idx) => ({ slot, idx, gear: gearById(slot.gearId) }))
+      .filter((e): e is FittedEntry => !!e.gear);
+
     const byCat = (cat: SlotCategory) =>
-      installed
-        .map((slot, idx) => ({ slot, idx, gear: gearById(slot.gearId) }))
-        .filter((e) => e.gear && slotCategoryFor(e.gear) === cat);
+      entries.filter((e) => slotCategoryFor(e.gear) === cat);
+    const weaponEntries = byCat("weapon");
+    const engineEntries = byCat("engine");
+    const radarEntries = byCat("radar");
+    const equipEntries = byCat("equipment");
+    const isClass = (e: FittedEntry, cls: EquipmentClass) =>
+      (e.gear as EquipmentSpec).equipmentClass === cls;
+    const fuelEntries = equipEntries.filter((e) =>
+      isClass(e, EquipmentClass.FUEL_TANK),
+    );
+    const scannerEntries = equipEntries.filter((e) =>
+      isClass(e, EquipmentClass.SCANNER),
+    );
+    const miscEquipEntries = equipEntries.filter(
+      (e) => !fuelEntries.includes(e) && !scannerEntries.includes(e),
+    );
 
+    const zeroCount = { used: 0, total: 0 };
     let y = contentTop;
-    for (const cat of HANGAR_BANKS) {
-      const c = stats?.categories[cat] ?? { used: 0, total: 0 };
 
-      const header = scaledText(
-        `${CATEGORY_LABEL[cat]}  ${c.used}/${c.total}`,
-        12,
-        c.used < c.total ? 0x88ccaa : 0xddaa66,
-        { rawColor: true, fontFamily: "monospace" },
-      );
-      header.x = leftX;
-      header.y = y;
-      header.eventMode = "none";
-      container.addChild(header);
-      y += 22;
+    // ── ВООРУЖЕНИЕ (top, full width) ──
+    const wc = stats?.categories.weapon ?? zeroCount;
+    y = this.renderRingZone(
+      "ВООРУЖЕНИЕ",
+      "weapon",
+      wc,
+      weaponEntries,
+      Math.max(0, wc.total - weaponEntries.length),
+      leftX,
+      leftW,
+      y,
+      loadout,
+      player,
+    );
+    y += 6;
 
-      const entries = byCat(cat);
-      const slotH = fittedSlotHeight();
-      for (const e of entries) {
-        this.renderFilledSlot(layout, loadout!, player, e, y, slotH);
-        y += slotH + 4;
-      }
+    // ── central hull view flanked by movement (left) / tracking (right) ──
+    const zoneW = Math.round(leftW * 0.3);
+    const hullX = leftX + zoneW + 8;
+    const hullW = leftW - zoneW * 2 - 16;
+    const rowTop = y;
 
-      const empties = Math.max(0, c.total - entries.length);
-      for (let k = 0; k < empties; k++) {
-        const slotBg = new Graphics();
-        slotBg.rect(leftX, y, leftW, 24).fill({ color: 0x0a1218, alpha: 1 });
-        slotBg.rect(leftX, y, leftW, 24).stroke({ color: 0x1a2a3a, width: 1 });
-        slotBg.eventMode = "none";
-        container.addChild(slotBg);
-        const txt = scaledText("— свободно —", 11, 0xb4bcc4, {
-          rawColor: true,
-          fontFamily: "monospace",
-        });
-        txt.x = leftX + 8;
-        txt.y = y + 6;
-        txt.eventMode = "none";
-        container.addChild(txt);
-        y += 28;
-      }
-      y += 8;
-    }
+    const ec = stats?.categories.engine ?? zeroCount;
+    const leftBottom = this.renderRingZone(
+      "СИСТЕМА ДВИЖЕНИЯ",
+      "engine",
+      ec,
+      [...engineEntries, ...fuelEntries],
+      Math.max(0, ec.total - engineEntries.length),
+      leftX,
+      zoneW,
+      rowTop,
+      loadout,
+      player,
+    );
+
+    const hullBottom = this.renderHullArtBox(loadout, hullX, rowTop, hullW);
+
+    const rc = stats?.categories.radar ?? zeroCount;
+    const rightBottom = this.renderRingZone(
+      "СИСТЕМА ОТСЛЕЖИВАНИЯ",
+      "radar",
+      rc,
+      [...radarEntries, ...scannerEntries],
+      Math.max(0, rc.total - radarEntries.length),
+      hullX + hullW + 8,
+      zoneW,
+      rowTop,
+      loadout,
+      player,
+    );
+
+    y = Math.max(leftBottom, hullBottom, rightBottom) + 6;
+
+    // ── ДОПОЛНИТЕЛЬНОЕ ОБОРУДОВАНИЕ (bottom, full width) ──
+    const qc = stats?.categories.equipment ?? zeroCount;
+    y = this.renderRingZone(
+      "ДОПОЛНИТЕЛЬНОЕ ОБОРУДОВАНИЕ",
+      "equipment",
+      qc,
+      miscEquipEntries,
+      Math.max(0, qc.total - equipEntries.length),
+      leftX,
+      leftW,
+      y,
+      loadout,
+      player,
+    );
+
     return y;
   }
 
-  /** One occupied fitting slot: name, [снять], and micromodule control. */
+  /**
+   * One ring zone: a visual group title, the underlying bank's domain
+   * `${label} used/total` header (unchanged text contract — the ring is a
+   * VISUAL regrouping over the same four banks), its filled slots, then its
+   * remaining empty-slot placeholders. `entries` may mix items from more than
+   * one `SlotCategory` (e.g. movement shows engine + fuel); `emptyCount` is
+   * always the true remaining capacity of `cat`'s own bank.
+   */
+  private renderRingZone(
+    groupTitle: string,
+    cat: SlotCategory,
+    counts: { used: number; total: number },
+    entries: FittedEntry[],
+    emptyCount: number,
+    x: number,
+    w: number,
+    y: number,
+    loadout: ShipLoadout | null,
+    player: Player,
+  ): number {
+    const container = this.leftContent!;
+
+    const title = scaledText(groupTitle, 10, 0x5f9ac0, {
+      rawColor: true,
+      fontFamily: "monospace",
+    });
+    title.x = x;
+    title.y = y;
+    title.eventMode = "none";
+    container.addChild(title);
+    y += 14;
+
+    const header = scaledText(
+      `${CATEGORY_LABEL[cat]}  ${counts.used}/${counts.total}`,
+      12,
+      counts.used < counts.total ? 0x88ccaa : 0xddaa66,
+      { rawColor: true, fontFamily: "monospace" },
+    );
+    header.x = x;
+    header.y = y;
+    header.eventMode = "none";
+    container.addChild(header);
+    y += 22;
+
+    const slotH = fittedSlotHeight();
+    for (const e of entries) {
+      this.renderFilledSlot(x, w, loadout!, player, e, y, slotH);
+      y += slotH + 4;
+    }
+
+    for (let k = 0; k < emptyCount; k++) {
+      const slotBg = new Graphics();
+      slotBg.rect(x, y, w, 24).fill({ color: 0x0a1218, alpha: 1 });
+      slotBg.rect(x, y, w, 24).stroke({ color: 0x1a2a3a, width: 1 });
+      slotBg.eventMode = "none";
+      container.addChild(slotBg);
+      const txt = scaledText("— свободно —", 11, 0xb4bcc4, {
+        rawColor: true,
+        fontFamily: "monospace",
+      });
+      txt.x = x + 8;
+      txt.y = y + 6;
+      txt.eventMode = "none";
+      container.addChild(txt);
+      y += 28;
+    }
+    return y + 8;
+  }
+
+  /**
+   * The central ship view: per-hull art (`player_ships/<hullClass>`, falling
+   * back to the generic `ships/ranger` art the flight scene uses) or a small
+   * accent-colored placeholder when no art is loaded, plus the hull name.
+   * Returns the y just past the box, for sizing the row it shares with the
+   * movement/tracking zones.
+   */
+  private renderHullArtBox(
+    loadout: ShipLoadout | null,
+    x: number,
+    y: number,
+    w: number,
+  ): number {
+    const container = this.leftContent!;
+    const h = 96;
+
+    const frame = new Graphics();
+    frame.rect(x, y, w, h).fill({ color: 0x081018, alpha: 1 });
+    frame.rect(x, y, w, h).stroke({ color: 0x2a4a5a, width: 1 });
+    frame.eventMode = "none";
+    container.addChild(frame);
+
+    if (!loadout) {
+      const dash = scaledText("—", 12, 0x5a7a8a, {
+        rawColor: true,
+        fontFamily: "monospace",
+      });
+      dash.anchor.set(0.5, 0.5);
+      dash.x = x + w / 2;
+      dash.y = y + h / 2;
+      dash.eventMode = "none";
+      container.addChild(dash);
+      return y + h;
+    }
+
+    const cx = x + w / 2;
+    const artCy = y + h / 2 - 8;
+    const shipTex =
+      pickVariant(
+        "player_ships",
+        loadout.hull.hullClass.toLowerCase(),
+        loadout.hull.id,
+      ) ?? pickVariant("ships", "ranger", loadout.hull.id);
+    if (shipTex) {
+      const sp = new Sprite(shipTex);
+      sp.anchor.set(0.5, 0.5);
+      const size = Math.min(w, h) * 0.7;
+      sp.width = size;
+      sp.height = size;
+      sp.x = cx;
+      sp.y = artCy;
+      sp.eventMode = "none";
+      container.addChild(sp);
+    } else {
+      // No hull art loaded yet — a small accent mark stands in for the ship
+      // silhouette (Graphics.poly() isn't available in every render context
+      // this panel is unit-tested under, so the placeholder stays rect-only).
+      const s = Math.min(w, h) * 0.34;
+      const mark = new Graphics();
+      mark
+        .rect(cx - s / 2, artCy - s / 2, s, s)
+        .fill({ color: 0x4a7a9a, alpha: 0.85 });
+      mark.eventMode = "none";
+      container.addChild(mark);
+    }
+
+    const name = scaledText(loadout.hull.name, 10, 0x9fc4d8, {
+      rawColor: true,
+      fontFamily: "monospace",
+    });
+    name.anchor.set(0.5, 1);
+    name.x = cx;
+    name.y = y + h - 4;
+    name.eventMode = "none";
+    container.addChild(name);
+
+    return y + h;
+  }
+
+  /**
+   * Mount the gear's class icon at `(x, y)` (vertically centered), sized to
+   * `size`. No-ops when the item has no icon key yet or the art isn't loaded
+   * (dev/unit-test environments never preload textures) — callers offset
+   * their text by the returned consumed width, 0 meaning "no icon drawn".
+   */
+  private mountGearIcon(
+    container: Container,
+    gear: Gear,
+    x: number,
+    y: number,
+    size: number,
+  ): number {
+    const key = gearIconKey(gear);
+    const texture = key ? tex(key) : undefined;
+    if (!texture) return 0;
+    const sp = new Sprite(texture);
+    sp.anchor.set(0, 0.5);
+    sp.width = size;
+    sp.height = size;
+    sp.x = x;
+    sp.y = y;
+    sp.eventMode = "none";
+    container.addChild(sp);
+    return size + 4;
+  }
+
+  /** One occupied fitting slot: icon, name, [снять], and micromodule control. */
   private renderFilledSlot(
-    layout: HangarLayout,
+    x: number,
+    w: number,
     loadout: ShipLoadout,
     player: Player,
-    entry: {
-      slot: { gearId: string; micromoduleId?: string; upgrades: number };
-      idx: number;
-      gear: Gear | undefined;
-    },
+    entry: FittedEntry,
     y: number,
     slotH: number,
   ): void {
     const container = this.leftContent!;
-    const { leftX, leftW } = layout;
-    const gear = entry.gear!;
+    const gear = entry.gear;
     const slot = entry.slot;
     const idx = entry.idx;
     // Name sits above the micromodule row; both steps scale with the current
@@ -611,8 +874,8 @@ export class HangarPanel {
     const mmStep = lineStepFor(scaledFont(10));
 
     const slotBg = new Graphics();
-    slotBg.rect(leftX, y, leftW, slotH).fill({ color: 0x0d2030, alpha: 1 });
-    slotBg.rect(leftX, y, leftW, slotH).stroke({ color: 0x336655, width: 1 });
+    slotBg.rect(x, y, w, slotH).fill({ color: 0x0d2030, alpha: 1 });
+    slotBg.rect(x, y, w, slotH).stroke({ color: 0x336655, width: 1 });
     slotBg.eventMode = "none";
     container.addChild(slotBg);
 
@@ -620,18 +883,27 @@ export class HangarPanel {
     // its exact slot index. Only empty slots accept one (one per item); a
     // filled-slot drop is rejected with a hint by applyMicromoduleDrop.
     this.dropZones.push({
-      x: leftX,
+      x,
       y,
-      w: leftW,
+      w,
       h: slotH,
       target: { kind: "gear", slotIndex: idx },
     });
+
+    const iconSize = Math.min(18, slotH - 8);
+    const iconOffset = this.mountGearIcon(
+      container,
+      gear,
+      x + 6,
+      y + slotH / 2,
+      iconSize,
+    );
 
     const name = scaledText(`${gear.name} (T${gear.techLevel})`, 11, 0xb8e6c8, {
       rawColor: true,
       fontFamily: "monospace",
     });
-    name.x = leftX + 8;
+    name.x = x + 8 + iconOffset;
     name.y = y + 4;
     name.eventMode = "none";
     container.addChild(name);
@@ -641,7 +913,7 @@ export class HangarPanel {
       fontFamily: "monospace",
     });
     unBtn.anchor.set(1, 0.5);
-    unBtn.x = leftX + leftW - 8;
+    unBtn.x = x + w - 8;
     unBtn.y = y + 4 + nameStep / 2;
     unBtn.eventMode = "static";
     unBtn.cursor = "pointer";
@@ -668,7 +940,7 @@ export class HangarPanel {
         rawColor: true,
         fontFamily: "monospace",
       });
-      mmTag.x = leftX + 8;
+      mmTag.x = x + 8 + iconOffset;
       mmTag.y = mmRowY;
       mmTag.eventMode = "none";
       container.addChild(mmTag);
@@ -688,7 +960,7 @@ export class HangarPanel {
         { rawColor: true, fontFamily: "monospace" },
       );
       mmBtn.anchor.set(1, 0.5);
-      mmBtn.x = leftX + leftW - 8;
+      mmBtn.x = x + w - 8;
       mmBtn.y = mmRowY + mmStep / 2;
       if (hasMatchingMm) {
         mmBtn.eventMode = "static";
@@ -1104,13 +1376,22 @@ export class HangarPanel {
       rowBg.eventMode = "none";
       container.addChild(rowBg);
 
+      const rowIconOffset = gear
+        ? this.mountGearIcon(
+            container,
+            gear,
+            rightX + 6,
+            y + warehouseRowH / 2,
+            Math.min(18, warehouseRowH - 8),
+          )
+        : 0;
       const rowText = scaledText(
         gear ? `${name} (T${gear.techLevel})` : name,
         11,
         0xccddaa,
         { rawColor: true, fontFamily: "monospace" },
       );
-      rowText.x = rightX + 8;
+      rowText.x = rightX + 8 + rowIconOffset;
       rowText.y = y + 4;
       rowText.eventMode = "none";
       container.addChild(rowText);

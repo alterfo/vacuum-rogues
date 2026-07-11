@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   HangarPanel,
   explainInstallBlock,
+  gearIconKey,
 } from "@/presentation/ui/HangarPanel";
+import { gearById } from "@/systems/equipment/GearCatalog";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { Renderer } from "@/presentation/Renderer";
 import type { Player } from "@/domain/Player";
@@ -451,5 +453,84 @@ describe("explainInstallBlock — shared fit-block reason (one source of truth)"
     loadout.install("eq_engine_i"); // mass 6 → used 30 (at capacity)
     const reason = explainInstallBlock(loadout, "eq_shield"); // free bank, mass 8
     expect(reason).toContain("Перегруз");
+  });
+});
+
+describe("HangarPanel ring (Task 4) — SR2-style zone grouping over the unchanged 4-bank model", () => {
+  beforeEach(() => {
+    created.length = 0;
+  });
+
+  it("renders the four SR2 ring group titles alongside the unchanged bank headers", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer();
+
+    new HangarPanel(renderer).render(makeCtx(loadout, player));
+
+    const all = texts();
+    expect(all).toContain("ВООРУЖЕНИЕ");
+    expect(all).toContain("СИСТЕМА ДВИЖЕНИЯ");
+    expect(all).toContain("СИСТЕМА ОТСЛЕЖИВАНИЯ");
+    expect(all).toContain("ДОПОЛНИТЕЛЬНОЕ ОБОРУДОВАНИЕ");
+    // The domain bank headers still render — the ring is a visual regrouping,
+    // not a change to the underlying 4-category model.
+    expect(all.some((t) => t.includes("ОРУЖИЕ") && t.includes("0/2"))).toBe(
+      true,
+    );
+  });
+
+  it("shows a fitted fuel tank in the movement zone (above the bottom equipment zone), not the misc equipment row", () => {
+    // hull_scout: 2 equipment slots. Fit a fuel tank (movement zone) and a
+    // shield (bottom misc zone) — same shared bank, different ring group.
+    const loadout = new ShipLoadout("hull_scout");
+    loadout.install("eq_tank");
+    loadout.install("eq_shield");
+    const player = makePlayer();
+
+    new HangarPanel(renderer).render(makeCtx(loadout, player));
+
+    const tankName = gearById("eq_tank")!.name;
+    const shieldName = gearById("eq_shield")!.name;
+    const tankNode = created.find((n) => n.text.startsWith(tankName)) as
+      | { y: number }
+      | undefined;
+    const shieldNode = created.find((n) => n.text.startsWith(shieldName)) as
+      | { y: number }
+      | undefined;
+    expect(tankNode).toBeDefined();
+    expect(shieldNode).toBeDefined();
+    // The movement zone shares the hull-view row (rendered before the bottom
+    // ДОПОЛНИТЕЛЬНОЕ ОБОРУДОВАНИЕ zone), so the fuel tank sits strictly above
+    // the shield.
+    expect(tankNode!.y).toBeLessThan(shieldNode!.y);
+  });
+
+  it("draws the central hull-view box with the hull's plain name, distinct from the top banner", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer();
+
+    new HangarPanel(renderer).render(makeCtx(loadout, player));
+
+    const all = texts();
+    // The banner keeps its "Корпус:" prefix (pinned contract); the central
+    // hull-view box additionally shows the bare hull name.
+    expect(all.some((t) => t === `Корпус: ${loadout.hull.name}`)).toBe(true);
+    expect(all.some((t) => t === loadout.hull.name)).toBe(true);
+  });
+});
+
+describe("gearIconKey — module-class icon resolution (Task 4)", () => {
+  it("resolves the 6 module classes with existing art to their icon key", () => {
+    expect(gearIconKey(gearById("wpn_pulse")!)).toBe("icons/laser");
+    expect(gearIconKey(gearById("eq_engine_i")!)).toBe("icons/engine");
+    expect(gearIconKey(gearById("eq_tank")!)).toBe("icons/fuel_tank");
+    expect(gearIconKey(gearById("eq_radar")!)).toBe("icons/radar");
+    expect(gearIconKey(gearById("eq_shield")!)).toBe("icons/shield");
+    expect(gearIconKey(gearById("eq_droid")!)).toBe("icons/repair_droid");
+  });
+
+  it("falls back to undefined for module classes with no art yet", () => {
+    expect(gearIconKey(gearById("eq_scanner")!)).toBeUndefined();
+    expect(gearIconKey(gearById("eq_grapple_i")!)).toBeUndefined();
   });
 });

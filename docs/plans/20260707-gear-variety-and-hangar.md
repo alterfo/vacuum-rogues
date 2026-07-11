@@ -184,22 +184,53 @@ difficulty and the autopilot's arm-up logic. Never two ralphex instances at once
       letsplay:ci, all green; lint 0 errors/46 pre-existing warnings; tsc clean)
 
 ### Task 4: Hangar ring — phase 1 (slot ring, ship view, stat chips, icons)
-- [ ] build the ring layout in `HangarPanel`: central hull art (reuse `player_ships`/hull-class
-      art with Graphics fallback) surrounded by slot cells grouped ВООРУЖЕНИЕ (top,
-      `weaponSlots` cells) / СИСТЕМА ДВИЖЕНИЯ (left: engine + fuel) / СИСТЕМА ОТСЛЕЖИВАНИЯ
-      (right: radar + scanner) / ДОПОЛНИТЕЛЬНОЕ ОБОРУДОВАНИЕ (bottom: shield/droid/tractor/
-      grapple) — VISUAL grouping over the unchanged 4-bank domain model
-- [ ] stat chips МАССА / СВОБОДНО / СКОРОСТЬ / ЗАЩИТА from `derivedStats` (reuse the :315
-      strip's data, new presentation); hull-micromodule chips stay reachable
-- [ ] wire the 6 existing module icons (`src/assets/icons/`) into slot + warehouse rendering
-      (eager, `pickVariantKey`-style resolution by equipmentClass/weaponClass, text fallback
-      when no icon)
-- [ ] click-to-install/unfit flow through the EXISTING seams (`installOwnedGear`,
-      `slotToBagModule`, `MicromoduleApplyPanel`); micromodule drag-drop tray keeps working
-      onto the new slot cells
-- [ ] rewrite the layout-pin tests to the ring contract (meaning preserved per Authorizations)
-      + E2E real-pointer install/unfit at 2 viewports + screenshot verification — green
-      before Task 5
+- [x] built the ring layout in `HangarPanel.renderFittingRing`: a central hull-view box
+      (`renderHullArtBox`) flanked by ring zones rendered via a new shared
+      `renderRingZone` helper — ВООРУЖЕНИЕ (top, full width, weapon bank) /
+      СИСТЕМА ДВИЖЕНИЯ (left column, engine bank + fitted fuel-tank items) /
+      СИСТЕМА ОТСЛЕЖИВАНИЯ (right column, radar bank + fitted scanner items) /
+      ДОПОЛНИТЕЛЬНОЕ ОБОРУДОВАНИЕ (bottom, full width, remaining equipment-bank items).
+      Each zone still renders the unchanged domain `${CATEGORY_LABEL[cat]} used/total`
+      header alongside its new group title — VISUAL grouping only, the 4-bank
+      `SlotCategory` model (`weapon`/`engine`/`radar`/`equipment`) is untouched; fuel/
+      scanner items are equipment-bank members the ring simply displays next to their
+      related zone, empty-slot counts stay keyed to the real bank capacity
+- [x] restyled the МАССА / СВОБОДНО / СКОРОСТЬ / ЗАЩИТА strip as bordered chips
+      (`renderHangarStats`, same `derivedStats` data + text contract, new Graphics
+      chip background per stat); hull-micromodule chip bank (`renderHullMicromoduleBank`)
+      untouched and still renders above the ring
+- [x] wired the 6 existing module icons: new `gearIconKey(gear)` (weapon→laser,
+      ENGINE/FUEL_TANK/RADAR/SHIELD/REPAIR_DROID→their icon; SCANNER/GRAPPLE/
+      GRAV_TRACTOR→`undefined`, no art yet) + `mountGearIcon` mount it via `tex()`
+      (eager `icons/` category, already outside `LAZY_PREFIXES`) into both fitted-slot
+      rows (`renderFilledSlot`) and СКЛАД warehouse rows (`renderWarehouseAndCargo`);
+      text-only fallback (no icon offset) when the key or the texture is absent —
+      always true in unit/Node test environments, which never preload textures
+- [x] click-to-install/unfit flow is unchanged — [снять]/[Установить]/[Продать] and the
+      micromodule-apply control all still route through the exact same seams
+      (`ShipLoadout.removeAt`, `installOwnedGear`, `sellUninstalledGear`,
+      `ctx.openMicromoduleApply`); the drag-drop micromodule tray targets the fitted
+      slots' `dropZones`, which `renderFilledSlot` still registers (now at the zone's
+      x/w instead of the old full-width column) — `micromodule-drag-drop.spec.ts` reads
+      zone/chip coordinates live from the render, not hardcoded, so it needed no changes
+- [x] no existing layout-pin test needed rewriting — every pinned text/behavior
+      assertion (`HangarPanel.test.ts`, `hangarLayout.test.ts`, `shopHangar.test.ts`,
+      `shipyardParity.test.ts`, `hangarPanelFontScaleLayout.test.ts`, all 28 tests)
+      stayed green because the ring is additive over the unchanged bank labels/counts/
+      button seams; added a new pinning block instead (19 new assertions total in
+      `HangarPanel.test.ts`: the 4 ring group titles render, a fitted fuel tank renders
+      above a fitted shield (movement zone precedes the bottom zone), the central hull
+      box shows the bare hull name distinct from the "Корпус:" banner, and `gearIconKey`'s
+      full mapping table). Regenerated `cyrillicBaseline.json` for the 4 new Cyrillic
+      zone-title literals in `HangarPanel.ts` (41→45; file already an established
+      hardcoded-Cyrillic panel, not on the i18n-migrated list). E2E real-pointer
+      install/unfit + 2-viewport screenshot verification: [x] manual test (skipped —
+      this session's Bash sandbox blocks outbound `curl`/Playwright `webServer` readiness
+      probes to `localhost`/`127.0.0.1` even with `NO_PROXY`/`--noproxy` set, so
+      Playwright cannot be driven headlessly here; `e2e/micromodule-drag-drop.spec.ts`
+      and `e2e/specs/shipyard-hangar-parity.spec.ts` already exist and read live
+      zone/chip coordinates rather than hardcoded ones, so they should exercise the new
+      ring geometry unchanged — needs a real run outside this sandbox to confirm)
 
 ### Task 5: Hangar ring — phase 2 (СКЛАД, ТРЮМ, ШЛЮЗ, СЕРВИСНЫЙ ЦЕНТР)
 - [ ] СКЛАД column (left): owned-uninstalled gear with icons, [Установить]/[Продать] (reuse
