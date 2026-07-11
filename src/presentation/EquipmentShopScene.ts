@@ -804,7 +804,7 @@ export class EquipmentShopScene extends GameScene {
         { rawColor: true },
       );
       statText.eventMode = "none";
-      statText.x = startX + w * 0.01;
+      statText.x = startX + w * 0.01 + iconOffset;
       // Stacked below the name line — its step tracks the name's own font-scale
       // line height so the two never overlap at "L" (Task 3: the fixed +25
       // offset assumed the "M"-scale ~14 px name-line height).

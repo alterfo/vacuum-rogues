@@ -735,7 +735,6 @@ export class HangarPanel {
     y = this.renderRingZone(
       "ВООРУЖЕНИЕ",
       "weapon",
-      wc,
       weaponEntries,
       Math.max(0, wc.total - weaponEntries.length),
       leftX,
@@ -756,7 +755,6 @@ export class HangarPanel {
     const leftBottom = this.renderRingZone(
       "СИСТЕМА ДВИЖЕНИЯ",
       "engine",
-      ec,
       [...engineEntries, ...fuelEntries],
       Math.max(0, ec.total - engineEntries.length),
       leftX,
@@ -772,7 +770,6 @@ export class HangarPanel {
     const rightBottom = this.renderRingZone(
       "СИСТЕМА ОТСЛЕЖИВАНИЯ",
       "radar",
-      rc,
       [...radarEntries, ...scannerEntries],
       Math.max(0, rc.total - radarEntries.length),
       hullX + hullW + 8,
@@ -789,7 +786,6 @@ export class HangarPanel {
     y = this.renderRingZone(
       "ДОПОЛНИТЕЛЬНОЕ ОБОРУДОВАНИЕ",
       "equipment",
-      qc,
       miscEquipEntries,
       Math.max(0, qc.total - equipEntries.length),
       leftX,
@@ -803,17 +799,17 @@ export class HangarPanel {
   }
 
   /**
-   * One ring zone: a visual group title, the underlying bank's domain
-   * `${label} used/total` header (unchanged text contract — the ring is a
-   * VISUAL regrouping over the same four banks), its filled slots, then its
-   * remaining empty-slot placeholders. `entries` may mix items from more than
-   * one `SlotCategory` (e.g. movement shows engine + fuel); `emptyCount` is
-   * always the true remaining capacity of `cat`'s own bank.
+   * One ring zone: a visual group title, a `${label} used/total` header, its
+   * filled slots, then its remaining empty-slot placeholders. `entries` may
+   * mix items from more than one `SlotCategory` (e.g. movement shows engine +
+   * fuel); the header's used/total is derived from what this zone actually
+   * draws (`entries.length` / `entries.length + emptyCount`), not the
+   * underlying bank's own count, so it never disagrees with the boxes shown
+   * below it.
    */
   private renderRingZone(
     groupTitle: string,
     cat: SlotCategory,
-    counts: { used: number; total: number },
     entries: FittedEntry[],
     emptyCount: number,
     x: number,
@@ -834,10 +830,12 @@ export class HangarPanel {
     container.addChild(title);
     y += 14;
 
+    const shownUsed = entries.length;
+    const shownTotal = entries.length + emptyCount;
     const header = scaledText(
-      `${CATEGORY_LABEL[cat]}  ${counts.used}/${counts.total}`,
+      `${CATEGORY_LABEL[cat]}  ${shownUsed}/${shownTotal}`,
       12,
-      counts.used < counts.total ? 0x88ccaa : 0xddaa66,
+      shownUsed < shownTotal ? 0x88ccaa : 0xddaa66,
       { rawColor: true, fontFamily: "monospace" },
     );
     header.x = x;

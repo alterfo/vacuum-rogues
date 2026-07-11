@@ -700,6 +700,11 @@ export class NpcSimulator {
    * pirate systems get PIRATE ships. Idempotent once the minimum is met.
    */
   ensureGarrison(galaxy: Galaxy, rng: SeededRNG): void {
+    // Re-sync `garrisonIds` from any `garrison_`/`capture_`-prefixed ships
+    // first (idempotent — a no-op if `tick()` already ran it this turn), so a
+    // reloaded or otherwise out-of-band call still recognises pre-existing
+    // members instead of treating them as unregistered transients.
+    this.reconcileTransientState(galaxy);
     for (const systemId of galaxy.overmindSystems) {
       this.fillGarrison(galaxy, rng, systemId, true);
     }
@@ -731,7 +736,15 @@ export class NpcSimulator {
     let present = this.countGarrisonPresent(galaxy, systemId);
     if (present >= garrisonMin) {
       this.establishedGarrisons.add(systemId);
-      this.anchorGarrisonBaseline(systemId, present, garrisonMin, garrisonMax);
+      // Members only (not raw `present`): a transient wanderer counted toward
+      // meeting the minimum here must not permanently inflate the growth
+      // baseline past what registered garrison members can ever reach.
+      this.anchorGarrisonBaseline(
+        systemId,
+        this.countGarrisonMembers(galaxy, systemId),
+        garrisonMin,
+        garrisonMax,
+      );
       return;
     }
     // A fully wiped garrison in an already-established system has been *cleared*
@@ -761,7 +774,15 @@ export class NpcSimulator {
       spawned++;
     }
     this.establishedGarrisons.add(systemId);
-    this.anchorGarrisonBaseline(systemId, present, garrisonMin, garrisonMax);
+    // Members only, same reasoning as the early-return branch above — every
+    // ship spawned in the loop was just registered into `garrisonIds`, so
+    // this recount excludes any stray non-member present before the loop ran.
+    this.anchorGarrisonBaseline(
+      systemId,
+      this.countGarrisonMembers(galaxy, systemId),
+      garrisonMin,
+      garrisonMax,
+    );
     logger.info(
       `Garrison: spawned ${spawned} hostile ships in ${systemId} (now ${present})`,
     );
