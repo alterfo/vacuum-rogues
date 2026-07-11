@@ -104,13 +104,13 @@ This plan fixes (1) and (2) with concrete, minimal code changes, and investigate
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] Verify Task 1's fix: a wheel-zoom gesture during active autopilot no longer disengages it, and zoom still works.
-- [ ] Verify Task 2's fix: flee-jump entry point now derives from the real exit angle; routine jumps are provably unchanged (byte-for-byte same computed vectors in the non-flee test).
-- [ ] Verify Task 3's outcome is documented either as (a) a landed fix with a green regression test, or (b) a confirmed-still-live-only bug with an updated investigation writeup and a Post-Completion verification recipe.
-- [ ] Run full unit test suite (`npm test -- --run`).
-- [ ] Run real-engine playtest suite (`npm run test:playtest`).
-- [ ] Run `npm run letsplay:ci` (oracle) to catch any autopilot-visible regression from Tasks 1-2.
-- [ ] Run linter — all issues must be fixed.
+- [x] Verify Task 1's fix: a wheel-zoom gesture during active autopilot no longer disengages it, and zoom still works. Confirmed — `capture: true` + `stopImmediatePropagation()` regression tests in place for both `SpaceFlightScene` and `StarMapScene`, plus the zoom-still-functions and modal-mirroring tests, all green in the full unit run.
+- [x] Verify Task 2's fix: flee-jump entry point now derives from the real exit angle; routine jumps are provably unchanged (byte-for-byte same computed vectors in the non-flee test). Confirmed — `departureVectorFromExitPoint`/`planWarpEdgeRoute` regression tests and the pre-existing `warpArrivalHeading.test.ts` both green.
+- [x] Verify Task 3's outcome is documented either as (a) a landed fix with a green regression test, or (b) a confirmed-still-live-only bug with an updated investigation writeup and a Post-Completion verification recipe. Confirmed (b) — Progress Tracking's 2026-07-12 entry documents the tab-visibility rAF hypothesis and the Post-Completion section (below) has the full live-browser repro recipe.
+- [x] Run full unit test suite (`npm test -- --run`). Green: 589 files / 5448 tests passed, 12 skipped.
+- [x] Run real-engine playtest suite (`npm run test:playtest`). Green: 73 files / 701 tests passed, 9 skipped.
+- [x] Run `npm run letsplay:ci` (oracle) to catch any autopilot-visible regression from Tasks 1-2. Green: 7 files / 108 tests passed, no regressions.
+- [x] Run linter — all issues must be fixed. `eslint src --ext .ts`: 0 errors, 46 pre-existing `no-explicit-any` warnings in test files (unrelated to this plan's changes) — nothing to fix.
 
 ### Task 5: [Final] Update documentation
 
