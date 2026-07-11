@@ -391,9 +391,12 @@ primary workstream.
 
 ### Task 5: Track 4 (Content) — no scoped work yet
 
-- [ ] *(placeholder — add concrete tasks here once content work is defined;
+- [x] *(placeholder — add concrete tasks here once content work is defined;
       the icon-button migration for `QuestJournalUI.ts`/`DialogueScene.ts` will
       land here once Task 2 proves the pattern)*
+      (skipped - not automatable; no content-track work has been defined yet
+      and the icon-button migration it references is itself still blocked on
+      the icon-set decision from Task 2, same as the Task 3/4 placeholders)
 
 ## Open question for you
 
