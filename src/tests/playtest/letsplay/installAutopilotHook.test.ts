@@ -561,6 +561,78 @@ describe("createLiveSceneController — verb → live engine call", () => {
     expect(closeModals).not.toHaveBeenCalled();
   });
 
+  it("tick() calls hud.closeModals() when the quest journal is open", () => {
+    const closeModals = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        hud: {
+          isQuestJournalOpen: () => true,
+          isSettingsPanelOpen: () => false,
+          closeModals,
+        },
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(closeModals).toHaveBeenCalledTimes(1);
+  });
+
+  it("tick() calls hud.closeModals() when the accessibility panel is open", () => {
+    const closeModals = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        hud: {
+          isQuestJournalOpen: () => false,
+          isSettingsPanelOpen: () => true,
+          closeModals,
+        },
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(closeModals).toHaveBeenCalledTimes(1);
+  });
+
+  it("tick() does not call hud.closeModals() when neither panel is open", () => {
+    const closeModals = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        hud: {
+          isQuestJournalOpen: () => false,
+          isSettingsPanelOpen: () => false,
+          closeModals,
+        },
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(closeModals).not.toHaveBeenCalled();
+  });
+
+  it("tick() calls planetManager.closeInfoPanel() when the planet info panel is open", () => {
+    const closeInfoPanel = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        planetManager: { hasInfoPanel: true, closeInfoPanel },
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(closeInfoPanel).toHaveBeenCalledTimes(1);
+  });
+
+  it("tick() does not call planetManager.closeInfoPanel() when no info panel is open", () => {
+    const closeInfoPanel = vi.fn();
+    const engine = mockEngine({
+      currentScene: {
+        performWarpJumpTo: vi.fn().mockResolvedValue(undefined),
+        planetManager: { hasInfoPanel: false, closeInfoPanel },
+      },
+    });
+    createLiveSceneController(engine).tick();
+    expect(closeInfoPanel).not.toHaveBeenCalled();
+  });
+
   it("tick() starts a turn (e2eStartTurn) when the ship is genuinely idle in flight (F7)", () => {
     const e2eStartTurn = vi.fn();
     const engine = mockEngine({

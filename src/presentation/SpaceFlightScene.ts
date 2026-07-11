@@ -578,8 +578,11 @@ export class SpaceFlightScene extends GameScene {
     // Keyboard (Quest Journal) + wheel (zoom, on window to capture all events).
     this.boundKeyDown = this.onKeyDown.bind(this);
     window.addEventListener("keydown", this.boundKeyDown);
-    this.boundWheel = this.onWheel.bind(this);
-    window.addEventListener("wheel", this.boundWheel, { passive: false });
+    this.boundWheel = this.onWheel.bind(this); // capture: true — see onWheel()'s comment
+    window.addEventListener("wheel", this.boundWheel, {
+      passive: false,
+      capture: true,
+    });
 
     // Reposition edge-anchored HUD on window resize (PixiJS resizes the canvas
     // via resizeTo, but UI placed at screen.width/height does not move).
@@ -697,7 +700,7 @@ export class SpaceFlightScene extends GameScene {
 
     // Remove wheel listener
     if (this.boundWheel) {
-      window.removeEventListener("wheel", this.boundWheel);
+      window.removeEventListener("wheel", this.boundWheel, { capture: true });
       this.boundWheel = null;
     }
 
@@ -1068,6 +1071,7 @@ export class SpaceFlightScene extends GameScene {
     // emit wheel events mid-pan, which would also zoom (bug: pan + unwanted zoom).
     if (this.panZoom.isPanning) return;
 
+    event.stopImmediatePropagation(); // keeps a handled zoom off the autopilot's same-node reclaim listener
     this.camera.zoomAtClient(event.deltaY, event.clientX, event.clientY);
   }
 

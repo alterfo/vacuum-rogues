@@ -157,6 +157,36 @@ export function createLiveSceneController(
         return;
       }
 
+      // Mirror the same auto-dismiss for the two other blocking-modal
+      // registries the live scene owns: the quest journal / accessibility
+      // panel (`FlightHud.closeModals()`) and the planet info panel
+      // (`PlanetManager.closeInfoPanel()`). Without this the autopilot sat
+      // silently idle behind either panel — it keeps acting through the port
+      // underneath, so a human never sees a decision fire until they close
+      // the panel themselves (reported as "dropped off").
+      const sceneForHud = engine.currentScene as {
+        hud?: {
+          isQuestJournalOpen?: () => boolean;
+          isSettingsPanelOpen?: () => boolean;
+          closeModals?: () => void;
+        };
+        planetManager?: {
+          hasInfoPanel?: boolean;
+          closeInfoPanel?: () => void;
+        };
+      } | null;
+      if (
+        sceneForHud?.hud?.isQuestJournalOpen?.() ||
+        sceneForHud?.hud?.isSettingsPanelOpen?.()
+      ) {
+        sceneForHud.hud.closeModals?.();
+        return;
+      }
+      if (sceneForHud?.planetManager?.hasInfoPanel) {
+        sceneForHud.planetManager.closeInfoPanel?.();
+        return;
+      }
+
       // A pending warp plots the route but does NOT start movement — the player
       // must press Ход (Space / run-turn) to fly to the system edge. The live rAF
       // loop does not do this automatically. Drive it manually each tick.

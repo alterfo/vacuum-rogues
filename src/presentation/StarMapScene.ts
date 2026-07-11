@@ -245,6 +245,11 @@ export class StarMapScene extends GameScene {
 
   private handleWheel(e: WheelEvent): void {
     e.preventDefault();
+    // Stop the gesture from bubbling to the dev autopilot's window-level
+    // reclaim-on-input listener — canvas is a real DOM descendant of window,
+    // so stopping propagation here (unlike the same-node case in
+    // SpaceFlightScene.onWheel) is sufficient regardless of listener order.
+    e.stopPropagation();
     const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
     this.zoomLevel = Math.max(0.5, Math.min(4, this.zoomLevel * zoomDelta));
     this.updateMapTransform();
