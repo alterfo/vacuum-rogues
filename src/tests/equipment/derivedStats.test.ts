@@ -83,3 +83,58 @@ describe("ShipLoadout.derivedStats — tech-based formulas (Task 6)", () => {
     expect(lo.derivedStats().speed).toBeCloseTo(0.11 * 1.2, 3);
   });
 });
+
+describe("ShipLoadout.derivedStats — radar range consumes potency (Task 2)", () => {
+  it("radar range equals the installed radar's potency", () => {
+    const lo = new ShipLoadout("hull_scout");
+    lo.install("eq_radar_near"); // potency 900
+    expect(lo.derivedStats().radarRange).toBe(900);
+  });
+
+  it("the best-potency radar wins when two are installed", () => {
+    const lo = new ShipLoadout("hull_bastion"); // 9 slots
+    lo.install("eq_radar_near"); // potency 900
+    lo.install("eq_radar_far"); // potency 2200 → wins
+    expect(lo.derivedStats().radarRange).toBe(2200);
+  });
+
+  it("eq_radar's shipped range is unchanged by the potency switch (600 + 4×200 = 1400)", () => {
+    const lo = new ShipLoadout("hull_warden");
+    lo.install("eq_radar");
+    expect(lo.derivedStats().radarRange).toBe(1400);
+  });
+
+  it("no radar installed → radarRange 0", () => {
+    const lo = new ShipLoadout("hull_scout");
+    lo.install("eq_engine_i");
+    expect(lo.derivedStats().radarRange).toBe(0);
+  });
+});
+
+describe("ShipLoadout.derivedStats — grapple (GRAPPLE family, Task 2)", () => {
+  it("no grapple installed → grappleStrength 0", () => {
+    const lo = new ShipLoadout("hull_corvette");
+    lo.install("eq_engine_i");
+    expect(lo.derivedStats().grappleStrength).toBe(0);
+  });
+
+  it("grappleStrength equals the installed grapple's potency", () => {
+    const lo = new ShipLoadout("hull_corvette");
+    lo.install("eq_grapple_i"); // potency 40
+    expect(lo.derivedStats().grappleStrength).toBe(40);
+  });
+
+  it("the best grapple wins when two are installed", () => {
+    const lo = new ShipLoadout("hull_bastion"); // 9 slots
+    lo.install("eq_grapple_i"); // 40
+    lo.install("eq_grapple_iii"); // 180 → wins
+    expect(lo.derivedStats().grappleStrength).toBe(180);
+  });
+
+  it("micromodule boosts grappleStrength proportionally", () => {
+    const lo = new ShipLoadout("hull_warden");
+    lo.install("eq_grapple_ii"); // potency 90
+    lo.applyMicromodule("eq_grapple_ii", "mm_amplifier_1"); // +20%
+    expect(lo.derivedStats().grappleStrength).toBe(Math.round(90 * 1.2));
+  });
+});

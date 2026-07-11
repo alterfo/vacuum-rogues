@@ -106,6 +106,8 @@ export interface DerivedStats {
   readonly fuelCapacity: number;
   /** Auto-pickup range (px) of the best installed gravity tractor; 0 with none. */
   readonly gravTractorRange: number;
+  /** Capture strength of the best installed boarding grapple; 0 with none. */
+  readonly grappleStrength: number;
   readonly canTakeOff: boolean;
 }
 
@@ -521,6 +523,7 @@ export class ShipLoadout {
     let repairRate = 0;
     let fuelCapacity = 0;
     let gravTractorRange = 0;
+    let grappleStrength = 0;
     let hasEngine = false;
     let hasFuel = false;
 
@@ -555,13 +558,19 @@ export class ShipLoadout {
             fuelCapacity += Math.round((50 + e.potency) * m);
             hasFuel = true;
             break;
-          case EquipmentClass.RADAR:
-            // 600 base + tech × 200 px; micromodule scales the computed range
+          case EquipmentClass.RADAR: {
+            // Range is the item's own potency (px), scaled by the artifact-
+            // upgrade tech-level ratio (1 when un-upgraded — shipped values
+            // stay unchanged) so setSlotUpgrades still extends radar range,
+            // then by the micromodule multiplier.
+            const upgradeRatio =
+              upgradeBonus > 0 ? g.techLevel / baseGear.techLevel : 1;
             radarRange = Math.max(
               radarRange,
-              Math.round((600 + e.techLevel * 200) * m),
+              Math.round(e.potency * upgradeRatio * m),
             );
             break;
+          }
           case EquipmentClass.SCANNER:
             scannerStrength = Math.max(
               scannerStrength,
@@ -586,6 +595,11 @@ export class ShipLoadout {
             );
             break;
           case EquipmentClass.GRAPPLE:
+            // Capture strength = potency; best grapple wins, micromodule scales it.
+            grappleStrength = Math.max(
+              grappleStrength,
+              Math.round(e.potency * m),
+            );
             break;
         }
       }
@@ -636,6 +650,7 @@ export class ShipLoadout {
       repairRate: Number(repairRate.toFixed(2)),
       fuelCapacity,
       gravTractorRange,
+      grappleStrength,
       // Canon §11.4: cannot take off without an engine and a fuel tank.
       canTakeOff: hasEngine && hasFuel,
     };

@@ -128,20 +128,30 @@ difficulty and the autopilot's arm-up logic. Never two ralphex instances at once
       letsplay:ci, all green; lint 0 errors; tsc clean)
 
 ### Task 2: Catalog invariants + equipment variety wave (fill the families)
-- [ ] write catalog invariant tests FIRST: unique ids; every `EquipmentClass` has ≥3 items
+- [x] write catalog invariant tests FIRST: unique ids; every `EquipmentClass` has ≥3 items
       spanning the tech ladder; every hull's massCapacity admits a sensible same-tech kit;
       price/mass grow with tech within a family; `rare` items T5+; every item's
-      `slotCategoryFor` resolves
-- [ ] add **GRAPPLE items ×3** (the missing family — T1/T3/T5, potency = capture
-      strength/range) and make the `derivedStats` grapple branch real (grappleStrength field)
-- [ ] extend thin families to ≥3 items each: fuel tanks (T1/T3/T6 capacity ladder), radars,
-      scanners, repair droids, shields — each tier a REAL tradeoff (mass vs potency vs price),
-      not a linear clone; add 2 more engines (T2 light / T7 rare)
-- [ ] fix the latent `radarRange` inconsistency: consume the item's `potency` (with the
-      tech-formula as fallback), keeping current shipped values equivalent so no behavior pin
-      moves
-- [ ] write derivedStats tests for every new branch/field; run unit + save-compat (catalog
-      change ⇒ revalidation path) — green before Task 3
+      `slotCategoryFor` resolves — `src/tests/equipment/catalogInvariants.test.ts`
+- [x] add **GRAPPLE items ×3** (`eq_grapple_i/ii/iii`, T1/T3/T5, potency = capture
+      strength/range) and make the `derivedStats` grapple branch real (`grappleStrength` field
+      on `DerivedStats`, best-grapple-wins + micromodule scaling)
+- [x] extend thin families to ≥3 items each: fuel tanks (`eq_tank`/`eq_tank_ii`/`eq_tank_iii`,
+      T1/T3/T6 capacity ladder), radars (`eq_radar_near`/`eq_radar`/`eq_radar_far`), scanners
+      (`eq_scanner_near`/`eq_scanner`/`eq_scanner_deep`), repair droids
+      (`eq_droid_basic`/`eq_droid`/`eq_droid_nano`), shields
+      (`eq_shield_light`/`eq_shield`/`eq_shield_apex`) — each tier a real mass/potency/price
+      tradeoff, not a linear clone; added 2 more engines (`eq_engine_light` T2 light /
+      `eq_engine_iv` T7 rare)
+- [x] fixed the latent `radarRange` inconsistency: `derivedStats` now consumes the item's
+      `potency` directly (`eq_radar`'s potency was set equal to the old tech-formula output,
+      600+4×200=1400, so shipped values are unchanged); artifact-upgrade scaling (
+      `setSlotUpgrades`) is preserved via a tech-level ratio applied to potency (ratio=1 when
+      un-upgraded) — this was needed to keep the existing
+      `hangarUpgradeRoundTrip.test.ts` pin green (upgrades must still extend radar range)
+- [x] wrote derivedStats tests for every new branch/field (radar-potency + grapple, 8 new
+      cases in `derivedStats.test.ts`); ran full unit suite (5380 tests green), lint (0
+      errors), `tsc --noEmit` (clean), and `npm run test:save-compat` (22 tests green,
+      catalog-change revalidation path) — green before Task 3
 
 ### Task 3: Weapon variety wave + real consumers for weapon dimensions
 - [ ] write red tests for the new consumers first: in REAL-TIME flight combat
