@@ -1043,7 +1043,8 @@ export class NpcShipManager implements FlightModule {
     worldY: number,
     rng: () => number = Math.random,
   ): void {
-    this.loot.spawn(npc, worldX, worldY, rng);
+    const day = this.gameEngine?.galaxy?.gameDays ?? 0;
+    this.loot.spawn(npc, worldX, worldY, rng, day);
   }
 
   /**

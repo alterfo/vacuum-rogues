@@ -65,7 +65,7 @@ function makeOvermind(id: string, systemId: string): NpcShip {
     name: `Жнец ${id}`,
     race: FactionType.PARADOXES,
     faction: Faction.OVERMIND,
-    role: NpcRole.PATROL,
+    role: NpcRole.OVERMIND,
     hullHP: 140,
     maxHull: 140,
     shields: 70,
