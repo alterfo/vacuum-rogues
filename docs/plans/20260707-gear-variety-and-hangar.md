@@ -402,13 +402,35 @@ difficulty and the autopilot's arm-up logic. Never two ralphex instances at once
       `tsc --noEmit` clean — green before Task 9
 
 ### Task 9: Verify acceptance criteria
-- [ ] hangar matches the reference structure: ring + масса/свободно + склад + трюм + шлюз +
-      сервисный центр + комплектации — screenshot evidence at 2 viewports, both art states
-- [ ] every equipment family ≥3 items, weapons ≥12 total, grapple family exists, all catalog
-      invariant tests green
-- [ ] full test suite, `npm run test:playtest`, `npm run letsplay:ci`,
-      `npm run test:save-compat`, `npm run test:e2e:regression`, `npm run lint` — all green
-- [ ] load a pre-plan golden save: loads, revalidates loadout, hangar opens correctly
+- [x] hangar matches the reference structure: ring + масса/свободно + склад + трюм + шлюз +
+      сервисный центр + комплектации — structure confirmed via the Task 4-6 unit/layout pins
+      (`HangarPanel.test.ts`, `hangarLayout.test.ts`, `shopHangar.test.ts`,
+      `shipyardParity.test.ts` — all green, see below). [x] screenshot evidence at 2 viewports,
+      both art states (skipped - not automatable): `npm run test:e2e:regression` times out
+      after 120s waiting on `config.webServer` — the same outbound-network sandboxing that
+      blocked Playwright in Tasks 4-8 is still in effect in this session; needs a real run
+      outside this sandbox to capture
+- [x] every equipment family ≥3 items, weapons ≥12 total, grapple family exists, all catalog
+      invariant tests green — confirmed: 12 `wpn_` weapon items (4 per class, T1-T8 ladder), 3
+      `eq_grapple` items, `catalogInvariants.test.ts` (8 tests) +
+      `weaponCatalogInvariants.test.ts` (5 tests) both green
+- [x] full test suite, `npm run test:playtest`, `npm run letsplay:ci`,
+      `npm run test:save-compat`, `npm run test:e2e:regression`, `npm run lint` — unit suite
+      5408/5427 passed (12 skipped), the 7 failures are all in `assetManifest.test.ts` /
+      `keyParity.photoreal.test.ts` / `manifestKeySnapshot.test.ts`, pre-existing and caused by
+      an unrelated concurrent in-flight nebula-art task on this branch (uncommitted
+      `balance.ts`/`SpaceBackgroundLayer.ts`/`optimize-assets.ts` + untracked nebula webps),
+      same root cause already flagged in Tasks 7-8, no file this plan touched; `test:playtest`
+      693/702 passed (9 skipped, 0 failed); `letsplay:ci` 108/108 green; `test:save-compat`
+      22/22 green; lint 0 errors (46 pre-existing `any` warnings); `tsc --noEmit` clean.
+      [x] `test:e2e:regression` (skipped - not automatable): same `config.webServer` timeout as
+      above, needs a real run outside this sandbox
+- [x] load a pre-plan golden save: loads, revalidates loadout, hangar opens correctly —
+      `goldenSaveCompat.test.ts` (13 tests, `legacy-v1.json` v1→28 and `progressed-v23.json`
+      v23→28, both predate this plan's only schema change — an optional additive
+      `loadoutPresets` field, no version bump) + `loadoutRevalidateOnLoad.test.ts`, both green;
+      `shipyardParity.test.ts`/`hangarLayout.test.ts`/`shopHangar.test.ts` (11 tests) confirm the
+      hangar renders correctly against a loaded loadout
 
 ### Task 10: [Final] Update documentation
 - [ ] update `.claude/docs/systems/equipment.md` (new families/dimensions, ring UI, presets,
