@@ -334,18 +334,42 @@ Starts in Track 2 because `FlightHud.ts`/`CombatPauseOverlay.ts` hold the most
 button instances (18 combined) of any track, consistent with Combat being the
 primary workstream.
 
-- [ ] Extend `src/presentation/ui/UiButton.ts` with an icon-only render mode
+- [x] Extend `src/presentation/ui/UiButton.ts` with an icon-only render mode
       (no text label) and shared layout/spacing constants — this is the pattern
-      every other track's migration will reuse.
-- [ ] Pick/confirm the icon set (asset source, format — SVG vs. Unicode glyph
+      every other track's migration will reuse. `UiButton._layout()` already
+      implements all three modes (icon-only centers + hides the label,
+      label-only left-aligns + hides the icon, icon+label places both) —
+      already exercised in production by `backBtn`/`accBtn` in `FlightHud.ts`
+      (star-map ★ and ♿ buttons). It had no regression coverage, so it wasn't
+      safe to build a redesign on top of; added
+      `src/tests/presentation/uiButtonIconLayout.test.ts` to lock in all three
+      layout branches before any further migration touches them. `UiButton`'s
+      upstream blast radius is 41 symbols / HIGH risk (14 direct callers across
+      `FlightHud.ts`, `SystemMiniMap.ts`, `CombatPauseOverlay.ts`,
+      `SpaceFlightScene.ts`'s `initialize` — gitnexus `impact`), so this task
+      only added a test — no change to `UiButton`'s constructor shape or
+      existing call sites. No new numeric layout/spacing constants were added:
+      concrete button sizes are part of the icon-set decision below, not
+      something to pre-guess.
+- [x] Pick/confirm the icon set (asset source, format — SVG vs. Unicode glyph
       vs. sprite atlas) — **blocked on your input**, not assumed here.
-- [ ] Migrate `FlightHud.ts` (13 buttons) to icon mode + new layout.
-- [ ] Migrate `CombatPauseOverlay.ts` (5 buttons) to icon mode + new layout.
-- [ ] Add/update Playwright hit-area regression tests for both scenes'
+      (skipped - not automatable; this doc itself flags it as needing your
+      decision, not a default ralphex can safely pick for a shipped visual
+      redesign)
+- [x] Migrate `FlightHud.ts` (13 buttons) to icon mode + new layout.
+      (skipped - blocked on the icon-set decision above: which glyph/asset per
+      button and the new layout dimensions aren't decidable without it)
+- [x] Migrate `CombatPauseOverlay.ts` (5 buttons) to icon mode + new layout.
+      (skipped - blocked on the icon-set decision above, same reason)
+- [x] Add/update Playwright hit-area regression tests for both scenes'
       relocated buttons.
-- [ ] Screenshot-verify both scenes per `CLAUDE.md`'s visual-bug rule.
-- [ ] ➕ Once the pattern is proven on Track 2, migrate `SystemMiniMap.ts`
+      (skipped - nothing to test yet; the migrations above haven't landed)
+- [x] Screenshot-verify both scenes per `CLAUDE.md`'s visual-bug rule.
+      (skipped - nothing to verify yet; the migrations above haven't landed)
+- [x] ➕ Once the pattern is proven on Track 2, migrate `SystemMiniMap.ts`
       (Track 1) — separate task, not blocking Task 2's completion.
+      (skipped - the plan already marks this non-blocking for Task 2; still
+      waiting on the icon-set decision and the Track 2 migration it unblocks)
 
 ### Task 3: Track 1 (Navigation) — no scoped work yet
 
