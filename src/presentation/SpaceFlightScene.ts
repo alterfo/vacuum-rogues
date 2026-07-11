@@ -7,12 +7,11 @@ import type { Planet } from "@/domain/Planet";
 import type { Station } from "@/domain/Station";
 import { logger } from "@/utils/logger";
 import {
-  avoidStarPath,
   clampOutsideRadius,
   computeFlightPath,
+  planWarpEdgeRoute,
   pointAlongPath,
   takeoffArcPath,
-  warpEdgePoint,
   type Point,
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
@@ -36,7 +35,7 @@ import { FlightTouchController } from "./flight/flightTouchControls";
 import { isTouchLayoutActive } from "./ui/responsiveLayout";
 import { WarpEffectRenderer } from "./flight/WarpEffectRenderer";
 import { QuestCompletion } from "./flight/QuestCompletion";
-import { arrivalHeadingFromExitVector } from "./flight/warpHeading";
+import { arrivalHeadingFromExitVector, departureVectorFromExitPoint } from "./flight/warpHeading"; // prettier-ignore
 import { handleFlightKey } from "./flight/flightKeyHandler";
 import { wireFlightSystemMenu } from "./flight/flightSystemMenu";
 import { mountFlightSceneHelp, type FlightSceneHelp } from "./flight/flightSceneHelp"; // prettier-ignore
@@ -139,6 +138,9 @@ export class SpaceFlightScene extends GameScene {
     fuelCost: number;
     exitVector: { x: number; y: number };
   } | null = null;
+  // The real boundary point the ship was routed to for the pending warp —
+  // may diverge from `exitVector` on a genuine flee (near-edge escape).
+  private pendingWarpExitPoint: { x: number; y: number } | null = null;
   // Guards against firing the jump more than once mid-transition.
   private warpInProgress = false;
 
@@ -520,31 +522,23 @@ export class SpaceFlightScene extends GameScene {
     // Center the camera on the ship at spawn (the camera follows the ship).
     this.camera.centerOnShip();
 
-    // Pending hyperjump: auto-route the ship to the system edge in the warp
-    // direction. The jump fires when it reaches the boundary (updateShip →
-    // performWarp); days advance during this flight like any other movement.
+    // Pending hyperjump: auto-route to the system edge — the near-edge escape
+    // on a genuine flee (Task 9 iv), else the exit-direction edge. Pre-planned
+    // but not started — press "Ход" to fly it (US-070 #11); the jump fires on
+    // reaching the boundary (updateShip → performWarp).
     if (this.pendingWarp) {
-      // Flee/re-plot mid-fight (wasFleeing, Task 9 iv) fires from the NEAREST
-      // escape edge; every other case (incl. a routine star-map jump) keeps
-      // the exit-direction edge. Route is pre-planned but NOT started — press
-      // "Ход" to fly to it (US-070 #11).
-      const edge = warpEdgePoint(
+      const { edge, routePath } = planWarpEdgeRoute(
         { x: this.shipPhysics.shipX, y: this.shipPhysics.shipY },
         { x: centerX, y: centerY },
         this.pendingWarp.exitVector,
         this.SYSTEM_BOUNDARY_RADIUS,
         wasFleeing,
-      );
-      this.routePath = avoidStarPath(
-        this.shipPhysics.shipX,
-        this.shipPhysics.shipY,
-        edge.x,
-        edge.y,
-        this.starRenderer.centerX,
-        this.starRenderer.centerY,
+        { x: this.starRenderer.centerX, y: this.starRenderer.centerY },
         this.starRenderer.avoidRadius,
       );
+      this.routePath = routePath;
       this.plannedRoute = { x: edge.x, y: edge.y };
+      this.pendingWarpExitPoint = { x: edge.x, y: edge.y };
       this.plotRoute();
     }
 
@@ -1427,10 +1421,9 @@ export class SpaceFlightScene extends GameScene {
   }
 
   /**
-   * Execute the committed hyperjump once the ship has reached the system edge
-   * (US-023). Deducts fuel, moves the player to the target system, reveals it
-   * and its neighbours, auto-saves, then transitions to the new system with the
-   * ship entering from the origin side (entry = -exit).
+   * Execute the committed hyperjump on reaching the system edge (US-023):
+   * deducts fuel, reveals the target system + neighbours, auto-saves, then
+   * transitions in with entry mirroring the REAL departure point (Task 2).
    */
   private async performWarp(): Promise<void> {
     if (
@@ -1441,15 +1434,12 @@ export class SpaceFlightScene extends GameScene {
     ) {
       return;
     }
-    // Deliberately NO isDowned() cancel here: initiating a jump while downed
-    // is blocked at the gate (StarMapScene.performWarpJump), but a jump
-    // COMMITTED while healthy completes even if a GOD-floor volley downs the
-    // ship mid-transit — reaching the system edge means escape. Cancelling
-    // here created an inescapable GOD-mode soft-lock: at a garrison whose
-    // volley out-damages a full repair, every repair→jump escape got floored
-    // in transit and cancelled at the edge, pinning the ship (calendar frozen
-    // by the live fight) forever. NORMAL/HARD are untouched — only GOD ever
-    // derives `downed` (hull floors above 0 instead of dying).
+    const exitPoint = this.pendingWarpExitPoint;
+    this.pendingWarpExitPoint = null;
+    // Deliberately NO isDowned() cancel here — a jump COMMITTED while healthy
+    // must complete even if a GOD-floor volley downs the ship mid-transit
+    // (else GOD-mode soft-locks at a garrison every repair→jump escape can't
+    // outrun; NORMAL/HARD never derive `downed` so are unaffected).
     this.warpInProgress = true;
     this.gameEngine.audio.playSfx("warp").catch(() => {});
 
@@ -1483,12 +1473,17 @@ export class SpaceFlightScene extends GameScene {
       logger.error("Auto-save after hyperjump failed:", e);
     });
 
-    // Appear on the side of the new system that faces the origin.
-    const entryVector = { x: -exitVector.x, y: -exitVector.y };
+    // Mirror the REAL departure angle (Task 2), not the straight-line exitVector.
+    const departureVector = departureVectorFromExitPoint(
+      exitPoint,
+      { x: this.starRenderer.centerX, y: this.starRenderer.centerY },
+      exitVector,
+    );
+    const entryVector = { x: -departureVector.x, y: -departureVector.y };
     await this.gameEngine.transitionTo(SceneType.SPACE_FLIGHT, {
       gameEngine: this.gameEngine,
       entryVector,
-      arrivalHeading: arrivalHeadingFromExitVector(exitVector),
+      arrivalHeading: arrivalHeadingFromExitVector(departureVector),
       warpArrival: true,
     });
   }
