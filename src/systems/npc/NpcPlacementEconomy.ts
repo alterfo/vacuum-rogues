@@ -9,7 +9,6 @@ import {
   FactionType,
   ResourceType,
 } from "@/types";
-import type { NpcBrain } from "./NpcBrain";
 import type { RouteRumor } from "@/domain/RouteRumor";
 import { applyMarketTradeImpact } from "@/domain/Market";
 import { GAME_BALANCE } from "@/config/balance";
@@ -452,34 +451,20 @@ export class NpcPlacementEconomy implements DwellTracker {
   }
 
   /**
-   * Decide whether a TRADER NPC diverts onto an active route rumor as it
-   * departs. Returns the rumor it reacted to (and mutates the NPC onto that
-   * route), or `null` to fall back to the brain's random goal.
+   * Commit a TRADER to a route rumor it has decided to react to: applies the
+   * buy-leg market impact at the source, sets cargo/goal/travel state, and
+   * remembers the sell-leg destination planet. The decision of *whether* to
+   * react (the rng roll against {@link rumorReactionChance}) is the brain
+   * layer's call (`NpcSimulator.pickTraderGoal`) — this method only carries
+   * out the mechanical world-state/economy consequences once that decision
+   * is made.
    *
-   * To keep the deterministic main simulation untouched for galaxies with no
-   * rumors, this draws from `rng` ONLY when there is a reachable rumor — so the
-   * existing NPC stream is unperturbed unless rumors are live. The draw scales
-   * with the rumor's live margin via {@link rumorReactionChance}.
+   * The buy-leg raises the (cheap) source here; the sell-leg lowers the
+   * (dear) destination when the trader arrives and runs simulateTraderTrade —
+   * so NPC flow converges BOTH legs of the route the way the player's
+   * round-trips do (Task 6), not just the sell side.
    */
-  private pickTraderGoal(
-    npc: NpcShip,
-    galaxy: Galaxy,
-    rng: SeededRNG,
-  ): RouteRumor | null {
-    // Most-profitable first; only rumors whose destination differs from where
-    // the trader already sits are actionable.
-    const rumor = galaxy
-      .getActiveRumors()
-      .find((r) => r.toSystemId !== npc.currentSystemId);
-    if (!rumor) return null;
-
-    if (rng.next() >= rumorReactionChance(rumor.lastMarginPct)) return null;
-
-    // Divert onto the route: head for the destination carrying the rumor's
-    // resource bought at the source. The buy-leg raises the (cheap) source here;
-    // the sell-leg lowers the (dear) destination when the trader arrives and runs
-    // simulateTraderTrade — so NPC flow converges BOTH legs of the route the way
-    // the player's round-trips do (Task 6), not just the sell side.
+  applyRumorDiversion(npc: NpcShip, galaxy: Galaxy, rumor: RouteRumor): void {
     const sourceMarket = galaxy.systems
       .find((s) => s.id === rumor.fromSystemId)
       ?.planets.find((p) => p.id === rumor.fromPlanetId)?.market;
@@ -503,33 +488,6 @@ export class NpcPlacementEconomy implements DwellTracker {
     // lowers THAT planet's price (the one the rumor re-score reads), not just
     // whichever planet happens to be first in the destination system.
     this.rumorDestPlanet.set(npc.id, rumor.toPlanetId);
-    return rumor;
-  }
-
-  /** Ask the brain for a goal and start travelling toward it. */
-  departToNewGoal(
-    npc: NpcShip,
-    galaxy: Galaxy,
-    rng: SeededRNG,
-    brain: NpcBrain,
-  ): void {
-    // TRADERs may divert onto a profitable route rumor before falling back to
-    // the brain's random goal. Pirates/garrisons/rangers ignore rumors.
-    if (npc.role === NpcRole.TRADER && this.pickTraderGoal(npc, galaxy, rng)) {
-      return;
-    }
-
-    const goal = brain.decideGoal(npc, galaxy, rng);
-    const target = goal.targetSystemId;
-    if (!target || target === npc.currentSystemId) {
-      npc.state = NpcState.IDLE;
-      return;
-    }
-
-    npc.goal = goal;
-    npc.destinationSystemId = target;
-    npc.daysToArrival = travelDays(galaxy, npc.currentSystemId, target);
-    npc.state = NpcState.TRAVELING;
   }
 
   /** State an NPC enters once it arrives, based on the goal it travelled for. */

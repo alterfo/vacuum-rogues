@@ -7,7 +7,11 @@ import type { NpcSizeTier } from "@/types";
 import type { NpcBrain } from "./NpcBrain";
 import { RuleBasedNpcBrain } from "./NpcBrain";
 import { NpcGarrisonCombat } from "./NpcGarrisonCombat";
-import { NpcPlacementEconomy } from "./NpcPlacementEconomy";
+import {
+  NpcPlacementEconomy,
+  rumorReactionChance,
+} from "./NpcPlacementEconomy";
+import { travelDays } from "./npcTravel";
 import type { BankAccess } from "@/systems/banking/economy";
 import { logger } from "@/utils/logger";
 
@@ -260,7 +264,7 @@ export class NpcSimulator {
 
       // A purposeless (IDLE) ship always departs immediately — no dwell applies.
       if (npc.state === NpcState.IDLE) {
-        this.placement.departToNewGoal(npc, galaxy, rng, this.brain);
+        this.departToNewGoal(npc, galaxy, rng);
         continue;
       }
 
@@ -273,7 +277,7 @@ export class NpcSimulator {
 
       // Present in a system after dwell period: random daily departure chance.
       if (rng.next() < DEPART_CHANCE) {
-        this.placement.departToNewGoal(npc, galaxy, rng, this.brain);
+        this.departToNewGoal(npc, galaxy, rng);
       }
     }
 
@@ -363,5 +367,55 @@ export class NpcSimulator {
     this.garrison.resolveLiberationDetection(galaxy);
 
     return events;
+  }
+
+  /**
+   * Decide whether a TRADER NPC diverts onto an active route rumor as it
+   * departs, committing the diversion (via `NpcPlacementEconomy`) if so.
+   * Returns whether it diverted; caller falls back to the brain's random
+   * goal when this returns false.
+   *
+   * To keep the deterministic main simulation untouched for galaxies with no
+   * rumors, this draws from `rng` ONLY when there is a reachable rumor — so
+   * the existing NPC stream is unperturbed unless rumors are live. The draw
+   * scales with the rumor's live margin via {@link rumorReactionChance}.
+   */
+  private pickTraderGoal(
+    npc: NpcShip,
+    galaxy: Galaxy,
+    rng: SeededRNG,
+  ): boolean {
+    // Most-profitable first; only rumors whose destination differs from where
+    // the trader already sits are actionable.
+    const rumor = galaxy
+      .getActiveRumors()
+      .find((r) => r.toSystemId !== npc.currentSystemId);
+    if (!rumor) return false;
+
+    if (rng.next() >= rumorReactionChance(rumor.lastMarginPct)) return false;
+
+    this.placement.applyRumorDiversion(npc, galaxy, rumor);
+    return true;
+  }
+
+  /** Ask the brain for a goal and start travelling toward it. */
+  private departToNewGoal(npc: NpcShip, galaxy: Galaxy, rng: SeededRNG): void {
+    // TRADERs may divert onto a profitable route rumor before falling back to
+    // the brain's random goal. Pirates/garrisons/rangers ignore rumors.
+    if (npc.role === NpcRole.TRADER && this.pickTraderGoal(npc, galaxy, rng)) {
+      return;
+    }
+
+    const goal = this.brain.decideGoal(npc, galaxy, rng);
+    const target = goal.targetSystemId;
+    if (!target || target === npc.currentSystemId) {
+      npc.state = NpcState.IDLE;
+      return;
+    }
+
+    npc.goal = goal;
+    npc.destinationSystemId = target;
+    npc.daysToArrival = travelDays(galaxy, npc.currentSystemId, target);
+    npc.state = NpcState.TRAVELING;
   }
 }
