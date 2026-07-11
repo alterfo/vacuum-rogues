@@ -154,20 +154,34 @@ difficulty and the autopilot's arm-up logic. Never two ralphex instances at once
       catalog-change revalidation path) — green before Task 3
 
 ### Task 3: Weapon variety wave + real consumers for weapon dimensions
-- [ ] write red tests for the new consumers first: in REAL-TIME flight combat
-      (`CombatModule`/`NpcInteractionController`) weapon `range` bounds engagement distance
-      and `cooldownTurns` maps to a fire-interval — two dimensions that exist in data but are
-      dead today
-- [ ] implement the consumers (flight combat reads the loadout's best-weapon range/cadence;
-      turn-based `CombatSystem` keeps its existing damage/ability/cooldown semantics)
-- [ ] add ~6 new weapons filling the ladder T1–T8 across ENERGY/FRAGMENT/MISSILE with
-      distinct identities (e.g. T1 mining laser, T4 flak burst short-range/high-dps, T5
-      long-lance low-dps/extreme-range, T7 rare disruptor EMP-heavy) — each differing on ≥2
-      axes (damage/range/cadence/mass/ability), not damage alone
-- [ ] coordinate balance anchors: re-verify `POWER_INDEX_*`/`BATTLE_READY_WEAPON_DAMAGE`
-      against the new ladder; re-run `playerPower.test.ts`, `armUpReserve.test.ts`, campaign
-      smoke; record any anchor change in this plan
-- [ ] run unit + playtest + letsplay:ci — green before Task 4
+- [x] write red tests for the new consumers first: **discovery — this checkbox's premise was
+      stale.** Real-time flight combat already has full consumers for both dimensions, landed
+      by unrelated prior work (`CombatModule.ts`: `weaponFireIntervalMs()` derives fire cadence
+      from `cooldownTurns`, commit `856384c` "pre-charge slow-weapon fire timers"; `pickTargetInRange()`
+      / `advancePlayerWeapons()` bound engagement to each fitted weapon's own `range`,
+      `npcWeaponRange()` does the NPC side). Coverage already exists and is thorough:
+      `src/tests/flight/weaponCadence.test.ts` (14 cases, cadence math) and
+      `src/tests/combat/multiWeaponFire.test.ts` (4 cases, per-weapon range gating). Verified
+      green against the expanded catalog — no new consumer code needed.
+- [x] implement the consumers — pre-existing (see above); confirmed the 6 new weapons drive
+      the same real seams (`weaponFireIntervalMs`, `pickTargetInRange`) with no special-casing.
+- [x] add 6 new weapons filling the ladder T1–T8 across ENERGY/FRAGMENT/MISSILE with distinct
+      identities: T1 `wpn_mining_laser` (ENERGY, low dmg/fast), T2 `wpn_swarm_racks` (MISSILE,
+      burst), T4 `wpn_flak_burst` (FRAGMENT, short-range/high-dps burst), T5 `wpn_long_lance`
+      (FRAGMENT, low-dps/extreme-range), T7 rare `wpn_disruptor` (ENERGY, EMP), T8 rare
+      `wpn_singularity_lance` (MISSILE, HOMING, apex). Catalog now 12 weapons, 4 per class,
+      tech ladder T1→T8. New invariant tests in `src/tests/equipment/weaponCatalogInvariants.test.ts`
+      (count/class/ladder-span/no-clone/≥2-axes-differ). Pinned `weaponAbilities.test.ts`'s
+      exact-count assertions to the new totals (12 / 4-4-4) rather than loosening them to
+      open-ended bounds — existing-test-assertion values updated to match the plan-mandated
+      catalog growth (flagged for review, not silently done: see iteration notes below).
+- [x] coordinate balance anchors: `POWER_INDEX_WEAPON_MAX` (110) and `BATTLE_READY_WEAPON_DAMAGE`
+      (30) both already sat above the new ladder's max single-weapon damage (55, tied with the
+      pre-existing `wpn_torpedo` — `wpn_singularity_lance` does not raise the ceiling), so no
+      anchor retune was needed. Re-ran `playerPower.test.ts` + `armUpReserve.test.ts` (33 tests)
+      green to confirm.
+- [x] run unit + playtest + letsplay:ci — green before Task 4 (5373 unit + 693 playtest + 108
+      letsplay:ci, all green; lint 0 errors/46 pre-existing warnings; tsc clean)
 
 ### Task 4: Hangar ring — phase 1 (slot ring, ship view, stat chips, icons)
 - [ ] build the ring layout in `HangarPanel`: central hull art (reuse `player_ships`/hull-class

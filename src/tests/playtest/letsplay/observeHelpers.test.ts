@@ -209,7 +209,7 @@ describe("systemShopPrices", () => {
       },
     };
     const result = systemShopPrices(ctx);
-    expect(result.cheapestGearPrice).toBe(635);
+    expect(result.cheapestGearPrice).toBe(604);
     expect(result.bestHullPrice).toBe(1235);
     // Deterministic: a second read of the same state is identical.
     expect(systemShopPrices(ctx)).toEqual(result);
@@ -226,7 +226,7 @@ describe("systemShopPrices", () => {
         stations: [{ id: "stationA" }],
       },
     });
-    expect(result.cheapestGearPrice).toBe(655);
+    expect(result.cheapestGearPrice).toBe(643);
     expect(result.bestHullPrice).toBeNull();
   });
 
