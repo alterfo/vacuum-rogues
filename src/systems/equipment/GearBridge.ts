@@ -3,6 +3,7 @@ import { ModuleCategory } from "@/types";
 import type { PlayerShip } from "@/domain/PlayerShip";
 import type { Player } from "@/domain/Player";
 import type { ShipLoadout } from "./ShipLoadout";
+import type { LoadoutPreset, LoadoutPresetName } from "@/types";
 import {
   GearKind,
   EquipmentClass,
@@ -422,3 +423,138 @@ export const KIND_COLOR: Record<GearKind, number> = {
   [GearKind.WEAPON]: 0xff8888,
   [GearKind.EQUIPMENT]: 0x88ffcc,
 };
+
+// ── КОМПЛЕКТАЦИЯ loadout presets (Task 6) ─────────────────────────────────
+
+/** Snapshot the live loadout's fitting into a named preset — ids only. */
+export function captureLoadoutPreset(
+  name: LoadoutPresetName,
+  loadout: ShipLoadout,
+): LoadoutPreset {
+  return {
+    name,
+    slots: loadout
+      .installedSlots()
+      .map((s) => ({ gearId: s.gearId, micromoduleId: s.micromoduleId })),
+    hullMicromoduleIds: loadout.hullMicromodules(),
+  };
+}
+
+/**
+ * Replace (or append) a named preset in the saved list. Replacing keeps the
+ * slot's original position (1/2/3 tab order never shuffles when re-saving).
+ */
+export function upsertLoadoutPreset(
+  presets: readonly LoadoutPreset[],
+  preset: LoadoutPreset,
+): LoadoutPreset[] {
+  const idx = presets.findIndex((p) => p.name === preset.name);
+  if (idx < 0) return [...presets, preset];
+  const next = [...presets];
+  next[idx] = preset;
+  return next;
+}
+
+/** Drop a named preset from the saved list (a no-op if it isn't saved). */
+export function removeLoadoutPreset(
+  presets: readonly LoadoutPreset[],
+  name: LoadoutPresetName,
+): LoadoutPreset[] {
+  return presets.filter((p) => p.name !== name);
+}
+
+export interface LoadoutPresetApplyResult {
+  /** Gear ids the preset asked for that were successfully (re-)installed. */
+  readonly applied: string[];
+  /** Gear ids the preset asked for that could not be installed (sold/missing
+   *  from the owned stores, or rejected by the engine's slot/mass rules). */
+  readonly skipped: string[];
+}
+
+/**
+ * Re-fit a saved КОМПЛЕКТАЦИЯ preset onto the live loadout — "ids only, not
+ * copies" (plan Technical Details): every currently-fitted item is returned to
+ * the bag first (preserving its micromodule/upgrade via {@link slotToBagModule},
+ * the same path the hangar's [снять] uses), then each preset slot's gearId is
+ * re-installed from whatever is owned *now* via the normal install path
+ * ({@link ShipLoadout.install}), so the engine's slot/mass rules are never
+ * bypassed. An id no longer owned (sold) — or one the current hull can no
+ * longer fit — is skipped, never force-fitted. Hull micromodules are never
+ * touched: canon forbids removing one once applied, so a preset can only ever
+ * *add* a hull micromodule the current hull has a free slot for, not swap one.
+ */
+export function applyLoadoutPreset(
+  player: Player,
+  loadout: ShipLoadout,
+  preset: LoadoutPreset,
+): LoadoutPresetApplyResult {
+  for (let i = loadout.installedSlots().length - 1; i >= 0; i--) {
+    const slot = loadout.installedSlots()[i];
+    const gear = gearById(slot.gearId);
+    if (gear && loadout.removeAt(i)) {
+      player.inventory.addItem(slotToBagModule(gear, slot));
+    }
+  }
+
+  const applied: string[] = [];
+  const skipped: string[] = [];
+  for (const presetSlot of preset.slots) {
+    if (
+      installFromBagOrOwned(
+        player,
+        loadout,
+        presetSlot.gearId,
+        presetSlot.micromoduleId,
+      )
+    ) {
+      applied.push(presetSlot.gearId);
+    } else {
+      skipped.push(presetSlot.gearId);
+    }
+  }
+  return { applied, skipped };
+}
+
+/**
+ * Install one preset slot's gearId from whichever owned store has it,
+ * preferring a legacy-bag copy carrying the preset's own micromodule (so a
+ * round-trip through {@link applyLoadoutPreset} restores it), else any
+ * legacy-bag copy (restoring whatever micromodule/upgrades it carries), else
+ * a plain `ownedGearIds` copy (no micromodule/upgrade to carry). Mirrors
+ * `HangarPanel.installFromWarehouse`'s legacy branch.
+ */
+function installFromBagOrOwned(
+  player: Player,
+  loadout: ShipLoadout,
+  gearId: string,
+  preferredMicromoduleId?: string,
+): boolean {
+  const bag = player.inventory.modules;
+  const legacyIdx = bag.findIndex(
+    (m) =>
+      m.id === gearId &&
+      (preferredMicromoduleId === undefined ||
+        m.micromoduleId === preferredMicromoduleId),
+  );
+  const idx =
+    legacyIdx >= 0 ? legacyIdx : bag.findIndex((m) => m.id === gearId);
+  if (idx >= 0) {
+    const mod = bag[idx];
+    const displaced = loadout.displacedBy(gearId);
+    if (!loadout.install(gearId)) return false;
+    const lastSlot = loadout.installedGearIds().length - 1;
+    if (mod.micromoduleId)
+      loadout.applyMicromoduleAt(lastSlot, mod.micromoduleId);
+    if (mod.upgrades) loadout.setSlotUpgrades(lastSlot, mod.upgrades);
+    bag.splice(idx, 1);
+    if (displaced) {
+      const dg = gearById(displaced);
+      if (dg) player.inventory.addItem(gearToModule(dg));
+    }
+    return true;
+  }
+  if ((player.inventory.ownedGearIds ?? []).includes(gearId)) {
+    return installOwnedGear(player, loadout, gearId);
+  }
+  return false;
+}

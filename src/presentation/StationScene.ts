@@ -1403,6 +1403,10 @@ export class StationScene extends GameScene {
       loadout: this.gameEngine?.playerLoadout ?? null,
       bank: this.gameEngine?.bank ?? null,
       equipment: this.equipment,
+      presets: this.gameEngine?.playerLoadoutPresets ?? [],
+      mutatePresets: (next) => {
+        if (this.gameEngine) this.gameEngine.playerLoadoutPresets = next;
+      },
       showToast: (msg, color) => this.showToast(msg, color),
       addToastSlot: (px, py, pw, ph) => this.addToastSlot(px, py, pw, ph),
       rerender: () => this.render(),

@@ -290,16 +290,43 @@ difficulty and the autopilot's arm-up logic. Never two ralphex instances at once
       (clean) — before Task 6.
 
 ### Task 6: КОМПЛЕКТАЦИЯ 1/2/3 — loadout presets
-- [ ] design: presets store gear-id layouts (slots + micromodules), NOT copies — applying a
+- [x] design: presets store gear-id layouts (slots + micromodules), NOT copies — applying a
       preset re-installs from owned gear via the normal install path (missing/sold items skip
-      with a toast; mass/slot rules enforced by the engine, never bypassed)
-- [ ] persist as an **optional additive** save field (`loadoutPresets?`), `.optional()` in
-      `src/validation/schemas.ts`, absent ⇒ no presets — no migration, no version bump
-- [ ] preset tabs 1/2/3 in the hangar header: save-current / apply / clear; disabled states
-      when empty
-- [ ] tests: preset round-trip (save→swap gear→apply→verify), partial-availability apply,
-      schema round-trip with absent field, golden-save gate stays green
-- [ ] run unit + save-compat + E2E preset switch — green before Task 7
+      with a toast; mass/slot rules enforced by the engine, never bypassed). `LoadoutPreset`
+      (`src/types/index.ts`) + pure helpers in `GearBridge.ts`:
+      `captureLoadoutPreset`/`upsertLoadoutPreset`/`removeLoadoutPreset`/`applyLoadoutPreset`.
+      `applyLoadoutPreset` first returns every currently-fitted item to the bag (preserving its
+      micromodule/upgrades via the existing `slotToBagModule`, same as the hangar's [снять]),
+      then re-installs each preset slot's gearId from whichever owned store has it (legacy bag
+      preferred when it carries a matching micromodule, else `ownedGearIds`) through the normal
+      `ShipLoadout.install`, so slot/mass caps are never bypassed. Hull micromodules are never
+      touched by apply (canon: a fitted one can't be removed) — a preset can only add one to a
+      free hull slot, never swap.
+- [x] persist as an **optional additive** save field (`loadoutPresets?`), `.optional()` in
+      `src/validation/schemas.ts` (`LoadoutPresetSchema`, capped at 3), threaded through
+      `SaveState`/`GameEngine.playerLoadoutPresets` (save/load, reset to `[]` on new game) —
+      no migration, no version bump; `test:save-compat` stays green.
+- [x] preset tabs 1/2/3 in the hangar header: save-current / apply / clear; disabled states
+      when empty. `HangarPanel.renderPresetTabs` — top-right of the header (free space beside
+      the centred hull banner): each tab shows `К{n}:` + `[Сохр]`/`[Прим]`/`[X]`; `[Прим]`/`[X]`
+      render dim with no `pointerdown` handler wired (matching this file's existing
+      disabled-button convention, e.g. the micromodule-apply prompt) when that slot has no
+      saved preset. `HangarPanelContext` gained `presets`/`mutatePresets`, wired identically in
+      both `StationScene` and `EquipmentShopScene` from `gameEngine.playerLoadoutPresets`.
+- [x] tests: `src/tests/equipment/loadoutPresets.test.ts` (11 cases — capture, upsert/remove
+      array helpers incl. tab-order-preserving replace, round-trip apply after a gear swap,
+      micromodule preservation across unfit/re-apply, partial-availability skip (sold gear),
+      never-force-fits-over-slot-caps, schema optional/cap-at-3 round-trip) +
+      `HangarPanel.test.ts` (6 new cases: tab rendering, save wiring, apply-disabled-when-empty,
+      apply re-fits through the canonical loadout, clear wiring, clear-disabled-when-empty).
+      Golden-save gate green (no new fixture needed — additive optional field, no version bump).
+      Regenerated `cyrillicBaseline.json` for the new hardcoded Cyrillic literals (tab
+      labels/toasts), same pattern as Tasks 4–5.
+- [x] run unit + save-compat + E2E preset switch — unit (5406 tests), `test:playtest` (693),
+      `test:save-compat` (22), lint (0 errors, 46 pre-existing warnings), `tsc --noEmit` clean —
+      all green. ⚠️ **E2E preset switch: skipped (not automatable here)** — same sandbox
+      limitation Tasks 4–5 hit (outbound Playwright `webServer` readiness probes blocked); needs
+      a real run outside this sandbox to confirm.
 
 ### Task 7: Gear icon art category (per-item icons)
 - [ ] extend the `icons` category in `tools/comfyui/asset_prompts.json`: one 768×768

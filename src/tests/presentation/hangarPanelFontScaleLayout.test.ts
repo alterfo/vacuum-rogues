@@ -172,6 +172,8 @@ function makeCtx(loadout: ShipLoadout | null, player: Player) {
     loadout,
     bank: null,
     equipment: { installGear: vi.fn() } as unknown as EquipmentSystem,
+    presets: [],
+    mutatePresets: vi.fn(),
     showToast: vi.fn(),
     addToastSlot: vi.fn(),
     rerender: vi.fn(),

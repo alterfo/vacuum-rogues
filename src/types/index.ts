@@ -669,6 +669,25 @@ export interface ShipLoadoutSnapshot {
   }[];
 }
 
+/** Slot name a КОМПЛЕКТАЦИЯ preset occupies — the hangar shows exactly 3 tabs. */
+export type LoadoutPresetName = "1" | "2" | "3";
+
+/**
+ * Saved КОМПЛЕКТАЦИЯ (gear-loadout preset) — gear ids only, not copies.
+ * `GearBridge.applyLoadoutPreset` re-installs each slot from whatever the
+ * player currently owns via the normal install path; a sold/missing item is
+ * skipped rather than force-fitted. Optional additive save field
+ * (`SaveState.loadoutPresets`): absent on saves made before this existed.
+ */
+export interface LoadoutPreset {
+  readonly name: LoadoutPresetName;
+  readonly slots: ReadonlyArray<{
+    readonly gearId: string;
+    readonly micromoduleId?: string;
+  }>;
+  readonly hullMicromoduleIds?: readonly string[];
+}
+
 export interface ResourceCost {
   readonly type: ResourceType;
   readonly amount: number;

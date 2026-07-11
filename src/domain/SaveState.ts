@@ -2,7 +2,11 @@ import type { Galaxy } from "./Galaxy";
 import type { Player } from "./Player";
 import type { DialogueSession } from "./DialogueSession";
 import type { BankingSnapshot } from "./banking/Ledger";
-import type { SerializedSave, ShipLoadoutSnapshot } from "@/types";
+import type {
+  SerializedSave,
+  ShipLoadoutSnapshot,
+  LoadoutPreset,
+} from "@/types";
 import type { SceneType } from "@/types";
 
 /**
@@ -48,6 +52,12 @@ export class SaveState {
      * no migration, no version bump. See `systems/campaign/playerPower.ts`.
      */
     public campaignPeakPower?: number,
+    /**
+     * Saved КОМПЛЕКТАЦИЯ gear-loadout presets (0–3). Optional and additive:
+     * saves made before presets existed simply lack it — no migration, no
+     * version bump. See `GearBridge.applyLoadoutPreset`/`HangarPanel`.
+     */
+    public loadoutPresets?: LoadoutPreset[],
   ) {}
 
   serialize(): SerializedSave {
@@ -65,6 +75,7 @@ export class SaveState {
         banking: this.banking,
         flightShipPos: this.flightShipPos,
         campaignPeakPower: this.campaignPeakPower,
+        loadoutPresets: this.loadoutPresets,
       }),
     };
   }
@@ -83,6 +94,7 @@ export class SaveState {
       parsed.banking,
       parsed.flightShipPos,
       parsed.campaignPeakPower,
+      parsed.loadoutPresets,
     );
   }
 }

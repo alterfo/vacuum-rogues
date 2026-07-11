@@ -9,6 +9,7 @@ import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import type { Renderer } from "@/presentation/Renderer";
 import type { Player } from "@/domain/Player";
 import type { EquipmentSystem } from "@/systems/EquipmentSystem";
+import type { LoadoutPreset } from "@/types";
 
 /**
  * Task 3 (shared hangar): the slot-fitting hangar extracted out of StationScene
@@ -113,8 +114,18 @@ function makePlayer(ownedGearIds: string[] = []) {
     ownedGearIds: [...ownedGearIds],
     micromodules: [] as unknown[],
     resources: [] as Array<{ type: string; amount: number }>,
-    modules: [] as Array<{ id: string; name: string }>,
-    addItem: vi.fn(),
+    modules: [] as Array<{
+      id: string;
+      name: string;
+      micromoduleId?: string;
+      upgrades?: number;
+    }>,
+    addItem: vi.fn(function (
+      this: { modules: Array<{ id: string; name: string }> },
+      item: { id: string; name: string },
+    ) {
+      this.modules.push(item);
+    }),
     addOwnedGear(id: string) {
       this.ownedGearIds.push(id);
     },
@@ -140,13 +151,19 @@ function makePlayer(ownedGearIds: string[] = []) {
   return { credits: 1000, inventory, ship } as unknown as Player;
 }
 
-function makeCtx(loadout: ShipLoadout | null, player: Player) {
+function makeCtx(
+  loadout: ShipLoadout | null,
+  player: Player,
+  presets: LoadoutPreset[] = [],
+) {
   return {
     container: new Container(),
     player,
     loadout,
     bank: null,
     equipment: { installGear: vi.fn() } as unknown as EquipmentSystem,
+    presets,
+    mutatePresets: vi.fn(),
     showToast: vi.fn(),
     addToastSlot: vi.fn(),
     rerender: vi.fn(),
@@ -161,6 +178,10 @@ function texts(): string[] {
 
 function findButton(prefix: string): FakeNode | undefined {
   return created.find((n) => n.text.startsWith(prefix));
+}
+
+function findButtons(prefix: string): FakeNode[] {
+  return created.filter((n) => n.text.startsWith(prefix));
 }
 
 const fakeEvent = { stopPropagation: () => {} };
@@ -691,5 +712,107 @@ describe("HangarPanel — СЕРВИСНЫЙ ЦЕНТР repair block (Task 5)", 
     expect(
       (player as unknown as { ship: { hullHP: number } }).ship.hullHP,
     ).toBe(maxHull - 10);
+  });
+});
+
+describe("HangarPanel — КОМПЛЕКТАЦИЯ 1/2/3 preset tabs (Task 6)", () => {
+  beforeEach(() => {
+    created.length = 0;
+  });
+
+  it("renders three К1/К2/К3 tab labels with a [Сохр] action each", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer();
+
+    new HangarPanel(renderer).render(makeCtx(loadout, player));
+
+    expect(texts().some((t) => t.includes("К1:"))).toBe(true);
+    expect(texts().some((t) => t.includes("К2:"))).toBe(true);
+    expect(texts().some((t) => t.includes("К3:"))).toBe(true);
+    expect(findButtons("[Сохр]")).toHaveLength(3);
+  });
+
+  it("[Сохр] captures the live fitting and persists it via ctx.mutatePresets", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    loadout.install("wpn_pulse");
+    const player = makePlayer();
+    const ctx = makeCtx(loadout, player);
+
+    new HangarPanel(renderer).render(ctx);
+    findButtons("[Сохр]")[0].handlers.pointerdown(fakeEvent);
+
+    expect(ctx.mutatePresets).toHaveBeenCalledTimes(1);
+    const saved = ctx.mutatePresets.mock.calls[0][0] as Array<{
+      name: string;
+      slots: Array<{ gearId: string }>;
+    }>;
+    expect(saved).toEqual([
+      {
+        name: "1",
+        slots: [{ gearId: "wpn_pulse", micromoduleId: undefined }],
+        hullMicromoduleIds: [],
+      },
+    ]);
+    expect(ctx.showToast).toHaveBeenCalled();
+    expect(ctx.rerender).toHaveBeenCalled();
+  });
+
+  it("[Прим] is inert (no eventMode) for an empty preset slot", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer();
+
+    new HangarPanel(renderer).render(makeCtx(loadout, player));
+
+    const applyBtns = findButtons("[Прим]");
+    expect(applyBtns).toHaveLength(3);
+    expect(applyBtns[0].handlers.pointerdown).toBeUndefined();
+  });
+
+  it("[Прим] re-fits a saved preset through the canonical loadout", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    loadout.install("wpn_pulse");
+    const player = makePlayer();
+    const preset = {
+      name: "1" as const,
+      slots: [{ gearId: "wpn_pulse" }],
+    };
+    const ctx = makeCtx(loadout, player, [preset]);
+
+    new HangarPanel(renderer).render(ctx);
+    // Unfit first so applying has to re-install it from the bag.
+    findButton("[снять]")!.handlers.pointerdown(fakeEvent);
+    expect(loadout.installedGearIds()).not.toContain("wpn_pulse");
+
+    findButtons("[Прим]")[0].handlers.pointerdown(fakeEvent);
+
+    expect(loadout.installedGearIds()).toContain("wpn_pulse");
+    expect(ctx.showToast).toHaveBeenCalled();
+  });
+
+  it("[X] clears a saved preset via ctx.mutatePresets", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer();
+    const presets = [
+      { name: "1" as const, slots: [] },
+      { name: "2" as const, slots: [] },
+    ];
+    const ctx = makeCtx(loadout, player, presets);
+
+    new HangarPanel(renderer).render(ctx);
+    findButtons("[X]")[0].handlers.pointerdown(fakeEvent);
+
+    expect(ctx.mutatePresets).toHaveBeenCalledWith([presets[1]]);
+    expect(ctx.rerender).toHaveBeenCalled();
+  });
+
+  it("[X] is inert for an already-empty preset slot", () => {
+    const loadout = new ShipLoadout("hull_scout");
+    const player = makePlayer();
+
+    new HangarPanel(renderer).render(makeCtx(loadout, player));
+
+    const clearBtns = findButtons("[X]");
+    expect(clearBtns).toHaveLength(3);
+    expect(clearBtns[0].handlers.pointerdown).toBeUndefined();
   });
 });

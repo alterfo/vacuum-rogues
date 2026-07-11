@@ -525,6 +525,18 @@ export const ShipLoadoutSnapshotSchema = z.object({
   ),
 });
 
+/** Saved КОМПЛЕКТАЦИЯ gear-loadout preset (mirrors LoadoutPreset in types). */
+export const LoadoutPresetSchema = z.object({
+  name: z.enum(["1", "2", "3"]),
+  slots: z.array(
+    z.object({
+      gearId: z.string(),
+      micromoduleId: z.string().optional(),
+    }),
+  ),
+  hullMicromoduleIds: z.array(z.string()).optional(),
+});
+
 /** Account flavours the АБС ledger persists (mirrors AccountType in domain/banking/Ledger). */
 export const LedgerAccountTypeSchema = z.enum([
   "CURRENT",
@@ -607,6 +619,10 @@ export const SaveStateSchema = z.object({
   // campaign lack it and derive it from the restored loadout on load
   // (GameEngine.loadGame → restoredPeakPower); no migration, no version bump.
   campaignPeakPower: z.number().min(0).max(1).optional(),
+  // Optional additive (gear-variety-and-hangar Task 6): saved КОМПЛЕКТАЦИЯ
+  // presets. Saves made before presets existed lack it; the hangar treats
+  // absent as "no presets saved yet" (all three tabs empty).
+  loadoutPresets: z.array(LoadoutPresetSchema).max(3).optional(),
 });
 
 export function validateSaveState(

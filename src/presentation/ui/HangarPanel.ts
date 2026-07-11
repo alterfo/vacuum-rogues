@@ -13,7 +13,7 @@ import { tex, pickVariant } from "../textures";
 import type { Renderer } from "../Renderer";
 import type { Player } from "@/domain/Player";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
-import type { MicroModule } from "@/types";
+import type { MicroModule, LoadoutPreset, LoadoutPresetName } from "@/types";
 import {
   GearKind,
   EquipmentClass,
@@ -37,6 +37,10 @@ import {
   micromoduleDropHint,
   jettisonOwnedGear,
   applyLoadoutHullToShip,
+  captureLoadoutPreset,
+  upsertLoadoutPreset,
+  removeLoadoutPreset,
+  applyLoadoutPreset,
   type MicromoduleDropTarget,
 } from "@/systems/equipment/GearBridge";
 import {
@@ -176,6 +180,10 @@ export interface HangarPanelContext {
   /** Bank seam for selling owned gear (gameEngine.bank). */
   readonly bank?: BankAccess | null;
   readonly equipment: EquipmentSystem;
+  /** Saved КОМПЛЕКТАЦИЯ gear-loadout presets (0–3). */
+  readonly presets: readonly LoadoutPreset[];
+  /** Persist an updated preset list back to the host (GameEngine.playerLoadoutPresets). */
+  mutatePresets(next: LoadoutPreset[]): void;
   /** Flash a status message in the panel's toast slot. */
   showToast(msg: string, color: number): void;
   /** Mount the host scene's toast at the given panel geometry. */
@@ -364,6 +372,7 @@ export class HangarPanel {
     hullBanner.eventMode = "none";
     ctx.container.addChild(hullBanner);
 
+    this.renderPresetTabs(loadout, player, ctx.presets, PX, PY);
     this.renderHangarStats(loadout, PX, PY, PW);
 
     // The drag-drop fitting board re-registers its drop zones + chip source
@@ -532,6 +541,116 @@ export class HangarPanel {
     if (state.max <= 0) return null;
     const WHEEL_STEP = 40;
     return attachWheelScroll((dir) => scrollBy(dir * WHEEL_STEP));
+  }
+
+  /**
+   * КОМПЛЕКТАЦИЯ 1/2/3 preset tabs, top-right of the header (free real
+   * estate: the title sits left, the hull banner is centred). Each tab is
+   * three independent actions — [Сохр] snapshots the live fitting into that
+   * slot (`captureLoadoutPreset` + `upsertLoadoutPreset`), [Прим] re-fits it
+   * via `applyLoadoutPreset` (missing/sold gear is silently skipped by the
+   * engine's normal install rules; the toast reports how many), [X] clears
+   * the slot (`removeLoadoutPreset`). [Прим]/[X] are disabled (dim, inert)
+   * while that slot has no saved preset; every action is disabled with no
+   * loadout mounted.
+   */
+  private renderPresetTabs(
+    loadout: ShipLoadout | null,
+    player: Player,
+    presets: readonly LoadoutPreset[],
+    PX: number,
+    PY: number,
+  ): void {
+    const container = this.ctx!.container;
+    const y = PY + 32;
+    let x = PX + 20;
+    const names: LoadoutPresetName[] = ["1", "2", "3"];
+    for (const name of names) {
+      const preset = presets.find((p) => p.name === name);
+
+      const label = scaledText(`К${name}:`, 10, 0x88aabb, {
+        rawColor: true,
+        fontFamily: "monospace",
+      });
+      label.x = x;
+      label.y = y;
+      label.eventMode = "none";
+      container.addChild(label);
+      x += label.width + 4;
+
+      const saveBtn = scaledText("[Сохр]", 10, loadout ? 0x66bbff : 0x556677, {
+        rawColor: true,
+        fontFamily: "monospace",
+      });
+      saveBtn.x = x;
+      saveBtn.y = y;
+      if (loadout) {
+        saveBtn.eventMode = "static";
+        saveBtn.cursor = "pointer";
+        saveBtn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          const captured = captureLoadoutPreset(name, loadout);
+          this.ctx!.mutatePresets(
+            upsertLoadoutPreset(this.ctx!.presets, captured),
+          );
+          this.ctx!.showToast(`Комплектация ${name} сохранена`, 0x66ddaa);
+          this.ctx!.rerender();
+        });
+      }
+      container.addChild(saveBtn);
+      x += saveBtn.width + 6;
+
+      const canApply = !!preset && !!loadout;
+      const applyBtn = scaledText(
+        "[Прим]",
+        10,
+        canApply ? 0xffcc44 : 0x556677,
+        {
+          rawColor: true,
+          fontFamily: "monospace",
+        },
+      );
+      applyBtn.x = x;
+      applyBtn.y = y;
+      if (canApply && loadout && preset) {
+        applyBtn.eventMode = "static";
+        applyBtn.cursor = "pointer";
+        applyBtn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          const result = applyLoadoutPreset(player, loadout, preset);
+          const msg =
+            result.skipped.length > 0
+              ? `Комплектация ${name} применена (пропущено: ${result.skipped.length})`
+              : `Комплектация ${name} применена`;
+          this.ctx!.showToast(
+            msg,
+            result.skipped.length > 0 ? 0xffaa44 : 0x66ddaa,
+          );
+          this.ctx!.rerender();
+        });
+      }
+      container.addChild(applyBtn);
+      x += applyBtn.width + 6;
+
+      const clearBtn = scaledText("[X]", 10, preset ? 0xff8866 : 0x556677, {
+        rawColor: true,
+        fontFamily: "monospace",
+      });
+      clearBtn.x = x;
+      clearBtn.y = y;
+      if (preset) {
+        clearBtn.eventMode = "static";
+        clearBtn.cursor = "pointer";
+        clearBtn.on("pointerdown", (e) => {
+          e.stopPropagation();
+          this.ctx!.mutatePresets(removeLoadoutPreset(this.ctx!.presets, name));
+          this.ctx!.showToast(`Комплектация ${name} очищена`, 0xaaaaaa);
+          this.ctx!.rerender();
+        });
+      }
+      container.addChild(clearBtn);
+      x += clearBtn.width + 16;
+    }
   }
 
   /** МАССА / СВОБОДНО / СКОРОСТЬ / ЗАЩИТА strip under the title. */
