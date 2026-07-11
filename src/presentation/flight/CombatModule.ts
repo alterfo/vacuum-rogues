@@ -389,12 +389,36 @@ export class CombatModule implements FlightModule {
 
     if (!this.isActive) {
       this.isActive = true;
-      this.weaponFireTimers.clear();
+      this.primeWeaponFireTimers();
       this.lowHullWarned = false;
       this.beginCombatRound(); // fresh engagement ⇒ fresh round budget
       this.hud?.open(this.selectedTarget);
     }
     logger.info(`In-flight combat: engaged ${npc.npc.id}`);
+  }
+
+  /**
+   * Seed every fitted weapon's fire timer on a fresh engagement. A
+   * `cooldownTurns:1` weapon (interval already equals one turn) starts at 0 —
+   * unchanged flat cold-start. A slower weapon starts pre-charged by
+   * {@link GAME_BALANCE.combatEngagePrechargeFraction} of its own interval, so
+   * its first shot lands well before a full cold-start wait (see the
+   * `CombatModule.addCombatant` first-shot-latency fix) without changing its
+   * steady-state cadence: once it fires, the timer resets to 0 like normal and
+   * every later shot still waits the weapon's full {@link weaponFireIntervalMs}.
+   */
+  private primeWeaponFireTimers(): void {
+    this.weaponFireTimers.clear();
+    const weapons = this.fittedWeapons();
+    for (let i = 0; i < weapons.length; i++) {
+      const weapon = weapons[i];
+      if (weapon.cooldownTurns <= 1) continue;
+      this.weaponFireTimers.set(
+        i,
+        weaponFireIntervalMs(weapon) *
+          GAME_BALANCE.combatEngagePrechargeFraction,
+      );
+    }
   }
 
   /**

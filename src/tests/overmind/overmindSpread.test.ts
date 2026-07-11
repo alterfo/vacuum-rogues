@@ -326,6 +326,103 @@ describe("advanceOvermind", () => {
     expect(state.status).not.toBe("won");
   });
 
+  it("prefers the frontier candidate nearest the most recently captured system", () => {
+    // Hub blob: "o" (captured first) fans out to nine faction leaves f1..f9.
+    // The most recent capture "r" hangs off the hub with its own leaf "near".
+    // Frontier = {f1..f9, near}; from "r" the distances are near=1, f*=2 — the
+    // coherent front must grow at "near", not hash-jump to a far hub leaf.
+    const leaves = Array.from({ length: 9 }, (_, i) => `f${i + 1}`);
+    const galaxy: SpreadGalaxyView & { overmindSystems: string[] } = {
+      id: "coherent-front", // under pure-hash ranking this id picks far leaf f3
+      systems: [
+        {
+          id: "o",
+          connections: [...leaves, "r"].map((id) => ({ toSystemId: id })),
+        },
+        ...leaves.map((id) => ({
+          id,
+          connections: [{ toSystemId: "o" }],
+        })),
+        {
+          id: "r",
+          connections: [{ toSystemId: "o" }, { toSystemId: "near" }],
+        },
+        { id: "near", connections: [{ toSystemId: "r" }] },
+      ],
+      overmindSystems: ["o", "r"], // "r" is the most recent addition
+      overmindCoreSystemId: "",
+    };
+    const state = advanceOvermind(
+      initialOvermindSpreadState(),
+      galaxy,
+      0,
+      FAST,
+    ).state;
+    const r = advanceOvermind(state, galaxy, 3, FAST); // past grace, on cadence
+    expect(r.captured).toEqual(["near"]);
+  });
+
+  it("proximity ranking stays deterministic by (seed, day) and skips unreachable blobs safely", () => {
+    // Two disconnected Overmind blobs: a0 (older) with leaf a1, b0 (most
+    // recent) with leaf b1. a1 is unreachable from b0 — it must rank after the
+    // reachable b1 without throwing, and identical inputs give identical output.
+    const make = (): SpreadGalaxyView & { overmindSystems: string[] } => ({
+      id: "seed-islands",
+      systems: [
+        { id: "a0", connections: [{ toSystemId: "a1" }] },
+        { id: "a1", connections: [{ toSystemId: "a0" }] },
+        { id: "b0", connections: [{ toSystemId: "b1" }] },
+        { id: "b1", connections: [{ toSystemId: "b0" }] },
+      ],
+      overmindSystems: ["a0", "b0"], // b0 is the most recent addition
+      overmindCoreSystemId: "",
+    });
+    const g1 = make();
+    const g2 = make();
+    const state = advanceOvermind(
+      initialOvermindSpreadState(),
+      g1,
+      0,
+      FAST,
+    ).state;
+    const r1 = advanceOvermind(state, g1, 3, FAST);
+    const r2 = advanceOvermind(state, g2, 3, FAST);
+    expect(r1.captured).toEqual(["b1"]); // reachable neighbor of the fresh capture wins
+    expect(r1.captured).toEqual(r2.captured); // deterministic by (seed, day)
+  });
+
+  it("still spreads inside the hardcoded day-constraint envelope (dayZero=1, day=7)", () => {
+    // Mirrors the fixed day budget the arc tests hardcode (dayZero=1, first
+    // check day=7 → graceDays ≤ 6, interval ≤ 5): with the default config the
+    // proximity-ranked spread must still fire a capture by day 7.
+    const galaxy = makeGalaxy(12, ["s6"]);
+    let state = advanceOvermind(
+      initialOvermindSpreadState(),
+      galaxy,
+      1,
+      DEFAULT_OVERMIND_SPREAD_CONFIG,
+    ).state;
+    expect(state.dayZero).toBe(1);
+    let captured: string[] = [];
+    for (let day = 2; day <= 7; day++) {
+      const r = advanceOvermind(
+        state,
+        galaxy,
+        day,
+        DEFAULT_OVERMIND_SPREAD_CONFIG,
+      );
+      captured = captured.concat(r.captured);
+      for (const id of r.captured) galaxy.overmindSystems.push(id);
+      state = r.state;
+    }
+    expect(captured.length).toBeGreaterThan(0);
+    // Every capture is warp-adjacent to the blob as it stood (chain topology ⇒
+    // coherent growth means only s5/s7 first, then their outward neighbors).
+    for (const id of captured) {
+      expect(["s4", "s5", "s7", "s8"]).toContain(id);
+    }
+  });
+
   it("terminal states are sticky (won/lost never re-open)", () => {
     const galaxy = makeGalaxy(12, []);
     // Force a won state, then keep advancing.

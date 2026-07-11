@@ -62,10 +62,10 @@ function makeRanger(id: string, systemId: string): NpcShip {
 function makeOvermind(id: string, systemId: string): NpcShip {
   return new NpcShip({
     id,
-    name: `Доминатор ${id}`,
+    name: `Жнец ${id}`,
     race: FactionType.PARADOXES,
     faction: Faction.OVERMIND,
-    role: NpcRole.PATROL,
+    role: NpcRole.OVERMIND,
     hullHP: 140,
     maxHull: 140,
     shields: 70,

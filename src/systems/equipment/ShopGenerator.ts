@@ -74,6 +74,9 @@ export function generateShop(opts: ShopOptions): GearListing[] {
   for (const gear of GEAR_CATALOG) {
     // Exclude gear whose tech level exceeds the system's current research level.
     if (maxTechLevel !== undefined && gear.techLevel > maxTechLevel) continue;
+    // Calendar gate: some apex gear (`minDay`, e.g. the top engine) must not
+    // exist in-world before a given day, however fast tech climbs.
+    if (gear.minDay !== undefined && day < gear.minDay) continue;
     // One independent RNG per (shop, item) → stable stock + price per item.
     const rng = new SeededRNG(`${seed}|shop|${planetId}|${bucket}|${gear.id}`);
     if (rng.next() > stockChance(gear)) continue;

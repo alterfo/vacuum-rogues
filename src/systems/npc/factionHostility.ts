@@ -47,9 +47,10 @@ export interface HostilityContext {
 
 /**
  * Classify a live NPC ship into its {@link FactionKind}. Overmind ships are
- * tagged by `faction === Faction.OVERMIND` (they fly a `PATROL` role), every
- * other ship by its {@link NpcRole}. Takes only the two fields it reads so it
- * stays trivially testable.
+ * tagged by `faction === Faction.OVERMIND` (belt and braces: their dedicated
+ * `NpcRole.OVERMIND` classifies identically), every other ship by its
+ * {@link NpcRole}. Takes only the two fields it reads so it stays trivially
+ * testable.
  */
 export function factionKindOf(
   npc: Pick<NpcShip, "role" | "faction">,
@@ -64,8 +65,12 @@ export function factionKindOf(
       return "ranger";
     case NpcRole.PATROL:
       return "patrol";
+    case NpcRole.OVERMIND:
+      // Role implies faction — an OVERMIND-role ship is hive craft even if a
+      // caller ever passes it with a stale/absent faction field.
+      return "overmind";
     default: {
-      // Exhaustive over the four NpcRole values today; a new role must be
+      // Exhaustive over the five NpcRole values today; a new role must be
       // classified here rather than silently falling through to `undefined`
       // (which would make every matrix call treat the ship as a non-combatant).
       const unhandled: never = npc.role;

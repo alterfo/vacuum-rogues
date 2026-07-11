@@ -26,7 +26,10 @@ function roleToGoalKind(role: NpcRole): NpcGoalKind {
       return NpcGoalKind.TRADE;
     case NpcRole.PIRATE:
       return NpcGoalKind.HUNT;
+    // OVERMIND garrison craft patrol their captured system — the same goal
+    // they pursued while flying a borrowed PATROL role.
     case NpcRole.PATROL:
+    case NpcRole.OVERMIND:
       return NpcGoalKind.PATROL;
     case NpcRole.RANGER:
     default:

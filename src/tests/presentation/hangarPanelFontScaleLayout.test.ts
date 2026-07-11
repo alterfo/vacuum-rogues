@@ -154,8 +154,15 @@ function makePlayer(ownedGearIds: string[] = []) {
       }
       return false;
     },
+    removeResource(type: string, amount: number) {
+      const stack = this.resources.find((r) => r.type === type);
+      if (stack) stack.amount -= amount;
+    },
   };
-  return { credits: 1000, inventory } as unknown as Player;
+  // Effectively-infinite hull pool so the СЕРВИСНЫЙ ЦЕНТР block always syncs
+  // to a healthy/perfect status regardless of which hull is under test.
+  const ship = { hullHP: 1_000_000_000, maxHull: 1_000_000_000 };
+  return { credits: 1000, inventory, ship } as unknown as Player;
 }
 
 function makeCtx(loadout: ShipLoadout | null, player: Player) {
@@ -165,6 +172,8 @@ function makeCtx(loadout: ShipLoadout | null, player: Player) {
     loadout,
     bank: null,
     equipment: { installGear: vi.fn() } as unknown as EquipmentSystem,
+    presets: [],
+    mutatePresets: vi.fn(),
     showToast: vi.fn(),
     addToastSlot: vi.fn(),
     rerender: vi.fn(),

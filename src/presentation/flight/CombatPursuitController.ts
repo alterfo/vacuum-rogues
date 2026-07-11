@@ -2,6 +2,7 @@ import type { GameEngine } from "@/systems/GameEngine";
 import type { NpcShip } from "@/domain/NpcShip";
 import type { NpcShipSprite } from "../NpcShipSprite";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
+import { SHIP_STOP_THRESHOLD } from "@/systems/ShipPhysics";
 import type { NpcShipManagerDeps } from "./NpcShipManager";
 import { OVERMIND_CORE_ID } from "./NpcShipManager";
 import {
@@ -18,7 +19,7 @@ import {
   avoidStarPath,
   type Point,
 } from "@/utils/flightGeometry";
-import { GAME_BALANCE } from "@/config/balance";
+import { GAME_BALANCE, SYSTEM_GEOMETRY } from "@/config/balance";
 import { NpcRole } from "@/types";
 
 /**
@@ -167,7 +168,13 @@ export class CombatPursuitController {
   // The combat orbit steers toward a carrot projected this far ahead along
   // the desired heading — only the heading matters; the ship keeps cruising.
   private readonly COMBAT_ORBIT_CARROT = 2000;
-
+  // A boundary-clamped carrot leg at/below this is inside ShipPhysics'
+  // STOP_THRESHOLD (8px) arrival window — the ship would full-stop on it and,
+  // against a stationary target, freeze there permanently (the edge-parking
+  // bug; see clampOrbitPoint). Kept EXACTLY at STOP_THRESHOLD (imported, so
+  // the two can never silently desync): any wider zone measurably perturbs
+  // the locked combatOrbit range-hold.
+  private static readonly ORBIT_PARK_EPS = SHIP_STOP_THRESHOLD;
   private readonly combatResolver = new FlightCombatResolver();
 
   constructor(private readonly deps: CombatPursuitDeps) {
@@ -472,22 +479,111 @@ export class CombatPursuitController {
     const dlen = Math.hypot(dirX, dirY) || 1;
     dirX /= dlen;
     dirY /= dlen;
-    const carrot = {
-      x: physics.shipX + dirX * this.COMBAT_ORBIT_CARROT,
-      y: physics.shipY + dirY * this.COMBAT_ORBIT_CARROT,
-    };
+    const carrot = this.clampOrbitPoint(
+      physics,
+      dirX,
+      dirY,
+      this.COMBAT_ORBIT_CARROT,
+    );
+    const far = this.clampOrbitPoint(
+      physics,
+      dirX,
+      dirY,
+      this.COMBAT_ORBIT_CARROT * 2,
+    );
     this.lastAimX = carrot.x;
     this.lastAimY = carrot.y;
     // Plot as a >1-point route: keeps ShipPhysics on a non-final leg (full
     // cruise, no deceleration/arc-cap) AND hides the heading crosshair while
-    // engaged.
-    physics.setPath([
-      carrot,
-      {
-        x: physics.shipX + dirX * this.COMBAT_ORBIT_CARROT * 2,
-        y: physics.shipY + dirY * this.COMBAT_ORBIT_CARROT * 2,
-      },
-    ]);
+    // engaged. Exception: when the boundary clamp truncates, carrot and far
+    // collapse to the same exit point and the leg decelerates as a final
+    // approach — accepted near-edge behavior (see clampOrbitPoint's doc block;
+    // only the tExit ≤ ORBIT_PARK_EPS park window gets the arc-slide rescue).
+    physics.setPath([carrot, far]);
+  }
+
+  /**
+   * Cap an orbit-carrot projection at {@link SYSTEM_GEOMETRY.boundaryRadius}
+   * of the star center: a point `desiredDist` ahead of the ship along the
+   * unit heading `(dirX, dirY)`, shortened — along the SAME heading — to
+   * where that ray exits the boundary circle, if the raw projection would
+   * land outside it. Heading preservation is load-bearing: `combatOrbit.
+   * test.ts`'s range-hold on a target cruising out past the edge fails if a
+   * clamped carrot is rotated off the steer heading (review attempts to
+   * arc-slide the clamped leftover in 300px/60px/far-point-only zones all
+   * perturbed the orbit enough to lose the moving target, as does a radial
+   * reprojection à la {@link NpcShipSprite.beginDeparture}, or caging a ship
+   * that crossed the edge at its current radius — the orbit legitimately
+   * swings past the boundary by up to {@link COMBAT_ORBIT_RANGE} + momentum
+   * and re-enters on the next pass; a ship at/past the boundary therefore
+   * keeps the raw point, which also covers an unconfigured/test star center).
+   *
+   * The ONE exception is the edge-parking freeze ({@link
+   * CombatPursuitController.ORBIT_PARK_EPS}): truncation puts BOTH `setPath`
+   * waypoints on the same exit point, and when that point sits inside
+   * ShipPhysics' STOP_THRESHOLD arrival window the ship full-stops before
+   * moving; against a stationary target the frozen geometry re-issues the
+   * identical degenerate path every frame and the strafe PARKED dead at the
+   * wall for the whole fight (2nd-review sim: 0px travelled for 38s, ship
+   * pinned 4-6px inside the boundary heading outward). Parking is exactly
+   * `tExit ≤ STOP_THRESHOLD` — any longer leg keeps the ship moving — so
+   * only then is the leftover distance slid along the boundary arc in the
+   * heading's tangential sense, turning the freeze into an edge-following
+   * strafe while every non-parked frame stays byte-identical to the
+   * truncation behavior the range-hold is locked to.
+   */
+  private clampOrbitPoint(
+    physics: ShipPhysics,
+    dirX: number,
+    dirY: number,
+    desiredDist: number,
+  ): Point {
+    const raw = {
+      x: physics.shipX + dirX * desiredDist,
+      y: physics.shipY + dirY * desiredDist,
+    };
+    const center = this.deps.flight.getStarCenter();
+    const ocx = physics.shipX - center.x;
+    const ocy = physics.shipY - center.y;
+    const shipDistToCenter = Math.hypot(ocx, ocy);
+    if (shipDistToCenter > SYSTEM_GEOMETRY.boundaryRadius) return raw;
+    const rawDistToCenter = Math.hypot(raw.x - center.x, raw.y - center.y);
+    if (rawDistToCenter <= SYSTEM_GEOMETRY.boundaryRadius) return raw;
+    // Ray-circle intersection (ship is inside the circle, so exactly one
+    // forward root exists): the ray exits the boundary at t = -b/2 + √disc/2.
+    // The max(0, …) clamps guard float rounding when the ship sits within
+    // ~1e-10 of the boundary (c can round tiny-positive with b ≈ 0, making
+    // disc marginally negative → NaN carrot without them).
+    const b = 2 * (ocx * dirX + ocy * dirY);
+    const c =
+      ocx * ocx +
+      ocy * ocy -
+      SYSTEM_GEOMETRY.boundaryRadius * SYSTEM_GEOMETRY.boundaryRadius;
+    const disc = Math.max(0, b * b - 4 * c);
+    const tExit = Math.max(0, (-b + Math.sqrt(disc)) / 2);
+    if (tExit >= desiredDist) return raw;
+    if (tExit > CombatPursuitController.ORBIT_PARK_EPS) {
+      // Heading-preserving truncation: keep the exact steer heading — see
+      // the doc block for why rotating it breaks the range-hold.
+      return {
+        x: physics.shipX + dirX * tExit,
+        y: physics.shipY + dirY * tExit,
+      };
+    }
+    // Edge-parking freeze: slide the leftover distance along the boundary
+    // arc, continuing in the heading's tangential sense at the exit point (a
+    // purely radial heading ties to the positive sense deterministically).
+    const exitX = ocx + dirX * tExit;
+    const exitY = ocy + dirY * tExit;
+    const sense = exitX * dirY - exitY * dirX >= 0 ? 1 : -1;
+    const arc =
+      ((desiredDist - tExit) / SYSTEM_GEOMETRY.boundaryRadius) * sense;
+    const cos = Math.cos(arc);
+    const sin = Math.sin(arc);
+    return {
+      x: center.x + exitX * cos - exitY * sin,
+      y: center.y + exitX * sin + exitY * cos,
+    };
   }
 
   /**

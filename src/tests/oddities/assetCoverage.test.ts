@@ -52,6 +52,9 @@ const ROLE_PREFIX: Record<NpcRole, string> = {
   [NpcRole.TRADER]: "trader",
   [NpcRole.PIRATE]: "pirate",
   [NpcRole.PATROL]: "patrol",
+  // Mirrors production: OVERMIND reuses patrol hull art until the dedicated
+  // overmind_* tier art lands (plan 20260709 Task 2 + manual generation).
+  [NpcRole.OVERMIND]: "patrol",
 };
 const NEBULA_FAMILIES = ["red", "blue", "green", "teal"]; // SpaceBackgroundLayer
 const NEBULA_DEPTHS = ["far", "mid", "near"];

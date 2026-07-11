@@ -129,7 +129,13 @@ function makePlayer(ownedGearIds: string[] = []) {
   return {
     credits: 5000,
     currentSystemId: "sys1",
-    ship: { hullClass: "SCOUT", maxHull: 100, energy: 40, maxEnergy: 50 },
+    ship: {
+      hullClass: "SCOUT",
+      hullHP: 100,
+      maxHull: 100,
+      energy: 40,
+      maxEnergy: 50,
+    },
     inventory,
   };
 }

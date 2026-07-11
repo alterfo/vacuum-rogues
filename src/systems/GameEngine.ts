@@ -1,4 +1,4 @@
-import type { GameConfig, GameMode } from "@/types";
+import type { GameConfig, GameMode, LoadoutPreset } from "@/types";
 import { SceneType, FactionType, QuestType, NpcRole, NpcState } from "@/types";
 import { Galaxy } from "@/domain/Galaxy";
 import type { FlightShipPos } from "@/domain/SaveState";
@@ -235,6 +235,8 @@ export class GameEngine {
   public renderer: Renderer | null = null;
   /** GearCatalog-based loadout driving derived ship stats (speed, shields, etc.). */
   public playerLoadout: ShipLoadout | null = null;
+  /** Saved КОМПЛЕКТАЦИЯ gear-loadout presets (0–3), read/written by the hangar. */
+  public playerLoadoutPresets: LoadoutPreset[] = [];
   /** Runtime engine for the active text quest (one at a time). */
   public readonly textQuestRuntime = new TextQuestRuntime();
   /** Narrator for text quest node descriptions (pure template substitution). */
@@ -652,6 +654,8 @@ export class GameEngine {
       if (!this.playerLoadout) {
         this.playerLoadout = this.starterLoadout();
       }
+      // A fresh run starts with no saved КОМПЛЕКТАЦИЯ presets.
+      this.playerLoadoutPresets = [];
 
       // Open the player's current account in the АБС and project credits onto it.
       this.setupPlayerBanking();
@@ -1208,6 +1212,9 @@ export class GameEngine {
       this.bankingService.toSnapshot(),
       flightShipPos,
       this.campaignPeakPowerValue ?? undefined,
+      this.playerLoadoutPresets.length > 0
+        ? this.playerLoadoutPresets
+        : undefined,
     );
 
     await this.saveManager.write(slotId, state);
@@ -1301,6 +1308,9 @@ export class GameEngine {
         if (g) this.player.inventory.addItem(slotToBagModule(g, slot));
       }
     }
+
+    // Restore saved КОМПЛЕКТАЦИЯ presets; pre-Task-6 saves lack the field.
+    this.playerLoadoutPresets = save.loadoutPresets ?? [];
 
     // Restore the adaptive-difficulty ratchet. Pre-campaign saves carry no
     // `campaignPeakPower` — derive it from the just-restored (and revalidated)

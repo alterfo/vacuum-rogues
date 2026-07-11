@@ -15,7 +15,7 @@ import {
   type MicroModule,
 } from "@/types";
 import { GameBusinessException } from "@/exceptions/GameBusinessException";
-import { RARE_TECH_THRESHOLD } from "@/config/balance";
+import { APEX_ENGINE_MIN_DAY, RARE_TECH_THRESHOLD } from "@/config/balance";
 
 export enum GearKind {
   HULL = "HULL",
@@ -37,6 +37,7 @@ export enum EquipmentClass {
   RADAR = "RADAR",
   SCANNER = "SCANNER",
   REPAIR_DROID = "REPAIR_DROID",
+  /** Boarding grapple: locks onto a disabled hull for capture. `potency` = capture strength. */
   GRAPPLE = "GRAPPLE",
   SHIELD = "SHIELD",
   /** Gravity tractor: auto-pickup of nearby space loot. `potency` = pickup range in px. */
@@ -65,6 +66,14 @@ interface GearBase {
    * absent ⇒ common (the implicit default for every mid/low-tech item).
    */
   readonly rare?: boolean;
+  /**
+   * Earliest in-game day this item may be stocked by any shop
+   * ({@link ShopGenerator}) — a calendar gate on top of the tech-level and
+   * stock-chance filters. Optional: absent ⇒ available whenever tech allows
+   * (the implicit default for every item except the apex engine, which sets
+   * `APEX_ENGINE_MIN_DAY` so its 2× cruise speed stays a ~year-3 payoff).
+   */
+  readonly minDay?: number;
 }
 
 export interface HullSpec extends GearBase {
@@ -336,6 +345,91 @@ const WEAPONS: WeaponSpec[] = [
     ability: WeaponAbility.NONE,
     cooldownTurns: 2,
   },
+  {
+    id: "wpn_mining_laser",
+    name: "Горнодобывающий лазер",
+    kind: GearKind.WEAPON,
+    techLevel: 1,
+    size: 2,
+    basePrice: 550,
+    mass: 2,
+    weaponClass: WeaponClass.ENERGY,
+    damage: 8,
+    range: 200,
+    ability: WeaponAbility.NONE,
+    cooldownTurns: 1,
+  },
+  {
+    id: "wpn_swarm_racks",
+    name: "Роевые направляющие",
+    kind: GearKind.WEAPON,
+    techLevel: 2,
+    size: 3,
+    basePrice: 1200,
+    mass: 5,
+    weaponClass: WeaponClass.MISSILE,
+    damage: 12,
+    range: 260,
+    ability: WeaponAbility.BURST,
+    cooldownTurns: 1,
+  },
+  {
+    id: "wpn_flak_burst",
+    name: "Картечный обвал",
+    kind: GearKind.WEAPON,
+    techLevel: 4,
+    size: 4,
+    basePrice: 4200,
+    mass: 7,
+    weaponClass: WeaponClass.FRAGMENT,
+    damage: 24,
+    range: 140,
+    ability: WeaponAbility.BURST,
+    cooldownTurns: 1,
+  },
+  {
+    id: "wpn_long_lance",
+    name: "Длинное копьё",
+    kind: GearKind.WEAPON,
+    techLevel: 5,
+    size: 5,
+    basePrice: 6000,
+    mass: 10,
+    weaponClass: WeaponClass.FRAGMENT,
+    damage: 16,
+    range: 375,
+    ability: WeaponAbility.NONE,
+    cooldownTurns: 2,
+  },
+  {
+    id: "wpn_disruptor",
+    name: "Дизраптор (редкий)",
+    kind: GearKind.WEAPON,
+    techLevel: 7,
+    size: 6,
+    basePrice: 11000,
+    mass: 14,
+    weaponClass: WeaponClass.ENERGY,
+    damage: 40,
+    range: 340,
+    ability: WeaponAbility.EMP,
+    cooldownTurns: 3,
+  },
+  {
+    id: "wpn_singularity_lance",
+    name: "Сингулярное копьё (редкое)",
+    kind: GearKind.WEAPON,
+    techLevel: 8,
+    size: 7,
+    basePrice: 13800,
+    mass: 16,
+    weaponClass: WeaponClass.MISSILE,
+    damage: 55,
+    range: 480,
+    ability: WeaponAbility.HOMING,
+    cooldownTurns: 4,
+    rare: true,
+  },
 ];
 
 const EQUIPMENT: EquipmentSpec[] = [
@@ -363,9 +457,11 @@ const EQUIPMENT: EquipmentSpec[] = [
   },
   {
     // Apex engine: the rare, very-expensive top tier. Its tech-7 cruise speed
-    // (0.05 + 7×0.03 = 0.26 px/ms) finally out-runs the interceptor tier
-    // (`npcSpeed` 0.2) — the reward for the long climb to top tech. Priced at the
-    // ceiling of the tech-7/8 band (≤ 14000) and stocked only by high-end markets.
+    // (0.066 + 7×0.022 = 0.22 px/ms, exactly 2× the starter's 0.11) still
+    // out-runs the interceptor tier (`npcSpeed` 0.2), though the margin is now
+    // thin (10%) — flagged for a balance follow-up if escapes feel too slow.
+    // Priced at the ceiling of the tech-7/8 band (≤ 14000), stocked only by
+    // high-end markets, and calendar-gated (`minDay`) to a ~year-3 payoff.
     id: "eq_engine_v",
     name: "Двигатель Тип-V",
     kind: GearKind.EQUIPMENT,
@@ -376,6 +472,40 @@ const EQUIPMENT: EquipmentSpec[] = [
     equipmentClass: EquipmentClass.ENGINE,
     potency: 1.8,
     rare: true,
+    minDay: APEX_ENGINE_MIN_DAY,
+  },
+  {
+    // Light budget engine (Task 2 gear-variety wave): same tech tier as
+    // eq_engine_i (identical derived speed — engine speed is tech-driven, not
+    // potency-driven), but far cheaper and half the mass. A genuine tradeoff
+    // on the mass-budget axis for tight scout/corvette fits, not a stat clone.
+    id: "eq_engine_light",
+    name: "Двигатель Тип-L (облегчённый)",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 2,
+    size: 2,
+    basePrice: 650,
+    mass: 3,
+    equipmentClass: EquipmentClass.ENGINE,
+    potency: 0.8,
+  },
+  {
+    // A second, un-gated rare tier below the calendar-locked apex — a rare
+    // T6 alternative players can field well before APEX_ENGINE_MIN_DAY.
+    // Engine speed is purely tech-level-driven (see derivedStats), so this
+    // MUST sit below eq_engine_v's techLevel (7) or it would deliver the
+    // apex's exact top speed for free, voiding the calendar gate — the
+    // heavier-mass/cheaper-than-apex tradeoff is the deliberately slower
+    // cruise speed this tier level buys.
+    id: "eq_engine_iv",
+    name: "Двигатель Тип-IV (форсированный)",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 6,
+    size: 4,
+    basePrice: 8800,
+    mass: 13,
+    equipmentClass: EquipmentClass.ENGINE,
+    potency: 1.6,
   },
   {
     id: "eq_tank",
@@ -389,6 +519,30 @@ const EQUIPMENT: EquipmentSpec[] = [
     potency: 40,
   },
   {
+    id: "eq_tank_ii",
+    name: "Топливный бак Тип-II",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 3,
+    size: 3,
+    basePrice: 2200,
+    mass: 5,
+    equipmentClass: EquipmentClass.FUEL_TANK,
+    potency: 90,
+  },
+  {
+    // Heavy long-haul tank: much more fuel, but the mass cost is steep — a
+    // real tradeoff against the light hulls' tight mass budgets.
+    id: "eq_tank_iii",
+    name: "Топливный танк Тип-III",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 6,
+    size: 5,
+    basePrice: 6200,
+    mass: 10,
+    equipmentClass: EquipmentClass.FUEL_TANK,
+    potency: 220,
+  },
+  {
     id: "eq_radar",
     name: "Радар дальнего поля",
     kind: GearKind.EQUIPMENT,
@@ -398,6 +552,28 @@ const EQUIPMENT: EquipmentSpec[] = [
     mass: 4,
     equipmentClass: EquipmentClass.RADAR,
     potency: 1400,
+  },
+  {
+    id: "eq_radar_near",
+    name: "Радар ближнего радиуса",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 2,
+    size: 2,
+    basePrice: 1300,
+    mass: 2,
+    equipmentClass: EquipmentClass.RADAR,
+    potency: 900,
+  },
+  {
+    id: "eq_radar_far",
+    name: "Радар дальнего охвата",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 6,
+    size: 3,
+    basePrice: 7600,
+    mass: 6,
+    equipmentClass: EquipmentClass.RADAR,
+    potency: 2200,
   },
   {
     id: "eq_scanner",
@@ -411,6 +587,28 @@ const EQUIPMENT: EquipmentSpec[] = [
     potency: 6,
   },
   {
+    id: "eq_scanner_near",
+    name: "Сканер ближней дистанции",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 2,
+    size: 2,
+    basePrice: 1100,
+    mass: 2,
+    equipmentClass: EquipmentClass.SCANNER,
+    potency: 3,
+  },
+  {
+    id: "eq_scanner_deep",
+    name: "Глубинный сканер",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 6,
+    size: 4,
+    basePrice: 6800,
+    mass: 6,
+    equipmentClass: EquipmentClass.SCANNER,
+    potency: 10,
+  },
+  {
     id: "eq_droid",
     name: "Ремонтный дроид",
     kind: GearKind.EQUIPMENT,
@@ -422,6 +620,28 @@ const EQUIPMENT: EquipmentSpec[] = [
     potency: 3,
   },
   {
+    id: "eq_droid_basic",
+    name: "Ремонтный набор",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 2,
+    size: 2,
+    basePrice: 1300,
+    mass: 3,
+    equipmentClass: EquipmentClass.REPAIR_DROID,
+    potency: 1.5,
+  },
+  {
+    id: "eq_droid_nano",
+    name: "Нанодроид-регенератор",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 7,
+    size: 5,
+    basePrice: 12500,
+    mass: 9,
+    equipmentClass: EquipmentClass.REPAIR_DROID,
+    potency: 6,
+  },
+  {
     id: "eq_shield",
     name: "Генератор поля",
     kind: GearKind.EQUIPMENT,
@@ -431,6 +651,63 @@ const EQUIPMENT: EquipmentSpec[] = [
     mass: 8,
     equipmentClass: EquipmentClass.SHIELD,
     potency: 80,
+  },
+  {
+    id: "eq_shield_light",
+    name: "Лёгкий дефлектор",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 3,
+    size: 3,
+    basePrice: 2600,
+    mass: 4,
+    equipmentClass: EquipmentClass.SHIELD,
+    potency: 35,
+  },
+  {
+    id: "eq_shield_apex",
+    name: "Абсолютный барьер",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 8,
+    size: 6,
+    basePrice: 13800,
+    mass: 14,
+    equipmentClass: EquipmentClass.SHIELD,
+    potency: 150,
+  },
+  // Boarding grapples (Task 2 gear-variety wave): the missing GRAPPLE family —
+  // potency encodes capture strength/range for a future boarding consumer.
+  {
+    id: "eq_grapple_i",
+    name: "Абордажный крюк Тип-I",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 1,
+    size: 2,
+    basePrice: 700,
+    mass: 3,
+    equipmentClass: EquipmentClass.GRAPPLE,
+    potency: 40,
+  },
+  {
+    id: "eq_grapple_ii",
+    name: "Абордажный захват Тип-II",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 3,
+    size: 3,
+    basePrice: 2600,
+    mass: 5,
+    equipmentClass: EquipmentClass.GRAPPLE,
+    potency: 90,
+  },
+  {
+    id: "eq_grapple_iii",
+    name: "Абордажный гарпун Тип-III",
+    kind: GearKind.EQUIPMENT,
+    techLevel: 5,
+    size: 4,
+    basePrice: 7200,
+    mass: 8,
+    equipmentClass: EquipmentClass.GRAPPLE,
+    potency: 180,
   },
   // Gravity tractors (Task 10): potency encodes the auto-pickup range in px.
   // Tech levels track the economy price bands (economyBalance.test.ts); they do
@@ -723,6 +1000,8 @@ const LOADOUT_NAME_ALIASES: Record<string, string> = {
   "Двигатель ур.3": "eq_engine_v",
   "Импульсная пушка": "wpn_pulse",
   "Балистическая пушка": "wpn_scatter",
+  // OVERMIND hive craft scan label — resolves to the energy beam emitter.
+  "Плазменная пушка": "wpn_beam",
   Радар: "eq_radar",
 };
 

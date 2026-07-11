@@ -157,4 +157,104 @@ describe("CombatModule fires per-weapon cadence", () => {
     module.update(BASE * 2); // now 3× base total → the beam fires once
     expect(target.npc.hullHP).toBe(10_000 - weapon("wpn_beam").damage);
   });
+
+  it("a cooldownTurns:3 weapon's first shot after engaging lands well before the full cold-start interval (engage pre-charge)", () => {
+    const beamInterval = weaponFireIntervalMs(weapon("wpn_beam")); // 7500 ms
+    // The timer is SEEDED with `interval × fraction` already elapsed, so the
+    // remaining wait before the first shot is `interval × (1 − fraction)` —
+    // and it must be materially shorter than the full cold start.
+    const budget =
+      beamInterval * (1 - GAME_BALANCE.combatEngagePrechargeFraction);
+    expect(budget).toBeLessThan(beamInterval);
+    const { module } = moduleWith("wpn_beam");
+    const target = makeSprite("t", 50, 0, 10_000);
+    module.addCombatant(target);
+
+    module.update(budget - 1); // just shy of the pre-charged budget — no shot yet
+    expect(target.npc.hullHP).toBe(10_000);
+
+    module.update(1); // crosses the budget — first shot lands, well short of the full 7500 ms
+    expect(target.npc.hullHP).toBe(10_000 - weapon("wpn_beam").damage);
+  });
+
+  it("engage pre-charge does not change steady-state cadence — the second shot still waits the full interval", () => {
+    const beamInterval = weaponFireIntervalMs(weapon("wpn_beam"));
+    // Remaining wait to the pre-charged first shot (the timer starts at
+    // `interval × fraction` elapsed).
+    const budget =
+      beamInterval * (1 - GAME_BALANCE.combatEngagePrechargeFraction);
+    const { module } = moduleWith("wpn_beam");
+    const target = makeSprite("t", 50, 0, 10_000_000);
+    module.addCombatant(target);
+
+    module.update(budget); // first (pre-charged) shot lands
+    expect(target.npc.hullHP).toBe(10_000_000 - weapon("wpn_beam").damage);
+
+    module.update(beamInterval - 1); // just shy of a full interval since the first shot
+    expect(target.npc.hullHP).toBe(10_000_000 - weapon("wpn_beam").damage); // still one shot
+
+    module.update(1); // crosses the full interval — second shot lands
+    expect(target.npc.hullHP).toBe(10_000_000 - weapon("wpn_beam").damage * 2);
+  });
+
+  it("a second combatant joining the active fight does not re-prime in-flight weapon timers", () => {
+    // The garrison-aggro path calls addCombatant every frame per aggressor —
+    // a mid-fight join must leave a nearly-charged weapon's schedule intact
+    // (prime runs only behind the !isActive fresh-engagement guard).
+    const beamInterval = weaponFireIntervalMs(weapon("wpn_beam"));
+    // Remaining wait to the pre-charged first shot (timer seeded to
+    // `interval × fraction` elapsed).
+    const budget =
+      beamInterval * (1 - GAME_BALANCE.combatEngagePrechargeFraction);
+    const { module } = moduleWith("wpn_beam");
+    const target = makeSprite("t", 50, 0, 10_000_000);
+    module.addCombatant(target);
+    module.update(budget - 1); // one tick shy of the pre-charged first shot
+    expect(target.npc.hullHP).toBe(10_000_000);
+
+    module.addCombatant(makeSprite("t2", 60, 0, 10_000_000)); // joins mid-fight
+    module.update(1); // original schedule holds — a re-prime/clear would push the shot out
+    expect(target.npc.hullHP).toBe(10_000_000 - weapon("wpn_beam").damage);
+  });
+
+  it("the pre-charge seeds ELAPSED time (interval × fraction) — pinned with a non-symmetric fraction", () => {
+    // At the shipped fraction 0.5 the seed is symmetric: `interval × f` ===
+    // `interval × (1 − f)`, so no 0.5-based test can tell elapsed-seeding
+    // (correct) from remaining-seeding (the inverted bug). Stub 0.75 to pin
+    // the semantics: seeded elapsed = 75% of the interval ⇒ the first shot
+    // lands after the REMAINING 25% — a remaining-seed implementation would
+    // instead wait 75% and red both assertions below.
+    // GAME_BALANCE is typed readonly; the runtime object is mutable, so a
+    // narrow cast lets the test stub the fraction and restore it after.
+    const balance = GAME_BALANCE as unknown as {
+      combatEngagePrechargeFraction: number;
+    };
+    const original = balance.combatEngagePrechargeFraction;
+    try {
+      balance.combatEngagePrechargeFraction = 0.75;
+      const beamInterval = weaponFireIntervalMs(weapon("wpn_beam")); // 7500 ms
+      const remaining = beamInterval * 0.25; // 1875 ms left after the seed
+      const { module } = moduleWith("wpn_beam");
+      const target = makeSprite("t", 50, 0, 10_000);
+      module.addCombatant(target);
+
+      module.update(remaining - 1); // just shy — no shot yet
+      expect(target.npc.hullHP).toBe(10_000);
+
+      module.update(1); // crosses interval × (1 − fraction) — first shot lands
+      expect(target.npc.hullHP).toBe(10_000 - weapon("wpn_beam").damage);
+    } finally {
+      balance.combatEngagePrechargeFraction = original;
+    }
+  });
+
+  it("a cooldownTurns:1 weapon gets no engage pre-charge (its interval already equals one turn)", () => {
+    const { module } = moduleWith("wpn_pulse");
+    const target = makeSprite("t", 50, 0, 10_000);
+    module.addCombatant(target);
+    module.update(BASE - 1); // just shy of the interval — no shot yet, precharge would break this
+    expect(target.npc.hullHP).toBe(10_000);
+    module.update(1);
+    expect(target.npc.hullHP).toBe(10_000 - weapon("wpn_pulse").damage);
+  });
 });

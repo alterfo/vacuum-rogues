@@ -1,4 +1,13 @@
 /**
+ * Arrival window: within this distance of the final waypoint the ship is
+ * considered "arrived" and full-stops. Exported because
+ * `CombatPursuitController.ORBIT_PARK_EPS` must stay EXACTLY in lockstep with
+ * it — a wider stop window than the combat-orbit park detection silently
+ * reopens the edge-parking freeze (ship pinned 0px/38s at the boundary).
+ */
+export const SHIP_STOP_THRESHOLD = 8; // pixels
+
+/**
  * Physics-based movement state machine for ship control.
  * Implements three-phase movement: acceleration → cruise → deceleration.
  * Extracted from SpaceFlightScene for testability.
@@ -32,7 +41,7 @@ export class ShipPhysics {
   private readonly acceleration: number = 0.0009; // pixels/ms²
   private readonly deceleration: number = 0.00025; // pixels/ms²
   private readonly rotationSpeed: number; // radians/ms
-  private readonly STOP_THRESHOLD: number = 8; // pixels - distance to consider "arrived"
+  private readonly STOP_THRESHOLD: number = SHIP_STOP_THRESHOLD; // distance to consider "arrived"
   // Switch to the next queued waypoint once this close, so the ship rounds the
   // corner at speed instead of decelerating to a stop at each one.
   private readonly WAYPOINT_SWITCH: number = 48; // pixels

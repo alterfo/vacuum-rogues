@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { GameMode, ResourceType } from "@/types";
+import type { GameMode, NpcSizeTier, ResourceType } from "@/types";
 import type { EncounterConfig } from "@/systems/encounters/encounterGenerator";
 import type { EncounterOutcomeConfig } from "@/systems/encounters/encounterOutcome";
 import { Faction } from "@/types/faction";
@@ -251,6 +251,18 @@ export const LOCAL_DELIVERY_REWARD_MARGIN = 3.1;
 export const RARE_TECH_THRESHOLD = 6;
 
 /**
+ * First in-game day the **apex engine** (`eq_engine_v`) may appear in any shop
+ * (`GearBase.minDay`, enforced by {@link ShopGenerator.generateShop}). The
+ * natural tech climb reaches tech 7 in well under a year (research-lab systems
+ * advance +1 tech / 50 days regardless of starting level), which made the
+ * endgame 2× cruise speed available far too early. Gating the one apex engine
+ * by calendar day — rather than slowing tech growth galaxy-wide, which would
+ * delay every other tech-7/8 item — lands it around year 3 of the documented
+ * 2–3-year campaign pacing. Tune here, never at call sites.
+ */
+export const APEX_ENGINE_MIN_DAY = 1050;
+
+/**
  * Probability that killing an Overmind enemy drops artifacts (per kill).
  *
  * Oddity sweep (Task 4): lowered 0.4 → 0.25 to tame combat as a money-printer.
@@ -266,6 +278,55 @@ export const ARTIFACT_DROP_CHANCE = 0.25;
 export const ARTIFACT_DROP_COUNT_MIN = 1;
 /** Maximum artifact count per Overmind-kill drop. */
 export const ARTIFACT_DROP_COUNT_MAX = 3;
+
+/**
+ * Overmind size tiers (plan 20260709 Task 2): garrison/capture-fleet ships get
+ * a small/medium/large tier by `weight` (small most common, hashed from the
+ * ship id); `statMult` scales HULL off `ROLE_STATS[NpcRole.OVERMIND]`. Damage
+ * deliberately does NOT scale with tier: the seeded letsplay campaign gates
+ * and the seeded siege tests red on any garrison damage change (both up and
+ * redistributed — see the ROLE_STATS[OVERMIND] comment and garrisonBudOff's
+ * 20-tick capture window), empirically re-confirmed while landing this table.
+ * Scale damage only with those gates re-run.
+ */
+export const OVERMIND_SIZE_TIERS: Record<
+  "small" | "medium" | "large",
+  { statMult: number; weight: number }
+> = {
+  small: { statMult: 0.8, weight: 50 },
+  medium: { statMult: 1.0, weight: 35 },
+  large: { statMult: 1.3, weight: 15 },
+};
+
+/**
+ * The OVERMIND-core boss tier's fixed stats — the single source for what was an
+ * ad-hoc override in OvermindBossController. Real-time combat does not model
+ * shields, so the old hex encounter's 150-shield layer is folded into the hull
+ * (300 + 150 = 450 effective HP); damage 45 as before.
+ */
+export const OVERMIND_BOSS_TIER = { hull: 450, damage: 45 } as const;
+
+/**
+ * Size-tier-scaled research-substance loot (plan 20260709 Task 5): bigger
+ * Overmind hulls drop more/better artifacts for research-station upgrades.
+ * `artifactChanceMult` scales {@link ARTIFACT_DROP_CHANCE} (capped at 1.0 by
+ * the consumer); `bonusLootRolls` adds guaranteed loot items on top of the
+ * flat 0–2 count roll. `small` is deliberately the unchanged flat baseline
+ * (mult 1, no bonus) so a garrison-ship kill pays exactly what it does today;
+ * `boss` caps the chance at 1.0 AND guarantees ≥1 loot roll, so a boss kill
+ * always yields artifacts. A ship with no `sizeTier` (old save) also falls
+ * back to the flat baseline. Only `LootDropHandler.spawn()` consumes this —
+ * non-Overmind ships never roll artifacts and ignore the table entirely.
+ */
+export const OVERMIND_ARTIFACT_DROP: Record<
+  NpcSizeTier,
+  { artifactChanceMult: number; bonusLootRolls: number }
+> = {
+  small: { artifactChanceMult: 1.0, bonusLootRolls: 0 },
+  medium: { artifactChanceMult: 1.4, bonusLootRolls: 0 },
+  large: { artifactChanceMult: 2.0, bonusLootRolls: 1 },
+  boss: { artifactChanceMult: 4.0, bonusLootRolls: 2 },
+};
 
 /** Player rank at which the government faction discount applies. */
 export const RANK_DISCOUNT_THRESHOLD = 5;
@@ -324,9 +385,10 @@ export const GAME_BALANCE = {
    * Drift/pursuit speed (px/ms) of an **interceptor-class** NPC — OVERMIND craft
    * and PIRATE raiders (see `npcCruiseSpeed`). Deliberately faster than the
    * fresh starter ship (~0.11 px/ms with `eq_engine_i`), so escaping an *elite*
-   * threat stays upgrade-gated: the mid engine `eq_engine_iii` (tech 5) only
-   * *ties* it, and only the rare, very-expensive apex engine `eq_engine_v`
-   * (tech 7) finally *out-runs* it — the reward for the long climb to top tech.
+   * threat stays upgrade-gated: the mid engine `eq_engine_iii` (tech 5, 0.176)
+   * stays below it, and only the rare, very-expensive apex engine `eq_engine_v`
+   * (tech 7, 0.22 — a thin 10% margin) finally *out-runs* it — the reward for
+   * the long, day-gated (`APEX_ENGINE_MIN_DAY`) climb to top tech.
    */
   npcSpeed: 0.2,
   /**
@@ -341,6 +403,17 @@ export const GAME_BALANCE = {
   weaponRange: 240,
   /** Real-time in-flight combat cadence: a ship fires once per this many ms while in range. */
   combatFireIntervalMs: 2500,
+  /**
+   * Fraction of a weapon's fire interval pre-charged into its cold-start timer
+   * when combat begins ({@link CombatModule.addCombatant}), applied only to
+   * weapons whose `cooldownTurns > 1`. A `cooldownTurns:1` weapon's interval
+   * already equals one turn (`combatFireIntervalMs`), so it keeps the old flat
+   * cold-start unchanged; a slower weapon (e.g. `cooldownTurns:3`, 7500ms) would
+   * otherwise force the full interval's wait for its first shot even after the
+   * ship already spent time closing to range — this halves that wait so first
+   * contact reads as prompt rather than a stall.
+   */
+  combatEngagePrechargeFraction: 0.5,
   /**
    * Round-based combat (campaign Task 9 (v)): the max fraction of the player's
    * MAX hull that a single **combat round** may remove before the module halts
@@ -618,8 +691,18 @@ export const PIRATE_TRIBUTE_REP_GAIN = 3;
  * letsplay): alpha of the full-screen black overlay mounted above the nebula
  * backdrop/clouds/star fields so the game layer (planets, ship, routes, NPCs)
  * stays readable against the bright panorama. 0 = no dimming, 1 = black sky.
+ * Kept low (not 0) so the nebula backdrop art reads as the hero visual it's
+ * meant to be — a heavy dimmer was drowning it out (2026-07-11 feedback).
  */
-export const BACKGROUND_DIM = 0.45;
+export const BACKGROUND_DIM = 0.12;
+
+/**
+ * Opacity of the nebula backdrop art sprite itself, independent of
+ * {@link BACKGROUND_DIM}. Raised from the original 0.38 so the AI-generated
+ * panorama actually reads as a visible nebula instead of a faint tint
+ * (2026-07-11 feedback: the nebula should be a mesmerizing hero backdrop).
+ */
+export const NEBULA_BACKDROP_ALPHA = 0.62;
 
 /**
  * Sun-avoidance tuning (Sprint 2, Task 3).

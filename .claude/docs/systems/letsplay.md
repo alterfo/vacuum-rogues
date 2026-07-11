@@ -109,6 +109,13 @@ The live controller (`createLiveSceneController`) routes:
 - `tick()` — auto-dismisses encounter overlays (`closeModals()`) + drives pendingWarp route
 - `attack(targetId?)` / `flee()` — delegate to `NpcShipManager.e2eEngageCombat`/`breakOffCombatPursuit`
 
+**Headless `attack` is active, not passive** (garrison-growth plan Task 4):
+`PlayerAgent.driveAttack` invokes the real «Атаковать» handler
+(`NpcShipManager.onAttackNpc` — engage in weapon range, else intercept +
+auto-follow), un-pauses each 50 ms tick, and ends the step after one completed
+combat round (the policy's reaction window). An already-engaged fight is
+*driven*, never re-targeted. `flee`/`repair` remain degraded ticks.
+
 **Live-head parity:** the seven previously no-op economy heads in
 `installAutopilotHook.ts` (`repair`, `buy-gear`, `upgrade-hull`, `buy-module`,
 `take-loan`, `repay-loan`, `sell-cargo`) are wired to the same headless executors

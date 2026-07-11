@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hullStatus } from "@/systems/equipment/hullStatus";
+import { hullStatus, repairCost } from "@/systems/equipment/hullStatus";
 import { applyLoadoutHullToShip } from "@/systems/equipment/GearBridge";
 import { PlayerShip } from "@/domain/PlayerShip";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
@@ -125,5 +125,27 @@ describe("repair flow — a defense micromodule's derived max reaches the live s
     const after = hullStatus(ship.hullHP, ship.maxHull, boostedMax);
     expect(after.percent).toBe(100);
     expect(after.isPerfect).toBe(true);
+  });
+});
+
+describe("repairCost — the hangar's СЕРВИСНЫЙ ЦЕНТР pricing seam (Task 5)", () => {
+  it("is null when the hull is already perfect — nothing to repair", () => {
+    const status = hullStatus(140, 140, 140);
+    expect(repairCost(status)).toBeNull();
+  });
+
+  it("bills the default planet-Верфь rate (2 cr/HP), rounded up", () => {
+    const status = hullStatus(100, 140, 140); // 40 missing
+    expect(repairCost(status)).toBe(80);
+  });
+
+  it("rounds a fractional bill up to the next whole credit", () => {
+    const status = hullStatus(99, 140, 140); // 41 missing
+    expect(repairCost(status, 1.5)).toBe(Math.ceil(41 * 1.5));
+  });
+
+  it("respects a custom rate override", () => {
+    const status = hullStatus(100, 140, 140); // 40 missing
+    expect(repairCost(status, 8)).toBe(320);
   });
 });

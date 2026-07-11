@@ -327,8 +327,8 @@ export class NpcShipManager implements FlightModule {
       getGameEngine: () => this.gameEngine,
       getNpcSprites: () => this.npcSprites,
       addNpcSprite: (npc, entry) => this.addNpcSprite(npc, entry),
-      spawnOvermindInSystem: (rng, id, systemId) =>
-        this.npcSimulator.spawnOvermindInSystem(rng, id, systemId),
+      spawnOvermindInSystem: (rng, id, systemId, sizeTier) =>
+        this.npcSimulator.spawnOvermindInSystem(rng, id, systemId, sizeTier),
     });
   }
 
@@ -1043,7 +1043,8 @@ export class NpcShipManager implements FlightModule {
     worldY: number,
     rng: () => number = Math.random,
   ): void {
-    this.loot.spawn(npc, worldX, worldY, rng);
+    const day = this.gameEngine?.galaxy?.gameDays ?? 0;
+    this.loot.spawn(npc, worldX, worldY, rng, day);
   }
 
   /**

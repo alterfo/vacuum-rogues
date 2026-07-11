@@ -10,6 +10,7 @@ import { JobBoardPanel } from "./JobBoardPanel";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { factionColor as resolveFactionColor } from "./ui/palette";
 import { Faction } from "@/types/faction";
+import { factionDisplayLabel } from "@/config/factionConfig";
 import {
   governorOfferLine,
   type GeneratedQuest,
@@ -56,16 +57,6 @@ const DIALOGUE_LINES: Record<RepTier, string[]> = {
 export function getDialogueLines(tier: RepTier): string[] {
   return DIALOGUE_LINES[tier];
 }
-
-const FACTION_RU: Record<string, string> = {
-  OUTLANDERS: "Окраинники",
-  BASTIONS: "Бастион",
-  SYNDICATE: "Синдикат",
-  PARADOXES: "Парадокс",
-  PROGRESSORS: "Прогрессоры",
-  INDEPENDENT: "Независимая",
-  OVERMIND: "Сверхразум",
-};
 
 const ECONOMY_RU: Record<string, string> = {
   AGRICULTURAL: "Аграрная",
@@ -155,7 +146,7 @@ export class GovernmentScene extends GameScene {
 
     const system = this.findSystem();
     const faction = system?.ownerFaction ?? "INDEPENDENT";
-    const factionName = FACTION_RU[faction] ?? faction;
+    const factionName = factionDisplayLabel(faction);
     const factionColor = resolveFactionColor(faction as Faction);
     const economyLabel = ECONOMY_RU[system?.economyType ?? ""] ?? "—";
     const politicalLabel = POLITICAL_RU[system?.politicalSystem ?? ""] ?? "—";

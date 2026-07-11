@@ -32,6 +32,7 @@ import { tintFromSeed } from "@/utils/instanceTint";
 import { UiButton, type ButtonAccent } from "./ui/UiButton";
 import { factionColor as resolveFactionColor } from "./ui/palette";
 import { Faction } from "@/types/faction";
+import { factionDisplayLabel } from "@/config/factionConfig";
 import { mountSceneHelp, helpButtonRect } from "./ui/mountSceneHelp";
 import { getRepLabel, getRepColor } from "@/utils/reputationUtils";
 import { applyLoadoutHullToShip } from "@/systems/equipment/GearBridge";
@@ -158,16 +159,6 @@ const STAR_MAP_TIERS: StarMapTier[] = [
   { hops: 2, cost: 1500, label: "Средняя (2 перехода)" },
   { hops: 3, cost: 4000, label: "Дальняя (3 перехода)" },
 ];
-
-const FACTION_RU: Record<string, string> = {
-  OUTLANDERS: "Окраинники",
-  BASTIONS: "Бастион",
-  SYNDICATE: "Синдикат",
-  PARADOXES: "Парадокс",
-  PROGRESSORS: "Прогрессоры",
-  INDEPENDENT: "Независимая",
-  OVERMIND: "Сверхразум",
-};
 
 const FACTION_PANORAMA: Record<string, string> = {
   OUTLANDERS: "outlanders_city",
@@ -904,7 +895,7 @@ export class PlanetScene extends GameScene {
       s.planets.some((p) => p.id === this.planet!.id),
     );
     const faction = system?.ownerFaction ?? "INDEPENDENT";
-    const factionName = FACTION_RU[faction] ?? faction;
+    const factionName = factionDisplayLabel(faction);
     const factionColor = resolveFactionColor(faction as Faction);
 
     // Panoramic background: per-planet generated surface (surfaces/<biome>_NN)
@@ -1019,8 +1010,7 @@ export class PlanetScene extends GameScene {
 
     // Capture warning banner
     if (this.planet.capturedBy) {
-      const captureName =
-        FACTION_RU[this.planet.capturedBy] ?? this.planet.capturedBy;
+      const captureName = factionDisplayLabel(this.planet.capturedBy);
       const captureBg = new Graphics();
       captureBg.rect(bannerX, bannerY + bannerH + 22, bannerW + 40, 24);
       captureBg.fill({ color: 0xff0000, alpha: 0.85 });
@@ -1335,7 +1325,7 @@ export class PlanetScene extends GameScene {
     );
 
     const faction = system?.ownerFaction ?? "INDEPENDENT";
-    const factionName = FACTION_RU[faction] ?? faction;
+    const factionName = factionDisplayLabel(faction);
     const factionColor = resolveFactionColor(faction as Faction);
 
     const rep = this.gameEngine.player?.reputation[faction] ?? 0;

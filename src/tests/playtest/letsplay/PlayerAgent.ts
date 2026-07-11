@@ -20,7 +20,8 @@
  * a *real* engine fault (an integration break) is exactly what shows up there.
  * Dev-only: lives under `src/tests/`, imported by no production module.
  */
-import { QuestType, SceneType } from "@/types";
+import { NpcState, QuestType, SceneType } from "@/types";
+import type { NpcShip } from "@/domain/NpcShip";
 import { RealEngineHarness, type RecordedError } from "../realEngineHarness";
 import { observe, type Observation } from "./observe";
 import type { Action, PlayerPolicy } from "./PlayerPolicy";
@@ -517,12 +518,16 @@ export class PlayerAgent {
         return;
       }
 
-      // Combat: advance a full day with the turn running so NpcShipManager's
-      // `updateCombat` fires, hostile NPCs close on the stationary ship, and
-      // `startInFlightCombat` auto-initiates once they're in weapon range.
-      // A single day (4 × 1000 ms) is enough for the starter weapon to defeat
-      // a typical NPC (~26 shots × 25 dmg). waitOneDay() un-pauses on each tick
-      // so weapons actually fire and the fight resolves rather than freezing.
+      // Combat: the player INITIATES the fight via the real «Атаковать»
+      // handler (NpcShipManager.onAttackNpc — engage in weapon range, else
+      // plot an intercept and auto-follow), exactly like the live autopilot
+      // executor and a human clicking the panel button. Waiting passively for
+      // the hostile to close (the old behavior) stopped being enough when
+      // checkGarrisonAggro's weak-ship neutral-aggro shield landed: a
+      // shielded wanderer never approaches, so "attack" degenerated into a
+      // multi-week stand-off the policy re-picks forever (competentSession's
+      // soft-lock guard). See driveAttack for the pursuit/round time model.
+      // No hostile target resolvable → degrade to the safe wait tick.
       // While warpInTransit, waitOneDay()'s trailing endTurn() would halt the
       // ship short of the edge exactly like the actions the blanket guard
       // above already redirects (the route survives, but the turn — and so
@@ -531,10 +536,22 @@ export class PlayerAgent {
       // Drive the warp forward instead: the turn is already running, so
       // real-time combat keeps auto-resolving via completeWarp()'s own
       // combat-pause handling.
-      case "attack":
-        if (obs.warpInTransit) await this.completeWarp();
-        else this.waitOneDay();
+      case "attack": {
+        if (obs.warpInTransit) {
+          await this.completeWarp();
+          return;
+        }
+        const targetId = action.targetId ?? obs.hostiles[0]?.id;
+        const target = targetId
+          ? engine.galaxy?.npcShips.find((n) => n.id === targetId && n.hostile)
+          : undefined;
+        if (!target) {
+          this.waitOneDay();
+          return;
+        }
+        this.driveAttack(target);
         return;
+      }
 
       // Flee: escape by navigating to the star map and warping to another system.
       // If no connections exist (trapped with no exit), fight it out via waitOneDay.
@@ -751,6 +768,81 @@ export class PlayerAgent {
       const dayAdvanced = (engine.galaxy?.gameDays ?? 0) > day0;
       const inCombat = scene.combatModule?.isActive === true;
       if (dayAdvanced && !inCombat) break;
+    }
+    if (scene.isTurnRunning && typeof scene.endTurn === "function") {
+      scene.endTurn();
+    }
+  }
+
+  /**
+   * Drive a player-initiated attack to a resolution point: invoke the real
+   * «Атаковать» handler (engage in weapon range, else auto-follow intercept),
+   * then run the turn in the same 50 ms slices {@link completeWarp} uses —
+   * `waitOneDay`'s 4 × 1000 ms ticks move only ~400 ms of capped physics, far
+   * too coarse for a cross-system chase (the ship crawls ~40 px per step while
+   * the calendar stalls, the exact multi-week stand-off the soft-lock guard
+   * flags). The chase itself costs no hull, so it runs uninterrupted; once the
+   * exchange starts, ONE combat round resolves and the step ends — the same
+   * per-round reaction window `waitOneDay` gives the policy (flee vs fight on)
+   * before more damage lands. Breaks off when the target dies, leaves the
+   * system, the scene changes (player death), or the tick budget expires
+   * (an uncatchable runner), so a step can never hang.
+   */
+  private driveAttack(target: NpcShip): void {
+    const engine = this.harness.engine;
+    const scene = this.harness.currentScene() as unknown as {
+      onPlayPause?(): void;
+      endTurn?(): void;
+      isTurnRunning?: boolean;
+      combatPause?: { paused?: boolean; resume?(): void } | null;
+      combatModule?: {
+        isActive?: boolean;
+        roundComplete?: boolean;
+        beginCombatRound?(): void;
+      } | null;
+      npcManager?: { onAttackNpc?(npc: NpcShip): void };
+    } | null;
+    if (
+      engine.currentSceneType !== SceneType.SPACE_FLIGHT ||
+      typeof scene?.onPlayPause !== "function" ||
+      typeof scene?.npcManager?.onAttackNpc !== "function"
+    ) {
+      this.waitOneDay();
+      return;
+    }
+
+    // An already-engaged fight is DRIVEN, never re-targeted: re-invoking
+    // onAttackNpc mid-exchange re-plots an intercept route (a "manual route"
+    // that breaks off the live combat pursuit), and a policy attacking with
+    // no explicit targetId would silently switch to whatever hostile happens
+    // to head obs.hostiles as new wanderers spawn — the staged slayer grind
+    // (slayerCampaign.test) never finishes its kill that way.
+    const alreadyFighting = scene.combatModule?.isActive === true;
+    if (!alreadyFighting) scene.npcManager.onAttackNpc(target);
+    if (!scene.isTurnRunning) scene.onPlayPause();
+    scene.combatModule?.beginCombatRound?.();
+    for (let i = 0; i < 2000; i++) {
+      // Un-pause before each tick so weapons fire (same discipline as
+      // waitOneDay/completeWarp — a paused ship neither flies nor shoots).
+      if (
+        scene.combatPause?.paused &&
+        typeof scene.combatPause.resume === "function"
+      ) {
+        scene.combatPause.resume();
+      }
+      this.harness.tick(50);
+      // Scene changed mid-fight (player death → GAME_OVER): stop driving.
+      if (engine.currentSceneType !== SceneType.SPACE_FLIGHT) return;
+      // Reaction window: one completed round ends the step (policy re-decides).
+      if (scene.combatModule?.roundComplete === true) break;
+      if (alreadyFighting) {
+        // Driving a pre-engaged exchange: done when the fight resolves.
+        if (scene.combatModule?.isActive !== true) break;
+      } else {
+        // Chasing our own pick: done when it dies or flees the system.
+        if (target.state === NpcState.DEAD || target.hullHP <= 0) break;
+        if (target.currentSystemId !== engine.player?.currentSystemId) break;
+      }
     }
     if (scene.isTurnRunning && typeof scene.endTurn === "function") {
       scene.endTurn();

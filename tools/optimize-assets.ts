@@ -57,7 +57,7 @@ export const PHOTOREAL_CATEGORIES = [
 export const UI_CATEGORIES = ["ui", "icons"] as const;
 
 /** WebP encode quality for the lossy (photoreal) path. */
-export const PHOTOREAL_QUALITY = 80;
+export const PHOTOREAL_QUALITY = 85;
 
 /** Sharp WebP options chosen by the category's leading path segment. */
 export interface WebpOptions {

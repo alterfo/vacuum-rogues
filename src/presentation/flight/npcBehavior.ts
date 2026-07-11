@@ -50,7 +50,11 @@ export function pickNpcDestination(
       return lanePoint(seed, ctx.bounds);
     }
 
-    case NpcRole.PATROL: {
+    // OVERMIND garrison craft sweep planets/stations like the law's patrol —
+    // the same movement they had while flying a borrowed PATROL role (their
+    // hostility comes from the faction matrix, not the destination intent).
+    case NpcRole.PATROL:
+    case NpcRole.OVERMIND: {
       if (ctx.planets.length > 0) {
         const p = ctx.planets[seed % ctx.planets.length];
         return { x: p.x, y: p.y, intent: "patrol_station" };

@@ -4,7 +4,11 @@ import type { Player } from "@/domain/Player";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import { type SpaceLootItem, ResourceType } from "@/types";
 import { Faction } from "@/types/faction";
-import { GAME_BALANCE, ARTIFACT_DROP_CHANCE } from "@/config/balance";
+import {
+  GAME_BALANCE,
+  ARTIFACT_DROP_CHANCE,
+  OVERMIND_ARTIFACT_DROP,
+} from "@/config/balance";
 import {
   cargoCapacityOf,
   acquireUninstalledGear,
@@ -46,26 +50,41 @@ export class LootDropHandler {
   constructor(private readonly gameLayer: Container) {}
 
   /**
-   * Spawn 0–2 floating loot items at a destroyed NPC's world position. Overmind
-   * ships drop Overmind artifacts (40% per item, otherwise a salvaged module);
-   * everyone else drops a random module from their scanned loadout. `rng` is
-   * injectable so tests can drive the roll deterministically.
+   * Spawn floating loot items at a destroyed NPC's world position. Overmind
+   * ships drop Overmind artifacts, otherwise a salvaged module; the artifact
+   * chance and item count scale with the ship's `sizeTier` (a boss kill
+   * guarantees artifacts — see {@link OVERMIND_ARTIFACT_DROP}; a tier-less
+   * ship keeps the flat baseline). Everyone else drops a random module from
+   * their scanned loadout. `rng` is injectable so tests can drive the roll
+   * deterministically. `day` gates a `minDay`-restricted loadout token (e.g.
+   * the apex engine, {@link APEX_ENGINE_MIN_DAY}) out of the drop pool before
+   * its calendar gate — without this, combat loot bypasses the same gate
+   * {@link ShopGenerator} enforces for shop stock. Defaults to no gate for
+   * direct callers that don't track the calendar.
    */
   spawn(
     npc: NpcShip,
     worldX: number,
     worldY: number,
     rng: () => number = Math.random,
+    day: number = Infinity,
   ): void {
     const isOvermind = npc.faction === Faction.OVERMIND;
-    const count = this.rollLootCount(rng);
+    const drop = isOvermind
+      ? OVERMIND_ARTIFACT_DROP[npc.sizeTier ?? "small"]
+      : undefined;
+    const count = this.rollLootCount(rng) + (drop?.bonusLootRolls ?? 0);
+    const artifactChance = Math.min(
+      1,
+      ARTIFACT_DROP_CHANCE * (drop?.artifactChanceMult ?? 1),
+    );
     for (let i = 0; i < count; i++) {
       let moduleId: string | undefined;
       let artifactId: string | undefined;
-      if (isOvermind && rng() < ARTIFACT_DROP_CHANCE) {
+      if (isOvermind && rng() < artifactChance) {
         artifactId = "ARTIFACTS";
       } else {
-        moduleId = this.pickModuleId(npc, rng);
+        moduleId = this.pickModuleId(npc, rng, day);
       }
       const item: SpaceLootItem = {
         id: `loot_${npc.id}_${Math.floor(this.lootClockMs)}_${i}`,
@@ -188,11 +207,20 @@ export class LootDropHandler {
   }
 
   /** Pick a module id for a non-artifact drop: a scanned loadout item, else a
-   *  generic salvage id when the NPC has no visible loadout. */
-  private pickModuleId(npc: NpcShip, rng: () => number): string {
+   *  generic salvage id when the NPC has no visible loadout. Excludes any
+   *  token whose resolved gear carries an unmet `minDay` (falls back to the
+   *  full pool only if every token happens to be gated, so a drop never goes
+   *  silently empty). */
+  private pickModuleId(npc: NpcShip, rng: () => number, day: number): string {
     const pool =
       npc.loadoutSummary.length > 0 ? npc.loadoutSummary : DEFAULT_LOOT_MODULES;
-    return pool[Math.floor(rng() * pool.length) % pool.length];
+    const eligible = pool.filter((token) => {
+      const gearId = gearIdForToken(token);
+      const minDay = gearId ? gearById(gearId)?.minDay : undefined;
+      return minDay === undefined || day >= minDay;
+    });
+    const usable = eligible.length > 0 ? eligible : pool;
+    return usable[Math.floor(rng() * usable.length) % usable.length];
   }
 
   /** Mount a small glowing dot for a loot item (yellow module / cyan artifact). */

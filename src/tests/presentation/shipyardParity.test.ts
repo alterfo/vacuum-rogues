@@ -221,6 +221,7 @@ interface RenderCall {
     loadout: unknown;
     bank: unknown;
     equipment: unknown;
+    repairRatePerHp: unknown;
     showToast: unknown;
     addToastSlot: unknown;
     rerender: unknown;
@@ -278,6 +279,13 @@ describe("Shipyard parity — planet Верфь АНГАР tab ⇄ station hanga
     expect(stationCall.ctx.bank).toBe(stationH.engine.bank);
     expect(planetCall.ctx.equipment).toBeInstanceOf(EquipmentSystem);
     expect(stationCall.ctx.equipment).toBeInstanceOf(EquipmentSystem);
+
+    // Repair pricing must match each scene's OWN "Ремонт" menu action so the
+    // hangar's СЕРВИСНЫЙ ЦЕНТР never undercuts (or overcharges vs) the same
+    // station's tuned REPAIR_DISCOUNT — planet Верфь stays the flat 2 cr/HP
+    // baseline; the REPAIR_DOCK test fixture (0.6 discount) prices at 4.8.
+    expect(planetCall.ctx.repairRatePerHp).toBe(2);
+    expect(stationCall.ctx.repairRatePerHp).toBe(4.8);
 
     // The scene-owned concerns are wired identically (functions on both).
     for (const k of [

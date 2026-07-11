@@ -177,7 +177,17 @@ export enum NpcRole {
   TRADER = "TRADER",
   PIRATE = "PIRATE",
   PATROL = "PATROL",
+  /** Overmind hive craft — hostile-faction ships with their own stats/art. */
+  OVERMIND = "OVERMIND",
 }
+
+/**
+ * Overmind hull size tier — scales spawn stats off `ROLE_STATS[NpcRole.OVERMIND]`
+ * (small/medium/large; boss uses fixed stats) and selects per-tier ship art
+ * (`ships/overmind_<tier>`). Optional/additive: absent on non-Overmind ships
+ * and on old saves (both read as the medium base tier where it matters).
+ */
+export type NpcSizeTier = "small" | "medium" | "large" | "boss";
 
 export enum NpcState {
   IDLE = "IDLE",
@@ -237,6 +247,8 @@ export interface NpcShipInit {
   worldY?: number | null;
   /** True when openly hostile to the player (garrison/pirate spawns, or attacked). */
   hostile?: boolean;
+  /** Overmind hull size tier (stat scaling + per-tier art). Unset for other factions. */
+  sizeTier?: NpcSizeTier;
 }
 
 /** A simulation event emitted by the living-galaxy and collected in newsFeed. */
@@ -655,6 +667,29 @@ export interface ShipLoadoutSnapshot {
     micromoduleId?: string;
     upgrades?: number;
   }[];
+}
+
+/** Slot name a КОМПЛЕКТАЦИЯ preset occupies — the hangar shows exactly 3 tabs. */
+export type LoadoutPresetName = "1" | "2" | "3";
+
+/**
+ * Saved КОМПЛЕКТАЦИЯ (gear-loadout preset) — gear ids only, not copies.
+ * `GearBridge.applyLoadoutPreset` re-installs each slot from whatever the
+ * player currently owns via the normal install path; a sold/missing item is
+ * skipped rather than force-fitted. Optional additive save field
+ * (`SaveState.loadoutPresets`): absent on saves made before this existed.
+ */
+export interface LoadoutPreset {
+  readonly name: LoadoutPresetName;
+  readonly slots: ReadonlyArray<{
+    readonly gearId: string;
+    readonly micromoduleId?: string;
+    /** Artifact-upgrade count captured with the slot, so re-applying the
+     *  preset later restores the same effective tech level instead of
+     *  silently resetting a spent artifact-upgrade investment to 0. */
+    readonly upgrades?: number;
+  }>;
+  readonly hullMicromoduleIds?: readonly string[];
 }
 
 export interface ResourceCost {

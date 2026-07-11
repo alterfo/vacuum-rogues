@@ -61,17 +61,17 @@ describe("WeaponSpec catalog — Task 10", () => {
     (g) => g.kind === GearKind.WEAPON,
   ) as WeaponSpec[];
 
-  it("has exactly 6 weapon variants", () => {
-    expect(weapons).toHaveLength(6);
+  it("has exactly 12 weapon variants", () => {
+    expect(weapons).toHaveLength(12);
   });
 
-  it("has 2 weapons per class (energy / fragment / missile)", () => {
+  it("has exactly 4 weapons per class (energy / fragment / missile)", () => {
     const energy = weapons.filter((w) => w.weaponClass === "ENERGY");
     const fragment = weapons.filter((w) => w.weaponClass === "FRAGMENT");
     const missile = weapons.filter((w) => w.weaponClass === "MISSILE");
-    expect(energy).toHaveLength(2);
-    expect(fragment).toHaveLength(2);
-    expect(missile).toHaveLength(2);
+    expect(energy).toHaveLength(4);
+    expect(fragment).toHaveLength(4);
+    expect(missile).toHaveLength(4);
   });
 
   it("all weapons have ability and cooldownTurns fields", () => {

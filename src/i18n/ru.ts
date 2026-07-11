@@ -130,7 +130,7 @@ export const ru: Dict = {
   "faction.PARADOXES": "Парадоксы",
   "faction.PROGRESSORS": "Прогрессоры",
   "faction.INDEPENDENT": "Независимые",
-  "faction.OVERMIND": "Предтечи",
+  "faction.OVERMIND": "Сверхразум",
   "role.RANGER": "Рейнджер",
   "role.TRADER": "Торговец",
   "role.PIRATE": "Пират",

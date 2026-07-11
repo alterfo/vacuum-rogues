@@ -67,15 +67,21 @@ matches `station.id` — **keep it**, else those quests stay stuck in pending-re
 card can't yet name/route to its station issuer.)
 
 **The slot-fitting hangar is one shared component** (`ui/HangarPanel.ts`,
-`docs/plans/20260623-combat-multiweapon-starter-loadout-shared-hangar.md`). It renders the
-four category banks + install/unfit + the ТРЮМ owned-gear strip via `scaledText` and mutates
-the canonical `ShipLoadout` through the shared gear helpers — **never** fork fit logic into a
-scene. **Both** `StationScene` and the `EquipmentShopScene` **АНГАР tab** mount the same
-`HangarPanel` (constructed with the scene's renderer), so fitting looks/behaves identically at
-either entry point; the per-slot micromodule-apply modal is the shared
-`ui/MicromoduleApplyPanel.ts`, opened from a fitted slot in both scenes. A fresh game arrives
-fully fitted (weapon/grapple/engine, empty hold — see `GameEngine.starterLoadout()`), so the
-hangar's job is swapping/upgrading, not first-time assembly.
+`docs/plans/20260623-combat-multiweapon-starter-loadout-shared-hangar.md`,
+SR2-style ring rework: `docs/plans/20260707-gear-variety-and-hangar.md`). It renders a
+presentation-only ring (`renderFittingRing`/`renderRingZone`) over the same four category banks
++ install/unfit + the ТРЮМ owned-gear strip via `scaledText`, plus a ВЫБРОСИТЬ/ШЛЮЗ jettison
+action, a СЕРВИСНЫЙ ЦЕНТР repair block, and КОМПЛЕКТАЦИЯ 1/2/3 loadout-preset tabs — see
+`.claude/docs/systems/equipment.md`'s "Hangar ring UI" / "Loadout presets" sections for the
+full breakdown. It mutates the canonical `ShipLoadout` through the shared gear helpers —
+**never** fork fit logic into a scene. **Both** `StationScene` and the `EquipmentShopScene`
+**АНГАР tab** mount the same `HangarPanel` (constructed with the scene's renderer), so fitting
+looks/behaves identically at either entry point; the per-slot micromodule-apply modal is the
+shared `ui/MicromoduleApplyPanel.ts`, opened from a fitted slot in both scenes. Gear renders via
+the shared `ui/gearIcon.ts` (`gearIconKey`/`mountGearIcon`) with a text-only fallback when art is
+missing — never resolve icon keys locally in a scene. A fresh game arrives fully fitted
+(weapon/grapple/engine, empty hold — see `GameEngine.starterLoadout()`), so the hangar's job is
+swapping/upgrading, not first-time assembly.
 
 **Warehouse-row action buttons need vertical clearance** (`HangarPanel.renderWarehouseAndCargo`,
 `20260625-arc-movement-and-combat-fixes` Task 3). The stacked «Установить» (install) and

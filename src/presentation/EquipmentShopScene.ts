@@ -11,6 +11,7 @@ import { generateShop } from "@/systems/equipment/ShopGenerator";
 import {
   GearKind,
   gearById,
+  EquipmentClass,
   type Gear,
   type HullSpec,
   type EquipmentSpec,
@@ -26,6 +27,7 @@ import {
 } from "@/systems/equipment/GearBridge";
 import { shopRowAction } from "./equipment/shopRowAction";
 import { HangarPanel } from "./ui/HangarPanel";
+import { mountGearIcon } from "./ui/gearIcon";
 import { MicromoduleApplyPanel } from "./ui/MicromoduleApplyPanel";
 import { mountSceneHelp } from "./ui/mountSceneHelp";
 import { formatStat, formatStatDelta } from "@/utils/formatStat";
@@ -72,12 +74,19 @@ function techLevelForPlanet(type: PlanetType): number {
 }
 
 /** Build a one-line stat summary for a gear item (shown on hover / detail). */
-function gearStatLine(gear: Gear): string {
+export function gearStatLine(gear: Gear): string {
   if (gear.kind === GearKind.HULL) {
     return `HP: ${gear.hp}  Слоты: ${gear.slots}  Трюм: ${gear.cargo}`;
   }
   if (gear.kind === GearKind.WEAPON) {
     return `Урон: ${gear.damage}  Дальность: ${gear.range}`;
+  }
+  // Engine speed is purely tech-level-driven (ShipLoadout.derivedStats never
+  // reads an engine's `potency`) — a "Мощность: <potency>" line would compare
+  // a number that doesn't actually affect speed, misleadingly implying a
+  // lower-potency same-tier engine (a genuine mass/price tradeoff) is slower.
+  if ((gear as EquipmentSpec).equipmentClass === EquipmentClass.ENGINE) {
+    return `Тех.ур.: ${gear.techLevel}  Масса: ${gear.mass}`;
   }
   return `Мощность: ${formatStat(gear.potency)}`;
 }
@@ -236,12 +245,17 @@ export class EquipmentShopScene extends GameScene {
     const system = this.gameEngine.galaxy.systems.find(
       (s) => s.id === this.gameEngine!.player?.currentSystemId,
     );
+    // Cap stock to the owning system's current research level — mirrors
+    // StationScene's gating so planet shops can't stock gear the local
+    // system hasn't researched yet.
+    const maxTechLevel = system?.techLevel ?? 1;
     this.listings = generateShop({
       systemId: system?.id ?? "unknown",
       planetId: this.planet.id,
       seed: this.gameEngine.galaxy.id,
       day: this.gameEngine.galaxy.gameDays,
       priceFactor: techLevelForPlanet(this.planet.type) >= 4 ? 0.9 : 1.0,
+      maxTechLevel,
     });
   }
 
@@ -739,6 +753,17 @@ export class EquipmentShopScene extends GameScene {
       if (isInstalled) rowBg.stroke({ width: 1, color: 0x226622 });
       this.listContainer.addChild(rowBg);
 
+      // Icon (mirrors the hangar's per-slot icon; text-only fallback until
+      // the item's tiered/family art is loaded — Task 7 shared `gearIcon.ts`)
+      const iconSize = 16;
+      const iconOffset = mountGearIcon(
+        this.listContainer,
+        gear,
+        startX + w * 0.01,
+        rowY + 6 + iconSize / 2,
+        iconSize,
+      );
+
       // Name + stat line
       const nameColor = isInstalled
         ? 0x44ff88
@@ -754,7 +779,7 @@ export class EquipmentShopScene extends GameScene {
         { rawColor: true, fontWeight: "bold" },
       );
       nameText.eventMode = "none";
-      nameText.x = startX + w * 0.01;
+      nameText.x = startX + w * 0.01 + iconOffset;
       const nameTop = rowY + 6;
       nameText.y = nameTop;
       this.listContainer.addChild(nameText);
@@ -762,9 +787,14 @@ export class EquipmentShopScene extends GameScene {
       // Stat line — show comparison delta if this item replaces an installed one
       let statLine = gearStatLine(gear);
       if (replacing && !isInstalled) {
-        const shopPotency = (gear as EquipmentSpec).potency;
-        const curPotency = replacing.potency;
-        const delta = shopPotency - curPotency;
+        // Engine speed is tech-level-driven, not potency-driven (see
+        // gearStatLine) — compare tech level so the delta reflects the stat
+        // that actually changes, not a same-tier mass/price tradeoff.
+        const isEngine =
+          (gear as EquipmentSpec).equipmentClass === EquipmentClass.ENGINE;
+        const delta = isEngine
+          ? gear.techLevel - replacing.techLevel
+          : (gear as EquipmentSpec).potency - replacing.potency;
         statLine += `  (${formatStatDelta(delta)} vs ${replacing.name})`;
       }
       const statText = scaledText(
@@ -774,7 +804,7 @@ export class EquipmentShopScene extends GameScene {
         { rawColor: true },
       );
       statText.eventMode = "none";
-      statText.x = startX + w * 0.01;
+      statText.x = startX + w * 0.01 + iconOffset;
       // Stacked below the name line — its step tracks the name's own font-scale
       // line height so the two never overlap at "L" (Task 3: the fixed +25
       // offset assumed the "M"-scale ~14 px name-line height).
@@ -1052,6 +1082,14 @@ export class EquipmentShopScene extends GameScene {
       loadout: this.gameEngine?.playerLoadout ?? null,
       bank: this.gameEngine?.bank ?? null,
       equipment: this.equipment,
+      // Planet Верфь baseline rate — mirrors `PlanetScene.openGarage`'s flat
+      // 2 cr/HP (the `repairCost` default); explicit here so both hangar
+      // mount points always supply the same context shape as `StationScene`.
+      repairRatePerHp: 2,
+      presets: this.gameEngine?.playerLoadoutPresets ?? [],
+      mutatePresets: (next) => {
+        if (this.gameEngine) this.gameEngine.playerLoadoutPresets = next;
+      },
       showToast: (msg, color) => this.showToast(msg, color),
       addToastSlot: (px, py, pw, ph) => this.addToastSlot(px, py, pw, ph),
       // The shop's render() appends (it doesn't clear), so a fit re-render must

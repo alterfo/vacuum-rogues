@@ -361,6 +361,43 @@ export function spiralApproachPath(
 }
 
 /**
+ * The star-avoidance path, falling back to a landing spiral-in when the
+ * straight shot is clear of the star but a planet destination was hinted —
+ * the single flight-path derivation shared by planning and executing a route
+ * (SpaceFlightScene.planRouteTo / executeRouteTo, "drawn == flown" contract).
+ */
+export function computeFlightPath(
+  fx: number,
+  fy: number,
+  tx: number,
+  ty: number,
+  star: { centerX: number; centerY: number; avoidRadius: number },
+  landingApproachOffset: number,
+  landing?: { planetX: number; planetY: number; planetRadius: number },
+): Point[] {
+  const path = avoidStarPath(
+    fx,
+    fy,
+    tx,
+    ty,
+    star.centerX,
+    star.centerY,
+    star.avoidRadius,
+  );
+  if (landing && path.length <= 1) {
+    return spiralApproachPath(
+      fx,
+      fy,
+      landing.planetX,
+      landing.planetY,
+      landing.planetRadius,
+      landingApproachOffset,
+    );
+  }
+  return path;
+}
+
+/**
  * Short outward arc a ship flies when lifting off a planet, before autopilot
  * engages (Task 5). `(outX,outY)` is the outward unit direction (planet facing
  * away from the star); the ship rises from the planet edge and curves out to a
@@ -427,7 +464,11 @@ export function pointAlongPath(points: Point[], dist: number): PathSample {
     const seg = Math.hypot(b.x - a.x, b.y - a.y);
     if (seg === 0) continue;
     const heading = Math.atan2(b.y - a.y, b.x - a.x);
-    if (dist <= acc + seg) {
+    // Strict <: a sample landing EXACTLY on the total length falls through to
+    // the done:true return below, honouring the documented "reaches/exceeds"
+    // contract (so a route of exactly one day draws no mid-route day marker
+    // on top of its end marker).
+    if (dist < acc + seg) {
       const t = (dist - acc) / seg;
       return {
         x: a.x + (b.x - a.x) * t,

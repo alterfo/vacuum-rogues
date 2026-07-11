@@ -16,7 +16,8 @@
  *   stars/<startype>_<NN>         red_dwarf|yellow|blue_giant|neutron|white_dwarf
  *   panoramas/<faction>_city ·    360° landing backdrops (faction city + wilderness
  *   panoramas/wilderness_<biome>  biome: desert|jungle|tundra) — lazy-loaded
- *   ships/<role>_<NN>             ranger|trader|pirate|patrol
+ *   ships/<role>_<NN>             ranger|trader|pirate|patrol|overmind_<tier>
+ *                                 (tier: small|medium|large|boss)
  *   ui/<name> · icons/<module>
  *
  * Loaded into PixiJS Textures at boot by {@link module:@/presentation/textures};

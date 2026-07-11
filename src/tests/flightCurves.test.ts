@@ -5,6 +5,7 @@ import {
   takeoffArcPath,
   pointAlongPath,
   avoidStarPath,
+  computeFlightPath,
   type Point,
 } from "@/utils/flightGeometry";
 
@@ -119,6 +120,37 @@ describe("pointAlongPath (Task 5: take-off animation sampling)", () => {
     expect(s.x).toBeCloseTo(10);
     expect(s.y).toBeCloseTo(10);
     expect(s.done).toBe(true);
+  });
+
+  it("reports done at EXACTLY the total length (a one-day route draws no mid-route day marker over its end marker)", () => {
+    const s = pointAlongPath(poly, 20); // total polyline length is exactly 20
+    expect(s.x).toBeCloseTo(10);
+    expect(s.y).toBeCloseTo(10);
+    expect(s.done).toBe(true);
+  });
+});
+
+describe("computeFlightPath (extracted scene routing: star-avoid vs landing spiral)", () => {
+  const star = { centerX: 0, centerY: 0, avoidRadius: 300 };
+
+  it("a clear shot with a landing hint takes the spiral-in approach", () => {
+    const landing = { planetX: 1000, planetY: 500, planetRadius: 40 };
+    const path = computeFlightPath(800, 500, 960, 500, star, 20, landing);
+    expect(path).toEqual(spiralApproachPath(800, 500, 1000, 500, 40, 20));
+    expect(path.length).toBeGreaterThan(1); // a real curve, not a bare endpoint
+  });
+
+  it("a star-blocked route wins over the landing spiral (the bowed path is kept)", () => {
+    // Straight shot from (-500,0) to (500,0) crosses the star at the origin.
+    const landing = { planetX: 520, planetY: 0, planetRadius: 40 };
+    const path = computeFlightPath(-500, 0, 500, 0, star, 20, landing);
+    expect(path.length).toBeGreaterThan(1); // the avoid path, not the spiral
+    expect(path).toEqual(avoidStarPath(-500, 0, 500, 0, 0, 0, 300));
+  });
+
+  it("a clear shot with no landing hint is the bare destination leg", () => {
+    const path = computeFlightPath(800, 500, 900, 500, star, 20);
+    expect(path).toEqual(avoidStarPath(800, 500, 900, 500, 0, 0, 300));
   });
 });
 

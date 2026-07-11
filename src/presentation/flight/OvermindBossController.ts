@@ -6,6 +6,8 @@ import type { NpcShipManagerDeps } from "./NpcShipManager";
 import { OVERMIND_CORE_ID } from "./NpcShipManager";
 import { SeededRNG } from "@/utils/seededRNG";
 import { scaledFont } from "@/utils/fontScale";
+import { OVERMIND_BOSS_TIER } from "@/config/balance";
+import type { NpcSizeTier } from "@/types";
 
 /**
  * Everything the OVERMIND-core boss controller reads from (or pushes back to)
@@ -25,7 +27,12 @@ export interface OvermindBossControllerDeps {
   /** Spawn + mount a new NPC sprite (manager owns sprite/anchor bookkeeping). */
   addNpcSprite(npc: NpcShip, entry: boolean): void;
   /** The manager's shared {@link NpcSimulator} OVERMIND-core factory. */
-  spawnOvermindInSystem(rng: SeededRNG, id: string, systemId: string): NpcShip;
+  spawnOvermindInSystem(
+    rng: SeededRNG,
+    id: string,
+    systemId: string,
+    sizeTier?: NpcSizeTier,
+  ): NpcShip;
 }
 
 /**
@@ -95,16 +102,17 @@ export class OvermindBossController {
       rng,
       OVERMIND_CORE_ID,
       systemId,
+      "boss",
     );
-    // Boss stats: far tougher than a patrol Доминатор. Real-time combat does NOT
-    // model shields (firePlayerShot/fireNpcShot only touch hullHP), so fold the
-    // old hex encounter's 150-shield layer into the hull — 300 hull + 150 shields
-    // = 450 effective HP — to preserve the boss's intended toughness. Damage 45 as
-    // before.
+    // Boss stats come from the shared OVERMIND_BOSS_TIER balance constant (see
+    // its doc for the folded-shields 450-HP rationale). The factory already
+    // applies them for the "boss" tier; re-apply here too so the boss stays at
+    // tier strength even through a deps factory that ignores the tier hint.
     core.name = "Ядро OVERMIND";
-    core.hullHP = 450;
-    core.maxHull = 450;
-    core.damage = 45;
+    core.sizeTier = "boss";
+    core.hullHP = OVERMIND_BOSS_TIER.hull;
+    core.maxHull = OVERMIND_BOSS_TIER.hull;
+    core.damage = OVERMIND_BOSS_TIER.damage;
     core.markHostile();
 
     // Register the boss in the domain galaxy like every other in-system spawn

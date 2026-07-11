@@ -145,17 +145,20 @@ describe("plotRoute: route overlay visibility while moving", () => {
   let s: Record<string, unknown>;
   let clearRoute: ReturnType<typeof vi.fn>;
   let drawRoute: ReturnType<typeof vi.fn>;
+  let drawDayMarker: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     scene = new SpaceFlightScene(makeMockRenderer());
     s = scene as unknown as Record<string, unknown>;
     clearRoute = vi.fn();
     drawRoute = vi.fn();
+    drawDayMarker = vi.fn();
     s.routeRenderer = {
       clearRoute,
       drawRoute,
       drawLandingMarker: vi.fn(),
       drawNavigationMarker: vi.fn(),
+      drawDayMarker,
     };
     s.shipPhysics = new ShipPhysics(100, 100, 0.1);
     s.plannedRoute = { x: 500, y: 500 };
@@ -168,6 +171,7 @@ describe("plotRoute: route overlay visibility while moving", () => {
     (scene as unknown as { plotRoute(): void }).plotRoute();
     expect(clearRoute).toHaveBeenCalledTimes(1);
     expect(drawRoute).not.toHaveBeenCalled();
+    expect(drawDayMarker).not.toHaveBeenCalled();
   });
 
   it("draws route when isTurnRunning=false (paused)", () => {

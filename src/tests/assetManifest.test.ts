@@ -14,16 +14,17 @@ const name = (key: string): string => key.split("/")[1] ?? "";
 describe("asset manifest — nebula parallax layers", () => {
   const keys = allTextures("nebula");
 
-  it("exposes all 12 palette × layer tiles", () => {
-    expect(keys).toHaveLength(12);
+  it("exposes all 24 palette × layer × variant tiles", () => {
+    expect(keys).toHaveLength(24);
   });
 
-  it("covers every palette × layer combination as <palette>_<layer>", () => {
+  it("covers every palette × layer combination with 2 variants (<palette>_<layer>_01/_02)", () => {
     const palettes = ["red", "blue", "green", "teal"];
     const layers = ["far", "mid", "near"];
     for (const palette of palettes) {
       for (const layer of layers) {
-        expect(texture(`nebula/${palette}_${layer}`)).toBeDefined();
+        expect(texture(`nebula/${palette}_${layer}_01`)).toBeDefined();
+        expect(texture(`nebula/${palette}_${layer}_02`)).toBeDefined();
       }
     }
   });

@@ -482,9 +482,11 @@ naming, so the next sweep doesn't have to rediscover them from scratch.
   non-combat CJM of rows (Task 9 dataset-generation finding of the 20260701 plan; the executor
   no-ops themselves were fixed in three-year-campaign Task 7 — see "Long-horizon campaign wedges"
   below for that fix and the further soft-locks it uncovered).**
-  `PlayerAgent.apply`'s `case "attack"` advances a full day so `NpcShipManager` can actually
-  resolve the fight, but `case "flee"`/`case "repair"` intentionally "degrade to a tick" (no real
-  navigate-away or repair-dock executor exists headlessly) — by design, since headless combat
+  At the time, `PlayerAgent.apply`'s `case "attack"` advanced a full day so `NpcShipManager`
+  could resolve the fight (since the 20260709 garrison-growth plan Task 4, `attack` is *active*:
+  `PlayerAgent.driveAttack` invokes the real «Атаковать» handler and drives 50 ms slices until
+  one combat round resolves), but `case "flee"`/`case "repair"` intentionally "degrade to a tick"
+  (no real navigate-away or repair-dock executor exists headlessly) — by design, since headless combat
   was expected to resolve within about a day against "a typical NPC". Against a heavily-garrisoned
   Overmind system (`garrison_ov_*`, observed spawning 6–10 hostile ships), the starter ship can
   neither win nor actually flee: hull dips just under the ~50% engage threshold (→ `flee`, a

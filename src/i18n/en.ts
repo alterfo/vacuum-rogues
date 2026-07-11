@@ -130,7 +130,7 @@ export const en: Dict = {
   "faction.PARADOXES": "Paradoxes",
   "faction.PROGRESSORS": "Progressors",
   "faction.INDEPENDENT": "Independents",
-  "faction.OVERMIND": "Precursors",
+  "faction.OVERMIND": "Overmind",
   "role.RANGER": "Ranger",
   "role.TRADER": "Trader",
   "role.PIRATE": "Pirate",

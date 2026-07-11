@@ -53,8 +53,8 @@ describe("ShipLoadout — fitting (US-073)", () => {
     expect(s.cargo).toBe(35);
     expect(s.weaponCount).toBe(2);
     expect(s.weaponDamage).toBe(56); // 30 + 26
-    // eq_engine_iii: tech 5 → 0.05 + 5*0.03 = 0.20 px/ms
-    expect(s.speed).toBeCloseTo(0.2);
+    // eq_engine_iii: tech 5 → 0.066 + 5*0.022 = 0.176 px/ms
+    expect(s.speed).toBeCloseTo(0.176);
     // eq_radar: tech 4 → 600 + 4*200 = 1400 px
     expect(s.radarRange).toBe(1400);
     // eq_shield: tech 6 → 6*30 = 180 HP
@@ -80,7 +80,7 @@ describe("ShipLoadout — fitting (US-073)", () => {
     // better engine *replaces* the current one rather than stacking a second.
     const lo = new ShipLoadout("hull_bastion");
     expect(lo.install("eq_engine_i")).toBe(true); // tech 2 → 0.11 px/ms
-    expect(lo.install("eq_engine_iii")).toBe(true); // tech 5 → 0.20 px/ms, replaces
+    expect(lo.install("eq_engine_iii")).toBe(true); // tech 5 → 0.176 px/ms, replaces
     expect(
       lo.installedGearIds().filter((id) => id.startsWith("eq_engine")),
     ).toEqual(["eq_engine_iii"]);
@@ -88,7 +88,7 @@ describe("ShipLoadout — fitting (US-073)", () => {
     lo.install("eq_tank"); // 50 + 40 = 90
     lo.install("eq_tank"); // +90 → 180
     const s = lo.derivedStats();
-    expect(s.speed).toBeCloseTo(0.2);
+    expect(s.speed).toBeCloseTo(0.176);
     expect(s.fuelCapacity).toBe(180);
     expect(s.categories.engine).toEqual({ used: 1, total: 1 });
   });
