@@ -13,7 +13,10 @@ import { describe, it, expect, vi } from "vitest";
 import { RealEngineHarness } from "../realEngineHarness";
 import { SceneType } from "@/types";
 import type { Planet } from "@/domain/Planet";
-import { MemoryHeuristicPolicy } from "./MemoryHeuristicPolicy";
+import {
+  MemoryHeuristicPolicy,
+  MAX_FOLDS_WITHOUT_DAY_ADVANCE,
+} from "./MemoryHeuristicPolicy";
 import {
   createMemory,
   updateMemory,
@@ -225,4 +228,82 @@ describe("Task 1 — live-tick symptom reproduction probe", () => {
       harness.dispose();
     }
   }, 30_000);
+
+  it.each(["TASK4-LOOP-1", "TASK4-LOOP-2"])(
+    "(1, Task 4) seed %s: no land↔take-off spin and no extended calendar stagnation over 300 folds",
+    async (seed) => {
+      // Task 4's own investigation: PROBE-WARP-1 above ruled out tight system
+      // ping-pong but left the land→no-trade→take-off cycle hypothesis
+      // (Context section) untested, and flagged "more runs/seeds" as the way
+      // to tell "legitimate extended local business" apart from a real spin.
+      // `MAX_FOLDS_WITHOUT_DAY_ADVANCE` (MemoryHeuristicPolicy.ts) is the
+      // existing stagnation escape valve: once `foldsSinceDayAdvance` reaches
+      // it, the policy is required to push a day-advancing `wait` ahead of
+      // any repeat `land("earn")`. If a land↔take-off cycle existed with no
+      // escape, this counter would grow unbounded instead of being capped by
+      // that valve.
+      const harness = await RealEngineHarness.boot({ seed, systemCount: 24 });
+      try {
+        await harness.newGame();
+        const engine = harness.engine;
+        let memory: AgentMemory = createMemory();
+        const controller = createLiveSceneController(engine, () => memory);
+        const policy = new MemoryHeuristicPolicy();
+        const actionSequence: string[] = [];
+        let maxFoldsSinceDayAdvance = 0;
+
+        for (let i = 0; i < 300; i++) {
+          const baseline = questBaselineForObserve(memory, engine);
+          const obs = observe(engine, baseline);
+          memory = updateMemory(memory, obs);
+          maxFoldsSinceDayAdvance = Math.max(
+            maxFoldsSinceDayAdvance,
+            memory.foldsSinceDayAdvance,
+          );
+
+          const action = policy.decide(obs, memory);
+          actionSequence.push(`${action.kind}:${action.reason ?? ""}`);
+          await applyLiveAction(action, obs, controller);
+          for (let f = 0; f < 4; f++) harness.tick(200);
+        }
+
+        const longestSameAction = longestRun(actionSequence);
+        // eslint-disable-next-line no-console
+        console.log(
+          `[${seed}] maxFoldsSinceDayAdvance=${maxFoldsSinceDayAdvance} longestSameAction=${longestSameAction}`,
+        );
+
+        // RECORDED (Task 4): across both additional seeds and a longer
+        // 300-fold horizon, `foldsSinceDayAdvance` never runs away past the
+        // policy's own stagnation valve — the calendar keeps advancing, so a
+        // land→no-trade→take-off spin with no escape does not
+        // reproduce here either. A generous multiple of the valve's own
+        // threshold (not an exact bound, since a `wait` action itself still
+        // costs a fold before the next real day boundary lands) is enough to
+        // catch a genuine runaway without being flaky on real engine timing.
+        expect(maxFoldsSinceDayAdvance).toBeLessThan(
+          MAX_FOLDS_WITHOUT_DAY_ADVANCE * 3,
+        );
+        expect(harness.errors()).toEqual([]);
+      } finally {
+        harness.dispose();
+      }
+    },
+    30_000,
+  );
 });
+
+/** Longest run of consecutive identical strings (mirrors longestTwoSystemPingPong's shape). */
+function longestRun(seq: string[]): number {
+  let best = 1;
+  let run = 1;
+  for (let i = 1; i < seq.length; i++) {
+    if (seq[i] === seq[i - 1]) {
+      run += 1;
+      best = Math.max(best, run);
+    } else {
+      run = 1;
+    }
+  }
+  return seq.length === 0 ? 0 : best;
+}
