@@ -131,8 +131,25 @@ export function createLiveSceneController(
   let lastSystemId: string | null = null;
   const visitedSystemIds = new Set<string>();
 
+  // Task 2 (docs/plans/20260712-autopilot-live-tick-symptoms.md) — grace flags
+  // for the quest-journal/settings panel and the planet-info panel. `tick()`
+  // used to close either panel unconditionally the instant it saw it open,
+  // which raced a human who had just opened it manually (confirmed via a
+  // real-engine probe: zero ticks of survival). Each flag lets a panel that
+  // OPENS MID-SESSION survive the tick that first observes it open — closing
+  // only fires on a later tick if it's still open then, preserving the
+  // original idle-panel auto-dismiss this code exists for. A panel that is
+  // already open on this controller's very first-ever tick call (`tickCount
+  // <= 1`) is treated as a stale leftover from before the autopilot engaged
+  // — exactly the idle-panel case the original fix targeted — and still
+  // closes immediately, with no grace.
+  let tickCount = 0;
+  let questJournalGraceGiven = false;
+  let planetInfoGraceGiven = false;
+
   return {
     tick() {
+      tickCount++;
       // Auto-dismiss any open onboarding/contextual-help panel (F3, live-session
       // finding): a full-screen help panel blocks a real player's pointer, but
       // the autopilot keeps acting through the port UNDER it and never
@@ -179,13 +196,27 @@ export function createLiveSceneController(
         sceneForHud?.hud?.isQuestJournalOpen?.() ||
         sceneForHud?.hud?.isSettingsPanelOpen?.()
       ) {
-        sceneForHud.hud.closeModals?.();
+        if (tickCount <= 1 || questJournalGraceGiven) {
+          sceneForHud.hud.closeModals?.();
+          questJournalGraceGiven = false;
+          return;
+        }
+        // First MID-SESSION tick observing it open — give a human who just
+        // opened it one full tick before the idle-panel auto-dismiss kicks in.
+        questJournalGraceGiven = true;
         return;
       }
+      questJournalGraceGiven = false;
       if (sceneForHud?.planetManager?.hasInfoPanel) {
-        sceneForHud.planetManager.closeInfoPanel?.();
+        if (tickCount <= 1 || planetInfoGraceGiven) {
+          sceneForHud.planetManager.closeInfoPanel?.();
+          planetInfoGraceGiven = false;
+          return;
+        }
+        planetInfoGraceGiven = true;
         return;
       }
+      planetInfoGraceGiven = false;
 
       // A pending warp plots the route but does NOT start movement — the player
       // must press Ход (Space / run-turn) to fly to the system edge. The live rAF

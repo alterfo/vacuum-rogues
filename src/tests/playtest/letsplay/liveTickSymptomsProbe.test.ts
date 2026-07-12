@@ -54,7 +54,7 @@ function longestTwoSystemPingPong(seq: string[]): number {
 }
 
 describe("Task 1 — live-tick symptom reproduction probe", () => {
-  it("(3) a manually-opened quest journal does NOT survive a single tick() call — confirms the auto-close race", async () => {
+  it("(3, Task 2 FIXED) a manually-opened quest journal survives one grace tick, then still auto-closes if left idle", async () => {
     const harness = await RealEngineHarness.boot({ seed: "PROBE-MODAL-1" });
     try {
       await harness.newGame();
@@ -70,13 +70,15 @@ describe("Task 1 — live-tick symptom reproduction probe", () => {
       scene.hud.toggleQuestJournal();
       expect(scene.hud.isQuestJournalOpen()).toBe(true);
 
-      // The very next autopilot tick — no grace window, no distinction between
-      // a human-just-opened panel and an idle leftover one.
+      // FIXED (Task 2): the first tick after a human opens the panel grants a
+      // grace window instead of closing it immediately.
       controller.tick();
+      expect(scene.hud.isQuestJournalOpen()).toBe(true);
 
-      // CONFIRMED (symptom 3): tick()'s unconditional auto-close closes a panel
-      // the human just opened, with zero opportunity to read it. This is the
-      // real cause, not a hypothesis — Task 2 should add a grace window.
+      // Regression coverage for the original fix this task modifies: if the
+      // panel is still open (left idle) on the NEXT tick, it still gets
+      // auto-dismissed — the autopilot never sits stuck behind it forever.
+      controller.tick();
       expect(scene.hud.isQuestJournalOpen()).toBe(false);
       expect(harness.errors()).toEqual([]);
     } finally {
@@ -84,7 +86,7 @@ describe("Task 1 — live-tick symptom reproduction probe", () => {
     }
   });
 
-  it("(3) a manually-opened planet info panel does NOT survive a single tick() call — same auto-close race", async () => {
+  it("(3, Task 2 FIXED) a manually-opened planet info panel survives one grace tick, then still auto-closes if left idle", async () => {
     const harness = await RealEngineHarness.boot({ seed: "PROBE-MODAL-2" });
     try {
       await harness.newGame();
@@ -101,10 +103,12 @@ describe("Task 1 — live-tick symptom reproduction probe", () => {
       scene.planetManager.handlePlanetClick(planet);
       expect(scene.planetManager.hasInfoPanel).toBe(true);
 
+      // FIXED (Task 2): survives the grace tick.
       controller.tick();
+      expect(scene.planetManager.hasInfoPanel).toBe(true);
 
-      // CONFIRMED (symptom 3): same unconditional auto-close hits the planet
-      // info panel too.
+      // Regression coverage: still auto-dismissed if left idle past the grace tick.
+      controller.tick();
       expect(scene.planetManager.hasInfoPanel).toBe(false);
       expect(harness.errors()).toEqual([]);
     } finally {
