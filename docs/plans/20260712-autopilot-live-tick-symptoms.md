@@ -1,0 +1,113 @@
+# Autopilot Live-Tick Symptoms: Looping, Sudden Jumps, Modal Ignoring, Quest Skipping
+
+## Overview
+
+Live testing of the dev-only autopilot (`window.__autopilot`, backtick-toggle in `npm run dev`) at `localhost:5173` surfaced four reported symptoms while it was engaged:
+
+1. **Looping** — the ship/session appears to cycle without making progress.
+2. **Sudden, unexplained jumps to a planet or station** — arrival looks like a teleport rather than a flight.
+3. **Modal windows (quest journal / settings / planet-info) get ignored / force-closed** — opening one while the autopilot is engaged doesn't stick.
+4. **Quests aren't taken** — the autopilot doesn't appear to accept available quests.
+
+None of these were confirmed via live browser (the Claude-in-Chrome extension was unavailable in the session that investigated this), so root cause is confirmed for none of them and only hypothesized for three. Per this project's standing regression-first bug process (root `CLAUDE.md` → "Bug Fixing Process"), this plan's first task is establishing real, automated reproduction — not guessing fixes for symptoms nobody has proven the cause of yet.
+
+## Context (from discovery)
+
+All four symptoms map onto the same live-only code path: `src/tests/playtest/letsplay/installAutopilotHook.ts`'s `createLiveSceneController` (the concrete controller the autopilot drives against the real `GameEngine`), specifically its `tick()`, `land()`, `dock()`, `warp()`, and `takeQuest()`.
+
+- **`tick()` (`installAutopilotHook.ts:135-236`)** auto-dismisses the quest journal / settings panel (`hud.closeModals()`) and the planet-info panel (`planetManager.closeInfoPanel()`) on **every** tick while engaged. This is intentional — a prior live-session fix so the autopilot never sits stuck idle behind a panel it can't see past — but is the leading candidate for symptom (3): if a human opens one of these panels manually while the autopilot is engaged, the very next tick can close it before they finish interacting with it. This could also explain symptom (4) if a manual quest-accept action races the same auto-close.
+- **`dock()` (`installAutopilotHook.ts:300-312`)** always teleports directly to the station scene — there is no physical-approach simulation, unlike `land()`. This is **explicit, pre-existing, by-design** behavior (see the code comment at the call site) and fully explains symptom (2) for stations specifically. **This plan does not treat it as a bug** — see the Open Question below.
+- **`land()` (`installAutopilotHook.ts:240-299`)** normally routes the ship physically to the resolved planet's sprite and lets `SpaceFlightScene.update()` auto-land on arrival. It has a silent fallback: if `pm.planetSprites.find(...)` can't find the target planet's sprite yet, it instantly does a headless-style scene teleport (`void goTo(SceneType.PLANET, ...)`) instead. This fallback was designed for the headless test harness (where sprites don't exist at all) — if it's also firing during real live play (e.g. a sprite not yet mounted at the moment `land()` runs), that's a real bug and the leading candidate for symptom (2) on planets.
+- **`takeQuest()` (`installAutopilotHook.ts:460-462`)** only calls `acceptBoardQuests` when the policy's decision loop chooses a take-quest action in the first place — `MemoryHeuristicPolicy` (`src/tests/playtest/letsplay/MemoryHeuristicPolicy.ts`) doesn't take every available quest on every opportunity. This alone could produce "doesn't take quests" over a short observation window, independent of the modal-close race above.
+- **Looping (symptom 1)** has no confirmed root cause. Candidates: the anti-ping-pong warp exploration (`lastSystemId`/`visitedSystemIds` closures inside `createLiveSceneController`, `installAutopilotHook.ts:332-403`) cycling within a small, fully-explored system pocket; or a land → no-profitable-trade → take-off → land cycle (a related PLANET↔TRADE collapse was previously fixed for the TRADE scene specifically — see the comment at `openTrade`, `installAutopilotHook.ts:412-416` — but an analogous land-side cycle wasn't ruled out).
+- **Existing coverage does not confirm or rule out any of the four symptoms**: `npm run letsplay:ci` (108/108) and the targeted regression suites for the recent wheel-zoom/flee-jump fixes (49/49) are all green, but none of them exercise `createLiveSceneController`'s `tick()` against a real, long-running session the way live play does — they either drive the headless `PlayerAgent` path or check narrow, already-fixed regressions.
+
+## Development Approach
+
+- **Testing approach**: TDD — establish reproduction first (Task 1), then fix only what actually reproduces, per this project's standing bug-fixing process.
+- Complete each task fully (repro/confirm → fix → green → verify) before moving to the next.
+- Make small, focused changes — no refactor bundled into any of these fixes.
+- **CRITICAL: every task MUST include new/updated tests** for code changes in that task.
+- **CRITICAL: all tests must pass before starting the next task** — no exceptions.
+- **CRITICAL: update this plan file when scope changes during implementation** — expected here, since Task 1 determines which of Tasks 2-4 have a real bug to fix vs. need to be deferred (same pattern as the prior plan's F9 investigation).
+- Do **not** implement a fix for `dock()`'s always-teleport behavior — it's out of scope by design (see Open Question).
+
+## Testing Strategy
+
+- **Real-engine playtest** (`src/tests/playtest/**`, boots the real `GameEngine`): the primary tier for Task 1's reproduction probe, since all four symptoms live in wiring between the autopilot's live controller and the real engine/scene — exactly the class of bug this project's three-tier convention assigns to the real-engine tier, not a mocked unit test.
+- **Unit tests**: for any confirmed, localized fix (e.g. `land()`'s fallback-teleport guard, a modal-close grace window) once Task 1 pins down a real cause.
+- **Playwright E2E**: not required unless Task 1's probe or a later task's fix surfaces a UI-interaction-only bug that a headless real-engine test structurally can't see (plausible for the modal-close race, given it's about real pointer/render timing) — if so, add a regression to `playtest-regression.spec.s` rather than forcing a real-engine test to fake it.
+- No existing e2e coverage exists for the autopilot itself (dev-only feature). Any symptom that resists headless reproduction gets live-browser confirmation as a Post-Completion item, not a task checkbox.
+
+## Progress Tracking
+
+- Mark completed items with `[x]` immediately when done.
+- Add newly discovered tasks with ➕ prefix.
+- Document issues/blockers with ⚠️ prefix.
+- Update this plan if implementation deviates from original scope — likely, since Tasks 2-4 are conditional on what Task 1 actually reproduces.
+
+## What Goes Where
+
+- **Implementation Steps** (`[ ]` checkboxes): reproduction probe, confirmed fixes, and their tests — automatable by the agent.
+- **Post-Completion** (no checkboxes): live-browser confirmation for any symptom that doesn't reproduce headlessly, and a final human-eyes pass watching a full autopilot session after all tasks land.
+
+## Implementation Steps
+
+### Task 1: Establish real reproduction for all 4 symptoms
+
+- [x] Write a new real-engine playtest probe that drives `createLiveSceneController`'s `tick()` directly against a real `GameEngine` over a long session (not the headless `PlayerAgent` path, since that's not the code live play actually uses), instrumented to observe: (a) whether a manually-opened quest-journal/settings/planet-info panel survives more than one `tick()` call before being auto-closed, (b) whether `land()`'s sprite-lookup fallback teleport branch is ever taken when sprites plausibly exist, (c) whether `takeQuest()` fires when a takeable quest is actually available, (d) whether `warp()`'s target selection ever repeats the same 2-3 systems with no new system visited over an extended run. Landed as `src/tests/playtest/letsplay/liveTickSymptomsProbe.test.ts`.
+- [x] Run the probe and record, in this plan, which of the four symptoms reproduce headlessly vs. which don't (update Tasks 2-4 and Progress Tracking accordingly — mirror how the prior plan handled F9 turning out to be live-only). **Findings (2026-07-12):**
+  - **(a)/symptom 3, modal auto-close — CONFIRMED, headlessly reproducible.** A manually-opened quest journal (`hud.toggleQuestJournal()`) and a manually-opened planet info panel (`planetManager.handlePlanetClick(planet)`) both close on the very next `tick()` call, with zero grace window — `tick()`'s modal-close branches don't distinguish a panel the human just opened from an idle leftover one. (One wrinkle: a fresh flight scene auto-shows the "welcome" onboarding help panel, and `tick()`'s help-panel check runs first and returns early — so the *very first* `tick()` after `newGame()` consumes itself dismissing that instead of reaching the modal-close branches. The probe flushes it with an extra `tick()` before opening the target panel, matching what a few real seconds of live play would already have passed through.) **Task 2 should proceed with a grace-window fix**, covering both the quest journal and the planet info panel (the FlightHud settings/accessibility panel shares the same `closeModals()` call site, so the same fix covers it too).
+  - **(b)/symptom 2, `land()`'s fallback teleport — RULED OUT under plausible live conditions.** `PlanetManager.createPlanets()` populates `planetSprites` synchronously during `SpaceFlightScene.initialize()` (`src/presentation/flight/PlanetManager.ts:423-486`), so by the time `land()` runs there is always a live sprite for every planet in the current system — the fallback's direct `transitionTo(PLANET, ...)` branch was never taken in the probe. **Task 3's fix does not apply — skip it** (matches Task 3's own "if Task 1 did not reproduce this fallback firing under plausible live conditions, skip this task's fix" bullet).
+  - **(c)/symptom 4, `takeQuest()` — RULED OUT at the applier level.** Landed on a planet with a non-empty job board and calling `takeQuest()` directly correctly grows `questManager.getActiveQuests()`. The executor itself is not the gap; symptom 4 is a **decision-policy frequency effect** (`MemoryHeuristicPolicy` not choosing a take-quest action often enough), which is outside this plan's wiring-bug scope (would need policy tuning, not a `createLiveSceneController` fix). **Task 2's second bullet (quest-accept clobbered by the modal-close ordering) was not independently confirmed** — the probe didn't find a scenario where the panel-close check and an in-flight `acceptBoardQuest` call interact; skip that half of Task 2 unless a more specific repro surfaces.
+  - **(d)/symptom 1, warp looping — INCONCLUSIVE, no tight ping-pong reproduced.** A real-policy 150-fold session (`MemoryHeuristicPolicy` + `observe`/`applyLiveAction`, mirroring `liveSmoke16b.test.ts`'s loop) never showed a tight 2-3 system oscillation (`longestTwoSystemPingPong < 30`, same bound as the existing gate). What it *did* show: across 150 folds the ship visited only 2 distinct systems total, sitting in the starting system for the first ~80 folds before its one and only warp. That's a real, headlessly-observed data point, but it's not the same shape as "cycling without progress" — `gameDays` and local trade/quest/repair business keep advancing the whole time — and the probe can't tell apart "legitimate extended local business before exploring" from an actual bug. **Task 4 should treat this as inconclusive**, per its own "if Task 1 could not reproduce any loop at all... stop here and defer to Post-Completion live-browser confirmation" bullet — no anti-ping-pong code fix is warranted from this data alone.
+- [x] write tests: the probe itself is the reproduction test — assert on whatever it finds (failing assertion where a symptom reproduces; a documented passing assertion with a note where it doesn't, so the probe stays a real regression gate rather than a script that's deleted after one run). All 5 probe assertions pass and document the finding inline (the modal-close race's passing assertions document the *bug* — the panel does NOT survive one tick, i.e. today's behavior is confirmed-broken; Task 2 will flip these to the fixed behavior).
+- [x] run full unit + real-engine playtest suites — must stay green (the probe is additive; it must not disturb existing coverage). `npm test -- --run`: 590 files / 5453 tests passed, 0 failed. `npx tsc --noEmit`: clean. `npm run lint` (via `eslint src --ext .ts` directly — the `npm run lint` wrapper in this shell surfaced unrelated build-artifact noise from outside `src/`, not attributable to this change): 0 errors, 46 pre-existing warnings.
+
+### Task 2: Fix modal auto-close racing a manual open (symptom 3, and possibly 4)
+
+- [ ] If Task 1 confirms `tick()`'s auto-close closes a panel the human just opened before they can act on it (rather than only the intentional idle-panel dismiss it was built for), add a grace window or an "opened-by-human-this-tick" guard so a freshly-opened panel survives at least one full render frame before being auto-dismissed
+- [ ] If the same race explains `takeQuest()`/manual quest-accept never landing (symptom 4), fix the ordering between the panel-close check and the in-flight accept so one doesn't clobber the other
+- [ ] write tests for the grace-window/ordering fix: manual-open-survives case, and the pre-existing idle-panel-still-gets-dismissed case (regression coverage for the original fix this task modifies)
+- [ ] write tests for the quest-accept ordering fix, if applicable
+- [ ] run full unit + real-engine playtest suites — must pass before next task
+- [ ] ⚠️ if Task 1 did not reproduce this race, skip this task's fix and note why here rather than changing working code speculatively
+
+### Task 3: Fix `land()`'s silent teleport fallback (symptom 2, planets)
+
+- [ ] If Task 1 confirms the sprite-lookup miss firing during plausible live conditions, fix it — either make `land()` wait/retry a frame for the sprite instead of falling back to an instant teleport, or make the fallback path visually consistent with the routed-arrival path — choice depends on what Task 1's probe shows about *when* the sprite is actually missing
+- [ ] write tests for the chosen fix: sprite-already-ready case is unaffected, previously-missing-sprite case no longer silently teleports
+- [ ] run full unit + real-engine playtest suites — must pass before next task
+- [ ] ⚠️ if Task 1 did not reproduce this fallback firing under plausible live conditions, skip this task's fix and note why here
+
+### Task 4: Investigate warp-target looping (symptom 1)
+
+- [ ] Using Task 1's probe data, identify the actual loop pattern (anti-ping-pong pocket-cycling vs. a land→no-trade→take-off cycle vs. something else) and fix the specific cycle-detection gap found
+- [ ] write tests reproducing the specific loop found, then verifying it's broken
+- [ ] run full unit + real-engine playtest suites — must pass before next task
+- [ ] ⚠️ if Task 1 could not reproduce any loop at all (a headless-only limitation, same class as this project's prior F9 finding), stop here and defer to Post-Completion live-browser confirmation rather than guessing a fix for an unreproduced symptom
+
+### Task 5: Verify acceptance criteria
+
+- [ ] verify all four symptoms are either fixed-and-tested or explicitly deferred to Post-Completion with a documented reason — no silent gaps
+- [ ] verify `dock()`'s always-teleport behavior was **not** changed by any of the above (explicitly out of scope — see Open Question)
+- [ ] run full unit test suite, real-engine playtest suite, `npm run letsplay:ci`, lint, and typecheck — all green
+- [ ] update this plan's Progress Tracking with the final status per symptom
+
+## Technical Details
+
+- Primary file: `src/tests/playtest/letsplay/installAutopilotHook.ts` — `createLiveSceneController`'s `tick()`, `land()`, `dock()`, `warp()`, `takeQuest()`.
+- Modal registries involved: `NpcShipManager.hasOpenModal()/closeModals()`, `FlightHud.isQuestJournalOpen()/isSettingsPanelOpen()/closeModals()`, `PlanetManager.hasInfoPanel/closeInfoPanel()`.
+- Decision policy: `MemoryHeuristicPolicy` (`src/tests/playtest/letsplay/MemoryHeuristicPolicy.ts`) decides when `takeQuest`/`warp` actions fire — a policy-frequency explanation for symptom (4) is possible independent of any modal-race fix in Task 2.
+- Anti-ping-pong state: `lastSystemId`/`visitedSystemIds` closures local to `createLiveSceneController` (`installAutopilotHook.ts:130-132`).
+
+## Open question for you
+
+`dock()` always teleports directly to the station scene with no physical-approach simulation (unlike `land()`, which routes and auto-lands). This plan treats that as existing, intentional behavior and does **not** scope a fix for it — Task 3 only touches `land()`'s teleport *fallback bug*, not `dock()`'s teleport-by-design. If you'd rather `dock()` gain real approach movement (matching `land()`'s feel), say so and this plan should grow a task for it.
+
+## Post-Completion
+
+**Manual verification** (if applicable):
+
+- Live-browser confirmation for any symptom Task 1 could not reproduce headlessly (same class of limitation as the prior plan's F9 investigation) — needs either the Claude-in-Chrome extension connected, or you testing directly (ideally with the browser console open) and reporting back what you see.
+- After all tasks land, watch a full autopilot session in `npm run dev` (backquote to engage) to confirm the fixes read as fixed from a human's perspective, not just from green tests.
