@@ -75,10 +75,10 @@ All four symptoms map onto the same live-only code path: `src/tests/playtest/let
 
 ### Task 3: Fix `land()`'s silent teleport fallback (symptom 2, planets)
 
-- [ ] If Task 1 confirms the sprite-lookup miss firing during plausible live conditions, fix it — either make `land()` wait/retry a frame for the sprite instead of falling back to an instant teleport, or make the fallback path visually consistent with the routed-arrival path — choice depends on what Task 1's probe shows about *when* the sprite is actually missing
-- [ ] write tests for the chosen fix: sprite-already-ready case is unaffected, previously-missing-sprite case no longer silently teleports
-- [ ] run full unit + real-engine playtest suites — must pass before next task
-- [ ] ⚠️ if Task 1 did not reproduce this fallback firing under plausible live conditions, skip this task's fix and note why here
+- [x] If Task 1 confirms the sprite-lookup miss firing during plausible live conditions, fix it — either make `land()` wait/retry a frame for the sprite instead of falling back to an instant teleport, or make the fallback path visually consistent with the routed-arrival path — choice depends on what Task 1's probe shows about *when* the sprite is actually missing. **N/A — no fix made.** Task 1's probe found `PlanetManager.createPlanets()` populates `planetSprites` synchronously during `SpaceFlightScene.initialize()` (`src/presentation/flight/PlanetManager.ts:423-486`), so every planet in the current system already has a live sprite by the time `land()` runs; the fallback's `transitionTo(PLANET, ...)` branch was never taken in the probe under plausible live conditions.
+- [x] write tests for the chosen fix: sprite-already-ready case is unaffected, previously-missing-sprite case no longer silently teleports. **N/A** — no fix exists to test; the existing sprite-already-ready coverage (`liveTickSymptomsProbe.test.ts`, Task 1) already stands as the regression gate for this path.
+- [x] run full unit + real-engine playtest suites — must pass before next task. Unaffected by this task (no code changed) — suites remain at Task 2's green baseline (`npm test -- --run`: 590 files / 5453 tests passed; `npx tsc --noEmit`: clean; `eslint src --ext .ts`: 0 errors, 46 pre-existing warnings).
+- [x] ⚠️ if Task 1 did not reproduce this fallback firing under plausible live conditions, skip this task's fix and note why here. **This is the case that applies.** Task 1 explicitly ruled out the fallback firing (see Task 1's second finding bullet above) and this task's own plan text already called it out as skippable — no `land()` code was touched, matching the "do not implement a fix nobody proved is needed" rule from Development Approach.
 
 ### Task 4: Investigate warp-target looping (symptom 1)
 
