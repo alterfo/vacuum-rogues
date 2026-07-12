@@ -125,8 +125,19 @@ describe("Task 1 — live-tick symptom reproduction probe", () => {
       await harness.newGame();
       const controller = createLiveSceneController(harness.engine);
       const transitionSpy = vi.spyOn(harness.engine, "transitionTo");
+      const scene = harness.currentScene() as unknown as {
+        planetManager: { routeTargetPlanetId: string | null };
+      };
+      const resolvedPlanet = harness
+        .galaxy()!
+        .systems.find((s) => s.id === harness.player()!.currentSystemId)!
+        .planets.find((p) => p.isHabitable !== false)!;
 
       controller.land();
+
+      // Positive check: the physical-routing branch actually fired (not just
+      // "the fallback didn't") — confirms land() isn't silently doing nothing.
+      expect(scene.planetManager.routeTargetPlanetId).toBe(resolvedPlanet.id);
 
       // RULED OUT under plausible live conditions: `PlanetManager.createPlanets()`
       // populates `planetSprites` synchronously during scene initialize(), so a
@@ -284,6 +295,11 @@ describe("Task 1 — live-tick symptom reproduction probe", () => {
         expect(maxFoldsSinceDayAdvance).toBeLessThan(
           MAX_FOLDS_WITHOUT_DAY_ADVANCE * 3,
         );
+        // Canary (not a tight bound — observed 103-104/300 on these seeds):
+        // catches a future regression where the policy repeats one action for
+        // the large majority of a run, without asserting a value nobody has
+        // shown is the "correct" one.
+        expect(longestSameAction).toBeLessThan(220);
         expect(harness.errors()).toEqual([]);
       } finally {
         harness.dispose();
