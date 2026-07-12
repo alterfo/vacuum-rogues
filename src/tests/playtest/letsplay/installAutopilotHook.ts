@@ -143,6 +143,17 @@ export function createLiveSceneController(
   // <= 1`) is treated as a stale leftover from before the autopilot engaged
   // — exactly the idle-panel case the original fix targeted — and still
   // closes immediately, with no grace.
+  //
+  // Caveat (review, 2026-07-12): the probe that "confirmed" this race calls
+  // `hud.toggleQuestJournal()`/`planetManager.handlePlanetClick()` directly,
+  // not through a real DOM dispatch. In a genuine browser session, the same
+  // native keydown/pointerdown that opens one of these panels also bubbles to
+  // `window` and hits `AutopilotController`'s reclaim-on-input listener
+  // (subscribed at `start()`), disengaging the autopilot in that same
+  // synchronous event — exactly the hazard the encounter-overlay branch above
+  // documents and works around. So this grace window may rarely or never
+  // trigger via real mouse/keyboard input; it has not been confirmed reachable
+  // outside the direct-call probe. See the plan's Task 1 finding for symptom 3.
   let tickCount = 0;
   let questJournalGraceGiven = false;
   let planetInfoGraceGiven = false;
