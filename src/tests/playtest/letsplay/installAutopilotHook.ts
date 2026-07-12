@@ -156,6 +156,7 @@ export function createLiveSceneController(
   // outside the direct-call probe. See the plan's Task 1 finding for symptom 3.
   let tickCount = 0;
   let questJournalGraceGiven = false;
+  let settingsPanelGraceGiven = false;
   let planetInfoGraceGiven = false;
 
   return {
@@ -203,10 +204,7 @@ export function createLiveSceneController(
           closeInfoPanel?: () => void;
         };
       } | null;
-      if (
-        sceneForHud?.hud?.isQuestJournalOpen?.() ||
-        sceneForHud?.hud?.isSettingsPanelOpen?.()
-      ) {
+      if (sceneForHud?.hud?.isQuestJournalOpen?.()) {
         if (tickCount <= 1 || questJournalGraceGiven) {
           sceneForHud.hud.closeModals?.();
           questJournalGraceGiven = false;
@@ -218,6 +216,16 @@ export function createLiveSceneController(
         return;
       }
       questJournalGraceGiven = false;
+      if (sceneForHud?.hud?.isSettingsPanelOpen?.()) {
+        if (tickCount <= 1 || settingsPanelGraceGiven) {
+          sceneForHud.hud.closeModals?.();
+          settingsPanelGraceGiven = false;
+          return;
+        }
+        settingsPanelGraceGiven = true;
+        return;
+      }
+      settingsPanelGraceGiven = false;
       if (sceneForHud?.planetManager?.hasInfoPanel) {
         if (tickCount <= 1 || planetInfoGraceGiven) {
           sceneForHud.planetManager.closeInfoPanel?.();
