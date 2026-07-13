@@ -260,17 +260,49 @@ invariants in `overmindSpread.ts`, which stay exactly as they are.
 
 ### Task 3: First measured re-run
 
-- [ ] Pick a starting `OVERMIND_GARRISON_POWER_MAX_DISCOUNT` value (reasoning, not a guess: size it
+- [x] Pick a starting `OVERMIND_GARRISON_POWER_MAX_DISCOUNT` value (reasoning, not a guess: size it
       so a powerless player, power index ≈0, faces a garrison small enough that a starter corvette
       or an early battle-ready 180/49 ship has realistic clear odds under the existing
       `hostileScaling()` per-hit multipliers — record the reasoning here).
-- [ ] Run `npm run letsplay:campaign` with `CAMPAIGN_SESSIONS=10` for a fast first read; record
+      **Value: `1`** (already in place from Task 2, not re-derived from scratch). Reasoning: Task 2's
+      own measurement found `2` regresses a pinned existing test (`sessionCompetence.test.ts`'s
+      GOD-mode Task-7 milestone probe times out because fewer garrison defenders means fewer
+      combat-loot kills, stalling peak-power growth below the `POWER_INDEX_BATTLE_READY_THRESHOLD
+      =0.13` gate) — standing rule #2 (never weaken/break an existing pinned test) rules `2` out
+      outright, so `1` is not a guess but the largest value that clears that constraint. At `1`,
+      power-0 effective range is `[max(1,5-1), max(4,10-1)] = [4, 9]` — a modest, real reduction
+      from today's fixed `[5, 10]` (one fewer defender at both ends), matching the "gentle while
+      weak" intent without claiming a bigger win than the constraint allows. Task 4 owns escalating
+      further only by exploring the other composed lever (`HOSTILE_SCALING_WEAK_MULT`) if `1` alone
+      plateaus, per the plan's Technical Details section.
+- [x] Run `npm run letsplay:campaign` with `CAMPAIGN_SESSIONS=10` for a fast first read; record
       win-rate, median win/death day, `battleReadyDay` rate, death taxonomy (early vs
       grind-to-death) in this plan.
-- [ ] `npm run letsplay:ci` and `npm run test:playtest` must stay green (wiring must not regress).
-- [ ] Compare against the pre-plan baseline (today's 3-session spot-check and the prior plan's
+      **Result (2026-07-13, discount=1, 10 sessions):** 1 win / 0 loss / 8 died / 1 timeout
+      (win-rate 10.0%). Median win day **d353** (the one win). `battleReadyDay` rate 10% (1/10, avg
+      d174). `firstLiberationDay` rate 80% (8/10, avg d108). Avg peak power 0.08. Death taxonomy:
+      6/8 deaths are early (d63–d222, before battle-ready, peak power 0.02–0.15) — root cause 1
+      (early death before arm-up) still dominates; only 1/8 deaths is late (d419, power 0.02 — a
+      wandering low-power death, not a grind-to-death against a cleared-odds garrison); 1 session
+      wedged/timed out at d342 (dayFrozen=300, a stall artifact, not a combat death). No
+      grind-to-death signature observed in this sample (root cause 2 not directly evidenced here,
+      small-N).
+- [x] `npm run letsplay:ci` and `npm run test:playtest` must stay green (wiring must not regress).
+      **Both green.** `letsplay:ci`: 7 test files / 108 tests passed. `test:playtest`: 74 passed +
+      4 skipped files / 733 passed + 9 skipped tests.
+- [x] Compare against the pre-plan baseline (today's 3-session spot-check and the prior plan's
       Task 9 18-24% / Task 19 2.0% numbers) — record whether the new lever moves the needle at all
       before investing in a larger sample.
+      **Inconclusive at N=10 — needle not clearly moved yet.** 10.0% sits inside the prior plan's
+      measured 2–24% plateau band, not above it; this single small-N run neither confirms nor rules
+      out an effect (N=10 has wide variance — the prior plan's own Task 9 log shows single-digit
+      sample runs swinging 0–30% purely from RNG). The death taxonomy shift (early-death still
+      dominant, no observed grind-to-death) is consistent with the discount being too small at `1`
+      to meaningfully move root cause 1 yet, exactly as anticipated by the reasoning above (discount
+      pinned to the smallest value that survives the existing GOD-mode test, not the value the
+      win-rate math alone would pick). Task 4 should treat `1` as a floor, not a target, and budget
+      sweeps that also touch `HOSTILE_SCALING_WEAK_MULT` since the headcount-only lever from Task 2
+      is capped by an orthogonal existing-test constraint.
 
 ### Task 4: Tune to a 50-session interim gate
 
