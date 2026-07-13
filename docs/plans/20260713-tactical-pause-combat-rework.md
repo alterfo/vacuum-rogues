@@ -411,15 +411,52 @@ Any test file **not** in this list stays under the standing "never touch existin
 
 ### Task 4: Environmental gravity effects (planet slingshot; black holes if Task 1 included them)
 
-- [ ] Planet gravity assist: a planned course passing within a threshold radius of a planet during
+- [x] Planet gravity assist: a planned course passing within a threshold radius of a planet during
       the execute phase adds a velocity boost along the pass trajectory (pure function of
       distance/mass-proxy — reuse existing planet position/size data, no new domain fields).
-- [ ] If Task 1 scoped black holes into this plan: add the new hazard entity (galaxy-gen +
+- [x] If Task 1 scoped black holes into this plan: add the new hazard entity (galaxy-gen +
       `StarSystem` field + presentation) with a pull-toward-center force scaling with proximity,
       usable as an escape tool (dangerous, high-risk high-reward) — otherwise record here that
       this sub-item was deferred to Post-Completion per Task 1's decision.
-- [ ] Write tests for the pure physics functions: gravity-assist vector/magnitude, black-hole pull
-      falloff (if in scope).
+      → **DEFERRED to Post-Completion** per Task 1 decision 1e (v1 = planet-assist only): a black-hole
+      hazard needs a new `StarSystem` hazard type + galaxy-gen levers + presentation + a
+      schema/migration/version bump — too large a green-field entity for this plan. Task 4 found no
+      cheap way to fold both in (planet-assist reuses live `displayRadius`/position at zero blast
+      radius; a black hole shares none of that), so the deferral stands.
+- [x] Write tests for the pure physics functions: gravity-assist vector/magnitude, black-hole pull
+      falloff (if in scope). → Black-hole falloff N/A (deferred). Planet-assist covered by
+      `src/tests/combat/combatGravity.test.ts` (18).
+
+#### Task 4 outcome (implemented 2026-07-14)
+
+- **New pure module**: `src/presentation/flight/combatGravity.ts` (PixiJS-free, unit-tested
+  standalone like `combatPlanning` / `combatTrajectory`). Owns the slingshot physics:
+  - `gravityAssistRadius(body, config) = displayRadius × radiusMultiplier` — the threshold reach; a
+    larger (more massive) planet reaches farther.
+  - `gravityAssistDelta(ship, body, dtMs, config)` — the per-frame velocity delta (px/ms) a single
+    planet adds: a boost **along the ship's current heading** (a slingshot accelerates along the pass
+    trajectory — it never yanks the ship toward the planet), scaled by a **mass-proxy** (the planet's
+    rendered `displayRadius` relative to `referenceRadius`) and a linear distance falloff (0 at the
+    assist edge → full at the surface), integrated over `dtMs` and capped at `maxBoostPerMs × dtMs`.
+    Returns zero outside the reach, for a (near-)stationary ship, for `dtMs ≤ 0`, or a zero-size body.
+  - `gravityAssistTotal(ship, bodies, dtMs, config)` — sums the deltas of every planet the ship is
+    passing; the primitive the execute-phase movement loop calls each frame.
+- **Data reuse (no new domain fields)**: the mass-proxy is the planet's live rendered `displayRadius`
+  (`PlanetManager` `PlanetSprite.displayRadius`, already used for landing-range/quest-marker sizing) —
+  no galaxy-gen change, no `StarSystem` field, **no schema/migration/save impact**.
+- **Balance**: new `GRAVITY_ASSIST` constant in `src/config/balance.ts` (radiusMultiplier /
+  referenceRadius / strengthPerMs / maxBoostPerMs), mirrored by the module's `DEFAULT_GRAVITY_ASSIST`
+  and parity-asserted in the test — tune-in-one-place, per the `COMBAT_ROUND_MS` precedent.
+- **Wiring status**: inert in production today, exactly like Task 2's freeze-gate and Task 3's
+  course-preview — the execute-phase movement loop that would fold this delta into `ShipPhysics`'
+  velocity isn't wired until the combat-open `beginCombat` trigger lands (a later task). The pure math
+  + config + tests are complete and green; the live pass-boost lights up the moment the execute loop
+  is connected.
+- **Tests**: `src/tests/combat/combatGravity.test.ts` (18) — reach formula + monotonic in mass,
+  in/outside-threshold, boost-along-heading (not toward planet, diagonal parallel-to-velocity),
+  closer→stronger falloff, zero at the edge, more-massive→harder, stationary/zero-dt no-op, linear in
+  dt, the max-boost cap, multi-body summation, and the balance/module parity. Full unit suite green
+  (5574 pass).
 
 ### Task 5: Per-weapon range visualization + manual target assignment UI
 

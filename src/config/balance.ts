@@ -626,6 +626,31 @@ export const GAME_BALANCE = {
 export const COMBAT_ROUND_MS = 3000;
 
 /**
+ * Planet gravity-assist tuning (`docs/plans/20260713-tactical-pause-combat-rework.md`,
+ * Task 4) — the single source of truth for the pure `combatGravity.ts` slingshot math.
+ * A planned course whose execute-window flight carries the ship within a planet's assist
+ * radius gets a small velocity boost *along its current heading* (a slingshot accelerates
+ * along the pass trajectory), a pure function of pass distance and a mass-proxy (the
+ * planet's rendered `displayRadius`). No new domain fields, no galaxy-gen or save impact —
+ * it reuses live planet position/size data. Black holes are **deferred to Post-Completion**
+ * per Task 1's recorded scope decision (v1 = planet-assist only).
+ *
+ * - radiusMultiplier: assist reaches out to `displayRadius × this` from the planet centre.
+ * - referenceRadius: the mass-proxy denominator — a planet of exactly this `displayRadius`
+ *   contributes unit mass, larger planets pull proportionally harder.
+ * - strengthPerMs: boost added per ms at closest approach for a unit-mass planet, before
+ *   the linear distance falloff (0 at the assist edge → full at the surface).
+ * - maxBoostPerMs: hard cap on the per-ms speed added, so a huge/close pass can't fling the
+ *   ship arbitrarily fast.
+ */
+export const GRAVITY_ASSIST = {
+  radiusMultiplier: 3.5,
+  referenceRadius: 120,
+  strengthPerMs: 0.00012,
+  maxBoostPerMs: 0.00008,
+} as const;
+
+/**
  * Exploration-encounter occurrence tuning — the single live source of truth for
  * how often derelict/anomaly/distress encounters fire and how they scale
  * (`docs/plans/20260625-exploration-encounters.md`). The live wiring
