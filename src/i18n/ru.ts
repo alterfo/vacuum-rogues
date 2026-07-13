@@ -482,6 +482,17 @@ export const ru: Dict = {
   "combat.consumable.jammer.name": "Глушитель",
   "combat.consumable.jammer.desc": "Отключает оружие цели на несколько секунд.",
 
+  // --- in-combat comms («Связь») -------------------------------------------
+  "combat.comms.category": "Связь",
+  "combat.comms.bribe.name": "Откупиться",
+  "combat.comms.bribe.desc": "Заплатить дань, чтобы враг вышел из боя.",
+  "combat.comms.surrender.name": "Требовать сдаться",
+  "combat.comms.surrender.desc":
+    "Ослабленный враг может сдаться — бежать, бросив груз.",
+  "combat.comms.callHelp.name": "Позвать на помощь",
+  "combat.comms.callHelp.desc":
+    "Ближайший союзный корабль вступит в бой на вашей стороне.",
+
   // --- onboarding: refuel ---------------------------------------------------
   "help.refuel.title": "Дозаправка",
   "help.refuel.body1":

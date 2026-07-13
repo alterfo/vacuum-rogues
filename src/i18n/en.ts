@@ -480,6 +480,18 @@ export const en: Dict = {
   "combat.consumable.jammer.desc":
     "Disables the target's weapons for several seconds.",
 
+  // --- in-combat comms («Связь») -------------------------------------------
+  "combat.comms.category": "Comms",
+  "combat.comms.bribe.name": "Bribe",
+  "combat.comms.bribe.desc":
+    "Pay a tribute to make the enemy break off this fight.",
+  "combat.comms.surrender.name": "Demand Surrender",
+  "combat.comms.surrender.desc":
+    "A weakened enemy may yield — fleeing and dropping its cargo.",
+  "combat.comms.callHelp.name": "Call for Help",
+  "combat.comms.callHelp.desc":
+    "A nearby friendly ship joins the fight on your side.",
+
   // --- onboarding: refuel ---------------------------------------------------
   "help.refuel.title": "Refueling",
   "help.refuel.body1":

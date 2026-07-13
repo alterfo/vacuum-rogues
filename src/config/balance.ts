@@ -727,6 +727,32 @@ export const COMBAT_CONSUMABLE = {
 } as const;
 
 /**
+ * In-combat comms tuning — the single live source of truth for the planning-phase «Связь»
+ * action resolved by the pure `combatComms.ts`
+ * (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 10). The three branches
+ * (bribe / demand-surrender / call-for-help) read this; the module mirrors it as
+ * `DEFAULT_COMBAT_COMMS`, kept in lockstep by `combatComms.test.ts`; the scene passes this value.
+ *
+ * - surrenderHullThreshold: per-role hull-fraction ceiling at/below which a hailed NPC yields
+ *   (higher = more cowardly; the hive `OVERMIND` never surrenders). A role absent from the map
+ *   uses `defaultSurrenderThreshold`. A threshold ≤ 0 means "never surrenders".
+ * - allyProximityRadius: how close (world px) a friendly NPC must be to answer a call for help.
+ * - allyRoles: the roles eligible to answer a call for help (trader + military per the spec).
+ */
+export const COMBAT_COMMS = {
+  surrenderHullThreshold: {
+    TRADER: 0.6,
+    PATROL: 0.35,
+    RANGER: 0.3,
+    PIRATE: 0.2,
+    OVERMIND: 0,
+  } as Readonly<Record<string, number>>,
+  defaultSurrenderThreshold: 0.25,
+  allyProximityRadius: 700,
+  allyRoles: ["TRADER", "PATROL", "RANGER"] as readonly string[],
+} as const;
+
+/**
  * Exploration-encounter occurrence tuning — the single live source of truth for
  * how often derelict/anomaly/distress encounters fire and how they scale
  * (`docs/plans/20260625-exploration-encounters.md`). The live wiring

@@ -771,16 +771,73 @@ Any test file **not** in this list stays under the standing "never touch existin
 
 ### Task 10: In-combat comms panel (bribe / demand surrender / call for help)
 
-- [ ] Extend `NpcInteractionController.ts`'s existing shakedown-hail pattern to be reachable as a
+- [x] Extend `NpcInteractionController.ts`'s existing shakedown-hail pattern to be reachable as a
       planning-phase action during an **active** fight (today it's pre-combat/negotiation-gated
       only) — add the "Связь" action alongside movement/weapons/afterburner/artifact.
-- [ ] Bribe/tribute reuses the existing `shakedownTribute` economy path. Demand-surrender is a new
+- [x] Bribe/tribute reuses the existing `shakedownTribute` economy path. Demand-surrender is a new
       resolution: a surrendering NPC flees or yields loot without being destroyed (decide which,
       record reasoning — probably role/hull-fraction gated, not unconditional). Call-for-help is a
       new resolution: a nearby friendly NPC (trader/military per the spec) joins the fight on the
       player's side if one exists in range (decide the eligibility/proximity rule).
-- [ ] Write tests for each of the three new resolution branches, plus the "no eligible ally in
+- [x] Write tests for each of the three new resolution branches, plus the "no eligible ally in
       range" call-for-help failure case.
+
+#### Task 10 outcome (implemented 2026-07-14)
+
+- **New pure module**: `src/presentation/flight/combatComms.ts` (PixiJS-free, unit-tested
+  standalone like `combatPlanning` / `combatConsumable` / `combatMissile`). Owns the three «Связь»
+  branches; `PlannedTurn.commsAction` + `CombatPlanningController.setComms` (Task 2) already thread
+  the ≤1 selected action per turn, this task fills in what each id means + the resolution rules:
+  - **bribe** — `resolveBribe(playerCredits)` reuses the existing `shakedownTribute` (imported from
+    `NpcBrain`, the same economy math the pirate shakedown uses) for the tribute amount; the target
+    always disengages once paid (even a penniless player's 0-credit bribe buys peace this fight,
+    matching the shakedown-payoff semantics). The pure function computes the amount + disengage
+    decision; the execute-loop caller moves the credits through the bank bus (`payTribute`), so the
+    module stays free of economy side effects.
+  - **demand-surrender** — `resolveSurrenderDemand(role, hullFraction, config)`, **role- AND
+    hull-fraction-gated** (recorded decision, not unconditional): a target yields only if its
+    clamped `[0,1]` hull fraction is at/below its role's `surrenderThreshold` and that threshold is
+    strictly positive. Cowardly traders (0.6) surrender at high hull, brave rangers/pirates
+    (0.3/0.2) only near death, and the hive `OVERMIND` (threshold 0) **never** surrenders even at 0
+    hull. Deterministic (no RNG). **Surrender = flees while dropping its loot** (recorded decision):
+    removed from the fight via the existing departure/flee path (never destroyed), and the player
+    still collects the yielded loot — chosen over "yields loot without fleeing" (a passive sitting
+    target the player could execute for free contradicts "spared, not killed") and "flees
+    empty-handed" (no reward for a successful demand).
+  - **call-for-help** — `findCallForHelpAlly(playerPos, candidates, posOf, roleOf, isAvailable?,
+    config)`: the **closest** candidate that is (1) an ally-eligible role (`allyRoles` = TRADER +
+    military PATROL/RANGER per the spec), (2) within `allyProximityRadius` of the player, and (3)
+    `isAvailable` (caller's predicate — e.g. not itself hostile/departing; defaults to always
+    available). Returns **null** when no eligible ally is in range (the failure case). Generic over
+    the candidate type via `posOf`/`roleOf`, so the module never touches sprite internals.
+- **Balance**: new `COMBAT_COMMS` constant in `src/config/balance.ts` (per-role
+  `surrenderHullThreshold` + `defaultSurrenderThreshold` / `allyProximityRadius` / `allyRoles`),
+  mirrored by the module's `DEFAULT_COMBAT_COMMS` and parity-asserted in the test — tune-in-one-place,
+  per the `COMBAT_ROUND_MS` / `MISSILE_COMBAT` / `AFTERBURNER` / `COMBAT_CONSUMABLE` precedent. Roles
+  are plain strings (the `NpcRole` enum values), so neither the module nor `balance.ts` imports
+  `NpcRole`.
+- **i18n (Task 1 decision 1d, disambiguated)**: player-facing category **«Связь» / "Comms"** (i18n
+  `combat.comms.category`) + per-branch name/desc keys added to **both** `ru.ts` and `en.ts`,
+  deliberately distinct from `combat.consumable.category` and the `ResourceType.ARTIFACTS` currency
+  (asserted in the test).
+- **Wiring status**: inert in production today, exactly like Tasks 2–9's machinery — the
+  execute-phase loop that would read `plan.commsAction`, run the resolved branch (pay tribute + break
+  off / flee-and-drop-loot / spawn a friendly combatant) isn't wired until the combat-open
+  `beginCombat` trigger lands (a later task). The pure resolution rules + config + i18n + tests are
+  complete and green; the live «Связь» panel + resolution light up the moment the execute loop is
+  connected. The scene is **not** touched here (also keeps `SpaceFlightScene.ts` clear of the line
+  guard). Blast radius: `NpcInteractionController` is MEDIUM (11 callers) but is **not edited** — the
+  new module extends its *pattern* (shakedown economy reuse) without touching the class, so its
+  fan-out is undisturbed. **No save/schema impact** (comms action lives on the transient
+  planned-turn draft; the `shakedownTribute`/`payTribute` reuse adds no new economy plumbing).
+- **Tests**: `src/tests/combat/combatComms.test.ts` (21) — balance/module parity, the three-branch
+  catalog + i18n presence in both dictionaries + the consumable/artifact disambiguation,
+  `commsActionById`, bribe (tribute == `shakedownTribute`, penniless=0 still disengages, paying
+  disengages), demand-surrender (role threshold lookup + default fallback, cowardly-trader vs
+  brave-pirate, boundary-inclusive gate, full-hull never yields, OVERMIND never yields, clamped
+  out-of-range/NaN hull), and call-for-help (closest eligible in range, ignores pirate/overmind,
+  null when none in range / no candidates, inclusive proximity boundary, availability-predicate
+  skip, all trader+military roles eligible). Full unit suite green (5678 pass, 0 fail).
 
 ### Task 11: Ship visual polish — banking/roll during planned execution
 
