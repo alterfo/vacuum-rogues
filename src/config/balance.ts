@@ -706,6 +706,27 @@ export const AFTERBURNER = {
 } as const;
 
 /**
+ * Combat-consumable ("tactical device") tuning
+ * (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 9) — the single source of truth for
+ * the three planning-phase activatable effects resolved by the pure `combatConsumable.ts`. A
+ * `CombatConsumable` is a persisted, activatable item (`Inventory.ownedConsumableIds`), selected
+ * into a turn via `PlannedTurn.consumableId` and resolved by the execute loop once wired. It is a
+ * **different concept** from `ResourceType.ARTIFACTS` (the Overmind-loot crafting currency) — Task 1
+ * decision 1d. The module mirrors this as `DEFAULT_COMBAT_CONSUMABLE`, kept in lockstep by
+ * `combatConsumable.test.ts`; the scene passes this value.
+ *
+ * - shieldRestoreAmount: shield points a shield-restorer returns (clamped to the ship's shield max).
+ * - aoeDamage/aoeRadius: damage dealt to *every* enemy within the blast radius (world px).
+ * - weaponJamMs: how long a weapon-jam device silences the target's fire.
+ */
+export const COMBAT_CONSUMABLE = {
+  shieldRestoreAmount: 120,
+  aoeDamage: 60,
+  aoeRadius: 220,
+  weaponJamMs: 4000,
+} as const;
+
+/**
  * Exploration-encounter occurrence tuning — the single live source of truth for
  * how often derelict/anomaly/distress encounters fire and how they scale
  * (`docs/plans/20260625-exploration-encounters.md`). The live wiring

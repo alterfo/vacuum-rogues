@@ -471,6 +471,17 @@ export const ru: Dict = {
   "help.combat.control1": "Движение — маневрировать в бою",
   "help.combat.control2": "«Огонь!» — прицельный выстрел на активной паузе",
 
+  // --- combat consumables (tactical devices) -------------------------------
+  "combat.consumable.category": "Тактическое устройство",
+  "combat.consumable.shieldCell.name": "Щитовая ячейка",
+  "combat.consumable.shieldCell.desc":
+    "Мгновенно восстанавливает щиты корабля.",
+  "combat.consumable.pulseBomb.name": "Импульсная бомба",
+  "combat.consumable.pulseBomb.desc":
+    "Наносит урон всем врагам в радиусе взрыва.",
+  "combat.consumable.jammer.name": "Глушитель",
+  "combat.consumable.jammer.desc": "Отключает оружие цели на несколько секунд.",
+
   // --- onboarding: refuel ---------------------------------------------------
   "help.refuel.title": "Дозаправка",
   "help.refuel.body1":

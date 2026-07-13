@@ -708,16 +708,66 @@ Any test file **not** in this list stays under the standing "never touch existin
 
 ### Task 9: Consumable combat artifacts (shield restore / AoE damage / weapon jam)
 
-- [ ] Add the new consumable-artifact concept per Task 1's disambiguated naming and
+- [x] Add the new consumable-artifact concept per Task 1's disambiguated naming and
       persistence decision: an inventory of activatable combat items, each with one of the three
       effects from the spec. Activation is a planning-phase action (like movement/weapons/comms).
-- [ ] Wire shield-restore to `shieldHP` (the first real combat consumer of that previously-unused
+- [x] Wire shield-restore to `shieldHP` (the first real combat consumer of that previously-unused
       field — coordinate with Task 12's shield-damage-order work so the two don't define
       conflicting semantics; if Task 12 hasn't landed yet, this task defines the shield-HP
       semantics and Task 12 follows it).
-- [ ] Write tests: shield-restore delta, AoE-damage applies to every enemy within its radius (not
+- [x] Write tests: shield-restore delta, AoE-damage applies to every enemy within its radius (not
       just the selected target), weapon-jam disables the target's fire for its stated duration and
       expires correctly.
+
+#### Task 9 outcome (implemented 2026-07-14)
+
+- **New pure module**: `src/presentation/flight/combatConsumable.ts` (PixiJS-free, unit-tested
+  standalone like `combatPlanning` / `combatAfterburner` / `combatMissile`). Defines the
+  `CombatConsumable` type + the three-item built-in catalog `COMBAT_CONSUMABLES` (one device per
+  effect: `con_shield_cell` shield-restore, `con_pulse_bomb` aoe-damage, `con_jammer` weapon-jam),
+  `consumableById` lookup, pure owned-inventory helpers (`hasConsumable`/`consumeOne`, non-mutating),
+  and the three pure effect resolvers:
+  - `applyShieldRestore(current, max, amount)` — clamp-to-max, **never-reduce** shield restore
+    (a non-positive amount is a no-op, not a drain); guards non-finite/negative inputs. This
+    **defines the shield-HP restore semantics Task 12's shield-vs-hull ordering follows** (Task 9
+    lands first, per the plan's coordination note).
+  - `aoeDamageTargets(center, enemies, posOf, config)` — returns an `AoeHit` for **every** enemy
+    within the blast radius (inclusive boundary), not just a single selected target; generic over
+    the ship-sprite type via `posOf`.
+  - `jamTarget(target, nowMs, durationMs)` + `isJamActive(jam, nowMs)` — silences a target's fire
+    for a fixed window that expires cleanly at `expiresAtMs` (`nowMs < expiresAtMs`).
+- **Activation is a planning-phase action** — already threaded: `PlannedTurn.consumableId` +
+  `CombatPlanningController.setConsumable` (Task 2) carry the ≤1 selected device per turn; this task
+  fills in what the id means and the effect math the execute loop resolves.
+- **Naming (Task 1 decision 1d)**: code type `CombatConsumable`, player-facing category
+  **"Тактическое устройство" / "Tactical Device"** (i18n `combat.consumable.category`), deliberately
+  distinct from `ResourceType.ARTIFACTS` (the Overmind-loot crafting currency) — asserted in the test.
+  Per-device name/desc keys added to **both** `ru.ts` and `en.ts`.
+- **Persistence (Task 1 decision 1d — additive-optional, NO migration/version bump)**: new
+  `Inventory.ownedConsumableIds: string[]` domain field + `addConsumable`/`hasConsumable`/
+  `removeConsumable` methods (mirroring the `ownedGearIds` precedent, `??=`-guarded so an old save's
+  absent field — the `setPrototypeOf` load path skips field initializers — never throws), and
+  `.default([])` in `InventorySchema` (`schemas.ts`). An absent field defaults to an empty inventory,
+  so **no `MigrationPipeline` migration and no `CURRENT_VERSION` bump** — `npm run test:save-compat`
+  stays green (old golden saves load with an empty consumable inventory).
+- **Balance**: new `COMBAT_CONSUMABLE` constant in `src/config/balance.ts` (shieldRestoreAmount /
+  aoeDamage / aoeRadius / weaponJamMs), mirrored by the module's `DEFAULT_COMBAT_CONSUMABLE` and
+  parity-asserted in the test — tune-in-one-place, per the `COMBAT_ROUND_MS` / `GRAVITY_ASSIST` /
+  `MISSILE_COMBAT` / `AFTERBURNER` precedent.
+- **Wiring status**: inert in production today, exactly like Tasks 2–8's machinery — the execute-phase
+  loop that would read `plan.consumableId`, spend the copy (`Inventory.removeConsumable`) and apply
+  the resolved effect (restore shields / AoE-damage enemies / jam a target's fire gate) isn't wired
+  until the combat-open `beginCombat` trigger lands (a later task). The pure math + catalog +
+  persisted inventory + i18n + config + tests are complete and green; the live activation lights up
+  the moment the execute loop is connected. Blast radius: `Inventory` is MEDIUM (6 direct callers);
+  the change is purely additive (new optional field + new methods), so no existing caller breaks.
+- **Tests**: `src/tests/combat/combatConsumable.test.ts` (21) — balance/module parity, catalog
+  one-device-per-effect + unique ids, i18n key presence in both dictionaries + the ARTIFACTS
+  disambiguation, `consumableById`, the non-mutating owned-inventory helpers, the domain
+  add/has/remove round-trip + the old-save absent-field guard, shield-restore (delta, clamp,
+  never-reduce, full-shield no-op, non-finite guards, config default), AoE (every enemy in radius,
+  inclusive boundary, multiple-hit not-just-one, empty list), and weapon-jam (suppress-then-expire,
+  non-positive no-op, config default). Full unit suite green (5657 pass, 0 fail); save-compat green.
 
 ### Task 10: In-combat comms panel (bribe / demand surrender / call for help)
 

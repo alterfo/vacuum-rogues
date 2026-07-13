@@ -119,6 +119,12 @@ export const InventorySchema = z.object({
   // [] so pre-existing saves (which lack the field) validate and load with an
   // empty hold rather than failing.
   ownedGearIds: z.array(z.string()).default([]),
+  // Persisted combat-consumable (tactical device) inventory — catalog consumable
+  // ids the player carries between fights (`combatConsumable.ts`). Additive-optional
+  // (mirrors `ownedGearIds`): absent old saves default to [] and load with an empty
+  // consumable inventory, so no migration / CURRENT_VERSION bump is required
+  // (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 9).
+  ownedConsumableIds: z.array(z.string()).default([]),
 });
 
 export const QuestObjectiveSchema = z.object({

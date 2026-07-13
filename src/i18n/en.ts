@@ -469,6 +469,17 @@ export const en: Dict = {
   "help.combat.control1": "Movement — maneuver in combat",
   "help.combat.control2": "«Fire!» — aimed shot on active pause",
 
+  // --- combat consumables (tactical devices) -------------------------------
+  "combat.consumable.category": "Tactical Device",
+  "combat.consumable.shieldCell.name": "Shield Cell",
+  "combat.consumable.shieldCell.desc": "Instantly restores the ship's shields.",
+  "combat.consumable.pulseBomb.name": "Pulse Bomb",
+  "combat.consumable.pulseBomb.desc":
+    "Damages every enemy within the blast radius.",
+  "combat.consumable.jammer.name": "Jammer",
+  "combat.consumable.jammer.desc":
+    "Disables the target's weapons for several seconds.",
+
   // --- onboarding: refuel ---------------------------------------------------
   "help.refuel.title": "Refueling",
   "help.refuel.body1":

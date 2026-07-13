@@ -26,6 +26,15 @@ export class Inventory {
    */
   ownedGearIds: string[] = [];
 
+  /**
+   * Persisted inventory of combat consumables (tactical devices) the player carries between
+   * fights — catalog consumable ids (`combatConsumable.ts`'s `COMBAT_CONSUMABLES`). Loot/purchase
+   * lands here; activating one during a planning phase spends a copy. Additive-optional field
+   * (`ownedGearIds` precedent): absent old saves default to an empty inventory, so no migration /
+   * version bump is needed (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 9).
+   */
+  ownedConsumableIds: string[] = [];
+
   addItem(item: ShipModule | CosmeticItem): void {
     if ("category" in item) {
       this.modules.push(item);
@@ -61,6 +70,25 @@ export class Inventory {
   removeOwnedGear(gearId: string): boolean {
     const list = (this.ownedGearIds ??= []);
     const i = list.indexOf(gearId);
+    if (i < 0) return false;
+    list.splice(i, 1);
+    return true;
+  }
+
+  /** Record a combat consumable (tactical device) id as owned (loot/purchase). */
+  addConsumable(consumableId: string): void {
+    (this.ownedConsumableIds ??= []).push(consumableId);
+  }
+
+  /** True while the player still carries at least one copy of a consumable id. */
+  hasConsumable(consumableId: string): boolean {
+    return (this.ownedConsumableIds ??= []).includes(consumableId);
+  }
+
+  /** Spend the first owned copy of a consumable id (on activation). Returns true if one was spent. */
+  removeConsumable(consumableId: string): boolean {
+    const list = (this.ownedConsumableIds ??= []);
+    const i = list.indexOf(consumableId);
     if (i < 0) return false;
     list.splice(i, 1);
     return true;
