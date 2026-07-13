@@ -30,16 +30,28 @@ describe("attachDevAutopilot — dev-only runtime gate", () => {
   });
 
   it("loads + installs the hook over the live engine in a DEV build", async () => {
-    const installAutopilotHook = vi.fn();
+    // A minimal engine exposing the two methods the install path calls, so the
+    // happy path runs to completion instead of throwing into the swallowed
+    // onError (which would let a broken install path still pass this test).
+    const engine = {
+      setAutopilotStateProvider: vi.fn(),
+      getLoadedAutopilotEngaged: () => undefined,
+    } as unknown as GameEngine;
+    const hook = { engaged: false, start: vi.fn() };
+    const installAutopilotHook = vi.fn(() => hook);
     const load = vi
       .fn<[], Promise<AutopilotHookModule>>()
       .mockResolvedValue({ installAutopilotHook });
+    const onError = vi.fn();
 
-    attachDevAutopilot(true, fakeEngine, load);
+    attachDevAutopilot(true, engine, load, onError);
 
     expect(load).toHaveBeenCalledTimes(1);
     await flush();
-    expect(installAutopilotHook).toHaveBeenCalledWith(fakeEngine);
+    expect(installAutopilotHook).toHaveBeenCalledWith(engine);
+    // The install path completed cleanly — no fault was routed to onError.
+    expect(onError).not.toHaveBeenCalled();
+    expect(engine.setAutopilotStateProvider).toHaveBeenCalledTimes(1);
   });
 
   it("routes a load/install fault to onError instead of throwing", async () => {
