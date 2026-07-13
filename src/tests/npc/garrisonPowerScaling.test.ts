@@ -8,7 +8,14 @@
  * garrison while weak), hard late (today's range plus the upward bonus at
  * full power). Applied at spawn time every tick, so it is
  * generation-independent: existing saves pick it up as garrisons top up.
- * Pirate garrisons are NOT power-scaled — the pressure ramp is the Overmind's.
+ *
+ * SCOPE REVERSAL (campaign win-rate-100pct plan, Task 1, authorized by the
+ * user's 2026-07-13 directive): pirate-held-system garrisons are now IN SCOPE
+ * for the same downward discount — the prior "pressure ramp is the Overmind's"
+ * invariant is retired because the death census flags pirate garrisons as the
+ * most likely dominant remaining early-death source. The pirate assertion at
+ * the bottom of this file still pins the OLD undiscounted behavior; it is
+ * flipped in that plan's Task 3 when the pirate discount is actually wired.
  */
 import { describe, it, expect } from "vitest";
 import { Galaxy } from "@/domain/Galaxy";
