@@ -841,12 +841,52 @@ Any test file **not** in this list stays under the standing "never touch existin
 
 ### Task 11: Ship visual polish — banking/roll during planned execution
 
-- [ ] Ships bank/roll into turns during the execute window — a presentation-only rotation tilt
+- [x] Ships bank/roll into turns during the execute window — a presentation-only rotation tilt
       correlated with the ship's current turn rate (no physics change, `ShipPhysics`'s
       `shipAngle`/turn math is untouched; this reads the existing turn rate to drive a visual
       roll).
-- [ ] Write tests: pure banking-angle-from-turn-rate function (input turn rate → output roll
+- [x] Write tests: pure banking-angle-from-turn-rate function (input turn rate → output roll
       angle, clamped to a sane max).
+
+#### Task 11 outcome (implemented 2026-07-14)
+
+- **New pure module**: `src/presentation/flight/combatBanking.ts` (PixiJS-free, unit-tested
+  standalone like `combatPlanning` / `combatTrajectory` / `combatGravity` / `combatMissile` /
+  `combatAfterburner`). Owns the presentation-only roll-tilt math — it **only reads** the turn
+  rate; `ShipPhysics`' `shipAngle`/turn math and every physics path are **untouched** (no
+  physics/save/schema impact):
+  - `shipTurnRate(prevAngle, currAngle, dtMs)` — the signed turn rate (radians/ms) between two
+    consecutive headings, with the heading delta wrapped to the shortest rotation so a wrap across
+    ±π never reads as a spurious ~2π turn; `0` for a non-positive `dtMs` or a non-finite heading.
+    The one place the scene derives "how fast is the ship turning" from the existing `shipAngle`.
+  - `bankingAngle(turnRate, config)` — the **banking-angle-from-turn-rate function**:
+    `turnRate × rollPerTurnRate`, **sign-preserving** (banks *into* the turn) and **clamped to
+    ±maxRollAngle** (the "sane max"), so a lag-spike / time-scaled frame with an outsized
+    instantaneous turn rate can never flip the sprite past a believable bank. Tuned so a full-rate
+    `ShipPhysics.rotationSpeed` (≈ π/2 / 300) turn lands right at the `π/6` clamp. Level (`0`) for
+    a zero / non-finite turn rate.
+  - `approachRoll(current, target, dtMs, config)` — a smoothing easer that steps the live roll
+    toward the target at `rollSmoothingPerMs` (never overshooting), so the tilt reads as a smooth
+    roll-in/roll-out rather than a snap; holds the current roll for a non-positive `dtMs`.
+- **Balance**: new `BANKING` constant in `src/config/balance.ts` (rollPerTurnRate / maxRollAngle /
+  rollSmoothingPerMs), mirrored by the module's `DEFAULT_BANKING` and parity-asserted in the test
+  — tune-in-one-place, per the `COMBAT_ROUND_MS` / `GRAVITY_ASSIST` / `MISSILE_COMBAT` /
+  `AFTERBURNER` / `COMBAT_CONSUMABLE` / `COMBAT_COMMS` precedent.
+- **Wiring status**: inert in production today, exactly like Tasks 2–10's machinery — the
+  execute-phase render loop that would read the ship's live per-frame turn rate, feed
+  `bankingAngle` and ease it via `approachRoll` into the ship sprite's visual roll isn't wired
+  until the combat-open `beginCombat` trigger lands (a later task). The scene is **not** touched
+  here (also keeps `SpaceFlightScene.ts` clear of the `< 1900`-line guard). The pure math + config
+  + tests are complete and green; the live bank lights up the moment the execute loop is
+  connected. **No i18n/save/schema impact** (roll is a transient render-only value; no persisted
+  field, no player-facing string).
+- **Tests**: `src/tests/combat/combatBanking.test.ts` (18) — balance/module parity, `shipTurnRate`
+  (unchanged=0, signed magnitude=delta/dt, ±π wrap, non-positive-dt/non-finite guards),
+  `bankingAngle` (level at no turn, banks-into-turn sign, linear below the clamp, monotonic in
+  magnitude, ±clamp for an outsized rate, a full-rate `rotationSpeed` turn landing at the clamp, a
+  never-exceeds-clamp sweep, non-finite guard), and `approachRoll` (steps at the smoothing rate,
+  snaps-without-overshoot within one step, eases both up and down, holds on non-positive dt,
+  converges over repeated steps). Full unit suite green (5696 pass, 0 fail).
 
 ### Task 12: Shield-hit flash + per-ship floating hull/shield bars
 

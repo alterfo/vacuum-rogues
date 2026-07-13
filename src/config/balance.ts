@@ -753,6 +753,29 @@ export const COMBAT_COMMS = {
 } as const;
 
 /**
+ * Ship banking/roll tuning (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 11) —
+ * the single source of truth for the pure `combatBanking.ts` visual-tilt math. During the
+ * execute window a ship banks *into* its turn: a **presentation-only** roll tilt correlated with
+ * the ship's current (signed) turn rate. `ShipPhysics`' `shipAngle`/turn math is **untouched** —
+ * this only reads the turn rate to drive a visual roll, no physics/save/schema impact. The module
+ * mirrors this as `DEFAULT_BANKING`, kept in lockstep by `combatBanking.test.ts`; the scene
+ * passes this value.
+ *
+ * - rollPerTurnRate: roll radians produced per unit signed turn rate (radians/ms). Tuned so a
+ *   full-rate turn at `ShipPhysics.rotationSpeed` (≈ π/2 / 300 ≈ 0.00524 rad/ms) lands right at
+ *   `maxRollAngle` (0.00524 × 100 ≈ π/6).
+ * - maxRollAngle: the sane clamp — the ship never tilts past this (radians), so a lag-spike /
+ *   time-scaled frame with an outsized turn rate can't flip the sprite.
+ * - rollSmoothingPerMs: max roll change per ms when easing the current tilt toward the target,
+ *   so the bank eases in/out instead of snapping (full range ≈ 130 ms).
+ */
+export const BANKING = {
+  rollPerTurnRate: 100,
+  maxRollAngle: Math.PI / 6,
+  rollSmoothingPerMs: 0.004,
+} as const;
+
+/**
  * Exploration-encounter occurrence tuning — the single live source of truth for
  * how often derelict/anomaly/distress encounters fire and how they scale
  * (`docs/plans/20260625-exploration-encounters.md`). The live wiring
