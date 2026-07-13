@@ -651,6 +651,35 @@ export const GRAVITY_ASSIST = {
 } as const;
 
 /**
+ * Missile projectile tuning (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 7) —
+ * the single source of truth for the pure `combatMissile.ts` travel-time + evasion math. A
+ * `WeaponClass.MISSILE` weapon fires a tracked projectile that flies at `speedPerMs` toward its
+ * target and only resolves hit/miss on arrival, instead of the instant hit-scan every other
+ * weapon class uses. It **consumes** the previously flavor-only `WeaponClass.MISSILE` and
+ * `WeaponAbility.HOMING` fields. The module mirrors this as `DEFAULT_MISSILE_CONFIG`, kept in
+ * lockstep by `combatMissile.test.ts`; the scene passes this value.
+ *
+ * Evasion (Task 7 decision): the hit chance is resolved at arrival and drops from
+ * `baseHitChance` by `evasionPerPx` per px the target *maneuvered during the flight* (its
+ * accumulated path length), floored at `minHitChance`. A homing missile re-aims each frame and
+ * suffers only `homingEvasionFactor` of that penalty — it trades a straight flight for accuracy.
+ *
+ * - speedPerMs: missile travel speed (px/ms); with the launch distance this fixes travel time.
+ * - baseHitChance/minHitChance: hit chance against a stationary target → floor for a weaving one.
+ * - evasionPerPx: hit chance lost per px of target displacement during the flight.
+ * - homingEvasionFactor: fraction of the evasion penalty a homing missile still suffers.
+ * - maxRangeMultiplier: the missile expires if it flies past `launchDistance × this` (target outran it).
+ */
+export const MISSILE_COMBAT = {
+  speedPerMs: 0.32,
+  baseHitChance: 0.95,
+  minHitChance: 0.15,
+  evasionPerPx: 0.0016,
+  homingEvasionFactor: 0.35,
+  maxRangeMultiplier: 2.5,
+} as const;
+
+/**
  * Exploration-encounter occurrence tuning — the single live source of truth for
  * how often derelict/anomaly/distress encounters fire and how they scale
  * (`docs/plans/20260625-exploration-encounters.md`). The live wiring

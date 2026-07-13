@@ -578,17 +578,71 @@ Any test file **not** in this list stays under the standing "never touch existin
 
 ### Task 7: Missile projectile mechanic — travel time + evasion
 
-- [ ] New projectile entity for `WeaponClass.MISSILE` weapons: instead of the instant hit-scan
+- [x] New projectile entity for `WeaponClass.MISSILE` weapons: instead of the instant hit-scan
       every other weapon class uses, a fired missile becomes a tracked entity that travels toward
       its target's position over N turns/seconds (finally consuming the existing flavor-only
       `WeaponClass`/`WeaponAbility.HOMING` fields for real behavior).
-- [ ] Evasion: the target can maneuver during the missile's flight to reduce hit probability —
+- [x] Evasion: the target can maneuver during the missile's flight to reduce hit probability —
       pick and record the exact resolution rule (e.g. hit chance inversely tied to the target's
       displacement/speed during the missile's flight window, resolved at arrival) rather than
       leaving it vague.
-- [ ] Write tests: travel-time math (distance/missile-speed → turns), evasion probability given a
+- [x] Write tests: travel-time math (distance/missile-speed → turns), evasion probability given a
       stationary vs. actively-maneuvering target, a destroyed/out-of-range target causes the
       missile to miss/despawn cleanly (no dangling entity).
+
+#### Task 7 outcome (implemented 2026-07-14)
+
+- **New pure module**: `src/presentation/flight/combatMissile.ts` (PixiJS-free, unit-tested
+  standalone like `combatPlanning` / `combatTrajectory` / `combatGravity`). Owns the missile
+  travel-time + evasion mechanic — the first real consumer of the previously flavor-only
+  `WeaponClass.MISSILE` (travel time) and `WeaponAbility.HOMING` (live re-aim + evasion
+  resistance) fields:
+  - `missileTravelTime(distance, speedPerMs)` — the **travel-time formula** (distance ÷ speed,
+    `Infinity` for a non-positive speed, never negative).
+  - `launchMissile(...)` — spawns a `MissileState` entity flying from the firing ship, aimed at
+    the target's launch-time position; carries `launchDistance`, per-missile `damage`, the
+    `homing` flag, and the displacement/flown accumulators.
+  - `advanceMissile(state, targetPos | null, dtMs, config)` — steps the missile toward its aim
+    each frame: a **homing** missile re-aims at the *live* `targetPos`, a dumb one flies the
+    fixed line to `targetLaunchPos`. Accumulates the target's frame-to-frame path length into
+    `targetDisplacement` (the evasion input). Resolves to `"arrived"` (within
+    `MISSILE_ARRIVAL_EPS` of the aim), `"expired"` (flew past `launchDistance ×
+    maxRangeMultiplier` without arriving — the target outran it), or `"miss"` (target `null` =
+    destroyed/removed). **No dangling entity** — a done/arrived missile is returned unchanged
+    (idempotent) and `isMissileDone` gates the execute-phase despawn sweep.
+  - `missileHitChance(state, config)` — the pure **evasion curve**: `baseHitChance` minus
+    `evasionPerPx × targetDisplacement`, floored at `minHitChance`; a homing missile suffers only
+    `homingEvasionFactor` of that penalty.
+  - `resolveMissileArrival(state, roll, config)` — settles an `"arrived"` missile to `"hit"`/
+    `"miss"` by comparing `missileHitChance` against an **injected** `roll ∈ [0,1)`, keeping the
+    module RNG-free and deterministic (the caller supplies the draw).
+- **Evasion resolution rule (recorded, Task 7 decision)**: hit probability is resolved *at
+  arrival* and is inversely tied to the target's **accumulated maneuver path length during the
+  missile's flight** (not instantaneous speed) — a stationary target is hit at `baseHitChance`
+  (~0.95), each px of target travel subtracts `evasionPerPx`, floored at `minHitChance` (0.15) so
+  a frantic weaver can always *possibly* be hit. A **homing** missile re-aims each frame and
+  therefore only suffers `homingEvasionFactor` (0.35) of the displacement penalty — homing trades
+  a straight-line flight for evasion resistance, which is exactly what consumes
+  `WeaponAbility.HOMING` for real behaviour.
+- **Balance**: new `MISSILE_COMBAT` constant in `src/config/balance.ts` (speedPerMs / baseHitChance
+  / minHitChance / evasionPerPx / homingEvasionFactor / maxRangeMultiplier), mirrored by the
+  module's `DEFAULT_MISSILE_CONFIG` and parity-asserted in the test — tune-in-one-place, per the
+  `COMBAT_ROUND_MS` / `GRAVITY_ASSIST` precedent.
+- **Wiring status**: inert in production today, exactly like Tasks 2–6's machinery — the
+  execute-phase loop that would launch a missile from `advancePlayerWeapons` (for a
+  `WeaponClass.MISSILE` gun) and step it each frame folding a hit into `applyDamageWithMode`
+  isn't wired until the combat-open `beginCombat` trigger lands (a later task). The pure math +
+  entity lifecycle + config + tests are complete and green; the weapon-type VFX smoke-trail that
+  tracks this projectile's actual flight path is Task 13. **No i18n/save/schema impact** (missiles
+  are transient execute-window entities).
+- **Tests**: `src/tests/combat/combatMissile.test.ts` (25) — travel-time formula (distance/speed,
+  faster→sooner, zero-speed=Infinity, non-negative), launch state, travel + arrival (stationary
+  target, per-step advance, overshoot-snap, homing intercept of a drifting target), clean despawn
+  (null target = miss, outrun target = expired, done/arrived idempotent — no dangling entity), the
+  evasion curve (stationary=base, more displacement→lower, floored, homing resists better, linear
+  penalty), roll-injected hit/miss settlement (low-roll hit, high-roll miss, a weaver survives a
+  mid roll a stationary target wouldn't, flying-not-settled), and the stationary-vs-weaving
+  integration. Full unit suite green (5635 pass, 0 fail).
 
 ### Task 8: Afterburner
 
