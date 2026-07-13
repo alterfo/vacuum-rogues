@@ -624,6 +624,11 @@ export const SaveStateSchema = z.object({
   // presets. Saves made before presets existed lack it; the hangar treats
   // absent as "no presets saved yet" (all three tabs empty).
   loadoutPresets: z.array(LoadoutPresetSchema).max(3).optional(),
+  // Optional additive (autosave-autopilot-resume): whether the DEV-only live
+  // autopilot was engaged at save time. Saves made before this existed lack it;
+  // absent ⇒ no auto-resume. Production/tests use a no-op provider so this is
+  // false/absent there. No migration, no version bump. See GameEngine.saveGame.
+  autopilotEngaged: z.boolean().optional(),
 });
 
 export function validateSaveState(

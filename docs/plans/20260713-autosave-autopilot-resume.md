@@ -198,16 +198,22 @@ touches different files, no shared risk.
 
 ### Task 3: Add `SaveState.autopilotEngaged` field + schema + save-time read
 
-- [ ] Add `autopilotEngaged?: boolean` to `src/domain/SaveState.ts` (constructor param, `serialize()`,
+- [x] Add `autopilotEngaged?: boolean` to `src/domain/SaveState.ts` (constructor param, `serialize()`,
       `deserialize()`) mirroring `campaignPeakPower`'s exact additive-optional shape.
-- [ ] Add the sibling Zod field to `SaveStateSchema` in `src/validation/schemas.ts`
+      (Added as the last constructor param; threaded through `serialize()`/`deserialize()`.
+      `SerializedSave.payload` is a JSON string so no `src/types/index.ts` change was needed.)
+- [x] Add the sibling Zod field to `SaveStateSchema` in `src/validation/schemas.ts`
       (`autopilotEngaged: z.boolean().optional()`).
-- [ ] In `GameEngine.saveGame()` (`:1213-1230`), read `this.autopilotStateProvider.isEngaged()` (the
-      Task 2 port) and set it on the built `SaveState`.
-- [ ] Write tests: `SaveState` round-trip (present `true`/`false`/absent), schema validation
+- [x] In `GameEngine.saveGame()` (`:1213-1230`), read the Task 2 port and set it on the built
+      `SaveState`. (Field is `this.autopilotState` — passes `this.autopilotState.isEngaged()`; inert
+      `false` under the default `NoOpAutopilotStateProvider` in production/tests.)
+- [x] Write tests: `SaveState` round-trip (present `true`/`false`/absent), schema validation
       (accepts boolean, accepts absent, rejects wrong type), `saveGame` writes the provider's current
       value into the built state (unit test with a stub provider).
-- [ ] Run affected unit tests — must pass before Task 4.
+      (`src/tests/core/saveStateAutopilotEngaged.test.ts` — 9 tests, all green.)
+- [x] Run affected unit tests — must pass before Task 4. (saveStateAutopilotEngaged +
+      autopilotStateProvider + GameEngine.flight-position + playerPower: 44 passed; goldenSaveCompat +
+      saveMigration: 18 passed; `tsc --noEmit` clean; targeted eslint clean.)
 
 ### Task 4: Wire boot/continue resume
 

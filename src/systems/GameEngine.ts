@@ -1284,6 +1284,10 @@ export class GameEngine {
       this.playerLoadoutPresets.length > 0
         ? this.playerLoadoutPresets
         : undefined,
+      // Persist whether the DEV-only live autopilot is engaged so a reload can
+      // auto-resume it. In production and in tests `autopilotState` is the
+      // headless no-op (always false), so this is inert there.
+      this.autopilotState.isEngaged(),
     );
 
     await this.saveManager.write(slotId, state);

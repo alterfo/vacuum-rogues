@@ -58,6 +58,15 @@ export class SaveState {
      * version bump. See `GearBridge.applyLoadoutPreset`/`HangarPanel`.
      */
     public loadoutPresets?: LoadoutPreset[],
+    /**
+     * Whether the DEV-only live autopilot was engaged when this save was
+     * written. Read back on load to auto-resume the autopilot (dev convenience
+     * only; production/tests use a no-op provider so this is always absent/false
+     * there). Optional and additive: saves made before this existed simply lack
+     * it — absent ⇒ no resume, no migration, no version bump. See
+     * `GameEngine.saveGame`/`loadGame` and `IAutopilotStateProvider`.
+     */
+    public autopilotEngaged?: boolean,
   ) {}
 
   serialize(): SerializedSave {
@@ -76,6 +85,7 @@ export class SaveState {
         flightShipPos: this.flightShipPos,
         campaignPeakPower: this.campaignPeakPower,
         loadoutPresets: this.loadoutPresets,
+        autopilotEngaged: this.autopilotEngaged,
       }),
     };
   }
@@ -95,6 +105,7 @@ export class SaveState {
       parsed.flightShipPos,
       parsed.campaignPeakPower,
       parsed.loadoutPresets,
+      parsed.autopilotEngaged,
     );
   }
 }
