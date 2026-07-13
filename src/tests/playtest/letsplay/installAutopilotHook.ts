@@ -159,32 +159,102 @@ export function createLiveSceneController(
   let settingsPanelGraceGiven = false;
   let planetInfoGraceGiven = false;
 
+  /**
+   * Auto-dismiss the "always close on sight, no grace" blocking surfaces —
+   * onboarding help panel, any manager-owned modal (NPC contact panel /
+   * OVERMIND-core overlay / exploration-encounter prompt), and a stuck
+   * active-pause («Огонь!») overlay. Exposed as its own `LiveSceneController`
+   * verb (not just inlined in `tick()`) so `AutopilotController.tickOnce()`
+   * can run it as a gate BEFORE the policy decides — live-session finding
+   * 2026-07-12: a distant pirate's shakedown hail (`openShakedownHail`) opens
+   * the manager-owned modal AND calls `endTurn()`, but `observe()` has no
+   * notion of either fact, so the policy still sees the hostile and legally
+   * picks `attack`/`flee`. Those verbs dispatch straight to their own
+   * executors (`LiveApplier.applyLiveAction` only routes `wait`/`move`
+   * through `tick()`), so the panel was never closed — a silent, permanent
+   * hang. Gating every tick on this check, not just wait/move, closes that
+   * hole for every action kind, not only the ones a given surface happened
+   * to be reachable from today.
+   *
+   * The active-pause branch has the same shape for a different reason (also
+   * live-session, 2026-07-12): a multi-ship Жнец garrison re-triggers
+   * `combatPause` faster than a single per-verb resume can make progress.
+   * `attack()`/`flee()` already resume/confirm it themselves, but `warp()`'s
+   * own resume only runs once the scene has ALREADY reached STAR_MAP — from
+   * SPACE_FLIGHT, a `warp` decision dispatches to `openStarMap()` FIRST
+   * (`LiveApplier`'s two-step warp), which had no pause awareness at all. A
+   * heavy garrison attack re-pauses combat before that first `openStarMap()`
+   * call's scene transition can land, so the ship never leaves SPACE_FLIGHT
+   * and the flee-stagnant-jump escape valve never actually fires — confirmed
+   * live: `combatPause.paused` stayed `true` across a full 10 s window with
+   * zero net ship displacement. Resuming (declining to fire) up front, before
+   * ANY verb runs, covers every dispatch path uniformly instead of requiring
+   * each new verb to remember its own resume.
+   */
+  function dismissBlockingModal(): boolean {
+    // Auto-dismiss any open onboarding/contextual-help panel (F3, live-session
+    // finding): a full-screen help panel blocks a real player's pointer, but
+    // the autopilot keeps acting through the port UNDER it and never
+    // dismisses on its own. `isHelpPanelOpen`/`dismissHelpPanel` are the
+    // module-level query+dismiss seam `mountSceneHelp`/`showHelpOnce` expose
+    // for exactly this (no scene reference needed). Never freezes the turn,
+    // so no restart is needed here.
+    if (isHelpPanelOpen()) {
+      dismissHelpPanel();
+      return true;
+    }
+    const scene = engine.currentScene as {
+      npcManager?: { hasOpenModal?: () => boolean; closeModals?: () => void };
+      pendingWarp?: unknown;
+      plannedRoute?: { x: number; y: number } | null;
+      shipPhysics?: { isMoving: boolean } | null;
+      isTurnRunning?: boolean;
+      combatModule?: { isActive?: boolean } | null;
+      e2eStartTurn?: () => void;
+      combatPause?: { paused?: boolean; resume?: () => void };
+    } | null;
+    // Auto-dismiss any open encounter/contact-panel/OVERMIND overlay so the
+    // autopilot keeps flying without a human pointer click. A click on the
+    // overlay's dismiss button fires a native `pointerdown` that bubbles to
+    // `window`, triggering reclaim-on-input → stop(). Driving the close
+    // programmatically via closeModals() bypasses that race entirely.
+    if (scene?.npcManager?.hasOpenModal?.()) {
+      scene.npcManager.closeModals?.();
+      // Only a pirate's shakedown hail (of the surfaces `hasOpenModal()`
+      // covers) calls `endTurn()` before opening — closing it programmatically
+      // (no human follow-up click) would otherwise leave `isTurnRunning`
+      // frozen forever. Re-arm it under the exact same safe-to-restart guard
+      // `tick()`'s idle restart uses below, so this can't step on a route or
+      // fight already under way (and is a no-op for the encounter/OVERMIND
+      // overlays, which never freeze the turn to begin with).
+      if (
+        engine.currentSceneType === SceneType.SPACE_FLIGHT &&
+        scene.pendingWarp == null &&
+        !scene.plannedRoute &&
+        !scene.shipPhysics?.isMoving &&
+        !scene.isTurnRunning &&
+        !scene.combatModule?.isActive &&
+        typeof scene.e2eStartTurn === "function"
+      ) {
+        scene.e2eStartTurn();
+      }
+      return true;
+    }
+    if (
+      scene?.combatPause?.paused &&
+      typeof scene.combatPause.resume === "function"
+    ) {
+      scene.combatPause.resume();
+      return true;
+    }
+    return false;
+  }
+
   return {
+    dismissBlockingModal,
     tick() {
       tickCount++;
-      // Auto-dismiss any open onboarding/contextual-help panel (F3, live-session
-      // finding): a full-screen help panel blocks a real player's pointer, but
-      // the autopilot keeps acting through the port UNDER it and never
-      // dismisses on its own. `isHelpPanelOpen`/`dismissHelpPanel` are the
-      // module-level query+dismiss seam `mountSceneHelp`/`showHelpOnce` expose
-      // for exactly this (no scene reference needed).
-      if (isHelpPanelOpen()) {
-        dismissHelpPanel();
-        return;
-      }
-
-      // Auto-dismiss any open encounter overlay (SOS / wreckage / anomaly scan)
-      // so the autopilot keeps flying without a human pointer click. A click on
-      // the overlay's dismiss button fires a native `pointerdown` that bubbles to
-      // `window`, triggering reclaim-on-input → stop(). Driving the close
-      // programmatically via closeModals() bypasses that race entirely.
-      const sceneForModal = engine.currentScene as {
-        npcManager?: { hasOpenModal?: () => boolean; closeModals?: () => void };
-      } | null;
-      if (sceneForModal?.npcManager?.hasOpenModal?.()) {
-        sceneForModal.npcManager.closeModals?.();
-        return;
-      }
+      if (dismissBlockingModal()) return;
 
       // Mirror the same auto-dismiss for the two other blocking-modal
       // registries the live scene owns: the quest journal / accessibility
@@ -204,27 +274,36 @@ export function createLiveSceneController(
           closeInfoPanel?: () => void;
         };
       } | null;
-      if (sceneForHud?.hud?.isQuestJournalOpen?.()) {
-        if (tickCount <= 1 || questJournalGraceGiven) {
-          sceneForHud.hud.closeModals?.();
+      const journalOpen = !!sceneForHud?.hud?.isQuestJournalOpen?.();
+      const settingsOpen = !!sceneForHud?.hud?.isSettingsPanelOpen?.();
+      if (journalOpen || settingsOpen) {
+        // `closeModals()` is a bulk close shared by the journal AND the
+        // settings/accessibility panel — it has no per-panel granularity. The
+        // two panels are independently openable (neither toggle closes the
+        // other), so both can be open at once. Closing while either one is
+        // still mid-grace would destroy the OTHER as collateral damage — e.g.
+        // a human opens the settings panel while the journal (already open a
+        // tick) is idle-and-due-to-close; without this check the settings
+        // panel would vanish having never gotten its own grace tick. Only
+        // actually close once EVERY currently-open panel in this shared
+        // registry agrees it's due.
+        const journalDue =
+          !journalOpen || tickCount <= 1 || questJournalGraceGiven;
+        const settingsDue =
+          !settingsOpen || tickCount <= 1 || settingsPanelGraceGiven;
+        if (journalDue && settingsDue) {
+          sceneForHud?.hud?.closeModals?.();
           questJournalGraceGiven = false;
-          return;
-        }
-        // First MID-SESSION tick observing it open — give a human who just
-        // opened it one full tick before the idle-panel auto-dismiss kicks in.
-        questJournalGraceGiven = true;
-        return;
-      }
-      questJournalGraceGiven = false;
-      if (sceneForHud?.hud?.isSettingsPanelOpen?.()) {
-        if (tickCount <= 1 || settingsPanelGraceGiven) {
-          sceneForHud.hud.closeModals?.();
           settingsPanelGraceGiven = false;
           return;
         }
-        settingsPanelGraceGiven = true;
+        // At least one panel still wants its grace tick — defer closing
+        // either, granting grace to whichever is open and hasn't had it yet.
+        if (journalOpen) questJournalGraceGiven = true;
+        if (settingsOpen) settingsPanelGraceGiven = true;
         return;
       }
+      questJournalGraceGiven = false;
       settingsPanelGraceGiven = false;
       if (sceneForHud?.planetManager?.hasInfoPanel) {
         if (tickCount <= 1 || planetInfoGraceGiven) {
@@ -352,6 +431,30 @@ export function createLiveSceneController(
       const station =
         sys?.stations.find((s) => s.id === stationId) ?? sys?.stations[0];
       if (station) {
+        // dock() always teleports (no physical-docking-range simulation like
+        // land()'s real-route branch) — the ship never actually travels here,
+        // so nothing else records "near the station" as its position. Save it
+        // the same way openStarMap() saves the pre-warp position below: the
+        // SPACE_FLIGHT entry logic only ever reads `lastFlightShipPos`, so
+        // without this, undocking falls back to the plain system-edge spawn.
+        // Confirmed live (2026-07-12): dock right after a fresh warp-in, then
+        // undock — the ship was back at the system boundary instead of by the
+        // station it supposedly just left.
+        const flightScene = engine.currentScene as {
+          planetManager?: {
+            stationMarkers?: Array<{
+              station: { id: string };
+              x: number;
+              y: number;
+            }>;
+          };
+        } | null;
+        const marker = flightScene?.planetManager?.stationMarkers?.find(
+          (m) => m.station.id === station.id,
+        );
+        if (marker) {
+          engine.lastFlightShipPos = { x: marker.x, y: marker.y };
+        }
         await goTo(SceneType.STATION, { station });
         // dock() always teleports (no physical-docking-range simulation like
         // land()'s real-route branch), so it must refuel itself — mirrors
@@ -380,6 +483,25 @@ export function createLiveSceneController(
       await goTo(SceneType.STAR_MAP);
     },
     async warp(systemId, reason) {
+      // Resume the active-pause overlay first, mirroring `flee()`'s own guard
+      // (decline to fire, don't freeze on it) — needed since the SPACE_FLIGHT
+      // survive tier's `flee-stagnant-jump` escalation (a fold-stagnant flee
+      // standoff) can push `warp` while combat-pause is open. Without this,
+      // `performWarpJumpTo` below either no-ops or races the frozen overlay,
+      // and the next tick re-observes the same outmatched/stagnant hostile and
+      // re-picks `warp` again — a live combat-pause deadlock, confirmed live
+      // (2026-07-12): the ship parked on the «Огонь!» overlay instead of the
+      // system boundary, the exact failure mode `flee-stagnant-jump` exists to
+      // break out of.
+      const pauseScene = engine.currentScene as {
+        combatPause?: { paused?: boolean; resume?: () => void };
+      } | null;
+      if (
+        pauseScene?.combatPause?.paused &&
+        typeof pauseScene.combatPause.resume === "function"
+      ) {
+        pauseScene.combatPause.resume();
+      }
       const sys = currentSystem(engine);
       const prevId = sys?.id ?? null;
       const connections = reachableNeighbors(
@@ -513,7 +635,11 @@ export function createLiveSceneController(
     attack(targetId) {
       const scene = engine.currentScene as {
         combatPause?: { paused?: boolean; confirm?: () => unknown };
-        npcManager?: { e2eEngageCombat?: (id?: string) => void };
+        npcManager?: {
+          e2eEngageCombat?: (id?: string) => void;
+          npcSprites?: Array<{ npc: { id: string } }>;
+          interaction?: { onAttackNpc?: (npc: { id: string }) => void };
+        };
       } | null;
       // When combat is on the active-pause overlay, pressing «Огонь!» is what
       // fires — `combatPause.confirm()` shoots one aimed shot and resumes time.
@@ -530,9 +656,37 @@ export function createLiveSceneController(
         scene.combatPause.confirm();
         return;
       }
-      // Otherwise engage the nearest (or named) hostile via the real
-      // CombatModule seam. e2eEngageCombat is __DEBUG__-gated in NpcShipManager
-      // so it never runs in a production build.
+      // Route through the real "Атаковать" handler — the exact one the
+      // contact-panel button calls — rather than the `e2eEngageCombat` E2E
+      // seam. That seam is built for staging a deterministic test fight
+      // (paired with `e2eForceAggressorInRange`): it registers the target as
+      // a combatant UNCONDITIONALLY, no range check at all. `observe()`'s
+      // hostile list has no distance filter either — any hostile anywhere in
+      // the system is a legal "attack" target — so the policy can pick one
+      // thousands of pixels away. Confirmed live (2026-07-12): right after a
+      // warp-in the policy attacked a system-wide hostile ~3500px off,
+      // `combatModule.isActive` latched true with that unreachable NPC as the
+      // sole combatant, and the ship just sat there — no pursuit, no fire,
+      // "under attack" with nothing nearby, forever (the stale engagement
+      // also never self-prunes: `pruneDisengaged` only runs while the turn is
+      // running, and `isTurnRunning` never restarts because `dismissBlockingModal`'s
+      // idle-restart deliberately refuses while `combatModule.isActive` is
+      // true — a genuine catch-22). `onAttackNpc` does the real player's own
+      // range check: pursues (plots an intercept route, which itself re-arms
+      // the turn) when out of range, engages only once actually in weapon
+      // range — exactly like a human clicking «Атаковать».
+      const npcSprites = scene?.npcManager?.npcSprites ?? [];
+      const sprite = targetId
+        ? (npcSprites.find((s) => s.npc.id === targetId) ?? npcSprites[0])
+        : npcSprites[0];
+      if (
+        sprite &&
+        typeof scene?.npcManager?.interaction?.onAttackNpc === "function"
+      ) {
+        scene.npcManager.interaction.onAttackNpc(sprite.npc);
+        return;
+      }
+      // Fallback for hosts/tests that only model the narrower E2E seam.
       scene?.npcManager?.e2eEngageCombat?.(targetId);
     },
     flee() {

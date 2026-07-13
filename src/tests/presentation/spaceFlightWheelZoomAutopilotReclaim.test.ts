@@ -181,6 +181,7 @@ describe("SpaceFlightScene.onWheel: handler-level behavior", () => {
 describe("SpaceFlightScene wheel-zoom vs. the real dev autopilot: DOM integration", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    document.body.innerHTML = "";
   });
 
   /**
@@ -216,9 +217,27 @@ describe("SpaceFlightScene wheel-zoom vs. the real dev autopilot: DOM integratio
     const { zoomAtClient } = primeSceneForWheel(scene);
     const detach = attachRealOnWheel(scene); // registered AFTER the autopilot
 
+    // Dispatch on a genuine descendant of `window` — not `window` itself.
+    // A real wheel gesture always targets the canvas element under the
+    // cursor, never bare `window`: dispatching straight on `window` would
+    // make it both target and currentTarget, and per the DOM spec, listeners
+    // registered on the same node at the AT_TARGET phase fire in add order
+    // regardless of the capture flag — which would defeat this test's whole
+    // point (it'd pass even if `onWheel` weren't capture-phase at all). Using
+    // a descendant forces the real capturing-then-bubbling traversal through
+    // `window`, exactly like production.
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+
     try {
-      window.dispatchEvent(
-        new WheelEvent("wheel", { deltaY: -100, clientX: 400, clientY: 300 }),
+      canvas.dispatchEvent(
+        new WheelEvent("wheel", {
+          deltaY: -100,
+          clientX: 400,
+          clientY: 300,
+          bubbles: true,
+          cancelable: true,
+        }),
       );
 
       expect(zoomAtClient).toHaveBeenCalledWith(-100, 400, 300);

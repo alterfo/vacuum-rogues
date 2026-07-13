@@ -310,6 +310,20 @@ export class GameEngine {
   private exceptionHandler: IExceptionHandler;
   private animationFrameId = 0;
   private lastTime = 0;
+  /**
+   * Background-tab fallback (F9, confirmed live 2026-07-12): a hidden tab's
+   * `requestAnimationFrame` gets throttled to near-zero by the browser, but
+   * the dev autopilot's `setInterval` tick keeps deciding/acting regardless —
+   * so the ship's physics/day progress silently froze while the autopilot
+   * looked like it was still working. `gameLoop` self-schedules via rAF and
+   * never stops on its own; while `document.hidden` is true, this interval
+   * drives the same per-tick work at a coarser cadence so the world keeps
+   * advancing. Both write `lastTime` before use, so an occasional throttled
+   * rAF frame overlapping the interval can't double-count elapsed time.
+   */
+  private backgroundIntervalId: ReturnType<typeof setInterval> | null = null;
+  private readonly BACKGROUND_TICK_MS = 500;
+  private visibilityChangeHandler: (() => void) | null = null;
   /** Renderer-backed in production; a headless no-op when not injected (tests, legacy DI sites). */
   private readonly overlay: IOverlayPresenter;
   /**
@@ -538,8 +552,7 @@ export class GameEngine {
           const loaded = await this.loadGame("auto");
           if (loaded) {
             // Start game loop after successful load
-            this.lastTime = performance.now();
-            this.gameLoop(this.lastTime);
+            this.startGameLoop();
             return;
           }
         } catch (error) {
@@ -559,8 +572,7 @@ export class GameEngine {
       await this.transitionTo(SceneType.MAIN_MENU, { gameEngine: this });
 
       // Start game loop
-      this.lastTime = performance.now();
-      this.gameLoop(this.lastTime);
+      this.startGameLoop();
     } catch (error) {
       this.handleError(error as Error);
       throw error;
@@ -1701,6 +1713,51 @@ export class GameEngine {
     this.animationFrameId = requestAnimationFrame(this.gameLoop);
   };
 
+  /** Start the rAF loop and arm the background-tab fallback (see field doc). */
+  private startGameLoop(): void {
+    this.lastTime = performance.now();
+    this.gameLoop(this.lastTime);
+    this.registerBackgroundFallback();
+  }
+
+  /**
+   * Idempotent — a second call (e.g. a reload path re-entering `initialize`) is a no-op.
+   * Also arms immediately if the tab is already hidden (e.g. opened/reloaded in a
+   * background tab) — `visibilitychange` only fires on a *transition*, so without this
+   * check a session that starts hidden would never get the fallback ticker.
+   */
+  private registerBackgroundFallback(): void {
+    if (typeof document === "undefined" || this.visibilityChangeHandler) return;
+    this.visibilityChangeHandler = () => {
+      if (document.visibilityState === "hidden") this.startBackgroundTicker();
+      else this.stopBackgroundTicker();
+    };
+    document.addEventListener("visibilitychange", this.visibilityChangeHandler);
+    if (document.visibilityState === "hidden") this.startBackgroundTicker();
+  }
+
+  private startBackgroundTicker(): void {
+    if (this.backgroundIntervalId != null) return;
+    this.backgroundIntervalId = setInterval(() => {
+      const time = performance.now();
+      const deltaTime = time - this.lastTime;
+      this.lastTime = time;
+      try {
+        this.currentScene?.update(deltaTime);
+        this.updateMusic(this.combatStateProvider?.() ?? false);
+      } catch (error) {
+        this.handleError(error as Error);
+      }
+    }, this.BACKGROUND_TICK_MS);
+  }
+
+  private stopBackgroundTicker(): void {
+    if (this.backgroundIntervalId != null) {
+      clearInterval(this.backgroundIntervalId);
+      this.backgroundIntervalId = null;
+    }
+  }
+
   /**
    * Register (or clear with `null`) the active scene's live "in combat?" signal.
    * The flight scene plugs in `() => combatModule.isActive`; {@link transitionTo}
@@ -1749,6 +1806,14 @@ export class GameEngine {
 
   stop(): void {
     cancelAnimationFrame(this.animationFrameId);
+    this.stopBackgroundTicker();
+    if (typeof document !== "undefined" && this.visibilityChangeHandler) {
+      document.removeEventListener(
+        "visibilitychange",
+        this.visibilityChangeHandler,
+      );
+      this.visibilityChangeHandler = null;
+    }
     this.flightPositions.unregisterFlightHideAutosave();
     this.currentScene?.destroy();
     this.renderer?.destroy();

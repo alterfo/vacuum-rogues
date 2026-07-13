@@ -35,6 +35,15 @@ import type { Observation } from "./observe";
 export interface LiveSceneController {
   /** Advance one frame / let real time pass (the universal "do nothing yet"). */
   tick(): void | Promise<void>;
+  /**
+   * Close any blocking modal the live scene owns (help panel, NPC contact
+   * panel, encounter prompt, OVERMIND overlay) and re-arm the turn if closing
+   * one left it frozen. Optional so tests/hosts that don't model any modal
+   * can omit it. Returns whether something was actually dismissed — a caller
+   * (the autopilot's own tick loop) should skip deciding an action this cycle
+   * when it does, so the next tick observes the now-clean state.
+   */
+  dismissBlockingModal?(): boolean | Promise<boolean>;
   /** Back out of a sub-screen toward the flight scene (the "leave this panel"). */
   leaveToFlight(): void | Promise<void>;
   /** Plot a course to and land on a planet (defaults to the nearest if absent). */

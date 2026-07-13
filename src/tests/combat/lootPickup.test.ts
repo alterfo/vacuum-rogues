@@ -230,3 +230,57 @@ describe("Loot proximity pickup (Task 6)", () => {
     manager.destroy();
   });
 });
+
+describe("Loot day-gate default when the calendar is unavailable (regression 7583e75)", () => {
+  /** No gameEngine at all — spawnLootForNpc must fall back to `?? Infinity`,
+   *  not `?? 0`, when it can't read `gameEngine.galaxy.gameDays`. */
+  function makeManagerWithoutGameEngine(): NpcShipManager {
+    const stage = new Container();
+    const uiLayer = new Container();
+    const gameLayer = new Container();
+    const renderer = {
+      app: { screen: { width: 800, height: 600 } },
+      stage,
+      uiLayer,
+      gameLayer,
+    } as unknown as Renderer;
+
+    const physics = {
+      shipX: 0,
+      shipY: 0,
+      timeScale: 1,
+    } as unknown as ShipPhysics;
+    const deps: NpcShipManagerDeps = {
+      getShipPhysics: () => physics,
+      getPlanetSprites: () => [],
+      getStarCenter: () => ({ x: 400, y: 300 }),
+      isTurnRunning: () => true,
+      showMessage: () => {},
+      showTooltip: () => {},
+      hideTooltip: () => {},
+      executeRouteTo: () => {},
+      clearRouteTarget: () => {},
+      endTurn: () => {},
+    };
+
+    return new NpcShipManager(renderer, null, gameLayer, uiLayer, deps);
+  }
+
+  it("does not gate a minDay-restricted loot token to 'never drop' with no galaxy to read a day from", () => {
+    // "eq_engine_v" (the apex engine) carries a real minDay gate
+    // (APEX_ENGINE_MIN_DAY = 1050); "laser_mk1" resolves to no catalog gear
+    // id and so is never gated, giving a stable control token.
+    const manager = makeManagerWithoutGameEngine();
+    const npc = makeNpc("gated", ["eq_engine_v", "laser_mk1"]);
+    // First roll picks the loot count (0.5 -> exactly 1 item); second picks
+    // the module — index 0 of whichever pool the day-gate left eligible.
+    manager.spawnLootForNpc(npc, 0, 0, seqRng([0.5, 0.1]));
+
+    expect(manager.spaceLoot.length).toBe(1);
+    // Day must resolve to Infinity (not 0), so the gated engine stays
+    // eligible and is the one picked at index 0 — a day-0 fallback would
+    // have excluded it, leaving only "laser_mk1" in the pool.
+    expect(manager.spaceLoot[0].moduleId).toBe("eq_engine_v");
+    manager.destroy();
+  });
+});

@@ -949,6 +949,23 @@ export function decideWithMemory(
   if (obs.hostiles.length > 0 && !downed) {
     const tid = obs.hostiles[0]?.id;
     if (hurt || outmatched || outgunned) {
+      // Live-observed deadlock: `flee`'s live executor routes to a boundary-
+      // adjacent point and stops — it never actually leaves the system, so a
+      // hostile that lingers in scanner range without closing distance (e.g.
+      // PATROLLING, not pursuing) makes this branch re-push `flee` forever
+      // with zero progress (confirmed live: `foldsSinceDayAdvance` ran past
+      // 300 with the ship parked at the system edge). `foldsSinceDayAdvance`
+      // is the existing no-progress signal (see `MAX_FOLDS_WITHOUT_DAY_ADVANCE`
+      // above); once a flee-worthy standoff has outlasted it, escalate to an
+      // actual hyperjump — `warp` is legal from SPACE_FLIGHT whenever the
+      // system has a connection, hostiles or not — instead of repeating the
+      // no-op flee route another fold.
+      if (
+        mem.foldsSinceDayAdvance >= MAX_FOLDS_WITHOUT_DAY_ADVANCE &&
+        legal.has("warp")
+      ) {
+        push("warp", "flee-stagnant-jump");
+      }
       push(
         "flee",
         outmatched
@@ -960,6 +977,28 @@ export function decideWithMemory(
       );
       push("attack", "fight", tid);
     } else {
+      // Strategic disengage (campaign win-rate finding, 2026-07-13): every
+      // trigger above is TACTICAL (about THIS fight) — nothing here ever
+      // asked "am I nowhere near battle-ready and stuck in a no-progress
+      // standoff." `NpcShipManager.checkGarrisonAggro` shields a low-power
+      // ship from a neutral wanderer's aggro but leaves it `hostile===true`,
+      // so it keeps populating `obs.hostiles` without ever closing or firing
+      // — `attack` wins this branch every time and the agent parks on it
+      // forever (the campaign's own stall telemetry: `repeat=N@SPACE_FLIGHT
+      // |attack`, `dayFrozen=N` — confirmed live: a fresh 3-session run today
+      // died 0/3, all before day 310, power never exceeding 0.15). Mirrors
+      // the tactical branch's own `flee-stagnant-jump` escalation above,
+      // gated the same way (`foldsSinceDayAdvance`) so it only fires once a
+      // standoff is PROVEN, never against a fresh/winnable fight — a
+      // battle-ready ship never reaches this push at all (`!battleReady`),
+      // preserving "an ARMED ship is still hunted."
+      if (
+        !battleReady &&
+        mem.foldsSinceDayAdvance >= MAX_FOLDS_WITHOUT_DAY_ADVANCE &&
+        legal.has("warp")
+      ) {
+        push("warp", "flee-weak-inert-standoff");
+      }
       push("attack", "fight", tid);
       push("flee", "flee", tid);
     }

@@ -19,6 +19,7 @@ import {
   MemoryHeuristicPolicy,
   decideWithMemory,
   BATTLE_READY_HULL_FRACTION,
+  MAX_FOLDS_WITHOUT_DAY_ADVANCE,
 } from "./MemoryHeuristicPolicy";
 
 /**
@@ -645,6 +646,101 @@ describe("flee escape jump (campaign wedge regression)", () => {
     const action = decideWithMemory(o, mem);
     expect(action.kind).toBe("warp");
     expect(action.targetId).toBe("sysC");
+  });
+});
+
+describe("SPACE_FLIGHT flee stagnation escalation (live-observed deadlock)", () => {
+  /**
+   * Live-browser repro (2026-07-12): `flee`'s live executor (installAutopilotHook.ts)
+   * routes the ship to a boundary-adjacent point and stops — it never actually
+   * leaves the system. A hostile that lingers in scanner range without closing
+   * distance (e.g. PATROLLING, not pursuing) makes SPACE_FLIGHT's survive tier
+   * re-push `flee` every fold forever: confirmed live with `foldsSinceDayAdvance`
+   * past 300 and the ship permanently parked at the system edge. Unlike
+   * STAR_MAP's `flee-escape-jump` (tested above), SPACE_FLIGHT's survive tier had
+   * no path to an actual hyperjump at all.
+   */
+  function outmatchedFlightObs(connections = 2): Observation {
+    return obs({
+      connections,
+      hostiles: [hostile("patrol-1", 60)],
+      player: { hull: 40, maxHull: 140, hullFraction: 40 / 140 },
+    });
+  }
+
+  it("keeps physically fleeing (no escalation) while the standoff is still fresh", () => {
+    const mem = createMemory();
+    mem.foldsSinceDayAdvance = MAX_FOLDS_WITHOUT_DAY_ADVANCE - 1;
+    const action = decideWithMemory(outmatchedFlightObs(), mem);
+    expect(action.kind).toBe("flee");
+    expect(action.reason).toContain("flee-outmatched");
+  });
+
+  it("escalates to a hyperjump once the standoff has outlasted the stagnation valve", () => {
+    const mem = createMemory();
+    mem.foldsSinceDayAdvance = MAX_FOLDS_WITHOUT_DAY_ADVANCE;
+    const action = decideWithMemory(outmatchedFlightObs(), mem);
+    expect(action.kind).toBe("warp");
+    expect(action.reason).toContain("flee-stagnant-jump");
+  });
+
+  it("falls back to flee when no warp connection is legal (nothing to jump to)", () => {
+    const mem = createMemory();
+    mem.foldsSinceDayAdvance = MAX_FOLDS_WITHOUT_DAY_ADVANCE + 50;
+    const action = decideWithMemory(outmatchedFlightObs(0), mem);
+    expect(action.kind).toBe("flee");
+    expect(action.reason).toContain("flee-outmatched");
+  });
+});
+
+/**
+ * Campaign win-rate finding (2026-07-13): every trigger in the tactical
+ * (hurt/outmatched/outgunned) branch above is about THIS fight — nothing in
+ * the survive tier ever asked "am I nowhere near battle-ready and stuck in a
+ * no-progress standoff." `NpcShipManager.checkGarrisonAggro` shields a
+ * low-power ship from a neutral wanderer's aggro but leaves it
+ * `hostile===true`, so it keeps populating `obs.hostiles` without ever
+ * closing or firing — `attack` won the "still fight" else-branch every time
+ * and the agent parked on it forever (a fresh 3-session campaign run died
+ * 0/3, all before day 310, power never exceeding 0.15, campaign telemetry
+ * showing `repeat=N@SPACE_FLIGHT|attack`/`dayFrozen=N`). This mirrors the
+ * tactical branch's `flee-stagnant-jump` escalation above — gated the same
+ * way so it only fires once a standoff is PROVEN (folds exhausted), never
+ * against a fresh/winnable fight.
+ */
+describe("SPACE_FLIGHT strategic disengage (weak ship stuck in an inert standoff)", () => {
+  function weakStandoffObs(connections = 2): Observation {
+    // Same shape as "a weaker hostile ⇒ still fight" (line ~335): full hull,
+    // a hostile that neither out-hulls nor out-guns the player, so hurt/
+    // outmatched/outgunned are all false and the else-branch fires. The
+    // default player fixture (100 hull, no weaponDamage) is not battle-ready.
+    return obs({
+      connections,
+      hostiles: [hostile("wanderer-1", 60)],
+      player: { hull: 100, maxHull: 100, hullFraction: 1 },
+    });
+  }
+
+  it("keeps fighting (no disengage) while the standoff is still fresh", () => {
+    const mem = createMemory();
+    mem.foldsSinceDayAdvance = MAX_FOLDS_WITHOUT_DAY_ADVANCE - 1;
+    const action = decideWithMemory(weakStandoffObs(), mem);
+    expect(action.kind).toBe("attack");
+  });
+
+  it("disengages (warp) once a below-battle-ready standoff has outlasted the stagnation valve", () => {
+    const mem = createMemory();
+    mem.foldsSinceDayAdvance = MAX_FOLDS_WITHOUT_DAY_ADVANCE;
+    const action = decideWithMemory(weakStandoffObs(), mem);
+    expect(action.kind).toBe("warp");
+    expect(action.reason).toContain("flee-weak-inert-standoff");
+  });
+
+  it("falls back to attack when no warp connection is legal (nothing to jump to)", () => {
+    const mem = createMemory();
+    mem.foldsSinceDayAdvance = MAX_FOLDS_WITHOUT_DAY_ADVANCE + 50;
+    const action = decideWithMemory(weakStandoffObs(0), mem);
+    expect(action.kind).toBe("attack");
   });
 });
 

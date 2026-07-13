@@ -304,7 +304,14 @@ Track 2.
       cross-cutting "NPC brain" layer — do not fold it into Track 2 or 3.
       `NpcSimulator.ts` now IS that layer: it composes `NpcGarrisonCombat` +
       `NpcPlacementEconomy` (+ `NpcBrain`) and owns only the per-NPC `tick()`
-      decision loop, ~330 lines down from 2624.
+      decision loop, 421 lines down from 2624.
+      ➕ Follow-up fix: the initial split left `pickTraderGoal`/
+      `departToNewGoal` (which call `NpcBrain.decideGoal`) inside
+      `NpcPlacementEconomy`, contradicting its own "pure world-state
+      bookkeeping, no decision-making" contract above. Moved both into
+      `NpcSimulator`'s brain layer in a follow-up commit (`2bdd97b`);
+      `NpcPlacementEconomy` now only does the mechanical
+      `applyRumorDiversion` step.
 - [x] Update all call sites (`GameEngine.ts` and any other consumer) to the new
       file locations. `NpcSimulator`'s public method signatures (constructor,
       `attachBank`/`setGameMode`/`attachCampaignPeakPower`, `spawnInitial`,
@@ -351,52 +358,51 @@ primary workstream.
       existing call sites. No new numeric layout/spacing constants were added:
       concrete button sizes are part of the icon-set decision below, not
       something to pre-guess.
-- [x] Pick/confirm the icon set (asset source, format — SVG vs. Unicode glyph
-      vs. sprite atlas) — **blocked on your input**, not assumed here.
-      (skipped - not automatable; this doc itself flags it as needing your
-      decision, not a default ralphex can safely pick for a shipped visual
-      redesign)
-- [x] Migrate `FlightHud.ts` (13 buttons) to icon mode + new layout.
-      (skipped - blocked on the icon-set decision above: which glyph/asset per
-      button and the new layout dimensions aren't decidable without it)
-- [x] Migrate `CombatPauseOverlay.ts` (5 buttons) to icon mode + new layout.
-      (skipped - blocked on the icon-set decision above, same reason)
-- [x] Add/update Playwright hit-area regression tests for both scenes'
-      relocated buttons.
-      (skipped - nothing to test yet; the migrations above haven't landed)
-- [x] Screenshot-verify both scenes per `CLAUDE.md`'s visual-bug rule.
-      (skipped - nothing to verify yet; the migrations above haven't landed)
-- [x] ➕ Once the pattern is proven on Track 2, migrate `SystemMiniMap.ts`
-      (Track 1) — separate task, not blocking Task 2's completion.
-      (skipped - the plan already marks this non-blocking for Task 2; still
-      waiting on the icon-set decision and the Track 2 migration it unblocks)
+- [ ] ⚠️ Pick/confirm the icon set (asset source, format — SVG vs. Unicode
+      glyph vs. sprite atlas) — **blocked on your input**, not assumed here.
+      Not automatable; this doc itself flags it as needing your decision, not
+      a default ralphex can safely pick for a shipped visual redesign.
+- [ ] ⚠️ Migrate `FlightHud.ts` (13 buttons) to icon mode + new layout.
+      Blocked on the icon-set decision above: which glyph/asset per button
+      and the new layout dimensions aren't decidable without it.
+- [ ] ⚠️ Migrate `CombatPauseOverlay.ts` (5 buttons) to icon mode + new
+      layout. Blocked on the icon-set decision above, same reason.
+- [ ] ⚠️ Add/update Playwright hit-area regression tests for both scenes'
+      relocated buttons. Nothing to test yet; the migrations above haven't
+      landed.
+- [ ] ⚠️ Screenshot-verify both scenes per `CLAUDE.md`'s visual-bug rule.
+      Nothing to verify yet; the migrations above haven't landed.
+- [ ] ⚠️ ➕ Once the pattern is proven on Track 2, migrate `SystemMiniMap.ts`
+      (Track 1) — separate task, not blocking Task 2's completion. Still
+      waiting on the icon-set decision and the Track 2 migration it unblocks.
 
 ### Task 3: Track 1 (Navigation) — no scoped work yet
 
-- [x] *(placeholder — add concrete tasks here once navigation work is defined;
-      the icon-button migration for `starMapButton.ts`/`SystemMiniMap.ts` will
-      land here once Task 2 proves the pattern)*
-      (skipped - not automatable; no navigation work has been defined yet and
-      the icon-button migration it references is itself still blocked on the
-      icon-set decision from Task 2)
+- [ ] ⚠️ *(placeholder — add concrete tasks here once navigation work is
+      defined; the icon-button migration for
+      `starMapButton.ts`/`SystemMiniMap.ts` will land here once Task 2 proves
+      the pattern)* Not automatable; no navigation work has been defined yet
+      and the icon-button migration it references is itself still blocked on
+      the icon-set decision from Task 2.
 
 ### Task 4: Track 3 (Economy) — combat-stat equipment edits
 
-- [x] *(placeholder — you've confirmed scope is "combat stats only" in
+- [ ] ⚠️ *(placeholder — you've confirmed scope is "combat stats only" in
       `GearCatalog.ts`/`hullStatus.ts`, but no specific stat change is named
-      yet; add the concrete stat/value change here when known)*
-      (skipped - not automatable; no concrete stat/value change has been named
-      yet, same as the Task 3/5 placeholders — this doc itself says to add the
-      real change here once known rather than guessing one)
+      yet; add the concrete stat/value change here when known)* Not
+      automatable; no concrete stat/value change has been named yet, same as
+      the Task 3/5 placeholders — this doc itself says to add the real change
+      here once known rather than guessing one.
 
 ### Task 5: Track 4 (Content) — no scoped work yet
 
-- [x] *(placeholder — add concrete tasks here once content work is defined;
-      the icon-button migration for `QuestJournalUI.ts`/`DialogueScene.ts` will
-      land here once Task 2 proves the pattern)*
-      (skipped - not automatable; no content-track work has been defined yet
-      and the icon-button migration it references is itself still blocked on
-      the icon-set decision from Task 2, same as the Task 3/4 placeholders)
+- [ ] ⚠️ *(placeholder — add concrete tasks here once content work is
+      defined; the icon-button migration for
+      `QuestJournalUI.ts`/`DialogueScene.ts` will land here once Task 2
+      proves the pattern)* Not automatable; no content-track work has been
+      defined yet and the icon-button migration it references is itself
+      still blocked on the icon-set decision from Task 2, same as the
+      Task 3/4 placeholders.
 
 ## Open question for you
 

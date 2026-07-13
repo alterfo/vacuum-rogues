@@ -220,6 +220,70 @@ describe("AutopilotController — engage / tick cadence", () => {
   });
 });
 
+describe("AutopilotController — blocking-modal gate (F-shakedown, 2026-07-12)", () => {
+  it("dismisses a blocking modal BEFORE deciding, and skips decide/apply this tick", async () => {
+    const sch = makeFakeScheduler();
+    const dismissBlockingModal = vi.fn(() => true);
+    const { controller, calls } = makeController({ dismissBlockingModal });
+    const decide = vi.fn(() => ({ kind: "attack" }) as Action);
+    const ap = new AutopilotController({
+      observe: flightObs,
+      policy: { name: "spy", decide },
+      controller,
+      scheduler: sch.scheduler,
+      indicator: noopIndicator(),
+    });
+
+    ap.start();
+    sch.fire();
+    await flush();
+
+    expect(dismissBlockingModal).toHaveBeenCalledTimes(1);
+    // A hostile is present in `flightObs()` — without the gate the policy
+    // would legally pick attack/flee; the gate must pre-empt that entirely.
+    expect(decide).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
+  });
+
+  it("proceeds to decide/apply once dismissBlockingModal reports nothing was open", async () => {
+    const sch = makeFakeScheduler();
+    const dismissBlockingModal = vi.fn(() => false);
+    const { controller, calls } = makeController({ dismissBlockingModal });
+    const ap = new AutopilotController({
+      observe: flightObs,
+      policy: fixedPolicy({ kind: "attack" }),
+      controller,
+      scheduler: sch.scheduler,
+      indicator: noopIndicator(),
+    });
+
+    ap.start();
+    sch.fire();
+    await flush();
+
+    expect(dismissBlockingModal).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(["attack"]);
+  });
+
+  it("still decides/applies when the controller doesn't implement dismissBlockingModal", async () => {
+    const sch = makeFakeScheduler();
+    const { controller, calls } = makeController(); // no override — optional method absent
+    const ap = new AutopilotController({
+      observe: flightObs,
+      policy: fixedPolicy({ kind: "land" }),
+      controller,
+      scheduler: sch.scheduler,
+      indicator: noopIndicator(),
+    });
+
+    ap.start();
+    sch.fire();
+    await flush();
+
+    expect(calls).toEqual(["land"]);
+  });
+});
+
 describe("AutopilotController — disengage", () => {
   it("stop() cancels the timer, unsubscribes input, hides the indicator", () => {
     const sch = makeFakeScheduler();
