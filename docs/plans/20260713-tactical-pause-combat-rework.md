@@ -964,15 +964,67 @@ Any test file **not** in this list stays under the standing "never touch existin
 
 ### Task 13: Weapon-type VFX (laser / plasma-blaster / missile smoke trail / heavy-weapon distortion)
 
-- [ ] Extend the existing `CombatHud` tracer/impact-bloom system to branch visual style by
+- [x] Extend the existing `CombatHud` tracer/impact-bloom system to branch visual style by
       `WeaponClass` (now consumed for both behavior — Task 6/7 — and visuals): a continuous beam
       for ENERGY/laser weapons, a fast plasma/physical burst for FRAGMENT/blaster weapons, a
       curved white smoke-trail arc for MISSILE weapons (ties into Task 7's travel-time entity —
       the trail should track the projectile's actual flight path, not a static line), and a
       space-distortion ripple effect for the heaviest weapon tier (decide which tier qualifies,
       record the threshold).
-- [ ] Write tests: correct VFX variant selected per `WeaponClass`/tier (presentation-logic unit
+- [x] Write tests: correct VFX variant selected per `WeaponClass`/tier (presentation-logic unit
       test asserting the right variant is dispatched, not pixel output).
+
+#### Task 13 outcome (implemented 2026-07-14)
+
+- **New pure module**: `src/presentation/flight/combatWeaponVfx.ts` (PixiJS-free, unit-tested
+  standalone like `combatMissile` / `combatShield` / `combatWeaponTargeting`). Owns the **variant
+  dispatch** — it consumes `GearCatalog.WeaponClass` for *visuals* (Task 6/7 already consumed it for
+  *behaviour*):
+  - `weaponVfxKind(weaponClass)` → `WeaponVfxKind.{BEAM|BURST|MISSILE_TRAIL}` (ENERGY→beam,
+    FRAGMENT→plasma burst, MISSILE→curved smoke-trail arc).
+  - `isDistortionTier(weapon, config)` — the heaviest-tier gate (see threshold below).
+  - `selectWeaponVfx(weapon, config)` → `{ kind, distortion }` — the full pure dispatch the drawing
+    seam branches on (no pixels here).
+  - `missileTrailPoints(path, maxPoints)` — samples Task 7's flown `MissileState.pos` history into a
+    bounded trail polyline so the smoke-trail arc **tracks the projectile's actual flight path**, not
+    a static shooter→target line (never mutates the input; clamps the cap to ≥2).
+- **Heaviest-tier threshold (recorded Task 13 decision)**: a weapon draws the space-distortion
+  ripple when it is `rare` (apex/endgame stock — catalog `wpn_torpedo` T6 / `wpn_singularity_lance`
+  T8) **or** its `techLevel >= distortionMinTech` (default **7** — captures the T7 `wpn_disruptor`,
+  which the catalog names «редкий» but does not flag `rare`). Smallest rule that reads as "only the
+  very heaviest guns warp space" against the current T1..8 catalog; the cutoff lives in `balance.ts`
+  (`WEAPON_VFX`) so it's tuned in one place.
+- **Drawing seam**: `src/presentation/flight/combatWeaponVfxOverlay.ts` (`drawWeaponVfx`) — a thin
+  presentation seam mirroring `combatShieldFlash` / `combatWeaponRangeOverlay`: it turns a resolved
+  `WeaponVfxSpec` (variant + endpoints + optional trail) into strokes/fills per kind (BEAM = one
+  continuous line; BURST = short bolt + impact spark; MISSILE_TRAIL = polyline along the flown trail
+  with a from→to fallback), plus the `distortion` ripple ring drawn *over* the base kind. Tinted
+  distinctly (`WEAPON_VFX_COLOR` hot cyan / `MISSILE_TRAIL_COLOR` near-white / `DISTORTION_COLOR`
+  violet). All *which-style* decisions are the pure module's; the seam only turns numbers into fills.
+- **Balance**: new `WEAPON_VFX` constant in `src/config/balance.ts` (`distortionMinTech`), mirrored
+  by the module's `DEFAULT_WEAPON_VFX` and parity-asserted in the test — tune-in-one-place, per the
+  `COMBAT_ROUND_MS` / `MISSILE_COMBAT` / `SHIELD_COMBAT` precedent.
+- **Wiring status**: inert in production today, exactly like Tasks 2–12's machinery — `CombatHud`
+  itself is **not** edited (its `flashShot` signature stays unchanged, so `CombatModule` needs no
+  behavioural change); the execute-phase fire loop that would call `selectWeaponVfx` per shot and
+  hand the variant to `drawWeaponVfx` (branching the tracer style, feeding a missile's flown points
+  as the trail) isn't wired until the combat-open `beginCombat` trigger lands (a later task). The
+  scene/`CombatHud` are untouched here (also keeps `SpaceFlightScene.ts` clear of the `< 1900`-line
+  guard). The pure dispatch + trail sampling + render seam + config + tests are complete and green;
+  the live weapon-type tracers light up the moment the execute loop is connected. **No i18n/save/
+  schema impact** (variants are transient render-only values; VFX geometry has no player-facing text).
+  Blast radius: `combatWeaponVfx`/`combatWeaponVfxOverlay` are brand-new files with no callers yet, so
+  the CRITICAL `CombatModule`/`CombatHud` fan-out is undisturbed (per the standing new-file impact
+  exemption).
+- **Tests**: `src/tests/combat/combatWeaponVfx.test.ts` (17) — `WEAPON_VFX`/module parity, base kind
+  per class, the heaviest-tier threshold (rare-any-tech, ≥minTech, below-minTech, custom config), the
+  full variant dispatch (incl. a rare apex missile keeping MISSILE_TRAIL **and** getting distortion,
+  and a T7 non-rare energy weapon getting distortion), and `missileTrailPoints` (whole-path copy, cap
+  trimming to most-recent, no-mutation, cap-clamp-to-2). `src/tests/combat/combatWeaponVfxOverlay.test.ts`
+  (8) — beam draws one line (no spark), burst draws bolt+spark fill, missile-trail draws a polyline
+  along the trail points (+ from→to fallback), a distortion shot adds the ripple ring over the base
+  kind, base-colour override keeps the distortion tint, faded/empty no-ops. Full unit suite green
+  (5752 pass, 0 fail; +25 new).
 
 ### Task 14: Death explosion + drifting wreckage/cargo debris
 

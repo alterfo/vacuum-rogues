@@ -805,6 +805,23 @@ export const SHIELD_COMBAT = {
 } as const;
 
 /**
+ * Weapon-type VFX tuning (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 13) — the
+ * single source of truth for the pure `combatWeaponVfx.ts` variant dispatch. A fired shot draws in
+ * a style branched by `GearCatalog.WeaponClass` (beam for ENERGY, plasma burst for FRAGMENT, a
+ * curved smoke-trail arc tracking the projectile for MISSILE), and the **heaviest weapon tier** adds
+ * a space-distortion ripple over its base kind. This consumes the `WeaponClass` field for *visuals*
+ * (Task 6/7 consumed it for behaviour). The module mirrors this as `DEFAULT_WEAPON_VFX`, kept in
+ * lockstep by `combatWeaponVfx.test.ts`; the scene passes this value. Presentation-only — no
+ * save/schema impact.
+ *
+ * - distortionMinTech: a non-rare weapon at/above this `techLevel` (1..8) gets the distortion
+ *   ripple; a `rare` weapon qualifies regardless of tech (Task 13 heaviest-tier threshold).
+ */
+export const WEAPON_VFX = {
+  distortionMinTech: 7,
+} as const;
+
+/**
  * Exploration-encounter occurrence tuning — the single live source of truth for
  * how often derelict/anomaly/distress encounters fire and how they scale
  * (`docs/plans/20260625-exploration-encounters.md`). The live wiring
