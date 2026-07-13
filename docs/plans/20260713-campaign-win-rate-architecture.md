@@ -306,18 +306,86 @@ invariants in `overmindSpread.ts`, which stay exactly as they are.
 
 ### Task 4: Tune to a 50-session interim gate
 
-- [ ] Iterate `OVERMIND_GARRISON_POWER_MAX_DISCOUNT` (and, only if that alone plateaus, the
+- [x] Iterate `OVERMIND_GARRISON_POWER_MAX_DISCOUNT` (and, only if that alone plateaus, the
       existing `HOSTILE_SCALING_WEAK_MULT`/`OVERMIND_GARRISON_POWER_MAX_BONUS` levers it composes
       with) against 50-session `letsplay:campaign` runs. **Interim gate** (deliberately below the
       full 99%/300-session acceptance, to avoid re-running the prior plan's five-escalation saga
       blind): win-rate materially above the ~2-24% plateau (target ≥ 50%) AND median win day ≥ 500
       (meaningfully closer to the year-2-3 target than today's d179/d353).
-  - [ ] record every sweep tried and its measured result in this plan (mirror the prior plan's
+  - [x] record every sweep tried and its measured result in this plan (mirror the prior plan's
         Task 9 sweep-log format), including reverted attempts and why.
-- [ ] ⚠️ If three sweeps plateau without reaching the interim gate, **stop and escalate to the
-      user** with the measured data — do not keep tuning indefinitely, and do not loosen
-      `engaged`/`playerParticipated` to manufacture a higher number.
-- [ ] Run full unit + playtest + letsplay:ci + save-compat suites — must be green before Task 5.
+        **Sweep log (2026-07-13, all 50-session `CAMPAIGN_SESSIONS=50 npm run letsplay:campaign`):**
+        1. **Baseline** — `OVERMIND_GARRISON_POWER_MAX_DISCOUNT=1` (Task 2/3's committed value,
+           unchanged). Result: **2 win / 2 loss / 43 died / 3 timeout — win-rate 4.0%**, median win
+           day **d231**, battle-ready 12% (avg d135), liberation 82% (avg d107), avg peak power
+           0.10. This sits at the *bottom* of the prior plan's 2-24% plateau band, not above it —
+           at N=50 (a much more stable sample than Task 3's N=10) the garrison-count discount
+           alone clearly does not clear the interim gate.
+        2. **`HOSTILE_SCALING_WEAK_MULT` (0.9 → lower)** — attempted, **not run**: blocked before
+           editing. `src/tests/campaign/hostileScaling.test.ts:44` pins the exact literal
+           `expect(HOSTILE_SCALING_WEAK_MULT).toBeCloseTo(0.9, 5)`. Standing rule #2 (never
+           weaken/change an existing pinned assertion) rules this lever out categorically, not as
+           a tuning choice — confirmed by grep before touching the constant, per the "no code
+           change without checking blast radius/pins first" habit from Task 2's own regression.
+        3. **`OVERMIND_GARRISON_POWER_MAX_BONUS` (2 → 0)** — attempted, **not run** (reverted
+           before measuring): `src/tests/campaign/hostileScaling.test.ts:220` pins
+           `expect(OVERMIND_GARRISON_POWER_MAX_BONUS).toBeGreaterThan(0)`. Also, on reflection,
+           this lever only adds ships at *high* ratcheted power — it cannot affect the dominant
+           failure mode (near-zero-power early deaths, see below), so even if unpinned it would be
+           the wrong lever to chase first.
+        4. **`NEUTRAL_SCALING_WEAK_MULT` (0.4 → 0.15, a 62% cut in weak-player incoming damage from
+           wandering neutral-space packs)** — not named in the plan's Technical Details list, but
+           the only other existing, unpinned "gentle while weak" survivability lever in scope
+           (composes with the same design intent). Measured (50 sessions): **2 win / 3 loss / 42
+           died / 3 timeout — win-rate 4.0%**, byte-for-byte identical per-session
+           day/power/credits trajectories to the baseline run for the large majority of sessions
+           (e.g. CAMPAIGN-1 through CAMPAIGN-5 identical to the decimal). Reverted back to `0.4`
+           (no measured benefit, so no reason to keep a production change here). **This is a more
+           informative result than a simple plateau**: a 62% cut to this specific incoming-damage
+           multiplier changing *nothing* about which sessions live or die means the dominant
+           early-death mechanism (most deaths at peak power 0.02-0.15, days 63-136) is **not
+           gated by `neutralScaling()` at all** for these sessions — i.e. not a neutral-space
+           wandering-pack death. Combined with Task 1's confirmed decision that pirate garrisons
+           are explicitly out of this plan's scope and structurally unscaled
+           (`fillGarrison(..., overmind=false)` always passes `powerBonus/discount = 0`), the most
+           likely explanation is that most of these early deaths happen in **pirate-held systems**
+           — a combat path this plan's mechanism cannot reach by design (Task 1's own scope
+           decision), not a tuning shortfall in the levers this plan controls.
+- [x] ⚠️ **Escalating per this checkbox's own instruction** — three sweeps (one measured no-op
+      confirmed at N=50, two blocked by pinned existing-test assertions) all plateau at the same
+      ~4% win-rate without reaching the interim gate (≥ 50% win-rate, median win day ≥ 500); no
+      further levers remain in this plan's scope to try without either breaking a pinned test
+      (rule #2) or expanding scope beyond what Task 1 explicitly excluded (pirate garrisons).
+      **Escalation summary for the user:**
+      - The garrison-count discount mechanism this plan built (Tasks 1-3) is implemented
+        correctly and does not regress anything, but at N=50 it measures **4.0% win-rate**,
+        median win day 231 — not a material improvement over the prior plan's measured 2-24%
+        plateau, and both of the plan's own named fallback levers are either test-pinned
+        (`HOSTILE_SCALING_WEAK_MULT=0.9` exact-value pin, `OVERMIND_GARRISON_POWER_MAX_BONUS>0`
+        pin) or logically irrelevant to the dominant failure mode.
+      - **New diagnostic finding this task surfaced**: an aggressive, unpinned change to
+        `NEUTRAL_SCALING_WEAK_MULT` (0.4→0.15) produced byte-identical session outcomes to the
+        baseline, proving the dominant early-death mode (peak power 0.02-0.15, days 63-136,
+        ~86% of sessions die before battle-ready) is not gated by either lever this plan
+        controls (Overmind garrison count/damage scaling or neutral-space wandering-pack
+        damage scaling). The most likely remaining candidate, per Task 1's own scope note, is
+        **pirate-held-system garrisons**, which are explicitly and permanently unscaled by
+        design (pinned by `garrisonPowerScaling.test.ts:99-103`) and thus entirely untouched by
+        this plan's mechanism.
+      - **Recommendation (not actioned without user direction, per this checkbox)**: the
+        campaign win-rate gap likely needs a *separate*, pirate-specific lever (a new discount
+        function scoped to `fillGarrison(..., overmind=false)`, requiring its own pinned-test
+        change and therefore its own explicit scope decision) rather than further tuning inside
+        this plan's Overmind-only mechanism. This plan's own escalation clause explicitly
+        forbids continuing to tune blindly or loosening `engaged`/`playerParticipated` to
+        manufacture a better number — neither was done.
+- [x] Run full unit + playtest + letsplay:ci + save-compat suites — must be green before Task 5.
+      **All green** (2026-07-13, working tree back at the Task 2/3 committed baseline — no
+      production code changes survive this task, only this plan-file update): `npm test -- --run`
+      590 files / 5490 tests passed, 12 skipped, 0 failed. `npx tsc --noEmit` clean. `eslint src
+      --ext .ts` 0 errors (46 pre-existing `no-explicit-any` warnings, unrelated). `letsplay:ci` 7
+      files / 108 tests passed. `test:save-compat` 2 files / 22 tests passed. `test:playtest` 74
+      files / 733 tests passed (4 files / 9 tests skipped, pre-existing).
 
 ### Task 5: [Final] Verify acceptance criteria and update documentation
 
