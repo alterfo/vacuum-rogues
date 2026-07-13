@@ -27,6 +27,7 @@ import { PlayerShipRenderer } from "./flight/PlayerShipRenderer";
 import { NpcShipManager } from "./flight/NpcShipManager";
 import { CombatModule } from "./flight/CombatModule";
 import { createCombatPauseUi } from "./flight/combatPauseUi";
+import { CombatPlanningController } from "./flight/combatPlanning";
 import { orbitBump } from "./flight/combatOrbitClock";
 import { PlanetManager } from "./flight/PlanetManager";
 import { FlightHud } from "./flight/FlightHud";
@@ -74,6 +75,7 @@ export class SpaceFlightScene extends GameScene {
   private npcManager!: NpcShipManager;
   private combatModule!: CombatModule;
   private combatPause = createCombatPauseUi(); // active-pause; rewired in initialize()
+  private combatPlanning = new CombatPlanningController(); // pause-and-plan loop (Task 2 skeleton): freeze gate wired below, idle until later tasks add the combat-open trigger
   // Latches the low-hull auto-stop so the warning fires once per descent.
   private lowHullStopped = false;
   private destroyed = false;
@@ -235,7 +237,10 @@ export class SpaceFlightScene extends GameScene {
 
     this.combatModule = new CombatModule({
       getShipPhysics: () => this.shipPhysics,
-      isPaused: () => this.combatPause.paused || !this.isTurnRunning,
+      isPaused: () =>
+        this.combatPlanning.isPlanning ||
+        this.combatPause.paused ||
+        !this.isTurnRunning,
       getPlayerLoadout: () => this.gameEngine?.playerLoadout ?? null,
       getUiLayer: () => this.renderer.uiLayer,
       getGameLayer: () => this.renderer.gameLayer,

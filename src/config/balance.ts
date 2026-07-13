@@ -612,6 +612,20 @@ export const GAME_BALANCE = {
 } as const;
 
 /**
+ * Tactical pause-and-plan combat (`docs/plans/20260713-tactical-pause-combat-rework.md`):
+ * the fixed real-time duration of a single **execute window** in ms. Combat runs as
+ * alternating PLANNING (sim frozen, the player fills a planned turn) and EXECUTING
+ * (real-time) phases; confirming a turn ("Ход") runs the plan for exactly this long,
+ * then re-opens PLANNING while ≥1 hostile remains. This is the *single deterministic*
+ * execute-phase terminator (Task 1 decision) — impacts/arrivals/incoming hits during
+ * the window are resolved in real time but do NOT end it early; only player death or
+ * the last hostile destroyed end a fight before the timer. The pure
+ * `CombatPlanningController` (`src/presentation/flight/combatPlanning.ts`) mirrors this
+ * as its `DEFAULT_ROUND_MS` fallback for standalone tests; the scene passes this value.
+ */
+export const COMBAT_ROUND_MS = 3000;
+
+/**
  * Exploration-encounter occurrence tuning — the single live source of truth for
  * how often derelict/anomaly/distress encounters fire and how they scale
  * (`docs/plans/20260625-exploration-encounters.md`). The live wiring

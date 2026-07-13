@@ -310,16 +310,45 @@ Any test file **not** in this list stays under the standing "never touch existin
 
 ### Task 2: Planning-phase state machine skeleton
 
-- [ ] Build the new planning/execute state machine per Task 1's recorded loop shape — likely a new
+- [x] Build the new planning/execute state machine per Task 1's recorded loop shape — likely a new
       module (name per Task 1) alongside `combatPause.ts`, not a rewrite of it (the reactive
       single-shot flow may still cover the "hit while NOT in a deliberate planning phase" edge
       case — decide and record whether `combatPause`'s reactive trigger is fully superseded or
       kept as a fallback).
-- [ ] Wire the freeze gate into `CombatModule.isFrozen()`'s existing `isPaused` closure pattern
+- [x] Wire the freeze gate into `CombatModule.isFrozen()`'s existing `isPaused` closure pattern
       (per `flight/CLAUDE.md`'s standing rule: fold new freeze conditions into `isPaused`, never
       into `isFrozen()` itself).
-- [ ] Write tests for the state machine's transitions (idle → planning → executing → next planning
+- [x] Write tests for the state machine's transitions (idle → planning → executing → next planning
       cycle; malformed/incomplete plan confirm attempts; interruption by a lethal hit mid-execute).
+
+#### Task 2 outcome (implemented 2026-07-14)
+
+- **New module**: `src/presentation/flight/combatPlanning.ts` — `CombatPlanningController<TTarget,
+  TWeapon>`, a pure PixiJS-free state machine (same discipline as `combatPause`/`combatRounds`).
+  Phases `idle | planning | executing`; a single `PlannedTurn` draft (destination, per-weapon target
+  map, afterburner flag, ≤1 `consumableId`, ≤1 `commsAction`) filled during PLANNING, handed to the
+  host via `onConfirm`. Transitions: `beginCombat()` idle→planning, `confirm()` planning→executing
+  (empty draft legal), `tickExecute(dt)` closes the fixed `COMBAT_ROUND_MS` window and re-opens
+  PLANNING, `endCombat()` any→idle (the only early terminator — player death / last hostile).
+  Draft setters no-op outside PLANNING so a confirmed plan can't be edited mid-execute.
+- **`combatPause` reactive trigger — decision: fully SUPERSEDED, not kept as a fallback** (matches
+  Task 1b). The new planning loop is the sole in-combat interaction model; the reactive
+  single-reactive-shot flow is not retained as a parallel "hit outside a planning phase" fallback.
+  Its freeze-gate *primitive* is reused (the `isPaused` closure), not its trigger. `combatPause.ts`
+  itself is still wired in the scene during this skeleton task (removed by Task 15's test-disposition
+  execution once the loop is fully driven) — the two do not both fire, because the planning trigger
+  (combat-open → `beginCombat`) is not connected until later tasks; today `combatPlanning` stays
+  idle, so behaviour is unchanged.
+- **Freeze gate**: new balance constant `COMBAT_ROUND_MS` (`src/config/balance.ts`, mirrored by the
+  module's `DEFAULT_ROUND_MS`, parity-asserted in the test). The scene folds
+  `this.combatPlanning.isPlanning` into the `CombatModule` `isPaused` closure
+  (`SpaceFlightScene.ts`, per `flight/CLAUDE.md`) — never into `isFrozen()`. Inert this task
+  (controller idle), so the full unit suite + line guard (`SpaceFlightScene.ts` = 1898 ≤ 1898) stay
+  green.
+- **Tests**: `src/tests/combat/combatPlanning.test.ts` (14) — the idle→planning→executing→planning
+  cycle, empty/malformed confirm attempts (empty legal, idle-confirm & double-confirm rejected,
+  mid-execute draft edits ignored), lethal-hit mid-execute end + inert subsequent ticks, and the
+  round-timer config/default fallback.
 
 ### Task 3: Movement trajectory planning UI
 
