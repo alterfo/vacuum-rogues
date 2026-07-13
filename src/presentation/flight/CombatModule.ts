@@ -71,6 +71,26 @@ export interface CombatModuleDeps {
   isTurnRunning?(): boolean;
   /** Player's canonical loadout — source of the equipped weapon. */
   getPlayerLoadout?(): ShipLoadout | null;
+  /**
+   * True when the tactical planning loop's execute window is the active targeting
+   * authority (a confirmed turn is running — Task 6). While true,
+   * {@link CombatModule.advancePlayerWeapons} fires each weapon **only** at its
+   * planned target from {@link getPlannedWeaponTarget} — an unassigned weapon
+   * **holds fire** (the "empty draft = hold fire" rule, plan Task 1b). While
+   * false/absent it keeps the legacy `pickTargetInRange` auto-target, so production
+   * stays on real-time auto-fire until the planning trigger lands (this dep is inert
+   * today — the planning loop never reaches EXECUTING yet). Absent ⇒ always legacy.
+   */
+  isPlannedTargetingActive?(): boolean;
+  /**
+   * The confirmed planned turn's target for `weapon` (Task 5's per-weapon
+   * assignment map), or null when that weapon was left unassigned (holds fire).
+   * Only consulted while {@link isPlannedTargetingActive} returns true. The weapon
+   * still fires at its own `weaponFireIntervalMs` cadence and the execute-phase
+   * range check ({@link CombatModule.advancePlayerWeapons}) stays the sole authority
+   * on whether the shot lands — an out-of-range or dead assigned target holds fire.
+   */
+  getPlannedWeaponTarget?(weapon: WeaponSpec): NpcShipSprite | null;
   /** Live UI layer the HUD overlay is mounted on. */
   getUiLayer?(): Container;
   /** Live world (game) layer the dashed range circle is drawn on. */
@@ -604,21 +624,32 @@ export class CombatModule implements FlightModule {
   }
 
   /**
-   * Advance every fitted weapon's fire timer and, as each elapses, fire it at the
-   * nearest combatant **within that weapon's own range** ("в зоне поражения
-   * орудия"), preferring the {@link selectedTarget} when it is in range. A weapon
-   * with no combatant in range holds — its timer stays "ready" (clamped to its
-   * interval) so it fires the instant a target closes, rather than re-waiting a
-   * full interval. Each weapon keeps its own timer (keyed by its index in
-   * {@link fittedWeapons}) **and its own cadence**: the fire interval is derived
-   * per-weapon from `cooldownTurns` via {@link weaponFireIntervalMs}, so a slow,
-   * high-damage weapon fires less often than a quick one (cadence is a real
-   * tradeoff, not a flat rate).
+   * Advance every fitted weapon's fire timer and, as each elapses, fire it at its
+   * target. Two targeting authorities, selected by {@link
+   * CombatModuleDeps.isPlannedTargetingActive}:
+   *
+   * - **Planned (Task 6, tactical pause-and-plan)**: while a confirmed execute
+   *   window runs, each weapon fires **only** at its planned assignment from
+   *   {@link CombatModuleDeps.getPlannedWeaponTarget} — an unassigned weapon
+   *   **holds fire** (the "empty draft = hold fire" rule, plan Task 1b).
+   * - **Legacy auto-fire (default/absent)**: each weapon fires at the nearest
+   *   combatant **within its own range** ("в зоне поражения орудия"), preferring
+   *   the {@link selectedTarget} when in range.
+   *
+   * Either way a weapon with no valid target this frame holds — its timer stays
+   * "ready" (clamped to its interval) so it fires the instant a target becomes
+   * valid, rather than re-waiting a full interval. Each weapon keeps its own timer
+   * (keyed by its index in {@link fittedWeapons}) **and its own cadence**: the fire
+   * interval is derived per-weapon from `cooldownTurns` via {@link
+   * weaponFireIntervalMs}, so a slow, high-damage weapon fires less often than a
+   * quick one (cadence is a real tradeoff, not a flat rate). The execute-phase
+   * range check is the sole authority on whether a planned shot lands (plan Task 5).
    */
   private advancePlayerWeapons(deltaTime: number): void {
     // A downed ship (GOD mode, hull at the floor) can't auto-fire until repaired.
     if (this.isPlayerDowned()) return;
     const weapons = this.fittedWeapons();
+    const planned = this.deps.isPlannedTargetingActive?.() ?? false;
     for (let i = 0; i < weapons.length; i++) {
       // A player shot can kill a target → removeCombatant → onTargetLost →
       // active-pause. The world is frozen the instant that pause is raised, so a
@@ -632,15 +663,34 @@ export class CombatModule implements FlightModule {
         this.weaponFireTimers.set(i, t);
         continue;
       }
-      const target = this.pickTargetInRange(weapon);
+      const target = planned
+        ? this.resolvePlannedTarget(weapon)
+        : this.pickTargetInRange(weapon);
       if (!target) {
-        // No combatant in this weapon's range — hold but stay primed.
+        // No valid target for this weapon — hold but stay primed (an unassigned
+        // or out-of-range weapon fires the instant a target becomes valid).
         this.weaponFireTimers.set(i, interval);
         continue;
       }
       this.weaponFireTimers.set(i, 0);
       this.firePlayerShot(target, weapon);
     }
+  }
+
+  /**
+   * The target `weapon` fires at under the tactical planning loop (Task 6): its
+   * confirmed planned assignment ({@link CombatModuleDeps.getPlannedWeaponTarget}),
+   * gated to a still-live combatant inside this weapon's own `range` this frame.
+   * Null when the weapon is unassigned (holds fire — the empty-draft rule), or its
+   * assigned target has been killed/fled (no longer a combatant) or drifted out of
+   * this weapon's range — the execute-phase range check is the sole fire authority.
+   */
+  private resolvePlannedTarget(weapon: WeaponSpec): NpcShipSprite | null {
+    const assigned = this.deps.getPlannedWeaponTarget?.(weapon) ?? null;
+    if (!assigned || !this.combatants.has(assigned)) return null;
+    const d = this.distanceToShip(assigned);
+    if (d === null || d > weapon.range) return null;
+    return assigned;
   }
 
   /**

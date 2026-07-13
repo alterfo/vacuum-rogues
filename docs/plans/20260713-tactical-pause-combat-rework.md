@@ -521,14 +521,60 @@ Any test file **not** in this list stays under the standing "never touch existin
 
 ### Task 6: Weapon execution — replace auto-fire with planned per-weapon assignments
 
-- [ ] Replace `advancePlayerWeapons`'s `pickTargetInRange` auto-target call with reading the
+- [x] Replace `advancePlayerWeapons`'s `pickTargetInRange` auto-target call with reading the
       confirmed planned turn's per-weapon target assignments; each weapon still fires on its own
       `weaponFireIntervalMs` cadence during the execute phase, now at ITS assigned target instead
       of the nearest-in-range pick. NPC-side targeting (`fireNpcShot`/NPC AI) is unchanged — only
       the player's weapons become manually targeted.
-- [ ] Write tests: each weapon fires at its own assigned target (not just the nearest), an
+- [x] Write tests: each weapon fires at its own assigned target (not just the nearest), an
       unassigned weapon falls back to a sane default (decide: auto-pick nearest, or hold fire —
       record which), multi-weapon focus-fire and spread-fire both resolve correctly.
+
+#### Task 6 outcome (implemented 2026-07-14)
+
+- **Two additive optional deps on `CombatModuleDeps`** (`src/presentation/flight/CombatModule.ts`),
+  the seam the planning loop drives targeting through:
+  - `isPlannedTargetingActive(): boolean` — true only while a confirmed planning turn is executing
+    (the scene will wire it to `combatPlanning.isExecuting`). Absent/false ⇒ the legacy
+    `pickTargetInRange` auto-fire is unchanged, so **production stays on real-time auto-fire** and
+    this change is **inert today** (the execute window is never reached until the combat-open
+    `beginCombat` trigger lands — same deferral as Tasks 2–5).
+  - `getPlannedWeaponTarget(weapon): NpcShipSprite | null` — the confirmed per-weapon assignment
+    (Task 5's `weaponTargets` map), or null if that gun was left unassigned.
+- **`advancePlayerWeapons` now branches** on `isPlannedTargetingActive`: while planned targeting is
+  active each weapon fires **only** at its assignment via the new `resolvePlannedTarget(weapon)`
+  helper; otherwise it keeps the exact legacy nearest-in-range pick. Each weapon still runs its own
+  `weaponFireIntervalMs` timer and its own range gate. **NPC-side targeting (`fireNpcShot`/NPC AI)
+  is untouched** — only the player's guns become manually targeted.
+- **Unassigned-weapon fallback — decision: HOLD FIRE** (not auto-pick-nearest). This is the direct
+  consequence of Task 1b's "empty draft = hold position, **hold fire**" rule: an empty planned turn
+  means every gun is unassigned, which must mean no shots — so an unassigned gun under a partial
+  plan likewise holds. `resolvePlannedTarget` returns null for an unassigned weapon → the existing
+  "primed but no target" hold path.
+- **Range/liveness stays the sole fire authority** (plan Task 5's flag-don't-reject): a planned
+  assignment still fires only if the target is a live combatant (`combatants.has`) inside that
+  weapon's own `range` this frame — a killed/fled or out-of-range assigned target holds and fires
+  the instant it becomes valid (e.g. the planned course carries it into range), exactly like the
+  legacy "closes into range" behaviour. So an out-of-range assignment is **accepted** at plan time
+  (Task 5) and simply **held** at execute time, never hard-rejected.
+- **Wiring status**: the CombatModule change + tests are complete and green; the scene is **not
+  touched** (same rationale as Task 5 — the live click routing / `beginCombat` trigger isn't lit up
+  yet, and touching `SpaceFlightScene.ts` would breach its `< 1900`-line guard, which sits at the
+  ceiling). The two deps are optional, so every existing DI site (and the whole legacy auto-fire
+  path) is byte-identical; the planned path lights up the moment the scene wires
+  `isPlannedTargetingActive`/`getPlannedWeaponTarget` alongside the trigger. **No i18n/save/schema
+  impact** (targeting lives on the transient planned-turn draft). Blast radius: `advancePlayerWeapons`
+  is **LOW** (only `CombatModule.update` → `SpaceFlightScene.update` calls it), and the change is
+  additive/gated, so the CRITICAL `CombatModule` fan-out is not disturbed.
+- **Tests**: `src/tests/combat/plannedWeaponFire.test.ts` (7) — each gun fires at its OWN
+  assignment (not nearest), focus-fire (all guns → one target), spread-fire (guns → different
+  targets), an unassigned gun **holds fire** with a target in range, an out-of-range assignment
+  holds then fires once it closes, a non-live-combatant assignment holds (no nearest-pick fallback),
+  and the legacy auto-fire resuming when planned targeting is inactive (proving the gate). The
+  existing `multiWeaponFire`/`confirmAttack`/`combatModule` suites stay green (legacy path
+  unchanged; those files' rewrite for the new loop is Task 15's scope, not touched here). Full unit
+  suite green apart from a pre-existing order-dependent flake in `cometHeadSprite.test.ts`
+  (comet-sprite rotation VFX — unrelated to combat; passes in isolation).
 
 ### Task 7: Missile projectile mechanic — travel time + evasion
 
