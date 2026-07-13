@@ -389,16 +389,36 @@ invariants in `overmindSpread.ts`, which stay exactly as they are.
 
 ### Task 5: [Final] Verify acceptance criteria and update documentation
 
-- [ ] Verify the interim gate from Task 4 was met (or the escalation happened and the user gave
+- [x] Verify the interim gate from Task 4 was met (or the escalation happened and the user gave
       further direction — update this task's scope accordingly if so).
-- [ ] Update `.claude/docs/systems/overmind.md`'s "Known-unmet gate" section: record the new
+      **Interim gate NOT met — escalation stands, no further user direction received.** Task 4's
+      50-session measure landed at 4.0% win-rate / median win day 231, below the ≥50%/≥day-500
+      interim gate, and its escalation checkbox already recorded that both named fallback levers
+      are test-pinned or logically irrelevant, with a recommendation (a separate pirate-specific
+      lever) that is out of this plan's scope by Task 1's own decision. This task's scope is
+      therefore documentation-only: record the honest outcome, not further blind tuning (which
+      the plan's own escalation clause explicitly forbids).
+- [x] Update `.claude/docs/systems/overmind.md`'s "Known-unmet gate" section: record the new
       measured numbers (do not silently delete the honest history of the prior 2.0%/18-24%
       figures — add to it, matching this project's "requirements in docs, source of truth" norm).
-- [ ] Update `CLAUDE.md`'s Overmind Arc section if the garrison-count lever becomes a named
+      **Done.** Added a dated 2026-07-13 follow-up paragraph after the existing history, recording
+      the discount mechanism, its measured 4.0%/50-session result, the two pinned-test-blocked
+      fallback levers, the byte-identical `NEUTRAL_SCALING_WEAK_MULT` diagnostic finding, and the
+      pirate-garrison-scoped-out root cause — original 2.0%/18-24% history untouched.
+- [x] Update `CLAUDE.md`'s Overmind Arc section if the garrison-count lever becomes a named
       invariant worth calling out alongside the existing adaptive-levers pointer.
-- [ ] Run full unit suite, `tsc --noEmit`, `npm run lint`, `npm run test:playtest`,
+      **Done.** Added `OVERMIND_GARRISON_POWER_MAX_BONUS`/`_MAX_DISCOUNT` to the named-levers list
+      and a one-sentence pointer to the 2026-07-13 follow-up result + the subsystem doc's Known-unmet
+      gate section.
+- [x] Run full unit suite, `tsc --noEmit`, `npm run lint`, `npm run test:playtest`,
       `npm run letsplay:ci`, `npm run test:save-compat` — all must be green.
-- [ ] Record final lever values and measured win-rates in this plan's Technical Details section.
+      **All green** (2026-07-13): `npm test -- --run` 590 files / 5490 tests passed, 5 files / 12
+      tests skipped, 0 failed. `npx tsc --noEmit` clean. `eslint src --ext .ts` 0 errors (46
+      pre-existing `no-explicit-any` warnings, unrelated). `npm run test:playtest` 74 files / 733
+      tests passed (4 files / 9 tests skipped, pre-existing). `npm run letsplay:ci` 7 files / 108
+      tests passed. `npm run test:save-compat` 2 files / 22 tests passed.
+- [x] Record final lever values and measured win-rates in this plan's Technical Details section.
+      **Done** — see the new "Final lever values and measured results" entry below.
 
 ## Technical Details
 
@@ -418,6 +438,24 @@ invariants in `overmindSpread.ts`, which stay exactly as they are.
   prior plan's own diagnosis flagged as untouched by any Task-9 lever.
 - **Steps↔days budget**: unchanged from the prior plan (~300 steps ≈ 55 days; 1080 days ≈ ~6000
   steps) — this plan does not touch the campaign harness's step budget, only combat-encounter size.
+- **Final lever values and measured results (2026-07-13):** `OVERMIND_GARRISON_POWER_MAX_DISCOUNT
+  = 1` (the largest value that does not regress the pinned GOD-mode `sessionCompetence.test.ts`
+  milestone probe — `2` starved combat-loot income and stalled peak-power growth below the
+  battle-ready gate). Composed effective garrison range at power 0: `[max(1,5-1), max(4,10-1)] =
+  [4, 9]` (down from the fixed `[5, 10]`), narrowing to `[5, 10]` again at power 1 and then to
+  `[5+bonus, 10+bonus]` as the existing upward bonus takes over — Overmind-held systems only,
+  pirate garrisons unchanged by Task 1's scope decision. Measured campaign win-rate: N=10 → 10.0%
+  (Task 3, inconclusive/wide-variance); N=50 → **4.0%** (2 win / 2 loss / 43 died / 3 timeout,
+  median win day 231, Task 4) — inside the prior plan's measured 2–24% plateau band, below this
+  plan's own ≥50%/≥day-500 interim gate. `HOSTILE_SCALING_WEAK_MULT=0.9` and
+  `OVERMIND_GARRISON_POWER_MAX_BONUS=2` are unchanged (both test-pinned, ruled out as further
+  tuning levers). `NEUTRAL_SCALING_WEAK_MULT=0.4` is unchanged (a diagnostic sweep to 0.15 was
+  reverted after producing byte-identical session outcomes). No 300-session acceptance re-run was
+  performed — the plan's own gate (do not chase the full re-run until the 50-session interim gate
+  is stably met) was not reached. **Net conclusion**: the downward garrison-count discount is
+  implemented, tested, and shipped as a real (non-regressing) improvement to held-system combat
+  fairness, but it does not close the campaign win-rate gap — the dominant early-death failure
+  mode is most likely gated by unscaled pirate-held-system garrisons, outside this plan's scope.
 
 ## Post-Completion
 
