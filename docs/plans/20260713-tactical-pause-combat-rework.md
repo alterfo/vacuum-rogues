@@ -352,18 +352,62 @@ Any test file **not** in this list stays under the standing "never touch existin
 
 ### Task 3: Movement trajectory planning UI
 
-- [ ] Point-and-click destination selection during the planning phase; render a colored trajectory
+- [x] Point-and-click destination selection during the planning phase; render a colored trajectory
       line from ship to the chosen point, length scaled by engine potency/maneuverability stats
       (reuse the existing `RouteRenderer` pattern from non-combat flight if its shape fits, else a
       new lightweight combat-scoped renderer — decide and record which).
       Note the constraint: `ShipPhysics` remains momentum/arc-only (no rotate-in-place) — the
       trajectory preview must reflect the ship's real achievable arc (min turn radius), not a
       straight-line fantasy the ship can't actually fly.
-- [ ] Wire the confirmed destination into `ShipPhysics.setPath()` as the execute-phase movement
+- [x] Wire the confirmed destination into `ShipPhysics.setPath()` as the execute-phase movement
       primitive (reuse, do not reinvent the path-follow logic).
-- [ ] Write tests: trajectory line length formula (engine potency/maneuverability → px), the
+- [x] Write tests: trajectory line length formula (engine potency/maneuverability → px), the
       confirmed path handed to `ShipPhysics` matches the click target, arc-radius constraint
       honored in the preview.
+
+#### Task 3 outcome (implemented 2026-07-14)
+
+- **New pure module**: `src/presentation/flight/combatTrajectory.ts` (PixiJS-free, unit-tested
+  standalone like `combatPlanning`). Owns the trajectory geometry:
+  - `combatReach(profile, roundMs) = maxSpeed × roundMs` — the **length formula**: how far the ship
+    can plan to travel in one execute window, so a more potent (faster) engine draws a strictly
+    longer line. "Engine potency" = cruise speed (`derivedStats().speed` / `ShipPhysics.getMaxSpeed`).
+  - `minTurnRadius(profile) = maxSpeed ÷ rotationSpeed` — the maneuverability constraint.
+  - `clampDestinationToReach(from, to, reach)` — pulls a too-far click back onto the reach circle
+    along the ship→click ray (planned destination is always reachable this round).
+  - `previewTrajectory(profile, from, heading, dest, reach)` — the sampled **arc** polyline the
+    renderer draws. Replays the same momentum kinematics as `ShipPhysics.update` (constant forward
+    cruise + a per-step heading turn bounded by `rotationSpeed`), so an off-axis/behind destination
+    **curves in** — never a straight-line pivot the momentum ship can't fly (honors the min turn
+    radius by construction; asserted per-segment in tests).
+  - `applyPlannedMovement(dest, physics)` — hands the confirmed destination to `ShipPhysics.setPath`
+    (reuse, not a reinvented follower). Null destination = hold position.
+- **Renderer decision (recorded)**: **reuse `RouteRenderer`**, not a new combat-scoped renderer —
+  its `drawRoute` already dashes an arbitrary polyline and `drawNavigationMarker` marks the
+  endpoint, which is exactly the preview's shape (the combat-specific length/arc logic is the
+  polyline fed in). The thin presentation seam is `src/presentation/flight/combatCoursePreview.ts`
+  (`previewCombatCourse`) — clamp → `setDestination` → draw. (Preview colour stays cyan for now; a
+  distinct combat tint is deferred polish, not worth widening `RouteRenderer`'s signature.)
+- **Scene wiring** (`SpaceFlightScene.ts`): `combatPlanning`'s `onConfirm` now calls
+  `applyPlannedMovement(plan.destination, shipPhysics)` (confirmed destination → `setPath`), and
+  `onPointerDown` routes a left-click through `previewCombatCourse` **while `isPlanning`**. Both are
+  **inert in production today** (the combat-open `beginCombat` trigger is still not wired — Task 2
+  deferred it to a later task), exactly like Task 2's freeze-gate: the machinery + math + renderer
+  seam are complete and unit-tested; the live click/preview lights up the moment the trigger lands.
+- **Line guard**: Task 2 had shipped `SpaceFlightScene.ts` **over** the `< 1900`
+  (`split("\n").length`) guard (1902) — a committed-red regression. Fixed here by extracting the
+  `plotRoute` body into `src/presentation/flight/routePlot.ts` (`plotPlannedRoute`, behaviour
+  byte-for-byte identical; `plotRoute()` stays as a thin delegate for `routeHideWhileMoving.test.ts`),
+  netting the scene back to **1896** (`split`) with the new Task 3 wiring included. `moduleContracts`
+  guard is green again.
+- **Tests**: `src/tests/combat/combatTrajectory.test.ts` (17) — reach/length formula + monotonic in
+  potency, min-turn-radius, clamp, arc-constraint (per-segment turn ≤ bounded rate, no snap-straight,
+  reach cap), and `applyPlannedMovement` (path target == click target, flown path arrives, null =
+  hold). `src/tests/combat/combatCoursePreview.test.ts` (2) — the click→setDestination→draw wiring +
+  the beyond-reach clamp. Full unit suite green (5556 pass); the E2E planning-loop coverage the plan
+  scoped for Tasks 2/3/5 is deferred to the task that wires the combat-open trigger, since the
+  planning phase can't be entered live until then (same rationale as `letsplay:ci` being allowed red
+  until Task 15).
 
 ### Task 4: Environmental gravity effects (planet slingshot; black holes if Task 1 included them)
 

@@ -10,13 +10,16 @@ import {
   clampOutsideRadius,
   computeFlightPath,
   planWarpEdgeRoute,
-  pointAlongPath,
   takeoffArcPath,
   type Point,
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import { PanZoomController } from "@/systems/PanZoomController";
-import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
+import {
+  SYSTEM_GEOMETRY,
+  GAME_BALANCE,
+  COMBAT_ROUND_MS,
+} from "@/config/balance";
 import { landingDenialMessage } from "@/systems/galaxy/landingAccess";
 import { SpaceBackgroundLayer } from "./SpaceBackgroundLayer";
 import { StarRenderer } from "./flight/StarRenderer";
@@ -28,6 +31,9 @@ import { NpcShipManager } from "./flight/NpcShipManager";
 import { CombatModule } from "./flight/CombatModule";
 import { createCombatPauseUi } from "./flight/combatPauseUi";
 import { CombatPlanningController } from "./flight/combatPlanning";
+import { applyPlannedMovement } from "./flight/combatTrajectory";
+import { previewCombatCourse } from "./flight/combatCoursePreview";
+import { plotPlannedRoute } from "./flight/routePlot";
 import { orbitBump } from "./flight/combatOrbitClock";
 import { PlanetManager } from "./flight/PlanetManager";
 import { FlightHud } from "./flight/FlightHud";
@@ -75,7 +81,12 @@ export class SpaceFlightScene extends GameScene {
   private npcManager!: NpcShipManager;
   private combatModule!: CombatModule;
   private combatPause = createCombatPauseUi(); // active-pause; rewired in initialize()
-  private combatPlanning = new CombatPlanningController(); // pause-and-plan loop (Task 2 skeleton): freeze gate wired below, idle until later tasks add the combat-open trigger
+  // Pause-and-plan loop (Task 2/3): idle until the combat-open trigger; onConfirm flies the planned dest via setPath.
+  private combatPlanning = new CombatPlanningController({
+    roundMs: COMBAT_ROUND_MS,
+    onConfirm: (plan) =>
+      applyPlannedMovement(plan.destination, this.shipPhysics ?? null),
+  });
   // Latches the low-hull auto-stop so the warning fires once per descent.
   private lowHullStopped = false;
   private destroyed = false;
@@ -993,6 +1004,17 @@ export class SpaceFlightScene extends GameScene {
       const pt = this.camera.screenToWorld(event.global.x, event.global.y);
       const { centerX: sx, centerY: sy, avoidRadius } = this.starRenderer;
       const world = clampOutsideRadius(pt.x, pt.y, sx, sy, avoidRadius);
+      // Tactical planning-phase click → this round's destination + arc preview (Task 3).
+      if (this.combatPlanning.isPlanning && this.shipPhysics) {
+        previewCombatCourse(
+          this.routeRenderer,
+          this.combatPlanning,
+          this.shipPhysics,
+          world.x,
+          world.y,
+        );
+        return;
+      }
 
       // Check if we already have a planned route
       if (this.plannedRoute) {
@@ -1493,43 +1515,18 @@ export class SpaceFlightScene extends GameScene {
     });
   }
 
-  /**
-   * Plot the planned-course overlay and hand it to {@link RouteRenderer} to draw.
-   * Route planning (the ship→waypoints→destination polyline + landing-vs-nav
-   * decision) is the scene's job; the renderer just draws what it's told.
-   */
+  /** Plot the planned-course overlay via {@link plotPlannedRoute} (extracted for the line guard). */
   private plotRoute(): void {
-    if (!this.shipPhysics || !this.plannedRoute) return;
-
-    if (this.isTurnRunning) {
-      this.routeRenderer.clearRoute();
-      return;
-    }
-    // Polyline ship → (curved waypoints) → destination (bare destination on a clear shot).
-    const path =
-      this.routePath.length > 0 ? this.routePath : [this.plannedRoute];
-    const points = [
-      { x: this.shipPhysics.shipX, y: this.shipPhysics.shipY },
-      ...path,
-    ];
-    const { x: toX, y: toY } = this.plannedRoute;
-
-    this.routeRenderer.drawRoute(points);
-
-    // Landing marker when the target sits on a planet, else a navigation marker.
-    if (this.planetManager.getPlanetAt(toX, toY) !== null) {
-      this.routeRenderer.drawLandingMarker(toX, toY);
-    } else {
-      this.routeRenderer.drawNavigationMarker(toX, toY);
-    }
-
-    // One-day-travel marker: only when the route is longer than one day's
-    // travel — a route shorter than that has no meaningful midpoint (it would
-    // coincide with the end marker).
-    const dayPoint = pointAlongPath(points, this.DISTANCE_PER_DAY);
-    if (!dayPoint.done) {
-      this.routeRenderer.drawDayMarker(dayPoint.x, dayPoint.y);
-    }
+    plotPlannedRoute(this.routeRenderer, {
+      shipPos: this.shipPhysics
+        ? { x: this.shipPhysics.shipX, y: this.shipPhysics.shipY }
+        : null,
+      plannedRoute: this.plannedRoute,
+      isTurnRunning: this.isTurnRunning,
+      routePath: this.routePath,
+      isPlanetAt: (x, y) => this.planetManager.getPlanetAt(x, y) !== null,
+      distancePerDay: this.DISTANCE_PER_DAY,
+    });
   }
 
   /**
