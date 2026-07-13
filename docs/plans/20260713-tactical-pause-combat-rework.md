@@ -1028,13 +1028,80 @@ Any test file **not** in this list stays under the standing "never touch existin
 
 ### Task 14: Death explosion + drifting wreckage/cargo debris
 
-- [ ] Extend the existing `shipDeathFx` explosion; add an actual wreck sprite (today's
+- [x] Extend the existing `shipDeathFx` explosion; add an actual wreck sprite (today's
       `LootDropHandler` only spawns floating loot dots, no wreck) that inherits the destroyed
       ship's last velocity/heading and drifts with that inertia before settling or despawning.
-- [ ] Spawn existing `LootDropHandler` cargo dots from the wreck's drifting position over its
+- [x] Spawn existing `LootDropHandler` cargo dots from the wreck's drifting position over its
       lifetime, rather than all at the instant of death at a fixed point.
-- [ ] Write tests: wreck spawn velocity/heading matches the ship's pre-death physics state, drift
+- [x] Write tests: wreck spawn velocity/heading matches the ship's pre-death physics state, drift
       decay/despawn timing.
+
+#### Task 14 outcome (implemented 2026-07-14)
+
+- **New pure module**: `src/presentation/flight/combatWreck.ts` (PixiJS-free, unit-tested
+  standalone like `combatPlanning` / `combatTrajectory` / `combatGravity` / `combatMissile` /
+  `combatAfterburner` / `combatBanking`). Owns the death-aftermath physics — the missing middle
+  between the one-shot `shipDeathFx` spark burst and `LootDropHandler`'s all-at-once dump:
+  - `shipVelocity(angle, speed)` — projects the ship's `ShipPhysics.shipAngle` + scalar
+    `currentSpeed` into the `{vx,vy}` (px/ms) velocity the wreck inherits (non-finite → zero).
+  - `spawnWreck(x, y, vx, vy, angle, config)` → `WreckState` — spawns the wreck at the destroyed
+    ship's position **inheriting its velocity + heading**; tumble `spinRate = spinRatePerSpeed ×
+    speed` so a fast-dying ship tumbles harder and a stationary kill barely rotates.
+  - `advanceWreck(state, dtMs, config)` — steps the wreck each frame: drifts by its velocity,
+    applies a per-ms **drag decay** (`v × driftRetentionPerMs^dt`, so it coasts then slows), tumbles
+    the heading, ages it. Returns a **new** state (input never mutated); a non-positive `dtMs` or an
+    already-done wreck is returned unchanged (idempotent — no dangling drift past despawn).
+  - `isWreckDone(state)` / `wreckAlpha(state, config)` — despawn gate + the render fade (full
+    opacity until the `fadeMs` window opens at `lifeMs − fadeMs`, then a linear ease to 0),
+    monotonically non-increasing across the life.
+  - `wreckLootEmissionTimes(count, spreadMs)` — the **staggered loot schedule**: `count` emissions
+    at interior instants `(i + 0.5)/count × spreadMs`, so cargo peels off the *drifting* wreck over
+    its lifetime and **never all at once at the death point** (the Task 14 requirement); the `+0.5`
+    interior offset keeps every emission strictly inside `(0, spread)` so a per-frame sweep from age
+    0 catches them all.
+  - `dueLootEmissions(prevAgeMs, currAgeMs, times)` — the half-open `[prev, curr)` frame check: the
+    execute loop steps the wreck, then spawns a `LootDropHandler` dot at the wreck's **live** drift
+    position for each returned index, so each scheduled drop fires on exactly one frame across the
+    drift.
+- **Wreck render seam**: `src/presentation/flight/combatWreckRenderer.ts` (`drawWrecks`,
+  `WRECK_HULL_COLOR` scorched slate / `WRECK_EMBER_COLOR` dim ember) — a thin drawing seam
+  (mirrors `combatShieldFlash` / `combatStatusBars`) that turns a `{x,y,angle,alpha,size}`
+  descriptor into a jagged hull-silhouette polygon (deliberately broken/asymmetric so it reads as
+  debris, not an intact ship), rotated to the wreck's tumble, plus a dim ember core so a fresh
+  wreck still glows. Tested with a fake `Graphics` recorder.
+- **Loot reuse (no new plumbing)**: the drift-position dots reuse the **existing** `LootDropHandler`
+  spawn/TTL/pickup path unchanged — this module only computes *when* and *where* along the drift to
+  call it, so `LootDropHandler`'s loot roll/pickup semantics are untouched.
+- **Data reuse (no new domain fields)**: the wreck inherits the ship's live `shipAngle` +
+  `currentSpeed` (already on `ShipPhysics`) and rough radius — no galaxy-gen change, no domain/
+  schema/save impact (wreck/drift/loot-cadence are transient render-window state).
+- **Balance**: new `WRECK` constant in `src/config/balance.ts` (driftRetentionPerMs / lifeMs /
+  fadeMs / spinRatePerSpeed), mirrored by the module's `DEFAULT_WRECK` and parity-asserted in the
+  test — tune-in-one-place, per the `COMBAT_ROUND_MS` / `GRAVITY_ASSIST` / `MISSILE_COMBAT` /
+  `AFTERBURNER` / `COMBAT_CONSUMABLE` / `COMBAT_COMMS` / `BANKING` / `SHIELD_COMBAT` / `WEAPON_VFX`
+  precedent.
+- **Wiring status**: inert in production today, exactly like Tasks 2–13's machinery — `shipDeathFx`
+  and `LootDropHandler` themselves are **not** edited; the execute-phase death loop that would
+  spawn a wreck on a kill (inheriting the dying ship's `shipVelocity`), step it each frame
+  (`advanceWreck` → `drawWrecks`), and spawn a `LootDropHandler` dot at the wreck's live position
+  for each `dueLootEmissions` index isn't wired until the combat-open `beginCombat` trigger lands
+  (a later task). The scene/`shipDeathFx`/`LootDropHandler` are untouched here (also keeps
+  `SpaceFlightScene.ts` clear of the `< 1900`-line guard, unchanged at 1898). The pure drift/fade/
+  loot-cadence math + render seam + config + tests are complete and green; the live wreck + trailing
+  loot light up the moment the execute loop is connected. Blast radius: `combatWreck` /
+  `combatWreckRenderer` are brand-new files with no callers yet, so the CRITICAL `CombatModule` /
+  `NpcShipManager` fan-out is undisturbed (per the standing new-file impact exemption).
+- **Tests**: `src/tests/combat/combatWreck.test.ts` (26) — `WRECK`/module parity, `shipVelocity`
+  projection + non-finite guard, `spawnWreck` inherits position/velocity/heading + tumble ∝ speed
+  (fast vs. slow vs. stationary) + non-finite guards, `advanceWreck` drift + drag-slows-over-frames
+  + heading tumble + no-mutation + non-positive-dt hold + done-idempotence, `isWreckDone`/
+  `wreckAlpha` despawn + fade timing (hold-then-ease, 0 at despawn, monotonic, zero-life),
+  `wreckLootEmissionTimes` interior stagger (never at t=0, single-drop mid-drift, non-positive
+  count/spread), and `dueLootEmissions` half-open frame window (boundary fires once, multi-span,
+  non-advancing/spent, and the every-drop-fires-exactly-once integration).
+  `src/tests/combat/combatWreckRenderer.test.ts` (11) — clears + draws a hull + ember poly per
+  wreck, alpha passthrough, colour override, centred silhouette, rotates with heading, skips
+  faded/zero-size, empty-list no-op. Full unit suite green (5801 pass, 0 fail; +37 new).
 
 ### Task 15: Update headless letsplay driving for the new planning-phase loop
 

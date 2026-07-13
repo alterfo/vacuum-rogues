@@ -822,6 +822,29 @@ export const WEAPON_VFX = {
 } as const;
 
 /**
+ * Ship-wreck drift + loot cadence tuning (`docs/plans/20260713-tactical-pause-combat-rework.md`,
+ * Task 14) — the single source of truth for the pure `combatWreck.ts` death-aftermath physics. On a
+ * kill the destroyed ship leaves an actual wreck that inherits its last velocity/heading and coasts
+ * on with that inertia (a slow drag decay + a lazy tumble) before fading out, and its cargo dots
+ * peel off the *drifting* wreck over its lifetime rather than all at once at the death point. The
+ * module mirrors this as `DEFAULT_WRECK`, kept in lockstep by `combatWreck.test.ts`; the scene
+ * passes this value. Presentation-only — the wreck/drift/loot-cadence are transient render-window
+ * state, no save/schema impact.
+ *
+ * - driftRetentionPerMs: fraction of velocity kept per ms of drift (drag), in (0,1]; nearer 1 = the
+ *   wreck coasts farther before slowing (0.9994^1000 ≈ 0.55 retained over a second).
+ * - lifeMs: total wreck lifetime from death to despawn.
+ * - fadeMs: fade-out window at the end of life (holds full alpha, then eases to 0).
+ * - spinRatePerSpeed: tumble spin (radians/ms) added per unit inherited speed (px/ms).
+ */
+export const WRECK = {
+  driftRetentionPerMs: 0.9994,
+  lifeMs: 5000,
+  fadeMs: 1200,
+  spinRatePerSpeed: 4,
+} as const;
+
+/**
  * Exploration-encounter occurrence tuning — the single live source of truth for
  * how often derelict/anomaly/distress encounters fire and how they scale
  * (`docs/plans/20260625-exploration-encounters.md`). The live wiring
