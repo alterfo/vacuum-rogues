@@ -26,6 +26,7 @@ import {
   NEUTRAL_SCALING_WEAK_MULT,
   NEUTRAL_SCALING_STRONG_MULT,
   OVERMIND_GARRISON_POWER_MAX_BONUS,
+  OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
   DIFFICULTY_HOSTILE_SCALING,
 } from "@/config/balance";
 import type { GameMode } from "@/types";
@@ -167,4 +168,18 @@ export function overmindGarrisonPowerBonus(
   maxBonus: number = OVERMIND_GARRISON_POWER_MAX_BONUS,
 ): number {
   return Math.floor(clamp01(powerIndex) * maxBonus);
+}
+
+/**
+ * Mirror of {@link overmindGarrisonPowerBonus}: garrison ships SUBTRACTED
+ * from both [min, max] spawn bounds at the given ratcheted power. Monotone
+ * non-increasing — `maxDiscount` at power 0 (a powerless player faces a
+ * smaller garrison), phasing out to 0 by power 1 (a maxed player faces
+ * today's undiscounted range, only the upward bonus applies).
+ */
+export function overmindGarrisonPowerDiscount(
+  powerIndex: number,
+  maxDiscount: number = OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
+): number {
+  return Math.floor((1 - clamp01(powerIndex)) * maxDiscount);
 }

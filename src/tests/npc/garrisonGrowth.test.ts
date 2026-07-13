@@ -7,6 +7,7 @@ import { NpcSimulator, npcsPresentInSystem } from "@/systems/npc/NpcSimulator";
 import { SeededRNG } from "@/utils/seededRNG";
 import { StarType, NpcState } from "@/types";
 import { Faction } from "@/types/faction";
+import { OVERMIND_GARRISON_POWER_MAX_DISCOUNT } from "@/config/balance";
 
 /** Two-system galaxy: sys_a (will be captured) ←→ sys_b (friendly). */
 function makeGalaxy(): Galaxy {
@@ -219,11 +220,14 @@ describe("NpcSimulator garrison growth (Overmind organic expansion)", () => {
 
     // A fresh simulator = a fresh GameEngine after load. Re-recording the raw
     // grown count as the baseline would ratchet the growth band ~1.5× per
-    // reload without bound; it must clamp to the scaled GARRISON_MAX (10).
+    // reload without bound; it must clamp to the scaled GARRISON_MAX. No
+    // campaign-power source is attached, so the win-rate architecture plan's
+    // downward discount applies at its full (power-0) magnitude, shifting
+    // today's fixed 10 down by that discount.
     const sim = new NpcSimulator();
     sim.ensureGarrison(galaxy, new SeededRNG("ratchet_est"));
     const baseline = garrisonOf(sim).garrisonBaseline.get("sys_a");
-    expect(baseline).toBe(10);
+    expect(baseline).toBe(10 - OVERMIND_GARRISON_POWER_MAX_DISCOUNT);
   });
 
   it("ignores wandering visitors when checking the growth cap (members only)", () => {

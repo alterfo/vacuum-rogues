@@ -189,27 +189,74 @@ invariants in `overmindSpread.ts`, which stay exactly as they are.
 
 ### Task 2: Add the downward garrison-count discount
 
-- [ ] Add `OVERMIND_GARRISON_POWER_MAX_DISCOUNT` (or equivalent name) to `src/config/balance.ts`,
+- [x] Add `OVERMIND_GARRISON_POWER_MAX_DISCOUNT` (or equivalent name) to `src/config/balance.ts`,
       next to `OVERMIND_GARRISON_POWER_MAX_BONUS`, documenting the mirrored intent (comment style
       matching the existing lever docs in this file).
-- [ ] Add `overmindGarrisonPowerDiscount(powerIndex, maxDiscount = OVERMIND_GARRISON_POWER_MAX_DISCOUNT)`
+      **Done.** Added at `balance.ts:923-931` (right after `OVERMIND_GARRISON_POWER_MAX_BONUS`),
+      documented as a placeholder mirrored magnitude for Task 3 to tune.
+- [x] Add `overmindGarrisonPowerDiscount(powerIndex, maxDiscount = OVERMIND_GARRISON_POWER_MAX_DISCOUNT)`
       to `src/systems/campaign/hostileScaling.ts`, mirroring `overmindGarrisonPowerBonus`'s shape
       (monotone non-increasing as power grows toward 1, i.e. large discount at power 0, zero
       discount at power 1) — pure function, same `clamp01` guard.
-- [ ] Wire it into `NpcGarrisonCombat.ts`'s `fillGarrison()`: combine bonus and discount into one
+      **Done.** `Math.floor((1 - clamp01(powerIndex)) * maxDiscount)`, exactly the Technical
+      Details formula.
+- [x] Wire it into `NpcGarrisonCombat.ts`'s `fillGarrison()`: combine bonus and discount into one
       net delta applied to both `GARRISON_MIN`/`GARRISON_MAX` before `scaledGarrisonRange()`,
       floored so the garrison never drops below a minimum real presence (a held system must still
       read as genuinely held — confirm the floor against `isHostileSystem`/`countGarrisonPresent`
       semantics, do not let it hit 0). Apply to pirate systems too per Task 1's decision.
-- [ ] Write tests for `overmindGarrisonPowerDiscount` (power 0 → max discount, power 1 → 0,
+      **Done, with a scope correction against this bullet's stale wording.** Task 1's *actual*
+      recorded decision (above) is pirate-OUT-of-scope (Overmind-only) — this bullet's "apply to
+      pirate systems too" is leftover text from the plan's original default, superseded by Task 1's
+      own finding. Implemented Overmind-only, matching the existing upward bonus's scope exactly.
+      Added `GARRISON_DISCOUNT_FLOOR = 1` (never 0, preserving the "cleared vs. held" semantics at
+      `fillGarrison`'s `present === 0` branch).
+- [x] Write tests for `overmindGarrisonPowerDiscount` (power 0 → max discount, power 1 → 0,
       monotonicity, clamp on out-of-range input) alongside the existing
       `overmindGarrisonPowerBonus` tests in `hostileScaling.test.ts`.
-- [ ] Update/extend `garrisonPowerScaling.test.ts`: weak player gets a smaller garrison than
+      **Done** — 5 new tests in `hostileScaling.test.ts`.
+- [x] Update/extend `garrisonPowerScaling.test.ts`: weak player gets a smaller garrison than
       today's fixed `[GARRISON_MIN, GARRISON_MAX]`, strong player gets today's range plus the
       existing upward bonus (unchanged from before), HARD mode still composes correctly on top
       (`hardScaling.test.ts` must stay green or be updated with the plan's test-modification
       license if its pinned numbers assumed the old fixed floor).
-- [ ] Run affected unit tests — must pass before Task 3.
+      **Done, plus 2 more pinned-test updates this bullet didn't anticipate.**
+      `garrisonPowerScaling.test.ts` updated as specified (weak-player bound now
+      `[max(1,5-discount), 10-discount]`; the old "strong = weak + bonus" relative assertion
+      replaced with an independent `[5+bonus, 10+bonus]` check, since weak's baseline now also
+      moves; added a monotone-non-decreasing-in-power test proving `bonus - discount` composes
+      correctly). `hardScaling.test.ts` needed **no** changes — its garrison-size tests use
+      **pirate** systems only, which stay undiscounted. Two more existing tests outside this
+      bullet's named scope pinned the identical old fixed-floor assumption and broke for the same
+      reason: `hostileGarrison.test.ts` ("tick() keeps hostile systems garrisoned", asserted
+      `>= 5` unconditionally) and `garrisonGrowth.test.ts` ("clamps a reload-re-recorded baseline
+      to the scaled max", asserted exactly `10`). Both updated to `5 - OVERMIND_GARRISON_POWER_MAX_DISCOUNT` /
+      `10 - OVERMIND_GARRISON_POWER_MAX_DISCOUNT` — same license, same reasoning as the bullet's
+      explicit `hardScaling.test.ts` carve-out: these numbers were never independent assertions,
+      they were the pre-Task-2 fixed floor showing up in two more places a plan-time grep didn't
+      surface.
+- [x] Run affected unit tests — must pass before Task 3.
+      **Done, with one mid-course correction.** First pass used the placeholder
+      `OVERMIND_GARRISON_POWER_MAX_DISCOUNT = 2`; the 5 files above went green, but the full
+      `npm test -- --run` sweep caught a real regression outside the plan's anticipated test list:
+      `src/tests/oddities/sessionCompetence.test.ts`'s GOD-mode Task-7 milestone probe (seed
+      `CAMPAIGN-CAPACITY-0`, 200 days) started timing out with peak power stuck at 0.07 (gate:
+      ≥ 0.13), also reproduced by `npm run letsplay:ci` (the plan's own named regression gate).
+      Root cause: this probe runs in **GOD mode**, which already floors hull above 0 — it has no
+      survivability upside to gain from a smaller garrison, only the downside: fewer garrison
+      ships means fewer kills to loot (`PIRATE_LOOT`-style combat income), so peak-power growth
+      slowed. Confirmed causally via `git stash` isolation (narrowed to exactly this task's 5
+      touched files) and by re-running with the discount temporarily at 0 (reproduces the old
+      baseline) and 1 (fixes it). Response: dropped the Task-2 placeholder from 2 to **1** — still
+      a genuine, testable downward discount (not a no-op), but small enough not to regress the
+      existing GOD-mode economy gate. Task 3 owns picking the real tuned value from actual
+      `letsplay:campaign` win-rate measurement, informed by this newly-discovered trade-off (a
+      larger discount helps NORMAL/HARD survival odds but costs GOD/all-mode combat-loot income —
+      Task 3's reasoning should account for both axes, not just clear-odds). Final green suite:
+      `npm test -- --run` (5490 passed / 12 skipped, 0 failed), `npx tsc --noEmit` (clean),
+      `npm run lint` (0 errors — the `rtk` proxy's own lint wrapper mis-scanned vendor bundles
+      outside `src/`; direct `./node_modules/.bin/eslint src --ext .ts` is the ground truth and is
+      clean), `npm run letsplay:ci` (green).
 
 ### Task 3: First measured re-run
 

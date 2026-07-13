@@ -19,6 +19,7 @@ import {
   combatScaling,
   scaleHostileDamage,
   overmindGarrisonPowerBonus,
+  overmindGarrisonPowerDiscount,
   NEUTRAL_HOSTILE_SCALING,
 } from "@/systems/campaign/hostileScaling";
 import {
@@ -27,6 +28,7 @@ import {
   NEUTRAL_SCALING_WEAK_MULT,
   NEUTRAL_SCALING_STRONG_MULT,
   OVERMIND_GARRISON_POWER_MAX_BONUS,
+  OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
   DIFFICULTY_HOSTILE_SCALING,
 } from "@/config/balance";
 
@@ -234,6 +236,35 @@ describe("overmindGarrisonPowerBonus", () => {
       const b = overmindGarrisonPowerBonus(p);
       expect(b).toBeGreaterThanOrEqual(prev);
       prev = b;
+    }
+  });
+});
+
+describe("overmindGarrisonPowerDiscount", () => {
+  it("subtracts the full configured discount while the player is powerless", () => {
+    expect(overmindGarrisonPowerDiscount(0)).toBe(
+      OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
+    );
+    expect(OVERMIND_GARRISON_POWER_MAX_DISCOUNT).toBeGreaterThan(0);
+  });
+
+  it("phases out to 0 at max power", () => {
+    expect(overmindGarrisonPowerDiscount(1)).toBe(0);
+  });
+
+  it("clamps out-of-range input", () => {
+    expect(overmindGarrisonPowerDiscount(-1)).toBe(
+      OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
+    );
+    expect(overmindGarrisonPowerDiscount(99)).toBe(0);
+  });
+
+  it("is monotone non-increasing in power (mirrors the bonus's non-decreasing shape)", () => {
+    let prev = overmindGarrisonPowerDiscount(0);
+    for (const p of [0.1, 0.3, 0.5, 0.7, 0.9, 1]) {
+      const d = overmindGarrisonPowerDiscount(p);
+      expect(d).toBeLessThanOrEqual(prev);
+      prev = d;
     }
   });
 });

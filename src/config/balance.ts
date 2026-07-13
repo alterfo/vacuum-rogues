@@ -922,6 +922,15 @@ export const HOSTILE_SCALING_WEAK_MULT = 0.9;
 /** Extra Overmind garrison ships (added to [min,max]) at full power (index 1). */
 export const OVERMIND_GARRISON_POWER_MAX_BONUS = 2;
 /**
+ * Mirror of `OVERMIND_GARRISON_POWER_MAX_BONUS`: Overmind garrison ships
+ * SUBTRACTED from [min,max] at zero power (a powerless player faces a
+ * smaller standing garrison), phasing out to 0 as power reaches 1 (campaign
+ * win-rate architecture plan, Task 2). Placeholder starting magnitude —
+ * mirrors the bonus's own size; Task 3 re-measures and tunes it against the
+ * `letsplay:campaign` harness rather than guessing the final value here.
+ */
+export const OVERMIND_GARRISON_POWER_MAX_DISCOUNT = 1;
+/**
  * ─── Campaign Task 9 (i): neutral-system combat gentling ─────────────────────
  * The Overview's "gentle while weak, relentless once armed" design applied
  * CONSISTENTLY: a weak ship takes reduced INCOMING hits *everywhere* — wandering

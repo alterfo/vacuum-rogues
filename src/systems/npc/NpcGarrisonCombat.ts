@@ -8,7 +8,10 @@ import {
   OVERMIND_BOSS_TIER,
   OVERMIND_SIZE_TIERS,
 } from "@/config/balance";
-import { overmindGarrisonPowerBonus } from "@/systems/campaign/hostileScaling";
+import {
+  overmindGarrisonPowerBonus,
+  overmindGarrisonPowerDiscount,
+} from "@/systems/campaign/hostileScaling";
 import {
   factionKindOf,
   isHostile,
@@ -53,6 +56,12 @@ const CONVOY_MAX_SHIPS = 3;
 const GARRISON_MIN = 5;
 /** Maximum hostile ships spawned to fill a captured system's garrison. */
 const GARRISON_MAX = 10;
+/**
+ * Absolute floor the power discount can never push a garrison's minimum
+ * below — a held system must still read as genuinely held (0 collides with
+ * the "cleared, awaiting liberation countdown" semantics in {@link fillGarrison}).
+ */
+const GARRISON_DISCOUNT_FLOOR = 1;
 
 /** Growth cap as a multiple of a garrison's recorded baseline size. Once a
  *  garrison reaches round(baseline × threshold) it stops growing (the excess
@@ -460,9 +469,10 @@ export class NpcGarrisonCombat {
   /**
    * Guarantee that every captured (overmind/pirate) system holds a standing
    * garrison of hostile ships. For each hostile system whose present garrison is
-   * below GARRISON_MIN, spawn fresh hostile ships up to a random target in
-   * [GARRISON_MIN, GARRISON_MAX]. Overmind systems get OVERMIND-role ships;
-   * pirate systems get PIRATE ships. Idempotent once the minimum is met.
+   * below the (power-scaled, Overmind-only) minimum, spawn fresh hostile ships
+   * up to a random target in that system's [min, max] range. Overmind systems
+   * get OVERMIND-role ships; pirate systems get PIRATE ships (always at the
+   * unscaled [GARRISON_MIN, GARRISON_MAX]). Idempotent once the minimum is met.
    */
   ensureGarrison(galaxy: Galaxy, rng: SeededRNG): void {
     // Re-sync `garrisonIds` from any `garrison_`/`capture_`-prefixed ships
@@ -492,11 +502,25 @@ export class NpcGarrisonCombat {
     const powerBonus = overmind
       ? overmindGarrisonPowerBonus(this.campaignPeakPowerSource?.() ?? 0)
       : 0;
+    // Win-rate architecture plan (Task 2): the mirrored downward half — a
+    // powerless player faces a SMALLER standing garrison, phasing out to 0
+    // discount by full power. Pirate garrisons stay undiscounted, matching
+    // the upward bonus's own Overmind-only scope.
+    const powerDiscount = overmind
+      ? overmindGarrisonPowerDiscount(this.campaignPeakPowerSource?.() ?? 0)
+      : 0;
+    const netDelta = powerBonus - powerDiscount;
+    // Floored so the discount can never make a held system read as empty.
+    const scaledMin = Math.max(
+      GARRISON_DISCOUNT_FLOOR,
+      GARRISON_MIN + netDelta,
+    );
+    const scaledMax = Math.max(scaledMin, GARRISON_MAX + netDelta);
     // HARD shifts the garrison range up; NORMAL/GOD keep [GARRISON_MIN, MAX].
     const { min: garrisonMin, max: garrisonMax } = scaledGarrisonRange(
       this.gameMode,
-      GARRISON_MIN + powerBonus,
-      GARRISON_MAX + powerBonus,
+      scaledMin,
+      scaledMax,
     );
     let present = this.countGarrisonPresent(galaxy, systemId);
     if (present >= garrisonMin) {
@@ -738,7 +762,7 @@ export class NpcGarrisonCombat {
    * invariant in root CLAUDE.md), so a directed-only scan silently misses
    * genuinely adjacent systems. Deterministic, systems-order listing.
    */
-  undirectedNeighbors(galaxy: Galaxy, systemId: string): string[] {
+  private undirectedNeighbors(galaxy: Galaxy, systemId: string): string[] {
     const ids = new Set<string>();
     for (const sys of galaxy.systems) {
       if (sys.id === systemId) {
