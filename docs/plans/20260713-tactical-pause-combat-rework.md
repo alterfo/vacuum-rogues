@@ -460,16 +460,64 @@ Any test file **not** in this list stays under the standing "never touch existin
 
 ### Task 5: Per-weapon range visualization + manual target assignment UI
 
-- [ ] Render a colored circle per fitted weapon showing its individual range (surfacing the
+- [x] Render a colored circle per fitted weapon showing its individual range (surfacing the
       player's own loadout range data — the equivalent of `npcWeaponRange`'s role-scaled ranges,
       now for the player's actual fitted gear via `GearCatalog`/`ShipLoadout`).
-- [ ] Build the assignment interaction (pick the concrete UX in Task 1 if not already decided:
+- [x] Build the assignment interaction (pick the concrete UX in Task 1 if not already decided:
       click a weapon icon then click a target, or drag-to-target) that writes into the planned
       turn's per-weapon target map — supports assigning every gun to one target (focus fire) or
       spreading targets across multiple guns.
-- [ ] Write tests: range-circle radius matches catalog range per weapon, assignment persists into
+- [x] Write tests: range-circle radius matches catalog range per weapon, assignment persists into
       the planned-turn draft, re-assignment overwrites cleanly, an out-of-range assignment is
       rejected or flagged (decide which and record).
+
+#### Task 5 outcome (implemented 2026-07-14)
+
+- **New pure module**: `src/presentation/flight/combatWeaponTargeting.ts` (PixiJS-free,
+  unit-tested standalone like `combatPlanning` / `combatTrajectory` / `combatGravity`). Owns the
+  range visualization + manual-assignment logic:
+  - `weaponRangeCircles(weapons, center)` — one `RangeCircle` per fitted weapon, **radius = that
+    weapon's own catalog `range`** (`WeaponSpec.range`, the player-side equivalent of
+    `npcWeaponRange`'s role-scaled reach, read from the actual fitted `GearCatalog`/`ShipLoadout`
+    gear), centred on the ship, tinted distinctly by slot order.
+  - `WEAPON_RANGE_PALETTE` / `weaponRangeColor(index)` — a 6-colour palette (cyan/amber/green/
+    magenta/orange/violet) that wraps for a loadout with more guns than colours, so overlapping
+    range rings read as separate circles.
+  - `targetInRange(range, from, target)` — inclusive-boundary reach test.
+  - `WeaponAssignmentController<TWeapon extends RangedWeapon, TTarget>` — the **UX decision:
+    click-a-weapon-then-click-a-target** two-step interaction. `selectWeapon` arms a gun (clicking
+    the armed gun again toggles it off); `selectTarget` writes the assignment into the planned-turn
+    draft via the narrow `WeaponAssignmentSink` (satisfied by `CombatPlanningController` — whose
+    `assignWeapon`/`clearWeapon` already overwrite cleanly and no-op outside PLANNING). Focus-fire
+    (every gun → one target) and spread (re-aim one gun) both work; `unassign` clears a gun.
+- **Out-of-range decision (recorded): FLAGGED, not rejected.** In a pause-and-plan model the
+  planned movement can carry a target into range during the execute window, so a hard reject
+  measured from the pre-move position would wrongly forbid a legitimate lead-the-target plan. The
+  assignment is accepted and returned with `inRange: false` so the UI can render it in a warning
+  tint; the execute-phase fire gate (`advancePlayerWeapons`' own range check, Task 6) stays the
+  sole authority on whether the shot lands.
+- **Presentation seam**: `src/presentation/flight/combatWeaponRangeOverlay.ts`
+  (`drawWeaponRangeCircles`) — a thin drawing seam mirroring `combatCoursePreview`, strokes each
+  `RangeCircle` as a dashed ring in the same style as `CombatHud.drawRangeCircle`, tested with a
+  fake `Graphics` recorder. All range/colour decisions live in the pure module; this only turns
+  circles into strokes.
+- **Wiring status**: inert in production today, exactly like Task 2's freeze-gate / Task 3's
+  course-preview / Task 4's gravity math — the live click routing between a movement click and a
+  weapon-assign click needs the planning-phase UI mode, which isn't lit up until the combat-open
+  `beginCombat` trigger lands (a later task); the scene isn't touched here (also keeps
+  `SpaceFlightScene.ts` clear of the line guard). The math + assignment logic + render seam +
+  tests are complete and green; the live overlay + two-step click light up the moment the trigger
+  is connected. **No new i18n strings** (range circles are geometry, weapon icons reuse the
+  existing `gearIcon.ts` art) and **no save/schema impact** (assignments live on the transient
+  planned-turn draft).
+- **Tests**: `src/tests/combat/combatWeaponTargeting.test.ts` (14) — radius==catalog range,
+  distinct+wrapping colours, negative-index/zero-range edge cases, inclusive/beyond range test,
+  assignment persists into the real `CombatPlanningController` draft, re-assignment overwrites,
+  focus-fire vs. spread, the out-of-range **flag** (recorded decision), no-weapon-armed no-op,
+  select toggle/clear, unassign, and the outside-PLANNING sink no-op.
+  `src/tests/combat/combatWeaponRangeOverlay.test.ts` (3) — clears + strokes one dashed ring per
+  weapon in that weapon's colour, skips a zero-radius circle, empty-list no-op. Full unit suite
+  green (5591 pass).
 
 ### Task 6: Weapon execution — replace auto-fire with planned per-weapon assignments
 
