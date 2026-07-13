@@ -776,6 +776,35 @@ export const BANKING = {
 } as const;
 
 /**
+ * Shield-vs-hull combat tuning (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 12) —
+ * the single source of truth for the pure `combatShield.ts` damage-ordering + VFX geometry. This
+ * is the first real combat consumer of the previously-unused ship shield pool
+ * (`PlayerShip.shields`/`maxShields`, `NpcShip.shields`): shields absorb incoming damage up to the
+ * current shield value before the hull takes the overflow (which still routes through
+ * `applyDamageWithMode` for the GOD-mode floor). A hit shields absorb triggers the translucent
+ * shield-hit flash sphere (distinct from the hull-hit impact bloom); a small floating hull/shield
+ * bar reads over each ship. The module mirrors this as `DEFAULT_SHIELD_COMBAT`, kept in lockstep by
+ * `combatShield.test.ts`; the scene passes this value. No save/schema impact (shields already
+ * persist; the flash/bar are transient render-only).
+ *
+ * - shieldFlashMs: how long the translucent shield-absorb sphere fades over (ms).
+ * - shieldFlashPeakAlpha: the sphere's opacity at the instant of the hit (fades to 0).
+ * - shieldFlashRadiusScale: sphere radius as a multiple of the struck ship's radius.
+ * - barWidth/barHeight: the floating hull/shield bar dimensions (world px).
+ * - barGap: vertical gap between the stacked hull and shield bars (world px).
+ * - barYOffset: how far above the ship centre the bar stack floats (world px).
+ */
+export const SHIELD_COMBAT = {
+  shieldFlashMs: 260,
+  shieldFlashPeakAlpha: 0.45,
+  shieldFlashRadiusScale: 1.35,
+  barWidth: 44,
+  barHeight: 4,
+  barGap: 2,
+  barYOffset: 26,
+} as const;
+
+/**
  * Exploration-encounter occurrence tuning — the single live source of truth for
  * how often derelict/anomaly/distress encounters fire and how they scale
  * (`docs/plans/20260625-exploration-encounters.md`). The live wiring

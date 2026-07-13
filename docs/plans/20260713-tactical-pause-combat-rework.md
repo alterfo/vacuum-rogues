@@ -890,16 +890,77 @@ Any test file **not** in this list stays under the standing "never touch existin
 
 ### Task 12: Shield-hit flash + per-ship floating hull/shield bars
 
-- [ ] Wire real shield-vs-hull damage ordering into combat resolution (shields absorb damage up to
+- [x] Wire real shield-vs-hull damage ordering into combat resolution (shields absorb damage up to
       `shieldHP` before hull takes the overflow) — per Task 9's coordination note, this is the
       first real consumer of `shieldHP` if Task 9 hasn't already defined the semantics; otherwise
       this task follows what Task 9 established.
-- [ ] Add the shield-hit flash VFX (translucent colored sphere, brief) on any hit that shields
+- [x] Add the shield-hit flash VFX (translucent colored sphere, brief) on any hit that shields
       absorb, distinct from the existing hull-hit flash.
-- [ ] Add a small floating hull/shield bar over each ship in flight (new presentation component —
+- [x] Add a small floating hull/shield bar over each ship in flight (new presentation component —
       today only the HUD side-panel shows target/player bars, nothing floats over the sprites).
-- [ ] Write tests: damage-order math (shield-then-hull, overflow calculation), bar-fraction mapping
+- [x] Write tests: damage-order math (shield-then-hull, overflow calculation), bar-fraction mapping
       for both hull and shield values.
+
+#### Task 12 outcome (implemented 2026-07-14)
+
+- **New pure module**: `src/presentation/flight/combatShield.ts` (PixiJS-free, unit-tested
+  standalone like `combatPlanning` / `combatTrajectory` / `combatGravity` / `combatMissile` /
+  `combatAfterburner` / `combatConsumable` / `combatBanking`). The **first real combat consumer** of
+  the ship shield pool — `PlayerShip.shields`/`maxShields` and `NpcShip.shields` are persisted domain
+  stats that no damage-resolution code has ever read (grep: zero hits in `src/systems/combat/*`).
+  (Note: the plan's Task-1 text calls the field `shieldHP`; the actual domain field is `shields`,
+  as Task 9 already recorded — this module stays generic over plain `shields`/`damage` numbers.)
+  - `resolveShieldedDamage(shields, damage)` → `{ shields, shieldAbsorbed, hullDamage, shieldHit }`
+    — the **damage-order split**: shields absorb up to their current value, the overflow reaches the
+    hull. **It does NOT touch the hull-flooring rule** — the caller feeds `hullDamage` to
+    `applyDamageWithMode` (godMode.ts), which still owns the GOD-mode floor, so this composes ahead
+    of the existing damage path without rewriting it. `shieldHit` (absorbed > 0) is the flash
+    trigger. Non-finite/negative inputs are guarded to 0.
+  - `barFraction(current, max)` → `[0,1]` — the fill mapping **both** the hull and shield floating
+    bars render their width from; a non-positive/non-finite `max` (a shield-less ship) is an empty
+    bar, over-full clamps to 1.
+  - `shieldFlashAlpha(ageMs, config)` — the flash sphere's linear fade from `shieldFlashPeakAlpha`
+    at the hit instant to 0 at `shieldFlashMs`.
+- **Shield-HP semantics coordinate with Task 9** (recorded): a shield is a `[0, maxShields]` pool
+  that `resolveShieldedDamage` drains and Task 9's `applyShieldRestore` (clamp-to-max, never-reduce)
+  refills — a round-trip test (`combatShield.test.ts`) proves the two agree on what a shield value
+  means, satisfying the plan's "whichever of Task 9/Task 12 lands first defines the semantics" note.
+- **Shield-hit flash VFX seam**: `src/presentation/flight/combatShieldFlash.ts`
+  (`drawShieldFlashes`, `SHIELD_FLASH_COLOR` cold cyan) — a thin drawing seam (mirrors
+  `combatWeaponRangeOverlay`/`combatCoursePreview`) that turns a `{x,y,radius,alpha}` descriptor into
+  a soft outer + brighter inner **translucent sphere**, deliberately **distinct** from the warm
+  hull-hit impact bloom (`CombatHud`'s tracer/impact flash). Tested with a fake `Graphics` recorder.
+- **Floating hull/shield bars seam**: `src/presentation/flight/combatStatusBars.ts`
+  (`drawShipStatusBars`) — a new presentation component (today only the HUD side-panel shows
+  target/player bars; nothing floats over the sprites). Draws a compact stacked bar (hull below,
+  shield above with a `barGap`) centred on each ship, floating `barYOffset` above it; a shield-less
+  ship (no/zero `maxShields`) reads as a single hull bar with no empty shield slot, and an
+  enemy-hull tint is a caller override. Tested with a fake `Graphics` recorder.
+- **Balance**: new `SHIELD_COMBAT` constant in `src/config/balance.ts` (shieldFlashMs /
+  shieldFlashPeakAlpha / shieldFlashRadiusScale / barWidth / barHeight / barGap / barYOffset),
+  mirrored by the module's `DEFAULT_SHIELD_COMBAT` and parity-asserted in the test — tune-in-one-place,
+  per the `COMBAT_ROUND_MS` / `GRAVITY_ASSIST` / `MISSILE_COMBAT` / `AFTERBURNER` /
+  `COMBAT_CONSUMABLE` / `COMBAT_COMMS` / `BANKING` precedent.
+- **Wiring status**: inert in production today, exactly like Tasks 2–11's machinery — the
+  execute-phase damage loop that would run `resolveShieldedDamage` before `applyDamageWithMode`,
+  spawn a `drawShieldFlashes` sphere on a `shieldHit`, and draw a `drawShipStatusBars` bar over each
+  combatant isn't wired until the combat-open `beginCombat` trigger lands (a later task). The scene
+  is **not** touched here (also keeps `SpaceFlightScene.ts` clear of the `< 1900`-line guard). The
+  pure damage-order math + fraction/flash math + both render seams + config + tests are complete and
+  green; the live shield absorption + flash + floating bars light up the moment the execute loop is
+  connected. **No i18n/save/schema impact** — shields already persist (`schemas.ts` unchanged), and
+  the flash/bar are transient render-only values. Blast radius: `applyDamageWithMode` is **not
+  edited** (the new module composes ahead of it), so the CRITICAL combat-core fan-out is undisturbed.
+- **Tests**: `src/tests/combat/combatShield.test.ts` (17) — balance/module parity, the
+  shield-then-hull split (full-absorb, overflow, shields-down, exact-drain, zero-damage no-op,
+  non-finite/negative guards, the Task-9 restore round-trip), `barFraction` (mid/full/empty, clamps,
+  non-positive/non-finite max, non-finite current), and `shieldFlashAlpha` (peak→0 linear fade,
+  monotonic, negative-age/past-duration, zero-duration no-op). `combatShieldFlash.test.ts` (5) —
+  clears + draws the concentric sphere per flash, default cyan tint + override, skips faded/zero
+  flashes, empty-list no-op. `combatStatusBars.test.ts` (9) — hull+shield tracks/fills, fill widths
+  match fractions, centred + floats above the ship, shield above hull, shield-less/missing-field
+  hull-only, empty-hull background-only, non-positive-maxHull no-op, enemy-tint override, empty-list
+  no-op. Full unit suite green (5727 pass, 0 fail; +31 new).
 
 ### Task 13: Weapon-type VFX (laser / plasma-blaster / missile smoke trail / heavy-weapon distortion)
 
