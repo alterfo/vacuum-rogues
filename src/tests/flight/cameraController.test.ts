@@ -239,14 +239,14 @@ describe("CameraController (extracted from SpaceFlightScene)", () => {
     );
     const idlePan = camera.panX;
     // A stopped, lead-free camera does nothing; a moving ship pulls the pan.
-    camera.update();
+    camera.update(16.67);
     expect(camera.panX).not.toBe(idlePan);
   });
 
   it("does nothing on update() with no ship physics", () => {
     const { camera, shipRef } = makeHarness(null);
     shipRef.current = null;
-    expect(() => camera.update()).not.toThrow();
+    expect(() => camera.update(16.67)).not.toThrow();
   });
 
   it("clampPan keeps the focus point inside [star ± boundaryRadius]", () => {
@@ -268,6 +268,77 @@ describe("CameraController (extracted from SpaceFlightScene)", () => {
     camera.setPan(9999, -9999);
     expect(camera.panX).toBe(400);
     expect(camera.panY).toBe(125);
+  });
+});
+
+describe("CameraController frame-rate independence (jitter fix)", () => {
+  /** Run `update(dt)` repeatedly until `totalMs` real time has elapsed. */
+  function runFor(
+    camera: CameraController,
+    stepMs: number,
+    totalMs: number,
+  ): void {
+    let elapsed = 0;
+    while (elapsed < totalMs - 1e-9) {
+      camera.update(stepMs);
+      elapsed += stepMs;
+    }
+  }
+
+  it("updateReturn() converges to the same pan regardless of frame-step size", () => {
+    // A pure single-target glide (ship stationary) — mathematically an exact
+    // exponential decay, so two different frame-step subdivisions of the same
+    // elapsed real time must land on (near enough) the same pan, not a
+    // frame-count-dependent one. Start 1000px off-target so neither run's
+    // final distance ever crosses updateReturn()'s 1px snap-to-target branch
+    // (which would otherwise make the two runs incomparable).
+    const start = () => {
+      const { camera } = makeHarness(makeShip({ shipX: 0, shipY: 0 }));
+      camera.setPan(1000, 0);
+      camera.startReturn();
+      return camera;
+    };
+    const fastFrames = start();
+    runFor(fastFrames, 4, 200); // 50 steps of 4ms
+    const slowFrames = start();
+    runFor(slowFrames, 40, 200); // 5 steps of 40ms
+
+    expect(Math.abs(fastFrames.panX - 0)).toBeGreaterThan(50); // sanity: still mid-glide
+    expect(fastFrames.panX).toBeCloseTo(slowFrames.panX, 3);
+    expect(fastFrames.panY).toBeCloseTo(slowFrames.panY, 3);
+  });
+
+  it("motion-follow (focusWithLead) lands close together at realistic frame rates (60fps vs 30fps)", () => {
+    // A moving ship's camLead itself glides toward a moving target, so this
+    // path isn't a pure single-variable exponential like updateReturn() —
+    // a small step-size-dependent residual from the two coupled smoothers is
+    // expected even after the fix — but at the frame-rate variance a real
+    // session actually sees (60fps vs a 30fps hitch, not an extreme
+    // synthetic ratio), it must be a handful of px, nowhere near the
+    // ~300+ px divergence the un-normalized frame-COUNT lerp produced
+    // between 4ms and 40ms steps pre-fix.
+    const start = () => {
+      const { camera } = makeHarness(
+        makeShip({
+          shipX: 2000,
+          shipY: 0,
+          shipAngle: 0,
+          isMoving: true,
+          currentSpeed: 1,
+          getSpeedFraction: () => 1,
+        }),
+      );
+      return camera;
+    };
+    const at60fps = start();
+    runFor(at60fps, 1000 / 60, 300);
+    const at30fps = start();
+    runFor(at30fps, 1000 / 30, 300);
+
+    const dx = Math.abs(at60fps.panX - at30fps.panX);
+    const dy = Math.abs(at60fps.panY - at30fps.panY);
+    expect(dx).toBeLessThan(15);
+    expect(dy).toBeLessThan(15);
   });
 });
 

@@ -648,7 +648,7 @@ export class SpaceFlightScene extends GameScene {
         this.flightAutosave,
         deltaTime,
       );
-    if (!frozen) this.camera.update();
+    if (!frozen) this.camera.update(deltaTime);
     this.npcManager.update(deltaTime, this.bgElapsed);
     this.planetManager.update(deltaTime, this.bgElapsed);
     this.updateSystemMiniMap();
