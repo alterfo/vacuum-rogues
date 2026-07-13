@@ -680,6 +680,32 @@ export const MISSILE_COMBAT = {
 } as const;
 
 /**
+ * Afterburner tuning (`docs/plans/20260713-tactical-pause-combat-rework.md`, Task 8) —
+ * the single source of truth for the pure `combatAfterburner.ts` speed-boost + engine-wear
+ * math. An afterburner engaged during PLANNING multiplies the ship's speed for the following
+ * execute window but **gradually wears the engine** ("постепенно разрушает мотор"): each burn
+ * permanently reduces the engine's integrity, weakening the boost it can still deliver, until a
+ * fully-worn engine can no longer afterburn at all. Wear is **session-scoped** (the smallest
+ * model satisfying the spec — Task 8 decision): it accumulates across the burns of a single fight
+ * and resets to pristine at the next engagement, so there is **no save/schema impact** (matching
+ * every sibling task in this rework staying persistence-neutral; a persistent cross-fight
+ * engine-health field is a recorded Post-Completion stretch, not v1). The module mirrors this as
+ * `DEFAULT_AFTERBURNER`, kept in lockstep by `combatAfterburner.test.ts`; the scene passes this
+ * value.
+ *
+ * - speedMultiplier: peak speed multiplier at pristine integrity (the boost tapers with wear).
+ * - wearPerBurn: integrity (0..1) permanently lost per afterburner engagement this fight.
+ * - minIntegrityToEngage: below this remaining integrity the afterburner can no longer engage
+ *   (no boost) — the "fully-degraded engine can no longer afterburn" rule. With `wearPerBurn`
+ *   this also fixes the natural cap on burns per fight (`floor((1 − this) / wearPerBurn) + 1`).
+ */
+export const AFTERBURNER = {
+  speedMultiplier: 2.2,
+  wearPerBurn: 0.12,
+  minIntegrityToEngage: 0.05,
+} as const;
+
+/**
  * Exploration-encounter occurrence tuning — the single live source of truth for
  * how often derelict/anomaly/distress encounters fire and how they scale
  * (`docs/plans/20260625-exploration-encounters.md`). The live wiring

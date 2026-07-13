@@ -646,14 +646,65 @@ Any test file **not** in this list stays under the standing "never touch existin
 
 ### Task 8: Afterburner
 
-- [ ] Add an afterburner action selectable during planning: a large speed multiplier for the
+- [x] Add an afterburner action selectable during planning: a large speed multiplier for the
       following execute window. Decide and record the degradation model (cumulative wear stat on
       the engine, capped uses per fight, or a persistent cross-fight engine-health field — pick
       the smallest one that satisfies "postepenno razrushaet motor" / "gradually damages the
       engine" from the spec, and check whether it needs `SaveState` persistence).
-- [ ] Write tests: speed multiplier applied correctly for exactly one execute window then reverts,
+- [x] Write tests: speed multiplier applied correctly for exactly one execute window then reverts,
       degradation accumulates per the chosen model, a fully-degraded engine can no longer
       afterburn (or applies a penalty — record which).
+
+#### Task 8 outcome (implemented 2026-07-14)
+
+- **New pure module**: `src/presentation/flight/combatAfterburner.ts` (PixiJS-free, unit-tested
+  standalone like `combatPlanning` / `combatTrajectory` / `combatGravity` / `combatMissile`). The
+  `PlannedTurn.afterburner` flag (+ `CombatPlanningController.setAfterburner`) already existed from
+  Task 2; this task adds the speed-boost + engine-wear math the execute loop consumes:
+  - `pristineEngine()` / `EngineWearState` — the session-scoped `{ integrity: 0..1 }` the host
+    carries for one fight (1 = pristine, 0 = spent).
+  - `afterburnerMultiplier(integrity, config)` — the **boost-taper curve**: `speedMultiplier` at
+    pristine, tapering linearly toward `1` (no boost) as the engine wears, exactly `1` once too
+    worn to engage; never below 1.
+  - `canAfterburn(state, config)` — true while integrity is strictly above `minIntegrityToEngage`.
+  - `engageAfterburner(state, config) → { state, multiplier, engaged }` — the **stateless
+    transform**: applies the pre-wear multiplier and permanently drops integrity by `wearPerBurn`
+    (floored at 0); a spent engine is a clean no-op (`engaged:false`, `multiplier:1`, state
+    unchanged — no penalty, just no boost).
+  - `afterburnerBurnBudget(config)` — the natural per-fight burn cap the wear model yields for free
+    (`Infinity` for a non-positive `wearPerBurn`).
+- **Degradation model (recorded decision) — session-scoped cumulative engine wear, NO save
+  persistence.** This is the *smallest* model satisfying "постепенно разрушает мотор": each burn
+  permanently lowers integrity for the rest of the fight (weakening later burns until the engine is
+  spent and can no longer afterburn), and integrity resets to pristine at the next engagement.
+  Rationale: (1) smallest of the three options — it subsumes "capped uses per fight" for free
+  (`afterburnerBurnBudget`); (2) **no `SaveState`/schema impact**, consistent with every sibling
+  task in this rework staying persistence-neutral (transient execute-window state); (3) avoids
+  opening a cross-fight repair/economy loop the spec never specifies (where would you fix a
+  permanently-damaged engine?). A persistent cross-fight engine-health field is recorded as a
+  Post-Completion stretch, not v1.
+- **Fully-degraded behaviour (recorded "record which")**: a spent engine **can no longer
+  afterburn** (reverts to normal speed, `multiplier:1`) rather than applying a speed penalty.
+- **"Applied for exactly one window then reverts"**: this is the planning loop's own contract, not
+  a timer in this module — the caller applies the returned `multiplier` for one execute window, and
+  the per-turn `afterburner` flag resets in the next fresh draft (`freshPlan`), so the boost
+  reverts automatically. The module stays stateless math.
+- **Balance**: new `AFTERBURNER` constant in `src/config/balance.ts` (speedMultiplier /
+  wearPerBurn / minIntegrityToEngage), mirrored by the module's `DEFAULT_AFTERBURNER` and
+  parity-asserted in the test — tune-in-one-place, per the `COMBAT_ROUND_MS` / `GRAVITY_ASSIST` /
+  `MISSILE_COMBAT` precedent.
+- **Wiring status**: inert in production today, exactly like Tasks 2–7's machinery — the
+  execute-phase loop that would read `plan.afterburner`, call `engageAfterburner`, and fold the
+  multiplier into `ShipPhysics`' speed for the window isn't wired until the combat-open
+  `beginCombat` trigger lands (a later task). The pure math + config + tests are complete and green;
+  the live boost lights up the moment the execute loop is connected. **No i18n/save/schema impact.**
+- **Tests**: `src/tests/combat/combatAfterburner.test.ts` (13) — balance/module parity, pristine
+  engine + engage-floor detection, the boost taper (peak at pristine, linear halving at half
+  integrity, monotonic, `1` when spent, never below 1), a pristine burn applies the peak multiplier
+  + wears the engine, degradation accumulates monotonically over a full fight (uses capped at
+  `afterburnerBurnBudget`), a fully-degraded engine can no longer afterburn (no boost, no further
+  wear), integrity never wears below 0, and the burn-budget cap (matches actual burns + `Infinity`
+  for non-positive wear). Full unit suite green (5636 pass, 0 fail).
 
 ### Task 9: Consumable combat artifacts (shield restore / AoE damage / weapon jam)
 
