@@ -456,6 +456,20 @@ invariants in `overmindSpread.ts`, which stay exactly as they are.
   implemented, tested, and shipped as a real (non-regressing) improvement to held-system combat
   fairness, but it does not close the campaign win-rate gap — the dominant early-death failure
   mode is most likely gated by unscaled pirate-held-system garrisons, outside this plan's scope.
+- **Post-hoc code review addendum (2026-07-13)**: a closer read of `overmindGarrisonPowerDiscount`
+  at the shipped `maxDiscount=1` found a second, more concrete candidate explanation, additive to
+  the pirate-garrison theory above — see `.claude/docs/systems/overmind.md`'s Known-unmet gate
+  section for the full write-up. In short: `Math.floor((1 - clamp01(p)) * 1)` is a knife-edge, not
+  a graded ramp — it returns the full discount only at the exact literal `powerIndex === 0` and `0`
+  for every `p` in `(0, 1]`. Since `campaignPeakPower` is a monotone ratchet that leaves 0 within
+  the first in-game day of normal play and never returns, the discount realistically engages for
+  at most the first tick of a fresh run, not through the `0.02–0.15` power band where this plan's
+  own death census places most early deaths — so the 4.0% result is also consistent with the lever
+  being a near-no-op by construction, independent of whether pirate garrisons are also a factor.
+  A future attempt at this lever should raise `maxDiscount` to `≥2` (giving `floor()` real interior
+  room, mirroring the bonus's own `0.5` step at `maxBonus=2`) and separately exempt GOD mode from
+  the Task-2 economy regression (GOD already floors hull and has no survivability upside to gain
+  from a smaller garrison) instead of shrinking `maxDiscount` to dodge it.
 
 ## Post-Completion
 
@@ -466,6 +480,13 @@ the automatable task list since it is slow):
 - 100-session neural-policy re-run if the heuristic gate improves enough to make it worth
   re-checking (the neural teacher clones whatever the heuristic does; Task 11's 0% neural result
   was downstream of the same arming-up bottleneck this plan targets).
+
+**Follow-up candidate for a future plan** (per the post-hoc code review addendum above): retry the
+downward discount with `maxDiscount ≥ 2` (giving `floor()` a real interior step instead of today's
+knife-edge-at-exactly-0) combined with a GOD-mode-specific exemption for the Task-2 combat-loot
+regression, rather than shrinking `maxDiscount` to fit around it. Needs its own scope decision and
+measurement pass — not actioned here, since re-tuning this lever without user direction is exactly
+what Task 4's own escalation clause forbids.
 
 **Live-browser feel-check** (manual, informational): watch a live autopilot session (`` ` ``
 backtick toggle in `npm run dev`) engage a held-system garrison at low vs. high `campaignPeakPower`

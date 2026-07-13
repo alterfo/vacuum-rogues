@@ -267,4 +267,23 @@ describe("overmindGarrisonPowerDiscount", () => {
       prev = d;
     }
   });
+
+  it("at the shipped max discount (1), any power above exactly 0 already reads as undiscounted", () => {
+    // Math.floor((1 - p) * 1) is 1 only at the literal p === 0 and 0 for
+    // every p in (0, 1] — a knife-edge, not a graded ramp. Documented
+    // explicitly so this stays a visible, conscious contract rather than an
+    // accidental one that only the win-rate architecture plan's escalation
+    // notes call out (see hostileScaling.ts's doc comment on this function).
+    expect(overmindGarrisonPowerDiscount(0.001)).toBe(0);
+    expect(overmindGarrisonPowerDiscount(0.01)).toBe(0);
+  });
+
+  it("does have a real interior step once maxDiscount gives floor() room (e.g. 2)", () => {
+    // Proves the formula itself is a genuine ramp, mirroring the bonus's own
+    // 0.5 step at maxBonus=2 — the knife-edge above is a consequence of the
+    // currently shipped maxDiscount=1, not a defect in this function.
+    expect(overmindGarrisonPowerDiscount(0.49, 2)).toBe(1);
+    expect(overmindGarrisonPowerDiscount(0.5, 2)).toBe(1);
+    expect(overmindGarrisonPowerDiscount(0.51, 2)).toBe(0);
+  });
 });

@@ -170,8 +170,11 @@ describe("combatLiberation — adaptive difficulty simulation (Task 4)", () => {
   const scout = { hp: 90, sh: 20, dmg: 14 };
   const top = { hp: 360, sh: 100, dmg: 55 };
 
-  // NpcSimulator's standing-garrison floor (GARRISON_MIN) — a captured system
-  // never holds fewer defenders than this.
+  // Pre-discount NpcGarrisonCombat.GARRISON_MIN — the worst-case baseline
+  // this hand-rolled simulateGarrison helper assumes. Overmind systems can
+  // now hold fewer (down to GARRISON_MIN - OVERMIND_GARRISON_POWER_MAX_DISCOUNT)
+  // for a low-power player; this constant is local to this simulated
+  // scenario, not a currently-guaranteed system-wide floor.
   const GARRISON_MIN = 5;
 
   it("strong endpoint equals the OVERMIND_COMBAT_*_MULT levers (still > 1)", () => {

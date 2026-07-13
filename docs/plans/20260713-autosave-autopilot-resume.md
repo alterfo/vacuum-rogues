@@ -250,20 +250,30 @@ touches different files, no shared risk.
 
 ### Task 5: [Final] Verify acceptance criteria and update documentation
 
-- [ ] Verify: engaging autopilot live, triggering an autosave (any scene transition), simulating a
+- [x] Verify: engaging autopilot live, triggering an autosave (any scene transition), simulating a
       fresh-engine reload+continue, resumes the autopilot automatically — proven by Task 4's
-      real-engine playtest, not just unit tests.
-- [ ] Verify a save with the autopilot OFF does not spuriously start it on continue.
-- [ ] Verify a save with `autopilotEngaged` absent (old save, pre-this-plan) loads exactly as today
-      (no autopilot, no crash) — the additive-optional-field default-safe path.
-- [ ] Run full unit suite, `tsc --noEmit`, `npm run lint`, `npm run test:playtest`,
-      `npm run letsplay:ci`, `npm run test:save-compat` — all must be green.
-- [ ] Update `.claude/docs/systems/letsplay.md`'s "Live autopilot" section with the new
-      resume-on-continue behavior (one short paragraph, matching the doc's existing style).
-- [ ] Update `.claude/docs/systems/save-slots.md` if the new field is worth a one-line mention
+      real-engine playtest, not just unit tests. (`src/tests/playtest/autopilotResumeOnLoad.test.ts`
+      asserts resume on both the boot-catch-up and continue paths — green in the full suite +
+      `npm run test:playtest`.)
+- [x] Verify a save with the autopilot OFF does not spuriously start it on continue. (Same playtest's
+      OFF-save negative assertion — green.)
+- [x] Verify a save with `autopilotEngaged` absent (old save, pre-this-plan) loads exactly as today
+      (no autopilot, no crash) — the additive-optional-field default-safe path. (Covered by the
+      round-trip absent case in `saveStateAutopilotEngaged.test.ts` + `goldenSaveCompat` golden saves
+      loading clean — `npm run test:save-compat`: 22 passed.)
+- [x] Run full unit suite, `tsc --noEmit`, `npm run lint`, `npm run test:playtest`,
+      `npm run letsplay:ci`, `npm run test:save-compat` — all must be green. (Full unit: 5517 passed |
+      12 skipped, exit 0; `tsc --noEmit`: clean; `npm run lint`: exit 0 (0 errors); `test:playtest`,
+      `letsplay:ci`, `test:save-compat`: all exit 0.)
+- [x] Update `.claude/docs/systems/letsplay.md`'s "Live autopilot" section with the new
+      resume-on-continue behavior (one short paragraph, matching the doc's existing style). (Added as
+      the "Resume-on-reload" paragraph under "Live autopilot".)
+- [x] Update `.claude/docs/systems/save-slots.md` if the new field is worth a one-line mention
       (likely yes, since it's a new `SaveState` field consumers of that doc should know exists).
-- [ ] Record final DI seam shape and any deviations from Task 1's design in this plan's Technical
-      Details section.
+      (Added the `## SaveState.autopilotEngaged (dev-autopilot resume)` section.)
+- [x] Record final DI seam shape and any deviations from Task 1's design in this plan's Technical
+      Details section. (Recorded in "Final seam shape (implemented — no deviation from Task 1's
+      design)" above — port, `GameEngine` wiring, `devAutopilot.ts` injection, and coverage.)
 
 ## Technical Details
 
@@ -284,6 +294,23 @@ touches different files, no shared risk.
   `src/tests/playtest/letsplay/` — the only concrete `IAutopilotStateProvider` implementation (backed
   by the real `AutopilotController`) is constructed and injected from `src/dev/devAutopilot.ts`,
   which is itself only reachable through `main.ts`'s `if (import.meta.env.DEV)` dynamic-import chunk.
+- **Final seam shape (implemented — no deviation from Task 1's design):**
+  - Port `IAutopilotStateProvider` (`src/core/ports/IAutopilotStateProvider.ts`): `isEngaged(): boolean`
+    + `resume(engaged: boolean): void`. Default `NoOpAutopilotStateProvider` (`src/core/adapters/`):
+    `isEngaged()→false`, `resume()→{}`.
+  - `GameEngine`: optional `autopilotStateProvider` DI dep (defaults to the no-op); private
+    `autopilotState` field; `setAutopilotStateProvider(p)` post-boot injection setter;
+    `getLoadedAutopilotEngaged(): boolean | undefined` boot-catch-up getter backed by
+    `loadedAutopilotEngaged`. `saveGame()` writes `this.autopilotState.isEngaged()` into the built
+    `SaveState`; `loadGame()` tail records `save.autopilotEngaged` and calls
+    `this.autopilotState.resume(save.autopilotEngaged ?? false)`.
+  - `devAutopilot.ts`: after `installAutopilotHook`, (a) `setAutopilotStateProvider({ isEngaged: () =>
+    hook.engaged, resume: (e) => { if (e) hook.start(); } })` — covers continue/in-game load; then
+    (b) reads `getLoadedAutopilotEngaged()` once and `start()`s if `true` — boot catch-up. Uses a
+    structural `AutopilotHookHandle` (`engaged` + `start()`), never importing the letsplay tree.
+  - Coverage: `src/tests/core/autopilotStateProvider.test.ts`, `saveStateAutopilotEngaged.test.ts`,
+    `src/tests/dev/devAutopilot.test.ts`, and the end-to-end
+    `src/tests/playtest/autopilotResumeOnLoad.test.ts`.
 
 ## Post-Completion
 

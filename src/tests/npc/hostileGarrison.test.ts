@@ -45,7 +45,12 @@ describe("NpcSimulator.ensureGarrison", () => {
     const hostile = present.filter(
       (n) => n.faction === Faction.OVERMIND || n.role === NpcRole.PIRATE,
     );
-    expect(hostile.length).toBeGreaterThanOrEqual(5);
+    // No campaign-power source is attached here, so the win-rate architecture
+    // plan's downward discount applies at its full (power-0) magnitude —
+    // today's fixed floor of 5 is no longer guaranteed, only the discounted one.
+    expect(hostile.length).toBeGreaterThanOrEqual(
+      5 - OVERMIND_GARRISON_POWER_MAX_DISCOUNT,
+    );
     expect(hostile.length).toBeLessThanOrEqual(10);
   });
 

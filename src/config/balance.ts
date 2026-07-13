@@ -925,9 +925,12 @@ export const OVERMIND_GARRISON_POWER_MAX_BONUS = 2;
  * Mirror of `OVERMIND_GARRISON_POWER_MAX_BONUS`: Overmind garrison ships
  * SUBTRACTED from [min,max] at zero power (a powerless player faces a
  * smaller standing garrison), phasing out to 0 as power reaches 1 (campaign
- * win-rate architecture plan, Task 2). Placeholder starting magnitude —
- * mirrors the bonus's own size; Task 3 re-measures and tunes it against the
- * `letsplay:campaign` harness rather than guessing the final value here.
+ * win-rate architecture plan, Task 2). Deliberately smaller than the bonus's
+ * own magnitude (2) — `2` regressed a pinned GOD-mode economy test (fewer
+ * garrison ships starved combat-loot income); `1` is the largest value that
+ * clears it. Measured (Task 4, 50 sessions) not to move the campaign
+ * win-rate plateau — see `.claude/docs/systems/overmind.md`'s Known-unmet
+ * gate section for the follow-up diagnosis.
  */
 export const OVERMIND_GARRISON_POWER_MAX_DISCOUNT = 1;
 /**

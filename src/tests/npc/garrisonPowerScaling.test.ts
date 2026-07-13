@@ -95,7 +95,13 @@ describe("NpcSimulator — Overmind garrison scales with ratcheted power (Task 4
 
   it("maxed player (power 1): the garrison shifts up by the full bonus (discount is 0 at full power)", () => {
     const bonus = OVERMIND_GARRISON_POWER_MAX_BONUS;
-    const strong = overmindGarrisonCount(1, "gp_strong");
+    const discount = OVERMIND_GARRISON_POWER_MAX_DISCOUNT;
+    const weak = overmindGarrisonCount(0, "gp_shift");
+    const strong = overmindGarrisonCount(1, "gp_shift");
+    // SeededRNG.nextInt is width-invariant, so an equal-width shifted range
+    // draws exactly +(bonus + discount) for the same seed (power 0 carries
+    // -discount, power 1 carries +bonus).
+    expect(strong).toBe(weak + bonus + discount);
     expect(strong).toBeGreaterThanOrEqual(5 + bonus);
     expect(strong).toBeLessThanOrEqual(10 + bonus);
   });

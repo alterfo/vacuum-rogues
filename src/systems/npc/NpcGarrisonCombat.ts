@@ -499,15 +499,14 @@ export class NpcGarrisonCombat {
     // run's ratcheted peak power — gentle early (0 extra while weak), hard
     // late. Spawn-time only, so it is generation-independent (existing saves
     // pick it up as garrisons top up). Pirate garrisons are not power-scaled.
-    const powerBonus = overmind
-      ? overmindGarrisonPowerBonus(this.campaignPeakPowerSource?.() ?? 0)
-      : 0;
+    const peakPower = this.campaignPeakPowerSource?.() ?? 0;
+    const powerBonus = overmind ? overmindGarrisonPowerBonus(peakPower) : 0;
     // Win-rate architecture plan (Task 2): the mirrored downward half — a
     // powerless player faces a SMALLER standing garrison, phasing out to 0
     // discount by full power. Pirate garrisons stay undiscounted, matching
     // the upward bonus's own Overmind-only scope.
     const powerDiscount = overmind
-      ? overmindGarrisonPowerDiscount(this.campaignPeakPowerSource?.() ?? 0)
+      ? overmindGarrisonPowerDiscount(peakPower)
       : 0;
     const netDelta = powerBonus - powerDiscount;
     // Floored so the discount can never make a held system read as empty.
@@ -762,7 +761,7 @@ export class NpcGarrisonCombat {
    * invariant in root CLAUDE.md), so a directed-only scan silently misses
    * genuinely adjacent systems. Deterministic, systems-order listing.
    */
-  private undirectedNeighbors(galaxy: Galaxy, systemId: string): string[] {
+  undirectedNeighbors(galaxy: Galaxy, systemId: string): string[] {
     const ids = new Set<string>();
     for (const sys of galaxy.systems) {
       if (sys.id === systemId) {
