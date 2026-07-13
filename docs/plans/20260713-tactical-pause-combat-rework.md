@@ -1103,7 +1103,74 @@ Any test file **not** in this list stays under the standing "never touch existin
   wreck, alpha passthrough, colour override, centred silhouette, rotates with heading, skips
   faded/zero-size, empty-list no-op. Full unit suite green (5801 pass, 0 fail; +37 new).
 
+### Task 14.5: [PREREQUISITE — was missing] Wire the planning loop live into SpaceFlightScene combat flow
+
+> ⚠️ **Blocker surfaced 2026-07-14 (this task did not exist in the original plan; inserted here).**
+> Tasks 2–14 each built their mechanic as a pure, unit-tested module and **every one of them
+> explicitly deferred production wiring** with the same sentence — *"inert in production today … the
+> execute-phase loop that would fold this into the live combat flow isn't wired until the combat-open
+> `beginCombat` trigger lands (a later task)."* **That later task was never written.** No task calls
+> `CombatPlanningController.beginCombat()` anywhere in production (`grep` confirms: the only scene
+> references are `combatPlanning.isPlanning` reads, never a lifecycle call). Consequences verified on
+> 2026-07-14:
+> - The new planning/execute loop **never activates** in the real engine. In-flight combat is still
+>   100% the legacy real-time auto-pursuit (`CombatPursuitController` orbit-strafe + `advancePlayerWeapons`
+>   auto-target). Every module from Tasks 2–14 (`combatPlanning`, `combatTrajectory`, `combatGravity`,
+>   `combatWeaponTargeting`, planned-fire branch, `combatMissile`, `combatAfterburner`,
+>   `combatConsumable`, `combatComms`, `combatBanking`, `combatShield`, `combatWreck`, the VFX seams)
+>   is inert parallel machinery.
+> - `gitnexus impact CombatPursuitController` (upstream) = **19 direct refs, CRITICAL**, across 8 core
+>   `SpaceFlightScene` processes. So Task 15's checkbox to *"delete now-fully-superseded dead modules …
+>   only once nothing still references them"* is **forbidden by its own guard** — they are not dead;
+>   they are the live combat system. Deleting them would brick combat.
+> - `npm run letsplay:ci` (108 passed) and `npm run test:playtest` (736 passed) are **already green**,
+>   precisely because production combat was never replaced — not because the new loop works headlessly.
+>
+> **Task 15 (headless driver rewire) and Task 16 (verification) both assume this integration already
+> happened. It did not.** This prerequisite must land first. Doing a headless-only force-wire of
+> `beginCombat` (to make letsplay drive the "new loop") without the live planning-phase UI would freeze
+> real human combat with no way to confirm a turn — a player-visible regression, which the standing
+> "fix the game, don't just satisfy the oracle" rule forbids. So this is a coordinated production +
+> UI integration, not a headless shortcut.
+
+- [ ] Call `combatPlanning.beginCombat()` when combat engages (fold into the same seam that today
+      starts the legacy pursuit / opens `combatPause`), and `endCombat()` on player death / last
+      hostile destroyed (the only early terminators, per Task 1b).
+- [ ] Drive the execute window: tick `combatPlanning.tickExecute(dt)` in `SpaceFlightScene.update`,
+      re-open PLANNING when it closes; on `onConfirm` apply movement (`applyPlannedMovement` → Task 3)
+      and flip the CombatModule planned-targeting deps live (`isPlannedTargetingActive` →
+      `combatPlanning.isExecuting`, `getPlannedWeaponTarget` → the confirmed `weaponTargets` — Task 6).
+- [ ] Light up the planning-phase **live UI**: mount the course preview (Task 3
+      `previewCombatCourse`) and per-weapon range overlay + two-step assignment click
+      (Task 5 `combatWeaponRangeOverlay` / `WeaponAssignmentController`), route planning-phase clicks
+      to movement-vs-weapon-assign, and surface the "Ход"/Space confirm (Task 1b). New i18n strings go
+      in BOTH `ru.ts`/`en.ts`.
+- [ ] Fold the remaining execute-phase mechanics into the live loop each frame: gravity assist
+      (Task 4 `gravityAssistTotal` → `ShipPhysics` velocity), afterburner (Task 8), missile entities
+      (Task 7 launch/advance/resolve), consumable/comms actions (Tasks 9/10), and the VFX
+      (Tasks 11–14) keyed to real execute-window events.
+- [ ] Respect the `SpaceFlightScene.ts` ≤ 1898-line guard — extract to `flight/` helpers as needed
+      (this integration is large; prefer new modules over inlining).
+- [ ] Tests: a real-engine playtest that boots the engine, enters combat, confirms a planned turn,
+      and asserts the loop actually cycled planning→execute→planning (the wiring, not the pure math
+      Tasks 2–14 already cover) + E2E for the core planning-phase click loop (the plan's Task 2/3/5
+      E2E, deferrable until now because the loop couldn't be entered live before this task).
+
+> **NOTE for the ralphex loop / next iteration:** this is a paradigm-sized integration touching two
+> CRITICAL-risk symbols (`CombatModule`, `CombatPursuitController`) and the scene at its line-guard
+> ceiling — it is realistically several iterations, and is a big user-visible flip. It should be
+> reviewed/split by a human before an autonomous batch drives it, per the standing "prefer fresh
+> sessions over long autonomous batches that broke real play" guidance. Recommend splitting into
+> sub-tasks (trigger+tick / live UI / mechanic-folding / VFX-folding) rather than one commit.
+
 ### Task 15: Update headless letsplay driving for the new planning-phase loop
+
+> ⚠️ **Blocked on Task 14.5 (above).** The checkboxes below cannot be executed until the planning loop
+> is actually live in production. Concretely: checkbox 1 says "drive the new loop instead of the old
+> handlers **this plan removes**" — the plan has not removed them; checkbox 2's deletes are forbidden
+> by their own "only once nothing still references them" guard (`gitnexus impact CombatPursuitController`
+> = 19 live refs, CRITICAL); checkbox 3 is already green only because nothing was replaced. Do not mark
+> these done and do not delete live combat modules until Task 14.5 lands.
 
 - [ ] Update `PlayerAgent.driveAttack`, `LiveApplier`'s attack/flee heads, and
       `MemoryHeuristicPolicy`'s combat decision branches to drive the new loop: pick a movement
