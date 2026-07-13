@@ -217,7 +217,7 @@ touches different files, no shared risk.
 
 ### Task 4: Wire boot/continue resume
 
-- [ ] Implement Task 1's confirmed resume seam: after a save with `autopilotEngaged === true` is
+- [x] Implement Task 1's confirmed resume seam: after a save with `autopilotEngaged === true` is
       loaded (boot auto-load path AND `continueGame()` path — both must be covered, they may differ
       per Task 1's sequencing finding), the DEV-only wiring in `src/dev/devAutopilot.ts` calls the
       installed `AutopilotController.start()` (via `window.__autopilot.start()` or a direct reference
@@ -225,15 +225,28 @@ touches different files, no shared risk.
       a new public surface).
       **Do not change `GameEngine`'s own behavior for the non-DEV production path** — the resume
       call must only ever be reachable through the existing `if (import.meta.env.DEV)` chunk.
-- [ ] Write tests: extend `AutopilotController.test.ts`/`installAutopilotHook.test.ts` for the new
-      resume trigger in isolation (given `autopilotEngaged: true` was loaded, `start()` is called;
-      given `false`/absent, it is not).
-- [ ] Write the real-engine playtest (Testing Strategy) proving the full loop: engage → autosave →
-      fresh engine → load → resumed. This is the task that actually validates Task 1's sequencing
-      decision was correct, not just internally consistent.
-- [ ] Run `npm run letsplay:ci`, `npm run test:playtest`, `letsplayDevOnly.test.ts`,
-      `noOnnxRuntime.test.ts` — all must stay green.
-- [ ] Run affected unit tests — must pass before Task 5.
+      Done: `loadGame` now records `save.autopilotEngaged` into `loadedAutopilotEngaged`;
+      `attachDevAutopilot`, after installing the hook, (a) injects the real
+      `IAutopilotStateProvider` (`{ isEngaged: () => hook.engaged, resume: (e) => { if (e) hook.start(); } }`)
+      via `setAutopilotStateProvider` — covers continue/in-game load — and (b) reads
+      `getLoadedAutopilotEngaged()` once and `start()`s if `true` — the boot catch-up. `GameEngine`
+      stays autopilot-agnostic; `devAutopilot.ts` uses a structural `AutopilotHookHandle` (`engaged`
+      + `start()`), never importing the letsplay tree.
+- [x] Write tests: the new resume trigger in isolation (given `autopilotEngaged: true` was loaded,
+      `start()` is called; given `false`/absent, it is not). Landed in
+      `src/tests/dev/devAutopilot.test.ts` (6 new tests) — the trigger lives in `attachDevAutopilot`
+      (provider injection + boot catch-up), so that is its isolation site, not `AutopilotController`/
+      `installAutopilotHook` (whose `start()`/`engaged` surface is unchanged and already covered).
+- [x] Write the real-engine playtest (Testing Strategy) proving the full loop: engage → autosave →
+      fresh engine → load → resumed. `src/tests/playtest/autopilotResumeOnLoad.test.ts` — boots a
+      real `GameEngine`, engages via the real hook, `saveGame("auto")`, boots a **fresh** engine over
+      a shared `MockSaveService`, and asserts resume on both the boot-catch-up path and the
+      continue path, plus the OFF-save negative. `RealEngineHarness` gained an additive optional
+      `saveService` so two engines can share one save store.
+- [x] Run `npm run letsplay:ci`, `npm run test:playtest`, `letsplayDevOnly.test.ts`,
+      `noOnnxRuntime.test.ts` — all green (108, 745, and the two architecture gates all pass).
+- [x] Run affected unit tests — must pass before Task 5. Full suite: 5517 passed | 12 skipped
+      (exit 0); `tsc --noEmit` clean; eslint clean on the touched files.
 
 ### Task 5: [Final] Verify acceptance criteria and update documentation
 

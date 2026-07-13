@@ -45,6 +45,12 @@ export interface HarnessOptions {
   seed?: string;
   /** Number of systems in the generated galaxy. */
   systemCount?: number;
+  /**
+   * A save store to use instead of a fresh per-harness {@link MockSaveService}.
+   * Pass the *same* instance to two harnesses to simulate a reload: engine A
+   * writes an autosave, engine B (fresh instance, shared store) reads it back.
+   */
+  saveService?: MockSaveService;
 }
 
 /**
@@ -70,7 +76,7 @@ export class RealEngineHarness {
     this.systemCount = opts.systemCount ?? 12;
 
     this.galaxyService = new GalaxyService();
-    this.saveService = new MockSaveService();
+    this.saveService = opts.saveService ?? new MockSaveService();
 
     const diDeps: GameEngineDIDependencies = {
       // I/O edges are stubbed (no IndexedDB, no ONNX model loading)…

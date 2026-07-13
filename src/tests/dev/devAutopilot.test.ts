@@ -57,3 +57,110 @@ describe("attachDevAutopilot — dev-only runtime gate", () => {
     expect(onError).toHaveBeenCalledWith(boom);
   });
 });
+
+/**
+ * Task 4: the autopilot-resume seam. After installing the hook,
+ * {@link attachDevAutopilot} must (a) inject an {@link IAutopilotStateProvider}
+ * whose `resume(true)` re-engages via the hook, and (b) replay the boot
+ * auto-load's missed resume by reading `getLoadedAutopilotEngaged()` once and
+ * `start()`-ing when it was `true`. These pin that a save written while engaged
+ * auto-resumes, and one written while *off* (or an old save with the flag
+ * absent) never spuriously starts.
+ */
+describe("attachDevAutopilot — autopilot resume seam", () => {
+  /** A fake engine capturing the injected provider + a configurable boot flag. */
+  const makeEngine = (loadedEngaged: boolean | undefined) => {
+    const engine = {
+      injected: undefined as
+        | { isEngaged(): boolean; resume(engaged: boolean): void }
+        | undefined,
+      setAutopilotStateProvider(p: {
+        isEngaged(): boolean;
+        resume(engaged: boolean): void;
+      }) {
+        engine.injected = p;
+      },
+      getLoadedAutopilotEngaged() {
+        return loadedEngaged;
+      },
+    };
+    return engine as unknown as GameEngine & {
+      injected?: { isEngaged(): boolean; resume(engaged: boolean): void };
+    };
+  };
+
+  const makeHook = () => {
+    const hook = { engaged: false, start: vi.fn(() => void 0) };
+    return hook;
+  };
+
+  const loaderFor = (hook: { engaged: boolean; start: () => void }) =>
+    vi
+      .fn<[], Promise<AutopilotHookModule>>()
+      .mockResolvedValue({ installAutopilotHook: () => hook });
+
+  it("injects a provider whose resume(true) re-engages the hook", async () => {
+    const engine = makeEngine(undefined);
+    const hook = makeHook();
+
+    attachDevAutopilot(true, engine, loaderFor(hook));
+    await flush();
+
+    expect(engine.injected).toBeDefined();
+    engine.injected!.resume(true);
+    expect(hook.start).toHaveBeenCalledTimes(1);
+  });
+
+  it("injects a provider whose resume(false) does NOT engage the hook", async () => {
+    const engine = makeEngine(undefined);
+    const hook = makeHook();
+
+    attachDevAutopilot(true, engine, loaderFor(hook));
+    await flush();
+
+    engine.injected!.resume(false);
+    expect(hook.start).not.toHaveBeenCalled();
+  });
+
+  it("provider.isEngaged() reflects the live hook engaged flag", async () => {
+    const engine = makeEngine(undefined);
+    const hook = makeHook();
+
+    attachDevAutopilot(true, engine, loaderFor(hook));
+    await flush();
+
+    expect(engine.injected!.isEngaged()).toBe(false);
+    hook.engaged = true;
+    expect(engine.injected!.isEngaged()).toBe(true);
+  });
+
+  it("boot catch-up: start()s when the boot auto-load was engaged", async () => {
+    const engine = makeEngine(true);
+    const hook = makeHook();
+
+    attachDevAutopilot(true, engine, loaderFor(hook));
+    await flush();
+
+    expect(hook.start).toHaveBeenCalledTimes(1);
+  });
+
+  it("boot catch-up: does NOT start when the boot flag is false", async () => {
+    const engine = makeEngine(false);
+    const hook = makeHook();
+
+    attachDevAutopilot(true, engine, loaderFor(hook));
+    await flush();
+
+    expect(hook.start).not.toHaveBeenCalled();
+  });
+
+  it("boot catch-up: does NOT start when the boot flag is absent (old save)", async () => {
+    const engine = makeEngine(undefined);
+    const hook = makeHook();
+
+    attachDevAutopilot(true, engine, loaderFor(hook));
+    await flush();
+
+    expect(hook.start).not.toHaveBeenCalled();
+  });
+});

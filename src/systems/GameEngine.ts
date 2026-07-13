@@ -1310,6 +1310,16 @@ export class GameEngine {
     this.galaxy = save.galaxy;
     this.player = save.player;
 
+    // Record whether this save was written while the DEV-only live autopilot was
+    // engaged. Two consumers read it: (a) the `autopilotState.resume(...)` tail
+    // call below, which fires for the continue / in-game-load paths where the
+    // real provider was already injected; and (b) the boot-catch-up getter
+    // `getLoadedAutopilotEngaged()`, read by the DEV wiring right after it installs
+    // the hook — the boot auto-load resolves *before* the hook exists, so its
+    // resume must be replayed once the hook is present. Absent flag ⇒ undefined
+    // ⇒ never a spurious resume (old saves stay off).
+    this.loadedAutopilotEngaged = save.autopilotEngaged;
+
     // Loading a checkpoint (e.g. the takeoff autosave after a death) re-arms the
     // one-shot death guard, so the restored player can die again — otherwise the
     // game-over flow would never re-fire after the first death.
