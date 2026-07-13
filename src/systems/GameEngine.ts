@@ -50,6 +50,7 @@ import type {
   IExceptionHandler,
   IQuestService,
   IOverlayPresenter,
+  IAutopilotStateProvider,
 } from "@/core/ports";
 import { ShipLoadout } from "@/systems/equipment/ShipLoadout";
 import {
@@ -65,7 +66,11 @@ import { gearById } from "@/systems/equipment/GearCatalog";
 import type { Faction } from "@/types/faction";
 import { NpcShip } from "@/domain/NpcShip";
 import { GalaxyService, PlayerService, SceneFactory } from "@/core/services";
-import { QuestManagerAdapter, NoOpOverlayPresenter } from "@/core/adapters";
+import {
+  QuestManagerAdapter,
+  NoOpOverlayPresenter,
+  NoOpAutopilotStateProvider,
+} from "@/core/adapters";
 import { TextQuestRuntime } from "@/systems/quests/TextQuestRuntime";
 import { StarSystem } from "@/domain/StarSystem";
 import { Planet } from "@/domain/Planet";
@@ -97,6 +102,14 @@ export interface GameEngineDIDependencies {
   questService: IQuestService;
   /** Optional — falls back to a headless no-op so existing DI sites keep compiling. */
   overlayPresenter?: IOverlayPresenter;
+  /**
+   * Optional — the DEV-only live-autopilot state bridge. Falls back to a
+   * headless no-op ({@link NoOpAutopilotStateProvider}) in production and in
+   * tests, so no save ever persists a spurious engaged flag. Usually injected
+   * later via {@link GameEngine.setAutopilotStateProvider} rather than at
+   * construction, because the autopilot hook is installed after boot.
+   */
+  autopilotStateProvider?: IAutopilotStateProvider;
 }
 
 /**
@@ -327,6 +340,26 @@ export class GameEngine {
   /** Renderer-backed in production; a headless no-op when not injected (tests, legacy DI sites). */
   private readonly overlay: IOverlayPresenter;
   /**
+   * DEV-only live-autopilot state bridge. Defaults to a headless no-op
+   * ({@link NoOpAutopilotStateProvider}); the real provider is injected later
+   * via {@link setAutopilotStateProvider} once the autopilot hook is installed
+   * (which happens after the boot auto-load has already run). `GameEngine`
+   * stays autopilot-agnostic — it only ever reads `isEngaged()` at save time
+   * and calls `resume()` at the tail of {@link loadGame}. Not `readonly`: the
+   * setter swaps in the real provider post-construction.
+   */
+  private autopilotState: IAutopilotStateProvider;
+  /**
+   * The `autopilotEngaged` flag from the most recently loaded save (or
+   * `undefined` before any load / for old saves lacking the field). The
+   * boot-catch-up seam: `loadGame`'s tail call to `autopilotState.resume()`
+   * covers the continue / in-game-load paths where the hook already exists, but
+   * the boot auto-load runs *before* the hook is installed, so its resume
+   * silently no-ops. The DEV wiring reads this getter once, right after it
+   * installs the hook and injects the provider, to catch that one boot load.
+   */
+  private loadedAutopilotEngaged: boolean | undefined = undefined;
+  /**
    * Carry-over staged by {@link startNewGamePlus} for the next fresh game: the
    * new-game creation path in {@link transitionTo} consumes it (once) to seed the
    * fresh player's credits/rank/faction/difficulty. Null for a plain new game.
@@ -377,6 +410,9 @@ export class GameEngine {
     }
     this.overlay =
       diDependencies?.overlayPresenter ?? new NoOpOverlayPresenter();
+    this.autopilotState =
+      diDependencies?.autopilotStateProvider ??
+      new NoOpAutopilotStateProvider();
 
     // Adaptive campaign pressure (Task 4): the per-tick Overmind garrison
     // sizing reads the run's ratcheted peak power live through this provider
@@ -1174,6 +1210,27 @@ export class GameEngine {
     }
   }
 
+  /**
+   * Inject the DEV-only live-autopilot state bridge. Called from
+   * `src/dev/devAutopilot.ts` after the autopilot hook is installed (which
+   * happens post-boot). Before this runs, {@link autopilotState} is the headless
+   * no-op, so save/load stay autopilot-agnostic in production and in tests.
+   */
+  setAutopilotStateProvider(provider: IAutopilotStateProvider): void {
+    this.autopilotState = provider;
+  }
+
+  /**
+   * The `autopilotEngaged` flag from the most recently loaded save, or
+   * `undefined` if nothing has been loaded / the loaded save predates the field.
+   * The boot-catch-up seam (see {@link loadedAutopilotEngaged}): the DEV wiring
+   * reads this once after installing the hook to re-engage the autopilot for a
+   * boot auto-load that resolved before the hook existed.
+   */
+  getLoadedAutopilotEngaged(): boolean | undefined {
+    return this.loadedAutopilotEngaged;
+  }
+
   async saveGame(slotId = "auto"): Promise<void> {
     if (!this.galaxy || !this.player) {
       throw new GameSystemException(
@@ -1446,6 +1503,14 @@ export class GameEngine {
         ? { gameEngine: this, preserveShipPos: resumePos }
         : { gameEngine: this },
     );
+    // Resume the DEV-only live autopilot if this save was written while it was
+    // engaged. In production and in tests `autopilotState` is the headless
+    // no-op, so this is inert. `loadedAutopilotEngaged` is populated from the
+    // save's `autopilotEngaged` flag once that field exists (undefined ⇒ false,
+    // i.e. never a spurious resume). The continue / in-game-load paths reach
+    // here after the real provider was injected; the boot auto-load runs before
+    // the hook exists and is caught up separately via getLoadedAutopilotEngaged.
+    this.autopilotState.resume(this.loadedAutopilotEngaged ?? false);
     return true;
   }
 

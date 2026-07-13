@@ -180,13 +180,21 @@ touches different files, no shared risk.
 
 ### Task 2: Add the `IAutopilotStateProvider` port + no-op adapter
 
-- [ ] Add the port interface to `src/core/ports/` per Task 1's confirmed shape.
-- [ ] Add `NoOpAutopilotStateProvider` to `src/core/adapters/` (mirrors `NoOpOverlayPresenter`) —
+- [x] Add the port interface to `src/core/ports/` per Task 1's confirmed shape.
+      (`src/core/ports/IAutopilotStateProvider.ts` — `isEngaged()` + `resume(engaged)`.)
+- [x] Add `NoOpAutopilotStateProvider` to `src/core/adapters/` (mirrors `NoOpOverlayPresenter`) —
       `isEngaged()` always returns `false`; the resume-hook side is a no-op.
-- [ ] Wire the optional dependency into `GameEngine`'s constructor/DI (default to the no-op adapter
+- [x] Wire the optional dependency into `GameEngine`'s constructor/DI (default to the no-op adapter
       when absent, exactly like `IOverlayPresenter`) — legacy DI sites stay byte-identical.
-- [ ] Write tests: no-op adapter behavior, `GameEngine` falls back to it when the port isn't injected.
-- [ ] Run affected unit tests — must pass before Task 3.
+      Added `GameEngineDIDependencies.autopilotStateProvider?`, the private `autopilotState` field
+      (defaults to `NoOpAutopilotStateProvider`), the `setAutopilotStateProvider()` post-boot
+      injection setter, the `getLoadedAutopilotEngaged()` boot-catch-up getter + backing
+      `loadedAutopilotEngaged` field, and the `loadGame`-tail `autopilotState.resume(...)` wiring
+      (inert no-op until Tasks 3/4 populate the loaded flag).
+- [x] Write tests: no-op adapter behavior, `GameEngine` falls back to it when the port isn't injected.
+      (`src/tests/core/autopilotStateProvider.test.ts` — 5 tests, all green.)
+- [x] Run affected unit tests — must pass before Task 3. (autopilotStateProvider + GameEngine.di +
+      overlayPresenter + gameEngineContinue: 40 passed; `tsc --noEmit` clean; targeted eslint clean.)
 
 ### Task 3: Add `SaveState.autopilotEngaged` field + schema + save-time read
 
