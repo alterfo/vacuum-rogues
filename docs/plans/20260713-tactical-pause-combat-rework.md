@@ -1152,16 +1152,20 @@ Any test file **not** in this list stays under the standing "never touch existin
       **Partially done (14.5a).** `tickExecute(dt)` is ticked every frame (no-op outside EXECUTING);
       `updateShip`/the scene's `frozen` local both now also gate on `combatPlanning.isPlanning`, so
       movement genuinely freezes during planning. `onConfirm` → `applyPlannedMovement` was already
-      wired (Task 3) and is now reachable. **NOT done**: `isPlannedTargetingActive`/
-      `getPlannedWeaponTarget` are still unwired — deliberately deferred, since flipping them on
+      wired (Task 3) and is now reachable. **NOT done in 14.5a**: `isPlannedTargetingActive`/
+      `getPlannedWeaponTarget` were left unwired — deliberately deferred, since flipping them on
       with no weapon-assignment UI yet would make every weapon hold fire the whole fight (the
-      "unassigned = hold fire" rule) — a real regression, not a neutral no-op. CombatModule stays on
-      legacy auto-target for this slice. Revisit once Task 14.5b lands the assignment UI.
-- [ ] Light up the planning-phase **live UI**: mount the course preview (Task 3
+      "unassigned = hold fire" rule) — a real regression, not a neutral no-op.
+      **→ CLOSED in Task 14.5b (2026-07-15)**: both deps are now wired live
+      (`isExecutingPlan`/`getPlannedTarget` in `combatModuleDeps.ts`) alongside the assignment
+      UI, and `combatPlanningLiveWiring.test.ts` pins both directions (assigned gun fires at
+      ITS target; empty confirmed plan holds all player fire while NPC fire stays real-time).
+- [x] Light up the planning-phase **live UI**: mount the course preview (Task 3
       `previewCombatCourse`) and per-weapon range overlay + two-step assignment click
       (Task 5 `combatWeaponRangeOverlay` / `WeaponAssignmentController`), route planning-phase clicks
       to movement-vs-weapon-assign, and surface the "Ход"/Space confirm (Task 1b). New i18n strings go
       in BOTH `ru.ts`/`en.ts`.
+      **Done (Task 14.5b, 2026-07-15) — see the Task 14.5b outcome block below.**
       **Partially done (14.5a) — confirm affordance only.** Both input paths now confirm the
       (currently always-empty) plan during PLANNING: the `Space` key (`flightKeyHandler.ts`'s
       `runTurn` branch, new optional `combatPlanning` ctx field, checked before the pre-existing
@@ -1174,10 +1178,11 @@ Any test file **not** in this list stays under the standing "never touch existin
       visible affordance; there is still no course preview, no range overlay, no weapon-assignment
       click routing, and no new i18n keys. **This is why the plan can't yet move destinations or
       targets — Task 14.5b's job.**
-- [ ] Fold the remaining execute-phase mechanics into the live loop each frame: gravity assist
-      (Task 4 `gravityAssistTotal` → `ShipPhysics` velocity), afterburner (Task 8), missile entities
-      (Task 7 launch/advance/resolve), consumable/comms actions (Tasks 9/10), and the VFX
-      (Tasks 11–14) keyed to real execute-window events. **Not started — Task 14.5c/d's scope.**
+- [x] Fold the remaining execute-phase mechanics into the live loop each frame →
+      **SPLIT OUT to its own Task 14.5c section (below)** per this plan's "split it and renumber
+      rather than silently cramming" rule + this task's own NOTE recommending the
+      trigger+tick / live-UI / mechanic-folding sub-task split. No work lost — the checkbox
+      text moved verbatim into Task 14.5c.
 - [x] Respect the `SpaceFlightScene.ts` ≤ 1898-line guard — extract to `flight/` helpers as needed
       (this integration is large; prefer new modules over inlining).
       **Done.** New `flight/combatModuleDeps.ts` (`buildCombatModuleDeps`) extracts the
@@ -1197,19 +1202,28 @@ Any test file **not** in this list stays under the standing "never touch existin
       (unchanged, still-passing assertion); an EXECUTING round cycles back to PLANNING on its own
       once `COMBAT_ROUND_MS` elapses, with no player action able to end it early; fire only lands
       during EXECUTING, never PLANNING; the HUD button confirms instead of desyncing state. **E2E
-      NOT added** — no clickable planning UI exists yet to E2E-test (Task 14.5b's job); the keyboard
-      confirm path already has real-engine + unit coverage, which is the meaningful surface today.
-      ⚠️ **Anticipated regression, confirmed 2026-07-14**: 3 pre-existing headless-letsplay tests now
-      fail — `src/tests/playtest/letsplay/exploreNoWarpLoop.test.ts`,
-      `longGameCompetence.test.ts` (b), `slayerCampaign.test.ts` — because the headless agent has no
+      NOT added in 14.5a** — no clickable planning UI existed yet to E2E-test.
+      **→ CLOSED in Task 14.5b (2026-07-15)**: the stale active-pause E2E in
+      `e2e/playtest-regression.spec.ts` (it waited on a `combatPause.paused` that can never fire
+      since 14.5a unwired the reactive trigger — red on every run since) is rewritten as the full
+      planning-loop click test: real weapon-button click → real enemy-sprite click (assignment) →
+      real empty-space click (destination) → Space confirm → planned shot lands on the assigned
+      target → the round timer re-opens PLANNING.
+      ⚠️ **Anticipated regression, confirmed 2026-07-14 — count corrected to 4 in 14.5b**:
+      4 pre-existing headless-letsplay tests fail —
+      `src/tests/playtest/letsplay/exploreNoWarpLoop.test.ts`,
+      `longGameCompetence.test.ts` (b), `slayerCampaign.test.ts`, and `letsplay/combat.test.ts`
+      (the 4th verified red on the pre-14.5b tree too) — because the headless agent has no
       way to call `combatPlanning.confirm()`, so it gets stuck in PLANNING forever once combat
       opens (no damage accrues, no landing cadence). This is **exactly** the gap this plan's own
       Task 15 exists to close (`PlayerAgent.driveAttack`/`LiveApplier`/`MemoryHeuristicPolicy` need
       to drive the new loop) — not a surprise, and not fixed in this task on purpose (per the
       "prefer fresh sessions over long autonomous batches" guidance already in this plan's own
       note below, this integration was deliberately kept to the live/player-facing half only).
-      `npm run letsplay:ci` and the 3 listed `test:playtest` files are RED until Task 15 lands —
-      tracked here, not silently left broken.
+      The 4 listed `test:playtest` files are RED until Task 15 lands — tracked here, not silently
+      left broken. (Correction, verified 2026-07-15 on both trees: `npm run letsplay:ci` itself is
+      GREEN — its 7-file oracle doesn't include the 4 combat-driving files above, so only
+      `npm run test:playtest` carries the tracked reds.)
 
 > **NOTE for the ralphex loop / next iteration:** this is a paradigm-sized integration touching two
 > CRITICAL-risk symbols (`CombatModule`, `CombatPursuitController`) and the scene at its line-guard
@@ -1217,6 +1231,79 @@ Any test file **not** in this list stays under the standing "never touch existin
 > reviewed/split by a human before an autonomous batch drives it, per the standing "prefer fresh
 > sessions over long autonomous batches that broke real play" guidance. Recommend splitting into
 > sub-tasks (trigger+tick / live UI / mechanic-folding / VFX-folding) rather than one commit.
+> **→ Split executed:** 14.5a (trigger+tick, done interactively) → 14.5b (live UI, outcome below) →
+> 14.5c (mechanic+VFX folding, next section).
+
+#### Task 14.5b outcome (implemented 2026-07-15)
+
+- **New module `src/presentation/flight/combatPlanningUi.ts`** — two pieces:
+  - `CombatPlanningUi`: the visible planning surface. Per-weapon range rings (Task 5's
+    `weaponRangeCircles` + `drawWeaponRangeCircles`, world-space `Graphics` on the game layer at the
+    live ship position) + a bottom-centre weapon bar (one `UiButton` per fitted gun, labelled
+    `combat-planning-bar`/`cpw-<i>`, accent = `weaponRangeColor(i)` so button and ring match). The
+    two-step assignment drives Task 5's `WeaponAssignmentController` (sink = the live
+    `CombatPlanningController` draft): `armWeapon()` (public, per the SettingsPanel testability
+    convention) arms/toggles; `handleTargetClick(sprite)` assigns (combatants only, out-of-range
+    **flagged not rejected**, ▶/✓ label markers, toasts). Mounted on `onEnterPlanning`, torn down on
+    confirm/round-reopen/fight-end/destroy — idempotent, rebuilt from the live loadout each round.
+  - `createCombatPlanningController(host)`: the scene's controller factory — binds
+    `NpcShipSprite`/`WeaponSpec`, moves the 14.5a hardcoded RU toasts into `t()` (new keys
+    `combat.planning.enter`/`.executing`/`.armWeapon`/`.assigned`/`.assignedFar` in BOTH
+    `ru.ts`+`en.ts`), applies confirmed movement via `applyPlannedMovement`, and restores/clears the
+    route overlay on fight end (`onFightEnd`: re-`plotRoute()` a preserved pre-combat route, else
+    clear the combat preview line; guarded on scene teardown).
+- **Click routing (movement vs. weapon-assign), no mode toggle needed**: an NPC sprite click
+  stops propagation and reaches `handleTargetClick` through the `selectCombatTarget` seam
+  (falls through to the legacy re-target when no gun is armed); an empty-space click falls to the
+  stage handler's `previewCombatCourse` branch. **Fixed a real click-order bug found here**: the
+  scene's turn-running guard («⏸ Поставь на паузу…» → return) sat BEFORE the planning branch in
+  `onPointerDown`, and engagement always holds the turn open — so a live planning movement click
+  could never reach `previewCombatCourse` (invisible while Tasks 3–13 were inert). The planning
+  branch now runs first; regression pinned in `combatPlanningLiveWiring.test.ts`.
+- **Planned per-weapon targeting is LIVE** (closing 14.5a's deliberate deferral):
+  `combatModuleDeps.ts` now wires `isPlannedTargetingActive → combatPlanning.isExecuting` and
+  `getPlannedWeaponTarget → plan.weaponTargets.get(w)` (identity-keyed on the stable `GearCatalog`
+  spec objects `fittedWeapons()` returns). During a confirmed window each gun fires only at ITS
+  assignment; unassigned holds fire (Task 6 rule); a fight staged without `beginCombat` (e2e
+  bare-`addCombatant`) keeps legacy auto-fire.
+- **Line guard**: the scene grew past 1898 mid-task; offset by two mechanical extractions in the
+  established `combatModuleDeps`/`routePlot` pattern — `flight/npcManagerDeps.ts`
+  (`buildNpcManagerDeps`, the `NpcShipManager` deps blob, behaviour-preserving except the new
+  planning-click route) and `flight/miniMapUpdate.ts` (`updateFlightMiniMap`, extracted verbatim).
+  Scene lands at **1880** (`wc -l`, guard ≤ 1898).
+- **Tests** (all green): `src/tests/combat/combatPlanningUi.test.ts` (15 — mount/teardown/idempotent
+  rebuild, arm/toggle, assign in/out-of-range flag, non-combatant + no-gun fall-through, overwrite,
+  rings geometry, factory side effects incl. empty-confirm-holds);
+  `src/tests/playtest/combatPlanningLiveWiring.test.ts` (5, real engine — bar mounts on engagement /
+  unmounts in EXECUTING / remounts next round; assigned gun's shot lands on ITS target; **empty
+  confirmed plan holds all player fire while NPC fire stays real-time** (reds against 14.5a's legacy
+  auto-fire, proving the flip); the click-order regression; round-length parity pins).
+  **E2E**: both stale combat specs in `e2e/playtest-regression.spec.ts` were red since 14.5a
+  (verified on the pre-change tree) and are rewritten to the new loop with REAL pointer clicks —
+  the active-pause spec → the full planning click loop (weapon click → enemy click → empty-space
+  click → Space → planned shot lands → round timer re-opens PLANNING), the auto-mode dogfight → a
+  multi-round pause-and-plan dogfight (per-round re-assignment; NPC maneuvers; BOTH hulls drop).
+  Screenshot visually verified (rings + bar + reticle + toast log). Full unit suite 5805 pass; the
+  only reds are the 4 tracked letsplay files (Task 15's scope, pre-existing).
+  ⚠️ Three **unrelated pre-existing** E2E reds remain in the regression suite (each verified red on
+  the pre-14.5b tree, none combat-related, none touched here): the font-size smoke ("changing the
+  font size keeps the ship in place"), the equipment-shop mouse-wheel scroll, and the
+  TRADE_OPPORTUNITY Info-Center rumor render — the suite runs serially, so the latter two had been
+  dark behind the font-size failure for some time. Every other regression test (including both
+  rewritten combat specs) passes; the [МЕНЮ] real-pointer test flaked once in a full run but passes
+  in isolation and in the first full run.
+
+### Task 14.5c: Fold the remaining execute-phase mechanics into the live loop
+
+> Split out of Task 14.5 (2026-07-15) per the plan's "split and renumber" rule — the checkbox text
+> below is the original Task 14.5 item, moved verbatim.
+
+- [ ] Fold the remaining execute-phase mechanics into the live loop each frame: gravity assist
+      (Task 4 `gravityAssistTotal` → `ShipPhysics` velocity), afterburner (Task 8), missile entities
+      (Task 7 launch/advance/resolve), consumable/comms actions (Tasks 9/10), and the VFX
+      (Tasks 11–14) keyed to real execute-window events.
+- [ ] Tests: real-engine playtest coverage for each folded mechanic actually firing during a live
+      execute window (wiring, not the pure math Tasks 4–14 already unit-cover).
 
 ### Task 15: Update headless letsplay driving for the new planning-phase loop
 

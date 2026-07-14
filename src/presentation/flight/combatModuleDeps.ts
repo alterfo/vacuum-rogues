@@ -12,6 +12,7 @@
 import type { Container } from "pixi.js";
 import type { ShipPhysics } from "@/systems/ShipPhysics";
 import type { ShipLoadout } from "@/systems/equipment/ShipLoadout";
+import type { WeaponSpec } from "@/systems/equipment/GearCatalog";
 import type { GameMode } from "@/types";
 import type { NpcShipSprite } from "../NpcShipSprite";
 import type { CombatModuleDeps } from "./CombatModule";
@@ -27,6 +28,10 @@ import type { CombatModuleDeps } from "./CombatModule";
 export interface CombatModuleDepsHost {
   getShipPhysics(): ShipPhysics | null;
   isPlanning(): boolean;
+  /** True while a confirmed planned turn's execute window is running (14.5b). */
+  isExecutingPlan(): boolean;
+  /** The confirmed draft's assignment for `weapon` (null = unassigned → hold). */
+  getPlannedTarget(weapon: WeaponSpec): NpcShipSprite | null;
   endCombatPlanning(): boolean;
   isCombatPauseActive(): boolean;
   isTurnRunning(): boolean;
@@ -63,6 +68,12 @@ export function buildCombatModuleDeps(
     getShipPhysics: () => host.getShipPhysics(),
     isPaused: () =>
       host.isPlanning() || host.isCombatPauseActive() || !host.isTurnRunning(),
+    // Planned per-weapon targeting goes live (14.5b): during a confirmed
+    // execute window each gun fires only at its assigned target; an unassigned
+    // gun holds fire (Task 6's recorded rule). Outside a window (or in a fight
+    // engaged without beginCombat — e.g. e2e staging) legacy auto-fire remains.
+    isPlannedTargetingActive: () => host.isExecutingPlan(),
+    getPlannedWeaponTarget: (w) => host.getPlannedTarget(w),
     getPlayerLoadout: () => host.gameEngine?.playerLoadout ?? null,
     getUiLayer: () => host.renderer.uiLayer,
     getGameLayer: () => host.renderer.gameLayer,

@@ -471,6 +471,14 @@ export const ru: Dict = {
   "help.combat.control1": "Движение — маневрировать в бою",
   "help.combat.control2": "«Огонь!» — прицельный выстрел на активной паузе",
 
+  // --- tactical planning phase (pause-and-plan combat, Task 14.5b) ---------
+  "combat.planning.enter": "⏸ Тактическое планирование — Ход для подтверждения",
+  "combat.planning.executing": "▶ Выполнение хода…",
+  "combat.planning.armWeapon": "«{name}»: выберите цель",
+  "combat.planning.assigned": "«{weapon}» → {target}",
+  "combat.planning.assignedFar":
+    "«{weapon}» → {target} — вне досягаемости, огонь при сближении",
+
   // --- combat consumables (tactical devices) -------------------------------
   "combat.consumable.category": "Тактическое устройство",
   "combat.consumable.shieldCell.name": "Щитовая ячейка",

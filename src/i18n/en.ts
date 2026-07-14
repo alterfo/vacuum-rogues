@@ -469,6 +469,14 @@ export const en: Dict = {
   "help.combat.control1": "Movement — maneuver in combat",
   "help.combat.control2": "«Fire!» — aimed shot on active pause",
 
+  // --- tactical planning phase (pause-and-plan combat, Task 14.5b) ---------
+  "combat.planning.enter": "⏸ Tactical planning — press Turn to confirm",
+  "combat.planning.executing": "▶ Executing turn…",
+  "combat.planning.armWeapon": "“{name}”: click a target",
+  "combat.planning.assigned": "“{weapon}” → {target}",
+  "combat.planning.assignedFar":
+    "“{weapon}” → {target} — out of range, fires on closing",
+
   // --- combat consumables (tactical devices) -------------------------------
   "combat.consumable.category": "Tactical Device",
   "combat.consumable.shieldCell.name": "Shield Cell",

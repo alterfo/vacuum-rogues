@@ -358,14 +358,13 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
     expect(await sf.isContactPanelOpen()).toBe(true);
   });
 
-  test('regression: a hostile NPC engages, orbits and trades fire in auto-mode (Task 4 dogfight)', async ({ page }) => {
-    // Task 4 acceptance: an aggressive NPC closes/orbits the player and both ships
-    // auto-fire each ход. Stage a deterministic fight (fit a weapon, drop the first
-    // NPC just inside weapon range as a hostile aggressor, engage it in the
-    // real-time CombatModule), run the turn, then prove the dogfight: combat stays
-    // engaged, the aggressor maneuvers (its position moves) and BOTH hulls drop.
-    // The combat guard freezes the wait-day calendar while a fight is active, so
-    // no day-tick refresh() can de-aggro the staged NPC mid-test.
+  test('regression: a hostile engagement trades fire across pause-and-plan rounds — NPC maneuvers, BOTH hulls drop (Task 14.5b dogfight)', async ({ page }) => {
+    // Rewritten from the superseded real-time auto-fire dogfight (per
+    // docs/plans/20260713-tactical-pause-combat-rework.md — engagement now
+    // funnels into the planning loop, so "auto-mode" no longer exists: fire
+    // only resolves inside confirmed execute windows, and the player's guns
+    // need a per-round assignment). Surviving invariants: the fight stays
+    // engaged across rounds, the aggressor maneuvers, and BOTH hulls drop.
     await setupNewGame(page);
     const sf = new SpaceFlightPage(page);
     const errorCollector = new ErrorCollector(page);
@@ -392,17 +391,17 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
         | {
             e2eForceAggressorInRange: (
               range: number,
-            ) => { npc: { hullHP: number }; x: number; y: number } | null;
+            ) => { npc: { id: string; hullHP: number }; x: number; y: number } | null;
+            launchCombatWithNpc?: (npc: unknown) => void;
           }
         | undefined;
-      const combat = scene['combatModule'] as
-        | { addCombatant: (s: unknown) => void; isActive: boolean }
-        | undefined;
       const sprite = npcManager?.e2eForceAggressorInRange(240);
-      if (!sprite || !combat) return null;
-      combat.addCombatant(sprite);
+      if (!sprite || !npcManager?.launchCombatWithNpc) return null;
+      npcManager.launchCombatWithNpc(sprite.npc); // the real engagement funnel
+      const planning = scene['combatPlanning'] as { isPlanning: boolean };
       return {
-        engaged: combat.isActive,
+        planning: planning.isPlanning,
+        enemyId: sprite.npc.id,
         npcHull0: sprite.npc.hullHP,
         playerHull0: engine.player?.ship?.hullHP ?? 0,
         npcX0: sprite.x,
@@ -410,49 +409,86 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
       };
     });
     expect(staged).not.toBeNull();
-    expect(staged!.engaged).toBe(true); // engages on contact
+    expect(staged!.planning).toBe(true); // engagement freezes into PLANNING
 
-    // Run the turn so the real-time fight advances (NPC orbits + both auto-fire).
-    await sf.startTurn();
-
-    // Poll until the dogfight is unmistakable: still engaged, the aggressor has
-    // maneuvered away from its spawn point (it orbits rather than sitting still),
-    // and BOTH hulls have dropped (each side fired at least one ход).
-    await page.waitForFunction(
-      (s0) => {
+    // Round loop: each PLANNING round, REAL-click the weapon button + the enemy
+    // sprite (a fresh draft each round needs a fresh assignment), Space-confirm,
+    // and let the execute window resolve. Poll until the dogfight is
+    // unmistakable: the aggressor maneuvered and BOTH hulls dropped.
+    const status = async () =>
+      page.evaluate((s0) => {
         const engine = (window as Record<string, unknown>).__gameEngine as {
           currentScene: Record<string, unknown> | null;
           player?: { ship?: { hullHP: number } } | null;
         };
-        const combat = engine.currentScene?.['combatModule'] as
+        const scene = engine.currentScene;
+        const planning = scene?.['combatPlanning'] as
+          | { isPlanning: boolean }
+          | undefined;
+        const npcManager = scene?.['npcManager'] as
           | {
-              isActive: boolean;
-              selectedTarget: { npc: { hullHP: number }; x: number; y: number } | null;
+              npcSprites: {
+                npc: { id: string; hullHP: number };
+                x: number;
+                y: number;
+                container: { getGlobalPosition: () => { x: number; y: number } };
+              }[];
             }
           | undefined;
-        const target = combat?.selectedTarget;
-        if (!combat?.isActive || !target) return false;
-        const playerHull = engine.player?.ship?.hullHP ?? 0;
-        const moved = Math.hypot(target.x - s0.npcX0, target.y - s0.npcY0) > 5;
-        return playerHull < s0.playerHull0 && target.npc.hullHP < s0.npcHull0 && moved;
-      },
-      staged!,
-      { timeout: 20_000 },
-    );
+        const enemy = npcManager?.npcSprites.find((s) => s.npc.id === s0.enemyId);
+        const uiLayer = (scene?.['renderer'] as { uiLayer: { getChildByLabel: (l: string, deep?: boolean) => unknown } }).uiLayer;
+        const btn = uiLayer.getChildByLabel('cpw-0', true) as
+          | { getGlobalPosition: () => { x: number; y: number }; width: number; height: number }
+          | null;
+        const btnPos = btn ? btn.getGlobalPosition() : null;
+        return {
+          planning: planning?.isPlanning === true,
+          enemyHull: enemy?.npc.hullHP ?? -1,
+          playerHull: engine.player?.ship?.hullHP ?? 0,
+          moved: enemy
+            ? Math.hypot(enemy.x - s0.npcX0, enemy.y - s0.npcY0) > 5
+            : false,
+          enemyPos: enemy ? enemy.container.getGlobalPosition() : null,
+          weaponBtn:
+            btn && btnPos
+              ? { x: btnPos.x + btn.width / 2, y: btnPos.y + btn.height / 2 }
+              : null,
+        };
+      }, staged!);
 
-    // Screenshot the live dogfight (range ring, reticles, fire flashes, hull bars).
-    await sf.screenshot('dogfight-task4');
+    await page.mouse.move(5, 5); // warm up the event boundary before real clicks
+    let done = false;
+    for (let round = 0; round < 8 && !done; round++) {
+      const s = await status();
+      done =
+        s.enemyHull >= 0 &&
+        s.enemyHull < staged!.npcHull0 &&
+        s.playerHull < staged!.playerHull0 &&
+        s.moved;
+      if (done) break;
+      if (s.planning && s.weaponBtn && s.enemyPos) {
+        await page.mouse.click(s.weaponBtn.x, s.weaponBtn.y); // arm the gun
+        await page.mouse.click(s.enemyPos.x, s.enemyPos.y); // assign the enemy
+        // Screenshot the first planning round (rings, weapon bar, hull bars).
+        if (round === 0) await sf.screenshot('dogfight-planning-phase');
+        await page.keyboard.press('Space'); // confirm → execute window
+      }
+      await page.waitForTimeout(1_000);
+    }
+    expect(done).toBe(true); // maneuvered + both hulls dropped across the rounds
 
     errorCollector.assertAndDetach();
   });
 
-  test('regression: an incoming attack auto-pauses and shows the target/weapon overlay; firing resumes (active-pause Task 3)', async ({ page }) => {
-    // Active-pause acceptance: when a hostile opens fire the game pauses and a
-    // centred target/weapon overlay appears; clicking Огонь! fires one shot and
-    // resumes real time. Stage a deterministic fight (fit a weapon, drop the
-    // first NPC just inside range as a hostile, engage it), run the turn until
-    // the first incoming shot lands, then assert the pause + overlay, screenshot
-    // it, and REAL-click the fire button (UiButton hit-geometry must work).
+  test('regression: engaging combat opens tactical planning; weapon-assign + movement clicks + Space confirm run the round loop (pause-and-plan Task 14.5b)', async ({ page }) => {
+    // Pause-and-plan acceptance (rewritten from the superseded reactive
+    // active-pause per docs/plans/20260713-tactical-pause-combat-rework.md —
+    // that flow was unwired in Task 14.5a, so its overlay never appears now).
+    // Engaging a hostile freezes into PLANNING and mounts the weapon bar +
+    // range rings; a REAL click on a weapon button arms it, a REAL click on the
+    // enemy assigns it, a REAL empty-space click sets the movement destination,
+    // and Space confirms → the execute window fires at the ASSIGNED target,
+    // then the round timer re-opens PLANNING on its own.
     await setupNewGame(page);
     const sf = new SpaceFlightPage(page);
     const errorCollector = new ErrorCollector(page);
@@ -466,90 +502,172 @@ test.describe.serial('Regression: quick smoke + monkey suite', () => {
         } | null;
       };
       const scene = engine.currentScene;
-      if (!scene) return false;
+      if (!scene) return null;
       const loadout = engine.playerLoadout;
       if (loadout && loadout.derivedStats().weaponCount === 0) {
         loadout.install('wpn_pulse');
       }
       const npcManager = scene['npcManager'] as
-        | { e2eForceAggressorInRange: (range: number) => { npc: { hullHP: number } } | null }
-        | undefined;
-      const combat = scene['combatModule'] as
-        | { addCombatant: (s: unknown) => void; isActive: boolean }
+        | {
+            e2eForceAggressorInRange: (range: number) => { npc: { id: string; hullHP: number } } | null;
+            launchCombatWithNpc?: (npc: unknown) => void;
+          }
         | undefined;
       const sprite = npcManager?.e2eForceAggressorInRange(240);
-      if (!sprite || !combat) return false;
-      combat.addCombatant(sprite);
-      return combat.isActive;
+      if (!sprite || !npcManager?.launchCombatWithNpc) return null;
+      // The real engagement seam (Атаковать path) — routes through
+      // startInFlightCombat → beginCombat(), unlike a bare addCombatant.
+      npcManager.launchCombatWithNpc(sprite.npc);
+      const planning = scene['combatPlanning'] as { isPlanning: boolean };
+      return { planning: planning.isPlanning, enemyId: sprite.npc.id, enemyHull0: sprite.npc.hullHP };
     });
-    expect(staged).toBe(true);
+    expect(staged).not.toBeNull();
+    expect(staged!.planning).toBe(true); // frozen into PLANNING on engagement
 
-    // Run the turn so the NPC's first shot lands → onPlayerUnderAttack → pause.
-    await sf.startTurn();
+    // Weapon bar + range rings are up — visual verification of the surface.
+    await sf.screenshot('combat-planning-phase');
+
+    // REAL-click the first weapon button (warm up the event boundary first;
+    // e2e* seams bypass hit-testing — only a real click catches a dead button).
+    await page.mouse.move(5, 5);
+    const weaponBtn = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene;
+      const uiLayer = (scene?.['renderer'] as { uiLayer: { getChildByLabel: (l: string, deep?: boolean) => unknown } }).uiLayer;
+      const btn = uiLayer.getChildByLabel('cpw-0', true) as
+        | { getGlobalPosition: () => { x: number; y: number }; width: number; height: number }
+        | null;
+      if (!btn) return null;
+      const p = btn.getGlobalPosition();
+      return { x: p.x + btn.width / 2, y: p.y + btn.height / 2 };
+    });
+    expect(weaponBtn).not.toBeNull();
+    await page.mouse.click(weaponBtn!.x, weaponBtn!.y);
+
+    const armed = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const ui = engine.currentScene?.['combatPlanningUi'] as
+        | { armedWeapon: { id: string } | null }
+        | undefined;
+      return ui?.armedWeapon?.id ?? null;
+    });
+    expect(armed).not.toBeNull(); // first click of the two-step armed the gun
+
+    // REAL-click the staged enemy sprite → the assignment lands in the draft.
+    const enemyPos = await page.evaluate((enemyId) => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const npcManager = engine.currentScene?.['npcManager'] as
+        | { npcSprites: { npc: { id: string }; container: { getGlobalPosition: () => { x: number; y: number } } }[] }
+        | undefined;
+      const sprite = npcManager?.npcSprites.find((s) => s.npc.id === enemyId);
+      if (!sprite) return null;
+      return sprite.container.getGlobalPosition();
+    }, staged!.enemyId);
+    expect(enemyPos).not.toBeNull();
+    await page.mouse.click(enemyPos!.x, enemyPos!.y);
+
+    const assigned = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const planning = engine.currentScene?.['combatPlanning'] as
+        | { plan: { weaponTargets: { size: number } } }
+        | undefined;
+      return planning?.plan.weaponTargets.size ?? 0;
+    });
+    expect(assigned).toBe(1); // second click wrote the weapon→target assignment
+
+    // REAL-click empty space (a point clear of every NPC/planet in world
+    // coords) → the movement destination + arc preview.
+    const movePoint = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const scene = engine.currentScene;
+      if (!scene) return null;
+      const camera = scene['camera'] as {
+        screenToWorld: (x: number, y: number) => { x: number; y: number };
+      };
+      const npcManager = scene['npcManager'] as {
+        npcSprites: { x: number; y: number }[];
+      };
+      const planetManager = scene['planetManager'] as {
+        planetSprites: { screenX: number; screenY: number }[];
+      };
+      const app = (scene['renderer'] as { app: { screen: { width: number; height: number } } }).app;
+      const cx = app.screen.width / 2;
+      const cy = app.screen.height / 2;
+      const candidates = [
+        { x: cx + 150, y: cy + 110 },
+        { x: cx - 150, y: cy + 110 },
+        { x: cx + 150, y: cy - 110 },
+        { x: cx - 150, y: cy - 110 },
+        { x: cx, y: cy + 170 },
+      ];
+      for (const c of candidates) {
+        const w = camera.screenToWorld(c.x, c.y);
+        const nearNpc = npcManager.npcSprites.some(
+          (s) => Math.hypot(s.x - w.x, s.y - w.y) < 80,
+        );
+        const nearPlanet = planetManager.planetSprites.some(
+          (p) => Math.hypot(p.screenX - w.x, p.screenY - w.y) < 110,
+        );
+        if (!nearNpc && !nearPlanet) return c;
+      }
+      return null;
+    });
+    expect(movePoint).not.toBeNull();
+    await page.mouse.click(movePoint!.x, movePoint!.y);
+
+    const destination = await page.evaluate(() => {
+      const engine = (window as Record<string, unknown>).__gameEngine as {
+        currentScene: Record<string, unknown> | null;
+      };
+      const planning = engine.currentScene?.['combatPlanning'] as
+        | { plan: { destination: { x: number; y: number } | null } }
+        | undefined;
+      return planning?.plan.destination ?? null;
+    });
+    expect(destination).not.toBeNull(); // movement click set this round's destination
+
+    // Space = «Ход» confirm → EXECUTING; the planned shot must land on the
+    // ASSIGNED enemy within the window (fire cadence < round length).
+    await page.keyboard.press('Space');
+    await page.waitForFunction(
+      (s0) => {
+        const engine = (window as Record<string, unknown>).__gameEngine as {
+          currentScene: Record<string, unknown> | null;
+        };
+        const scene = engine.currentScene;
+        const npcManager = scene?.['npcManager'] as
+          | { npcSprites: { npc: { id: string; hullHP: number } }[] }
+          | undefined;
+        const enemy = npcManager?.npcSprites.find((s) => s.npc.id === s0.enemyId);
+        return !!enemy && enemy.npc.hullHP < s0.enemyHull0;
+      },
+      staged!,
+      { timeout: 15_000 },
+    );
+
+    // The fixed round timer re-opens PLANNING on its own — the loop cycles.
     await page.waitForFunction(
       () => {
         const engine = (window as Record<string, unknown>).__gameEngine as {
           currentScene: Record<string, unknown> | null;
         };
-        const cp = engine.currentScene?.['combatPause'] as { paused: boolean } | undefined;
-        return cp?.paused === true;
+        const planning = engine.currentScene?.['combatPlanning'] as
+          | { isPlanning: boolean }
+          | undefined;
+        return planning?.isPlanning === true;
       },
       undefined,
-      { timeout: 20_000 },
-    );
-
-    // The overlay modal must be mounted on the UI layer (labelled handle), and
-    // the enemy hull at the moment of pause (the first exchange already landed).
-    const opened = await page.evaluate(() => {
-      const engine = (window as Record<string, unknown>).__gameEngine as {
-        currentScene: Record<string, unknown> | null;
-      };
-      const scene = engine.currentScene;
-      const uiLayer = (scene?.['renderer'] as { uiLayer: { getChildByLabel: (l: string, deep?: boolean) => unknown } }).uiLayer;
-      const overlay = uiLayer.getChildByLabel('combat-pause-overlay', true);
-      const combat = scene?.['combatModule'] as { selectedTarget: { npc: { hullHP: number } } | null } | undefined;
-      return { hasOverlay: overlay != null, enemyHull: combat?.selectedTarget?.npc.hullHP ?? null };
-    });
-    expect(opened.hasOverlay).toBe(true);
-    expect(opened.enemyHull).not.toBeNull();
-
-    // Visual verification: the centred overlay with target + weapon lists.
-    await sf.screenshot('combat-pause-overlay');
-
-    // REAL-click the fire button (warm up the event boundary first; e2e* seams
-    // bypass hit-testing, so only a real click can catch a mouse-dead button).
-    await page.mouse.move(5, 5);
-    const fire = await page.evaluate(() => {
-      const engine = (window as Record<string, unknown>).__gameEngine as {
-        currentScene: Record<string, unknown> | null;
-      };
-      const scene = engine.currentScene;
-      const uiLayer = (scene?.['renderer'] as { uiLayer: { getChildByLabel: (l: string, deep?: boolean) => unknown } }).uiLayer;
-      const btn = uiLayer.getChildByLabel('combat-pause-overlay', true) as
-        | { getChildByLabel: (l: string, deep?: boolean) => { getGlobalPosition: () => { x: number; y: number }; width: number; height: number } | null }
-        | null;
-      const c = btn?.getChildByLabel('cp-fire', true);
-      if (!c) return null;
-      const p = c.getGlobalPosition();
-      return { x: p.x + c.width / 2, y: p.y + c.height / 2 };
-    });
-    expect(fire).not.toBeNull();
-    await page.mouse.click(fire!.x, fire!.y);
-
-    // Firing resumes time (paused → false) and lands one more shot on the enemy.
-    await page.waitForFunction(
-      (hull0) => {
-        const engine = (window as Record<string, unknown>).__gameEngine as {
-          currentScene: Record<string, unknown> | null;
-        };
-        const scene = engine.currentScene;
-        const cp = scene?.['combatPause'] as { paused: boolean } | undefined;
-        const combat = scene?.['combatModule'] as { selectedTarget: { npc: { hullHP: number } } | null } | undefined;
-        const hull = combat?.selectedTarget?.npc.hullHP ?? 0;
-        return cp?.paused === false && hull < hull0;
-      },
-      opened.enemyHull as number,
-      { timeout: 10_000 },
+      { timeout: 15_000 },
     );
 
     errorCollector.assertAndDetach();

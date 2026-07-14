@@ -15,11 +15,7 @@ import {
 } from "@/utils/flightGeometry";
 import { ShipPhysics } from "@/systems/ShipPhysics";
 import { PanZoomController } from "@/systems/PanZoomController";
-import {
-  SYSTEM_GEOMETRY,
-  GAME_BALANCE,
-  COMBAT_ROUND_MS,
-} from "@/config/balance";
+import { SYSTEM_GEOMETRY, GAME_BALANCE } from "@/config/balance";
 import { landingDenialMessage } from "@/systems/galaxy/landingAccess";
 import { SpaceBackgroundLayer } from "./SpaceBackgroundLayer";
 import { StarRenderer } from "./flight/StarRenderer";
@@ -28,13 +24,14 @@ import { OrbitRenderer } from "./flight/OrbitRenderer";
 import { RouteRenderer } from "./flight/RouteRenderer";
 import { PlayerShipRenderer } from "./flight/PlayerShipRenderer";
 import { NpcShipManager } from "./flight/NpcShipManager";
+import { buildNpcManagerDeps } from "./flight/npcManagerDeps";
 import { CombatModule } from "./flight/CombatModule";
 import { buildCombatModuleDeps } from "./flight/combatModuleDeps";
 import { createCombatPauseUi } from "./flight/combatPauseUi";
-import { CombatPlanningController } from "./flight/combatPlanning";
-import { applyPlannedMovement } from "./flight/combatTrajectory";
+import { CombatPlanningUi, createCombatPlanningController } from "./flight/combatPlanningUi"; // prettier-ignore
 import { previewCombatCourse } from "./flight/combatCoursePreview";
 import { plotPlannedRoute } from "./flight/routePlot";
+import { updateFlightMiniMap } from "./flight/miniMapUpdate";
 import { orbitBump } from "./flight/combatOrbitClock";
 import { PlanetManager } from "./flight/PlanetManager";
 import { FlightHud } from "./flight/FlightHud";
@@ -82,20 +79,19 @@ export class SpaceFlightScene extends GameScene {
   private npcManager!: NpcShipManager;
   private combatModule!: CombatModule;
   private combatPause = createCombatPauseUi(); // active-pause; rewired in initialize()
-  // Pause-and-plan loop (Task 2/3, live-wired Task 14.5a): startInFlightCombat
-  // calls beginCombat(); onConfirm flies the planned dest; the toasts make a
-  // fight playable before the full planning UI (Task 14.5b+) lands.
-  private combatPlanning = new CombatPlanningController({
-    roundMs: COMBAT_ROUND_MS,
-    onConfirm: (plan) =>
-      applyPlannedMovement(plan.destination, this.shipPhysics ?? null),
-    onEnterPlanning: () =>
-      this.hud.showMessage(
-        "⏸ Тактическое планирование — Ход для подтверждения",
-        0x66ccff,
-      ),
-    onEnterExecuting: () =>
-      this.hud.showMessage("▶ Выполнение хода…", 0x66ccff),
+  // Pause-and-plan loop (Task 2/3, live 14.5a, UI 14.5b): startInFlightCombat
+  // calls beginCombat(); the toasts/UI mount live in flight/combatPlanningUi.ts.
+  private combatPlanningUi: CombatPlanningUi | null = null;
+  private combatPlanning = createCombatPlanningController({
+    getShipPhysics: () => this.shipPhysics,
+    getUi: () => this.combatPlanningUi,
+    showMessage: (text, color) => this.hud.showMessage(text, color),
+    onFightEnd: () => {
+      if (this.destroyed) return; // mid-teardown — clearPlannedRoute() handles it
+      if (this.plannedRoute)
+        this.plotRoute(); // restore the pre-combat course line
+      else this.routeRenderer.clearRoute(); // drop the last combat course preview
+    },
   });
   // Latches the low-hull auto-stop so the warning fires once per descent.
   private lowHullStopped = false;
@@ -260,6 +256,9 @@ export class SpaceFlightScene extends GameScene {
       buildCombatModuleDeps({
         getShipPhysics: () => this.shipPhysics,
         isPlanning: () => this.combatPlanning.isPlanning,
+        isExecutingPlan: () => this.combatPlanning.isExecuting,
+        getPlannedTarget: (w) =>
+          this.combatPlanning.plan.weaponTargets.get(w) ?? null,
         endCombatPlanning: () => this.combatPlanning.endCombat(),
         isCombatPauseActive: () => this.combatPause.paused,
         isTurnRunning: () => this.isTurnRunning,
@@ -278,52 +277,62 @@ export class SpaceFlightScene extends GameScene {
       () => this.shipPhysics?.stop(),
     );
     this.gameEngine?.setCombatStateProvider(() => this.combatModule.isActive); // adaptive combat music signal
+    // Planning-phase surface (14.5b): range rings + weapon-assignment bar.
+    this.combatPlanningUi = new CombatPlanningUi({
+      getUiLayer: () => this.renderer.uiLayer,
+      getGameLayer: () => this.renderer.gameLayer,
+      getScreenSize: () => this.renderer.app.screen,
+      getShipPos: () =>
+        this.shipPhysics
+          ? { x: this.shipPhysics.shipX, y: this.shipPhysics.shipY }
+          : null,
+      getFittedWeapons: () => this.combatModule.fittedWeapons(),
+      isCombatant: (s) => this.combatModule.combatants.has(s),
+      planning: this.combatPlanning,
+      showMessage: (text, color) => this.hud.showMessage(text, color),
+    });
     // NPC module: living-galaxy ships, contact panel, auto-follow combat, OVERMIND prompt.
     this.npcManager = new NpcShipManager(
       this.renderer,
       this.gameEngine,
       this.renderer.gameLayer,
       this.renderer.uiLayer,
-      {
+      buildNpcManagerDeps({
         getShipPhysics: () => this.shipPhysics,
         getPlanetSprites: () => this.planetManager.planetSprites,
         getStarCenter: () => ({
           x: this.starRenderer.centerX,
           y: this.starRenderer.centerY,
         }),
-        isTurnRunning: () => this.isTurnRunning && !this.combatPause.paused,
+        getStarAvoidRadius: () => this.starRenderer.avoidRadius,
+        isTurnRunning: () => this.isTurnRunning,
+        setTurnRunning: (v) => {
+          this.isTurnRunning = v;
+        },
+        isCombatPauseActive: () => this.combatPause.paused,
+        updateInteractiveCursors: (v) => this.updateInteractiveCursors(v),
         showMessage: (text, color) => this.hud.showMessage(text, color),
         showTooltip: (text, sx, sy) => this.hud.showTooltip(text, sx, sy),
         hideTooltip: () => this.hud.hideTooltip(),
-        executeRouteTo: (x, y) => {
-          this.pursuitReplot = true;
-          this.executeRouteTo(x, y);
-          this.pursuitReplot = false;
+        executeRouteTo: (x, y) => this.executeRouteTo(x, y),
+        setPursuitReplot: (v) => {
+          this.pursuitReplot = v;
         },
-        clearRouteTarget: () => {
+        clearRouteTargetPlanet: () => {
           this.planetManager.routeTargetPlanetId = null;
         },
         endTurn: () => this.endTurn(),
-        startInFlightCombat: (sprite) => {
-          this.combatModule.addCombatant(sprite);
-          this.combatPlanning.beginCombat(); // no-op if already underway (14.5a)
-        },
-        onPlayerEngagesCombat: () => {
-          // beginCombat() above already froze the sim — no deferred pause needed.
-          if (!this.isTurnRunning) {
-            this.isTurnRunning = true;
-            this.updateInteractiveCursors(true);
-          }
-        },
-        isInCombat: () => this.combatModule.isActive,
+        addCombatant: (s) => this.combatModule.addCombatant(s),
+        beginCombatPlanning: () => void this.combatPlanning.beginCombat(),
+        isCombatActive: () => this.combatModule.isActive,
         selectCombatTarget: (s) => this.combatModule.selectTarget(s),
-        getCombatTargetId: () =>
+        handlePlanningTargetClick: (s) =>
+          this.combatPlanningUi?.handleTargetClick(s) ?? false,
+        getSelectedCombatTargetId: () =>
           this.combatModule.selectedTarget?.npc.id ?? null,
         isCombatant: (sprite) => this.combatModule.combatants.has(sprite),
-        isPaused: () => this.combatPause.paused,
-        getStarAvoidRadius: () => this.starRenderer.avoidRadius,
         sessionState: this.gameEngine?.sessionState,
-      },
+      }),
     );
     // Auto-complete system-entry quests: EXPLORATION, DEFENSE (OVERMIND liberation), ESCORT.
     this.questCompletion.explorationBySystemEntry();
@@ -741,6 +750,7 @@ export class SpaceFlightScene extends GameScene {
     // Tear down NPC ship sprites, contact panel and the OVERMIND-core overlay.
     this.npcManager?.destroy();
     this.combatModule?.destroy(); // Clear in-flight combat target + active flag.
+    this.combatPlanningUi?.destroy(); // Planning bar + range rings (14.5b).
     this.combatPlanning.endCombat(); // Reset the pause-and-plan loop too (Task 14.5a).
 
     // Tear down the star module (disposes its halo/sun filters and removes its
@@ -947,6 +957,29 @@ export class SpaceFlightScene extends GameScene {
       return;
     }
 
+    // Tactical planning-phase click → this round's destination + arc preview
+    // (Task 3, reachable 14.5b). Checked BEFORE the turn-running guard:
+    // engagement holds the turn open, but PLANNING freezes the sim — a click
+    // here is the planning interaction itself, not a mid-flight mis-click.
+    if (
+      event.button === 0 &&
+      !event.shiftKey &&
+      this.combatPlanning.isPlanning &&
+      this.shipPhysics
+    ) {
+      const pt = this.camera.screenToWorld(event.global.x, event.global.y);
+      const { centerX: sx, centerY: sy, avoidRadius } = this.starRenderer;
+      const world = clampOutsideRadius(pt.x, pt.y, sx, sy, avoidRadius);
+      previewCombatCourse(
+        this.routeRenderer,
+        this.combatPlanning,
+        this.shipPhysics,
+        world.x,
+        world.y,
+      );
+      return;
+    }
+
     // While a turn is running, block route building (panning stays allowed).
     if (this.isTurnRunning && !isPanButton) {
       if (!this.turnHintShown) {
@@ -990,18 +1023,6 @@ export class SpaceFlightScene extends GameScene {
       const pt = this.camera.screenToWorld(event.global.x, event.global.y);
       const { centerX: sx, centerY: sy, avoidRadius } = this.starRenderer;
       const world = clampOutsideRadius(pt.x, pt.y, sx, sy, avoidRadius);
-      // Tactical planning-phase click → this round's destination + arc preview (Task 3).
-      if (this.combatPlanning.isPlanning && this.shipPhysics) {
-        previewCombatCourse(
-          this.routeRenderer,
-          this.combatPlanning,
-          this.shipPhysics,
-          world.x,
-          world.y,
-        );
-        return;
-      }
-
       // Check if we already have a planned route
       if (this.plannedRoute) {
         // Check if clicking near the same point (within 50px) - execute the route
@@ -1583,42 +1604,21 @@ export class SpaceFlightScene extends GameScene {
 
   /** Refresh mini-map each frame; PlanetManager.update() owns the orbital motion. */
   private updateSystemMiniMap(): void {
-    // Always update even when paused — gives visual feedback during the pause overlay.
-    const miniMap = this.hud.miniMap;
-    if (miniMap && this.shipPhysics) {
-      const npcDots = this.npcManager.getNpcDots();
-      // Show the route on the radar: the planned destination (set on planning
-      // or while travelling), else the live target while the ship is moving.
-      const route =
-        this.plannedRoute ??
-        (this.shipPhysics.isMoving
-          ? {
-              x: this.shipPhysics.getTargetX(),
-              y: this.shipPhysics.getTargetY(),
-            }
-          : null);
-      // Current camera view in world coords → radar viewport rectangle.
-      const viewport = this.camera.worldViewport();
-      miniMap.updateWithSprites(
-        this.planetManager.planetSprites,
-        this.shipPhysics.shipX,
-        this.shipPhysics.shipY,
-        this.starRenderer.centerX,
-        this.starRenderer.centerY,
-        npcDots,
-        route,
-        this.SYSTEM_BOUNDARY_RADIUS,
-        viewport,
-        this.SCANNER_RANGE,
-      );
-      miniMap.updateCenterButton(
-        this.camera.panX,
-        this.camera.panY,
-        this.shipPhysics.shipX,
-        this.shipPhysics.shipY,
-        this.camera.zoom,
-      );
-    }
+    // Always update even when paused — visual feedback during a pause overlay.
+    updateFlightMiniMap({
+      miniMap: this.hud.miniMap,
+      ship: this.shipPhysics,
+      npcDots: this.npcManager.getNpcDots(),
+      planetSprites: this.planetManager.planetSprites,
+      plannedRoute: this.plannedRoute,
+      starCenter: {
+        x: this.starRenderer.centerX,
+        y: this.starRenderer.centerY,
+      },
+      camera: this.camera,
+      boundaryRadius: this.SYSTEM_BOUNDARY_RADIUS,
+      scannerRange: this.SCANNER_RANGE,
+    });
   }
 
   /**
