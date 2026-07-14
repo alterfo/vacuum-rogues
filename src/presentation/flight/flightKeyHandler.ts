@@ -76,6 +76,16 @@ export interface FlightKeyContext {
   executeRouteTo(x: number, y: number): void;
   openInventory(): void;
   /**
+   * The tactical pause-and-plan loop (`CombatPlanningController`, Task 14.5a).
+   * Optional so existing callers/tests that don't model it can omit it — the
+   * `runTurn` guard below then falls through to the pre-existing route-turn
+   * behavior unchanged. While `isPlanning`, `confirm()` takes priority over the
+   * ordinary route-turn path (planning freezes the sim outside of
+   * `isTurnRunning`, so the usual `ctx.isTurnRunning` guard would otherwise make
+   * Space a no-op during a fight).
+   */
+  combatPlanning?: { isPlanning: boolean; confirm(): void };
+  /**
    * The active action→key bindings used to resolve the event to an action.
    * Optional so existing callers/tests that don't model remapping can omit it —
    * the handler then reads the live `currentKeymap()` (the persisted player
@@ -124,7 +134,15 @@ export function handleFlightKey(
   }
   if (action === "runTurn") {
     event.preventDefault(); // Space would otherwise scroll the page
-    if (event.repeat || ctx.combatPause.paused || ctx.isTurnRunning) return;
+    if (event.repeat) return;
+    // Tactical planning confirm ("Ход") takes priority — checked before the
+    // ordinary route-turn guard below, since planning freezes the sim
+    // independently of `isTurnRunning` (Task 14.5a).
+    if (ctx.combatPlanning?.isPlanning) {
+      ctx.combatPlanning.confirm();
+      return;
+    }
+    if (ctx.combatPause.paused || ctx.isTurnRunning) return;
     // Don't launch the turn behind an open modal — the contact panel, the
     // OVERMIND-core overlay, the quest journal, planet-info, or the settings
     // panel must be dismissed first, otherwise the ship flies off while the

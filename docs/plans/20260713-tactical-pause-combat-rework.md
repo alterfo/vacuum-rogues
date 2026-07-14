@@ -1133,28 +1133,83 @@ Any test file **not** in this list stays under the standing "never touch existin
 > "fix the game, don't just satisfy the oracle" rule forbids. So this is a coordinated production +
 > UI integration, not a headless shortcut.
 
-- [ ] Call `combatPlanning.beginCombat()` when combat engages (fold into the same seam that today
+- [x] Call `combatPlanning.beginCombat()` when combat engages (fold into the same seam that today
       starts the legacy pursuit / opens `combatPause`), and `endCombat()` on player death / last
       hostile destroyed (the only early terminators, per Task 1b).
-- [ ] Drive the execute window: tick `combatPlanning.tickExecute(dt)` in `SpaceFlightScene.update`,
+      **Done (Task 14.5a, 2026-07-14, interactive session).** `startInFlightCombat` (the shared
+      funnel every engagement path already routed through) now also calls `beginCombat()`;
+      `onCombatEnded` calls `endCombat()`; `destroy()` also calls it for teardown safety. The old
+      reactive single-shot active-pause (`onPlayerUnderAttack`/`onTargetLost`/`onRoundComplete` →
+      `combatPause`) is superseded per this plan's own Task 1b decision — those deps are no longer
+      wired from `CombatModule`'s construction (extracted to `flight/combatModuleDeps.ts` to stay
+      under the line guard); `combatPause.ts` itself is untouched, still used directly by two
+      passing regression tests, real deletion is Task 15's job once `CombatPursuitController`'s
+      live refs clear.
+- [x] Drive the execute window: tick `combatPlanning.tickExecute(dt)` in `SpaceFlightScene.update`,
       re-open PLANNING when it closes; on `onConfirm` apply movement (`applyPlannedMovement` → Task 3)
       and flip the CombatModule planned-targeting deps live (`isPlannedTargetingActive` →
       `combatPlanning.isExecuting`, `getPlannedWeaponTarget` → the confirmed `weaponTargets` — Task 6).
+      **Partially done (14.5a).** `tickExecute(dt)` is ticked every frame (no-op outside EXECUTING);
+      `updateShip`/the scene's `frozen` local both now also gate on `combatPlanning.isPlanning`, so
+      movement genuinely freezes during planning. `onConfirm` → `applyPlannedMovement` was already
+      wired (Task 3) and is now reachable. **NOT done**: `isPlannedTargetingActive`/
+      `getPlannedWeaponTarget` are still unwired — deliberately deferred, since flipping them on
+      with no weapon-assignment UI yet would make every weapon hold fire the whole fight (the
+      "unassigned = hold fire" rule) — a real regression, not a neutral no-op. CombatModule stays on
+      legacy auto-target for this slice. Revisit once Task 14.5b lands the assignment UI.
 - [ ] Light up the planning-phase **live UI**: mount the course preview (Task 3
       `previewCombatCourse`) and per-weapon range overlay + two-step assignment click
       (Task 5 `combatWeaponRangeOverlay` / `WeaponAssignmentController`), route planning-phase clicks
       to movement-vs-weapon-assign, and surface the "Ход"/Space confirm (Task 1b). New i18n strings go
       in BOTH `ru.ts`/`en.ts`.
+      **Partially done (14.5a) — confirm affordance only.** Both input paths now confirm the
+      (currently always-empty) plan during PLANNING: the `Space` key (`flightKeyHandler.ts`'s
+      `runTurn` branch, new optional `combatPlanning` ctx field, checked before the pre-existing
+      `isTurnRunning` guard which would otherwise always block Space during any fight) and the HUD
+      «Ход»/«Пауза» button (`onPlayPause()` — needed its own explicit guard, since without it this
+      button would call `endTurn()` mid-plan and desync `isTurnRunning` from `combatPlanning`'s
+      phase, the same class of bug the old `combatPause.paused` guard used to prevent here). A
+      toast (`onEnterPlanning`/`onEnterExecuting`, plain hardcoded RU strings via `hud.showMessage`,
+      matching this file's existing toast convention — not yet routed through `t()`) is the only
+      visible affordance; there is still no course preview, no range overlay, no weapon-assignment
+      click routing, and no new i18n keys. **This is why the plan can't yet move destinations or
+      targets — Task 14.5b's job.**
 - [ ] Fold the remaining execute-phase mechanics into the live loop each frame: gravity assist
       (Task 4 `gravityAssistTotal` → `ShipPhysics` velocity), afterburner (Task 8), missile entities
       (Task 7 launch/advance/resolve), consumable/comms actions (Tasks 9/10), and the VFX
-      (Tasks 11–14) keyed to real execute-window events.
-- [ ] Respect the `SpaceFlightScene.ts` ≤ 1898-line guard — extract to `flight/` helpers as needed
+      (Tasks 11–14) keyed to real execute-window events. **Not started — Task 14.5c/d's scope.**
+- [x] Respect the `SpaceFlightScene.ts` ≤ 1898-line guard — extract to `flight/` helpers as needed
       (this integration is large; prefer new modules over inlining).
-- [ ] Tests: a real-engine playtest that boots the engine, enters combat, confirms a planned turn,
+      **Done.** New `flight/combatModuleDeps.ts` (`buildCombatModuleDeps`) extracts the
+      `CombatModule` dependency-object construction verbatim (same class of extraction as Task 3's
+      `routePlot.ts`) — net scene line count 1898→1894 despite the new wiring. Passing `this`
+      directly to the extracted builder does NOT type-check (TS rejects assigning a class instance
+      to an interface exposing public members with the same name as the class's own `private`
+      fields) — the host object is built explicitly at the call site with named getter-methods
+      instead, not a raw property/`this` pass-through.
+- [x] Tests: a real-engine playtest that boots the engine, enters combat, confirms a planned turn,
       and asserts the loop actually cycled planning→execute→planning (the wiring, not the pure math
       Tasks 2–14 already cover) + E2E for the core planning-phase click loop (the plan's Task 2/3/5
       E2E, deferrable until now because the loop couldn't be entered live before this task).
+      **Real-engine playtest done** — `src/tests/playtest/combatPauseFreezesLiveFight.test.ts`
+      rewritten (pre-authorized, Task 1c REWRITE entry) to prove: planning opens immediately on
+      engagement (moving or not — the old day-boundary deferral is gone); planning freezes movement
+      (unchanged, still-passing assertion); an EXECUTING round cycles back to PLANNING on its own
+      once `COMBAT_ROUND_MS` elapses, with no player action able to end it early; fire only lands
+      during EXECUTING, never PLANNING; the HUD button confirms instead of desyncing state. **E2E
+      NOT added** — no clickable planning UI exists yet to E2E-test (Task 14.5b's job); the keyboard
+      confirm path already has real-engine + unit coverage, which is the meaningful surface today.
+      ⚠️ **Anticipated regression, confirmed 2026-07-14**: 3 pre-existing headless-letsplay tests now
+      fail — `src/tests/playtest/letsplay/exploreNoWarpLoop.test.ts`,
+      `longGameCompetence.test.ts` (b), `slayerCampaign.test.ts` — because the headless agent has no
+      way to call `combatPlanning.confirm()`, so it gets stuck in PLANNING forever once combat
+      opens (no damage accrues, no landing cadence). This is **exactly** the gap this plan's own
+      Task 15 exists to close (`PlayerAgent.driveAttack`/`LiveApplier`/`MemoryHeuristicPolicy` need
+      to drive the new loop) — not a surprise, and not fixed in this task on purpose (per the
+      "prefer fresh sessions over long autonomous batches" guidance already in this plan's own
+      note below, this integration was deliberately kept to the live/player-facing half only).
+      `npm run letsplay:ci` and the 3 listed `test:playtest` files are RED until Task 15 lands —
+      tracked here, not silently left broken.
 
 > **NOTE for the ralphex loop / next iteration:** this is a paradigm-sized integration touching two
 > CRITICAL-risk symbols (`CombatModule`, `CombatPursuitController`) and the scene at its line-guard

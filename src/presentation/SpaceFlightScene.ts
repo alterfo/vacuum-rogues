@@ -29,6 +29,7 @@ import { RouteRenderer } from "./flight/RouteRenderer";
 import { PlayerShipRenderer } from "./flight/PlayerShipRenderer";
 import { NpcShipManager } from "./flight/NpcShipManager";
 import { CombatModule } from "./flight/CombatModule";
+import { buildCombatModuleDeps } from "./flight/combatModuleDeps";
 import { createCombatPauseUi } from "./flight/combatPauseUi";
 import { CombatPlanningController } from "./flight/combatPlanning";
 import { applyPlannedMovement } from "./flight/combatTrajectory";
@@ -81,11 +82,20 @@ export class SpaceFlightScene extends GameScene {
   private npcManager!: NpcShipManager;
   private combatModule!: CombatModule;
   private combatPause = createCombatPauseUi(); // active-pause; rewired in initialize()
-  // Pause-and-plan loop (Task 2/3): idle until the combat-open trigger; onConfirm flies the planned dest via setPath.
+  // Pause-and-plan loop (Task 2/3, live-wired Task 14.5a): startInFlightCombat
+  // calls beginCombat(); onConfirm flies the planned dest; the toasts make a
+  // fight playable before the full planning UI (Task 14.5b+) lands.
   private combatPlanning = new CombatPlanningController({
     roundMs: COMBAT_ROUND_MS,
     onConfirm: (plan) =>
       applyPlannedMovement(plan.destination, this.shipPhysics ?? null),
+    onEnterPlanning: () =>
+      this.hud.showMessage(
+        "⏸ Тактическое планирование — Ход для подтверждения",
+        0x66ccff,
+      ),
+    onEnterExecuting: () =>
+      this.hud.showMessage("▶ Выполнение хода…", 0x66ccff),
   });
   // Latches the low-hull auto-stop so the warning fires once per descent.
   private lowHullStopped = false;
@@ -246,44 +256,22 @@ export class SpaceFlightScene extends GameScene {
       this.onKeyDown({ key: "Escape" } as KeyboardEvent);
     wireFlightSystemMenu(this.hud, this.gameEngine); // in-flight load/main-menu escape hatch (Task 2)
 
-    this.combatModule = new CombatModule({
-      getShipPhysics: () => this.shipPhysics,
-      isPaused: () =>
-        this.combatPlanning.isPlanning ||
-        this.combatPause.paused ||
-        !this.isTurnRunning,
-      getPlayerLoadout: () => this.gameEngine?.playerLoadout ?? null,
-      getUiLayer: () => this.renderer.uiLayer,
-      getGameLayer: () => this.renderer.gameLayer,
-      getScreenSize: () => this.renderer.app.screen,
-      getPlayerShip: () => this.gameEngine?.player?.ship ?? null,
-      getGameMode: () => this.gameEngine?.player?.gameMode ?? "NORMAL",
-      // Adaptive garrison scaling (Task 4): fights in a hostile-held system
-      // scale with the run's ratcheted peak power.
-      isHostileSystem: () => {
-        const sysId = this.gameEngine?.player?.currentSystemId;
-        return !!(sysId && this.gameEngine?.galaxy?.isHostileSystem(sysId));
-      },
-      getCampaignPeakPower: () => this.gameEngine?.campaignPeakPower ?? 0,
-      onNpcDestroyed: (s) => {
-        const npcId = s.npc.id; // capture before the death path deletes the NPC, then complete its BOUNTY
-        this.npcManager.handleInFlightDeath(s);
-        this.questCompletion.bountyByNpcKill(npcId);
-      },
-      onPlayerDestroyed: () => this.npcManager.handlePlayerDeath(),
-      onPlayerUnderAttack: () =>
-        this.combatPause.requestPause("incoming-attack"),
-      onCombatEnded: () => {
-        // Resume if a fight ended while paused (a phantom stance cleaned up while
-        // frozen — Task 9 (vi)); reset() alone leaves `paused` set → still frozen.
-        if (this.combatPause.paused) this.combatPause.resume();
-        this.combatPause.reset(); // re-arm pause debounce
-        if (!this.destroyed) this.endTurn(); // combat over → end the turn (skip teardown)
-      },
-      onTargetLost: (npc) => this.combatPause.loseTarget(npc), // re-pause on lost target
-      onRoundComplete: () => this.combatPause.repause(), // Task 9 (v): between-rounds reaction window
-      showMessage: (t, c) => this.hud.showMessage(t, c),
-    });
+    this.combatModule = new CombatModule(
+      buildCombatModuleDeps({
+        getShipPhysics: () => this.shipPhysics,
+        isPlanning: () => this.combatPlanning.isPlanning,
+        endCombatPlanning: () => this.combatPlanning.endCombat(),
+        isCombatPauseActive: () => this.combatPause.paused,
+        isTurnRunning: () => this.isTurnRunning,
+        isDestroyed: () => this.destroyed,
+        renderer: this.renderer,
+        gameEngine: this.gameEngine,
+        npcManager: this.npcManager,
+        questCompletion: this.questCompletion,
+        hud: this.hud,
+        endTurn: () => this.endTurn(),
+      }),
+    );
     this.combatPause = createCombatPauseUi(
       this.renderer,
       this.combatModule,
@@ -316,20 +304,15 @@ export class SpaceFlightScene extends GameScene {
           this.planetManager.routeTargetPlanetId = null;
         },
         endTurn: () => this.endTurn(),
-        startInFlightCombat: (sprite) => this.combatModule.addCombatant(sprite),
+        startInFlightCombat: (sprite) => {
+          this.combatModule.addCombatant(sprite);
+          this.combatPlanning.beginCombat(); // no-op if already underway (14.5a)
+        },
         onPlayerEngagesCombat: () => {
-          // Route is preserved through combat.
-          // If the ship is flying, defer the stop to the current day boundary
-          // so the route isn't aborted mid-day; if stationary, the first hit
-          // via onPlayerUnderAttack will open the active-pause overlay anyway.
+          // beginCombat() above already froze the sim — no deferred pause needed.
           if (!this.isTurnRunning) {
             this.isTurnRunning = true;
             this.updateInteractiveCursors(true);
-          }
-          if (!this.shipPhysics?.isMoving) {
-            this.combatPause.requestPause("incoming-attack");
-          } else {
-            this.pauseAtDayBoundary = true;
           }
         },
         isInCombat: () => this.combatModule.isActive,
@@ -646,7 +629,9 @@ export class SpaceFlightScene extends GameScene {
     this.starRenderer.update(deltaTime, this.bgElapsed);
     this.warpFx.update(deltaTime);
     this.updateShip(deltaTime);
-    const frozen = this.combatPause.paused; // freeze ship-sync + camera too (2026-06-27 #1)
+    this.combatPlanning.tickExecute(deltaTime); // no-op outside EXECUTING (14.5a)
+    // Freeze ship-sync + camera too (2026-06-27 #1), also during PLANNING (14.5a).
+    const frozen = this.combatPause.paused || this.combatPlanning.isPlanning;
     if (!frozen) this.playerShip.update(deltaTime, this.bgElapsed);
     if (!frozen) this.npcManager.updateCombat(deltaTime);
     this.combatModule.update(deltaTime, this.bgElapsed);
@@ -756,6 +741,7 @@ export class SpaceFlightScene extends GameScene {
     // Tear down NPC ship sprites, contact panel and the OVERMIND-core overlay.
     this.npcManager?.destroy();
     this.combatModule?.destroy(); // Clear in-flight combat target + active flag.
+    this.combatPlanning.endCombat(); // Reset the pause-and-plan loop too (Task 14.5a).
 
     // Tear down the star module (disposes its halo/sun filters and removes its
     // display objects from the game layer) before the layer-wide cleanup below.
@@ -1249,6 +1235,7 @@ export class SpaceFlightScene extends GameScene {
   private updateShip(deltaTime: number): void {
     if (!this.shipPhysics) return;
     if (this.combatPause.paused) return; // active-pause: freeze movement + calendar
+    if (this.combatPlanning.isPlanning) return; // tactical planning: freeze movement + calendar (Task 14.5a)
 
     // Take-off arc in progress (Task 5): the ship renderer walks the cosmetic
     // outward curve (see PlayerShipRenderer.update) — skip the day-counting
@@ -1642,6 +1629,12 @@ export class SpaceFlightScene extends GameScene {
    */
   private onPlayPause(): void {
     if (this.combatPause.paused) return;
+    // Mouse equivalent of Space's confirm during planning (14.5a) — else the
+    // branch below would endTurn() mid-plan, desyncing isTurnRunning from phase.
+    if (this.combatPlanning.isPlanning) {
+      this.combatPlanning.confirm();
+      return;
+    }
     if (this.isTurnRunning) {
       // A combat auto-follow / active fight has no advancing day to defer the
       // pause to (combat freezes the calendar), so the day-boundary latch would
@@ -1744,6 +1737,10 @@ export class SpaceFlightScene extends GameScene {
       clearPlannedRoute: () => this.clearPlannedRoute(),
       executeRouteTo: (x, y) => this.executeRouteTo(x, y),
       openInventory: () => void this.openInventory(),
+      combatPlanning: {
+        isPlanning: this.combatPlanning.isPlanning,
+        confirm: () => this.combatPlanning.confirm(),
+      },
     });
   }
 
